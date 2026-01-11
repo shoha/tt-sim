@@ -16,11 +16,14 @@ func populate_items(filter: String = "") -> void:
 	clear()
 	_current_items = []
 	
-	for pokemon_name in PokemonAutoload.available_pokemon:
-		if filter == "" or filter.to_lower() in pokemon_name.to_lower():
-			var pokemon = PokemonAutoload.available_pokemon[pokemon_name]
-			_current_items.append({"name": pokemon_name, "icon": pokemon.icon, "scene": pokemon.scene})
-			_current_items.append({"name": pokemon_name, "icon": pokemon.shiny_icon, "scene": pokemon.shiny_scene})
+	for pokemon_number in PokemonAutoload.available_pokemon:
+		var pokemon = PokemonAutoload.available_pokemon[pokemon_number]
+		var pokemon_name = pokemon.name
+
+		if filter == "" or filter.to_lower() in pokemon.name.to_lower():
+			var scene_path = PokemonAutoload.path_to_scene(pokemon_number, false)
+			var icon_path = PokemonAutoload.path_to_icon(pokemon_number, false)
+			_current_items.append({"name": pokemon_name, "icon": icon_path, "scene": scene_path})
 	
 	for item in _current_items:
 		add_item(item.name, load(item.icon))
