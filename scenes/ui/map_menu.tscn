@@ -14,7 +14,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Button" type="Button" parent="MapMenu"]
+[node name="TogglePokemonList" type="Button" parent="MapMenu"]
 z_index = 1
 z_as_relative = false
 layout_mode = 1
@@ -31,7 +31,6 @@ toggle_mode = true
 text = "Add Pokemon"
 
 [node name="PokemonListContainer" type="Control" parent="MapMenu"]
-visible = false
 anchors_preset = 0
 offset_left = 967.5
 offset_top = 120.0
@@ -76,6 +75,6 @@ expand_to_text_length = true
 clear_button_enabled = true
 select_all_on_focus = true
 
-[connection signal="toggled" from="MapMenu/Button" to="MapMenu/PokemonListContainer" method="_on_button_toggled"]
+[connection signal="toggled" from="MapMenu/TogglePokemonList" to="MapMenu/PokemonListContainer" method="_on_button_toggled"]
 [connection signal="item_activated" from="MapMenu/PokemonListContainer/CenterContainer/PokemonList" to="MapMenu/PokemonListContainer/CenterContainer/PokemonList" method="_on_item_activated"]
 [connection signal="text_changed" from="MapMenu/PokemonListContainer/PokemonFilter" to="MapMenu/PokemonListContainer/CenterContainer/PokemonList" method="_on_pokemon_filter_text_changed"]

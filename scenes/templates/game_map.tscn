@@ -1,11 +1,10 @@
-[gd_scene load_steps=14 format=3 uid="uid://byf7iljoqrotr"]
+[gd_scene load_steps=13 format=3 uid="uid://byf7iljoqrotr"]
 
 [ext_resource type="Script" uid="uid://ybc3vhthi6i5" path="res://scenes/templates/game_map.gd" id="1_5384n"]
 [ext_resource type="PackedScene" uid="uid://bim2dski2fp35" path="res://scenes/ui/map_menu.tscn" id="2_stlim"]
 [ext_resource type="Script" uid="uid://md8k6faseouk" path="res://addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd" id="2_tyn2t"]
 [ext_resource type="Shader" uid="uid://6kugy8y2oa1c" path="res://shaders/sharpen.gdshader" id="3_hgeeq"]
 [ext_resource type="Shader" uid="uid://p0vr8rfouk5b" path="res://shaders/pixelate.gdshader" id="4_hxr2g"]
-[ext_resource type="PackedScene" uid="uid://ddjdkbc65lw0x" path="res://scenes/pokemon/1_bulbasaur.tscn" id="5_hgeeq"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_kjinj"]
 turbidity = 0.0
@@ -61,6 +60,7 @@ mouse_filter = 2
 metadata/_edit_use_anchors_ = true
 
 [node name="PixelateCanvas" type="CanvasLayer" parent="WorldEnvironment"]
+visible = false
 
 [node name="Pixelate" type="ColorRect" parent="WorldEnvironment/PixelateCanvas"]
 material = SubResource("ShaderMaterial_pe1xh")
@@ -87,8 +87,6 @@ near = 0.001
 [node name="DragAndDrop3D" type="Node3D" parent="WorldEnvironment" groups=["DragAndDrop3D"]]
 script = ExtResource("2_tyn2t")
 metadata/_custom_type_script = "uid://md8k6faseouk"
-
-[node name="DraggingObject3D" parent="WorldEnvironment/DragAndDrop3D" instance=ExtResource("5_hgeeq")]
 
 [node name="MapMenu" parent="." instance=ExtResource("2_stlim")]
 
