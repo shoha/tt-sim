@@ -63,17 +63,16 @@ func _post_import(scene):
 
 	var animation_tree_instance = AnimationTreeScene.instantiate()
 	rigid_body.add_child(animation_tree_instance)
-	var tree = animation_tree_instance.get_node("AnimationTree")
 	animation_tree_instance.anim_player = animation_player
 		
 	for node in [rigid_body, animation_player, collision_shape, armature, skeleton, mesh_model, animation_tree_instance]:
 		node.set_owner(dragging_object)
 		
 	# Create and save scene
-	var packed_scene = PackedScene.new()
-	packed_scene.pack(dragging_object)
-	var save_path = "res://scenes/pokemon/" + scene.name + ".tscn"
-	print("Saving scene... " + save_path)
-	ResourceSaver.save(packed_scene, save_path)
+	#var packed_scene = PackedScene.new()
+	#packed_scene.pack(dragging_object)
+	#var save_path = "res://scenes/pokemon/" + scene.name + ".tscn"
+	#print("Saving scene... " + save_path)
+	#ResourceSaver.save(packed_scene, save_path)
 	
 	return dragging_object
