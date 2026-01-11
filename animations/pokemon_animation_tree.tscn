@@ -1,0 +1,53 @@
+[gd_scene load_steps=10 format=3 uid="uid://syx65bd6uwbf"]
+
+[ext_resource type="Script" uid="uid://d2xfnor344wo5" path="res://animations/pokemon_animation_tree.gd" id="1_uunvo"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_uunvo"]
+animation = &"battlewait01"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_ilmp8"]
+animation = &"jumpup01"
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_g6kvh"]
+advance_mode = 2
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_iu24e"]
+advance_mode = 2
+advance_condition = &"is_dragging"
+
+[sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_mr505"]
+states/battlewait01/node = SubResource("AnimationNodeAnimation_uunvo")
+states/battlewait01/position = Vector2(403, 186)
+states/jumpup01/node = SubResource("AnimationNodeAnimation_ilmp8")
+states/jumpup01/position = Vector2(365, 55)
+transitions = ["Start", "battlewait01", SubResource("AnimationNodeStateMachineTransition_g6kvh"), "battlewait01", "jumpup01", SubResource("AnimationNodeStateMachineTransition_iu24e")]
+graph_offset = Vector2(10, -140)
+
+[sub_resource type="Animation" id="Animation_t6fl1"]
+resource_name = "battlewait01"
+loop_mode = 1
+
+[sub_resource type="Animation" id="Animation_5wt2i"]
+resource_name = "jumpup01"
+loop_mode = 1
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_qvjbr"]
+_data = {
+&"battlewait01": SubResource("Animation_t6fl1"),
+&"jumpup01": SubResource("Animation_5wt2i")
+}
+
+[node name="PokemonAnimationTree" type="Node3D"]
+script = ExtResource("1_uunvo")
+
+[node name="AnimationTree" type="AnimationTree" parent="."]
+root_node = NodePath(".")
+tree_root = SubResource("AnimationNodeStateMachine_mr505")
+anim_player = NodePath("Dummy")
+parameters/conditions/is_dragging = false
+
+[node name="Dummy" type="AnimationPlayer" parent="AnimationTree"]
+libraries = {
+&"": SubResource("AnimationLibrary_qvjbr")
+}
+autoplay = "battlewait01"
