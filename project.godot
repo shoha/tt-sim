@@ -17,6 +17,7 @@ config/features=PackedStringArray("4.5", "Forward Plus")
 [autoload]
 
 DragAndDropGroupHelper="*res://addons/DragAndDrop3D/DragAndDropGroupHelper.gd"
+PokemonAutoload="*res://scripts/autoloads/pokemon_autoload.gd"
 
 [display]
 

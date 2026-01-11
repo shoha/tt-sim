@@ -1,0 +1,81 @@
+[gd_scene load_steps=3 format=3 uid="uid://bim2dski2fp35"]
+
+[ext_resource type="Script" uid="uid://bsuwk8okbttoi" path="res://scenes/ui/pokemon_list.gd" id="1_nlnlb"]
+[ext_resource type="Script" uid="uid://bdb6i6bah667h" path="res://scenes/ui/pokemon_list_container.gd" id="1_v7vxt"]
+
+[node name="MapMenu" type="CanvasLayer"]
+layer = 2
+
+[node name="MapMenu" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Button" type="Button" parent="MapMenu"]
+z_index = 1
+z_as_relative = false
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -116.0
+offset_top = -31.0
+grow_horizontal = 0
+grow_vertical = 0
+toggle_mode = true
+text = "Add Pokemon"
+
+[node name="PokemonListContainer" type="Control" parent="MapMenu"]
+visible = false
+anchors_preset = 0
+offset_left = 967.5
+offset_top = 120.0
+offset_right = 967.5
+offset_bottom = 120.0
+script = ExtResource("1_v7vxt")
+
+[node name="CenterContainer" type="CenterContainer" parent="MapMenu/PokemonListContainer"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -275.0
+offset_top = -70.0
+offset_right = 275.0
+offset_bottom = 70.0
+grow_horizontal = 2
+
+[node name="ItemList" type="ItemList" parent="MapMenu/PokemonListContainer/CenterContainer"]
+custom_minimum_size = Vector2(550, 140)
+layout_mode = 2
+theme_override_colors/guide_color = Color(0.7176471, 0.7176471, 0.7176471, 0)
+allow_search = false
+max_columns = 4
+same_column_width = true
+fixed_column_width = 128
+fixed_icon_size = Vector2i(128, 128)
+script = ExtResource("1_nlnlb")
+
+[node name="PokemonFilter" type="LineEdit" parent="MapMenu/PokemonListContainer"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -81.0
+offset_top = -108.0
+offset_right = 66.0
+offset_bottom = -77.0
+grow_horizontal = 2
+placeholder_text = "Filter list"
+expand_to_text_length = true
+clear_button_enabled = true
+select_all_on_focus = true
+
+[connection signal="toggled" from="MapMenu/Button" to="MapMenu/PokemonListContainer" method="_on_button_toggled"]
+[connection signal="item_activated" from="MapMenu/PokemonListContainer/CenterContainer/ItemList" to="MapMenu/PokemonListContainer/CenterContainer/ItemList" method="_on_item_activated"]
+[connection signal="text_changed" from="MapMenu/PokemonListContainer/PokemonFilter" to="MapMenu/PokemonListContainer/CenterContainer/ItemList" method="_on_pokemon_filter_text_changed"]
