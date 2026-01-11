@@ -1,0 +1,87 @@
+[gd_scene load_steps=12 format=3 uid="uid://byf7iljoqrotr"]
+
+[ext_resource type="Script" uid="uid://ybc3vhthi6i5" path="res://scenes/templates/game_map.gd" id="1_5384n"]
+[ext_resource type="Script" uid="uid://md8k6faseouk" path="res://addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd" id="2_tyn2t"]
+[ext_resource type="Shader" uid="uid://6kugy8y2oa1c" path="res://shaders/sharpen.gdshader" id="3_hgeeq"]
+[ext_resource type="Shader" uid="uid://p0vr8rfouk5b" path="res://shaders/pixelate.gdshader" id="4_hxr2g"]
+
+[sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_kjinj"]
+turbidity = 0.0
+sun_disk_scale = 123.4
+energy_multiplier = 24.91
+
+[sub_resource type="Sky" id="Sky_28aoi"]
+sky_material = SubResource("PhysicalSkyMaterial_kjinj")
+process_mode = 3
+
+[sub_resource type="Environment" id="Environment_lskvb"]
+background_mode = 2
+sky = SubResource("Sky_28aoi")
+sky_custom_fov = 5.5
+ambient_light_color = Color(0.8776157, 0.8776158, 0.8776157, 1)
+ambient_light_energy = 16.0
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_qb5if"]
+
+[sub_resource type="Compositor" id="Compositor_6evhf"]
+compositor_effects = Array[CompositorEffect]([null])
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_6netm"]
+shader = ExtResource("3_hgeeq")
+shader_parameter/blur_sharp = -1.9999999552964
+shader_parameter/pixel = 2.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_pe1xh"]
+shader = ExtResource("4_hxr2g")
+shader_parameter/pixelation = 0.0030000001425
+shader_parameter/opacity = 1.0
+shader_parameter/camera_size = 1.0
+
+[node name="GameMap" type="Node3D"]
+script = ExtResource("1_5384n")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_lskvb")
+camera_attributes = SubResource("CameraAttributesPractical_qb5if")
+compositor = SubResource("Compositor_6evhf")
+
+[node name="SharpenCanvas" type="CanvasLayer" parent="WorldEnvironment"]
+visible = false
+
+[node name="Sharpen" type="ColorRect" parent="WorldEnvironment/SharpenCanvas"]
+material = SubResource("ShaderMaterial_6netm")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+metadata/_edit_use_anchors_ = true
+
+[node name="PixelateCanvas" type="CanvasLayer" parent="WorldEnvironment"]
+
+[node name="Pixelate" type="ColorRect" parent="WorldEnvironment/PixelateCanvas"]
+material = SubResource("ShaderMaterial_pe1xh")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+metadata/_edit_use_anchors_ = true
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="WorldEnvironment"]
+transform = Transform3D(0.7071068, -0.26030338, 0.6574513, 0, 0.9297765, 0.36812457, -0.7071068, -0.26030338, 0.6574513, -3.6885204, 12.131653, 11.087999)
+sky_mode = 2
+
+[node name="CameraHolder" type="Node3D" parent="WorldEnvironment"]
+
+[node name="Camera3D" type="Camera3D" parent="WorldEnvironment/CameraHolder"]
+transform = Transform3D(0.7071068, -0.26030335, 0.6574513, 0, 0.9297765, 0.36812454, -0.7071068, -0.26030335, 0.6574513, 11.088, 8, 11.088)
+projection = 1
+size = 13.85
+near = 0.001
+
+[node name="DragAndDrop3D" type="Node3D" parent="WorldEnvironment" groups=["DragAndDrop3D"]]
+script = ExtResource("2_tyn2t")
+metadata/_custom_type_script = "uid://md8k6faseouk"

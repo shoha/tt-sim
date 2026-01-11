@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://bcb6wurf2c3jv"]
+
+[ext_resource type="PackedScene" uid="uid://byf7iljoqrotr" path="res://scenes/templates/game_map.tscn" id="1_dse15"]
+[ext_resource type="PackedScene" uid="uid://dqwr3aser070b" path="res://assets/models/maps/oakslabpainted.glb" id="2_qp6d2"]
+
+[node name="Oakslab" type="Node3D"]
+
+[node name="GameMap" parent="." instance=ExtResource("1_dse15")]
+
+[node name="oakslabpainted" parent="GameMap/WorldEnvironment" index="5" instance=ExtResource("2_qp6d2")]
+
+[editable path="GameMap"]
