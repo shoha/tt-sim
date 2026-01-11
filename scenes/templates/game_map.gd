@@ -10,6 +10,9 @@ class_name GameMap
 @onready var camera_node: Camera3D = $WorldEnvironment/CameraHolder/Camera3D
 @onready var pixelate_node: ColorRect = $WorldEnvironment/PixelateCanvas/Pixelate
 
+var _camera_move_dir: Vector3
+var _camera_zoom_dir: int
+
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	pass # Replace with function body.
@@ -20,35 +23,54 @@ func _process(delta):
 	handle_zoom(delta)
 
 func handle_movement(delta):
-	var input_dir := Vector3.ZERO
+	cameraholder_node.translate(_camera_move_dir * move_speed * delta)
+
+func handle_zoom(delta):
+	if _camera_zoom_dir != 0.0:
+		camera_node.size = clamp(camera_node.size + _camera_zoom_dir * zoom_speed * delta, min_zoom, max_zoom)
+	
+	_camera_zoom_dir = 0
+	
+	pixelate_node.material.set_shader_parameter("camera_size", camera_node.size)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is not InputEventMouseButton:
+		return
+	
+	if event.is_action_pressed("camera_zoom_in"):
+		_camera_zoom_dir -= 1
+	if event.is_action_pressed("camera_zoom_out"):
+		_camera_zoom_dir += 1
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	var input_dir := _camera_move_dir
 	
 	# Map keyboard inputs to directions
-	if Input.is_action_pressed("camera_move_forward"):
-		input_dir -= cameraholder_node.transform.basis.z # Move along the camera's local forward axis
-	if Input.is_action_pressed("camera_move_backward"):
-		input_dir += cameraholder_node.transform.basis.z
-	if Input.is_action_pressed("camera_move_left"):
-		input_dir -= cameraholder_node.transform.basis.x # Move along the camera's local right/left axis
-	if Input.is_action_pressed("camera_move_right"):
-		input_dir += cameraholder_node.transform.basis.x
+	if event.is_action_pressed("camera_move_forward", true):
+		input_dir.z = -cameraholder_node.transform.basis.z.z # Move along the camera's local forward axis
+	if event.is_action_pressed("camera_move_backward", true):
+		input_dir.z = cameraholder_node.transform.basis.z.z
+	if event.is_action_pressed("camera_move_left", true):
+		input_dir.x = -cameraholder_node.transform.basis.x.x # Move along the camera's local right/left axis
+	if event.is_action_pressed("camera_move_right", true):
+		input_dir.x = cameraholder_node.transform.basis.x.x
+		
+		# Map keyboard inputs to directions
+	if event.is_action_released("camera_move_forward", true):
+		input_dir.z = 0 # Move along the camera's local forward axis
+	if event.is_action_released("camera_move_backward", true):
+		input_dir.z = 0
+	if event.is_action_released("camera_move_left", true):
+		input_dir.x = 0 # Move along the camera's local right/left axis
+	if event.is_action_released("camera_move_right", true):
+		input_dir.x = 0
 	
-	# Keep movement horizontal (prevent movement in the vertical y-axis of the world)
+	 #Keep movement horizontal (prevent movement in the vertical y-axis of the world)
 	input_dir.y = 0
 	input_dir = input_dir.normalized()
 	
-	# Apply movement
-	cameraholder_node.translate(input_dir * move_speed * delta)
+	_camera_move_dir = input_dir
 
-func handle_zoom(delta):
-	var zoom_delta: float = 0.0
+func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
+	$WorldEnvironment/DragAndDrop3D.add_child(pokemon.instantiate())
 	
-	# Map mouse wheel input to zoom
-	if Input.is_action_pressed("camera_zoom_in") or Input.is_action_just_pressed("camera_zoom_in"):
-		zoom_delta = -1.0
-	elif Input.is_action_pressed("camera_zoom_out") or Input.is_action_just_pressed("camera_zoom_out"):
-		zoom_delta = 1.0
-		
-	if zoom_delta != 0.0:
-		camera_node.size = clamp(camera_node.size + zoom_delta * zoom_speed * delta, min_zoom, max_zoom)
-	
-	pixelate_node.material.set_shader_parameter("camera_size", camera_node.size)
