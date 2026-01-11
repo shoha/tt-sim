@@ -10,3 +10,4 @@
 [node name="oakslabpainted" parent="GameMap/WorldEnvironment" index="5" instance=ExtResource("2_qp6d2")]
 
 [editable path="GameMap"]
+[editable path="GameMap/MapMenu"]

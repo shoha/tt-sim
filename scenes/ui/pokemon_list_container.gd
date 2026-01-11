@@ -12,7 +12,6 @@ func _process(_delta: float) -> void:
 
 
 func _on_button_toggled(toggled_on: bool) -> void:
-	print(toggled_on)
 	if(toggled_on):
 		show()
 	else:

@@ -33,7 +33,9 @@ func _ready() -> void:
 func _set_group() -> void:
 	if Engine.is_editor_hint(): return
 	
-	await get_tree().current_scene.ready
+	if !get_tree().current_scene.is_node_ready():
+		await get_tree().current_scene.ready
+	
 	DragAndDropGroupHelper.add_node_to_group(self, "draggingObjects")
 
 func _set_default_snap_position() -> void:

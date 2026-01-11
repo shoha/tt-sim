@@ -50,7 +50,7 @@ offset_right = 275.0
 offset_bottom = 70.0
 grow_horizontal = 2
 
-[node name="ItemList" type="ItemList" parent="MapMenu/PokemonListContainer/CenterContainer"]
+[node name="PokemonList" type="ItemList" parent="MapMenu/PokemonListContainer/CenterContainer"]
 custom_minimum_size = Vector2(550, 140)
 layout_mode = 2
 theme_override_colors/guide_color = Color(0.7176471, 0.7176471, 0.7176471, 0)
@@ -77,5 +77,5 @@ clear_button_enabled = true
 select_all_on_focus = true
 
 [connection signal="toggled" from="MapMenu/Button" to="MapMenu/PokemonListContainer" method="_on_button_toggled"]
-[connection signal="item_activated" from="MapMenu/PokemonListContainer/CenterContainer/ItemList" to="MapMenu/PokemonListContainer/CenterContainer/ItemList" method="_on_item_activated"]
-[connection signal="text_changed" from="MapMenu/PokemonListContainer/PokemonFilter" to="MapMenu/PokemonListContainer/CenterContainer/ItemList" method="_on_pokemon_filter_text_changed"]
+[connection signal="item_activated" from="MapMenu/PokemonListContainer/CenterContainer/PokemonList" to="MapMenu/PokemonListContainer/CenterContainer/PokemonList" method="_on_item_activated"]
+[connection signal="text_changed" from="MapMenu/PokemonListContainer/PokemonFilter" to="MapMenu/PokemonListContainer/CenterContainer/PokemonList" method="_on_pokemon_filter_text_changed"]
