@@ -28,7 +28,6 @@ func handle_zoom(delta):
 		camera_node.size = clamp(camera_node.size + _camera_zoom_dir * zoom_speed * delta, min_zoom, max_zoom)
 	
 	_camera_zoom_dir = 0
-	
 	pixelate_node.material.set_shader_parameter("camera_size", camera_node.size)
 
 func _unhandled_input(event: InputEvent) -> void:
