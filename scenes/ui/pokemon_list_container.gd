@@ -11,7 +11,7 @@ func _process(_delta: float) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		$"../TogglePokemonList".button_pressed = false
-
+	
 func _on_button_toggled(toggled_on: bool) -> void:
 	if(toggled_on):
 		show()

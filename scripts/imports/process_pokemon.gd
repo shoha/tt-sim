@@ -31,7 +31,7 @@ func _post_import(scene):
 	# Create a new RigidBody3D and configure it
 	# This will be the root node of the returned scene
 	var rigid_body = RigidBody3D.new()
-	rigid_body.name = scene.name + "_rigid"
+	rigid_body.name = "RigidBody3D"
 	rigid_body.axis_lock_angular_x = true
 	rigid_body.axis_lock_angular_y = true
 	rigid_body.axis_lock_angular_z = true
@@ -44,7 +44,7 @@ func _post_import(scene):
 	var mesh_shape = mesh_model.mesh.create_convex_shape()
 	var collision_shape = CollisionShape3D.new()
 	collision_shape.shape = mesh_shape
-	collision_shape.name = scene.name + "_collision"
+	collision_shape.name = "CollisionShape3D"
 	# Apply the original mesh child's transform to the collision shape
 	#collision_shape.transform = armature.transform
 	# Add the collision shape to the RigidBody3D
@@ -67,12 +67,7 @@ func _post_import(scene):
 		
 	for node in [rigid_body, animation_player, collision_shape, armature, skeleton, mesh_model, animation_tree_instance]:
 		node.set_owner(dragging_object)
-		
-	# Create and save scene
-	#var packed_scene = PackedScene.new()
-	#packed_scene.pack(dragging_object)
-	#var save_path = "res://scenes/pokemon/" + scene.name + ".tscn"
-	#print("Saving scene... " + save_path)
-	#ResourceSaver.save(packed_scene, save_path)
+	
+	dragging_object.set_script(load("res://scripts/draggable_token.gd"))
 	
 	return dragging_object

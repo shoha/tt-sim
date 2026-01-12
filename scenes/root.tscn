@@ -6,6 +6,18 @@
 
 [node name="Oakslab" parent="." instance=ExtResource("1_j5px3")]
 
+[node name="CenterContainer" parent="Oakslab/GameMap/MapMenu/MapMenu/PokemonListContainer" index="0"]
+offset_top = 0.0
+offset_bottom = 140.0
+
+[node name="PokemonFilter" parent="Oakslab/GameMap/MapMenu/MapMenu/PokemonListContainer" index="1"]
+offset_left = -73.5
+offset_top = 0.0
+offset_right = 73.5
+offset_bottom = 31.0
+
 [editable path="Oakslab"]
 [editable path="Oakslab/GameMap"]
+[editable path="Oakslab/GameMap/WorldEnvironment/DragAndDrop3D/DraggingObject3D"]
+[editable path="Oakslab/GameMap/WorldEnvironment/DragAndDrop3D/DraggingObject3D2"]
 [editable path="Oakslab/GameMap/MapMenu"]
