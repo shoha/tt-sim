@@ -65,3 +65,8 @@ camera_zoom_out={
 
 3d/physics_engine="Jolt Physics"
 3d/default_gravity=9.799999999999995
+
+[rendering]
+
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=5
+lights_and_shadows/positional_shadow/soft_shadow_filter_quality=5

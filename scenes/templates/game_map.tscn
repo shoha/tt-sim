@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://byf7iljoqrotr"]
+[gd_scene load_steps=12 format=3 uid="uid://byf7iljoqrotr"]
 
 [ext_resource type="Script" uid="uid://ybc3vhthi6i5" path="res://scenes/templates/game_map.gd" id="1_5384n"]
 [ext_resource type="PackedScene" uid="uid://bim2dski2fp35" path="res://scenes/ui/map_menu.tscn" id="2_stlim"]
@@ -16,16 +16,15 @@ sky_material = SubResource("PhysicalSkyMaterial_kjinj")
 process_mode = 3
 
 [sub_resource type="Environment" id="Environment_lskvb"]
-background_mode = 2
+background_mode = 1
+background_color = Color(1, 1, 1, 1)
+background_energy_multiplier = 0.5
 sky = SubResource("Sky_28aoi")
 sky_custom_fov = 5.5
-ambient_light_color = Color(0.8776157, 0.8776158, 0.8776157, 1)
-ambient_light_energy = 16.0
-
-[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_qb5if"]
-
-[sub_resource type="Compositor" id="Compositor_6evhf"]
-compositor_effects = Array[CompositorEffect]([null])
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
+ambient_light_energy = 0.5
+tonemap_exposure = 0.71
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_6netm"]
 shader = ExtResource("3_hgeeq")
@@ -38,13 +37,22 @@ shader_parameter/pixelation = 0.0030000001425
 shader_parameter/opacity = 1.0
 shader_parameter/camera_size = 1.0
 
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_stlim"]
+auto_exposure_enabled = true
+auto_exposure_scale = 0.8
+dof_blur_far_enabled = true
+dof_blur_far_distance = 18.28
+dof_blur_far_transition = -1.0
+dof_blur_near_enabled = true
+dof_blur_near_distance = 15.82
+dof_blur_near_transition = -1.0
+dof_blur_amount = 0.25
+
 [node name="GameMap" type="Node3D"]
 script = ExtResource("1_5384n")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_lskvb")
-camera_attributes = SubResource("CameraAttributesPractical_qb5if")
-compositor = SubResource("Compositor_6evhf")
 
 [node name="SharpenCanvas" type="CanvasLayer" parent="WorldEnvironment"]
 visible = false
@@ -72,17 +80,22 @@ grow_vertical = 2
 mouse_filter = 2
 metadata/_edit_use_anchors_ = true
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="WorldEnvironment"]
-transform = Transform3D(0.7071068, -0.26030338, 0.6574513, 0, 0.9297765, 0.36812457, -0.7071068, -0.26030338, 0.6574513, -3.6885204, 12.131653, 11.087999)
-sky_mode = 2
-
 [node name="CameraHolder" type="Node3D" parent="WorldEnvironment"]
 
 [node name="Camera3D" type="Camera3D" parent="WorldEnvironment/CameraHolder"]
 transform = Transform3D(0.7071068, -0.26030335, 0.6574513, 0, 0.9297765, 0.36812454, -0.7071068, -0.26030335, 0.6574513, 11.088, 8, 11.088)
+attributes = SubResource("CameraAttributesPractical_stlim")
 projection = 1
 size = 13.85
-near = 0.001
+near = 1.0
+far = 50.0
+
+[node name="DirectionalLight3D" type="OmniLight3D" parent="WorldEnvironment/CameraHolder/Camera3D"]
+light_energy = 2.0
+shadow_enabled = true
+omni_range = 50.0
+omni_attenuation = 0.247
+omni_shadow_mode = 0
 
 [node name="DragAndDrop3D" type="Node3D" parent="WorldEnvironment" groups=["DragAndDrop3D"]]
 script = ExtResource("2_tyn2t")

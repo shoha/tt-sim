@@ -7,7 +7,7 @@
 
 [node name="GameMap" parent="." instance=ExtResource("1_dse15")]
 
-[node name="oakslabpainted" parent="GameMap/WorldEnvironment" index="5" instance=ExtResource("2_qp6d2")]
+[node name="oakslabpainted" parent="GameMap/WorldEnvironment" index="4" instance=ExtResource("2_qp6d2")]
 
 [editable path="GameMap"]
 [editable path="GameMap/MapMenu"]
