@@ -13,11 +13,9 @@ class_name GameMap
 var _camera_move_dir: Vector3
 var _camera_zoom_dir: int
 
-# Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	pass # Replace with function body.
 
-# Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta):
 	handle_movement(delta)
 	handle_zoom(delta)
@@ -45,32 +43,34 @@ func _unhandled_input(event: InputEvent) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	var input_dir := _camera_move_dir
 	
-	# Map keyboard inputs to directions
-	if event.is_action_pressed("camera_move_forward", true):
-		input_dir.z = -cameraholder_node.transform.basis.z.z # Move along the camera's local forward axis
-	if event.is_action_pressed("camera_move_backward", true):
-		input_dir.z = cameraholder_node.transform.basis.z.z
-	if event.is_action_pressed("camera_move_left", true):
-		input_dir.x = -cameraholder_node.transform.basis.x.x # Move along the camera's local right/left axis
-	if event.is_action_pressed("camera_move_right", true):
-		input_dir.x = cameraholder_node.transform.basis.x.x
+	if event.is_action_released("camera_move_forward"):
+		input_dir.x += 1
+		input_dir.z += 1
+	if event.is_action_released("camera_move_backward"):
+		input_dir.x -= 1
+		input_dir.z -= 1
+	if event.is_action_released("camera_move_left"):
+		input_dir.x += 1
+		input_dir.z -= 1
+	if event.is_action_released("camera_move_right"):
+		input_dir.x -= 1
+		input_dir.z += 1
+	
+	if event.is_action_pressed("camera_move_forward"):
+		input_dir.x -= 1
+		input_dir.z -= 1
+	if event.is_action_pressed("camera_move_backward"):
+		input_dir.x += 1
+		input_dir.z += 1
+	if event.is_action_pressed("camera_move_left"):
+		input_dir.x -= 1
+		input_dir.z += 1
+	if event.is_action_pressed("camera_move_right"):
+		input_dir.x += 1
+		input_dir.z -= 1
 		
-		# Map keyboard inputs to directions
-	if event.is_action_released("camera_move_forward", true):
-		input_dir.z = 0 # Move along the camera's local forward axis
-	if event.is_action_released("camera_move_backward", true):
-		input_dir.z = 0
-	if event.is_action_released("camera_move_left", true):
-		input_dir.x = 0 # Move along the camera's local right/left axis
-	if event.is_action_released("camera_move_right", true):
-		input_dir.x = 0
-	
-	 #Keep movement horizontal (prevent movement in the vertical y-axis of the world)
-	input_dir.y = 0
-	input_dir = input_dir.normalized()
-	
+	input_dir.y = 0	
 	_camera_move_dir = input_dir
 
 func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
 	$WorldEnvironment/DragAndDrop3D.add_child(pokemon.instantiate())
-	
