@@ -9,6 +9,7 @@ class_name GameMap
 @onready var cameraholder_node: Node3D = $WorldEnvironment/CameraHolder
 @onready var camera_node: Camera3D = $WorldEnvironment/CameraHolder/Camera3D
 @onready var pixelate_node: ColorRect = $WorldEnvironment/PixelateCanvas/Pixelate
+@onready var tiltshift_node: MeshInstance3D = $WorldEnvironment/CameraHolder/Camera3D/MeshInstance3D
 
 var _camera_move_dir: Vector3
 var _camera_zoom_dir: int
@@ -24,11 +25,17 @@ func handle_movement(delta):
 	cameraholder_node.translate(_camera_move_dir * move_speed * delta)
 
 func handle_zoom(delta):
+	var zoom_level = clamp(camera_node.size + _camera_zoom_dir * zoom_speed * delta, min_zoom, max_zoom)
+	
 	if _camera_zoom_dir != 0.0:
-		camera_node.size = clamp(camera_node.size + _camera_zoom_dir * zoom_speed * delta, min_zoom, max_zoom)
+		camera_node.size = zoom_level
 	
 	_camera_zoom_dir = 0
-	pixelate_node.material.set_shader_parameter("camera_size", camera_node.size)
+	pixelate_node.material.set_shader_parameter(&"camera_size", camera_node.size)
+	
+	var zoom_percentage: float = (zoom_level - min_zoom) / (max_zoom - min_zoom)
+	tiltshift_node.mesh.material.set_shader_parameter(&"DoF", 5 * zoom_percentage)
+	
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is not InputEventMouseButton:
