@@ -6,8 +6,6 @@ var items_sem: Semaphore
 var items_thread: Thread
 var exit_items_thread := false
 
-signal pokemon_added(pokemon: PackedScene)
-
 var _current_items: Array
 var _current_filter: String
 
@@ -65,7 +63,7 @@ func _on_pokemon_filter_text_changed(new_text: String) -> void:
 func _on_item_activated(index: int) -> void:
 	var selected_item = _current_items[index]
 	var pokemon_scene: PackedScene = load(selected_item.scene)
-	pokemon_added.emit(pokemon_scene)
+	EventBus.pokemon_added.emit(pokemon_scene)
 	
 func _exit_tree():
 	# Set exit condition to true.
