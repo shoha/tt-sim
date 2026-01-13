@@ -1,9 +1,8 @@
-[gd_scene load_steps=6 format=3 uid="uid://bcb6wurf2c3jv"]
+[gd_scene load_steps=5 format=3 uid="uid://bcb6wurf2c3jv"]
 
 [ext_resource type="PackedScene" uid="uid://byf7iljoqrotr" path="res://scenes/templates/game_map.tscn" id="1_dse15"]
 [ext_resource type="PackedScene" uid="uid://dqwr3aser070b" path="res://assets/models/maps/oakslabpainted.glb" id="2_qp6d2"]
 [ext_resource type="PackedScene" uid="uid://dta7euhspicut" path="res://assets/models/pokemon/1_bulbasaur.glb" id="2_y7u8f"]
-[ext_resource type="Script" uid="uid://cji46721pjyw7" path="res://scripts/draggable_token.gd" id="3_0rm4c"]
 [ext_resource type="PackedScene" uid="uid://dxcfybowb5gld" path="res://assets/models/pokemon/2_ivysaur.glb" id="4_0rm4c"]
 
 [node name="Oakslab" type="Node3D"]
@@ -11,12 +10,8 @@
 [node name="GameMap" parent="." instance=ExtResource("1_dse15")]
 
 [node name="DraggingObject3D" parent="GameMap/WorldEnvironment/DragAndDrop3D" index="0" instance=ExtResource("2_y7u8f")]
-script = ExtResource("3_0rm4c")
 
 [node name="DraggingObject3D2" parent="GameMap/WorldEnvironment/DragAndDrop3D" index="1" instance=ExtResource("4_0rm4c")]
-
-[node name="Skeleton3D" parent="GameMap/WorldEnvironment/DragAndDrop3D/DraggingObject3D2/RigidBody3D" index="3"]
-transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
 
 [node name="oakslabpainted" parent="GameMap/WorldEnvironment" index="4" instance=ExtResource("2_qp6d2")]
 

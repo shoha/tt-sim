@@ -1,10 +1,12 @@
-[gd_scene load_steps=12 format=3 uid="uid://byf7iljoqrotr"]
+[gd_scene load_steps=16 format=3 uid="uid://byf7iljoqrotr"]
 
 [ext_resource type="Script" uid="uid://ybc3vhthi6i5" path="res://scenes/templates/game_map.gd" id="1_5384n"]
 [ext_resource type="PackedScene" uid="uid://bim2dski2fp35" path="res://scenes/ui/map_menu.tscn" id="2_stlim"]
 [ext_resource type="Script" uid="uid://md8k6faseouk" path="res://addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd" id="2_tyn2t"]
 [ext_resource type="Shader" uid="uid://6kugy8y2oa1c" path="res://shaders/sharpen.gdshader" id="3_hgeeq"]
+[ext_resource type="Shader" uid="uid://cyy1aha4j5eb1" path="res://shaders/tilt_shift.gdshader" id="4_hgeeq"]
 [ext_resource type="Shader" uid="uid://p0vr8rfouk5b" path="res://shaders/pixelate.gdshader" id="4_hxr2g"]
+[ext_resource type="Script" uid="uid://bm2kst6ow2637" path="res://scenes/templates/camera_3d.gd" id="4_kjinj"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_kjinj"]
 turbidity = 0.0
@@ -40,13 +42,24 @@ shader_parameter/camera_size = 1.0
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_stlim"]
 auto_exposure_enabled = true
 auto_exposure_scale = 0.8
-dof_blur_far_enabled = true
 dof_blur_far_distance = 18.28
 dof_blur_far_transition = -1.0
-dof_blur_near_enabled = true
 dof_blur_near_distance = 15.82
 dof_blur_near_transition = -1.0
-dof_blur_amount = 0.25
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hgeeq"]
+render_priority = 0
+shader = ExtResource("4_hgeeq")
+shader_parameter/focal_point = Vector3(0, 0, 0)
+shader_parameter/DoF = 5.0
+shader_parameter/blur_cap = 2.0
+shader_parameter/blur_rate = 2.0
+shader_parameter/vertical_bias = 1.0
+
+[sub_resource type="QuadMesh" id="QuadMesh_stlim"]
+material = SubResource("ShaderMaterial_hgeeq")
+flip_faces = true
+size = Vector2(2, 2)
 
 [node name="GameMap" type="Node3D"]
 script = ExtResource("1_5384n")
@@ -86,8 +99,9 @@ transform = Transform3D(0.7071068, -0.26030335, 0.6574513, 0, 0.9297765, 0.36812
 attributes = SubResource("CameraAttributesPractical_stlim")
 projection = 1
 size = 13.85
-near = 1.0
+near = 0.001
 far = 50.0
+script = ExtResource("4_kjinj")
 
 [node name="DirectionalLight3D" type="OmniLight3D" parent="WorldEnvironment/CameraHolder/Camera3D"]
 light_energy = 2.0
@@ -95,6 +109,14 @@ shadow_enabled = true
 omni_range = 50.0
 omni_attenuation = 0.247
 omni_shadow_mode = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WorldEnvironment/CameraHolder/Camera3D"]
+extra_cull_margin = 16384.0
+mesh = SubResource("QuadMesh_stlim")
+
+[node name="RayCast3D" type="RayCast3D" parent="WorldEnvironment/CameraHolder/Camera3D"]
+target_position = Vector3(0, 0, -100)
+hit_back_faces = false
 
 [node name="DragAndDrop3D" type="Node3D" parent="WorldEnvironment" groups=["DragAndDrop3D"]]
 script = ExtResource("2_tyn2t")
