@@ -20,6 +20,10 @@ DragAndDropGroupHelper="*res://addons/DragAndDrop3D/DragAndDropGroupHelper.gd"
 PokemonAutoload="*res://scripts/autoloads/pokemon_autoload.gd"
 EventBus="*res://scripts/autoloads/event_bus.gd"
 
+[debug]
+
+gdscript/warnings/unused_signal=0
+
 [display]
 
 window/size/viewport_width=1920
@@ -27,7 +31,7 @@ window/size/viewport_height=1080
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/DragAndDrop3D/plugin.cfg", "res://addons/godot_vim/plugin.cfg")
+enabled=PackedStringArray("res://addons/DragAndDrop3D/plugin.cfg", "res://addons/gdscript-linter/plugin.cfg", "res://addons/godot_vim/plugin.cfg")
 
 [input]
 
