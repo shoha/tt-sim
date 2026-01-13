@@ -15,6 +15,7 @@ var _camera_move_dir: Vector3
 var _camera_zoom_dir: int
 
 func _ready() -> void:
+	EventBus.pokemon_added.connect(_on_pokemon_list_pokemon_added)
 	pass # Replace with function body.
 
 func _process(delta):
