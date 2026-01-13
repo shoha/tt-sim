@@ -123,10 +123,3 @@ script = ExtResource("2_tyn2t")
 metadata/_custom_type_script = "uid://md8k6faseouk"
 
 [node name="MapMenu" parent="." instance=ExtResource("2_stlim")]
-
-[node name="MapMenu" parent="MapMenu" index="0"]
-mouse_filter = 1
-
-[connection signal="pokemon_added" from="MapMenu/MapMenu/PokemonListContainer/CenterContainer/PokemonList" to="." method="_on_pokemon_list_pokemon_added"]
-
-[editable path="MapMenu"]

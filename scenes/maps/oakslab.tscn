@@ -9,13 +9,8 @@
 
 [node name="GameMap" parent="." instance=ExtResource("1_dse15")]
 
-[node name="DraggingObject3D" parent="GameMap/WorldEnvironment/DragAndDrop3D" index="0" instance=ExtResource("2_y7u8f")]
+[node name="DraggingObject3D" parent="GameMap" instance=ExtResource("2_y7u8f")]
 
-[node name="DraggingObject3D2" parent="GameMap/WorldEnvironment/DragAndDrop3D" index="1" instance=ExtResource("4_0rm4c")]
+[node name="DraggingObject3D2" parent="GameMap" instance=ExtResource("4_0rm4c")]
 
-[node name="oakslabpainted" parent="GameMap/WorldEnvironment" index="4" instance=ExtResource("2_qp6d2")]
-
-[editable path="GameMap"]
-[editable path="GameMap/WorldEnvironment/DragAndDrop3D/DraggingObject3D"]
-[editable path="GameMap/WorldEnvironment/DragAndDrop3D/DraggingObject3D2"]
-[editable path="GameMap/MapMenu"]
+[node name="oakslabpainted" parent="GameMap" instance=ExtResource("2_qp6d2")]
