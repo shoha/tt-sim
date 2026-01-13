@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://bim2dski2fp35"]
+[gd_scene load_steps=4 format=3 uid="uid://bim2dski2fp35"]
 
 [ext_resource type="Script" uid="uid://bsuwk8okbttoi" path="res://scenes/ui/pokemon_list.gd" id="1_nlnlb"]
 [ext_resource type="Script" uid="uid://bdb6i6bah667h" path="res://scenes/ui/pokemon_list_container.gd" id="1_v7vxt"]
+[ext_resource type="Script" uid="uid://dwsd3xkatk3vt" path="res://scenes/ui/pokemon_filter.gd" id="3_lxh2f"]
 
 [node name="MapMenu" type="CanvasLayer"]
 layer = 2
@@ -74,6 +75,7 @@ placeholder_text = "Filter list"
 expand_to_text_length = true
 clear_button_enabled = true
 select_all_on_focus = true
+script = ExtResource("3_lxh2f")
 
 [connection signal="toggled" from="MapMenu/TogglePokemonList" to="MapMenu/PokemonListContainer" method="_on_button_toggled"]
 [connection signal="item_activated" from="MapMenu/PokemonListContainer/CenterContainer/PokemonList" to="MapMenu/PokemonListContainer/CenterContainer/PokemonList" method="_on_item_activated"]
