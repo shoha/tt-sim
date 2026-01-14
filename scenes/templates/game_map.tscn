@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3 uid="uid://byf7iljoqrotr"]
+[gd_scene load_steps=17 format=3 uid="uid://byf7iljoqrotr"]
 
 [ext_resource type="Script" uid="uid://ybc3vhthi6i5" path="res://scenes/templates/game_map.gd" id="1_5384n"]
 [ext_resource type="PackedScene" uid="uid://bim2dski2fp35" path="res://scenes/ui/map_menu.tscn" id="2_stlim"]
@@ -7,6 +7,7 @@
 [ext_resource type="Shader" uid="uid://cyy1aha4j5eb1" path="res://shaders/tilt_shift.gdshader" id="4_hgeeq"]
 [ext_resource type="Shader" uid="uid://p0vr8rfouk5b" path="res://shaders/pixelate.gdshader" id="4_hxr2g"]
 [ext_resource type="Script" uid="uid://bm2kst6ow2637" path="res://scenes/templates/camera_3d.gd" id="4_kjinj"]
+[ext_resource type="PackedScene" uid="uid://fpsdb2q3dsou" path="res://scenes/templates/selected_indicator.tscn" id="7_kjinj"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_kjinj"]
 turbidity = 0.0
@@ -121,5 +122,9 @@ hit_back_faces = false
 [node name="DragAndDrop3D" type="Node3D" parent="WorldEnvironment" groups=["DragAndDrop3D"]]
 script = ExtResource("2_tyn2t")
 metadata/_custom_type_script = "uid://md8k6faseouk"
+
+[node name="SelectedIndicator" parent="WorldEnvironment" instance=ExtResource("7_kjinj")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.8844986, 0, -1.3427734)
+visible = false
 
 [node name="MapMenu" parent="." instance=ExtResource("2_stlim")]
