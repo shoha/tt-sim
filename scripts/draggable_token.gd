@@ -34,6 +34,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_rotating = false
 		return
 	
+	if event.is_action_pressed("select_token") and _mouse_over:
+		print(event.is_action_pressed("select_token"))
+		EventBus.emit_signal("token_selected", _rigid_body)
+	
 	if _rotating and event is InputEventMouseMotion:
 		var velocity_x = event.screen_velocity.x
 		_rigid_body.rotate_y(velocity_x * ROTATION_FACTOR)

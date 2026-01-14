@@ -10,6 +10,7 @@
 [node name="GameMap" parent="." instance=ExtResource("1_dse15")]
 
 [node name="DraggingObject3D" parent="GameMap" instance=ExtResource("2_y7u8f")]
+visible = false
 
 [node name="DraggingObject3D2" parent="GameMap" instance=ExtResource("4_0rm4c")]
 

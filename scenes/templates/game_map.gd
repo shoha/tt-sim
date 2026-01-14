@@ -10,13 +10,14 @@ class_name GameMap
 @onready var camera_node: Camera3D = $WorldEnvironment/CameraHolder/Camera3D
 @onready var pixelate_node: ColorRect = $WorldEnvironment/PixelateCanvas/Pixelate
 @onready var tiltshift_node: MeshInstance3D = $WorldEnvironment/CameraHolder/Camera3D/MeshInstance3D
+@onready var selected_indicator: Node3D = $WorldEnvironment/SelectedIndicator
 
 var _camera_move_dir: Vector3
 var _camera_zoom_dir: int
 
 func _ready() -> void:
 	EventBus.pokemon_added.connect(_on_pokemon_list_pokemon_added)
-	pass # Replace with function body.
+	EventBus.token_selected.connect(_on_token_selected)
 
 func _process(delta):
 	handle_movement(delta)
@@ -81,3 +82,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
 	$WorldEnvironment/DragAndDrop3D.add_child(pokemon.instantiate())
+	
+func _on_token_selected(token: Node3D) -> void:
+	print(token.global_position)
+	selected_indicator.global_position = token.global_position
+	selected_indicator.show()
