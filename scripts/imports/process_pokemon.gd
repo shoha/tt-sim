@@ -3,7 +3,6 @@ extends EditorScenePostImport
 
 const AnimationTreeScene = preload("res://animations/pokemon_animation_tree.tscn")
 
-
 func _post_import(scene):
 	print(scene.name)
 	scene.print_tree_pretty()
@@ -36,9 +35,6 @@ func _post_import(scene):
 	rigid_body.axis_lock_angular_y = true
 	rigid_body.axis_lock_angular_z = true
 
-	var dragging_object: DraggingObject3D = DraggingObject3D.new()
-	dragging_object.name = 'DraggingObject3D'
-	dragging_object.add_child(rigid_body)
 
 	# Iterate through MeshInstance3D children to create individual collision shapes
 	var mesh_shape = mesh_model.mesh.create_convex_shape()
@@ -65,9 +61,13 @@ func _post_import(scene):
 	rigid_body.add_child(animation_tree_instance)
 	animation_tree_instance.anim_player = animation_player
 
-	for node in [rigid_body, animation_player, collision_shape, armature, skeleton, mesh_model, animation_tree_instance]:
-		node.set_owner(dragging_object)
+	# Ensure all nodes are owned by rigid_body
+	_set_ownership_recursive(rigid_body, rigid_body)
 
-	dragging_object.set_script(load("res://scripts/draggable_token.gd"))
+	return rigid_body
 
-	return dragging_object
+func _set_ownership_recursive(node: Node, owner_node: Node) -> void:
+	if node != owner_node:
+		node.owner = owner_node
+	for child in node.get_children():
+		_set_ownership_recursive(child, owner_node)

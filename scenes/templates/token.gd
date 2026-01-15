@@ -1,7 +1,7 @@
 @tool
 
 extends DraggingObject3D
-class_name DraggableToken
+class_name Token
 
 const ROTATION_FACTOR: float = 0.0001
 
@@ -9,8 +9,25 @@ var _rotating: bool = false
 var _rigid_body: RigidBody3D
 var _mouse_over: bool = false
 
+func _init(rigid_body: RigidBody3D = null) -> void:
+	if rigid_body:
+		# Remove any existing RigidBody3D children
+		for child in get_children():
+			if child is RigidBody3D:
+				child.queue_free()
+
+		_rigid_body = rigid_body
+		add_child(rigid_body)
+
 func _ready() -> void:
-	_rigid_body = get_child(0)
+	# Use the provided rigid_body or get it from children
+	if not _rigid_body:
+		_rigid_body = get_child(0) as RigidBody3D
+
+	if not _rigid_body:
+		push_error("DraggableToken requires a RigidBody3D node")
+		return
+
 	_rigid_body.connect("mouse_entered", _mouse_entered)
 	_rigid_body.connect("mouse_exited", _mouse_exited)
 
