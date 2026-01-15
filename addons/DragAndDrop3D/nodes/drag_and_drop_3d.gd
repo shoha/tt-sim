@@ -8,6 +8,7 @@ signal dragging_stopped(draggingObject: DraggingObject3D)
 @export var mousePositionDepth := 100
 @export var groupExclude: Array[String] = []
 @export_flags_3d_physics var collisionMask: int = 1
+@export var drag_smoothing := 0.15
 
 @export_group("Swap")
 ## If [code]true[/code], you swap the dragging objects if the snap position is already taken[br]
@@ -74,7 +75,8 @@ func _handle_drag() -> void:
 	if not mousePosition3D: return
 
 	mousePosition3D.y += _currentDraggingObject.get_height_offset()
-	_currentDraggingObject.objectBody.global_position = mousePosition3D
+	var currentPos = _currentDraggingObject.objectBody.global_position
+	_currentDraggingObject.objectBody.global_position = currentPos.lerp(mousePosition3D, drag_smoothing)
 
 func _get_3d_mouse_position():
 	var mousePosition := get_viewport().get_mouse_position()

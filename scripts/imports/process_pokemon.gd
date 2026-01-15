@@ -7,18 +7,18 @@ const AnimationTreeScene = preload("res://animations/pokemon_animation_tree.tscn
 func _post_import(scene):
 	print(scene.name)
 	scene.print_tree_pretty()
-	
+
 	print("Starting post-import processing.")
-	
+
 	var animation_player: AnimationPlayer
 	var armature: Node3D;
 	var skeleton: Skeleton3D;
 	var mesh_model: MeshInstance3D;
-	
+
 	for child in scene.get_children():
 		if child.name == "AnimationPlayer":
 			animation_player = child
-			
+
 		if child.name == "Armature":
 			armature = child
 			skeleton = armature.get_child(0)
@@ -27,7 +27,7 @@ func _post_import(scene):
 	if !mesh_model:
 		push_error("No mesh found.")
 		return scene
-	
+
 	# Create a new RigidBody3D and configure it
 	# This will be the root node of the returned scene
 	var rigid_body = RigidBody3D.new()
@@ -52,11 +52,11 @@ func _post_import(scene):
 	# Set the owner to ensure it's saved with the rigid_body # scene
 	print("Added CollisionShape3D for: ", mesh_model.name)
 	print("Finished setting up RigidBody3D and collision shapes.")
-	
+
 	scene.remove_child(armature)
 	armature.set_owner(null)
 	rigid_body.add_child(armature)
-	
+
 	scene.remove_child(animation_player)
 	animation_player.set_owner(null)
 	rigid_body.add_child(animation_player)
@@ -64,10 +64,10 @@ func _post_import(scene):
 	var animation_tree_instance = AnimationTreeScene.instantiate()
 	rigid_body.add_child(animation_tree_instance)
 	animation_tree_instance.anim_player = animation_player
-		
+
 	for node in [rigid_body, animation_player, collision_shape, armature, skeleton, mesh_model, animation_tree_instance]:
 		node.set_owner(dragging_object)
-	
+
 	dragging_object.set_script(load("res://scripts/draggable_token.gd"))
-	
+
 	return dragging_object
