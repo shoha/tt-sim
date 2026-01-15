@@ -112,6 +112,7 @@ omni_attenuation = 0.247
 omni_shadow_mode = 0
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="WorldEnvironment/CameraHolder/Camera3D"]
+visible = false
 extra_cull_margin = 16384.0
 mesh = SubResource("QuadMesh_stlim")
 
