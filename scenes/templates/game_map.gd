@@ -28,21 +28,21 @@ func handle_movement(delta):
 
 func handle_zoom(delta):
 	var zoom_level = clamp(camera_node.size + _camera_zoom_dir * zoom_speed * delta, min_zoom, max_zoom)
-	
+
 	if _camera_zoom_dir != 0.0:
 		camera_node.size = zoom_level
-	
+
 	_camera_zoom_dir = 0
 	pixelate_node.material.set_shader_parameter(&"camera_size", camera_node.size)
-	
+
 	var zoom_percentage: float = (zoom_level - min_zoom) / (max_zoom - min_zoom)
 	tiltshift_node.mesh.material.set_shader_parameter(&"DoF", 5 * zoom_percentage)
-	
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is not InputEventMouseButton:
 		return
-	
+
 	if event.is_action_pressed("camera_zoom_in"):
 		_camera_zoom_dir -= 1
 	if event.is_action_pressed("camera_zoom_out"):
@@ -50,7 +50,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	var input_dir := _camera_move_dir
-	
+
 	if event.is_action_released("camera_move_forward"):
 		input_dir.x += 1
 		input_dir.z += 1
@@ -63,7 +63,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if event.is_action_released("camera_move_right"):
 		input_dir.x -= 1
 		input_dir.z += 1
-	
+
 	if event.is_action_pressed("camera_move_forward"):
 		input_dir.x -= 1
 		input_dir.z -= 1
@@ -76,13 +76,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if event.is_action_pressed("camera_move_right"):
 		input_dir.x += 1
 		input_dir.z -= 1
-		
-	input_dir.y = 0	
+
+	input_dir.y = 0
 	_camera_move_dir = input_dir
 
 func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
-	$WorldEnvironment/DragAndDrop3D.add_child(pokemon.instantiate())
-	
+	# $WorldEnvironment/DragAndDrop3D.add_child(pokemon.instantiate())
+	var scene = pokemon.instantiate()
+	if scene is RigidBody3D:
+		$WorldEnvironment/DragAndDrop3D.add_child(Token.new(scene))
+
 func _on_token_selected(token: Node3D) -> void:
 	print(token.global_position)
 	selected_indicator.global_position = token.global_position
