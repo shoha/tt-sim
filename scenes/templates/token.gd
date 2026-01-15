@@ -5,8 +5,8 @@ class_name Token
 
 const ROTATION_FACTOR: float = 0.0001
 
+@export var _rigid_body: RigidBody3D
 var _rotating: bool = false
-var _rigid_body: RigidBody3D
 var _mouse_over: bool = false
 
 func _init(rigid_body: RigidBody3D = null) -> void:
@@ -22,7 +22,7 @@ func _init(rigid_body: RigidBody3D = null) -> void:
 func _ready() -> void:
 	# Use the provided rigid_body or get it from children
 	if not _rigid_body:
-		_rigid_body = get_child(0) as RigidBody3D
+		_rigid_body = $RigidBody3D
 
 	if not _rigid_body:
 		push_error("DraggableToken requires a RigidBody3D node")
