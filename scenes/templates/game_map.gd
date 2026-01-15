@@ -84,9 +84,10 @@ func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
 	# $WorldEnvironment/DragAndDrop3D.add_child(pokemon.instantiate())
 	var scene = pokemon.instantiate()
 	if scene is RigidBody3D:
-		$WorldEnvironment/DragAndDrop3D.add_child(Token.new(scene))
+		var board_token = load("res://scenes/templates/board_token.tscn").instantiate() as BoardToken
+		board_token.setup(scene)
+		$WorldEnvironment/DragAndDrop3D.add_child(board_token)
 
 func _on_token_selected(token: Node3D) -> void:
-	print(token.global_position)
 	selected_indicator.global_position = token.global_position
 	selected_indicator.show()
