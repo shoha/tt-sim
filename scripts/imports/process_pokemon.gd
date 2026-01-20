@@ -13,15 +13,13 @@ func _post_import(scene):
 	var armature: Node3D;
 	var skeleton: Skeleton3D;
 	var mesh_model: MeshInstance3D;
+	var collision_shape: CollisionShape3D;
 
-	for child in scene.get_children():
-		if child.name == "AnimationPlayer":
-			animation_player = child
-
-		if child.name == "Armature":
-			armature = child
-			skeleton = armature.get_child(0)
-			mesh_model = skeleton.get_child(0)
+	armature = scene.get_node_or_null("Armature")
+	animation_player = scene.get_node_or_null("AnimationPlayer")
+	skeleton = armature.get_node_or_null("Skeleton3D") if armature else null
+	mesh_model = skeleton.get_node_or_null("Mesh") if armature else null
+	collision_shape = scene.get_node_or_null("Armature/Mesh/Mesh/CollisionShape3D")
 
 	if !mesh_model:
 		push_error("No mesh found.")
@@ -36,11 +34,18 @@ func _post_import(scene):
 	rigid_body.axis_lock_angular_z = true
 
 
-	# Iterate through MeshInstance3D children to create individual collision shapes
-	var mesh_shape = mesh_model.mesh.create_convex_shape()
-	var collision_shape = CollisionShape3D.new()
-	collision_shape.shape = mesh_shape
-	collision_shape.name = "CollisionShape3D"
+	if collision_shape:
+		if armature:
+			var collision_parent = armature.get_node("Mesh")
+			armature.remove_child(collision_parent)
+			collision_shape.get_parent().remove_child(collision_shape)
+	else:
+		# Iterate through MeshInstance3D children to create individual collision shapes
+		var mesh_shape = mesh_model.mesh.create_convex_shape()
+		collision_shape = CollisionShape3D.new()
+		collision_shape.shape = mesh_shape
+		collision_shape.name = "CollisionShape3D"
+
 	# Apply the original mesh child's transform to the collision shape
 	#collision_shape.transform = armature.transform
 	# Add the collision shape to the RigidBody3D

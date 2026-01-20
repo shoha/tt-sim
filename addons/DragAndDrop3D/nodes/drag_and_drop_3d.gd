@@ -32,7 +32,7 @@ var _currentDraggingObject: DraggingObject3D
 var _otherObjectOnPosition: DraggingObject3D
 
 func _ready() -> void:
-	if not Engine.is_editor_hint():
+	if not Engine.is_editor_hint() and not DragAndDropGroupHelper.is_connected("group_added", _set_dragging_object_signals):
 		DragAndDropGroupHelper.group_added.connect(_set_dragging_object_signals)
 
 	_set_group()
@@ -44,7 +44,7 @@ func _set_group() -> void:
 	DragAndDropGroupHelper.add_node_to_group(self, "DragAndDrop3D")
 
 func _set_dragging_object_signals(group: String, node: Node) -> void:
-	if group == "draggingObjects":
+	if group == "draggingObjects" and not node.is_connected("object_body_mouse_down", set_dragging_object):
 		node.object_body_mouse_down.connect(set_dragging_object.bind(node))
 
 func set_dragging_object(object: DraggingObject3D) -> void:
