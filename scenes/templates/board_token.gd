@@ -11,7 +11,6 @@ var _mouse_over: bool = false
 @onready var _original_rigid_body: RigidBody3D = $DraggingObject3D/RigidBody3D
 
 func setup(rb: RigidBody3D = null) -> void:
-	print(rb)
 	if rb:
 		rigid_body = rb
 

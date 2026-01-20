@@ -82,6 +82,7 @@ mouse_filter = 2
 metadata/_edit_use_anchors_ = true
 
 [node name="PixelateCanvas" type="CanvasLayer" parent="WorldEnvironment"]
+visible = false
 
 [node name="Pixelate" type="ColorRect" parent="WorldEnvironment/PixelateCanvas"]
 material = SubResource("ShaderMaterial_pe1xh")

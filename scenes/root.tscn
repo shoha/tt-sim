@@ -5,13 +5,3 @@
 [node name="Root" type="Node3D"]
 
 [node name="Oakslab" parent="." instance=ExtResource("1_j5px3")]
-
-[node name="DraggingObject3D2" parent="Oakslab/GameMap" index="4"]
-visible = false
-
-[editable path="Oakslab"]
-[editable path="Oakslab/GameMap"]
-[editable path="Oakslab/GameMap/MapMenu"]
-[editable path="Oakslab/GameMap/oakslabpainted"]
-[editable path="Oakslab/GameMap/Token"]
-[editable path="Oakslab/GameMap/DraggingObject3D2"]
