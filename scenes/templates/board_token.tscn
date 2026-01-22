@@ -1,7 +1,6 @@
-[gd_scene load_steps=67 format=3 uid="uid://bev473ihcxqg8"]
+[gd_scene load_steps=66 format=3 uid="uid://bev473ihcxqg8"]
 
 [ext_resource type="Script" uid="uid://dueuxg404yd3w" path="res://scenes/templates/board_token.gd" id="1_sfu0e"]
-[ext_resource type="Script" uid="uid://cji46721pjyw7" path="res://scenes/templates/draggable_token.gd" id="2_pb0a3"]
 [ext_resource type="PackedScene" uid="uid://syx65bd6uwbf" path="res://animations/pokemon_animation_tree.tscn" id="2_qbeu5"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_sfu0e"]
@@ -65089,33 +65088,30 @@ _data = {
 [node name="Token" type="Node3D"]
 script = ExtResource("1_sfu0e")
 
-[node name="DraggingObject3D" type="Node3D" parent="."]
-script = ExtResource("2_pb0a3")
-
-[node name="RigidBody3D" type="RigidBody3D" parent="DraggingObject3D"]
+[node name="Placeholder" type="RigidBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
 axis_lock_angular_x = true
 axis_lock_angular_y = true
 axis_lock_angular_z = true
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="DraggingObject3D/RigidBody3D"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Placeholder"]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
 shape = SubResource("BoxShape3D_sfu0e")
 debug_color = Color(0.7, 0, 0.011666489, 1)
 
-[node name="Armature" type="Node3D" parent="DraggingObject3D/RigidBody3D"]
+[node name="Armature" type="Node3D" parent="Placeholder"]
 
-[node name="Skeleton3D" type="Skeleton3D" parent="DraggingObject3D/RigidBody3D/Armature"]
+[node name="Skeleton3D" type="Skeleton3D" parent="Placeholder/Armature"]
 
-[node name="Mesh" type="MeshInstance3D" parent="DraggingObject3D/RigidBody3D/Armature/Skeleton3D"]
+[node name="Mesh" type="MeshInstance3D" parent="Placeholder/Armature/Skeleton3D"]
 mesh = SubResource("BoxMesh_qbeu5")
 skin = SubResource("Skin_nn47j")
 skeleton = NodePath("")
 
-[node name="AnimationPlayer" type="AnimationPlayer" parent="DraggingObject3D/RigidBody3D"]
+[node name="AnimationPlayer" type="AnimationPlayer" parent="Placeholder"]
 libraries = {
 &"": SubResource("AnimationLibrary_lh3at")
 }
 
-[node name="AnimationTree" parent="DraggingObject3D/RigidBody3D" node_paths=PackedStringArray("anim_player") instance=ExtResource("2_qbeu5")]
+[node name="AnimationTree" parent="Placeholder" node_paths=PackedStringArray("anim_player") instance=ExtResource("2_qbeu5")]
 anim_player = NodePath("../AnimationPlayer")
