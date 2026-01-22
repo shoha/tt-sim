@@ -2,8 +2,10 @@ extends Node3D
 class_name BoardToken
 
 const ROTATION_FACTOR: float = 0.0001
+const SCALE_FACTOR: float = 0.0001
 
 var _rotating: bool = false
+var _scaling: bool = false
 var _mouse_over: bool = false
 @export var rigid_body: RigidBody3D
 
@@ -43,11 +45,16 @@ func _mouse_exited():
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("rotate_model") and _mouse_over:
-		_rotating = true
+		# Check if shift is held to determine scaling vs rotation
+		if Input.is_key_pressed(KEY_SHIFT):
+			_scaling = true
+		else:
+			_rotating = true
 		return
 
 	if event.is_action_released("rotate_model"):
 		_rotating = false
+		_scaling = false
 		return
 
 	if event.is_action_pressed("select_token") and _mouse_over:
@@ -57,3 +64,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _rotating and event is InputEventMouseMotion:
 		var velocity_x = event.screen_velocity.x
 		rigid_body.rotate_y(velocity_x * ROTATION_FACTOR)
+	
+	if _scaling and event is InputEventMouseMotion:
+		var velocity_y = event.screen_velocity.y
+		# Use negative velocity_y so moving mouse up scales up, down scales down
+		var scale_change = - velocity_y * SCALE_FACTOR
+		var new_scale = rigid_body.scale + Vector3.ONE * scale_change
+		# Clamp the scale to prevent it from going too small or too large
+		new_scale = new_scale.clamp(Vector3.ONE * 0.1, Vector3.ONE * 10.0)
+		rigid_body.scale = new_scale
+		
+		# Recompute the height offset to keep it in sync with the new AABB size
+		if _dragging_object is DraggableToken:
+			_dragging_object._set_height_offset_from_bounding_box()
