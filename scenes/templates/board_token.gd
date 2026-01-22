@@ -1,121 +1,164 @@
 extends Node3D
 class_name BoardToken
 
-const ROTATION_FACTOR: float = 0.0001
-const SCALE_FACTOR: float = 0.0001
+## Represents a PC or NPC token on the game board
+## Manages entity data like health, visibility, and status
+## Separated from interaction logic (TokenController) and drag mechanics (DraggableToken)
+##
+## Runtime Scene Tree Structure:
+## BoardToken (Node3D) - this script
+## ├── DraggingObject3D (DraggableToken) - created at runtime
+## │   └── RigidBody3D (from rigid_body export or Placeholder)
+## │       ├── CollisionShape3D
+## │       ├── Armature
+## │       ├── AnimationPlayer
+## │       └── AnimationTree
+## └── TokenController - created at runtime
+##
+## Usage:
+## - Set the @export rigid_body to an existing RigidBody3D with model/collision
+## - Or leave it unset to use the Placeholder node from the scene
+## - The script will automatically create DraggableToken and TokenController components
 
-var _rotating: bool = false
-var _scaling: bool = false
-var _mouse_over: bool = false
+# Preload the controller script since it's not a global class yet when this loads
+const TokenControllerScript = preload("res://scenes/templates/token_controller.gd")
+
+# Entity identification
+@export var token_name: String = "Token"
+@export var is_player_controlled: bool = false
+@export var character_id: String = ""
+
+# Health and status
+@export var max_health: int = 100
+@export var current_health: int = 100
+@export var is_alive: bool = true
+
+# Visibility and game state
+@export var is_visible_to_players: bool = true
+@export var is_hidden_from_gm: bool = false
+
+# Status effects (could be expanded to a proper status effect system)
+@export var status_effects: Array[String] = []
+
+# References to child components
 var _dragging_object: DraggableToken
+var _token_controller: Node # TokenController
 @export var rigid_body: RigidBody3D
 
 @onready var placeholder: Node3D = $Placeholder
 
-# Called when the node enters the scene tree for the first time.
+# Signals for game state changes
+signal health_changed(new_health: int, max_health: int)
+signal health_depleted()
+signal died()
+signal revived()
+signal token_visibility_changed(is_visible: bool)
+signal status_effect_added(effect: String)
+signal status_effect_removed(effect: String)
+
 func _ready() -> void:
 	if not rigid_body:
-		push_warning("No RigidBody3D found in Token node.")
+		push_warning("BoardToken: No RigidBody3D found in Token node.")
 		rigid_body = placeholder
 		return
 
 	_construct_tree()
 
-	rigid_body.connect("mouse_entered", _mouse_entered)
-	rigid_body.connect("mouse_exited", _mouse_exited)
-
 func _construct_tree() -> void:
+	# Remove placeholder from scene tree
 	placeholder.set_owner(null)
 	remove_child(placeholder)
 
+	# Create draggable component
 	_dragging_object = DraggableToken.new()
 	_dragging_object.name = "DraggingObject3D"
 	_dragging_object.add_child(rigid_body)
 	add_child(_dragging_object)
 
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(_delta: float) -> void:
-	pass
+	# Create interaction controller
+	_token_controller = TokenControllerScript.new()
+	_token_controller.name = "TokenController"
+	_token_controller.rigid_body = rigid_body
+	_token_controller.draggable_token = _dragging_object
+	add_child(_token_controller)
 
-func _mouse_entered():
-	_mouse_over = true
-
-func _mouse_exited():
-	_mouse_over = false
-
-func _reset_rotation_and_scale() -> void:
-	# Store the old scale to calculate position adjustment
-	var old_scale = rigid_body.scale
-
-	# Reset rotation to identity (no rotation)
-	rigid_body.rotation = Vector3.ZERO
-
-	# Calculate position adjustment to keep bottom fixed when resetting scale
-	var collision_shape: CollisionShape3D = rigid_body.get_node_or_null("CollisionShape3D")
-	if collision_shape and collision_shape.shape:
-		var aabb: AABB = collision_shape.shape.get_debug_mesh().get_aabb()
-		var local_bottom_y = collision_shape.position.y + aabb.position.y
-		var bottom_offset_old = local_bottom_y * old_scale.y
-		var bottom_offset_new = local_bottom_y * 1.0 # New scale is 1.0
-		rigid_body.position.y += (bottom_offset_old - bottom_offset_new)
-
-	# Reset scale to default
-	rigid_body.scale = Vector3.ONE
-
-	# Recompute the height offset
-	if _dragging_object is DraggableToken:
-		_dragging_object._set_height_offset_from_bounding_box()
-
-func _unhandled_input(event: InputEvent) -> void:
-	# Check for double-click on middle mouse button to reset rotation and scale
-	if event is InputEventMouseButton and event.double_click and event.is_action_pressed("rotate_model") and _mouse_over:
-		_reset_rotation_and_scale()
+# Health management
+func take_damage(amount: int) -> void:
+	if not is_alive:
 		return
 
-	if event.is_action_pressed("rotate_model") and _mouse_over:
-		# Check if shift is held to determine scaling vs rotation
-		if Input.is_key_pressed(KEY_SHIFT):
-			_scaling = true
-		else:
-			_rotating = true
+	var old_health = current_health
+	current_health = max(0, current_health - amount)
+	health_changed.emit(current_health, max_health)
+
+	if current_health == 0 and old_health > 0:
+		health_depleted.emit()
+		_on_health_depleted()
+
+func heal(amount: int) -> void:
+	if not is_alive:
 		return
 
-	if event.is_action_released("rotate_model"):
-		_rotating = false
-		_scaling = false
+	current_health = min(max_health, current_health + amount)
+	health_changed.emit(current_health, max_health)
+
+func set_max_health(new_max: int) -> void:
+	max_health = new_max
+	current_health = min(current_health, max_health)
+	health_changed.emit(current_health, max_health)
+
+func _on_health_depleted() -> void:
+	is_alive = false
+	died.emit()
+	# Could trigger visual effects here
+
+func revive(health_amount: int = -1) -> void:
+	if is_alive:
 		return
 
-	if event.is_action_pressed("select_token") and _mouse_over:
-		EventBus.emit_signal("token_selected", rigid_body)
+	is_alive = true
+	if health_amount < 0:
+		current_health = max_health
+	else:
+		current_health = min(health_amount, max_health)
 
-	if _rotating and event is InputEventMouseMotion:
-		var velocity_x = event.screen_velocity.x
-		rigid_body.rotate_y(velocity_x * ROTATION_FACTOR)
+	revived.emit()
+	health_changed.emit(current_health, max_health)
 
-	if _scaling and event is InputEventMouseMotion:
-		var velocity_y = event.screen_velocity.y
-		# Use negative velocity_y so moving mouse up scales up, down scales down
-		var scale_change = - velocity_y * SCALE_FACTOR
-		var old_scale = rigid_body.scale
-		var new_scale = rigid_body.scale + Vector3.ONE * scale_change
-		# Clamp the scale to prevent it from going too small or too large
-		new_scale = new_scale.clamp(Vector3.ONE * 0.1, Vector3.ONE * 10.0)
+# Visibility management
+func set_visible_to_players(is_visible_value: bool) -> void:
+	is_visible_to_players = is_visible_value
+	token_visibility_changed.emit(is_visible_value)
+	# Could trigger visual effects here (fade, highlight, etc.)
 
-		# Calculate the position adjustment to keep the bottom fixed
-		# Get the collision shape to determine the object's height
-		var collision_shape: CollisionShape3D = rigid_body.get_node_or_null("CollisionShape3D")
-		if collision_shape and collision_shape.shape:
-			var aabb: AABB = collision_shape.shape.get_debug_mesh().get_aabb()
-			# Calculate the bottom position in local space
-			var local_bottom_y = collision_shape.position.y + aabb.position.y
-			# Calculate how much the bottom moves when scaling from center
-			var bottom_offset_old = local_bottom_y * old_scale.y
-			var bottom_offset_new = local_bottom_y * new_scale.y
-			# Adjust position to compensate
-			rigid_body.position.y += (bottom_offset_old - bottom_offset_new)
+func toggle_visibility() -> void:
+	set_visible_to_players(not is_visible_to_players)
 
-		rigid_body.scale = new_scale
+# Status effect management
+func add_status_effect(effect: String) -> void:
+	if not status_effects.has(effect):
+		status_effects.append(effect)
+		status_effect_added.emit(effect)
 
-		# Recompute the height offset to keep it in sync with the new AABB size
-		if _dragging_object is DraggableToken:
-			_dragging_object._set_height_offset_from_bounding_box()
+func remove_status_effect(effect: String) -> void:
+	if status_effects.has(effect):
+		status_effects.erase(effect)
+		status_effect_removed.emit(effect)
+
+func has_status_effect(effect: String) -> bool:
+	return status_effects.has(effect)
+
+func clear_status_effects() -> void:
+	for effect in status_effects:
+		status_effect_removed.emit(effect)
+	status_effects.clear()
+
+# Getters for component access
+func get_draggable_component() -> DraggableToken:
+	return _dragging_object
+
+func get_controller_component() -> Node:
+	return _token_controller
+
+func get_rigid_body() -> RigidBody3D:
+	return rigid_body

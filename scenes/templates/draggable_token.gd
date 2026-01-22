@@ -3,6 +3,16 @@
 extends DraggingObject3D
 class_name DraggableToken
 
+## Adds drag-and-drop functionality to a token's RigidBody3D
+## Handles visual feedback during dragging (drop indicators, lean effects)
+## This is a pure interaction component - it has no knowledge of game entity data
+##
+## Expected hierarchy:
+## DraggableToken (this)
+## └── RigidBody3D
+##     ├── CollisionShape3D (required)
+##     └── Visual nodes (MeshInstance3D, etc.)
+
 const ROTATION_FACTOR: float = 0.0001
 const PICKUP_HEIGHT: float = 0.25 # How much to raise the token while dragging
 const RAYCAST_LENGTH: float = 100.0 # Maximum distance to raycast downward
@@ -31,7 +41,7 @@ func _ready() -> void:
 	if not _rigid_body:
 		return
 
-	_set_height_offset_from_bounding_box()
+	update_height_offset()
 
 	# Only set up dragging signals and line mesh during gameplay
 	if not Engine.is_editor_hint():
@@ -77,7 +87,9 @@ func _collect_visual_children() -> void:
 		if child is Node3D and not child is CollisionShape3D:
 			_visual_children.append(child)
 
-func _set_height_offset_from_bounding_box() -> void:
+## Public method to update height offset based on bounding box
+## Should be called when the token's scale or collision shape changes
+func update_height_offset() -> void:
 	if Engine.is_editor_hint():
 		return
 
@@ -100,6 +112,11 @@ func _set_height_offset_from_bounding_box() -> void:
 	# Set height offset to align the bottom of the bounding box at y=0
 	_base_height_offset = shape_top / 2
 	heightOffset = shape_top / 2
+
+## Get the visual children (non-collision nodes) of the rigid body
+## Useful for external components that need to manipulate visuals
+func get_visual_children() -> Array[Node3D]:
+	return _visual_children
 
 func _on_dragging_started() -> void:
 	# Disable gravity while dragging
