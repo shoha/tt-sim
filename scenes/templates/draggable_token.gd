@@ -4,6 +4,9 @@ extends DraggingObject3D
 class_name DraggableToken
 
 const ROTATION_FACTOR: float = 0.0001
+const PICKUP_HEIGHT: float = 0.5 # How much to raise the token while dragging
+
+var _base_height_offset: float = 0.0
 
 @onready var _rigid_body: RigidBody3D = $RigidBody3D
 @onready var _collision_shape: CollisionShape3D = $RigidBody3D/CollisionShape3D
@@ -14,6 +17,10 @@ func _ready() -> void:
 		return
 
 	_set_height_offset_from_bounding_box()
+
+	# Connect to dragging signals to disable gravity while dragging
+	dragging_started.connect(_on_dragging_started)
+	dragging_stopped.connect(_on_dragging_stopped)
 
 	super ()
 
@@ -39,7 +46,20 @@ func _set_height_offset_from_bounding_box() -> void:
 	var shape_top = scaled_collision_position.y + scaled_aabb_position.y + scaled_aabb_size.y
 
 	# Set height offset to align the bottom of the bounding box at y=0
+	_base_height_offset = shape_top
 	heightOffset = shape_top
+
+func _on_dragging_started() -> void:
+	# Disable gravity while dragging
+	_rigid_body.gravity_scale = 0.0
+	# Raise the token to create a "picked up" effect
+	heightOffset = _base_height_offset + PICKUP_HEIGHT
+
+func _on_dragging_stopped() -> void:
+	# Re-enable gravity when dragging stops
+	_rigid_body.gravity_scale = 1.0
+	# Lower the token back to its base height
+	heightOffset = _base_height_offset
 
 func _process(_delta: float) -> void:
 	pass
