@@ -28,8 +28,15 @@ func _set_height_offset_from_bounding_box() -> void:
 	# Get the bounding box of the shape
 	var aabb: AABB = _collision_shape.shape.get_debug_mesh().get_aabb()
 
-	# Account for the collision shape's local position
-	var shape_top = _collision_shape.position.y + aabb.position.y + aabb.size.y
+	# Account for the rigid_body's scale transformation
+	var scaled_aabb_position = aabb.position * _rigid_body.scale
+	var scaled_aabb_size = aabb.size * _rigid_body.scale
+
+	# Account for the collision shape's local position (also affected by scale)
+	var scaled_collision_position = _collision_shape.position * _rigid_body.scale
+
+	# Calculate the top of the shape with scaling applied
+	var shape_top = scaled_collision_position.y + scaled_aabb_position.y + scaled_aabb_size.y
 
 	# Set height offset to align the bottom of the bounding box at y=0
 	heightOffset = shape_top
