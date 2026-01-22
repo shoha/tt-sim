@@ -11,12 +11,18 @@ const DOT_GAP: float = 0.1 # Gap between dashes
 const LINE_THICKNESS: float = 0.03 # Thickness of the line
 const CIRCLE_RADIUS: float = 0.3 # Radius of the landing circle indicator
 const CIRCLE_SEGMENTS: int = 32 # Number of segments for the circle
+const INERTIA_LEAN_STRENGTH: float = 0.3 # How much the token leans from drag velocity (in radians)
+const LEAN_SMOOTHING: float = 8.0 # How quickly the lean adjusts to velocity changes
 
 var _base_height_offset: float = 0.0
 var _line_mesh_instance: MeshInstance3D
 var _immediate_mesh: ImmediateMesh
 var _circle_mesh_instance: MeshInstance3D
 var _circle_immediate_mesh: ImmediateMesh
+var _last_drag_position: Vector3 = Vector3.ZERO
+var _drag_velocity: Vector3 = Vector3.ZERO
+var _target_lean_rotation: Basis = Basis.IDENTITY
+var _visual_children: Array[Node3D] = []
 
 @onready var _rigid_body: RigidBody3D = $RigidBody3D
 @onready var _collision_shape: CollisionShape3D = $RigidBody3D/CollisionShape3D
@@ -30,6 +36,9 @@ func _ready() -> void:
 
 	# Only set up dragging signals and line mesh during gameplay
 	if not Engine.is_editor_hint():
+		# Collect all visual children (non-CollisionShape nodes) of the RigidBody3D
+		_collect_visual_children()
+
 		# Connect to dragging signals to disable gravity while dragging
 		dragging_started.connect(_on_dragging_started)
 		dragging_stopped.connect(_on_dragging_stopped)
@@ -61,6 +70,12 @@ func _ready() -> void:
 
 	super ()
 
+func _collect_visual_children() -> void:
+	# Collect all visual children of the rigid body (excluding collision shapes)
+	for child in _rigid_body.get_children():
+		if child is Node3D and not child is CollisionShape3D:
+			_visual_children.append(child)
+
 
 func _set_height_offset_from_bounding_box() -> void:
 	if Engine.is_editor_hint():
@@ -91,10 +106,19 @@ func _on_dragging_started() -> void:
 	_rigid_body.gravity_scale = 0.0
 	# Raise the token to create a "picked up" effect
 	heightOffset = _base_height_offset + PICKUP_HEIGHT
+	# Initialize drag tracking
+	_last_drag_position = _rigid_body.global_position
+	_drag_velocity = Vector3.ZERO
 
 func _on_dragging_stopped() -> void:
+	# Reset visual children rotation
+	for child in _visual_children:
+		if is_instance_valid(child):
+			child.transform.basis = Basis.IDENTITY
+
 	# Re-enable gravity when dragging stops
 	_rigid_body.gravity_scale = 1.0
+
 	# Lower the token back to its base height
 	heightOffset = _base_height_offset
 	# Clear the line and circle
@@ -102,6 +126,39 @@ func _on_dragging_stopped() -> void:
 		_immediate_mesh.clear_surfaces()
 	if _circle_immediate_mesh and is_instance_valid(_circle_mesh_instance):
 		_circle_immediate_mesh.clear_surfaces()
+	# Reset velocity tracking
+	_drag_velocity = Vector3.ZERO
+	_target_lean_rotation = Basis.IDENTITY
+
+func _update_inertia_lean(delta: float) -> void:
+	# Calculate drag velocity from position change
+	var current_position = _rigid_body.global_position
+	var position_delta = current_position - _last_drag_position
+
+	# Smooth the velocity to avoid jitter
+	_drag_velocity = _drag_velocity.lerp(position_delta / delta, 0.3)
+	_last_drag_position = current_position
+
+	# Calculate lean based on horizontal (XZ plane) movement
+	var horizontal_velocity = Vector3(_drag_velocity.x, 0, _drag_velocity.z)
+
+	if horizontal_velocity.length() > 0.001:
+		# Calculate lean axis perpendicular to movement direction (cross with UP)
+		var lean_axis = horizontal_velocity.cross(Vector3.UP).normalized()
+		# Calculate lean angle based on velocity magnitude
+		var lean_angle = clamp(horizontal_velocity.length() * INERTIA_LEAN_STRENGTH, 0.0, 0.5) # Max ~28 degrees
+
+		# Create target lean rotation
+		_target_lean_rotation = Basis(lean_axis, lean_angle)
+	else:
+		# No movement, return to upright
+		_target_lean_rotation = Basis.IDENTITY
+
+	# Apply rotation to visual children only, not the rigid body
+	for child in _visual_children:
+		if is_instance_valid(child):
+			var current_basis = child.transform.basis.orthonormalized()
+			child.transform.basis = current_basis.slerp(_target_lean_rotation, LEAN_SMOOTHING * delta).orthonormalized()
 
 func _process(_delta: float) -> void:
 	# Only update drop indicator during gameplay when dragging
@@ -109,6 +166,7 @@ func _process(_delta: float) -> void:
 		return
 	if _is_dragging:
 		_update_drop_indicator()
+		_update_inertia_lean(_delta)
 
 func _update_drop_indicator() -> void:
 	# Safety check to ensure mesh instance is valid
