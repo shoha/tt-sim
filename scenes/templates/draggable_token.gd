@@ -4,7 +4,7 @@ extends DraggingObject3D
 class_name DraggableToken
 
 const ROTATION_FACTOR: float = 0.0001
-const PICKUP_HEIGHT: float = 1.5 # How much to raise the token while dragging
+const PICKUP_HEIGHT: float = 0.25 # How much to raise the token while dragging
 const RAYCAST_LENGTH: float = 100.0 # Maximum distance to raycast downward
 const DOT_LENGTH: float = 0.15 # Length of each dash in the dotted line
 const DOT_GAP: float = 0.1 # Gap between dashes
@@ -29,7 +29,6 @@ var _visual_children: Array[Node3D] = []
 
 func _ready() -> void:
 	if not _rigid_body:
-		push_error("DraggableToken requires a RigidBody3D node")
 		return
 
 	_set_height_offset_from_bounding_box()
@@ -38,11 +37,15 @@ func _ready() -> void:
 	if not Engine.is_editor_hint():
 		# Collect all visual children (non-CollisionShape nodes) of the RigidBody3D
 		_collect_visual_children()
+		_create_line_mesh()
 
 		# Connect to dragging signals to disable gravity while dragging
 		dragging_started.connect(_on_dragging_started)
 		dragging_stopped.connect(_on_dragging_stopped)
 
+	super ()
+
+func _create_line_mesh() -> void:
 		# Create the line mesh for the drop indicator
 		_immediate_mesh = ImmediateMesh.new()
 		_line_mesh_instance = MeshInstance3D.new()
@@ -68,14 +71,11 @@ func _ready() -> void:
 
 		add_child(_circle_mesh_instance)
 
-	super ()
-
 func _collect_visual_children() -> void:
 	# Collect all visual children of the rigid body (excluding collision shapes)
 	for child in _rigid_body.get_children():
 		if child is Node3D and not child is CollisionShape3D:
 			_visual_children.append(child)
-
 
 func _set_height_offset_from_bounding_box() -> void:
 	if Engine.is_editor_hint():
@@ -98,8 +98,8 @@ func _set_height_offset_from_bounding_box() -> void:
 	var shape_top = scaled_collision_position.y + scaled_aabb_position.y + scaled_aabb_size.y
 
 	# Set height offset to align the bottom of the bounding box at y=0
-	_base_height_offset = shape_top
-	heightOffset = shape_top
+	_base_height_offset = shape_top / 2
+	heightOffset = shape_top / 2
 
 func _on_dragging_started() -> void:
 	# Disable gravity while dragging

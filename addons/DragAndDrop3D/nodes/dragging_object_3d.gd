@@ -43,12 +43,12 @@ func _set_default_snap_position() -> void:
 	snapPosition = Vector3(global_position.x, global_position.y - get_height_offset(), global_position.z)
 
 func _set_late_signals() -> void:
-	await get_tree().current_scene.ready
+	if !get_tree().current_scene.is_node_ready():
+		await get_tree().current_scene.ready
 
 	var dragAndDrop3D: DragAndDrop3D = get_tree().get_first_node_in_group("DragAndDrop3D")
 
 	if !dragAndDrop3D:
-		push_warning("No DragAndDrop3D parent node found")
 		return
 
 	dragAndDrop3D.dragging_started.connect(_is_dragging.bind(true))

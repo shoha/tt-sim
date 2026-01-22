@@ -10,7 +10,6 @@ class_name GameMap
 @onready var camera_node: Camera3D = $WorldEnvironment/CameraHolder/Camera3D
 @onready var pixelate_node: ColorRect = $WorldEnvironment/PixelateCanvas/Pixelate
 @onready var tiltshift_node: MeshInstance3D = $WorldEnvironment/CameraHolder/Camera3D/MeshInstance3D
-@onready var selected_indicator: Node3D = $WorldEnvironment/SelectedIndicator
 
 var _camera_move_dir: Vector3
 var _camera_zoom_dir: int
@@ -81,13 +80,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	_camera_move_dir = input_dir
 
 func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
-	# $WorldEnvironment/DragAndDrop3D.add_child(pokemon.instantiate())
 	var scene = pokemon.instantiate()
 	if scene is RigidBody3D:
 		var board_token = load("res://scenes/templates/board_token.tscn").instantiate() as BoardToken
-		board_token.setup(scene)
+		board_token.rigid_body = scene
 		$WorldEnvironment/DragAndDrop3D.add_child(board_token)
 
-func _on_token_selected(token: Node3D) -> void:
-	selected_indicator.global_position = token.global_position
-	selected_indicator.show()
+func _on_token_selected(_token: Node3D) -> void:
+	pass

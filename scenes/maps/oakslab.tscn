@@ -1,14 +1,10 @@
-[gd_scene load_steps=4 format=3 uid="uid://bcb6wurf2c3jv"]
+[gd_scene load_steps=3 format=3 uid="uid://bcb6wurf2c3jv"]
 
 [ext_resource type="PackedScene" uid="uid://byf7iljoqrotr" path="res://scenes/templates/game_map.tscn" id="1_dse15"]
 [ext_resource type="PackedScene" uid="uid://dqwr3aser070b" path="res://assets/models/maps/oakslabpainted.glb" id="2_qp6d2"]
-[ext_resource type="PackedScene" uid="uid://bev473ihcxqg8" path="res://scenes/templates/board_token.tscn" id="5_0rm4c"]
 
 [node name="Oakslab" type="Node3D"]
 
 [node name="GameMap" parent="." instance=ExtResource("1_dse15")]
 
 [node name="oakslabpainted" parent="GameMap" instance=ExtResource("2_qp6d2")]
-
-[node name="Token" parent="GameMap" instance=ExtResource("5_0rm4c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.9451904, 1.1275024, 0)
