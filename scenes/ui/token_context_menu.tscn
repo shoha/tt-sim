@@ -1,0 +1,123 @@
+[gd_scene load_steps=2 format=3 uid="uid://bh84knb3smm3y"]
+
+[ext_resource type="Script" path="res://scenes/ui/token_context_menu.gd" id="1_menu"]
+
+[node name="TokenContextMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+mouse_filter = 2
+script = ExtResource("1_menu")
+
+[node name="MenuPanel" type="PanelContainer" parent="."]
+layout_mode = 0
+offset_right = 200.0
+offset_bottom = 300.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MenuPanel"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+text = "Token Actions"
+horizontal_alignment = 1
+
+[node name="HSeparator1" type="HSeparator" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="HealthLabel" type="Label" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+text = "HP: 100/100"
+horizontal_alignment = 1
+
+[node name="HSeparator2" type="HSeparator" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="DamageLabel" type="Label" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+text = "Deal Damage:"
+
+[node name="QuickDamageContainer" type="HBoxContainer" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="Damage1Button" type="Button" parent="MenuPanel/VBoxContainer/QuickDamageContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "-1"
+
+[node name="Damage5Button" type="Button" parent="MenuPanel/VBoxContainer/QuickDamageContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "-5"
+
+[node name="Damage10Button" type="Button" parent="MenuPanel/VBoxContainer/QuickDamageContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "-10"
+
+[node name="Damage20Button" type="Button" parent="MenuPanel/VBoxContainer/QuickDamageContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "-20"
+
+[node name="CustomDamageContainer" type="HBoxContainer" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="CustomDamageInput" type="LineEdit" parent="MenuPanel/VBoxContainer/CustomDamageContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Custom"
+
+[node name="CustomDamageButton" type="Button" parent="MenuPanel/VBoxContainer/CustomDamageContainer"]
+layout_mode = 2
+text = "Apply"
+
+[node name="HSeparator3" type="HSeparator" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="HealLabel" type="Label" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+text = "Heal:"
+
+[node name="QuickHealContainer" type="HBoxContainer" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="Heal5Button" type="Button" parent="MenuPanel/VBoxContainer/QuickHealContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "+5"
+
+[node name="Heal10Button" type="Button" parent="MenuPanel/VBoxContainer/QuickHealContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "+10"
+
+[node name="HealFullButton" type="Button" parent="MenuPanel/VBoxContainer/QuickHealContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Full"
+
+[node name="HSeparator4" type="HSeparator" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="ToggleVisibilityButton" type="Button" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+text = "Toggle Visibility"
+
+[node name="HSeparator5" type="HSeparator" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="CloseButton" type="Button" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+text = "Close"
+
+[connection signal="pressed" from="MenuPanel/VBoxContainer/QuickDamageContainer/Damage1Button" to="." method="_on_damage_button_pressed" binds= [1]]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/QuickDamageContainer/Damage5Button" to="." method="_on_damage_button_pressed" binds= [5]]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/QuickDamageContainer/Damage10Button" to="." method="_on_damage_button_pressed" binds= [10]]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/QuickDamageContainer/Damage20Button" to="." method="_on_damage_button_pressed" binds= [20]]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/CustomDamageContainer/CustomDamageButton" to="." method="_on_custom_damage_requested"]
+[connection signal="text_submitted" from="MenuPanel/VBoxContainer/CustomDamageContainer/CustomDamageInput" to="." method="_on_custom_damage_requested"]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/QuickHealContainer/Heal5Button" to="." method="_on_heal_button_pressed" binds= [5]]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/QuickHealContainer/Heal10Button" to="." method="_on_heal_button_pressed" binds= [10]]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/QuickHealContainer/HealFullButton" to="." method="_on_heal_button_pressed" binds= [999]]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/ToggleVisibilityButton" to="." method="_on_toggle_visibility_pressed"]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/CloseButton" to="." method="_on_close_button_pressed"]

@@ -129,10 +129,20 @@ func revive(health_amount: int = -1) -> void:
 func set_visible_to_players(is_visible_value: bool) -> void:
 	is_visible_to_players = is_visible_value
 	token_visibility_changed.emit(is_visible_value)
-	# Could trigger visual effects here (fade, highlight, etc.)
+	_update_visibility_visuals()
 
 func toggle_visibility() -> void:
 	set_visible_to_players(not is_visible_to_players)
+
+func _update_visibility_visuals() -> void:
+	# Apply visual feedback when visibility is toggled
+	if rigid_body:
+		if is_visible_to_players:
+			# Fully visible
+			rigid_body.modulate = Color(1.0, 1.0, 1.0, 1.0)
+		else:
+			# Semi-transparent to indicate hidden
+			rigid_body.modulate = Color(0.5, 0.5, 0.5, 0.5)
 
 # Status effect management
 func add_status_effect(effect: String) -> void:

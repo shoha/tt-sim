@@ -13,10 +13,12 @@ class_name GameMap
 
 var _camera_move_dir: Vector3
 var _camera_zoom_dir: int
+var _context_menu = null # TokenContextMenu - dynamically typed to avoid load order issues
 
 func _ready() -> void:
 	EventBus.pokemon_added.connect(_on_pokemon_list_pokemon_added)
 	EventBus.token_selected.connect(_on_token_selected)
+	_setup_context_menu()
 
 func _process(delta):
 	handle_movement(delta)
@@ -86,5 +88,44 @@ func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
 		board_token.rigid_body = scene
 		$WorldEnvironment/DragAndDrop3D.add_child(board_token)
 
+		# Connect context menu request from the token
+		var token_controller = board_token.get_controller_component()
+		if token_controller:
+			token_controller.context_menu_requested.connect(_on_token_context_menu_requested)
+
 func _on_token_selected(_token: Node3D) -> void:
 	pass
+
+func _setup_context_menu() -> void:
+	# Load and add the context menu to the UI layer
+	var context_menu_scene = load("res://scenes/ui/token_context_menu.tscn")
+	if context_menu_scene:
+		_context_menu = context_menu_scene.instantiate()
+		# Find the MapMenu canvas layer to add the menu to
+		var map_menu = get_node_or_null("../MapMenu/MapMenu")
+		if map_menu:
+			map_menu.add_child(_context_menu)
+		else:
+			# Fallback: add to the scene root if MapMenu not found
+			add_child(_context_menu)
+
+		# Connect context menu signals
+		_context_menu.damage_requested.connect(_on_context_menu_damage_requested)
+		_context_menu.heal_requested.connect(_on_context_menu_heal_requested)
+		_context_menu.visibility_toggled.connect(_on_context_menu_visibility_toggled)
+
+func _on_token_context_menu_requested(token: BoardToken, menu_position: Vector2) -> void:
+	if _context_menu:
+		_context_menu.open_for_token(token, menu_position)
+
+func _on_context_menu_damage_requested(amount: int) -> void:
+	if _context_menu and _context_menu.target_token:
+		_context_menu.target_token.take_damage(amount)
+
+func _on_context_menu_heal_requested(amount: int) -> void:
+	if _context_menu and _context_menu.target_token:
+		_context_menu.target_token.heal(amount)
+
+func _on_context_menu_visibility_toggled() -> void:
+	if _context_menu and _context_menu.target_token:
+		_context_menu.target_token.toggle_visibility()
