@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://syx65bd6uwbf"]
+[gd_scene load_steps=17 format=3 uid="uid://syx65bd6uwbf"]
 
 [ext_resource type="Script" uid="uid://d2xfnor344wo5" path="res://animations/pokemon_animation_tree.gd" id="1_uunvo"]
 
@@ -31,10 +31,40 @@ loop_mode = 1
 resource_name = "jumpup01"
 loop_mode = 1
 
+[sub_resource type="Animation" id="Animation_uunvo"]
+resource_name = "sleep01_loop"
+loop_mode = 1
+
+[sub_resource type="Animation" id="Animation_ilmp8"]
+resource_name = "defaultwait01_loop"
+loop_mode = 1
+
+[sub_resource type="Animation" id="Animation_g6kvh"]
+resource_name = "damage01"
+
+[sub_resource type="Animation" id="Animation_iu24e"]
+resource_name = "land02"
+
+[sub_resource type="Animation" id="Animation_137i2"]
+resource_name = "down01_start"
+
+[sub_resource type="Animation" id="Animation_mr505"]
+resource_name = "down01_loop"
+
+[sub_resource type="Animation" id="Animation_qvjbr"]
+resource_name = "down01_end"
+
 [sub_resource type="AnimationLibrary" id="AnimationLibrary_qvjbr"]
 _data = {
 &"battlewait01": SubResource("Animation_t6fl1"),
-&"jumpup01": SubResource("Animation_5wt2i")
+&"damage01": SubResource("Animation_g6kvh"),
+&"defaultwait01_loop": SubResource("Animation_ilmp8"),
+&"down01_end": SubResource("Animation_qvjbr"),
+&"down01_loop": SubResource("Animation_mr505"),
+&"down01_start": SubResource("Animation_137i2"),
+&"jumpup01": SubResource("Animation_5wt2i"),
+&"land02": SubResource("Animation_iu24e"),
+&"sleep01_loop": SubResource("Animation_uunvo")
 }
 
 [node name="PokemonAnimationTree" type="Node3D"]
