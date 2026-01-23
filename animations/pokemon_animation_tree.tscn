@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3 uid="uid://syx65bd6uwbf"]
+[gd_scene load_steps=18 format=3 uid="uid://syx65bd6uwbf"]
 
 [ext_resource type="Script" uid="uid://d2xfnor344wo5" path="res://animations/pokemon_animation_tree.gd" id="1_uunvo"]
 
@@ -12,6 +12,9 @@ animation = &"damage01"
 advance_mode = 2
 
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_137i2"]
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_uunvo"]
+switch_mode = 2
 advance_mode = 2
 
 [sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_mr505"]
@@ -19,7 +22,7 @@ states/battlewait01/node = SubResource("AnimationNodeAnimation_uunvo")
 states/battlewait01/position = Vector2(403, 186)
 states/damage01/node = SubResource("AnimationNodeAnimation_g6kvh")
 states/damage01/position = Vector2(558, 91)
-transitions = ["Start", "battlewait01", SubResource("AnimationNodeStateMachineTransition_g6kvh"), "battlewait01", "damage01", SubResource("AnimationNodeStateMachineTransition_137i2")]
+transitions = ["Start", "battlewait01", SubResource("AnimationNodeStateMachineTransition_g6kvh"), "battlewait01", "damage01", SubResource("AnimationNodeStateMachineTransition_137i2"), "damage01", "battlewait01", SubResource("AnimationNodeStateMachineTransition_uunvo")]
 graph_offset = Vector2(106, -64)
 
 [sub_resource type="Animation" id="Animation_t6fl1"]
