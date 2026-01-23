@@ -28,7 +28,7 @@ func open_for_token(token: BoardToken, at_position: Vector2) -> void:
 	_update_menu_content()
 	
 	# Position menu and adjust to stay within viewport bounds
-	await get_tree().process_frame  # Wait for size to be calculated
+	await get_tree().process_frame # Wait for size to be calculated
 	_position_menu_in_viewport(at_position)
 	
 	animate_in()
