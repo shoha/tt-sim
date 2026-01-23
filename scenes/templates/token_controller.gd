@@ -14,6 +14,7 @@ class_name TokenController
 ## - Scaling input (middle mouse + shift drag)
 ## - Reset transformations (middle mouse double-click)
 ## - Token selection (left click)
+## - Context menu (right click)
 
 const ROTATION_FACTOR: float = 0.0001
 const SCALE_FACTOR: float = 0.0001
@@ -24,6 +25,8 @@ const SCALE_FACTOR: float = 0.0001
 var _rotating: bool = false
 var _scaling: bool = false
 var _mouse_over: bool = false
+
+signal context_menu_requested(token: BoardToken, position: Vector2)
 
 func _ready() -> void:
 	if not rigid_body:
@@ -42,6 +45,13 @@ func _on_mouse_exited() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not rigid_body:
+		return
+	
+	# Handle right-click for context menu
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and _mouse_over:
+		var board_token = get_parent() as BoardToken
+		if board_token:
+			context_menu_requested.emit(board_token, event.position)
 		return
 	
 	# Check for double-click on middle mouse button to reset rotation and scale
