@@ -43,7 +43,6 @@ const TokenControllerScript = preload("res://scenes/templates/token_controller.g
 # References to child components
 var _dragging_object: DraggableToken
 var _token_controller: Node # TokenController
-var _animation_controller: Node3D # PokemonAnimationTree
 @export var rigid_body: RigidBody3D
 
 @onready var placeholder: Node3D = $Placeholder
@@ -83,19 +82,6 @@ func _construct_tree() -> void:
 	_token_controller.draggable_token = _dragging_object
 	add_child(_token_controller)
 
-	# Find animation controller (PokemonAnimationTree) in rigid body hierarchy
-	_find_animation_controller(rigid_body)
-
-# Find the PokemonAnimationTree controller in the node hierarchy
-func _find_animation_controller(node: Node) -> void:
-	# Look for nodes with the expected animation controller script
-	for child in node.get_children():
-		if child.has_method("play_damage") and child.has_method("play_knockout"):
-			_animation_controller = child
-			return
-		# Recursively search children
-		_find_animation_controller(child)
-
 # Health management
 func take_damage(amount: int) -> void:
 	if not is_alive:
@@ -108,9 +94,7 @@ func take_damage(amount: int) -> void:
 	if current_health == 0 and old_health > 0:
 		health_depleted.emit()
 		_on_health_depleted()
-	elif amount > 0 and _animation_controller:
-		# Play damage animation if we took damage but didn't die
-		_animation_controller.play_damage()
+
 
 func heal(amount: int) -> void:
 	if not is_alive:
@@ -127,9 +111,6 @@ func set_max_health(new_max: int) -> void:
 func _on_health_depleted() -> void:
 	is_alive = false
 	died.emit()
-	# Play knockout animation
-	if _animation_controller:
-		_animation_controller.play_knockout()
 
 func revive(health_amount: int = -1) -> void:
 	if is_alive:
@@ -140,10 +121,6 @@ func revive(health_amount: int = -1) -> void:
 		current_health = max_health
 	else:
 		current_health = min(health_amount, max_health)
-
-	# Play revival animation
-	if _animation_controller:
-		_animation_controller.play_revival()
 
 	revived.emit()
 	health_changed.emit(current_health, max_health)
@@ -192,9 +169,6 @@ func get_draggable_component() -> DraggableToken:
 
 func get_controller_component() -> Node:
 	return _token_controller
-
-func get_animation_controller() -> Node3D:
-	return _animation_controller
 
 func get_rigid_body() -> RigidBody3D:
 	return rigid_body
