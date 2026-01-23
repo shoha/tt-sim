@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3 uid="uid://syx65bd6uwbf"]
+[gd_scene load_steps=17 format=3 uid="uid://syx65bd6uwbf"]
 
 [ext_resource type="Script" uid="uid://d2xfnor344wo5" path="res://animations/pokemon_animation_tree.gd" id="1_uunvo"]
 
@@ -8,20 +8,10 @@ animation = &"battlewait01"
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_g6kvh"]
 animation = &"damage01"
 
-[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_ilmp8"]
-animation = &"jumpup01"
-
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_g6kvh"]
 advance_mode = 2
 
-[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_iu24e"]
-advance_mode = 0
-advance_condition = &"is_dragging"
-
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_137i2"]
-
-[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_mr505"]
-switch_mode = 2
 advance_mode = 2
 
 [sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_mr505"]
@@ -29,9 +19,7 @@ states/battlewait01/node = SubResource("AnimationNodeAnimation_uunvo")
 states/battlewait01/position = Vector2(403, 186)
 states/damage01/node = SubResource("AnimationNodeAnimation_g6kvh")
 states/damage01/position = Vector2(558, 91)
-states/jumpup01/node = SubResource("AnimationNodeAnimation_ilmp8")
-states/jumpup01/position = Vector2(365, 55)
-transitions = ["Start", "battlewait01", SubResource("AnimationNodeStateMachineTransition_g6kvh"), "battlewait01", "jumpup01", SubResource("AnimationNodeStateMachineTransition_iu24e"), "battlewait01", "damage01", SubResource("AnimationNodeStateMachineTransition_137i2"), "damage01", "battlewait01", SubResource("AnimationNodeStateMachineTransition_mr505")]
+transitions = ["Start", "battlewait01", SubResource("AnimationNodeStateMachineTransition_g6kvh"), "battlewait01", "damage01", SubResource("AnimationNodeStateMachineTransition_137i2")]
 graph_offset = Vector2(106, -64)
 
 [sub_resource type="Animation" id="Animation_t6fl1"]
@@ -85,7 +73,6 @@ script = ExtResource("1_uunvo")
 root_node = NodePath(".")
 tree_root = SubResource("AnimationNodeStateMachine_mr505")
 anim_player = NodePath("Dummy")
-parameters/conditions/is_dragging = false
 
 [node name="Dummy" type="AnimationPlayer" parent="AnimationTree"]
 libraries = {
