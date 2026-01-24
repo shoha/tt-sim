@@ -88,7 +88,7 @@ func take_damage(amount: int) -> void:
 		return
 
 	var old_health = current_health
-	current_health = max(0, current_health - amount)
+	current_health = max(0, current_health + amount)
 	health_changed.emit(current_health, max_health)
 
 	if current_health == 0 and old_health > 0:

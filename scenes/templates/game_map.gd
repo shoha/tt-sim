@@ -110,21 +110,19 @@ func _setup_context_menu() -> void:
 			add_child(_context_menu)
 
 		# Connect context menu signals
-		_context_menu.damage_requested.connect(_on_context_menu_damage_requested)
-		_context_menu.heal_requested.connect(_on_context_menu_heal_requested)
+		_context_menu.hp_adjustment_requested.connect(_on_context_menu_hp_adjustment_requested)
 		_context_menu.visibility_toggled.connect(_on_context_menu_visibility_toggled)
 
 func _on_token_context_menu_requested(token: BoardToken, menu_position: Vector2) -> void:
 	if _context_menu:
 		_context_menu.open_for_token(token, menu_position)
 
-func _on_context_menu_damage_requested(amount: int) -> void:
+func _on_context_menu_hp_adjustment_requested(amount: int) -> void:
 	if _context_menu and _context_menu.target_token:
-		_context_menu.target_token.take_damage(amount)
-
-func _on_context_menu_heal_requested(amount: int) -> void:
-	if _context_menu and _context_menu.target_token:
-		_context_menu.target_token.heal(amount)
+		if amount > 0:
+			_context_menu.target_token.heal(amount)
+		else:
+			_context_menu.target_token.take_damage(amount)
 
 func _on_context_menu_visibility_toggled() -> void:
 	if _context_menu and _context_menu.target_token:

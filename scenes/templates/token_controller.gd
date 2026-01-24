@@ -21,6 +21,7 @@ const SCALE_FACTOR: float = 0.0001
 
 @export var rigid_body: RigidBody3D
 @export var draggable_token: DraggableToken
+@export var animation_tree: AnimationTree
 
 var _rotating: bool = false
 var _scaling: bool = false
@@ -32,7 +33,7 @@ func _ready() -> void:
 	if not rigid_body:
 		push_warning("TokenController: No RigidBody3D assigned.")
 		return
-	
+
 	# Connect to mouse events
 	rigid_body.connect("mouse_entered", _on_mouse_entered)
 	rigid_body.connect("mouse_exited", _on_mouse_exited)
@@ -46,14 +47,14 @@ func _on_mouse_exited() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not rigid_body:
 		return
-	
+
 	# Handle right-click for context menu
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and _mouse_over:
 		var board_token = get_parent() as BoardToken
 		if board_token:
 			context_menu_requested.emit(board_token, event.position)
 		return
-	
+
 	# Check for double-click on middle mouse button to reset rotation and scale
 	if event is InputEventMouseButton and event.double_click and event.is_action_pressed("rotate_model") and _mouse_over:
 		_reset_rotation_and_scale()
@@ -88,7 +89,7 @@ func _handle_rotation(event: InputEventMouseMotion) -> void:
 func _handle_scaling(event: InputEventMouseMotion) -> void:
 	var velocity_y = event.screen_velocity.y
 	# Use negative velocity_y so moving mouse up scales up, down scales down
-	var scale_change = -velocity_y * SCALE_FACTOR
+	var scale_change = - velocity_y * SCALE_FACTOR
 	var old_scale = rigid_body.scale
 	var new_scale = rigid_body.scale + Vector3.ONE * scale_change
 	# Clamp the scale to prevent it from going too small or too large
@@ -96,7 +97,7 @@ func _handle_scaling(event: InputEventMouseMotion) -> void:
 
 	# Calculate the position adjustment to keep the bottom fixed
 	_adjust_position_for_scale(old_scale, new_scale)
-	
+
 	rigid_body.scale = new_scale
 
 	# Update the draggable token's height offset to match new scale
