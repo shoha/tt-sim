@@ -30,12 +30,14 @@ func _find_ancestor_board_token() -> BoardToken:
 		node = node.get_parent()
 	return null
 
-func _on_health_changed(new_health: int, max_health: int) -> void:
+func _on_health_changed(new_health: int, _max_health: int, previous_health: int) -> void:
 	if not _state_machine:
 		push_warning("PokemonAnimationTree: No state machine found.")
 		return
 
-	if new_health < max_health:
+	if new_health == 0:
+		_state_machine.travel("down01")
+	elif previous_health > new_health:
 		_state_machine.travel("damage01")
 	else:
 		_state_machine.travel("battlewait01")

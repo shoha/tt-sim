@@ -89,7 +89,7 @@ func take_damage(amount: int) -> void:
 
 	var old_health = current_health
 	current_health = max(0, current_health + amount)
-	health_changed.emit(current_health, max_health)
+	health_changed.emit(current_health, max_health, old_health)
 
 	if current_health == 0 and old_health > 0:
 		health_depleted.emit()
@@ -100,8 +100,9 @@ func heal(amount: int) -> void:
 	if not is_alive:
 		return
 
+	var old_health = current_health
 	current_health = min(max_health, current_health + amount)
-	health_changed.emit(current_health, max_health)
+	health_changed.emit(current_health, max_health, old_health)
 
 func set_max_health(new_max: int) -> void:
 	max_health = new_max
