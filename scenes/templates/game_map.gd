@@ -84,7 +84,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
 	var scene = pokemon.instantiate()
-	var board_token = iBoardToken.make_instance(scene)
+	var board_token = TokenFactory.create_from_scene(scene)
+	if not board_token:
+		push_error("GameMap: Failed to create board token")
+		return
 	drag_and_drop_node.add_child(board_token)
 
 	# Connect context menu request from the token
