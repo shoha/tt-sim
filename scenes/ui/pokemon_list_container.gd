@@ -1,10 +1,11 @@
 extends AnimatedVisibilityContainer
 
 @onready var pokemon_filter: LineEdit = $PokemonFilter
+@onready var toggle_pokemon_list_button: Button = %TogglePokemonListButton
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		$"../TogglePokemonList".button_pressed = false
+		toggle_pokemon_list_button.button_pressed = false
 
 # Override to clear filter before hiding
 func _on_before_animate_out() -> void:
