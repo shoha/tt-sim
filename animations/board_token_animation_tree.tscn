@@ -1,6 +1,6 @@
 [gd_scene load_steps=22 format=3 uid="uid://syx65bd6uwbf"]
 
-[ext_resource type="Script" uid="uid://d2xfnor344wo5" path="res://animations/board_token_animation_tree.gd" id="1_uunvo"]
+[ext_resource type="Script" uid="uid://q6jq4gyv70dn" path="res://animations/board_token_animation_tree.gd" id="1_uunvo"]
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_uunvo"]
 animation = &"battlewait01"
