@@ -19,6 +19,7 @@ config/features=PackedStringArray("4.5", "Forward Plus")
 DragAndDropGroupHelper="*res://addons/DragAndDrop3D/DragAndDropGroupHelper.gd"
 PokemonAutoload="*res://scripts/autoloads/pokemon_autoload.gd"
 EventBus="*res://scripts/autoloads/event_bus.gd"
+Utils="*res://scripts/autoloads/utils.gd"
 
 [debug]
 

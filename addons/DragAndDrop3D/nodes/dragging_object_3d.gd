@@ -55,8 +55,12 @@ func _set_late_signals() -> void:
 	dragAndDrop3D.dragging_stopped.connect(_is_dragging.bind(false))
 
 func _get_object_body() -> CollisionObject3D:
-	for node in get_children():
-		if node is CollisionObject3D: return node
+	var body = find_children("*", "CollisionObject3D", true, false)
+
+	if body.size() > 0:
+		return body[0]
+
+	breakpoint
 
 	return null
 

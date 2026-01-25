@@ -34,12 +34,24 @@ var _drag_velocity: Vector3 = Vector3.ZERO
 var _target_lean_rotation: Basis = Basis.IDENTITY
 var _visual_children: Array[Node3D] = []
 
-@onready var _rigid_body: RigidBody3D = $RigidBody3D
-@onready var _collision_shape: CollisionShape3D = $RigidBody3D/CollisionShape3D
+
+@export var rigid_body: RigidBody3D
+@export var collision_shape: CollisionShape3D
 
 func _ready() -> void:
-	if not _rigid_body:
-		return
+	if !rigid_body:
+		rigid_body = get_parent().find_child("RigidBody3D", true, false)
+
+		if not rigid_body:
+			push_error("DraggableToken: No RigidBody3D found in parent.")
+			return
+
+	if !collision_shape:
+		collision_shape = rigid_body.find_child("CollisionShape3D", true, false)
+
+		if not collision_shape:
+			push_error("DraggableToken: No CollisionShape3D found in parent.")
+			return
 
 	update_height_offset()
 
@@ -83,7 +95,7 @@ func _create_line_mesh() -> void:
 
 func _collect_visual_children() -> void:
 	# Collect all visual children of the rigid body (excluding collision shapes)
-	for child in _rigid_body.get_children():
+	for child in rigid_body.get_children():
 		if child is Node3D and not child is CollisionShape3D:
 			_visual_children.append(child)
 
@@ -93,18 +105,18 @@ func update_height_offset() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	if not _collision_shape or not _collision_shape.shape:
+	if not collision_shape or not collision_shape.shape:
 		return
 
 	# Get the bounding box of the shape
-	var aabb: AABB = _collision_shape.shape.get_debug_mesh().get_aabb()
+	var aabb: AABB = collision_shape.shape.get_debug_mesh().get_aabb()
 
 	# Account for the rigid_body's scale transformation
-	var scaled_aabb_position = aabb.position * _rigid_body.scale
-	var scaled_aabb_size = aabb.size * _rigid_body.scale
+	var scaled_aabb_position = aabb.position * rigid_body.scale
+	var scaled_aabb_size = aabb.size * rigid_body.scale
 
 	# Account for the collision shape's local position (also affected by scale)
-	var scaled_collision_position = _collision_shape.position * _rigid_body.scale
+	var scaled_collision_position = collision_shape.position * rigid_body.scale
 
 	# Calculate the top of the shape with scaling applied
 	var shape_top = scaled_collision_position.y + scaled_aabb_position.y + scaled_aabb_size.y
@@ -120,12 +132,14 @@ func get_visual_children() -> Array[Node3D]:
 
 func _on_dragging_started() -> void:
 	# Disable gravity while dragging
-	_rigid_body.gravity_scale = 0.0
+	rigid_body.gravity_scale = 0.0
 	# Raise the token to create a "picked up" effect
 	heightOffset = _base_height_offset + PICKUP_HEIGHT
 	# Initialize drag tracking
-	_last_drag_position = _rigid_body.global_position
+	_last_drag_position = rigid_body.global_position
 	_drag_velocity = Vector3.ZERO
+	_line_mesh_instance.show()
+	_circle_mesh_instance.show()
 
 func _on_dragging_stopped() -> void:
 	# Reset visual children rotation
@@ -134,22 +148,24 @@ func _on_dragging_stopped() -> void:
 			child.transform.basis = Basis.IDENTITY
 
 	# Re-enable gravity when dragging stops
-	_rigid_body.gravity_scale = 1.0
+	rigid_body.gravity_scale = 1.0
 
 	# Lower the token back to its base height
 	heightOffset = _base_height_offset
 	# Clear the line and circle
 	if _immediate_mesh and is_instance_valid(_line_mesh_instance):
 		_immediate_mesh.clear_surfaces()
+		_line_mesh_instance.hide()
 	if _circle_immediate_mesh and is_instance_valid(_circle_mesh_instance):
 		_circle_immediate_mesh.clear_surfaces()
+		_circle_mesh_instance.hide()
 	# Reset velocity tracking
 	_drag_velocity = Vector3.ZERO
 	_target_lean_rotation = Basis.IDENTITY
 
 func _update_inertia_lean(delta: float) -> void:
 	# Calculate drag velocity from position change
-	var current_position = _rigid_body.global_position
+	var current_position = rigid_body.global_position
 	var position_delta = current_position - _last_drag_position
 
 	# Smooth the velocity to avoid jitter
@@ -195,21 +211,21 @@ func _update_drop_indicator() -> void:
 	_circle_immediate_mesh.clear_surfaces()
 
 	# Get the bottom center of the token
-	if not _collision_shape or not _collision_shape.shape:
+	if not collision_shape or not collision_shape.shape:
 		return
 
-	var aabb: AABB = _collision_shape.shape.get_debug_mesh().get_aabb()
-	var scaled_aabb_position = aabb.position * _rigid_body.scale
-	var scaled_collision_position = _collision_shape.position * _rigid_body.scale
+	var aabb: AABB = collision_shape.shape.get_debug_mesh().get_aabb()
+	var scaled_aabb_position = aabb.position * rigid_body.scale
+	var scaled_collision_position = collision_shape.position * rigid_body.scale
 	var bottom_y = scaled_collision_position.y + scaled_aabb_position.y
 
 	# Start from the bottom of the token in global space
-	var start_pos = _rigid_body.global_position + Vector3(0, bottom_y, 0)
+	var start_pos = rigid_body.global_position + Vector3(0, bottom_y, 0)
 
 	# Raycast downward
 	var space_state = get_world_3d().direct_space_state
 	var query = PhysicsRayQueryParameters3D.create(start_pos, start_pos + Vector3.DOWN * RAYCAST_LENGTH)
-	query.exclude = [_rigid_body.get_rid()]
+	query.exclude = [rigid_body.get_rid()]
 	var result = space_state.intersect_ray(query)
 
 	if result:

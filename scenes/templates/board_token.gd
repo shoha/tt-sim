@@ -1,5 +1,5 @@
 extends Node3D
-class_name BoardToken
+class_name iBoardToken
 
 ## Represents a PC or NPC token on the game board
 ## Manages entity data like health, visibility, and status
@@ -20,8 +20,10 @@ class_name BoardToken
 ## - Or leave it unset to use the Placeholder node from the scene
 ## - The script will automatically create DraggableToken and TokenController components
 
-# Preload the controller script since it's not a global class yet when this loads
 const TokenControllerScript = preload("res://scenes/templates/token_controller.gd")
+const BoardTokenScene = preload("res://scenes/templates/board_token.tscn")
+const AnimationTreeScene = preload("res://animations/pokemon_animation_tree.tscn")
+
 
 # Entity identification
 @export var token_name: String = "Token"
@@ -45,7 +47,6 @@ var _dragging_object: DraggableToken
 var _token_controller: Node # TokenController
 @export var rigid_body: RigidBody3D
 
-@onready var placeholder: Node3D = $Placeholder
 
 # Signals for game state changes
 signal health_changed(new_health: int, max_health: int)
@@ -56,26 +57,93 @@ signal token_visibility_changed(is_visible: bool)
 signal status_effect_added(effect: String)
 signal status_effect_removed(effect: String)
 
+static func make_instance(scene: Node3D) -> iBoardToken:
+	var instance = BoardTokenScene.instantiate() as iBoardToken
+	var children = instance.get_children()
+
+	for child in children:
+		instance.remove_child(child)
+		child.queue_free()
+
+	var armature: Node3D;
+	var animation_player: AnimationPlayer;
+	var skeleton: Skeleton3D;
+	var mesh_model: MeshInstance3D;
+	var collision_shape: CollisionShape3D;
+
+	armature = scene.get_node_or_null("Armature")
+	animation_player = scene.get_node_or_null("AnimationPlayer")
+	skeleton = armature.get_node_or_null("Skeleton3D") if armature else null
+	mesh_model = skeleton.get_node_or_null("Mesh") if armature else null
+	collision_shape = scene.get_node_or_null("Armature/Mesh/Mesh/CollisionShape3D")
+
+	if !mesh_model:
+		push_error("No mesh found.")
+		return scene
+
+
+	# Create a new RigidBody3D and configure it
+	# This will be the root node of the returned scene
+	var rb = RigidBody3D.new()
+	rb.name = "RigidBody3D"
+	rb.axis_lock_angular_x = true
+	rb.axis_lock_angular_y = true
+	rb.axis_lock_angular_z = true
+
+
+	if collision_shape:
+		if armature:
+			var collision_parent = armature.get_node("Mesh")
+			armature.remove_child(collision_parent)
+			collision_shape.get_parent().remove_child(collision_shape)
+	else:
+		# Iterate through MeshInstance3D children to create individual collision shapes
+		var mesh_shape = mesh_model.mesh.create_convex_shape()
+		collision_shape = CollisionShape3D.new()
+		collision_shape.shape = mesh_shape
+		collision_shape.name = "CollisionShape3D"
+
+	# Apply the original mesh child's transform to the collision shape
+	#collision_shape.transform = armature.transform
+	# Add the collision shape to the RigidBody3D
+	collision_shape.owner = null
+	rb.add_child(collision_shape)
+	# armature.add_child(rb)
+	rb.add_child(scene)
+
+
+	instance.add_child(rb)
+	instance.rigid_body = rb
+
+	var animation_tree_instance = AnimationTreeScene.instantiate()
+	rb.add_child(animation_tree_instance)
+	animation_tree_instance.anim_player = animation_player
+
+	Utils.set_own_children(instance)
+
+	return instance
+
+
 func _ready() -> void:
-	if not rigid_body:
-		push_warning("BoardToken: No RigidBody3D found in Token node.")
+	var placeholder = get("Placeholder")
+	if placeholder:
 		rigid_body = placeholder
 		return
 
 	_construct_tree()
 
 func _construct_tree() -> void:
-	# Remove placeholder from scene tree
-	placeholder.set_owner(null)
-	remove_child(placeholder)
-
+	var imported_scene = get_child(0)
+	remove_child(imported_scene)
 	# Create draggable component
 	_dragging_object = DraggableToken.new()
 	_dragging_object.name = "DraggingObject3D"
-	_dragging_object.add_child(rigid_body)
+	_dragging_object.add_child(imported_scene)
+	_dragging_object.rigid_body = rigid_body
+
 	add_child(_dragging_object)
 
-	# Create interaction controller
+	# # Create interaction controller
 	_token_controller = TokenControllerScript.new()
 	_token_controller.name = "TokenController"
 	_token_controller.rigid_body = rigid_body

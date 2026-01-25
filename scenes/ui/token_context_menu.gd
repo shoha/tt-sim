@@ -8,7 +8,7 @@ signal hp_adjustment_requested(amount: int)
 signal visibility_toggled()
 signal menu_closed()
 
-var target_token: BoardToken = null
+var target_token: iBoardToken = null
 
 @onready var input_field: LineEdit = $MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentInput
 @onready var heal_hurt_toggle: CheckButton = $MenuPanel/VBoxContainer/CustomDamageContainer/HealHurtToggle
@@ -22,7 +22,7 @@ func _ready():
 	trans_out_type = Tween.TRANS_CUBIC
 	super._ready()
 
-func open_for_token(token: BoardToken, at_position: Vector2) -> void:
+func open_for_token(token: iBoardToken, at_position: Vector2) -> void:
 	target_token = token
 	_update_menu_content()
 	input_field.grab_focus()
