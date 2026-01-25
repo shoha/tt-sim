@@ -52,7 +52,6 @@ func load_level(data: LevelData) -> bool:
 			token_spawned.emit(token, placement)
 	
 	level_loaded.emit(level_data)
-	print("LevelLoader: Loaded level '%s' with %d tokens" % [level_data.level_name, loaded_tokens.size()])
 	
 	return true
 

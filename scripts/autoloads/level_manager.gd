@@ -49,7 +49,6 @@ func save_level(level_data: LevelData, file_name: String = "") -> String:
 	current_level_path = full_path
 	level_saved.emit(full_path)
 	
-	print("LevelManager: Saved level to " + full_path)
 	return full_path
 
 
@@ -69,7 +68,6 @@ func load_level(file_path: String) -> LevelData:
 	current_level_path = file_path
 	level_loaded.emit(level)
 	
-	print("LevelManager: Loaded level from " + file_path)
 	return level
 
 
