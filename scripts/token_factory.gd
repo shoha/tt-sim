@@ -10,7 +10,7 @@ class_name TokenFactory
 ##   var token = TokenFactory.create_from_config(my_token_config)
 
 const BoardTokenScene = preload("res://scenes/templates/board_token.tscn")
-const AnimationTreeScene = preload("res://animations/pokemon_animation_tree.tscn")
+const iBoardTokenAnimationTree = preload("res://animations/board_token_animation_tree.tscn")
 
 ## Internal structure to hold extracted model components
 class ModelComponents:
@@ -42,7 +42,7 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> i
 
 	# Add animation tree if animation player exists
 	if components.animation_player:
-		var anim_tree_scene = AnimationTreeScene if not config or not config.animation_tree_scene else config.animation_tree_scene
+		var anim_tree_scene = iBoardTokenAnimationTree if not config or not config.animation_tree_scene else config.animation_tree_scene
 		var animation_tree_instance = anim_tree_scene.instantiate()
 		rigid_body.add_child(animation_tree_instance)
 		animation_tree_instance.anim_player = components.animation_player
