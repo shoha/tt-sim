@@ -24,23 +24,23 @@ func play_level(level_data: LevelData) -> bool:
 	if not _game_map:
 		push_error("LevelPlayController: No GameMap set. Call setup() first.")
 		return false
-	
+
 	# Clear any previously loaded level first
 	clear_level()
-	
+
 	# Store reference to active level
 	active_level_data = level_data
-	
+
 	# Load the map model from level data
 	if not _load_level_map(level_data):
 		push_error("LevelPlayController: Failed to load map")
 		return false
-	
+
 	var drag_and_drop = _game_map.drag_and_drop_node
 	if not drag_and_drop:
 		push_error("LevelPlayController: Could not find DragAndDrop3D node")
 		return false
-	
+
 	# Spawn all tokens from the level
 	for placement in level_data.token_placements:
 		var token = BoardTokenFactory.create_from_placement(placement)
@@ -49,7 +49,7 @@ func play_level(level_data: LevelData) -> bool:
 			_track_token(token, placement)
 			_connect_token_context_menu(token)
 			token_spawned.emit(token, placement)
-	
+
 	level_loaded.emit(level_data)
 	return true
 
@@ -60,37 +60,37 @@ func _load_level_map(level_data: LevelData) -> bool:
 	if is_instance_valid(loaded_map_instance):
 		loaded_map_instance.queue_free()
 		loaded_map_instance = null
-	
+
 	# Clear any existing map children from the game map
 	_clear_existing_maps()
-	
+
 	# Check for valid map path
 	if level_data.map_glb_path == "":
 		push_error("LevelPlayController: No map path in level data")
 		return false
-	
+
 	if not ResourceLoader.exists(level_data.map_glb_path):
 		push_error("LevelPlayController: Map file not found: " + level_data.map_glb_path)
 		return false
-	
+
 	# Load and instantiate the map
 	var map_scene = load(level_data.map_glb_path)
 	if not map_scene:
 		push_error("LevelPlayController: Failed to load map scene")
 		return false
-	
+
 	loaded_map_instance = map_scene.instantiate() as Node3D
 	if not loaded_map_instance:
 		push_error("LevelPlayController: Map is not a Node3D")
 		return false
-	
+
 	loaded_map_instance.name = "LevelMap"
 	loaded_map_instance.scale = level_data.map_scale
 	loaded_map_instance.position = level_data.map_offset
-	
+
 	# Add to the GameMap node
 	_game_map.add_child(loaded_map_instance)
-	
+
 	return true
 
 
@@ -111,10 +111,10 @@ func _connect_token_context_menu(token: BoardToken) -> void:
 func _clear_existing_maps() -> void:
 	if not _game_map:
 		return
-	
+
 	# List of node names/types to preserve (not maps)
 	var preserved_names = ["WorldEnvironment", "MapMenu", "DragAndDrop3D", "LevelMap"]
-	
+
 	for child in _game_map.get_children():
 		# Skip UI nodes, environments, and the drag-and-drop container
 		if child.name in preserved_names:
@@ -130,20 +130,20 @@ func _clear_existing_maps() -> void:
 func add_token_to_level(token: BoardToken, pokemon_number: String, is_shiny: bool) -> void:
 	if not active_level_data:
 		return
-	
+
 	# Create a new placement for this token
 	var placement = TokenPlacement.new()
 	placement.pokemon_number = pokemon_number
 	placement.is_shiny = is_shiny
-	placement.position = Vector3.ZERO  # Will be updated when saved
-	
+	placement.position = Vector3.ZERO # Will be updated when saved
+
 	# Set default name from pokemon
 	if PokemonAutoload.available_pokemon.has(pokemon_number):
 		placement.token_name = PokemonAutoload.available_pokemon[pokemon_number].name.capitalize()
-	
+
 	# Add to level data
 	active_level_data.add_token_placement(placement)
-	
+
 	# Track the token
 	token.set_meta("placement_id", placement.placement_id)
 	token.set_meta("pokemon_number", pokemon_number)
@@ -156,19 +156,19 @@ func save_token_positions() -> String:
 	if not active_level_data:
 		push_error("LevelPlayController: No active level to save")
 		return ""
-	
+
 	# Update map position and scale from the loaded map instance
 	if is_instance_valid(loaded_map_instance):
 		active_level_data.map_scale = loaded_map_instance.scale
 		active_level_data.map_offset = loaded_map_instance.position
-	
+
 	# Update each placement with current token position
 	for placement in active_level_data.token_placements:
 		if spawned_tokens.has(placement.placement_id):
 			var token = spawned_tokens[placement.placement_id] as BoardToken
 			if is_instance_valid(token):
 				_sync_placement_from_token(placement, token)
-	
+
 	# Save the level
 	return LevelManager.save_level(active_level_data)
 
@@ -185,7 +185,7 @@ func _sync_placement_from_token(placement: TokenPlacement, token: BoardToken) ->
 		placement.position = token.global_position
 		placement.rotation_y = token.rotation.y
 		placement.scale = token.scale
-	
+
 	# Also sync current stats
 	placement.token_name = token.token_name
 	placement.max_health = token.max_health
@@ -200,7 +200,7 @@ func clear_level_tokens() -> void:
 		var token = spawned_tokens[placement_id]
 		if is_instance_valid(token):
 			token.queue_free()
-	
+
 	spawned_tokens.clear()
 	active_level_data = null
 

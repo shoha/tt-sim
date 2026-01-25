@@ -33,48 +33,48 @@ func _on_ready() -> void:
 func animate_in() -> void:
 	if tween:
 		tween.kill()
-	
+
 	_is_animating = true
 	show()
-	
+
 	tween = create_tween()
 	tween.set_parallel(true)
 	tween.set_ease(ease_in_type)
 	tween.set_trans(trans_in_type)
-	
+
 	# Animate opacity
 	tween.tween_property(self, "modulate:a", 1.0, fade_in_duration)
-	
+
 	# Animate scale
 	scale = scale_in_from
 	tween.tween_property(self, "scale", Vector2.ONE, fade_in_duration)
-	
+
 	# Callback when animation completes
 	tween.finished.connect(_on_animate_in_finished, CONNECT_ONE_SHOT)
-	
+
 	_on_before_animate_in()
 
 ## Smoothly hide the container with animation
 func animate_out() -> void:
 	if tween:
 		tween.kill()
-	
+
 	_is_animating = true
-	
+
 	tween = create_tween()
 	tween.set_parallel(true)
 	tween.set_ease(ease_out_type)
 	tween.set_trans(trans_out_type)
-	
+
 	# Animate opacity
 	tween.tween_property(self, "modulate:a", 0.0, fade_out_duration)
-	
+
 	# Animate scale
 	tween.tween_property(self, "scale", scale_out_to, fade_out_duration)
-	
+
 	# Hide after animation completes
 	tween.finished.connect(_on_animate_out_finished, CONNECT_ONE_SHOT)
-	
+
 	_on_before_animate_out()
 
 ## Toggle visibility with animation

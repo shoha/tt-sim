@@ -14,7 +14,7 @@ const LevelEditorScene = preload("res://scenes/level_editor/level_editor.tscn")
 
 func _ready() -> void:
 	_setup_level_play_controller()
-	
+
 	# Listen for new tokens being created so we can add them to the active level
 	EventBus.token_created.connect(_on_token_created)
 
@@ -22,7 +22,7 @@ func _ready() -> void:
 func _setup_level_play_controller() -> void:
 	_level_play_controller = LevelPlayController.new()
 	add_child(_level_play_controller)
-	
+
 	# Find and setup the game map
 	var game_map = _find_game_map()
 	if game_map:
@@ -43,7 +43,7 @@ func _open_level_editor() -> void:
 		_level_editor_instance._refresh_token_list()
 		_level_editor_instance.show()
 		return
-	
+
 	_level_editor_instance = LevelEditorScene.instantiate()
 	_level_editor_instance.editor_closed.connect(_on_editor_closed)
 	_level_editor_instance.play_level_requested.connect(_on_play_level_requested)
@@ -62,7 +62,7 @@ func _on_play_level_requested(level_data: LevelData) -> void:
 	# Close the editor
 	if _level_editor_instance:
 		_level_editor_instance.hide()
-	
+
 	# Delegate level loading to the play controller
 	if _level_play_controller.play_level(level_data):
 		_update_save_button_visibility()
@@ -94,7 +94,7 @@ func _on_token_created(token: BoardToken, pokemon_number: String, is_shiny: bool
 	# Only track if we have an active level being played/edited
 	if not _level_play_controller.has_active_level():
 		return
-	
+
 	_level_play_controller.add_token_to_level(token, pokemon_number, is_shiny)
 	_update_save_button_visibility()
 
@@ -112,7 +112,7 @@ func _find_game_map() -> GameMap:
 			if sibling is GameMap:
 				return sibling
 		parent = parent.get_parent()
-	
+
 	# Try finding by tree
 	var root = get_tree().root
 	return _find_game_map_recursive(root)
