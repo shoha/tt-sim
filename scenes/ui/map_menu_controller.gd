@@ -217,14 +217,16 @@ func save_token_positions() -> void:
 		if _spawned_tokens.has(placement.placement_id):
 			var token = _spawned_tokens[placement.placement_id] as iBoardToken
 			if is_instance_valid(token):
-				# The rigid_body is what actually gets moved during dragging
+				# The rigid_body is what actually gets moved/scaled during dragging
 				var rigid_body = token.get_rigid_body()
 				if rigid_body:
 					placement.position = rigid_body.global_position
 					placement.rotation_y = rigid_body.rotation.y
+					placement.scale = rigid_body.scale
 				else:
 					placement.position = token.global_position
 					placement.rotation_y = token.rotation.y
+					placement.scale = token.scale
 				
 				# Also sync current stats
 				placement.token_name = token.token_name

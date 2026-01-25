@@ -31,6 +31,9 @@ signal play_level_requested(level_data: LevelData)
 @onready var placement_pos_y_spin: SpinBox = %PlacementPosYSpin
 @onready var placement_pos_z_spin: SpinBox = %PlacementPosZSpin
 @onready var placement_rotation_spin: SpinBox = %PlacementRotationSpin
+@onready var placement_scale_x_spin: SpinBox = %PlacementScaleXSpin
+@onready var placement_scale_y_spin: SpinBox = %PlacementScaleYSpin
+@onready var placement_scale_z_spin: SpinBox = %PlacementScaleZSpin
 @onready var delete_placement_button: Button = %DeletePlacementButton
 @onready var apply_placement_button: Button = %ApplyPlacementButton
 
@@ -204,6 +207,9 @@ func _update_placement_panel(placement: TokenPlacement) -> void:
 	placement_pos_y_spin.value = placement.position.y
 	placement_pos_z_spin.value = placement.position.z
 	placement_rotation_spin.value = rad_to_deg(placement.rotation_y)
+	placement_scale_x_spin.value = placement.scale.x
+	placement_scale_y_spin.value = placement.scale.y
+	placement_scale_z_spin.value = placement.scale.z
 
 
 func _get_placement_from_panel() -> TokenPlacement:
@@ -223,6 +229,11 @@ func _get_placement_from_panel() -> TokenPlacement:
 		placement_pos_z_spin.value
 	)
 	placement.rotation_y = deg_to_rad(placement_rotation_spin.value)
+	placement.scale = Vector3(
+		placement_scale_x_spin.value,
+		placement_scale_y_spin.value,
+		placement_scale_z_spin.value
+	)
 	
 	return placement
 
