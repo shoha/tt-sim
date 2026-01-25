@@ -106,12 +106,30 @@ func toggle_visibility() -> void:
 func _update_visibility_visuals() -> void:
 	# Apply visual feedback when visibility is toggled
 	if rigid_body:
-		if is_visible_to_players:
-			# Fully visible
-			rigid_body.modulate = Color(1.0, 1.0, 1.0, 1.0)
-		else:
-			# Semi-transparent to indicate hidden
-			rigid_body.modulate = Color(0.5, 0.5, 0.5, 0.5)
+		var alpha := 1.0 if is_visible_to_players else 0.5
+		_set_mesh_transparency(rigid_body, alpha)
+
+
+func _set_mesh_transparency(node: Node, alpha: float) -> void:
+	# Recursively find all MeshInstance3D nodes and set their transparency
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			var mesh_instance := child as MeshInstance3D
+			# Modify transparency on each surface material
+			for i in range(mesh_instance.get_surface_override_material_count()):
+				var mat = mesh_instance.get_surface_override_material(i)
+				if mat == null and mesh_instance.mesh:
+					# Get the mesh's material and create an override
+					mat = mesh_instance.mesh.surface_get_material(i)
+					if mat:
+						mat = mat.duplicate()
+						mesh_instance.set_surface_override_material(i, mat)
+				if mat is StandardMaterial3D:
+					var std_mat := mat as StandardMaterial3D
+					std_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA if alpha < 1.0 else BaseMaterial3D.TRANSPARENCY_DISABLED
+					std_mat.albedo_color.a = alpha
+		# Recurse into children
+		_set_mesh_transparency(child, alpha)
 
 # Status effect management
 func add_status_effect(effect: String) -> void:

@@ -1,0 +1,480 @@
+[gd_scene load_steps=2 format=3 uid="uid://dlevel_editor_main"]
+
+[ext_resource type="Script" path="res://scenes/level_editor/level_editor.gd" id="1_script"]
+
+[node name="LevelEditor" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.12, 0.12, 0.15, 1)
+
+[node name="MainContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="MainContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Header" type="HBoxContainer" parent="MainContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="MainContainer/VBox/Header"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Level Editor"
+
+[node name="Spacer" type="Control" parent="MainContainer/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NewButton" type="Button" parent="MainContainer/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "New"
+
+[node name="LoadButton" type="Button" parent="MainContainer/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Load"
+
+[node name="SaveButton" type="Button" parent="MainContainer/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Save"
+
+[node name="ExportButton" type="Button" parent="MainContainer/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Export JSON"
+
+[node name="ImportButton" type="Button" parent="MainContainer/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Import JSON"
+
+[node name="Separator" type="VSeparator" parent="MainContainer/VBox/Header"]
+layout_mode = 2
+
+[node name="PlayButton" type="Button" parent="MainContainer/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Play Level"
+
+[node name="CloseButton" type="Button" parent="MainContainer/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Close"
+
+[node name="ContentSplit" type="HSplitContainer" parent="MainContainer/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+split_offset = 350
+
+[node name="LeftPanel" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 15
+
+[node name="MetadataPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel"]
+layout_mode = 2
+
+[node name="MetadataVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="MetadataTitle" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Level Info"
+
+[node name="NameRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/NameRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+text = "Name:"
+
+[node name="LevelNameEdit" type="LineEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/NameRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Level name..."
+
+[node name="AuthorRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
+layout_mode = 2
+
+[node name="AuthorLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/AuthorRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+text = "Author:"
+
+[node name="AuthorEdit" type="LineEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/AuthorRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Author name..."
+
+[node name="DescLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
+layout_mode = 2
+text = "Description:"
+
+[node name="LevelDescriptionEdit" type="TextEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 80)
+placeholder_text = "Level description..."
+
+[node name="MapPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel"]
+layout_mode = 2
+
+[node name="MapVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="MapTitle" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Map"
+
+[node name="MapRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox"]
+layout_mode = 2
+
+[node name="MapPathLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "No map selected"
+
+[node name="SelectMapButton" type="Button" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Select Map..."
+
+[node name="TokensPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="TokensVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TokensHeader" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox"]
+layout_mode = 2
+
+[node name="TokensTitle" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox/TokensHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "Token Placements"
+
+[node name="AddTokenButton" type="Button" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox/TokensHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "+ Add Token"
+
+[node name="PokemonSearch" type="LineEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+placeholder_text = "Search pokemon..."
+
+[node name="TokenList" type="ItemList" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="RightPanel" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 15
+
+[node name="PlacementPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/RightPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PlacementVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PlacementTitle" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Token Properties"
+
+[node name="PlacementPokemonLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "#25 Pikachu"
+
+[node name="NameRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/NameRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 0)
+text = "Display Name:"
+
+[node name="PlacementNameEdit" type="LineEdit" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/NameRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Token name..."
+
+[node name="ChecksRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="PlacementShinyCheck" type="CheckBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ChecksRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Shiny"
+
+[node name="PlacementPlayerCheck" type="CheckBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ChecksRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Player Controlled"
+
+[node name="PlacementVisibleCheck" type="CheckBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ChecksRow"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "Visible to Players"
+
+[node name="Separator1" type="HSeparator" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+
+[node name="HealthLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+text = "Health"
+
+[node name="HealthRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+
+[node name="MaxHPLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(80, 0)
+text = "Max HP:"
+
+[node name="PlacementMaxHPSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 9999.0
+value = 100.0
+
+[node name="CurrentHPLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(80, 0)
+text = "Current:"
+
+[node name="PlacementCurrentHPSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 9999.0
+value = 100.0
+
+[node name="Separator2" type="HSeparator" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+
+[node name="PositionLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+text = "Position"
+
+[node name="PositionRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+
+[node name="XLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
+layout_mode = 2
+text = "X:"
+
+[node name="PlacementPosXSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -1000.0
+max_value = 1000.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
+[node name="YLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
+layout_mode = 2
+text = "Y:"
+
+[node name="PlacementPosYSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -1000.0
+max_value = 1000.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
+[node name="ZLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
+layout_mode = 2
+text = "Z:"
+
+[node name="PlacementPosZSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -1000.0
+max_value = 1000.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
+[node name="RotationRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+
+[node name="RotLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/RotationRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(80, 0)
+text = "Rotation:"
+
+[node name="PlacementRotationSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/RotationRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -360.0
+max_value = 360.0
+step = 5.0
+suffix = "°"
+
+[node name="Spacer" type="Control" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ButtonsRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ApplyPlacementButton" type="Button" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ButtonsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Apply Changes"
+
+[node name="DeletePlacementButton" type="Button" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ButtonsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Delete Token"
+
+[node name="StatusBar" type="HBoxContainer" parent="MainContainer/VBox"]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="MainContainer/VBox/StatusBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+text = "Ready"
+
+[node name="MapFileDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Select Map File"
+size = Vector2i(800, 600)
+ok_button_text = "Select"
+
+[node name="LoadDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Load Level"
+size = Vector2i(500, 400)
+ok_button_text = "Load"
+
+[node name="LoadVBox" type="VBoxContainer" parent="LoadDialog"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -48.0
+
+[node name="LoadLabel" type="Label" parent="LoadDialog/LoadVBox"]
+layout_mode = 2
+text = "Select a level to load:"
+
+[node name="SavedLevelsList" type="ItemList" parent="LoadDialog/LoadVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="DeleteLevelButton" type="Button" parent="LoadDialog/LoadVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Delete Selected Level"
+
+[node name="DeleteConfirmDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Delete Level"
+size = Vector2i(400, 120)
+ok_button_text = "Delete"
+dialog_text = "Are you sure you want to delete this level? This cannot be undone."
+
+[node name="ExportDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Export Level as JSON"
+size = Vector2i(800, 600)
+ok_button_text = "Export"
+file_mode = 4
+
+[node name="ImportDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Import Level from JSON"
+size = Vector2i(800, 600)
+ok_button_text = "Import"
+
+[node name="PokemonSelectorPopup" type="Window" parent="."]
+unique_name_in_owner = true
+title = "Select Pokemon"
+size = Vector2i(400, 500)
+visible = false
+
+[node name="VBox" type="VBoxContainer" parent="PokemonSelectorPopup"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -10.0
+theme_override_constants/separation = 10
+
+[node name="PokemonSelectorSearch" type="LineEdit" parent="PokemonSelectorPopup/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Search pokemon..."
+
+[node name="PokemonSelectorShiny" type="CheckBox" parent="PokemonSelectorPopup/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Shiny Variant"
+
+[node name="PokemonSelectorList" type="ItemList" parent="PokemonSelectorPopup/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Hint" type="Label" parent="PokemonSelectorPopup/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 1)
+text = "Double-click to add token"

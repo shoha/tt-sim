@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://bim2dski2fp35"]
+[gd_scene load_steps=5 format=3 uid="uid://bim2dski2fp35"]
 
 [ext_resource type="Script" uid="uid://bsuwk8okbttoi" path="res://scenes/ui/pokemon_list.gd" id="1_nlnlb"]
 [ext_resource type="Script" uid="uid://bdb6i6bah667h" path="res://scenes/ui/pokemon_list_container.gd" id="1_v7vxt"]
 [ext_resource type="Script" uid="uid://dwsd3xkatk3vt" path="res://scenes/ui/pokemon_filter.gd" id="3_lxh2f"]
+[ext_resource type="Script" path="res://scenes/ui/map_menu_controller.gd" id="4_controller"]
 
 [node name="MapMenu" type="CanvasLayer"]
 layer = 2
@@ -15,22 +16,37 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+script = ExtResource("4_controller")
 
-[node name="TogglePokemonList" type="Button" parent="MapMenu"]
-z_index = 1
-z_as_relative = false
+[node name="BottomButtons" type="HBoxContainer" parent="MapMenu"]
 layout_mode = 1
 anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -131.0
+offset_left = -400.0
 offset_top = -46.0
 offset_right = -15.0
 offset_bottom = -15.0
 grow_horizontal = 0
 grow_vertical = 0
+theme_override_constants/separation = 10
+
+[node name="SavePositionsButton" type="Button" parent="MapMenu/BottomButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+text = "Save Positions"
+
+[node name="LevelEditorButton" type="Button" parent="MapMenu/BottomButtons"]
+layout_mode = 2
+text = "Level Editor"
+
+[node name="TogglePokemonList" type="Button" parent="MapMenu/BottomButtons"]
+z_index = 1
+z_as_relative = false
+layout_mode = 2
 toggle_mode = true
 text = "Add Pokemon"
 
@@ -86,6 +102,8 @@ clear_button_enabled = true
 select_all_on_focus = true
 script = ExtResource("3_lxh2f")
 
-[connection signal="toggled" from="MapMenu/TogglePokemonList" to="MapMenu/PokemonListContainer" method="_on_button_toggled"]
+[connection signal="pressed" from="MapMenu/BottomButtons/SavePositionsButton" to="MapMenu" method="_on_save_positions_button_pressed"]
+[connection signal="pressed" from="MapMenu/BottomButtons/LevelEditorButton" to="MapMenu" method="_on_level_editor_button_pressed"]
+[connection signal="toggled" from="MapMenu/BottomButtons/TogglePokemonList" to="MapMenu/PokemonListContainer" method="_on_button_toggled"]
 [connection signal="item_activated" from="MapMenu/PokemonListContainer/CenterContainer/PokemonList" to="MapMenu/PokemonListContainer/CenterContainer/PokemonList" method="_on_item_activated"]
 [connection signal="text_changed" from="MapMenu/PokemonListContainer/PokemonFilter" to="MapMenu/PokemonListContainer/CenterContainer/PokemonList" method="_on_pokemon_filter_text_changed"]
