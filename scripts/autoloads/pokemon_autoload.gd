@@ -55,3 +55,10 @@ func path_to_scene(number: String, is_shiny: bool) -> String:
 
 func path_to_icon(number: String, is_shiny: bool) -> String:
 	return _asset_path_for(number, is_shiny, AssetType.ICON)
+
+
+## Get the display name for a pokemon by number
+func get_pokemon_name(number: String) -> String:
+	if number != "" and available_pokemon.has(number):
+		return available_pokemon[number].name.capitalize()
+	return "Unknown"
