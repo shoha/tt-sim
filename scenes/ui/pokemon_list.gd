@@ -36,10 +36,6 @@ func _items_thread_function():
 		populate_items(_current_filter)
 		items_mutex.unlock()
 
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(_delta: float) -> void:
-	pass
-
 func populate_items(filter: String = "") -> void:
 	call_deferred("clear")
 	_current_items = []
