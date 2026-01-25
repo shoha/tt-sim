@@ -119,7 +119,7 @@ func _on_dragging_stopped() -> void:
 
 	_drag_velocity = Vector3.ZERO
 	_target_lean_rotation = Basis.IDENTITY
-	
+
 	# Sync the parent BoardToken position with the rigid body
 	_sync_parent_position()
 
@@ -129,25 +129,25 @@ func _on_dragging_stopped() -> void:
 func _sync_parent_position() -> void:
 	if not rigid_body:
 		return
-	
+
 	# Find the BoardToken (grandparent: BoardToken -> DraggableToken -> RigidBody3D)
 	var board_token = get_parent()
 	if not board_token or not board_token is BoardToken:
 		return
-	
+
 	# Get the rigid body's world position
 	var world_pos = rigid_body.global_position
 	var world_rot = rigid_body.global_rotation
-	
+
 	# Move the BoardToken to match the rigid body's world position
 	board_token.global_position = world_pos
 	board_token.global_rotation = world_rot
-	
+
 	# Reset the intermediate nodes to local origin so hierarchy stays clean
 	# DraggableToken (self) relative to BoardToken
 	position = Vector3.ZERO
 	rotation = Vector3.ZERO
-	
+
 	# RigidBody3D relative to DraggableToken
 	rigid_body.position = Vector3.ZERO
 	rigid_body.rotation = Vector3.ZERO

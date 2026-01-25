@@ -70,7 +70,7 @@ var current_level: LevelData = null
 var selected_placement_index: int = -1
 var _filtered_pokemon: Array = []
 var _selected_level_path_for_delete: String = ""
-var _is_updating_ui: bool = false  # Flag to prevent feedback loops when setting UI values
+var _is_updating_ui: bool = false # Flag to prevent feedback loops when setting UI values
 
 
 func _ready() -> void:
@@ -84,20 +84,20 @@ func _ready() -> void:
 func _connect_signals() -> void:
 	select_map_button.pressed.connect(_on_select_map_pressed)
 	map_file_dialog.file_selected.connect(_on_map_file_selected)
-	
+
 	add_token_button.pressed.connect(_on_add_token_pressed)
 	token_list.item_selected.connect(_on_token_list_item_selected)
-	
+
 	delete_placement_button.pressed.connect(_on_delete_placement_pressed)
 	apply_placement_button.pressed.connect(_on_apply_placement_pressed)
-	
+
 	save_button.pressed.connect(_on_save_pressed)
 	load_button.pressed.connect(_on_load_pressed)
 	new_button.pressed.connect(_on_new_pressed)
 	close_button.pressed.connect(_on_close_pressed)
 	export_button.pressed.connect(_on_export_pressed)
 	import_button.pressed.connect(_on_import_pressed)
-	
+
 	saved_levels_list.item_activated.connect(_on_saved_level_activated)
 	saved_levels_list.item_selected.connect(_on_saved_level_selected)
 	load_dialog.confirmed.connect(_on_load_confirmed)
@@ -105,22 +105,22 @@ func _connect_signals() -> void:
 	delete_confirm_dialog.confirmed.connect(_on_delete_level_confirmed)
 	export_dialog.file_selected.connect(_on_export_file_selected)
 	import_dialog.file_selected.connect(_on_import_file_selected)
-	
+
 	pokemon_selector_popup.close_requested.connect(_on_pokemon_selector_closed)
 	pokemon_selector_list.item_activated.connect(_on_pokemon_selector_activated)
 	pokemon_selector_search.text_changed.connect(_on_pokemon_selector_search_changed)
-	
+
 	level_name_edit.text_changed.connect(_on_level_metadata_changed)
 	level_description_edit.text_changed.connect(_on_level_metadata_changed)
 	author_edit.text_changed.connect(_on_level_metadata_changed)
-	
+
 	map_offset_x_spin.value_changed.connect(_on_map_transform_changed)
 	map_offset_y_spin.value_changed.connect(_on_map_transform_changed)
 	map_offset_z_spin.value_changed.connect(_on_map_transform_changed)
 	map_scale_x_spin.value_changed.connect(_on_map_transform_changed)
 	map_scale_y_spin.value_changed.connect(_on_map_transform_changed)
 	map_scale_z_spin.value_changed.connect(_on_map_transform_changed)
-	
+
 	play_button.pressed.connect(_on_play_pressed)
 
 
@@ -129,11 +129,11 @@ func _setup_file_dialogs() -> void:
 	map_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	map_file_dialog.filters = ["*.glb ; GLB Models", "*.gltf ; GLTF Models", "*.tscn ; Godot Scenes"]
 	map_file_dialog.current_dir = Paths.MAPS_DIR
-	
+
 	export_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
 	export_dialog.filters = ["*.json ; JSON Files"]
-	
+
 	import_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	import_dialog.filters = ["*.json ; JSON Files"]
@@ -148,14 +148,14 @@ func _populate_pokemon_list() -> void:
 func _update_pokemon_selector_list() -> void:
 	pokemon_selector_list.clear()
 	var search_text = pokemon_selector_search.text.to_lower() if pokemon_selector_search else ""
-	
+
 	for num in _filtered_pokemon:
 		var poke_data = PokemonAutoload.available_pokemon[num]
 		var poke_name = poke_data.name
-		
+
 		if search_text != "" and not poke_name.contains(search_text) and not num.contains(search_text):
 			continue
-		
+
 		var display_text = "#%s %s" % [num, poke_name.capitalize()]
 		pokemon_selector_list.add_item(display_text)
 		pokemon_selector_list.set_item_metadata(pokemon_selector_list.item_count - 1, num)
@@ -170,19 +170,19 @@ func _create_new_level() -> void:
 func _update_ui_from_level() -> void:
 	if not current_level:
 		return
-	
+
 	# Block change handlers while we update UI programmatically
 	_is_updating_ui = true
-	
+
 	level_name_edit.text = current_level.level_name
 	level_description_edit.text = current_level.level_description
 	author_edit.text = current_level.author
-	
+
 	if current_level.map_glb_path != "":
 		map_path_label.text = current_level.map_glb_path.get_file()
 	else:
 		map_path_label.text = "No map selected"
-	
+
 	# Update map transform controls
 	map_offset_x_spin.value = current_level.map_offset.x
 	map_offset_y_spin.value = current_level.map_offset.y
@@ -190,9 +190,9 @@ func _update_ui_from_level() -> void:
 	map_scale_x_spin.value = current_level.map_scale.x
 	map_scale_y_spin.value = current_level.map_scale.y
 	map_scale_z_spin.value = current_level.map_scale.z
-	
+
 	_is_updating_ui = false
-	
+
 	_refresh_token_list()
 	placement_panel.visible = false
 	selected_placement_index = -1
@@ -200,10 +200,10 @@ func _update_ui_from_level() -> void:
 
 func _refresh_token_list() -> void:
 	token_list.clear()
-	
+
 	if not current_level:
 		return
-	
+
 	for placement in current_level.token_placements:
 		var display_name = placement.get_display_name()
 		if placement.is_shiny:
@@ -215,16 +215,16 @@ func _update_placement_panel(placement: TokenPlacement) -> void:
 	if not placement:
 		placement_panel.visible = false
 		return
-	
+
 	placement_panel.visible = true
-	
+
 	placement_name_edit.text = placement.token_name
-	
+
 	var poke_name = "Unknown"
 	if PokemonAutoload.available_pokemon.has(placement.pokemon_number):
 		poke_name = PokemonAutoload.available_pokemon[placement.pokemon_number].name.capitalize()
 	placement_pokemon_label.text = "#%s %s" % [placement.pokemon_number, poke_name]
-	
+
 	placement_shiny_check.button_pressed = placement.is_shiny
 	placement_player_check.button_pressed = placement.is_player_controlled
 	placement_max_hp_spin.value = placement.max_health
@@ -242,7 +242,7 @@ func _update_placement_panel(placement: TokenPlacement) -> void:
 func _get_placement_from_panel() -> TokenPlacement:
 	if selected_placement_index < 0 or selected_placement_index >= current_level.token_placements.size():
 		return null
-	
+
 	var placement = current_level.token_placements[selected_placement_index]
 	placement.token_name = placement_name_edit.text
 	placement.is_shiny = placement_shiny_check.button_pressed
@@ -261,7 +261,7 @@ func _get_placement_from_panel() -> TokenPlacement:
 		placement_scale_y_spin.value,
 		placement_scale_z_spin.value
 	)
-	
+
 	return placement
 
 
@@ -272,12 +272,12 @@ func _set_status(message: String) -> void:
 func _refresh_saved_levels_list() -> void:
 	saved_levels_list.clear()
 	var levels = LevelManager.get_saved_levels()
-	
+
 	for level_info in levels:
 		var display_text = "%s (%d tokens)" % [level_info.name, level_info.token_count]
 		saved_levels_list.add_item(display_text)
 		saved_levels_list.set_item_metadata(saved_levels_list.item_count - 1, level_info.path)
-	
+
 	# Disable delete button until a level is selected
 	delete_level_button.disabled = true
 
@@ -307,23 +307,23 @@ func _on_pokemon_selector_closed() -> void:
 func _on_pokemon_selector_activated(index: int) -> void:
 	var pokemon_number = pokemon_selector_list.get_item_metadata(index)
 	var is_shiny = pokemon_selector_shiny.button_pressed
-	
+
 	var placement = TokenPlacement.new()
 	placement.pokemon_number = pokemon_number
 	placement.is_shiny = is_shiny
 	placement.position = Vector3.ZERO
-	
+
 	# Set default name from pokemon
 	if PokemonAutoload.available_pokemon.has(pokemon_number):
 		placement.token_name = PokemonAutoload.available_pokemon[pokemon_number].name.capitalize()
-	
+
 	current_level.add_token_placement(placement)
 	_refresh_token_list()
-	
+
 	# Select the new token
 	token_list.select(token_list.item_count - 1)
 	_on_token_list_item_selected(token_list.item_count - 1)
-	
+
 	pokemon_selector_popup.hide()
 	_set_status("Added token: " + placement.get_display_name())
 
@@ -341,7 +341,7 @@ func _on_token_list_item_selected(index: int) -> void:
 func _on_delete_placement_pressed() -> void:
 	if selected_placement_index < 0:
 		return
-	
+
 	var placement = current_level.token_placements[selected_placement_index]
 	current_level.remove_token_placement(placement.placement_id)
 	_refresh_token_list()
@@ -388,12 +388,12 @@ func _on_save_pressed() -> void:
 	# Update metadata and map transform before saving
 	_on_level_metadata_changed()
 	_on_map_transform_changed()
-	
+
 	var errors = current_level.validate()
 	if errors.size() > 0:
 		_set_status("Error: " + errors[0])
 		return
-	
+
 	var path = LevelManager.save_level(current_level)
 	if path != "":
 		_set_status("Level saved: " + path.get_file())
@@ -428,10 +428,10 @@ func _on_delete_level_pressed() -> void:
 	var selected_items = saved_levels_list.get_selected_items()
 	if selected_items.size() == 0:
 		return
-	
+
 	var path = saved_levels_list.get_item_metadata(selected_items[0])
 	var level_name = saved_levels_list.get_item_text(selected_items[0])
-	
+
 	_selected_level_path_for_delete = path
 	delete_confirm_dialog.dialog_text = "Are you sure you want to delete '%s'? This cannot be undone." % level_name
 	delete_confirm_dialog.popup_centered()
@@ -440,13 +440,13 @@ func _on_delete_level_pressed() -> void:
 func _on_delete_level_confirmed() -> void:
 	if _selected_level_path_for_delete == "":
 		return
-	
+
 	if LevelManager.delete_level(_selected_level_path_for_delete):
 		_set_status("Level deleted")
 		_refresh_saved_levels_list()
 	else:
 		_set_status("Failed to delete level")
-	
+
 	_selected_level_path_for_delete = ""
 
 
@@ -498,11 +498,11 @@ func _on_import_file_selected(path: String) -> void:
 func _on_play_pressed() -> void:
 	# Update metadata before playing
 	_on_level_metadata_changed()
-	
+
 	var errors = current_level.validate()
 	if errors.size() > 0:
 		_set_status("Cannot play: " + errors[0])
 		return
-	
+
 	play_level_requested.emit(current_level)
 	_set_status("Starting level: " + current_level.level_name)

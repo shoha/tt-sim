@@ -88,25 +88,25 @@ func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
 	# Extract pokemon info from the scene path
 	var pokemon_number = _extract_pokemon_number_from_path(pokemon.resource_path)
 	var is_shiny = "_shiny" in pokemon.resource_path
-	
+
 	var board_token = BoardTokenFactory.create_from_pokemon(pokemon_number, is_shiny)
 	if not board_token:
 		push_error("GameMap: Failed to create board token")
 		return
-	
+
 	drag_and_drop_node.add_child(board_token)
 
 	# Connect context menu request from the token
 	var token_controller = board_token.get_controller_component()
 	if token_controller:
 		token_controller.context_menu_requested.connect(_on_token_context_menu_requested)
-	
+
 	EventBus.token_created.emit(board_token, pokemon_number, is_shiny)
 
 
 ## Extract pokemon number from a scene path like "res://assets/models/pokemon/25_pikachu.glb"
 func _extract_pokemon_number_from_path(path: String) -> String:
-	var filename = path.get_file().get_basename()  # "25_pikachu" or "25_pikachu_shiny"
+	var filename = path.get_file().get_basename() # "25_pikachu" or "25_pikachu_shiny"
 	var parts = filename.split("_")
 	if parts.size() > 0:
 		return parts[0]
