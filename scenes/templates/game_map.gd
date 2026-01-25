@@ -10,6 +10,7 @@ class_name GameMap
 @onready var camera_node: Camera3D = $WorldEnvironment/CameraHolder/Camera3D
 @onready var pixelate_node: ColorRect = $WorldEnvironment/PixelateCanvas/Pixelate
 @onready var tiltshift_node: MeshInstance3D = $WorldEnvironment/CameraHolder/Camera3D/MeshInstance3D
+@onready var drag_and_drop_node: Node3D = $WorldEnvironment/DragAndDrop3D
 
 var _camera_move_dir: Vector3
 var _camera_zoom_dir: int
@@ -83,15 +84,13 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
 	var scene = pokemon.instantiate()
-	if scene is RigidBody3D:
-		var board_token = load("res://scenes/templates/board_token.tscn").instantiate() as BoardToken
-		board_token.rigid_body = scene
-		$WorldEnvironment/DragAndDrop3D.add_child(board_token)
+	var board_token = iBoardToken.make_instance(scene)
+	drag_and_drop_node.add_child(board_token)
 
-		# Connect context menu request from the token
-		var token_controller = board_token.get_controller_component()
-		if token_controller:
-			token_controller.context_menu_requested.connect(_on_token_context_menu_requested)
+	# Connect context menu request from the token
+	var token_controller = board_token.get_controller_component()
+	if token_controller:
+		token_controller.context_menu_requested.connect(_on_token_context_menu_requested)
 
 func _on_token_selected(_token: Node3D) -> void:
 	pass
@@ -113,7 +112,7 @@ func _setup_context_menu() -> void:
 		_context_menu.hp_adjustment_requested.connect(_on_context_menu_hp_adjustment_requested)
 		_context_menu.visibility_toggled.connect(_on_context_menu_visibility_toggled)
 
-func _on_token_context_menu_requested(token: BoardToken, menu_position: Vector2) -> void:
+func _on_token_context_menu_requested(token: iBoardToken, menu_position: Vector2) -> void:
 	if _context_menu:
 		_context_menu.open_for_token(token, menu_position)
 

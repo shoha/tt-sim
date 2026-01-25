@@ -27,7 +27,7 @@ var _rotating: bool = false
 var _scaling: bool = false
 var _mouse_over: bool = false
 
-signal context_menu_requested(token: BoardToken, position: Vector2)
+signal context_menu_requested(token: iBoardToken, position: Vector2)
 
 func _ready() -> void:
 	if not rigid_body:
@@ -50,7 +50,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# Handle right-click for context menu
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and _mouse_over:
-		var board_token = get_parent() as BoardToken
+		var board_token = get_parent() as iBoardToken
 		if board_token:
 			context_menu_requested.emit(board_token, event.position)
 		return

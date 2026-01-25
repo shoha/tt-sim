@@ -3,7 +3,7 @@ extends Node3D
 @onready var tree: AnimationTree = $AnimationTree
 @export var anim_player: AnimationPlayer
 
-var _board_token: BoardToken
+var _board_token: iBoardToken
 var _state_machine: AnimationNodeStateMachinePlayback
 
 func _ready() -> void:
@@ -22,10 +22,10 @@ func _connect_to_board_token() -> void:
 
 	_board_token.health_changed.connect(_on_health_changed)
 
-func _find_ancestor_board_token() -> BoardToken:
+func _find_ancestor_board_token() -> iBoardToken:
 	var node = get_parent()
 	while node:
-		if node is BoardToken:
+		if node is iBoardToken:
 			return node
 		node = node.get_parent()
 	return null
