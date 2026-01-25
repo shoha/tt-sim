@@ -206,28 +206,28 @@ static func _apply_config(token: BoardToken, config: Resource) -> void:
 ## @return: A configured BoardToken, or null if creation failed
 static func create_from_pokemon(pokemon_number: String, is_shiny: bool, config: Resource = null) -> BoardToken:
 	var scene_path = PokemonAutoload.path_to_scene(pokemon_number, is_shiny)
-	
+
 	if not ResourceLoader.exists(scene_path):
 		push_error("BoardTokenFactory: Pokemon scene not found: " + scene_path)
 		return null
-	
+
 	var pokemon_scene = load(scene_path)
 	if not pokemon_scene:
 		push_error("BoardTokenFactory: Failed to load Pokemon scene: " + scene_path)
 		return null
-	
+
 	var model = pokemon_scene.instantiate()
 	var token = create_from_scene(model, config)
-	
+
 	if not token:
 		push_error("BoardTokenFactory: Failed to create token for Pokemon " + pokemon_number)
 		return null
-	
+
 	# Set the node name and display name to the Pokemon name
 	var pokemon_name = PokemonAutoload.get_pokemon_name(pokemon_number)
 	token.name = pokemon_name
 	token.token_name = pokemon_name
-	
+
 	return token
 
 
@@ -237,16 +237,16 @@ static func create_from_pokemon(pokemon_number: String, is_shiny: bool, config: 
 ## @return: A fully configured BoardToken at the specified position
 static func create_from_placement(placement: TokenPlacement) -> BoardToken:
 	var token = create_from_pokemon(placement.pokemon_number, placement.is_shiny)
-	
+
 	if not token:
 		return null
-	
+
 	# Store placement ID for later reference
 	token.set_meta("placement_id", placement.placement_id)
 	token.set_meta("pokemon_number", placement.pokemon_number)
 	token.set_meta("is_shiny", placement.is_shiny)
-	
+
 	# Apply placement data (position, rotation, scale, properties)
 	placement.apply_to_token(token)
-	
+
 	return token
