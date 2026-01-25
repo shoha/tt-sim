@@ -110,6 +110,10 @@ func _load_level_map(level_data: LevelData, game_map: GameMap) -> bool:
 		_loaded_map_instance.queue_free()
 		_loaded_map_instance = null
 
+	# Also clear any existing map children that might be in the scene
+	# Look for children that are 3D models (not UI, cameras, environments, etc.)
+	_clear_existing_maps(game_map)
+
 	# Check for valid map path
 	if level_data.map_glb_path == "":
 		push_error("MapMenuController: No map path in level data")
@@ -213,6 +217,14 @@ func save_token_positions() -> void:
 
 	var updated_count = 0
 
+	# Update map position and scale from the loaded map instance
+	if is_instance_valid(_loaded_map_instance):
+		_active_level_data.map_scale = _loaded_map_instance.scale
+		_active_level_data.map_offset = _loaded_map_instance.position
+		print("MapMenuController: Saving map transform - position: %s, scale: %s" % [
+			_active_level_data.map_offset, _active_level_data.map_scale
+		])
+
 	# Update each placement with current token position
 	for placement in _active_level_data.token_placements:
 		if _spawned_tokens.has(placement.placement_id):
@@ -262,6 +274,28 @@ func clear_level_map() -> void:
 	if is_instance_valid(_loaded_map_instance):
 		_loaded_map_instance.queue_free()
 		_loaded_map_instance = null
+
+
+## Clear any existing map models from the game map
+## This handles cases where a default map was already in the scene
+func _clear_existing_maps(game_map: GameMap) -> void:
+	# List of node names/types to preserve (not maps)
+	var preserved_names = ["WorldEnvironment", "MapMenu", "DragAndDrop3D", "LevelMap"]
+	
+	for child in game_map.get_children():
+		# Skip UI nodes, environments, and the drag-and-drop container
+		if child.name in preserved_names:
+			continue
+		# Skip Control nodes (UI)
+		if child is Control:
+			continue
+		# Skip CanvasLayer
+		if child is CanvasLayer:
+			continue
+		# If it's a Node3D that's not one of our known nodes, it's likely a map model
+		if child is Node3D:
+			print("MapMenuController: Clearing existing map child: ", child.name)
+			child.queue_free()
 
 
 ## Clear everything from the current level
