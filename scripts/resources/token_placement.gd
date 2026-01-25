@@ -11,6 +11,7 @@ class_name TokenPlacement
 ## Transform data
 @export var position: Vector3 = Vector3.ZERO
 @export var rotation_y: float = 0.0
+@export var scale: Vector3 = Vector3.ONE
 
 ## Token properties (overrides defaults if set)
 @export_group("Token Properties")
@@ -46,9 +47,11 @@ static func from_board_token(token: iBoardToken, pokemon_num: String, shiny: boo
 	if rigid_body:
 		placement.position = rigid_body.global_position
 		placement.rotation_y = rigid_body.rotation.y
+		placement.scale = rigid_body.scale
 	else:
 		placement.position = token.global_position
 		placement.rotation_y = token.rotation.y
+		placement.scale = token.scale
 
 	placement.token_name = token.token_name
 	placement.is_player_controlled = token.is_player_controlled
@@ -66,9 +69,11 @@ func apply_to_token(token: iBoardToken) -> void:
 	if rigid_body:
 		rigid_body.position = position
 		rigid_body.rotation.y = rotation_y
+		rigid_body.scale = scale
 	else:
 		token.position = position
 		token.rotation.y = rotation_y
+		token.scale = scale
 
 	if token_name != "":
 		token.token_name = token_name

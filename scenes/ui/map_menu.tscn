@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://bsuwk8okbttoi" path="res://scenes/ui/pokemon_list.gd" id="1_nlnlb"]
 [ext_resource type="Script" uid="uid://bdb6i6bah667h" path="res://scenes/ui/pokemon_list_container.gd" id="1_v7vxt"]
 [ext_resource type="Script" uid="uid://dwsd3xkatk3vt" path="res://scenes/ui/pokemon_filter.gd" id="3_lxh2f"]
-[ext_resource type="Script" path="res://scenes/ui/map_menu_controller.gd" id="4_controller"]
+[ext_resource type="Script" uid="uid://wwwkdsxa0ont" path="res://scenes/ui/map_menu_controller.gd" id="4_controller"]
 
 [node name="MapMenu" type="CanvasLayer"]
 layer = 2
@@ -32,11 +32,12 @@ offset_bottom = -15.0
 grow_horizontal = 0
 grow_vertical = 0
 theme_override_constants/separation = 10
+alignment = 2
 
 [node name="SavePositionsButton" type="Button" parent="MapMenu/BottomButtons"]
 unique_name_in_owner = true
-layout_mode = 2
 visible = false
+layout_mode = 2
 text = "Save Positions"
 
 [node name="LevelEditorButton" type="Button" parent="MapMenu/BottomButtons"]

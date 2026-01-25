@@ -237,6 +237,7 @@ func export_level_json(level_data: LevelData, file_path: String) -> bool:
 			"is_shiny": placement.is_shiny,
 			"position": {"x": placement.position.x, "y": placement.position.y, "z": placement.position.z},
 			"rotation_y": placement.rotation_y,
+			"scale": {"x": placement.scale.x, "y": placement.scale.y, "z": placement.scale.z},
 			"token_name": placement.token_name,
 			"is_player_controlled": placement.is_player_controlled,
 			"max_health": placement.max_health,
@@ -297,6 +298,12 @@ func import_level_json(file_path: String) -> LevelData:
 			placement_data.position.z
 		)
 		placement.rotation_y = placement_data.get("rotation_y", 0.0)
+		if placement_data.has("scale"):
+			placement.scale = Vector3(
+				placement_data.scale.x,
+				placement_data.scale.y,
+				placement_data.scale.z
+			)
 		placement.token_name = placement_data.get("token_name", "")
 		placement.is_player_controlled = placement_data.get("is_player_controlled", false)
 		placement.max_health = placement_data.get("max_health", 100)
