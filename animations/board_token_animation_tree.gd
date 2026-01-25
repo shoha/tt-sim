@@ -17,7 +17,7 @@ func _init_state_machine() -> void:
 func _connect_to_board_token() -> void:
 	_board_token = _find_ancestor_board_token()
 	if not _board_token:
-		push_warning("PokemonAnimationTree: No BoardToken ancestor found.")
+		push_warning("BoardTokenAnimationTree: No BoardToken ancestor found.")
 		return
 
 	_board_token.health_changed.connect(_on_health_changed)
@@ -32,7 +32,7 @@ func _find_ancestor_board_token() -> iBoardToken:
 
 func _on_health_changed(new_health: int, _max_health: int, previous_health: int) -> void:
 	if not _state_machine:
-		push_warning("PokemonAnimationTree: No state machine found.")
+		push_warning("BoardTokenAnimationTree: No state machine found.")
 		return
 
 	if new_health == 0:
