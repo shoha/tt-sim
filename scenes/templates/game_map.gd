@@ -84,7 +84,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
 	var scene = pokemon.instantiate()
-	var board_token = TokenFactory.create_from_scene(scene)
+	var board_token = BoardTokenFactory.create_from_scene(scene)
 	if not board_token:
 		push_error("GameMap: Failed to create board token")
 		return
@@ -100,7 +100,7 @@ func _on_token_selected(_token: Node3D) -> void:
 
 func _setup_context_menu() -> void:
 	# Load and add the context menu to the UI layer
-	var context_menu_scene = load("res://scenes/ui/token_context_menu.tscn")
+	var context_menu_scene = load("uid://bh84knb3smm3y")
 	if context_menu_scene:
 		_context_menu = context_menu_scene.instantiate()
 		# Find the MapMenu canvas layer to add the menu to
