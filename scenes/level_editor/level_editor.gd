@@ -184,9 +184,6 @@ func _update_ui_from_level() -> void:
 		map_path_label.text = "No map selected"
 	
 	# Update map transform controls
-	print("LevelEditor: Setting UI spinboxes from level data:")
-	print("  map_offset = ", current_level.map_offset)
-	print("  map_scale = ", current_level.map_scale)
 	map_offset_x_spin.value = current_level.map_offset.x
 	map_offset_y_spin.value = current_level.map_offset.y
 	map_offset_z_spin.value = current_level.map_offset.z
@@ -392,10 +389,6 @@ func _on_save_pressed() -> void:
 	_on_level_metadata_changed()
 	_on_map_transform_changed()
 	
-	# Debug: print the values we're about to save
-	print("LevelEditor: Saving map_scale = ", current_level.map_scale)
-	print("LevelEditor: Saving map_offset = ", current_level.map_offset)
-	
 	var errors = current_level.validate()
 	if errors.size() > 0:
 		_set_status("Error: " + errors[0])
@@ -461,9 +454,6 @@ func _load_level_from_path(path: String) -> void:
 	var level = LevelManager.load_level(path)
 	if level:
 		current_level = level
-		# Debug: print the loaded values
-		print("LevelEditor: Loaded map_scale = ", level.map_scale)
-		print("LevelEditor: Loaded map_offset = ", level.map_offset)
 		_update_ui_from_level()
 		_set_status("Level loaded: " + level.level_name)
 	else:
@@ -513,9 +503,6 @@ func _on_play_pressed() -> void:
 	if errors.size() > 0:
 		_set_status("Cannot play: " + errors[0])
 		return
-	
-	print("LevelEditor: Playing level with map: ", current_level.map_glb_path)
-	print("LevelEditor: Token count: ", current_level.token_placements.size())
 	
 	play_level_requested.emit(current_level)
 	_set_status("Starting level: " + current_level.level_name)

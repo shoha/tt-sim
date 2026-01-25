@@ -42,11 +42,6 @@ func _on_editor_closed() -> void:
 
 
 func _on_play_level_requested(level_data: LevelData) -> void:
-	print("=== MapMenuController: Play Level Requested ===")
-	print("  Level name: ", level_data.level_name)
-	print("  Map path: ", level_data.map_glb_path)
-	print("  Token count: ", level_data.token_placements.size())
-
 	# Close the editor
 	if _level_editor_instance:
 		_level_editor_instance.hide()
@@ -62,8 +57,6 @@ func _on_play_level_requested(level_data: LevelData) -> void:
 	if not game_map:
 		push_error("MapMenuController: Could not find GameMap")
 		return
-
-	print("  Found GameMap: ", game_map.name, " at path: ", game_map.get_path())
 
 	# Load the map model from level data
 	if not _load_level_map(level_data, game_map):
@@ -96,12 +89,6 @@ func _on_play_level_requested(level_data: LevelData) -> void:
 	# Show save button
 	_update_save_button_visibility()
 
-	print("MapMenuController: Loaded level '%s' with map '%s' and %d tokens" % [
-		level_data.level_name,
-		level_data.map_glb_path.get_file(),
-		level_data.token_placements.size()
-	])
-
 
 ## Load the map model from level data
 func _load_level_map(level_data: LevelData, game_map: GameMap) -> bool:
@@ -118,8 +105,6 @@ func _load_level_map(level_data: LevelData, game_map: GameMap) -> bool:
 	if level_data.map_glb_path == "":
 		push_error("MapMenuController: No map path in level data")
 		return false
-
-	print("MapMenuController: Loading map from path: ", level_data.map_glb_path)
 
 	if not ResourceLoader.exists(level_data.map_glb_path):
 		push_error("MapMenuController: Map file not found: " + level_data.map_glb_path)
@@ -142,9 +127,6 @@ func _load_level_map(level_data: LevelData, game_map: GameMap) -> bool:
 
 	# Add to the GameMap node
 	game_map.add_child(_loaded_map_instance)
-
-	print("MapMenuController: Map loaded successfully, added to: ", game_map.name)
-	print("MapMenuController: Map position: ", _loaded_map_instance.position, ", scale: ", _loaded_map_instance.scale)
 
 	return true
 
@@ -221,9 +203,6 @@ func save_token_positions() -> void:
 	if is_instance_valid(_loaded_map_instance):
 		_active_level_data.map_scale = _loaded_map_instance.scale
 		_active_level_data.map_offset = _loaded_map_instance.position
-		print("MapMenuController: Saving map transform - position: %s, scale: %s" % [
-			_active_level_data.map_offset, _active_level_data.map_scale
-		])
 
 	# Update each placement with current token position
 	for placement in _active_level_data.token_placements:
@@ -251,9 +230,7 @@ func save_token_positions() -> void:
 
 	# Save the level
 	var path = LevelManager.save_level(_active_level_data)
-	if path != "":
-		print("MapMenuController: Saved %d token positions to '%s'" % [updated_count, path])
-	else:
+	if path == "":
 		push_error("MapMenuController: Failed to save level")
 
 
@@ -294,7 +271,6 @@ func _clear_existing_maps(game_map: GameMap) -> void:
 			continue
 		# If it's a Node3D that's not one of our known nodes, it's likely a map model
 		if child is Node3D:
-			print("MapMenuController: Clearing existing map child: ", child.name)
 			child.queue_free()
 
 
@@ -332,5 +308,3 @@ func _on_token_created(token: iBoardToken, pokemon_number: String, is_shiny: boo
 
 	# Update save button visibility
 	_update_save_button_visibility()
-
-	print("MapMenuController: Added new token to level - %s (#%s)" % [placement.token_name, pokemon_number])
