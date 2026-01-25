@@ -169,6 +169,104 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Select Map..."
 
+[node name="MapTransformLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox"]
+layout_mode = 2
+text = "Transform"
+
+[node name="MapOffsetRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox"]
+layout_mode = 2
+
+[node name="OffsetLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+text = "Offset:"
+
+[node name="XLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
+layout_mode = 2
+text = "X:"
+
+[node name="MapOffsetXSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -1000.0
+max_value = 1000.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
+[node name="YLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
+layout_mode = 2
+text = "Y:"
+
+[node name="MapOffsetYSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -1000.0
+max_value = 1000.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
+[node name="ZLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
+layout_mode = 2
+text = "Z:"
+
+[node name="MapOffsetZSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -1000.0
+max_value = 1000.0
+step = 0.1
+allow_greater = true
+allow_lesser = true
+
+[node name="MapScaleRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox"]
+layout_mode = 2
+
+[node name="ScaleLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+text = "Scale:"
+
+[node name="XLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
+layout_mode = 2
+text = "X:"
+
+[node name="MapScaleXSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.01
+max_value = 100.0
+step = 0.1
+value = 1.0
+allow_greater = true
+
+[node name="YLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
+layout_mode = 2
+text = "Y:"
+
+[node name="MapScaleYSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.01
+max_value = 100.0
+step = 0.1
+value = 1.0
+allow_greater = true
+
+[node name="ZLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
+layout_mode = 2
+text = "Z:"
+
+[node name="MapScaleZSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.01
+max_value = 100.0
+step = 0.1
+value = 1.0
+allow_greater = true
+
 [node name="TokensPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel"]
 layout_mode = 2
 size_flags_vertical = 3

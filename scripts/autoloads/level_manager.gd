@@ -59,7 +59,8 @@ func load_level(file_path: String) -> LevelData:
 		push_error("LevelManager: Level file does not exist: " + file_path)
 		return null
 	
-	var level = ResourceLoader.load(file_path) as LevelData
+	# Use CACHE_MODE_REPLACE to ensure we get the latest saved data, not a cached version
+	var level = ResourceLoader.load(file_path, "", ResourceLoader.CACHE_MODE_REPLACE) as LevelData
 	if not level:
 		push_error("LevelManager: Failed to load level: " + file_path)
 		return null

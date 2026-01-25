@@ -14,6 +14,12 @@ signal play_level_requested(level_data: LevelData)
 @onready var map_path_label: Label = %MapPathLabel
 @onready var select_map_button: Button = %SelectMapButton
 @onready var map_file_dialog: FileDialog = %MapFileDialog
+@onready var map_offset_x_spin: SpinBox = %MapOffsetXSpin
+@onready var map_offset_y_spin: SpinBox = %MapOffsetYSpin
+@onready var map_offset_z_spin: SpinBox = %MapOffsetZSpin
+@onready var map_scale_x_spin: SpinBox = %MapScaleXSpin
+@onready var map_scale_y_spin: SpinBox = %MapScaleYSpin
+@onready var map_scale_z_spin: SpinBox = %MapScaleZSpin
 
 @onready var token_list: ItemList = %TokenList
 @onready var pokemon_search: LineEdit = %PokemonSearch
@@ -64,6 +70,7 @@ var current_level: LevelData = null
 var selected_placement_index: int = -1
 var _filtered_pokemon: Array = []
 var _selected_level_path_for_delete: String = ""
+var _is_updating_ui: bool = false  # Flag to prevent feedback loops when setting UI values
 
 
 func _ready() -> void:
@@ -106,6 +113,13 @@ func _connect_signals() -> void:
 	level_name_edit.text_changed.connect(_on_level_metadata_changed)
 	level_description_edit.text_changed.connect(_on_level_metadata_changed)
 	author_edit.text_changed.connect(_on_level_metadata_changed)
+	
+	map_offset_x_spin.value_changed.connect(_on_map_transform_changed)
+	map_offset_y_spin.value_changed.connect(_on_map_transform_changed)
+	map_offset_z_spin.value_changed.connect(_on_map_transform_changed)
+	map_scale_x_spin.value_changed.connect(_on_map_transform_changed)
+	map_scale_y_spin.value_changed.connect(_on_map_transform_changed)
+	map_scale_z_spin.value_changed.connect(_on_map_transform_changed)
 	
 	play_button.pressed.connect(_on_play_pressed)
 
@@ -157,6 +171,9 @@ func _update_ui_from_level() -> void:
 	if not current_level:
 		return
 	
+	# Block change handlers while we update UI programmatically
+	_is_updating_ui = true
+	
 	level_name_edit.text = current_level.level_name
 	level_description_edit.text = current_level.level_description
 	author_edit.text = current_level.author
@@ -165,6 +182,19 @@ func _update_ui_from_level() -> void:
 		map_path_label.text = current_level.map_glb_path.get_file()
 	else:
 		map_path_label.text = "No map selected"
+	
+	# Update map transform controls
+	print("LevelEditor: Setting UI spinboxes from level data:")
+	print("  map_offset = ", current_level.map_offset)
+	print("  map_scale = ", current_level.map_scale)
+	map_offset_x_spin.value = current_level.map_offset.x
+	map_offset_y_spin.value = current_level.map_offset.y
+	map_offset_z_spin.value = current_level.map_offset.z
+	map_scale_x_spin.value = current_level.map_scale.x
+	map_scale_y_spin.value = current_level.map_scale.y
+	map_scale_z_spin.value = current_level.map_scale.z
+	
+	_is_updating_ui = false
 	
 	_refresh_token_list()
 	placement_panel.visible = false
@@ -333,16 +363,38 @@ func _on_apply_placement_pressed() -> void:
 
 
 func _on_level_metadata_changed(_new_text = null) -> void:
-	if not current_level:
+	# Don't update level data if we're programmatically setting UI values
+	if _is_updating_ui or not current_level:
 		return
 	current_level.level_name = level_name_edit.text
 	current_level.level_description = level_description_edit.text
 	current_level.author = author_edit.text
 
 
+func _on_map_transform_changed(_value: float = 0.0) -> void:
+	# Don't update level data if we're programmatically setting UI values
+	if _is_updating_ui or not current_level:
+		return
+	current_level.map_offset = Vector3(
+		map_offset_x_spin.value,
+		map_offset_y_spin.value,
+		map_offset_z_spin.value
+	)
+	current_level.map_scale = Vector3(
+		map_scale_x_spin.value,
+		map_scale_y_spin.value,
+		map_scale_z_spin.value
+	)
+
+
 func _on_save_pressed() -> void:
-	# Update metadata before saving
+	# Update metadata and map transform before saving
 	_on_level_metadata_changed()
+	_on_map_transform_changed()
+	
+	# Debug: print the values we're about to save
+	print("LevelEditor: Saving map_scale = ", current_level.map_scale)
+	print("LevelEditor: Saving map_offset = ", current_level.map_offset)
 	
 	var errors = current_level.validate()
 	if errors.size() > 0:
@@ -409,6 +461,9 @@ func _load_level_from_path(path: String) -> void:
 	var level = LevelManager.load_level(path)
 	if level:
 		current_level = level
+		# Debug: print the loaded values
+		print("LevelEditor: Loaded map_scale = ", level.map_scale)
+		print("LevelEditor: Loaded map_offset = ", level.map_offset)
 		_update_ui_from_level()
 		_set_status("Level loaded: " + level.level_name)
 	else:
