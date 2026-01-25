@@ -44,7 +44,8 @@ text = "Save Positions"
 layout_mode = 2
 text = "Level Editor"
 
-[node name="TogglePokemonList" type="Button" parent="MapMenu/BottomButtons"]
+[node name="TogglePokemonListButton" type="Button" parent="MapMenu/BottomButtons"]
+unique_name_in_owner = true
 z_index = 1
 z_as_relative = false
 layout_mode = 2
@@ -105,6 +106,6 @@ script = ExtResource("3_lxh2f")
 
 [connection signal="pressed" from="MapMenu/BottomButtons/SavePositionsButton" to="MapMenu" method="_on_save_positions_button_pressed"]
 [connection signal="pressed" from="MapMenu/BottomButtons/LevelEditorButton" to="MapMenu" method="_on_level_editor_button_pressed"]
-[connection signal="toggled" from="MapMenu/BottomButtons/TogglePokemonList" to="MapMenu/PokemonListContainer" method="_on_button_toggled"]
+[connection signal="toggled" from="MapMenu/BottomButtons/TogglePokemonListButton" to="MapMenu/PokemonListContainer" method="_on_button_toggled"]
 [connection signal="item_activated" from="MapMenu/PokemonListContainer/CenterContainer/PokemonList" to="MapMenu/PokemonListContainer/CenterContainer/PokemonList" method="_on_item_activated"]
 [connection signal="text_changed" from="MapMenu/PokemonListContainer/PokemonFilter" to="MapMenu/PokemonListContainer/CenterContainer/PokemonList" method="_on_pokemon_filter_text_changed"]
