@@ -1,5 +1,5 @@
 extends Node
-class_name TokenController
+class_name BoardTokenController
 
 ## Handles user interaction and visual manipulation for tokens
 ## Manages rotation, scaling, and selection input
@@ -31,7 +31,7 @@ signal context_menu_requested(token: iBoardToken, position: Vector2)
 
 func _ready() -> void:
 	if not rigid_body:
-		push_warning("TokenController: No RigidBody3D assigned.")
+		push_warning("BoardTokenController: No RigidBody3D assigned.")
 		return
 
 	# Connect to mouse events

@@ -1,16 +1,15 @@
 extends RefCounted
-class_name TokenFactory
+class_name BoardTokenFactory
 
 ## Factory for creating BoardToken instances from model scenes
 ## Centralizes all scene construction and component wiring logic
 ##
 ## Usage:
-##   var token = TokenFactory.create_from_scene(my_model_scene)
+##   var token = BoardTokenFactory.create_from_scene(my_model_scene)
 ##   # or with config:
-##   var token = TokenFactory.create_from_config(my_token_config)
+##   var token = BoardTokenFactory.create_from_config(my_token_config)
 
-const BoardTokenScene = preload("res://scenes/templates/board_token.tscn")
-const iBoardTokenAnimationTree = preload("res://animations/board_token_animation_tree.tscn")
+const BoardTokenScene = preload("uid://bev473ihcxqg8")
 
 ## Internal structure to hold extracted model components
 class ModelComponents:
@@ -28,7 +27,7 @@ class ModelComponents:
 static func create_from_scene(model_scene: Node3D, config: Resource = null) -> iBoardToken:
 	var components = _extract_model_components(model_scene)
 	if not components:
-		push_error("TokenFactory: Failed to extract model components")
+		push_error("BoardTokenFactory: Failed to extract model components")
 		return null
 
 	var instance = BoardTokenScene.instantiate() as iBoardToken
@@ -42,8 +41,13 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> i
 
 	# Add animation tree if animation player exists
 	if components.animation_player:
-		var anim_tree_scene = iBoardTokenAnimationTree if not config or not config.animation_tree_scene else config.animation_tree_scene
-		var animation_tree_instance = anim_tree_scene.instantiate()
+		var animation_tree_instance = null
+
+		if config and config.animation_tree_scene:
+			animation_tree_instance = config.animation_tree_scene.instantiate()
+		else:
+			animation_tree_instance = BoardTokenAnimationTreeFactory.create()
+
 		rigid_body.add_child(animation_tree_instance)
 		animation_tree_instance.anim_player = components.animation_player
 
@@ -73,7 +77,7 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> i
 ## Create a BoardToken from a TokenConfig resource
 static func create_from_config(config: Resource) -> iBoardToken:
 	if not config.model_scene:
-		push_error("TokenFactory: TokenConfig has no model_scene")
+		push_error("BoardTokenFactory: TokenConfig has no model_scene")
 		return null
 
 	var model = config.model_scene.instantiate()
@@ -94,7 +98,7 @@ static func _extract_model_components(scene: Node3D) -> ModelComponents:
 	components.collision_shape = scene.get_node_or_null("Armature/Mesh/Mesh/CollisionShape3D")
 
 	if not components.mesh_model:
-		push_error("TokenFactory: No mesh found in model scene")
+		push_error("BoardTokenFactory: No mesh found in model scene")
 		return null
 
 	return components
@@ -175,10 +179,10 @@ static func _build_draggable_token(rigid_body: RigidBody3D, collision_shape: Col
 	return draggable
 
 
-## Build the TokenController component
-static func _build_token_controller(rigid_body: RigidBody3D, draggable: DraggableToken) -> TokenController:
-	var controller = TokenController.new() as TokenController
-	controller.name = "TokenController"
+## Build the BoardTokenController component
+static func _build_token_controller(rigid_body: RigidBody3D, draggable: DraggableToken) -> BoardTokenController:
+	var controller = BoardTokenController.new() as BoardTokenController
+	controller.name = "BoardTokenController"
 	controller.rigid_body = rigid_body
 	controller.draggable_token = draggable
 	return controller

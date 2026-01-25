@@ -3,19 +3,19 @@ class_name iBoardToken
 
 ## Represents a PC or NPC token on the game board
 ## Manages entity data like health, visibility, and status
-## Separated from interaction logic (TokenController) and drag mechanics (DraggableToken)
+## Separated from interaction logic (BoardTokenController) and drag mechanics (DraggableToken)
 ##
-## Runtime Scene Tree Structure (built by TokenFactory):
+## Runtime Scene Tree Structure (built by BoardTokenFactory):
 ## BoardToken (Node3D) - this script
 ## ├── DraggingObject3D (DraggableToken)
 ## │   └── RigidBody3D
 ## │       ├── CollisionShape3D
 ## │       ├── Model Scene (Armature, etc.)
 ## │       └── AnimationTree
-## └── TokenController
+## └── BoardTokenController
 ##
 ## Usage:
-##   Use TokenFactory.create_from_scene() or TokenFactory.create_from_config()
+##   Use BoardTokenFactory.create_from_scene() or BoardTokenFactory.create_from_config()
 ##   to create properly configured BoardToken instances.
 
 # Entity identification
@@ -35,9 +35,9 @@ class_name iBoardToken
 # Status effects (could be expanded to a proper status effect system)
 @export var status_effects: Array[String] = []
 
-# References to child components (set by TokenFactory)
+# References to child components (set by BoardTokenFactory)
 var _dragging_object: DraggableToken
-var _token_controller: TokenController
+var _token_controller: BoardTokenController
 var rigid_body: RigidBody3D
 
 

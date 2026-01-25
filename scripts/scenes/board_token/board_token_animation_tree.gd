@@ -1,4 +1,5 @@
 extends Node3D
+class_name iBoardTokenAnimationTree
 
 @onready var tree: AnimationTree = $AnimationTree
 @export var anim_player: AnimationPlayer
