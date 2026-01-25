@@ -12,11 +12,11 @@ var tokens_container: Node3D = null
 var game_map: GameMap = null
 
 # References set after loading
-var loaded_tokens: Array[iBoardToken] = []
+var loaded_tokens: Array[BoardToken] = []
 
 
 signal level_loaded(level_data: LevelData)
-signal token_spawned(token: iBoardToken, placement: TokenPlacement)
+signal token_spawned(token: BoardToken, placement: TokenPlacement)
 
 
 func _ready() -> void:
@@ -81,31 +81,12 @@ func _load_map() -> bool:
 
 
 ## Spawn a single token from placement data
-func _spawn_token(placement: TokenPlacement) -> iBoardToken:
-	var scene_path = PokemonAutoload.path_to_scene(placement.pokemon_number, placement.is_shiny)
-	
-	if not ResourceLoader.exists(scene_path):
-		push_error("LevelLoader: Pokemon scene not found: " + scene_path)
-		return null
-	
-	var pokemon_scene = load(scene_path)
-	var model = pokemon_scene.instantiate()
-	var token = BoardTokenFactory.create_from_scene(model)
+func _spawn_token(placement: TokenPlacement) -> BoardToken:
+	var token = BoardTokenFactory.create_from_placement(placement)
 	
 	if not token:
 		push_error("LevelLoader: Failed to create token for Pokemon " + placement.pokemon_number)
 		return null
-	
-	# Set the node name and display name to the pokemon name
-	var pokemon_name = PokemonAutoload.get_pokemon_name(placement.pokemon_number)
-	token.name = pokemon_name
-	token.token_name = pokemon_name
-	
-	# Apply placement data
-	placement.apply_to_token(token)
-	
-	# Store placement ID for later reference
-	token.set_meta("placement_id", placement.placement_id)
 	
 	tokens_container.add_child(token)
 	
@@ -129,7 +110,7 @@ func _clear_current_level() -> void:
 
 
 ## Get a token by its placement ID
-func get_token_by_placement_id(placement_id: String) -> iBoardToken:
+func get_token_by_placement_id(placement_id: String) -> BoardToken:
 	for token in loaded_tokens:
 		if token.get_meta("placement_id", "") == placement_id:
 			return token

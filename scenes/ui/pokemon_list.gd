@@ -21,7 +21,7 @@ func _ready() -> void:
 	items_thread.start(_items_thread_function)
 	items_sem.post()
 
-func _items_thread_function():
+func _items_thread_function() -> void:
 	while true:
 		items_sem.wait()
 
@@ -61,7 +61,7 @@ func _on_item_activated(index: int) -> void:
 	var pokemon_scene: PackedScene = load(selected_item.scene)
 	EventBus.pokemon_added.emit(pokemon_scene)
 
-func _exit_tree():
+func _exit_tree() -> void:
 	# Set exit condition to true.
 	exit_mutex.lock()
 	exit_items_thread = true # Protect with Mutex.
