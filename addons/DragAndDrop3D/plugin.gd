@@ -6,15 +6,15 @@ func _ready() -> void:
 
 func _enter_tree():
 	add_custom_type(
-		"DragAndDrop3D", 
-		"Node3D", 
-		preload("res://addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd"), 
+		"DragAndDrop3D",
+		"Node3D",
+		preload("res://addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd"),
 		preload("res://addons/DragAndDrop3D/assets/dragIcon.png")
 	)
 	add_custom_type(
-		"DraggingObject3D", 
-		"Node3D", 
-		preload("res://addons/DragAndDrop3D/nodes/dragging_object_3d.gd"), 
+		"DraggingObject3D",
+		"Node3D",
+		preload("res://addons/DragAndDrop3D/nodes/dragging_object_3d.gd"),
 		preload("res://addons/DragAndDrop3D/assets/dragIcon.png")
 	)
 
