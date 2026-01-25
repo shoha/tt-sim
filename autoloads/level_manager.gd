@@ -1,9 +1,8 @@
 extends Node
 
-## Manages level save/load operations and level instantiation
-## Autoload singleton for global access
+## Manages level save/load operations and level instantiation.
+## Autoload singleton for global access.
 
-const LEVELS_DIR = "user://levels/"
 const LEVEL_FILE_EXTENSION = ".tres"
 
 ## Signals
@@ -22,8 +21,8 @@ func _ready() -> void:
 
 ## Ensure the levels directory exists
 func _ensure_levels_directory() -> void:
-	if not DirAccess.dir_exists_absolute(LEVELS_DIR):
-		DirAccess.make_dir_recursive_absolute(LEVELS_DIR)
+	if not DirAccess.dir_exists_absolute(Paths.LEVELS_DIR):
+		DirAccess.make_dir_recursive_absolute(Paths.LEVELS_DIR)
 
 
 ## Save a level to disk
@@ -36,7 +35,7 @@ func save_level(level_data: LevelData, file_name: String = "") -> String:
 	if not file_name.ends_with(LEVEL_FILE_EXTENSION):
 		file_name += LEVEL_FILE_EXTENSION
 	
-	var full_path = LEVELS_DIR + file_name
+	var full_path = Paths.LEVELS_DIR + file_name
 	
 	level_data._update_modified_time()
 	
@@ -76,7 +75,7 @@ func get_saved_levels() -> Array[Dictionary]:
 	_ensure_levels_directory()
 	
 	var levels: Array[Dictionary] = []
-	var dir = DirAccess.open(LEVELS_DIR)
+	var dir = DirAccess.open(Paths.LEVELS_DIR)
 	
 	if not dir:
 		push_error("LevelManager: Cannot open levels directory")
@@ -87,8 +86,9 @@ func get_saved_levels() -> Array[Dictionary]:
 	
 	while file_name != "":
 		if not dir.current_is_dir() and file_name.ends_with(LEVEL_FILE_EXTENSION):
-			var full_path = LEVELS_DIR + file_name
-			var level = ResourceLoader.load(full_path) as LevelData
+			var full_path = Paths.LEVELS_DIR + file_name
+			# Use load with error handling for potentially corrupted/outdated files
+			var level = ResourceLoader.load(full_path, "", ResourceLoader.CACHE_MODE_IGNORE) as LevelData
 			if level:
 				levels.append({
 					"path": full_path,
@@ -98,6 +98,8 @@ func get_saved_levels() -> Array[Dictionary]:
 					"modified_at": level.modified_at,
 					"token_count": level.token_placements.size()
 				})
+			else:
+				push_warning("LevelManager: Skipping incompatible level file: " + file_name)
 		file_name = dir.get_next()
 	
 	dir.list_dir_end()
@@ -172,29 +174,8 @@ func instantiate_level(level_data: LevelData, parent: Node3D) -> Node3D:
 
 
 ## Create a BoardToken from a TokenPlacement
-func _create_token_from_placement(placement: TokenPlacement) -> iBoardToken:
-	var scene_path = PokemonAutoload.path_to_scene(placement.pokemon_number, placement.is_shiny)
-	
-	if not ResourceLoader.exists(scene_path):
-		push_error("LevelManager: Pokemon scene not found: " + scene_path)
-		return null
-	
-	var pokemon_scene = load(scene_path)
-	var model = pokemon_scene.instantiate()
-	var token = BoardTokenFactory.create_from_scene(model)
-	
-	if not token:
-		push_error("LevelManager: Failed to create token for Pokemon " + placement.pokemon_number)
-		return null
-	
-	# Set the node name and display name to the pokemon name
-	var pokemon_name = PokemonAutoload.get_pokemon_name(placement.pokemon_number)
-	token.name = pokemon_name
-	token.token_name = pokemon_name
-	
-	placement.apply_to_token(token)
-	
-	return token
+func _create_token_from_placement(placement: TokenPlacement) -> BoardToken:
+	return BoardTokenFactory.create_from_placement(placement)
 
 
 ## Sanitize a filename

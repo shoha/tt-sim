@@ -24,13 +24,14 @@ class ModelComponents:
 ## Create a BoardToken from a model scene (Node3D)
 ## This is the main entry point for runtime token creation
 ## @param config: Optional TokenConfig resource for customization
-static func create_from_scene(model_scene: Node3D, config: Resource = null) -> iBoardToken:
+static func create_from_scene(model_scene: Node3D, config: Resource = null) -> BoardToken:
 	var components = _extract_model_components(model_scene)
 	if not components:
 		push_error("BoardTokenFactory: Failed to extract model components")
 		return null
 
-	var instance = BoardTokenScene.instantiate() as iBoardToken
+	var instance = BoardTokenScene.instantiate() as BoardToken
+	instance._factory_created = true
 	_clear_placeholder_children(instance)
 
 	# Build the rigid body with collision
@@ -69,13 +70,13 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> i
 	if config:
 		_apply_config(instance, config)
 
-	Utils.set_own_children(instance)
+	NodeUtils.set_own_children(instance)
 
 	return instance
 
 
 ## Create a BoardToken from a TokenConfig resource
-static func create_from_config(config: Resource) -> iBoardToken:
+static func create_from_config(config: Resource) -> BoardToken:
 	if not config.model_scene:
 		push_error("BoardTokenFactory: TokenConfig has no model_scene")
 		return null
@@ -105,7 +106,7 @@ static func _extract_model_components(scene: Node3D) -> ModelComponents:
 
 
 ## Clear placeholder children from the BoardToken scene
-static func _clear_placeholder_children(instance: iBoardToken) -> void:
+static func _clear_placeholder_children(instance: BoardToken) -> void:
 	var children = instance.get_children()
 	for child in children:
 		instance.remove_child(child)
@@ -189,9 +190,63 @@ static func _build_token_controller(rigid_body: RigidBody3D, draggable: Draggabl
 
 
 ## Apply TokenConfig properties to a BoardToken instance
-static func _apply_config(token: iBoardToken, config: Resource) -> void:
+static func _apply_config(token: BoardToken, config: Resource) -> void:
 	if config.token_name:
 		token.token_name = config.token_name
 	token.is_player_controlled = config.is_player_controlled
 	token.max_health = config.max_health
 	token.current_health = config.max_health
+
+
+## Create a BoardToken from a Pokemon number and shiny flag
+## This is the preferred method for spawning Pokemon tokens
+## @param pokemon_number: The Pokemon's number (e.g., "25" for Pikachu)
+## @param is_shiny: Whether to use the shiny variant
+## @param config: Optional TokenConfig for additional customization
+## @return: A configured BoardToken, or null if creation failed
+static func create_from_pokemon(pokemon_number: String, is_shiny: bool, config: Resource = null) -> BoardToken:
+	var scene_path = PokemonAutoload.path_to_scene(pokemon_number, is_shiny)
+	
+	if not ResourceLoader.exists(scene_path):
+		push_error("BoardTokenFactory: Pokemon scene not found: " + scene_path)
+		return null
+	
+	var pokemon_scene = load(scene_path)
+	if not pokemon_scene:
+		push_error("BoardTokenFactory: Failed to load Pokemon scene: " + scene_path)
+		return null
+	
+	var model = pokemon_scene.instantiate()
+	var token = create_from_scene(model, config)
+	
+	if not token:
+		push_error("BoardTokenFactory: Failed to create token for Pokemon " + pokemon_number)
+		return null
+	
+	# Set the node name and display name to the Pokemon name
+	var pokemon_name = PokemonAutoload.get_pokemon_name(pokemon_number)
+	token.name = pokemon_name
+	token.token_name = pokemon_name
+	
+	return token
+
+
+## Create a BoardToken from a TokenPlacement resource
+## Applies all placement data (position, rotation, scale, properties)
+## @param placement: The TokenPlacement containing spawn data
+## @return: A fully configured BoardToken at the specified position
+static func create_from_placement(placement: TokenPlacement) -> BoardToken:
+	var token = create_from_pokemon(placement.pokemon_number, placement.is_shiny)
+	
+	if not token:
+		return null
+	
+	# Store placement ID for later reference
+	token.set_meta("placement_id", placement.placement_id)
+	token.set_meta("pokemon_number", placement.pokemon_number)
+	token.set_meta("is_shiny", placement.is_shiny)
+	
+	# Apply placement data (position, rotation, scale, properties)
+	placement.apply_to_token(token)
+	
+	return token

@@ -1,9 +1,12 @@
 extends Node3D
-class_name iBoardToken
+class_name BoardToken
 
-## Represents a PC or NPC token on the game board
-## Manages entity data like health, visibility, and status
-## Separated from interaction logic (BoardTokenController) and drag mechanics (DraggableToken)
+## Represents a PC or NPC token on the game board.
+## Manages entity data like health, visibility, and status.
+## Separated from interaction logic (BoardTokenController) and drag mechanics (DraggableToken).
+##
+## @warning Do not create with BoardToken.new() - use BoardTokenFactory instead.
+## This class requires its scene structure to function properly.
 ##
 ## Runtime Scene Tree Structure (built by BoardTokenFactory):
 ## BoardToken (Node3D) - this script
@@ -17,6 +20,9 @@ class_name iBoardToken
 ## Usage:
 ##   Use BoardTokenFactory.create_from_scene() or BoardTokenFactory.create_from_config()
 ##   to create properly configured BoardToken instances.
+
+## Set to true by BoardTokenFactory - detects improper instantiation
+var _factory_created: bool = false
 
 # Entity identification
 @export var token_name: String = "Token"
@@ -49,6 +55,12 @@ signal revived()
 signal token_visibility_changed(is_visible: bool)
 signal status_effect_added(effect: String)
 signal status_effect_removed(effect: String)
+
+
+func _enter_tree() -> void:
+	if not _factory_created:
+		push_error("BoardToken: Use BoardTokenFactory.create_from_scene(), not .new()")
+
 
 # Health management
 func take_damage(amount: int) -> void:

@@ -1,11 +1,23 @@
 extends Node3D
-class_name iBoardTokenAnimationTree
+class_name BoardTokenAnimationTree
+
+## Animation tree component for BoardToken.
+##
+## @warning Do not create with .new() - use BoardTokenAnimationTreeFactory instead.
+## This class requires its scene structure to function properly.
 
 @onready var tree: AnimationTree = $AnimationTree
 @export var anim_player: AnimationPlayer
 
-var _board_token: iBoardToken
+## Set to true by BoardTokenAnimationTreeFactory - detects improper instantiation
+var _factory_created: bool = false
+var _board_token: BoardToken
 var _state_machine: AnimationNodeStateMachinePlayback
+
+func _enter_tree() -> void:
+	if not _factory_created:
+		push_error("BoardTokenAnimationTree: Use BoardTokenAnimationTreeFactory.create(), not .new()")
+
 
 func _ready() -> void:
 	tree.set_animation_player(tree.get_path_to(anim_player))
@@ -23,10 +35,10 @@ func _connect_to_board_token() -> void:
 
 	_board_token.health_changed.connect(_on_health_changed)
 
-func _find_ancestor_board_token() -> iBoardToken:
+func _find_ancestor_board_token() -> BoardToken:
 	var node = get_parent()
 	while node:
-		if node is iBoardToken:
+		if node is BoardToken:
 			return node
 		node = node.get_parent()
 	return null

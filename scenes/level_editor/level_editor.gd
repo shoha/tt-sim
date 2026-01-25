@@ -128,7 +128,7 @@ func _setup_file_dialogs() -> void:
 	map_file_dialog.access = FileDialog.ACCESS_RESOURCES
 	map_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	map_file_dialog.filters = ["*.glb ; GLB Models", "*.gltf ; GLTF Models", "*.tscn ; Godot Scenes"]
-	map_file_dialog.current_dir = "res://assets/models/maps/"
+	map_file_dialog.current_dir = Paths.MAPS_DIR
 	
 	export_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE

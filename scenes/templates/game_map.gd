@@ -21,14 +21,16 @@ func _ready() -> void:
 	EventBus.token_selected.connect(_on_token_selected)
 	_setup_context_menu()
 
-func _process(delta):
+func _process(delta: float) -> void:
 	handle_movement(delta)
 	handle_zoom(delta)
 
-func handle_movement(delta):
+
+func handle_movement(delta: float) -> void:
 	cameraholder_node.translate(_camera_move_dir * move_speed * delta)
 
-func handle_zoom(delta):
+
+func handle_zoom(delta: float) -> void:
 	var zoom_level = clamp(camera_node.size + _camera_zoom_dir * zoom_speed * delta, min_zoom, max_zoom)
 
 	if _camera_zoom_dir != 0.0:
@@ -83,20 +85,14 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	_camera_move_dir = input_dir
 
 func _on_pokemon_list_pokemon_added(pokemon: PackedScene) -> void:
-	var scene = pokemon.instantiate()
-	var board_token = BoardTokenFactory.create_from_scene(scene)
-	if not board_token:
-		push_error("GameMap: Failed to create board token")
-		return
-	
 	# Extract pokemon info from the scene path
 	var pokemon_number = _extract_pokemon_number_from_path(pokemon.resource_path)
 	var is_shiny = "_shiny" in pokemon.resource_path
 	
-	# Set the node name and display name to the pokemon name
-	var pokemon_name = PokemonAutoload.get_pokemon_name(pokemon_number)
-	board_token.name = pokemon_name
-	board_token.token_name = pokemon_name
+	var board_token = BoardTokenFactory.create_from_pokemon(pokemon_number, is_shiny)
+	if not board_token:
+		push_error("GameMap: Failed to create board token")
+		return
 	
 	drag_and_drop_node.add_child(board_token)
 
@@ -136,7 +132,7 @@ func _setup_context_menu() -> void:
 		_context_menu.hp_adjustment_requested.connect(_on_context_menu_hp_adjustment_requested)
 		_context_menu.visibility_toggled.connect(_on_context_menu_visibility_toggled)
 
-func _on_token_context_menu_requested(token: iBoardToken, menu_position: Vector2) -> void:
+func _on_token_context_menu_requested(token: BoardToken, menu_position: Vector2) -> void:
 	if _context_menu:
 		_context_menu.open_for_token(token, menu_position)
 

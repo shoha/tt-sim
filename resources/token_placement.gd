@@ -37,7 +37,7 @@ static func _generate_id() -> String:
 
 
 ## Create a TokenPlacement from an existing BoardToken
-static func from_board_token(token: iBoardToken, pokemon_num: String, shiny: bool) -> TokenPlacement:
+static func from_board_token(token: BoardToken, pokemon_num: String, shiny: bool) -> TokenPlacement:
 	var placement = TokenPlacement.new()
 	placement.pokemon_number = pokemon_num
 	placement.is_shiny = shiny
@@ -63,7 +63,7 @@ static func from_board_token(token: iBoardToken, pokemon_num: String, shiny: boo
 
 ## Apply this placement's properties to a BoardToken
 ## Note: Positions the rigid_body since that's what the drag system moves
-func apply_to_token(token: iBoardToken) -> void:
+func apply_to_token(token: BoardToken) -> void:
 	# The rigid_body is what gets moved during gameplay, so position it
 	var rigid_body = token.get_rigid_body()
 	if rigid_body:

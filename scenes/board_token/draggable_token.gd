@@ -132,7 +132,7 @@ func _sync_parent_position() -> void:
 	
 	# Find the BoardToken (grandparent: BoardToken -> DraggableToken -> RigidBody3D)
 	var board_token = get_parent()
-	if not board_token or not board_token is iBoardToken:
+	if not board_token or not board_token is BoardToken:
 		return
 	
 	# Get the rigid body's world position
