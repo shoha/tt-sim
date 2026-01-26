@@ -113,7 +113,7 @@ func _clear_existing_maps() -> void:
 		return
 
 	# List of node names/types to preserve (not maps)
-	var preserved_names = ["WorldEnvironment", "MapMenu", "DragAndDrop3D", "LevelMap"]
+	var preserved_names = ["MapMenu", "DragAndDrop3D", "LevelMap", "CameraHolder", "PixelateCanvas", "SharpenCanvas"]
 
 	for child in _game_map.get_children():
 		# Skip UI nodes, environments, and the drag-and-drop container
