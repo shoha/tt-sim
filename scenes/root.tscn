@@ -1,7 +1,45 @@
-[gd_scene load_steps=2 format=3 uid="uid://dow8pna05oxft"]
+[gd_scene load_steps=3 format=3 uid="uid://dow8pna05oxft"]
 
 [ext_resource type="PackedScene" uid="uid://byf7iljoqrotr" path="res://scenes/templates/game_map.tscn" id="1_j5px3"]
+[ext_resource type="Script" uid="uid://c72pjb3vxixl6" path="res://scenes/root.gd" id="2_root"]
 
 [node name="Root" type="Node3D"]
+script = ExtResource("2_root")
 
 [node name="GameMap" parent="." instance=ExtResource("1_j5px3")]
+
+[node name="PlaceholderLayer" type="CanvasLayer" parent="."]
+layer = 1
+
+[node name="PlaceholderContainer" type="ColorRect" parent="PlaceholderLayer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.12, 0.12, 0.15, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="PlaceholderLayer/PlaceholderContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PlaceholderLayer/PlaceholderContainer/CenterContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="PlaceholderLabel" type="Label" parent="PlaceholderLayer/PlaceholderContainer/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "No Map Loaded"
+horizontal_alignment = 1
+
+[node name="SubLabel" type="Label" parent="PlaceholderLayer/PlaceholderContainer/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 18
+text = "Open the Level Editor to load or create a level"
+horizontal_alignment = 1
