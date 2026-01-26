@@ -46,8 +46,6 @@ text = "Level Editor"
 
 [node name="TogglePokemonListButton" type="Button" parent="MapMenu/BottomButtons"]
 unique_name_in_owner = true
-z_index = 1
-z_as_relative = false
 layout_mode = 2
 toggle_mode = true
 text = "Add Pokemon"

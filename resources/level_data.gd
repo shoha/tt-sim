@@ -13,7 +13,7 @@ class_name LevelData
 
 ## Map configuration
 @export_group("Map")
-@export var map_glb_path: String = ""
+@export var map_path: String = ""
 @export var map_scale: Vector3 = Vector3.ONE
 @export var map_offset: Vector3 = Vector3.ZERO
 
@@ -76,7 +76,7 @@ func duplicate_level() -> LevelData:
 	new_level.level_name = level_name + " (Copy)"
 	new_level.level_description = level_description
 	new_level.author = author
-	new_level.map_glb_path = map_glb_path
+	new_level.map_path = map_path
 	new_level.map_scale = map_scale
 	new_level.map_offset = map_offset
 
@@ -95,10 +95,10 @@ func validate() -> Array[String]:
 	if level_name.strip_edges() == "":
 		errors.append("Level name is required")
 
-	if map_glb_path == "":
-		errors.append("Map GLB file is required")
-	elif not ResourceLoader.exists(map_glb_path) and not FileAccess.file_exists(map_glb_path):
-		errors.append("Map file does not exist: " + map_glb_path)
+	if map_path == "":
+		errors.append("Map file is required")
+	elif not ResourceLoader.exists(map_path) and not FileAccess.file_exists(map_path):
+		errors.append("Map file does not exist: " + map_path)
 
 	for i in range(token_placements.size()):
 		var placement = token_placements[i]
