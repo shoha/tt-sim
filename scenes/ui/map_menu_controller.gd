@@ -132,3 +132,8 @@ func _find_game_map_recursive(node: Node) -> GameMap:
 func clear_level() -> void:
 	_level_play_controller.clear_level()
 	_update_save_button_visibility()
+
+
+## Get the level play controller (for external connections)
+func get_level_play_controller() -> LevelPlayController:
+	return _level_play_controller
