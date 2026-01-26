@@ -139,16 +139,16 @@ func create_new_level(level_name: String = "New Level") -> LevelData:
 ## Instantiate a loaded level into the scene
 ## Returns the map node with all tokens added
 func instantiate_level(level_data: LevelData, parent: Node3D) -> Node3D:
-	if level_data.map_glb_path == "":
+	if level_data.map_path == "":
 		push_error("LevelManager: No map path specified")
 		return null
 
 	# Load and instantiate the map
 	var map_scene: PackedScene
-	if ResourceLoader.exists(level_data.map_glb_path):
-		map_scene = load(level_data.map_glb_path)
+	if ResourceLoader.exists(level_data.map_path):
+		map_scene = load(level_data.map_path)
 	else:
-		push_error("LevelManager: Map file not found: " + level_data.map_glb_path)
+		push_error("LevelManager: Map file not found: " + level_data.map_path)
 		return null
 
 	var map_instance = map_scene.instantiate() as Node3D
@@ -204,7 +204,7 @@ func export_level_json(level_data: LevelData, file_path: String) -> bool:
 		"author": level_data.author,
 		"created_at": level_data.created_at,
 		"modified_at": level_data.modified_at,
-		"map_glb_path": level_data.map_glb_path,
+		"map_path": level_data.map_path,
 		"map_scale": {"x": level_data.map_scale.x, "y": level_data.map_scale.y, "z": level_data.map_scale.z},
 		"map_offset": {"x": level_data.map_offset.x, "y": level_data.map_offset.y, "z": level_data.map_offset.z},
 		"token_placements": []
@@ -260,7 +260,7 @@ func import_level_json(file_path: String) -> LevelData:
 	level.author = data.get("author", "")
 	level.created_at = data.get("created_at", int(Time.get_unix_time_from_system()))
 	level.modified_at = data.get("modified_at", level.created_at)
-	level.map_glb_path = data.get("map_glb_path", "")
+	level.map_path = data.get("map_path", data.get("map_glb_path", ""))
 
 	if data.has("map_scale"):
 		level.map_scale = Vector3(data.map_scale.x, data.map_scale.y, data.map_scale.z)

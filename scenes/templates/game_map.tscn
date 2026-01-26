@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3 uid="uid://byf7iljoqrotr"]
+[gd_scene load_steps=13 format=3 uid="uid://byf7iljoqrotr"]
 
 [ext_resource type="Script" uid="uid://ybc3vhthi6i5" path="res://scenes/templates/game_map.gd" id="1_5384n"]
 [ext_resource type="PackedScene" uid="uid://bim2dski2fp35" path="res://scenes/ui/map_menu.tscn" id="2_stlim"]
@@ -7,26 +7,6 @@
 [ext_resource type="Shader" uid="uid://cyy1aha4j5eb1" path="res://shaders/tilt_shift.gdshader" id="4_hgeeq"]
 [ext_resource type="Shader" uid="uid://p0vr8rfouk5b" path="res://shaders/pixelate.gdshader" id="4_hxr2g"]
 [ext_resource type="Script" uid="uid://bm2kst6ow2637" path="res://scenes/templates/camera_3d.gd" id="4_kjinj"]
-
-[sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_kjinj"]
-turbidity = 0.0
-sun_disk_scale = 123.4
-energy_multiplier = 24.91
-
-[sub_resource type="Sky" id="Sky_28aoi"]
-sky_material = SubResource("PhysicalSkyMaterial_kjinj")
-process_mode = 3
-
-[sub_resource type="Environment" id="Environment_lskvb"]
-background_mode = 1
-background_color = Color(1, 1, 1, 1)
-background_energy_multiplier = 0.5
-sky = SubResource("Sky_28aoi")
-sky_custom_fov = 5.5
-ambient_light_source = 2
-ambient_light_color = Color(1, 1, 1, 1)
-ambient_light_energy = 0.5
-tonemap_exposure = 0.71
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_6netm"]
 shader = ExtResource("3_hgeeq")
@@ -40,7 +20,6 @@ shader_parameter/opacity = 1.0
 shader_parameter/camera_size = 1.0
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_stlim"]
-auto_exposure_enabled = true
 auto_exposure_scale = 0.8
 dof_blur_far_distance = 18.28
 dof_blur_far_transition = -1.0
@@ -64,13 +43,12 @@ size = Vector2(2, 2)
 [node name="GameMap" type="Node3D"]
 script = ExtResource("1_5384n")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
-environment = SubResource("Environment_lskvb")
+[node name="MapMenu" parent="." instance=ExtResource("2_stlim")]
 
-[node name="SharpenCanvas" type="CanvasLayer" parent="WorldEnvironment"]
+[node name="SharpenCanvas" type="CanvasLayer" parent="."]
 visible = false
 
-[node name="Sharpen" type="ColorRect" parent="WorldEnvironment/SharpenCanvas"]
+[node name="Sharpen" type="ColorRect" parent="SharpenCanvas"]
 material = SubResource("ShaderMaterial_6netm")
 anchors_preset = 15
 anchor_right = 1.0
@@ -80,10 +58,10 @@ grow_vertical = 2
 mouse_filter = 2
 metadata/_edit_use_anchors_ = true
 
-[node name="PixelateCanvas" type="CanvasLayer" parent="WorldEnvironment"]
+[node name="PixelateCanvas" type="CanvasLayer" parent="."]
 visible = false
 
-[node name="Pixelate" type="ColorRect" parent="WorldEnvironment/PixelateCanvas"]
+[node name="Pixelate" type="ColorRect" parent="PixelateCanvas"]
 material = SubResource("ShaderMaterial_pe1xh")
 anchors_preset = 15
 anchor_right = 1.0
@@ -93,35 +71,34 @@ grow_vertical = 2
 mouse_filter = 2
 metadata/_edit_use_anchors_ = true
 
-[node name="CameraHolder" type="Node3D" parent="WorldEnvironment"]
+[node name="CameraHolder" type="Node3D" parent="."]
 
-[node name="Camera3D" type="Camera3D" parent="WorldEnvironment/CameraHolder"]
+[node name="Camera3D" type="Camera3D" parent="CameraHolder"]
 transform = Transform3D(0.7071068, -0.26030335, 0.6574513, 0, 0.9297765, 0.36812454, -0.7071068, -0.26030335, 0.6574513, 11.088, 8, 11.088)
 attributes = SubResource("CameraAttributesPractical_stlim")
 projection = 1
 size = 13.85
 near = 0.001
-far = 50.0
+far = 1000.0
 script = ExtResource("4_kjinj")
 
-[node name="DirectionalLight3D" type="OmniLight3D" parent="WorldEnvironment/CameraHolder/Camera3D"]
+[node name="DirectionalLight3D" type="OmniLight3D" parent="CameraHolder/Camera3D"]
+visible = false
 light_energy = 2.0
 shadow_enabled = true
 omni_range = 50.0
 omni_attenuation = 0.247
 omni_shadow_mode = 0
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="WorldEnvironment/CameraHolder/Camera3D"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CameraHolder/Camera3D"]
 visible = false
 extra_cull_margin = 16384.0
 mesh = SubResource("QuadMesh_stlim")
 
-[node name="RayCast3D" type="RayCast3D" parent="WorldEnvironment/CameraHolder/Camera3D"]
+[node name="RayCast3D" type="RayCast3D" parent="CameraHolder/Camera3D"]
 target_position = Vector3(0, 0, -100)
 hit_back_faces = false
 
-[node name="DragAndDrop3D" type="Node3D" parent="WorldEnvironment" groups=["DragAndDrop3D"]]
+[node name="DragAndDrop3D" type="Node3D" parent="." groups=["DragAndDrop3D"]]
 script = ExtResource("2_tyn2t")
 metadata/_custom_type_script = "uid://md8k6faseouk"
-
-[node name="MapMenu" parent="." instance=ExtResource("2_stlim")]

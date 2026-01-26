@@ -65,16 +65,16 @@ func _load_level_map(level_data: LevelData) -> bool:
 	_clear_existing_maps()
 
 	# Check for valid map path
-	if level_data.map_glb_path == "":
+	if level_data.map_path == "":
 		push_error("LevelPlayController: No map path in level data")
 		return false
 
-	if not ResourceLoader.exists(level_data.map_glb_path):
-		push_error("LevelPlayController: Map file not found: " + level_data.map_glb_path)
+	if not ResourceLoader.exists(level_data.map_path):
+		push_error("LevelPlayController: Map file not found: " + level_data.map_path)
 		return false
 
 	# Load and instantiate the map
-	var map_scene = load(level_data.map_glb_path)
+	var map_scene = load(level_data.map_path)
 	if not map_scene:
 		push_error("LevelPlayController: Failed to load map scene")
 		return false

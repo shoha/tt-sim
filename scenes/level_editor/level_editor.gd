@@ -178,8 +178,8 @@ func _update_ui_from_level() -> void:
 	level_description_edit.text = current_level.level_description
 	author_edit.text = current_level.author
 
-	if current_level.map_glb_path != "":
-		map_path_label.text = current_level.map_glb_path.get_file()
+	if current_level.map_path != "":
+		map_path_label.text = current_level.map_path.get_file()
 	else:
 		map_path_label.text = "No map selected"
 
@@ -289,7 +289,7 @@ func _on_select_map_pressed() -> void:
 
 
 func _on_map_file_selected(path: String) -> void:
-	current_level.map_glb_path = path
+	current_level.map_path = path
 	map_path_label.text = path.get_file()
 	_set_status("Map selected: " + path.get_file())
 

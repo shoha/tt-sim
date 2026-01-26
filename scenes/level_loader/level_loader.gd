@@ -31,7 +31,7 @@ func load_level(data: LevelData) -> bool:
 	# Clear any existing level
 	_clear_current_level()
 
-	if data.map_glb_path == "":
+	if data.map_path == "":
 		push_error("LevelLoader: No map path in level data")
 		return false
 
@@ -58,11 +58,11 @@ func load_level(data: LevelData) -> bool:
 
 ## Load the map GLB/scene
 func _load_map() -> bool:
-	if not ResourceLoader.exists(level_data.map_glb_path):
-		push_error("LevelLoader: Map file not found: " + level_data.map_glb_path)
+	if not ResourceLoader.exists(level_data.map_path):
+		push_error("LevelLoader: Map file not found: " + level_data.map_path)
 		return false
 
-	var map_scene = load(level_data.map_glb_path)
+	var map_scene = load(level_data.map_path)
 	if not map_scene:
 		push_error("LevelLoader: Failed to load map scene")
 		return false

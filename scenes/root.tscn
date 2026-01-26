@@ -1,7 +1,7 @@
 [gd_scene load_steps=2 format=3 uid="uid://dow8pna05oxft"]
 
-[ext_resource type="PackedScene" uid="uid://bcb6wurf2c3jv" path="res://scenes/maps/oakslab.tscn" id="1_j5px3"]
+[ext_resource type="PackedScene" uid="uid://byf7iljoqrotr" path="res://scenes/templates/game_map.tscn" id="1_j5px3"]
 
 [node name="Root" type="Node3D"]
 
-[node name="Oakslab" parent="." instance=ExtResource("1_j5px3")]
+[node name="GameMap" parent="." instance=ExtResource("1_j5px3")]
