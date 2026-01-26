@@ -1,23 +1,10 @@
-[gd_scene load_steps=13 format=3 uid="uid://byf7iljoqrotr"]
+[gd_scene load_steps=9 format=3 uid="uid://byf7iljoqrotr"]
 
 [ext_resource type="Script" uid="uid://ybc3vhthi6i5" path="res://scenes/templates/game_map.gd" id="1_5384n"]
 [ext_resource type="PackedScene" uid="uid://bim2dski2fp35" path="res://scenes/ui/map_menu.tscn" id="2_stlim"]
 [ext_resource type="Script" uid="uid://md8k6faseouk" path="res://addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd" id="2_tyn2t"]
-[ext_resource type="Shader" uid="uid://6kugy8y2oa1c" path="res://shaders/sharpen.gdshader" id="3_hgeeq"]
 [ext_resource type="Shader" uid="uid://cyy1aha4j5eb1" path="res://shaders/tilt_shift.gdshader" id="4_hgeeq"]
-[ext_resource type="Shader" uid="uid://p0vr8rfouk5b" path="res://shaders/pixelate.gdshader" id="4_hxr2g"]
 [ext_resource type="Script" uid="uid://bm2kst6ow2637" path="res://scenes/templates/camera_3d.gd" id="4_kjinj"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_6netm"]
-shader = ExtResource("3_hgeeq")
-shader_parameter/blur_sharp = -1.9999999552964
-shader_parameter/pixel = 2.0
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_pe1xh"]
-shader = ExtResource("4_hxr2g")
-shader_parameter/pixelation = 0.0030000001425
-shader_parameter/opacity = 1.0
-shader_parameter/camera_size = 1.0
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_stlim"]
 auto_exposure_scale = 0.8
@@ -45,32 +32,6 @@ script = ExtResource("1_5384n")
 
 [node name="MapMenu" parent="." instance=ExtResource("2_stlim")]
 
-[node name="SharpenCanvas" type="CanvasLayer" parent="."]
-visible = false
-
-[node name="Sharpen" type="ColorRect" parent="SharpenCanvas"]
-material = SubResource("ShaderMaterial_6netm")
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-metadata/_edit_use_anchors_ = true
-
-[node name="PixelateCanvas" type="CanvasLayer" parent="."]
-visible = false
-
-[node name="Pixelate" type="ColorRect" parent="PixelateCanvas"]
-material = SubResource("ShaderMaterial_pe1xh")
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-metadata/_edit_use_anchors_ = true
-
 [node name="CameraHolder" type="Node3D" parent="."]
 
 [node name="Camera3D" type="Camera3D" parent="CameraHolder"]
@@ -91,7 +52,6 @@ omni_attenuation = 0.247
 omni_shadow_mode = 0
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="CameraHolder/Camera3D"]
-visible = false
 extra_cull_margin = 16384.0
 mesh = SubResource("QuadMesh_stlim")
 

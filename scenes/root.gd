@@ -5,6 +5,6 @@ extends Node3D
 @export var min_zoom: float = 2.0
 @export var max_zoom: float = 20.0
 
-@onready var cameraholder_node: Node3D = $WorldEnvironment/CameraHolder
-@onready var camera_node: Camera3D = $WorldEnvironment/CameraHolder/Camera3D
-@onready var pixelate_node: ColorRect = $WorldEnvironment/PixelateCanvas/Pixelate
+@onready var cameraholder_node: Node3D = $CameraHolder
+@onready var camera_node: Camera3D = $CameraHolder/Camera3D
+@onready var pixelate_node: ColorRect = $PixelateCanvas/Pixelate

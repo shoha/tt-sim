@@ -6,11 +6,10 @@ class_name GameMap
 @export var min_zoom: float = 2.0
 @export var max_zoom: float = 20.0
 
-@onready var cameraholder_node: Node3D = $WorldEnvironment/CameraHolder
-@onready var camera_node: Camera3D = $WorldEnvironment/CameraHolder/Camera3D
-@onready var pixelate_node: ColorRect = $WorldEnvironment/PixelateCanvas/Pixelate
-@onready var tiltshift_node: MeshInstance3D = $WorldEnvironment/CameraHolder/Camera3D/MeshInstance3D
-@onready var drag_and_drop_node: Node3D = $WorldEnvironment/DragAndDrop3D
+@onready var cameraholder_node: Node3D = $CameraHolder
+@onready var camera_node: Camera3D = $CameraHolder/Camera3D
+@onready var tiltshift_node: MeshInstance3D = $CameraHolder/Camera3D/MeshInstance3D
+@onready var drag_and_drop_node: Node3D = $DragAndDrop3D
 
 var _camera_move_dir: Vector3
 var _camera_zoom_dir: int
@@ -37,7 +36,6 @@ func handle_zoom(delta: float) -> void:
 		camera_node.size = zoom_level
 
 	_camera_zoom_dir = 0
-	pixelate_node.material.set_shader_parameter(&"camera_size", camera_node.size)
 
 	var zoom_percentage: float = (zoom_level - min_zoom) / (max_zoom - min_zoom)
 	tiltshift_node.mesh.material.set_shader_parameter(&"DoF", 5 * zoom_percentage)
