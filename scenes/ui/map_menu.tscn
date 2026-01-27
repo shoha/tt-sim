@@ -31,7 +31,6 @@ offset_right = -15.0
 offset_bottom = -15.0
 grow_horizontal = 0
 grow_vertical = 0
-theme_override_constants/separation = 10
 alignment = 2
 
 [node name="SavePositionsButton" type="Button" parent="MapMenu/BottomButtons"]
@@ -78,7 +77,6 @@ grow_vertical = 2
 custom_minimum_size = Vector2(550, 140)
 layout_mode = 2
 mouse_filter = 1
-theme_override_colors/guide_color = Color(0.7176471, 0.7176471, 0.7176471, 0)
 allow_search = false
 max_columns = 4
 same_column_width = true
