@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://dlevel_editor_main"]
+[gd_scene load_steps=2 format=3 uid="uid://jpfohjr0e8nv"]
 
-[ext_resource type="Script" path="res://scenes/level_editor/level_editor.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://cocec7gcywhnm" path="res://scenes/level_editor/level_editor.gd" id="1_script"]
 
 [node name="LevelEditor" type="Control"]
 layout_mode = 3
@@ -16,29 +16,26 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-color = Color(0.12, 0.12, 0.15, 1)
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.101960786, 0.07058824, 0.101960786, 1)
 
 [node name="MainContainer" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 20
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="VBox" type="VBoxContainer" parent="MainContainer"]
 layout_mode = 2
-theme_override_constants/separation = 15
 
 [node name="Header" type="HBoxContainer" parent="MainContainer/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 20
 
 [node name="Title" type="Label" parent="MainContainer/VBox/Header"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 28
 text = "Level Editor"
 
 [node name="Spacer" type="Control" parent="MainContainer/VBox/Header"]
@@ -91,26 +88,23 @@ split_offset = 350
 [node name="LeftPanel" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 15
 
 [node name="MetadataPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel"]
 layout_mode = 2
 
 [node name="MetadataVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel"]
 layout_mode = 2
-theme_override_constants/separation = 10
 
 [node name="MetadataTitle" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
 text = "Level Info"
 
 [node name="NameRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
 layout_mode = 2
 
 [node name="NameLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/NameRow"]
-layout_mode = 2
 custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
 text = "Name:"
 
 [node name="LevelNameEdit" type="LineEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/NameRow"]
@@ -123,8 +117,8 @@ placeholder_text = "Level name..."
 layout_mode = 2
 
 [node name="AuthorLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/AuthorRow"]
-layout_mode = 2
 custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
 text = "Author:"
 
 [node name="AuthorEdit" type="LineEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/AuthorRow"]
@@ -139,8 +133,8 @@ text = "Description:"
 
 [node name="LevelDescriptionEdit" type="TextEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
 unique_name_in_owner = true
-layout_mode = 2
 custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
 placeholder_text = "Level description..."
 
 [node name="MapPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel"]
@@ -148,11 +142,9 @@ layout_mode = 2
 
 [node name="MapVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel"]
 layout_mode = 2
-theme_override_constants/separation = 10
 
 [node name="MapTitle" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
 text = "Map"
 
 [node name="MapRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox"]
@@ -177,8 +169,8 @@ text = "Transform"
 layout_mode = 2
 
 [node name="OffsetLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
-layout_mode = 2
 custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
 text = "Offset:"
 
 [node name="XLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
@@ -224,8 +216,8 @@ allow_lesser = true
 layout_mode = 2
 
 [node name="ScaleLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
-layout_mode = 2
 custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
 text = "Scale:"
 
 [node name="XLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
@@ -236,9 +228,8 @@ text = "X:"
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 0.01
-max_value = 100.0
 step = 0.1
-value = 1.0
+value = 1.01
 allow_greater = true
 
 [node name="YLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
@@ -249,9 +240,8 @@ text = "Y:"
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 0.01
-max_value = 100.0
 step = 0.1
-value = 1.0
+value = 1.01
 allow_greater = true
 
 [node name="ZLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
@@ -262,9 +252,8 @@ text = "Z:"
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 0.01
-max_value = 100.0
 step = 0.1
-value = 1.0
+value = 1.01
 allow_greater = true
 
 [node name="TokensPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel"]
@@ -273,7 +262,6 @@ size_flags_vertical = 3
 
 [node name="TokensVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel"]
 layout_mode = 2
-theme_override_constants/separation = 10
 
 [node name="TokensHeader" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox"]
 layout_mode = 2
@@ -281,7 +269,6 @@ layout_mode = 2
 [node name="TokensTitle" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox/TokensHeader"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 18
 text = "Token Placements"
 
 [node name="AddTokenButton" type="Button" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox/TokensHeader"]
@@ -291,8 +278,8 @@ text = "+ Add Token"
 
 [node name="PokemonSearch" type="LineEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox"]
 unique_name_in_owner = true
-layout_mode = 2
 visible = false
+layout_mode = 2
 placeholder_text = "Search pokemon..."
 
 [node name="TokenList" type="ItemList" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox"]
@@ -303,7 +290,6 @@ size_flags_vertical = 3
 [node name="RightPanel" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 15
 
 [node name="PlacementPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/RightPanel"]
 unique_name_in_owner = true
@@ -312,25 +298,22 @@ size_flags_vertical = 3
 
 [node name="PlacementVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel"]
 layout_mode = 2
-theme_override_constants/separation = 12
 
 [node name="PlacementTitle" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
 text = "Token Properties"
 
 [node name="PlacementPokemonLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
 text = "#25 Pikachu"
 
 [node name="NameRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
 layout_mode = 2
 
 [node name="Label" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/NameRow"]
-layout_mode = 2
 custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
 text = "Display Name:"
 
 [node name="PlacementNameEdit" type="LineEdit" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/NameRow"]
@@ -341,7 +324,6 @@ placeholder_text = "Token name..."
 
 [node name="ChecksRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
 layout_mode = 2
-theme_override_constants/separation = 20
 
 [node name="PlacementShinyCheck" type="CheckBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ChecksRow"]
 unique_name_in_owner = true
@@ -370,8 +352,8 @@ text = "Health"
 layout_mode = 2
 
 [node name="MaxHPLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
-layout_mode = 2
 custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
 text = "Max HP:"
 
 [node name="PlacementMaxHPSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
@@ -382,14 +364,13 @@ max_value = 9999.0
 value = 100.0
 
 [node name="CurrentHPLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
-layout_mode = 2
 custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
 text = "Current:"
 
 [node name="PlacementCurrentHPSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
 unique_name_in_owner = true
 layout_mode = 2
-min_value = 0.0
 max_value = 9999.0
 value = 100.0
 
@@ -446,8 +427,8 @@ allow_lesser = true
 layout_mode = 2
 
 [node name="RotLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/RotationRow"]
-layout_mode = 2
 custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
 text = "Rotation:"
 
 [node name="PlacementRotationSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/RotationRow"]
@@ -473,9 +454,8 @@ text = "X:"
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 0.01
-max_value = 100.0
 step = 0.1
-value = 1.0
+value = 1.01
 allow_greater = true
 
 [node name="YLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow"]
@@ -486,9 +466,8 @@ text = "Y:"
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 0.01
-max_value = 100.0
 step = 0.1
-value = 1.0
+value = 1.01
 allow_greater = true
 
 [node name="ZLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow"]
@@ -499,9 +478,8 @@ text = "Z:"
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 0.01
-max_value = 100.0
 step = 0.1
-value = 1.0
+value = 1.01
 allow_greater = true
 
 [node name="Spacer" type="Control" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
@@ -510,7 +488,6 @@ size_flags_vertical = 3
 
 [node name="ButtonsRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
 layout_mode = 2
-theme_override_constants/separation = 10
 
 [node name="ApplyPlacementButton" type="Button" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ButtonsRow"]
 unique_name_in_owner = true
@@ -529,7 +506,6 @@ layout_mode = 2
 [node name="StatusLabel" type="Label" parent="MainContainer/VBox/StatusBar"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
 text = "Ready"
 
 [node name="MapFileDialog" type="FileDialog" parent="."]
@@ -579,7 +555,6 @@ unique_name_in_owner = true
 title = "Export Level as JSON"
 size = Vector2i(800, 600)
 ok_button_text = "Export"
-file_mode = 4
 
 [node name="ImportDialog" type="FileDialog" parent="."]
 unique_name_in_owner = true
@@ -601,7 +576,6 @@ offset_left = 10.0
 offset_top = 10.0
 offset_right = -10.0
 offset_bottom = -10.0
-theme_override_constants/separation = 10
 
 [node name="PokemonSelectorSearch" type="LineEdit" parent="PokemonSelectorPopup/VBox"]
 unique_name_in_owner = true

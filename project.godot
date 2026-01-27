@@ -34,7 +34,11 @@ window/size/viewport_height=1080
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/DragAndDrop3D/plugin.cfg")
+enabled=PackedStringArray("res://addons/DragAndDrop3D/plugin.cfg", "res://addons/theme_gen_save_sync/plugin.cfg")
+
+[gui]
+
+theme/custom="uid://gsomug13qq54"
 
 [input]
 
