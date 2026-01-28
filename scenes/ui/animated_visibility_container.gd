@@ -36,6 +36,9 @@ func animate_in() -> void:
 
 	_is_animating = true
 	show()
+	
+	# Set pivot to center so scale animates from center
+	pivot_offset = size / 2
 
 	tween = create_tween()
 	tween.set_parallel(true)
@@ -60,6 +63,9 @@ func animate_out() -> void:
 		tween.kill()
 
 	_is_animating = true
+	
+	# Set pivot to center so scale animates from center
+	pivot_offset = size / 2
 
 	tween = create_tween()
 	tween.set_parallel(true)
