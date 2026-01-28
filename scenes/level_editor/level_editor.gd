@@ -28,6 +28,7 @@ var _popup_tween: Tween
 @onready var pokemon_search: LineEdit = %PokemonSearch
 @onready var add_token_button: Button = %AddTokenButton
 
+@onready var right_panel: VBoxContainer = $MainContainer/VBox/ContentSplit/RightPanel
 @onready var placement_panel: PanelContainer = %PlacementPanel
 @onready var placement_name_edit: LineEdit = %PlacementNameEdit
 @onready var placement_pokemon_label: Label = %PlacementPokemonLabel
@@ -90,7 +91,7 @@ func _ready() -> void:
 	_setup_file_dialogs()
 	_populate_pokemon_list()
 	_create_new_level()
-	placement_panel.visible = false
+	right_panel.visible = false
 
 
 func _connect_signals() -> void:
@@ -206,7 +207,7 @@ func _update_ui_from_level() -> void:
 	_is_updating_ui = false
 
 	_refresh_token_list()
-	placement_panel.visible = false
+	right_panel.visible = false
 	selected_placement_index = -1
 
 
@@ -225,10 +226,10 @@ func _refresh_token_list() -> void:
 
 func _update_placement_panel(placement: TokenPlacement) -> void:
 	if not placement:
-		placement_panel.visible = false
+		right_panel.visible = false
 		return
 
-	placement_panel.visible = true
+	right_panel.visible = true
 
 	placement_name_edit.text = placement.token_name
 
@@ -361,7 +362,7 @@ func _on_delete_placement_pressed() -> void:
 	var placement = current_level.token_placements[selected_placement_index]
 	current_level.remove_token_placement(placement.placement_id)
 	_refresh_token_list()
-	placement_panel.visible = false
+	right_panel.visible = false
 	selected_placement_index = -1
 	_set_status("Token deleted")
 
@@ -534,6 +535,14 @@ func _on_play_pressed() -> void:
 ## Open the level editor with animation
 func open_editor() -> void:
 	animate_in()
+
+
+## Set the current level (e.g., from an active playing level)
+func set_level(level_data: LevelData) -> void:
+	if level_data:
+		current_level = level_data
+		_update_ui_from_level()
+		_set_status("Editing: " + level_data.level_name)
 
 
 ## Animate a window popup in
