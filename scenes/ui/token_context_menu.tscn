@@ -15,9 +15,11 @@ offset_bottom = 214.0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MenuPanel"]
 layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
 
 [node name="TitleLabel" type="Label" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
+theme_type_variation = &"SectionHeader"
 text = "Token Actions"
 horizontal_alignment = 1
 
@@ -26,6 +28,7 @@ layout_mode = 2
 
 [node name="HealthLabel" type="Label" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
+theme_type_variation = &"Body"
 text = "HP: 100/100"
 horizontal_alignment = 1
 
@@ -34,6 +37,7 @@ layout_mode = 2
 
 [node name="DamageLabel" type="Label" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
+theme_type_variation = &"H3"
 text = "Damage/Heal"
 
 [node name="CustomDamageContainer" type="HBoxContainer" parent="MenuPanel/VBoxContainer"]
@@ -41,8 +45,7 @@ layout_mode = 2
 
 [node name="HealHurtToggle" type="CheckButton" parent="MenuPanel/VBoxContainer/CustomDamageContainer"]
 layout_mode = 2
-theme_override_colors/button_checked_color = Color(0.4509804, 1, 0.27058825, 1)
-theme_override_colors/button_unchecked_color = Color(1, 0.34901962, 0.34901962, 1)
+theme_type_variation = &"SuccessCheckButton"
 
 [node name="HPAdjustmentInput" type="LineEdit" parent="MenuPanel/VBoxContainer/CustomDamageContainer"]
 layout_mode = 2
@@ -51,6 +54,7 @@ placeholder_text = "Points"
 
 [node name="HPAdjustmentButton" type="Button" parent="MenuPanel/VBoxContainer/CustomDamageContainer"]
 layout_mode = 2
+theme_type_variation = &"Success"
 text = "Apply"
 
 [node name="HSeparator4" type="HSeparator" parent="MenuPanel/VBoxContainer"]
@@ -58,6 +62,7 @@ layout_mode = 2
 
 [node name="ToggleVisibilityButton" type="Button" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
+theme_type_variation = &"Secondary"
 text = "Toggle Visibility"
 
 [node name="HSeparator5" type="HSeparator" parent="MenuPanel/VBoxContainer"]
@@ -65,6 +70,7 @@ layout_mode = 2
 
 [node name="CloseButton" type="Button" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
+theme_type_variation = &"Danger"
 text = "Close"
 
 [connection signal="text_submitted" from="MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentInput" to="." method="_on_hp_adjustment_requested"]

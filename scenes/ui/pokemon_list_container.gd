@@ -1,6 +1,6 @@
 extends AnimatedVisibilityContainer
 
-@onready var pokemon_filter: LineEdit = $PokemonFilter
+@onready var pokemon_filter: LineEdit = $PanelContainer/VBox/Header/PokemonFilter
 @onready var toggle_pokemon_list_button: Button = %TogglePokemonListButton
 
 func _unhandled_key_input(event: InputEvent) -> void:
