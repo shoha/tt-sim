@@ -4,7 +4,7 @@ extends Control
 ## Handles button presses, level editor integration, and coordinates level playback.
 ## Delegates level loading/management to LevelPlayController.
 
-var _level_editor_instance: Control = null
+var _level_editor_instance: LevelEditor = null
 var _level_play_controller: LevelPlayController = null
 
 const LevelEditorScene = preload("res://scenes/level_editor/level_editor.tscn")
@@ -41,13 +41,14 @@ func _open_level_editor() -> void:
 	if _level_editor_instance and is_instance_valid(_level_editor_instance):
 		# Refresh the token list in case tokens were added during play
 		_level_editor_instance._refresh_token_list()
-		_level_editor_instance.show()
+		_level_editor_instance.animate_in()
 		return
 
 	_level_editor_instance = LevelEditorScene.instantiate()
 	_level_editor_instance.editor_closed.connect(_on_editor_closed)
 	_level_editor_instance.play_level_requested.connect(_on_play_level_requested)
 	add_child(_level_editor_instance)
+	_level_editor_instance.animate_in()
 
 
 func _on_editor_closed() -> void:
@@ -59,9 +60,9 @@ func _on_editor_closed() -> void:
 # --- Level Playback ---
 
 func _on_play_level_requested(level_data: LevelData) -> void:
-	# Close the editor
+	# Close the editor with animation
 	if _level_editor_instance:
-		_level_editor_instance.hide()
+		_level_editor_instance.animate_out()
 
 	# Delegate level loading to the play controller
 	if _level_play_controller.play_level(level_data):
