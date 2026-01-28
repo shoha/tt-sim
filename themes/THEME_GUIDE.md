@@ -60,7 +60,8 @@ Font sizes form a clear hierarchy for visual organization:
 | `H1` | 18px | Primary headings |
 | `H2` | 16px | Secondary headings |
 | `H3` | 15px | Subsection headings (e.g., "Health", "Position") |
-| `SectionHeader` | 16px + accent color | Panel titles (e.g., "Level Info", "Token Properties") |
+| `SectionHeader` | 16px + accent color | Prominent panel titles (e.g., "Level Info", "Token Properties") |
+| `PanelHeader` | 16px + light text | Panel/popup titles on dark surfaces (e.g., "Add Pokemon") |
 | `Body` | 14px | Field labels, general content |
 | `Caption` | 12px + 70% opacity | Hints, status text, secondary info |
 
@@ -80,7 +81,19 @@ Font sizes form a clear hierarchy for visual organization:
 │                                     │
 │ Starting level: Oak's Lab          │  ← Caption (12px, muted)
 └─────────────────────────────────────┘
+
+┌─────────────────────────────────────┐  (floating popup/overlay)
+│ Add Pokemon      [____Search____]  │  ← PanelHeader (16px, light)
+│  ┌─────┐ ┌─────┐ ┌─────┐           │
+│  │ 🐸  │ │ 🌸  │ │ 🌺  │           │
+│  └─────┘ └─────┘ └─────┘           │
+│ Click a Pokemon to add it          │  ← Caption (12px, muted)
+└─────────────────────────────────────┘
 ```
+
+**When to use `SectionHeader` vs `PanelHeader`:**
+- `SectionHeader` (accent color): For titles in the main UI panels that should draw attention
+- `PanelHeader` (light text): For titles in floating popups, overlays, or context menus
 
 ---
 

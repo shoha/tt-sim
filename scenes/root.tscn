@@ -28,13 +28,16 @@ grow_vertical = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="PlaceholderLayer/PlaceholderContainer/CenterContainer"]
 layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
 
 [node name="PlaceholderLabel" type="Label" parent="PlaceholderLayer/PlaceholderContainer/CenterContainer/VBoxContainer"]
 layout_mode = 2
+theme_type_variation = &"H1"
 text = "No Map Loaded"
 horizontal_alignment = 1
 
 [node name="SubLabel" type="Label" parent="PlaceholderLayer/PlaceholderContainer/CenterContainer/VBoxContainer"]
 layout_mode = 2
+theme_type_variation = &"Caption"
 text = "Open the Level Editor to load or create a level"
 horizontal_alignment = 1
