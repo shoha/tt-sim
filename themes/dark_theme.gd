@@ -198,10 +198,16 @@ func _define_label():
 	define_variant_style("H2", "Label", { font_size = font_size_h2 })
 	define_variant_style("H3", "Label", { font_size = font_size_h3 })
 
-	# Section header - accent colored, used for panel/group titles
+	# Section header - accent colored, for prominent panel titles
 	define_variant_style("SectionHeader", "Label", {
 		font_size = font_size_h2,
 		font_color = color_accent,
+	})
+
+	# Panel header - light text on dark surfaces, for panel/popup titles
+	define_variant_style("PanelHeader", "Label", {
+		font_size = font_size_h2,
+		font_color = color_text_on_dark,
 	})
 
 	# Body text - smaller than headings, for general content

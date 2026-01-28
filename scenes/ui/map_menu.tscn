@@ -31,16 +31,19 @@ offset_right = -15.0
 offset_bottom = -15.0
 grow_horizontal = 0
 grow_vertical = 0
+theme_type_variation = &"BoxContainerSpaced"
 alignment = 2
 
 [node name="SavePositionsButton" type="Button" parent="MapMenu/BottomButtons"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+theme_type_variation = &"Secondary"
 text = "Save Positions"
 
 [node name="LevelEditorButton" type="Button" parent="MapMenu/BottomButtons"]
 layout_mode = 2
+theme_type_variation = &"Secondary"
 text = "Level Editor"
 
 [node name="TogglePokemonListButton" type="Button" parent="MapMenu/BottomButtons"]
@@ -49,31 +52,42 @@ layout_mode = 2
 toggle_mode = true
 text = "Add Pokemon"
 
-[node name="PokemonListContainer" type="Control" parent="MapMenu"]
-layout_mode = 1
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_top = 200.0
-offset_bottom = 200.0
-grow_horizontal = 2
-script = ExtResource("1_v7vxt")
-
-[node name="CenterContainer" type="CenterContainer" parent="MapMenu/PokemonListContainer"]
+[node name="PokemonListContainer" type="CenterContainer" parent="MapMenu"]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -275.0
-offset_top = -70.0
-offset_right = 275.0
-offset_bottom = 70.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("1_v7vxt")
 
-[node name="PokemonList" type="ItemList" parent="MapMenu/PokemonListContainer/CenterContainer"]
+[node name="PanelContainer" type="PanelContainer" parent="MapMenu/PokemonListContainer"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="MapMenu/PokemonListContainer/PanelContainer"]
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="Header" type="HBoxContainer" parent="MapMenu/PokemonListContainer/PanelContainer/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="MapMenu/PokemonListContainer/PanelContainer/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PanelHeader"
+text = "Add Pokemon"
+
+[node name="PokemonFilter" type="LineEdit" parent="MapMenu/PokemonListContainer/PanelContainer/VBox/Header"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+placeholder_text = "Search..."
+clear_button_enabled = true
+select_all_on_focus = true
+script = ExtResource("3_lxh2f")
+
+[node name="PokemonList" type="ItemList" parent="MapMenu/PokemonListContainer/PanelContainer/VBox"]
 custom_minimum_size = Vector2(550, 140)
 layout_mode = 2
 mouse_filter = 1
@@ -84,24 +98,14 @@ fixed_column_width = 128
 fixed_icon_size = Vector2i(128, 128)
 script = ExtResource("1_nlnlb")
 
-[node name="PokemonFilter" type="LineEdit" parent="MapMenu/PokemonListContainer"]
-layout_mode = 1
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -81.0
-offset_top = -108.0
-offset_right = 66.0
-offset_bottom = -77.0
-grow_horizontal = 2
-placeholder_text = "Filter list"
-expand_to_text_length = true
-clear_button_enabled = true
-select_all_on_focus = true
-script = ExtResource("3_lxh2f")
+[node name="Hint" type="Label" parent="MapMenu/PokemonListContainer/PanelContainer/VBox"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Click a Pokemon to add it to the map"
+horizontal_alignment = 1
 
 [connection signal="pressed" from="MapMenu/BottomButtons/SavePositionsButton" to="MapMenu" method="_on_save_positions_button_pressed"]
 [connection signal="pressed" from="MapMenu/BottomButtons/LevelEditorButton" to="MapMenu" method="_on_level_editor_button_pressed"]
 [connection signal="toggled" from="MapMenu/BottomButtons/TogglePokemonListButton" to="MapMenu/PokemonListContainer" method="_on_button_toggled"]
-[connection signal="item_activated" from="MapMenu/PokemonListContainer/CenterContainer/PokemonList" to="MapMenu/PokemonListContainer/CenterContainer/PokemonList" method="_on_item_activated"]
-[connection signal="text_changed" from="MapMenu/PokemonListContainer/PokemonFilter" to="MapMenu/PokemonListContainer/CenterContainer/PokemonList" method="_on_pokemon_filter_text_changed"]
+[connection signal="text_changed" from="MapMenu/PokemonListContainer/PanelContainer/VBox/Header/PokemonFilter" to="MapMenu/PokemonListContainer/PanelContainer/VBox/PokemonList" method="_on_pokemon_filter_text_changed"]
+[connection signal="item_activated" from="MapMenu/PokemonListContainer/PanelContainer/VBox/PokemonList" to="MapMenu/PokemonListContainer/PanelContainer/VBox/PokemonList" method="_on_item_activated"]
