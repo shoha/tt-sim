@@ -2,7 +2,7 @@ extends Node3D
 
 ## Root scene controller - manages placeholder display until a level is loaded.
 
-@onready var placeholder_layer: CanvasLayer = $PlaceholderLayer
+@onready var title_screen: CanvasLayer = $TitleScreen
 @onready var game_map: GameMap = $GameMap
 
 var _level_play_controller: LevelPlayController = null
@@ -11,10 +11,10 @@ var _level_play_controller: LevelPlayController = null
 func _ready() -> void:
 	# Connect to level manager signals
 	LevelManager.level_loaded.connect(_on_level_loaded)
-	
+
 	# Defer connection to level play controller to ensure it's initialized
 	call_deferred("_connect_level_play_controller")
-	
+
 	# Show placeholder initially
 	_show_placeholder(true)
 
@@ -42,5 +42,5 @@ func _on_level_cleared() -> void:
 
 
 func _show_placeholder(should_show: bool) -> void:
-	if placeholder_layer:
-		placeholder_layer.visible = should_show
+	if title_screen:
+		title_screen.visible = should_show
