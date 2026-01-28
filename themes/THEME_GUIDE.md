@@ -167,6 +167,156 @@ theme_type_variation = &"BoxContainerSpaced"
 
 ---
 
+## Animating UI Panels
+
+Use `AnimatedVisibilityContainer` to add smooth show/hide animations to UI panels, menus, and dialogs.
+
+### Basic Usage
+
+Extend `AnimatedVisibilityContainer` instead of `Control`:
+
+```gdscript
+extends AnimatedVisibilityContainer
+class_name MyPanel
+
+func _ready() -> void:
+    # Configure animation (optional - these are defaults)
+    fade_in_duration = 0.3
+    fade_out_duration = 0.2
+    scale_in_from = Vector2(0.8, 0.8)
+    scale_out_to = Vector2(0.9, 0.9)
+    trans_in_type = Tween.TRANS_BACK
+    trans_out_type = Tween.TRANS_CUBIC
+    super._ready()
+
+func open() -> void:
+    animate_in()
+
+func close() -> void:
+    animate_out()
+```
+
+### Animation Properties
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `fade_in_duration` | 0.3s | Duration of show animation |
+| `fade_out_duration` | 0.2s | Duration of hide animation |
+| `scale_in_from` | (0.8, 0.8) | Starting scale when appearing |
+| `scale_out_to` | (0.9, 0.9) | Ending scale when disappearing |
+| `ease_in_type` | EASE_OUT | Easing for show animation |
+| `ease_out_type` | EASE_IN | Easing for hide animation |
+| `trans_in_type` | TRANS_BACK | Transition curve for show (bouncy) |
+| `trans_out_type` | TRANS_CUBIC | Transition curve for hide (smooth) |
+| `start_hidden` | true | Whether to start hidden on ready |
+
+### Recommended Settings by UI Type
+
+**Quick context menus:**
+```gdscript
+fade_in_duration = 0.15
+fade_out_duration = 0.1
+scale_in_from = Vector2(0.9, 0.9)
+trans_in_type = Tween.TRANS_CUBIC
+```
+
+**Large panels (editors, dialogs):**
+```gdscript
+fade_in_duration = 0.25
+fade_out_duration = 0.15
+scale_in_from = Vector2(0.95, 0.95)
+scale_out_to = Vector2(0.98, 0.98)
+trans_in_type = Tween.TRANS_CUBIC
+```
+
+**Slide-in sidebars:**
+```gdscript
+fade_in_duration = 0.2
+fade_out_duration = 0.15
+scale_in_from = Vector2(1.0, 1.0)  # No scale, just fade
+scale_out_to = Vector2(1.0, 1.0)
+```
+
+### Lifecycle Callbacks
+
+Override these for custom behavior:
+
+```gdscript
+func _on_before_animate_in() -> void:
+    # Called just before show animation starts
+    pass
+
+func _on_after_animate_in() -> void:
+    # Called when show animation completes
+    some_input.grab_focus()
+
+func _on_before_animate_out() -> void:
+    # Called just before hide animation starts
+    pass
+
+func _on_after_animate_out() -> void:
+    # Called when hide animation completes (node is now hidden)
+    closed.emit()  # Safe to emit signals here
+```
+
+### Animating Window Popups
+
+For `Window`-based dialogs (FileDialog, ConfirmationDialog), animate their content containers:
+
+```gdscript
+var _popup_tween: Tween
+
+func _open_popup() -> void:
+    my_popup.popup_centered(Vector2i(400, 500))
+    _animate_popup_in(my_popup.get_node("ContentVBox"))
+
+func _close_popup() -> void:
+    _animate_popup_out(my_popup, my_popup.get_node("ContentVBox"))
+
+func _animate_popup_in(content: Control) -> void:
+    if _popup_tween:
+        _popup_tween.kill()
+    
+    content.modulate.a = 0.0
+    content.scale = Vector2(0.9, 0.9)
+    content.pivot_offset = content.size / 2
+    
+    _popup_tween = create_tween()
+    _popup_tween.set_parallel(true)
+    _popup_tween.set_ease(Tween.EASE_OUT)
+    _popup_tween.set_trans(Tween.TRANS_BACK)
+    _popup_tween.tween_property(content, "modulate:a", 1.0, 0.2)
+    _popup_tween.tween_property(content, "scale", Vector2.ONE, 0.2)
+
+func _animate_popup_out(popup: Window, content: Control) -> void:
+    if _popup_tween:
+        _popup_tween.kill()
+    
+    content.pivot_offset = content.size / 2
+    
+    _popup_tween = create_tween()
+    _popup_tween.set_parallel(true)
+    _popup_tween.set_ease(Tween.EASE_IN)
+    _popup_tween.set_trans(Tween.TRANS_CUBIC)
+    _popup_tween.tween_property(content, "modulate:a", 0.0, 0.15)
+    _popup_tween.tween_property(content, "scale", Vector2(0.95, 0.95), 0.15)
+    _popup_tween.finished.connect(popup.hide, CONNECT_ONE_SHOT)
+```
+
+### Important Notes
+
+1. **Don't use `show()`/`hide()`** - Use `animate_in()`/`animate_out()` instead
+2. **Signal timing** - Emit "closed" signals in `_on_after_animate_out()` so animations complete before parents call `queue_free()`
+3. **Check animation state** - Use `is_animating()` to prevent interrupting animations
+4. **Toggle helper** - Use `toggle_animated(bool)` for checkbox-driven visibility
+
+### File Reference
+
+- **Base class**: `scenes/ui/animated_visibility_container.gd`
+- **Example usage**: `scenes/ui/token_context_menu.gd`, `scenes/level_editor/level_editor.gd`
+
+---
+
 ## Building a Complex UI
 
 ### Step 1: Structure with Containers

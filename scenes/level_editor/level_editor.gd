@@ -1,4 +1,4 @@
-extends Control
+extends AnimatedVisibilityContainer
 class_name LevelEditor
 
 ## Level Editor UI for creating and editing game levels
@@ -6,6 +6,9 @@ class_name LevelEditor
 
 signal editor_closed
 signal play_level_requested(level_data: LevelData)
+
+# Animation tweens for subdialogs
+var _popup_tween: Tween
 
 # UI References
 @onready var level_name_edit: LineEdit = %LevelNameEdit
@@ -74,6 +77,15 @@ var _is_updating_ui: bool = false # Flag to prevent feedback loops when setting 
 
 
 func _ready() -> void:
+	# Configure animation for the level editor panel
+	fade_in_duration = 0.25
+	fade_out_duration = 0.15
+	scale_in_from = Vector2(0.95, 0.95)
+	scale_out_to = Vector2(0.98, 0.98)
+	trans_in_type = Tween.TRANS_CUBIC
+	trans_out_type = Tween.TRANS_CUBIC
+	super._ready()
+	
 	_connect_signals()
 	_setup_file_dialogs()
 	_populate_pokemon_list()
@@ -298,10 +310,13 @@ func _on_add_token_pressed() -> void:
 	pokemon_selector_search.text = ""
 	_update_pokemon_selector_list()
 	pokemon_selector_popup.popup_centered(Vector2i(400, 500))
+	var popup_content = pokemon_selector_popup.get_node("VBox")
+	_animate_popup_in(pokemon_selector_popup, popup_content)
 
 
 func _on_pokemon_selector_closed() -> void:
-	pokemon_selector_popup.hide()
+	var popup_content = pokemon_selector_popup.get_node("VBox")
+	_animate_popup_out(pokemon_selector_popup, popup_content)
 
 
 func _on_pokemon_selector_activated(index: int) -> void:
@@ -324,7 +339,8 @@ func _on_pokemon_selector_activated(index: int) -> void:
 	token_list.select(token_list.item_count - 1)
 	_on_token_list_item_selected(token_list.item_count - 1)
 
-	pokemon_selector_popup.hide()
+	var popup_content = pokemon_selector_popup.get_node("VBox")
+	_animate_popup_out(pokemon_selector_popup, popup_content)
 	_set_status("Added token: " + placement.get_display_name())
 
 
@@ -404,12 +420,15 @@ func _on_save_pressed() -> void:
 func _on_load_pressed() -> void:
 	_refresh_saved_levels_list()
 	load_dialog.popup_centered(Vector2i(500, 400))
+	var dialog_content = load_dialog.get_node("LoadVBox")
+	_animate_popup_in(load_dialog, dialog_content)
 
 
 func _on_saved_level_activated(index: int) -> void:
 	var path = saved_levels_list.get_item_metadata(index)
 	_load_level_from_path(path)
-	load_dialog.hide()
+	var dialog_content = load_dialog.get_node("LoadVBox")
+	_animate_popup_out(load_dialog, dialog_content)
 
 
 func _on_load_confirmed() -> void:
@@ -465,8 +484,12 @@ func _on_new_pressed() -> void:
 
 
 func _on_close_pressed() -> void:
+	animate_out()
+
+
+# Emit editor_closed after animate out completes so the parent can safely queue_free
+func _on_after_animate_out() -> void:
 	editor_closed.emit()
-	hide()
 
 
 func _on_export_pressed() -> void:
@@ -506,3 +529,42 @@ func _on_play_pressed() -> void:
 
 	play_level_requested.emit(current_level)
 	_set_status("Starting level: " + current_level.level_name)
+
+
+## Open the level editor with animation
+func open_editor() -> void:
+	animate_in()
+
+
+## Animate a window popup in
+func _animate_popup_in(_popup: Window, content: Control) -> void:
+	if _popup_tween:
+		_popup_tween.kill()
+	
+	# Start scaled down and transparent
+	content.modulate.a = 0.0
+	content.scale = Vector2(0.9, 0.9)
+	content.pivot_offset = content.size / 2
+	
+	_popup_tween = create_tween()
+	_popup_tween.set_parallel(true)
+	_popup_tween.set_ease(Tween.EASE_OUT)
+	_popup_tween.set_trans(Tween.TRANS_BACK)
+	_popup_tween.tween_property(content, "modulate:a", 1.0, 0.2)
+	_popup_tween.tween_property(content, "scale", Vector2.ONE, 0.2)
+
+
+## Animate a window popup out and hide it
+func _animate_popup_out(popup: Window, content: Control) -> void:
+	if _popup_tween:
+		_popup_tween.kill()
+	
+	content.pivot_offset = content.size / 2
+	
+	_popup_tween = create_tween()
+	_popup_tween.set_parallel(true)
+	_popup_tween.set_ease(Tween.EASE_IN)
+	_popup_tween.set_trans(Tween.TRANS_CUBIC)
+	_popup_tween.tween_property(content, "modulate:a", 0.0, 0.15)
+	_popup_tween.tween_property(content, "scale", Vector2(0.95, 0.95), 0.15)
+	_popup_tween.finished.connect(popup.hide, CONNECT_ONE_SHOT)

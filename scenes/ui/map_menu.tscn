@@ -53,6 +53,7 @@ toggle_mode = true
 text = "Add Pokemon"
 
 [node name="PokemonListContainer" type="CenterContainer" parent="MapMenu"]
+visible = false
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -88,14 +89,14 @@ select_all_on_focus = true
 script = ExtResource("3_lxh2f")
 
 [node name="PokemonList" type="ItemList" parent="MapMenu/PokemonListContainer/PanelContainer/VBox"]
-custom_minimum_size = Vector2(550, 140)
+custom_minimum_size = Vector2(550, 136)
 layout_mode = 2
 mouse_filter = 1
 allow_search = false
 max_columns = 4
 same_column_width = true
-fixed_column_width = 128
-fixed_icon_size = Vector2i(128, 128)
+fixed_column_width = 125
+fixed_icon_size = Vector2i(125, 125)
 script = ExtResource("1_nlnlb")
 
 [node name="Hint" type="Label" parent="MapMenu/PokemonListContainer/PanelContainer/VBox"]
