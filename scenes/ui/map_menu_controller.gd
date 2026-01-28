@@ -10,6 +10,7 @@ var _level_play_controller: LevelPlayController = null
 const LevelEditorScene = preload("res://scenes/level_editor/level_editor.tscn")
 
 @onready var save_positions_button: Button = %SavePositionsButton
+@onready var toggle_pokemon_list_button: Button = %TogglePokemonListButton
 
 
 func _ready() -> void:
@@ -18,10 +19,17 @@ func _ready() -> void:
 	# Listen for new tokens being created so we can add them to the active level
 	EventBus.token_created.connect(_on_token_created)
 
+	# Initially disable the Add Pokemon button since no level is loaded
+	_update_pokemon_button_state()
+
 
 func _setup_level_play_controller() -> void:
 	_level_play_controller = LevelPlayController.new()
 	add_child(_level_play_controller)
+
+	# Connect to level state changes to update UI
+	_level_play_controller.level_loaded.connect(_on_level_loaded)
+	_level_play_controller.level_cleared.connect(_on_level_cleared)
 
 	# Find and setup the game map
 	var game_map = _find_game_map()
@@ -39,8 +47,8 @@ func _on_level_editor_button_pressed() -> void:
 
 func _open_level_editor() -> void:
 	if _level_editor_instance and is_instance_valid(_level_editor_instance):
-		# Refresh the token list in case tokens were added during play
-		_level_editor_instance._refresh_token_list()
+		# Sync with active level if one is playing
+		_sync_editor_with_active_level()
 		_level_editor_instance.animate_in()
 		return
 
@@ -48,7 +56,21 @@ func _open_level_editor() -> void:
 	_level_editor_instance.editor_closed.connect(_on_editor_closed)
 	_level_editor_instance.play_level_requested.connect(_on_play_level_requested)
 	add_child(_level_editor_instance)
+	
+	# If a level is already playing, load it into the editor
+	_sync_editor_with_active_level()
 	_level_editor_instance.animate_in()
+
+
+func _sync_editor_with_active_level() -> void:
+	if not _level_editor_instance:
+		return
+	
+	if _level_play_controller and _level_play_controller.has_active_level():
+		_level_editor_instance.set_level(_level_play_controller.active_level_data)
+	else:
+		# Just refresh token list if no active level
+		_level_editor_instance._refresh_token_list()
 
 
 func _on_editor_closed() -> void:
@@ -87,6 +109,25 @@ func _update_save_button_visibility() -> void:
 	if save_positions_button:
 		var should_show = _level_play_controller.has_active_level() and _level_play_controller.get_token_count() > 0
 		save_positions_button.visible = should_show
+
+
+# --- Level State Handling ---
+
+func _on_level_loaded(_level_data: LevelData) -> void:
+	_update_pokemon_button_state()
+
+
+func _on_level_cleared() -> void:
+	_update_pokemon_button_state()
+	# Also untoggle the button if it was pressed
+	if toggle_pokemon_list_button:
+		toggle_pokemon_list_button.button_pressed = false
+
+
+func _update_pokemon_button_state() -> void:
+	if toggle_pokemon_list_button:
+		var has_level = _level_play_controller and _level_play_controller.has_active_level()
+		toggle_pokemon_list_button.visible = has_level
 
 
 # --- Token Creation Handling ---
