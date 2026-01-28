@@ -459,4 +459,54 @@ func define_theme():
 
 	define_style("ItemList", {
 		panel = panel_style,
+		hovered = stylebox_flat({
+			bg_color = color_primary_lighter,
+			border_color = color_primary_lighter,
+		}),
+		hovered_selected = stylebox_flat({
+			bg_color = color_primary_lighter,
+			border_color = color_primary_lighter,
+		}),
+		hovered_selected_focus = stylebox_flat({
+			bg_color = color_primary_lighter,
+			border_color = color_primary_lighter,
+		}),
+		selected = stylebox_flat({
+			bg_color = color_primary,
+			border_color = color_primary,
+		}),
+		selected_focus = stylebox_flat({
+			bg_color = color_primary,
+			border_color = color_primary,
+		}),
+		focus = stylebox_empty({}),
+		font_color = color_input,
+		font_hovered_color = color_content1,
+		font_selected_color = color_content1,
+		font_hovered_selected_color = color_content1,
+	})
+
+
+	define_style("Window", {
+		embedded_border = stylebox_flat({
+			bg_color = color_primary,
+			border_color = color_content1,
+			border_ = border_width(10, 36, 10, 10),
+			expand_margin_ = expand_margins(10, 36, 10, 10),
+		}),
+		embedded_unfocused_border = stylebox_flat({
+			bg_color = color_primary,
+			border_color = color_content1,
+			border_ = border_width(10, 36, 10, 10),
+			expand_margin_ = expand_margins(10, 36, 10, 10),
+		}),
+	})
+
+	define_style("AcceptDialog", {
+		panel = stylebox_flat({
+			bg_color = color_background,
+			content_margin_ = content_margins(margin_w * 2, margin_w * 2, margin_w * 2, margin_w * 2),
+			border_color = color_primary,
+			border_ = border_width(border_w, border_w, border_w, border_w),
+		}),
 	})

@@ -510,12 +510,14 @@ text = "Ready"
 
 [node name="MapFileDialog" type="FileDialog" parent="."]
 unique_name_in_owner = true
+oversampling_override = 1.0
 title = "Select Map File"
 size = Vector2i(800, 600)
 ok_button_text = "Select"
 
 [node name="LoadDialog" type="ConfirmationDialog" parent="."]
 unique_name_in_owner = true
+oversampling_override = 1.0
 title = "Load Level"
 size = Vector2i(500, 400)
 ok_button_text = "Load"
@@ -524,10 +526,10 @@ ok_button_text = "Load"
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 8.0
-offset_right = -8.0
-offset_bottom = -48.0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = -38.0
 
 [node name="LoadLabel" type="Label" parent="LoadDialog/LoadVBox"]
 layout_mode = 2
@@ -545,25 +547,29 @@ text = "Delete Selected Level"
 
 [node name="DeleteConfirmDialog" type="ConfirmationDialog" parent="."]
 unique_name_in_owner = true
+oversampling_override = 1.0
 title = "Delete Level"
-size = Vector2i(400, 120)
+size = Vector2i(769, 120)
 ok_button_text = "Delete"
 dialog_text = "Are you sure you want to delete this level? This cannot be undone."
 
 [node name="ExportDialog" type="FileDialog" parent="."]
 unique_name_in_owner = true
+oversampling_override = 1.0
 title = "Export Level as JSON"
 size = Vector2i(800, 600)
 ok_button_text = "Export"
 
 [node name="ImportDialog" type="FileDialog" parent="."]
 unique_name_in_owner = true
+oversampling_override = 1.0
 title = "Import Level from JSON"
 size = Vector2i(800, 600)
 ok_button_text = "Import"
 
 [node name="PokemonSelectorPopup" type="Window" parent="."]
 unique_name_in_owner = true
+oversampling_override = 1.0
 title = "Select Pokemon"
 size = Vector2i(400, 500)
 visible = false
