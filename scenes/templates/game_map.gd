@@ -10,15 +10,29 @@ class_name GameMap
 @onready var camera_node: Camera3D = $CameraHolder/Camera3D
 @onready var tiltshift_node: MeshInstance3D = $CameraHolder/Camera3D/MeshInstance3D
 @onready var drag_and_drop_node: Node3D = $DragAndDrop3D
+@onready var gameplay_menu: CanvasLayer = $GameplayMenu
 
 var _camera_move_dir: Vector3
 var _camera_zoom_dir: int
 var _context_menu = null # TokenContextMenu - dynamically typed to avoid load order issues
+var _level_play_controller: LevelPlayController = null
+
 
 func _ready() -> void:
 	EventBus.pokemon_added.connect(_on_pokemon_list_pokemon_added)
 	EventBus.token_selected.connect(_on_token_selected)
 	_setup_context_menu()
+
+
+## Setup with a reference to the level play controller
+func setup(level_play_controller: LevelPlayController) -> void:
+	_level_play_controller = level_play_controller
+
+	# Pass the controller to the gameplay menu
+	if gameplay_menu:
+		var menu_controller = gameplay_menu.get_node_or_null("GameplayMenu")
+		if menu_controller and menu_controller.has_method("setup"):
+			menu_controller.setup(level_play_controller)
 
 func _process(delta: float) -> void:
 	handle_movement(delta)
@@ -118,12 +132,12 @@ func _setup_context_menu() -> void:
 	var context_menu_scene = load("uid://bh84knb3smm3y")
 	if context_menu_scene:
 		_context_menu = context_menu_scene.instantiate()
-		# Find the MapMenu canvas layer to add the menu to
-		var map_menu = get_node_or_null("../MapMenu/MapMenu")
-		if map_menu:
-			map_menu.add_child(_context_menu)
+		# Find the GameplayMenu canvas layer to add the menu to
+		var menu_control = gameplay_menu.get_node_or_null("GameplayMenu") if gameplay_menu else null
+		if menu_control:
+			menu_control.add_child(_context_menu)
 		else:
-			# Fallback: add to the scene root if MapMenu not found
+			# Fallback: add to the scene root if GameplayMenu not found
 			add_child(_context_menu)
 
 		# Connect context menu signals
