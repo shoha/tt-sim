@@ -1,16 +1,36 @@
 extends AnimatedVisibilityContainer
 
 @onready var pokemon_filter: LineEdit = $PanelContainer/VBox/Header/PokemonFilter
+@onready var pokemon_list: ItemList = $PanelContainer/VBox/PokemonList
 @onready var toggle_pokemon_list_button: Button = %TogglePokemonListButton
 
-func _unhandled_key_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
-		toggle_pokemon_list_button.button_pressed = false
 
-# Override to clear filter before hiding
-func _on_before_animate_out() -> void:
-	pokemon_filter.clear()
+func _ready() -> void:
+	pokemon_list.pokemon_selected.connect(_on_pokemon_selected)
+
+
+func _on_pokemon_selected(_pokemon_number: String, _is_shiny: bool) -> void:
+	# Close the overlay after a Pokemon is selected
+	animate_out()
+
 
 func _on_button_toggled(toggled_on: bool) -> void:
 	toggle_animated(toggled_on)
-	pokemon_filter.grab_focus()
+	if toggled_on:
+		pokemon_filter.grab_focus()
+
+
+# Register with UIManager when opening
+func _on_before_animate_in() -> void:
+	UIManager.register_overlay(self)
+
+
+# Unregister and clear filter when closing
+func _on_before_animate_out() -> void:
+	UIManager.unregister_overlay(self)
+	pokemon_filter.clear()
+
+
+# Also untoggle the button when closed via ESC
+func _on_after_animate_out() -> void:
+	toggle_pokemon_list_button.button_pressed = false

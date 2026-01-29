@@ -7,6 +7,7 @@ class_name LevelPlayController
 signal level_loaded(level_data: LevelData)
 signal level_cleared()
 signal token_spawned(token: BoardToken, placement: TokenPlacement)
+signal token_added(token: BoardToken)
 
 var active_level_data: LevelData = null
 var spawned_tokens: Dictionary = {} # placement_id -> BoardToken
@@ -124,6 +125,25 @@ func _clear_existing_maps() -> void:
 		# If it's a Node3D that's not one of our known nodes, it's likely a map model
 		if child is Node3D:
 			child.queue_free()
+
+
+## Spawn a Pokemon token and add it to the current level
+## Returns the created token, or null if spawning failed
+func spawn_pokemon(pokemon_number: String, is_shiny: bool) -> BoardToken:
+	if not _game_map or not active_level_data:
+		push_warning("LevelPlayController: Cannot spawn Pokemon - no GameMap or active level")
+		return null
+
+	var token = BoardTokenFactory.create_from_pokemon(pokemon_number, is_shiny)
+	if not token:
+		push_error("LevelPlayController: Failed to create board token")
+		return null
+
+	_game_map.drag_and_drop_node.add_child(token)
+	_connect_token_context_menu(token)
+	add_token_to_level(token, pokemon_number, is_shiny)
+	token_added.emit(token)
+	return token
 
 
 ## Add a new token to the active level

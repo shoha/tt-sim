@@ -8,11 +8,13 @@ var _level_play_controller: LevelPlayController = null
 
 @onready var save_positions_button: Button = %SavePositionsButton
 @onready var toggle_pokemon_list_button: Button = %TogglePokemonListButton
+@onready var pokemon_list: ItemList = $PokemonListContainer/PanelContainer/VBox/PokemonList
 
 
 func _ready() -> void:
-	# Listen for new tokens being created so we can add them to the active level
-	EventBus.token_created.connect(_on_token_created)
+	# Connect to PokemonList's pokemon_selected signal
+	if pokemon_list:
+		pokemon_list.pokemon_selected.connect(_on_pokemon_selected)
 
 	# Initially hide buttons since no level is loaded yet
 	_update_pokemon_button_state()
@@ -26,6 +28,7 @@ func setup(level_play_controller: LevelPlayController) -> void:
 	# Connect to level state changes to update UI
 	_level_play_controller.level_loaded.connect(_on_level_loaded)
 	_level_play_controller.level_cleared.connect(_on_level_cleared)
+	_level_play_controller.token_added.connect(_on_token_added)
 
 	# Update UI state
 	_update_pokemon_button_state()
@@ -73,14 +76,16 @@ func _update_pokemon_button_state() -> void:
 		toggle_pokemon_list_button.visible = has_level
 
 
-# --- Token Creation Handling ---
+# --- Pokemon Selection Handling ---
 
-func _on_token_created(token: BoardToken, pokemon_number: String, is_shiny: bool) -> void:
-	# Only track if we have an active level being played/edited
-	if not _level_play_controller or not _level_play_controller.has_active_level():
-		return
+func _on_pokemon_selected(pokemon_number: String, is_shiny: bool) -> void:
+	# Spawn the Pokemon via LevelPlayController
+	if _level_play_controller:
+		_level_play_controller.spawn_pokemon(pokemon_number, is_shiny)
 
-	_level_play_controller.add_token_to_level(token, pokemon_number, is_shiny)
+
+func _on_token_added(_token: BoardToken) -> void:
+	# Update save button visibility when a token is added
 	_update_save_button_visibility()
 
 
