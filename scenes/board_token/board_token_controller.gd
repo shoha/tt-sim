@@ -73,9 +73,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		_scaling = false
 		return
 
-	if event.is_action_pressed("select_token") and _mouse_over:
-		EventBus.emit_signal("token_selected", rigid_body)
-
 	if _rotating and event is InputEventMouseMotion:
 		_handle_rotation(event)
 

@@ -23,9 +23,9 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 DragAndDropGroupHelper="*uid://d21uumvllljay"
 Paths="*res://autoloads/paths.gd"
 PokemonAutoload="*res://autoloads/pokemon_autoload.gd"
-EventBus="*res://autoloads/event_bus.gd"
 NodeUtils="*res://autoloads/node_utils.gd"
 LevelManager="*res://autoloads/level_manager.gd"
+UIManager="*res://autoloads/ui_manager.gd"
 
 [debug]
 

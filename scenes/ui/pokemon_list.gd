@@ -1,5 +1,8 @@
 extends ItemList
 
+## Emitted when a Pokemon is selected from the list
+signal pokemon_selected(pokemon_number: String, is_shiny: bool)
+
 var exit_mutex: Mutex
 var items_mutex: Mutex
 var items_sem: Semaphore
@@ -58,8 +61,18 @@ func _on_pokemon_filter_text_changed(new_text: String) -> void:
 
 func _on_item_activated(index: int) -> void:
 	var selected_item = _current_items[index]
-	var pokemon_scene: PackedScene = load(selected_item.scene)
-	EventBus.pokemon_added.emit(pokemon_scene)
+	var pokemon_number = _extract_pokemon_number(selected_item.scene)
+	var is_shiny = "_shiny" in selected_item.scene
+	pokemon_selected.emit(pokemon_number, is_shiny)
+
+
+## Extract pokemon number from a scene path like "res://assets/models/pokemon/25_pikachu.glb"
+func _extract_pokemon_number(path: String) -> String:
+	var filename = path.get_file().get_basename()
+	var parts = filename.split("_")
+	if parts.size() > 0:
+		return parts[0]
+	return ""
 
 func _exit_tree() -> void:
 	# Set exit condition to true.

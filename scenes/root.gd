@@ -1,22 +1,30 @@
 extends Node3D
 
 ## Root scene controller - manages application state and scene transitions.
+##
+## Uses a state stack to support overlay states (like PAUSED on top of PLAYING).
+## - change_state(): Replaces entire stack with a new base state
+## - push_state(): Adds overlay state on top of current state
+## - pop_state(): Removes top overlay state, returning to previous
 
 const TITLE_SCREEN_SCENE := preload("res://scenes/title_screen.tscn")
 const APP_MENU_SCENE := preload("res://scenes/ui/app_menu.tscn")
 const GAME_MAP_SCENE := preload("res://scenes/templates/game_map.tscn")
+const PAUSE_OVERLAY_SCENE := preload("res://scenes/ui/pause_overlay.tscn")
 
 enum State {
 	TITLE_SCREEN,
 	PLAYING,
+	PAUSED,
 }
 
 signal state_changed(old_state: State, new_state: State)
 
-var _current_state: State = State.TITLE_SCREEN
+var _state_stack: Array[State] = []
 var _title_screen: CanvasLayer = null
 var _app_menu: CanvasLayer = null
 var _game_map: GameMap = null
+var _pause_overlay: CanvasLayer = null
 var _level_play_controller: LevelPlayController = null
 var _pending_level_data: LevelData = null
 
@@ -30,7 +38,7 @@ func _ready() -> void:
 	LevelManager.level_loaded.connect(_on_level_loaded)
 
 	# Enter initial state
-	_enter_state(_current_state)
+	push_state(State.TITLE_SCREEN)
 
 
 func _setup_level_play_controller() -> void:
@@ -54,20 +62,46 @@ func _setup_app_menu() -> void:
 func _on_play_level_requested(level_data: LevelData) -> void:
 	# Store level data and transition to PLAYING state
 	_pending_level_data = level_data
-	_change_state(State.PLAYING)
+	change_state(State.PLAYING)
 
 
-func _change_state(new_state: State) -> void:
-	if new_state == _current_state:
+## Get the current (topmost) state
+func get_current_state() -> State:
+	if _state_stack.size() > 0:
+		return _state_stack[-1]
+	return State.TITLE_SCREEN
+
+
+## Push a new state onto the stack (for overlay states like PAUSED)
+func push_state(state: State) -> void:
+	var old_state := get_current_state()
+	_state_stack.push_back(state)
+	_enter_state(state)
+	state_changed.emit(old_state, state)
+
+
+## Pop the top state from the stack (returns to previous state)
+func pop_state() -> void:
+	if _state_stack.size() <= 1:
+		return  # Don't pop the last state
+	var old_state: State = _state_stack.pop_back()
+	_exit_state(old_state)
+	state_changed.emit(old_state, get_current_state())
+
+
+## Replace the entire state stack with a new base state
+func change_state(new_state: State) -> void:
+	var old_state := get_current_state()
+	if new_state == old_state and _state_stack.size() == 1:
 		return
 
-	var old_state := _current_state
+	# Exit all current states (top to bottom)
+	while _state_stack.size() > 0:
+		var state_to_exit: State = _state_stack.pop_back()
+		_exit_state(state_to_exit)
 
-	# Exit current state
-	_exit_state(_current_state)
-
-	# Enter new state
-	_current_state = new_state
+	# Push the new base state
+	_state_stack.push_back(new_state)
 	_enter_state(new_state)
 
 	state_changed.emit(old_state, new_state)
@@ -80,6 +114,8 @@ func _enter_state(state: State) -> void:
 			add_child(_title_screen)
 		State.PLAYING:
 			_enter_playing_state()
+		State.PAUSED:
+			_enter_paused_state()
 
 
 func _enter_playing_state() -> void:
@@ -106,6 +142,8 @@ func _exit_state(state: State) -> void:
 				_title_screen = null
 		State.PLAYING:
 			_exit_playing_state()
+		State.PAUSED:
+			_exit_paused_state()
 
 
 func _exit_playing_state() -> void:
@@ -120,9 +158,28 @@ func _exit_playing_state() -> void:
 		_game_map = null
 
 
+func _enter_paused_state() -> void:
+	# Pause the game tree (physics, _process, etc.)
+	get_tree().paused = true
+	
+	# Show pause overlay
+	_pause_overlay = PAUSE_OVERLAY_SCENE.instantiate()
+	add_child(_pause_overlay)
+
+
+func _exit_paused_state() -> void:
+	# Hide pause overlay
+	if _pause_overlay:
+		_pause_overlay.queue_free()
+		_pause_overlay = null
+	
+	# Resume the game tree
+	get_tree().paused = false
+
+
 func _on_level_loaded(_level_data: LevelData) -> void:
 	_pending_level_data = _level_data
-	_change_state(State.PLAYING)
+	change_state(State.PLAYING)
 
 
 func _on_level_play_loaded(_level_data: LevelData) -> void:
@@ -135,4 +192,4 @@ func _on_level_cleared() -> void:
 	# (play_level() calls clear_level() internally before loading)
 	if _pending_level_data:
 		return
-	_change_state(State.TITLE_SCREEN)
+	change_state(State.TITLE_SCREEN)

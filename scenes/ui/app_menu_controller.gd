@@ -28,12 +28,17 @@ func _open_level_editor() -> void:
 		# Sync with active level if one is playing
 		_sync_editor_with_active_level()
 		_level_editor_instance.animate_in()
+		# Re-register in case it was unregistered
+		UIManager.register_overlay(_level_editor_instance)
 		return
 
 	_level_editor_instance = LevelEditorScene.instantiate()
 	_level_editor_instance.editor_closed.connect(_on_editor_closed)
 	_level_editor_instance.play_level_requested.connect(_on_play_level_requested)
 	add_child(_level_editor_instance)
+
+	# Register with UIManager for ESC handling
+	UIManager.register_overlay(_level_editor_instance)
 
 	# If a level is already playing, load it into the editor
 	_sync_editor_with_active_level()
@@ -53,6 +58,7 @@ func _sync_editor_with_active_level() -> void:
 
 func _on_editor_closed() -> void:
 	if _level_editor_instance:
+		UIManager.unregister_overlay(_level_editor_instance)
 		_level_editor_instance.queue_free()
 		_level_editor_instance = null
 
