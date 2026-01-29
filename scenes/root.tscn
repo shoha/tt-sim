@@ -1,9 +1,6 @@
 [gd_scene format=3 uid="uid://dow8pna05oxft"]
 
-[ext_resource type="PackedScene" uid="uid://byf7iljoqrotr" path="res://scenes/templates/game_map.tscn" id="1_j5px3"]
-[ext_resource type="Script" uid="uid://c72pjb3vxixl6" path="res://scenes/root.gd" id="2_root"]
+[ext_resource type="Script" uid="uid://c72pjb3vxixl6" path="res://scenes/root.gd" id="1_root"]
 
 [node name="Root" type="Node3D" unique_id=1417688551]
-script = ExtResource("2_root")
-
-[node name="GameMap" parent="." unique_id=1248635442 instance=ExtResource("1_j5px3")]
+script = ExtResource("1_root")
