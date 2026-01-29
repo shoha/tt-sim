@@ -1,12 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://dow8pna05oxft"]
+[gd_scene format=3 uid="uid://dow8pna05oxft"]
 
 [ext_resource type="PackedScene" uid="uid://byf7iljoqrotr" path="res://scenes/templates/game_map.tscn" id="1_j5px3"]
 [ext_resource type="Script" uid="uid://c72pjb3vxixl6" path="res://scenes/root.gd" id="2_root"]
-[ext_resource type="PackedScene" uid="uid://0mln5piv3eiq" path="res://scenes/title_screen.tscn" id="3_lrqlo"]
 
-[node name="Root" type="Node3D"]
+[node name="Root" type="Node3D" unique_id=1417688551]
 script = ExtResource("2_root")
 
-[node name="GameMap" parent="." instance=ExtResource("1_j5px3")]
-
-[node name="TitleScreen" parent="." instance=ExtResource("3_lrqlo")]
+[node name="GameMap" parent="." unique_id=1248635442 instance=ExtResource("1_j5px3")]
