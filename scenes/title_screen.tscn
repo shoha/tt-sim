@@ -1,16 +1,235 @@
 [gd_scene format=3 uid="uid://0mln5piv3eiq"]
 
-[node name="TitleScreen" type="CanvasLayer"]
+[ext_resource type="PackedScene" uid="uid://b3to05sowrppc" path="res://assets/models/dice/d20.glb" id="1_fgkus"]
 
-[node name="PlaceholderContainer" type="ColorRect" parent="."]
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_fgkus"]
+sky_top_color = Color(0.7866573, 0.8264243, 0.8797699, 1)
+sky_horizon_color = Color(1, 1, 1, 1)
+
+[sub_resource type="Sky" id="Sky_sa3yf"]
+sky_material = SubResource("ProceduralSkyMaterial_fgkus")
+
+[sub_resource type="Environment" id="Environment_fgkus"]
+sky = SubResource("Sky_sa3yf")
+ambient_light_source = 3
+
+[sub_resource type="Animation" id="Animation_sa3yf"]
+length = 0.001
+tracks/0/type = "bezier"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:rotation:x")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"handle_modes": PackedInt32Array(0),
+"points": PackedFloat32Array(0, -0.25, 0, 0.25, 0),
+"times": PackedFloat32Array(0)
+}
+tracks/1/type = "bezier"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath(".:rotation:y")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"handle_modes": PackedInt32Array(0),
+"points": PackedFloat32Array(0, -0.25, 0, 0.25, 0),
+"times": PackedFloat32Array(0)
+}
+tracks/2/type = "bezier"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath(".:rotation:z")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"handle_modes": PackedInt32Array(0),
+"points": PackedFloat32Array(0, -0.25, 0, 0.25, 0),
+"times": PackedFloat32Array(0)
+}
+tracks/3/type = "bezier"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath(".:position:x")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"handle_modes": PackedInt32Array(0),
+"points": PackedFloat32Array(0, -0.25, 0, 0.25, 0),
+"times": PackedFloat32Array(0)
+}
+tracks/4/type = "bezier"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath(".:position:y")
+tracks/4/interp = 1
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"handle_modes": PackedInt32Array(0),
+"points": PackedFloat32Array(0, -0.25, 0, 0.25, 0),
+"times": PackedFloat32Array(0)
+}
+tracks/5/type = "bezier"
+tracks/5/imported = false
+tracks/5/enabled = true
+tracks/5/path = NodePath(".:position:z")
+tracks/5/interp = 1
+tracks/5/loop_wrap = true
+tracks/5/keys = {
+"handle_modes": PackedInt32Array(0),
+"points": PackedFloat32Array(0, -0.25, 0, 0.25, 0),
+"times": PackedFloat32Array(0)
+}
+
+[sub_resource type="Animation" id="Animation_s4lrb"]
+resource_name = "curve_rotate"
+length = 5.0
+loop_mode = 1
+tracks/0/type = "bezier"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:rotation:x")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"handle_modes": PackedInt32Array(1, 1, 1),
+"points": PackedFloat32Array(0, 0, 0, 0, 0, 3.1415927, 0, 0, 0, 0, 6.2831855, 0, 0, 0, 0),
+"times": PackedFloat32Array(0, 2.5, 5)
+}
+tracks/1/type = "bezier"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath(".:rotation:y")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"handle_modes": PackedInt32Array(1, 1, 1),
+"points": PackedFloat32Array(0, 0, 0, 0, 0, 3.1415927, 0, 0, 0, 0, 6.2831855, 0, 0, 0, 0),
+"times": PackedFloat32Array(0, 2.5, 5)
+}
+tracks/2/type = "bezier"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath(".:rotation:z")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"handle_modes": PackedInt32Array(1, 1, 1),
+"points": PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+"times": PackedFloat32Array(0, 2.5, 5)
+}
+tracks/3/type = "bezier"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath(".:position:x")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"handle_modes": PackedInt32Array(1, 1, 1, 1, 1),
+"points": PackedFloat32Array(0, -0.25, 0, 0.25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+"times": PackedFloat32Array(0, 1.25, 2.5, 3.75, 5)
+}
+tracks/4/type = "bezier"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath(".:position:y")
+tracks/4/interp = 1
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"handle_modes": PackedInt32Array(1, 1, 1, 1, 1),
+"points": PackedFloat32Array(0, -0.25, 0, 0.25, 0, 0.35, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.35, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+"times": PackedFloat32Array(0, 1.25, 2.5, 3.75, 5)
+}
+tracks/5/type = "bezier"
+tracks/5/imported = false
+tracks/5/enabled = true
+tracks/5/path = NodePath(".:position:z")
+tracks/5/interp = 1
+tracks/5/loop_wrap = true
+tracks/5/keys = {
+"handle_modes": PackedInt32Array(1, 1, 1, 1, 1),
+"points": PackedFloat32Array(0, -0.25, 0, 0.25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+"times": PackedFloat32Array(0, 1.25, 2.5, 3.75, 5)
+}
+
+[sub_resource type="Animation" id="Animation_fgkus"]
+resource_name = "rotate"
+length = 5.0
+loop_mode = 1
+tracks/0/type = "rotation_3d"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = PackedFloat32Array(0, 1, 0, 0, 0, 1, 1, 1, 0, 0.5877853, 0, 0.809017, 2.5, 1, 0, 1, 0, -4.371139e-08, 4, 1, 0, -0.5877852, 0, 0.80901706, 5, 1, 0, 8.742278e-08, 0, 1)
+tracks/1/type = "position_3d"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath(".")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = PackedFloat32Array(0, 1, 0, 0, 0, 1.1666666, 1, 0, 0.35, 0, 2.5, 1, 0, 0, 0, 3.6666667, 1, 0, -0.35, 0, 5, 1, 0, 0, 0)
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_s4lrb"]
+_data = {
+&"RESET": SubResource("Animation_sa3yf"),
+&"curve_rotate": SubResource("Animation_s4lrb"),
+&"rotate": SubResource("Animation_fgkus")
+}
+
+[node name="TitleScreen" type="CanvasLayer" unique_id=278777048]
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1869187167]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.12, 0.12, 0.15, 1)
+color = Color(0.12156863, 0.12156863, 0.14901961, 1)
 
-[node name="CenterContainer" type="CenterContainer" parent="PlaceholderContainer"]
+[node name="SubViewportContainer" type="SubViewportContainer" parent="." unique_id=2114530362]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="SubViewportContainer" unique_id=669390547]
+transparent_bg = true
+handle_input_locally = false
+size = Vector2i(1920, 1080)
+render_target_update_mode = 4
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="SubViewportContainer/SubViewport" unique_id=764635471]
+environment = SubResource("Environment_fgkus")
+
+[node name="d20" parent="SubViewportContainer/SubViewport" unique_id=1067528831 instance=ExtResource("1_fgkus")]
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="SubViewportContainer/SubViewport/d20" unique_id=2115989980]
+libraries/ = SubResource("AnimationLibrary_s4lrb")
+autoplay = &"curve_rotate"
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport" unique_id=473512982]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 6)
+
+[node name="Camera3D" type="Camera3D" parent="SubViewportContainer/SubViewport" unique_id=1501389922]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 16)
+v_offset = 3.0
+projection = 1
+size = 10.0
+
+[node name="PlaceholderContainer" type="ColorRect" parent="." unique_id=670198466]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.120000005, 0.120000005, 0.15, 0)
+
+[node name="CenterContainer" type="CenterContainer" parent="PlaceholderContainer" unique_id=813964330]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -18,17 +237,17 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PlaceholderContainer/CenterContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="PlaceholderContainer/CenterContainer" unique_id=1823067034]
 layout_mode = 2
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="PlaceholderLabel" type="Label" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+[node name="PlaceholderLabel" type="Label" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=310823600]
 layout_mode = 2
 theme_type_variation = &"H1"
 text = "No Map Loaded"
 horizontal_alignment = 1
 
-[node name="SubLabel" type="Label" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+[node name="SubLabel" type="Label" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=562751378]
 layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Open the Level Editor to load or create a level"
