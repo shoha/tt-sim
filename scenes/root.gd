@@ -83,7 +83,7 @@ func push_state(state: State) -> void:
 ## Pop the top state from the stack (returns to previous state)
 func pop_state() -> void:
 	if _state_stack.size() <= 1:
-		return  # Don't pop the last state
+		return # Don't pop the last state
 	var old_state: State = _state_stack.pop_back()
 	_exit_state(old_state)
 	state_changed.emit(old_state, get_current_state())
@@ -165,6 +165,22 @@ func _enter_paused_state() -> void:
 	# Show pause overlay
 	_pause_overlay = PAUSE_OVERLAY_SCENE.instantiate()
 	add_child(_pause_overlay)
+	
+	# Connect pause overlay signals
+	if _pause_overlay.has_signal("resume_requested"):
+		_pause_overlay.resume_requested.connect(_on_pause_resume_requested)
+	if _pause_overlay.has_signal("main_menu_requested"):
+		_pause_overlay.main_menu_requested.connect(_on_pause_main_menu_requested)
+
+
+func _on_pause_resume_requested() -> void:
+	pop_state()
+
+
+func _on_pause_main_menu_requested() -> void:
+	# First unpause, then return to title
+	get_tree().paused = false
+	change_state(State.TITLE_SCREEN)
 
 
 func _exit_paused_state() -> void:

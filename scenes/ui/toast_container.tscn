@@ -1,0 +1,25 @@
+[gd_scene load_steps=2 format=3 uid="uid://ctoast_container"]
+
+[ext_resource type="Script" path="res://scenes/ui/toast_container.gd" id="1_toast"]
+
+[node name="ToastContainer" type="CanvasLayer"]
+layer = 90
+process_mode = 3
+script = ExtResource("1_toast")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 8
+mouse_filter = 2
+theme_type_variation = &"BoxContainerSpaced"
+alignment = 2
