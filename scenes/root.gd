@@ -1,10 +1,20 @@
 extends Node3D
 
-## Root scene controller - manages placeholder display until a level is loaded.
+## Root scene controller - manages application state and scene transitions.
 
-@onready var title_screen: CanvasLayer = $TitleScreen
+const TITLE_SCREEN_SCENE := preload("res://scenes/title_screen.tscn")
+
+enum State {
+	TITLE_SCREEN,
+	PLAYING,
+}
+
+signal state_changed(old_state: State, new_state: State)
+
 @onready var game_map: GameMap = $GameMap
 
+var _current_state: State = State.TITLE_SCREEN
+var _title_screen: CanvasLayer = null
 var _level_play_controller: LevelPlayController = null
 
 
@@ -15,8 +25,8 @@ func _ready() -> void:
 	# Defer connection to level play controller to ensure it's initialized
 	call_deferred("_connect_level_play_controller")
 
-	# Show placeholder initially
-	_show_placeholder(true)
+	# Enter initial state
+	_enter_state(_current_state)
 
 
 func _connect_level_play_controller() -> void:
@@ -29,18 +39,48 @@ func _connect_level_play_controller() -> void:
 			_level_play_controller.level_cleared.connect(_on_level_cleared)
 
 
+func _change_state(new_state: State) -> void:
+	if new_state == _current_state:
+		return
+
+	var old_state := _current_state
+
+	# Exit current state
+	_exit_state(_current_state)
+
+	# Enter new state
+	_current_state = new_state
+	_enter_state(new_state)
+
+	state_changed.emit(old_state, new_state)
+
+
+func _enter_state(state: State) -> void:
+	match state:
+		State.TITLE_SCREEN:
+			_title_screen = TITLE_SCREEN_SCENE.instantiate()
+			add_child(_title_screen)
+		State.PLAYING:
+			pass # GameMap is always present, nothing extra needed
+
+
+func _exit_state(state: State) -> void:
+	match state:
+		State.TITLE_SCREEN:
+			if _title_screen:
+				_title_screen.queue_free()
+				_title_screen = null
+		State.PLAYING:
+			pass # Cleanup handled by level manager
+
+
 func _on_level_loaded(_level_data: LevelData) -> void:
-	_show_placeholder(false)
+	_change_state(State.PLAYING)
 
 
 func _on_level_play_loaded(_level_data: LevelData) -> void:
-	_show_placeholder(false)
+	_change_state(State.PLAYING)
 
 
 func _on_level_cleared() -> void:
-	_show_placeholder(true)
-
-
-func _show_placeholder(should_show: bool) -> void:
-	if title_screen:
-		title_screen.visible = should_show
+	_change_state(State.TITLE_SCREEN)
