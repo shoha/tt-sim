@@ -1,9 +1,9 @@
 [gd_scene load_steps=5 format=3 uid="uid://cgameplay_menu_001"]
 
-[ext_resource type="Script" uid="uid://bsuwk8okbttoi" path="res://scenes/ui/pokemon_list.gd" id="1_nlnlb"]
-[ext_resource type="Script" uid="uid://bdb6i6bah667h" path="res://scenes/ui/pokemon_list_container.gd" id="1_v7vxt"]
-[ext_resource type="Script" uid="uid://dwsd3xkatk3vt" path="res://scenes/ui/pokemon_filter.gd" id="3_lxh2f"]
-[ext_resource type="Script" uid="uid://dgameplay_menu_ctrl" path="res://scenes/ui/gameplay_menu_controller.gd" id="4_controller"]
+[ext_resource type="Script" uid="uid://bsuwk8okbttoi" path="res://scenes/states/playing/pokemon_list.gd" id="1_nlnlb"]
+[ext_resource type="Script" uid="uid://bdb6i6bah667h" path="res://scenes/states/playing/pokemon_list_container.gd" id="1_v7vxt"]
+[ext_resource type="Script" uid="uid://dwsd3xkatk3vt" path="res://scenes/states/playing/pokemon_filter.gd" id="3_lxh2f"]
+[ext_resource type="Script" uid="uid://dgameplay_menu_ctrl" path="res://scenes/states/playing/gameplay_menu_controller.gd" id="4_controller"]
 
 [node name="GameplayMenu" type="CanvasLayer"]
 layer = 2

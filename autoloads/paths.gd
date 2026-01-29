@@ -13,8 +13,8 @@ const POKEMON_DATA_PATH: String = "res://data/pokemon.json"
 const ASSETS_DIR: String = "res://assets/"
 const MODELS_DIR: String = "res://assets/models/"
 const ICONS_DIR: String = "res://assets/icons/"
-const POKEMON_MODELS_DIR: String = "res://assets/models/pokemon/"
-const POKEMON_ICONS_DIR: String = "res://assets/icons/pokemon/"
+const POKEMON_MODELS_DIR: String = "res://assets/models/user/pokemon/"
+const POKEMON_ICONS_DIR: String = "res://assets/icons/user/pokemon/"
 const MAPS_DIR: String = "res://assets/models/maps/"
 
 # Scene directories
