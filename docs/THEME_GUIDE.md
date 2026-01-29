@@ -2,37 +2,42 @@
 
 This guide explains how to use the theme variants defined in `dark_theme.gd` to create consistent, well-organized UIs.
 
+> **Related Documentation:**
+>
+> - [UI Systems Guide](UI_SYSTEMS.md) - Toasts, dialogs, transitions, etc.
+> - [Architecture Guide](ARCHITECTURE.md) - Overall project structure
+
 ## Color Palette
 
 The theme uses a semantic color system where colors are named by their purpose, not their appearance.
 
 ### Background & Surface Colors
 
-| Color | Hex | Usage |
-|-------|-----|-------|
+| Color              | Hex       | Usage                                               |
+| ------------------ | --------- | --------------------------------------------------- |
 | `color_background` | `#1a121a` | Deepest background (inputs, tracks, recessed areas) |
-| `color_surface1` | `#2c1f2b` | Panel backgrounds, cards |
-| `color_surface2` | `#3e2b3c` | Elevated surfaces, hover states |
-| `color_surface3` | `#50374d` | Higher elevation, borders |
-| `color_surface4` | `#62435f` | Highest elevation |
+| `color_surface1`   | `#2c1f2b` | Panel backgrounds, cards                            |
+| `color_surface2`   | `#3e2b3c` | Elevated surfaces, hover states                     |
+| `color_surface3`   | `#50374d` | Higher elevation, borders                           |
+| `color_surface4`   | `#62435f` | Highest elevation                                   |
 
 ### Interactive Colors
 
-| Color | Usage |
-|-------|-------|
-| `color_accent` | Primary interactive elements (buttons, selections) |
-| `color_accent_lighter` | Hover states |
-| `color_accent_darker` | Pressed states |
-| `color_secondary` | Secondary actions, less prominent elements |
-| `color_success` | Positive actions (Apply, Confirm, Play) |
-| `color_warning` | Caution states |
-| `color_danger` | Destructive actions (Delete, Close) |
+| Color                  | Usage                                              |
+| ---------------------- | -------------------------------------------------- |
+| `color_accent`         | Primary interactive elements (buttons, selections) |
+| `color_accent_lighter` | Hover states                                       |
+| `color_accent_darker`  | Pressed states                                     |
+| `color_secondary`      | Secondary actions, less prominent elements         |
+| `color_success`        | Positive actions (Apply, Confirm, Play)            |
+| `color_warning`        | Caution states                                     |
+| `color_danger`         | Destructive actions (Delete, Close)                |
 
 ### Text Colors
 
-| Color | Usage |
-|-------|-------|
-| `color_text_on_dark` | Text on dark backgrounds (inputs, panels) |
+| Color                  | Usage                                        |
+| ---------------------- | -------------------------------------------- |
+| `color_text_on_dark`   | Text on dark backgrounds (inputs, panels)    |
 | `color_text_on_accent` | Text on accent-colored backgrounds (buttons) |
 
 ---
@@ -41,12 +46,12 @@ The theme uses a semantic color system where colors are named by their purpose, 
 
 Use these consistent spacing values for margins and padding:
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `spacing_sm` | 4px | Tight spacing (inline elements) |
-| `spacing_md` | 8px | Default spacing |
-| `spacing_lg` | 12px | Section spacing |
-| `spacing_xl` | 16px | Large gaps |
+| Token        | Value | Usage                           |
+| ------------ | ----- | ------------------------------- |
+| `spacing_sm` | 4px   | Tight spacing (inline elements) |
+| `spacing_md` | 8px   | Default spacing                 |
+| `spacing_lg` | 12px  | Section spacing                 |
+| `spacing_xl` | 16px  | Large gaps                      |
 
 ---
 
@@ -54,16 +59,16 @@ Use these consistent spacing values for margins and padding:
 
 Font sizes form a clear hierarchy for visual organization:
 
-| Variant | Size | Usage |
-|---------|------|-------|
-| (default Label) | 20px | Main titles (e.g., "Level Editor") |
-| `H1` | 18px | Primary headings |
-| `H2` | 16px | Secondary headings |
-| `H3` | 15px | Subsection headings (e.g., "Health", "Position") |
+| Variant         | Size                | Usage                                                           |
+| --------------- | ------------------- | --------------------------------------------------------------- |
+| (default Label) | 20px                | Main titles (e.g., "Level Editor")                              |
+| `H1`            | 18px                | Primary headings                                                |
+| `H2`            | 16px                | Secondary headings                                              |
+| `H3`            | 15px                | Subsection headings (e.g., "Health", "Position")                |
 | `SectionHeader` | 16px + accent color | Prominent panel titles (e.g., "Level Info", "Token Properties") |
-| `PanelHeader` | 16px + light text | Panel/popup titles on dark surfaces (e.g., "Add Pokemon") |
-| `Body` | 14px | Field labels, general content |
-| `Caption` | 12px + 70% opacity | Hints, status text, secondary info |
+| `PanelHeader`   | 16px + light text   | Panel/popup titles on dark surfaces (e.g., "Add Pokemon")       |
+| `Body`          | 14px                | Field labels, general content                                   |
+| `Caption`       | 12px + 70% opacity  | Hints, status text, secondary info                              |
 
 ### When to Use Each
 
@@ -92,6 +97,7 @@ Font sizes form a clear hierarchy for visual organization:
 ```
 
 **When to use `SectionHeader` vs `PanelHeader`:**
+
 - `SectionHeader` (accent color): For titles in the main UI panels that should draw attention
 - `PanelHeader` (light text): For titles in floating popups, overlays, or context menus
 
@@ -101,13 +107,13 @@ Font sizes form a clear hierarchy for visual organization:
 
 Buttons have semantic variants to communicate their purpose:
 
-| Variant | Color | Usage |
-|---------|-------|-------|
-| (default) | Accent/Orange | Primary actions |
-| `Secondary` | Teal | Less prominent actions (New, Load, Save, Select) |
-| `Success` | Green | Positive/confirm actions (Apply, Play) |
-| `Warning` | Yellow | Caution actions |
-| `Danger` | Red | Destructive actions (Delete, Close) |
+| Variant     | Color         | Usage                                            |
+| ----------- | ------------- | ------------------------------------------------ |
+| (default)   | Accent/Orange | Primary actions                                  |
+| `Secondary` | Teal          | Less prominent actions (New, Load, Save, Select) |
+| `Success`   | Green         | Positive/confirm actions (Apply, Play)           |
+| `Warning`   | Yellow        | Caution actions                                  |
+| `Danger`    | Red           | Destructive actions (Delete, Close)              |
 
 ### Example Button Bar
 
@@ -138,15 +144,16 @@ text = "Delete"
 
 ### BoxContainer Spacing
 
-| Variant | Separation | Usage |
-|---------|------------|-------|
-| (default) | 4px | Tight groupings |
-| `BoxContainerTight` | 4px | Inline elements (X/Y/Z fields) |
-| `BoxContainerSpaced` | 12px | Section content, form fields |
+| Variant              | Separation | Usage                          |
+| -------------------- | ---------- | ------------------------------ |
+| (default)            | 4px        | Tight groupings                |
+| `BoxContainerTight`  | 4px        | Inline elements (X/Y/Z fields) |
+| `BoxContainerSpaced` | 12px       | Section content, form fields   |
 
 ### When to Use BoxContainerSpaced
 
 Apply to VBoxContainers that hold:
+
 - Form fields with labels
 - Multiple sections within a panel
 - Any content that needs breathing room
@@ -158,12 +165,12 @@ theme_type_variation = &"BoxContainerSpaced"
 
 ### Panel Variants
 
-| Variant | Background | Usage |
-|---------|------------|-------|
-| (default) | `surface1` | Standard panels |
-| `PanelElevated` | `surface2` | Nested panels, emphasis |
-| `PanelBordered` | Transparent + border | Grouping related controls |
-| `PanelInset` | `background` | Recessed areas (lists, inputs) |
+| Variant         | Background           | Usage                          |
+| --------------- | -------------------- | ------------------------------ |
+| (default)       | `surface1`           | Standard panels                |
+| `PanelElevated` | `surface2`           | Nested panels, emphasis        |
+| `PanelBordered` | Transparent + border | Grouping related controls      |
+| `PanelInset`    | `background`         | Recessed areas (lists, inputs) |
 
 ---
 
@@ -198,21 +205,22 @@ func close() -> void:
 
 ### Animation Properties
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| `fade_in_duration` | 0.3s | Duration of show animation |
-| `fade_out_duration` | 0.2s | Duration of hide animation |
-| `scale_in_from` | (0.8, 0.8) | Starting scale when appearing |
-| `scale_out_to` | (0.9, 0.9) | Ending scale when disappearing |
-| `ease_in_type` | EASE_OUT | Easing for show animation |
-| `ease_out_type` | EASE_IN | Easing for hide animation |
-| `trans_in_type` | TRANS_BACK | Transition curve for show (bouncy) |
-| `trans_out_type` | TRANS_CUBIC | Transition curve for hide (smooth) |
-| `start_hidden` | true | Whether to start hidden on ready |
+| Property            | Default     | Description                        |
+| ------------------- | ----------- | ---------------------------------- |
+| `fade_in_duration`  | 0.3s        | Duration of show animation         |
+| `fade_out_duration` | 0.2s        | Duration of hide animation         |
+| `scale_in_from`     | (0.8, 0.8)  | Starting scale when appearing      |
+| `scale_out_to`      | (0.9, 0.9)  | Ending scale when disappearing     |
+| `ease_in_type`      | EASE_OUT    | Easing for show animation          |
+| `ease_out_type`     | EASE_IN     | Easing for hide animation          |
+| `trans_in_type`     | TRANS_BACK  | Transition curve for show (bouncy) |
+| `trans_out_type`    | TRANS_CUBIC | Transition curve for hide (smooth) |
+| `start_hidden`      | true        | Whether to start hidden on ready   |
 
 ### Recommended Settings by UI Type
 
 **Quick context menus:**
+
 ```gdscript
 fade_in_duration = 0.15
 fade_out_duration = 0.1
@@ -221,6 +229,7 @@ trans_in_type = Tween.TRANS_CUBIC
 ```
 
 **Large panels (editors, dialogs):**
+
 ```gdscript
 fade_in_duration = 0.25
 fade_out_duration = 0.15
@@ -230,6 +239,7 @@ trans_in_type = Tween.TRANS_CUBIC
 ```
 
 **Slide-in sidebars:**
+
 ```gdscript
 fade_in_duration = 0.2
 fade_out_duration = 0.15
@@ -276,11 +286,11 @@ func _close_popup() -> void:
 func _animate_popup_in(content: Control) -> void:
     if _popup_tween:
         _popup_tween.kill()
-    
+
     content.modulate.a = 0.0
     content.scale = Vector2(0.9, 0.9)
     content.pivot_offset = content.size / 2
-    
+
     _popup_tween = create_tween()
     _popup_tween.set_parallel(true)
     _popup_tween.set_ease(Tween.EASE_OUT)
@@ -291,9 +301,9 @@ func _animate_popup_in(content: Control) -> void:
 func _animate_popup_out(popup: Window, content: Control) -> void:
     if _popup_tween:
         _popup_tween.kill()
-    
+
     content.pivot_offset = content.size / 2
-    
+
     _popup_tween = create_tween()
     _popup_tween.set_parallel(true)
     _popup_tween.set_ease(Tween.EASE_IN)
@@ -372,13 +382,13 @@ Use `HSeparator` between logical sections within panels:
 
 Toggle controls also have color variants:
 
-| Variant | Usage |
-|---------|-------|
-| (default) | Standard toggles |
-| `SecondaryCheckBox` | Less prominent options |
-| `SuccessCheckBox` | Positive/enable options |
-| `WarningCheckBox` | Caution options |
-| `DangerCheckBox` | Destructive options |
+| Variant             | Usage                   |
+| ------------------- | ----------------------- |
+| (default)           | Standard toggles        |
+| `SecondaryCheckBox` | Less prominent options  |
+| `SuccessCheckBox`   | Positive/enable options |
+| `WarningCheckBox`   | Caution options         |
+| `DangerCheckBox`    | Destructive options     |
 
 Same pattern for `CheckButton` variants.
 
@@ -386,13 +396,13 @@ Same pattern for `CheckButton` variants.
 
 ## MenuButton Variants
 
-| Variant | Usage |
-|---------|-------|
-| (default) | Primary dropdown menus |
-| `SecondaryMenuButton` | Secondary menus |
-| `SuccessMenuButton` | Positive action menus |
-| `WarningMenuButton` | Caution menus |
-| `DangerMenuButton` | Destructive action menus |
+| Variant               | Usage                    |
+| --------------------- | ------------------------ |
+| (default)             | Primary dropdown menus   |
+| `SecondaryMenuButton` | Secondary menus          |
+| `SuccessMenuButton`   | Positive action menus    |
+| `WarningMenuButton`   | Caution menus            |
+| `DangerMenuButton`    | Destructive action menus |
 
 ---
 
@@ -439,10 +449,48 @@ HBoxContainer
 
 ---
 
+## Pre-built UI Components
+
+The project includes several ready-to-use UI components that follow the theme. Access them via `UIManager`:
+
+### Confirmation Dialogs
+
+```gdscript
+# Simple confirmation
+var dialog = UIManager.show_confirmation("Delete?", "This cannot be undone.")
+var confirmed = await dialog.closed
+
+# Danger confirmation (red button)
+UIManager.show_danger_confirmation("Delete Level?", "All data will be lost.", my_callback)
+```
+
+### Toast Notifications
+
+```gdscript
+UIManager.show_info("Auto-saved")
+UIManager.show_success("Level saved!")
+UIManager.show_warning("Unsaved changes")
+UIManager.show_error("Failed to load")
+```
+
+### Other Components
+
+| Component      | Access                           | Purpose                 |
+| -------------- | -------------------------------- | ----------------------- |
+| Settings Menu  | `UIManager.open_settings()`      | Audio/Graphics/Controls |
+| Loading Screen | `UIManager.show_loading()`       | Progress indicator      |
+| Input Hints    | `UIManager.set_hints([...])`     | Contextual keybindings  |
+| Transitions    | `UIManager.transition(callback)` | Fade between scenes     |
+
+See [UI Systems Guide](UI_SYSTEMS.md) for complete documentation.
+
+---
+
 ## File Reference
 
 - **Theme definition**: `themes/dark_theme.gd`
 - **Generated theme**: `themes/generated/dark_theme.tres`
 - **Base class**: `addons/theme_gen/programmatic_theme.gd`
+- **UI Components**: `scenes/ui/` directory
 
 To regenerate the theme after changes, run the script via **File → Run** in Godot's script editor, or enable hot-reload with `const UPDATE_ON_SAVE = true`.
