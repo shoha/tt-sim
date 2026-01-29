@@ -1,0 +1,39 @@
+[gd_scene load_steps=2 format=3 uid="uid://c7app_menu_001"]
+
+[ext_resource type="Script" uid="uid://dapp_menu_ctrl" path="res://scenes/ui/app_menu_controller.gd" id="1_controller"]
+
+[node name="AppMenu" type="CanvasLayer"]
+layer = 2
+
+[node name="AppMenu" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_controller")
+
+[node name="BottomButtons" type="HBoxContainer" parent="AppMenu"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -150.0
+offset_top = -46.0
+offset_right = -15.0
+offset_bottom = -15.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_type_variation = &"BoxContainerSpaced"
+alignment = 2
+
+[node name="LevelEditorButton" type="Button" parent="AppMenu/BottomButtons"]
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Level Editor"
+
+[connection signal="pressed" from="AppMenu/BottomButtons/LevelEditorButton" to="AppMenu" method="_on_level_editor_button_pressed"]

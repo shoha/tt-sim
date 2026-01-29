@@ -1,0 +1,106 @@
+[gd_scene load_steps=5 format=3 uid="uid://cgameplay_menu_001"]
+
+[ext_resource type="Script" uid="uid://bsuwk8okbttoi" path="res://scenes/ui/pokemon_list.gd" id="1_nlnlb"]
+[ext_resource type="Script" uid="uid://bdb6i6bah667h" path="res://scenes/ui/pokemon_list_container.gd" id="1_v7vxt"]
+[ext_resource type="Script" uid="uid://dwsd3xkatk3vt" path="res://scenes/ui/pokemon_filter.gd" id="3_lxh2f"]
+[ext_resource type="Script" uid="uid://dgameplay_menu_ctrl" path="res://scenes/ui/gameplay_menu_controller.gd" id="4_controller"]
+
+[node name="GameplayMenu" type="CanvasLayer"]
+layer = 2
+
+[node name="GameplayMenu" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("4_controller")
+
+[node name="BottomButtons" type="HBoxContainer" parent="GameplayMenu"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -400.0
+offset_top = -46.0
+offset_right = -160.0
+offset_bottom = -15.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_type_variation = &"BoxContainerSpaced"
+alignment = 2
+
+[node name="SavePositionsButton" type="Button" parent="GameplayMenu/BottomButtons"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Save Positions"
+
+[node name="TogglePokemonListButton" type="Button" parent="GameplayMenu/BottomButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "Add Pokemon"
+
+[node name="PokemonListContainer" type="CenterContainer" parent="GameplayMenu"]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_v7vxt")
+
+[node name="PanelContainer" type="PanelContainer" parent="GameplayMenu/PokemonListContainer"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="GameplayMenu/PokemonListContainer/PanelContainer"]
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="Header" type="HBoxContainer" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PanelHeader"
+text = "Add Pokemon"
+
+[node name="PokemonFilter" type="LineEdit" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox/Header"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+placeholder_text = "Search..."
+clear_button_enabled = true
+select_all_on_focus = true
+script = ExtResource("3_lxh2f")
+
+[node name="PokemonList" type="ItemList" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox"]
+custom_minimum_size = Vector2(550, 136)
+layout_mode = 2
+mouse_filter = 1
+allow_search = false
+max_columns = 4
+same_column_width = true
+fixed_column_width = 125
+fixed_icon_size = Vector2i(125, 125)
+script = ExtResource("1_nlnlb")
+
+[node name="Hint" type="Label" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Click a Pokemon to add it to the map"
+horizontal_alignment = 1
+
+[connection signal="pressed" from="GameplayMenu/BottomButtons/SavePositionsButton" to="GameplayMenu" method="_on_save_positions_button_pressed"]
+[connection signal="toggled" from="GameplayMenu/BottomButtons/TogglePokemonListButton" to="GameplayMenu/PokemonListContainer" method="_on_button_toggled"]
+[connection signal="text_changed" from="GameplayMenu/PokemonListContainer/PanelContainer/VBox/Header/PokemonFilter" to="GameplayMenu/PokemonListContainer/PanelContainer/VBox/PokemonList" method="_on_pokemon_filter_text_changed"]
+[connection signal="item_activated" from="GameplayMenu/PokemonListContainer/PanelContainer/VBox/PokemonList" to="GameplayMenu/PokemonListContainer/PanelContainer/VBox/PokemonList" method="_on_item_activated"]
