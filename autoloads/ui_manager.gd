@@ -7,6 +7,11 @@ extends Node
 ## - Modal management (push/pop modal stack with proper input handling)
 ## - Overlay tracking (for things like Level Editor that respond to ESC)
 ## - Centralized ESC key handling for closing modals/overlays and pause toggle
+## - Confirmation dialogs
+## - Toast notifications
+## - Scene transitions
+## - Loading screens
+## - Input hints
 
 signal modal_opened(modal: Control)
 signal modal_closed(modal: Control)
@@ -14,6 +19,20 @@ signal modal_closed(modal: Control)
 var _modal_stack: Array[Control] = []
 var _overlay_stack: Array[Control] = []
 var _root: Node = null
+
+# Preload scene resources at script load time
+const CONFIRMATION_DIALOG_SCENE := preload("res://scenes/ui/confirmation_dialog.tscn")
+const SETTINGS_MENU_SCENE := preload("res://scenes/ui/settings_menu.tscn")
+const TOAST_CONTAINER_SCENE := preload("res://scenes/ui/toast_container.tscn")
+const TRANSITION_OVERLAY_SCENE := preload("res://scenes/ui/transition_overlay.tscn")
+const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
+const INPUT_HINTS_SCENE := preload("res://scenes/ui/input_hints.tscn")
+
+# Persistent UI components
+var _toast_container: Node = null
+var _transition_overlay: Node = null
+var _loading_overlay: Node = null
+var _input_hints: Node = null
 
 # State enum values (must match Root.State)
 const STATE_TITLE_SCREEN := 0
@@ -27,10 +46,26 @@ func _ready() -> void:
 	
 	# Defer getting root reference until scene tree is ready
 	call_deferred("_find_root")
+	call_deferred("_setup_ui_components")
 
 
 func _find_root() -> void:
 	_root = get_tree().root.get_node_or_null("Root")
+
+
+func _setup_ui_components() -> void:
+	# Create persistent UI components
+	_toast_container = TOAST_CONTAINER_SCENE.instantiate()
+	add_child(_toast_container)
+	
+	_transition_overlay = TRANSITION_OVERLAY_SCENE.instantiate()
+	add_child(_transition_overlay)
+	
+	_loading_overlay = LOADING_OVERLAY_SCENE.instantiate()
+	add_child(_loading_overlay)
+	
+	_input_hints = INPUT_HINTS_SCENE.instantiate()
+	add_child(_input_hints)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -136,3 +171,132 @@ func has_open_overlay() -> bool:
 ## Get the number of open overlays
 func get_overlay_count() -> int:
 	return _overlay_stack.size()
+
+
+# --- Confirmation Dialog ---
+
+## Show a confirmation dialog and return it for await
+func show_confirmation(title: String, message: String, confirm_text: String = "Confirm", cancel_text: String = "Cancel", confirm_callback: Callable = Callable(), cancel_callback: Callable = Callable(), confirm_style: String = "Success") -> Node:
+	var dialog = CONFIRMATION_DIALOG_SCENE.instantiate()
+	get_tree().root.add_child(dialog)
+	dialog.setup(title, message, confirm_text, cancel_text, confirm_callback, cancel_callback, confirm_style)
+	return dialog
+
+
+## Show a danger confirmation (e.g., for delete actions)
+func show_danger_confirmation(title: String, message: String, confirm_callback: Callable = Callable()) -> Node:
+	return show_confirmation(title, message, "Delete", "Cancel", confirm_callback, Callable(), "Danger")
+
+
+# --- Toast Notifications ---
+
+## Toast type constants (must match ToastContainer.ToastType)
+const TOAST_INFO := 0
+const TOAST_SUCCESS := 1
+const TOAST_WARNING := 2
+const TOAST_ERROR := 3
+
+## Show a toast notification
+func show_toast(message: String, type: int = TOAST_INFO, duration: float = 3.0) -> void:
+	if _toast_container and _toast_container.has_method("show_toast"):
+		_toast_container.show_toast(message, type, duration)
+
+
+## Show an info toast
+func show_info(message: String) -> void:
+	show_toast(message, TOAST_INFO)
+
+
+## Show a success toast
+func show_success(message: String) -> void:
+	show_toast(message, TOAST_SUCCESS)
+
+
+## Show a warning toast
+func show_warning(message: String) -> void:
+	show_toast(message, TOAST_WARNING)
+
+
+## Show an error toast
+func show_error(message: String) -> void:
+	show_toast(message, TOAST_ERROR)
+
+
+# --- Scene Transitions ---
+
+## Fade out the screen
+func fade_out(duration: float = 0.3) -> void:
+	if _transition_overlay:
+		await _transition_overlay.fade_out(duration)
+
+
+## Fade in the screen
+func fade_in(duration: float = 0.3) -> void:
+	if _transition_overlay:
+		await _transition_overlay.fade_in(duration)
+
+
+## Perform a transition with a callback in the middle
+func transition(middle_callback: Callable, fade_out_duration: float = 0.3, fade_in_duration: float = 0.3) -> void:
+	if _transition_overlay:
+		await _transition_overlay.transition(middle_callback, fade_out_duration, fade_in_duration)
+
+
+## Check if currently transitioning
+func is_transitioning() -> bool:
+	return _transition_overlay and _transition_overlay.is_transitioning()
+
+
+# --- Loading Screen ---
+
+## Show loading screen
+func show_loading(title: String = "Loading...") -> void:
+	if _loading_overlay:
+		_loading_overlay.show_loading(title)
+
+
+## Update loading progress (0.0 to 1.0)
+func set_loading_progress(value: float, status: String = "") -> void:
+	if _loading_overlay:
+		_loading_overlay.set_progress(value, status)
+
+
+## Hide loading screen
+func hide_loading() -> void:
+	if _loading_overlay:
+		await _loading_overlay.hide_loading()
+
+
+# --- Input Hints ---
+
+## Set input hints to display
+func set_hints(hints: Array) -> void:
+	if _input_hints:
+		_input_hints.set_hints(hints)
+
+
+## Clear all input hints
+func clear_hints() -> void:
+	if _input_hints:
+		_input_hints.clear_hints()
+
+
+## Add a single input hint
+func add_hint(key: String, action: String) -> void:
+	if _input_hints:
+		_input_hints.add_hint(key, action)
+
+
+## Remove an input hint
+func remove_hint(key: String) -> void:
+	if _input_hints:
+		_input_hints.remove_hint(key)
+
+
+# --- Settings Menu ---
+
+## Open the settings menu
+func open_settings() -> Node:
+	var settings = SETTINGS_MENU_SCENE.instantiate()
+	get_tree().root.add_child(settings)
+	return settings

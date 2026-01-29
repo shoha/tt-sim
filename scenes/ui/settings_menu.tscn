@@ -1,0 +1,219 @@
+[gd_scene load_steps=2 format=3 uid="uid://csettings_menu"]
+
+[ext_resource type="Script" path="res://scenes/ui/settings_menu.gd" id="1_settings"]
+
+[node name="SettingsMenu" type="CanvasLayer"]
+layer = 95
+process_mode = 3
+script = ExtResource("1_settings")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.6)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(450, 0)
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer"]
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="Header" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"H1"
+text = "Settings"
+
+[node name="CloseButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Danger"
+text = "X"
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="TabContainer" type="TabContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Audio" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="MasterVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/MasterVolume"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Master Volume"
+
+[node name="MasterVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/MasterVolume"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+value = 100.0
+
+[node name="MasterVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/MasterVolume"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "100%"
+horizontal_alignment = 2
+
+[node name="MusicVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/MusicVolume"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Music"
+
+[node name="MusicVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/MusicVolume"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+value = 100.0
+
+[node name="MusicVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/MusicVolume"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "100%"
+horizontal_alignment = 2
+
+[node name="SFXVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/SFXVolume"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Sound Effects"
+
+[node name="SFXVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/SFXVolume"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+value = 100.0
+
+[node name="SFXVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/SFXVolume"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "100%"
+horizontal_alignment = 2
+
+[node name="UIVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/UIVolume"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "UI Sounds"
+
+[node name="UIVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/UIVolume"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+value = 100.0
+
+[node name="UIVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/UIVolume"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "100%"
+horizontal_alignment = 2
+
+[node name="Graphics" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="Fullscreen" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Fullscreen"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Fullscreen"
+
+[node name="FullscreenCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Fullscreen"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="VSync" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/VSync"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "VSync"
+
+[node name="VSyncCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/VSync"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+
+[node name="Controls" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="ControlsInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Keyboard & Mouse Controls"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls"]
+layout_mode = 2
+
+[node name="ControlsList" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ButtonContainer" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 2
+
+[node name="ResetButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Reset to Defaults"
+
+[node name="ApplyButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Success"
+text = "Apply"
