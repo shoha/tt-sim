@@ -323,7 +323,7 @@ func _animate_popup_out(popup: Window, content: Control) -> void:
 ### File Reference
 
 - **Base class**: `scenes/ui/animated_visibility_container.gd`
-- **Example usage**: `scenes/ui/token_context_menu.gd`, `scenes/level_editor/level_editor.gd`
+- **Example usage**: `scenes/states/playing/token_context_menu.gd`, `scenes/level_editor/level_editor.gd`
 
 ---
 

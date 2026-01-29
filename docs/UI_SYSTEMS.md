@@ -451,7 +451,7 @@ Overlays must implement one of:
 | `scenes/ui/loading_overlay.tscn`             | Loading screen                 |
 | `scenes/ui/input_hints.tscn`                 | Input hints                    |
 | `scenes/ui/settings_menu.tscn`               | Settings menu                  |
-| `scenes/ui/pause_overlay.tscn`               | Pause menu                     |
+| `scenes/states/paused/pause_overlay.tscn`    | Pause menu                     |
 | `scenes/ui/animated_visibility_container.gd` | Base class for animated panels |
 
 ---

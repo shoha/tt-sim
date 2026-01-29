@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://bh84knb3smm3y"]
 
-[ext_resource type="Script" uid="uid://d08bdfp1deaim" path="res://scenes/ui/token_context_menu.gd" id="1_menu"]
+[ext_resource type="Script" uid="uid://d08bdfp1deaim" path="res://scenes/states/playing/token_context_menu.gd" id="1_menu"]
 
 [node name="TokenContextMenu" type="Control"]
 layout_mode = 3

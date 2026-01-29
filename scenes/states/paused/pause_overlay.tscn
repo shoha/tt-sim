@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://cpause_overlay_001"]
 
-[ext_resource type="Script" path="res://scenes/ui/pause_overlay.gd" id="1_pause"]
+[ext_resource type="Script" path="res://scenes/states/paused/pause_overlay.gd" id="1_pause"]
 
 [node name="PauseOverlay" type="CanvasLayer"]
 layer = 10
