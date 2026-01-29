@@ -7,10 +7,10 @@ extends Node3D
 ## - push_state(): Adds overlay state on top of current state
 ## - pop_state(): Removes top overlay state, returning to previous
 
-const TITLE_SCREEN_SCENE := preload("res://scenes/title_screen.tscn")
+const TITLE_SCREEN_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
 const APP_MENU_SCENE := preload("res://scenes/ui/app_menu.tscn")
-const GAME_MAP_SCENE := preload("res://scenes/templates/game_map.tscn")
-const PAUSE_OVERLAY_SCENE := preload("res://scenes/ui/pause_overlay.tscn")
+const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
+const PAUSE_OVERLAY_SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
 
 enum State {
 	TITLE_SCREEN,

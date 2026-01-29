@@ -66,7 +66,7 @@ func _on_item_activated(index: int) -> void:
 	pokemon_selected.emit(pokemon_number, is_shiny)
 
 
-## Extract pokemon number from a scene path like "res://assets/models/pokemon/25_pikachu.glb"
+## Extract pokemon number from a scene path like "res://assets/models/user/pokemon/25_pikachu.glb"
 func _extract_pokemon_number(path: String) -> String:
 	var filename = path.get_file().get_basename()
 	var parts = filename.split("_")
