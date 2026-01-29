@@ -1,6 +1,6 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
-/assets/models/pokemon/
-/assets/icons/pokemon/
+/assets/models/user/
+/assets/icons/user/
 /cursor_hints/
