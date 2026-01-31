@@ -23,6 +23,7 @@ var _drag_velocity: Vector3 = Vector3.ZERO
 var _target_lean_rotation: Basis = Basis.IDENTITY
 var _visual_children: Array[Node3D] = []
 var _drop_indicator: DropIndicatorRenderer
+var _is_currently_dragging: bool = false # Track dragging state properly
 
 @export var rigid_body: RigidBody3D
 @export var collision_shape: CollisionShape3D
@@ -96,6 +97,7 @@ func get_visual_children() -> Array[Node3D]:
 
 
 func _on_dragging_started() -> void:
+	_is_currently_dragging = true
 	rigid_body.gravity_scale = 0.0
 	heightOffset = _base_height_offset + PICKUP_HEIGHT
 
@@ -107,6 +109,8 @@ func _on_dragging_started() -> void:
 
 
 func _on_dragging_stopped() -> void:
+	_is_currently_dragging = false
+
 	for child in _visual_children:
 		if is_instance_valid(child):
 			child.transform.basis = Basis.IDENTITY
@@ -179,7 +183,7 @@ func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
 
-	if _is_dragging:
+	if _is_currently_dragging:
 		_update_drop_indicator()
 		_update_inertia_lean(delta)
 

@@ -1,4 +1,4 @@
-[gd_scene load_steps=66 format=3 uid="uid://bev473ihcxqg8"]
+[gd_scene format=3 uid="uid://bev473ihcxqg8"]
 
 [ext_resource type="Script" uid="uid://dueuxg404yd3w" path="res://scenes/board_token/board_token.gd" id="1_sfu0e"]
 [ext_resource type="PackedScene" uid="uid://syx65bd6uwbf" path="res://scenes/board_token/board_token_animation_tree.tscn" id="2_qbeu5"]
@@ -65085,33 +65085,28 @@ _data = {
 &"walk01": SubResource("Animation_n48vr")
 }
 
-[node name="Token" type="Node3D"]
+[node name="Token" type="Node3D" unique_id=1140510280]
 script = ExtResource("1_sfu0e")
 
-[node name="Placeholder" type="RigidBody3D" parent="."]
+[node name="Placeholder" type="RigidBody3D" parent="." unique_id=158800064]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
-axis_lock_angular_x = true
-axis_lock_angular_y = true
-axis_lock_angular_z = true
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Placeholder"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Placeholder" unique_id=712015862]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
 shape = SubResource("BoxShape3D_sfu0e")
 debug_color = Color(0.7, 0, 0.011666489, 1)
 
-[node name="Armature" type="Node3D" parent="Placeholder"]
+[node name="Armature" type="Node3D" parent="Placeholder" unique_id=290818145]
 
-[node name="Skeleton3D" type="Skeleton3D" parent="Placeholder/Armature"]
+[node name="Skeleton3D" type="Skeleton3D" parent="Placeholder/Armature" unique_id=1362530543]
 
-[node name="Mesh" type="MeshInstance3D" parent="Placeholder/Armature/Skeleton3D"]
+[node name="Mesh" type="MeshInstance3D" parent="Placeholder/Armature/Skeleton3D" unique_id=15686597]
 mesh = SubResource("BoxMesh_qbeu5")
 skin = SubResource("Skin_nn47j")
 skeleton = NodePath("")
 
-[node name="AnimationPlayer" type="AnimationPlayer" parent="Placeholder"]
-libraries = {
-&"": SubResource("AnimationLibrary_lh3at")
-}
+[node name="AnimationPlayer" type="AnimationPlayer" parent="Placeholder" unique_id=861373687]
+libraries/ = SubResource("AnimationLibrary_lh3at")
 
-[node name="AnimationTree" parent="Placeholder" node_paths=PackedStringArray("anim_player") instance=ExtResource("2_qbeu5")]
+[node name="AnimationTree" parent="Placeholder" unique_id=894821334 node_paths=PackedStringArray("anim_player") instance=ExtResource("2_qbeu5")]
 anim_player = NodePath("../AnimationPlayer")
