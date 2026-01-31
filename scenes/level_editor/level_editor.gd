@@ -86,7 +86,7 @@ func _ready() -> void:
 	trans_in_type = Tween.TRANS_CUBIC
 	trans_out_type = Tween.TRANS_CUBIC
 	super._ready()
-	
+
 	_connect_signals()
 	_setup_file_dialogs()
 	_populate_pokemon_list()
@@ -471,6 +471,7 @@ func _on_delete_level_confirmed() -> void:
 
 
 func _load_level_from_path(path: String) -> void:
+	# Load without emitting signal to prevent auto-play
 	var level = LevelManager.load_level(path)
 	if level:
 		current_level = level
@@ -549,12 +550,12 @@ func set_level(level_data: LevelData) -> void:
 func _animate_popup_in(_popup: Window, content: Control) -> void:
 	if _popup_tween:
 		_popup_tween.kill()
-	
+
 	# Start scaled down and transparent
 	content.modulate.a = 0.0
 	content.scale = Vector2(0.9, 0.9)
 	content.pivot_offset = content.size / 2
-	
+
 	_popup_tween = create_tween()
 	_popup_tween.set_parallel(true)
 	_popup_tween.set_ease(Tween.EASE_OUT)
@@ -567,9 +568,9 @@ func _animate_popup_in(_popup: Window, content: Control) -> void:
 func _animate_popup_out(popup: Window, content: Control) -> void:
 	if _popup_tween:
 		_popup_tween.kill()
-	
+
 	content.pivot_offset = content.size / 2
-	
+
 	_popup_tween = create_tween()
 	_popup_tween.set_parallel(true)
 	_popup_tween.set_ease(Tween.EASE_IN)
