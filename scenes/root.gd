@@ -60,7 +60,15 @@ func _setup_app_menu() -> void:
 
 
 func _on_play_level_requested(level_data: LevelData) -> void:
-	# Store level data and transition to PLAYING state
+	# If already in PLAYING state, reload the level directly
+	if get_current_state() == State.PLAYING and _level_play_controller:
+		# Set pending data to prevent level_cleared from triggering title screen
+		_pending_level_data = level_data
+		_level_play_controller.play_level(level_data)
+		_pending_level_data = null
+		return
+	
+	# Otherwise, store level data and transition to PLAYING state
 	_pending_level_data = level_data
 	change_state(State.PLAYING)
 

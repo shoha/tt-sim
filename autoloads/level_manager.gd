@@ -52,7 +52,8 @@ func save_level(level_data: LevelData, file_name: String = "") -> String:
 
 
 ## Load a level from disk
-func load_level(file_path: String) -> LevelData:
+## Set notify to false when loading for editing (prevents auto-play)
+func load_level(file_path: String, notify: bool = true) -> LevelData:
 	if not ResourceLoader.exists(file_path):
 		push_error("LevelManager: Level file does not exist: " + file_path)
 		return null
@@ -65,7 +66,9 @@ func load_level(file_path: String) -> LevelData:
 
 	current_level = level
 	current_level_path = file_path
-	level_loaded.emit(level)
+	
+	if notify:
+		level_loaded.emit(level)
 
 	return level
 

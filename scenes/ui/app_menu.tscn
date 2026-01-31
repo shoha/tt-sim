@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://c7app_menu_001"]
 
-[ext_resource type="Script" uid="uid://dapp_menu_ctrl" path="res://scenes/ui/app_menu_controller.gd" id="1_controller"]
+[ext_resource type="Script" uid="uid://do4tg4jtm5cjk" path="res://scenes/ui/app_menu_controller.gd" id="1_controller"]
 
 [node name="AppMenu" type="CanvasLayer"]
 layer = 2

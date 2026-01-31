@@ -1,7 +1,7 @@
 [gd_scene load_steps=9 format=3 uid="uid://byf7iljoqrotr"]
 
 [ext_resource type="Script" uid="uid://ybc3vhthi6i5" path="res://scenes/states/playing/game_map.gd" id="1_5384n"]
-[ext_resource type="PackedScene" uid="uid://cgameplay_menu_001" path="res://scenes/states/playing/gameplay_menu.tscn" id="2_stlim"]
+[ext_resource type="PackedScene" uid="uid://y7g8xy3ginxi" path="res://scenes/states/playing/gameplay_menu.tscn" id="2_stlim"]
 [ext_resource type="Script" uid="uid://md8k6faseouk" path="res://addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd" id="2_tyn2t"]
 [ext_resource type="Shader" uid="uid://cyy1aha4j5eb1" path="res://shaders/tilt_shift.gdshader" id="4_hgeeq"]
 [ext_resource type="Script" uid="uid://bm2kst6ow2637" path="res://scenes/states/playing/camera_3d.gd" id="4_kjinj"]
