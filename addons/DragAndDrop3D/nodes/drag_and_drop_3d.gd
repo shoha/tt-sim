@@ -30,6 +30,8 @@ signal dragging_stopped(draggingObject: DraggingObject3D)
 
 var _currentDraggingObject: DraggingObject3D
 var _otherObjectOnPosition: DraggingObject3D
+var _target_drag_position: Vector3 = Vector3.ZERO
+var _has_target_position: bool = false
 
 func _ready() -> void:
 	if not Engine.is_editor_hint() and not DragAndDropGroupHelper.is_connected("group_added", _set_dragging_object_signals):
@@ -57,7 +59,17 @@ func _input(event: InputEvent) -> void:
 			stop_drag()
 	elif event is InputEventMouseMotion:
 		if _currentDraggingObject:
-			_handle_drag()
+			_update_target_position()
+
+
+func _process(_delta: float) -> void:
+	if Engine.is_editor_hint():
+		return
+	
+	# Continue lerping toward target position while dragging
+	if _currentDraggingObject and _has_target_position:
+		var currentPos = _currentDraggingObject.objectBody.global_position
+		_currentDraggingObject.objectBody.global_position = currentPos.lerp(_target_drag_position, drag_smoothing)
 
 func stop_drag() -> void:
 	var swaped = _swap_dragging_objects()
@@ -67,16 +79,17 @@ func stop_drag() -> void:
 	dragging_stopped.emit(_currentDraggingObject)
 
 	_currentDraggingObject = null
+	_has_target_position = false
 
 
-func _handle_drag() -> void:
+func _update_target_position() -> void:
 	var mousePosition3D = _get_3d_mouse_position()
 
 	if not mousePosition3D: return
 
 	mousePosition3D.y += _currentDraggingObject.get_height_offset()
-	var currentPos = _currentDraggingObject.objectBody.global_position
-	_currentDraggingObject.objectBody.global_position = currentPos.lerp(mousePosition3D, drag_smoothing)
+	_target_drag_position = mousePosition3D
+	_has_target_position = true
 
 func _get_3d_mouse_position():
 	var mousePosition := get_viewport().get_mouse_position()
