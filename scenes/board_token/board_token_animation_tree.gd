@@ -24,6 +24,7 @@ func _ready() -> void:
 	_init_state_machine.call_deferred()
 	_connect_to_board_token()
 
+
 func _init_state_machine() -> void:
 	_state_machine = tree.get("parameters/playback") as AnimationNodeStateMachinePlayback
 
