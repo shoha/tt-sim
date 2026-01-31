@@ -1,14 +1,14 @@
-[gd_scene load_steps=5 format=3 uid="uid://cgameplay_menu_001"]
+[gd_scene format=3 uid="uid://y7g8xy3ginxi"]
 
 [ext_resource type="Script" uid="uid://bsuwk8okbttoi" path="res://scenes/states/playing/pokemon_list.gd" id="1_nlnlb"]
 [ext_resource type="Script" uid="uid://bdb6i6bah667h" path="res://scenes/states/playing/pokemon_list_container.gd" id="1_v7vxt"]
 [ext_resource type="Script" uid="uid://dwsd3xkatk3vt" path="res://scenes/states/playing/pokemon_filter.gd" id="3_lxh2f"]
-[ext_resource type="Script" uid="uid://dgameplay_menu_ctrl" path="res://scenes/states/playing/gameplay_menu_controller.gd" id="4_controller"]
+[ext_resource type="Script" uid="uid://cu7374mk0ngm2" path="res://scenes/states/playing/gameplay_menu_controller.gd" id="4_controller"]
 
-[node name="GameplayMenu" type="CanvasLayer"]
+[node name="GameplayMenu" type="CanvasLayer" unique_id=977478588]
 layer = 2
 
-[node name="GameplayMenu" type="Control" parent="."]
+[node name="GameplayMenu" type="Control" parent="." unique_id=713098423]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -18,7 +18,7 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("4_controller")
 
-[node name="BottomButtons" type="HBoxContainer" parent="GameplayMenu"]
+[node name="BottomButtons" type="HBoxContainer" parent="GameplayMenu" unique_id=1268848480]
 layout_mode = 1
 anchors_preset = 3
 anchor_left = 1.0
@@ -34,20 +34,20 @@ grow_vertical = 0
 theme_type_variation = &"BoxContainerSpaced"
 alignment = 2
 
-[node name="SavePositionsButton" type="Button" parent="GameplayMenu/BottomButtons"]
+[node name="SavePositionsButton" type="Button" parent="GameplayMenu/BottomButtons" unique_id=738580539]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Save Positions"
 
-[node name="TogglePokemonListButton" type="Button" parent="GameplayMenu/BottomButtons"]
+[node name="TogglePokemonListButton" type="Button" parent="GameplayMenu/BottomButtons" unique_id=688700750]
 unique_name_in_owner = true
 layout_mode = 2
 toggle_mode = true
 text = "Add Pokemon"
 
-[node name="PokemonListContainer" type="CenterContainer" parent="GameplayMenu"]
+[node name="PokemonListContainer" type="CenterContainer" parent="GameplayMenu" unique_id=454441786]
 visible = false
 layout_mode = 1
 anchors_preset = 8
@@ -59,23 +59,23 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_v7vxt")
 
-[node name="PanelContainer" type="PanelContainer" parent="GameplayMenu/PokemonListContainer"]
+[node name="PanelContainer" type="PanelContainer" parent="GameplayMenu/PokemonListContainer" unique_id=2020775875]
 layout_mode = 2
 
-[node name="VBox" type="VBoxContainer" parent="GameplayMenu/PokemonListContainer/PanelContainer"]
+[node name="VBox" type="VBoxContainer" parent="GameplayMenu/PokemonListContainer/PanelContainer" unique_id=1796072533]
 layout_mode = 2
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="Header" type="HBoxContainer" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox"]
+[node name="Header" type="HBoxContainer" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox" unique_id=916618381]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox/Header"]
+[node name="Title" type="Label" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox/Header" unique_id=186917538]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"PanelHeader"
 text = "Add Pokemon"
 
-[node name="PokemonFilter" type="LineEdit" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox/Header"]
+[node name="PokemonFilter" type="LineEdit" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox/Header" unique_id=1588635432]
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 placeholder_text = "Search..."
@@ -83,7 +83,7 @@ clear_button_enabled = true
 select_all_on_focus = true
 script = ExtResource("3_lxh2f")
 
-[node name="PokemonList" type="ItemList" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox"]
+[node name="PokemonList" type="ItemList" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox" unique_id=141526985]
 custom_minimum_size = Vector2(550, 136)
 layout_mode = 2
 mouse_filter = 1
@@ -94,7 +94,7 @@ fixed_column_width = 125
 fixed_icon_size = Vector2i(125, 125)
 script = ExtResource("1_nlnlb")
 
-[node name="Hint" type="Label" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox"]
+[node name="Hint" type="Label" parent="GameplayMenu/PokemonListContainer/PanelContainer/VBox" unique_id=735621106]
 layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Click a Pokemon to add it to the map"

@@ -35,7 +35,7 @@ func _ready() -> void:
 		player.bus = BUS_UI
 		add_child(player)
 		_ui_players.append(player)
-	
+
 	# Load UI sounds if they exist
 	_load_ui_sounds()
 
@@ -51,7 +51,7 @@ func _load_ui_sounds() -> void:
 func play_ui_sound(sound_name: String, volume_db: float = 0.0) -> void:
 	if not _ui_sounds.has(sound_name) or _ui_sounds[sound_name] == null:
 		return
-	
+
 	var player = _get_available_player()
 	if player:
 		player.stream = _ui_sounds[sound_name]
