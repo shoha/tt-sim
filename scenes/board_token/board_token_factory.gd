@@ -232,7 +232,16 @@ static func create_from_asset(pack_id: String, asset_id: String, variant_id: Str
 	token.name = display_name
 	token.token_name = display_name
 
+	# Generate a network_id if not set (will be overwritten by placement if applicable)
+	if token.network_id == "":
+		token.network_id = _generate_network_id()
+
 	return token
+
+
+## Generate a unique network ID for tokens
+static func _generate_network_id() -> String:
+	return str(Time.get_unix_time_from_system()) + "_" + str(randi() % 100000)
 
 
 ## Create a BoardToken from a TokenPlacement resource
@@ -248,6 +257,9 @@ static func create_from_placement(placement: TokenPlacement) -> BoardToken:
 
 	if not token:
 		return null
+
+	# Set network_id from placement_id for network synchronization
+	token.network_id = placement.placement_id
 
 	# Store placement metadata for later reference
 	token.set_meta("placement_id", placement.placement_id)

@@ -24,6 +24,9 @@ class_name BoardToken
 ## Set to true by BoardTokenFactory - detects improper instantiation
 var _factory_created: bool = false
 
+# Network identification - stable unique ID for network synchronization
+@export var network_id: String = ""
+
 # Entity identification
 @export var token_name: String = "Token"
 @export var is_player_controlled: bool = false
