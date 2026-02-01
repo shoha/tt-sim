@@ -430,8 +430,10 @@ func _create_token_from_state(token_state: TokenState) -> BoardToken:
 
 
 func _enter_paused_state() -> void:
-	# Pause the game tree (physics, _process, etc.)
-	get_tree().paused = true
+	# Only pause the game tree in local (non-networked) games
+	# Networked games continue running with the menu as an overlay
+	if not NetworkManager.is_networked():
+		get_tree().paused = true
 	
 	# Show pause overlay
 	_pause_overlay = PAUSE_OVERLAY_SCENE.instantiate()
@@ -449,8 +451,9 @@ func _on_pause_resume_requested() -> void:
 
 
 func _on_pause_main_menu_requested() -> void:
-	# First unpause, then return to title
-	get_tree().paused = false
+	# First unpause (if paused), then return to title
+	if not NetworkManager.is_networked():
+		get_tree().paused = false
 	change_state(State.TITLE_SCREEN)
 
 
@@ -460,8 +463,9 @@ func _exit_paused_state() -> void:
 		_pause_overlay.queue_free()
 		_pause_overlay = null
 	
-	# Resume the game tree
-	get_tree().paused = false
+	# Resume the game tree (only needed for local games that were actually paused)
+	if not NetworkManager.is_networked():
+		get_tree().paused = false
 
 
 func _on_level_loaded(_level_data: LevelData) -> void:
