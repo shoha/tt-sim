@@ -49,18 +49,14 @@ var _pending_changes: Array[Dictionary] = []
 
 ## Check if this client has authority to modify game state.
 ## In single-player, always returns true.
-## When networking is added, returns true only for the host.
+## In networked games, returns true only for the host.
 func has_authority() -> bool:
-	# TODO: When netfox is integrated:
-	# return multiplayer.is_server() or not multiplayer.has_multiplayer_peer()
-	return true
+	return NetworkManager.is_host() or not NetworkManager.is_networked()
 
 
 ## Check if we're in a networked game
 func is_networked() -> bool:
-	# TODO: When netfox is integrated:
-	# return multiplayer.has_multiplayer_peer()
-	return false
+	return NetworkManager.is_networked()
 
 
 # =============================================================================

@@ -1,0 +1,108 @@
+[gd_scene load_steps=2 format=3 uid="uid://lobby_client_001"]
+
+[ext_resource type="Script" path="res://scenes/states/lobby/lobby_client.gd" id="1_script"]
+
+[node name="LobbyClient" type="CanvasLayer"]
+layer = 5
+script = ExtResource("1_script")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.1, 0.12, 1.0)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(500, 400)
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="CenterContainer/PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_type_variation = &"H1"
+text = "JOIN GAME"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="InputContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="RoomCodeLabel" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/InputContainer"]
+layout_mode = 2
+text = "Room Code:"
+
+[node name="RoomCodeInput" type="LineEdit" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/InputContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Enter room code..."
+alignment = 1
+max_length = 20
+caret_blink = true
+
+[node name="ConnectButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/InputContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Success"
+text = "Connect"
+
+[node name="WaitingContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PlayersLabel" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/WaitingContainer"]
+layout_mode = 2
+text = "Connected Players:"
+
+[node name="PlayerList" type="ItemList" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/WaitingContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+size_flags_vertical = 3
+auto_height = true
+
+[node name="WaitingLabel" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/WaitingContainer"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Waiting for host to start the game..."
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Enter the room code from the host"
+horizontal_alignment = 1
+
+[node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="LeaveButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Danger"
+text = "Leave"

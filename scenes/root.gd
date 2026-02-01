@@ -11,9 +11,13 @@ const TITLE_SCREEN_SCENE := preload("res://scenes/states/title_screen/title_scre
 const APP_MENU_SCENE := preload("res://scenes/ui/app_menu.tscn")
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const PAUSE_OVERLAY_SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
+const LOBBY_HOST_SCENE := preload("res://scenes/states/lobby/lobby_host.tscn")
+const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn")
 
 enum State {
 	TITLE_SCREEN,
+	LOBBY_HOST,    ## Hosting a game, waiting for players
+	LOBBY_CLIENT,  ## Joined a game, waiting for host to start
 	PLAYING,
 	PAUSED,
 }
@@ -25,6 +29,8 @@ var _title_screen: CanvasLayer = null
 var _app_menu: CanvasLayer = null
 var _game_map: GameMap = null
 var _pause_overlay: CanvasLayer = null
+var _lobby_host: CanvasLayer = null
+var _lobby_client: CanvasLayer = null
 var _level_play_controller: LevelPlayController = null
 var _pending_level_data: LevelData = null
 
@@ -120,6 +126,15 @@ func _enter_state(state: State) -> void:
 		State.TITLE_SCREEN:
 			_title_screen = TITLE_SCREEN_SCENE.instantiate()
 			add_child(_title_screen)
+			# Connect title screen signals
+			if _title_screen.has_signal("host_game_requested"):
+				_title_screen.host_game_requested.connect(_on_host_game_requested)
+			if _title_screen.has_signal("join_game_requested"):
+				_title_screen.join_game_requested.connect(_on_join_game_requested)
+		State.LOBBY_HOST:
+			_enter_lobby_host_state()
+		State.LOBBY_CLIENT:
+			_enter_lobby_client_state()
 		State.PLAYING:
 			_enter_playing_state()
 		State.PAUSED:
@@ -135,8 +150,20 @@ func _enter_playing_state() -> void:
 	_level_play_controller.setup(_game_map)
 	_game_map.setup(_level_play_controller)
 
-	# Load the pending level if we have one
-	if _pending_level_data:
+	# Handle networked vs local play
+	if NetworkManager.is_host() and _pending_level_data:
+		# Host: Load level and broadcast to clients
+		if not _level_play_controller.play_level(_pending_level_data):
+			push_error("Root: Failed to play level")
+		else:
+			# Broadcast level data to all clients
+			NetworkManager.broadcast_level_data(_pending_level_data.to_dict())
+		_pending_level_data = null
+	elif NetworkManager.is_client():
+		# Client: Listen for level data from host
+		NetworkManager.level_data_received.connect(_on_level_data_received)
+	elif _pending_level_data:
+		# Local play: Just load the level
 		if not _level_play_controller.play_level(_pending_level_data):
 			push_error("Root: Failed to play level")
 		_pending_level_data = null
@@ -148,6 +175,10 @@ func _exit_state(state: State) -> void:
 			if _title_screen:
 				_title_screen.queue_free()
 				_title_screen = null
+		State.LOBBY_HOST:
+			_exit_lobby_host_state()
+		State.LOBBY_CLIENT:
+			_exit_lobby_client_state()
 		State.PLAYING:
 			_exit_playing_state()
 		State.PAUSED:
@@ -155,6 +186,12 @@ func _exit_state(state: State) -> void:
 
 
 func _exit_playing_state() -> void:
+	# Disconnect network signals
+	if NetworkManager.level_data_received.is_connected(_on_level_data_received):
+		NetworkManager.level_data_received.disconnect(_on_level_data_received)
+	if NetworkManager.game_state_received.is_connected(_on_game_state_received):
+		NetworkManager.game_state_received.disconnect(_on_game_state_received)
+
 	# Clear the level first
 	if _level_play_controller:
 		_level_play_controller.clear_level_tokens()
@@ -164,6 +201,102 @@ func _exit_playing_state() -> void:
 	if _game_map:
 		_game_map.queue_free()
 		_game_map = null
+
+
+func _enter_lobby_host_state() -> void:
+	_lobby_host = LOBBY_HOST_SCENE.instantiate()
+	add_child(_lobby_host)
+
+	# Connect lobby signals
+	if _lobby_host.has_signal("start_game_requested"):
+		_lobby_host.start_game_requested.connect(_on_lobby_start_game)
+	if _lobby_host.has_signal("cancel_requested"):
+		_lobby_host.cancel_requested.connect(_on_lobby_cancel)
+
+
+func _exit_lobby_host_state() -> void:
+	if _lobby_host:
+		_lobby_host.queue_free()
+		_lobby_host = null
+
+
+func _enter_lobby_client_state() -> void:
+	_lobby_client = LOBBY_CLIENT_SCENE.instantiate()
+	add_child(_lobby_client)
+
+	# Connect lobby signals
+	if _lobby_client.has_signal("leave_requested"):
+		_lobby_client.leave_requested.connect(_on_lobby_cancel)
+
+	# Listen for game starting from host
+	NetworkManager.game_starting.connect(_on_network_game_starting)
+
+
+func _exit_lobby_client_state() -> void:
+	if _lobby_client:
+		_lobby_client.queue_free()
+		_lobby_client = null
+
+	# Disconnect network signals
+	if NetworkManager.game_starting.is_connected(_on_network_game_starting):
+		NetworkManager.game_starting.disconnect(_on_network_game_starting)
+
+
+func _on_host_game_requested() -> void:
+	# Transition to host lobby
+	change_state(State.LOBBY_HOST)
+
+
+func _on_join_game_requested() -> void:
+	# Transition to client lobby
+	change_state(State.LOBBY_CLIENT)
+
+
+func _on_lobby_start_game() -> void:
+	# Host is starting the game - notify clients and transition
+	NetworkManager.notify_game_starting()
+	change_state(State.PLAYING)
+
+
+func _on_lobby_cancel() -> void:
+	# Cancel/leave lobby - disconnect and return to title
+	NetworkManager.disconnect_game()
+	change_state(State.TITLE_SCREEN)
+
+
+func _on_network_game_starting() -> void:
+	# Client received game starting signal from host
+	change_state(State.PLAYING)
+
+
+func _on_level_data_received(level_dict: Dictionary) -> void:
+	# Client received level data from host
+	var level_data = LevelData.from_dict(level_dict)
+	if _level_play_controller and _game_map:
+		if not _level_play_controller.play_level(level_data):
+			push_error("Root: Failed to load networked level")
+		else:
+			# Now listen for game state updates
+			NetworkManager.game_state_received.connect(_on_game_state_received)
+
+
+func _on_game_state_received(state_dict: Dictionary) -> void:
+	# Client received game state update from host
+	GameState.apply_full_state_dict(state_dict)
+	# Apply state to existing tokens
+	_apply_game_state_to_tokens()
+
+
+func _apply_game_state_to_tokens() -> void:
+	# Update visual tokens from GameState
+	if not _level_play_controller:
+		return
+	
+	for network_id in GameState.get_all_token_states():
+		var token_state: TokenState = GameState.get_token_state(network_id)
+		var token = _level_play_controller.spawned_tokens.get(network_id)
+		if token and is_instance_valid(token):
+			token_state.apply_to_token(token)
 
 
 func _enter_paused_state() -> void:

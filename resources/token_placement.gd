@@ -105,3 +105,49 @@ func get_display_name() -> String:
 		return AssetPackManager.get_asset_display_name(pack_id, asset_id)
 	
 	return "Unknown Token"
+
+
+## Convert to dictionary for network transmission
+func to_dict() -> Dictionary:
+	return {
+		"placement_id": placement_id,
+		"pack_id": pack_id,
+		"asset_id": asset_id,
+		"variant_id": variant_id,
+		"position": {"x": position.x, "y": position.y, "z": position.z},
+		"rotation_y": rotation_y,
+		"scale": {"x": scale.x, "y": scale.y, "z": scale.z},
+		"token_name": token_name,
+		"is_player_controlled": is_player_controlled,
+		"max_health": max_health,
+		"current_health": current_health,
+		"is_visible_to_players": is_visible_to_players,
+		"status_effects": status_effects.duplicate(),
+		"is_alive": is_alive,
+	}
+
+
+## Create from dictionary (for network reception)
+static func from_dict(data: Dictionary) -> TokenPlacement:
+	var placement = TokenPlacement.new()
+	placement.placement_id = data.get("placement_id", _generate_id())
+	placement.pack_id = data.get("pack_id", "")
+	placement.asset_id = data.get("asset_id", "")
+	placement.variant_id = data.get("variant_id", "default")
+	
+	var pos = data.get("position", {})
+	placement.position = Vector3(pos.get("x", 0), pos.get("y", 0), pos.get("z", 0))
+	placement.rotation_y = data.get("rotation_y", 0.0)
+	
+	var scl = data.get("scale", {"x": 1, "y": 1, "z": 1})
+	placement.scale = Vector3(scl.get("x", 1), scl.get("y", 1), scl.get("z", 1))
+	
+	placement.token_name = data.get("token_name", "")
+	placement.is_player_controlled = data.get("is_player_controlled", false)
+	placement.max_health = data.get("max_health", 100)
+	placement.current_health = data.get("current_health", 100)
+	placement.is_visible_to_players = data.get("is_visible_to_players", true)
+	placement.status_effects = data.get("status_effects", [])
+	placement.is_alive = data.get("is_alive", true)
+	
+	return placement
