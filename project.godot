@@ -23,11 +23,21 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 DragAndDropGroupHelper="*uid://d21uumvllljay"
 Paths="*res://autoloads/paths.gd"
 AssetPackManager="*res://autoloads/asset_pack_manager.gd"
+PokemonAutoload="*res://autoloads/pokemon_autoload.gd"
 NodeUtils="*res://autoloads/node_utils.gd"
 LevelManager="*res://autoloads/level_manager.gd"
 UIManager="*res://autoloads/ui_manager.gd"
 AudioManager="*res://autoloads/audio_manager.gd"
 GameState="*res://autoloads/game_state.gd"
+WindowTiler="*uid://cmqjajhjgffm1"
+NetworkSimulator="*uid://1y2ey1e6qjwr"
+Noray="*uid://gu4bv4tgms3x"
+PacketHandshake="*uid://tt3j25a05n7c"
+NetworkTime="*uid://cnqdxyjptkfvp"
+NetworkTimeSynchronizer="*uid://5rmn2ik3kjo8"
+NetworkRollback="*uid://gas743comroj"
+NetworkEvents="*uid://bdmobxxptryj0"
+NetworkPerformance="*uid://cqgf7aqmjfoa3"
 
 [debug]
 
@@ -40,7 +50,7 @@ window/size/viewport_height=1080
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/DragAndDrop3D/plugin.cfg", "res://addons/theme_gen_save_sync/plugin.cfg")
+enabled=PackedStringArray("res://addons/DragAndDrop3D/plugin.cfg", "res://addons/brackeys_particle_controls/plugin.cfg", "res://addons/netfox.extras/plugin.cfg", "res://addons/netfox.internals/plugin.cfg", "res://addons/netfox.noray/plugin.cfg", "res://addons/netfox/plugin.cfg", "res://addons/theme_gen_save_sync/plugin.cfg")
 
 [gui]
 
