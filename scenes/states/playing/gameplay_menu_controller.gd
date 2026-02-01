@@ -3,7 +3,7 @@ extends Control
 ## Controller for the GameplayMenu UI.
 ## Handles gameplay-specific UI: asset browser, save positions.
 ## Only active when a level is loaded.
-## Adding tokens and saving positions are only available to the host, not to clients.
+## Adding tokens and saving positions are only available to the GM, not to regular players.
 
 var _level_play_controller: LevelPlayController = null
 
@@ -53,9 +53,9 @@ func _on_save_positions_button_pressed() -> void:
 
 
 func _save_token_positions() -> void:
-	# Only host can save positions
-	if NetworkManager.is_client():
-		push_warning("GameplayMenuController: Only host can save positions")
+	# Only GM can save positions
+	if not NetworkManager.is_gm() and NetworkManager.is_networked():
+		push_warning("GameplayMenuController: Only GM can save positions")
 		return
 
 	if not _level_play_controller:
@@ -67,8 +67,8 @@ func _save_token_positions() -> void:
 
 func _update_save_button_visibility() -> void:
 	if save_positions_button:
-		# Hide for clients - only host can save positions
-		if NetworkManager.is_client():
+		# Hide for non-GM players - only GM can save positions
+		if not NetworkManager.is_gm() and NetworkManager.is_networked():
 			save_positions_button.visible = false
 			return
 		var should_show = _level_play_controller and _level_play_controller.has_active_level() and _level_play_controller.get_token_count() > 0
@@ -92,8 +92,8 @@ func _on_level_cleared() -> void:
 
 func _update_asset_browser_button_state() -> void:
 	if toggle_asset_browser_button:
-		# Hide for clients - only host can add tokens
-		if NetworkManager.is_client():
+		# Hide for non-GM players - only GM can add tokens
+		if not NetworkManager.is_gm() and NetworkManager.is_networked():
 			toggle_asset_browser_button.visible = false
 			return
 		var has_level = _level_play_controller and _level_play_controller.has_active_level()
@@ -103,9 +103,9 @@ func _update_asset_browser_button_state() -> void:
 # --- Asset Selection Handling ---
 
 func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -> void:
-	# Only host can add tokens
-	if NetworkManager.is_client():
-		push_warning("GameplayMenuController: Only host can add tokens")
+	# Only GM can add tokens
+	if not NetworkManager.is_gm() and NetworkManager.is_networked():
+		push_warning("GameplayMenuController: Only GM can add tokens")
 		return
 
 	# Spawn the asset via LevelPlayController

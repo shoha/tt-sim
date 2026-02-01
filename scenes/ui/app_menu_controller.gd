@@ -3,7 +3,7 @@ extends Control
 ## Controller for the AppMenu UI.
 ## Handles Level Editor button and lifecycle.
 ## Always visible regardless of game state.
-## Level Editor is only available to the host, not to clients.
+## Level Editor is only available to the GM, not to regular players.
 
 signal play_level_requested(level_data: LevelData)
 
@@ -30,10 +30,10 @@ func _on_connection_state_changed(_old_state: NetworkManager.ConnectionState, _n
 	_update_level_editor_button_visibility()
 
 
-## Hide the level editor button for clients (only host can edit levels)
+## Hide the level editor button for non-GM players (only GM can edit levels)
 func _update_level_editor_button_visibility() -> void:
 	if _level_editor_button:
-		_level_editor_button.visible = not NetworkManager.is_client()
+		_level_editor_button.visible = NetworkManager.is_gm() or not NetworkManager.is_networked()
 
 
 # --- Level Editor Management ---
@@ -43,9 +43,9 @@ func _on_level_editor_button_pressed() -> void:
 
 
 func _open_level_editor() -> void:
-	# Only host can access the level editor
-	if NetworkManager.is_client():
-		push_warning("AppMenuController: Level editor is only available to the host")
+	# Only GM can access the level editor
+	if not NetworkManager.is_gm() and NetworkManager.is_networked():
+		push_warning("AppMenuController: Level editor is only available to the GM")
 		return
 
 	if _level_editor_instance and is_instance_valid(_level_editor_instance):
