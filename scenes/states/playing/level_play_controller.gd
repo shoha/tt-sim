@@ -22,6 +22,9 @@ var _reconciliation_timer: Timer = null
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
 	_setup_reconciliation_timer()
+	
+	# Listen for network state changes to update token interactivity
+	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
 
 func _setup_reconciliation_timer() -> void:
@@ -42,6 +45,20 @@ func _on_reconciliation_timeout() -> void:
 	
 	# Sync all token positions to catch any physics drift
 	broadcast_token_positions()
+
+
+func _on_connection_state_changed(_old_state: NetworkManager.ConnectionState, _new_state: NetworkManager.ConnectionState) -> void:
+	_update_all_token_interactivity()
+
+
+## Update interactivity for all spawned tokens based on network state
+## Clients can only view tokens, not interact with them
+func _update_all_token_interactivity() -> void:
+	var can_interact = not NetworkManager.is_client()
+	for placement_id in spawned_tokens:
+		var token = spawned_tokens[placement_id] as BoardToken
+		if is_instance_valid(token):
+			token.set_interactive(can_interact)
 
 
 ## Load and play a level
@@ -127,6 +144,9 @@ func _load_level_map(level_data: LevelData) -> bool:
 ## Track a spawned token
 func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 	spawned_tokens[placement.placement_id] = token
+	
+	# Clients can only view tokens, not interact with them
+	token.set_interactive(not NetworkManager.is_client())
 	
 	# Register with GameState for network synchronization
 	if GameState.has_authority():
@@ -237,6 +257,9 @@ func add_token_to_level(token: BoardToken, pack_id: String, asset_id: String, va
 	token.set_meta("asset_id", asset_id)
 	token.set_meta("variant_id", variant_id)
 	spawned_tokens[placement.placement_id] = token
+	
+	# Clients can only view tokens, not interact with them
+	token.set_interactive(not NetworkManager.is_client())
 	
 	# Register with GameState for network synchronization
 	if GameState.has_authority():
