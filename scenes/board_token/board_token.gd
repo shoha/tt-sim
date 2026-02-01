@@ -200,3 +200,10 @@ func get_controller_component() -> Node:
 
 func get_rigid_body() -> RigidBody3D:
 	return rigid_body
+
+
+## Enable or disable all user interaction with this token (dragging, rotating, scaling, context menu)
+## Used to make tokens view-only for clients in multiplayer
+func set_interactive(enabled: bool) -> void:
+	if rigid_body:
+		rigid_body.input_ray_pickable = enabled
