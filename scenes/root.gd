@@ -72,6 +72,10 @@ func _on_play_level_requested(level_data: LevelData) -> void:
 		_pending_level_data = level_data
 		_level_play_controller.play_level(level_data)
 		_pending_level_data = null
+		
+		# Broadcast level data to clients if we're the host
+		if NetworkManager.is_host():
+			NetworkManager.broadcast_level_data(level_data.to_dict())
 		return
 	
 	# Otherwise, store level data and transition to PLAYING state
@@ -273,11 +277,15 @@ func _on_level_data_received(level_dict: Dictionary) -> void:
 	# Client received level data from host
 	var level_data = LevelData.from_dict(level_dict)
 	if _level_play_controller and _game_map:
+		# Set pending data to prevent _on_level_cleared from returning to title
+		_pending_level_data = level_data
 		if not _level_play_controller.play_level(level_data):
 			push_error("Root: Failed to load networked level")
 		else:
 			# Now listen for game state updates
-			NetworkManager.game_state_received.connect(_on_game_state_received)
+			if not NetworkManager.game_state_received.is_connected(_on_game_state_received):
+				NetworkManager.game_state_received.connect(_on_game_state_received)
+		_pending_level_data = null
 
 
 func _on_game_state_received(state_dict: Dictionary) -> void:

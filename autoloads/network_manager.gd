@@ -41,7 +41,7 @@ var _local_player_info: Dictionary = {
 }
 
 ## Default noray server (can be overridden)
-const DEFAULT_NORAY_SERVER := "localhost"
+const DEFAULT_NORAY_SERVER := "192.168.0.244"
 const DEFAULT_NORAY_PORT := 8890
 
 ## ENet configuration
@@ -125,6 +125,10 @@ func host_game(noray_server: String = DEFAULT_NORAY_SERVER, noray_port: int = DE
 func _on_host_oid_received(oid: String) -> void:
 	_room_code = oid
 	room_code_received.emit(oid)
+
+	# Wait for PID before registering remote (register_remote requires PID)
+	if not Noray.pid:
+		await Noray.on_pid
 
 	# Register remote address for NAT punchthrough
 	var err = await Noray.register_remote()

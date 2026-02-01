@@ -64,14 +64,15 @@ static func from_board_token(token: BoardToken) -> TokenState:
 	state.variant_id = token.get_meta("variant_id", "default")
 
 	# Transform from rigid body (what actually moves)
+	# Use global transforms because _sync_parent_position moves rotation to BoardToken
 	var rigid_body = token.get_rigid_body()
 	if rigid_body:
 		state.position = rigid_body.global_position
-		state.rotation = rigid_body.rotation
+		state.rotation = rigid_body.global_rotation
 		state.scale = rigid_body.scale
 	else:
 		state.position = token.global_position
-		state.rotation = token.rotation
+		state.rotation = token.global_rotation
 		state.scale = token.scale
 
 	# Identity
@@ -128,17 +129,14 @@ static func from_placement(placement: TokenPlacement) -> TokenState:
 
 
 ## Apply this state to a BoardToken
-func apply_to_token(token: BoardToken) -> void:
-	# Transform
-	var rigid_body = token.get_rigid_body()
-	if rigid_body:
-		rigid_body.global_position = position
-		rigid_body.rotation = rotation
-		rigid_body.scale = scale
+## On clients, uses interpolation for smooth motion
+## On host or for initial placement, applies immediately
+func apply_to_token(token: BoardToken, use_interpolation: bool = true) -> void:
+	# Transform - use interpolation on clients for smooth motion
+	if use_interpolation and NetworkManager.is_client():
+		token.set_interpolation_target(position, rotation, scale)
 	else:
-		token.global_position = position
-		token.rotation = rotation
-		token.scale = scale
+		token.set_transform_immediate(position, rotation, scale)
 
 	# Identity
 	token.token_name = token_name

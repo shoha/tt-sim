@@ -24,6 +24,8 @@ var _target_lean_rotation: Basis = Basis.IDENTITY
 var _visual_children: Array[Node3D] = []
 var _drop_indicator: DropIndicatorRenderer
 var _is_currently_dragging: bool = false # Track dragging state properly
+var _transform_update_timer: float = 0.0
+const TRANSFORM_UPDATE_INTERVAL: float = 0.1 # Send updates 10 times per second during drag
 
 @export var rigid_body: RigidBody3D
 @export var collision_shape: CollisionShape3D
@@ -156,6 +158,9 @@ func _sync_parent_position() -> void:
 	rigid_body.position = Vector3.ZERO
 	rigid_body.rotation = Vector3.ZERO
 
+	# Notify that the token position has changed (for network sync)
+	board_token.position_changed.emit()
+
 
 func _update_inertia_lean(delta: float) -> void:
 	var current_position = rigid_body.global_position
@@ -186,6 +191,14 @@ func _process(delta: float) -> void:
 	if _is_currently_dragging:
 		_update_drop_indicator()
 		_update_inertia_lean(delta)
+		
+		# Emit throttled transform updates for network sync
+		_transform_update_timer += delta
+		if _transform_update_timer >= TRANSFORM_UPDATE_INTERVAL:
+			_transform_update_timer = 0.0
+			var board_token = get_parent() as BoardToken
+			if board_token:
+				board_token.transform_updated.emit()
 
 
 func _update_drop_indicator() -> void:

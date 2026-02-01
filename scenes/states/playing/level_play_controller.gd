@@ -9,15 +9,39 @@ signal level_cleared()
 signal token_spawned(token: BoardToken, placement: TokenPlacement)
 signal token_added(token: BoardToken)
 
+const RECONCILIATION_INTERVAL: float = 2.0 # Full state sync every 2 seconds
+
 var active_level_data: LevelData = null
 var spawned_tokens: Dictionary = {} # placement_id -> BoardToken
 var loaded_map_instance: Node3D = null
 var _game_map: GameMap = null
+var _reconciliation_timer: Timer = null
 
 
 ## Initialize with a reference to the game map
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
+	_setup_reconciliation_timer()
+
+
+func _setup_reconciliation_timer() -> void:
+	if _reconciliation_timer:
+		return
+	
+	_reconciliation_timer = Timer.new()
+	_reconciliation_timer.wait_time = RECONCILIATION_INTERVAL
+	_reconciliation_timer.autostart = false
+	_reconciliation_timer.timeout.connect(_on_reconciliation_timeout)
+	add_child(_reconciliation_timer)
+
+
+func _on_reconciliation_timeout() -> void:
+	# Only host broadcasts reconciliation
+	if not NetworkManager.is_host():
+		return
+	
+	# Sync all token positions to catch any physics drift
+	broadcast_token_positions()
 
 
 ## Load and play a level
@@ -52,6 +76,11 @@ func play_level(level_data: LevelData) -> bool:
 			token_spawned.emit(token, placement)
 
 	level_loaded.emit(level_data)
+	
+	# Start reconciliation timer for networked games
+	if NetworkManager.is_host() and _reconciliation_timer:
+		_reconciliation_timer.start()
+	
 	return true
 
 
@@ -119,6 +148,10 @@ func _connect_token_state_signals(token: BoardToken) -> void:
 	token.status_effect_removed.connect(func(_effect): _broadcast_token_state(token))
 	token.died.connect(func(): _broadcast_token_state(token))
 	token.revived.connect(func(): _broadcast_token_state(token))
+	token.position_changed.connect(func(): _broadcast_token_state(token))
+	token.rotation_changed.connect(func(): _broadcast_token_state(token))
+	token.scale_changed.connect(func(): _broadcast_token_state(token))
+	token.transform_updated.connect(func(): _broadcast_token_state(token))
 
 
 ## Broadcast a token's current state to all clients
@@ -300,6 +333,10 @@ func clear_level_map() -> void:
 
 ## Clear everything from the current level
 func clear_level() -> void:
+	# Stop reconciliation timer
+	if _reconciliation_timer:
+		_reconciliation_timer.stop()
+	
 	clear_level_tokens()
 	clear_level_map()
 	level_cleared.emit()
