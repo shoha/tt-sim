@@ -153,7 +153,9 @@ func _setup_file_dialogs() -> void:
 
 
 func _populate_pokemon_list() -> void:
-	_filtered_pokemon = PokemonAutoload.available_pokemon.keys()
+	_filtered_pokemon = []
+	for asset in AssetPackManager.get_assets("pokemon"):
+		_filtered_pokemon.append(asset.asset_id)
 	_filtered_pokemon.sort_custom(func(a, b): return int(a) < int(b))
 	_update_pokemon_selector_list()
 
@@ -162,16 +164,15 @@ func _update_pokemon_selector_list() -> void:
 	pokemon_selector_list.clear()
 	var search_text = pokemon_selector_search.text.to_lower() if pokemon_selector_search else ""
 
-	for num in _filtered_pokemon:
-		var poke_data = PokemonAutoload.available_pokemon[num]
-		var poke_name = poke_data.name
+	for asset_id in _filtered_pokemon:
+		var display_name = AssetPackManager.get_asset_display_name("pokemon", asset_id)
 
-		if search_text != "" and not poke_name.contains(search_text) and not num.contains(search_text):
+		if search_text != "" and not display_name.to_lower().contains(search_text) and not asset_id.contains(search_text):
 			continue
 
-		var display_text = "#%s %s" % [num, poke_name.capitalize()]
+		var display_text = "#%s %s" % [asset_id, display_name]
 		pokemon_selector_list.add_item(display_text)
-		pokemon_selector_list.set_item_metadata(pokemon_selector_list.item_count - 1, num)
+		pokemon_selector_list.set_item_metadata(pokemon_selector_list.item_count - 1, asset_id)
 
 
 func _create_new_level() -> void:
@@ -219,7 +220,7 @@ func _refresh_token_list() -> void:
 
 	for placement in current_level.token_placements:
 		var display_name = placement.get_display_name()
-		if placement.is_shiny:
+		if placement.variant_id == "shiny":
 			display_name += " (Shiny)"
 		token_list.add_item(display_name)
 
@@ -233,12 +234,11 @@ func _update_placement_panel(placement: TokenPlacement) -> void:
 
 	placement_name_edit.text = placement.token_name
 
-	var poke_name = "Unknown"
-	if PokemonAutoload.available_pokemon.has(placement.pokemon_number):
-		poke_name = PokemonAutoload.available_pokemon[placement.pokemon_number].name.capitalize()
-	placement_pokemon_label.text = "#%s %s" % [placement.pokemon_number, poke_name]
+	# Display asset info using pack-based system
+	var asset_name = AssetPackManager.get_asset_display_name(placement.pack_id, placement.asset_id)
+	placement_pokemon_label.text = "#%s %s" % [placement.asset_id, asset_name]
 
-	placement_shiny_check.button_pressed = placement.is_shiny
+	placement_shiny_check.button_pressed = (placement.variant_id == "shiny")
 	placement_player_check.button_pressed = placement.is_player_controlled
 	placement_max_hp_spin.value = placement.max_health
 	placement_current_hp_spin.value = placement.current_health
@@ -258,7 +258,7 @@ func _get_placement_from_panel() -> TokenPlacement:
 
 	var placement = current_level.token_placements[selected_placement_index]
 	placement.token_name = placement_name_edit.text
-	placement.is_shiny = placement_shiny_check.button_pressed
+	placement.variant_id = "shiny" if placement_shiny_check.button_pressed else "default"
 	placement.is_player_controlled = placement_player_check.button_pressed
 	placement.max_health = int(placement_max_hp_spin.value)
 	placement.current_health = int(placement_current_hp_spin.value)
@@ -325,13 +325,14 @@ func _on_pokemon_selector_activated(index: int) -> void:
 	var is_shiny = pokemon_selector_shiny.button_pressed
 
 	var placement = TokenPlacement.new()
-	placement.pokemon_number = pokemon_number
-	placement.is_shiny = is_shiny
+	# Use pack-based asset system
+	placement.pack_id = "pokemon"
+	placement.asset_id = pokemon_number
+	placement.variant_id = "shiny" if is_shiny else "default"
 	placement.position = Vector3.ZERO
 
-	# Set default name from pokemon
-	if PokemonAutoload.available_pokemon.has(pokemon_number):
-		placement.token_name = PokemonAutoload.available_pokemon[pokemon_number].name.capitalize()
+	# Set default name from asset pack
+	placement.token_name = AssetPackManager.get_asset_display_name("pokemon", pokemon_number)
 
 	current_level.add_token_placement(placement)
 	_refresh_token_list()

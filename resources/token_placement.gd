@@ -4,15 +4,10 @@ class_name TokenPlacement
 ## Represents a placed token in a level
 ## Stores the asset identity, position, and custom stats
 
-## Asset identification (new pack-based system)
+## Asset identification (pack-based system)
 @export var pack_id: String = ""
 @export var asset_id: String = ""
 @export var variant_id: String = "default"
-
-## Legacy Pokemon identification (for backward compatibility with old save files)
-## DEPRECATED: Use pack_id/asset_id/variant_id instead
-@export var pokemon_number: String = ""
-@export var is_shiny: bool = false
 
 ## Transform data
 @export var position: Vector3 = Vector3.ZERO
@@ -42,8 +37,8 @@ static func _generate_id() -> String:
 	return str(Time.get_unix_time_from_system()) + "_" + str(randi() % 10000)
 
 
-## Create a TokenPlacement from an existing BoardToken using the new pack-based system
-static func from_board_token_asset(token: BoardToken, pack: String, asset: String, variant: String = "default") -> TokenPlacement:
+## Create a TokenPlacement from an existing BoardToken
+static func from_board_token(token: BoardToken, pack: String, asset: String, variant: String = "default") -> TokenPlacement:
 	var placement = TokenPlacement.new()
 	placement.pack_id = pack
 	placement.asset_id = asset
@@ -65,16 +60,6 @@ static func from_board_token_asset(token: BoardToken, pack: String, asset: Strin
 	placement.max_health = token.max_health
 	placement.current_health = token.current_health
 	placement.is_visible_to_players = token.is_visible_to_players
-	return placement
-
-
-## Create a TokenPlacement from an existing BoardToken
-## DEPRECATED: Use from_board_token_asset() instead
-static func from_board_token(token: BoardToken, pokemon_num: String, shiny: bool) -> TokenPlacement:
-	var placement = from_board_token_asset(token, "pokemon", pokemon_num, "shiny" if shiny else "default")
-	# Also set legacy fields for backward compatibility
-	placement.pokemon_number = pokemon_num
-	placement.is_shiny = shiny
 	return placement
 
 
@@ -106,13 +91,7 @@ func get_display_name() -> String:
 	if token_name != "":
 		return token_name
 	
-	# Try new pack-based system first
 	if pack_id != "" and asset_id != "":
 		return AssetPackManager.get_asset_display_name(pack_id, asset_id)
-	
-	# Legacy fallback for old save files
-	if pokemon_number != "" and PokemonAutoload.available_pokemon.has(pokemon_number):
-		var poke_data = PokemonAutoload.available_pokemon[pokemon_number]
-		return poke_data.name.capitalize()
 	
 	return "Unknown Token"

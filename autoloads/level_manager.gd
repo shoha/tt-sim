@@ -216,8 +216,9 @@ func export_level_json(level_data: LevelData, file_path: String) -> bool:
 	for placement in level_data.token_placements:
 		data.token_placements.append({
 			"placement_id": placement.placement_id,
-			"pokemon_number": placement.pokemon_number,
-			"is_shiny": placement.is_shiny,
+			"pack_id": placement.pack_id,
+			"asset_id": placement.asset_id,
+			"variant_id": placement.variant_id,
 			"position": {"x": placement.position.x, "y": placement.position.y, "z": placement.position.z},
 			"rotation_y": placement.rotation_y,
 			"scale": {"x": placement.scale.x, "y": placement.scale.y, "z": placement.scale.z},
@@ -263,7 +264,7 @@ func import_level_json(file_path: String) -> LevelData:
 	level.author = data.get("author", "")
 	level.created_at = data.get("created_at", int(Time.get_unix_time_from_system()))
 	level.modified_at = data.get("modified_at", level.created_at)
-	level.map_path = data.get("map_path", data.get("map_glb_path", ""))
+	level.map_path = data.get("map_path", "")
 
 	if data.has("map_scale"):
 		level.map_scale = Vector3(data.map_scale.x, data.map_scale.y, data.map_scale.z)
@@ -273,8 +274,9 @@ func import_level_json(file_path: String) -> LevelData:
 	for placement_data in data.get("token_placements", []):
 		var placement = TokenPlacement.new()
 		placement.placement_id = placement_data.get("placement_id", TokenPlacement._generate_id())
-		placement.pokemon_number = placement_data.get("pokemon_number", "")
-		placement.is_shiny = placement_data.get("is_shiny", false)
+		placement.pack_id = placement_data.get("pack_id", "")
+		placement.asset_id = placement_data.get("asset_id", "")
+		placement.variant_id = placement_data.get("variant_id", "default")
 		placement.position = Vector3(
 			placement_data.position.x,
 			placement_data.position.y,
