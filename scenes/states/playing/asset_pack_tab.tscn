@@ -1,0 +1,36 @@
+[gd_scene format=3 uid="uid://dnepluxogcmr2"]
+
+[ext_resource type="Script" path="res://scenes/states/playing/asset_pack_tab.gd" id="1_tab"]
+
+[node name="AssetPackTab" type="MarginContainer"]
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+script = ExtResource("1_tab")
+
+[node name="Content" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="Header" type="HBoxContainer" parent="Content"]
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="SearchFilter" type="LineEdit" parent="Content/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Search..."
+clear_button_enabled = true
+select_all_on_focus = true
+
+[node name="ItemList" type="ItemList" parent="Content"]
+custom_minimum_size = Vector2(550, 300)
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 1
+allow_search = false
+max_columns = 4
+same_column_width = true
+fixed_column_width = 125
+fixed_icon_size = Vector2i(125, 125)
