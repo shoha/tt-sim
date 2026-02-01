@@ -1,23 +1,23 @@
 extends Control
 
 ## Controller for the GameplayMenu UI.
-## Handles gameplay-specific UI: Pokemon list, save positions.
+## Handles gameplay-specific UI: asset browser, save positions.
 ## Only active when a level is loaded.
 
 var _level_play_controller: LevelPlayController = null
 
 @onready var save_positions_button: Button = %SavePositionsButton
-@onready var toggle_pokemon_list_button: Button = %TogglePokemonListButton
-@onready var pokemon_list: ItemList = $PokemonListContainer/PanelContainer/VBox/PokemonList
+@onready var toggle_asset_browser_button: Button = %ToggleAssetBrowserButton
+@onready var asset_browser: AssetBrowser = $AssetBrowserContainer/PanelContainer/VBox/AssetBrowser
 
 
 func _ready() -> void:
-	# Connect to PokemonList's asset_selected signal (new system)
-	if pokemon_list:
-		pokemon_list.asset_selected.connect(_on_asset_selected)
+	# Connect to AssetBrowser's asset_selected signal
+	if asset_browser:
+		asset_browser.asset_selected.connect(_on_asset_selected)
 
 	# Initially hide buttons since no level is loaded yet
-	_update_pokemon_button_state()
+	_update_asset_browser_button_state()
 	_update_save_button_visibility()
 
 
@@ -31,7 +31,7 @@ func setup(level_play_controller: LevelPlayController) -> void:
 	_level_play_controller.token_added.connect(_on_token_added)
 
 	# Update UI state
-	_update_pokemon_button_state()
+	_update_asset_browser_button_state()
 	_update_save_button_visibility()
 
 
@@ -58,22 +58,22 @@ func _update_save_button_visibility() -> void:
 # --- Level State Handling ---
 
 func _on_level_loaded(_level_data: LevelData) -> void:
-	_update_pokemon_button_state()
+	_update_asset_browser_button_state()
 	_update_save_button_visibility()
 
 
 func _on_level_cleared() -> void:
-	_update_pokemon_button_state()
+	_update_asset_browser_button_state()
 	_update_save_button_visibility()
 	# Also untoggle the button if it was pressed
-	if toggle_pokemon_list_button:
-		toggle_pokemon_list_button.button_pressed = false
+	if toggle_asset_browser_button:
+		toggle_asset_browser_button.button_pressed = false
 
 
-func _update_pokemon_button_state() -> void:
-	if toggle_pokemon_list_button:
+func _update_asset_browser_button_state() -> void:
+	if toggle_asset_browser_button:
 		var has_level = _level_play_controller and _level_play_controller.has_active_level()
-		toggle_pokemon_list_button.visible = has_level
+		toggle_asset_browser_button.visible = has_level
 
 
 # --- Asset Selection Handling ---

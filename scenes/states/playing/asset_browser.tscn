@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://cupvbdawpup3n"]
+
+[ext_resource type="Script" path="res://scenes/states/playing/asset_browser.gd" id="1_browser"]
+
+[node name="AssetBrowser" type="VBoxContainer"]
+theme_type_variation = &"BoxContainerSpaced"
+script = ExtResource("1_browser")
+
+[node name="TabContainer" type="TabContainer" parent="."]
+layout_mode = 2
+size_flags_vertical = 3

@@ -63,6 +63,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_camera_zoom_dir += 1
 
 func _unhandled_key_input(event: InputEvent) -> void:
+	# Don't process camera input if a text input has focus
+	if _is_text_input_focused():
+		return
+	
 	var input_dir := _camera_move_dir
 
 	if event.is_action_released("camera_move_forward"):
@@ -93,6 +97,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 	input_dir.y = 0
 	_camera_move_dir = input_dir
+
+
+## Check if a text input control currently has focus
+func _is_text_input_focused() -> bool:
+	var focused = get_viewport().gui_get_focus_owner()
+	return focused is LineEdit or focused is TextEdit
 
 func _setup_context_menu() -> void:
 	# Load and add the context menu to the UI layer
