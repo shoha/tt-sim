@@ -98,6 +98,40 @@ func _load_level_map(level_data: LevelData) -> bool:
 ## Track a spawned token
 func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 	spawned_tokens[placement.placement_id] = token
+	
+	# Register with GameState for network synchronization
+	if GameState.has_authority():
+		GameState.register_token_from_board_token(token)
+		
+		# Connect to token signals for state change broadcasting
+		_connect_token_state_signals(token)
+
+
+## Connect to token signals for broadcasting state changes over network
+func _connect_token_state_signals(token: BoardToken) -> void:
+	if not GameState.has_authority():
+		return
+	
+	# Connect to relevant signals for state sync
+	token.health_changed.connect(func(_new, _max, _old = null): _broadcast_token_state(token))
+	token.token_visibility_changed.connect(func(_visible): _broadcast_token_state(token))
+	token.status_effect_added.connect(func(_effect): _broadcast_token_state(token))
+	token.status_effect_removed.connect(func(_effect): _broadcast_token_state(token))
+	token.died.connect(func(): _broadcast_token_state(token))
+	token.revived.connect(func(): _broadcast_token_state(token))
+
+
+## Broadcast a token's current state to all clients
+func _broadcast_token_state(token: BoardToken) -> void:
+	if not NetworkManager.is_host():
+		return
+	
+	# Sync the token state to GameState
+	GameState.sync_from_board_token(token)
+	
+	# Broadcast the full game state to clients
+	# (In a more optimized version, we'd send just the changed token)
+	NetworkManager.broadcast_game_state(GameState.get_full_state_dict())
 
 
 ## Connect token's context menu signal to game map
@@ -170,6 +204,14 @@ func add_token_to_level(token: BoardToken, pack_id: String, asset_id: String, va
 	token.set_meta("asset_id", asset_id)
 	token.set_meta("variant_id", variant_id)
 	spawned_tokens[placement.placement_id] = token
+	
+	# Register with GameState for network synchronization
+	if GameState.has_authority():
+		GameState.register_token_from_board_token(token)
+		_connect_token_state_signals(token)
+		# Broadcast new token to clients
+		if NetworkManager.is_host():
+			NetworkManager.broadcast_game_state(GameState.get_full_state_dict())
 
 
 ## Save current token positions to level data
@@ -189,9 +231,29 @@ func save_token_positions() -> String:
 			var token = spawned_tokens[placement.placement_id] as BoardToken
 			if is_instance_valid(token):
 				_sync_placement_from_token(placement, token)
+				# Also sync to GameState
+				if GameState.has_authority():
+					GameState.sync_from_board_token(token)
+
+	# Broadcast updated state to clients
+	if NetworkManager.is_host():
+		NetworkManager.broadcast_game_state(GameState.get_full_state_dict())
 
 	# Save the level
 	return LevelManager.save_level(active_level_data)
+
+
+## Sync all token positions to network (call after drags, etc.)
+func broadcast_token_positions() -> void:
+	if not NetworkManager.is_host():
+		return
+	
+	for placement_id in spawned_tokens:
+		var token = spawned_tokens[placement_id] as BoardToken
+		if is_instance_valid(token):
+			GameState.sync_from_board_token(token)
+	
+	NetworkManager.broadcast_game_state(GameState.get_full_state_dict())
 
 
 ## Sync placement data from a token's current state
@@ -224,6 +286,9 @@ func clear_level_tokens() -> void:
 
 	spawned_tokens.clear()
 	active_level_data = null
+	
+	# Clear GameState
+	GameState.clear_all_tokens()
 
 
 ## Clear the loaded level map

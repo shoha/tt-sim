@@ -37,14 +37,11 @@ signal context_menu_requested(token: BoardToken, position: Vector2)
 
 ## Check if this client has authority to manipulate this token.
 ## In single-player mode, always returns true.
-## When networking is implemented, this will check:
-## - If we're the host (hosts always have authority)
-## - If this is a client-owned token (future feature)
+## In networked games, only the host has authority (for now).
+## Future: Could allow client-owned tokens.
 ## @return: true if input should be processed, false to ignore
 func _has_input_authority() -> bool:
-	# TODO: When netfox is integrated, replace with actual authority check:
-	# return NetworkManager.is_host() or _is_locally_owned()
-	return true
+	return NetworkManager.is_host() or not NetworkManager.is_networked()
 
 
 func _ready() -> void:
