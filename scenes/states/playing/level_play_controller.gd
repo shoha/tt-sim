@@ -48,17 +48,20 @@ func _on_reconciliation_timeout() -> void:
 
 
 func _on_connection_state_changed(_old_state: NetworkManager.ConnectionState, _new_state: NetworkManager.ConnectionState) -> void:
-	_update_all_token_interactivity()
+	_update_all_token_state()
 
 
-## Update interactivity for all spawned tokens based on network state
-## Clients can only view tokens, not interact with them
-func _update_all_token_interactivity() -> void:
-	var can_interact = not NetworkManager.is_client()
+## Update interactivity and visibility for all spawned tokens based on player role
+## Only GM can interact with tokens, players can only view
+## Hidden tokens are semi-transparent for GM, invisible for players
+func _update_all_token_state() -> void:
+	var can_interact = NetworkManager.is_gm() or not NetworkManager.is_networked()
 	for placement_id in spawned_tokens:
 		var token = spawned_tokens[placement_id] as BoardToken
 		if is_instance_valid(token):
 			token.set_interactive(can_interact)
+			# Refresh visibility visuals based on current role
+			token._update_visibility_visuals()
 
 
 ## Load and play a level
@@ -145,8 +148,8 @@ func _load_level_map(level_data: LevelData) -> bool:
 func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 	spawned_tokens[placement.placement_id] = token
 	
-	# Clients can only view tokens, not interact with them
-	token.set_interactive(not NetworkManager.is_client())
+	# Only GM can interact with tokens, players can only view
+	token.set_interactive(NetworkManager.is_gm() or not NetworkManager.is_networked())
 	
 	# Register with GameState for network synchronization
 	if GameState.has_authority():
@@ -161,30 +164,34 @@ func _connect_token_state_signals(token: BoardToken) -> void:
 	if not GameState.has_authority():
 		return
 	
-	# Connect to relevant signals for state sync
-	token.health_changed.connect(func(_new, _max, _old = null): _broadcast_token_state(token))
-	token.token_visibility_changed.connect(func(_visible): _broadcast_token_state(token))
-	token.status_effect_added.connect(func(_effect): _broadcast_token_state(token))
-	token.status_effect_removed.connect(func(_effect): _broadcast_token_state(token))
-	token.died.connect(func(): _broadcast_token_state(token))
-	token.revived.connect(func(): _broadcast_token_state(token))
-	token.position_changed.connect(func(): _broadcast_token_state(token))
-	token.rotation_changed.connect(func(): _broadcast_token_state(token))
-	token.scale_changed.connect(func(): _broadcast_token_state(token))
-	token.transform_updated.connect(func(): _broadcast_token_state(token))
+	# Property changes use reliable channel (important, must arrive)
+	# Use lambdas to ignore signal arguments and just pass the token
+	token.health_changed.connect(func(_cur, _max, _old = null): _on_token_property_changed(token))
+	token.token_visibility_changed.connect(func(_visible): _on_token_property_changed(token))
+	token.status_effect_added.connect(func(_effect): _on_token_property_changed(token))
+	token.status_effect_removed.connect(func(_effect): _on_token_property_changed(token))
+	token.died.connect(func(): _on_token_property_changed(token))
+	token.revived.connect(func(): _on_token_property_changed(token))
+	
+	# Transform changes use unreliable channel with rate limiting (high-frequency, can drop)
+	token.position_changed.connect(func(): _on_token_transform_changed(token))
+	token.rotation_changed.connect(func(): _on_token_transform_changed(token))
+	token.scale_changed.connect(func(): _on_token_transform_changed(token))
+	token.transform_updated.connect(func(): _on_token_transform_changed(token))
 
 
-## Broadcast a token's current state to all clients
-func _broadcast_token_state(token: BoardToken) -> void:
+## Handle property changes (health, visibility, status) - uses reliable channel
+func _on_token_property_changed(token: BoardToken) -> void:
 	if not NetworkManager.is_host():
 		return
-	
-	# Sync the token state to GameState
-	GameState.sync_from_board_token(token)
-	
-	# Broadcast the full game state to clients
-	# (In a more optimized version, we'd send just the changed token)
-	NetworkManager.broadcast_game_state(GameState.get_full_state_dict())
+	NetworkStateSync.broadcast_token_properties(token)
+
+
+## Handle transform changes (position, rotation, scale) - uses unreliable channel with rate limiting
+func _on_token_transform_changed(token: BoardToken) -> void:
+	if not NetworkManager.is_host():
+		return
+	NetworkStateSync.broadcast_token_transform(token)
 
 
 ## Connect token's context menu signal to game map
@@ -258,16 +265,16 @@ func add_token_to_level(token: BoardToken, pack_id: String, asset_id: String, va
 	token.set_meta("variant_id", variant_id)
 	spawned_tokens[placement.placement_id] = token
 	
-	# Clients can only view tokens, not interact with them
-	token.set_interactive(not NetworkManager.is_client())
+	# Only GM can interact with tokens, players can only view
+	token.set_interactive(NetworkManager.is_gm() or not NetworkManager.is_networked())
 	
 	# Register with GameState for network synchronization
 	if GameState.has_authority():
 		GameState.register_token_from_board_token(token)
 		_connect_token_state_signals(token)
-		# Broadcast new token to clients
+		# Broadcast new token to clients (use full state so clients can create the token)
 		if NetworkManager.is_host():
-			NetworkManager.broadcast_game_state(GameState.get_full_state_dict())
+			NetworkStateSync.broadcast_full_state()
 
 
 ## Save current token positions to level data
@@ -293,13 +300,14 @@ func save_token_positions() -> String:
 
 	# Broadcast updated state to clients
 	if NetworkManager.is_host():
-		NetworkManager.broadcast_game_state(GameState.get_full_state_dict())
+		NetworkStateSync.broadcast_full_state()
 
 	# Save the level
 	return LevelManager.save_level(active_level_data)
 
 
 ## Sync all token positions to network (call after drags, etc.)
+## Uses full state broadcast for reconciliation to ensure consistency
 func broadcast_token_positions() -> void:
 	if not NetworkManager.is_host():
 		return
@@ -309,7 +317,8 @@ func broadcast_token_positions() -> void:
 		if is_instance_valid(token):
 			GameState.sync_from_board_token(token)
 	
-	NetworkManager.broadcast_game_state(GameState.get_full_state_dict())
+	# Use full state for reconciliation to ensure all clients are in sync
+	NetworkStateSync.broadcast_full_state()
 
 
 ## Sync placement data from a token's current state
@@ -359,6 +368,9 @@ func clear_level() -> void:
 	# Stop reconciliation timer
 	if _reconciliation_timer:
 		_reconciliation_timer.stop()
+	
+	# Clear network sync throttle state
+	NetworkStateSync.clear_throttle_state()
 	
 	clear_level_tokens()
 	clear_level_map()
