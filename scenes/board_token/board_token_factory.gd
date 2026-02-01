@@ -199,7 +199,6 @@ static func _apply_config(token: BoardToken, config: Resource) -> void:
 
 
 ## Create a BoardToken from an asset pack
-## This is the preferred method for spawning tokens from any asset pack
 ## @param pack_id: The pack identifier (e.g., "pokemon")
 ## @param asset_id: The asset identifier within the pack
 ## @param variant_id: The variant to use (e.g., "default", "shiny")
@@ -236,43 +235,25 @@ static func create_from_asset(pack_id: String, asset_id: String, variant_id: Str
 	return token
 
 
-## Create a BoardToken from a Pokemon number and shiny flag
-## DEPRECATED: Use create_from_asset("pokemon", pokemon_number, variant) instead
-## @param pokemon_number: The Pokemon's number (e.g., "25" for Pikachu)
-## @param is_shiny: Whether to use the shiny variant
-## @param config: Optional TokenConfig for additional customization
-## @return: A configured BoardToken, or null if creation failed
-static func create_from_pokemon(pokemon_number: String, is_shiny: bool, config: Resource = null) -> BoardToken:
-	var variant = "shiny" if is_shiny else "default"
-	return create_from_asset("pokemon", pokemon_number, variant, config)
-
-
 ## Create a BoardToken from a TokenPlacement resource
 ## Applies all placement data (position, rotation, scale, properties)
 ## @param placement: The TokenPlacement containing spawn data
 ## @return: A fully configured BoardToken at the specified position
 static func create_from_placement(placement: TokenPlacement) -> BoardToken:
-	var token: BoardToken = null
-	
-	# Use the new pack-based system if pack_id is set, otherwise fall back to legacy
-	if placement.pack_id != "":
-		token = create_from_asset(placement.pack_id, placement.asset_id, placement.variant_id)
-	else:
-		# Legacy fallback for old save files
-		token = create_from_pokemon(placement.pokemon_number, placement.is_shiny)
+	if placement.pack_id == "" or placement.asset_id == "":
+		push_error("BoardTokenFactory: TokenPlacement has no asset assigned")
+		return null
+
+	var token = create_from_asset(placement.pack_id, placement.asset_id, placement.variant_id)
 
 	if not token:
 		return null
 
 	# Store placement metadata for later reference
 	token.set_meta("placement_id", placement.placement_id)
-	token.set_meta("pack_id", placement.pack_id if placement.pack_id != "" else "pokemon")
-	token.set_meta("asset_id", placement.asset_id if placement.asset_id != "" else placement.pokemon_number)
-	token.set_meta("variant_id", placement.variant_id if placement.variant_id != "" else ("shiny" if placement.is_shiny else "default"))
-	
-	# Legacy compatibility
-	token.set_meta("pokemon_number", placement.pokemon_number)
-	token.set_meta("is_shiny", placement.is_shiny)
+	token.set_meta("pack_id", placement.pack_id)
+	token.set_meta("asset_id", placement.asset_id)
+	token.set_meta("variant_id", placement.variant_id)
 
 	# Apply placement data (position, rotation, scale, properties)
 	placement.apply_to_token(token)

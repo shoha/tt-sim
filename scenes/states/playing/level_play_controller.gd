@@ -128,7 +128,6 @@ func _clear_existing_maps() -> void:
 
 
 ## Spawn an asset token and add it to the current level
-## This is the preferred method for spawning tokens from any asset pack
 ## Returns the created token, or null if spawning failed
 func spawn_asset(pack_id: String, asset_id: String, variant_id: String = "default") -> BoardToken:
 	if not _game_map or not active_level_data:
@@ -142,21 +141,13 @@ func spawn_asset(pack_id: String, asset_id: String, variant_id: String = "defaul
 
 	_game_map.drag_and_drop_node.add_child(token)
 	_connect_token_context_menu(token)
-	add_token_to_level_asset(token, pack_id, asset_id, variant_id)
+	add_token_to_level(token, pack_id, asset_id, variant_id)
 	token_added.emit(token)
 	return token
 
 
-## Spawn a Pokemon token and add it to the current level
-## DEPRECATED: Use spawn_asset("pokemon", pokemon_number, variant) instead
-## Returns the created token, or null if spawning failed
-func spawn_pokemon(pokemon_number: String, is_shiny: bool) -> BoardToken:
-	var variant = "shiny" if is_shiny else "default"
-	return spawn_asset("pokemon", pokemon_number, variant)
-
-
-## Add a new token to the active level using the pack-based system
-func add_token_to_level_asset(token: BoardToken, pack_id: String, asset_id: String, variant_id: String = "default") -> void:
+## Add a new token to the active level
+func add_token_to_level(token: BoardToken, pack_id: String, asset_id: String, variant_id: String = "default") -> void:
 	if not active_level_data:
 		return
 
@@ -179,16 +170,6 @@ func add_token_to_level_asset(token: BoardToken, pack_id: String, asset_id: Stri
 	token.set_meta("asset_id", asset_id)
 	token.set_meta("variant_id", variant_id)
 	spawned_tokens[placement.placement_id] = token
-
-
-## Add a new token to the active level
-## DEPRECATED: Use add_token_to_level_asset() instead
-func add_token_to_level(token: BoardToken, pokemon_number: String, is_shiny: bool) -> void:
-	var variant = "shiny" if is_shiny else "default"
-	add_token_to_level_asset(token, "pokemon", pokemon_number, variant)
-	# Also set legacy metadata for backward compatibility
-	token.set_meta("pokemon_number", pokemon_number)
-	token.set_meta("is_shiny", is_shiny)
 
 
 ## Save current token positions to level data

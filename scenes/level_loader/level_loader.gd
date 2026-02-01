@@ -85,7 +85,7 @@ func _spawn_token(placement: TokenPlacement) -> BoardToken:
 	var token = BoardTokenFactory.create_from_placement(placement)
 
 	if not token:
-		push_error("LevelLoader: Failed to create token for Pokemon " + placement.pokemon_number)
+		push_error("LevelLoader: Failed to create token for asset %s/%s" % [placement.pack_id, placement.asset_id])
 		return null
 
 	tokens_container.add_child(token)
