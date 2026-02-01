@@ -297,14 +297,55 @@ func _on_game_state_received(state_dict: Dictionary) -> void:
 
 func _apply_game_state_to_tokens() -> void:
 	# Update visual tokens from GameState
-	if not _level_play_controller:
+	if not _level_play_controller or not _game_map:
+		return
+	
+	var drag_and_drop = _game_map.drag_and_drop_node
+	if not drag_and_drop:
 		return
 	
 	for network_id in GameState.get_all_token_states():
 		var token_state: TokenState = GameState.get_token_state(network_id)
 		var token = _level_play_controller.spawned_tokens.get(network_id)
+		
 		if token and is_instance_valid(token):
+			# Update existing token
 			token_state.apply_to_token(token)
+		else:
+			# Create new token that was added on host
+			var new_token = _create_token_from_state(token_state)
+			if new_token:
+				drag_and_drop.add_child(new_token)
+				_level_play_controller.spawned_tokens[network_id] = new_token
+
+
+func _create_token_from_state(token_state: TokenState) -> BoardToken:
+	# Create a token from network state
+	if token_state.pack_id == "" or token_state.asset_id == "":
+		push_warning("Root: Cannot create token - missing pack_id or asset_id")
+		return null
+	
+	var token = BoardTokenFactory.create_from_asset(
+		token_state.pack_id,
+		token_state.asset_id,
+		token_state.variant_id
+	)
+	
+	if not token:
+		push_error("Root: Failed to create token from state")
+		return null
+	
+	# Set network_id and metadata
+	token.network_id = token_state.network_id
+	token.set_meta("placement_id", token_state.network_id)
+	token.set_meta("pack_id", token_state.pack_id)
+	token.set_meta("asset_id", token_state.asset_id)
+	token.set_meta("variant_id", token_state.variant_id)
+	
+	# Apply the full state (position, health, etc.) without interpolation for initial placement
+	token_state.apply_to_token(token, false)
+	
+	return token
 
 
 func _enter_paused_state() -> void:
