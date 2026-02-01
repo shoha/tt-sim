@@ -15,6 +15,11 @@ class_name BoardTokenController
 ## - Reset transformations (middle mouse double-click)
 ## - Token selection (left click)
 ## - Context menu (right click)
+##
+## Network Considerations:
+## - All mutating input is gated by _has_input_authority()
+## - In single-player, authority is always granted
+## - When networking is added, this will check for host/authority status
 
 const ROTATION_FACTOR: float = 0.0001
 const SCALE_FACTOR: float = 0.0001
@@ -28,6 +33,19 @@ var _scaling: bool = false
 var _mouse_over: bool = false
 
 signal context_menu_requested(token: BoardToken, position: Vector2)
+
+
+## Check if this client has authority to manipulate this token.
+## In single-player mode, always returns true.
+## When networking is implemented, this will check:
+## - If we're the host (hosts always have authority)
+## - If this is a client-owned token (future feature)
+## @return: true if input should be processed, false to ignore
+func _has_input_authority() -> bool:
+	# TODO: When netfox is integrated, replace with actual authority check:
+	# return NetworkManager.is_host() or _is_locally_owned()
+	return true
+
 
 func _ready() -> void:
 	if not rigid_body:
@@ -46,6 +64,16 @@ func _on_mouse_exited() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not rigid_body:
+		return
+
+	# Gate all mutating input behind authority check
+	# Context menu is allowed for all (read-only viewing), but actions within may be gated
+	if not _has_input_authority():
+		# Still allow context menu for viewing token info (actions inside will be gated)
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and _mouse_over:
+			var board_token = get_parent() as BoardToken
+			if board_token:
+				context_menu_requested.emit(board_token, event.position)
 		return
 
 	# Handle right-click for context menu

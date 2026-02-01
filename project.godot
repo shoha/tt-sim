@@ -27,6 +27,7 @@ NodeUtils="*res://autoloads/node_utils.gd"
 LevelManager="*res://autoloads/level_manager.gd"
 UIManager="*res://autoloads/ui_manager.gd"
 AudioManager="*res://autoloads/audio_manager.gd"
+GameState="*res://autoloads/game_state.gd"
 
 [debug]
 
