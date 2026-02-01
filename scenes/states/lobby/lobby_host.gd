@@ -6,6 +6,7 @@ extends CanvasLayer
 signal start_game_requested()
 signal cancel_requested()
 
+@onready var player_name_input: LineEdit = %PlayerNameInput
 @onready var room_code_label: Label = %RoomCodeLabel
 @onready var room_code_value: Label = %RoomCodeValue
 @onready var player_list: ItemList = %PlayerList
@@ -20,6 +21,7 @@ func _ready() -> void:
 	start_button.pressed.connect(_on_start_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	copy_button.pressed.connect(_on_copy_code_pressed)
+	player_name_input.text_changed.connect(_on_player_name_changed)
 
 	# Connect network signals
 	NetworkManager.room_code_received.connect(_on_room_code_received)
@@ -27,6 +29,9 @@ func _ready() -> void:
 	NetworkManager.player_left.connect(_on_player_left)
 	NetworkManager.connection_failed.connect(_on_connection_failed)
 	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
+
+	# Load and display saved player name
+	player_name_input.text = NetworkManager.get_player_name()
 
 	# Initialize UI
 	room_code_value.text = "Connecting..."
@@ -107,3 +112,11 @@ func _on_copy_code_pressed() -> void:
 	copy_button.text = "Copied!"
 	await get_tree().create_timer(1.0).timeout
 	copy_button.text = "Copy"
+
+
+func _on_player_name_changed(new_name: String) -> void:
+	var name_to_save = new_name.strip_edges()
+	if name_to_save.is_empty():
+		name_to_save = "Player"
+	NetworkManager.save_player_name(name_to_save)
+	_update_player_list()

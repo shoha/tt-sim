@@ -5,6 +5,7 @@ extends CanvasLayer
 
 signal leave_requested()
 
+@onready var player_name_input: LineEdit = %PlayerNameInput
 @onready var room_code_input: LineEdit = %RoomCodeInput
 @onready var connect_button: Button = %ConnectButton
 @onready var leave_button: Button = %LeaveButton
@@ -28,6 +29,9 @@ func _ready() -> void:
 	NetworkManager.connection_failed.connect(_on_connection_failed)
 	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
+	# Load saved player name
+	player_name_input.text = NetworkManager.get_player_name()
+	
 	# Initialize UI
 	_show_input_state()
 
@@ -47,16 +51,18 @@ func _exit_tree() -> void:
 func _show_input_state() -> void:
 	input_container.visible = true
 	waiting_container.visible = false
-	status_label.text = "Enter the room code from the host"
+	status_label.text = "Enter your name and the room code from the host"
 	connect_button.disabled = false
 	room_code_input.editable = true
-	room_code_input.grab_focus()
+	player_name_input.editable = true
+	player_name_input.grab_focus()
 
 
 func _show_connecting_state() -> void:
 	status_label.text = "Connecting..."
 	connect_button.disabled = true
 	room_code_input.editable = false
+	player_name_input.editable = false
 
 
 func _show_connected_state() -> void:
@@ -68,11 +74,18 @@ func _show_connected_state() -> void:
 
 
 func _on_connect_pressed() -> void:
+	var player_name = player_name_input.text.strip_edges()
+	if player_name.is_empty():
+		player_name = "Player"
+	
 	var code = room_code_input.text.strip_edges()
 	if code.is_empty():
 		status_label.text = "Please enter a room code"
 		return
 
+	# Save and set player name before connecting
+	NetworkManager.save_player_name(player_name)
+	
 	_show_connecting_state()
 	NetworkManager.join_game(code)
 
