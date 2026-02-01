@@ -8,6 +8,8 @@ This document provides an overview of the project's architecture, core systems, 
 - [Scene Hierarchy](#scene-hierarchy)
 - [Autoloads (Singletons)](#autoloads-singletons)
 - [State Management](#state-management)
+- [Networking](#networking)
+- [Asset Management](#asset-management)
 - [UI Architecture](#ui-architecture)
 - [Level System](#level-system)
 - [Token System](#token-system)
@@ -60,14 +62,32 @@ Root (Node3D)
 
 Autoloads are registered in `project.godot` and available globally.
 
-| Autoload          | File                            | Purpose                            |
-| ----------------- | ------------------------------- | ---------------------------------- |
-| `Paths`           | `autoloads/paths.gd`            | Path constants and utilities       |
-| `PokemonAutoload` | `autoloads/pokemon_autoload.gd` | Pokemon data and scene loading     |
-| `NodeUtils`       | `autoloads/node_utils.gd`       | Node manipulation utilities        |
-| `LevelManager`    | `autoloads/level_manager.gd`    | Level save/load operations         |
-| `UIManager`       | `autoloads/ui_manager.gd`       | UI systems (dialogs, toasts, etc.) |
-| `AudioManager`    | `autoloads/audio_manager.gd`    | Audio playback and bus control     |
+### Core Autoloads
+
+| Autoload       | File                         | Purpose                            |
+| -------------- | ---------------------------- | ---------------------------------- |
+| `Paths`        | `autoloads/paths.gd`         | Path constants and utilities       |
+| `NodeUtils`    | `autoloads/node_utils.gd`    | Node manipulation utilities        |
+| `LevelManager` | `autoloads/level_manager.gd` | Level save/load operations         |
+| `UIManager`    | `autoloads/ui_manager.gd`    | UI systems (dialogs, toasts, etc.) |
+| `AudioManager` | `autoloads/audio_manager.gd` | Audio playback and bus control     |
+
+### Networking Autoloads
+
+| Autoload           | File                              | Purpose                           |
+| ------------------ | --------------------------------- | --------------------------------- |
+| `NetworkManager`   | `autoloads/network_manager.gd`    | Connection lifecycle, RPC routing |
+| `NetworkStateSync` | `autoloads/network_state_sync.gd` | State broadcasting and batching   |
+| `GameState`        | `autoloads/game_state.gd`         | Authoritative game state storage  |
+| `Noray`            | `addons/netfox.noray/noray.gd`    | NAT punchthrough client           |
+
+### Asset Management Autoloads
+
+| Autoload           | File                              | Purpose                          |
+| ------------------ | --------------------------------- | -------------------------------- |
+| `AssetPackManager` | `autoloads/asset_pack_manager.gd` | Pack discovery and asset loading |
+| `AssetDownloader`  | `autoloads/asset_downloader.gd`   | HTTP downloads with caching      |
+| `AssetStreamer`    | `autoloads/asset_streamer.gd`     | P2P asset streaming              |
 
 ### UIManager Responsibilities
 
@@ -86,6 +106,24 @@ Autoloads are registered in `project.godot` and available globally.
 - Level discovery (listing available levels)
 - Level data validation
 
+### NetworkManager Responsibilities
+
+- Host/join game connections via Noray
+- Player tracking and role management
+- RPC routing for state synchronization
+- Late joiner handling
+
+See [NETWORKING.md](NETWORKING.md) for detailed documentation.
+
+### AssetPackManager Responsibilities
+
+- Asset pack discovery and registration
+- Asset loading (models, icons)
+- Remote pack support
+- Asset resolution (local → cache → download → P2P)
+
+See [ASSET_MANAGEMENT.md](ASSET_MANAGEMENT.md) for detailed documentation.
+
 ---
 
 ## State Management
@@ -97,6 +135,7 @@ The `Root` node implements a state stack for flexible state management.
 ```gdscript
 enum State {
     TITLE_SCREEN,  # Main menu
+    LOBBY,         # Multiplayer lobby (host or client)
     PLAYING,       # Active gameplay
     PAUSED,        # Game paused (overlay state)
 }
@@ -144,6 +183,77 @@ func _exit_state(state: State) -> void:
 ```gdscript
 signal state_changed(old_state: State, new_state: State)
 ```
+
+---
+
+## Networking
+
+The project uses a **host-authoritative architecture** for multiplayer.
+
+### Key Concepts
+
+- **Host** acts as the server, clients connect via room codes
+- **Noray** provides NAT punchthrough for peer-to-peer connections
+- **GameState** is the single source of truth (host-authoritative)
+- **NetworkStateSync** handles rate-limited state broadcasting
+
+### Connection Flow
+
+```
+Host Flow:
+1. Connect to Noray → Get room code (OID)
+2. Start ENet server → Wait for clients
+3. Clients connect → Send level data and game state
+
+Client Flow:
+1. Enter room code → Connect to Noray
+2. NAT punchthrough → Connect to host
+3. Receive level data → Receive game state → Play
+```
+
+### State Synchronization
+
+- **Transform updates**: Unreliable, rate-limited (20/sec), batched
+- **Property updates**: Reliable, immediate
+- **Full state sync**: Sent to late joiners
+
+See [NETWORKING.md](NETWORKING.md) for complete documentation.
+
+---
+
+## Asset Management
+
+The asset system supports local and remote asset packs with multiplayer synchronization.
+
+### Key Concepts
+
+- **Asset Packs** contain models and icons with manifest.json
+- **Variants** allow multiple versions of an asset (e.g., shiny, fire)
+- **Remote packs** specify `base_url` for HTTP downloads
+- **P2P streaming** provides fallback when URLs unavailable
+- **Placeholders** shown while assets download
+
+### Asset Resolution
+
+```
+1. Check local file (res://user_assets/)
+2. Check disk cache (user://asset_cache/)
+3. Download from URL (if available)
+4. Request from host via P2P
+```
+
+### Creating Packs
+
+Place in `user_assets/`:
+
+```
+my_pack/
+├── manifest.json
+├── models/*.glb
+└── icons/*.png
+```
+
+See [ASSET_MANAGEMENT.md](ASSET_MANAGEMENT.md) for complete documentation.
 
 ---
 
@@ -234,28 +344,68 @@ var scale: Vector3
 
 ### BoardToken Scene
 
-Physical game tokens representing Pokemon.
+Physical game tokens representing assets from packs.
 
 ```
 BoardToken (RigidBody3D)
 ├── CollisionShape3D
-├── MeshInstance3D (Pokemon model)
+├── MeshInstance3D (model from asset pack)
 ├── BoardTokenController (script)
-└── AnimationTree
+├── AnimationTree
+└── network_id: String (unique identifier)
+```
+
+### Token State
+
+Each token has an associated `TokenState` resource:
+
+```gdscript
+class_name TokenState extends Resource
+
+var network_id: String      # Unique identifier
+var pack_id: String         # Asset pack reference
+var asset_id: String        # Asset reference
+var variant_id: String      # Variant reference
+var display_name: String
+var position: Vector3
+var rotation: Vector3
+var scale: Vector3
+var is_visible: bool
+var current_health: int
+var max_health: int
 ```
 
 ### Token Lifecycle
 
-1. **Spawn**: `LevelPlayController.spawn_pokemon()` creates token
-2. **Setup**: Controller receives config, sets up appearance
-3. **Interaction**: Drag/drop, context menu, selection
-4. **Cleanup**: `queue_free()` when level clears
+1. **Spawn**: Created from asset pack via `BoardTokenFactory`
+2. **Register**: Added to `GameState` with unique `network_id`
+3. **Sync**: State changes broadcast via `NetworkStateSync`
+4. **Interaction**: Drag/drop, context menu, selection
+5. **Cleanup**: Removed from `GameState`, `queue_free()`
+
+### Network Synchronization
+
+```gdscript
+# Host creates token
+var token = BoardTokenFactory.create_from_asset(pack_id, asset_id, variant_id)
+GameState.register_token(token.get_state())
+NetworkStateSync.broadcast_token_properties(token)
+
+# Token moves
+NetworkStateSync.broadcast_token_transform(token)
+
+# Token removed
+GameState.remove_token(network_id)
+NetworkStateSync.broadcast_token_removed(network_id)
+```
 
 ### Token Signals
 
 ```gdscript
 signal token_added(token: BoardToken)
 signal token_spawned(token: BoardToken)
+signal transform_changed(token: BoardToken)
+signal properties_changed(token: BoardToken)
 ```
 
 ---
@@ -296,9 +446,25 @@ The project previously used an EventBus autoload but this was removed in favor o
 ```
 project/
 ├── autoloads/           # Singleton services
+│   ├── network_manager.gd
+│   ├── network_state_sync.gd
+│   ├── game_state.gd
+│   ├── asset_pack_manager.gd
+│   ├── asset_downloader.gd
+│   ├── asset_streamer.gd
+│   └── ...
 ├── resources/           # Custom Resource classes
+│   ├── token_state.gd
+│   ├── asset_pack.gd
+│   └── ...
 ├── scenes/
 │   ├── board_token/     # Token system
+│   │   ├── board_token.gd
+│   │   ├── board_token_factory.gd
+│   │   └── placeholder_token.gd
+│   ├── states/          # Application states
+│   │   ├── lobby/       # Multiplayer lobby
+│   │   └── playing/     # Gameplay with asset browser
 │   ├── level_editor/    # Level editor UI
 │   ├── level_loader/    # Level loading UI
 │   ├── maps/            # Map scenes
@@ -306,6 +472,13 @@ project/
 │   └── ui/              # UI components
 ├── themes/              # Theme definitions
 ├── docs/                # Documentation
+├── user_assets/         # Custom asset packs
+│   └── {pack_id}/
+│       ├── manifest.json
+│       ├── models/
+│       └── icons/
+├── addons/
+│   └── netfox.noray/    # NAT punchthrough addon
 └── assets/
     ├── fonts/
     ├── audio/

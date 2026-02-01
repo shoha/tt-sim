@@ -4,11 +4,13 @@ This folder contains technical documentation for the project.
 
 ## Available Guides
 
-| Document                           | Description                                       |
-| ---------------------------------- | ------------------------------------------------- |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Project structure, state management, core systems |
-| [UI_SYSTEMS.md](UI_SYSTEMS.md)     | UIManager, dialogs, toasts, transitions, settings |
-| [THEME_GUIDE.md](THEME_GUIDE.md)   | Theme variants, typography, styling               |
+| Document                                   | Description                                       |
+| ------------------------------------------ | ------------------------------------------------- |
+| [ARCHITECTURE.md](ARCHITECTURE.md)         | Project structure, state management, core systems |
+| [NETWORKING.md](NETWORKING.md)             | Multiplayer networking, state sync, connections   |
+| [ASSET_MANAGEMENT.md](ASSET_MANAGEMENT.md) | Asset packs, downloading, caching, P2P streaming  |
+| [UI_SYSTEMS.md](UI_SYSTEMS.md)             | UIManager, dialogs, toasts, transitions, settings |
+| [THEME_GUIDE.md](THEME_GUIDE.md)           | Theme variants, typography, styling               |
 
 ## Quick Start
 
@@ -42,11 +44,42 @@ await UIManager.transition(func():
 UIManager.open_settings()
 ```
 
+### Hosting a Multiplayer Game
+
+```gdscript
+NetworkManager.host_game()
+NetworkManager.room_code_received.connect(func(code):
+    print("Share this code: ", code)
+)
+```
+
+### Joining a Multiplayer Game
+
+```gdscript
+NetworkManager.join_game("ABC123")
+```
+
+### Loading an Asset
+
+```gdscript
+var model = AssetPackManager.load_model("my_pack", "dragon", "default")
+```
+
+### Creating a Token from Asset
+
+```gdscript
+var token = await BoardTokenFactory.create_from_asset_async(
+    "my_pack", "dragon", "default"
+)
+add_child(token)
+```
+
 ## Architecture Overview
 
 ```
 Root (manages state)
 ├── TITLE_SCREEN state → TitleScreen scene
+├── LOBBY state → Lobby scene (host/client)
 ├── PLAYING state → GameMap scene
 └── PAUSED state → PauseOverlay scene
 
@@ -54,9 +87,14 @@ Autoloads:
 ├── UIManager - UI systems
 ├── AudioManager - Sound
 ├── LevelManager - Level I/O
-├── PokemonAutoload - Pokemon data
 ├── NodeUtils - Utilities
-└── Paths - Path constants
+├── Paths - Path constants
+├── NetworkManager - Multiplayer connections
+├── NetworkStateSync - State broadcasting
+├── GameState - Authoritative game state
+├── AssetPackManager - Asset pack registry
+├── AssetDownloader - HTTP downloads
+└── AssetStreamer - P2P streaming
 ```
 
 ## Contributing
