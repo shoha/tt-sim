@@ -53,6 +53,9 @@ var _local_player_info: Dictionary = {
 	"role": PlayerRole.PLAYER,
 }
 
+## Default player name
+const DEFAULT_PLAYER_NAME := "Player"
+
 ## Current level data (for late joiners)
 var _current_level_dict: Dictionary = {}
 
@@ -368,7 +371,7 @@ func _on_peer_connected(peer_id: int) -> void:
 			_rpc_receive_level_data.rpc_id(peer_id, _current_level_dict)
 			# Send game state after level data
 			await get_tree().create_timer(0.1).timeout
-			NetworkStateSync.send_full_state_to_peer(peer_id)
+			get_node("/root/NetworkStateSync").send_full_state_to_peer(peer_id)
 			late_joiner_connected.emit(peer_id)
 
 	# Request player info from the new peer
@@ -528,6 +531,28 @@ func set_player_name(player_name: String) -> void:
 	_local_player_info["name"] = player_name
 
 
+## Get the local player's display name
+func get_player_name() -> String:
+	return _local_player_info.get("name", DEFAULT_PLAYER_NAME)
+
+
+## Save the player name to settings
+func save_player_name(player_name: String) -> void:
+	_local_player_info["name"] = player_name
+	
+	# Update local player entry if we're in a game
+	var my_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
+	if my_id > 0 and _players.has(my_id):
+		_players[my_id]["name"] = player_name
+	
+	var config = ConfigFile.new()
+	# Load existing settings first to preserve other sections
+	config.load(SETTINGS_PATH)
+	config.set_value("player", "name", player_name)
+	config.save(SETTINGS_PATH)
+	_log("Saved player name: %s" % player_name)
+
+
 ## Set the local player's role
 func set_player_role(role: PlayerRole) -> void:
 	_local_player_info["role"] = role
@@ -574,8 +599,9 @@ func _load_network_settings() -> void:
 		noray_server = config.get_value("network", "noray_server", DEFAULT_NORAY_SERVER)
 		noray_port = config.get_value("network", "noray_port", DEFAULT_NORAY_PORT)
 		debug_logging = config.get_value("network", "debug_logging", false)
+		_local_player_info["name"] = config.get_value("player", "name", DEFAULT_PLAYER_NAME)
 	
-	_log("Loaded network settings: noray=%s:%d" % [noray_server, noray_port])
+	_log("Loaded network settings: noray=%s:%d, player=%s" % [noray_server, noray_port, _local_player_info["name"]])
 
 
 ## Save network settings to config file
