@@ -164,13 +164,45 @@ func _enter_playing_state() -> void:
 			NetworkManager.broadcast_level_data(_pending_level_data.to_dict())
 		_pending_level_data = null
 	elif NetworkManager.is_client():
-		# Client: Listen for level data from host
+		# Client: Listen for level data and state updates from host
 		NetworkManager.level_data_received.connect(_on_level_data_received)
+		_connect_client_state_signals()
 	elif _pending_level_data:
 		# Local play: Just load the level
 		if not _level_play_controller.play_level(_pending_level_data):
 			push_error("Root: Failed to play level")
 		_pending_level_data = null
+
+
+## Connect client-side signals for receiving state updates
+func _connect_client_state_signals() -> void:
+	# Full state updates (initial sync, reconciliation)
+	if not NetworkStateSync.full_state_received.is_connected(_on_full_state_received):
+		NetworkStateSync.full_state_received.connect(_on_full_state_received)
+	
+	# Individual token updates
+	if not NetworkManager.token_transform_received.is_connected(_on_token_transform_received):
+		NetworkManager.token_transform_received.connect(_on_token_transform_received)
+	if not NetworkManager.transform_batch_received.is_connected(_on_transform_batch_received):
+		NetworkManager.transform_batch_received.connect(_on_transform_batch_received)
+	if not NetworkManager.token_state_received.is_connected(_on_token_state_received):
+		NetworkManager.token_state_received.connect(_on_token_state_received)
+	if not NetworkManager.token_removed_received.is_connected(_on_token_removed_received):
+		NetworkManager.token_removed_received.connect(_on_token_removed_received)
+
+
+## Disconnect client-side state signals
+func _disconnect_client_state_signals() -> void:
+	if NetworkStateSync.full_state_received.is_connected(_on_full_state_received):
+		NetworkStateSync.full_state_received.disconnect(_on_full_state_received)
+	if NetworkManager.token_transform_received.is_connected(_on_token_transform_received):
+		NetworkManager.token_transform_received.disconnect(_on_token_transform_received)
+	if NetworkManager.transform_batch_received.is_connected(_on_transform_batch_received):
+		NetworkManager.transform_batch_received.disconnect(_on_transform_batch_received)
+	if NetworkManager.token_state_received.is_connected(_on_token_state_received):
+		NetworkManager.token_state_received.disconnect(_on_token_state_received)
+	if NetworkManager.token_removed_received.is_connected(_on_token_removed_received):
+		NetworkManager.token_removed_received.disconnect(_on_token_removed_received)
 
 
 func _exit_state(state: State) -> void:
@@ -193,8 +225,7 @@ func _exit_playing_state() -> void:
 	# Disconnect network signals
 	if NetworkManager.level_data_received.is_connected(_on_level_data_received):
 		NetworkManager.level_data_received.disconnect(_on_level_data_received)
-	if NetworkManager.game_state_received.is_connected(_on_game_state_received):
-		NetworkManager.game_state_received.disconnect(_on_game_state_received)
+	_disconnect_client_state_signals()
 
 	# Clear the level first
 	if _level_play_controller:
@@ -281,18 +312,68 @@ func _on_level_data_received(level_dict: Dictionary) -> void:
 		_pending_level_data = level_data
 		if not _level_play_controller.play_level(level_data):
 			push_error("Root: Failed to load networked level")
-		else:
-			# Now listen for game state updates
-			if not NetworkManager.game_state_received.is_connected(_on_game_state_received):
-				NetworkManager.game_state_received.connect(_on_game_state_received)
 		_pending_level_data = null
 
 
-func _on_game_state_received(state_dict: Dictionary) -> void:
-	# Client received game state update from host
-	GameState.apply_full_state_dict(state_dict)
-	# Apply state to existing tokens
+## Handle full state sync (initial sync or reconciliation)
+func _on_full_state_received(_state_dict: Dictionary) -> void:
 	_apply_game_state_to_tokens()
+
+
+## Handle individual token transform update (unreliable channel, high frequency)
+func _on_token_transform_received(network_id: String, pos: Vector3, rot: Vector3, scl: Vector3) -> void:
+	var token = _level_play_controller.spawned_tokens.get(network_id) as BoardToken
+	if token and is_instance_valid(token):
+		token.set_interpolation_target(pos, rot, scl)
+
+
+## Handle batch transform update (unreliable channel)
+func _on_transform_batch_received(batch: Dictionary) -> void:
+	for network_id in batch:
+		var data = batch[network_id]
+		var pos_arr = data["position"]
+		var rot_arr = data["rotation"]
+		var scl_arr = data["scale"]
+		
+		var pos = Vector3(pos_arr[0], pos_arr[1], pos_arr[2])
+		var rot = Vector3(rot_arr[0], rot_arr[1], rot_arr[2])
+		var scl = Vector3(scl_arr[0], scl_arr[1], scl_arr[2])
+		
+		var token = _level_play_controller.spawned_tokens.get(network_id) as BoardToken
+		if token and is_instance_valid(token):
+			token.set_interpolation_target(pos, rot, scl)
+
+
+## Handle individual token property update (reliable channel, low frequency)
+func _on_token_state_received(network_id: String, token_dict: Dictionary) -> void:
+	var token_state = TokenState.from_dict(token_dict)
+	
+	# Update GameState
+	if GameState.has_token(network_id):
+		GameState._token_states[network_id] = token_state
+	
+	# Apply to visual token
+	var token = _level_play_controller.spawned_tokens.get(network_id) as BoardToken
+	if token and is_instance_valid(token):
+		token_state.apply_to_token(token)
+	else:
+		# Token doesn't exist, might be a new one - create it
+		var new_token = _create_token_from_state(token_state)
+		if new_token and _game_map:
+			_game_map.drag_and_drop_node.add_child(new_token)
+			_level_play_controller.spawned_tokens[network_id] = new_token
+
+
+## Handle token removal (reliable channel)
+func _on_token_removed_received(network_id: String) -> void:
+	# Remove from GameState
+	GameState._token_states.erase(network_id)
+	
+	# Remove visual token
+	var token = _level_play_controller.spawned_tokens.get(network_id)
+	if token and is_instance_valid(token):
+		token.queue_free()
+	_level_play_controller.spawned_tokens.erase(network_id)
 
 
 func _apply_game_state_to_tokens() -> void:

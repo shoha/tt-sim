@@ -146,9 +146,19 @@ func toggle_visibility() -> void:
 
 func _update_visibility_visuals() -> void:
 	# Apply visual feedback when visibility is toggled
+	# GM sees hidden tokens as semi-transparent, players don't see them at all
 	if rigid_body:
-		var alpha := 1.0 if is_visible_to_players else 0.5
-		_set_mesh_transparency(rigid_body, alpha)
+		if is_visible_to_players:
+			# Visible to everyone
+			rigid_body.visible = true
+			_set_mesh_transparency(rigid_body, 1.0)
+		elif NetworkManager.is_gm() or not NetworkManager.is_networked():
+			# GM/local: show as semi-transparent so they can still see and interact
+			rigid_body.visible = true
+			_set_mesh_transparency(rigid_body, 0.4)
+		else:
+			# Player: completely hidden
+			rigid_body.visible = false
 
 
 func _set_mesh_transparency(node: Node, alpha: float) -> void:
