@@ -1,6 +1,11 @@
 extends ItemList
 
-## Emitted when a Pokemon is selected from the list
+## Emitted when an asset is selected from the list
+## Uses the new pack-based system
+signal asset_selected(pack_id: String, asset_id: String, variant_id: String)
+
+## Legacy signal for backward compatibility
+## DEPRECATED: Use asset_selected instead
 signal pokemon_selected(pokemon_number: String, is_shiny: bool)
 
 var exit_mutex: Mutex
@@ -43,17 +48,28 @@ func populate_items(filter: String = "") -> void:
 	call_deferred("clear")
 	_current_items = []
 
-	for pokemon_number in PokemonAutoload.available_pokemon:
-		var pokemon = PokemonAutoload.available_pokemon[pokemon_number]
-		var pokemon_name = pokemon.name
-
-		if filter == "" or filter.to_lower() in pokemon.name.to_lower():
-			var scene_path = PokemonAutoload.path_to_scene(pokemon_number, false)
-			var icon_path = PokemonAutoload.path_to_icon(pokemon_number, false)
-			_current_items.append({"name": pokemon_name, "icon": icon_path, "scene": scene_path})
+	# Iterate through all packs and their assets
+	for pack in AssetPackManager.get_packs():
+		for asset in pack.get_all_assets():
+			var display_name = asset.display_name
+			
+			if filter == "" or filter.to_lower() in display_name.to_lower():
+				# Get the default variant for icon
+				var icon_path = pack.get_icon_path(asset.asset_id, "default")
+				
+				_current_items.append({
+					"pack_id": pack.pack_id,
+					"asset_id": asset.asset_id,
+					"variant_id": "default",
+					"name": display_name,
+					"icon": icon_path,
+					"has_variants": asset.has_variants(),
+					"variants": asset.get_variant_ids()
+				})
 
 	for item in _current_items:
-		call_deferred("add_item", item.name, load(item.icon))
+		var icon = load(item.icon) if ResourceLoader.exists(item.icon) else null
+		call_deferred("add_item", item.name, icon)
 
 func _on_pokemon_filter_text_changed(new_text: String) -> void:
 	_current_filter = new_text
@@ -61,18 +77,35 @@ func _on_pokemon_filter_text_changed(new_text: String) -> void:
 
 func _on_item_activated(index: int) -> void:
 	var selected_item = _current_items[index]
-	var pokemon_number = _extract_pokemon_number(selected_item.scene)
-	var is_shiny = "_shiny" in selected_item.scene
-	pokemon_selected.emit(pokemon_number, is_shiny)
+	
+	# Emit the new signal
+	asset_selected.emit(
+		selected_item.pack_id,
+		selected_item.asset_id,
+		selected_item.variant_id
+	)
+	
+	# Also emit legacy signal for backward compatibility if it's a Pokemon
+	if selected_item.pack_id == "pokemon":
+		var is_shiny = selected_item.variant_id == "shiny"
+		pokemon_selected.emit(selected_item.asset_id, is_shiny)
 
 
-## Extract pokemon number from a scene path like "res://assets/models/user/pokemon/25_pikachu.glb"
-func _extract_pokemon_number(path: String) -> String:
-	var filename = path.get_file().get_basename()
-	var parts = filename.split("_")
-	if parts.size() > 0:
-		return parts[0]
-	return ""
+## Get variant options for the selected item
+## Returns array of variant IDs, or empty if no variants
+func get_selected_variants(index: int) -> Array[String]:
+	if index < 0 or index >= _current_items.size():
+		return []
+	var item = _current_items[index]
+	return item.variants if item.has("variants") else []
+
+
+## Select a specific variant for spawning
+func select_variant(index: int, variant_id: String) -> void:
+	if index < 0 or index >= _current_items.size():
+		return
+	_current_items[index].variant_id = variant_id
+
 
 func _exit_tree() -> void:
 	# Set exit condition to true.

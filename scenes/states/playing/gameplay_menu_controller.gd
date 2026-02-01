@@ -12,9 +12,9 @@ var _level_play_controller: LevelPlayController = null
 
 
 func _ready() -> void:
-	# Connect to PokemonList's pokemon_selected signal
+	# Connect to PokemonList's asset_selected signal (new system)
 	if pokemon_list:
-		pokemon_list.pokemon_selected.connect(_on_pokemon_selected)
+		pokemon_list.asset_selected.connect(_on_asset_selected)
 
 	# Initially hide buttons since no level is loaded yet
 	_update_pokemon_button_state()
@@ -76,12 +76,12 @@ func _update_pokemon_button_state() -> void:
 		toggle_pokemon_list_button.visible = has_level
 
 
-# --- Pokemon Selection Handling ---
+# --- Asset Selection Handling ---
 
-func _on_pokemon_selected(pokemon_number: String, is_shiny: bool) -> void:
-	# Spawn the Pokemon via LevelPlayController
+func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -> void:
+	# Spawn the asset via LevelPlayController
 	if _level_play_controller:
-		_level_play_controller.spawn_pokemon(pokemon_number, is_shiny)
+		_level_play_controller.spawn_asset(pack_id, asset_id, variant_id)
 
 
 func _on_token_added(_token: BoardToken) -> void:

@@ -198,37 +198,53 @@ static func _apply_config(token: BoardToken, config: Resource) -> void:
 	token.current_health = config.max_health
 
 
+## Create a BoardToken from an asset pack
+## This is the preferred method for spawning tokens from any asset pack
+## @param pack_id: The pack identifier (e.g., "pokemon")
+## @param asset_id: The asset identifier within the pack
+## @param variant_id: The variant to use (e.g., "default", "shiny")
+## @param config: Optional TokenConfig for additional customization
+## @return: A configured BoardToken, or null if creation failed
+static func create_from_asset(pack_id: String, asset_id: String, variant_id: String = "default", config: Resource = null) -> BoardToken:
+	var scene_path = AssetPackManager.get_model_path(pack_id, asset_id, variant_id)
+
+	if scene_path == "":
+		push_error("BoardTokenFactory: Asset not found: %s/%s/%s" % [pack_id, asset_id, variant_id])
+		return null
+
+	if not ResourceLoader.exists(scene_path):
+		push_error("BoardTokenFactory: Asset scene not found: " + scene_path)
+		return null
+
+	var asset_scene = load(scene_path)
+	if not asset_scene:
+		push_error("BoardTokenFactory: Failed to load asset scene: " + scene_path)
+		return null
+
+	var model = asset_scene.instantiate()
+	var token = create_from_scene(model, config)
+
+	if not token:
+		push_error("BoardTokenFactory: Failed to create token for asset %s/%s" % [pack_id, asset_id])
+		return null
+
+	# Set the node name and display name
+	var display_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
+	token.name = display_name
+	token.token_name = display_name
+
+	return token
+
+
 ## Create a BoardToken from a Pokemon number and shiny flag
-## This is the preferred method for spawning Pokemon tokens
+## DEPRECATED: Use create_from_asset("pokemon", pokemon_number, variant) instead
 ## @param pokemon_number: The Pokemon's number (e.g., "25" for Pikachu)
 ## @param is_shiny: Whether to use the shiny variant
 ## @param config: Optional TokenConfig for additional customization
 ## @return: A configured BoardToken, or null if creation failed
 static func create_from_pokemon(pokemon_number: String, is_shiny: bool, config: Resource = null) -> BoardToken:
-	var scene_path = PokemonAutoload.path_to_scene(pokemon_number, is_shiny)
-
-	if not ResourceLoader.exists(scene_path):
-		push_error("BoardTokenFactory: Pokemon scene not found: " + scene_path)
-		return null
-
-	var pokemon_scene = load(scene_path)
-	if not pokemon_scene:
-		push_error("BoardTokenFactory: Failed to load Pokemon scene: " + scene_path)
-		return null
-
-	var model = pokemon_scene.instantiate()
-	var token = create_from_scene(model, config)
-
-	if not token:
-		push_error("BoardTokenFactory: Failed to create token for Pokemon " + pokemon_number)
-		return null
-
-	# Set the node name and display name to the Pokemon name
-	var pokemon_name = PokemonAutoload.get_pokemon_name(pokemon_number)
-	token.name = pokemon_name
-	token.token_name = pokemon_name
-
-	return token
+	var variant = "shiny" if is_shiny else "default"
+	return create_from_asset("pokemon", pokemon_number, variant, config)
 
 
 ## Create a BoardToken from a TokenPlacement resource
@@ -236,13 +252,25 @@ static func create_from_pokemon(pokemon_number: String, is_shiny: bool, config: 
 ## @param placement: The TokenPlacement containing spawn data
 ## @return: A fully configured BoardToken at the specified position
 static func create_from_placement(placement: TokenPlacement) -> BoardToken:
-	var token = create_from_pokemon(placement.pokemon_number, placement.is_shiny)
+	var token: BoardToken = null
+	
+	# Use the new pack-based system if pack_id is set, otherwise fall back to legacy
+	if placement.pack_id != "":
+		token = create_from_asset(placement.pack_id, placement.asset_id, placement.variant_id)
+	else:
+		# Legacy fallback for old save files
+		token = create_from_pokemon(placement.pokemon_number, placement.is_shiny)
 
 	if not token:
 		return null
 
-	# Store placement ID for later reference
+	# Store placement metadata for later reference
 	token.set_meta("placement_id", placement.placement_id)
+	token.set_meta("pack_id", placement.pack_id if placement.pack_id != "" else "pokemon")
+	token.set_meta("asset_id", placement.asset_id if placement.asset_id != "" else placement.pokemon_number)
+	token.set_meta("variant_id", placement.variant_id if placement.variant_id != "" else ("shiny" if placement.is_shiny else "default"))
+	
+	# Legacy compatibility
 	token.set_meta("pokemon_number", placement.pokemon_number)
 	token.set_meta("is_shiny", placement.is_shiny)
 
