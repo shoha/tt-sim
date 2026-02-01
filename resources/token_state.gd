@@ -143,10 +143,14 @@ func apply_to_token(token: BoardToken, use_interpolation: bool = true) -> void:
 	token.is_player_controlled = is_player_controlled
 	token.character_id = character_id
 
-	# Health
+	# Health - emit signal if changed so animations can play
+	var old_health = token.current_health
+	var health_changed = (token.current_health != current_health or token.max_health != max_health)
 	token.max_health = max_health
 	token.current_health = current_health
 	token.is_alive = is_alive
+	if health_changed:
+		token.health_changed.emit(current_health, max_health, old_health)
 
 	# Visibility (use setter to update visuals)
 	token.set_visible_to_players(is_visible_to_players)

@@ -32,6 +32,7 @@ theme_type_variation = &"BoxContainerSpaced"
 alignment = 2
 
 [node name="LevelEditorButton" type="Button" parent="AppMenu/BottomButtons"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Level Editor"
