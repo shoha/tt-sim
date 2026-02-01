@@ -88,6 +88,10 @@ func _exit_tree() -> void:
 	NetfoxLogger.free_tag(_get_peer_id_tag)
 
 func _get_peer_id_tag() -> String:
+	if multiplayer == null or multiplayer.multiplayer_peer == null:
+		return "#?"
+	if multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		return "#?"
 	return "#%d" % multiplayer.get_unique_id()
 
 func _process(_delta: float) -> void:

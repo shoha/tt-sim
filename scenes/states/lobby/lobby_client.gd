@@ -68,7 +68,7 @@ func _show_connected_state() -> void:
 
 
 func _on_connect_pressed() -> void:
-	var code = room_code_input.text.strip_edges().to_upper()
+	var code = room_code_input.text.strip_edges()
 	if code.is_empty():
 		status_label.text = "Please enter a room code"
 		return

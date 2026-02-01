@@ -59,7 +59,7 @@ unique_name_in_owner = true
 layout_mode = 2
 placeholder_text = "Enter room code..."
 alignment = 1
-max_length = 20
+max_length = 32
 caret_blink = true
 
 [node name="ConnectButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/InputContainer"]
