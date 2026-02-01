@@ -54,6 +54,11 @@ func _ready() -> void:
 	_scan_existing_cache()
 
 
+func _process(_delta: float) -> void:
+	if not _active_downloads.is_empty():
+		_update_download_progress()
+
+
 ## Ensure the cache directory exists
 func _ensure_cache_dir() -> void:
 	if not DirAccess.dir_exists_absolute(CACHE_DIR):
@@ -182,7 +187,31 @@ func _start_download(request: DownloadRequest) -> void:
 		_handle_download_error(request, "Failed to start HTTP request: " + str(error))
 		return
 	
+	# Emit initial progress
+	download_progress.emit(request.pack_id, request.asset_id, request.variant_id, 0.0)
+	
 	print("AssetDownloader: Starting download of %s from %s" % [key, request.url])
+
+
+## Poll active downloads for progress (called from _process)
+func _update_download_progress() -> void:
+	for key in _active_downloads:
+		var request = _active_downloads[key] as DownloadRequest
+		if request.http_request:
+			var downloaded = request.http_request.get_downloaded_bytes()
+			var total = request.http_request.get_body_size()
+			
+			if total > 0:
+				var progress = float(downloaded) / float(total)
+				# Only emit if progress changed significantly
+				if abs(progress - request.bytes_downloaded / max(1.0, float(request.total_bytes))) > 0.05:
+					request.bytes_downloaded = downloaded
+					request.total_bytes = total
+					download_progress.emit(request.pack_id, request.asset_id, request.variant_id, progress)
+			elif downloaded > 0 and request.bytes_downloaded != downloaded:
+				# Unknown total size, emit indeterminate progress
+				request.bytes_downloaded = downloaded
+				download_progress.emit(request.pack_id, request.asset_id, request.variant_id, -1.0)
 
 
 ## Handle HTTP request completion
