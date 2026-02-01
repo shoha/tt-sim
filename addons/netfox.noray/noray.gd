@@ -77,7 +77,6 @@ func connect_to_host(address: String, port: int = 8890) -> Error:
 	if err != Error.OK:
 		return err
 		
-	_peer.set_no_delay(true)
 	_protocol.reset()
 	
 	while _peer.get_status() < 2:
@@ -85,6 +84,7 @@ func connect_to_host(address: String, port: int = 8890) -> Error:
 		await get_tree().process_frame
 	
 	if _peer.get_status() == _peer.STATUS_CONNECTED:
+		_peer.set_no_delay(true)
 		_address = address
 		_logger.info("Connected to noray at %s:%s", [address, port])
 		on_connect_to_host.emit()
@@ -191,6 +191,9 @@ func _handle_commands(command: String, data: String):
 		_logger.debug("Saved PID: %s", [pid])
 	elif command == "connect":
 		var parts = data.split(":")
+		if parts.size() < 2:
+			_logger.error("Invalid connect command data: %s", [data])
+			return
 		var host = parts[0]
 		var port = parts[1].to_int()
 		_logger.debug("Received connect command to %s:%s", [host, port])
