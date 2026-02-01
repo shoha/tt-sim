@@ -25,7 +25,12 @@ class_name TokenPlacement
 @export_group("Visibility")
 @export var is_visible_to_players: bool = true
 
-## Unique identifier for this placement
+## Status effects
+@export_group("Status")
+@export var status_effects: Array[String] = []
+@export var is_alive: bool = true
+
+## Unique identifier for this placement (also used as network_id)
 @export var placement_id: String = ""
 
 
@@ -60,6 +65,8 @@ static func from_board_token(token: BoardToken, pack: String, asset: String, var
 	placement.max_health = token.max_health
 	placement.current_health = token.current_health
 	placement.is_visible_to_players = token.is_visible_to_players
+	placement.status_effects = token.status_effects.duplicate()
+	placement.is_alive = token.is_alive
 	return placement
 
 
@@ -82,6 +89,9 @@ func apply_to_token(token: BoardToken) -> void:
 	token.is_player_controlled = is_player_controlled
 	token.max_health = max_health
 	token.current_health = current_health
+	token.is_alive = is_alive
+	# Restore status effects
+	token.status_effects = status_effects.duplicate()
 	# Use the setter to ensure visibility visuals are updated
 	token.set_visible_to_players(is_visible_to_players)
 
