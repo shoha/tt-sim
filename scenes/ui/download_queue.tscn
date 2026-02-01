@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://c8x3hk2qv1mjo"]
+[gd_scene format=3 uid="uid://c8x3hk2qv1mjo"]
 
 [ext_resource type="Script" path="res://scenes/ui/download_queue.gd" id="1_script"]
 
