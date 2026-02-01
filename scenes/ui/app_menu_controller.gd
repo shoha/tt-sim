@@ -3,18 +3,37 @@ extends Control
 ## Controller for the AppMenu UI.
 ## Handles Level Editor button and lifecycle.
 ## Always visible regardless of game state.
+## Level Editor is only available to the host, not to clients.
 
 signal play_level_requested(level_data: LevelData)
 
 const LevelEditorScene = preload("res://scenes/level_editor/level_editor.tscn")
 
+@onready var _level_editor_button: Button = %LevelEditorButton
+
 var _level_editor_instance: LevelEditor = null
 var _level_play_controller: LevelPlayController = null
+
+
+func _ready() -> void:
+	# Connect to network state changes to show/hide level editor button
+	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
+	_update_level_editor_button_visibility()
 
 
 ## Setup with a reference to the level play controller
 func setup(level_play_controller: LevelPlayController) -> void:
 	_level_play_controller = level_play_controller
+
+
+func _on_connection_state_changed(_old_state: NetworkManager.ConnectionState, _new_state: NetworkManager.ConnectionState) -> void:
+	_update_level_editor_button_visibility()
+
+
+## Hide the level editor button for clients (only host can edit levels)
+func _update_level_editor_button_visibility() -> void:
+	if _level_editor_button:
+		_level_editor_button.visible = not NetworkManager.is_client()
 
 
 # --- Level Editor Management ---
@@ -24,6 +43,11 @@ func _on_level_editor_button_pressed() -> void:
 
 
 func _open_level_editor() -> void:
+	# Only host can access the level editor
+	if NetworkManager.is_client():
+		push_warning("AppMenuController: Level editor is only available to the host")
+		return
+
 	if _level_editor_instance and is_instance_valid(_level_editor_instance):
 		# Sync with active level if one is playing
 		_sync_editor_with_active_level()
