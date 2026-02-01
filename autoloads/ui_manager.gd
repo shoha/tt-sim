@@ -27,12 +27,14 @@ const TOAST_CONTAINER_SCENE := preload("res://scenes/ui/toast_container.tscn")
 const TRANSITION_OVERLAY_SCENE := preload("res://scenes/ui/transition_overlay.tscn")
 const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
 const INPUT_HINTS_SCENE := preload("res://scenes/ui/input_hints.tscn")
+const DOWNLOAD_QUEUE_SCENE := preload("res://scenes/ui/download_queue.tscn")
 
 # Persistent UI components
 var _toast_container: Node = null
 var _transition_overlay: Node = null
 var _loading_overlay: Node = null
 var _input_hints: Node = null
+var _download_queue: Node = null
 
 # Reference to Root script for accessing State enum
 const RootScript = preload("res://scenes/root.gd")
@@ -64,6 +66,9 @@ func _setup_ui_components() -> void:
 	
 	_input_hints = INPUT_HINTS_SCENE.instantiate()
 	add_child(_input_hints)
+	
+	_download_queue = DOWNLOAD_QUEUE_SCENE.instantiate()
+	add_child(_download_queue)
 
 
 func _unhandled_input(event: InputEvent) -> void:
