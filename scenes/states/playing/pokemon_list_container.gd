@@ -6,11 +6,11 @@ extends AnimatedVisibilityContainer
 
 
 func _ready() -> void:
-	pokemon_list.pokemon_selected.connect(_on_pokemon_selected)
+	pokemon_list.asset_selected.connect(_on_asset_selected)
 
 
-func _on_pokemon_selected(_pokemon_number: String, _is_shiny: bool) -> void:
-	# Close the overlay after a Pokemon is selected
+func _on_asset_selected(_pack_id: String, _asset_id: String, _variant_id: String) -> void:
+	# Close the overlay after an asset is selected
 	animate_out()
 
 
