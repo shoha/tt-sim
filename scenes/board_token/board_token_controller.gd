@@ -31,6 +31,8 @@ const SCALE_FACTOR: float = 0.0001
 var _rotating: bool = false
 var _scaling: bool = false
 var _mouse_over: bool = false
+var _transform_update_timer: float = 0.0
+const TRANSFORM_UPDATE_INTERVAL: float = 0.1 # Send updates 10 times per second during manipulation
 
 signal context_menu_requested(token: BoardToken, position: Vector2)
 
@@ -94,8 +96,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event.is_action_released("rotate_model"):
+		var was_rotating = _rotating
+		var was_scaling = _scaling
 		_rotating = false
 		_scaling = false
+		
+		# Emit signals for network sync when rotation/scale changes complete
+		var board_token = get_parent() as BoardToken
+		if board_token:
+			if was_rotating:
+				board_token.rotation_changed.emit()
+			if was_scaling:
+				board_token.scale_changed.emit()
 		return
 
 	if _rotating and event is InputEventMouseMotion:
@@ -155,3 +167,20 @@ func _reset_rotation_and_scale() -> void:
 	# Recompute the height offset
 	if draggable_token:
 		draggable_token.update_height_offset()
+	
+	# Emit signals for network sync
+	var board_token = get_parent() as BoardToken
+	if board_token:
+		board_token.rotation_changed.emit()
+		board_token.scale_changed.emit()
+
+
+func _process(delta: float) -> void:
+	# Emit throttled transform updates during rotation/scaling for network sync
+	if _rotating or _scaling:
+		_transform_update_timer += delta
+		if _transform_update_timer >= TRANSFORM_UPDATE_INTERVAL:
+			_transform_update_timer = 0.0
+			var board_token = get_parent() as BoardToken
+			if board_token:
+				board_token.transform_updated.emit()

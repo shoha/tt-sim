@@ -49,6 +49,13 @@ var _dragging_object: DraggableToken
 var _token_controller: BoardTokenController
 var rigid_body: RigidBody3D
 
+# Network interpolation (for smooth client-side motion)
+var _interpolation_enabled: bool = false
+var _target_position: Vector3 = Vector3.ZERO
+var _target_rotation: Vector3 = Vector3.ZERO
+var _target_scale: Vector3 = Vector3.ONE
+const INTERPOLATION_SPEED: float = 15.0  # How fast to lerp towards target
+
 
 # Signals for game state changes
 signal health_changed(new_health: int, max_health: int)
@@ -58,11 +65,46 @@ signal revived()
 signal token_visibility_changed(is_visible: bool)
 signal status_effect_added(effect: String)
 signal status_effect_removed(effect: String)
+signal position_changed()
+signal rotation_changed()
+signal scale_changed()
+signal transform_updated()  # Emitted during continuous manipulation (drag/rotate/scale)
 
 
 func _enter_tree() -> void:
 	if not _factory_created:
 		push_error("BoardToken: Use BoardTokenFactory.create_from_scene(), not .new()")
+
+
+func _process(delta: float) -> void:
+	# Interpolate towards target transforms on clients
+	if not _interpolation_enabled or not rigid_body:
+		return
+	
+	# Smoothly lerp position, rotation, and scale
+	rigid_body.global_position = rigid_body.global_position.lerp(_target_position, INTERPOLATION_SPEED * delta)
+	rigid_body.global_rotation = rigid_body.global_rotation.lerp(_target_rotation, INTERPOLATION_SPEED * delta)
+	rigid_body.scale = rigid_body.scale.lerp(_target_scale, INTERPOLATION_SPEED * delta)
+
+
+## Set interpolation target (called by network sync on clients)
+func set_interpolation_target(p_position: Vector3, p_rotation: Vector3, p_scale: Vector3) -> void:
+	_target_position = p_position
+	_target_rotation = p_rotation
+	_target_scale = p_scale
+	_interpolation_enabled = true
+
+
+## Directly set transform without interpolation (for initial placement or host)
+func set_transform_immediate(p_position: Vector3, p_rotation: Vector3, p_scale: Vector3) -> void:
+	_interpolation_enabled = false
+	if rigid_body:
+		rigid_body.global_position = p_position
+		rigid_body.global_rotation = p_rotation
+		rigid_body.scale = p_scale
+	_target_position = p_position
+	_target_rotation = p_rotation
+	_target_scale = p_scale
 
 
 # Health management
