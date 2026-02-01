@@ -27,6 +27,15 @@ var _is_currently_dragging: bool = false # Track dragging state properly
 var _transform_update_timer: float = 0.0
 const TRANSFORM_UPDATE_INTERVAL: float = 0.1 # Send updates 10 times per second during drag
 
+# Network interpolation state (for smooth client-side motion)
+var _network_interpolating: bool = false
+var _network_target_position: Vector3 = Vector3.ZERO
+var _network_target_rotation: Vector3 = Vector3.ZERO
+var _network_target_scale: Vector3 = Vector3.ONE
+var _network_interpolation_timeout: float = 0.0
+const NETWORK_INTERPOLATION_SPEED: float = 15.0
+const NETWORK_INTERPOLATION_TIMEOUT: float = 0.3  # Stop interpolating if no updates for this long
+
 @export var rigid_body: RigidBody3D
 @export var collision_shape: CollisionShape3D
 
@@ -199,6 +208,9 @@ func _process(delta: float) -> void:
 			var board_token = get_parent() as BoardToken
 			if board_token:
 				board_token.transform_updated.emit()
+	elif _network_interpolating:
+		# Handle network interpolation with lean effects (same as dragging)
+		_update_network_interpolation(delta)
 
 
 func _update_drop_indicator() -> void:
@@ -213,3 +225,106 @@ func _update_drop_indicator() -> void:
 
 	var start_pos = rigid_body.global_position + Vector3(0, bottom_y, 0)
 	_drop_indicator.update(start_pos)
+
+
+## Handle network interpolation - smoothly moves towards target with lean effects
+func _update_network_interpolation(delta: float) -> void:
+	if not rigid_body:
+		return
+	
+	# Store previous position for velocity calculation
+	var prev_position = rigid_body.global_position
+	
+	# Interpolate position, rotation, and scale
+	rigid_body.global_position = rigid_body.global_position.lerp(_network_target_position, NETWORK_INTERPOLATION_SPEED * delta)
+	rigid_body.global_rotation = rigid_body.global_rotation.lerp(_network_target_rotation, NETWORK_INTERPOLATION_SPEED * delta)
+	rigid_body.scale = rigid_body.scale.lerp(_network_target_scale, NETWORK_INTERPOLATION_SPEED * delta)
+	
+	# Update drop indicator (same as local dragging)
+	_update_drop_indicator()
+	
+	# Compute velocity from movement for lean effect
+	var position_delta = rigid_body.global_position - prev_position
+	_drag_velocity = _drag_velocity.lerp(position_delta / delta, 0.3)
+	
+	# Apply lean based on velocity (same formula as local dragging)
+	var horizontal_velocity = Vector3(_drag_velocity.x, 0, _drag_velocity.z)
+	if horizontal_velocity.length() > 0.001:
+		var lean_axis = horizontal_velocity.cross(Vector3.UP).normalized()
+		var lean_angle = clamp(horizontal_velocity.length() * INERTIA_LEAN_STRENGTH, 0.0, 0.5)
+		_target_lean_rotation = Basis(lean_axis, lean_angle)
+	else:
+		_target_lean_rotation = Basis.IDENTITY
+	
+	# Apply lean to visual children
+	for child in _visual_children:
+		if is_instance_valid(child):
+			var current_basis = child.transform.basis.orthonormalized()
+			child.transform.basis = current_basis.slerp(_target_lean_rotation, LEAN_SMOOTHING * delta).orthonormalized()
+	
+	# Check timeout - stop interpolating if no updates received recently
+	_network_interpolation_timeout -= delta
+	if _network_interpolation_timeout <= 0:
+		_stop_network_interpolation()
+
+
+## Set network interpolation target (called by network sync on clients)
+func set_network_target(p_position: Vector3, p_rotation: Vector3, p_scale: Vector3) -> void:
+	_network_target_position = p_position
+	_network_target_rotation = p_rotation
+	_network_target_scale = p_scale
+	
+	# Reset timeout - we're still receiving updates
+	_network_interpolation_timeout = NETWORK_INTERPOLATION_TIMEOUT
+	
+	# Start network interpolation if not already active
+	if not _network_interpolating:
+		_network_interpolating = true
+		# Disable gravity while being remotely manipulated (same as local dragging)
+		if rigid_body:
+			rigid_body.gravity_scale = 0.0
+		# Show drop indicator (same as local dragging)
+		if _drop_indicator:
+			_drop_indicator.show_indicator()
+	
+	# Initialize last drag position if not already set
+	if _last_drag_position == Vector3.ZERO and rigid_body:
+		_last_drag_position = rigid_body.global_position
+
+
+## Stop network interpolation and restore normal physics
+func _stop_network_interpolation() -> void:
+	if not _network_interpolating:
+		return
+	
+	_network_interpolating = false
+	_drag_velocity = Vector3.ZERO
+	
+	# Restore gravity
+	if rigid_body:
+		rigid_body.gravity_scale = 1.0
+	
+	# Hide drop indicator
+	if _drop_indicator:
+		_drop_indicator.hide_indicator()
+
+
+## Directly set transform without interpolation (for initial placement)
+func set_transform_immediate(p_position: Vector3, p_rotation: Vector3, p_scale: Vector3) -> void:
+	_stop_network_interpolation()
+	_target_lean_rotation = Basis.IDENTITY
+	
+	if rigid_body:
+		rigid_body.global_position = p_position
+		rigid_body.global_rotation = p_rotation
+		rigid_body.scale = p_scale
+	
+	# Reset lean on visual children
+	for child in _visual_children:
+		if is_instance_valid(child):
+			child.transform.basis = Basis.IDENTITY
+	
+	# Update targets to match
+	_network_target_position = p_position
+	_network_target_rotation = p_rotation
+	_network_target_scale = p_scale
