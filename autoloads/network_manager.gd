@@ -25,7 +25,7 @@ signal connection_failed(reason: String)
 signal connection_timeout()
 signal game_starting()
 signal level_data_received(level_dict: Dictionary)
-signal late_joiner_connected(peer_id: int)  ## Emitted when a player joins mid-game
+signal late_joiner_connected(peer_id: int) ## Emitted when a player joins mid-game
 signal game_state_received(state_dict: Dictionary)
 signal token_transform_received(network_id: String, position: Vector3, rotation: Vector3, scale: Vector3)
 signal token_state_received(network_id: String, token_dict: Dictionary)
@@ -43,8 +43,8 @@ var _players: Dictionary = {}
 
 ## Player roles
 enum PlayerRole {
-	PLAYER,  ## Regular player - can view, limited interaction
-	GM,      ## Game Master - full control
+	PLAYER, ## Regular player - can view, limited interaction
+	GM, ## Game Master - full control
 }
 
 ## Local player info
@@ -430,8 +430,9 @@ func _rpc_sync_player_list(players: Dictionary) -> void:
 			player_joined.emit(peer_id, players[peer_id])
 
 
-@rpc("authority", "reliable", "call_local")
+@rpc("authority", "reliable")
 func _rpc_game_starting() -> void:
+	_log("Received game_starting RPC")
 	game_starting.emit()
 
 
@@ -479,7 +480,13 @@ func notify_game_starting() -> void:
 		return
 
 	_game_in_progress = true
-	_rpc_game_starting.rpc()
+	_log("Notifying all clients that game is starting (players: %s)" % str(_players.keys()))
+	
+	# Send to all connected clients (not to self - peer 1)
+	for peer_id in _players:
+		if peer_id != 1:
+			_log("Sending game_starting RPC to peer %d" % peer_id)
+			_rpc_game_starting.rpc_id(peer_id)
 
 
 ## Called by host to send level data to all clients
