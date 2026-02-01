@@ -106,3 +106,46 @@ func validate() -> Array[String]:
 			errors.append("Token %d has no asset assigned" % (i + 1))
 
 	return errors
+
+
+## Convert to dictionary for network transmission
+func to_dict() -> Dictionary:
+	var placements_array: Array[Dictionary] = []
+	for placement in token_placements:
+		placements_array.append(placement.to_dict())
+	
+	return {
+		"level_name": level_name,
+		"level_description": level_description,
+		"author": author,
+		"created_at": created_at,
+		"modified_at": modified_at,
+		"map_path": map_path,
+		"map_scale": {"x": map_scale.x, "y": map_scale.y, "z": map_scale.z},
+		"map_offset": {"x": map_offset.x, "y": map_offset.y, "z": map_offset.z},
+		"token_placements": placements_array,
+	}
+
+
+## Create from dictionary (for network reception)
+static func from_dict(data: Dictionary) -> LevelData:
+	var level = LevelData.new()
+	level.level_name = data.get("level_name", "Untitled Level")
+	level.level_description = data.get("level_description", "")
+	level.author = data.get("author", "")
+	level.created_at = data.get("created_at", 0)
+	level.modified_at = data.get("modified_at", 0)
+	level.map_path = data.get("map_path", "")
+	
+	var scale_data = data.get("map_scale", {"x": 1, "y": 1, "z": 1})
+	level.map_scale = Vector3(scale_data.get("x", 1), scale_data.get("y", 1), scale_data.get("z", 1))
+	
+	var offset_data = data.get("map_offset", {"x": 0, "y": 0, "z": 0})
+	level.map_offset = Vector3(offset_data.get("x", 0), offset_data.get("y", 0), offset_data.get("z", 0))
+	
+	level.token_placements.clear()
+	var placements_data = data.get("token_placements", [])
+	for placement_data in placements_data:
+		level.token_placements.append(TokenPlacement.from_dict(placement_data))
+	
+	return level

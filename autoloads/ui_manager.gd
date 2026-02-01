@@ -34,10 +34,8 @@ var _transition_overlay: Node = null
 var _loading_overlay: Node = null
 var _input_hints: Node = null
 
-# State enum values (must match Root.State)
-const STATE_TITLE_SCREEN := 0
-const STATE_PLAYING := 1
-const STATE_PAUSED := 2
+# Reference to Root script for accessing State enum
+const RootScript = preload("res://scenes/root.gd")
 
 
 func _ready() -> void:
@@ -81,10 +79,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		# Priority 3: Toggle pause if playing
 		elif _root:
 			var current_state := get_current_state()
-			if current_state == STATE_PLAYING:
-				_root.push_state(STATE_PAUSED)
+			if current_state == RootScript.State.PLAYING:
+				_root.push_state(RootScript.State.PAUSED)
 				get_viewport().set_input_as_handled()
-			elif current_state == STATE_PAUSED:
+			elif current_state == RootScript.State.PAUSED:
 				_root.pop_state()
 				get_viewport().set_input_as_handled()
 

@@ -1,6 +1,7 @@
-[gd_scene format=3 uid="uid://0mln5piv3eiq"]
+[gd_scene load_steps=3 format=3 uid="uid://0mln5piv3eiq"]
 
 [ext_resource type="PackedScene" uid="uid://b3to05sowrppc" path="res://assets/models/dice/d20.glb" id="1_fgkus"]
+[ext_resource type="Script" path="res://scenes/states/title_screen/title_screen.gd" id="2_script"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_fgkus"]
 sky_top_color = Color(0.7866573, 0.8264243, 0.8797699, 1)
@@ -180,6 +181,7 @@ _data = {
 }
 
 [node name="TitleScreen" type="CanvasLayer" unique_id=278777048]
+script = ExtResource("2_script")
 
 [node name="ColorRect" type="ColorRect" parent="." unique_id=1869187167]
 anchors_preset = 15
@@ -252,3 +254,32 @@ layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Open the Level Editor to load or create a level"
 horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="NetworkLabel" type="Label" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_type_variation = &"H2"
+text = "Multiplayer"
+horizontal_alignment = 1
+
+[node name="NetworkButtons" type="HBoxContainer" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="HostGameButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/NetworkButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"Success"
+text = "Host Game"
+
+[node name="JoinGameButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/NetworkButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Join Game"
