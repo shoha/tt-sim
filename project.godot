@@ -22,6 +22,8 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 
 DragAndDropGroupHelper="*uid://d21uumvllljay"
 Paths="*res://autoloads/paths.gd"
+AssetDownloader="*res://autoloads/asset_downloader.gd"
+AssetStreamer="*res://autoloads/asset_streamer.gd"
 AssetPackManager="*res://autoloads/asset_pack_manager.gd"
 NodeUtils="*res://autoloads/node_utils.gd"
 LevelManager="*res://autoloads/level_manager.gd"

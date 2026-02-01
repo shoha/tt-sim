@@ -3,13 +3,23 @@ class_name BoardTokenFactory
 
 ## Factory for creating BoardToken instances from model scenes
 ## Centralizes all scene construction and component wiring logic
+## Supports placeholder tokens for remote assets that need downloading
 ##
 ## Usage:
 ##   var token = BoardTokenFactory.create_from_scene(my_model_scene)
 ##   # or with config:
 ##   var token = BoardTokenFactory.create_from_config(my_token_config)
+##   # or from asset pack (with automatic download support):
+##   var result = BoardTokenFactory.create_from_asset_async(pack_id, asset_id, variant_id)
 
 const BoardTokenScene = preload("uid://bev473ihcxqg8")
+const PlaceholderTokenScript = preload("res://scenes/board_token/placeholder_token.gd")
+
+## Tokens waiting for their model to download (network_id -> token reference)
+static var _pending_tokens: Dictionary = {}
+
+## Whether we've connected to AssetPackManager signals
+static var _signals_connected: bool = false
 
 ## Internal structure to hold extracted model components
 class ModelComponents:
@@ -271,3 +281,209 @@ static func create_from_placement(placement: TokenPlacement) -> BoardToken:
 	placement.apply_to_token(token)
 
 	return token
+
+
+## Create a BoardToken from an asset pack with async download support
+## If the asset is available locally, returns the token immediately
+## If the asset needs downloading, returns a placeholder token that will be upgraded later
+## @param pack_id: The pack identifier
+## @param asset_id: The asset identifier within the pack
+## @param variant_id: The variant to use
+## @param priority: Download priority (lower = higher priority, used for visible tokens)
+## @return: Dictionary with "token" and "is_placeholder" keys
+static func create_from_asset_async(pack_id: String, asset_id: String, variant_id: String = "default", priority: int = 100) -> Dictionary:
+	_ensure_signals_connected()
+	
+	# Try to resolve the model path (checks local + cache, triggers download if needed)
+	var model_path = AssetPackManager.resolve_model_path(pack_id, asset_id, variant_id, priority)
+	
+	if model_path != "":
+		# Asset is available - create normally
+		var ready_token = create_from_asset(pack_id, asset_id, variant_id)
+		return {"token": ready_token, "is_placeholder": false}
+	
+	# Asset needs downloading - check if download was queued
+	if not AssetPackManager.needs_download(pack_id, asset_id, variant_id):
+		# No URL available, can't create token
+		push_error("BoardTokenFactory: Asset not available and no download URL: %s/%s/%s" % [pack_id, asset_id, variant_id])
+		return {"token": null, "is_placeholder": false}
+	
+	# Create a placeholder token
+	var placeholder_token = _create_placeholder_token(pack_id, asset_id, variant_id)
+	if placeholder_token:
+		# Register for upgrade when download completes
+		_pending_tokens[placeholder_token.network_id] = {
+			"token": placeholder_token,
+			"pack_id": pack_id,
+			"asset_id": asset_id,
+			"variant_id": variant_id
+		}
+		placeholder_token.tree_exiting.connect(_on_pending_token_removed.bind(placeholder_token.network_id))
+	
+	return {"token": placeholder_token, "is_placeholder": true}
+
+
+## Create a placeholder token that shows a loading indicator
+static func _create_placeholder_token(pack_id: String, asset_id: String, variant_id: String) -> BoardToken:
+	# Create placeholder model
+	var placeholder = PlaceholderTokenScript.new()
+	placeholder.name = "PlaceholderModel"
+	
+	# Create a minimal BoardToken structure manually
+	var instance = BoardTokenScene.instantiate() as BoardToken
+	instance._factory_created = true
+	_clear_placeholder_children(instance)
+	
+	# Build simplified rigid body with placeholder
+	var rb = RigidBody3D.new()
+	rb.name = "RigidBody3D"
+	rb.axis_lock_angular_x = true
+	rb.axis_lock_angular_y = true
+	rb.axis_lock_angular_z = true
+	
+	# Add collision from placeholder
+	var collision = placeholder.create_collision()
+	rb.add_child(collision)
+	rb.add_child(placeholder)
+	
+	# Build draggable component
+	var draggable = _build_draggable_token(rb, collision)
+	draggable.add_child(rb)
+	instance.add_child(draggable)
+	
+	# Build controller
+	var controller = _build_token_controller(rb, draggable)
+	instance.add_child(controller)
+	
+	# Wire up references
+	instance.rigid_body = rb
+	instance._dragging_object = draggable
+	instance._token_controller = controller
+	
+	# Set metadata
+	instance.network_id = _generate_network_id()
+	instance.set_meta("pack_id", pack_id)
+	instance.set_meta("asset_id", asset_id)
+	instance.set_meta("variant_id", variant_id)
+	instance.set_meta("is_placeholder", true)
+	
+	# Set display name
+	var display_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
+	instance.name = display_name + " (Loading...)"
+	instance.token_name = display_name
+	
+	NodeUtils.set_own_children(instance)
+	
+	return instance
+
+
+## Ensure we're connected to AssetPackManager signals for download completion
+static func _ensure_signals_connected() -> void:
+	if _signals_connected:
+		return
+	
+	# We need to defer this because autoloads may not be ready yet
+	if Engine.get_main_loop():
+		var scene_tree = Engine.get_main_loop() as SceneTree
+		if scene_tree and scene_tree.root.has_node("AssetPackManager"):
+			var manager = scene_tree.root.get_node("AssetPackManager")
+			if not manager.asset_available.is_connected(_on_asset_available):
+				manager.asset_available.connect(_on_asset_available)
+			_signals_connected = true
+
+
+## Called when a remote asset becomes available after download
+static func _on_asset_available(pack_id: String, asset_id: String, variant_id: String, local_path: String) -> void:
+	# Find any pending tokens waiting for this asset
+	var tokens_to_upgrade: Array = []
+	
+	for network_id in _pending_tokens:
+		var pending = _pending_tokens[network_id]
+		if pending.pack_id == pack_id and pending.asset_id == asset_id and pending.variant_id == variant_id:
+			tokens_to_upgrade.append(network_id)
+	
+	# Upgrade each pending token
+	for network_id in tokens_to_upgrade:
+		var pending = _pending_tokens[network_id]
+		var token = pending.token as BoardToken
+		
+		if is_instance_valid(token) and token.is_inside_tree():
+			_upgrade_placeholder_token(token, local_path)
+		
+		_pending_tokens.erase(network_id)
+
+
+## Upgrade a placeholder token with the real model
+static func _upgrade_placeholder_token(token: BoardToken, model_path: String) -> void:
+	if not is_instance_valid(token) or not token.rigid_body:
+		return
+	
+	print("BoardTokenFactory: Upgrading placeholder token: " + token.token_name)
+	
+	# Load the real model
+	var asset_scene = load(model_path)
+	if not asset_scene:
+		push_error("BoardTokenFactory: Failed to load downloaded asset: " + model_path)
+		return
+	
+	var model = asset_scene.instantiate()
+	
+	# Extract components from new model
+	var components = _extract_model_components(model)
+	if not components:
+		push_error("BoardTokenFactory: Failed to extract model components for upgrade")
+		model.queue_free()
+		return
+	
+	# Store current transform
+	var current_pos = token.rigid_body.global_position
+	var current_rot = token.rigid_body.global_rotation
+	var current_scale = token.rigid_body.scale
+	
+	# Find and remove placeholder model
+	var rb = token.rigid_body
+	for child in rb.get_children():
+		if child.has_method("set_placeholder_color") or child.name == "PlaceholderModel":
+			child.queue_free()
+	
+	# Add real model to rigid body
+	rb.add_child(components.original_scene)
+	
+	# Add animation tree if available
+	if components.animation_player:
+		var animation_tree = BoardTokenAnimationTreeFactory.create()
+		rb.add_child(animation_tree)
+		animation_tree.anim_player = components.animation_player
+	
+	# Update collision shape if needed
+	for child in rb.get_children():
+		if child is CollisionShape3D:
+			if components.mesh_model and components.mesh_model.mesh:
+				child.shape = components.mesh_model.mesh.create_convex_shape()
+			break
+	
+	# Restore transform
+	rb.global_position = current_pos
+	rb.global_rotation = current_rot
+	rb.scale = current_scale
+	
+	# Update metadata
+	token.set_meta("is_placeholder", false)
+	token.name = token.token_name
+	
+	print("BoardTokenFactory: Successfully upgraded token: " + token.token_name)
+
+
+## Called when a pending token is removed from the tree
+static func _on_pending_token_removed(network_id: String) -> void:
+	_pending_tokens.erase(network_id)
+
+
+## Check if a token is still a placeholder waiting for download
+static func is_placeholder(token: BoardToken) -> bool:
+	return token.has_meta("is_placeholder") and token.get_meta("is_placeholder") == true
+
+
+## Get the number of tokens waiting for downloads
+static func get_pending_count() -> int:
+	return _pending_tokens.size()

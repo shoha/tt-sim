@@ -16,8 +16,8 @@ const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn
 
 enum State {
 	TITLE_SCREEN,
-	LOBBY_HOST,    ## Hosting a game, waiting for players
-	LOBBY_CLIENT,  ## Joined a game, waiting for host to start
+	LOBBY_HOST, ## Hosting a game, waiting for players
+	LOBBY_CLIENT, ## Joined a game, waiting for host to start
 	PLAYING,
 	PAUSED,
 }
@@ -39,12 +39,31 @@ func _ready() -> void:
 	# Setup core systems
 	_setup_level_play_controller()
 	_setup_app_menu()
+	_setup_download_notifications()
 
 	# Connect to level manager signals
 	LevelManager.level_loaded.connect(_on_level_loaded)
 
 	# Enter initial state
 	push_state(State.TITLE_SCREEN)
+
+
+func _setup_download_notifications() -> void:
+	# Connect to AssetDownloader signals for user feedback
+	if has_node("/root/AssetDownloader"):
+		var downloader = get_node("/root/AssetDownloader")
+		downloader.download_completed.connect(_on_asset_download_completed)
+		downloader.download_failed.connect(_on_asset_download_failed)
+
+
+func _on_asset_download_completed(pack_id: String, asset_id: String, _variant_id: String, _local_path: String) -> void:
+	var display_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
+	UIManager.show_success("Downloaded: " + display_name)
+
+
+func _on_asset_download_failed(pack_id: String, asset_id: String, _variant_id: String, error: String) -> void:
+	var display_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
+	UIManager.show_error("Failed to download " + display_name + ": " + error)
 
 
 func _setup_level_play_controller() -> void:
@@ -264,7 +283,9 @@ func _enter_lobby_client_state() -> void:
 		_lobby_client.leave_requested.connect(_on_lobby_cancel)
 
 	# Listen for game starting from host
-	NetworkManager.game_starting.connect(_on_network_game_starting)
+	if not NetworkManager.game_starting.is_connected(_on_network_game_starting):
+		NetworkManager.game_starting.connect(_on_network_game_starting)
+		print("Root: Connected game_starting signal handler")
 
 
 func _exit_lobby_client_state() -> void:
@@ -301,6 +322,7 @@ func _on_lobby_cancel() -> void:
 
 func _on_network_game_starting() -> void:
 	# Client received game starting signal from host
+	print("Root: Received game_starting signal, transitioning to PLAYING state")
 	change_state(State.PLAYING)
 
 
@@ -401,16 +423,24 @@ func _apply_game_state_to_tokens() -> void:
 
 
 func _create_token_from_state(token_state: TokenState) -> BoardToken:
-	# Create a token from network state
+	# Create a token from network state (with async download support)
 	if token_state.pack_id == "" or token_state.asset_id == "":
 		push_warning("Root: Cannot create token - missing pack_id or asset_id")
 		return null
 	
-	var token = BoardTokenFactory.create_from_asset(
+	# Use async factory method that handles remote asset downloading
+	# Priority based on visibility - visible tokens download first
+	var priority = 50 if token_state.is_visible_to_players else 100
+	
+	var result = BoardTokenFactory.create_from_asset_async(
 		token_state.pack_id,
 		token_state.asset_id,
-		token_state.variant_id
+		token_state.variant_id,
+		priority
 	)
+	
+	var token = result.token
+	var is_placeholder = result.is_placeholder
 	
 	if not token:
 		push_error("Root: Failed to create token from state")
@@ -425,6 +455,11 @@ func _create_token_from_state(token_state: TokenState) -> BoardToken:
 	
 	# Apply the full state (position, health, etc.) without interpolation for initial placement
 	token_state.apply_to_token(token, false)
+	
+	# Notify about downloading if this is a placeholder
+	if is_placeholder:
+		var display_name = AssetPackManager.get_asset_display_name(token_state.pack_id, token_state.asset_id)
+		UIManager.show_info("Downloading: " + display_name)
 	
 	return token
 
