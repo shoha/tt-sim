@@ -199,6 +199,68 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"BoxContainerSpaced"
 
+[node name="Network" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="NetworkInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Asset Streaming Settings"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network"]
+layout_mode = 2
+
+[node name="P2PEnabled" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/P2PEnabled"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Enable P2P Asset Streaming"
+
+[node name="P2PEnabledCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/P2PEnabled"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+
+[node name="P2PDescription" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "When enabled, missing assets will be downloaded
+directly from the host if no URL is available."
+horizontal_alignment = 1
+
+[node name="HSeparator2a" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network"]
+layout_mode = 2
+
+[node name="ClearCache" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/ClearCache"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Body"
+text = "Asset Cache"
+
+[node name="ClearCacheButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/ClearCache"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Clear Cache"
+
+[node name="CacheInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Downloaded assets are cached locally.
+Clear to force re-download of all assets."
+horizontal_alignment = 1
+
 [node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
 layout_mode = 2
 

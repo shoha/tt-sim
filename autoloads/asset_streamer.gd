@@ -30,11 +30,23 @@ var _request_queue: Array[Dictionary] = []
 ## Whether streaming is enabled
 var _enabled: bool = true
 
+const SETTINGS_PATH := "user://settings.cfg"
+
 
 func _ready() -> void:
+	# Load settings
+	_load_settings()
+	
 	# Connect to multiplayer signals
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+
+
+func _load_settings() -> void:
+	var config = ConfigFile.new()
+	var err = config.load(SETTINGS_PATH)
+	if err == OK:
+		_enabled = config.get_value("network", "p2p_enabled", true)
 
 
 ## Request an asset from the host
