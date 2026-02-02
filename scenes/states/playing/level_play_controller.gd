@@ -22,7 +22,7 @@ var _reconciliation_timer: Timer = null
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
 	_setup_reconciliation_timer()
-	
+
 	# Listen for network state changes to update token interactivity
 	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
@@ -30,7 +30,7 @@ func setup(game_map: GameMap) -> void:
 func _setup_reconciliation_timer() -> void:
 	if _reconciliation_timer:
 		return
-	
+
 	_reconciliation_timer = Timer.new()
 	_reconciliation_timer.wait_time = RECONCILIATION_INTERVAL
 	_reconciliation_timer.autostart = false
@@ -42,7 +42,7 @@ func _on_reconciliation_timeout() -> void:
 	# Only host broadcasts reconciliation
 	if not NetworkManager.is_host():
 		return
-	
+
 	# Sync all token positions to catch any physics drift
 	broadcast_token_positions()
 
@@ -96,11 +96,11 @@ func play_level(level_data: LevelData) -> bool:
 			token_spawned.emit(token, placement)
 
 	level_loaded.emit(level_data)
-	
+
 	# Start reconciliation timer for networked games
 	if NetworkManager.is_host() and _reconciliation_timer:
 		_reconciliation_timer.start()
-	
+
 	return true
 
 
@@ -147,14 +147,14 @@ func _load_level_map(level_data: LevelData) -> bool:
 ## Track a spawned token
 func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 	spawned_tokens[placement.placement_id] = token
-	
+
 	# Only GM can interact with tokens, players can only view
 	token.set_interactive(NetworkManager.is_gm() or not NetworkManager.is_networked())
-	
+
 	# Register with GameState for network synchronization
 	if GameState.has_authority():
 		GameState.register_token_from_board_token(token)
-		
+
 		# Connect to token signals for state change broadcasting
 		_connect_token_state_signals(token)
 
@@ -163,7 +163,7 @@ func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 func _connect_token_state_signals(token: BoardToken) -> void:
 	if not GameState.has_authority():
 		return
-	
+
 	# Property changes use reliable channel (important, must arrive)
 	# Use lambdas to ignore signal arguments and just pass the token
 	token.health_changed.connect(func(_cur, _max, _old = null): _on_token_property_changed(token))
@@ -172,7 +172,7 @@ func _connect_token_state_signals(token: BoardToken) -> void:
 	token.status_effect_removed.connect(func(_effect): _on_token_property_changed(token))
 	token.died.connect(func(): _on_token_property_changed(token))
 	token.revived.connect(func(): _on_token_property_changed(token))
-	
+
 	# Transform changes use unreliable channel with rate limiting (high-frequency, can drop)
 	token.position_changed.connect(func(): _on_token_transform_changed(token))
 	token.rotation_changed.connect(func(): _on_token_transform_changed(token))
@@ -223,15 +223,22 @@ func _clear_existing_maps() -> void:
 
 ## Spawn an asset token and add it to the current level
 ## Returns the created token, or null if spawning failed
+## Supports remote assets - will show placeholder while downloading
 func spawn_asset(pack_id: String, asset_id: String, variant_id: String = "default") -> BoardToken:
 	if not _game_map or not active_level_data:
 		push_warning("LevelPlayController: Cannot spawn asset - no GameMap or active level")
 		return null
 
-	var token = BoardTokenFactory.create_from_asset(pack_id, asset_id, variant_id)
+	# Use async factory to support remote asset downloading
+	var result = BoardTokenFactory.create_from_asset_async(pack_id, asset_id, variant_id)
+	var token = result.token as BoardToken
+
 	if not token:
 		push_error("LevelPlayController: Failed to create board token for %s/%s" % [pack_id, asset_id])
 		return null
+
+	if result.is_placeholder:
+		print("LevelPlayController: Spawning placeholder for %s/%s (downloading...)" % [pack_id, asset_id])
 
 	_game_map.drag_and_drop_node.add_child(token)
 	_connect_token_context_menu(token)
@@ -264,10 +271,10 @@ func add_token_to_level(token: BoardToken, pack_id: String, asset_id: String, va
 	token.set_meta("asset_id", asset_id)
 	token.set_meta("variant_id", variant_id)
 	spawned_tokens[placement.placement_id] = token
-	
+
 	# Only GM can interact with tokens, players can only view
 	token.set_interactive(NetworkManager.is_gm() or not NetworkManager.is_networked())
-	
+
 	# Register with GameState for network synchronization
 	if GameState.has_authority():
 		GameState.register_token_from_board_token(token)
@@ -311,12 +318,12 @@ func save_token_positions() -> String:
 func broadcast_token_positions() -> void:
 	if not NetworkManager.is_host():
 		return
-	
+
 	for placement_id in spawned_tokens:
 		var token = spawned_tokens[placement_id] as BoardToken
 		if is_instance_valid(token):
 			GameState.sync_from_board_token(token)
-	
+
 	# Use full state for reconciliation to ensure all clients are in sync
 	NetworkStateSync.broadcast_full_state()
 
@@ -351,7 +358,7 @@ func clear_level_tokens() -> void:
 
 	spawned_tokens.clear()
 	active_level_data = null
-	
+
 	# Clear GameState
 	GameState.clear_all_tokens()
 
@@ -368,10 +375,10 @@ func clear_level() -> void:
 	# Stop reconciliation timer
 	if _reconciliation_timer:
 		_reconciliation_timer.stop()
-	
+
 	# Clear network sync throttle state
 	NetworkStateSync.clear_throttle_state()
-	
+
 	clear_level_tokens()
 	clear_level_map()
 	level_cleared.emit()

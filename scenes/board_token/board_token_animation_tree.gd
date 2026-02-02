@@ -20,13 +20,31 @@ func _enter_tree() -> void:
 
 
 func _ready() -> void:
-	tree.set_animation_player(tree.get_path_to(anim_player))
-	_init_state_machine.call_deferred()
+	if anim_player:
+		# Set the animation player path
+		tree.anim_player = tree.get_path_to(anim_player)
+
+		# Set root_node to the model scene (AnimationPlayer's parent) where animation tracks are valid
+		# Animation tracks target paths like "Armature/Skeleton3D:bone" relative to this root
+		var model_root = anim_player.get_parent()
+		if model_root:
+			tree.root_node = tree.get_path_to(model_root)
+
+		# Ensure the tree is active
+		tree.active = true
+
+		_init_state_machine.call_deferred()
+	else:
+		push_warning("BoardTokenAnimationTree: anim_player not set")
 	_connect_to_board_token()
 
 
 func _init_state_machine() -> void:
 	_state_machine = tree.get("parameters/playback") as AnimationNodeStateMachinePlayback
+
+	# Start playing the default idle animation
+	if _state_machine:
+		_state_machine.travel("battlewait01")
 
 func _connect_to_board_token() -> void:
 	_board_token = _find_ancestor_board_token()
