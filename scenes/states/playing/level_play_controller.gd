@@ -3,11 +3,16 @@ class_name LevelPlayController
 
 ## Manages level playback: loading maps, spawning tokens, tracking state.
 ## Extracted from MapMenuController to follow single-responsibility principle.
+## Supports async map loading for client-side map downloads.
 
 signal level_loaded(level_data: LevelData)
 signal level_cleared()
 signal token_spawned(token: BoardToken, placement: TokenPlacement)
 signal token_added(token: BoardToken)
+signal map_download_started(level_folder: String)
+signal map_download_progress(level_folder: String, progress: float)
+signal map_download_completed(level_folder: String)
+signal map_download_failed(level_folder: String, error: String)
 
 const RECONCILIATION_INTERVAL: float = 2.0 # Full state sync every 2 seconds
 
@@ -16,15 +21,79 @@ var spawned_tokens: Dictionary = {} # placement_id -> BoardToken
 var loaded_map_instance: Node3D = null
 var _game_map: GameMap = null
 var _reconciliation_timer: Timer = null
+var _pending_map_level_folder: String = "" # Level folder waiting for map download
+var _streamer_connected: bool = false
 
 
 ## Initialize with a reference to the game map
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
 	_setup_reconciliation_timer()
+	_connect_asset_streamer()
 
 	# Listen for network state changes to update token interactivity
 	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
+
+
+## Connect to AssetStreamer for map downloads
+func _connect_asset_streamer() -> void:
+	if _streamer_connected:
+		return
+	
+	if has_node("/root/AssetStreamer"):
+		var streamer = get_node("/root/AssetStreamer")
+		if not streamer.asset_received.is_connected(_on_map_received):
+			streamer.asset_received.connect(_on_map_received)
+		if not streamer.asset_failed.is_connected(_on_map_failed):
+			streamer.asset_failed.connect(_on_map_failed)
+		if not streamer.transfer_progress.is_connected(_on_map_transfer_progress):
+			streamer.transfer_progress.connect(_on_map_transfer_progress)
+		_streamer_connected = true
+
+
+## Handle map download completion from AssetStreamer
+func _on_map_received(pack_id: String, asset_id: String, _variant_id: String, local_path: String) -> void:
+	# Only handle map downloads
+	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
+		return
+	
+	# Check if this is the map we're waiting for
+	if asset_id != _pending_map_level_folder:
+		return
+	
+	print("LevelPlayController: Map downloaded for level: " + asset_id)
+	map_download_completed.emit(asset_id)
+	
+	# Now load the map
+	var map = _load_glb_from_path(local_path)
+	if map:
+		_finalize_map_loading(map)
+	else:
+		push_error("LevelPlayController: Failed to load downloaded map")
+		map_download_failed.emit(asset_id, "Failed to load map file")
+	
+	_pending_map_level_folder = ""
+
+
+## Handle map download failure from AssetStreamer
+func _on_map_failed(pack_id: String, asset_id: String, _variant_id: String, error: String) -> void:
+	# Only handle map downloads
+	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
+		return
+	
+	if asset_id == _pending_map_level_folder:
+		push_error("LevelPlayController: Map download failed: " + error)
+		map_download_failed.emit(asset_id, error)
+		_pending_map_level_folder = ""
+
+
+## Handle map download progress
+func _on_map_transfer_progress(pack_id: String, asset_id: String, _variant_id: String, progress: float) -> void:
+	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
+		return
+	
+	if asset_id == _pending_map_level_folder:
+		map_download_progress.emit(asset_id, progress)
 
 
 func _setup_reconciliation_timer() -> void:
@@ -105,6 +174,8 @@ func play_level(level_data: LevelData) -> bool:
 
 
 ## Load the map model from level data
+## Supports both res:// (legacy) and user:// (folder-based) paths
+## For clients, will trigger async download if map is not available locally
 func _load_level_map(level_data: LevelData) -> bool:
 	# Remove previous level map if exists
 	if is_instance_valid(loaded_map_instance):
@@ -119,29 +190,98 @@ func _load_level_map(level_data: LevelData) -> bool:
 		push_error("LevelPlayController: No map path in level data")
 		return false
 
-	if not ResourceLoader.exists(level_data.map_path):
-		push_error("LevelPlayController: Map file not found: " + level_data.map_path)
+	# Get the absolute map path
+	var map_path = level_data.get_absolute_map_path()
+	if map_path == "":
+		push_error("LevelPlayController: Cannot resolve map path")
 		return false
 
-	# Load and instantiate the map
-	var map_scene = load(level_data.map_path)
-	if not map_scene:
-		push_error("LevelPlayController: Failed to load map scene")
+	# Try to load the map from various sources
+	var map: Node3D = null
+	
+	# 1. Check if it's a res:// path (legacy format)
+	if map_path.begins_with("res://"):
+		if ResourceLoader.exists(map_path):
+			var map_scene = load(map_path)
+			if map_scene:
+				map = map_scene.instantiate() as Node3D
+	
+	# 2. Check if it's a user:// path (folder-based format)
+	elif map_path.begins_with("user://"):
+		if FileAccess.file_exists(map_path):
+			map = _load_glb_from_path(map_path)
+		else:
+			# Check cache (for clients who downloaded from host)
+			var cached_path = _get_cached_map_path(level_data.level_folder)
+			if cached_path != "":
+				map = _load_glb_from_path(cached_path)
+			elif NetworkManager.is_client():
+				# Request map from host
+				return _request_map_download(level_data.level_folder)
+			else:
+				push_error("LevelPlayController: Map file not found: " + map_path)
+				return false
+
+	if not map:
+		push_error("LevelPlayController: Failed to load map")
 		return false
 
-	loaded_map_instance = map_scene.instantiate() as Node3D
-	if not loaded_map_instance:
-		push_error("LevelPlayController: Map is not a Node3D")
-		return false
+	_finalize_map_loading(map)
+	return true
 
+
+## Finalize map loading after the map instance is ready
+func _finalize_map_loading(map: Node3D) -> void:
+	loaded_map_instance = map
 	loaded_map_instance.name = "LevelMap"
-	loaded_map_instance.scale = level_data.map_scale
-	loaded_map_instance.position = level_data.map_offset
+	
+	if active_level_data:
+		loaded_map_instance.scale = active_level_data.map_scale
+		loaded_map_instance.position = active_level_data.map_offset
 
 	# Add to the GameMap node
 	_game_map.add_child(loaded_map_instance)
 
+
+## Load a GLB file from a user:// path using shared GlbUtils
+## For maps, we create StaticBody3D for collision meshes
+func _load_glb_from_path(path: String) -> Node3D:
+	# Use shared utility with create_static_bodies=true (maps need StaticBody3D for collision)
+	return GlbUtils.load_glb_with_processing(path, true)
+
+
+## Get the cached map path for a level (if it exists)
+func _get_cached_map_path(level_folder: String) -> String:
+	if has_node("/root/AssetStreamer"):
+		var streamer = get_node("/root/AssetStreamer")
+		return streamer.get_cached_map_path(level_folder)
+	return ""
+
+
+## Request map download from host
+func _request_map_download(level_folder: String) -> bool:
+	if not has_node("/root/AssetStreamer"):
+		push_error("LevelPlayController: AssetStreamer not available")
+		return false
+	
+	var streamer = get_node("/root/AssetStreamer")
+	if not streamer.is_enabled():
+		push_error("LevelPlayController: P2P streaming is disabled")
+		return false
+	
+	_pending_map_level_folder = level_folder
+	streamer.request_map_from_host(level_folder)
+	
+	print("LevelPlayController: Requesting map download for level: " + level_folder)
+	map_download_started.emit(level_folder)
+	
+	# Return true to indicate level loading will continue async
 	return true
+
+
+## Check if a map download is in progress
+func is_map_downloading() -> bool:
+	return _pending_map_level_folder != ""
 
 
 ## Track a spawned token

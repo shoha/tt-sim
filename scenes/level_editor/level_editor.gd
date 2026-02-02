@@ -75,6 +75,7 @@ var selected_placement_index: int = -1
 var _filtered_pokemon: Array = []
 var _selected_level_path_for_delete: String = ""
 var _is_updating_ui: bool = false # Flag to prevent feedback loops when setting UI values
+var _pending_map_source_path: String = "" # Source map path to be bundled on save (for new/edited levels)
 
 
 func _ready() -> void:
@@ -138,10 +139,13 @@ func _connect_signals() -> void:
 
 
 func _setup_file_dialogs() -> void:
-	map_file_dialog.access = FileDialog.ACCESS_RESOURCES
+	# Map file dialog - allow both resources and filesystem for map imports
+	map_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	map_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	map_file_dialog.filters = ["*.glb ; GLB Models", "*.gltf ; GLTF Models", "*.tscn ; Godot Scenes"]
-	map_file_dialog.current_dir = Paths.MAPS_DIR
+	# Start in a reasonable location - project maps folder if it exists
+	if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(Paths.MAPS_DIR)):
+		map_file_dialog.current_dir = ProjectSettings.globalize_path(Paths.MAPS_DIR)
 
 	export_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
@@ -177,6 +181,7 @@ func _update_pokemon_selector_list() -> void:
 
 func _create_new_level() -> void:
 	current_level = LevelManager.create_new_level()
+	_pending_map_source_path = "" # Clear any pending map from previous level
 	_update_ui_from_level()
 	_set_status("New level created")
 
@@ -192,7 +197,15 @@ func _update_ui_from_level() -> void:
 	level_description_edit.text = current_level.level_description
 	author_edit.text = current_level.author
 
-	if current_level.map_path != "":
+	# Update map path display based on level type
+	if _pending_map_source_path != "":
+		# New map selected but not yet saved
+		map_path_label.text = _pending_map_source_path.get_file() + " (will be bundled)"
+	elif current_level.is_folder_based():
+		# Folder-based level with bundled map
+		map_path_label.text = current_level.map_path + " (bundled)"
+	elif current_level.map_path != "":
+		# Legacy res:// path
 		map_path_label.text = current_level.map_path.get_file()
 	else:
 		map_path_label.text = "No map selected"
@@ -302,9 +315,16 @@ func _on_select_map_pressed() -> void:
 
 
 func _on_map_file_selected(path: String) -> void:
-	current_level.map_path = path
-	map_path_label.text = path.get_file()
+	# Store the source path for bundling on save
+	_pending_map_source_path = path
+	
+	# For display, just show the filename - actual bundling happens on save
+	map_path_label.text = path.get_file() + " (will be bundled)"
 	_set_status("Map selected: " + path.get_file())
+	
+	# Clear the old map_path since we're selecting a new one
+	# It will be set properly when saved
+	current_level.map_path = ""
 
 
 func _on_add_token_pressed() -> void:
@@ -407,14 +427,48 @@ func _on_save_pressed() -> void:
 	_on_level_metadata_changed()
 	_on_map_transform_changed()
 
-	var errors = current_level.validate()
-	if errors.size() > 0:
-		_set_status("Error: " + errors[0])
-		return
+	# Determine if we should use folder-based save
+	var use_folder_save = _pending_map_source_path != "" or current_level.is_folder_based()
+	
+	if use_folder_save:
+		_save_level_folder()
+	else:
+		# Legacy save for levels with res:// map paths
+		var errors = current_level.validate()
+		if errors.size() > 0:
+			_set_status("Error: " + errors[0])
+			return
 
-	var path = LevelManager.save_level(current_level)
-	if path != "":
-		_set_status("Level saved: " + path.get_file())
+		var path = LevelManager.save_level(current_level)
+		if path != "":
+			_set_status("Level saved: " + path.get_file())
+		else:
+			_set_status("Failed to save level")
+
+
+## Save level using folder-based format with bundled map
+func _save_level_folder() -> void:
+	# Validate basic requirements (skip map validation since we're bundling it)
+	if current_level.level_name.strip_edges() == "":
+		_set_status("Error: Level name is required")
+		return
+	
+	# Check if we have a map source or existing bundled map
+	if _pending_map_source_path == "" and current_level.map_path == "":
+		_set_status("Error: No map selected")
+		return
+	
+	# If we have a pending map source, verify it exists
+	if _pending_map_source_path != "" and not FileAccess.file_exists(_pending_map_source_path):
+		_set_status("Error: Map file not found: " + _pending_map_source_path)
+		return
+	
+	# Save using folder-based format
+	var result = LevelManager.save_level_folder(current_level, "", _pending_map_source_path)
+	if result != "":
+		_pending_map_source_path = "" # Clear pending map after successful save
+		_update_ui_from_level() # Refresh UI to show bundled status
+		_set_status("Level saved: " + current_level.level_folder)
 	else:
 		_set_status("Failed to save level")
 
@@ -476,6 +530,7 @@ func _load_level_from_path(path: String) -> void:
 	var level = LevelManager.load_level(path)
 	if level:
 		current_level = level
+		_pending_map_source_path = "" # Clear pending map when loading existing level
 		_update_ui_from_level()
 		_set_status("Level loaded: " + level.level_name)
 	else:
@@ -543,6 +598,7 @@ func open_editor() -> void:
 func set_level(level_data: LevelData) -> void:
 	if level_data:
 		current_level = level_data
+		_pending_map_source_path = "" # Clear pending map when setting existing level
 		_update_ui_from_level()
 		_set_status("Editing: " + level_data.level_name)
 
