@@ -147,7 +147,13 @@ static func from_dict(data: Dictionary) -> TokenPlacement:
 	placement.max_health = data.get("max_health", 100)
 	placement.current_health = data.get("current_health", 100)
 	placement.is_visible_to_players = data.get("is_visible_to_players", true)
-	placement.status_effects = data.get("status_effects", [])
+	
+	# Handle typed array conversion for status_effects
+	var effects_data = data.get("status_effects", [])
+	placement.status_effects.clear()
+	for effect in effects_data:
+		placement.status_effects.append(str(effect))
+	
 	placement.is_alive = data.get("is_alive", true)
 	
 	return placement
