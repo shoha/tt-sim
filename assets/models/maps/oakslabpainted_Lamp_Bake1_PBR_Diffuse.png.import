@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://pa5i66e8ugox"
 path.s3tc="res://.godot/imported/oakslabpainted_Lamp_Bake1_PBR_Diffuse.png-b45ae13b8bf8298510f69a31d82c9d3b.s3tc.ctex"
+path.etc2="res://.godot/imported/oakslabpainted_Lamp_Bake1_PBR_Diffuse.png-b45ae13b8bf8298510f69a31d82c9d3b.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/maps/oakslabpainted_Lamp_Bake1_PBR_Diffuse.png"
-dest_files=["res://.godot/imported/oakslabpainted_Lamp_Bake1_PBR_Diffuse.png-b45ae13b8bf8298510f69a31d82c9d3b.s3tc.ctex"]
+dest_files=["res://.godot/imported/oakslabpainted_Lamp_Bake1_PBR_Diffuse.png-b45ae13b8bf8298510f69a31d82c9d3b.s3tc.ctex", "res://.godot/imported/oakslabpainted_Lamp_Bake1_PBR_Diffuse.png-b45ae13b8bf8298510f69a31d82c9d3b.etc2.ctex"]
 
 [params]
 

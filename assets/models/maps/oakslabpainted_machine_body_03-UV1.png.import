@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bewqm4j4x7hq6"
 path.s3tc="res://.godot/imported/oakslabpainted_machine_body_03-UV1.png-8c3b1479929be4088850013b4b960a1b.s3tc.ctex"
+path.etc2="res://.godot/imported/oakslabpainted_machine_body_03-UV1.png-8c3b1479929be4088850013b4b960a1b.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/maps/oakslabpainted_machine_body_03-UV1.png"
-dest_files=["res://.godot/imported/oakslabpainted_machine_body_03-UV1.png-8c3b1479929be4088850013b4b960a1b.s3tc.ctex"]
+dest_files=["res://.godot/imported/oakslabpainted_machine_body_03-UV1.png-8c3b1479929be4088850013b4b960a1b.s3tc.ctex", "res://.godot/imported/oakslabpainted_machine_body_03-UV1.png-8c3b1479929be4088850013b4b960a1b.etc2.ctex"]
 
 [params]
 

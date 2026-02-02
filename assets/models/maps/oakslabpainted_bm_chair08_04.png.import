@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://pc24nnrd8j3e"
 path.s3tc="res://.godot/imported/oakslabpainted_bm_chair08_04.png-706085c01b8a1faa46493ddd7f697f24.s3tc.ctex"
+path.etc2="res://.godot/imported/oakslabpainted_bm_chair08_04.png-706085c01b8a1faa46493ddd7f697f24.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/maps/oakslabpainted_bm_chair08_04.png"
-dest_files=["res://.godot/imported/oakslabpainted_bm_chair08_04.png-706085c01b8a1faa46493ddd7f697f24.s3tc.ctex"]
+dest_files=["res://.godot/imported/oakslabpainted_bm_chair08_04.png-706085c01b8a1faa46493ddd7f697f24.s3tc.ctex", "res://.godot/imported/oakslabpainted_bm_chair08_04.png-706085c01b8a1faa46493ddd7f697f24.etc2.ctex"]
 
 [params]
 
