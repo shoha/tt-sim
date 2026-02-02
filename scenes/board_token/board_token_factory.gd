@@ -623,13 +623,25 @@ static func _upgrade_placeholder_token(token: BoardToken, model_path: String) ->
 		model.queue_free()
 		return
 
+	var rb = token.rigid_body
+
 	# Store current transform
-	var current_pos = token.rigid_body.global_position
-	var current_rot = token.rigid_body.global_rotation
-	var current_scale = token.rigid_body.scale
+	var current_pos = rb.global_position
+	var current_rot = rb.global_rotation
+	var current_scale = rb.scale
+
+	# Calculate where the placeholder's collision bottom was in world space
+	# This is the floor position we need to preserve
+	var old_floor_y: float = current_pos.y
+	for child in rb.get_children():
+		if child is CollisionShape3D and child.shape:
+			var old_aabb: AABB = child.shape.get_debug_mesh().get_aabb()
+			var old_scaled_aabb_pos = old_aabb.position * current_scale
+			var old_collision_pos = child.position * current_scale
+			old_floor_y = current_pos.y + old_collision_pos.y + old_scaled_aabb_pos.y
+			break
 
 	# Find and remove placeholder model
-	var rb = token.rigid_body
 	for child in rb.get_children():
 		if child.has_method("set_placeholder_color") or child.name == "PlaceholderModel":
 			child.queue_free()
@@ -643,17 +655,34 @@ static func _upgrade_placeholder_token(token: BoardToken, model_path: String) ->
 		animation_tree.anim_player = components.animation_player # Set BEFORE add_child
 		rb.add_child(animation_tree)
 
-	# Update collision shape if needed
+	# Update collision shape - reset position offset from placeholder and create new shape
+	var collision_shape: CollisionShape3D = null
 	for child in rb.get_children():
 		if child is CollisionShape3D:
+			collision_shape = child
+			# Reset the position offset that the placeholder collision had
+			child.position = Vector3.ZERO
 			if components.mesh_model and components.mesh_model.mesh:
 				child.shape = components.mesh_model.mesh.create_convex_shape()
 			break
 
-	# Restore transform
-	rb.global_position = current_pos
+	# Calculate where the new collision bottom would be and adjust Y to match old floor position
+	var new_y: float = current_pos.y
+	if collision_shape and collision_shape.shape:
+		var new_aabb: AABB = collision_shape.shape.get_debug_mesh().get_aabb()
+		var new_scaled_aabb_pos = new_aabb.position * current_scale
+		# new_floor_y = new_y + new_scaled_aabb_pos.y = old_floor_y
+		# Therefore: new_y = old_floor_y - new_scaled_aabb_pos.y
+		new_y = old_floor_y - new_scaled_aabb_pos.y
+
+	# Restore transform with corrected Y position
+	rb.global_position = Vector3(current_pos.x, new_y, current_pos.z)
 	rb.global_rotation = current_rot
 	rb.scale = current_scale
+
+	# Update the DraggableToken's height offset now that collision shape has changed
+	if token._dragging_object:
+		token._dragging_object.update_height_offset()
 
 	# Update metadata
 	token.set_meta("is_placeholder", false)
