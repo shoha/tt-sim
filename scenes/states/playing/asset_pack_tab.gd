@@ -25,10 +25,10 @@ func _ready() -> void:
 	_items_mutex = Mutex.new()
 	_items_sem = Semaphore.new()
 	_items_thread = Thread.new()
-	
+
 	_exit_thread = false
 	_items_thread.start(_items_thread_function)
-	
+
 	# Connect signals
 	search_filter.text_changed.connect(_on_filter_changed)
 	item_list.item_activated.connect(_on_item_activated)
@@ -51,14 +51,14 @@ func refresh() -> void:
 func _items_thread_function() -> void:
 	while true:
 		_items_sem.wait()
-		
+
 		_exit_mutex.lock()
 		var should_exit = _exit_thread
 		_exit_mutex.unlock()
-		
+
 		if should_exit:
 			break
-		
+
 		_items_mutex.lock()
 		_populate_items()
 		_items_mutex.unlock()
@@ -67,34 +67,30 @@ func _items_thread_function() -> void:
 func _populate_items() -> void:
 	call_deferred("_clear_list")
 	_items.clear()
-	
+
 	var pack = AssetPackManager.get_pack(_pack_id)
 	if not pack:
 		return
-	
+
+	# Collect asset info in background thread (no node access needed)
+	var items_to_add: Array = []
 	for asset in pack.get_all_assets():
 		var display_name = asset.display_name
-		
+
 		# Apply filter
 		if _filter == "" or _filter.to_lower() in display_name.to_lower():
-			var icon_path = pack.get_icon_path(asset.asset_id, "default")
-			
-			# Load icon on background thread
-			var icon: Texture2D = null
-			if ResourceLoader.exists(icon_path):
-				icon = load(icon_path)
-			
-			_items.append({
+			items_to_add.append({
 				"pack_id": _pack_id,
 				"asset_id": asset.asset_id,
 				"variant_id": "default",
 				"name": display_name,
-				"icon": icon,  # Store loaded texture, not path
 				"has_variants": asset.has_variants(),
 				"variants": asset.get_variant_ids()
 			})
-	
-	# Add items to list on main thread (icons already loaded)
+
+	_items = items_to_add
+
+	# Add items to list on main thread
 	for item in _items:
 		call_deferred("_add_item_to_list", item)
 
@@ -104,8 +100,8 @@ func _clear_list() -> void:
 
 
 func _add_item_to_list(item: Dictionary) -> void:
-	# Icon is already loaded from background thread
-	item_list.add_item(item.name, item.icon)
+	# Add item without icon to avoid bulk icon downloads for remote asset packs
+	item_list.add_item(item.name)
 
 
 func _on_filter_changed(new_text: String) -> void:
@@ -117,7 +113,7 @@ func _on_filter_changed(new_text: String) -> void:
 func _on_item_activated(index: int) -> void:
 	if index < 0 or index >= _items.size():
 		return
-	
+
 	var selected = _items[index]
 	asset_selected.emit(selected.pack_id, selected.asset_id, selected.variant_id)
 
@@ -137,6 +133,6 @@ func _exit_tree() -> void:
 	_exit_mutex.lock()
 	_exit_thread = true
 	_exit_mutex.unlock()
-	
+
 	_items_sem.post()
 	_items_thread.wait_to_finish()
