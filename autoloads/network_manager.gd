@@ -27,6 +27,8 @@ signal game_starting()
 signal level_data_received(level_dict: Dictionary)
 signal late_joiner_connected(peer_id: int) ## Emitted when a player joins mid-game
 signal game_state_received(state_dict: Dictionary)
+signal level_sync_complete(peer_id: int) ## Emitted when level sync ACK received from client
+signal state_sync_complete(peer_id: int) ## Emitted when state sync ACK received from client
 signal token_transform_received(network_id: String, position: Vector3, rotation: Vector3, scale: Vector3)
 signal token_state_received(network_id: String, token_dict: Dictionary)
 signal token_removed_received(network_id: String)
@@ -366,16 +368,44 @@ func _on_peer_connected(peer_id: int) -> void:
 		# Handle late joiner - send current level and game state
 		if _game_in_progress and not _current_level_dict.is_empty():
 			_log("Late joiner detected, sending current level and state to peer %d" % peer_id)
-			# Small delay to ensure peer is ready
-			await get_tree().create_timer(0.1).timeout
-			_rpc_receive_level_data.rpc_id(peer_id, _current_level_dict)
-			# Send game state after level data
-			await get_tree().create_timer(0.1).timeout
-			get_node("/root/NetworkStateSync").send_full_state_to_peer(peer_id)
-			late_joiner_connected.emit(peer_id)
+			# Use event-driven sync instead of hardcoded delays
+			_sync_late_joiner(peer_id)
 
 	# Request player info from the new peer
 	_rpc_send_player_info.rpc_id(peer_id, _local_player_info)
+
+
+## Event-driven late joiner synchronization
+func _sync_late_joiner(peer_id: int) -> void:
+	# Send level data first
+	_rpc_receive_level_data.rpc_id(peer_id, _current_level_dict)
+	
+	# Wait for client ACK with timeout using a shared state container
+	var sync_timeout = 5.0 # seconds
+	var sync_state = {"ack_received": false}
+	
+	# Create one-shot connection for level ACK
+	var level_ack_handler = func(acking_peer_id: int) -> void:
+		if acking_peer_id == peer_id:
+			sync_state.ack_received = true
+	
+	level_sync_complete.connect(level_ack_handler, CONNECT_ONE_SHOT)
+	
+	# Wait for ACK or timeout
+	var start_time = Time.get_ticks_msec()
+	while not sync_state.ack_received and (Time.get_ticks_msec() - start_time) < sync_timeout * 1000:
+		await get_tree().process_frame
+	
+	if not sync_state.ack_received:
+		_log("Level sync timeout for peer %d, proceeding anyway" % peer_id)
+		if level_sync_complete.is_connected(level_ack_handler):
+			level_sync_complete.disconnect(level_ack_handler)
+	
+	# Send game state
+	if has_node("/root/NetworkStateSync"):
+		get_node("/root/NetworkStateSync").send_full_state_to_peer(peer_id)
+	
+	late_joiner_connected.emit(peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -439,6 +469,28 @@ func _rpc_game_starting() -> void:
 @rpc("authority", "reliable")
 func _rpc_receive_level_data(level_dict: Dictionary) -> void:
 	level_data_received.emit(level_dict)
+	# Send ACK back to host
+	_rpc_level_sync_ack.rpc_id(1)
+
+
+## RPC: Client acknowledges level sync complete
+@rpc("any_peer", "reliable")
+func _rpc_level_sync_ack() -> void:
+	if not is_host():
+		return
+	var peer_id = multiplayer.get_remote_sender_id()
+	_log("Received level sync ACK from peer %d" % peer_id)
+	level_sync_complete.emit(peer_id)
+
+
+## RPC: Client acknowledges state sync complete
+@rpc("any_peer", "reliable")
+func _rpc_state_sync_ack() -> void:
+	if not is_host():
+		return
+	var peer_id = multiplayer.get_remote_sender_id()
+	_log("Received state sync ACK from peer %d" % peer_id)
+	state_sync_complete.emit(peer_id)
 
 
 @rpc("authority", "reliable")

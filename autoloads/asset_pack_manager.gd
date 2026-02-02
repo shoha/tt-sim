@@ -24,35 +24,52 @@ signal asset_download_failed(pack_id: String, asset_id: String, variant_id: Stri
 
 func _ready() -> void:
 	_discover_packs()
-	_connect_downloader_signals()
+	_connect_resolver_signals()
 
 
-## Connect to AssetDownloader signals
-func _connect_downloader_signals() -> void:
-	# AssetDownloader may not be ready yet, so we defer this
-	call_deferred("_deferred_connect_downloader")
+## Connect to AssetResolver signals (unified resolution pipeline)
+func _connect_resolver_signals() -> void:
+	# AssetResolver may not be ready yet, so we defer this
+	call_deferred("_deferred_connect_resolver")
 
 
-func _deferred_connect_downloader() -> void:
-	# Connect to AssetDownloader
+func _deferred_connect_resolver() -> void:
+	# Connect to AssetResolver for unified asset resolution
+	if has_node("/root/AssetResolver"):
+		var resolver = get_node("/root/AssetResolver")
+		if not resolver.asset_resolved.is_connected(_on_resolver_asset_resolved):
+			resolver.asset_resolved.connect(_on_resolver_asset_resolved)
+		if not resolver.asset_failed.is_connected(_on_resolver_asset_failed):
+			resolver.asset_failed.connect(_on_resolver_asset_failed)
+	else:
+		# Fallback: connect to individual downloaders
+		push_warning("AssetPackManager: AssetResolver not found, using direct connections")
+		_connect_legacy_signals()
+
+
+func _connect_legacy_signals() -> void:
+	# Fallback for backwards compatibility
 	if has_node("/root/AssetDownloader"):
 		var downloader = get_node("/root/AssetDownloader")
 		if not downloader.download_completed.is_connected(_on_asset_downloaded):
 			downloader.download_completed.connect(_on_asset_downloaded)
 		if not downloader.download_failed.is_connected(_on_asset_download_failed):
 			downloader.download_failed.connect(_on_asset_download_failed)
-	else:
-		push_warning("AssetPackManager: AssetDownloader autoload not found")
 	
-	# Connect to AssetStreamer (P2P fallback)
 	if has_node("/root/AssetStreamer"):
 		var streamer = get_node("/root/AssetStreamer")
 		if not streamer.asset_received.is_connected(_on_p2p_asset_received):
 			streamer.asset_received.connect(_on_p2p_asset_received)
 		if not streamer.asset_failed.is_connected(_on_p2p_asset_failed):
 			streamer.asset_failed.connect(_on_p2p_asset_failed)
-	else:
-		push_warning("AssetPackManager: AssetStreamer autoload not found")
+
+
+func _on_resolver_asset_resolved(_request_id: String, pack_id: String, asset_id: String, variant_id: String, local_path: String) -> void:
+	asset_available.emit(pack_id, asset_id, variant_id, local_path)
+
+
+func _on_resolver_asset_failed(_request_id: String, pack_id: String, asset_id: String, variant_id: String, error: String) -> void:
+	asset_download_failed.emit(pack_id, asset_id, variant_id, error)
 
 
 func _on_asset_downloaded(pack_id: String, asset_id: String, variant_id: String, local_path: String) -> void:
@@ -184,6 +201,18 @@ func get_icon_path(pack_id: String, asset_id: String, variant_id: String = "defa
 ## Returns the local path if available (local or cached), empty string if needs download
 ## If needs download, automatically queues it and emits asset_available when ready
 func resolve_model_path(pack_id: String, asset_id: String, variant_id: String = "default", priority: int = 100) -> String:
+	# Use AssetResolver if available
+	if has_node("/root/AssetResolver"):
+		var resolver = get_node("/root/AssetResolver")
+		# Try sync resolution first (local + cache)
+		var sync_path = resolver.resolve_model_sync(pack_id, asset_id, variant_id)
+		if sync_path != "":
+			return sync_path
+		# Start async resolution (downloads)
+		resolver.resolve_model_async(pack_id, asset_id, variant_id, priority)
+		return ""
+	
+	# Fallback: original implementation
 	var pack = get_pack(pack_id)
 	if not pack:
 		push_error("AssetPackManager: Pack not found: " + pack_id)
@@ -217,6 +246,16 @@ func resolve_model_path(pack_id: String, asset_id: String, variant_id: String = 
 
 ## Resolve the icon path, checking cache first, then local, then triggering download
 func resolve_icon_path(pack_id: String, asset_id: String, variant_id: String = "default", priority: int = 100) -> String:
+	# Use AssetResolver if available
+	if has_node("/root/AssetResolver"):
+		var resolver = get_node("/root/AssetResolver")
+		var sync_path = resolver.resolve_icon_sync(pack_id, asset_id, variant_id)
+		if sync_path != "":
+			return sync_path
+		resolver.resolve_icon_async(pack_id, asset_id, variant_id, priority)
+		return ""
+	
+	# Fallback: original implementation
 	var pack = get_pack(pack_id)
 	if not pack:
 		return ""
@@ -279,18 +318,32 @@ func needs_download(pack_id: String, asset_id: String, variant_id: String = "def
 
 ## Get the cached model path if it exists
 func _get_cached_model_path(pack_id: String, asset_id: String, variant_id: String) -> String:
-	if not has_node("/root/AssetDownloader"):
-		return ""
-	var downloader = get_node("/root/AssetDownloader")
-	return downloader.get_cached_path(pack_id, asset_id, variant_id, "model")
+	# Try AssetCacheManager first (unified cache)
+	if has_node("/root/AssetCacheManager"):
+		var cache_manager = get_node("/root/AssetCacheManager")
+		return cache_manager.get_cached_path(pack_id, asset_id, variant_id, "model")
+	
+	# Fallback to AssetDownloader
+	if has_node("/root/AssetDownloader"):
+		var downloader = get_node("/root/AssetDownloader")
+		return downloader.get_cached_path(pack_id, asset_id, variant_id, "model")
+	
+	return ""
 
 
 ## Get the cached icon path if it exists
 func _get_cached_icon_path(pack_id: String, asset_id: String, variant_id: String) -> String:
-	if not has_node("/root/AssetDownloader"):
-		return ""
-	var downloader = get_node("/root/AssetDownloader")
-	return downloader.get_cached_path(pack_id, asset_id, variant_id, "icon")
+	# Try AssetCacheManager first (unified cache)
+	if has_node("/root/AssetCacheManager"):
+		var cache_manager = get_node("/root/AssetCacheManager")
+		return cache_manager.get_cached_path(pack_id, asset_id, variant_id, "icon")
+	
+	# Fallback to AssetDownloader
+	if has_node("/root/AssetDownloader"):
+		var downloader = get_node("/root/AssetDownloader")
+		return downloader.get_cached_path(pack_id, asset_id, variant_id, "icon")
+	
+	return ""
 
 
 ## Request a download from the AssetDownloader

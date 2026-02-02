@@ -68,6 +68,25 @@ func get_token_state(network_id: String) -> TokenState:
 	return _token_states.get(network_id, null)
 
 
+## Set a token's state directly (for network sync on clients)
+## This bypasses authority checks since it's used for applying received state
+func set_token_state(network_id: String, state: TokenState) -> void:
+	var is_new = not _token_states.has(network_id)
+	_token_states[network_id] = state
+	if is_new:
+		token_added.emit(network_id, state)
+	else:
+		token_state_changed.emit(network_id, "_all", null, state)
+
+
+## Remove a token's state (for network sync on clients)
+## This bypasses authority checks since it's used for applying received state
+func remove_token_state(network_id: String) -> void:
+	if _token_states.has(network_id):
+		_token_states.erase(network_id)
+		token_removed.emit(network_id)
+
+
 ## Get all token states
 func get_all_token_states() -> Dictionary:
 	return _token_states.duplicate()
@@ -146,7 +165,7 @@ func update_token_property(network_id: String, property: String, value: Variant)
 
 	var old_value = state.get(property)
 	if old_value == value:
-		return true  # No change needed
+		return true # No change needed
 
 	state.set(property, value)
 

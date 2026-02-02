@@ -6,48 +6,71 @@
 layer = 100
 script = ExtResource("1_script")
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="Anchor" type="Control" parent="."]
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
-offset_top = -200.0
+offset_top = -60.0
 offset_right = 320.0
 offset_bottom = -16.0
 grow_vertical = 0
 
-[node name="PanelContainer" type="PanelContainer" parent="MarginContainer"]
-layout_mode = 2
-size_flags_vertical = 8
+[node name="VBoxContainer" type="VBoxContainer" parent="Anchor"]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -200.0
+offset_right = 44.0
+grow_vertical = 0
+alignment = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/PanelContainer"]
+[node name="DetailPanel" type="PanelContainer" parent="Anchor/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(280, 0)
+
+[node name="MarginContainer" type="MarginContainer" parent="Anchor/VBoxContainer/DetailPanel"]
 layout_mode = 2
 theme_override_constants/margin_left = 12
 theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 8
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="Anchor/VBoxContainer/DetailPanel/MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_type_variation = &"BoxContainerSpaced"
 
-[node name="TitleLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="TitleLabel" type="Label" parent="Anchor/VBoxContainer/DetailPanel/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_type_variation = &"H2"
 text = "Downloading Assets"
 horizontal_alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HSeparator" type="HSeparator" parent="Anchor/VBoxContainer/DetailPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
-[node name="ItemsContainer" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="ItemsContainer" type="VBoxContainer" parent="Anchor/VBoxContainer/DetailPanel/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="QueueLabel" type="Label" parent="MarginContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="QueueLabel" type="Label" parent="Anchor/VBoxContainer/DetailPanel/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 11
+theme_type_variation = &"Caption"
 text = "+ 5 more in queue"
 horizontal_alignment = 1
+
+[node name="IconButton" type="Button" parent="Anchor/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Downloads in progress - click to expand"
+theme_type_variation = &"Secondary"
+text = "↓"

@@ -56,9 +56,9 @@ func _setup_download_notifications() -> void:
 		downloader.download_failed.connect(_on_asset_download_failed)
 
 
-func _on_asset_download_completed(pack_id: String, asset_id: String, _variant_id: String, _local_path: String) -> void:
-	var display_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
-	UIManager.show_success("Downloaded: " + display_name)
+func _on_asset_download_completed(_pack_id: String, _asset_id: String, _variant_id: String, _local_path: String) -> void:
+	# Download success is shown quietly via the download queue UI
+	pass
 
 
 func _on_asset_download_failed(pack_id: String, asset_id: String, _variant_id: String, error: String) -> void:
@@ -370,9 +370,8 @@ func _on_transform_batch_received(batch: Dictionary) -> void:
 func _on_token_state_received(network_id: String, token_dict: Dictionary) -> void:
 	var token_state = TokenState.from_dict(token_dict)
 	
-	# Update GameState
-	if GameState.has_token(network_id):
-		GameState._token_states[network_id] = token_state
+	# Update GameState using proper API
+	GameState.set_token_state(network_id, token_state)
 	
 	# Apply to visual token
 	var token = _level_play_controller.spawned_tokens.get(network_id) as BoardToken
@@ -388,8 +387,8 @@ func _on_token_state_received(network_id: String, token_dict: Dictionary) -> voi
 
 ## Handle token removal (reliable channel)
 func _on_token_removed_received(network_id: String) -> void:
-	# Remove from GameState
-	GameState._token_states.erase(network_id)
+	# Remove from GameState using proper API
+	GameState.remove_token_state(network_id)
 	
 	# Remove visual token
 	var token = _level_play_controller.spawned_tokens.get(network_id)
@@ -440,7 +439,7 @@ func _create_token_from_state(token_state: TokenState) -> BoardToken:
 	)
 	
 	var token = result.token
-	var is_placeholder = result.is_placeholder
+	var _is_placeholder = result.is_placeholder
 	
 	if not token:
 		push_error("Root: Failed to create token from state")
@@ -456,10 +455,8 @@ func _create_token_from_state(token_state: TokenState) -> BoardToken:
 	# Apply the full state (position, health, etc.) without interpolation for initial placement
 	token_state.apply_to_token(token, false)
 	
-	# Notify about downloading if this is a placeholder
-	if is_placeholder:
-		var display_name = AssetPackManager.get_asset_display_name(token_state.pack_id, token_state.asset_id)
-		UIManager.show_info("Downloading: " + display_name)
+	# Download progress is shown via the compact download queue UI
+	# No toast needed for placeholder assets
 	
 	return token
 

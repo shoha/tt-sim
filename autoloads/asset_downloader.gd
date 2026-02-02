@@ -2,9 +2,8 @@ extends Node
 
 ## Handles downloading assets from remote URLs and caching them locally.
 ## Supports HTTP downloads from GitHub, Cloudflare R2, Dropbox, and other services.
-## Downloaded assets are cached in user://asset_cache/ for future sessions.
+## Uses AssetCacheManager for unified cache management with LRU eviction.
 
-const CACHE_DIR: String = "user://asset_cache/"
 const MAX_CONCURRENT_DOWNLOADS: int = 3
 const DOWNLOAD_TIMEOUT: float = 60.0 # seconds
 
@@ -50,8 +49,7 @@ var _failed_downloads: Dictionary = {}
 
 
 func _ready() -> void:
-	_ensure_cache_dir()
-	_scan_existing_cache()
+	pass # AssetCacheManager handles cache directory setup
 
 
 func _process(_delta: float) -> void:
@@ -59,33 +57,26 @@ func _process(_delta: float) -> void:
 		_update_download_progress()
 
 
-## Ensure the cache directory exists
-func _ensure_cache_dir() -> void:
-	if not DirAccess.dir_exists_absolute(CACHE_DIR):
-		DirAccess.make_dir_recursive_absolute(CACHE_DIR)
-
-
-## Scan existing cache to populate completed cache dictionary
-func _scan_existing_cache() -> void:
-	# We'll populate this lazily when checking for cached assets
-	pass
-
-
 ## Check if an asset is already cached locally
+## Delegates to AssetCacheManager for unified cache access
 ## Returns the local path if cached, empty string otherwise
 func get_cached_path(pack_id: String, asset_id: String, variant_id: String, file_type: String = "model") -> String:
 	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 	
-	# Check memory cache first, but verify file still exists
+	# Check memory cache first (for this session's downloads)
 	if _completed_cache.has(key):
 		var cached_path = _completed_cache[key]
 		if FileAccess.file_exists(cached_path):
 			return cached_path
 		else:
-			# Stale cache entry - remove it
 			_completed_cache.erase(key)
 	
-	# Check filesystem
+	# Delegate to AssetCacheManager
+	if has_node("/root/AssetCacheManager"):
+		var cache_manager = get_node("/root/AssetCacheManager")
+		return cache_manager.get_cached_path(pack_id, asset_id, variant_id, file_type)
+	
+	# Fallback: check filesystem directly
 	var cache_path = _get_cache_path(pack_id, asset_id, variant_id, file_type)
 	if FileAccess.file_exists(cache_path):
 		_completed_cache[key] = cache_path
@@ -96,8 +87,13 @@ func get_cached_path(pack_id: String, asset_id: String, variant_id: String, file
 
 ## Get the cache path for an asset (whether it exists or not)
 func _get_cache_path(pack_id: String, asset_id: String, variant_id: String, file_type: String = "model") -> String:
+	if has_node("/root/AssetCacheManager"):
+		var cache_manager = get_node("/root/AssetCacheManager")
+		return cache_manager.get_expected_cache_path(pack_id, asset_id, variant_id, file_type)
+	
+	# Fallback
 	var extension = ".glb" if file_type == "model" else ".png"
-	return CACHE_DIR + "%s/%s/%s%s" % [pack_id, asset_id, variant_id, extension]
+	return "user://asset_cache/%s/%s/%s%s" % [pack_id, asset_id, variant_id, extension]
 
 
 ## Request download of an asset
@@ -168,10 +164,13 @@ func _process_queue() -> void:
 func _start_download(request: DownloadRequest) -> void:
 	var key = request.get_key()
 	
-	# Ensure cache subdirectory exists
+	# Ensure cache subdirectory exists (AssetCacheManager may not have created it yet)
 	var cache_dir = request.cache_path.get_base_dir()
 	if not DirAccess.dir_exists_absolute(cache_dir):
-		DirAccess.make_dir_recursive_absolute(cache_dir)
+		var err = DirAccess.make_dir_recursive_absolute(cache_dir)
+		if err != OK:
+			_handle_download_error(request, "Failed to create cache directory")
+			return
 	
 	# Create HTTP request node
 	var http_request = HTTPRequest.new()
@@ -259,8 +258,13 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		_process_queue()
 		return
 	
-	# Cache the result
+	# Register with AssetCacheManager for unified cache tracking
 	var file_type = "model" if request.cache_path.ends_with(".glb") else "icon"
+	if has_node("/root/AssetCacheManager"):
+		var cache_manager = get_node("/root/AssetCacheManager")
+		cache_manager.register_cached_file(request.pack_id, request.asset_id, request.variant_id, request.cache_path, file_type)
+	
+	# Also update local memory cache
 	var cache_key = "%s/%s" % [key, file_type]
 	_completed_cache[cache_key] = request.cache_path
 	
@@ -365,11 +369,17 @@ func clear_all_caches() -> void:
 	_completed_cache.clear()
 	_failed_downloads.clear()
 	
-	# Optionally clear filesystem cache
-	var dir = DirAccess.open(CACHE_DIR)
-	if dir:
-		_recursive_delete(CACHE_DIR)
-		_ensure_cache_dir()
+	# Use AssetCacheManager if available
+	if has_node("/root/AssetCacheManager"):
+		var cache_manager = get_node("/root/AssetCacheManager")
+		cache_manager.clear_cache()
+	else:
+		# Fallback: clear filesystem cache directly
+		var cache_dir = "user://asset_cache/"
+		var dir = DirAccess.open(cache_dir)
+		if dir:
+			_recursive_delete(cache_dir)
+			DirAccess.make_dir_recursive_absolute(cache_dir)
 
 
 ## Recursively delete a directory
