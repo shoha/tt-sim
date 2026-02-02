@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://cm38k5ry642qp"
 path.s3tc="res://.godot/imported/oakslabpainted_Desktop Setup_57.png-9532f08f8237b6e4489ba6d1222939ad.s3tc.ctex"
+path.etc2="res://.godot/imported/oakslabpainted_Desktop Setup_57.png-9532f08f8237b6e4489ba6d1222939ad.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/maps/oakslabpainted_Desktop Setup_57.png"
-dest_files=["res://.godot/imported/oakslabpainted_Desktop Setup_57.png-9532f08f8237b6e4489ba6d1222939ad.s3tc.ctex"]
+dest_files=["res://.godot/imported/oakslabpainted_Desktop Setup_57.png-9532f08f8237b6e4489ba6d1222939ad.s3tc.ctex", "res://.godot/imported/oakslabpainted_Desktop Setup_57.png-9532f08f8237b6e4489ba6d1222939ad.etc2.ctex"]
 
 [params]
 

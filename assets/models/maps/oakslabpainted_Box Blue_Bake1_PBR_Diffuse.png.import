@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://depkd0s534gvt"
 path.s3tc="res://.godot/imported/oakslabpainted_Box Blue_Bake1_PBR_Diffuse.png-b26bd17d1770497b3ae9460335e9639c.s3tc.ctex"
+path.etc2="res://.godot/imported/oakslabpainted_Box Blue_Bake1_PBR_Diffuse.png-b26bd17d1770497b3ae9460335e9639c.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/maps/oakslabpainted_Box Blue_Bake1_PBR_Diffuse.png"
-dest_files=["res://.godot/imported/oakslabpainted_Box Blue_Bake1_PBR_Diffuse.png-b26bd17d1770497b3ae9460335e9639c.s3tc.ctex"]
+dest_files=["res://.godot/imported/oakslabpainted_Box Blue_Bake1_PBR_Diffuse.png-b26bd17d1770497b3ae9460335e9639c.s3tc.ctex", "res://.godot/imported/oakslabpainted_Box Blue_Bake1_PBR_Diffuse.png-b26bd17d1770497b3ae9460335e9639c.etc2.ctex"]
 
 [params]
 

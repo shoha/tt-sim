@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bga3ewmxx3qnq"
 path.s3tc="res://.godot/imported/oakslabpainted_Rolling Chair Yellow_76.png-b8ec46b1910fbbeca6e0d9a4e5d8e190.s3tc.ctex"
+path.etc2="res://.godot/imported/oakslabpainted_Rolling Chair Yellow_76.png-b8ec46b1910fbbeca6e0d9a4e5d8e190.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/maps/oakslabpainted_Rolling Chair Yellow_76.png"
-dest_files=["res://.godot/imported/oakslabpainted_Rolling Chair Yellow_76.png-b8ec46b1910fbbeca6e0d9a4e5d8e190.s3tc.ctex"]
+dest_files=["res://.godot/imported/oakslabpainted_Rolling Chair Yellow_76.png-b8ec46b1910fbbeca6e0d9a4e5d8e190.s3tc.ctex", "res://.godot/imported/oakslabpainted_Rolling Chair Yellow_76.png-b8ec46b1910fbbeca6e0d9a4e5d8e190.etc2.ctex"]
 
 [params]
 

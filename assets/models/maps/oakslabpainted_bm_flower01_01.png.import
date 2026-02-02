@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://b1rne2qvp6432"
 path.s3tc="res://.godot/imported/oakslabpainted_bm_flower01_01.png-8b871f9c6b5d250f3ad2a13242344b63.s3tc.ctex"
+path.etc2="res://.godot/imported/oakslabpainted_bm_flower01_01.png-8b871f9c6b5d250f3ad2a13242344b63.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/maps/oakslabpainted_bm_flower01_01.png"
-dest_files=["res://.godot/imported/oakslabpainted_bm_flower01_01.png-8b871f9c6b5d250f3ad2a13242344b63.s3tc.ctex"]
+dest_files=["res://.godot/imported/oakslabpainted_bm_flower01_01.png-8b871f9c6b5d250f3ad2a13242344b63.s3tc.ctex", "res://.godot/imported/oakslabpainted_bm_flower01_01.png-8b871f9c6b5d250f3ad2a13242344b63.etc2.ctex"]
 
 [params]
 

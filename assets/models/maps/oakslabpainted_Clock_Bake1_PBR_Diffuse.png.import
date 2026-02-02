@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://kobkhyg0m1bj"
 path.s3tc="res://.godot/imported/oakslabpainted_Clock_Bake1_PBR_Diffuse.png-09aa7fa4b1a1e24b112a0d60627be612.s3tc.ctex"
+path.etc2="res://.godot/imported/oakslabpainted_Clock_Bake1_PBR_Diffuse.png-09aa7fa4b1a1e24b112a0d60627be612.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/maps/oakslabpainted_Clock_Bake1_PBR_Diffuse.png"
-dest_files=["res://.godot/imported/oakslabpainted_Clock_Bake1_PBR_Diffuse.png-09aa7fa4b1a1e24b112a0d60627be612.s3tc.ctex"]
+dest_files=["res://.godot/imported/oakslabpainted_Clock_Bake1_PBR_Diffuse.png-09aa7fa4b1a1e24b112a0d60627be612.s3tc.ctex", "res://.godot/imported/oakslabpainted_Clock_Bake1_PBR_Diffuse.png-09aa7fa4b1a1e24b112a0d60627be612.etc2.ctex"]
 
 [params]
 
