@@ -4,9 +4,15 @@ extends Node
 ## 
 ## When a client needs an asset that has no external URL, this system
 ## allows downloading it directly from the host over the game network.
+## Uses AssetCacheManager for unified cache management.
 ##
 ## Host side: Responds to asset requests by reading and sending local files
 ## Client side: Requests assets from host when URL-based download is unavailable
+##
+## Features:
+##   - ZSTD compression for efficient transfer
+##   - Chunked transfers with progress tracking
+##   - Transfer resume support for interrupted downloads
 
 const CHUNK_SIZE := 32768 # 32KB chunks
 const MAX_CONCURRENT_TRANSFERS := 2
@@ -23,6 +29,9 @@ var _host_transfers: Dictionary = {}
 
 ## Pending downloads on client (key -> download state)
 var _client_downloads: Dictionary = {}
+
+## Partial transfers saved for resume (key -> partial state)
+var _partial_transfers: Dictionary = {}
 
 ## Queue of pending requests on client
 var _request_queue: Array[Dictionary] = []
@@ -108,30 +117,44 @@ func _process_request_queue() -> void:
 func _start_request(request: Dictionary) -> void:
 	var key = request.key
 	
-	_client_downloads[key] = {
-		"pack_id": request.pack_id,
-		"asset_id": request.asset_id,
-		"variant_id": request.variant_id,
-		"chunks": [],
-		"total_chunks": 0,
-		"started_at": Time.get_ticks_msec()
-	}
+	# Check for partial transfer to resume
+	var resume_from: int = 0
+	if _partial_transfers.has(key):
+		var partial = _partial_transfers[key]
+		resume_from = partial.received_count
+		_client_downloads[key] = partial.duplicate(true)
+		_partial_transfers.erase(key)
+		print("AssetStreamer: Resuming %s from chunk %d" % [key, resume_from])
+	else:
+		_client_downloads[key] = {
+			"pack_id": request.pack_id,
+			"asset_id": request.asset_id,
+			"variant_id": request.variant_id,
+			"chunks": [],
+			"total_chunks": 0,
+			"received_count": 0,
+			"original_size": 0,
+			"started_at": Time.get_ticks_msec()
+		}
 	
-	# Send request to host (peer_id 1)
-	rpc_id(1, "_rpc_request_asset", request.pack_id, request.asset_id, request.variant_id)
-	print("AssetStreamer: Requesting %s from host" % key)
+	# Send request to host (peer_id 1) with resume info
+	rpc_id(1, "_rpc_request_asset", request.pack_id, request.asset_id, request.variant_id, resume_from)
+	print("AssetStreamer: Requesting %s from host (resume_from=%d)" % [key, resume_from])
 
 
-## RPC: Client requests an asset from host
+## RPC: Client requests an asset from host (with optional resume)
 @rpc("any_peer", "reliable")
-func _rpc_request_asset(pack_id: String, asset_id: String, variant_id: String) -> void:
+func _rpc_request_asset(pack_id: String, asset_id: String, variant_id: String, resume_from_chunk: int = 0) -> void:
 	if not NetworkManager.is_host():
 		return
 	
 	var peer_id = multiplayer.get_remote_sender_id()
 	var key = "%s/%s/%s" % [pack_id, asset_id, variant_id]
 	
-	print("AssetStreamer: Peer %d requesting asset %s" % [peer_id, key])
+	if resume_from_chunk > 0:
+		print("AssetStreamer: Peer %d resuming asset %s from chunk %d" % [peer_id, key, resume_from_chunk])
+	else:
+		print("AssetStreamer: Peer %d requesting asset %s" % [peer_id, key])
 	
 	# Resolve the file path based on pack type
 	var file_path: String
@@ -146,12 +169,12 @@ func _rpc_request_asset(pack_id: String, asset_id: String, variant_id: String) -
 		rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id)
 		return
 	
-	# Read and send the file
-	_send_asset_to_peer(peer_id, pack_id, asset_id, variant_id, file_path)
+	# Read and send the file (with resume support)
+	_send_asset_to_peer(peer_id, pack_id, asset_id, variant_id, file_path, resume_from_chunk)
 
 
-## Send an asset file to a peer in chunks
-func _send_asset_to_peer(peer_id: int, pack_id: String, asset_id: String, variant_id: String, file_path: String) -> void:
+## Send an asset file to a peer in chunks (with resume support)
+func _send_asset_to_peer(peer_id: int, pack_id: String, asset_id: String, variant_id: String, file_path: String, resume_from_chunk: int = 0) -> void:
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	if not file:
 		rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id)
@@ -164,23 +187,24 @@ func _send_asset_to_peer(peer_id: int, pack_id: String, asset_id: String, varian
 	var compressed = data.compress(FileAccess.COMPRESSION_ZSTD)
 	var total_chunks = ceili(float(compressed.size()) / CHUNK_SIZE)
 	
-	print("AssetStreamer: Sending %s to peer %d (%d bytes, %d chunks)" % [
+	print("AssetStreamer: Sending %s to peer %d (%d bytes, %d chunks, starting from %d)" % [
 		"%s/%s/%s" % [pack_id, asset_id, variant_id],
 		peer_id,
 		compressed.size(),
-		total_chunks
+		total_chunks,
+		resume_from_chunk
 	])
 	
-	# Send header
+	# Send header (always send so client knows total)
 	rpc_id(peer_id, "_rpc_asset_header", pack_id, asset_id, variant_id, total_chunks, data.size())
 	
-	# Send chunks (spread across frames to avoid blocking)
-	_send_chunks_async(peer_id, pack_id, asset_id, variant_id, compressed, total_chunks)
+	# Send chunks starting from resume point (spread across frames to avoid blocking)
+	_send_chunks_async(peer_id, pack_id, asset_id, variant_id, compressed, total_chunks, resume_from_chunk)
 
 
-## Async chunk sending to avoid blocking
-func _send_chunks_async(peer_id: int, pack_id: String, asset_id: String, variant_id: String, compressed: PackedByteArray, total_chunks: int) -> void:
-	for i in range(total_chunks):
+## Async chunk sending to avoid blocking (with resume support)
+func _send_chunks_async(peer_id: int, pack_id: String, asset_id: String, variant_id: String, compressed: PackedByteArray, total_chunks: int, start_chunk: int = 0) -> void:
+	for i in range(start_chunk, total_chunks):
 		var start = i * CHUNK_SIZE
 		var end = mini(start + CHUNK_SIZE, compressed.size())
 		var chunk = compressed.slice(start, end)
@@ -188,10 +212,11 @@ func _send_chunks_async(peer_id: int, pack_id: String, asset_id: String, variant
 		rpc_id(peer_id, "_rpc_asset_chunk", pack_id, asset_id, variant_id, i, chunk)
 		
 		# Yield every few chunks to avoid blocking
-		if i % 4 == 3:
+		if (i - start_chunk) % 4 == 3:
 			await get_tree().process_frame
 	
-	print("AssetStreamer: Finished sending %s/%s/%s to peer %d" % [pack_id, asset_id, variant_id, peer_id])
+	var chunks_sent = total_chunks - start_chunk
+	print("AssetStreamer: Finished sending %s/%s/%s to peer %d (%d chunks)" % [pack_id, asset_id, variant_id, peer_id, chunks_sent])
 
 
 ## RPC: Asset not found on host
@@ -241,6 +266,10 @@ func _rpc_asset_chunk(pack_id: String, asset_id: String, variant_id: String, chu
 		if chunk != null:
 			received += 1
 	
+	# Track received count for resume
+	download.received_count = received
+	download.last_chunk_time = Time.get_ticks_msec()
+	
 	# Emit progress
 	var progress = float(received) / float(download.total_chunks)
 	transfer_progress.emit(pack_id, asset_id, variant_id, progress)
@@ -270,23 +299,35 @@ func _finalize_download(key: String) -> void:
 		_process_request_queue()
 		return
 	
-	# Save to cache
-	var cache_path = "user://asset_cache/%s/%s/%s.glb" % [download.pack_id, download.asset_id, download.variant_id]
-	var cache_dir = cache_path.get_base_dir()
-	
-	if not DirAccess.dir_exists_absolute(cache_dir):
-		DirAccess.make_dir_recursive_absolute(cache_dir)
-	
-	var file = FileAccess.open(cache_path, FileAccess.WRITE)
-	if not file:
-		push_error("AssetStreamer: Failed to write cache file: " + cache_path)
-		asset_failed.emit(download.pack_id, download.asset_id, download.variant_id, "Failed to write file")
-		_client_downloads.erase(key)
-		_process_request_queue()
-		return
-	
-	file.store_buffer(data)
-	file.close()
+	# Store via AssetCacheManager if available
+	var cache_path: String
+	if has_node("/root/AssetCacheManager"):
+		var cache_manager = get_node("/root/AssetCacheManager")
+		cache_path = cache_manager.store_asset(download.pack_id, download.asset_id, download.variant_id, data, "model")
+		if cache_path == "":
+			push_error("AssetStreamer: Failed to store asset in cache")
+			asset_failed.emit(download.pack_id, download.asset_id, download.variant_id, "Failed to cache file")
+			_client_downloads.erase(key)
+			_process_request_queue()
+			return
+	else:
+		# Fallback: save directly to cache folder
+		cache_path = "user://asset_cache/%s/%s/%s.glb" % [download.pack_id, download.asset_id, download.variant_id]
+		var cache_dir = cache_path.get_base_dir()
+		
+		if not DirAccess.dir_exists_absolute(cache_dir):
+			DirAccess.make_dir_recursive_absolute(cache_dir)
+		
+		var file = FileAccess.open(cache_path, FileAccess.WRITE)
+		if not file:
+			push_error("AssetStreamer: Failed to write cache file: " + cache_path)
+			asset_failed.emit(download.pack_id, download.asset_id, download.variant_id, "Failed to write file")
+			_client_downloads.erase(key)
+			_process_request_queue()
+			return
+		
+		file.store_buffer(data)
+		file.close()
 	
 	print("AssetStreamer: Downloaded and cached %s (%d bytes)" % [key, data.size()])
 	
@@ -305,6 +346,28 @@ func _on_peer_connected(_peer_id: int) -> void:
 func _on_peer_disconnected(peer_id: int) -> void:
 	# Host: Clean up any transfers to this peer
 	_host_transfers.erase(peer_id)
+	
+	# Client: If we disconnected from host, save partial transfers for resume
+	if peer_id == 1: # Host peer_id
+		_save_partial_transfers()
+
+
+## Save current downloads as partial transfers for resume
+func _save_partial_transfers() -> void:
+	for key in _client_downloads:
+		var download = _client_downloads[key]
+		# Only save if we've received some chunks
+		if download.get("received_count", 0) > 0:
+			_partial_transfers[key] = download.duplicate(true)
+			print("AssetStreamer: Saved partial transfer %s (%d/%d chunks)" % [
+				key, download.received_count, download.total_chunks
+			])
+	_client_downloads.clear()
+
+
+## Clear partial transfers (call when starting fresh)
+func clear_partial_transfers() -> void:
+	_partial_transfers.clear()
 
 
 ## Enable or disable P2P streaming
@@ -331,6 +394,14 @@ func get_queued_request_count() -> int:
 ## @param level_folder: The level folder name
 ## @return: The cached path, or empty string if not cached
 func get_cached_map_path(level_folder: String) -> String:
+	# Try AssetCacheManager first
+	if has_node("/root/AssetCacheManager"):
+		var cache_manager = get_node("/root/AssetCacheManager")
+		var cached = cache_manager.get_cached_path(Paths.LEVEL_MAPS_PACK_ID, level_folder, "map", "model")
+		if cached != "":
+			return cached
+	
+	# Fallback: check filesystem directly
 	var cache_path = "user://asset_cache/%s/%s/map.glb" % [Paths.LEVEL_MAPS_PACK_ID, level_folder]
 	if FileAccess.file_exists(cache_path):
 		return cache_path
