@@ -49,6 +49,14 @@ func _load_settings() -> void:
 		_enabled = config.get_value("network", "p2p_enabled", true)
 
 
+## Request a map from the host (convenience method)
+## Uses the special _level_maps pack_id to stream map files
+## @param level_folder: The level folder name (e.g., "my_dungeon")
+## @param priority: Download priority (lower = higher priority)
+func request_map_from_host(level_folder: String, priority: int = 50) -> void:
+	request_from_host(Paths.LEVEL_MAPS_PACK_ID, level_folder, "map", priority)
+
+
 ## Request an asset from the host
 ## Called by AssetDownloader when no URL is available
 func request_from_host(pack_id: String, asset_id: String, variant_id: String, priority: int = 100) -> void:
@@ -125,15 +133,21 @@ func _rpc_request_asset(pack_id: String, asset_id: String, variant_id: String) -
 	
 	print("AssetStreamer: Peer %d requesting asset %s" % [peer_id, key])
 	
-	# Get the model path
-	var model_path = AssetPackManager.get_model_path(pack_id, asset_id, variant_id)
+	# Resolve the file path based on pack type
+	var file_path: String
+	if pack_id == Paths.LEVEL_MAPS_PACK_ID:
+		# Special handling for level maps - asset_id is the level folder name
+		file_path = Paths.get_level_map_path(asset_id)
+	else:
+		# Regular asset pack - use AssetPackManager
+		file_path = AssetPackManager.get_model_path(pack_id, asset_id, variant_id)
 	
-	if model_path == "" or not FileAccess.file_exists(model_path):
+	if file_path == "" or not FileAccess.file_exists(file_path):
 		rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id)
 		return
 	
 	# Read and send the file
-	_send_asset_to_peer(peer_id, pack_id, asset_id, variant_id, model_path)
+	_send_asset_to_peer(peer_id, pack_id, asset_id, variant_id, file_path)
 
 
 ## Send an asset file to a peer in chunks
@@ -311,3 +325,28 @@ func get_active_download_count() -> int:
 ## Get the number of queued requests (client side)  
 func get_queued_request_count() -> int:
 	return _request_queue.size()
+
+
+## Get the cached map path for a level (if it exists)
+## @param level_folder: The level folder name
+## @return: The cached path, or empty string if not cached
+func get_cached_map_path(level_folder: String) -> String:
+	var cache_path = "user://asset_cache/%s/%s/map.glb" % [Paths.LEVEL_MAPS_PACK_ID, level_folder]
+	if FileAccess.file_exists(cache_path):
+		return cache_path
+	return ""
+
+
+## Check if a map download is in progress for a level
+func is_map_downloading(level_folder: String) -> bool:
+	var key = "%s/%s/map" % [Paths.LEVEL_MAPS_PACK_ID, level_folder]
+	return _client_downloads.has(key)
+
+
+## Check if a map download is queued for a level
+func is_map_queued(level_folder: String) -> bool:
+	var key = "%s/%s/map" % [Paths.LEVEL_MAPS_PACK_ID, level_folder]
+	for req in _request_queue:
+		if req.key == key:
+			return true
+	return false

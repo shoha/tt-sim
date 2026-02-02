@@ -109,53 +109,21 @@ static func _extract_model_components(scene: Node3D) -> ModelComponents:
 	components.collision_shape = scene.get_node_or_null("Armature/Mesh/Mesh/CollisionShape3D")
 
 	# If not found, search recursively (for GLTFDocument-loaded scenes)
+	# Uses shared GlbUtils for node finding
 	if not components.animation_player:
-		components.animation_player = _find_node_of_type(scene, "AnimationPlayer")
+		components.animation_player = GlbUtils.find_node_of_type(scene, "AnimationPlayer")
 	if not components.armature:
-		components.armature = _find_node_by_name(scene, "Armature")
+		components.armature = GlbUtils.find_node_by_name(scene, "Armature")
 	if not components.skeleton:
-		components.skeleton = _find_node_of_type(scene, "Skeleton3D")
+		components.skeleton = GlbUtils.find_node_of_type(scene, "Skeleton3D")
 	if not components.mesh_model:
-		components.mesh_model = _find_first_mesh_instance(scene)
+		components.mesh_model = GlbUtils.find_first_mesh_instance(scene)
 
 	if not components.mesh_model:
 		push_error("BoardTokenFactory: No mesh found in model scene")
 		return null
 
 	return components
-
-
-## Find a node by class type recursively
-static func _find_node_of_type(root: Node, type_name: String) -> Node:
-	for child in root.get_children():
-		if child.get_class() == type_name:
-			return child
-		var found = _find_node_of_type(child, type_name)
-		if found:
-			return found
-	return null
-
-
-## Find a node by name recursively
-static func _find_node_by_name(root: Node, node_name: String) -> Node:
-	for child in root.get_children():
-		if child.name == node_name:
-			return child
-		var found = _find_node_by_name(child, node_name)
-		if found:
-			return found
-	return null
-
-
-## Find the first MeshInstance3D recursively
-static func _find_first_mesh_instance(root: Node) -> MeshInstance3D:
-	for child in root.get_children():
-		if child is MeshInstance3D:
-			return child
-		var found = _find_first_mesh_instance(child)
-		if found:
-			return found
-	return null
 
 
 ## Clear placeholder children from the BoardToken scene
@@ -309,115 +277,11 @@ static func _create_from_model_path(scene_path: String, pack_id: String, asset_i
 	return token
 
 
-## Load a GLB file from user:// path using GLTFDocument
+## Load a GLB file from user:// path using shared GlbUtils
+## For tokens, we don't create StaticBody3D - the RigidBody3D handles collision
 static func _load_glb_from_user_path(path: String) -> Node3D:
-	var gltf_document = GLTFDocument.new()
-	var gltf_state = GLTFState.new()
-	
-	# Configure GLTFState to create animations
-	gltf_state.create_animations = true
-
-	# Read the file bytes
-	var file = FileAccess.open(path, FileAccess.READ)
-	if not file:
-		push_error("BoardTokenFactory: Could not open GLB file: " + path)
-		return null
-
-	var buffer = file.get_buffer(file.get_length())
-	file.close()
-
-	# Parse the GLB
-	var error = gltf_document.append_from_buffer(buffer, "", gltf_state)
-	if error != OK:
-		push_error("BoardTokenFactory: Failed to parse GLB: " + path + " (error: " + str(error) + ")")
-		return null
-
-	# Generate the scene with animation baking at 30 FPS
-	var scene = gltf_document.generate_scene(gltf_state, 30.0)
-	if not scene:
-		push_error("BoardTokenFactory: Failed to generate scene from GLB: " + path)
-		return null
-
-	# Post-process: handle collision meshes that Godot's import system would normally process
-	_process_collision_meshes(scene)
-	
-	# Post-process: handle animation naming conventions (strip _loop suffix, set loop mode)
-	_process_animations(scene)
-
-	return scene
-
-
-## Process animations in a runtime-loaded GLB
-## Godot's import system strips _loop suffix and sets loop mode - replicate that behavior
-static func _process_animations(scene: Node) -> void:
-	var anim_player = _find_node_of_type(scene, "AnimationPlayer") as AnimationPlayer
-	if not anim_player:
-		return
-	
-	# Process each library
-	for lib_name in anim_player.get_animation_library_list():
-		var lib = anim_player.get_animation_library(lib_name)
-		var anims_to_rename: Array[Dictionary] = []
-		
-		# Find animations with _loop suffix
-		for anim_name in lib.get_animation_list():
-			var name_str = String(anim_name)
-			if name_str.ends_with("_loop"):
-				var new_name = name_str.substr(0, name_str.length() - 5) # Strip "_loop"
-				var anim = lib.get_animation(anim_name)
-				if anim:
-					anim.loop_mode = Animation.LOOP_LINEAR
-					anims_to_rename.append({
-						"old_name": anim_name,
-						"new_name": new_name,
-						"animation": anim
-					})
-		
-		# Rename animations (can't modify while iterating)
-		for rename_info in anims_to_rename:
-			lib.remove_animation(rename_info.old_name)
-			# Only add if the non-loop version doesn't already exist
-			if not lib.has_animation(rename_info.new_name):
-				lib.add_animation(rename_info.new_name, rename_info.animation)
-
-
-## Process collision mesh nodes in a runtime-loaded GLB
-## Godot's import system handles these automatically, but GLTFDocument doesn't
-## Standard Godot collision mesh suffixes: -col, -convcol, -colonly, -convcolonly
-static func _process_collision_meshes(node: Node) -> void:
-	# Collect nodes to process (can't modify tree while iterating)
-	var nodes_to_hide: Array[Node] = []
-	_find_collision_mesh_nodes(node, nodes_to_hide)
-	
-	# Hide collision mesh nodes (they're meant to be invisible collision geometry)
-	for col_node in nodes_to_hide:
-		if col_node is MeshInstance3D:
-			col_node.visible = false
-
-
-## Recursively find nodes that are collision meshes based on naming convention
-## Godot standard suffixes: https://docs.godotengine.org/en/stable/tutorials/assets_pipeline/importing_3d_scenes/node_type_customization.html
-static func _find_collision_mesh_nodes(node: Node, result: Array[Node]) -> void:
-	var name_lower = node.name.to_lower()
-	
-	# Standard Godot collision mesh suffixes (order matters - check longer suffixes first)
-	var collision_suffixes = [
-		"-convcolonly", # Convex collision only (no visual)
-		"-convco", # Convex collision only (short form)
-		"-convcol", # Convex collision (keeps visual)
-		"-colonly", # Trimesh collision only (no visual)
-		"-trimesh", # Trimesh collision
-		"-col", # Generic collision
-	]
-	
-	for suffix in collision_suffixes:
-		if name_lower.ends_with(suffix):
-			result.append(node)
-			break
-	
-	# Recurse into children
-	for child in node.get_children():
-		_find_collision_mesh_nodes(child, result)
+	# Use shared utility with create_static_bodies=false (tokens use RigidBody3D for collision)
+	return GlbUtils.load_glb_with_processing(path, false)
 
 
 ## Generate a unique network ID for tokens
