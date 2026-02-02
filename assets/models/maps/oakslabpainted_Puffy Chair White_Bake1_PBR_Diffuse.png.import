@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dvs7x0sb3q0nx"
 path.s3tc="res://.godot/imported/oakslabpainted_Puffy Chair White_Bake1_PBR_Diffuse.png-159e45011c460f4aa00920cdaf62f986.s3tc.ctex"
+path.etc2="res://.godot/imported/oakslabpainted_Puffy Chair White_Bake1_PBR_Diffuse.png-159e45011c460f4aa00920cdaf62f986.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/maps/oakslabpainted_Puffy Chair White_Bake1_PBR_Diffuse.png"
-dest_files=["res://.godot/imported/oakslabpainted_Puffy Chair White_Bake1_PBR_Diffuse.png-159e45011c460f4aa00920cdaf62f986.s3tc.ctex"]
+dest_files=["res://.godot/imported/oakslabpainted_Puffy Chair White_Bake1_PBR_Diffuse.png-159e45011c460f4aa00920cdaf62f986.s3tc.ctex", "res://.godot/imported/oakslabpainted_Puffy Chair White_Bake1_PBR_Diffuse.png-159e45011c460f4aa00920cdaf62f986.etc2.ctex"]
 
 [params]
 
