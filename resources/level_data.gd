@@ -11,8 +11,14 @@ class_name LevelData
 @export var created_at: int = 0
 @export var modified_at: int = 0
 
+## Level storage location (folder name within user://levels/)
+## Empty string means the level hasn't been saved yet
+@export var level_folder: String = ""
+
 ## Map configuration
 @export_group("Map")
+## For user:// levels: relative path within level folder (e.g., "map.glb")
+## For legacy res:// levels: full path (e.g., "res://assets/models/maps/map.glb")
 @export var map_path: String = ""
 @export var map_scale: Vector3 = Vector3.ONE
 @export var map_offset: Vector3 = Vector3.ZERO
@@ -70,12 +76,37 @@ func _update_modified_time() -> void:
 	modified_at = int(Time.get_unix_time_from_system())
 
 
+## Get the absolute path to the map file
+## Handles both user:// (folder-based) and res:// (legacy) paths
+func get_absolute_map_path() -> String:
+	if map_path == "":
+		return ""
+	
+	# If map_path is already absolute (res:// or user://), return as-is
+	if map_path.begins_with("res://") or map_path.begins_with("user://"):
+		return map_path
+	
+	# Otherwise, it's a relative path within the level folder
+	if level_folder != "":
+		return Paths.get_level_folder(level_folder) + map_path
+	
+	# No level folder set - can't resolve relative path
+	return ""
+
+
+## Check if this level uses the new folder-based storage
+func is_folder_based() -> bool:
+	return level_folder != "" and not map_path.begins_with("res://")
+
+
 ## Create a duplicate of this level data
+## Note: level_folder is NOT copied - duplicates need their own folder
 func duplicate_level() -> LevelData:
 	var new_level = LevelData.new()
 	new_level.level_name = level_name + " (Copy)"
 	new_level.level_description = level_description
 	new_level.author = author
+	new_level.level_folder = "" # Duplicates need to be saved to a new folder
 	new_level.map_path = map_path
 	new_level.map_scale = map_scale
 	new_level.map_offset = map_offset
@@ -97,8 +128,12 @@ func validate() -> Array[String]:
 
 	if map_path == "":
 		errors.append("Map file is required")
-	elif not ResourceLoader.exists(map_path) and not FileAccess.file_exists(map_path):
-		errors.append("Map file does not exist: " + map_path)
+	else:
+		var absolute_path = get_absolute_map_path()
+		if absolute_path == "":
+			errors.append("Cannot resolve map path - level_folder may not be set")
+		elif not _map_file_exists(absolute_path):
+			errors.append("Map file does not exist: " + absolute_path)
 
 	for i in range(token_placements.size()):
 		var placement = token_placements[i]
@@ -106,6 +141,14 @@ func validate() -> Array[String]:
 			errors.append("Token %d has no asset assigned" % (i + 1))
 
 	return errors
+
+
+## Check if a map file exists (handles both res:// and user:// paths)
+func _map_file_exists(path: String) -> bool:
+	if path.begins_with("res://"):
+		return ResourceLoader.exists(path)
+	else:
+		return FileAccess.file_exists(path)
 
 
 ## Convert to dictionary for network transmission
@@ -120,6 +163,7 @@ func to_dict() -> Dictionary:
 		"author": author,
 		"created_at": created_at,
 		"modified_at": modified_at,
+		"level_folder": level_folder,
 		"map_path": map_path,
 		"map_scale": {"x": map_scale.x, "y": map_scale.y, "z": map_scale.z},
 		"map_offset": {"x": map_offset.x, "y": map_offset.y, "z": map_offset.z},
@@ -135,6 +179,7 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.author = data.get("author", "")
 	level.created_at = data.get("created_at", 0)
 	level.modified_at = data.get("modified_at", 0)
+	level.level_folder = data.get("level_folder", "")
 	level.map_path = data.get("map_path", "")
 	
 	var scale_data = data.get("map_scale", {"x": 1, "y": 1, "z": 1})
