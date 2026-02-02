@@ -76,9 +76,14 @@ func _scan_existing_cache() -> void:
 func get_cached_path(pack_id: String, asset_id: String, variant_id: String, file_type: String = "model") -> String:
 	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 	
-	# Check memory cache first
+	# Check memory cache first, but verify file still exists
 	if _completed_cache.has(key):
-		return _completed_cache[key]
+		var cached_path = _completed_cache[key]
+		if FileAccess.file_exists(cached_path):
+			return cached_path
+		else:
+			# Stale cache entry - remove it
+			_completed_cache.erase(key)
 	
 	# Check filesystem
 	var cache_path = _get_cache_path(pack_id, asset_id, variant_id, file_type)
