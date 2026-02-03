@@ -1,7 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://0mln5piv3eiq"]
+[gd_scene format=3 uid="uid://0mln5piv3eiq"]
 
 [ext_resource type="PackedScene" uid="uid://b3to05sowrppc" path="res://assets/models/dice/d20.glb" id="1_fgkus"]
-[ext_resource type="Script" path="res://scenes/states/title_screen/title_screen.gd" id="2_script"]
+[ext_resource type="Script" uid="uid://c3lxhfpdyugkh" path="res://scenes/states/title_screen/title_screen.gd" id="2_script"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_fgkus"]
 sky_top_color = Color(0.7866573, 0.8264243, 0.8797699, 1)
@@ -243,36 +243,36 @@ grow_vertical = 2
 layout_mode = 2
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="NetworkLabel" type="Label" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+[node name="NetworkLabel" type="Label" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=1084628932]
 layout_mode = 2
 theme_type_variation = &"H2"
 text = "Multiplayer"
 horizontal_alignment = 1
 
-[node name="NetworkButtons" type="HBoxContainer" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+[node name="NetworkButtons" type="HBoxContainer" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=1412160317]
 layout_mode = 2
 theme_override_constants/separation = 16
 alignment = 1
 
-[node name="HostGameButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/NetworkButtons"]
+[node name="HostGameButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/NetworkButtons" unique_id=1114653406]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
 theme_type_variation = &"Success"
 text = "Host Game"
 
-[node name="JoinGameButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/NetworkButtons"]
+[node name="JoinGameButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/NetworkButtons" unique_id=1679235874]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Join Game"
 
-[node name="HSeparator2" type="HSeparator" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+[node name="HSeparator2" type="HSeparator" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=1101493498]
 layout_mode = 2
 theme_override_constants/separation = 20
 
-[node name="SettingsButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+[node name="SettingsButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=1708751033]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
