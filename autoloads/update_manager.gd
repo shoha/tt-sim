@@ -136,6 +136,13 @@ func _on_check_completed(result: int, response_code: int, _headers: PackedString
 		update_check_complete.emit(false)
 		return
 	
+	# Sort releases by published_at descending (API order is unreliable)
+	releases.sort_custom(func(a, b):
+		var date_a = a.get("published_at", "") if a is Dictionary else ""
+		var date_b = b.get("published_at", "") if b is Dictionary else ""
+		return date_a > date_b # Descending order (newest first)
+	)
+	
 	# Find the best release (respecting prerelease setting)
 	var check_prereleases = is_prerelease_enabled()
 	var best_release: Dictionary = {}
@@ -155,7 +162,7 @@ func _on_check_completed(result: int, response_code: int, _headers: PackedString
 		if is_prerelease and not check_prereleases:
 			continue
 		
-		# First valid release is the latest (API returns sorted by date)
+		# First valid release is the latest (sorted by published_at)
 		best_release = release
 		break
 	
