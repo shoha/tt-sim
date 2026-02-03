@@ -29,11 +29,13 @@ The asset management system provides:
 
 ### Core Components
 
-| Autoload           | Purpose                                         |
-| ------------------ | ----------------------------------------------- |
-| `AssetPackManager` | Pack discovery, asset resolution, pack registry |
-| `AssetDownloader`  | HTTP downloads with queue and caching           |
-| `AssetStreamer`    | P2P asset streaming for multiplayer             |
+| Autoload            | Purpose                                              |
+| ------------------- | ---------------------------------------------------- |
+| `AssetPackManager`  | Pack discovery, asset resolution, model cache        |
+| `AssetResolver`     | Unified resolution pipeline (local → cache → remote) |
+| `AssetCacheManager` | Disk cache management for downloaded files           |
+| `AssetDownloader`   | HTTP downloads with queue                            |
+| `AssetStreamer`     | P2P asset streaming for multiplayer                  |
 
 ---
 
@@ -118,40 +120,75 @@ Packs are automatically discovered on startup by scanning `res://user_assets/` f
 AssetPackManager.reload_packs()
 
 # Get all available packs
-var packs = AssetPackManager.get_all_packs()
+var packs = AssetPackManager.get_packs()
 ```
 
 ---
 
 ## Loading Assets
 
-### Synchronous Loading
+### Getting Model Instances
 
-For assets known to be available locally:
+Use `AssetPackManager.get_model_instance()` for general model loading with automatic caching:
 
 ```gdscript
-var model = AssetPackManager.load_model("my_pack", "dragon", "default")
+# Async loading (recommended - non-blocking, uses cache)
+var model = await AssetPackManager.get_model_instance("my_pack", "dragon", "default")
 if model:
     add_child(model)
+
+# Sync loading (blocks if not cached - use sparingly)
+var model = AssetPackManager.get_model_instance_sync("my_pack", "dragon", "default")
 ```
 
-### Asynchronous Loading
+### Creating Tokens
 
-For assets that may need downloading:
+For game tokens that need physics and interactions:
 
 ```gdscript
-# Using BoardTokenFactory
+# Async (handles downloading, shows placeholder if needed)
 var token = await BoardTokenFactory.create_from_asset_async(
     "my_pack", "dragon", "default"
 )
 add_child(token)
+
+# Sync (asset must already be available)
+var token = BoardTokenFactory.create_from_asset("my_pack", "dragon", "default")
+```
+
+### Batch Preloading
+
+For best performance when loading many tokens, preload models first:
+
+```gdscript
+# Prepare asset list
+var assets_to_load: Array[Dictionary] = []
+for placement in level_data.token_placements:
+    assets_to_load.append({
+        "pack_id": placement.pack_id,
+        "asset_id": placement.asset_id,
+        "variant_id": placement.variant_id
+    })
+
+# Preload with progress callback
+var loaded = await AssetPackManager.preload_models(
+    assets_to_load,
+    func(current: int, total: int):
+        print("Loading models: %d/%d" % [current, total])
+)
+
+# Now create tokens (fast - models are cached)
+for placement in level_data.token_placements:
+    var token = BoardTokenFactory.create_from_placement(placement)
+    add_child(token)
 ```
 
 ### Loading Icons
 
 ```gdscript
-var icon = AssetPackManager.load_icon("my_pack", "dragon", "default")
-if icon:
+var icon_path = AssetPackManager.resolve_icon_path("my_pack", "dragon", "default")
+if icon_path:
+    var icon = load(icon_path) as Texture2D
     texture_rect.texture = icon
 ```
 
@@ -275,7 +312,12 @@ Tokens set download priority based on visibility:
 
 ## Caching System
 
-### Cache Location
+The asset system uses a **two-level caching strategy**:
+
+1. **Disk Cache** - Raw downloaded files persisted to disk
+2. **Memory Cache** - Loaded and processed model instances for fast cloning
+
+### Disk Cache
 
 Downloaded assets are cached at:
 
@@ -287,20 +329,66 @@ user://asset_cache/
 │   │   └── ...
 ```
 
-### Cache Behavior
+**Disk Cache Behavior:**
 
 - **Persistent** - Survives game restarts
 - **Automatic** - No manual management needed
 - **Per-Variant** - Each variant cached separately
 
+### Memory Model Cache
+
+Loaded model scenes are cached in memory for fast instantiation:
+
+```
+AssetPackManager._model_cache
+├── "user://asset_cache/pokemon/pikachu/default.glb" -> Node3D template
+├── "res://user_assets/trainers/models/trainer.glb" -> PackedScene
+└── ...
+```
+
+**Memory Cache Behavior:**
+
+- **Session-scoped** - Cleared when switching levels or on game exit
+- **De-duplicated** - Each unique model loaded only once
+- **Fast cloning** - New instances created via `duplicate()` or `instantiate()`
+- **Async loading** - GLB files loaded on background thread
+
+**Why Two Caches?**
+
+| Cache Type   | Purpose              | Speed           | Persistence  |
+| ------------ | -------------------- | --------------- | ------------ |
+| Disk Cache   | Avoid re-downloading | Slow (file I/O) | Persistent   |
+| Memory Cache | Avoid re-parsing GLB | Fast (clone)    | Session only |
+
+Loading a GLB file involves:
+
+1. Reading file from disk
+2. Parsing GLTF structure
+3. Generating Godot nodes and materials
+4. Processing collision meshes
+
+The memory cache skips steps 1-4 by keeping the processed result in memory.
+
 ### Checking Cache
 
 ```gdscript
-# Check if asset is cached
+# Check if asset file is cached on disk
 var cached_path = AssetDownloader.get_cached_path(pack_id, asset_id, variant_id)
 if cached_path:
-    # Asset is available locally
+    # File is available locally
     pass
+
+# Get model instance (uses memory cache automatically)
+var model = await AssetPackManager.get_model_instance(pack_id, asset_id, variant_id)
+```
+
+### Clearing Caches
+
+```gdscript
+# Clear memory cache (call when switching levels to free memory)
+AssetPackManager.clear_model_cache()
+
+# Disk cache is persistent - no API to clear (managed by OS/user)
 ```
 
 ---
@@ -395,30 +483,87 @@ Multiple variants allow alternate appearances:
 #### Pack Discovery
 
 ```gdscript
-func get_all_packs() -> Array[AssetPack]
-func get_pack(pack_id: String) -> AssetPack
-func reload_packs() -> void
+func get_packs() -> Array                    # Get all loaded packs
+func get_pack(pack_id: String) -> AssetPack  # Get pack by ID
+func has_pack(pack_id: String) -> bool       # Check if pack exists
+func reload_packs() -> void                  # Reload all packs
 ```
 
 #### Asset Access
 
 ```gdscript
 func get_asset(pack_id: String, asset_id: String) -> AssetEntry
-func get_variant(pack_id: String, asset_id: String, variant_id: String) -> AssetVariant
+func get_assets(pack_id: String) -> Array    # Get all assets in a pack
+func get_all_assets() -> Array[Dictionary]   # Get all assets across all packs
+func get_variants(pack_id: String, asset_id: String) -> Array[String]
+func get_asset_display_name(pack_id: String, asset_id: String) -> String
 ```
 
-#### Loading
+#### Path Resolution
 
 ```gdscript
-func load_model(pack_id: String, asset_id: String, variant_id: String) -> Node3D
-func load_icon(pack_id: String, asset_id: String, variant_id: String) -> Texture2D
+# Resolve model path (checks local, cache, triggers download if needed)
+func resolve_model_path(pack_id: String, asset_id: String,
+                        variant_id: String = "default", priority: int = 100) -> String
+
+# Resolve icon path
+func resolve_icon_path(pack_id: String, asset_id: String,
+                       variant_id: String = "default", priority: int = 100) -> String
+
+# Check availability
+func is_asset_available(pack_id: String, asset_id: String, variant_id: String = "default") -> bool
+func needs_download(pack_id: String, asset_id: String, variant_id: String = "default") -> bool
 ```
+
+#### Model Instance API (with Memory Caching)
+
+```gdscript
+# Get a model instance (async, uses memory cache)
+# Returns a new Node3D instance, or null if asset needs downloading
+func get_model_instance(pack_id: String, asset_id: String,
+                        variant_id: String = "default",
+                        create_static_bodies: bool = false) -> Node3D
+
+# Get a model instance from a resolved path (async)
+func get_model_instance_from_path(path: String,
+                                  create_static_bodies: bool = false) -> Node3D
+
+# Synchronous versions (blocks if not cached - prefer async)
+func get_model_instance_sync(pack_id: String, asset_id: String,
+                             variant_id: String = "default",
+                             create_static_bodies: bool = false) -> Node3D
+func get_model_instance_from_path_sync(path: String,
+                                       create_static_bodies: bool = false) -> Node3D
+
+# Preload multiple models (for batch loading before spawning)
+# assets: Array of {pack_id, asset_id, variant_id} dictionaries
+func preload_models(assets: Array,
+                    progress_callback: Callable = Callable(),
+                    create_static_bodies: bool = false) -> int
+
+# Clear the memory cache (call when switching levels)
+func clear_model_cache() -> void
+```
+
+**Model Instance Parameters:**
+
+| Parameter              | Purpose                                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `create_static_bodies` | If `true`, generates `StaticBody3D` for collision meshes. Use `true` for maps, `false` for tokens (they use `RigidBody3D`). |
 
 #### Remote Packs
 
 ```gdscript
-func register_remote_pack(pack: AssetPack) -> void
-func load_remote_pack_from_url(manifest_url: String) -> AssetPack
+func register_remote_pack(manifest: Dictionary) -> bool
+func load_remote_pack_from_url(manifest_url: String) -> void
+```
+
+#### Signals
+
+```gdscript
+signal packs_loaded()
+signal asset_available(pack_id: String, asset_id: String, variant_id: String, local_path: String)
+signal asset_download_failed(pack_id: String, asset_id: String, variant_id: String, error: String)
 ```
 
 ### AssetDownloader
@@ -474,14 +619,30 @@ signal stream_failed(pack_id, asset_id, variant_id, error)
 
 ### BoardTokenFactory
 
+Factory for creating `BoardToken` instances from asset packs. Uses `AssetPackManager` for model loading and caching.
+
 #### Token Creation
 
 ```gdscript
+# Create from model scene directly
+static func create_from_scene(model_scene: Node3D, config: Resource = null) -> BoardToken
+
+# Create from asset pack (synchronous - asset must be available)
 static func create_from_asset(pack_id: String, asset_id: String,
-                              variant_id: String) -> BoardToken
+                              variant_id: String = "default",
+                              config: Resource = null) -> BoardToken
+
+# Create from asset pack (async - handles downloading, returns placeholder if needed)
 static func create_from_asset_async(pack_id: String, asset_id: String,
-                                    variant_id: String) -> BoardToken
+                                    variant_id: String = "default",
+                                    config: Resource = null) -> BoardToken
+
+# Create from TokenPlacement resource (for level loading)
+static func create_from_placement(placement: TokenPlacement) -> BoardToken
+static func create_from_placement_async(placement: TokenPlacement) -> BoardToken
 ```
+
+**Note:** Model caching is handled by `AssetPackManager`. Call `AssetPackManager.clear_model_cache()` when switching levels to free memory.
 
 ---
 

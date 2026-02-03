@@ -246,6 +246,108 @@ func load_level_folder(folder_name: String, notify: bool = true) -> LevelData:
 	return level
 
 
+# ============================================================================
+# Async Loading (non-blocking)
+# ============================================================================
+
+## Load a level asynchronously (does not block the main thread)
+## @param path: Either a .tres file path or a level folder path
+## @param notify: Whether to emit level_loaded signal
+## @return: LevelData or null on failure
+func load_level_async(path: String, notify: bool = true) -> LevelData:
+	var clean_path = path.rstrip("/")
+
+	# Check if it's a folder-based level
+	if DirAccess.dir_exists_absolute(clean_path):
+		return await load_level_folder_async(clean_path.get_file(), notify)
+
+	# Check for level.json in the path
+	if clean_path.ends_with("/" + LEVEL_JSON_NAME):
+		var folder_name = clean_path.get_base_dir().get_file()
+		return await load_level_folder_async(folder_name, notify)
+
+	# Legacy .tres format - use threaded resource loading
+	if not ResourceLoader.exists(path):
+		push_error("LevelManager: Level file does not exist: " + path)
+		return null
+
+	var load_status = ResourceLoader.load_threaded_request(path, "", false, ResourceLoader.CACHE_MODE_REPLACE)
+	if load_status != OK:
+		push_error("LevelManager: Failed to start threaded load: " + path)
+		return null
+
+	# Wait for loading to complete without blocking
+	while ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		await get_tree().process_frame
+
+	var level = ResourceLoader.load_threaded_get(path) as LevelData
+	if not level:
+		push_error("LevelManager: Failed to load level: " + path)
+		return null
+
+	current_level = level
+	current_level_path = path
+
+	if notify:
+		level_loaded.emit(level)
+
+	return level
+
+
+## Load a level from a folder asynchronously (new format)
+## Uses WorkerThreadPool for file I/O to avoid blocking
+## @param folder_name: The folder name within user://levels/
+func load_level_folder_async(folder_name: String, notify: bool = true) -> LevelData:
+	var json_path = Paths.get_level_json_path(folder_name)
+
+	if not FileAccess.file_exists(json_path):
+		push_error("LevelManager: Level JSON not found: " + json_path)
+		return null
+
+	# Read file on background thread
+	var thread_result: Dictionary = {"json_string": "", "error": ""}
+	
+	var task_id = WorkerThreadPool.add_task(
+		func():
+			var file = FileAccess.open(json_path, FileAccess.READ)
+			if not file:
+				thread_result.error = "Cannot read level JSON: " + json_path
+				return
+			thread_result.json_string = file.get_as_text()
+			file.close()
+	)
+
+	# Wait for thread without blocking main thread
+	while not WorkerThreadPool.is_task_completed(task_id):
+		await get_tree().process_frame
+
+	WorkerThreadPool.wait_for_task_completion(task_id)
+
+	if thread_result.error != "":
+		push_error("LevelManager: " + thread_result.error)
+		return null
+
+	# Parse JSON on main thread (fast operation)
+	var json = JSON.new()
+	var error = json.parse(thread_result.json_string)
+	if error != OK:
+		push_error("LevelManager: Failed to parse level JSON: " + json.get_error_message())
+		return null
+
+	var level = LevelData.from_dict(json.data)
+
+	# Ensure level_folder is set correctly
+	level.level_folder = folder_name
+
+	current_level = level
+	current_level_path = Paths.get_level_folder(folder_name)
+
+	if notify:
+		level_loaded.emit(level)
+
+	return level
+
+
 ## Get list of all saved levels (both formats)
 func get_saved_levels() -> Array[Dictionary]:
 	_ensure_levels_directory()
