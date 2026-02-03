@@ -261,6 +261,77 @@ text = "Downloaded assets are cached locally.
 Clear to force re-download of all assets."
 horizontal_alignment = 1
 
+[node name="Updates" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="VersionInfo" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/VersionInfo"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Current Version"
+
+[node name="VersionLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/VersionInfo"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Caption"
+text = "v0.0.0-dev"
+horizontal_alignment = 2
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates"]
+layout_mode = 2
+
+[node name="Prereleases" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Prereleases"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Include Prereleases"
+
+[node name="PrereleasesCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Prereleases"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="PrereleasesDescription" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Prerelease builds may be unstable or incomplete.
+Only enable if you want to test new features early."
+horizontal_alignment = 1
+
+[node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates"]
+layout_mode = 2
+
+[node name="CheckUpdates" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/CheckUpdates"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Body"
+text = "Check for Updates"
+
+[node name="CheckUpdatesButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/CheckUpdates"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Check Now"
+
+[node name="UpdateStatus" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Updates are checked automatically at startup."
+horizontal_alignment = 1
+
 [node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
 layout_mode = 2
 
