@@ -3,6 +3,8 @@ name: Build Godot Project
 on:
   push:
     branches: [main]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 env:
@@ -53,3 +55,59 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.folder }}/
           retention-days: 14
+
+  release:
+    name: Create Release
+    needs: export
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: TTSim-Windows
+          path: artifacts/windows
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: TTSim-macOS
+          path: artifacts/macos
+
+      - name: Prepare release assets
+        run: |
+          cd artifacts/windows && zip -r ../../TTSim-Windows.zip . && cd ../..
+          mv artifacts/macos/TTSim.zip TTSim-macOS.zip
+
+      - name: Get version info
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            SHORT_SHA=$(git rev-parse --short HEAD)
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+            echo "version=build-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "tag_name=build-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: ${{ steps.version.outputs.is_tag == 'true' && steps.version.outputs.version || format('Build {0}', steps.version.outputs.version) }}
+          body: |
+            ${{ steps.version.outputs.is_tag == 'true' && format('## Release {0}', steps.version.outputs.version) || 'Automated build from commit' }}
+
+            **Commit:** [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+            ${{ steps.version.outputs.is_tag != 'true' && format('**Branch:** `{0}`', github.ref_name) || '' }}
+          files: |
+            TTSim-Windows.zip
+            TTSim-macOS.zip
+          prerelease: ${{ steps.version.outputs.is_tag != 'true' }}
