@@ -43,6 +43,9 @@ signal update_check_complete(has_update: bool)
 ## Emitted when a pending update is being applied (before restart)
 signal applying_pending_update(version: String)
 
+## Emitted when update cannot be applied due to App Translocation (macOS)
+signal update_blocked_by_translocation()
+
 
 ## Latest available release info (populated after check)
 var latest_release: Dictionary = {}
@@ -93,6 +96,36 @@ func _show_deferred_toast() -> void:
 			ui_manager.show_success(_pending_toast_message)
 
 	_pending_toast_message = ""
+
+
+## Show a dialog explaining App Translocation and how to fix it (macOS only)
+func _show_translocation_dialog() -> void:
+	# Wait for UI to be ready
+	await get_tree().process_frame
+
+	var ui_manager = get_node_or_null("/root/UIManager")
+	if not ui_manager:
+		return
+
+	var title = "Update Requires App Relocation"
+	var message = """An update is ready but cannot be installed because macOS is running the app from a temporary location.
+
+To install the update:
+1. Quit the app
+2. Move TTSim.app to your Applications folder (or another permanent location)
+3. Open the app from its new location
+
+The update will install automatically when you next open the app from a permanent location."""
+
+	ui_manager.show_confirmation(
+		title,
+		message,
+		"Open Downloads",
+		"OK",
+		func(): OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR)),
+		Callable(),
+		"Warning"
+	)
 
 
 ## Log a message to both console and persistent log file
@@ -766,8 +799,11 @@ func _extract_update_macos(zip_path: String) -> bool:
 	if "/private/var/folders/" in app_path or "/AppTranslocation/" in app_path:
 		_log("ERROR: App Translocation detected - app is running from a temporary location")
 		_log("Please move the app to /Applications or another permanent location first")
-		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
-		_cleanup_pending_update()
+
+		# Don't clean up the pending update - user might move the app and restart
+		# Show user-friendly guidance after UI is ready
+		update_blocked_by_translocation.emit()
+		call_deferred("_show_translocation_dialog")
 		return false
 
 	var install_dir = app_path.get_base_dir()
