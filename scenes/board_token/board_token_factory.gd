@@ -11,6 +11,11 @@ class_name BoardTokenFactory
 ##   var token = BoardTokenFactory.create_from_config(my_token_config)
 ##   # or from asset pack (with automatic download support):
 ##   var result = BoardTokenFactory.create_from_asset_async(pack_id, asset_id, variant_id)
+##
+## Model Loading:
+##   Uses AssetPackManager for model loading and caching.
+##   Call AssetPackManager.preload_models() before batch spawning for best performance.
+##   Call AssetPackManager.clear_model_cache() when switching levels to free memory.
 
 const BoardTokenScene = preload("uid://bev473ihcxqg8")
 const PlaceholderTokenScript = preload("res://scenes/board_token/placeholder_token.gd")
@@ -237,23 +242,11 @@ static func create_from_asset(pack_id: String, asset_id: String, variant_id: Str
 
 
 ## Internal: Create a BoardToken from a specific model path
+## Uses AssetPackManager for model loading and caching
 static func _create_from_model_path(scene_path: String, pack_id: String, asset_id: String, config: Resource = null) -> BoardToken:
-	var model: Node3D = null
-
-	# For user:// paths (cached downloads), use GLTFDocument to load GLB files
-	if scene_path.begins_with("user://") and scene_path.ends_with(".glb"):
-		if not FileAccess.file_exists(scene_path):
-			push_error("BoardTokenFactory: Cached asset not found: " + scene_path)
-			return null
-		model = _load_glb_from_user_path(scene_path)
-	else:
-		# For res:// paths, use standard resource loading
-		if not ResourceLoader.exists(scene_path):
-			push_error("BoardTokenFactory: Asset scene not found: " + scene_path)
-			return null
-		var asset_scene = load(scene_path)
-		if asset_scene:
-			model = asset_scene.instantiate()
+	# Use AssetPackManager for loading (handles caching internally)
+	# create_static_bodies=false because tokens use RigidBody3D for physics
+	var model = AssetPackManager.get_model_instance_from_path_sync(scene_path, false)
 
 	if not model:
 		push_error("BoardTokenFactory: Failed to load asset scene: " + scene_path)
@@ -275,13 +268,6 @@ static func _create_from_model_path(scene_path: String, pack_id: String, asset_i
 		token.network_id = _generate_network_id()
 
 	return token
-
-
-## Load a GLB file from user:// path using shared GlbUtils
-## For tokens, we don't create StaticBody3D - the RigidBody3D handles collision
-static func _load_glb_from_user_path(path: String) -> Node3D:
-	# Use shared utility with create_static_bodies=false (tokens use RigidBody3D for collision)
-	return GlbUtils.load_glb_with_processing(path, false)
 
 
 ## Generate a unique network ID for tokens
@@ -467,14 +453,8 @@ static func _upgrade_placeholder_token(token: BoardToken, model_path: String) ->
 
 	print("BoardTokenFactory: Upgrading placeholder token: " + token.token_name)
 
-	# Load the real model (handle user:// paths with GLTFDocument)
-	var model: Node3D = null
-	if model_path.begins_with("user://") and model_path.ends_with(".glb"):
-		model = _load_glb_from_user_path(model_path)
-	else:
-		var asset_scene = load(model_path)
-		if asset_scene:
-			model = asset_scene.instantiate()
+	# Load the real model using AssetPackManager (handles caching)
+	var model = AssetPackManager.get_model_instance_from_path_sync(model_path, false)
 
 	if not model:
 		push_error("BoardTokenFactory: Failed to load downloaded asset: " + model_path)
