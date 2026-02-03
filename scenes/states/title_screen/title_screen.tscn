@@ -283,3 +283,15 @@ custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Join Game"
+
+[node name="HSeparator2" type="HSeparator" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="SettingsButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"Secondary"
+text = "Settings"
