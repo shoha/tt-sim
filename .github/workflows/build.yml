@@ -111,6 +111,8 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.version.outputs.tag_name }}
           name: ${{ steps.version.outputs.is_tag == 'true' && steps.version.outputs.version || format('Build {0}', steps.version.outputs.version) }}
