@@ -13,6 +13,7 @@ const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const PAUSE_OVERLAY_SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
 const LOBBY_HOST_SCENE := preload("res://scenes/states/lobby/lobby_host.tscn")
 const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn")
+const UPDATE_DIALOG_SCENE := preload("res://scenes/ui/update_dialog.tscn")
 
 enum State {
 	TITLE_SCREEN,
@@ -40,12 +41,16 @@ func _ready() -> void:
 	_setup_level_play_controller()
 	_setup_app_menu()
 	_setup_download_notifications()
+	_setup_update_checker()
 
 	# Connect to level manager signals
 	LevelManager.level_loaded.connect(_on_level_loaded)
 
 	# Enter initial state
 	push_state(State.TITLE_SCREEN)
+	
+	# Check for updates after a short delay to let the UI settle
+	_check_for_updates_on_startup()
 
 
 func _setup_download_notifications() -> void:
@@ -516,3 +521,28 @@ func _on_level_cleared() -> void:
 	if _pending_level_data:
 		return
 	change_state(State.TITLE_SCREEN)
+
+
+# ============================================================================
+# Update Checking
+# ============================================================================
+
+func _setup_update_checker() -> void:
+	# Connect to UpdateManager signals
+	UpdateManager.update_available.connect(_on_update_available)
+
+
+func _check_for_updates_on_startup() -> void:
+	# Wait a moment for the title screen to fully load before checking
+	await get_tree().create_timer(1.0).timeout
+	
+	# Only check if we're still on the title screen
+	if get_current_state() == State.TITLE_SCREEN:
+		UpdateManager.check_for_updates()
+
+
+func _on_update_available(release_info: Dictionary) -> void:
+	# Show the update dialog
+	var dialog = UPDATE_DIALOG_SCENE.instantiate()
+	add_child(dialog)
+	dialog.setup(release_info)

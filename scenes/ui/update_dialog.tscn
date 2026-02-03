@@ -1,0 +1,138 @@
+[gd_scene load_steps=2 format=3 uid="uid://cupdate_dialog"]
+
+[ext_resource type="Script" path="res://scenes/ui/update_dialog.gd" id="1_script"]
+
+[node name="UpdateDialog" type="CanvasLayer"]
+layer = 100
+process_mode = 3
+script = ExtResource("1_script")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.6)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(500, 0)
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer"]
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"H1"
+text = "Update Available"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="VersionLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"H2"
+text = "v1.0.0 → v1.1.0"
+horizontal_alignment = 1
+
+[node name="ReleaseNotesContainer" type="ScrollContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ReleaseNotes" type="RichTextLabel" parent="CenterContainer/PanelContainer/VBoxContainer/ReleaseNotesContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "Loading release notes..."
+fit_content = true
+
+[node name="ProgressContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ProgressLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/ProgressContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Downloading... 0%"
+horizontal_alignment = 1
+
+[node name="ProgressBar" type="ProgressBar" parent="CenterContainer/PanelContainer/VBoxContainer/ProgressContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+value = 50.0
+
+[node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ButtonContainer" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+alignment = 1
+
+[node name="DownloadButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Success"
+text = "Download"
+
+[node name="ViewButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "View on GitHub"
+
+[node name="SkipButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Skip"
+
+[node name="PostDownloadButtons" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+alignment = 1
+
+[node name="RestartButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/PostDownloadButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"Success"
+text = "Restart Now"
+
+[node name="LaterButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/PostDownloadButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Later"
+
+[node name="OpenFolderButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/PostDownloadButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Open Folder"
