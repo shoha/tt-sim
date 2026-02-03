@@ -164,20 +164,34 @@ func _on_check_completed(result: int, response_code: int, _headers: PackedString
 		update_check_complete.emit(false)
 		return
 	
-	# Parse and compare versions
+	# Parse release info first to get normalized version
+	latest_release = _parse_release_info(best_release)
 	var current_version = get_current_version()
-	var release_tag = best_release.get("tag_name", "")
-	var release_version = release_tag.trim_prefix("v")
+	var release_version = latest_release.version
 	
 	print("UpdateManager: Current version: %s, Latest: %s" % [current_version, release_version])
 	
-	if _is_newer_version(release_version, current_version):
-		latest_release = _parse_release_info(best_release)
+	# Check if update is available
+	var is_newer = false
+	
+	# For dev builds (both have "build." in suffix), compare by checking if different
+	# Since commit hashes aren't orderable, any different dev build is potentially newer
+	if _is_dev_build(current_version) and _is_dev_build(release_version):
+		# Different commit hash = different build, offer update
+		is_newer = (current_version != release_version)
+		if is_newer:
+			print("UpdateManager: Different dev build detected")
+	else:
+		# Standard semver comparison
+		is_newer = _is_newer_version(release_version, current_version)
+	
+	if is_newer:
 		print("UpdateManager: Update available - %s" % release_version)
 		update_available.emit(latest_release)
 		update_check_complete.emit(true)
 	else:
 		print("UpdateManager: Already up to date")
+		latest_release = {}
 		update_check_complete.emit(false)
 
 
@@ -185,6 +199,15 @@ func _on_check_completed(result: int, response_code: int, _headers: PackedString
 func _parse_release_info(release: Dictionary) -> Dictionary:
 	var tag = release.get("tag_name", "")
 	var assets = release.get("assets", [])
+	
+	# Normalize version from tag
+	# - "v1.0.0" -> "1.0.0"
+	# - "build-abc123" -> "0.0.0-build.abc123" (to match project.godot format)
+	var version = tag
+	if tag.begins_with("v"):
+		version = tag.substr(1)
+	elif tag.begins_with("build-"):
+		version = "0.0.0-build." + tag.substr(6)
 	
 	# Find platform-specific download URL
 	var platform = _get_platform_name()
@@ -199,7 +222,7 @@ func _parse_release_info(release: Dictionary) -> Dictionary:
 			break
 	
 	return {
-		"version": tag.trim_prefix("v"),
+		"version": version,
 		"tag": tag,
 		"name": release.get("name", tag),
 		"body": release.get("body", ""),
@@ -222,6 +245,11 @@ func _get_platform_name() -> String:
 			return "linux"
 		_:
 			return OS.get_name().to_lower()
+
+
+## Check if a version is a dev build (contains "build." in suffix)
+func _is_dev_build(version: String) -> bool:
+	return "-build." in version or version.begins_with("build.")
 
 
 ## Compare two semantic versions, returns true if version_a > version_b
