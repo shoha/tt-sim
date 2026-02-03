@@ -166,10 +166,13 @@ func _apply_settings() -> void:
 	_apply_audio_bus("SFX", sfx_slider.value)
 	_apply_audio_bus("UI", ui_slider.value)
 	
-	# Apply graphics settings
-	if fullscreen_check.button_pressed:
+	# Apply graphics settings - only change mode if different to avoid macOS toggle issue
+	var current_mode := DisplayServer.window_get_mode()
+	var is_currently_fullscreen := current_mode == DisplayServer.WINDOW_MODE_FULLSCREEN or current_mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+	
+	if fullscreen_check.button_pressed and not is_currently_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	else:
+	elif not fullscreen_check.button_pressed and is_currently_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	
 	DisplayServer.window_set_vsync_mode(
