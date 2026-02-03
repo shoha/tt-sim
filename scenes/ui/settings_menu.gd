@@ -69,9 +69,6 @@ func _ready() -> void:
 	# Updates
 	prereleases_check.toggled.connect(_on_prereleases_toggled)
 	check_updates_button.pressed.connect(_on_check_updates_pressed)
-	UpdateManager.update_check_complete.connect(_on_update_check_complete)
-	UpdateManager.update_check_failed.connect(_on_update_check_failed)
-	UpdateManager.update_available.connect(_on_update_available)
 	
 	# Load current settings
 	_load_settings()
@@ -359,27 +356,27 @@ func _on_prereleases_toggled(pressed: bool) -> void:
 func _on_check_updates_pressed() -> void:
 	check_updates_button.disabled = true
 	update_status_label.text = "Checking for updates..."
-	UpdateManager.check_for_updates()
-
-
-func _on_update_check_complete(has_update: bool) -> void:
-	check_updates_button.disabled = false
-	if not has_update:
-		update_status_label.text = "You're up to date!"
-
-
-func _on_update_check_failed(error: String) -> void:
-	check_updates_button.disabled = false
-	update_status_label.text = "Check failed: " + error
-
-
-func _on_update_available(release_info: Dictionary) -> void:
-	check_updates_button.disabled = false
-	var version = release_info.get("version", "?")
-	update_status_label.text = "Update available: v" + version
 	
-	# Show the update dialog
-	var dialog_scene = preload("res://scenes/ui/update_dialog.tscn")
-	var dialog = dialog_scene.instantiate()
-	get_tree().root.add_child(dialog)
-	dialog.setup(release_info)
+	# Connect signals for this check only
+	var on_complete = func(has_update: bool) -> void:
+		check_updates_button.disabled = false
+		if has_update:
+			var version = UpdateManager.latest_release.get("version", "?")
+			update_status_label.text = "Update available: v" + version
+			# Show the update dialog
+			var dialog_scene = preload("res://scenes/ui/update_dialog.tscn")
+			var dialog = dialog_scene.instantiate()
+			get_tree().root.add_child(dialog)
+			dialog.setup(UpdateManager.latest_release)
+		else:
+			update_status_label.text = "You're up to date!"
+	
+	var on_failed = func(error: String) -> void:
+		check_updates_button.disabled = false
+		update_status_label.text = "Check failed: " + error
+	
+	# Connect one-shot signals
+	UpdateManager.update_check_complete.connect(on_complete, CONNECT_ONE_SHOT)
+	UpdateManager.update_check_failed.connect(on_failed, CONNECT_ONE_SHOT)
+	
+	UpdateManager.check_for_updates()

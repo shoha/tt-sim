@@ -48,7 +48,9 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # Strip the "v" prefix for semver consistency (v1.0.0 -> 1.0.0)
             VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
           else
             VERSION="0.0.0-build.$(git rev-parse --short HEAD)"
           fi
