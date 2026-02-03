@@ -43,6 +43,16 @@ jobs:
       - name: Setup export directory
         run: mkdir -p ${{ matrix.folder }}
 
+      - name: Inject version into project
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="0.0.0-build.$(git rev-parse --short HEAD)"
+          fi
+          echo "Injecting version: $VERSION"
+          sed -i "s/config\/version=\"[^\"]*\"/config\/version=\"$VERSION\"/" project.godot
+
       - name: Import project
         run: godot --headless --import
 

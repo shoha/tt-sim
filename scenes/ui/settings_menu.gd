@@ -32,6 +32,12 @@ const SETTINGS_PATH := "user://settings.cfg"
 @onready var clear_cache_button: Button = %ClearCacheButton
 @onready var cache_info_label: Label = %CacheInfo
 
+# Update controls
+@onready var version_label: Label = %VersionLabel
+@onready var prereleases_check: CheckButton = %PrereleasesCheck
+@onready var check_updates_button: Button = %CheckUpdatesButton
+@onready var update_status_label: Label = %UpdateStatus
+
 # Buttons
 @onready var close_button: Button = %CloseButton
 @onready var reset_button: Button = %ResetButton
@@ -60,10 +66,18 @@ func _ready() -> void:
 	p2p_enabled_check.toggled.connect(_on_p2p_toggled)
 	clear_cache_button.pressed.connect(_on_clear_cache_pressed)
 	
+	# Updates
+	prereleases_check.toggled.connect(_on_prereleases_toggled)
+	check_updates_button.pressed.connect(_on_check_updates_pressed)
+	UpdateManager.update_check_complete.connect(_on_update_check_complete)
+	UpdateManager.update_check_failed.connect(_on_update_check_failed)
+	UpdateManager.update_available.connect(_on_update_available)
+	
 	# Load current settings
 	_load_settings()
 	_populate_controls_list()
 	_update_cache_info()
+	_update_version_info()
 	
 	# Register as overlay (cast to Control for type compatibility)
 	UIManager.register_overlay($ColorRect as Control)
@@ -121,6 +135,7 @@ func _load_settings() -> void:
 		fullscreen_check.button_pressed = config.get_value("graphics", "fullscreen", false)
 		vsync_check.button_pressed = config.get_value("graphics", "vsync", true)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
+		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
 	
 	# Update labels
 	_update_volume_label(master_label, master_slider.value)
@@ -139,6 +154,7 @@ func _save_settings() -> void:
 	config.set_value("graphics", "fullscreen", fullscreen_check.button_pressed)
 	config.set_value("graphics", "vsync", vsync_check.button_pressed)
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
+	config.set_value("updates", "check_prereleases", prereleases_check.button_pressed)
 	
 	config.save(SETTINGS_PATH)
 
@@ -217,6 +233,7 @@ func _on_reset_pressed() -> void:
 	fullscreen_check.button_pressed = false
 	vsync_check.button_pressed = true
 	p2p_enabled_check.button_pressed = true
+	prereleases_check.button_pressed = false
 
 
 func _on_p2p_toggled(_pressed: bool) -> void:
@@ -326,3 +343,40 @@ func animate_out() -> void:
 	await _tween.finished
 	closed.emit()
 	queue_free()
+
+
+func _update_version_info() -> void:
+	version_label.text = "v" + UpdateManager.get_current_version()
+
+
+func _on_prereleases_toggled(pressed: bool) -> void:
+	UpdateManager.set_prerelease_enabled(pressed)
+
+
+func _on_check_updates_pressed() -> void:
+	check_updates_button.disabled = true
+	update_status_label.text = "Checking for updates..."
+	UpdateManager.check_for_updates()
+
+
+func _on_update_check_complete(has_update: bool) -> void:
+	check_updates_button.disabled = false
+	if not has_update:
+		update_status_label.text = "You're up to date!"
+
+
+func _on_update_check_failed(error: String) -> void:
+	check_updates_button.disabled = false
+	update_status_label.text = "Check failed: " + error
+
+
+func _on_update_available(release_info: Dictionary) -> void:
+	check_updates_button.disabled = false
+	var version = release_info.get("version", "?")
+	update_status_label.text = "Update available: v" + version
+	
+	# Show the update dialog
+	var dialog_scene = preload("res://scenes/ui/update_dialog.tscn")
+	var dialog = dialog_scene.instantiate()
+	get_tree().root.add_child(dialog)
+	dialog.setup(release_info)
