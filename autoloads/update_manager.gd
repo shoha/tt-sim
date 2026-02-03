@@ -16,6 +16,11 @@ const DOWNLOAD_TIMEOUT: float = 300.0 # 5 minutes for large downloads
 const SETTINGS_FILE: String = "user://settings.cfg"
 const UPDATES_DIR: String = "user://updates/"
 const PENDING_UPDATE_FILE: String = "user://updates/pending_update.json"
+const UPDATE_LOG_FILE: String = "user://updates/update_log.txt"
+
+## Result of the last update attempt (for showing toast after UIManager is ready)
+var _pending_toast_message: String = ""
+var _pending_toast_is_error: bool = false
 
 ## Emitted when a new update is available
 signal update_available(release_info: Dictionary)
@@ -66,6 +71,43 @@ func _ready() -> void:
 
 	# Check for and apply any pending update from a previous download
 	_apply_pending_update()
+
+	# Show any pending toast message after UIManager is ready
+	if not _pending_toast_message.is_empty():
+		call_deferred("_show_deferred_toast")
+
+
+## Show a toast that was queued during startup (before UIManager was ready)
+func _show_deferred_toast() -> void:
+	# Wait a frame for UIManager's deferred _setup_ui_components to complete
+	await get_tree().process_frame
+
+	if _pending_toast_message.is_empty():
+		return
+
+	var ui_manager = get_node_or_null("/root/UIManager")
+	if ui_manager:
+		if _pending_toast_is_error:
+			ui_manager.show_error(_pending_toast_message)
+		else:
+			ui_manager.show_success(_pending_toast_message)
+
+	_pending_toast_message = ""
+
+
+## Log a message to both console and persistent log file
+func _log(message: String) -> void:
+	print("UpdateManager: " + message)
+
+	# Also write to log file for debugging (especially useful on macOS)
+	var file = FileAccess.open(UPDATE_LOG_FILE, FileAccess.READ_WRITE)
+	if not file:
+		file = FileAccess.open(UPDATE_LOG_FILE, FileAccess.WRITE)
+	if file:
+		file.seek_end()
+		var timestamp = Time.get_datetime_string_from_system()
+		file.store_line("[%s] %s" % [timestamp, message])
+		file.close()
 
 
 ## Clean up .old executables left over from previous updates (Windows only)
@@ -486,11 +528,14 @@ func _apply_pending_update() -> void:
 	if not FileAccess.file_exists(PENDING_UPDATE_FILE):
 		return
 
-	print("UpdateManager: Found pending update marker, checking...")
+	_log("Found pending update marker, checking...")
+	_log("Platform: %s" % OS.get_name())
+	_log("Executable path: %s" % OS.get_executable_path())
 
 	# Read the pending update info
 	var file = FileAccess.open(PENDING_UPDATE_FILE, FileAccess.READ)
 	if not file:
+		_log("ERROR: Could not open pending update file")
 		_cleanup_pending_update()
 		return
 
@@ -499,65 +544,114 @@ func _apply_pending_update() -> void:
 	file.close()
 
 	if parse_result != OK:
-		print("UpdateManager: Failed to parse pending update marker")
+		_log("ERROR: Failed to parse pending update marker")
 		_cleanup_pending_update()
 		return
 
 	var pending_info = json.data
 	if not pending_info is Dictionary:
+		_log("ERROR: Pending update data is not a dictionary")
 		_cleanup_pending_update()
 		return
 
 	var zip_path = pending_info.get("zip_path", "")
 	var version = pending_info.get("version", "unknown")
-	var install_dir = pending_info.get("install_dir", "")
+	var stored_install_dir = pending_info.get("install_dir", "")
+
+	_log("Pending update version: %s" % version)
+	_log("Zip path: %s" % zip_path)
+	_log("Stored install_dir: %s" % stored_install_dir)
 
 	# Verify the zip still exists
+	var global_zip = ProjectSettings.globalize_path(zip_path)
+	_log("Globalized zip path: %s" % global_zip)
+
 	if not FileAccess.file_exists(zip_path):
-		print("UpdateManager: Pending update zip not found, cleaning up")
+		_log("ERROR: Pending update zip not found at: %s" % zip_path)
+		_log("Checking globalized path exists: %s" % FileAccess.file_exists(global_zip))
 		_cleanup_pending_update()
+		_pending_toast_message = "Update file not found"
+		_pending_toast_is_error = true
 		return
 
 	# Verify we're running from the expected location
-	var current_exe_dir = OS.get_executable_path().get_base_dir()
-	if install_dir != current_exe_dir:
-		print("UpdateManager: Running from different location than expected, skipping update")
-		print("  Expected: %s" % install_dir)
-		print("  Current: %s" % current_exe_dir)
+	# Note: On macOS, we compare the .app bundle parent directories, not exe directories
+	var current_exe_path = OS.get_executable_path()
+	var current_exe_dir = current_exe_path.get_base_dir()
+
+	_log("Current exe dir: %s" % current_exe_dir)
+
+	# On macOS, the stored path might differ from current due to symlinks or translocation
+	# So we do a more lenient check - just verify the app name matches
+	var location_ok = false
+	if OS.get_name() == "macOS":
+		# Extract app name from both paths
+		var stored_app = _extract_app_name_from_path(stored_install_dir)
+		var current_app = _extract_app_name_from_path(current_exe_dir)
+		_log("Stored app name: '%s', Current app name: '%s'" % [stored_app, current_app])
+		location_ok = (stored_app == current_app and not stored_app.is_empty())
+
+		if not location_ok:
+			# Also check if paths resolve to same location (symlinks)
+			location_ok = (stored_install_dir == current_exe_dir)
+	else:
+		location_ok = (stored_install_dir == current_exe_dir)
+
+	if not location_ok:
+		_log("WARNING: Running from different location than expected, skipping update")
+		_log("  Expected: %s" % stored_install_dir)
+		_log("  Current: %s" % current_exe_dir)
 		_cleanup_pending_update()
+		_pending_toast_message = "Update skipped - app location changed"
+		_pending_toast_is_error = true
 		return
 
-	print("UpdateManager: Applying pending update v%s..." % version)
+	_log("Applying pending update v%s..." % version)
 	applying_pending_update.emit(version)
 
 	# Apply the update based on platform
 	var success = false
 	match OS.get_name():
 		"Windows":
-			success = _extract_update_windows(zip_path, install_dir)
+			success = _extract_update_windows(zip_path, stored_install_dir)
 		"macOS":
 			success = _extract_update_macos(zip_path)
 		_:
-			print("UpdateManager: Unsupported platform for auto-update")
+			_log("ERROR: Unsupported platform for auto-update: %s" % OS.get_name())
 
 	if success:
-		print("UpdateManager: Update applied successfully!")
+		_log("Update applied successfully!")
 		_cleanup_pending_update()
 		# Delete the zip file after successful extraction
 		DirAccess.remove_absolute(zip_path)
 
+		_pending_toast_message = "Updated to v%s" % version
+		_pending_toast_is_error = false
+
 		# On Windows, we need to restart immediately to run the new executable
 		# (we're currently running from the .old file)
 		if OS.get_name() == "Windows":
-			print("UpdateManager: Restarting to run updated executable...")
+			_log("Restarting to run updated executable...")
 			var new_exe_path = pending_info.get("exe_path", "")
 			if not new_exe_path.is_empty() and FileAccess.file_exists(new_exe_path):
 				OS.create_process(new_exe_path, [])
 				get_tree().quit()
 	else:
-		print("UpdateManager: Failed to apply update")
-		# Leave the marker so we can retry next time, but log the error
+		_log("ERROR: Failed to apply update - see above for details")
+		_pending_toast_message = "Update failed - check update_log.txt"
+		_pending_toast_is_error = true
+		# Leave the marker so we can retry next time
 		push_error("UpdateManager: Update extraction failed - will retry on next startup")
+
+
+## Extract app name from a macOS path (e.g., "/Applications/TTSim.app/Contents/MacOS" -> "TTSim")
+func _extract_app_name_from_path(path: String) -> String:
+	# Look for .app in the path
+	var parts = path.split("/")
+	for part in parts:
+		if part.ends_with(".app"):
+			return part.get_basename()
+	return ""
 
 
 ## Extract update on Windows
@@ -652,56 +746,87 @@ func _extract_update_macos(zip_path: String) -> bool:
 	var global_zip = ProjectSettings.globalize_path(zip_path)
 	var exe_path = OS.get_executable_path()
 
+	_log("macOS extraction starting...")
+	_log("Zip path: %s" % global_zip)
+	_log("Exe path: %s" % exe_path)
+
 	# Find the .app bundle path
 	var app_path = exe_path
 	while not app_path.ends_with(".app") and app_path != "/":
 		app_path = app_path.get_base_dir()
 
+	_log("Found app path: %s" % app_path)
+
 	if not app_path.ends_with(".app"):
-		print("UpdateManager: Could not find .app bundle")
+		_log("ERROR: Could not find .app bundle in path")
 		return false
 
 	# Detect App Translocation - macOS moves quarantined apps to a random read-only location
 	# If the app path contains "/private/var/folders/" or "/AppTranslocation/", we can't update in place
 	if "/private/var/folders/" in app_path or "/AppTranslocation/" in app_path:
-		print("UpdateManager: App Translocation detected - app is running from a temporary location")
-		print("UpdateManager: Please move the app to /Applications or another permanent location first")
+		_log("ERROR: App Translocation detected - app is running from a temporary location")
+		_log("Please move the app to /Applications or another permanent location first")
 		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
 		_cleanup_pending_update()
 		return false
 
 	var install_dir = app_path.get_base_dir()
-	print("UpdateManager: Extracting %s to %s" % [global_zip, install_dir])
+	_log("Install directory: %s" % install_dir)
 
 	# Check if we have write permission to the install directory
+	_log("Testing write permission to: %s" % install_dir)
 	var test_file = install_dir + "/.update_permission_test"
 	var test = FileAccess.open(test_file, FileAccess.WRITE)
 	if test:
 		test.close()
 		DirAccess.remove_absolute(test_file)
+		_log("Write permission OK")
 	else:
-		print("UpdateManager: No write permission to %s" % install_dir)
-		print("UpdateManager: Opening downloads folder for manual update")
+		_log("ERROR: No write permission to %s" % install_dir)
+		_log("Opening downloads folder for manual update")
 		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
 		_cleanup_pending_update()
 		return false
 
+	# Run unzip command
+	_log("Running: unzip -o '%s' -d '%s'" % [global_zip, install_dir])
 	var output = []
 	var exit_code = OS.execute("unzip", ["-o", global_zip, "-d", install_dir], output, true)
 
+	_log("unzip exit code: %d" % exit_code)
+	for line in output:
+		_log("unzip output: %s" % str(line))
+
 	if exit_code != 0:
-		print("UpdateManager: unzip failed with code %d" % exit_code)
-		for line in output:
-			print("  %s" % line)
+		_log("ERROR: unzip failed with code %d" % exit_code)
+		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
+		return false
+
+	# Verify the app was extracted
+	var app_name = app_path.get_file()
+	var new_app_path = install_dir + "/" + app_name
+	_log("Checking for extracted app at: %s" % new_app_path)
+
+	if not DirAccess.dir_exists_absolute(new_app_path):
+		_log("ERROR: Extracted app not found at expected location")
+		_log("Checking what was extracted...")
+		var dir = DirAccess.open(install_dir)
+		if dir:
+			dir.list_dir_begin()
+			var file_name = dir.get_next()
+			while file_name != "":
+				_log("  Found: %s" % file_name)
+				file_name = dir.get_next()
 		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
 		return false
 
 	# Remove quarantine attribute from the extracted app so Gatekeeper doesn't complain
-	var app_name = app_path.get_file()
-	var new_app_path = install_dir + "/" + app_name
-	OS.execute("xattr", ["-rd", "com.apple.quarantine", new_app_path], [], false)
-	print("UpdateManager: Removed quarantine attribute from %s" % new_app_path)
+	_log("Removing quarantine attribute from: %s" % new_app_path)
+	var xattr_output = []
+	OS.execute("xattr", ["-rd", "com.apple.quarantine", new_app_path], xattr_output, true)
+	_log("Quarantine removal complete")
 
+	_log("macOS extraction completed successfully")
 	return true
 
 
