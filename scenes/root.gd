@@ -527,9 +527,12 @@ func _on_level_cleared() -> void:
 # Update Checking
 # ============================================================================
 
+var _startup_update_check_pending: bool = false
+
+
 func _setup_update_checker() -> void:
-	# Connect to UpdateManager signals
-	UpdateManager.update_available.connect(_on_update_available)
+	# We'll connect signals only for the startup check
+	pass
 
 
 func _check_for_updates_on_startup() -> void:
@@ -538,11 +541,29 @@ func _check_for_updates_on_startup() -> void:
 	
 	# Only check if we're still on the title screen
 	if get_current_state() == State.TITLE_SCREEN:
+		_startup_update_check_pending = true
+		
+		# Connect one-shot handler for startup check only
+		UpdateManager.update_available.connect(_on_startup_update_available, CONNECT_ONE_SHOT)
+		UpdateManager.update_check_complete.connect(_on_startup_check_complete, CONNECT_ONE_SHOT)
+		
 		UpdateManager.check_for_updates()
 
 
-func _on_update_available(release_info: Dictionary) -> void:
+func _on_startup_update_available(release_info: Dictionary) -> void:
+	_startup_update_check_pending = false
+	# Disconnect the complete signal since we got an update
+	if UpdateManager.update_check_complete.is_connected(_on_startup_check_complete):
+		UpdateManager.update_check_complete.disconnect(_on_startup_check_complete)
+	
 	# Show the update dialog
 	var dialog = UPDATE_DIALOG_SCENE.instantiate()
 	add_child(dialog)
 	dialog.setup(release_info)
+
+
+func _on_startup_check_complete(_has_update: bool) -> void:
+	_startup_update_check_pending = false
+	# Disconnect the available signal since check is done
+	if UpdateManager.update_available.is_connected(_on_startup_update_available):
+		UpdateManager.update_available.disconnect(_on_startup_update_available)
