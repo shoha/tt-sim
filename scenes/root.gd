@@ -263,8 +263,9 @@ func _exit_playing_state() -> void:
 		NetworkManager.level_data_received.disconnect(_on_level_data_received)
 	_disconnect_client_state_signals()
 
-	# Clear the level first
+	# Clear the level and reset loading state
 	if _level_play_controller:
+		_level_play_controller.reset_loading_state()
 		_level_play_controller.clear_level_tokens()
 		_level_play_controller.clear_level_map()
 
@@ -356,6 +357,9 @@ func _on_level_data_received(level_dict: Dictionary) -> void:
 
 ## Handle full state sync (initial sync or reconciliation)
 func _on_full_state_received(_state_dict: Dictionary) -> void:
+	# Don't apply state during loading - it will be applied when loading completes
+	if _level_play_controller and _level_play_controller.is_loading():
+		return
 	_apply_game_state_to_tokens()
 
 
@@ -387,15 +391,21 @@ func _on_transform_batch_received(batch: Dictionary) -> void:
 func _on_token_state_received(network_id: String, token_dict: Dictionary) -> void:
 	var token_state = TokenState.from_dict(token_dict)
 	
-	# Update GameState using proper API
+	# Update GameState using proper API (always do this, even during loading)
 	GameState.set_token_state(network_id, token_state)
+	
+	# Don't create visual tokens during async loading - the loading process will
+	# create them from placements, and we'll sync GameState afterward.
+	# This prevents duplicate tokens from being created.
+	if _level_play_controller and _level_play_controller.is_loading():
+		return
 	
 	# Apply to visual token
 	var token = _level_play_controller.spawned_tokens.get(network_id) as BoardToken
 	if token and is_instance_valid(token):
 		token_state.apply_to_token(token)
 	else:
-		# Token doesn't exist, might be a new one - create it
+		# Token doesn't exist, might be a new one added by host - create it
 		var new_token = _create_token_from_state(token_state)
 		if new_token and _game_map:
 			_game_map.drag_and_drop_node.add_child(new_token)
@@ -417,6 +427,10 @@ func _on_token_removed_received(network_id: String) -> void:
 func _apply_game_state_to_tokens() -> void:
 	# Update visual tokens from GameState
 	if not _level_play_controller or not _game_map:
+		return
+	
+	# Don't apply during loading - wait for loading to complete
+	if _level_play_controller.is_loading():
 		return
 	
 	var drag_and_drop = _game_map.drag_and_drop_node
@@ -551,8 +565,16 @@ func _on_level_loading_progress(progress: float, status: String) -> void:
 
 
 func _on_level_loading_completed() -> void:
-	if _loading_overlay:
+	# Don't hide loading overlay if there's another level queued - it will start loading immediately
+	# This prevents a visual flash between levels
+	if _loading_overlay and not (_level_play_controller and _level_play_controller.has_queued_level()):
 		_loading_overlay.hide_loading()
+	
+	# Apply any GameState updates that arrived during async loading
+	# This syncs token properties and creates any tokens added by host during loading
+	if NetworkManager.is_client():
+		_apply_game_state_to_tokens()
+	
 	# Clear pending data in case loading was aborted
 	# (successful loads clear this in _on_level_play_loaded via level_loaded signal)
 	_pending_level_data = null

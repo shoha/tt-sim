@@ -57,6 +57,22 @@ func _connect_asset_streamer() -> void:
 		_streamer_connected = true
 
 
+## Disconnect from AssetStreamer signals
+func _disconnect_asset_streamer() -> void:
+	if not _streamer_connected:
+		return
+
+	if has_node("/root/AssetStreamer"):
+		var streamer = get_node("/root/AssetStreamer")
+		if streamer.asset_received.is_connected(_on_map_received):
+			streamer.asset_received.disconnect(_on_map_received)
+		if streamer.asset_failed.is_connected(_on_map_failed):
+			streamer.asset_failed.disconnect(_on_map_failed)
+		if streamer.transfer_progress.is_connected(_on_map_transfer_progress):
+			streamer.transfer_progress.disconnect(_on_map_transfer_progress)
+	_streamer_connected = false
+
+
 ## Handle map download completion from AssetStreamer
 func _on_map_received(pack_id: String, asset_id: String, _variant_id: String, local_path: String) -> void:
 	# Only handle map downloads
@@ -142,14 +158,21 @@ func _update_all_token_state() -> void:
 ## Load and play a level (async version - does not block main thread)
 ## Returns true if loading started successfully, false on immediate failure
 ## Listen to level_loaded signal for completion
+## Stores pending level data when a new level is requested during loading
+var _queued_level_data: LevelData = null
+
+
 func play_level(level_data: LevelData) -> bool:
 	if not _game_map:
 		push_error("LevelPlayController: No GameMap set. Call setup() first.")
 		return false
 
 	if _is_loading:
-		push_warning("LevelPlayController: Already loading a level")
-		return false
+		# If we're already loading, queue this level to load after current completes/aborts
+		# This handles cases like: host sends new level while client is still loading previous
+		push_warning("LevelPlayController: Queueing level (currently loading)")
+		_queued_level_data = level_data
+		return true # Return true - level will be loaded when current finishes
 
 	# Start async loading
 	_play_level_async(level_data)
@@ -279,103 +302,8 @@ func _play_level_async(level_data: LevelData) -> void:
 	if NetworkManager.is_host() and _reconciliation_timer:
 		_reconciliation_timer.start()
 
-
-## Synchronous play_level for cases where blocking is acceptable
-## (e.g., when called from network sync where we need immediate results)
-func play_level_sync(level_data: LevelData) -> bool:
-	if not _game_map:
-		push_error("LevelPlayController: No GameMap set. Call setup() first.")
-		return false
-
-	# Clear any previously loaded level first
-	clear_level()
-
-	# Store reference to active level
-	active_level_data = level_data
-
-	# Load the map model from level data (sync)
-	if not _load_level_map(level_data):
-		push_error("LevelPlayController: Failed to load map")
-		return false
-
-	var drag_and_drop = _game_map.drag_and_drop_node
-	if not drag_and_drop:
-		push_error("LevelPlayController: Could not find DragAndDrop3D node")
-		return false
-
-	# Spawn all tokens from the level
-	for placement in level_data.token_placements:
-		var token = BoardTokenFactory.create_from_placement(placement)
-		if token:
-			drag_and_drop.add_child(token)
-			_track_token(token, placement)
-			_connect_token_context_menu(token)
-			token_spawned.emit(token, placement)
-
-	level_loaded.emit(level_data)
-
-	# Start reconciliation timer for networked games
-	if NetworkManager.is_host() and _reconciliation_timer:
-		_reconciliation_timer.start()
-
-	return true
-
-
-## Load the map model from level data (synchronous version)
-## Supports both res:// (legacy) and user:// (folder-based) paths
-## For clients, will trigger async download if map is not available locally
-func _load_level_map(level_data: LevelData) -> bool:
-	# Remove previous level map if exists
-	if is_instance_valid(loaded_map_instance):
-		loaded_map_instance.queue_free()
-		loaded_map_instance = null
-
-	# Clear any existing map children from the game map
-	_clear_existing_maps()
-
-	# Check for valid map path
-	if level_data.map_path == "":
-		push_error("LevelPlayController: No map path in level data")
-		return false
-
-	# Get the absolute map path
-	var map_path = level_data.get_absolute_map_path()
-	if map_path == "":
-		push_error("LevelPlayController: Cannot resolve map path")
-		return false
-
-	# Try to load the map from various sources
-	var map: Node3D = null
-
-	# 1. Check if it's a res:// path (legacy format)
-	if map_path.begins_with("res://"):
-		if ResourceLoader.exists(map_path):
-			var map_scene = load(map_path)
-			if map_scene:
-				map = map_scene.instantiate() as Node3D
-
-	# 2. Check if it's a user:// path (folder-based format)
-	elif map_path.begins_with("user://"):
-		if FileAccess.file_exists(map_path):
-			map = _load_glb_from_path(map_path)
-		else:
-			# Check cache (for clients who downloaded from host)
-			var cached_path = _get_cached_map_path(level_data.level_folder)
-			if cached_path != "":
-				map = _load_glb_from_path(cached_path)
-			elif NetworkManager.is_client():
-				# Request map from host
-				return _request_map_download(level_data.level_folder)
-			else:
-				push_error("LevelPlayController: Map file not found: " + map_path)
-				return false
-
-	if not map:
-		push_error("LevelPlayController: Failed to load map")
-		return false
-
-	_finalize_map_loading(map)
-	return true
+	# Check if another level was queued during loading
+	_process_queued_level()
 
 
 ## Load the map model from level data (async version - does not block main thread)
@@ -538,6 +466,24 @@ func _abort_loading() -> void:
 	push_warning("LevelPlayController: Aborting async loading (context no longer valid)")
 	_is_loading = false
 	level_loading_completed.emit()
+
+	# Check if another level was queued during loading
+	_process_queued_level()
+
+
+## Process any level that was queued during loading
+func _process_queued_level() -> void:
+	if _queued_level_data:
+		var queued = _queued_level_data
+		_queued_level_data = null
+		print("LevelPlayController: Loading queued level")
+		# Use call_deferred to avoid recursion issues
+		call_deferred("play_level", queued)
+
+
+## Check if there's a level queued to load after current loading completes
+func has_queued_level() -> bool:
+	return _queued_level_data != null
 
 
 ## Track a spawned token
@@ -782,6 +728,14 @@ func clear_level() -> void:
 	AssetPackManager.clear_model_cache()
 
 	level_cleared.emit()
+
+
+## Reset all loading state (call when exiting PLAYING state)
+func reset_loading_state() -> void:
+	_is_loading = false
+	_queued_level_data = null
+	_pending_map_level_folder = ""
+	_disconnect_asset_streamer()
 
 
 ## Check if a level is currently loaded
