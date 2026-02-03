@@ -482,16 +482,18 @@ func _on_load_pressed() -> void:
 
 func _on_saved_level_activated(index: int) -> void:
 	var path = saved_levels_list.get_item_metadata(index)
-	_load_level_from_path(path)
 	var dialog_content = load_dialog.get_node("LoadVBox")
 	_animate_popup_out(load_dialog, dialog_content)
+	# Load async - doesn't block so animation runs smoothly
+	_load_level_async(path)
 
 
 func _on_load_confirmed() -> void:
 	var selected_items = saved_levels_list.get_selected_items()
 	if selected_items.size() > 0:
 		var path = saved_levels_list.get_item_metadata(selected_items[0])
-		_load_level_from_path(path)
+		# Load async - doesn't block so dialog hide animation runs smoothly
+		_load_level_async(path)
 
 
 func _on_saved_level_selected(index: int) -> void:
@@ -528,6 +530,22 @@ func _on_delete_level_confirmed() -> void:
 func _load_level_from_path(path: String) -> void:
 	# Load without emitting signal to prevent auto-play
 	var level = LevelManager.load_level(path)
+	if level:
+		current_level = level
+		_pending_map_source_path = "" # Clear pending map when loading existing level
+		_update_ui_from_level()
+		_set_status("Level loaded: " + level.level_name)
+	else:
+		_set_status("Failed to load level")
+
+
+## Load a level asynchronously (does not block the main thread)
+## This allows UI animations to run smoothly while loading
+func _load_level_async(path: String) -> void:
+	_set_status("Loading...")
+	
+	# Load without emitting signal to prevent auto-play
+	var level = await LevelManager.load_level_async(path, false)
 	if level:
 		current_level = level
 		_pending_map_source_path = "" # Clear pending map when loading existing level

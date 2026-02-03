@@ -4,6 +4,12 @@ extends Node
 ## Scans the user_assets/ directory for packs containing manifest.json files.
 ## Supports both local and remote asset packs with on-demand downloading.
 ## Provides API for accessing assets across all loaded packs.
+##
+## Model Instance API:
+##   get_model_instance() - Get a model Node3D (async, uses memory cache)
+##   get_model_instance_sync() - Get a model Node3D (sync, uses memory cache)
+##   preload_models() - Preload multiple models async with progress
+##   clear_model_cache() - Clear the in-memory model cache
 
 const AssetPackClass = preload("res://resources/asset_pack.gd")
 const USER_ASSETS_DIR: String = "res://user_assets/"
@@ -11,6 +17,13 @@ const CACHE_DIR: String = "user://asset_cache/"
 
 ## Dictionary of pack_id -> AssetPack
 var _packs: Dictionary = {}
+
+## In-memory cache for loaded model scenes (path -> Node3D template or PackedScene)
+## This avoids re-parsing GLB files when creating multiple tokens of the same type
+var _model_cache: Dictionary = {}
+
+## Tracks which models are currently being loaded async (path -> true)
+var _loading_models: Dictionary = {}
 
 ## Signal emitted when all packs have been loaded
 signal packs_loaded
@@ -457,3 +470,194 @@ func get_all_assets() -> Array[Dictionary]:
 ## Reload all packs (useful for hot-reloading during development)
 func reload_packs() -> void:
 	_discover_packs()
+
+
+# =============================================================================
+# MODEL INSTANCE API (with in-memory caching)
+# =============================================================================
+
+## Get a model instance for an asset (async, uses cache)
+## Returns a new Node3D instance (duplicated from cache if available)
+## Handles path resolution, loading, and caching automatically
+## @param pack_id: The pack identifier
+## @param asset_id: The asset identifier
+## @param variant_id: The variant (default, shiny, etc.)
+## @param create_static_bodies: If true, creates StaticBody3D for collision meshes (for maps)
+## @return: A Node3D model instance, or null on failure
+func get_model_instance(pack_id: String, asset_id: String, variant_id: String = "default", create_static_bodies: bool = false) -> Node3D:
+	var path = resolve_model_path(pack_id, asset_id, variant_id)
+	if path == "":
+		# Asset needs to be downloaded - caller should wait for asset_available signal
+		return null
+	
+	return await get_model_instance_from_path(path, create_static_bodies)
+
+
+## Get a model instance from a resolved path (async, uses cache)
+## @param path: The resolved model path (res:// or user://)
+## @param create_static_bodies: If true, creates StaticBody3D for collision meshes
+## @return: A Node3D model instance, or null on failure
+func get_model_instance_from_path(path: String, create_static_bodies: bool = false) -> Node3D:
+	var cache_key = path + ("_static" if create_static_bodies else "")
+	
+	# Check cache first
+	if _model_cache.has(cache_key):
+		return _get_instance_from_cache(cache_key)
+	
+	# Wait if another call is already loading this model
+	while _loading_models.has(cache_key):
+		await get_tree().process_frame
+		if _model_cache.has(cache_key):
+			return _get_instance_from_cache(cache_key)
+	
+	# Mark as loading
+	_loading_models[cache_key] = true
+	
+	var model: Node3D = null
+	
+	# Load based on path type
+	if path.begins_with("user://") and path.ends_with(".glb"):
+		# GLB file - use async loading
+		var result = await GlbUtils.load_glb_with_processing_async(path, create_static_bodies)
+		if result.success:
+			model = result.scene
+	else:
+		# res:// path - use threaded resource loading
+		var load_status = ResourceLoader.load_threaded_request(path)
+		if load_status == OK:
+			while ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+				await get_tree().process_frame
+			var resource = ResourceLoader.load_threaded_get(path)
+			if resource is PackedScene:
+				# Cache the PackedScene itself
+				_model_cache[cache_key] = resource
+				_loading_models.erase(cache_key)
+				return resource.instantiate() as Node3D
+	
+	# Cache the loaded model as a template
+	if model:
+		_model_cache[cache_key] = model
+		_loading_models.erase(cache_key)
+		# Return a duplicate, keep original as template
+		return model.duplicate(Node.DUPLICATE_USE_INSTANTIATION) as Node3D
+	
+	_loading_models.erase(cache_key)
+	return null
+
+
+## Get a model instance synchronously (uses cache, blocks if not cached)
+## Prefer get_model_instance() for better performance
+func get_model_instance_sync(pack_id: String, asset_id: String, variant_id: String = "default", create_static_bodies: bool = false) -> Node3D:
+	var path = resolve_model_path(pack_id, asset_id, variant_id)
+	if path == "":
+		return null
+	
+	return get_model_instance_from_path_sync(path, create_static_bodies)
+
+
+## Get a model instance from a path synchronously
+func get_model_instance_from_path_sync(path: String, create_static_bodies: bool = false) -> Node3D:
+	var cache_key = path + ("_static" if create_static_bodies else "")
+	
+	# Check cache first
+	if _model_cache.has(cache_key):
+		return _get_instance_from_cache(cache_key)
+	
+	var model: Node3D = null
+	
+	# Load based on path type
+	if path.begins_with("user://") and path.ends_with(".glb"):
+		model = GlbUtils.load_glb_with_processing(path, create_static_bodies)
+	else:
+		if ResourceLoader.exists(path):
+			var resource = load(path)
+			if resource is PackedScene:
+				_model_cache[cache_key] = resource
+				return resource.instantiate() as Node3D
+	
+	# Cache the loaded model as a template
+	if model:
+		_model_cache[cache_key] = model
+		return model.duplicate(Node.DUPLICATE_USE_INSTANTIATION) as Node3D
+	
+	return null
+
+
+## Get an instance from the cache (handles both PackedScene and Node3D templates)
+func _get_instance_from_cache(cache_key: String) -> Node3D:
+	var cached = _model_cache[cache_key]
+	
+	if cached is PackedScene:
+		return cached.instantiate() as Node3D
+	
+	if cached is Node3D and is_instance_valid(cached):
+		return cached.duplicate(Node.DUPLICATE_USE_INSTANTIATION) as Node3D
+	
+	# Invalid cache entry
+	_model_cache.erase(cache_key)
+	return null
+
+
+## Preload multiple models asynchronously (for batch loading before spawning)
+## @param assets: Array of dictionaries with pack_id, asset_id, variant_id keys
+## @param progress_callback: Optional callback(loaded: int, total: int) for progress
+## @param create_static_bodies: If true, creates StaticBody3D for collision meshes
+## @return: Number of models successfully loaded
+func preload_models(assets: Array, progress_callback: Callable = Callable(), create_static_bodies: bool = false) -> int:
+	# Collect unique paths
+	var unique_paths: Dictionary = {}
+	for asset in assets:
+		if not asset is Dictionary:
+			continue
+		var pack_id = asset.get("pack_id", "")
+		var asset_id = asset.get("asset_id", "")
+		var variant_id = asset.get("variant_id", "default")
+		
+		if pack_id == "" or asset_id == "":
+			continue
+		
+		var path = resolve_model_path(pack_id, asset_id, variant_id)
+		if path != "":
+			var cache_key = path + ("_static" if create_static_bodies else "")
+			unique_paths[cache_key] = path
+	
+	var total = unique_paths.size()
+	var loaded = 0
+	
+	for cache_key in unique_paths:
+		var path = unique_paths[cache_key]
+		
+		# Skip if already cached
+		if _model_cache.has(cache_key):
+			loaded += 1
+			if progress_callback.is_valid():
+				progress_callback.call(loaded, total)
+			continue
+		
+		# Load the model
+		var model = await get_model_instance_from_path(path, create_static_bodies)
+		if model:
+			# We got a duplicate - free it since we just wanted to populate the cache
+			model.queue_free()
+			loaded += 1
+		
+		if progress_callback.is_valid():
+			progress_callback.call(loaded, total)
+		
+		# Yield to keep UI responsive
+		await get_tree().process_frame
+	
+	return loaded
+
+
+## Clear the in-memory model cache (call when switching levels to free memory)
+func clear_model_cache() -> void:
+	for cache_key in _model_cache:
+		var cached = _model_cache[cache_key]
+		# Free Node3D templates (PackedScene doesn't need explicit freeing)
+		if cached is Node3D and is_instance_valid(cached):
+			cached.free()
+	
+	_model_cache.clear()
+	_loading_models.clear()
+	print("AssetPackManager: Model cache cleared")

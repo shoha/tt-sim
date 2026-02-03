@@ -5,9 +5,21 @@ class_name GlbUtils
 ## Used by BoardTokenFactory, LevelPlayController, and any future streaming asset systems.
 ##
 ## Usage:
+##   # Synchronous (blocking):
 ##   var model = GlbUtils.load_glb(path)
 ##   GlbUtils.process_collision_meshes(model, true)  # true = create StaticBody3D
 ##   GlbUtils.process_animations(model)
+##
+##   # Asynchronous (non-blocking):
+##   var result = await GlbUtils.load_glb_async(path)
+##   if result.scene:
+##       GlbUtils.process_collision_meshes(result.scene, true)
+
+## Result structure for async loading
+class AsyncLoadResult:
+	var scene: Node3D = null
+	var error: String = ""
+	var success: bool = false
 
 
 ## Load a GLB file from a user:// or res:// path using GLTFDocument
@@ -44,6 +56,91 @@ static func load_glb(path: String) -> Node3D:
 	return scene
 
 
+## Load a GLB file asynchronously using WorkerThreadPool
+## File I/O and GLB parsing happen on a background thread
+## Scene generation still happens on main thread (required by Godot)
+## @param path: Path to the GLB file
+## @return: AsyncLoadResult with scene or error
+static func load_glb_async(path: String) -> AsyncLoadResult:
+	var result = AsyncLoadResult.new()
+	
+	# Use a signal to wait for the thread to complete
+	var scene_tree = Engine.get_main_loop() as SceneTree
+	if not scene_tree:
+		result.error = "No scene tree available"
+		return result
+	
+	# Read file and parse GLB on background thread
+	var thread_result: Dictionary = {"buffer": null, "gltf_state": null, "error": ""}
+	
+	var task_id = WorkerThreadPool.add_task(
+		func():
+			_load_glb_thread_work(path, thread_result)
+	)
+	
+	# Wait for thread to complete without blocking the main thread
+	while not WorkerThreadPool.is_task_completed(task_id):
+		await scene_tree.process_frame
+	
+	# Ensure task is fully cleaned up
+	WorkerThreadPool.wait_for_task_completion(task_id)
+	
+	# Check for errors from thread
+	if thread_result.error != "":
+		result.error = thread_result.error
+		push_error("GlbUtils: " + result.error)
+		return result
+	
+	# Generate scene on main thread (Node creation requires main thread)
+	var gltf_document = GLTFDocument.new()
+	var gltf_state = thread_result.gltf_state as GLTFState
+	
+	if not gltf_state:
+		result.error = "Failed to get GLTF state from thread"
+		return result
+	
+	# Re-parse the buffer on main thread since GLTFDocument can't be shared across threads
+	var error = gltf_document.append_from_buffer(thread_result.buffer, "", gltf_state)
+	if error != OK:
+		result.error = "Failed to parse GLB: " + path + " (error: " + str(error) + ")"
+		push_error("GlbUtils: " + result.error)
+		return result
+	
+	var scene = gltf_document.generate_scene(gltf_state, 30.0)
+	if not scene:
+		result.error = "Failed to generate scene from GLB: " + path
+		push_error("GlbUtils: " + result.error)
+		return result
+	
+	result.scene = scene
+	result.success = true
+	return result
+
+
+## Thread worker function for async GLB loading
+## Only handles file I/O (the heavy disk operation)
+static func _load_glb_thread_work(path: String, result: Dictionary) -> void:
+	# Read the file bytes on background thread
+	var file = FileAccess.open(path, FileAccess.READ)
+	if not file:
+		result.error = "Could not open GLB file: " + path
+		return
+	
+	var buffer = file.get_buffer(file.get_length())
+	file.close()
+	
+	if buffer.size() == 0:
+		result.error = "GLB file is empty: " + path
+		return
+	
+	# Store buffer for main thread to use
+	result.buffer = buffer
+	
+	# Create a fresh GLTFState for the main thread
+	result.gltf_state = GLTFState.new()
+	result.gltf_state.create_animations = true
+
+
 ## Load a GLB and apply all standard post-processing
 ## @param path: Path to the GLB file
 ## @param create_static_bodies: If true, creates StaticBody3D for collision meshes (for maps)
@@ -58,6 +155,78 @@ static func load_glb_with_processing(path: String, create_static_bodies: bool = 
 	process_animations(scene)
 	
 	return scene
+
+
+## Load a GLB asynchronously and apply all standard post-processing
+## @param path: Path to the GLB file
+## @param create_static_bodies: If true, creates StaticBody3D for collision meshes (for maps)
+##                              If false, just hides collision mesh indicators (for tokens)
+## @return: AsyncLoadResult with fully processed scene or error
+static func load_glb_with_processing_async(path: String, create_static_bodies: bool = false) -> AsyncLoadResult:
+	var result = await load_glb_async(path)
+	
+	if result.success and result.scene:
+		# Process collision meshes - yield periodically for large scenes
+		await _process_collision_meshes_async(result.scene, create_static_bodies)
+		process_animations(result.scene)
+	
+	return result
+
+
+## Process collision meshes with periodic yielding for large scenes
+static func _process_collision_meshes_async(node: Node, create_static_bodies: bool) -> void:
+	var scene_tree = Engine.get_main_loop() as SceneTree
+	
+	# Collect nodes to process
+	var collision_nodes: Array[Dictionary] = []
+	_find_collision_mesh_nodes(node, collision_nodes)
+	
+	var processed = 0
+	for col_info in collision_nodes:
+		var mesh_node = col_info.node as MeshInstance3D
+		var suffix = col_info.suffix as String
+		
+		if not mesh_node:
+			continue
+		
+		var is_only = suffix.contains("only")
+		
+		if create_static_bodies and mesh_node.mesh:
+			var is_convex = suffix.contains("conv")
+			
+			var static_body = StaticBody3D.new()
+			static_body.name = mesh_node.name.replace(suffix, "") + "_collision"
+			
+			var collision_shape = CollisionShape3D.new()
+			collision_shape.name = "CollisionShape3D"
+			
+			# Shape creation can be slow for complex meshes
+			if is_convex:
+				collision_shape.shape = mesh_node.mesh.create_convex_shape()
+			else:
+				collision_shape.shape = mesh_node.mesh.create_trimesh_shape()
+			
+			static_body.add_child(collision_shape)
+			
+			var parent = mesh_node.get_parent()
+			if parent:
+				static_body.transform = mesh_node.transform
+				parent.add_child(static_body)
+			
+			if is_only:
+				mesh_node.queue_free()
+			else:
+				mesh_node.visible = false
+		else:
+			if is_only:
+				mesh_node.queue_free()
+			else:
+				mesh_node.visible = false
+		
+		processed += 1
+		# Yield every few collision meshes to prevent frame drops
+		if processed % 3 == 0 and scene_tree:
+			await scene_tree.process_frame
 
 
 ## Process collision mesh nodes in a runtime-loaded GLB

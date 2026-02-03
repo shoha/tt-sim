@@ -14,6 +14,7 @@ const PAUSE_OVERLAY_SCENE := preload("res://scenes/states/paused/pause_overlay.t
 const LOBBY_HOST_SCENE := preload("res://scenes/states/lobby/lobby_host.tscn")
 const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn")
 const UPDATE_DIALOG_SCENE := preload("res://scenes/ui/update_dialog.tscn")
+const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
 
 enum State {
 	TITLE_SCREEN,
@@ -34,6 +35,7 @@ var _lobby_host: CanvasLayer = null
 var _lobby_client: CanvasLayer = null
 var _level_play_controller: LevelPlayController = null
 var _pending_level_data: LevelData = null
+var _loading_overlay: LoadingOverlay = null
 
 
 func _ready() -> void:
@@ -76,6 +78,15 @@ func _setup_level_play_controller() -> void:
 	add_child(_level_play_controller)
 	_level_play_controller.level_loaded.connect(_on_level_play_loaded)
 	_level_play_controller.level_cleared.connect(_on_level_cleared)
+	
+	# Connect loading signals for the loading overlay
+	_level_play_controller.level_loading_started.connect(_on_level_loading_started)
+	_level_play_controller.level_loading_progress.connect(_on_level_loading_progress)
+	_level_play_controller.level_loading_completed.connect(_on_level_loading_completed)
+	
+	# Create loading overlay (always available)
+	_loading_overlay = LOADING_OVERLAY_SCENE.instantiate()
+	add_child(_loading_overlay)
 
 
 func _setup_app_menu() -> void:
@@ -93,9 +104,10 @@ func _on_play_level_requested(level_data: LevelData) -> void:
 	# If already in PLAYING state, reload the level directly
 	if get_current_state() == State.PLAYING and _level_play_controller:
 		# Set pending data to prevent level_cleared from triggering title screen
+		# Note: Don't clear this until loading completes (play_level is async)
 		_pending_level_data = level_data
 		_level_play_controller.play_level(level_data)
-		_pending_level_data = null
+		# _pending_level_data is cleared in _on_level_play_loaded() when loading completes
 		
 		# Broadcast level data to clients if we're the host
 		if NetworkManager.is_host():
@@ -179,6 +191,8 @@ func _enter_playing_state() -> void:
 	_game_map.setup(_level_play_controller)
 
 	# Handle networked vs local play
+	# Note: Don't clear _pending_level_data until loading completes (play_level is async)
+	# It will be cleared in _on_level_play_loaded or _on_level_loading_completed
 	if NetworkManager.is_host() and _pending_level_data:
 		# Host: Load level and broadcast to clients
 		if not _level_play_controller.play_level(_pending_level_data):
@@ -186,7 +200,6 @@ func _enter_playing_state() -> void:
 		else:
 			# Broadcast level data to all clients
 			NetworkManager.broadcast_level_data(_pending_level_data.to_dict())
-		_pending_level_data = null
 	elif NetworkManager.is_client():
 		# Client: Listen for level data and state updates from host
 		NetworkManager.level_data_received.connect(_on_level_data_received)
@@ -195,7 +208,6 @@ func _enter_playing_state() -> void:
 		# Local play: Just load the level
 		if not _level_play_controller.play_level(_pending_level_data):
 			push_error("Root: Failed to play level")
-		_pending_level_data = null
 
 
 ## Connect client-side signals for receiving state updates
@@ -336,10 +348,10 @@ func _on_level_data_received(level_dict: Dictionary) -> void:
 	var level_data = LevelData.from_dict(level_dict)
 	if _level_play_controller and _game_map:
 		# Set pending data to prevent _on_level_cleared from returning to title
+		# Don't clear until loading completes (play_level is async)
 		_pending_level_data = level_data
 		if not _level_play_controller.play_level(level_data):
 			push_error("Root: Failed to load networked level")
-		_pending_level_data = null
 
 
 ## Handle full state sync (initial sync or reconciliation)
@@ -512,7 +524,8 @@ func _on_level_loaded(_level_data: LevelData) -> void:
 
 func _on_level_play_loaded(_level_data: LevelData) -> void:
 	# Already in PLAYING state, no need to transition
-	pass
+	# Clear pending data now that loading is complete
+	_pending_level_data = null
 
 
 func _on_level_cleared() -> void:
@@ -521,6 +534,28 @@ func _on_level_cleared() -> void:
 	if _pending_level_data:
 		return
 	change_state(State.TITLE_SCREEN)
+
+
+# ============================================================================
+# Loading Overlay
+# ============================================================================
+
+func _on_level_loading_started() -> void:
+	if _loading_overlay:
+		_loading_overlay.show_loading("Loading Level...")
+
+
+func _on_level_loading_progress(progress: float, status: String) -> void:
+	if _loading_overlay:
+		_loading_overlay.set_progress(progress, status)
+
+
+func _on_level_loading_completed() -> void:
+	if _loading_overlay:
+		_loading_overlay.hide_loading()
+	# Clear pending data in case loading was aborted
+	# (successful loads clear this in _on_level_play_loaded via level_loaded signal)
+	_pending_level_data = null
 
 
 # ============================================================================

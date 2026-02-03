@@ -83,11 +83,13 @@ Autoloads are registered in `project.godot` and available globally.
 
 ### Asset Management Autoloads
 
-| Autoload           | File                              | Purpose                          |
-| ------------------ | --------------------------------- | -------------------------------- |
-| `AssetPackManager` | `autoloads/asset_pack_manager.gd` | Pack discovery and asset loading |
-| `AssetDownloader`  | `autoloads/asset_downloader.gd`   | HTTP downloads with caching      |
-| `AssetStreamer`    | `autoloads/asset_streamer.gd`     | P2P asset streaming              |
+| Autoload            | File                               | Purpose                                    |
+| ------------------- | ---------------------------------- | ------------------------------------------ |
+| `AssetPackManager`  | `autoloads/asset_pack_manager.gd`  | Pack discovery, asset loading, model cache |
+| `AssetResolver`     | `autoloads/asset_resolver.gd`      | Unified asset resolution pipeline          |
+| `AssetCacheManager` | `autoloads/asset_cache_manager.gd` | Disk cache management                      |
+| `AssetDownloader`   | `autoloads/asset_downloader.gd`    | HTTP downloads with queue                  |
+| `AssetStreamer`     | `autoloads/asset_streamer.gd`      | P2P asset streaming                        |
 
 ### UIManager Responsibilities
 
@@ -103,6 +105,7 @@ Autoloads are registered in `project.godot` and available globally.
 ### LevelManager Responsibilities
 
 - Level file I/O (save/load)
+- Async level loading (non-blocking for UI responsiveness)
 - Level discovery (listing available levels)
 - Level data validation
 
@@ -118,9 +121,27 @@ See [NETWORKING.md](NETWORKING.md) for detailed documentation.
 ### AssetPackManager Responsibilities
 
 - Asset pack discovery and registration
-- Asset loading (models, icons)
+- Asset path resolution (local → disk cache → download → P2P)
+- **Model instance loading with memory caching**
 - Remote pack support
-- Asset resolution (local → cache → download → P2P)
+- Batch model preloading for level loading
+
+**Model Instance API:**
+
+The `AssetPackManager` provides a unified API for getting model instances with automatic caching:
+
+```gdscript
+# Get a model instance (async, uses cache)
+var model = await AssetPackManager.get_model_instance(pack_id, asset_id, variant_id)
+
+# Preload multiple models before batch spawning
+await AssetPackManager.preload_models(assets_array, progress_callback)
+
+# Clear cache when switching levels
+AssetPackManager.clear_model_cache()
+```
+
+This centralizes model loading logic that was previously duplicated in `BoardTokenFactory` and `LevelPlayController`.
 
 See [ASSET_MANAGEMENT.md](ASSET_MANAGEMENT.md) for detailed documentation.
 
@@ -232,6 +253,7 @@ The asset system supports local and remote asset packs with multiplayer synchron
 - **Remote packs** specify `base_url` for HTTP downloads
 - **P2P streaming** provides fallback when URLs unavailable
 - **Placeholders** shown while assets download
+- **Two-level caching** - disk cache for downloads, memory cache for loaded models
 
 ### Asset Resolution
 
@@ -240,6 +262,17 @@ The asset system supports local and remote asset packs with multiplayer synchron
 2. Check disk cache (user://asset_cache/)
 3. Download from URL (if available)
 4. Request from host via P2P
+```
+
+### Model Loading Flow
+
+```
+1. Check memory cache (already loaded this session)
+2. If not cached, load from resolved path:
+   - res:// paths: Use ResourceLoader (threaded)
+   - user:// GLB: Use GlbUtils async loader (background I/O)
+3. Cache loaded model in memory
+4. Return duplicate/instance for caller
 ```
 
 ### Creating Packs
@@ -331,10 +364,12 @@ var scale: Vector3
 ### Level Flow
 
 1. **Level Editor** creates/edits `LevelData`
-2. **LevelManager** saves/loads level files
+2. **LevelManager** saves/loads level files (sync or async)
 3. **LevelPlayController** receives level data and:
-   - Loads map scene
-   - Spawns tokens from placements
+   - Loads map scene asynchronously (threaded resource loading)
+   - Preloads token models via `AssetPackManager.preload_models()`
+   - Spawns tokens progressively (yields to keep UI responsive)
+   - Emits progress signals for loading overlay
    - Manages active gameplay
 4. **Root** transitions state based on level events
 

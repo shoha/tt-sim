@@ -62,7 +62,11 @@ NetworkManager.join_game("ABC123")
 ### Loading an Asset
 
 ```gdscript
-var model = AssetPackManager.load_model("my_pack", "dragon", "default")
+# Async (recommended - non-blocking, uses cache)
+var model = await AssetPackManager.get_model_instance("my_pack", "dragon", "default")
+
+# Sync (blocks if not cached)
+var model = AssetPackManager.get_model_instance_sync("my_pack", "dragon", "default")
 ```
 
 ### Creating a Token from Asset
@@ -92,7 +96,9 @@ Autoloads:
 ├── NetworkManager - Multiplayer connections
 ├── NetworkStateSync - State broadcasting
 ├── GameState - Authoritative game state
-├── AssetPackManager - Asset pack registry
+├── AssetPackManager - Asset loading & model cache
+├── AssetResolver - Unified asset resolution
+├── AssetCacheManager - Disk cache management
 ├── AssetDownloader - HTTP downloads
 └── AssetStreamer - P2P streaming
 ```
