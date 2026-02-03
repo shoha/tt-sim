@@ -243,22 +243,6 @@ grow_vertical = 2
 layout_mode = 2
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="PlaceholderLabel" type="Label" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=310823600]
-layout_mode = 2
-theme_type_variation = &"H1"
-text = "No Map Loaded"
-horizontal_alignment = 1
-
-[node name="SubLabel" type="Label" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=562751378]
-layout_mode = 2
-theme_type_variation = &"Caption"
-text = "Open the Level Editor to load or create a level"
-horizontal_alignment = 1
-
-[node name="HSeparator" type="HSeparator" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_constants/separation = 20
-
 [node name="NetworkLabel" type="Label" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
 layout_mode = 2
 theme_type_variation = &"H2"
