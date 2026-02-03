@@ -196,8 +196,8 @@ func _on_download_complete(zip_path: String) -> void:
 	button_container.visible = false
 	post_download_buttons.visible = true
 	
-	title_label.text = "Download Complete"
-	release_notes.text = "The update has been downloaded and is ready to install.\n\nClick 'Restart Now' to apply the update, or 'Later' to install it the next time you start the game."
+	title_label.text = "Ready to Update"
+	release_notes.text = "The update has been downloaded and will be installed when the game restarts.\n\nClick 'Restart Now' to apply the update immediately, or 'Later' to continue playing. The update will be applied the next time you start the game."
 	
 	restart_button.grab_focus()
 
