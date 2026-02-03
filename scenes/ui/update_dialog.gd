@@ -41,10 +41,19 @@ func _ready() -> void:
 	UpdateManager.update_download_complete.connect(_on_download_complete)
 	UpdateManager.update_download_failed.connect(_on_download_failed)
 	
+	# Connect RichTextLabel link clicks
+	release_notes.meta_clicked.connect(_on_link_clicked)
+	
 	# Start hidden for animation
 	$ColorRect.modulate.a = 0.0
 	$CenterContainer.modulate.a = 0.0
 	_animate_in()
+
+
+func _on_link_clicked(meta: Variant) -> void:
+	# Open URL in browser
+	if meta is String and (meta.begins_with("http://") or meta.begins_with("https://")):
+		OS.shell_open(meta)
 
 
 func setup(release_info: Dictionary) -> void:
@@ -100,6 +109,11 @@ func _markdown_to_bbcode(markdown: String) -> String:
 	var code_regex = RegEx.new()
 	code_regex.compile("`(.+?)`")
 	text = code_regex.sub(text, "[code]$1[/code]", true)
+	
+	# Convert markdown links [text](url) to BBCode [url=...]text[/url]
+	var link_regex = RegEx.new()
+	link_regex.compile("\\[([^\\]]+)\\]\\(([^\\)]+)\\)")
+	text = link_regex.sub(text, "[url=$2]$1[/url]", true)
 	
 	return text
 
