@@ -44,7 +44,9 @@ jobs:
         run: mkdir -p ${{ matrix.folder }}
 
       - name: Inject version into project
+        shell: bash
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             VERSION="${{ github.ref_name }}"
           else
