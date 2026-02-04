@@ -1,8 +1,18 @@
 extends Node3D
 class_name DropIndicatorRenderer
 
-## Renders drop indicator visuals (dotted line + landing circle) during token dragging
-## This is a pure visual component - attach as child to a draggable object
+## Renders drop indicator visuals (dotted line + landing circle) during token dragging.
+## This is a pure visual component - attach as child to a draggable object.
+##
+## RENDER ORDER NOTE:
+## This uses OPAQUE rendering (TRANSPARENCY_DISABLED) intentionally. The lo-fi
+## post-processing shader (lofi_composite.gdshader) uses hint_screen_texture which
+## only captures opaque objects. Transparent objects would render AFTER the screen
+## texture is captured and thus wouldn't receive the lo-fi effect, making them
+## visually inconsistent with the rest of the scene.
+##
+## Trade-off: We lose semi-transparency but gain visual cohesion with the scene.
+## The bright emission color ensures visibility without needing alpha blending.
 
 const DOT_LENGTH: float = 0.15
 const DOT_GAP: float = 0.1
@@ -46,11 +56,13 @@ func _create_meshes() -> void:
 func _create_indicator_material() -> StandardMaterial3D:
 	var material = StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color(1.0, 0.0, 0.0, 0.5)
+	# Use opaque rendering so indicators are captured by post-process effects
+	# Bright red with emission for visibility without needing transparency
+	material.albedo_color = Color(1.0, 0.2, 0.2, 1.0)
 	material.emission_enabled = true
-	material.emission = Color(1.0, 0.0, 0.0, 0.5)
-	material.emission_energy_multiplier = 2.0
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.emission = Color(1.0, 0.0, 0.0, 1.0)
+	material.emission_energy_multiplier = 1.5
+	material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 	return material
 
 
