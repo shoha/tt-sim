@@ -9,6 +9,7 @@ class_name GameMap
 @onready var cameraholder_node: Node3D = $CameraHolder
 @onready var camera_node: Camera3D = $CameraHolder/Camera3D
 @onready var tiltshift_node: MeshInstance3D = $CameraHolder/Camera3D/MeshInstance3D
+@onready var lofi_node: MeshInstance3D = $CameraHolder/Camera3D/LofiQuad
 @onready var drag_and_drop_node: Node3D = $DragAndDrop3D
 @onready var gameplay_menu: CanvasLayer = $GameplayMenu
 
@@ -18,8 +19,12 @@ var _context_menu = null # TokenContextMenu - dynamically typed to avoid load or
 var _level_play_controller: LevelPlayController = null
 
 
+const SETTINGS_PATH := "user://settings.cfg"
+
+
 func _ready() -> void:
 	_setup_context_menu()
+	_load_lofi_setting()
 
 
 ## Setup with a reference to the level play controller
@@ -135,3 +140,22 @@ func _on_context_menu_hp_adjustment_requested(amount: int) -> void:
 func _on_context_menu_visibility_toggled() -> void:
 	if _context_menu and _context_menu.target_token:
 		_context_menu.target_token.toggle_visibility()
+
+
+## Load lo-fi filter setting from config
+func _load_lofi_setting() -> void:
+	var config = ConfigFile.new()
+	var err = config.load(SETTINGS_PATH)
+	
+	# Default to enabled if no setting exists
+	var lofi_enabled = true
+	if err == OK:
+		lofi_enabled = config.get_value("graphics", "lofi_enabled", true)
+	
+	set_lofi_enabled(lofi_enabled)
+
+
+## Enable or disable the lo-fi visual filter
+func set_lofi_enabled(enabled: bool) -> void:
+	if lofi_node:
+		lofi_node.visible = enabled

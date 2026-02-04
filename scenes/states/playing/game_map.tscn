@@ -1,10 +1,11 @@
-[gd_scene load_steps=9 format=3 uid="uid://byf7iljoqrotr"]
+[gd_scene load_steps=12 format=3 uid="uid://byf7iljoqrotr"]
 
 [ext_resource type="Script" uid="uid://ybc3vhthi6i5" path="res://scenes/states/playing/game_map.gd" id="1_5384n"]
 [ext_resource type="PackedScene" uid="uid://y7g8xy3ginxi" path="res://scenes/states/playing/gameplay_menu.tscn" id="2_stlim"]
 [ext_resource type="Script" uid="uid://md8k6faseouk" path="res://addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd" id="2_tyn2t"]
 [ext_resource type="Shader" uid="uid://cyy1aha4j5eb1" path="res://shaders/tilt_shift.gdshader" id="4_hgeeq"]
 [ext_resource type="Script" uid="uid://bm2kst6ow2637" path="res://scenes/states/playing/camera_3d.gd" id="4_kjinj"]
+[ext_resource type="Shader" path="res://shaders/lofi_composite.gdshader" id="5_lofi"]
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_stlim"]
 auto_exposure_scale = 0.8
@@ -24,6 +25,23 @@ shader_parameter/vertical_bias = 1.0
 
 [sub_resource type="QuadMesh" id="QuadMesh_stlim"]
 material = SubResource("ShaderMaterial_hgeeq")
+flip_faces = true
+size = Vector2(2, 2)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_lofi"]
+render_priority = 100
+shader = ExtResource("5_lofi")
+shader_parameter/pixelation = 0.003
+shader_parameter/saturation = 0.85
+shader_parameter/color_tint = Color(1.02, 1.0, 0.96, 1.0)
+shader_parameter/vignette_strength = 0.3
+shader_parameter/vignette_radius = 0.8
+shader_parameter/grain_intensity = 0.025
+shader_parameter/grain_speed = 0.2
+shader_parameter/grain_scale = 0.12
+
+[sub_resource type="QuadMesh" id="QuadMesh_lofi"]
+material = SubResource("ShaderMaterial_lofi")
 flip_faces = true
 size = Vector2(2, 2)
 
@@ -60,6 +78,10 @@ mesh = SubResource("QuadMesh_stlim")
 visible = false
 target_position = Vector3(0, 0, -100)
 hit_back_faces = false
+
+[node name="LofiQuad" type="MeshInstance3D" parent="CameraHolder/Camera3D"]
+extra_cull_margin = 16384.0
+mesh = SubResource("QuadMesh_lofi")
 
 [node name="DragAndDrop3D" type="Node3D" parent="." groups=["DragAndDrop3D"]]
 script = ExtResource("2_tyn2t")
