@@ -180,6 +180,20 @@ unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 
+[node name="LofiFilter" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/LofiFilter"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Lo-Fi Filter"
+
+[node name="LofiCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/LofiFilter"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+
 [node name="Controls" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
 visible = false
 layout_mode = 2
