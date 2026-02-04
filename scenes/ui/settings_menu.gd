@@ -23,6 +23,7 @@ const SETTINGS_PATH := "user://settings.cfg"
 # Graphics controls
 @onready var fullscreen_check: CheckButton = %FullscreenCheck
 @onready var vsync_check: CheckButton = %VSyncCheck
+@onready var lofi_check: CheckButton = %LofiCheck
 
 # Controls display
 @onready var controls_list: VBoxContainer = %ControlsList
@@ -61,6 +62,7 @@ func _ready() -> void:
 	# Graphics
 	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
 	vsync_check.toggled.connect(_on_vsync_toggled)
+	lofi_check.toggled.connect(_on_lofi_toggled)
 	
 	# Network
 	p2p_enabled_check.toggled.connect(_on_p2p_toggled)
@@ -131,6 +133,7 @@ func _load_settings() -> void:
 		ui_slider.value = config.get_value("audio", "ui", 100.0)
 		fullscreen_check.button_pressed = config.get_value("graphics", "fullscreen", false)
 		vsync_check.button_pressed = config.get_value("graphics", "vsync", true)
+		lofi_check.button_pressed = config.get_value("graphics", "lofi_enabled", true)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
 		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
 	
@@ -150,6 +153,7 @@ func _save_settings() -> void:
 	config.set_value("audio", "ui", ui_slider.value)
 	config.set_value("graphics", "fullscreen", fullscreen_check.button_pressed)
 	config.set_value("graphics", "vsync", vsync_check.button_pressed)
+	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
 	config.set_value("updates", "check_prereleases", prereleases_check.button_pressed)
 	
@@ -175,6 +179,9 @@ func _apply_settings() -> void:
 	DisplayServer.window_set_vsync_mode(
 		DisplayServer.VSYNC_ENABLED if vsync_check.button_pressed else DisplayServer.VSYNC_DISABLED
 	)
+	
+	# Apply lo-fi filter setting
+	_apply_lofi_setting()
 	
 	# Apply network settings
 	_apply_network_settings()
@@ -221,6 +228,28 @@ func _on_vsync_toggled(_pressed: bool) -> void:
 	pass
 
 
+func _on_lofi_toggled(_pressed: bool) -> void:
+	pass
+
+
+func _apply_lofi_setting() -> void:
+	# Find active GameMap and apply lo-fi setting
+	var game_map = _find_game_map()
+	if game_map:
+		game_map.set_lofi_enabled(lofi_check.button_pressed)
+
+
+func _find_game_map() -> GameMap:
+	# Look for GameMap in the scene tree
+	var root = get_tree().root
+	for child in root.get_children():
+		if child.name == "Root":
+			for subchild in child.get_children():
+				if subchild is GameMap:
+					return subchild
+	return null
+
+
 func _on_close_pressed() -> void:
 	animate_out()
 
@@ -232,6 +261,7 @@ func _on_reset_pressed() -> void:
 	ui_slider.value = 100.0
 	fullscreen_check.button_pressed = false
 	vsync_check.button_pressed = true
+	lofi_check.button_pressed = true
 	p2p_enabled_check.button_pressed = true
 	prereleases_check.button_pressed = false
 
