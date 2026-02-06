@@ -1,10 +1,37 @@
 shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never;
 
-// Selection glow shader - renders a soft radial glow behind selected tokens.
-//
-// Uses alpha transparency for smooth edges. The SubViewport-based lo-fi effect
-// captures everything including transparent objects, so this renders correctly.
+/*
+ * Selection Glow Shader
+ * =====================
+ * 
+ * PURPOSE:
+ * Renders a soft radial glow effect behind selected/hovered board tokens.
+ * Provides visual feedback to differentiate the focused token from nearby tokens.
+ * 
+ * ARCHITECTURE:
+ * This shader is applied to a horizontal QuadMesh positioned at the token's base.
+ * The glow is managed by SelectionGlowRenderer (scenes/board_token/selection_glow_renderer.gd)
+ * which is created by BoardTokenFactory and attached to each token's RigidBody3D.
+ * 
+ * USAGE:
+ * The glow visibility is controlled via BoardToken.set_highlighted(bool):
+ *   token.set_highlighted(true)   # Show glow
+ *   token.set_highlighted(false)  # Hide glow
+ * 
+ * Currently triggered by hover in BoardTokenController._on_mouse_entered/exited.
+ * Can also be used for selection, targeting, or other highlight states.
+ * 
+ * CUSTOMIZATION:
+ * - Glow color can be changed via BoardToken.set_highlight_color(Color)
+ * - Pulse speed/amount can be adjusted for different visual effects
+ * - Falloff controls how sharp vs soft the glow edge appears
+ * 
+ * TRANSPARENCY NOTE:
+ * Uses alpha transparency for smooth edges. The SubViewport-based lo-fi effect
+ * (lofi_canvas.gdshader) captures everything including transparent objects,
+ * so this renders correctly with the lo-fi aesthetic applied.
+ */
 
 // Glow color with alpha for intensity control
 uniform vec4 glow_color : source_color = vec4(1.0, 0.8, 0.2, 0.8);
