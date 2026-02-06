@@ -67,6 +67,10 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> B
 		animation_tree_instance.anim_player = components.animation_player # Set BEFORE add_child
 		rigid_body.add_child(animation_tree_instance)
 
+	# Build selection glow component (added to rigid body so it moves with token)
+	var selection_glow = _build_selection_glow(components.collision_shape)
+	rigid_body.add_child(selection_glow)
+
 	# Build draggable component
 	var draggable = _build_draggable_token(rigid_body, components.collision_shape)
 	draggable.add_child(rigid_body)
@@ -80,6 +84,7 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> B
 	instance.rigid_body = rigid_body
 	instance._dragging_object = draggable
 	instance._token_controller = controller
+	instance._selection_glow = selection_glow
 
 	# Apply config properties if provided
 	if config:
@@ -213,6 +218,17 @@ static func _build_token_controller(rigid_body: RigidBody3D, draggable: Draggabl
 	controller.rigid_body = rigid_body
 	controller.draggable_token = draggable
 	return controller
+
+
+## Build the SelectionGlowRenderer component
+static func _build_selection_glow(collision_shape: CollisionShape3D) -> SelectionGlowRenderer:
+	var glow = SelectionGlowRenderer.new()
+	glow.name = "SelectionGlow"
+	# Size will be updated in _ready after collision shape is available
+	# We defer the size update since the collision shape may not be in the tree yet
+	if collision_shape:
+		glow.call_deferred("update_size_from_collision", collision_shape)
+	return glow
 
 
 ## Apply TokenConfig properties to a BoardToken instance
@@ -379,6 +395,10 @@ static func _create_placeholder_token(pack_id: String, asset_id: String, variant
 	rb.add_child(collision)
 	rb.add_child(placeholder)
 
+	# Build selection glow component
+	var selection_glow = _build_selection_glow(collision)
+	rb.add_child(selection_glow)
+
 	# Build draggable component
 	var draggable = _build_draggable_token(rb, collision)
 	draggable.add_child(rb)
@@ -392,6 +412,7 @@ static func _create_placeholder_token(pack_id: String, asset_id: String, variant
 	instance.rigid_body = rb
 	instance._dragging_object = draggable
 	instance._token_controller = controller
+	instance._selection_glow = selection_glow
 
 	# Set metadata
 	instance.network_id = _generate_network_id()
