@@ -40,6 +40,14 @@ class_name LevelData
 ## Colors should be Color objects or hex strings like "#ff0000"
 @export var environment_overrides: Dictionary = {}
 
+## Visual Effects (lo-fi shader)
+@export_group("Effects")
+## Optional overrides for lo-fi post-processing shader parameters
+## Keys: "pixelation", "saturation", "color_levels", "dither_strength",
+##       "vignette_strength", "vignette_radius", "grain_intensity"
+## Empty dictionary uses defaults from the scene/shader
+@export var lofi_overrides: Dictionary = {}
+
 ## Token placements
 @export_group("Tokens")
 @export var token_placements: Array[TokenPlacement] = []
@@ -130,6 +138,7 @@ func duplicate_level() -> LevelData:
 	new_level.light_intensity_scale = light_intensity_scale
 	new_level.environment_preset = environment_preset
 	new_level.environment_overrides = environment_overrides.duplicate()
+	new_level.lofi_overrides = lofi_overrides.duplicate()
 
 	for placement in token_placements:
 		var new_placement = placement.duplicate()
@@ -190,6 +199,7 @@ func to_dict() -> Dictionary:
 		"light_intensity_scale": light_intensity_scale,
 		"environment_preset": environment_preset,
 		"environment_overrides": EnvironmentPresets.overrides_to_json(environment_overrides),
+		"lofi_overrides": lofi_overrides.duplicate(),
 		"token_placements": placements_array,
 	}
 
@@ -214,6 +224,7 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
 	level.environment_preset = data.get("environment_preset", "indoor_neutral")
 	level.environment_overrides = EnvironmentPresets.overrides_from_json(data.get("environment_overrides", {}))
+	level.lofi_overrides = data.get("lofi_overrides", {}).duplicate()
 	
 	level.token_placements.clear()
 	var placements_data = data.get("token_placements", [])
