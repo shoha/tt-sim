@@ -29,6 +29,7 @@ var _reconciliation_timer: Timer = null
 var _pending_map_level_folder: String = "" # Level folder waiting for map download
 var _streamer_connected: bool = false
 var _is_loading: bool = false # True while async loading is in progress
+var _world_environment: WorldEnvironment = null # Environment node for lighting/atmosphere
 
 
 ## Initialize with a reference to the game map
@@ -397,6 +398,28 @@ func _finalize_map_loading(map: Node3D) -> void:
 
 	# Add to the GameMap node
 	_game_map.add_child(loaded_map_instance)
+	
+	# Apply environment settings from level data
+	if active_level_data:
+		_apply_level_environment(active_level_data)
+
+
+## Apply environment settings from level data
+func _apply_level_environment(level_data: LevelData) -> void:
+	# Create WorldEnvironment if it doesn't exist
+	if not is_instance_valid(_world_environment):
+		_world_environment = WorldEnvironment.new()
+		_world_environment.name = "LevelEnvironment"
+		_game_map.add_child(_world_environment)
+	
+	# Apply preset and overrides
+	EnvironmentPresets.apply_to_world_environment(
+		_world_environment,
+		level_data.environment_preset,
+		level_data.environment_overrides
+	)
+	
+	print("LevelPlayController: Applied environment preset '%s'" % level_data.environment_preset)
 
 
 ## Load a GLB file from a user:// path using shared GlbUtils (synchronous)
@@ -718,6 +741,11 @@ func clear_level_map() -> void:
 	if is_instance_valid(loaded_map_instance):
 		loaded_map_instance.queue_free()
 		loaded_map_instance = null
+	
+	# Also clear the environment (will be recreated with next level)
+	if is_instance_valid(_world_environment):
+		_world_environment.queue_free()
+		_world_environment = null
 
 
 ## Clear everything from the current level
