@@ -41,12 +41,16 @@ var _factory_created: bool = false
 @export var is_visible_to_players: bool = true
 @export var is_hidden_from_gm: bool = false
 
+# Selection/highlight state
+var is_highlighted: bool = false
+
 # Status effects (could be expanded to a proper status effect system)
 @export var status_effects: Array[String] = []
 
 # References to child components (set by BoardTokenFactory)
 var _dragging_object: DraggableToken
 var _token_controller: BoardTokenController
+var _selection_glow: SelectionGlowRenderer
 var rigid_body: RigidBody3D
 
 
@@ -62,6 +66,7 @@ signal position_changed()
 signal rotation_changed()
 signal scale_changed()
 signal transform_updated()  # Emitted during continuous manipulation (drag/rotate/scale)
+signal highlight_changed(is_highlighted: bool)
 
 
 func _enter_tree() -> void:
@@ -161,6 +166,34 @@ func _update_visibility_visuals() -> void:
 			rigid_body.visible = false
 
 
+# Highlight/selection management
+func set_highlighted(highlighted: bool) -> void:
+	if is_highlighted == highlighted:
+		return
+	
+	is_highlighted = highlighted
+	_update_highlight_visuals()
+	highlight_changed.emit(is_highlighted)
+
+
+func toggle_highlight() -> void:
+	set_highlighted(not is_highlighted)
+
+
+func _update_highlight_visuals() -> void:
+	if _selection_glow:
+		if is_highlighted:
+			_selection_glow.show_glow()
+		else:
+			_selection_glow.hide_glow()
+
+
+## Set the highlight glow color
+func set_highlight_color(color: Color) -> void:
+	if _selection_glow:
+		_selection_glow.set_glow_color(color)
+
+
 func _set_mesh_transparency(node: Node, alpha: float) -> void:
 	# Recursively find all MeshInstance3D nodes and set their transparency
 	for child in node.get_children():
@@ -210,6 +243,9 @@ func get_controller_component() -> Node:
 
 func get_rigid_body() -> RigidBody3D:
 	return rigid_body
+
+func get_selection_glow() -> SelectionGlowRenderer:
+	return _selection_glow
 
 
 ## Enable or disable all user interaction with this token (dragging, rotating, scaling, context menu)

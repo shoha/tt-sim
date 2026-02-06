@@ -6,11 +6,15 @@ class_name GameMap
 @export var min_zoom: float = 2.0
 @export var max_zoom: float = 20.0
 
-@onready var cameraholder_node: Node3D = $CameraHolder
-@onready var camera_node: Camera3D = $CameraHolder/Camera3D
-@onready var tiltshift_node: MeshInstance3D = $CameraHolder/Camera3D/MeshInstance3D
-@onready var lofi_node: MeshInstance3D = $CameraHolder/Camera3D/LofiQuad
-@onready var drag_and_drop_node: Node3D = $DragAndDrop3D
+# SubViewport-based structure for proper transparency support
+# The 3D scene renders to a SubViewport, then the lo-fi shader is applied
+# as a 2D post-process via the SubViewportContainer's material
+@onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
+@onready var world_viewport: SubViewport = $WorldViewportLayer/SubViewportContainer/SubViewport
+@onready var cameraholder_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder
+@onready var camera_node: Camera3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D
+@onready var tiltshift_node: MeshInstance3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D/MeshInstance3D
+@onready var drag_and_drop_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/DragAndDrop3D
 @onready var gameplay_menu: CanvasLayer = $GameplayMenu
 
 var _camera_move_dir: Vector3
@@ -18,12 +22,12 @@ var _camera_zoom_dir: int
 var _context_menu = null # TokenContextMenu - dynamically typed to avoid load order issues
 var _level_play_controller: LevelPlayController = null
 
-
 const SETTINGS_PATH := "user://settings.cfg"
 
 
 func _ready() -> void:
 	_setup_context_menu()
+	_setup_viewport()
 	_load_lofi_setting()
 
 
@@ -142,6 +146,14 @@ func _on_context_menu_visibility_toggled() -> void:
 		_context_menu.target_token.toggle_visibility()
 
 
+## Setup the SubViewport for proper rendering
+## With SubViewportContainer.stretch = true, viewport size is managed automatically
+func _setup_viewport() -> void:
+	# The SubViewportContainer with stretch=true automatically handles sizing
+	# No manual setup needed
+	pass
+
+
 ## Load lo-fi filter setting from config
 func _load_lofi_setting() -> void:
 	var config = ConfigFile.new()
@@ -157,5 +169,21 @@ func _load_lofi_setting() -> void:
 
 ## Enable or disable the lo-fi visual filter
 func set_lofi_enabled(enabled: bool) -> void:
-	if lofi_node:
-		lofi_node.visible = enabled
+	if viewport_container:
+		if enabled:
+			# Apply the lo-fi shader material
+			var shader = load("res://shaders/lofi_canvas.gdshader")
+			var material = ShaderMaterial.new()
+			material.shader = shader
+			material.set_shader_parameter("pixelation", 0.003)
+			material.set_shader_parameter("saturation", 0.85)
+			material.set_shader_parameter("color_tint", Color(1.02, 1.0, 0.96))
+			material.set_shader_parameter("vignette_strength", 0.3)
+			material.set_shader_parameter("vignette_radius", 0.8)
+			material.set_shader_parameter("grain_intensity", 0.025)
+			material.set_shader_parameter("grain_speed", 0.2)
+			material.set_shader_parameter("grain_scale", 0.12)
+			viewport_container.material = material
+		else:
+			# Remove the shader to show unprocessed viewport
+			viewport_container.material = null
