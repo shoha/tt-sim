@@ -1,0 +1,51 @@
+---
+description: TTSim project architecture and conventions
+alwaysApply: true
+---
+
+# TTSim Project Overview
+
+Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENTS.md` for full details.
+
+## Architecture
+
+- **State stack** – Root manages states (TITLE_SCREEN, LOBBY, PLAYING, PAUSED). Use `change_state()`, `push_state()`, `pop_state()`.
+- **Autoloads** – Singletons for cross-cutting concerns: UIManager, LevelManager, AssetPackManager, NetworkManager, GameState, etc.
+- **Signals** – Prefer direct signal connections. **No EventBus** – use autoload services instead.
+- **Host-authoritative** – GameState is authoritative; NetworkStateSync broadcasts to clients.
+
+## Where to Add Things
+
+| Feature | Location |
+|---------|----------|
+| New state | Root.State enum, `_enter_*_state()` / `_exit_*_state()` |
+| New autoload | `autoloads/`, register in project.godot |
+| UI component | `scenes/ui/`, extend AnimatedVisibilityContainer if animated |
+| Level/token logic | LevelPlayController, BoardTokenFactory, GameState |
+| GLB utilities | `utils/glb_utils.gd` |
+| Custom Resource | `resources/` with `class_name` |
+
+## Key APIs
+
+```gdscript
+# Models (async, cached)
+var model = await AssetPackManager.get_model_instance(pack_id, asset_id, variant_id)
+
+# GLB loading
+var result = await GlbUtils.load_glb_async(path)
+GlbUtils.process_collision_meshes(result.scene, true)
+
+# UI
+UIManager.show_success("Done!")
+UIManager.register_overlay(self)  # For ESC handling
+```
+
+## Formatting
+
+After editing any file, run the formatter for that file type (see `formatting.mdc`). For GDScript: `gdformat path/to/file.gd`. Optional lint: `gdlint path/to/file.gd`.
+
+## Do Not
+
+- Create or use a global EventBus
+- Edit `.uid` files manually
+- Block main thread for I/O – use async/await or threaded loading
