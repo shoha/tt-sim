@@ -1,13 +1,15 @@
 extends Control
 class_name LightingEditorPanel
 
-## Compact floating panel for editing level lighting and environment settings.
+## Compact floating panel for editing level lighting, environment, and post-processing settings.
 ## Displays over the 3D map preview for real-time feedback.
 
-signal save_requested(light_intensity_scale: float, environment_preset: String, environment_overrides: Dictionary)
+signal save_requested(light_intensity_scale: float, environment_preset: String, environment_overrides: Dictionary, lofi_overrides: Dictionary)
 signal cancel_requested()
 signal intensity_changed(new_scale: float)
+signal lofi_changed(overrides: Dictionary)
 
+# Lighting controls
 @onready var resize_handle: Control = %ResizeHandle
 @onready var preset_dropdown: OptionButton = %PresetDropdown
 @onready var intensity_slider: HSlider = %IntensitySlider
@@ -24,9 +26,24 @@ signal intensity_changed(new_scale: float)
 @onready var save_button: Button = %SaveButton
 @onready var cancel_button: Button = %CancelButton
 
+# Post-processing (lo-fi) controls
+@onready var pixelation_slider: HSlider = %PixelationSlider
+@onready var pixelation_spin: SpinBox = %PixelationSpin
+@onready var saturation_slider: HSlider = %SaturationSlider
+@onready var saturation_spin: SpinBox = %SaturationSpin
+@onready var color_levels_slider: HSlider = %ColorLevelsSlider
+@onready var color_levels_spin: SpinBox = %ColorLevelsSpin
+@onready var dither_slider: HSlider = %DitherSlider
+@onready var dither_spin: SpinBox = %DitherSpin
+@onready var vignette_slider: HSlider = %VignetteSlider
+@onready var vignette_spin: SpinBox = %VignetteSpin
+@onready var grain_slider: HSlider = %GrainSlider
+@onready var grain_spin: SpinBox = %GrainSpin
+
 var world_environment: WorldEnvironment = null
 var current_preset: String = "indoor_neutral"
 var current_overrides: Dictionary = {}
+var current_lofi_overrides: Dictionary = {}
 var light_intensity_scale: float = 1.0
 
 # Resize state
@@ -41,7 +58,7 @@ func _ready() -> void:
 	# Connect resize handle
 	resize_handle.gui_input.connect(_on_resize_handle_input)
 	
-	# Connect UI signals
+	# Connect lighting UI signals
 	preset_dropdown.item_selected.connect(_on_preset_selected)
 	intensity_slider.value_changed.connect(_on_intensity_slider_changed)
 	intensity_spin.value_changed.connect(_on_intensity_spin_changed)
@@ -54,6 +71,21 @@ func _ready() -> void:
 	glow_enabled_check.toggled.connect(_on_glow_enabled_changed)
 	glow_intensity_slider.value_changed.connect(_on_glow_intensity_slider_changed)
 	glow_intensity_spin.value_changed.connect(_on_glow_intensity_spin_changed)
+	
+	# Connect post-processing (lo-fi) UI signals
+	pixelation_slider.value_changed.connect(_on_pixelation_slider_changed)
+	pixelation_spin.value_changed.connect(_on_pixelation_spin_changed)
+	saturation_slider.value_changed.connect(_on_saturation_slider_changed)
+	saturation_spin.value_changed.connect(_on_saturation_spin_changed)
+	color_levels_slider.value_changed.connect(_on_color_levels_slider_changed)
+	color_levels_spin.value_changed.connect(_on_color_levels_spin_changed)
+	dither_slider.value_changed.connect(_on_dither_slider_changed)
+	dither_spin.value_changed.connect(_on_dither_spin_changed)
+	vignette_slider.value_changed.connect(_on_vignette_slider_changed)
+	vignette_spin.value_changed.connect(_on_vignette_spin_changed)
+	grain_slider.value_changed.connect(_on_grain_slider_changed)
+	grain_spin.value_changed.connect(_on_grain_spin_changed)
+	
 	save_button.pressed.connect(_on_save_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	
@@ -74,11 +106,12 @@ func _populate_preset_dropdown() -> void:
 
 
 ## Initialize the panel with current level data settings
-func initialize(env: WorldEnvironment, intensity: float, preset: String, overrides: Dictionary) -> void:
+func initialize(env: WorldEnvironment, intensity: float, preset: String, overrides: Dictionary, lofi_overrides: Dictionary = {}) -> void:
 	world_environment = env
 	light_intensity_scale = intensity
 	current_preset = preset
 	current_overrides = overrides.duplicate()
+	current_lofi_overrides = lofi_overrides.duplicate()
 	
 	# Set intensity controls (set spin first to avoid feedback loop)
 	intensity_spin.set_value_no_signal(intensity)
@@ -93,6 +126,7 @@ func initialize(env: WorldEnvironment, intensity: float, preset: String, overrid
 	# Apply current settings
 	_apply_environment()
 	_sync_controls_from_environment()
+	_sync_lofi_controls()
 
 
 func _apply_environment() -> void:
@@ -190,11 +224,115 @@ func _on_glow_intensity_spin_changed(value: float) -> void:
 
 
 func _on_save_pressed() -> void:
-	save_requested.emit(light_intensity_scale, current_preset, current_overrides)
+	save_requested.emit(light_intensity_scale, current_preset, current_overrides, current_lofi_overrides)
 
 
 func _on_cancel_pressed() -> void:
 	cancel_requested.emit()
+
+
+# ============================================================================
+# Lo-Fi Post-Processing Handlers
+# ============================================================================
+
+## Sync lo-fi controls from current_lofi_overrides (or defaults)
+func _sync_lofi_controls() -> void:
+	# Use stored overrides or defaults
+	var pixelation = current_lofi_overrides.get("pixelation", 0.003)
+	var saturation = current_lofi_overrides.get("saturation", 0.85)
+	var color_levels = current_lofi_overrides.get("color_levels", 32.0)
+	var dither_strength = current_lofi_overrides.get("dither_strength", 0.5)
+	var vignette_strength = current_lofi_overrides.get("vignette_strength", 0.3)
+	var grain_intensity = current_lofi_overrides.get("grain_intensity", 0.025)
+	
+	pixelation_slider.set_value_no_signal(pixelation)
+	pixelation_spin.set_value_no_signal(pixelation)
+	saturation_slider.set_value_no_signal(saturation)
+	saturation_spin.set_value_no_signal(saturation)
+	color_levels_slider.set_value_no_signal(color_levels)
+	color_levels_spin.set_value_no_signal(color_levels)
+	dither_slider.set_value_no_signal(dither_strength)
+	dither_spin.set_value_no_signal(dither_strength)
+	vignette_slider.set_value_no_signal(vignette_strength)
+	vignette_spin.set_value_no_signal(vignette_strength)
+	grain_slider.set_value_no_signal(grain_intensity)
+	grain_spin.set_value_no_signal(grain_intensity)
+
+
+func _emit_lofi_changed() -> void:
+	lofi_changed.emit(current_lofi_overrides)
+
+
+func _on_pixelation_slider_changed(value: float) -> void:
+	current_lofi_overrides["pixelation"] = value
+	pixelation_spin.set_value_no_signal(value)
+	_emit_lofi_changed()
+
+
+func _on_pixelation_spin_changed(value: float) -> void:
+	current_lofi_overrides["pixelation"] = value
+	pixelation_slider.set_value_no_signal(value)
+	_emit_lofi_changed()
+
+
+func _on_saturation_slider_changed(value: float) -> void:
+	current_lofi_overrides["saturation"] = value
+	saturation_spin.set_value_no_signal(value)
+	_emit_lofi_changed()
+
+
+func _on_saturation_spin_changed(value: float) -> void:
+	current_lofi_overrides["saturation"] = value
+	saturation_slider.set_value_no_signal(value)
+	_emit_lofi_changed()
+
+
+func _on_color_levels_slider_changed(value: float) -> void:
+	current_lofi_overrides["color_levels"] = value
+	color_levels_spin.set_value_no_signal(value)
+	_emit_lofi_changed()
+
+
+func _on_color_levels_spin_changed(value: float) -> void:
+	current_lofi_overrides["color_levels"] = value
+	color_levels_slider.set_value_no_signal(value)
+	_emit_lofi_changed()
+
+
+func _on_dither_slider_changed(value: float) -> void:
+	current_lofi_overrides["dither_strength"] = value
+	dither_spin.set_value_no_signal(value)
+	_emit_lofi_changed()
+
+
+func _on_dither_spin_changed(value: float) -> void:
+	current_lofi_overrides["dither_strength"] = value
+	dither_slider.set_value_no_signal(value)
+	_emit_lofi_changed()
+
+
+func _on_vignette_slider_changed(value: float) -> void:
+	current_lofi_overrides["vignette_strength"] = value
+	vignette_spin.set_value_no_signal(value)
+	_emit_lofi_changed()
+
+
+func _on_vignette_spin_changed(value: float) -> void:
+	current_lofi_overrides["vignette_strength"] = value
+	vignette_slider.set_value_no_signal(value)
+	_emit_lofi_changed()
+
+
+func _on_grain_slider_changed(value: float) -> void:
+	current_lofi_overrides["grain_intensity"] = value
+	grain_spin.set_value_no_signal(value)
+	_emit_lofi_changed()
+
+
+func _on_grain_spin_changed(value: float) -> void:
+	current_lofi_overrides["grain_intensity"] = value
+	grain_slider.set_value_no_signal(value)
+	_emit_lofi_changed()
 
 
 # ============================================================================
