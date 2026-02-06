@@ -57,9 +57,17 @@ func _ready() -> void:
 
 func _on_mouse_entered() -> void:
 	_mouse_over = true
+	# Show hover highlight
+	var board_token = get_parent() as BoardToken
+	if board_token:
+		board_token.set_highlighted(true)
 
 func _on_mouse_exited() -> void:
 	_mouse_over = false
+	# Hide hover highlight
+	var board_token = get_parent() as BoardToken
+	if board_token:
+		board_token.set_highlighted(false)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not rigid_body:
