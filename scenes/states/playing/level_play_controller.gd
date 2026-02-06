@@ -419,6 +419,10 @@ func _apply_level_environment(level_data: LevelData) -> void:
 		level_data.environment_overrides
 	)
 	
+	# Apply lo-fi shader overrides if any are set
+	if level_data.lofi_overrides.size() > 0 and is_instance_valid(_game_map):
+		_game_map.apply_lofi_overrides(level_data.lofi_overrides)
+	
 	print("LevelPlayController: Applied environment preset '%s'" % level_data.environment_preset)
 
 

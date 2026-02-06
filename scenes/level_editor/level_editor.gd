@@ -72,6 +72,7 @@ var _popup_tween: Tween
 # Lighting editor mode
 @onready var edit_lighting_button: Button = %EditLightingButton
 @onready var lighting_mode_container: Control = %LightingModeContainer
+@onready var lighting_viewport_container: SubViewportContainer = %SubViewportContainer
 @onready var lighting_viewport: SubViewport = %SubViewport
 @onready var lighting_world_env: WorldEnvironment = %WorldEnvironment
 @onready var lighting_camera: Camera3D = %Camera3D
@@ -92,8 +93,10 @@ var _in_lighting_mode: bool = false
 var _lighting_original_intensity: float = 1.0
 var _lighting_original_preset: String = "indoor_neutral"
 var _lighting_original_overrides: Dictionary = {}
+var _lighting_original_lofi: Dictionary = {}
 var _loaded_map_instance: Node = null
 var _original_light_energies: Dictionary = {} # Stores original light energies for re-scaling
+var _lighting_lofi_material: ShaderMaterial = null # Lo-fi shader for lighting preview
 
 
 func _ready() -> void:
@@ -160,6 +163,7 @@ func _connect_signals() -> void:
 	lighting_editor_panel.save_requested.connect(_on_lighting_save_requested)
 	lighting_editor_panel.cancel_requested.connect(_on_lighting_cancel_requested)
 	lighting_editor_panel.intensity_changed.connect(_on_lighting_intensity_changed)
+	lighting_editor_panel.lofi_changed.connect(_on_lofi_changed)
 
 
 func _setup_file_dialogs() -> void:
@@ -664,6 +668,7 @@ func _on_edit_lighting_pressed() -> void:
 	_lighting_original_intensity = current_level.light_intensity_scale
 	_lighting_original_preset = current_level.environment_preset
 	_lighting_original_overrides = current_level.environment_overrides.duplicate()
+	_lighting_original_lofi = current_level.lofi_overrides.duplicate()
 	
 	# Enter lighting mode
 	_enter_lighting_mode(map_path)
@@ -691,6 +696,9 @@ func _enter_lighting_mode(map_path: String) -> void:
 	# Show lighting mode container
 	lighting_mode_container.visible = true
 	
+	# Set up lo-fi shader on the lighting preview viewport
+	_setup_lighting_lofi_material()
+	
 	# Wait a frame for layout to update
 	await get_tree().process_frame
 	
@@ -702,10 +710,11 @@ func _enter_lighting_mode(map_path: String) -> void:
 		lighting_world_env,
 		current_level.light_intensity_scale,
 		current_level.environment_preset,
-		current_level.environment_overrides
+		current_level.environment_overrides,
+		current_level.lofi_overrides
 	)
 	
-	_set_status("Editing lighting - adjust settings and click Save")
+	_set_status("Editing lighting & effects - adjust settings and click Save")
 
 
 func _load_map_into_viewport(map_path: String) -> void:
@@ -808,6 +817,9 @@ func _exit_lighting_mode() -> void:
 		child.queue_free()
 	_loaded_map_instance = null
 	
+	# Clean up lo-fi material
+	_cleanup_lighting_lofi_material()
+	
 	# Hide lighting mode container
 	lighting_mode_container.visible = false
 	
@@ -815,14 +827,39 @@ func _exit_lighting_mode() -> void:
 	main_container.visible = true
 
 
-func _on_lighting_save_requested(intensity: float, preset: String, overrides: Dictionary) -> void:
-	# Apply the lighting settings to the level data
+func _on_lighting_save_requested(intensity: float, preset: String, overrides: Dictionary, lofi_overrides: Dictionary) -> void:
+	# Apply the lighting and effects settings to the level data
 	current_level.light_intensity_scale = intensity
 	current_level.environment_preset = preset
 	current_level.environment_overrides = overrides.duplicate()
+	current_level.lofi_overrides = lofi_overrides.duplicate()
+	
+	# Save the level file
+	_save_level_from_lighting_mode()
 	
 	_exit_lighting_mode()
-	_set_status("Lighting settings saved")
+
+
+## Save the level file after lighting/effects changes
+func _save_level_from_lighting_mode() -> void:
+	if not current_level:
+		_set_status("Error: No level to save")
+		return
+	
+	# Use folder-based save if applicable
+	if current_level.is_folder_based():
+		var result = LevelManager.save_level_folder(current_level, "", "")
+		if result != "":
+			_set_status("Lighting & effects saved to: " + current_level.level_name)
+		else:
+			_set_status("Error: Failed to save level")
+	else:
+		# Legacy save for levels with res:// map paths
+		var path = LevelManager.save_level(current_level)
+		if path != "":
+			_set_status("Lighting & effects saved: " + path.get_file())
+		else:
+			_set_status("Error: Failed to save level")
 
 
 func _on_lighting_cancel_requested() -> void:
@@ -830,9 +867,55 @@ func _on_lighting_cancel_requested() -> void:
 	current_level.light_intensity_scale = _lighting_original_intensity
 	current_level.environment_preset = _lighting_original_preset
 	current_level.environment_overrides = _lighting_original_overrides.duplicate()
+	current_level.lofi_overrides = _lighting_original_lofi.duplicate()
 	
 	_exit_lighting_mode()
-	_set_status("Lighting changes cancelled")
+	_set_status("Lighting & effects changes cancelled")
+
+
+func _on_lofi_changed(overrides: Dictionary) -> void:
+	# Apply lo-fi shader changes in real-time for preview
+	if _lighting_lofi_material:
+		for param_name in overrides:
+			_lighting_lofi_material.set_shader_parameter(param_name, overrides[param_name])
+
+
+## Set up the lo-fi shader material for the lighting preview viewport
+func _setup_lighting_lofi_material() -> void:
+	if not lighting_viewport_container:
+		return
+	
+	# Create a new lo-fi material for the preview
+	var shader = load("res://shaders/lofi_canvas.gdshader")
+	_lighting_lofi_material = ShaderMaterial.new()
+	_lighting_lofi_material.shader = shader
+	
+	# Set default values (these will be overridden by initialize() call)
+	_lighting_lofi_material.set_shader_parameter("pixelation", 0.003)
+	_lighting_lofi_material.set_shader_parameter("saturation", 0.85)
+	_lighting_lofi_material.set_shader_parameter("color_tint", Color(1.02, 1.0, 0.96))
+	_lighting_lofi_material.set_shader_parameter("vignette_strength", 0.3)
+	_lighting_lofi_material.set_shader_parameter("vignette_radius", 0.8)
+	_lighting_lofi_material.set_shader_parameter("grain_intensity", 0.025)
+	_lighting_lofi_material.set_shader_parameter("grain_speed", 0.2)
+	_lighting_lofi_material.set_shader_parameter("grain_scale", 0.12)
+	_lighting_lofi_material.set_shader_parameter("color_levels", 32.0)
+	_lighting_lofi_material.set_shader_parameter("dither_strength", 0.5)
+	
+	# Apply any existing lofi_overrides from level data
+	if current_level and current_level.lofi_overrides.size() > 0:
+		for param_name in current_level.lofi_overrides:
+			_lighting_lofi_material.set_shader_parameter(param_name, current_level.lofi_overrides[param_name])
+	
+	# Apply to the viewport container
+	lighting_viewport_container.material = _lighting_lofi_material
+
+
+## Clean up the lo-fi material when exiting lighting mode
+func _cleanup_lighting_lofi_material() -> void:
+	if lighting_viewport_container:
+		lighting_viewport_container.material = null
+	_lighting_lofi_material = null
 
 
 ## Animate a window popup in
