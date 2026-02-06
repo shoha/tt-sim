@@ -209,6 +209,9 @@ func set_lofi_enabled(enabled: bool) -> void:
 			material.set_shader_parameter("grain_intensity", 0.025)
 			material.set_shader_parameter("grain_speed", 0.2)
 			material.set_shader_parameter("grain_scale", 0.12)
+			# Dithering / color quantization (set to 4 levels for testing)
+			material.set_shader_parameter("color_levels", 4.0)
+			material.set_shader_parameter("dither_strength", 1.0)
 			viewport_container.material = material
 		else:
 			# Remove the shader to show unprocessed viewport
