@@ -69,6 +69,16 @@ var _popup_tween: Tween
 @onready var pokemon_selector_search: LineEdit = %PokemonSelectorSearch
 @onready var pokemon_selector_shiny: CheckBox = %PokemonSelectorShiny
 
+# Lighting editor mode
+@onready var edit_lighting_button: Button = %EditLightingButton
+@onready var lighting_mode_container: Control = %LightingModeContainer
+@onready var lighting_viewport: SubViewport = %SubViewport
+@onready var lighting_world_env: WorldEnvironment = %WorldEnvironment
+@onready var lighting_camera: Camera3D = %Camera3D
+@onready var lighting_map_container: Node3D = %MapContainer
+@onready var lighting_editor_panel: LightingEditorPanel = %LightingEditorPanel
+@onready var main_container: MarginContainer = $MainContainer
+
 # State
 var current_level: LevelData = null
 var selected_placement_index: int = -1
@@ -76,6 +86,14 @@ var _filtered_pokemon: Array = []
 var _selected_level_path_for_delete: String = ""
 var _is_updating_ui: bool = false # Flag to prevent feedback loops when setting UI values
 var _pending_map_source_path: String = "" # Source map path to be bundled on save (for new/edited levels)
+
+# Lighting mode state
+var _in_lighting_mode: bool = false
+var _lighting_original_intensity: float = 1.0
+var _lighting_original_preset: String = "indoor_neutral"
+var _lighting_original_overrides: Dictionary = {}
+var _loaded_map_instance: Node = null
+var _original_light_energies: Dictionary = {} # Stores original light energies for re-scaling
 
 
 func _ready() -> void:
@@ -136,6 +154,12 @@ func _connect_signals() -> void:
 	map_scale_z_spin.value_changed.connect(_on_map_transform_changed)
 
 	play_button.pressed.connect(_on_play_pressed)
+	
+	# Lighting editor signals
+	edit_lighting_button.pressed.connect(_on_edit_lighting_pressed)
+	lighting_editor_panel.save_requested.connect(_on_lighting_save_requested)
+	lighting_editor_panel.cancel_requested.connect(_on_lighting_cancel_requested)
+	lighting_editor_panel.intensity_changed.connect(_on_lighting_intensity_changed)
 
 
 func _setup_file_dialogs() -> void:
@@ -619,6 +643,196 @@ func set_level(level_data: LevelData) -> void:
 		_pending_map_source_path = "" # Clear pending map when setting existing level
 		_update_ui_from_level()
 		_set_status("Editing: " + level_data.level_name)
+
+
+# ============================================================================
+# Lighting Editor Mode
+# ============================================================================
+
+func _on_edit_lighting_pressed() -> void:
+	if not current_level:
+		_set_status("Create or load a level first")
+		return
+	
+	# Check if we have a map to load
+	var map_path = _get_current_map_path()
+	if map_path == "":
+		_set_status("Select a map file first")
+		return
+	
+	# Store original values for cancel
+	_lighting_original_intensity = current_level.light_intensity_scale
+	_lighting_original_preset = current_level.environment_preset
+	_lighting_original_overrides = current_level.environment_overrides.duplicate()
+	
+	# Enter lighting mode
+	_enter_lighting_mode(map_path)
+
+
+## Get the effective map path (pending source or current level map)
+func _get_current_map_path() -> String:
+	if _pending_map_source_path != "":
+		return _pending_map_source_path
+	if current_level:
+		if current_level.is_folder_based():
+			# For folder-based levels, use the absolute path resolver
+			return current_level.get_absolute_map_path()
+		elif current_level.map_path != "":
+			return current_level.map_path
+	return ""
+
+
+func _enter_lighting_mode(map_path: String) -> void:
+	_in_lighting_mode = true
+	
+	# Hide main editor UI
+	main_container.visible = false
+	
+	# Show lighting mode container
+	lighting_mode_container.visible = true
+	
+	# Wait a frame for layout to update
+	await get_tree().process_frame
+	
+	# Load the map into the viewport
+	await _load_map_into_viewport(map_path)
+	
+	# Initialize the lighting panel with current settings
+	lighting_editor_panel.initialize(
+		lighting_world_env,
+		current_level.light_intensity_scale,
+		current_level.environment_preset,
+		current_level.environment_overrides
+	)
+	
+	_set_status("Editing lighting - adjust settings and click Save")
+
+
+func _load_map_into_viewport(map_path: String) -> void:
+	# Clear any existing map
+	for child in lighting_map_container.get_children():
+		child.queue_free()
+	_loaded_map_instance = null
+	_original_light_energies.clear()
+	
+	await get_tree().process_frame
+	
+	# Load the map
+	var map_instance: Node3D = null
+	
+	if map_path.ends_with(".glb") or map_path.ends_with(".gltf"):
+		# Use GlbUtils for GLB files - load WITHOUT intensity scaling first
+		# so we can store original energies and scale dynamically
+		var result = await GlbUtils.load_glb_with_processing_async(map_path, false, 1.0)
+		if result.success and result.scene:
+			map_instance = result.scene
+	elif map_path.ends_with(".tscn"):
+		# Load as packed scene
+		var scene = load(map_path)
+		if scene:
+			map_instance = scene.instantiate()
+	
+	if map_instance:
+		lighting_map_container.add_child(map_instance)
+		_loaded_map_instance = map_instance
+		
+		# Apply map transform from level data
+		map_instance.position = current_level.map_offset
+		map_instance.scale = current_level.map_scale
+		
+		# Store original light energies and apply current scale
+		_store_original_light_energies(map_instance)
+		_apply_light_intensity_scale(current_level.light_intensity_scale)
+		
+		# Center camera on the loaded map
+		_center_lighting_camera()
+
+
+func _store_original_light_energies(node: Node) -> void:
+	if node is Light3D:
+		_original_light_energies[node.get_instance_id()] = node.light_energy
+	for child in node.get_children():
+		_store_original_light_energies(child)
+
+
+func _apply_light_intensity_scale(intensity_scale: float) -> void:
+	for instance_id in _original_light_energies:
+		var light = instance_from_id(instance_id)
+		if is_instance_valid(light) and light is Light3D:
+			light.light_energy = _original_light_energies[instance_id] * intensity_scale
+
+
+func _on_lighting_intensity_changed(new_scale: float) -> void:
+	# Re-apply light intensity to all lights in the preview
+	_apply_light_intensity_scale(new_scale)
+
+
+func _center_lighting_camera() -> void:
+	if not _loaded_map_instance:
+		return
+	
+	# Calculate scene bounds
+	var aabb = AABB()
+	var first_mesh = true
+	
+	for child in _loaded_map_instance.get_children():
+		if child is MeshInstance3D:
+			var mesh_aabb = child.get_aabb()
+			mesh_aabb = Transform3D(child.global_basis, child.global_position) * mesh_aabb
+			if first_mesh:
+				aabb = mesh_aabb
+				first_mesh = false
+			else:
+				aabb = aabb.merge(mesh_aabb)
+	
+	if first_mesh:
+		# No meshes found, use default position
+		lighting_camera.position = Vector3(0, 10, 15)
+		lighting_camera.look_at(Vector3.ZERO)
+		return
+	
+	# Position camera to see the whole scene
+	var center = aabb.get_center()
+	var aabb_size = aabb.size.length()
+	var distance = aabb_size * 1.2
+	
+	lighting_camera.position = center + Vector3(0, distance * 0.5, distance * 0.7)
+	lighting_camera.look_at(center)
+
+
+func _exit_lighting_mode() -> void:
+	_in_lighting_mode = false
+	
+	# Clear loaded map
+	for child in lighting_map_container.get_children():
+		child.queue_free()
+	_loaded_map_instance = null
+	
+	# Hide lighting mode container
+	lighting_mode_container.visible = false
+	
+	# Show main editor UI
+	main_container.visible = true
+
+
+func _on_lighting_save_requested(intensity: float, preset: String, overrides: Dictionary) -> void:
+	# Apply the lighting settings to the level data
+	current_level.light_intensity_scale = intensity
+	current_level.environment_preset = preset
+	current_level.environment_overrides = overrides.duplicate()
+	
+	_exit_lighting_mode()
+	_set_status("Lighting settings saved")
+
+
+func _on_lighting_cancel_requested() -> void:
+	# Restore original values
+	current_level.light_intensity_scale = _lighting_original_intensity
+	current_level.environment_preset = _lighting_original_preset
+	current_level.environment_overrides = _lighting_original_overrides.duplicate()
+	
+	_exit_lighting_mode()
+	_set_status("Lighting changes cancelled")
 
 
 ## Animate a window popup in
