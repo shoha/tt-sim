@@ -1,5 +1,5 @@
 extends Control
-## Test scene for verifying GLB light imports
+## Test scene for verifying GLB light imports and environment presets
 ## Run this scene directly (F6 in editor) to test
 
 @onready var path_input: LineEdit = %PathInput
@@ -9,27 +9,175 @@ extends Control
 @onready var preview_container: Node3D = %PreviewContainer
 @onready var intensity_slider: HSlider = %IntensitySlider
 @onready var intensity_label: Label = %IntensityLabel
+@onready var preset_dropdown: OptionButton = %PresetDropdown
+@onready var world_environment: WorldEnvironment = %WorldEnvironment
+
+# Override controls
+@onready var ambient_color_picker: ColorPickerButton = %AmbientColorPicker
+@onready var ambient_energy_slider: HSlider = %AmbientEnergySlider
+@onready var ambient_energy_label: Label = %AmbientEnergyLabel
+@onready var fog_enabled_check: CheckBox = %FogEnabledCheck
+@onready var fog_density_slider: HSlider = %FogDensitySlider
+@onready var fog_density_label: Label = %FogDensityLabel
+@onready var fog_color_picker: ColorPickerButton = %FogColorPicker
+@onready var glow_enabled_check: CheckBox = %GlowEnabledCheck
+@onready var glow_intensity_slider: HSlider = %GlowIntensitySlider
+@onready var glow_intensity_label: Label = %GlowIntensityLabel
+@onready var copy_json_button: Button = %CopyJsonButton
 
 var loaded_scene: Node3D = null
 var original_light_energies: Dictionary = {} # Light node -> original energy
+var current_preset: String = "indoor_neutral"
+var current_overrides: Dictionary = {}
 
 
 func _ready() -> void:
 	load_button.pressed.connect(_on_load_pressed)
 	intensity_slider.value_changed.connect(_on_intensity_changed)
+	preset_dropdown.item_selected.connect(_on_preset_selected)
+	
+	# Connect override controls
+	ambient_color_picker.color_changed.connect(_on_ambient_color_changed)
+	ambient_energy_slider.value_changed.connect(_on_ambient_energy_changed)
+	fog_enabled_check.toggled.connect(_on_fog_enabled_changed)
+	fog_density_slider.value_changed.connect(_on_fog_density_changed)
+	fog_color_picker.color_changed.connect(_on_fog_color_changed)
+	glow_enabled_check.toggled.connect(_on_glow_enabled_changed)
+	glow_intensity_slider.value_changed.connect(_on_glow_intensity_changed)
+	copy_json_button.pressed.connect(_on_copy_json_pressed)
 	
 	# Set default test path
 	path_input.text = "user://levels/test_lights/map.glb"
 	
-	# Initialize intensity label
+	# Initialize labels
 	_update_intensity_label()
+	_update_override_labels()
 	
-	_log("[b]GLB Light Import Test[/b]")
+	# Populate preset dropdown
+	_populate_preset_dropdown()
+	
+	_log("[b]GLB Light & Environment Test[/b]")
 	_log("Enter a path to a GLB file and click 'Load & Test'")
 	_log("")
 	_log("[i]Tip: In Blender, use 'Unitless' lighting mode for 1:1 intensity matching[/i]")
 	_log("[i]For 'Standard' mode exports, use lower scale values (0.001 - 0.01)[/i]")
 	_log("")
+
+
+func _populate_preset_dropdown() -> void:
+	preset_dropdown.clear()
+	var presets = EnvironmentPresets.get_preset_names()
+	
+	for i in range(presets.size()):
+		var preset_name = presets[i]
+		var description = EnvironmentPresets.get_preset_description(preset_name)
+		preset_dropdown.add_item("%s - %s" % [preset_name, description], i)
+		preset_dropdown.set_item_metadata(i, preset_name)
+	
+	# Select "indoor_neutral" by default
+	for i in range(preset_dropdown.item_count):
+		if preset_dropdown.get_item_metadata(i) == "indoor_neutral":
+			preset_dropdown.select(i)
+			current_preset = "indoor_neutral"
+			_apply_environment()
+			_sync_override_controls_from_environment()
+			break
+
+
+func _on_preset_selected(index: int) -> void:
+	var preset_name = preset_dropdown.get_item_metadata(index)
+	current_preset = preset_name
+	current_overrides.clear()
+	_apply_environment()
+	_sync_override_controls_from_environment()
+	_log("")
+	_log("[color=cyan]Applied environment preset: %s[/color]" % preset_name)
+
+
+func _apply_environment() -> void:
+	if is_instance_valid(world_environment):
+		EnvironmentPresets.apply_to_world_environment(world_environment, current_preset, current_overrides)
+
+
+func _sync_override_controls_from_environment() -> void:
+	if not is_instance_valid(world_environment) or not world_environment.environment:
+		return
+	
+	var env = world_environment.environment
+	
+	# Sync controls to current environment values
+	ambient_color_picker.color = env.ambient_light_color
+	ambient_energy_slider.value = env.ambient_light_energy
+	fog_enabled_check.button_pressed = env.fog_enabled
+	fog_density_slider.value = env.fog_density
+	fog_color_picker.color = env.fog_light_color
+	glow_enabled_check.button_pressed = env.glow_enabled
+	glow_intensity_slider.value = env.glow_intensity
+	
+	_update_override_labels()
+
+
+func _update_override_labels() -> void:
+	ambient_energy_label.text = "%.2f" % ambient_energy_slider.value
+	fog_density_label.text = "%.4f" % fog_density_slider.value
+	glow_intensity_label.text = "%.2f" % glow_intensity_slider.value
+
+
+# Override control handlers
+func _on_ambient_color_changed(color: Color) -> void:
+	current_overrides["ambient_light_color"] = color
+	_apply_environment()
+
+
+func _on_ambient_energy_changed(value: float) -> void:
+	current_overrides["ambient_light_energy"] = value
+	ambient_energy_label.text = "%.2f" % value
+	_apply_environment()
+
+
+func _on_fog_enabled_changed(enabled: bool) -> void:
+	current_overrides["fog_enabled"] = enabled
+	_apply_environment()
+
+
+func _on_fog_density_changed(value: float) -> void:
+	current_overrides["fog_density"] = value
+	fog_density_label.text = "%.4f" % value
+	_apply_environment()
+
+
+func _on_fog_color_changed(color: Color) -> void:
+	current_overrides["fog_light_color"] = color
+	_apply_environment()
+
+
+func _on_glow_enabled_changed(enabled: bool) -> void:
+	current_overrides["glow_enabled"] = enabled
+	_apply_environment()
+
+
+func _on_glow_intensity_changed(value: float) -> void:
+	current_overrides["glow_intensity"] = value
+	glow_intensity_label.text = "%.2f" % value
+	_apply_environment()
+
+
+func _on_copy_json_pressed() -> void:
+	var json_config = {
+		"light_intensity_scale": intensity_slider.value,
+		"environment_preset": current_preset,
+	}
+	
+	# Only include overrides if there are any
+	if current_overrides.size() > 0:
+		json_config["environment_overrides"] = EnvironmentPresets.overrides_to_json(current_overrides)
+	
+	var json_string = JSON.stringify(json_config, "  ")
+	DisplayServer.clipboard_set(json_string)
+	
+	_log("")
+	_log("[color=green]Copied to clipboard![/color]")
+	_log("[code]%s[/code]" % json_string)
 
 
 func _on_load_pressed() -> void:

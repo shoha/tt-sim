@@ -568,6 +568,8 @@ func export_level_json(level_data: LevelData, file_path: String) -> bool:
 		"map_scale": {"x": level_data.map_scale.x, "y": level_data.map_scale.y, "z": level_data.map_scale.z},
 		"map_offset": {"x": level_data.map_offset.x, "y": level_data.map_offset.y, "z": level_data.map_offset.z},
 		"light_intensity_scale": level_data.light_intensity_scale,
+		"environment_preset": level_data.environment_preset,
+		"environment_overrides": EnvironmentPresets.overrides_to_json(level_data.environment_overrides),
 		"token_placements": []
 	}
 
@@ -630,6 +632,8 @@ func import_level_json(file_path: String) -> LevelData:
 		level.map_offset = Vector3(data.map_offset.x, data.map_offset.y, data.map_offset.z)
 	
 	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
+	level.environment_preset = data.get("environment_preset", "indoor_neutral")
+	level.environment_overrides = EnvironmentPresets.overrides_from_json(data.get("environment_overrides", {}))
 
 	for placement_data in data.get("token_placements", []):
 		var placement = TokenPlacement.new()

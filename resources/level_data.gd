@@ -30,6 +30,16 @@ class_name LevelData
 ## Use lower values (0.001 - 0.01) for GLBs exported with "Standard" lighting mode.
 @export var light_intensity_scale: float = 1.0
 
+## Environment configuration
+@export_group("Environment")
+## Environment preset name (e.g., "dungeon_dark", "outdoor_day", "tavern")
+## See EnvironmentPresets for available presets
+@export var environment_preset: String = "indoor_neutral"
+## Optional overrides for specific environment properties
+## Keys should match EnvironmentPresets property names (e.g., "ambient_light_energy", "fog_density")
+## Colors should be Color objects or hex strings like "#ff0000"
+@export var environment_overrides: Dictionary = {}
+
 ## Token placements
 @export_group("Tokens")
 @export var token_placements: Array[TokenPlacement] = []
@@ -118,6 +128,8 @@ func duplicate_level() -> LevelData:
 	new_level.map_scale = map_scale
 	new_level.map_offset = map_offset
 	new_level.light_intensity_scale = light_intensity_scale
+	new_level.environment_preset = environment_preset
+	new_level.environment_overrides = environment_overrides.duplicate()
 
 	for placement in token_placements:
 		var new_placement = placement.duplicate()
@@ -176,6 +188,8 @@ func to_dict() -> Dictionary:
 		"map_scale": {"x": map_scale.x, "y": map_scale.y, "z": map_scale.z},
 		"map_offset": {"x": map_offset.x, "y": map_offset.y, "z": map_offset.z},
 		"light_intensity_scale": light_intensity_scale,
+		"environment_preset": environment_preset,
+		"environment_overrides": EnvironmentPresets.overrides_to_json(environment_overrides),
 		"token_placements": placements_array,
 	}
 
@@ -198,6 +212,8 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.map_offset = Vector3(offset_data.get("x", 0), offset_data.get("y", 0), offset_data.get("z", 0))
 	
 	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
+	level.environment_preset = data.get("environment_preset", "indoor_neutral")
+	level.environment_overrides = EnvironmentPresets.overrides_from_json(data.get("environment_overrides", {}))
 	
 	level.token_placements.clear()
 	var placements_data = data.get("token_placements", [])
