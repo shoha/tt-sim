@@ -45,6 +45,7 @@ var _camera_move_dir: Vector3
 var _camera_zoom_dir: int
 var _context_menu = null # TokenContextMenu - dynamically typed to avoid load order issues
 var _level_play_controller: LevelPlayController = null
+var _lofi_material: ShaderMaterial = null # Cached lo-fi material (from scene or created)
 
 const SETTINGS_PATH := "user://settings.cfg"
 
@@ -175,9 +176,10 @@ func _on_context_menu_visibility_toggled() -> void:
 ## Setup the SubViewport for proper rendering
 ## With SubViewportContainer.stretch = true, viewport size is managed automatically
 func _setup_viewport() -> void:
-	# The SubViewportContainer with stretch=true automatically handles sizing
-	# No manual setup needed
-	pass
+	# Cache the lo-fi material from the scene (if present)
+	# This allows editor-tweaked values to be preserved
+	if viewport_container and viewport_container.material is ShaderMaterial:
+		_lofi_material = viewport_container.material as ShaderMaterial
 
 
 ## Load lo-fi filter setting from config
@@ -197,22 +199,41 @@ func _load_lofi_setting() -> void:
 func set_lofi_enabled(enabled: bool) -> void:
 	if viewport_container:
 		if enabled:
-			# Apply the lo-fi shader material
-			var shader = load("res://shaders/lofi_canvas.gdshader")
-			var material = ShaderMaterial.new()
-			material.shader = shader
-			material.set_shader_parameter("pixelation", 0.003)
-			material.set_shader_parameter("saturation", 0.85)
-			material.set_shader_parameter("color_tint", Color(1.02, 1.0, 0.96))
-			material.set_shader_parameter("vignette_strength", 0.3)
-			material.set_shader_parameter("vignette_radius", 0.8)
-			material.set_shader_parameter("grain_intensity", 0.025)
-			material.set_shader_parameter("grain_speed", 0.2)
-			material.set_shader_parameter("grain_scale", 0.12)
-			# Dithering / color quantization (set to 4 levels for testing)
-			material.set_shader_parameter("color_levels", 4.0)
-			material.set_shader_parameter("dither_strength", 1.0)
-			viewport_container.material = material
+			# Use the cached material (from scene) or create a default one
+			if not _lofi_material:
+				_lofi_material = _create_default_lofi_material()
+			viewport_container.material = _lofi_material
 		else:
 			# Remove the shader to show unprocessed viewport
 			viewport_container.material = null
+
+
+## Create a default lo-fi material with sensible defaults
+## Used as fallback if no material is defined in the scene
+func _create_default_lofi_material() -> ShaderMaterial:
+	var shader = load("res://shaders/lofi_canvas.gdshader")
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	# These are fallback defaults - prefer setting values in the scene's material
+	material.set_shader_parameter("pixelation", 0.003)
+	material.set_shader_parameter("saturation", 0.85)
+	material.set_shader_parameter("color_tint", Color(1.02, 1.0, 0.96))
+	material.set_shader_parameter("vignette_strength", 0.3)
+	material.set_shader_parameter("vignette_radius", 0.8)
+	material.set_shader_parameter("grain_intensity", 0.025)
+	material.set_shader_parameter("grain_speed", 0.2)
+	material.set_shader_parameter("grain_scale", 0.12)
+	material.set_shader_parameter("color_levels", 32.0)
+	material.set_shader_parameter("dither_strength", 0.5)
+	return material
+
+
+## Override lo-fi shader parameters from map data
+## Call this after loading a map to apply map-specific visual settings
+## Parameters dict can contain any subset of shader parameter names
+func apply_lofi_overrides(overrides: Dictionary) -> void:
+	if not _lofi_material:
+		_lofi_material = _create_default_lofi_material()
+	
+	for param_name in overrides:
+		_lofi_material.set_shader_parameter(param_name, overrides[param_name])
