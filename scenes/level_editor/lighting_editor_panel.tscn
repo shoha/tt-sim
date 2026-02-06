@@ -1,0 +1,270 @@
+[gd_scene load_steps=2 format=3 uid="uid://lighting_editor_panel"]
+
+[ext_resource type="Script" path="res://scenes/level_editor/lighting_editor_panel.gd" id="1_script"]
+
+[node name="LightingEditorPanel" type="Control"]
+custom_minimum_size = Vector2(280, 0)
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -340.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 420.0
+grow_horizontal = 0
+script = ExtResource("1_script")
+
+[node name="PanelBG" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ResizeHandle" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 8.0
+grow_vertical = 2
+mouse_default_cursor_shape = 10
+
+[node name="GripVisual" type="Control" parent="ResizeHandle"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -1.0
+offset_top = -15.0
+offset_right = 1.0
+offset_bottom = 15.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Line1" type="ColorRect" parent="ResizeHandle/GripVisual"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_bottom = -20.0
+color = Color(1, 1, 1, 0.4)
+
+[node name="Line2" type="ColorRect" parent="ResizeHandle/GripVisual"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 10.0
+offset_bottom = -10.0
+color = Color(1, 1, 1, 0.4)
+
+[node name="Line3" type="ColorRect" parent="ResizeHandle/GripVisual"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 20.0
+color = Color(1, 1, 1, 0.4)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="MarginContainer/VBox"]
+layout_mode = 2
+text = "Lighting & Environment"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBox"]
+layout_mode = 2
+
+[node name="PresetRow" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="PresetLabel" type="Label" parent="MarginContainer/VBox/PresetRow"]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+text = "Preset:"
+
+[node name="PresetDropdown" type="OptionButton" parent="MarginContainer/VBox/PresetRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="IntensityRow" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="IntensityLabelTitle" type="Label" parent="MarginContainer/VBox/IntensityRow"]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+text = "Light Scale:"
+
+[node name="IntensitySlider" type="HSlider" parent="MarginContainer/VBox/IntensityRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+min_value = 0.0001
+max_value = 2.0
+step = 0.0001
+value = 1.0
+exp_edit = true
+
+[node name="IntensitySpin" type="SpinBox" parent="MarginContainer/VBox/IntensityRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+min_value = 0.0001
+max_value = 10.0
+step = 0.0001
+value = 1.0
+allow_greater = true
+
+[node name="HSeparator2" type="HSeparator" parent="MarginContainer/VBox"]
+layout_mode = 2
+
+[node name="OverridesLabel" type="Label" parent="MarginContainer/VBox"]
+layout_mode = 2
+text = "Overrides"
+horizontal_alignment = 1
+
+[node name="AmbientRow" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="AmbientLabel" type="Label" parent="MarginContainer/VBox/AmbientRow"]
+custom_minimum_size = Vector2(60, 0)
+layout_mode = 2
+text = "Ambient:"
+
+[node name="AmbientColorPicker" type="ColorPickerButton" parent="MarginContainer/VBox/AmbientRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 0)
+layout_mode = 2
+color = Color(0.4, 0.4, 0.45, 1)
+
+[node name="AmbientEnergySlider" type="HSlider" parent="MarginContainer/VBox/AmbientRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+max_value = 2.0
+step = 0.01
+value = 0.5
+
+[node name="AmbientEnergySpin" type="SpinBox" parent="MarginContainer/VBox/AmbientRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+max_value = 5.0
+step = 0.01
+value = 0.5
+allow_greater = true
+
+[node name="FogRow" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="FogLabel" type="Label" parent="MarginContainer/VBox/FogRow"]
+custom_minimum_size = Vector2(60, 0)
+layout_mode = 2
+text = "Fog:"
+
+[node name="FogEnabledCheck" type="CheckBox" parent="MarginContainer/VBox/FogRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 0)
+layout_mode = 2
+
+[node name="FogDensitySlider" type="HSlider" parent="MarginContainer/VBox/FogRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+min_value = 0.001
+max_value = 0.1
+step = 0.0001
+value = 0.01
+exp_edit = true
+
+[node name="FogDensitySpin" type="SpinBox" parent="MarginContainer/VBox/FogRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+min_value = 0.0001
+max_value = 1.0
+step = 0.0001
+value = 0.01
+allow_greater = true
+
+[node name="GlowRow" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="GlowLabel" type="Label" parent="MarginContainer/VBox/GlowRow"]
+custom_minimum_size = Vector2(60, 0)
+layout_mode = 2
+text = "Glow:"
+
+[node name="GlowEnabledCheck" type="CheckBox" parent="MarginContainer/VBox/GlowRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 0)
+layout_mode = 2
+
+[node name="GlowIntensitySlider" type="HSlider" parent="MarginContainer/VBox/GlowRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+max_value = 2.0
+step = 0.01
+value = 0.8
+
+[node name="GlowIntensitySpin" type="SpinBox" parent="MarginContainer/VBox/GlowRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+max_value = 5.0
+step = 0.01
+value = 0.8
+allow_greater = true
+
+[node name="Spacer" type="Control" parent="MarginContainer/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ButtonsRow" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CancelButton" type="Button" parent="MarginContainer/VBox/ButtonsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = "Secondary"
+text = "Cancel"
+
+[node name="SaveButton" type="Button" parent="MarginContainer/VBox/ButtonsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = "Success"
+text = "Save"
