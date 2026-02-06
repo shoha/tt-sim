@@ -34,17 +34,18 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-split_offsets = PackedInt32Array(500)
-split_offset = 500
+split_offsets = PackedInt32Array(-200)
+split_offset = -200
 
 [node name="LeftPanel" type="VBoxContainer" parent="HSplitContainer" unique_id=324021393]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.5
 
 [node name="Title" type="Label" parent="HSplitContainer/LeftPanel" unique_id=778427379]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
-text = "GLB Light Import Test"
+text = "GLB Light & Environment Test"
 horizontal_alignment = 1
 
 [node name="HSeparator" type="HSeparator" parent="HSplitContainer/LeftPanel" unique_id=1863488993]
@@ -68,17 +69,17 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Load & Test"
 
-[node name="IntensityContainer" type="HBoxContainer" parent="HSplitContainer/LeftPanel"]
+[node name="IntensityContainer" type="HBoxContainer" parent="HSplitContainer/LeftPanel" unique_id=60579334]
 layout_mode = 2
 
-[node name="IntensityLabel" type="Label" parent="HSplitContainer/LeftPanel/IntensityContainer"]
+[node name="IntensityLabel" type="Label" parent="HSplitContainer/LeftPanel/IntensityContainer" unique_id=955487895]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 0)
 layout_mode = 2
 size_flags_horizontal = 0
-custom_minimum_size = Vector2(180, 0)
 text = "Intensity Scale: 1.0000"
 
-[node name="IntensitySlider" type="HSlider" parent="HSplitContainer/LeftPanel/IntensityContainer"]
+[node name="IntensitySlider" type="HSlider" parent="HSplitContainer/LeftPanel/IntensityContainer" unique_id=344383164]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -87,6 +88,121 @@ max_value = 2.0
 step = 0.0001
 value = 1.0
 exp_edit = true
+
+[node name="PresetContainer" type="HBoxContainer" parent="HSplitContainer/LeftPanel" unique_id=2048066660]
+layout_mode = 2
+
+[node name="PresetLabel" type="Label" parent="HSplitContainer/LeftPanel/PresetContainer" unique_id=8642628]
+layout_mode = 2
+text = "Environment Preset:"
+
+[node name="PresetDropdown" type="OptionButton" parent="HSplitContainer/LeftPanel/PresetContainer" unique_id=1709416237]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="OverridesLabel" type="Label" parent="HSplitContainer/LeftPanel" unique_id=1748518285]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Environment Overrides:"
+
+[node name="AmbientRow" type="HBoxContainer" parent="HSplitContainer/LeftPanel" unique_id=1528301159]
+layout_mode = 2
+
+[node name="AmbientLabel" type="Label" parent="HSplitContainer/LeftPanel/AmbientRow" unique_id=262094696]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Ambient:"
+
+[node name="AmbientColorPicker" type="ColorPickerButton" parent="HSplitContainer/LeftPanel/AmbientRow" unique_id=449828354]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+color = Color(0.4, 0.4, 0.45, 1)
+
+[node name="AmbientEnergySlider" type="HSlider" parent="HSplitContainer/LeftPanel/AmbientRow" unique_id=2007635846]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 2.0
+step = 0.01
+value = 0.5
+
+[node name="AmbientEnergyLabel" type="Label" parent="HSplitContainer/LeftPanel/AmbientRow" unique_id=116532307]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+text = "0.50"
+horizontal_alignment = 2
+
+[node name="FogRow" type="HBoxContainer" parent="HSplitContainer/LeftPanel" unique_id=207354381]
+layout_mode = 2
+
+[node name="FogLabel" type="Label" parent="HSplitContainer/LeftPanel/FogRow" unique_id=332070710]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Fog:"
+
+[node name="FogEnabledCheck" type="CheckBox" parent="HSplitContainer/LeftPanel/FogRow" unique_id=1397621699]
+unique_name_in_owner = true
+layout_mode = 2
+text = "On"
+
+[node name="FogColorPicker" type="ColorPickerButton" parent="HSplitContainer/LeftPanel/FogRow" unique_id=1975808319]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+color = Color(0.5, 0.5, 0.55, 1)
+
+[node name="FogDensitySlider" type="HSlider" parent="HSplitContainer/LeftPanel/FogRow" unique_id=2144663667]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.001
+max_value = 0.1
+step = 0.0001
+value = 0.01
+exp_edit = true
+
+[node name="FogDensityLabel" type="Label" parent="HSplitContainer/LeftPanel/FogRow" unique_id=748894390]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "0.0100"
+horizontal_alignment = 2
+
+[node name="GlowRow" type="HBoxContainer" parent="HSplitContainer/LeftPanel" unique_id=741435078]
+layout_mode = 2
+
+[node name="GlowLabel" type="Label" parent="HSplitContainer/LeftPanel/GlowRow" unique_id=418996184]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Glow:"
+
+[node name="GlowEnabledCheck" type="CheckBox" parent="HSplitContainer/LeftPanel/GlowRow" unique_id=1425143478]
+unique_name_in_owner = true
+layout_mode = 2
+text = "On"
+
+[node name="GlowIntensitySlider" type="HSlider" parent="HSplitContainer/LeftPanel/GlowRow" unique_id=1199324132]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 2.0
+step = 0.01
+value = 0.8
+
+[node name="GlowIntensityLabel" type="Label" parent="HSplitContainer/LeftPanel/GlowRow" unique_id=375444289]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+text = "0.80"
+horizontal_alignment = 2
+
+[node name="CopyJsonButton" type="Button" parent="HSplitContainer/LeftPanel" unique_id=121146586]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Copy Settings to Clipboard (JSON)"
 
 [node name="HSeparator2" type="HSeparator" parent="HSplitContainer/LeftPanel" unique_id=1125539864]
 layout_mode = 2
@@ -105,6 +221,7 @@ scroll_following = true
 [node name="RightPanel" type="VBoxContainer" parent="HSplitContainer" unique_id=1049546481]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.0
 
 [node name="PreviewLabel" type="Label" parent="HSplitContainer/RightPanel" unique_id=1184687820]
 layout_mode = 2
@@ -128,6 +245,7 @@ transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 5, 5, 5)
 unique_name_in_owner = true
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="HSplitContainer/RightPanel/SubViewportContainer/Viewport3D" unique_id=97422652]
+unique_name_in_owner = true
 environment = SubResource("Environment_1")
 
 [node name="FallbackLight" type="DirectionalLight3D" parent="HSplitContainer/RightPanel/SubViewportContainer/Viewport3D" unique_id=640994337]
