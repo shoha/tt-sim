@@ -23,6 +23,13 @@ class_name LevelData
 @export var map_scale: Vector3 = Vector3.ONE
 @export var map_offset: Vector3 = Vector3.ZERO
 
+## Lighting configuration
+@export_group("Lighting")
+## Multiplier for all light intensities in the map's GLB file.
+## Use 1.0 for GLBs exported with "Unitless" lighting mode in Blender.
+## Use lower values (0.001 - 0.01) for GLBs exported with "Standard" lighting mode.
+@export var light_intensity_scale: float = 1.0
+
 ## Token placements
 @export_group("Tokens")
 @export var token_placements: Array[TokenPlacement] = []
@@ -110,6 +117,7 @@ func duplicate_level() -> LevelData:
 	new_level.map_path = map_path
 	new_level.map_scale = map_scale
 	new_level.map_offset = map_offset
+	new_level.light_intensity_scale = light_intensity_scale
 
 	for placement in token_placements:
 		var new_placement = placement.duplicate()
@@ -167,6 +175,7 @@ func to_dict() -> Dictionary:
 		"map_path": map_path,
 		"map_scale": {"x": map_scale.x, "y": map_scale.y, "z": map_scale.z},
 		"map_offset": {"x": map_offset.x, "y": map_offset.y, "z": map_offset.z},
+		"light_intensity_scale": light_intensity_scale,
 		"token_placements": placements_array,
 	}
 
@@ -187,6 +196,8 @@ static func from_dict(data: Dictionary) -> LevelData:
 	
 	var offset_data = data.get("map_offset", {"x": 0, "y": 0, "z": 0})
 	level.map_offset = Vector3(offset_data.get("x", 0), offset_data.get("y", 0), offset_data.get("z", 0))
+	
+	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
 	
 	level.token_placements.clear()
 	var placements_data = data.get("token_placements", [])

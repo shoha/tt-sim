@@ -401,16 +401,24 @@ func _finalize_map_loading(map: Node3D) -> void:
 
 ## Load a GLB file from a user:// path using shared GlbUtils (synchronous)
 ## For maps, we create StaticBody3D for collision meshes
+## Applies light intensity scaling from the active level data
 func _load_glb_from_path(path: String) -> Node3D:
+	var light_scale = 1.0
+	if active_level_data:
+		light_scale = active_level_data.light_intensity_scale
 	# Use shared utility with create_static_bodies=true (maps need StaticBody3D for collision)
-	return GlbUtils.load_glb_with_processing(path, true)
+	return GlbUtils.load_glb_with_processing(path, true, light_scale)
 
 
 ## Load a GLB file from a user:// path using shared GlbUtils (async - does not block)
 ## For maps, we create StaticBody3D for collision meshes
+## Applies light intensity scaling from the active level data
 func _load_glb_from_path_async(path: String) -> Node3D:
+	var light_scale = 1.0
+	if active_level_data:
+		light_scale = active_level_data.light_intensity_scale
 	# Use async utility with create_static_bodies=true (maps need StaticBody3D for collision)
-	var result = await GlbUtils.load_glb_with_processing_async(path, true)
+	var result = await GlbUtils.load_glb_with_processing_async(path, true, light_scale)
 	if result.success:
 		return result.scene
 	return null

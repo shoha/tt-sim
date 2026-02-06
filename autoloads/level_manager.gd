@@ -567,6 +567,7 @@ func export_level_json(level_data: LevelData, file_path: String) -> bool:
 		"map_path": level_data.map_path,
 		"map_scale": {"x": level_data.map_scale.x, "y": level_data.map_scale.y, "z": level_data.map_scale.z},
 		"map_offset": {"x": level_data.map_offset.x, "y": level_data.map_offset.y, "z": level_data.map_offset.z},
+		"light_intensity_scale": level_data.light_intensity_scale,
 		"token_placements": []
 	}
 
@@ -627,6 +628,8 @@ func import_level_json(file_path: String) -> LevelData:
 		level.map_scale = Vector3(data.map_scale.x, data.map_scale.y, data.map_scale.z)
 	if data.has("map_offset"):
 		level.map_offset = Vector3(data.map_offset.x, data.map_offset.y, data.map_offset.z)
+	
+	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
 
 	for placement_data in data.get("token_placements", []):
 		var placement = TokenPlacement.new()
