@@ -1,0 +1,50 @@
+---
+description: UI and theme conventions for TTSim
+globs: ["**/*.tscn", "**/themes/**"]
+alwaysApply: false
+---
+
+# UI and Theme Conventions
+
+Read `docs/THEME_GUIDE.md` and `docs/UI_SYSTEMS.md` for full details.
+
+## Theme Variants
+
+Use semantic theme variants from `dark_theme.gd`:
+
+- **Surfaces**: `color_background`, `color_surface1`–`color_surface4`
+- **Interactive**: `color_accent`, `color_accent_lighter`, `color_accent_darker`, `color_secondary`, `color_success`, `color_warning`, `color_danger`
+- **Text**: `color_text_on_dark`, `color_text_on_accent`
+- **Typography**: `H1`, `H2`, `H3`, `SectionHeader`, `PanelHeader`, `Body`, `Caption`
+- **Spacing**: `spacing_sm`, `spacing_md`, `spacing_lg`, `spacing_xl`
+
+## CanvasLayer Order
+
+| Layer | Purpose |
+|-------|---------|
+| 2 | AppMenu (persistent) |
+| 10 | Pause overlay |
+| 80–110 | UIManager components |
+
+## Animated Panels
+
+- Extend `AnimatedVisibilityContainer` for panels with show/hide animations.
+- Implement `animate_in()` / `animate_out()` or `close()`.
+- Use lifecycle callbacks: `_on_before_animate_in()`, `_on_after_animate_out()`.
+
+## ESC Handling
+
+Overlays that should close on ESC must:
+
+1. Call `UIManager.register_overlay(self)` when shown.
+2. Implement `animate_out()` or `close()`.
+3. Call `UIManager.unregister_overlay(self)` when hidden.
+
+## UIManager Quick Reference
+
+```gdscript
+UIManager.show_confirmation("Title", "Message")
+UIManager.show_success("Saved!")
+await UIManager.transition(func(): do_something())
+UIManager.register_overlay(my_panel)
+```
