@@ -1,11 +1,33 @@
 extends Node3D
 class_name SelectionGlowRenderer
 
-## Renders a glow effect behind selected tokens.
-## This is a pure visual component - attach as child to a token's RigidBody3D.
+## Renders a glow effect behind selected/hovered tokens.
 ##
-## The glow is rendered as a flat disc positioned at the token's base,
-## using a custom shader for a soft radial falloff effect.
+## This is a pure visual component attached to a token's RigidBody3D.
+## The glow is rendered as a flat disc (QuadMesh) positioned at the token's base,
+## using a custom shader (selection_glow.gdshader) for a soft radial falloff effect.
+##
+## LIFECYCLE:
+## Created by BoardTokenFactory and attached to each token's RigidBody3D.
+## The glow is hidden by default and shown/hidden via show_glow()/hide_glow().
+##
+## INTEGRATION:
+## BoardToken has is_highlighted property and set_highlighted() method that
+## controls this renderer. BoardTokenController triggers highlight on mouse hover.
+##
+## CUSTOMIZATION:
+## - Size automatically calculated from token's collision bounds
+## - Color can be changed via set_glow_color()
+## - Pulse animation controlled by shader parameters
+##
+## EXAMPLE USAGE:
+##   # Via BoardToken (preferred):
+##   token.set_highlighted(true)
+##   token.set_highlight_color(Color.CYAN)
+##
+##   # Direct access:
+##   token.get_selection_glow().show_glow()
+##   token.get_selection_glow().set_glow_color(Color.RED)
 
 const GLOW_SHADER = preload("res://shaders/selection_glow.gdshader")
 
