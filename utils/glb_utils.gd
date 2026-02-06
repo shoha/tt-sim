@@ -145,14 +145,16 @@ static func _load_glb_thread_work(path: String, result: Dictionary) -> void:
 ## @param path: Path to the GLB file
 ## @param create_static_bodies: If true, creates StaticBody3D for collision meshes (for maps)
 ##                              If false, just hides collision mesh indicators (for tokens)
+## @param light_intensity_scale: Multiplier for light energies (1.0 = no change, use < 1.0 for Blender "Standard" mode exports)
 ## @return: The fully processed Node3D scene, or null on failure
-static func load_glb_with_processing(path: String, create_static_bodies: bool = false) -> Node3D:
+static func load_glb_with_processing(path: String, create_static_bodies: bool = false, light_intensity_scale: float = 1.0) -> Node3D:
 	var scene = load_glb(path)
 	if not scene:
 		return null
 	
 	process_collision_meshes(scene, create_static_bodies)
 	process_animations(scene)
+	process_lights(scene, light_intensity_scale)
 	
 	return scene
 
@@ -161,14 +163,16 @@ static func load_glb_with_processing(path: String, create_static_bodies: bool = 
 ## @param path: Path to the GLB file
 ## @param create_static_bodies: If true, creates StaticBody3D for collision meshes (for maps)
 ##                              If false, just hides collision mesh indicators (for tokens)
+## @param light_intensity_scale: Multiplier for light energies (1.0 = no change, use < 1.0 for Blender "Standard" mode exports)
 ## @return: AsyncLoadResult with fully processed scene or error
-static func load_glb_with_processing_async(path: String, create_static_bodies: bool = false) -> AsyncLoadResult:
+static func load_glb_with_processing_async(path: String, create_static_bodies: bool = false, light_intensity_scale: float = 1.0) -> AsyncLoadResult:
 	var result = await load_glb_async(path)
 	
 	if result.success and result.scene:
 		# Process collision meshes - yield periodically for large scenes
 		await _process_collision_meshes_async(result.scene, create_static_bodies)
 		process_animations(result.scene)
+		process_lights(result.scene, light_intensity_scale)
 	
 	return result
 
@@ -314,6 +318,32 @@ static func _find_collision_mesh_nodes(node: Node, result: Array[Dictionary]) ->
 		_find_collision_mesh_nodes(child, result)
 
 
+## Process lights in a runtime-loaded GLB
+## Applies an intensity scale factor to all lights in the scene
+## Use scale < 1.0 for GLBs exported with "Standard" lighting mode in Blender
+## Use scale = 1.0 for GLBs exported with "Unitless" lighting mode
+## @param node: The root node to process
+## @param intensity_scale: Multiplier for all light energies (default 1.0 = no change)
+static func process_lights(node: Node, intensity_scale: float = 1.0) -> void:
+	if intensity_scale == 1.0:
+		return # No processing needed
+	
+	var lights: Array[Light3D] = []
+	_find_lights_recursive(node, lights)
+	
+	for light in lights:
+		light.light_energy *= intensity_scale
+
+
+## Recursively find all Light3D nodes in the scene tree
+static func _find_lights_recursive(node: Node, result: Array[Light3D]) -> void:
+	if node is Light3D:
+		result.append(node as Light3D)
+	
+	for child in node.get_children():
+		_find_lights_recursive(child, result)
+
+
 ## Process animations in a runtime-loaded GLB
 ## Godot's import system strips _loop suffix and sets loop mode - replicate that behavior
 static func process_animations(scene: Node) -> void:
@@ -379,3 +409,86 @@ static func find_first_mesh_instance(root: Node) -> MeshInstance3D:
 		if found:
 			return found
 	return null
+
+
+## Debug: Load a GLB and print a report of all nodes including lights
+## Call this from the console or a test script to verify light import
+## Example: GlbUtils.debug_load_glb("user://levels/my_map/map.glb")
+static func debug_load_glb(path: String) -> void:
+	print("=== GLB Debug Load: ", path, " ===")
+	
+	var scene = load_glb(path)
+	if not scene:
+		print("ERROR: Failed to load GLB")
+		return
+	
+	var stats = {
+		"total_nodes": 0,
+		"mesh_instances": 0,
+		"lights": [],
+		"cameras": 0,
+		"animation_players": 0,
+		"other_nodes": []
+	}
+	
+	_debug_analyze_node(scene, stats, 0)
+	
+	print("\n--- Summary ---")
+	print("Total nodes: ", stats.total_nodes)
+	print("MeshInstance3D: ", stats.mesh_instances)
+	print("Cameras: ", stats.cameras)
+	print("AnimationPlayers: ", stats.animation_players)
+	
+	if stats.lights.size() > 0:
+		print("\n*** LIGHTS FOUND (%d) ***" % stats.lights.size())
+		for light_info in stats.lights:
+			print("  - ", light_info)
+	else:
+		print("\n*** NO LIGHTS FOUND ***")
+		print("If your GLB should have lights, ensure:")
+		print("  1. Lights are included in export (Blender: check 'Punctual Lights' in glTF export)")
+		print("  2. The GLB uses KHR_lights_punctual extension")
+	
+	print("\n=== End Debug ===")
+	
+	# Clean up
+	scene.queue_free()
+
+
+## Recursively analyze nodes for debug output
+static func _debug_analyze_node(node: Node, stats: Dictionary, depth: int) -> void:
+	stats.total_nodes += 1
+	var indent = "  ".repeat(depth)
+	var node_info = "%s%s (%s)" % [indent, node.name, node.get_class()]
+	
+	if node is Light3D:
+		var light_type = "Unknown"
+		if node is DirectionalLight3D:
+			light_type = "DirectionalLight3D"
+		elif node is OmniLight3D:
+			light_type = "OmniLight3D"
+		elif node is SpotLight3D:
+			light_type = "SpotLight3D"
+		
+		var light_desc = "%s '%s' (color: %s, energy: %.2f)" % [
+			light_type, 
+			node.name, 
+			node.light_color,
+			node.light_energy
+		]
+		stats.lights.append(light_desc)
+		print(node_info, " ** LIGHT **")
+	elif node is MeshInstance3D:
+		stats.mesh_instances += 1
+		print(node_info)
+	elif node is Camera3D:
+		stats.cameras += 1
+		print(node_info)
+	elif node is AnimationPlayer:
+		stats.animation_players += 1
+		print(node_info)
+	else:
+		print(node_info)
+	
+	for child in node.get_children():
+		_debug_analyze_node(child, stats, depth + 1)

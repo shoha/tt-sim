@@ -1,0 +1,136 @@
+[gd_scene format=3 uid="uid://syqrbacwg273"]
+
+[ext_resource type="Script" uid="uid://c3154xuvqkmmr" path="res://tests/test_glb_lights.gd" id="1_script"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
+sky_top_color = Color(0.4, 0.45, 0.5, 1)
+sky_horizon_color = Color(0.6, 0.65, 0.7, 1)
+ground_bottom_color = Color(0.2, 0.2, 0.2, 1)
+ground_horizon_color = Color(0.4, 0.4, 0.4, 1)
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("ProceduralSkyMaterial_1")
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+sky = SubResource("Sky_1")
+ambient_light_source = 2
+ambient_light_color = Color(0.3, 0.3, 0.35, 1)
+ambient_light_energy = 0.5
+
+[node name="TestGlbLights" type="Control" unique_id=306359170]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="HSplitContainer" type="HSplitContainer" parent="." unique_id=85501855]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+split_offsets = PackedInt32Array(500)
+split_offset = 500
+
+[node name="LeftPanel" type="VBoxContainer" parent="HSplitContainer" unique_id=324021393]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Title" type="Label" parent="HSplitContainer/LeftPanel" unique_id=778427379]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "GLB Light Import Test"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="HSplitContainer/LeftPanel" unique_id=1863488993]
+layout_mode = 2
+
+[node name="PathContainer" type="HBoxContainer" parent="HSplitContainer/LeftPanel" unique_id=2034878906]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="HSplitContainer/LeftPanel/PathContainer" unique_id=1210725103]
+layout_mode = 2
+text = "GLB Path:"
+
+[node name="PathInput" type="LineEdit" parent="HSplitContainer/LeftPanel/PathContainer" unique_id=930999039]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "user://levels/my_map/map.glb"
+
+[node name="LoadButton" type="Button" parent="HSplitContainer/LeftPanel/PathContainer" unique_id=588596251]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Load & Test"
+
+[node name="IntensityContainer" type="HBoxContainer" parent="HSplitContainer/LeftPanel"]
+layout_mode = 2
+
+[node name="IntensityLabel" type="Label" parent="HSplitContainer/LeftPanel/IntensityContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+custom_minimum_size = Vector2(180, 0)
+text = "Intensity Scale: 1.0000"
+
+[node name="IntensitySlider" type="HSlider" parent="HSplitContainer/LeftPanel/IntensityContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0001
+max_value = 2.0
+step = 0.0001
+value = 1.0
+exp_edit = true
+
+[node name="HSeparator2" type="HSeparator" parent="HSplitContainer/LeftPanel" unique_id=1125539864]
+layout_mode = 2
+
+[node name="OutputLabel" type="Label" parent="HSplitContainer/LeftPanel" unique_id=455378885]
+layout_mode = 2
+text = "Output:"
+
+[node name="OutputText" type="RichTextLabel" parent="HSplitContainer/LeftPanel" unique_id=380433673]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+scroll_following = true
+
+[node name="RightPanel" type="VBoxContainer" parent="HSplitContainer" unique_id=1049546481]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PreviewLabel" type="Label" parent="HSplitContainer/RightPanel" unique_id=1184687820]
+layout_mode = 2
+text = "3D Preview:"
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="HSplitContainer/RightPanel" unique_id=2080688171]
+layout_mode = 2
+size_flags_vertical = 3
+stretch = true
+
+[node name="Viewport3D" type="SubViewport" parent="HSplitContainer/RightPanel/SubViewportContainer" unique_id=558759060]
+unique_name_in_owner = true
+handle_input_locally = false
+size = Vector2i(454, 1049)
+render_target_update_mode = 4
+
+[node name="Camera3D" type="Camera3D" parent="HSplitContainer/RightPanel/SubViewportContainer/Viewport3D" unique_id=283352887]
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 5, 5, 5)
+
+[node name="PreviewContainer" type="Node3D" parent="HSplitContainer/RightPanel/SubViewportContainer/Viewport3D" unique_id=388675398]
+unique_name_in_owner = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="HSplitContainer/RightPanel/SubViewportContainer/Viewport3D" unique_id=97422652]
+environment = SubResource("Environment_1")
+
+[node name="FallbackLight" type="DirectionalLight3D" parent="HSplitContainer/RightPanel/SubViewportContainer/Viewport3D" unique_id=640994337]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 10, 0)
+light_energy = 0.3
+shadow_enabled = true
