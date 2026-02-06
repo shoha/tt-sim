@@ -1,55 +1,37 @@
 /*
- * Lo-Fi Composite Post-Processing Shader
- * =======================================
+ * Lo-Fi Composite Post-Processing Shader (DEPRECATED)
+ * ====================================================
  * 
- * PURPOSE:
+ * STATUS: DEPRECATED - Use lofi_canvas.gdshader instead
+ * 
+ * This shader is kept for reference but is no longer used in game_map.tscn.
+ * The new SubViewport-based approach (lofi_canvas.gdshader) properly handles
+ * transparent objects like glass, water, particles, and the selection glow.
+ * 
+ * WHY THIS WAS REPLACED:
+ * This shader uses hint_screen_texture which captures the scene BEFORE
+ * transparent objects render. This meant:
+ * - Glass, water, particles would NOT receive the lo-fi effect
+ * - Semi-transparent UI elements in the 3D scene looked inconsistent
+ * - The selection glow had to use hacky discard-based rendering
+ * 
+ * NEW APPROACH (lofi_canvas.gdshader):
+ * The 3D scene now renders to a SubViewport, and the lo-fi effect is applied
+ * as a 2D post-process via SubViewportContainer. This captures EVERYTHING
+ * including transparent objects.
+ * 
+ * See: scenes/states/playing/game_map.tscn for the new structure
+ * See: shaders/lofi_canvas.gdshader for the current implementation
+ * 
+ * ORIGINAL PURPOSE:
  * Creates a cohesive retro/lo-fi aesthetic to unify assets of varying styles
- * and quality levels. Applied as a fullscreen post-process effect via a 
- * MeshInstance3D quad positioned in front of the camera.
+ * and quality levels.
  * 
- * EFFECTS OVERVIEW:
+ * EFFECTS:
  * 1. PIXELATION - Subtle resolution reduction to soften detail differences
  * 2. COLOR GRADING - Desaturation + warm tint for cohesive palette
  * 3. VIGNETTE - Edge darkening to focus attention and add warmth
  * 4. FILM GRAIN - Organic noise texture mimicking analog film stock
- * 
- * SCENE SETUP:
- * - Attached to a 2x2 QuadMesh with flip_faces=true as child of Camera3D
- * - The MeshInstance3D node is named "LofiQuad" in game_map.tscn
- * - Toggle visibility via GameMap.set_lofi_enabled() or the Settings menu
- * - Shader parameters are exposed in the ShaderMaterial for editor tweaking
- * 
- * RENDER ORDER (CRITICAL):
- * This shader uses hint_screen_texture which captures the scene BEFORE 
- * transparent objects render. This has important implications:
- * 
- * 1. OPAQUE objects ARE processed by this shader (captured in screen texture)
- * 2. TRANSPARENT objects are NOT processed (render after screen capture)
- * 
- * For visual elements that MUST be processed by this shader (like drop 
- * indicators), they must use TRANSPARENCY_DISABLED to render in the opaque
- * pass. See board_token_drop_indicator_renderer.gd for an example.
- * 
- * The shader uses these render_mode flags:
- * - depth_test_disabled: Don't check depth buffer (always render)
- * - depth_draw_never: Don't write to depth buffer (don't occlude anything)
- * - cull_disabled: Render both sides of the quad
- * 
- * The ShaderMaterial uses render_priority=100 to render after most scene
- * objects but the exact priority is less important than the opaque/transparent
- * distinction described above.
- * 
- * EDITOR TWEAKING:
- * All effect parameters are exposed as uniforms with hint_range for easy
- * adjustment in the Godot editor. Select the LofiQuad node, expand the
- * mesh material, and adjust Shader Parameters.
- * 
- * ITERATION TIPS:
- * - Pixelation: Increase for more retro look, set to 0 to disable
- * - Saturation: Lower = more muted/vintage, higher = more vibrant
- * - Color tint: Adjust RGB for different moods (warm, cool, sepia)
- * - Vignette: Increase strength for more dramatic framing
- * - Grain: Keep subtle (< 0.05) to avoid distraction, 0 to disable
  */
 
 shader_type spatial;

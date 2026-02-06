@@ -5,16 +5,43 @@
  * PURPOSE:
  * Creates a cohesive retro/lo-fi aesthetic to unify assets of varying styles
  * and quality levels. Applied as a 2D post-process effect on a SubViewport's
- * texture via SubViewportContainer or TextureRect.
+ * texture via SubViewportContainer.
  * 
- * This version processes the ENTIRE rendered scene including transparent objects,
- * since the SubViewport captures everything before this shader runs.
+ * ARCHITECTURE:
+ * The 3D scene renders to a SubViewport, then this shader processes the
+ * viewport's texture via the SubViewportContainer's material. This approach
+ * captures EVERYTHING including transparent objects (glass, water, particles,
+ * selection glow, etc.) - unlike the old hint_screen_texture approach.
+ * 
+ * Scene structure in game_map.tscn:
+ *   GameMap (Node3D)
+ *   ├── WorldViewportLayer (CanvasLayer, layer=-1)
+ *   │   └── SubViewportContainer (with this shader as material)
+ *   │       └── SubViewport
+ *   │           ├── CameraHolder/Camera3D
+ *   │           ├── DragAndDrop3D
+ *   │           └── (tokens, map, etc.)
+ *   └── GameplayMenu (CanvasLayer - UI on top)
  * 
  * EFFECTS OVERVIEW:
  * 1. PIXELATION - Subtle resolution reduction to soften detail differences
  * 2. COLOR GRADING - Desaturation + warm tint for cohesive palette
  * 3. VIGNETTE - Edge darkening to focus attention and add warmth
  * 4. FILM GRAIN - Organic noise texture mimicking analog film stock
+ * 
+ * USAGE:
+ * - Toggle via GameMap.set_lofi_enabled() or the Settings menu
+ * - Parameters can be adjusted in the ShaderMaterial on SubViewportContainer
+ * 
+ * EDITOR TWEAKING:
+ * - Pixelation: Increase for more retro look, set to 0 to disable
+ * - Saturation: Lower = more muted/vintage, higher = more vibrant  
+ * - Color tint: Adjust RGB for different moods (warm, cool, sepia)
+ * - Vignette: Increase strength for more dramatic framing
+ * - Grain: Keep subtle (< 0.05) to avoid distraction, 0 to disable
+ * 
+ * NOTE: This replaced lofi_composite.gdshader which had transparency limitations.
+ * See lofi_composite.gdshader header comments for migration history.
  */
 
 shader_type canvas_item;

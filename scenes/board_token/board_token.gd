@@ -2,7 +2,7 @@ extends Node3D
 class_name BoardToken
 
 ## Represents a PC or NPC token on the game board.
-## Manages entity data like health, visibility, and status.
+## Manages entity data like health, visibility, status, and visual feedback.
 ## Separated from interaction logic (BoardTokenController) and drag mechanics (DraggableToken).
 ##
 ## @warning Do not create with BoardToken.new() - use BoardTokenFactory instead.
@@ -13,9 +13,20 @@ class_name BoardToken
 ## ├── DraggingObject3D (DraggableToken)
 ## │   └── RigidBody3D
 ## │       ├── CollisionShape3D
+## │       ├── SelectionGlow (SelectionGlowRenderer) - hover/selection highlight
 ## │       ├── Model Scene (Armature, etc.)
 ## │       └── AnimationTree
 ## └── BoardTokenController
+##
+## HIGHLIGHT SYSTEM:
+## Tokens can be visually highlighted via set_highlighted(bool). This shows/hides
+## a glowing disc beneath the token using SelectionGlowRenderer. By default,
+## BoardTokenController triggers this on mouse hover, but it can also be used
+## for selection, targeting, or other visual states.
+##
+##   token.set_highlighted(true)           # Show glow
+##   token.set_highlighted(false)          # Hide glow
+##   token.set_highlight_color(Color.RED)  # Change glow color
 ##
 ## Usage:
 ##   Use BoardTokenFactory.create_from_scene() or BoardTokenFactory.create_from_config()

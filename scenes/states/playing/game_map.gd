@@ -1,14 +1,38 @@
 extends Node3D
 class_name GameMap
 
+## Main game map controller for the playing state.
+## Manages camera movement/zoom, the lo-fi visual effect, and token context menus.
+##
+## ARCHITECTURE (SubViewport-based rendering):
+## The 3D scene renders to a SubViewport, then the lo-fi shader is applied as a
+## 2D post-process via SubViewportContainer's material. This approach properly
+## handles transparent objects (glass, water, particles, selection glow) - they
+## all receive the lo-fi effect correctly.
+##
+## Scene structure:
+##   GameMap (Node3D) - this script
+##   ├── WorldViewportLayer (CanvasLayer, layer=-1)
+##   │   └── SubViewportContainer (lo-fi shader applied here)
+##   │       └── SubViewport
+##   │           ├── CameraHolder/Camera3D
+##   │           ├── DragAndDrop3D
+##   │           └── (tokens, map geometry, etc.)
+##   └── GameplayMenu (CanvasLayer - UI on top)
+##
+## INPUT HANDLING NOTE:
+## Camera zoom uses _input() instead of _unhandled_input() because input events
+## routed through SubViewportContainer may not reach _unhandled_input on this node.
+## Keyboard camera movement still uses _unhandled_key_input() which works correctly.
+##
+## LO-FI EFFECT:
+## Toggle via set_lofi_enabled(bool) or Settings menu. The effect is applied
+## by setting a ShaderMaterial on viewport_container. See lofi_canvas.gdshader.
+
 @export var move_speed: float = 10.0
 @export var zoom_speed: float = 20.0
 @export var min_zoom: float = 2.0
 @export var max_zoom: float = 20.0
-
-# SubViewport-based structure for proper transparency support
-# The 3D scene renders to a SubViewport, then the lo-fi shader is applied
-# as a 2D post-process via the SubViewportContainer's material
 @onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
 @onready var world_viewport: SubViewport = $WorldViewportLayer/SubViewportContainer/SubViewport
 @onready var cameraholder_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder
@@ -62,7 +86,9 @@ func handle_zoom(delta: float) -> void:
 	tiltshift_node.mesh.material.set_shader_parameter(&"DoF", 5 * zoom_percentage)
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
+	# Handle zoom input - use _input instead of _unhandled_input because
+	# events going through SubViewportContainer may not reach _unhandled_input
 	if event is not InputEventMouseButton:
 		return
 
