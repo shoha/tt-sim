@@ -1,0 +1,36 @@
+---
+description: Run formatters after editing files to match project style
+alwaysApply: true
+---
+
+# Formatting After Edits
+
+After editing any file, ensure it conforms to the project's formatters. Run the appropriate formatter before considering the task complete.
+
+## Formatters by File Type
+
+| File Type | Formatter | Command |
+|-----------|-----------|---------|
+| `*.gd` (GDScript) | gdformat | `gdformat path/to/file.gd` |
+| `*.py` | black (or project default) | `black path/to/file.py` |
+| `*.json` | Prettier (if configured) | `npx prettier --write path/to/file.json` |
+
+## GDScript (gdtoolkit)
+
+Install: `pip install gdtoolkit`. This provides `gdformat`, `gdlint`, etc. (add Python Scripts to PATH if needed).
+
+| Command | Purpose |
+|---------|---------|
+| `gdformat path/to/file.gd` | Format GDScript |
+| `gdformat file1.gd file2.gd` | Format multiple files |
+| `gdlint path/to/file.gd` | Lint GDScript |
+
+Run `gdformat` after editing `.gd` files.
+
+## Workspace Settings
+
+If the project has `.vscode/settings.json` with `editor.formatOnSave` or `editor.defaultFormatter`, respect those settings. When the agent saves files, format-on-save may not run automatically—run the formatter explicitly after edits.
+
+## EditorConfig
+
+The project uses `.editorconfig`. Preserve charset (utf-8) and any indentation rules when editing.

@@ -1,0 +1,51 @@
+---
+description: GDScript coding conventions for TTSim
+globs: "**/*.gd"
+alwaysApply: false
+---
+
+# GDScript Conventions
+
+## Resource and Utility Classes
+
+- Use `class_name` for reusable types (TokenState, LevelData, GlbUtils).
+- Static utilities: `extends RefCounted` with `class_name`, `static func` for methods.
+
+```gdscript
+extends RefCounted
+class_name GlbUtils
+
+static func load_glb(path: String) -> Node3D:
+    # ...
+```
+
+## Signals and Async
+
+- Connect signals in `_ready()` or setup code.
+- Use `await` for async operations; avoid blocking main thread for I/O.
+- Prefer `await AssetPackManager.get_model_instance()` over sync variants when possible.
+
+```gdscript
+# Good
+var model = await GlbUtils.load_glb_async(path)
+var instance = await AssetPackManager.get_model_instance(pack_id, asset_id, variant_id)
+
+# Avoid blocking
+# var model = GlbUtils.load_glb(path)  # blocks
+```
+
+## GLB and 3D Assets
+
+- Use `GlbUtils` for GLB loading: `load_glb()`, `load_glb_async()`.
+- After loading: `GlbUtils.process_collision_meshes(scene, true)`, `GlbUtils.process_animations(scene)`.
+- Model instances: `AssetPackManager.get_model_instance()` / `preload_models()`.
+
+## Node References
+
+- Use `@onready` for scene tree references.
+- Use `%UniqueName` for direct child access when appropriate.
+
+## Error Handling
+
+- Use `push_error()` for non-fatal errors; return null or empty when appropriate.
+- Document failure modes in docstrings.
