@@ -6,29 +6,6 @@
 theme_type_variation = &"BoxContainerSpaced"
 script = ExtResource("1_browser")
 
-[node name="AddPackRow" type="HBoxContainer" parent="."]
-layout_mode = 2
-theme_type_variation = &"BoxContainerSpaced"
-
-[node name="Label" type="Label" parent="AddPackRow"]
-layout_mode = 2
-text = "Add pack from URL:"
-
-[node name="UrlEdit" type="LineEdit" parent="AddPackRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-placeholder_text = "https://example.com/packs/my_pack/manifest.json"
-
-[node name="DownloadButton" type="Button" parent="AddPackRow"]
-layout_mode = 2
-text = "Download"
-
-[node name="ProgressLabel" type="Label" parent="AddPackRow"]
-layout_mode = 2
-visible = false
-theme_type_variation = &"Caption"
-text = ""
-
 [node name="TabContainer" type="TabContainer" parent="."]
 layout_mode = 2
 size_flags_vertical = 3

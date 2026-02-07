@@ -74,6 +74,13 @@ size_flags_horizontal = 3
 theme_type_variation = &"PanelHeader"
 text = "Add Token"
 
+[node name="AddPackButton" type="Button" parent="GameplayMenu/AssetBrowserContainer/PanelContainer/VBox/Header" unique_id=556190123]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "+ Add Pack"
+tooltip_text = "Download an asset pack from a URL"
+
 [node name="AssetBrowser" parent="GameplayMenu/AssetBrowserContainer/PanelContainer/VBox" instance=ExtResource("5_browser")]
 layout_mode = 2
 
