@@ -223,6 +223,23 @@ static func _process_collision_meshes_async(node: Node, create_static_bodies: bo
 			else:
 				mesh_node.visible = false
 		else:
+			# For tokens: convert collision meshes to CollisionShape3D nodes
+			# so the token factory can attach them to the RigidBody3D.
+			if mesh_node.mesh:
+				var is_convex = suffix.contains("conv")
+				var collision_shape = CollisionShape3D.new()
+				collision_shape.name = "CollisionShape3D"
+
+				if is_convex:
+					collision_shape.shape = mesh_node.mesh.create_convex_shape()
+				else:
+					collision_shape.shape = mesh_node.mesh.create_trimesh_shape()
+
+				var parent = mesh_node.get_parent()
+				if parent:
+					collision_shape.transform = mesh_node.transform
+					parent.add_child(collision_shape)
+
 			if is_only:
 				mesh_node.get_parent().remove_child(mesh_node)
 				mesh_node.free()
@@ -291,7 +308,27 @@ static func process_collision_meshes(node: Node, create_static_bodies: bool = fa
 			else:
 				mesh_node.visible = false
 		else:
-			# Just hide the collision mesh indicator (for tokens where RigidBody handles collision)
+			# For tokens: convert collision meshes to CollisionShape3D nodes
+			# so the token factory can attach them to the RigidBody3D.
+			# Without this, the factory falls back to creating a convex shape from
+			# the visual mesh, which is wrong for skinned meshes (bind-pose vertices).
+			if mesh_node.mesh:
+				var is_convex = suffix.contains("conv")
+				var collision_shape = CollisionShape3D.new()
+				collision_shape.name = "CollisionShape3D"
+
+				if is_convex:
+					collision_shape.shape = mesh_node.mesh.create_convex_shape()
+				else:
+					collision_shape.shape = mesh_node.mesh.create_trimesh_shape()
+
+				# Place collision shape as sibling with same transform
+				var parent = mesh_node.get_parent()
+				if parent:
+					collision_shape.transform = mesh_node.transform
+					parent.add_child(collision_shape)
+
+			# Remove or hide the original mesh node
 			if is_only:
 				mesh_node.get_parent().remove_child(mesh_node)
 				mesh_node.free()

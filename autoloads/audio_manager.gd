@@ -23,9 +23,20 @@ var _ui_sounds := {
 	"cancel": null, # "res://assets/audio/ui/cancel.wav"
 }
 
+# SFX Sound effects for game interactions (token pickup, drop, slide, etc.)
+var _sfx_sounds := {
+	"token_pickup": null, # "res://assets/audio/sfx/token_pickup.wav"
+	"token_drop": null, # "res://assets/audio/sfx/token_drop.wav"
+	"token_slide": null, # "res://assets/audio/sfx/token_slide.wav"
+}
+
 # Audio players pool for UI sounds
 var _ui_players: Array[AudioStreamPlayer] = []
 const UI_PLAYER_POOL_SIZE := 4
+
+# Audio players pool for SFX sounds
+var _sfx_players: Array[AudioStreamPlayer] = []
+const SFX_PLAYER_POOL_SIZE := 4
 
 
 func _ready() -> void:
@@ -36,8 +47,16 @@ func _ready() -> void:
 		add_child(player)
 		_ui_players.append(player)
 
-	# Load UI sounds if they exist
+	# Create audio player pool for SFX sounds
+	for i in range(SFX_PLAYER_POOL_SIZE):
+		var player = AudioStreamPlayer.new()
+		player.bus = BUS_SFX
+		add_child(player)
+		_sfx_players.append(player)
+
+	# Load sounds if they exist
 	_load_ui_sounds()
+	_load_sfx_sounds()
 
 
 func _load_ui_sounds() -> void:
@@ -45,6 +64,16 @@ func _load_ui_sounds() -> void:
 		var path = "res://assets/audio/ui/%s.wav" % key
 		if ResourceLoader.exists(path):
 			_ui_sounds[key] = load(path)
+
+
+func _load_sfx_sounds() -> void:
+	for key in _sfx_sounds.keys():
+		# Try .wav first, then .ogg
+		for ext in ["wav", "ogg"]:
+			var path = "res://assets/audio/sfx/%s.%s" % [key, ext]
+			if ResourceLoader.exists(path):
+				_sfx_sounds[key] = load(path)
+				break
 
 
 ## Play a UI sound by name
@@ -97,6 +126,40 @@ func play_confirm() -> void:
 ## Play cancel/back sound
 func play_cancel() -> void:
 	play_ui_sound("cancel")
+
+
+## Play a SFX sound by name
+func play_sfx(sound_name: String, volume_db: float = 0.0) -> void:
+	if not _sfx_sounds.has(sound_name) or _sfx_sounds[sound_name] == null:
+		return
+
+	var player = _get_available_sfx_player()
+	if player:
+		player.stream = _sfx_sounds[sound_name]
+		player.volume_db = volume_db
+		player.play()
+
+
+## Play token pickup sound (short click/pop)
+func play_token_pickup() -> void:
+	play_sfx("token_pickup")
+
+
+## Play token drop/place sound (soft thud)
+func play_token_drop() -> void:
+	play_sfx("token_drop")
+
+
+## Play token slide sound (faint movement sound)
+func play_token_slide() -> void:
+	play_sfx("token_slide", -3.0)
+
+
+func _get_available_sfx_player() -> AudioStreamPlayer:
+	for player in _sfx_players:
+		if not player.playing:
+			return player
+	return _sfx_players[0] if _sfx_players.size() > 0 else null
 
 
 func _get_available_player() -> AudioStreamPlayer:

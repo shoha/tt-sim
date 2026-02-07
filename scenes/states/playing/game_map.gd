@@ -69,6 +69,7 @@ func setup(level_play_controller: LevelPlayController) -> void:
 func _process(delta: float) -> void:
 	handle_movement(delta)
 	handle_zoom(delta)
+	_handle_edge_pan(delta)
 
 
 func handle_movement(delta: float) -> void:
@@ -95,6 +96,10 @@ func _input(event: InputEvent) -> void:
 
 	# Don't zoom when scrolling over any UI element (e.g. asset browser list)
 	if _is_mouse_over_gui():
+		return
+
+	# Don't zoom while dragging - scroll wheel is used for token height adjustment
+	if drag_and_drop_node and drag_and_drop_node.is_dragging():
 		return
 
 	if event.is_action_pressed("camera_zoom_in"):
@@ -242,6 +247,25 @@ func _create_default_lofi_material() -> ShaderMaterial:
 	material.set_shader_parameter("color_levels", 32.0)
 	material.set_shader_parameter("dither_strength", 0.5)
 	return material
+
+
+## Handle camera edge-panning when dragging a token near screen edges.
+## Reads the edge_pan_direction from DragAndDrop3D and translates the camera.
+func _handle_edge_pan(delta: float) -> void:
+	if not drag_and_drop_node or not drag_and_drop_node.is_dragging():
+		return
+
+	var pan: Vector2 = drag_and_drop_node.edge_pan_direction
+	if pan.length_squared() < 0.001:
+		return
+
+	# Convert screen-space pan direction to isometric camera movement
+	# Same coordinate mapping as keyboard: up=(-1,-1), down=(+1,+1), left=(-1,+1), right=(+1,-1)
+	var cam_move = Vector3.ZERO
+	cam_move.x = pan.x + pan.y
+	cam_move.z = -pan.x + pan.y
+
+	cameraholder_node.translate(cam_move * drag_and_drop_node.edge_pan_speed * delta)
 
 
 ## Override lo-fi shader parameters from map data
