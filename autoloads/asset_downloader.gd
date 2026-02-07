@@ -30,9 +30,13 @@ class DownloadRequest:
 	var http_request: HTTPRequest
 	var bytes_downloaded: int = 0
 	var total_bytes: int = 0
+	var target_path: String = "" # When set, download to this path instead of cache (for user_assets)
 	
 	func get_key() -> String:
 		return "%s/%s/%s" % [pack_id, asset_id, variant_id]
+	
+	func get_dedup_key() -> String:
+		return target_path if target_path != "" else get_key()
 
 
 ## Queue of pending downloads
@@ -97,36 +101,41 @@ func _get_cache_path(pack_id: String, asset_id: String, variant_id: String, file
 
 
 ## Request download of an asset
-## If already cached, emits download_completed immediately
+## If already cached/present, emits download_completed immediately
 ## If already downloading, does nothing (will emit when complete)
 ## Otherwise, queues the download
-func request_download(pack_id: String, asset_id: String, variant_id: String, url: String, priority: int = 100, file_type: String = "model") -> void:
+## @param target_path: Optional. When set, download to this path instead of cache (e.g. user://user_assets/pack/models/file.glb)
+func request_download(pack_id: String, asset_id: String, variant_id: String, url: String, priority: int = 100, file_type: String = "model", target_path: String = "") -> void:
 	var key = "%s/%s/%s" % [pack_id, asset_id, variant_id]
 	
-	# Already cached?
-	var cached_path = get_cached_path(pack_id, asset_id, variant_id, file_type)
-	if cached_path != "":
-		# Emit immediately on next frame to allow caller to connect signals
-		call_deferred("_emit_completed", pack_id, asset_id, variant_id, cached_path)
-		return
+	# Already present?
+	var dest_path: String
+	if target_path != "":
+		dest_path = target_path
+		if FileAccess.file_exists(dest_path):
+			call_deferred("_emit_completed", pack_id, asset_id, variant_id, dest_path)
+			return
+	else:
+		dest_path = get_cached_path(pack_id, asset_id, variant_id, file_type)
+		if dest_path != "":
+			call_deferred("_emit_completed", pack_id, asset_id, variant_id, dest_path)
+			return
 	
 	# Already failed this session?
-	if _failed_downloads.has(key):
-		call_deferred("_emit_failed", pack_id, asset_id, variant_id, _failed_downloads[key])
+	var dedup_key = target_path if target_path != "" else key
+	if _failed_downloads.has(dedup_key):
+		call_deferred("_emit_failed", pack_id, asset_id, variant_id, _failed_downloads[dedup_key])
 		return
 	
-	# Already downloading?
-	if _active_downloads.has(key):
-		return
-	
-	# Already queued?
+	# Already downloading or queued?
 	for request in _download_queue:
-		if request.get_key() == key:
-			# Update priority if higher
+		if request.get_dedup_key() == dedup_key:
 			if priority < request.priority:
 				request.priority = priority
 				_sort_queue()
 			return
+	if _active_downloads.has(dedup_key):
+		return
 	
 	# Create new download request
 	var request = DownloadRequest.new()
@@ -134,8 +143,9 @@ func request_download(pack_id: String, asset_id: String, variant_id: String, url
 	request.asset_id = asset_id
 	request.variant_id = variant_id
 	request.url = url
-	request.cache_path = _get_cache_path(pack_id, asset_id, variant_id, file_type)
+	request.cache_path = target_path if target_path != "" else _get_cache_path(pack_id, asset_id, variant_id, file_type)
 	request.priority = priority
+	request.target_path = target_path
 	
 	_download_queue.append(request)
 	_sort_queue()
@@ -162,7 +172,7 @@ func _process_queue() -> void:
 
 ## Start a download
 func _start_download(request: DownloadRequest) -> void:
-	var key = request.get_key()
+	var key = request.get_dedup_key()
 	
 	# Ensure cache subdirectory exists (AssetCacheManager may not have created it yet)
 	var cache_dir = request.cache_path.get_base_dir()
@@ -220,7 +230,7 @@ func _update_download_progress() -> void:
 
 ## Handle HTTP request completion
 func _on_request_completed(result: int, response_code: int, headers: PackedStringArray, _body: PackedByteArray, request: DownloadRequest) -> void:
-	var key = request.get_key()
+	var key = request.get_dedup_key()
 	
 	# Clean up HTTP request node
 	if request.http_request:
@@ -258,15 +268,14 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		_process_queue()
 		return
 	
-	# Register with AssetCacheManager for unified cache tracking
-	var file_type = "model" if request.cache_path.ends_with(".glb") else "icon"
-	if has_node("/root/AssetCacheManager"):
-		var cache_manager = get_node("/root/AssetCacheManager")
-		cache_manager.register_cached_file(request.pack_id, request.asset_id, request.variant_id, request.cache_path, file_type)
-	
-	# Also update local memory cache
-	var cache_key = "%s/%s" % [key, file_type]
-	_completed_cache[cache_key] = request.cache_path
+	# Register with AssetCacheManager only for cache downloads (not user_assets)
+	if request.target_path == "":
+		var file_type = "model" if request.cache_path.ends_with(".glb") else "icon"
+		if has_node("/root/AssetCacheManager"):
+			var cache_manager = get_node("/root/AssetCacheManager")
+			cache_manager.register_cached_file(request.pack_id, request.asset_id, request.variant_id, request.cache_path, file_type)
+		var cache_key = "%s/%s" % [request.get_key(), file_type]
+		_completed_cache[cache_key] = request.cache_path
 	
 	print("AssetDownloader: Completed download of %s" % key)
 	download_completed.emit(request.pack_id, request.asset_id, request.variant_id, request.cache_path)
@@ -276,7 +285,7 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 
 ## Handle download errors
 func _handle_download_error(request: DownloadRequest, error_msg: String) -> void:
-	var key = request.get_key()
+	var key = request.get_dedup_key()
 	
 	# Clean up partial download
 	if FileAccess.file_exists(request.cache_path):

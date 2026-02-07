@@ -93,6 +93,10 @@ func _input(event: InputEvent) -> void:
 	if event is not InputEventMouseButton:
 		return
 
+	# Don't zoom when scrolling over any UI element (e.g. asset browser list)
+	if _is_mouse_over_gui():
+		return
+
 	if event.is_action_pressed("camera_zoom_in"):
 		_camera_zoom_dir -= 1
 	if event.is_action_pressed("camera_zoom_out"):
@@ -139,6 +143,18 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _is_text_input_focused() -> bool:
 	var focused = get_viewport().gui_get_focus_owner()
 	return focused is LineEdit or focused is TextEdit
+
+
+## Check if the mouse is currently hovering over any UI control (not the 3D viewport).
+## Uses gui_get_hovered_control() for a general check that works with any UI overlay.
+func _is_mouse_over_gui() -> bool:
+	var hovered = get_viewport().gui_get_hovered_control()
+	if hovered == null:
+		return false
+	# The SubViewportContainer is our 3D rendering surface, not a UI element
+	if hovered == viewport_container:
+		return false
+	return true
 
 func _setup_context_menu() -> void:
 	# Load and add the context menu to the UI layer
