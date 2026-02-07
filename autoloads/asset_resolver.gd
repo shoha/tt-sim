@@ -230,10 +230,12 @@ func _check_local_pack(pack_id: String, asset_id: String, variant_id: String, fi
 	else:
 		path = pack.get_icon_path(asset_id, variant_id)
 	
-	if path != "" and ResourceLoader.exists(path):
-		return path
-	
-	return ""
+	if path == "":
+		return ""
+	# user:// paths need FileAccess; res:// paths use ResourceLoader
+	if path.begins_with("user://"):
+		return path if FileAccess.file_exists(path) else ""
+	return path if ResourceLoader.exists(path) else ""
 
 
 ## Check cache for asset

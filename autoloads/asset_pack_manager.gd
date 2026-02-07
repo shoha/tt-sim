@@ -13,6 +13,7 @@ extends Node
 
 const AssetPackClass = preload("res://resources/asset_pack.gd")
 const USER_ASSETS_DIR: String = "res://user_assets/"
+const USER_ASSETS_USER_DIR: String = "user://user_assets/"
 const CACHE_DIR: String = "user://asset_cache/"
 
 ## Dictionary of pack_id -> AssetPack
@@ -33,6 +34,15 @@ signal asset_available(pack_id: String, asset_id: String, variant_id: String, lo
 
 ## Signal emitted when a remote asset download fails
 signal asset_download_failed(pack_id: String, asset_id: String, variant_id: String, error: String)
+
+## Signal emitted during pack download (downloaded_count, total_count)
+signal pack_download_progress(pack_id: String, downloaded: int, total: int)
+
+## Signal emitted when an entire pack has finished downloading
+signal pack_download_completed(pack_id: String)
+
+## Signal emitted when a pack download fails (e.g., manifest fetch or parse error)
+signal pack_download_failed(pack_id: String, error: String)
 
 
 func _ready() -> void:
@@ -109,34 +119,59 @@ func _on_p2p_asset_failed(pack_id: String, asset_id: String, variant_id: String,
 	asset_download_failed.emit(pack_id, asset_id, variant_id, error)
 
 
-## Discover and load all asset packs from the user_assets directory
+## Discover and load all asset packs from the user_assets directory and cached packs
 func _discover_packs() -> void:
 	_packs.clear()
 	
+	# 1. Load local packs from res://user_assets/
 	var dir = DirAccess.open(USER_ASSETS_DIR)
-	if dir == null:
-		push_warning("AssetPackManager: Could not open user_assets directory: " + USER_ASSETS_DIR)
-		packs_loaded.emit()
+	if dir:
+		dir.list_dir_begin()
+		var folder_name = dir.get_next()
+		
+		while folder_name != "":
+			if dir.current_is_dir() and not folder_name.begins_with("."):
+				var pack_path = USER_ASSETS_DIR + folder_name + "/"
+				var manifest_path = pack_path + "manifest.json"
+				
+				if FileAccess.file_exists(manifest_path):
+					var pack = _load_pack(manifest_path, pack_path)
+					if pack:
+						_packs[pack.pack_id] = pack
+						print("AssetPackManager: Loaded pack '" + pack.display_name + "' with " + str(pack.assets.size()) + " assets")
+			
+			folder_name = dir.get_next()
+		
+		dir.list_dir_end()
+	
+	# 2. Load downloaded packs from user://user_assets/ (installed via download UI)
+	_discover_user_assets_packs()
+	
+	packs_loaded.emit()
+
+
+## Discover packs installed in user://user_assets/ (downloaded via manifest URL)
+func _discover_user_assets_packs() -> void:
+	var user_dir = DirAccess.open(USER_ASSETS_USER_DIR)
+	if user_dir == null:
 		return
 	
-	dir.list_dir_begin()
-	var folder_name = dir.get_next()
+	user_dir.list_dir_begin()
+	var folder_name = user_dir.get_next()
 	
 	while folder_name != "":
-		if dir.current_is_dir() and not folder_name.begins_with("."):
-			var pack_path = USER_ASSETS_DIR + folder_name + "/"
+		if user_dir.current_is_dir() and not folder_name.begins_with("."):
+			var pack_path = USER_ASSETS_USER_DIR + folder_name + "/"
 			var manifest_path = pack_path + "manifest.json"
-			
 			if FileAccess.file_exists(manifest_path):
 				var pack = _load_pack(manifest_path, pack_path)
-				if pack:
+				if pack and not _packs.has(pack.pack_id):
 					_packs[pack.pack_id] = pack
-					print("AssetPackManager: Loaded pack '" + pack.display_name + "' with " + str(pack.assets.size()) + " assets")
+					print("AssetPackManager: Loaded user pack '" + pack.display_name + "' with " + str(pack.assets.size()) + " assets")
 		
-		folder_name = dir.get_next()
+		folder_name = user_dir.get_next()
 	
-	dir.list_dir_end()
-	packs_loaded.emit()
+	user_dir.list_dir_end()
 
 
 ## Load a single pack from its manifest file
@@ -156,6 +191,27 @@ func _load_pack(manifest_path: String, pack_path: String):
 		return null
 	
 	return AssetPackClass.from_manifest(json.data, pack_path)
+
+
+## Save manifest to user://user_assets/ for pack discovery on next game launch
+func _save_pack_to_user_assets(pack_id: String, manifest_data: Dictionary) -> bool:
+	var pack_dir = USER_ASSETS_USER_DIR + pack_id + "/"
+	if not DirAccess.dir_exists_absolute(pack_dir):
+		var err = DirAccess.make_dir_recursive_absolute(pack_dir)
+		if err != OK:
+			push_error("AssetPackManager: Failed to create user_assets dir for pack: " + pack_id)
+			return false
+	
+	var manifest_path = pack_dir + "manifest.json"
+	var file = FileAccess.open(manifest_path, FileAccess.WRITE)
+	if file == null:
+		push_error("AssetPackManager: Failed to write manifest: " + manifest_path)
+		return false
+	
+	file.store_string(JSON.stringify(manifest_data))
+	file.close()
+	print("AssetPackManager: Installed pack '%s' to user_assets" % pack_id)
+	return true
 
 
 ## Get all loaded packs
@@ -436,6 +492,132 @@ func _on_manifest_downloaded(result: int, response_code: int, _headers: PackedSt
 		packs_loaded.emit()
 
 
+## Download an entire asset pack from a manifest URL.
+## Fetches the manifest, registers the pack, then downloads all models and icons.
+## Use pack_download_progress for progress updates and pack_download_completed when done.
+## @param manifest_url: URL to the manifest.json file (e.g. https://example.com/packs/my_pack/manifest.json)
+## @return: true if pack was registered and download started, false on manifest fetch/parse error
+func download_asset_pack_from_url(manifest_url: String) -> bool:
+	if not has_node("/root/AssetDownloader"):
+		push_error("AssetPackManager: Cannot download pack - AssetDownloader not available")
+		pack_download_failed.emit("", "AssetDownloader not available")
+		return false
+	
+	var http_request = HTTPRequest.new()
+	add_child(http_request)
+	http_request.request_completed.connect(_on_download_pack_manifest_downloaded.bind(http_request, manifest_url))
+	
+	var error = http_request.request(manifest_url)
+	if error != OK:
+		push_error("AssetPackManager: Failed to request manifest from " + manifest_url)
+		http_request.queue_free()
+		pack_download_failed.emit("", "Failed to request manifest")
+		return false
+	
+	return true
+
+
+func _on_download_pack_manifest_downloaded(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, http_request: HTTPRequest, manifest_url: String) -> void:
+	http_request.queue_free()
+	
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		push_error("AssetPackManager: Failed to download manifest from " + manifest_url)
+		pack_download_failed.emit("", "Failed to download manifest")
+		return
+	
+	var json_text = body.get_string_from_utf8()
+	var json = JSON.new()
+	var parse_result = json.parse(json_text)
+	if parse_result != OK:
+		push_error("AssetPackManager: Failed to parse manifest JSON")
+		pack_download_failed.emit("", "Invalid manifest JSON: " + json.get_error_message())
+		return
+	
+	var pack_id = json.data.get("pack_id", "")
+	if pack_id == "":
+		pack_download_failed.emit("", "Manifest missing pack_id")
+		return
+	
+	# Create pack with base_path in user_assets (same structure as local packs)
+	var pack_path = USER_ASSETS_USER_DIR + pack_id + "/"
+	if not _save_pack_to_user_assets(pack_id, json.data):
+		pack_download_failed.emit("", "Failed to create user_assets directory")
+		return
+	
+	var pack = AssetPackClass.from_manifest(json.data, pack_path)
+	if _packs.has(pack.pack_id):
+		push_warning("AssetPackManager: Overwriting existing pack: " + pack.pack_id)
+	_packs[pack.pack_id] = pack
+	
+	# Collect all files to download to user_assets (models/ and icons/ structure)
+	var download_items: Array[Dictionary] = []
+	for asset in pack.get_all_assets():
+		for variant_id in asset.get_variant_ids():
+			var variant = asset.get_variant(variant_id)
+			if not variant:
+				continue
+			var model_url = pack.get_model_url(asset.asset_id, variant_id)
+			var icon_url = pack.get_icon_url(asset.asset_id, variant_id)
+			if model_url != "" and variant.model_file != "":
+				download_items.append({
+					"asset_id": asset.asset_id,
+					"variant_id": variant_id,
+					"url": model_url,
+					"file_type": "model",
+					"target_path": pack_path + "models/" + variant.model_file
+				})
+			if icon_url != "" and variant.icon_file != "":
+				download_items.append({
+					"asset_id": asset.asset_id,
+					"variant_id": variant_id,
+					"url": icon_url,
+					"file_type": "icon",
+					"target_path": pack_path + "icons/" + variant.icon_file
+				})
+	
+	if download_items.is_empty():
+		print("AssetPackManager: Pack '%s' has no downloadable assets" % pack.display_name)
+		pack_download_completed.emit(pack.pack_id)
+		packs_loaded.emit()
+		return
+	
+	var downloader = get_node("/root/AssetDownloader")
+	var total_count = download_items.size()
+	var state = {"finished": 0}
+	
+	var handlers = {}
+	handlers.completed = func(p_id: String, _a_id: String, _v_id: String, _path: String) -> void:
+		if p_id != pack.pack_id:
+			return
+		state["finished"] += 1
+		pack_download_progress.emit(pack.pack_id, state["finished"], total_count)
+		if state["finished"] >= total_count:
+			downloader.download_completed.disconnect(handlers.completed)
+			downloader.download_failed.disconnect(handlers.failed)
+			pack_download_completed.emit(pack.pack_id)
+			packs_loaded.emit()
+	
+	handlers.failed = func(p_id: String, _a_id: String, _v_id: String, _error: String) -> void:
+		if p_id != pack.pack_id:
+			return
+		state["finished"] += 1
+		pack_download_progress.emit(pack.pack_id, state["finished"], total_count)
+		if state["finished"] >= total_count:
+			downloader.download_completed.disconnect(handlers.completed)
+			downloader.download_failed.disconnect(handlers.failed)
+			pack_download_completed.emit(pack.pack_id)
+			packs_loaded.emit()
+	
+	downloader.download_completed.connect(handlers.completed)
+	downloader.download_failed.connect(handlers.failed)
+	
+	# Queue all downloads (target_path makes each file unique, so we can do models and icons in parallel)
+	for item in download_items:
+		downloader.request_download(pack.pack_id, item.asset_id, item.variant_id, item.url, 0, item.file_type, item.target_path)
+	
+	print("AssetPackManager: Queued %d files for pack '%s'" % [total_count, pack.display_name])
+
+
 ## Get all variant IDs for a specific asset
 func get_variants(pack_id: String, asset_id: String) -> Array[String]:
 	var asset = get_asset(pack_id, asset_id)
@@ -515,14 +697,14 @@ func get_model_instance_from_path(path: String, create_static_bodies: bool = fal
 	
 	var model: Node3D = null
 	
-	# Load based on path type
-	if path.begins_with("user://") and path.ends_with(".glb"):
-		# GLB file - use async loading
+	# Load based on file type
+	if path.ends_with(".glb"):
+		# GLB file - use GlbUtils (works for both res:// and user:// paths)
 		var result = await GlbUtils.load_glb_with_processing_async(path, create_static_bodies)
 		if result.success:
 			model = result.scene
 	else:
-		# res:// path - use threaded resource loading
+		# Non-GLB resource (e.g. .tscn, .scn) - use threaded resource loading
 		var load_status = ResourceLoader.load_threaded_request(path)
 		if load_status == OK:
 			while ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
@@ -565,10 +747,13 @@ func get_model_instance_from_path_sync(path: String, create_static_bodies: bool 
 	
 	var model: Node3D = null
 	
-	# Load based on path type
-	if path.begins_with("user://") and path.ends_with(".glb"):
+	# Load based on file type
+	if path.ends_with(".glb"):
+		# GLB file - use GlbUtils directly (works for both res:// and user:// paths,
+		# avoids Godot's import pipeline which can have stale/broken .import entries)
 		model = GlbUtils.load_glb_with_processing(path, create_static_bodies)
 	else:
+		# Non-GLB resource (e.g. .tscn, .scn) - use ResourceLoader
 		if ResourceLoader.exists(path):
 			var resource = load(path)
 			if resource is PackedScene:
