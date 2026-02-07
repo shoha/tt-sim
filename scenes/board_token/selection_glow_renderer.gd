@@ -37,6 +37,9 @@ const DEFAULT_GLOW_COLOR = Color(1.0, 0.8, 0.2, 0.9)
 ## Size multiplier for the glow relative to the token
 @export var size_multiplier: float = 1.5
 
+## Maximum glow size in world units (caps the indicator for large tokens)
+@export var max_size: float = 2.0
+
 ## Vertical offset from token base (slightly above ground to prevent z-fighting)
 @export var ground_offset: float = 0.02
 
@@ -84,8 +87,8 @@ func update_size_from_collision(collision_shape: CollisionShape3D) -> void:
 	
 	# Use the larger of X or Z extent for the glow radius
 	var max_horizontal_extent = max(aabb.size.x, aabb.size.z)
-	_base_size = max_horizontal_extent * size_multiplier
-	
+	_base_size = clampf(max_horizontal_extent * size_multiplier, 0.0, max_size)
+
 	# Position at the bottom of the collision shape
 	var bottom_y = aabb.position.y + ground_offset
 	_glow_mesh_instance.position = Vector3(0, bottom_y, 0)
@@ -99,7 +102,8 @@ func update_scale(token_scale: Vector3) -> void:
 	if _glow_mesh_instance:
 		# Account for non-uniform scaling by using the average horizontal scale
 		var horizontal_scale = (token_scale.x + token_scale.z) / 2.0
-		_glow_mesh_instance.scale = Vector3(_base_size * horizontal_scale, 1.0, _base_size * horizontal_scale)
+		var effective_size = clampf(_base_size * horizontal_scale, 0.0, max_size)
+		_glow_mesh_instance.scale = Vector3(effective_size, 1.0, effective_size)
 
 
 ## Show the selection glow
