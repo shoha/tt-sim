@@ -120,6 +120,10 @@ static func _extract_model_components(scene: Node3D) -> ModelComponents:
 
 	# If not found, search recursively (for GLTFDocument-loaded scenes)
 	# Uses shared GlbUtils for node finding
+	if not components.collision_shape:
+		var found = GlbUtils.find_node_of_type(scene, "CollisionShape3D")
+		if found is CollisionShape3D:
+			components.collision_shape = found
 	if not components.animation_player:
 		components.animation_player = GlbUtils.find_node_of_type(scene, "AnimationPlayer")
 	if not components.armature:
@@ -148,6 +152,15 @@ static func _clear_placeholder_children(instance: BoardToken) -> void:
 static func _build_rigid_body(components: ModelComponents, config: Resource = null) -> RigidBody3D:
 	var rb = RigidBody3D.new()
 	rb.name = "RigidBody3D"
+
+	# Tokens never use physics gravity - position is always explicitly controlled
+	# (settle animations handle placement, not physics)
+	rb.gravity_scale = 0.0
+
+	# Tokens are on layer 2 so drag raycasts (layer 1 = terrain) don't hit them.
+	# Tokens don't physically collide with anything (no pushing other tokens).
+	rb.collision_layer = 2
+	rb.collision_mask = 0
 
 	# Apply rotation locks (default: lock all axes for board tokens)
 	var lock_rotation = true if not config else config.lock_rotation
@@ -386,6 +399,9 @@ static func _create_placeholder_token(pack_id: String, asset_id: String, variant
 	# Build simplified rigid body with placeholder
 	var rb = RigidBody3D.new()
 	rb.name = "RigidBody3D"
+	rb.gravity_scale = 0.0
+	rb.collision_layer = 2
+	rb.collision_mask = 0
 	rb.axis_lock_angular_x = true
 	rb.axis_lock_angular_y = true
 	rb.axis_lock_angular_z = true
