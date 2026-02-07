@@ -17,9 +17,15 @@ class_name DropIndicatorRenderer
 const DOT_LENGTH: float = 0.15
 const DOT_GAP: float = 0.1
 const LINE_THICKNESS: float = 0.03
-const CIRCLE_RADIUS: float = 0.3
+const CIRCLE_RADIUS: float = 0.3 # Default/max circle radius
+const MAX_CIRCLE_RADIUS: float = 0.4 # Cap to keep the indicator compact on large tokens
 const CIRCLE_SEGMENTS: int = 32
 const RAYCAST_LENGTH: float = 100.0
+const TERRAIN_COLLISION_LAYER: int = 1 # Only raycast against terrain, not other tokens
+
+## Pulsing animation settings
+const PULSE_SPEED: float = 3.0
+const PULSE_AMOUNT: float = 0.15
 
 var _line_mesh_instance: MeshInstance3D
 var _line_immediate_mesh: ImmediateMesh
@@ -28,6 +34,12 @@ var _circle_immediate_mesh: ImmediateMesh
 
 ## The RigidBody3D to exclude from raycasts (the token being dragged)
 var exclude_body: RigidBody3D
+
+## Dynamic circle radius (set from token collision footprint)
+var _circle_radius: float = CIRCLE_RADIUS
+
+## Pulse animation time
+var _pulse_time: float = 0.0
 
 
 func _ready() -> void:
@@ -57,16 +69,27 @@ func _create_indicator_material() -> StandardMaterial3D:
 	var material = StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	# Use opaque rendering so indicators are captured by post-process effects
-	# Bright red with emission for visibility without needing transparency
-	material.albedo_color = Color(1.0, 0.2, 0.2, 1.0)
+	# Cyan/blue with emission for a softer, more polished look
+	material.albedo_color = Color(0.2, 0.7, 1.0, 1.0)
 	material.emission_enabled = true
-	material.emission = Color(1.0, 0.0, 0.0, 1.0)
+	material.emission = Color(0.1, 0.5, 1.0, 1.0)
 	material.emission_energy_multiplier = 1.5
 	material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 	return material
 
 
+## Set the circle radius based on the token's collision footprint.
+## Call this when creating the indicator so it matches the token's size.
+func set_token_footprint(collision_shape: CollisionShape3D) -> void:
+	if collision_shape and collision_shape.shape:
+		var aabb = collision_shape.shape.get_debug_mesh().get_aabb()
+		# Use a fraction of the footprint so the indicator stays compact,
+		# just large enough to communicate placement position
+		_circle_radius = clampf(max(aabb.size.x, aabb.size.z) * 0.25, 0.2, MAX_CIRCLE_RADIUS)
+
+
 func show_indicator() -> void:
+	_pulse_time = 0.0
 	_line_mesh_instance.show()
 	_circle_mesh_instance.show()
 
@@ -92,15 +115,21 @@ func update(start_position: Vector3) -> void:
 
 	_clear_meshes()
 
+	# Advance pulse animation
+	_pulse_time += get_process_delta_time()
+
 	var hit_result = _raycast_down(start_position)
 	if hit_result:
 		_draw_dotted_line(start_position, hit_result.position)
-		_draw_landing_circle(hit_result.position, hit_result.normal)
+		# Apply pulsing to the landing circle radius
+		var pulse_scale = 1.0 + sin(_pulse_time * PULSE_SPEED) * PULSE_AMOUNT
+		_draw_landing_circle(hit_result.position, hit_result.normal, _circle_radius * pulse_scale)
 
 
 func _raycast_down(from: Vector3) -> Dictionary:
 	var space_state = get_world_3d().direct_space_state
 	var query = PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * RAYCAST_LENGTH)
+	query.collision_mask = TERRAIN_COLLISION_LAYER # Only hit terrain, not other tokens
 	if exclude_body:
 		query.exclude = [exclude_body.get_rid()]
 	return space_state.intersect_ray(query)
@@ -165,7 +194,7 @@ func _draw_thick_segment(start: Vector3, end: Vector3, perp1: Vector3, perp2: Ve
 		_line_immediate_mesh.surface_add_vertex(p4)
 
 
-func _draw_landing_circle(hit_position: Vector3, normal: Vector3) -> void:
+func _draw_landing_circle(hit_position: Vector3, normal: Vector3, radius: float) -> void:
 	# Offset slightly above surface to prevent z-fighting
 	var offset_position = hit_position + normal * 0.01
 
@@ -185,8 +214,8 @@ func _draw_landing_circle(hit_position: Vector3, normal: Vector3) -> void:
 		var angle1 = i * angle_step
 		var angle2 = (i + 1) * angle_step
 
-		var p1 = offset_position + (right * cos(angle1) + forward * sin(angle1)) * CIRCLE_RADIUS
-		var p2 = offset_position + (right * cos(angle2) + forward * sin(angle2)) * CIRCLE_RADIUS
+		var p1 = offset_position + (right * cos(angle1) + forward * sin(angle1)) * radius
+		var p2 = offset_position + (right * cos(angle2) + forward * sin(angle2)) * radius
 
 		var local_center = _circle_mesh_instance.to_local(offset_position)
 		var local_p1 = _circle_mesh_instance.to_local(p1)

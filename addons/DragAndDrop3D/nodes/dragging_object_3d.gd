@@ -5,6 +5,7 @@ class_name DraggingObject3D
 signal object_body_mouse_down()
 signal dragging_started()
 signal dragging_stopped()
+signal dragging_cancelled()
 
 @export var heightOffset := 0.0
 @export var input_ray_pickable := true:
@@ -53,6 +54,7 @@ func _set_late_signals() -> void:
 
 	dragAndDrop3D.dragging_started.connect(_is_dragging.bind(true))
 	dragAndDrop3D.dragging_stopped.connect(_is_dragging.bind(false))
+	dragAndDrop3D.dragging_cancelled.connect(_on_drag_cancelled)
 
 func _get_object_body() -> CollisionObject3D:
 	var body = find_children("*", "CollisionObject3D", true, false)
@@ -69,6 +71,10 @@ func _is_dragging(draggingObject, boolean) -> void:
 
 	if boolean: dragging_started.emit()
 	else: dragging_stopped.emit()
+
+func _on_drag_cancelled(draggingObject) -> void:
+	if not draggingObject == self: return
+	dragging_cancelled.emit()
 
 func _on_object_body_3d_input_event(camera: Node, event: InputEvent, event_position: Vector3, normal: Vector3, shape_idx: int) -> void:
 	if event is InputEventMouseButton:
