@@ -218,12 +218,14 @@ static func _process_collision_meshes_async(node: Node, create_static_bodies: bo
 				parent.add_child(static_body)
 			
 			if is_only:
-				mesh_node.queue_free()
+				mesh_node.get_parent().remove_child(mesh_node)
+				mesh_node.free()
 			else:
 				mesh_node.visible = false
 		else:
 			if is_only:
-				mesh_node.queue_free()
+				mesh_node.get_parent().remove_child(mesh_node)
+				mesh_node.free()
 			else:
 				mesh_node.visible = false
 		
@@ -246,6 +248,9 @@ static func process_collision_meshes(node: Node, create_static_bodies: bool = fa
 	_find_collision_mesh_nodes(node, collision_nodes)
 	
 	# Process each collision mesh node
+	# NOTE: We use immediate free() instead of queue_free() because the scene may be
+	# cached as a Node3D template and duplicated before queue_free() executes.
+	# If we used queue_free(), the duplicate would still contain the collision meshes.
 	for col_info in collision_nodes:
 		var mesh_node = col_info.node as MeshInstance3D
 		var suffix = col_info.suffix as String
@@ -281,13 +286,15 @@ static func process_collision_meshes(node: Node, create_static_bodies: bool = fa
 			
 			# Hide or remove the visual mesh based on suffix type
 			if is_only:
-				mesh_node.queue_free()
+				mesh_node.get_parent().remove_child(mesh_node)
+				mesh_node.free()
 			else:
 				mesh_node.visible = false
 		else:
 			# Just hide the collision mesh indicator (for tokens where RigidBody handles collision)
 			if is_only:
-				mesh_node.queue_free()
+				mesh_node.get_parent().remove_child(mesh_node)
+				mesh_node.free()
 			else:
 				mesh_node.visible = false
 

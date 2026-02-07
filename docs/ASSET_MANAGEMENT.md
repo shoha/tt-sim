@@ -113,7 +113,10 @@ user_assets/
 
 ### Pack Discovery
 
-Packs are automatically discovered on startup by scanning `res://user_assets/` for folders containing `manifest.json`.
+Packs are automatically discovered on startup from two sources:
+
+1. **Local packs**: `res://user_assets/` - folders containing `manifest.json` (in project)
+2. **Installed packs**: `user://user_assets/` - packs downloaded via the manifest URL in the asset browser (same structure: manifest.json, models/, icons/)
 
 ```gdscript
 # Manually refresh packs
@@ -248,10 +251,18 @@ pack.display_name = "Remote Pack"
 pack.base_url = "https://cdn.example.com/packs/remote/"
 AssetPackManager.register_remote_pack(pack)
 
-# Or load from remote manifest URL
-await AssetPackManager.load_remote_pack_from_url(
+# Or load from remote manifest URL (metadata only, assets download on-demand)
+AssetPackManager.load_remote_pack_from_url(
     "https://example.com/packs/my_pack/manifest.json"
 )
+
+# Or download entire pack from manifest URL (all models and icons)
+AssetPackManager.download_asset_pack_from_url(
+    "https://example.com/packs/my_pack/manifest.json"
+)
+# Connect to pack_download_progress and pack_download_completed for progress
+# Downloaded packs are installed to user://user_assets/{pack_id}/ (manifest, models/, icons/)
+# so the pack is available after game restart
 ```
 
 ---
@@ -556,6 +567,7 @@ func clear_model_cache() -> void
 ```gdscript
 func register_remote_pack(manifest: Dictionary) -> bool
 func load_remote_pack_from_url(manifest_url: String) -> void
+func download_asset_pack_from_url(manifest_url: String) -> bool  # Downloads all assets in pack
 ```
 
 #### Signals
