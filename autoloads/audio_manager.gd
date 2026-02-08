@@ -58,6 +58,38 @@ func _ready() -> void:
 	_load_ui_sounds()
 	_load_sfx_sounds()
 
+	# Auto-connect button sounds so every button gets click/hover sounds
+	# automatically. To opt a button out, call button.set_meta("ui_silent", true).
+	get_tree().node_added.connect(_on_node_added)
+
+
+# ---------------------------------------------------------------------------
+# Auto-connect button sounds
+# ---------------------------------------------------------------------------
+
+## Called when any node is added to the scene tree.
+## Automatically connects press/hover sounds to BaseButton descendants.
+func _on_node_added(node: Node) -> void:
+	if node is BaseButton:
+		# Defer so the node is fully ready and any meta set during _ready() is applied
+		node.ready.connect(_auto_connect_button.bind(node), CONNECT_ONE_SHOT)
+
+
+func _auto_connect_button(button: BaseButton) -> void:
+	if not is_instance_valid(button):
+		return
+	if button.has_meta("ui_silent"):
+		return
+	# Guard against duplicate connections (e.g. re-parenting)
+	if not button.pressed.is_connected(play_click):
+		button.pressed.connect(play_click)
+	if not button.mouse_entered.is_connected(_on_button_hover):
+		button.mouse_entered.connect(_on_button_hover)
+
+
+func _on_button_hover() -> void:
+	play_hover()
+
 
 func _load_ui_sounds() -> void:
 	for key in _ui_sounds.keys():

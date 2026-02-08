@@ -16,6 +16,10 @@ class_name AnimatedVisibilityContainer
 @export var trans_out_type: Tween.TransitionType = Tween.TRANS_CUBIC
 @export var start_hidden: bool = true
 
+@export_group("Sound")
+## Whether to play open/close sounds when animating in/out.
+@export var play_open_close_sounds: bool = true
+
 var tween: Tween
 var _is_animating: bool = false
 
@@ -55,6 +59,9 @@ func animate_in() -> void:
 	# Callback when animation completes
 	tween.finished.connect(_on_animate_in_finished, CONNECT_ONE_SHOT)
 
+	if play_open_close_sounds:
+		AudioManager.play_open()
+
 	_on_before_animate_in()
 
 ## Smoothly hide the container with animation
@@ -80,6 +87,9 @@ func animate_out() -> void:
 
 	# Hide after animation completes
 	tween.finished.connect(_on_animate_out_finished, CONNECT_ONE_SHOT)
+
+	if play_open_close_sounds:
+		AudioManager.play_close()
 
 	_on_before_animate_out()
 
