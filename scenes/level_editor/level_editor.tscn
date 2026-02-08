@@ -479,51 +479,22 @@ max_value = 360.0
 step = 5.0
 suffix = "°"
 
-[node name="ScaleLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
-layout_mode = 2
-theme_type_variation = &"H3"
-text = "Scale"
-
 [node name="ScaleRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
 layout_mode = 2
 
-[node name="XLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow"]
+[node name="ScaleLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow"]
+custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
-text = "X:"
+text = "Scale:"
 
-[node name="PlacementScaleXSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow"]
+[node name="PlacementScaleSliderSpin" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow" instance=ExtResource("3_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
-min_value = 0.01
-step = 0.1
-value = 1.01
-allow_greater = true
-
-[node name="YLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow"]
-layout_mode = 2
-theme_type_variation = &"Body"
-text = "Y:"
-
-[node name="PlacementScaleYSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow"]
-unique_name_in_owner = true
-layout_mode = 2
-min_value = 0.01
-step = 0.1
-value = 1.01
-allow_greater = true
-
-[node name="ZLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow"]
-layout_mode = 2
-theme_type_variation = &"Body"
-text = "Z:"
-
-[node name="PlacementScaleZSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow"]
-unique_name_in_owner = true
-layout_mode = 2
-min_value = 0.01
-step = 0.1
-value = 1.01
+min_value = 0.1
+max_value = 5.0
+step = 0.01
+value = 1.0
 allow_greater = true
 
 [node name="Spacer" type="Control" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
