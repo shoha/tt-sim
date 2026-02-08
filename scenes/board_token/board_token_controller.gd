@@ -21,11 +21,11 @@ class_name BoardTokenController
 ## - In single-player, authority is always granted
 ## - When networking is added, this will check for host/authority status
 
-const ROTATION_SNAP_DEGREES: float = 45.0 # Rotation snaps to this increment
-const ROTATION_INPUT_THRESHOLD: float = 60.0 # Accumulated pixel distance before each rotation snap
-const ROTATION_TWEEN_DURATION: float = 0.1 # Duration of rotation snap animation
+const ROTATION_SNAP_DEGREES: float = 45.0  # Rotation snaps to this increment
+const ROTATION_INPUT_THRESHOLD: float = 60.0  # Accumulated pixel distance before each rotation snap
+const ROTATION_TWEEN_DURATION: float = 0.1  # Duration of rotation snap animation
 const SCALE_FACTOR: float = 0.0001
-const SCALE_SMOOTH_SPEED: float = 15.0 # Smoothing rate for scale interpolation
+const SCALE_SMOOTH_SPEED: float = 15.0  # Smoothing rate for scale interpolation
 
 @export var rigid_body: RigidBody3D
 @export var draggable_token: DraggableToken
@@ -35,7 +35,8 @@ var _rotating: bool = false
 var _scaling: bool = false
 var _mouse_over: bool = false
 var _transform_update_timer: float = 0.0
-const TRANSFORM_UPDATE_INTERVAL: float = 0.1 # Send updates 10 times per second during manipulation
+const SCALE_MIN: float = 0.1
+const SCALE_MAX: float = 10.0
 
 # Rotation snapping state
 var _rotation_accumulator: float = 0.0
@@ -65,6 +66,10 @@ func _ready() -> void:
 	rigid_body.connect("mouse_entered", _on_mouse_entered)
 	rigid_body.connect("mouse_exited", _on_mouse_exited)
 
+	# Only process when actively scaling or rotating
+	set_process(false)
+
+
 func _on_mouse_entered() -> void:
 	_mouse_over = true
 	# Show hover highlight
@@ -77,6 +82,7 @@ func _on_mouse_entered() -> void:
 	# Sound
 	AudioManager.play_token_hover()
 
+
 func _on_mouse_exited() -> void:
 	_mouse_over = false
 	# Hide hover highlight
@@ -87,6 +93,7 @@ func _on_mouse_exited() -> void:
 	if not draggable_token or not draggable_token.is_being_dragged():
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not rigid_body:
 		return
@@ -95,21 +102,36 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Context menu is allowed for all (read-only viewing), but actions within may be gated
 	if not _has_input_authority():
 		# Still allow context menu for viewing token info (actions inside will be gated)
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and _mouse_over:
+		if (
+			event is InputEventMouseButton
+			and event.button_index == MOUSE_BUTTON_RIGHT
+			and event.pressed
+			and _mouse_over
+		):
 			var board_token = get_parent() as BoardToken
 			if board_token:
 				context_menu_requested.emit(board_token, event.position)
 		return
 
 	# Handle right-click for context menu
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and _mouse_over:
+	if (
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_RIGHT
+		and event.pressed
+		and _mouse_over
+	):
 		var board_token = get_parent() as BoardToken
 		if board_token:
 			context_menu_requested.emit(board_token, event.position)
 		return
 
 	# Check for double-click on middle mouse button to reset rotation and scale
-	if event is InputEventMouseButton and event.double_click and event.is_action_pressed("rotate_model") and _mouse_over:
+	if (
+		event is InputEventMouseButton
+		and event.double_click
+		and event.is_action_pressed("rotate_model")
+		and _mouse_over
+	):
 		_reset_rotation_and_scale()
 		return
 
@@ -121,6 +143,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_rotating = true
 			_rotation_accumulator = 0.0
+		set_process(true)
 		return
 
 	if event.is_action_released("rotate_model"):
@@ -129,6 +152,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_rotating = false
 		_scaling = false
 		_rotation_accumulator = 0.0
+		if not _rotating and not _scaling:
+			set_process(false)
 
 		# Snap to target scale on release to finalize
 		if was_scaling:
@@ -136,7 +161,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			rigid_body.scale = _target_scale
 			if draggable_token:
 				draggable_token.update_height_offset()
-		
+
 		# Emit signals for network sync when rotation/scale changes complete
 		var board_token = get_parent() as BoardToken
 		if board_token:
@@ -174,15 +199,23 @@ func _handle_rotation(event: InputEventMouseMotion) -> void:
 		if _rotation_tween and _rotation_tween.is_valid():
 			_rotation_tween.kill()
 		_rotation_tween = create_tween()
-		_rotation_tween.tween_property(rigid_body, "rotation:y", target_y, ROTATION_TWEEN_DURATION)\
-			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		(
+			_rotation_tween
+			. tween_property(rigid_body, "rotation:y", target_y, ROTATION_TWEEN_DURATION)
+			. set_trans(Tween.TRANS_CUBIC)
+			. set_ease(Tween.EASE_OUT)
+		)
+
 
 func _handle_scaling(event: InputEventMouseMotion) -> void:
 	var velocity_y = event.screen_velocity.y
 	# Use negative velocity_y so moving mouse up scales up, down scales down
-	var scale_change = - velocity_y * SCALE_FACTOR
+	var scale_change = -velocity_y * SCALE_FACTOR
 	# Update the target scale (actual scale is smoothed toward this in _process)
-	_target_scale = (_target_scale + Vector3.ONE * scale_change).clamp(Vector3.ONE * 0.1, Vector3.ONE * 10.0)
+	_target_scale = (_target_scale + Vector3.ONE * scale_change).clamp(
+		Vector3.ONE * SCALE_MIN, Vector3.ONE * SCALE_MAX
+	)
+
 
 func _adjust_position_for_scale(old_scale: Vector3, new_scale: Vector3) -> void:
 	# Get the collision shape to determine the object's height
@@ -197,6 +230,7 @@ func _adjust_position_for_scale(old_scale: Vector3, new_scale: Vector3) -> void:
 		# Adjust position to compensate
 		rigid_body.position.y += (bottom_offset_old - bottom_offset_new)
 
+
 func _reset_rotation_and_scale() -> void:
 	# Store the old scale to calculate position adjustment
 	var old_scale = rigid_body.scale
@@ -205,8 +239,12 @@ func _reset_rotation_and_scale() -> void:
 	if _rotation_tween and _rotation_tween.is_valid():
 		_rotation_tween.kill()
 	_rotation_tween = create_tween()
-	_rotation_tween.tween_property(rigid_body, "rotation", Vector3.ZERO, ROTATION_TWEEN_DURATION * 2.0)\
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	(
+		_rotation_tween
+		. tween_property(rigid_body, "rotation", Vector3.ZERO, ROTATION_TWEEN_DURATION * 2.0)
+		. set_trans(Tween.TRANS_CUBIC)
+		. set_ease(Tween.EASE_OUT)
+	)
 
 	# Calculate position adjustment to keep bottom fixed when resetting scale
 	_adjust_position_for_scale(old_scale, Vector3.ONE)
@@ -217,7 +255,7 @@ func _reset_rotation_and_scale() -> void:
 	# Recompute the height offset
 	if draggable_token:
 		draggable_token.update_height_offset()
-	
+
 	# Emit signals for network sync
 	var board_token = get_parent() as BoardToken
 	if board_token:
@@ -239,7 +277,7 @@ func _process(delta: float) -> void:
 	# Emit throttled transform updates during rotation/scaling for network sync
 	if _rotating or _scaling:
 		_transform_update_timer += delta
-		if _transform_update_timer >= TRANSFORM_UPDATE_INTERVAL:
+		if _transform_update_timer >= Constants.NETWORK_TRANSFORM_UPDATE_INTERVAL:
 			_transform_update_timer = 0.0
 			var board_token = get_parent() as BoardToken
 			if board_token:

@@ -43,20 +43,27 @@ func setup(game_map: GameMap) -> void:
 		NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
 
+func _exit_tree() -> void:
+	# Disconnect network signals
+	if NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
+		NetworkManager.connection_state_changed.disconnect(_on_connection_state_changed)
+
+	# Disconnect AssetStreamer signals
+	_disconnect_asset_streamer()
+
+
 ## Connect to AssetStreamer for map downloads
 func _connect_asset_streamer() -> void:
 	if _streamer_connected:
 		return
 
-	if has_node("/root/AssetStreamer"):
-		var streamer = get_node("/root/AssetStreamer")
-		if not streamer.asset_received.is_connected(_on_map_received):
-			streamer.asset_received.connect(_on_map_received)
-		if not streamer.asset_failed.is_connected(_on_map_failed):
-			streamer.asset_failed.connect(_on_map_failed)
-		if not streamer.transfer_progress.is_connected(_on_map_transfer_progress):
-			streamer.transfer_progress.connect(_on_map_transfer_progress)
-		_streamer_connected = true
+	if not AssetStreamer.asset_received.is_connected(_on_map_received):
+		AssetStreamer.asset_received.connect(_on_map_received)
+	if not AssetStreamer.asset_failed.is_connected(_on_map_failed):
+		AssetStreamer.asset_failed.connect(_on_map_failed)
+	if not AssetStreamer.transfer_progress.is_connected(_on_map_transfer_progress):
+		AssetStreamer.transfer_progress.connect(_on_map_transfer_progress)
+	_streamer_connected = true
 
 
 ## Disconnect from AssetStreamer signals
@@ -64,14 +71,12 @@ func _disconnect_asset_streamer() -> void:
 	if not _streamer_connected:
 		return
 
-	if has_node("/root/AssetStreamer"):
-		var streamer = get_node("/root/AssetStreamer")
-		if streamer.asset_received.is_connected(_on_map_received):
-			streamer.asset_received.disconnect(_on_map_received)
-		if streamer.asset_failed.is_connected(_on_map_failed):
-			streamer.asset_failed.disconnect(_on_map_failed)
-		if streamer.transfer_progress.is_connected(_on_map_transfer_progress):
-			streamer.transfer_progress.disconnect(_on_map_transfer_progress)
+	if AssetStreamer.asset_received.is_connected(_on_map_received):
+		AssetStreamer.asset_received.disconnect(_on_map_received)
+	if AssetStreamer.asset_failed.is_connected(_on_map_failed):
+		AssetStreamer.asset_failed.disconnect(_on_map_failed)
+	if AssetStreamer.transfer_progress.is_connected(_on_map_transfer_progress):
+		AssetStreamer.transfer_progress.disconnect(_on_map_transfer_progress)
 	_streamer_connected = false
 
 
@@ -453,25 +458,17 @@ func _get_light_intensity_scale() -> float:
 
 ## Get the cached map path for a level (if it exists)
 func _get_cached_map_path(level_folder: String) -> String:
-	if has_node("/root/AssetStreamer"):
-		var streamer = get_node("/root/AssetStreamer")
-		return streamer.get_cached_map_path(level_folder)
-	return ""
+	return AssetStreamer.get_cached_map_path(level_folder)
 
 
 ## Request map download from host
 func _request_map_download(level_folder: String) -> bool:
-	if not has_node("/root/AssetStreamer"):
-		push_error("LevelPlayController: AssetStreamer not available")
-		return false
-
-	var streamer = get_node("/root/AssetStreamer")
-	if not streamer.is_enabled():
+	if not AssetStreamer.is_enabled():
 		push_error("LevelPlayController: P2P streaming is disabled")
 		return false
 
 	_pending_map_level_folder = level_folder
-	streamer.request_map_from_host(level_folder)
+	AssetStreamer.request_map_from_host(level_folder)
 
 	print("LevelPlayController: Requesting map download for level: " + level_folder)
 	map_download_started.emit(level_folder)

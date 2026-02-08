@@ -275,17 +275,9 @@ func _create_default_lofi_material() -> ShaderMaterial:
 	var shader = load("res://shaders/lofi_canvas.gdshader")
 	var material = ShaderMaterial.new()
 	material.shader = shader
-	# These are fallback defaults - prefer setting values in the scene's material
-	material.set_shader_parameter("pixelation", 0.003)
-	material.set_shader_parameter("saturation", 0.85)
-	material.set_shader_parameter("color_tint", Color(1.02, 1.0, 0.96))
-	material.set_shader_parameter("vignette_strength", 0.3)
-	material.set_shader_parameter("vignette_radius", 0.8)
-	material.set_shader_parameter("grain_intensity", 0.025)
-	material.set_shader_parameter("grain_speed", 0.2)
-	material.set_shader_parameter("grain_scale", 0.12)
-	material.set_shader_parameter("color_levels", 32.0)
-	material.set_shader_parameter("dither_strength", 0.5)
+	# Apply shared defaults — prefer setting values in the scene's material
+	for param_name in Constants.LOFI_DEFAULTS:
+		material.set_shader_parameter(param_name, Constants.LOFI_DEFAULTS[param_name])
 	return material
 
 

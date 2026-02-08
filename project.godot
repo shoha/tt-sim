@@ -22,9 +22,14 @@ boot_splash/bg_color=Color(0.12156863, 0.12156863, 0.14901961, 1)
 boot_splash/show_image=false
 config/icon="uid://b5peyjobxtm2l"
 
+[audio]
+
+buses/default_bus_layout="uid://rmc2eog1qlvw"
+
 [autoload]
 
 DragAndDropGroupHelper="*uid://d21uumvllljay"
+Constants="*res://autoloads/constants.gd"
 Paths="*res://autoloads/paths.gd"
 AssetCacheManager="*res://autoloads/asset_cache_manager.gd"
 AssetPackManager="*res://autoloads/asset_pack_manager.gd"

@@ -1,16 +1,15 @@
-[gd_resource type="AudioBusLayout" format=3]
+[gd_resource type="AudioBusLayout" format=3 uid="uid://rmc2eog1qlvw"]
 
 [sub_resource type="AudioEffectLowPassFilter" id="AudioEffectLowPassFilter_sfx"]
 cutoff_hz = 7000.0
 
 [sub_resource type="AudioEffectReverb" id="AudioEffectReverb_sfx"]
+predelay_msec = 20.0
+predelay_feedback = 0.2
 room_size = 0.2
 damping = 0.7
 spread = 0.4
-dry = 1.0
 wet = 0.12
-predelay_msec = 20.0
-predelay_feedback = 0.2
 
 [sub_resource type="AudioEffectLowPassFilter" id="AudioEffectLowPassFilter_ui"]
 cutoff_hz = 7000.0

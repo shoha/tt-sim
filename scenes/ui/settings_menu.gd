@@ -201,9 +201,7 @@ func _apply_settings() -> void:
 
 
 func _apply_network_settings() -> void:
-	if has_node("/root/AssetStreamer"):
-		var streamer = get_node("/root/AssetStreamer")
-		streamer.set_enabled(p2p_enabled_check.button_pressed)
+	AssetStreamer.set_enabled(p2p_enabled_check.button_pressed)
 
 
 func _apply_audio_bus(bus_name: String, volume_percent: float) -> void:
@@ -319,13 +317,11 @@ func _on_p2p_toggled(_pressed: bool) -> void:
 
 
 func _on_clear_cache_pressed() -> void:
-	if has_node("/root/AssetDownloader"):
-		var downloader = get_node("/root/AssetDownloader")
-		downloader.clear_all_caches()
-		_update_cache_info()
+	AssetDownloader.clear_all_caches()
+	_update_cache_info()
 
-		if UIManager.has_method("show_toast"):
-			UIManager.show_toast("Asset cache cleared", 1)  # SUCCESS type
+	if UIManager.has_method("show_toast"):
+		UIManager.show_toast("Asset cache cleared", 1)  # SUCCESS type
 
 
 func _update_cache_info() -> void:
