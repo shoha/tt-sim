@@ -63,6 +63,8 @@ Panels using this: `SettingsMenu`, `PauseOverlay`, `ConfirmationDialogUI`, `Upda
 
 The level editor's `_animate_popup_in()` / `_animate_popup_out()` methods also play open/close sounds.
 
+The level editor's `LoadDialog` and `DeleteConfirmDialog` also play close sounds when dismissed via the X button (`close_requested` signal).
+
 ### Specialized Button Sounds
 
 Some buttons play specialized sounds instead of the generic click:
@@ -81,12 +83,12 @@ These are played via `AudioManager.play_<name>()` helper methods. Default pitch 
 | File                | AudioManager Method    | Volume  | Description                       | Wiring              |
 |---------------------|------------------------|---------|-----------------------------------|----------------------|
 | `click.wav`         | `play_click()`         | 0 dB    | Button press / tap                | **Auto** (all buttons) |
-| `hover.wav`         | `play_hover()`         | -6 dB   | Button hover / focus              | **Auto** (all buttons) |
-| `open.wav`          | `play_open()`          | 0 dB    | Menu or panel opening             | **Auto** (panels)    |
-| `close.wav`         | `play_close()`         | 0 dB    | Menu or panel closing             | **Auto** (panels)    |
+| `hover.ogg`         | `play_hover()`         | -6 dB   | Button hover / focus              | **Auto** (all buttons) |
+| `open.ogg`          | `play_open()`          | 0 dB    | Menu or panel opening             | **Auto** (panels)    |
+| `close.ogg`         | `play_close()`         | 0 dB    | Menu or panel closing             | **Auto** (panels)    |
 | `success.wav`       | `play_success()`       | 0 dB    | Success feedback (e.g. level win) | Manual               |
 | `error.wav`         | `play_error()`         | 0 dB    | Error feedback                    | Manual               |
-| `confirm.wav`       | `play_confirm()`       | 0 dB    | Confirmation dialog accept        | **Wired**            |
+| `confirm.ogg`       | `play_confirm()`       | 0 dB    | Confirmation dialog accept        | **Wired**            |
 | `cancel.wav`        | `play_cancel()`        | 0 dB    | Cancel / back action              | **Wired**            |
 
 ---
@@ -100,15 +102,17 @@ These are played via `AudioManager.play_<name>()` helper methods. Default pitch 
 | `token_pickup.wav`    | `play_token_pickup()`    | 0 dB    | Picking up / starting to drag a token| **Wired**     |
 | `token_drop.wav`      | `play_token_drop()`      | 0 dB    | Dropping / placing a token           | **Wired**     |
 | `token_slide.wav`     | `play_token_slide()`     | -3 dB   | Token sliding / movement on board    | Not wired     |
-| `token_hover.wav`     | `play_token_hover()`     | -6 dB   | Mouse hovering over a board token    | **Wired**     |
+| `token_hover.ogg`     | `play_token_hover()`     | -6 dB   | Mouse hovering over a board token    | **Wired**     |
+| `token_whoosh.wav`    | `play_token_whoosh()`    | -3 dB   | Rapid drag swoosh (velocity-based)   | **Wired**     |
 
 ### Where SFX Sounds Are Used
 
 | Sound              | File                      | Trigger                          |
 |--------------------|---------------------------|----------------------------------|
-| `play_token_pickup()` | `draggable_token.gd:167` | Drag start                      |
-| `play_token_drop()`   | `draggable_token.gd:248` | Settle complete (drop or cancel) |
+| `play_token_pickup()` | `draggable_token.gd`    | Drag start                      |
+| `play_token_drop()`   | `draggable_token.gd`    | Settle start (immediate on drop/cancel) |
 | `play_token_hover()`  | `board_token_controller.gd` | Mouse enters token rigid body |
+| `play_token_whoosh()` | `draggable_token.gd`    | Horizontal drag speed >= 48 units/sec (0.4s cooldown, velocity-scaled pitch) |
 
 ### Additional SFX Candidates (Not Yet in AudioManager)
 
@@ -263,26 +267,31 @@ func _on_after_animate_out() -> void:
 
 ## Implementation Checklist
 
-### Phase 1: Audio Files (11 files)
-- [ ] `assets/audio/ui/click.wav`
-- [ ] `assets/audio/ui/hover.wav`
-- [ ] `assets/audio/ui/open.wav`
-- [ ] `assets/audio/ui/close.wav`
-- [ ] `assets/audio/ui/success.wav`
-- [ ] `assets/audio/ui/error.wav`
-- [ ] `assets/audio/ui/confirm.wav`
-- [ ] `assets/audio/ui/cancel.wav`
-- [ ] `assets/audio/sfx/token_pickup.wav`
-- [ ] `assets/audio/sfx/token_drop.wav`
-- [ ] `assets/audio/sfx/token_slide.wav`
-- [ ] `assets/audio/sfx/token_hover.wav`
+### Phase 1: Audio Files (13 files)
+- [x] `assets/audio/ui/click.wav` (JDSherbert Tabletop SFX)
+- [x] `assets/audio/ui/hover.ogg` (Kenney Interface Sounds)
+- [x] `assets/audio/ui/open.ogg` (Kenney — pluck)
+- [x] `assets/audio/ui/close.ogg` (Kenney — pluck)
+- [x] `assets/audio/ui/success.wav` (ObsydianX Interface SFX)
+- [x] `assets/audio/ui/error.wav` (ObsydianX Interface SFX)
+- [x] `assets/audio/ui/confirm.ogg` (Kenney Interface Sounds)
+- [x] `assets/audio/ui/cancel.wav` (ObsydianX Interface SFX)
+- [x] `assets/audio/sfx/token_pickup.wav` (JDSherbert Tabletop SFX)
+- [x] `assets/audio/sfx/token_drop.wav` (JDSherbert Tabletop SFX)
+- [ ] `assets/audio/sfx/token_slide.wav` (JDSherbert Tabletop SFX — file exists, not wired)
+- [x] `assets/audio/sfx/token_hover.ogg` (Kenney — tick)
+- [x] `assets/audio/sfx/token_whoosh.wav` (JDSherbert — swipe)
+
+All audio files are CC0-licensed. All files are normalized via the pre-commit hook.
 
 ### Phase 2: Wiring (done)
 - [x] Auto-connect all button click/hover sounds via `SceneTree.node_added`
 - [x] Panel open/close sounds in `AnimatedVisibilityContainer` base class
 - [x] Panel sounds via `AnimatedCanvasLayerPanel` base class (SettingsMenu, PauseOverlay, ConfirmationDialogUI, UpdateDialogUI)
-- [x] Level editor popup sounds
+- [x] Level editor popup sounds (open/close + X button close on LoadDialog and DeleteConfirmDialog)
 - [x] Specialized confirm/cancel sounds in `ConfirmationDialogUI`
+- [x] Token drop sound plays at settle start (immediate feedback on release)
+- [x] Token whoosh sound on rapid drag (velocity-based trigger with pitch scaling)
 - [ ] Wire `AudioManager.play_token_slide()` to token movement
 - [ ] Wire `AudioManager.play_success()` / `play_error()` to relevant feedback points
 
