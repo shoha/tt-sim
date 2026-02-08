@@ -39,18 +39,18 @@ def main():
         os.remove(hook_dest)
         print(f"Removed existing hook: {hook_dest}")
 
-    # On Windows, git hooks need a shebang-aware runner or a wrapper.
-    # We create a shell wrapper that invokes Python with the actual hook script.
+    # Git runs hooks with cwd = repo root, so paths must be relative to project_root.
+    rel_from_root = os.path.relpath(hook_source, project_root).replace("\\", "/")
+
     if platform.system() == "Windows":
         # Write a tiny shell script that git for Windows (bash) can run
-        rel_path = os.path.relpath(hook_source, git_hooks_dir).replace("\\", "/")
         with open(hook_dest, "w", newline="\n") as f:
             f.write("#!/bin/sh\n")
-            f.write(f'python "{rel_path}" "$@"\n')
+            f.write(f'python "{rel_from_root}" "$@"\n')
     else:
-        # Unix: symlink so changes to the hook are picked up automatically
-        rel_path = os.path.relpath(hook_source, git_hooks_dir)
-        os.symlink(rel_path, hook_dest)
+        # Unix: symlink (must be relative to .git/hooks/ for the symlink itself)
+        rel_for_symlink = os.path.relpath(hook_source, git_hooks_dir)
+        os.symlink(rel_for_symlink, hook_dest)
 
     # Ensure executable
     st = os.stat(hook_dest)

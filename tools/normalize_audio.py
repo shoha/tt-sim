@@ -2,8 +2,9 @@
 """
 Normalize all audio files in assets/audio/ to a consistent perceived loudness.
 
-Uses ffmpeg's loudnorm filter (EBU R128 / LUFS-based) for perceptual normalization,
-so sounds from different sources sit well together regardless of original levels.
+Uses ffmpeg's loudnorm filter (EBU R128 / LUFS-based) for perceptual normalization.
+For files too short for LUFS measurement (< ~400ms), falls back to peak normalization
+so that every file — even tiny clicks — gets consistent levels.
 
 Requirements:
     - ffmpeg must be installed and on PATH
@@ -12,12 +13,14 @@ Requirements:
 Usage:
     python tools/normalize_audio.py                 # Normalize all audio files
     python tools/normalize_audio.py --target -18    # Custom LUFS target (default: -18)
+    python tools/normalize_audio.py --peak -3       # Custom peak target for short files (default: -3)
     python tools/normalize_audio.py --dry-run       # Preview what would be processed
     python tools/normalize_audio.py --backup        # Keep originals as .bak files
 """
 
 import argparse
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -35,6 +38,16 @@ TRUE_PEAK_LIMIT = -1.0
 
 # Loudness range target (LRA) — how much dynamic range to preserve
 LOUDNESS_RANGE = 11.0
+
+# Default peak target (dBFS) for short files that can't use LUFS.
+# -3 dBFS leaves headroom while keeping short transients punchy.
+DEFAULT_PEAK_TARGET = -3.0
+
+# Tolerance: skip files already within this many dB of their target.
+# 1.5 dB for LUFS accounts for measurement variance from re-encoding and limiting.
+# A 1 dB loudness difference is barely perceptible in game SFX.
+LUFS_TOLERANCE = 1.5
+PEAK_TOLERANCE = 1.5
 
 
 def find_audio_files(audio_dir: str) -> list[str]:
@@ -59,6 +72,19 @@ def check_ffmpeg() -> bool:
         return result.returncode == 0
     except FileNotFoundError:
         return False
+
+
+def get_codec_args(ext: str) -> list[str]:
+    """Return ffmpeg codec arguments for the given file extension."""
+    if ext == ".ogg":
+        return ["-c:a", "libvorbis", "-q:a", "6"]
+    elif ext == ".opus":
+        return ["-c:a", "libopus", "-b:a", "128k"]
+    elif ext == ".mp3":
+        return ["-c:a", "libmp3lame", "-q:a", "2"]
+    else:
+        # WAV — PCM output
+        return ["-c:a", "pcm_s16le"]
 
 
 def measure_loudness(filepath: str, target_lufs: float) -> dict | None:
@@ -91,42 +117,79 @@ def measure_loudness(filepath: str, target_lufs: float) -> dict | None:
         return None
 
 
-def normalize_file(
+def is_lufs_valid(measurements: dict) -> bool:
+    """Check whether the LUFS measurement is usable (not -inf / inf)."""
+    try:
+        val = float(measurements["input_i"])
+        return math.isfinite(val)
+    except (ValueError, KeyError, TypeError):
+        return False
+
+
+def get_peak_db(measurements: dict) -> float | None:
+    """Extract the true peak value in dB from measurements."""
+    try:
+        val = float(measurements["input_tp"])
+        return val if math.isfinite(val) else None
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# LUFS normalization (for files long enough for EBU R128)
+# ---------------------------------------------------------------------------
+
+def normalize_lufs(
     filepath: str,
-    measurements: dict,
+    current_lufs: float,
     target_lufs: float,
     backup: bool = False,
 ) -> bool:
     """
-    Second pass: apply loudnorm normalization using the measured values.
-    Overwrites the original file (optionally backing up first).
+    Normalize a file by applying the exact gain needed to reach the LUFS target,
+    with a hard limiter to prevent clipping. More reliable for short game SFX
+    than ffmpeg's loudnorm two-pass mode.
     """
     ext = os.path.splitext(filepath)[1].lower()
+    gain_db = target_lufs - current_lufs
 
-    # Build the loudnorm filter string with measured values
-    af = (
-        f"loudnorm=I={target_lufs}:TP={TRUE_PEAK_LIMIT}:LRA={LOUDNESS_RANGE}"
-        f":measured_I={measurements['input_i']}"
-        f":measured_TP={measurements['input_tp']}"
-        f":measured_LRA={measurements['input_lra']}"
-        f":measured_thresh={measurements['input_thresh']}"
-        f":offset={measurements['target_offset']}"
-        f":linear=true"
-    )
+    # Apply gain and hard-limit to prevent peaks exceeding the ceiling
+    af = f"volume={gain_db}dB,alimiter=limit={TRUE_PEAK_LIMIT}dB:attack=0.1:release=50"
 
-    # Output codec depends on format
-    codec_args = []
-    if ext == ".ogg":
-        codec_args = ["-c:a", "libvorbis", "-q:a", "6"]
-    elif ext == ".opus":
-        codec_args = ["-c:a", "libopus", "-b:a", "128k"]
-    elif ext == ".mp3":
-        codec_args = ["-c:a", "libmp3lame", "-q:a", "2"]
-    else:
-        # WAV — PCM output
-        codec_args = ["-c:a", "pcm_s16le"]
+    return _apply_filter(filepath, af, ext, backup)
 
-    # Write to a temp file first, then replace the original
+
+# ---------------------------------------------------------------------------
+# Peak normalization (fallback for very short files)
+# ---------------------------------------------------------------------------
+
+def normalize_peak(
+    filepath: str,
+    current_peak_db: float,
+    target_peak_db: float,
+    backup: bool = False,
+) -> bool:
+    """
+    Normalize a short file by scaling its peak to the target level.
+    Uses ffmpeg's volume filter with a simple gain adjustment.
+    """
+    ext = os.path.splitext(filepath)[1].lower()
+    gain_db = target_peak_db - current_peak_db
+
+    # Apply gain and hard-limit to prevent any overshoot
+    af = f"volume={gain_db}dB,alimiter=limit={TRUE_PEAK_LIMIT}dB:attack=0.1:release=50"
+
+    return _apply_filter(filepath, af, ext, backup)
+
+
+# ---------------------------------------------------------------------------
+# Shared filter application
+# ---------------------------------------------------------------------------
+
+def _apply_filter(filepath: str, af: str, ext: str, backup: bool) -> bool:
+    """Apply an ffmpeg audio filter, writing to a temp file then replacing the original."""
+    codec_args = get_codec_args(ext)
+
     fd, tmp_path = tempfile.mkstemp(suffix=ext)
     os.close(fd)
 
@@ -144,12 +207,10 @@ def normalize_file(
             os.unlink(tmp_path)
             return False
 
-        # Backup original if requested
         if backup:
             bak_path = filepath + ".bak"
             shutil.copy2(filepath, bak_path)
 
-        # Replace original with normalized version
         shutil.move(tmp_path, filepath)
         return True
 
@@ -159,6 +220,10 @@ def normalize_file(
         raise
 
 
+# ---------------------------------------------------------------------------
+# Display helpers
+# ---------------------------------------------------------------------------
+
 def format_lufs(value: str) -> str:
     """Format a LUFS value string for display."""
     try:
@@ -167,6 +232,15 @@ def format_lufs(value: str) -> str:
         return str(value)
 
 
+def format_db(value: float) -> str:
+    """Format a dB value for display."""
+    return f"{value:+.1f} dB"
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main():
     parser = argparse.ArgumentParser(
         description="Normalize audio files to consistent perceived loudness (EBU R128 / LUFS)."
@@ -174,6 +248,10 @@ def main():
     parser.add_argument(
         "--target", type=float, default=DEFAULT_TARGET_LUFS,
         help=f"Target loudness in LUFS (default: {DEFAULT_TARGET_LUFS})"
+    )
+    parser.add_argument(
+        "--peak", type=float, default=DEFAULT_PEAK_TARGET,
+        help=f"Target peak in dBFS for short files (default: {DEFAULT_PEAK_TARGET})"
     )
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -224,10 +302,12 @@ def main():
 
     # Process
     target = args.target
+    peak_target = args.peak
     mode = "DRY RUN" if args.dry_run else "NORMALIZING"
 
-    print(f"Target loudness: {target} LUFS")
-    print(f"True peak limit: {TRUE_PEAK_LIMIT} dBTP")
+    print(f"LUFS target:  {target} LUFS  (files >= 400ms)")
+    print(f"Peak target:  {peak_target} dBFS  (short files)")
+    print(f"Peak ceiling: {TRUE_PEAK_LIMIT} dBTP")
     print(f"Mode: {mode}")
     print(f"Files: {len(audio_files)}")
     print("-" * 60)
@@ -248,41 +328,73 @@ def main():
             fail_count += 1
             continue
 
-        input_lufs = format_lufs(measurements.get("input_i", "?"))
         input_tp = measurements.get("input_tp", "?")
-        offset = measurements.get("target_offset", "?")
+        current_peak = get_peak_db(measurements)
 
-        print(f"    Current: {input_lufs}  (peak: {input_tp} dBTP, offset: {offset} dB)")
+        if is_lufs_valid(measurements):
+            # ---- LUFS path (normal-length files) ----
+            current_lufs = float(measurements["input_i"])
+            print(f"    Current: {current_lufs:+.1f} LUFS  (peak: {input_tp} dBTP)")
 
-        # Check if already within tolerance (±0.5 LUFS)
-        try:
-            current = float(measurements["input_i"])
-            if abs(current - target) < 0.5:
-                print(f"    Already within target — skipping")
+            if abs(current_lufs - target) < LUFS_TOLERANCE:
+                print(f"    Already within LUFS target — skipping")
                 skip_count += 1
                 continue
-        except (ValueError, KeyError):
-            pass
 
-        if args.dry_run:
-            print(f"    Would normalize to {target} LUFS")
-            success_count += 1
-            continue
+            gain = target - current_lufs
+            print(f"    Gain: {format_db(gain)}")
 
-        # Pass 2: Normalize
-        ok = normalize_file(filepath, measurements, target, backup=args.backup)
-        if ok:
-            # Verify result
-            verify = measure_loudness(filepath, target)
-            if verify:
-                result_lufs = format_lufs(verify.get("input_i", "?"))
-                print(f"    Normalized: {result_lufs}")
+            if args.dry_run:
+                print(f"    Would normalize to {target} LUFS")
+                success_count += 1
+                continue
+
+            ok = normalize_lufs(filepath, current_lufs, target, backup=args.backup)
+            if ok:
+                verify = measure_loudness(filepath, target)
+                if verify and is_lufs_valid(verify):
+                    print(f"    Normalized: {float(verify['input_i']):+.1f} LUFS")
+                else:
+                    print(f"    Normalized (could not verify)")
+                success_count += 1
             else:
-                print(f"    Normalized (could not verify)")
-            success_count += 1
+                print(f"    FAILED to normalize")
+                fail_count += 1
+
+        elif current_peak is not None:
+            # ---- Peak path (short files) ----
+            print(f"    Current: too short for LUFS  (peak: {current_peak:+.1f} dBFS)")
+
+            if abs(current_peak - peak_target) < PEAK_TOLERANCE:
+                print(f"    Already within peak target — skipping")
+                skip_count += 1
+                continue
+
+            gain = peak_target - current_peak
+            print(f"    Gain: {format_db(gain)}")
+
+            if args.dry_run:
+                print(f"    Would peak-normalize to {peak_target} dBFS")
+                success_count += 1
+                continue
+
+            ok = normalize_peak(filepath, current_peak, peak_target, backup=args.backup)
+            if ok:
+                verify = measure_loudness(filepath, target)
+                v_peak = get_peak_db(verify) if verify else None
+                if v_peak is not None:
+                    print(f"    Peak-normalized: {v_peak:+.1f} dBFS")
+                else:
+                    print(f"    Peak-normalized (could not verify)")
+                success_count += 1
+            else:
+                print(f"    FAILED to peak-normalize")
+                fail_count += 1
+
         else:
-            print(f"    FAILED to normalize")
+            print(f"    No valid LUFS or peak measurement — skipping")
             fail_count += 1
+            continue
 
     # Summary
     print("\n" + "-" * 60)
