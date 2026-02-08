@@ -34,12 +34,12 @@ func _on_panel_ready() -> void:
 	restart_button.pressed.connect(_on_restart_pressed)
 	later_button.pressed.connect(_on_later_pressed)
 	open_folder_button.pressed.connect(_on_open_folder_pressed)
-	
+
 	# Connect to UpdateManager signals
 	UpdateManager.update_download_progress.connect(_on_download_progress)
 	UpdateManager.update_download_complete.connect(_on_download_complete)
 	UpdateManager.update_download_failed.connect(_on_download_failed)
-	
+
 	# Connect RichTextLabel link clicks
 	release_notes.meta_clicked.connect(_on_link_clicked)
 
@@ -61,18 +61,18 @@ func _on_link_clicked(meta: Variant) -> void:
 
 func setup(release_info: Dictionary) -> void:
 	_release_info = release_info
-	
+
 	var current_version = UpdateManager.get_current_version()
 	var new_version = release_info.get("version", "?")
-	
+
 	# Update labels
 	if release_info.get("prerelease", false):
 		title_label.text = "Prerelease Update Available"
 	else:
 		title_label.text = "Update Available"
-	
+
 	version_label.text = "v%s → v%s" % [current_version, new_version]
-	
+
 	# Parse and display release notes
 	var body = release_info.get("body", "")
 	if body.is_empty():
@@ -80,7 +80,7 @@ func setup(release_info: Dictionary) -> void:
 	else:
 		# Convert GitHub markdown to BBCode (basic conversion)
 		release_notes.text = _markdown_to_bbcode(body)
-	
+
 	# Show/hide download button based on platform availability
 	if release_info.get("download_url", "").is_empty():
 		download_button.visible = false
@@ -89,35 +89,35 @@ func setup(release_info: Dictionary) -> void:
 
 func _markdown_to_bbcode(markdown: String) -> String:
 	var text = markdown
-	
+
 	# Convert headers
 	text = text.replace("### ", "[b]")
 	text = text.replace("## ", "[b][u]")
 	text = text.replace("# ", "[b][u]")
-	
+
 	# Basic bold/italic (simplified)
 	var bold_regex = RegEx.new()
 	bold_regex.compile("\\*\\*(.+?)\\*\\*")
 	text = bold_regex.sub(text, "[b]$1[/b]", true)
-	
+
 	var italic_regex = RegEx.new()
 	italic_regex.compile("\\*(.+?)\\*")
 	text = italic_regex.sub(text, "[i]$1[/i]", true)
-	
+
 	# Convert bullet points
 	text = text.replace("\n- ", "\n• ")
 	text = text.replace("\n* ", "\n• ")
-	
+
 	# Convert inline code
 	var code_regex = RegEx.new()
 	code_regex.compile("`(.+?)`")
 	text = code_regex.sub(text, "[code]$1[/code]", true)
-	
+
 	# Convert markdown links [text](url) to BBCode [url=...]text[/url]
 	var link_regex = RegEx.new()
 	link_regex.compile("\\[([^\\]]+)\\]\\(([^\\)]+)\\)")
 	text = link_regex.sub(text, "[url=$2]$1[/url]", true)
-	
+
 	return text
 
 
@@ -127,8 +127,16 @@ func _on_download_pressed() -> void:
 	skip_button.disabled = true
 	progress_container.visible = true
 	progress_bar.value = 0
+	progress_bar.visible = true
 	progress_label.text = "Starting download..."
-	
+
+	# Fade in progress area
+	progress_container.modulate.a = 0.0
+	var tw = create_tween()
+	tw.set_ease(Tween.EASE_OUT)
+	tw.set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(progress_container, "modulate:a", 1.0, 0.2)
+
 	UpdateManager.download_update()
 
 
@@ -159,7 +167,7 @@ func _on_download_progress(percent: float) -> void:
 	if percent < 0:
 		# Indeterminate progress
 		progress_label.text = "Downloading..."
-		progress_bar.value = 50 # Could use animated indeterminate style
+		progress_bar.value = 50
 	else:
 		progress_bar.value = percent * 100
 		progress_label.text = "Downloading... %d%%" % int(percent * 100)
@@ -167,15 +175,27 @@ func _on_download_progress(percent: float) -> void:
 
 func _on_download_complete(zip_path: String) -> void:
 	_download_path = zip_path
-	
-	# Update UI for post-download state
+
+	# Cross-fade into post-download state
 	progress_container.visible = false
 	button_container.visible = false
 	post_download_buttons.visible = true
-	
+
 	title_label.text = "Ready to Update"
-	release_notes.text = "The update has been downloaded and will be installed when the game restarts.\n\nClick 'Restart Now' to apply the update immediately, or 'Later' to continue playing. The update will be applied the next time you start the game."
-	
+	release_notes.text = (
+		"The update has been downloaded and will be installed when the game restarts."
+		+ "\n\nClick 'Restart Now' to apply the update immediately, or 'Later' to continue playing."
+		+ " The update will be applied the next time you start the game."
+	)
+
+	# Animate the post-download buttons in
+	post_download_buttons.modulate.a = 0.0
+	var tw = create_tween()
+	tw.set_ease(Tween.EASE_OUT)
+	tw.set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(post_download_buttons, "modulate:a", 1.0, 0.2)
+
+	AudioManager.play_success()
 	restart_button.grab_focus()
 
 
@@ -184,10 +204,11 @@ func _on_download_failed(error: String) -> void:
 	download_button.disabled = false
 	skip_button.disabled = false
 	progress_container.visible = false
-	
+
 	progress_label.text = "Download failed: " + error
 	progress_container.visible = true
 	progress_bar.visible = false
+	AudioManager.play_error()
 
 
 func _unhandled_input(event: InputEvent) -> void:

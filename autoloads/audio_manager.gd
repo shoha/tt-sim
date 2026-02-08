@@ -90,9 +90,16 @@ func _auto_connect_button(button: BaseButton) -> void:
 		return
 	if button.has_meta("ui_silent"):
 		return
+
+	# CheckButtons / CheckBoxes use toggle sounds instead of click
+	if button is CheckButton or button is CheckBox:
+		if not button.toggled.is_connected(_on_toggle_sound):
+			button.toggled.connect(_on_toggle_sound)
+	else:
+		if not button.pressed.is_connected(play_click):
+			button.pressed.connect(play_click)
+
 	# Guard against duplicate connections (e.g. re-parenting)
-	if not button.pressed.is_connected(play_click):
-		button.pressed.connect(play_click)
 	if not button.mouse_entered.is_connected(_on_button_hover):
 		button.mouse_entered.connect(_on_button_hover)
 
@@ -102,6 +109,14 @@ func _auto_connect_button(button: BaseButton) -> void:
 
 func _on_button_hover() -> void:
 	play_hover()
+
+
+## Plays a higher-pitch tick on toggle-on and a lower-pitch tick on toggle-off
+func _on_toggle_sound(toggled_on: bool) -> void:
+	if toggled_on:
+		play_ui_sound("tick", -6.0, 0.0)
+	else:
+		play_ui_sound("tick", -8.0, 0.0)
 
 
 func _load_sounds(sounds: Dictionary, directory: String) -> void:
