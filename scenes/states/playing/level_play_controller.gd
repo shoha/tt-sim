@@ -278,6 +278,8 @@ func _play_level_async(level_data: LevelData) -> void:
 			drag_and_drop.add_child(token)
 			_track_token(token, placement)
 			_connect_token_context_menu(token)
+			# Staggered pop-in animation for a satisfying cascade effect
+			token.play_spawn_animation(randf() * 0.15)
 			token_spawned.emit(token, placement)
 
 		spawned_count += 1
@@ -437,7 +439,7 @@ func _load_glb_from_path(path: String) -> Node3D:
 	return GlbUtils.load_glb_with_processing(path, true, light_scale)
 
 
-## Load a GLB file from a user:// path using shared GlbUtils (async - does not block)
+## Load a GLB file from a user:// path using shared GlbUtils (async - runs on background thread)
 ## For maps, we create StaticBody3D for collision meshes
 ## Applies light intensity scaling from the active level data
 func _load_glb_from_path_async(path: String) -> Node3D:
@@ -601,12 +603,15 @@ func _clear_existing_maps() -> void:
 ## Spawn an asset token and add it to the current level
 ## Returns the created token, or null if spawning failed
 ## Supports remote assets - will show placeholder while downloading
+## If the model isn't cached yet, a placeholder appears instantly and upgrades
+## asynchronously once the model finishes loading (no main-thread stall).
 func spawn_asset(pack_id: String, asset_id: String, variant_id: String = "default") -> BoardToken:
 	if not _game_map or not active_level_data:
 		push_warning("LevelPlayController: Cannot spawn asset - no GameMap or active level")
 		return null
 
-	# Use async factory to support remote asset downloading
+	# The factory returns the real token if the model is cached, or a placeholder
+	# that auto-upgrades when the async load completes (see create_from_asset_async).
 	var result = BoardTokenFactory.create_from_asset_async(pack_id, asset_id, variant_id)
 	var token = result.token as BoardToken
 
@@ -615,11 +620,13 @@ func spawn_asset(pack_id: String, asset_id: String, variant_id: String = "defaul
 		return null
 
 	if result.is_placeholder:
-		print("LevelPlayController: Spawning placeholder for %s/%s (downloading...)" % [pack_id, asset_id])
+		print("LevelPlayController: Spawning placeholder for %s/%s (loading...)" % [pack_id, asset_id])
 
 	_game_map.drag_and_drop_node.add_child(token)
 	_connect_token_context_menu(token)
 	add_token_to_level(token, pack_id, asset_id, variant_id)
+	# Immediate pop-in for single token placement
+	token.play_spawn_animation()
 	token_added.emit(token)
 	return token
 
