@@ -85,8 +85,8 @@ var current_level: LevelData = null
 var selected_placement_index: int = -1
 var _filtered_pokemon: Array = []
 var _selected_level_path_for_delete: String = ""
-var _is_updating_ui: bool = false # Flag to prevent feedback loops when setting UI values
-var _pending_map_source_path: String = "" # Source map path to be bundled on save (for new/edited levels)
+var _is_updating_ui: bool = false  # Flag to prevent feedback loops when setting UI values
+var _pending_map_source_path: String = ""  # Source map path to be bundled on save (for new/edited levels)
 
 # Lighting mode state
 var _in_lighting_mode: bool = false
@@ -95,8 +95,8 @@ var _lighting_original_preset: String = "indoor_neutral"
 var _lighting_original_overrides: Dictionary = {}
 var _lighting_original_lofi: Dictionary = {}
 var _loaded_map_instance: Node = null
-var _original_light_energies: Dictionary = {} # Stores original light energies for re-scaling
-var _lighting_lofi_material: ShaderMaterial = null # Lo-fi shader for lighting preview
+var _original_light_energies: Dictionary = {}  # Stores original light energies for re-scaling
+var _lighting_lofi_material: ShaderMaterial = null  # Lo-fi shader for lighting preview
 
 
 func _ready() -> void:
@@ -159,7 +159,7 @@ func _connect_signals() -> void:
 	map_scale_z_spin.value_changed.connect(_on_map_transform_changed)
 
 	play_button.pressed.connect(_on_play_pressed)
-	
+
 	# Lighting editor signals
 	edit_lighting_button.pressed.connect(_on_edit_lighting_pressed)
 	lighting_editor_panel.save_requested.connect(_on_lighting_save_requested)
@@ -172,7 +172,9 @@ func _setup_file_dialogs() -> void:
 	# Map file dialog - allow both resources and filesystem for map imports
 	map_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	map_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-	map_file_dialog.filters = ["*.glb ; GLB Models", "*.gltf ; GLTF Models", "*.tscn ; Godot Scenes"]
+	map_file_dialog.filters = [
+		"*.glb ; GLB Models", "*.gltf ; GLTF Models", "*.tscn ; Godot Scenes"
+	]
 	# Start in a reasonable location - project maps folder if it exists
 	if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(Paths.MAPS_DIR)):
 		map_file_dialog.current_dir = ProjectSettings.globalize_path(Paths.MAPS_DIR)
@@ -201,7 +203,11 @@ func _update_pokemon_selector_list() -> void:
 	for asset_id in _filtered_pokemon:
 		var display_name = AssetPackManager.get_asset_display_name("pokemon", asset_id)
 
-		if search_text != "" and not display_name.to_lower().contains(search_text) and not asset_id.contains(search_text):
+		if (
+			search_text != ""
+			and not display_name.to_lower().contains(search_text)
+			and not asset_id.contains(search_text)
+		):
 			continue
 
 		var display_text = "#%s %s" % [asset_id, display_name]
@@ -211,7 +217,7 @@ func _update_pokemon_selector_list() -> void:
 
 func _create_new_level() -> void:
 	current_level = LevelManager.create_new_level()
-	_pending_map_source_path = "" # Clear any pending map from previous level
+	_pending_map_source_path = ""  # Clear any pending map from previous level
 	_update_ui_from_level()
 	_set_status("New level created")
 
@@ -296,7 +302,10 @@ func _update_placement_panel(placement: TokenPlacement) -> void:
 
 
 func _get_placement_from_panel() -> TokenPlacement:
-	if selected_placement_index < 0 or selected_placement_index >= current_level.token_placements.size():
+	if (
+		selected_placement_index < 0
+		or selected_placement_index >= current_level.token_placements.size()
+	):
 		return null
 
 	var placement = current_level.token_placements[selected_placement_index]
@@ -307,15 +316,11 @@ func _get_placement_from_panel() -> TokenPlacement:
 	placement.current_health = int(placement_current_hp_spin.value)
 	placement.is_visible_to_players = placement_visible_check.button_pressed
 	placement.position = Vector3(
-		placement_pos_x_spin.value,
-		placement_pos_y_spin.value,
-		placement_pos_z_spin.value
+		placement_pos_x_spin.value, placement_pos_y_spin.value, placement_pos_z_spin.value
 	)
 	placement.rotation_y = deg_to_rad(placement_rotation_spin.value)
 	placement.scale = Vector3(
-		placement_scale_x_spin.value,
-		placement_scale_y_spin.value,
-		placement_scale_z_spin.value
+		placement_scale_x_spin.value, placement_scale_y_spin.value, placement_scale_z_spin.value
 	)
 
 	return placement
@@ -340,6 +345,7 @@ func _refresh_saved_levels_list() -> void:
 
 # Signal handlers
 
+
 func _on_select_map_pressed() -> void:
 	map_file_dialog.popup_centered(Vector2i(800, 600))
 
@@ -347,11 +353,11 @@ func _on_select_map_pressed() -> void:
 func _on_map_file_selected(path: String) -> void:
 	# Store the source path for bundling on save
 	_pending_map_source_path = path
-	
+
 	# For display, just show the filename - actual bundling happens on save
 	map_path_label.text = path.get_file() + " (will be bundled)"
 	_set_status("Map selected: " + path.get_file())
-	
+
 	# Clear the old map_path since we're selecting a new one
 	# It will be set properly when saved
 	current_level.map_path = ""
@@ -441,14 +447,10 @@ func _on_map_transform_changed(_value: float = 0.0) -> void:
 	if _is_updating_ui or not current_level:
 		return
 	current_level.map_offset = Vector3(
-		map_offset_x_spin.value,
-		map_offset_y_spin.value,
-		map_offset_z_spin.value
+		map_offset_x_spin.value, map_offset_y_spin.value, map_offset_z_spin.value
 	)
 	current_level.map_scale = Vector3(
-		map_scale_x_spin.value,
-		map_scale_y_spin.value,
-		map_scale_z_spin.value
+		map_scale_x_spin.value, map_scale_y_spin.value, map_scale_z_spin.value
 	)
 
 
@@ -459,7 +461,7 @@ func _on_save_pressed() -> void:
 
 	# Determine if we should use folder-based save
 	var use_folder_save = _pending_map_source_path != "" or current_level.is_folder_based()
-	
+
 	if use_folder_save:
 		_save_level_folder()
 	else:
@@ -482,22 +484,22 @@ func _save_level_folder() -> void:
 	if current_level.level_name.strip_edges() == "":
 		_set_status("Error: Level name is required")
 		return
-	
+
 	# Check if we have a map source or existing bundled map
 	if _pending_map_source_path == "" and current_level.map_path == "":
 		_set_status("Error: No map selected")
 		return
-	
+
 	# If we have a pending map source, verify it exists
 	if _pending_map_source_path != "" and not FileAccess.file_exists(_pending_map_source_path):
 		_set_status("Error: Map file not found: " + _pending_map_source_path)
 		return
-	
+
 	# Save using folder-based format
 	var result = LevelManager.save_level_folder(current_level, "", _pending_map_source_path)
 	if result != "":
-		_pending_map_source_path = "" # Clear pending map after successful save
-		_update_ui_from_level() # Refresh UI to show bundled status
+		_pending_map_source_path = ""  # Clear pending map after successful save
+		_update_ui_from_level()  # Refresh UI to show bundled status
 		_set_status("Level saved: " + current_level.level_folder)
 	else:
 		_set_status("Failed to save level")
@@ -544,7 +546,9 @@ func _on_delete_level_pressed() -> void:
 	var level_name = saved_levels_list.get_item_text(selected_items[0])
 
 	_selected_level_path_for_delete = path
-	delete_confirm_dialog.dialog_text = "Are you sure you want to delete '%s'? This cannot be undone." % level_name
+	delete_confirm_dialog.dialog_text = (
+		"Are you sure you want to delete '%s'? This cannot be undone." % level_name
+	)
 	delete_confirm_dialog.popup_centered()
 
 
@@ -570,7 +574,7 @@ func _load_level_from_path(path: String) -> void:
 	var level = LevelManager.load_level(path)
 	if level:
 		current_level = level
-		_pending_map_source_path = "" # Clear pending map when loading existing level
+		_pending_map_source_path = ""  # Clear pending map when loading existing level
 		_update_ui_from_level()
 		_set_status("Level loaded: " + level.level_name)
 	else:
@@ -581,12 +585,12 @@ func _load_level_from_path(path: String) -> void:
 ## This allows UI animations to run smoothly while loading
 func _load_level_async(path: String) -> void:
 	_set_status("Loading...")
-	
+
 	# Load without emitting signal to prevent auto-play
 	var level = await LevelManager.load_level_async(path, false)
 	if level:
 		current_level = level
-		_pending_map_source_path = "" # Clear pending map when loading existing level
+		_pending_map_source_path = ""  # Clear pending map when loading existing level
 		_update_ui_from_level()
 		_set_status("Level loaded: " + level.level_name)
 	else:
@@ -633,8 +637,9 @@ func _on_import_file_selected(path: String) -> void:
 
 
 func _on_play_pressed() -> void:
-	# Update metadata before playing
+	# Update metadata and map transform before playing
 	_on_level_metadata_changed()
+	_on_map_transform_changed()
 
 	var errors = current_level.validate()
 	if errors.size() > 0:
@@ -654,7 +659,7 @@ func open_editor() -> void:
 func set_level(level_data: LevelData) -> void:
 	if level_data:
 		current_level = level_data
-		_pending_map_source_path = "" # Clear pending map when setting existing level
+		_pending_map_source_path = ""  # Clear pending map when setting existing level
 		_update_ui_from_level()
 		_set_status("Editing: " + level_data.level_name)
 
@@ -663,23 +668,24 @@ func set_level(level_data: LevelData) -> void:
 # Lighting Editor Mode
 # ============================================================================
 
+
 func _on_edit_lighting_pressed() -> void:
 	if not current_level:
 		_set_status("Create or load a level first")
 		return
-	
+
 	# Check if we have a map to load
 	var map_path = _get_current_map_path()
 	if map_path == "":
 		_set_status("Select a map file first")
 		return
-	
+
 	# Store original values for cancel
 	_lighting_original_intensity = current_level.light_intensity_scale
 	_lighting_original_preset = current_level.environment_preset
 	_lighting_original_overrides = current_level.environment_overrides.duplicate()
 	_lighting_original_lofi = current_level.lofi_overrides.duplicate()
-	
+
 	# Enter lighting mode
 	_enter_lighting_mode(map_path)
 
@@ -699,22 +705,22 @@ func _get_current_map_path() -> String:
 
 func _enter_lighting_mode(map_path: String) -> void:
 	_in_lighting_mode = true
-	
+
 	# Hide main editor UI
 	main_container.visible = false
-	
+
 	# Show lighting mode container
 	lighting_mode_container.visible = true
-	
+
 	# Set up lo-fi shader on the lighting preview viewport
 	_setup_lighting_lofi_material()
-	
+
 	# Wait a frame for layout to update
 	await get_tree().process_frame
-	
+
 	# Load the map into the viewport
 	await _load_map_into_viewport(map_path)
-	
+
 	# Initialize the lighting panel with current settings
 	lighting_editor_panel.initialize(
 		lighting_world_env,
@@ -723,7 +729,7 @@ func _enter_lighting_mode(map_path: String) -> void:
 		current_level.environment_overrides,
 		current_level.lofi_overrides
 	)
-	
+
 	_set_status("Editing lighting & effects - adjust settings and click Save")
 
 
@@ -733,12 +739,12 @@ func _load_map_into_viewport(map_path: String) -> void:
 		child.queue_free()
 	_loaded_map_instance = null
 	_original_light_energies.clear()
-	
+
 	await get_tree().process_frame
-	
+
 	# Load the map
 	var map_instance: Node3D = null
-	
+
 	if map_path.ends_with(".glb") or map_path.ends_with(".gltf"):
 		# Use GlbUtils for GLB files - load WITHOUT intensity scaling first
 		# so we can store original energies and scale dynamically
@@ -750,19 +756,19 @@ func _load_map_into_viewport(map_path: String) -> void:
 		var scene = load(map_path)
 		if scene:
 			map_instance = scene.instantiate()
-	
+
 	if map_instance:
 		lighting_map_container.add_child(map_instance)
 		_loaded_map_instance = map_instance
-		
+
 		# Apply map transform from level data
 		map_instance.position = current_level.map_offset
 		map_instance.scale = current_level.map_scale
-		
+
 		# Store original light energies and apply current scale
 		_store_original_light_energies(map_instance)
 		_apply_light_intensity_scale(current_level.light_intensity_scale)
-		
+
 		# Center camera on the loaded map
 		_center_lighting_camera()
 
@@ -789,11 +795,11 @@ func _on_lighting_intensity_changed(new_scale: float) -> void:
 func _center_lighting_camera() -> void:
 	if not _loaded_map_instance:
 		return
-	
+
 	# Calculate scene bounds
 	var aabb = AABB()
 	var first_mesh = true
-	
+
 	for child in _loaded_map_instance.get_children():
 		if child is MeshInstance3D:
 			var mesh_aabb = child.get_aabb()
@@ -803,50 +809,52 @@ func _center_lighting_camera() -> void:
 				first_mesh = false
 			else:
 				aabb = aabb.merge(mesh_aabb)
-	
+
 	if first_mesh:
 		# No meshes found, use default position
 		lighting_camera.position = Vector3(0, 10, 15)
 		lighting_camera.look_at(Vector3.ZERO)
 		return
-	
+
 	# Position camera to see the whole scene
 	var center = aabb.get_center()
 	var aabb_size = aabb.size.length()
 	var distance = aabb_size * 1.2
-	
+
 	lighting_camera.position = center + Vector3(0, distance * 0.5, distance * 0.7)
 	lighting_camera.look_at(center)
 
 
 func _exit_lighting_mode() -> void:
 	_in_lighting_mode = false
-	
+
 	# Clear loaded map
 	for child in lighting_map_container.get_children():
 		child.queue_free()
 	_loaded_map_instance = null
-	
+
 	# Clean up lo-fi material
 	_cleanup_lighting_lofi_material()
-	
+
 	# Hide lighting mode container
 	lighting_mode_container.visible = false
-	
+
 	# Show main editor UI
 	main_container.visible = true
 
 
-func _on_lighting_save_requested(intensity: float, preset: String, overrides: Dictionary, lofi_overrides: Dictionary) -> void:
+func _on_lighting_save_requested(
+	intensity: float, preset: String, overrides: Dictionary, lofi_overrides: Dictionary
+) -> void:
 	# Apply the lighting and effects settings to the level data
 	current_level.light_intensity_scale = intensity
 	current_level.environment_preset = preset
 	current_level.environment_overrides = overrides.duplicate()
 	current_level.lofi_overrides = lofi_overrides.duplicate()
-	
+
 	# Save the level file
 	_save_level_from_lighting_mode()
-	
+
 	_exit_lighting_mode()
 
 
@@ -855,7 +863,7 @@ func _save_level_from_lighting_mode() -> void:
 	if not current_level:
 		_set_status("Error: No level to save")
 		return
-	
+
 	# Use folder-based save if applicable
 	if current_level.is_folder_based():
 		var result = LevelManager.save_level_folder(current_level, "", "")
@@ -878,7 +886,7 @@ func _on_lighting_cancel_requested() -> void:
 	current_level.environment_preset = _lighting_original_preset
 	current_level.environment_overrides = _lighting_original_overrides.duplicate()
 	current_level.lofi_overrides = _lighting_original_lofi.duplicate()
-	
+
 	_exit_lighting_mode()
 	_set_status("Lighting & effects changes cancelled")
 
@@ -894,12 +902,12 @@ func _on_lofi_changed(overrides: Dictionary) -> void:
 func _setup_lighting_lofi_material() -> void:
 	if not lighting_viewport_container:
 		return
-	
+
 	# Create a new lo-fi material for the preview
 	var shader = load("res://shaders/lofi_canvas.gdshader")
 	_lighting_lofi_material = ShaderMaterial.new()
 	_lighting_lofi_material.shader = shader
-	
+
 	# Set default values (these will be overridden by initialize() call)
 	_lighting_lofi_material.set_shader_parameter("pixelation", 0.003)
 	_lighting_lofi_material.set_shader_parameter("saturation", 0.85)
@@ -911,12 +919,14 @@ func _setup_lighting_lofi_material() -> void:
 	_lighting_lofi_material.set_shader_parameter("grain_scale", 0.12)
 	_lighting_lofi_material.set_shader_parameter("color_levels", 32.0)
 	_lighting_lofi_material.set_shader_parameter("dither_strength", 0.5)
-	
+
 	# Apply any existing lofi_overrides from level data
 	if current_level and current_level.lofi_overrides.size() > 0:
 		for param_name in current_level.lofi_overrides:
-			_lighting_lofi_material.set_shader_parameter(param_name, current_level.lofi_overrides[param_name])
-	
+			_lighting_lofi_material.set_shader_parameter(
+				param_name, current_level.lofi_overrides[param_name]
+			)
+
 	# Apply to the viewport container
 	lighting_viewport_container.material = _lighting_lofi_material
 
