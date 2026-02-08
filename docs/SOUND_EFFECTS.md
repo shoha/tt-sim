@@ -112,7 +112,7 @@ These are played via `AudioManager.play_<name>()` helper methods. Default pitch 
 | `play_token_pickup()` | `draggable_token.gd`    | Drag start                      |
 | `play_token_drop()`   | `draggable_token.gd`    | Settle start (immediate on drop/cancel) |
 | `play_token_hover()`  | `board_token_controller.gd` | Mouse enters token rigid body |
-| `play_token_whoosh()` | `draggable_token.gd`    | Horizontal drag speed >= 48 units/sec (0.4s cooldown, velocity-scaled pitch) |
+| `play_token_whoosh()` | `draggable_token.gd`    | Horizontal drag speed >= 48 units/sec (0.15s cooldown, velocity-scaled pitch) |
 
 ### Additional SFX Candidates (Not Yet in AudioManager)
 

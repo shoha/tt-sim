@@ -13,13 +13,13 @@ class_name DraggableToken
 ##     ├── CollisionShape3D (required)
 ##     └── Visual nodes (MeshInstance3D, etc.)
 
-const PICKUP_HEIGHT: float = 0.25 # How much to raise the token while dragging
-const INERTIA_LEAN_STRENGTH: float = 0.3 # How much the token leans from drag velocity (in radians)
-const LEAN_SMOOTHING: float = 8.0 # How quickly the lean adjusts to velocity changes
-const SETTLE_DURATION: float = 0.3 # Duration of the settle-to-ground animation when dropped
-const PICKUP_SPRING_DURATION: float = 0.15 # Duration of the spring-up animation on pickup
-const SCALE_PUNCH_AMOUNT: float = 1.05 # Scale multiplier for the pickup punch effect
-const TERRAIN_COLLISION_LAYER: int = 1 # Physics layer for terrain/board surfaces
+const PICKUP_HEIGHT: float = 0.25  # How much to raise the token while dragging
+const INERTIA_LEAN_STRENGTH: float = 0.3  # How much the token leans from drag velocity (in radians)
+const LEAN_SMOOTHING: float = 8.0  # How quickly the lean adjusts to velocity changes
+const SETTLE_DURATION: float = 0.3  # Duration of the settle-to-ground animation when dropped
+const PICKUP_SPRING_DURATION: float = 0.15  # Duration of the spring-up animation on pickup
+const SCALE_PUNCH_AMOUNT: float = 1.05  # Scale multiplier for the pickup punch effect
+const TERRAIN_COLLISION_LAYER: int = 1  # Physics layer for terrain/board surfaces
 
 var _base_height_offset: float = 0.0
 var _last_drag_position: Vector3 = Vector3.ZERO
@@ -28,18 +28,18 @@ var _target_lean_rotation: Basis = Basis.IDENTITY
 var _visual_children: Array[Node3D] = []
 var _drop_indicator: DropIndicatorRenderer
 var _is_currently_dragging: bool = false
-var _is_settling: bool = false # True during settle/cancel animation
-var _drag_start_position: Vector3 = Vector3.ZERO # Position when drag started (for cancel)
+var _is_settling: bool = false  # True during settle/cancel animation
+var _drag_start_position: Vector3 = Vector3.ZERO  # Position when drag started (for cancel)
 var _transform_update_timer: float = 0.0
-const TRANSFORM_UPDATE_INTERVAL: float = 0.1 # Send updates 10 times per second during drag
+const TRANSFORM_UPDATE_INTERVAL: float = 0.1  # Send updates 10 times per second during drag
 
 # Whoosh sound state
 var _whoosh_cooldown: float = 0.0
-const WHOOSH_SPEED_THRESHOLD: float = 48.0 # Minimum horizontal speed (units/sec) to trigger whoosh
-const WHOOSH_COOLDOWN_DURATION: float = 0.4 # Minimum time between whoosh sounds
-const WHOOSH_PITCH_MIN: float = 0.85 # Pitch at threshold speed
-const WHOOSH_PITCH_MAX: float = 1.3 # Pitch at very high speed
-const WHOOSH_SPEED_MAX: float = 18.0 # Speed at which pitch reaches maximum
+const WHOOSH_SPEED_THRESHOLD: float = 48.0  # Minimum horizontal speed (units/sec) to trigger whoosh
+const WHOOSH_COOLDOWN_DURATION: float = 0.15  # Minimum time between whoosh sounds
+const WHOOSH_PITCH_MIN: float = 0.85  # Pitch at threshold speed
+const WHOOSH_PITCH_MAX: float = 1.3  # Pitch at very high speed
+const WHOOSH_SPEED_MAX: float = 18.0  # Speed at which pitch reaches maximum
 
 # Tweens
 var _pickup_tween: Tween = null
@@ -84,7 +84,7 @@ func _ready() -> void:
 		dragging_stopped.connect(_on_dragging_stopped)
 		dragging_cancelled.connect(_on_dragging_cancelled)
 
-	super ()
+	super()
 
 
 func _setup_drop_indicator() -> void:
@@ -137,6 +137,7 @@ func is_being_dragged() -> bool:
 # Drag Lifecycle
 # -------------------------------------------------------------------------
 
+
 func _on_dragging_started() -> void:
 	# If settling from a previous drop, cancel the settle
 	if _is_settling:
@@ -161,9 +162,15 @@ func _on_dragging_started() -> void:
 	# Spring height animation (pop up with overshoot)
 	_kill_pickup_tween()
 	_pickup_tween = create_tween()
-	_pickup_tween.tween_property(self, "heightOffset", _base_height_offset + PICKUP_HEIGHT, PICKUP_SPRING_DURATION)\
-		.from(_base_height_offset)\
-		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	(
+		_pickup_tween
+		. tween_property(
+			self, "heightOffset", _base_height_offset + PICKUP_HEIGHT, PICKUP_SPRING_DURATION
+		)
+		. from(_base_height_offset)
+		. set_trans(Tween.TRANS_BACK)
+		. set_ease(Tween.EASE_OUT)
+	)
 
 	# Scale punch on visual children (subtle pop feel)
 	_play_scale_punch()
@@ -221,6 +228,7 @@ func _on_dragging_cancelled() -> void:
 # Settle Animations
 # -------------------------------------------------------------------------
 
+
 ## Settle the token to the ground below it (normal drop).
 func _settle_to_ground() -> void:
 	var landing_pos = _find_landing_position()
@@ -245,8 +253,12 @@ func _settle_to_position(target_pos: Vector3) -> void:
 
 	_kill_settle_tween()
 	_settle_tween = create_tween()
-	_settle_tween.tween_property(rigid_body, "global_position", target_pos, SETTLE_DURATION)\
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	(
+		_settle_tween
+		. tween_property(rigid_body, "global_position", target_pos, SETTLE_DURATION)
+		. set_trans(Tween.TRANS_CUBIC)
+		. set_ease(Tween.EASE_OUT)
+	)
 	_settle_tween.tween_callback(_on_settle_complete)
 
 
@@ -274,8 +286,10 @@ func _find_landing_position() -> Variant:
 	var bottom_world = rigid_body.global_position + Vector3(0, scaled_bottom_y, 0)
 
 	var space_state = get_world_3d().direct_space_state
-	var query = PhysicsRayQueryParameters3D.create(bottom_world, bottom_world + Vector3.DOWN * 100.0)
-	query.collision_mask = TERRAIN_COLLISION_LAYER # Only hit terrain, not other tokens
+	var query = PhysicsRayQueryParameters3D.create(
+		bottom_world, bottom_world + Vector3.DOWN * 100.0
+	)
+	query.collision_mask = TERRAIN_COLLISION_LAYER  # Only hit terrain, not other tokens
 	query.exclude = [rigid_body.get_rid()]
 	var hit = space_state.intersect_ray(query)
 
@@ -291,6 +305,7 @@ func _find_landing_position() -> Variant:
 # Visual Effects
 # -------------------------------------------------------------------------
 
+
 ## Play a subtle scale punch on visual children (pop feel on pickup).
 func _play_scale_punch() -> void:
 	for child in _visual_children:
@@ -298,10 +313,18 @@ func _play_scale_punch() -> void:
 			var base_scale = child.scale
 			var punch_scale = base_scale * SCALE_PUNCH_AMOUNT
 			var tween = create_tween()
-			tween.tween_property(child, "scale", punch_scale, PICKUP_SPRING_DURATION * 0.5)\
-				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-			tween.tween_property(child, "scale", base_scale, PICKUP_SPRING_DURATION * 0.5)\
-				.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+			(
+				tween
+				. tween_property(child, "scale", punch_scale, PICKUP_SPRING_DURATION * 0.5)
+				. set_trans(Tween.TRANS_BACK)
+				. set_ease(Tween.EASE_OUT)
+			)
+			(
+				tween
+				. tween_property(child, "scale", base_scale, PICKUP_SPRING_DURATION * 0.5)
+				. set_trans(Tween.TRANS_CUBIC)
+				. set_ease(Tween.EASE_IN_OUT)
+			)
 
 
 func _reset_lean() -> void:
@@ -330,12 +353,16 @@ func _update_inertia_lean(delta: float) -> void:
 	for child in _visual_children:
 		if is_instance_valid(child):
 			var current_basis = child.transform.basis.orthonormalized()
-			child.transform.basis = current_basis.slerp(_target_lean_rotation, LEAN_SMOOTHING * delta).orthonormalized()
+			child.transform.basis = (
+				current_basis.slerp(_target_lean_rotation, LEAN_SMOOTHING * delta).orthonormalized()
+			)
 
 	# Whoosh sound when dragging fast
 	_whoosh_cooldown = max(_whoosh_cooldown - delta, 0.0)
 	if speed >= WHOOSH_SPEED_THRESHOLD and _whoosh_cooldown <= 0.0:
-		var speed_t = clamp((speed - WHOOSH_SPEED_THRESHOLD) / (WHOOSH_SPEED_MAX - WHOOSH_SPEED_THRESHOLD), 0.0, 1.0)
+		var speed_t = clamp(
+			(speed - WHOOSH_SPEED_THRESHOLD) / (WHOOSH_SPEED_MAX - WHOOSH_SPEED_THRESHOLD), 0.0, 1.0
+		)
 		var pitch = lerp(WHOOSH_PITCH_MIN, WHOOSH_PITCH_MAX, speed_t)
 		AudioManager.play_token_whoosh(pitch)
 		_whoosh_cooldown = WHOOSH_COOLDOWN_DURATION
@@ -344,6 +371,7 @@ func _update_inertia_lean(delta: float) -> void:
 # -------------------------------------------------------------------------
 # Process
 # -------------------------------------------------------------------------
+
 
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
@@ -383,6 +411,7 @@ func _update_drop_indicator() -> void:
 # Position Sync
 # -------------------------------------------------------------------------
 
+
 ## Sync the parent BoardToken's position with the rigid body after dragging
 ## This keeps the entire hierarchy in sync so reading from any node gives the correct position
 func _sync_parent_position() -> void:
@@ -419,6 +448,7 @@ func _sync_parent_position() -> void:
 # Tween Helpers
 # -------------------------------------------------------------------------
 
+
 func _kill_pickup_tween() -> void:
 	if _pickup_tween and _pickup_tween.is_valid():
 		_pickup_tween.kill()
@@ -435,6 +465,7 @@ func _kill_settle_tween() -> void:
 # Network Interpolation
 # -------------------------------------------------------------------------
 
+
 ## Handle network interpolation - smoothly moves towards target with lean effects
 func _update_network_interpolation(delta: float) -> void:
 	if not rigid_body:
@@ -444,9 +475,15 @@ func _update_network_interpolation(delta: float) -> void:
 	var prev_position = rigid_body.global_position
 
 	# Interpolate position, rotation, and scale
-	rigid_body.global_position = rigid_body.global_position.lerp(_network_target_position, NETWORK_INTERPOLATION_SPEED * delta)
-	rigid_body.global_rotation = rigid_body.global_rotation.lerp(_network_target_rotation, NETWORK_INTERPOLATION_SPEED * delta)
-	rigid_body.scale = rigid_body.scale.lerp(_network_target_scale, NETWORK_INTERPOLATION_SPEED * delta)
+	rigid_body.global_position = rigid_body.global_position.lerp(
+		_network_target_position, NETWORK_INTERPOLATION_SPEED * delta
+	)
+	rigid_body.global_rotation = rigid_body.global_rotation.lerp(
+		_network_target_rotation, NETWORK_INTERPOLATION_SPEED * delta
+	)
+	rigid_body.scale = rigid_body.scale.lerp(
+		_network_target_scale, NETWORK_INTERPOLATION_SPEED * delta
+	)
 
 	# Update drop indicator (same as local dragging)
 	_update_drop_indicator()
@@ -468,7 +505,9 @@ func _update_network_interpolation(delta: float) -> void:
 	for child in _visual_children:
 		if is_instance_valid(child):
 			var current_basis = child.transform.basis.orthonormalized()
-			child.transform.basis = current_basis.slerp(_target_lean_rotation, LEAN_SMOOTHING * delta).orthonormalized()
+			child.transform.basis = (
+				current_basis.slerp(_target_lean_rotation, LEAN_SMOOTHING * delta).orthonormalized()
+			)
 
 	# Check timeout - stop interpolating if no updates received recently
 	_network_interpolation_timeout -= delta
