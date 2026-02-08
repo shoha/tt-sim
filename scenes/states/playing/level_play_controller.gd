@@ -91,7 +91,7 @@ func _on_map_received(
 	map_download_completed.emit(asset_id)
 
 	# Now load the map
-	var map = _load_glb_from_path(local_path)
+	var map = _load_map_from_path(local_path)
 	if map:
 		_finalize_map_loading(map)
 	else:
@@ -349,25 +349,9 @@ func _load_level_map_async(level_data: LevelData) -> bool:
 
 	# 1. Check if it's a res:// path (legacy format)
 	if map_path.begins_with("res://"):
-		if ResourceLoader.exists(map_path):
-			# Use threaded resource loading for res:// paths
-			var load_status = ResourceLoader.load_threaded_request(map_path)
-			if load_status == OK:
-				# Wait for loading to complete
-				while (
-					ResourceLoader.load_threaded_get_status(map_path)
-					== ResourceLoader.THREAD_LOAD_IN_PROGRESS
-				):
-					await get_tree().process_frame
-
-				var map_scene = ResourceLoader.load_threaded_get(map_path)
-				if map_scene:
-					map = map_scene.instantiate() as Node3D
-			else:
-				# Fall back to sync loading
-				var map_scene = load(map_path)
-				if map_scene:
-					map = map_scene.instantiate() as Node3D
+		var result = await GlbUtils.load_map_async(map_path, true, _get_light_intensity_scale())
+		if result.success:
+			map = result.scene
 
 	# 2. Check if it's a user:// path (folder-based format)
 	elif map_path.begins_with("user://"):
@@ -388,8 +372,8 @@ func _load_level_map_async(level_data: LevelData) -> bool:
 				return false
 
 		if path_to_load != "":
-			# Use async GLB loading to avoid blocking
-			map = await _load_glb_from_path_async(path_to_load)
+			# Use async map loading to avoid blocking
+			map = await _load_map_from_path_async(path_to_load)
 
 	if not map:
 		push_error("LevelPlayController: Failed to load map")
@@ -410,14 +394,11 @@ func _finalize_map_loading(map: Node3D) -> void:
 	loaded_map_instance = map
 	loaded_map_instance.name = "LevelMap"
 
-	# Fix broken transform chains: GLB files can contain non-Node3D nodes
-	# (e.g. WorldEnvironment) that prevent transform inheritance.
-	# Apply here as a safety net — GlbUtils also does this, but maps loaded
-	# via res:// (Godot import pipeline) bypass GlbUtils.
-	GlbUtils.flatten_non_node3d_parents(loaded_map_instance)
+	# Safety check: warn if transform chain is broken (non-Node3D intermediate parents)
+	GlbUtils.validate_transform_chain(loaded_map_instance)
 
-	# Add to the SubViewport
-	_game_map.world_viewport.add_child(loaded_map_instance)
+	# Add to the dedicated MapContainer
+	_game_map.map_container.add_child(loaded_map_instance)
 
 	if active_level_data:
 		loaded_map_instance.scale = active_level_data.map_scale
@@ -448,29 +429,26 @@ func _apply_level_environment(level_data: LevelData) -> void:
 	print("LevelPlayController: Applied environment preset '%s'" % level_data.environment_preset)
 
 
-## Load a GLB file from a user:// path using shared GlbUtils (synchronous)
-## For maps, we create StaticBody3D for collision meshes
-## Applies light intensity scaling from the active level data
-func _load_glb_from_path(path: String) -> Node3D:
-	var light_scale = 1.0
-	if active_level_data:
-		light_scale = active_level_data.light_intensity_scale
-	# Use shared utility with create_static_bodies=true (maps need StaticBody3D for collision)
-	return GlbUtils.load_glb_with_processing(path, true, light_scale)
+## Load a map file synchronously using the unified GlbUtils.load_map pipeline.
+## Handles both res:// and user:// paths with full post-processing.
+func _load_map_from_path(path: String) -> Node3D:
+	return GlbUtils.load_map(path, true, _get_light_intensity_scale())
 
 
-## Load a GLB file from a user:// path using shared GlbUtils (async - runs on background thread)
-## For maps, we create StaticBody3D for collision meshes
-## Applies light intensity scaling from the active level data
-func _load_glb_from_path_async(path: String) -> Node3D:
-	var light_scale = 1.0
-	if active_level_data:
-		light_scale = active_level_data.light_intensity_scale
-	# Use async utility with create_static_bodies=true (maps need StaticBody3D for collision)
-	var result = await GlbUtils.load_glb_with_processing_async(path, true, light_scale)
+## Load a map file asynchronously using the unified GlbUtils.load_map_async pipeline.
+## Handles both res:// and user:// paths with full post-processing.
+func _load_map_from_path_async(path: String) -> Node3D:
+	var result = await GlbUtils.load_map_async(path, true, _get_light_intensity_scale())
 	if result.success:
 		return result.scene
 	return null
+
+
+## Get the light intensity scale from the active level data (or 1.0 if none)
+func _get_light_intensity_scale() -> float:
+	if active_level_data:
+		return active_level_data.light_intensity_scale
+	return 1.0
 
 
 ## Get the cached map path for a level (if it exists)
@@ -603,24 +581,13 @@ func _connect_token_context_menu(token: BoardToken) -> void:
 			)
 
 
-## Clear any existing map models from the game map's SubViewport
+## Clear any existing map models from the MapContainer
 func _clear_existing_maps() -> void:
-	if not _game_map or not is_instance_valid(_game_map.world_viewport):
+	if not _game_map or not is_instance_valid(_game_map.map_container):
 		return
 
-	# List of node names to preserve (core viewport children, not maps)
-	var preserved_names = [
-		"CameraHolder",
-		"DragAndDrop3D",
-	]
-
-	for child in _game_map.world_viewport.get_children():
-		# Skip known viewport children
-		if child.name in preserved_names:
-			continue
-		# If it's a Node3D that's not one of our known nodes, it's likely a map model
-		if child is Node3D:
-			child.queue_free()
+	for child in _game_map.map_container.get_children():
+		child.queue_free()
 
 
 ## Spawn an asset token and add it to the current level

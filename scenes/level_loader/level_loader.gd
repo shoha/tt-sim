@@ -14,7 +14,6 @@ var game_map: GameMap = null
 # References set after loading
 var loaded_tokens: Array[BoardToken] = []
 
-
 signal level_loaded(level_data: LevelData)
 signal token_spawned(token: BoardToken, placement: TokenPlacement)
 
@@ -56,22 +55,14 @@ func load_level(data: LevelData) -> bool:
 	return true
 
 
-## Load the map GLB/scene
+## Load the map using the unified GlbUtils pipeline (handles res:// and user:// paths)
 func _load_map() -> bool:
-	if not ResourceLoader.exists(level_data.map_path):
-		push_error("LevelLoader: Map file not found: " + level_data.map_path)
+	var loaded = GlbUtils.load_map(level_data.map_path, true)
+	if not loaded:
+		push_error("LevelLoader: Failed to load map: " + level_data.map_path)
 		return false
 
-	var map_scene = load(level_data.map_path)
-	if not map_scene:
-		push_error("LevelLoader: Failed to load map scene")
-		return false
-
-	map_instance = map_scene.instantiate() as Node3D
-	if not map_instance:
-		push_error("LevelLoader: Map is not a Node3D")
-		return false
-
+	map_instance = loaded
 	map_instance.name = "Map"
 	map_instance.scale = level_data.map_scale
 	map_instance.position = level_data.map_offset
@@ -85,7 +76,12 @@ func _spawn_token(placement: TokenPlacement) -> BoardToken:
 	var token = BoardTokenFactory.create_from_placement(placement)
 
 	if not token:
-		push_error("LevelLoader: Failed to create token for asset %s/%s" % [placement.pack_id, placement.asset_id])
+		push_error(
+			(
+				"LevelLoader: Failed to create token for asset %s/%s"
+				% [placement.pack_id, placement.asset_id]
+			)
+		)
 		return null
 
 	tokens_container.add_child(token)

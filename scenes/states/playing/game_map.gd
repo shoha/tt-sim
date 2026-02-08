@@ -16,8 +16,8 @@ class_name GameMap
 ##   │   └── SubViewportContainer (lo-fi shader applied here)
 ##   │       └── SubViewport
 ##   │           ├── CameraHolder/Camera3D
-##   │           ├── DragAndDrop3D
-##   │           └── (tokens, map geometry, etc.)
+##   │           ├── MapContainer (map geometry, environment)
+##   │           └── DragAndDrop3D (tokens)
 ##   └── GameplayMenu (CanvasLayer - UI on top)
 ##
 ## INPUT HANDLING NOTE:
@@ -30,28 +30,34 @@ class_name GameMap
 ## by setting a ShaderMaterial on viewport_container. See lofi_canvas.gdshader.
 
 @export var move_speed: float = 10.0
-@export var move_accel_speed: float = 15.0 # Smoothing rate for camera movement acceleration/deceleration
-@export var zoom_step: float = 1.5 # How much each scroll tick changes the target zoom
-@export var zoom_smooth_speed: float = 12.0 # Smoothing rate for zoom interpolation
+@export var move_accel_speed: float = 15.0  # Smoothing rate for camera movement acceleration/deceleration
+@export var zoom_step: float = 1.5  # How much each scroll tick changes the target zoom
+@export var zoom_smooth_speed: float = 12.0  # Smoothing rate for zoom interpolation
 @export var min_zoom: float = 2.0
 @export var max_zoom: float = 20.0
 @onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
 @onready var world_viewport: SubViewport = $WorldViewportLayer/SubViewportContainer/SubViewport
-@onready var cameraholder_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder
-@onready var camera_node: Camera3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D
-@onready var tiltshift_node: MeshInstance3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D/MeshInstance3D
-@onready var drag_and_drop_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/DragAndDrop3D
+@onready
+var cameraholder_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder
+@onready
+var camera_node: Camera3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D
+@onready
+var tiltshift_node: MeshInstance3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D/MeshInstance3D
+@onready
+var map_container: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/MapContainer
+@onready
+var drag_and_drop_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/DragAndDrop3D
 @onready var gameplay_menu: CanvasLayer = $GameplayMenu
 
 var _camera_move_dir: Vector3
-var _camera_velocity: Vector3 = Vector3.ZERO # Smoothed camera movement velocity
-var _target_zoom: float = 0.0 # Target zoom level (smoothly interpolated toward)
-var _current_edge_pan: Vector2 = Vector2.ZERO # Smoothed edge pan direction
-var _context_menu = null # TokenContextMenu - dynamically typed to avoid load order issues
+var _camera_velocity: Vector3 = Vector3.ZERO  # Smoothed camera movement velocity
+var _target_zoom: float = 0.0  # Target zoom level (smoothly interpolated toward)
+var _current_edge_pan: Vector2 = Vector2.ZERO  # Smoothed edge pan direction
+var _context_menu = null  # TokenContextMenu - dynamically typed to avoid load order issues
 var _level_play_controller: LevelPlayController = null
-var _lofi_material: ShaderMaterial = null # Cached lo-fi material (from scene or created)
+var _lofi_material: ShaderMaterial = null  # Cached lo-fi material (from scene or created)
 
-const EDGE_PAN_SMOOTH_SPEED: float = 8.0 # Smoothing rate for edge panning ramp-up/coast-out
+const EDGE_PAN_SMOOTH_SPEED: float = 8.0  # Smoothing rate for edge panning ramp-up/coast-out
 const SETTINGS_PATH := "user://settings.cfg"
 
 
@@ -72,6 +78,7 @@ func setup(level_play_controller: LevelPlayController) -> void:
 		var menu_controller = gameplay_menu.get_node_or_null("GameplayMenu")
 		if menu_controller and menu_controller.has_method("setup"):
 			menu_controller.setup(level_play_controller)
+
 
 func _process(delta: float) -> void:
 	handle_movement(delta)
@@ -119,11 +126,12 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("camera_zoom_out"):
 		_target_zoom = clampf(_target_zoom + zoom_step, min_zoom, max_zoom)
 
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	# Don't process camera input if a text input has focus
 	if _is_text_input_focused():
 		return
-	
+
 	var input_dir := _camera_move_dir
 
 	if event.is_action_released("camera_move_forward"):
@@ -173,6 +181,7 @@ func _is_mouse_over_gui() -> bool:
 		return false
 	return true
 
+
 func _setup_context_menu() -> void:
 	# Load and add the context menu to the UI layer
 	var context_menu_scene = load("uid://bh84knb3smm3y")
@@ -190,9 +199,11 @@ func _setup_context_menu() -> void:
 		_context_menu.hp_adjustment_requested.connect(_on_context_menu_hp_adjustment_requested)
 		_context_menu.visibility_toggled.connect(_on_context_menu_visibility_toggled)
 
+
 func _on_token_context_menu_requested(token: BoardToken, menu_position: Vector2) -> void:
 	if _context_menu:
 		_context_menu.open_for_token(token, menu_position)
+
 
 func _on_context_menu_hp_adjustment_requested(amount: int) -> void:
 	if _context_menu and _context_menu.target_token:
@@ -200,6 +211,7 @@ func _on_context_menu_hp_adjustment_requested(amount: int) -> void:
 			_context_menu.target_token.heal(amount)
 		else:
 			_context_menu.target_token.take_damage(amount)
+
 
 func _on_context_menu_visibility_toggled() -> void:
 	if _context_menu and _context_menu.target_token:
@@ -219,12 +231,12 @@ func _setup_viewport() -> void:
 func _load_lofi_setting() -> void:
 	var config = ConfigFile.new()
 	var err = config.load(SETTINGS_PATH)
-	
+
 	# Default to enabled if no setting exists
 	var lofi_enabled = true
 	if err == OK:
 		lofi_enabled = config.get_value("graphics", "lofi_enabled", true)
-	
+
 	set_lofi_enabled(lofi_enabled)
 
 
@@ -295,6 +307,6 @@ func _handle_edge_pan(delta: float) -> void:
 func apply_lofi_overrides(overrides: Dictionary) -> void:
 	if not _lofi_material:
 		_lofi_material = _create_default_lofi_material()
-	
+
 	for param_name in overrides:
 		_lofi_material.set_shader_parameter(param_name, overrides[param_name])

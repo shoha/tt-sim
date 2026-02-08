@@ -742,20 +742,13 @@ func _load_map_into_viewport(map_path: String) -> void:
 
 	await get_tree().process_frame
 
-	# Load the map
+	# Load the map using unified pipeline — handles both res:// and user:// paths.
+	# Load WITHOUT intensity scaling first so we can store original energies
+	# and scale dynamically in the lighting editor.
 	var map_instance: Node3D = null
-
-	if map_path.ends_with(".glb") or map_path.ends_with(".gltf"):
-		# Use GlbUtils for GLB files - load WITHOUT intensity scaling first
-		# so we can store original energies and scale dynamically
-		var result = await GlbUtils.load_glb_with_processing_async(map_path, false, 1.0)
-		if result.success and result.scene:
-			map_instance = result.scene
-	elif map_path.ends_with(".tscn"):
-		# Load as packed scene
-		var scene = load(map_path)
-		if scene:
-			map_instance = scene.instantiate()
+	var result = await GlbUtils.load_map_async(map_path, false, 1.0)
+	if result.success and result.scene:
+		map_instance = result.scene
 
 	if map_instance:
 		lighting_map_container.add_child(map_instance)

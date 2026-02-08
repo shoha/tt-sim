@@ -64,7 +64,9 @@ func save_level(level_data: LevelData, file_name: String = "") -> String:
 ## @param folder_name: Optional folder name (defaults to sanitized level name)
 ## @param source_map_path: Optional path to map file to copy (if map needs to be bundled)
 ## @return: The folder path, or empty string on failure
-func save_level_folder(level_data: LevelData, folder_name: String = "", source_map_path: String = "") -> String:
+func save_level_folder(
+	level_data: LevelData, folder_name: String = "", source_map_path: String = ""
+) -> String:
 	_ensure_levels_directory()
 
 	# Determine folder name
@@ -250,6 +252,7 @@ func load_level_folder(folder_name: String, notify: bool = true) -> LevelData:
 # Async Loading (non-blocking)
 # ============================================================================
 
+
 ## Load a level asynchronously (does not block the main thread)
 ## @param path: Either a .tres file path or a level folder path
 ## @param notify: Whether to emit level_loaded signal
@@ -271,7 +274,9 @@ func load_level_async(path: String, notify: bool = true) -> LevelData:
 		push_error("LevelManager: Level file does not exist: " + path)
 		return null
 
-	var load_status = ResourceLoader.load_threaded_request(path, "", false, ResourceLoader.CACHE_MODE_REPLACE)
+	var load_status = ResourceLoader.load_threaded_request(
+		path, "", false, ResourceLoader.CACHE_MODE_REPLACE
+	)
 	if load_status != OK:
 		push_error("LevelManager: Failed to start threaded load: " + path)
 		return null
@@ -306,7 +311,7 @@ func load_level_folder_async(folder_name: String, notify: bool = true) -> LevelD
 
 	# Read file on background thread
 	var thread_result: Dictionary = {"json_string": "", "error": ""}
-	
+
 	var task_id = WorkerThreadPool.add_task(
 		func():
 			var file = FileAccess.open(json_path, FileAccess.READ)
@@ -373,18 +378,22 @@ func get_saved_levels() -> Array[Dictionary]:
 		elif entry_name.ends_with(LEVEL_FILE_EXTENSION):
 			# Legacy .tres format
 			var full_path = Paths.LEVELS_DIR + entry_name
-			var level = ResourceLoader.load(full_path, "", ResourceLoader.CACHE_MODE_IGNORE) as LevelData
+			var level = (
+				ResourceLoader.load(full_path, "", ResourceLoader.CACHE_MODE_IGNORE) as LevelData
+			)
 			if level:
-				levels.append({
-					"path": full_path,
-					"folder": "",
-					"is_folder_based": false,
-					"name": level.level_name,
-					"description": level.level_description,
-					"author": level.author,
-					"modified_at": level.modified_at,
-					"token_count": level.token_placements.size()
-				})
+				levels.append(
+					{
+						"path": full_path,
+						"folder": "",
+						"is_folder_based": false,
+						"name": level.level_name,
+						"description": level.level_description,
+						"author": level.author,
+						"modified_at": level.modified_at,
+						"token_count": level.token_placements.size()
+					}
+				)
 			else:
 				push_warning("LevelManager: Skipping incompatible level file: " + entry_name)
 		entry_name = dir.get_next()
@@ -503,17 +512,10 @@ func instantiate_level(level_data: LevelData, parent: Node3D) -> Node3D:
 		push_error("LevelManager: No map path specified")
 		return null
 
-	# Load and instantiate the map
-	var map_scene: PackedScene
-	if ResourceLoader.exists(level_data.map_path):
-		map_scene = load(level_data.map_path)
-	else:
-		push_error("LevelManager: Map file not found: " + level_data.map_path)
-		return null
-
-	var map_instance = map_scene.instantiate() as Node3D
+	# Load the map using the unified pipeline (handles res:// and user:// paths)
+	var map_instance = GlbUtils.load_map(level_data.map_path, true)
 	if not map_instance:
-		push_error("LevelManager: Failed to instantiate map")
+		push_error("LevelManager: Failed to load map: " + level_data.map_path)
 		return null
 
 	map_instance.scale = level_data.map_scale
@@ -565,29 +567,35 @@ func export_level_json(level_data: LevelData, file_path: String) -> bool:
 		"created_at": level_data.created_at,
 		"modified_at": level_data.modified_at,
 		"map_path": level_data.map_path,
-		"map_scale": {"x": level_data.map_scale.x, "y": level_data.map_scale.y, "z": level_data.map_scale.z},
-		"map_offset": {"x": level_data.map_offset.x, "y": level_data.map_offset.y, "z": level_data.map_offset.z},
+		"map_scale":
+		{"x": level_data.map_scale.x, "y": level_data.map_scale.y, "z": level_data.map_scale.z},
+		"map_offset":
+		{"x": level_data.map_offset.x, "y": level_data.map_offset.y, "z": level_data.map_offset.z},
 		"light_intensity_scale": level_data.light_intensity_scale,
 		"environment_preset": level_data.environment_preset,
-		"environment_overrides": EnvironmentPresets.overrides_to_json(level_data.environment_overrides),
+		"environment_overrides":
+		EnvironmentPresets.overrides_to_json(level_data.environment_overrides),
 		"token_placements": []
 	}
 
 	for placement in level_data.token_placements:
-		data.token_placements.append({
-			"placement_id": placement.placement_id,
-			"pack_id": placement.pack_id,
-			"asset_id": placement.asset_id,
-			"variant_id": placement.variant_id,
-			"position": {"x": placement.position.x, "y": placement.position.y, "z": placement.position.z},
-			"rotation_y": placement.rotation_y,
-			"scale": {"x": placement.scale.x, "y": placement.scale.y, "z": placement.scale.z},
-			"token_name": placement.token_name,
-			"is_player_controlled": placement.is_player_controlled,
-			"max_health": placement.max_health,
-			"current_health": placement.current_health,
-			"is_visible_to_players": placement.is_visible_to_players
-		})
+		data.token_placements.append(
+			{
+				"placement_id": placement.placement_id,
+				"pack_id": placement.pack_id,
+				"asset_id": placement.asset_id,
+				"variant_id": placement.variant_id,
+				"position":
+				{"x": placement.position.x, "y": placement.position.y, "z": placement.position.z},
+				"rotation_y": placement.rotation_y,
+				"scale": {"x": placement.scale.x, "y": placement.scale.y, "z": placement.scale.z},
+				"token_name": placement.token_name,
+				"is_player_controlled": placement.is_player_controlled,
+				"max_health": placement.max_health,
+				"current_health": placement.current_health,
+				"is_visible_to_players": placement.is_visible_to_players
+			}
+		)
 
 	var json_string = JSON.stringify(data, "\t")
 	var file = FileAccess.open(file_path, FileAccess.WRITE)
@@ -630,10 +638,12 @@ func import_level_json(file_path: String) -> LevelData:
 		level.map_scale = Vector3(data.map_scale.x, data.map_scale.y, data.map_scale.z)
 	if data.has("map_offset"):
 		level.map_offset = Vector3(data.map_offset.x, data.map_offset.y, data.map_offset.z)
-	
+
 	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
 	level.environment_preset = data.get("environment_preset", "indoor_neutral")
-	level.environment_overrides = EnvironmentPresets.overrides_from_json(data.get("environment_overrides", {}))
+	level.environment_overrides = EnvironmentPresets.overrides_from_json(
+		data.get("environment_overrides", {})
+	)
 
 	for placement_data in data.get("token_placements", []):
 		var placement = TokenPlacement.new()
@@ -642,16 +652,12 @@ func import_level_json(file_path: String) -> LevelData:
 		placement.asset_id = placement_data.get("asset_id", "")
 		placement.variant_id = placement_data.get("variant_id", "default")
 		placement.position = Vector3(
-			placement_data.position.x,
-			placement_data.position.y,
-			placement_data.position.z
+			placement_data.position.x, placement_data.position.y, placement_data.position.z
 		)
 		placement.rotation_y = placement_data.get("rotation_y", 0.0)
 		if placement_data.has("scale"):
 			placement.scale = Vector3(
-				placement_data.scale.x,
-				placement_data.scale.y,
-				placement_data.scale.z
+				placement_data.scale.x, placement_data.scale.y, placement_data.scale.z
 			)
 		placement.token_name = placement_data.get("token_name", "")
 		placement.is_player_controlled = placement_data.get("is_player_controlled", false)
