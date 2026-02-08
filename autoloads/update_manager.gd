@@ -12,10 +12,11 @@ extends Node
 const GITHUB_API_URL: String = "https://api.github.com/repos/shoha/tt-sim/releases"
 const GITHUB_RELEASES_URL: String = "https://github.com/shoha/tt-sim/releases"
 const UPDATE_CHECK_TIMEOUT: float = 15.0
-const DOWNLOAD_TIMEOUT: float = 300.0 # 5 minutes for large downloads
+const DOWNLOAD_TIMEOUT: float = 300.0  # 5 minutes for large downloads
 const SETTINGS_FILE: String = "user://settings.cfg"
 const UPDATES_DIR: String = "user://updates/"
 const PENDING_UPDATE_FILE: String = "user://updates/pending_update.json"
+const UPDATE_SUCCESS_FILE: String = "user://updates/update_success.txt"
 const UPDATE_LOG_FILE: String = "user://updates/update_log.txt"
 
 ## Result of the last update attempt (for showing toast after UIManager is ready)
@@ -44,8 +45,7 @@ signal update_check_complete(has_update: bool)
 signal applying_pending_update(version: String)
 
 ## Emitted when update cannot be applied due to App Translocation (macOS)
-signal update_blocked_by_translocation()
-
+signal update_blocked_by_translocation
 
 ## Latest available release info (populated after check)
 var latest_release: Dictionary = {}
@@ -72,6 +72,9 @@ func _ready() -> void:
 	# Clean up old executables from previous updates (Windows)
 	_cleanup_old_executables()
 
+	# Check for update success from a previous restart (persisted to disk)
+	_load_update_success_toast()
+
 	# Check for and apply any pending update from a previous download
 	_apply_pending_update()
 
@@ -96,6 +99,28 @@ func _show_deferred_toast() -> void:
 			ui_manager.show_success(_pending_toast_message)
 
 	_pending_toast_message = ""
+
+
+## Load a persisted update success toast from a previous restart
+func _load_update_success_toast() -> void:
+	if not FileAccess.file_exists(UPDATE_SUCCESS_FILE):
+		return
+	var file = FileAccess.open(UPDATE_SUCCESS_FILE, FileAccess.READ)
+	if file:
+		var version = file.get_as_text().strip_edges()
+		file.close()
+		if not version.is_empty():
+			_pending_toast_message = "Updated to v%s" % version
+			_pending_toast_is_error = false
+	DirAccess.remove_absolute(UPDATE_SUCCESS_FILE)
+
+
+## Persist the update success version to disk so the toast survives a restart
+func _save_update_success_toast(version: String) -> void:
+	var file = FileAccess.open(UPDATE_SUCCESS_FILE, FileAccess.WRITE)
+	if file:
+		file.store_string(version)
+		file.close()
 
 
 ## Show a dialog explaining App Translocation and how to fix it (macOS only)
@@ -188,7 +213,7 @@ func is_prerelease_enabled() -> bool:
 ## Set the prerelease preference
 func set_prerelease_enabled(enabled: bool) -> void:
 	var config = ConfigFile.new()
-	config.load(SETTINGS_FILE) # OK if doesn't exist
+	config.load(SETTINGS_FILE)  # OK if doesn't exist
 	config.set_value("updates", "check_prereleases", enabled)
 	config.save(SETTINGS_FILE)
 
@@ -225,7 +250,12 @@ func check_for_updates() -> void:
 	# Skip check if we already have a pending update
 	if has_pending_update():
 		var pending = get_pending_update_info()
-		print("UpdateManager: Skipping update check - pending update v%s ready" % pending.get("version", "?"))
+		print(
+			(
+				"UpdateManager: Skipping update check - pending update v%s ready"
+				% pending.get("version", "?")
+			)
+		)
 		update_check_complete.emit(false)
 		return
 
@@ -239,10 +269,7 @@ func check_for_updates() -> void:
 	_http_check.request_completed.connect(_on_check_completed)
 
 	# GitHub API requires User-Agent header
-	var headers = [
-		"User-Agent: TTSim-Game-Client",
-		"Accept: application/vnd.github.v3+json"
-	]
+	var headers = ["User-Agent: TTSim-Game-Client", "Accept: application/vnd.github.v3+json"]
 
 	var error = _http_check.request(GITHUB_API_URL, headers)
 	if error != OK:
@@ -255,7 +282,9 @@ func check_for_updates() -> void:
 
 
 ## Handle update check response
-func _on_check_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+func _on_check_completed(
+	result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray
+) -> void:
 	_cleanup_check()
 
 	if result != HTTPRequest.RESULT_SUCCESS:
@@ -287,10 +316,11 @@ func _on_check_completed(result: int, response_code: int, _headers: PackedString
 		return
 
 	# Sort releases by published_at descending (API order is unreliable)
-	releases.sort_custom(func(a, b):
-		var date_a = a.get("published_at", "") if a is Dictionary else ""
-		var date_b = b.get("published_at", "") if b is Dictionary else ""
-		return date_a > date_b # Descending order (newest first)
+	releases.sort_custom(
+		func(a, b):
+			var date_a = a.get("published_at", "") if a is Dictionary else ""
+			var date_b = b.get("published_at", "") if b is Dictionary else ""
+			return date_a > date_b  # Descending order (newest first)
 	)
 
 	# Find the best release (respecting prerelease setting)
@@ -427,9 +457,9 @@ func _is_newer_version(version_a: String, version_b: String) -> bool:
 	var suffix_b = parts_b[3]
 
 	if suffix_a.is_empty() and not suffix_b.is_empty():
-		return true # a is release, b is prerelease
+		return true  # a is release, b is prerelease
 	if not suffix_a.is_empty() and suffix_b.is_empty():
-		return false # a is prerelease, b is release
+		return false  # a is prerelease, b is release
 
 	# Both have suffixes or both don't - compare lexically
 	return suffix_a > suffix_b
@@ -505,11 +535,13 @@ func _process(_delta: float) -> void:
 				download_progress = new_progress
 				update_download_progress.emit(download_progress)
 		elif downloaded > 0:
-			update_download_progress.emit(-1.0) # Indeterminate
+			update_download_progress.emit(-1.0)  # Indeterminate
 
 
 ## Handle download completion
-func _on_download_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+func _on_download_completed(
+	result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray
+) -> void:
 	_cleanup_download()
 
 	if result != HTTPRequest.RESULT_SUCCESS:
@@ -658,17 +690,24 @@ func _apply_pending_update() -> void:
 		# Delete the zip file after successful extraction
 		DirAccess.remove_absolute(zip_path)
 
+		# Persist success toast so it survives the restart
+		_save_update_success_toast(version)
+
+		# Restart to run the new executable — the current process is still the old binary
+		match OS.get_name():
+			"Windows":
+				_log("Restarting to run updated executable...")
+				var new_exe_path = pending_info.get("exe_path", "")
+				if not new_exe_path.is_empty() and FileAccess.file_exists(new_exe_path):
+					OS.create_process(new_exe_path, [])
+					get_tree().quit()
+			"macOS":
+				_log("Restarting to run updated executable...")
+				_restart_macos(OS.get_executable_path())
+
+		# Fallback: if restart didn't happen, show toast in current session
 		_pending_toast_message = "Updated to v%s" % version
 		_pending_toast_is_error = false
-
-		# On Windows, we need to restart immediately to run the new executable
-		# (we're currently running from the .old file)
-		if OS.get_name() == "Windows":
-			_log("Restarting to run updated executable...")
-			var new_exe_path = pending_info.get("exe_path", "")
-			if not new_exe_path.is_empty() and FileAccess.file_exists(new_exe_path):
-				OS.create_process(new_exe_path, [])
-				get_tree().quit()
 	else:
 		_log("ERROR: Failed to apply update - see above for details")
 		_pending_toast_message = "Update failed - check update_log.txt"
@@ -731,7 +770,12 @@ func _extract_update_windows(zip_path: String, install_dir: String) -> bool:
 		had_console_wrapper = true
 		var console_rename = DirAccess.rename_absolute(console_exe_path, old_console_path)
 		if console_rename != OK:
-			print("UpdateManager: Warning - failed to rename console wrapper (error %d)" % console_rename)
+			print(
+				(
+					"UpdateManager: Warning - failed to rename console wrapper (error %d)"
+					% console_rename
+				)
+			)
 			# Non-fatal, continue with update
 
 	# Step 2: Extract the new executable from the zip
@@ -740,11 +784,19 @@ func _extract_update_windows(zip_path: String, install_dir: String) -> bool:
 	var escaped_zip = global_zip.replace("'", "''")
 	var escaped_install = global_install.replace("'", "''")
 	var output = []
-	var exit_code = OS.execute("powershell", [
-		"-NoProfile",
-		"-Command",
-		"Expand-Archive -LiteralPath '%s' -DestinationPath '%s' -Force" % [escaped_zip, escaped_install]
-	], output, true)
+	var exit_code = OS.execute(
+		"powershell",
+		[
+			"-NoProfile",
+			"-Command",
+			(
+				"Expand-Archive -LiteralPath '%s' -DestinationPath '%s' -Force"
+				% [escaped_zip, escaped_install]
+			)
+		],
+		output,
+		true
+	)
 
 	if exit_code != 0:
 		print("UpdateManager: PowerShell extraction failed with code %d" % exit_code)
@@ -913,11 +965,14 @@ func _restart_windows(exe_path: String) -> void:
 	var script_path = UPDATES_DIR + "restart.bat"
 	var global_script = ProjectSettings.globalize_path(script_path)
 
-	var script = """@echo off
+	var script = (
+		"""@echo off
 timeout /t 1 /nobreak >nul
 start "" "%s"
 del "%%~f0"
-""" % [exe_path]
+"""
+		% [exe_path]
+	)
 
 	var file = FileAccess.open(script_path, FileAccess.WRITE)
 	if file:
@@ -947,11 +1002,14 @@ func _restart_macos(exe_path: String) -> void:
 	var script_path = UPDATES_DIR + "restart.sh"
 	var global_script = ProjectSettings.globalize_path(script_path)
 
-	var script = """#!/bin/bash
+	var script = (
+		"""#!/bin/bash
 sleep 1
 open "%s"
 rm "$0"
-""" % [app_path]
+"""
+		% [app_path]
+	)
 
 	var file = FileAccess.open(script_path, FileAccess.WRITE)
 	if file:
