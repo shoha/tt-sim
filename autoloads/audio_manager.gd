@@ -11,6 +11,8 @@ const BUS_MUSIC := "Music"
 const BUS_SFX := "SFX"
 const BUS_UI := "UI"
 
+const SETTINGS_PATH := "user://settings.cfg"
+
 # UI Sound effects (paths will be updated when actual audio files are added)
 var _ui_sounds := {
 	"click": null, # "res://assets/audio/ui/click.wav"
@@ -58,6 +60,9 @@ func _ready() -> void:
 	# Load sounds if they exist
 	_load_ui_sounds()
 	_load_sfx_sounds()
+
+	# Apply saved audio settings (bus volumes) on startup
+	_load_audio_settings()
 
 	# Auto-connect button sounds so every button gets click/hover sounds
 	# automatically. To opt a button out, call button.set_meta("ui_silent", true).
@@ -107,6 +112,25 @@ func _load_ui_sounds() -> void:
 
 func _load_sfx_sounds() -> void:
 	_load_sounds(_sfx_sounds, "sfx")
+
+
+## Load saved audio bus volumes from settings.cfg and apply them.
+## Called once at startup so the game respects the user's previous volume choices.
+func _load_audio_settings() -> void:
+	var config = ConfigFile.new()
+	var err = config.load(SETTINGS_PATH)
+	if err != OK:
+		return  # No saved settings — buses stay at default (100%)
+
+	var buses := {
+		BUS_MASTER: config.get_value("audio", "master", 100.0),
+		BUS_MUSIC: config.get_value("audio", "music", 100.0),
+		BUS_SFX: config.get_value("audio", "sfx", 100.0),
+		BUS_UI: config.get_value("audio", "ui", 100.0),
+	}
+
+	for bus_name in buses:
+		set_bus_volume(bus_name, buses[bus_name] / 100.0)
 
 
 ## Play a UI sound by name

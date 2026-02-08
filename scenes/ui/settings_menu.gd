@@ -204,18 +204,22 @@ func _update_volume_label(label: Label, value: float) -> void:
 
 func _on_master_volume_changed(value: float) -> void:
 	_update_volume_label(master_label, value)
+	_apply_audio_bus("Master", value)
 
 
 func _on_music_volume_changed(value: float) -> void:
 	_update_volume_label(music_label, value)
+	_apply_audio_bus("Music", value)
 
 
 func _on_sfx_volume_changed(value: float) -> void:
 	_update_volume_label(sfx_label, value)
+	_apply_audio_bus("SFX", value)
 
 
 func _on_ui_volume_changed(value: float) -> void:
 	_update_volume_label(ui_label, value)
+	_apply_audio_bus("UI", value)
 
 
 func _on_fullscreen_toggled(_pressed: bool) -> void:
