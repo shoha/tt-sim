@@ -67,13 +67,14 @@ Autoloads are registered in `project.godot` and available globally.
 
 ### Core Autoloads
 
-| Autoload       | File                         | Purpose                            |
-| -------------- | ---------------------------- | ---------------------------------- |
-| `Paths`        | `autoloads/paths.gd`         | Path constants and utilities       |
-| `NodeUtils`    | `autoloads/node_utils.gd`    | Node manipulation utilities        |
-| `LevelManager` | `autoloads/level_manager.gd` | Level save/load operations         |
-| `UIManager`    | `autoloads/ui_manager.gd`    | UI systems (dialogs, toasts, etc.) |
-| `AudioManager` | `autoloads/audio_manager.gd` | Audio playback and bus control     |
+| Autoload       | File                         | Purpose                              |
+| -------------- | ---------------------------- | ------------------------------------ |
+| `Constants`    | `autoloads/constants.gd`    | Shared constants (lo-fi defaults, network intervals) |
+| `Paths`        | `autoloads/paths.gd`         | Path constants and utilities         |
+| `NodeUtils`    | `autoloads/node_utils.gd`    | Node manipulation utilities          |
+| `LevelManager` | `autoloads/level_manager.gd` | Level save/load operations           |
+| `UIManager`    | `autoloads/ui_manager.gd`    | UI systems (dialogs, toasts, etc.)   |
+| `AudioManager` | `autoloads/audio_manager.gd` | Audio playback and bus control       |
 
 ### Networking Autoloads
 
@@ -117,7 +118,8 @@ Autoloads are registered in `project.godot` and available globally.
 - Host/join game connections via Noray
 - Player tracking and role management
 - RPC routing for state synchronization
-- Late joiner handling
+- Late joiner handling (signal-driven, no polling)
+- Automatic reconnection with exponential backoff (clients only)
 
 See [NETWORKING.md](NETWORKING.md) for detailed documentation.
 
@@ -400,9 +402,14 @@ var rotation_y: float
 var scale: Vector3
 ```
 
+### Level Editor Features
+
+- **Undo/Redo** — Snapshot-based (`Ctrl+Z` / `Ctrl+Y`). Captures `LevelData.to_dict()` before each mutation. History capped at 50 entries with deduplication.
+- **Autosave** — 30-second timer writes to `user://levels/_autosave/level.json` when unsaved changes exist. On startup, prompts to recover if an autosave file is found. Cleared after manual save.
+
 ### Level Flow
 
-1. **Level Editor** creates/edits `LevelData`
+1. **Level Editor** creates/edits `LevelData` (with undo/redo and autosave)
 2. **LevelManager** saves/loads level files (sync or async)
 3. **LevelPlayController** receives level data and:
    - Loads map via `GlbUtils.load_map_async()` (unified pipeline for `res://` and `user://` paths)
