@@ -43,10 +43,11 @@ The networking system uses a **host-authoritative architecture** where one playe
 
 ```gdscript
 enum ConnectionState {
-    OFFLINE,     # Not connected
-    CONNECTING,  # Connecting to Noray or game server
-    HOSTING,     # Hosting a game
-    JOINED,      # Connected as client
+    OFFLINE,       # Not connected
+    CONNECTING,    # Connecting to Noray or game server
+    HOSTING,       # Hosting a game
+    JOINED,        # Connected as client
+    RECONNECTING,  # Attempting automatic reconnection (client only)
 }
 ```
 
@@ -58,6 +59,7 @@ signal connection_state_changed(old_state, new_state)
 signal room_code_received(code: String)
 signal connection_failed(reason: String)
 signal connection_timeout()
+signal reconnecting(attempt: int, max_attempts: int)  # Emitted during auto-reconnection
 
 # Player management
 signal player_joined(peer_id: int, player_info: Dictionary)
@@ -128,6 +130,27 @@ NetworkManager.connection_state_changed.connect(func(old, new):
 
 ```gdscript
 NetworkManager.disconnect_game()
+```
+
+### Automatic Reconnection
+
+When a **client** loses connection to the host, NetworkManager automatically attempts to reconnect using exponential backoff. Hosts do not reconnect — they fully disconnect instead.
+
+**Behavior:**
+
+- Up to `MAX_RECONNECT_ATTEMPTS` (5) retries
+- Exponential backoff delay: `min(1.0 * 2^attempt, 16.0)` seconds
+- State transitions to `RECONNECTING` during retries
+- Emits `reconnecting(attempt, max_attempts)` for UI feedback
+- On success, state returns to `JOINED` and normal gameplay resumes
+- On failure after all attempts, state goes to `OFFLINE` and `connection_failed` is emitted
+- Room code is preserved during reconnection attempts
+
+```gdscript
+# React to reconnection attempts in the UI
+NetworkManager.reconnecting.connect(func(attempt, max_attempts):
+    status_label.text = "Reconnecting (attempt %d/%d)..." % [attempt, max_attempts]
+)
 ```
 
 ---
@@ -220,7 +243,7 @@ var players = NetworkManager.get_players()
 
 When a player joins mid-game, they automatically receive:
 
-1. Current level data
+1. Current level data (with signal-driven ACK and timeout — no polling)
 2. Full game state (all tokens and their states)
 
 ### Host-Side Handling
