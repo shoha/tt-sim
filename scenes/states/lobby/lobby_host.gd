@@ -67,12 +67,14 @@ func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
 	_update_player_list()
 	status_label.text = "%d player(s) connected" % NetworkManager.get_player_count()
 	_flash_player_list()
+	AudioManager.play_success()
 
 
 func _on_player_left(_peer_id: int) -> void:
 	_update_player_list()
 	status_label.text = "%d player(s) connected" % NetworkManager.get_player_count()
 	_flash_player_list()
+	AudioManager.play_tick()
 
 
 func _on_connection_failed(reason: String) -> void:
@@ -94,6 +96,11 @@ func _on_connection_state_changed(
 func _update_player_list() -> void:
 	player_list.clear()
 	var players = NetworkManager.get_players()
+	if players.is_empty():
+		player_list.add_item("Waiting for players...")
+		player_list.set_item_disabled(0, true)
+		player_list.set_item_selectable(0, false)
+		return
 	for peer_id in players:
 		var info = players[peer_id]
 		var player_name = info.get("name", "Player %d" % peer_id)
@@ -112,10 +119,13 @@ func _on_cancel_pressed() -> void:
 
 func _on_copy_code_pressed() -> void:
 	DisplayServer.clipboard_set(room_code_value.text)
-	# Brief visual feedback
+	# Brief visual + color feedback
 	copy_button.text = "Copied!"
+	var original_variant: StringName = copy_button.theme_type_variation
+	copy_button.theme_type_variation = &"Success"
 	await get_tree().create_timer(1.0).timeout
 	copy_button.text = "Copy"
+	copy_button.theme_type_variation = original_variant
 
 
 func _on_player_name_changed(new_name: String) -> void:

@@ -34,7 +34,7 @@ func _create_tabs() -> void:
 	for child in tab_container.get_children():
 		child.queue_free()
 	_tabs.clear()
-	
+
 	# Create a tab for each pack
 	for pack in AssetPackManager.get_packs():
 		var tab = AssetPackTabScene.instantiate() as AssetPackTab
@@ -43,17 +43,26 @@ func _create_tabs() -> void:
 		tab.setup(pack.pack_id)
 		tab.asset_selected.connect(_on_asset_selected)
 		_tabs[pack.pack_id] = tab
-	
+
 	# Refresh the first tab
 	if tab_container.get_child_count() > 0:
 		_refresh_current_tab()
-	
+
 	# Connect to tab changes
 	tab_container.tab_changed.connect(_on_tab_changed)
 
 
 func _on_tab_changed(_tab_index: int) -> void:
 	_refresh_current_tab()
+	# Cross-fade the newly visible tab content
+	var tab := tab_container.get_current_tab_control()
+	if tab:
+		tab.modulate.a = 0.0
+		var tw := create_tween()
+		tw.set_ease(Tween.EASE_OUT)
+		tw.set_trans(Tween.TRANS_CUBIC)
+		tw.tween_property(tab, "modulate:a", 1.0, 0.15)
+	AudioManager.play_tick()
 
 
 func _refresh_current_tab() -> void:
