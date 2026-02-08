@@ -40,6 +40,11 @@ var map = GlbUtils.load_map(path, true, light_scale)
 # UI
 UIManager.show_success("Done!")
 UIManager.register_overlay(self)  # For ESC handling
+
+# TabContainer — consistent cross-fade + tick sound on tab switch
+tab_container.tab_changed.connect(_on_tab_changed)
+func _on_tab_changed(_idx: int) -> void:
+    TabUtils.animate_tab_change(tab_container, self)
 ```
 
 ## Formatting

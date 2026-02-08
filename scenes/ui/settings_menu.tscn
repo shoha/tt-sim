@@ -58,27 +58,32 @@ size_flags_vertical = 3
 layout_mode = 2
 horizontal_scroll_mode = 0
 
-[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio"]
+[node name="Margin" type="MarginContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"TabContentMargin"
+
+[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="MasterVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content"]
+[node name="MasterVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/MasterVolume"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/MasterVolume"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Master Volume"
 
-[node name="MasterVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/MasterVolume"]
+[node name="MasterVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/MasterVolume"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 value = 100.0
 
-[node name="MasterVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/MasterVolume"]
+[node name="MasterVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/MasterVolume"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
@@ -86,22 +91,22 @@ theme_type_variation = &"Body"
 text = "100%"
 horizontal_alignment = 2
 
-[node name="MusicVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content"]
+[node name="MusicVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/MusicVolume"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/MusicVolume"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Music"
 
-[node name="MusicVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/MusicVolume"]
+[node name="MusicVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/MusicVolume"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 value = 100.0
 
-[node name="MusicVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/MusicVolume"]
+[node name="MusicVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/MusicVolume"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
@@ -109,22 +114,22 @@ theme_type_variation = &"Body"
 text = "100%"
 horizontal_alignment = 2
 
-[node name="SFXVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content"]
+[node name="SFXVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/SFXVolume"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/SFXVolume"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Sound Effects"
 
-[node name="SFXVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/SFXVolume"]
+[node name="SFXVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/SFXVolume"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 value = 100.0
 
-[node name="SFXVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/SFXVolume"]
+[node name="SFXVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/SFXVolume"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
@@ -132,22 +137,22 @@ theme_type_variation = &"Body"
 text = "100%"
 horizontal_alignment = 2
 
-[node name="UIVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content"]
+[node name="UIVolume" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/UIVolume"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/UIVolume"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "UI Sounds"
 
-[node name="UIVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/UIVolume"]
+[node name="UIVolumeSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/UIVolume"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 value = 100.0
 
-[node name="UIVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Content/UIVolume"]
+[node name="UIVolumeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Audio/Margin/Content/UIVolume"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
@@ -160,48 +165,53 @@ visible = false
 layout_mode = 2
 horizontal_scroll_mode = 0
 
-[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics"]
+[node name="Margin" type="MarginContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"TabContentMargin"
+
+[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="Fullscreen" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Content"]
+[node name="Fullscreen" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Content/Fullscreen"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Fullscreen"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Fullscreen"
 
-[node name="FullscreenCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Content/Fullscreen"]
+[node name="FullscreenCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Fullscreen"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="VSync" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Content"]
+[node name="VSync" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Content/VSync"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/VSync"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "VSync"
 
-[node name="VSyncCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Content/VSync"]
+[node name="VSyncCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/VSync"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 
-[node name="LofiFilter" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Content"]
+[node name="LofiFilter" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Content/LofiFilter"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/LofiFilter"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Lo-Fi Filter"
 
-[node name="LofiCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Content/LofiFilter"]
+[node name="LofiCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/LofiFilter"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
@@ -211,21 +221,26 @@ visible = false
 layout_mode = 2
 horizontal_scroll_mode = 0
 
-[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls"]
+[node name="Margin" type="MarginContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"TabContentMargin"
+
+[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Margin"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="ControlsInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Content"]
+[node name="ControlsInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Margin/Content"]
 layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Keyboard & Mouse Controls"
 horizontal_alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Content"]
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Margin/Content"]
 layout_mode = 2
 
-[node name="ControlsList" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Content"]
+[node name="ControlsList" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Margin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"BoxContainerSpaced"
@@ -235,61 +250,66 @@ visible = false
 layout_mode = 2
 horizontal_scroll_mode = 0
 
-[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network"]
+[node name="Margin" type="MarginContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"TabContentMargin"
+
+[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="NetworkInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Content"]
+[node name="NetworkInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content"]
 layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Asset Streaming Settings"
 horizontal_alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Content"]
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content"]
 layout_mode = 2
 
-[node name="P2PEnabled" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Content"]
+[node name="P2PEnabled" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Content/P2PEnabled"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content/P2PEnabled"]
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Enable P2P Asset Streaming"
 
-[node name="P2PEnabledCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Content/P2PEnabled"]
+[node name="P2PEnabledCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content/P2PEnabled"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 
-[node name="P2PDescription" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Content"]
+[node name="P2PDescription" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content"]
 layout_mode = 2
 theme_type_variation = &"Caption"
 text = "When enabled, missing assets will be downloaded
 directly from the host if no URL is available."
 horizontal_alignment = 1
 
-[node name="HSeparator2a" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Content"]
+[node name="HSeparator2a" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content"]
 layout_mode = 2
 
-[node name="ClearCache" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Content"]
+[node name="ClearCache" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Content/ClearCache"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content/ClearCache"]
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"Body"
 text = "Asset Cache"
 
-[node name="ClearCacheButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Content/ClearCache"]
+[node name="ClearCacheButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content/ClearCache"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Clear Cache"
 
-[node name="CacheInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Content"]
+[node name="CacheInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Caption"
@@ -302,21 +322,26 @@ visible = false
 layout_mode = 2
 horizontal_scroll_mode = 0
 
-[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates"]
+[node name="Margin" type="MarginContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"TabContentMargin"
+
+[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="VersionInfo" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content"]
+[node name="VersionInfo" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content/VersionInfo"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content/VersionInfo"]
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Current Version"
 
-[node name="VersionLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content/VersionInfo"]
+[node name="VersionLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content/VersionInfo"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -324,49 +349,49 @@ theme_type_variation = &"Caption"
 text = "v0.0.0-dev"
 horizontal_alignment = 2
 
-[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content"]
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content"]
 layout_mode = 2
 
-[node name="Prereleases" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content"]
+[node name="Prereleases" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content/Prereleases"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content/Prereleases"]
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Include Prereleases"
 
-[node name="PrereleasesCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content/Prereleases"]
+[node name="PrereleasesCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content/Prereleases"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="PrereleasesDescription" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content"]
+[node name="PrereleasesDescription" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content"]
 layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Prerelease builds may be unstable or incomplete.
 Only enable if you want to test new features early."
 horizontal_alignment = 1
 
-[node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content"]
+[node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content"]
 layout_mode = 2
 
-[node name="CheckUpdates" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content"]
+[node name="CheckUpdates" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content/CheckUpdates"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content/CheckUpdates"]
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"Body"
 text = "Check for Updates"
 
-[node name="CheckUpdatesButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content/CheckUpdates"]
+[node name="CheckUpdatesButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content/CheckUpdates"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Check Now"
 
-[node name="UpdateStatus" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Content"]
+[node name="UpdateStatus" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Updates/Margin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Caption"
