@@ -149,7 +149,16 @@ Each bus has independent volume (0–100%) and mute controls, adjustable from th
 
 ### Volume Normalization
 
-All audio files are automatically normalized to **-18 LUFS** (EBU R128) on commit via a pre-commit hook. This ensures consistent perceived loudness regardless of the source.
+All audio files are automatically normalized on commit via a pre-commit hook. This ensures consistent perceived loudness regardless of the source.
+
+**Two-tier strategy:**
+
+| File length | Method | Target | Tolerance |
+|---|---|---|---|
+| >= ~400ms | LUFS (EBU R128 measurement + gain + limiter) | -18 LUFS | ±1.5 dB |
+| < ~400ms | Peak normalization (gain + limiter) | -3 dBFS | ±1.5 dB |
+
+Short files (clicks, pops) can't be measured by the LUFS algorithm, so they fall back to peak normalization automatically.
 
 **Setup (one-time):**
 
@@ -157,13 +166,31 @@ All audio files are automatically normalized to **-18 LUFS** (EBU R128) on commi
 python tools/hooks/install.py
 ```
 
-**Requirements:** `ffmpeg` on PATH (`winget install ffmpeg` on Windows).
+**Requirements:** `ffmpeg` on PATH:
+
+```bash
+# Windows
+winget install ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# Ubuntu / Debian
+sudo apt install ffmpeg
+
+# Fedora
+sudo dnf install ffmpeg
+
+# Arch
+sudo pacman -S ffmpeg
+```
 
 **How it works:**
 - The pre-commit hook detects staged audio files in `assets/audio/`
-- Runs two-pass LUFS normalization via `tools/normalize_audio.py`
+- Measures loudness (LUFS) and peak levels via `tools/normalize_audio.py`
+- Applies the exact gain needed to reach the target, with a hard limiter at -1 dBTP to prevent clipping
 - Re-stages the normalized files so the commit includes corrected versions
-- Files already within ±0.5 LUFS of the target are skipped
+- Files already within tolerance are skipped (idempotent — re-running does nothing)
 - If ffmpeg is not installed, the hook prints a warning and continues (non-blocking)
 
 **Manual usage:**
@@ -172,6 +199,7 @@ python tools/hooks/install.py
 python tools/normalize_audio.py                 # Normalize all audio files
 python tools/normalize_audio.py --dry-run       # Preview without modifying
 python tools/normalize_audio.py --target -16    # Custom LUFS target
+python tools/normalize_audio.py --peak -1       # Custom peak target for short files
 python tools/normalize_audio.py --backup        # Keep originals as .bak
 ```
 
