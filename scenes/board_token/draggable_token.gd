@@ -232,6 +232,9 @@ func _settle_to_position(target_pos: Vector3) -> void:
 	# highlighted / re-picked before it finishes its landing animation.
 	rigid_body.input_ray_pickable = false
 
+	# Play drop sound immediately so it coincides with the user's action
+	AudioManager.play_token_drop()
+
 	_kill_settle_tween()
 	_settle_tween = create_tween()
 	_settle_tween.tween_property(rigid_body, "global_position", target_pos, SETTLE_DURATION)\
@@ -250,9 +253,6 @@ func _on_settle_complete() -> void:
 
 	# Cursor: restore to arrow
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
-
-	# Sound
-	AudioManager.play_token_drop()
 
 
 ## Find where the token should land by raycasting down from its bottom.

@@ -136,8 +136,10 @@ func _connect_signals() -> void:
 	saved_levels_list.item_activated.connect(_on_saved_level_activated)
 	saved_levels_list.item_selected.connect(_on_saved_level_selected)
 	load_dialog.confirmed.connect(_on_load_confirmed)
+	load_dialog.close_requested.connect(_on_load_dialog_close_requested)
 	delete_level_button.pressed.connect(_on_delete_level_pressed)
 	delete_confirm_dialog.confirmed.connect(_on_delete_level_confirmed)
+	delete_confirm_dialog.close_requested.connect(_on_delete_confirm_close_requested)
 	export_dialog.file_selected.connect(_on_export_file_selected)
 	import_dialog.file_selected.connect(_on_import_file_selected)
 
@@ -524,6 +526,10 @@ func _on_load_confirmed() -> void:
 		_load_level_async(path)
 
 
+func _on_load_dialog_close_requested() -> void:
+	AudioManager.play_close()
+
+
 func _on_saved_level_selected(index: int) -> void:
 	# Update delete button state based on selection
 	delete_level_button.disabled = index < 0
@@ -553,6 +559,10 @@ func _on_delete_level_confirmed() -> void:
 		_set_status("Failed to delete level")
 
 	_selected_level_path_for_delete = ""
+
+
+func _on_delete_confirm_close_requested() -> void:
+	AudioManager.play_close()
 
 
 func _load_level_from_path(path: String) -> void:
