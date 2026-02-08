@@ -91,21 +91,21 @@ func _on_button_hover() -> void:
 	play_hover()
 
 
+func _load_sounds(sounds: Dictionary, directory: String) -> void:
+	for key in sounds.keys():
+		for ext in ["wav", "ogg"]:
+			var path = "res://assets/audio/%s/%s.%s" % [directory, key, ext]
+			if ResourceLoader.exists(path):
+				sounds[key] = load(path)
+				break
+
+
 func _load_ui_sounds() -> void:
-	for key in _ui_sounds.keys():
-		var path = "res://assets/audio/ui/%s.wav" % key
-		if ResourceLoader.exists(path):
-			_ui_sounds[key] = load(path)
+	_load_sounds(_ui_sounds, "ui")
 
 
 func _load_sfx_sounds() -> void:
-	for key in _sfx_sounds.keys():
-		# Try .wav first, then .ogg
-		for ext in ["wav", "ogg"]:
-			var path = "res://assets/audio/sfx/%s.%s" % [key, ext]
-			if ResourceLoader.exists(path):
-				_sfx_sounds[key] = load(path)
-				break
+	_load_sounds(_sfx_sounds, "sfx")
 
 
 ## Play a UI sound by name
