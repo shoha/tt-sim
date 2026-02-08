@@ -429,6 +429,16 @@ func _on_before_animate_out() -> void:
     UIManager.unregister_overlay(self)
 ```
 
+For overlays extending `AnimatedCanvasLayerPanel`:
+
+```gdscript
+func _on_panel_ready() -> void:
+    UIManager.register_overlay($ColorRect as Control)
+
+func _on_before_animate_out() -> void:
+    UIManager.unregister_overlay($ColorRect as Control)
+```
+
 ### Overlay Requirements
 
 Overlays must implement one of:

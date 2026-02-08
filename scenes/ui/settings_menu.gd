@@ -1,4 +1,4 @@
-extends CanvasLayer
+extends AnimatedCanvasLayerPanel
 class_name SettingsMenu
 
 ## Settings menu with Audio, Graphics, and Controls tabs.
@@ -44,10 +44,8 @@ const SETTINGS_PATH := "user://settings.cfg"
 @onready var reset_button: Button = %ResetButton
 @onready var apply_button: Button = %ApplyButton
 
-var _tween: Tween
 
-
-func _ready() -> void:
+func _on_panel_ready() -> void:
 	# Connect UI signals
 	close_button.pressed.connect(_on_close_pressed)
 	reset_button.pressed.connect(_on_reset_pressed)
@@ -80,15 +78,15 @@ func _ready() -> void:
 	
 	# Register as overlay (cast to Control for type compatibility)
 	UIManager.register_overlay($ColorRect as Control)
-	
-	# Animate in
-	_set_alpha(0.0)
-	_animate_in()
 
 
-func _set_alpha(alpha: float) -> void:
-	$ColorRect.modulate.a = alpha
-	$CenterContainer.modulate.a = alpha
+func _on_before_animate_out() -> void:
+	UIManager.unregister_overlay($ColorRect as Control)
+
+
+func _on_after_animate_out() -> void:
+	closed.emit()
+	queue_free()
 
 
 func _populate_controls_list() -> void:
@@ -334,45 +332,6 @@ func _on_apply_pressed() -> void:
 	
 	if UIManager.has_method("show_toast"):
 		UIManager.show_toast("Settings saved", 0) # INFO type
-
-
-func _animate_in() -> void:
-	if _tween:
-		_tween.kill()
-	
-	var panel = $CenterContainer/PanelContainer
-	panel.pivot_offset = panel.size / 2
-	panel.scale = Vector2(0.9, 0.9)
-	
-	_tween = create_tween()
-	_tween.set_parallel(true)
-	_tween.set_ease(Tween.EASE_OUT)
-	_tween.set_trans(Tween.TRANS_BACK)
-	_tween.tween_property($ColorRect, "modulate:a", 1.0, 0.2)
-	_tween.tween_property($CenterContainer, "modulate:a", 1.0, 0.2)
-	_tween.tween_property(panel, "scale", Vector2.ONE, 0.2)
-
-
-func animate_out() -> void:
-	UIManager.unregister_overlay($ColorRect as Control)
-	
-	if _tween:
-		_tween.kill()
-	
-	var panel = $CenterContainer/PanelContainer
-	panel.pivot_offset = panel.size / 2
-	
-	_tween = create_tween()
-	_tween.set_parallel(true)
-	_tween.set_ease(Tween.EASE_IN)
-	_tween.set_trans(Tween.TRANS_CUBIC)
-	_tween.tween_property($ColorRect, "modulate:a", 0.0, 0.15)
-	_tween.tween_property($CenterContainer, "modulate:a", 0.0, 0.15)
-	_tween.tween_property(panel, "scale", Vector2(0.95, 0.95), 0.15)
-	
-	await _tween.finished
-	closed.emit()
-	queue_free()
 
 
 func _update_version_info() -> void:

@@ -1,4 +1,4 @@
-extends CanvasLayer
+extends AnimatedCanvasLayerPanel
 class_name PauseOverlay
 
 ## Pause menu overlay with resume, settings, and return to title options.
@@ -10,41 +10,14 @@ signal main_menu_requested
 @onready var settings_button: Button = %SettingsButton
 @onready var main_menu_button: Button = %MainMenuButton
 
-var _tween: Tween
 
-
-func _ready() -> void:
+func _on_panel_ready() -> void:
 	resume_button.pressed.connect(_on_resume_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
 	main_menu_button.pressed.connect(_on_main_menu_pressed)
-	
-	# Animate in
-	_set_alpha(0.0)
-	_animate_in()
 
 
-func _set_alpha(alpha: float) -> void:
-	$ColorRect.modulate.a = alpha
-	$CenterContainer.modulate.a = alpha
-
-
-func _animate_in() -> void:
-	if _tween:
-		_tween.kill()
-	
-	var panel = $CenterContainer/PanelContainer
-	panel.pivot_offset = panel.size / 2
-	panel.scale = Vector2(0.9, 0.9)
-	
-	_tween = create_tween()
-	_tween.set_parallel(true)
-	_tween.set_ease(Tween.EASE_OUT)
-	_tween.set_trans(Tween.TRANS_BACK)
-	_tween.tween_property($ColorRect, "modulate:a", 1.0, 0.2)
-	_tween.tween_property($CenterContainer, "modulate:a", 1.0, 0.2)
-	_tween.tween_property(panel, "scale", Vector2.ONE, 0.2)
-	
-	await _tween.finished
+func _on_after_animate_in() -> void:
 	resume_button.grab_focus()
 
 

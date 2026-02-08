@@ -327,6 +327,119 @@ func _animate_popup_out(popup: Window, content: Control) -> void:
 
 ---
 
+## Full-Screen Overlay Panels
+
+Use `AnimatedCanvasLayerPanel` for full-screen overlays that dim the background and show a centered dialog — settings menus, confirmation dialogs, pause screens, etc.
+
+### When to Use Which Base Class
+
+| Use case | Base class | Extends |
+| --- | --- | --- |
+| Panel that shows/hides within the UI tree (sidebars, context menus, editors) | `AnimatedVisibilityContainer` | `Control` |
+| Full-screen overlay with backdrop dimming + centered dialog | `AnimatedCanvasLayerPanel` | `CanvasLayer` |
+
+### Scene Structure
+
+`AnimatedCanvasLayerPanel` expects this child node layout:
+
+```
+MyDialog (CanvasLayer — script extends AnimatedCanvasLayerPanel)
+├── ColorRect          ← semi-transparent backdrop
+└── CenterContainer
+    └── PanelContainer ← the content panel
+        └── ... your UI content ...
+```
+
+The base class animates `ColorRect` and `CenterContainer` opacity together, and scales `PanelContainer` with a back-ease on open and cubic-ease on close.
+
+### Basic Usage
+
+```gdscript
+extends AnimatedCanvasLayerPanel
+class_name MyDialog
+
+signal closed
+
+@onready var ok_button: Button = %OKButton
+
+func _on_panel_ready() -> void:
+    # Called instead of _ready(). Connect signals, load data, etc.
+    ok_button.pressed.connect(_on_ok_pressed)
+
+func _on_after_animate_in() -> void:
+    # Called when the open animation finishes.
+    ok_button.grab_focus()
+
+func _on_ok_pressed() -> void:
+    animate_out()
+
+func _on_after_animate_out() -> void:
+    # Called when the close animation finishes. Default: queue_free().
+    closed.emit()
+    queue_free()
+```
+
+### Lifecycle Hooks
+
+Override these for custom behavior at each stage:
+
+```gdscript
+func _on_panel_ready() -> void:
+    # Runs during _ready(), before animate_in().
+    # Use for signal connections, data loading, overlay registration.
+    pass
+
+func _on_after_animate_in() -> void:
+    # Open animation finished. Grab focus, start timers, etc.
+    pass
+
+func _on_before_animate_out() -> void:
+    # About to close. Unregister overlays, save state, etc.
+    pass
+
+func _on_after_animate_out() -> void:
+    # Close animation finished. Emit signals, then queue_free().
+    queue_free()  # default behavior if not overridden
+```
+
+### Overlay Registration
+
+If the panel should close on ESC, register with UIManager:
+
+```gdscript
+func _on_panel_ready() -> void:
+    UIManager.register_overlay($ColorRect as Control)
+
+func _on_before_animate_out() -> void:
+    UIManager.unregister_overlay($ColorRect as Control)
+```
+
+### Sounds
+
+Open/close sounds are played automatically. To disable:
+
+```gdscript
+@export var play_sounds: bool = false  # override in inspector
+```
+
+Or for buttons that need specialized sounds instead of the auto-connected click:
+
+```gdscript
+func _on_panel_ready() -> void:
+    confirm_button.set_meta("ui_silent", true)  # skip auto-click
+    confirm_button.pressed.connect(func():
+        AudioManager.play_confirm()  # play specialized sound
+        animate_out()
+    )
+```
+
+### File Reference
+
+- **Base class**: `scenes/ui/animated_canvas_layer_panel.gd`
+- **Example usage**: `scenes/ui/settings_menu.gd`, `scenes/ui/confirmation_dialog.gd`, `scenes/ui/update_dialog.gd`, `scenes/states/paused/pause_overlay.gd`
+
+---
+
 ## Building a Complex UI
 
 ### Step 1: Structure with Containers

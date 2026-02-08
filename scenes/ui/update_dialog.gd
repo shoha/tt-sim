@@ -1,4 +1,4 @@
-extends CanvasLayer
+extends AnimatedCanvasLayerPanel
 class_name UpdateDialogUI
 
 ## Dialog shown when a game update is available.
@@ -24,10 +24,9 @@ signal closed
 
 var _release_info: Dictionary = {}
 var _download_path: String = ""
-var _tween: Tween
 
 
-func _ready() -> void:
+func _on_panel_ready() -> void:
 	# Connect buttons
 	download_button.pressed.connect(_on_download_pressed)
 	view_button.pressed.connect(_on_view_pressed)
@@ -43,11 +42,15 @@ func _ready() -> void:
 	
 	# Connect RichTextLabel link clicks
 	release_notes.meta_clicked.connect(_on_link_clicked)
-	
-	# Start hidden for animation
-	$ColorRect.modulate.a = 0.0
-	$CenterContainer.modulate.a = 0.0
-	_animate_in()
+
+
+func _on_after_animate_in() -> void:
+	download_button.grab_focus()
+
+
+func _on_after_animate_out() -> void:
+	closed.emit()
+	queue_free()
 
 
 func _on_link_clicked(meta: Variant) -> void:
@@ -118,46 +121,6 @@ func _markdown_to_bbcode(markdown: String) -> String:
 	return text
 
 
-func _animate_in() -> void:
-	if _tween:
-		_tween.kill()
-	
-	var panel = $CenterContainer/PanelContainer
-	panel.pivot_offset = panel.size / 2
-	panel.scale = Vector2(0.9, 0.9)
-	
-	_tween = create_tween()
-	_tween.set_parallel(true)
-	_tween.set_ease(Tween.EASE_OUT)
-	_tween.set_trans(Tween.TRANS_BACK)
-	_tween.tween_property($ColorRect, "modulate:a", 1.0, 0.2)
-	_tween.tween_property($CenterContainer, "modulate:a", 1.0, 0.2)
-	_tween.tween_property(panel, "scale", Vector2.ONE, 0.2)
-	
-	await _tween.finished
-	download_button.grab_focus()
-
-
-func _animate_out() -> void:
-	if _tween:
-		_tween.kill()
-	
-	var panel = $CenterContainer/PanelContainer
-	panel.pivot_offset = panel.size / 2
-	
-	_tween = create_tween()
-	_tween.set_parallel(true)
-	_tween.set_ease(Tween.EASE_IN)
-	_tween.set_trans(Tween.TRANS_CUBIC)
-	_tween.tween_property($ColorRect, "modulate:a", 0.0, 0.15)
-	_tween.tween_property($CenterContainer, "modulate:a", 0.0, 0.15)
-	_tween.tween_property(panel, "scale", Vector2(0.95, 0.95), 0.15)
-	
-	await _tween.finished
-	closed.emit()
-	queue_free()
-
-
 func _on_download_pressed() -> void:
 	# Start download
 	download_button.disabled = true
@@ -174,18 +137,18 @@ func _on_view_pressed() -> void:
 
 
 func _on_skip_pressed() -> void:
-	_animate_out()
+	animate_out()
 
 
 func _on_restart_pressed() -> void:
 	if not _download_path.is_empty():
 		UpdateManager.apply_update(_download_path)
 	else:
-		_animate_out()
+		animate_out()
 
 
 func _on_later_pressed() -> void:
-	_animate_out()
+	animate_out()
 
 
 func _on_open_folder_pressed() -> void:
