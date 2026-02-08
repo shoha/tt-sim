@@ -1,4 +1,4 @@
-extends CanvasLayer
+extends AnimatedCanvasLayerPanel
 class_name ConfirmationDialogUI
 
 ## Reusable confirmation dialog component.
@@ -21,17 +21,16 @@ signal closed(confirmed: bool)
 
 var _confirm_callback: Callable
 var _cancel_callback: Callable
-var _tween: Tween
+var _confirmed: bool = false
 
 
-func _ready() -> void:
+func _on_panel_ready() -> void:
+	# Opt out of generic click — these buttons play confirm/cancel sounds instead
+	confirm_button.set_meta("ui_silent", true)
+	cancel_button.set_meta("ui_silent", true)
+
 	confirm_button.pressed.connect(_on_confirm_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
-	
-	# Start hidden for animation
-	$ColorRect.modulate.a = 0.0
-	$CenterContainer.modulate.a = 0.0
-	_animate_in()
 
 
 func setup(title: String, message: String, confirm_text: String = "Confirm", cancel_text: String = "Cancel", confirm_callback: Callable = Callable(), cancel_callback: Callable = Callable(), confirm_style: String = "Success") -> void:
@@ -44,56 +43,29 @@ func setup(title: String, message: String, confirm_text: String = "Confirm", can
 	_cancel_callback = cancel_callback
 
 
-func _animate_in() -> void:
-	if _tween:
-		_tween.kill()
-	
-	var panel = $CenterContainer/PanelContainer
-	panel.pivot_offset = panel.size / 2
-	panel.scale = Vector2(0.9, 0.9)
-	
-	_tween = create_tween()
-	_tween.set_parallel(true)
-	_tween.set_ease(Tween.EASE_OUT)
-	_tween.set_trans(Tween.TRANS_BACK)
-	_tween.tween_property($ColorRect, "modulate:a", 1.0, 0.2)
-	_tween.tween_property($CenterContainer, "modulate:a", 1.0, 0.2)
-	_tween.tween_property(panel, "scale", Vector2.ONE, 0.2)
-	
-	await _tween.finished
+func _on_after_animate_in() -> void:
 	confirm_button.grab_focus()
 
 
-func _animate_out(confirmed: bool) -> void:
-	if _tween:
-		_tween.kill()
-	
-	var panel = $CenterContainer/PanelContainer
-	panel.pivot_offset = panel.size / 2
-	
-	_tween = create_tween()
-	_tween.set_parallel(true)
-	_tween.set_ease(Tween.EASE_IN)
-	_tween.set_trans(Tween.TRANS_CUBIC)
-	_tween.tween_property($ColorRect, "modulate:a", 0.0, 0.15)
-	_tween.tween_property($CenterContainer, "modulate:a", 0.0, 0.15)
-	_tween.tween_property(panel, "scale", Vector2(0.95, 0.95), 0.15)
-	
-	await _tween.finished
-	closed.emit(confirmed)
+func _on_after_animate_out() -> void:
+	closed.emit(_confirmed)
 	queue_free()
 
 
 func _on_confirm_pressed() -> void:
+	AudioManager.play_confirm()
+	_confirmed = true
 	if _confirm_callback.is_valid():
 		_confirm_callback.call()
-	_animate_out(true)
+	animate_out()
 
 
 func _on_cancel_pressed() -> void:
+	AudioManager.play_cancel()
+	_confirmed = false
 	if _cancel_callback.is_valid():
 		_cancel_callback.call()
-	_animate_out(false)
+	animate_out()
 
 
 func _unhandled_input(event: InputEvent) -> void:

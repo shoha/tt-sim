@@ -34,7 +34,8 @@
 
 - **New state**: Add to `Root.State` enum, implement `_enter_*_state()` / `_exit_*_state()`
 - **New autoload**: Create in `autoloads/`, register in `project.godot`
-- **New UI panel**: Extend `AnimatedVisibilityContainer`, register with `UIManager.register_overlay()` for ESC handling
+- **New UI panel (in-scene)**: Extend `AnimatedVisibilityContainer`, register with `UIManager.register_overlay()` for ESC handling
+- **New UI overlay (full-screen dialog)**: Extend `AnimatedCanvasLayerPanel`, override `_on_panel_ready()` for setup
 - **New level/token logic**: See LevelPlayController, BoardTokenFactory, GameState
 
 ## Formatting

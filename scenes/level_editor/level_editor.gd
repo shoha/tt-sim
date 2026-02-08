@@ -935,6 +935,8 @@ func _animate_popup_in(_popup: Window, content: Control) -> void:
 	_popup_tween.tween_property(content, "modulate:a", 1.0, 0.2)
 	_popup_tween.tween_property(content, "scale", Vector2.ONE, 0.2)
 
+	AudioManager.play_open()
+
 
 ## Animate a window popup out and hide it
 func _animate_popup_out(popup: Window, content: Control) -> void:
@@ -950,3 +952,5 @@ func _animate_popup_out(popup: Window, content: Control) -> void:
 	_popup_tween.tween_property(content, "modulate:a", 0.0, 0.15)
 	_popup_tween.tween_property(content, "scale", Vector2(0.95, 0.95), 0.15)
 	_popup_tween.finished.connect(popup.hide, CONNECT_ONE_SHOT)
+
+	AudioManager.play_close()
