@@ -182,8 +182,10 @@ func _remove_item(pack_id: String, asset_id: String, variant_id: String, success
 	if success:
 		item.progress_bar.value = 100.0
 		item.progress_bar.modulate = Color(0.5, 0.8, 0.5)
+		AudioManager.play_success()
 	else:
 		item.progress_bar.modulate = Color(0.8, 0.4, 0.4)
+		AudioManager.play_error()
 
 	var tween = create_tween()
 	tween.tween_interval(0.5)

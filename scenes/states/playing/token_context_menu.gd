@@ -106,6 +106,8 @@ func _on_hp_adjustment_requested(input_amount: String = "") -> void:
 		input_field.clear()
 		hp_adjustment_requested.emit(amount)
 		_update_menu_content()
+		# Brief flash on the health label to confirm the change
+		_flash_health_label(amount > 0)
 		close_menu()
 
 
@@ -113,6 +115,19 @@ func _on_toggle_visibility_pressed() -> void:
 	if target_token:
 		visibility_toggled.emit()
 		_update_menu_content()
+		AudioManager.play_tick()
+
+
+## Quick color flash on the health label after an HP change
+func _flash_health_label(is_heal: bool) -> void:
+	var health_label = get_node_or_null("MenuPanel/VBoxContainer/HealthLabel")
+	if not health_label:
+		return
+	var color = Color(0.5, 0.9, 0.5) if is_heal else Color(0.9, 0.4, 0.4)
+	health_label.add_theme_color_override("font_color", color)
+	var tw = create_tween()
+	tw.tween_interval(0.4)
+	tw.tween_callback(func(): health_label.remove_theme_color_override("font_color"))
 
 
 func _on_close_button_pressed() -> void:

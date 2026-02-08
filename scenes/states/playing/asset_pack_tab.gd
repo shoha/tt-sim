@@ -79,20 +79,25 @@ func _populate_items() -> void:
 
 		# Apply filter
 		if _filter == "" or _filter.to_lower() in display_name.to_lower():
-			items_to_add.append({
-				"pack_id": _pack_id,
-				"asset_id": asset.asset_id,
-				"variant_id": "default",
-				"name": display_name,
-				"has_variants": asset.has_variants(),
-				"variants": asset.get_variant_ids()
-			})
+			items_to_add.append(
+				{
+					"pack_id": _pack_id,
+					"asset_id": asset.asset_id,
+					"variant_id": "default",
+					"name": display_name,
+					"has_variants": asset.has_variants(),
+					"variants": asset.get_variant_ids()
+				}
+			)
 
 	_items = items_to_add
 
-	# Add items to list on main thread
-	for item in _items:
-		call_deferred("_add_item_to_list", item)
+	if _items.is_empty():
+		call_deferred("_show_empty_state")
+	else:
+		# Add items to list on main thread
+		for item in _items:
+			call_deferred("_add_item_to_list", item)
 
 
 func _clear_list() -> void:
@@ -102,6 +107,13 @@ func _clear_list() -> void:
 func _add_item_to_list(item: Dictionary) -> void:
 	# Add item without icon to avoid bulk icon downloads for remote asset packs
 	item_list.add_item(item.name)
+
+
+func _show_empty_state() -> void:
+	var msg = 'No results for "%s"' % _filter if _filter != "" else "No assets in this pack"
+	item_list.add_item(msg)
+	item_list.set_item_disabled(0, true)
+	item_list.set_item_selectable(0, false)
 
 
 func _on_filter_changed(new_text: String) -> void:

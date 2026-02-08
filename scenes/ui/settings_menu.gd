@@ -262,15 +262,15 @@ func _on_tab_changed(_tab_idx: int) -> void:
 
 
 func _on_fullscreen_toggled(_pressed: bool) -> void:
-	AudioManager.play_tick()
+	pass
 
 
 func _on_vsync_toggled(_pressed: bool) -> void:
-	AudioManager.play_tick()
+	pass
 
 
 func _on_lofi_toggled(_pressed: bool) -> void:
-	AudioManager.play_tick()
+	pass
 
 
 func _apply_lofi_setting() -> void:
@@ -296,10 +296,17 @@ func _on_close_pressed() -> void:
 
 
 func _on_reset_pressed() -> void:
-	master_slider.value = 100.0
-	music_slider.value = 100.0
-	sfx_slider.value = 100.0
-	ui_slider.value = 100.0
+	# Tween sliders smoothly to defaults
+	var tw = create_tween()
+	tw.set_parallel(true)
+	tw.set_ease(Tween.EASE_OUT)
+	tw.set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(master_slider, "value", 100.0, 0.3)
+	tw.tween_property(music_slider, "value", 100.0, 0.3)
+	tw.tween_property(sfx_slider, "value", 100.0, 0.3)
+	tw.tween_property(ui_slider, "value", 100.0, 0.3)
+
+	# Snap toggles immediately (no meaningful tween for booleans)
 	fullscreen_check.button_pressed = false
 	vsync_check.button_pressed = true
 	lofi_check.button_pressed = true
@@ -308,7 +315,7 @@ func _on_reset_pressed() -> void:
 
 
 func _on_p2p_toggled(_pressed: bool) -> void:
-	AudioManager.play_tick()
+	pass
 
 
 func _on_clear_cache_pressed() -> void:
@@ -383,7 +390,6 @@ func _update_version_info() -> void:
 
 func _on_prereleases_toggled(pressed: bool) -> void:
 	UpdateManager.set_prerelease_enabled(pressed)
-	AudioManager.play_tick()
 
 
 ## Apply helpful tooltips to settings controls
@@ -392,7 +398,7 @@ func _apply_tooltips() -> void:
 	music_slider.tooltip_text = "Background music volume"
 	sfx_slider.tooltip_text = "Sound effects for token interactions"
 	ui_slider.tooltip_text = "UI sounds (clicks, hover, panel open/close)"
-	fullscreen_check.tooltip_text = "Toggle fullscreen mode"
+	fullscreen_check.tooltip_text = "Toggle fullscreen mode (F11)"
 	vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
 	lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
 	p2p_enabled_check.tooltip_text = "Allow peer-to-peer asset sharing with other players"
@@ -401,6 +407,7 @@ func _apply_tooltips() -> void:
 	check_updates_button.tooltip_text = "Check for a newer version of TTSim"
 	reset_button.tooltip_text = "Reset all settings to defaults"
 	apply_button.tooltip_text = "Apply and save current settings"
+	close_button.tooltip_text = "Close settings (ESC)"
 
 
 func _on_check_updates_pressed() -> void:

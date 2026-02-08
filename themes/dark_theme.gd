@@ -328,7 +328,7 @@ func _button_styles(base_color: Color, lighter: Color, darker: Color) -> Diction
 		font_pressed_color = color_text_on_accent,
 		font_hover_pressed_color = color_text_on_accent,
 		font_focus_color = color_text_on_accent,
-		font_disabled_color = color_text_on_accent,
+		font_disabled_color = Color(color_text_on_accent, 0.5),
 	}
 
 
@@ -368,7 +368,7 @@ func _toggle_font_colors(base_color: Color, lighter: Color) -> Dictionary:
 		font_pressed_color = base_color,
 		font_hover_pressed_color = lighter,
 		font_focus_color = base_color,
-		font_disabled_color = base_color,
+		font_disabled_color = Color(base_color, 0.4),
 	}
 
 
@@ -562,6 +562,14 @@ func _define_editors():
 
 	var normal_style = style_input_bg()
 
+	# Read-only / disabled style — darker bg with muted text
+	var read_only_style = stylebox_flat(
+		{
+			bg_color = Color(color_background, 0.6),
+			content_margin_ = content_margins(margin_w * 2),
+		}
+	)
+
 	define_style(
 		"LineEdit",
 		inherit(
@@ -570,6 +578,8 @@ func _define_editors():
 				clear_button_color_pressed = color_accent_lighter,
 				focus = style_focus_ring,
 				normal = normal_style,
+				read_only = read_only_style,
+				font_readonly_color = Color(color_text_on_dark, 0.5),
 			},
 			editor_colors
 		)
@@ -581,6 +591,8 @@ func _define_editors():
 			{
 				focus = style_focus_ring,
 				normal = normal_style,
+				read_only = read_only_style,
+				font_readonly_color = Color(color_text_on_dark, 0.5),
 			},
 			editor_colors
 		)
