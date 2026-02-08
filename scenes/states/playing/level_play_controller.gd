@@ -7,29 +7,29 @@ class_name LevelPlayController
 ## Uses threaded loading to avoid blocking the main thread.
 
 signal level_loaded(level_data: LevelData)
-signal level_cleared()
+signal level_cleared
 signal token_spawned(token: BoardToken, placement: TokenPlacement)
 signal token_added(token: BoardToken)
 signal map_download_started(level_folder: String)
 signal map_download_progress(level_folder: String, progress: float)
 signal map_download_completed(level_folder: String)
 signal map_download_failed(level_folder: String, error: String)
-signal level_loading_started()
+signal level_loading_started
 signal level_loading_progress(progress: float, status: String)
-signal level_loading_completed()
+signal level_loading_completed
 
-const RECONCILIATION_INTERVAL: float = 2.0 # Full state sync every 2 seconds
-const TOKENS_PER_FRAME: int = 3 # How many tokens to spawn per frame during progressive loading
+const RECONCILIATION_INTERVAL: float = 2.0  # Full state sync every 2 seconds
+const TOKENS_PER_FRAME: int = 3  # How many tokens to spawn per frame during progressive loading
 
 var active_level_data: LevelData = null
-var spawned_tokens: Dictionary = {} # placement_id -> BoardToken
+var spawned_tokens: Dictionary = {}  # placement_id -> BoardToken
 var loaded_map_instance: Node3D = null
 var _game_map: GameMap = null
 var _reconciliation_timer: Timer = null
-var _pending_map_level_folder: String = "" # Level folder waiting for map download
+var _pending_map_level_folder: String = ""  # Level folder waiting for map download
 var _streamer_connected: bool = false
-var _is_loading: bool = false # True while async loading is in progress
-var _world_environment: WorldEnvironment = null # Environment node for lighting/atmosphere
+var _is_loading: bool = false  # True while async loading is in progress
+var _world_environment: WorldEnvironment = null  # Environment node for lighting/atmosphere
 
 
 ## Initialize with a reference to the game map
@@ -39,7 +39,8 @@ func setup(game_map: GameMap) -> void:
 	_connect_asset_streamer()
 
 	# Listen for network state changes to update token interactivity
-	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
+	if not NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
+		NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
 
 ## Connect to AssetStreamer for map downloads
@@ -75,7 +76,9 @@ func _disconnect_asset_streamer() -> void:
 
 
 ## Handle map download completion from AssetStreamer
-func _on_map_received(pack_id: String, asset_id: String, _variant_id: String, local_path: String) -> void:
+func _on_map_received(
+	pack_id: String, asset_id: String, _variant_id: String, local_path: String
+) -> void:
 	# Only handle map downloads
 	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
 		return
@@ -111,7 +114,9 @@ func _on_map_failed(pack_id: String, asset_id: String, _variant_id: String, erro
 
 
 ## Handle map download progress
-func _on_map_transfer_progress(pack_id: String, asset_id: String, _variant_id: String, progress: float) -> void:
+func _on_map_transfer_progress(
+	pack_id: String, asset_id: String, _variant_id: String, progress: float
+) -> void:
 	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
 		return
 
@@ -139,7 +144,9 @@ func _on_reconciliation_timeout() -> void:
 	broadcast_token_positions()
 
 
-func _on_connection_state_changed(_old_state: NetworkManager.ConnectionState, _new_state: NetworkManager.ConnectionState) -> void:
+func _on_connection_state_changed(
+	_old_state: NetworkManager.ConnectionState, _new_state: NetworkManager.ConnectionState
+) -> void:
 	_update_all_token_state()
 
 
@@ -173,7 +180,7 @@ func play_level(level_data: LevelData) -> bool:
 		# This handles cases like: host sends new level while client is still loading previous
 		push_warning("LevelPlayController: Queueing level (currently loading)")
 		_queued_level_data = level_data
-		return true # Return true - level will be loaded when current finishes
+		return true  # Return true - level will be loaded when current finishes
 
 	# Start async loading
 	_play_level_async(level_data)
@@ -242,11 +249,13 @@ func _play_level_async(level_data: LevelData) -> void:
 		# Build asset list for preloading
 		var assets_to_preload: Array[Dictionary] = []
 		for placement in level_data.token_placements:
-			assets_to_preload.append({
-				"pack_id": placement.pack_id,
-				"asset_id": placement.asset_id,
-				"variant_id": placement.variant_id
-			})
+			assets_to_preload.append(
+				{
+					"pack_id": placement.pack_id,
+					"asset_id": placement.asset_id,
+					"variant_id": placement.variant_id
+				}
+			)
 
 		if assets_to_preload.size() > 0:
 			# Pre-load with progress callback (create_static_bodies=false for tokens)
@@ -254,8 +263,10 @@ func _play_level_async(level_data: LevelData) -> void:
 				assets_to_preload,
 				func(loaded: int, total: int):
 					var model_progress = 0.2 + (0.4 * loaded / max(total, 1))
-					level_loading_progress.emit(model_progress, "Loading models... (%d/%d)" % [loaded, total]),
-				false # create_static_bodies
+					level_loading_progress.emit(
+						model_progress, "Loading models... (%d/%d)" % [loaded, total]
+					),
+				false  # create_static_bodies
 			)
 
 		# Check validity after async model preload
@@ -288,7 +299,9 @@ func _play_level_async(level_data: LevelData) -> void:
 		# With cached models, we can spawn more per frame
 		if spawned_count % (TOKENS_PER_FRAME * 2) == 0:
 			var progress = 0.6 + (0.4 * spawned_count / max(total_tokens, 1))
-			level_loading_progress.emit(progress, "Spawning tokens... (%d/%d)" % [spawned_count, total_tokens])
+			level_loading_progress.emit(
+				progress, "Spawning tokens... (%d/%d)" % [spawned_count, total_tokens]
+			)
 			await get_tree().process_frame
 
 	level_loading_progress.emit(1.0, "Complete")
@@ -341,7 +354,10 @@ func _load_level_map_async(level_data: LevelData) -> bool:
 			var load_status = ResourceLoader.load_threaded_request(map_path)
 			if load_status == OK:
 				# Wait for loading to complete
-				while ResourceLoader.load_threaded_get_status(map_path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+				while (
+					ResourceLoader.load_threaded_get_status(map_path)
+					== ResourceLoader.THREAD_LOAD_IN_PROGRESS
+				):
 					await get_tree().process_frame
 
 				var map_scene = ResourceLoader.load_threaded_get(map_path)
@@ -400,7 +416,7 @@ func _finalize_map_loading(map: Node3D) -> void:
 
 	# Add to the GameMap node
 	_game_map.add_child(loaded_map_instance)
-	
+
 	# Apply environment settings from level data
 	if active_level_data:
 		_apply_level_environment(active_level_data)
@@ -413,18 +429,16 @@ func _apply_level_environment(level_data: LevelData) -> void:
 		_world_environment = WorldEnvironment.new()
 		_world_environment.name = "LevelEnvironment"
 		_game_map.add_child(_world_environment)
-	
+
 	# Apply preset and overrides
 	EnvironmentPresets.apply_to_world_environment(
-		_world_environment,
-		level_data.environment_preset,
-		level_data.environment_overrides
+		_world_environment, level_data.environment_preset, level_data.environment_overrides
 	)
-	
+
 	# Apply lo-fi shader overrides if any are set
 	if level_data.lofi_overrides.size() > 0 and is_instance_valid(_game_map):
 		_game_map.apply_lofi_overrides(level_data.lofi_overrides)
-	
+
 	print("LevelPlayController: Applied environment preset '%s'" % level_data.environment_preset)
 
 
@@ -578,7 +592,9 @@ func _connect_token_context_menu(token: BoardToken) -> void:
 	var token_controller = token.get_controller_component()
 	if token_controller and token_controller.has_signal("context_menu_requested"):
 		if _game_map.has_method("_on_token_context_menu_requested"):
-			token_controller.context_menu_requested.connect(_game_map._on_token_context_menu_requested)
+			token_controller.context_menu_requested.connect(
+				_game_map._on_token_context_menu_requested
+			)
 
 
 ## Clear any existing map models from the game map
@@ -587,7 +603,9 @@ func _clear_existing_maps() -> void:
 		return
 
 	# List of node names/types to preserve (not maps)
-	var preserved_names = ["MapMenu", "DragAndDrop3D", "LevelMap", "CameraHolder", "PixelateCanvas", "SharpenCanvas"]
+	var preserved_names = [
+		"MapMenu", "DragAndDrop3D", "LevelMap", "CameraHolder", "PixelateCanvas", "SharpenCanvas"
+	]
 
 	for child in _game_map.get_children():
 		# Skip UI nodes, environments, and the drag-and-drop container
@@ -616,11 +634,15 @@ func spawn_asset(pack_id: String, asset_id: String, variant_id: String = "defaul
 	var token = result.token as BoardToken
 
 	if not token:
-		push_error("LevelPlayController: Failed to create board token for %s/%s" % [pack_id, asset_id])
+		push_error(
+			"LevelPlayController: Failed to create board token for %s/%s" % [pack_id, asset_id]
+		)
 		return null
 
 	if result.is_placeholder:
-		print("LevelPlayController: Spawning placeholder for %s/%s (loading...)" % [pack_id, asset_id])
+		print(
+			"LevelPlayController: Spawning placeholder for %s/%s (loading...)" % [pack_id, asset_id]
+		)
 
 	_game_map.drag_and_drop_node.add_child(token)
 	_connect_token_context_menu(token)
@@ -632,7 +654,9 @@ func spawn_asset(pack_id: String, asset_id: String, variant_id: String = "defaul
 
 
 ## Add a new token to the active level
-func add_token_to_level(token: BoardToken, pack_id: String, asset_id: String, variant_id: String = "default") -> void:
+func add_token_to_level(
+	token: BoardToken, pack_id: String, asset_id: String, variant_id: String = "default"
+) -> void:
 	if not active_level_data:
 		return
 
@@ -641,7 +665,7 @@ func add_token_to_level(token: BoardToken, pack_id: String, asset_id: String, va
 	placement.pack_id = pack_id
 	placement.asset_id = asset_id
 	placement.variant_id = variant_id
-	placement.position = Vector3.ZERO # Will be updated when saved
+	placement.position = Vector3.ZERO  # Will be updated when saved
 
 	# Set default name from asset
 	placement.token_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
@@ -752,7 +776,7 @@ func clear_level_map() -> void:
 	if is_instance_valid(loaded_map_instance):
 		loaded_map_instance.queue_free()
 		loaded_map_instance = null
-	
+
 	# Also clear the environment (will be recreated with next level)
 	if is_instance_valid(_world_environment):
 		_world_environment.queue_free()
