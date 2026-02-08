@@ -10,10 +10,11 @@ extends Node
 
 ## Connection states
 enum ConnectionState {
-	OFFLINE, ## Not connected to any network
-	CONNECTING, ## Connecting to noray or game server
-	HOSTING, ## Hosting a game, waiting for players or playing
-	JOINED, ## Joined a game as client
+	OFFLINE,  ## Not connected to any network
+	CONNECTING,  ## Connecting to noray or game server
+	HOSTING,  ## Hosting a game, waiting for players or playing
+	JOINED,  ## Joined a game as client
+	RECONNECTING,  ## Attempting to reconnect after disconnection
 }
 
 ## Signals
@@ -22,14 +23,17 @@ signal room_code_received(code: String)
 signal player_joined(peer_id: int, player_info: Dictionary)
 signal player_left(peer_id: int)
 signal connection_failed(reason: String)
-signal connection_timeout()
-signal game_starting()
+signal connection_timeout
+signal reconnecting(attempt: int, max_attempts: int)
+signal game_starting
 signal level_data_received(level_dict: Dictionary)
-signal late_joiner_connected(peer_id: int) ## Emitted when a player joins mid-game
+signal late_joiner_connected(peer_id: int)  ## Emitted when a player joins mid-game
 signal game_state_received(state_dict: Dictionary)
-signal level_sync_complete(peer_id: int) ## Emitted when level sync ACK received from client
-signal state_sync_complete(peer_id: int) ## Emitted when state sync ACK received from client
-signal token_transform_received(network_id: String, position: Vector3, rotation: Vector3, scale: Vector3)
+signal level_sync_complete(peer_id: int)  ## Emitted when level sync ACK received from client
+signal state_sync_complete(peer_id: int)  ## Emitted when state sync ACK received from client
+signal token_transform_received(
+	network_id: String, position: Vector3, rotation: Vector3, scale: Vector3
+)
 signal token_state_received(network_id: String, token_dict: Dictionary)
 signal token_removed_received(network_id: String)
 signal transform_batch_received(batch: Dictionary)
@@ -45,8 +49,8 @@ var _players: Dictionary = {}
 
 ## Player roles
 enum PlayerRole {
-	PLAYER, ## Regular player - can view, limited interaction
-	GM, ## Game Master - full control
+	PLAYER,  ## Regular player - can view, limited interaction
+	GM,  ## Game Master - full control
 }
 
 ## Local player info
@@ -76,14 +80,24 @@ const DEFAULT_PORT := 7777
 
 ## Connection timeout (seconds)
 const CONNECTION_TIMEOUT := 15.0
+const LATE_JOINER_SYNC_TIMEOUT := 5.0
 var _connection_timer: Timer = null
+
+## Reconnection settings
+const MAX_RECONNECT_ATTEMPTS := 5
+const RECONNECT_BASE_DELAY := 1.0
+const RECONNECT_MAX_DELAY := 16.0
 
 ## Game state tracking (for late joiner detection)
 var _game_in_progress: bool = false
 
+## Reconnection tracking
+var _reconnect_attempts: int = 0
+var _stored_room_code: String = ""
+var _reconnect_timer: Timer = null
+
 ## Debug logging
 var debug_logging: bool = false
-
 
 # =============================================================================
 # PUBLIC PROPERTIES
@@ -91,27 +105,36 @@ var debug_logging: bool = false
 
 ## Get current connection state
 var connection_state: ConnectionState:
-	get: return _connection_state
+	get:
+		return _connection_state
 
 ## Get room code (only valid when hosting)
 var room_code: String:
-	get: return _room_code
+	get:
+		return _room_code
+
 
 ## Check if we're the host/server
 func is_host() -> bool:
 	return _connection_state == ConnectionState.HOSTING
 
+
 ## Check if we're a client
 func is_client() -> bool:
 	return _connection_state == ConnectionState.JOINED
 
+
 ## Check if we're in a networked game (host or client)
 func is_networked() -> bool:
-	return _connection_state == ConnectionState.HOSTING or _connection_state == ConnectionState.JOINED
+	return (
+		_connection_state == ConnectionState.HOSTING or _connection_state == ConnectionState.JOINED
+	)
+
 
 ## Get all connected players
 func get_players() -> Dictionary:
 	return _players.duplicate()
+
 
 ## Get player count (including self)
 func get_player_count() -> int:
@@ -122,6 +145,7 @@ func get_player_count() -> int:
 # LIFECYCLE
 # =============================================================================
 
+
 func _ready() -> void:
 	# Connect to multiplayer signals
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -129,13 +153,19 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
-	
+
 	# Setup connection timeout timer
 	_connection_timer = Timer.new()
 	_connection_timer.one_shot = true
 	_connection_timer.timeout.connect(_on_connection_timeout)
 	add_child(_connection_timer)
-	
+
+	# Setup reconnection timer
+	_reconnect_timer = Timer.new()
+	_reconnect_timer.one_shot = true
+	_reconnect_timer.timeout.connect(_on_reconnect_timeout)
+	add_child(_reconnect_timer)
+
 	# Load network settings
 	_load_network_settings()
 
@@ -162,6 +192,7 @@ func _stop_connection_timeout() -> void:
 # HOST GAME
 # =============================================================================
 
+
 ## Start hosting a game
 ## Connects to noray, gets a room code, and starts the ENet server
 ## If no server specified, uses the configured noray_server/noray_port
@@ -174,7 +205,7 @@ func host_game(server_override: String = "", port_override: int = 0) -> void:
 
 	_set_connection_state(ConnectionState.CONNECTING)
 	_start_connection_timeout()
-	
+
 	# Host is always GM
 	_local_player_info["role"] = PlayerRole.GM
 
@@ -248,19 +279,29 @@ func _on_client_relay_connect(address: String, port: int) -> void:
 # JOIN GAME
 # =============================================================================
 
+
 ## Join a game using a room code
 ## If no server specified, uses the configured noray_server/noray_port
-func join_game(room_code_input: String, server_override: String = "", port_override: int = 0) -> void:
+func join_game(
+	room_code_input: String, server_override: String = "", port_override: int = 0
+) -> void:
 	var target_server = server_override if server_override != "" else noray_server
 	var target_port = port_override if port_override > 0 else noray_port
-	
-	if _connection_state != ConnectionState.OFFLINE:
+
+	# Allow joining when offline or reconnecting
+	if (
+		_connection_state != ConnectionState.OFFLINE
+		and _connection_state != ConnectionState.RECONNECTING
+	):
 		push_warning("NetworkManager: Already connected, disconnect first")
 		return
 
+	# Store room code for potential reconnection
+	_stored_room_code = room_code_input
+
 	_set_connection_state(ConnectionState.CONNECTING)
 	_start_connection_timeout()
-	
+
 	# Clients are players by default
 	_local_player_info["role"] = PlayerRole.PLAYER
 
@@ -272,8 +313,8 @@ func join_game(room_code_input: String, server_override: String = "", port_overr
 		return
 
 	# Register remote to get a local port
-	Noray.on_pid.connect(func(_pid): pass , CONNECT_ONE_SHOT) # Need PID for register_remote
-	Noray.register_host() # This gets us a PID even as a "client"
+	Noray.on_pid.connect(func(_pid): pass, CONNECT_ONE_SHOT)  # Need PID for register_remote
+	Noray.register_host()  # This gets us a PID even as a "client"
 
 	# Wait for PID
 	await Noray.on_pid
@@ -324,10 +365,14 @@ func _connect_enet_client(address: String, port: int) -> void:
 # DISCONNECT
 # =============================================================================
 
+
 ## Disconnect from the current game
 func disconnect_game() -> void:
 	if _connection_state == ConnectionState.OFFLINE:
 		return
+
+	# Stop any pending reconnection attempts
+	_stop_reconnection()
 
 	# Disconnect Noray signals
 	if Noray.on_connect_nat.is_connected(_on_client_nat_connect):
@@ -358,13 +403,14 @@ func disconnect_game() -> void:
 # MULTIPLAYER CALLBACKS
 # =============================================================================
 
+
 func _on_peer_connected(peer_id: int) -> void:
 	_log("Peer connected: %d" % peer_id)
 
 	if is_host():
 		# Send current player list to new peer
 		_rpc_sync_player_list.rpc_id(peer_id, _players)
-		
+
 		# Handle late joiner - send current level and game state
 		if _game_in_progress and not _current_level_dict.is_empty():
 			_log("Late joiner detected, sending current level and state to peer %d" % peer_id)
@@ -375,37 +421,58 @@ func _on_peer_connected(peer_id: int) -> void:
 	_rpc_send_player_info.rpc_id(peer_id, _local_player_info)
 
 
-## Event-driven late joiner synchronization
+## Event-driven late joiner synchronization.
+## Uses a signal race (ACK vs timeout) instead of a busy-wait loop.
 func _sync_late_joiner(peer_id: int) -> void:
 	# Send level data first
 	_rpc_receive_level_data.rpc_id(peer_id, _current_level_dict)
-	
-	# Wait for client ACK with timeout using a shared state container
-	var sync_timeout = 5.0 # seconds
-	var sync_state = {"ack_received": false}
-	
-	# Create one-shot connection for level ACK
-	var level_ack_handler = func(acking_peer_id: int) -> void:
-		if acking_peer_id == peer_id:
-			sync_state.ack_received = true
-	
-	level_sync_complete.connect(level_ack_handler, CONNECT_ONE_SHOT)
-	
-	# Wait for ACK or timeout
-	var start_time = Time.get_ticks_msec()
-	while not sync_state.ack_received and (Time.get_ticks_msec() - start_time) < sync_timeout * 1000:
-		await get_tree().process_frame
-	
-	if not sync_state.ack_received:
+
+	# Wait for client ACK with timeout — signal-driven, no polling
+	var ack_received := await _await_signal_or_timeout(
+		level_sync_complete, peer_id, LATE_JOINER_SYNC_TIMEOUT
+	)
+
+	if not ack_received:
 		_log("Level sync timeout for peer %d, proceeding anyway" % peer_id)
-		if level_sync_complete.is_connected(level_ack_handler):
-			level_sync_complete.disconnect(level_ack_handler)
-	
+
 	# Send game state
-	if has_node("/root/NetworkStateSync"):
-		get_node("/root/NetworkStateSync").send_full_state_to_peer(peer_id)
-	
+	NetworkStateSync.send_full_state_to_peer(peer_id)
+
 	late_joiner_connected.emit(peer_id)
+
+
+## Race a peer-specific signal against a timeout timer.
+## Returns true if the signal fired for the given peer_id before the timeout.
+func _await_signal_or_timeout(sig: Signal, peer_id: int, timeout_seconds: float) -> bool:
+	var result := {"resolved": false, "success": false}
+
+	# Timeout timer
+	var timer := get_tree().create_timer(timeout_seconds)
+	timer.timeout.connect(
+		func():
+			if not result.resolved:
+				result.resolved = true
+				result.success = false,
+		CONNECT_ONE_SHOT,
+	)
+
+	# Signal handler — filters by peer_id
+	var handler := func(acking_peer_id: int) -> void:
+		if acking_peer_id == peer_id and not result.resolved:
+			result.resolved = true
+			result.success = true
+
+	sig.connect(handler, CONNECT_ONE_SHOT)
+
+	# Wait until one of them fires
+	while not result.resolved:
+		await get_tree().process_frame
+
+	# Clean up signal if the timeout won
+	if sig.is_connected(handler):
+		sig.disconnect(handler)
+
+	return result.success
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -423,17 +490,51 @@ func _on_connected_to_server() -> void:
 	_log("Connected to server")
 	_stop_connection_timeout()
 	_players[multiplayer.get_unique_id()] = _local_player_info.duplicate()
+
+	# If we were reconnecting, reset reconnection state
+	if _connection_state == ConnectionState.RECONNECTING:
+		_stop_reconnection()
+		_reconnect_attempts = 0
+		_stored_room_code = ""
+
 	_set_connection_state(ConnectionState.JOINED)
 
 
 func _on_connection_failed() -> void:
 	_log("Connection failed")
-	_handle_connection_error("Failed to connect to game server")
+	# If we're reconnecting, handle retry logic
+	if _connection_state == ConnectionState.RECONNECTING:
+		_reconnect_attempts += 1
+		if _reconnect_attempts >= MAX_RECONNECT_ATTEMPTS:
+			_log("Reconnection failed after %d attempts" % MAX_RECONNECT_ATTEMPTS)
+			_stop_reconnection()
+			_handle_connection_error(
+				"Reconnection failed after %d attempts" % MAX_RECONNECT_ATTEMPTS
+			)
+		else:
+			# Try again with exponential backoff
+			_start_reconnection()
+	else:
+		_handle_connection_error("Failed to connect to game server")
 
 
 func _on_server_disconnected() -> void:
 	_log("Server disconnected")
-	disconnect_game()
+	# Only attempt reconnection if we were previously joined as a client
+	if _connection_state == ConnectionState.JOINED:
+		# Partial cleanup: close ENet connection but preserve room code for reconnection
+		if multiplayer.multiplayer_peer:
+			multiplayer.multiplayer_peer.close()
+			multiplayer.multiplayer_peer = null
+
+		# Clear players but keep room code
+		_players.clear()
+		_stop_connection_timeout()
+
+		# Start reconnection process
+		_start_reconnection()
+	else:
+		disconnect_game()
 
 
 # =============================================================================
@@ -499,7 +600,9 @@ func _rpc_receive_game_state(state_dict: Dictionary) -> void:
 
 
 @rpc("authority", "unreliable")
-func _rpc_receive_token_transform(network_id: String, pos_arr: Array, rot_arr: Array, scale_arr: Array) -> void:
+func _rpc_receive_token_transform(
+	network_id: String, pos_arr: Array, rot_arr: Array, scale_arr: Array
+) -> void:
 	var pos = Vector3(pos_arr[0], pos_arr[1], pos_arr[2])
 	var rot = Vector3(rot_arr[0], rot_arr[1], rot_arr[2])
 	var scl = Vector3(scale_arr[0], scale_arr[1], scale_arr[2])
@@ -525,6 +628,7 @@ func _rpc_receive_token_removed(network_id: String) -> void:
 # HOST GAME CONTROL
 # =============================================================================
 
+
 ## Called by host to start the game (notify all clients)
 func notify_game_starting() -> void:
 	if not is_host():
@@ -533,7 +637,7 @@ func notify_game_starting() -> void:
 
 	_game_in_progress = true
 	_log("Notifying all clients that game is starting (players: %s)" % str(_players.keys()))
-	
+
 	# Send to all connected clients (not to self - peer 1)
 	for peer_id in _players:
 		if peer_id != 1:
@@ -549,7 +653,7 @@ func broadcast_level_data(level_dict: Dictionary) -> void:
 	# Store for late joiners
 	_current_level_dict = level_dict.duplicate(true)
 	_game_in_progress = true
-	
+
 	_rpc_receive_level_data.rpc(level_dict)
 
 
@@ -572,6 +676,7 @@ func send_game_state_to_peer(peer_id: int, state_dict: Dictionary) -> void:
 # =============================================================================
 # HELPERS
 # =============================================================================
+
 
 func _set_connection_state(new_state: ConnectionState) -> void:
 	var old_state = _connection_state
@@ -598,12 +703,12 @@ func get_player_name() -> String:
 ## Save the player name to settings
 func save_player_name(player_name: String) -> void:
 	_local_player_info["name"] = player_name
-	
+
 	# Update local player entry if we're in a game
 	var my_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
 	if my_id > 0 and _players.has(my_id):
 		_players[my_id]["name"] = player_name
-	
+
 	var config = ConfigFile.new()
 	# Load existing settings first to preserve other sections
 	config.load(SETTINGS_PATH)
@@ -649,18 +754,24 @@ func clear_level_data() -> void:
 # SETTINGS
 # =============================================================================
 
+
 ## Load network settings from config file
 func _load_network_settings() -> void:
 	var config = ConfigFile.new()
 	var err = config.load(SETTINGS_PATH)
-	
+
 	if err == OK:
 		noray_server = config.get_value("network", "noray_server", DEFAULT_NORAY_SERVER)
 		noray_port = config.get_value("network", "noray_port", DEFAULT_NORAY_PORT)
 		debug_logging = config.get_value("network", "debug_logging", false)
 		_local_player_info["name"] = config.get_value("player", "name", DEFAULT_PLAYER_NAME)
-	
-	_log("Loaded network settings: noray=%s:%d, player=%s" % [noray_server, noray_port, _local_player_info["name"]])
+
+	_log(
+		(
+			"Loaded network settings: noray=%s:%d, player=%s"
+			% [noray_server, noray_port, _local_player_info["name"]]
+		)
+	)
 
 
 ## Save network settings to config file
@@ -668,11 +779,11 @@ func save_network_settings() -> void:
 	var config = ConfigFile.new()
 	# Load existing settings first to preserve other sections
 	config.load(SETTINGS_PATH)
-	
+
 	config.set_value("network", "noray_server", noray_server)
 	config.set_value("network", "noray_port", noray_port)
 	config.set_value("network", "debug_logging", debug_logging)
-	
+
 	config.save(SETTINGS_PATH)
 	_log("Saved network settings")
 
@@ -687,6 +798,66 @@ func set_noray_server(server: String, port: int = DEFAULT_NORAY_PORT) -> void:
 # =============================================================================
 # DEBUG LOGGING
 # =============================================================================
+
+
+## Start reconnection process with exponential backoff
+func _start_reconnection() -> void:
+	# Store room code before it's cleared (if not already stored)
+	if _stored_room_code.is_empty() and not _room_code.is_empty():
+		_stored_room_code = _room_code
+
+	# If we don't have a stored room code, can't reconnect
+	if _stored_room_code.is_empty():
+		_log("Cannot reconnect: no room code stored")
+		_handle_connection_error("Cannot reconnect: no room code available")
+		return
+
+	# Increment attempt counter (first attempt is 0, so this becomes 1)
+	_reconnect_attempts += 1
+
+	_log("Starting reconnection attempt %d/%d" % [_reconnect_attempts, MAX_RECONNECT_ATTEMPTS])
+
+	# Set state to RECONNECTING
+	_set_connection_state(ConnectionState.RECONNECTING)
+
+	# Emit reconnecting signal for UI
+	reconnecting.emit(_reconnect_attempts, MAX_RECONNECT_ATTEMPTS)
+
+	# Calculate exponential backoff delay
+	var delay = min(RECONNECT_BASE_DELAY * pow(2, _reconnect_attempts - 1), RECONNECT_MAX_DELAY)
+	_log("Waiting %.2f seconds before reconnection attempt" % delay)
+
+	# Setup timer for reconnection
+	_reconnect_timer.wait_time = delay
+	_reconnect_timer.start()
+
+
+## Handle reconnection timer timeout
+func _on_reconnect_timeout() -> void:
+	if _connection_state != ConnectionState.RECONNECTING:
+		return
+
+	_log("Attempting to rejoin room: %s" % _stored_room_code)
+
+	# Clean up current connection state before attempting rejoin
+	if multiplayer.multiplayer_peer:
+		multiplayer.multiplayer_peer.close()
+		multiplayer.multiplayer_peer = null
+
+	# Attempt to rejoin
+	join_game(_stored_room_code)
+
+
+## Stop reconnection process and clean up
+func _stop_reconnection() -> void:
+	if _reconnect_timer:
+		_reconnect_timer.stop()
+
+	# Reset reconnection state if we're in RECONNECTING state
+	if _connection_state == ConnectionState.RECONNECTING:
+		_reconnect_attempts = 0
+		_stored_room_code = ""
+
 
 ## Log a message if debug logging is enabled
 func _log(message: String) -> void:

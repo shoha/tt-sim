@@ -53,6 +53,9 @@ func _ready() -> void:
 	# Connect to download signals
 	_connect_signals()
 
+	# No need to process when icon is hidden
+	set_process(false)
+
 
 func _create_badge() -> void:
 	_badge_container = PanelContainer.new()
@@ -86,17 +89,13 @@ func _create_badge() -> void:
 
 
 func _connect_signals() -> void:
-	if has_node("/root/AssetDownloader"):
-		var downloader = get_node("/root/AssetDownloader")
-		downloader.download_completed.connect(_on_download_completed)
-		downloader.download_failed.connect(_on_download_failed)
-		downloader.download_progress.connect(_on_download_progress)
+	AssetDownloader.download_completed.connect(_on_download_completed)
+	AssetDownloader.download_failed.connect(_on_download_failed)
+	AssetDownloader.download_progress.connect(_on_download_progress)
 
-	if has_node("/root/AssetStreamer"):
-		var streamer = get_node("/root/AssetStreamer")
-		streamer.asset_received.connect(_on_p2p_completed)
-		streamer.asset_failed.connect(_on_p2p_failed)
-		streamer.transfer_progress.connect(_on_p2p_progress)
+	AssetStreamer.asset_received.connect(_on_p2p_completed)
+	AssetStreamer.asset_failed.connect(_on_p2p_failed)
+	AssetStreamer.transfer_progress.connect(_on_p2p_progress)
 
 
 func _process(delta: float) -> void:
@@ -215,11 +214,9 @@ func _update_queue_count() -> void:
 	var http_queued = 0
 	var p2p_queued = 0
 
-	if has_node("/root/AssetDownloader"):
-		http_queued = get_node("/root/AssetDownloader").get_queued_download_count()
+	http_queued = AssetDownloader.get_queued_download_count()
 
-	if has_node("/root/AssetStreamer"):
-		p2p_queued = get_node("/root/AssetStreamer").get_queued_request_count()
+	p2p_queued = AssetStreamer.get_queued_request_count()
 
 	var total_queued = http_queued + p2p_queued
 	var total_active = _download_items.size()
@@ -246,6 +243,7 @@ func _show_icon() -> void:
 	_pulse_time = 0.0
 	icon_button.visible = true
 	icon_button.modulate.a = 0.0
+	set_process(true)
 
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_OUT)
@@ -265,6 +263,7 @@ func _hide_icon() -> void:
 		func():
 			icon_button.visible = false
 			_is_icon_visible = false
+			set_process(false)
 	)
 
 

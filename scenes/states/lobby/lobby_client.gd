@@ -28,6 +28,7 @@ func _ready() -> void:
 	NetworkManager.player_left.connect(_on_player_left)
 	NetworkManager.connection_failed.connect(_on_connection_failed)
 	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
+	NetworkManager.reconnecting.connect(_on_reconnecting)
 
 	# Load saved player name
 	player_name_input.text = NetworkManager.get_player_name()
@@ -46,6 +47,8 @@ func _exit_tree() -> void:
 		NetworkManager.connection_failed.disconnect(_on_connection_failed)
 	if NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
 		NetworkManager.connection_state_changed.disconnect(_on_connection_state_changed)
+	if NetworkManager.reconnecting.is_connected(_on_reconnecting):
+		NetworkManager.reconnecting.disconnect(_on_reconnecting)
 
 
 func _show_input_state() -> void:
@@ -127,11 +130,18 @@ func _on_connection_state_changed(
 	match new_state:
 		NetworkManager.ConnectionState.JOINED:
 			_show_connected_state()
+		NetworkManager.ConnectionState.RECONNECTING:
+			# Status will be updated by _on_reconnecting signal
+			pass
 		NetworkManager.ConnectionState.OFFLINE:
 			if _is_connected:
 				status_label.text = "Disconnected from server"
 				_is_connected = false
 			_show_input_state()
+
+
+func _on_reconnecting(attempt: int, max_attempts: int) -> void:
+	status_label.text = "Reconnecting (attempt %d/%d)..." % [attempt, max_attempts]
 
 
 func _update_player_list() -> void:
