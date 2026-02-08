@@ -228,6 +228,10 @@ func _settle_to_ground() -> void:
 func _settle_to_position(target_pos: Vector3) -> void:
 	_is_settling = true
 
+	# Disable hover detection while settling so the token can't be
+	# highlighted / re-picked before it finishes its landing animation.
+	rigid_body.input_ray_pickable = false
+
 	_kill_settle_tween()
 	_settle_tween = create_tween()
 	_settle_tween.tween_property(rigid_body, "global_position", target_pos, SETTLE_DURATION)\
@@ -237,6 +241,9 @@ func _settle_to_position(target_pos: Vector3) -> void:
 
 func _on_settle_complete() -> void:
 	_is_settling = false
+
+	# Re-enable hover detection now that the settle animation is done
+	rigid_body.input_ray_pickable = true
 
 	# Sync hierarchy positions
 	_sync_parent_position()
