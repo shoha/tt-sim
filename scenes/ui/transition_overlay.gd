@@ -17,7 +17,7 @@ var _is_transitioning := false
 
 # Configuration
 var fade_duration := 0.3
-var fade_color := Color(0.102, 0.071, 0.102, 1.0) # Dark theme background
+var fade_color := Color(0.102, 0.071, 0.102, 1.0)  # Dark theme background
 
 
 func _ready() -> void:
@@ -30,18 +30,20 @@ func _ready() -> void:
 func fade_out(duration: float = -1.0) -> void:
 	if duration < 0:
 		duration = fade_duration
-	
+
 	_is_transitioning = true
 	color_rect.mouse_filter = Control.MOUSE_FILTER_STOP
-	
+
 	if _tween:
 		_tween.kill()
-	
+
 	_tween = create_tween()
 	_tween.set_ease(Tween.EASE_IN)
 	_tween.set_trans(Tween.TRANS_CUBIC)
 	_tween.tween_property(color_rect, "modulate:a", 1.0, duration)
-	
+
+	AudioManager.play_transition()
+
 	await _tween.finished
 	fade_out_complete.emit()
 
@@ -50,15 +52,17 @@ func fade_out(duration: float = -1.0) -> void:
 func fade_in(duration: float = -1.0) -> void:
 	if duration < 0:
 		duration = fade_duration
-	
+
 	if _tween:
 		_tween.kill()
-	
+
 	_tween = create_tween()
 	_tween.set_ease(Tween.EASE_OUT)
 	_tween.set_trans(Tween.TRANS_CUBIC)
 	_tween.tween_property(color_rect, "modulate:a", 0.0, duration)
-	
+
+	AudioManager.play_transition()
+
 	await _tween.finished
 	color_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_is_transitioning = false
@@ -67,15 +71,17 @@ func fade_in(duration: float = -1.0) -> void:
 
 
 ## Perform a full transition: fade out, call middle_callback, fade in
-func transition(middle_callback: Callable, fade_out_duration: float = -1.0, fade_in_duration: float = -1.0) -> void:
+func transition(
+	middle_callback: Callable, fade_out_duration: float = -1.0, fade_in_duration: float = -1.0
+) -> void:
 	await fade_out(fade_out_duration)
-	
+
 	if middle_callback.is_valid():
 		middle_callback.call()
-	
+
 	# Small delay to ensure scene changes are processed
 	await get_tree().process_frame
-	
+
 	await fade_in(fade_in_duration)
 
 
