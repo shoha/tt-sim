@@ -96,6 +96,9 @@ func _auto_connect_button(button: BaseButton) -> void:
 	if not button.mouse_entered.is_connected(_on_button_hover):
 		button.mouse_entered.connect(_on_button_hover)
 
+	# Set pointing-hand cursor on all buttons for clickability feedback
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
 
 func _on_button_hover() -> void:
 	play_hover()

@@ -49,6 +49,7 @@ text = "X"
 layout_mode = 2
 
 [node name="TabContainer" type="TabContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 300)
 layout_mode = 2
 size_flags_vertical = 3
