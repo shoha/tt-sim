@@ -33,6 +33,14 @@ var _drag_start_position: Vector3 = Vector3.ZERO # Position when drag started (f
 var _transform_update_timer: float = 0.0
 const TRANSFORM_UPDATE_INTERVAL: float = 0.1 # Send updates 10 times per second during drag
 
+# Whoosh sound state
+var _whoosh_cooldown: float = 0.0
+const WHOOSH_SPEED_THRESHOLD: float = 48.0 # Minimum horizontal speed (units/sec) to trigger whoosh
+const WHOOSH_COOLDOWN_DURATION: float = 0.4 # Minimum time between whoosh sounds
+const WHOOSH_PITCH_MIN: float = 0.85 # Pitch at threshold speed
+const WHOOSH_PITCH_MAX: float = 1.3 # Pitch at very high speed
+const WHOOSH_SPEED_MAX: float = 18.0 # Speed at which pitch reaches maximum
+
 # Tweens
 var _pickup_tween: Tween = null
 var _settle_tween: Tween = null
@@ -310,10 +318,11 @@ func _update_inertia_lean(delta: float) -> void:
 	_last_drag_position = current_position
 
 	var horizontal_velocity = Vector3(_drag_velocity.x, 0, _drag_velocity.z)
+	var speed = horizontal_velocity.length()
 
-	if horizontal_velocity.length() > 0.001:
+	if speed > 0.001:
 		var lean_axis = horizontal_velocity.cross(Vector3.UP).normalized()
-		var lean_angle = clamp(horizontal_velocity.length() * INERTIA_LEAN_STRENGTH, 0.0, 0.5)
+		var lean_angle = clamp(speed * INERTIA_LEAN_STRENGTH, 0.0, 0.5)
 		_target_lean_rotation = Basis(lean_axis, lean_angle)
 	else:
 		_target_lean_rotation = Basis.IDENTITY
@@ -322,6 +331,14 @@ func _update_inertia_lean(delta: float) -> void:
 		if is_instance_valid(child):
 			var current_basis = child.transform.basis.orthonormalized()
 			child.transform.basis = current_basis.slerp(_target_lean_rotation, LEAN_SMOOTHING * delta).orthonormalized()
+
+	# Whoosh sound when dragging fast
+	_whoosh_cooldown = max(_whoosh_cooldown - delta, 0.0)
+	if speed >= WHOOSH_SPEED_THRESHOLD and _whoosh_cooldown <= 0.0:
+		var speed_t = clamp((speed - WHOOSH_SPEED_THRESHOLD) / (WHOOSH_SPEED_MAX - WHOOSH_SPEED_THRESHOLD), 0.0, 1.0)
+		var pitch = lerp(WHOOSH_PITCH_MIN, WHOOSH_PITCH_MAX, speed_t)
+		AudioManager.play_token_whoosh(pitch)
+		_whoosh_cooldown = WHOOSH_COOLDOWN_DURATION
 
 
 # -------------------------------------------------------------------------

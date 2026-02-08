@@ -31,6 +31,7 @@ var _sfx_sounds := {
 	"token_drop": null, # "res://assets/audio/sfx/token_drop.wav"
 	"token_slide": null, # "res://assets/audio/sfx/token_slide.wav"
 	"token_hover": null, # "res://assets/audio/sfx/token_hover.wav"
+	"token_whoosh": null, # "res://assets/audio/sfx/token_whoosh.wav"
 }
 
 # Audio players pool for UI sounds
@@ -219,6 +220,17 @@ func play_token_slide() -> void:
 ## Play token hover sound (subtle highlight cue)
 func play_token_hover() -> void:
 	play_sfx("token_hover", -6.0)
+
+
+## Play token whoosh sound (rapid drag movement)
+## pitch_scale allows velocity-based pitch scaling for a natural feel.
+func play_token_whoosh(pitch_scale: float = 1.0) -> void:
+	var player = _get_available_sfx_player()
+	if player and _sfx_sounds.has("token_whoosh") and _sfx_sounds["token_whoosh"] != null:
+		player.stream = _sfx_sounds["token_whoosh"]
+		player.volume_db = -3.0
+		player.pitch_scale = pitch_scale + randf_range(-0.08, 0.08)
+		player.play()
 
 
 func _get_available_sfx_player() -> AudioStreamPlayer:
