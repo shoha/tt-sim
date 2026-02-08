@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://jpfohjr0e8nv"]
+[gd_scene load_steps=6 format=3 uid="uid://jpfohjr0e8nv"]
 
 [ext_resource type="Script" uid="uid://cocec7gcywhnm" path="res://scenes/level_editor/level_editor.gd" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://lighting_editor_panel" path="res://scenes/level_editor/lighting_editor_panel.tscn" id="2_lighting_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/slider_spin_box.tscn" id="3_slider_spin_box"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -253,43 +254,13 @@ layout_mode = 2
 theme_type_variation = &"Body"
 text = "Scale:"
 
-[node name="XLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
-layout_mode = 2
-theme_type_variation = &"Body"
-text = "X:"
-
-[node name="MapScaleXSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
+[node name="MapScaleSliderSpin" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow" instance=ExtResource("3_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
-min_value = 0.01
-step = 0.1
-value = 1.01
-allow_greater = true
-
-[node name="YLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
-layout_mode = 2
-theme_type_variation = &"Body"
-text = "Y:"
-
-[node name="MapScaleYSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
-unique_name_in_owner = true
-layout_mode = 2
-min_value = 0.01
-step = 0.1
-value = 1.01
-allow_greater = true
-
-[node name="ZLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
-layout_mode = 2
-theme_type_variation = &"Body"
-text = "Z:"
-
-[node name="MapScaleZSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
-unique_name_in_owner = true
-layout_mode = 2
-min_value = 0.01
-step = 0.1
-value = 1.01
+min_value = 0.1
+max_value = 5.0
+step = 0.01
+value = 1.0
 allow_greater = true
 
 [node name="LightingSeparator" type="HSeparator" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox"]
