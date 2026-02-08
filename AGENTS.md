@@ -27,7 +27,8 @@
 - **No EventBus** – Use direct signal connections or autoload services
 - **State stack** – Root manages states: `change_state()`, `push_state()`, `pop_state()`
 - **Autoloads** – UIManager, LevelManager, AssetPackManager, NetworkManager, etc. (see project.godot)
-- **GLB loading** – Use `GlbUtils.load_glb_async()` and `GlbUtils.process_collision_meshes()` / `process_animations()`
+- **Map loading** – Use `GlbUtils.load_map_async()` (or `load_map()` sync) for maps; handles both `res://` and `user://` paths with full post-processing
+- **GLB loading** – Use `GlbUtils.load_glb_with_processing_async()` for non-map GLBs (tokens use `AssetPackManager` instead)
 - **Models** – Use `AssetPackManager.get_model_instance()` for cached model loading
 - **UIDs** – Godot `.uid` files are auto-generated; avoid manual edits
 
@@ -38,6 +39,16 @@
 - **New UI panel (in-scene)**: Extend `AnimatedVisibilityContainer`, register with `UIManager.register_overlay()` for ESC handling
 - **New UI overlay (full-screen dialog)**: Extend `AnimatedCanvasLayerPanel`, override `_on_panel_ready()` for setup
 - **New level/token logic**: See LevelPlayController, BoardTokenFactory, GameState
+
+## Documentation
+
+After making architectural or API changes, update the relevant documentation. Check the **Essential Reading** table above for which doc covers each area. Common triggers:
+
+- **New or changed API** (functions, signals, autoloads) – update `docs/ARCHITECTURE.md` and this file's Key Conventions
+- **Scene tree changes** (new nodes, reparenting) – update the Scene Hierarchy in `docs/ARCHITECTURE.md`
+- **Asset/model loading changes** – update `docs/ASSET_MANAGEMENT.md`
+- **UI system changes** – update `docs/UI_SYSTEMS.md`
+- **New conventions or patterns** – update this file (`AGENTS.md`) and `.cursor/rules/project-overview.mdc`
 
 ## Formatting
 
