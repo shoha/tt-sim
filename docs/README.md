@@ -11,6 +11,7 @@ This folder contains technical documentation for the project.
 | [ASSET_MANAGEMENT.md](ASSET_MANAGEMENT.md) | Asset packs, downloading, caching, P2P streaming  |
 | [UI_SYSTEMS.md](UI_SYSTEMS.md)             | UIManager, dialogs, toasts, transitions, settings |
 | [THEME_GUIDE.md](THEME_GUIDE.md)           | Theme variants, typography, styling               |
+| [SOUND_EFFECTS.md](SOUND_EFFECTS.md)       | Audio files, wiring, normalization, adding sounds  |
 
 ## Quick Start
 
@@ -111,3 +112,21 @@ When adding new features:
 2. Use theme variants from THEME_GUIDE.md
 3. Register overlays with UIManager for ESC handling
 4. Update relevant documentation
+
+### Audio Setup
+
+If you're working with audio files, run the one-time hook install:
+
+```bash
+python tools/hooks/install.py
+```
+
+This installs a pre-commit hook that auto-normalizes audio files in `assets/audio/` to consistent loudness. Requires `ffmpeg` on PATH:
+
+```bash
+winget install ffmpeg        # Windows
+brew install ffmpeg          # macOS
+sudo apt install ffmpeg      # Ubuntu / Debian
+```
+
+See [SOUND_EFFECTS.md](SOUND_EFFECTS.md) for the full audio reference.
