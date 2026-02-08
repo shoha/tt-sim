@@ -131,10 +131,29 @@ These are interactions that could benefit from sound effects but don't have corr
 Master
 ├── Music   (background music, not yet implemented)
 ├── SFX     (game interaction sounds — tokens, level events)
+│   ├── Effect: LowPassFilter  (cutoff 7kHz — softens digital sharpness)
+│   └── Effect: Reverb          (small room, 12% wet — subtle physical space)
 └── UI      (interface sounds — clicks, hovers, panels)
+    └── Effect: LowPassFilter  (cutoff 7kHz — warm, muffled-speaker feel)
 ```
 
 Each bus has independent volume (0–100%) and mute controls, adjustable from the Settings menu.
+
+### Lo-fi Bus Effects
+
+The SFX and UI buses have effects applied to achieve a warm, lo-fi aesthetic. These are configured in `default_bus_layout.tres` and can be tweaked in the Godot editor (bottom panel → Audio tab).
+
+| Bus | Effect | Key Settings | Purpose |
+|-----|--------|-------------|---------|
+| SFX | LowPassFilter | cutoff: 7kHz | Rolls off harsh highs for a warm tone |
+| SFX | Reverb | room: 0.2, wet: 12%, damping: 0.7 | Subtle sense of physical space (tabletop feel) |
+| UI  | LowPassFilter | cutoff: 7kHz | Softens UI clicks/chimes to match the lo-fi vibe |
+
+**Tuning tips:**
+- Lower the cutoff (e.g. 5kHz) for a more muffled, retro feel
+- Raise the cutoff (e.g. 10kHz) if sounds feel too dull
+- Increase reverb wet (e.g. 0.2) for more spatial depth, decrease (e.g. 0.05) for drier sound
+- All changes are audible immediately in the editor's Audio tab
 
 ---
 
