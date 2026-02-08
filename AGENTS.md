@@ -26,10 +26,13 @@
 
 - **No EventBus** – Use direct signal connections or autoload services
 - **State stack** – Root manages states: `change_state()`, `push_state()`, `pop_state()`
-- **Autoloads** – UIManager, LevelManager, AssetPackManager, NetworkManager, etc. (see project.godot)
+- **Autoloads** – UIManager, LevelManager, AssetPackManager, NetworkManager, Constants, etc. (see project.godot). Always reference autoloads directly (e.g. `AssetPackManager.method()`), never via `has_node("/root/X")` or `get_node("/root/X")`
+- **Shared constants** – Use `Constants.LOFI_DEFAULTS`, `Constants.NETWORK_TRANSFORM_UPDATE_INTERVAL`, etc. for values shared across files. Add file-local constants for single-file magic numbers
 - **Map loading** – Use `GlbUtils.load_map_async()` (or `load_map()` sync) for maps; handles both `res://` and `user://` paths with full post-processing
 - **GLB loading** – Use `GlbUtils.load_glb_with_processing_async()` for non-map GLBs (tokens use `AssetPackManager` instead)
 - **Models** – Use `AssetPackManager.get_model_instance()` for cached model loading
+- **Signal cleanup** – Disconnect autoload signals in `_exit_tree()` for non-autoload nodes. Use `CONNECT_ONE_SHOT` for transient signals
+- **Process optimization** – Use `set_process(false)` in `_ready()` and toggle on/off when needed, to avoid unnecessary per-frame work
 - **UIDs** – Godot `.uid` files are auto-generated; avoid manual edits
 
 ## Adding Features
@@ -39,6 +42,7 @@
 - **New UI panel (in-scene)**: Extend `AnimatedVisibilityContainer`, register with `UIManager.register_overlay()` for ESC handling
 - **New UI overlay (full-screen dialog)**: Extend `AnimatedCanvasLayerPanel`, override `_on_panel_ready()` for setup
 - **New level/token logic**: See LevelPlayController, BoardTokenFactory, GameState
+- **Level editor**: Supports undo/redo (`Ctrl+Z`/`Ctrl+Y`) and autosave (30s interval, recovery on startup)
 
 ## Documentation
 
