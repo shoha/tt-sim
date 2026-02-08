@@ -1,0 +1,59 @@
+---
+description: Use the SliderSpinBox reusable component for slider + spinbox pairs
+globs: "**/*.gd,**/*.tscn"
+alwaysApply: false
+---
+
+# SliderSpinBox Component
+
+When adding a slider with an accompanying spinbox for precise value entry, use the reusable `SliderSpinBox` component at `scenes/ui/slider_spin_box.tscn`.
+
+## Usage in .tscn
+
+Instance the scene and set exported properties on the instance:
+
+```
+[ext_resource type="PackedScene" path="res://scenes/ui/slider_spin_box.tscn" id="slider_spin_id"]
+
+[node name="MySliderSpin" parent="SomeRow" instance=ExtResource("slider_spin_id")]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.1
+max_value = 5.0
+step = 0.01
+value = 1.0
+allow_greater = true
+```
+
+## Usage in GDScript
+
+```gdscript
+@onready var my_slider_spin: SliderSpinBox = %MySliderSpin
+
+func _ready() -> void:
+    my_slider_spin.value_changed.connect(_on_my_value_changed)
+
+func _on_my_value_changed(value: float) -> void:
+    # Handle value change — sync is handled internally
+    pass
+
+# To update programmatically without emitting signals:
+my_slider_spin.set_value_no_signal(1.5)
+```
+
+## Exported Properties
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `min_value` | float | 0.0 | Minimum value for slider and spinbox |
+| `max_value` | float | 1.0 | Maximum value for slider and spinbox |
+| `step` | float | 0.01 | Step increment |
+| `value` | float | 0.0 | Current value |
+| `exp_edit` | bool | false | Exponential slider curve |
+| `allow_greater` | bool | false | SpinBox accepts values above max_value |
+| `allow_lesser` | bool | false | SpinBox accepts values below min_value |
+
+## Do Not
+
+- Manually create separate HSlider + SpinBox nodes and wire sync logic
+- Forget `set_value_no_signal()` when setting values programmatically
