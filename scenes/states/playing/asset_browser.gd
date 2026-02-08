@@ -54,15 +54,7 @@ func _create_tabs() -> void:
 
 func _on_tab_changed(_tab_index: int) -> void:
 	_refresh_current_tab()
-	# Cross-fade the newly visible tab content
-	var tab := tab_container.get_current_tab_control()
-	if tab:
-		tab.modulate.a = 0.0
-		var tw := create_tween()
-		tw.set_ease(Tween.EASE_OUT)
-		tw.set_trans(Tween.TRANS_CUBIC)
-		tw.tween_property(tab, "modulate:a", 1.0, 0.15)
-	AudioManager.play_tick()
+	TabUtils.animate_tab_change(tab_container, self)
 
 
 func _refresh_current_tab() -> void:

@@ -90,6 +90,8 @@ These are played via `AudioManager.play_<name>()` helper methods. Default pitch 
 | `error.wav`         | `play_error()`         | 0 dB    | Error feedback                    | Manual               |
 | `confirm.ogg`       | `play_confirm()`       | 0 dB    | Confirmation dialog accept        | **Wired**            |
 | `cancel.wav`        | `play_cancel()`        | 0 dB    | Cancel / back action              | **Wired**            |
+| `tick.ogg`          | `play_tick()`          | -8 dB   | Slider / toggle / checkbox tick   | **Auto** (toggles)   |
+| `transition.wav`    | `play_transition()`    | -3 dB   | Scene / state transition whoosh   | **Wired**            |
 
 ---
 
@@ -267,7 +269,7 @@ func _on_after_animate_out() -> void:
 
 ## Implementation Checklist
 
-### Phase 1: Audio Files (13 files)
+### Phase 1: Audio Files (15 files)
 - [x] `assets/audio/ui/click.wav` (JDSherbert Tabletop SFX)
 - [x] `assets/audio/ui/hover.ogg` (Kenney Interface Sounds)
 - [x] `assets/audio/ui/open.ogg` (Kenney — pluck)
@@ -276,6 +278,8 @@ func _on_after_animate_out() -> void:
 - [x] `assets/audio/ui/error.wav` (ObsydianX Interface SFX)
 - [x] `assets/audio/ui/confirm.ogg` (Kenney Interface Sounds)
 - [x] `assets/audio/ui/cancel.wav` (ObsydianX Interface SFX)
+- [x] `assets/audio/ui/tick.ogg` (Kenney Interface Sounds — tick)
+- [x] `assets/audio/ui/transition.wav` (Shapeforms Audio — whoosh)
 - [x] `assets/audio/sfx/token_pickup.wav` (JDSherbert Tabletop SFX)
 - [x] `assets/audio/sfx/token_drop.wav` (JDSherbert Tabletop SFX)
 - [ ] `assets/audio/sfx/token_slide.wav` (JDSherbert Tabletop SFX — file exists, not wired)
