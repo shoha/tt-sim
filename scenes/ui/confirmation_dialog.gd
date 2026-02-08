@@ -33,7 +33,15 @@ func _on_panel_ready() -> void:
 	cancel_button.pressed.connect(_on_cancel_pressed)
 
 
-func setup(title: String, message: String, confirm_text: String = "Confirm", cancel_text: String = "Cancel", confirm_callback: Callable = Callable(), cancel_callback: Callable = Callable(), confirm_style: String = "Success") -> void:
+func setup(
+	title: String,
+	message: String,
+	confirm_text: String = "Confirm",
+	cancel_text: String = "Cancel",
+	confirm_callback: Callable = Callable(),
+	cancel_callback: Callable = Callable(),
+	confirm_style: String = "Success"
+) -> void:
 	title_label.text = title
 	message_label.text = message
 	confirm_button.text = confirm_text
@@ -41,10 +49,32 @@ func setup(title: String, message: String, confirm_text: String = "Confirm", can
 	confirm_button.theme_type_variation = confirm_style
 	_confirm_callback = confirm_callback
 	_cancel_callback = cancel_callback
+	_is_danger = confirm_style == "Danger"
+
+
+var _is_danger: bool = false
 
 
 func _on_after_animate_in() -> void:
 	confirm_button.grab_focus()
+
+	# Danger dialogs get a subtle horizontal shake to draw attention
+	if _is_danger:
+		_play_danger_shake()
+
+
+## Quick horizontal shake animation for danger/destructive confirmations
+func _play_danger_shake() -> void:
+	var panel = $CenterContainer/PanelContainer
+	var base_x: float = panel.position.x
+	var tw = create_tween()
+	tw.set_ease(Tween.EASE_OUT)
+	tw.set_trans(Tween.TRANS_SINE)
+	tw.tween_property(panel, "position:x", base_x + 6, 0.04)
+	tw.tween_property(panel, "position:x", base_x - 5, 0.04)
+	tw.tween_property(panel, "position:x", base_x + 3, 0.04)
+	tw.tween_property(panel, "position:x", base_x - 2, 0.04)
+	tw.tween_property(panel, "position:x", base_x, 0.04)
 
 
 func _on_after_animate_out() -> void:

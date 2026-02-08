@@ -79,6 +79,9 @@ func _on_panel_ready() -> void:
 	# Tab transition animation
 	tab_container.tab_changed.connect(_on_tab_changed)
 
+	# Apply tooltips to settings controls
+	_apply_tooltips()
+
 	# Load current settings
 	_load_settings()
 	_populate_controls_list()
@@ -381,6 +384,23 @@ func _update_version_info() -> void:
 func _on_prereleases_toggled(pressed: bool) -> void:
 	UpdateManager.set_prerelease_enabled(pressed)
 	AudioManager.play_tick()
+
+
+## Apply helpful tooltips to settings controls
+func _apply_tooltips() -> void:
+	master_slider.tooltip_text = "Overall volume for all audio"
+	music_slider.tooltip_text = "Background music volume"
+	sfx_slider.tooltip_text = "Sound effects for token interactions"
+	ui_slider.tooltip_text = "UI sounds (clicks, hover, panel open/close)"
+	fullscreen_check.tooltip_text = "Toggle fullscreen mode"
+	vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
+	lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
+	p2p_enabled_check.tooltip_text = "Allow peer-to-peer asset sharing with other players"
+	clear_cache_button.tooltip_text = "Delete downloaded asset files to free disk space"
+	prereleases_check.tooltip_text = "Include pre-release versions when checking for updates"
+	check_updates_button.tooltip_text = "Check for a newer version of TTSim"
+	reset_button.tooltip_text = "Reset all settings to defaults"
+	apply_button.tooltip_text = "Apply and save current settings"
 
 
 func _on_check_updates_pressed() -> void:

@@ -15,6 +15,37 @@ func _on_panel_ready() -> void:
 	resume_button.pressed.connect(_on_resume_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
 	main_menu_button.pressed.connect(_on_main_menu_pressed)
+	_setup_blur_backdrop()
+
+
+## Replace the flat dark backdrop with a blurred-background shader
+func _setup_blur_backdrop() -> void:
+	var shader = Shader.new()
+	shader.code = (
+		"shader_type canvas_item;\n"
+		+ "\n"
+		+ "uniform sampler2D screen_texture : hint_screen_texture, filter_linear_mipmap;\n"
+		+ "uniform float blur_amount : hint_range(0, 10) = 2.5;\n"
+		+ "\n"
+		+ "void fragment() {\n"
+		+ "    vec2 ps = SCREEN_PIXEL_SIZE * blur_amount;\n"
+		+ "    vec4 col = vec4(0.0);\n"
+		+ "    float total = 0.0;\n"
+		+ "    for (int x = -3; x <= 3; x++) {\n"
+		+ "        for (int y = -3; y <= 3; y++) {\n"
+		+ "            float w = 1.0 / (1.0 + float(x*x + y*y));\n"
+		+ "            col += texture(screen_texture, SCREEN_UV + vec2(float(x), float(y)) * ps) * w;\n"
+		+ "            total += w;\n"
+		+ "        }\n"
+		+ "    }\n"
+		+ "    col /= total;\n"
+		+ "    // Darken the blurred result to keep text readable\n"
+		+ "    COLOR = vec4(col.rgb * 0.4, 1.0);\n"
+		+ "}\n"
+	)
+	var mat = ShaderMaterial.new()
+	mat.shader = shader
+	$ColorRect.material = mat
 
 
 func _on_after_animate_in() -> void:

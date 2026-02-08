@@ -18,6 +18,8 @@ func _ready() -> void:
 	fade_in_duration = 0.25
 	fade_out_duration = 0.15
 	trans_in_type = Tween.TRANS_BACK
+	# Sounds are handled manually to avoid doubling with the toggle button's click.
+	play_open_close_sounds = false
 
 	asset_browser.asset_selected.connect(_on_asset_selected)
 	if add_pack_button:
@@ -47,11 +49,15 @@ func _on_before_animate_in() -> void:
 func _on_before_animate_out() -> void:
 	UIManager.unregister_overlay(self)
 	asset_browser.clear_filters()
+	# If the button is still pressed, the close came from ESC or asset selection
+	# rather than the toggle button (which already plays its own click sound).
+	if toggle_button.button_pressed:
+		AudioManager.play_close()
 
 
-# Also untoggle the button when closed via ESC
+# Also untoggle the button when closed via ESC (without re-triggering toggled signal)
 func _on_after_animate_out() -> void:
-	toggle_button.button_pressed = false
+	toggle_button.set_pressed_no_signal(false)
 
 
 # =============================================================================

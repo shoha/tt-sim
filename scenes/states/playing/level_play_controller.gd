@@ -289,8 +289,8 @@ func _play_level_async(level_data: LevelData) -> void:
 			drag_and_drop.add_child(token)
 			_track_token(token, placement)
 			_connect_token_context_menu(token)
-			# Staggered pop-in animation for a satisfying cascade effect
-			token.play_spawn_animation(randf() * 0.15)
+			# Staggered pop-in animation — sequential cascade instead of random
+			token.play_spawn_animation(spawned_count * 0.05)
 			token_spawned.emit(token, placement)
 
 		spawned_count += 1

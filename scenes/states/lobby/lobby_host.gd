@@ -3,8 +3,8 @@ extends CanvasLayer
 ## Lobby screen for the host.
 ## Displays the room code, connected players, and provides a start game button.
 
-signal start_game_requested()
-signal cancel_requested()
+signal start_game_requested
+signal cancel_requested
 
 @onready var player_name_input: LineEdit = %PlayerNameInput
 @onready var room_code_label: Label = %RoomCodeLabel
@@ -66,11 +66,13 @@ func _on_room_code_received(code: String) -> void:
 func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
 	_update_player_list()
 	status_label.text = "%d player(s) connected" % NetworkManager.get_player_count()
+	_flash_player_list()
 
 
 func _on_player_left(_peer_id: int) -> void:
 	_update_player_list()
 	status_label.text = "%d player(s) connected" % NetworkManager.get_player_count()
+	_flash_player_list()
 
 
 func _on_connection_failed(reason: String) -> void:
@@ -79,7 +81,9 @@ func _on_connection_failed(reason: String) -> void:
 	start_button.disabled = true
 
 
-func _on_connection_state_changed(_old_state: NetworkManager.ConnectionState, new_state: NetworkManager.ConnectionState) -> void:
+func _on_connection_state_changed(
+	_old_state: NetworkManager.ConnectionState, new_state: NetworkManager.ConnectionState
+) -> void:
 	match new_state:
 		NetworkManager.ConnectionState.HOSTING:
 			status_label.text = "Lobby ready!"
@@ -120,3 +124,10 @@ func _on_player_name_changed(new_name: String) -> void:
 		name_to_save = "Player"
 	NetworkManager.save_player_name(name_to_save)
 	_update_player_list()
+
+
+## Brief highlight flash on the player list when someone joins or leaves
+func _flash_player_list() -> void:
+	var tw = player_list.create_tween()
+	tw.tween_property(player_list, "self_modulate", Color(1.3, 1.2, 1.0, 1.0), 0.1)
+	tw.tween_property(player_list, "self_modulate", Color.WHITE, 0.3)

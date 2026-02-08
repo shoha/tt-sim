@@ -19,6 +19,7 @@ const LEAN_SMOOTHING: float = 8.0  # How quickly the lean adjusts to velocity ch
 const SETTLE_DURATION: float = 0.3  # Duration of the settle-to-ground animation when dropped
 const PICKUP_SPRING_DURATION: float = 0.15  # Duration of the spring-up animation on pickup
 const SCALE_PUNCH_AMOUNT: float = 1.05  # Scale multiplier for the pickup punch effect
+const DRAG_SCALE_AMOUNT: float = 1.08  # Sustained scale-up while dragging for "lifted" feel
 const TERRAIN_COLLISION_LAYER: int = 1  # Physics layer for terrain/board surfaces
 
 var _base_height_offset: float = 0.0
@@ -172,8 +173,8 @@ func _on_dragging_started() -> void:
 		. set_ease(Tween.EASE_OUT)
 	)
 
-	# Scale punch on visual children (subtle pop feel)
-	_play_scale_punch()
+	# Scale punch on visual children (subtle pop feel), then hold at drag scale
+	_play_scale_punch_then_hold()
 
 	# Cursor: closed hand while dragging
 	Input.set_default_cursor_shape(Input.CURSOR_DRAG)
@@ -199,6 +200,9 @@ func _on_dragging_stopped() -> void:
 	_drag_velocity = Vector3.ZERO
 	_target_lean_rotation = Basis.IDENTITY
 
+	# Restore visual scale from the drag hold scale
+	_restore_visual_scale()
+
 	# Settle to the ground with animation (replaces physics gravity drop)
 	_settle_to_ground()
 
@@ -219,6 +223,9 @@ func _on_dragging_cancelled() -> void:
 
 	_drag_velocity = Vector3.ZERO
 	_target_lean_rotation = Basis.IDENTITY
+
+	# Restore visual scale from the drag hold scale
+	_restore_visual_scale()
 
 	# Animate back to original position
 	_settle_to_position(_drag_start_position)
@@ -306,12 +313,16 @@ func _find_landing_position() -> Variant:
 # -------------------------------------------------------------------------
 
 
-## Play a subtle scale punch on visual children (pop feel on pickup).
-func _play_scale_punch() -> void:
+## Play a scale punch then hold at a slightly enlarged scale while dragging.
+## Gives a tactile "lifted off the board" feel.
+func _play_scale_punch_then_hold() -> void:
 	for child in _visual_children:
 		if is_instance_valid(child):
 			var base_scale = child.scale
+			# Store the base scale so we can restore it on drop
+			child.set_meta("_base_scale", base_scale)
 			var punch_scale = base_scale * SCALE_PUNCH_AMOUNT
+			var hold_scale = base_scale * DRAG_SCALE_AMOUNT
 			var tween = create_tween()
 			(
 				tween
@@ -321,9 +332,23 @@ func _play_scale_punch() -> void:
 			)
 			(
 				tween
-				. tween_property(child, "scale", base_scale, PICKUP_SPRING_DURATION * 0.5)
+				. tween_property(child, "scale", hold_scale, PICKUP_SPRING_DURATION * 0.5)
 				. set_trans(Tween.TRANS_CUBIC)
 				. set_ease(Tween.EASE_IN_OUT)
+			)
+
+
+## Smoothly restore visual children to their base scale after dragging stops.
+func _restore_visual_scale() -> void:
+	for child in _visual_children:
+		if is_instance_valid(child):
+			var base_scale: Vector3 = child.get_meta("_base_scale", child.scale)
+			var tween = create_tween()
+			(
+				tween
+				. tween_property(child, "scale", base_scale, SETTLE_DURATION)
+				. set_trans(Tween.TRANS_CUBIC)
+				. set_ease(Tween.EASE_OUT)
 			)
 
 

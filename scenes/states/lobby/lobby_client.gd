@@ -3,7 +3,7 @@ extends CanvasLayer
 ## Lobby screen for clients.
 ## Allows entering a room code and shows connection status.
 
-signal leave_requested()
+signal leave_requested
 
 @onready var player_name_input: LineEdit = %PlayerNameInput
 @onready var room_code_input: LineEdit = %RoomCodeInput
@@ -31,7 +31,7 @@ func _ready() -> void:
 
 	# Load saved player name
 	player_name_input.text = NetworkManager.get_player_name()
-	
+
 	# Initialize UI
 	_show_input_state()
 
@@ -77,7 +77,7 @@ func _on_connect_pressed() -> void:
 	var player_name = player_name_input.text.strip_edges()
 	if player_name.is_empty():
 		player_name = "Player"
-	
+
 	var code = room_code_input.text.strip_edges()
 	if code.is_empty():
 		status_label.text = "Please enter a room code"
@@ -85,7 +85,7 @@ func _on_connect_pressed() -> void:
 
 	# Save and set player name before connecting
 	NetworkManager.save_player_name(player_name)
-	
+
 	_show_connecting_state()
 	NetworkManager.join_game(code)
 
@@ -101,11 +101,13 @@ func _on_leave_pressed() -> void:
 func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
 	if _is_connected:
 		_update_player_list()
+		_flash_player_list()
 
 
 func _on_player_left(_peer_id: int) -> void:
 	if _is_connected:
 		_update_player_list()
+		_flash_player_list()
 
 
 func _on_connection_failed(reason: String) -> void:
@@ -113,7 +115,9 @@ func _on_connection_failed(reason: String) -> void:
 	_show_input_state()
 
 
-func _on_connection_state_changed(_old_state: NetworkManager.ConnectionState, new_state: NetworkManager.ConnectionState) -> void:
+func _on_connection_state_changed(
+	_old_state: NetworkManager.ConnectionState, new_state: NetworkManager.ConnectionState
+) -> void:
 	match new_state:
 		NetworkManager.ConnectionState.JOINED:
 			_show_connected_state()
@@ -135,3 +139,10 @@ func _update_player_list() -> void:
 		elif peer_id == multiplayer.get_unique_id():
 			player_name += " (You)"
 		player_list.add_item(player_name)
+
+
+## Brief highlight flash on the player list when someone joins or leaves
+func _flash_player_list() -> void:
+	var tw = player_list.create_tween()
+	tw.tween_property(player_list, "self_modulate", Color(1.3, 1.2, 1.0, 1.0), 0.1)
+	tw.tween_property(player_list, "self_modulate", Color.WHITE, 0.3)

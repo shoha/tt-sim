@@ -204,6 +204,7 @@ func define_theme():
 	_define_window()
 	_define_accept_dialog()
 	_define_separator()
+	_define_tooltip()
 
 
 # =============================================================================
@@ -850,4 +851,31 @@ func _define_separator():
 	define_style("HSeparator", {separator = stylebox_line(separator_base)})
 	define_style(
 		"VSeparator", {separator = stylebox_line(inherit(separator_base, {vertical = true}))}
+	)
+
+
+func _define_tooltip():
+	var tooltip_panel = stylebox_flat(
+		{
+			bg_color = color_surface2,
+			border_color = color_accent_darker,
+			border_ = border_width(border_w),
+			corner_ = corner_radius(corner_r),
+			content_margin_ = content_margins(spacing_md, spacing_sm),
+		}
+	)
+
+	define_style(
+		"TooltipPanel",
+		{
+			panel = tooltip_panel,
+		}
+	)
+
+	define_style(
+		"TooltipLabel",
+		{
+			font_size = font_size_body,
+			font_color = color_text_on_dark,
+		}
 	)
