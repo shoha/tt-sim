@@ -20,9 +20,7 @@ var _popup_tween: Tween
 @onready var map_offset_x_spin: SpinBox = %MapOffsetXSpin
 @onready var map_offset_y_spin: SpinBox = %MapOffsetYSpin
 @onready var map_offset_z_spin: SpinBox = %MapOffsetZSpin
-@onready var map_scale_x_spin: SpinBox = %MapScaleXSpin
-@onready var map_scale_y_spin: SpinBox = %MapScaleYSpin
-@onready var map_scale_z_spin: SpinBox = %MapScaleZSpin
+@onready var map_scale_slider_spin: SliderSpinBox = %MapScaleSliderSpin
 
 @onready var token_list: ItemList = %TokenList
 @onready var pokemon_search: LineEdit = %PokemonSearch
@@ -154,9 +152,7 @@ func _connect_signals() -> void:
 	map_offset_x_spin.value_changed.connect(_on_map_transform_changed)
 	map_offset_y_spin.value_changed.connect(_on_map_transform_changed)
 	map_offset_z_spin.value_changed.connect(_on_map_transform_changed)
-	map_scale_x_spin.value_changed.connect(_on_map_transform_changed)
-	map_scale_y_spin.value_changed.connect(_on_map_transform_changed)
-	map_scale_z_spin.value_changed.connect(_on_map_transform_changed)
+	map_scale_slider_spin.value_changed.connect(_on_map_scale_changed)
 
 	play_button.pressed.connect(_on_play_pressed)
 
@@ -250,9 +246,7 @@ func _update_ui_from_level() -> void:
 	map_offset_x_spin.value = current_level.map_offset.x
 	map_offset_y_spin.value = current_level.map_offset.y
 	map_offset_z_spin.value = current_level.map_offset.z
-	map_scale_x_spin.value = current_level.map_scale.x
-	map_scale_y_spin.value = current_level.map_scale.y
-	map_scale_z_spin.value = current_level.map_scale.z
+	map_scale_slider_spin.set_value_no_signal(current_level.map_scale.x)
 
 	_is_updating_ui = false
 
@@ -449,9 +443,11 @@ func _on_map_transform_changed(_value: float = 0.0) -> void:
 	current_level.map_offset = Vector3(
 		map_offset_x_spin.value, map_offset_y_spin.value, map_offset_z_spin.value
 	)
-	current_level.map_scale = Vector3(
-		map_scale_x_spin.value, map_scale_y_spin.value, map_scale_z_spin.value
-	)
+	current_level.map_scale = Vector3.ONE * map_scale_slider_spin.value
+
+
+func _on_map_scale_changed(value: float) -> void:
+	_on_map_transform_changed(value)
 
 
 func _on_save_pressed() -> void:
