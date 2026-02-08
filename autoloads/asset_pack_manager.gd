@@ -7,9 +7,13 @@ extends Node
 ##
 ## Model Instance API:
 ##   get_model_instance() - Get a model Node3D (async, uses memory cache)
-##   get_model_instance_sync() - Get a model Node3D (sync, uses memory cache)
+##   get_model_instance_sync() - Get a model Node3D (sync, blocks main thread)
+##   is_model_cached() - Check if a model is already in the memory cache
 ##   preload_models() - Preload multiple models async with progress
 ##   clear_model_cache() - Clear the in-memory model cache
+##
+## GLB files are loaded via GlbUtils, which performs file I/O, GLB parsing,
+## and scene generation entirely on a background thread (WorkerThreadPool).
 
 const AssetPackClass = preload("res://resources/asset_pack.gd")
 const USER_ASSETS_DIR: String = "res://user_assets/"
@@ -781,6 +785,12 @@ func _get_instance_from_cache(cache_key: String) -> Node3D:
 	# Invalid cache entry
 	_model_cache.erase(cache_key)
 	return null
+
+
+## Check if a model is already in the cache (avoids redundant async loads)
+func is_model_cached(path: String, create_static_bodies: bool = false) -> bool:
+	var cache_key = path + ("_static" if create_static_bodies else "")
+	return _model_cache.has(cache_key)
 
 
 ## Preload multiple models asynchronously (for batch loading before spawning)

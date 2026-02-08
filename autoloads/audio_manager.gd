@@ -77,7 +77,8 @@ func _load_sfx_sounds() -> void:
 
 
 ## Play a UI sound by name
-func play_ui_sound(sound_name: String, volume_db: float = 0.0) -> void:
+## pitch_variation: random pitch offset range (e.g. 0.08 = +/- 8%). Set to 0.0 for exact pitch.
+func play_ui_sound(sound_name: String, volume_db: float = 0.0, pitch_variation: float = 0.08) -> void:
 	if not _ui_sounds.has(sound_name) or _ui_sounds[sound_name] == null:
 		return
 
@@ -85,6 +86,7 @@ func play_ui_sound(sound_name: String, volume_db: float = 0.0) -> void:
 	if player:
 		player.stream = _ui_sounds[sound_name]
 		player.volume_db = volume_db
+		player.pitch_scale = 1.0 + randf_range(-pitch_variation, pitch_variation)
 		player.play()
 
 
@@ -129,7 +131,8 @@ func play_cancel() -> void:
 
 
 ## Play a SFX sound by name
-func play_sfx(sound_name: String, volume_db: float = 0.0) -> void:
+## pitch_variation: random pitch offset range (e.g. 0.08 = +/- 8%). Set to 0.0 for exact pitch.
+func play_sfx(sound_name: String, volume_db: float = 0.0, pitch_variation: float = 0.08) -> void:
 	if not _sfx_sounds.has(sound_name) or _sfx_sounds[sound_name] == null:
 		return
 
@@ -137,6 +140,7 @@ func play_sfx(sound_name: String, volume_db: float = 0.0) -> void:
 	if player:
 		player.stream = _sfx_sounds[sound_name]
 		player.volume_db = volume_db
+		player.pitch_scale = 1.0 + randf_range(-pitch_variation, pitch_variation)
 		player.play()
 
 

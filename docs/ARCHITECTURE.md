@@ -270,10 +270,16 @@ The asset system supports local and remote asset packs with multiplayer synchron
 1. Check memory cache (already loaded this session)
 2. If not cached, load from resolved path:
    - res:// paths: Use ResourceLoader (threaded)
-   - user:// GLB: Use GlbUtils async loader (background I/O)
+   - user:// GLB: Use GlbUtils async loader (full background thread)
+     File I/O, GLB parsing, and scene generation all run on a
+     WorkerThreadPool thread — zero main-thread blocking.
 3. Cache loaded model in memory
 4. Return duplicate/instance for caller
 ```
+
+For mid-game token spawns, `BoardTokenFactory.create_from_asset_async()` shows a
+placeholder token instantly when the model isn't cached, then upgrades it
+asynchronously once the background load completes.
 
 ### Creating Packs
 
