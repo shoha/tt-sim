@@ -38,11 +38,14 @@ Root (Node3D)
 ├── [Dynamic] TitleScreen (CanvasLayer) - shown in TITLE_SCREEN state
 │
 ├── [Dynamic] GameMap (Node3D) - shown in PLAYING state
-│   ├── Map (instantiated from level data)
-│   ├── Tokens (BoardToken instances)
-│   ├── Camera3D
+│   ├── WorldViewportLayer (CanvasLayer, layer=-1)
+│   │   └── SubViewportContainer (lo-fi shader post-process)
+│   │       └── SubViewport
+│   │           ├── CameraHolder / Camera3D
+│   │           ├── MapContainer (Node3D) - map geometry added here
+│   │           └── DragAndDrop3D - tokens added here
 │   └── GameplayMenu (CanvasLayer)
-│       └── Pokemon list, context menus
+│       └── Token list, context menus
 │
 └── [Dynamic] PauseOverlay (CanvasLayer) - shown in PAUSED state
 ```
@@ -264,7 +267,7 @@ The asset system supports local and remote asset packs with multiplayer synchron
 4. Request from host via P2P
 ```
 
-### Model Loading Flow
+### Model Loading Flow (tokens via AssetPackManager)
 
 ```
 1. Check memory cache (already loaded this session)
@@ -275,6 +278,22 @@ The asset system supports local and remote asset packs with multiplayer synchron
      WorkerThreadPool thread — zero main-thread blocking.
 3. Cache loaded model in memory
 4. Return duplicate/instance for caller
+```
+
+### Map Loading Flow (via GlbUtils.load_map / load_map_async)
+
+Maps use a unified pipeline that handles both `res://` and `user://` paths:
+
+```
+1. GlbUtils.load_map_async(path, create_static_bodies, light_scale)
+2. Loads scene (ResourceLoader for res://, GLTFDocument for user:// GLB)
+3. Applies post-processing:
+   - flatten_non_node3d_parents() — fix transform inheritance chains
+   - process_collision_meshes() — create StaticBody3D from naming conventions
+   - process_animations() — strip _loop suffix, set loop mode
+   - process_lights() — apply intensity scaling
+4. validate_transform_chain() — safety assertion after loading
+5. Add to GameMap.map_container
 ```
 
 For mid-game token spawns, `BoardTokenFactory.create_from_asset_async()` shows a
@@ -386,7 +405,8 @@ var scale: Vector3
 1. **Level Editor** creates/edits `LevelData`
 2. **LevelManager** saves/loads level files (sync or async)
 3. **LevelPlayController** receives level data and:
-   - Loads map scene asynchronously (threaded resource loading)
+   - Loads map via `GlbUtils.load_map_async()` (unified pipeline for `res://` and `user://` paths)
+   - Adds map to `GameMap.map_container` (dedicated Node3D inside SubViewport)
    - Preloads token models via `AssetPackManager.preload_models()`
    - Spawns tokens progressively (yields to keep UI responsive)
    - Emits progress signals for loading overlay

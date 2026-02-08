@@ -28,12 +28,13 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 ## Key APIs
 
 ```gdscript
-# Models (async, cached)
+# Models (async, cached) — for tokens
 var model = await AssetPackManager.get_model_instance(pack_id, asset_id, variant_id)
 
-# GLB loading
-var result = await GlbUtils.load_glb_async(path)
-GlbUtils.process_collision_meshes(result.scene, true)
+# Map loading (unified pipeline — handles res:// and user:// with full post-processing)
+var map = await GlbUtils.load_map_async(path, true, light_scale)
+# or synchronously:
+var map = GlbUtils.load_map(path, true, light_scale)
 
 # UI
 UIManager.show_success("Done!")

@@ -91,6 +91,8 @@ visible = false
 target_position = Vector3(0, 0, -100)
 hit_back_faces = false
 
+[node name="MapContainer" type="Node3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport" unique_id=482917301]
+
 [node name="DragAndDrop3D" type="Node3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport" unique_id=390056310 groups=["DragAndDrop3D"]]
 script = ExtResource("2_tyn2t")
 metadata/_custom_type_script = "uid://md8k6faseouk"

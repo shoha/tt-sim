@@ -420,6 +420,110 @@ static func _find_non_node3d_with_3d_children(node: Node, result: Array[Node]) -
 			_find_non_node3d_with_3d_children(child, result)
 
 
+## Load a map from any path (res://, user://) and apply standard post-processing.
+## For res:// paths, loads via ResourceLoader and applies flatten + collision + animation processing.
+## For user:// (or other) paths, delegates to load_glb_with_processing.
+## Returns the processed Node3D ready for adding to the scene tree, or null on failure.
+## @param path: Path to the map file (res://, user://, or absolute)
+## @param create_static_bodies: If true, creates StaticBody3D for collision meshes
+## @param light_intensity_scale: Multiplier for light energies
+## @return: The fully processed Node3D scene, or null on failure
+static func load_map(
+	path: String, create_static_bodies: bool = true, light_intensity_scale: float = 1.0
+) -> Node3D:
+	var scene: Node3D = null
+
+	if path.begins_with("res://"):
+		var packed = load(path) as PackedScene
+		if not packed:
+			push_error("GlbUtils: Failed to load map scene: " + path)
+			return null
+		scene = packed.instantiate() as Node3D
+		if not scene:
+			push_error("GlbUtils: Map scene is not a Node3D: " + path)
+			return null
+		flatten_non_node3d_parents(scene)
+		process_collision_meshes(scene, create_static_bodies)
+		process_animations(scene)
+		process_lights(scene, light_intensity_scale)
+	else:
+		scene = load_glb_with_processing(path, create_static_bodies, light_intensity_scale)
+
+	return scene
+
+
+## Load a map asynchronously from any path (res://, user://) with standard post-processing.
+## For res:// paths, uses threaded ResourceLoader and applies flatten + collision + animation processing.
+## For user:// (or other) paths, delegates to load_glb_with_processing_async.
+## @param path: Path to the map file (res://, user://, or absolute)
+## @param create_static_bodies: If true, creates StaticBody3D for collision meshes
+## @param light_intensity_scale: Multiplier for light energies
+## @return: AsyncLoadResult with fully processed scene or error
+static func load_map_async(
+	path: String, create_static_bodies: bool = true, light_intensity_scale: float = 1.0
+) -> AsyncLoadResult:
+	var result = AsyncLoadResult.new()
+
+	if path.begins_with("res://"):
+		var scene_tree = Engine.get_main_loop() as SceneTree
+		if not scene_tree:
+			result.error = "No scene tree available"
+			return result
+
+		if not ResourceLoader.exists(path):
+			result.error = "Map file not found: " + path
+			push_error("GlbUtils: " + result.error)
+			return result
+
+		# Use threaded resource loading for res:// paths
+		var load_status = ResourceLoader.load_threaded_request(path)
+		if load_status == OK:
+			while (
+				ResourceLoader.load_threaded_get_status(path)
+				== ResourceLoader.THREAD_LOAD_IN_PROGRESS
+			):
+				await scene_tree.process_frame
+
+			var packed = ResourceLoader.load_threaded_get(path) as PackedScene
+			if packed:
+				var scene = packed.instantiate() as Node3D
+				if scene:
+					flatten_non_node3d_parents(scene)
+					await _process_collision_meshes_async(scene, create_static_bodies)
+					process_animations(scene)
+					process_lights(scene, light_intensity_scale)
+					result.scene = scene
+					result.success = true
+				else:
+					result.error = "Map scene is not a Node3D: " + path
+			else:
+				result.error = "Failed to load map scene: " + path
+		else:
+			# Fall back to sync loading
+			var packed = load(path) as PackedScene
+			if packed:
+				var scene = packed.instantiate() as Node3D
+				if scene:
+					flatten_non_node3d_parents(scene)
+					process_collision_meshes(scene, create_static_bodies)
+					process_animations(scene)
+					process_lights(scene, light_intensity_scale)
+					result.scene = scene
+					result.success = true
+				else:
+					result.error = "Map scene is not a Node3D: " + path
+			else:
+				result.error = "Failed to load map scene: " + path
+
+		if not result.success:
+			push_error("GlbUtils: " + result.error)
+		return result
+	else:
+		return await load_glb_with_processing_async(
+			path, create_static_bodies, light_intensity_scale
+		)
+
+
 ## Process lights in a runtime-loaded GLB
 ## Applies an intensity scale factor to all lights in the scene
 ## Use scale < 1.0 for GLBs exported with "Standard" lighting mode in Blender
@@ -509,6 +613,35 @@ static func find_first_mesh_instance(root: Node) -> MeshInstance3D:
 		if found:
 			return found
 	return null
+
+
+## Validate that no Node3D child has a non-Node3D parent (broken transform chain).
+## Emits push_warning for each broken link found. Use after loading a map to catch
+## transform inheritance issues early instead of debugging silent visual bugs.
+static func validate_transform_chain(root: Node3D) -> void:
+	_validate_transform_chain_recursive(root)
+
+
+## Recursive helper for validate_transform_chain
+static func _validate_transform_chain_recursive(node: Node) -> void:
+	for child in node.get_children():
+		if child is Node3D:
+			_validate_transform_chain_recursive(child)
+		else:
+			# Non-Node3D node — check if it has any Node3D children (broken chain)
+			for grandchild in child.get_children():
+				if grandchild is Node3D:
+					push_warning(
+						(
+							(
+								"Transform chain broken: Node3D '%s' has non-Node3D parent '%s' (%s). "
+								% [grandchild.name, child.name, child.get_class()]
+							)
+							+ "Call GlbUtils.flatten_non_node3d_parents() to fix."
+						)
+					)
+			# Continue recursing into non-Node3D subtrees
+			_validate_transform_chain_recursive(child)
 
 
 ## Debug: Load a GLB and print a report of all nodes including lights
