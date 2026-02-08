@@ -5,22 +5,26 @@ class_name TokenContextMenu
 ## Provides actions like dealing damage, healing, and toggling visibility
 
 signal hp_adjustment_requested(amount: int)
-signal visibility_toggled()
-signal menu_closed()
+signal visibility_toggled
+signal menu_closed
 
 var target_token: BoardToken = null
 
 @onready var input_field: LineEdit = $MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentInput
-@onready var heal_hurt_toggle: CheckButton = $MenuPanel/VBoxContainer/CustomDamageContainer/HealHurtToggle
+@onready
+var heal_hurt_toggle: CheckButton = $MenuPanel/VBoxContainer/CustomDamageContainer/HealHurtToggle
+
 
 func _ready() -> void:
-	# Quick fade-in menu
-	fade_in_duration = 0.15
-	fade_out_duration = 0.1
-	scale_in_from = Vector2(0.9, 0.9)
-	trans_in_type = Tween.TRANS_CUBIC
+	# Quick snap-in menu with a subtle bounce for game feel
+	fade_in_duration = 0.12
+	fade_out_duration = 0.08
+	scale_in_from = Vector2(0.85, 0.85)
+	scale_out_to = Vector2(0.92, 0.92)
+	trans_in_type = Tween.TRANS_BACK
 	trans_out_type = Tween.TRANS_CUBIC
 	super._ready()
+
 
 func open_for_token(token: BoardToken, at_position: Vector2) -> void:
 	target_token = token
@@ -28,10 +32,11 @@ func open_for_token(token: BoardToken, at_position: Vector2) -> void:
 	input_field.grab_focus()
 
 	# Position menu and adjust to stay within viewport bounds
-	await get_tree().process_frame # Wait for size to be calculated
+	await get_tree().process_frame  # Wait for size to be calculated
 	_position_menu_in_viewport(at_position)
 
 	animate_in()
+
 
 func _update_menu_content() -> void:
 	if not target_token:
@@ -48,7 +53,8 @@ func _update_menu_content() -> void:
 	# Update health label
 	var health_label = get_node_or_null("MenuPanel/VBoxContainer/HealthLabel")
 	if health_label:
-					health_label.text = "HP: %d/%d" % [target_token.current_health, target_token.max_health]
+		health_label.text = "HP: %d/%d" % [target_token.current_health, target_token.max_health]
+
 
 func _position_menu_in_viewport(cursor_position: Vector2) -> void:
 	var menu_panel = get_node_or_null("MenuPanel")
@@ -84,6 +90,7 @@ func _position_menu_in_viewport(cursor_position: Vector2) -> void:
 
 	global_position = target_position
 
+
 func _on_hp_adjustment_requested(input_amount: String = "") -> void:
 	var amount: int = 0
 
@@ -93,7 +100,7 @@ func _on_hp_adjustment_requested(input_amount: String = "") -> void:
 		amount = int(input_amount)
 
 	if !heal_hurt_toggle.button_pressed:
-		amount = - amount
+		amount = -amount
 
 	if amount != 0:
 		input_field.clear()
@@ -101,17 +108,21 @@ func _on_hp_adjustment_requested(input_amount: String = "") -> void:
 		_update_menu_content()
 		close_menu()
 
+
 func _on_toggle_visibility_pressed() -> void:
 	if target_token:
 		visibility_toggled.emit()
 		_update_menu_content()
 
+
 func _on_close_button_pressed() -> void:
 	close_menu()
+
 
 func close_menu() -> void:
 	menu_closed.emit()
 	animate_out()
+
 
 # Close menu when clicking outside
 func _unhandled_input(event: InputEvent) -> void:

@@ -12,6 +12,13 @@ var _downloading_pack_id: String = ""
 
 
 func _ready() -> void:
+	# Slide in from the right instead of a pure scale-up
+	scale_in_from = Vector2(0.95, 0.95)
+	scale_out_to = Vector2(0.97, 0.97)
+	fade_in_duration = 0.25
+	fade_out_duration = 0.15
+	trans_in_type = Tween.TRANS_BACK
+
 	asset_browser.asset_selected.connect(_on_asset_selected)
 	if add_pack_button:
 		add_pack_button.pressed.connect(_on_add_pack_pressed)
@@ -50,6 +57,7 @@ func _on_after_animate_out() -> void:
 # =============================================================================
 # ADD PACK MODAL
 # =============================================================================
+
 
 func _on_add_pack_pressed() -> void:
 	_show_add_pack_dialog()
@@ -156,31 +164,33 @@ func _show_add_pack_dialog() -> void:
 	url_edit.grab_focus()
 
 	# Connect buttons
-	var close_dialog = func() -> void:
-		_close_add_pack_dialog(dialog)
+	var close_dialog = func() -> void: _close_add_pack_dialog(dialog)
 
 	cancel_btn.pressed.connect(close_dialog)
 
-	download_btn.pressed.connect(func() -> void:
-		var url = url_edit.text.strip_edges()
-		if url.is_empty():
-			progress_label.text = "Please enter a manifest URL"
+	download_btn.pressed.connect(
+		func() -> void:
+			var url = url_edit.text.strip_edges()
+			if url.is_empty():
+				progress_label.text = "Please enter a manifest URL"
+				progress_label.visible = true
+				return
+			progress_label.text = "Fetching manifest..."
 			progress_label.visible = true
-			return
-		progress_label.text = "Fetching manifest..."
-		progress_label.visible = true
-		download_btn.disabled = true
-		_downloading_pack_id = ""
-		if not AssetPackManager.download_asset_pack_from_url(url):
-			progress_label.text = "Failed to start download"
-			download_btn.disabled = false
+			download_btn.disabled = true
+			_downloading_pack_id = ""
+			if not AssetPackManager.download_asset_pack_from_url(url):
+				progress_label.text = "Failed to start download"
+				download_btn.disabled = false
 	)
 
 	# ESC to close
-	dialog.set_meta("_esc_handler", func(event: InputEvent) -> void:
-		if event.is_action_pressed("ui_cancel"):
-			close_dialog.call()
-			dialog.get_viewport().set_input_as_handled()
+	dialog.set_meta(
+		"_esc_handler",
+		func(event: InputEvent) -> void:
+			if event.is_action_pressed("ui_cancel"):
+				close_dialog.call()
+				dialog.get_viewport().set_input_as_handled()
 	)
 	# We use set_process_unhandled_input but CanvasLayer doesn't support it,
 	# so we add a Control that catches ESC
@@ -190,9 +200,10 @@ func _show_add_pack_dialog() -> void:
 	dialog.add_child(esc_catcher)
 	esc_catcher.set_script(GDScript.new())
 	# Can't easily attach inline script; handle ESC via bg click instead
-	bg.gui_input.connect(func(event: InputEvent) -> void:
-		if event is InputEventMouseButton and event.pressed:
-			close_dialog.call()
+	bg.gui_input.connect(
+		func(event: InputEvent) -> void:
+			if event is InputEventMouseButton and event.pressed:
+				close_dialog.call()
 	)
 
 	# Store current dialog reference
@@ -231,6 +242,7 @@ func _get_active_dialog() -> Node:
 # DOWNLOAD PROGRESS (updates the dialog if open)
 # =============================================================================
 
+
 func _on_pack_download_progress(pack_id: String, downloaded: int, total: int) -> void:
 	_downloading_pack_id = pack_id
 	var dialog = _get_active_dialog()
@@ -256,9 +268,7 @@ func _on_pack_download_completed(pack_id: String) -> void:
 		if btn:
 			btn.disabled = false
 			btn.text = "Done"
-			btn.pressed.connect(func() -> void:
-				_close_add_pack_dialog(dialog)
-			)
+			btn.pressed.connect(func() -> void: _close_add_pack_dialog(dialog))
 
 
 func _on_pack_download_failed(pack_id: String, error: String) -> void:
