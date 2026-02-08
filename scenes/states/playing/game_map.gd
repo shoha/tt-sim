@@ -81,6 +81,9 @@ func setup(level_play_controller: LevelPlayController) -> void:
 
 
 func _process(delta: float) -> void:
+	# Don't process camera movement while a level is loading
+	if _is_level_loading():
+		return
 	handle_movement(delta)
 	handle_zoom(delta)
 	_handle_edge_pan(delta)
@@ -113,6 +116,10 @@ func _input(event: InputEvent) -> void:
 	if event is not InputEventMouseButton:
 		return
 
+	# Don't zoom while a level is loading
+	if _is_level_loading():
+		return
+
 	# Don't zoom when scrolling over any UI element (e.g. asset browser list)
 	if _is_mouse_over_gui():
 		return
@@ -128,6 +135,10 @@ func _input(event: InputEvent) -> void:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
+	# Don't process camera input while a level is loading
+	if _is_level_loading():
+		return
+
 	# Don't process camera input if a text input has focus
 	if _is_text_input_focused():
 		return
@@ -162,6 +173,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 	input_dir.y = 0
 	_camera_move_dir = input_dir
+
+
+## Check if a level is currently being loaded
+func _is_level_loading() -> bool:
+	return _level_play_controller and _level_play_controller.is_loading()
 
 
 ## Check if a text input control currently has focus
