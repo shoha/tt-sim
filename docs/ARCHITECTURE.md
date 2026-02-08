@@ -324,13 +324,27 @@ ESC priority:
 
 ### AnimatedVisibilityContainer
 
-Base class for animated UI panels. Provides:
+Base class for in-scene animated UI panels (extends `Control`). Provides:
 
 - `animate_in()` / `animate_out()` methods
-- Configurable timing and easing
+- Configurable timing and easing via exports
 - Lifecycle callbacks: `_on_before_animate_in()`, `_on_after_animate_out()`, etc.
+- Automatic open/close sounds (toggle via `play_open_close_sounds` export)
 
-See `themes/THEME_GUIDE.md` for detailed usage.
+Used by: `TokenContextMenu`, `AssetBrowserContainer`, `LevelEditor`
+
+### AnimatedCanvasLayerPanel
+
+Base class for full-screen overlay panels (extends `CanvasLayer`). Provides:
+
+- `animate_in()` / `animate_out()` with backdrop + centered panel animation
+- Automatic open/close sounds (toggle via `play_sounds` export)
+- Lifecycle hooks: `_on_panel_ready()`, `_on_after_animate_in()`, `_on_before_animate_out()`, `_on_after_animate_out()`
+- Expects scene structure: `ColorRect` (backdrop) + `CenterContainer/PanelContainer` (content)
+
+Used by: `SettingsMenu`, `PauseOverlay`, `ConfirmationDialogUI`, `UpdateDialogUI`
+
+See `THEME_GUIDE.md` for detailed usage of both base classes.
 
 ---
 
