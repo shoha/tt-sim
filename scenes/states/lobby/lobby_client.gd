@@ -56,6 +56,7 @@ func _show_input_state() -> void:
 	room_code_input.editable = true
 	player_name_input.editable = true
 	player_name_input.grab_focus()
+	_cross_fade(input_container)
 
 
 func _show_connecting_state() -> void:
@@ -71,6 +72,8 @@ func _show_connected_state() -> void:
 	status_label.text = "Connected! Waiting for host to start..."
 	_is_connected = true
 	_update_player_list()
+	_cross_fade(waiting_container)
+	AudioManager.play_success()
 
 
 func _on_connect_pressed() -> void:
@@ -102,16 +105,19 @@ func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
 	if _is_connected:
 		_update_player_list()
 		_flash_player_list()
+		AudioManager.play_success()
 
 
 func _on_player_left(_peer_id: int) -> void:
 	if _is_connected:
 		_update_player_list()
 		_flash_player_list()
+		AudioManager.play_tick()
 
 
 func _on_connection_failed(reason: String) -> void:
 	status_label.text = "Connection failed: " + reason
+	AudioManager.play_error()
 	_show_input_state()
 
 
@@ -131,6 +137,11 @@ func _on_connection_state_changed(
 func _update_player_list() -> void:
 	player_list.clear()
 	var players = NetworkManager.get_players()
+	if players.is_empty():
+		player_list.add_item("No players yet")
+		player_list.set_item_disabled(0, true)
+		player_list.set_item_selectable(0, false)
+		return
 	for peer_id in players:
 		var info = players[peer_id]
 		var player_name = info.get("name", "Player %d" % peer_id)
@@ -146,3 +157,12 @@ func _flash_player_list() -> void:
 	var tw = player_list.create_tween()
 	tw.tween_property(player_list, "self_modulate", Color(1.3, 1.2, 1.0, 1.0), 0.1)
 	tw.tween_property(player_list, "self_modulate", Color.WHITE, 0.3)
+
+
+## Quick cross-fade when switching between lobby states
+func _cross_fade(container: Control) -> void:
+	container.modulate.a = 0.0
+	var tw = create_tween()
+	tw.set_ease(Tween.EASE_OUT)
+	tw.set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(container, "modulate:a", 1.0, 0.2)

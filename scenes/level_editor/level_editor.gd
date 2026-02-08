@@ -259,6 +259,12 @@ func _refresh_token_list() -> void:
 	if not current_level:
 		return
 
+	if current_level.token_placements.is_empty():
+		token_list.add_item("No tokens — click Add Token to begin")
+		token_list.set_item_disabled(0, true)
+		token_list.set_item_selectable(0, false)
+		return
+
 	for placement in current_level.token_placements:
 		var display_name = placement.get_display_name()
 		if placement.variant_id == "shiny":
@@ -318,10 +324,21 @@ func _set_status(message: String) -> void:
 	status_label.text = message
 
 	# Visual flash: green for success, red for errors
-	if message.begins_with("Error"):
+	if (
+		message.begins_with("Error")
+		or message.begins_with("Failed")
+		or message.begins_with("Cannot")
+	):
 		_flash_status(Color(1.0, 0.5, 0.4))
-	elif message.begins_with("Level saved") or message.begins_with("Lighting"):
+		AudioManager.play_error()
+	elif (
+		message.begins_with("Level saved")
+		or message.begins_with("Lighting")
+		or message.begins_with("Level exported")
+		or message.begins_with("Level imported")
+	):
 		_flash_status(Color(0.6, 0.9, 0.5))
+		AudioManager.play_success()
 
 
 ## Brief color flash on the status label for visual feedback
@@ -336,10 +353,15 @@ func _refresh_saved_levels_list() -> void:
 	saved_levels_list.clear()
 	var levels = LevelManager.get_saved_levels()
 
-	for level_info in levels:
-		var display_text = "%s (%d tokens)" % [level_info.name, level_info.token_count]
-		saved_levels_list.add_item(display_text)
-		saved_levels_list.set_item_metadata(saved_levels_list.item_count - 1, level_info.path)
+	if levels.is_empty():
+		saved_levels_list.add_item("No saved levels yet")
+		saved_levels_list.set_item_disabled(0, true)
+		saved_levels_list.set_item_selectable(0, false)
+	else:
+		for level_info in levels:
+			var display_text = "%s (%d tokens)" % [level_info.name, level_info.token_count]
+			saved_levels_list.add_item(display_text)
+			saved_levels_list.set_item_metadata(saved_levels_list.item_count - 1, level_info.path)
 
 	# Disable delete button until a level is selected
 	delete_level_button.disabled = true
@@ -402,6 +424,7 @@ func _on_pokemon_selector_activated(index: int) -> void:
 	var popup_content = pokemon_selector_popup.get_node("VBox")
 	_animate_popup_out(pokemon_selector_popup, popup_content)
 	_set_status("Added token: " + placement.get_display_name())
+	AudioManager.play_success()
 
 
 func _on_pokemon_selector_search_changed(_text: String) -> void:
@@ -424,6 +447,7 @@ func _on_delete_placement_pressed() -> void:
 	right_panel.visible = false
 	selected_placement_index = -1
 	_set_status("Token deleted")
+	AudioManager.play_cancel()
 
 
 func _on_apply_placement_pressed() -> void:
