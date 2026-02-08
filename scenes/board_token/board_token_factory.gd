@@ -1,19 +1,23 @@
 extends RefCounted
 class_name BoardTokenFactory
 
-## Factory for creating BoardToken instances from model scenes
-## Centralizes all scene construction and component wiring logic
-## Supports placeholder tokens for remote assets that need downloading
+## Factory for creating BoardToken instances from model scenes.
+## Centralizes all scene construction and component wiring logic.
+## Supports placeholder tokens for assets that are downloading or still loading.
 ##
 ## Usage:
 ##   var token = BoardTokenFactory.create_from_scene(my_model_scene)
 ##   # or with config:
 ##   var token = BoardTokenFactory.create_from_config(my_token_config)
-##   # or from asset pack (with automatic download support):
+##   # or from asset pack (with automatic placeholder & async upgrade):
 ##   var result = BoardTokenFactory.create_from_asset_async(pack_id, asset_id, variant_id)
 ##
 ## Model Loading:
 ##   Uses AssetPackManager for model loading and caching.
+##   GLB parsing runs entirely on a background thread (via GlbUtils.load_glb_async)
+##   so creating tokens never blocks the main thread.
+##   When a model isn't in the memory cache, a placeholder token is returned
+##   immediately and auto-upgrades once the background load completes.
 ##   Call AssetPackManager.preload_models() before batch spawning for best performance.
 ##   Call AssetPackManager.clear_model_cache() when switching levels to free memory.
 
@@ -346,8 +350,10 @@ static func create_from_placement_async(placement: TokenPlacement) -> Dictionary
 
 
 ## Create a BoardToken from an asset pack with async download support
-## If the asset is available locally, returns the token immediately
-## If the asset needs downloading, returns a placeholder token that will be upgraded later
+## If the model is already in the memory cache, creates the token synchronously (fast).
+## If the model file exists locally but isn't cached, returns a placeholder token that
+## auto-upgrades once the model finishes loading asynchronously (avoids main-thread hitch).
+## If the asset needs downloading, returns a placeholder that upgrades after download.
 ## @param pack_id: The pack identifier
 ## @param asset_id: The asset identifier within the pack
 ## @param variant_id: The variant to use
@@ -360,9 +366,23 @@ static func create_from_asset_async(pack_id: String, asset_id: String, variant_i
 	var model_path = AssetPackManager.resolve_model_path(pack_id, asset_id, variant_id, priority)
 
 	if model_path != "":
-		# Asset is available - create using the resolved path directly
-		var ready_token = _create_from_model_path(model_path, pack_id, asset_id)
-		return {"token": ready_token, "is_placeholder": false}
+		# Asset file is available locally
+		if AssetPackManager.is_model_cached(model_path):
+			# Fast path: model is in memory cache, create synchronously (no hitch)
+			var ready_token = _create_from_model_path(model_path, pack_id, asset_id)
+			return {"token": ready_token, "is_placeholder": false}
+		else:
+			# Model file exists but needs loading — use a placeholder to avoid
+			# blocking the main thread with GLB parsing. The placeholder will
+			# auto-upgrade once the async load finishes.
+			var loading_token = _create_placeholder_token(pack_id, asset_id, variant_id)
+			if loading_token:
+				var upgrade_path = model_path
+				loading_token.tree_entered.connect(
+					func(): loading_token._async_upgrade_placeholder(upgrade_path),
+					CONNECT_ONE_SHOT
+				)
+			return {"token": loading_token, "is_placeholder": true}
 
 	# Asset needs downloading - check if download was queued
 	if not AssetPackManager.needs_download(pack_id, asset_id, variant_id):
@@ -370,7 +390,7 @@ static func create_from_asset_async(pack_id: String, asset_id: String, variant_i
 		push_error("BoardTokenFactory: Asset not available and no download URL: %s/%s/%s" % [pack_id, asset_id, variant_id])
 		return {"token": null, "is_placeholder": false}
 
-	# Create a placeholder token
+	# Create a placeholder token for download
 	var placeholder_token = _create_placeholder_token(pack_id, asset_id, variant_id)
 	if placeholder_token:
 		# Register for upgrade when download completes
@@ -472,30 +492,30 @@ static func _on_asset_available(pack_id: String, asset_id: String, variant_id: S
 		if pending.pack_id == pack_id and pending.asset_id == asset_id and pending.variant_id == variant_id:
 			tokens_to_upgrade.append(network_id)
 
-	# Upgrade each pending token
+	# Upgrade each pending token (async: load model off the main thread, then swap)
 	for network_id in tokens_to_upgrade:
 		var pending = _pending_tokens[network_id]
 		var token = pending.token as BoardToken
 
 		if is_instance_valid(token) and token.is_inside_tree():
-			_upgrade_placeholder_token(token, local_path)
+			# Kick off async load on the token (a Node that can await).
+			# The coroutine runs across multiple frames, then calls back to
+			# _apply_model_upgrade() for the fast synchronous swap.
+			token._async_upgrade_placeholder(local_path)
 
 		_pending_tokens.erase(network_id)
 
 
-## Upgrade a placeholder token with the real model
-static func _upgrade_placeholder_token(token: BoardToken, model_path: String) -> void:
+## Apply a pre-loaded model to a placeholder token (fast synchronous swap).
+## Called from BoardToken._async_upgrade_placeholder() after the model has been
+## loaded asynchronously so there is no main-thread stall.
+static func apply_model_upgrade(token: BoardToken, model: Node3D) -> void:
 	if not is_instance_valid(token) or not token.rigid_body:
+		if model:
+			model.queue_free()
 		return
 
 	print("BoardTokenFactory: Upgrading placeholder token: " + token.token_name)
-
-	# Load the real model using AssetPackManager (handles caching)
-	var model = AssetPackManager.get_model_instance_from_path_sync(model_path, false)
-
-	if not model:
-		push_error("BoardTokenFactory: Failed to load downloaded asset: " + model_path)
-		return
 
 	# Extract components from new model
 	var components = _extract_model_components(model)
@@ -536,16 +556,22 @@ static func _upgrade_placeholder_token(token: BoardToken, model_path: String) ->
 		animation_tree.anim_player = components.animation_player # Set BEFORE add_child
 		rb.add_child(animation_tree)
 
-	# Update collision shape - reset position offset from placeholder and create new shape
-	var collision_shape: CollisionShape3D = null
+	# Update collision shape with the real model's shape
+	var old_collision: CollisionShape3D = null
 	for child in rb.get_children():
 		if child is CollisionShape3D:
-			collision_shape = child
-			# Reset the position offset that the placeholder collision had
-			child.position = Vector3.ZERO
-			if components.mesh_model and components.mesh_model.mesh:
-				child.shape = components.mesh_model.mesh.create_convex_shape()
+			old_collision = child
 			break
+
+	# Use the collision shape from the model if available (e.g. from -convcolonly mesh),
+	# otherwise fall back to creating one from the visual mesh
+	var new_collision = _get_or_create_collision_shape(components)
+	if old_collision:
+		old_collision.position = new_collision.position if new_collision else Vector3.ZERO
+		old_collision.shape = new_collision.shape if new_collision else null
+		if new_collision and new_collision != old_collision:
+			new_collision.queue_free()
+	var collision_shape = old_collision
 
 	# Calculate where the new collision bottom would be and adjust Y to match old floor position
 	var new_y: float = current_pos.y
@@ -564,6 +590,10 @@ static func _upgrade_placeholder_token(token: BoardToken, model_path: String) ->
 	# Update the DraggableToken's height offset now that collision shape has changed
 	if token._dragging_object:
 		token._dragging_object.update_height_offset()
+
+	# Resize the selection glow to match the new collision shape
+	if token._selection_glow and collision_shape:
+		token._selection_glow.update_size_from_collision(collision_shape)
 
 	# Update metadata
 	token.set_meta("is_placeholder", false)

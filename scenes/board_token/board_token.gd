@@ -58,11 +58,18 @@ var is_highlighted: bool = false
 # Status effects (could be expanded to a proper status effect system)
 @export var status_effects: Array[String] = []
 
+# Spawn/removal animation constants
+const SPAWN_ANIM_DURATION: float = 0.25
+const REMOVAL_ANIM_DURATION: float = 0.2
+
 # References to child components (set by BoardTokenFactory)
 var _dragging_object: DraggableToken
 var _token_controller: BoardTokenController
 var _selection_glow: SelectionGlowRenderer
 var rigid_body: RigidBody3D
+var _spawn_tween: Tween
+var _removal_tween: Tween
+var _spawn_target_scale: Vector3 = Vector3.ONE
 
 
 # Signals for game state changes
@@ -264,3 +271,71 @@ func get_selection_glow() -> SelectionGlowRenderer:
 func set_interactive(enabled: bool) -> void:
 	if rigid_body:
 		rigid_body.input_ray_pickable = enabled
+
+
+## Play a bouncy pop-in spawn animation.
+## delay: seconds to wait before starting (use for staggered batch spawns).
+func play_spawn_animation(delay: float = 0.0) -> void:
+	if not rigid_body:
+		return
+
+	# Remember the intended scale and start at near-zero
+	_spawn_target_scale = rigid_body.scale
+	rigid_body.scale = Vector3(0.01, 0.01, 0.01)
+
+	if _spawn_tween and _spawn_tween.is_valid():
+		_spawn_tween.kill()
+
+	_spawn_tween = create_tween()
+	if delay > 0.0:
+		_spawn_tween.tween_interval(delay)
+	_spawn_tween.tween_property(rigid_body, "scale", _spawn_target_scale, SPAWN_ANIM_DURATION)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## Play a shrink-out removal animation, then queue_free() on completion.
+func play_removal_animation() -> void:
+	if not rigid_body:
+		queue_free()
+		return
+
+	# Disable input so the token can't be interacted with during removal
+	rigid_body.input_ray_pickable = false
+
+	if _removal_tween and _removal_tween.is_valid():
+		_removal_tween.kill()
+
+	_removal_tween = create_tween()
+	_removal_tween.tween_property(rigid_body, "scale", Vector3(0.01, 0.01, 0.01), REMOVAL_ANIM_DURATION)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	_removal_tween.tween_callback(queue_free)
+
+
+## Asynchronously load a model and upgrade this placeholder token.
+## Called when the token enters the tree (for local uncached models) or when
+## a downloaded asset becomes available (for remote assets).
+## GLB parsing runs entirely on a background thread via GlbUtils, so the
+## main thread is never blocked during the load.
+func _async_upgrade_placeholder(model_path: String) -> void:
+	# Load the model asynchronously (runs on background thread, no main-thread hitch)
+	var model = await AssetPackManager.get_model_instance_from_path(model_path, false)
+	if not model:
+		push_error("BoardToken: Failed to load model for placeholder upgrade: " + model_path)
+		return
+
+	# Validate we're still valid (token might have been freed during async load)
+	if not is_instance_valid(self) or not is_inside_tree():
+		model.queue_free()
+		return
+
+	# Yield one more frame so the model caching / duplicate that just finished
+	# doesn't share a frame with the model swap + first-render shader compilation
+	await get_tree().process_frame
+
+	# Re-validate after yield (token might have been freed)
+	if not is_instance_valid(self) or not is_inside_tree():
+		model.queue_free()
+		return
+
+	# Perform the fast synchronous swap now that the model is loaded/cached
+	BoardTokenFactory.apply_model_upgrade(self, model)
