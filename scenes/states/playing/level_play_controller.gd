@@ -410,12 +410,18 @@ func _finalize_map_loading(map: Node3D) -> void:
 	loaded_map_instance = map
 	loaded_map_instance.name = "LevelMap"
 
+	# Fix broken transform chains: GLB files can contain non-Node3D nodes
+	# (e.g. WorldEnvironment) that prevent transform inheritance.
+	# Apply here as a safety net — GlbUtils also does this, but maps loaded
+	# via res:// (Godot import pipeline) bypass GlbUtils.
+	GlbUtils.flatten_non_node3d_parents(loaded_map_instance)
+
+	# Add to the SubViewport
+	_game_map.world_viewport.add_child(loaded_map_instance)
+
 	if active_level_data:
 		loaded_map_instance.scale = active_level_data.map_scale
 		loaded_map_instance.position = active_level_data.map_offset
-
-	# Add to the GameMap node
-	_game_map.add_child(loaded_map_instance)
 
 	# Apply environment settings from level data
 	if active_level_data:
@@ -428,7 +434,7 @@ func _apply_level_environment(level_data: LevelData) -> void:
 	if not is_instance_valid(_world_environment):
 		_world_environment = WorldEnvironment.new()
 		_world_environment.name = "LevelEnvironment"
-		_game_map.add_child(_world_environment)
+		_game_map.world_viewport.add_child(_world_environment)
 
 	# Apply preset and overrides
 	EnvironmentPresets.apply_to_world_environment(
@@ -597,21 +603,20 @@ func _connect_token_context_menu(token: BoardToken) -> void:
 			)
 
 
-## Clear any existing map models from the game map
+## Clear any existing map models from the game map's SubViewport
 func _clear_existing_maps() -> void:
-	if not _game_map:
+	if not _game_map or not is_instance_valid(_game_map.world_viewport):
 		return
 
-	# List of node names/types to preserve (not maps)
+	# List of node names to preserve (core viewport children, not maps)
 	var preserved_names = [
-		"MapMenu", "DragAndDrop3D", "LevelMap", "CameraHolder", "PixelateCanvas", "SharpenCanvas"
+		"CameraHolder",
+		"DragAndDrop3D",
 	]
 
-	for child in _game_map.get_children():
-		# Skip UI nodes, environments, and the drag-and-drop container
+	for child in _game_map.world_viewport.get_children():
+		# Skip known viewport children
 		if child.name in preserved_names:
-			continue
-		if child is Control or child is CanvasLayer:
 			continue
 		# If it's a Node3D that's not one of our known nodes, it's likely a map model
 		if child is Node3D:
