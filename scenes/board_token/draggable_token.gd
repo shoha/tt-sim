@@ -32,7 +32,6 @@ var _is_currently_dragging: bool = false
 var _is_settling: bool = false  # True during settle/cancel animation
 var _drag_start_position: Vector3 = Vector3.ZERO  # Position when drag started (for cancel)
 var _transform_update_timer: float = 0.0
-const TRANSFORM_UPDATE_INTERVAL: float = 0.1  # Send updates 10 times per second during drag
 
 # Whoosh sound state
 var _whoosh_cooldown: float = 0.0
@@ -408,7 +407,7 @@ func _process(delta: float) -> void:
 
 		# Emit throttled transform updates for network sync
 		_transform_update_timer += delta
-		if _transform_update_timer >= TRANSFORM_UPDATE_INTERVAL:
+		if _transform_update_timer >= Constants.NETWORK_TRANSFORM_UPDATE_INTERVAL:
 			_transform_update_timer = 0.0
 			var board_token = get_parent() as BoardToken
 			if board_token:

@@ -7,8 +7,21 @@ class_name LevelEditor
 signal editor_closed
 signal play_level_requested(level_data: LevelData)
 
+const POPUP_SIZE_SMALL := Vector2i(400, 500)
+const POPUP_SIZE_LARGE := Vector2i(800, 600)
+const DIALOG_SIZE := Vector2i(500, 400)
+const STATUS_FLASH_DURATION := 1.0
+const UNDO_HISTORY_MAX := 50
+const AUTOSAVE_INTERVAL := 30.0
+const AUTOSAVE_DIR := "user://levels/_autosave/"
+const AUTOSAVE_FILE := "user://levels/_autosave/level.json"
+
 # Animation tweens for subdialogs
 var _popup_tween: Tween
+
+# Undo/redo stacks — each entry is a serialized LevelData snapshot (Dictionary)
+var _undo_stack: Array[Dictionary] = []
+var _redo_stack: Array[Dictionary] = []
 
 # UI References
 @onready var level_name_edit: LineEdit = %LevelNameEdit
@@ -94,6 +107,10 @@ var _loaded_map_instance: Node = null
 var _original_light_energies: Dictionary = {}  # Stores original light energies for re-scaling
 var _lighting_lofi_material: ShaderMaterial = null  # Lo-fi shader for lighting preview
 
+# Autosave state
+var _autosave_timer: Timer = null
+var _last_saved_snapshot: Dictionary = {}  # Snapshot at last manual save — used to detect changes
+
 
 func _ready() -> void:
 	# Configure animation for the level editor panel
@@ -108,6 +125,8 @@ func _ready() -> void:
 	_connect_signals()
 	_setup_file_dialogs()
 	_populate_pokemon_list()
+	_setup_autosave()
+	_check_autosave_recovery()
 	_create_new_level()
 	right_panel.visible = false
 
@@ -212,6 +231,8 @@ func _update_pokemon_selector_list() -> void:
 func _create_new_level() -> void:
 	current_level = LevelManager.create_new_level()
 	_pending_map_source_path = ""  # Clear any pending map from previous level
+	_clear_undo_history()
+	_last_saved_snapshot = current_level.to_dict()
 	_update_ui_from_level()
 	_set_status("New level created")
 
@@ -251,6 +272,175 @@ func _update_ui_from_level() -> void:
 	_refresh_token_list()
 	right_panel.visible = false
 	selected_placement_index = -1
+
+
+# =============================================================================
+# UNDO / REDO
+# =============================================================================
+
+
+## Save a snapshot of the current level before a mutation.
+## Call this BEFORE modifying current_level.
+## Skips saving if the snapshot is identical to the top of the undo stack.
+func _save_undo_snapshot() -> void:
+	if not current_level:
+		return
+	var snapshot := current_level.to_dict()
+	# Avoid duplicate consecutive snapshots (e.g. from per-keystroke text_changed)
+	if not _undo_stack.is_empty() and _undo_stack.back() == snapshot:
+		return
+	_undo_stack.append(snapshot)
+	if _undo_stack.size() > UNDO_HISTORY_MAX:
+		_undo_stack.pop_front()
+	# Any new edit invalidates the redo history
+	_redo_stack.clear()
+
+
+## Restore the most recent undo snapshot.
+func _undo() -> void:
+	if _undo_stack.is_empty() or not current_level:
+		return
+	# Push current state onto redo stack before reverting
+	_redo_stack.append(current_level.to_dict())
+	var snapshot := _undo_stack.pop_back() as Dictionary
+	current_level = LevelData.from_dict(snapshot)
+	_update_ui_from_level()
+	_set_status("Undo")
+
+
+## Restore the most recent redo snapshot.
+func _redo() -> void:
+	if _redo_stack.is_empty() or not current_level:
+		return
+	# Push current state onto undo stack before re-applying
+	_undo_stack.append(current_level.to_dict())
+	var snapshot := _redo_stack.pop_back() as Dictionary
+	current_level = LevelData.from_dict(snapshot)
+	_update_ui_from_level()
+	_set_status("Redo")
+
+
+## Clear undo/redo history (e.g. when loading a new level).
+func _clear_undo_history() -> void:
+	_undo_stack.clear()
+	_redo_stack.clear()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event.is_action_pressed("ui_undo"):
+		_undo()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_redo"):
+		_redo()
+		get_viewport().set_input_as_handled()
+
+
+# =============================================================================
+# AUTOSAVE
+# =============================================================================
+
+
+func _setup_autosave() -> void:
+	_autosave_timer = Timer.new()
+	_autosave_timer.wait_time = AUTOSAVE_INTERVAL
+	_autosave_timer.one_shot = false
+	_autosave_timer.timeout.connect(_on_autosave_timeout)
+	add_child(_autosave_timer)
+	_autosave_timer.start()
+
+
+func _on_autosave_timeout() -> void:
+	if not current_level:
+		return
+	var snapshot := current_level.to_dict()
+	# Only autosave if the level has changed since the last manual save
+	if snapshot == _last_saved_snapshot:
+		return
+	_perform_autosave(snapshot)
+
+
+func _perform_autosave(snapshot: Dictionary) -> void:
+	if not DirAccess.dir_exists_absolute(AUTOSAVE_DIR):
+		DirAccess.make_dir_recursive_absolute(AUTOSAVE_DIR)
+
+	var json_string := JSON.stringify(snapshot, "\t")
+	var file := FileAccess.open(AUTOSAVE_FILE, FileAccess.WRITE)
+	if not file:
+		push_warning("LevelEditor: Autosave failed — could not open file")
+		return
+	file.store_string(json_string)
+	file.close()
+	_set_status("Autosaved")
+
+
+## Remove the autosave file after a successful manual save.
+func _clear_autosave() -> void:
+	if FileAccess.file_exists(AUTOSAVE_FILE):
+		DirAccess.remove_absolute(AUTOSAVE_FILE)
+
+
+## Record the current state as the last-saved reference point.
+func _mark_saved() -> void:
+	if current_level:
+		_last_saved_snapshot = current_level.to_dict()
+	_clear_autosave()
+
+
+## Check for autosave recovery on startup.
+func _check_autosave_recovery() -> void:
+	if not FileAccess.file_exists(AUTOSAVE_FILE):
+		return
+
+	# Defer the dialog until the editor is fully ready
+	call_deferred("_show_autosave_recovery_prompt")
+
+
+func _show_autosave_recovery_prompt() -> void:
+	(
+		UIManager
+		. show_confirmation(
+			"Recover Autosave?",
+			"An autosaved level was found. Would you like to recover it?",
+			"Recover",
+			"Discard",
+			_on_autosave_recover_confirmed,
+			_on_autosave_recover_declined,
+		)
+	)
+
+
+func _on_autosave_recover_confirmed() -> void:
+	var file := FileAccess.open(AUTOSAVE_FILE, FileAccess.READ)
+	if not file:
+		_set_status("Failed to read autosave file")
+		_clear_autosave()
+		return
+
+	var json_string := file.get_as_text()
+	file.close()
+
+	var json := JSON.new()
+	var error := json.parse(json_string)
+	if error != OK:
+		_set_status("Autosave file is corrupted")
+		_clear_autosave()
+		return
+
+	var level := LevelData.from_dict(json.data)
+	if level:
+		current_level = level
+		_clear_undo_history()
+		_update_ui_from_level()
+		_set_status("Recovered autosaved level: " + level.level_name)
+	else:
+		_set_status("Failed to parse autosave data")
+	_clear_autosave()
+
+
+func _on_autosave_recover_declined() -> void:
+	_clear_autosave()
 
 
 func _refresh_token_list() -> void:
@@ -345,7 +535,7 @@ func _set_status(message: String) -> void:
 func _flash_status(color: Color) -> void:
 	status_label.add_theme_color_override("font_color", color)
 	var tw = status_label.create_tween()
-	tw.tween_interval(1.0)
+	tw.tween_interval(STATUS_FLASH_DURATION)
 	tw.tween_callback(func(): status_label.remove_theme_color_override("font_color"))
 
 
@@ -371,10 +561,12 @@ func _refresh_saved_levels_list() -> void:
 
 
 func _on_select_map_pressed() -> void:
-	map_file_dialog.popup_centered(Vector2i(800, 600))
+	map_file_dialog.popup_centered(POPUP_SIZE_LARGE)
 
 
 func _on_map_file_selected(path: String) -> void:
+	_save_undo_snapshot()
+
 	# Store the source path for bundling on save
 	_pending_map_source_path = path
 
@@ -390,7 +582,7 @@ func _on_map_file_selected(path: String) -> void:
 func _on_add_token_pressed() -> void:
 	pokemon_selector_search.text = ""
 	_update_pokemon_selector_list()
-	pokemon_selector_popup.popup_centered(Vector2i(400, 500))
+	pokemon_selector_popup.popup_centered(POPUP_SIZE_SMALL)
 	var popup_content = pokemon_selector_popup.get_node("VBox")
 	_animate_popup_in(pokemon_selector_popup, popup_content)
 
@@ -414,6 +606,7 @@ func _on_pokemon_selector_activated(index: int) -> void:
 	# Set default name from asset pack
 	placement.token_name = AssetPackManager.get_asset_display_name("pokemon", pokemon_number)
 
+	_save_undo_snapshot()
 	current_level.add_token_placement(placement)
 	_refresh_token_list()
 
@@ -441,6 +634,7 @@ func _on_delete_placement_pressed() -> void:
 	if selected_placement_index < 0:
 		return
 
+	_save_undo_snapshot()
 	var placement = current_level.token_placements[selected_placement_index]
 	current_level.remove_token_placement(placement.placement_id)
 	_refresh_token_list()
@@ -453,6 +647,7 @@ func _on_delete_placement_pressed() -> void:
 func _on_apply_placement_pressed() -> void:
 	var placement = _get_placement_from_panel()
 	if placement:
+		_save_undo_snapshot()
 		current_level.update_token_placement(placement)
 		_refresh_token_list()
 		token_list.select(selected_placement_index)
@@ -463,6 +658,7 @@ func _on_level_metadata_changed(_new_text = null) -> void:
 	# Don't update level data if we're programmatically setting UI values
 	if _is_updating_ui or not current_level:
 		return
+	_save_undo_snapshot()
 	current_level.level_name = level_name_edit.text
 	current_level.level_description = level_description_edit.text
 	current_level.author = author_edit.text
@@ -472,6 +668,7 @@ func _on_map_transform_changed(_value: float = 0.0) -> void:
 	# Don't update level data if we're programmatically setting UI values
 	if _is_updating_ui or not current_level:
 		return
+	_save_undo_snapshot()
 	current_level.map_offset = Vector3(
 		map_offset_x_spin.value, map_offset_y_spin.value, map_offset_z_spin.value
 	)
@@ -501,6 +698,7 @@ func _on_save_pressed() -> void:
 
 		var path = LevelManager.save_level(current_level)
 		if path != "":
+			_mark_saved()
 			_set_status("Level saved: " + path.get_file())
 		else:
 			_set_status("Failed to save level")
@@ -527,6 +725,7 @@ func _save_level_folder() -> void:
 	var result = LevelManager.save_level_folder(current_level, "", _pending_map_source_path)
 	if result != "":
 		_pending_map_source_path = ""  # Clear pending map after successful save
+		_mark_saved()
 		_update_ui_from_level()  # Refresh UI to show bundled status
 		_set_status("Level saved: " + current_level.level_folder)
 	else:
@@ -535,7 +734,7 @@ func _save_level_folder() -> void:
 
 func _on_load_pressed() -> void:
 	_refresh_saved_levels_list()
-	load_dialog.popup_centered(Vector2i(500, 400))
+	load_dialog.popup_centered(DIALOG_SIZE)
 	var dialog_content = load_dialog.get_node("LoadVBox")
 	_animate_popup_in(load_dialog, dialog_content)
 
@@ -603,6 +802,8 @@ func _load_level_from_path(path: String) -> void:
 	if level:
 		current_level = level
 		_pending_map_source_path = ""  # Clear pending map when loading existing level
+		_clear_undo_history()
+		_last_saved_snapshot = current_level.to_dict()
 		_update_ui_from_level()
 		_set_status("Level loaded: " + level.level_name)
 	else:
@@ -619,6 +820,8 @@ func _load_level_async(path: String) -> void:
 	if level:
 		current_level = level
 		_pending_map_source_path = ""  # Clear pending map when loading existing level
+		_clear_undo_history()
+		_last_saved_snapshot = current_level.to_dict()
 		_update_ui_from_level()
 		_set_status("Level loaded: " + level.level_name)
 	else:
@@ -640,7 +843,7 @@ func _on_after_animate_out() -> void:
 
 func _on_export_pressed() -> void:
 	export_dialog.current_file = LevelManager._sanitize_filename(current_level.level_name) + ".json"
-	export_dialog.popup_centered(Vector2i(800, 600))
+	export_dialog.popup_centered(POPUP_SIZE_LARGE)
 
 
 func _on_export_file_selected(path: String) -> void:
@@ -651,13 +854,15 @@ func _on_export_file_selected(path: String) -> void:
 
 
 func _on_import_pressed() -> void:
-	import_dialog.popup_centered(Vector2i(800, 600))
+	import_dialog.popup_centered(POPUP_SIZE_LARGE)
 
 
 func _on_import_file_selected(path: String) -> void:
 	var level = LevelManager.import_level_json(path)
 	if level:
 		current_level = level
+		_clear_undo_history()
+		_last_saved_snapshot = current_level.to_dict()
 		_update_ui_from_level()
 		_set_status("Level imported: " + level.level_name)
 	else:
@@ -688,6 +893,8 @@ func set_level(level_data: LevelData) -> void:
 	if level_data:
 		current_level = level_data
 		_pending_map_source_path = ""  # Clear pending map when setting existing level
+		_clear_undo_history()
+		_last_saved_snapshot = current_level.to_dict()
 		_update_ui_from_level()
 		_set_status("Editing: " + level_data.level_name)
 
@@ -867,6 +1074,7 @@ func _exit_lighting_mode() -> void:
 func _on_lighting_save_requested(
 	intensity: float, preset: String, overrides: Dictionary, lofi_overrides: Dictionary
 ) -> void:
+	_save_undo_snapshot()
 	# Apply the lighting and effects settings to the level data
 	current_level.light_intensity_scale = intensity
 	current_level.environment_preset = preset
@@ -889,6 +1097,7 @@ func _save_level_from_lighting_mode() -> void:
 	if current_level.is_folder_based():
 		var result = LevelManager.save_level_folder(current_level, "", "")
 		if result != "":
+			_mark_saved()
 			_set_status("Lighting & effects saved to: " + current_level.level_name)
 		else:
 			_set_status("Error: Failed to save level")
@@ -896,6 +1105,7 @@ func _save_level_from_lighting_mode() -> void:
 		# Legacy save for levels with res:// map paths
 		var path = LevelManager.save_level(current_level)
 		if path != "":
+			_mark_saved()
 			_set_status("Lighting & effects saved: " + path.get_file())
 		else:
 			_set_status("Error: Failed to save level")
@@ -929,17 +1139,11 @@ func _setup_lighting_lofi_material() -> void:
 	_lighting_lofi_material = ShaderMaterial.new()
 	_lighting_lofi_material.shader = shader
 
-	# Set default values (these will be overridden by initialize() call)
-	_lighting_lofi_material.set_shader_parameter("pixelation", 0.003)
-	_lighting_lofi_material.set_shader_parameter("saturation", 0.85)
-	_lighting_lofi_material.set_shader_parameter("color_tint", Color(1.02, 1.0, 0.96))
-	_lighting_lofi_material.set_shader_parameter("vignette_strength", 0.3)
-	_lighting_lofi_material.set_shader_parameter("vignette_radius", 0.8)
-	_lighting_lofi_material.set_shader_parameter("grain_intensity", 0.025)
-	_lighting_lofi_material.set_shader_parameter("grain_speed", 0.2)
-	_lighting_lofi_material.set_shader_parameter("grain_scale", 0.12)
-	_lighting_lofi_material.set_shader_parameter("color_levels", 32.0)
-	_lighting_lofi_material.set_shader_parameter("dither_strength", 0.5)
+	# Apply shared defaults (these will be overridden by initialize() call)
+	for param_name in Constants.LOFI_DEFAULTS:
+		_lighting_lofi_material.set_shader_parameter(
+			param_name, Constants.LOFI_DEFAULTS[param_name]
+		)
 
 	# Apply any existing lofi_overrides from level data
 	if current_level and current_level.lofi_overrides.size() > 0:
