@@ -15,23 +15,25 @@ const SETTINGS_PATH := "user://settings.cfg"
 
 # UI Sound effects (paths will be updated when actual audio files are added)
 var _ui_sounds := {
-	"click": null, # "res://assets/audio/ui/click.wav"
-	"hover": null, # "res://assets/audio/ui/hover.wav"
-	"open": null, # "res://assets/audio/ui/open.wav"
-	"close": null, # "res://assets/audio/ui/close.wav"
-	"success": null, # "res://assets/audio/ui/success.wav"
-	"error": null, # "res://assets/audio/ui/error.wav"
-	"confirm": null, # "res://assets/audio/ui/confirm.wav"
-	"cancel": null, # "res://assets/audio/ui/cancel.wav"
+	"click": null,  # "res://assets/audio/ui/click.wav"
+	"hover": null,  # "res://assets/audio/ui/hover.wav"
+	"open": null,  # "res://assets/audio/ui/open.wav"
+	"close": null,  # "res://assets/audio/ui/close.wav"
+	"success": null,  # "res://assets/audio/ui/success.wav"
+	"error": null,  # "res://assets/audio/ui/error.wav"
+	"confirm": null,  # "res://assets/audio/ui/confirm.wav"
+	"cancel": null,  # "res://assets/audio/ui/cancel.wav"
+	"tick": null,  # "res://assets/audio/ui/tick.wav" — slider/toggle feedback
+	"transition": null,  # "res://assets/audio/ui/transition.wav" — scene transitions
 }
 
 # SFX Sound effects for game interactions (token pickup, drop, slide, etc.)
 var _sfx_sounds := {
-	"token_pickup": null, # "res://assets/audio/sfx/token_pickup.wav"
-	"token_drop": null, # "res://assets/audio/sfx/token_drop.wav"
-	"token_slide": null, # "res://assets/audio/sfx/token_slide.wav"
-	"token_hover": null, # "res://assets/audio/sfx/token_hover.wav"
-	"token_whoosh": null, # "res://assets/audio/sfx/token_whoosh.wav"
+	"token_pickup": null,  # "res://assets/audio/sfx/token_pickup.wav"
+	"token_drop": null,  # "res://assets/audio/sfx/token_drop.wav"
+	"token_slide": null,  # "res://assets/audio/sfx/token_slide.wav"
+	"token_hover": null,  # "res://assets/audio/sfx/token_hover.wav"
+	"token_whoosh": null,  # "res://assets/audio/sfx/token_whoosh.wav"
 }
 
 # Audio players pool for UI sounds
@@ -73,6 +75,7 @@ func _ready() -> void:
 # ---------------------------------------------------------------------------
 # Auto-connect button sounds
 # ---------------------------------------------------------------------------
+
 
 ## Called when any node is added to the scene tree.
 ## Automatically connects press/hover sounds to BaseButton descendants.
@@ -136,7 +139,9 @@ func _load_audio_settings() -> void:
 
 ## Play a UI sound by name
 ## pitch_variation: random pitch offset range (e.g. 0.08 = +/- 8%). Set to 0.0 for exact pitch.
-func play_ui_sound(sound_name: String, volume_db: float = 0.0, pitch_variation: float = 0.08) -> void:
+func play_ui_sound(
+	sound_name: String, volume_db: float = 0.0, pitch_variation: float = 0.08
+) -> void:
 	if not _ui_sounds.has(sound_name) or _ui_sounds[sound_name] == null:
 		return
 
@@ -186,6 +191,16 @@ func play_confirm() -> void:
 ## Play cancel/back sound
 func play_cancel() -> void:
 	play_ui_sound("cancel")
+
+
+## Play a subtle tick sound (slider / toggle / checkbox feedback)
+func play_tick() -> void:
+	play_ui_sound("tick", -8.0, 0.12)
+
+
+## Play transition whoosh (scene / state transitions)
+func play_transition() -> void:
+	play_ui_sound("transition", -3.0, 0.0)
 
 
 ## Play a SFX sound by name

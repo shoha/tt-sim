@@ -9,6 +9,7 @@ class_name SettingsMenu
 signal closed
 
 const SETTINGS_PATH := "user://settings.cfg"
+const SLIDER_TICK_INTERVAL := 0.08  # Minimum seconds between slider tick sounds
 
 # Audio controls
 @onready var master_slider: HSlider = %MasterVolumeSlider
@@ -19,6 +20,11 @@ const SETTINGS_PATH := "user://settings.cfg"
 @onready var sfx_label: Label = %SFXVolumeLabel
 @onready var ui_slider: HSlider = %UIVolumeSlider
 @onready var ui_label: Label = %UIVolumeLabel
+
+# Tab container for cross-fade transitions
+@onready var tab_container: TabContainer = %TabContainer
+
+var _last_slider_tick_time: float = 0.0
 
 # Graphics controls
 @onready var fullscreen_check: CheckButton = %FullscreenCheck
@@ -50,32 +56,35 @@ func _on_panel_ready() -> void:
 	close_button.pressed.connect(_on_close_pressed)
 	reset_button.pressed.connect(_on_reset_pressed)
 	apply_button.pressed.connect(_on_apply_pressed)
-	
+
 	# Audio sliders
 	master_slider.value_changed.connect(_on_master_volume_changed)
 	music_slider.value_changed.connect(_on_music_volume_changed)
 	sfx_slider.value_changed.connect(_on_sfx_volume_changed)
 	ui_slider.value_changed.connect(_on_ui_volume_changed)
-	
+
 	# Graphics
 	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
 	vsync_check.toggled.connect(_on_vsync_toggled)
 	lofi_check.toggled.connect(_on_lofi_toggled)
-	
+
 	# Network
 	p2p_enabled_check.toggled.connect(_on_p2p_toggled)
 	clear_cache_button.pressed.connect(_on_clear_cache_pressed)
-	
+
 	# Updates
 	prereleases_check.toggled.connect(_on_prereleases_toggled)
 	check_updates_button.pressed.connect(_on_check_updates_pressed)
-	
+
+	# Tab transition animation
+	tab_container.tab_changed.connect(_on_tab_changed)
+
 	# Load current settings
 	_load_settings()
 	_populate_controls_list()
 	_update_cache_info()
 	_update_version_info()
-	
+
 	# Register as overlay (cast to Control for type compatibility)
 	UIManager.register_overlay($ColorRect as Control)
 
@@ -93,7 +102,7 @@ func _populate_controls_list() -> void:
 	# Clear existing
 	for child in controls_list.get_children():
 		child.queue_free()
-	
+
 	# Add control hints
 	var controls = [
 		["Left Click + Drag", "Move token"],
@@ -102,28 +111,28 @@ func _populate_controls_list() -> void:
 		["Middle Click + Drag", "Pan camera"],
 		["ESC", "Pause / Close menu"],
 	]
-	
+
 	for control in controls:
 		var hbox = HBoxContainer.new()
-		
+
 		var key_label = Label.new()
 		key_label.text = control[0]
 		key_label.theme_type_variation = "Body"
 		key_label.custom_minimum_size = Vector2(180, 0)
 		hbox.add_child(key_label)
-		
+
 		var action_label = Label.new()
 		action_label.text = control[1]
 		action_label.theme_type_variation = "Caption"
 		hbox.add_child(action_label)
-		
+
 		controls_list.add_child(hbox)
 
 
 func _load_settings() -> void:
 	var config = ConfigFile.new()
 	var err = config.load(SETTINGS_PATH)
-	
+
 	if err == OK:
 		master_slider.value = config.get_value("audio", "master", 100.0)
 		music_slider.value = config.get_value("audio", "music", 100.0)
@@ -134,7 +143,7 @@ func _load_settings() -> void:
 		lofi_check.button_pressed = config.get_value("graphics", "lofi_enabled", true)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
 		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
-	
+
 	# Update labels
 	_update_volume_label(master_label, master_slider.value)
 	_update_volume_label(music_label, music_slider.value)
@@ -144,7 +153,7 @@ func _load_settings() -> void:
 
 func _save_settings() -> void:
 	var config = ConfigFile.new()
-	
+
 	config.set_value("audio", "master", master_slider.value)
 	config.set_value("audio", "music", music_slider.value)
 	config.set_value("audio", "sfx", sfx_slider.value)
@@ -154,7 +163,7 @@ func _save_settings() -> void:
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
 	config.set_value("updates", "check_prereleases", prereleases_check.button_pressed)
-	
+
 	config.save(SETTINGS_PATH)
 
 
@@ -164,23 +173,26 @@ func _apply_settings() -> void:
 	_apply_audio_bus("Music", music_slider.value)
 	_apply_audio_bus("SFX", sfx_slider.value)
 	_apply_audio_bus("UI", ui_slider.value)
-	
+
 	# Apply graphics settings - only change mode if different to avoid macOS toggle issue
 	var current_mode := DisplayServer.window_get_mode()
-	var is_currently_fullscreen := current_mode == DisplayServer.WINDOW_MODE_FULLSCREEN or current_mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
-	
+	var is_currently_fullscreen := (
+		current_mode == DisplayServer.WINDOW_MODE_FULLSCREEN
+		or current_mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+	)
+
 	if fullscreen_check.button_pressed and not is_currently_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	elif not fullscreen_check.button_pressed and is_currently_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-	
+
 	DisplayServer.window_set_vsync_mode(
 		DisplayServer.VSYNC_ENABLED if vsync_check.button_pressed else DisplayServer.VSYNC_DISABLED
 	)
-	
+
 	# Apply lo-fi filter setting
 	_apply_lofi_setting()
-	
+
 	# Apply network settings
 	_apply_network_settings()
 
@@ -205,33 +217,57 @@ func _update_volume_label(label: Label, value: float) -> void:
 func _on_master_volume_changed(value: float) -> void:
 	_update_volume_label(master_label, value)
 	_apply_audio_bus("Master", value)
+	_try_play_slider_tick()
 
 
 func _on_music_volume_changed(value: float) -> void:
 	_update_volume_label(music_label, value)
 	_apply_audio_bus("Music", value)
+	_try_play_slider_tick()
 
 
 func _on_sfx_volume_changed(value: float) -> void:
 	_update_volume_label(sfx_label, value)
 	_apply_audio_bus("SFX", value)
+	_try_play_slider_tick()
 
 
 func _on_ui_volume_changed(value: float) -> void:
 	_update_volume_label(ui_label, value)
 	_apply_audio_bus("UI", value)
+	_try_play_slider_tick()
+
+
+## Throttled tick sound for slider movement feedback
+func _try_play_slider_tick() -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _last_slider_tick_time >= SLIDER_TICK_INTERVAL:
+		_last_slider_tick_time = now
+		AudioManager.play_tick()
+
+
+## Cross-fade animation when switching settings tabs
+func _on_tab_changed(_tab_idx: int) -> void:
+	var tab := tab_container.get_current_tab_control()
+	if tab:
+		tab.modulate.a = 0.0
+		var tw := create_tween()
+		tw.set_ease(Tween.EASE_OUT)
+		tw.set_trans(Tween.TRANS_CUBIC)
+		tw.tween_property(tab, "modulate:a", 1.0, 0.15)
+	AudioManager.play_tick()
 
 
 func _on_fullscreen_toggled(_pressed: bool) -> void:
-	pass
+	AudioManager.play_tick()
 
 
 func _on_vsync_toggled(_pressed: bool) -> void:
-	pass
+	AudioManager.play_tick()
 
 
 func _on_lofi_toggled(_pressed: bool) -> void:
-	pass
+	AudioManager.play_tick()
 
 
 func _apply_lofi_setting() -> void:
@@ -269,7 +305,7 @@ func _on_reset_pressed() -> void:
 
 
 func _on_p2p_toggled(_pressed: bool) -> void:
-	pass
+	AudioManager.play_tick()
 
 
 func _on_clear_cache_pressed() -> void:
@@ -277,9 +313,9 @@ func _on_clear_cache_pressed() -> void:
 		var downloader = get_node("/root/AssetDownloader")
 		downloader.clear_all_caches()
 		_update_cache_info()
-		
+
 		if UIManager.has_method("show_toast"):
-			UIManager.show_toast("Asset cache cleared", 1) # SUCCESS type
+			UIManager.show_toast("Asset cache cleared", 1)  # SUCCESS type
 
 
 func _update_cache_info() -> void:
@@ -300,7 +336,7 @@ func _get_dir_size(path: String) -> int:
 	var dir = DirAccess.open(path)
 	if not dir:
 		return 0
-	
+
 	dir.list_dir_begin()
 	var file_name = dir.get_next()
 	while file_name != "":
@@ -315,7 +351,7 @@ func _get_dir_size(path: String) -> int:
 				file.close()
 		file_name = dir.get_next()
 	dir.list_dir_end()
-	
+
 	return total_size
 
 
@@ -333,9 +369,9 @@ func _format_size(bytes: int) -> String:
 func _on_apply_pressed() -> void:
 	_apply_settings()
 	_save_settings()
-	
+
 	if UIManager.has_method("show_toast"):
-		UIManager.show_toast("Settings saved", 0) # INFO type
+		UIManager.show_toast("Settings saved", 0)  # INFO type
 
 
 func _update_version_info() -> void:
@@ -344,12 +380,13 @@ func _update_version_info() -> void:
 
 func _on_prereleases_toggled(pressed: bool) -> void:
 	UpdateManager.set_prerelease_enabled(pressed)
+	AudioManager.play_tick()
 
 
 func _on_check_updates_pressed() -> void:
 	check_updates_button.disabled = true
 	update_status_label.text = "Checking for updates..."
-	
+
 	# Connect signals for this check only
 	var on_complete = func(has_update: bool) -> void:
 		check_updates_button.disabled = false
@@ -363,13 +400,13 @@ func _on_check_updates_pressed() -> void:
 			dialog.setup(UpdateManager.latest_release)
 		else:
 			update_status_label.text = "You're up to date!"
-	
+
 	var on_failed = func(error: String) -> void:
 		check_updates_button.disabled = false
 		update_status_label.text = "Check failed: " + error
-	
+
 	# Connect one-shot signals
 	UpdateManager.update_check_complete.connect(on_complete, CONNECT_ONE_SHOT)
 	UpdateManager.update_check_failed.connect(on_failed, CONNECT_ONE_SHOT)
-	
+
 	UpdateManager.check_for_updates()
