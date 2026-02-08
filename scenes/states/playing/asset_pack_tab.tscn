@@ -3,10 +3,7 @@
 [ext_resource type="Script" path="res://scenes/states/playing/asset_pack_tab.gd" id="1_tab"]
 
 [node name="AssetPackTab" type="MarginContainer"]
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 8
+theme_type_variation = &"TabContentMargin"
 script = ExtResource("1_tab")
 
 [node name="Content" type="VBoxContainer" parent="."]

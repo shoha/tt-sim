@@ -163,6 +163,22 @@ Apply to VBoxContainers that hold:
 theme_type_variation = &"BoxContainerSpaced"
 ```
 
+### MarginContainer Variants
+
+| Variant            | Margins              | Usage                              |
+| ------------------ | -------------------- | ---------------------------------- |
+| (default)          | 8px all sides        | General-purpose inner padding      |
+| `TabContentMargin` | 16px h / 12px v      | Content area inside TabContainer tabs |
+
+Use `TabContentMargin` on the `MarginContainer` that wraps content inside each tab:
+
+```
+[node name="Margin" type="MarginContainer" parent="TabContainer/MyTab"]
+theme_type_variation = &"TabContentMargin"
+```
+
+For consistent tab-change animations, call `TabUtils.animate_tab_change()` from the `tab_changed` signal (see `utils/tab_utils.gd`).
+
 ### Panel Variants
 
 | Variant         | Background           | Usage                          |

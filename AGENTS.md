@@ -67,7 +67,7 @@ After editing files, run the appropriate formatter so output matches project sty
 autoloads/     # Singletons
 resources/     # Custom Resource classes (LevelData, TokenState, etc.)
 scenes/        # States, board_token, level_editor, ui
-utils/         # GlbUtils, environment_presets
+utils/         # GlbUtils, TabUtils, environment_presets
 themes/        # dark_theme.gd, theme variants
 tests/         # Runnable test scenes (F6 in editor)
 docs/          # Authoritative documentation

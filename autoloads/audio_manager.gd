@@ -99,9 +99,10 @@ func _auto_connect_button(button: BaseButton) -> void:
 		if not button.pressed.is_connected(play_click):
 			button.pressed.connect(play_click)
 
-	# Guard against duplicate connections (e.g. re-parenting)
-	if not button.mouse_entered.is_connected(_on_button_hover):
-		button.mouse_entered.connect(_on_button_hover)
+	# Hover sounds for regular buttons only (toggles already have tick feedback)
+	if not (button is CheckButton or button is CheckBox):
+		if not button.mouse_entered.is_connected(_on_button_hover):
+			button.mouse_entered.connect(_on_button_hover)
 
 	# Set pointing-hand cursor on all buttons for clickability feedback
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND

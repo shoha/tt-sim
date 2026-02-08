@@ -801,6 +801,18 @@ func _define_containers():
 		}
 	)
 
+	# Standardised padding for tab content areas (inside TabContainer tabs)
+	define_variant_style(
+		"TabContentMargin",
+		"MarginContainer",
+		{
+			margin_left = spacing_xl,
+			margin_top = spacing_lg,
+			margin_right = spacing_xl,
+			margin_bottom = spacing_lg,
+		}
+	)
+
 
 func _define_item_list():
 	var selected = style_selection(color_accent)
