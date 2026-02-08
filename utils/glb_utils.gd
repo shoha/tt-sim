@@ -10,10 +10,14 @@ class_name GlbUtils
 ##   GlbUtils.process_collision_meshes(model, true)  # true = create StaticBody3D
 ##   GlbUtils.process_animations(model)
 ##
-##   # Asynchronous (non-blocking):
+##   # Asynchronous (non-blocking, runs entirely on background thread):
 ##   var result = await GlbUtils.load_glb_async(path)
 ##   if result.scene:
 ##       GlbUtils.process_collision_meshes(result.scene, true)
+##
+## The async loader performs file I/O, GLB parsing (append_from_buffer), and scene
+## generation (generate_scene) entirely on a WorkerThreadPool thread, so the main
+## thread is never blocked. Godot 4's RenderingServer command buffer makes this safe.
 
 ## Result structure for async loading
 class AsyncLoadResult:
@@ -57,21 +61,26 @@ static func load_glb(path: String) -> Node3D:
 
 
 ## Load a GLB file asynchronously using WorkerThreadPool
-## File I/O and GLB parsing happen on a background thread
-## Scene generation still happens on main thread (required by Godot)
+## The entire heavy lifting (file I/O, GLB parsing, scene generation) runs on
+## a background thread. Only the finished Node3D scene is passed back to the
+## main thread, avoiding any cross-thread intermediate object issues.
+##
+## In Godot 4, RenderingServer uses a thread-safe command buffer, so mesh/texture
+## creation from generate_scene() is safe from worker threads. The resulting
+## scene tree is not yet in the SceneTree so Node operations are also safe.
 ## @param path: Path to the GLB file
 ## @return: AsyncLoadResult with scene or error
 static func load_glb_async(path: String) -> AsyncLoadResult:
 	var result = AsyncLoadResult.new()
 	
-	# Use a signal to wait for the thread to complete
 	var scene_tree = Engine.get_main_loop() as SceneTree
 	if not scene_tree:
 		result.error = "No scene tree available"
 		return result
 	
-	# Read file and parse GLB on background thread
-	var thread_result: Dictionary = {"buffer": null, "gltf_state": null, "error": ""}
+	# Do ALL heavy work on the background thread:
+	# file I/O + append_from_buffer + generate_scene
+	var thread_result: Dictionary = {"scene": null, "error": ""}
 	
 	var task_id = WorkerThreadPool.add_task(
 		func():
@@ -91,36 +100,23 @@ static func load_glb_async(path: String) -> AsyncLoadResult:
 		push_error("GlbUtils: " + result.error)
 		return result
 	
-	# Generate scene on main thread (Node creation requires main thread)
-	var gltf_document = GLTFDocument.new()
-	var gltf_state = thread_result.gltf_state as GLTFState
-	
-	if not gltf_state:
-		result.error = "Failed to get GLTF state from thread"
-		return result
-	
-	# Re-parse the buffer on main thread since GLTFDocument can't be shared across threads
-	var error = gltf_document.append_from_buffer(thread_result.buffer, "", gltf_state)
-	if error != OK:
-		result.error = "Failed to parse GLB: " + path + " (error: " + str(error) + ")"
+	if not thread_result.scene:
+		result.error = "Thread produced no scene for: " + path
 		push_error("GlbUtils: " + result.error)
 		return result
 	
-	var scene = gltf_document.generate_scene(gltf_state, 30.0)
-	if not scene:
-		result.error = "Failed to generate scene from GLB: " + path
-		push_error("GlbUtils: " + result.error)
-		return result
-	
-	result.scene = scene
+	result.scene = thread_result.scene
 	result.success = true
 	return result
 
 
 ## Thread worker function for async GLB loading
-## Only handles file I/O (the heavy disk operation)
+## Performs file I/O, GLB binary parsing (append_from_buffer), and scene
+## generation (generate_scene) entirely on the background thread.
+## Only the final Node3D scene crosses the thread boundary — no intermediate
+## GLTFDocument/GLTFState objects are shared, avoiding reference issues.
 static func _load_glb_thread_work(path: String, result: Dictionary) -> void:
-	# Read the file bytes on background thread
+	# 1. Read the file bytes
 	var file = FileAccess.open(path, FileAccess.READ)
 	if not file:
 		result.error = "Could not open GLB file: " + path
@@ -133,12 +129,25 @@ static func _load_glb_thread_work(path: String, result: Dictionary) -> void:
 		result.error = "GLB file is empty: " + path
 		return
 	
-	# Store buffer for main thread to use
-	result.buffer = buffer
+	# 2. Parse the GLB binary (creates intermediate mesh/material/image data)
+	var gltf_document = GLTFDocument.new()
+	var gltf_state = GLTFState.new()
+	gltf_state.create_animations = true
 	
-	# Create a fresh GLTFState for the main thread
-	result.gltf_state = GLTFState.new()
-	result.gltf_state.create_animations = true
+	var error = gltf_document.append_from_buffer(buffer, "", gltf_state)
+	if error != OK:
+		result.error = "Failed to parse GLB: " + path + " (error: " + str(error) + ")"
+		return
+	
+	# 3. Generate the scene tree (creates Nodes, ArrayMesh, textures, etc.)
+	# In Godot 4, RenderingServer calls are thread-safe (command buffer).
+	# The scene is not in the SceneTree yet, so Node ops are also safe.
+	var scene = gltf_document.generate_scene(gltf_state, 30.0)
+	if not scene:
+		result.error = "Failed to generate scene from GLB: " + path
+		return
+	
+	result.scene = scene
 
 
 ## Load a GLB and apply all standard post-processing

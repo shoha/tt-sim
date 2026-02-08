@@ -282,17 +282,23 @@ When assets aren't immediately available, placeholder tokens are shown:
 
 ```gdscript
 # Automatic placeholder handling
-var token = await BoardTokenFactory.create_from_asset_async(
+var result = BoardTokenFactory.create_from_asset_async(
     pack_id, asset_id, variant_id
 )
-# Returns immediately with placeholder if asset downloading
-# Placeholder upgrades to real model when download completes
+# Returns immediately — result.is_placeholder indicates loading state
+# Three paths:
+#   1. Model cached in memory → real token returned instantly (no placeholder)
+#   2. Model on disk but not cached → placeholder returned, async upgrade on tree_entered
+#   3. Model not on disk → placeholder returned, upgrade after download completes
 ```
 
 Placeholders display:
 
 - Pulsing/spinning cube animation
 - Visual indication that content is loading
+
+Placeholder upgrade uses `GlbUtils.load_glb_async()` which runs entirely on a
+background thread, so the swap from placeholder to real model is hitch-free.
 
 ### P2P Streaming Fallback
 
@@ -362,7 +368,7 @@ AssetPackManager._model_cache
 - **Session-scoped** - Cleared when switching levels or on game exit
 - **De-duplicated** - Each unique model loaded only once
 - **Fast cloning** - New instances created via `duplicate()` or `instantiate()`
-- **Async loading** - GLB files loaded on background thread
+- **Async loading** - GLB files fully parsed and generated on a background thread (zero main-thread blocking)
 
 **Why Two Caches?**
 
@@ -374,10 +380,12 @@ AssetPackManager._model_cache
 Loading a GLB file involves:
 
 1. Reading file from disk
-2. Parsing GLTF structure
-3. Generating Godot nodes and materials
-4. Processing collision meshes
+2. Parsing GLTF structure (`append_from_buffer`)
+3. Generating Godot nodes and materials (`generate_scene`)
+4. Processing collision meshes, animations, and lights
 
+Steps 1-3 run entirely on a background thread via `GlbUtils.load_glb_async()`.
+Step 4 runs on the main thread but is lightweight.
 The memory cache skips steps 1-4 by keeping the processed result in memory.
 
 ### Checking Cache
@@ -411,7 +419,7 @@ AssetPackManager.clear_model_cache()
 - **Format:** glTF Binary (`.glb`)
 - **Structure:** `Armature` → `Skeleton3D` → `Mesh`
 - **Animations:** Optional, via `AnimationPlayer`
-- **Collision:** Auto-generated if not provided
+- **Collision:** Uses `-convcolonly` meshes from the GLB if present, otherwise auto-generated
 
 ### Icon Requirements
 

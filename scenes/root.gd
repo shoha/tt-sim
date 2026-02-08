@@ -417,10 +417,10 @@ func _on_token_removed_received(network_id: String) -> void:
 	# Remove from GameState using proper API
 	GameState.remove_token_state(network_id)
 	
-	# Remove visual token
+	# Remove visual token with shrink-out animation
 	var token = _level_play_controller.spawned_tokens.get(network_id)
 	if token and is_instance_valid(token):
-		token.queue_free()
+		token.play_removal_animation()
 	_level_play_controller.spawned_tokens.erase(network_id)
 
 

@@ -31,26 +31,30 @@ class_name SelectionGlowRenderer
 
 const GLOW_SHADER = preload("res://shaders/selection_glow.gdshader")
 
-## Default glow color (golden yellow with transparency)
-const DEFAULT_GLOW_COLOR = Color(1.0, 0.8, 0.2, 0.9)
+## Default glow color (golden yellow, reduced intensity for a subtler hover)
+const DEFAULT_GLOW_COLOR = Color(1.0, 0.8, 0.2, 0.6)
 
 ## Size multiplier for the glow relative to the token
-@export var size_multiplier: float = 1.5
+@export var size_multiplier: float = 1.2
 
 ## Maximum glow size in world units (caps the indicator for large tokens)
-@export var max_size: float = 2.0
+@export var max_size: float = 1.6
 
 ## Vertical offset from token base (slightly above ground to prevent z-fighting)
 @export var ground_offset: float = 0.02
 
+## Duration of the fade in/out animation
+const FADE_DURATION: float = 0.12
+
 var _glow_mesh_instance: MeshInstance3D
 var _glow_material: ShaderMaterial
 var _base_size: float = 1.0
+var _fade_tween: Tween
 
 
 func _ready() -> void:
 	_create_glow_mesh()
-	hide_glow()
+	hide_glow(true)
 
 
 func _create_glow_mesh() -> void:
@@ -58,9 +62,9 @@ func _create_glow_mesh() -> void:
 	_glow_material = ShaderMaterial.new()
 	_glow_material.shader = GLOW_SHADER
 	_glow_material.set_shader_parameter("glow_color", DEFAULT_GLOW_COLOR)
-	_glow_material.set_shader_parameter("falloff", 2.0)
+	_glow_material.set_shader_parameter("falloff", 2.5)
 	_glow_material.set_shader_parameter("pulse_speed", 1.5)
-	_glow_material.set_shader_parameter("pulse_amount", 0.2)
+	_glow_material.set_shader_parameter("pulse_amount", 0.15)
 	
 	# Create a flat quad mesh oriented horizontally (XZ plane)
 	var quad = QuadMesh.new()
@@ -106,21 +110,64 @@ func update_scale(token_scale: Vector3) -> void:
 		_glow_mesh_instance.scale = Vector3(effective_size, 1.0, effective_size)
 
 
-## Show the selection glow
+## Show the selection glow with a smooth fade-in
 func show_glow() -> void:
-	if _glow_mesh_instance:
-		_glow_mesh_instance.show()
+	if not _glow_mesh_instance or not _glow_material:
+		return
+
+	if _fade_tween and _fade_tween.is_valid():
+		_fade_tween.kill()
+
+	_glow_mesh_instance.show()
+	var target_color: Color = DEFAULT_GLOW_COLOR
+	var current_color: Color = _glow_material.get_shader_parameter("glow_color")
+	current_color.a = 0.0
+	_glow_material.set_shader_parameter("glow_color", current_color)
+
+	_fade_tween = create_tween()
+	_fade_tween.tween_method(_set_glow_alpha, 0.0, target_color.a, FADE_DURATION)\
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
-## Hide the selection glow
-func hide_glow() -> void:
-	if _glow_mesh_instance:
+## Hide the selection glow with a smooth fade-out
+## Set immediate to true to skip the animation (e.g. during initialization)
+func hide_glow(immediate: bool = false) -> void:
+	if not _glow_mesh_instance or not _glow_material:
+		return
+
+	if _fade_tween and _fade_tween.is_valid():
+		_fade_tween.kill()
+
+	if immediate:
+		_set_glow_alpha(0.0)
 		_glow_mesh_instance.hide()
+		return
+
+	_fade_tween = create_tween()
+	_fade_tween.tween_method(_set_glow_alpha, _get_glow_alpha(), 0.0, FADE_DURATION)\
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	_fade_tween.tween_callback(_glow_mesh_instance.hide)
 
 
 ## Check if the glow is currently shown
 func is_glow_visible() -> bool:
 	return _glow_mesh_instance and _glow_mesh_instance.visible
+
+
+## Set the glow alpha (used by fade tweens)
+func _set_glow_alpha(alpha: float) -> void:
+	if _glow_material:
+		var color: Color = _glow_material.get_shader_parameter("glow_color")
+		color.a = alpha
+		_glow_material.set_shader_parameter("glow_color", color)
+
+
+## Get the current glow alpha
+func _get_glow_alpha() -> float:
+	if _glow_material:
+		var color: Color = _glow_material.get_shader_parameter("glow_color")
+		return color.a
+	return 0.0
 
 
 ## Set the glow color

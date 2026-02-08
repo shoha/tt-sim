@@ -30,7 +30,9 @@ class_name GameMap
 ## by setting a ShaderMaterial on viewport_container. See lofi_canvas.gdshader.
 
 @export var move_speed: float = 10.0
-@export var zoom_speed: float = 20.0
+@export var move_accel_speed: float = 15.0 # Smoothing rate for camera movement acceleration/deceleration
+@export var zoom_step: float = 1.5 # How much each scroll tick changes the target zoom
+@export var zoom_smooth_speed: float = 12.0 # Smoothing rate for zoom interpolation
 @export var min_zoom: float = 2.0
 @export var max_zoom: float = 20.0
 @onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
@@ -42,11 +44,14 @@ class_name GameMap
 @onready var gameplay_menu: CanvasLayer = $GameplayMenu
 
 var _camera_move_dir: Vector3
-var _camera_zoom_dir: int
+var _camera_velocity: Vector3 = Vector3.ZERO # Smoothed camera movement velocity
+var _target_zoom: float = 0.0 # Target zoom level (smoothly interpolated toward)
+var _current_edge_pan: Vector2 = Vector2.ZERO # Smoothed edge pan direction
 var _context_menu = null # TokenContextMenu - dynamically typed to avoid load order issues
 var _level_play_controller: LevelPlayController = null
 var _lofi_material: ShaderMaterial = null # Cached lo-fi material (from scene or created)
 
+const EDGE_PAN_SMOOTH_SPEED: float = 8.0 # Smoothing rate for edge panning ramp-up/coast-out
 const SETTINGS_PATH := "user://settings.cfg"
 
 
@@ -54,6 +59,8 @@ func _ready() -> void:
 	_setup_context_menu()
 	_setup_viewport()
 	_load_lofi_setting()
+	# Initialize target zoom from the camera's current size
+	_target_zoom = camera_node.size
 
 
 ## Setup with a reference to the level play controller
@@ -73,18 +80,23 @@ func _process(delta: float) -> void:
 
 
 func handle_movement(delta: float) -> void:
-	cameraholder_node.translate(_camera_move_dir * move_speed * delta)
+	# Smoothly accelerate toward target velocity and decelerate when keys released
+	var target_velocity = _camera_move_dir * move_speed
+	var smooth_factor = 1.0 - exp(-move_accel_speed * delta)
+	_camera_velocity = _camera_velocity.lerp(target_velocity, smooth_factor)
+
+	# Only translate if velocity is meaningful (avoid micro-drift)
+	if _camera_velocity.length_squared() > 0.001:
+		cameraholder_node.translate(_camera_velocity * delta)
 
 
 func handle_zoom(delta: float) -> void:
-	var zoom_level = clamp(camera_node.size + _camera_zoom_dir * zoom_speed * delta, min_zoom, max_zoom)
+	# Smoothly interpolate camera size toward target zoom
+	var smooth_factor = 1.0 - exp(-zoom_smooth_speed * delta)
+	camera_node.size = lerpf(camera_node.size, _target_zoom, smooth_factor)
 
-	if _camera_zoom_dir != 0.0:
-		camera_node.size = zoom_level
-
-	_camera_zoom_dir = 0
-
-	var zoom_percentage: float = (zoom_level - min_zoom) / (max_zoom - min_zoom)
+	# Update tilt-shift DoF from actual interpolated zoom
+	var zoom_percentage: float = (camera_node.size - min_zoom) / (max_zoom - min_zoom)
 	tiltshift_node.mesh.material.set_shader_parameter(&"DoF", 5 * zoom_percentage)
 
 
@@ -103,9 +115,9 @@ func _input(event: InputEvent) -> void:
 		return
 
 	if event.is_action_pressed("camera_zoom_in"):
-		_camera_zoom_dir -= 1
+		_target_zoom = clampf(_target_zoom - zoom_step, min_zoom, max_zoom)
 	if event.is_action_pressed("camera_zoom_out"):
-		_camera_zoom_dir += 1
+		_target_zoom = clampf(_target_zoom + zoom_step, min_zoom, max_zoom)
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	# Don't process camera input if a text input has focus
@@ -250,22 +262,31 @@ func _create_default_lofi_material() -> ShaderMaterial:
 
 
 ## Handle camera edge-panning when dragging a token near screen edges.
-## Reads the edge_pan_direction from DragAndDrop3D and translates the camera.
+## Reads the edge_pan_direction from DragAndDrop3D and smoothly interpolates
+## to provide a gentle ramp-up entering the zone and coast-out when leaving.
 func _handle_edge_pan(delta: float) -> void:
-	if not drag_and_drop_node or not drag_and_drop_node.is_dragging():
-		return
+	# Determine raw target pan direction (zero if not dragging)
+	var target_pan = Vector2.ZERO
+	if drag_and_drop_node and drag_and_drop_node.is_dragging():
+		target_pan = drag_and_drop_node.edge_pan_direction
 
-	var pan: Vector2 = drag_and_drop_node.edge_pan_direction
-	if pan.length_squared() < 0.001:
+	# Smoothly interpolate toward the target pan direction
+	var smooth_factor = 1.0 - exp(-EDGE_PAN_SMOOTH_SPEED * delta)
+	_current_edge_pan = _current_edge_pan.lerp(target_pan, smooth_factor)
+
+	# Only translate if pan is meaningful
+	if _current_edge_pan.length_squared() < 0.0001:
+		_current_edge_pan = Vector2.ZERO
 		return
 
 	# Convert screen-space pan direction to isometric camera movement
 	# Same coordinate mapping as keyboard: up=(-1,-1), down=(+1,+1), left=(-1,+1), right=(+1,-1)
 	var cam_move = Vector3.ZERO
-	cam_move.x = pan.x + pan.y
-	cam_move.z = -pan.x + pan.y
+	cam_move.x = _current_edge_pan.x + _current_edge_pan.y
+	cam_move.z = -_current_edge_pan.x + _current_edge_pan.y
 
-	cameraholder_node.translate(cam_move * drag_and_drop_node.edge_pan_speed * delta)
+	var pan_speed = drag_and_drop_node.edge_pan_speed if drag_and_drop_node else 4.0
+	cameraholder_node.translate(cam_move * pan_speed * delta)
 
 
 ## Override lo-fi shader parameters from map data

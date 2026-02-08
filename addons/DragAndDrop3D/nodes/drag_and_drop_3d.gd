@@ -26,7 +26,7 @@ signal dragging_cancelled(draggingObject: DraggingObject3D)
 ## Distance from screen edge (in pixels) that triggers panning.
 @export var edge_pan_margin: float = 50.0
 ## Camera pan speed multiplier during edge panning.
-@export var edge_pan_speed: float = 8.0
+@export var edge_pan_speed: float = 4.0
 
 @export_group("Swap")
 ## If [code]true[/code], you swap the dragging objects if the snap position is already taken[br]
