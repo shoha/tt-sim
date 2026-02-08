@@ -317,6 +317,20 @@ func _get_placement_from_panel() -> TokenPlacement:
 func _set_status(message: String) -> void:
 	status_label.text = message
 
+	# Visual flash: green for success, red for errors
+	if message.begins_with("Error"):
+		_flash_status(Color(1.0, 0.5, 0.4))
+	elif message.begins_with("Level saved") or message.begins_with("Lighting"):
+		_flash_status(Color(0.6, 0.9, 0.5))
+
+
+## Brief color flash on the status label for visual feedback
+func _flash_status(color: Color) -> void:
+	status_label.add_theme_color_override("font_color", color)
+	var tw = status_label.create_tween()
+	tw.tween_interval(1.0)
+	tw.tween_callback(func(): status_label.remove_theme_color_override("font_color"))
+
 
 func _refresh_saved_levels_list() -> void:
 	saved_levels_list.clear()
