@@ -1,0 +1,16 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/slider_spin_box.gd" id="1_script"]
+
+[node name="SliderSpinBox" type="HBoxContainer"]
+size_flags_horizontal = 3
+script = ExtResource("1_script")
+
+[node name="Slider" type="HSlider" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+
+[node name="SpinBox" type="SpinBox" parent="."]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
