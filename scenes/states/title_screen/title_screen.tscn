@@ -213,6 +213,7 @@ environment = SubResource("Environment_fgkus")
 [node name="AnimationPlayer" type="AnimationPlayer" parent="SubViewportContainer/SubViewport/d20" unique_id=2115989980]
 libraries/ = SubResource("AnimationLibrary_s4lrb")
 autoplay = &"curve_rotate"
+speed_scale = 0.5
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport" unique_id=473512982]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 6)
