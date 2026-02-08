@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""
+Git pre-commit hook: auto-normalizes staged audio files.
+
+Only processes audio files that are newly added or modified in the current commit.
+If any files are normalized, they are automatically re-staged so the commit
+includes the corrected versions.
+
+Install:
+    python tools/hooks/install.py
+"""
+
+import os
+import subprocess
+import sys
+
+
+AUDIO_EXTENSIONS = {".wav", ".ogg", ".mp3", ".opus"}
+AUDIO_DIR_PREFIX = "assets/audio/"
+
+
+def get_staged_audio_files() -> list[str]:
+    """Get list of staged audio files (added or modified)."""
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=AM"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return []
+
+    files = []
+    for line in result.stdout.strip().splitlines():
+        filepath = line.strip()
+        ext = os.path.splitext(filepath)[1].lower()
+        if ext in AUDIO_EXTENSIONS and filepath.replace("\\", "/").startswith(AUDIO_DIR_PREFIX):
+            files.append(filepath)
+    return files
+
+
+def main() -> int:
+    audio_files = get_staged_audio_files()
+
+    if not audio_files:
+        return 0
+
+    # Find the normalize script
+    hook_dir = os.path.dirname(os.path.abspath(__file__))
+    tools_dir = os.path.dirname(hook_dir)
+    normalize_script = os.path.join(tools_dir, "normalize_audio.py")
+
+    if not os.path.isfile(normalize_script):
+        print(f"Warning: normalize_audio.py not found at {normalize_script}", file=sys.stderr)
+        print("Skipping audio normalization.", file=sys.stderr)
+        return 0
+
+    # Check if ffmpeg is available
+    try:
+        subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        print("Warning: ffmpeg not found on PATH — skipping audio normalization.", file=sys.stderr)
+        print("Install ffmpeg to enable automatic loudness normalization.", file=sys.stderr)
+        return 0
+
+    print(f"Normalizing {len(audio_files)} audio file(s)...")
+
+    # Run the normalizer on just the staged files
+    result = subprocess.run(
+        [sys.executable, normalize_script, *audio_files],
+        capture_output=True,
+        text=True,
+    )
+
+    # Show output
+    if result.stdout.strip():
+        print(result.stdout)
+    if result.stderr.strip():
+        print(result.stderr, file=sys.stderr)
+
+    if result.returncode != 0:
+        print("Audio normalization failed — commit aborted.", file=sys.stderr)
+        print("Run manually to debug: python tools/normalize_audio.py --dry-run", file=sys.stderr)
+        return 1
+
+    # Re-stage any files that were modified by normalization
+    subprocess.run(["git", "add", *audio_files], check=False)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

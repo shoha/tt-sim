@@ -28,6 +28,7 @@ var _sfx_sounds := {
 	"token_pickup": null, # "res://assets/audio/sfx/token_pickup.wav"
 	"token_drop": null, # "res://assets/audio/sfx/token_drop.wav"
 	"token_slide": null, # "res://assets/audio/sfx/token_slide.wav"
+	"token_hover": null, # "res://assets/audio/sfx/token_hover.wav"
 }
 
 # Audio players pool for UI sounds
@@ -189,6 +190,11 @@ func play_token_drop() -> void:
 ## Play token slide sound (faint movement sound)
 func play_token_slide() -> void:
 	play_sfx("token_slide", -3.0)
+
+
+## Play token hover sound (subtle highlight cue)
+func play_token_hover() -> void:
+	play_sfx("token_hover", -6.0)
 
 
 func _get_available_sfx_player() -> AudioStreamPlayer:

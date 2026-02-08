@@ -74,6 +74,8 @@ func _on_mouse_entered() -> void:
 	# Cursor: show pointing hand when hovering (not during drag)
 	if not draggable_token or not draggable_token.is_being_dragged():
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
+	# Sound
+	AudioManager.play_token_hover()
 
 func _on_mouse_exited() -> void:
 	_mouse_over = false

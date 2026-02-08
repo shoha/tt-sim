@@ -100,6 +100,7 @@ These are played via `AudioManager.play_<name>()` helper methods. Default pitch 
 | `token_pickup.wav`    | `play_token_pickup()`    | 0 dB    | Picking up / starting to drag a token| **Wired**     |
 | `token_drop.wav`      | `play_token_drop()`      | 0 dB    | Dropping / placing a token           | **Wired**     |
 | `token_slide.wav`     | `play_token_slide()`     | -3 dB   | Token sliding / movement on board    | Not wired     |
+| `token_hover.wav`     | `play_token_hover()`     | -6 dB   | Mouse hovering over a board token    | **Wired**     |
 
 ### Where SFX Sounds Are Used
 
@@ -107,6 +108,7 @@ These are played via `AudioManager.play_<name>()` helper methods. Default pitch 
 |--------------------|---------------------------|----------------------------------|
 | `play_token_pickup()` | `draggable_token.gd:167` | Drag start                      |
 | `play_token_drop()`   | `draggable_token.gd:248` | Settle complete (drop or cancel) |
+| `play_token_hover()`  | `board_token_controller.gd` | Mouse enters token rigid body |
 
 ### Additional SFX Candidates (Not Yet in AudioManager)
 
@@ -144,6 +146,34 @@ Each bus has independent volume (0–100%) and mute controls, adjustable from th
 - **Format**: `.wav` is preferred for short sound effects (low latency). `.ogg` is acceptable for longer SFX.
 - **Sample rate**: 44100 Hz or 22050 Hz are both fine for short effects.
 - **Channels**: Mono is preferred for UI/SFX (saves memory, no stereo placement needed).
+
+### Volume Normalization
+
+All audio files are automatically normalized to **-18 LUFS** (EBU R128) on commit via a pre-commit hook. This ensures consistent perceived loudness regardless of the source.
+
+**Setup (one-time):**
+
+```bash
+python tools/hooks/install.py
+```
+
+**Requirements:** `ffmpeg` on PATH (`winget install ffmpeg` on Windows).
+
+**How it works:**
+- The pre-commit hook detects staged audio files in `assets/audio/`
+- Runs two-pass LUFS normalization via `tools/normalize_audio.py`
+- Re-stages the normalized files so the commit includes corrected versions
+- Files already within ±0.5 LUFS of the target are skipped
+- If ffmpeg is not installed, the hook prints a warning and continues (non-blocking)
+
+**Manual usage:**
+
+```bash
+python tools/normalize_audio.py                 # Normalize all audio files
+python tools/normalize_audio.py --dry-run       # Preview without modifying
+python tools/normalize_audio.py --target -16    # Custom LUFS target
+python tools/normalize_audio.py --backup        # Keep originals as .bak
+```
 
 ---
 
@@ -198,6 +228,7 @@ func _on_after_animate_out() -> void:
 - [ ] `assets/audio/sfx/token_pickup.wav`
 - [ ] `assets/audio/sfx/token_drop.wav`
 - [ ] `assets/audio/sfx/token_slide.wav`
+- [ ] `assets/audio/sfx/token_hover.wav`
 
 ### Phase 2: Wiring (done)
 - [x] Auto-connect all button click/hover sounds via `SceneTree.node_added`
