@@ -10,8 +10,8 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 ## Architecture
 
 - **State stack** – Root manages states (TITLE_SCREEN, LOBBY, PLAYING, PAUSED). Use `change_state()`, `push_state()`, `pop_state()`.
-- **Autoloads** – Singletons for cross-cutting concerns: UIManager, LevelManager, AssetPackManager, NetworkManager, GameState, etc.
-- **Signals** – Prefer direct signal connections. **No EventBus** – use autoload services instead.
+- **Autoloads** – Singletons for cross-cutting concerns: Constants, UIManager, LevelManager, AssetPackManager, NetworkManager, GameState, etc. Always use direct references (`X.method()`), never `has_node("/root/X")`.
+- **Signals** – Prefer direct signal connections. **No EventBus** – use autoload services instead. Disconnect autoload signals in `_exit_tree()` for non-autoload nodes.
 - **Host-authoritative** – GameState is authoritative; NetworkStateSync broadcasts to clients.
 
 ## Where to Add Things
@@ -22,6 +22,7 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 | New autoload | `autoloads/`, register in project.godot |
 | UI component | `scenes/ui/`, extend AnimatedVisibilityContainer if animated |
 | Level/token logic | LevelPlayController, BoardTokenFactory, GameState |
+| Shared constant | `autoloads/constants.gd` (registered as `Constants` autoload) |
 | GLB utilities | `utils/glb_utils.gd` |
 | Custom Resource | `resources/` with `class_name` |
 
@@ -50,3 +51,5 @@ After editing any file, run the formatter for that file type (see `formatting.md
 - Create or use a global EventBus
 - Edit `.uid` files manually
 - Block main thread for I/O – use async/await or threaded loading
+- Use `has_node("/root/X")` or `get_node("/root/X")` for autoloads – reference them directly
+- Leave `_process()` running when idle – use `set_process(false)` and toggle as needed
