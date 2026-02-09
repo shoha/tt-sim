@@ -51,6 +51,12 @@ func _on_tab_changed(_idx: int) -> void:
 
 After editing any file, run the formatter for that file type (see `formatting.mdc`). For GDScript: `gdformat path/to/file.gd`. Optional lint: `gdlint path/to/file.gd`.
 
+## CanvasLayer & Input Safety
+
+- **Layer numbers** are centralized in `Constants` (`LAYER_*`). Check existing screen regions before adding UI.
+- **mouse_filter** – Set `MOUSE_FILTER_IGNORE` on layout-only containers. See `.cursor/rules/canvas-layers.mdc`.
+- **Programmatic CanvasLayers** – Use `Constants.LAYER_DIALOG`, etc. instead of magic numbers.
+
 ## Do Not
 
 - Create or use a global EventBus
@@ -58,3 +64,5 @@ After editing any file, run the formatter for that file type (see `formatting.md
 - Block main thread for I/O – use async/await or threaded loading
 - Use `has_node("/root/X")` or `get_node("/root/X")` for autoloads – reference them directly
 - Leave `_process()` running when idle – use `set_process(false)` and toggle as needed
+- Use magic numbers for CanvasLayer layers – use `Constants.LAYER_*` in code, and keep `.tscn` values in sync with `constants.gd`
+- Leave `mouse_filter = STOP` (default) on bare layout containers – always set `IGNORE` on non-interactive wrappers

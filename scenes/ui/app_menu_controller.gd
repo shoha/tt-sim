@@ -26,7 +26,9 @@ func setup(level_play_controller: LevelPlayController) -> void:
 	_level_play_controller = level_play_controller
 
 
-func _on_connection_state_changed(_old_state: NetworkManager.ConnectionState, _new_state: NetworkManager.ConnectionState) -> void:
+func _on_connection_state_changed(
+	_old_state: NetworkManager.ConnectionState, _new_state: NetworkManager.ConnectionState
+) -> void:
 	_update_level_editor_button_visibility()
 
 
@@ -37,6 +39,7 @@ func _update_level_editor_button_visibility() -> void:
 
 
 # --- Level Editor Management ---
+
 
 func _on_level_editor_button_pressed() -> void:
 	_open_level_editor()
@@ -91,6 +94,10 @@ func _on_play_level_requested(level_data: LevelData) -> void:
 	# Close the editor with animation
 	if _level_editor_instance:
 		_level_editor_instance.animate_out()
+
+	# Mark as editor preview so gameplay UI shows scale controls
+	if _level_play_controller:
+		_level_play_controller.is_editor_preview = true
 
 	# Emit signal for Root to handle
 	play_level_requested.emit(level_data)
