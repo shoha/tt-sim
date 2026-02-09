@@ -432,13 +432,8 @@ func _on_network_state_changed(
 		_hide_disconnect_indicator()
 
 
-func _on_network_player_left(peer_id: int) -> void:
-	if not NetworkManager.is_host():
-		return
-	var players = NetworkManager.get_players()
-	var player_name: String = "A player"
-	if players.has(peer_id):
-		player_name = players[peer_id].get("name", player_name)
+func _on_network_player_left(_peer_id: int, player_info: Dictionary) -> void:
+	var player_name: String = player_info.get("name", "A player")
 	UIManager.show_warning("%s disconnected" % player_name)
 
 

@@ -21,7 +21,7 @@ enum ConnectionState {
 signal connection_state_changed(old_state: ConnectionState, new_state: ConnectionState)
 signal room_code_received(code: String)
 signal player_joined(peer_id: int, player_info: Dictionary)
-signal player_left(peer_id: int)
+signal player_left(peer_id: int, player_info: Dictionary)
 signal connection_failed(reason: String)
 signal connection_timeout
 signal reconnecting(attempt: int, max_attempts: int)
@@ -518,9 +518,10 @@ func _await_signal_or_timeout(sig: Signal, peer_id: int, timeout_seconds: float)
 func _on_peer_disconnected(peer_id: int) -> void:
 	_log("Peer disconnected: %d" % peer_id)
 	if _players.has(peer_id):
-		# Emit before erasing so handlers can still look up player info
-		player_left.emit(peer_id)
+		var player_info: Dictionary = _players[peer_id].duplicate()
 		_players.erase(peer_id)
+		# Emit after erasing so get_players() returns consistent state
+		player_left.emit(peer_id, player_info)
 
 		# Notify all clients of updated player list
 		if is_host():
@@ -597,10 +598,17 @@ func _rpc_send_player_info(info: Dictionary) -> void:
 
 @rpc("authority", "reliable")
 func _rpc_sync_player_list(players: Dictionary) -> void:
+	var old_players := _players.duplicate()
 	_players = players
-	# Emit signals for UI updates
+
+	# Emit player_left for removed players
+	for peer_id in old_players:
+		if not players.has(peer_id):
+			player_left.emit(peer_id, old_players[peer_id])
+
+	# Emit player_joined for genuinely new players
 	for peer_id in players:
-		if peer_id != multiplayer.get_unique_id():
+		if peer_id != multiplayer.get_unique_id() and not old_players.has(peer_id):
 			player_joined.emit(peer_id, players[peer_id])
 
 

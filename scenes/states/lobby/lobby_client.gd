@@ -111,7 +111,7 @@ func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
 		AudioManager.play_success()
 
 
-func _on_player_left(_peer_id: int) -> void:
+func _on_player_left(_peer_id: int, _player_info: Dictionary) -> void:
 	if _is_connected:
 		_update_player_list()
 		_flash_player_list()
