@@ -25,6 +25,7 @@ var _ui_sounds := {
 	"cancel": null,  # "res://assets/audio/ui/cancel.wav"
 	"tick": null,  # "res://assets/audio/ui/tick.wav" — slider/toggle feedback
 	"transition": null,  # "res://assets/audio/ui/transition.wav" — scene transitions
+	"leave_game": null,  # "res://assets/audio/ui/leave_game.wav" — leaving a game session
 }
 
 # SFX Sound effects for game interactions (token pickup, drop, slide, etc.)
@@ -159,7 +160,7 @@ func _load_audio_settings() -> void:
 ## Play a UI sound by name
 ## pitch_variation: random pitch offset range (e.g. 0.08 = +/- 8%). Set to 0.0 for exact pitch.
 func play_ui_sound(
-	sound_name: String, volume_db: float = 0.0, pitch_variation: float = 0.08
+	sound_name: String, volume_db: float = 0.0, pitch_variation: float = 0.03
 ) -> void:
 	if not _ui_sounds.has(sound_name) or _ui_sounds[sound_name] == null:
 		return
@@ -222,9 +223,14 @@ func play_transition() -> void:
 	play_ui_sound("transition", -3.0, 0.0)
 
 
+## Play leave-game sound (returning to title from a game session)
+func play_leave_game() -> void:
+	play_ui_sound("leave_game", 0.0, 0.0)
+
+
 ## Play a SFX sound by name
 ## pitch_variation: random pitch offset range (e.g. 0.08 = +/- 8%). Set to 0.0 for exact pitch.
-func play_sfx(sound_name: String, volume_db: float = 0.0, pitch_variation: float = 0.08) -> void:
+func play_sfx(sound_name: String, volume_db: float = 0.0, pitch_variation: float = 0.03) -> void:
 	if not _sfx_sounds.has(sound_name) or _sfx_sounds[sound_name] == null:
 		return
 

@@ -54,6 +54,12 @@ func _ready() -> void:
 	_connect_resolver_signals()
 
 
+func _exit_tree() -> void:
+	# Free cached Node3D templates so their CollisionShape3D children release
+	# physics-server RIDs before the engine shuts down (prevents JoltShape3D leaks).
+	clear_model_cache()
+
+
 ## Connect to AssetResolver signals (unified resolution pipeline)
 func _connect_resolver_signals() -> void:
 	# AssetResolver may not be ready yet, so we defer this
