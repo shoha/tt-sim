@@ -16,7 +16,7 @@ func _ready() -> void:
 	scale_in_from = Vector2(0.95, 0.95)
 	scale_out_to = Vector2(0.97, 0.97)
 	fade_in_duration = 0.25
-	fade_out_duration = 0.15
+	fade_out_duration = Constants.ANIM_FADE_OUT_DURATION
 	trans_in_type = Tween.TRANS_BACK
 	# Sounds are handled manually to avoid doubling with the toggle button's click.
 	play_open_close_sounds = false
@@ -27,6 +27,15 @@ func _ready() -> void:
 	AssetPackManager.pack_download_progress.connect(_on_pack_download_progress)
 	AssetPackManager.pack_download_completed.connect(_on_pack_download_completed)
 	AssetPackManager.pack_download_failed.connect(_on_pack_download_failed)
+
+
+func _exit_tree() -> void:
+	if AssetPackManager.pack_download_progress.is_connected(_on_pack_download_progress):
+		AssetPackManager.pack_download_progress.disconnect(_on_pack_download_progress)
+	if AssetPackManager.pack_download_completed.is_connected(_on_pack_download_completed):
+		AssetPackManager.pack_download_completed.disconnect(_on_pack_download_completed)
+	if AssetPackManager.pack_download_failed.is_connected(_on_pack_download_failed):
+		AssetPackManager.pack_download_failed.disconnect(_on_pack_download_failed)
 
 
 func _on_asset_selected(_pack_id: String, _asset_id: String, _variant_id: String) -> void:
@@ -163,9 +172,9 @@ func _show_add_pack_dialog() -> void:
 	intro_tween.set_parallel(true)
 	intro_tween.set_ease(Tween.EASE_OUT)
 	intro_tween.set_trans(Tween.TRANS_BACK)
-	intro_tween.tween_property(bg, "modulate:a", 1.0, 0.2)
-	intro_tween.tween_property(center, "modulate:a", 1.0, 0.2)
-	intro_tween.tween_property(panel, "scale", Vector2.ONE, 0.2)
+	intro_tween.tween_property(bg, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
+	intro_tween.tween_property(center, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
+	intro_tween.tween_property(panel, "scale", Vector2.ONE, Constants.ANIM_FADE_IN_DURATION)
 	await intro_tween.finished
 	url_edit.grab_focus()
 
@@ -227,9 +236,11 @@ func _close_add_pack_dialog(dialog: Node) -> void:
 	outro_tween.set_parallel(true)
 	outro_tween.set_ease(Tween.EASE_IN)
 	outro_tween.set_trans(Tween.TRANS_CUBIC)
-	outro_tween.tween_property(bg, "modulate:a", 0.0, 0.15)
-	outro_tween.tween_property(center, "modulate:a", 0.0, 0.15)
-	outro_tween.tween_property(panel, "scale", Vector2(0.95, 0.95), 0.15)
+	outro_tween.tween_property(bg, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
+	outro_tween.tween_property(center, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
+	outro_tween.tween_property(
+		panel, "scale", Vector2(0.95, 0.95), Constants.ANIM_FADE_OUT_DURATION
+	)
 	await outro_tween.finished
 	dialog.queue_free()
 	if has_meta("_add_pack_dialog"):

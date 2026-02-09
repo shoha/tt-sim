@@ -68,7 +68,10 @@ func request_map_from_host(level_folder: String, priority: int = 50) -> void:
 ## Request an asset from the host
 ## Called by AssetDownloader when no URL is available
 func request_from_host(
-	pack_id: String, asset_id: String, variant_id: String, priority: int = 100
+	pack_id: String,
+	asset_id: String,
+	variant_id: String,
+	priority: int = Constants.ASSET_PRIORITY_DEFAULT,
 ) -> void:
 	if not _enabled:
 		asset_failed.emit(pack_id, asset_id, variant_id, "P2P streaming disabled")

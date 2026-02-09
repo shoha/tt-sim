@@ -98,6 +98,21 @@ func _connect_signals() -> void:
 	AssetStreamer.transfer_progress.connect(_on_p2p_progress)
 
 
+func _exit_tree() -> void:
+	if AssetDownloader.download_completed.is_connected(_on_download_completed):
+		AssetDownloader.download_completed.disconnect(_on_download_completed)
+	if AssetDownloader.download_failed.is_connected(_on_download_failed):
+		AssetDownloader.download_failed.disconnect(_on_download_failed)
+	if AssetDownloader.download_progress.is_connected(_on_download_progress):
+		AssetDownloader.download_progress.disconnect(_on_download_progress)
+	if AssetStreamer.asset_received.is_connected(_on_p2p_completed):
+		AssetStreamer.asset_received.disconnect(_on_p2p_completed)
+	if AssetStreamer.asset_failed.is_connected(_on_p2p_failed):
+		AssetStreamer.asset_failed.disconnect(_on_p2p_failed)
+	if AssetStreamer.transfer_progress.is_connected(_on_p2p_progress):
+		AssetStreamer.transfer_progress.disconnect(_on_p2p_progress)
+
+
 func _process(delta: float) -> void:
 	_update_queue_count()
 
@@ -162,7 +177,7 @@ func _add_or_update_item(
 		# Animate in
 		container.modulate.a = 0.0
 		var tween = create_tween()
-		tween.tween_property(container, "modulate:a", 1.0, 0.15)
+		tween.tween_property(container, "modulate:a", 1.0, Constants.ANIM_FADE_OUT_DURATION)
 
 		_limit_visible_items()
 
@@ -188,7 +203,7 @@ func _remove_item(pack_id: String, asset_id: String, variant_id: String, success
 
 	var tween = create_tween()
 	tween.tween_interval(0.5)
-	tween.tween_property(container, "modulate:a", 0.0, 0.2)
+	tween.tween_property(container, "modulate:a", 0.0, Constants.ANIM_FADE_IN_DURATION)
 	tween.tween_callback(
 		func():
 			container.queue_free()
@@ -248,7 +263,7 @@ func _show_icon() -> void:
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_CUBIC)
-	tween.tween_property(icon_button, "modulate:a", 1.0, 0.2)
+	tween.tween_property(icon_button, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
 
 
 func _hide_icon() -> void:
@@ -258,7 +273,7 @@ func _hide_icon() -> void:
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_IN)
 	tween.set_trans(Tween.TRANS_CUBIC)
-	tween.tween_property(icon_button, "modulate:a", 0.0, 0.15)
+	tween.tween_property(icon_button, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
 	tween.tween_callback(
 		func():
 			icon_button.visible = false
@@ -282,8 +297,8 @@ func _expand_panel() -> void:
 	_tween.set_parallel(true)
 	_tween.set_ease(Tween.EASE_OUT)
 	_tween.set_trans(Tween.TRANS_BACK)
-	_tween.tween_property(detail_panel, "modulate:a", 1.0, 0.15)
-	_tween.tween_property(detail_panel, "scale", Vector2.ONE, 0.2)
+	_tween.tween_property(detail_panel, "modulate:a", 1.0, Constants.ANIM_FADE_OUT_DURATION)
+	_tween.tween_property(detail_panel, "scale", Vector2.ONE, Constants.ANIM_FADE_IN_DURATION)
 
 	AudioManager.play_open()
 
