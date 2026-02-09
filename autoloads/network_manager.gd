@@ -124,10 +124,13 @@ func is_client() -> bool:
 	return _connection_state == ConnectionState.JOINED
 
 
-## Check if we're in a networked game (host or client)
+## Check if we're in a networked game (host or client).
+## Returns true during reconnection — the game is still networked, just temporarily disconnected.
 func is_networked() -> bool:
 	return (
-		_connection_state == ConnectionState.HOSTING or _connection_state == ConnectionState.JOINED
+		_connection_state == ConnectionState.HOSTING
+		or _connection_state == ConnectionState.JOINED
+		or _is_reconnecting()
 	)
 
 
