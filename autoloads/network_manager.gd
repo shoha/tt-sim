@@ -464,7 +464,10 @@ func _on_peer_connected(peer_id: int) -> void:
 ## Event-driven late joiner synchronization.
 ## Uses a signal race (ACK vs timeout) instead of a busy-wait loop.
 func _sync_late_joiner(peer_id: int) -> void:
-	# Send level data first
+	# Tell the late joiner to transition from lobby to playing state
+	_rpc_game_starting.rpc_id(peer_id)
+
+	# Send level data
 	_rpc_receive_level_data.rpc_id(peer_id, _current_level_dict)
 
 	# Wait for client ACK with timeout — signal-driven, no polling
