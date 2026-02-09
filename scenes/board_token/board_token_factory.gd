@@ -30,6 +30,7 @@ static var _pending_tokens: Dictionary = {}
 ## Whether we've connected to AssetPackManager signals
 static var _signals_connected: bool = false
 
+
 ## Internal structure to hold extracted model components
 class ModelComponents:
 	var armature: Node3D
@@ -68,7 +69,7 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> B
 		else:
 			animation_tree_instance = BoardTokenAnimationTreeFactory.create()
 
-		animation_tree_instance.anim_player = components.animation_player # Set BEFORE add_child
+		animation_tree_instance.anim_player = components.animation_player  # Set BEFORE add_child
 		rigid_body.add_child(animation_tree_instance)
 
 	# Build selection glow component (added to rigid body so it moves with token)
@@ -118,8 +119,12 @@ static func _extract_model_components(scene: Node3D) -> ModelComponents:
 	# Try fixed paths first (for Godot-imported scenes)
 	components.armature = scene.get_node_or_null("Armature")
 	components.animation_player = scene.get_node_or_null("AnimationPlayer")
-	components.skeleton = components.armature.get_node_or_null("Skeleton3D") if components.armature else null
-	components.mesh_model = components.skeleton.get_node_or_null("Mesh") if components.skeleton else null
+	components.skeleton = (
+		components.armature.get_node_or_null("Skeleton3D") if components.armature else null
+	)
+	components.mesh_model = (
+		components.skeleton.get_node_or_null("Mesh") if components.skeleton else null
+	)
 	components.collision_shape = scene.get_node_or_null("Armature/Mesh/Mesh/CollisionShape3D")
 
 	# If not found, search recursively (for GLTFDocument-loaded scenes)
@@ -184,7 +189,9 @@ static func _build_rigid_body(components: ModelComponents, config: Resource = nu
 
 
 ## Get existing collision shape or create one from mesh
-static func _get_or_create_collision_shape(components: ModelComponents, config: Resource = null) -> CollisionShape3D:
+static func _get_or_create_collision_shape(
+	components: ModelComponents, config: Resource = null
+) -> CollisionShape3D:
 	var use_convex = true if not config else config.use_convex_collision
 
 	if components.collision_shape:
@@ -220,7 +227,9 @@ static func _detach_existing_collision(components: ModelComponents) -> void:
 
 
 ## Build the DraggableToken component
-static func _build_draggable_token(rigid_body: RigidBody3D, collision_shape: CollisionShape3D) -> DraggableToken:
+static func _build_draggable_token(
+	rigid_body: RigidBody3D, collision_shape: CollisionShape3D
+) -> DraggableToken:
 	var draggable = DraggableToken.new()
 	draggable.name = "DraggingObject3D"
 	draggable.rigid_body = rigid_body
@@ -229,7 +238,9 @@ static func _build_draggable_token(rigid_body: RigidBody3D, collision_shape: Col
 
 
 ## Build the BoardTokenController component
-static func _build_token_controller(rigid_body: RigidBody3D, draggable: DraggableToken) -> BoardTokenController:
+static func _build_token_controller(
+	rigid_body: RigidBody3D, draggable: DraggableToken
+) -> BoardTokenController:
 	var controller = BoardTokenController.new() as BoardTokenController
 	controller.name = "BoardTokenController"
 	controller.rigid_body = rigid_body
@@ -263,12 +274,19 @@ static func _apply_config(token: BoardToken, config: Resource) -> void:
 ## @param variant_id: The variant to use (e.g., "default", "shiny")
 ## @param config: Optional TokenConfig for additional customization
 ## @return: A configured BoardToken, or null if creation failed
-static func create_from_asset(pack_id: String, asset_id: String, variant_id: String = "default", config: Resource = null) -> BoardToken:
+static func create_from_asset(
+	pack_id: String, asset_id: String, variant_id: String = "default", config: Resource = null
+) -> BoardToken:
 	# Use resolve_model_path to check local, cache, and trigger download if needed
 	var scene_path = AssetPackManager.resolve_model_path(pack_id, asset_id, variant_id)
 
 	if scene_path == "":
-		push_error("BoardTokenFactory: Asset not found or not yet downloaded: %s/%s/%s" % [pack_id, asset_id, variant_id])
+		push_error(
+			(
+				"BoardTokenFactory: Asset not found or not yet downloaded: %s/%s/%s"
+				% [pack_id, asset_id, variant_id]
+			)
+		)
 		return null
 
 	return _create_from_model_path(scene_path, pack_id, asset_id, config)
@@ -276,7 +294,9 @@ static func create_from_asset(pack_id: String, asset_id: String, variant_id: Str
 
 ## Internal: Create a BoardToken from a specific model path
 ## Uses AssetPackManager for model loading and caching
-static func _create_from_model_path(scene_path: String, pack_id: String, asset_id: String, config: Resource = null) -> BoardToken:
+static func _create_from_model_path(
+	scene_path: String, pack_id: String, asset_id: String, config: Resource = null
+) -> BoardToken:
 	# Use AssetPackManager for loading (handles caching internally)
 	# create_static_bodies=false because tokens use RigidBody3D for physics
 	var model = AssetPackManager.get_model_instance_from_path_sync(scene_path, false)
@@ -288,7 +308,9 @@ static func _create_from_model_path(scene_path: String, pack_id: String, asset_i
 	var token = create_from_scene(model, config)
 
 	if not token:
-		push_error("BoardTokenFactory: Failed to create token for asset %s/%s" % [pack_id, asset_id])
+		push_error(
+			"BoardTokenFactory: Failed to create token for asset %s/%s" % [pack_id, asset_id]
+		)
 		return null
 
 	# Set the node name and display name
@@ -328,7 +350,9 @@ static func create_from_placement_async(placement: TokenPlacement) -> Dictionary
 		push_error("BoardTokenFactory: TokenPlacement has no asset assigned")
 		return {"token": null, "is_placeholder": false}
 
-	var result = create_from_asset_async(placement.pack_id, placement.asset_id, placement.variant_id)
+	var result = create_from_asset_async(
+		placement.pack_id, placement.asset_id, placement.variant_id
+	)
 	var token = result.token as BoardToken
 
 	if not token:
@@ -359,7 +383,12 @@ static func create_from_placement_async(placement: TokenPlacement) -> Dictionary
 ## @param variant_id: The variant to use
 ## @param priority: Download priority (lower = higher priority, used for visible tokens)
 ## @return: Dictionary with "token" and "is_placeholder" keys
-static func create_from_asset_async(pack_id: String, asset_id: String, variant_id: String = "default", priority: int = 100) -> Dictionary:
+static func create_from_asset_async(
+	pack_id: String,
+	asset_id: String,
+	variant_id: String = "default",
+	priority: int = Constants.ASSET_PRIORITY_DEFAULT
+) -> Dictionary:
 	_ensure_signals_connected()
 
 	# Try to resolve the model path (checks local + cache, triggers download if needed)
@@ -379,15 +408,19 @@ static func create_from_asset_async(pack_id: String, asset_id: String, variant_i
 			if loading_token:
 				var upgrade_path = model_path
 				loading_token.tree_entered.connect(
-					func(): loading_token._async_upgrade_placeholder(upgrade_path),
-					CONNECT_ONE_SHOT
+					func(): loading_token._async_upgrade_placeholder(upgrade_path), CONNECT_ONE_SHOT
 				)
 			return {"token": loading_token, "is_placeholder": true}
 
 	# Asset needs downloading - check if download was queued
 	if not AssetPackManager.needs_download(pack_id, asset_id, variant_id):
 		# No URL available, can't create token
-		push_error("BoardTokenFactory: Asset not available and no download URL: %s/%s/%s" % [pack_id, asset_id, variant_id])
+		push_error(
+			(
+				"BoardTokenFactory: Asset not available and no download URL: %s/%s/%s"
+				% [pack_id, asset_id, variant_id]
+			)
+		)
 		return {"token": null, "is_placeholder": false}
 
 	# Create a placeholder token for download
@@ -400,13 +433,17 @@ static func create_from_asset_async(pack_id: String, asset_id: String, variant_i
 			"asset_id": asset_id,
 			"variant_id": variant_id
 		}
-		placeholder_token.tree_exiting.connect(_on_pending_token_removed.bind(placeholder_token.network_id))
+		placeholder_token.tree_exiting.connect(
+			_on_pending_token_removed.bind(placeholder_token.network_id)
+		)
 
 	return {"token": placeholder_token, "is_placeholder": true}
 
 
 ## Create a placeholder token that shows a loading indicator
-static func _create_placeholder_token(pack_id: String, asset_id: String, variant_id: String) -> BoardToken:
+static func _create_placeholder_token(
+	pack_id: String, asset_id: String, variant_id: String
+) -> BoardToken:
 	# Create placeholder model
 	var placeholder = PlaceholderTokenScript.new()
 	placeholder.name = "PlaceholderModel"
@@ -483,13 +520,19 @@ static func _ensure_signals_connected() -> void:
 
 
 ## Called when a remote asset becomes available after download
-static func _on_asset_available(pack_id: String, asset_id: String, variant_id: String, local_path: String) -> void:
+static func _on_asset_available(
+	pack_id: String, asset_id: String, variant_id: String, local_path: String
+) -> void:
 	# Find any pending tokens waiting for this asset
 	var tokens_to_upgrade: Array = []
 
 	for network_id in _pending_tokens:
 		var pending = _pending_tokens[network_id]
-		if pending.pack_id == pack_id and pending.asset_id == asset_id and pending.variant_id == variant_id:
+		if (
+			pending.pack_id == pack_id
+			and pending.asset_id == asset_id
+			and pending.variant_id == variant_id
+		):
 			tokens_to_upgrade.append(network_id)
 
 	# Upgrade each pending token (async: load model off the main thread, then swap)
@@ -553,7 +596,7 @@ static func apply_model_upgrade(token: BoardToken, model: Node3D) -> void:
 	# Add animation tree if available
 	if components.animation_player:
 		var animation_tree = BoardTokenAnimationTreeFactory.create()
-		animation_tree.anim_player = components.animation_player # Set BEFORE add_child
+		animation_tree.anim_player = components.animation_player  # Set BEFORE add_child
 		rb.add_child(animation_tree)
 
 	# Update collision shape with the real model's shape

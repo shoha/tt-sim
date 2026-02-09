@@ -95,6 +95,13 @@ Autoloads are registered in `project.godot` and available globally.
 | `AssetDownloader`   | `autoloads/asset_downloader.gd`    | HTTP downloads with queue                  |
 | `AssetStreamer`     | `autoloads/asset_streamer.gd`      | P2P asset streaming                        |
 
+### Other Autoloads
+
+| Autoload              | File                                | Purpose                                       |
+| --------------------- | ----------------------------------- | --------------------------------------------- |
+| `GameNetworkEvents`   | `autoloads/game_network_events.gd`  | Aggregated game-level network event bus        |
+| `UpdateManager`       | `autoloads/update_manager.gd`       | GitHub release checking and in-app updates     |
+
 ### UIManager Responsibilities
 
 - Modal and overlay stack management
@@ -160,10 +167,11 @@ The `Root` node implements a state stack for flexible state management.
 
 ```gdscript
 enum State {
-    TITLE_SCREEN,  # Main menu
-    LOBBY,         # Multiplayer lobby (host or client)
-    PLAYING,       # Active gameplay
-    PAUSED,        # Game paused (overlay state)
+    TITLE_SCREEN,   # Main menu
+    LOBBY_HOST,     # Hosting a game, waiting for players
+    LOBBY_CLIENT,   # Joined a game, waiting for host to start
+    PLAYING,        # Active gameplay
+    PAUSED,         # Game paused (overlay state)
 }
 ```
 

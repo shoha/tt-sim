@@ -175,4 +175,4 @@ func _cross_fade(container: Control) -> void:
 	var tw = create_tween()
 	tw.set_ease(Tween.EASE_OUT)
 	tw.set_trans(Tween.TRANS_CUBIC)
-	tw.tween_property(container, "modulate:a", 1.0, 0.2)
+	tw.tween_property(container, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)

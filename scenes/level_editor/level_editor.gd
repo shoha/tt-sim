@@ -115,7 +115,7 @@ var _last_saved_snapshot: Dictionary = {}  # Snapshot at last manual save — us
 func _ready() -> void:
 	# Configure animation for the level editor panel
 	fade_in_duration = 0.25
-	fade_out_duration = 0.15
+	fade_out_duration = Constants.ANIM_FADE_OUT_DURATION
 	scale_in_from = Vector2(0.95, 0.95)
 	scale_out_to = Vector2(0.98, 0.98)
 	trans_in_type = Tween.TRANS_CUBIC
@@ -1177,8 +1177,8 @@ func _animate_popup_in(_popup: Window, content: Control) -> void:
 	_popup_tween.set_parallel(true)
 	_popup_tween.set_ease(Tween.EASE_OUT)
 	_popup_tween.set_trans(Tween.TRANS_BACK)
-	_popup_tween.tween_property(content, "modulate:a", 1.0, 0.2)
-	_popup_tween.tween_property(content, "scale", Vector2.ONE, 0.2)
+	_popup_tween.tween_property(content, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
+	_popup_tween.tween_property(content, "scale", Vector2.ONE, Constants.ANIM_FADE_IN_DURATION)
 
 	AudioManager.play_open()
 
@@ -1194,8 +1194,10 @@ func _animate_popup_out(popup: Window, content: Control) -> void:
 	_popup_tween.set_parallel(true)
 	_popup_tween.set_ease(Tween.EASE_IN)
 	_popup_tween.set_trans(Tween.TRANS_CUBIC)
-	_popup_tween.tween_property(content, "modulate:a", 0.0, 0.15)
-	_popup_tween.tween_property(content, "scale", Vector2(0.95, 0.95), 0.15)
+	_popup_tween.tween_property(content, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
+	_popup_tween.tween_property(
+		content, "scale", Vector2(0.95, 0.95), Constants.ANIM_FADE_OUT_DURATION
+	)
 	_popup_tween.finished.connect(popup.hide, CONNECT_ONE_SHOT)
 
 	AudioManager.play_close()

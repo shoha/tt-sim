@@ -10,7 +10,7 @@ var _level_play_controller: LevelPlayController = null
 @onready var save_positions_button: Button = %SavePositionsButton
 @onready var toggle_asset_browser_button: Button = %ToggleAssetBrowserButton
 @onready var asset_browser: AssetBrowser = $AssetBrowserContainer/PanelContainer/VBox/AssetBrowser
-@onready var editor_scale_panel: PanelContainer = %EditorScalePanel
+@onready var map_scale_panel: PanelContainer = %MapScalePanel
 @onready var map_scale_slider_spin: SliderSpinBox = %MapScaleSliderSpin
 @onready var player_list_drawer: PlayerListDrawer = %PlayerListDrawer
 
@@ -30,8 +30,13 @@ func _ready() -> void:
 	# Initially hide buttons since no level is loaded yet
 	_update_asset_browser_button_state()
 	_update_save_button_visibility()
-	_update_editor_scale_panel()
+	_update_map_scale_panel()
 	_update_player_list_drawer()
+
+
+func _exit_tree() -> void:
+	if NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
+		NetworkManager.connection_state_changed.disconnect(_on_connection_state_changed)
 
 
 ## Setup with a reference to the level play controller
@@ -56,7 +61,7 @@ func _on_connection_state_changed(
 ) -> void:
 	_update_asset_browser_button_state()
 	_update_save_button_visibility()
-	_update_editor_scale_panel()
+	_update_map_scale_panel()
 	_update_player_list_drawer()
 
 
@@ -100,7 +105,7 @@ func _update_save_button_visibility() -> void:
 func _on_level_loaded(level_data: LevelData) -> void:
 	_update_asset_browser_button_state()
 	_update_save_button_visibility()
-	_update_editor_scale_panel()
+	_update_map_scale_panel()
 
 	# Initialize slider from level data scale
 	if map_scale_slider_spin and level_data:
@@ -110,7 +115,7 @@ func _on_level_loaded(level_data: LevelData) -> void:
 func _on_level_cleared() -> void:
 	_update_asset_browser_button_state()
 	_update_save_button_visibility()
-	_update_editor_scale_panel()
+	_update_map_scale_panel()
 	# Also untoggle the button if it was pressed
 	if toggle_asset_browser_button:
 		toggle_asset_browser_button.button_pressed = false
@@ -147,13 +152,13 @@ func _on_token_added(_token: BoardToken) -> void:
 
 ## Show/hide the map scale panel.
 ## Visible during editor preview OR for the GM in a networked game.
-func _update_editor_scale_panel() -> void:
-	if not editor_scale_panel:
+func _update_map_scale_panel() -> void:
+	if not map_scale_panel:
 		return
 	var has_level = _level_play_controller and _level_play_controller.has_active_level()
 	var is_editor_preview = has_level and _level_play_controller.is_editor_preview
 	var is_networked_gm = has_level and NetworkManager.is_networked() and NetworkManager.is_gm()
-	editor_scale_panel.visible = is_editor_preview or is_networked_gm
+	map_scale_panel.visible = is_editor_preview or is_networked_gm
 
 
 ## Handle real-time map scale changes from the slider

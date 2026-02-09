@@ -97,7 +97,7 @@ func _apply_toast_style(panel: PanelContainer, icon_label: Label, type: ToastTyp
 	style.content_margin_bottom = 4
 
 	# Base dark background
-	style.bg_color = Color(0.17, 0.12, 0.17, 0.95)
+	style.bg_color = Constants.COLOR_TOAST_BG
 
 	# Type-specific accent
 	match type:
@@ -105,8 +105,8 @@ func _apply_toast_style(panel: PanelContainer, icon_label: Label, type: ToastTyp
 			style.border_color = Color(0.62, 0.72, 0.53)  # Green
 			icon_label.add_theme_color_override("font_color", Color(0.62, 0.72, 0.53))
 		ToastType.WARNING:
-			style.border_color = Color(1.0, 0.82, 0.37)  # Yellow
-			icon_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.37))
+			style.border_color = Constants.COLOR_WARNING
+			icon_label.add_theme_color_override("font_color", Constants.COLOR_WARNING)
 		ToastType.ERROR:
 			style.border_color = Color(0.99, 0.58, 0.51)  # Red
 			icon_label.add_theme_color_override("font_color", Color(0.99, 0.58, 0.51))
@@ -124,7 +124,7 @@ func _animate_toast_in(toast: Control, type: ToastType = ToastType.INFO) -> void
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_CUBIC)
-	tween.tween_property(toast, "modulate:a", 1.0, 0.2)
+	tween.tween_property(toast, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
 
 	# Play a sound matching the toast type
 	match type:
@@ -154,5 +154,5 @@ func _dismiss_toast(toast: Control, immediate: bool) -> void:
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_IN)
 	tween.set_trans(Tween.TRANS_CUBIC)
-	tween.tween_property(toast, "modulate:a", 0.0, 0.15)
+	tween.tween_property(toast, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
 	tween.finished.connect(toast.queue_free)

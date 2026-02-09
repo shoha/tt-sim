@@ -301,7 +301,10 @@ func get_icon_path(pack_id: String, asset_id: String, variant_id: String = "defa
 ## Returns the local path if available (local or cached), empty string if needs download
 ## If needs download, automatically queues it and emits asset_available when ready
 func resolve_model_path(
-	pack_id: String, asset_id: String, variant_id: String = "default", priority: int = 100
+	pack_id: String,
+	asset_id: String,
+	variant_id: String = "default",
+	priority: int = Constants.ASSET_PRIORITY_DEFAULT,
 ) -> String:
 	# Use AssetResolver if available
 	# Try sync resolution first (local + cache)
@@ -315,7 +318,10 @@ func resolve_model_path(
 
 ## Resolve the icon path, checking cache first, then local, then triggering download
 func resolve_icon_path(
-	pack_id: String, asset_id: String, variant_id: String = "default", priority: int = 100
+	pack_id: String,
+	asset_id: String,
+	variant_id: String = "default",
+	priority: int = Constants.ASSET_PRIORITY_DEFAULT,
 ) -> String:
 	# Use AssetResolver if available
 	var sync_path = AssetResolver.resolve_icon_sync(pack_id, asset_id, variant_id)

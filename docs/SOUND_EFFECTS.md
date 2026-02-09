@@ -92,6 +92,7 @@ These are played via `AudioManager.play_<name>()` helper methods. Default pitch 
 | `cancel.wav`        | `play_cancel()`        | 0 dB    | Cancel / back action              | **Wired**            |
 | `tick.ogg`          | `play_tick()`          | -8 dB   | Slider / toggle / checkbox tick   | **Auto** (toggles)   |
 | `transition.wav`    | `play_transition()`    | -3 dB   | Scene / state transition whoosh   | **Wired**            |
+| `leave_game.wav`    | `play_leave_game()`    | 0 dB    | Returning to title from a game    | **Wired**            |
 
 ---
 
@@ -280,6 +281,7 @@ func _on_after_animate_out() -> void:
 - [x] `assets/audio/ui/cancel.wav` (ObsydianX Interface SFX)
 - [x] `assets/audio/ui/tick.ogg` (Kenney Interface Sounds — tick)
 - [x] `assets/audio/ui/transition.wav` (Shapeforms Audio — whoosh)
+- [x] `assets/audio/ui/leave_game.wav`
 - [x] `assets/audio/sfx/token_pickup.wav` (JDSherbert Tabletop SFX)
 - [x] `assets/audio/sfx/token_drop.wav` (JDSherbert Tabletop SFX)
 - [ ] `assets/audio/sfx/token_slide.wav` (JDSherbert Tabletop SFX — file exists, not wired)
