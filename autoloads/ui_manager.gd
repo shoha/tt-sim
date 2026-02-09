@@ -43,7 +43,7 @@ const RootScript = preload("res://scenes/root.gd")
 func _ready() -> void:
 	# Process input even when game is paused (for ESC to unpause)
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	
+
 	# Defer getting root reference until scene tree is ready
 	call_deferred("_find_root")
 	call_deferred("_setup_ui_components")
@@ -57,16 +57,16 @@ func _setup_ui_components() -> void:
 	# Create persistent UI components
 	_toast_container = TOAST_CONTAINER_SCENE.instantiate()
 	add_child(_toast_container)
-	
+
 	_transition_overlay = TRANSITION_OVERLAY_SCENE.instantiate()
 	add_child(_transition_overlay)
-	
+
 	_loading_overlay = LOADING_OVERLAY_SCENE.instantiate()
 	add_child(_loading_overlay)
-	
+
 	_input_hints = INPUT_HINTS_SCENE.instantiate()
 	add_child(_input_hints)
-	
+
 	_download_queue = DOWNLOAD_QUEUE_SCENE.instantiate()
 	add_child(_download_queue)
 
@@ -153,6 +153,7 @@ func get_modal_count() -> int:
 
 # --- Overlay Management ---
 
+
 ## Register an overlay (like Level Editor) for ESC handling
 func register_overlay(overlay: Control) -> void:
 	if overlay not in _overlay_stack:
@@ -178,17 +179,40 @@ func get_overlay_count() -> int:
 
 # --- Confirmation Dialog ---
 
+
 ## Show a confirmation dialog and return it for await
-func show_confirmation(title: String, message: String, confirm_text: String = "Confirm", cancel_text: String = "Cancel", confirm_callback: Callable = Callable(), cancel_callback: Callable = Callable(), confirm_style: String = "Success") -> Node:
+func show_confirmation(
+	title: String,
+	message: String,
+	confirm_text: String = "Confirm",
+	cancel_text: String = "Cancel",
+	confirm_callback: Callable = Callable(),
+	cancel_callback: Callable = Callable(),
+	confirm_style: String = "Success",
+	confirm_sound_override: Callable = Callable()
+) -> Node:
 	var dialog = CONFIRMATION_DIALOG_SCENE.instantiate()
 	get_tree().root.add_child(dialog)
-	dialog.setup(title, message, confirm_text, cancel_text, confirm_callback, cancel_callback, confirm_style)
+	dialog.setup(
+		title,
+		message,
+		confirm_text,
+		cancel_text,
+		confirm_callback,
+		cancel_callback,
+		confirm_style,
+		confirm_sound_override
+	)
 	return dialog
 
 
 ## Show a danger confirmation (e.g., for delete actions)
-func show_danger_confirmation(title: String, message: String, confirm_callback: Callable = Callable()) -> Node:
-	return show_confirmation(title, message, "Delete", "Cancel", confirm_callback, Callable(), "Danger")
+func show_danger_confirmation(
+	title: String, message: String, confirm_callback: Callable = Callable()
+) -> Node:
+	return show_confirmation(
+		title, message, "Delete", "Cancel", confirm_callback, Callable(), "Danger"
+	)
 
 
 # --- Toast Notifications ---
@@ -198,6 +222,7 @@ const TOAST_INFO := 0
 const TOAST_SUCCESS := 1
 const TOAST_WARNING := 2
 const TOAST_ERROR := 3
+
 
 ## Show a toast notification
 func show_toast(message: String, type: int = TOAST_INFO, duration: float = 3.0) -> void:
@@ -227,6 +252,7 @@ func show_error(message: String) -> void:
 
 # --- Scene Transitions ---
 
+
 ## Fade out the screen
 func fade_out(duration: float = 0.3) -> void:
 	if _transition_overlay:
@@ -240,7 +266,9 @@ func fade_in(duration: float = 0.3) -> void:
 
 
 ## Perform a transition with a callback in the middle
-func transition(middle_callback: Callable, fade_out_duration: float = 0.3, fade_in_duration: float = 0.3) -> void:
+func transition(
+	middle_callback: Callable, fade_out_duration: float = 0.3, fade_in_duration: float = 0.3
+) -> void:
 	if _transition_overlay:
 		await _transition_overlay.transition(middle_callback, fade_out_duration, fade_in_duration)
 
@@ -251,6 +279,7 @@ func is_transitioning() -> bool:
 
 
 # --- Loading Screen ---
+
 
 ## Show loading screen
 func show_loading(title: String = "Loading...") -> void:
@@ -271,6 +300,7 @@ func hide_loading() -> void:
 
 
 # --- Input Hints ---
+
 
 ## Set input hints to display
 func set_hints(hints: Array) -> void:
@@ -297,6 +327,7 @@ func remove_hint(key: String) -> void:
 
 
 # --- Settings Menu ---
+
 
 ## Open the settings menu
 func open_settings() -> Node:

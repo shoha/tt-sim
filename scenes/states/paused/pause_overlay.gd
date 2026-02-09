@@ -14,6 +14,7 @@ signal main_menu_requested
 func _on_panel_ready() -> void:
 	resume_button.pressed.connect(_on_resume_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
+	main_menu_button.set_meta("ui_silent", true)
 	main_menu_button.pressed.connect(_on_main_menu_pressed)
 	_setup_blur_backdrop()
 
@@ -70,5 +71,6 @@ func _on_main_menu_pressed() -> void:
 		"Cancel",
 		func(): main_menu_requested.emit(),
 		Callable(),
-		"Danger"
+		"Danger",
+		AudioManager.play_leave_game,
 	)
