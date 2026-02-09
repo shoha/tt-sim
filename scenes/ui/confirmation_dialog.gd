@@ -21,6 +21,7 @@ signal closed(confirmed: bool)
 
 var _confirm_callback: Callable
 var _cancel_callback: Callable
+var _confirm_sound_override: Callable
 var _confirmed: bool = false
 
 
@@ -40,7 +41,8 @@ func setup(
 	cancel_text: String = "Cancel",
 	confirm_callback: Callable = Callable(),
 	cancel_callback: Callable = Callable(),
-	confirm_style: String = "Success"
+	confirm_style: String = "Success",
+	confirm_sound_override: Callable = Callable(),
 ) -> void:
 	title_label.text = title
 	message_label.text = message
@@ -49,6 +51,7 @@ func setup(
 	confirm_button.theme_type_variation = confirm_style
 	_confirm_callback = confirm_callback
 	_cancel_callback = cancel_callback
+	_confirm_sound_override = confirm_sound_override
 	_is_danger = confirm_style == "Danger"
 
 
@@ -83,7 +86,12 @@ func _on_after_animate_out() -> void:
 
 
 func _on_confirm_pressed() -> void:
-	AudioManager.play_confirm()
+	if _confirm_sound_override.is_valid():
+		_confirm_sound_override.call()
+		# Suppress the base class close sound so only the override is heard
+		play_sounds = false
+	else:
+		AudioManager.play_confirm()
 	_confirmed = true
 	if _confirm_callback.is_valid():
 		_confirm_callback.call()
