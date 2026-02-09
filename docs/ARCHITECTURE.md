@@ -99,7 +99,6 @@ Autoloads are registered in `project.godot` and available globally.
 
 | Autoload              | File                                | Purpose                                       |
 | --------------------- | ----------------------------------- | --------------------------------------------- |
-| `GameNetworkEvents`   | `autoloads/game_network_events.gd`  | Aggregated game-level network event bus        |
 | `UpdateManager`       | `autoloads/update_manager.gd`       | GitHub release checking and in-app updates     |
 
 ### UIManager Responsibilities
