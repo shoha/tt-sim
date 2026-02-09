@@ -34,6 +34,8 @@
 - **Signal cleanup** – Disconnect autoload signals in `_exit_tree()` for non-autoload nodes. Use `CONNECT_ONE_SHOT` for transient signals
 - **Process optimization** – Use `set_process(false)` in `_ready()` and toggle on/off when needed, to avoid unnecessary per-frame work
 - **UIDs** – Godot `.uid` files are auto-generated; avoid manual edits
+- **CanvasLayer ordering** – Layer numbers are centralized in `Constants` (`LAYER_*`). Check screen region comments before adding UI to avoid overlaps. See `.cursor/rules/canvas-layers.mdc`
+- **mouse_filter** – Set `mouse_filter = IGNORE` on pure layout containers (`Control`, `MarginContainer`, `HBoxContainer`, etc.). Only interactive controls and modal backdrops should keep the default `STOP`
 
 ## Adding Features
 
