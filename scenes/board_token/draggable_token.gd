@@ -53,6 +53,9 @@ var _network_target_scale: Vector3 = Vector3.ONE
 var _network_interpolation_timeout: float = 0.0
 const NETWORK_INTERPOLATION_SPEED: float = 15.0
 const NETWORK_INTERPOLATION_TIMEOUT: float = 0.3  # Stop interpolating if no updates for this long
+const NETWORK_SYNC_POSITION_THRESHOLD: float = 0.05  # Skip interpolation if within this distance
+const NETWORK_SYNC_ROTATION_THRESHOLD: float = 0.02  # Skip interpolation if rotation within this (radians)
+const NETWORK_SYNC_SCALE_THRESHOLD: float = 0.01  # Skip interpolation if scale within this
 
 @export var rigid_body: RigidBody3D
 @export var collision_shape: CollisionShape3D
@@ -541,6 +544,18 @@ func _update_network_interpolation(delta: float) -> void:
 
 ## Set network interpolation target (called by network sync on clients)
 func set_network_target(p_position: Vector3, p_rotation: Vector3, p_scale: Vector3) -> void:
+	# Skip interpolation if already very close to target (prevents reconciliation churn)
+	if not _network_interpolating and rigid_body:
+		var pos_diff = rigid_body.global_position.distance_to(p_position)
+		var rot_diff = (rigid_body.global_rotation - p_rotation).length()
+		var scl_diff = (rigid_body.scale - p_scale).length()
+		if (
+			pos_diff < NETWORK_SYNC_POSITION_THRESHOLD
+			and rot_diff < NETWORK_SYNC_ROTATION_THRESHOLD
+			and scl_diff < NETWORK_SYNC_SCALE_THRESHOLD
+		):
+			return
+
 	_network_target_position = p_position
 	_network_target_rotation = p_rotation
 	_network_target_scale = p_scale
@@ -563,7 +578,10 @@ func set_network_target(p_position: Vector3, p_rotation: Vector3, p_scale: Vecto
 		_last_drag_position = rigid_body.global_position
 
 
-## Stop network interpolation and settle to ground
+## Stop network interpolation and snap to target position.
+## We snap to the host's authoritative position rather than settling via local
+## raycast, which can produce slightly different results and cause a repeating
+## reconciliation cycle every 2 seconds.
 func _stop_network_interpolation() -> void:
 	if not _network_interpolating:
 		return
@@ -575,8 +593,21 @@ func _stop_network_interpolation() -> void:
 	if _drop_indicator:
 		_drop_indicator.hide_indicator()
 
-	# Settle to ground after remote manipulation ends
-	_settle_to_ground()
+	# Snap to exact target — the host has already determined the resting position.
+	# Using _settle_to_ground() here would do a local raycast that may differ
+	# from the host's, causing positional drift and a repeating sync cycle.
+	# Note: gravity_scale stays at 0 — tokens never use physics gravity.
+	# All positioning is managed by tweens, interpolation, and direct placement.
+	if rigid_body:
+		rigid_body.global_position = _network_target_position
+		rigid_body.global_rotation = _network_target_rotation
+		rigid_body.scale = _network_target_scale
+
+	# Reset lean on visual children
+	_target_lean_rotation = Basis.IDENTITY
+	for child in _visual_children:
+		if is_instance_valid(child):
+			child.transform.basis = Basis.IDENTITY
 
 
 ## Directly set transform without interpolation (for initial placement)
