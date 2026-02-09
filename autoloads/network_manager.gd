@@ -356,10 +356,14 @@ func _on_join_relay_received(address: String, port: int) -> void:
 ## The noray server sends a bare "connect" with empty data when the host is gone.
 func _on_noray_command_during_join(command: String, data: String) -> void:
 	if command == "connect" and not data.contains(":"):
-		var reason := "Host not found (room code may be invalid or expired)"
-		push_warning("NetworkManager: ", reason)
-		connection_failed.emit(reason)
-		disconnect_game()
+		push_warning("NetworkManager: Host not found (room code may be invalid or expired)")
+		_disconnect_join_signals()
+		if _is_reconnecting():
+			# During reconnection: route through retry logic
+			_on_connection_failed()
+		else:
+			# Initial join attempt: give a descriptive error
+			_handle_connection_error("Host not found (room code may be invalid or expired)")
 
 
 ## Disconnect all client-side join signal handlers from Noray.
@@ -531,8 +535,10 @@ func _on_connected_to_server() -> void:
 func _on_connection_failed() -> void:
 	_log("Connection failed")
 	# If we're reconnecting, handle retry logic
-	if _connection_state == ConnectionState.RECONNECTING:
-		_reconnect_attempts += 1
+	# Note: can't check _connection_state == RECONNECTING here because join_game()
+	# changes it to CONNECTING. Use _is_reconnecting() which checks _reconnect_attempts.
+	if _is_reconnecting():
+		# Note: _reconnect_attempts is incremented by _start_reconnection(), not here
 		if _reconnect_attempts >= MAX_RECONNECT_ATTEMPTS:
 			_log("Reconnection failed after %d attempts" % MAX_RECONNECT_ATTEMPTS)
 			_stop_reconnection()
@@ -713,7 +719,7 @@ func _set_connection_state(new_state: ConnectionState) -> void:
 
 
 func _handle_connection_error(reason: String) -> void:
-	push_error("NetworkManager: ", reason)
+	push_warning("NetworkManager: ", reason)
 	connection_failed.emit(reason)
 	disconnect_game()
 
@@ -881,10 +887,16 @@ func _stop_reconnection() -> void:
 	if _reconnect_timer:
 		_reconnect_timer.stop()
 
-	# Reset reconnection state if we're in RECONNECTING state
-	if _connection_state == ConnectionState.RECONNECTING:
-		_reconnect_attempts = 0
-		_stored_room_code = ""
+	# Reset reconnection state
+	_reconnect_attempts = 0
+	_stored_room_code = ""
+
+
+## Check if we're in the middle of a reconnection cycle.
+## Can't rely on _connection_state == RECONNECTING because join_game() changes
+## the state to CONNECTING during each attempt.
+func _is_reconnecting() -> bool:
+	return _reconnect_attempts > 0
 
 
 ## Log a message if debug logging is enabled
