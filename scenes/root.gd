@@ -646,6 +646,8 @@ func _on_pause_main_menu_requested() -> void:
 	# First unpause (if paused), then return to title
 	if not NetworkManager.is_networked():
 		get_tree().paused = false
+	else:
+		NetworkManager.disconnect_game()
 	change_state(State.TITLE_SCREEN)
 
 
