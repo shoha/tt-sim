@@ -160,7 +160,7 @@ func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
 	_flash_tab()
 
 
-func _on_player_left(_peer_id: int) -> void:
+func _on_player_left(_peer_id: int, _player_info: Dictionary) -> void:
 	_update_player_list()
 	_flash_tab()
 
