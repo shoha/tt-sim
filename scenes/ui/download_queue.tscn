@@ -7,23 +7,30 @@ layer = 100
 script = ExtResource("1_script")
 
 [node name="Anchor" type="Control" parent="."]
-anchors_preset = 2
+anchors_preset = 7
+anchor_left = 0.5
 anchor_top = 1.0
+anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = 16.0
+offset_left = -160.0
 offset_top = -60.0
-offset_right = 320.0
+offset_right = 160.0
 offset_bottom = -16.0
 grow_vertical = 0
+mouse_filter = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Anchor"]
 layout_mode = 1
-anchors_preset = 2
+anchors_preset = 7
+anchor_left = 0.5
 anchor_top = 1.0
+anchor_right = 0.5
 anchor_bottom = 1.0
+offset_left = -152.0
 offset_top = -200.0
-offset_right = 44.0
+offset_right = 152.0
 grow_vertical = 0
+mouse_filter = 2
 alignment = 2
 
 [node name="DetailPanel" type="PanelContainer" parent="Anchor/VBoxContainer"]
@@ -70,7 +77,7 @@ unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
-size_flags_horizontal = 0
+size_flags_horizontal = 4
 tooltip_text = "Downloads in progress - click to expand"
 theme_type_variation = &"Secondary"
 text = "↓"

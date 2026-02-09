@@ -1,0 +1,92 @@
+---
+description: CanvasLayer ordering, mouse_filter conventions, and UI input safety rules
+globs: ["**/*.tscn", "scenes/**/*.gd", "autoloads/**/*.gd"]
+alwaysApply: false
+---
+
+# CanvasLayer & Mouse Input Conventions
+
+## Layer Ordering
+
+All CanvasLayer numbers are documented in `autoloads/constants.gd` under `CANVAS LAYER ORDERING`. When adding or modifying a CanvasLayer:
+
+1. Check `constants.gd` for the current layer map and screen regions
+2. Pick a layer number that reflects the correct priority
+3. Update the constants file if adding a new layer
+4. Check for **position overlaps** with other layers occupying the same screen region
+
+| Layer | Constant | Scene | Screen Region |
+|-------|----------|-------|---------------|
+| -1 | `LAYER_WORLD_VIEWPORT` | 3D world rendering | Full-screen |
+| 2 | `LAYER_APP_MENU` | App chrome (Level Editor button) | Bottom-right |
+| 2 | `LAYER_GAMEPLAY_MENU` | In-game UI (tokens, save, scale) | Bottom-left, bottom-right |
+| 5 | `LAYER_LOBBY` | Host/client lobby | Centered (full backdrop) |
+| 10 | `LAYER_PAUSE` | Pause overlay | Centered (full backdrop) |
+| 80 | `LAYER_INPUT_HINTS` | Keyboard hints | Bottom-center |
+| 90 | `LAYER_TOAST` | Toast notifications | Bottom-center |
+| 95 | `LAYER_SETTINGS` | Settings menu | Centered (full backdrop) |
+| 100 | `LAYER_DIALOG` | Modals, download queue | Centered / bottom-center |
+| 105 | `LAYER_LOADING` | Loading screen | Full-screen (hidden when idle) |
+| 110 | `LAYER_TRANSITION` | Scene transition fade | Full-screen (hidden when idle) |
+
+## mouse_filter Rules
+
+Godot defaults every Control to `mouse_filter = STOP` (0), which silently consumes all mouse events in its rect — even if the control has no visual content. This causes hard-to-find input-blocking bugs when invisible layout containers on higher CanvasLayers cover interactive controls on lower layers.
+
+### Always set `mouse_filter = IGNORE` (2) on:
+
+- **Pure layout/positioning containers** — bare `Control`, `MarginContainer`, `CenterContainer`, `VBoxContainer`, `HBoxContainer` nodes that exist only to arrange children
+- **Full-screen root Controls** used as pass-through parents (e.g. the root `Control` of a CanvasLayer that just holds child panels)
+- **Non-interactive overlays** — decorative elements, hint displays, anything that should never consume input
+
+### Keep `mouse_filter = STOP` (0, default) on:
+
+- **Interactive controls** — `Button`, `HSlider`, `SpinBox`, `LineEdit`, `ItemList`, etc.
+- **Modal backdrops** — full-screen `ColorRect` nodes that intentionally block all input behind a dialog
+- **PanelContainer** nodes that serve as visible, clickable card/panel UI (not just layout wrappers)
+
+### In `.tscn` files
+
+```ini
+# Layout container — set explicitly
+mouse_filter = 2
+
+# Interactive control — leave default (STOP), no need to specify
+```
+
+### In GDScript (programmatic UI)
+
+```gdscript
+# Layout container
+var anchor = Control.new()
+anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+# Modal backdrop — intentionally blocks input
+var bg = ColorRect.new()
+bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+# mouse_filter defaults to STOP, which is correct here
+```
+
+## Avoiding Position Overlaps
+
+When placing a new UI element, check `constants.gd`'s screen region comments to see what already occupies that area. Key conflict zones:
+
+| Screen Region | Layers Using It |
+|---------------|-----------------|
+| Bottom-left | Gameplay menu (layer 2: EditorScalePanel) |
+| Bottom-right | Gameplay menu (layer 2: BottomButtons), App menu (layer 2) |
+| Bottom-center | Input hints (layer 80), Toasts (layer 90), Download queue (layer 100) |
+
+If your new control overlaps with an always-present higher-layer element, either:
+- Move the new control to a non-conflicting region
+- Ensure the higher-layer element has `mouse_filter = IGNORE` on all non-interactive containers
+- Use the same CanvasLayer as the element you're adjacent to
+
+## Programmatic CanvasLayers
+
+When creating CanvasLayers in GDScript, use the constants:
+
+```gdscript
+var dialog = CanvasLayer.new()
+dialog.layer = Constants.LAYER_DIALOG
+```

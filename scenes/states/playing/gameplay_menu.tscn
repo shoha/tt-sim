@@ -3,6 +3,7 @@
 [ext_resource type="Script" path="res://scenes/states/playing/asset_browser_container.gd" id="1_v7vxt"]
 [ext_resource type="Script" uid="uid://cu7374mk0ngm2" path="res://scenes/states/playing/gameplay_menu_controller.gd" id="4_controller"]
 [ext_resource type="PackedScene" uid="uid://c2xassetbrowser" path="res://scenes/states/playing/asset_browser.tscn" id="5_browser"]
+[ext_resource type="PackedScene" path="res://scenes/ui/slider_spin_box.tscn" id="6_slider_spin"]
 
 [node name="GameplayMenu" type="CanvasLayer" unique_id=977478588]
 layer = 2
@@ -45,6 +46,36 @@ unique_name_in_owner = true
 layout_mode = 2
 toggle_mode = true
 text = "Add Token"
+
+[node name="EditorScalePanel" type="PanelContainer" parent="GameplayMenu" unique_id=112233445]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 15.0
+offset_top = -56.0
+offset_right = 345.0
+offset_bottom = -15.0
+grow_vertical = 0
+
+[node name="HBox" type="HBoxContainer" parent="GameplayMenu/EditorScalePanel"]
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="Label" type="Label" parent="GameplayMenu/EditorScalePanel/HBox"]
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Map Scale:"
+
+[node name="MapScaleSliderSpin" parent="GameplayMenu/EditorScalePanel/HBox" instance=ExtResource("6_slider_spin")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.1
+max_value = 5.0
+step = 0.01
 
 [node name="AssetBrowserContainer" type="CenterContainer" parent="GameplayMenu" unique_id=454441786]
 visible = false
