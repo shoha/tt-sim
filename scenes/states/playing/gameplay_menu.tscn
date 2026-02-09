@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://cu7374mk0ngm2" path="res://scenes/states/playing/gameplay_menu_controller.gd" id="4_controller"]
 [ext_resource type="PackedScene" uid="uid://c2xassetbrowser" path="res://scenes/states/playing/asset_browser.tscn" id="5_browser"]
 [ext_resource type="PackedScene" path="res://scenes/ui/slider_spin_box.tscn" id="6_slider_spin"]
+[ext_resource type="Script" path="res://scenes/states/playing/player_list_drawer.gd" id="7_player_list"]
 
 [node name="GameplayMenu" type="CanvasLayer" unique_id=977478588]
 layer = 2
@@ -120,6 +121,18 @@ layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Click an asset to add it to the map"
 horizontal_alignment = 1
+
+[node name="PlayerListDrawer" type="Control" parent="GameplayMenu"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("7_player_list")
 
 [connection signal="pressed" from="GameplayMenu/BottomButtons/SavePositionsButton" to="GameplayMenu" method="_on_save_positions_button_pressed"]
 [connection signal="toggled" from="GameplayMenu/BottomButtons/ToggleAssetBrowserButton" to="GameplayMenu/AssetBrowserContainer" method="_on_button_toggled"]
