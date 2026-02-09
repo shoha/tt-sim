@@ -513,8 +513,9 @@ func _await_signal_or_timeout(sig: Signal, peer_id: int, timeout_seconds: float)
 func _on_peer_disconnected(peer_id: int) -> void:
 	_log("Peer disconnected: %d" % peer_id)
 	if _players.has(peer_id):
-		_players.erase(peer_id)
+		# Emit before erasing so handlers can still look up player info
 		player_left.emit(peer_id)
+		_players.erase(peer_id)
 
 		# Notify all clients of updated player list
 		if is_host():
