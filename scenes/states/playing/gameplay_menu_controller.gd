@@ -10,6 +10,8 @@ var _level_play_controller: LevelPlayController = null
 @onready var save_positions_button: Button = %SavePositionsButton
 @onready var toggle_asset_browser_button: Button = %ToggleAssetBrowserButton
 @onready var asset_browser: AssetBrowser = $AssetBrowserContainer/PanelContainer/VBox/AssetBrowser
+@onready var editor_scale_panel: PanelContainer = %EditorScalePanel
+@onready var map_scale_slider_spin: SliderSpinBox = %MapScaleSliderSpin
 
 
 func _ready() -> void:
@@ -17,12 +19,17 @@ func _ready() -> void:
 	if asset_browser:
 		asset_browser.asset_selected.connect(_on_asset_selected)
 
+	# Connect map scale slider
+	if map_scale_slider_spin:
+		map_scale_slider_spin.value_changed.connect(_on_map_scale_changed)
+
 	# Connect to network state changes to show/hide host-only buttons
 	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
 	# Initially hide buttons since no level is loaded yet
 	_update_asset_browser_button_state()
 	_update_save_button_visibility()
+	_update_editor_scale_panel()
 
 
 ## Setup with a reference to the level play controller
@@ -41,12 +48,16 @@ func setup(level_play_controller: LevelPlayController) -> void:
 
 # --- Network State Handling ---
 
-func _on_connection_state_changed(_old_state: NetworkManager.ConnectionState, _new_state: NetworkManager.ConnectionState) -> void:
+
+func _on_connection_state_changed(
+	_old_state: NetworkManager.ConnectionState, _new_state: NetworkManager.ConnectionState
+) -> void:
 	_update_asset_browser_button_state()
 	_update_save_button_visibility()
 
 
 # --- Save Functionality ---
+
 
 func _on_save_positions_button_pressed() -> void:
 	_save_token_positions()
@@ -71,20 +82,31 @@ func _update_save_button_visibility() -> void:
 		if not NetworkManager.is_gm() and NetworkManager.is_networked():
 			save_positions_button.visible = false
 			return
-		var should_show = _level_play_controller and _level_play_controller.has_active_level() and _level_play_controller.get_token_count() > 0
+		var should_show = (
+			_level_play_controller
+			and _level_play_controller.has_active_level()
+			and _level_play_controller.get_token_count() > 0
+		)
 		save_positions_button.visible = should_show
 
 
 # --- Level State Handling ---
 
-func _on_level_loaded(_level_data: LevelData) -> void:
+
+func _on_level_loaded(level_data: LevelData) -> void:
 	_update_asset_browser_button_state()
 	_update_save_button_visibility()
+	_update_editor_scale_panel()
+
+	# Initialize slider from level data scale
+	if map_scale_slider_spin and level_data:
+		map_scale_slider_spin.set_value_no_signal(level_data.map_scale.x)
 
 
 func _on_level_cleared() -> void:
 	_update_asset_browser_button_state()
 	_update_save_button_visibility()
+	_update_editor_scale_panel()
 	# Also untoggle the button if it was pressed
 	if toggle_asset_browser_button:
 		toggle_asset_browser_button.button_pressed = false
@@ -102,6 +124,7 @@ func _update_asset_browser_button_state() -> void:
 
 # --- Asset Selection Handling ---
 
+
 func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -> void:
 	# Only GM can add tokens
 	if not NetworkManager.is_gm() and NetworkManager.is_networked():
@@ -116,6 +139,24 @@ func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -
 func _on_token_added(_token: BoardToken) -> void:
 	# Update save button visibility when a token is added
 	_update_save_button_visibility()
+
+
+## Show/hide the editor scale panel based on whether this is an editor preview
+func _update_editor_scale_panel() -> void:
+	if not editor_scale_panel:
+		return
+	var should_show = (
+		_level_play_controller
+		and _level_play_controller.is_editor_preview
+		and _level_play_controller.has_active_level()
+	)
+	editor_scale_panel.visible = should_show
+
+
+## Handle real-time map scale changes from the slider
+func _on_map_scale_changed(new_value: float) -> void:
+	if _level_play_controller:
+		_level_play_controller.set_map_scale(new_value)
 
 
 ## Clear the current level (exposed for external use)

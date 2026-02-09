@@ -72,7 +72,7 @@ func _on_add_pack_pressed() -> void:
 func _show_add_pack_dialog() -> void:
 	# Build dialog as a CanvasLayer (same pattern as ConfirmationDialogUI)
 	var dialog = CanvasLayer.new()
-	dialog.layer = 100
+	dialog.layer = Constants.LAYER_DIALOG
 
 	# Dimmed background
 	var bg = ColorRect.new()

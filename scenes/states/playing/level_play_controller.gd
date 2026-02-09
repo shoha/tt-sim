@@ -24,6 +24,7 @@ const TOKENS_PER_FRAME: int = 3  # How many tokens to spawn per frame during pro
 var active_level_data: LevelData = null
 var spawned_tokens: Dictionary = {}  # placement_id -> BoardToken
 var loaded_map_instance: Node3D = null
+var is_editor_preview: bool = false  # True when playing a level from the level editor
 var _game_map: GameMap = null
 var _reconciliation_timer: Timer = null
 var _pending_map_level_folder: String = ""  # Level folder waiting for map download
@@ -775,7 +776,16 @@ func reset_loading_state() -> void:
 	_is_loading = false
 	_queued_level_data = null
 	_pending_map_level_folder = ""
+	is_editor_preview = false
 	_disconnect_asset_streamer()
+
+
+## Set map scale in real-time (used by gameplay UI during editor preview)
+func set_map_scale(uniform_scale: float) -> void:
+	if is_instance_valid(loaded_map_instance):
+		loaded_map_instance.scale = Vector3.ONE * uniform_scale
+	if active_level_data:
+		active_level_data.map_scale = Vector3.ONE * uniform_scale
 
 
 ## Check if a level is currently loaded
