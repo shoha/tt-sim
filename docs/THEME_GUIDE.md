@@ -343,6 +343,84 @@ func _animate_popup_out(popup: Window, content: Control) -> void:
 
 ---
 
+## Drawer Panels
+
+Use `DrawerContainer` for slide-in/out panels attached to a screen edge with a persistent tab handle. The tab remains visible even when the drawer is closed, providing a clear affordance for the user.
+
+### Basic Usage
+
+Extend `DrawerContainer` and override `_on_ready()`:
+
+```gdscript
+extends DrawerContainer
+class_name MyDrawer
+
+func _on_ready() -> void:
+    tab_text = "Menu"
+    drawer_width = 200.0
+
+    var label = Label.new()
+    label.text = "Drawer content goes here"
+    content_container.add_child(label)
+```
+
+### Configuration Properties
+
+| Property         | Default     | Description                         |
+| ---------------- | ----------- | ----------------------------------- |
+| `edge`           | `LEFT`      | Which screen edge (`LEFT`, `RIGHT`) |
+| `drawer_width`   | 220px       | Width of the content panel          |
+| `tab_width`      | 32px        | Width of the tab handle button      |
+| `slide_duration` | 0.25s       | Animation duration                  |
+| `start_open`     | `false`     | Whether to start open               |
+| `play_sounds`    | `true`      | Play open/close sounds              |
+
+### Scene Setup
+
+The `DrawerContainer` should be added as a `Control` node with full-rect anchors (`anchors_preset = 15`) and `mouse_filter = IGNORE`. The drawer builds its internal UI programmatically — no child nodes needed in the `.tscn`.
+
+```
+[node name="MyDrawer" type="Control" parent="..."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("my_drawer_script")
+```
+
+### Lifecycle Callbacks
+
+```gdscript
+func _on_ready() -> void:
+    # Build your content, configure tab_text, drawer_width, etc.
+    pass
+
+func _on_opened() -> void:
+    # Called after the open animation finishes.
+    pass
+
+func _on_closed() -> void:
+    # Called after the close animation finishes.
+    pass
+```
+
+### Public API
+
+```gdscript
+drawer.open()    # Slide open with animation
+drawer.close()   # Slide closed with animation
+drawer.toggle()  # Toggle open/closed
+drawer.is_open   # Current state (bool)
+```
+
+### File Reference
+
+- **Base class**: `scenes/ui/drawer_container.gd`
+- **Example usage**: `scenes/states/playing/player_list_drawer.gd` (connected player roster)
+
+---
+
 ## Full-Screen Overlay Panels
 
 Use `AnimatedCanvasLayerPanel` for full-screen overlays that dim the background and show a centered dialog — settings menus, confirmation dialogs, pause screens, etc.
@@ -352,6 +430,7 @@ Use `AnimatedCanvasLayerPanel` for full-screen overlays that dim the background 
 | Use case | Base class | Extends |
 | --- | --- | --- |
 | Panel that shows/hides within the UI tree (sidebars, context menus, editors) | `AnimatedVisibilityContainer` | `Control` |
+| Slide-in/out drawer from a screen edge with a visible tab handle | `DrawerContainer` | `Control` |
 | Full-screen overlay with backdrop dimming + centered dialog | `AnimatedCanvasLayerPanel` | `CanvasLayer` |
 
 ### Scene Structure
