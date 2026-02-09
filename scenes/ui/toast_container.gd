@@ -118,15 +118,13 @@ func _apply_toast_style(panel: PanelContainer, icon_label: Label, type: ToastTyp
 
 
 func _animate_toast_in(toast: Control, type: ToastType = ToastType.INFO) -> void:
+	# Fade-only animation — avoids fighting with VBoxContainer layout management.
 	toast.modulate.a = 0.0
-	toast.position.y += 20
 
 	var tween = create_tween()
-	tween.set_parallel(true)
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_CUBIC)
 	tween.tween_property(toast, "modulate:a", 1.0, 0.2)
-	tween.tween_property(toast, "position:y", toast.position.y - 20, 0.25)
 
 	# Play a sound matching the toast type
 	match type:
@@ -154,9 +152,7 @@ func _dismiss_toast(toast: Control, immediate: bool) -> void:
 		return
 
 	var tween = create_tween()
-	tween.set_parallel(true)
 	tween.set_ease(Tween.EASE_IN)
 	tween.set_trans(Tween.TRANS_CUBIC)
 	tween.tween_property(toast, "modulate:a", 0.0, 0.15)
-	tween.tween_property(toast, "position:y", toast.position.y + 15, 0.15)
 	tween.finished.connect(toast.queue_free)

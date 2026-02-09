@@ -18,8 +18,8 @@ const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
 
 enum State {
 	TITLE_SCREEN,
-	LOBBY_HOST, ## Hosting a game, waiting for players
-	LOBBY_CLIENT, ## Joined a game, waiting for host to start
+	LOBBY_HOST,  ## Hosting a game, waiting for players
+	LOBBY_CLIENT,  ## Joined a game, waiting for host to start
 	PLAYING,
 	PAUSED,
 }
@@ -48,9 +48,13 @@ func _ready() -> void:
 	# Connect to level manager signals
 	LevelManager.level_loaded.connect(_on_level_loaded)
 
+	# Connect network disconnect signals (for handling disconnects while in-game)
+	NetworkManager.connection_state_changed.connect(_on_network_state_changed)
+	NetworkManager.reconnecting.connect(_on_network_reconnecting)
+
 	# Enter initial state
 	push_state(State.TITLE_SCREEN)
-	
+
 	# Check for updates after a short delay to let the UI settle
 	_check_for_updates_on_startup()
 
@@ -63,12 +67,16 @@ func _setup_download_notifications() -> void:
 		downloader.download_failed.connect(_on_asset_download_failed)
 
 
-func _on_asset_download_completed(_pack_id: String, _asset_id: String, _variant_id: String, _local_path: String) -> void:
+func _on_asset_download_completed(
+	_pack_id: String, _asset_id: String, _variant_id: String, _local_path: String
+) -> void:
 	# Download success is shown quietly via the download queue UI
 	pass
 
 
-func _on_asset_download_failed(pack_id: String, asset_id: String, _variant_id: String, error: String) -> void:
+func _on_asset_download_failed(
+	pack_id: String, asset_id: String, _variant_id: String, error: String
+) -> void:
 	var display_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
 	UIManager.show_error("Failed to download " + display_name + ": " + error)
 
@@ -78,12 +86,12 @@ func _setup_level_play_controller() -> void:
 	add_child(_level_play_controller)
 	_level_play_controller.level_loaded.connect(_on_level_play_loaded)
 	_level_play_controller.level_cleared.connect(_on_level_cleared)
-	
+
 	# Connect loading signals for the loading overlay
 	_level_play_controller.level_loading_started.connect(_on_level_loading_started)
 	_level_play_controller.level_loading_progress.connect(_on_level_loading_progress)
 	_level_play_controller.level_loading_completed.connect(_on_level_loading_completed)
-	
+
 	# Create loading overlay (always available)
 	_loading_overlay = LOADING_OVERLAY_SCENE.instantiate()
 	add_child(_loading_overlay)
@@ -108,12 +116,12 @@ func _on_play_level_requested(level_data: LevelData) -> void:
 		_pending_level_data = level_data
 		_level_play_controller.play_level(level_data)
 		# _pending_level_data is cleared in _on_level_play_loaded() when loading completes
-		
+
 		# Broadcast level data to clients if we're the host
 		if NetworkManager.is_host():
 			NetworkManager.broadcast_level_data(level_data.to_dict())
 		return
-	
+
 	# Otherwise, store level data and transition to PLAYING state
 	_pending_level_data = level_data
 	change_state(State.PLAYING)
@@ -137,7 +145,7 @@ func push_state(state: State) -> void:
 ## Pop the top state from the stack (returns to previous state)
 func pop_state() -> void:
 	if _state_stack.size() <= 1:
-		return # Don't pop the last state
+		return  # Don't pop the last state
 	var old_state: State = _state_stack.pop_back()
 	_exit_state(old_state)
 	state_changed.emit(old_state, get_current_state())
@@ -215,7 +223,7 @@ func _connect_client_state_signals() -> void:
 	# Full state updates (initial sync, reconciliation)
 	if not NetworkStateSync.full_state_received.is_connected(_on_full_state_received):
 		NetworkStateSync.full_state_received.connect(_on_full_state_received)
-	
+
 	# Individual token updates
 	if not NetworkManager.token_transform_received.is_connected(_on_token_transform_received):
 		NetworkManager.token_transform_received.connect(_on_token_transform_received)
@@ -344,6 +352,47 @@ func _on_network_game_starting() -> void:
 	change_state(State.PLAYING)
 
 
+func _on_network_state_changed(
+	old_state: NetworkManager.ConnectionState, new_state: NetworkManager.ConnectionState
+) -> void:
+	# Handle disconnect while in PLAYING state
+	if new_state == NetworkManager.ConnectionState.OFFLINE and get_current_state() == State.PLAYING:
+		# Show disconnect dialog if we were in any networked state.
+		# Exclude OFFLINE→OFFLINE (redundant) and HOSTING (host disconnects via
+		# pause menu, which handles its own transition to title screen).
+		if (
+			old_state != NetworkManager.ConnectionState.OFFLINE
+			and old_state != NetworkManager.ConnectionState.HOSTING
+		):
+			_show_disconnect_dialog()
+
+
+func _on_network_reconnecting(attempt: int, max_attempts: int) -> void:
+	# Show reconnection status while in PLAYING state
+	if get_current_state() == State.PLAYING:
+		UIManager.show_warning("Reconnecting to host (%d/%d)..." % [attempt, max_attempts])
+
+
+func _show_disconnect_dialog() -> void:
+	var go_to_title := func(): change_state(State.TITLE_SCREEN)
+	var dialog = (
+		UIManager
+		. show_confirmation(
+			"Disconnected",
+			"The connection to the host was lost.",
+			"Return to Title",
+			"",  # No cancel text
+			go_to_title,
+			go_to_title,  # ESC also returns to title — can't continue without host
+		)
+	)
+	# Hide the cancel button since there's only one valid action
+	if dialog:
+		var cancel_btn = dialog.get_node_or_null("%CancelButton")
+		if cancel_btn:
+			cancel_btn.hide()
+
+
 func _on_level_data_received(level_dict: Dictionary) -> void:
 	# Client received level data from host
 	var level_data = LevelData.from_dict(level_dict)
@@ -364,7 +413,9 @@ func _on_full_state_received(_state_dict: Dictionary) -> void:
 
 
 ## Handle individual token transform update (unreliable channel, high frequency)
-func _on_token_transform_received(network_id: String, pos: Vector3, rot: Vector3, scl: Vector3) -> void:
+func _on_token_transform_received(
+	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
+) -> void:
 	var token = _level_play_controller.spawned_tokens.get(network_id) as BoardToken
 	if token and is_instance_valid(token):
 		token.set_interpolation_target(pos, rot, scl)
@@ -377,11 +428,11 @@ func _on_transform_batch_received(batch: Dictionary) -> void:
 		var pos_arr = data["position"]
 		var rot_arr = data["rotation"]
 		var scl_arr = data["scale"]
-		
+
 		var pos = Vector3(pos_arr[0], pos_arr[1], pos_arr[2])
 		var rot = Vector3(rot_arr[0], rot_arr[1], rot_arr[2])
 		var scl = Vector3(scl_arr[0], scl_arr[1], scl_arr[2])
-		
+
 		var token = _level_play_controller.spawned_tokens.get(network_id) as BoardToken
 		if token and is_instance_valid(token):
 			token.set_interpolation_target(pos, rot, scl)
@@ -390,16 +441,16 @@ func _on_transform_batch_received(batch: Dictionary) -> void:
 ## Handle individual token property update (reliable channel, low frequency)
 func _on_token_state_received(network_id: String, token_dict: Dictionary) -> void:
 	var token_state = TokenState.from_dict(token_dict)
-	
+
 	# Update GameState using proper API (always do this, even during loading)
 	GameState.set_token_state(network_id, token_state)
-	
+
 	# Don't create visual tokens during async loading - the loading process will
 	# create them from placements, and we'll sync GameState afterward.
 	# This prevents duplicate tokens from being created.
 	if _level_play_controller and _level_play_controller.is_loading():
 		return
-	
+
 	# Apply to visual token
 	var token = _level_play_controller.spawned_tokens.get(network_id) as BoardToken
 	if token and is_instance_valid(token):
@@ -416,7 +467,7 @@ func _on_token_state_received(network_id: String, token_dict: Dictionary) -> voi
 func _on_token_removed_received(network_id: String) -> void:
 	# Remove from GameState using proper API
 	GameState.remove_token_state(network_id)
-	
+
 	# Remove visual token with shrink-out animation
 	var token = _level_play_controller.spawned_tokens.get(network_id)
 	if token and is_instance_valid(token):
@@ -428,19 +479,19 @@ func _apply_game_state_to_tokens() -> void:
 	# Update visual tokens from GameState
 	if not _level_play_controller or not _game_map:
 		return
-	
+
 	# Don't apply during loading - wait for loading to complete
 	if _level_play_controller.is_loading():
 		return
-	
+
 	var drag_and_drop = _game_map.drag_and_drop_node
 	if not drag_and_drop:
 		return
-	
+
 	for network_id in GameState.get_all_token_states():
 		var token_state: TokenState = GameState.get_token_state(network_id)
 		var token = _level_play_controller.spawned_tokens.get(network_id)
-		
+
 		if token and is_instance_valid(token):
 			# Update existing token
 			token_state.apply_to_token(token)
@@ -457,38 +508,35 @@ func _create_token_from_state(token_state: TokenState) -> BoardToken:
 	if token_state.pack_id == "" or token_state.asset_id == "":
 		push_warning("Root: Cannot create token - missing pack_id or asset_id")
 		return null
-	
+
 	# Use async factory method that handles remote asset downloading
 	# Priority based on visibility - visible tokens download first
 	var priority = 50 if token_state.is_visible_to_players else 100
-	
+
 	var result = BoardTokenFactory.create_from_asset_async(
-		token_state.pack_id,
-		token_state.asset_id,
-		token_state.variant_id,
-		priority
+		token_state.pack_id, token_state.asset_id, token_state.variant_id, priority
 	)
-	
+
 	var token = result.token
 	var _is_placeholder = result.is_placeholder
-	
+
 	if not token:
 		push_error("Root: Failed to create token from state")
 		return null
-	
+
 	# Set network_id and metadata
 	token.network_id = token_state.network_id
 	token.set_meta("placement_id", token_state.network_id)
 	token.set_meta("pack_id", token_state.pack_id)
 	token.set_meta("asset_id", token_state.asset_id)
 	token.set_meta("variant_id", token_state.variant_id)
-	
+
 	# Apply the full state (position, health, etc.) without interpolation for initial placement
 	token_state.apply_to_token(token, false)
-	
+
 	# Download progress is shown via the compact download queue UI
 	# No toast needed for placeholder assets
-	
+
 	return token
 
 
@@ -497,11 +545,11 @@ func _enter_paused_state() -> void:
 	# Networked games continue running with the menu as an overlay
 	if not NetworkManager.is_networked():
 		get_tree().paused = true
-	
+
 	# Show pause overlay
 	_pause_overlay = PAUSE_OVERLAY_SCENE.instantiate()
 	add_child(_pause_overlay)
-	
+
 	# Connect pause overlay signals
 	if _pause_overlay.has_signal("resume_requested"):
 		_pause_overlay.resume_requested.connect(_on_pause_resume_requested)
@@ -525,7 +573,7 @@ func _exit_paused_state() -> void:
 	if _pause_overlay:
 		_pause_overlay.queue_free()
 		_pause_overlay = null
-	
+
 	# Resume the game tree (only needed for local games that were actually paused)
 	if not NetworkManager.is_networked():
 		get_tree().paused = false
@@ -554,6 +602,7 @@ func _on_level_cleared() -> void:
 # Loading Overlay
 # ============================================================================
 
+
 func _on_level_loading_started() -> void:
 	if _loading_overlay:
 		_loading_overlay.show_loading("Loading Level...")
@@ -567,14 +616,17 @@ func _on_level_loading_progress(progress: float, status: String) -> void:
 func _on_level_loading_completed() -> void:
 	# Don't hide loading overlay if there's another level queued - it will start loading immediately
 	# This prevents a visual flash between levels
-	if _loading_overlay and not (_level_play_controller and _level_play_controller.has_queued_level()):
+	if (
+		_loading_overlay
+		and not (_level_play_controller and _level_play_controller.has_queued_level())
+	):
 		_loading_overlay.hide_loading()
-	
+
 	# Apply any GameState updates that arrived during async loading
 	# This syncs token properties and creates any tokens added by host during loading
 	if NetworkManager.is_client():
 		_apply_game_state_to_tokens()
-	
+
 	# Clear pending data in case loading was aborted
 	# (successful loads clear this in _on_level_play_loaded via level_loaded signal)
 	_pending_level_data = null
@@ -595,15 +647,15 @@ func _setup_update_checker() -> void:
 func _check_for_updates_on_startup() -> void:
 	# Wait a moment for the title screen to fully load before checking
 	await get_tree().create_timer(1.0).timeout
-	
+
 	# Only check if we're still on the title screen
 	if get_current_state() == State.TITLE_SCREEN:
 		_startup_update_check_pending = true
-		
+
 		# Connect one-shot handler for startup check only
 		UpdateManager.update_available.connect(_on_startup_update_available, CONNECT_ONE_SHOT)
 		UpdateManager.update_check_complete.connect(_on_startup_check_complete, CONNECT_ONE_SHOT)
-		
+
 		UpdateManager.check_for_updates()
 
 
@@ -612,7 +664,7 @@ func _on_startup_update_available(release_info: Dictionary) -> void:
 	# Disconnect the complete signal since we got an update
 	if UpdateManager.update_check_complete.is_connected(_on_startup_check_complete):
 		UpdateManager.update_check_complete.disconnect(_on_startup_check_complete)
-	
+
 	# Show the update dialog
 	var dialog = UPDATE_DIALOG_SCENE.instantiate()
 	add_child(dialog)
