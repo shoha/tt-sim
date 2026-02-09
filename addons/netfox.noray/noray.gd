@@ -217,7 +217,7 @@ func _handle_commands(command: String, data: String):
 	elif command == "connect":
 		var parts = data.split(":")
 		if parts.size() < 2:
-			_logger.error("Invalid connect command data: %s", [data])
+			_logger.warning("Invalid connect command data (host may have disconnected): %s", [data])
 			return
 		var host = parts[0]
 		var port = parts[1].to_int()
