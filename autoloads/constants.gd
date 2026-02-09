@@ -16,6 +16,7 @@ extends Node
 #   3. Check for position overlaps with other layers (see screen regions below)
 #
 # Screen regions occupied:
+#   Left edge:     LAYER_GAMEPLAY_MENU (PlayerListDrawer — networked games only)
 #   Bottom-left:   LAYER_GAMEPLAY_MENU (EditorScalePanel)
 #   Bottom-right:  LAYER_GAMEPLAY_MENU (BottomButtons), LAYER_APP_MENU (BottomButtons)
 #   Bottom-center: LAYER_INPUT_HINTS, LAYER_TOAST, LAYER_DIALOG (download queue)

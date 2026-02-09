@@ -43,11 +43,17 @@ func setup(game_map: GameMap) -> void:
 	if not NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
 		NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
+	# Listen for map scale changes from the host
+	if not NetworkManager.map_scale_received.is_connected(_on_map_scale_received):
+		NetworkManager.map_scale_received.connect(_on_map_scale_received)
+
 
 func _exit_tree() -> void:
 	# Disconnect network signals
 	if NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
 		NetworkManager.connection_state_changed.disconnect(_on_connection_state_changed)
+	if NetworkManager.map_scale_received.is_connected(_on_map_scale_received):
+		NetworkManager.map_scale_received.disconnect(_on_map_scale_received)
 
 	# Disconnect AssetStreamer signals
 	_disconnect_asset_streamer()
@@ -780,12 +786,17 @@ func reset_loading_state() -> void:
 	_disconnect_asset_streamer()
 
 
-## Set map scale in real-time (used by gameplay UI during editor preview)
+## Set map scale in real-time (used by gameplay UI and network sync)
 func set_map_scale(uniform_scale: float) -> void:
 	if is_instance_valid(loaded_map_instance):
 		loaded_map_instance.scale = Vector3.ONE * uniform_scale
 	if active_level_data:
 		active_level_data.map_scale = Vector3.ONE * uniform_scale
+
+
+## Called on clients when the host changes map scale
+func _on_map_scale_received(uniform_scale: float) -> void:
+	set_map_scale(uniform_scale)
 
 
 ## Check if a level is currently loaded

@@ -37,6 +37,7 @@ signal token_transform_received(
 signal token_state_received(network_id: String, token_dict: Dictionary)
 signal token_removed_received(network_id: String)
 signal transform_batch_received(batch: Dictionary)
+signal map_scale_received(uniform_scale: float)
 
 ## Current connection state
 var _connection_state: ConnectionState = ConnectionState.OFFLINE
@@ -662,6 +663,11 @@ func _rpc_receive_token_removed(network_id: String) -> void:
 	token_removed_received.emit(network_id)
 
 
+@rpc("authority", "reliable")
+func _rpc_receive_map_scale(uniform_scale: float) -> void:
+	map_scale_received.emit(uniform_scale)
+
+
 # =============================================================================
 # HOST GAME CONTROL
 # =============================================================================
@@ -709,6 +715,14 @@ func send_game_state_to_peer(peer_id: int, state_dict: Dictionary) -> void:
 		return
 
 	_rpc_receive_game_state.rpc_id(peer_id, state_dict)
+
+
+## Called by host to broadcast map scale to all clients
+func broadcast_map_scale(uniform_scale: float) -> void:
+	if not is_host():
+		return
+
+	_rpc_receive_map_scale.rpc(uniform_scale)
 
 
 # =============================================================================
