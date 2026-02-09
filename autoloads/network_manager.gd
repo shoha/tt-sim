@@ -325,8 +325,12 @@ func join_game(
 		return
 
 	# Request connection to host via NAT
+	# Disconnect any leftover handlers first (e.g. only one of NAT/relay fires
+	# per attempt, so the other ONE_SHOT handler may still be connected)
+	_disconnect_join_signals()
 	Noray.on_connect_nat.connect(_on_join_nat_received, CONNECT_ONE_SHOT)
 	Noray.on_connect_relay.connect(_on_join_relay_received, CONNECT_ONE_SHOT)
+	Noray.on_command.connect(_on_noray_command_during_join)
 
 	err = Noray.connect_nat(room_code_input)
 	if err != OK:
@@ -338,12 +342,34 @@ func join_game(
 
 func _on_join_nat_received(address: String, port: int) -> void:
 	_log("Received NAT connection info: %s:%d" % [address, port])
+	_disconnect_join_signals()
 	_connect_enet_client(address, port)
 
 
 func _on_join_relay_received(address: String, port: int) -> void:
 	_log("Received relay connection info: %s:%d" % [address, port])
+	_disconnect_join_signals()
 	_connect_enet_client(address, port)
+
+
+## Detect invalid connect responses from noray (e.g. host OID no longer exists).
+## The noray server sends a bare "connect" with empty data when the host is gone.
+func _on_noray_command_during_join(command: String, data: String) -> void:
+	if command == "connect" and not data.contains(":"):
+		var reason := "Host not found (room code may be invalid or expired)"
+		push_warning("NetworkManager: ", reason)
+		connection_failed.emit(reason)
+		disconnect_game()
+
+
+## Disconnect all client-side join signal handlers from Noray.
+func _disconnect_join_signals() -> void:
+	if Noray.on_connect_nat.is_connected(_on_join_nat_received):
+		Noray.on_connect_nat.disconnect(_on_join_nat_received)
+	if Noray.on_connect_relay.is_connected(_on_join_relay_received):
+		Noray.on_connect_relay.disconnect(_on_join_relay_received)
+	if Noray.on_command.is_connected(_on_noray_command_during_join):
+		Noray.on_command.disconnect(_on_noray_command_during_join)
 
 
 func _connect_enet_client(address: String, port: int) -> void:
@@ -374,11 +400,13 @@ func disconnect_game() -> void:
 	# Stop any pending reconnection attempts
 	_stop_reconnection()
 
-	# Disconnect Noray signals
+	# Disconnect Noray signals (host-side)
 	if Noray.on_connect_nat.is_connected(_on_client_nat_connect):
 		Noray.on_connect_nat.disconnect(_on_client_nat_connect)
 	if Noray.on_connect_relay.is_connected(_on_client_relay_connect):
 		Noray.on_connect_relay.disconnect(_on_client_relay_connect)
+	# Disconnect Noray signals (client-side join)
+	_disconnect_join_signals()
 
 	# Disconnect from noray
 	Noray.disconnect_from_host()
