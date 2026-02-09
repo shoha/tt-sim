@@ -36,6 +36,8 @@ var _lobby_client: CanvasLayer = null
 var _level_play_controller: LevelPlayController = null
 var _pending_level_data: LevelData = null
 var _loading_overlay: LoadingOverlay = null
+var _disconnect_indicator: CanvasLayer = null
+var _disconnect_label: Label = null
 
 
 func _ready() -> void:
@@ -44,6 +46,7 @@ func _ready() -> void:
 	_setup_app_menu()
 	_setup_download_notifications()
 	_setup_update_checker()
+	_setup_disconnect_indicator()
 
 	# Connect to level manager signals
 	LevelManager.level_loaded.connect(_on_level_loaded)
@@ -95,6 +98,63 @@ func _setup_level_play_controller() -> void:
 	# Create loading overlay (always available)
 	_loading_overlay = LOADING_OVERLAY_SCENE.instantiate()
 	add_child(_loading_overlay)
+
+
+func _setup_disconnect_indicator() -> void:
+	_disconnect_indicator = CanvasLayer.new()
+	_disconnect_indicator.layer = Constants.LAYER_TOAST
+	add_child(_disconnect_indicator)
+
+	# Top-center margin container
+	var margin = MarginContainer.new()
+	margin.anchors_preset = Control.PRESET_TOP_WIDE
+	margin.anchor_right = 1.0
+	margin.offset_bottom = 40
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_theme_constant_override("margin_top", 12)
+	_disconnect_indicator.add_child(margin)
+
+	# Panel with warning styling
+	var panel = PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.17, 0.12, 0.17, 0.95)
+	style.border_color = Color(1.0, 0.82, 0.37)
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	panel.add_theme_stylebox_override("panel", style)
+	margin.add_child(panel)
+
+	# Label
+	_disconnect_label = Label.new()
+	_disconnect_label.text = "Reconnecting..."
+	_disconnect_label.theme_type_variation = "Body"
+	_disconnect_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.37))
+	panel.add_child(_disconnect_label)
+
+	# Start hidden
+	_disconnect_indicator.hide()
+
+
+func _show_disconnect_indicator(text: String) -> void:
+	_disconnect_label.text = text
+	if not _disconnect_indicator.visible:
+		_disconnect_indicator.show()
+
+
+func _hide_disconnect_indicator() -> void:
+	_disconnect_indicator.hide()
 
 
 func _setup_app_menu() -> void:
@@ -357,6 +417,7 @@ func _on_network_state_changed(
 ) -> void:
 	# Handle disconnect while in PLAYING state
 	if new_state == NetworkManager.ConnectionState.OFFLINE and get_current_state() == State.PLAYING:
+		_hide_disconnect_indicator()
 		# Show disconnect dialog if we were in any networked state.
 		# Exclude OFFLINE→OFFLINE (redundant) and HOSTING (host disconnects via
 		# pause menu, which handles its own transition to title screen).
@@ -365,12 +426,17 @@ func _on_network_state_changed(
 			and old_state != NetworkManager.ConnectionState.HOSTING
 		):
 			_show_disconnect_dialog()
+	elif new_state == NetworkManager.ConnectionState.JOINED:
+		# Successfully reconnected
+		_hide_disconnect_indicator()
 
 
 func _on_network_reconnecting(attempt: int, max_attempts: int) -> void:
-	# Show reconnection status while in PLAYING state
+	# Show persistent indicator while reconnecting
 	if get_current_state() == State.PLAYING:
-		UIManager.show_warning("Reconnecting to host (%d/%d)..." % [attempt, max_attempts])
+		_show_disconnect_indicator(
+			"Disconnected — Reconnecting (%d/%d)..." % [attempt, max_attempts]
+		)
 
 
 func _show_disconnect_dialog() -> void:
