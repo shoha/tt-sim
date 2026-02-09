@@ -51,9 +51,10 @@ func _ready() -> void:
 	# Connect to level manager signals
 	LevelManager.level_loaded.connect(_on_level_loaded)
 
-	# Connect network disconnect signals (for handling disconnects while in-game)
+	# Connect network signals (for handling disconnects and player events while in-game)
 	NetworkManager.connection_state_changed.connect(_on_network_state_changed)
 	NetworkManager.reconnecting.connect(_on_network_reconnecting)
+	NetworkManager.player_left.connect(_on_network_player_left)
 
 	# Enter initial state
 	push_state(State.TITLE_SCREEN)
@@ -429,6 +430,16 @@ func _on_network_state_changed(
 	elif new_state == NetworkManager.ConnectionState.JOINED:
 		# Successfully reconnected
 		_hide_disconnect_indicator()
+
+
+func _on_network_player_left(peer_id: int) -> void:
+	if not NetworkManager.is_host():
+		return
+	var players = NetworkManager.get_players()
+	var player_name: String = "A player"
+	if players.has(peer_id):
+		player_name = players[peer_id].get("name", player_name)
+	UIManager.show_warning("%s disconnected" % player_name)
 
 
 func _on_network_reconnecting(attempt: int, max_attempts: int) -> void:
