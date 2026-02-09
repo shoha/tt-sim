@@ -98,7 +98,6 @@ Autoloads:
 ├── NetworkManager - Multiplayer connections
 ├── NetworkStateSync - State broadcasting
 ├── GameState - Authoritative game state
-├── GameNetworkEvents - Aggregated network event bus
 ├── AssetPackManager - Asset loading & model cache
 ├── AssetResolver - Unified asset resolution
 ├── AssetCacheManager - Disk cache management

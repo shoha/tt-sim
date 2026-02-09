@@ -162,6 +162,9 @@ func _loop() -> void:
 	on_initial_sync.emit()
 
 	while _active:
+		if not multiplayer.has_multiplayer_peer():
+			return stop()
+
 		if multiplayer.is_server():
 			return stop()
 
