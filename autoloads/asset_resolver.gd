@@ -147,14 +147,20 @@ func is_available_locally(
 ## Returns request_id for tracking
 ## Emits asset_resolved or asset_failed when complete
 func resolve_model_async(
-	pack_id: String, asset_id: String, variant_id: String = "default", priority: int = 100
+	pack_id: String,
+	asset_id: String,
+	variant_id: String = "default",
+	priority: int = Constants.ASSET_PRIORITY_DEFAULT,
 ) -> String:
 	return _resolve_async(pack_id, asset_id, variant_id, "model", priority)
 
 
 ## Resolve an icon asynchronously
 func resolve_icon_async(
-	pack_id: String, asset_id: String, variant_id: String = "default", priority: int = 100
+	pack_id: String,
+	asset_id: String,
+	variant_id: String = "default",
+	priority: int = Constants.ASSET_PRIORITY_DEFAULT,
 ) -> String:
 	return _resolve_async(pack_id, asset_id, variant_id, "icon", priority)
 

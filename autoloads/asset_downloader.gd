@@ -98,7 +98,7 @@ func request_download(
 	asset_id: String,
 	variant_id: String,
 	url: String,
-	priority: int = 100,
+	priority: int = Constants.ASSET_PRIORITY_DEFAULT,
 	file_type: String = "model",
 	target_path: String = ""
 ) -> void:

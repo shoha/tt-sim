@@ -120,8 +120,8 @@ func _setup_disconnect_indicator() -> void:
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.17, 0.12, 0.17, 0.95)
-	style.border_color = Color(1.0, 0.82, 0.37)
+	style.bg_color = Constants.COLOR_TOAST_BG
+	style.border_color = Constants.COLOR_WARNING
 	style.border_width_left = 2
 	style.border_width_right = 2
 	style.border_width_top = 2
@@ -141,7 +141,7 @@ func _setup_disconnect_indicator() -> void:
 	_disconnect_label = Label.new()
 	_disconnect_label.text = "Reconnecting..."
 	_disconnect_label.theme_type_variation = "Body"
-	_disconnect_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.37))
+	_disconnect_label.add_theme_color_override("font_color", Constants.COLOR_WARNING)
 	panel.add_child(_disconnect_label)
 
 	# Start hidden
@@ -588,7 +588,11 @@ func _create_token_from_state(token_state: TokenState) -> BoardToken:
 
 	# Use async factory method that handles remote asset downloading
 	# Priority based on visibility - visible tokens download first
-	var priority = 50 if token_state.is_visible_to_players else 100
+	var priority = (
+		Constants.ASSET_PRIORITY_HIGH
+		if token_state.is_visible_to_players
+		else Constants.ASSET_PRIORITY_DEFAULT
+	)
 
 	var result = BoardTokenFactory.create_from_asset_async(
 		token_state.pack_id, token_state.asset_id, token_state.variant_id, priority

@@ -65,11 +65,13 @@ The application uses a **state stack** managed by the `Root` node.
 
 ### Available States
 
-| State          | Description                         |
-| -------------- | ----------------------------------- |
-| `TITLE_SCREEN` | Main menu, level selection          |
-| `PLAYING`      | Active gameplay with GameMap loaded |
-| `PAUSED`       | Game paused, pause menu visible     |
+| State          | Description                              |
+| -------------- | ---------------------------------------- |
+| `TITLE_SCREEN` | Main menu, level selection               |
+| `LOBBY_HOST`   | Hosting a game, waiting for players      |
+| `LOBBY_CLIENT` | Joined a game, waiting for host to start |
+| `PLAYING`      | Active gameplay with GameMap loaded      |
+| `PAUSED`       | Game paused, pause menu visible          |
 
 ### State Transitions
 
@@ -449,20 +451,70 @@ Overlays must implement one of:
 
 ---
 
+## DrawerContainer
+
+Reusable slide-in/out drawer panel with a tab handle. Extends `Control`.
+
+### Features
+
+- Configurable edge (`LEFT` or `RIGHT`)
+- Independent panel and tab animations
+- `reveal()` / `conceal()` to show/hide the tab handle
+- `open()` / `close()` / `toggle()` for the drawer itself
+- Optional open/close sounds via `play_sounds` export
+- Subclass lifecycle hook: override `_on_ready()` to configure and populate content
+
+### Usage
+
+```gdscript
+extends DrawerContainer
+class_name MyDrawer
+
+func _on_ready() -> void:
+    drawer_width = 200.0
+    tab_text = "3"
+    # Populate content_container with your UI
+    var label = Label.new()
+    label.text = "Hello"
+    content_container.add_child(label)
+```
+
+### Exports
+
+| Property          | Type       | Default | Description                          |
+| ----------------- | ---------- | ------- | ------------------------------------ |
+| `edge`            | DrawerEdge | `RIGHT` | Which screen edge the drawer docks to |
+| `drawer_width`    | float      | `220`   | Width of the panel                   |
+| `tab_width`       | float      | `40`    | Width of the tab handle              |
+| `slide_duration`  | float      | `0.25`  | Animation duration                   |
+| `start_open`      | bool       | `false` | Open on ready                        |
+| `play_sounds`     | bool       | `true`  | Play open/close sounds               |
+| `tab_top_margin`  | float      | `12`    | Tab offset from top edge             |
+| `start_revealed`  | bool       | `false` | Show tab on ready                    |
+
+### Existing Implementation
+
+`PlayerListDrawer` extends `DrawerContainer` to show connected players during networked games.
+
+See `THEME_GUIDE.md` for styling details.
+
+---
+
 ## File Reference
 
-| File                                         | Purpose                        |
-| -------------------------------------------- | ------------------------------ |
-| `autoloads/ui_manager.gd`                    | Central UI manager             |
-| `autoloads/audio_manager.gd`                 | Audio management               |
-| `scenes/ui/confirmation_dialog.tscn`         | Confirmation dialog            |
-| `scenes/ui/toast_container.tscn`             | Toast notifications            |
-| `scenes/ui/transition_overlay.tscn`          | Scene transitions              |
-| `scenes/ui/loading_overlay.tscn`             | Loading screen                 |
-| `scenes/ui/input_hints.tscn`                 | Input hints                    |
-| `scenes/ui/settings_menu.tscn`               | Settings menu                  |
-| `scenes/states/paused/pause_overlay.tscn`    | Pause menu                     |
-| `scenes/ui/animated_visibility_container.gd` | Base class for animated panels |
+| File                                         | Purpose                          |
+| -------------------------------------------- | -------------------------------- |
+| `autoloads/ui_manager.gd`                    | Central UI manager               |
+| `autoloads/audio_manager.gd`                 | Audio management                 |
+| `scenes/ui/confirmation_dialog.tscn`         | Confirmation dialog              |
+| `scenes/ui/toast_container.tscn`             | Toast notifications              |
+| `scenes/ui/transition_overlay.tscn`          | Scene transitions                |
+| `scenes/ui/loading_overlay.tscn`             | Loading screen                   |
+| `scenes/ui/input_hints.tscn`                 | Input hints                      |
+| `scenes/ui/settings_menu.tscn`               | Settings menu                    |
+| `scenes/states/paused/pause_overlay.tscn`    | Pause menu                       |
+| `scenes/ui/animated_visibility_container.gd` | Base class for animated panels   |
+| `scenes/ui/drawer_container.gd`              | Base class for slide-out drawers |
 
 ---
 
