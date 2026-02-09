@@ -17,7 +17,7 @@ extends Node
 #
 # Screen regions occupied:
 #   Left edge:     LAYER_GAMEPLAY_MENU (PlayerListDrawer — networked games only)
-#   Bottom-left:   LAYER_GAMEPLAY_MENU (EditorScalePanel)
+#   Bottom-left:   LAYER_GAMEPLAY_MENU (MapScalePanel)
 #   Bottom-right:  LAYER_GAMEPLAY_MENU (BottomButtons), LAYER_APP_MENU (BottomButtons)
 #   Bottom-center: LAYER_INPUT_HINTS, LAYER_TOAST, LAYER_DIALOG (download queue)
 #   Centered:      LAYER_SETTINGS, LAYER_DIALOG (modals)
@@ -53,6 +53,33 @@ const LOFI_DEFAULTS := {
 	"color_levels": 32.0,
 	"dither_strength": 0.5,
 }
+
+# =============================================================================
+# UI ANIMATION
+# =============================================================================
+# Standard durations used across all UI fade/slide animations.
+# "In" is slightly slower than "out" so openings feel deliberate and
+# closings feel snappy.
+
+const ANIM_FADE_IN_DURATION: float = 0.2
+const ANIM_FADE_OUT_DURATION: float = 0.15
+
+# =============================================================================
+# UI COLORS (mirrors theme values for programmatic use)
+# =============================================================================
+
+const COLOR_WARNING := Color("#ffd25f")  # ProgrammaticTheme.color_warning
+const COLOR_TOAST_BG := Color(0.17, 0.12, 0.17, 0.95)  # ~color_surface1 at 95% alpha
+
+# =============================================================================
+# ASSET LOADING
+# =============================================================================
+
+## Default download/resolve priority (lower = higher priority).
+const ASSET_PRIORITY_DEFAULT: int = 100
+
+## Higher priority for visible/important assets.
+const ASSET_PRIORITY_HIGH: int = 50
 
 # =============================================================================
 # NETWORK

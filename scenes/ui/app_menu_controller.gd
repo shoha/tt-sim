@@ -21,6 +21,11 @@ func _ready() -> void:
 	_update_level_editor_button_visibility()
 
 
+func _exit_tree() -> void:
+	if NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
+		NetworkManager.connection_state_changed.disconnect(_on_connection_state_changed)
+
+
 ## Setup with a reference to the level play controller
 func setup(level_play_controller: LevelPlayController) -> void:
 	_level_play_controller = level_play_controller

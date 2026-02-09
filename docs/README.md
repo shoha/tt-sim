@@ -84,7 +84,8 @@ add_child(token)
 ```
 Root (manages state)
 ├── TITLE_SCREEN state → TitleScreen scene
-├── LOBBY state → Lobby scene (host/client)
+├── LOBBY_HOST state → Lobby scene (hosting)
+├── LOBBY_CLIENT state → Lobby scene (joining)
 ├── PLAYING state → GameMap scene
 └── PAUSED state → PauseOverlay scene
 
@@ -97,11 +98,13 @@ Autoloads:
 ├── NetworkManager - Multiplayer connections
 ├── NetworkStateSync - State broadcasting
 ├── GameState - Authoritative game state
+├── GameNetworkEvents - Aggregated network event bus
 ├── AssetPackManager - Asset loading & model cache
 ├── AssetResolver - Unified asset resolution
 ├── AssetCacheManager - Disk cache management
 ├── AssetDownloader - HTTP downloads
-└── AssetStreamer - P2P streaming
+├── AssetStreamer - P2P streaming
+└── UpdateManager - GitHub release checking & updates
 ```
 
 ## Contributing

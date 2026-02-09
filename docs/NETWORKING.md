@@ -76,6 +76,9 @@ signal token_transform_received(network_id, position, rotation, scale)
 signal token_state_received(network_id, token_dict)
 signal token_removed_received(network_id)
 signal transform_batch_received(batch: Array)
+
+# Map updates (clients)
+signal map_scale_received(uniform_scale: float)
 ```
 
 ---
@@ -317,6 +320,17 @@ NetworkManager.token_transform_received.connect(func(id, pos, rot, scale):
 NetworkStateSync.broadcast_token_removed(network_id)
 ```
 
+### Map Scale (Reliable)
+
+The GM can adjust map scale in real-time via the Map Scale slider. Changes are broadcast to all clients so everyone sees the same scale.
+
+```gdscript
+# Host broadcasts map scale to all clients
+NetworkManager.broadcast_map_scale(uniform_scale)
+```
+
+On clients, `LevelPlayController` listens for `NetworkManager.map_scale_received` and applies the scale locally. The scale is also part of `LevelData` serialization, so late joiners receive the correct value during level sync.
+
 ---
 
 ## Configuration
@@ -388,6 +402,7 @@ func get_local_role() -> PlayerRole
 func notify_game_starting() -> void
 func broadcast_level_data(level_dict: Dictionary) -> void
 func broadcast_game_state(state_dict: Dictionary) -> void
+func broadcast_map_scale(uniform_scale: float) -> void
 ```
 
 ### NetworkStateSync

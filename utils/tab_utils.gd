@@ -21,5 +21,5 @@ static func animate_tab_change(tab_container: TabContainer, owner: Node) -> void
 		var tw := owner.create_tween()
 		tw.set_ease(Tween.EASE_OUT)
 		tw.set_trans(Tween.TRANS_CUBIC)
-		tw.tween_property(tab, "modulate:a", 1.0, 0.15)
+		tw.tween_property(tab, "modulate:a", 1.0, Constants.ANIM_FADE_OUT_DURATION)
 	AudioManager.play_tick()

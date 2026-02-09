@@ -71,19 +71,18 @@ var _spawn_tween: Tween
 var _removal_tween: Tween
 var _spawn_target_scale: Vector3 = Vector3.ONE
 
-
 # Signals for game state changes
 signal health_changed(new_health: int, max_health: int)
-signal health_depleted()
-signal died()
-signal revived()
+signal health_depleted
+signal died
+signal revived
 signal token_visibility_changed(is_visible: bool)
 signal status_effect_added(effect: String)
 signal status_effect_removed(effect: String)
-signal position_changed()
-signal rotation_changed()
-signal scale_changed()
-signal transform_updated()  # Emitted during continuous manipulation (drag/rotate/scale)
+signal position_changed
+signal rotation_changed
+signal scale_changed
+signal transform_updated  # Emitted during continuous manipulation (drag/rotate/scale)
 signal highlight_changed(is_highlighted: bool)
 
 
@@ -109,8 +108,12 @@ func set_transform_immediate(p_position: Vector3, p_rotation: Vector3, p_scale: 
 	if _dragging_object:
 		_dragging_object.set_transform_immediate(p_position, p_rotation, p_scale)
 	elif rigid_body:
-		rigid_body.global_position = p_position
-		rigid_body.global_rotation = p_rotation
+		if rigid_body.is_inside_tree():
+			rigid_body.global_position = p_position
+			rigid_body.global_rotation = p_rotation
+		else:
+			rigid_body.position = p_position
+			rigid_body.rotation = p_rotation
 		rigid_body.scale = p_scale
 
 
@@ -136,14 +139,17 @@ func heal(amount: int) -> void:
 	current_health = min(max_health, current_health + amount)
 	health_changed.emit(current_health, max_health, old_health)
 
+
 func set_max_health(new_max: int) -> void:
 	max_health = new_max
 	current_health = min(current_health, max_health)
 	health_changed.emit(current_health, max_health)
 
+
 func _on_health_depleted() -> void:
 	is_alive = false
 	died.emit()
+
 
 func revive(health_amount: int = -1) -> void:
 	if is_alive:
@@ -158,14 +164,17 @@ func revive(health_amount: int = -1) -> void:
 	revived.emit()
 	health_changed.emit(current_health, max_health)
 
+
 # Visibility management
 func set_visible_to_players(is_visible_value: bool) -> void:
 	is_visible_to_players = is_visible_value
 	token_visibility_changed.emit(is_visible_value)
 	_update_visibility_visuals()
 
+
 func toggle_visibility() -> void:
 	set_visible_to_players(not is_visible_to_players)
+
 
 func _update_visibility_visuals() -> void:
 	# Apply visual feedback when visibility is toggled
@@ -188,7 +197,7 @@ func _update_visibility_visuals() -> void:
 func set_highlighted(highlighted: bool) -> void:
 	if is_highlighted == highlighted:
 		return
-	
+
 	is_highlighted = highlighted
 	_update_highlight_visuals()
 	highlight_changed.emit(is_highlighted)
@@ -228,10 +237,15 @@ func _set_mesh_transparency(node: Node, alpha: float) -> void:
 						mesh_instance.set_surface_override_material(i, mat)
 				if mat is StandardMaterial3D:
 					var std_mat := mat as StandardMaterial3D
-					std_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA if alpha < 1.0 else BaseMaterial3D.TRANSPARENCY_DISABLED
+					std_mat.transparency = (
+						BaseMaterial3D.TRANSPARENCY_ALPHA
+						if alpha < 1.0
+						else BaseMaterial3D.TRANSPARENCY_DISABLED
+					)
 					std_mat.albedo_color.a = alpha
 		# Recurse into children
 		_set_mesh_transparency(child, alpha)
+
 
 # Status effect management
 func add_status_effect(effect: String) -> void:
@@ -239,28 +253,35 @@ func add_status_effect(effect: String) -> void:
 		status_effects.append(effect)
 		status_effect_added.emit(effect)
 
+
 func remove_status_effect(effect: String) -> void:
 	if status_effects.has(effect):
 		status_effects.erase(effect)
 		status_effect_removed.emit(effect)
 
+
 func has_status_effect(effect: String) -> bool:
 	return status_effects.has(effect)
+
 
 func clear_status_effects() -> void:
 	for effect in status_effects:
 		status_effect_removed.emit(effect)
 	status_effects.clear()
 
+
 # Getters for component access
 func get_draggable_component() -> DraggableToken:
 	return _dragging_object
 
+
 func get_controller_component() -> Node:
 	return _token_controller
 
+
 func get_rigid_body() -> RigidBody3D:
 	return rigid_body
+
 
 func get_selection_glow() -> SelectionGlowRenderer:
 	return _selection_glow
@@ -289,8 +310,12 @@ func play_spawn_animation(delay: float = 0.0) -> void:
 	_spawn_tween = create_tween()
 	if delay > 0.0:
 		_spawn_tween.tween_interval(delay)
-	_spawn_tween.tween_property(rigid_body, "scale", _spawn_target_scale, SPAWN_ANIM_DURATION)\
-		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	(
+		_spawn_tween
+		. tween_property(rigid_body, "scale", _spawn_target_scale, SPAWN_ANIM_DURATION)
+		. set_trans(Tween.TRANS_BACK)
+		. set_ease(Tween.EASE_OUT)
+	)
 
 
 ## Play a shrink-out removal animation, then queue_free() on completion.
@@ -306,8 +331,12 @@ func play_removal_animation() -> void:
 		_removal_tween.kill()
 
 	_removal_tween = create_tween()
-	_removal_tween.tween_property(rigid_body, "scale", Vector3(0.01, 0.01, 0.01), REMOVAL_ANIM_DURATION)\
-		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	(
+		_removal_tween
+		. tween_property(rigid_body, "scale", Vector3(0.01, 0.01, 0.01), REMOVAL_ANIM_DURATION)
+		. set_trans(Tween.TRANS_BACK)
+		. set_ease(Tween.EASE_IN)
+	)
 	_removal_tween.tween_callback(queue_free)
 
 

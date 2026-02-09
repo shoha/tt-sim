@@ -134,7 +134,7 @@ func _animate_in() -> void:
 	_tween.set_parallel(true)
 	_tween.set_ease(Tween.EASE_OUT)
 	_tween.set_trans(Tween.TRANS_CUBIC)
-	_tween.tween_property(container, "modulate:a", 1.0, 0.2)
+	_tween.tween_property(container, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
 	_tween.tween_property(container, "position:y", target_y, 0.25)
 
 
@@ -149,5 +149,7 @@ func _animate_out() -> void:
 	_tween.set_parallel(true)
 	_tween.set_ease(Tween.EASE_IN)
 	_tween.set_trans(Tween.TRANS_CUBIC)
-	_tween.tween_property(container, "modulate:a", 0.0, 0.15)
-	_tween.tween_property(container, "position:y", container.position.y + 12, 0.15)
+	_tween.tween_property(container, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
+	_tween.tween_property(
+		container, "position:y", container.position.y + 12, Constants.ANIM_FADE_OUT_DURATION
+	)

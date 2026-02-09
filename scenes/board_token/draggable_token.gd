@@ -616,8 +616,13 @@ func set_transform_immediate(p_position: Vector3, p_rotation: Vector3, p_scale: 
 	_target_lean_rotation = Basis.IDENTITY
 
 	if rigid_body:
-		rigid_body.global_position = p_position
-		rigid_body.global_rotation = p_rotation
+		# Use local transform if not yet in the tree (global requires a parent).
+		if rigid_body.is_inside_tree():
+			rigid_body.global_position = p_position
+			rigid_body.global_rotation = p_rotation
+		else:
+			rigid_body.position = p_position
+			rigid_body.rotation = p_rotation
 		rigid_body.scale = p_scale
 
 	# Reset lean on visual children

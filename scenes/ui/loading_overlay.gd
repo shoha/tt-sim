@@ -48,8 +48,8 @@ func show_loading(title: String = "Loading...") -> void:
 	_tween.set_parallel(true)
 	_tween.set_ease(Tween.EASE_OUT)
 	_tween.set_trans(Tween.TRANS_CUBIC)
-	_tween.tween_property($ColorRect, "modulate:a", 1.0, 0.2)
-	_tween.tween_property($CenterContainer, "modulate:a", 1.0, 0.2)
+	_tween.tween_property($ColorRect, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
+	_tween.tween_property($CenterContainer, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
 
 	# Start a looping shimmer on the progress bar fill
 	_start_shimmer()
@@ -73,8 +73,8 @@ func hide_loading() -> void:
 	_tween.set_parallel(true)
 	_tween.set_ease(Tween.EASE_IN)
 	_tween.set_trans(Tween.TRANS_CUBIC)
-	_tween.tween_property($ColorRect, "modulate:a", 0.0, 0.15)
-	_tween.tween_property($CenterContainer, "modulate:a", 0.0, 0.15)
+	_tween.tween_property($ColorRect, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
+	_tween.tween_property($CenterContainer, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
 
 	await _tween.finished
 	hide()
