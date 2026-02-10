@@ -2,7 +2,8 @@ extends Control
 
 ## Controller for the AppMenu UI.
 ## Handles Level Editor button and lifecycle.
-## Always visible regardless of game state.
+## The button is visible on the title screen and hidden during gameplay
+## (the edit drawer provides a "Level Details..." button instead).
 ## Level Editor is only available to the GM, not to regular players.
 
 signal play_level_requested(level_data: LevelData)
@@ -12,7 +13,9 @@ const LevelEditorScene = preload("res://scenes/level_editor/level_editor.tscn")
 @onready var _level_editor_button: Button = %LevelEditorButton
 
 var _level_editor_instance: LevelEditor = null
+var _editor_canvas_layer: CanvasLayer = null
 var _level_play_controller: LevelPlayController = null
+var _force_hide_button: bool = false
 
 
 func _ready() -> void:
@@ -32,25 +35,44 @@ func setup(level_play_controller: LevelPlayController) -> void:
 
 
 func _on_connection_state_changed(
-	_old_state: NetworkManager.ConnectionState, _new_state: NetworkManager.ConnectionState
+	_old_state: NetworkManager.ConnectionState,
+	_new_state: NetworkManager.ConnectionState,
 ) -> void:
 	_update_level_editor_button_visibility()
 
 
-## Hide the level editor button for non-GM players (only GM can edit levels)
+## Hide the level editor button for non-GM players (only GM can edit levels).
+## Also hidden when _force_hide_button is true (during gameplay).
 func _update_level_editor_button_visibility() -> void:
 	if _level_editor_button:
+		if _force_hide_button:
+			_level_editor_button.visible = false
+			return
 		_level_editor_button.visible = NetworkManager.is_gm() or not NetworkManager.is_networked()
+
+
+## Show the Level Editor button (for title screen / non-gameplay states).
+func show_editor_button() -> void:
+	_force_hide_button = false
+	_update_level_editor_button_visibility()
+
+
+## Hide the Level Editor button (during gameplay, the edit drawer is used instead).
+func hide_editor_button() -> void:
+	_force_hide_button = true
+	_update_level_editor_button_visibility()
 
 
 # --- Level Editor Management ---
 
 
 func _on_level_editor_button_pressed() -> void:
-	_open_level_editor()
+	open_level_editor()
 
 
-func _open_level_editor() -> void:
+## Open the level editor overlay.
+## Called from the button press or externally (e.g. from the edit drawer via Root).
+func open_level_editor() -> void:
 	# Only GM can access the level editor
 	if not NetworkManager.is_gm() and NetworkManager.is_networked():
 		push_warning("AppMenuController: Level editor is only available to the GM")
@@ -64,10 +86,16 @@ func _open_level_editor() -> void:
 		UIManager.register_overlay(_level_editor_instance)
 		return
 
+	# Create a dedicated CanvasLayer so the editor renders above gameplay UI
+	if not _editor_canvas_layer:
+		_editor_canvas_layer = CanvasLayer.new()
+		_editor_canvas_layer.layer = Constants.LAYER_LEVEL_EDITOR
+		add_child(_editor_canvas_layer)
+
 	_level_editor_instance = LevelEditorScene.instantiate()
 	_level_editor_instance.editor_closed.connect(_on_editor_closed)
 	_level_editor_instance.play_level_requested.connect(_on_play_level_requested)
-	add_child(_level_editor_instance)
+	_editor_canvas_layer.add_child(_level_editor_instance)
 
 	# Register with UIManager for ESC handling
 	UIManager.register_overlay(_level_editor_instance)

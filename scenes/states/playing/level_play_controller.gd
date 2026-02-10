@@ -31,6 +31,8 @@ var _pending_map_level_folder: String = ""  # Level folder waiting for map downl
 var _streamer_connected: bool = false
 var _is_loading: bool = false  # True while async loading is in progress
 var _world_environment: WorldEnvironment = null  # Environment node for lighting/atmosphere
+var _map_environment_config: Dictionary = {}  # Environment extracted from the loaded map (if any)
+var _original_light_energies: Dictionary = {}  # instance_id -> base energy
 
 
 ## Initialize with a reference to the game map
@@ -409,6 +411,12 @@ func _finalize_map_loading(map: Node3D) -> void:
 	# Safety check: warn if transform chain is broken (non-Node3D intermediate parents)
 	GlbUtils.validate_transform_chain(loaded_map_instance)
 
+	# Extract environment settings from any embedded WorldEnvironment nodes
+	# before adding the map to the viewport.  After extraction the nodes are
+	# stripped so only the programmatic LevelEnvironment controls the viewport.
+	_map_environment_config = _extract_and_strip_map_environment(loaded_map_instance)
+	var map_env_config := _map_environment_config
+
 	# Add to the dedicated MapContainer
 	_game_map.map_container.add_child(loaded_map_instance)
 
@@ -416,18 +424,54 @@ func _finalize_map_loading(map: Node3D) -> void:
 		loaded_map_instance.scale = active_level_data.map_scale
 		loaded_map_instance.position = active_level_data.map_offset
 
-	# Apply environment settings from level data
+	# Store original light energies for real-time intensity editing
+	_store_original_light_energies(loaded_map_instance)
+
+	# Apply environment settings from level data (with map defaults as fallback)
 	if active_level_data:
-		_apply_level_environment(active_level_data)
+		_apply_level_environment(active_level_data, map_env_config)
 
 
-## Apply environment settings from level data
-func _apply_level_environment(level_data: LevelData) -> void:
+## Extract environment settings from embedded WorldEnvironment nodes in a
+## loaded map scene, then strip the nodes so they don't conflict with the
+## programmatic LevelEnvironment.  Returns the extracted config dictionary
+## (empty if the map had no WorldEnvironment).
+func _extract_and_strip_map_environment(root: Node3D) -> Dictionary:
+	var env_nodes: Array[Node] = []
+	GlbUtils._find_world_environments(root, env_nodes)
+	if env_nodes.is_empty():
+		return {}
+
+	# Use the first WorldEnvironment found
+	var world_env := env_nodes[0] as WorldEnvironment
+	var config := {}
+	if world_env and world_env.environment:
+		config = EnvironmentPresets.extract_from_environment(world_env.environment)
+		print("LevelPlayController: Extracted environment from map node '%s'" % world_env.name)
+
+	# Strip all WorldEnvironment nodes
+	GlbUtils.strip_world_environments(root)
+	return config
+
+
+## Apply environment settings from level data.
+## If the level has no custom environment overrides (fresh level) and the map
+## contained an embedded WorldEnvironment, those map settings are used as the
+## starting overrides so the map author's intended look is preserved.
+func _apply_level_environment(level_data: LevelData, map_env_config: Dictionary = {}) -> void:
 	# Create WorldEnvironment if it doesn't exist
 	if not is_instance_valid(_world_environment):
 		_world_environment = WorldEnvironment.new()
 		_world_environment.name = "LevelEnvironment"
 		_game_map.world_viewport.add_child(_world_environment)
+
+	# If the level has no custom overrides and the map provided its own
+	# environment, adopt the map's settings as the level's overrides.
+	if level_data.environment_overrides.is_empty() and not map_env_config.is_empty():
+		level_data.environment_overrides = map_env_config
+		# Clear the preset — the map's concrete values take precedence
+		level_data.environment_preset = ""
+		print("LevelPlayController: Using map's embedded environment as level defaults")
 
 	# Apply preset and overrides
 	EnvironmentPresets.apply_to_world_environment(
@@ -438,7 +482,12 @@ func _apply_level_environment(level_data: LevelData) -> void:
 	if level_data.lofi_overrides.size() > 0 and is_instance_valid(_game_map):
 		_game_map.apply_lofi_overrides(level_data.lofi_overrides)
 
-	print("LevelPlayController: Applied environment preset '%s'" % level_data.environment_preset)
+	if level_data.environment_preset != "":
+		print(
+			"LevelPlayController: Applied environment preset '%s'" % level_data.environment_preset
+		)
+	else:
+		print("LevelPlayController: Applied custom environment overrides")
 
 
 ## Load a map file synchronously using the unified GlbUtils.load_map pipeline.
@@ -461,6 +510,54 @@ func _get_light_intensity_scale() -> float:
 	if active_level_data:
 		return active_level_data.light_intensity_scale
 	return 1.0
+
+
+## Store the original light energies from a node tree so we can scale them later.
+## Called once after the map loads so intensity editing doesn't compound.
+func _store_original_light_energies(node: Node) -> void:
+	_original_light_energies.clear()
+	_collect_light_energies(node)
+
+
+func _collect_light_energies(node: Node) -> void:
+	if node is Light3D:
+		_original_light_energies[node.get_instance_id()] = node.light_energy
+	for child in node.get_children():
+		_collect_light_energies(child)
+
+
+## Apply a light intensity scale to all lights in the loaded map.
+## Multiplies each light's original energy by the given scale.
+func apply_light_intensity_scale(intensity_scale: float) -> void:
+	for instance_id in _original_light_energies:
+		var light = instance_from_id(instance_id)
+		if is_instance_valid(light) and light is Light3D:
+			light.light_energy = _original_light_energies[instance_id] * intensity_scale
+	if active_level_data:
+		active_level_data.light_intensity_scale = intensity_scale
+
+
+## Apply environment settings to the live WorldEnvironment.
+func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
+	if is_instance_valid(_world_environment):
+		EnvironmentPresets.apply_to_world_environment(_world_environment, preset, overrides)
+	else:
+		push_warning("LevelPlayController: WorldEnvironment is null — cannot apply settings")
+
+
+## Get the live WorldEnvironment node (or null if not created yet).
+func get_world_environment() -> WorldEnvironment:
+	return _world_environment
+
+
+## Get the environment config extracted from the loaded map (empty if none).
+func get_map_environment_config() -> Dictionary:
+	return _map_environment_config
+
+
+## Get the GameMap reference.
+func get_game_map() -> GameMap:
+	return _game_map
 
 
 ## Get the cached map path for a level (if it exists)
@@ -669,7 +766,7 @@ func add_token_to_level(
 
 
 ## Save current token positions to level data
-func save_token_positions() -> String:
+func save_level() -> String:
 	if not active_level_data:
 		push_error("LevelPlayController: No active level to save")
 		return ""
@@ -753,10 +850,14 @@ func clear_level_map() -> void:
 		loaded_map_instance.queue_free()
 		loaded_map_instance = null
 
+	# Clear cached light energies
+	_original_light_energies.clear()
+
 	# Also clear the environment (will be recreated with next level)
 	if is_instance_valid(_world_environment):
 		_world_environment.queue_free()
 		_world_environment = null
+	_map_environment_config = {}
 
 
 ## Clear everything from the current level

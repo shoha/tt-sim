@@ -1,13 +1,7 @@
-[gd_scene load_steps=6 format=3 uid="uid://jpfohjr0e8nv"]
+[gd_scene load_steps=3 format=3 uid="uid://jpfohjr0e8nv"]
 
 [ext_resource type="Script" uid="uid://cocec7gcywhnm" path="res://scenes/level_editor/level_editor.gd" id="1_script"]
-[ext_resource type="PackedScene" uid="uid://lighting_editor_panel" path="res://scenes/level_editor/lighting_editor_panel.tscn" id="2_lighting_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/slider_spin_box.tscn" id="3_slider_spin_box"]
-
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
-
-[sub_resource type="Sky" id="Sky_1"]
-sky_material = SubResource("ProceduralSkyMaterial_1")
 
 [node name="LevelEditor" type="Control"]
 layout_mode = 3
@@ -262,24 +256,6 @@ max_value = 5.0
 step = 0.01
 value = 1.0
 allow_greater = true
-
-[node name="LightingSeparator" type="HSeparator" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox"]
-layout_mode = 2
-
-[node name="LightingRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox"]
-layout_mode = 2
-
-[node name="LightingLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/LightingRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_type_variation = &"Body"
-text = "Lighting & Environment"
-
-[node name="EditLightingButton" type="Button" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/LightingRow"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"Secondary"
-text = "Edit..."
 
 [node name="TokensPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel"]
 layout_mode = 2
@@ -625,42 +601,3 @@ layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Double-click to add token"
 
-[node name="LightingModeContainer" type="Control" parent="."]
-unique_name_in_owner = true
-visible = false
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="SubViewportContainer" type="SubViewportContainer" parent="LightingModeContainer"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-stretch = true
-
-[node name="SubViewport" type="SubViewport" parent="LightingModeContainer/SubViewportContainer"]
-unique_name_in_owner = true
-own_world_3d = true
-handle_input_locally = false
-size = Vector2i(1280, 720)
-render_target_update_mode = 4
-
-[node name="WorldEnvironment" type="WorldEnvironment" parent="LightingModeContainer/SubViewportContainer/SubViewport"]
-unique_name_in_owner = true
-
-[node name="Camera3D" type="Camera3D" parent="LightingModeContainer/SubViewportContainer/SubViewport"]
-unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 10, 15)
-
-[node name="MapContainer" type="Node3D" parent="LightingModeContainer/SubViewportContainer/SubViewport"]
-unique_name_in_owner = true
-
-[node name="LightingEditorPanel" parent="LightingModeContainer" instance=ExtResource("2_lighting_panel")]
-unique_name_in_owner = true

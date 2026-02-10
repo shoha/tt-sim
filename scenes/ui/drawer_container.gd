@@ -88,9 +88,11 @@ func _ready() -> void:
 	# and populate the content_container.
 	_on_ready()
 
-	# Re-apply panel size and positions AFTER _on_ready(), because the
-	# subclass may have changed drawer_width or other configuration.
+	# Re-apply panel size, tab style, and positions AFTER _on_ready(),
+	# because the subclass may have changed drawer_width, edge, or other
+	# configuration.
 	_panel.size.x = drawer_width
+	_apply_tab_style()
 	_apply_initial_position()
 
 
