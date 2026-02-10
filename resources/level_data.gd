@@ -195,8 +195,8 @@ func to_dict() -> Dictionary:
 		"modified_at": modified_at,
 		"level_folder": level_folder,
 		"map_path": map_path,
-		"map_scale": {"x": map_scale.x, "y": map_scale.y, "z": map_scale.z},
-		"map_offset": {"x": map_offset.x, "y": map_offset.y, "z": map_offset.z},
+		"map_scale": SerializationUtils.vec3_to_dict(map_scale),
+		"map_offset": SerializationUtils.vec3_to_dict(map_offset),
 		"light_intensity_scale": light_intensity_scale,
 		"environment_preset": environment_preset,
 		"environment_overrides": EnvironmentPresets.overrides_to_json(environment_overrides),
@@ -216,15 +216,8 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.level_folder = data.get("level_folder", "")
 	level.map_path = data.get("map_path", "")
 
-	var scale_data = data.get("map_scale", {"x": 1, "y": 1, "z": 1})
-	level.map_scale = Vector3(
-		scale_data.get("x", 1), scale_data.get("y", 1), scale_data.get("z", 1)
-	)
-
-	var offset_data = data.get("map_offset", {"x": 0, "y": 0, "z": 0})
-	level.map_offset = Vector3(
-		offset_data.get("x", 0), offset_data.get("y", 0), offset_data.get("z", 0)
-	)
+	level.map_scale = SerializationUtils.dict_to_vec3(data.get("map_scale", {}), Vector3.ONE)
+	level.map_offset = SerializationUtils.dict_to_vec3(data.get("map_offset", {}))
 
 	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
 	level.environment_preset = data.get("environment_preset", "")

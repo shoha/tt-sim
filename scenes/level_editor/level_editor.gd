@@ -430,7 +430,11 @@ func _refresh_token_list() -> void:
 		return
 
 	for placement in current_level.token_placements:
-		var display_name = placement.get_display_name()
+		var display_name = AssetPackManager.get_asset_display_name(
+			placement.pack_id, placement.asset_id
+		)
+		if placement.token_name != "":
+			display_name = placement.token_name
 		if placement.variant_id == "shiny":
 			display_name += " (Shiny)"
 		token_list.add_item(display_name)
@@ -589,7 +593,7 @@ func _on_pokemon_selector_activated(index: int) -> void:
 
 	var popup_content = pokemon_selector_popup.get_node("VBox")
 	_animate_popup_out(pokemon_selector_popup, popup_content)
-	_set_status("Added token: " + placement.get_display_name())
+	_set_status("Added token: " + placement.token_name)
 	AudioManager.play_success()
 
 

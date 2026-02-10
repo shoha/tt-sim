@@ -170,36 +170,12 @@ func _log(message: String) -> void:
 
 ## Clean up .old executables left over from previous updates (Windows only)
 func _cleanup_old_executables() -> void:
-	if OS.get_name() != "Windows":
-		return
-
-	var exe_path = OS.get_executable_path()
-	var exe_dir = exe_path.get_base_dir()
-	var exe_name = exe_path.get_file()
-
-	# Clean up main executable .old file
-	var old_exe_path = exe_dir + "/" + exe_name + ".old"
-	if FileAccess.file_exists(old_exe_path):
-		var err = DirAccess.remove_absolute(old_exe_path)
-		if err == OK:
-			print("UpdateManager: Cleaned up old executable: %s" % old_exe_path)
-		else:
-			print("UpdateManager: Failed to clean up old executable (error %d)" % err)
-
-	# Clean up console wrapper .old file (if export has console wrapper enabled)
-	var console_exe_name = exe_name.get_basename() + ".console.exe"
-	var old_console_path = exe_dir + "/" + console_exe_name + ".old"
-	if FileAccess.file_exists(old_console_path):
-		var err = DirAccess.remove_absolute(old_console_path)
-		if err == OK:
-			print("UpdateManager: Cleaned up old console wrapper: %s" % old_console_path)
-		else:
-			print("UpdateManager: Failed to clean up old console wrapper (error %d)" % err)
+	UpdateInstaller.cleanup_old_executables()
 
 
 ## Get the current application version from project settings
 func get_current_version() -> String:
-	return ProjectSettings.get_setting("application/config/version", "0.0.0-dev")
+	return UpdateVersion.get_current()
 
 
 ## Check if prerelease updates are enabled in settings
@@ -362,15 +338,12 @@ func _on_check_completed(
 	var is_newer = false
 
 	# For dev builds (both have "build." in suffix), compare by checking if different
-	# Since commit hashes aren't orderable, any different dev build is potentially newer
-	if _is_dev_build(current_version) and _is_dev_build(release_version):
-		# Different commit hash = different build, offer update
+	if UpdateVersion.is_dev_build(current_version) and UpdateVersion.is_dev_build(release_version):
 		is_newer = (current_version != release_version)
 		if is_newer:
 			print("UpdateManager: Different dev build detected")
 	else:
-		# Standard semver comparison
-		is_newer = _is_newer_version(release_version, current_version)
+		is_newer = UpdateVersion.is_newer(release_version, current_version)
 
 	if is_newer:
 		print("UpdateManager: Update available - %s" % release_version)
@@ -387,17 +360,10 @@ func _parse_release_info(release: Dictionary) -> Dictionary:
 	var tag = release.get("tag_name", "")
 	var assets = release.get("assets", [])
 
-	# Normalize version from tag
-	# - "v1.0.0" -> "1.0.0"
-	# - "build-abc123" -> "0.0.0-build.abc123" (to match project.godot format)
-	var version = tag
-	if tag.begins_with("v"):
-		version = tag.substr(1)
-	elif tag.begins_with("build-"):
-		version = "0.0.0-build." + tag.substr(6)
+	var version = UpdateVersion.normalize_tag(tag)
 
 	# Find platform-specific download URL
-	var platform = _get_platform_name()
+	var platform = UpdateVersion.get_platform_name()
 	var download_url = ""
 	var download_size: int = 0
 
@@ -421,69 +387,6 @@ func _parse_release_info(release: Dictionary) -> Dictionary:
 	}
 
 
-## Get the platform name for asset matching
-func _get_platform_name() -> String:
-	match OS.get_name():
-		"Windows":
-			return "windows"
-		"macOS":
-			return "macos"
-		"Linux":
-			return "linux"
-		_:
-			return OS.get_name().to_lower()
-
-
-## Check if a version is a dev build (contains "build." in suffix)
-func _is_dev_build(version: String) -> bool:
-	return "-build." in version or version.begins_with("build.")
-
-
-## Compare two semantic versions, returns true if version_a > version_b
-func _is_newer_version(version_a: String, version_b: String) -> bool:
-	var parts_a = _parse_version(version_a)
-	var parts_b = _parse_version(version_b)
-
-	# Compare major.minor.patch
-	for i in range(3):
-		if parts_a[i] > parts_b[i]:
-			return true
-		elif parts_a[i] < parts_b[i]:
-			return false
-
-	# Same base version - check prerelease suffix
-	# A release version (no suffix) is newer than a prerelease
-	var suffix_a = parts_a[3]
-	var suffix_b = parts_b[3]
-
-	if suffix_a.is_empty() and not suffix_b.is_empty():
-		return true  # a is release, b is prerelease
-	if not suffix_a.is_empty() and suffix_b.is_empty():
-		return false  # a is prerelease, b is release
-
-	# Both have suffixes or both don't - compare lexically
-	return suffix_a > suffix_b
-
-
-## Parse a version string into [major, minor, patch, suffix]
-func _parse_version(version: String) -> Array:
-	# Handle versions like "1.2.3-beta", "1.2.3", "0.0.0-build.abc123"
-	var suffix = ""
-	var base = version
-
-	var dash_pos = version.find("-")
-	if dash_pos >= 0:
-		base = version.substr(0, dash_pos)
-		suffix = version.substr(dash_pos + 1)
-
-	var parts = base.split(".")
-	var major = int(parts[0]) if parts.size() > 0 else 0
-	var minor = int(parts[1]) if parts.size() > 1 else 0
-	var patch = int(parts[2]) if parts.size() > 2 else 0
-
-	return [major, minor, patch, suffix]
-
-
 ## Download the update for the current platform
 func download_update() -> void:
 	if is_downloading:
@@ -497,7 +400,7 @@ func download_update() -> void:
 	download_progress = 0.0
 
 	# Prepare download path
-	var filename = "TTSim-%s-%s.zip" % [_get_platform_name(), latest_release.version]
+	var filename = "TTSim-%s-%s.zip" % [UpdateVersion.get_platform_name(), latest_release.version]
 	_download_path = UPDATES_DIR + filename
 
 	# Clean up any existing partial download
@@ -640,24 +543,20 @@ func _apply_pending_update() -> void:
 		return
 
 	# Verify we're running from the expected location
-	# Note: On macOS, we compare the .app bundle parent directories, not exe directories
 	var current_exe_path = OS.get_executable_path()
 	var current_exe_dir = current_exe_path.get_base_dir()
 
 	_log("Current exe dir: %s" % current_exe_dir)
 
 	# On macOS, the stored path might differ from current due to symlinks or translocation
-	# So we do a more lenient check - just verify the app name matches
 	var location_ok = false
 	if OS.get_name() == "macOS":
-		# Extract app name from both paths
-		var stored_app = _extract_app_name_from_path(stored_install_dir)
-		var current_app = _extract_app_name_from_path(current_exe_dir)
+		var stored_app = UpdateInstaller.extract_app_name_from_path(stored_install_dir)
+		var current_app = UpdateInstaller.extract_app_name_from_path(current_exe_dir)
 		_log("Stored app name: '%s', Current app name: '%s'" % [stored_app, current_app])
 		location_ok = (stored_app == current_app and not stored_app.is_empty())
 
 		if not location_ok:
-			# Also check if paths resolve to same location (symlinks)
 			location_ok = (stored_install_dir == current_exe_dir)
 	else:
 		location_ok = (stored_install_dir == current_exe_dir)
@@ -674,13 +573,14 @@ func _apply_pending_update() -> void:
 	_log("Applying pending update v%s..." % version)
 	applying_pending_update.emit(version)
 
-	# Apply the update based on platform
+	# Apply the update based on platform (delegating to UpdateInstaller)
+	var log_fn := Callable(self, "_log")
 	var success = false
 	match OS.get_name():
 		"Windows":
-			success = _extract_update_windows(zip_path, stored_install_dir)
+			success = UpdateInstaller.extract_windows(zip_path, stored_install_dir, log_fn)
 		"macOS":
-			success = _extract_update_macos(zip_path)
+			success = UpdateInstaller.extract_macos(zip_path, log_fn)
 		_:
 			_log("ERROR: Unsupported platform for auto-update: %s" % OS.get_name())
 
@@ -703,7 +603,7 @@ func _apply_pending_update() -> void:
 					get_tree().quit()
 			"macOS":
 				_log("Restarting to run updated executable...")
-				_restart_macos(OS.get_executable_path())
+				UpdateInstaller.restart_macos(OS.get_executable_path(), get_tree())
 
 		# Fallback: if restart didn't happen, show toast in current session
 		_pending_toast_message = "Updated to v%s" % version
@@ -716,206 +616,24 @@ func _apply_pending_update() -> void:
 		push_error("UpdateManager: Update extraction failed - will retry on next startup")
 
 
-## Extract app name from a macOS path (e.g., "/Applications/TTSim.app/Contents/MacOS" -> "TTSim")
-func _extract_app_name_from_path(path: String) -> String:
-	# Look for .app in the path
-	var parts = path.split("/")
-	for part in parts:
-		if part.ends_with(".app"):
-			return part.get_basename()
-	return ""
-
-
-## Extract update on Windows
-## Strategy: Rename the running exe to .old (Windows allows this), then extract new exe
-func _extract_update_windows(zip_path: String, install_dir: String) -> bool:
-	var global_zip = ProjectSettings.globalize_path(zip_path)
-	var global_install = install_dir
-	var exe_path = OS.get_executable_path()
-	var old_exe_path = exe_path + ".old"
-
-	print("UpdateManager: Extracting %s to %s" % [global_zip, global_install])
-
-	# Check if we have write permission to the install directory
-	var test_file = install_dir + "/.update_permission_test"
-	var test = FileAccess.open(test_file, FileAccess.WRITE)
-	if test:
-		test.close()
-		DirAccess.remove_absolute(test_file)
-	else:
-		print("UpdateManager: No write permission to %s" % install_dir)
-		print("UpdateManager: Opening downloads folder for manual update")
-		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
-		_cleanup_pending_update()
-		return false
-
-	# Step 1: Rename the currently running executable to .old
-	# Windows allows renaming a locked file - the lock follows the file handle, not the path
-	# This frees up the original path for the new executable
-	print("UpdateManager: Renaming current executable to .old")
-	var rename_result = DirAccess.rename_absolute(exe_path, old_exe_path)
-	if rename_result != OK:
-		print("UpdateManager: Failed to rename executable (error %d)" % rename_result)
-		print("UpdateManager: Opening downloads folder for manual update")
-		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
-		_cleanup_pending_update()
-		return false
-
-	# Also rename console wrapper if it exists (created when export_console_wrapper is enabled)
-	var exe_basename = exe_path.get_basename()
-	var console_exe_path = exe_basename + ".console.exe"
-	var old_console_path = console_exe_path + ".old"
-	var had_console_wrapper = false
-	if FileAccess.file_exists(console_exe_path):
-		had_console_wrapper = true
-		var console_rename = DirAccess.rename_absolute(console_exe_path, old_console_path)
-		if console_rename != OK:
-			print(
-				(
-					"UpdateManager: Warning - failed to rename console wrapper (error %d)"
-					% console_rename
-				)
-			)
-			# Non-fatal, continue with update
-
-	# Step 2: Extract the new executable from the zip
-	# Use -LiteralPath to handle paths with special characters (brackets, etc.)
-	# Escape single quotes in paths by doubling them
-	var escaped_zip = global_zip.replace("'", "''")
-	var escaped_install = global_install.replace("'", "''")
-	var output = []
-	var exit_code = OS.execute(
-		"powershell",
-		[
-			"-NoProfile",
-			"-Command",
-			(
-				"Expand-Archive -LiteralPath '%s' -DestinationPath '%s' -Force"
-				% [escaped_zip, escaped_install]
-			)
-		],
-		output,
-		true
-	)
-
-	if exit_code != 0:
-		print("UpdateManager: PowerShell extraction failed with code %d" % exit_code)
-		for line in output:
-			print("  %s" % line)
-		# Try to restore the original executables
-		DirAccess.rename_absolute(old_exe_path, exe_path)
-		if had_console_wrapper:
-			DirAccess.rename_absolute(old_console_path, console_exe_path)
-		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
-		return false
-
-	# Step 3: Verify the new executable exists
-	if not FileAccess.file_exists(exe_path):
-		print("UpdateManager: New executable not found after extraction")
-		# Try to restore the original executables
-		DirAccess.rename_absolute(old_exe_path, exe_path)
-		if had_console_wrapper:
-			DirAccess.rename_absolute(old_console_path, console_exe_path)
-		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
-		return false
-
-	print("UpdateManager: Extraction successful, restart required to use new version")
-
-	# The .old file will be cleaned up on next startup by _cleanup_old_executables()
-	# We need to restart now to run the new executable
-	return true
-
-
-## Extract update on macOS (called during startup when nothing is locked)
+## macOS extraction wrapper — delegates to UpdateInstaller but handles
+## App Translocation detection (which requires emitting signals on this node).
 func _extract_update_macos(zip_path: String) -> bool:
-	var global_zip = ProjectSettings.globalize_path(zip_path)
 	var exe_path = OS.get_executable_path()
-
-	_log("macOS extraction starting...")
-	_log("Zip path: %s" % global_zip)
-	_log("Exe path: %s" % exe_path)
-
-	# Find the .app bundle path
 	var app_path = exe_path
 	while not app_path.ends_with(".app") and app_path != "/":
 		app_path = app_path.get_base_dir()
 
-	_log("Found app path: %s" % app_path)
+	# Detect App Translocation before delegating
+	if app_path.ends_with(".app"):
+		if "/private/var/folders/" in app_path or "/AppTranslocation/" in app_path:
+			_log("ERROR: App Translocation detected")
+			update_blocked_by_translocation.emit()
+			call_deferred("_show_translocation_dialog")
+			return false
 
-	if not app_path.ends_with(".app"):
-		_log("ERROR: Could not find .app bundle in path")
-		return false
-
-	# Detect App Translocation - macOS moves quarantined apps to a random read-only location
-	# If the app path contains "/private/var/folders/" or "/AppTranslocation/", we can't update in place
-	if "/private/var/folders/" in app_path or "/AppTranslocation/" in app_path:
-		_log("ERROR: App Translocation detected - app is running from a temporary location")
-		_log("Please move the app to /Applications or another permanent location first")
-
-		# Don't clean up the pending update - user might move the app and restart
-		# Show user-friendly guidance after UI is ready
-		update_blocked_by_translocation.emit()
-		call_deferred("_show_translocation_dialog")
-		return false
-
-	var install_dir = app_path.get_base_dir()
-	_log("Install directory: %s" % install_dir)
-
-	# Check if we have write permission to the install directory
-	_log("Testing write permission to: %s" % install_dir)
-	var test_file = install_dir + "/.update_permission_test"
-	var test = FileAccess.open(test_file, FileAccess.WRITE)
-	if test:
-		test.close()
-		DirAccess.remove_absolute(test_file)
-		_log("Write permission OK")
-	else:
-		_log("ERROR: No write permission to %s" % install_dir)
-		_log("Opening downloads folder for manual update")
-		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
-		_cleanup_pending_update()
-		return false
-
-	# Run unzip command
-	_log("Running: unzip -o '%s' -d '%s'" % [global_zip, install_dir])
-	var output = []
-	var exit_code = OS.execute("unzip", ["-o", global_zip, "-d", install_dir], output, true)
-
-	_log("unzip exit code: %d" % exit_code)
-	for line in output:
-		_log("unzip output: %s" % str(line))
-
-	if exit_code != 0:
-		_log("ERROR: unzip failed with code %d" % exit_code)
-		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
-		return false
-
-	# Verify the app was extracted
-	var app_name = app_path.get_file()
-	var new_app_path = install_dir + "/" + app_name
-	_log("Checking for extracted app at: %s" % new_app_path)
-
-	if not DirAccess.dir_exists_absolute(new_app_path):
-		_log("ERROR: Extracted app not found at expected location")
-		_log("Checking what was extracted...")
-		var dir = DirAccess.open(install_dir)
-		if dir:
-			dir.list_dir_begin()
-			var file_name = dir.get_next()
-			while file_name != "":
-				_log("  Found: %s" % file_name)
-				file_name = dir.get_next()
-		OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
-		return false
-
-	# Remove quarantine attribute from the extracted app so Gatekeeper doesn't complain
-	_log("Removing quarantine attribute from: %s" % new_app_path)
-	var xattr_output = []
-	OS.execute("xattr", ["-rd", "com.apple.quarantine", new_app_path], xattr_output, true)
-	_log("Quarantine removal complete")
-
-	_log("macOS extraction completed successfully")
-	return true
+	var log_fn := Callable(self, "_log")
+	return UpdateInstaller.extract_macos(zip_path, log_fn)
 
 
 ## Clean up pending update marker and related files
@@ -943,25 +661,21 @@ func cancel_pending_update() -> void:
 
 ## Apply the downloaded update by restarting the game
 ## On Windows, the actual extraction happens on next startup via _apply_pending_update()
-## On macOS, we extract in-place before restarting (no file locking issues) to avoid a double-restart
+## On macOS, we extract in-place before restarting (no file locking issues)
 func apply_update(zip_path: String) -> void:
-	var exe_path = OS.get_executable_path()
-
 	print("UpdateManager: Restarting to apply update...")
 
 	match OS.get_name():
 		"Windows":
-			_restart_windows(exe_path)
+			UpdateInstaller.restart_windows(OS.get_executable_path(), get_tree())
 		"macOS":
 			_apply_and_restart_macos(zip_path)
 		_:
-			# Fallback: just quit and let user restart manually
 			print("UpdateManager: Please restart the game to apply the update")
 			get_tree().quit()
 
 
 ## Apply update and restart on macOS in a single step to avoid double-restart.
-## macOS doesn't lock files in use, so we can safely extract while running.
 func _apply_and_restart_macos(zip_path: String) -> void:
 	var pending = get_pending_update_info()
 	var version = pending.get("version", "unknown")
@@ -975,75 +689,7 @@ func _apply_and_restart_macos(zip_path: String) -> void:
 		DirAccess.remove_absolute(zip_path)
 		_save_update_success_toast(version)
 
-	# Restart regardless — if extraction succeeded, the new version launches directly.
-	# If it failed, the deferred approach on next startup will retry.
-	_restart_macos(OS.get_executable_path())
-
-
-## Restart the game on Windows
-func _restart_windows(exe_path: String) -> void:
-	# Create a simple batch script that waits for us to exit, then relaunches
-	var script_path = UPDATES_DIR + "restart.bat"
-	var global_script = ProjectSettings.globalize_path(script_path)
-
-	var script = (
-		"""@echo off
-timeout /t 1 /nobreak >nul
-start "" "%s"
-del "%%~f0"
-"""
-		% [exe_path]
-	)
-
-	var file = FileAccess.open(script_path, FileAccess.WRITE)
-	if file:
-		file.store_string(script)
-		file.close()
-
-		# Launch the script and quit the game
-		OS.create_process("cmd.exe", ["/c", global_script])
-		get_tree().quit()
-	else:
-		push_error("UpdateManager: Failed to create restart script")
-		get_tree().quit()
-
-
-## Restart the game on macOS
-func _restart_macos(exe_path: String) -> void:
-	# Find the .app bundle path
-	var app_path = exe_path
-	while not app_path.ends_with(".app") and app_path != "/":
-		app_path = app_path.get_base_dir()
-
-	if not app_path.ends_with(".app"):
-		# Can't find app bundle, just quit
-		get_tree().quit()
-		return
-
-	var script_path = UPDATES_DIR + "restart.sh"
-	var global_script = ProjectSettings.globalize_path(script_path)
-
-	var script = (
-		"""#!/bin/bash
-sleep 1
-open "%s"
-rm "$0"
-"""
-		% [app_path]
-	)
-
-	var file = FileAccess.open(script_path, FileAccess.WRITE)
-	if file:
-		file.store_string(script)
-		file.close()
-
-		# Make executable and run
-		OS.execute("chmod", ["+x", global_script])
-		OS.create_process("/bin/bash", [global_script])
-		get_tree().quit()
-	else:
-		push_error("UpdateManager: Failed to create restart script")
-		get_tree().quit()
+	UpdateInstaller.restart_macos(OS.get_executable_path(), get_tree())
 
 
 ## Open the releases page in the default browser
@@ -1093,28 +739,4 @@ func _cleanup_download_file() -> void:
 
 ## Get human-readable error message for HTTP result
 func _get_http_error(result: int) -> String:
-	match result:
-		HTTPRequest.RESULT_CANT_CONNECT:
-			return "Cannot connect to server"
-		HTTPRequest.RESULT_CANT_RESOLVE:
-			return "Cannot resolve hostname"
-		HTTPRequest.RESULT_CONNECTION_ERROR:
-			return "Connection error"
-		HTTPRequest.RESULT_TLS_HANDSHAKE_ERROR:
-			return "TLS handshake error"
-		HTTPRequest.RESULT_NO_RESPONSE:
-			return "No response from server"
-		HTTPRequest.RESULT_BODY_SIZE_LIMIT_EXCEEDED:
-			return "Response too large"
-		HTTPRequest.RESULT_REQUEST_FAILED:
-			return "Request failed"
-		HTTPRequest.RESULT_DOWNLOAD_FILE_CANT_OPEN:
-			return "Cannot open download file"
-		HTTPRequest.RESULT_DOWNLOAD_FILE_WRITE_ERROR:
-			return "Error writing download file"
-		HTTPRequest.RESULT_REDIRECT_LIMIT_REACHED:
-			return "Too many redirects"
-		HTTPRequest.RESULT_TIMEOUT:
-			return "Request timed out"
-		_:
-			return "Unknown error: " + str(result)
+	return UpdateInstaller.get_http_error(result)

@@ -18,7 +18,15 @@ signal modal_closed(modal: Control)
 
 var _modal_stack: Array[Control] = []
 var _overlay_stack: Array[Control] = []
-var _root: Node = null
+
+## Cached current state (updated via EventBus.state_changed).
+## Values match RootScript.State enum (TITLE_SCREEN=0, ..., PLAYING=3, PAUSED=4).
+var _current_state: int = -1
+
+# State constants matching the Root.State enum so UIManager doesn't need to
+# import root.gd.  Keep these in sync with Root.State if it changes.
+const STATE_PLAYING := 3
+const STATE_PAUSED := 4
 
 # Preload scene resources at script load time
 const CONFIRMATION_DIALOG_SCENE := preload("res://scenes/ui/confirmation_dialog.tscn")
@@ -36,21 +44,19 @@ var _loading_overlay: Node = null
 var _input_hints: Node = null
 var _download_queue: Node = null
 
-# Reference to Root script for accessing State enum
-const RootScript = preload("res://scenes/root.gd")
-
 
 func _ready() -> void:
 	# Process input even when game is paused (for ESC to unpause)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
-	# Defer getting root reference until scene tree is ready
-	call_deferred("_find_root")
+	# Listen for state changes via the EventBus (no Root import needed)
+	EventBus.state_changed.connect(_on_state_changed)
+
 	call_deferred("_setup_ui_components")
 
 
-func _find_root() -> void:
-	_root = get_tree().root.get_node_or_null("Root")
+func _on_state_changed(_old_state: int, new_state: int) -> void:
+	_current_state = new_state
 
 
 func _setup_ui_components() -> void:
@@ -82,14 +88,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_top_overlay()
 			get_viewport().set_input_as_handled()
 		# Priority 3: Toggle pause if playing
-		elif _root:
-			var current_state := get_current_state()
-			if current_state == RootScript.State.PLAYING:
-				_root.push_state(RootScript.State.PAUSED)
-				get_viewport().set_input_as_handled()
-			elif current_state == RootScript.State.PAUSED:
-				_root.pop_state()
-				get_viewport().set_input_as_handled()
+		elif _current_state == STATE_PLAYING:
+			EventBus.pause_requested.emit()
+			get_viewport().set_input_as_handled()
+		elif _current_state == STATE_PAUSED:
+			EventBus.resume_requested.emit()
+			get_viewport().set_input_as_handled()
 
 
 func _close_top_overlay() -> void:
@@ -104,16 +108,14 @@ func _close_top_overlay() -> void:
 			overlay.hide()
 
 
-## Get current app state from Root
+## Get current app state (updated via EventBus.state_changed).
 func get_current_state() -> int:
-	if _root and _root.has_method("get_current_state"):
-		return _root.get_current_state()
-	return -1
+	return _current_state
 
 
 ## Check if app is in a specific state
 func is_state(state: int) -> bool:
-	return get_current_state() == state
+	return _current_state == state
 
 
 ## Open a modal and add to stack
