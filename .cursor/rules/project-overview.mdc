@@ -22,6 +22,10 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 | New autoload | `autoloads/`, register in project.godot |
 | UI component | `scenes/ui/`, extend AnimatedVisibilityContainer if animated |
 | Level/token logic | LevelPlayController, BoardTokenFactory, GameState |
+| Environment preset | `EnvironmentPresets.PRESETS` in `utils/environment_presets.gd` |
+| Environment property | `PROPERTY_DEFAULTS`, `_apply_config_to_environment()`, `extract_from_environment()`, + LevelEditPanel UI |
+| In-game edit panel | `scenes/states/playing/level_edit_panel.gd` (extends DrawerContainer) |
+| Slide-out drawer | Extend `DrawerContainer`, configure edge/width/tab_text in `_on_ready()` |
 | Shared constant | `autoloads/constants.gd` (registered as `Constants` autoload) |
 | GLB utilities | `utils/glb_utils.gd` |
 | Custom Resource | `resources/` with `class_name` |
@@ -45,6 +49,11 @@ UIManager.register_overlay(self)  # For ESC handling
 tab_container.tab_changed.connect(_on_tab_changed)
 func _on_tab_changed(_idx: int) -> void:
     TabUtils.animate_tab_change(tab_container, self)
+
+# Environment (layered: PROPERTY_DEFAULTS → map_defaults → preset → overrides)
+EnvironmentPresets.apply_to_world_environment(world_env, preset, overrides, map_sky, map_defaults)
+var config = EnvironmentPresets.get_environment_config(preset, overrides, map_defaults)
+var extracted = EnvironmentPresets.extract_from_environment(env)
 ```
 
 ## Formatting
@@ -66,3 +75,5 @@ After editing any file, run the formatter for that file type (see `formatting.md
 - Leave `_process()` running when idle – use `set_process(false)` and toggle as needed
 - Use magic numbers for CanvasLayer layers – use `Constants.LAYER_*` in code, and keep `.tscn` values in sync with `constants.gd`
 - Leave `mouse_filter = STOP` (default) on bare layout containers – always set `IGNORE` on non-interactive wrappers
+- Bake map environment defaults into `level_data` – they are derived from the map file at load time
+- Mutate `level_data` when applying environment settings – the effective config should be computed at apply-time via the layering model

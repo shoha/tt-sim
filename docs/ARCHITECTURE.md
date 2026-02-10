@@ -44,8 +44,10 @@ Root (Node3D)
 │   │           ├── CameraHolder / Camera3D
 │   │           ├── MapContainer (Node3D) - map geometry added here
 │   │           └── DragAndDrop3D - tokens added here
-│   └── GameplayMenu (CanvasLayer)
-│       └── Token list, context menus
+│   ├── GameplayMenu (CanvasLayer)
+│   │   └── GameplayMenuController - token list, context menus
+│   ├── LevelEditPanel (DrawerContainer) - slide-out editing drawer (right edge)
+│   └── PlayerListDrawer (DrawerContainer) - connected players (left edge)
 │
 └── [Dynamic] PauseOverlay (CanvasLayer) - shown in PAUSED state
 ```
@@ -389,8 +391,14 @@ var author: String
 var map_scene_path: String
 var map_offset: Vector3
 var map_scale: Vector3
+var light_intensity_scale: float = 1.0
+var environment_preset: String = ""          # "" = use map defaults
+var environment_overrides: Dictionary = {}   # Fine-tuned property tweaks
+var lofi_overrides: Dictionary = {}          # Post-processing shader overrides
 var token_placements: Array[TokenPlacement]
 ```
+
+See [lighting-and-environment.md](lighting-and-environment.md) for the environment configuration layering model and how `environment_preset`, `environment_overrides`, and map defaults interact.
 
 ### TokenPlacement Resource
 
@@ -420,12 +428,15 @@ var scale: Vector3
 2. **LevelManager** saves/loads level files (sync or async)
 3. **LevelPlayController** receives level data and:
    - Loads map via `GlbUtils.load_map_async()` (unified pipeline for `res://` and `user://` paths)
+   - **Extracts and strips** embedded `WorldEnvironment` nodes from the map (preserves settings as map defaults)
    - Adds map to `GameMap.map_container` (dedicated Node3D inside SubViewport)
+   - **Applies environment** via layered config: PROPERTY_DEFAULTS → map defaults → preset → overrides
    - Preloads token models via `AssetPackManager.preload_models()`
    - Spawns tokens progressively (yields to keep UI responsive)
    - Emits progress signals for loading overlay
    - Manages active gameplay
-4. **Root** transitions state based on level events
+4. **In-game editing** — `LevelEditPanel` (drawer on right edge) allows real-time adjustments to map scale, lighting, environment, and post-processing. `GameplayMenuController` routes changes to `LevelPlayController` for immediate application. Cancel reverts all changes; save persists to disk.
+5. **Root** transitions state based on level events
 
 ---
 
