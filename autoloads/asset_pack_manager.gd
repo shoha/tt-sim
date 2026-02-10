@@ -446,7 +446,9 @@ func load_remote_pack_from_url(manifest_url: String) -> void:
 	# Create a temporary HTTPRequest to fetch the manifest
 	var http_request = HTTPRequest.new()
 	add_child(http_request)
-	http_request.request_completed.connect(_on_manifest_downloaded.bind(http_request))
+	http_request.request_completed.connect(
+		_on_manifest_downloaded.bind(http_request, manifest_url)
+	)
 
 	var error = http_request.request(manifest_url)
 	if error != OK:
@@ -459,7 +461,8 @@ func _on_manifest_downloaded(
 	response_code: int,
 	_headers: PackedStringArray,
 	body: PackedByteArray,
-	http_request: HTTPRequest
+	http_request: HTTPRequest,
+	manifest_url: String
 ) -> void:
 	http_request.queue_free()
 
@@ -471,8 +474,15 @@ func _on_manifest_downloaded(
 	var json = JSON.new()
 	var parse_result = json.parse(json_text)
 	if parse_result != OK:
-		push_error("AssetPackManager: Failed to parse remote manifest JSON")
+		push_error(
+			"AssetPackManager: Failed to parse remote manifest JSON: "
+			+ json.get_error_message()
+		)
 		return
+
+	# Derive base_url from manifest URL if not specified in manifest
+	if json.data is Dictionary:
+		_inject_base_url_from_manifest_url(json.data, manifest_url)
 
 	if register_remote_pack(json.data):
 		packs_loaded.emit()
@@ -514,6 +524,11 @@ func _on_download_pack_manifest_downloaded(
 	if manifest.is_empty():
 		return
 
+	# Derive base_url from manifest URL if not specified in manifest.
+	# Without this, _queue_pack_downloads cannot build download URLs and
+	# the pack ends up with only the manifest file but no model/icon files.
+	_inject_base_url_from_manifest_url(manifest, manifest_url)
+
 	var pack_id = manifest.get("pack_id", "")
 	if pack_id == "":
 		pack_download_failed.emit("", "Manifest missing pack_id")
@@ -539,11 +554,33 @@ func _fetch_pack_manifest(
 	var json = JSON.new()
 	var parse_result = json.parse(json_text)
 	if parse_result != OK:
-		push_error("AssetPackManager: Failed to parse manifest JSON")
+		push_error(
+			"AssetPackManager: Failed to parse manifest JSON: " + json.get_error_message()
+		)
 		pack_download_failed.emit("", "Invalid manifest JSON: " + json.get_error_message())
 		return {}
 
 	return json.data
+
+
+## Derive base_url from the manifest URL when the manifest doesn't include one.
+## For example, manifest at https://example.com/packs/pokemon/manifest.json
+## yields base_url https://example.com/packs/pokemon/
+## This allows _queue_pack_downloads (and future asset resolution) to build
+## download URLs for individual model and icon files.
+func _inject_base_url_from_manifest_url(manifest: Dictionary, manifest_url: String) -> void:
+	if manifest.get("base_url", "") != "":
+		return
+
+	var derived_url = manifest_url.get_base_dir()
+	if derived_url == "" or not derived_url.begins_with("http"):
+		return
+
+	if not derived_url.ends_with("/"):
+		derived_url += "/"
+
+	manifest["base_url"] = derived_url
+	print("AssetPackManager: Derived base_url from manifest URL: " + derived_url)
 
 
 ## Saves manifest to user_assets and registers the pack.
