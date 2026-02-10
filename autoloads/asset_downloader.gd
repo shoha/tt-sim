@@ -378,6 +378,27 @@ func get_queued_download_count() -> int:
 	return _download_queue.size()
 
 
+## Check if there are any pending (queued or active) downloads for a given variant.
+## Useful for determining whether a variant's UI item should be removed yet.
+func has_pending_downloads_for(pack_id: String, asset_id: String, variant_id: String) -> bool:
+	for key in _active_downloads:
+		var request = _active_downloads[key] as DownloadRequest
+		if request.pack_id == pack_id and request.asset_id == asset_id and request.variant_id == variant_id:
+			return true
+	for request in _download_queue:
+		if request.pack_id == pack_id and request.asset_id == asset_id and request.variant_id == variant_id:
+			return true
+	return false
+
+
+## Get the number of queued downloads counted by unique variant (not per file).
+func get_queued_variant_count() -> int:
+	var variants: Dictionary = {}
+	for request in _download_queue:
+		variants[request.get_key()] = true
+	return variants.size()
+
+
 ## Cancel all pending downloads (does not cancel active downloads)
 func cancel_pending_downloads() -> void:
 	_download_queue.clear()
