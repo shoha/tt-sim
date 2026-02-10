@@ -271,6 +271,12 @@ func _on_pack_download_progress(pack_id: String, downloaded: int, total: int) ->
 
 
 func _on_pack_download_completed(pack_id: String) -> void:
+	print(
+		(
+			"AssetBrowserContainer: pack_download_completed '%s' (tracking='%s')"
+			% [pack_id, _downloading_pack_id]
+		)
+	)
 	if pack_id != _downloading_pack_id and _downloading_pack_id != "":
 		return
 	_downloading_pack_id = ""

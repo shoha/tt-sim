@@ -123,10 +123,23 @@ func _on_filter_changed(new_text: String) -> void:
 
 
 func _on_item_activated(index: int) -> void:
+	print(
+		(
+			"AssetPackTab: item_activated index=%d, _items.size()=%d, pack=%s"
+			% [index, _items.size(), _pack_id]
+		)
+	)
 	if index < 0 or index >= _items.size():
+		push_warning("AssetPackTab: index %d out of range (items=%d)" % [index, _items.size()])
 		return
 
 	var selected = _items[index]
+	print(
+		(
+			"AssetPackTab: emitting asset_selected %s/%s/%s"
+			% [selected.pack_id, selected.asset_id, selected.variant_id]
+		)
+	)
 	asset_selected.emit(selected.pack_id, selected.asset_id, selected.variant_id)
 
 

@@ -105,8 +105,10 @@ func _save_level() -> void:
 	if not _level_play_controller:
 		return
 	var path = _level_play_controller.save_level()
-	if path == "":
-		push_error("GameplayMenuController: Failed to save level")
+	if path != "":
+		UIManager.show_success("Level saved")
+	else:
+		UIManager.show_error("Failed to save level")
 
 
 func _update_save_level_button_visibility() -> void:
@@ -159,6 +161,7 @@ func _update_asset_browser_button_state() -> void:
 
 
 func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -> void:
+	print("GameplayMenuController: _on_asset_selected %s/%s/%s" % [pack_id, asset_id, variant_id])
 	# Only GM can add tokens
 	if not NetworkManager.is_gm() and NetworkManager.is_networked():
 		UIManager.show_error("Only the GM can add tokens")
