@@ -15,6 +15,7 @@ This guide documents the UI infrastructure and reusable components available in 
 - [Pause Menu](#pause-menu)
 - [AudioManager](#audiomanager)
 - [Overlay & Modal System](#overlay--modal-system)
+- [LevelEditPanel (In-Game Edit Mode)](#leveleditpanel-in-game-edit-mode)
 
 ---
 
@@ -492,11 +493,88 @@ func _on_ready() -> void:
 | `tab_top_margin`  | float      | `12`    | Tab offset from top edge             |
 | `start_revealed`  | bool       | `false` | Show tab on ready                    |
 
-### Existing Implementation
+### Existing Implementations
 
-`PlayerListDrawer` extends `DrawerContainer` to show connected players during networked games.
+| Drawer | Edge | Purpose |
+|--------|------|---------|
+| `PlayerListDrawer` | LEFT | Shows connected players during networked games |
+| `LevelEditPanel` | RIGHT | Real-time level editing during gameplay (see below) |
 
 See `THEME_GUIDE.md` for styling details.
+
+---
+
+## LevelEditPanel (In-Game Edit Mode)
+
+`LevelEditPanel` extends `DrawerContainer` to provide real-time level editing during gameplay. It slides in from the right edge of the screen and applies all changes immediately to the live viewport.
+
+### Accessing
+
+During gameplay, click the "Edit" tab on the right edge of the screen. The panel slides open with all editing controls.
+
+### Controls
+
+The panel is divided into sections:
+
+**Map Scale** — Uniform scale slider for map geometry.
+
+**Lighting & Environment:**
+- Preset dropdown (named presets or "Map Defaults")
+- Lighting Power (light intensity multiplier)
+- Ambient Light (color + energy)
+- Fog (toggle, color, density, height)
+- Glow/Bloom (toggle, intensity, strength, bloom)
+- Exposure (tone map mode, exposure, white point)
+- Brightness, Contrast, Saturation (adjustment controls)
+
+**Advanced (collapsible):**
+- Background mode/color, sky preset, ambient source, reflected light source
+- SSAO, SSR, SDFGI toggles, fog height density
+
+**Post-Processing Effects:**
+- Pixelation, Color Depth, Color Fade, Outline
+
+**Actions:**
+- Revert to Map Defaults, Edit Details, Save Level, Cancel
+
+### Signal Architecture
+
+The panel emits granular signals for each type of change:
+
+```gdscript
+signal save_requested(map_scale, light_intensity_scale, environment_preset, environment_overrides, lofi_overrides)
+signal cancel_requested
+signal map_scale_changed(new_scale: float)
+signal intensity_changed(new_scale: float)
+signal environment_changed(preset: String, overrides: Dictionary)
+signal lofi_changed(overrides: Dictionary)
+signal revert_to_map_defaults_requested
+signal open_editor_requested
+signal drawer_opened   # Controller should snapshot values and call initialize()
+signal drawer_closed   # Controller should revert if not saved
+```
+
+`GameplayMenuController` connects these signals and routes them to `LevelPlayController` for live application.
+
+### Cancel Behavior
+
+When the drawer closes without saving, `GameplayMenuController` restores all original values (snapshotted at open time) and re-applies them to the live viewport.
+
+### Initialization
+
+```gdscript
+level_edit_panel.initialize(
+    current_map_scale,
+    light_intensity_scale,
+    environment_preset,
+    environment_overrides,
+    lofi_overrides,
+    map_defaults,       # Dictionary from LevelPlayController.get_map_environment_config()
+    has_map_sky,        # true if the map had an embedded Sky resource
+)
+```
+
+See [lighting-and-environment.md](lighting-and-environment.md) for the full environment system documentation.
 
 ---
 
@@ -513,8 +591,10 @@ See `THEME_GUIDE.md` for styling details.
 | `scenes/ui/input_hints.tscn`                 | Input hints                      |
 | `scenes/ui/settings_menu.tscn`               | Settings menu                    |
 | `scenes/states/paused/pause_overlay.tscn`    | Pause menu                       |
-| `scenes/ui/animated_visibility_container.gd` | Base class for animated panels   |
-| `scenes/ui/drawer_container.gd`              | Base class for slide-out drawers |
+| `scenes/ui/animated_visibility_container.gd` | Base class for animated panels        |
+| `scenes/ui/drawer_container.gd`              | Base class for slide-out drawers      |
+| `scenes/states/playing/level_edit_panel.gd`  | In-game real-time level editing panel |
+| `scenes/states/playing/level_edit_panel.tscn`| UI layout for the edit panel          |
 
 ---
 
