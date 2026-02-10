@@ -69,7 +69,7 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> B
 		else:
 			animation_tree_instance = BoardTokenAnimationTreeFactory.create()
 
-		animation_tree_instance.anim_player = components.animation_player # Set BEFORE add_child
+		animation_tree_instance.anim_player = components.animation_player  # Set BEFORE add_child
 		rigid_body.add_child(animation_tree_instance)
 
 	# Build selection glow component (added to rigid body so it moves with token)
@@ -393,17 +393,25 @@ static func create_from_asset_async(
 
 	# Try to resolve the model path (checks local + cache, triggers download if needed)
 	var model_path = AssetPackManager.resolve_model_path(pack_id, asset_id, variant_id, priority)
+	print(
+		(
+			"BoardTokenFactory: create_from_asset_async %s/%s/%s → model_path='%s'"
+			% [pack_id, asset_id, variant_id, model_path]
+		)
+	)
 
 	if model_path != "":
 		# Asset file is available locally
 		if AssetPackManager.is_model_cached(model_path):
 			# Fast path: model is in memory cache, create synchronously (no hitch)
+			print("BoardTokenFactory: model cached, creating synchronously")
 			var ready_token = _create_from_model_path(model_path, pack_id, asset_id)
 			return {"token": ready_token, "is_placeholder": false}
 		else:
 			# Model file exists but needs loading — use a placeholder to avoid
 			# blocking the main thread with GLB parsing. The placeholder will
 			# auto-upgrade once the async load finishes.
+			print("BoardTokenFactory: model on disk, creating placeholder for async load")
 			var loading_token = _create_placeholder_token(pack_id, asset_id, variant_id)
 			if loading_token:
 				var upgrade_path = model_path
@@ -413,7 +421,9 @@ static func create_from_asset_async(
 			return {"token": loading_token, "is_placeholder": true}
 
 	# Asset needs downloading - check if download was queued
-	if not AssetPackManager.needs_download(pack_id, asset_id, variant_id):
+	var needs_dl = AssetPackManager.needs_download(pack_id, asset_id, variant_id)
+	print("BoardTokenFactory: model_path empty, needs_download=%s" % str(needs_dl))
+	if not needs_dl:
 		# No URL available, can't create token
 		push_error(
 			(
@@ -596,7 +606,7 @@ static func apply_model_upgrade(token: BoardToken, model: Node3D) -> void:
 	# Add animation tree if available
 	if components.animation_player:
 		var animation_tree = BoardTokenAnimationTreeFactory.create()
-		animation_tree.anim_player = components.animation_player # Set BEFORE add_child
+		animation_tree.anim_player = components.animation_player  # Set BEFORE add_child
 		rb.add_child(animation_tree)
 
 	# Update collision shape with the real model's shape

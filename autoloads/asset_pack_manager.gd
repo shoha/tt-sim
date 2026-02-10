@@ -310,8 +310,20 @@ func resolve_model_path(
 	# Try sync resolution first (local + cache)
 	var sync_path = AssetResolver.resolve_model_sync(pack_id, asset_id, variant_id)
 	if sync_path != "":
+		print(
+			(
+				"AssetPackManager: resolve_model_path %s/%s/%s → sync '%s'"
+				% [pack_id, asset_id, variant_id, sync_path]
+			)
+		)
 		return sync_path
 	# Start async resolution (downloads)
+	print(
+		(
+			"AssetPackManager: resolve_model_path %s/%s/%s → sync empty, starting async"
+			% [pack_id, asset_id, variant_id]
+		)
+	)
 	AssetResolver.resolve_model_async(pack_id, asset_id, variant_id, priority)
 	return ""
 
@@ -543,6 +555,12 @@ func _finalize_pack_download(pack_id: String, manifest: Dictionary) -> bool:
 		return false
 
 	var pack = AssetPackClass.from_manifest(manifest, pack_path)
+	print(
+		(
+			"AssetPackManager: Registering pack '%s' base_path='%s' base_url='%s' assets=%d"
+			% [pack.pack_id, pack.base_path, pack.base_url, pack.assets.size()]
+		)
+	)
 	if _packs.has(pack.pack_id):
 		push_warning("AssetPackManager: Overwriting existing pack: " + pack.pack_id)
 	_packs[pack.pack_id] = pack

@@ -83,7 +83,9 @@ func _ready() -> void:
 func _on_node_added(node: Node) -> void:
 	if node is BaseButton:
 		# Defer so the node is fully ready and any meta set during _ready() is applied
-		node.ready.connect(_auto_connect_button.bind(node), CONNECT_ONE_SHOT)
+		var callable := _auto_connect_button.bind(node)
+		if not node.ready.is_connected(callable):
+			node.ready.connect(callable, CONNECT_ONE_SHOT)
 
 
 func _auto_connect_button(button: BaseButton) -> void:

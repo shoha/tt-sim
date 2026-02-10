@@ -30,13 +30,18 @@ func _create_tabs() -> void:
 	if tab_container.tab_changed.is_connected(_on_tab_changed):
 		tab_container.tab_changed.disconnect(_on_tab_changed)
 
-	# Clear existing tabs
-	for child in tab_container.get_children():
+	# Remove existing tabs immediately (not queue_free) to avoid dual-children
+	# issues where old and new tabs coexist in the TabContainer
+	var old_children = tab_container.get_children()
+	for child in old_children:
+		tab_container.remove_child(child)
 		child.queue_free()
 	_tabs.clear()
 
 	# Create a tab for each pack
-	for pack in AssetPackManager.get_packs():
+	var packs = AssetPackManager.get_packs()
+	print("AssetBrowser: _create_tabs() — creating %d tabs" % packs.size())
+	for pack in packs:
 		var tab = AssetPackTabScene.instantiate() as AssetPackTab
 		tab.name = pack.display_name
 		tab_container.add_child(tab)
@@ -64,6 +69,7 @@ func _refresh_current_tab() -> void:
 
 
 func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -> void:
+	print("AssetBrowser: relaying asset_selected %s/%s/%s" % [pack_id, asset_id, variant_id])
 	asset_selected.emit(pack_id, asset_id, variant_id)
 
 
