@@ -9,14 +9,12 @@ class_name EnvironmentPresets
 ## These map to Godot's Environment resource properties
 const PROPERTY_DEFAULTS = {
 	# Background
-	"background_mode": Environment.BG_COLOR, # BG_COLOR, BG_SKY, BG_CANVAS
+	"background_mode": Environment.BG_COLOR,  # BG_COLOR, BG_SKY, BG_CANVAS
 	"background_color": Color(0.3, 0.3, 0.3),
-	
 	# Ambient light
-	"ambient_light_source": Environment.AMBIENT_SOURCE_COLOR, # AMBIENT_SOURCE_COLOR, AMBIENT_SOURCE_SKY
+	"ambient_light_source": Environment.AMBIENT_SOURCE_COLOR,  # AMBIENT_SOURCE_COLOR, AMBIENT_SOURCE_SKY
 	"ambient_light_color": Color(0.4, 0.4, 0.45),
 	"ambient_light_energy": 0.5,
-	
 	# Fog
 	"fog_enabled": false,
 	"fog_light_color": Color(0.5, 0.5, 0.55),
@@ -24,36 +22,30 @@ const PROPERTY_DEFAULTS = {
 	"fog_density": 0.01,
 	"fog_height": 0.0,
 	"fog_height_density": 0.0,
-	
 	# Tonemap
-	"tonemap_mode": Environment.TONE_MAPPER_FILMIC, # TONE_MAPPER_LINEAR, TONE_MAPPER_REINHARDT, TONE_MAPPER_FILMIC, TONE_MAPPER_ACES
+	"tonemap_mode": Environment.TONE_MAPPER_FILMIC,  # TONE_MAPPER_LINEAR, TONE_MAPPER_REINHARDT, TONE_MAPPER_FILMIC, TONE_MAPPER_ACES
 	"tonemap_exposure": 1.0,
 	"tonemap_white": 1.0,
-	
 	# Glow/Bloom
 	"glow_enabled": false,
 	"glow_intensity": 0.8,
 	"glow_strength": 1.0,
 	"glow_bloom": 0.0,
-	
 	# SSAO (Screen Space Ambient Occlusion)
 	"ssao_enabled": false,
 	"ssao_intensity": 2.0,
-	
 	# SSR (Screen Space Reflections)
 	"ssr_enabled": false,
-	
 	# SDFGI (Signed Distance Field Global Illumination)
 	"sdfgi_enabled": false,
 }
-
 
 ## Built-in environment presets
 ## Each preset overrides only the properties it needs to change from defaults
 const PRESETS = {
 	# ========== OUTDOOR PRESETS ==========
-	
-	"outdoor_day": {
+	"outdoor_day":
+	{
 		"description": "Bright outdoor daytime - clear sky, neutral lighting",
 		"background_mode": Environment.BG_SKY,
 		"ambient_light_source": Environment.AMBIENT_SOURCE_SKY,
@@ -62,8 +54,8 @@ const PRESETS = {
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 1.0,
 	},
-	
-	"outdoor_overcast": {
+	"outdoor_overcast":
+	{
 		"description": "Cloudy outdoor day - soft diffuse lighting",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.55, 0.58, 0.62),
@@ -74,8 +66,8 @@ const PRESETS = {
 		"fog_density": 0.002,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 	},
-	
-	"outdoor_sunset": {
+	"outdoor_sunset":
+	{
 		"description": "Golden hour - warm orange/pink lighting",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.9, 0.5, 0.3),
@@ -89,8 +81,8 @@ const PRESETS = {
 		"glow_intensity": 0.5,
 		"glow_bloom": 0.1,
 	},
-	
-	"outdoor_night": {
+	"outdoor_night":
+	{
 		"description": "Moonlit night - cool blue tones, low visibility",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.02, 0.03, 0.08),
@@ -102,10 +94,9 @@ const PRESETS = {
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 0.8,
 	},
-	
 	# ========== INDOOR/DUNGEON PRESETS ==========
-	
-	"indoor_neutral": {
+	"indoor_neutral":
+	{
 		"description": "Standard indoor lighting - neutral, well-lit",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.15, 0.15, 0.15),
@@ -115,8 +106,8 @@ const PRESETS = {
 		"ssao_intensity": 1.5,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 	},
-	
-	"dungeon_dark": {
+	"dungeon_dark":
+	{
 		"description": "Dark dungeon - minimal ambient, torch-lit atmosphere",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.02, 0.02, 0.03),
@@ -130,8 +121,8 @@ const PRESETS = {
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 0.9,
 	},
-	
-	"dungeon_crypt": {
+	"dungeon_crypt":
+	{
 		"description": "Eerie crypt - cold, deathly atmosphere",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.01, 0.02, 0.03),
@@ -146,8 +137,8 @@ const PRESETS = {
 		"glow_enabled": true,
 		"glow_intensity": 0.3,
 	},
-	
-	"cave": {
+	"cave":
+	{
 		"description": "Natural cave - damp, earthy tones",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.02, 0.02, 0.02),
@@ -160,10 +151,9 @@ const PRESETS = {
 		"ssao_intensity": 2.0,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 	},
-	
 	# ========== SPECIAL ATMOSPHERE PRESETS ==========
-	
-	"tavern": {
+	"tavern":
+	{
 		"description": "Cozy tavern - warm firelit interior",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.08, 0.05, 0.03),
@@ -178,8 +168,8 @@ const PRESETS = {
 		"glow_intensity": 0.4,
 		"glow_bloom": 0.05,
 	},
-	
-	"forest": {
+	"forest":
+	{
 		"description": "Dense forest - dappled green light",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.1, 0.15, 0.08),
@@ -191,8 +181,8 @@ const PRESETS = {
 		"ssao_enabled": true,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 	},
-	
-	"swamp": {
+	"swamp":
+	{
 		"description": "Murky swamp - thick fog, sickly green",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.08, 0.1, 0.05),
@@ -206,8 +196,8 @@ const PRESETS = {
 		"ssao_enabled": true,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 	},
-	
-	"underwater": {
+	"underwater":
+	{
 		"description": "Underwater - blue-green murky depths",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.02, 0.08, 0.12),
@@ -220,8 +210,8 @@ const PRESETS = {
 		"glow_enabled": true,
 		"glow_intensity": 0.3,
 	},
-	
-	"hell": {
+	"hell":
+	{
 		"description": "Infernal realm - fiery red/orange glow",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.15, 0.02, 0.0),
@@ -235,8 +225,8 @@ const PRESETS = {
 		"glow_intensity": 0.6,
 		"glow_bloom": 0.15,
 	},
-	
-	"ethereal": {
+	"ethereal":
+	{
 		"description": "Ethereal/fey realm - soft magical glow",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.15, 0.1, 0.2),
@@ -250,8 +240,8 @@ const PRESETS = {
 		"glow_intensity": 0.7,
 		"glow_bloom": 0.2,
 	},
-	
-	"arctic": {
+	"arctic":
+	{
 		"description": "Frozen tundra - cold blue-white",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.7, 0.75, 0.85),
@@ -263,8 +253,8 @@ const PRESETS = {
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 1.1,
 	},
-	
-	"desert": {
+	"desert":
+	{
 		"description": "Harsh desert - bright, warm, hazy",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.85, 0.75, 0.6),
@@ -276,18 +266,17 @@ const PRESETS = {
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 1.2,
 	},
-	
 	# ========== UTILITY PRESETS ==========
-	
-	"none": {
+	"none":
+	{
 		"description": "No environment effects - use map's embedded lighting only",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.2, 0.2, 0.2),
 		"ambient_light_color": Color(0.3, 0.3, 0.3),
 		"ambient_light_energy": 0.3,
 	},
-	
-	"bright_editor": {
+	"bright_editor":
+	{
 		"description": "Bright editing mode - maximum visibility",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.4, 0.4, 0.45),
@@ -318,35 +307,39 @@ static func get_preset_description(preset_name: String) -> String:
 ## 1. Property defaults
 ## 2. Preset values (if specified)
 ## 3. Override values (if specified)
-static func get_environment_config(preset_name: String = "", overrides: Dictionary = {}) -> Dictionary:
+static func get_environment_config(
+	preset_name: String = "", overrides: Dictionary = {}
+) -> Dictionary:
 	var config = PROPERTY_DEFAULTS.duplicate()
-	
+
 	# Apply preset if specified
 	if preset_name != "" and PRESETS.has(preset_name):
 		var preset = PRESETS[preset_name]
 		for key in preset:
 			if key != "description":
 				config[key] = preset[key]
-	
+
 	# Apply overrides
 	for key in overrides:
 		if config.has(key):
 			config[key] = overrides[key]
-	
+
 	return config
 
 
 ## Apply environment configuration to a WorldEnvironment node
 ## Creates the Environment resource if needed
-static func apply_to_world_environment(world_env: WorldEnvironment, preset_name: String = "", overrides: Dictionary = {}) -> void:
+static func apply_to_world_environment(
+	world_env: WorldEnvironment, preset_name: String = "", overrides: Dictionary = {}
+) -> void:
 	var config = get_environment_config(preset_name, overrides)
-	
+
 	# Create or get environment
 	var env = world_env.environment
 	if not env:
 		env = Environment.new()
 		world_env.environment = env
-	
+
 	# Apply all settings
 	_apply_config_to_environment(env, config)
 
@@ -356,12 +349,12 @@ static func _apply_config_to_environment(env: Environment, config: Dictionary) -
 	# Background
 	env.background_mode = config.get("background_mode", Environment.BG_COLOR)
 	env.background_color = config.get("background_color", Color(0.3, 0.3, 0.3))
-	
+
 	# Ambient light
 	env.ambient_light_source = config.get("ambient_light_source", Environment.AMBIENT_SOURCE_COLOR)
 	env.ambient_light_color = config.get("ambient_light_color", Color(0.4, 0.4, 0.45))
 	env.ambient_light_energy = config.get("ambient_light_energy", 0.5)
-	
+
 	# Fog
 	env.fog_enabled = config.get("fog_enabled", false)
 	env.fog_light_color = config.get("fog_light_color", Color(0.5, 0.5, 0.55))
@@ -369,27 +362,60 @@ static func _apply_config_to_environment(env: Environment, config: Dictionary) -
 	env.fog_density = config.get("fog_density", 0.01)
 	env.fog_height = config.get("fog_height", 0.0)
 	env.fog_height_density = config.get("fog_height_density", 0.0)
-	
+
 	# Tonemap
 	env.tonemap_mode = config.get("tonemap_mode", Environment.TONE_MAPPER_FILMIC)
 	env.tonemap_exposure = config.get("tonemap_exposure", 1.0)
 	env.tonemap_white = config.get("tonemap_white", 1.0)
-	
+
 	# Glow
 	env.glow_enabled = config.get("glow_enabled", false)
 	env.glow_intensity = config.get("glow_intensity", 0.8)
 	env.glow_strength = config.get("glow_strength", 1.0)
 	env.glow_bloom = config.get("glow_bloom", 0.0)
-	
+
 	# SSAO
 	env.ssao_enabled = config.get("ssao_enabled", false)
 	env.ssao_intensity = config.get("ssao_intensity", 2.0)
-	
+
 	# SSR
 	env.ssr_enabled = config.get("ssr_enabled", false)
-	
+
 	# SDFGI
 	env.sdfgi_enabled = config.get("sdfgi_enabled", false)
+
+
+## Extract all supported settings from an existing Environment resource into a
+## config dictionary.  This is the inverse of _apply_config_to_environment() and
+## uses the same key names as PROPERTY_DEFAULTS so the result can be used
+## directly as overrides or compared against presets.
+static func extract_from_environment(env: Environment) -> Dictionary:
+	if not env:
+		return {}
+	return {
+		"background_mode": env.background_mode,
+		"background_color": env.background_color,
+		"ambient_light_source": env.ambient_light_source,
+		"ambient_light_color": env.ambient_light_color,
+		"ambient_light_energy": env.ambient_light_energy,
+		"fog_enabled": env.fog_enabled,
+		"fog_light_color": env.fog_light_color,
+		"fog_light_energy": env.fog_light_energy,
+		"fog_density": env.fog_density,
+		"fog_height": env.fog_height,
+		"fog_height_density": env.fog_height_density,
+		"tonemap_mode": env.tonemap_mode,
+		"tonemap_exposure": env.tonemap_exposure,
+		"tonemap_white": env.tonemap_white,
+		"glow_enabled": env.glow_enabled,
+		"glow_intensity": env.glow_intensity,
+		"glow_strength": env.glow_strength,
+		"glow_bloom": env.glow_bloom,
+		"ssao_enabled": env.ssao_enabled,
+		"ssao_intensity": env.ssao_intensity,
+		"ssr_enabled": env.ssr_enabled,
+		"sdfgi_enabled": env.sdfgi_enabled,
+	}
 
 
 ## Create a new Environment resource with the given configuration

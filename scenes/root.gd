@@ -259,6 +259,17 @@ func _enter_playing_state() -> void:
 	_level_play_controller.setup(_game_map)
 	_game_map.setup(_level_play_controller)
 
+	# Hide the AppMenu "Level Editor" button during gameplay — the edit
+	# drawer provides "Level Details..." instead.
+	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
+	if app_ctrl:
+		app_ctrl.hide_editor_button()
+
+	# Wire "Level Details..." button from the edit drawer to the level editor
+	var gameplay_ctrl = _game_map.gameplay_menu.get_node_or_null("GameplayMenu")
+	if gameplay_ctrl and app_ctrl:
+		gameplay_ctrl.open_editor_requested.connect(app_ctrl.open_level_editor)
+
 	# Handle networked vs local play
 	# Note: Don't clear _pending_level_data until loading completes (play_level is async)
 	# It will be cleared in _on_level_play_loaded or _on_level_loading_completed
@@ -342,6 +353,11 @@ func _exit_playing_state() -> void:
 	if _game_map:
 		_game_map.queue_free()
 		_game_map = null
+
+	# Restore the AppMenu "Level Editor" button
+	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
+	if app_ctrl:
+		app_ctrl.show_editor_button()
 
 
 func _enter_lobby_host_state() -> void:

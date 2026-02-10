@@ -1,0 +1,310 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/states/playing/level_edit_panel.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/slider_spin_box.tscn" id="2_slider_spin_box"]
+
+[node name="LevelEditPanel" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_script")
+
+[node name="ScrollContainer" type="ScrollContainer" parent="."]
+layout_mode = 0
+offset_right = 320.0
+offset_bottom = 600.0
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="ScrollContainer/VBox"]
+layout_mode = 2
+text = "Level Settings"
+horizontal_alignment = 1
+
+[node name="OpenEditorButton" type="Button" parent="ScrollContainer/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = "Secondary"
+text = "Level Details..."
+
+[node name="HSeparator0" type="HSeparator" parent="ScrollContainer/VBox"]
+layout_mode = 2
+
+[node name="MapScaleRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="MapScaleLabel" type="Label" parent="ScrollContainer/VBox/MapScaleRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Map Scale:"
+
+[node name="MapScaleSliderSpin" parent="ScrollContainer/VBox/MapScaleRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.1
+max_value = 5.0
+step = 0.01
+value = 1.0
+
+[node name="HSeparator" type="HSeparator" parent="ScrollContainer/VBox"]
+layout_mode = 2
+
+[node name="LightingLabel" type="Label" parent="ScrollContainer/VBox"]
+layout_mode = 2
+text = "Lighting & Environment"
+horizontal_alignment = 1
+
+[node name="PresetRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="PresetLabel" type="Label" parent="ScrollContainer/VBox/PresetRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Preset:"
+
+[node name="PresetDropdown" type="OptionButton" parent="ScrollContainer/VBox/PresetRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="IntensityRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="IntensityLabelTitle" type="Label" parent="ScrollContainer/VBox/IntensityRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Light Scale:"
+
+[node name="IntensitySliderSpin" parent="ScrollContainer/VBox/IntensityRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0001
+max_value = 2.0
+step = 0.0001
+value = 1.0
+exp_edit = true
+allow_greater = true
+
+[node name="RevertToMapButton" type="Button" parent="ScrollContainer/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = "Secondary"
+text = "Revert to Map Defaults"
+
+[node name="OverridesLabel" type="Label" parent="ScrollContainer/VBox"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Overrides"
+horizontal_alignment = 1
+
+[node name="AmbientRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="AmbientLabel" type="Label" parent="ScrollContainer/VBox/AmbientRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Ambient:"
+
+[node name="AmbientColorPicker" type="ColorPickerButton" parent="ScrollContainer/VBox/AmbientRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 0)
+layout_mode = 2
+color = Color(0.4, 0.4, 0.45, 1)
+
+[node name="AmbientEnergySliderSpin" parent="ScrollContainer/VBox/AmbientRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 2.0
+step = 0.01
+value = 0.5
+allow_greater = true
+
+[node name="FogRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="FogLabel" type="Label" parent="ScrollContainer/VBox/FogRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Fog:"
+
+[node name="FogEnabledCheck" type="CheckBox" parent="ScrollContainer/VBox/FogRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 0)
+layout_mode = 2
+
+[node name="FogDensitySliderSpin" parent="ScrollContainer/VBox/FogRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0001
+max_value = 0.1
+step = 0.0001
+value = 0.01
+exp_edit = true
+allow_greater = true
+
+[node name="GlowRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="GlowLabel" type="Label" parent="ScrollContainer/VBox/GlowRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Glow:"
+
+[node name="GlowEnabledCheck" type="CheckBox" parent="ScrollContainer/VBox/GlowRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 0)
+layout_mode = 2
+
+[node name="GlowIntensitySliderSpin" parent="ScrollContainer/VBox/GlowRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 2.0
+step = 0.01
+value = 0.8
+allow_greater = true
+
+[node name="HSeparator3" type="HSeparator" parent="ScrollContainer/VBox"]
+layout_mode = 2
+
+[node name="EffectsLabel" type="Label" parent="ScrollContainer/VBox"]
+layout_mode = 2
+text = "Post-Processing Effects"
+horizontal_alignment = 1
+
+[node name="PixelationRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="PixelationLabel" type="Label" parent="ScrollContainer/VBox/PixelationRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Pixelate:"
+
+[node name="PixelationSliderSpin" parent="ScrollContainer/VBox/PixelationRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 0.01
+step = 0.0001
+value = 0.003
+allow_greater = true
+
+[node name="SaturationRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SaturationLabel" type="Label" parent="ScrollContainer/VBox/SaturationRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Saturation:"
+
+[node name="SaturationSliderSpin" parent="ScrollContainer/VBox/SaturationRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 1.5
+step = 0.01
+value = 0.85
+
+[node name="ColorLevelsRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ColorLevelsLabel" type="Label" parent="ScrollContainer/VBox/ColorLevelsRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Colors:"
+
+[node name="ColorLevelsSliderSpin" parent="ScrollContainer/VBox/ColorLevelsRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 2.0
+max_value = 256.0
+step = 1.0
+value = 32.0
+
+[node name="DitherRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="DitherLabel" type="Label" parent="ScrollContainer/VBox/DitherRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Dither:"
+
+[node name="DitherSliderSpin" parent="ScrollContainer/VBox/DitherRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.5
+
+[node name="VignetteRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="VignetteLabel" type="Label" parent="ScrollContainer/VBox/VignetteRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Vignette:"
+
+[node name="VignetteSliderSpin" parent="ScrollContainer/VBox/VignetteRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.3
+
+[node name="GrainRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="GrainLabel" type="Label" parent="ScrollContainer/VBox/GrainRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Grain:"
+
+[node name="GrainSliderSpin" parent="ScrollContainer/VBox/GrainRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 0.1
+step = 0.001
+value = 0.025
+allow_greater = true
+
+[node name="Spacer" type="Control" parent="ScrollContainer/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ButtonsRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="CancelButton" type="Button" parent="ScrollContainer/VBox/ButtonsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = "Secondary"
+text = "Cancel"
+
+[node name="SaveButton" type="Button" parent="ScrollContainer/VBox/ButtonsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = "Success"
+text = "Save"

@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scenes/states/playing/asset_browser_container.gd" id="1_v7vxt"]
 [ext_resource type="Script" uid="uid://cu7374mk0ngm2" path="res://scenes/states/playing/gameplay_menu_controller.gd" id="4_controller"]
 [ext_resource type="PackedScene" uid="uid://c2xassetbrowser" path="res://scenes/states/playing/asset_browser.tscn" id="5_browser"]
-[ext_resource type="PackedScene" path="res://scenes/ui/slider_spin_box.tscn" id="6_slider_spin"]
+[ext_resource type="PackedScene" path="res://scenes/states/playing/level_edit_panel.tscn" id="6_edit_panel"]
 [ext_resource type="Script" path="res://scenes/states/playing/player_list_drawer.gd" id="7_player_list"]
 
 [node name="GameplayMenu" type="CanvasLayer" unique_id=977478588]
@@ -26,57 +26,27 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -400.0
+offset_left = -320.0
 offset_top = -46.0
-offset_right = -160.0
+offset_right = -15.0
 offset_bottom = -15.0
 grow_horizontal = 0
 grow_vertical = 0
 theme_type_variation = &"BoxContainerSpaced"
 alignment = 2
 
-[node name="SavePositionsButton" type="Button" parent="GameplayMenu/BottomButtons" unique_id=738580539]
+[node name="SaveLevelButton" type="Button" parent="GameplayMenu/BottomButtons" unique_id=738580539]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_type_variation = &"Secondary"
-text = "Save Positions"
+text = "Save Level"
 
 [node name="ToggleAssetBrowserButton" type="Button" parent="GameplayMenu/BottomButtons" unique_id=688700750]
 unique_name_in_owner = true
 layout_mode = 2
 toggle_mode = true
 text = "Add Token"
-
-[node name="MapScalePanel" type="PanelContainer" parent="GameplayMenu" unique_id=112233445]
-unique_name_in_owner = true
-visible = false
-layout_mode = 1
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 15.0
-offset_top = -56.0
-offset_right = 345.0
-offset_bottom = -15.0
-grow_vertical = 0
-
-[node name="HBox" type="HBoxContainer" parent="GameplayMenu/MapScalePanel"]
-layout_mode = 2
-theme_type_variation = &"BoxContainerSpaced"
-
-[node name="Label" type="Label" parent="GameplayMenu/MapScalePanel/HBox"]
-layout_mode = 2
-theme_type_variation = &"Body"
-text = "Map Scale:"
-
-[node name="MapScaleSliderSpin" parent="GameplayMenu/MapScalePanel/HBox" instance=ExtResource("6_slider_spin")]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-min_value = 0.1
-max_value = 5.0
-step = 0.01
 
 [node name="AssetBrowserContainer" type="CenterContainer" parent="GameplayMenu" unique_id=454441786]
 visible = false
@@ -122,6 +92,15 @@ theme_type_variation = &"Caption"
 text = "Click an asset to add it to the map"
 horizontal_alignment = 1
 
+[node name="LevelEditPanel" parent="GameplayMenu" instance=ExtResource("6_edit_panel")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
 [node name="PlayerListDrawer" type="Control" parent="GameplayMenu"]
 unique_name_in_owner = true
 visible = false
@@ -134,5 +113,5 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("7_player_list")
 
-[connection signal="pressed" from="GameplayMenu/BottomButtons/SavePositionsButton" to="GameplayMenu" method="_on_save_positions_button_pressed"]
+[connection signal="pressed" from="GameplayMenu/BottomButtons/SaveLevelButton" to="GameplayMenu" method="_on_save_level_button_pressed"]
 [connection signal="toggled" from="GameplayMenu/BottomButtons/ToggleAssetBrowserButton" to="GameplayMenu/AssetBrowserContainer" method="_on_button_toggled"]
