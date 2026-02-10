@@ -463,23 +463,36 @@ static func get_preset_description(preset_name: String) -> String:
 	return ""
 
 
-## Get a complete environment configuration by merging:
-## 1. Property defaults
-## 2. Preset values (if specified)
-## 3. Override values (if specified)
+## Get a complete environment configuration by merging layers:
+## 1. PROPERTY_DEFAULTS (base)
+## 2. Map defaults — applied when preset is "" and map_defaults is non-empty
+## 3. Preset values — applied when a named preset is selected
+## 4. User overrides — always applied on top
+##
+## When preset is "" (no explicit choice) and the map provides its own
+## embedded environment, the map's settings are used as the base instead of
+## a named preset.  This means map defaults are always re-derived from the
+## live map file, never baked into level_data.
 static func get_environment_config(
-	preset_name: String = "", overrides: Dictionary = {}
+	preset_name: String = "",
+	overrides: Dictionary = {},
+	map_defaults: Dictionary = {},
 ) -> Dictionary:
 	var config = PROPERTY_DEFAULTS.duplicate()
 
-	# Apply preset if specified
-	if preset_name != "" and PRESETS.has(preset_name):
+	# Layer: map defaults (when no preset is explicitly selected)
+	if preset_name == "" and not map_defaults.is_empty():
+		for key in map_defaults:
+			if key != "description" and config.has(key):
+				config[key] = map_defaults[key]
+	# Layer: named preset
+	elif preset_name != "" and PRESETS.has(preset_name):
 		var preset = PRESETS[preset_name]
 		for key in preset:
 			if key != "description":
 				config[key] = preset[key]
 
-	# Apply overrides
+	# Layer: user overrides (always on top)
 	for key in overrides:
 		if config.has(key):
 			config[key] = overrides[key]
@@ -491,13 +504,16 @@ static func get_environment_config(
 ## Creates the Environment resource if needed.
 ## [param map_sky] is an optional Sky resource extracted from the loaded map,
 ## used when sky_preset == "map_default".
+## [param map_defaults] is the config extracted from the map's embedded
+## WorldEnvironment; used as the base layer when preset_name is "".
 static func apply_to_world_environment(
 	world_env: WorldEnvironment,
 	preset_name: String = "",
 	overrides: Dictionary = {},
 	map_sky: Sky = null,
+	map_defaults: Dictionary = {},
 ) -> void:
-	var config = get_environment_config(preset_name, overrides)
+	var config = get_environment_config(preset_name, overrides, map_defaults)
 
 	# Create or get environment
 	var env = world_env.environment

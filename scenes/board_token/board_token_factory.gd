@@ -69,7 +69,7 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> B
 		else:
 			animation_tree_instance = BoardTokenAnimationTreeFactory.create()
 
-		animation_tree_instance.anim_player = components.animation_player  # Set BEFORE add_child
+		animation_tree_instance.anim_player = components.animation_player # Set BEFORE add_child
 		rigid_body.add_child(animation_tree_instance)
 
 	# Build selection glow component (added to rigid body so it moves with token)
@@ -596,7 +596,7 @@ static func apply_model_upgrade(token: BoardToken, model: Node3D) -> void:
 	# Add animation tree if available
 	if components.animation_player:
 		var animation_tree = BoardTokenAnimationTreeFactory.create()
-		animation_tree.anim_player = components.animation_player  # Set BEFORE add_child
+		animation_tree.anim_player = components.animation_player # Set BEFORE add_child
 		rb.add_child(animation_tree)
 
 	# Update collision shape with the real model's shape
