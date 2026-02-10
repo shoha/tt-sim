@@ -105,12 +105,10 @@ func _on_ready() -> void:
 	play_sounds = true
 
 	# Increase content padding inside the drawer panel.
-	# Extra right margin accommodates the scrollbar that appears when the
-	# panel content overflows.
 	var margin_node = _panel.get_child(0) as MarginContainer
 	if margin_node:
 		margin_node.add_theme_constant_override("margin_left", 16)
-		margin_node.add_theme_constant_override("margin_right", 24)
+		margin_node.add_theme_constant_override("margin_right", 16)
 		margin_node.add_theme_constant_override("margin_top", 16)
 		margin_node.add_theme_constant_override("margin_bottom", 16)
 
@@ -122,6 +120,19 @@ func _on_ready() -> void:
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		content_container.add_child(scroll)
+
+		# Wrap the VBox in an inner MarginContainer so the right padding sits
+		# *between* the content and the scrollbar, not outside the scrollbar.
+		var vbox = scroll.get_child(0)
+		if vbox:
+			var inner_margin := MarginContainer.new()
+			inner_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			inner_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			inner_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			inner_margin.add_theme_constant_override("margin_right", 16)
+			scroll.remove_child(vbox)
+			inner_margin.add_child(vbox)
+			scroll.add_child(inner_margin)
 
 	_connect_control_signals()
 	_populate_preset_dropdown()
