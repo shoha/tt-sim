@@ -225,6 +225,7 @@ func _enter_edit_mode() -> void:
 
 	# Initialize the edit panel with current values
 	var has_map_defaults = not _level_play_controller.get_map_environment_config().is_empty()
+	var has_map_sky = _level_play_controller.get_map_sky_resource() != null
 	(
 		level_edit_panel
 		. initialize(
@@ -234,6 +235,7 @@ func _enter_edit_mode() -> void:
 			level_data.environment_overrides,
 			level_data.lofi_overrides,
 			has_map_defaults,
+			has_map_sky,
 		)
 	)
 
