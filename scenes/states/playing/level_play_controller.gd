@@ -416,7 +416,6 @@ func _finalize_map_loading(map: Node3D) -> void:
 	# before adding the map to the viewport.  After extraction the nodes are
 	# stripped so only the programmatic LevelEnvironment controls the viewport.
 	_map_environment_config = _extract_and_strip_map_environment(loaded_map_instance)
-	var map_env_config := _map_environment_config
 
 	# Add to the dedicated MapContainer
 	_game_map.map_container.add_child(loaded_map_instance)
@@ -428,9 +427,9 @@ func _finalize_map_loading(map: Node3D) -> void:
 	# Store original light energies for real-time intensity editing
 	_store_original_light_energies(loaded_map_instance)
 
-	# Apply environment settings from level data (with map defaults as fallback)
+	# Apply environment settings from level data (map defaults used as a layer)
 	if active_level_data:
-		_apply_level_environment(active_level_data, map_env_config)
+		_apply_level_environment(active_level_data)
 
 
 ## Extract environment settings from embedded WorldEnvironment nodes in a
@@ -463,25 +462,18 @@ func _extract_and_strip_map_environment(root: Node3D) -> Dictionary:
 
 
 ## Apply environment settings from level data.
-## If the level has no custom environment overrides (fresh level) and the map
-## contained an embedded WorldEnvironment, those map settings are used as the
-## starting overrides so the map author's intended look is preserved.
-func _apply_level_environment(level_data: LevelData, map_env_config: Dictionary = {}) -> void:
+## Map defaults are passed through as a layer — when the level's preset is ""
+## (no explicit choice), the map's embedded environment is used as the base.
+## This function does NOT mutate level_data; the effective config is computed
+## at apply-time from: PROPERTY_DEFAULTS → map_defaults → preset → overrides.
+func _apply_level_environment(level_data: LevelData) -> void:
 	# Create WorldEnvironment if it doesn't exist
 	if not is_instance_valid(_world_environment):
 		_world_environment = WorldEnvironment.new()
 		_world_environment.name = "LevelEnvironment"
 		_game_map.world_viewport.add_child(_world_environment)
 
-	# If the level has no custom overrides and the map provided its own
-	# environment, adopt the map's settings as the level's overrides.
-	if level_data.environment_overrides.is_empty() and not map_env_config.is_empty():
-		level_data.environment_overrides = map_env_config
-		# Clear the preset — the map's concrete values take precedence
-		level_data.environment_preset = ""
-		print("LevelPlayController: Using map's embedded environment as level defaults")
-
-	# Apply preset and overrides (pass map sky for "map_default" sky preset)
+	# Apply preset + overrides with map defaults as a layer
 	(
 		EnvironmentPresets
 		. apply_to_world_environment(
@@ -489,6 +481,7 @@ func _apply_level_environment(level_data: LevelData, map_env_config: Dictionary 
 			level_data.environment_preset,
 			level_data.environment_overrides,
 			_map_sky_resource,
+			_map_environment_config,
 		)
 	)
 
@@ -500,8 +493,10 @@ func _apply_level_environment(level_data: LevelData, map_env_config: Dictionary 
 		print(
 			"LevelPlayController: Applied environment preset '%s'" % level_data.environment_preset
 		)
+	elif not _map_environment_config.is_empty():
+		print("LevelPlayController: Applied map default environment")
 	else:
-		print("LevelPlayController: Applied custom environment overrides")
+		print("LevelPlayController: Applied default environment")
 
 
 ## Load a map file synchronously using the unified GlbUtils.load_map pipeline.
@@ -552,10 +547,11 @@ func apply_light_intensity_scale(intensity_scale: float) -> void:
 
 
 ## Apply environment settings to the live WorldEnvironment.
+## Map defaults are always passed through so preset "" uses them.
 func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 	if is_instance_valid(_world_environment):
 		EnvironmentPresets.apply_to_world_environment(
-			_world_environment, preset, overrides, _map_sky_resource
+			_world_environment, preset, overrides, _map_sky_resource, _map_environment_config
 		)
 	else:
 		push_warning("LevelPlayController: WorldEnvironment is null — cannot apply settings")
@@ -811,7 +807,9 @@ func save_level() -> String:
 	if NetworkManager.is_host():
 		NetworkStateSync.broadcast_full_state()
 
-	# Save the level
+	# Save the level — use folder format when the level came from a folder
+	if active_level_data.level_folder != "":
+		return LevelManager.save_level_folder(active_level_data)
 	return LevelManager.save_level(active_level_data)
 
 

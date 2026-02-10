@@ -640,7 +640,7 @@ func import_level_json(file_path: String) -> LevelData:
 		level.map_offset = Vector3(data.map_offset.x, data.map_offset.y, data.map_offset.z)
 
 	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
-	level.environment_preset = data.get("environment_preset", "indoor_neutral")
+	level.environment_preset = data.get("environment_preset", "")
 	level.environment_overrides = EnvironmentPresets.overrides_from_json(
 		data.get("environment_overrides", {})
 	)

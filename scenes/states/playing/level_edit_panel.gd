@@ -87,25 +87,30 @@ const TONEMAP_MODES = {
 @onready var vignette_slider_spin: SliderSpinBox = %VignetteSliderSpin
 @onready var grain_slider_spin: SliderSpinBox = %GrainSliderSpin
 
-var current_preset: String = "indoor_neutral"
+var current_preset: String = ""
 var current_overrides: Dictionary = {}
 var current_lofi_overrides: Dictionary = {}
 var light_intensity_scale: float = 1.0
 var map_scale: float = 1.0
+## Environment config extracted from the map's embedded WorldEnvironment.
+## Used as the base layer when current_preset is "" (no explicit choice).
+var _map_defaults: Dictionary = {}
 
 
 func _on_ready() -> void:
 	# Configure drawer
 	edge = DrawerEdge.RIGHT
-	drawer_width = 320.0
+	drawer_width = 350.0
 	tab_text = "Edit"
 	play_sounds = true
 
-	# Increase content padding inside the drawer panel
+	# Increase content padding inside the drawer panel.
+	# Extra right margin accommodates the scrollbar that appears when the
+	# panel content overflows.
 	var margin_node = _panel.get_child(0) as MarginContainer
 	if margin_node:
 		margin_node.add_theme_constant_override("margin_left", 16)
-		margin_node.add_theme_constant_override("margin_right", 16)
+		margin_node.add_theme_constant_override("margin_right", 24)
 		margin_node.add_theme_constant_override("margin_top", 16)
 		margin_node.add_theme_constant_override("margin_bottom", 16)
 
@@ -177,16 +182,24 @@ func _connect_control_signals() -> void:
 	cancel_button.pressed.connect(_on_cancel_pressed)
 
 
-func _populate_preset_dropdown() -> void:
+func _populate_preset_dropdown(has_map_defaults: bool = false) -> void:
 	preset_dropdown.clear()
-	var presets = EnvironmentPresets.get_preset_names()
+	var idx := 0
 
-	for i in range(presets.size()):
-		var preset_name = presets[i]
+	# "Map Defaults" option — shown when the map has an embedded environment
+	if has_map_defaults:
+		preset_dropdown.add_item("Map Defaults", idx)
+		preset_dropdown.set_item_tooltip(idx, "Use the map's embedded lighting")
+		preset_dropdown.set_item_metadata(idx, "")
+		idx += 1
+
+	var presets = EnvironmentPresets.get_preset_names()
+	for preset_name in presets:
 		var description = EnvironmentPresets.get_preset_description(preset_name)
-		preset_dropdown.add_item("%s" % preset_name, i)
-		preset_dropdown.set_item_tooltip(i, description)
-		preset_dropdown.set_item_metadata(i, preset_name)
+		preset_dropdown.add_item("%s" % preset_name, idx)
+		preset_dropdown.set_item_tooltip(idx, description)
+		preset_dropdown.set_item_metadata(idx, preset_name)
+		idx += 1
 
 
 ## Populate the sky preset dropdown.
@@ -249,15 +262,16 @@ func _on_closed() -> void:
 
 ## Initialize the panel with current level data settings.
 ## Call this in response to drawer_opened, before the panel animates in.
-## [param has_map_defaults] controls whether the "Revert to Map Defaults"
-## button is shown (true when the loaded map had an embedded WorldEnvironment).
+## [param map_defaults] is the environment config extracted from the map's
+## embedded WorldEnvironment (empty dict if none).  It is used as the base
+## layer when preset is "" and for the "Map Defaults" dropdown option.
 func initialize(
 	current_map_scale: float,
 	intensity: float,
 	preset: String,
 	overrides: Dictionary,
 	lofi_overrides: Dictionary = {},
-	has_map_defaults: bool = false,
+	map_defaults: Dictionary = {},
 	has_map_sky: bool = false,
 ) -> void:
 	map_scale = current_map_scale
@@ -265,12 +279,17 @@ func initialize(
 	current_preset = preset
 	current_overrides = overrides.duplicate()
 	current_lofi_overrides = lofi_overrides.duplicate()
+	_map_defaults = map_defaults
 
 	# Set map scale control
 	map_scale_slider_spin.set_value_no_signal(current_map_scale)
 
 	# Set intensity control
 	intensity_slider_spin.set_value_no_signal(intensity)
+
+	# Repopulate preset dropdown (may include "Map Defaults" option)
+	var has_map_defaults := not map_defaults.is_empty()
+	_populate_preset_dropdown(has_map_defaults)
 
 	# Select preset in dropdown
 	for i in range(preset_dropdown.item_count):
@@ -295,7 +314,7 @@ func apply_environment_state(preset: String, overrides: Dictionary) -> void:
 	current_preset = preset
 	current_overrides = overrides.duplicate()
 
-	# Update preset dropdown
+	# Update preset dropdown selection
 	for i in range(preset_dropdown.item_count):
 		if preset_dropdown.get_item_metadata(i) == preset:
 			preset_dropdown.select(i)
@@ -308,7 +327,9 @@ func apply_environment_state(preset: String, overrides: Dictionary) -> void:
 ## Uses EnvironmentPresets to compute the final values rather than reading from
 ## a WorldEnvironment node, keeping the panel independent of the live scene.
 func _sync_controls_from_config() -> void:
-	var config = EnvironmentPresets.get_environment_config(current_preset, current_overrides)
+	var config = EnvironmentPresets.get_environment_config(
+		current_preset, current_overrides, _map_defaults
+	)
 
 	# Basic controls
 	bg_color_picker.color = config.get("background_color", Color(0.3, 0.3, 0.3))

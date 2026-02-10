@@ -33,8 +33,9 @@ class_name LevelData
 ## Environment configuration
 @export_group("Environment")
 ## Environment preset name (e.g., "dungeon_dark", "outdoor_day", "tavern")
-## See EnvironmentPresets for available presets
-@export var environment_preset: String = "indoor_neutral"
+## Empty string means "use map defaults if available, otherwise PROPERTY_DEFAULTS".
+## See EnvironmentPresets for available presets.
+@export var environment_preset: String = ""
 ## Optional overrides for specific environment properties
 ## Keys should match EnvironmentPresets property names (e.g., "ambient_light_energy", "fog_density")
 ## Colors should be Color objects or hex strings like "#ff0000"
@@ -106,15 +107,15 @@ func _update_modified_time() -> void:
 func get_absolute_map_path() -> String:
 	if map_path == "":
 		return ""
-	
+
 	# If map_path is already absolute (res:// or user://), return as-is
 	if map_path.begins_with("res://") or map_path.begins_with("user://"):
 		return map_path
-	
+
 	# Otherwise, it's a relative path within the level folder
 	if level_folder != "":
 		return Paths.get_level_folder(level_folder) + map_path
-	
+
 	# No level folder set - can't resolve relative path
 	return ""
 
@@ -131,7 +132,7 @@ func duplicate_level() -> LevelData:
 	new_level.level_name = level_name + " (Copy)"
 	new_level.level_description = level_description
 	new_level.author = author
-	new_level.level_folder = "" # Duplicates need to be saved to a new folder
+	new_level.level_folder = ""  # Duplicates need to be saved to a new folder
 	new_level.map_path = map_path
 	new_level.map_scale = map_scale
 	new_level.map_offset = map_offset
@@ -185,7 +186,7 @@ func to_dict() -> Dictionary:
 	var placements_array: Array[Dictionary] = []
 	for placement in token_placements:
 		placements_array.append(placement.to_dict())
-	
+
 	return {
 		"level_name": level_name,
 		"level_description": level_description,
@@ -214,21 +215,27 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.modified_at = data.get("modified_at", 0)
 	level.level_folder = data.get("level_folder", "")
 	level.map_path = data.get("map_path", "")
-	
+
 	var scale_data = data.get("map_scale", {"x": 1, "y": 1, "z": 1})
-	level.map_scale = Vector3(scale_data.get("x", 1), scale_data.get("y", 1), scale_data.get("z", 1))
-	
+	level.map_scale = Vector3(
+		scale_data.get("x", 1), scale_data.get("y", 1), scale_data.get("z", 1)
+	)
+
 	var offset_data = data.get("map_offset", {"x": 0, "y": 0, "z": 0})
-	level.map_offset = Vector3(offset_data.get("x", 0), offset_data.get("y", 0), offset_data.get("z", 0))
-	
+	level.map_offset = Vector3(
+		offset_data.get("x", 0), offset_data.get("y", 0), offset_data.get("z", 0)
+	)
+
 	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
-	level.environment_preset = data.get("environment_preset", "indoor_neutral")
-	level.environment_overrides = EnvironmentPresets.overrides_from_json(data.get("environment_overrides", {}))
+	level.environment_preset = data.get("environment_preset", "")
+	level.environment_overrides = EnvironmentPresets.overrides_from_json(
+		data.get("environment_overrides", {})
+	)
 	level.lofi_overrides = data.get("lofi_overrides", {}).duplicate()
-	
+
 	level.token_placements.clear()
 	var placements_data = data.get("token_placements", [])
 	for placement_data in placements_data:
 		level.token_placements.append(TokenPlacement.from_dict(placement_data))
-	
+
 	return level
