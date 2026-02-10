@@ -605,6 +605,8 @@ func _finalize_pack_download(pack_id: String, manifest: Dictionary) -> bool:
 
 
 ## Queues all asset downloads for a pack and sets up progress tracking.
+## Progress is reported per asset variant (not per file), so a variant with both
+## a model and an icon counts as a single unit in the progress total.
 func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
 	var pack = _packs.get(pack_id)
 	if not pack:
@@ -613,6 +615,7 @@ func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
 
 	var pack_path = USER_ASSETS_USER_DIR + pack_id + "/"
 	var download_items: Array[Dictionary] = []
+	var variant_file_counts: Dictionary = {}  # "asset_id/variant_id" -> number of files
 
 	# Collect all files to download to user_assets (models/ and icons/ structure)
 	for asset in pack.get_all_assets():
@@ -620,6 +623,7 @@ func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
 			var variant = asset.get_variant(variant_id)
 			if not variant:
 				continue
+			var variant_key = "%s/%s" % [asset.asset_id, variant_id]
 			var model_url = pack.get_model_url(asset.asset_id, variant_id)
 			var icon_url = pack.get_icon_url(asset.asset_id, variant_id)
 			if model_url != "" and variant.model_file != "":
@@ -632,6 +636,7 @@ func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
 						"target_path": pack_path + "models/" + variant.model_file
 					}
 				)
+				variant_file_counts[variant_key] = variant_file_counts.get(variant_key, 0) + 1
 			if icon_url != "" and variant.icon_file != "":
 				download_items.append(
 					{
@@ -642,6 +647,7 @@ func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
 						"target_path": pack_path + "icons/" + variant.icon_file
 					}
 				)
+				variant_file_counts[variant_key] = variant_file_counts.get(variant_key, 0) + 1
 
 	if download_items.is_empty():
 		print("AssetPackManager: Pack '%s' has no downloadable assets" % pack.display_name)
@@ -649,31 +655,36 @@ func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
 		packs_loaded.emit()
 		return
 
-	var total_count = download_items.size()
-	var state = {"finished": 0}
+	var total_variants = variant_file_counts.size()
+	var variant_remaining = variant_file_counts.duplicate()  # Remaining files per variant
+	var state = {"finished_variants": 0}
 
 	var handlers = {}
-	handlers.completed = func(p_id: String, _a_id: String, _v_id: String, _path: String) -> void:
+
+	# Shared handler: decrement the variant's remaining file count and emit progress
+	# when the variant is fully done (all its files completed or failed).
+	var _on_file_done = func(p_id: String, a_id: String, v_id: String) -> void:
 		if p_id != pack.pack_id:
 			return
-		state["finished"] += 1
-		pack_download_progress.emit(pack.pack_id, state["finished"], total_count)
-		if state["finished"] >= total_count:
+		var vk = "%s/%s" % [a_id, v_id]
+		if not variant_remaining.has(vk):
+			return
+		variant_remaining[vk] -= 1
+		if variant_remaining[vk] <= 0:
+			variant_remaining.erase(vk)
+			state["finished_variants"] += 1
+			pack_download_progress.emit(pack.pack_id, state["finished_variants"], total_variants)
+		if variant_remaining.is_empty():
 			AssetDownloader.download_completed.disconnect(handlers.completed)
 			AssetDownloader.download_failed.disconnect(handlers.failed)
 			pack_download_completed.emit(pack.pack_id)
 			packs_loaded.emit()
 
-	handlers.failed = func(p_id: String, _a_id: String, _v_id: String, _error: String) -> void:
-		if p_id != pack.pack_id:
-			return
-		state["finished"] += 1
-		pack_download_progress.emit(pack.pack_id, state["finished"], total_count)
-		if state["finished"] >= total_count:
-			AssetDownloader.download_completed.disconnect(handlers.completed)
-			AssetDownloader.download_failed.disconnect(handlers.failed)
-			pack_download_completed.emit(pack.pack_id)
-			packs_loaded.emit()
+	handlers.completed = func(p_id: String, a_id: String, v_id: String, _path: String) -> void:
+		_on_file_done.call(p_id, a_id, v_id)
+
+	handlers.failed = func(p_id: String, a_id: String, v_id: String, _error: String) -> void:
+		_on_file_done.call(p_id, a_id, v_id)
 
 	AssetDownloader.download_completed.connect(handlers.completed)
 	AssetDownloader.download_failed.connect(handlers.failed)
@@ -690,7 +701,10 @@ func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
 			item.target_path
 		)
 
-	print("AssetPackManager: Queued %d files for pack '%s'" % [total_count, pack.display_name])
+	print(
+		"AssetPackManager: Queued %d files (%d variants) for pack '%s'"
+		% [download_items.size(), total_variants, pack.display_name]
+	)
 
 
 ## Get all variant IDs for a specific asset

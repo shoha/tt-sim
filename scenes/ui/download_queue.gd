@@ -135,7 +135,9 @@ func _add_or_update_item(
 
 	if _download_items.has(key):
 		var item = _download_items[key]
-		item.progress_bar.value = progress * 100.0
+		# Use max to avoid progress bouncing when multiple files (model + icon)
+		# download in parallel for the same variant
+		item.progress_bar.value = max(item.progress_bar.value, progress * 100.0)
 	else:
 		var container = HBoxContainer.new()
 		container.add_theme_constant_override("separation", 8)
@@ -171,7 +173,11 @@ func _add_or_update_item(
 		items_container.add_child(container)
 
 		_download_items[key] = {
-			"container": container, "label": label, "progress_bar": progress_bar, "source": source
+			"container": container,
+			"label": label,
+			"progress_bar": progress_bar,
+			"source": source,
+			"has_failure": false,
 		}
 
 		# Animate in
@@ -226,12 +232,10 @@ func _update_badge() -> void:
 
 
 func _update_queue_count() -> void:
-	var http_queued = 0
-	var p2p_queued = 0
-
-	http_queued = AssetDownloader.get_queued_download_count()
-
-	p2p_queued = AssetStreamer.get_queued_request_count()
+	# Count queued items by variant, not by individual file, so the numbers
+	# match the user's mental model of "assets remaining".
+	var http_queued = AssetDownloader.get_queued_variant_count()
+	var p2p_queued = AssetStreamer.get_queued_request_count()
 
 	var total_queued = http_queued + p2p_queued
 	var total_active = _download_items.size()
@@ -336,17 +340,38 @@ func _on_hide_timer_timeout() -> void:
 		_hide_icon()
 
 
+## Called when any file for a variant finishes (success or failure).
+## Defers UI removal until all files for the variant are done, so that a variant
+## with both a model and an icon shows as a single item until both complete.
+func _on_variant_file_done(
+	pack_id: String, asset_id: String, variant_id: String, success: bool
+) -> void:
+	var key = "%s/%s/%s" % [pack_id, asset_id, variant_id]
+	if not _download_items.has(key):
+		return
+
+	if not success:
+		_download_items[key]["has_failure"] = true
+
+	# If more files for this variant are still queued or active, wait for them
+	if AssetDownloader.has_pending_downloads_for(pack_id, asset_id, variant_id):
+		return
+
+	var variant_success = not _download_items[key].get("has_failure", false)
+	_remove_item(pack_id, asset_id, variant_id, variant_success)
+
+
 # HTTP Download callbacks
 func _on_download_completed(
 	pack_id: String, asset_id: String, variant_id: String, _local_path: String
 ) -> void:
-	_remove_item(pack_id, asset_id, variant_id, true)
+	_on_variant_file_done(pack_id, asset_id, variant_id, true)
 
 
 func _on_download_failed(
 	pack_id: String, asset_id: String, variant_id: String, _error: String
 ) -> void:
-	_remove_item(pack_id, asset_id, variant_id, false)
+	_on_variant_file_done(pack_id, asset_id, variant_id, false)
 
 
 func _on_download_progress(
@@ -359,11 +384,11 @@ func _on_download_progress(
 func _on_p2p_completed(
 	pack_id: String, asset_id: String, variant_id: String, _local_path: String
 ) -> void:
-	_remove_item(pack_id, asset_id, variant_id, true)
+	_on_variant_file_done(pack_id, asset_id, variant_id, true)
 
 
 func _on_p2p_failed(pack_id: String, asset_id: String, variant_id: String, _error: String) -> void:
-	_remove_item(pack_id, asset_id, variant_id, false)
+	_on_variant_file_done(pack_id, asset_id, variant_id, false)
 
 
 func _on_p2p_progress(
