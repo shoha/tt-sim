@@ -13,8 +13,8 @@ class_name DrawerContainer
 ## [member content_container].
 ##
 ## The root Control should be anchored full-rect (preset 15) inside its parent.
-## The panel and tab are animated independently so neither fights the anchor
-## layout system.
+## The panel and tab live inside a shared "sled" container that slides as a
+## single unit, so the two always move in lock-step with no mid-animation gap.
 
 # -- Configuration ----------------------------------------------------------
 
@@ -60,6 +60,7 @@ var tab_text: String = "":
 
 # -- Internals --------------------------------------------------------------
 
+var _sled: Control  ## Container that slides panel + tab as one unit
 var _panel: PanelContainer  ## The sliding content panel
 var _tab_button: Button  ## The clickable tab handle
 var _tab_label: Label
@@ -88,11 +89,12 @@ func _ready() -> void:
 	# and populate the content_container.
 	_on_ready()
 
-	# Re-apply panel size, tab style, and positions AFTER _on_ready(),
-	# because the subclass may have changed drawer_width, edge, or other
-	# configuration.
+	# Re-apply panel size, tab style, sled layout, and positions AFTER
+	# _on_ready(), because the subclass may have changed drawer_width,
+	# edge, or other configuration.
 	_panel.size.x = drawer_width
 	_apply_tab_style()
+	_layout_sled()
 	_apply_initial_position()
 
 
@@ -164,14 +166,17 @@ func _build_ui() -> void:
 	# Re-sync when the parent resizes
 	resized.connect(_on_parent_resized)
 
+	# -- Sled container (moves panel + tab as one unit) ----------------------
+	_sled = Control.new()
+	_sled.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_sled)
+
 	# -- Content panel -------------------------------------------------------
-	# The panel is a direct child, positioned manually (not anchored).
 	_panel = PanelContainer.new()
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_panel.size = Vector2(drawer_width, size.y)
-	_panel.position.y = 0
 	_apply_panel_style()
-	add_child(_panel)
+	_sled.add_child(_panel)
 
 	var margin := MarginContainer.new()
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -198,12 +203,11 @@ func _build_ui() -> void:
 	# Silence the default auto-connected click sound; we play open/close instead
 	_tab_button.set_meta("ui_silent", true)
 	_tab_button.pressed.connect(_on_tab_pressed)
-	_tab_button.position.y = tab_top_margin
 
 	# Style the tab for visibility against the dark viewport
 	_apply_tab_style()
 
-	add_child(_tab_button)
+	_sled.add_child(_tab_button)
 
 	_tab_label = Label.new()
 	_tab_label.text = tab_text
@@ -255,8 +259,31 @@ func _apply_tab_style() -> void:
 
 
 func _on_parent_resized() -> void:
-	if _panel:
+	if _sled:
+		_sled.size.y = size.y
 		_panel.size.y = size.y
+		# Right-edge drawers depend on size.x for their sled position.
+		if not _is_animating:
+			_sled.position.x = _get_sled_x()
+
+
+# -- Sled Layout -------------------------------------------------------------
+
+
+## Arrange the panel and tab at fixed positions inside the sled.
+## Called once after _on_ready() so subclass config is already applied.
+func _layout_sled() -> void:
+	_sled.size = Vector2(drawer_width + tab_width, size.y)
+	_sled.position.y = 0
+
+	if edge == DrawerEdge.LEFT:
+		_panel.position = Vector2(0, 0)
+		_tab_button.position = Vector2(drawer_width, tab_top_margin)
+	else:
+		_tab_button.position = Vector2(0, tab_top_margin)
+		_panel.position = Vector2(tab_width, 0)
+
+	_panel.size = Vector2(drawer_width, size.y)
 
 
 # -- Position Helpers --------------------------------------------------------
@@ -269,43 +296,27 @@ func _apply_initial_position() -> void:
 	elif start_revealed:
 		is_revealed = true
 
-	_panel.position.x = _get_panel_x()
-	_tab_button.position.x = _get_tab_x()
+	_sled.position.x = _get_sled_x()
 
 
-func _get_panel_x() -> float:
-	## Panel X for the current state.
-	## When not open the panel is pushed well past the screen edge so no
-	## part of it is visible (including stylebox borders/shadows).
+func _get_sled_x() -> float:
+	## Sled X for the current state.
+	## The sled holds both the panel and the tab, so moving it slides
+	## both in perfect lock-step.
 	if edge == DrawerEdge.LEFT:
 		if is_open:
 			return 0.0
-		else:
-			return -(drawer_width + 20)
-	else:
-		if is_open:
-			return size.x - drawer_width
-		else:
-			return size.x + 20
-
-
-func _get_tab_x() -> float:
-	## Tab X for the current state.
-	if edge == DrawerEdge.LEFT:
-		if is_open:
-			return drawer_width
 		elif is_revealed:
-			return 0.0
+			return -drawer_width
 		else:
-			# Off-screen
-			return -tab_width
+			return -(drawer_width + tab_width + 20)
 	else:
 		if is_open:
 			return size.x - drawer_width - tab_width
 		elif is_revealed:
 			return size.x - tab_width
 		else:
-			return size.x
+			return size.x + 20
 
 
 # -- Animation ---------------------------------------------------------------
@@ -317,15 +328,12 @@ func _animate_to_state() -> void:
 
 	_is_animating = true
 
-	var panel_target := _get_panel_x()
-	var tab_target := _get_tab_x()
+	var target := _get_sled_x()
 
 	_slide_tween = create_tween()
-	_slide_tween.set_parallel(true)
 	_slide_tween.set_ease(Tween.EASE_OUT)
 	_slide_tween.set_trans(Tween.TRANS_CUBIC)
-	_slide_tween.tween_property(_panel, "position:x", panel_target, slide_duration)
-	_slide_tween.tween_property(_tab_button, "position:x", tab_target, slide_duration)
+	_slide_tween.tween_property(_sled, "position:x", target, slide_duration)
 	_slide_tween.finished.connect(_on_slide_finished, CONNECT_ONE_SHOT)
 
 	if play_sounds:
