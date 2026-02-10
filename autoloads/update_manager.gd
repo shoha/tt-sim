@@ -942,8 +942,9 @@ func cancel_pending_update() -> void:
 
 
 ## Apply the downloaded update by restarting the game
-## The actual extraction happens on next startup via _apply_pending_update()
-func apply_update(_zip_path: String) -> void:
+## On Windows, the actual extraction happens on next startup via _apply_pending_update()
+## On macOS, we extract in-place before restarting (no file locking issues) to avoid a double-restart
+func apply_update(zip_path: String) -> void:
 	var exe_path = OS.get_executable_path()
 
 	print("UpdateManager: Restarting to apply update...")
@@ -952,11 +953,31 @@ func apply_update(_zip_path: String) -> void:
 		"Windows":
 			_restart_windows(exe_path)
 		"macOS":
-			_restart_macos(exe_path)
+			_apply_and_restart_macos(zip_path)
 		_:
 			# Fallback: just quit and let user restart manually
 			print("UpdateManager: Please restart the game to apply the update")
 			get_tree().quit()
+
+
+## Apply update and restart on macOS in a single step to avoid double-restart.
+## macOS doesn't lock files in use, so we can safely extract while running.
+func _apply_and_restart_macos(zip_path: String) -> void:
+	var pending = get_pending_update_info()
+	var version = pending.get("version", "unknown")
+
+	_log("Extracting update v%s before restart (avoiding double-restart)..." % version)
+
+	var success = _extract_update_macos(zip_path)
+	if success:
+		_log("Update extracted successfully, restarting into new version...")
+		_cleanup_pending_update()
+		DirAccess.remove_absolute(zip_path)
+		_save_update_success_toast(version)
+
+	# Restart regardless — if extraction succeeded, the new version launches directly.
+	# If it failed, the deferred approach on next startup will retry.
+	_restart_macos(OS.get_executable_path())
 
 
 ## Restart the game on Windows
