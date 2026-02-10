@@ -1,0 +1,80 @@
+[gd_resource type="Resource" script_class="LevelData" format=3]
+
+[ext_resource type="Script" path="res://resources/level_data.gd" id="1_jlq7d"]
+[ext_resource type="Script" path="res://resources/token_placement.gd" id="2_wts35"]
+
+[sub_resource type="Resource" id="Resource_jlq7d"]
+script = ExtResource("2_wts35")
+pack_id = "pokemon"
+asset_id = "3"
+position = Vector3(-6.1977816, -0.012256503, -0.0010449663)
+token_name = "Venusaur"
+current_health = 98
+placement_id = "1769378667.492_7637"
+
+[sub_resource type="Resource" id="Resource_wts35"]
+script = ExtResource("2_wts35")
+pack_id = "pokemon"
+asset_id = "4"
+position = Vector3(-1.7941616, -0.019958615, -1.8185897)
+scale = Vector3(1.0000014, 1.0000014, 1.0000014)
+token_name = "Charmander"
+placement_id = "1769391725.19_4865"
+
+[sub_resource type="Resource" id="Resource_f3ecs"]
+script = ExtResource("2_wts35")
+pack_id = "pokemon"
+asset_id = "3"
+position = Vector3(3.1849208, 0.007743478, 0.19866116)
+token_name = "Venusaur"
+placement_id = "1769885735.29_9101"
+
+[sub_resource type="Resource" id="Resource_1akjt"]
+script = ExtResource("2_wts35")
+pack_id = "pokemon"
+asset_id = "3"
+position = Vector3(7.98112, -0.012256503, -2.1169405)
+token_name = "Venusaur"
+placement_id = "1769885738.153_6112"
+
+[sub_resource type="Resource" id="Resource_me85d"]
+script = ExtResource("2_wts35")
+pack_id = "pokemon"
+asset_id = "4"
+position = Vector3(-0.22484598, -0.019958705, -9.149313e-06)
+token_name = "Charmander"
+placement_id = "1769885742.866_9534"
+
+[sub_resource type="Resource" id="Resource_hfngp"]
+script = ExtResource("2_wts35")
+pack_id = "pokemon"
+asset_id = "9"
+position = Vector3(-2.226402, -0.005109787, -3.235939)
+token_name = "Blastoise"
+placement_id = "1769885746.51_3203"
+
+[sub_resource type="Resource" id="Resource_8topm"]
+script = ExtResource("2_wts35")
+pack_id = "pokemon"
+asset_id = "6"
+position = Vector3(-1.6411133, 0.07238096, 2.487638)
+rotation_y = 1.1698564
+scale = Vector3(1.0000014, 1.0000014, 1.0000014)
+token_name = "Charizard"
+placement_id = "1769885752.125_6774"
+
+[sub_resource type="Resource" id="Resource_1fg2c"]
+script = ExtResource("2_wts35")
+pack_id = "pokemon"
+asset_id = "14"
+position = Vector3(3.3718498, -0.016571581, 3.396186)
+token_name = "Kakuna"
+placement_id = "1769914155.001_5390"
+
+[resource]
+script = ExtResource("1_jlq7d")
+level_name = "Oak's Lab"
+created_at = 1769378622
+modified_at = 1770688487
+map_path = "res://assets/models/maps/oaks_lab_lit.tscn"
+token_placements = Array[ExtResource("2_wts35")]([SubResource("Resource_jlq7d"), SubResource("Resource_wts35"), SubResource("Resource_f3ecs"), SubResource("Resource_1akjt"), SubResource("Resource_me85d"), SubResource("Resource_hfngp"), SubResource("Resource_8topm"), SubResource("Resource_1fg2c")])

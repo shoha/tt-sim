@@ -14,7 +14,7 @@ var _level_play_controller: LevelPlayController = null
 # Original values snapshot for edit mode cancel/revert
 var _original_map_scale: Vector3 = Vector3.ONE
 var _original_light_intensity: float = 1.0
-var _original_environment_preset: String = "indoor_neutral"
+var _original_environment_preset: String = ""
 var _original_environment_overrides: Dictionary = {}
 var _original_lofi_overrides: Dictionary = {}
 
@@ -161,12 +161,16 @@ func _update_asset_browser_button_state() -> void:
 func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -> void:
 	# Only GM can add tokens
 	if not NetworkManager.is_gm() and NetworkManager.is_networked():
-		push_warning("GameplayMenuController: Only GM can add tokens")
+		UIManager.show_error("Only the GM can add tokens")
 		return
 
 	# Spawn the asset via LevelPlayController
 	if _level_play_controller:
-		_level_play_controller.spawn_asset(pack_id, asset_id, variant_id)
+		var token = _level_play_controller.spawn_asset(pack_id, asset_id, variant_id)
+		if not token:
+			UIManager.show_error("Failed to add token — asset may still be downloading")
+	else:
+		UIManager.show_error("Cannot add token — no level is loaded")
 
 
 func _on_token_added(_token: BoardToken) -> void:
@@ -224,7 +228,7 @@ func _enter_edit_mode() -> void:
 	_original_lofi_overrides = level_data.lofi_overrides.duplicate()
 
 	# Initialize the edit panel with current values
-	var has_map_defaults = not _level_play_controller.get_map_environment_config().is_empty()
+	var map_defaults = _level_play_controller.get_map_environment_config()
 	var has_map_sky = _level_play_controller.get_map_sky_resource() != null
 	(
 		level_edit_panel
@@ -234,7 +238,7 @@ func _enter_edit_mode() -> void:
 			level_data.environment_preset,
 			level_data.environment_overrides,
 			level_data.lofi_overrides,
-			has_map_defaults,
+			map_defaults,
 			has_map_sky,
 		)
 	)
@@ -296,6 +300,7 @@ func _on_edit_environment_changed(preset: String, overrides: Dictionary) -> void
 
 
 ## Revert environment to the map's original embedded settings.
+## Clears preset and overrides so the map defaults layer takes effect.
 func _on_revert_to_map_defaults() -> void:
 	if not _level_play_controller:
 		return
@@ -303,11 +308,11 @@ func _on_revert_to_map_defaults() -> void:
 	if map_config.is_empty():
 		return
 
-	# Apply map's environment to the live scene (no preset, pure overrides)
-	_level_play_controller.apply_environment_settings("", map_config)
+	# Apply with empty preset and overrides — map defaults layer does the work
+	_level_play_controller.apply_environment_settings("", {})
 
 	# Update the panel's internal state and controls to match
-	level_edit_panel.apply_environment_state("", map_config)
+	level_edit_panel.apply_environment_state("", {})
 
 
 ## Real-time lo-fi shader change from the edit panel
@@ -338,8 +343,12 @@ func _on_edit_save_requested(
 	level_data.environment_overrides = new_overrides.duplicate()
 	level_data.lofi_overrides = new_lofi_overrides.duplicate()
 
-	# Save to disk
-	var save_path = LevelManager.save_level(level_data)
+	# Save to disk — use folder format when the level came from a folder
+	var save_path := ""
+	if level_data.level_folder != "":
+		save_path = LevelManager.save_level_folder(level_data)
+	else:
+		save_path = LevelManager.save_level(level_data)
 	if save_path != "":
 		UIManager.show_success("Level settings saved")
 	else:
