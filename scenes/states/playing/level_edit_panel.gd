@@ -29,28 +29,59 @@ signal drawer_opened
 ## The controller should revert changes if not saved.
 signal drawer_closed
 
+const TONEMAP_MODES = {
+	"Linear": Environment.TONE_MAPPER_LINEAR,
+	"Reinhardt": Environment.TONE_MAPPER_REINHARDT,
+	"Filmic": Environment.TONE_MAPPER_FILMIC,
+	"ACES": Environment.TONE_MAPPER_ACES,
+}
+
 # Open full editor button
 @onready var open_editor_button: Button = %OpenEditorButton
 
 # Map scale control
 @onready var map_scale_slider_spin: SliderSpinBox = %MapScaleSliderSpin
 
-# Lighting controls
+# Lighting controls — basic
 @onready var preset_dropdown: OptionButton = %PresetDropdown
 @onready var intensity_slider_spin: SliderSpinBox = %IntensitySliderSpin
+@onready var bg_color_picker: ColorPickerButton = %BgColorPicker
 @onready var ambient_color_picker: ColorPickerButton = %AmbientColorPicker
 @onready var ambient_energy_slider_spin: SliderSpinBox = %AmbientEnergySliderSpin
 @onready var fog_enabled_check: CheckBox = %FogEnabledCheck
+@onready var fog_color_picker: ColorPickerButton = %FogColorPicker
 @onready var fog_density_slider_spin: SliderSpinBox = %FogDensitySliderSpin
 @onready var glow_enabled_check: CheckBox = %GlowEnabledCheck
 @onready var glow_intensity_slider_spin: SliderSpinBox = %GlowIntensitySliderSpin
+@onready var exposure_slider_spin: SliderSpinBox = %ExposureSliderSpin
+@onready var brightness_slider_spin: SliderSpinBox = %BrightnessSliderSpin
+@onready var contrast_slider_spin: SliderSpinBox = %ContrastSliderSpin
+@onready var saturation_slider_spin: SliderSpinBox = %SaturationSliderSpin
 @onready var revert_to_map_button: Button = %RevertToMapButton
+
+# Lighting controls — advanced
+@onready var advanced_toggle: Button = %AdvancedToggle
+@onready var advanced_container: VBoxContainer = %AdvancedContainer
+@onready var sky_preset_dropdown: OptionButton = %SkyPresetDropdown
+@onready var fog_energy_slider_spin: SliderSpinBox = %FogEnergySliderSpin
+@onready var fog_height_slider_spin: SliderSpinBox = %FogHeightSliderSpin
+@onready var fog_height_density_slider_spin: SliderSpinBox = %FogHeightDensitySliderSpin
+@onready var tonemap_mode_dropdown: OptionButton = %TonemapModeDropdown
+@onready var tonemap_white_slider_spin: SliderSpinBox = %TonemapWhiteSliderSpin
+@onready var glow_strength_slider_spin: SliderSpinBox = %GlowStrengthSliderSpin
+@onready var glow_bloom_slider_spin: SliderSpinBox = %GlowBloomSliderSpin
+@onready var ssao_enabled_check: CheckBox = %SSAOEnabledCheck
+@onready var ssao_intensity_slider_spin: SliderSpinBox = %SSAOIntensitySliderSpin
+@onready var ssr_enabled_check: CheckBox = %SSREnabledCheck
+@onready var sdfgi_enabled_check: CheckBox = %SDFGIEnabledCheck
+
+# Action buttons
 @onready var save_button: Button = %SaveButton
 @onready var cancel_button: Button = %CancelButton
 
 # Post-processing (lo-fi) controls
 @onready var pixelation_slider_spin: SliderSpinBox = %PixelationSliderSpin
-@onready var saturation_slider_spin: SliderSpinBox = %SaturationSliderSpin
+@onready var color_fade_slider_spin: SliderSpinBox = %ColorFadeSliderSpin
 @onready var color_levels_slider_spin: SliderSpinBox = %ColorLevelsSliderSpin
 @onready var dither_slider_spin: SliderSpinBox = %DitherSliderSpin
 @onready var vignette_slider_spin: SliderSpinBox = %VignetteSliderSpin
@@ -89,6 +120,8 @@ func _on_ready() -> void:
 
 	_connect_control_signals()
 	_populate_preset_dropdown()
+	_populate_sky_preset_dropdown()
+	_populate_tonemap_mode_dropdown()
 
 
 func _connect_control_signals() -> void:
@@ -98,19 +131,42 @@ func _connect_control_signals() -> void:
 	# Map scale
 	map_scale_slider_spin.value_changed.connect(_on_map_scale_changed)
 
-	# Lighting UI signals
+	# Lighting — basic
 	preset_dropdown.item_selected.connect(_on_preset_selected)
 	intensity_slider_spin.value_changed.connect(_on_intensity_changed)
+	bg_color_picker.color_changed.connect(_on_bg_color_changed)
 	ambient_color_picker.color_changed.connect(_on_ambient_color_changed)
 	ambient_energy_slider_spin.value_changed.connect(_on_ambient_energy_changed)
 	fog_enabled_check.toggled.connect(_on_fog_enabled_changed)
+	fog_color_picker.color_changed.connect(_on_fog_color_changed)
 	fog_density_slider_spin.value_changed.connect(_on_fog_density_changed)
 	glow_enabled_check.toggled.connect(_on_glow_enabled_changed)
 	glow_intensity_slider_spin.value_changed.connect(_on_glow_intensity_changed)
+	exposure_slider_spin.value_changed.connect(_on_exposure_changed)
+	brightness_slider_spin.value_changed.connect(_on_brightness_changed)
+	contrast_slider_spin.value_changed.connect(_on_contrast_changed)
+	saturation_slider_spin.value_changed.connect(_on_saturation_changed)
+
+	# Lighting — advanced toggle
+	advanced_toggle.toggled.connect(_on_advanced_toggled)
+
+	# Lighting — advanced controls
+	sky_preset_dropdown.item_selected.connect(_on_sky_preset_selected)
+	fog_energy_slider_spin.value_changed.connect(_on_fog_energy_changed)
+	fog_height_slider_spin.value_changed.connect(_on_fog_height_changed)
+	fog_height_density_slider_spin.value_changed.connect(_on_fog_height_density_changed)
+	tonemap_mode_dropdown.item_selected.connect(_on_tonemap_mode_selected)
+	tonemap_white_slider_spin.value_changed.connect(_on_tonemap_white_changed)
+	glow_strength_slider_spin.value_changed.connect(_on_glow_strength_changed)
+	glow_bloom_slider_spin.value_changed.connect(_on_glow_bloom_changed)
+	ssao_enabled_check.toggled.connect(_on_ssao_enabled_changed)
+	ssao_intensity_slider_spin.value_changed.connect(_on_ssao_intensity_changed)
+	ssr_enabled_check.toggled.connect(_on_ssr_enabled_changed)
+	sdfgi_enabled_check.toggled.connect(_on_sdfgi_enabled_changed)
 
 	# Post-processing (lo-fi) UI signals
 	pixelation_slider_spin.value_changed.connect(_on_pixelation_changed)
-	saturation_slider_spin.value_changed.connect(_on_saturation_changed)
+	color_fade_slider_spin.value_changed.connect(_on_color_fade_changed)
 	color_levels_slider_spin.value_changed.connect(_on_color_levels_changed)
 	dither_slider_spin.value_changed.connect(_on_dither_changed)
 	vignette_slider_spin.value_changed.connect(_on_vignette_changed)
@@ -131,6 +187,42 @@ func _populate_preset_dropdown() -> void:
 		preset_dropdown.add_item("%s" % preset_name, i)
 		preset_dropdown.set_item_tooltip(i, description)
 		preset_dropdown.set_item_metadata(i, preset_name)
+
+
+## Populate the sky preset dropdown.
+## [param has_map_sky] adds the "map_default" option when the loaded map has
+## an embedded Sky resource.
+func _populate_sky_preset_dropdown(has_map_sky: bool = false) -> void:
+	sky_preset_dropdown.clear()
+
+	# "None" option (no sky, use background color)
+	sky_preset_dropdown.add_item("None", 0)
+	sky_preset_dropdown.set_item_metadata(0, "")
+
+	var idx := 1
+	# Map default option (only shown when a map sky exists)
+	if has_map_sky:
+		sky_preset_dropdown.add_item("Map Default", idx)
+		sky_preset_dropdown.set_item_metadata(idx, "map_default")
+		idx += 1
+
+	# Built-in presets
+	var sky_names = EnvironmentPresets.get_sky_preset_names()
+	for sky_name in sky_names:
+		var desc = EnvironmentPresets.get_sky_preset_description(sky_name)
+		sky_preset_dropdown.add_item(sky_name, idx)
+		sky_preset_dropdown.set_item_tooltip(idx, desc)
+		sky_preset_dropdown.set_item_metadata(idx, sky_name)
+		idx += 1
+
+
+func _populate_tonemap_mode_dropdown() -> void:
+	tonemap_mode_dropdown.clear()
+	var idx := 0
+	for label in TONEMAP_MODES:
+		tonemap_mode_dropdown.add_item(label, idx)
+		tonemap_mode_dropdown.set_item_metadata(idx, TONEMAP_MODES[label])
+		idx += 1
 
 
 # ============================================================================
@@ -166,6 +258,7 @@ func initialize(
 	overrides: Dictionary,
 	lofi_overrides: Dictionary = {},
 	has_map_defaults: bool = false,
+	has_map_sky: bool = false,
 ) -> void:
 	map_scale = current_map_scale
 	light_intensity_scale = intensity
@@ -187,6 +280,9 @@ func initialize(
 
 	# Show revert button only when the map provided its own environment
 	revert_to_map_button.visible = has_map_defaults
+
+	# Repopulate sky dropdown (map_default may or may not be available)
+	_populate_sky_preset_dropdown(has_map_sky)
 
 	# Sync environment and lo-fi controls from stored values
 	_sync_controls_from_config()
@@ -213,12 +309,50 @@ func apply_environment_state(preset: String, overrides: Dictionary) -> void:
 ## a WorldEnvironment node, keeping the panel independent of the live scene.
 func _sync_controls_from_config() -> void:
 	var config = EnvironmentPresets.get_environment_config(current_preset, current_overrides)
+
+	# Basic controls
+	bg_color_picker.color = config.get("background_color", Color(0.3, 0.3, 0.3))
 	ambient_color_picker.color = config.get("ambient_light_color", Color(0.4, 0.4, 0.45))
 	ambient_energy_slider_spin.set_value_no_signal(config.get("ambient_light_energy", 0.5))
 	fog_enabled_check.set_pressed_no_signal(config.get("fog_enabled", false))
+	fog_color_picker.color = config.get("fog_light_color", Color(0.5, 0.5, 0.55))
 	fog_density_slider_spin.set_value_no_signal(config.get("fog_density", 0.01))
 	glow_enabled_check.set_pressed_no_signal(config.get("glow_enabled", false))
 	glow_intensity_slider_spin.set_value_no_signal(config.get("glow_intensity", 0.8))
+	exposure_slider_spin.set_value_no_signal(config.get("tonemap_exposure", 1.0))
+	brightness_slider_spin.set_value_no_signal(config.get("adjustment_brightness", 1.0))
+	contrast_slider_spin.set_value_no_signal(config.get("adjustment_contrast", 1.0))
+	saturation_slider_spin.set_value_no_signal(config.get("adjustment_saturation", 1.0))
+
+	# Advanced controls — sky preset
+	var sky_preset_name: String = config.get("sky_preset", "")
+	for i in range(sky_preset_dropdown.item_count):
+		if sky_preset_dropdown.get_item_metadata(i) == sky_preset_name:
+			sky_preset_dropdown.select(i)
+			break
+
+	# Advanced controls — fog details
+	fog_energy_slider_spin.set_value_no_signal(config.get("fog_light_energy", 1.0))
+	fog_height_slider_spin.set_value_no_signal(config.get("fog_height", 0.0))
+	fog_height_density_slider_spin.set_value_no_signal(config.get("fog_height_density", 0.0))
+
+	# Advanced controls — tonemap
+	var tm_mode: int = config.get("tonemap_mode", Environment.TONE_MAPPER_FILMIC)
+	for i in range(tonemap_mode_dropdown.item_count):
+		if tonemap_mode_dropdown.get_item_metadata(i) == tm_mode:
+			tonemap_mode_dropdown.select(i)
+			break
+	tonemap_white_slider_spin.set_value_no_signal(config.get("tonemap_white", 1.0))
+
+	# Advanced controls — glow details
+	glow_strength_slider_spin.set_value_no_signal(config.get("glow_strength", 1.0))
+	glow_bloom_slider_spin.set_value_no_signal(config.get("glow_bloom", 0.0))
+
+	# Advanced controls — SSAO, SSR, SDFGI
+	ssao_enabled_check.set_pressed_no_signal(config.get("ssao_enabled", false))
+	ssao_intensity_slider_spin.set_value_no_signal(config.get("ssao_intensity", 2.0))
+	ssr_enabled_check.set_pressed_no_signal(config.get("ssr_enabled", false))
+	sdfgi_enabled_check.set_pressed_no_signal(config.get("sdfgi_enabled", false))
 
 
 # ============================================================================
@@ -278,6 +412,122 @@ func _on_glow_intensity_changed(value: float) -> void:
 	environment_changed.emit(current_preset, current_overrides)
 
 
+func _on_bg_color_changed(color: Color) -> void:
+	current_overrides["background_color"] = color
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_fog_color_changed(color: Color) -> void:
+	current_overrides["fog_light_color"] = color
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_exposure_changed(value: float) -> void:
+	current_overrides["tonemap_exposure"] = value
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_brightness_changed(value: float) -> void:
+	current_overrides["adjustment_brightness"] = value
+	current_overrides["adjustment_enabled"] = true
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_contrast_changed(value: float) -> void:
+	current_overrides["adjustment_contrast"] = value
+	current_overrides["adjustment_enabled"] = true
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_saturation_changed(value: float) -> void:
+	current_overrides["adjustment_saturation"] = value
+	current_overrides["adjustment_enabled"] = true
+	environment_changed.emit(current_preset, current_overrides)
+
+
+# ============================================================================
+# Advanced Toggle
+# ============================================================================
+
+
+func _on_advanced_toggled(pressed: bool) -> void:
+	advanced_container.visible = pressed
+	advanced_toggle.text = "Advanced ▲" if pressed else "Advanced ▼"
+
+
+# ============================================================================
+# Advanced Signal Handlers
+# ============================================================================
+
+
+func _on_sky_preset_selected(index: int) -> void:
+	var sky_name: String = sky_preset_dropdown.get_item_metadata(index)
+	current_overrides["sky_preset"] = sky_name
+	# When a sky is selected, switch to BG_SKY; when "None", revert to BG_COLOR
+	if sky_name != "":
+		current_overrides["background_mode"] = Environment.BG_SKY
+		current_overrides["ambient_light_source"] = Environment.AMBIENT_SOURCE_SKY
+	else:
+		current_overrides["background_mode"] = Environment.BG_COLOR
+		current_overrides["ambient_light_source"] = Environment.AMBIENT_SOURCE_COLOR
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_fog_energy_changed(value: float) -> void:
+	current_overrides["fog_light_energy"] = value
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_fog_height_changed(value: float) -> void:
+	current_overrides["fog_height"] = value
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_fog_height_density_changed(value: float) -> void:
+	current_overrides["fog_height_density"] = value
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_tonemap_mode_selected(index: int) -> void:
+	current_overrides["tonemap_mode"] = tonemap_mode_dropdown.get_item_metadata(index)
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_tonemap_white_changed(value: float) -> void:
+	current_overrides["tonemap_white"] = value
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_glow_strength_changed(value: float) -> void:
+	current_overrides["glow_strength"] = value
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_glow_bloom_changed(value: float) -> void:
+	current_overrides["glow_bloom"] = value
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_ssao_enabled_changed(enabled: bool) -> void:
+	current_overrides["ssao_enabled"] = enabled
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_ssao_intensity_changed(value: float) -> void:
+	current_overrides["ssao_intensity"] = value
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_ssr_enabled_changed(enabled: bool) -> void:
+	current_overrides["ssr_enabled"] = enabled
+	environment_changed.emit(current_preset, current_overrides)
+
+
+func _on_sdfgi_enabled_changed(enabled: bool) -> void:
+	current_overrides["sdfgi_enabled"] = enabled
+	environment_changed.emit(current_preset, current_overrides)
+
+
 func _on_save_pressed() -> void:
 	save_requested.emit(
 		map_scale, light_intensity_scale, current_preset, current_overrides, current_lofi_overrides
@@ -304,7 +554,7 @@ func _sync_lofi_controls() -> void:
 	var grain_intensity = current_lofi_overrides.get("grain_intensity", 0.025)
 
 	pixelation_slider_spin.set_value_no_signal(pixelation)
-	saturation_slider_spin.set_value_no_signal(saturation)
+	color_fade_slider_spin.set_value_no_signal(saturation)
 	color_levels_slider_spin.set_value_no_signal(color_levels)
 	dither_slider_spin.set_value_no_signal(dither_strength)
 	vignette_slider_spin.set_value_no_signal(vignette_strength)
@@ -320,7 +570,7 @@ func _on_pixelation_changed(value: float) -> void:
 	_emit_lofi_changed()
 
 
-func _on_saturation_changed(value: float) -> void:
+func _on_color_fade_changed(value: float) -> void:
 	current_lofi_overrides["saturation"] = value
 	_emit_lofi_changed()
 

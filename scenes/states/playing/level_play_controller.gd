@@ -32,6 +32,7 @@ var _streamer_connected: bool = false
 var _is_loading: bool = false  # True while async loading is in progress
 var _world_environment: WorldEnvironment = null  # Environment node for lighting/atmosphere
 var _map_environment_config: Dictionary = {}  # Environment extracted from the loaded map (if any)
+var _map_sky_resource: Sky = null  # Sky resource extracted from the loaded map (if any)
 var _original_light_energies: Dictionary = {}  # instance_id -> base energy
 
 
@@ -440,6 +441,7 @@ func _extract_and_strip_map_environment(root: Node3D) -> Dictionary:
 	var env_nodes: Array[Node] = []
 	GlbUtils._find_world_environments(root, env_nodes)
 	if env_nodes.is_empty():
+		_map_sky_resource = null
 		return {}
 
 	# Use the first WorldEnvironment found
@@ -447,6 +449,12 @@ func _extract_and_strip_map_environment(root: Node3D) -> Dictionary:
 	var config := {}
 	if world_env and world_env.environment:
 		config = EnvironmentPresets.extract_from_environment(world_env.environment)
+		# Preserve the Sky resource so "map_default" sky preset can use it
+		if world_env.environment.sky:
+			_map_sky_resource = world_env.environment.sky.duplicate()
+			print("LevelPlayController: Extracted sky from map node '%s'" % world_env.name)
+		else:
+			_map_sky_resource = null
 		print("LevelPlayController: Extracted environment from map node '%s'" % world_env.name)
 
 	# Strip all WorldEnvironment nodes
@@ -473,9 +481,15 @@ func _apply_level_environment(level_data: LevelData, map_env_config: Dictionary 
 		level_data.environment_preset = ""
 		print("LevelPlayController: Using map's embedded environment as level defaults")
 
-	# Apply preset and overrides
-	EnvironmentPresets.apply_to_world_environment(
-		_world_environment, level_data.environment_preset, level_data.environment_overrides
+	# Apply preset and overrides (pass map sky for "map_default" sky preset)
+	(
+		EnvironmentPresets
+		. apply_to_world_environment(
+			_world_environment,
+			level_data.environment_preset,
+			level_data.environment_overrides,
+			_map_sky_resource,
+		)
 	)
 
 	# Apply lo-fi shader overrides if any are set
@@ -540,7 +554,9 @@ func apply_light_intensity_scale(intensity_scale: float) -> void:
 ## Apply environment settings to the live WorldEnvironment.
 func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 	if is_instance_valid(_world_environment):
-		EnvironmentPresets.apply_to_world_environment(_world_environment, preset, overrides)
+		EnvironmentPresets.apply_to_world_environment(
+			_world_environment, preset, overrides, _map_sky_resource
+		)
 	else:
 		push_warning("LevelPlayController: WorldEnvironment is null — cannot apply settings")
 
@@ -553,6 +569,11 @@ func get_world_environment() -> WorldEnvironment:
 ## Get the environment config extracted from the loaded map (empty if none).
 func get_map_environment_config() -> Dictionary:
 	return _map_environment_config
+
+
+## Get the Sky resource extracted from the loaded map (null if none).
+func get_map_sky_resource() -> Sky:
+	return _map_sky_resource
 
 
 ## Get the GameMap reference.
@@ -858,6 +879,7 @@ func clear_level_map() -> void:
 		_world_environment.queue_free()
 		_world_environment = null
 	_map_environment_config = {}
+	_map_sky_resource = null
 
 
 ## Clear everything from the current level

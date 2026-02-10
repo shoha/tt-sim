@@ -110,6 +110,21 @@ theme_type_variation = &"Caption"
 text = "Overrides"
 horizontal_alignment = 1
 
+[node name="BgColorRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="BgColorLabel" type="Label" parent="ScrollContainer/VBox/BgColorRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Background:"
+
+[node name="BgColorPicker" type="ColorPickerButton" parent="ScrollContainer/VBox/BgColorRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+color = Color(0.3, 0.3, 0.3, 1)
+
 [node name="AmbientRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
@@ -147,9 +162,16 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(32, 0)
 layout_mode = 2
 
+[node name="FogColorPicker" type="ColorPickerButton" parent="ScrollContainer/VBox/FogRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 0)
+layout_mode = 2
+color = Color(0.5, 0.5, 0.55, 1)
+
 [node name="FogDensitySliderSpin" parent="ScrollContainer/VBox/FogRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 min_value = 0.0001
 max_value = 0.1
 step = 0.0001
@@ -179,6 +201,280 @@ step = 0.01
 value = 0.8
 allow_greater = true
 
+[node name="ExposureRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ExposureLabel" type="Label" parent="ScrollContainer/VBox/ExposureRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Exposure:"
+
+[node name="ExposureSliderSpin" parent="ScrollContainer/VBox/ExposureRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.1
+max_value = 4.0
+step = 0.01
+value = 1.0
+allow_greater = true
+
+[node name="BrightnessRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="BrightnessLabel" type="Label" parent="ScrollContainer/VBox/BrightnessRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Brightness:"
+
+[node name="BrightnessSliderSpin" parent="ScrollContainer/VBox/BrightnessRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.1
+max_value = 3.0
+step = 0.01
+value = 1.0
+
+[node name="ContrastRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ContrastLabel" type="Label" parent="ScrollContainer/VBox/ContrastRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Contrast:"
+
+[node name="ContrastSliderSpin" parent="ScrollContainer/VBox/ContrastRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.1
+max_value = 3.0
+step = 0.01
+value = 1.0
+
+[node name="SaturationRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SaturationLabel" type="Label" parent="ScrollContainer/VBox/SaturationRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Saturation:"
+
+[node name="SaturationSliderSpin" parent="ScrollContainer/VBox/SaturationRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 3.0
+step = 0.01
+value = 1.0
+
+[node name="AdvancedToggle" type="Button" parent="ScrollContainer/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+theme_type_variation = &"Caption"
+text = "Advanced ▼"
+
+[node name="AdvancedContainer" type="VBoxContainer" parent="ScrollContainer/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SkyPresetRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SkyLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/SkyPresetRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Sky:"
+
+[node name="SkyPresetDropdown" type="OptionButton" parent="ScrollContainer/VBox/AdvancedContainer/SkyPresetRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="FogEnergyRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="FogEnergyLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/FogEnergyRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Fog Energy:"
+
+[node name="FogEnergySliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/FogEnergyRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 2.0
+step = 0.01
+value = 1.0
+allow_greater = true
+
+[node name="FogHeightRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="FogHeightLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/FogHeightRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Fog Height:"
+
+[node name="FogHeightSliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/FogHeightRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -10.0
+max_value = 10.0
+step = 0.1
+value = 0.0
+allow_greater = true
+allow_lesser = true
+
+[node name="FogHeightDensityRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="FogHDLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/FogHeightDensityRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Fog H.Dens:"
+
+[node name="FogHeightDensitySliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/FogHeightDensityRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 10.0
+step = 0.01
+value = 0.0
+allow_greater = true
+
+[node name="TonemapModeRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TonemapLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/TonemapModeRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Tonemap:"
+
+[node name="TonemapModeDropdown" type="OptionButton" parent="ScrollContainer/VBox/AdvancedContainer/TonemapModeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TonemapWhiteRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TmWhiteLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/TonemapWhiteRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "TM White:"
+
+[node name="TonemapWhiteSliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/TonemapWhiteRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.1
+max_value = 16.0
+step = 0.01
+value = 1.0
+allow_greater = true
+
+[node name="GlowStrengthRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="GlowStrLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/GlowStrengthRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Glow Str:"
+
+[node name="GlowStrengthSliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/GlowStrengthRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 2.0
+step = 0.01
+value = 1.0
+allow_greater = true
+
+[node name="GlowBloomRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="GlowBloomLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/GlowBloomRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Bloom:"
+
+[node name="GlowBloomSliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/GlowBloomRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.01
+value = 0.0
+
+[node name="SSAORow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SSAOLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/SSAORow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "SSAO:"
+
+[node name="SSAOEnabledCheck" type="CheckBox" parent="ScrollContainer/VBox/AdvancedContainer/SSAORow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 0)
+layout_mode = 2
+
+[node name="SSAOIntensitySliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/SSAORow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 5.0
+step = 0.01
+value = 2.0
+
+[node name="SSRRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SSRLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/SSRRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "SSR:"
+
+[node name="SSREnabledCheck" type="CheckBox" parent="ScrollContainer/VBox/AdvancedContainer/SSRRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Reflections"
+
+[node name="SDFGIRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SDFGILabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/SDFGIRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "SDFGI:"
+
+[node name="SDFGIEnabledCheck" type="CheckBox" parent="ScrollContainer/VBox/AdvancedContainer/SDFGIRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Global Illumination"
+
 [node name="HSeparator3" type="HSeparator" parent="ScrollContainer/VBox"]
 layout_mode = 2
 
@@ -204,16 +500,16 @@ step = 0.0001
 value = 0.003
 allow_greater = true
 
-[node name="SaturationRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="ColorFadeRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SaturationLabel" type="Label" parent="ScrollContainer/VBox/SaturationRow"]
+[node name="ColorFadeLabel" type="Label" parent="ScrollContainer/VBox/ColorFadeRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
-text = "Saturation:"
+text = "Color Fade:"
 
-[node name="SaturationSliderSpin" parent="ScrollContainer/VBox/SaturationRow" instance=ExtResource("2_slider_spin_box")]
+[node name="ColorFadeSliderSpin" parent="ScrollContainer/VBox/ColorFadeRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 1.5
