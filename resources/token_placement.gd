@@ -96,14 +96,15 @@ func apply_to_token(token: BoardToken) -> void:
 	token.set_visible_to_players(is_visible_to_players)
 
 
-## Get display name for this placement
+## Get display name for this placement.
+## Returns token_name if set, otherwise falls back to asset_id or "Unknown Token".
+## For a human-readable asset name, callers with access to AssetPackManager
+## should use AssetPackManager.get_asset_display_name(pack_id, asset_id) instead.
 func get_display_name() -> String:
 	if token_name != "":
 		return token_name
-	
-	if pack_id != "" and asset_id != "":
-		return AssetPackManager.get_asset_display_name(pack_id, asset_id)
-	
+	if asset_id != "":
+		return asset_id
 	return "Unknown Token"
 
 
@@ -114,9 +115,9 @@ func to_dict() -> Dictionary:
 		"pack_id": pack_id,
 		"asset_id": asset_id,
 		"variant_id": variant_id,
-		"position": {"x": position.x, "y": position.y, "z": position.z},
+		"position": SerializationUtils.vec3_to_dict(position),
 		"rotation_y": rotation_y,
-		"scale": {"x": scale.x, "y": scale.y, "z": scale.z},
+		"scale": SerializationUtils.vec3_to_dict(scale),
 		"token_name": token_name,
 		"is_player_controlled": is_player_controlled,
 		"max_health": max_health,
@@ -135,12 +136,9 @@ static func from_dict(data: Dictionary) -> TokenPlacement:
 	placement.asset_id = data.get("asset_id", "")
 	placement.variant_id = data.get("variant_id", "default")
 	
-	var pos = data.get("position", {})
-	placement.position = Vector3(pos.get("x", 0), pos.get("y", 0), pos.get("z", 0))
+	placement.position = SerializationUtils.dict_to_vec3(data.get("position", {}))
 	placement.rotation_y = data.get("rotation_y", 0.0)
-	
-	var scl = data.get("scale", {"x": 1, "y": 1, "z": 1})
-	placement.scale = Vector3(scl.get("x", 1), scl.get("y", 1), scl.get("z", 1))
+	placement.scale = SerializationUtils.dict_to_vec3(data.get("scale", {}), Vector3.ONE)
 	
 	placement.token_name = data.get("token_name", "")
 	placement.is_player_controlled = data.get("is_player_controlled", false)

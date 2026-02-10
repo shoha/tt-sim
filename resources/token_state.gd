@@ -167,9 +167,9 @@ func to_dict() -> Dictionary:
 		"pack_id": pack_id,
 		"asset_id": asset_id,
 		"variant_id": variant_id,
-		"position": {"x": position.x, "y": position.y, "z": position.z},
-		"rotation": {"x": rotation.x, "y": rotation.y, "z": rotation.z},
-		"scale": {"x": scale.x, "y": scale.y, "z": scale.z},
+		"position": SerializationUtils.vec3_to_dict(position),
+		"rotation": SerializationUtils.vec3_to_dict(rotation),
+		"scale": SerializationUtils.vec3_to_dict(scale),
 		"token_name": token_name,
 		"is_player_controlled": is_player_controlled,
 		"character_id": character_id,
@@ -190,14 +190,9 @@ static func from_dict(data: Dictionary) -> TokenState:
 	state.asset_id = data.get("asset_id", "")
 	state.variant_id = data.get("variant_id", "default")
 
-	var pos = data.get("position", {})
-	state.position = Vector3(pos.get("x", 0), pos.get("y", 0), pos.get("z", 0))
-
-	var rot = data.get("rotation", {})
-	state.rotation = Vector3(rot.get("x", 0), rot.get("y", 0), rot.get("z", 0))
-
-	var scl = data.get("scale", {"x": 1, "y": 1, "z": 1})
-	state.scale = Vector3(scl.get("x", 1), scl.get("y", 1), scl.get("z", 1))
+	state.position = SerializationUtils.dict_to_vec3(data.get("position", {}))
+	state.rotation = SerializationUtils.dict_to_vec3(data.get("rotation", {}))
+	state.scale = SerializationUtils.dict_to_vec3(data.get("scale", {}), Vector3.ONE)
 
 	state.token_name = data.get("token_name", "Token")
 	state.is_player_controlled = data.get("is_player_controlled", false)
