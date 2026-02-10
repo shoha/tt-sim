@@ -13,6 +13,7 @@
 | [docs/ASSET_MANAGEMENT.md](docs/ASSET_MANAGEMENT.md) | Asset packs, model loading, caching |
 | [docs/SOUND_EFFECTS.md](docs/SOUND_EFFECTS.md) | Audio files, wiring, normalization, adding new sounds |
 | [docs/NETWORKING.md](docs/NETWORKING.md) | Multiplayer, Noray, state sync |
+| [docs/lighting-and-environment.md](docs/lighting-and-environment.md) | Environment presets, map defaults, sky, in-game editing |
 
 ## Tech Stack
 
@@ -36,6 +37,12 @@
 - **UIDs** – Godot `.uid` files are auto-generated; avoid manual edits
 - **CanvasLayer ordering** – Layer numbers are centralized in `Constants` (`LAYER_*`). Check screen region comments before adding UI to avoid overlaps. See `.cursor/rules/canvas-layers.mdc`
 - **mouse_filter** – Set `mouse_filter = IGNORE` on pure layout containers (`Control`, `MarginContainer`, `HBoxContainer`, etc.). Only interactive controls and modal backdrops should keep the default `STOP`
+- **Environment system** – Environment settings use a layering model: `PROPERTY_DEFAULTS` → map defaults → named preset → user overrides. See `docs/lighting-and-environment.md`. Key points:
+  - `LevelData.environment_preset` defaults to `""` (empty = use map defaults)
+  - Map defaults are extracted at load time, never baked into `level_data`
+  - Use `EnvironmentPresets.apply_to_world_environment()` with `map_defaults` parameter
+  - Embedded `WorldEnvironment` nodes are stripped from maps after extraction
+- **In-game editing** – `LevelEditPanel` (extends `DrawerContainer`, right edge) provides real-time editing during gameplay. `GameplayMenuController` routes changes to `LevelPlayController`. Cancel reverts; save persists to disk
 
 ## Adding Features
 
@@ -43,7 +50,10 @@
 - **New autoload**: Create in `autoloads/`, register in `project.godot`
 - **New UI panel (in-scene)**: Extend `AnimatedVisibilityContainer`, register with `UIManager.register_overlay()` for ESC handling
 - **New UI overlay (full-screen dialog)**: Extend `AnimatedCanvasLayerPanel`, override `_on_panel_ready()` for setup
+- **New slide-out drawer**: Extend `DrawerContainer`, configure `edge`, `drawer_width`, `tab_text` in `_on_ready()`
 - **New level/token logic**: See LevelPlayController, BoardTokenFactory, GameState
+- **New environment preset**: Add to `EnvironmentPresets.PRESETS` in `utils/environment_presets.gd`
+- **New environment property**: Add to `PROPERTY_DEFAULTS`, update `_apply_config_to_environment()`, `extract_from_environment()`, and `LevelEditPanel` controls
 - **Level editor**: Supports undo/redo (`Ctrl+Z`/`Ctrl+Y`) and autosave (30s interval, recovery on startup)
 
 ## Documentation
@@ -54,6 +64,7 @@ After making architectural or API changes, update the relevant documentation. Ch
 - **Scene tree changes** (new nodes, reparenting) – update the Scene Hierarchy in `docs/ARCHITECTURE.md`
 - **Asset/model loading changes** – update `docs/ASSET_MANAGEMENT.md`
 - **UI system changes** – update `docs/UI_SYSTEMS.md`
+- **Environment/lighting changes** – update `docs/lighting-and-environment.md`
 - **New conventions or patterns** – update this file (`AGENTS.md`) and `.cursor/rules/project-overview.mdc`
 
 ## Formatting
