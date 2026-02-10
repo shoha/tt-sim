@@ -109,33 +109,53 @@ func setup(release_info: Dictionary) -> void:
 func _markdown_to_bbcode(markdown: String) -> String:
 	var text = markdown
 
-	# Convert headers
-	text = text.replace("### ", "[b]")
-	text = text.replace("## ", "[b][u]")
-	text = text.replace("# ", "[b][u]")
+	# Normalize line endings
+	text = text.replace("\r", "")
 
-	# Basic bold/italic (simplified)
+	# Convert markdown links [text](url) to BBCode (first, before anything touches brackets)
+	var link_regex = RegEx.new()
+	link_regex.compile("\\[([^\\]]+)\\]\\(([^\\)]+)\\)")
+	text = link_regex.sub(text, "[url=$2]$1[/url]", true)
+
+	# Convert raw/bare URLs into clickable links (lookbehind skips urls already in [url=...])
+	var raw_url_regex = RegEx.new()
+	raw_url_regex.compile("(?<!=)(https?://[^\\s<>\\[\\]()]+)")
+	text = raw_url_regex.sub(text, "[url=$1]$1[/url]", true)
+
+	# Headers: anchored to line start, with proper closing tags.
+	# Process h3 before h2 before h1 so ### isn't consumed by ##.
+	var h3_regex = RegEx.new()
+	h3_regex.compile("(?m)^### (.+)$")
+	text = h3_regex.sub(text, "[b]$1[/b]", true)
+
+	var h2_regex = RegEx.new()
+	h2_regex.compile("(?m)^## (.+)$")
+	text = h2_regex.sub(text, "[b][u]$1[/u][/b]", true)
+
+	var h1_regex = RegEx.new()
+	h1_regex.compile("(?m)^# (.+)$")
+	text = h1_regex.sub(text, "[b][u]$1[/u][/b]", true)
+
+	# Bullet points: anchored to line start, before bold/italic so leading * isn't
+	# misinterpreted as emphasis
+	var bullet_regex = RegEx.new()
+	bullet_regex.compile("(?m)^[\\*\\-] ")
+	text = bullet_regex.sub(text, "• ", true)
+
+	# Bold (**text**) — must run before italic
 	var bold_regex = RegEx.new()
 	bold_regex.compile("\\*\\*(.+?)\\*\\*")
 	text = bold_regex.sub(text, "[b]$1[/b]", true)
 
+	# Italic (*text*)
 	var italic_regex = RegEx.new()
 	italic_regex.compile("\\*(.+?)\\*")
 	text = italic_regex.sub(text, "[i]$1[/i]", true)
 
-	# Convert bullet points
-	text = text.replace("\n- ", "\n• ")
-	text = text.replace("\n* ", "\n• ")
-
-	# Convert inline code
+	# Inline code
 	var code_regex = RegEx.new()
 	code_regex.compile("`(.+?)`")
 	text = code_regex.sub(text, "[code]$1[/code]", true)
-
-	# Convert markdown links [text](url) to BBCode [url=...]text[/url]
-	var link_regex = RegEx.new()
-	link_regex.compile("\\[([^\\]]+)\\]\\(([^\\)]+)\\)")
-	text = link_regex.sub(text, "[url=$2]$1[/url]", true)
 
 	return text
 
