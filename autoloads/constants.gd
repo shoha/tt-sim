@@ -17,15 +17,16 @@ extends Node
 #
 # Screen regions occupied:
 #   Left edge:     LAYER_GAMEPLAY_MENU (PlayerListDrawer — networked games only)
-#   Bottom-left:   LAYER_GAMEPLAY_MENU (MapScalePanel)
-#   Bottom-right:  LAYER_GAMEPLAY_MENU (BottomButtons), LAYER_APP_MENU (BottomButtons)
+#   Right edge:    LAYER_GAMEPLAY_MENU (LevelEditPanel drawer — GM only)
+#   Bottom-right:  LAYER_GAMEPLAY_MENU (BottomButtons)
 #   Bottom-center: LAYER_INPUT_HINTS, LAYER_TOAST, LAYER_DIALOG (download queue)
 #   Centered:      LAYER_SETTINGS, LAYER_DIALOG (modals)
-#   Full-screen:   LAYER_LOADING, LAYER_TRANSITION (transient)
+#   Full-screen:   LAYER_LEVEL_EDITOR, LAYER_LOADING, LAYER_TRANSITION (transient)
 
 const LAYER_WORLD_VIEWPORT := -1  ## 3D scene rendering (SubViewportContainer)
 const LAYER_APP_MENU := 2  ## Always-visible app chrome (Level Editor button) — bottom-right
-const LAYER_GAMEPLAY_MENU := 2  ## In-game UI (tokens, save, scale slider) — bottom-left & bottom-right
+const LAYER_GAMEPLAY_MENU := 2  ## In-game UI (tokens, save, edit drawer) — right edge & bottom-right
+const LAYER_LEVEL_EDITOR := 3  ## Level Editor overlay (full-screen, above gameplay)
 const LAYER_LOBBY := 5  ## Host/client lobby (centered, full-screen backdrop)
 const LAYER_PAUSE := 10  ## Pause overlay (centered, full-screen backdrop)
 const LAYER_INPUT_HINTS := 80  ## Contextual keyboard hints — bottom-center

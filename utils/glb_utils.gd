@@ -404,6 +404,35 @@ static func flatten_non_node3d_parents(root: Node3D) -> void:
 			child.transform = child_transform
 
 
+## Remove all WorldEnvironment nodes from a loaded scene.
+## Maps may embed their own WorldEnvironment which would conflict with the
+## programmatic one created by LevelPlayController._apply_level_environment().
+## Godot only uses one WorldEnvironment per Viewport, so duplicates cause the
+## programmatic settings to be silently ignored.  Node3D children are
+## reparented first (via flatten_non_node3d_parents) so they are not lost.
+static func strip_world_environments(root: Node) -> void:
+	var to_remove: Array[Node] = []
+	_find_world_environments(root, to_remove)
+	for node in to_remove:
+		node.get_parent().remove_child(node)
+		node.queue_free()
+	if to_remove.size() > 0:
+		print(
+			(
+				"GlbUtils: Stripped %d WorldEnvironment node(s) from '%s'"
+				% [to_remove.size(), root.name]
+			)
+		)
+
+
+## Recursively collect WorldEnvironment nodes (excluding the root itself).
+static func _find_world_environments(node: Node, result: Array[Node]) -> void:
+	for child in node.get_children():
+		if child is WorldEnvironment:
+			result.append(child)
+		_find_world_environments(child, result)
+
+
 ## Recursively find non-Node3D nodes that have Node3D children
 static func _find_non_node3d_with_3d_children(node: Node, result: Array[Node]) -> void:
 	for child in node.get_children():
