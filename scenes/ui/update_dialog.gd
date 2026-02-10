@@ -17,10 +17,13 @@ signal closed
 @onready var download_button: Button = %DownloadButton
 @onready var view_button: Button = %ViewButton
 @onready var skip_button: Button = %SkipButton
+@onready var commit_link: LinkButton = %CommitLink
 @onready var post_download_buttons: HBoxContainer = %PostDownloadButtons
 @onready var restart_button: Button = %RestartButton
 @onready var later_button: Button = %LaterButton
 @onready var open_folder_button: Button = %OpenFolderButton
+
+const GITHUB_COMMIT_URL := "https://github.com/shoha/tt-sim/commit/"
 
 var _release_info: Dictionary = {}
 var _download_path: String = ""
@@ -34,7 +37,6 @@ func _on_panel_ready() -> void:
 	restart_button.pressed.connect(_on_restart_pressed)
 	later_button.pressed.connect(_on_later_pressed)
 	open_folder_button.pressed.connect(_on_open_folder_pressed)
-
 	# Connect to UpdateManager signals
 	UpdateManager.update_download_progress.connect(_on_download_progress)
 	UpdateManager.update_download_complete.connect(_on_download_complete)
@@ -59,6 +61,15 @@ func _on_link_clicked(meta: Variant) -> void:
 		OS.shell_open(meta)
 
 
+## Extract the short commit hash from a dev build version like "0.0.0-build.abc123"
+static func _extract_commit_hash(version: String) -> String:
+	var prefix := "-build."
+	var idx := version.find(prefix)
+	if idx >= 0:
+		return version.substr(idx + prefix.length())
+	return ""
+
+
 func setup(release_info: Dictionary) -> void:
 	_release_info = release_info
 
@@ -72,6 +83,14 @@ func setup(release_info: Dictionary) -> void:
 		title_label.text = "Update Available"
 
 	version_label.text = "v%s → v%s" % [current_version, new_version]
+
+	# Show a clickable commit link for dev builds (version contains "build.")
+	var commit_hash := _extract_commit_hash(new_version)
+	if not commit_hash.is_empty():
+		commit_link.uri = GITHUB_COMMIT_URL + commit_hash
+		commit_link.text = "commit %s" % commit_hash
+		commit_link.tooltip_text = commit_link.uri
+		commit_link.visible = true
 
 	# Parse and display release notes
 	var body = release_info.get("body", "")
