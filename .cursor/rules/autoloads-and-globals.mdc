@@ -1,0 +1,117 @@
+---
+description: Best practices for autoloads, static classes, and global access patterns
+globs: "autoloads/**/*.gd"
+alwaysApply: false
+---
+
+# Autoloads and Global Access Patterns
+
+This project uses three tiers of global accessibility. Choose the lightest tier that fits.
+
+## Tier 1: Static Classes (no Node, no autoload)
+
+**Use when:** the script contains only `const` declarations, `static func` helpers, or both. It never needs `_ready()`, `_process()`, signals, or scene tree access.
+
+**How:** Add `class_name Foo` at the top. Do NOT add `extends Node`. Mark all functions `static`. Do NOT register in `project.godot`.
+
+**Examples in this project:** `Constants`, `Paths`, `NodeUtils`.
+
+```gdscript
+class_name MyHelpers
+
+const MAX_RETRIES := 3
+
+static func clamp_name(name: String) -> String:
+    return name.substr(0, 32)
+```
+
+**Checklist before choosing Tier 1:**
+- [ ] No `_ready()`, `_process()`, or other lifecycle callbacks needed
+- [ ] No signals emitted or connected
+- [ ] No child nodes or scene tree access
+- [ ] No RPCs or multiplayer interaction
+- [ ] Every function can be `static`
+
+## Tier 2: Autoload Singletons
+
+**Use when:** the system manages runtime state, emits signals, needs lifecycle callbacks, or must persist across scene changes.
+
+**How:** Create in `autoloads/`, extend `Node`, register in `project.godot`. Reference by autoload name directly (`MyManager.method()`), never via `get_node("/root/MyManager")`.
+
+**Examples:** `UIManager`, `LevelManager`, `AudioManager`, `NetworkManager`, `GameState`, `EventBus`, `UpdateManager`.
+
+**Rules for new autoloads:**
+- Only create an autoload for a **true service** — something that persists across scenes and manages state or coordinates cross-cutting behavior.
+- Do NOT create autoloads for implementation details of an existing service. Use the facade pattern instead (see Tier 3).
+- Keep the public API surface small. Internal helpers should be private (`_func_name`).
+- Document the autoload's responsibilities in a `##` docstring at the top of the file.
+- Add it to the Autoloads table in `docs/ARCHITECTURE.md`.
+
+## Tier 3: Facade with Internal Sub-components
+
+**Use when:** a system is complex enough to warrant multiple classes, but only one public entry point makes sense.
+
+**How:** One autoload facade owns internal sub-components as child nodes or `RefCounted` objects. Sub-components receive dependencies via a `setup()` method (dependency injection) rather than referencing autoload names.
+
+**Example in this project:** `AssetManager` is the single autoload for the asset pipeline. It owns `cache`, `downloader`, `streamer`, and `resolver` as child nodes. External code accesses the facade (`AssetManager.get_model_instance(...)`) or, for signals, the exposed sub-component (`AssetManager.downloader.download_progress`).
+
+```gdscript
+# Facade autoload
+extends Node
+
+var cache: Node
+var downloader: Node
+
+func _ready() -> void:
+    cache = preload("res://autoloads/my_cache.gd").new()
+    cache.name = "MyCache"
+    add_child(cache)
+
+    downloader = preload("res://autoloads/my_downloader.gd").new()
+    downloader.name = "MyDownloader"
+    add_child(downloader)
+
+    downloader.setup(cache)  # Inject dependencies
+```
+
+```gdscript
+# Sub-component (NOT an autoload)
+extends Node
+
+var _cache: Node
+
+func setup(cache_ref: Node) -> void:
+    _cache = cache_ref
+```
+
+**Rules for sub-components:**
+- Never register sub-components in `project.godot`.
+- Sub-components must NOT reference autoload names for sibling dependencies. Use the injected reference instead.
+- Sub-components CAN reference unrelated autoloads that are still registered (e.g., `NetworkManager`).
+- If a sub-component needs RPCs, it must be a `Node` child (RPCs require a scene tree path).
+
+## Decision Flowchart
+
+1. Does it need lifecycle callbacks, signals, or scene tree access?
+   - **No** → Tier 1 (static `class_name`)
+   - **Yes** → continue
+2. Is it an implementation detail of an existing system?
+   - **Yes** → Tier 3 (sub-component of existing facade)
+   - **No** → continue
+3. Does it manage cross-cutting runtime state that persists across scenes?
+   - **Yes** → Tier 2 (autoload)
+   - **No** → Consider making it a scene-local node or `RefCounted` object instead
+
+## EventBus
+
+`EventBus` is the one autoload dedicated to cross-system signals. Rules:
+- Only add signals that genuinely span unrelated systems (e.g., UI requesting a state change from Root).
+- If the emitter and listener have a parent-child or sibling relationship, use a direct signal connection instead.
+- Keep EventBus small. If it grows beyond ~15 signals, some likely belong on a domain-specific autoload.
+
+## Do Not
+
+- Create autoloads for pure data or pure utility functions (use `class_name` + `static func`).
+- Expose implementation-detail classes as separate autoloads (use the facade pattern).
+- Reference autoloads via `get_node("/root/X")` or `has_node("/root/X")` — use the autoload name directly.
+- Create circular dependencies between autoloads. If A depends on B and B depends on A, introduce a shared signal or extract the shared concern.
