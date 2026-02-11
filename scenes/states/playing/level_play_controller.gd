@@ -297,7 +297,7 @@ func _play_level_async(level_data: LevelData) -> void:
 			_abort_loading()
 			return
 
-		var token = BoardTokenFactory.create_from_placement(placement)
+		var token = BoardTokenFactory.create_from_placement_async(placement).token
 		if token and is_instance_valid(drag_and_drop):
 			drag_and_drop.add_child(token)
 			_track_token(token, placement)
@@ -578,9 +578,7 @@ func _connect_token_state_signals(token: BoardToken) -> void:
 	token.revived.connect(func(): _on_token_property_changed(token))
 
 	# Transform changes use unreliable channel with rate limiting (high-frequency, can drop)
-	token.position_changed.connect(func(): _on_token_transform_changed(token))
-	token.rotation_changed.connect(func(): _on_token_transform_changed(token))
-	token.scale_changed.connect(func(): _on_token_transform_changed(token))
+	token.transform_changed.connect(func(): _on_token_transform_changed(token))
 	token.transform_updated.connect(func(): _on_token_transform_changed(token))
 
 

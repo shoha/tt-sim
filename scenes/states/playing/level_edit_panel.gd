@@ -1,7 +1,7 @@
 extends DrawerContainer
 class_name LevelEditPanel
 
-## Slide-out drawer for real-time level editing during gameplay.
+## Slide-out drawer for real-time visual tuning during gameplay.
 ## Provides controls for map scale, lighting, environment, and post-processing.
 ## Changes apply immediately to the live game viewport.
 ## Uses DrawerContainer with edge = RIGHT so the tab appears on the left.
@@ -19,7 +19,6 @@ signal intensity_changed(new_scale: float)
 signal environment_changed(preset: String, overrides: Dictionary)
 signal lofi_changed(overrides: Dictionary)
 signal revert_to_map_defaults_requested
-signal open_editor_requested
 
 ## Emitted when the drawer opens (before the animation starts).
 ## The controller should snapshot current values and call initialize().
@@ -35,9 +34,6 @@ const TONEMAP_MODES = {
 	"Filmic": Environment.TONE_MAPPER_FILMIC,
 	"ACES": Environment.TONE_MAPPER_ACES,
 }
-
-# Open full editor button
-@onready var open_editor_button: Button = %OpenEditorButton
 
 # Map scale control
 @onready var map_scale_slider_spin: SliderSpinBox = %MapScaleSliderSpin
@@ -101,7 +97,7 @@ func _on_ready() -> void:
 	# Configure drawer
 	edge = DrawerEdge.RIGHT
 	drawer_width = 350.0
-	tab_text = "Edit"
+	tab_text = "Visuals"
 	play_sounds = true
 
 	# Increase content padding inside the drawer panel.
@@ -141,52 +137,58 @@ func _on_ready() -> void:
 
 
 func _connect_control_signals() -> void:
-	# Open full editor
-	open_editor_button.pressed.connect(func() -> void: open_editor_requested.emit())
-
 	# Map scale
 	map_scale_slider_spin.value_changed.connect(_on_map_scale_changed)
 
-	# Lighting — basic
+	# Special-case controls (preset selection, dropdowns with complex logic)
 	preset_dropdown.item_selected.connect(_on_preset_selected)
 	intensity_slider_spin.value_changed.connect(_on_intensity_changed)
-	bg_color_picker.color_changed.connect(_on_bg_color_changed)
-	ambient_color_picker.color_changed.connect(_on_ambient_color_changed)
-	ambient_energy_slider_spin.value_changed.connect(_on_ambient_energy_changed)
-	fog_enabled_check.toggled.connect(_on_fog_enabled_changed)
-	fog_color_picker.color_changed.connect(_on_fog_color_changed)
-	fog_density_slider_spin.value_changed.connect(_on_fog_density_changed)
-	glow_enabled_check.toggled.connect(_on_glow_enabled_changed)
-	glow_intensity_slider_spin.value_changed.connect(_on_glow_intensity_changed)
-	exposure_slider_spin.value_changed.connect(_on_exposure_changed)
-	brightness_slider_spin.value_changed.connect(_on_brightness_changed)
-	contrast_slider_spin.value_changed.connect(_on_contrast_changed)
-	saturation_slider_spin.value_changed.connect(_on_saturation_changed)
-
-	# Lighting — advanced toggle
 	advanced_toggle.toggled.connect(_on_advanced_toggled)
-
-	# Lighting — advanced controls
 	sky_preset_dropdown.item_selected.connect(_on_sky_preset_selected)
-	fog_energy_slider_spin.value_changed.connect(_on_fog_energy_changed)
-	fog_height_slider_spin.value_changed.connect(_on_fog_height_changed)
-	fog_height_density_slider_spin.value_changed.connect(_on_fog_height_density_changed)
 	tonemap_mode_dropdown.item_selected.connect(_on_tonemap_mode_selected)
-	tonemap_white_slider_spin.value_changed.connect(_on_tonemap_white_changed)
-	glow_strength_slider_spin.value_changed.connect(_on_glow_strength_changed)
-	glow_bloom_slider_spin.value_changed.connect(_on_glow_bloom_changed)
-	ssao_enabled_check.toggled.connect(_on_ssao_enabled_changed)
-	ssao_intensity_slider_spin.value_changed.connect(_on_ssao_intensity_changed)
-	ssr_enabled_check.toggled.connect(_on_ssr_enabled_changed)
-	sdfgi_enabled_check.toggled.connect(_on_sdfgi_enabled_changed)
 
-	# Post-processing (lo-fi) UI signals
-	pixelation_slider_spin.value_changed.connect(_on_pixelation_changed)
-	color_fade_slider_spin.value_changed.connect(_on_color_fade_changed)
-	color_levels_slider_spin.value_changed.connect(_on_color_levels_changed)
-	dither_slider_spin.value_changed.connect(_on_dither_changed)
-	vignette_slider_spin.value_changed.connect(_on_vignette_changed)
-	grain_slider_spin.value_changed.connect(_on_grain_changed)
+	# Config-driven environment overrides: [control, signal_name, override_key]
+	for binding in [
+		[bg_color_picker, "color_changed", "background_color"],
+		[ambient_color_picker, "color_changed", "ambient_light_color"],
+		[ambient_energy_slider_spin, "value_changed", "ambient_light_energy"],
+		[fog_enabled_check, "toggled", "fog_enabled"],
+		[fog_color_picker, "color_changed", "fog_light_color"],
+		[fog_density_slider_spin, "value_changed", "fog_density"],
+		[glow_enabled_check, "toggled", "glow_enabled"],
+		[glow_intensity_slider_spin, "value_changed", "glow_intensity"],
+		[exposure_slider_spin, "value_changed", "tonemap_exposure"],
+		[fog_energy_slider_spin, "value_changed", "fog_light_energy"],
+		[fog_height_slider_spin, "value_changed", "fog_height"],
+		[fog_height_density_slider_spin, "value_changed", "fog_height_density"],
+		[tonemap_white_slider_spin, "value_changed", "tonemap_white"],
+		[glow_strength_slider_spin, "value_changed", "glow_strength"],
+		[glow_bloom_slider_spin, "value_changed", "glow_bloom"],
+		[ssao_enabled_check, "toggled", "ssao_enabled"],
+		[ssao_intensity_slider_spin, "value_changed", "ssao_intensity"],
+		[ssr_enabled_check, "toggled", "ssr_enabled"],
+		[sdfgi_enabled_check, "toggled", "sdfgi_enabled"],
+	]:
+		binding[0].connect(binding[1], _on_env_override_changed.bind(binding[2]))
+
+	# Adjustment overrides (also sets adjustment_enabled = true)
+	for binding in [
+		[brightness_slider_spin, "value_changed", "adjustment_brightness"],
+		[contrast_slider_spin, "value_changed", "adjustment_contrast"],
+		[saturation_slider_spin, "value_changed", "adjustment_saturation"],
+	]:
+		binding[0].connect(binding[1], _on_adjustment_override_changed.bind(binding[2]))
+
+	# Lo-fi post-processing overrides: [control, signal_name, override_key]
+	for binding in [
+		[pixelation_slider_spin, "value_changed", "pixelation"],
+		[color_fade_slider_spin, "value_changed", "saturation"],
+		[color_levels_slider_spin, "value_changed", "color_levels"],
+		[dither_slider_spin, "value_changed", "dither_strength"],
+		[vignette_slider_spin, "value_changed", "vignette_strength"],
+		[grain_slider_spin, "value_changed", "grain_intensity"],
+	]:
+		binding[0].connect(binding[1], _on_lofi_override_changed.bind(binding[2]))
 
 	revert_to_map_button.pressed.connect(func() -> void: revert_to_map_defaults_requested.emit())
 	save_button.pressed.connect(_on_save_pressed)
@@ -414,65 +416,15 @@ func _on_intensity_changed(value: float) -> void:
 	intensity_changed.emit(value)
 
 
-func _on_ambient_color_changed(color: Color) -> void:
-	current_overrides["ambient_light_color"] = color
+## Generic handler for config-driven environment overrides.
+func _on_env_override_changed(value: Variant, key: String) -> void:
+	current_overrides[key] = value
 	environment_changed.emit(current_preset, current_overrides)
 
 
-func _on_ambient_energy_changed(value: float) -> void:
-	current_overrides["ambient_light_energy"] = value
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_fog_enabled_changed(enabled: bool) -> void:
-	current_overrides["fog_enabled"] = enabled
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_fog_density_changed(value: float) -> void:
-	current_overrides["fog_density"] = value
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_glow_enabled_changed(enabled: bool) -> void:
-	current_overrides["glow_enabled"] = enabled
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_glow_intensity_changed(value: float) -> void:
-	current_overrides["glow_intensity"] = value
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_bg_color_changed(color: Color) -> void:
-	current_overrides["background_color"] = color
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_fog_color_changed(color: Color) -> void:
-	current_overrides["fog_light_color"] = color
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_exposure_changed(value: float) -> void:
-	current_overrides["tonemap_exposure"] = value
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_brightness_changed(value: float) -> void:
-	current_overrides["adjustment_brightness"] = value
-	current_overrides["adjustment_enabled"] = true
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_contrast_changed(value: float) -> void:
-	current_overrides["adjustment_contrast"] = value
-	current_overrides["adjustment_enabled"] = true
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_saturation_changed(value: float) -> void:
-	current_overrides["adjustment_saturation"] = value
+## Handler for adjustment overrides that also enables the adjustment system.
+func _on_adjustment_override_changed(value: Variant, key: String) -> void:
+	current_overrides[key] = value
 	current_overrides["adjustment_enabled"] = true
 	environment_changed.emit(current_preset, current_overrides)
 
@@ -505,58 +457,8 @@ func _on_sky_preset_selected(index: int) -> void:
 	environment_changed.emit(current_preset, current_overrides)
 
 
-func _on_fog_energy_changed(value: float) -> void:
-	current_overrides["fog_light_energy"] = value
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_fog_height_changed(value: float) -> void:
-	current_overrides["fog_height"] = value
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_fog_height_density_changed(value: float) -> void:
-	current_overrides["fog_height_density"] = value
-	environment_changed.emit(current_preset, current_overrides)
-
-
 func _on_tonemap_mode_selected(index: int) -> void:
 	current_overrides["tonemap_mode"] = tonemap_mode_dropdown.get_item_metadata(index)
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_tonemap_white_changed(value: float) -> void:
-	current_overrides["tonemap_white"] = value
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_glow_strength_changed(value: float) -> void:
-	current_overrides["glow_strength"] = value
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_glow_bloom_changed(value: float) -> void:
-	current_overrides["glow_bloom"] = value
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_ssao_enabled_changed(enabled: bool) -> void:
-	current_overrides["ssao_enabled"] = enabled
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_ssao_intensity_changed(value: float) -> void:
-	current_overrides["ssao_intensity"] = value
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_ssr_enabled_changed(enabled: bool) -> void:
-	current_overrides["ssr_enabled"] = enabled
-	environment_changed.emit(current_preset, current_overrides)
-
-
-func _on_sdfgi_enabled_changed(enabled: bool) -> void:
-	current_overrides["sdfgi_enabled"] = enabled
 	environment_changed.emit(current_preset, current_overrides)
 
 
@@ -578,12 +480,12 @@ func _on_cancel_pressed() -> void:
 ## Sync lo-fi controls from current_lofi_overrides (or defaults)
 func _sync_lofi_controls() -> void:
 	# Use stored overrides or defaults
-	var pixelation = current_lofi_overrides.get("pixelation", 0.003)
-	var saturation = current_lofi_overrides.get("saturation", 0.85)
-	var color_levels = current_lofi_overrides.get("color_levels", 32.0)
-	var dither_strength = current_lofi_overrides.get("dither_strength", 0.5)
-	var vignette_strength = current_lofi_overrides.get("vignette_strength", 0.3)
-	var grain_intensity = current_lofi_overrides.get("grain_intensity", 0.025)
+	var pixelation = current_lofi_overrides.get("pixelation", Constants.LOFI_DEFAULTS["pixelation"])
+	var saturation = current_lofi_overrides.get("saturation", Constants.LOFI_DEFAULTS["saturation"])
+	var color_levels = current_lofi_overrides.get("color_levels", Constants.LOFI_DEFAULTS["color_levels"])
+	var dither_strength = current_lofi_overrides.get("dither_strength", Constants.LOFI_DEFAULTS["dither_strength"])
+	var vignette_strength = current_lofi_overrides.get("vignette_strength", Constants.LOFI_DEFAULTS["vignette_strength"])
+	var grain_intensity = current_lofi_overrides.get("grain_intensity", Constants.LOFI_DEFAULTS["grain_intensity"])
 
 	pixelation_slider_spin.set_value_no_signal(pixelation)
 	color_fade_slider_spin.set_value_no_signal(saturation)
@@ -593,35 +495,7 @@ func _sync_lofi_controls() -> void:
 	grain_slider_spin.set_value_no_signal(grain_intensity)
 
 
-func _emit_lofi_changed() -> void:
+## Generic handler for config-driven lo-fi overrides.
+func _on_lofi_override_changed(value: Variant, key: String) -> void:
+	current_lofi_overrides[key] = value
 	lofi_changed.emit(current_lofi_overrides)
-
-
-func _on_pixelation_changed(value: float) -> void:
-	current_lofi_overrides["pixelation"] = value
-	_emit_lofi_changed()
-
-
-func _on_color_fade_changed(value: float) -> void:
-	current_lofi_overrides["saturation"] = value
-	_emit_lofi_changed()
-
-
-func _on_color_levels_changed(value: float) -> void:
-	current_lofi_overrides["color_levels"] = value
-	_emit_lofi_changed()
-
-
-func _on_dither_changed(value: float) -> void:
-	current_lofi_overrides["dither_strength"] = value
-	_emit_lofi_changed()
-
-
-func _on_vignette_changed(value: float) -> void:
-	current_lofi_overrides["vignette_strength"] = value
-	_emit_lofi_changed()
-
-
-func _on_grain_changed(value: float) -> void:
-	current_lofi_overrides["grain_intensity"] = value
-	_emit_lofi_changed()

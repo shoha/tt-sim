@@ -26,14 +26,8 @@ theme_override_constants/separation = 10
 
 [node name="Title" type="Label" parent="ScrollContainer/VBox"]
 layout_mode = 2
-text = "Level Settings"
+text = "Visuals"
 horizontal_alignment = 1
-
-[node name="OpenEditorButton" type="Button" parent="ScrollContainer/VBox"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = "Secondary"
-text = "Level Details..."
 
 [node name="HSeparator0" type="HSeparator" parent="ScrollContainer/VBox"]
 layout_mode = 2

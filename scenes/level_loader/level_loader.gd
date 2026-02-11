@@ -73,7 +73,7 @@ func _load_map() -> bool:
 
 ## Spawn a single token from placement data
 func _spawn_token(placement: TokenPlacement) -> BoardToken:
-	var token = BoardTokenFactory.create_from_placement(placement)
+	var token = BoardTokenFactory.create_from_placement_async(placement).token
 
 	if not token:
 		push_error(

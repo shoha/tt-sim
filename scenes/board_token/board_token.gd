@@ -72,16 +72,13 @@ var _removal_tween: Tween
 var _spawn_target_scale: Vector3 = Vector3.ONE
 
 # Signals for game state changes
-signal health_changed(new_health: int, max_health: int)
-signal health_depleted
+signal health_changed(new_health: int, max_health: int, old_health: int)
 signal died
 signal revived
 signal token_visibility_changed(is_visible: bool)
 signal status_effect_added(effect: String)
 signal status_effect_removed(effect: String)
-signal position_changed
-signal rotation_changed
-signal scale_changed
+signal transform_changed  # Emitted for any position/rotation/scale change
 signal transform_updated  # Emitted during continuous manipulation (drag/rotate/scale)
 signal highlight_changed(is_highlighted: bool)
 
@@ -127,7 +124,6 @@ func take_damage(amount: int) -> void:
 	health_changed.emit(current_health, max_health, old_health)
 
 	if current_health == 0 and old_health > 0:
-		health_depleted.emit()
 		_on_health_depleted()
 
 
@@ -141,9 +137,10 @@ func heal(amount: int) -> void:
 
 
 func set_max_health(new_max: int) -> void:
+	var old_health = current_health
 	max_health = new_max
 	current_health = min(current_health, max_health)
-	health_changed.emit(current_health, max_health)
+	health_changed.emit(current_health, max_health, old_health)
 
 
 func _on_health_depleted() -> void:
@@ -155,6 +152,7 @@ func revive(health_amount: int = -1) -> void:
 	if is_alive:
 		return
 
+	var old_health = current_health
 	is_alive = true
 	if health_amount < 0:
 		current_health = max_health
@@ -162,7 +160,7 @@ func revive(health_amount: int = -1) -> void:
 		current_health = min(health_amount, max_health)
 
 	revived.emit()
-	health_changed.emit(current_health, max_health)
+	health_changed.emit(current_health, max_health, old_health)
 
 
 # Visibility management

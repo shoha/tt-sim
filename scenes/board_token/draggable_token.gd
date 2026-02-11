@@ -468,7 +468,7 @@ func _sync_parent_position() -> void:
 	rigid_body.rotation = Vector3.ZERO
 
 	# Notify that the token position has changed (for network sync)
-	board_token.position_changed.emit()
+	board_token.transform_changed.emit()
 
 
 # -------------------------------------------------------------------------

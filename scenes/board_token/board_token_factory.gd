@@ -50,10 +50,6 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> B
 		push_error("BoardTokenFactory: Failed to extract model components")
 		return null
 
-	var instance = BoardTokenScene.instantiate() as BoardToken
-	instance._factory_created = true
-	_clear_placeholder_children(instance)
-
 	# Build the rigid body with collision
 	var rigid_body = _build_rigid_body(components, config)
 
@@ -72,12 +68,39 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> B
 		animation_tree_instance.anim_player = components.animation_player  # Set BEFORE add_child
 		rigid_body.add_child(animation_tree_instance)
 
+	# Assemble the full token from the rigid body
+	var instance = _assemble_token(rigid_body, components.collision_shape)
+
+	# Apply config properties if provided
+	if config:
+		_apply_config(instance, config)
+
+	return instance
+
+
+## Create a BoardToken from a TokenConfig resource
+static func create_from_config(config: Resource) -> BoardToken:
+	if not config.model_scene:
+		push_error("BoardTokenFactory: TokenConfig has no model_scene")
+		return null
+
+	var model = config.model_scene.instantiate()
+	return create_from_scene(model, config)
+
+
+## Assemble a complete BoardToken from a pre-built rigid body.
+## Shared by create_from_scene and _create_placeholder_token to avoid duplication.
+static func _assemble_token(rigid_body: RigidBody3D, collision_shape: CollisionShape3D) -> BoardToken:
+	var instance = BoardTokenScene.instantiate() as BoardToken
+	instance._factory_created = true
+	_clear_placeholder_children(instance)
+
 	# Build selection glow component (added to rigid body so it moves with token)
-	var selection_glow = _build_selection_glow(components.collision_shape)
+	var selection_glow = _build_selection_glow(collision_shape)
 	rigid_body.add_child(selection_glow)
 
 	# Build draggable component
-	var draggable = _build_draggable_token(rigid_body, components.collision_shape)
+	var draggable = _build_draggable_token(rigid_body, collision_shape)
 	draggable.add_child(rigid_body)
 	instance.add_child(draggable)
 
@@ -91,23 +114,9 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> B
 	instance._token_controller = controller
 	instance._selection_glow = selection_glow
 
-	# Apply config properties if provided
-	if config:
-		_apply_config(instance, config)
-
 	NodeUtils.set_own_children(instance)
 
 	return instance
-
-
-## Create a BoardToken from a TokenConfig resource
-static func create_from_config(config: Resource) -> BoardToken:
-	if not config.model_scene:
-		push_error("BoardTokenFactory: TokenConfig has no model_scene")
-		return null
-
-	var model = config.model_scene.instantiate()
-	return create_from_scene(model, config)
 
 
 ## Extract relevant components from a model scene
@@ -268,30 +277,6 @@ static func _apply_config(token: BoardToken, config: Resource) -> void:
 	token.current_health = config.max_health
 
 
-## Create a BoardToken from an asset pack
-## @param pack_id: The pack identifier (e.g., "pokemon")
-## @param asset_id: The asset identifier within the pack
-## @param variant_id: The variant to use (e.g., "default", "shiny")
-## @param config: Optional TokenConfig for additional customization
-## @return: A configured BoardToken, or null if creation failed
-static func create_from_asset(
-	pack_id: String, asset_id: String, variant_id: String = "default", config: Resource = null
-) -> BoardToken:
-	# Use resolve_model_path to check local, cache, and trigger download if needed
-	var scene_path = AssetManager.resolve_model_path(pack_id, asset_id, variant_id)
-
-	if scene_path == "":
-		push_error(
-			(
-				"BoardTokenFactory: Asset not found or not yet downloaded: %s/%s/%s"
-				% [pack_id, asset_id, variant_id]
-			)
-		)
-		return null
-
-	return _create_from_model_path(scene_path, pack_id, asset_id, config)
-
-
 ## Internal: Create a BoardToken from a specific model path
 ## Uses AssetManager for model loading and caching
 static func _create_from_model_path(
@@ -328,16 +313,6 @@ static func _create_from_model_path(
 ## Generate a unique network ID for tokens
 static func _generate_network_id() -> String:
 	return str(Time.get_unix_time_from_system()) + "_" + str(randi() % 100000)
-
-
-## Create a BoardToken from a TokenPlacement resource
-## Applies all placement data (position, rotation, scale, properties)
-## @param placement: The TokenPlacement containing spawn data
-## @return: A fully configured BoardToken at the specified position
-## @deprecated: Use create_from_placement_async for remote asset support
-static func create_from_placement(placement: TokenPlacement) -> BoardToken:
-	var result = create_from_placement_async(placement)
-	return result.token
 
 
 ## Create a BoardToken from a TokenPlacement resource with async download support
@@ -458,11 +433,6 @@ static func _create_placeholder_token(
 	var placeholder = PlaceholderTokenScript.new()
 	placeholder.name = "PlaceholderModel"
 
-	# Create a minimal BoardToken structure manually
-	var instance = BoardTokenScene.instantiate() as BoardToken
-	instance._factory_created = true
-	_clear_placeholder_children(instance)
-
 	# Build simplified rigid body with placeholder
 	var rb = RigidBody3D.new()
 	rb.name = "RigidBody3D"
@@ -478,24 +448,8 @@ static func _create_placeholder_token(
 	rb.add_child(collision)
 	rb.add_child(placeholder)
 
-	# Build selection glow component
-	var selection_glow = _build_selection_glow(collision)
-	rb.add_child(selection_glow)
-
-	# Build draggable component
-	var draggable = _build_draggable_token(rb, collision)
-	draggable.add_child(rb)
-	instance.add_child(draggable)
-
-	# Build controller
-	var controller = _build_token_controller(rb, draggable)
-	instance.add_child(controller)
-
-	# Wire up references
-	instance.rigid_body = rb
-	instance._dragging_object = draggable
-	instance._token_controller = controller
-	instance._selection_glow = selection_glow
+	# Assemble the full token structure
+	var instance = _assemble_token(rb, collision)
 
 	# Set metadata
 	instance.network_id = _generate_network_id()
@@ -508,8 +462,6 @@ static func _create_placeholder_token(
 	var display_name = AssetManager.get_asset_display_name(pack_id, asset_id)
 	instance.name = display_name + " (Loading...)"
 	instance.token_name = display_name
-
-	NodeUtils.set_own_children(instance)
 
 	return instance
 

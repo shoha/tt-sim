@@ -15,6 +15,7 @@ const LOBBY_HOST_SCENE := preload("res://scenes/states/lobby/lobby_host.tscn")
 const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn")
 const UPDATE_DIALOG_SCENE := preload("res://scenes/ui/update_dialog.tscn")
 const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
+const DISCONNECT_INDICATOR_SCENE := preload("res://scenes/ui/disconnect_indicator.tscn")
 
 enum State {
 	TITLE_SCREEN,
@@ -36,8 +37,7 @@ var _lobby_client: CanvasLayer = null
 var _level_play_controller: LevelPlayController = null
 var _pending_level_data: LevelData = null
 var _loading_overlay: LoadingOverlay = null
-var _disconnect_indicator: CanvasLayer = null
-var _disconnect_label: Label = null
+var _disconnect_indicator: Node = null
 
 
 func _ready() -> void:
@@ -45,7 +45,6 @@ func _ready() -> void:
 	_setup_level_play_controller()
 	_setup_app_menu()
 	_setup_download_notifications()
-	_setup_update_checker()
 	_setup_disconnect_indicator()
 
 	# Connect to level manager signals
@@ -60,6 +59,7 @@ func _ready() -> void:
 	# state changes without importing this script.
 	EventBus.pause_requested.connect(func(): push_state(State.PAUSED))
 	EventBus.resume_requested.connect(func(): pop_state())
+	EventBus.open_editor_requested.connect(_on_open_editor_requested)
 
 	# Enter initial state
 	push_state(State.TITLE_SCREEN)
@@ -105,60 +105,16 @@ func _setup_level_play_controller() -> void:
 
 
 func _setup_disconnect_indicator() -> void:
-	_disconnect_indicator = CanvasLayer.new()
-	_disconnect_indicator.layer = Constants.LAYER_TOAST
+	_disconnect_indicator = DISCONNECT_INDICATOR_SCENE.instantiate()
 	add_child(_disconnect_indicator)
-
-	# Top-center margin container
-	var margin = MarginContainer.new()
-	margin.anchors_preset = Control.PRESET_TOP_WIDE
-	margin.anchor_right = 1.0
-	margin.offset_bottom = 40
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_theme_constant_override("margin_top", 12)
-	_disconnect_indicator.add_child(margin)
-
-	# Panel with warning styling
-	var panel = PanelContainer.new()
-	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style = StyleBoxFlat.new()
-	style.bg_color = Constants.COLOR_TOAST_BG
-	style.border_color = Constants.COLOR_WARNING
-	style.border_width_left = 2
-	style.border_width_right = 2
-	style.border_width_top = 2
-	style.border_width_bottom = 2
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
-	style.content_margin_left = 16
-	style.content_margin_right = 16
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	panel.add_theme_stylebox_override("panel", style)
-	margin.add_child(panel)
-
-	# Label
-	_disconnect_label = Label.new()
-	_disconnect_label.text = "Reconnecting..."
-	_disconnect_label.theme_type_variation = "Body"
-	_disconnect_label.add_theme_color_override("font_color", Constants.COLOR_WARNING)
-	panel.add_child(_disconnect_label)
-
-	# Start hidden
-	_disconnect_indicator.hide()
 
 
 func _show_disconnect_indicator(text: String) -> void:
-	_disconnect_label.text = text
-	if not _disconnect_indicator.visible:
-		_disconnect_indicator.show()
+	_disconnect_indicator.show_message(text)
 
 
 func _hide_disconnect_indicator() -> void:
-	_disconnect_indicator.hide()
+	_disconnect_indicator.hide_indicator()
 
 
 func _setup_app_menu() -> void:
@@ -170,6 +126,12 @@ func _setup_app_menu() -> void:
 	if app_menu_controller:
 		app_menu_controller.setup(_level_play_controller)
 		app_menu_controller.play_level_requested.connect(_on_play_level_requested)
+
+
+func _on_open_editor_requested() -> void:
+	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
+	if app_ctrl:
+		app_ctrl.open_level_editor()
 
 
 func _on_play_level_requested(level_data: LevelData) -> void:
@@ -266,16 +228,11 @@ func _enter_playing_state() -> void:
 	_level_play_controller.setup(_game_map)
 	_game_map.setup(_level_play_controller)
 
-	# Hide the AppMenu "Level Editor" button during gameplay — the edit
-	# drawer provides "Level Details..." instead.
+	# Hide the AppMenu "Level Editor" button during gameplay — the pause
+	# menu provides "Edit Level" instead.
 	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
 	if app_ctrl:
 		app_ctrl.hide_editor_button()
-
-	# Wire "Level Details..." button from the edit drawer to the level editor
-	var gameplay_ctrl = _game_map.gameplay_menu.get_node_or_null("GameplayMenu")
-	if gameplay_ctrl and app_ctrl:
-		gameplay_ctrl.open_editor_requested.connect(app_ctrl.open_level_editor)
 
 	# Handle networked vs local play
 	# Note: Don't clear _pending_level_data until loading completes (play_level is async)
@@ -610,11 +567,6 @@ func _on_level_loading_completed() -> void:
 # ============================================================================
 
 var _startup_update_check_pending: bool = false
-
-
-func _setup_update_checker() -> void:
-	# We'll connect signals only for the startup check
-	pass
 
 
 func _check_for_updates_on_startup() -> void:

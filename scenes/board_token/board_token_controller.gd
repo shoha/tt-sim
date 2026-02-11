@@ -162,13 +162,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			if draggable_token:
 				draggable_token.update_height_offset()
 
-		# Emit signals for network sync when rotation/scale changes complete
+		# Emit signal for network sync when rotation/scale changes complete
 		var board_token = get_parent() as BoardToken
-		if board_token:
-			if was_rotating:
-				board_token.rotation_changed.emit()
-			if was_scaling:
-				board_token.scale_changed.emit()
+		if board_token and (was_rotating or was_scaling):
+			board_token.transform_changed.emit()
 		return
 
 	if _rotating and event is InputEventMouseMotion:
@@ -256,11 +253,10 @@ func _reset_rotation_and_scale() -> void:
 	if draggable_token:
 		draggable_token.update_height_offset()
 
-	# Emit signals for network sync
+	# Emit signal for network sync
 	var board_token = get_parent() as BoardToken
 	if board_token:
-		board_token.rotation_changed.emit()
-		board_token.scale_changed.emit()
+		board_token.transform_changed.emit()
 
 
 func _process(delta: float) -> void:

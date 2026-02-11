@@ -13,16 +13,10 @@ extends Node
 ## Usage:
 ##   NetworkStateSync.broadcast_token_transform(token)  # Host sends position
 ##   NetworkStateSync.broadcast_token_properties(token)  # Host sends health/visibility
-##   NetworkStateSync.token_transform_received.connect(_on_transform)  # Client listens
-
-## Emitted when a token's transform is received from host (clients only)
-signal token_transform_received(network_id: String, position: Vector3, rotation: Vector3, scale: Vector3)
-
-## Emitted when a token's full state is received from host (clients only)
-signal token_state_received(network_id: String, token_state: TokenState)
-
-## Emitted when a token is removed on the host (clients only)
-signal token_removed_received(network_id: String)
+##   NetworkManager.token_transform_received.connect(_on_transform)  # Client listens
+##
+## Note: Client-side receive signals live on NetworkManager, not here.
+## NetworkStateSync only handles host-side broadcasting and full_state_received.
 
 ## Emitted when full game state is received (clients only, for initial sync)
 signal full_state_received(state_dict: Dictionary)
@@ -182,13 +176,6 @@ func _on_game_state_received(state_dict: Dictionary) -> void:
 ## Convert Vector3 to array for network transmission (more compact than dict)
 func _vector3_to_array(v: Vector3) -> Array:
 	return [v.x, v.y, v.z]
-
-
-## Convert array back to Vector3
-static func _array_to_vector3(arr: Array) -> Vector3:
-	if arr.size() < 3:
-		return Vector3.ZERO
-	return Vector3(arr[0], arr[1], arr[2])
 
 
 ## Clear rate limiting state (call when level changes)

@@ -282,29 +282,16 @@ func sync_from_board_token(token: BoardToken) -> bool:
 	if not _token_states.has(network_id):
 		return register_token_from_board_token(token)
 
-	var new_state = TokenState.from_board_token(token)
 	var old_state: TokenState = _token_states[network_id]
+	var new_state := TokenState.from_board_token(token)
+	var changes := old_state.diff(new_state)
+
+	if changes.is_empty():
+		return true
 
 	begin_batch_update()
-
-	# Compare and update changed properties
-	if old_state.position != new_state.position:
-		update_token_property(network_id, "position", new_state.position)
-	if old_state.rotation != new_state.rotation:
-		update_token_property(network_id, "rotation", new_state.rotation)
-	if old_state.scale != new_state.scale:
-		update_token_property(network_id, "scale", new_state.scale)
-	if old_state.current_health != new_state.current_health:
-		update_token_property(network_id, "current_health", new_state.current_health)
-	if old_state.max_health != new_state.max_health:
-		update_token_property(network_id, "max_health", new_state.max_health)
-	if old_state.is_alive != new_state.is_alive:
-		update_token_property(network_id, "is_alive", new_state.is_alive)
-	if old_state.is_visible_to_players != new_state.is_visible_to_players:
-		update_token_property(network_id, "is_visible_to_players", new_state.is_visible_to_players)
-	if old_state.status_effects != new_state.status_effects:
-		update_token_property(network_id, "status_effects", new_state.status_effects)
-
+	for prop in changes:
+		update_token_property(network_id, prop, changes[prop])
 	end_batch_update()
 	return true
 

@@ -537,7 +537,7 @@ func instantiate_level(level_data: LevelData, parent: Node3D) -> Node3D:
 
 ## Create a BoardToken from a TokenPlacement
 func _create_token_from_placement(placement: TokenPlacement) -> BoardToken:
-	return BoardTokenFactory.create_from_placement(placement)
+	return BoardTokenFactory.create_from_placement_async(placement).token
 
 
 ## Sanitize a filename

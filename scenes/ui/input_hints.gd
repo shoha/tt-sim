@@ -94,7 +94,7 @@ func _create_hint_widget(key: String, action: String) -> Control:
 	# Key badge
 	var key_panel = PanelContainer.new()
 	var key_style = StyleBoxFlat.new()
-	key_style.bg_color = Color(0.24, 0.17, 0.24, 0.9)
+	key_style.bg_color = Constants.COLOR_TOAST_BG
 	key_style.corner_radius_top_left = 4
 	key_style.corner_radius_top_right = 4
 	key_style.corner_radius_bottom_left = 4

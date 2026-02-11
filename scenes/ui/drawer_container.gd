@@ -66,6 +66,7 @@ var _tab_button: Button  ## The clickable tab handle
 var _tab_label: Label
 var _slide_tween: Tween
 var _is_animating: bool = false
+var _closing_from_open: bool = false  ## True when the current animation is a close/conceal from an open state
 
 # -- Colours -----------------------------------------------------------------
 # Surface colours from the dark theme, used for programmatic styling.
@@ -122,6 +123,7 @@ func reveal() -> void:
 	if is_revealed:
 		return
 	is_revealed = true
+	_closing_from_open = false
 	_animate_to_state()
 
 
@@ -129,6 +131,7 @@ func reveal() -> void:
 func conceal() -> void:
 	if not is_revealed and not is_open:
 		return
+	_closing_from_open = is_open
 	is_open = false
 	is_revealed = false
 	_animate_to_state()
@@ -140,6 +143,7 @@ func open() -> void:
 		return
 	is_open = true
 	is_revealed = true
+	_closing_from_open = false
 	_animate_to_state()
 
 
@@ -147,6 +151,7 @@ func open() -> void:
 func close() -> void:
 	if not is_open or _is_animating:
 		return
+	_closing_from_open = true
 	is_open = false
 	_animate_to_state()
 
@@ -347,7 +352,8 @@ func _on_slide_finished() -> void:
 	_is_animating = false
 	if is_open:
 		_on_opened()
-	else:
+	elif _closing_from_open:
+		_closing_from_open = false
 		_on_closed()
 
 

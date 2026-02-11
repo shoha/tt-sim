@@ -5,9 +5,6 @@ extends Control
 ## Only active when a level is loaded.
 ## Adding tokens, saving positions, and editing level settings are only available to the GM.
 
-## Emitted when the user clicks "Level Details..." in the edit drawer.
-## Root wires this to AppMenuController.open_level_editor().
-signal open_editor_requested
 
 var _level_play_controller: LevelPlayController = null
 
@@ -18,8 +15,6 @@ var _original_environment_preset: String = ""
 var _original_environment_overrides: Dictionary = {}
 var _original_lofi_overrides: Dictionary = {}
 
-# Flag to distinguish save-close from cancel/tab-close
-var _edit_saved: bool = false
 
 @onready var save_level_button: Button = %SaveLevelButton
 @onready var toggle_asset_browser_button: Button = %ToggleAssetBrowserButton
@@ -44,7 +39,6 @@ func _ready() -> void:
 		level_edit_panel.revert_to_map_defaults_requested.connect(_on_revert_to_map_defaults)
 		level_edit_panel.save_requested.connect(_on_edit_save_requested)
 		level_edit_panel.cancel_requested.connect(_on_edit_cancel_requested)
-		level_edit_panel.open_editor_requested.connect(_on_open_editor_requested)
 
 	# Connect to network state changes to show/hide host-only buttons
 	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
@@ -143,7 +137,6 @@ func _on_level_cleared() -> void:
 		toggle_asset_browser_button.button_pressed = false
 	# Close the edit drawer if open
 	if level_edit_panel and level_edit_panel.is_open:
-		_edit_saved = true  # Suppress revert on close — level was cleared
 		level_edit_panel.close()
 
 
@@ -187,14 +180,15 @@ func _on_token_added(_token: BoardToken) -> void:
 
 
 ## Reveal or conceal the edit drawer tab based on permissions.
-## Visible during editor preview OR for the GM in a networked game.
+## Visible whenever the local player has GM-like control:
+##   - Local (non-networked) play: always the GM
+##   - Networked play: only the host/GM
 func _update_edit_mode_drawer() -> void:
 	if not level_edit_panel:
 		return
 	var has_level = _level_play_controller and _level_play_controller.has_active_level()
-	var is_editor_preview = has_level and _level_play_controller.is_editor_preview
-	var is_networked_gm = has_level and NetworkManager.is_networked() and NetworkManager.is_gm()
-	if is_editor_preview or is_networked_gm:
+	var can_edit = has_level and (not NetworkManager.is_networked() or NetworkManager.is_gm())
+	if can_edit:
 		level_edit_panel.visible = true
 		level_edit_panel.reveal()
 	else:
@@ -202,18 +196,15 @@ func _update_edit_mode_drawer() -> void:
 
 
 ## Called when the drawer tab is clicked and the drawer opens.
-## Snapshot current values and initialize the panel controls.
+## Snapshot current values so the Cancel button can revert to them.
 func _on_edit_drawer_opened() -> void:
-	_edit_saved = false
 	_enter_edit_mode()
 
 
 ## Called when the drawer finishes closing (via tab or programmatically).
-## Reverts changes unless the user saved.
+## Changes are kept — the user can Cancel to revert, or Save to persist to disk.
 func _on_edit_drawer_closed() -> void:
-	if not _edit_saved:
-		_revert_edit_mode_values()
-	_edit_saved = false
+	pass
 
 
 ## Snapshot current level values and initialize the edit panel.
@@ -300,6 +291,10 @@ func _on_edit_intensity_changed(new_scale: float) -> void:
 func _on_edit_environment_changed(preset: String, overrides: Dictionary) -> void:
 	if _level_play_controller:
 		_level_play_controller.apply_environment_settings(preset, overrides)
+		# Keep level_data in sync so changes survive drawer close/reopen
+		if _level_play_controller.active_level_data:
+			_level_play_controller.active_level_data.environment_preset = preset
+			_level_play_controller.active_level_data.environment_overrides = overrides.duplicate()
 
 
 ## Revert environment to the map's original embedded settings.
@@ -314,6 +309,11 @@ func _on_revert_to_map_defaults() -> void:
 	# Apply with empty preset and overrides — map defaults layer does the work
 	_level_play_controller.apply_environment_settings("", {})
 
+	# Keep level_data in sync
+	if _level_play_controller.active_level_data:
+		_level_play_controller.active_level_data.environment_preset = ""
+		_level_play_controller.active_level_data.environment_overrides = {}
+
 	# Update the panel's internal state and controls to match
 	level_edit_panel.apply_environment_state("", {})
 
@@ -324,6 +324,9 @@ func _on_edit_lofi_changed(overrides: Dictionary) -> void:
 		var game_map = _level_play_controller.get_game_map()
 		if game_map:
 			game_map.apply_lofi_overrides(overrides)
+		# Keep level_data in sync so changes survive drawer close/reopen
+		if _level_play_controller.active_level_data:
+			_level_play_controller.active_level_data.lofi_overrides = overrides.duplicate()
 
 
 ## Save all edited values to level data and persist to disk
@@ -357,22 +360,13 @@ func _on_edit_save_requested(
 	else:
 		UIManager.show_error("Failed to save level settings")
 
-	# Mark as saved so the drawer close doesn't revert
-	_edit_saved = true
 	level_edit_panel.close()
 
 
-## Cancel editing: revert and close the drawer
+## Cancel editing: revert to the snapshot taken when the drawer was opened
 func _on_edit_cancel_requested() -> void:
 	_revert_edit_mode_values()
-	_edit_saved = true  # Already reverted — suppress revert on close
 	level_edit_panel.close()
-
-
-## Open the full Level Editor overlay. The drawer stays open — the editor
-## renders on a higher CanvasLayer so there is no input conflict.
-func _on_open_editor_requested() -> void:
-	open_editor_requested.emit()
 
 
 # --- Player List ---
