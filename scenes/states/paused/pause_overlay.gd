@@ -7,16 +7,21 @@ signal resume_requested
 signal main_menu_requested
 
 @onready var resume_button: Button = %ResumeButton
+@onready var edit_level_button: Button = %EditLevelButton
 @onready var settings_button: Button = %SettingsButton
 @onready var main_menu_button: Button = %MainMenuButton
 
 
 func _on_panel_ready() -> void:
 	resume_button.pressed.connect(_on_resume_pressed)
+	edit_level_button.pressed.connect(_on_edit_level_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
 	main_menu_button.set_meta("ui_silent", true)
 	main_menu_button.pressed.connect(_on_main_menu_pressed)
 	_setup_blur_backdrop()
+
+	# Only show "Edit Level" for the GM / local player
+	edit_level_button.visible = NetworkManager.is_gm() or not NetworkManager.is_networked()
 
 
 ## Replace the flat dark backdrop with a blurred-background shader
@@ -56,6 +61,12 @@ func _on_after_animate_in() -> void:
 func _on_resume_pressed() -> void:
 	resume_requested.emit()
 	# Root will handle the actual unpause via pop_state
+
+
+func _on_edit_level_pressed() -> void:
+	# Resume first, then open the editor via EventBus
+	resume_requested.emit()
+	EventBus.open_editor_requested.emit()
 
 
 func _on_settings_pressed() -> void:

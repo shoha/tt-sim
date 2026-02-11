@@ -1,8 +1,16 @@
 extends Resource
 class_name TokenPlacement
 
-## Represents a placed token in a level
-## Stores the asset identity, position, and custom stats
+## Represents a placed token in a level definition (static, design-time data).
+## Stores the asset identity, position, and custom stats used when spawning.
+##
+## Relationship to TokenState:
+##   TokenPlacement is level-design data — it lives inside LevelData and is
+##   saved/loaded with the level file.  It uses placement_id as its unique key.
+##   TokenState is runtime network-sync data — it lives inside GameState and
+##   tracks the live in-game state of each token (position, health, etc.).
+##   When a level loads, each TokenPlacement is converted to a TokenState via
+##   TokenState.from_placement() for network synchronization.
 
 ## Asset identification (pack-based system)
 @export var pack_id: String = ""

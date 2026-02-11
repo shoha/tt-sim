@@ -57,11 +57,14 @@ func _on_panel_ready() -> void:
 	reset_button.pressed.connect(_on_reset_pressed)
 	apply_button.pressed.connect(_on_apply_pressed)
 
-	# Audio sliders
-	master_slider.value_changed.connect(_on_master_volume_changed)
-	music_slider.value_changed.connect(_on_music_volume_changed)
-	sfx_slider.value_changed.connect(_on_sfx_volume_changed)
-	ui_slider.value_changed.connect(_on_ui_volume_changed)
+	# Audio sliders (config-driven: [slider, label, bus_name])
+	for binding in [
+		[master_slider, master_label, "Master"],
+		[music_slider, music_label, "Music"],
+		[sfx_slider, sfx_label, "SFX"],
+		[ui_slider, ui_label, "UI"],
+	]:
+		binding[0].value_changed.connect(_on_volume_changed.bind(binding[1], binding[2]))
 
 	# Graphics
 	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
@@ -215,27 +218,10 @@ func _update_volume_label(label: Label, value: float) -> void:
 	label.text = "%d%%" % int(value)
 
 
-func _on_master_volume_changed(value: float) -> void:
-	_update_volume_label(master_label, value)
-	_apply_audio_bus("Master", value)
-	_try_play_slider_tick()
-
-
-func _on_music_volume_changed(value: float) -> void:
-	_update_volume_label(music_label, value)
-	_apply_audio_bus("Music", value)
-	_try_play_slider_tick()
-
-
-func _on_sfx_volume_changed(value: float) -> void:
-	_update_volume_label(sfx_label, value)
-	_apply_audio_bus("SFX", value)
-	_try_play_slider_tick()
-
-
-func _on_ui_volume_changed(value: float) -> void:
-	_update_volume_label(ui_label, value)
-	_apply_audio_bus("UI", value)
+## Generic handler for all volume sliders.
+func _on_volume_changed(value: float, label: Label, bus_name: String) -> void:
+	_update_volume_label(label, value)
+	_apply_audio_bus(bus_name, value)
 	_try_play_slider_tick()
 
 
@@ -313,8 +299,7 @@ func _on_clear_cache_pressed() -> void:
 	AssetManager.downloader.clear_all_caches()
 	_update_cache_info()
 
-	if UIManager.has_method("show_toast"):
-		UIManager.show_toast("Asset cache cleared", 1)  # SUCCESS type
+	UIManager.show_toast("Asset cache cleared", 1)  # SUCCESS type
 
 
 func _update_cache_info() -> void:
@@ -369,8 +354,7 @@ func _on_apply_pressed() -> void:
 	_apply_settings()
 	_save_settings()
 
-	if UIManager.has_method("show_toast"):
-		UIManager.show_toast("Settings saved", 0)  # INFO type
+	UIManager.show_toast("Settings saved", 0)  # INFO type
 
 
 func _update_version_info() -> void:

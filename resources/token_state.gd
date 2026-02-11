@@ -1,9 +1,16 @@
 extends Resource
 class_name TokenState
 
-## Pure state data for a token, designed for network synchronization.
-## This resource contains all data needed to represent and sync a token's state.
-## Separated from BoardToken to enable clean network state management.
+## Runtime state data for a token, designed for network synchronization.
+## This resource contains all data needed to represent and sync a token's
+## live in-game state. Separated from BoardToken to enable clean network
+## state management.
+##
+## Relationship to TokenPlacement:
+##   TokenPlacement is static level-design data (saved in level files).
+##   TokenState is dynamic runtime data (managed by GameState for networking).
+##   network_id corresponds to TokenPlacement.placement_id for tokens that
+##   originated from a level file.
 ##
 ## Usage:
 ##   - GameState maintains a dictionary of TokenState objects
@@ -205,6 +212,21 @@ static func from_dict(data: Dictionary) -> TokenState:
 	state.status_effects = data.get("status_effects", [])
 
 	return state
+
+
+## Return a dictionary of properties that differ between this state and another.
+## Keys are property names, values are the new values (from `other`).
+func diff(other: TokenState) -> Dictionary:
+	var changes: Dictionary = {}
+	for prop in [
+		"position", "rotation", "scale",
+		"current_health", "max_health", "is_alive",
+		"is_visible_to_players", "is_hidden_from_gm",
+		"status_effects",
+	]:
+		if get(prop) != other.get(prop):
+			changes[prop] = other.get(prop)
+	return changes
 
 
 ## Create a duplicate of this state

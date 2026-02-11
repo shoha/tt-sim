@@ -1,23 +1,26 @@
 extends CanvasLayer
 
 ## Title screen controller.
-## Provides options to start a local game or host/join a networked game.
+## Provides options to play a saved level locally, or host/join a networked game.
 
 signal host_game_requested
 signal join_game_requested
 
 const SettingsMenuScene := preload("res://scenes/ui/settings_menu.tscn")
+const LevelBrowserDialogScene := preload("res://scenes/ui/level_browser_dialog.tscn")
 
 ## Stagger delay between each UI element fading in (seconds)
 const ENTRANCE_STAGGER := 0.08
 const ENTRANCE_DURATION := 0.3
 
+@onready var play_level_button: Button = %PlayLevelButton
 @onready var host_button: Button = %HostGameButton
 @onready var join_button: Button = %JoinGameButton
 @onready var settings_button: Button = %SettingsButton
 
 
 func _ready() -> void:
+	play_level_button.pressed.connect(_on_play_level_pressed)
 	host_button.pressed.connect(_on_host_pressed)
 	join_button.pressed.connect(_on_join_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
@@ -41,6 +44,11 @@ func _play_entrance_animation() -> void:
 		tw.set_ease(Tween.EASE_OUT)
 		tw.set_trans(Tween.TRANS_CUBIC)
 		tw.tween_property(child, "modulate:a", 1.0, ENTRANCE_DURATION).set_delay(delay)
+
+
+func _on_play_level_pressed() -> void:
+	var dialog = LevelBrowserDialogScene.instantiate()
+	get_tree().root.add_child(dialog)
 
 
 func _on_host_pressed() -> void:
