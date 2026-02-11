@@ -473,32 +473,44 @@ class_name MyDrawer
 
 func _on_ready() -> void:
     drawer_width = 200.0
-    tab_text = "3"
+    tab_text = "Menu"
     # Populate content_container with your UI
     var label = Label.new()
     label.text = "Hello"
     content_container.add_child(label)
 ```
 
+### Icon Tabs
+
+Use `tab_icon` instead of `tab_text` to show an SVG icon on the tab handle. The icon is tinted with the theme's accent color and padded consistently. SVG files must use `fill="#ffffff"` (white) so the tint applies correctly — see the [SVG Icons section in THEME_GUIDE.md](THEME_GUIDE.md#svg-icons).
+
+```gdscript
+func _on_ready() -> void:
+    tab_icon = preload("res://assets/icons/ui/Sun.svg")
+    drawer_width = 350.0
+```
+
 ### Exports
 
-| Property          | Type       | Default | Description                          |
-| ----------------- | ---------- | ------- | ------------------------------------ |
+| Property          | Type       | Default | Description                           |
+| ----------------- | ---------- | ------- | ------------------------------------- |
 | `edge`            | DrawerEdge | `RIGHT` | Which screen edge the drawer docks to |
-| `drawer_width`    | float      | `220`   | Width of the panel                   |
-| `tab_width`       | float      | `40`    | Width of the tab handle              |
-| `slide_duration`  | float      | `0.25`  | Animation duration                   |
-| `start_open`      | bool       | `false` | Open on ready                        |
-| `play_sounds`     | bool       | `true`  | Play open/close sounds               |
-| `tab_top_margin`  | float      | `12`    | Tab offset from top edge             |
-| `start_revealed`  | bool       | `false` | Show tab on ready                    |
+| `drawer_width`    | float      | `220`   | Width of the panel                    |
+| `tab_width`       | float      | `40`    | Width of the tab handle               |
+| `tab_text`        | String     | `""`    | Text label on the tab handle          |
+| `tab_icon`        | Texture2D  | `null`  | Icon on the tab (hides text when set) |
+| `slide_duration`  | float      | `0.25`  | Animation duration                    |
+| `start_open`      | bool       | `false` | Open on ready                         |
+| `play_sounds`     | bool       | `true`  | Play open/close sounds                |
+| `tab_top_margin`  | float      | `12`    | Tab offset from top edge              |
+| `start_revealed`  | bool       | `false` | Show tab on ready                     |
 
 ### Existing Implementations
 
-| Drawer | Edge | Purpose |
-|--------|------|---------|
-| `PlayerListDrawer` | LEFT | Shows connected players during networked games |
-| `LevelEditPanel` | RIGHT | Real-time level editing during gameplay (see below) |
+| Drawer | Edge | Tab | Purpose |
+|--------|------|-----|---------|
+| `PlayerListDrawer` | LEFT | `Users.svg` icon | Shows connected players during networked games |
+| `LevelEditPanel` | RIGHT | `Sun.svg` icon | Real-time level editing during gameplay (see below) |
 
 See `THEME_GUIDE.md` for styling details.
 
