@@ -13,13 +13,13 @@ class_name BoardTokenFactory
 ##   var result = BoardTokenFactory.create_from_asset_async(pack_id, asset_id, variant_id)
 ##
 ## Model Loading:
-##   Uses AssetPackManager for model loading and caching.
+##   Uses AssetManager for model loading and caching.
 ##   GLB parsing runs entirely on a background thread (via GlbUtils.load_glb_async)
 ##   so creating tokens never blocks the main thread.
 ##   When a model isn't in the memory cache, a placeholder token is returned
 ##   immediately and auto-upgrades once the background load completes.
-##   Call AssetPackManager.preload_models() before batch spawning for best performance.
-##   Call AssetPackManager.clear_model_cache() when switching levels to free memory.
+##   Call AssetManager.preload_models() before batch spawning for best performance.
+##   Call AssetManager.clear_model_cache() when switching levels to free memory.
 
 const BoardTokenScene = preload("uid://bev473ihcxqg8")
 const PlaceholderTokenScript = preload("res://scenes/board_token/placeholder_token.gd")
@@ -27,7 +27,7 @@ const PlaceholderTokenScript = preload("res://scenes/board_token/placeholder_tok
 ## Tokens waiting for their model to download (network_id -> token reference)
 static var _pending_tokens: Dictionary = {}
 
-## Whether we've connected to AssetPackManager signals
+## Whether we've connected to AssetManager signals
 static var _signals_connected: bool = false
 
 
@@ -278,7 +278,7 @@ static func create_from_asset(
 	pack_id: String, asset_id: String, variant_id: String = "default", config: Resource = null
 ) -> BoardToken:
 	# Use resolve_model_path to check local, cache, and trigger download if needed
-	var scene_path = AssetPackManager.resolve_model_path(pack_id, asset_id, variant_id)
+	var scene_path = AssetManager.resolve_model_path(pack_id, asset_id, variant_id)
 
 	if scene_path == "":
 		push_error(
@@ -293,13 +293,13 @@ static func create_from_asset(
 
 
 ## Internal: Create a BoardToken from a specific model path
-## Uses AssetPackManager for model loading and caching
+## Uses AssetManager for model loading and caching
 static func _create_from_model_path(
 	scene_path: String, pack_id: String, asset_id: String, config: Resource = null
 ) -> BoardToken:
-	# Use AssetPackManager for loading (handles caching internally)
+	# Use AssetManager for loading (handles caching internally)
 	# create_static_bodies=false because tokens use RigidBody3D for physics
-	var model = AssetPackManager.get_model_instance_from_path_sync(scene_path, false)
+	var model = AssetManager.get_model_instance_from_path_sync(scene_path, false)
 
 	if not model:
 		push_error("BoardTokenFactory: Failed to load asset scene: " + scene_path)
@@ -314,7 +314,7 @@ static func _create_from_model_path(
 		return null
 
 	# Set the node name and display name
-	var display_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
+	var display_name = AssetManager.get_asset_display_name(pack_id, asset_id)
 	token.name = display_name
 	token.token_name = display_name
 
@@ -392,7 +392,7 @@ static func create_from_asset_async(
 	_ensure_signals_connected()
 
 	# Try to resolve the model path (checks local + cache, triggers download if needed)
-	var model_path = AssetPackManager.resolve_model_path(pack_id, asset_id, variant_id, priority)
+	var model_path = AssetManager.resolve_model_path(pack_id, asset_id, variant_id, priority)
 	print(
 		(
 			"BoardTokenFactory: create_from_asset_async %s/%s/%s → model_path='%s'"
@@ -402,7 +402,7 @@ static func create_from_asset_async(
 
 	if model_path != "":
 		# Asset file is available locally
-		if AssetPackManager.is_model_cached(model_path):
+		if AssetManager.is_model_cached(model_path):
 			# Fast path: model is in memory cache, create synchronously (no hitch)
 			print("BoardTokenFactory: model cached, creating synchronously")
 			var ready_token = _create_from_model_path(model_path, pack_id, asset_id)
@@ -421,7 +421,7 @@ static func create_from_asset_async(
 			return {"token": loading_token, "is_placeholder": true}
 
 	# Asset needs downloading - check if download was queued
-	var needs_dl = AssetPackManager.needs_download(pack_id, asset_id, variant_id)
+	var needs_dl = AssetManager.needs_download(pack_id, asset_id, variant_id)
 	print("BoardTokenFactory: model_path empty, needs_download=%s" % str(needs_dl))
 	if not needs_dl:
 		# No URL available, can't create token
@@ -505,7 +505,7 @@ static func _create_placeholder_token(
 	instance.set_meta("is_placeholder", true)
 
 	# Set display name
-	var display_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
+	var display_name = AssetManager.get_asset_display_name(pack_id, asset_id)
 	instance.name = display_name + " (Loading...)"
 	instance.token_name = display_name
 
@@ -514,7 +514,7 @@ static func _create_placeholder_token(
 	return instance
 
 
-## Ensure we're connected to AssetPackManager signals for download completion
+## Ensure we're connected to AssetManager signals for download completion
 static func _ensure_signals_connected() -> void:
 	if _signals_connected:
 		return
@@ -522,8 +522,8 @@ static func _ensure_signals_connected() -> void:
 	# We need to defer this because autoloads may not be ready yet
 	if Engine.get_main_loop():
 		var scene_tree = Engine.get_main_loop() as SceneTree
-		if scene_tree and scene_tree.root.has_node("AssetPackManager"):
-			var manager = scene_tree.root.get_node("AssetPackManager")
+		if scene_tree and scene_tree.root.has_node("AssetManager"):
+			var manager = scene_tree.root.get_node("AssetManager")
 			if not manager.asset_available.is_connected(_on_asset_available):
 				manager.asset_available.connect(_on_asset_available)
 			_signals_connected = true

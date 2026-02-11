@@ -69,11 +69,9 @@ func _ready() -> void:
 
 
 func _setup_download_notifications() -> void:
-	# Connect to AssetDownloader signals for user feedback
-	if has_node("/root/AssetDownloader"):
-		var downloader = get_node("/root/AssetDownloader")
-		downloader.download_completed.connect(_on_asset_download_completed)
-		downloader.download_failed.connect(_on_asset_download_failed)
+	# Connect to AssetManager.downloader signals for user feedback
+	AssetManager.downloader.download_completed.connect(_on_asset_download_completed)
+	AssetManager.downloader.download_failed.connect(_on_asset_download_failed)
 
 
 func _on_asset_download_completed(
@@ -86,7 +84,7 @@ func _on_asset_download_completed(
 func _on_asset_download_failed(
 	pack_id: String, asset_id: String, _variant_id: String, error: String
 ) -> void:
-	var display_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
+	var display_name = AssetManager.get_asset_display_name(pack_id, asset_id)
 	UIManager.show_error("Failed to download " + display_name + ": " + error)
 
 

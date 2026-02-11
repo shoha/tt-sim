@@ -347,7 +347,7 @@ func play_removal_animation() -> void:
 ## main thread is never blocked during the load.
 func _async_upgrade_placeholder(model_path: String) -> void:
 	# Load the model asynchronously (runs on background thread, no main-thread hitch)
-	var model = await AssetPackManager.get_model_instance_from_path(model_path, false)
+	var model = await AssetManager.get_model_instance_from_path(model_path, false)
 	if not model:
 		push_error("BoardToken: Failed to load model for placeholder upgrade: " + model_path)
 		return

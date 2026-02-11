@@ -25,13 +25,14 @@
 
 ## Key Conventions
 
-- **No EventBus** – Use direct signal connections or autoload services
+- **EventBus** – `EventBus` is a small autoload with cross-system signals (`pause_requested`, `play_level_requested`, `state_changed`, etc.). Use it only for signals that genuinely span system boundaries. Prefer direct signal connections for parent-child communication and autoload services for global operations
 - **State stack** – Root manages states: `change_state()`, `push_state()`, `pop_state()`
-- **Autoloads** – UIManager, LevelManager, AssetPackManager, NetworkManager, Constants, etc. (see project.godot). Always reference autoloads directly (e.g. `AssetPackManager.method()`), never via `has_node("/root/X")` or `get_node("/root/X")`
+- **Static classes** – `Constants`, `Paths`, and `NodeUtils` are `class_name` scripts (not autoloads). They provide globally accessible constants and static utility functions without a Node in the tree
+- **Autoloads** – UIManager, LevelManager, AssetManager, NetworkManager, EventBus, etc. (see project.godot). Always reference autoloads directly (e.g. `AssetManager.method()`), never via `has_node("/root/X")` or `get_node("/root/X")`
 - **Shared constants** – Use `Constants.LOFI_DEFAULTS`, `Constants.NETWORK_TRANSFORM_UPDATE_INTERVAL`, etc. for values shared across files. Add file-local constants for single-file magic numbers
 - **Map loading** – Use `GlbUtils.load_map_async()` (or `load_map()` sync) for maps; handles both `res://` and `user://` paths with full post-processing
-- **GLB loading** – Use `GlbUtils.load_glb_with_processing_async()` for non-map GLBs (tokens use `AssetPackManager` instead)
-- **Models** – Use `AssetPackManager.get_model_instance()` for cached model loading
+- **GLB loading** – Use `GlbUtils.load_glb_with_processing_async()` for non-map GLBs (tokens use `AssetManager` instead)
+- **Models** – Use `AssetManager.get_model_instance()` for cached model loading
 - **Signal cleanup** – Disconnect autoload signals in `_exit_tree()` for non-autoload nodes. Use `CONNECT_ONE_SHOT` for transient signals
 - **Process optimization** – Use `set_process(false)` in `_ready()` and toggle on/off when needed, to avoid unnecessary per-frame work
 - **UIDs** – Godot `.uid` files are auto-generated; avoid manual edits
@@ -77,7 +78,7 @@ After editing files, run the appropriate formatter so output matches project sty
 ## File Layout
 
 ```
-autoloads/     # Singletons
+autoloads/     # Singletons and static class_name scripts (Constants, Paths, NodeUtils)
 resources/     # Custom Resource classes (LevelData, TokenState, etc.)
 scenes/        # States, board_token, level_editor, ui
 utils/         # GlbUtils, TabUtils, environment_presets

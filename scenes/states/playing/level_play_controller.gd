@@ -65,12 +65,12 @@ func _connect_asset_streamer() -> void:
 	if _streamer_connected:
 		return
 
-	if not AssetStreamer.asset_received.is_connected(_on_map_received):
-		AssetStreamer.asset_received.connect(_on_map_received)
-	if not AssetStreamer.asset_failed.is_connected(_on_map_failed):
-		AssetStreamer.asset_failed.connect(_on_map_failed)
-	if not AssetStreamer.transfer_progress.is_connected(_on_map_transfer_progress):
-		AssetStreamer.transfer_progress.connect(_on_map_transfer_progress)
+	if not AssetManager.streamer.asset_received.is_connected(_on_map_received):
+		AssetManager.streamer.asset_received.connect(_on_map_received)
+	if not AssetManager.streamer.asset_failed.is_connected(_on_map_failed):
+		AssetManager.streamer.asset_failed.connect(_on_map_failed)
+	if not AssetManager.streamer.transfer_progress.is_connected(_on_map_transfer_progress):
+		AssetManager.streamer.transfer_progress.connect(_on_map_transfer_progress)
 	_streamer_connected = true
 
 
@@ -79,12 +79,12 @@ func _disconnect_asset_streamer() -> void:
 	if not _streamer_connected:
 		return
 
-	if AssetStreamer.asset_received.is_connected(_on_map_received):
-		AssetStreamer.asset_received.disconnect(_on_map_received)
-	if AssetStreamer.asset_failed.is_connected(_on_map_failed):
-		AssetStreamer.asset_failed.disconnect(_on_map_failed)
-	if AssetStreamer.transfer_progress.is_connected(_on_map_transfer_progress):
-		AssetStreamer.transfer_progress.disconnect(_on_map_transfer_progress)
+	if AssetManager.streamer.asset_received.is_connected(_on_map_received):
+		AssetManager.streamer.asset_received.disconnect(_on_map_received)
+	if AssetManager.streamer.asset_failed.is_connected(_on_map_failed):
+		AssetManager.streamer.asset_failed.disconnect(_on_map_failed)
+	if AssetManager.streamer.transfer_progress.is_connected(_on_map_transfer_progress):
+		AssetManager.streamer.transfer_progress.disconnect(_on_map_transfer_progress)
 	_streamer_connected = false
 
 
@@ -272,7 +272,7 @@ func _play_level_async(level_data: LevelData) -> void:
 
 		if assets_to_preload.size() > 0:
 			# Pre-load with progress callback (create_static_bodies=false for tokens)
-			var _loaded_count = await AssetPackManager.preload_models(
+			var _loaded_count = await AssetManager.preload_models(
 				assets_to_preload,
 				func(loaded: int, total: int):
 					var model_progress = 0.2 + (0.4 * loaded / max(total, 1))
@@ -488,17 +488,17 @@ func get_game_map() -> GameMap:
 
 ## Get the cached map path for a level (if it exists)
 func _get_cached_map_path(level_folder: String) -> String:
-	return AssetStreamer.get_cached_map_path(level_folder)
+	return AssetManager.streamer.get_cached_map_path(level_folder)
 
 
 ## Request map download from host
 func _request_map_download(level_folder: String) -> bool:
-	if not AssetStreamer.is_enabled():
+	if not AssetManager.streamer.is_enabled():
 		push_error("LevelPlayController: P2P streaming is disabled")
 		return false
 
 	_pending_map_level_folder = level_folder
-	AssetStreamer.request_map_from_host(level_folder)
+	AssetManager.streamer.request_map_from_host(level_folder)
 
 	print("LevelPlayController: Requesting map download for level: " + level_folder)
 	map_download_started.emit(level_folder)
@@ -667,7 +667,7 @@ func add_token_to_level(
 	placement.position = Vector3.ZERO  # Will be updated when saved
 
 	# Set default name from asset
-	placement.token_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
+	placement.token_name = AssetManager.get_asset_display_name(pack_id, asset_id)
 
 	# Add to level data
 	active_level_data.add_token_placement(placement)
@@ -795,7 +795,7 @@ func clear_level() -> void:
 	clear_level_map()
 
 	# Clear model cache to free memory
-	AssetPackManager.clear_model_cache()
+	AssetManager.clear_model_cache()
 
 	level_cleared.emit()
 

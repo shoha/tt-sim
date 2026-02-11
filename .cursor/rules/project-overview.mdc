@@ -10,8 +10,9 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 ## Architecture
 
 - **State stack** – Root manages states (TITLE_SCREEN, LOBBY, PLAYING, PAUSED). Use `change_state()`, `push_state()`, `pop_state()`.
-- **Autoloads** – Singletons for cross-cutting concerns: Constants, UIManager, LevelManager, AssetPackManager, NetworkManager, GameState, etc. Always use direct references (`X.method()`), never `has_node("/root/X")`.
-- **Signals** – Prefer direct signal connections. **No EventBus** – use autoload services instead. Disconnect autoload signals in `_exit_tree()` for non-autoload nodes.
+- **Static classes** – `Constants`, `Paths`, `NodeUtils` are `class_name` scripts (not autoloads). They provide globally accessible constants and static functions without a Node in the tree.
+- **Autoloads** – Singletons for cross-cutting concerns: UIManager, LevelManager, AssetManager, NetworkManager, GameState, EventBus, etc. Always use direct references (`X.method()`), never `has_node("/root/X")`.
+- **Signals** – Prefer direct signal connections. `EventBus` is a small autoload for cross-system signals (pause, state, level lifecycle) — use it sparingly, only when emitter and listener are in unrelated systems. Disconnect autoload signals in `_exit_tree()` for non-autoload nodes.
 - **Host-authoritative** – GameState is authoritative; NetworkStateSync broadcasts to clients.
 
 ## Where to Add Things
@@ -26,7 +27,7 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 | Environment property | `PROPERTY_DEFAULTS`, `_apply_config_to_environment()`, `extract_from_environment()`, + LevelEditPanel UI |
 | In-game edit panel | `scenes/states/playing/level_edit_panel.gd` (extends DrawerContainer) |
 | Slide-out drawer | Extend `DrawerContainer`, configure edge/width/tab_text in `_on_ready()` |
-| Shared constant | `autoloads/constants.gd` (registered as `Constants` autoload) |
+| Shared constant | `autoloads/constants.gd` (`class_name Constants`, not an autoload) |
 | GLB utilities | `utils/glb_utils.gd` |
 | Custom Resource | `resources/` with `class_name` |
 
@@ -34,7 +35,7 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 
 ```gdscript
 # Models (async, cached) — for tokens
-var model = await AssetPackManager.get_model_instance(pack_id, asset_id, variant_id)
+var model = await AssetManager.get_model_instance(pack_id, asset_id, variant_id)
 
 # Map loading (unified pipeline — handles res:// and user:// with full post-processing)
 var map = await GlbUtils.load_map_async(path, true, light_scale)
@@ -68,7 +69,7 @@ After editing any file, run the formatter for that file type (see `formatting.md
 
 ## Do Not
 
-- Create or use a global EventBus
+- Add signals to `EventBus` that aren't truly cross-system (use direct connections instead)
 - Edit `.uid` files manually
 - Block main thread for I/O – use async/await or threaded loading
 - Use `has_node("/root/X")` or `get_node("/root/X")` for autoloads – reference them directly

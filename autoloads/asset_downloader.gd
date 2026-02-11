@@ -2,10 +2,16 @@ extends Node
 
 ## Handles downloading assets from remote URLs and caching them locally.
 ## Supports HTTP downloads from GitHub, Cloudflare R2, Dropbox, and other services.
-## Uses AssetCacheManager for unified cache management with LRU eviction.
+## Uses the disk cache for unified cache management with LRU eviction.
+##
+## This is an internal sub-component of AssetManager. External code should
+## access it via AssetManager.downloader rather than as a standalone autoload.
 
 const MAX_CONCURRENT_DOWNLOADS: int = 3
 const DOWNLOAD_TIMEOUT: float = 60.0  # seconds
+
+## Injected reference to the disk cache (set by AssetManager.setup).
+var _cache_manager: Node
 
 ## Emitted when an asset download completes successfully
 signal download_completed(pack_id: String, asset_id: String, variant_id: String, local_path: String)
@@ -53,7 +59,12 @@ var _failed_downloads: Dictionary = {}
 
 
 func _ready() -> void:
-	pass  # AssetCacheManager handles cache directory setup
+	pass  # Cache directory setup is handled by the cache manager
+
+
+## Inject dependencies (called by AssetManager after adding to tree).
+func setup(cache_manager: Node) -> void:
+	_cache_manager = cache_manager
 
 
 func _process(_delta: float) -> void:
@@ -78,14 +89,14 @@ func get_cached_path(
 			_completed_cache.erase(key)
 
 	# Delegate to AssetCacheManager
-	return AssetCacheManager.get_cached_path(pack_id, asset_id, variant_id, file_type)
+	return _cache_manager.get_cached_path(pack_id, asset_id, variant_id, file_type)
 
 
 ## Get the cache path for an asset (whether it exists or not)
 func _get_cache_path(
 	pack_id: String, asset_id: String, variant_id: String, file_type: String = "model"
 ) -> String:
-	return AssetCacheManager.get_expected_cache_path(pack_id, asset_id, variant_id, file_type)
+	return _cache_manager.get_expected_cache_path(pack_id, asset_id, variant_id, file_type)
 
 
 ## Request download of an asset
@@ -282,7 +293,7 @@ func _on_request_completed(
 	# Register with AssetCacheManager only for cache downloads (not user_assets)
 	if request.target_path == "":
 		var file_type = "model" if request.cache_path.ends_with(".glb") else "icon"
-		AssetCacheManager.register_cached_file(
+		_cache_manager.register_cached_file(
 			request.pack_id, request.asset_id, request.variant_id, request.cache_path, file_type
 		)
 		var cache_key = "%s/%s" % [request.get_key(), file_type]
@@ -383,10 +394,18 @@ func get_queued_download_count() -> int:
 func has_pending_downloads_for(pack_id: String, asset_id: String, variant_id: String) -> bool:
 	for key in _active_downloads:
 		var request = _active_downloads[key] as DownloadRequest
-		if request.pack_id == pack_id and request.asset_id == asset_id and request.variant_id == variant_id:
+		if (
+			request.pack_id == pack_id
+			and request.asset_id == asset_id
+			and request.variant_id == variant_id
+		):
 			return true
 	for request in _download_queue:
-		if request.pack_id == pack_id and request.asset_id == asset_id and request.variant_id == variant_id:
+		if (
+			request.pack_id == pack_id
+			and request.asset_id == asset_id
+			and request.variant_id == variant_id
+		):
 			return true
 	return false
 
@@ -414,8 +433,7 @@ func clear_all_caches() -> void:
 	_completed_cache.clear()
 	_failed_downloads.clear()
 
-	# Use AssetCacheManager
-	AssetCacheManager.clear_cache()
+	_cache_manager.clear_cache()
 
 
 ## Recursively delete a directory

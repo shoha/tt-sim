@@ -24,18 +24,18 @@ func _ready() -> void:
 	asset_browser.asset_selected.connect(_on_asset_selected)
 	if add_pack_button:
 		add_pack_button.pressed.connect(_on_add_pack_pressed)
-	AssetPackManager.pack_download_progress.connect(_on_pack_download_progress)
-	AssetPackManager.pack_download_completed.connect(_on_pack_download_completed)
-	AssetPackManager.pack_download_failed.connect(_on_pack_download_failed)
+	AssetManager.pack_download_progress.connect(_on_pack_download_progress)
+	AssetManager.pack_download_completed.connect(_on_pack_download_completed)
+	AssetManager.pack_download_failed.connect(_on_pack_download_failed)
 
 
 func _exit_tree() -> void:
-	if AssetPackManager.pack_download_progress.is_connected(_on_pack_download_progress):
-		AssetPackManager.pack_download_progress.disconnect(_on_pack_download_progress)
-	if AssetPackManager.pack_download_completed.is_connected(_on_pack_download_completed):
-		AssetPackManager.pack_download_completed.disconnect(_on_pack_download_completed)
-	if AssetPackManager.pack_download_failed.is_connected(_on_pack_download_failed):
-		AssetPackManager.pack_download_failed.disconnect(_on_pack_download_failed)
+	if AssetManager.pack_download_progress.is_connected(_on_pack_download_progress):
+		AssetManager.pack_download_progress.disconnect(_on_pack_download_progress)
+	if AssetManager.pack_download_completed.is_connected(_on_pack_download_completed):
+		AssetManager.pack_download_completed.disconnect(_on_pack_download_completed)
+	if AssetManager.pack_download_failed.is_connected(_on_pack_download_failed):
+		AssetManager.pack_download_failed.disconnect(_on_pack_download_failed)
 
 
 func _on_asset_selected(_pack_id: String, _asset_id: String, _variant_id: String) -> void:
@@ -194,7 +194,7 @@ func _show_add_pack_dialog() -> void:
 			progress_label.visible = true
 			download_btn.disabled = true
 			_downloading_pack_id = ""
-			if not AssetPackManager.download_asset_pack_from_url(url):
+			if not AssetManager.download_asset_pack_from_url(url):
 				progress_label.text = "Failed to start download"
 				download_btn.disabled = false
 	)

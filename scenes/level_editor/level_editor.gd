@@ -176,7 +176,7 @@ func _setup_file_dialogs() -> void:
 
 func _populate_pokemon_list() -> void:
 	_filtered_pokemon = []
-	for asset in AssetPackManager.get_assets("pokemon"):
+	for asset in AssetManager.get_assets("pokemon"):
 		_filtered_pokemon.append(asset.asset_id)
 	_filtered_pokemon.sort_custom(func(a, b): return int(a) < int(b))
 	_update_pokemon_selector_list()
@@ -187,7 +187,7 @@ func _update_pokemon_selector_list() -> void:
 	var search_text = pokemon_selector_search.text.to_lower() if pokemon_selector_search else ""
 
 	for asset_id in _filtered_pokemon:
-		var display_name = AssetPackManager.get_asset_display_name("pokemon", asset_id)
+		var display_name = AssetManager.get_asset_display_name("pokemon", asset_id)
 
 		if (
 			search_text != ""
@@ -276,16 +276,13 @@ func _check_autosave_recovery() -> void:
 
 
 func _show_autosave_recovery_prompt() -> void:
-	(
-		UIManager
-		. show_confirmation(
-			"Recover Autosave?",
-			"An autosaved level was found. Would you like to recover it?",
-			"Recover",
-			"Discard",
-			func() -> void: _history.recover_autosave(),
-			func() -> void: _history.discard_autosave(),
-		)
+	UIManager.show_confirmation(
+		"Recover Autosave?",
+		"An autosaved level was found. Would you like to recover it?",
+		"Recover",
+		"Discard",
+		func() -> void: _history.recover_autosave(),
+		func() -> void: _history.discard_autosave(),
 	)
 
 
@@ -302,7 +299,7 @@ func _refresh_token_list() -> void:
 		return
 
 	for placement in current_level.token_placements:
-		var display_name = AssetPackManager.get_asset_display_name(
+		var display_name = AssetManager.get_asset_display_name(
 			placement.pack_id, placement.asset_id
 		)
 		if placement.token_name != "":
@@ -322,7 +319,7 @@ func _update_placement_panel(placement: TokenPlacement) -> void:
 	placement_name_edit.text = placement.token_name
 
 	# Display asset info using pack-based system
-	var asset_name = AssetPackManager.get_asset_display_name(placement.pack_id, placement.asset_id)
+	var asset_name = AssetManager.get_asset_display_name(placement.pack_id, placement.asset_id)
 	placement_pokemon_label.text = "#%s %s" % [placement.asset_id, asset_name]
 
 	placement_shiny_check.button_pressed = (placement.variant_id == "shiny")
@@ -453,7 +450,7 @@ func _on_pokemon_selector_activated(index: int) -> void:
 	placement.position = Vector3.ZERO
 
 	# Set default name from asset pack
-	placement.token_name = AssetPackManager.get_asset_display_name("pokemon", pokemon_number)
+	placement.token_name = AssetManager.get_asset_display_name("pokemon", pokemon_number)
 
 	_history.save_undo_snapshot()
 	current_level.add_token_placement(placement)

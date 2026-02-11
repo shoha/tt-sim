@@ -43,7 +43,9 @@ static func _generate_id() -> String:
 
 
 ## Create a TokenPlacement from an existing BoardToken
-static func from_board_token(token: BoardToken, pack: String, asset: String, variant: String = "default") -> TokenPlacement:
+static func from_board_token(
+	token: BoardToken, pack: String, asset: String, variant: String = "default"
+) -> TokenPlacement:
 	var placement = TokenPlacement.new()
 	placement.pack_id = pack
 	placement.asset_id = asset
@@ -98,8 +100,8 @@ func apply_to_token(token: BoardToken) -> void:
 
 ## Get display name for this placement.
 ## Returns token_name if set, otherwise falls back to asset_id or "Unknown Token".
-## For a human-readable asset name, callers with access to AssetPackManager
-## should use AssetPackManager.get_asset_display_name(pack_id, asset_id) instead.
+## For a human-readable asset name, callers with access to AssetManager
+## should use AssetManager.get_asset_display_name(pack_id, asset_id) instead.
 func get_display_name() -> String:
 	if token_name != "":
 		return token_name
@@ -135,23 +137,23 @@ static func from_dict(data: Dictionary) -> TokenPlacement:
 	placement.pack_id = data.get("pack_id", "")
 	placement.asset_id = data.get("asset_id", "")
 	placement.variant_id = data.get("variant_id", "default")
-	
+
 	placement.position = SerializationUtils.dict_to_vec3(data.get("position", {}))
 	placement.rotation_y = data.get("rotation_y", 0.0)
 	placement.scale = SerializationUtils.dict_to_vec3(data.get("scale", {}), Vector3.ONE)
-	
+
 	placement.token_name = data.get("token_name", "")
 	placement.is_player_controlled = data.get("is_player_controlled", false)
 	placement.max_health = data.get("max_health", 100)
 	placement.current_health = data.get("current_health", 100)
 	placement.is_visible_to_players = data.get("is_visible_to_players", true)
-	
+
 	# Handle typed array conversion for status_effects
 	var effects_data = data.get("status_effects", [])
 	placement.status_effects.clear()
 	for effect in effects_data:
 		placement.status_effects.append(str(effect))
-	
+
 	placement.is_alive = data.get("is_alive", true)
-	
+
 	return placement

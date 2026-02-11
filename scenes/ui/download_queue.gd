@@ -89,28 +89,28 @@ func _create_badge() -> void:
 
 
 func _connect_signals() -> void:
-	AssetDownloader.download_completed.connect(_on_download_completed)
-	AssetDownloader.download_failed.connect(_on_download_failed)
-	AssetDownloader.download_progress.connect(_on_download_progress)
+	AssetManager.downloader.download_completed.connect(_on_download_completed)
+	AssetManager.downloader.download_failed.connect(_on_download_failed)
+	AssetManager.downloader.download_progress.connect(_on_download_progress)
 
-	AssetStreamer.asset_received.connect(_on_p2p_completed)
-	AssetStreamer.asset_failed.connect(_on_p2p_failed)
-	AssetStreamer.transfer_progress.connect(_on_p2p_progress)
+	AssetManager.streamer.asset_received.connect(_on_p2p_completed)
+	AssetManager.streamer.asset_failed.connect(_on_p2p_failed)
+	AssetManager.streamer.transfer_progress.connect(_on_p2p_progress)
 
 
 func _exit_tree() -> void:
-	if AssetDownloader.download_completed.is_connected(_on_download_completed):
-		AssetDownloader.download_completed.disconnect(_on_download_completed)
-	if AssetDownloader.download_failed.is_connected(_on_download_failed):
-		AssetDownloader.download_failed.disconnect(_on_download_failed)
-	if AssetDownloader.download_progress.is_connected(_on_download_progress):
-		AssetDownloader.download_progress.disconnect(_on_download_progress)
-	if AssetStreamer.asset_received.is_connected(_on_p2p_completed):
-		AssetStreamer.asset_received.disconnect(_on_p2p_completed)
-	if AssetStreamer.asset_failed.is_connected(_on_p2p_failed):
-		AssetStreamer.asset_failed.disconnect(_on_p2p_failed)
-	if AssetStreamer.transfer_progress.is_connected(_on_p2p_progress):
-		AssetStreamer.transfer_progress.disconnect(_on_p2p_progress)
+	if AssetManager.downloader.download_completed.is_connected(_on_download_completed):
+		AssetManager.downloader.download_completed.disconnect(_on_download_completed)
+	if AssetManager.downloader.download_failed.is_connected(_on_download_failed):
+		AssetManager.downloader.download_failed.disconnect(_on_download_failed)
+	if AssetManager.downloader.download_progress.is_connected(_on_download_progress):
+		AssetManager.downloader.download_progress.disconnect(_on_download_progress)
+	if AssetManager.streamer.asset_received.is_connected(_on_p2p_completed):
+		AssetManager.streamer.asset_received.disconnect(_on_p2p_completed)
+	if AssetManager.streamer.asset_failed.is_connected(_on_p2p_failed):
+		AssetManager.streamer.asset_failed.disconnect(_on_p2p_failed)
+	if AssetManager.streamer.transfer_progress.is_connected(_on_p2p_progress):
+		AssetManager.streamer.transfer_progress.disconnect(_on_p2p_progress)
 
 
 func _process(delta: float) -> void:
@@ -152,7 +152,7 @@ func _add_or_update_item(
 		container.add_child(source_label)
 
 		# Asset name (Body style)
-		var display_name = AssetPackManager.get_asset_display_name(pack_id, asset_id)
+		var display_name = AssetManager.get_asset_display_name(pack_id, asset_id)
 		var label = Label.new()
 		label.theme_type_variation = "Body"
 		label.text = display_name
@@ -234,8 +234,8 @@ func _update_badge() -> void:
 func _update_queue_count() -> void:
 	# Count queued items by variant, not by individual file, so the numbers
 	# match the user's mental model of "assets remaining".
-	var http_queued = AssetDownloader.get_queued_variant_count()
-	var p2p_queued = AssetStreamer.get_queued_request_count()
+	var http_queued = AssetManager.downloader.get_queued_variant_count()
+	var p2p_queued = AssetManager.streamer.get_queued_request_count()
 
 	var total_queued = http_queued + p2p_queued
 	var total_active = _download_items.size()
@@ -354,7 +354,7 @@ func _on_variant_file_done(
 		_download_items[key]["has_failure"] = true
 
 	# If more files for this variant are still queued or active, wait for them
-	if AssetDownloader.has_pending_downloads_for(pack_id, asset_id, variant_id):
+	if AssetManager.downloader.has_pending_downloads_for(pack_id, asset_id, variant_id):
 		return
 
 	var variant_success = not _download_items[key].get("has_failure", false)
