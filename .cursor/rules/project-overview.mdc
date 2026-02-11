@@ -14,6 +14,7 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 - **Autoloads** – Singletons for cross-cutting concerns: UIManager, LevelManager, AssetManager, NetworkManager, GameState, EventBus, etc. Always use direct references (`X.method()`), never `has_node("/root/X")`.
 - **Signals** – Prefer direct signal connections. `EventBus` is a small autoload for cross-system signals (pause, state, level lifecycle) — use it sparingly, only when emitter and listener are in unrelated systems. Disconnect autoload signals in `_exit_tree()` for non-autoload nodes.
 - **Host-authoritative** – GameState is authoritative; NetworkStateSync broadcasts to clients.
+- **Occlusion fade** – Map geometry between camera and tokens fades via per-pixel dithered shader. See `.cursor/rules/occlusion-fade.mdc`.
 
 ## Where to Add Things
 
@@ -29,6 +30,7 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 | Slide-out drawer | Extend `DrawerContainer`, configure edge/width/tab_text in `_on_ready()` |
 | Shared constant | `autoloads/constants.gd` (`class_name Constants`, not an autoload) |
 | GLB utilities | `utils/glb_utils.gd` |
+| Shaders | `shaders/` (lo-fi post-process, occlusion fade) |
 | Custom Resource | `resources/` with `class_name` |
 
 ## Key APIs
