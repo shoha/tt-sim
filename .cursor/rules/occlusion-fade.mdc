@@ -1,0 +1,88 @@
+---
+description: Occlusion fade system — how map geometry fades to reveal tokens behind it
+globs: ["shaders/occlusion_fade.gdshader", "scenes/states/playing/occlusion_fade_manager.gd", "scenes/states/playing/game_map.gd", "scenes/states/playing/game_map.tscn", "utils/glb_utils.gd"]
+alwaysApply: false
+---
+
+# Occlusion Fade System
+
+Makes tokens visible and selectable when map geometry (walls, pillars, furniture) blocks them from the camera.
+
+## Architecture
+
+```
+GameMap (game_map.gd)
+├── Owns the OcclusionFadeManager node
+├── Calls setup/clear on map load/unload
+├── Syncs lo-fi pixelation value to the manager
+├── Loads/applies the "occlusion_fade_enabled" setting
+│
+OcclusionFadeManager (occlusion_fade_manager.gd)
+├── Converts map StandardMaterial3D → ShaderMaterial (occlusion_fade.gdshader)
+├── Every N physics frames, collects token positions + radii → pushes to shader uniforms
+├── Restores original materials on clear() or when disabled
+│
+occlusion_fade.gdshader
+├── Replicates PBR appearance from original material
+├── Per-pixel: checks if fragment is between camera and any token
+├── Discards occluding fragments via 16x16 Bayer dithered transparency
+│
+GlbUtils (glb_utils.gd)
+├── disable_static_body_picking() — sets input_ray_pickable=false on all map StaticBody3D
+├── Called from all load_map / load_map_async paths
+└── Allows viewport picking rays to reach tokens behind map collision geometry
+```
+
+## Key Design Decisions
+
+### Per-pixel shader (not per-mesh)
+The fade decision happens in the fragment shader, not at the mesh level. This works correctly regardless of how the map is subdivided — one big mesh or thousands of small ones.
+
+### Dithered discard (not alpha blending)
+Uses `discard` with a Bayer dither pattern instead of alpha transparency. This avoids depth sorting artifacts that plague alpha-blended geometry in a scene with many overlapping surfaces.
+
+### 16x16 Bayer matrix (256 levels)
+The dither uses a recursively constructed 16x16 Bayer matrix (bayer2 → bayer4 → bayer8 → bayer16). This provides near-smooth gradients. Smaller matrices (4x4, 8x8) looked too chunky, especially with the lo-fi pixelation.
+
+### Lo-fi pixelation alignment
+The dither grid must align with the lo-fi post-process pixel grid, or moiré artifacts appear. The `lofi_pixelation` uniform mirrors the lo-fi shader's pixelation value. When active, dither coordinates are snapped to the lo-fi grid: `floor(uv * scale / lofi_cell)`. The `lofi_dither_scale` allows finer subdivision but values > 1 cause blurring (lo-fi point sampling picks random sub-cells). Keep scale at 1 for clean results.
+
+### Per-token fade radius
+Each token gets its own fade radius derived from its collision shape's horizontal AABB extent (`max(x, z) * 0.5 * multiplier`). Small tokens like Kakuna get tight zones; large tokens like Charizard get bigger ones. The full 3D diagonal was too generous for tall models.
+
+### Floor exclusion
+The shader transforms the fragment normal to world space and skips surfaces where `normal.y > floor_threshold`. Without this, floors beneath tokens dither because they're technically closer to the camera than the token center.
+
+### Token position from CollisionShape3D
+Token positions are derived from the CollisionShape3D's AABB center, not the RigidBody3D position (which is at the token's feet) and not the full visual bounds (which include the SelectionGlow disc).
+
+### Click-through map geometry
+`GlbUtils.disable_static_body_picking()` sets `input_ray_pickable = false` on all map StaticBody3D nodes. This lets Godot's viewport picking ray pass through terrain to reach tokens behind it. This is separate from the visual fade — tokens are selectable even without the dither effect.
+
+**Important:** This covers StaticBody3D nodes created both by Godot's GLB importer (via `nodes/use_name_suffixes=true` in import settings) AND by `process_collision_meshes()`. The `disable_static_body_picking()` call is in `load_map()` and all `load_map_async()` code paths. DragAndDrop3D's drop-position raycast (PhysicsDirectSpaceState, mask=1) is unaffected.
+
+## Settings Integration
+
+- **Config key:** `graphics/occlusion_fade_enabled` (bool, default true)
+- **UI:** CheckButton in Settings > Graphics tab, labeled "Occlusion Fade"
+- **Runtime toggle:** `GameMap.set_occlusion_fade_enabled(bool)` — clears/restores materials immediately
+- **Map load/unload:** `notify_map_loaded()` / `notify_map_clearing()` skip setup when disabled
+
+## Files
+
+| File | Role |
+|------|------|
+| `shaders/occlusion_fade.gdshader` | Spatial shader — PBR replication + per-pixel fade logic |
+| `scenes/states/playing/occlusion_fade_manager.gd` | Material conversion, token uniform updates, lifecycle |
+| `scenes/states/playing/game_map.gd` | Integration: setup, lo-fi sync, settings, map lifecycle hooks |
+| `scenes/states/playing/game_map.tscn` | OcclusionFadeManager node under SubViewport |
+| `utils/glb_utils.gd` | `disable_static_body_picking()` for click-through |
+| `scenes/ui/settings_menu.gd` / `.tscn` | Settings toggle UI |
+
+## Gotchas
+
+- **Godot shader language:** `return` is not allowed in `fragment()` / `vertex()` processor functions. Wrap early-exit logic in `if` blocks instead.
+- **Shader arrays:** Uniform arrays like `token_positions[32]` must be padded to full size when setting from GDScript (pad with `Vector3.ZERO` / `0.0`).
+- **Lo-fi aspect ratio:** The lo-fi shader hardcodes `aspect = 16.0 / 9.0`. The occlusion shader must use the same value for grid alignment.
+- **Material restoration:** `clear()` restores original materials via surface overrides. If the original material was the mesh's own (not an override), the override is set to `null` to remove it cleanly.
+- **`lofi_dither_scale > 1` causes blurring:** The lo-fi post-process point-samples one pixel per block. If multiple dither values exist within a block, the result is inconsistent. Keep at 1 for production.
