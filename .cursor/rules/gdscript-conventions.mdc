@@ -9,9 +9,20 @@ alwaysApply: false
 ## Resource and Utility Classes
 
 - Use `class_name` for reusable types (TokenState, LevelData, GlbUtils).
-- Static utilities: `extends RefCounted` with `class_name`, `static func` for methods.
+- Static utilities that need no Node features: `class_name` with `static func` (no `extends`). Examples: `Constants`, `Paths`, `NodeUtils`.
+- Static utilities that need a base class: `extends RefCounted` with `class_name`, `static func`.
+- See `.cursor/rules/autoloads-and-globals.mdc` for when to use static classes vs autoloads vs facade sub-components.
 
 ```gdscript
+# Pure static class (no extends needed)
+class_name MyHelpers
+
+static func clamp_name(name: String) -> String:
+    return name.substr(0, 32)
+```
+
+```gdscript
+# Static utility that extends RefCounted
 extends RefCounted
 class_name GlbUtils
 

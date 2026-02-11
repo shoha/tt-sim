@@ -20,7 +20,7 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 | Feature | Location |
 |---------|----------|
 | New state | Root.State enum, `_enter_*_state()` / `_exit_*_state()` |
-| New autoload | `autoloads/`, register in project.godot |
+| New autoload | `autoloads/`, register in project.godot. See `.cursor/rules/autoloads-and-globals.mdc` for the decision flowchart (static class vs autoload vs facade sub-component) |
 | UI component | `scenes/ui/`, extend AnimatedVisibilityContainer if animated |
 | Level/token logic | LevelPlayController, BoardTokenFactory, GameState |
 | Environment preset | `EnvironmentPresets.PRESETS` in `utils/environment_presets.gd` |
@@ -70,6 +70,7 @@ After editing any file, run the formatter for that file type (see `formatting.md
 ## Do Not
 
 - Add signals to `EventBus` that aren't truly cross-system (use direct connections instead)
+- Create autoloads for pure constants, pure utilities, or implementation details of existing systems (see `autoloads-and-globals.mdc`)
 - Edit `.uid` files manually
 - Block main thread for I/O – use async/await or threaded loading
 - Use `has_node("/root/X")` or `get_node("/root/X")` for autoloads – reference them directly

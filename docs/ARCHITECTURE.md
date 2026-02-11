@@ -629,8 +629,24 @@ project/
 3. Update UIManager state constants to match
 4. Update documentation
 
-### New Autoload
+### New Global Class or Autoload
 
+Before creating a new autoload, evaluate which tier fits (see `.cursor/rules/autoloads-and-globals.mdc`):
+
+| Need | Approach | Example |
+|------|----------|---------|
+| Pure constants or static helpers | `class_name` script, no `extends Node`, `static func` | `Constants`, `Paths`, `NodeUtils` |
+| Runtime state, signals, or lifecycle | Autoload singleton (`extends Node`, register in project.godot) | `UIManager`, `NetworkManager` |
+| Implementation detail of existing system | Sub-component of a facade autoload (child Node with injected deps) | `AssetManager.cache`, `AssetManager.downloader` |
+
+For a new autoload:
 1. Create script in `autoloads/`
 2. Register in `project.godot` under `[autoload]`
-3. Document purpose and API
+3. Document purpose, responsibilities, and public API
+4. Add to the Autoloads table in this file
+
+For a new sub-component of an existing facade:
+1. Create script in `autoloads/`
+2. Do NOT register in `project.godot`
+3. Add a `setup()` method for dependency injection
+4. Have the parent facade create it as a child node and call `setup()`
