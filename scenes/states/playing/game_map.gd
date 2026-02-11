@@ -17,7 +17,8 @@ class_name GameMap
 ##   │       └── SubViewport
 ##   │           ├── CameraHolder/Camera3D
 ##   │           ├── MapContainer (map geometry, environment)
-##   │           └── DragAndDrop3D (tokens)
+##   │           ├── DragAndDrop3D (tokens)
+##   │           └── OcclusionFadeManager (fades geometry hiding tokens)
 ##   └── GameplayMenu (CanvasLayer - UI on top)
 ##
 ## INPUT HANDLING NOTE:
@@ -47,6 +48,8 @@ var tiltshift_node: MeshInstance3D = $WorldViewportLayer/SubViewportContainer/Su
 var map_container: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/MapContainer
 @onready
 var drag_and_drop_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/DragAndDrop3D
+@onready  # OcclusionFadeManager - type resolved at runtime after editor imports the new script
+var occlusion_fade: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/OcclusionFadeManager
 @onready var gameplay_menu: CanvasLayer = $GameplayMenu
 
 var _camera_move_dir: Vector3
@@ -56,6 +59,7 @@ var _current_edge_pan: Vector2 = Vector2.ZERO  # Smoothed edge pan direction
 var _context_menu = null  # TokenContextMenu - dynamically typed to avoid load order issues
 var _level_play_controller: LevelPlayController = null
 var _lofi_material: ShaderMaterial = null  # Cached lo-fi material (from scene or created)
+var _occlusion_fade_enabled: bool = true  # Whether the occlusion fade effect is active
 
 const EDGE_PAN_SMOOTH_SPEED: float = 8.0  # Smoothing rate for edge panning ramp-up/coast-out
 const SETTINGS_PATH := "user://settings.cfg"
@@ -65,6 +69,8 @@ func _ready() -> void:
 	_setup_context_menu()
 	_setup_viewport()
 	_load_lofi_setting()
+	_load_occlusion_fade_setting()
+	_setup_occlusion_fade()
 	# Initialize target zoom from the camera's current size
 	_target_zoom = camera_node.size
 
@@ -267,6 +273,8 @@ func set_lofi_enabled(enabled: bool) -> void:
 		else:
 			# Remove the shader to show unprocessed viewport
 			viewport_container.material = null
+	# Keep occlusion dither grid aligned with lo-fi pixelation
+	_sync_lofi_pixelation()
 
 
 ## Create a default lo-fi material with sensible defaults
@@ -279,6 +287,54 @@ func _create_default_lofi_material() -> ShaderMaterial:
 	for param_name in Constants.LOFI_DEFAULTS:
 		material.set_shader_parameter(param_name, Constants.LOFI_DEFAULTS[param_name])
 	return material
+
+
+## Load occlusion fade setting from config
+func _load_occlusion_fade_setting() -> void:
+	var config = ConfigFile.new()
+	var err = config.load(SETTINGS_PATH)
+	var enabled = true
+	if err == OK:
+		enabled = config.get_value("graphics", "occlusion_fade_enabled", true)
+	set_occlusion_fade_enabled(enabled)
+
+
+## Enable or disable the occlusion fade effect
+func set_occlusion_fade_enabled(enabled: bool) -> void:
+	_occlusion_fade_enabled = enabled
+	if not occlusion_fade:
+		return
+	if enabled:
+		# Re-setup if a map is already loaded
+		if map_container and map_container.get_child_count() > 0:
+			occlusion_fade.setup(camera_node, map_container, drag_and_drop_node)
+			_sync_lofi_pixelation()
+	else:
+		occlusion_fade.clear()
+
+
+## Initialize the occlusion fade manager with node references.
+## The mesh cache is rebuilt separately when a map loads (see notify_map_loaded).
+func _setup_occlusion_fade() -> void:
+	if occlusion_fade and _occlusion_fade_enabled:
+		occlusion_fade.setup(camera_node, map_container, drag_and_drop_node)
+		_sync_lofi_pixelation()
+
+
+## Notify the occlusion fade manager that a new map has been loaded.
+## Re-initializes and rebuilds the internal mesh cache so occlusion detection
+## works with the new geometry.
+func notify_map_loaded() -> void:
+	if occlusion_fade and _occlusion_fade_enabled:
+		occlusion_fade.setup(camera_node, map_container, drag_and_drop_node)
+		_sync_lofi_pixelation()
+
+
+## Clear occlusion fade state. Call before loading a new map.
+## The manager will be re-activated when notify_map_loaded() is called.
+func notify_map_clearing() -> void:
+	if occlusion_fade:
+		occlusion_fade.clear()
 
 
 ## Handle camera edge-panning when dragging a token near screen edges.
@@ -318,3 +374,21 @@ func apply_lofi_overrides(overrides: Dictionary) -> void:
 
 	for param_name in overrides:
 		_lofi_material.set_shader_parameter(param_name, overrides[param_name])
+
+	# If pixelation was among the overrides, sync it to the occlusion shader
+	if "pixelation" in overrides:
+		_sync_lofi_pixelation()
+
+
+## Sync the lo-fi pixelation value to the occlusion fade manager so its dither
+## grid aligns with the post-process pixelation. Pass 0 when lo-fi is off.
+func _sync_lofi_pixelation() -> void:
+	if not occlusion_fade:
+		return
+	var px := 0.0
+	if viewport_container and viewport_container.material is ShaderMaterial:
+		var mat := viewport_container.material as ShaderMaterial
+		var val = mat.get_shader_parameter("pixelation")
+		if val != null:
+			px = float(val)
+	occlusion_fade.set_lofi_pixelation(px)

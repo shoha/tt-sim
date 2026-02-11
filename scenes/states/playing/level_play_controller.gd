@@ -428,6 +428,9 @@ func _finalize_map_loading(map: Node3D) -> void:
 	if active_level_data:
 		_environment_manager.apply_level_environment(active_level_data, _game_map.world_viewport)
 
+	# Rebuild occlusion fade mesh cache now that map geometry is in the scene tree
+	_game_map.notify_map_loaded()
+
 
 ## Get the environment manager (for external callers that need direct access).
 func get_environment_manager() -> LevelEnvironmentManager:
@@ -772,6 +775,10 @@ func clear_level_tokens() -> void:
 
 ## Clear the loaded level map
 func clear_level_map() -> void:
+	# Clear occlusion fade state before freeing map geometry
+	if _game_map:
+		_game_map.notify_map_clearing()
+
 	if is_instance_valid(loaded_map_instance):
 		loaded_map_instance.queue_free()
 		loaded_map_instance = null

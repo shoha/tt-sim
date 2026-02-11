@@ -30,6 +30,7 @@ var _last_slider_tick_time: float = 0.0
 @onready var fullscreen_check: CheckButton = %FullscreenCheck
 @onready var vsync_check: CheckButton = %VSyncCheck
 @onready var lofi_check: CheckButton = %LofiCheck
+@onready var occlusion_fade_check: CheckButton = %OcclusionFadeCheck
 
 # Controls display
 @onready var controls_list: VBoxContainer = %ControlsList
@@ -51,6 +52,12 @@ var _last_slider_tick_time: float = 0.0
 @onready var apply_button: Button = %ApplyButton
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		animate_out()
+		get_viewport().set_input_as_handled()
+
+
 func _on_panel_ready() -> void:
 	# Connect UI signals
 	close_button.pressed.connect(_on_close_pressed)
@@ -70,6 +77,7 @@ func _on_panel_ready() -> void:
 	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
 	vsync_check.toggled.connect(_on_vsync_toggled)
 	lofi_check.toggled.connect(_on_lofi_toggled)
+	occlusion_fade_check.toggled.connect(_on_occlusion_fade_toggled)
 
 	# Network
 	p2p_enabled_check.toggled.connect(_on_p2p_toggled)
@@ -147,6 +155,7 @@ func _load_settings() -> void:
 		fullscreen_check.button_pressed = config.get_value("graphics", "fullscreen", false)
 		vsync_check.button_pressed = config.get_value("graphics", "vsync", true)
 		lofi_check.button_pressed = config.get_value("graphics", "lofi_enabled", true)
+		occlusion_fade_check.button_pressed = config.get_value("graphics", "occlusion_fade_enabled", true)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
 		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
 
@@ -167,6 +176,7 @@ func _save_settings() -> void:
 	config.set_value("graphics", "fullscreen", fullscreen_check.button_pressed)
 	config.set_value("graphics", "vsync", vsync_check.button_pressed)
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
+	config.set_value("graphics", "occlusion_fade_enabled", occlusion_fade_check.button_pressed)
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
 	config.set_value("updates", "check_prereleases", prereleases_check.button_pressed)
 
@@ -198,6 +208,9 @@ func _apply_settings() -> void:
 
 	# Apply lo-fi filter setting
 	_apply_lofi_setting()
+
+	# Apply occlusion fade setting
+	_apply_occlusion_fade_setting()
 
 	# Apply network settings
 	_apply_network_settings()
@@ -250,11 +263,21 @@ func _on_lofi_toggled(_pressed: bool) -> void:
 	pass
 
 
+func _on_occlusion_fade_toggled(_pressed: bool) -> void:
+	pass
+
+
 func _apply_lofi_setting() -> void:
 	# Find active GameMap and apply lo-fi setting
 	var game_map = _find_game_map()
 	if game_map:
 		game_map.set_lofi_enabled(lofi_check.button_pressed)
+
+
+func _apply_occlusion_fade_setting() -> void:
+	var game_map = _find_game_map()
+	if game_map:
+		game_map.set_occlusion_fade_enabled(occlusion_fade_check.button_pressed)
 
 
 func _find_game_map() -> GameMap:
@@ -287,6 +310,7 @@ func _on_reset_pressed() -> void:
 	fullscreen_check.button_pressed = false
 	vsync_check.button_pressed = true
 	lofi_check.button_pressed = true
+	occlusion_fade_check.button_pressed = true
 	p2p_enabled_check.button_pressed = true
 	prereleases_check.button_pressed = false
 
@@ -374,6 +398,7 @@ func _apply_tooltips() -> void:
 	fullscreen_check.tooltip_text = "Toggle fullscreen mode (F11)"
 	vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
 	lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
+	occlusion_fade_check.tooltip_text = "Fade map geometry that hides tokens from view"
 	p2p_enabled_check.tooltip_text = "Allow peer-to-peer asset sharing with other players"
 	clear_cache_button.tooltip_text = "Delete downloaded asset files to free disk space"
 	prereleases_check.tooltip_text = "Include pre-release versions when checking for updates"
