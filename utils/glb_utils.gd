@@ -213,6 +213,9 @@ static func _process_collision_meshes_async(node: Node, create_static_bodies: bo
 
 			var static_body = StaticBody3D.new()
 			static_body.name = mesh_node.name.replace(suffix, "") + "_collision"
+			# Allow viewport picking rays to pass through map geometry so tokens
+			# behind walls/pillars remain selectable (see OcclusionFadeManager).
+			static_body.input_ray_pickable = false
 
 			var collision_shape = CollisionShape3D.new()
 			collision_shape.name = "CollisionShape3D"
@@ -296,6 +299,9 @@ static func process_collision_meshes(node: Node, create_static_bodies: bool = fa
 
 			var static_body = StaticBody3D.new()
 			static_body.name = mesh_node.name.replace(suffix, "") + "_collision"
+			# Allow viewport picking rays to pass through map geometry so tokens
+			# behind walls/pillars remain selectable (see OcclusionFadeManager).
+			static_body.input_ray_pickable = false
 
 			var collision_shape = CollisionShape3D.new()
 			collision_shape.name = "CollisionShape3D"
@@ -478,6 +484,8 @@ static func load_map(
 	else:
 		scene = load_glb_with_processing(path, create_static_bodies, light_intensity_scale)
 
+	if scene:
+		disable_static_body_picking(scene)
 	return scene
 
 
@@ -521,6 +529,7 @@ static func load_map_async(
 					await _process_collision_meshes_async(scene, create_static_bodies)
 					process_animations(scene)
 					process_lights(scene, light_intensity_scale)
+					disable_static_body_picking(scene)
 					result.scene = scene
 					result.success = true
 				else:
@@ -537,6 +546,7 @@ static func load_map_async(
 					process_collision_meshes(scene, create_static_bodies)
 					process_animations(scene)
 					process_lights(scene, light_intensity_scale)
+					disable_static_body_picking(scene)
 					result.scene = scene
 					result.success = true
 				else:
@@ -548,9 +558,23 @@ static func load_map_async(
 			push_error("GlbUtils: " + result.error)
 		return result
 	else:
-		return await load_glb_with_processing_async(
+		var glb_result = await load_glb_with_processing_async(
 			path, create_static_bodies, light_intensity_scale
 		)
+		if glb_result.success and glb_result.scene:
+			disable_static_body_picking(glb_result.scene)
+		return glb_result
+
+
+## Disable input_ray_pickable on all StaticBody3D nodes in a map scene tree.
+## This allows viewport picking rays to pass through map collision geometry so
+## tokens behind walls/pillars remain selectable. Covers both StaticBody3D nodes
+## created by Godot's GLB importer and those added by process_collision_meshes().
+static func disable_static_body_picking(node: Node) -> void:
+	if node is StaticBody3D:
+		(node as StaticBody3D).input_ray_pickable = false
+	for child in node.get_children():
+		disable_static_body_picking(child)
 
 
 ## Process lights in a runtime-loaded GLB
@@ -642,6 +666,28 @@ static func find_first_mesh_instance(root: Node) -> MeshInstance3D:
 		if found:
 			return found
 	return null
+
+
+## Collect all visible MeshInstance3D nodes with actual geometry from a subtree.
+## Useful for building spatial caches (e.g. occlusion fade, LOD systems).
+## @param root: The root node to search under
+## @return: Flat array of all visible MeshInstance3D nodes with non-null meshes
+static func collect_visible_mesh_instances(root: Node) -> Array[MeshInstance3D]:
+	var result: Array[MeshInstance3D] = []
+	_collect_visible_meshes_recursive(root, result)
+	return result
+
+
+## Recursive helper for collect_visible_mesh_instances
+static func _collect_visible_meshes_recursive(
+	node: Node, result: Array[MeshInstance3D]
+) -> void:
+	for child in node.get_children():
+		if child is MeshInstance3D and child.visible:
+			var mesh_inst := child as MeshInstance3D
+			if mesh_inst.mesh:
+				result.append(mesh_inst)
+		_collect_visible_meshes_recursive(child, result)
 
 
 ## Validate that no Node3D child has a non-Node3D parent (broken transform chain).

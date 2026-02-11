@@ -216,6 +216,20 @@ unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 
+[node name="OcclusionFade" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/OcclusionFade"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Occlusion Fade"
+
+[node name="OcclusionFadeCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/OcclusionFade"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+
 [node name="Controls" type="ScrollContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
 visible = false
 layout_mode = 2
