@@ -7,17 +7,26 @@ extends Node
 ##   3. HTTP download (from URLs in manifest)
 ##   4. P2P streaming (from host in multiplayer)
 ##
+## This is an internal sub-component of AssetManager. External code should
+## access it via AssetManager.resolver rather than as a standalone autoload.
+##
 ## Architecture:
 ##   - Single entry point for asset resolution
 ##   - Async resolution with signal-based completion
 ##   - Automatic fallback through resolution stages
-##   - Integrated with AssetCacheManager for unified caching
-##
-## Usage:
-##   var request_id = AssetResolver.resolve_model_async(pack_id, asset_id, variant_id)
-##   AssetResolver.asset_resolved.connect(_on_asset_resolved)
-##   # or
-##   var path = AssetResolver.resolve_model_sync(pack_id, asset_id, variant_id) # blocks if not available
+##   - Integrated with disk cache for unified caching
+
+## Injected reference to the disk cache.
+var _cache_manager: Node
+
+## Injected reference to the HTTP downloader.
+var _downloader: Node
+
+## Injected reference to the P2P streamer.
+var _streamer: Node
+
+## Injected reference to the AssetManager facade.
+var _asset_manager: Node
 
 ## Emitted when async resolution completes successfully
 signal asset_resolved(
@@ -73,26 +82,34 @@ var _key_to_request: Dictionary = {}
 
 
 func _ready() -> void:
-	# Connect to download/streaming signals
+	pass  # Signal connections are done in setup() after dependencies are injected
+
+
+## Inject dependencies (called by AssetManager after adding to tree).
+func setup(cache_manager: Node, dl: Node, st: Node, asset_manager: Node) -> void:
+	_cache_manager = cache_manager
+	_downloader = dl
+	_streamer = st
+	_asset_manager = asset_manager
 	_connect_download_signals()
 
 
 func _connect_download_signals() -> void:
-	# AssetDownloader signals
-	if not AssetDownloader.download_completed.is_connected(_on_http_download_completed):
-		AssetDownloader.download_completed.connect(_on_http_download_completed)
-	if not AssetDownloader.download_failed.is_connected(_on_http_download_failed):
-		AssetDownloader.download_failed.connect(_on_http_download_failed)
-	if not AssetDownloader.download_progress.is_connected(_on_http_download_progress):
-		AssetDownloader.download_progress.connect(_on_http_download_progress)
+	# Downloader signals
+	if not _downloader.download_completed.is_connected(_on_http_download_completed):
+		_downloader.download_completed.connect(_on_http_download_completed)
+	if not _downloader.download_failed.is_connected(_on_http_download_failed):
+		_downloader.download_failed.connect(_on_http_download_failed)
+	if not _downloader.download_progress.is_connected(_on_http_download_progress):
+		_downloader.download_progress.connect(_on_http_download_progress)
 
-	# AssetStreamer signals
-	if not AssetStreamer.asset_received.is_connected(_on_p2p_asset_received):
-		AssetStreamer.asset_received.connect(_on_p2p_asset_received)
-	if not AssetStreamer.asset_failed.is_connected(_on_p2p_asset_failed):
-		AssetStreamer.asset_failed.connect(_on_p2p_asset_failed)
-	if not AssetStreamer.transfer_progress.is_connected(_on_p2p_transfer_progress):
-		AssetStreamer.transfer_progress.connect(_on_p2p_transfer_progress)
+	# Streamer signals
+	if not _streamer.asset_received.is_connected(_on_p2p_asset_received):
+		_streamer.asset_received.connect(_on_p2p_asset_received)
+	if not _streamer.asset_failed.is_connected(_on_p2p_asset_failed):
+		_streamer.asset_failed.connect(_on_p2p_asset_failed)
+	if not _streamer.transfer_progress.is_connected(_on_p2p_transfer_progress):
+		_streamer.transfer_progress.connect(_on_p2p_transfer_progress)
 
 
 # =============================================================================
@@ -235,7 +252,7 @@ func cancel_request(request_id: String) -> void:
 func _check_local_pack(
 	pack_id: String, asset_id: String, variant_id: String, file_type: String
 ) -> String:
-	var pack = AssetPackManager.get_pack(pack_id)
+	var pack = _asset_manager.get_pack(pack_id)
 	if not pack:
 		return ""
 
@@ -261,13 +278,13 @@ func _check_local_pack(
 func _check_cache(
 	pack_id: String, asset_id: String, variant_id: String, file_type: String
 ) -> String:
-	return AssetCacheManager.get_cached_path(pack_id, asset_id, variant_id, file_type)
+	return _cache_manager.get_cached_path(pack_id, asset_id, variant_id, file_type)
 
 
 ## Try HTTP download
 ## Returns true if download was started
 func _try_http_download(request: ResolutionRequest) -> bool:
-	var pack = AssetPackManager.get_pack(request.pack_id)
+	var pack = _asset_manager.get_pack(request.pack_id)
 	if not pack:
 		return false
 
@@ -281,7 +298,7 @@ func _try_http_download(request: ResolutionRequest) -> bool:
 		return false
 
 	# Start download
-	AssetDownloader.request_download(
+	_downloader.request_download(
 		request.pack_id,
 		request.asset_id,
 		request.variant_id,
@@ -300,10 +317,10 @@ func _try_p2p_download(request: ResolutionRequest) -> bool:
 	if not NetworkManager.is_client():
 		return false
 
-	if not AssetStreamer.is_enabled():
+	if not _streamer.is_enabled():
 		return false
 
-	AssetStreamer.request_from_host(
+	_streamer.request_from_host(
 		request.pack_id, request.asset_id, request.variant_id, request.priority
 	)
 

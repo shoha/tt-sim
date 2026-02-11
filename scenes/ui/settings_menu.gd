@@ -201,7 +201,7 @@ func _apply_settings() -> void:
 
 
 func _apply_network_settings() -> void:
-	AssetStreamer.set_enabled(p2p_enabled_check.button_pressed)
+	AssetManager.streamer.set_enabled(p2p_enabled_check.button_pressed)
 
 
 func _apply_audio_bus(bus_name: String, volume_percent: float) -> void:
@@ -310,7 +310,7 @@ func _on_p2p_toggled(_pressed: bool) -> void:
 
 
 func _on_clear_cache_pressed() -> void:
-	AssetDownloader.clear_all_caches()
+	AssetManager.downloader.clear_all_caches()
 	_update_cache_info()
 
 	if UIManager.has_method("show_toast"):

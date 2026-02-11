@@ -2,16 +2,16 @@ class_name AssetModelCache
 
 ## In-memory cache for loaded model scenes.
 ##
-## Extracted from AssetPackManager to give the model instance API (get,
+## Extracted from AssetManager to give the model instance API (get,
 ## preload, cache) a dedicated home.  The cache stores either a Node3D
 ## template (for GLB files) or a PackedScene (for .tscn/.scn), and
 ## hands out duplicates/instances so every caller gets a unique tree.
 ##
 ## Requires a Node reference for `get_tree()` and coroutine yielding.
 
-var _model_cache: Dictionary = {}       # cache_key -> Node3D | PackedScene
-var _loading_models: Dictionary = {}    # cache_key -> true (in-flight guard)
-var _owner: Node                        # parent node (for get_tree())
+var _model_cache: Dictionary = {}  # cache_key -> Node3D | PackedScene
+var _loading_models: Dictionary = {}  # cache_key -> true (in-flight guard)
+var _owner: Node  # parent node (for get_tree())
 
 
 func _init(owner: Node) -> void:

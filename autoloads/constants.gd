@@ -1,7 +1,7 @@
-extends Node
+class_name Constants
 
 ## Global constants shared across the project.
-## Registered as an autoload so values are accessible everywhere.
+## Accessible everywhere via the class_name (no autoload needed).
 
 # =============================================================================
 # CANVAS LAYER ORDERING

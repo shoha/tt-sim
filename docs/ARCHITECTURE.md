@@ -63,6 +63,18 @@ Root (Node3D)
 
 ---
 
+## Static Classes
+
+These are `class_name` scripts (not autoloads) that provide globally accessible constants and static utility functions. They do not extend `Node` and are not in the scene tree.
+
+| Class          | File                         | Purpose                              |
+| -------------- | ---------------------------- | ------------------------------------ |
+| `Constants`    | `autoloads/constants.gd`    | Shared constants (lo-fi defaults, canvas layers, network intervals) |
+| `Paths`        | `autoloads/paths.gd`         | Path constants and static path utilities |
+| `NodeUtils`    | `autoloads/node_utils.gd`    | Static node manipulation utilities   |
+
+---
+
 ## Autoloads (Singletons)
 
 Autoloads are registered in `project.godot` and available globally.
@@ -71,9 +83,7 @@ Autoloads are registered in `project.godot` and available globally.
 
 | Autoload       | File                         | Purpose                              |
 | -------------- | ---------------------------- | ------------------------------------ |
-| `Constants`    | `autoloads/constants.gd`    | Shared constants (lo-fi defaults, network intervals) |
-| `Paths`        | `autoloads/paths.gd`         | Path constants and utilities         |
-| `NodeUtils`    | `autoloads/node_utils.gd`    | Node manipulation utilities          |
+| `EventBus`     | `autoloads/event_bus.gd`     | Cross-system signals (pause, state, level lifecycle) |
 | `LevelManager` | `autoloads/level_manager.gd` | Level save/load operations           |
 | `UIManager`    | `autoloads/ui_manager.gd`    | UI systems (dialogs, toasts, etc.)   |
 | `AudioManager` | `autoloads/audio_manager.gd` | Audio playback and bus control       |
@@ -87,15 +97,20 @@ Autoloads are registered in `project.godot` and available globally.
 | `GameState`        | `autoloads/game_state.gd`         | Authoritative game state storage  |
 | `Noray`            | `addons/netfox.noray/noray.gd`    | NAT punchthrough client           |
 
-### Asset Management Autoloads
+### Asset Management
 
 | Autoload            | File                               | Purpose                                    |
 | ------------------- | ---------------------------------- | ------------------------------------------ |
-| `AssetPackManager`  | `autoloads/asset_pack_manager.gd`  | Pack discovery, asset loading, model cache |
-| `AssetResolver`     | `autoloads/asset_resolver.gd`      | Unified asset resolution pipeline          |
-| `AssetCacheManager` | `autoloads/asset_cache_manager.gd` | Disk cache management                      |
-| `AssetDownloader`   | `autoloads/asset_downloader.gd`    | HTTP downloads with queue                  |
-| `AssetStreamer`     | `autoloads/asset_streamer.gd`      | P2P asset streaming                        |
+| `AssetManager`      | `autoloads/asset_manager.gd`       | Facade: pack management, resolution, model cache |
+
+`AssetManager` is the single entry point for the asset pipeline. It owns four internal sub-components as child nodes (not separate autoloads):
+
+| Sub-component | Access via                    | Purpose                            |
+| ------------- | ----------------------------- | ---------------------------------- |
+| Cache         | `AssetManager.cache`          | Disk cache with LRU eviction       |
+| Downloader    | `AssetManager.downloader`     | HTTP download queue                |
+| Streamer      | `AssetManager.streamer`       | P2P chunked streaming              |
+| Resolver      | `AssetManager.resolver`       | Resolution pipeline (local → cache → HTTP → P2P) |
 
 ### Other Autoloads
 
@@ -131,30 +146,41 @@ Autoloads are registered in `project.godot` and available globally.
 
 See [NETWORKING.md](NETWORKING.md) for detailed documentation.
 
-### AssetPackManager Responsibilities
+### AssetManager Responsibilities
 
 - Asset pack discovery and registration
 - Asset path resolution (local → disk cache → download → P2P)
 - **Model instance loading with memory caching**
 - Remote pack support
 - Batch model preloading for level loading
+- HTTP download queue and P2P streaming (via internal sub-components)
 
 **Model Instance API:**
 
-The `AssetPackManager` provides a unified API for getting model instances with automatic caching:
+`AssetManager` provides a unified API for getting model instances with automatic caching:
 
 ```gdscript
 # Get a model instance (async, uses cache)
-var model = await AssetPackManager.get_model_instance(pack_id, asset_id, variant_id)
+var model = await AssetManager.get_model_instance(pack_id, asset_id, variant_id)
 
 # Preload multiple models before batch spawning
-await AssetPackManager.preload_models(assets_array, progress_callback)
+await AssetManager.preload_models(assets_array, progress_callback)
 
 # Clear cache when switching levels
-AssetPackManager.clear_model_cache()
+AssetManager.clear_model_cache()
 ```
 
-This centralizes model loading logic that was previously duplicated in `BoardTokenFactory` and `LevelPlayController`.
+**Sub-component signals** (for download progress UI, etc.):
+
+```gdscript
+# HTTP download progress
+AssetManager.downloader.download_completed.connect(_on_download_completed)
+AssetManager.downloader.download_progress.connect(_on_download_progress)
+
+# P2P streaming progress
+AssetManager.streamer.asset_received.connect(_on_p2p_received)
+AssetManager.streamer.transfer_progress.connect(_on_p2p_progress)
+```
 
 See [ASSET_MANAGEMENT.md](ASSET_MANAGEMENT.md) for detailed documentation.
 
@@ -278,7 +304,7 @@ The asset system supports local and remote asset packs with multiplayer synchron
 4. Request from host via P2P
 ```
 
-### Model Loading Flow (tokens via AssetPackManager)
+### Model Loading Flow (tokens via AssetManager)
 
 ```
 1. Check memory cache (already loaded this session)
@@ -431,7 +457,7 @@ var scale: Vector3
    - **Extracts and strips** embedded `WorldEnvironment` nodes from the map (preserves settings as map defaults)
    - Adds map to `GameMap.map_container` (dedicated Node3D inside SubViewport)
    - **Applies environment** via layered config: PROPERTY_DEFAULTS → map defaults → preset → overrides
-   - Preloads token models via `AssetPackManager.preload_models()`
+   - Preloads token models via `AssetManager.preload_models()`
    - Spawns tokens progressively (yields to keep UI responsive)
    - Emits progress signals for loading overlay
    - Manages active gameplay
@@ -531,13 +557,9 @@ AudioManager.play_click()
 LevelManager.save_level(data)
 ```
 
-### Avoid: Global Event Bus
+### For Cross-System Signals: EventBus
 
-The project previously used an EventBus autoload but this was removed in favor of:
-
-- Direct signal connections for parent-child communication
-- Autoload services for global operations
-- Controller classes for domain logic (LevelPlayController)
+`EventBus` is a small autoload with signals that span system boundaries (e.g. `pause_requested`, `play_level_requested`, `state_changed`). Use it sparingly -- only for signals where the emitter and listener are in unrelated systems. Prefer direct signal connections for parent-child communication and autoload method calls for global operations.
 
 ---
 
@@ -545,7 +567,10 @@ The project previously used an EventBus autoload but this was removed in favor o
 
 ```
 project/
-├── autoloads/           # Singleton services
+├── autoloads/           # Singleton services and static class_name scripts
+│   ├── constants.gd         # Static class (class_name, not autoload)
+│   ├── paths.gd             # Static class (class_name, not autoload)
+│   ├── node_utils.gd        # Static class (class_name, not autoload)
 │   ├── network_manager.gd
 │   ├── network_state_sync.gd
 │   ├── game_state.gd

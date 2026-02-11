@@ -68,7 +68,7 @@ func _populate_items() -> void:
 	call_deferred("_clear_list")
 	_items.clear()
 
-	var pack = AssetPackManager.get_pack(_pack_id)
+	var pack = AssetManager.get_pack(_pack_id)
 	if not pack:
 		return
 

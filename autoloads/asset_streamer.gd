@@ -4,10 +4,13 @@ extends Node
 ##
 ## When a client needs an asset that has no external URL, this system
 ## allows downloading it directly from the host over the game network.
-## Uses AssetCacheManager for unified cache management.
+## Uses the disk cache for unified cache management.
 ##
 ## Host side: Responds to asset requests by reading and sending local files
 ## Client side: Requests assets from host when URL-based download is unavailable
+##
+## This is an internal sub-component of AssetManager. External code should
+## access it via AssetManager.streamer rather than as a standalone autoload.
 ##
 ## Features:
 ##   - ZSTD compression for efficient transfer
@@ -17,6 +20,12 @@ extends Node
 const CHUNK_SIZE := 32768  # 32KB chunks
 const MAX_CONCURRENT_TRANSFERS := 2
 const TRANSFER_TIMEOUT := 60.0  # seconds
+
+## Injected reference to the disk cache (set by AssetManager.setup).
+var _cache_manager: Node
+
+## Injected reference to the AssetManager facade (set by AssetManager.setup).
+var _asset_manager: Node
 
 ## Signals
 signal asset_received(pack_id: String, asset_id: String, variant_id: String, local_path: String)
@@ -48,6 +57,12 @@ func _ready() -> void:
 	# Connect to multiplayer signals
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+
+
+## Inject dependencies (called by AssetManager after adding to tree).
+func setup(cache_manager: Node, asset_manager: Node) -> void:
+	_cache_manager = cache_manager
+	_asset_manager = asset_manager
 
 
 func _load_settings() -> void:
@@ -177,8 +192,8 @@ func _rpc_request_asset(
 		# Special handling for level maps - asset_id is the level folder name
 		file_path = Paths.get_level_map_path(asset_id)
 	else:
-		# Regular asset pack - use AssetPackManager
-		file_path = AssetPackManager.get_model_path(pack_id, asset_id, variant_id)
+		# Regular asset pack - use AssetManager
+		file_path = _asset_manager.get_model_path(pack_id, asset_id, variant_id)
 
 	if file_path == "" or not FileAccess.file_exists(file_path):
 		rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id)
@@ -352,7 +367,7 @@ func _finalize_download(key: String) -> void:
 		return
 
 	# Store via AssetCacheManager
-	var cache_path = AssetCacheManager.store_asset(
+	var cache_path = _cache_manager.store_asset(
 		download.pack_id, download.asset_id, download.variant_id, data, "model"
 	)
 	if cache_path == "":
@@ -432,7 +447,7 @@ func get_queued_request_count() -> int:
 ## @param level_folder: The level folder name
 ## @return: The cached path, or empty string if not cached
 func get_cached_map_path(level_folder: String) -> String:
-	return AssetCacheManager.get_cached_path(Paths.LEVEL_MAPS_PACK_ID, level_folder, "map", "model")
+	return _cache_manager.get_cached_path(Paths.LEVEL_MAPS_PACK_ID, level_folder, "map", "model")
 
 
 ## Check if a map download is in progress for a level

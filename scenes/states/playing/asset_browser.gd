@@ -14,11 +14,11 @@ var _tabs: Dictionary = {}  # pack_id -> AssetPackTab
 
 
 func _ready() -> void:
-	# Wait for AssetPackManager to be ready
-	if AssetPackManager.get_packs().size() > 0:
+	# Wait for AssetManager to be ready
+	if AssetManager.get_packs().size() > 0:
 		_create_tabs()
 	else:
-		AssetPackManager.packs_loaded.connect(_on_packs_loaded, CONNECT_ONE_SHOT)
+		AssetManager.packs_loaded.connect(_on_packs_loaded, CONNECT_ONE_SHOT)
 
 
 func _on_packs_loaded() -> void:
@@ -39,7 +39,7 @@ func _create_tabs() -> void:
 	_tabs.clear()
 
 	# Create a tab for each pack
-	var packs = AssetPackManager.get_packs()
+	var packs = AssetManager.get_packs()
 	print("AssetBrowser: _create_tabs() — creating %d tabs" % packs.size())
 	for pack in packs:
 		var tab = AssetPackTabScene.instantiate() as AssetPackTab

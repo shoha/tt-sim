@@ -31,7 +31,7 @@ The asset management system provides:
 
 | Autoload            | Purpose                                              |
 | ------------------- | ---------------------------------------------------- |
-| `AssetPackManager`  | Pack discovery, asset resolution, model cache        |
+| `AssetManager`  | Pack discovery, asset resolution, model cache        |
 | `AssetResolver`     | Unified resolution pipeline (local → cache → remote) |
 | `AssetCacheManager` | Disk cache management for downloaded files           |
 | `AssetDownloader`   | HTTP downloads with queue                            |
@@ -44,7 +44,7 @@ The asset management system provides:
 ### Asset Hierarchy
 
 ```
-AssetPackManager
+AssetManager
 ├── AssetPack (pack_id: "trainers")
 │   ├── AssetEntry (asset_id: "pikachu")
 │   │   ├── AssetVariant (variant_id: "default")
@@ -120,10 +120,10 @@ Packs are automatically discovered on startup from two sources:
 
 ```gdscript
 # Manually refresh packs
-AssetPackManager.reload_packs()
+AssetManager.reload_packs()
 
 # Get all available packs
-var packs = AssetPackManager.get_packs()
+var packs = AssetManager.get_packs()
 ```
 
 ---
@@ -132,16 +132,16 @@ var packs = AssetPackManager.get_packs()
 
 ### Getting Model Instances
 
-Use `AssetPackManager.get_model_instance()` for general model loading with automatic caching:
+Use `AssetManager.get_model_instance()` for general model loading with automatic caching:
 
 ```gdscript
 # Async loading (recommended - non-blocking, uses cache)
-var model = await AssetPackManager.get_model_instance("my_pack", "dragon", "default")
+var model = await AssetManager.get_model_instance("my_pack", "dragon", "default")
 if model:
     add_child(model)
 
 # Sync loading (blocks if not cached - use sparingly)
-var model = AssetPackManager.get_model_instance_sync("my_pack", "dragon", "default")
+var model = AssetManager.get_model_instance_sync("my_pack", "dragon", "default")
 ```
 
 ### Creating Tokens
@@ -174,7 +174,7 @@ for placement in level_data.token_placements:
     })
 
 # Preload with progress callback
-var loaded = await AssetPackManager.preload_models(
+var loaded = await AssetManager.preload_models(
     assets_to_load,
     func(current: int, total: int):
         print("Loading models: %d/%d" % [current, total])
@@ -189,7 +189,7 @@ for placement in level_data.token_placements:
 ### Loading Icons
 
 ```gdscript
-var icon_path = AssetPackManager.resolve_icon_path("my_pack", "dragon", "default")
+var icon_path = AssetManager.resolve_icon_path("my_pack", "dragon", "default")
 if icon_path:
     var icon = load(icon_path) as Texture2D
     texture_rect.texture = icon
@@ -249,15 +249,15 @@ var pack = AssetPack.new()
 pack.pack_id = "remote_pack"
 pack.display_name = "Remote Pack"
 pack.base_url = "https://cdn.example.com/packs/remote/"
-AssetPackManager.register_remote_pack(pack)
+AssetManager.register_remote_pack(pack)
 
 # Or load from remote manifest URL (metadata only, assets download on-demand)
-AssetPackManager.load_remote_pack_from_url(
+AssetManager.load_remote_pack_from_url(
     "https://example.com/packs/my_pack/manifest.json"
 )
 
 # Or download entire pack from manifest URL (all models and icons)
-AssetPackManager.download_asset_pack_from_url(
+AssetManager.download_asset_pack_from_url(
     "https://example.com/packs/my_pack/manifest.json"
 )
 # Connect to pack_download_progress and pack_download_completed for progress
@@ -357,7 +357,7 @@ user://asset_cache/
 Loaded model scenes are cached in memory for fast instantiation:
 
 ```
-AssetPackManager._model_cache
+AssetManager._model_cache
 ├── "user://asset_cache/pokemon/pikachu/default.glb" -> Node3D template
 ├── "res://user_assets/trainers/models/trainer.glb" -> PackedScene
 └── ...
@@ -398,14 +398,14 @@ if cached_path:
     pass
 
 # Get model instance (uses memory cache automatically)
-var model = await AssetPackManager.get_model_instance(pack_id, asset_id, variant_id)
+var model = await AssetManager.get_model_instance(pack_id, asset_id, variant_id)
 ```
 
 ### Clearing Caches
 
 ```gdscript
 # Clear memory cache (call when switching levels to free memory)
-AssetPackManager.clear_model_cache()
+AssetManager.clear_model_cache()
 
 # Disk cache is persistent - no API to clear (managed by OS/user)
 ```
@@ -497,7 +497,7 @@ Multiple variants allow alternate appearances:
 
 ## API Reference
 
-### AssetPackManager
+### AssetManager
 
 #### Pack Discovery
 
@@ -639,7 +639,7 @@ signal stream_failed(pack_id, asset_id, variant_id, error)
 
 ### BoardTokenFactory
 
-Factory for creating `BoardToken` instances from asset packs. Uses `AssetPackManager` for model loading and caching.
+Factory for creating `BoardToken` instances from asset packs. Uses `AssetManager` for model loading and caching.
 
 #### Token Creation
 
@@ -662,7 +662,7 @@ static func create_from_placement(placement: TokenPlacement) -> BoardToken
 static func create_from_placement_async(placement: TokenPlacement) -> BoardToken
 ```
 
-**Note:** Model caching is handled by `AssetPackManager`. Call `AssetPackManager.clear_model_cache()` when switching levels to free memory.
+**Note:** Model caching is handled by `AssetManager`. Call `AssetManager.clear_model_cache()` when switching levels to free memory.
 
 ---
 
