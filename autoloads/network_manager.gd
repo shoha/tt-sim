@@ -45,6 +45,9 @@ var _connection_state: ConnectionState = ConnectionState.OFFLINE
 ## Room code (OID from Noray) when hosting
 var _room_code: String = ""
 
+## Room code used to join (stored for reconnection)
+var _joined_room_code: String = ""
+
 ## Connected players: peer_id -> player_info dictionary
 var _players: Dictionary = {}
 
@@ -84,18 +87,11 @@ const CONNECTION_TIMEOUT := 15.0
 const LATE_JOINER_SYNC_TIMEOUT := 5.0
 var _connection_timer: Timer = null
 
-## Reconnection settings
-const MAX_RECONNECT_ATTEMPTS := 5
-const RECONNECT_BASE_DELAY := 1.0
-const RECONNECT_MAX_DELAY := 16.0
-
 ## Game state tracking (for late joiner detection)
 var _game_in_progress: bool = false
 
-## Reconnection tracking
-var _reconnect_attempts: int = 0
-var _stored_room_code: String = ""
-var _reconnect_timer: Timer = null
+## Delegated reconnection state machine
+var _reconnection: NetworkReconnection
 
 ## Debug logging
 var debug_logging: bool = false
@@ -131,7 +127,7 @@ func is_networked() -> bool:
 	return (
 		_connection_state == ConnectionState.HOSTING
 		or _connection_state == ConnectionState.JOINED
-		or _is_reconnecting()
+		or _reconnection.is_reconnecting()
 	)
 
 
@@ -164,11 +160,25 @@ func _ready() -> void:
 	_connection_timer.timeout.connect(_on_connection_timeout)
 	add_child(_connection_timer)
 
-	# Setup reconnection timer
-	_reconnect_timer = Timer.new()
-	_reconnect_timer.one_shot = true
-	_reconnect_timer.timeout.connect(_on_reconnect_timeout)
-	add_child(_reconnect_timer)
+	# Setup reconnection handler
+	_reconnection = NetworkReconnection.new(
+		self,
+		func(code: String) -> void:
+			# Clean up peer before attempting rejoin
+			if multiplayer.multiplayer_peer:
+				multiplayer.multiplayer_peer.close()
+				multiplayer.multiplayer_peer = null
+			join_game(code),
+		func(state: int) -> void: _set_connection_state(state as ConnectionState),
+		ConnectionState.RECONNECTING,
+	)
+	_reconnection.reconnecting.connect(
+		func(attempt: int, max_attempts: int) -> void:
+			reconnecting.emit(attempt, max_attempts)
+	)
+	_reconnection.reconnection_failed.connect(
+		func(reason: String) -> void: _handle_connection_error(reason)
+	)
 
 	# Load network settings
 	_load_network_settings()
@@ -300,8 +310,8 @@ func join_game(
 		push_warning("NetworkManager: Already connected, disconnect first")
 		return
 
-	# Store room code for potential reconnection
-	_stored_room_code = room_code_input
+	# Store room code for potential reconnection (used by _reconnection handler)
+	_joined_room_code = room_code_input
 
 	_set_connection_state(ConnectionState.CONNECTING)
 	_start_connection_timeout()
@@ -362,7 +372,7 @@ func _on_noray_command_during_join(command: String, data: String) -> void:
 	if command == "connect" and not data.contains(":"):
 		push_warning("NetworkManager: Host not found (room code may be invalid or expired)")
 		_disconnect_join_signals()
-		if _is_reconnecting():
+		if _reconnection.is_reconnecting():
 			# During reconnection: route through retry logic
 			_on_connection_failed()
 		else:
@@ -406,7 +416,7 @@ func disconnect_game() -> void:
 		return
 
 	# Stop any pending reconnection attempts
-	_stop_reconnection()
+	_reconnection.stop()
 
 	# Disconnect Noray signals (host-side)
 	if Noray.on_connect_nat.is_connected(_on_client_nat_connect):
@@ -431,6 +441,7 @@ func disconnect_game() -> void:
 	# Clear state
 	_players.clear()
 	_room_code = ""
+	_joined_room_code = ""
 	_game_in_progress = false
 	_current_level_dict.clear()
 	_stop_connection_timeout()
@@ -537,30 +548,17 @@ func _on_connected_to_server() -> void:
 	_players[multiplayer.get_unique_id()] = _local_player_info.duplicate()
 
 	# If we were reconnecting, reset reconnection state
-	if _connection_state == ConnectionState.RECONNECTING:
-		_stop_reconnection()
-		_reconnect_attempts = 0
-		_stored_room_code = ""
+	if _connection_state == ConnectionState.RECONNECTING or _reconnection.is_reconnecting():
+		_reconnection.stop()
 
 	_set_connection_state(ConnectionState.JOINED)
 
 
 func _on_connection_failed() -> void:
 	_log("Connection failed")
-	# If we're reconnecting, handle retry logic
-	# Note: can't check _connection_state == RECONNECTING here because join_game()
-	# changes it to CONNECTING. Use _is_reconnecting() which checks _reconnect_attempts.
-	if _is_reconnecting():
-		# Note: _reconnect_attempts is incremented by _start_reconnection(), not here
-		if _reconnect_attempts >= MAX_RECONNECT_ATTEMPTS:
-			_log("Reconnection failed after %d attempts" % MAX_RECONNECT_ATTEMPTS)
-			_stop_reconnection()
-			_handle_connection_error(
-				"Reconnection failed after %d attempts" % MAX_RECONNECT_ATTEMPTS
-			)
-		else:
-			# Try again with exponential backoff
-			_start_reconnection()
+	# If we're reconnecting, delegate retry/give-up logic to the handler
+	if _reconnection.is_reconnecting():
+		_reconnection.on_attempt_failed()
 	else:
 		_handle_connection_error("Failed to connect to game server")
 
@@ -578,8 +576,11 @@ func _on_server_disconnected() -> void:
 		_players.clear()
 		_stop_connection_timeout()
 
-		# Start reconnection process
-		_start_reconnection()
+		# Start reconnection process via handler — use the room code the client
+		# originally joined with (for clients _room_code is empty since it's the
+		# host OID; for hosts _joined_room_code is empty so fall back to _room_code)
+		var code_for_reconnect = _joined_room_code if _joined_room_code != "" else _room_code
+		_reconnection.start(code_for_reconnect)
 	else:
 		disconnect_game()
 
@@ -865,71 +866,6 @@ func set_noray_server(server: String, port: int = DEFAULT_NORAY_PORT) -> void:
 # =============================================================================
 # DEBUG LOGGING
 # =============================================================================
-
-
-## Start reconnection process with exponential backoff
-func _start_reconnection() -> void:
-	# Store room code before it's cleared (if not already stored)
-	if _stored_room_code.is_empty() and not _room_code.is_empty():
-		_stored_room_code = _room_code
-
-	# If we don't have a stored room code, can't reconnect
-	if _stored_room_code.is_empty():
-		_log("Cannot reconnect: no room code stored")
-		_handle_connection_error("Cannot reconnect: no room code available")
-		return
-
-	# Increment attempt counter (first attempt is 0, so this becomes 1)
-	_reconnect_attempts += 1
-
-	_log("Starting reconnection attempt %d/%d" % [_reconnect_attempts, MAX_RECONNECT_ATTEMPTS])
-
-	# Set state to RECONNECTING
-	_set_connection_state(ConnectionState.RECONNECTING)
-
-	# Emit reconnecting signal for UI
-	reconnecting.emit(_reconnect_attempts, MAX_RECONNECT_ATTEMPTS)
-
-	# Calculate exponential backoff delay
-	var delay = min(RECONNECT_BASE_DELAY * pow(2, _reconnect_attempts - 1), RECONNECT_MAX_DELAY)
-	_log("Waiting %.2f seconds before reconnection attempt" % delay)
-
-	# Setup timer for reconnection
-	_reconnect_timer.wait_time = delay
-	_reconnect_timer.start()
-
-
-## Handle reconnection timer timeout
-func _on_reconnect_timeout() -> void:
-	if _connection_state != ConnectionState.RECONNECTING:
-		return
-
-	_log("Attempting to rejoin room: %s" % _stored_room_code)
-
-	# Clean up current connection state before attempting rejoin
-	if multiplayer.multiplayer_peer:
-		multiplayer.multiplayer_peer.close()
-		multiplayer.multiplayer_peer = null
-
-	# Attempt to rejoin
-	join_game(_stored_room_code)
-
-
-## Stop reconnection process and clean up
-func _stop_reconnection() -> void:
-	if _reconnect_timer:
-		_reconnect_timer.stop()
-
-	# Reset reconnection state
-	_reconnect_attempts = 0
-	_stored_room_code = ""
-
-
-## Check if we're in the middle of a reconnection cycle.
-## Can't rely on _connection_state == RECONNECTING because join_game() changes
-## the state to CONNECTING during each attempt.
-func _is_reconnecting() -> bool:
-	return _reconnect_attempts > 0
 
 
 ## Log a message if debug logging is enabled

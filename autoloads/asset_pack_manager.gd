@@ -23,12 +23,8 @@ const CACHE_DIR: String = "user://asset_cache/"
 ## Dictionary of pack_id -> AssetPack
 var _packs: Dictionary = {}
 
-## In-memory cache for loaded model scenes (path -> Node3D template or PackedScene)
-## This avoids re-parsing GLB files when creating multiple tokens of the same type
-var _model_cache: Dictionary = {}
-
-## Tracks which models are currently being loaded async (path -> true)
-var _loading_models: Dictionary = {}
+## Delegated model-instance cache (loaded lazily in _ready)
+var _model_cache_handler: AssetModelCache
 
 ## Signal emitted when all packs have been loaded
 signal packs_loaded
@@ -50,6 +46,7 @@ signal pack_download_failed(pack_id: String, error: String)
 
 
 func _ready() -> void:
+	_model_cache_handler = AssetModelCache.new(self)
 	_discover_packs()
 	_connect_resolver_signals()
 
@@ -57,7 +54,8 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	# Free cached Node3D templates so their CollisionShape3D children release
 	# physics-server RIDs before the engine shuts down (prevents JoltShape3D leaks).
-	clear_model_cache()
+	if _model_cache_handler:
+		_model_cache_handler.clear()
 
 
 ## Connect to AssetResolver signals (unified resolution pipeline)
@@ -746,216 +744,74 @@ func reload_packs() -> void:
 
 
 # =============================================================================
-# MODEL INSTANCE API (with in-memory caching)
+# MODEL INSTANCE API  (delegated to AssetModelCache)
 # =============================================================================
 
 
-## Get a model instance for an asset (async, uses cache)
-## Returns a new Node3D instance (duplicated from cache if available)
-## Handles path resolution, loading, and caching automatically
-## @param pack_id: The pack identifier
-## @param asset_id: The asset identifier
-## @param variant_id: The variant (default, shiny, etc.)
-## @param create_static_bodies: If true, creates StaticBody3D for collision meshes (for maps)
-## @return: A Node3D model instance, or null on failure
+## Get a model instance for an asset (async, uses cache).
 func get_model_instance(
 	pack_id: String,
 	asset_id: String,
 	variant_id: String = "default",
-	create_static_bodies: bool = false
+	create_static_bodies: bool = false,
 ) -> Node3D:
 	var path = resolve_model_path(pack_id, asset_id, variant_id)
 	if path == "":
-		# Asset needs to be downloaded - caller should wait for asset_available signal
 		return null
+	return await _model_cache_handler.get_instance_from_path(path, create_static_bodies)
 
-	return await get_model_instance_from_path(path, create_static_bodies)
 
-
-## Get a model instance from a resolved path (async, uses cache)
-## @param path: The resolved model path (res:// or user://)
-## @param create_static_bodies: If true, creates StaticBody3D for collision meshes
-## @return: A Node3D model instance, or null on failure
+## Get a model instance from a resolved path (async, uses cache).
 func get_model_instance_from_path(path: String, create_static_bodies: bool = false) -> Node3D:
-	var cache_key = path + ("_static" if create_static_bodies else "")
-
-	# Check cache first
-	if _model_cache.has(cache_key):
-		return _get_instance_from_cache(cache_key)
-
-	# Wait if another call is already loading this model
-	while _loading_models.has(cache_key):
-		await get_tree().process_frame
-		if _model_cache.has(cache_key):
-			return _get_instance_from_cache(cache_key)
-
-	# Mark as loading
-	_loading_models[cache_key] = true
-
-	var model: Node3D = null
-
-	# Load based on file type
-	if path.ends_with(".glb"):
-		# GLB file - use GlbUtils (works for both res:// and user:// paths)
-		var result = await GlbUtils.load_glb_with_processing_async(path, create_static_bodies)
-		if result.success:
-			model = result.scene
-	else:
-		# Non-GLB resource (e.g. .tscn, .scn) - use threaded resource loading
-		var load_status = ResourceLoader.load_threaded_request(path)
-		if load_status == OK:
-			while (
-				ResourceLoader.load_threaded_get_status(path)
-				== ResourceLoader.THREAD_LOAD_IN_PROGRESS
-			):
-				await get_tree().process_frame
-			var resource = ResourceLoader.load_threaded_get(path)
-			if resource is PackedScene:
-				# Cache the PackedScene itself
-				_model_cache[cache_key] = resource
-				_loading_models.erase(cache_key)
-				return resource.instantiate() as Node3D
-
-	# Cache the loaded model as a template
-	if model:
-		_model_cache[cache_key] = model
-		_loading_models.erase(cache_key)
-		# Return a duplicate, keep original as template
-		return model.duplicate(Node.DUPLICATE_USE_INSTANTIATION) as Node3D
-
-	_loading_models.erase(cache_key)
-	return null
+	return await _model_cache_handler.get_instance_from_path(path, create_static_bodies)
 
 
-## Get a model instance synchronously (uses cache, blocks if not cached)
-## Prefer get_model_instance() for better performance
+## Get a model instance synchronously (blocks if not cached).
 func get_model_instance_sync(
 	pack_id: String,
 	asset_id: String,
 	variant_id: String = "default",
-	create_static_bodies: bool = false
+	create_static_bodies: bool = false,
 ) -> Node3D:
 	var path = resolve_model_path(pack_id, asset_id, variant_id)
 	if path == "":
 		return null
+	return _model_cache_handler.get_instance_from_path_sync(path, create_static_bodies)
 
-	return get_model_instance_from_path_sync(path, create_static_bodies)
 
-
-## Get a model instance from a path synchronously
+## Get a model instance from a path synchronously.
 func get_model_instance_from_path_sync(path: String, create_static_bodies: bool = false) -> Node3D:
-	var cache_key = path + ("_static" if create_static_bodies else "")
-
-	# Check cache first
-	if _model_cache.has(cache_key):
-		return _get_instance_from_cache(cache_key)
-
-	var model: Node3D = null
-
-	# Load based on file type
-	if path.ends_with(".glb"):
-		# GLB file - use GlbUtils directly (works for both res:// and user:// paths,
-		# avoids Godot's import pipeline which can have stale/broken .import entries)
-		model = GlbUtils.load_glb_with_processing(path, create_static_bodies)
-	else:
-		# Non-GLB resource (e.g. .tscn, .scn) - use ResourceLoader
-		if ResourceLoader.exists(path):
-			var resource = load(path)
-			if resource is PackedScene:
-				_model_cache[cache_key] = resource
-				return resource.instantiate() as Node3D
-
-	# Cache the loaded model as a template
-	if model:
-		_model_cache[cache_key] = model
-		return model.duplicate(Node.DUPLICATE_USE_INSTANTIATION) as Node3D
-
-	return null
+	return _model_cache_handler.get_instance_from_path_sync(path, create_static_bodies)
 
 
-## Get an instance from the cache (handles both PackedScene and Node3D templates)
-func _get_instance_from_cache(cache_key: String) -> Node3D:
-	var cached = _model_cache[cache_key]
-
-	if cached is PackedScene:
-		return cached.instantiate() as Node3D
-
-	if cached is Node3D and is_instance_valid(cached):
-		return cached.duplicate(Node.DUPLICATE_USE_INSTANTIATION) as Node3D
-
-	# Invalid cache entry
-	_model_cache.erase(cache_key)
-	return null
-
-
-## Check if a model is already in the cache (avoids redundant async loads)
+## Check if a model is already in the cache.
 func is_model_cached(path: String, create_static_bodies: bool = false) -> bool:
-	var cache_key = path + ("_static" if create_static_bodies else "")
-	return _model_cache.has(cache_key)
+	return _model_cache_handler.is_cached(path, create_static_bodies)
 
 
-## Preload multiple models asynchronously (for batch loading before spawning)
-## @param assets: Array of dictionaries with pack_id, asset_id, variant_id keys
-## @param progress_callback: Optional callback(loaded: int, total: int) for progress
-## @param create_static_bodies: If true, creates StaticBody3D for collision meshes
-## @return: Number of models successfully loaded
+## Preload multiple models asynchronously.
 func preload_models(
-	assets: Array, progress_callback: Callable = Callable(), create_static_bodies: bool = false
+	assets: Array, progress_callback: Callable = Callable(), create_static_bodies: bool = false,
 ) -> int:
-	# Collect unique paths
 	var unique_paths: Dictionary = {}
 	for asset in assets:
 		if not asset is Dictionary:
 			continue
-		var pack_id = asset.get("pack_id", "")
-		var asset_id = asset.get("asset_id", "")
-		var variant_id = asset.get("variant_id", "default")
-
-		if pack_id == "" or asset_id == "":
+		var p_id = asset.get("pack_id", "")
+		var a_id = asset.get("asset_id", "")
+		var v_id = asset.get("variant_id", "default")
+		if p_id == "" or a_id == "":
 			continue
-
-		var path = resolve_model_path(pack_id, asset_id, variant_id)
+		var path = resolve_model_path(p_id, a_id, v_id)
 		if path != "":
 			var cache_key = path + ("_static" if create_static_bodies else "")
 			unique_paths[cache_key] = path
-
-	var total = unique_paths.size()
-	var loaded = 0
-
-	for cache_key in unique_paths:
-		var path = unique_paths[cache_key]
-
-		# Skip if already cached
-		if _model_cache.has(cache_key):
-			loaded += 1
-			if progress_callback.is_valid():
-				progress_callback.call(loaded, total)
-			continue
-
-		# Load the model
-		var model = await get_model_instance_from_path(path, create_static_bodies)
-		if model:
-			# We got a duplicate - free it since we just wanted to populate the cache
-			model.queue_free()
-			loaded += 1
-
-		if progress_callback.is_valid():
-			progress_callback.call(loaded, total)
-
-		# Yield to keep UI responsive
-		await get_tree().process_frame
-
-	return loaded
+	return await _model_cache_handler.preload_from_paths(
+		unique_paths, create_static_bodies, progress_callback
+	)
 
 
-## Clear the in-memory model cache (call when switching levels to free memory)
+## Clear the in-memory model cache (call when switching levels to free memory).
 func clear_model_cache() -> void:
-	for cache_key in _model_cache:
-		var cached = _model_cache[cache_key]
-		# Free Node3D templates (PackedScene doesn't need explicit freeing)
-		if cached is Node3D and is_instance_valid(cached):
-			cached.free()
-
-	_model_cache.clear()
-	_loading_models.clear()
-	print("AssetPackManager: Model cache cleared")
+	if _model_cache_handler:
+		_model_cache_handler.clear()
