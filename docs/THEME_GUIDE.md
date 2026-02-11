@@ -42,6 +42,58 @@ The theme uses a semantic color system where colors are named by their purpose, 
 
 ---
 
+## SVG Icons
+
+SVG icons are used for drawer tab handles and other UI elements. They are imported by Godot as `CompressedTexture2D` and displayed via `TextureRect` nodes. To ensure icons can be tinted correctly at runtime, follow these conventions.
+
+### Preparing SVG Files
+
+**Always set `fill="#ffffff"` (white) on the root `<svg>` element.** This allows the icon to be recolored in code using Godot's `self_modulate` or `modulate` properties.
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="#ffffff">
+  <path d="..."/>
+</svg>
+```
+
+### Why White Fill?
+
+Godot's `modulate` and `self_modulate` work by **multiplying** the source pixel color with the modulate color. This means:
+
+| Source Color | × Modulate         | = Result          |
+| ------------ | ------------------ | ----------------- |
+| White `#fff` | `color_accent`     | `color_accent`    |
+| White `#fff` | `Color.WHITE`      | White (no change) |
+| Black `#000` | Any color          | Black (invisible) |
+
+A white source icon acts as a blank canvas that takes on whatever tint you apply. A black source icon will remain black regardless of modulate, making it invisible on dark backgrounds.
+
+### Coloring Icons in Code
+
+Use `self_modulate` on the `TextureRect` to tint the icon:
+
+```gdscript
+var icon_rect = TextureRect.new()
+icon_rect.texture = preload("res://assets/icons/ui/Sun.svg")
+icon_rect.self_modulate = Color("#db924b")  # color_accent
+```
+
+`self_modulate` only affects the node itself (not children), making it ideal for icon tinting. Use `modulate` if you need the tint to propagate to children.
+
+### Standard Icon Colors
+
+| Context               | Color                          | Hex       |
+| --------------------- | ------------------------------ | --------- |
+| Drawer tab icons      | `color_accent`                 | `#db924b` |
+| Informational / muted | `color_text_on_dark`           | `#e0e0e0` |
+| Status indicators     | Use the relevant status color  | —         |
+
+### Icon File Location
+
+Place UI icons in `res://assets/icons/ui/`. Use PascalCase names matching the icon's subject (e.g., `Sun.svg`, `Users.svg`).
+
+---
+
 ## Spacing System
 
 Use these consistent spacing values for margins and padding:
@@ -364,6 +416,20 @@ func _on_ready() -> void:
     content_container.add_child(label)
 ```
 
+### Icon Tabs
+
+Set `tab_icon` instead of `tab_text` to show an SVG icon on the tab handle. The icon is automatically tinted with `color_accent` and padded consistently via the built-in `_TAB_ICON_PAD_H` / `_TAB_ICON_PAD_V` constants.
+
+```gdscript
+func _on_ready() -> void:
+    tab_icon = preload("res://assets/icons/ui/Sun.svg")
+    drawer_width = 350.0
+```
+
+When `tab_icon` is set, `tab_text` is hidden. Setting `tab_icon = null` re-shows the text.
+
+**Important:** SVG icons must use `fill="#ffffff"` (white) so the accent tint applies correctly. See the [SVG Icons](#svg-icons) section for details.
+
 ### Configuration Properties
 
 | Property         | Default     | Description                         |
@@ -371,6 +437,8 @@ func _on_ready() -> void:
 | `edge`           | `LEFT`      | Which screen edge (`LEFT`, `RIGHT`) |
 | `drawer_width`   | 220px       | Width of the content panel          |
 | `tab_width`      | 32px        | Width of the tab handle button      |
+| `tab_text`       | `""`        | Text label on the tab handle        |
+| `tab_icon`       | `null`      | Icon texture on the tab (hides text)|
 | `slide_duration` | 0.25s       | Animation duration                  |
 | `start_open`     | `false`     | Whether to start open               |
 | `play_sounds`    | `true`      | Play open/close sounds              |
