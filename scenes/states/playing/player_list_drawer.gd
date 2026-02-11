@@ -15,6 +15,7 @@ var _player_list_vbox: VBoxContainer
 
 func _on_ready() -> void:
 	drawer_width = 200.0
+	tab_icon = preload("res://assets/icons/ui/Users.svg")
 
 	_build_player_list_ui()
 	_update_player_list()
@@ -80,9 +81,6 @@ func _update_player_list() -> void:
 
 	# Update header with count
 	_header_label.text = "Players (%d)" % count
-
-	# Update tab text — player count only, fits in the narrow tab
-	tab_text = str(count)
 
 	if players.is_empty():
 		var empty_label := Label.new()

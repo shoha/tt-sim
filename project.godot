@@ -29,8 +29,11 @@ buses/default_bus_layout="uid://rmc2eog1qlvw"
 [autoload]
 
 DragAndDropGroupHelper="*uid://d21uumvllljay"
-AssetManager="*res://autoloads/asset_manager.gd"
-EventBus="*res://autoloads/event_bus.gd"
+AssetCacheManager="*res://autoloads/asset_cache_manager.gd"
+AssetPackManager="*res://autoloads/asset_pack_manager.gd"
+AssetDownloader="*res://autoloads/asset_downloader.gd"
+AssetStreamer="*res://autoloads/asset_streamer.gd"
+AssetResolver="*res://autoloads/asset_resolver.gd"
 LevelManager="*res://autoloads/level_manager.gd"
 UIManager="*res://autoloads/ui_manager.gd"
 AudioManager="*res://autoloads/audio_manager.gd"
@@ -47,6 +50,8 @@ NetworkRollback="*uid://gas743comroj"
 WindowTiler="*uid://cmqjajhjgffm1"
 NetworkSimulator="*uid://1y2ey1e6qjwr"
 UpdateManager="*res://autoloads/update_manager.gd"
+EventBus="*res://autoloads/event_bus.gd"
+AssetManager="*res://autoloads/asset_manager.gd"
 
 [debug]
 
@@ -61,7 +66,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/DragAndDrop3D/plugin.cfg", "res://addons/brackeys_particle_controls/plugin.cfg", "res://addons/netfox.extras/plugin.cfg", "res://addons/netfox.internals/plugin.cfg", "res://addons/netfox.noray/plugin.cfg", "res://addons/netfox/plugin.cfg", "res://addons/theme_gen_save_sync/plugin.cfg")
+enabled=PackedStringArray("res://addons/DragAndDrop3D/plugin.cfg", "res://addons/brackeys_particle_controls/plugin.cfg", "res://addons/icon_explorer/plugin.cfg", "res://addons/netfox.extras/plugin.cfg", "res://addons/netfox.internals/plugin.cfg", "res://addons/netfox.noray/plugin.cfg", "res://addons/netfox/plugin.cfg", "res://addons/theme_gen_save_sync/plugin.cfg")
 
 [gui]
 

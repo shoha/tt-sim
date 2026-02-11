@@ -57,6 +57,18 @@ var tab_text: String = "":
 		tab_text = value
 		if _tab_label:
 			_tab_label.text = value
+			_tab_label.visible = value != "" and tab_icon == null
+
+## Icon shown on the tab handle instead of text. Set in [method _on_ready] or
+## at any time. When set, the text label is hidden and the icon is displayed.
+var tab_icon: Texture2D = null:
+	set(value):
+		tab_icon = value
+		if _tab_icon_rect:
+			_tab_icon_rect.texture = value
+			_tab_icon_rect.visible = value != null
+		if _tab_label:
+			_tab_label.visible = value == null and tab_text != ""
 
 # -- Internals --------------------------------------------------------------
 
@@ -64,6 +76,7 @@ var _sled: Control  ## Container that slides panel + tab as one unit
 var _panel: PanelContainer  ## The sliding content panel
 var _tab_button: Button  ## The clickable tab handle
 var _tab_label: Label
+var _tab_icon_rect: TextureRect
 var _slide_tween: Tween
 var _is_animating: bool = false
 var _closing_from_open: bool = false  ## True when the current animation is a close/conceal from an open state
@@ -76,6 +89,12 @@ const _TAB_COLOR_NORMAL := Color("#2c1f2b")  # color_surface1 — same as panel
 const _TAB_COLOR_HOVER := Color("#3e2b3c")  # color_surface2 — hover highlight
 const _TAB_COLOR_PRESSED := Color("#1a121a")  # color_background — pressed depression
 const _TAB_BORDER_COLOR := Color("#50374d")  # color_surface3 — subtle border
+const _TAB_ICON_COLOR := Color("#db924b")  # color_accent — icon tint
+
+# -- Icon tab padding -------------------------------------------------------
+# Standard insets for icon-mode tabs so all icon tabs look consistent.
+const _TAB_ICON_PAD_H := 6   # Horizontal (left + right) padding
+const _TAB_ICON_PAD_V := 14  # Vertical (top + bottom) padding
 
 # -- Lifecycle ---------------------------------------------------------------
 
@@ -222,6 +241,22 @@ func _build_ui() -> void:
 	_tab_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tab_label.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	_tab_button.add_child(_tab_label)
+
+	_tab_icon_rect = TextureRect.new()
+	_tab_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_tab_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_tab_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Anchor full-rect with padding so the icon doesn't fill the entire tab.
+	_tab_icon_rect.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	_tab_icon_rect.offset_left = _TAB_ICON_PAD_H
+	_tab_icon_rect.offset_right = -_TAB_ICON_PAD_H
+	_tab_icon_rect.offset_top = _TAB_ICON_PAD_V
+	_tab_icon_rect.offset_bottom = -_TAB_ICON_PAD_V
+	# Tint the icon with the theme's accent colour.
+	_tab_icon_rect.self_modulate = _TAB_ICON_COLOR
+	_tab_icon_rect.visible = tab_icon != null
+	_tab_icon_rect.texture = tab_icon
+	_tab_button.add_child(_tab_icon_rect)
 
 
 func _apply_panel_style() -> void:
