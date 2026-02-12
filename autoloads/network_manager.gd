@@ -69,13 +69,23 @@ const DEFAULT_PLAYER_NAME := "Player"
 ## Current level data (for late joiners)
 var _current_level_dict: Dictionary = {}
 
-## Default noray server (can be overridden via settings)
-const DEFAULT_NORAY_SERVER := "192.168.0.244"
+## Noray server addresses
+## Local server is used when running in the editor; production is used in exports.
+const LOCAL_NORAY_SERVER := "192.168.0.244"
+const PRODUCTION_NORAY_SERVER := "134.209.44.68"
 const DEFAULT_NORAY_PORT := 8890
 const SETTINGS_PATH := "user://settings.cfg"
 
+
+## Returns the default noray server for the current build context.
+static func _get_default_noray_server() -> String:
+	if OS.has_feature("editor"):
+		return LOCAL_NORAY_SERVER
+	return PRODUCTION_NORAY_SERVER
+
+
 ## Configurable noray settings (loaded from settings file)
-var noray_server: String = DEFAULT_NORAY_SERVER
+var noray_server: String
 var noray_port: int = DEFAULT_NORAY_PORT
 
 ## ENet configuration
@@ -828,8 +838,11 @@ func _load_network_settings() -> void:
 	var config = ConfigFile.new()
 	var err = config.load(SETTINGS_PATH)
 
+	var default_server := _get_default_noray_server()
+	noray_server = default_server
+
 	if err == OK:
-		noray_server = config.get_value("network", "noray_server", DEFAULT_NORAY_SERVER)
+		noray_server = config.get_value("network", "noray_server", default_server)
 		noray_port = config.get_value("network", "noray_port", DEFAULT_NORAY_PORT)
 		debug_logging = config.get_value("network", "debug_logging", false)
 		_local_player_info["name"] = config.get_value("player", "name", DEFAULT_PLAYER_NAME)
