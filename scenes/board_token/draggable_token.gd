@@ -57,6 +57,10 @@ const NETWORK_SYNC_POSITION_THRESHOLD: float = 0.05  # Skip interpolation if wit
 const NETWORK_SYNC_ROTATION_THRESHOLD: float = 0.02  # Skip interpolation if rotation within this (radians)
 const NETWORK_SYNC_SCALE_THRESHOLD: float = 0.01  # Skip interpolation if scale within this
 
+## When false, left-click will not initiate a drag (hover & right-click still work).
+## Set by BoardToken.set_interactive() to prevent unauthorized dragging.
+var dragging_allowed: bool = true
+
 @export var rigid_body: RigidBody3D
 @export var collision_shape: CollisionShape3D
 
@@ -88,6 +92,17 @@ func _ready() -> void:
 		dragging_cancelled.connect(_on_dragging_cancelled)
 
 	super()
+
+
+## Override base class input handler to gate drag initiation on dragging_allowed.
+## The base class emits object_body_mouse_down on left-click, which triggers
+## DragAndDrop3D to start a drag. We suppress that when dragging is disallowed.
+func _on_object_body_3d_input_event(
+	camera: Node, event: InputEvent, event_position: Vector3, normal: Vector3, shape_idx: int
+) -> void:
+	if not dragging_allowed:
+		return
+	super(camera, event, event_position, normal, shape_idx)
 
 
 func _setup_drop_indicator() -> void:

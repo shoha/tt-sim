@@ -68,6 +68,19 @@ text = "Toggle Visibility"
 [node name="HSeparator5" type="HSeparator" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
 
+[node name="RequestControlButton" type="Button" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Request Control"
+
+[node name="RevokeControlButton" type="Button" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+theme_type_variation = &"Danger"
+text = "Revoke Control"
+
+[node name="HSeparator6" type="HSeparator" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+
 [node name="CloseButton" type="Button" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
 theme_type_variation = &"Danger"
@@ -76,4 +89,6 @@ text = "Close"
 [connection signal="text_submitted" from="MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentInput" to="." method="_on_hp_adjustment_requested"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentButton" to="." method="_on_hp_adjustment_requested"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/ToggleVisibilityButton" to="." method="_on_toggle_visibility_pressed"]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/RequestControlButton" to="." method="_on_request_control_pressed"]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/RevokeControlButton" to="." method="_on_revoke_control_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/CloseButton" to="." method="_on_close_button_pressed"]

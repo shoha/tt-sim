@@ -220,6 +220,8 @@ func _setup_context_menu() -> void:
 		# Connect context menu signals
 		_context_menu.hp_adjustment_requested.connect(_on_context_menu_hp_adjustment_requested)
 		_context_menu.visibility_toggled.connect(_on_context_menu_visibility_toggled)
+		_context_menu.control_requested.connect(_on_context_menu_control_requested)
+		_context_menu.control_revoked.connect(_on_context_menu_control_revoked)
 
 
 func _on_token_context_menu_requested(token: BoardToken, menu_position: Vector2) -> void:
@@ -238,6 +240,32 @@ func _on_context_menu_hp_adjustment_requested(amount: int) -> void:
 func _on_context_menu_visibility_toggled() -> void:
 	if _context_menu and _context_menu.target_token:
 		_context_menu.target_token.toggle_visibility()
+
+
+func _on_context_menu_control_requested(token: BoardToken) -> void:
+	# Player requests CONTROL permission — send RPC to host
+	if NetworkManager.is_client() and is_instance_valid(token):
+		NetworkManager.request_token_permission(
+			token.network_id, TokenPermissions.Permission.CONTROL
+		)
+
+
+func _on_context_menu_control_revoked(token: BoardToken) -> void:
+	# DM revokes CONTROL permission for all players on this token
+	if (NetworkManager.is_host() or not NetworkManager.is_networked()) and is_instance_valid(token):
+		var controlling_peers = GameState.get_peers_with_permission(
+			token.network_id, TokenPermissions.Permission.CONTROL
+		)
+		for peer_id in controlling_peers:
+			GameState.revoke_token_permission(
+				token.network_id, peer_id, TokenPermissions.Permission.CONTROL
+			)
+		# Broadcast updated permissions
+		if NetworkManager.is_host():
+			NetworkManager.broadcast_token_permissions(
+				TokenPermissions.to_dict(GameState.get_token_permissions())
+			)
+			UIManager.show_info("Token control revoked")
 
 
 ## Setup the SubViewport for proper rendering
