@@ -50,11 +50,23 @@ signal context_menu_requested(token: BoardToken, position: Vector2)
 
 ## Check if this client has authority to manipulate this token.
 ## In single-player mode, always returns true.
-## In networked games, only the host has authority (for now).
-## Future: Could allow client-owned tokens.
+## In networked games, the host always has authority.
+## Players have authority if they've been granted CONTROL permission for this token.
 ## @return: true if input should be processed, false to ignore
 func _has_input_authority() -> bool:
-	return NetworkManager.is_host() or not NetworkManager.is_networked()
+	if NetworkManager.is_host() or not NetworkManager.is_networked():
+		return true
+	# Guard against missing multiplayer peer (can happen during reconnection / disconnect)
+	if not multiplayer.multiplayer_peer:
+		return false
+	var board_token = get_parent() as BoardToken
+	if board_token:
+		return GameState.has_token_permission(
+			board_token.network_id,
+			multiplayer.get_unique_id(),
+			TokenPermissions.Permission.CONTROL
+		)
+	return false
 
 
 func _ready() -> void:
@@ -68,6 +80,16 @@ func _ready() -> void:
 
 	# Only process when actively scaling or rotating
 	set_process(false)
+
+
+func _notification(what: int) -> void:
+	# When the mouse leaves the game window, Godot's physics picking may not
+	# fire mouse_exited on the RigidBody3D. This can cause rapid re-entry
+	# cycles at the window boundary, repeatedly triggering the hover sound.
+	# Force-clear hover state here to prevent that.
+	if what == NOTIFICATION_WM_MOUSE_EXIT:
+		if _mouse_over:
+			_on_mouse_exited()
 
 
 func _on_mouse_entered() -> void:
