@@ -187,8 +187,9 @@ func _update_visibility_visuals() -> void:
 			rigid_body.visible = true
 			_set_mesh_transparency(rigid_body, 0.4)
 		else:
-			# Player: completely hidden
+			# Player: completely hidden (also disable ray picking so invisible tokens can't be hovered)
 			rigid_body.visible = false
+			rigid_body.input_ray_pickable = false
 
 
 # Highlight/selection management
@@ -285,11 +286,21 @@ func get_selection_glow() -> SelectionGlowRenderer:
 	return _selection_glow
 
 
-## Enable or disable all user interaction with this token (dragging, rotating, scaling, context menu)
-## Used to make tokens view-only for clients in multiplayer
+## Enable or disable token interaction (dragging, rotating, scaling).
+## In networked games, tokens always remain hoverable (input_ray_pickable stays true)
+## so players can right-click for the context menu (e.g., to request control).
+## Dragging is gated separately via DraggableToken.dragging_allowed.
 func set_interactive(enabled: bool) -> void:
+	# Gate drag initiation separately from hover detection
+	if _dragging_object:
+		_dragging_object.dragging_allowed = enabled
+
 	if rigid_body:
-		rigid_body.input_ray_pickable = enabled
+		if NetworkManager.is_networked() and not NetworkManager.is_gm():
+			# Players always need hover for context menu access (request control, view info)
+			rigid_body.input_ray_pickable = true
+		else:
+			rigid_body.input_ray_pickable = enabled
 
 
 ## Play a bouncy pop-in spawn animation.

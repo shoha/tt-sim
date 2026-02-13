@@ -129,6 +129,28 @@ func broadcast_token_properties(token: BoardToken) -> void:
 	NetworkManager._rpc_receive_token_state.rpc(token.network_id, state.to_dict())
 
 
+## Broadcast a client-sent token transform to all OTHER clients (excluding the sender).
+## Called by the host after validating that a player has CONTROL permission.
+func broadcast_client_token_transform(
+	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3, exclude_peer: int
+) -> void:
+	if not NetworkManager.is_host():
+		return
+
+	var players = NetworkManager.get_players()
+	for peer_id in players:
+		# Skip the host itself (peer 1) and the original sender
+		if peer_id == 1 or peer_id == exclude_peer:
+			continue
+		NetworkManager._rpc_receive_token_transform.rpc_id(
+			peer_id,
+			network_id,
+			_vector3_to_array(pos),
+			_vector3_to_array(rot),
+			_vector3_to_array(scl),
+		)
+
+
 ## Broadcast that a token was removed
 func broadcast_token_removed(network_id: String) -> void:
 	if not NetworkManager.is_host():

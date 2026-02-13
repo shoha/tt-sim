@@ -20,6 +20,7 @@ signal level_loading_completed
 
 const RECONCILIATION_INTERVAL: float = 2.0  # Full state sync every 2 seconds
 const TOKENS_PER_FRAME: int = 3  # How many tokens to spawn per frame during progressive loading
+const CLIENT_TRANSFORM_SEND_INTERVAL: float = 0.05  # 20 updates/sec max (same as host)
 
 var active_level_data: LevelData = null
 var spawned_tokens: Dictionary = {}  # placement_id -> BoardToken
@@ -31,6 +32,11 @@ var _pending_map_level_folder: String = ""  # Level folder waiting for map downl
 var _streamer_connected: bool = false
 var _is_loading: bool = false  # True while async loading is in progress
 var _environment_manager := LevelEnvironmentManager.new()  # Manages lighting/atmosphere
+
+# Token permission state
+var _pending_permission_requests: Dictionary = {}  # "network_id:peer_id" -> true (host-side)
+var _client_transform_throttle: Dictionary = {}  # network_id -> last_send_time (client-side)
+var _client_connected_tokens: Dictionary = {}  # network_id -> { "changed": Callable, "updated": Callable }
 
 
 ## Initialize with a reference to the game map
@@ -48,6 +54,26 @@ func setup(game_map: GameMap) -> void:
 	if not NetworkManager.map_scale_received.is_connected(_on_map_scale_received):
 		NetworkManager.map_scale_received.connect(_on_map_scale_received)
 
+	# Token permission signals
+	if not GameState.permissions_changed.is_connected(_on_permissions_changed):
+		GameState.permissions_changed.connect(_on_permissions_changed)
+
+	# Host-side: listen for permission requests and client transforms
+	if not NetworkManager.token_permission_requested.is_connected(_on_token_permission_requested):
+		NetworkManager.token_permission_requested.connect(_on_token_permission_requested)
+	if not NetworkManager.client_token_transform_received.is_connected(_on_client_transform_received):
+		NetworkManager.client_token_transform_received.connect(_on_client_transform_received)
+
+	# Client-side: listen for permission responses and full permission syncs
+	if not NetworkManager.token_permission_response_received.is_connected(_on_permission_response_received):
+		NetworkManager.token_permission_response_received.connect(_on_permission_response_received)
+	if not NetworkManager.token_permissions_received.is_connected(_on_permissions_received):
+		NetworkManager.token_permissions_received.connect(_on_permissions_received)
+
+	# Clean up permissions when a player disconnects
+	if not NetworkManager.player_left.is_connected(_on_player_left_permissions):
+		NetworkManager.player_left.connect(_on_player_left_permissions)
+
 
 func _exit_tree() -> void:
 	# Disconnect network signals
@@ -55,6 +81,20 @@ func _exit_tree() -> void:
 		NetworkManager.connection_state_changed.disconnect(_on_connection_state_changed)
 	if NetworkManager.map_scale_received.is_connected(_on_map_scale_received):
 		NetworkManager.map_scale_received.disconnect(_on_map_scale_received)
+
+	# Disconnect permission signals
+	if GameState.permissions_changed.is_connected(_on_permissions_changed):
+		GameState.permissions_changed.disconnect(_on_permissions_changed)
+	if NetworkManager.token_permission_requested.is_connected(_on_token_permission_requested):
+		NetworkManager.token_permission_requested.disconnect(_on_token_permission_requested)
+	if NetworkManager.client_token_transform_received.is_connected(_on_client_transform_received):
+		NetworkManager.client_token_transform_received.disconnect(_on_client_transform_received)
+	if NetworkManager.token_permission_response_received.is_connected(_on_permission_response_received):
+		NetworkManager.token_permission_response_received.disconnect(_on_permission_response_received)
+	if NetworkManager.token_permissions_received.is_connected(_on_permissions_received):
+		NetworkManager.token_permissions_received.disconnect(_on_permissions_received)
+	if NetworkManager.player_left.is_connected(_on_player_left_permissions):
+		NetworkManager.player_left.disconnect(_on_player_left_permissions)
 
 	# Disconnect AssetStreamer signals
 	_disconnect_asset_streamer()
@@ -163,17 +203,29 @@ func _on_connection_state_changed(
 	_update_all_token_state()
 
 
-## Update interactivity and visibility for all spawned tokens based on player role
-## Only GM can interact with tokens, players can only view
-## Hidden tokens are semi-transparent for GM, invisible for players
+## Update interactivity and visibility for all spawned tokens based on player role.
+## GM can interact with all tokens, players can only interact with tokens they control.
+## Hidden tokens are semi-transparent for GM, invisible for players.
 func _update_all_token_state() -> void:
-	var can_interact = NetworkManager.is_gm() or not NetworkManager.is_networked()
+	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
+	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
+
 	for placement_id in spawned_tokens:
 		var token = spawned_tokens[placement_id] as BoardToken
 		if is_instance_valid(token):
+			var can_interact = is_gm
+			# Players can interact with tokens they have CONTROL permission for
+			if not can_interact and my_peer_id > 0:
+				can_interact = GameState.has_token_permission(
+					token.network_id, my_peer_id, TokenPermissions.Permission.CONTROL
+				)
 			token.set_interactive(can_interact)
 			# Refresh visibility visuals based on current role
 			token._update_visibility_visuals()
+
+	# Update client-side transform signal wiring based on permissions
+	if not is_gm and NetworkManager.is_networked():
+		_update_client_transform_wiring()
 
 
 ## Load and play a level (async version - does not block main thread)
@@ -555,8 +607,16 @@ func has_queued_level() -> bool:
 func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 	spawned_tokens[placement.placement_id] = token
 
-	# Only GM can interact with tokens, players can only view
-	token.set_interactive(NetworkManager.is_gm() or not NetworkManager.is_networked())
+	# GM can interact with all tokens; players only with tokens they control
+	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
+	var can_interact = is_gm
+	if not can_interact and multiplayer.multiplayer_peer:
+		can_interact = GameState.has_token_permission(
+			token.network_id,
+			multiplayer.get_unique_id(),
+			TokenPermissions.Permission.CONTROL
+		)
+	token.set_interactive(can_interact)
 
 	# Register with GameState for network synchronization
 	if GameState.has_authority():
@@ -680,8 +740,16 @@ func add_token_to_level(
 	token.set_meta("variant_id", variant_id)
 	spawned_tokens[placement.placement_id] = token
 
-	# Only GM can interact with tokens, players can only view
-	token.set_interactive(NetworkManager.is_gm() or not NetworkManager.is_networked())
+	# GM can interact with all tokens; players only with tokens they control
+	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
+	var can_interact_new = is_gm
+	if not can_interact_new and multiplayer.multiplayer_peer:
+		can_interact_new = GameState.has_token_permission(
+			token.network_id,
+			multiplayer.get_unique_id(),
+			TokenPermissions.Permission.CONTROL
+		)
+	token.set_interactive(can_interact_new)
 
 	# Register with GameState for network synchronization
 	if GameState.has_authority():
@@ -759,6 +827,320 @@ func _sync_placement_from_token(placement: TokenPlacement, token: BoardToken) ->
 	placement.is_player_controlled = token.is_player_controlled
 
 
+# =============================================================================
+# TOKEN PERMISSIONS
+# =============================================================================
+
+
+## Called when any token permission changes (grant or revoke).
+## Updates interactivity for the affected token and manages client transform wiring.
+func _on_permissions_changed(network_id: String, _peer_id: int) -> void:
+	# If network_id is empty, it's a full permissions sync — update everything
+	if network_id == "":
+		_update_all_token_state()
+		return
+
+	# Update interactivity for the specific token
+	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
+	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
+
+	for placement_id in spawned_tokens:
+		var token = spawned_tokens[placement_id] as BoardToken
+		if is_instance_valid(token) and token.network_id == network_id:
+			var can_interact = is_gm
+			if not can_interact and my_peer_id > 0:
+				can_interact = GameState.has_token_permission(
+					network_id, my_peer_id, TokenPermissions.Permission.CONTROL
+				)
+			token.set_interactive(can_interact)
+			break
+
+	# Update client-side transform signal wiring
+	if not is_gm and NetworkManager.is_networked():
+		_update_client_transform_wiring()
+
+
+## Host-side: handle a permission request from a player.
+## Shows a confirmation dialog to the DM.
+func _on_token_permission_requested(
+	network_id: String, peer_id: int, permission_type: int
+) -> void:
+	if not NetworkManager.is_host():
+		return
+
+	# Prevent duplicate requests
+	var request_key = "%s:%d" % [network_id, peer_id]
+	if _pending_permission_requests.has(request_key):
+		return
+	_pending_permission_requests[request_key] = true
+
+	# Look up names for the dialog
+	var player_name = "Player"
+	var players = NetworkManager.get_players()
+	if players.has(peer_id):
+		player_name = players[peer_id].get("name", "Player")
+
+	var token_name = "Unknown Token"
+	var token_state = GameState.get_token_state(network_id)
+	if token_state:
+		token_name = token_state.token_name
+
+	var permission_name = "Control"
+	if permission_type == TokenPermissions.Permission.CONTROL:
+		permission_name = "Control (move/rotate/scale)"
+
+	# Show confirmation dialog to DM
+	var dialog = UIManager.show_confirmation(
+		"Token Control Request",
+		"%s wants to control \"%s\".\n\nPermission: %s" % [player_name, token_name, permission_name],
+		"Approve",
+		"Deny",
+		func():
+			_approve_permission_request(network_id, peer_id, permission_type, request_key),
+		func():
+			_deny_permission_request(network_id, peer_id, permission_type, request_key),
+	)
+	# Clean up pending state if dialog is dismissed or destroyed (e.g., scene change)
+	if dialog:
+		if dialog.has_signal("closed"):
+			dialog.closed.connect(
+				func(_confirmed: bool):
+					_pending_permission_requests.erase(request_key),
+				CONNECT_ONE_SHOT,
+			)
+		dialog.tree_exiting.connect(
+			func():
+				_pending_permission_requests.erase(request_key),
+			CONNECT_ONE_SHOT,
+		)
+
+
+## Host-side: approve a permission request.
+func _approve_permission_request(
+	network_id: String, peer_id: int, permission_type: int, request_key: String
+) -> void:
+	_pending_permission_requests.erase(request_key)
+
+	# Guard: peer may have disconnected while DM was deciding
+	if not NetworkManager.get_players().has(peer_id):
+		UIManager.show_warning("Player disconnected before approval could be sent")
+		return
+
+	GameState.grant_token_permission(network_id, peer_id, permission_type)
+
+	# Send response to the requesting client
+	NetworkManager.send_permission_response(peer_id, network_id, permission_type, true)
+
+	# Broadcast updated permissions to all clients
+	NetworkManager.broadcast_token_permissions(
+		TokenPermissions.to_dict(GameState.get_token_permissions())
+	)
+
+	# Show toast on host
+	var token_state = GameState.get_token_state(network_id)
+	var token_name = token_state.token_name if token_state else "token"
+	var players = NetworkManager.get_players()
+	var player_name = players[peer_id].get("name", "Player") if players.has(peer_id) else "Player"
+	UIManager.show_success("%s can now control \"%s\"" % [player_name, token_name])
+
+
+## Host-side: deny a permission request.
+func _deny_permission_request(
+	network_id: String, peer_id: int, permission_type: int, request_key: String
+) -> void:
+	_pending_permission_requests.erase(request_key)
+	# Only send denial if peer is still connected
+	if NetworkManager.get_players().has(peer_id):
+		NetworkManager.send_permission_response(peer_id, network_id, permission_type, false)
+
+
+## Host-side: handle a client-sent token transform.
+## Validates permission, applies to local BoardToken and GameState, broadcasts to others.
+func _on_client_transform_received(
+	sender_id: int,
+	network_id: String,
+	pos: Vector3,
+	rot: Vector3,
+	scl: Vector3,
+) -> void:
+	if not NetworkManager.is_host():
+		return
+
+	# Validate that the sender has CONTROL permission
+	if not GameState.has_token_permission(
+		network_id, sender_id, TokenPermissions.Permission.CONTROL
+	):
+		return
+
+	# Apply transform to the host's local BoardToken (with interpolation)
+	var token_found := false
+	for placement_id in spawned_tokens:
+		var token = spawned_tokens[placement_id] as BoardToken
+		if is_instance_valid(token) and token.network_id == network_id:
+			token.set_interpolation_target(pos, rot, scl)
+			token_found = true
+			break
+
+	if not token_found:
+		return  # Token doesn't exist on host — don't update GameState or broadcast
+
+	# Update GameState
+	GameState.update_token_property(network_id, "position", pos)
+	GameState.update_token_property(network_id, "rotation", rot)
+	GameState.update_token_property(network_id, "scale", scl)
+
+	# Broadcast to all OTHER clients (not the sender)
+	NetworkStateSync.broadcast_client_token_transform(network_id, pos, rot, scl, sender_id)
+
+
+## Client-side: handle permission response from host.
+func _on_permission_response_received(
+	network_id: String, _permission_type: int, approved: bool
+) -> void:
+	if NetworkManager.is_host():
+		return
+
+	var token_state = GameState.get_token_state(network_id)
+	var token_name = token_state.token_name if token_state else "token"
+
+	if approved:
+		UIManager.show_success("Control granted for \"%s\"!" % token_name)
+	else:
+		UIManager.show_warning("Control request for \"%s\" was denied" % token_name)
+
+
+## Client-side: handle full permission sync from host.
+func _on_permissions_received(permissions_dict: Dictionary) -> void:
+	if NetworkManager.is_host():
+		return
+	GameState.apply_token_permissions(permissions_dict)
+
+
+## Host-side: clean up permissions when a player disconnects.
+func _on_player_left_permissions(peer_id: int, _player_info: Dictionary) -> void:
+	if not NetworkManager.is_host():
+		return
+
+	# Check if the disconnected player had any permissions
+	var controlled = GameState.get_controlled_tokens(peer_id, TokenPermissions.Permission.CONTROL)
+	if controlled.is_empty():
+		return
+
+	# Revoke all permissions for the disconnected player
+	GameState.clear_permissions_for_peer(peer_id)
+
+	# Broadcast updated permissions to remaining clients
+	NetworkManager.broadcast_token_permissions(
+		TokenPermissions.to_dict(GameState.get_token_permissions())
+	)
+
+	# Clean up any pending requests from this peer
+	var keys_to_remove: Array[String] = []
+	for key in _pending_permission_requests:
+		if key.ends_with(":%d" % peer_id):
+			keys_to_remove.append(key)
+	for key in keys_to_remove:
+		_pending_permission_requests.erase(key)
+
+
+# =============================================================================
+# CLIENT-SIDE TRANSFORM WIRING
+# =============================================================================
+
+
+## Dynamically connect/disconnect transform signals for tokens this client controls.
+## Called when permissions change on the client side.
+func _update_client_transform_wiring() -> void:
+	if not multiplayer.multiplayer_peer:
+		return
+	var my_peer_id = multiplayer.get_unique_id()
+
+	# Get the list of tokens this client has CONTROL permission for
+	var controlled = GameState.get_controlled_tokens(
+		my_peer_id, TokenPermissions.Permission.CONTROL
+	)
+
+	# Disconnect tokens that are no longer controlled
+	var to_disconnect: Array[String] = []
+	for network_id in _client_connected_tokens:
+		if network_id not in controlled:
+			to_disconnect.append(network_id)
+
+	for network_id in to_disconnect:
+		_disconnect_client_transform_signals(network_id)
+
+	# Connect tokens that are newly controlled
+	for network_id in controlled:
+		if network_id not in _client_connected_tokens:
+			_connect_client_transform_signals(network_id)
+
+
+## Connect transform signals for a client-controlled token.
+func _connect_client_transform_signals(network_id: String) -> void:
+	var token = _find_token_by_network_id(network_id)
+	if not token:
+		return
+
+	# Store callables so they can be disconnected later
+	var changed_callable = func(): _on_client_token_transform_changed(token)
+	var updated_callable = func(): _on_client_token_transform_changed(token)
+	token.transform_changed.connect(changed_callable)
+	token.transform_updated.connect(updated_callable)
+	_client_connected_tokens[network_id] = {
+		"token": token,
+		"changed": changed_callable,
+		"updated": updated_callable,
+	}
+
+
+## Disconnect transform signals for a token that is no longer client-controlled.
+func _disconnect_client_transform_signals(network_id: String) -> void:
+	if not _client_connected_tokens.has(network_id):
+		return
+
+	var data: Dictionary = _client_connected_tokens[network_id]
+	var token: BoardToken = data.get("token")
+	if is_instance_valid(token):
+		var changed_callable: Callable = data.get("changed")
+		var updated_callable: Callable = data.get("updated")
+		if token.transform_changed.is_connected(changed_callable):
+			token.transform_changed.disconnect(changed_callable)
+		if token.transform_updated.is_connected(updated_callable):
+			token.transform_updated.disconnect(updated_callable)
+
+	_client_connected_tokens.erase(network_id)
+
+
+## Client-side: send a token transform to the host with rate limiting.
+func _on_client_token_transform_changed(token: BoardToken) -> void:
+	if NetworkManager.is_host() or not NetworkManager.is_networked():
+		return
+
+	var network_id = token.network_id
+
+	# Rate limiting
+	var now = Time.get_ticks_msec() / 1000.0
+	var last_send = _client_transform_throttle.get(network_id, 0.0)
+	if now - last_send < CLIENT_TRANSFORM_SEND_INTERVAL:
+		return
+	_client_transform_throttle[network_id] = now
+
+	# Get current transform from the rigid body
+	var state = TokenState.from_board_token(token)
+	NetworkManager.send_client_token_transform(
+		network_id, state.position, state.rotation, state.scale
+	)
+
+
+## Find a token by its network_id in spawned_tokens.
+func _find_token_by_network_id(network_id: String) -> BoardToken:
+	for placement_id in spawned_tokens:
+		var token = spawned_tokens[placement_id] as BoardToken
+		if is_instance_valid(token) and token.network_id == network_id:
+			return token
+	return null
+
+
 ## Clear spawned tokens
 func clear_level_tokens() -> void:
 	for placement_id in spawned_tokens:
@@ -769,7 +1151,12 @@ func clear_level_tokens() -> void:
 	spawned_tokens.clear()
 	active_level_data = null
 
-	# Clear GameState
+	# Clear permission-related state
+	_pending_permission_requests.clear()
+	_client_transform_throttle.clear()
+	_client_connected_tokens.clear()
+
+	# Clear GameState (also clears permissions)
 	GameState.clear_all_tokens()
 
 

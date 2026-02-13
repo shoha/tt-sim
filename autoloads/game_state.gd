@@ -32,9 +32,17 @@ signal state_reset()
 ## Emitted when a batch of state changes completes (for network sync optimization)
 signal state_batch_complete()
 
+## Emitted when a token permission is granted or revoked
+signal permissions_changed(network_id: String, peer_id: int)
+
 
 ## Dictionary of all token states: network_id -> TokenState
 var _token_states: Dictionary = {}
+
+## Per-token, per-player permissions: managed by TokenPermissions static class.
+## Structure: { network_id -> { peer_id -> Array[TokenPermissions.Permission] } }
+## Session-only -- not saved to level files.
+var _token_permissions: Dictionary = {}
 
 ## Flag indicating if we're currently in a batch update (suppresses individual signals)
 var _batch_updating: bool = false
@@ -84,6 +92,7 @@ func set_token_state(network_id: String, state: TokenState) -> void:
 func remove_token_state(network_id: String) -> void:
 	if _token_states.has(network_id):
 		_token_states.erase(network_id)
+		clear_permissions_for_token(network_id)
 		token_removed.emit(network_id)
 
 
@@ -148,6 +157,7 @@ func remove_token(network_id: String) -> bool:
 		return false
 
 	_token_states.erase(network_id)
+	clear_permissions_for_token(network_id)
 	token_removed.emit(network_id)
 	return true
 
@@ -243,6 +253,90 @@ func apply_token_state(state: TokenState) -> bool:
 
 
 # =============================================================================
+# TOKEN PERMISSIONS
+# =============================================================================
+
+
+## Grant a permission to a peer for a specific token.
+## Returns true if newly granted, false if already present.
+func grant_token_permission(
+	network_id: String, peer_id: int, permission: TokenPermissions.Permission
+) -> bool:
+	var changed = TokenPermissions.grant(_token_permissions, network_id, peer_id, permission)
+	if changed:
+		permissions_changed.emit(network_id, peer_id)
+	return changed
+
+
+## Revoke a permission from a peer for a specific token.
+## Returns true if removed, false if it wasn't present.
+func revoke_token_permission(
+	network_id: String, peer_id: int, permission: TokenPermissions.Permission
+) -> bool:
+	var changed = TokenPermissions.revoke(_token_permissions, network_id, peer_id, permission)
+	if changed:
+		permissions_changed.emit(network_id, peer_id)
+	return changed
+
+
+## Check if a peer has a specific permission for a token.
+func has_token_permission(
+	network_id: String, peer_id: int, permission: TokenPermissions.Permission
+) -> bool:
+	return TokenPermissions.has_permission(_token_permissions, network_id, peer_id, permission)
+
+
+## Get all token network_ids that a peer has a specific permission for.
+func get_controlled_tokens(
+	peer_id: int, permission: TokenPermissions.Permission
+) -> Array[String]:
+	return TokenPermissions.get_controlled_tokens(_token_permissions, peer_id, permission)
+
+
+## Get all peer_ids that have a specific permission for a token.
+func get_peers_with_permission(
+	network_id: String, permission: TokenPermissions.Permission
+) -> Array[int]:
+	return TokenPermissions.get_peers_with_permission(_token_permissions, network_id, permission)
+
+
+## Remove all permissions for a specific peer (e.g., on disconnect).
+func clear_permissions_for_peer(peer_id: int) -> void:
+	var controlled = TokenPermissions.get_controlled_tokens(
+		_token_permissions, peer_id, TokenPermissions.Permission.CONTROL
+	)
+	TokenPermissions.clear_for_peer(_token_permissions, peer_id)
+	for network_id in controlled:
+		permissions_changed.emit(network_id, peer_id)
+
+
+## Remove all permissions for a specific token (e.g., on token removal).
+func clear_permissions_for_token(network_id: String) -> void:
+	var peers = TokenPermissions.get_peers_with_permission(
+		_token_permissions, network_id, TokenPermissions.Permission.CONTROL
+	)
+	TokenPermissions.clear_for_token(_token_permissions, network_id)
+	for peer_id in peers:
+		permissions_changed.emit(network_id, peer_id)
+
+
+## Clear all permissions (e.g., on level change).
+func clear_all_permissions() -> void:
+	_token_permissions.clear()
+
+
+## Get the raw permissions dictionary (for serialization/sync).
+func get_token_permissions() -> Dictionary:
+	return _token_permissions
+
+
+## Apply a full permissions dictionary (for network reception on clients).
+func apply_token_permissions(permissions_dict: Dictionary) -> void:
+	_token_permissions = TokenPermissions.from_dict(permissions_dict)
+	permissions_changed.emit("", 0)  # Generic "everything changed" signal
+
+
+# =============================================================================
 # BATCH UPDATES
 # =============================================================================
 
@@ -310,28 +404,43 @@ func apply_to_board_token(network_id: String, token: BoardToken) -> bool:
 # LEVEL/STATE RESET
 # =============================================================================
 
-## Clear all token states (call when changing levels)
+## Clear all token states and permissions (call when changing levels)
 func clear_all_tokens() -> void:
 	var ids = _token_states.keys()
 	for network_id in ids:
 		_token_states.erase(network_id)
 		token_removed.emit(network_id)
 
+	clear_all_permissions()
 	state_reset.emit()
 
 
 ## Get the full state as a dictionary (for network transmission)
 func get_full_state_dict() -> Dictionary:
 	var result: Dictionary = {}
+	var tokens: Dictionary = {}
 	for network_id in _token_states:
-		result[network_id] = _token_states[network_id].to_dict()
+		tokens[network_id] = _token_states[network_id].to_dict()
+	result["tokens"] = tokens
+	result["permissions"] = TokenPermissions.to_dict(_token_permissions)
 	return result
 
 
 ## Apply a full state dictionary (for network reception on clients)
 func apply_full_state_dict(data: Dictionary) -> void:
+	# Support both new format (with "tokens" key) and legacy format (flat token dict)
+	var token_data: Dictionary
+	if data.has("tokens"):
+		token_data = data["tokens"]
+	else:
+		token_data = data
+
 	clear_all_tokens()
-	for network_id in data:
-		var state = TokenState.from_dict(data[network_id])
+	for network_id in token_data:
+		var state = TokenState.from_dict(token_data[network_id])
 		_token_states[network_id] = state
 		token_added.emit(network_id, state)
+
+	# Apply permissions if present
+	if data.has("permissions"):
+		apply_token_permissions(data["permissions"])
