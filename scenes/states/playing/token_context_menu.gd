@@ -245,15 +245,25 @@ func close_menu() -> void:
 	animate_out()
 
 
-# Close menu when clicking outside
-func _unhandled_input(event: InputEvent) -> void:
+# Close menu when clicking outside or pressing Escape.
+# Uses _input instead of _unhandled_input because full-screen Controls in the
+# same CanvasLayer (e.g. LevelEditPanel) have mouse_filter STOP, which causes
+# the GUI system to consume clicks before _unhandled_input fires.
+func _input(event: InputEvent) -> void:
 	if not visible or is_animating():
 		return
 
+	# Close on Escape key
+	if event.is_action_pressed("ui_cancel"):
+		close_menu()
+		get_viewport().set_input_as_handled()
+		return
+
 	if event is InputEventMouseButton and event.pressed:
-		# Check if click is outside the menu
+		# Check if click is outside the menu panel
 		var menu_panel = get_node_or_null("MenuPanel")
 		if menu_panel:
 			var menu_rect = Rect2(menu_panel.global_position, menu_panel.size)
 			if not menu_rect.has_point(event.position):
 				close_menu()
+				get_viewport().set_input_as_handled()
