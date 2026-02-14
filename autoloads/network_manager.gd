@@ -82,6 +82,12 @@ const PRODUCTION_NORAY_SERVER := "134.209.44.68"
 const DEFAULT_NORAY_PORT := 8890
 const SETTINGS_PATH := "user://settings.cfg"
 
+## Noray relay port range — the host pre-punches NAT holes for these ports
+## so relay traffic can reach the ENet server. Must match the noray server's
+## udpRelay.ports configuration.
+const NORAY_RELAY_PORT_START := 49152
+const NORAY_RELAY_PORT_END := 49201
+
 
 ## Returns the default noray server for the current build context.
 static func _get_default_noray_server() -> String:
@@ -311,10 +317,18 @@ func _on_host_oid_received(oid: String) -> void:
 
 
 func _start_enet_server() -> void:
-	var peer = ENetMultiplayerPeer.new()
 	var port = Noray.local_port if Noray.local_port > 0 else DEFAULT_PORT
 	_log("[HOST STEP 5] ENet server port=%d (Noray.local_port=%d)" % [port, Noray.local_port])
 
+	# Pre-punch NAT holes for the noray relay port range BEFORE ENet binds.
+	# At this point the UDP socket from register_remote is closed so the port
+	# is free.  By sending from the ENet port to every relay port on the noray
+	# server, we create NAT mappings that allow the relay to reach us later —
+	# even through port-restricted NATs.
+	if Noray.local_port > 0:
+		_prepunch_relay_nat(port)
+
+	var peer = ENetMultiplayerPeer.new()
 	var err = peer.create_server(port, MAX_PLAYERS)
 	_log("[HOST STEP 5] create_server returned err=%d (%s)" % [err, error_string(err)])
 	if err != OK:
@@ -343,27 +357,38 @@ func _on_client_nat_connect(address: String, port: int) -> void:
 
 
 func _on_client_relay_connect(address: String, port: int) -> void:
-	_log("Client connecting via relay through %s:%d" % [address, port])
-	# Punch a hole in our NAT for the relay port by sending UDP to it.
-	# The ENet server occupies our registered local port, so we use a
-	# temporary socket on an ephemeral port.  This helps routers with
-	# address-restricted NAT recognise the relay's IP; port-restricted
-	# NATs may still require the traffic to originate from the ENet port,
-	# but most consumer routers are address-restricted.
-	_punch_relay_hole(address, port)
+	_log("Client connecting via relay through %s:%d — NAT holes were pre-punched at server start" % [address, port])
 
 
-## Send a few UDP packets to the relay address to help punch through the host's NAT.
-## This creates an outbound mapping so the relay server's packets are allowed in.
-func _punch_relay_hole(address: String, port: int) -> void:
+## Pre-punch NAT holes for every noray relay port.
+## Called just before `create_server` while the registered local port is still
+## free (register_remote has already closed its socket).  Each outbound UDP
+## packet creates a NAT mapping from our ENet port to the relay port on the
+## noray server, so that relay traffic can reach us later.
+func _prepunch_relay_nat(local_port: int) -> void:
 	var udp = PacketPeerUDP.new()
-	udp.bind(0) # Ephemeral port — best-effort NAT punch
-	udp.set_dest_address(address, port)
-	# Send a few small packets so the router learns the relay's address
-	for i in range(3):
+	var err = udp.bind(local_port)
+	if err != OK:
+		_log("[HOST] Failed to bind UDP port %d for relay NAT pre-punch (err=%d: %s)" % [local_port, err, error_string(err)])
+		return
+
+	var server_ip = noray_server
+	var count := 0
+	for p in range(NORAY_RELAY_PORT_START, NORAY_RELAY_PORT_END + 1):
+		udp.set_dest_address(server_ip, p)
 		udp.put_packet("punch".to_utf8_buffer())
-	_log("[HOST RELAY] Sent NAT punch packets to relay at %s:%d from port %d" % [address, port, udp.get_local_port()])
+		count += 1
+
+	# Also punch the registrar port (8809) as a safety net — register_remote
+	# already did this, but repeating from the same local port reinforces the
+	# NAT mapping.
+	udp.set_dest_address(server_ip, 8809)
+	udp.put_packet("punch".to_utf8_buffer())
+
 	udp.close()
+	_log("[HOST] Pre-punched NAT for %d relay ports (%d-%d) + registrar on %s from local port %d" % [
+		count, NORAY_RELAY_PORT_START, NORAY_RELAY_PORT_END, server_ip, local_port
+	])
 
 
 # =============================================================================
