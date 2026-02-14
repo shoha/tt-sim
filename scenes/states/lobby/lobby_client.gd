@@ -8,6 +8,7 @@ signal leave_requested
 @onready var player_name_input: LineEdit = %PlayerNameInput
 @onready var room_code_input: LineEdit = %RoomCodeInput
 @onready var connect_button: Button = %ConnectButton
+@onready var paste_button: Button = %PasteButton
 @onready var leave_button: Button = %LeaveButton
 @onready var status_label: Label = %StatusLabel
 @onready var player_list: ItemList = %PlayerList
@@ -24,6 +25,7 @@ func _ready() -> void:
 	# Connect UI signals
 	connect_button.pressed.connect(_on_connect_pressed)
 	leave_button.pressed.connect(_on_leave_pressed)
+	paste_button.pressed.connect(_on_paste_pressed)
 	room_code_input.text_submitted.connect(_on_room_code_submitted)
 
 	# Connect network signals
@@ -103,6 +105,13 @@ func _on_connect_pressed() -> void:
 
 	_show_connecting_state()
 	NetworkManager.join_game(code)
+
+
+func _on_paste_pressed() -> void:
+	var clipboard_text = DisplayServer.clipboard_get().strip_edges()
+	if not clipboard_text.is_empty():
+		room_code_input.text = clipboard_text
+		room_code_input.caret_column = clipboard_text.length()
 
 
 func _on_room_code_submitted(_text: String) -> void:

@@ -66,13 +66,25 @@ caret_blink = true
 layout_mode = 2
 text = "Room Code:"
 
-[node name="RoomCodeInput" type="LineEdit" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/InputContainer"]
+[node name="RoomCodeRow" type="HBoxContainer" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/InputContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RoomCodeInput" type="LineEdit" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/InputContainer/RoomCodeRow"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 placeholder_text = "Enter room code..."
 alignment = 1
 max_length = 32
 caret_blink = true
+
+[node name="PasteButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/InputContainer/RoomCodeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Secondary"
+tooltip_text = "Paste from clipboard"
+text = "Paste"
 
 [node name="ConnectButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/InputContainer"]
 unique_name_in_owner = true
