@@ -47,6 +47,13 @@ func get_instance_from_path(path: String, create_static_bodies: bool = false) ->
 		var result = await GlbUtils.load_glb_with_processing_async(path, create_static_bodies)
 		if result.success:
 			model = result.scene
+		else:
+			# Delete corrupted/invalid GLB from disk so the cache manager
+			# will drop it from its index on the next lookup, allowing a
+			# fresh download.
+			if FileAccess.file_exists(path):
+				push_warning("AssetModelCache: Removing corrupted cache file: %s" % path)
+				DirAccess.remove_absolute(path)
 	else:
 		# Non-GLB resource — use threaded resource loading
 		var load_status = ResourceLoader.load_threaded_request(path)

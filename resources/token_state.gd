@@ -209,7 +209,11 @@ static func from_dict(data: Dictionary) -> TokenState:
 	state.is_alive = data.get("is_alive", true)
 	state.is_visible_to_players = data.get("is_visible_to_players", true)
 	state.is_hidden_from_gm = data.get("is_hidden_from_gm", false)
-	state.status_effects = data.get("status_effects", [])
+	# Handle typed array conversion for status_effects
+	var effects_data = data.get("status_effects", [])
+	state.status_effects.clear()
+	for effect in effects_data:
+		state.status_effects.append(str(effect))
 
 	return state
 
