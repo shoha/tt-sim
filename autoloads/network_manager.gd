@@ -828,6 +828,14 @@ func _rpc_send_player_info(info: Dictionary) -> void:
 @rpc("authority", "reliable")
 func _rpc_sync_player_list(players: Dictionary) -> void:
 	var old_players := _players.duplicate()
+
+	# Preserve local player info when the host's sync doesn't include us yet.
+	# This happens because the host sends the player list immediately on
+	# peer_connected, before our _rpc_send_player_info RPC has arrived.
+	var my_id := multiplayer.get_unique_id()
+	if _players.has(my_id) and not players.has(my_id):
+		players[my_id] = _players[my_id]
+
 	_players = players
 
 	# Emit player_left for removed players
