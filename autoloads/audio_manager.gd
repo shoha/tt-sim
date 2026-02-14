@@ -13,6 +13,9 @@ const BUS_UI := "UI"
 
 const SETTINGS_PATH := "user://settings.cfg"
 
+## Set to true to re-enable the hover sound on buttons.
+const BUTTON_HOVER_SOUND_ENABLED := false
+
 # UI Sound effects (paths will be updated when actual audio files are added)
 var _ui_sounds := {
 	"click": null,  # "res://assets/audio/ui/click.wav"
@@ -103,7 +106,7 @@ func _auto_connect_button(button: BaseButton) -> void:
 			button.pressed.connect(play_click)
 
 	# Hover sounds for regular buttons only (toggles already have tick feedback)
-	if not (button is CheckButton or button is CheckBox):
+	if BUTTON_HOVER_SOUND_ENABLED and not (button is CheckButton or button is CheckBox):
 		if not button.mouse_entered.is_connected(_on_button_hover):
 			button.mouse_entered.connect(_on_button_hover)
 
