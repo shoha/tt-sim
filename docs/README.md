@@ -13,6 +13,7 @@ This folder contains technical documentation for the project.
 | [THEME_GUIDE.md](THEME_GUIDE.md)                               | Theme variants, typography, styling               |
 | [SOUND_EFFECTS.md](SOUND_EFFECTS.md)                           | Audio files, wiring, normalization, adding sounds  |
 | [lighting-and-environment.md](lighting-and-environment.md)     | Environment presets, map defaults, sky, in-game editing |
+| [CONVENTIONS.md](CONVENTIONS.md)                               | RPC patterns, signal cleanup, token hierarchy, camera, settings |
 
 ## Quick Start
 

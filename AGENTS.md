@@ -14,6 +14,7 @@
 | [docs/SOUND_EFFECTS.md](docs/SOUND_EFFECTS.md) | Audio files, wiring, normalization, adding new sounds |
 | [docs/NETWORKING.md](docs/NETWORKING.md) | Multiplayer, Noray, state sync |
 | [docs/lighting-and-environment.md](docs/lighting-and-environment.md) | Environment presets, map defaults, sky, in-game editing |
+| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | RPC patterns, signal cleanup, token hierarchy, camera, settings, gotchas |
 
 ## Tech Stack
 
@@ -33,7 +34,7 @@
 - **Map loading** – Use `GlbUtils.load_map_async()` (or `load_map()` sync) for maps; handles both `res://` and `user://` paths with full post-processing
 - **GLB loading** – Use `GlbUtils.load_glb_with_processing_async()` for non-map GLBs (tokens use `AssetManager` instead)
 - **Models** – Use `AssetManager.get_model_instance()` for cached model loading
-- **Signal cleanup** – Disconnect autoload signals in `_exit_tree()` for non-autoload nodes. Use `CONNECT_ONE_SHOT` for transient signals
+- **Signal cleanup** – Disconnect autoload signals in `_exit_tree()` for non-autoload nodes. Always guard with `is_connected()` before disconnecting. Use `CONNECT_ONE_SHOT` for transient signals. See `docs/CONVENTIONS.md` for full patterns
 - **Process optimization** – Use `set_process(false)` in `_ready()` and toggle on/off when needed, to avoid unnecessary per-frame work
 - **UIDs** – Godot `.uid` files are auto-generated; avoid manual edits
 - **CanvasLayer ordering** – Layer numbers are centralized in `Constants` (`LAYER_*`). Check screen region comments before adding UI to avoid overlaps. See `.cursor/rules/canvas-layers.mdc`
@@ -52,7 +53,8 @@
 - **New UI panel (in-scene)**: Extend `AnimatedVisibilityContainer`, register with `UIManager.register_overlay()` for ESC handling
 - **New UI overlay (full-screen dialog)**: Extend `AnimatedCanvasLayerPanel`, override `_on_panel_ready()` for setup
 - **New slide-out drawer**: Extend `DrawerContainer`, configure `edge`, `drawer_width`, `tab_text` in `_on_ready()`
-- **New level/token logic**: See LevelPlayController, BoardTokenFactory, GameState, TokenPermissions
+- **New level/token logic**: See LevelPlayController, BoardTokenFactory (tokens MUST be created via factory), GameState, TokenPermissions
+- **New RPC**: Follow conventions in `docs/CONVENTIONS.md` — `@rpc` with `_rpc_` prefix, use `Array` not `Vector3` for parameters, emit signals from RPC methods
 - **New environment preset**: Add to `EnvironmentPresets.PRESETS` in `utils/environment_presets.gd`
 - **New environment property**: Add to `PROPERTY_DEFAULTS`, update `_apply_config_to_environment()`, `extract_from_environment()`, and `LevelEditPanel` controls
 - **Level editor**: Supports undo/redo (`Ctrl+Z`/`Ctrl+Y`) and autosave (30s interval, recovery on startup)
@@ -67,6 +69,8 @@ After making architectural or API changes, update the relevant documentation. Ch
 - **UI system changes** – update `docs/UI_SYSTEMS.md`
 - **Environment/lighting changes** – update `docs/lighting-and-environment.md`
 - **New conventions or patterns** – update this file (`AGENTS.md`) and `.cursor/rules/project-overview.mdc`
+- **New gotchas or coding patterns** – update `docs/CONVENTIONS.md`
+- **New RPC or network patterns** – update `docs/CONVENTIONS.md` and `docs/NETWORKING.md`
 
 ## Formatting
 
