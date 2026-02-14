@@ -156,6 +156,10 @@ func broadcast_token_removed(network_id: String) -> void:
 	if not NetworkManager.is_host():
 		return
 	
+	# Clean up any queued transform data for this token
+	_pending_transforms.erase(network_id)
+	_transform_throttle.erase(network_id)
+	
 	NetworkManager._rpc_receive_token_removed.rpc(network_id)
 
 

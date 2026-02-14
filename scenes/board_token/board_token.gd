@@ -202,10 +202,6 @@ func set_highlighted(highlighted: bool) -> void:
 	highlight_changed.emit(is_highlighted)
 
 
-func toggle_highlight() -> void:
-	set_highlighted(not is_highlighted)
-
-
 func _update_highlight_visuals() -> void:
 	if _selection_glow:
 		if is_highlighted:
@@ -270,10 +266,6 @@ func clear_status_effects() -> void:
 
 
 # Getters for component access
-func get_draggable_component() -> DraggableToken:
-	return _dragging_object
-
-
 func get_controller_component() -> Node:
 	return _token_controller
 

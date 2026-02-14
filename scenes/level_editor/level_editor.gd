@@ -491,9 +491,9 @@ func _on_delete_placement_pressed() -> void:
 
 
 func _on_apply_placement_pressed() -> void:
+	_history.save_undo_snapshot()
 	var placement = _get_placement_from_panel()
 	if placement:
-		_history.save_undo_snapshot()
 		current_level.update_token_placement(placement)
 		_refresh_token_list()
 		token_list.select(selected_placement_index)
@@ -663,6 +663,8 @@ func _load_level_async(path: String) -> void:
 
 	# Load without emitting signal to prevent auto-play
 	var level = await LevelManager.load_level_async(path, false)
+	if not is_instance_valid(self):
+		return
 	if level:
 		current_level = level
 		_pending_map_source_path = ""  # Clear pending map when loading existing level

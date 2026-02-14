@@ -124,6 +124,8 @@ func _on_copy_code_pressed() -> void:
 	var original_variant: StringName = copy_button.theme_type_variation
 	copy_button.theme_type_variation = &"Success"
 	await get_tree().create_timer(1.0).timeout
+	if not is_instance_valid(self):
+		return
 	copy_button.text = "Copy"
 	copy_button.theme_type_variation = original_variant
 

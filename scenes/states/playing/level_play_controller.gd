@@ -663,7 +663,7 @@ func _on_token_transform_changed(token: BoardToken) -> void:
 func _connect_token_context_menu(token: BoardToken) -> void:
 	var token_controller = token.get_controller_component()
 	if token_controller and token_controller.has_signal("context_menu_requested"):
-		if _game_map.has_method("_on_token_context_menu_requested"):
+		if _game_map and _game_map.has_method("_on_token_context_menu_requested"):
 			token_controller.context_menu_requested.connect(
 				_game_map._on_token_context_menu_requested
 			)

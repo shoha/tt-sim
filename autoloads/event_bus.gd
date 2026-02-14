@@ -33,9 +33,3 @@ signal play_level_requested(level_data: LevelData)
 ## Emitted when any system wants to open the level editor.
 signal open_editor_requested
 
-# ---------------------------------------------------------------------------
-# Network notifications (informational — no action required)
-# ---------------------------------------------------------------------------
-
-## A player disconnected (convenience relay for UI toast consumers).
-signal player_disconnected(player_name: String)
