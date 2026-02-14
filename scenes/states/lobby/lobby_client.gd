@@ -15,6 +15,9 @@ signal leave_requested
 @onready var input_container: Control = %InputContainer
 
 var _is_connected: bool = false
+## Suppresses join sounds/flash during the initial player list sync so only
+## the "you connected" sound plays, not an extra sound for every existing player.
+var _suppressing_join_sounds: bool = false
 
 
 func _ready() -> void:
@@ -74,9 +77,15 @@ func _show_connected_state() -> void:
 	waiting_container.visible = true
 	status_label.text = "Connected! Waiting for host to start..."
 	_is_connected = true
+	_suppressing_join_sounds = true
 	_update_player_list()
 	_cross_fade(waiting_container)
 	AudioManager.play_success()
+	# Allow the initial player list sync from the host to complete before
+	# treating subsequent player_joined signals as new-player events.
+	get_tree().create_timer(1.0).timeout.connect(
+		func(): _suppressing_join_sounds = false, CONNECT_ONE_SHOT
+	)
 
 
 func _on_connect_pressed() -> void:
@@ -107,8 +116,9 @@ func _on_leave_pressed() -> void:
 func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
 	if _is_connected:
 		_update_player_list()
-		_flash_player_list()
-		AudioManager.play_success()
+		if not _suppressing_join_sounds:
+			_flash_player_list()
+			AudioManager.play_success()
 
 
 func _on_player_left(_peer_id: int, _player_info: Dictionary) -> void:
