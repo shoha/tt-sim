@@ -73,14 +73,16 @@ func _enter_tree():
 
 ## Connect to noray at host.
 func connect_to_host(address: String, port: int = 8890) -> Error:
-	if is_connected_to_host():
-		disconnect_from_host()
+	# Always clean up any existing connection and state first
+	disconnect_from_host()
 
 	_logger.info("Trying to connect to noray at %s:%s", [address, port])
 
 	address = IP.resolve_hostname(address, IP.TYPE_IPV4)
 	_logger.debug("Resolved noray host to %s", [address])
 
+	# Create a fresh TCP peer to avoid stale socket state from previous connections
+	_peer = StreamPeerTCP.new()
 	var err = _peer.connect_to_host(address, port)
 	if err != Error.OK:
 		return err
@@ -121,6 +123,10 @@ func disconnect_from_host():
 	if is_connected_to_host():
 		on_disconnect_from_host.emit()
 	_peer.disconnect_from_host()
+	_protocol.reset()
+	_oid = ""
+	_pid = ""
+	_local_port = -1
 
 
 ## Register as host.
