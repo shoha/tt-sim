@@ -50,9 +50,9 @@ func setup(game_map: GameMap) -> void:
 	if not NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
 		NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
-	# Listen for map scale changes from the host
-	if not NetworkManager.map_scale_received.is_connected(_on_map_scale_received):
-		NetworkManager.map_scale_received.connect(_on_map_scale_received)
+	# Listen for visual settings changes from the host (map scale, lighting, environment, lo-fi)
+	if not NetworkManager.visual_settings_received.is_connected(_on_visual_settings_received):
+		NetworkManager.visual_settings_received.connect(_on_visual_settings_received)
 
 	# Token permission signals
 	if not GameState.permissions_changed.is_connected(_on_permissions_changed):
@@ -79,8 +79,8 @@ func _exit_tree() -> void:
 	# Disconnect network signals
 	if NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
 		NetworkManager.connection_state_changed.disconnect(_on_connection_state_changed)
-	if NetworkManager.map_scale_received.is_connected(_on_map_scale_received):
-		NetworkManager.map_scale_received.disconnect(_on_map_scale_received)
+	if NetworkManager.visual_settings_received.is_connected(_on_visual_settings_received):
+		NetworkManager.visual_settings_received.disconnect(_on_visual_settings_received)
 
 	# Disconnect permission signals
 	if GameState.permissions_changed.is_connected(_on_permissions_changed):
@@ -1209,9 +1209,27 @@ func set_map_scale(uniform_scale: float) -> void:
 		active_level_data.map_scale = Vector3.ONE * uniform_scale
 
 
-## Called on clients when the host changes map scale
-func _on_map_scale_received(uniform_scale: float) -> void:
-	set_map_scale(uniform_scale)
+## Called on clients when the host changes visual settings (map scale, lighting, environment, lo-fi)
+func _on_visual_settings_received(settings: Dictionary) -> void:
+	if settings.has("map_scale"):
+		set_map_scale(settings["map_scale"])
+	if settings.has("light_intensity"):
+		apply_light_intensity_scale(settings["light_intensity"])
+		if active_level_data:
+			active_level_data.light_intensity_scale = settings["light_intensity"]
+	if settings.has("environment_preset"):
+		var preset: String = settings["environment_preset"]
+		var overrides: Dictionary = settings.get("environment_overrides", {})
+		apply_environment_settings(preset, overrides)
+		if active_level_data:
+			active_level_data.environment_preset = preset
+			active_level_data.environment_overrides = overrides.duplicate()
+	if settings.has("lofi_overrides"):
+		var game_map = get_game_map()
+		if game_map:
+			game_map.apply_lofi_overrides(settings["lofi_overrides"])
+		if active_level_data:
+			active_level_data.lofi_overrides = settings["lofi_overrides"].duplicate()
 
 
 ## Check if a level is currently loaded

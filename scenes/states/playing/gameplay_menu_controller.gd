@@ -268,6 +268,21 @@ func _revert_edit_mode_values() -> void:
 		if _original_lofi_overrides.size() > 0:
 			game_map.apply_lofi_overrides(_original_lofi_overrides)
 
+	# Broadcast reverted values to clients so they also snap back.
+	# Lo-fi overrides must include full defaults merged with originals, because
+	# apply_lofi_overrides() only sets keys present in the dictionary — a sparse
+	# original dict would leave edited parameters (e.g. grain, color fade) stuck.
+	if NetworkManager.is_networked() and NetworkManager.is_host():
+		var full_lofi = Constants.LOFI_DEFAULTS.duplicate()
+		full_lofi.merge(_original_lofi_overrides, true)
+		NetworkManager.broadcast_visual_settings({
+			"map_scale": _original_map_scale.x,
+			"light_intensity": _original_light_intensity,
+			"environment_preset": _original_environment_preset,
+			"environment_overrides": _original_environment_overrides,
+			"lofi_overrides": full_lofi,
+		})
+
 
 # --- Edit Panel Signal Handlers ---
 
@@ -278,13 +293,16 @@ func _on_edit_map_scale_changed(new_value: float) -> void:
 		_level_play_controller.set_map_scale(new_value)
 	# Broadcast to clients so they see the same scale
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_map_scale(new_value)
+		NetworkManager.broadcast_visual_settings({"map_scale": new_value})
 
 
 ## Real-time light intensity change from the edit panel
 func _on_edit_intensity_changed(new_scale: float) -> void:
 	if _level_play_controller:
 		_level_play_controller.apply_light_intensity_scale(new_scale)
+	# Broadcast to clients so they see the same intensity
+	if NetworkManager.is_networked() and NetworkManager.is_host():
+		NetworkManager.broadcast_visual_settings({"light_intensity": new_scale})
 
 
 ## Real-time environment change from the edit panel
@@ -295,6 +313,11 @@ func _on_edit_environment_changed(preset: String, overrides: Dictionary) -> void
 		if _level_play_controller.active_level_data:
 			_level_play_controller.active_level_data.environment_preset = preset
 			_level_play_controller.active_level_data.environment_overrides = overrides.duplicate()
+	# Broadcast to clients so they see the same environment
+	if NetworkManager.is_networked() and NetworkManager.is_host():
+		NetworkManager.broadcast_visual_settings(
+			{"environment_preset": preset, "environment_overrides": overrides}
+		)
 
 
 ## Revert environment to the map's original embedded settings.
@@ -314,6 +337,12 @@ func _on_revert_to_map_defaults() -> void:
 		_level_play_controller.active_level_data.environment_preset = ""
 		_level_play_controller.active_level_data.environment_overrides = {}
 
+	# Broadcast to clients so they also revert to map defaults
+	if NetworkManager.is_networked() and NetworkManager.is_host():
+		NetworkManager.broadcast_visual_settings(
+			{"environment_preset": "", "environment_overrides": {}}
+		)
+
 	# Update the panel's internal state and controls to match
 	level_edit_panel.apply_environment_state("", {})
 
@@ -327,6 +356,9 @@ func _on_edit_lofi_changed(overrides: Dictionary) -> void:
 		# Keep level_data in sync so changes survive drawer close/reopen
 		if _level_play_controller.active_level_data:
 			_level_play_controller.active_level_data.lofi_overrides = overrides.duplicate()
+	# Broadcast to clients so they see the same lo-fi settings
+	if NetworkManager.is_networked() and NetworkManager.is_host():
+		NetworkManager.broadcast_visual_settings({"lofi_overrides": overrides})
 
 
 ## Save all edited values to level data and persist to disk
