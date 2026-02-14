@@ -50,6 +50,15 @@ func _on_after_animate_in() -> void:
 	download_button.grab_focus()
 
 
+func _on_before_animate_out() -> void:
+	if UpdateManager.update_download_progress.is_connected(_on_download_progress):
+		UpdateManager.update_download_progress.disconnect(_on_download_progress)
+	if UpdateManager.update_download_complete.is_connected(_on_download_complete):
+		UpdateManager.update_download_complete.disconnect(_on_download_complete)
+	if UpdateManager.update_download_failed.is_connected(_on_download_failed):
+		UpdateManager.update_download_failed.disconnect(_on_download_failed)
+
+
 func _on_after_animate_out() -> void:
 	closed.emit()
 	queue_free()
