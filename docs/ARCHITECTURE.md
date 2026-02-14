@@ -579,7 +579,20 @@ BoardToken (Node3D)
 └── BoardTokenController (input, context menu, rotation, scaling)
 ```
 
-See [CONVENTIONS.md](CONVENTIONS.md) for the full token transform hierarchy, placeholder upgrade flow, and drag-and-drop integration details.
+See [CONVENTIONS.md](CONVENTIONS.md) for the full token transform hierarchy, placeholder upgrade flow, drag-and-drop integration, and animation system details.
+
+### GameplayMenuController
+
+`GameplayMenuController` (`scenes/states/playing/gameplay_menu_controller.gd`) routes between gameplay UI and `LevelPlayController`:
+
+- **Asset browser** → `LevelPlayController.spawn_asset()` (token spawning)
+- **LevelEditPanel** → `LevelPlayController` methods (map scale, lighting, environment, lo-fi)
+- **Save/cancel** → `LevelManager.save_level_folder()` / revert
+- **Network changes** → Updates visibility of GM-only controls (asset browser, save, edit drawer)
+
+**GM-only controls:** When connected as a client (not host), the asset browser, save button, and level edit drawer are hidden. `GameplayMenuController` listens to `NetworkManager.connection_state_changed` to toggle visibility.
+
+**Edit mode:** When the edit drawer opens, the controller snapshots all current values (`_original_map_scale`, `_original_light_scale`, etc.). On cancel, it restores the originals and re-applies them to the live viewport. When networked, visual changes are broadcast to clients via `NetworkManager`.
 
 ### Token State
 

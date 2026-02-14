@@ -452,3 +452,147 @@ user://levels/
 - Colors in `environment_overrides` are stored as hex strings (`"#ff0000"`)
 - Autosave writes to `user://levels/_autosave/level.json` and is cleared after manual save
 - Folder names are generated via `Paths.sanitize_level_name()`: lowercase, spaces to underscores, restricted charset
+
+---
+
+## Threading & Async Patterns
+
+The project uses several async patterns. Mixing them up causes hangs or crashes.
+
+### Pattern 1: WorkerThreadPool (preferred for one-off jobs)
+
+Used by `GlbUtils` and `LevelManager` for background loading:
+
+```gdscript
+var task_id = WorkerThreadPool.add_task(func():
+    # Heavy work here (runs on background thread)
+    _result = _do_expensive_parsing(data)
+)
+
+# Poll until done (main thread stays responsive)
+while not WorkerThreadPool.is_task_completed(task_id):
+    await get_tree().process_frame
+
+# MUST call this after completion to clean up
+WorkerThreadPool.wait_for_task_completion(task_id)
+```
+
+### Pattern 2: ResourceLoader.load_threaded (for Godot resources)
+
+Used by `LevelManager` and `AssetModelCache` for `.tres` and `.tscn` files:
+
+```gdscript
+ResourceLoader.load_threaded_request(path)
+
+while ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+    await get_tree().process_frame
+
+var resource = ResourceLoader.load_threaded_get(path)
+```
+
+### Pattern 3: Dedicated Thread (for long-running workers)
+
+Used by `AssetPackTab` for icon loading:
+
+```gdscript
+var _thread := Thread.new()
+
+func _start_loading():
+    _thread.start(_load_icons_worker)
+
+func _load_icons_worker():
+    for item in items:
+        call_deferred("_add_item_to_list", item)  # Main thread callback
+```
+
+### Threading Gotchas
+
+1. **Deferred callbacks on freed nodes**: If a `Thread` calls `call_deferred()` and the target node is freed before the deferred call runs, it crashes. Stop threads in `_exit_tree()` and guard deferred callbacks.
+
+2. **Always call `wait_for_task_completion()`**: After `WorkerThreadPool.is_task_completed()` returns true, you must call `wait_for_task_completion()` to release the task. Skipping this leaks.
+
+3. **Mutex usage**: `AssetCacheManager` uses mutexes to protect cache dictionaries from concurrent access. New cache operations must follow the same locking pattern:
+   ```gdscript
+   _mutex.lock()
+   var result = _cache.get(key, null)
+   _mutex.unlock()
+   ```
+
+4. **Post-await validity**: After any `await`, re-check `is_instance_valid(self)` and `is_inside_tree()` before accessing node properties. The node may have been freed during the yield.
+
+---
+
+## Input Actions
+
+Custom input actions defined in `project.godot`:
+
+| Action | Binding | Used By |
+|--------|---------|---------|
+| `camera_move_forward` | W | `game_map.gd` — camera pan (isometric) |
+| `camera_move_backward` | S | `game_map.gd` — camera pan |
+| `camera_move_left` | A | `game_map.gd` — camera pan |
+| `camera_move_right` | D | `game_map.gd` — camera pan |
+| `camera_zoom_in` | Mouse wheel up | `game_map.gd` — orthographic zoom |
+| `camera_zoom_out` | Mouse wheel down | `game_map.gd` — orthographic zoom |
+| `rotate_model` | Middle mouse | `board_token_controller.gd` — token rotation (Shift = scale) |
+| `select_token` | Left double-click | Defined but not currently referenced in code |
+
+**Undo/Redo**: `Ctrl+Z` / `Ctrl+Y` are handled directly via `_unhandled_key_input()` in `level_editor.gd`, not through the input map.
+
+---
+
+## GUI-Over-3D Input Blocking
+
+### The Problem
+
+The 3D viewport renders inside a `SubViewportContainer`. UI panels (asset browser, drawers, menus) overlap the viewport. Without filtering, camera zoom and token interaction occur when scrolling or clicking on UI panels.
+
+### The Solution
+
+`game_map.gd` uses `_is_mouse_over_gui()` to block 3D input when the mouse is over UI:
+
+```gdscript
+func _is_mouse_over_gui() -> bool:
+    var hovered = get_viewport().gui_get_hovered_control()
+    if hovered == null:
+        return false
+    if hovered == _sub_viewport_container:
+        return false  # The 3D viewport itself — allow 3D input
+    return true       # Any other control — block 3D input
+```
+
+This is checked before processing camera zoom and edge panning.
+
+### Implications for New UI
+
+- New UI panels that overlap the viewport will **automatically** block 3D input if they have interactive controls (controls with `mouse_filter = STOP`)
+- Pure layout containers with `mouse_filter = IGNORE` do **not** block 3D input (their children might, but the container itself doesn't)
+- If a new panel should **not** block 3D input (e.g., a transparent HUD overlay), set all its controls to `mouse_filter = PASS` or `IGNORE`
+
+---
+
+## Token Animation System
+
+### Factory Requirement
+
+Like `BoardToken`, the `BoardTokenAnimationTree` **must be created via `BoardTokenAnimationTreeFactory.create()`**. It checks `_factory_created` in `_enter_tree()`.
+
+### Animation States
+
+The animation tree uses an `AnimationNodeStateMachinePlayback` with these states:
+
+| State | Trigger | Description |
+|-------|---------|-------------|
+| `battlewait01` | Default / health increased | Idle animation |
+| `damage01` | `health_changed` when `previous > current` | Damage reaction |
+| `down01` | `health_changed` when `new_health == 0` | Death/knockout |
+
+### Scene Structure
+
+The `AnimationTree` is added as a child of the `RigidBody3D`. Its `tree_root` node path must point to the model root (parent of `AnimationPlayer`) so bone paths resolve correctly. The factory handles this wiring.
+
+### Adding New Animations
+
+1. Add the animation state to the `AnimationNodeStateMachine` in `board_token_animation_tree.tscn`
+2. Add transition logic in `board_token_animation_tree.gd`'s `_on_health_changed()` or equivalent handler
+3. Ensure the GLB model includes the animation with matching name

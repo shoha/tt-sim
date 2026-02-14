@@ -87,3 +87,7 @@ After editing any file, run the formatter for that file type (see `formatting.md
 - Bake map environment defaults into `level_data` – they are derived from the map file at load time
 - Mutate `level_data` when applying environment settings – the effective config should be computed at apply-time via the layering model
 - Skip `is_instance_valid()` checks after `await` – the node may have been freed during the async operation
+- Create `BoardTokenAnimationTree` directly – use `BoardTokenAnimationTreeFactory.create()`
+- Call `call_deferred()` from threads without guarding against freed nodes – stop threads in `_exit_tree()`
+- Skip `WorkerThreadPool.wait_for_task_completion()` after polling – it leaks the task
+- Modify theme colors/variants without regenerating `dark_theme.tres` – save `dark_theme.gd` with `UPDATE_ON_SAVE = true` or use File → Run
