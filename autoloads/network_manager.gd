@@ -37,7 +37,7 @@ signal token_transform_received(
 signal token_state_received(network_id: String, token_dict: Dictionary)
 signal token_removed_received(network_id: String)
 signal transform_batch_received(batch: Dictionary)
-signal map_scale_received(uniform_scale: float)
+signal visual_settings_received(settings: Dictionary)
 signal token_permission_requested(network_id: String, peer_id: int, permission_type: int)
 signal token_permission_response_received(network_id: String, permission_type: int, approved: bool)
 signal token_permissions_received(permissions_dict: Dictionary)
@@ -917,8 +917,13 @@ func _rpc_receive_token_removed(network_id: String) -> void:
 
 
 @rpc("authority", "reliable")
-func _rpc_receive_map_scale(uniform_scale: float) -> void:
-	map_scale_received.emit(uniform_scale)
+func _rpc_receive_visual_settings(settings: Dictionary) -> void:
+	# Deserialize environment overrides (Color from hex)
+	if settings.has("environment_overrides"):
+		settings["environment_overrides"] = EnvironmentPresets.overrides_from_json(
+			settings["environment_overrides"]
+		)
+	visual_settings_received.emit(settings)
 
 
 ## RPC: Player requests permission for a token (client -> host)
@@ -1008,12 +1013,19 @@ func send_game_state_to_peer(peer_id: int, state_dict: Dictionary) -> void:
 	_rpc_receive_game_state.rpc_id(peer_id, state_dict)
 
 
-## Called by host to broadcast map scale to all clients
-func broadcast_map_scale(uniform_scale: float) -> void:
+## Called by host to broadcast visual settings to all clients.
+## Accepts a dictionary with any subset of keys: "map_scale", "light_intensity",
+## "environment_preset", "environment_overrides", "lofi_overrides".
+func broadcast_visual_settings(settings: Dictionary) -> void:
 	if not is_host():
 		return
-
-	_rpc_receive_map_scale.rpc(uniform_scale)
+	# Serialize environment overrides (Color to hex) for network transmission
+	var net_settings = settings.duplicate()
+	if net_settings.has("environment_overrides"):
+		net_settings["environment_overrides"] = EnvironmentPresets.overrides_to_json(
+			net_settings["environment_overrides"]
+		)
+	_rpc_receive_visual_settings.rpc(net_settings)
 
 
 ## Called by host to send permission response to a specific client
