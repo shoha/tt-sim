@@ -769,4 +769,19 @@ See [UI Systems Guide](UI_SYSTEMS.md) for complete documentation.
 - **Base class**: `addons/theme_gen/programmatic_theme.gd`
 - **UI Components**: `scenes/ui/` directory
 
-To regenerate the theme after changes, run the script via **File → Run** in Godot's script editor, or enable hot-reload with `const UPDATE_ON_SAVE = true`.
+### Theme Regeneration
+
+The theme is generated programmatically from `themes/dark_theme.gd` (extends `ProgrammaticTheme` from the ThemeGen addon) into `themes/generated/dark_theme.tres`.
+
+**How to regenerate:**
+
+1. **Automatic (recommended):** With `const UPDATE_ON_SAVE = true` in `dark_theme.gd`, the `theme_gen_save_sync` plugin regenerates the `.tres` file every time you save the script.
+2. **Manual:** Open `dark_theme.gd` in the Godot script editor, then use **File → Run** (or Ctrl+Shift+X).
+
+**When to regenerate:**
+
+- After modifying colors, fonts, spacing, or any theme properties in `dark_theme.gd`
+- After adding new theme type variations (button variants, label variants, etc.)
+- The generated `.tres` file should always be committed alongside the `.gd` changes
+
+**Dependencies:** Requires the `theme_gen` and `theme_gen_save_sync` editor plugins to be enabled (see `project.godot` `[editor_plugins]`).
