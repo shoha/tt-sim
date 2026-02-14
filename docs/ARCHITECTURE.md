@@ -67,11 +67,14 @@ Root (Node3D)
 
 These are `class_name` scripts (not autoloads) that provide globally accessible constants and static utility functions. They do not extend `Node` and are not in the scene tree.
 
-| Class          | File                         | Purpose                              |
-| -------------- | ---------------------------- | ------------------------------------ |
-| `Constants`    | `autoloads/constants.gd`    | Shared constants (lo-fi defaults, canvas layers, network intervals) |
-| `Paths`        | `autoloads/paths.gd`         | Path constants and static path utilities |
-| `NodeUtils`    | `autoloads/node_utils.gd`    | Static node manipulation utilities   |
+| Class                | File                              | Purpose                              |
+| -------------------- | --------------------------------- | ------------------------------------ |
+| `Constants`          | `autoloads/constants.gd`         | Shared constants (lo-fi defaults, canvas layers, network intervals, asset priorities) |
+| `Paths`              | `autoloads/paths.gd`             | Path constants and static path utilities |
+| `NodeUtils`          | `autoloads/node_utils.gd`        | Static node manipulation utilities   |
+| `TokenPermissions`   | `autoloads/token_permissions.gd` | Per-token, per-player permission management (query, grant, revoke, serialize) |
+| `SerializationUtils` | `utils/serialization_utils.gd`   | Vector3/Color/Dictionary conversion helpers for network and file I/O |
+| `EnvironmentPresets` | `utils/environment_presets.gd`   | Environment preset definitions, layered config application, sky presets |
 
 ---
 
@@ -112,6 +115,31 @@ Autoloads are registered in `project.godot` and available globally.
 | Streamer      | `AssetManager.streamer`       | P2P chunked streaming              |
 | Resolver      | `AssetManager.resolver`       | Resolution pipeline (local → cache → HTTP → P2P) |
 
+### Token Permissions
+
+`TokenPermissions` (`autoloads/token_permissions.gd`) is a **static class** (Tier 1, no autoload) that provides per-token, per-player permission management. The actual permissions data lives in `GameState._token_permissions`.
+
+```gdscript
+enum Permission { CONTROL }  # Move, rotate, scale
+
+# Grant/revoke
+TokenPermissions.grant(perms, network_id, peer_id, Permission.CONTROL)
+TokenPermissions.revoke(perms, network_id, peer_id, Permission.CONTROL)
+
+# Query
+TokenPermissions.has_permission(perms, network_id, peer_id, Permission.CONTROL)
+TokenPermissions.get_controlled_tokens(perms, peer_id, Permission.CONTROL)
+TokenPermissions.get_peers_with_permission(perms, network_id, Permission.CONTROL)
+
+# Cleanup
+TokenPermissions.clear_for_peer(perms, peer_id)    # On disconnect
+TokenPermissions.clear_for_token(perms, network_id) # On token removal
+
+# Serialization
+var dict = TokenPermissions.to_dict(perms)
+var restored = TokenPermissions.from_dict(dict)
+```
+
 ### Other Autoloads
 
 | Autoload              | File                                | Purpose                                       |
@@ -142,7 +170,15 @@ Autoloads are registered in `project.godot` and available globally.
 - Player tracking and role management
 - RPC routing for state synchronization
 - Late joiner handling (signal-driven, no polling)
-- Automatic reconnection with exponential backoff (clients only)
+- Automatic reconnection with exponential backoff (clients only, via `NetworkReconnection`)
+
+#### NetworkReconnection
+
+`NetworkReconnection` (`autoloads/network_reconnection.gd`) is a `RefCounted` helper class (not an autoload) that encapsulates the exponential-backoff reconnection state machine. `NetworkManager` creates it internally and delegates client reconnection to it.
+
+- Up to 5 retries with exponential backoff (`min(1.0 * 2^attempt, 16.0)` seconds)
+- Emits `reconnecting(attempt, max_attempts)` for UI feedback
+- Emits `reconnection_failed(reason)` when all attempts exhausted
 
 See [NETWORKING.md](NETWORKING.md) for detailed documentation.
 
@@ -411,36 +447,63 @@ See `THEME_GUIDE.md` for detailed usage of both base classes.
 ```gdscript
 class_name LevelData extends Resource
 
-var name: String
-var description: String
-var author: String
-var map_scene_path: String
-var map_offset: Vector3
-var map_scale: Vector3
+## Metadata
+var level_name: String = "Untitled Level"
+var level_description: String = ""
+var author: String = ""
+var created_at: int              # Unix timestamp
+var modified_at: int             # Unix timestamp
+var level_folder: String = ""    # Folder name within user://levels/ (empty = not saved)
+
+## Map
+var map_path: String = ""        # Relative (folder-based) or absolute (legacy res://)
+var map_scale: Vector3 = Vector3.ONE
+var map_offset: Vector3 = Vector3.ZERO
+
+## Lighting
 var light_intensity_scale: float = 1.0
+
+## Environment
 var environment_preset: String = ""          # "" = use map defaults
 var environment_overrides: Dictionary = {}   # Fine-tuned property tweaks
 var lofi_overrides: Dictionary = {}          # Post-processing shader overrides
-var token_placements: Array[TokenPlacement]
+
+## Tokens
+var token_placements: Array[TokenPlacement] = []
 ```
+
+Key methods: `get_absolute_map_path()` (resolves relative paths for folder-based levels), `is_folder_based()`, `to_dict()` / `from_dict()` (for network serialization), `duplicate_level()`, `validate()`.
 
 See [lighting-and-environment.md](lighting-and-environment.md) for the environment configuration layering model and how `environment_preset`, `environment_overrides`, and map defaults interact.
 
 ### TokenPlacement Resource
 
+Represents a placed token in a level definition (static, design-time data). Uses the pack-based asset system for model identification.
+
 ```gdscript
 class_name TokenPlacement extends Resource
 
-var display_name: String
-var pokemon_number: String
-var is_shiny: bool
-var is_player_controlled: bool
-var max_health: int
-var current_health: int
-var is_visible: bool
-var position: Vector3
-var rotation_y: float
-var scale: Vector3
+## Unique identifier (also used as network_id when spawned)
+var placement_id: String
+
+## Asset identification (pack-based system)
+var pack_id: String = ""
+var asset_id: String = ""
+var variant_id: String = "default"
+
+## Transform
+var position: Vector3 = Vector3.ZERO
+var rotation_y: float = 0.0
+var scale: Vector3 = Vector3.ONE
+
+## Token properties
+var token_name: String = ""
+var is_player_controlled: bool = false
+var max_health: int = 100
+var current_health: int = 100
+var is_alive: bool = true
+var is_visible_to_players: bool = true
+var status_effects: Array[String] = []
 ```
 
 ### Level Editor Features
@@ -483,22 +546,58 @@ BoardToken (RigidBody3D)
 
 ### Token State
 
-Each token has an associated `TokenState` resource:
+Each token has an associated `TokenState` resource (runtime network-sync data, managed by `GameState`):
 
 ```gdscript
 class_name TokenState extends Resource
 
-var network_id: String      # Unique identifier
-var pack_id: String         # Asset pack reference
-var asset_id: String        # Asset reference
-var variant_id: String      # Variant reference
-var display_name: String
-var position: Vector3
-var rotation: Vector3
-var scale: Vector3
-var is_visible: bool
-var current_health: int
-var max_health: int
+## Network ID (matches TokenPlacement.placement_id for level-spawned tokens)
+var network_id: String = ""
+
+## Asset identification
+var pack_id: String = ""
+var asset_id: String = ""
+var variant_id: String = "default"
+
+## Transform
+var position: Vector3 = Vector3.ZERO
+var rotation: Vector3 = Vector3.ZERO
+var scale: Vector3 = Vector3.ONE
+
+## Identity
+var token_name: String = "Token"
+var is_player_controlled: bool = false
+var character_id: String = ""
+
+## Health
+var max_health: int = 100
+var current_health: int = 100
+var is_alive: bool = true
+
+## Visibility
+var is_visible_to_players: bool = true
+var is_hidden_from_gm: bool = false
+
+## Status
+var status_effects: Array[String] = []
+```
+
+Key methods: `from_board_token()`, `from_placement()`, `apply_to_token()`, `to_dict()` / `from_dict()`, `diff()`, `should_sync_to_client()`.
+
+### TokenConfig Resource
+
+Optional configuration for token creation:
+
+```gdscript
+class_name TokenConfig extends Resource
+
+var model_scene: PackedScene       # Model to use
+var animation_tree_scene: PackedScene  # Custom animations (optional)
+var use_convex_collision: bool = true
+var lock_rotation: bool = true
+var token_name: String = "Token"
+var is_player_controlled: bool = false
+var max_health: int = 100
 ```
 
 ### Token Lifecycle
@@ -568,46 +667,63 @@ LevelManager.save_level(data)
 ```
 project/
 ├── autoloads/           # Singleton services and static class_name scripts
-│   ├── constants.gd         # Static class (class_name, not autoload)
-│   ├── paths.gd             # Static class (class_name, not autoload)
-│   ├── node_utils.gd        # Static class (class_name, not autoload)
-│   ├── network_manager.gd
-│   ├── network_state_sync.gd
-│   ├── game_state.gd
-│   ├── asset_pack_manager.gd
-│   ├── asset_downloader.gd
-│   ├── asset_streamer.gd
-│   └── ...
+│   ├── constants.gd         # Static class: shared constants (layers, lo-fi, network)
+│   ├── paths.gd             # Static class: path constants and utilities
+│   ├── node_utils.gd        # Static class: node manipulation utilities
+│   ├── token_permissions.gd # Static class: per-token, per-player permissions
+│   ├── event_bus.gd         # Autoload: cross-system signals
+│   ├── ui_manager.gd        # Autoload: UI systems
+│   ├── audio_manager.gd     # Autoload: sound playback and buses
+│   ├── level_manager.gd     # Autoload: level file I/O
+│   ├── network_manager.gd   # Autoload: multiplayer connections
+│   ├── network_state_sync.gd # Autoload: state broadcasting
+│   ├── network_reconnection.gd # RefCounted: exponential-backoff reconnection helper
+│   ├── game_state.gd        # Autoload: authoritative game state
+│   ├── asset_manager.gd     # Autoload: facade for asset pipeline
+│   ├── asset_cache_manager.gd # Sub-component: disk cache (child of AssetManager)
+│   ├── asset_pack_manager.gd  # Sub-component: pack discovery
+│   ├── asset_downloader.gd    # Sub-component: HTTP downloads
+│   ├── asset_streamer.gd      # Sub-component: P2P streaming
+│   ├── asset_resolver.gd      # Sub-component: resolution pipeline
+│   ├── asset_model_cache.gd   # RefCounted: memory model cache (owned by AssetManager)
+│   └── update_manager.gd    # Autoload: GitHub release checks
 ├── resources/           # Custom Resource classes
-│   ├── token_state.gd
-│   ├── asset_pack.gd
-│   └── ...
+│   ├── level_data.gd        # Level metadata, environment, token placements
+│   ├── token_state.gd       # Runtime network-sync token state
+│   ├── token_placement.gd   # Design-time token placement in levels
+│   ├── token_config.gd      # Token creation configuration
+│   └── asset_pack.gd        # Asset pack metadata and entries
 ├── scenes/
-│   ├── board_token/     # Token system
-│   │   ├── board_token.gd
-│   │   ├── board_token_factory.gd
-│   │   └── placeholder_token.gd
+│   ├── root.gd / root.tscn  # Root controller, state stack
+│   ├── board_token/     # Token system (BoardToken, Factory, animations, drag)
 │   ├── states/          # Application states
-│   │   ├── lobby/       # Multiplayer lobby
-│   │   └── playing/     # Gameplay with asset browser
-│   ├── level_editor/    # Level editor UI
+│   │   ├── title_screen/  # Main menu
+│   │   ├── lobby/         # Host/client lobby
+│   │   ├── playing/       # Gameplay (GameMap, camera, menus, asset browser)
+│   │   └── paused/        # Pause overlay
+│   ├── level_editor/    # Level editor with undo/redo
 │   ├── level_loader/    # Level loading UI
 │   ├── maps/            # Map scenes
-│   ├── templates/       # Reusable scene templates
-│   └── ui/              # UI components
-├── themes/              # Theme definitions
-├── docs/                # Documentation
-├── user_assets/         # Custom asset packs
-│   └── {pack_id}/
-│       ├── manifest.json
-│       ├── models/
-│       └── icons/
-├── addons/
-│   └── netfox.noray/    # NAT punchthrough addon
-└── assets/
-    ├── fonts/
-    ├── audio/
-    └── models/
+│   └── ui/              # Reusable UI components
+├── utils/               # Utility classes
+│   ├── glb_utils.gd         # GLB/GLTF loading, map post-processing
+│   ├── serialization_utils.gd # Vector3/Color serialization helpers
+│   ├── environment_presets.gd  # Environment preset definitions and application
+│   ├── tab_utils.gd         # TabContainer animation helpers
+│   ├── update_version.gd    # Version string parsing
+│   └── update_installer.gd  # Update installation
+├── shaders/             # GLSL shaders (lo-fi, occlusion fade, selection)
+├── themes/              # Theme definitions (dark_theme.gd → dark_theme.tres)
+├── tests/               # GUT unit tests and runnable test scenes
+├── tools/               # Python scripts (audio normalization, hooks)
+├── data/                # Static data files (pokemon.json)
+├── docs/                # Authoritative documentation
+├── assets/
+│   ├── audio/           # UI and SFX sound files
+│   ├── icons/ui/        # SVG/PNG UI icons
+│   └── models/maps/     # Built-in map scenes and textures
+├── addons/              # Third-party addons (netfox, DragAndDrop3D, etc.)
+└── .github/workflows/   # CI/CD (Godot build, export, releases)
 ```
 
 ---

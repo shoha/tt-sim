@@ -612,17 +612,21 @@ See [lighting-and-environment.md](lighting-and-environment.md) for the full envi
 
 ## CanvasLayer Ordering
 
-UI elements are organized by layer for proper z-ordering:
+UI elements are organized by layer for proper z-ordering. All layer numbers are defined in `autoloads/constants.gd` under `LAYER_*` constants.
 
-| Layer | Component          | Purpose                |
-| ----- | ------------------ | ---------------------- |
-| 2     | AppMenu            | Always-visible buttons |
-| 10    | PauseOverlay       | Pause menu             |
-| 80    | InputHints         | Keybinding hints       |
-| 90    | ToastContainer     | Notifications          |
-| 95    | SettingsMenu       | Settings overlay       |
-| 100   | ConfirmationDialog | Modal dialogs          |
-| 105   | LoadingOverlay     | Loading screen         |
-| 110   | TransitionOverlay  | Scene transitions      |
+| Layer | Constant               | Component          | Purpose                            |
+| ----- | ---------------------- | ------------------ | ---------------------------------- |
+| -1    | `LAYER_WORLD_VIEWPORT` | WorldViewportLayer | 3D scene rendering (SubViewport)   |
+| 2     | `LAYER_APP_MENU`       | AppMenu            | Always-visible buttons (bottom-right) |
+| 2     | `LAYER_GAMEPLAY_MENU`  | GameplayMenu       | In-game UI, edit drawer, player list |
+| 3     | `LAYER_LEVEL_EDITOR`   | LevelEditor        | Level editor overlay (full-screen) |
+| 5     | `LAYER_LOBBY`          | Lobby              | Host/client lobby (centered)       |
+| 10    | `LAYER_PAUSE`          | PauseOverlay       | Pause menu                         |
+| 80    | `LAYER_INPUT_HINTS`    | InputHints         | Keybinding hints (bottom-center)   |
+| 90    | `LAYER_TOAST`          | ToastContainer     | Notifications (bottom-center)      |
+| 95    | `LAYER_SETTINGS`       | SettingsMenu       | Settings overlay (centered)        |
+| 100   | `LAYER_DIALOG`         | ConfirmationDialog | Modals, download queue             |
+| 105   | `LAYER_LOADING`        | LoadingOverlay     | Loading screen (full-screen)       |
+| 110   | `LAYER_TRANSITION`     | TransitionOverlay  | Scene transitions (full-screen)    |
 
-Higher layers appear on top of lower layers.
+Higher layers appear on top of lower layers. When creating CanvasLayers in code, always use `Constants.LAYER_*` constants instead of magic numbers.
