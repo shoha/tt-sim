@@ -75,6 +75,9 @@ After editing any file, run the formatter for that file type (see `formatting.md
 
 - Add signals to `EventBus` that aren't truly cross-system (use direct connections instead)
 - Create autoloads for pure constants, pure utilities, or implementation details of existing systems (see `autoloads-and-globals.mdc`)
+- Create `BoardToken` instances directly – always use `BoardTokenFactory` (factory sets up the full scene hierarchy)
+- Use `Vector3` or `Color` as RPC parameters – convert to `Array` or `Dictionary` first (see `docs/CONVENTIONS.md`)
+- Disconnect signals without guarding with `is_connected()` first
 - Edit `.uid` files manually
 - Block main thread for I/O – use async/await or threaded loading
 - Use `has_node("/root/X")` or `get_node("/root/X")` for autoloads – reference them directly
@@ -83,3 +86,4 @@ After editing any file, run the formatter for that file type (see `formatting.md
 - Leave `mouse_filter = STOP` (default) on bare layout containers – always set `IGNORE` on non-interactive wrappers
 - Bake map environment defaults into `level_data` – they are derived from the map file at load time
 - Mutate `level_data` when applying environment settings – the effective config should be computed at apply-time via the layering model
+- Skip `is_instance_valid()` checks after `await` – the node may have been freed during the async operation

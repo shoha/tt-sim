@@ -314,7 +314,24 @@ Client Flow:
 - **Property updates**: Reliable, immediate
 - **Full state sync**: Sent to late joiners
 
-See [NETWORKING.md](NETWORKING.md) for complete documentation.
+### RootNetworkHandler
+
+`RootNetworkHandler` (`scenes/root_network_handler.gd`) provides static helpers for client-side token state mapping. It bridges `NetworkManager` transport signals to token visuals during the PLAYING state.
+
+| Component | Role |
+|-----------|------|
+| `NetworkManager` (autoload) | Connection lifecycle, RPC transport, player tracking — always active |
+| `RootNetworkHandler` (static helpers) | Client-side state → token visual mapping — active during PLAYING only |
+
+```gdscript
+# Root._enter_playing_state()
+RootNetworkHandler.connect_client_signals(self)
+
+# Root._exit_playing_state()
+RootNetworkHandler.disconnect_client_signals(self)
+```
+
+See [NETWORKING.md](NETWORKING.md) and [CONVENTIONS.md](CONVENTIONS.md) for complete documentation.
 
 ---
 
@@ -511,6 +528,22 @@ var status_effects: Array[String] = []
 - **Undo/Redo** — Snapshot-based (`Ctrl+Z` / `Ctrl+Y`). Captures `LevelData.to_dict()` before each mutation. History capped at 50 entries with deduplication.
 - **Autosave** — 30-second timer writes to `user://levels/_autosave/level.json` when unsaved changes exist. On startup, prompts to recover if an autosave file is found. Cleared after manual save.
 
+### Level Storage Formats
+
+**Folder-based (current):**
+
+```
+user://levels/{folder_name}/
+├── level.json    # LevelData serialized as JSON
+└── map.glb       # Bundled map file
+```
+
+**Legacy:** `user://levels/*.tres` (Godot Resource format, read-only migration path).
+
+**Autosave:** `user://levels/_autosave/level.json` (cleared after manual save).
+
+See [CONVENTIONS.md](CONVENTIONS.md) for the full `level.json` schema and path resolution details.
+
 ### Level Flow
 
 1. **Level Editor** creates/edits `LevelData` (with undo/redo and autosave)
@@ -533,16 +566,20 @@ var status_effects: Array[String] = []
 
 ### BoardToken Scene
 
-Physical game tokens representing assets from packs.
+Physical game tokens representing assets from packs. **Must be created via `BoardTokenFactory`** — direct instantiation will fail.
 
 ```
-BoardToken (RigidBody3D)
-├── CollisionShape3D
-├── MeshInstance3D (model from asset pack)
-├── BoardTokenController (script)
-├── AnimationTree
-└── network_id: String (unique identifier)
+BoardToken (Node3D)
+├── DraggableToken (DraggingObject3D)
+│   ├── RigidBody3D
+│   │   ├── CollisionShape3D
+│   │   ├── SelectionGlowRenderer (selection_glow.gdshader on QuadMesh)
+│   │   └── Model (Armature/Skeleton3D/Mesh — or PlaceholderToken while loading)
+│   └── DropIndicatorRenderer (ImmediateMesh for drop-line and circle)
+└── BoardTokenController (input, context menu, rotation, scaling)
 ```
+
+See [CONVENTIONS.md](CONVENTIONS.md) for the full token transform hierarchy, placeholder upgrade flow, and drag-and-drop integration details.
 
 ### Token State
 
