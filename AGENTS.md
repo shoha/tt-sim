@@ -25,10 +25,10 @@
 
 ## Key Conventions
 
-- **EventBus** – `EventBus` is a small autoload with cross-system signals (`pause_requested`, `play_level_requested`, `state_changed`, etc.). Use it only for signals that genuinely span system boundaries. Prefer direct signal connections for parent-child communication and autoload services for global operations
+- **EventBus** – `EventBus` is a small autoload with cross-system signals (`pause_requested`, `play_level_requested`, `state_changed`, `player_disconnected`, etc.). Use it only for signals that genuinely span system boundaries. Prefer direct signal connections for parent-child communication and autoload services for global operations
 - **State stack** – Root manages states: `change_state()`, `push_state()`, `pop_state()`
-- **Static classes** – `Constants`, `Paths`, and `NodeUtils` are `class_name` scripts (not autoloads). They provide globally accessible constants and static utility functions without a Node in the tree
-- **Autoloads** – UIManager, LevelManager, AssetManager, NetworkManager, EventBus, etc. (see project.godot). Always reference autoloads directly (e.g. `AssetManager.method()`), never via `has_node("/root/X")` or `get_node("/root/X")`
+- **Static classes** – `Constants`, `Paths`, `NodeUtils`, `TokenPermissions`, `SerializationUtils`, and `EnvironmentPresets` are `class_name` scripts (not autoloads). They provide globally accessible constants and static utility functions without a Node in the tree
+- **Autoloads** – UIManager, LevelManager, AssetManager, NetworkManager, EventBus, GameState, NetworkStateSync, AudioManager, UpdateManager (see project.godot). Always reference autoloads directly (e.g. `AssetManager.method()`), never via `has_node("/root/X")` or `get_node("/root/X")`
 - **Shared constants** – Use `Constants.LOFI_DEFAULTS`, `Constants.NETWORK_TRANSFORM_UPDATE_INTERVAL`, etc. for values shared across files. Add file-local constants for single-file magic numbers
 - **Map loading** – Use `GlbUtils.load_map_async()` (or `load_map()` sync) for maps; handles both `res://` and `user://` paths with full post-processing
 - **GLB loading** – Use `GlbUtils.load_glb_with_processing_async()` for non-map GLBs (tokens use `AssetManager` instead)
@@ -52,7 +52,7 @@
 - **New UI panel (in-scene)**: Extend `AnimatedVisibilityContainer`, register with `UIManager.register_overlay()` for ESC handling
 - **New UI overlay (full-screen dialog)**: Extend `AnimatedCanvasLayerPanel`, override `_on_panel_ready()` for setup
 - **New slide-out drawer**: Extend `DrawerContainer`, configure `edge`, `drawer_width`, `tab_text` in `_on_ready()`
-- **New level/token logic**: See LevelPlayController, BoardTokenFactory, GameState
+- **New level/token logic**: See LevelPlayController, BoardTokenFactory, GameState, TokenPermissions
 - **New environment preset**: Add to `EnvironmentPresets.PRESETS` in `utils/environment_presets.gd`
 - **New environment property**: Add to `PROPERTY_DEFAULTS`, update `_apply_config_to_environment()`, `extract_from_environment()`, and `LevelEditPanel` controls
 - **Level editor**: Supports undo/redo (`Ctrl+Z`/`Ctrl+Y`) and autosave (30s interval, recovery on startup)
@@ -75,14 +75,31 @@ After editing files, run the appropriate formatter so output matches project sty
 - **GDScript**: `gdformat path/to/file.gd` (from `pip install gdtoolkit`)
 - **Lint GDScript**: `gdlint path/to/file.gd`
 
+## Testing
+
+- **Unit tests** – GUT framework, configured in `tests/.gutconfig.json`. Test files in `tests/unit/` with `test_` prefix.
+- **Integration test scenes** – Runnable with F6 in Godot editor: `tests/test_glb_lights.tscn`, `tests/test_play_level.tscn`, `tests/test_client_waiting.tscn`
+- **Run unit tests**: In Godot editor, open the GUT panel and click Run All. Or from CLI if the GUT command-line runner is configured.
+
+## CI/CD
+
+- **GitHub Actions** – `.github/workflows/build.yml` exports Windows and macOS builds on push to `main` or version tags (`v*`). Uses `barichello/godot-ci:4.6` container.
+- **Releases** – Tagged pushes (`v*`) create GitHub releases with build artifacts. `UpdateManager` checks for new releases and prompts in-app updates.
+
 ## File Layout
 
 ```
-autoloads/     # Singletons and static class_name scripts (Constants, Paths, NodeUtils)
-resources/     # Custom Resource classes (LevelData, TokenState, etc.)
-scenes/        # States, board_token, level_editor, ui
-utils/         # GlbUtils, TabUtils, environment_presets
-themes/        # dark_theme.gd, theme variants
-tests/         # Runnable test scenes (F6 in editor)
+autoloads/     # Singletons, static class_name scripts, and facade sub-components
+resources/     # Custom Resource classes (LevelData, TokenState, TokenPlacement, TokenConfig, AssetPack)
+scenes/        # States, board_token, level_editor, level_loader, ui
+utils/         # GlbUtils, SerializationUtils, EnvironmentPresets, TabUtils
+shaders/       # GLSL shaders (lo-fi, occlusion fade, selection glow)
+themes/        # dark_theme.gd → generated/dark_theme.tres
+tests/         # GUT unit tests + runnable test scenes (F6 in editor)
+tools/         # Python scripts (audio normalization, hooks, manifest generation)
+data/          # Static data files (pokemon.json)
 docs/          # Authoritative documentation
+assets/        # Audio, icons, models, maps
+.github/       # CI/CD workflows
+.cursor/rules/ # Cursor IDE rules for AI agent guidance
 ```

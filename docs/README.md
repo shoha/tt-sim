@@ -4,14 +4,15 @@ This folder contains technical documentation for the project.
 
 ## Available Guides
 
-| Document                                   | Description                                       |
-| ------------------------------------------ | ------------------------------------------------- |
-| [ARCHITECTURE.md](ARCHITECTURE.md)         | Project structure, state management, core systems |
-| [NETWORKING.md](NETWORKING.md)             | Multiplayer networking, state sync, connections   |
-| [ASSET_MANAGEMENT.md](ASSET_MANAGEMENT.md) | Asset packs, downloading, caching, P2P streaming  |
-| [UI_SYSTEMS.md](UI_SYSTEMS.md)             | UIManager, dialogs, toasts, transitions, settings |
-| [THEME_GUIDE.md](THEME_GUIDE.md)           | Theme variants, typography, styling               |
-| [SOUND_EFFECTS.md](SOUND_EFFECTS.md)       | Audio files, wiring, normalization, adding sounds  |
+| Document                                                       | Description                                       |
+| -------------------------------------------------------------- | ------------------------------------------------- |
+| [ARCHITECTURE.md](ARCHITECTURE.md)                             | Project structure, state management, core systems |
+| [NETWORKING.md](NETWORKING.md)                                 | Multiplayer networking, state sync, connections   |
+| [ASSET_MANAGEMENT.md](ASSET_MANAGEMENT.md)                     | Asset packs, downloading, caching, P2P streaming  |
+| [UI_SYSTEMS.md](UI_SYSTEMS.md)                                 | UIManager, dialogs, toasts, transitions, settings |
+| [THEME_GUIDE.md](THEME_GUIDE.md)                               | Theme variants, typography, styling               |
+| [SOUND_EFFECTS.md](SOUND_EFFECTS.md)                           | Audio files, wiring, normalization, adding sounds  |
+| [lighting-and-environment.md](lighting-and-environment.md)     | Environment presets, map defaults, sky, in-game editing |
 
 ## Quick Start
 
@@ -89,21 +90,28 @@ Root (manages state)
 ├── PLAYING state → GameMap scene
 └── PAUSED state → PauseOverlay scene
 
-Autoloads:
-├── UIManager - UI systems
-├── AudioManager - Sound
-├── LevelManager - Level I/O
-├── NodeUtils - Utilities
-├── Paths - Path constants
-├── NetworkManager - Multiplayer connections
+Autoloads (singletons):
+├── EventBus        - Cross-system signals
+├── UIManager       - UI systems (dialogs, toasts, transitions)
+├── AudioManager    - Sound playback and buses
+├── LevelManager    - Level file I/O
+├── NetworkManager  - Multiplayer connections
 ├── NetworkStateSync - State broadcasting
-├── GameState - Authoritative game state
-├── AssetManager - Asset loading & model cache
-├── AssetResolver - Unified asset resolution
-├── AssetCacheManager - Disk cache management
-├── AssetDownloader - HTTP downloads
-├── AssetStreamer - P2P streaming
-└── UpdateManager - GitHub release checking & updates
+├── GameState       - Authoritative game state
+├── AssetManager    - Asset pipeline facade (pack management, resolution, model cache)
+│   ├── cache       - Disk cache with LRU eviction
+│   ├── downloader  - HTTP download queue
+│   ├── streamer    - P2P chunked streaming
+│   └── resolver    - Resolution pipeline (local → cache → HTTP → P2P)
+└── UpdateManager   - GitHub release checking & updates
+
+Static classes (class_name, no autoload):
+├── Constants          - Shared constants (layers, lo-fi defaults, network intervals)
+├── Paths              - Path constants and utilities
+├── NodeUtils          - Node manipulation utilities
+├── TokenPermissions   - Per-token, per-player permission management
+├── SerializationUtils - Vector3/Color serialization helpers
+└── EnvironmentPresets - Environment presets and layered configuration
 ```
 
 ## Contributing
