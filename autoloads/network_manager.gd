@@ -616,6 +616,11 @@ func disconnect_game() -> void:
 	# Stop any pending reconnection attempts
 	_reconnection.stop()
 
+	# Set state to OFFLINE *before* closing connections so that any signals
+	# triggered by the teardown (e.g. server_disconnected from peer.close())
+	# see OFFLINE and short-circuit instead of starting a reconnection cycle.
+	_set_connection_state(ConnectionState.OFFLINE)
+
 	# Disconnect Noray signals (host-side)
 	if Noray.on_connect_nat.is_connected(_on_client_nat_connect):
 		Noray.on_connect_nat.disconnect(_on_client_nat_connect)
@@ -652,7 +657,6 @@ func disconnect_game() -> void:
 	_current_level_dict.clear()
 	_stop_connection_timeout()
 
-	_set_connection_state(ConnectionState.OFFLINE)
 	_log("Disconnected")
 
 
