@@ -17,6 +17,7 @@ const ENTRANCE_DURATION := 0.3
 @onready var host_button: Button = %HostGameButton
 @onready var join_button: Button = %JoinGameButton
 @onready var settings_button: Button = %SettingsButton
+@onready var quit_button: Button = %QuitButton
 
 
 func _ready() -> void:
@@ -24,6 +25,7 @@ func _ready() -> void:
 	host_button.pressed.connect(_on_host_pressed)
 	join_button.pressed.connect(_on_join_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
+	quit_button.pressed.connect(_on_quit_pressed)
 
 	_play_entrance_animation()
 
@@ -62,3 +64,7 @@ func _on_join_pressed() -> void:
 func _on_settings_pressed() -> void:
 	var settings_menu = SettingsMenuScene.instantiate()
 	get_tree().root.add_child(settings_menu)
+
+
+func _on_quit_pressed() -> void:
+	get_tree().quit()

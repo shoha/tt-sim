@@ -285,10 +285,21 @@ text = "Join Game"
 layout_mode = 2
 theme_override_constants/separation = 20
 
-[node name="SettingsButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=1708751033]
+[node name="BottomButtons" type="HBoxContainer" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="SettingsButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/BottomButtons" unique_id=1708751033]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
-size_flags_horizontal = 4
 theme_type_variation = &"Secondary"
 text = "Settings"
+
+[node name="QuitButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/BottomButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"Danger"
+text = "Quit"

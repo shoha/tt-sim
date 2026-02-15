@@ -10,6 +10,7 @@ signal main_menu_requested
 @onready var edit_level_button: Button = %EditLevelButton
 @onready var settings_button: Button = %SettingsButton
 @onready var main_menu_button: Button = %MainMenuButton
+@onready var quit_game_button: Button = %QuitGameButton
 
 
 func _on_panel_ready() -> void:
@@ -18,6 +19,8 @@ func _on_panel_ready() -> void:
 	settings_button.pressed.connect(_on_settings_pressed)
 	main_menu_button.set_meta("ui_silent", true)
 	main_menu_button.pressed.connect(_on_main_menu_pressed)
+	quit_game_button.set_meta("ui_silent", true)
+	quit_game_button.pressed.connect(_on_quit_game_pressed)
 	_setup_blur_backdrop()
 
 	# Only show "Edit Level" for the GM / local player
@@ -84,4 +87,16 @@ func _on_main_menu_pressed() -> void:
 		Callable(),
 		"Danger",
 		AudioManager.play_leave_game,
+	)
+
+
+func _on_quit_game_pressed() -> void:
+	UIManager.show_confirmation(
+		"Quit Game?",
+		"Any unsaved progress will be lost.",
+		"Quit",
+		"Cancel",
+		func(): get_tree().quit(),
+		Callable(),
+		"Danger",
 	)

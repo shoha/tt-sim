@@ -41,6 +41,9 @@ var _disconnect_indicator: Node = null
 
 
 func _ready() -> void:
+	# Apply saved graphics settings (fullscreen, vsync) before any UI is shown
+	SettingsMenu.apply_startup_graphics_settings()
+
 	# Setup core systems
 	_setup_level_play_controller()
 	_setup_app_menu()
