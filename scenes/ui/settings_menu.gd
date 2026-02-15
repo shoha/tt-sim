@@ -58,6 +58,35 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+## Apply saved graphics settings (fullscreen, vsync) at startup.
+## Call this early (e.g. from Root._ready()) so the window mode is correct
+## before any UI is shown.
+static func apply_startup_graphics_settings() -> void:
+	var config = ConfigFile.new()
+	if config.load(SETTINGS_PATH) != OK:
+		return
+
+	var fullscreen: bool = config.get_value("graphics", "fullscreen", false)
+	var vsync: bool = config.get_value("graphics", "vsync", true)
+
+	# Apply fullscreen
+	var current_mode := DisplayServer.window_get_mode()
+	var is_currently_fullscreen := (
+		current_mode == DisplayServer.WINDOW_MODE_FULLSCREEN
+		or current_mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+	)
+
+	if fullscreen and not is_currently_fullscreen:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	elif not fullscreen and is_currently_fullscreen:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+	# Apply vsync
+	DisplayServer.window_set_vsync_mode(
+		DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED
+	)
+
+
 func _on_panel_ready() -> void:
 	# Connect UI signals
 	close_button.pressed.connect(_on_close_pressed)
@@ -155,7 +184,9 @@ func _load_settings() -> void:
 		fullscreen_check.button_pressed = config.get_value("graphics", "fullscreen", false)
 		vsync_check.button_pressed = config.get_value("graphics", "vsync", true)
 		lofi_check.button_pressed = config.get_value("graphics", "lofi_enabled", true)
-		occlusion_fade_check.button_pressed = config.get_value("graphics", "occlusion_fade_enabled", true)
+		occlusion_fade_check.button_pressed = config.get_value(
+			"graphics", "occlusion_fade_enabled", true
+		)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
 		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
 
