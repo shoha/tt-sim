@@ -1,6 +1,7 @@
 [gd_scene load_steps=2 format=3 uid="uid://c7app_menu_001"]
 
 [ext_resource type="Script" uid="uid://do4tg4jtm5cjk" path="res://scenes/ui/app_menu_controller.gd" id="1_controller"]
+[ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [node name="AppMenu" type="CanvasLayer"]
 layer = 2
@@ -32,6 +33,7 @@ theme_type_variation = &"BoxContainerSpaced"
 alignment = 2
 
 [node name="LevelEditorButton" type="Button" parent="AppMenu/BottomButtons"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"

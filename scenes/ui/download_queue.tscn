@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://c8x3hk2qv1mjo"]
 
 [ext_resource type="Script" path="res://scenes/ui/download_queue.gd" id="1_script"]
+[ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [node name="DownloadQueue" type="CanvasLayer"]
 layer = 100
@@ -73,6 +74,7 @@ text = "+ 5 more in queue"
 horizontal_alignment = 1
 
 [node name="IconButton" type="Button" parent="Anchor/VBoxContainer"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(44, 44)

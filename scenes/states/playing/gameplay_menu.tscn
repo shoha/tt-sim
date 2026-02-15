@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://c2xassetbrowser" path="res://scenes/states/playing/asset_browser.tscn" id="5_browser"]
 [ext_resource type="PackedScene" path="res://scenes/states/playing/level_edit_panel.tscn" id="6_edit_panel"]
 [ext_resource type="Script" path="res://scenes/states/playing/player_list_drawer.gd" id="7_player_list"]
+[ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [node name="GameplayMenu" type="CanvasLayer" unique_id=977478588]
 layer = 2
@@ -36,6 +37,7 @@ theme_type_variation = &"BoxContainerSpaced"
 alignment = 2
 
 [node name="SaveLevelButton" type="Button" parent="GameplayMenu/BottomButtons" unique_id=738580539]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
@@ -43,6 +45,7 @@ theme_type_variation = &"Secondary"
 text = "Save Level"
 
 [node name="ToggleAssetBrowserButton" type="Button" parent="GameplayMenu/BottomButtons" unique_id=688700750]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 toggle_mode = true
@@ -77,6 +80,7 @@ theme_type_variation = &"PanelHeader"
 text = "Add Token"
 
 [node name="AddPackButton" type="Button" parent="GameplayMenu/AssetBrowserContainer/PanelContainer/VBox/Header" unique_id=556190123]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"

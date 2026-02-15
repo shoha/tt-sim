@@ -61,7 +61,29 @@ var _level_play_controller: LevelPlayController = null
 var _lofi_material: ShaderMaterial = null  # Cached lo-fi material (from scene or created)
 var _occlusion_fade_enabled: bool = true  # Whether the occlusion fade effect is active
 
+# Middle-mouse pan state
+var _is_panning: bool = false
+var _pan_start_mouse: Vector2 = Vector2.ZERO
+var _last_mouse_position: Vector2 = Vector2.ZERO  # Tracked for zoom-toward-cursor
+
+# Camera home position (stored on level load for reset)
+var _home_position: Vector3 = Vector3.ZERO
+var _home_zoom: float = 0.0
+var _reset_tween: Tween = null
+
+# Camera soft bounds (computed from map geometry)
+var _map_bounds: AABB = AABB()
+var _has_map_bounds: bool = false
+const MAP_BOUNDS_MARGIN_FACTOR := 0.0  # Extra margin as fraction of map size on each side
+
+# Camera shake state
+var _shake_tween: Tween = null
+var _shake_offset: Vector3 = Vector3.ZERO
+const SHAKE_MAX_INTENSITY := 0.05  # Max shake offset in world units
+const SHAKE_DURATION := 0.15  # Duration of shake effect
+
 const EDGE_PAN_SMOOTH_SPEED: float = 8.0  # Smoothing rate for edge panning ramp-up/coast-out
+const TOKEN_COLLISION_LAYER: int = 2  # Physics layer for tokens (layer 1 = terrain)
 const SETTINGS_PATH := "user://settings.cfg"
 
 
@@ -73,11 +95,17 @@ func _ready() -> void:
 	_setup_occlusion_fade()
 	# Initialize target zoom from the camera's current size
 	_target_zoom = camera_node.size
+	# Seed mouse position so first scroll-to-zoom targets the cursor, not (0,0)
+	_last_mouse_position = get_viewport().get_mouse_position()
 
 
 ## Setup with a reference to the level play controller
 func setup(level_play_controller: LevelPlayController) -> void:
 	_level_play_controller = level_play_controller
+
+	# Store home camera position for reset (Home key)
+	_home_position = cameraholder_node.global_position
+	_home_zoom = camera_node.size
 
 	# Pass the controller to the gameplay menu
 	if gameplay_menu:
@@ -104,12 +132,31 @@ func handle_movement(delta: float) -> void:
 	# Only translate if velocity is meaningful (avoid micro-drift)
 	if _camera_velocity.length_squared() > 0.001:
 		cameraholder_node.translate(_camera_velocity * delta)
+		_clamp_camera_to_bounds()
 
 
 func handle_zoom(delta: float) -> void:
+	# Zoom toward cursor: capture world point under cursor before size change,
+	# interpolate size, then recapture and correct camera position.
+	var zooming := absf(camera_node.size - _target_zoom) > 0.001
+
+	# Skip zoom-toward-cursor when a reset/focus tween is animating the camera position,
+	# because the tween would overwrite our correction each frame causing wobble.
+	var tween_active := _reset_tween and _reset_tween.is_valid() and _reset_tween.is_running()
+
+	var world_before: Vector3
+	if zooming and not tween_active:
+		world_before = camera_node.project_position(_last_mouse_position, 0)
+
 	# Smoothly interpolate camera size toward target zoom
 	var smooth_factor = 1.0 - exp(-zoom_smooth_speed * delta)
 	camera_node.size = lerpf(camera_node.size, _target_zoom, smooth_factor)
+
+	# Correct camera position so the point under the cursor stays fixed
+	if zooming and not tween_active:
+		var world_after = camera_node.project_position(_last_mouse_position, 0)
+		cameraholder_node.global_position += world_before - world_after
+		_clamp_camera_to_bounds()
 
 	# Update tilt-shift DoF from actual interpolated zoom
 	var zoom_percentage: float = (camera_node.size - min_zoom) / (max_zoom - min_zoom)
@@ -117,19 +164,39 @@ func handle_zoom(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	# Handle zoom input - use _input instead of _unhandled_input because
-	# events going through SubViewportContainer may not reach _unhandled_input
-	if event is not InputEventMouseButton:
-		return
-
-	# Don't zoom while a level is loading
+	# Use _input instead of _unhandled_input because events going through
+	# SubViewportContainer may not reach _unhandled_input on this node.
 	if _is_level_loading():
 		return
 
-	# Don't zoom when scrolling over any UI element (e.g. asset browser list)
-	if _is_mouse_over_gui():
+	# Track mouse position for zoom-toward-cursor
+	if event is InputEventMouseMotion:
+		_last_mouse_position = event.position
+		if _is_panning:
+			_handle_pan_motion(event)
 		return
 
+	if event is not InputEventMouseButton:
+		return
+
+	# Don't process mouse buttons over UI
+	if _is_mouse_over_gui():
+		_is_panning = false
+		return
+
+	# Middle-mouse button: pan camera
+	if event.button_index == MOUSE_BUTTON_MIDDLE:
+		if event.pressed:
+			# Don't start panning if the mouse is over a token — let
+			# BoardTokenController handle rotation via _unhandled_input.
+			if not _is_mouse_over_token(event.position):
+				_is_panning = true
+				_pan_start_mouse = event.position
+		else:
+			_is_panning = false
+		return
+
+	# Don't zoom when scrolling over any UI element (e.g. asset browser list)
 	# Don't zoom while dragging - scroll wheel is used for token height adjustment
 	if drag_and_drop_node and drag_and_drop_node.is_dragging():
 		return
@@ -147,6 +214,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 	# Don't process camera input if a text input has focus
 	if _is_text_input_focused():
+		return
+
+	# Camera reset (Home key) - tween back to initial position and zoom
+	if event.is_action_pressed("camera_reset"):
+		_reset_camera_to_home()
 		return
 
 	var input_dir := _camera_move_dir
@@ -190,6 +262,111 @@ func _is_level_loading() -> bool:
 func _is_text_input_focused() -> bool:
 	var focused = get_viewport().gui_get_focus_owner()
 	return focused is LineEdit or focused is TextEdit
+
+
+## Apply a subtle camera shake effect. Intensity is clamped to SHAKE_MAX_INTENSITY.
+## Used for token drop feedback — larger tokens produce more shake.
+func camera_shake(intensity: float, duration: float = SHAKE_DURATION) -> void:
+	intensity = clampf(intensity, 0.0, SHAKE_MAX_INTENSITY)
+	if intensity < 0.001:
+		return
+
+	if _shake_tween and _shake_tween.is_valid():
+		_shake_tween.kill()
+		# Remove old offset before starting new shake
+		cameraholder_node.global_position -= _shake_offset
+		_shake_offset = Vector3.ZERO
+
+	_shake_tween = create_tween()
+	var steps := 4
+	var step_duration := duration / steps
+	for i in range(steps):
+		var t := float(i) / steps
+		var decay := 1.0 - t  # Linear decay
+		var offset := Vector3(
+			randf_range(-intensity, intensity) * decay,
+			0,
+			randf_range(-intensity, intensity) * decay,
+		)
+		_shake_tween.tween_callback(_apply_shake_offset.bind(offset))
+		_shake_tween.tween_interval(step_duration)
+	# Final step: reset to zero offset
+	_shake_tween.tween_callback(_apply_shake_offset.bind(Vector3.ZERO))
+
+
+func _apply_shake_offset(new_offset: Vector3) -> void:
+	cameraholder_node.global_position -= _shake_offset
+	_shake_offset = new_offset
+	cameraholder_node.global_position += _shake_offset
+
+
+## Smoothly center the camera on a world position.
+## Used by double-click-to-focus on tokens. Camera position is purely local.
+func focus_camera_on(world_position: Vector3) -> void:
+	# Keep the Y component of the camera holder unchanged (only pan XZ)
+	var target_pos := Vector3(
+		world_position.x, cameraholder_node.global_position.y, world_position.z
+	)
+	# Clamp target to map bounds so the tween doesn't overshoot
+	target_pos = _clamp_position_to_bounds(target_pos)
+	if _reset_tween and _reset_tween.is_valid():
+		_reset_tween.kill()
+	_reset_tween = create_tween()
+	(
+		_reset_tween
+		. tween_property(cameraholder_node, "global_position", target_pos, 0.3)
+		. set_trans(Tween.TRANS_CUBIC)
+		. set_ease(Tween.EASE_OUT)
+	)
+
+
+## Reset camera to the home position and zoom stored on level load.
+## Position is tweened; zoom is set on _target_zoom and interpolated by handle_zoom().
+func _reset_camera_to_home() -> void:
+	if _reset_tween and _reset_tween.is_valid():
+		_reset_tween.kill()
+	# Let handle_zoom() smoothly interpolate size toward home zoom.
+	# Don't tween camera_node.size directly — that would fight with handle_zoom().
+	_target_zoom = _home_zoom
+	var target_pos := _clamp_position_to_bounds(_home_position)
+	_reset_tween = create_tween()
+	_reset_tween.set_ease(Tween.EASE_OUT)
+	_reset_tween.set_trans(Tween.TRANS_CUBIC)
+	_reset_tween.tween_property(cameraholder_node, "global_position", target_pos, 0.3)
+
+
+## Handle mouse motion during middle-mouse pan.
+## Uses project_position to convert screen delta to world-space camera movement.
+## Works correctly for orthographic cameras regardless of angle.
+func _handle_pan_motion(event: InputEventMouseMotion) -> void:
+	if not camera_node:
+		return
+	# Convert old and new screen positions to world positions at depth 0.
+	# For orthographic cameras the depth doesn't matter — the delta is the same.
+	var world_from = camera_node.project_position(_pan_start_mouse, 0)
+	var world_to = camera_node.project_position(event.position, 0)
+	# Move camera opposite to the mouse drag direction (drag right → view moves right)
+	cameraholder_node.global_position -= (world_to - world_from)
+	_pan_start_mouse = event.position
+	_clamp_camera_to_bounds()
+
+
+## Check if the mouse position is over a token by raycasting against the token
+## collision layer. Returns true if a token rigid body is under the cursor.
+func _is_mouse_over_token(screen_pos: Vector2) -> bool:
+	if not camera_node or not world_viewport:
+		return false
+	if not world_viewport.world_3d:
+		return false
+	var from = camera_node.project_ray_origin(screen_pos)
+	var to = from + camera_node.project_ray_normal(screen_pos) * 100.0
+	var space_state = world_viewport.world_3d.direct_space_state
+	if not space_state:
+		return false
+	var query = PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = TOKEN_COLLISION_LAYER
+	var hit = space_state.intersect_ray(query)
+	return not hit.is_empty()
 
 
 ## Check if the mouse is currently hovering over any UI control (not the 3D viewport).
@@ -351,11 +528,14 @@ func _setup_occlusion_fade() -> void:
 
 ## Notify the occlusion fade manager that a new map has been loaded.
 ## Re-initializes and rebuilds the internal mesh cache so occlusion detection
-## works with the new geometry.
+## works with the new geometry. Also computes camera soft bounds from map AABB.
 func notify_map_loaded() -> void:
 	if occlusion_fade and _occlusion_fade_enabled:
 		occlusion_fade.setup(camera_node, map_container, drag_and_drop_node)
 		_sync_lofi_pixelation()
+
+	# Compute camera soft bounds from map geometry
+	_compute_map_bounds()
 
 
 ## Clear occlusion fade state. Call before loading a new map.
@@ -363,6 +543,14 @@ func notify_map_loaded() -> void:
 func notify_map_clearing() -> void:
 	if occlusion_fade:
 		occlusion_fade.clear()
+	_has_map_bounds = false
+
+	# Clean up any in-progress shake so the offset doesn't persist into the next level
+	if _shake_tween and _shake_tween.is_valid():
+		_shake_tween.kill()
+	if _shake_offset != Vector3.ZERO:
+		cameraholder_node.global_position -= _shake_offset
+		_shake_offset = Vector3.ZERO
 
 
 ## Handle camera edge-panning when dragging a token near screen edges.
@@ -391,6 +579,65 @@ func _handle_edge_pan(delta: float) -> void:
 
 	var pan_speed = drag_and_drop_node.edge_pan_speed if drag_and_drop_node else 4.0
 	cameraholder_node.translate(cam_move * pan_speed * delta)
+	_clamp_camera_to_bounds()
+
+
+## Compute the bounding box of all mesh geometry in the map container.
+## Used for camera soft bounds to prevent panning into the void.
+func _compute_map_bounds() -> void:
+	if not map_container:
+		_has_map_bounds = false
+		return
+
+	var mesh_aabbs: Array[AABB] = []
+	_collect_mesh_aabbs(map_container, mesh_aabbs)
+
+	if mesh_aabbs.is_empty():
+		_has_map_bounds = false
+		return
+
+	var bounds: AABB = mesh_aabbs[0]
+	for i in range(1, mesh_aabbs.size()):
+		bounds = bounds.merge(mesh_aabbs[i])
+
+	_map_bounds = bounds
+	_has_map_bounds = true
+
+
+## Recursively collect world-space AABBs from all MeshInstance3D children.
+func _collect_mesh_aabbs(node: Node, out: Array[AABB]) -> void:
+	if node is MeshInstance3D and node.mesh:
+		out.append(node.global_transform * node.mesh.get_aabb())
+	for child in node.get_children():
+		_collect_mesh_aabbs(child, out)
+
+
+## Return a position clamped to the map bounds. If no bounds are computed,
+## the input position is returned unchanged. Used by both the live clamp and
+## tween-target helpers so the camera never leaves the allowed area.
+func _clamp_position_to_bounds(pos: Vector3) -> Vector3:
+	if not _has_map_bounds:
+		return pos
+
+	var margin_x = _map_bounds.size.x * MAP_BOUNDS_MARGIN_FACTOR
+	var margin_z = _map_bounds.size.z * MAP_BOUNDS_MARGIN_FACTOR
+
+	var min_x = _map_bounds.position.x - margin_x
+	var max_x = _map_bounds.position.x + _map_bounds.size.x + margin_x
+	var min_z = _map_bounds.position.z - margin_z
+	var max_z = _map_bounds.position.z + _map_bounds.size.z + margin_z
+
+	pos.x = clampf(pos.x, min_x, max_x)
+	pos.z = clampf(pos.z, min_z, max_z)
+	return pos
+
+
+## Clamp the camera position to the map bounds (soft limits).
+## Called after any camera translation to prevent panning into the void.
+func _clamp_camera_to_bounds() -> void:
+	cameraholder_node.global_position = _clamp_position_to_bounds(
+		cameraholder_node.global_position
+	)
 
 
 ## Override lo-fi shader parameters from map data

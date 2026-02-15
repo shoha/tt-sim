@@ -61,11 +61,15 @@ func setup(game_map: GameMap) -> void:
 	# Host-side: listen for permission requests and client transforms
 	if not NetworkManager.token_permission_requested.is_connected(_on_token_permission_requested):
 		NetworkManager.token_permission_requested.connect(_on_token_permission_requested)
-	if not NetworkManager.client_token_transform_received.is_connected(_on_client_transform_received):
+	if not NetworkManager.client_token_transform_received.is_connected(
+		_on_client_transform_received
+	):
 		NetworkManager.client_token_transform_received.connect(_on_client_transform_received)
 
 	# Client-side: listen for permission responses and full permission syncs
-	if not NetworkManager.token_permission_response_received.is_connected(_on_permission_response_received):
+	if not NetworkManager.token_permission_response_received.is_connected(
+		_on_permission_response_received
+	):
 		NetworkManager.token_permission_response_received.connect(_on_permission_response_received)
 	if not NetworkManager.token_permissions_received.is_connected(_on_permissions_received):
 		NetworkManager.token_permissions_received.connect(_on_permissions_received)
@@ -89,8 +93,12 @@ func _exit_tree() -> void:
 		NetworkManager.token_permission_requested.disconnect(_on_token_permission_requested)
 	if NetworkManager.client_token_transform_received.is_connected(_on_client_transform_received):
 		NetworkManager.client_token_transform_received.disconnect(_on_client_transform_received)
-	if NetworkManager.token_permission_response_received.is_connected(_on_permission_response_received):
-		NetworkManager.token_permission_response_received.disconnect(_on_permission_response_received)
+	if NetworkManager.token_permission_response_received.is_connected(
+		_on_permission_response_received
+	):
+		NetworkManager.token_permission_response_received.disconnect(
+			_on_permission_response_received
+		)
 	if NetworkManager.token_permissions_received.is_connected(_on_permissions_received):
 		NetworkManager.token_permissions_received.disconnect(_on_permissions_received)
 	if NetworkManager.player_left.is_connected(_on_player_left_permissions):
@@ -612,9 +620,7 @@ func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 	var can_interact = is_gm
 	if not can_interact and multiplayer.multiplayer_peer:
 		can_interact = GameState.has_token_permission(
-			token.network_id,
-			multiplayer.get_unique_id(),
-			TokenPermissions.Permission.CONTROL
+			token.network_id, multiplayer.get_unique_id(), TokenPermissions.Permission.CONTROL
 		)
 	token.set_interactive(can_interact)
 
@@ -659,7 +665,7 @@ func _on_token_transform_changed(token: BoardToken) -> void:
 	NetworkStateSync.broadcast_token_transform(token)
 
 
-## Connect token's context menu signal to game map
+## Connect token's context menu signal and other per-token signals to game map
 func _connect_token_context_menu(token: BoardToken) -> void:
 	var token_controller = token.get_controller_component()
 	if token_controller and token_controller.has_signal("context_menu_requested"):
@@ -667,6 +673,27 @@ func _connect_token_context_menu(token: BoardToken) -> void:
 			token_controller.context_menu_requested.connect(
 				_game_map._on_token_context_menu_requested
 			)
+
+	# Camera shake on token drop (local drops only — signal not emitted for network tokens)
+	if _game_map:
+		token.token_landed.connect(_on_token_landed.bind(token))
+
+	# Double-click to center camera on token (any player)
+	if token_controller and _game_map:
+		token_controller.focus_requested.connect(_game_map.focus_camera_on)
+
+
+## Handle token landing — apply camera shake proportional to drop height and token scale.
+## NOTE: Screen shake disabled for now — uncomment the call below to re-enable.
+func _on_token_landed(_drop_height: float, _token: BoardToken) -> void:
+	return
+	#if not _game_map or not is_instance_valid(_token):
+		#return
+	#var avg_scale := 1.0
+	#if _token.rigid_body:
+		#avg_scale = (_token.rigid_body.scale.x + _token.rigid_body.scale.z) / 2.0
+	#var intensity := _drop_height * avg_scale * 0.02  # Subtle: 0.02 per unit height at scale 1
+	#_game_map.camera_shake(intensity)
 
 
 ## Clear any existing map models from the MapContainer
@@ -745,9 +772,7 @@ func add_token_to_level(
 	var can_interact_new = is_gm
 	if not can_interact_new and multiplayer.multiplayer_peer:
 		can_interact_new = GameState.has_token_permission(
-			token.network_id,
-			multiplayer.get_unique_id(),
-			TokenPermissions.Permission.CONTROL
+			token.network_id, multiplayer.get_unique_id(), TokenPermissions.Permission.CONTROL
 		)
 	token.set_interactive(can_interact_new)
 
@@ -862,9 +887,7 @@ func _on_permissions_changed(network_id: String, _peer_id: int) -> void:
 
 ## Host-side: handle a permission request from a player.
 ## Shows a confirmation dialog to the DM.
-func _on_token_permission_requested(
-	network_id: String, peer_id: int, permission_type: int
-) -> void:
+func _on_token_permission_requested(network_id: String, peer_id: int, permission_type: int) -> void:
 	if not NetworkManager.is_host():
 		return
 
@@ -892,25 +915,21 @@ func _on_token_permission_requested(
 	# Show confirmation dialog to DM
 	var dialog = UIManager.show_confirmation(
 		"Token Control Request",
-		"%s wants to control \"%s\".\n\nPermission: %s" % [player_name, token_name, permission_name],
+		'%s wants to control "%s".\n\nPermission: %s' % [player_name, token_name, permission_name],
 		"Approve",
 		"Deny",
-		func():
-			_approve_permission_request(network_id, peer_id, permission_type, request_key),
-		func():
-			_deny_permission_request(network_id, peer_id, permission_type, request_key),
+		func(): _approve_permission_request(network_id, peer_id, permission_type, request_key),
+		func(): _deny_permission_request(network_id, peer_id, permission_type, request_key),
 	)
 	# Clean up pending state if dialog is dismissed or destroyed (e.g., scene change)
 	if dialog:
 		if dialog.has_signal("closed"):
 			dialog.closed.connect(
-				func(_confirmed: bool):
-					_pending_permission_requests.erase(request_key),
+				func(_confirmed: bool): _pending_permission_requests.erase(request_key),
 				CONNECT_ONE_SHOT,
 			)
 		dialog.tree_exiting.connect(
-			func():
-				_pending_permission_requests.erase(request_key),
+			func(): _pending_permission_requests.erase(request_key),
 			CONNECT_ONE_SHOT,
 		)
 
@@ -941,7 +960,7 @@ func _approve_permission_request(
 	var token_name = token_state.token_name if token_state else "token"
 	var players = NetworkManager.get_players()
 	var player_name = players[peer_id].get("name", "Player") if players.has(peer_id) else "Player"
-	UIManager.show_success("%s can now control \"%s\"" % [player_name, token_name])
+	UIManager.show_success('%s can now control "%s"' % [player_name, token_name])
 
 
 ## Host-side: deny a permission request.
@@ -1004,9 +1023,9 @@ func _on_permission_response_received(
 	var token_name = token_state.token_name if token_state else "token"
 
 	if approved:
-		UIManager.show_success("Control granted for \"%s\"!" % token_name)
+		UIManager.show_success('Control granted for "%s"!' % token_name)
 	else:
-		UIManager.show_warning("Control request for \"%s\" was denied" % token_name)
+		UIManager.show_warning('Control request for "%s" was denied' % token_name)
 
 
 ## Client-side: handle full permission sync from host.

@@ -1,6 +1,7 @@
 [gd_scene load_steps=2 format=3 uid="uid://bh84knb3smm3y"]
 
 [ext_resource type="Script" uid="uid://d08bdfp1deaim" path="res://scenes/states/playing/token_context_menu.gd" id="1_menu"]
+[ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [node name="TokenContextMenu" type="Control"]
 layout_mode = 3
@@ -53,6 +54,7 @@ size_flags_horizontal = 3
 placeholder_text = "Points"
 
 [node name="HPAdjustmentButton" type="Button" parent="MenuPanel/VBoxContainer/CustomDamageContainer"]
+script = ExtResource("animated_btn")
 layout_mode = 2
 theme_type_variation = &"Success"
 text = "Apply"
@@ -61,6 +63,7 @@ text = "Apply"
 layout_mode = 2
 
 [node name="ToggleVisibilityButton" type="Button" parent="MenuPanel/VBoxContainer"]
+script = ExtResource("animated_btn")
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Toggle Visibility"
@@ -69,11 +72,13 @@ text = "Toggle Visibility"
 layout_mode = 2
 
 [node name="RequestControlButton" type="Button" parent="MenuPanel/VBoxContainer"]
+script = ExtResource("animated_btn")
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Request Control"
 
 [node name="RevokeControlButton" type="Button" parent="MenuPanel/VBoxContainer"]
+script = ExtResource("animated_btn")
 layout_mode = 2
 theme_type_variation = &"Danger"
 text = "Revoke Control"
@@ -82,6 +87,7 @@ text = "Revoke Control"
 layout_mode = 2
 
 [node name="CloseButton" type="Button" parent="MenuPanel/VBoxContainer"]
+script = ExtResource("animated_btn")
 layout_mode = 2
 theme_type_variation = &"Danger"
 text = "Close"

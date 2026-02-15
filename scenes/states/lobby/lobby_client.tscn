@@ -1,6 +1,7 @@
 [gd_scene load_steps=2 format=3 uid="uid://lobby_client_001"]
 
 [ext_resource type="Script" path="res://scenes/states/lobby/lobby_client.gd" id="1_script"]
+[ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [node name="LobbyClient" type="CanvasLayer"]
 layer = 5
@@ -80,6 +81,7 @@ max_length = 32
 caret_blink = true
 
 [node name="PasteButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/InputContainer/RoomCodeRow"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
@@ -87,6 +89,7 @@ tooltip_text = "Paste from clipboard"
 text = "Paste"
 
 [node name="ConnectButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/InputContainer"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Success"
@@ -126,6 +129,7 @@ horizontal_alignment = 1
 layout_mode = 2
 
 [node name="LeaveButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Danger"

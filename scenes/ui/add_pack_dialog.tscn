@@ -1,6 +1,7 @@
 [gd_scene load_steps=2 format=3 uid="uid://cadd_pack_dialog"]
 
 [ext_resource type="Script" path="res://scenes/ui/add_pack_dialog.gd" id="1_script"]
+[ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [node name="AddPackDialog" type="CanvasLayer"]
 layer = 100
@@ -69,6 +70,7 @@ layout_mode = 2
 alignment = 1
 
 [node name="DownloadButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
@@ -76,6 +78,7 @@ theme_type_variation = &"Success"
 text = "Download"
 
 [node name="CancelButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
