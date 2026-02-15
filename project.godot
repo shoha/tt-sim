@@ -15,7 +15,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="TTSim"
-config/version="0.0.0-dev"
+config/version="0.1.0"
 run/main_scene="uid://dow8pna05oxft"
 config/features=PackedStringArray("4.6", "Forward Plus")
 boot_splash/bg_color=Color(0.12156863, 0.12156863, 0.14901961, 1)
