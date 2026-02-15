@@ -90,7 +90,9 @@ static func create_from_config(config: Resource) -> BoardToken:
 
 ## Assemble a complete BoardToken from a pre-built rigid body.
 ## Shared by create_from_scene and _create_placeholder_token to avoid duplication.
-static func _assemble_token(rigid_body: RigidBody3D, collision_shape: CollisionShape3D) -> BoardToken:
+static func _assemble_token(
+	rigid_body: RigidBody3D, collision_shape: CollisionShape3D
+) -> BoardToken:
 	var instance = BoardTokenScene.instantiate() as BoardToken
 	instance._factory_created = true
 	_clear_placeholder_children(instance)
@@ -603,6 +605,13 @@ static func apply_model_upgrade(token: BoardToken, model: Node3D) -> void:
 	# Update metadata
 	token.set_meta("is_placeholder", false)
 	token.name = token.token_name
+
+	# Sparkle burst effect to signal "model is ready"
+	var viewport := rb.get_viewport()
+	if viewport:
+		var sparkle_pos: Vector3 = rb.global_position
+		var sparkle: GPUParticles3D = SparkleBurst.create_at(sparkle_pos)
+		viewport.add_child(sparkle)
 
 	print("BoardTokenFactory: Successfully upgraded token: " + token.token_name)
 

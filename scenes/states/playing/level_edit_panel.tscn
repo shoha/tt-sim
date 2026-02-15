@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scenes/states/playing/level_edit_panel.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://scenes/ui/slider_spin_box.tscn" id="2_slider_spin_box"]
+[ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [node name="LevelEditPanel" type="Control"]
 layout_mode = 1
@@ -92,6 +93,7 @@ exp_edit = true
 allow_greater = true
 
 [node name="RevertToMapButton" type="Button" parent="ScrollContainer/VBox"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
@@ -269,6 +271,7 @@ step = 0.01
 value = 1.0
 
 [node name="AdvancedToggle" type="Button" parent="ScrollContainer/VBox"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 toggle_mode = true
@@ -586,6 +589,7 @@ mouse_filter = 2
 theme_override_constants/separation = 8
 
 [node name="CancelButton" type="Button" parent="ScrollContainer/VBox/ButtonsRow"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -593,6 +597,7 @@ theme_type_variation = "Secondary"
 text = "Cancel"
 
 [node name="SaveButton" type="Button" parent="ScrollContainer/VBox/ButtonsRow"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3

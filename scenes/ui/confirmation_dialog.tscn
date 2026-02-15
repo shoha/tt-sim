@@ -1,6 +1,7 @@
 [gd_scene load_steps=2 format=3 uid="uid://cconfirmation_dialog"]
 
 [ext_resource type="Script" path="res://scenes/ui/confirmation_dialog.gd" id="1_dialog"]
+[ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [node name="ConfirmationDialog" type="CanvasLayer"]
 layer = 100
@@ -56,6 +57,7 @@ layout_mode = 2
 alignment = 1
 
 [node name="ConfirmButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
@@ -63,6 +65,7 @@ theme_type_variation = &"Success"
 text = "Confirm"
 
 [node name="CancelButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2

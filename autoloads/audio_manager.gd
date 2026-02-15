@@ -235,7 +235,13 @@ func play_leave_game() -> void:
 
 ## Play a SFX sound by name
 ## pitch_variation: random pitch offset range (e.g. 0.08 = +/- 8%). Set to 0.0 for exact pitch.
-func play_sfx(sound_name: String, volume_db: float = 0.0, pitch_variation: float = 0.03) -> void:
+## base_pitch: base pitch scale before variation is applied (default 1.0).
+func play_sfx(
+	sound_name: String,
+	volume_db: float = 0.0,
+	pitch_variation: float = 0.03,
+	base_pitch: float = 1.0,
+) -> void:
 	if not _sfx_sounds.has(sound_name) or _sfx_sounds[sound_name] == null:
 		return
 
@@ -243,7 +249,7 @@ func play_sfx(sound_name: String, volume_db: float = 0.0, pitch_variation: float
 	if player:
 		player.stream = _sfx_sounds[sound_name]
 		player.volume_db = volume_db
-		player.pitch_scale = 1.0 + randf_range(-pitch_variation, pitch_variation)
+		player.pitch_scale = maxf(0.01, base_pitch + randf_range(-pitch_variation, pitch_variation))
 		player.play()
 
 

@@ -32,6 +32,8 @@ var _is_currently_dragging: bool = false
 var _is_settling: bool = false  # True during settle/cancel animation
 var _drag_start_position: Vector3 = Vector3.ZERO  # Position when drag started (for cancel)
 var _transform_update_timer: float = 0.0
+var _last_drop_height: float = 0.0  # Stored during settle for token_landed signal
+var _is_cancel_settle: bool = false  # True when settling back to start after cancel (skip effects)
 
 # Whoosh sound state
 var _whoosh_cooldown: float = 0.0
@@ -156,6 +158,13 @@ func is_being_dragged() -> bool:
 # -------------------------------------------------------------------------
 
 
+func _exit_tree() -> void:
+	# Clean up input hints if the token is freed mid-drag (e.g. level clear)
+	if _is_currently_dragging or _is_settling:
+		UIManager.remove_hint("RMB")
+		UIManager.remove_hint("Scroll")
+
+
 func _on_dragging_started() -> void:
 	# If settling from a previous drop, cancel the settle
 	if _is_settling:
@@ -199,9 +208,17 @@ func _on_dragging_started() -> void:
 	# Sound
 	AudioManager.play_token_pickup()
 
+	# Contextual input hints for dragging
+	UIManager.add_hint("RMB", "Cancel")
+	UIManager.add_hint("Scroll", "Height")
+
 
 func _on_dragging_stopped() -> void:
 	_is_currently_dragging = false
+
+	# Remove drag-specific input hints
+	UIManager.remove_hint("RMB")
+	UIManager.remove_hint("Scroll")
 
 	# Reset lean
 	_reset_lean()
@@ -221,11 +238,16 @@ func _on_dragging_stopped() -> void:
 	_restore_visual_scale()
 
 	# Settle to the ground with animation (replaces physics gravity drop)
+	_is_cancel_settle = false
 	_settle_to_ground()
 
 
 func _on_dragging_cancelled() -> void:
 	_is_currently_dragging = false
+
+	# Remove drag-specific input hints
+	UIManager.remove_hint("RMB")
+	UIManager.remove_hint("Scroll")
 
 	# Reset lean
 	_reset_lean()
@@ -244,7 +266,8 @@ func _on_dragging_cancelled() -> void:
 	# Restore visual scale from the drag hold scale
 	_restore_visual_scale()
 
-	# Animate back to original position
+	# Animate back to original position (skip drop effects for cancel)
+	_is_cancel_settle = true
 	_settle_to_position(_drag_start_position)
 
 
@@ -272,8 +295,16 @@ func _settle_to_position(target_pos: Vector3) -> void:
 	# highlighted / re-picked before it finishes its landing animation.
 	rigid_body.input_ray_pickable = false
 
-	# Play drop sound immediately so it coincides with the user's action
-	AudioManager.play_token_drop()
+	# Compute drop height for sound variation and token_landed signal.
+	var drop_height := rigid_body.global_position.y - target_pos.y
+	_last_drop_height = maxf(drop_height, 0.0)
+
+	# Only play drop sound on real drops, not on cancel-back-to-start
+	if not _is_cancel_settle:
+		var height_t := clampf(drop_height / 2.0, 0.0, 1.0)  # Normalize: 2 units = full effect
+		var drop_volume_db := lerpf(-3.0, 2.0, height_t)  # Quiet for tiny drops, louder for big
+		var drop_pitch := lerpf(1.1, 0.85, height_t)  # Higher pitch for small, lower for heavy
+		AudioManager.play_sfx("token_drop", drop_volume_db, 0.04, drop_pitch)
 
 	_kill_settle_tween()
 	_settle_tween = create_tween()
@@ -288,12 +319,27 @@ func _settle_to_position(target_pos: Vector3) -> void:
 
 func _on_settle_complete() -> void:
 	_is_settling = false
+	var was_cancel := _is_cancel_settle
+	_is_cancel_settle = false
 
 	# Re-enable hover detection now that the settle animation is done
 	rigid_body.input_ray_pickable = true
 
 	# Sync hierarchy positions
 	_sync_parent_position()
+
+	# Only spawn effects and emit signals for real drops, not cancel-to-start
+	if not was_cancel:
+		# Spawn dust particles at the landing position (local drops only)
+		if _last_drop_height > 0.1:
+			var dust = DustBurst.create_at(rigid_body.global_position)
+			# Add to the world (SubViewport), not the token, so particles stay in place
+			rigid_body.get_viewport().add_child(dust)
+
+		# Emit token_landed signal via parent BoardToken (local drops only)
+		var board_token = get_parent() as BoardToken
+		if board_token:
+			board_token.token_landed.emit(_last_drop_height)
 
 	# Cursor: restore to arrow
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW)

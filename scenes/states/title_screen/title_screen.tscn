@@ -2,6 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://b3to05sowrppc" path="res://assets/models/dice/d20.glb" id="1_fgkus"]
 [ext_resource type="Script" uid="uid://c3lxhfpdyugkh" path="res://scenes/states/title_screen/title_screen.gd" id="2_script"]
+[ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_fgkus"]
 sky_top_color = Color(0.7866573, 0.8264243, 0.8797699, 1)
@@ -245,6 +246,7 @@ layout_mode = 2
 theme_type_variation = &"BoxContainerSpaced"
 
 [node name="PlayLevelButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
@@ -268,6 +270,7 @@ theme_override_constants/separation = 16
 alignment = 1
 
 [node name="HostGameButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/NetworkButtons" unique_id=1114653406]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
@@ -275,6 +278,7 @@ theme_type_variation = &"Success"
 text = "Host Game"
 
 [node name="JoinGameButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/NetworkButtons" unique_id=1679235874]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
@@ -291,6 +295,7 @@ theme_override_constants/separation = 16
 alignment = 1
 
 [node name="SettingsButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/BottomButtons" unique_id=1708751033]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
@@ -298,6 +303,7 @@ theme_type_variation = &"Secondary"
 text = "Settings"
 
 [node name="QuitButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/BottomButtons"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2

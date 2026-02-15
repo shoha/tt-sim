@@ -38,7 +38,7 @@ func _populate_levels() -> void:
 	empty_label.visible = false
 
 	for level_info in levels:
-		var btn := Button.new()
+		var btn: Button = AnimatedButton.new()
 		btn.text = level_info.get("name", "Untitled")
 		var token_count: int = level_info.get("token_count", 0)
 		if token_count > 0:

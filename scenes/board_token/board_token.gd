@@ -81,6 +81,7 @@ signal status_effect_removed(effect: String)
 signal transform_changed  # Emitted for any position/rotation/scale change
 signal transform_updated  # Emitted during continuous manipulation (drag/rotate/scale)
 signal highlight_changed(is_highlighted: bool)
+signal token_landed(drop_height: float)  # Emitted when a locally-dragged token settles
 
 
 func _enter_tree() -> void:

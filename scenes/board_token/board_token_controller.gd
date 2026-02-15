@@ -46,6 +46,7 @@ var _rotation_tween: Tween = null
 var _target_scale: Vector3 = Vector3.ONE
 
 signal context_menu_requested(token: BoardToken, position: Vector2)
+signal focus_requested(position: Vector3)  # Double-click to center camera on token
 
 
 ## Check if this client has authority to manipulate this token.
@@ -62,9 +63,7 @@ func _has_input_authority() -> bool:
 	var board_token = get_parent() as BoardToken
 	if board_token:
 		return GameState.has_token_permission(
-			board_token.network_id,
-			multiplayer.get_unique_id(),
-			TokenPermissions.Permission.CONTROL
+			board_token.network_id, multiplayer.get_unique_id(), TokenPermissions.Permission.CONTROL
 		)
 	return false
 
@@ -118,6 +117,16 @@ func _on_mouse_exited() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not rigid_body:
+		return
+
+	# Double-click left mouse to focus camera on this token (any player, no authority needed)
+	if (
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_LEFT
+		and event.double_click
+		and _mouse_over
+	):
+		focus_requested.emit(rigid_body.global_position)
 		return
 
 	# Gate all mutating input behind authority check

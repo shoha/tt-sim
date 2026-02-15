@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cocec7gcywhnm" path="res://scenes/level_editor/level_editor.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://scenes/ui/slider_spin_box.tscn" id="3_slider_spin_box"]
+[ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [node name="LevelEditor" type="Control"]
 layout_mode = 3
@@ -45,18 +46,21 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="NewButton" type="Button" parent="MainContainer/VBox/Header"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "New"
 
 [node name="LoadButton" type="Button" parent="MainContainer/VBox/Header"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Load"
 
 [node name="SaveButton" type="Button" parent="MainContainer/VBox/Header"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
@@ -66,12 +70,14 @@ text = "Save"
 layout_mode = 2
 
 [node name="ExportButton" type="Button" parent="MainContainer/VBox/Header"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Export JSON"
 
 [node name="ImportButton" type="Button" parent="MainContainer/VBox/Header"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
@@ -81,12 +87,14 @@ text = "Import JSON"
 layout_mode = 2
 
 [node name="PlayButton" type="Button" parent="MainContainer/VBox/Header"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Success"
 text = "Play Level"
 
 [node name="CloseButton" type="Button" parent="MainContainer/VBox/Header"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Danger"
@@ -178,6 +186,7 @@ theme_type_variation = &"Body"
 text = "No map selected"
 
 [node name="SelectMapButton" type="Button" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapRow"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
@@ -275,6 +284,7 @@ theme_type_variation = &"SectionHeader"
 text = "Token Placements"
 
 [node name="AddTokenButton" type="Button" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox/TokensHeader"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 text = "+ Add Token"
@@ -481,6 +491,7 @@ size_flags_vertical = 3
 layout_mode = 2
 
 [node name="ApplyPlacementButton" type="Button" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ButtonsRow"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -488,6 +499,7 @@ theme_type_variation = &"Success"
 text = "Apply Changes"
 
 [node name="DeletePlacementButton" type="Button" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ButtonsRow"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Danger"
@@ -537,6 +549,7 @@ layout_mode = 2
 size_flags_vertical = 3
 
 [node name="DeleteLevelButton" type="Button" parent="LoadDialog/LoadVBox"]
+script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Danger"

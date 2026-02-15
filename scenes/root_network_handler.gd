@@ -92,6 +92,7 @@ static func on_token_state_received(
 		if new_token and game_map:
 			game_map.drag_and_drop_node.add_child(new_token)
 			controller.spawned_tokens[network_id] = new_token
+			controller._connect_token_context_menu(new_token)
 
 
 ## Handle token removal (reliable channel)
@@ -130,6 +131,7 @@ static func apply_game_state_to_tokens(
 			if new_token:
 				drag_and_drop.add_child(new_token)
 				controller.spawned_tokens[network_id] = new_token
+				controller._connect_token_context_menu(new_token)
 
 
 ## Create a BoardToken from a TokenState (for network-spawned tokens)

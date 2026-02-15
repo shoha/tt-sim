@@ -5,7 +5,6 @@ extends Control
 ## Only active when a level is loaded.
 ## Adding tokens, saving positions, and editing level settings are only available to the GM.
 
-
 var _level_play_controller: LevelPlayController = null
 
 # Original values snapshot for edit mode cancel/revert
@@ -14,7 +13,6 @@ var _original_light_intensity: float = 1.0
 var _original_environment_preset: String = ""
 var _original_environment_overrides: Dictionary = {}
 var _original_lofi_overrides: Dictionary = {}
-
 
 @onready var save_level_button: Button = %SaveLevelButton
 @onready var toggle_asset_browser_button: Button = %ToggleAssetBrowserButton
@@ -53,6 +51,7 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
 		NetworkManager.connection_state_changed.disconnect(_on_connection_state_changed)
+	UIManager.clear_hints()
 
 
 ## Setup with a reference to the level play controller
@@ -63,6 +62,9 @@ func setup(level_play_controller: LevelPlayController) -> void:
 	_level_play_controller.level_loaded.connect(_on_level_loaded)
 	_level_play_controller.level_cleared.connect(_on_level_cleared)
 	_level_play_controller.token_added.connect(_on_token_added)
+
+	# Show default gameplay input hints
+	_set_default_hints()
 
 	# Update UI state
 	_update_asset_browser_button_state()
@@ -275,13 +277,18 @@ func _revert_edit_mode_values() -> void:
 	if NetworkManager.is_networked() and NetworkManager.is_host():
 		var full_lofi = Constants.LOFI_DEFAULTS.duplicate()
 		full_lofi.merge(_original_lofi_overrides, true)
-		NetworkManager.broadcast_visual_settings({
-			"map_scale": _original_map_scale.x,
-			"light_intensity": _original_light_intensity,
-			"environment_preset": _original_environment_preset,
-			"environment_overrides": _original_environment_overrides,
-			"lofi_overrides": full_lofi,
-		})
+		(
+			NetworkManager
+			. broadcast_visual_settings(
+				{
+					"map_scale": _original_map_scale.x,
+					"light_intensity": _original_light_intensity,
+					"environment_preset": _original_environment_preset,
+					"environment_overrides": _original_environment_overrides,
+					"lofi_overrides": full_lofi,
+				}
+			)
+		)
 
 
 # --- Edit Panel Signal Handlers ---
@@ -422,3 +429,18 @@ func clear_level() -> void:
 	if _level_play_controller:
 		_level_play_controller.clear_level()
 	_update_save_level_button_visibility()
+
+
+## Display the default gameplay input hints
+func _set_default_hints() -> void:
+	(
+		UIManager
+		. set_hints(
+			[
+				{"key": "ESC", "action": "Pause"},
+				{"key": "WASD", "action": "Pan"},
+				{"key": "Scroll", "action": "Zoom"},
+				{"key": "Home", "action": "Reset Camera"},
+			]
+		)
+	)

@@ -31,8 +31,32 @@ class_name SelectionGlowRenderer
 
 const GLOW_SHADER = preload("res://shaders/selection_glow.gdshader")
 
+## Glow appearance states — HOVER is the default (triggered by mouse-over),
+## SELECTED is reserved for a future multi-select system (brighter, steadier).
+enum GlowState { NONE, HOVER, SELECTED }
+
+## Shader parameters for each glow state
+const GLOW_STATE_PARAMS := {
+	GlowState.HOVER:
+	{
+		"color": Color(1.0, 0.8, 0.2, 0.6),  # Warm golden, semi-transparent
+		"falloff": 2.5,
+		"pulse_speed": 1.5,
+		"pulse_amount": 0.15,
+	},
+	GlowState.SELECTED:
+	{
+		"color": Color(1.0, 0.9, 0.3, 0.85),  # Brighter, more opaque
+		"falloff": 3.0,  # Tighter glow
+		"pulse_speed": 0.8,  # Slower, steadier pulse
+		"pulse_amount": 0.08,
+	},
+}
+
 ## Default glow color (golden yellow, reduced intensity for a subtler hover)
 const DEFAULT_GLOW_COLOR = Color(1.0, 0.8, 0.2, 0.6)
+
+var _current_glow_state: int = GlowState.NONE
 
 ## Size multiplier for the glow relative to the token
 @export var size_multiplier: float = 1.2
@@ -65,18 +89,18 @@ func _create_glow_mesh() -> void:
 	_glow_material.set_shader_parameter("falloff", 2.5)
 	_glow_material.set_shader_parameter("pulse_speed", 1.5)
 	_glow_material.set_shader_parameter("pulse_amount", 0.15)
-	
+
 	# Create a flat quad mesh oriented horizontally (XZ plane)
 	var quad = QuadMesh.new()
 	quad.size = Vector2(2.0, 2.0)  # Will be scaled based on token size
 	quad.orientation = PlaneMesh.FACE_Y  # Face upward
-	
+
 	# Create mesh instance
 	_glow_mesh_instance = MeshInstance3D.new()
 	_glow_mesh_instance.mesh = quad
 	_glow_mesh_instance.material_override = _glow_material
 	_glow_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	
+
 	add_child(_glow_mesh_instance)
 
 
@@ -85,10 +109,10 @@ func _create_glow_mesh() -> void:
 func update_size_from_collision(collision_shape: CollisionShape3D) -> void:
 	if not collision_shape or not collision_shape.shape:
 		return
-	
+
 	# Get the AABB of the collision shape to determine token footprint
 	var aabb: AABB = collision_shape.shape.get_debug_mesh().get_aabb()
-	
+
 	# Use the larger of X or Z extent for the glow radius
 	var max_horizontal_extent = max(aabb.size.x, aabb.size.z)
 	_base_size = clampf(max_horizontal_extent * size_multiplier, 0.0, max_size)
@@ -96,7 +120,7 @@ func update_size_from_collision(collision_shape: CollisionShape3D) -> void:
 	# Position at the bottom of the collision shape
 	var bottom_y = aabb.position.y + ground_offset
 	_glow_mesh_instance.position = Vector3(0, bottom_y, 0)
-	
+
 	# Scale the quad to match
 	_glow_mesh_instance.scale = Vector3(_base_size, 1.0, _base_size)
 
@@ -125,8 +149,12 @@ func show_glow() -> void:
 	_glow_material.set_shader_parameter("glow_color", current_color)
 
 	_fade_tween = create_tween()
-	_fade_tween.tween_method(_set_glow_alpha, 0.0, target_color.a, FADE_DURATION)\
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	(
+		_fade_tween
+		. tween_method(_set_glow_alpha, 0.0, target_color.a, FADE_DURATION)
+		. set_trans(Tween.TRANS_CUBIC)
+		. set_ease(Tween.EASE_OUT)
+	)
 
 
 ## Hide the selection glow with a smooth fade-out
@@ -144,8 +172,12 @@ func hide_glow(immediate: bool = false) -> void:
 		return
 
 	_fade_tween = create_tween()
-	_fade_tween.tween_method(_set_glow_alpha, _get_glow_alpha(), 0.0, FADE_DURATION)\
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	(
+		_fade_tween
+		. tween_method(_set_glow_alpha, _get_glow_alpha(), 0.0, FADE_DURATION)
+		. set_trans(Tween.TRANS_CUBIC)
+		. set_ease(Tween.EASE_IN)
+	)
 	_fade_tween.tween_callback(_glow_mesh_instance.hide)
 
 
@@ -186,3 +218,49 @@ func set_pulse_speed(speed: float) -> void:
 func set_falloff(falloff: float) -> void:
 	if _glow_material:
 		_glow_material.set_shader_parameter("falloff", falloff)
+
+
+## Set the glow state (NONE, HOVER, or SELECTED).
+## NONE hides the glow. HOVER and SELECTED show the glow with distinct visual styles.
+## show_glow() / hide_glow() continue to work as before (they implicitly use HOVER).
+func set_glow_state(state: int) -> void:
+	_current_glow_state = state
+
+	if state == GlowState.NONE:
+		hide_glow()
+		return
+
+	if not GLOW_STATE_PARAMS.has(state):
+		return
+
+	var params: Dictionary = GLOW_STATE_PARAMS[state]
+	if _glow_material:
+		_glow_material.set_shader_parameter("falloff", params["falloff"])
+		_glow_material.set_shader_parameter("pulse_speed", params["pulse_speed"])
+		_glow_material.set_shader_parameter("pulse_amount", params["pulse_amount"])
+
+	# Show with the state's color
+	if not _glow_mesh_instance or not _glow_material:
+		return
+
+	if _fade_tween and _fade_tween.is_valid():
+		_fade_tween.kill()
+
+	_glow_mesh_instance.show()
+	var target_color: Color = params["color"]
+	_glow_material.set_shader_parameter(
+		"glow_color", Color(target_color.r, target_color.g, target_color.b, 0.0)
+	)
+
+	_fade_tween = create_tween()
+	(
+		_fade_tween
+		. tween_method(_set_glow_alpha, 0.0, target_color.a, FADE_DURATION)
+		. set_trans(Tween.TRANS_CUBIC)
+		. set_ease(Tween.EASE_OUT)
+	)
+
+
+## Get the current glow state.
+func get_glow_state() -> int:
+	return _current_glow_state
