@@ -7,15 +7,19 @@ class_name LevelEditPanel
 ## Uses DrawerContainer with edge = RIGHT so the tab appears on the left.
 
 signal save_requested(
-	map_scale: float,
 	light_intensity_scale: float,
 	environment_preset: String,
 	environment_overrides: Dictionary,
-	lofi_overrides: Dictionary
+	lofi_overrides: Dictionary,
+	grid_cell_size: float,
+	display_unit: String,
+	display_unit_per_cell: float
 )
 signal cancel_requested
-signal map_scale_changed(new_scale: float)
 signal intensity_changed(new_scale: float)
+signal scale_config_changed(
+	grid_cell_size: float, display_unit: String, display_unit_per_cell: float
+)
 signal environment_changed(preset: String, overrides: Dictionary)
 signal lofi_changed(overrides: Dictionary)
 signal revert_to_map_defaults_requested
@@ -35,8 +39,9 @@ const TONEMAP_MODES = {
 	"ACES": Environment.TONE_MAPPER_ACES,
 }
 
-# Map scale control
-@onready var map_scale_slider_spin: SliderSpinBox = %MapScaleSliderSpin
+# Scale & measurement controls
+@onready var scale_preset_dropdown: OptionButton = %ScalePresetDropdown
+@onready var grid_cell_size_slider_spin: SliderSpinBox = %GridCellSizeSliderSpin
 
 # Lighting controls — basic
 @onready var preset_dropdown: OptionButton = %PresetDropdown
@@ -87,7 +92,10 @@ var current_preset: String = ""
 var current_overrides: Dictionary = {}
 var current_lofi_overrides: Dictionary = {}
 var light_intensity_scale: float = 1.0
-var map_scale: float = 1.0
+var current_grid_cell_size: float = 1.524
+var current_display_unit: String = "ft"
+var current_display_unit_per_cell: float = 5.0
+var _current_scale_preset_key: String = ScaleUtils.DEFAULT_PRESET
 ## Environment config extracted from the map's embedded WorldEnvironment.
 ## Used as the base layer when current_preset is "" (no explicit choice).
 var _map_defaults: Dictionary = {}
@@ -131,14 +139,16 @@ func _on_ready() -> void:
 			scroll.add_child(inner_margin)
 
 	_connect_control_signals()
+	_populate_scale_preset_dropdown()
 	_populate_preset_dropdown()
 	_populate_sky_preset_dropdown()
 	_populate_tonemap_mode_dropdown()
 
 
 func _connect_control_signals() -> void:
-	# Map scale
-	map_scale_slider_spin.value_changed.connect(_on_map_scale_changed)
+	# Scale & measurement
+	scale_preset_dropdown.item_selected.connect(_on_scale_preset_selected)
+	grid_cell_size_slider_spin.value_changed.connect(_on_grid_cell_size_changed)
 
 	# Special-case controls (preset selection, dropdowns with complex logic)
 	preset_dropdown.item_selected.connect(_on_preset_selected)
@@ -279,23 +289,27 @@ func _on_closed() -> void:
 ## embedded WorldEnvironment (empty dict if none).  It is used as the base
 ## layer when preset is "" and for the "Map Defaults" dropdown option.
 func initialize(
-	current_map_scale: float,
 	intensity: float,
 	preset: String,
 	overrides: Dictionary,
 	lofi_overrides: Dictionary = {},
 	map_defaults: Dictionary = {},
 	has_map_sky: bool = false,
+	grid_cell_size: float = 1.524,
+	display_unit: String = "ft",
+	display_unit_per_cell: float = 5.0,
 ) -> void:
-	map_scale = current_map_scale
 	light_intensity_scale = intensity
 	current_preset = preset
 	current_overrides = overrides.duplicate()
 	current_lofi_overrides = lofi_overrides.duplicate()
 	_map_defaults = map_defaults
 
-	# Set map scale control
-	map_scale_slider_spin.set_value_no_signal(current_map_scale)
+	# Set scale controls
+	current_grid_cell_size = grid_cell_size
+	current_display_unit = display_unit
+	current_display_unit_per_cell = display_unit_per_cell
+	_sync_scale_controls()
 
 	# Set intensity control
 	intensity_slider_spin.set_value_no_signal(intensity)
@@ -390,13 +404,69 @@ func _sync_controls_from_config() -> void:
 
 
 # ============================================================================
-# Map Scale Handler
+# Scale & Measurement Handlers
 # ============================================================================
 
 
-func _on_map_scale_changed(value: float) -> void:
-	map_scale = value
-	map_scale_changed.emit(value)
+func _populate_scale_preset_dropdown() -> void:
+	scale_preset_dropdown.clear()
+	var options := ScaleUtils.get_preset_options()
+	for i in range(options.size()):
+		scale_preset_dropdown.add_item(options[i].label, i)
+		scale_preset_dropdown.set_item_metadata(i, options[i].key)
+
+
+## Sync scale controls from current values.
+## Also detects which preset (if any) currently matches.
+func _sync_scale_controls() -> void:
+	grid_cell_size_slider_spin.set_value_no_signal(current_grid_cell_size)
+
+	# Find matching preset or fall back to "Custom"
+	_current_scale_preset_key = "custom"
+	for key in ScaleUtils.PRESETS:
+		var p: Dictionary = ScaleUtils.PRESETS[key]
+		if (
+			is_equal_approx(p.grid_cell_size, current_grid_cell_size)
+			and p.display_unit == current_display_unit
+			and is_equal_approx(p.display_unit_per_cell, current_display_unit_per_cell)
+		):
+			_current_scale_preset_key = key
+			break
+
+	# Select the matching item in the dropdown
+	for i in range(scale_preset_dropdown.item_count):
+		if scale_preset_dropdown.get_item_metadata(i) == _current_scale_preset_key:
+			scale_preset_dropdown.select(i)
+			break
+
+
+func _on_scale_preset_selected(index: int) -> void:
+	var key: String = scale_preset_dropdown.get_item_metadata(index)
+	_current_scale_preset_key = key
+	if key == "custom":
+		return
+	if ScaleUtils.PRESETS.has(key):
+		var p: Dictionary = ScaleUtils.PRESETS[key]
+		current_grid_cell_size = p.grid_cell_size
+		current_display_unit = p.display_unit
+		current_display_unit_per_cell = p.display_unit_per_cell
+		grid_cell_size_slider_spin.set_value_no_signal(current_grid_cell_size)
+		scale_config_changed.emit(
+			current_grid_cell_size, current_display_unit, current_display_unit_per_cell
+		)
+
+
+func _on_grid_cell_size_changed(value: float) -> void:
+	current_grid_cell_size = value
+	# Manually changing the slider switches to "Custom"
+	_current_scale_preset_key = "custom"
+	for i in range(scale_preset_dropdown.item_count):
+		if scale_preset_dropdown.get_item_metadata(i) == "custom":
+			scale_preset_dropdown.select(i)
+			break
+	scale_config_changed.emit(
+		current_grid_cell_size, current_display_unit, current_display_unit_per_cell
+	)
 
 
 # ============================================================================
@@ -463,8 +533,17 @@ func _on_tonemap_mode_selected(index: int) -> void:
 
 
 func _on_save_pressed() -> void:
-	save_requested.emit(
-		map_scale, light_intensity_scale, current_preset, current_overrides, current_lofi_overrides
+	(
+		save_requested
+		. emit(
+			light_intensity_scale,
+			current_preset,
+			current_overrides,
+			current_lofi_overrides,
+			current_grid_cell_size,
+			current_display_unit,
+			current_display_unit_per_cell,
+		)
 	)
 
 
@@ -482,10 +561,18 @@ func _sync_lofi_controls() -> void:
 	# Use stored overrides or defaults
 	var pixelation = current_lofi_overrides.get("pixelation", Constants.LOFI_DEFAULTS["pixelation"])
 	var saturation = current_lofi_overrides.get("saturation", Constants.LOFI_DEFAULTS["saturation"])
-	var color_levels = current_lofi_overrides.get("color_levels", Constants.LOFI_DEFAULTS["color_levels"])
-	var dither_strength = current_lofi_overrides.get("dither_strength", Constants.LOFI_DEFAULTS["dither_strength"])
-	var vignette_strength = current_lofi_overrides.get("vignette_strength", Constants.LOFI_DEFAULTS["vignette_strength"])
-	var grain_intensity = current_lofi_overrides.get("grain_intensity", Constants.LOFI_DEFAULTS["grain_intensity"])
+	var color_levels = current_lofi_overrides.get(
+		"color_levels", Constants.LOFI_DEFAULTS["color_levels"]
+	)
+	var dither_strength = current_lofi_overrides.get(
+		"dither_strength", Constants.LOFI_DEFAULTS["dither_strength"]
+	)
+	var vignette_strength = current_lofi_overrides.get(
+		"vignette_strength", Constants.LOFI_DEFAULTS["vignette_strength"]
+	)
+	var grain_intensity = current_lofi_overrides.get(
+		"grain_intensity", Constants.LOFI_DEFAULTS["grain_intensity"]
+	)
 
 	pixelation_slider_spin.set_value_no_signal(pixelation)
 	color_fade_slider_spin.set_value_no_signal(saturation)
