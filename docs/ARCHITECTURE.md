@@ -12,6 +12,8 @@ This document provides an overview of the project's architecture, core systems, 
 - [Asset Management](#asset-management)
 - [UI Architecture](#ui-architecture)
 - [Level System](#level-system)
+  - [Scale & Measurement](#scale--measurement)
+  - [Measure Tool](#measure-tool)
 - [Token System](#token-system)
 
 ---
@@ -44,6 +46,7 @@ Root (Node3D)
 │   │           ├── CameraHolder / Camera3D
 │   │           ├── MapContainer (Node3D) - map geometry added here
 │   │           └── DragAndDrop3D - tokens added here
+│   ├── MeasureTool (Node) - distance measurement, 2D overlay on LAYER_MEASURE_OVERLAY
 │   ├── GameplayMenu (CanvasLayer)
 │   │   └── GameplayMenuController - token list, context menus
 │   ├── LevelEditPanel (DrawerContainer) - slide-out editing drawer (right edge)
@@ -75,6 +78,7 @@ These are `class_name` scripts (not autoloads) that provide globally accessible 
 | `TokenPermissions`   | `autoloads/token_permissions.gd` | Per-token, per-player permission management (query, grant, revoke, serialize) |
 | `SerializationUtils` | `utils/serialization_utils.gd`   | Vector3/Color/Dictionary conversion helpers for network and file I/O |
 | `EnvironmentPresets` | `utils/environment_presets.gd`   | Environment preset definitions, layered config application, sky presets |
+| `ScaleUtils`         | `utils/scale_utils.gd`           | World-to-display distance conversion, formatting, scale presets |
 
 ---
 
@@ -477,6 +481,11 @@ var map_path: String = ""        # Relative (folder-based) or absolute (legacy r
 var map_scale: Vector3 = Vector3.ONE
 var map_offset: Vector3 = Vector3.ZERO
 
+## Scale (1 world unit = 1 meter, per glTF standard)
+var grid_cell_size: float = 1.524         # World meters per grid square (default = 5 ft)
+var display_unit: String = "ft"           # Unit label for distance display
+var display_unit_per_cell: float = 5.0    # Display units per grid cell
+
 ## Lighting
 var light_intensity_scale: float = 1.0
 
@@ -559,6 +568,86 @@ See [CONVENTIONS.md](CONVENTIONS.md) for the full `level.json` schema and path r
    - Manages active gameplay
 4. **In-game editing** — `LevelEditPanel` (drawer on right edge) allows real-time adjustments to map scale, lighting, environment, and post-processing. `GameplayMenuController` routes changes to `LevelPlayController` for immediate application. Cancel reverts all changes; save persists to disk.
 5. **Root** transitions state based on level events
+
+### Scale & Measurement
+
+The project follows the **glTF standard: 1 world unit = 1 meter**. All imported GLB models (maps and tokens) are authored in meters and used at their native scale. There is no `map_scale`-based unit conversion at runtime.
+
+`LevelData` provides three properties in the **Scale** export group that bridge world meters to game-specific display units:
+
+- `grid_cell_size` (float) — World meters per grid square. Default `1.524` (= 5 ft). This is the fundamental adapter between metric world space and the game's logical grid.
+- `display_unit` (String) — Label shown to players (e.g. `"ft"`, `"m"`, `"sq"`).
+- `display_unit_per_cell` (float) — How many display units fit in one grid cell. Default `5.0` (5 ft per cell).
+
+`ScaleUtils` (`utils/scale_utils.gd`) is a static utility class that performs all conversions:
+
+```gdscript
+# Convert world distance (meters) to display units
+ScaleUtils.world_to_display(distance_m, grid_cell_size, display_unit_per_cell) -> float
+
+# Format a world distance as a human-readable string (e.g. "25 ft")
+ScaleUtils.format_distance(distance_m, level_data) -> String
+
+# Format with elevation delta when height difference is significant
+ScaleUtils.format_distance_with_elevation(dist_2d, dist_3d, elev_delta, level_data) -> String
+
+# Apply a named preset (e.g. "dnd_5e", "metric_1m") to a LevelData
+ScaleUtils.apply_preset(preset_key, level_data) -> void
+```
+
+GMs configure scale in the `LevelEditPanel` via a preset dropdown and a `grid_cell_size` slider. Changes propagate through `GameplayMenuController` to `LevelPlayController`, which updates `LevelData` and reconfigures the `MeasureTool`.
+
+### Measure Tool
+
+`MeasureTool` (`scenes/states/playing/measure_tool.gd`) lets players measure distances on the game map. It is a `Node` (not `Node3D`) child of `GameMap`, initialized via `setup(camera, world_viewport, overlay_parent)`.
+
+**State Machine:**
+
+| State              | Description                                      |
+| ------------------ | ------------------------------------------------ |
+| `INACTIVE`         | Tool is off. No processing or rendering.         |
+| `PLACING_START`    | Activated (M key). Cursor dot follows mouse, waiting for first click. |
+| `PLACING_WAYPOINT` | First point placed. Preview segment stretches to cursor. Click to add waypoints, right-click/Escape to finish. |
+
+**Rendering Architecture:**
+
+The tool renders entirely in 2D to avoid the lo-fi post-processing shader applied to the 3D SubViewport:
+
+- A `CanvasLayer` at `Constants.LAYER_MEASURE_OVERLAY` (layer 8) hosts all visuals.
+- A `Control` node (`_draw_control`) uses `_draw()` to render lines, circles, and the cursor dot by projecting 3D world points to 2D screen coordinates via `Camera3D.unproject_position()`.
+- `PanelContainer`-based labels (pooled) display per-segment and total distances.
+
+**Optimizations:**
+
+- `set_process(false)` when inactive; `set_process(true)` on activation.
+- Dirty flag (`_needs_redraw`) prevents redundant redraws. Marked dirty by mouse movement, clicks, camera changes, or configuration updates.
+- Camera state tracking (`_last_camera_size`, `_last_camera_pos`) detects zoom/pan and triggers redraws to keep 2D projections in sync.
+- `process_priority = 1` ensures the tool runs after `GameMap`'s camera updates.
+- Segment label pool (`_segment_label_pool`) avoids creating/destroying nodes per frame.
+
+**Input Handling:**
+
+- `GameMap._input()` intercepts M key and mouse events, forwarding them to `MeasureTool.handle_input()`.
+- GUI click guard: mouse clicks over UI elements (checked via `_is_mouse_over_gui()`) are not forwarded to the measure tool.
+- When the tool consumes an event, `get_viewport().set_input_as_handled()` prevents propagation to `_unhandled_input` (blocking token context menus, etc.).
+- Ctrl held during measurement snaps to token base positions instead of terrain.
+- The `toggled(active)` signal disables `DragAndDrop3D.dragging_enabled` while measuring to prevent accidental token drags.
+
+**Lifecycle:**
+
+- Created and set up by `GameMap.setup_measure_tool()` during level load.
+- Deactivated automatically by `LevelPlayController.clear_level()` on level unload.
+- Configured with current scale settings via `configure(grid_cell_size, display_unit, display_unit_per_cell)`.
+
+**Key Files:**
+
+| File | Purpose |
+| ---- | ------- |
+| `scenes/states/playing/measure_tool.gd` | Tool logic, state machine, 2D rendering, label management |
+| `scenes/states/playing/game_map.gd` | Input routing, tool setup, drag integration |
+| `scenes/states/playing/level_play_controller.gd` | Lifecycle (deactivation on level clear) |
+| `scenes/states/playing/gameplay_menu_controller.gd` | Scale config routing |
+| `utils/scale_utils.gd` | Distance conversion and formatting |
 
 ---
 

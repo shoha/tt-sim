@@ -19,6 +19,7 @@ class_name Constants
 #   Left edge:     LAYER_GAMEPLAY_MENU (PlayerListDrawer — networked games only)
 #   Right edge:    LAYER_GAMEPLAY_MENU (LevelEditPanel drawer — GM only)
 #   Bottom-right:  LAYER_GAMEPLAY_MENU (BottomButtons)
+#   Over map:      LAYER_MEASURE_OVERLAY (measure tool lines + label)
 #   Bottom-center: LAYER_INPUT_HINTS, LAYER_TOAST, LAYER_DIALOG (download queue)
 #   Centered:      LAYER_SETTINGS, LAYER_DIALOG (modals)
 #   Full-screen:   LAYER_LEVEL_EDITOR, LAYER_LOADING, LAYER_TRANSITION (transient)
@@ -28,6 +29,7 @@ const LAYER_APP_MENU := 2  ## Always-visible app chrome (Level Editor button) �
 const LAYER_GAMEPLAY_MENU := 2  ## In-game UI (tokens, save, edit drawer) — right edge & bottom-right
 const LAYER_LEVEL_EDITOR := 3  ## Level Editor overlay (full-screen, above gameplay)
 const LAYER_LOBBY := 5  ## Host/client lobby (centered, full-screen backdrop)
+const LAYER_MEASURE_OVERLAY := 8  ## Measure tool lines + distance label — above gameplay, below pause
 const LAYER_PAUSE := 10  ## Pause overlay (centered, full-screen backdrop)
 const LAYER_INPUT_HINTS := 80  ## Contextual keyboard hints — bottom-center
 const LAYER_TOAST := 90  ## Toast notifications — bottom-center
