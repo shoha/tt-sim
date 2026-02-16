@@ -8,11 +8,13 @@ extends Control
 var _level_play_controller: LevelPlayController = null
 
 # Original values snapshot for edit mode cancel/revert
-var _original_map_scale: Vector3 = Vector3.ONE
 var _original_light_intensity: float = 1.0
 var _original_environment_preset: String = ""
 var _original_environment_overrides: Dictionary = {}
 var _original_lofi_overrides: Dictionary = {}
+var _original_grid_cell_size: float = 1.524
+var _original_display_unit: String = "ft"
+var _original_display_unit_per_cell: float = 5.0
 
 @onready var save_level_button: Button = %SaveLevelButton
 @onready var toggle_asset_browser_button: Button = %ToggleAssetBrowserButton
@@ -30,8 +32,8 @@ func _ready() -> void:
 	if level_edit_panel:
 		level_edit_panel.drawer_opened.connect(_on_edit_drawer_opened)
 		level_edit_panel.drawer_closed.connect(_on_edit_drawer_closed)
-		level_edit_panel.map_scale_changed.connect(_on_edit_map_scale_changed)
 		level_edit_panel.intensity_changed.connect(_on_edit_intensity_changed)
+		level_edit_panel.scale_config_changed.connect(_on_edit_scale_config_changed)
 		level_edit_panel.environment_changed.connect(_on_edit_environment_changed)
 		level_edit_panel.lofi_changed.connect(_on_edit_lofi_changed)
 		level_edit_panel.revert_to_map_defaults_requested.connect(_on_revert_to_map_defaults)
@@ -152,6 +154,7 @@ func _update_asset_browser_button_state() -> void:
 		toggle_asset_browser_button.visible = has_level
 
 
+
 # --- Asset Selection Handling ---
 
 
@@ -217,11 +220,13 @@ func _enter_edit_mode() -> void:
 	var level_data = _level_play_controller.active_level_data
 
 	# Snapshot original values for cancel/revert
-	_original_map_scale = level_data.map_scale
 	_original_light_intensity = level_data.light_intensity_scale
 	_original_environment_preset = level_data.environment_preset
 	_original_environment_overrides = level_data.environment_overrides.duplicate()
 	_original_lofi_overrides = level_data.lofi_overrides.duplicate()
+	_original_grid_cell_size = level_data.grid_cell_size
+	_original_display_unit = level_data.display_unit
+	_original_display_unit_per_cell = level_data.display_unit_per_cell
 
 	# Initialize the edit panel with current values
 	var map_defaults = _level_play_controller.get_map_environment_config()
@@ -229,13 +234,15 @@ func _enter_edit_mode() -> void:
 	(
 		level_edit_panel
 		. initialize(
-			level_data.map_scale.x,
 			level_data.light_intensity_scale,
 			level_data.environment_preset,
 			level_data.environment_overrides,
 			level_data.lofi_overrides,
 			map_defaults,
 			has_map_sky,
+			level_data.grid_cell_size,
+			level_data.display_unit,
+			level_data.display_unit_per_cell,
 		)
 	)
 
@@ -248,14 +255,15 @@ func _revert_edit_mode_values() -> void:
 	var level_data = _level_play_controller.active_level_data
 
 	# Restore original values to level data
-	level_data.map_scale = _original_map_scale
 	level_data.light_intensity_scale = _original_light_intensity
 	level_data.environment_preset = _original_environment_preset
 	level_data.environment_overrides = _original_environment_overrides.duplicate()
 	level_data.lofi_overrides = _original_lofi_overrides.duplicate()
+	level_data.grid_cell_size = _original_grid_cell_size
+	level_data.display_unit = _original_display_unit
+	level_data.display_unit_per_cell = _original_display_unit_per_cell
 
 	# Re-apply original values to the live game
-	_level_play_controller.set_map_scale(_original_map_scale.x)
 	_level_play_controller.apply_light_intensity_scale(_original_light_intensity)
 	_level_play_controller.apply_environment_settings(
 		_original_environment_preset, _original_environment_overrides
@@ -281,7 +289,6 @@ func _revert_edit_mode_values() -> void:
 			NetworkManager
 			. broadcast_visual_settings(
 				{
-					"map_scale": _original_map_scale.x,
 					"light_intensity": _original_light_intensity,
 					"environment_preset": _original_environment_preset,
 					"environment_overrides": _original_environment_overrides,
@@ -294,13 +301,18 @@ func _revert_edit_mode_values() -> void:
 # --- Edit Panel Signal Handlers ---
 
 
-## Real-time map scale change from the edit panel
-func _on_edit_map_scale_changed(new_value: float) -> void:
-	if _level_play_controller:
-		_level_play_controller.set_map_scale(new_value)
-	# Broadcast to clients so they see the same scale
-	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings({"map_scale": new_value})
+## Real-time scale config change from the edit panel.
+## Keeps level_data in sync so changes survive drawer close/reopen.
+## Also updates the measure tool so distance readouts reflect the new units.
+func _on_edit_scale_config_changed(
+	grid_cell_size: float, display_unit: String, display_unit_per_cell: float
+) -> void:
+	if _level_play_controller and _level_play_controller.active_level_data:
+		var ld = _level_play_controller.active_level_data
+		ld.grid_cell_size = grid_cell_size
+		ld.display_unit = display_unit
+		ld.display_unit_per_cell = display_unit_per_cell
+		_level_play_controller.update_measure_tool_scale()
 
 
 ## Real-time light intensity change from the edit panel
@@ -370,11 +382,13 @@ func _on_edit_lofi_changed(overrides: Dictionary) -> void:
 
 ## Save all edited values to level data and persist to disk
 func _on_edit_save_requested(
-	new_map_scale: float,
 	new_intensity: float,
 	new_preset: String,
 	new_overrides: Dictionary,
 	new_lofi_overrides: Dictionary,
+	new_grid_cell_size: float,
+	new_display_unit: String,
+	new_display_unit_per_cell: float,
 ) -> void:
 	if not _level_play_controller or not _level_play_controller.has_active_level():
 		return
@@ -382,11 +396,13 @@ func _on_edit_save_requested(
 	var level_data = _level_play_controller.active_level_data
 
 	# Apply all values to level data
-	level_data.map_scale = Vector3.ONE * new_map_scale
 	level_data.light_intensity_scale = new_intensity
 	level_data.environment_preset = new_preset
 	level_data.environment_overrides = new_overrides.duplicate()
 	level_data.lofi_overrides = new_lofi_overrides.duplicate()
+	level_data.grid_cell_size = new_grid_cell_size
+	level_data.display_unit = new_display_unit
+	level_data.display_unit_per_cell = new_display_unit_per_cell
 
 	# Save to disk — use folder format when the level came from a folder
 	var save_path := ""
@@ -441,6 +457,7 @@ func _set_default_hints() -> void:
 				{"key": "WASD", "action": "Pan"},
 				{"key": "Scroll", "action": "Zoom"},
 				{"key": "Home", "action": "Reset Camera"},
+				{"key": "M", "action": "Measure"},
 			]
 		)
 	)

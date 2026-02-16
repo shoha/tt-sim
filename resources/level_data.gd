@@ -49,6 +49,17 @@ class_name LevelData
 ## Empty dictionary uses defaults from the scene/shader
 @export var lofi_overrides: Dictionary = {}
 
+## Scale & Measurement
+@export_group("Scale")
+## Size of one grid cell in world units (meters), as measured in the loaded scene.
+## Default 1.524 = 5 feet, the standard D&D/Pathfinder grid square.
+## For maps authored at "1 unit = 1 square" convention, set to 1.0.
+@export var grid_cell_size: float = 1.524
+## Unit label for distance display (e.g., "ft", "m", "in", "sq")
+@export var display_unit: String = "ft"
+## How many display units each grid cell represents (e.g., 5.0 for "5 ft per square")
+@export var display_unit_per_cell: float = 5.0
+
 ## Token placements
 @export_group("Tokens")
 @export var token_placements: Array[TokenPlacement] = []
@@ -140,6 +151,9 @@ func duplicate_level() -> LevelData:
 	new_level.environment_preset = environment_preset
 	new_level.environment_overrides = environment_overrides.duplicate()
 	new_level.lofi_overrides = lofi_overrides.duplicate()
+	new_level.grid_cell_size = grid_cell_size
+	new_level.display_unit = display_unit
+	new_level.display_unit_per_cell = display_unit_per_cell
 
 	for placement in token_placements:
 		var new_placement = placement.duplicate()
@@ -201,6 +215,9 @@ func to_dict() -> Dictionary:
 		"environment_preset": environment_preset,
 		"environment_overrides": EnvironmentPresets.overrides_to_json(environment_overrides),
 		"lofi_overrides": lofi_overrides.duplicate(),
+		"grid_cell_size": grid_cell_size,
+		"display_unit": display_unit,
+		"display_unit_per_cell": display_unit_per_cell,
 		"token_placements": placements_array,
 	}
 
@@ -225,6 +242,10 @@ static func from_dict(data: Dictionary) -> LevelData:
 		data.get("environment_overrides", {})
 	)
 	level.lofi_overrides = data.get("lofi_overrides", {}).duplicate()
+
+	level.grid_cell_size = data.get("grid_cell_size", 1.524)
+	level.display_unit = data.get("display_unit", "ft")
+	level.display_unit_per_cell = data.get("display_unit_per_cell", 5.0)
 
 	level.token_placements.clear()
 	var placements_data = data.get("token_placements", [])

@@ -43,6 +43,7 @@ var _client_connected_tokens: Dictionary = {}  # network_id -> { "changed": Call
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
 	_environment_manager.setup(game_map)
+	_game_map.setup_measure_tool()
 	_setup_reconciliation_timer()
 	_connect_asset_streamer()
 
@@ -491,6 +492,9 @@ func _finalize_map_loading(map: Node3D) -> void:
 	# Rebuild occlusion fade mesh cache now that map geometry is in the scene tree
 	_game_map.notify_map_loaded()
 
+	# Configure measure tool with scale settings from level data
+	_configure_measure_tool()
+
 
 ## Get the environment manager (for external callers that need direct access).
 func get_environment_manager() -> LevelEnvironmentManager:
@@ -547,6 +551,28 @@ func get_map_sky_resource() -> Sky:
 ## Get the GameMap reference.
 func get_game_map() -> GameMap:
 	return _game_map
+
+
+## Pass current scale settings from level data to the measure tool.
+func _configure_measure_tool() -> void:
+	if not _game_map:
+		return
+	var tool := _game_map.get_measure_tool()
+	if not tool or not active_level_data:
+		return
+	(
+		tool
+		. configure(
+			active_level_data.grid_cell_size,
+			active_level_data.display_unit,
+			active_level_data.display_unit_per_cell,
+		)
+	)
+
+
+## Public: update measure tool scale configuration (called when GM changes scale in UI).
+func update_measure_tool_scale() -> void:
+	_configure_measure_tool()
 
 
 ## Get the cached map path for a level (if it exists)
@@ -688,10 +714,10 @@ func _connect_token_context_menu(token: BoardToken) -> void:
 func _on_token_landed(_drop_height: float, _token: BoardToken) -> void:
 	return
 	#if not _game_map or not is_instance_valid(_token):
-		#return
+	#return
 	#var avg_scale := 1.0
 	#if _token.rigid_body:
-		#avg_scale = (_token.rigid_body.scale.x + _token.rigid_body.scale.z) / 2.0
+	#avg_scale = (_token.rigid_body.scale.x + _token.rigid_body.scale.z) / 2.0
 	#var intensity := _drop_height * avg_scale * 0.02  # Subtle: 0.02 per unit height at scale 1
 	#_game_map.camera_shake(intensity)
 

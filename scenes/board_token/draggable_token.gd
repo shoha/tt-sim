@@ -163,6 +163,7 @@ func _exit_tree() -> void:
 	if _is_currently_dragging or _is_settling:
 		UIManager.remove_hint("RMB")
 		UIManager.remove_hint("Scroll")
+		UIManager.add_hint("M", "Measure")
 
 
 func _on_dragging_started() -> void:
@@ -209,6 +210,7 @@ func _on_dragging_started() -> void:
 	AudioManager.play_token_pickup()
 
 	# Contextual input hints for dragging
+	UIManager.remove_hint("M")
 	UIManager.add_hint("RMB", "Cancel")
 	UIManager.add_hint("Scroll", "Height")
 
@@ -216,9 +218,10 @@ func _on_dragging_started() -> void:
 func _on_dragging_stopped() -> void:
 	_is_currently_dragging = false
 
-	# Remove drag-specific input hints
+	# Remove drag-specific input hints and restore measure hint
 	UIManager.remove_hint("RMB")
 	UIManager.remove_hint("Scroll")
+	UIManager.add_hint("M", "Measure")
 
 	# Reset lean
 	_reset_lean()
@@ -245,9 +248,10 @@ func _on_dragging_stopped() -> void:
 func _on_dragging_cancelled() -> void:
 	_is_currently_dragging = false
 
-	# Remove drag-specific input hints
+	# Remove drag-specific input hints and restore measure hint
 	UIManager.remove_hint("RMB")
 	UIManager.remove_hint("Scroll")
+	UIManager.add_hint("M", "Measure")
 
 	# Reset lean
 	_reset_lean()

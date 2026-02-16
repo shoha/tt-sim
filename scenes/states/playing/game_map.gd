@@ -60,6 +60,7 @@ var _context_menu = null  # TokenContextMenu - dynamically typed to avoid load o
 var _level_play_controller: LevelPlayController = null
 var _lofi_material: ShaderMaterial = null  # Cached lo-fi material (from scene or created)
 var _occlusion_fade_enabled: bool = true  # Whether the occlusion fade effect is active
+var _measure_tool: MeasureTool = null
 
 # Middle-mouse pan state
 var _is_panning: bool = false
@@ -169,9 +170,33 @@ func _input(event: InputEvent) -> void:
 	if _is_level_loading():
 		return
 
-	# Track mouse position for zoom-toward-cursor
+	# Always track mouse position for zoom-toward-cursor, even during measurement
 	if event is InputEventMouseMotion:
 		_last_mouse_position = event.position
+
+	# Toggle measure tool — handled in _input (not _unhandled_key_input) because
+	# SubViewportContainer routing can swallow key events before they reach
+	# _unhandled_key_input. Uses both the input action and a direct keycode
+	# fallback in case the project hasn't reloaded the input map yet.
+	if event is InputEventKey and event.pressed and not event.echo:
+		if not _is_text_input_focused():
+			var is_m_key: bool = (
+				event.is_action_pressed("measure_toggle") or event.keycode == KEY_M
+			)
+			if is_m_key and _measure_tool:
+				_measure_tool.toggle()
+				get_viewport().set_input_as_handled()
+				return
+
+	# Measure tool gets first look at input when active.
+	# handle_input returns true if the event was consumed (clicks on terrain, etc.).
+	# Mouse motion is never consumed — it always falls through to camera handling.
+	if _measure_tool and _measure_tool.is_active():
+		if _measure_tool.handle_input(event):
+			return
+
+	# Mouse motion: pan handling
+	if event is InputEventMouseMotion:
 		if _is_panning:
 			_handle_pan_motion(event)
 		return
@@ -356,11 +381,12 @@ func _handle_pan_motion(event: InputEventMouseMotion) -> void:
 func _is_mouse_over_token(screen_pos: Vector2) -> bool:
 	if not camera_node or not world_viewport:
 		return false
-	if not world_viewport.world_3d:
+	var world: World3D = world_viewport.find_world_3d()
+	if not world:
 		return false
 	var from = camera_node.project_ray_origin(screen_pos)
 	var to = from + camera_node.project_ray_normal(screen_pos) * 100.0
-	var space_state = world_viewport.world_3d.direct_space_state
+	var space_state = world.direct_space_state
 	if not space_state:
 		return false
 	var query = PhysicsRayQueryParameters3D.create(from, to)
@@ -452,6 +478,32 @@ func _setup_viewport() -> void:
 	# This allows editor-tweaked values to be preserved
 	if viewport_container and viewport_container.material is ShaderMaterial:
 		_lofi_material = viewport_container.material as ShaderMaterial
+
+
+## Create and configure the MeasureTool node inside the SubViewport.
+## The 3D line mesh lives inside the SubViewport (gets lo-fi effect),
+## but the distance label is parented to GameMap (this node) so it stays crisp.
+func setup_measure_tool() -> void:
+	if _measure_tool:
+		return
+	_measure_tool = MeasureTool.new()
+	_measure_tool.name = "MeasureTool"
+	_measure_tool.camera = camera_node
+	_measure_tool.world_viewport = world_viewport
+	world_viewport.add_child(_measure_tool)
+	_measure_tool.create_label(self)
+	_measure_tool.toggled.connect(_on_measure_tool_toggled)
+
+
+## Return the MeasureTool instance (may be null before setup).
+func get_measure_tool() -> MeasureTool:
+	return _measure_tool
+
+
+## Disable token dragging while the measure tool is active, re-enable when it's not.
+func _on_measure_tool_toggled(active: bool) -> void:
+	if drag_and_drop_node:
+		drag_and_drop_node.dragging_enabled = not active
 
 
 ## Load lo-fi filter setting from config
@@ -635,9 +687,7 @@ func _clamp_position_to_bounds(pos: Vector3) -> Vector3:
 ## Clamp the camera position to the map bounds (soft limits).
 ## Called after any camera translation to prevent panning into the void.
 func _clamp_camera_to_bounds() -> void:
-	cameraholder_node.global_position = _clamp_position_to_bounds(
-		cameraholder_node.global_position
-	)
+	cameraholder_node.global_position = _clamp_position_to_bounds(cameraholder_node.global_position)
 
 
 ## Override lo-fi shader parameters from map data

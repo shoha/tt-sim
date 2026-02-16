@@ -125,17 +125,18 @@ func _animate_in() -> void:
 	if _tween:
 		_tween.kill()
 
-	# Slide up from below + fade in
+	# Slide up from below + fade in.
+	# Always reset to base position first to prevent drift when the tween is
+	# interrupted by rapid add_hint / remove_hint calls (e.g. during drag).
 	var container := $MarginContainer
-	container.position.y += 12
-	var target_y: float = container.position.y - 12
+	container.position.y = 12.0
 
 	_tween = create_tween()
 	_tween.set_parallel(true)
 	_tween.set_ease(Tween.EASE_OUT)
 	_tween.set_trans(Tween.TRANS_CUBIC)
 	_tween.tween_property(container, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
-	_tween.tween_property(container, "position:y", target_y, 0.25)
+	_tween.tween_property(container, "position:y", 0.0, 0.25)
 
 
 func _animate_out() -> void:
@@ -150,6 +151,4 @@ func _animate_out() -> void:
 	_tween.set_ease(Tween.EASE_IN)
 	_tween.set_trans(Tween.TRANS_CUBIC)
 	_tween.tween_property(container, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
-	_tween.tween_property(
-		container, "position:y", container.position.y + 12, Constants.ANIM_FADE_OUT_DURATION
-	)
+	_tween.tween_property(container, "position:y", 12.0, Constants.ANIM_FADE_OUT_DURATION)

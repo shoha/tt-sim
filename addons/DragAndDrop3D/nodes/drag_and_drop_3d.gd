@@ -80,9 +80,15 @@ func _set_dragging_object_signals(group: String, node: Node) -> void:
 		node.object_body_mouse_down.connect(set_dragging_object.bind(node))
 
 
+## When false, new drags are blocked (e.g. while the measure tool is active).
+var dragging_enabled: bool = true
+
+
 ## Called when a draggable object receives mouse down.
 ## Starts a pending drag that only activates after the mouse moves past the threshold.
 func set_dragging_object(object: DraggingObject3D) -> void:
+	if not dragging_enabled:
+		return
 	if _currentDraggingObject or _pending_drag_object:
 		return # Already dragging or pending
 	_pending_drag_object = object
