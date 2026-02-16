@@ -191,8 +191,13 @@ func _input(event: InputEvent) -> void:
 	# Measure tool gets first look at input when active.
 	# handle_input returns true if the event was consumed (clicks on terrain, etc.).
 	# Mouse motion is never consumed — it always falls through to camera handling.
+	# Skip mouse button events over GUI so UI elements (asset browser, etc.) still work.
 	if _measure_tool and _measure_tool.is_active():
-		if _measure_tool.handle_input(event):
+		var is_click: bool = event is InputEventMouseButton and event.pressed
+		if is_click and _is_mouse_over_gui():
+			pass
+		elif _measure_tool.handle_input(event):
+			get_viewport().set_input_as_handled()
 			return
 
 	# Mouse motion: pan handling
@@ -480,18 +485,16 @@ func _setup_viewport() -> void:
 		_lofi_material = viewport_container.material as ShaderMaterial
 
 
-## Create and configure the MeasureTool node inside the SubViewport.
-## The 3D line mesh lives inside the SubViewport (gets lo-fi effect),
-## but the distance label is parented to GameMap (this node) so it stays crisp.
+## Create and configure the MeasureTool.
+## The tool lives in the SubViewport for raycasting access, but its 2D overlay
+## (lines + label) is parented to GameMap so it renders above the lo-fi shader.
 func setup_measure_tool() -> void:
 	if _measure_tool:
 		return
 	_measure_tool = MeasureTool.new()
 	_measure_tool.name = "MeasureTool"
-	_measure_tool.camera = camera_node
-	_measure_tool.world_viewport = world_viewport
-	world_viewport.add_child(_measure_tool)
-	_measure_tool.create_label(self)
+	add_child(_measure_tool)
+	_measure_tool.setup(camera_node, world_viewport, self)
 	_measure_tool.toggled.connect(_on_measure_tool_toggled)
 
 

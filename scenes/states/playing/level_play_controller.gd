@@ -575,6 +575,15 @@ func update_measure_tool_scale() -> void:
 	_configure_measure_tool()
 
 
+## Deactivate the measure tool if it's active (called on level clear/load).
+func _deactivate_measure_tool() -> void:
+	if not _game_map:
+		return
+	var tool := _game_map.get_measure_tool()
+	if tool and tool.is_active():
+		tool.deactivate()
+
+
 ## Get the cached map path for a level (if it exists)
 func _get_cached_map_path(level_folder: String) -> String:
 	return AssetManager.streamer.get_cached_map_path(level_folder)
@@ -1221,6 +1230,8 @@ func clear_level_map() -> void:
 
 ## Clear everything from the current level
 func clear_level() -> void:
+	_deactivate_measure_tool()
+
 	# Stop reconciliation timer
 	if _reconciliation_timer:
 		_reconciliation_timer.stop()

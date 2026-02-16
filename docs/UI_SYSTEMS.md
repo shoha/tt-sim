@@ -16,6 +16,7 @@ This guide documents the UI infrastructure and reusable components available in 
 - [AudioManager](#audiomanager)
 - [Overlay & Modal System](#overlay--modal-system)
 - [LevelEditPanel (In-Game Edit Mode)](#leveleditpanel-in-game-edit-mode)
+- [Measure Tool](#measure-tool)
 
 ---
 
@@ -607,6 +608,53 @@ See [lighting-and-environment.md](lighting-and-environment.md) for the full envi
 | `scenes/ui/drawer_container.gd`              | Base class for slide-out drawers      |
 | `scenes/states/playing/level_edit_panel.gd`  | In-game real-time level editing panel |
 | `scenes/states/playing/level_edit_panel.tscn`| UI layout for the edit panel          |
+| `scenes/states/playing/measure_tool.gd`      | Distance measurement tool (2D overlay)|
+| `utils/scale_utils.gd`                       | Scale conversion and formatting       |
+
+---
+
+## Measure Tool
+
+The measure tool provides distance measurement for players during gameplay. It renders as a 2D overlay on its own `CanvasLayer` so that measurement lines and labels are crisp and unaffected by the lo-fi post-processing shader applied to the 3D SubViewport.
+
+### Activation
+
+Toggle with the **M** key. The tool uses a three-state machine: `INACTIVE` -> `PLACING_START` -> `PLACING_WAYPOINT`. Press M again, Escape, or right-click to deactivate.
+
+### Visuals
+
+All rendering is 2D, driven by `Control._draw()`:
+
+- **Cursor dot** — A yellow circle follows the mouse while the tool is active, indicating where the next point will be placed.
+- **Committed segments** — Solid colored lines between placed waypoints.
+- **Preview segment** — Semi-transparent line from the last waypoint to the current cursor position.
+- **Endpoint circles** — Small circles at each waypoint.
+- **Segment labels** — Each segment shows its individual distance. Labels are `PanelContainer`s with a dark semi-transparent backdrop for contrast. Managed via an object pool to avoid per-frame allocation.
+- **Total label** — When 2+ segments exist, a larger label shows the cumulative distance. Positioned at the midpoint of the last committed segment.
+- **Preview label suppression** — The tentative segment's label is hidden when its on-screen length is < 80 pixels to avoid overlap with the total label.
+
+### Input Hints Integration
+
+The tool manages its own input hints via `UIManager`:
+
+- **PLACING_START**: Shows `LMB: Place start`, `Esc: Cancel`.
+- **PLACING_WAYPOINT**: Shows `LMB: Add point`, `RMB: Finish`, `Esc: Cancel`.
+- **M: Measure** hint is shown in the default gameplay hints and removed while dragging a token.
+
+### Scale Configuration
+
+Distance labels use the active level's scale settings (`grid_cell_size`, `display_unit`, `display_unit_per_cell`) via `ScaleUtils`. When the GM changes scale in `LevelEditPanel`, the tool is reconfigured live via `MeasureTool.configure()`.
+
+### Interaction Guards
+
+- **Drag prevention**: `DragAndDrop3D.dragging_enabled` is set to `false` while the tool is active (via the `toggled` signal).
+- **GUI click guard**: `GameMap._input()` checks `_is_mouse_over_gui()` before forwarding mouse clicks to the tool.
+- **Context menu suppression**: When the tool consumes an input event, `get_viewport().set_input_as_handled()` prevents token context menus from opening.
+- **Level lifecycle**: The tool is deactivated automatically when a level is cleared or a new level is loaded.
+
+### Click Sound
+
+Placing a waypoint plays `AudioManager.play_tick()` for tactile feedback.
 
 ---
 
@@ -621,6 +669,7 @@ UI elements are organized by layer for proper z-ordering. All layer numbers are 
 | 2     | `LAYER_GAMEPLAY_MENU`  | GameplayMenu       | In-game UI, edit drawer, player list |
 | 3     | `LAYER_LEVEL_EDITOR`   | LevelEditor        | Level editor overlay (full-screen) |
 | 5     | `LAYER_LOBBY`          | Lobby              | Host/client lobby (centered)       |
+| 8     | `LAYER_MEASURE_OVERLAY`| MeasureTool        | Distance measurement lines & labels |
 | 10    | `LAYER_PAUSE`          | PauseOverlay       | Pause menu                         |
 | 80    | `LAYER_INPUT_HINTS`    | InputHints         | Keybinding hints (bottom-center)   |
 | 90    | `LAYER_TOAST`          | ToastContainer     | Notifications (bottom-center)      |
