@@ -604,13 +604,27 @@ GMs configure scale in the `LevelEditPanel` via a preset dropdown and a `grid_ce
 
 `GridOverlay` (`scenes/states/playing/grid_overlay.gd`) renders a procedural grid onto all visible 3D geometry using a depth-buffer projection shader. It is a `MeshInstance3D` with a full-screen `QuadMesh` parented to `Camera3D` inside the SubViewport.
 
-**Rendering:**
+**Rendering — Shader Pipeline:**
 
-The grid shader (`shaders/grid_overlay.gdshader`) reads `hint_depth_texture` to reconstruct world-space positions for each pixel, then applies grid line math to the XZ coordinates. This approach eliminates z-fighting (no depth write) and conforms the grid to all surfaces — floors, tabletops, ramps, elevated platforms.
+The grid shader (`shaders/grid_overlay.gdshader`) follows a multi-stage pipeline:
 
-Surface normal filtering excludes steep/vertical surfaces (walls, cliff faces) so the grid only appears on mostly-horizontal playable areas. A configurable distance fade (`fade_radius`) prevents the grid from blanketing the entire map.
+1. **Depth reconstruction** — reads `hint_depth_texture` (reversed-Z) to reconstruct the world-space position of each visible pixel. A full-screen quad (2×2 `QuadMesh`, `flip_faces = true`) is forced to fill the screen via `POSITION = vec4(VERTEX.xy, 1.0, 1.0)` in the vertex shader.
+2. **Edge rejection** — discards sky/void pixels (`raw_depth < 0.0001`) and geometry silhouette edges. Samples all 4 depth neighbors with a 2-texel kernel; discards if any neighbor is void. Also rejects pixels with large linear depth discontinuities between neighbors (`depth_threshold = max(0.1 * linear_c, 0.2)`).
+3. **Height filter** — discards pixels outside `[grid_y_level ± grid_y_tolerance]`. This prevents the grid from projecting onto board tokens (which extend above the floor) and ceilings. Floor Y defaults to 0.0 (glTF convention); tolerance is `max(cell_size * 0.4, 0.5)`.
+4. **Normal filter** — reconstructs surface normals via cross product of depth-buffer neighbors. Discards steep/vertical surfaces where `abs(dot(normal, UP)) < normal_threshold` (default 0.7). Only mostly-horizontal playable surfaces show the grid.
+5. **Grid math** — computes grid UVs from world XZ coordinates, applies `fwidth()` anti-aliasing with configurable `line_thickness`.
+6. **Distance fade** — `smoothstep` fade based on XZ distance from `grid_center` (camera look-at point projected onto the `grid_y_level` plane).
+7. **Three-layer compositing** (bottom to top):
+   - **Cell tint** — every cell gets a semi-transparent fill using `cell_tint_color` (theme `color_surface1` at 65% opacity). An inset mask (`cell_tint_inset`, default 10%) fades the tint near cell edges, creating visible gaps between adjacent cells without explicit grid lines.
+   - **Drag highlight** — during token drags, the hovered cell and start cell are filled with a brighter color (`cell_fill_color` / `cell_start_fill_color`) with an edge glow effect. Replaces the tint layer on highlighted cells.
+   - **Grid lines** — optional white lines on top (`line_color`). Currently set to 0% opacity (lines hidden) since the cell tint inset provides sufficient cell delineation.
+8. **Opacity multiplier** — a global `opacity` uniform (0.0–1.0) is applied to `ALPHA`, enabling animated fade in/out from GDScript.
 
 The overlay lives inside the SubViewport, so it naturally receives the lo-fi post-processing effect.
+
+**Animated Visibility:**
+
+`show_grid()` and `hide_grid()` tween the shader's `opacity` uniform over 0.2 seconds. A `_showing` boolean tracks intended state so rapid toggles interrupt cleanly. `hide_grid_immediate()` skips animation for level clear/reset.
 
 **Visibility State Machine:**
 
@@ -621,6 +635,10 @@ Grid visibility combines three sources:
 - **LevelData default** (`grid_visible`) — initial state when a level loads.
 
 Logic: `visible = explicit_toggle OR (show_on_measure AND measuring) OR (show_on_drag AND dragging)`
+
+**Floor Level & Token Exclusion:**
+
+The height filter (`grid_y_level` / `grid_y_tolerance`) prevents the grid from projecting onto token bodies. `GameMap.configure_grid()` sets floor Y to 0.0 (GLB maps are authored with floors at the origin). The AABB bottom of the map is NOT used because it includes mesh undersides/foundations which are well below the actual walkable floor. Tolerance is computed as `max(cell_size * 0.4, 0.5)`, covering slight elevation changes (rugs, gentle ramps) while excluding token figures.
 
 **Configuration:**
 

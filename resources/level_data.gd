@@ -72,7 +72,7 @@ class_name LevelData
 ## Auto-show the grid overlay while dragging a token.
 @export var grid_show_on_drag: bool = true
 ## Grid line color (including alpha for opacity).
-@export var grid_color: Color = Color(1.0, 1.0, 1.0, 0.35)
+@export var grid_color: Color = Color(1.0, 1.0, 1.0, 0.0)
 ## XZ offset for aligning the grid to imported map geometry.
 @export var grid_origin: Vector2 = Vector2.ZERO
 ## Grid type — currently only "square" is supported.

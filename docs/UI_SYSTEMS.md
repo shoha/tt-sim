@@ -662,9 +662,20 @@ Placing a waypoint plays `AudioManager.play_tick()` for tactile feedback.
 
 The grid overlay projects a procedural grid onto all visible 3D geometry, rendered via a depth-buffer shader. It lives inside the SubViewport (parented to Camera3D) so it receives the lo-fi post-processing effect.
 
+### Visual Design
+
+The grid uses a **cell tint** approach rather than traditional grid lines for readability on bright maps:
+
+- Each cell is filled with a semi-transparent dark neutral color (`color_surface1` from the theme at 65% opacity).
+- The fill is **inset** by 10% from cell edges, creating visible gaps between adjacent cells that serve as implicit grid lines.
+- During token drags, the hovered cell and the starting cell are highlighted with a brighter blue fill (with edge glow), replacing the neutral tint on those cells.
+- Grid lines (`line_color`) are available as an additional layer rendered on top of everything, but currently disabled (0% opacity) since the cell tint inset provides sufficient delineation.
+- A height filter prevents the grid from projecting onto board tokens — only surfaces near the floor level show the grid.
+- Visibility transitions are **animated** with a 0.2s fade in/out when the grid is toggled.
+
 ### Activation
 
-- **G key** — toggles the grid on/off (local per-client).
+- **G key** — toggles the grid on/off (local per-client) with a fade animation.
 - **Auto-show** — appears automatically when the Measure Tool is active or a token is being dragged (configurable via `LevelData.grid_show_on_measure` and `grid_show_on_drag`).
 - Auto-hide reverts when the triggering context ends, unless the player has explicitly toggled it on via G.
 
@@ -678,7 +689,7 @@ The grid overlay projects a procedural grid onto all visible 3D geometry, render
 
 ### Configuration
 
-Grid appearance and behavior are configured via `LevelData` properties in the **Grid** export group. `GameMap.configure_grid()` applies these settings to the overlay and drag system when a level loads or the GM changes settings.
+Grid appearance and behavior are configured via `LevelData` properties in the **Grid** export group. `GameMap.configure_grid()` applies these settings to the overlay and drag system when a level loads or the GM changes settings. Floor level for the height filter is computed automatically (defaults to Y=0).
 
 ---
 

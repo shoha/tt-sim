@@ -10,7 +10,11 @@ class_name GridOverlay
 ##   grid.configure(cell_size, grid_origin, grid_color)
 ##   grid.show_grid()  /  grid.hide_grid()
 
+const FADE_DURATION := 0.2
+
 var _material: ShaderMaterial
+var _fade_tween: Tween
+var _showing := false
 
 
 ## Factory — creates a GridOverlay and parents it to the given camera.
@@ -34,6 +38,7 @@ static func create(camera: Camera3D) -> GridOverlay:
 
 	instance.visible = false
 	instance.set_process(false)
+	instance._material.set_shader_parameter("opacity", 0.0)
 	return instance
 
 
@@ -92,20 +97,59 @@ func clear_drag_highlight() -> void:
 	_material.set_shader_parameter("drag_active", false)
 
 
-## Show the grid overlay and start updating the fade center.
+## Show the grid overlay with a fade-in animation.
 func show_grid() -> void:
+	_showing = true
+	_kill_fade_tween()
 	visible = true
 	set_process(true)
+	_fade_tween = create_tween()
+	_fade_tween.tween_method(_set_opacity, _get_opacity(), 1.0, FADE_DURATION)
 
 
-## Hide the grid overlay and stop per-frame updates.
+## Hide the grid overlay with a fade-out animation.
 func hide_grid() -> void:
+	_showing = false
+	_kill_fade_tween()
+	_fade_tween = create_tween()
+	_fade_tween.tween_method(_set_opacity, _get_opacity(), 0.0, FADE_DURATION)
+	_fade_tween.tween_callback(_on_fade_out_finished)
+
+
+## Hide immediately without animation (for level clear / reset).
+func hide_grid_immediate() -> void:
+	_showing = false
+	_kill_fade_tween()
+	_set_opacity(0.0)
 	visible = false
 	set_process(false)
 
 
+## Returns true if the grid is logically shown (may still be animating).
 func is_grid_visible() -> bool:
-	return visible
+	return _showing
+
+
+func _set_opacity(value: float) -> void:
+	if _material:
+		_material.set_shader_parameter("opacity", value)
+
+
+func _get_opacity() -> float:
+	if _material:
+		return _material.get_shader_parameter("opacity")
+	return 0.0
+
+
+func _on_fade_out_finished() -> void:
+	visible = false
+	set_process(false)
+
+
+func _kill_fade_tween() -> void:
+	if _fade_tween and _fade_tween.is_valid():
+		_fade_tween.kill()
+	_fade_tween = null
 
 
 func _ready() -> void:
