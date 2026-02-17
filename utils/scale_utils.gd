@@ -90,6 +90,27 @@ static func format_distance_with_elevation(
 	return "%s  |  %s%d %s elev  |  %s direct" % [h, sign_str, roundi(elev_val), unit_label, d]
 
 
+## ── Grid snap helpers ────────────────────────────────────────────────────
+
+
+## Snap a world position to the nearest grid cell center on the XZ plane.
+## Cell centers are at half-cell offsets from the grid lines (e.g. for a 1m grid
+## with origin 0, centers are at 0.5, 1.5, 2.5 …).
+## Y is preserved (terrain height conformance). The [param origin] parameter
+## aligns snapping with the grid overlay's origin offset.
+static func snap_to_grid(
+	world_pos: Vector3, cell_size: float, origin: Vector2 = Vector2.ZERO
+) -> Vector3:
+	if cell_size <= 0.0:
+		return world_pos
+	var half := cell_size * 0.5
+	return Vector3(
+		roundf((world_pos.x - origin.x - half) / cell_size) * cell_size + origin.x + half,
+		world_pos.y,
+		roundf((world_pos.z - origin.y - half) / cell_size) * cell_size + origin.y + half,
+	)
+
+
 ## ── Preset helpers ───────────────────────────────────────────────────────────
 
 

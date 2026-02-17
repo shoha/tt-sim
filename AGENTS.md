@@ -28,7 +28,7 @@
 
 - **EventBus** – `EventBus` is a small autoload with cross-system signals (`pause_requested`, `play_level_requested`, `state_changed`, `player_disconnected`, etc.). Use it only for signals that genuinely span system boundaries. Prefer direct signal connections for parent-child communication and autoload services for global operations
 - **State stack** – Root manages states: `change_state()`, `push_state()`, `pop_state()`
-- **Static classes** – `Constants`, `Paths`, `NodeUtils`, `TokenPermissions`, `SerializationUtils`, `EnvironmentPresets`, and `ScaleUtils` are `class_name` scripts (not autoloads). They provide globally accessible constants and static utility functions without a Node in the tree
+- **Static classes** – `Constants`, `Paths`, `NodeUtils`, `TokenPermissions`, `SerializationUtils`, `EnvironmentPresets`, `ScaleUtils`, and `MapOverlayUtils` are `class_name` scripts (not autoloads). They provide globally accessible constants and static utility functions without a Node in the tree
 - **Autoloads** – UIManager, LevelManager, AssetManager, NetworkManager, EventBus, GameState, NetworkStateSync, AudioManager, UpdateManager (see project.godot). Always reference autoloads directly (e.g. `AssetManager.method()`), never via `has_node("/root/X")` or `get_node("/root/X")`
 - **Shared constants** – Use `Constants.LOFI_DEFAULTS`, `Constants.NETWORK_TRANSFORM_UPDATE_INTERVAL`, etc. for values shared across files. Add file-local constants for single-file magic numbers
 - **Map loading** – Use `GlbUtils.load_map_async()` (or `load_map()` sync) for maps; handles both `res://` and `user://` paths with full post-processing
@@ -47,6 +47,10 @@
 - **In-game editing** – `LevelEditPanel` (extends `DrawerContainer`, right edge) provides real-time editing during gameplay. `GameplayMenuController` routes changes to `LevelPlayController`. Cancel reverts; save persists to disk
 - **Scale convention** – 1 world unit = 1 meter (glTF standard). `LevelData.grid_cell_size` adapts meters to game units. Use `ScaleUtils` for all distance conversion and formatting
 - **Measure tool** – `MeasureTool` (Node child of GameMap) provides distance measurement. Renders 2D on `LAYER_MEASURE_OVERLAY` (layer 8) to stay crisp above the lo-fi shader. M key toggles. Disables token dragging while active. Input routed through `GameMap._input()` with GUI click guard
+- **Grid overlay** – `GridOverlay` (MeshInstance3D child of Camera3D inside SubViewport) projects a procedural grid via depth-buffer shader. G key toggles (local per-client). Auto-shows during measure tool and token drag (configurable via `LevelData`). Managed by `GameMap`
+- **Grid snap** – `DragAndDrop3D` snaps to grid cell centers when `grid_snap_enabled = true`. Hold Shift for free move override. Configured from `LevelData` via `GameMap.configure_grid()`
+- **Drag ruler** – `DragRuler` (Node child of GameMap) shows movement distance during token drag. Renders 2D on `LAYER_DRAG_RULER` (layer 7). Activates/deactivates via DragAndDrop3D signals. Uses `MapOverlayUtils` for 2D overlay boilerplate
+- **MapOverlayUtils** – Shared factory for creating CanvasLayer/Control overlays and styled label panels. Used by both `MeasureTool` and `DragRuler`
 
 ## Adding Features
 
@@ -73,7 +77,8 @@ After making architectural or API changes, update the relevant documentation. Ch
 - **New conventions or patterns** – update this file (`AGENTS.md`) and `.cursor/rules/project-overview.mdc`
 - **New gotchas or coding patterns** – update `docs/CONVENTIONS.md`
 - **New RPC or network patterns** – update `docs/CONVENTIONS.md` and `docs/NETWORKING.md`
-- **Measure tool or gameplay tool changes** – update `docs/ARCHITECTURE.md` (Scale & Measurement / Measure Tool sections) and `docs/UI_SYSTEMS.md` (Measure Tool section)
+- **Measure tool or gameplay tool changes** – update `docs/ARCHITECTURE.md` (Scale & Measurement / Measure Tool / Grid Overlay / Drag Ruler sections) and `docs/UI_SYSTEMS.md` (Measure Tool / Grid Overlay / Drag Ruler sections)
+- **Grid overlay or snap changes** – update `docs/ARCHITECTURE.md` (Grid Overlay / Grid-Snapped Movement sections) and `docs/UI_SYSTEMS.md` (Grid Overlay section)
 
 ## Formatting
 

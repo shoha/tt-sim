@@ -107,6 +107,33 @@ The measure tool (`scenes/states/playing/measure_tool.gd`) is a `Node` child of 
 - **Rendering**: 2D overlay on `Constants.LAYER_MEASURE_OVERLAY` (layer 8) — uses `Control._draw()`, not 3D meshes. This keeps lines crisp above the lo-fi shader
 - **Adding new gameplay tools**: Follow the same pattern — `Node` child of `GameMap`, own CanvasLayer, input routed through `GameMap._input()` with GUI guard, `set_input_as_handled()` to prevent propagation
 
+### Working with the Grid Overlay
+
+The grid overlay (`scenes/states/playing/grid_overlay.gd`) is a `MeshInstance3D` child of `Camera3D` inside the SubViewport. Key integration points:
+
+- **Setup**: `GameMap.setup_grid_overlay()` creates it via `GridOverlay.create(camera_node)`
+- **Configuration**: `GameMap.configure_grid(level_data)` sets shader uniforms (cell_size, origin, color) and configures DragAndDrop3D snap settings
+- **Visibility**: Managed by `GameMap._update_grid_visibility()` — combines explicit toggle (G key), auto-show (measure/drag), and LevelData defaults
+- **Shader**: `shaders/grid_overlay.gdshader` — depth-buffer projection, surface normal filtering, distance fade
+- **Grid snap**: Integrated into `DragAndDrop3D._update_target_position()` via `ScaleUtils.snap_to_grid()`. Shift held during drag bypasses snap
+
+### Working with the Drag Ruler
+
+The drag ruler (`scenes/states/playing/drag_ruler.gd`) is a `Node` child of `GameMap`. Key integration points:
+
+- **Setup**: `GameMap.setup_drag_ruler()` creates it and connects DragAndDrop3D signals
+- **Activation**: Automatic — starts on `dragging_started`, stops on `dragging_stopped`/`dragging_cancelled`
+- **Scale config**: `DragRuler.configure(grid_cell_size, display_unit, display_unit_per_cell, grid_snap_enabled)` — called from `GameMap.configure_grid()`
+- **Rendering**: 2D overlay on `Constants.LAYER_DRAG_RULER` (layer 7) — uses `MapOverlayUtils` for shared overlay and label creation
+
+### Working with MapOverlayUtils
+
+`MapOverlayUtils` (`utils/map_overlay_utils.gd`) provides shared factory methods for gameplay 2D overlays:
+
+- `create_overlay(parent, layer, draw_callback)` → creates CanvasLayer + full-rect Control with draw signal connected
+- `create_label_panel(font_size, font_color)` → creates PanelContainer + Label with dark backdrop styling
+- Used by both `MeasureTool` and `DragRuler`. Use it for any new 2D overlay tool
+
 ## Post-Edit Checklist
 
 After modifying code:
@@ -122,6 +149,7 @@ After modifying code:
    - Sounds -> `docs/SOUND_EFFECTS.md`
    - Conventions or patterns -> `AGENTS.md` + `.cursor/rules/project-overview.mdc`
    - Measure tool or gameplay tools -> `docs/ARCHITECTURE.md` + `docs/UI_SYSTEMS.md`
+   - Grid overlay or snap changes -> `docs/ARCHITECTURE.md` + `docs/UI_SYSTEMS.md`
 
 ## Finding User Screenshots / Reference Images
 
@@ -164,5 +192,9 @@ D:\dev\tt-sim\cursor_hints\
 - **GUI-over-3D**: New UI panels automatically block 3D input if they have `mouse_filter = STOP` controls. Set `IGNORE` on transparent overlays that shouldn't block
 - **GM-only controls**: Asset browser, save button, and edit drawer are hidden for clients. `GameplayMenuController` manages this based on `NetworkManager.connection_state_changed`
 - **Shader limitations**: `return` is not allowed in `fragment()` / `vertex()` — use `if` blocks instead
+- **Grid visibility**: Grid visibility is a combination of explicit toggle, auto-show, and LevelData defaults. Always use `GameMap._update_grid_visibility()` — never set `GridOverlay.visible` directly
+- **Grid snap**: Implemented in `DragAndDrop3D._update_target_position()` via `ScaleUtils.snap_to_grid()`. Shift bypasses. Configure via `GameMap.configure_grid(level_data)`
+- **Drag ruler endpoint**: `DragRuler` reads `DragAndDrop3D._target_drag_position` (the snapped target), not the lerping `objectBody.global_position`
+- **MapOverlayUtils returns Dictionary**: The factory methods return untyped Dictionaries — always type the receiving variable as `var result: Dictionary` to avoid GDScript type inference errors
 
 For full details on all conventions, see `docs/CONVENTIONS.md`.

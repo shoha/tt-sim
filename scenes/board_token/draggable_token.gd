@@ -211,6 +211,7 @@ func _on_dragging_started() -> void:
 
 	# Contextual input hints for dragging
 	UIManager.remove_hint("M")
+	UIManager.remove_hint("G")
 	UIManager.add_hint("RMB", "Cancel")
 	UIManager.add_hint("Scroll", "Height")
 
@@ -218,10 +219,12 @@ func _on_dragging_started() -> void:
 func _on_dragging_stopped() -> void:
 	_is_currently_dragging = false
 
-	# Remove drag-specific input hints and restore measure hint
+	# Remove drag-specific input hints and restore defaults
 	UIManager.remove_hint("RMB")
 	UIManager.remove_hint("Scroll")
+	UIManager.remove_hint("Shift")
 	UIManager.add_hint("M", "Measure")
+	UIManager.add_hint("G", "Grid")
 
 	# Reset lean
 	_reset_lean()
@@ -248,10 +251,12 @@ func _on_dragging_stopped() -> void:
 func _on_dragging_cancelled() -> void:
 	_is_currently_dragging = false
 
-	# Remove drag-specific input hints and restore measure hint
+	# Remove drag-specific input hints and restore defaults
 	UIManager.remove_hint("RMB")
 	UIManager.remove_hint("Scroll")
+	UIManager.remove_hint("Shift")
 	UIManager.add_hint("M", "Measure")
+	UIManager.add_hint("G", "Grid")
 
 	# Reset lean
 	_reset_lean()

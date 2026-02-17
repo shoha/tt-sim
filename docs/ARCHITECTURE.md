@@ -44,9 +44,11 @@ Root (Node3D)
 │   │   └── SubViewportContainer (lo-fi shader post-process)
 │   │       └── SubViewport
 │   │           ├── CameraHolder / Camera3D
+│   │           │   └── GridOverlay (MeshInstance3D) - depth-projected grid overlay shader
 │   │           ├── MapContainer (Node3D) - map geometry added here
-│   │           └── DragAndDrop3D - tokens added here
+│   │           └── DragAndDrop3D - tokens added here (grid snap support)
 │   ├── MeasureTool (Node) - distance measurement, 2D overlay on LAYER_MEASURE_OVERLAY
+│   ├── DragRuler (Node) - movement distance during token drag, 2D overlay on LAYER_DRAG_RULER
 │   ├── GameplayMenu (CanvasLayer)
 │   │   └── GameplayMenuController - token list, context menus
 │   ├── LevelEditPanel (DrawerContainer) - slide-out editing drawer (right edge)
@@ -78,7 +80,8 @@ These are `class_name` scripts (not autoloads) that provide globally accessible 
 | `TokenPermissions`   | `autoloads/token_permissions.gd` | Per-token, per-player permission management (query, grant, revoke, serialize) |
 | `SerializationUtils` | `utils/serialization_utils.gd`   | Vector3/Color/Dictionary conversion helpers for network and file I/O |
 | `EnvironmentPresets` | `utils/environment_presets.gd`   | Environment preset definitions, layered config application, sky presets |
-| `ScaleUtils`         | `utils/scale_utils.gd`           | World-to-display distance conversion, formatting, scale presets |
+| `ScaleUtils`         | `utils/scale_utils.gd`           | World-to-display distance conversion, formatting, scale presets, grid snapping |
+| `MapOverlayUtils`    | `utils/map_overlay_utils.gd`     | Shared CanvasLayer/Control/label panel factory for 2D map overlays |
 
 ---
 
@@ -595,7 +598,53 @@ ScaleUtils.format_distance_with_elevation(dist_2d, dist_3d, elev_delta, level_da
 ScaleUtils.apply_preset(preset_key, level_data) -> void
 ```
 
-GMs configure scale in the `LevelEditPanel` via a preset dropdown and a `grid_cell_size` slider. Changes propagate through `GameplayMenuController` to `LevelPlayController`, which updates `LevelData` and reconfigures the `MeasureTool`.
+GMs configure scale in the `LevelEditPanel` via a preset dropdown and a `grid_cell_size` slider. Changes propagate through `GameplayMenuController` to `LevelPlayController`, which updates `LevelData` and reconfigures the `MeasureTool`, `GridOverlay`, and `DragRuler`.
+
+### Grid Overlay
+
+`GridOverlay` (`scenes/states/playing/grid_overlay.gd`) renders a procedural grid onto all visible 3D geometry using a depth-buffer projection shader. It is a `MeshInstance3D` with a full-screen `QuadMesh` parented to `Camera3D` inside the SubViewport.
+
+**Rendering:**
+
+The grid shader (`shaders/grid_overlay.gdshader`) reads `hint_depth_texture` to reconstruct world-space positions for each pixel, then applies grid line math to the XZ coordinates. This approach eliminates z-fighting (no depth write) and conforms the grid to all surfaces — floors, tabletops, ramps, elevated platforms.
+
+Surface normal filtering excludes steep/vertical surfaces (walls, cliff faces) so the grid only appears on mostly-horizontal playable areas. A configurable distance fade (`fade_radius`) prevents the grid from blanketing the entire map.
+
+The overlay lives inside the SubViewport, so it naturally receives the lo-fi post-processing effect.
+
+**Visibility State Machine:**
+
+Grid visibility combines three sources:
+
+- **Explicit toggle** (G key) — local per-client, persists until toggled or level changes.
+- **Auto-show** — temporarily visible while the MeasureTool is active (`grid_show_on_measure`) or a token is being dragged (`grid_show_on_drag`). Reverts when the context ends.
+- **LevelData default** (`grid_visible`) — initial state when a level loads.
+
+Logic: `visible = explicit_toggle OR (show_on_measure AND measuring) OR (show_on_drag AND dragging)`
+
+**Configuration:**
+
+`LevelData` provides grid properties in the **Grid** export group: `grid_visible`, `grid_snap_enabled`, `grid_show_on_measure`, `grid_show_on_drag`, `grid_color`, `grid_origin`, `grid_type`. The `grid_type` field defaults to `"square"` and is reserved for future hex grid support.
+
+### Grid-Snapped Movement
+
+When `LevelData.grid_snap_enabled` is `true`, dragged tokens snap to the nearest grid cell center on XZ. This is implemented directly in `DragAndDrop3D._update_target_position()` via `ScaleUtils.snap_to_grid()`.
+
+- **Shift modifier**: Hold Shift during drag to bypass grid snap (free move). Shift always means "free move" regardless of settings.
+- **Configuration**: `GameMap.configure_grid()` sets `DragAndDrop3D.grid_snap_enabled`, `grid_cell_size`, and `grid_origin` from `LevelData`.
+
+### Drag Ruler
+
+`DragRuler` (`scenes/states/playing/drag_ruler.gd`) shows a distance line from a token's start position to its current position during drags. It activates automatically via `DragAndDrop3D.dragging_started` and deactivates on `dragging_stopped`/`dragging_cancelled`.
+
+- Renders on `CanvasLayer` at `Constants.LAYER_DRAG_RULER` (layer 7, below the measure overlay).
+- Uses `MapOverlayUtils` for overlay and label creation.
+- Shows formatted distance (e.g. "30 ft") and cell count when grid snap is active (e.g. "6 cells / 30 ft").
+- Reads `DragAndDrop3D._target_drag_position` (the snapped target) for the endpoint, not the lerping visual position.
+
+### Shared Overlay Infrastructure (MapOverlayUtils)
+
+`MapOverlayUtils` (`utils/map_overlay_utils.gd`) provides factory methods for creating `CanvasLayer` + `Control` overlays and styled `PanelContainer` + `Label` panels. Both `MeasureTool` and `DragRuler` use these helpers to avoid duplicating boilerplate.
 
 ### Measure Tool
 
@@ -644,10 +693,15 @@ The tool renders entirely in 2D to avoid the lo-fi post-processing shader applie
 | File | Purpose |
 | ---- | ------- |
 | `scenes/states/playing/measure_tool.gd` | Tool logic, state machine, 2D rendering, label management |
-| `scenes/states/playing/game_map.gd` | Input routing, tool setup, drag integration |
-| `scenes/states/playing/level_play_controller.gd` | Lifecycle (deactivation on level clear) |
+| `scenes/states/playing/grid_overlay.gd` | Grid overlay (MeshInstance3D + depth shader uniform management) |
+| `shaders/grid_overlay.gdshader` | Depth-projected procedural grid shader |
+| `scenes/states/playing/drag_ruler.gd` | Movement distance display during token drags |
+| `utils/map_overlay_utils.gd` | Shared CanvasLayer/label factory for 2D overlays |
+| `scenes/states/playing/game_map.gd` | Input routing, tool setup, grid/ruler lifecycle, G key toggle |
+| `scenes/states/playing/level_play_controller.gd` | Lifecycle (deactivation on level clear, grid configuration) |
 | `scenes/states/playing/gameplay_menu_controller.gd` | Scale config routing |
-| `utils/scale_utils.gd` | Distance conversion and formatting |
+| `utils/scale_utils.gd` | Distance conversion, formatting, and grid snapping |
+| `addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd` | Grid snap in drag system (Shift override) |
 
 ---
 

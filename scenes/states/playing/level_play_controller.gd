@@ -44,6 +44,8 @@ func setup(game_map: GameMap) -> void:
 	_game_map = game_map
 	_environment_manager.setup(game_map)
 	_game_map.setup_measure_tool()
+	_game_map.setup_grid_overlay()
+	_game_map.setup_drag_ruler()
 	_setup_reconciliation_timer()
 	_connect_asset_streamer()
 
@@ -492,8 +494,9 @@ func _finalize_map_loading(map: Node3D) -> void:
 	# Rebuild occlusion fade mesh cache now that map geometry is in the scene tree
 	_game_map.notify_map_loaded()
 
-	# Configure measure tool with scale settings from level data
+	# Configure measure tool and grid with scale settings from level data
 	_configure_measure_tool()
+	_configure_grid()
 
 
 ## Get the environment manager (for external callers that need direct access).
@@ -570,9 +573,17 @@ func _configure_measure_tool() -> void:
 	)
 
 
-## Public: update measure tool scale configuration (called when GM changes scale in UI).
+## Configure grid overlay, grid snap, and drag ruler from level data.
+func _configure_grid() -> void:
+	if not _game_map or not active_level_data:
+		return
+	_game_map.configure_grid(active_level_data)
+
+
+## Public: update measure tool and grid configuration (called when GM changes scale in UI).
 func update_measure_tool_scale() -> void:
 	_configure_measure_tool()
+	_configure_grid()
 
 
 ## Deactivate the measure tool if it's active (called on level clear/load).
@@ -1231,6 +1242,8 @@ func clear_level_map() -> void:
 ## Clear everything from the current level
 func clear_level() -> void:
 	_deactivate_measure_tool()
+	if _game_map:
+		_game_map.reset_grid_state()
 
 	# Stop reconciliation timer
 	if _reconciliation_timer:

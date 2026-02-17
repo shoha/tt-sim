@@ -658,6 +658,53 @@ Placing a waypoint plays `AudioManager.play_tick()` for tactile feedback.
 
 ---
 
+## Grid Overlay
+
+The grid overlay projects a procedural grid onto all visible 3D geometry, rendered via a depth-buffer shader. It lives inside the SubViewport (parented to Camera3D) so it receives the lo-fi post-processing effect.
+
+### Activation
+
+- **G key** — toggles the grid on/off (local per-client).
+- **Auto-show** — appears automatically when the Measure Tool is active or a token is being dragged (configurable via `LevelData.grid_show_on_measure` and `grid_show_on_drag`).
+- Auto-hide reverts when the triggering context ends, unless the player has explicitly toggled it on via G.
+
+### Input Hints
+
+| Context              | Hints                  |
+| -------------------- | ---------------------- |
+| Default gameplay     | `G: Grid`, `M: Measure`|
+| Dragging (snap on)   | `Scroll: Height`, `Shift: Free Move` |
+| Dragging (snap off)  | `Scroll: Height`       |
+
+### Configuration
+
+Grid appearance and behavior are configured via `LevelData` properties in the **Grid** export group. `GameMap.configure_grid()` applies these settings to the overlay and drag system when a level loads or the GM changes settings.
+
+---
+
+## Drag Ruler
+
+The drag ruler displays a distance line from a token's starting position to its current drag position. It activates automatically during token drags.
+
+### Visuals
+
+- Solid blue-white line from start to current position.
+- Endpoint circles at both ends.
+- Distance label at the midpoint (dark backdrop, same style as MeasureTool).
+- When grid snap is active, shows cell count alongside distance (e.g. "6 cells / 30 ft").
+
+### Rendering
+
+Uses `MapOverlayUtils` for overlay and label creation. Renders on `Constants.LAYER_DRAG_RULER` (layer 7), below the measure overlay (layer 8). Uses the same dirty-flag + camera-tracking pattern as MeasureTool for efficient updates.
+
+### Lifecycle
+
+- Created by `GameMap.setup_drag_ruler()` during level setup.
+- Connects to `DragAndDrop3D` signals: `dragging_started`, `dragging_stopped`, `dragging_cancelled`.
+- Deactivated automatically on level clear via `GameMap.reset_grid_state()`.
+
+---
+
 ## CanvasLayer Ordering
 
 UI elements are organized by layer for proper z-ordering. All layer numbers are defined in `autoloads/constants.gd` under `LAYER_*` constants.
@@ -669,6 +716,7 @@ UI elements are organized by layer for proper z-ordering. All layer numbers are 
 | 2     | `LAYER_GAMEPLAY_MENU`  | GameplayMenu       | In-game UI, edit drawer, player list |
 | 3     | `LAYER_LEVEL_EDITOR`   | LevelEditor        | Level editor overlay (full-screen) |
 | 5     | `LAYER_LOBBY`          | Lobby              | Host/client lobby (centered)       |
+| 7     | `LAYER_DRAG_RULER`     | DragRuler          | Movement distance line during drag  |
 | 8     | `LAYER_MEASURE_OVERLAY`| MeasureTool        | Distance measurement lines & labels |
 | 10    | `LAYER_PAUSE`          | PauseOverlay       | Pause menu                         |
 | 80    | `LAYER_INPUT_HINTS`    | InputHints         | Keybinding hints (bottom-center)   |

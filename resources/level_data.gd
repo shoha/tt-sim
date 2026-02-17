@@ -60,6 +60,25 @@ class_name LevelData
 ## How many display units each grid cell represents (e.g., 5.0 for "5 ft per square")
 @export var display_unit_per_cell: float = 5.0
 
+## Grid overlay & snapping
+@export_group("Grid")
+## Whether the grid overlay is visible by default when this level loads.
+## Players can locally override with the G key.
+@export var grid_visible: bool = false
+## When true, dragged tokens snap to grid cell centers. GM-controlled.
+@export var grid_snap_enabled: bool = true
+## Auto-show the grid overlay while the measure tool is active.
+@export var grid_show_on_measure: bool = true
+## Auto-show the grid overlay while dragging a token.
+@export var grid_show_on_drag: bool = true
+## Grid line color (including alpha for opacity).
+@export var grid_color: Color = Color(1.0, 1.0, 1.0, 0.35)
+## XZ offset for aligning the grid to imported map geometry.
+@export var grid_origin: Vector2 = Vector2.ZERO
+## Grid type — currently only "square" is supported.
+## Reserved for future hex support: "hex_flat", "hex_pointy".
+@export var grid_type: String = "square"
+
 ## Token placements
 @export_group("Tokens")
 @export var token_placements: Array[TokenPlacement] = []
@@ -154,6 +173,13 @@ func duplicate_level() -> LevelData:
 	new_level.grid_cell_size = grid_cell_size
 	new_level.display_unit = display_unit
 	new_level.display_unit_per_cell = display_unit_per_cell
+	new_level.grid_visible = grid_visible
+	new_level.grid_snap_enabled = grid_snap_enabled
+	new_level.grid_show_on_measure = grid_show_on_measure
+	new_level.grid_show_on_drag = grid_show_on_drag
+	new_level.grid_color = grid_color
+	new_level.grid_origin = grid_origin
+	new_level.grid_type = grid_type
 
 	for placement in token_placements:
 		var new_placement = placement.duplicate()
@@ -218,6 +244,13 @@ func to_dict() -> Dictionary:
 		"grid_cell_size": grid_cell_size,
 		"display_unit": display_unit,
 		"display_unit_per_cell": display_unit_per_cell,
+		"grid_visible": grid_visible,
+		"grid_snap_enabled": grid_snap_enabled,
+		"grid_show_on_measure": grid_show_on_measure,
+		"grid_show_on_drag": grid_show_on_drag,
+		"grid_color": SerializationUtils.color_to_dict(grid_color),
+		"grid_origin": {"x": grid_origin.x, "y": grid_origin.y},
+		"grid_type": grid_type,
 		"token_placements": placements_array,
 	}
 
@@ -246,6 +279,17 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.grid_cell_size = data.get("grid_cell_size", 1.524)
 	level.display_unit = data.get("display_unit", "ft")
 	level.display_unit_per_cell = data.get("display_unit_per_cell", 5.0)
+	level.grid_visible = data.get("grid_visible", false)
+	level.grid_snap_enabled = data.get("grid_snap_enabled", true)
+	level.grid_show_on_measure = data.get("grid_show_on_measure", true)
+	level.grid_show_on_drag = data.get("grid_show_on_drag", true)
+	var gc = data.get("grid_color", {})
+	if gc is Dictionary and not gc.is_empty():
+		level.grid_color = SerializationUtils.dict_to_color(gc, Color(1.0, 1.0, 1.0, 0.35))
+	var go = data.get("grid_origin", {})
+	if go is Dictionary and not go.is_empty():
+		level.grid_origin = Vector2(go.get("x", 0.0), go.get("y", 0.0))
+	level.grid_type = data.get("grid_type", "square")
 
 	level.token_placements.clear()
 	var placements_data = data.get("token_placements", [])

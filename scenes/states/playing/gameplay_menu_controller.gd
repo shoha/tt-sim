@@ -154,7 +154,6 @@ func _update_asset_browser_button_state() -> void:
 		toggle_asset_browser_button.visible = has_level
 
 
-
 # --- Asset Selection Handling ---
 
 
@@ -458,6 +457,7 @@ func _set_default_hints() -> void:
 				{"key": "Scroll", "action": "Zoom"},
 				{"key": "Home", "action": "Reset Camera"},
 				{"key": "M", "action": "Measure"},
+				{"key": "G", "action": "Grid"},
 			]
 		)
 	)
