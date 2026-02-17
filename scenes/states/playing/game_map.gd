@@ -609,6 +609,13 @@ func configure_grid(level_data: LevelData) -> void:
 		_grid_overlay.configure(
 			level_data.grid_cell_size, level_data.grid_origin, level_data.grid_color
 		)
+		# Set floor level so the grid doesn't project onto token bodies.
+		# GLB maps are authored with floors at Y≈0; the AABB bottom includes
+		# mesh undersides/foundations so we default to Y=0 instead.
+		# Tolerance covers slight elevation (rugs, ramps) but excludes tokens.
+		var floor_y := 0.0
+		var tolerance: float = maxf(level_data.grid_cell_size * 0.4, 0.5)
+		_grid_overlay.set_floor_level(floor_y, tolerance)
 	_update_grid_visibility()
 
 	# Configure drag snap on the DragAndDrop3D node

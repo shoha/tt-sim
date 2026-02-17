@@ -51,6 +51,16 @@ func configure(
 	_material.set_shader_parameter("line_color", color)
 
 
+## Set the floor Y level for height-based filtering.
+## The grid only renders on surfaces within [y_level - tolerance, y_level + tolerance].
+## This prevents the grid from projecting onto tokens and ceilings.
+func set_floor_level(y_level: float, tolerance: float = 0.5) -> void:
+	if not _material:
+		return
+	_material.set_shader_parameter("grid_y_level", y_level)
+	_material.set_shader_parameter("grid_y_tolerance", tolerance)
+
+
 ## Activate cell highlighting for a drag in progress.
 ## [param current_pos] World position of the hovered/snapped cell center.
 ## [param start_pos] World position of the drag origin cell center.
@@ -105,19 +115,19 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if not _material:
 		return
-	# Update the fade center to where the camera is looking on the ground plane.
+	# Update the fade center to where the camera is looking on the floor plane.
 	# For orthographic/isometric cameras the camera position itself is high up
-	# and offset — project its forward ray onto Y=0 for an accurate center.
+	# and offset — project its forward ray onto the grid_y_level plane.
 	var cam := get_parent() as Camera3D
 	if cam:
+		var floor_y: float = _material.get_shader_parameter("grid_y_level")
 		var vp_size := cam.get_viewport().get_visible_rect().size
 		var center_screen := vp_size * 0.5
 		var ray_origin := cam.project_ray_origin(center_screen)
 		var ray_dir := cam.project_ray_normal(center_screen)
-		# Intersect with Y=0 ground plane
 		var look_center := ray_origin
 		if absf(ray_dir.y) > 0.001:
-			var t := -ray_origin.y / ray_dir.y
+			var t := (floor_y - ray_origin.y) / ray_dir.y
 			if t > 0.0:
 				look_center = ray_origin + ray_dir * t
 		_material.set_shader_parameter("grid_center", look_center)
