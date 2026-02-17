@@ -106,9 +106,7 @@ func setup(cam: Camera3D, viewport: SubViewport, overlay_parent: Node) -> void:
 
 
 ## Configure scale settings. Call after level load and when scale changes.
-func configure(
-	grid_cell_size: float, display_unit: String, display_unit_per_cell: float
-) -> void:
+func configure(grid_cell_size: float, display_unit: String, display_unit_per_cell: float) -> void:
 	_grid_cell_size = grid_cell_size
 	_display_unit = display_unit
 	_display_unit_per_cell = display_unit_per_cell
@@ -493,56 +491,24 @@ func _draw_dashed_line_2d(from_pt: Vector2, to_pt: Vector2, color: Color) -> voi
 ## Create the screen-space overlay (line drawing + distance label). Parented
 ## outside the SubViewport so visuals aren't pixelated by the lo-fi shader.
 func _create_overlay(overlay_parent: Node) -> void:
-	_canvas_layer = CanvasLayer.new()
-	_canvas_layer.layer = Constants.LAYER_MEASURE_OVERLAY
-	overlay_parent.add_child(_canvas_layer)
-
-	# Full-rect Control for drawing measurement lines via _draw()
-	_draw_control = Control.new()
-	_draw_control.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_draw_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_draw_control.draw.connect(_on_draw_control_draw)
-	_canvas_layer.add_child(_draw_control)
+	var overlay: Dictionary = MapOverlayUtils.create_overlay(
+		overlay_parent, Constants.LAYER_MEASURE_OVERLAY, _on_draw_control_draw
+	)
+	_canvas_layer = overlay.canvas_layer
+	_draw_control = overlay.draw_control
 
 	# Total distance label (larger, shown when 2+ segments)
-	_total_label_panel = _create_label_panel(20)
-	_total_label = _total_label_panel.get_child(0) as Label
+	var total: Dictionary = MapOverlayUtils.create_label_panel(20)
+	_total_label_panel = total.panel
+	_total_label = total.label
 	_canvas_layer.add_child(_total_label_panel)
-
-
-## Create a styled label panel with the given font size.
-func _create_label_panel(font_size: int) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.visible = false
-
-	var stylebox := StyleBoxFlat.new()
-	stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.7)
-	stylebox.corner_radius_top_left = 4
-	stylebox.corner_radius_top_right = 4
-	stylebox.corner_radius_bottom_left = 4
-	stylebox.corner_radius_bottom_right = 4
-	stylebox.content_margin_left = 8.0
-	stylebox.content_margin_right = 8.0
-	stylebox.content_margin_top = 4.0
-	stylebox.content_margin_bottom = 4.0
-	panel.add_theme_stylebox_override("panel", stylebox)
-
-	var lbl := Label.new()
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	lbl.add_theme_font_size_override("font_size", font_size)
-	lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.6))
-	panel.add_child(lbl)
-
-	return panel
 
 
 ## Ensure the segment label pool has at least [param count] entries.
 func _ensure_segment_label_count(count: int) -> void:
 	while _segment_label_pool.size() < count:
-		var panel := _create_label_panel(14)
+		var result: Dictionary = MapOverlayUtils.create_label_panel(14)
+		var panel: PanelContainer = result.panel
 		_canvas_layer.add_child(panel)
 		_segment_label_pool.append(panel)
 
@@ -580,6 +546,7 @@ func _update_label_positions() -> void:
 
 func _push_measure_hints() -> void:
 	UIManager.remove_hint("M")
+	UIManager.remove_hint("G")
 	UIManager.add_hint("LMB", "Place Point")
 	UIManager.add_hint("Ctrl+LMB", "Snap Token")
 	UIManager.add_hint("RMB", "Undo / Cancel")
@@ -592,3 +559,4 @@ func _pop_measure_hints() -> void:
 	UIManager.remove_hint("RMB")
 	UIManager.remove_hint("M")
 	UIManager.add_hint("M", "Measure")
+	UIManager.add_hint("G", "Grid")

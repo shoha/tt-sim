@@ -64,24 +64,39 @@ var edge_pan_direction: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
-	if not Engine.is_editor_hint() and not DragAndDropGroupHelper.is_connected("group_added", _set_dragging_object_signals):
+	if (
+		not Engine.is_editor_hint()
+		and not DragAndDropGroupHelper.is_connected("group_added", _set_dragging_object_signals)
+	):
 		DragAndDropGroupHelper.group_added.connect(_set_dragging_object_signals)
 
 	_set_group()
 
+
 func _set_group() -> void:
-	if Engine.is_editor_hint(): return
+	if Engine.is_editor_hint():
+		return
 
 	await get_tree().current_scene.ready
 	DragAndDropGroupHelper.add_node_to_group(self, "DragAndDrop3D")
 
+
 func _set_dragging_object_signals(group: String, node: Node) -> void:
-	if group == "draggingObjects" and not node.is_connected("object_body_mouse_down", set_dragging_object):
+	if (
+		group == "draggingObjects"
+		and not node.is_connected("object_body_mouse_down", set_dragging_object)
+	):
 		node.object_body_mouse_down.connect(set_dragging_object.bind(node))
 
 
 ## When false, new drags are blocked (e.g. while the measure tool is active).
 var dragging_enabled: bool = true
+
+## Grid snap — when true, dragged tokens snap to grid cell centers on XZ.
+## Configured by GameMap from LevelData. Hold Shift during drag for free move.
+var grid_snap_enabled: bool = false
+var grid_cell_size: float = 1.524
+var grid_origin: Vector2 = Vector2.ZERO
 
 
 ## Called when a draggable object receives mouse down.
@@ -90,7 +105,7 @@ func set_dragging_object(object: DraggingObject3D) -> void:
 	if not dragging_enabled:
 		return
 	if _currentDraggingObject or _pending_drag_object:
-		return # Already dragging or pending
+		return  # Already dragging or pending
 	_pending_drag_object = object
 	_drag_start_mouse_pos = get_viewport().get_mouse_position()
 
@@ -153,7 +168,9 @@ func _process(delta: float) -> void:
 	if _currentDraggingObject and _has_target_position:
 		var currentPos = _currentDraggingObject.objectBody.global_position
 		var smooth_factor = 1.0 - exp(-drag_speed * delta)
-		_currentDraggingObject.objectBody.global_position = currentPos.lerp(_target_drag_position, smooth_factor)
+		_currentDraggingObject.objectBody.global_position = currentPos.lerp(
+			_target_drag_position, smooth_factor
+		)
 
 	# Update edge pan direction for camera controller to read
 	_update_edge_pan()
@@ -162,7 +179,8 @@ func _process(delta: float) -> void:
 func stop_drag() -> void:
 	var swaped = _swap_dragging_objects()
 
-	if swaped: return
+	if swaped:
+		return
 
 	edge_pan_direction = Vector2.ZERO
 	dragging_stopped.emit(_currentDraggingObject)
@@ -193,7 +211,12 @@ func is_dragging() -> bool:
 func _update_target_position() -> void:
 	var mousePosition3D = _get_3d_mouse_position()
 
-	if not mousePosition3D: return
+	if not mousePosition3D:
+		return
+
+	# Grid snap: snap XZ to cell centers unless Shift is held (free move override)
+	if grid_snap_enabled and not Input.is_key_pressed(KEY_SHIFT):
+		mousePosition3D = ScaleUtils.snap_to_grid(mousePosition3D, grid_cell_size, grid_origin)
 
 	mousePosition3D.y += _currentDraggingObject.get_height_offset()
 	mousePosition3D.y += _drag_height_offset
@@ -240,7 +263,8 @@ func _get_3d_mouse_position():
 	var worldspace := get_world_3d().direct_space_state
 	var intersect := worldspace.intersect_ray(params)
 
-	if not intersect: return
+	if not intersect:
+		return
 
 	var snapPosition = _get_snap_position(intersect.collider)
 	var isColliderParentDraggingObject = intersect.collider.get_parent() is DraggingObject3D
@@ -253,10 +277,13 @@ func _get_3d_mouse_position():
 	_set_dragging_object_on_position(snapPosition, intersect.collider)
 
 	var newPosition
-	if snapPosition and not isColliderParentDraggingObject: newPosition = snapPosition
-	else: newPosition = intersect.position
+	if snapPosition and not isColliderParentDraggingObject:
+		newPosition = snapPosition
+	else:
+		newPosition = intersect.position
 
 	return newPosition
+
 
 func _get_excluded_objects() -> Array:
 	var exclude := []
@@ -273,8 +300,10 @@ func _get_excluded_objects() -> Array:
 
 	return exclude
 
+
 func _get_snap_position(collider: Node):
-	if not useSnap: return
+	if not useSnap:
+		return
 
 	if collider.get_parent() is DraggingObject3D:
 		return collider.get_parent().snapPosition
@@ -284,6 +313,7 @@ func _get_snap_position(collider: Node):
 				return node.global_position
 	elif sourceSnapMode == "Group" and collider.is_in_group(SnapSourceGroup):
 		return collider.global_position
+
 
 func _set_dragging_object_on_position(snapPosition, collider) -> void:
 	if collider.get_parent() is DraggingObject3D:
@@ -299,10 +329,14 @@ func _set_dragging_object_on_position(snapPosition, collider) -> void:
 
 		_otherObjectOnPosition = null
 
+
 func _swap_dragging_objects() -> bool:
-	if (not swapDraggingObjects or
-		not _otherObjectOnPosition or
-		_otherObjectOnPosition.snapPosition == null): return false
+	if (
+		not swapDraggingObjects
+		or not _otherObjectOnPosition
+		or _otherObjectOnPosition.snapPosition == null
+	):
+		return false
 
 	var position: Vector3 = _otherObjectOnPosition.snapPosition
 	position.y += _currentDraggingObject.get_height_offset()
@@ -313,6 +347,7 @@ func _swap_dragging_objects() -> bool:
 
 	return true
 
+
 func _validate_property(property: Dictionary) -> void:
 	var hideList = []
 
@@ -320,6 +355,7 @@ func _validate_property(property: Dictionary) -> void:
 
 	if property.name in hideList:
 		property.usage = PROPERTY_USAGE_NO_EDITOR
+
 
 func _editor_snap_validate() -> Array:
 	var list = []

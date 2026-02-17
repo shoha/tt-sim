@@ -61,6 +61,18 @@ var _level_play_controller: LevelPlayController = null
 var _lofi_material: ShaderMaterial = null  # Cached lo-fi material (from scene or created)
 var _occlusion_fade_enabled: bool = true  # Whether the occlusion fade effect is active
 var _measure_tool: MeasureTool = null
+var _grid_overlay: GridOverlay = null
+var _drag_ruler: DragRuler = null
+
+# Grid visibility state (local client-side override)
+var _grid_explicit_toggle: bool = false  # Set by G key, persists until toggled or level change
+var _grid_auto_show_measure: bool = false
+var _grid_auto_show_drag: bool = false
+var _grid_level_default: bool = false  # From LevelData.grid_visible
+var _grid_show_on_measure: bool = true  # From LevelData
+var _grid_show_on_drag: bool = true  # From LevelData
+var _drag_highlight_active: bool = false
+var _drag_highlight_start_pos: Vector3 = Vector3.ZERO
 
 # Middle-mouse pan state
 var _is_panning: bool = false
@@ -122,6 +134,7 @@ func _process(delta: float) -> void:
 	handle_movement(delta)
 	handle_zoom(delta)
 	_handle_edge_pan(delta)
+	_update_drag_cell_highlight()
 
 
 func handle_movement(delta: float) -> void:
@@ -180,11 +193,16 @@ func _input(event: InputEvent) -> void:
 	# fallback in case the project hasn't reloaded the input map yet.
 	if event is InputEventKey and event.pressed and not event.echo:
 		if not _is_text_input_focused():
-			var is_m_key: bool = (
-				event.is_action_pressed("measure_toggle") or event.keycode == KEY_M
-			)
+			var is_m_key: bool = event.is_action_pressed("measure_toggle") or event.keycode == KEY_M
 			if is_m_key and _measure_tool:
 				_measure_tool.toggle()
+				get_viewport().set_input_as_handled()
+				return
+
+			var is_g_key: bool = event.keycode == KEY_G
+			if is_g_key:
+				_grid_explicit_toggle = not _grid_explicit_toggle
+				_update_grid_visibility()
 				get_viewport().set_input_as_handled()
 				return
 
@@ -504,9 +522,141 @@ func get_measure_tool() -> MeasureTool:
 
 
 ## Disable token dragging while the measure tool is active, re-enable when it's not.
+## Also auto-show/hide the grid overlay during measurement.
 func _on_measure_tool_toggled(active: bool) -> void:
 	if drag_and_drop_node:
 		drag_and_drop_node.dragging_enabled = not active
+	_grid_auto_show_measure = active
+	_update_grid_visibility()
+
+
+## Create and configure the GridOverlay.
+## Parented to Camera3D inside the SubViewport so it receives the lo-fi effect.
+func setup_grid_overlay() -> void:
+	if _grid_overlay:
+		return
+	_grid_overlay = GridOverlay.create(camera_node)
+
+
+## Return the GridOverlay instance (may be null before setup).
+func get_grid_overlay() -> GridOverlay:
+	return _grid_overlay
+
+
+## Create and configure the DragRuler.
+## Connects to DragAndDrop3D signals for automatic activation during drags.
+func setup_drag_ruler() -> void:
+	if _drag_ruler:
+		return
+	_drag_ruler = DragRuler.new()
+	_drag_ruler.name = "DragRuler"
+	add_child(_drag_ruler)
+	_drag_ruler.setup(camera_node, world_viewport, self, drag_and_drop_node)
+
+	# Auto-show/hide grid during drags
+	drag_and_drop_node.dragging_started.connect(_on_drag_started_grid)
+	drag_and_drop_node.dragging_stopped.connect(_on_drag_stopped_grid)
+	drag_and_drop_node.dragging_cancelled.connect(_on_drag_stopped_grid)
+
+
+## Return the DragRuler instance (may be null before setup).
+func get_drag_ruler() -> DragRuler:
+	return _drag_ruler
+
+
+func _on_drag_started_grid(obj: DraggingObject3D) -> void:
+	_grid_auto_show_drag = true
+	_update_grid_visibility()
+	# Show "Shift: Free move" hint when grid snap is active
+	if drag_and_drop_node and drag_and_drop_node.grid_snap_enabled:
+		UIManager.add_hint("Shift", "Free Move")
+	# Start cell highlighting
+	if obj and obj.objectBody:
+		_drag_highlight_active = true
+		_drag_highlight_start_pos = obj.objectBody.global_position
+
+
+func _on_drag_stopped_grid(_obj: DraggingObject3D) -> void:
+	_grid_auto_show_drag = false
+	_drag_highlight_active = false
+	_update_grid_visibility()
+	UIManager.remove_hint("Shift")
+	if _grid_overlay:
+		_grid_overlay.clear_drag_highlight()
+
+
+## Update the grid shader's highlighted cell each frame during a drag.
+func _update_drag_cell_highlight() -> void:
+	if not _drag_highlight_active or not _grid_overlay or not drag_and_drop_node:
+		return
+	if not drag_and_drop_node.is_dragging() or not drag_and_drop_node._has_target_position:
+		return
+	_grid_overlay.set_drag_highlight(
+		drag_and_drop_node._target_drag_position, _drag_highlight_start_pos
+	)
+
+
+## Configure grid overlay and drag systems from LevelData.
+func configure_grid(level_data: LevelData) -> void:
+	_grid_level_default = level_data.grid_visible
+	_grid_explicit_toggle = level_data.grid_visible
+	_grid_show_on_measure = level_data.grid_show_on_measure
+	_grid_show_on_drag = level_data.grid_show_on_drag
+	_grid_auto_show_measure = false
+	_grid_auto_show_drag = false
+
+	if _grid_overlay:
+		_grid_overlay.configure(
+			level_data.grid_cell_size, level_data.grid_origin, level_data.grid_color
+		)
+	_update_grid_visibility()
+
+	# Configure drag snap on the DragAndDrop3D node
+	if drag_and_drop_node:
+		drag_and_drop_node.grid_snap_enabled = level_data.grid_snap_enabled
+		drag_and_drop_node.grid_cell_size = level_data.grid_cell_size
+		drag_and_drop_node.grid_origin = level_data.grid_origin
+
+	# Configure drag ruler
+	if _drag_ruler:
+		(
+			_drag_ruler
+			. configure(
+				level_data.grid_cell_size,
+				level_data.display_unit,
+				level_data.display_unit_per_cell,
+				level_data.grid_snap_enabled,
+			)
+		)
+
+
+## Evaluate all grid visibility sources and show/hide accordingly.
+func _update_grid_visibility() -> void:
+	if not _grid_overlay:
+		return
+	var should_show: bool = (
+		_grid_explicit_toggle
+		or (_grid_show_on_measure and _grid_auto_show_measure)
+		or (_grid_show_on_drag and _grid_auto_show_drag)
+	)
+	if should_show and not _grid_overlay.is_grid_visible():
+		_grid_overlay.show_grid()
+	elif not should_show and _grid_overlay.is_grid_visible():
+		_grid_overlay.hide_grid()
+
+
+## Reset grid state when a level is cleared.
+func reset_grid_state() -> void:
+	_grid_explicit_toggle = false
+	_grid_auto_show_measure = false
+	_grid_auto_show_drag = false
+	_grid_level_default = false
+	_drag_highlight_active = false
+	if _grid_overlay:
+		_grid_overlay.clear_drag_highlight()
+		_grid_overlay.hide_grid()
+	if _drag_ruler:
+		_drag_ruler.deactivate()
 
 
 ## Load lo-fi filter setting from config
