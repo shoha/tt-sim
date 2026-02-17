@@ -44,14 +44,19 @@ uniform vec4 cell_fill_color : source_color = vec4(0.4, 0.65, 1.0, 0.18); // sof
 uniform vec4 cell_start_fill_color : source_color = vec4(0.4, 0.65, 1.0, 0.10); // dimmer for start
 uniform float cell_fill_edge_glow = 0.08; // brighter edge inside highlighted cells
 
-// Reconstruct world position from depth at a given screen UV
-vec3 world_from_depth(vec2 uv, mat4 inv_proj, mat4 inv_view) {
+// Reconstruct view-space position from depth at a given screen UV
+vec4 view_from_depth(vec2 uv, mat4 inv_proj) {
 	float d = texture(depth_texture, uv).r;
 	vec4 clip_pos = vec4(uv * 2.0 - 1.0, d, 1.0);
 	vec4 view_pos = inv_proj * clip_pos;
 	view_pos /= view_pos.w;
-	vec4 world_pos = inv_view * view_pos;
-	return world_pos.xyz;
+	return view_pos;
+}
+
+// Reconstruct world position from depth at a given screen UV
+vec3 world_from_depth(vec2 uv, mat4 inv_proj, mat4 inv_view) {
+	vec4 view_pos = view_from_depth(uv, inv_proj);
+	return (inv_view * view_pos).xyz;
 }
 
 void vertex() {
@@ -60,14 +65,44 @@ void vertex() {
 }
 
 void fragment() {
-	// Reconstruct world position of the geometry at this pixel
-	vec3 world_pos = world_from_depth(SCREEN_UV, INV_PROJECTION_MATRIX, INV_VIEW_MATRIX);
+	// Reject sky/void pixels (reversed-Z: far plane = 0.0)
+	float raw_depth = texture(depth_texture, SCREEN_UV).r;
+	if (raw_depth < 0.0001) {
+		discard;
+	}
+
+	// Sample depth at all 4 neighbors to detect geometry silhouette edges
+	vec2 texel = vec2(1.0) / vec2(textureSize(depth_texture, 0));
+	// Use a wider kernel (2 texels) so the rejection zone is thick enough to
+	// survive the lo-fi pixelation downsampling
+	float depth_r = texture(depth_texture, SCREEN_UV + vec2(texel.x * 2.0, 0.0)).r;
+	float depth_l = texture(depth_texture, SCREEN_UV - vec2(texel.x * 2.0, 0.0)).r;
+	float depth_u = texture(depth_texture, SCREEN_UV + vec2(0.0, texel.y * 2.0)).r;
+	float depth_d = texture(depth_texture, SCREEN_UV - vec2(0.0, texel.y * 2.0)).r;
+
+	// Reject if ANY neighbor is in the void — this pixel is at the geometry edge
+	if (depth_r < 0.0001 || depth_l < 0.0001 || depth_u < 0.0001 || depth_d < 0.0001) {
+		discard;
+	}
+
+	// Depth discontinuity rejection: large depth jumps between neighbors mean
+	// we're on a geometry silhouette where reconstruction is unreliable
+	vec4 view_c = view_from_depth(SCREEN_UV, INV_PROJECTION_MATRIX);
+	float linear_c = -view_c.z;
+	float linear_r = -view_from_depth(SCREEN_UV + vec2(texel.x, 0.0), INV_PROJECTION_MATRIX).z;
+	float linear_u = -view_from_depth(SCREEN_UV + vec2(0.0, texel.y), INV_PROJECTION_MATRIX).z;
+	float depth_threshold = max(0.1 * linear_c, 0.2);
+	if (abs(linear_r - linear_c) > depth_threshold || abs(linear_u - linear_c) > depth_threshold) {
+		discard;
+	}
+
+	// Reconstruct world positions from the already-computed view positions
+	vec3 world_pos = (INV_VIEW_MATRIX * view_c).xyz;
+	vec3 world_r_pos = (INV_VIEW_MATRIX * view_from_depth(SCREEN_UV + vec2(texel.x, 0.0), INV_PROJECTION_MATRIX)).xyz;
+	vec3 world_u_pos = (INV_VIEW_MATRIX * view_from_depth(SCREEN_UV + vec2(0.0, texel.y), INV_PROJECTION_MATRIX)).xyz;
 
 	// Reconstruct surface normal from depth-buffer neighbors via cross product
-	vec2 texel = vec2(1.0) / vec2(textureSize(depth_texture, 0));
-	vec3 world_r = world_from_depth(SCREEN_UV + vec2(texel.x, 0.0), INV_PROJECTION_MATRIX, INV_VIEW_MATRIX);
-	vec3 world_u = world_from_depth(SCREEN_UV + vec2(0.0, texel.y), INV_PROJECTION_MATRIX, INV_VIEW_MATRIX);
-	vec3 surface_normal = normalize(cross(world_r - world_pos, world_u - world_pos));
+	vec3 surface_normal = normalize(cross(world_r_pos - world_pos, world_u_pos - world_pos));
 
 	// Only draw grid on mostly-horizontal surfaces (floors, tabletops, ramps)
 	if (abs(dot(surface_normal, vec3(0.0, 1.0, 0.0))) < normal_threshold) {
