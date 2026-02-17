@@ -12,9 +12,11 @@
  *    The vertex shader forces it to fill the screen in clip space.
  * 2. The fragment shader samples hint_depth_texture to reconstruct the world
  *    position of each visible pixel.
- * 3. Reconstructs the surface normal from depth-buffer neighbors (cross product
+ * 3. Height filter rejects pixels outside [grid_y_level ± grid_y_tolerance],
+ *    preventing the grid from projecting onto tokens and ceilings.
+ * 4. Reconstructs the surface normal from depth-buffer neighbors (cross product
  *    of partial derivatives) and discards steep/vertical surfaces.
- * 4. Applies grid math on the XZ plane and fades with distance from grid_center.
+ * 5. Applies grid math on the XZ plane and fades with distance from grid_center.
  *
  * SETUP:
  *   MeshInstance3D child of Camera3D inside the SubViewport.
@@ -35,6 +37,8 @@ uniform float fade_radius = 30.0;
 uniform vec3 grid_center = vec3(0.0);
 uniform vec2 grid_origin = vec2(0.0);
 uniform float normal_threshold = 0.7;
+uniform float grid_y_level = 0.0;       // approximate floor Y in world space
+uniform float grid_y_tolerance = 0.5;   // max height above grid_y_level to draw grid
 
 // Cell highlighting during token drags
 uniform bool drag_active = false;
@@ -98,6 +102,13 @@ void fragment() {
 
 	// Reconstruct world positions from the already-computed view positions
 	vec3 world_pos = (INV_VIEW_MATRIX * view_c).xyz;
+
+	// Height filter: only draw grid near the expected floor level.
+	// Rejects token surfaces (which extend above the floor) and ceilings.
+	if (world_pos.y > grid_y_level + grid_y_tolerance || world_pos.y < grid_y_level - grid_y_tolerance) {
+		discard;
+	}
+
 	vec3 world_r_pos = (INV_VIEW_MATRIX * view_from_depth(SCREEN_UV + vec2(texel.x, 0.0), INV_PROJECTION_MATRIX)).xyz;
 	vec3 world_u_pos = (INV_VIEW_MATRIX * view_from_depth(SCREEN_UV + vec2(0.0, texel.y), INV_PROJECTION_MATRIX)).xyz;
 
