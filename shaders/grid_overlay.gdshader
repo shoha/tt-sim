@@ -31,14 +31,20 @@ render_mode unshaded, depth_draw_never, fog_disabled, cull_disabled;
 
 uniform sampler2D depth_texture : hint_depth_texture;
 uniform float cell_size = 1.524;
-uniform vec4 line_color : source_color = vec4(1.0, 1.0, 1.0, 0.35);
+uniform vec4 line_color : source_color = vec4(1.0, 1.0, 1.0, 0.0);
 uniform float line_thickness = 2.0; // multiplier for grid line width (helps survive lo-fi pixelation)
 uniform float fade_radius = 30.0;
+uniform float opacity = 1.0;            // global opacity multiplier (animated for fade in/out)
 uniform vec3 grid_center = vec3(0.0);
 uniform vec2 grid_origin = vec2(0.0);
 uniform float normal_threshold = 0.7;
 uniform float grid_y_level = 0.0;       // approximate floor Y in world space
 uniform float grid_y_tolerance = 0.5;   // max height above grid_y_level to draw grid
+
+// Neutral cell tint — subtle fill on every cell for readability on bright maps
+// color_surface1 (#2c1f2b) from the theme
+uniform vec4 cell_tint_color : source_color = vec4(0.173, 0.122, 0.169, 0.65);
+uniform float cell_tint_inset = 0.10;   // fraction of cell to leave unshaded at edges (0.10 = 90% fill)
 
 // Cell highlighting during token drags
 uniform bool drag_active = false;
@@ -131,36 +137,47 @@ void fragment() {
 	float dist = length(world_pos.xz - grid_center.xz);
 	float fade = 1.0 - smoothstep(fade_radius * 0.6, fade_radius, dist);
 
-	// Base grid lines
-	vec3 final_color = line_color.rgb;
-	float final_alpha = grid_line * line_color.a * fade;
+	// Compositing layers (bottom to top):
+	//   1. Cell tint   — neutral darkening on every cell
+	//   2. Drag fill   — colored highlight on hovered/start cells
+	//   3. Grid lines  — white lines on top
 
-	// Cell highlighting during drags
+	// Layer 1: cell tint (base) — inset slightly from cell edges
+	vec2 cell_local = fract((world_pos.xz - grid_origin) / cell_size);
+	vec2 edge_dist = min(cell_local, vec2(1.0) - cell_local); // 0 at edge, 0.5 at center
+	float inset_half = cell_tint_inset * 0.5; // half the inset fraction
+	float inset_mask = smoothstep(0.0, inset_half, min(edge_dist.x, edge_dist.y));
+
+	vec3 final_color = cell_tint_color.rgb;
+	float final_alpha = cell_tint_color.a * fade * inset_mask;
+
+	// Layer 2: drag cell highlighting
 	if (drag_active) {
-		// Determine which cell this pixel belongs to
 		vec2 pixel_cell = floor((world_pos.xz - grid_origin) / cell_size);
-
-		// Check if this pixel is in the current (hovered) cell or the start cell
 		bool is_current = (pixel_cell == drag_current_cell);
 		bool is_start = (pixel_cell == drag_start_cell);
 
 		if (is_current || is_start) {
-			// Compute how close the pixel is to the cell edge (0 = center, 1 = edge)
-			vec2 cell_local = fract((world_pos.xz - grid_origin) / cell_size);
-			vec2 edge_dist = min(cell_local, vec2(1.0) - cell_local); // distance to nearest edge [0..0.5]
 			float edge_factor = 1.0 - smoothstep(0.0, 0.15, min(edge_dist.x, edge_dist.y));
 
 			vec4 fill = is_current ? cell_fill_color : cell_start_fill_color;
 			float fill_alpha = (fill.a + edge_factor * cell_fill_edge_glow) * fade;
 
-			// Blend: cell fill underneath grid lines
-			final_color = mix(fill.rgb, final_color, step(0.01, final_alpha));
-			final_alpha = max(final_alpha, fill_alpha);
+			// Drag fill replaces the tint on highlighted cells
+			final_color = fill.rgb;
+			final_alpha = fill_alpha;
 		}
 	}
 
+	// Layer 3: grid lines on top of everything
+	float line_alpha = grid_line * line_color.a * fade;
+	if (line_alpha > 0.01) {
+		final_color = line_color.rgb;
+		final_alpha = max(final_alpha, line_alpha);
+	}
+
 	ALBEDO = final_color;
-	ALPHA = final_alpha;
+	ALPHA = final_alpha * opacity;
 
 	// Discard fully transparent pixels for performance
 	if (ALPHA < 0.001) {

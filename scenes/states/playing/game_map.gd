@@ -661,7 +661,7 @@ func reset_grid_state() -> void:
 	_drag_highlight_active = false
 	if _grid_overlay:
 		_grid_overlay.clear_drag_highlight()
-		_grid_overlay.hide_grid()
+		_grid_overlay.hide_grid_immediate()
 	if _drag_ruler:
 		_drag_ruler.deactivate()
 
