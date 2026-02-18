@@ -59,7 +59,7 @@ var _failed_downloads: Dictionary = {}
 
 
 func _ready() -> void:
-	pass  # Cache directory setup is handled by the cache manager
+	set_process(false)
 
 
 ## Inject dependencies (called by AssetManager after adding to tree).
@@ -68,8 +68,9 @@ func setup(cache_manager: Node) -> void:
 
 
 func _process(_delta: float) -> void:
-	if not _active_downloads.is_empty():
-		_update_download_progress()
+	_update_download_progress()
+	if _active_downloads.is_empty():
+		set_process(false)
 
 
 ## Check if an asset is already cached locally
@@ -202,6 +203,7 @@ func _start_download(request: DownloadRequest) -> void:
 
 	request.http_request = http_request
 	_active_downloads[key] = request
+	set_process(true)
 
 	# Connect signals
 	http_request.request_completed.connect(_on_request_completed.bind(request))
@@ -434,22 +436,3 @@ func clear_all_caches() -> void:
 	_failed_downloads.clear()
 
 	_cache_manager.clear_cache()
-
-
-## Recursively delete a directory
-func _recursive_delete(path: String) -> void:
-	var dir = DirAccess.open(path)
-	if not dir:
-		return
-
-	dir.list_dir_begin()
-	var file_name = dir.get_next()
-	while file_name != "":
-		var full_path = path + "/" + file_name
-		if dir.current_is_dir():
-			_recursive_delete(full_path)
-			DirAccess.remove_absolute(full_path)
-		else:
-			DirAccess.remove_absolute(full_path)
-		file_name = dir.get_next()
-	dir.list_dir_end()

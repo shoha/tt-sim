@@ -47,8 +47,6 @@ var _request_queue: Array[Dictionary] = []
 ## Whether streaming is enabled
 var _enabled: bool = true
 
-const SETTINGS_PATH := "user://settings.cfg"
-
 
 func _ready() -> void:
 	# Load settings
@@ -67,7 +65,7 @@ func setup(cache_manager: Node, asset_manager: Node) -> void:
 
 func _load_settings() -> void:
 	var config = ConfigFile.new()
-	var err = config.load(SETTINGS_PATH)
+	var err = config.load(Paths.SETTINGS_PATH)
 	if err == OK:
 		_enabled = config.get_value("network", "p2p_enabled", true)
 
@@ -266,6 +264,8 @@ func _send_chunks_async(
 		# Yield every few chunks to avoid blocking
 		if (i - start_chunk) % 4 == 3:
 			await get_tree().process_frame
+			if not is_instance_valid(self):
+				return
 
 	var chunks_sent = total_chunks - start_chunk
 	print(

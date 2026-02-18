@@ -72,19 +72,6 @@ func _deferred_connect_resolver() -> void:
 		AssetResolver.asset_failed.connect(_on_resolver_asset_failed)
 
 
-func _connect_legacy_signals() -> void:
-	# Fallback for backwards compatibility
-	if not AssetDownloader.download_completed.is_connected(_on_asset_downloaded):
-		AssetDownloader.download_completed.connect(_on_asset_downloaded)
-	if not AssetDownloader.download_failed.is_connected(_on_asset_download_failed):
-		AssetDownloader.download_failed.connect(_on_asset_download_failed)
-
-	if not AssetStreamer.asset_received.is_connected(_on_p2p_asset_received):
-		AssetStreamer.asset_received.connect(_on_p2p_asset_received)
-	if not AssetStreamer.asset_failed.is_connected(_on_p2p_asset_failed):
-		AssetStreamer.asset_failed.connect(_on_p2p_asset_failed)
-
-
 func _on_resolver_asset_resolved(
 	_request_id: String, pack_id: String, asset_id: String, variant_id: String, local_path: String
 ) -> void:
@@ -444,9 +431,7 @@ func load_remote_pack_from_url(manifest_url: String) -> void:
 	# Create a temporary HTTPRequest to fetch the manifest
 	var http_request = HTTPRequest.new()
 	add_child(http_request)
-	http_request.request_completed.connect(
-		_on_manifest_downloaded.bind(http_request, manifest_url)
-	)
+	http_request.request_completed.connect(_on_manifest_downloaded.bind(http_request, manifest_url))
 
 	var error = http_request.request(manifest_url)
 	if error != OK:
@@ -473,8 +458,7 @@ func _on_manifest_downloaded(
 	var parse_result = json.parse(json_text)
 	if parse_result != OK:
 		push_error(
-			"AssetPackManager: Failed to parse remote manifest JSON: "
-			+ json.get_error_message()
+			"AssetPackManager: Failed to parse remote manifest JSON: " + json.get_error_message()
 		)
 		return
 
@@ -552,9 +536,7 @@ func _fetch_pack_manifest(
 	var json = JSON.new()
 	var parse_result = json.parse(json_text)
 	if parse_result != OK:
-		push_error(
-			"AssetPackManager: Failed to parse manifest JSON: " + json.get_error_message()
-		)
+		push_error("AssetPackManager: Failed to parse manifest JSON: " + json.get_error_message())
 		pack_download_failed.emit("", "Invalid manifest JSON: " + json.get_error_message())
 		return {}
 
@@ -700,8 +682,10 @@ func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
 		)
 
 	print(
-		"AssetPackManager: Queued %d files (%d variants) for pack '%s'"
-		% [download_items.size(), total_variants, pack.display_name]
+		(
+			"AssetPackManager: Queued %d files (%d variants) for pack '%s'"
+			% [download_items.size(), total_variants, pack.display_name]
+		)
 	)
 
 
@@ -791,7 +775,9 @@ func is_model_cached(path: String, create_static_bodies: bool = false) -> bool:
 
 ## Preload multiple models asynchronously.
 func preload_models(
-	assets: Array, progress_callback: Callable = Callable(), create_static_bodies: bool = false,
+	assets: Array,
+	progress_callback: Callable = Callable(),
+	create_static_bodies: bool = false,
 ) -> int:
 	var unique_paths: Dictionary = {}
 	for asset in assets:

@@ -19,6 +19,7 @@ var _target_progress := 0.0
 func _ready() -> void:
 	_set_alpha(0.0)
 	hide()
+	set_process(false)
 
 
 func _set_alpha(alpha: float) -> void:
@@ -27,9 +28,11 @@ func _set_alpha(alpha: float) -> void:
 
 
 func _process(_delta: float) -> void:
-	# Smooth progress bar animation
 	if progress_bar.value < _target_progress:
 		progress_bar.value = lerpf(progress_bar.value, _target_progress, 0.1)
+		if progress_bar.value >= _target_progress - 0.001:
+			progress_bar.value = _target_progress
+			set_process(false)
 
 
 ## Show the loading overlay with optional title
@@ -58,6 +61,7 @@ func show_loading(title: String = "Loading...") -> void:
 ## Update the progress (0.0 to 1.0)
 func set_progress(value: float, status: String = "") -> void:
 	_target_progress = clampf(value, 0.0, 1.0)
+	set_process(true)
 	if status != "":
 		status_label.text = status
 
@@ -77,6 +81,8 @@ func hide_loading() -> void:
 	_tween.tween_property($CenterContainer, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
 
 	await _tween.finished
+	if not is_instance_valid(self):
+		return
 	hide()
 	loading_complete.emit()
 

@@ -97,7 +97,6 @@ const SHAKE_DURATION := 0.15  # Duration of shake effect
 
 const EDGE_PAN_SMOOTH_SPEED: float = 8.0  # Smoothing rate for edge panning ramp-up/coast-out
 const TOKEN_COLLISION_LAYER: int = 2  # Physics layer for tokens (layer 1 = terrain)
-const SETTINGS_PATH := "user://settings.cfg"
 
 
 func _ready() -> void:
@@ -670,7 +669,7 @@ func reset_grid_state() -> void:
 ## Load lo-fi filter setting from config
 func _load_lofi_setting() -> void:
 	var config = ConfigFile.new()
-	var err = config.load(SETTINGS_PATH)
+	var err = config.load(Paths.SETTINGS_PATH)
 
 	# Default to enabled if no setting exists
 	var lofi_enabled = true
@@ -710,7 +709,7 @@ func _create_default_lofi_material() -> ShaderMaterial:
 ## Load grid visual settings from config and apply to the overlay.
 func _load_grid_visual_settings() -> void:
 	var config = ConfigFile.new()
-	var err = config.load(SETTINGS_PATH)
+	var err = config.load(Paths.SETTINGS_PATH)
 	if err != OK:
 		return
 	if not _grid_overlay:
@@ -732,7 +731,7 @@ func apply_grid_visual_settings(
 ## Load occlusion fade setting from config
 func _load_occlusion_fade_setting() -> void:
 	var config = ConfigFile.new()
-	var err = config.load(SETTINGS_PATH)
+	var err = config.load(Paths.SETTINGS_PATH)
 	var enabled = true
 	if err == OK:
 		enabled = config.get_value("graphics", "occlusion_fade_enabled", true)

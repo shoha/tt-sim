@@ -64,6 +64,8 @@ func fade_out(duration: float = -1.0) -> void:
 
 	AudioManager.play_transition()
 	await _tween.finished
+	if not is_instance_valid(self):
+		return
 	fade_out_complete.emit()
 
 
@@ -85,6 +87,8 @@ func fade_in(duration: float = -1.0) -> void:
 
 	AudioManager.play_transition()
 	await _tween.finished
+	if not is_instance_valid(self):
+		return
 	_cleanup_transition()
 	color_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_is_transitioning = false
@@ -99,12 +103,16 @@ func transition(
 	fade_in_duration: float = -1.0,
 ) -> void:
 	await fade_out(fade_out_duration)
+	if not is_instance_valid(self):
+		return
 
 	if middle_callback.is_valid():
 		middle_callback.call()
 
 	# Small delay to ensure scene changes are processed
 	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
 
 	await fade_in(fade_in_duration)
 

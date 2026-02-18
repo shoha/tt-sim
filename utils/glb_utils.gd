@@ -194,115 +194,83 @@ static func load_glb_with_processing_async(
 static func _process_collision_meshes_async(node: Node, create_static_bodies: bool) -> void:
 	var scene_tree = Engine.get_main_loop() as SceneTree
 
-	# Collect nodes to process
 	var collision_nodes: Array[Dictionary] = []
 	_find_collision_mesh_nodes(node, collision_nodes)
 
 	var processed = 0
 	for col_info in collision_nodes:
-		var mesh_node = col_info.node as MeshInstance3D
-		var suffix = col_info.suffix as String
-
-		if not mesh_node:
-			continue
-
-		var is_only = suffix.contains("only")
-
-		if create_static_bodies and mesh_node.mesh:
-			var is_convex = suffix.contains("conv")
-
-			var static_body = StaticBody3D.new()
-			static_body.name = mesh_node.name.replace(suffix, "") + "_collision"
-			# Allow viewport picking rays to pass through map geometry so tokens
-			# behind walls/pillars remain selectable (see OcclusionFadeManager).
-			static_body.input_ray_pickable = false
-
-			var collision_shape = CollisionShape3D.new()
-			collision_shape.name = "CollisionShape3D"
-
-			# Shape creation can be slow for complex meshes
-			if is_convex:
-				collision_shape.shape = mesh_node.mesh.create_convex_shape()
-			else:
-				collision_shape.shape = mesh_node.mesh.create_trimesh_shape()
-
-			static_body.add_child(collision_shape)
-
-			var parent = mesh_node.get_parent()
-			if parent:
-				static_body.transform = mesh_node.transform
-				parent.add_child(static_body)
-
-			if is_only:
-				mesh_node.get_parent().remove_child(mesh_node)
-				mesh_node.free()
-			else:
-				mesh_node.visible = false
-		else:
-			# For tokens: convert collision meshes to CollisionShape3D nodes
-			# so the token factory can attach them to the RigidBody3D.
-			if mesh_node.mesh:
-				var is_convex = suffix.contains("conv")
-				var collision_shape = CollisionShape3D.new()
-				collision_shape.name = "CollisionShape3D"
-
-				if is_convex:
-					collision_shape.shape = mesh_node.mesh.create_convex_shape()
-				else:
-					collision_shape.shape = mesh_node.mesh.create_trimesh_shape()
-
-				var parent = mesh_node.get_parent()
-				if parent:
-					collision_shape.transform = mesh_node.transform
-					parent.add_child(collision_shape)
-
-			if is_only:
-				mesh_node.get_parent().remove_child(mesh_node)
-				mesh_node.free()
-			else:
-				mesh_node.visible = false
-
+		_process_single_collision_node(col_info, create_static_bodies)
 		processed += 1
-		# Yield every few collision meshes to prevent frame drops
 		if processed % 3 == 0 and scene_tree:
 			await scene_tree.process_frame
 
 
-## Process collision mesh nodes in a runtime-loaded GLB
-## Godot's import system handles these automatically, but GLTFDocument doesn't
+## Process collision mesh nodes in a runtime-loaded GLB.
+## Godot's import system handles these automatically, but GLTFDocument doesn't.
 ## Standard Godot collision mesh suffixes: -col, -convcol, -colonly, -convcolonly
 ##
 ## @param node: The root node to process
-## @param create_static_bodies: If true, creates StaticBody3D with CollisionShape3D (for maps)
-##                              If false, just hides the collision mesh indicators (for tokens)
+## @param create_static_bodies: If true, creates StaticBody3D with CollisionShape3D (for maps).
+##                              If false, just hides the collision mesh indicators (for tokens).
 static func process_collision_meshes(node: Node, create_static_bodies: bool = false) -> void:
-	# Collect nodes to process (can't modify tree while iterating)
 	var collision_nodes: Array[Dictionary] = []
 	_find_collision_mesh_nodes(node, collision_nodes)
 
-	# Process each collision mesh node
 	# NOTE: We use immediate free() instead of queue_free() because the scene may be
 	# cached as a Node3D template and duplicated before queue_free() executes.
-	# If we used queue_free(), the duplicate would still contain the collision meshes.
 	for col_info in collision_nodes:
-		var mesh_node = col_info.node as MeshInstance3D
-		var suffix = col_info.suffix as String
+		_process_single_collision_node(col_info, create_static_bodies)
 
-		if not mesh_node:
-			continue
 
-		var is_only = suffix.contains("only")  # -colonly, -convcolonly means no visual
+## Shared implementation for processing a single collision mesh node.
+## Used by both the sync and async variants.
+static func _process_single_collision_node(
+	col_info: Dictionary, create_static_bodies: bool
+) -> void:
+	var mesh_node = col_info.node as MeshInstance3D
+	var suffix = col_info.suffix as String
 
-		if create_static_bodies and mesh_node.mesh:
-			# Create actual collision geometry (for maps)
+	if not mesh_node:
+		return
+
+	var is_only = suffix.contains("only")
+
+	if create_static_bodies and mesh_node.mesh:
+		var is_convex = suffix.contains("conv")
+
+		var static_body = StaticBody3D.new()
+		static_body.name = mesh_node.name.replace(suffix, "") + "_collision"
+		# Allow viewport picking rays to pass through map geometry so tokens
+		# behind walls/pillars remain selectable (see OcclusionFadeManager).
+		static_body.input_ray_pickable = false
+
+		var collision_shape = CollisionShape3D.new()
+		collision_shape.name = "CollisionShape3D"
+
+		if is_convex:
+			collision_shape.shape = mesh_node.mesh.create_convex_shape()
+		else:
+			collision_shape.shape = mesh_node.mesh.create_trimesh_shape()
+
+		static_body.add_child(collision_shape)
+
+		var parent = mesh_node.get_parent()
+		if parent:
+			static_body.transform = mesh_node.transform
+			parent.add_child(static_body)
+
+		if is_only:
+			mesh_node.get_parent().remove_child(mesh_node)
+			mesh_node.free()
+		else:
+			mesh_node.visible = false
+	else:
+		# For tokens: convert collision meshes to CollisionShape3D nodes
+		# so the token factory can attach them to the RigidBody3D.
+		# Without this, the factory falls back to creating a convex shape from
+		# the visual mesh, which is wrong for skinned meshes (bind-pose vertices).
+		if mesh_node.mesh:
 			var is_convex = suffix.contains("conv")
-
-			var static_body = StaticBody3D.new()
-			static_body.name = mesh_node.name.replace(suffix, "") + "_collision"
-			# Allow viewport picking rays to pass through map geometry so tokens
-			# behind walls/pillars remain selectable (see OcclusionFadeManager).
-			static_body.input_ray_pickable = false
-
 			var collision_shape = CollisionShape3D.new()
 			collision_shape.name = "CollisionShape3D"
 
@@ -311,48 +279,16 @@ static func process_collision_meshes(node: Node, create_static_bodies: bool = fa
 			else:
 				collision_shape.shape = mesh_node.mesh.create_trimesh_shape()
 
-			static_body.add_child(collision_shape)
-
-			# Add the static body as a sibling to the mesh node
 			var parent = mesh_node.get_parent()
 			if parent:
-				# Copy transform from mesh node
-				static_body.transform = mesh_node.transform
-				parent.add_child(static_body)
+				collision_shape.transform = mesh_node.transform
+				parent.add_child(collision_shape)
 
-			# Hide or remove the visual mesh based on suffix type
-			if is_only:
-				mesh_node.get_parent().remove_child(mesh_node)
-				mesh_node.free()
-			else:
-				mesh_node.visible = false
+		if is_only:
+			mesh_node.get_parent().remove_child(mesh_node)
+			mesh_node.free()
 		else:
-			# For tokens: convert collision meshes to CollisionShape3D nodes
-			# so the token factory can attach them to the RigidBody3D.
-			# Without this, the factory falls back to creating a convex shape from
-			# the visual mesh, which is wrong for skinned meshes (bind-pose vertices).
-			if mesh_node.mesh:
-				var is_convex = suffix.contains("conv")
-				var collision_shape = CollisionShape3D.new()
-				collision_shape.name = "CollisionShape3D"
-
-				if is_convex:
-					collision_shape.shape = mesh_node.mesh.create_convex_shape()
-				else:
-					collision_shape.shape = mesh_node.mesh.create_trimesh_shape()
-
-				# Place collision shape as sibling with same transform
-				var parent = mesh_node.get_parent()
-				if parent:
-					collision_shape.transform = mesh_node.transform
-					parent.add_child(collision_shape)
-
-			# Remove or hide the original mesh node
-			if is_only:
-				mesh_node.get_parent().remove_child(mesh_node)
-				mesh_node.free()
-			else:
-				mesh_node.visible = false
+			mesh_node.visible = false
 
 
 ## Recursively find nodes that are collision meshes based on naming convention
@@ -679,9 +615,7 @@ static func collect_visible_mesh_instances(root: Node) -> Array[MeshInstance3D]:
 
 
 ## Recursive helper for collect_visible_mesh_instances
-static func _collect_visible_meshes_recursive(
-	node: Node, result: Array[MeshInstance3D]
-) -> void:
+static func _collect_visible_meshes_recursive(node: Node, result: Array[MeshInstance3D]) -> void:
 	for child in node.get_children():
 		if child is MeshInstance3D and child.visible:
 			var mesh_inst := child as MeshInstance3D

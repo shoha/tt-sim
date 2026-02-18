@@ -67,6 +67,8 @@ func animate_in() -> void:
 		AudioManager.play_open()
 
 	await _panel_tween.finished
+	if not is_instance_valid(self):
+		return
 	_on_after_animate_in()
 
 
@@ -96,6 +98,8 @@ func animate_out() -> void:
 		AudioManager.play_close()
 
 	await _panel_tween.finished
+	if not is_instance_valid(self):
+		return
 	_on_after_animate_out()
 
 

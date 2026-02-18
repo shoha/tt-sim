@@ -14,9 +14,12 @@ var _factory_created: bool = false
 var _board_token: BoardToken
 var _state_machine: AnimationNodeStateMachinePlayback
 
+
 func _enter_tree() -> void:
 	if not _factory_created:
-		push_error("BoardTokenAnimationTree: Use BoardTokenAnimationTreeFactory.create(), not .new()")
+		push_error(
+			"BoardTokenAnimationTree: Use BoardTokenAnimationTreeFactory.create(), not .new()"
+		)
 
 
 func _ready() -> void:
@@ -46,6 +49,13 @@ func _init_state_machine() -> void:
 	if _state_machine:
 		_state_machine.travel("battlewait01")
 
+
+func _exit_tree() -> void:
+	if _board_token and is_instance_valid(_board_token):
+		if _board_token.health_changed.is_connected(_on_health_changed):
+			_board_token.health_changed.disconnect(_on_health_changed)
+
+
 func _connect_to_board_token() -> void:
 	_board_token = _find_ancestor_board_token()
 	if not _board_token:
@@ -54,6 +64,7 @@ func _connect_to_board_token() -> void:
 
 	_board_token.health_changed.connect(_on_health_changed)
 
+
 func _find_ancestor_board_token() -> BoardToken:
 	var node = get_parent()
 	while node:
@@ -61,6 +72,7 @@ func _find_ancestor_board_token() -> BoardToken:
 			return node
 		node = node.get_parent()
 	return null
+
 
 func _on_health_changed(new_health: int, _max_health: int, previous_health: int) -> void:
 	if not _state_machine:

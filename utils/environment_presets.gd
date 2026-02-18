@@ -663,9 +663,13 @@ static func overrides_from_json(json_data: Dictionary) -> Dictionary:
 	var overrides = {}
 	for key in json_data:
 		var value = json_data[key]
-		# Check if this is a color property and convert from hex
-		if key.ends_with("_color") and value is String and value.begins_with("#"):
-			overrides[key] = Color.from_string(value, Color.WHITE)
+		if key.ends_with("_color"):
+			if value is String and value.begins_with("#"):
+				overrides[key] = Color.from_string(value, Color.WHITE)
+			elif value is Dictionary:
+				overrides[key] = SerializationUtils.dict_to_color(value)
+			else:
+				overrides[key] = value
 		else:
 			overrides[key] = value
 	return overrides

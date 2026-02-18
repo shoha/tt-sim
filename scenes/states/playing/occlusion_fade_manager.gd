@@ -38,7 +38,7 @@ const MAX_TOKENS := 32
 # References (set via setup())
 var _camera: Camera3D
 var _map_container: Node3D
-var _tokens_container: Node3D # DragAndDrop3D
+var _tokens_container: Node3D  # DragAndDrop3D
 
 # The occlusion fade shader resource (loaded once)
 var _shader: Shader
@@ -53,10 +53,11 @@ var _all_shader_materials: Array[ShaderMaterial] = []
 
 var _frame_counter: int = 0
 var _is_setup: bool = false
-var _lofi_pixelation: float = 0.0 # Mirror of lo-fi shader's pixelation value (0 = disabled)
+var _lofi_pixelation: float = 0.0  # Mirror of lo-fi shader's pixelation value (0 = disabled)
 
 
 func _ready() -> void:
+	set_physics_process(false)
 	_shader = load("res://shaders/occlusion_fade.gdshader") as Shader
 	if not _shader:
 		push_error("OcclusionFadeManager: Failed to load occlusion_fade.gdshader")
@@ -75,6 +76,7 @@ func setup(camera: Camera3D, map_container: Node3D, tokens_container: Node3D) ->
 
 	_convert_map_materials()
 	_is_setup = true
+	set_physics_process(true)
 
 
 ## Clear all state and restore original materials. Call before loading a new map.
@@ -83,12 +85,10 @@ func clear() -> void:
 	_converted_meshes.clear()
 	_all_shader_materials.clear()
 	_is_setup = false
+	set_physics_process(false)
 
 
 func _physics_process(_delta: float) -> void:
-	if not _is_setup or _all_shader_materials.is_empty():
-		return
-
 	_frame_counter += 1
 	if _frame_counter % update_interval != 0:
 		return
@@ -109,6 +109,7 @@ func set_lofi_pixelation(value: float) -> void:
 # =============================================================================
 # Material conversion
 # =============================================================================
+
 
 ## Convert all StandardMaterial3D materials on map meshes to our occlusion shader.
 func _convert_map_materials() -> void:
@@ -146,11 +147,16 @@ func _convert_mesh_materials(mesh_inst: MeshInstance3D) -> void:
 		mesh_inst.set_surface_override_material(surface_idx, shader_mat)
 		_all_shader_materials.append(shader_mat)
 
-		surface_entries.append({
-			"surface_index": surface_idx,
-			"original_material": original_mat,
-			"shader_material": shader_mat,
-		})
+		(
+			surface_entries
+			. append(
+				{
+					"surface_index": surface_idx,
+					"original_material": original_mat,
+					"shader_material": shader_mat,
+				}
+			)
+		)
 
 	if not surface_entries.is_empty():
 		_converted_meshes[mesh_id] = {"mesh": mesh_inst, "surfaces": surface_entries}
@@ -200,6 +206,7 @@ func _create_shader_material_from(std_mat: StandardMaterial3D) -> ShaderMaterial
 # =============================================================================
 # Token position uniform updates
 # =============================================================================
+
 
 ## Collect token world positions and per-token fade radii, then push to shaders.
 ## Uses the collision shape AABB center as the token position and derives the
@@ -260,6 +267,7 @@ func _update_token_uniforms() -> void:
 # Restoration
 # =============================================================================
 
+
 ## Restore all original materials on converted meshes.
 func _restore_all_materials() -> void:
 	for mesh_id in _converted_meshes:
@@ -288,6 +296,7 @@ func _restore_all_materials() -> void:
 # =============================================================================
 # Helpers
 # =============================================================================
+
 
 ## Find the first CollisionShape3D child of a node (non-recursive, direct children only).
 static func _find_collision_shape(node: Node) -> CollisionShape3D:
