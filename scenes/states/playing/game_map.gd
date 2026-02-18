@@ -34,6 +34,7 @@ class_name GameMap
 @export var move_accel_speed: float = 15.0  # Smoothing rate for camera movement acceleration/deceleration
 @export var zoom_step: float = 1.5  # How much each scroll tick changes the target zoom
 @export var zoom_smooth_speed: float = 12.0  # Smoothing rate for zoom interpolation
+@export var pan_gesture_zoom_factor: float = 0.05
 @export var min_zoom: float = 2.0
 @export var max_zoom: float = 20.0
 @onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
@@ -223,6 +224,12 @@ func _input(event: InputEvent) -> void:
 			_handle_pan_motion(event)
 		return
 
+	if event is InputEventPanGesture:
+		if event.delta.y < 0:
+			_target_zoom = clampf(_target_zoom - zoom_step * pan_gesture_zoom_factor, min_zoom, max_zoom)
+		if event.delta.y > 0:
+			_target_zoom = clampf(_target_zoom + zoom_step * pan_gesture_zoom_factor, min_zoom, max_zoom)
+
 	if event is not InputEventMouseButton:
 		return
 
@@ -252,6 +259,7 @@ func _input(event: InputEvent) -> void:
 		_target_zoom = clampf(_target_zoom - zoom_step, min_zoom, max_zoom)
 	if event.is_action_pressed("camera_zoom_out"):
 		_target_zoom = clampf(_target_zoom + zoom_step, min_zoom, max_zoom)
+
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
