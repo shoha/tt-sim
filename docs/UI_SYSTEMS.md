@@ -321,7 +321,7 @@ await settings.closed  # Wait for user to close
 
 ### Persistence
 
-Settings are saved to `user://settings.cfg` and loaded on startup.
+Settings are saved to `Paths.SETTINGS_PATH` (`user://settings.cfg`) and loaded on startup.
 
 ---
 

@@ -10,7 +10,7 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 ## Architecture
 
 - **State stack** – Root manages states (TITLE_SCREEN, LOBBY, PLAYING, PAUSED). Use `change_state()`, `push_state()`, `pop_state()`.
-- **Static classes** – `Constants`, `Paths`, `NodeUtils`, `TokenPermissions`, `SerializationUtils`, `EnvironmentPresets` are `class_name` scripts (not autoloads). They provide globally accessible constants and static functions without a Node in the tree.
+- **Static classes** – `Constants`, `Paths`, `NodeUtils`, `TokenPermissions`, `SerializationUtils`, `EnvironmentPresets`, `ScaleUtils`, `MapOverlayUtils` are `class_name` scripts (not autoloads). They provide globally accessible constants and static functions without a Node in the tree.
 - **Autoloads** – Singletons for cross-cutting concerns: UIManager, LevelManager, AssetManager, NetworkManager, GameState, EventBus, etc. Always use direct references (`X.method()`), never `has_node("/root/X")`.
 - **Signals** – Prefer direct signal connections. `EventBus` is a small autoload for cross-system signals (pause, state, level lifecycle) — use it sparingly, only when emitter and listener are in unrelated systems. Disconnect autoload signals in `_exit_tree()` for non-autoload nodes.
 - **Host-authoritative** – GameState is authoritative; NetworkStateSync broadcasts to clients.
@@ -28,7 +28,7 @@ Godot 4.6 tabletop simulator in GDScript. Read `docs/ARCHITECTURE.md` and `AGENT
 | Environment property | `PROPERTY_DEFAULTS`, `_apply_config_to_environment()`, `extract_from_environment()`, + LevelEditPanel UI |
 | In-game edit panel | `scenes/states/playing/level_edit_panel.gd` (extends DrawerContainer) |
 | Slide-out drawer | Extend `DrawerContainer`, configure edge/width/tab_text in `_on_ready()` |
-| Shared constant | `autoloads/constants.gd` (`class_name Constants`, not an autoload) |
+| Shared constant | `autoloads/constants.gd` (`class_name Constants`, not an autoload). Settings path: `Paths.SETTINGS_PATH` |
 | Token permissions | `autoloads/token_permissions.gd` (`class_name TokenPermissions`, static class) |
 | Serialization helpers | `utils/serialization_utils.gd` (`class_name SerializationUtils`, static class) |
 | GLB utilities | `utils/glb_utils.gd` |
@@ -88,6 +88,8 @@ After editing any file, run the formatter for that file type (see `formatting.md
 - Mutate `level_data` when applying environment settings – the effective config should be computed at apply-time via the layering model
 - Skip `is_instance_valid()` checks after `await` – the node may have been freed during the async operation
 - Create `BoardTokenAnimationTree` directly – use `BoardTokenAnimationTreeFactory.create()`
-- Call `call_deferred()` from threads without guarding against freed nodes – stop threads in `_exit_tree()`
+- Call `call_deferred()` from threads without guarding against freed nodes – stop threads in `_exit_tree()` and check `is_instance_valid(self)` in the deferred callback
+- Hardcode `"user://settings.cfg"` – always use `Paths.SETTINGS_PATH`
+- Ignore `ConfigFile.load()` return values – check for errors before overwriting
 - Skip `WorkerThreadPool.wait_for_task_completion()` after polling – it leaks the task
 - Modify theme colors/variants without regenerating `dark_theme.tres` – save `dark_theme.gd` with `UPDATE_ON_SAVE = true` or use File → Run

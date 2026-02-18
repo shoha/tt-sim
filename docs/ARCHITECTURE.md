@@ -75,7 +75,7 @@ These are `class_name` scripts (not autoloads) that provide globally accessible 
 | Class                | File                              | Purpose                              |
 | -------------------- | --------------------------------- | ------------------------------------ |
 | `Constants`          | `autoloads/constants.gd`         | Shared constants (lo-fi defaults, canvas layers, network intervals, asset priorities) |
-| `Paths`              | `autoloads/paths.gd`             | Path constants and static path utilities |
+| `Paths`              | `autoloads/paths.gd`             | Path constants (`SETTINGS_PATH`, level dirs) and static path utilities |
 | `NodeUtils`          | `autoloads/node_utils.gd`        | Static node manipulation utilities   |
 | `TokenPermissions`   | `autoloads/token_permissions.gd` | Per-token, per-player permission management (query, grant, revoke, serialize) |
 | `SerializationUtils` | `utils/serialization_utils.gd`   | Vector3/Color/Dictionary conversion helpers for network and file I/O |

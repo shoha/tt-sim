@@ -337,7 +337,7 @@ On clients, `LevelPlayController` listens for `NetworkManager.map_scale_received
 
 ### Network Settings
 
-Settings are stored in `user://settings.cfg`:
+Settings are stored in `Paths.SETTINGS_PATH` (`user://settings.cfg`):
 
 ```gdscript
 # Change Noray server
