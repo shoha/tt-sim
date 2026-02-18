@@ -689,7 +689,7 @@ The download queue widget (`DownloadQueue`) shows:
 
 ## Settings
 
-Asset management settings in `user://settings.cfg`:
+Asset management settings in `Paths.SETTINGS_PATH` (`user://settings.cfg`):
 
 | Setting                    | Default | Description                       |
 | -------------------------- | ------- | --------------------------------- |

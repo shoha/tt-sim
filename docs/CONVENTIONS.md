@@ -330,27 +330,34 @@ The addon (`addons/DragAndDrop3D/`) provides the core drag-and-drop system:
 
 ### Architecture
 
-Settings use a single `user://settings.cfg` (ConfigFile) but are **decentralized** — each system reads/writes its own section independently.
+Settings use a single `user://settings.cfg` (ConfigFile) but are **decentralized** — each system reads/writes its own section independently. The path is centralized in `Paths.SETTINGS_PATH`.
 
 ### Current Sections
 
 | Section | Keys | Managed By |
 |---------|------|------------|
-| `audio` | `master_volume`, `music_volume`, `sfx_volume`, `ui_volume` | `AudioManager` |
+| `audio` | `master`, `music`, `sfx`, `ui` | `SettingsMenu` |
 | `graphics` | `fullscreen`, `vsync`, `lofi_enabled`, `occlusion_fade_enabled` | `SettingsMenu`, `GameMap` |
-| `network` | `noray_server`, `noray_port`, `p2p_enabled` | `NetworkManager`, `AssetStreamer` |
-| `updates` | `check_prereleases` | `UpdateManager` |
+| `grid_visuals` | `cell_tint_opacity`, `line_thickness`, `fade_radius` | `SettingsMenu`, `GameMap` |
+| `network` | `noray_server`, `noray_port`, `debug_logging`, `p2p_enabled` | `NetworkManager`, `SettingsMenu` |
+| `player` | `name` | `NetworkManager` |
+| `updates` | `check_prereleases` | `UpdateManager`, `SettingsMenu` |
 
 ### Adding New Settings
 
 1. Choose an appropriate section (or create a new one)
-2. Load with `ConfigFile.load("user://settings.cfg")` in `_ready()` or setup
-3. Save with `config.set_value(section, key, value)` then `config.save(path)`
-4. Guard against missing keys with `config.get_value(section, key, default_value)`
-
-### Gotcha
-
-The settings path (`"user://settings.cfg"`) is duplicated across multiple files. If you need to change it, search for all occurrences.
+2. Use `Paths.SETTINGS_PATH` for the file path (never hardcode `"user://settings.cfg"`)
+3. Load with `ConfigFile.load(Paths.SETTINGS_PATH)` in `_ready()` or setup
+4. **Always check the return value** of `config.load()` — if it fails with anything other than `ERR_FILE_NOT_FOUND`, warn before overwriting:
+   ```gdscript
+   var config = ConfigFile.new()
+   var err = config.load(Paths.SETTINGS_PATH)
+   if err != OK and err != ERR_FILE_NOT_FOUND:
+       push_warning("Failed to load settings (err=%d), writing section only" % err)
+   config.set_value("my_section", "my_key", value)
+   config.save(Paths.SETTINGS_PATH)
+   ```
+5. Guard against missing keys with `config.get_value(section, key, default_value)`
 
 ---
 
@@ -507,7 +514,13 @@ func _load_icons_worker():
 
 ### Threading Gotchas
 
-1. **Deferred callbacks on freed nodes**: If a `Thread` calls `call_deferred()` and the target node is freed before the deferred call runs, it crashes. Stop threads in `_exit_tree()` and guard deferred callbacks.
+1. **Deferred callbacks on freed nodes**: If a `Thread` calls `call_deferred()` and the target node is freed before the deferred call runs, it crashes. Stop threads in `_exit_tree()` and guard deferred callbacks with `is_instance_valid(self)` at the start of every deferred method:
+   ```gdscript
+   func _deferred_callback(data) -> void:
+       if not is_instance_valid(self):
+           return
+       # safe to use self here
+   ```
 
 2. **Always call `wait_for_task_completion()`**: After `WorkerThreadPool.is_task_completed()` returns true, you must call `wait_for_task_completion()` to release the task. Skipping this leaks.
 
