@@ -232,6 +232,106 @@ unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 
+[node name="Grid" type="ScrollContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Margin" type="MarginContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"TabContentMargin"
+
+[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="GridInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Customize how the grid overlay appears on the map."
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content"]
+layout_mode = 2
+
+[node name="CellTintOpacity" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content/CellTintOpacity"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Cell Tint Opacity"
+
+[node name="CellTintOpacitySlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content/CellTintOpacity"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+value = 65.0
+
+[node name="CellTintOpacityLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content/CellTintOpacity"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "65%"
+horizontal_alignment = 2
+
+[node name="LineThickness" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content/LineThickness"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Line Thickness"
+
+[node name="LineThicknessSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content/LineThickness"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.5
+max_value = 5.0
+step = 0.5
+value = 2.0
+
+[node name="LineThicknessLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content/LineThickness"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "2.0"
+horizontal_alignment = 2
+
+[node name="FadeDistance" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content/FadeDistance"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Fade Distance"
+
+[node name="FadeDistanceSlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content/FadeDistance"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 10.0
+max_value = 100.0
+step = 5.0
+value = 30.0
+
+[node name="FadeDistanceLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Grid/Margin/Content/FadeDistance"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "30"
+horizontal_alignment = 2
+
 [node name="Controls" type="ScrollContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
 visible = false
 layout_mode = 2

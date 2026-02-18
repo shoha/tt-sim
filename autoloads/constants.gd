@@ -20,7 +20,7 @@ class_name Constants
 #   Right edge:    LAYER_GAMEPLAY_MENU (LevelEditPanel drawer — GM only)
 #   Bottom-right:  LAYER_GAMEPLAY_MENU (BottomButtons)
 #   Over map:      LAYER_DRAG_RULER (drag ruler), LAYER_MEASURE_OVERLAY (measure tool lines + label)
-#   Bottom-center: LAYER_INPUT_HINTS, LAYER_TOAST, LAYER_DIALOG (download queue)
+#   Bottom-center: LAYER_INPUT_HINTS (below gameplay), LAYER_TOAST, LAYER_DIALOG (download queue)
 #   Centered:      LAYER_SETTINGS, LAYER_DIALOG (modals)
 #   Full-screen:   LAYER_LEVEL_EDITOR, LAYER_LOADING, LAYER_TRANSITION (transient)
 
@@ -32,7 +32,7 @@ const LAYER_LOBBY := 5  ## Host/client lobby (centered, full-screen backdrop)
 const LAYER_DRAG_RULER := 7  ## Drag ruler overlay (distance during token drag) — above gameplay, below measure
 const LAYER_MEASURE_OVERLAY := 8  ## Measure tool lines + distance label — above gameplay, below pause
 const LAYER_PAUSE := 10  ## Pause overlay (centered, full-screen backdrop)
-const LAYER_INPUT_HINTS := 80  ## Contextual keyboard hints — bottom-center
+const LAYER_INPUT_HINTS := 1  ## Contextual keyboard hints — bottom-center, below gameplay panels
 const LAYER_TOAST := 90  ## Toast notifications — bottom-center
 const LAYER_SETTINGS := 95  ## Settings menu (centered, full-screen backdrop)
 const LAYER_DIALOG := 100  ## Modals: confirmation, update, add-pack; download queue — bottom-center
