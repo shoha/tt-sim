@@ -97,6 +97,22 @@ func clear_drag_highlight() -> void:
 	_material.set_shader_parameter("drag_active", false)
 
 
+## Apply user visual settings that are independent of per-level configuration.
+## These control how the grid looks (opacity, thickness, distance) without
+## affecting grid scale, origin, or color set by the GM.
+func apply_visual_settings(
+	cell_tint_opacity: float, line_thickness: float, fade_radius: float
+) -> void:
+	if not _material:
+		return
+	var current_tint = _material.get_shader_parameter("cell_tint_color")
+	if current_tint is Color:
+		current_tint.a = cell_tint_opacity
+		_material.set_shader_parameter("cell_tint_color", current_tint)
+	_material.set_shader_parameter("line_thickness", line_thickness)
+	_material.set_shader_parameter("fade_radius", fade_radius)
+
+
 ## Show the grid overlay with a fade-in animation.
 func show_grid() -> void:
 	_showing = true

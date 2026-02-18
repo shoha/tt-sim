@@ -536,6 +536,7 @@ func setup_grid_overlay() -> void:
 	if _grid_overlay:
 		return
 	_grid_overlay = GridOverlay.create(camera_node)
+	_load_grid_visual_settings()
 
 
 ## Return the GridOverlay instance (may be null before setup).
@@ -704,6 +705,28 @@ func _create_default_lofi_material() -> ShaderMaterial:
 	for param_name in Constants.LOFI_DEFAULTS:
 		material.set_shader_parameter(param_name, Constants.LOFI_DEFAULTS[param_name])
 	return material
+
+
+## Load grid visual settings from config and apply to the overlay.
+func _load_grid_visual_settings() -> void:
+	var config = ConfigFile.new()
+	var err = config.load(SETTINGS_PATH)
+	if err != OK:
+		return
+	if not _grid_overlay:
+		return
+	var cell_tint_opacity: float = config.get_value("grid_visuals", "cell_tint_opacity", 0.65)
+	var line_thickness: float = config.get_value("grid_visuals", "line_thickness", 2.0)
+	var fade_radius: float = config.get_value("grid_visuals", "fade_radius", 30.0)
+	_grid_overlay.apply_visual_settings(cell_tint_opacity, line_thickness, fade_radius)
+
+
+## Apply grid visual settings from the settings menu.
+func apply_grid_visual_settings(
+	cell_tint_opacity: float, line_thickness: float, fade_radius: float
+) -> void:
+	if _grid_overlay:
+		_grid_overlay.apply_visual_settings(cell_tint_opacity, line_thickness, fade_radius)
 
 
 ## Load occlusion fade setting from config

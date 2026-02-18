@@ -32,6 +32,14 @@ var _last_slider_tick_time: float = 0.0
 @onready var lofi_check: CheckButton = %LofiCheck
 @onready var occlusion_fade_check: CheckButton = %OcclusionFadeCheck
 
+# Grid visual controls
+@onready var cell_tint_opacity_slider: HSlider = %CellTintOpacitySlider
+@onready var cell_tint_opacity_label: Label = %CellTintOpacityLabel
+@onready var line_thickness_slider: HSlider = %LineThicknessSlider
+@onready var line_thickness_label: Label = %LineThicknessLabel
+@onready var fade_distance_slider: HSlider = %FadeDistanceSlider
+@onready var fade_distance_label: Label = %FadeDistanceLabel
+
 # Controls display
 @onready var controls_list: VBoxContainer = %ControlsList
 
@@ -107,6 +115,11 @@ func _on_panel_ready() -> void:
 	vsync_check.toggled.connect(_on_vsync_toggled)
 	lofi_check.toggled.connect(_on_lofi_toggled)
 	occlusion_fade_check.toggled.connect(_on_occlusion_fade_toggled)
+
+	# Grid visuals
+	cell_tint_opacity_slider.value_changed.connect(_on_cell_tint_opacity_changed)
+	line_thickness_slider.value_changed.connect(_on_line_thickness_changed)
+	fade_distance_slider.value_changed.connect(_on_fade_distance_changed)
 
 	# Network
 	p2p_enabled_check.toggled.connect(_on_p2p_toggled)
@@ -189,12 +202,18 @@ func _load_settings() -> void:
 		)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
 		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
+		cell_tint_opacity_slider.value = (
+			config.get_value("grid_visuals", "cell_tint_opacity", 0.65) * 100.0
+		)
+		line_thickness_slider.value = config.get_value("grid_visuals", "line_thickness", 2.0)
+		fade_distance_slider.value = config.get_value("grid_visuals", "fade_radius", 30.0)
 
 	# Update labels
 	_update_volume_label(master_label, master_slider.value)
 	_update_volume_label(music_label, music_slider.value)
 	_update_volume_label(sfx_label, sfx_slider.value)
 	_update_volume_label(ui_label, ui_slider.value)
+	_update_grid_labels()
 
 
 func _save_settings() -> void:
@@ -210,6 +229,9 @@ func _save_settings() -> void:
 	config.set_value("graphics", "occlusion_fade_enabled", occlusion_fade_check.button_pressed)
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
 	config.set_value("updates", "check_prereleases", prereleases_check.button_pressed)
+	config.set_value("grid_visuals", "cell_tint_opacity", cell_tint_opacity_slider.value / 100.0)
+	config.set_value("grid_visuals", "line_thickness", line_thickness_slider.value)
+	config.set_value("grid_visuals", "fade_radius", fade_distance_slider.value)
 
 	config.save(SETTINGS_PATH)
 
@@ -242,6 +264,9 @@ func _apply_settings() -> void:
 
 	# Apply occlusion fade setting
 	_apply_occlusion_fade_setting()
+
+	# Apply grid visual settings
+	_apply_grid_visual_settings()
 
 	# Apply network settings
 	_apply_network_settings()
@@ -311,6 +336,40 @@ func _apply_occlusion_fade_setting() -> void:
 		game_map.set_occlusion_fade_enabled(occlusion_fade_check.button_pressed)
 
 
+func _apply_grid_visual_settings() -> void:
+	var game_map = _find_game_map()
+	if game_map:
+		(
+			game_map
+			. apply_grid_visual_settings(
+				cell_tint_opacity_slider.value / 100.0,
+				line_thickness_slider.value,
+				fade_distance_slider.value,
+			)
+		)
+
+
+func _on_cell_tint_opacity_changed(value: float) -> void:
+	cell_tint_opacity_label.text = "%d%%" % int(value)
+	_try_play_slider_tick()
+
+
+func _on_line_thickness_changed(value: float) -> void:
+	line_thickness_label.text = "%.1f" % value
+	_try_play_slider_tick()
+
+
+func _on_fade_distance_changed(value: float) -> void:
+	fade_distance_label.text = "%d" % int(value)
+	_try_play_slider_tick()
+
+
+func _update_grid_labels() -> void:
+	cell_tint_opacity_label.text = "%d%%" % int(cell_tint_opacity_slider.value)
+	line_thickness_label.text = "%.1f" % line_thickness_slider.value
+	fade_distance_label.text = "%d" % int(fade_distance_slider.value)
+
+
 func _find_game_map() -> GameMap:
 	# Look for GameMap in the scene tree
 	var root = get_tree().root
@@ -336,6 +395,10 @@ func _on_reset_pressed() -> void:
 	tw.tween_property(music_slider, "value", 100.0, 0.3)
 	tw.tween_property(sfx_slider, "value", 100.0, 0.3)
 	tw.tween_property(ui_slider, "value", 100.0, 0.3)
+
+	tw.tween_property(cell_tint_opacity_slider, "value", 65.0, 0.3)
+	tw.tween_property(line_thickness_slider, "value", 2.0, 0.3)
+	tw.tween_property(fade_distance_slider, "value", 30.0, 0.3)
 
 	# Snap toggles immediately (no meaningful tween for booleans)
 	fullscreen_check.button_pressed = false
@@ -430,6 +493,9 @@ func _apply_tooltips() -> void:
 	vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
 	lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
 	occlusion_fade_check.tooltip_text = "Fade map geometry that hides tokens from view"
+	cell_tint_opacity_slider.tooltip_text = "Opacity of the cell fill shading on the grid"
+	line_thickness_slider.tooltip_text = "Thickness of the grid lines"
+	fade_distance_slider.tooltip_text = "How far the grid extends from the camera center"
 	p2p_enabled_check.tooltip_text = "Allow peer-to-peer asset sharing with other players"
 	clear_cache_button.tooltip_text = "Delete downloaded asset files to free disk space"
 	prereleases_check.tooltip_text = "Include pre-release versions when checking for updates"
