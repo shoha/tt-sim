@@ -68,7 +68,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Apply saved graphics settings (fullscreen, vsync) at startup.
 ## Call this early (e.g. from Root._ready()) so the window mode is correct
-## before any UI is shown.
+## before any UI is shown.  Fullscreen is deferred so the window is fully
+## presented first — required on macOS where native fullscreen is async.
 static func apply_startup_graphics_settings() -> void:
 	var config = ConfigFile.new()
 	if config.load(SETTINGS_PATH) != OK:
@@ -77,22 +78,29 @@ static func apply_startup_graphics_settings() -> void:
 	var fullscreen: bool = config.get_value("graphics", "fullscreen", false)
 	var vsync: bool = config.get_value("graphics", "vsync", true)
 
-	# Apply fullscreen
+	# Apply vsync immediately (safe on all platforms)
+	DisplayServer.window_set_vsync_mode(
+		DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED
+	)
+
+	# Defer fullscreen — macOS native fullscreen requires the window to be
+	# fully presented before `toggleFullScreen:` will take effect.
+	_set_window_fullscreen.call_deferred(fullscreen)
+
+
+## Set the window fullscreen mode, guarding against redundant toggles.
+## Extracted as a static helper so it can be used with call_deferred().
+static func _set_window_fullscreen(enable: bool) -> void:
 	var current_mode := DisplayServer.window_get_mode()
 	var is_currently_fullscreen := (
 		current_mode == DisplayServer.WINDOW_MODE_FULLSCREEN
 		or current_mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
 	)
 
-	if fullscreen and not is_currently_fullscreen:
+	if enable and not is_currently_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	elif not fullscreen and is_currently_fullscreen:
+	elif not enable and is_currently_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-
-	# Apply vsync
-	DisplayServer.window_set_vsync_mode(
-		DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED
-	)
 
 
 func _on_panel_ready() -> void:
@@ -243,17 +251,9 @@ func _apply_settings() -> void:
 	_apply_audio_bus("SFX", sfx_slider.value)
 	_apply_audio_bus("UI", ui_slider.value)
 
-	# Apply graphics settings - only change mode if different to avoid macOS toggle issue
-	var current_mode := DisplayServer.window_get_mode()
-	var is_currently_fullscreen := (
-		current_mode == DisplayServer.WINDOW_MODE_FULLSCREEN
-		or current_mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
-	)
-
-	if fullscreen_check.button_pressed and not is_currently_fullscreen:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	elif not fullscreen_check.button_pressed and is_currently_fullscreen:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	# Defer fullscreen mode change — macOS native fullscreen (`toggleFullScreen:`)
+	# requires the window to be fully presented and the run-loop to be idle.
+	_apply_fullscreen_mode.call_deferred(fullscreen_check.button_pressed)
 
 	DisplayServer.window_set_vsync_mode(
 		DisplayServer.VSYNC_ENABLED if vsync_check.button_pressed else DisplayServer.VSYNC_DISABLED
@@ -309,6 +309,10 @@ func _on_tab_changed(_tab_idx: int) -> void:
 
 func _on_fullscreen_toggled(_pressed: bool) -> void:
 	pass
+
+
+func _apply_fullscreen_mode(enable: bool) -> void:
+	_set_window_fullscreen(enable)
 
 
 func _on_vsync_toggled(_pressed: bool) -> void:
