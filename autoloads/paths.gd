@@ -5,6 +5,7 @@ class_name Paths
 
 # User data directories
 const LEVELS_DIR: String = "user://levels/"
+const SETTINGS_PATH: String = "user://settings.cfg"
 
 # Special pack ID for map streaming (used by AssetStreamer)
 const LEVEL_MAPS_PACK_ID: String = "_level_maps"

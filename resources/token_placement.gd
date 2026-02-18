@@ -141,7 +141,8 @@ func to_dict() -> Dictionary:
 ## Create from dictionary (for network reception)
 static func from_dict(data: Dictionary) -> TokenPlacement:
 	var placement = TokenPlacement.new()
-	placement.placement_id = data.get("placement_id", _generate_id())
+	var pid = data.get("placement_id", "")
+	placement.placement_id = pid if pid != "" else _generate_id()
 	placement.pack_id = data.get("pack_id", "")
 	placement.asset_id = data.get("asset_id", "")
 	placement.variant_id = data.get("variant_id", "default")

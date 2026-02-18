@@ -13,7 +13,6 @@ const GITHUB_API_URL: String = "https://api.github.com/repos/shoha/tt-sim/releas
 const GITHUB_RELEASES_URL: String = "https://github.com/shoha/tt-sim/releases"
 const UPDATE_CHECK_TIMEOUT: float = 15.0
 const DOWNLOAD_TIMEOUT: float = 300.0  # 5 minutes for large downloads
-const SETTINGS_FILE: String = "user://settings.cfg"
 const UPDATES_DIR: String = "user://updates/"
 const PENDING_UPDATE_FILE: String = "user://updates/pending_update.json"
 const UPDATE_SUCCESS_FILE: String = "user://updates/update_success.txt"
@@ -65,6 +64,8 @@ var _download_path: String = ""
 
 
 func _ready() -> void:
+	set_process(false)
+
 	# Ensure updates directory exists
 	if not DirAccess.dir_exists_absolute(UPDATES_DIR):
 		DirAccess.make_dir_recursive_absolute(UPDATES_DIR)
@@ -91,12 +92,10 @@ func _show_deferred_toast() -> void:
 	if _pending_toast_message.is_empty():
 		return
 
-	var ui_manager = get_node_or_null("/root/UIManager")
-	if ui_manager:
-		if _pending_toast_is_error:
-			ui_manager.show_error(_pending_toast_message)
-		else:
-			ui_manager.show_success(_pending_toast_message)
+	if _pending_toast_is_error:
+		UIManager.show_error(_pending_toast_message)
+	else:
+		UIManager.show_success(_pending_toast_message)
 
 	_pending_toast_message = ""
 
@@ -128,10 +127,6 @@ func _show_translocation_dialog() -> void:
 	# Wait for UI to be ready
 	await get_tree().process_frame
 
-	var ui_manager = get_node_or_null("/root/UIManager")
-	if not ui_manager:
-		return
-
 	var title = "Update Requires App Relocation"
 	var message = """An update is ready but cannot be installed because macOS is running the app from a temporary location.
 
@@ -142,7 +137,7 @@ To install the update:
 
 The update will install automatically when you next open the app from a permanent location."""
 
-	ui_manager.show_confirmation(
+	UIManager.show_confirmation(
 		title,
 		message,
 		"Open Downloads",
@@ -181,7 +176,7 @@ func get_current_version() -> String:
 ## Check if prerelease updates are enabled in settings
 func is_prerelease_enabled() -> bool:
 	var config = ConfigFile.new()
-	if config.load(SETTINGS_FILE) == OK:
+	if config.load(Paths.SETTINGS_PATH) == OK:
 		return config.get_value("updates", "check_prereleases", false)
 	return false
 
@@ -189,9 +184,9 @@ func is_prerelease_enabled() -> bool:
 ## Set the prerelease preference
 func set_prerelease_enabled(enabled: bool) -> void:
 	var config = ConfigFile.new()
-	config.load(SETTINGS_FILE)  # OK if doesn't exist
+	config.load(Paths.SETTINGS_PATH)  # OK if doesn't exist
 	config.set_value("updates", "check_prereleases", enabled)
-	config.save(SETTINGS_FILE)
+	config.save(Paths.SETTINGS_PATH)
 
 
 ## Check if there's a pending update waiting to be applied
@@ -398,6 +393,7 @@ func download_update() -> void:
 
 	is_downloading = true
 	download_progress = 0.0
+	set_process(true)
 
 	# Prepare download path
 	var filename = "TTSim-%s-%s.zip" % [UpdateVersion.get_platform_name(), latest_release.version]
@@ -427,7 +423,10 @@ func download_update() -> void:
 
 
 func _process(_delta: float) -> void:
-	# Update download progress
+	if not is_downloading or not _http_download:
+		set_process(false)
+		return
+
 	if is_downloading and _http_download:
 		var downloaded = _http_download.get_downloaded_bytes()
 		var total = _http_download.get_body_size()

@@ -449,6 +449,8 @@ func _on_full_state_received(_state_dict: Dictionary) -> void:
 func _on_token_transform_received(
 	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
 ) -> void:
+	if not _level_play_controller or not _game_map:
+		return
 	RootNetworkHandler.on_token_transform_received(
 		_level_play_controller, network_id, pos, rot, scl
 	)
@@ -456,11 +458,15 @@ func _on_token_transform_received(
 
 ## Handle batch transform update (unreliable channel)
 func _on_transform_batch_received(batch: Dictionary) -> void:
+	if not _level_play_controller or not _game_map:
+		return
 	RootNetworkHandler.on_transform_batch_received(_level_play_controller, batch)
 
 
 ## Handle individual token property update (reliable channel, low frequency)
 func _on_token_state_received(network_id: String, token_dict: Dictionary) -> void:
+	if not _level_play_controller or not _game_map:
+		return
 	RootNetworkHandler.on_token_state_received(
 		_level_play_controller, _game_map, network_id, token_dict
 	)
@@ -468,6 +474,8 @@ func _on_token_state_received(network_id: String, token_dict: Dictionary) -> voi
 
 ## Handle token removal (reliable channel)
 func _on_token_removed_received(network_id: String) -> void:
+	if not _level_play_controller:
+		return
 	RootNetworkHandler.on_token_removed_received(_level_play_controller, network_id)
 
 
@@ -575,6 +583,9 @@ var _startup_update_check_pending: bool = false
 func _check_for_updates_on_startup() -> void:
 	# Wait a moment for the title screen to fully load before checking
 	await get_tree().create_timer(1.0).timeout
+
+	if not is_instance_valid(self):
+		return
 
 	# Only check if we're still on the title screen
 	if get_current_state() == State.TITLE_SCREEN:

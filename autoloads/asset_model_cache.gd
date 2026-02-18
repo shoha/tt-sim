@@ -35,6 +35,8 @@ func get_instance_from_path(path: String, create_static_bodies: bool = false) ->
 	# Wait if another call is already loading this model
 	while _loading_models.has(cache_key):
 		await _owner.get_tree().process_frame
+		if not is_instance_valid(_owner):
+			return null
 		if _model_cache.has(cache_key):
 			return _get_from_cache(cache_key)
 
@@ -63,6 +65,9 @@ func get_instance_from_path(path: String, create_static_bodies: bool = false) ->
 				== ResourceLoader.THREAD_LOAD_IN_PROGRESS
 			):
 				await _owner.get_tree().process_frame
+				if not is_instance_valid(_owner):
+					_loading_models.erase(cache_key)
+					return null
 			var resource = ResourceLoader.load_threaded_get(path)
 			if resource is PackedScene:
 				_model_cache[cache_key] = resource

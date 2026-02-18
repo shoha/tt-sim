@@ -101,15 +101,20 @@ func _populate_items() -> void:
 
 
 func _clear_list() -> void:
+	if not is_instance_valid(self):
+		return
 	item_list.clear()
 
 
 func _add_item_to_list(item: Dictionary) -> void:
-	# Add item without icon to avoid bulk icon downloads for remote asset packs
+	if not is_instance_valid(self):
+		return
 	item_list.add_item(item.name)
 
 
 func _show_empty_state() -> void:
+	if not is_instance_valid(self):
+		return
 	var msg = 'No results for "%s"' % _filter if _filter != "" else "No assets in this pack"
 	item_list.add_item(msg)
 	item_list.set_item_disabled(0, true)

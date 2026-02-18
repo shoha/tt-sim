@@ -84,6 +84,8 @@ func _ready() -> void:
 
 	update_height_offset()
 
+	set_process(false)
+
 	# Only set up dragging signals and indicators during gameplay
 	if not Engine.is_editor_hint():
 		_collect_visual_children()
@@ -173,6 +175,7 @@ func _on_dragging_started() -> void:
 		_is_settling = false
 
 	_is_currently_dragging = true
+	set_process(true)
 
 	# Store start position for cancel
 	_drag_start_position = rigid_body.global_position
@@ -218,6 +221,8 @@ func _on_dragging_started() -> void:
 
 func _on_dragging_stopped() -> void:
 	_is_currently_dragging = false
+	if not _network_interpolating:
+		set_process(false)
 
 	# Remove drag-specific input hints and restore defaults
 	UIManager.remove_hint("RMB")
@@ -250,6 +255,8 @@ func _on_dragging_stopped() -> void:
 
 func _on_dragging_cancelled() -> void:
 	_is_currently_dragging = false
+	if not _network_interpolating:
+		set_process(false)
 
 	# Remove drag-specific input hints and restore defaults
 	UIManager.remove_hint("RMB")
@@ -636,6 +643,7 @@ func set_network_target(p_position: Vector3, p_rotation: Vector3, p_scale: Vecto
 	# Start network interpolation if not already active
 	if not _network_interpolating:
 		_network_interpolating = true
+		set_process(true)
 		# Disable gravity while being remotely manipulated (same as local dragging)
 		if rigid_body:
 			rigid_body.gravity_scale = 0.0
@@ -657,6 +665,8 @@ func _stop_network_interpolation() -> void:
 		return
 
 	_network_interpolating = false
+	if not _is_currently_dragging:
+		set_process(false)
 	_drag_velocity = Vector3.ZERO
 
 	# Hide drop indicator

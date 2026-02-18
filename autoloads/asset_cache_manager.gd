@@ -167,7 +167,8 @@ func register_cached_file(
 		return
 
 	var key = _make_key(pack_id, asset_id, variant_id, file_type)
-	var file_size = FileAccess.open(file_path, FileAccess.READ).get_length()
+	var file = FileAccess.open(file_path, FileAccess.READ)
+	var file_size = file.get_length() if file else 0
 
 	_add_to_index(key, file_path, file_size, file_type)
 	cache_updated.emit(key, file_path)

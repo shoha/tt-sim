@@ -732,14 +732,7 @@ func _connect_token_context_menu(token: BoardToken) -> void:
 ## Handle token landing — apply camera shake proportional to drop height and token scale.
 ## NOTE: Screen shake disabled for now — uncomment the call below to re-enable.
 func _on_token_landed(_drop_height: float, _token: BoardToken) -> void:
-	return
-	#if not _game_map or not is_instance_valid(_token):
-	#return
-	#var avg_scale := 1.0
-	#if _token.rigid_body:
-	#avg_scale = (_token.rigid_body.scale.x + _token.rigid_body.scale.z) / 2.0
-	#var intensity := _drop_height * avg_scale * 0.02  # Subtle: 0.02 per unit height at scale 1
-	#_game_map.camera_shake(intensity)
+	pass
 
 
 ## Clear any existing map models from the MapContainer
@@ -1216,10 +1209,13 @@ func clear_level_tokens() -> void:
 	spawned_tokens.clear()
 	active_level_data = null
 
+	# Disconnect client transform signals before clearing
+	for network_id in _client_connected_tokens.keys():
+		_disconnect_client_transform_signals(network_id)
+
 	# Clear permission-related state
 	_pending_permission_requests.clear()
 	_client_transform_throttle.clear()
-	_client_connected_tokens.clear()
 
 	# Clear GameState (also clears permissions)
 	GameState.clear_all_tokens()

@@ -11,8 +11,6 @@ const BUS_MUSIC := "Music"
 const BUS_SFX := "SFX"
 const BUS_UI := "UI"
 
-const SETTINGS_PATH := "user://settings.cfg"
-
 ## Set to true to re-enable the hover sound on buttons.
 const BUTTON_HOVER_SOUND_ENABLED := false
 
@@ -147,7 +145,7 @@ func _load_sfx_sounds() -> void:
 ## Called once at startup so the game respects the user's previous volume choices.
 func _load_audio_settings() -> void:
 	var config = ConfigFile.new()
-	var err = config.load(SETTINGS_PATH)
+	var err = config.load(Paths.SETTINGS_PATH)
 	if err != OK:
 		return  # No saved settings — buses stay at default (100%)
 

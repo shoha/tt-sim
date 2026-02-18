@@ -274,7 +274,8 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.environment_overrides = EnvironmentPresets.overrides_from_json(
 		data.get("environment_overrides", {})
 	)
-	level.lofi_overrides = data.get("lofi_overrides", {}).duplicate()
+	var lofi_raw = data.get("lofi_overrides", {})
+	level.lofi_overrides = lofi_raw.duplicate() if lofi_raw is Dictionary else {}
 
 	level.grid_cell_size = data.get("grid_cell_size", 1.524)
 	level.display_unit = data.get("display_unit", "ft")
@@ -285,7 +286,7 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.grid_show_on_drag = data.get("grid_show_on_drag", true)
 	var gc = data.get("grid_color", {})
 	if gc is Dictionary and not gc.is_empty():
-		level.grid_color = SerializationUtils.dict_to_color(gc, Color(1.0, 1.0, 1.0, 0.35))
+		level.grid_color = SerializationUtils.dict_to_color(gc, Color(1.0, 1.0, 1.0, 0.0))
 	var go = data.get("grid_origin", {})
 	if go is Dictionary and not go.is_empty():
 		level.grid_origin = Vector2(go.get("x", 0.0), go.get("y", 0.0))
@@ -294,6 +295,7 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.token_placements.clear()
 	var placements_data = data.get("token_placements", [])
 	for placement_data in placements_data:
-		level.token_placements.append(TokenPlacement.from_dict(placement_data))
+		if placement_data is Dictionary:
+			level.token_placements.append(TokenPlacement.from_dict(placement_data))
 
 	return level

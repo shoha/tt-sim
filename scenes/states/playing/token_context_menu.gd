@@ -39,6 +39,8 @@ func open_for_token(token: BoardToken, at_position: Vector2) -> void:
 
 	# Position menu and adjust to stay within viewport bounds
 	await get_tree().process_frame  # Wait for size to be calculated
+	if not is_instance_valid(self):
+		return
 	_position_menu_in_viewport(at_position)
 
 	animate_in()
@@ -50,9 +52,7 @@ func _update_menu_content() -> void:
 
 	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
 	var is_networked = NetworkManager.is_networked()
-	var my_peer_id = (
-		multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
-	)
+	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
 
 	# Update visibility toggle button text
 	var visibility_button = get_node_or_null("MenuPanel/VBoxContainer/ToggleVisibilityButton")

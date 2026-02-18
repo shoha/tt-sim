@@ -8,7 +8,6 @@ class_name SettingsMenu
 
 signal closed
 
-const SETTINGS_PATH := "user://settings.cfg"
 const SLIDER_TICK_INTERVAL := 0.08  # Minimum seconds between slider tick sounds
 
 # Audio controls
@@ -72,7 +71,7 @@ func _unhandled_input(event: InputEvent) -> void:
 ## presented first — required on macOS where native fullscreen is async.
 static func apply_startup_graphics_settings() -> void:
 	var config = ConfigFile.new()
-	if config.load(SETTINGS_PATH) != OK:
+	if config.load(Paths.SETTINGS_PATH) != OK:
 		return
 
 	var fullscreen: bool = config.get_value("graphics", "fullscreen", false)
@@ -195,7 +194,7 @@ func _populate_controls_list() -> void:
 
 func _load_settings() -> void:
 	var config = ConfigFile.new()
-	var err = config.load(SETTINGS_PATH)
+	var err = config.load(Paths.SETTINGS_PATH)
 
 	if err == OK:
 		master_slider.value = config.get_value("audio", "master", 100.0)
@@ -241,7 +240,7 @@ func _save_settings() -> void:
 	config.set_value("grid_visuals", "line_thickness", line_thickness_slider.value)
 	config.set_value("grid_visuals", "fade_radius", fade_distance_slider.value)
 
-	config.save(SETTINGS_PATH)
+	config.save(Paths.SETTINGS_PATH)
 
 
 func _apply_settings() -> void:
