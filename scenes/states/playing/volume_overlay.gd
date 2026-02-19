@@ -34,3 +34,90 @@ static func build_horizontal_ring(
 		verts.append(center + Vector3(cos(a) * radius, y_offset, sin(a) * radius))
 		verts.append(center + Vector3(cos(b) * radius, y_offset, sin(b) * radius))
 	return verts
+
+
+## References — set once via setup()
+var _camera: Camera3D
+var _world_viewport: SubViewport
+
+## 3D geometry nodes — added as children of _world_viewport
+var _fill_instance: MeshInstance3D
+var _wire_instance: MeshInstance3D
+var _wire_mesh: ImmediateMesh
+
+## Materials — created once in setup(), colors updated in show()
+var _wire_material: StandardMaterial3D
+var _fill_material: StandardMaterial3D
+
+## 2D label — CanvasLayer + PanelContainer added to overlay_parent
+var _canvas_layer: CanvasLayer
+var _label_panel: PanelContainer
+var _label: Label
+
+## State
+var _center: Vector3 = Vector3.ZERO
+var _radius: float = 0.0
+var _is_showing: bool = false
+
+
+func _ready() -> void:
+	set_process(false)
+
+
+## One-time initialization. Called by MeasureTool.setup().
+func setup(cam: Camera3D, viewport: SubViewport, overlay_parent: Node) -> void:
+	_camera = cam
+	_world_viewport = viewport
+	_create_materials()
+	_create_mesh_instances()
+	_create_label(overlay_parent)
+	set_process(true)
+
+
+func clear() -> void:
+	_is_showing = false
+	if _fill_instance:
+		_fill_instance.visible = false
+	if _wire_instance:
+		_wire_instance.visible = false
+		_wire_mesh.clear_surfaces()
+	if _label_panel:
+		_label_panel.visible = false
+
+
+func _create_materials() -> void:
+	_wire_material = StandardMaterial3D.new()
+	_wire_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_wire_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_wire_material.albedo_color = WIRE_COLOR_LOCKED
+
+	_fill_material = StandardMaterial3D.new()
+	_fill_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_fill_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_fill_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_fill_material.albedo_color = FILL_COLOR_LOCKED
+
+
+func _create_mesh_instances() -> void:
+	_wire_mesh = ImmediateMesh.new()
+	_wire_instance = MeshInstance3D.new()
+	_wire_instance.mesh = _wire_mesh
+	_wire_instance.material_override = _wire_material
+	_wire_instance.visible = false
+	_world_viewport.add_child(_wire_instance)
+
+	_fill_instance = MeshInstance3D.new()
+	_fill_instance.material_override = _fill_material
+	_fill_instance.visible = false
+	_world_viewport.add_child(_fill_instance)
+
+
+func _create_label(overlay_parent: Node) -> void:
+	_canvas_layer = CanvasLayer.new()
+	_canvas_layer.layer = Constants.LAYER_MEASURE_OVERLAY
+	overlay_parent.add_child(_canvas_layer)
+
+	var result := MapOverlayUtils.create_label_panel(16)
+	_label_panel = result.panel
+	_label = result.label
+	_canvas_layer.add_child(_label_panel)
