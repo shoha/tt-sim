@@ -231,6 +231,24 @@ func _handle_left_click(ctrl_held: bool) -> bool:
 			_mark_dirty()
 			AudioManager.play_tick()
 			return true
+		State.PLACING_VOLUME_CENTER:
+			_volume_center = hit
+			_volume_radius = 0.0
+			_state = State.PLACING_VOLUME_RADIUS
+			_mark_dirty()
+			AudioManager.play_tick()
+			return true
+		State.PLACING_VOLUME_RADIUS:
+			if _has_preview:
+				_volume_radius = Vector2(_preview_point.x, _preview_point.z).distance_to(
+					Vector2(_volume_center.x, _volume_center.z)
+				)
+				_has_locked_volume = true
+				_state = State.PLACING_VOLUME_CENTER
+				_redraw_locked_volume()
+				_mark_dirty()
+				AudioManager.play_tick()
+			return true
 	return false
 
 
@@ -244,6 +262,24 @@ func _cancel_measurement() -> void:
 				_total_label_panel.visible = false
 			for panel in _segment_label_pool:
 				panel.visible = false
+	elif _state == State.PLACING_VOLUME_RADIUS:
+		_state = State.PLACING_VOLUME_CENTER
+		_has_preview = false
+		if _volume_overlay:
+			if _has_locked_volume:
+				_redraw_locked_volume()
+			else:
+				_volume_overlay.clear()
+		_mark_dirty()
+	elif _state == State.PLACING_VOLUME_CENTER:
+		if _has_locked_volume:
+			_has_locked_volume = false
+			_volume_radius = 0.0
+			if _volume_overlay:
+				_volume_overlay.clear()
+			_mark_dirty()
+		else:
+			deactivate()
 	elif (
 		_state == State.PLACING_START
 		or (_state == State.PLACING_WAYPOINT and _waypoints.size() <= 1)
@@ -385,7 +421,47 @@ func _clear_visuals() -> void:
 		panel.visible = false
 
 
+func _current_volume_shape() -> VolumeOverlay.Shape:
+	return VolumeOverlay.Shape.SPHERE if _mode == Mode.SPHERE else VolumeOverlay.Shape.CYLINDER
+
+
+func _redraw_locked_volume() -> void:
+	if not _volume_overlay or not _has_locked_volume:
+		return
+	var label := ScaleUtils.format_distance(
+		_volume_radius, _grid_cell_size, _display_unit_per_cell, _display_unit
+	)
+	_volume_overlay.show(_current_volume_shape(), _volume_center, _volume_radius, label, false)
+
+
+func _redraw_volume_preview() -> void:
+	if not _volume_overlay or not _has_preview:
+		return
+	var radius := Vector2(_preview_point.x, _preview_point.z).distance_to(
+		Vector2(_volume_center.x, _volume_center.z)
+	)
+	if radius < 0.01:
+		return
+	var label := ScaleUtils.format_distance(
+		radius, _grid_cell_size, _display_unit_per_cell, _display_unit
+	)
+	_volume_overlay.show(_current_volume_shape(), _volume_center, radius, label, true)
+
+
 func _do_redraw() -> void:
+	# Volume mode — skip line rendering entirely
+	if _mode != Mode.LINE:
+		if _state != State.INACTIVE and _has_preview and _camera:
+			_cursor_dot = _camera.unproject_position(_preview_point)
+			_show_cursor_dot = true
+		else:
+			_show_cursor_dot = false
+		if _draw_control:
+			_draw_control.queue_redraw()
+		if _state == State.PLACING_VOLUME_RADIUS:
+			_redraw_volume_preview()
+		return
+
 	# Show a cursor dot at the mouse position whenever there's a preview hit.
 	# In PLACING_START this is the only visual; in PLACING_WAYPOINT it reinforces
 	# the endpoint of the tentative segment (especially useful when very short).
