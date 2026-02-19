@@ -225,3 +225,17 @@ func _add_cylinder_geometry() -> void:
 		var z := _center.z + sin(angle) * _radius
 		_wire_mesh.surface_add_vertex(Vector3(x, _center.y, z))
 		_wire_mesh.surface_add_vertex(Vector3(x, top_y, z))
+
+
+func _process(_delta: float) -> void:
+	if not _is_showing or not _camera or not _label_panel or not _label_panel.visible:
+		return
+	_update_label_position()
+
+
+func _update_label_position() -> void:
+	# Position label at the right edge of the shape, offset up to avoid overlapping the mesh.
+	var edge_world := _center + Vector3.RIGHT * _radius
+	var screen_pos := _camera.unproject_position(edge_world)
+	screen_pos.y -= 24.0
+	_label_panel.position = screen_pos - _label_panel.size * 0.5
