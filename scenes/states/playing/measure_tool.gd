@@ -18,6 +18,12 @@ signal toggled(active: bool)
 
 enum State { INACTIVE, PLACING_START, PLACING_WAYPOINT }
 
+enum Mode { LINE, SPHERE, CYLINDER }
+
+## Returns the next mode in the cycle: LINE -> SPHERE -> CYLINDER -> LINE.
+static func advance_mode(current: Mode) -> Mode:
+	return (current + 1) % 3 as Mode
+
 const TERRAIN_COLLISION_LAYER: int = 1
 const TOKEN_COLLISION_LAYER: int = 2
 const RAYCAST_LENGTH: float = 200.0
@@ -45,6 +51,7 @@ var _display_unit_per_cell: float = 5.0
 
 ## State
 var _state: State = State.INACTIVE
+var _mode: Mode = Mode.LINE
 var _waypoints: PackedVector3Array = PackedVector3Array()
 var _preview_point: Vector3 = Vector3.ZERO
 var _has_preview: bool = false
@@ -186,6 +193,9 @@ func _handle_mouse_button(event: InputEventMouseButton) -> bool:
 
 
 func _handle_key(event: InputEventKey) -> bool:
+	if event.pressed and event.keycode == KEY_TAB:
+		_cycle_mode()
+		return true
 	if event.pressed and event.keycode == KEY_ESCAPE:
 		_cancel_measurement()
 		return true
@@ -560,3 +570,7 @@ func _pop_measure_hints() -> void:
 	UIManager.remove_hint("M")
 	UIManager.add_hint("M", "Measure")
 	UIManager.add_hint("G", "Grid")
+
+
+func _cycle_mode() -> void:
+	_mode = advance_mode(_mode)
