@@ -714,3 +714,4 @@ func _cycle_mode() -> void:
 			_redraw_locked_volume()
 
 	_update_hints()
+	_mark_dirty()
