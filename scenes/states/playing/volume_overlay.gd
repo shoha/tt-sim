@@ -38,12 +38,17 @@ static func build_horizontal_ring(
 
 ## References — set once via setup()
 var _camera: Camera3D
-var _world_viewport: SubViewport
+var _world_viewport: SubViewport   # kept to free children in _exit_tree()
+var _overlay_parent: Node          # kept to free _canvas_layer in _exit_tree()
 
 ## 3D geometry nodes — added as children of _world_viewport
 var _fill_instance: MeshInstance3D
 var _wire_instance: MeshInstance3D
 var _wire_mesh: ImmediateMesh
+
+## Reusable fill meshes — properties updated in place each show()
+var _sphere_mesh: SphereMesh
+var _cylinder_mesh: CylinderMesh
 
 ## Materials — created once in setup(), colors updated in show()
 var _wire_material: StandardMaterial3D
@@ -68,10 +73,20 @@ func _ready() -> void:
 func setup(cam: Camera3D, viewport: SubViewport, overlay_parent: Node) -> void:
 	_camera = cam
 	_world_viewport = viewport
+	_overlay_parent = overlay_parent
 	_create_materials()
 	_create_mesh_instances()
 	_create_label(overlay_parent)
 	set_process(true)
+
+
+func _exit_tree() -> void:
+	if _wire_instance and is_instance_valid(_wire_instance):
+		_wire_instance.queue_free()
+	if _fill_instance and is_instance_valid(_fill_instance):
+		_fill_instance.queue_free()
+	if _canvas_layer and is_instance_valid(_canvas_layer):
+		_canvas_layer.queue_free()
 
 
 func clear() -> void:
@@ -105,6 +120,10 @@ func _create_mesh_instances() -> void:
 	_wire_instance.material_override = _wire_material
 	_wire_instance.visible = false
 	_world_viewport.add_child(_wire_instance)
+
+	_sphere_mesh = SphereMesh.new()
+	_cylinder_mesh = CylinderMesh.new()
+	_cylinder_mesh.height = CYLINDER_HEIGHT
 
 	_fill_instance = MeshInstance3D.new()
 	_fill_instance.material_override = _fill_material
@@ -168,17 +187,14 @@ func _update_wire_mesh(shape: Shape) -> void:
 func _update_fill_mesh(shape: Shape) -> void:
 	match shape:
 		Shape.SPHERE:
-			var sphere := SphereMesh.new()
-			sphere.radius = _radius
-			sphere.height = _radius * 2.0
-			_fill_instance.mesh = sphere
+			_sphere_mesh.radius = _radius
+			_sphere_mesh.height = _radius * 2.0
+			_fill_instance.mesh = _sphere_mesh
 			_fill_instance.position = _center
 		Shape.CYLINDER:
-			var cyl := CylinderMesh.new()
-			cyl.top_radius = _radius
-			cyl.bottom_radius = _radius
-			cyl.height = CYLINDER_HEIGHT
-			_fill_instance.mesh = cyl
+			_cylinder_mesh.top_radius = _radius
+			_cylinder_mesh.bottom_radius = _radius
+			_fill_instance.mesh = _cylinder_mesh
 			_fill_instance.position = _center + Vector3.UP * CYLINDER_HEIGHT * 0.5
 
 

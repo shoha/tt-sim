@@ -17,7 +17,7 @@ func test_to_dict_from_dict_round_trip() -> void:
 	original.max_health = 200
 	original.current_health = 150
 	original.is_visible_to_players = false
-	original.status_effects = ["poisoned", "confused"]
+	original.status_effects.assign(["poisoned", "confused"])
 	original.is_alive = true
 
 	var dict = original.to_dict()
