@@ -9,3 +9,6 @@
 /cursor_hints/
 /user_assets/
 .vscode/
+
+# Claude Code — local overrides are machine-specific
+.claude/settings.local.json
