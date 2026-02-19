@@ -28,6 +28,9 @@ const TERRAIN_COLLISION_LAYER: int = 1
 const TOKEN_COLLISION_LAYER: int = 2
 const RAYCAST_LENGTH: float = 200.0
 
+## Color used to highlight tokens inside the active volume
+const AOE_HIGHLIGHT_COLOR := Color(1.0, 0.45, 0.1, 1.0)
+
 ## 2D visual constants (pixel units — rendered on a CanvasLayer above the lo-fi shader)
 const LINE_WIDTH_PX: float = 2.5
 const DASH_LENGTH_PX: float = 8.0
@@ -58,6 +61,7 @@ var _volume_center: Vector3 = Vector3.ZERO
 var _volume_radius: float = 0.0
 var _has_locked_volume: bool = false
 var _volume_overlay: VolumeOverlay  # created in setup()
+var _aoe_highlighted_tokens: Array[BoardToken] = []
 
 var _waypoints: PackedVector3Array = PackedVector3Array()
 var _preview_point: Vector3 = Vector3.ZERO
@@ -161,6 +165,7 @@ func deactivate() -> void:
 	if _volume_overlay:
 		_volume_overlay.clear()
 	_clear_visuals()
+	_clear_token_highlights()
 	_pop_measure_hints()
 	set_process(false)
 	toggled.emit(false)
@@ -322,6 +327,68 @@ func _check_camera_changed() -> void:
 		_last_camera_size = cam_size
 		_last_camera_pos = cam_pos
 		_mark_dirty()
+
+
+# ============================================================================
+# Token Highlighting
+# ============================================================================
+
+
+func _get_all_tokens() -> Array[Node]:
+	if not _world_viewport:
+		return []
+	return _world_viewport.find_children("*", "BoardToken", true, false)
+
+
+func _token_in_volume(
+	token_pos: Vector3, shape: VolumeOverlay.Shape, center: Vector3, radius: float
+) -> bool:
+	match shape:
+		VolumeOverlay.Shape.SPHERE:
+			return token_pos.distance_to(center) <= radius
+		VolumeOverlay.Shape.CYLINDER:
+			var xz := Vector2(token_pos.x, token_pos.z).distance_to(
+				Vector2(center.x, center.z)
+			)
+			return (
+				xz <= radius
+				and token_pos.y >= center.y
+				and token_pos.y <= center.y + VolumeOverlay.CYLINDER_HEIGHT
+			)
+	return false
+
+
+func _update_token_highlights(
+	shape: VolumeOverlay.Shape, center: Vector3, radius: float
+) -> void:
+	var next: Array[BoardToken] = []
+	for node in _get_all_tokens():
+		var token := node as BoardToken
+		if not token or not token.rigid_body:
+			continue
+		if _token_in_volume(token.rigid_body.global_position, shape, center, radius):
+			next.append(token)
+
+	# Unhighlight tokens that left the volume
+	for token in _aoe_highlighted_tokens:
+		if is_instance_valid(token) and not next.has(token):
+			token.set_highlighted(false)
+			token.set_highlight_color(SelectionGlowRenderer.DEFAULT_GLOW_COLOR)
+
+	# Highlight (or re-confirm color on) tokens inside the volume
+	for token in next:
+		token.set_highlight_color(AOE_HIGHLIGHT_COLOR)
+		token.set_highlighted(true)
+
+	_aoe_highlighted_tokens = next
+
+
+func _clear_token_highlights() -> void:
+	for token in _aoe_highlighted_tokens:
+		if is_instance_valid(token):
+			token.set_highlighted(false)
+			token.set_highlight_color(SelectionGlowRenderer.DEFAULT_GLOW_COLOR)
+	_aoe_highlighted_tokens.clear()
 
 
 # ============================================================================
@@ -487,6 +554,19 @@ func _do_redraw() -> void:
 			_draw_control.queue_redraw()
 		if _state == State.PLACING_VOLUME_RADIUS:
 			_redraw_volume_preview()
+		# Sync token highlights with the active volume (preview or locked)
+		if _state == State.PLACING_VOLUME_RADIUS and _has_preview:
+			var r := Vector2(_preview_point.x, _preview_point.z).distance_to(
+				Vector2(_volume_center.x, _volume_center.z)
+			)
+			if r >= 0.01:
+				_update_token_highlights(_current_volume_shape(), _volume_center, r)
+			else:
+				_clear_token_highlights()
+		elif _has_locked_volume:
+			_update_token_highlights(_current_volume_shape(), _volume_center, _volume_radius)
+		else:
+			_clear_token_highlights()
 		return
 
 	# Show a cursor dot at the mouse position whenever there's a preview hit.
@@ -729,6 +809,7 @@ func _cycle_mode() -> void:
 		_volume_radius = 0.0
 		if _volume_overlay:
 			_volume_overlay.clear()
+		_clear_token_highlights()
 		_state = State.PLACING_START
 	else:
 		# SPHERE <-> CYLINDER: preserve locked volume if present, just redraw as new shape
