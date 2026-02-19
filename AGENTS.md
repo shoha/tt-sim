@@ -47,7 +47,7 @@
 - **Settings persistence** – Each system reads/writes its own section in `Paths.SETTINGS_PATH` (`user://settings.cfg`). Always check `ConfigFile.load()` return value before overwriting — ignore `ERR_FILE_NOT_FOUND` but warn on other errors. See `docs/CONVENTIONS.md` Settings Persistence
 - **In-game editing** – `LevelEditPanel` (extends `DrawerContainer`, right edge) provides real-time editing during gameplay. `GameplayMenuController` routes changes to `LevelPlayController`. Cancel reverts; save persists to disk
 - **Scale convention** – 1 world unit = 1 meter (glTF standard). `LevelData.grid_cell_size` adapts meters to game units. Use `ScaleUtils` for all distance conversion and formatting
-- **Measure tool** – `MeasureTool` (Node child of GameMap) provides distance measurement. Renders 2D on `LAYER_MEASURE_OVERLAY` (layer 8) to stay crisp above the lo-fi shader. M key toggles. Disables token dragging while active. Input routed through `GameMap._input()` with GUI click guard
+- **Measure tool** – `MeasureTool` (Node child of GameMap) provides distance measurement. Renders 2D on `LAYER_MEASURE_OVERLAY` (layer 8) to stay crisp above the lo-fi shader. M key toggles. Disables token dragging while active. Input routed through `GameMap._input()` with GUI click guard. Tab cycles mode: Line → Sphere → Cylinder → Line. VolumeOverlay (child of MeasureTool, created in setup()) renders 3D wireframe + transparent fill inside the SubViewport, plus a 2D label. Tabbing from a line waypoint uses that point as the volume center.
 - **Grid overlay** – `GridOverlay` (MeshInstance3D child of Camera3D inside SubViewport) projects a procedural grid via depth-buffer shader. Uses cell tint (theme `color_surface1` at 65% with 10% inset) instead of grid lines for readability on bright maps. Height filter (`grid_y_level`/`grid_y_tolerance`) prevents projection onto tokens. Animated fade in/out (0.2s). G key toggles (local per-client). Auto-shows during measure tool and token drag (configurable via `LevelData`). Managed by `GameMap`
 - **Grid snap** – `DragAndDrop3D` snaps to grid cell centers when `grid_snap_enabled = true`. Hold Shift for free move override. Configured from `LevelData` via `GameMap.configure_grid()`
 - **Drag ruler** – `DragRuler` (Node child of GameMap) shows movement distance during token drag. Renders 2D on `LAYER_DRAG_RULER` (layer 7). Activates/deactivates via DragAndDrop3D signals. Uses `MapOverlayUtils` for 2D overlay boilerplate
@@ -90,9 +90,34 @@ After editing files, run the appropriate formatter so output matches project sty
 
 ## Testing
 
-- **Unit tests** – GUT framework, configured in `tests/.gutconfig.json`. Test files in `tests/unit/` with `test_` prefix.
+- **Unit tests** – GUT framework (`addons/gut/`), configured in `tests/.gutconfig.json`. Test files in `tests/unit/` with `test_` prefix.
 - **Integration test scenes** – Runnable with F6 in Godot editor: `tests/test_glb_lights.tscn`, `tests/test_play_level.tscn`, `tests/test_client_waiting.tscn`
-- **Run unit tests**: In Godot editor, open the GUT panel and click Run All. Or from CLI if the GUT command-line runner is configured.
+
+### Running tests from the CLI
+
+`godot` must be on PATH (bash wrapper at `~/.local/bin/godot` pointing to the local install).
+
+**Run all unit tests (headless):**
+```
+godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
+```
+
+**After a fresh clone or when new `class_name` scripts are added**, run the import step first (required once):
+```
+godot --headless --import --path .
+```
+Then run tests normally.
+
+**Check for GDScript compilation errors** (loads the project, reports all parse/compile errors, exits):
+```
+godot --headless --path . --quit-after 1
+```
+Filter to just errors: pipe output through `grep -E "ERROR:|SCRIPT ERROR:"`.
+
+**Lint a file:**
+```
+gdlint path/to/file.gd
+```
 
 ## CI/CD
 

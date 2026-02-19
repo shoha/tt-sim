@@ -675,6 +675,12 @@ When `LevelData.grid_snap_enabled` is `true`, dragged tokens snap to the nearest
 | `INACTIVE`         | Tool is off. No processing or rendering.         |
 | `PLACING_START`    | Activated (M key). Cursor dot follows mouse, waiting for first click. |
 | `PLACING_WAYPOINT` | First point placed. Preview segment stretches to cursor. Click to add waypoints, right-click/Escape to finish. |
+| `PLACING_VOLUME_CENTER`  | Volume mode active. Cursor dot follows mouse, waiting for center click. |
+| `PLACING_VOLUME_RADIUS`  | Center placed. Preview volume (wire + fill) stretches to cursor. Click locks radius. |
+
+**Volume Mode:**
+
+Tab cycles the tool's `Mode` enum (LINE → SPHERE → CYLINDER → LINE). In SPHERE or CYLINDER mode, clicking places a center point and dragging sets the radius; a second click locks the volume. RMB cancels the current step. Switching from SPHERE to CYLINDER preserves the placed center and radius. Tabbing from LINE to a volume mode carries the last placed waypoint as the volume center. The cylinder extends `CYLINDER_HEIGHT` (10 world meters, ~33 ft) above the center Y.
 
 **Rendering Architecture:**
 
@@ -711,6 +717,7 @@ The tool renders entirely in 2D to avoid the lo-fi post-processing shader applie
 | File | Purpose |
 | ---- | ------- |
 | `scenes/states/playing/measure_tool.gd` | Tool logic, state machine, 2D rendering, label management |
+| `scenes/states/playing/volume_overlay.gd` | 3D sphere/cylinder wireframe + fill + 2D radius label |
 | `scenes/states/playing/grid_overlay.gd` | Grid overlay (MeshInstance3D + depth shader uniform management) |
 | `shaders/grid_overlay.gdshader` | Depth-projected procedural grid shader |
 | `scenes/states/playing/drag_ruler.gd` | Movement distance display during token drags |

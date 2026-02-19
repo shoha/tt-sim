@@ -621,6 +621,8 @@ The measure tool provides distance measurement for players during gameplay. It r
 
 Toggle with the **M** key. The tool uses a three-state machine: `INACTIVE` -> `PLACING_START` -> `PLACING_WAYPOINT`. Press M again, Escape, or right-click to deactivate.
 
+Volume mode is activated by pressing **Tab** while the tool is open. Tab cycles through Line → Sphere → Cylinder → Line. The current mode is communicated by the active 3D shape and the Tab hint (which shows the next mode in the cycle).
+
 ### Visuals
 
 All rendering is 2D, driven by `Control._draw()`:
@@ -651,6 +653,14 @@ Distance labels use the active level's scale settings (`grid_cell_size`, `displa
 - **GUI click guard**: `GameMap._input()` checks `_is_mouse_over_gui()` before forwarding mouse clicks to the tool.
 - **Context menu suppression**: When the tool consumes an input event, `get_viewport().set_input_as_handled()` prevents token context menus from opening.
 - **Level lifecycle**: The tool is deactivated automatically when a level is cleared or a new level is loaded.
+
+### Volume Mode
+
+When in Sphere or Cylinder mode, `VolumeOverlay` (`scenes/states/playing/volume_overlay.gd`) renders:
+
+- **Wireframe** — `ImmediateMesh` with `PRIMITIVE_LINES`. Sphere: 3 great-circle rings (XZ equatorial, XY, YZ). Cylinder: bottom ring + top ring + 8 vertical lines. Preview at 50% opacity; locked at full opacity.
+- **Fill** — `SphereMesh` / `CylinderMesh` with `TRANSPARENCY_ALPHA` at ~12% opacity (6% during preview). Both the wireframe and fill render after the lo-fi post-process pass (transparent objects bypass `hint_screen_texture`), so both appear crisp as UI overlay elements.
+- **Radius label** — `PanelContainer` label at `LAYER_MEASURE_OVERLAY`, positioned at the right edge of the shape and updated each `_process()` frame.
 
 ### Click Sound
 
