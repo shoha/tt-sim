@@ -1,3 +1,6 @@
+# Design docs (local planning notes, not for repo)
+/docs/plans/
+
 # Godot 4+ specific ignores
 .godot/
 /android/

@@ -9,10 +9,19 @@ class_name MeasureTool
 ##   2. Call configure() after a level loads to provide scale settings.
 ##   3. GameMap feeds input via handle_input() — returns true if the event was consumed.
 ##
-## State machine:
+## Modes: LINE (default), SPHERE, CYLINDER — Tab cycles between them.
+##
+## State machine (LINE mode):
 ##   INACTIVE ──(activate)──► PLACING_START ──(click)──► PLACING_WAYPOINT
 ##   PLACING_WAYPOINT ──(click)──► PLACING_WAYPOINT (adds waypoint)
-##   PLACING_WAYPOINT / PLACING_START ──(deactivate / right-click / Escape)──► INACTIVE
+##   PLACING_WAYPOINT / PLACING_START ──(RMB/Esc)──► INACTIVE
+##
+## State machine (SPHERE / CYLINDER modes):
+##   INACTIVE ──(activate)──► PLACING_VOLUME_CENTER ──(click)──► PLACING_VOLUME_RADIUS
+##   PLACING_VOLUME_RADIUS ──(click)──► PLACING_VOLUME_CENTER (locks radius)
+##   PLACING_VOLUME_RADIUS ──(RMB/Esc)──► PLACING_VOLUME_CENTER (cancel preview)
+##   PLACING_VOLUME_CENTER ──(RMB/Esc, no lock)──► INACTIVE
+##   PLACING_VOLUME_CENTER ──(RMB/Esc, locked)──► PLACING_VOLUME_CENTER (clears lock)
 
 signal toggled(active: bool)
 

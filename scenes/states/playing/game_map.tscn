@@ -5,8 +5,8 @@
 [ext_resource type="Script" uid="uid://md8k6faseouk" path="res://addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd" id="2_tyn2t"]
 [ext_resource type="Shader" uid="uid://cyy1aha4j5eb1" path="res://shaders/tilt_shift.gdshader" id="4_hgeeq"]
 [ext_resource type="Script" uid="uid://bm2kst6ow2637" path="res://scenes/states/playing/camera_3d.gd" id="4_kjinj"]
-[ext_resource type="Shader" path="res://shaders/lofi_canvas.gdshader" id="5_lofi_canvas"]
-[ext_resource type="Script" path="res://scenes/states/playing/occlusion_fade_manager.gd" id="6_occfade"]
+[ext_resource type="Shader" uid="uid://cxn1njji80mb1" path="res://shaders/lofi_canvas.gdshader" id="5_lofi_canvas"]
+[ext_resource type="Script" uid="uid://2xyvhnhgntl" path="res://scenes/states/playing/occlusion_fade_manager.gd" id="6_occfade"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_lofi_canvas"]
 shader = ExtResource("5_lofi_canvas")
@@ -98,7 +98,7 @@ hit_back_faces = false
 script = ExtResource("2_tyn2t")
 metadata/_custom_type_script = "uid://md8k6faseouk"
 
-[node name="OcclusionFadeManager" type="Node3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport"]
+[node name="OcclusionFadeManager" type="Node3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport" unique_id=1128785975]
 script = ExtResource("6_occfade")
 
 [node name="GameplayMenu" parent="." unique_id=2132725076 instance=ExtResource("2_stlim")]

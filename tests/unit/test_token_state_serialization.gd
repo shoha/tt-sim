@@ -20,7 +20,7 @@ func test_to_dict_from_dict_round_trip() -> void:
 	original.is_alive = true
 	original.is_visible_to_players = false
 	original.is_hidden_from_gm = true
-	original.status_effects = ["burned"]
+	original.status_effects.assign(["burned"])
 
 	var dict = original.to_dict()
 	var restored = TokenState.from_dict(dict)
