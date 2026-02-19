@@ -294,7 +294,12 @@ func _cancel_measurement() -> void:
 
 ## Update the live preview point from the SubViewport mouse position.
 func _update_preview() -> void:
-	var hit := _raycast(Input.is_key_pressed(KEY_CTRL))
+	var hit: Vector3
+	if _state == State.PLACING_VOLUME_RADIUS:
+		# Skip physics — intersect with the horizontal plane at center Y for smooth scaling.
+		hit = _raycast_horizontal_plane(_volume_center.y)
+	else:
+		hit = _raycast(Input.is_key_pressed(KEY_CTRL))
 	if hit != Vector3.INF:
 		_preview_point = hit
 		_has_preview = true
@@ -371,6 +376,23 @@ func _raycast_layer(
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = layer
 	return space_state.intersect_ray(query)
+
+
+## Intersect the camera ray through the current mouse position with a horizontal
+## plane at the given world Y. Returns Vector3.INF if the ray is parallel to the
+## plane or the intersection is behind the camera.
+func _raycast_horizontal_plane(y: float) -> Vector3:
+	if not _camera or not _world_viewport:
+		return Vector3.INF
+	var vp_mouse := _world_viewport.get_mouse_position()
+	var from := _camera.project_ray_origin(vp_mouse)
+	var dir := _camera.project_ray_normal(vp_mouse)
+	if abs(dir.y) < 0.001:
+		return Vector3.INF
+	var t := (y - from.y) / dir.y
+	if t < 0.0:
+		return Vector3.INF
+	return from + dir * t
 
 
 # ============================================================================
