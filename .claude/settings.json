@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(git *)",
+      "Bash(godot *)",
+      "Bash(gdlint *)",
+      "Task",
+      "WebFetch",
+      "WebSearch"
+    ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
+  }
+}
