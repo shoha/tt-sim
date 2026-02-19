@@ -117,6 +117,9 @@ func setup(cam: Camera3D, viewport: SubViewport, overlay_parent: Node) -> void:
 	_camera = cam
 	_world_viewport = viewport
 	_create_overlay(overlay_parent)
+	_volume_overlay = VolumeOverlay.new()
+	add_child(_volume_overlay)
+	_volume_overlay.setup(cam, viewport, overlay_parent)
 
 
 ## Configure scale settings. Call after level load and when scale changes.
@@ -235,6 +238,7 @@ func _handle_left_click(ctrl_held: bool) -> bool:
 			_volume_center = hit
 			_volume_radius = 0.0
 			_state = State.PLACING_VOLUME_RADIUS
+			_update_hints()
 			_mark_dirty()
 			AudioManager.play_tick()
 			return true
@@ -245,6 +249,7 @@ func _handle_left_click(ctrl_held: bool) -> bool:
 				)
 				_has_locked_volume = true
 				_state = State.PLACING_VOLUME_CENTER
+				_update_hints()
 				_redraw_locked_volume()
 				_mark_dirty()
 				AudioManager.play_tick()
@@ -642,22 +647,70 @@ func _update_label_positions() -> void:
 
 
 func _push_measure_hints() -> void:
+	_update_hints()
+
+
+func _update_hints() -> void:
+	# Clear all measure-tool-owned hint keys
 	UIManager.remove_hint("M")
 	UIManager.remove_hint("G")
-	UIManager.add_hint("LMB", "Place Point")
-	UIManager.add_hint("Ctrl+LMB", "Snap Token")
-	UIManager.add_hint("RMB", "Undo / Cancel")
-	UIManager.add_hint("M", "Done")
+	UIManager.remove_hint("LMB")
+	UIManager.remove_hint("Ctrl+LMB")
+	UIManager.remove_hint("RMB")
+	UIManager.remove_hint("Tab")
+
+	if _mode == Mode.LINE:
+		UIManager.add_hint("LMB", "Place Point")
+		UIManager.add_hint("Ctrl+LMB", "Snap Token")
+		UIManager.add_hint("RMB", "Undo / Cancel")
+		UIManager.add_hint("Tab", "Sphere")
+		UIManager.add_hint("M", "Done")
+	else:
+		var next_label := "Cylinder" if _mode == Mode.SPHERE else "Line"
+		var action_label := "Place Center" if _state == State.PLACING_VOLUME_CENTER else "Lock Radius"
+		var cancel_label := "Clear/Cancel" if _state == State.PLACING_VOLUME_CENTER else "Cancel"
+		UIManager.add_hint("LMB", action_label)
+		UIManager.add_hint("RMB", cancel_label)
+		UIManager.add_hint("Tab", next_label)
+		UIManager.add_hint("M", "Done")
 
 
 func _pop_measure_hints() -> void:
 	UIManager.remove_hint("LMB")
 	UIManager.remove_hint("Ctrl+LMB")
 	UIManager.remove_hint("RMB")
+	UIManager.remove_hint("Tab")
 	UIManager.remove_hint("M")
 	UIManager.add_hint("M", "Measure")
 	UIManager.add_hint("G", "Grid")
 
 
 func _cycle_mode() -> void:
+	var prev_mode := _mode
 	_mode = advance_mode(_mode)
+
+	if prev_mode == Mode.LINE:
+		# LINE -> SPHERE/CYLINDER: inherit last placed waypoint as volume center if available
+		if _state == State.PLACING_WAYPOINT and _waypoints.size() > 0:
+			_volume_center = _waypoints[_waypoints.size() - 1]
+			_waypoints.clear()
+			_has_locked_volume = false
+			_state = State.PLACING_VOLUME_RADIUS
+		else:
+			_waypoints.clear()
+			_has_locked_volume = false
+			_state = State.PLACING_VOLUME_CENTER
+		_clear_visuals()
+	elif _mode == Mode.LINE:
+		# CYLINDER -> LINE: clear volume, return to line start
+		_has_locked_volume = false
+		_volume_radius = 0.0
+		if _volume_overlay:
+			_volume_overlay.clear()
+		_state = State.PLACING_START
+	else:
+		# SPHERE <-> CYLINDER: preserve locked volume if present, just redraw as new shape
+		if _has_locked_volume:
+			_redraw_locked_volume()
+
+	_update_hints()
