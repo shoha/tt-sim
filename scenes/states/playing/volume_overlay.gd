@@ -5,10 +5,10 @@ class_name VolumeOverlay
 ## Adds MeshInstance3D geometry directly to the SubViewport for world-space rendering,
 ## and a 2D radius label in a CanvasLayer above the lo-fi shader.
 ##
-## NOTE: The fill mesh uses TRANSPARENCY_ALPHA. Godot's lo-fi post-process
-## (lofi_composite.gdshader) only captures opaque geometry, so the fill will render
-## after the lo-fi pass and appear crisp. The wireframe is opaque and will receive
-## the lo-fi effect. This is intentional — the fill reads clearly as a UI overlay.
+## NOTE: Both the wireframe and fill use TRANSPARENCY_ALPHA (the preview wire color
+## has alpha=0.5). Godot's lo-fi post-process (lofi_composite.gdshader) only captures
+## opaque geometry, so both meshes render after the lo-fi pass and appear crisp.
+## This is intentional — they read clearly as UI overlay elements distinct from world geometry.
 
 const CYLINDER_HEIGHT: float = 10.0   # World meters (~33 ft). Covers most TTRPG column spells.
 const RING_SEGMENTS: int = 32
@@ -121,3 +121,107 @@ func _create_label(overlay_parent: Node) -> void:
 	_label_panel = result.panel
 	_label = result.label
 	_canvas_layer.add_child(_label_panel)
+
+
+## Show a volume shape. Call every frame during preview; call once to lock.
+## [param shape] SPHERE or CYLINDER.
+## [param center] World-space center of the shape.
+## [param radius] XZ radius in world meters.
+## [param label_text] Pre-formatted string, e.g. "20 ft" (from ScaleUtils.format_distance).
+## [param is_preview] true while the user is dragging; false when the radius is locked.
+func show(
+	shape: Shape,
+	center: Vector3,
+	radius: float,
+	label_text: String,
+	is_preview: bool,
+) -> void:
+	_center = center
+	_radius = radius
+	_is_showing = true
+
+	_wire_material.albedo_color = WIRE_COLOR_PREVIEW if is_preview else WIRE_COLOR_LOCKED
+	_fill_material.albedo_color = FILL_COLOR_PREVIEW if is_preview else FILL_COLOR_LOCKED
+
+	_update_wire_mesh(shape)
+	_update_fill_mesh(shape)
+
+	_fill_instance.visible = true
+	_wire_instance.visible = true
+	_label.text = label_text
+	_label_panel.visible = true
+
+
+func _update_wire_mesh(shape: Shape) -> void:
+	_wire_mesh.clear_surfaces()
+	_wire_mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+
+	match shape:
+		Shape.SPHERE:
+			_add_sphere_rings()
+		Shape.CYLINDER:
+			_add_cylinder_geometry()
+
+	_wire_mesh.surface_end()
+
+
+func _update_fill_mesh(shape: Shape) -> void:
+	match shape:
+		Shape.SPHERE:
+			var sphere := SphereMesh.new()
+			sphere.radius = _radius
+			sphere.height = _radius * 2.0
+			_fill_instance.mesh = sphere
+			_fill_instance.position = _center
+		Shape.CYLINDER:
+			var cyl := CylinderMesh.new()
+			cyl.top_radius = _radius
+			cyl.bottom_radius = _radius
+			cyl.height = CYLINDER_HEIGHT
+			_fill_instance.mesh = cyl
+			_fill_instance.position = _center + Vector3.UP * CYLINDER_HEIGHT * 0.5
+
+
+func _add_sphere_rings() -> void:
+	# XZ equatorial ring
+	for i in range(RING_SEGMENTS):
+		var a := TAU * i / RING_SEGMENTS
+		var b := TAU * (i + 1) / RING_SEGMENTS
+		_wire_mesh.surface_add_vertex(_center + Vector3(cos(a), 0.0, sin(a)) * _radius)
+		_wire_mesh.surface_add_vertex(_center + Vector3(cos(b), 0.0, sin(b)) * _radius)
+
+	# XY vertical ring
+	for i in range(RING_SEGMENTS):
+		var a := TAU * i / RING_SEGMENTS
+		var b := TAU * (i + 1) / RING_SEGMENTS
+		_wire_mesh.surface_add_vertex(_center + Vector3(cos(a), sin(a), 0.0) * _radius)
+		_wire_mesh.surface_add_vertex(_center + Vector3(cos(b), sin(b), 0.0) * _radius)
+
+	# YZ vertical ring
+	for i in range(RING_SEGMENTS):
+		var a := TAU * i / RING_SEGMENTS
+		var b := TAU * (i + 1) / RING_SEGMENTS
+		_wire_mesh.surface_add_vertex(_center + Vector3(0.0, cos(a), sin(a)) * _radius)
+		_wire_mesh.surface_add_vertex(_center + Vector3(0.0, cos(b), sin(b)) * _radius)
+
+
+func _add_cylinder_geometry() -> void:
+	var top_y := _center.y + CYLINDER_HEIGHT
+
+	# Bottom ring
+	var bottom_verts := build_horizontal_ring(_center, _radius, 0.0, RING_SEGMENTS)
+	for v in bottom_verts:
+		_wire_mesh.surface_add_vertex(v)
+
+	# Top ring
+	var top_verts := build_horizontal_ring(_center, _radius, CYLINDER_HEIGHT, RING_SEGMENTS)
+	for v in top_verts:
+		_wire_mesh.surface_add_vertex(v)
+
+	# Vertical lines
+	for i in range(VERTICAL_LINES):
+		var angle := TAU * i / VERTICAL_LINES
+		var x := _center.x + cos(angle) * _radius
+		var z := _center.z + sin(angle) * _radius
+		_wire_mesh.surface_add_vertex(Vector3(x, _center.y, z))
+		_wire_mesh.surface_add_vertex(Vector3(x, top_y, z))
