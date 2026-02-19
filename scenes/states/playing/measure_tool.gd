@@ -16,7 +16,7 @@ class_name MeasureTool
 
 signal toggled(active: bool)
 
-enum State { INACTIVE, PLACING_START, PLACING_WAYPOINT }
+enum State { INACTIVE, PLACING_START, PLACING_WAYPOINT, PLACING_VOLUME_CENTER, PLACING_VOLUME_RADIUS }
 
 enum Mode { LINE, SPHERE, CYLINDER }
 
@@ -52,6 +52,13 @@ var _display_unit_per_cell: float = 5.0
 ## State
 var _state: State = State.INACTIVE
 var _mode: Mode = Mode.LINE
+
+## Volume mode state
+var _volume_center: Vector3 = Vector3.ZERO
+var _volume_radius: float = 0.0
+var _has_locked_volume: bool = false
+var _volume_overlay: VolumeOverlay  # created in setup()
+
 var _waypoints: PackedVector3Array = PackedVector3Array()
 var _preview_point: Vector3 = Vector3.ZERO
 var _has_preview: bool = false
@@ -133,9 +140,10 @@ func is_active() -> bool:
 func activate() -> void:
 	if _state != State.INACTIVE:
 		return
-	_state = State.PLACING_START
+	_state = State.PLACING_START if _mode == Mode.LINE else State.PLACING_VOLUME_CENTER
 	_waypoints.clear()
 	_has_preview = false
+	_has_locked_volume = false
 	_clear_visuals()
 	_push_measure_hints()
 	set_process(true)
@@ -146,6 +154,9 @@ func deactivate() -> void:
 	_state = State.INACTIVE
 	_waypoints.clear()
 	_has_preview = false
+	_has_locked_volume = false
+	if _volume_overlay:
+		_volume_overlay.clear()
 	_clear_visuals()
 	_pop_measure_hints()
 	set_process(false)
