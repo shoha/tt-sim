@@ -347,14 +347,10 @@ func _token_in_volume(
 		VolumeOverlay.Shape.SPHERE:
 			return token_pos.distance_to(center) <= radius
 		VolumeOverlay.Shape.CYLINDER:
-			var xz := Vector2(token_pos.x, token_pos.z).distance_to(
+			# Cylinder is a vertical column — only the XZ footprint matters.
+			return Vector2(token_pos.x, token_pos.z).distance_to(
 				Vector2(center.x, center.z)
-			)
-			return (
-				xz <= radius
-				and token_pos.y >= center.y
-				and token_pos.y <= center.y + VolumeOverlay.CYLINDER_HEIGHT
-			)
+			) <= radius
 	return false
 
 
