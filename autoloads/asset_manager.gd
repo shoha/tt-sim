@@ -398,14 +398,14 @@ func needs_download(pack_id: String, asset_id: String, variant_id: String = "def
 		return false
 
 	var pack = get_pack(pack_id)
-	if not pack:
-		return false
 
-	# Check if URL download is available
-	if pack.get_model_url(asset_id, variant_id) != "":
+	# Check if URL download is available (requires registered pack with base_url or per-variant URL)
+	if pack and pack.get_model_url(asset_id, variant_id) != "":
 		return true
 
-	# Check if P2P streaming is available (client connected to host)
+	# P2P streaming doesn't require pack registration on the client — the host
+	# resolves the path from its own registry.  Must be checked independently of
+	# whether the pack is registered here.
 	if NetworkManager.is_client() and streamer.is_enabled():
 		return true
 
