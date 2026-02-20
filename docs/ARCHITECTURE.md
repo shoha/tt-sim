@@ -897,9 +897,8 @@ project/
 │   ├── network_state_sync.gd # Autoload: state broadcasting
 │   ├── network_reconnection.gd # RefCounted: exponential-backoff reconnection helper
 │   ├── game_state.gd        # Autoload: authoritative game state
-│   ├── asset_manager.gd     # Autoload: facade for asset pipeline
+│   ├── asset_manager.gd     # Autoload: facade for asset pipeline (includes pack discovery)
 │   ├── asset_cache_manager.gd # Sub-component: disk cache (child of AssetManager)
-│   ├── asset_pack_manager.gd  # Sub-component: pack discovery
 │   ├── asset_downloader.gd    # Sub-component: HTTP downloads
 │   ├── asset_streamer.gd      # Sub-component: P2P streaming
 │   ├── asset_resolver.gd      # Sub-component: resolution pipeline

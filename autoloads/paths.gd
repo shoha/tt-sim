@@ -10,9 +10,6 @@ const SETTINGS_PATH: String = "user://settings.cfg"
 # Special pack ID for map streaming (used by AssetStreamer)
 const LEVEL_MAPS_PACK_ID: String = "_level_maps"
 
-# User asset packs directory (pack-based system)
-const USER_ASSETS_DIR: String = "res://user_assets/"
-
 # Data files
 const POKEMON_DATA_PATH: String = "res://data/pokemon.json"
 
@@ -25,21 +22,6 @@ const MAPS_DIR: String = "res://assets/models/maps/"
 # Scene directories
 const SCENES_DIR: String = "res://scenes/"
 const BOARD_TOKEN_DIR: String = "res://scenes/board_token/"
-
-
-## Get the base path for an asset pack
-static func pack_path(pack_id: String) -> String:
-	return USER_ASSETS_DIR + pack_id + "/"
-
-
-## Get the models directory for an asset pack
-static func pack_models_path(pack_id: String) -> String:
-	return pack_path(pack_id) + "models/"
-
-
-## Get the icons directory for an asset pack
-static func pack_icons_path(pack_id: String) -> String:
-	return pack_path(pack_id) + "icons/"
 
 
 ## Get the folder path for a level (where level.json and map.glb are stored)
