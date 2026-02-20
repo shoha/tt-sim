@@ -40,8 +40,12 @@ func _play_entrance_animation() -> void:
 		if child is Control:
 			child.modulate.a = 0.0
 
-	# Wait one frame so the VBoxContainer computes its layout positions
-	await get_tree().process_frame
+	# Wait for the VBoxContainer to finish computing its layout positions.
+	# queue_sort() + sort_children signal is reliable even under heavy load
+	# (e.g. returning from playing while tokens are still spawning), whereas
+	# a bare process_frame wait can fire before layout is complete.
+	container.queue_sort()
+	await container.sort_children
 	if not is_instance_valid(self):
 		return
 
