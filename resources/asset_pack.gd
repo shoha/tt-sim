@@ -14,7 +14,7 @@ class_name AssetPack
 ## Version string for the pack
 @export var version: String = "1.0"
 
-## Base path to the pack directory for local assets (e.g., "res://user_assets/pokemon/")
+## Base path to the pack directory for local assets (e.g., "user://user_assets/pokemon/")
 @export var base_path: String = ""
 
 ## Base URL for remote assets (e.g., "https://raw.githubusercontent.com/user/repo/main/pokemon/")

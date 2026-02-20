@@ -2,7 +2,7 @@ extends Node
 
 ## Asset resolution pipeline for locating and loading assets.
 ## Provides a unified interface for resolving assets through multiple sources:
-##   1. Local pack files (res://user_assets/)
+##   1. Local pack files (user://user_assets/)
 ##   2. Disk cache (user://asset_cache/)
 ##   3. HTTP download (from URLs in manifest)
 ##   4. P2P streaming (from host in multiplayer)
