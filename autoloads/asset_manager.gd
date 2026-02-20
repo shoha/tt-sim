@@ -173,6 +173,19 @@ func _discover_packs() -> void:
 								+ " assets"
 							)
 						)
+				else:
+					var pack = AssetPackClass.from_directory(pack_path, folder_name)
+					if pack and pack.assets.size() > 0:
+						_packs[pack.pack_id] = pack
+						print(
+							(
+								"AssetManager: Auto-discovered pack '"
+								+ pack.display_name
+								+ "' with "
+								+ str(pack.assets.size())
+								+ " assets"
+							)
+						)
 
 			folder_name = dir.get_next()
 
@@ -204,6 +217,19 @@ func _discover_user_assets_packs() -> void:
 					print(
 						(
 							"AssetManager: Loaded user pack '"
+							+ pack.display_name
+							+ "' with "
+							+ str(pack.assets.size())
+							+ " assets"
+						)
+					)
+			elif not _packs.has(folder_name):
+				var pack = AssetPackClass.from_directory(pack_path, folder_name)
+				if pack and pack.assets.size() > 0:
+					_packs[pack.pack_id] = pack
+					print(
+						(
+							"AssetManager: Auto-discovered user pack '"
 							+ pack.display_name
 							+ "' with "
 							+ str(pack.assets.size())
