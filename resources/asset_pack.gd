@@ -60,6 +60,8 @@ func get_icon_path(asset_id: String, variant_id: String = "default") -> String:
 	var variant = asset.get_variant(variant_id)
 	if not variant:
 		return ""
+	if variant.icon_file == "":
+		return ""
 	return base_path + "icons/" + variant.icon_file
 
 
