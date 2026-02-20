@@ -113,10 +113,12 @@ user_assets/
 
 ### Pack Discovery
 
-Packs are automatically discovered on startup from two sources:
+Packs are automatically discovered on startup from `user://user_assets/` (the OS user data directory — on Windows: `%APPDATA%\Godot\app_userdata\TTSim\user_assets\`).
 
-1. **Local packs**: `res://user_assets/` - folders containing `manifest.json` (in project)
-2. **Installed packs**: `user://user_assets/` - packs downloaded via the manifest URL in the asset browser (same structure: manifest.json, models/, icons/)
+Two layouts are supported:
+
+1. **Manifest packs**: folder contains a `manifest.json` defining the pack and its assets
+2. **Manifest-free packs**: folder has no `manifest.json` — the pack is auto-synthesized from any `.glb` files found directly inside `models/`. The folder name becomes the pack name. A matching `.png` in `icons/` is used as the icon if present; otherwise the icon is left blank.
 
 ```gdscript
 # Manually refresh packs
@@ -428,6 +430,20 @@ AssetManager.clear_model_cache()
 - **Background:** Transparent works best
 
 ### Step-by-Step Guide
+
+Packs live in the user data directory. On Windows: `%APPDATA%\Godot\app_userdata\TTSim\user_assets\`.
+
+**Option A — Manifest-free (quickest):** Drop GLB files into `models/` with no manifest. The folder name becomes the pack name; matching PNGs in `icons/` are used as icons.
+
+```
+user_assets/my_pack/
+├── models/
+│   └── warrior.glb
+└── icons/
+    └── warrior.png   (optional)
+```
+
+**Option B — With manifest** (required for remote URLs, variants, or custom display names):
 
 1. **Create folder structure:**
 
