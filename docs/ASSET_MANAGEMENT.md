@@ -361,7 +361,7 @@ Loaded model scenes are cached in memory for fast instantiation:
 ```
 AssetManager._model_cache
 ├── "user://asset_cache/pokemon/pikachu/default.glb" -> Node3D template
-├── "res://user_assets/trainers/models/trainer.glb" -> PackedScene
+├── "user://user_assets/trainers/models/trainer.glb" -> Node3D template
 └── ...
 ```
 

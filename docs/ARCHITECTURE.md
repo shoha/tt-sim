@@ -358,7 +358,7 @@ The asset system supports local and remote asset packs with multiplayer synchron
 ### Asset Resolution
 
 ```
-1. Check local file (res://user_assets/)
+1. Check local file (user://user_assets/)
 2. Check disk cache (user://asset_cache/)
 3. Download from URL (if available)
 4. Request from host via P2P
@@ -399,11 +399,11 @@ asynchronously once the background load completes.
 
 ### Creating Packs
 
-Place in `user_assets/`:
+Place in `user://user_assets/` (Windows: `%APPDATA%\Godot\app_userdata\TTSim\user_assets\`):
 
 ```
 my_pack/
-├── manifest.json
+├── manifest.json   ← optional; omit for manifest-free auto-discovery
 ├── models/*.glb
 └── icons/*.png
 ```
