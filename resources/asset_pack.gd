@@ -145,6 +145,42 @@ static func from_manifest(manifest: Dictionary, pack_path: String = "") -> Asset
 	return pack
 
 
+## Synthesize an AssetPack by scanning a directory that has no manifest.json.
+## Discovers all .glb files directly inside pack_path/models/ (non-recursive).
+## For each model, checks pack_path/icons/<stem>.png; uses it if present, else "".
+## Returns an AssetPack with 0 assets if models/ does not exist.
+static func from_directory(pack_path: String, folder_name: String) -> AssetPack:
+	var pack := AssetPack.new()
+	pack.pack_id = folder_name
+	pack.display_name = folder_name.capitalize()
+	pack.base_path = pack_path
+
+	var models_dir := DirAccess.open(pack_path + "models/")
+	if models_dir == null:
+		return pack
+
+	models_dir.list_dir_begin()
+	var file_name := models_dir.get_next()
+	while file_name != "":
+		if not models_dir.current_is_dir() and file_name.get_extension().to_lower() == "glb":
+			var stem := file_name.get_basename()
+			var entry := AssetEntry.new()
+			entry.asset_id = stem
+			entry.display_name = stem.capitalize()
+			var variant := AssetVariant.new()
+			variant.variant_id = "default"
+			variant.model_file = file_name
+			var icon_name := stem + ".png"
+			if FileAccess.file_exists(pack_path + "icons/" + icon_name):
+				variant.icon_file = icon_name
+			entry.variants["default"] = variant
+			pack.assets[stem] = entry
+		file_name = models_dir.get_next()
+	models_dir.list_dir_end()
+
+	return pack
+
+
 ## Represents a single asset within a pack (e.g., one Pokemon, one miniature)
 class AssetEntry:
 	## Unique identifier within the pack
