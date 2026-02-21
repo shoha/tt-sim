@@ -184,6 +184,16 @@ func _rpc_request_asset(
 	else:
 		print("AssetStreamer: Peer %d requesting asset %s" % [peer_id, key])
 
+	# If the pack has a public URL, redirect the client to HTTP rather than
+	# streaming through the relay (faster, zero relay bandwidth).
+	# Level map assets are always local on the host — skip them.
+	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
+		var model_url = _asset_manager.get_model_url(pack_id, asset_id, variant_id)
+		if model_url != "":
+			print("AssetStreamer: Redirecting peer %d to URL for %s" % [peer_id, key])
+			rpc_id(peer_id, "_rpc_redirect_to_url", pack_id, asset_id, variant_id, model_url)
+			return
+
 	# Resolve the file path based on pack type
 	var file_path: String
 	if pack_id == Paths.LEVEL_MAPS_PACK_ID:
@@ -285,6 +295,30 @@ func _rpc_asset_not_found(pack_id: String, asset_id: String, variant_id: String)
 	push_error("AssetStreamer: Asset not found on host: " + key)
 	asset_failed.emit(pack_id, asset_id, variant_id, "Asset not found on host")
 
+	_process_request_queue()
+
+
+## RPC: Host redirects client to download asset from a public URL.
+## Avoids relay streaming when the pack has a CDN/GitHub URL.
+@rpc("authority", "reliable")
+func _rpc_redirect_to_url(
+	pack_id: String, asset_id: String, variant_id: String, url: String
+) -> void:
+	if not NetworkManager.is_client():
+		return
+
+	var key = "%s/%s/%s" % [pack_id, asset_id, variant_id]
+
+	# Clean up P2P state so the concurrency slot is freed and the queue advances.
+	_client_downloads.erase(key)
+	_partial_transfers.erase(key)
+	_request_queue = _request_queue.filter(func(r): return r.key != key)
+
+	print("AssetStreamer: Host redirected %s to URL: %s" % [key, url])
+
+	# Trigger HTTP download. The resolver's _on_http_download_completed callback
+	# handles completion → asset_resolved → asset_available → factory upgrade.
+	_asset_manager.downloader.request_download(pack_id, asset_id, variant_id, url)
 	_process_request_queue()
 
 
