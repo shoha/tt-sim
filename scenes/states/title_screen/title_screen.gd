@@ -18,6 +18,7 @@ const ENTRANCE_DURATION := 0.3
 @onready var join_button: Button = %JoinGameButton
 @onready var settings_button: Button = %SettingsButton
 @onready var quit_button: Button = %QuitButton
+@onready var version_label: Label = $PlaceholderContainer/VersionLabel
 
 
 func _ready() -> void:
@@ -27,7 +28,11 @@ func _ready() -> void:
 	settings_button.pressed.connect(_on_settings_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
 
+	version_label.text = "v" + UpdateVersion.get_current()
+	version_label.modulate.a = 0.0
+
 	_play_entrance_animation()
+	_play_version_label_entrance()
 
 
 ## Staggered fade-in + slide-up for title screen UI elements
@@ -63,6 +68,23 @@ func _play_entrance_animation() -> void:
 		tw.set_trans(Tween.TRANS_CUBIC)
 		tw.tween_property(child, "modulate:a", 1.0, ENTRANCE_DURATION).set_delay(delay)
 		tw.tween_property(child, "position:y", target_y, ENTRANCE_DURATION).set_delay(delay)
+
+
+## Fade in the version label in sync with the main entrance animation.
+## Awaits the same sort_children signal so timing matches the VBox stagger.
+func _play_version_label_entrance() -> void:
+	var container = $PlaceholderContainer/CenterContainer/VBoxContainer
+	await container.sort_children
+	if not is_instance_valid(self):
+		return
+	var control_count: int = (
+		container.get_children().filter(func(c: Node) -> bool: return c is Control).size()
+	)
+	var delay: float = (control_count - 1) * ENTRANCE_STAGGER
+	var tw = create_tween()
+	tw.set_ease(Tween.EASE_OUT)
+	tw.set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(version_label, "modulate:a", 1.0, ENTRANCE_DURATION).set_delay(delay)
 
 
 func _on_play_level_pressed() -> void:
