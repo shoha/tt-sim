@@ -349,9 +349,6 @@ static func create_from_placement_async(placement: TokenPlacement) -> Dictionary
 
 	# Store placement metadata for later reference
 	token.set_meta("placement_id", placement.placement_id)
-	token.pack_id = placement.pack_id
-	token.asset_id = placement.asset_id
-	token.variant_id = placement.variant_id
 
 	# Apply placement data (position, rotation, scale, properties)
 	placement.apply_to_token(token)
