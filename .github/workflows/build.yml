@@ -76,6 +76,22 @@ jobs:
       - name: Export ${{ matrix.preset }}
         run: godot --headless --export-release "${{ matrix.preset }}" ${{ matrix.output }}
 
+      - name: Sign Windows executable
+        if: startsWith(github.ref, 'refs/tags/') && matrix.preset == 'Windows Desktop'
+        uses: azure/artifact-signing-action@v1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.ARTIFACT_SIGNING_CERT_PROFILE }}
+          files-folder: ${{ matrix.folder }}
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
