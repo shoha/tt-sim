@@ -38,9 +38,6 @@ signal token_state_received(network_id: String, token_dict: Dictionary)
 signal token_removed_received(network_id: String)
 signal transform_batch_received(batch: Dictionary)
 signal visual_settings_received(settings: Dictionary)
-signal token_permission_requested(network_id: String, peer_id: int, permission_type: int)
-signal token_permission_response_received(network_id: String, permission_type: int, approved: bool)
-signal token_permissions_received(permissions_dict: Dictionary)
 signal client_token_transform_received(
 	sender_id: int, network_id: String, position: Vector3, rotation: Vector3, scale: Vector3
 )
@@ -113,6 +110,9 @@ var _game_in_progress: bool = false
 
 ## Delegated reconnection state machine
 var _reconnection: NetworkReconnection
+
+## Permission request/response sub-component
+var permissions: NetworkPermissions
 
 ## Debug logging
 var debug_logging: bool = false
@@ -199,6 +199,11 @@ func _ready() -> void:
 	_reconnection.reconnection_failed.connect(
 		func(reason: String) -> void: _handle_connection_error(reason)
 	)
+
+	# Setup permissions sub-component
+	permissions = NetworkPermissions.new()
+	permissions.name = "Permissions"
+	add_child(permissions)
 
 	# Load network settings
 	_load_network_settings()
@@ -855,35 +860,6 @@ func _rpc_receive_visual_settings(settings: Dictionary) -> void:
 	visual_settings_received.emit(settings)
 
 
-## RPC: Player requests permission for a token (client -> host)
-@rpc("any_peer", "reliable")
-func _rpc_request_token_permission(network_id: String, permission_type: int) -> void:
-	if not is_host():
-		return
-	var sender_id = multiplayer.get_remote_sender_id()
-	_log(
-		(
-			"Permission request from peer %d for token %s (type %d)"
-			% [sender_id, network_id, permission_type]
-		)
-	)
-	token_permission_requested.emit(network_id, sender_id, permission_type)
-
-
-## RPC: Host sends permission response to a specific client (host -> client)
-@rpc("authority", "reliable")
-func _rpc_token_permission_response(
-	network_id: String, permission_type: int, approved: bool
-) -> void:
-	token_permission_response_received.emit(network_id, permission_type, approved)
-
-
-## RPC: Host broadcasts full permissions state to all clients (host -> all)
-@rpc("authority", "reliable")
-func _rpc_sync_token_permissions(permissions_dict: Dictionary) -> void:
-	token_permissions_received.emit(permissions_dict)
-
-
 ## RPC: Player sends token transform to host for validation (client -> host)
 @rpc("any_peer", "unreliable")
 func _rpc_client_token_transform(
@@ -960,29 +936,6 @@ func broadcast_visual_settings(settings: Dictionary) -> void:
 			net_settings["environment_overrides"]
 		)
 	_rpc_receive_visual_settings.rpc(net_settings)
-
-
-## Called by host to send permission response to a specific client
-func send_permission_response(
-	peer_id: int, network_id: String, permission_type: int, approved: bool
-) -> void:
-	if not is_host() or not multiplayer.multiplayer_peer:
-		return
-	_rpc_token_permission_response.rpc_id(peer_id, network_id, permission_type, approved)
-
-
-## Called by host to broadcast permissions to all clients
-func broadcast_token_permissions(permissions_dict: Dictionary) -> void:
-	if not is_host() or not multiplayer.multiplayer_peer:
-		return
-	_rpc_sync_token_permissions.rpc(permissions_dict)
-
-
-## Called by client to request permission for a token
-func request_token_permission(network_id: String, permission_type: int) -> void:
-	if not is_client() or not multiplayer.multiplayer_peer:
-		return
-	_rpc_request_token_permission.rpc_id(1, network_id, permission_type)
 
 
 ## Called by client to send a token transform to the host
