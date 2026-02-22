@@ -8,6 +8,7 @@
       "Grep",
       "Bash(git *)",
       "Bash(godot *)",
+      "Bash(gdformat *)",
       "Bash(gdlint *)",
       "Task",
       "WebFetch",
