@@ -16,5 +16,18 @@
   },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c \"git -C /d/dev/tt-sim worktree prune 2>/dev/null; for dir in /d/dev/tt-sim/.worktrees/*/; do [ -d \\\"$dir\\\" ] && ! git -C /d/dev/tt-sim worktree list --porcelain | grep -qF \\\"${dir%/}\\\" && rm -rf \\\"$dir\\\"; done 2>/dev/null; rmdir /d/dev/tt-sim/.worktrees 2>/dev/null; true\"",
+            "async": true
+          }
+        ]
+      }
+    ]
   }
 }
