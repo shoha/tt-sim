@@ -18,7 +18,7 @@ const ENTRANCE_DURATION := 0.3
 @onready var join_button: Button = %JoinGameButton
 @onready var settings_button: Button = %SettingsButton
 @onready var quit_button: Button = %QuitButton
-@onready var version_label: Label = $PlaceholderContainer/VersionLabel
+@onready var version_label: Label = %VersionLabel
 
 
 func _ready() -> void:
