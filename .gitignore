@@ -1,6 +1,9 @@
 # Design docs (local planning notes, not for repo)
 /docs/plans/
 
+# Git worktrees
+.worktrees/
+
 # Godot 4+ specific ignores
 .godot/
 /android/
