@@ -16,29 +16,41 @@ var _pending_permission_requests: Dictionary = {}
 
 
 func setup() -> void:
-	if not NetworkManager.token_permission_requested.is_connected(_on_token_permission_requested):
-		NetworkManager.token_permission_requested.connect(_on_token_permission_requested)
-	if not NetworkManager.token_permission_response_received.is_connected(
+	if not NetworkManager.permissions.token_permission_requested.is_connected(
+		_on_token_permission_requested
+	):
+		NetworkManager.permissions.token_permission_requested.connect(
+			_on_token_permission_requested
+		)
+	if not NetworkManager.permissions.token_permission_response_received.is_connected(
 		_on_permission_response_received
 	):
-		NetworkManager.token_permission_response_received.connect(_on_permission_response_received)
-	if not NetworkManager.token_permissions_received.is_connected(_on_permissions_received):
-		NetworkManager.token_permissions_received.connect(_on_permissions_received)
+		NetworkManager.permissions.token_permission_response_received.connect(
+			_on_permission_response_received
+		)
+	if not NetworkManager.permissions.token_permissions_received.is_connected(
+		_on_permissions_received
+	):
+		NetworkManager.permissions.token_permissions_received.connect(_on_permissions_received)
 	if not NetworkManager.player_left.is_connected(_on_player_left_permissions):
 		NetworkManager.player_left.connect(_on_player_left_permissions)
 
 
 func _exit_tree() -> void:
-	if NetworkManager.token_permission_requested.is_connected(_on_token_permission_requested):
-		NetworkManager.token_permission_requested.disconnect(_on_token_permission_requested)
-	if NetworkManager.token_permission_response_received.is_connected(
+	if NetworkManager.permissions.token_permission_requested.is_connected(
+		_on_token_permission_requested
+	):
+		NetworkManager.permissions.token_permission_requested.disconnect(
+			_on_token_permission_requested
+		)
+	if NetworkManager.permissions.token_permission_response_received.is_connected(
 		_on_permission_response_received
 	):
-		NetworkManager.token_permission_response_received.disconnect(
+		NetworkManager.permissions.token_permission_response_received.disconnect(
 			_on_permission_response_received
 		)
-	if NetworkManager.token_permissions_received.is_connected(_on_permissions_received):
-		NetworkManager.token_permissions_received.disconnect(_on_permissions_received)
+	if NetworkManager.permissions.token_permissions_received.is_connected(_on_permissions_received):
+		NetworkManager.permissions.token_permissions_received.disconnect(_on_permissions_received)
 	if NetworkManager.player_left.is_connected(_on_player_left_permissions):
 		NetworkManager.player_left.disconnect(_on_player_left_permissions)
 
@@ -106,10 +118,10 @@ func _approve_permission_request(
 	GameState.grant_token_permission(network_id, peer_id, permission_type)
 
 	# Send response to the requesting client
-	NetworkManager.send_permission_response(peer_id, network_id, permission_type, true)
+	NetworkManager.permissions.send_permission_response(peer_id, network_id, permission_type, true)
 
 	# Broadcast updated permissions to all clients
-	NetworkManager.broadcast_token_permissions(
+	NetworkManager.permissions.broadcast_token_permissions(
 		TokenPermissions.to_dict(GameState.get_token_permissions())
 	)
 
@@ -128,7 +140,9 @@ func _deny_permission_request(
 	_pending_permission_requests.erase(request_key)
 	# Only send denial if peer is still connected
 	if NetworkManager.get_players().has(peer_id):
-		NetworkManager.send_permission_response(peer_id, network_id, permission_type, false)
+		NetworkManager.permissions.send_permission_response(
+			peer_id, network_id, permission_type, false
+		)
 
 
 ## Client-side: handle permission response from host.
@@ -168,7 +182,7 @@ func _on_player_left_permissions(peer_id: int, _player_info: Dictionary) -> void
 	GameState.clear_permissions_for_peer(peer_id)
 
 	# Broadcast updated permissions to remaining clients
-	NetworkManager.broadcast_token_permissions(
+	NetworkManager.permissions.broadcast_token_permissions(
 		TokenPermissions.to_dict(GameState.get_token_permissions())
 	)
 

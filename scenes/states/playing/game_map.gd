@@ -226,9 +226,13 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventPanGesture:
 		if event.delta.y < 0:
-			_target_zoom = clampf(_target_zoom - zoom_step * pan_gesture_zoom_factor, min_zoom, max_zoom)
+			_target_zoom = clampf(
+				_target_zoom - zoom_step * pan_gesture_zoom_factor, min_zoom, max_zoom
+			)
 		if event.delta.y > 0:
-			_target_zoom = clampf(_target_zoom + zoom_step * pan_gesture_zoom_factor, min_zoom, max_zoom)
+			_target_zoom = clampf(
+				_target_zoom + zoom_step * pan_gesture_zoom_factor, min_zoom, max_zoom
+			)
 
 	if event is not InputEventMouseButton:
 		return
@@ -259,7 +263,6 @@ func _input(event: InputEvent) -> void:
 		_target_zoom = clampf(_target_zoom - zoom_step, min_zoom, max_zoom)
 	if event.is_action_pressed("camera_zoom_out"):
 		_target_zoom = clampf(_target_zoom + zoom_step, min_zoom, max_zoom)
-
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -478,7 +481,7 @@ func _on_context_menu_visibility_toggled() -> void:
 func _on_context_menu_control_requested(token: BoardToken) -> void:
 	# Player requests CONTROL permission — send RPC to host
 	if NetworkManager.is_client() and is_instance_valid(token):
-		NetworkManager.request_token_permission(
+		NetworkManager.permissions.request_token_permission(
 			token.network_id, TokenPermissions.Permission.CONTROL
 		)
 
@@ -495,7 +498,7 @@ func _on_context_menu_control_revoked(token: BoardToken) -> void:
 			)
 		# Broadcast updated permissions
 		if NetworkManager.is_host():
-			NetworkManager.broadcast_token_permissions(
+			NetworkManager.permissions.broadcast_token_permissions(
 				TokenPermissions.to_dict(GameState.get_token_permissions())
 			)
 			UIManager.show_info("Token control revoked")
