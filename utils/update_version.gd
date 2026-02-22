@@ -62,7 +62,8 @@ static func parse(version: String) -> Array:
 
 ## Normalize a release tag into a version string.
 ##   "v1.0.0" -> "1.0.0"
-##   "build-abc123" -> "0.0.0-build.abc123"
+##   "v0.1.0-build.abc123" -> "0.1.0-build.abc123"
+##   "build-abc123" -> "0.0.0-build.abc123" (legacy format, kept for backward compat)
 static func normalize_tag(tag: String) -> String:
 	if tag.begins_with("v"):
 		return tag.substr(1)

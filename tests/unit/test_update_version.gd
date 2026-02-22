@@ -66,6 +66,10 @@ func test_normalize_tag_build_prefix() -> void:
 	assert_eq(UpdateVersion.normalize_tag("build-abc123"), "0.0.0-build.abc123")
 
 
+func test_normalize_tag_versioned_build() -> void:
+	assert_eq(UpdateVersion.normalize_tag("v0.1.0-build.abc123"), "0.1.0-build.abc123")
+
+
 func test_normalize_tag_plain() -> void:
 	assert_eq(UpdateVersion.normalize_tag("1.0.0"), "1.0.0")
 
