@@ -74,6 +74,7 @@ var _glow_mesh_instance: MeshInstance3D
 var _glow_material: ShaderMaterial
 var _base_size: float = 1.0
 var _fade_tween: Tween
+var _target_glow_color: Color = DEFAULT_GLOW_COLOR
 
 
 func _ready() -> void:
@@ -143,15 +144,13 @@ func show_glow() -> void:
 		_fade_tween.kill()
 
 	_glow_mesh_instance.show()
-	var target_color: Color = DEFAULT_GLOW_COLOR
-	var current_color: Color = _glow_material.get_shader_parameter("glow_color")
-	current_color.a = 0.0
-	_glow_material.set_shader_parameter("glow_color", current_color)
+	var start_color := Color(_target_glow_color.r, _target_glow_color.g, _target_glow_color.b, 0.0)
+	_glow_material.set_shader_parameter("glow_color", start_color)
 
 	_fade_tween = create_tween()
 	(
 		_fade_tween
-		. tween_method(_set_glow_alpha, 0.0, target_color.a, FADE_DURATION)
+		. tween_method(_set_glow_alpha, 0.0, _target_glow_color.a, FADE_DURATION)
 		. set_trans(Tween.TRANS_CUBIC)
 		. set_ease(Tween.EASE_OUT)
 	)
@@ -205,6 +204,7 @@ func _get_glow_alpha() -> float:
 ## Set the glow color
 func set_glow_color(color: Color) -> void:
 	if _glow_material:
+		_target_glow_color = color
 		_glow_material.set_shader_parameter("glow_color", color)
 
 
