@@ -158,7 +158,7 @@ jobs:
           MACOS_NOTARIZATION_API_ISSUER: ${{ secrets.MACOS_NOTARIZATION_API_ISSUER }}
         run: |
           API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8
-          echo -n "$MACOS_NOTARIZATION_API_KEY" > "$API_KEY_PATH"
+          echo -n "$MACOS_NOTARIZATION_API_KEY" | base64 --decode > "$API_KEY_PATH"
 
           xcrun notarytool submit artifacts/macos/TTSim-notarize.zip \
             --key "$API_KEY_PATH" \
