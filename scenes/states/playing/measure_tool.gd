@@ -25,13 +25,15 @@ class_name MeasureTool
 
 signal toggled(active: bool)
 
-enum State { INACTIVE, PLACING_START, PLACING_WAYPOINT, PLACING_VOLUME_CENTER, PLACING_VOLUME_RADIUS }
+enum State {INACTIVE, PLACING_START, PLACING_WAYPOINT, PLACING_VOLUME_CENTER, PLACING_VOLUME_RADIUS}
 
 enum Mode { LINE, SPHERE, CYLINDER }
+
 
 ## Returns the next mode in the cycle: LINE -> SPHERE -> CYLINDER -> LINE.
 static func advance_mode(current: Mode) -> Mode:
 	return (current + 1) % 3 as Mode
+
 
 const TERRAIN_COLLISION_LAYER: int = 1
 const TOKEN_COLLISION_LAYER: int = 2
@@ -346,7 +348,7 @@ func _check_camera_changed() -> void:
 func _get_all_tokens() -> Array[Node]:
 	if not _world_viewport:
 		return []
-	return _world_viewport.find_children("*", "BoardToken", true, false)
+	return get_tree().get_nodes_in_group(BoardToken.GROUP_NAME)
 
 
 func _token_in_volume(
@@ -357,15 +359,13 @@ func _token_in_volume(
 			return token_pos.distance_to(center) <= radius
 		VolumeOverlay.Shape.CYLINDER:
 			# Cylinder is a vertical column — only the XZ footprint matters.
-			return Vector2(token_pos.x, token_pos.z).distance_to(
-				Vector2(center.x, center.z)
-			) <= radius
+			return (
+				Vector2(token_pos.x, token_pos.z).distance_to(Vector2(center.x, center.z)) <= radius
+			)
 	return false
 
 
-func _update_token_highlights(
-	shape: VolumeOverlay.Shape, center: Vector3, radius: float
-) -> void:
+func _update_token_highlights(shape: VolumeOverlay.Shape, center: Vector3, radius: float) -> void:
 	var next: Array[BoardToken] = []
 	for node in _get_all_tokens():
 		var token := node as BoardToken
@@ -774,7 +774,9 @@ func _update_hints() -> void:
 		UIManager.add_hint("M", "Done")
 	else:
 		var next_label := "Cylinder" if _mode == Mode.SPHERE else "Line"
-		var action_label := "Place Center" if _state == State.PLACING_VOLUME_CENTER else "Lock Radius"
+		var action_label := (
+			"Place Center" if _state == State.PLACING_VOLUME_CENTER else "Lock Radius"
+		)
 		var cancel_label := "Clear/Cancel" if _state == State.PLACING_VOLUME_CENTER else "Cancel"
 		UIManager.add_hint("LMB", action_label)
 		UIManager.add_hint("RMB", cancel_label)
