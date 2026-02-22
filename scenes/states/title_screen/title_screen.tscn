@@ -311,6 +311,7 @@ theme_type_variation = &"Danger"
 text = "Quit"
 
 [node name="VersionLabel" type="Label" parent="PlaceholderContainer"]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 2
 anchor_left = 0.0
