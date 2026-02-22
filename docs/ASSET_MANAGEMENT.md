@@ -23,7 +23,7 @@ The asset management system provides:
 - **Asset Pack Discovery** - Automatic scanning for local and remote packs
 - **On-Demand Loading** - Assets loaded when needed
 - **HTTP Downloads** - Remote assets downloaded from URLs
-- **P2P Streaming** - Fallback streaming from host when URLs unavailable
+- **P2P Streaming** - Fallback from host when asset has no local URL: host redirects client to HTTP if it knows a public URL, otherwise streams the file directly
 - **Placeholder System** - Visual placeholders while assets download
 - **Persistent Caching** - Downloaded assets cached for reuse
 
@@ -65,7 +65,7 @@ AssetManager
 2. Check memory cache (already loaded this session)
 3. Check disk cache (`user://asset_cache/`)
 4. Download from URL if `base_url` or `model_url` available
-5. Request from host via P2P streaming (multiplayer fallback)
+5. Request from host via P2P (multiplayer fallback — host redirects to HTTP if it has a public URL, otherwise streams the file)
 
 ---
 
@@ -304,19 +304,22 @@ background thread, so the swap from placeholder to real model is hitch-free.
 
 ### P2P Streaming Fallback
 
-If URL download fails, clients request assets from the host:
+P2P is triggered when the client has no URL for the asset (the pack is not registered locally). The host handles the request in one of two ways:
+
+1. **HTTP redirect** — if the host's pack has a `base_url` or per-variant `model_url`, the host sends `_rpc_redirect_to_url` and the client downloads from HTTP directly (faster; no relay bandwidth used). Level map assets are always streamed, never redirected.
+2. **Direct streaming** — if the host has no public URL, it reads the file and streams it to the client in compressed chunks.
 
 ```gdscript
 # Automatic - handled by AssetStreamer
-# Host reads local file and streams to client in chunks
 ```
 
-**P2P Features:**
+**Streaming features (when redirect is not applicable):**
 
 - 32KB chunk size
 - ZSTD compression
 - Max 2 concurrent transfers
 - Async chunk sending (non-blocking)
+- Resume support (restarts from last received chunk on retry)
 
 ### Download Priority
 
