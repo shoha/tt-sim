@@ -51,12 +51,16 @@ jobs:
         shell: bash
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          BASE_VERSION=$(sed -n 's/config\/version="\([^"]*\)"/\1/p' project.godot)
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            # Strip the "v" prefix for semver consistency (v1.0.0 -> 1.0.0)
-            VERSION="${{ github.ref_name }}"
-            VERSION="${VERSION#v}"
+            TAG_VERSION="${{ github.ref_name }}"
+            TAG_VERSION="${TAG_VERSION#v}"
+            if [[ "$TAG_VERSION" != "$BASE_VERSION" ]]; then
+              echo "ERROR: Tag ${{ github.ref_name }} does not match project.godot version ($BASE_VERSION)"
+              exit 1
+            fi
+            VERSION="$BASE_VERSION"
           else
-            BASE_VERSION=$(sed -n 's/config\/version="\([^"]*\)"/\1/p' project.godot)
             VERSION="${BASE_VERSION}-build.$(git rev-parse --short HEAD)"
           fi
           echo "Injecting version: $VERSION"
