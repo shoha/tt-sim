@@ -6,8 +6,10 @@ extends Node
 ##
 ## Update Strategy:
 ## - Downloads are saved to user://updates/ with a .pending marker file
-## - On next startup, _apply_pending_update() checks for and applies any pending update
-## - This avoids file locking issues since the update is applied before the game fully loads
+## - When the user confirms restart, the update is extracted in-place and the new
+##   executable is spawned before quitting (single exit on all platforms)
+## - On startup, _apply_pending_update() handles any leftover pending marker as a
+##   fallback (e.g. if the game was quit before the user confirmed restart)
 
 const GITHUB_API_URL: String = "https://api.github.com/repos/shoha/tt-sim/releases"
 const GITHUB_RELEASES_URL: String = "https://github.com/shoha/tt-sim/releases"
