@@ -29,6 +29,10 @@ jobs:
             artifact: "TTSim-macOS"
             output: "build/macos/TTSim.zip"
             folder: "build/macos"
+          - preset: "Linux"
+            artifact: "TTSim-Linux"
+            output: "build/linux/TTSim.x86_64"
+            folder: "build/linux"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,10 +96,17 @@ jobs:
           name: TTSim-macOS
           path: artifacts/macos
 
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: TTSim-Linux
+          path: artifacts/linux
+
       - name: Prepare release assets
         run: |
           cd artifacts/windows && zip -r ../../TTSim-Windows.zip . && cd ../..
           mv artifacts/macos/TTSim.zip TTSim-macOS.zip
+          cd artifacts/linux && zip -r ../../TTSim-Linux.zip . && cd ../..
 
       - name: Get version info
         id: version
@@ -126,4 +137,5 @@ jobs:
           files: |
             TTSim-Windows.zip
             TTSim-macOS.zip
+            TTSim-Linux.zip
           prerelease: ${{ steps.version.outputs.is_tag != 'true' }}
