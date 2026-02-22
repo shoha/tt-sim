@@ -110,7 +110,7 @@ func _ready() -> void:
 
 	# 3. Own initialization
 	_model_cache_handler = AssetModelCache.new(self)
-	_discover_packs()
+	call_deferred("_discover_packs")
 	_connect_resolver_signals()
 
 
