@@ -658,20 +658,53 @@ func cancel_pending_update() -> void:
 	_cleanup_pending_update()
 
 
-## Apply the downloaded update by restarting the game
-## On Windows, the actual extraction happens on next startup via _apply_pending_update()
-## On macOS, we extract in-place before restarting (no file locking issues)
+## Apply the downloaded update by restarting the game.
+## On both Windows and macOS, we extract in-place before restarting so
+## the user only sees one exit (no intermediate restart just to apply).
 func apply_update(zip_path: String) -> void:
-	print("UpdateManager: Restarting to apply update...")
+	print("UpdateManager: Applying update and restarting...")
 
 	match OS.get_name():
 		"Windows":
-			UpdateInstaller.restart_windows(OS.get_executable_path(), get_tree())
+			_apply_and_restart_windows(zip_path)
 		"macOS":
 			_apply_and_restart_macos(zip_path)
 		_:
 			print("UpdateManager: Please restart the game to apply the update")
 			get_tree().quit()
+
+
+## Apply update and restart on Windows in a single step to avoid double-restart.
+## Windows allows renaming a running executable, so we extract in-place here
+## rather than deferring to the next startup via the pending-update marker.
+func _apply_and_restart_windows(zip_path: String) -> void:
+	var pending = get_pending_update_info()
+	var version = pending.get("version", "unknown")
+	var install_dir = pending.get("install_dir", "")
+	var new_exe_path = pending.get("exe_path", "")
+
+	_log("Extracting update v%s before restart..." % version)
+
+	var log_fn := Callable(self, "_log")
+	var success = UpdateInstaller.extract_windows(zip_path, install_dir, log_fn)
+	if success:
+		_log("Update extracted successfully, restarting into new version...")
+		_cleanup_pending_update()
+		DirAccess.remove_absolute(zip_path)
+		_save_update_success_toast(version)
+
+		if not new_exe_path.is_empty() and FileAccess.file_exists(new_exe_path):
+			OS.create_process(new_exe_path, [])
+			get_tree().quit()
+		else:
+			# Fallback: let the batch script handle the restart
+			_log("New exe not found at expected path, falling back to batch restart...")
+			UpdateInstaller.restart_windows(OS.get_executable_path(), get_tree())
+	else:
+		_log("ERROR: Failed to apply update - see above for details")
+		_pending_toast_message = "Update failed - check update_log.txt"
+		_pending_toast_is_error = true
+		push_error("UpdateManager: Update extraction failed")
 
 
 ## Apply update and restart on macOS in a single step to avoid double-restart.
