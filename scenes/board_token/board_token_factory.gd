@@ -282,7 +282,11 @@ static func _apply_config(token: BoardToken, config: Resource) -> void:
 ## Internal: Create a BoardToken from a specific model path
 ## Uses AssetManager for model loading and caching
 static func _create_from_model_path(
-	scene_path: String, pack_id: String, asset_id: String, config: Resource = null
+	scene_path: String,
+	pack_id: String,
+	asset_id: String,
+	variant_id: String = "default",
+	config: Resource = null
 ) -> BoardToken:
 	# Use AssetManager for loading (handles caching internally)
 	# create_static_bodies=false because tokens use RigidBody3D for physics
@@ -299,6 +303,11 @@ static func _create_from_model_path(
 			"BoardTokenFactory: Failed to create token for asset %s/%s" % [pack_id, asset_id]
 		)
 		return null
+
+	# Set typed asset identification properties
+	token.pack_id = pack_id
+	token.asset_id = asset_id
+	token.variant_id = variant_id
 
 	# Set the node name and display name
 	var display_name = AssetManager.get_asset_display_name(pack_id, asset_id)
@@ -340,9 +349,9 @@ static func create_from_placement_async(placement: TokenPlacement) -> Dictionary
 
 	# Store placement metadata for later reference
 	token.set_meta("placement_id", placement.placement_id)
-	token.set_meta("pack_id", placement.pack_id)
-	token.set_meta("asset_id", placement.asset_id)
-	token.set_meta("variant_id", placement.variant_id)
+	token.pack_id = placement.pack_id
+	token.asset_id = placement.asset_id
+	token.variant_id = placement.variant_id
 
 	# Apply placement data (position, rotation, scale, properties)
 	placement.apply_to_token(token)
@@ -382,7 +391,7 @@ static func create_from_asset_async(
 		if AssetManager.is_model_cached(model_path):
 			# Fast path: model is in memory cache, create synchronously (no hitch)
 			print("BoardTokenFactory: model cached, creating synchronously")
-			var ready_token = _create_from_model_path(model_path, pack_id, asset_id)
+			var ready_token = _create_from_model_path(model_path, pack_id, asset_id, variant_id)
 			return {"token": ready_token, "is_placeholder": false}
 		else:
 			# Model file exists but needs loading — use a placeholder to avoid
@@ -453,11 +462,11 @@ static func _create_placeholder_token(
 	# Assemble the full token structure
 	var instance = _assemble_token(rb, collision)
 
-	# Set metadata
+	# Set typed asset identification properties
 	instance.network_id = _generate_network_id()
-	instance.set_meta("pack_id", pack_id)
-	instance.set_meta("asset_id", asset_id)
-	instance.set_meta("variant_id", variant_id)
+	instance.pack_id = pack_id
+	instance.asset_id = asset_id
+	instance.variant_id = variant_id
 	instance.set_meta("is_placeholder", true)
 
 	# Set display name

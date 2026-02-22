@@ -43,6 +43,11 @@ var _factory_created: bool = false
 @export var is_player_controlled: bool = false
 @export var character_id: String = ""
 
+# Asset identification — set by BoardTokenFactory, used for network state capture
+var pack_id: String = ""
+var asset_id: String = ""
+var variant_id: String = "default"
+
 # Health and status
 @export var max_health: int = 100
 @export var current_health: int = 100

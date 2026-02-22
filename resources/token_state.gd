@@ -65,10 +65,10 @@ static func from_board_token(token: BoardToken) -> TokenState:
 	var state = TokenState.new()
 	state.network_id = token.network_id
 
-	# Get asset info from metadata
-	state.pack_id = token.get_meta("pack_id", "")
-	state.asset_id = token.get_meta("asset_id", "")
-	state.variant_id = token.get_meta("variant_id", "default")
+	# Get asset info from typed properties
+	state.pack_id = token.pack_id
+	state.asset_id = token.asset_id
+	state.variant_id = token.variant_id
 
 	# Transform from rigid body (what actually moves)
 	# Use global transforms because _sync_parent_position moves rotation to BoardToken
@@ -152,7 +152,7 @@ func apply_to_token(token: BoardToken, use_interpolation: bool = true) -> void:
 
 	# Health - emit signal if changed so animations can play
 	var old_health = token.current_health
-	var health_changed = (token.current_health != current_health or token.max_health != max_health)
+	var health_changed = token.current_health != current_health or token.max_health != max_health
 	token.max_health = max_health
 	token.current_health = current_health
 	token.is_alive = is_alive
@@ -223,9 +223,14 @@ static func from_dict(data: Dictionary) -> TokenState:
 func diff(other: TokenState) -> Dictionary:
 	var changes: Dictionary = {}
 	for prop in [
-		"position", "rotation", "scale",
-		"current_health", "max_health", "is_alive",
-		"is_visible_to_players", "is_hidden_from_gm",
+		"position",
+		"rotation",
+		"scale",
+		"current_health",
+		"max_health",
+		"is_alive",
+		"is_visible_to_players",
+		"is_hidden_from_gm",
 		"status_effects",
 	]:
 		if get(prop) != other.get(prop):
