@@ -198,6 +198,10 @@ func _on_skip_pressed() -> void:
 
 func _on_restart_pressed() -> void:
 	if not _download_path.is_empty():
+		restart_button.disabled = true
+		later_button.disabled = true
+		title_label.text = "Installing Update..."
+		release_notes.text = "Please wait while the update is installed."
 		UpdateManager.apply_update(_download_path)
 	else:
 		animate_out()
