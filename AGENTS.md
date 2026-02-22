@@ -123,7 +123,9 @@ gdlint path/to/file.gd
 
 - **GitHub Actions** – `.github/workflows/build.yml` exports Windows, macOS, and Linux builds on push to `main` or version tags (`v*`). Uses `barichello/godot-ci:4.6` container.
 - **Releases** – Tagged pushes (`v*`) create GitHub releases with build artifacts. `UpdateManager` checks for new releases and prompts in-app updates.
-- **Cutting a release** – Before tagging, update `config/version` in `project.godot` to match the tag (e.g. tag `v0.2.0` → `config/version="0.2.0"`). The build injects the tag at CI time, but keeping the source value current avoids confusion when reading the file locally.
+- **Versioning rule** – `project.godot config/version` is the single source of truth. It always holds the version being worked *toward*, not the one last shipped. CI reads it for every build; for tagged builds it validates the tag matches and fails the build if not.
+- **Cutting a release** – Ensure `project.godot config/version` is set to the intended release version (e.g. `0.1.2`). Tag: `git tag v0.1.2 && git push origin v0.1.2`. CI validates tag == project.godot version. **Immediately after**: bump `project.godot` to the next version (e.g. `0.1.3`) and push — this ensures subsequent builds are correctly versioned as pre-releases of `0.1.3`.
+- **Hotfixes** – Branch from the release tag, apply the fix, tag a patch release (e.g. `v0.1.2.1`), then merge the fix back to main if applicable.
 
 ## File Layout
 
