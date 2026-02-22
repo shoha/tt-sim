@@ -30,6 +30,7 @@ const AssetPackClass = preload("res://resources/asset_pack.gd")
 const USER_ASSETS_DIR: String = "res://user_assets/"
 const USER_ASSETS_USER_DIR: String = "user://user_assets/"
 const CACHE_DIR: String = "user://asset_cache/"
+const MANIFEST_FETCH_TIMEOUT: float = 30.0
 
 # =========================================================================
 # Sub-components  (child Nodes, created in _ready)
@@ -460,6 +461,7 @@ func load_remote_pack_from_url(manifest_url: String) -> void:
 	# Create a temporary HTTPRequest to fetch the manifest
 	var http_request = HTTPRequest.new()
 	add_child(http_request)
+	http_request.timeout = MANIFEST_FETCH_TIMEOUT
 	http_request.request_completed.connect(_on_manifest_downloaded.bind(http_request, manifest_url))
 
 	var error = http_request.request(manifest_url)
@@ -503,6 +505,7 @@ func _on_manifest_downloaded(
 func download_asset_pack_from_url(manifest_url: String) -> bool:
 	var http_request = HTTPRequest.new()
 	add_child(http_request)
+	http_request.timeout = MANIFEST_FETCH_TIMEOUT
 	http_request.request_completed.connect(
 		_on_download_pack_manifest_downloaded.bind(http_request, manifest_url)
 	)
