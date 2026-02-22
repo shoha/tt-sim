@@ -150,97 +150,55 @@ func _on_resolver_asset_failed(
 func _discover_packs() -> void:
 	_packs.clear()
 
-	# 1. Load local packs from res://user_assets/
-	var dir = DirAccess.open(USER_ASSETS_DIR)
-	if dir:
-		dir.list_dir_begin()
-		var folder_name = dir.get_next()
+	# 1. Built-in packs (res://user_assets/) — may be overwritten by user packs
+	_discover_packs_in_dir(USER_ASSETS_DIR, true)
 
-		while folder_name != "":
-			if dir.current_is_dir() and not folder_name.begins_with("."):
-				var pack_path = USER_ASSETS_DIR + folder_name + "/"
-				var manifest_path = pack_path + "manifest.json"
+	# 2. User-installed packs (user://user_assets/) — cannot overwrite built-ins
+	_discover_packs_in_dir(USER_ASSETS_USER_DIR, false)
 
-				if FileAccess.file_exists(manifest_path):
-					var pack = _load_pack(manifest_path, pack_path)
-					if pack:
-						_packs[pack.pack_id] = pack
-						print(
-							(
-								"AssetManager: Loaded pack '"
-								+ pack.display_name
-								+ "' with "
-								+ str(pack.assets.size())
-								+ " assets"
-							)
+	packs_loaded.emit()
+
+
+## Discover and register packs from a single directory.
+## allow_overwrite: if false, skip packs whose pack_id is already registered.
+func _discover_packs_in_dir(dir_path: String, allow_overwrite: bool) -> void:
+	var dir = DirAccess.open(dir_path)
+	if not dir:
+		return
+
+	dir.list_dir_begin()
+	var folder_name = dir.get_next()
+
+	while folder_name != "":
+		if dir.current_is_dir() and not folder_name.begins_with("."):
+			var pack_path = dir_path + folder_name + "/"
+			var manifest_path = pack_path + "manifest.json"
+
+			if FileAccess.file_exists(manifest_path):
+				var pack = _load_pack(manifest_path, pack_path)
+				if pack and (allow_overwrite or not _packs.has(pack.pack_id)):
+					_packs[pack.pack_id] = pack
+					print(
+						(
+							"AssetManager: Loaded pack '%s' with %d assets"
+							% [pack.display_name, pack.assets.size()]
 						)
-				else:
+					)
+			else:
+				if allow_overwrite or not _packs.has(folder_name):
 					var pack = AssetPackClass.from_directory(pack_path, folder_name)
 					if pack and pack.assets.size() > 0:
 						_packs[pack.pack_id] = pack
 						print(
 							(
-								"AssetManager: Auto-discovered pack '"
-								+ pack.display_name
-								+ "' with "
-								+ str(pack.assets.size())
-								+ " assets"
+								"AssetManager: Auto-discovered pack '%s' with %d assets"
+								% [pack.display_name, pack.assets.size()]
 							)
 						)
 
-			folder_name = dir.get_next()
+		folder_name = dir.get_next()
 
-		dir.list_dir_end()
-
-	# 2. Load downloaded packs from user://user_assets/ (installed via download UI)
-	_discover_user_assets_packs()
-
-	packs_loaded.emit()
-
-
-## Discover packs installed in user://user_assets/ (downloaded via manifest URL)
-func _discover_user_assets_packs() -> void:
-	var user_dir = DirAccess.open(USER_ASSETS_USER_DIR)
-	if user_dir == null:
-		return
-
-	user_dir.list_dir_begin()
-	var folder_name = user_dir.get_next()
-
-	while folder_name != "":
-		if user_dir.current_is_dir() and not folder_name.begins_with("."):
-			var pack_path = USER_ASSETS_USER_DIR + folder_name + "/"
-			var manifest_path = pack_path + "manifest.json"
-			if FileAccess.file_exists(manifest_path):
-				var pack = _load_pack(manifest_path, pack_path)
-				if pack and not _packs.has(pack.pack_id):
-					_packs[pack.pack_id] = pack
-					print(
-						(
-							"AssetManager: Loaded user pack '"
-							+ pack.display_name
-							+ "' with "
-							+ str(pack.assets.size())
-							+ " assets"
-						)
-					)
-			elif not _packs.has(folder_name):
-				var pack = AssetPackClass.from_directory(pack_path, folder_name)
-				if pack and pack.assets.size() > 0:
-					_packs[pack.pack_id] = pack
-					print(
-						(
-							"AssetManager: Auto-discovered user pack '"
-							+ pack.display_name
-							+ "' with "
-							+ str(pack.assets.size())
-							+ " assets"
-						)
-					)
-
-		folder_name = user_dir.get_next()
-
-	user_dir.list_dir_end()
+	dir.list_dir_end()
 
 
 ## Load a single pack from its manifest file
