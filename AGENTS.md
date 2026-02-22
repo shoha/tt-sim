@@ -121,7 +121,7 @@ gdlint path/to/file.gd
 
 ## CI/CD
 
-- **GitHub Actions** – `.github/workflows/build.yml` exports Windows and macOS builds on push to `main` or version tags (`v*`). Uses `barichello/godot-ci:4.6` container.
+- **GitHub Actions** – `.github/workflows/build.yml` exports Windows, macOS, and Linux builds on push to `main` or version tags (`v*`). Uses `barichello/godot-ci:4.6` container.
 - **Releases** – Tagged pushes (`v*`) create GitHub releases with build artifacts. `UpdateManager` checks for new releases and prompts in-app updates.
 
 ## File Layout
