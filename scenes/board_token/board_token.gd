@@ -1,6 +1,9 @@
 extends Node3D
 class_name BoardToken
 
+## Godot group name for all active board tokens — used for efficient tree queries
+const GROUP_NAME := "board_tokens"
+
 ## Represents a PC or NPC token on the game board.
 ## Manages entity data like health, visibility, status, and visual feedback.
 ## Separated from interaction logic (BoardTokenController) and drag mechanics (DraggableToken).
@@ -92,6 +95,11 @@ signal token_landed(drop_height: float)  # Emitted when a locally-dragged token 
 func _enter_tree() -> void:
 	if not _factory_created:
 		push_error("BoardToken: Use BoardTokenFactory.create_from_scene(), not .new()")
+	add_to_group(GROUP_NAME)
+
+
+func _exit_tree() -> void:
+	remove_from_group(GROUP_NAME)
 
 
 ## Set interpolation target (called by network sync on clients)
