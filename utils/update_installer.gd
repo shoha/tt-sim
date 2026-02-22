@@ -28,7 +28,25 @@ static func extract_windows(
 		OS.shell_open(ProjectSettings.globalize_path("user://updates/"))
 		return false
 
-	# Step 1: Rename current exe to .old
+	# Step 1: Rename current exe to .old.
+	# Remove any stale .old file first — if a previous update left one behind and it
+	# is locked (e.g. by an antivirus scanner), the rename below would fail.
+	if FileAccess.file_exists(old_exe_path):
+		var stale_result = DirAccess.remove_absolute(old_exe_path)
+		if stale_result != OK:
+			_log(
+				log_fn,
+				(
+					(
+						"ERROR: Stale .old executable exists and could not be removed (error %d)."
+						% stale_result
+					)
+					+ " It may be locked by antivirus. Try deleting manually: %s" % old_exe_path
+				)
+			)
+			OS.shell_open(ProjectSettings.globalize_path("user://updates/"))
+			return false
+		_log(log_fn, "Removed stale .old executable")
 	_log(log_fn, "Renaming current executable to .old")
 	var rename_result = DirAccess.rename_absolute(exe_path, old_exe_path)
 	if rename_result != OK:
@@ -45,10 +63,7 @@ static func extract_windows(
 		had_console_wrapper = true
 		var console_rename = DirAccess.rename_absolute(console_exe_path, old_console_path)
 		if console_rename != OK:
-			_log(
-				log_fn,
-				"Warning — failed to rename console wrapper (error %d)" % console_rename
-			)
+			_log(log_fn, "Warning — failed to rename console wrapper (error %d)" % console_rename)
 
 	# Step 2: Extract the zip
 	var escaped_zip = global_zip.replace("'", "''")
@@ -93,9 +108,7 @@ static func extract_windows(
 
 ## Extract a downloaded update on macOS.
 ## Returns true on success.
-static func extract_macos(
-	zip_path: String, log_fn: Callable = Callable()
-) -> bool:
+static func extract_macos(zip_path: String, log_fn: Callable = Callable()) -> bool:
 	var global_zip = ProjectSettings.globalize_path(zip_path)
 	var exe_path = OS.get_executable_path()
 
@@ -162,8 +175,19 @@ static func extract_macos(
 	# Remove quarantine attribute
 	_log(log_fn, "Removing quarantine attribute from: %s" % new_app_path)
 	var xattr_output = []
-	OS.execute("xattr", ["-rd", "com.apple.quarantine", new_app_path], xattr_output, true)
-	_log(log_fn, "Quarantine removal complete")
+	var xattr_result = OS.execute(
+		"xattr", ["-rd", "com.apple.quarantine", new_app_path], xattr_output, true
+	)
+	if xattr_result != 0:
+		_log(
+			log_fn,
+			(
+				"Warning: quarantine removal may have failed (exit code %d)" % xattr_result
+				+ " — Gatekeeper may block the updated app on first launch"
+			)
+		)
+	else:
+		_log(log_fn, "Quarantine removal complete")
 
 	_log(log_fn, "macOS extraction completed successfully")
 	return true

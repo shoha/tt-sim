@@ -220,18 +220,6 @@ func check_for_updates() -> void:
 	if is_checking:
 		return
 
-	# Skip check if we already have a pending update
-	if has_pending_update():
-		var pending = get_pending_update_info()
-		print(
-			(
-				"UpdateManager: Skipping update check - pending update v%s ready"
-				% pending.get("version", "?")
-			)
-		)
-		update_check_complete.emit(false)
-		return
-
 	is_checking = true
 	latest_release = {}
 
@@ -343,6 +331,18 @@ func _on_check_completed(
 		is_newer = UpdateVersion.is_newer(release_version, current_version)
 
 	if is_newer:
+		# Don't show the dialog if this exact version is already downloaded and pending
+		if has_pending_update():
+			var pending = get_pending_update_info()
+			if pending.get("version", "") == release_version:
+				print(
+					(
+						"UpdateManager: Latest version v%s already downloaded and pending"
+						% release_version
+					)
+				)
+				update_check_complete.emit(false)
+				return
 		print("UpdateManager: Update available - %s" % release_version)
 		update_available.emit(latest_release)
 		update_check_complete.emit(true)
@@ -392,6 +392,11 @@ func download_update() -> void:
 	if latest_release.is_empty() or latest_release.download_url.is_empty():
 		update_download_failed.emit("No download URL available")
 		return
+
+	# Cancel any existing pending update so the new download replaces it cleanly
+	if has_pending_update():
+		print("UpdateManager: Cancelling pending update to download newer version")
+		cancel_pending_update()
 
 	is_downloading = true
 	download_progress = 0.0
@@ -600,8 +605,14 @@ func _apply_pending_update() -> void:
 				_log("Restarting to run updated executable...")
 				var new_exe_path = pending_info.get("exe_path", "")
 				if not new_exe_path.is_empty() and FileAccess.file_exists(new_exe_path):
-					OS.create_process(new_exe_path, [])
-					get_tree().quit()
+					var pid = OS.create_process(new_exe_path, [])
+					if pid != -1:
+						get_tree().quit()
+						return
+					_log(
+						"WARNING: Failed to spawn new executable directly, falling back to batch restart..."
+					)
+				UpdateInstaller.restart_windows(OS.get_executable_path(), get_tree())
 			"macOS":
 				_log("Restarting to run updated executable...")
 				UpdateInstaller.restart_macos(OS.get_executable_path(), get_tree())
@@ -685,7 +696,24 @@ func _apply_and_restart_windows(zip_path: String) -> void:
 	var install_dir = pending.get("install_dir", "")
 	var new_exe_path = pending.get("exe_path", "")
 
+	# Check write permission before attempting extraction so we can show a
+	# user-actionable message rather than a generic "check update_log.txt".
+	var test_path = install_dir + "/.update_permission_test"
+	var test_file = FileAccess.open(test_path, FileAccess.WRITE)
+	if not test_file:
+		_log("ERROR: No write permission to install directory: %s" % install_dir)
+		_pending_toast_message = (
+			"Update failed: no write permission to the install folder.\n"
+			+ "Try moving the game out of Program Files, or run as administrator."
+		)
+		_pending_toast_is_error = true
+		return
+	test_file.close()
+	DirAccess.remove_absolute(test_path)
+
 	_log("Extracting update v%s before restart..." % version)
+	applying_pending_update.emit(version)
+	await get_tree().process_frame  # Let the UI render "Installing..." before blocking
 
 	var log_fn := Callable(self, "_log")
 	var success = UpdateInstaller.extract_windows(zip_path, install_dir, log_fn)
@@ -696,12 +724,16 @@ func _apply_and_restart_windows(zip_path: String) -> void:
 		_save_update_success_toast(version)
 
 		if not new_exe_path.is_empty() and FileAccess.file_exists(new_exe_path):
-			OS.create_process(new_exe_path, [])
-			get_tree().quit()
+			var pid = OS.create_process(new_exe_path, [])
+			if pid != -1:
+				get_tree().quit()
+				return
+			_log(
+				"WARNING: Failed to spawn new executable directly, falling back to batch restart..."
+			)
 		else:
-			# Fallback: let the batch script handle the restart
 			_log("New exe not found at expected path, falling back to batch restart...")
-			UpdateInstaller.restart_windows(OS.get_executable_path(), get_tree())
+		UpdateInstaller.restart_windows(OS.get_executable_path(), get_tree())
 	else:
 		_log("ERROR: Failed to apply update - see above for details")
 		_pending_toast_message = "Update failed - check update_log.txt"
@@ -714,7 +746,9 @@ func _apply_and_restart_macos(zip_path: String) -> void:
 	var pending = get_pending_update_info()
 	var version = pending.get("version", "unknown")
 
-	_log("Extracting update v%s before restart (avoiding double-restart)..." % version)
+	_log("Extracting update v%s before restart..." % version)
+	applying_pending_update.emit(version)
+	await get_tree().process_frame  # Let the UI render "Installing..." before blocking
 
 	var success = _extract_update_macos(zip_path)
 	if success:
@@ -722,8 +756,12 @@ func _apply_and_restart_macos(zip_path: String) -> void:
 		_cleanup_pending_update()
 		DirAccess.remove_absolute(zip_path)
 		_save_update_success_toast(version)
-
-	UpdateInstaller.restart_macos(OS.get_executable_path(), get_tree())
+		UpdateInstaller.restart_macos(OS.get_executable_path(), get_tree())
+	else:
+		_log("ERROR: Failed to apply update - see above for details")
+		_pending_toast_message = "Update failed - check update_log.txt"
+		_pending_toast_is_error = true
+		push_error("UpdateManager: Update extraction failed")
 
 
 ## Open the releases page in the default browser
