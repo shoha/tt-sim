@@ -801,9 +801,9 @@ func add_token_to_level(
 
 	# Track the token with metadata
 	token.set_meta("placement_id", placement.placement_id)
-	token.set_meta("pack_id", pack_id)
-	token.set_meta("asset_id", asset_id)
-	token.set_meta("variant_id", variant_id)
+	token.pack_id = pack_id
+	token.asset_id = asset_id
+	token.variant_id = variant_id
 	spawned_tokens[placement.placement_id] = token
 
 	# GM can interact with all tokens; players only with tokens they control

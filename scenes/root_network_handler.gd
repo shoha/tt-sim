@@ -13,9 +13,13 @@ static func connect_client_signals(handler: Node) -> void:
 	if not NetworkStateSync.full_state_received.is_connected(handler._on_full_state_received):
 		NetworkStateSync.full_state_received.connect(handler._on_full_state_received)
 
-	if not NetworkManager.token_transform_received.is_connected(handler._on_token_transform_received):
+	if not NetworkManager.token_transform_received.is_connected(
+		handler._on_token_transform_received
+	):
 		NetworkManager.token_transform_received.connect(handler._on_token_transform_received)
-	if not NetworkManager.transform_batch_received.is_connected(handler._on_transform_batch_received):
+	if not NetworkManager.transform_batch_received.is_connected(
+		handler._on_transform_batch_received
+	):
 		NetworkManager.transform_batch_received.connect(handler._on_transform_batch_received)
 	if not NetworkManager.token_state_received.is_connected(handler._on_token_state_received):
 		NetworkManager.token_state_received.connect(handler._on_token_state_received)
@@ -39,8 +43,7 @@ static func disconnect_client_signals(handler: Node) -> void:
 
 ## Handle individual token transform update (unreliable channel, high frequency)
 static func on_token_transform_received(
-	controller: LevelPlayController,
-	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
+	controller: LevelPlayController, network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
 ) -> void:
 	var token = controller.spawned_tokens.get(network_id) as BoardToken
 	if token and is_instance_valid(token):
@@ -48,9 +51,7 @@ static func on_token_transform_received(
 
 
 ## Handle batch transform update (unreliable channel)
-static func on_transform_batch_received(
-	controller: LevelPlayController, batch: Dictionary
-) -> void:
+static func on_transform_batch_received(controller: LevelPlayController, batch: Dictionary) -> void:
 	for network_id in batch:
 		var data = batch[network_id]
 		var pos_arr = data["position"]
@@ -68,10 +69,7 @@ static func on_transform_batch_received(
 
 ## Handle individual token property update (reliable channel, low frequency)
 static func on_token_state_received(
-	controller: LevelPlayController,
-	game_map: Node,
-	network_id: String,
-	token_dict: Dictionary
+	controller: LevelPlayController, game_map: Node, network_id: String, token_dict: Dictionary
 ) -> void:
 	var token_state = TokenState.from_dict(token_dict)
 
@@ -96,9 +94,7 @@ static func on_token_state_received(
 
 
 ## Handle token removal (reliable channel)
-static func on_token_removed_received(
-	controller: LevelPlayController, network_id: String
-) -> void:
+static func on_token_removed_received(controller: LevelPlayController, network_id: String) -> void:
 	GameState.remove_token_state(network_id)
 
 	var token = controller.spawned_tokens.get(network_id)
@@ -108,9 +104,7 @@ static func on_token_removed_received(
 
 
 ## Apply full GameState to all visual tokens (initial sync or reconciliation)
-static func apply_game_state_to_tokens(
-	controller: LevelPlayController, game_map: Node
-) -> void:
+static func apply_game_state_to_tokens(controller: LevelPlayController, game_map: Node) -> void:
 	if not controller or not game_map:
 		return
 	if controller.is_loading():
@@ -157,9 +151,9 @@ static func create_token_from_state(token_state: TokenState) -> BoardToken:
 
 	token.network_id = token_state.network_id
 	token.set_meta("placement_id", token_state.network_id)
-	token.set_meta("pack_id", token_state.pack_id)
-	token.set_meta("asset_id", token_state.asset_id)
-	token.set_meta("variant_id", token_state.variant_id)
+	token.pack_id = token_state.pack_id
+	token.asset_id = token_state.asset_id
+	token.variant_id = token_state.variant_id
 
 	# Apply state without interpolation for initial placement
 	token_state.apply_to_token(token, false)
