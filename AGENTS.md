@@ -22,7 +22,7 @@
 - **Language**: GDScript
 - **Physics**: Jolt Physics
 - **Renderer**: Forward Plus
-- **Networking**: Netfox + Noray (NAT punchthrough)
+- **Networking**: Netfox + Noray (relay-only)
 
 ## Key Conventions
 

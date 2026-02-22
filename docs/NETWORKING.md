@@ -20,8 +20,7 @@ This document covers the multiplayer networking system, including connection man
 
 The networking system uses a **host-authoritative architecture** where one player acts as the host (server) and others connect as clients. Key features:
 
-- **NAT Punchthrough** via Noray server for peer-to-peer connections
-- **Relay Fallback** when direct connections fail
+- **Relay via Noray** — clients connect through the Noray relay server directly (no NAT punchthrough)
 - **State Synchronization** for game state and token transforms
 - **Late Joiner Support** with full state catch-up
 - **Rate-Limited Updates** to prevent network flooding
@@ -33,7 +32,7 @@ The networking system uses a **host-authoritative architecture** where one playe
 | `NetworkManager`   | Connection lifecycle, player tracking, RPC routing |
 | `NetworkStateSync` | State broadcasting, rate limiting, batching        |
 | `GameState`        | Authoritative game state storage                   |
-| `Noray`            | NAT punchthrough and relay server client           |
+| `Noray`            | Relay server client (room codes, relay connections) |
 
 ---
 
@@ -103,8 +102,9 @@ NetworkManager.room_code_received.connect(func(code):
 2. Register as host → receive OID (room code)
 3. Wait for PID (private ID)
 4. Register remote address → get `local_port`
-5. Start ENet server on registered port
-6. Ready for client connections
+5. Pre-punch NAT holes for Noray relay ports (so relay traffic can reach the ENet server)
+6. Start ENet server on registered port
+7. Ready for client connections
 
 ### Joining a Game
 
@@ -124,9 +124,9 @@ NetworkManager.connection_state_changed.connect(func(old, new):
 1. Connect to Noray server
 2. Register to get PID
 3. Register remote address → get `local_port`
-4. Request NAT connection with room code
-5. Receive connection info (NAT or relay)
-6. Create ENet client and connect to host
+4. Request relay connection with room code
+5. Receive relay address and port
+6. Create ENet client and connect via relay
 7. Receive level data and game state
 
 ### Disconnecting
@@ -481,13 +481,13 @@ multiplayer.server_disconnected.connect(func():
 
 ## Noray Integration
 
-The project uses [netfox.noray](https://github.com/foxssake/netfox.noray) for NAT punchthrough.
+The project uses [netfox.noray](https://github.com/foxssake/netfox.noray) for relay-based connections.
 
 ### How It Works
 
 1. Both host and clients connect to a central Noray server
-2. Noray facilitates NAT punchthrough between peers
-3. If NAT fails, traffic is relayed through the Noray server
+2. Clients connect to the host via Noray relay directly (no NAT punchthrough attempt)
+3. The host pre-punches its own NAT for the relay port range at server start so relay traffic can reach it
 
 ### Room Codes
 
