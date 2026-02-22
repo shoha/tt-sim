@@ -68,6 +68,9 @@ func setup(game_map: GameMap) -> void:
 		NetworkManager.client_token_transform_received.connect(_on_client_transform_received)
 
 	# Token permission handling (delegated to TokenPermissionHandler)
+	if is_instance_valid(_permission_handler):
+		_permission_handler.queue_free()
+		_permission_handler = null
 	_permission_handler = TokenPermissionHandler.new()
 	_permission_handler.name = "TokenPermissionHandler"
 	add_child(_permission_handler)
