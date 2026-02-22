@@ -83,9 +83,111 @@ jobs:
           path: ${{ matrix.folder }}/
           retention-days: 14
 
+  sign-macos:
+    name: Sign and Notarize macOS
+    needs: export
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: TTSim-macOS
+          path: artifacts/macos
+
+      - name: Extract app bundle
+        run: unzip -q artifacts/macos/TTSim.zip -d artifacts/macos/
+
+      - name: Install signing certificate
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_CI_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_CI_KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+
+          echo -n "$MACOS_CERTIFICATE" | base64 --decode -o "$CERTIFICATE_PATH"
+
+          security create-keychain -p "$MACOS_CI_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$MACOS_CI_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$CERTIFICATE_PATH" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$MACOS_CI_KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+      - name: Sign app bundle
+        env:
+          MACOS_CERTIFICATE_NAME: ${{ secrets.MACOS_CERTIFICATE_NAME }}
+        run: |
+          APP="artifacts/macos/TTSim.app"
+
+          codesign --force --sign "$MACOS_CERTIFICATE_NAME" \
+            --options runtime \
+            --timestamp \
+            --entitlements build/macos/entitlements.plist \
+            "$APP/Contents/MacOS/TTSim"
+
+          codesign --force --sign "$MACOS_CERTIFICATE_NAME" \
+            --options runtime \
+            --timestamp \
+            --entitlements build/macos/entitlements.plist \
+            "$APP"
+
+          codesign --verify --verbose "$APP"
+
+      - name: Create zip for notarization
+        run: ditto -c -k --keepParent artifacts/macos/TTSim.app artifacts/macos/TTSim-notarize.zip
+
+      - name: Notarize
+        env:
+          MACOS_NOTARIZATION_API_KEY: ${{ secrets.MACOS_NOTARIZATION_API_KEY }}
+          MACOS_NOTARIZATION_API_KEY_ID: ${{ secrets.MACOS_NOTARIZATION_API_KEY_ID }}
+          MACOS_NOTARIZATION_API_ISSUER: ${{ secrets.MACOS_NOTARIZATION_API_ISSUER }}
+        run: |
+          API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8
+          echo -n "$MACOS_NOTARIZATION_API_KEY" > "$API_KEY_PATH"
+
+          xcrun notarytool submit artifacts/macos/TTSim-notarize.zip \
+            --key "$API_KEY_PATH" \
+            --key-id "$MACOS_NOTARIZATION_API_KEY_ID" \
+            --issuer "$MACOS_NOTARIZATION_API_ISSUER" \
+            --wait
+
+          rm "$API_KEY_PATH"
+
+      - name: Staple notarization ticket
+        run: xcrun stapler staple artifacts/macos/TTSim.app
+
+      - name: Verify notarization
+        run: spctl -a -vvv -t install artifacts/macos/TTSim.app
+
+      - name: Repackage signed app
+        run: ditto -c -k --keepParent artifacts/macos/TTSim.app artifacts/macos/TTSim.zip
+
+      - name: Upload signed macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TTSim-macOS-Signed
+          path: artifacts/macos/TTSim.zip
+          retention-days: 14
+
   release:
     name: Create Release
-    needs: export
+    needs: [export, sign-macos]
+    if: always() && needs.export.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -99,7 +201,15 @@ jobs:
           name: TTSim-Windows
           path: artifacts/windows
 
-      - name: Download macOS artifact
+      - name: Download macOS artifact (signed, tag builds)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/download-artifact@v4
+        with:
+          name: TTSim-macOS-Signed
+          path: artifacts/macos
+
+      - name: Download macOS artifact (unsigned, pre-release builds)
+        if: "!startsWith(github.ref, 'refs/tags/')"
         uses: actions/download-artifact@v4
         with:
           name: TTSim-macOS
