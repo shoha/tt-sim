@@ -351,7 +351,7 @@ The asset system supports local and remote asset packs with multiplayer synchron
 - **Asset Packs** contain models and icons with manifest.json
 - **Variants** allow multiple versions of an asset (e.g., shiny, fire)
 - **Remote packs** specify `base_url` for HTTP downloads
-- **P2P streaming** provides fallback when URLs unavailable
+- **P2P streaming** provides fallback when the client has no URL: host redirects to HTTP if it knows a public URL, otherwise streams the file directly
 - **Placeholders** shown while assets download
 - **Two-level caching** - disk cache for downloads, memory cache for loaded models
 
@@ -361,7 +361,7 @@ The asset system supports local and remote asset packs with multiplayer synchron
 1. Check local file (user://user_assets/)
 2. Check disk cache (user://asset_cache/)
 3. Download from URL (if available)
-4. Request from host via P2P
+4. Request from host via P2P (host redirects to HTTP if it has a public URL, otherwise streams)
 ```
 
 ### Model Loading Flow (tokens via AssetManager)
