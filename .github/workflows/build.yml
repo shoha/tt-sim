@@ -175,15 +175,44 @@ jobs:
         run: |
           API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8
           echo -n "$MACOS_NOTARIZATION_API_KEY" | base64 --decode > "$API_KEY_PATH"
-          echo "Key file size: $(wc -c < "$API_KEY_PATH") bytes"
-          echo "Key file first line: $(head -1 "$API_KEY_PATH")"
-          openssl pkcs8 -in "$API_KEY_PATH" -nocrypt -noout && echo "openssl: key is valid" || echo "openssl: key is INVALID"
 
-          xcrun notarytool submit artifacts/macos/TTSim-notarize.zip \
+          SUBMISSION_ID=$(xcrun notarytool submit artifacts/macos/TTSim-notarize.zip \
             --key "$API_KEY_PATH" \
             --key-id "$MACOS_NOTARIZATION_API_KEY_ID" \
             --issuer "$MACOS_NOTARIZATION_API_ISSUER" \
-            --wait
+            --output-format json | jq -r '.id')
+          echo "Submission ID: $SUBMISSION_ID"
+
+          TIMEOUT=1800
+          ELAPSED=0
+          INTERVAL=30
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            STATUS=$(xcrun notarytool info "$SUBMISSION_ID" \
+              --key "$API_KEY_PATH" \
+              --key-id "$MACOS_NOTARIZATION_API_KEY_ID" \
+              --issuer "$MACOS_NOTARIZATION_API_ISSUER" \
+              --output-format json | jq -r '.status')
+            echo "Status: $STATUS (${ELAPSED}s elapsed)"
+            if [ "$STATUS" = "Accepted" ]; then
+              echo "Notarization accepted."
+              break
+            elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --key "$API_KEY_PATH" \
+                --key-id "$MACOS_NOTARIZATION_API_KEY_ID" \
+                --issuer "$MACOS_NOTARIZATION_API_ISSUER"
+              rm "$API_KEY_PATH"
+              exit 1
+            fi
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "Notarization timed out after ${TIMEOUT}s. Submission ID: $SUBMISSION_ID"
+            rm "$API_KEY_PATH"
+            exit 1
+          fi
 
           rm "$API_KEY_PATH"
 
