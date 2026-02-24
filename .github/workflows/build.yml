@@ -162,19 +162,6 @@ jobs:
 
           security list-keychain -d user -s "$KEYCHAIN_PATH"
 
-      - name: Inspect app bundle structure
-        run: |
-          echo "=== Top-level contents ==="
-          ls -la artifacts/macos/
-          echo "=== App bundle Contents/ ==="
-          ls -la artifacts/macos/TTSim.app/Contents/
-          echo "=== MacOS/ executables ==="
-          ls -la artifacts/macos/TTSim.app/Contents/MacOS/
-          echo "=== Frameworks/ (if any) ==="
-          ls artifacts/macos/TTSim.app/Contents/Frameworks/ 2>/dev/null || echo "(no Frameworks directory)"
-          echo "=== Info.plist CFBundleExecutable ==="
-          grep -A1 CFBundleExecutable artifacts/macos/TTSim.app/Contents/Info.plist || echo "(not found)"
-
       - name: Sign app bundle
         env:
           MACOS_CERTIFICATE_NAME: ${{ secrets.MACOS_CERTIFICATE_NAME }}
