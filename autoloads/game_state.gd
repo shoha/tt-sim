@@ -351,6 +351,9 @@ func apply_token_permissions(permissions_dict: Dictionary) -> void:
 ## Attempt to claim a drag lock for a token. Returns true if the lock was
 ## newly acquired, false if another peer already holds it.
 func claim_drag_lock(network_id: String, peer_id: int) -> bool:
+	if not has_authority():
+		push_warning("GameState: Cannot claim drag lock - no authority")
+		return false
 	if _drag_locks.has(network_id):
 		return false
 	_drag_locks[network_id] = peer_id
@@ -458,6 +461,7 @@ func clear_all_tokens() -> void:
 		token_removed.emit(network_id)
 
 	clear_all_permissions()
+	clear_all_drag_locks()
 	state_reset.emit()
 
 

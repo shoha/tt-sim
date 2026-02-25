@@ -1,5 +1,7 @@
 extends GutTest
 
+## Tests for GameState drag lock methods.
+
 
 func after_each() -> void:
 	GameState.clear_all_drag_locks()
