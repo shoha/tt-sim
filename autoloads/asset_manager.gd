@@ -235,7 +235,7 @@ func _save_pack_to_user_assets(pack_id: String, manifest_data: Dictionary) -> bo
 		push_error("AssetManager: Failed to write manifest: " + manifest_path)
 		return false
 
-	file.store_string(JSON.stringify(manifest_data))
+	file.store_string(JSON.stringify(manifest_data, "", false))
 	file.close()
 	print("AssetManager: Installed pack '%s' to user_assets" % pack_id)
 	return true
