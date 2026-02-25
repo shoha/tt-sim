@@ -181,6 +181,17 @@ func _on_player_left_permissions(peer_id: int, _player_info: Dictionary) -> void
 	# Revoke all permissions for the disconnected player
 	GameState.clear_permissions_for_peer(peer_id)
 
+	# Release any drag locks held by the disconnected player and broadcast releases
+	var locked_tokens: Array[String] = []
+	for network_id in GameState.get_all_token_states():
+		if GameState.get_drag_lock(network_id) == peer_id:
+			locked_tokens.append(network_id)
+
+	if not locked_tokens.is_empty():
+		GameState.clear_drag_locks_for_peer(peer_id)
+		for network_id in locked_tokens:
+			NetworkManager._rpc_drag_lock_released.rpc(network_id)
+
 	# Broadcast updated permissions to remaining clients
 	NetworkManager.permissions.broadcast_token_permissions(
 		TokenPermissions.to_dict(GameState.get_token_permissions())

@@ -1185,6 +1185,7 @@ func clear_level() -> void:
 
 	# Clear network sync throttle state
 	NetworkStateSync.clear_throttle_state()
+	GameState.clear_all_drag_locks()
 
 	clear_level_tokens()
 	clear_level_map()
