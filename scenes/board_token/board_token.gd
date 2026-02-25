@@ -63,6 +63,12 @@ var variant_id: String = "default"
 # Selection/highlight state
 var is_highlighted: bool = false
 
+## Tracks the last value passed to set_interactive() for lock-release restoration.
+var _is_interactive: bool = false
+
+## peer_id currently holding the drag lock on this token, or 0 if free.
+var _drag_locked_by: int = 0
+
 # Status effects (could be expanded to a proper status effect system)
 @export var status_effects: Array[String] = []
 
@@ -297,9 +303,10 @@ func get_selection_glow() -> SelectionGlowRenderer:
 ## so players can right-click for the context menu (e.g., to request control).
 ## Dragging is gated separately via DraggableToken.dragging_allowed.
 func set_interactive(enabled: bool) -> void:
+	_is_interactive = enabled
 	# Gate drag initiation separately from hover detection
 	if _dragging_object:
-		_dragging_object.dragging_allowed = enabled
+		_dragging_object.dragging_allowed = enabled and _drag_locked_by == 0
 
 	if rigid_body:
 		if NetworkManager.is_networked() and not NetworkManager.is_gm():
@@ -307,6 +314,25 @@ func set_interactive(enabled: bool) -> void:
 			rigid_body.input_ray_pickable = true
 		else:
 			rigid_body.input_ray_pickable = enabled
+
+
+## Called when another peer acquires the drag lock on this token.
+## Disables dragging for everyone except the lock holder.
+func set_drag_lock(locker_peer_id: int) -> void:
+	_drag_locked_by = locker_peer_id
+	if not _dragging_object:
+		return
+	var my_peer = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 1
+	if locker_peer_id != my_peer:
+		_dragging_object.dragging_allowed = false
+
+
+## Called when the drag lock on this token is released.
+## Restores dragging_allowed to the permission-based state.
+func clear_drag_lock() -> void:
+	_drag_locked_by = 0
+	if _dragging_object:
+		_dragging_object.dragging_allowed = _is_interactive
 
 
 ## Play a bouncy pop-in spawn animation.
