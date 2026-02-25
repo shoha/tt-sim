@@ -509,5 +509,8 @@ func _on_pack_download_completed(pack_id: String) -> void:
 	_remove_pack_item(pack_id, true)
 
 
-func _on_pack_download_failed_pack(pack_id: String, _error: String) -> void:
+func _on_pack_download_failed_pack(pack_id: String, error: String) -> void:
+	if pack_id.is_empty():
+		UIManager.show_error("Pack download failed: %s" % error)
+		return
 	_remove_pack_item(pack_id, false)
