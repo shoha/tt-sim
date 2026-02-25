@@ -38,9 +38,17 @@ signal token_state_received(network_id: String, token_dict: Dictionary)
 signal token_removed_received(network_id: String)
 signal transform_batch_received(batch: Dictionary)
 signal visual_settings_received(settings: Dictionary)
+## Emitted on clients when a drag lock is granted (another peer is now dragging)
+signal drag_lock_granted(network_id: String, locker_peer_id: int)
+## Emitted on the denied client when its lock claim was rejected
+signal drag_lock_denied(network_id: String)
+## Emitted on clients when a drag lock is released (token is free again)
+signal drag_lock_released(network_id: String)
 signal client_token_transform_received(
 	sender_id: int, network_id: String, position: Vector3, rotation: Vector3, scale: Vector3
 )
+signal client_drag_lock_claimed(sender_id: int, network_id: String)
+signal client_drag_lock_released(sender_id: int, network_id: String)
 
 ## Current connection state
 var _connection_state: ConnectionState = ConnectionState.OFFLINE
@@ -874,6 +882,42 @@ func _rpc_client_token_transform(
 	client_token_transform_received.emit(sender_id, network_id, pos, rot, scl)
 
 
+## RPC: Client claims a drag lock for a token (client -> host)
+@rpc("any_peer", "reliable")
+func _rpc_client_claim_drag_lock(network_id: String) -> void:
+	if not is_host():
+		return
+	var sender_id = multiplayer.get_remote_sender_id()
+	client_drag_lock_claimed.emit(sender_id, network_id)
+
+
+## RPC: Client releases a drag lock (client -> host)
+@rpc("any_peer", "reliable")
+func _rpc_client_release_drag_lock(network_id: String) -> void:
+	if not is_host():
+		return
+	var sender_id = multiplayer.get_remote_sender_id()
+	client_drag_lock_released.emit(sender_id, network_id)
+
+
+## RPC: Host broadcasts that a token is now locked by a peer (host -> all clients)
+@rpc("authority", "reliable")
+func _rpc_drag_lock_granted(network_id: String, locker_peer_id: int) -> void:
+	drag_lock_granted.emit(network_id, locker_peer_id)
+
+
+## RPC: Host tells a specific client its claim was denied (host -> requester)
+@rpc("authority", "reliable")
+func _rpc_drag_lock_denied(network_id: String) -> void:
+	drag_lock_denied.emit(network_id)
+
+
+## RPC: Host broadcasts that a token's lock has been released (host -> all clients)
+@rpc("authority", "reliable")
+func _rpc_drag_lock_released(network_id: String) -> void:
+	drag_lock_released.emit(network_id)
+
+
 # =============================================================================
 # HOST GAME CONTROL
 # =============================================================================
@@ -947,6 +991,16 @@ func send_client_token_transform(
 	_rpc_client_token_transform.rpc_id(
 		1, network_id, [pos.x, pos.y, pos.z], [rot.x, rot.y, rot.z], [scl.x, scl.y, scl.z]
 	)
+
+
+## Client sends a drag lock claim to the host.
+func send_drag_lock_claim(network_id: String) -> void:
+	_rpc_client_claim_drag_lock.rpc_id(1, network_id)
+
+
+## Client sends a drag lock release to the host.
+func send_drag_lock_release(network_id: String) -> void:
+	_rpc_client_release_drag_lock.rpc_id(1, network_id)
 
 
 # =============================================================================
