@@ -18,7 +18,9 @@ extends Node
 ##   GameState.token_state_changed.connect(_on_token_changed)
 
 ## Emitted when any property of a token changes
-signal token_state_changed(network_id: String, property: String, old_value: Variant, new_value: Variant)
+signal token_state_changed(
+	network_id: String, property: String, old_value: Variant, new_value: Variant
+)
 
 ## Emitted when a new token is added to the game
 signal token_added(network_id: String, state: TokenState)
@@ -27,14 +29,13 @@ signal token_added(network_id: String, state: TokenState)
 signal token_removed(network_id: String)
 
 ## Emitted when the entire game state is reset (e.g., level change)
-signal state_reset()
+signal state_reset
 
 ## Emitted when a batch of state changes completes (for network sync optimization)
-signal state_batch_complete()
+signal state_batch_complete
 
 ## Emitted when a token permission is granted or revoked
 signal permissions_changed(network_id: String, peer_id: int)
-
 
 ## Dictionary of all token states: network_id -> TokenState
 var _token_states: Dictionary = {}
@@ -44,16 +45,19 @@ var _token_states: Dictionary = {}
 ## Session-only -- not saved to level files.
 var _token_permissions: Dictionary = {}
 
+## Active drag locks: network_id -> peer_id. Ephemeral -- not serialized.
+var _drag_locks: Dictionary = {}
+
 ## Flag indicating if we're currently in a batch update (suppresses individual signals)
 var _batch_updating: bool = false
 
 ## Pending changes during batch update
 var _pending_changes: Array[Dictionary] = []
 
-
 # =============================================================================
 # AUTHORITY CHECKS
 # =============================================================================
+
 
 ## Check if this client has authority to modify game state.
 ## In single-player, always returns true.
@@ -70,6 +74,7 @@ func is_networked() -> bool:
 # =============================================================================
 # TOKEN STATE MANAGEMENT
 # =============================================================================
+
 
 ## Get a token's state by network_id
 func get_token_state(network_id: String) -> TokenState:
@@ -125,6 +130,7 @@ func get_token_count() -> int:
 # STATE MUTATIONS (Authority Required)
 # =============================================================================
 
+
 ## Register a new token in the game state
 ## Returns true if successful, false if no authority or ID already exists
 func register_token(state: TokenState) -> bool:
@@ -175,17 +181,19 @@ func update_token_property(network_id: String, property: String, value: Variant)
 
 	var old_value = state.get(property)
 	if old_value == value:
-		return true # No change needed
+		return true  # No change needed
 
 	state.set(property, value)
 
 	if _batch_updating:
-		_pending_changes.append({
-			"network_id": network_id,
-			"property": property,
-			"old_value": old_value,
-			"new_value": value
-		})
+		_pending_changes.append(
+			{
+				"network_id": network_id,
+				"property": property,
+				"old_value": old_value,
+				"new_value": value
+			}
+		)
 	else:
 		token_state_changed.emit(network_id, property, old_value, value)
 
@@ -193,6 +201,7 @@ func update_token_property(network_id: String, property: String, value: Variant)
 
 
 ## Convenience methods for common property updates
+
 
 func update_token_position(network_id: String, position: Vector3) -> bool:
 	return update_token_property(network_id, "position", position)
@@ -287,9 +296,7 @@ func has_token_permission(
 
 
 ## Get all token network_ids that a peer has a specific permission for.
-func get_controlled_tokens(
-	peer_id: int, permission: TokenPermissions.Permission
-) -> Array[String]:
+func get_controlled_tokens(peer_id: int, permission: TokenPermissions.Permission) -> Array[String]:
 	return TokenPermissions.get_controlled_tokens(_token_permissions, peer_id, permission)
 
 
@@ -337,8 +344,48 @@ func apply_token_permissions(permissions_dict: Dictionary) -> void:
 
 
 # =============================================================================
+# DRAG LOCKS
+# =============================================================================
+
+
+## Attempt to claim a drag lock for a token. Returns true if the lock was
+## newly acquired, false if another peer already holds it.
+func claim_drag_lock(network_id: String, peer_id: int) -> bool:
+	if _drag_locks.has(network_id):
+		return false
+	_drag_locks[network_id] = peer_id
+	return true
+
+
+## Release the drag lock for a token (called on drop or cancel).
+func release_drag_lock(network_id: String) -> void:
+	_drag_locks.erase(network_id)
+
+
+## Return the peer_id currently holding this token's lock, or 0 if free.
+func get_drag_lock(network_id: String) -> int:
+	return _drag_locks.get(network_id, 0)
+
+
+## Release all locks held by a specific peer (called on disconnect).
+func clear_drag_locks_for_peer(peer_id: int) -> void:
+	var to_clear: Array[String] = []
+	for network_id in _drag_locks:
+		if _drag_locks[network_id] == peer_id:
+			to_clear.append(network_id)
+	for network_id in to_clear:
+		_drag_locks.erase(network_id)
+
+
+## Release all drag locks (called on level clear).
+func clear_all_drag_locks() -> void:
+	_drag_locks.clear()
+
+
+# =============================================================================
 # BATCH UPDATES
 # =============================================================================
+
 
 ## Begin a batch update (suppresses individual signals until end_batch_update)
 func begin_batch_update() -> void:
@@ -353,10 +400,7 @@ func end_batch_update() -> void:
 	# Emit all pending changes
 	for change in _pending_changes:
 		token_state_changed.emit(
-			change["network_id"],
-			change["property"],
-			change["old_value"],
-			change["new_value"]
+			change["network_id"], change["property"], change["old_value"], change["new_value"]
 		)
 
 	_pending_changes.clear()
@@ -366,6 +410,7 @@ func end_batch_update() -> void:
 # =============================================================================
 # STATE SYNCHRONIZATION
 # =============================================================================
+
 
 ## Sync state from a BoardToken (call after token moves, etc.)
 func sync_from_board_token(token: BoardToken) -> bool:
@@ -403,6 +448,7 @@ func apply_to_board_token(network_id: String, token: BoardToken) -> bool:
 # =============================================================================
 # LEVEL/STATE RESET
 # =============================================================================
+
 
 ## Clear all token states and permissions (call when changing levels)
 func clear_all_tokens() -> void:
