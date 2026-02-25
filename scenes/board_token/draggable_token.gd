@@ -218,6 +218,11 @@ func _on_dragging_started() -> void:
 	UIManager.add_hint("RMB", "Cancel")
 	UIManager.add_hint("Scroll", "Height")
 
+	# Claim drag lock so other clients cannot start dragging this token
+	var board_token := get_parent() as BoardToken
+	if board_token and board_token.network_id != "":
+		_send_drag_lock_claim(board_token.network_id)
+
 
 func _on_dragging_stopped() -> void:
 	_is_currently_dragging = false
@@ -252,6 +257,11 @@ func _on_dragging_stopped() -> void:
 	_is_cancel_settle = false
 	_settle_to_ground()
 
+	# Release drag lock so other clients can drag this token again
+	var board_token := get_parent() as BoardToken
+	if board_token and board_token.network_id != "":
+		_send_drag_lock_release(board_token.network_id)
+
 
 func _on_dragging_cancelled() -> void:
 	_is_currently_dragging = false
@@ -285,6 +295,11 @@ func _on_dragging_cancelled() -> void:
 	# Animate back to original position (skip drop effects for cancel)
 	_is_cancel_settle = true
 	_settle_to_position(_drag_start_position)
+
+	# Release drag lock so other clients can drag this token again
+	var board_token := get_parent() as BoardToken
+	if board_token and board_token.network_id != "":
+		_send_drag_lock_release(board_token.network_id)
 
 
 # -------------------------------------------------------------------------
@@ -720,3 +735,42 @@ func set_transform_immediate(p_position: Vector3, p_rotation: Vector3, p_scale: 
 	_network_target_position = p_position
 	_network_target_rotation = p_rotation
 	_network_target_scale = p_scale
+
+
+## Cancel an in-progress drag because the host denied our lock claim.
+## Uses DragAndDrop3D.cancel_drag() so all state is cleaned up correctly.
+## No-op if not currently dragging.
+func cancel_from_lock_denied() -> void:
+	if not _is_currently_dragging:
+		return
+	var drag_and_drop := get_tree().get_first_node_in_group("DragAndDrop3D") as DragAndDrop3D
+	if drag_and_drop:
+		drag_and_drop.cancel_drag()
+
+
+## Send a drag lock claim to the host (client) or claim directly (host).
+func _send_drag_lock_claim(network_id: String) -> void:
+	if not NetworkManager.is_networked():
+		return
+	if NetworkManager.is_host():
+		var board_token := get_parent() as BoardToken
+		if GameState.claim_drag_lock(network_id, 1):
+			if board_token:
+				board_token.set_drag_lock(1)
+			NetworkManager._rpc_drag_lock_granted.rpc(network_id, 1)
+	else:
+		NetworkManager.send_drag_lock_claim(network_id)
+
+
+## Send a drag lock release to the host (client) or release directly (host).
+func _send_drag_lock_release(network_id: String) -> void:
+	if not NetworkManager.is_networked():
+		return
+	if NetworkManager.is_host():
+		GameState.release_drag_lock(network_id)
+		var board_token := get_parent() as BoardToken
+		if board_token:
+			board_token.clear_drag_lock()
+		NetworkManager._rpc_drag_lock_released.rpc(network_id)
+	else:
+		NetworkManager.send_drag_lock_release(network_id)
