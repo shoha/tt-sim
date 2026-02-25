@@ -98,6 +98,27 @@ const SHAKE_DURATION := 0.15  # Duration of shake effect
 
 const EDGE_PAN_SMOOTH_SPEED: float = 8.0  # Smoothing rate for edge panning ramp-up/coast-out
 const TOKEN_COLLISION_LAYER: int = 2  # Physics layer for tokens (layer 1 = terrain)
+const REFERENCE_ASPECT := 16.0 / 9.0  # Reference window aspect ratio for frustum consistency
+
+
+## Return the camera size needed to show at least as much horizontal world space
+## as a 16:9 window at the given height. On 16:9 or wider viewports the height
+## is returned unchanged; on narrower viewports it is scaled up so that
+## size * actual_aspect == height * reference_aspect (same visible width).
+static func compute_aspect_corrected_size(
+	height: float, vp_size: Vector2i, reference_aspect: float
+) -> float:
+	if vp_size.y == 0 or vp_size.x == 0:
+		return height
+	var actual_aspect := float(vp_size.x) / float(vp_size.y)
+	if actual_aspect >= reference_aspect:
+		return height
+	return height * reference_aspect / actual_aspect
+
+
+## Return the aspect-corrected camera size for the current viewport.
+func _corrected_size(height: float) -> float:
+	return GameMap.compute_aspect_corrected_size(height, world_viewport.size, REFERENCE_ASPECT)
 
 
 func _ready() -> void:
@@ -106,8 +127,14 @@ func _ready() -> void:
 	_load_lofi_setting()
 	_load_occlusion_fade_setting()
 	_setup_occlusion_fade()
-	# Initialize target zoom from the camera's current size
+	# Initialize target zoom from the camera's current size (reference 16:9 height)
 	_target_zoom = camera_node.size
+	# Apply aspect correction immediately using the actual window size.
+	# world_viewport.size may still hold the scene default at this point,
+	# so get_window().size gives the real pixel dimensions.
+	camera_node.size = GameMap.compute_aspect_corrected_size(
+		_target_zoom, get_window().size, REFERENCE_ASPECT
+	)
 	# Seed mouse position so first scroll-to-zoom targets the cursor, not (0,0)
 	_last_mouse_position = get_viewport().get_mouse_position()
 
@@ -116,9 +143,10 @@ func _ready() -> void:
 func setup(level_play_controller: LevelPlayController) -> void:
 	_level_play_controller = level_play_controller
 
-	# Store home camera position for reset (Home key)
+	# Store home camera position for reset (Home key).
+	# Use _target_zoom (reference height) not camera_node.size (may be aspect-corrected).
 	_home_position = cameraholder_node.global_position
-	_home_zoom = camera_node.size
+	_home_zoom = _target_zoom
 
 	# Pass the controller to the gameplay menu
 	if gameplay_menu:
@@ -152,7 +180,10 @@ func handle_movement(delta: float) -> void:
 func handle_zoom(delta: float) -> void:
 	# Zoom toward cursor: capture world point under cursor before size change,
 	# interpolate size, then recapture and correct camera position.
-	var zooming := absf(camera_node.size - _target_zoom) > 0.001
+	# Compute aspect-corrected target: on narrower-than-16:9 viewports, camera.size is
+	# scaled up so the visible world width matches the reference 16:9 horizontal extent.
+	var corrected_target := _corrected_size(_target_zoom)
+	var zooming := absf(camera_node.size - corrected_target) > 0.001
 
 	# Skip zoom-toward-cursor when a reset/focus tween is animating the camera position,
 	# because the tween would overwrite our correction each frame causing wobble.
@@ -162,9 +193,9 @@ func handle_zoom(delta: float) -> void:
 	if zooming and not tween_active:
 		world_before = camera_node.project_position(_last_mouse_position, 0)
 
-	# Smoothly interpolate camera size toward target zoom
+	# Smoothly interpolate camera size toward corrected target
 	var smooth_factor = 1.0 - exp(-zoom_smooth_speed * delta)
-	camera_node.size = lerpf(camera_node.size, _target_zoom, smooth_factor)
+	camera_node.size = lerpf(camera_node.size, corrected_target, smooth_factor)
 
 	# Correct camera position so the point under the cursor stays fixed
 	if zooming and not tween_active:
@@ -172,8 +203,8 @@ func handle_zoom(delta: float) -> void:
 		cameraholder_node.global_position += world_before - world_after
 		_clamp_camera_to_bounds()
 
-	# Update tilt-shift DoF from actual interpolated zoom
-	var zoom_percentage: float = (camera_node.size - min_zoom) / (max_zoom - min_zoom)
+	# Update tilt-shift DoF from logical zoom (_target_zoom, independent of aspect correction)
+	var zoom_percentage: float = (_target_zoom - min_zoom) / (max_zoom - min_zoom)
 	tiltshift_node.mesh.material.set_shader_parameter(&"DoF", 5 * zoom_percentage)
 
 
@@ -511,6 +542,18 @@ func _setup_viewport() -> void:
 	# This allows editor-tweaked values to be preserved
 	if viewport_container and viewport_container.material is ShaderMaterial:
 		_lofi_material = viewport_container.material as ShaderMaterial
+	# React to viewport resizes (e.g. window resize) so aspect correction stays current
+	world_viewport.size_changed.connect(_on_viewport_size_changed)
+
+
+## Snap camera.size to the aspect-corrected value when the SubViewport is resized
+## (triggered by window resize via SubViewportContainer.stretch = true).
+## Snapping immediately prevents handle_zoom() from treating the ratio change as
+## a user-initiated zoom-toward-cursor operation.
+func _on_viewport_size_changed() -> void:
+	if not is_instance_valid(camera_node):
+		return
+	camera_node.size = _corrected_size(_target_zoom)
 
 
 ## Create and configure the MeasureTool.
