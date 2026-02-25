@@ -21,8 +21,11 @@ const COLOR_TEXT_ON_ACCENT := Color("#2c1f2b")
 @onready var title_label: Label = %TitleLabel
 @onready var items_container: VBoxContainer = %ItemsContainer
 @onready var queue_label: Label = %QueueLabel
+@onready var packs_container: VBoxContainer = %PacksContainer
+@onready var packs_separator: HSeparator = %PacksSeparator
 
 var _download_items: Dictionary = {}  # key -> {container, label, progress_bar}
+var _pack_items: Dictionary = {}  # pack_id -> {container, label, count_label, progress_bar}
 var _hide_timer: Timer
 var _is_icon_visible: bool = false
 var _is_panel_expanded: bool = false
@@ -97,6 +100,10 @@ func _connect_signals() -> void:
 	AssetManager.streamer.asset_failed.connect(_on_p2p_failed)
 	AssetManager.streamer.transfer_progress.connect(_on_p2p_progress)
 
+	AssetManager.pack_download_progress.connect(_on_pack_download_progress)
+	AssetManager.pack_download_completed.connect(_on_pack_download_completed)
+	AssetManager.pack_download_failed.connect(_on_pack_download_failed_pack)
+
 
 func _exit_tree() -> void:
 	if AssetManager.downloader.download_completed.is_connected(_on_download_completed):
@@ -111,6 +118,12 @@ func _exit_tree() -> void:
 		AssetManager.streamer.asset_failed.disconnect(_on_p2p_failed)
 	if AssetManager.streamer.transfer_progress.is_connected(_on_p2p_progress):
 		AssetManager.streamer.transfer_progress.disconnect(_on_p2p_progress)
+	if AssetManager.pack_download_progress.is_connected(_on_pack_download_progress):
+		AssetManager.pack_download_progress.disconnect(_on_pack_download_progress)
+	if AssetManager.pack_download_completed.is_connected(_on_pack_download_completed):
+		AssetManager.pack_download_completed.disconnect(_on_pack_download_completed)
+	if AssetManager.pack_download_failed.is_connected(_on_pack_download_failed_pack):
+		AssetManager.pack_download_failed.disconnect(_on_pack_download_failed_pack)
 
 
 func _process(delta: float) -> void:
@@ -186,6 +199,7 @@ func _add_or_update_item(
 		tween.tween_property(container, "modulate:a", 1.0, Constants.ANIM_FADE_OUT_DURATION)
 
 		_limit_visible_items()
+		_update_packs_separator()
 
 	_update_badge()
 
@@ -215,6 +229,7 @@ func _remove_item(pack_id: String, asset_id: String, variant_id: String, success
 			container.queue_free()
 			_download_items.erase(key)
 			_update_badge()
+			_update_packs_separator()
 			_check_hide_icon()
 	)
 
@@ -253,7 +268,7 @@ func _update_queue_count() -> void:
 
 
 func _check_hide_icon() -> void:
-	if _download_items.is_empty():
+	if _download_items.is_empty() and _pack_items.is_empty():
 		_hide_timer.start(HIDE_DELAY)
 
 
@@ -395,3 +410,104 @@ func _on_p2p_progress(
 	pack_id: String, asset_id: String, variant_id: String, progress: float
 ) -> void:
 	_add_or_update_item(pack_id, asset_id, variant_id, progress, "P2P")
+
+
+func _add_or_update_pack_item(pack_id: String, downloaded: int, total: int) -> void:
+	if not _is_icon_visible:
+		_show_icon()
+	_hide_timer.stop()
+
+	if _pack_items.has(pack_id):
+		var item = _pack_items[pack_id]
+		item.progress_bar.value = (float(downloaded) / float(total)) * 100.0
+		item.count_label.text = "%d / %d" % [downloaded, total]
+	else:
+		var container = HBoxContainer.new()
+		container.add_theme_constant_override("separation", 8)
+		container.alignment = BoxContainer.ALIGNMENT_CENTER
+
+		var pack = AssetManager.get_pack(pack_id)
+		var label = Label.new()
+		label.theme_type_variation = "Body"
+		label.text = pack.display_name if pack else pack_id
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		label.clip_text = true
+		label.custom_minimum_size = Vector2(120, 0)
+		container.add_child(label)
+
+		var count_label = Label.new()
+		count_label.theme_type_variation = "Caption"
+		count_label.text = "%d / %d" % [downloaded, total]
+		count_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		container.add_child(count_label)
+
+		var progress_bar = ProgressBar.new()
+		progress_bar.custom_minimum_size = Vector2(80, 16)
+		progress_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		progress_bar.value = (float(downloaded) / float(total)) * 100.0
+		progress_bar.show_percentage = false
+		container.add_child(progress_bar)
+
+		packs_container.add_child(container)
+		_pack_items[pack_id] = {
+			"container": container,
+			"label": label,
+			"count_label": count_label,
+			"progress_bar": progress_bar,
+		}
+
+		container.modulate.a = 0.0
+		var tween = create_tween()
+		tween.tween_property(container, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
+
+		_update_packs_separator()
+
+
+func _remove_pack_item(pack_id: String, success: bool) -> void:
+	if not _pack_items.has(pack_id):
+		return
+
+	var item = _pack_items[pack_id]
+	var container = item.container
+
+	if success:
+		item.progress_bar.value = 100.0
+		item.progress_bar.modulate = Color(0.5, 0.8, 0.5)
+		AudioManager.play_success()
+		var pack = AssetManager.get_pack(pack_id)
+		var display = pack.display_name if pack else pack_id
+		UIManager.show_success("%s downloaded and ready." % display)
+	else:
+		item.progress_bar.modulate = Color(0.8, 0.4, 0.4)
+		AudioManager.play_error()
+		var pack = AssetManager.get_pack(pack_id)
+		var display = pack.display_name if pack else pack_id
+		UIManager.show_error("Failed to download %s." % display)
+
+	var tween = create_tween()
+	tween.tween_interval(0.5)
+	tween.tween_property(container, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
+	tween.tween_callback(
+		func():
+			container.queue_free()
+			_pack_items.erase(pack_id)
+			_update_packs_separator()
+			_check_hide_icon()
+	)
+
+
+func _update_packs_separator() -> void:
+	packs_separator.visible = _pack_items.size() > 0 and _download_items.size() > 0
+
+
+func _on_pack_download_progress(pack_id: String, downloaded: int, total: int) -> void:
+	_add_or_update_pack_item(pack_id, downloaded, total)
+
+
+func _on_pack_download_completed(pack_id: String) -> void:
+	_remove_pack_item(pack_id, true)
+
+
+func _on_pack_download_failed_pack(pack_id: String, _error: String) -> void:
+	_remove_pack_item(pack_id, false)
