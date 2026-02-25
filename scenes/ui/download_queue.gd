@@ -351,7 +351,7 @@ func _on_icon_pressed() -> void:
 
 
 func _on_hide_timer_timeout() -> void:
-	if _download_items.is_empty():
+	if _download_items.is_empty() and _pack_items.is_empty():
 		_hide_icon()
 
 
