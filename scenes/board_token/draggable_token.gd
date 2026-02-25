@@ -757,7 +757,7 @@ func _send_drag_lock_claim(network_id: String) -> void:
 		if GameState.claim_drag_lock(network_id, 1):
 			if board_token:
 				board_token.set_drag_lock(1)
-			NetworkManager._rpc_drag_lock_granted.rpc(network_id, 1)
+				NetworkManager._rpc_drag_lock_granted.rpc(network_id, 1)
 	else:
 		NetworkManager.send_drag_lock_claim(network_id)
 
