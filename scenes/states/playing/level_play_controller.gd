@@ -67,6 +67,12 @@ func setup(game_map: GameMap) -> void:
 	):
 		NetworkManager.client_token_transform_received.connect(_on_client_transform_received)
 
+	# Host-side: handle client drag lock requests
+	if not NetworkManager.client_drag_lock_claimed.is_connected(_on_client_drag_lock_claimed):
+		NetworkManager.client_drag_lock_claimed.connect(_on_client_drag_lock_claimed)
+	if not NetworkManager.client_drag_lock_released.is_connected(_on_client_drag_lock_released):
+		NetworkManager.client_drag_lock_released.connect(_on_client_drag_lock_released)
+
 	# Token permission handling (delegated to TokenPermissionHandler)
 	if is_instance_valid(_permission_handler):
 		_permission_handler.queue_free()
@@ -89,6 +95,10 @@ func _exit_tree() -> void:
 		GameState.permissions_changed.disconnect(_on_permissions_changed)
 	if NetworkManager.client_token_transform_received.is_connected(_on_client_transform_received):
 		NetworkManager.client_token_transform_received.disconnect(_on_client_transform_received)
+	if NetworkManager.client_drag_lock_claimed.is_connected(_on_client_drag_lock_claimed):
+		NetworkManager.client_drag_lock_claimed.disconnect(_on_client_drag_lock_claimed)
+	if NetworkManager.client_drag_lock_released.is_connected(_on_client_drag_lock_released):
+		NetworkManager.client_drag_lock_released.disconnect(_on_client_drag_lock_released)
 
 	# Disconnect AssetStreamer signals
 	_disconnect_asset_streamer()
@@ -944,6 +954,50 @@ func _on_client_transform_received(
 
 	# Broadcast to all OTHER clients (not the sender)
 	NetworkStateSync.broadcast_client_token_transform(network_id, pos, rot, scl, sender_id)
+
+
+## Host-side: handle a client drag lock claim.
+## Grants if the token is free; denies if another peer holds the lock.
+func _on_client_drag_lock_claimed(sender_id: int, network_id: String) -> void:
+	if not NetworkManager.is_host():
+		return
+
+	# Validate CONTROL permission before granting
+	if not GameState.has_token_permission(
+		network_id, sender_id, TokenPermissions.Permission.CONTROL
+	):
+		NetworkManager._rpc_drag_lock_denied.rpc_id(sender_id, network_id)
+		return
+
+	if GameState.claim_drag_lock(network_id, sender_id):
+		# Granted — apply to host's local token and broadcast to all clients
+		var token = _find_token_by_network_id(network_id)
+		if token:
+			token.set_drag_lock(sender_id)
+		NetworkManager._rpc_drag_lock_granted.rpc(network_id, sender_id)
+	else:
+		# Denied — someone else holds the lock
+		NetworkManager._rpc_drag_lock_denied.rpc_id(sender_id, network_id)
+
+
+## Host-side: handle a client drag lock release.
+func _on_client_drag_lock_released(sender_id: int, network_id: String) -> void:
+	if not NetworkManager.is_host():
+		return
+
+	# Only the lock holder can release
+	if GameState.get_drag_lock(network_id) != sender_id:
+		return
+
+	GameState.release_drag_lock(network_id)
+
+	# Apply to host's local token
+	var token = _find_token_by_network_id(network_id)
+	if token:
+		token.clear_drag_lock()
+
+	# Broadcast release to all clients
+	NetworkManager._rpc_drag_lock_released.rpc(network_id)
 
 
 # =============================================================================
