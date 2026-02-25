@@ -73,6 +73,14 @@ func setup(game_map: GameMap) -> void:
 	if not NetworkManager.client_drag_lock_released.is_connected(_on_client_drag_lock_released):
 		NetworkManager.client_drag_lock_released.connect(_on_client_drag_lock_released)
 
+	# Client-side: receive drag lock broadcasts from host
+	if not NetworkManager.drag_lock_granted.is_connected(_on_drag_lock_granted):
+		NetworkManager.drag_lock_granted.connect(_on_drag_lock_granted)
+	if not NetworkManager.drag_lock_denied.is_connected(_on_drag_lock_denied):
+		NetworkManager.drag_lock_denied.connect(_on_drag_lock_denied)
+	if not NetworkManager.drag_lock_released.is_connected(_on_drag_lock_released):
+		NetworkManager.drag_lock_released.connect(_on_drag_lock_released)
+
 	# Token permission handling (delegated to TokenPermissionHandler)
 	if is_instance_valid(_permission_handler):
 		_permission_handler.queue_free()
@@ -99,6 +107,12 @@ func _exit_tree() -> void:
 		NetworkManager.client_drag_lock_claimed.disconnect(_on_client_drag_lock_claimed)
 	if NetworkManager.client_drag_lock_released.is_connected(_on_client_drag_lock_released):
 		NetworkManager.client_drag_lock_released.disconnect(_on_client_drag_lock_released)
+	if NetworkManager.drag_lock_granted.is_connected(_on_drag_lock_granted):
+		NetworkManager.drag_lock_granted.disconnect(_on_drag_lock_granted)
+	if NetworkManager.drag_lock_denied.is_connected(_on_drag_lock_denied):
+		NetworkManager.drag_lock_denied.disconnect(_on_drag_lock_denied)
+	if NetworkManager.drag_lock_released.is_connected(_on_drag_lock_released):
+		NetworkManager.drag_lock_released.disconnect(_on_drag_lock_released)
 
 	# Disconnect AssetStreamer signals
 	_disconnect_asset_streamer()
@@ -998,6 +1012,32 @@ func _on_client_drag_lock_released(sender_id: int, network_id: String) -> void:
 
 	# Broadcast release to all clients
 	NetworkManager._rpc_drag_lock_released.rpc(network_id)
+
+
+## Client-side: another peer (or the host) has locked this token.
+## Disables dragging on the local copy.
+func _on_drag_lock_granted(network_id: String, locker_peer_id: int) -> void:
+	var token = _find_token_by_network_id(network_id)
+	if token:
+		token.set_drag_lock(locker_peer_id)
+
+
+## Client-side: this client's lock claim was denied.
+## Cancel the in-progress drag via the cancel-settle path.
+func _on_drag_lock_denied(network_id: String) -> void:
+	var token = _find_token_by_network_id(network_id)
+	if not token:
+		return
+	var draggable := token._dragging_object as DraggableToken
+	if draggable:
+		draggable.cancel_from_lock_denied()
+
+
+## Client-side: a drag lock has been released, token is free to drag again.
+func _on_drag_lock_released(network_id: String) -> void:
+	var token = _find_token_by_network_id(network_id)
+	if token:
+		token.clear_drag_lock()
 
 
 # =============================================================================
