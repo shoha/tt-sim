@@ -621,6 +621,12 @@ func _update_network_interpolation(delta: float) -> void:
 
 ## Set network interpolation target (called by network sync on clients)
 func set_network_target(p_position: Vector3, p_rotation: Vector3, p_scale: Vector3) -> void:
+	# While this client is dragging or settling this token, it is authoritative over the
+	# token's position. Ignore incoming network targets (including reconciliation) so they
+	# don't fight the local settle animation and cause the token to visually jump upward.
+	if _is_currently_dragging or _is_settling:
+		return
+
 	# Skip interpolation if already very close to target (prevents reconciliation churn)
 	if not _network_interpolating and rigid_body:
 		var pos_diff = rigid_body.global_position.distance_to(p_position)
