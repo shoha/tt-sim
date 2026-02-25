@@ -61,6 +61,16 @@ horizontal_alignment = 1
 [node name="HSeparator" type="HSeparator" parent="Anchor/VBoxContainer/DetailPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
+[node name="PacksContainer" type="VBoxContainer" parent="Anchor/VBoxContainer/DetailPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="PacksSeparator" type="HSeparator" parent="Anchor/VBoxContainer/DetailPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+
 [node name="ItemsContainer" type="VBoxContainer" parent="Anchor/VBoxContainer/DetailPanel/MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
