@@ -262,9 +262,11 @@ AssetManager.load_remote_pack_from_url(
 AssetManager.download_asset_pack_from_url(
     "https://example.com/packs/my_pack/manifest.json"
 )
-# Connect to pack_download_progress and pack_download_completed for progress
+# Connect to pack_download_progress, pack_download_completed, and pack_download_failed for progress.
 # Downloaded packs are installed to user://user_assets/{pack_id}/ (manifest, models/, icons/)
-# so the pack is available after game restart
+# and are immediately available in the asset browser without a restart.
+# pack_download_failed is emitted if any variant fails to download, or if the manifest
+# cannot be fetched/parsed. pack_download_completed is only emitted if all variants succeed.
 ```
 
 ---
@@ -603,6 +605,11 @@ func download_asset_pack_from_url(manifest_url: String) -> bool  # Downloads all
 signal packs_loaded()
 signal asset_available(pack_id: String, asset_id: String, variant_id: String, local_path: String)
 signal asset_download_failed(pack_id: String, asset_id: String, variant_id: String, error: String)
+
+# Bulk pack download (via download_asset_pack_from_url)
+signal pack_download_progress(pack_id: String, downloaded: int, total: int)
+signal pack_download_completed(pack_id: String)   # all variants succeeded
+signal pack_download_failed(pack_id: String, error: String)  # any variant failed, or pre-queue error
 ```
 
 ### AssetDownloader
@@ -698,11 +705,32 @@ The in-game asset browser (`AssetBrowser`) provides:
 
 ### Download Queue
 
-The download queue widget (`DownloadQueue`) shows:
+The `DownloadQueue` widget is a persistent `CanvasLayer` (layer 100) parented to `UIManager`,
+so it is always in the scene tree regardless of game state. It shows a collapsible detail panel
+triggered by a pulsing icon button in the bottom-center of the screen.
 
-- Active downloads with progress bars
-- Download queue length
-- Error indicators
+The panel has two sections:
+
+**Pack-level rows** (top): one row per in-progress bulk pack download, showing the pack display
+name, a `downloaded / total` variant count, and a progress bar. These rows appear when
+`AssetManager.pack_download_progress` fires and are removed (with a green/red flash and a
+`UIManager` toast) when `pack_download_completed` or `pack_download_failed` fires.
+
+**Asset-level rows** (bottom): one row per actively-transferring asset variant, showing a
+`[HTTP]`/`[P2P]` source tag, asset name, and progress bar. A "N more in queue" label reflects
+the pending queue depth. These rows are driven by `AssetDownloader` and `AssetStreamer` signals.
+
+A separator between the two sections is only shown when both have content simultaneously. The
+icon button hides automatically (with a short delay) once both sections are empty.
+
+### Add Pack Dialog
+
+`AddPackDialog` lets users enter a manifest URL to install a remote asset pack. Once the manifest
+is confirmed and the first `pack_download_progress` signal fires, the Cancel button is renamed to
+**"Run in Background"** (Secondary style). Clicking it closes the dialog; the download continues
+uninterrupted in `AssetManager` and progress is tracked in `DownloadQueue`. The asset browser
+tab for the new pack appears automatically when the download completes, without needing to keep
+the dialog open.
 
 ---
 
