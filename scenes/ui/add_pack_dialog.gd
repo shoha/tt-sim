@@ -83,6 +83,9 @@ func _on_pack_download_progress(pack_id: String, downloaded: int, total: int) ->
 	_downloading_pack_id = pack_id
 	progress_label.text = "Downloading %s: %d / %d" % [pack_id, downloaded, total]
 	progress_label.visible = true
+	if cancel_button.text != "Run in Background":
+		cancel_button.text = "Run in Background"
+		cancel_button.theme_type_variation = "Secondary"
 
 
 func _on_pack_download_completed(pack_id: String) -> void:
