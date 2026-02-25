@@ -607,7 +607,7 @@ func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
 
 	var total_variants = variant_file_counts.size()
 	var variant_remaining = variant_file_counts.duplicate()
-	var state = {"finished_variants": 0}
+	var state = {"finished_variants": 0, "has_failure": false}
 
 	var handlers = {}
 
@@ -625,13 +625,17 @@ func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
 		if variant_remaining.is_empty():
 			downloader.download_completed.disconnect(handlers.completed)
 			downloader.download_failed.disconnect(handlers.failed)
-			pack_download_completed.emit(pack.pack_id)
+			if state["has_failure"]:
+				pack_download_failed.emit(pack.pack_id, "Some assets failed to download")
+			else:
+				pack_download_completed.emit(pack.pack_id)
 			packs_loaded.emit()
 
 	handlers.completed = func(p_id: String, a_id: String, v_id: String, _path: String) -> void:
 		_on_file_done.call(p_id, a_id, v_id)
 
 	handlers.failed = func(p_id: String, a_id: String, v_id: String, _error: String) -> void:
+		state["has_failure"] = true
 		_on_file_done.call(p_id, a_id, v_id)
 
 	downloader.download_completed.connect(handlers.completed)
