@@ -23,6 +23,16 @@ func _ready() -> void:
 	asset_browser.asset_selected.connect(_on_asset_selected)
 	if add_pack_button:
 		add_pack_button.pressed.connect(_on_add_pack_pressed)
+	AssetManager.pack_download_completed.connect(_on_pack_download_completed)
+
+
+func _exit_tree() -> void:
+	if AssetManager.pack_download_completed.is_connected(_on_pack_download_completed):
+		AssetManager.pack_download_completed.disconnect(_on_pack_download_completed)
+
+
+func _on_pack_download_completed(_pack_id: String) -> void:
+	asset_browser._create_tabs()
 
 
 func _on_asset_selected(_pack_id: String, _asset_id: String, _variant_id: String) -> void:
@@ -63,8 +73,4 @@ func _on_after_animate_out() -> void:
 
 func _on_add_pack_pressed() -> void:
 	var dialog = AddPackDialogScene.instantiate()
-	dialog.pack_downloaded.connect(func(_pack_id: String) -> void:
-		# Refresh tabs to show the new pack
-		asset_browser._create_tabs()
-	)
 	get_tree().root.add_child(dialog)
