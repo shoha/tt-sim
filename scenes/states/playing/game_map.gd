@@ -89,6 +89,7 @@ var _reset_tween: Tween = null
 var _map_bounds: AABB = AABB()
 var _has_map_bounds: bool = false
 const MAP_BOUNDS_MARGIN_FACTOR := 0.0  # Extra margin as fraction of map size on each side
+const BOUNDS_INSET_FACTOR := 0.2  # Fraction of camera.size used to inset camera bounds
 
 # Camera shake state
 var _shake_tween: Tween = null
@@ -822,8 +823,10 @@ func notify_map_loaded() -> void:
 		occlusion_fade.setup(camera_node, map_container, drag_and_drop_node)
 		_sync_lofi_pixelation()
 
-	# Compute camera soft bounds from map geometry
+	# Compute camera soft bounds from map geometry and snap the camera into
+	# the allowed range immediately so the first user input doesn't jump.
 	_compute_map_bounds()
+	_clamp_camera_to_bounds()
 
 
 ## Clear occlusion fade state. Call before loading a new map.
@@ -900,23 +903,69 @@ func _collect_mesh_aabbs(node: Node, out: Array[AABB]) -> void:
 		_collect_mesh_aabbs(child, out)
 
 
-## Return a position clamped to the map bounds. If no bounds are computed,
-## the input position is returned unchanged. Used by both the live clamp and
-## tween-target helpers so the camera never leaves the allowed area.
+## Compute the XZ offset from the camera holder to the ground-level view center.
+## The isometric camera is positioned at a large local offset from the holder
+## and looks downward at an angle, so the point on the ground that the screen
+## center maps to is NOT at the holder's XZ position.
+func _get_view_center_ground_offset() -> Vector2:
+	var vp_size := world_viewport.size
+	var screen_center := Vector2(vp_size.x * 0.5, vp_size.y * 0.5)
+	var origin := camera_node.project_ray_origin(screen_center)
+	var dir := camera_node.project_ray_normal(screen_center)
+	if absf(dir.y) < 0.001:
+		return Vector2.ZERO
+	var t := -origin.y / dir.y
+	var ground := origin + dir * t
+	var holder := cameraholder_node.global_position
+	return Vector2(ground.x - holder.x, ground.z - holder.z)
+
+
+## Return a position clamped so the camera view center stays within the map
+## bounds (inset by a fraction of camera.size to reduce visible void at edges).
+## The view center is what the user sees as the middle of the screen on the
+## ground plane — it differs from the holder position due to the isometric
+## camera offset. When the map is smaller than the inset, the view is centered.
 func _clamp_position_to_bounds(pos: Vector3) -> Vector3:
 	if not _has_map_bounds:
 		return pos
+	if not is_instance_valid(camera_node) or not is_instance_valid(world_viewport):
+		return pos
 
-	var margin_x = _map_bounds.size.x * MAP_BOUNDS_MARGIN_FACTOR
-	var margin_z = _map_bounds.size.z * MAP_BOUNDS_MARGIN_FACTOR
+	# Offset from holder to the ground-level view center (constant at a given Y)
+	var view_off := _get_view_center_ground_offset()
 
-	var min_x = _map_bounds.position.x - margin_x
-	var max_x = _map_bounds.position.x + _map_bounds.size.x + margin_x
-	var min_z = _map_bounds.position.z - margin_z
-	var max_z = _map_bounds.position.z + _map_bounds.size.z + margin_z
+	var margin_x := _map_bounds.size.x * MAP_BOUNDS_MARGIN_FACTOR
+	var margin_z := _map_bounds.size.z * MAP_BOUNDS_MARGIN_FACTOR
+	var map_min_x := _map_bounds.position.x - margin_x
+	var map_max_x := _map_bounds.position.x + _map_bounds.size.x + margin_x
+	var map_min_z := _map_bounds.position.z - margin_z
+	var map_max_z := _map_bounds.position.z + _map_bounds.size.z + margin_z
 
-	pos.x = clampf(pos.x, min_x, max_x)
-	pos.z = clampf(pos.z, min_z, max_z)
+	# Inset proportional to camera.size — adapts to zoom and aspect correction.
+	# Larger view = tighter bounds so the edges don't show too much void.
+	var inset := camera_node.size * BOUNDS_INSET_FACTOR
+
+	# Clamp the view center, then convert back to holder position
+	var vc_x := pos.x + view_off.x
+	var vc_z := pos.z + view_off.y
+
+	var lo_x := map_min_x + inset
+	var hi_x := map_max_x - inset
+	var lo_z := map_min_z + inset
+	var hi_z := map_max_z - inset
+
+	if lo_x > hi_x:
+		vc_x = (map_min_x + map_max_x) * 0.5
+	else:
+		vc_x = clampf(vc_x, lo_x, hi_x)
+
+	if lo_z > hi_z:
+		vc_z = (map_min_z + map_max_z) * 0.5
+	else:
+		vc_z = clampf(vc_z, lo_z, hi_z)
+
+	pos.x = vc_x - view_off.x
+	pos.z = vc_z - view_off.y
 	return pos
 
 
