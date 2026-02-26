@@ -88,7 +88,7 @@ var _reset_tween: Tween = null
 # Camera soft bounds (computed from map geometry)
 var _map_bounds: AABB = AABB()
 var _has_map_bounds: bool = false
-const MAP_BOUNDS_MARGIN_FACTOR := 0.0  # Extra margin as fraction of map size on each side
+const MAP_BOUNDS_MARGIN_FACTOR := 0.15  # Extra margin as fraction of map size on each side
 const BOUNDS_INSET_FACTOR := 0.2  # Fraction of camera.size used to inset camera bounds
 
 # Camera shake state
