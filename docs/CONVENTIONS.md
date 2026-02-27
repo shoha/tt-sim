@@ -287,16 +287,21 @@ Right (D) = (+1, 0, -1)    (up-right on screen)
 - Updates `focal_point` shader parameter on a fullscreen quad
 - DoF intensity scales with zoom level (0 at min zoom, stronger at max zoom)
 
+### Camera Offset Scaling (Near-Plane Culling Prevention)
+
+The Camera3D sits at a local offset from CameraHolder. At large `camera.size` values (zoom out or aspect correction on narrow windows), the bottom screen edge's ray origin can drop below Y=0 — meaning ground geometry is behind the near plane and gets culled.
+
+**Fix**: `_update_camera_offset()` scales the Camera3D local position proportionally with `camera.size`. For an orthographic camera, translating along the view direction has zero visual effect but moves the near plane further from the ground, preventing culling. Called after every `camera.size` change (`_ready`, `handle_zoom`, `_on_viewport_size_changed`).
+
 ### Camera Bounds
 
-The camera is soft-clamped to the loaded map's geometry AABB to prevent panning into the void.
+The camera is soft-clamped to the loaded map's geometry AABB to prevent panning too far from the map. Void/padding around the map is expected and desired.
 
 - **View-center clamping**: Bounds constrain the **ground-level view center** (the screen center projected to Y=0 via ray intersection), not the camera holder position. This is necessary because the isometric camera is at a large local offset from the holder (~11 units in X and Z), so clamping the holder directly produces asymmetric panning.
-- **Zoom-proportional inset**: The allowed range is inset by `camera_node.size * BOUNDS_INSET_FACTOR` (0.2). Larger views (zoomed out or tall windows with aspect correction) get tighter bounds so the edges don't show excessive void.
 - **Margin**: `MAP_BOUNDS_MARGIN_FACTOR` (0.15) expands the AABB by 15% of the map size per side, giving breathing room around the map edges.
-- **Collapsed axes**: When the map is smaller than the inset on an axis, the view is centered on that axis (no panning).
+- **Degenerate axes**: When the map bounds collapse on an axis, the view centers on that axis.
 - **Initial snap**: `_clamp_camera_to_bounds()` runs immediately after `_compute_map_bounds()` in `notify_map_loaded()` so the first user input doesn't cause a jump.
-- **Key helper**: `_get_view_center_ground_offset()` computes the XZ offset from holder to ground-level view center. This offset is constant during panning/zooming (only depends on the camera's local transform and holder Y).
+- **Key helper**: `_get_view_center_ground_offset()` computes the XZ offset from holder to ground-level view center. This offset varies with camera offset scaling but is recomputed each frame.
 
 ### Aspect Ratio Correction
 
