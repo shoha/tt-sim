@@ -85,11 +85,14 @@ var _home_position: Vector3 = Vector3.ZERO
 var _home_zoom: float = 0.0
 var _reset_tween: Tween = null
 
+# Camera offset scaling (prevents near-plane culling at large zoom/narrow aspect)
+var _base_camera_offset: Vector3  # Camera3D local position at base zoom (from scene)
+var _base_camera_size: float  # Camera3D orthographic size at base zoom (from scene)
+
 # Camera soft bounds (computed from map geometry)
 var _map_bounds: AABB = AABB()
 var _has_map_bounds: bool = false
 const MAP_BOUNDS_MARGIN_FACTOR := 0.15  # Extra margin as fraction of map size on each side
-const BOUNDS_INSET_FACTOR := 0.2  # Fraction of camera.size used to inset camera bounds
 
 # Camera shake state
 var _shake_tween: Tween = null
@@ -122,12 +125,24 @@ func _corrected_size(height: float) -> float:
 	return GameMap.compute_aspect_corrected_size(height, world_viewport.size, REFERENCE_ASPECT)
 
 
+## Scale the Camera3D local position proportionally with camera.size.
+## For an orthographic camera this has no visual effect but keeps the
+## near plane ahead of all visible ground geometry, preventing culling
+## at large zoom levels or narrow aspect ratios.
+func _update_camera_offset() -> void:
+	camera_node.position = _base_camera_offset * (camera_node.size / _base_camera_size)
+
+
 func _ready() -> void:
 	_setup_context_menu()
 	_setup_viewport()
 	_load_lofi_setting()
 	_load_occlusion_fade_setting()
 	_setup_occlusion_fade()
+	# Capture the scene-default camera offset and size before any modification.
+	# These are the reference values for proportional offset scaling.
+	_base_camera_offset = camera_node.position
+	_base_camera_size = camera_node.size
 	# Initialize target zoom from the camera's current size (reference 16:9 height)
 	_target_zoom = camera_node.size
 	# Apply aspect correction immediately using the actual window size.
@@ -136,6 +151,7 @@ func _ready() -> void:
 	camera_node.size = GameMap.compute_aspect_corrected_size(
 		_target_zoom, get_window().size, REFERENCE_ASPECT
 	)
+	_update_camera_offset()
 	# Seed mouse position so first scroll-to-zoom targets the cursor, not (0,0)
 	_last_mouse_position = get_viewport().get_mouse_position()
 
@@ -203,6 +219,10 @@ func handle_zoom(delta: float) -> void:
 		var world_after = camera_node.project_position(_last_mouse_position, 0)
 		cameraholder_node.global_position += world_before - world_after
 		_clamp_camera_to_bounds()
+
+	# Scale camera offset to match current size — no visual effect for orthographic,
+	# but keeps the near plane ahead of all visible ground geometry.
+	_update_camera_offset()
 
 	# Update tilt-shift DoF from logical zoom (_target_zoom, independent of aspect correction)
 	var zoom_percentage: float = (_target_zoom - min_zoom) / (max_zoom - min_zoom)
@@ -555,6 +575,7 @@ func _on_viewport_size_changed() -> void:
 	if not is_instance_valid(camera_node):
 		return
 	camera_node.size = _corrected_size(_target_zoom)
+	_update_camera_offset()
 
 
 ## Create and configure the MeasureTool.
@@ -920,18 +941,17 @@ func _get_view_center_ground_offset() -> Vector2:
 	return Vector2(ground.x - holder.x, ground.z - holder.z)
 
 
-## Return a position clamped so the camera view center stays within the map
-## bounds (inset by a fraction of camera.size to reduce visible void at edges).
-## The view center is what the user sees as the middle of the screen on the
-## ground plane — it differs from the holder position due to the isometric
-## camera offset. When the map is smaller than the inset, the view is centered.
+## Return a position clamped so the view center stays within the map bounds
+## plus margin. The view center is the screen center projected to Y=0 — it
+## differs from the holder position due to the isometric camera offset.
+## This prevents infinite panning while preserving natural padding around
+## the map. When the map is very small, the view centers on it.
 func _clamp_position_to_bounds(pos: Vector3) -> Vector3:
 	if not _has_map_bounds:
 		return pos
 	if not is_instance_valid(camera_node) or not is_instance_valid(world_viewport):
 		return pos
 
-	# Offset from holder to the ground-level view center (constant at a given Y)
 	var view_off := _get_view_center_ground_offset()
 
 	var margin_x := _map_bounds.size.x * MAP_BOUNDS_MARGIN_FACTOR
@@ -941,28 +961,18 @@ func _clamp_position_to_bounds(pos: Vector3) -> Vector3:
 	var map_min_z := _map_bounds.position.z - margin_z
 	var map_max_z := _map_bounds.position.z + _map_bounds.size.z + margin_z
 
-	# Inset proportional to camera.size — adapts to zoom and aspect correction.
-	# Larger view = tighter bounds so the edges don't show too much void.
-	var inset := camera_node.size * BOUNDS_INSET_FACTOR
-
-	# Clamp the view center, then convert back to holder position
 	var vc_x := pos.x + view_off.x
 	var vc_z := pos.z + view_off.y
 
-	var lo_x := map_min_x + inset
-	var hi_x := map_max_x - inset
-	var lo_z := map_min_z + inset
-	var hi_z := map_max_z - inset
-
-	if lo_x > hi_x:
-		vc_x = (map_min_x + map_max_x) * 0.5
+	if map_min_x >= map_max_x:
+		vc_x = _map_bounds.position.x + _map_bounds.size.x * 0.5
 	else:
-		vc_x = clampf(vc_x, lo_x, hi_x)
+		vc_x = clampf(vc_x, map_min_x, map_max_x)
 
-	if lo_z > hi_z:
-		vc_z = (map_min_z + map_max_z) * 0.5
+	if map_min_z >= map_max_z:
+		vc_z = _map_bounds.position.z + _map_bounds.size.z * 0.5
 	else:
-		vc_z = clampf(vc_z, lo_z, hi_z)
+		vc_z = clampf(vc_z, map_min_z, map_max_z)
 
 	pos.x = vc_x - view_off.x
 	pos.z = vc_z - view_off.y
