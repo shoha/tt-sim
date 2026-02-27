@@ -93,6 +93,7 @@ var _base_camera_size: float  # Camera3D orthographic size at base zoom (from sc
 var _map_bounds: AABB = AABB()
 var _has_map_bounds: bool = false
 const MAP_BOUNDS_MARGIN_FACTOR := 0.15  # Extra margin as fraction of map size on each side
+const NEAR_PLANE_GROUND_MARGIN := 0.5  # Keep bottom-corner ray origins at least this far above Y=0
 
 # Camera shake state
 var _shake_tween: Tween = null
@@ -125,12 +126,28 @@ func _corrected_size(height: float) -> float:
 	return GameMap.compute_aspect_corrected_size(height, world_viewport.size, REFERENCE_ASPECT)
 
 
-## Scale the Camera3D local position proportionally with camera.size.
-## For an orthographic camera this has no visual effect but keeps the
-## near plane ahead of all visible ground geometry, preventing culling
-## at large zoom levels or narrow aspect ratios.
+## Scale the Camera3D local position so that all screen-corner ray origins
+## stay above Y=0. For an orthographic camera, translating along the view
+## direction has zero visual effect but keeps the near plane ahead of all
+## visible ground geometry, preventing culling at any zoom or aspect ratio.
 func _update_camera_offset() -> void:
-	camera_node.position = _base_camera_offset * (camera_node.size / _base_camera_size)
+	# Baseline: proportional scaling preserves the original camera geometry
+	var offset_scale := camera_node.size / _base_camera_size
+	camera_node.position = _base_camera_offset * offset_scale
+
+	# The bottom screen corners have the lowest ray-origin Y because the
+	# camera's right axis tilts downward.  On wide or zoomed-out viewports
+	# this can push the ray origin below Y=0, causing near-plane culling.
+	# Check the actual ray origins and add exactly enough extra offset.
+	var vp_size := world_viewport.size
+	if vp_size.x > 0 and vp_size.y > 0:
+		var bl := camera_node.project_ray_origin(Vector2(0, vp_size.y))
+		var br := camera_node.project_ray_origin(Vector2(vp_size.x, vp_size.y))
+		var min_y := minf(bl.y, br.y)
+		if min_y < NEAR_PLANE_GROUND_MARGIN:
+			var deficit := NEAR_PLANE_GROUND_MARGIN - min_y
+			offset_scale += deficit / _base_camera_offset.y
+			camera_node.position = _base_camera_offset * offset_scale
 
 
 func _ready() -> void:
