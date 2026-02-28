@@ -112,6 +112,7 @@ func _ready() -> void:
 	_model_cache_handler = AssetModelCache.new(self)
 	call_deferred("_discover_packs")
 	_connect_resolver_signals()
+	pack_download_completed.connect(_on_own_pack_download_completed)
 
 
 func _exit_tree() -> void:
@@ -139,6 +140,10 @@ func _on_resolver_asset_failed(
 	_request_id: String, pack_id: String, asset_id: String, variant_id: String, error: String
 ) -> void:
 	asset_download_failed.emit(pack_id, asset_id, variant_id, error)
+
+
+func _on_own_pack_download_completed(pack_id: String) -> void:
+	_delete_download_state(pack_id)
 
 
 # =========================================================================
@@ -239,6 +244,34 @@ func _save_pack_to_user_assets(pack_id: String, manifest_data: Dictionary) -> bo
 	file.close()
 	print("AssetManager: Installed pack '%s' to user_assets" % pack_id)
 	return true
+
+
+## Write download_state.json to mark a pack as an explicit full download.
+## This file's presence signals that the user initiated a full pack download
+## (vs on-demand streaming) and that the download should be resumable.
+func _save_download_state(pack_id: String, manifest_url: String, total_variants: int) -> void:
+	var state_path := USER_ASSETS_USER_DIR + pack_id + "/download_state.json"
+	var state := {
+		"manifest_url": manifest_url,
+		"started_at": Time.get_datetime_string_from_system(true),
+		"total_variants": total_variants,
+	}
+	var file := FileAccess.open(state_path, FileAccess.WRITE)
+	if file == null:
+		push_error("AssetManager: Failed to write download_state: " + state_path)
+		return
+	file.store_string(JSON.stringify(state, "", false))
+	file.close()
+
+
+## Delete download_state.json for a pack (called on completion or user dismiss).
+## Caller must ensure the pack directory exists.
+func _delete_download_state(pack_id: String) -> void:
+	var state_path := USER_ASSETS_USER_DIR + pack_id + "/download_state.json"
+	if FileAccess.file_exists(state_path):
+		var err := DirAccess.remove_absolute(state_path)
+		if err != OK:
+			push_error("AssetManager: Failed to delete download_state: " + state_path)
 
 
 # =========================================================================
@@ -413,6 +446,98 @@ func register_remote_pack(manifest: Dictionary) -> bool:
 	return true
 
 
+## Scan user://user_assets/ for packs with download_state.json that have missing files.
+## Returns an array of dictionaries: {pack_id, display_name, manifest_url, total_variants, downloaded_variants}
+func get_incomplete_downloads() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var dir := DirAccess.open(USER_ASSETS_USER_DIR)
+	if not dir:
+		return result
+
+	dir.list_dir_begin()
+	var folder_name := dir.get_next()
+	while folder_name != "":
+		if dir.current_is_dir() and not folder_name.begins_with("."):
+			var pack_dir := USER_ASSETS_USER_DIR + folder_name + "/"
+			var state_path := pack_dir + "download_state.json"
+			if FileAccess.file_exists(state_path):
+				var info := _check_incomplete_pack(folder_name, pack_dir, state_path)
+				if not info.is_empty():
+					result.append(info)
+		folder_name = dir.get_next()
+	dir.list_dir_end()
+	return result
+
+
+## Check whether a pack with download_state.json has missing files.
+## Returns empty dict if pack is fully downloaded, state is invalid, or pack is unknown.
+func _check_incomplete_pack(pack_id: String, pack_dir: String, state_path: String) -> Dictionary:
+	var file := FileAccess.open(state_path, FileAccess.READ)
+	if file == null:
+		return {}
+	var json := JSON.new()
+	if json.parse(file.get_as_text()) != OK:
+		file.close()
+		return {}
+	file.close()
+	var state: Dictionary = json.data
+
+	var pack := _packs.get(pack_id) as AssetPack
+	if not pack:
+		push_warning(
+			"AssetManager: download_state.json found for unknown pack '%s' -- skipping" % pack_id
+		)
+		return {}
+
+	# Count how many variants have all their files present
+	var total_variants := 0
+	var downloaded_variants := 0
+	for asset in pack.get_all_assets():
+		for variant_id in asset.get_variant_ids():
+			var variant := asset.get_variant(variant_id)
+			if not variant:
+				continue
+			total_variants += 1
+			var all_present := true
+			if variant.model_file != "" and pack.get_model_url(asset.asset_id, variant_id) != "":
+				if not FileAccess.file_exists(pack_dir + "models/" + variant.model_file):
+					all_present = false
+			if variant.icon_file != "" and pack.get_icon_url(asset.asset_id, variant_id) != "":
+				if not FileAccess.file_exists(pack_dir + "icons/" + variant.icon_file):
+					all_present = false
+			if all_present:
+				downloaded_variants += 1
+
+	# If everything is downloaded, clean up the state file and skip
+	if downloaded_variants >= total_variants:
+		_delete_download_state(pack_id)
+		return {}
+
+	return {
+		"pack_id": pack_id,
+		"display_name": pack.display_name,
+		"manifest_url": state.get("manifest_url", ""),
+		"total_variants": total_variants,
+		"downloaded_variants": downloaded_variants,
+	}
+
+
+## Resume downloading missing files for a previously interrupted pack download.
+## The existing download_state.json is preserved (not overwritten) so the pack
+## remains resumable if the game exits again before completion.
+func resume_pack_download(pack_id: String) -> void:
+	var pack := _packs.get(pack_id) as AssetPack
+	if not pack:
+		pack_download_failed.emit(pack_id, "Pack not found")
+		return
+	_queue_pack_downloads(pack_id, {})
+
+
+## Permanently dismiss a pending pack download (deletes download_state.json).
+func dismiss_pack_download(pack_id: String) -> void:
+	_delete_download_state(pack_id)
+
+
 ## Load a remote pack from a URL pointing to manifest.json
 ## This is async - the pack will be available after download completes
 func load_remote_pack_from_url(manifest_url: String) -> void:
@@ -502,7 +627,7 @@ func _on_download_pack_manifest_downloaded(
 	if not _finalize_pack_download(pack_id, manifest):
 		return
 
-	_queue_pack_downloads(pack_id, manifest)
+	_queue_pack_downloads(pack_id, manifest, manifest_url)
 
 
 func _fetch_pack_manifest(
@@ -558,7 +683,9 @@ func _finalize_pack_download(pack_id: String, manifest: Dictionary) -> bool:
 	return true
 
 
-func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
+func _queue_pack_downloads(
+	pack_id: String, _manifest: Dictionary, manifest_url: String = ""
+) -> void:
 	var pack = _packs.get(pack_id)
 	if not pack:
 		pack_download_failed.emit(pack_id, "Pack not found after registration")
@@ -606,6 +733,11 @@ func _queue_pack_downloads(pack_id: String, _manifest: Dictionary) -> void:
 		return
 
 	var total_variants = variant_file_counts.size()
+
+	# Write download state so this pack can be resumed if the game exits mid-download
+	if manifest_url != "":
+		_save_download_state(pack_id, manifest_url, total_variants)
+
 	var variant_remaining = variant_file_counts.duplicate()
 	var state = {"finished_variants": 0, "has_failure": false}
 

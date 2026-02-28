@@ -26,6 +26,7 @@ const COLOR_TEXT_ON_ACCENT := Color("#2c1f2b")
 
 var _download_items: Dictionary = {}  # key -> {container, label, progress_bar}
 var _pack_items: Dictionary = {}  # pack_id -> {container, label, count_label, progress_bar}
+var _resume_items: Dictionary = {}  # pack_id -> {container}
 var _hide_timer: Timer
 var _is_icon_visible: bool = false
 var _is_panel_expanded: bool = false
@@ -102,6 +103,8 @@ func _connect_signals() -> void:
 
 	AssetManager.pack_download_progress.connect(_on_pack_download_progress)
 	AssetManager.pack_download_completed.connect(_on_pack_download_completed)
+
+	AssetManager.packs_loaded.connect(_on_packs_loaded_check_resume)
 	AssetManager.pack_download_failed.connect(_on_pack_download_failed_pack)
 
 
@@ -124,6 +127,8 @@ func _exit_tree() -> void:
 		AssetManager.pack_download_completed.disconnect(_on_pack_download_completed)
 	if AssetManager.pack_download_failed.is_connected(_on_pack_download_failed_pack):
 		AssetManager.pack_download_failed.disconnect(_on_pack_download_failed_pack)
+	if AssetManager.packs_loaded.is_connected(_on_packs_loaded_check_resume):
+		AssetManager.packs_loaded.disconnect(_on_packs_loaded_check_resume)
 
 
 func _process(delta: float) -> void:
@@ -268,7 +273,7 @@ func _update_queue_count() -> void:
 
 
 func _check_hide_icon() -> void:
-	if _download_items.is_empty() and _pack_items.is_empty():
+	if _download_items.is_empty() and _pack_items.is_empty() and _resume_items.is_empty():
 		_hide_timer.start(HIDE_DELAY)
 
 
@@ -351,7 +356,7 @@ func _on_icon_pressed() -> void:
 
 
 func _on_hide_timer_timeout() -> void:
-	if _download_items.is_empty() and _pack_items.is_empty():
+	if _download_items.is_empty() and _pack_items.is_empty() and _resume_items.is_empty():
 		_hide_icon()
 
 
@@ -497,8 +502,112 @@ func _remove_pack_item(pack_id: String, success: bool) -> void:
 	)
 
 
+func _on_packs_loaded_check_resume() -> void:
+	# Only check once at startup, not on every subsequent packs_loaded emission
+	if AssetManager.packs_loaded.is_connected(_on_packs_loaded_check_resume):
+		AssetManager.packs_loaded.disconnect(_on_packs_loaded_check_resume)
+	var incomplete := AssetManager.get_incomplete_downloads()
+	for info in incomplete:
+		_add_resume_item(info)
+
+
+func _add_resume_item(info: Dictionary) -> void:
+	var pack_id: String = info.pack_id
+	if _resume_items.has(pack_id):
+		return
+
+	if not _is_icon_visible:
+		_show_icon()
+
+	var container := VBoxContainer.new()
+	container.add_theme_constant_override("separation", 4)
+
+	# Info row: pack name + progress count
+	var info_row := HBoxContainer.new()
+	info_row.add_theme_constant_override("separation", 8)
+
+	var label := Label.new()
+	label.theme_type_variation = "Body"
+	label.text = info.display_name
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.clip_text = true
+	label.custom_minimum_size = Vector2(120, 0)
+	info_row.add_child(label)
+
+	var count_label := Label.new()
+	count_label.theme_type_variation = "Caption"
+	count_label.text = "%d / %d" % [info.downloaded_variants, info.total_variants]
+	info_row.add_child(count_label)
+
+	container.add_child(info_row)
+
+	# Button row: Resume + Remove
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 8)
+	btn_row.alignment = BoxContainer.ALIGNMENT_END
+
+	var remove_btn := Button.new()
+	remove_btn.text = "Remove"
+	remove_btn.theme_type_variation = "Secondary"
+	remove_btn.custom_minimum_size = Vector2(70, 0)
+	remove_btn.pressed.connect(_on_resume_remove_pressed.bind(pack_id))
+	btn_row.add_child(remove_btn)
+
+	var resume_btn := Button.new()
+	resume_btn.text = "Resume"
+	resume_btn.custom_minimum_size = Vector2(70, 0)
+	resume_btn.pressed.connect(_on_resume_pressed.bind(pack_id))
+	btn_row.add_child(resume_btn)
+
+	container.add_child(btn_row)
+
+	packs_container.add_child(container)
+	_resume_items[pack_id] = {"container": container}
+
+	# Fade in
+	container.modulate.a = 0.0
+	var tween := create_tween()
+	tween.tween_property(container, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
+
+	_update_packs_separator()
+
+	# Auto-expand so the user sees the prompt
+	if not _is_panel_expanded:
+		_expand_panel()
+
+
+func _on_resume_pressed(pack_id: String) -> void:
+	AudioManager.play_confirm()
+	_remove_resume_item(pack_id)
+	AssetManager.resume_pack_download(pack_id)
+
+
+func _on_resume_remove_pressed(pack_id: String) -> void:
+	AudioManager.play_cancel()
+	AssetManager.dismiss_pack_download(pack_id)
+	_remove_resume_item(pack_id)
+
+
+func _remove_resume_item(pack_id: String) -> void:
+	if not _resume_items.has(pack_id):
+		return
+	var item: Dictionary = _resume_items[pack_id]
+	var container: Control = item.container
+	var tween := create_tween()
+	tween.tween_property(container, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
+	tween.tween_callback(
+		func():
+			container.queue_free()
+			_resume_items.erase(pack_id)
+			_update_packs_separator()
+			_check_hide_icon()
+	)
+
+
 func _update_packs_separator() -> void:
-	packs_separator.visible = _pack_items.size() > 0 and _download_items.size() > 0
+	packs_separator.visible = (
+		(_pack_items.size() > 0 or _resume_items.size() > 0) and _download_items.size() > 0
+	)
 
 
 func _on_pack_download_progress(pack_id: String, downloaded: int, total: int) -> void:
