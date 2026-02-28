@@ -117,7 +117,7 @@ script = ExtResource("animated_btn")
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_type_variation = "Secondary"
+theme_type_variation = &"Secondary"
 text = "Revert to Map Defaults"
 
 [node name="OverridesLabel" type="Label" parent="ScrollContainer/VBox"]
@@ -613,7 +613,7 @@ script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_type_variation = "Secondary"
+theme_type_variation = &"Secondary"
 text = "Cancel"
 
 [node name="SaveButton" type="Button" parent="ScrollContainer/VBox/ButtonsRow"]
@@ -621,5 +621,5 @@ script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_type_variation = "Success"
+theme_type_variation = &"Success"
 text = "Save"
