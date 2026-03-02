@@ -828,9 +828,9 @@ func _queue_pack_downloads(
 	downloader.download_completed.connect(handlers.completed)
 	downloader.download_failed.connect(handlers.failed)
 
-	# Emit initial progress so the UI shows the correct starting position on resume
-	if already_done_variants > 0:
-		pack_download_progress.emit(pack.pack_id, already_done_variants, total_variants)
+	# Emit initial progress so the pack item exists in the UI before any
+	# per-variant download_progress signals fire (used for suppression).
+	pack_download_progress.emit(pack.pack_id, already_done_variants, total_variants)
 
 	downloader.request_downloads_bulk(needs_download)
 
