@@ -164,6 +164,72 @@ func request_download(
 	_process_queue()
 
 
+## Queue a batch of downloads that the caller has already confirmed are not
+## present on disk.  Skips the per-item FileAccess.file_exists check and
+## performs a single O(n) dedup pass before enqueueing.
+## Each item Dictionary must have: pack_id, asset_id, variant_id, url,
+## file_type, target_path, priority.
+func request_downloads_bulk(items: Array[Dictionary]) -> void:
+	if items.is_empty():
+		return
+
+	# Build O(1) lookup of dedup keys already active or queued.
+	var in_flight: Dictionary = {}
+	for key in _active_downloads:
+		in_flight[key] = true
+	for req in _download_queue:
+		in_flight[req.get_dedup_key()] = true
+
+	var new_requests: Array[DownloadRequest] = []
+
+	for item in items:
+		var pack_id: String = item["pack_id"]
+		var asset_id: String = item["asset_id"]
+		var variant_id: String = item["variant_id"]
+		var url: String = item["url"]
+		var file_type: String = item["file_type"]
+		var target_path: String = item["target_path"]
+		var priority: int = item["priority"]
+
+		var dedup_key: String = (
+			target_path if target_path != "" else "%s/%s/%s" % [pack_id, asset_id, variant_id]
+		)
+
+		if _failed_downloads.has(dedup_key):
+			call_deferred(
+				"_emit_failed", pack_id, asset_id, variant_id, _failed_downloads[dedup_key]
+			)
+			continue
+
+		if in_flight.has(dedup_key):
+			continue
+
+		in_flight[dedup_key] = true
+
+		var req := DownloadRequest.new()
+		req.pack_id = pack_id
+		req.asset_id = asset_id
+		req.variant_id = variant_id
+		req.url = url
+		req.cache_path = (
+			target_path
+			if target_path != ""
+			else _get_cache_path(pack_id, asset_id, variant_id, file_type)
+		)
+		req.priority = priority
+		req.target_path = target_path
+
+		new_requests.append(req)
+
+	if new_requests.is_empty():
+		_process_queue()
+		return
+
+	_download_queue.append_array(new_requests)
+	_sort_queue()
+	_process_queue()
+
+
 ## Sort download queue by priority (lower number = higher priority)
 func _sort_queue() -> void:
 	_download_queue.sort_custom(
