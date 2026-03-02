@@ -691,8 +691,10 @@ func _queue_pack_downloads(
 		pack_download_failed.emit(pack_id, "Pack not found after registration")
 		return
 
-	var pack_path = USER_ASSETS_USER_DIR + pack_id + "/"
-	var download_items: Array[Dictionary] = []
+	var pack_path := USER_ASSETS_USER_DIR + pack_id + "/"
+
+	# -- Phase 1: build candidate list on main thread (no I/O) --
+	var candidates: Array[Dictionary] = []
 	var variant_file_counts: Dictionary = {}
 
 	for asset in pack.get_all_assets():
@@ -700,53 +702,106 @@ func _queue_pack_downloads(
 			var variant = asset.get_variant(variant_id)
 			if not variant:
 				continue
-			var variant_key = "%s/%s" % [asset.asset_id, variant_id]
-			var model_url = pack.get_model_url(asset.asset_id, variant_id)
-			var icon_url = pack.get_icon_url(asset.asset_id, variant_id)
+			var variant_key := "%s/%s" % [asset.asset_id, variant_id]
+			var model_url: String = pack.get_model_url(asset.asset_id, variant_id)
+			var icon_url: String = pack.get_icon_url(asset.asset_id, variant_id)
 			if model_url != "" and variant.model_file != "":
-				download_items.append(
-					{
-						"asset_id": asset.asset_id,
-						"variant_id": variant_id,
-						"url": model_url,
-						"file_type": "model",
-						"target_path": pack_path + "models/" + variant.model_file
-					}
-				)
+				var model_item := {
+					"pack_id": pack_id,
+					"asset_id": asset.asset_id,
+					"variant_id": variant_id,
+					"url": model_url,
+					"file_type": "model",
+					"target_path": pack_path + "models/" + variant.model_file,
+					"variant_key": variant_key,
+					"priority": 0,
+				}
+				candidates.append(model_item)
 				variant_file_counts[variant_key] = variant_file_counts.get(variant_key, 0) + 1
 			if icon_url != "" and variant.icon_file != "":
-				download_items.append(
-					{
-						"asset_id": asset.asset_id,
-						"variant_id": variant_id,
-						"url": icon_url,
-						"file_type": "icon",
-						"target_path": pack_path + "icons/" + variant.icon_file
-					}
-				)
+				var icon_item := {
+					"pack_id": pack_id,
+					"asset_id": asset.asset_id,
+					"variant_id": variant_id,
+					"url": icon_url,
+					"file_type": "icon",
+					"target_path": pack_path + "icons/" + variant.icon_file,
+					"variant_key": variant_key,
+					"priority": 0,
+				}
+				candidates.append(icon_item)
 				variant_file_counts[variant_key] = variant_file_counts.get(variant_key, 0) + 1
 
-	if download_items.is_empty():
+	if candidates.is_empty():
 		print("AssetManager: Pack '%s' has no downloadable assets" % pack.display_name)
 		pack_download_completed.emit(pack.pack_id)
 		packs_loaded.emit()
 		return
 
-	var total_variants = variant_file_counts.size()
+	var total_variants := variant_file_counts.size()
 
-	# Write download state so this pack can be resumed if the game exits mid-download
+	# Write download state before the worker starts (fast, main thread only)
 	if manifest_url != "":
 		_save_download_state(pack_id, manifest_url, total_variants)
 
-	var variant_remaining = variant_file_counts.duplicate()
-	var state = {"finished_variants": 0, "has_failure": false}
+	# -- Phase 2: file-existence scan on worker thread --
+	var thread_result: Dictionary = {"needs_download": [], "present_counts": {}}
 
-	var handlers = {}
+	var task_id := WorkerThreadPool.add_task(
+		func() -> void:
+			var needs: Array[Dictionary] = []
+			var present: Dictionary = {}
+			for item: Dictionary in candidates:
+				if FileAccess.file_exists(item["target_path"]):
+					var vk: String = item["variant_key"]
+					present[vk] = present.get(vk, 0) + 1
+				else:
+					needs.append(item)
+			thread_result["needs_download"] = needs
+			thread_result["present_counts"] = present
+	)
 
-	var _on_file_done = func(p_id: String, a_id: String, v_id: String) -> void:
+	while not WorkerThreadPool.is_task_completed(task_id):
+		await get_tree().process_frame
+
+	WorkerThreadPool.wait_for_task_completion(task_id)
+
+	# -- Phase 3: initialize progress, queue only missing files --
+	var needs_download: Array[Dictionary] = []
+	needs_download.assign(thread_result["needs_download"])
+	var present_counts: Dictionary = thread_result["present_counts"]
+
+	# A variant is fully present when all its expected files exist on disk
+	var already_done_variants := 0
+	for vk: String in present_counts:
+		if present_counts[vk] >= variant_file_counts.get(vk, 0):
+			already_done_variants += 1
+
+	# Build per-variant remaining counts for only the items we will download
+	var variant_remaining: Dictionary = {}
+	for item: Dictionary in needs_download:
+		var vk: String = item["variant_key"]
+		variant_remaining[vk] = variant_remaining.get(vk, 0) + 1
+
+	if variant_remaining.is_empty():
+		print(
+			(
+				"AssetManager: Pack '%s' fully present, %d variants"
+				% [pack.display_name, total_variants]
+			)
+		)
+		pack_download_progress.emit(pack.pack_id, total_variants, total_variants)
+		pack_download_completed.emit(pack.pack_id)
+		packs_loaded.emit()
+		return
+
+	var state := {"finished_variants": already_done_variants, "has_failure": false}
+	var handlers := {}
+
+	var _on_file_done := func(p_id: String, a_id: String, v_id: String) -> void:
 		if p_id != pack.pack_id:
 			return
-		var vk = "%s/%s" % [a_id, v_id]
+		var vk := "%s/%s" % [a_id, v_id]
 		if not variant_remaining.has(vk):
 			return
 		variant_remaining[vk] -= 1
@@ -773,21 +828,21 @@ func _queue_pack_downloads(
 	downloader.download_completed.connect(handlers.completed)
 	downloader.download_failed.connect(handlers.failed)
 
-	for item in download_items:
-		downloader.request_download(
-			pack.pack_id,
-			item.asset_id,
-			item.variant_id,
-			item.url,
-			0,
-			item.file_type,
-			item.target_path
-		)
+	# Emit initial progress so the UI shows the correct starting position on resume
+	if already_done_variants > 0:
+		pack_download_progress.emit(pack.pack_id, already_done_variants, total_variants)
+
+	downloader.request_downloads_bulk(needs_download)
 
 	print(
 		(
-			"AssetManager: Queued %d files (%d variants) for pack '%s'"
-			% [download_items.size(), total_variants, pack.display_name]
+			"AssetManager: Queued %d files (%d variants to download, %d already present) for pack '%s'"
+			% [
+				needs_download.size(),
+				variant_remaining.size(),
+				already_done_variants,
+				pack.display_name
+			]
 		)
 	)
 
