@@ -144,6 +144,11 @@ func _process(delta: float) -> void:
 func _add_or_update_item(
 	pack_id: String, asset_id: String, variant_id: String, progress: float, source: String = "HTTP"
 ) -> void:
+	# During a pack download the pack row already conveys all progress --
+	# suppress per-variant rows to avoid visual clutter.
+	if _pack_items.has(pack_id):
+		return
+
 	var key = "%s/%s/%s" % [pack_id, asset_id, variant_id]
 
 	if not _is_icon_visible:
@@ -160,14 +165,6 @@ func _add_or_update_item(
 		var container = HBoxContainer.new()
 		container.add_theme_constant_override("separation", 8)
 		container.alignment = BoxContainer.ALIGNMENT_CENTER
-
-		# Source indicator (Caption style)
-		var source_label = Label.new()
-		source_label.theme_type_variation = "Caption"
-		source_label.text = "[%s]" % source
-		source_label.custom_minimum_size = Vector2(40, 0)
-		source_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		container.add_child(source_label)
 
 		# Asset name (Body style)
 		var display_name = AssetManager.get_asset_display_name(pack_id, asset_id)
@@ -246,30 +243,31 @@ func _limit_visible_items() -> void:
 
 
 func _update_badge() -> void:
-	var count = _download_items.size()
+	var count = _pack_items.size() + _download_items.size()
 	_badge_label.text = str(count)
 	_badge_container.visible = count > 0
 
 
 func _update_queue_count() -> void:
+	title_label.text = "Downloads"
+
+	# Hide queue count when only pack downloads are active (the pack progress
+	# bar already communicates completion info).
+	if _pack_items.size() > 0 and _download_items.is_empty():
+		queue_label.visible = false
+		return
+
 	# Count queued items by variant, not by individual file, so the numbers
 	# match the user's mental model of "assets remaining".
 	var http_queued = AssetManager.downloader.get_queued_variant_count()
 	var p2p_queued = AssetManager.streamer.get_queued_request_count()
-
 	var total_queued = http_queued + p2p_queued
-	var total_active = _download_items.size()
 
 	if total_queued > 0:
 		queue_label.text = "+ %d more in queue" % total_queued
 		queue_label.visible = true
 	else:
 		queue_label.visible = false
-
-	if total_active > 0:
-		title_label.text = "Downloading Assets (%d)" % total_active
-	else:
-		title_label.text = "Downloading Assets"
 
 
 func _check_hide_icon() -> void:
