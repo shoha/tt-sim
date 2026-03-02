@@ -62,6 +62,16 @@ func _ready() -> void:
 	set_process(false)
 
 
+func _exit_tree() -> void:
+	# Cancel active HTTPRequests so their background threads can join
+	# immediately instead of blocking shutdown for up to DOWNLOAD_TIMEOUT
+	# per request.
+	for key in _active_downloads:
+		var request: DownloadRequest = _active_downloads[key]
+		if request.http_request and is_instance_valid(request.http_request):
+			request.http_request.cancel_request()
+
+
 ## Inject dependencies (called by AssetManager after adding to tree).
 func setup(cache_manager: Node) -> void:
 	_cache_manager = cache_manager
