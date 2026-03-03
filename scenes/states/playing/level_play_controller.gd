@@ -38,6 +38,12 @@ var _permission_handler: TokenPermissionHandler = null
 var _client_transform_throttle: Dictionary = {}  # network_id -> last_send_time (client-side)
 var _client_connected_tokens: Dictionary = {}  # network_id -> { "changed": Callable, "updated": Callable }
 
+# Signal connection tracking for proper disconnect (prevents lambda accumulation)
+var _token_signal_connections: Dictionary = {}  # network_id -> Dictionary with handlers
+
+# Reverse index for O(1) network_id -> placement_id lookup
+var _network_id_to_placement: Dictionary = {}  # network_id -> placement_id
+
 
 ## Initialize with a reference to the game map
 func setup(game_map: GameMap) -> void:
@@ -667,6 +673,7 @@ func has_queued_level() -> bool:
 ## Track a spawned token
 func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 	spawned_tokens[placement.placement_id] = token
+	_network_id_to_placement[token.network_id] = placement.placement_id
 
 	# GM can interact with all tokens; players only with tokens they control
 	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
@@ -685,23 +692,61 @@ func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 		_connect_token_state_signals(token)
 
 
-## Connect to token signals for broadcasting state changes over network
+## Connect to token signals for broadcasting state changes over network.
+## Stores callables so they can be disconnected later (prevents lambda accumulation).
 func _connect_token_state_signals(token: BoardToken) -> void:
 	if not GameState.has_authority():
 		return
+	_disconnect_token_state_signals(token)
 
 	# Property changes use reliable channel (important, must arrive)
-	# Use lambdas to ignore signal arguments and just pass the token
-	token.health_changed.connect(func(_cur, _max, _old = null): _on_token_property_changed(token))
-	token.token_visibility_changed.connect(func(_visible): _on_token_property_changed(token))
-	token.status_effect_added.connect(func(_effect): _on_token_property_changed(token))
-	token.status_effect_removed.connect(func(_effect): _on_token_property_changed(token))
-	token.died.connect(func(): _on_token_property_changed(token))
-	token.revived.connect(func(): _on_token_property_changed(token))
+	# Optional args handle varying signal signatures (health_changed has 3 args, died has 0, etc.)
+	var prop_handler := func(_a = null, _b = null, _c = null): _on_token_property_changed(token)
+	var transform_handler := func(): _on_token_transform_changed(token)
+
+	token.health_changed.connect(prop_handler)
+	token.token_visibility_changed.connect(prop_handler)
+	token.status_effect_added.connect(prop_handler)
+	token.status_effect_removed.connect(prop_handler)
+	token.died.connect(prop_handler)
+	token.revived.connect(prop_handler)
 
 	# Transform changes use unreliable channel with rate limiting (high-frequency, can drop)
-	token.transform_changed.connect(func(): _on_token_transform_changed(token))
-	token.transform_updated.connect(func(): _on_token_transform_changed(token))
+	token.transform_changed.connect(transform_handler)
+	token.transform_updated.connect(transform_handler)
+
+	_token_signal_connections[token.network_id] = {
+		"token": token,
+		"prop_handler": prop_handler,
+		"transform_handler": transform_handler,
+	}
+
+
+## Disconnect stored token signal handlers (idempotent).
+func _disconnect_token_state_signals(token: BoardToken) -> void:
+	if not _token_signal_connections.has(token.network_id):
+		return
+	var info: Dictionary = _token_signal_connections[token.network_id]
+	var t: BoardToken = info["token"]
+	if not is_instance_valid(t):
+		_token_signal_connections.erase(token.network_id)
+		return
+	var ph: Callable = info["prop_handler"]
+	var th: Callable = info["transform_handler"]
+	for sig in [
+		t.health_changed,
+		t.token_visibility_changed,
+		t.status_effect_added,
+		t.status_effect_removed,
+		t.died,
+		t.revived,
+	]:
+		if sig.is_connected(ph):
+			sig.disconnect(ph)
+	for sig in [t.transform_changed, t.transform_updated]:
+		if sig.is_connected(th):
+			sig.disconnect(th)
+	_token_signal_connections.erase(token.network_id)
 
 
 ## Handle property changes (health, visibility, status) - uses reliable channel
@@ -812,6 +857,7 @@ func add_token_to_level(
 	token.asset_id = asset_id
 	token.variant_id = variant_id
 	spawned_tokens[placement.placement_id] = token
+	_network_id_to_placement[token.network_id] = placement.placement_id
 
 	# GM can interact with all tokens; players only with tokens they control
 	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
@@ -915,16 +961,14 @@ func _on_permissions_changed(network_id: String, _peer_id: int) -> void:
 	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
 	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
 
-	for placement_id in spawned_tokens:
-		var token = spawned_tokens[placement_id] as BoardToken
-		if is_instance_valid(token) and token.network_id == network_id:
-			var can_interact = is_gm
-			if not can_interact and my_peer_id > 0:
-				can_interact = GameState.has_token_permission(
-					network_id, my_peer_id, TokenPermissions.Permission.CONTROL
-				)
-			token.set_interactive(can_interact)
-			break
+	var token = _find_token_by_network_id(network_id)
+	if token:
+		var can_interact = is_gm
+		if not can_interact and my_peer_id > 0:
+			can_interact = GameState.has_token_permission(
+				network_id, my_peer_id, TokenPermissions.Permission.CONTROL
+			)
+		token.set_interactive(can_interact)
 
 	# Update client-side transform signal wiring
 	if not is_gm and NetworkManager.is_networked():
@@ -950,16 +994,10 @@ func _on_client_transform_received(
 		return
 
 	# Apply transform to the host's local BoardToken (with interpolation)
-	var token_found := false
-	for placement_id in spawned_tokens:
-		var token = spawned_tokens[placement_id] as BoardToken
-		if is_instance_valid(token) and token.network_id == network_id:
-			token.set_interpolation_target(pos, rot, scl)
-			token_found = true
-			break
-
-	if not token_found:
+	var token = _find_token_by_network_id(network_id)
+	if not token:
 		return  # Token doesn't exist on host — don't update GameState or broadcast
+	token.set_interpolation_target(pos, rot, scl)
 
 	# Update GameState
 	GameState.update_token_property(network_id, "position", pos)
@@ -1129,12 +1167,14 @@ func _on_client_token_transform_changed(token: BoardToken) -> void:
 	)
 
 
-## Find a token by its network_id in spawned_tokens.
+## Find a token by its network_id in spawned_tokens (O(1) via reverse index).
 func _find_token_by_network_id(network_id: String) -> BoardToken:
-	for placement_id in spawned_tokens:
-		var token = spawned_tokens[placement_id] as BoardToken
-		if is_instance_valid(token) and token.network_id == network_id:
-			return token
+	var placement_id: String = _network_id_to_placement.get(network_id, "")
+	if placement_id == "":
+		return null
+	var token = spawned_tokens.get(placement_id)
+	if token and is_instance_valid(token):
+		return token
 	return null
 
 
@@ -1146,6 +1186,8 @@ func clear_level_tokens() -> void:
 			token.queue_free()
 
 	spawned_tokens.clear()
+	_network_id_to_placement.clear()
+	_token_signal_connections.clear()
 	active_level_data = null
 
 	# Disconnect client transform signals before clearing
