@@ -24,7 +24,7 @@ func _on_panel_ready() -> void:
 	_setup_blur_backdrop()
 
 	# Only show "Edit Level" for the GM / local player
-	edit_level_button.visible = NetworkManager.is_gm() or not NetworkManager.is_networked()
+	edit_level_button.visible = NetworkManager.has_gm_access()
 
 
 ## Replace the flat dark backdrop with a blurred-background shader

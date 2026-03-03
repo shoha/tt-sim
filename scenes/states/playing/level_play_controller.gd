@@ -231,7 +231,7 @@ func _on_connection_state_changed(
 ## GM can interact with all tokens, players can only interact with tokens they control.
 ## Hidden tokens are semi-transparent for GM, invisible for players.
 func _update_all_token_state() -> void:
-	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
+	var is_gm = NetworkManager.has_gm_access()
 	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
 
 	for placement_id in spawned_tokens:
@@ -676,7 +676,7 @@ func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 	_network_id_to_placement[token.network_id] = placement.placement_id
 
 	# GM can interact with all tokens; players only with tokens they control
-	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
+	var is_gm = NetworkManager.has_gm_access()
 	var can_interact = is_gm
 	if not can_interact and multiplayer.multiplayer_peer:
 		can_interact = GameState.has_token_permission(
@@ -860,7 +860,7 @@ func add_token_to_level(
 	_network_id_to_placement[token.network_id] = placement.placement_id
 
 	# GM can interact with all tokens; players only with tokens they control
-	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
+	var is_gm = NetworkManager.has_gm_access()
 	var can_interact_new = is_gm
 	if not can_interact_new and multiplayer.multiplayer_peer:
 		can_interact_new = GameState.has_token_permission(
@@ -958,7 +958,7 @@ func _on_permissions_changed(network_id: String, _peer_id: int) -> void:
 		return
 
 	# Update interactivity for the specific token
-	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
+	var is_gm = NetworkManager.has_gm_access()
 	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
 
 	var token = _find_token_by_network_id(network_id)
@@ -1148,7 +1148,7 @@ func _disconnect_client_transform_signals(network_id: String) -> void:
 
 ## Client-side: send a token transform to the host with rate limiting.
 func _on_client_token_transform_changed(token: BoardToken) -> void:
-	if NetworkManager.is_host() or not NetworkManager.is_networked():
+	if GameState.has_authority():
 		return
 
 	var network_id = token.network_id

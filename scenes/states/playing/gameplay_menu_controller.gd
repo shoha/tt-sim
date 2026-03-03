@@ -103,7 +103,7 @@ func _on_save_level_button_pressed() -> void:
 
 func _save_level() -> void:
 	# Only GM can save
-	if not NetworkManager.is_gm() and NetworkManager.is_networked():
+	if NetworkManager.is_restricted_client():
 		push_warning("GameplayMenuController: Only GM can save level")
 		return
 
@@ -119,7 +119,7 @@ func _save_level() -> void:
 func _update_save_level_button_visibility() -> void:
 	if save_level_button:
 		# Hide for non-GM players - only GM can save
-		if not NetworkManager.is_gm() and NetworkManager.is_networked():
+		if NetworkManager.is_restricted_client():
 			save_level_button.visible = false
 			return
 		var should_show = (
@@ -154,7 +154,7 @@ func _on_level_cleared() -> void:
 func _update_asset_browser_button_state() -> void:
 	if toggle_asset_browser_button:
 		# Hide for non-GM players - only GM can add tokens
-		if not NetworkManager.is_gm() and NetworkManager.is_networked():
+		if NetworkManager.is_restricted_client():
 			toggle_asset_browser_button.visible = false
 			return
 		var has_level = _level_play_controller and _level_play_controller.has_active_level()
@@ -167,7 +167,7 @@ func _update_asset_browser_button_state() -> void:
 func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -> void:
 	print("GameplayMenuController: _on_asset_selected %s/%s/%s" % [pack_id, asset_id, variant_id])
 	# Only GM can add tokens
-	if not NetworkManager.is_gm() and NetworkManager.is_networked():
+	if NetworkManager.is_restricted_client():
 		UIManager.show_error("Only the GM can add tokens")
 		return
 
@@ -198,7 +198,7 @@ func _update_edit_mode_drawer() -> void:
 	if not level_edit_panel:
 		return
 	var has_level = _level_play_controller and _level_play_controller.has_active_level()
-	var can_edit = has_level and (not NetworkManager.is_networked() or NetworkManager.is_gm())
+	var can_edit = has_level and NetworkManager.has_gm_access()
 	if can_edit:
 		level_edit_panel.visible = true
 		level_edit_panel.reveal()

@@ -203,7 +203,7 @@ func _update_visibility_visuals() -> void:
 			# Visible to everyone
 			rigid_body.visible = true
 			_set_mesh_transparency(rigid_body, 1.0)
-		elif NetworkManager.is_gm() or not NetworkManager.is_networked():
+		elif NetworkManager.has_gm_access():
 			# GM/local: show as semi-transparent so they can still see and interact
 			rigid_body.visible = true
 			_set_mesh_transparency(rigid_body, 0.4)
