@@ -377,13 +377,14 @@ func _update_token_highlights(shape: VolumeOverlay.Shape, center: Vector3, radiu
 	# Unhighlight tokens that left the volume
 	for token in _aoe_highlighted_tokens:
 		if is_instance_valid(token) and not next.has(token):
-			token.set_highlighted(false)
-			token.set_highlight_color(SelectionGlowRenderer.DEFAULT_GLOW_COLOR)
+			token.remove_highlight()
 
 	# Highlight (or re-confirm color on) tokens inside the volume
 	for token in next:
-		token.set_highlight_color(AOE_HIGHLIGHT_COLOR)
-		token.set_highlighted(true)
+		if not _aoe_highlighted_tokens.has(token):
+			token.add_highlight(AOE_HIGHLIGHT_COLOR)
+		else:
+			token.set_highlight_color(AOE_HIGHLIGHT_COLOR)
 
 	_aoe_highlighted_tokens = next
 
@@ -391,8 +392,7 @@ func _update_token_highlights(shape: VolumeOverlay.Shape, center: Vector3, radiu
 func _clear_token_highlights() -> void:
 	for token in _aoe_highlighted_tokens:
 		if is_instance_valid(token):
-			token.set_highlighted(false)
-			token.set_highlight_color(SelectionGlowRenderer.DEFAULT_GLOW_COLOR)
+			token.remove_highlight()
 	_aoe_highlighted_tokens.clear()
 
 

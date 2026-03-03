@@ -88,7 +88,7 @@ func _ready() -> void:
 
 	# Only set up dragging signals and indicators during gameplay
 	if not Engine.is_editor_hint():
-		_collect_visual_children()
+		collect_visual_children()
 		_setup_drop_indicator()
 
 		dragging_started.connect(_on_dragging_started)
@@ -120,7 +120,8 @@ func _setup_drop_indicator() -> void:
 	add_child(_drop_indicator)
 
 
-func _collect_visual_children() -> void:
+func collect_visual_children() -> void:
+	_visual_children.clear()
 	for child in rigid_body.get_children():
 		if child is Node3D and not child is CollisionShape3D:
 			_visual_children.append(child)
@@ -356,8 +357,13 @@ func _on_settle_complete() -> void:
 	var was_cancel := _is_cancel_settle
 	_is_cancel_settle = false
 
-	# Re-enable hover detection now that the settle animation is done
-	rigid_body.input_ray_pickable = true
+	# Re-enable hover detection now that the settle animation is done,
+	# but respect the token's interactive state (e.g. hidden tokens stay non-pickable)
+	var board_token := get_parent() as BoardToken
+	if board_token:
+		rigid_body.input_ray_pickable = board_token._is_interactive
+	else:
+		rigid_body.input_ray_pickable = true
 
 	# Sync hierarchy positions
 	_sync_parent_position()
@@ -371,7 +377,6 @@ func _on_settle_complete() -> void:
 			rigid_body.get_viewport().add_child(dust)
 
 		# Emit token_landed signal via parent BoardToken (local drops only)
-		var board_token = get_parent() as BoardToken
 		if board_token:
 			board_token.token_landed.emit(_last_drop_height)
 
@@ -596,16 +601,15 @@ func _update_network_interpolation(delta: float) -> void:
 	# Store previous position for velocity calculation
 	var prev_position = rigid_body.global_position
 
-	# Interpolate position, rotation, and scale
+	# Interpolate position, rotation, and scale (exponential smoothing for frame-rate independence)
+	var smooth_factor := 1.0 - exp(-NETWORK_INTERPOLATION_SPEED * delta)
 	rigid_body.global_position = rigid_body.global_position.lerp(
-		_network_target_position, NETWORK_INTERPOLATION_SPEED * delta
+		_network_target_position, smooth_factor
 	)
 	rigid_body.global_rotation = rigid_body.global_rotation.lerp(
-		_network_target_rotation, NETWORK_INTERPOLATION_SPEED * delta
+		_network_target_rotation, smooth_factor
 	)
-	rigid_body.scale = rigid_body.scale.lerp(
-		_network_target_scale, NETWORK_INTERPOLATION_SPEED * delta
-	)
+	rigid_body.scale = rigid_body.scale.lerp(_network_target_scale, smooth_factor)
 
 	# Update drop indicator (same as local dragging)
 	_update_drop_indicator()

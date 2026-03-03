@@ -524,9 +524,17 @@ static func _on_asset_available(
 ## loaded asynchronously so there is no main-thread stall.
 static func apply_model_upgrade(token: BoardToken, model: Node3D) -> void:
 	if not is_instance_valid(token) or not token.rigid_body:
-		if model:
+		if model and model is Node:
 			model.queue_free()
 		return
+
+	# Guard against double-upgrade: tree_entered callback and asset_available signal
+	# can race, potentially calling this method twice for the same token.
+	if not token.has_meta("is_placeholder") or not token.get_meta("is_placeholder"):
+		if model and model is Node:
+			model.queue_free()
+		return
+	token.set_meta("is_placeholder", false)  # Clear immediately to prevent re-entry
 
 	print("BoardTokenFactory: Upgrading placeholder token: " + token.token_name)
 
@@ -608,8 +616,11 @@ static func apply_model_upgrade(token: BoardToken, model: Node3D) -> void:
 	if token._selection_glow and collision_shape:
 		token._selection_glow.update_size_from_collision(collision_shape)
 
-	# Update metadata
-	token.set_meta("is_placeholder", false)
+	# Re-collect visual children so lean effects and scale punch target the real model
+	if token._dragging_object:
+		token._dragging_object.collect_visual_children()
+
+	# Update display name (is_placeholder was already cleared at the top of this method)
 	token.name = token.token_name
 
 	# Sparkle burst effect to signal "model is ready"
