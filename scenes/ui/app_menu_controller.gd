@@ -48,7 +48,7 @@ func _update_level_editor_button_visibility() -> void:
 		if _force_hide_button:
 			_level_editor_button.visible = false
 			return
-		_level_editor_button.visible = NetworkManager.is_gm() or not NetworkManager.is_networked()
+		_level_editor_button.visible = NetworkManager.has_gm_access()
 
 
 ## Show the Level Editor button (for title screen / non-gameplay states).
@@ -74,7 +74,7 @@ func _on_level_editor_button_pressed() -> void:
 ## Called from the button press or externally (e.g. from the edit drawer via Root).
 func open_level_editor() -> void:
 	# Only GM can access the level editor
-	if not NetworkManager.is_gm() and NetworkManager.is_networked():
+	if NetworkManager.is_restricted_client():
 		push_warning("AppMenuController: Level editor is only available to the GM")
 		return
 

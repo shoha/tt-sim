@@ -615,7 +615,7 @@ func _on_context_menu_control_requested(token: BoardToken) -> void:
 
 func _on_context_menu_control_revoked(token: BoardToken) -> void:
 	# DM revokes CONTROL permission for all players on this token
-	if (NetworkManager.is_host() or not NetworkManager.is_networked()) and is_instance_valid(token):
+	if GameState.has_authority() and is_instance_valid(token):
 		var controlling_peers = GameState.get_peers_with_permission(
 			token.network_id, TokenPermissions.Permission.CONTROL
 		)

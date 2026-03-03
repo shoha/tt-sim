@@ -59,7 +59,7 @@ signal focus_requested(position: Vector3)  # Double-click to center camera on to
 ## Players have authority if they've been granted CONTROL permission for this token.
 ## @return: true if input should be processed, false to ignore
 func _has_input_authority() -> bool:
-	if NetworkManager.is_host() or not NetworkManager.is_networked():
+	if GameState.has_authority():
 		return true
 	# Guard against missing multiplayer peer (can happen during reconnection / disconnect)
 	if not multiplayer.multiplayer_peer:

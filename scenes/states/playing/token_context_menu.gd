@@ -51,7 +51,7 @@ func _update_menu_content() -> void:
 	if not target_token or not is_instance_valid(target_token):
 		return
 
-	var is_gm = NetworkManager.is_gm() or not NetworkManager.is_networked()
+	var is_gm = NetworkManager.has_gm_access()
 	var is_networked = NetworkManager.is_networked()
 	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
 
@@ -63,7 +63,7 @@ func _update_menu_content() -> void:
 		else:
 			visibility_button.text = "Show Token"
 		# Only DM can toggle visibility
-		visibility_button.visible = is_gm or not is_networked
+		visibility_button.visible = is_gm
 
 	# Update health label
 	var health_label = get_node_or_null("MenuPanel/VBoxContainer/HealthLabel")
@@ -75,7 +75,7 @@ func _update_menu_content() -> void:
 	var damage_container = get_node_or_null("MenuPanel/VBoxContainer/CustomDamageContainer")
 	var separator2 = get_node_or_null("MenuPanel/VBoxContainer/HSeparator2")
 	var separator4 = get_node_or_null("MenuPanel/VBoxContainer/HSeparator4")
-	var show_gm_actions = is_gm or not is_networked
+	var show_gm_actions = is_gm
 	if damage_label:
 		damage_label.visible = show_gm_actions
 	if damage_container:
@@ -88,7 +88,7 @@ func _update_menu_content() -> void:
 	# Reset Transform button — visible for anyone with input authority
 	var reset_transform_button = get_node_or_null("MenuPanel/VBoxContainer/ResetTransformButton")
 	if reset_transform_button:
-		var has_authority := is_gm or not is_networked
+		var has_authority := is_gm
 		if not has_authority and is_networked and multiplayer.multiplayer_peer:
 			has_authority = (
 				GameState
