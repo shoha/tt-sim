@@ -48,8 +48,8 @@ var _token_permissions: Dictionary = {}
 ## Active drag locks: network_id -> peer_id. Ephemeral -- not serialized.
 var _drag_locks: Dictionary = {}
 
-## Flag indicating if we're currently in a batch update (suppresses individual signals)
-var _batch_updating: bool = false
+## Depth counter for nested batch updates (suppresses individual signals while > 0)
+var _batch_depth: int = 0
 
 ## Pending changes during batch update
 var _pending_changes: Array[Dictionary] = []
@@ -64,11 +64,6 @@ var _pending_changes: Array[Dictionary] = []
 ## In networked games, returns true only for the host.
 func has_authority() -> bool:
 	return NetworkManager.is_host() or not NetworkManager.is_networked()
-
-
-## Check if we're in a networked game
-func is_networked() -> bool:
-	return NetworkManager.is_networked()
 
 
 # =============================================================================
@@ -104,16 +99,6 @@ func remove_token_state(network_id: String) -> void:
 ## Get all token states
 func get_all_token_states() -> Dictionary:
 	return _token_states.duplicate()
-
-
-## Get token states filtered for a specific client (respects visibility)
-func get_visible_token_states(client_id: String, is_gm: bool = false) -> Dictionary:
-	var result: Dictionary = {}
-	for network_id in _token_states:
-		var state: TokenState = _token_states[network_id]
-		if state.should_sync_to_client(client_id, is_gm):
-			result[network_id] = state
-	return result
 
 
 ## Check if a token exists
@@ -185,7 +170,7 @@ func update_token_property(network_id: String, property: String, value: Variant)
 
 	state.set(property, value)
 
-	if _batch_updating:
+	if _batch_depth > 0:
 		_pending_changes.append(
 			{
 				"network_id": network_id,
@@ -392,15 +377,18 @@ func clear_all_drag_locks() -> void:
 
 ## Begin a batch update (suppresses individual signals until end_batch_update)
 func begin_batch_update() -> void:
-	_batch_updating = true
-	_pending_changes.clear()
+	_batch_depth += 1
+	if _batch_depth == 1:
+		_pending_changes.clear()
 
 
 ## End a batch update and emit accumulated signals
 func end_batch_update() -> void:
-	_batch_updating = false
+	_batch_depth -= 1
+	if _batch_depth > 0:
+		return
+	_batch_depth = 0  # Guard against unbalanced calls
 
-	# Emit all pending changes
 	for change in _pending_changes:
 		token_state_changed.emit(
 			change["network_id"], change["property"], change["old_value"], change["new_value"]
