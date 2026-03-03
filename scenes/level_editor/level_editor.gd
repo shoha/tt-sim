@@ -82,6 +82,7 @@ var _filtered_pokemon: Array = []
 var _selected_level_path_for_delete: String = ""
 var _is_updating_ui: bool = false  # Flag to prevent feedback loops when setting UI values
 var _pending_map_source_path: String = ""  # Source map path to be bundled on save (for new/edited levels)
+var _metadata_debounce_timer: Timer
 
 
 func _ready() -> void:
@@ -93,6 +94,12 @@ func _ready() -> void:
 	trans_in_type = Tween.TRANS_CUBIC
 	trans_out_type = Tween.TRANS_CUBIC
 	super._ready()
+
+	_metadata_debounce_timer = Timer.new()
+	_metadata_debounce_timer.wait_time = 0.5
+	_metadata_debounce_timer.one_shot = true
+	_metadata_debounce_timer.timeout.connect(_on_metadata_debounce_timeout)
+	add_child(_metadata_debounce_timer)
 
 	_connect_signals()
 	_setup_file_dialogs()
@@ -504,25 +511,29 @@ func _on_level_metadata_changed(_new_text = null) -> void:
 	# Don't update level data if we're programmatically setting UI values
 	if _is_updating_ui or not current_level:
 		return
-	_history.save_undo_snapshot()
 	current_level.level_name = level_name_edit.text
 	current_level.level_description = level_description_edit.text
 	current_level.author = author_edit.text
+	_metadata_debounce_timer.start()
 
 
 func _on_map_transform_changed(_value: float = 0.0) -> void:
 	# Don't update level data if we're programmatically setting UI values
 	if _is_updating_ui or not current_level:
 		return
-	_history.save_undo_snapshot()
 	current_level.map_offset = Vector3(
 		map_offset_x_spin.value, map_offset_y_spin.value, map_offset_z_spin.value
 	)
 	current_level.map_scale = Vector3.ONE * map_scale_slider_spin.value
+	_metadata_debounce_timer.start()
 
 
 func _on_map_scale_changed(value: float) -> void:
 	_on_map_transform_changed(value)
+
+
+func _on_metadata_debounce_timeout() -> void:
+	_history.save_undo_snapshot()
 
 
 func _on_save_pressed() -> void:

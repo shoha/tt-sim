@@ -23,6 +23,7 @@ var _confirm_callback: Callable
 var _cancel_callback: Callable
 var _confirm_sound_override: Callable
 var _confirmed: bool = false
+var _closing: bool = false
 
 
 func _on_panel_ready() -> void:
@@ -86,6 +87,9 @@ func _on_after_animate_out() -> void:
 
 
 func _on_confirm_pressed() -> void:
+	if _closing:
+		return
+	_closing = true
 	if _confirm_sound_override.is_valid():
 		_confirm_sound_override.call()
 		# Suppress the base class close sound so only the override is heard
@@ -99,6 +103,9 @@ func _on_confirm_pressed() -> void:
 
 
 func _on_cancel_pressed() -> void:
+	if _closing:
+		return
+	_closing = true
 	AudioManager.play_cancel()
 	_confirmed = false
 	if _cancel_callback.is_valid():
@@ -107,6 +114,8 @@ func _on_cancel_pressed() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _closing:
+		return
 	if event.is_action_pressed("ui_cancel"):
 		_on_cancel_pressed()
 		get_viewport().set_input_as_handled()
