@@ -767,8 +767,8 @@ func _queue_pack_downloads(
 	WorkerThreadPool.wait_for_task_completion(task_id)
 
 	# -- Phase 3: initialize progress, queue only missing files --
-	var needs_download: Array[Dictionary] = []
-	needs_download.assign(thread_result["needs_download"])
+	var pending_downloads: Array[Dictionary] = []
+	pending_downloads.assign(thread_result["needs_download"])
 	var present_counts: Dictionary = thread_result["present_counts"]
 
 	# A variant is fully present when all its expected files exist on disk
@@ -779,7 +779,7 @@ func _queue_pack_downloads(
 
 	# Build per-variant remaining counts for only the items we will download
 	var variant_remaining: Dictionary = {}
-	for item: Dictionary in needs_download:
+	for item: Dictionary in pending_downloads:
 		var vk: String = item["variant_key"]
 		variant_remaining[vk] = variant_remaining.get(vk, 0) + 1
 
@@ -832,13 +832,13 @@ func _queue_pack_downloads(
 	# per-variant download_progress signals fire (used for suppression).
 	pack_download_progress.emit(pack.pack_id, already_done_variants, total_variants)
 
-	downloader.request_downloads_bulk(needs_download)
+	downloader.request_downloads_bulk(pending_downloads)
 
 	print(
 		(
 			"AssetManager: Queued %d files (%d variants to download, %d already present) for pack '%s'"
 			% [
-				needs_download.size(),
+				pending_downloads.size(),
 				variant_remaining.size(),
 				already_done_variants,
 				pack.display_name
