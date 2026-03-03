@@ -160,6 +160,18 @@ func is_networked() -> bool:
 	)
 
 
+## Check if the local player has GM-level access (is GM or not in a networked game).
+## Useful for gating actions that should be available to the GM or in solo play.
+func has_gm_access() -> bool:
+	return is_gm() or not is_networked()
+
+
+## Check if the local player is a non-GM in a networked game.
+## Convenience inverse of has_gm_access() for guard clauses.
+func is_restricted_client() -> bool:
+	return not is_gm() and is_networked()
+
+
 ## Get all connected players
 func get_players() -> Dictionary:
 	return _players.duplicate()
@@ -849,11 +861,9 @@ func _rpc_receive_game_state(state_dict: Dictionary) -> void:
 func _rpc_receive_token_transform(
 	network_id: String, pos_arr: Array, rot_arr: Array, scale_arr: Array
 ) -> void:
-	if pos_arr.size() != 3 or rot_arr.size() != 3 or scale_arr.size() != 3:
-		return
-	var pos = Vector3(pos_arr[0], pos_arr[1], pos_arr[2])
-	var rot = Vector3(rot_arr[0], rot_arr[1], rot_arr[2])
-	var scl = Vector3(scale_arr[0], scale_arr[1], scale_arr[2])
+	var pos := SerializationUtils.array_to_vec3(pos_arr)
+	var rot := SerializationUtils.array_to_vec3(rot_arr)
+	var scl := SerializationUtils.array_to_vec3(scale_arr, Vector3.ONE)
 	token_transform_received.emit(network_id, pos, rot, scl)
 
 
@@ -889,12 +899,10 @@ func _rpc_client_token_transform(
 ) -> void:
 	if not is_host():
 		return
-	if pos_arr.size() != 3 or rot_arr.size() != 3 or scale_arr.size() != 3:
-		return
 	var sender_id = multiplayer.get_remote_sender_id()
-	var pos = Vector3(pos_arr[0], pos_arr[1], pos_arr[2])
-	var rot = Vector3(rot_arr[0], rot_arr[1], rot_arr[2])
-	var scl = Vector3(scale_arr[0], scale_arr[1], scale_arr[2])
+	var pos := SerializationUtils.array_to_vec3(pos_arr)
+	var rot := SerializationUtils.array_to_vec3(rot_arr)
+	var scl := SerializationUtils.array_to_vec3(scale_arr, Vector3.ONE)
 	client_token_transform_received.emit(sender_id, network_id, pos, rot, scl)
 
 

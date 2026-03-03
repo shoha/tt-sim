@@ -22,6 +22,15 @@ static func dict_to_vec3(d: Dictionary, default: Vector3 = Vector3.ZERO) -> Vect
 	)
 
 
+## Convert an Array of at least 3 elements to a Vector3.
+## Returns [param default] when the array is too short.
+## Values are explicitly cast to float for robustness against integer data.
+static func array_to_vec3(arr: Array, default: Vector3 = Vector3.ZERO) -> Vector3:
+	if arr.size() < 3:
+		return default
+	return Vector3(float(arr[0]), float(arr[1]), float(arr[2]))
+
+
 ## Convert a Color to a JSON-friendly dictionary.
 static func color_to_dict(c: Color) -> Dictionary:
 	return {"r": c.r, "g": c.g, "b": c.b, "a": c.a}
