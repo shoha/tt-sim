@@ -40,6 +40,7 @@ var _last_slider_tick_time: float = 0.0
 @onready var fade_distance_label: Label = %FadeDistanceLabel
 
 # Controls display
+@onready var input_device_option: OptionButton = %InputDeviceOption
 @onready var controls_list: VBoxContainer = %ControlsList
 
 # Network controls
@@ -128,6 +129,10 @@ func _on_panel_ready() -> void:
 	line_thickness_slider.value_changed.connect(_on_line_thickness_changed)
 	fade_distance_slider.value_changed.connect(_on_fade_distance_changed)
 
+	# Controls
+	input_device_option.item_selected.connect(_on_input_device_selected)
+	InputProfile.profile_changed.connect(_on_input_profile_changed)
+
 	# Network
 	p2p_enabled_check.toggled.connect(_on_p2p_toggled)
 	clear_cache_button.pressed.connect(_on_clear_cache_pressed)
@@ -153,6 +158,8 @@ func _on_panel_ready() -> void:
 
 
 func _on_before_animate_out() -> void:
+	if InputProfile.profile_changed.is_connected(_on_input_profile_changed):
+		InputProfile.profile_changed.disconnect(_on_input_profile_changed)
 	UIManager.unregister_overlay($ColorRect as Control)
 
 
@@ -166,25 +173,31 @@ func _populate_controls_list() -> void:
 	for child in controls_list.get_children():
 		child.queue_free()
 
-	# Add control hints
-	var controls = [
+	# Add control hints (profile-aware labels)
+	var controls: Array[Array] = [
 		["Left Click + Drag", "Move token"],
 		["Right Click", "Open context menu"],
-		["Scroll Wheel", "Zoom camera"],
-		["Middle Click + Drag", "Pan camera"],
-		["ESC", "Pause / Close menu"],
+		[InputProfile.label(&"zoom"), "Zoom camera"],
+		[InputProfile.label(&"pan"), "Pan camera"],
+		[InputProfile.label(&"rotate"), "Rotate token"],
+		[InputProfile.label(&"scale"), "Scale token"],
+		[InputProfile.label(&"reset_camera"), "Reset camera"],
+		[InputProfile.label(&"wasd"), "Move camera"],
+		[InputProfile.label(&"measure"), "Measure tool"],
+		[InputProfile.label(&"grid"), "Toggle grid"],
+		[InputProfile.label(&"pause"), "Pause / Close menu"],
 	]
 
 	for control in controls:
-		var hbox = HBoxContainer.new()
+		var hbox := HBoxContainer.new()
 
-		var key_label = Label.new()
+		var key_label := Label.new()
 		key_label.text = control[0]
 		key_label.theme_type_variation = "Body"
 		key_label.custom_minimum_size = Vector2(180, 0)
 		hbox.add_child(key_label)
 
-		var action_label = Label.new()
+		var action_label := Label.new()
 		action_label.text = control[1]
 		action_label.theme_type_variation = "Caption"
 		hbox.add_child(action_label)
@@ -214,6 +227,9 @@ func _load_settings() -> void:
 		)
 		line_thickness_slider.value = config.get_value("grid_visuals", "line_thickness", 2.0)
 		fade_distance_slider.value = config.get_value("grid_visuals", "fade_radius", 30.0)
+
+	# Input device profile (reads from InputProfile autoload, not config)
+	input_device_option.selected = InputProfile.get_selected_profile() as int
 
 	# Update labels
 	_update_volume_label(master_label, master_slider.value)
@@ -410,6 +426,16 @@ func _on_reset_pressed() -> void:
 	occlusion_fade_check.button_pressed = true
 	p2p_enabled_check.button_pressed = true
 	prereleases_check.button_pressed = false
+	input_device_option.selected = InputProfile.Profile.AUTO
+	InputProfile.set_profile(InputProfile.Profile.AUTO)
+
+
+func _on_input_device_selected(index: int) -> void:
+	InputProfile.set_profile(index as InputProfile.Profile)
+
+
+func _on_input_profile_changed(_new_profile: InputProfile.Profile) -> void:
+	_populate_controls_list()
 
 
 func _on_p2p_toggled(_pressed: bool) -> void:
@@ -499,6 +525,7 @@ func _apply_tooltips() -> void:
 	cell_tint_opacity_slider.tooltip_text = "Opacity of the cell fill shading on the grid"
 	line_thickness_slider.tooltip_text = "Thickness of the grid lines"
 	fade_distance_slider.tooltip_text = "How far the grid extends from the camera center"
+	input_device_option.tooltip_text = "Choose which key labels to show in hints (Auto detects your device)"
 	p2p_enabled_check.tooltip_text = "Allow peer-to-peer asset sharing with other players"
 	clear_cache_button.tooltip_text = "Delete downloaded asset files to free disk space"
 	prereleases_check.tooltip_text = "Include pre-release versions when checking for updates"

@@ -68,6 +68,12 @@ layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Toggle Visibility"
 
+[node name="ResetTransformButton" type="Button" parent="MenuPanel/VBoxContainer"]
+script = ExtResource("animated_btn")
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Reset Transform"
+
 [node name="HSeparator5" type="HSeparator" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
 
@@ -95,6 +101,7 @@ text = "Close"
 [connection signal="text_submitted" from="MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentInput" to="." method="_on_hp_adjustment_requested"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentButton" to="." method="_on_hp_adjustment_requested"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/ToggleVisibilityButton" to="." method="_on_toggle_visibility_pressed"]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/ResetTransformButton" to="." method="_on_reset_transform_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/RequestControlButton" to="." method="_on_request_control_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/RevokeControlButton" to="." method="_on_revoke_control_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/CloseButton" to="." method="_on_close_button_pressed"]

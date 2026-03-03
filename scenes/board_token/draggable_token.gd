@@ -106,6 +106,9 @@ func _on_object_body_3d_input_event(
 ) -> void:
 	if not dragging_allowed:
 		return
+	# Suppress drag when R is held — R+LMB is used for rotate/scale
+	if Input.is_key_pressed(KEY_R):
+		return
 	super(camera, event, event_position, normal, shape_idx)
 
 
@@ -163,9 +166,9 @@ func is_being_dragged() -> bool:
 func _exit_tree() -> void:
 	# Clean up input hints if the token is freed mid-drag (e.g. level clear)
 	if _is_currently_dragging or _is_settling:
-		UIManager.remove_hint("RMB")
-		UIManager.remove_hint("Scroll")
-		UIManager.add_hint("M", "Measure")
+		UIManager.remove_hint(InputProfile.label(&"cancel_drag"))
+		UIManager.remove_hint(InputProfile.label(&"drag_height"))
+		UIManager.add_hint(InputProfile.label(&"measure"), "Measure")
 
 
 func _on_dragging_started() -> void:
@@ -213,10 +216,10 @@ func _on_dragging_started() -> void:
 	AudioManager.play_token_pickup()
 
 	# Contextual input hints for dragging
-	UIManager.remove_hint("M")
-	UIManager.remove_hint("G")
-	UIManager.add_hint("RMB", "Cancel")
-	UIManager.add_hint("Scroll", "Height")
+	UIManager.remove_hint(InputProfile.label(&"measure"))
+	UIManager.remove_hint(InputProfile.label(&"grid"))
+	UIManager.add_hint(InputProfile.label(&"cancel_drag"), "Cancel")
+	UIManager.add_hint(InputProfile.label(&"drag_height"), "Height")
 
 	# Claim drag lock so other clients cannot start dragging this token
 	var board_token := get_parent() as BoardToken
@@ -230,11 +233,11 @@ func _on_dragging_stopped() -> void:
 		set_process(false)
 
 	# Remove drag-specific input hints and restore defaults
-	UIManager.remove_hint("RMB")
-	UIManager.remove_hint("Scroll")
-	UIManager.remove_hint("Shift")
-	UIManager.add_hint("M", "Measure")
-	UIManager.add_hint("G", "Grid")
+	UIManager.remove_hint(InputProfile.label(&"cancel_drag"))
+	UIManager.remove_hint(InputProfile.label(&"drag_height"))
+	UIManager.remove_hint(InputProfile.label(&"free_move"))
+	UIManager.add_hint(InputProfile.label(&"measure"), "Measure")
+	UIManager.add_hint(InputProfile.label(&"grid"), "Grid")
 
 	# Reset lean
 	_reset_lean()
@@ -269,11 +272,11 @@ func _on_dragging_cancelled() -> void:
 		set_process(false)
 
 	# Remove drag-specific input hints and restore defaults
-	UIManager.remove_hint("RMB")
-	UIManager.remove_hint("Scroll")
-	UIManager.remove_hint("Shift")
-	UIManager.add_hint("M", "Measure")
-	UIManager.add_hint("G", "Grid")
+	UIManager.remove_hint(InputProfile.label(&"cancel_drag"))
+	UIManager.remove_hint(InputProfile.label(&"drag_height"))
+	UIManager.remove_hint(InputProfile.label(&"free_move"))
+	UIManager.add_hint(InputProfile.label(&"measure"), "Measure")
+	UIManager.add_hint(InputProfile.label(&"grid"), "Grid")
 
 	# Reset lean
 	_reset_lean()

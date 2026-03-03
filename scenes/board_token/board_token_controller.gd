@@ -45,6 +45,10 @@ var _rotation_tween: Tween = null
 # Smooth scaling state
 var _target_scale: Vector3 = Vector3.ONE
 
+# R+LMB alternative rotate/scale state
+var _r_key_rotating: bool = false
+var _r_key_scaling: bool = false
+
 signal context_menu_requested(token: BoardToken, position: Vector2)
 signal focus_requested(position: Vector3)  # Double-click to center camera on token
 
@@ -163,10 +167,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		and event.is_action_pressed("rotate_model")
 		and _mouse_over
 	):
+		InputProfile.notify_middle_click()
 		_reset_rotation_and_scale()
 		return
 
+	# --- MMB rotate/scale (original binding) ---
 	if event.is_action_pressed("rotate_model") and _mouse_over:
+		InputProfile.notify_middle_click()
 		# Check if shift is held to determine scaling vs rotation
 		if Input.is_key_pressed(KEY_SHIFT):
 			_scaling = true
@@ -178,25 +185,40 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event.is_action_released("rotate_model"):
-		var was_rotating = _rotating
-		var was_scaling = _scaling
-		_rotating = false
-		_scaling = false
-		_rotation_accumulator = 0.0
-		if not _rotating and not _scaling:
-			set_process(false)
+		if _rotating or _scaling:
+			_finalize_rotate_scale()
+			return
 
-		# Snap to target scale on release to finalize
-		if was_scaling:
-			_adjust_position_for_scale(rigid_body.scale, _target_scale)
-			rigid_body.scale = _target_scale
-			if draggable_token:
-				draggable_token.update_height_offset()
+	# --- R+LMB rotate/scale (alternative binding) ---
+	if (
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_LEFT
+		and event.pressed
+		and _mouse_over
+		and Input.is_key_pressed(KEY_R)
+	):
+		if Input.is_key_pressed(KEY_SHIFT):
+			_r_key_scaling = true
+			_scaling = true
+			_target_scale = rigid_body.scale
+		else:
+			_r_key_rotating = true
+			_rotating = true
+			_rotation_accumulator = 0.0
+		set_process(true)
+		get_viewport().set_input_as_handled()
+		return
 
-		# Emit signal for network sync when rotation/scale changes complete
-		var board_token = get_parent() as BoardToken
-		if board_token and (was_rotating or was_scaling):
-			board_token.transform_changed.emit()
+	if (
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_LEFT
+		and not event.pressed
+		and (_r_key_rotating or _r_key_scaling)
+	):
+		_r_key_rotating = false
+		_r_key_scaling = false
+		_finalize_rotate_scale()
+		get_viewport().set_input_as_handled()
 		return
 
 	if _rotating and event is InputEventMouseMotion:
@@ -204,6 +226,28 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if _scaling and event is InputEventMouseMotion:
 		_handle_scaling(event)
+
+
+## Shared finalize logic for ending a rotate/scale gesture (MMB or R+LMB).
+func _finalize_rotate_scale() -> void:
+	var was_rotating := _rotating
+	var was_scaling := _scaling
+	_rotating = false
+	_scaling = false
+	_rotation_accumulator = 0.0
+	set_process(false)
+
+	# Snap to target scale on release to finalize
+	if was_scaling:
+		_adjust_position_for_scale(rigid_body.scale, _target_scale)
+		rigid_body.scale = _target_scale
+		if draggable_token:
+			draggable_token.update_height_offset()
+
+	# Emit signal for network sync when rotation/scale changes complete
+	var board_token := get_parent() as BoardToken
+	if board_token and (was_rotating or was_scaling):
+		board_token.transform_changed.emit()
 
 
 ## Handle rotation input with 45-degree snapping.

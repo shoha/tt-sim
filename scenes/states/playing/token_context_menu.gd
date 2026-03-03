@@ -6,6 +6,7 @@ class_name TokenContextMenu
 
 signal hp_adjustment_requested(amount: int)
 signal visibility_toggled
+signal reset_transform_requested
 signal control_requested(token: BoardToken)
 signal control_revoked(token: BoardToken)
 signal menu_closed
@@ -83,6 +84,21 @@ func _update_menu_content() -> void:
 		separator2.visible = show_gm_actions
 	if separator4:
 		separator4.visible = show_gm_actions
+
+	# Reset Transform button — visible for anyone with input authority
+	var reset_transform_button = get_node_or_null("MenuPanel/VBoxContainer/ResetTransformButton")
+	if reset_transform_button:
+		var has_authority := is_gm or not is_networked
+		if not has_authority and is_networked and multiplayer.multiplayer_peer:
+			has_authority = (
+				GameState
+				. has_token_permission(
+					target_token.network_id,
+					my_peer_id,
+					TokenPermissions.Permission.CONTROL,
+				)
+			)
+		reset_transform_button.visible = has_authority
 
 	# Permission buttons
 	_update_permission_buttons(is_gm, is_networked, my_peer_id)
@@ -215,6 +231,13 @@ func _flash_health_label(is_heal: bool) -> void:
 	var tw = create_tween()
 	tw.tween_interval(0.4)
 	tw.tween_callback(func(): health_label.remove_theme_color_override("font_color"))
+
+
+func _on_reset_transform_pressed() -> void:
+	if target_token and is_instance_valid(target_token):
+		reset_transform_requested.emit()
+		AudioManager.play_tick()
+		close_menu()
 
 
 func _on_request_control_pressed() -> void:
