@@ -53,7 +53,6 @@ func _ready() -> void:
 	_load_settings()
 
 	# Connect to multiplayer signals
-	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
 
@@ -423,10 +422,6 @@ func _finalize_download(key: String) -> void:
 
 
 ## Clean up when a peer disconnects
-func _on_peer_connected(_peer_id: int) -> void:
-	pass
-
-
 func _on_peer_disconnected(peer_id: int) -> void:
 	# Host: Clean up any transfers to this peer
 	_host_transfers.erase(peer_id)
