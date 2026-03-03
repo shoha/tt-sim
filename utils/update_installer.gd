@@ -305,6 +305,8 @@ static func get_http_error(result: int) -> String:
 			return "No response from server"
 		HTTPRequest.RESULT_BODY_SIZE_LIMIT_EXCEEDED:
 			return "Response too large"
+		HTTPRequest.RESULT_BODY_DECOMPRESS_FAILED:
+			return "Failed to decompress response"
 		HTTPRequest.RESULT_REQUEST_FAILED:
 			return "Request failed"
 		HTTPRequest.RESULT_DOWNLOAD_FILE_CANT_OPEN:

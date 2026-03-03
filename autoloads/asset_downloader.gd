@@ -402,33 +402,7 @@ func _handle_download_error(request: DownloadRequest, error_msg: String) -> void
 
 ## Get human-readable error message for HTTP result
 func _get_http_result_error(result: int) -> String:
-	match result:
-		HTTPRequest.RESULT_CANT_CONNECT:
-			return "Cannot connect to host"
-		HTTPRequest.RESULT_CANT_RESOLVE:
-			return "Cannot resolve hostname"
-		HTTPRequest.RESULT_CONNECTION_ERROR:
-			return "Connection error"
-		HTTPRequest.RESULT_TLS_HANDSHAKE_ERROR:
-			return "TLS handshake error"
-		HTTPRequest.RESULT_NO_RESPONSE:
-			return "No response from server"
-		HTTPRequest.RESULT_BODY_SIZE_LIMIT_EXCEEDED:
-			return "Response body too large"
-		HTTPRequest.RESULT_BODY_DECOMPRESS_FAILED:
-			return "Failed to decompress response"
-		HTTPRequest.RESULT_REQUEST_FAILED:
-			return "Request failed"
-		HTTPRequest.RESULT_DOWNLOAD_FILE_CANT_OPEN:
-			return "Cannot open download file"
-		HTTPRequest.RESULT_DOWNLOAD_FILE_WRITE_ERROR:
-			return "Error writing download file"
-		HTTPRequest.RESULT_REDIRECT_LIMIT_REACHED:
-			return "Too many redirects"
-		HTTPRequest.RESULT_TIMEOUT:
-			return "Request timed out"
-		_:
-			return "Unknown error: " + str(result)
+	return UpdateInstaller.get_http_error(result)
 
 
 ## Deferred emit for completed downloads (for cached assets)
