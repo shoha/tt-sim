@@ -758,40 +758,40 @@ func _push_measure_hints() -> void:
 
 
 func _update_hints() -> void:
-	# Clear all measure-tool-owned hint keys
-	UIManager.remove_hint("M")
-	UIManager.remove_hint("G")
-	UIManager.remove_hint("LMB")
-	UIManager.remove_hint("Ctrl+LMB")
-	UIManager.remove_hint("RMB")
-	UIManager.remove_hint("Tab")
+	# Clear all measure-tool-owned hint keys using current profile labels
+	UIManager.remove_hint(InputProfile.label(&"done"))
+	UIManager.remove_hint(InputProfile.label(&"grid"))
+	UIManager.remove_hint(InputProfile.label(&"place_point"))
+	UIManager.remove_hint(InputProfile.label(&"snap_token"))
+	UIManager.remove_hint(InputProfile.label(&"undo_cancel"))
+	UIManager.remove_hint(InputProfile.label(&"cycle_mode"))
 
 	if _mode == Mode.LINE:
-		UIManager.add_hint("LMB", "Place Point")
-		UIManager.add_hint("Ctrl+LMB", "Snap Token")
-		UIManager.add_hint("RMB", "Undo / Cancel")
-		UIManager.add_hint("Tab", "Sphere")
-		UIManager.add_hint("M", "Done")
+		UIManager.add_hint(InputProfile.label(&"place_point"), "Place Point")
+		UIManager.add_hint(InputProfile.label(&"snap_token"), "Snap Token")
+		UIManager.add_hint(InputProfile.label(&"undo_cancel"), "Undo / Cancel")
+		UIManager.add_hint(InputProfile.label(&"cycle_mode"), "Sphere")
+		UIManager.add_hint(InputProfile.label(&"done"), "Done")
 	else:
 		var next_label := "Cylinder" if _mode == Mode.SPHERE else "Line"
 		var action_label := (
 			"Place Center" if _state == State.PLACING_VOLUME_CENTER else "Lock Radius"
 		)
 		var cancel_label := "Clear/Cancel" if _state == State.PLACING_VOLUME_CENTER else "Cancel"
-		UIManager.add_hint("LMB", action_label)
-		UIManager.add_hint("RMB", cancel_label)
-		UIManager.add_hint("Tab", next_label)
-		UIManager.add_hint("M", "Done")
+		UIManager.add_hint(InputProfile.label(&"place_point"), action_label)
+		UIManager.add_hint(InputProfile.label(&"undo_cancel"), cancel_label)
+		UIManager.add_hint(InputProfile.label(&"cycle_mode"), next_label)
+		UIManager.add_hint(InputProfile.label(&"done"), "Done")
 
 
 func _pop_measure_hints() -> void:
-	UIManager.remove_hint("LMB")
-	UIManager.remove_hint("Ctrl+LMB")
-	UIManager.remove_hint("RMB")
-	UIManager.remove_hint("Tab")
-	UIManager.remove_hint("M")
-	UIManager.add_hint("M", "Measure")
-	UIManager.add_hint("G", "Grid")
+	UIManager.remove_hint(InputProfile.label(&"place_point"))
+	UIManager.remove_hint(InputProfile.label(&"snap_token"))
+	UIManager.remove_hint(InputProfile.label(&"undo_cancel"))
+	UIManager.remove_hint(InputProfile.label(&"cycle_mode"))
+	UIManager.remove_hint(InputProfile.label(&"done"))
+	UIManager.add_hint(InputProfile.label(&"measure"), "Measure")
+	UIManager.add_hint(InputProfile.label(&"grid"), "Grid")
 
 
 func _cycle_mode() -> void:

@@ -347,11 +347,25 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="ControlsInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Margin/Content"]
+[node name="InputDevice" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Margin/Content"]
 layout_mode = 2
-theme_type_variation = &"Caption"
-text = "Keyboard & Mouse Controls"
-horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Margin/Content/InputDevice"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Input Device"
+
+[node name="InputDeviceOption" type="OptionButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Margin/Content/InputDevice"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 3
+popup/item_0/text = "Auto"
+popup/item_1/text = "Mouse"
+popup/item_1/id = 1
+popup/item_2/text = "Trackpad"
+popup/item_2/id = 2
 
 [node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Controls/Margin/Content"]
 layout_mode = 2

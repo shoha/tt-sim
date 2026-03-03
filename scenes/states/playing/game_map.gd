@@ -75,10 +75,15 @@ var _grid_show_on_drag: bool = true  # From LevelData
 var _drag_highlight_active: bool = false
 var _drag_highlight_start_pos: Vector3 = Vector3.ZERO
 
-# Middle-mouse pan state
+# Pan state (middle-mouse and RMB alternative)
 var _is_panning: bool = false
 var _pan_start_mouse: Vector2 = Vector2.ZERO
 var _last_mouse_position: Vector2 = Vector2.ZERO  # Tracked for zoom-toward-cursor
+var _rmb_pan_active: bool = false  # True when RMB is being used for panning
+var _rmb_press_time: int = 0  # Timestamp (msec) of RMB press for short-click detection
+var _rmb_press_pos: Vector2 = Vector2.ZERO  # Screen position of RMB press
+const RMB_PAN_CLICK_THRESHOLD_MS: int = 150  # Max ms for a short-click (not a drag)
+const RMB_PAN_MOVE_THRESHOLD_PX: float = 5.0  # Min movement to count as drag
 
 # Camera home position (stored on level load for reset)
 var _home_position: Vector3 = Vector3.ZERO
@@ -287,10 +292,12 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
-	# Mouse motion: pan handling
+	# Mouse motion: pan handling (MMB or RMB)
 	if event is InputEventMouseMotion:
 		if _is_panning:
 			_handle_pan_motion(event)
+			if _rmb_pan_active:
+				get_viewport().set_input_as_handled()
 		return
 
 	if event is InputEventPanGesture:
@@ -309,11 +316,13 @@ func _input(event: InputEvent) -> void:
 	# Don't process mouse buttons over UI
 	if _is_mouse_over_gui():
 		_is_panning = false
+		_rmb_pan_active = false
 		return
 
 	# Middle-mouse button: pan camera
 	if event.button_index == MOUSE_BUTTON_MIDDLE:
 		if event.pressed:
+			InputProfile.notify_middle_click()
 			# Don't start panning if the mouse is over a token — let
 			# BoardTokenController handle rotation via _unhandled_input.
 			if not _is_mouse_over_token(event.position):
@@ -322,6 +331,27 @@ func _input(event: InputEvent) -> void:
 		else:
 			_is_panning = false
 		return
+
+	# Right-mouse button: alternative pan (on empty space, not during measure)
+	if event.button_index == MOUSE_BUTTON_RIGHT:
+		if event.pressed:
+			if _rmb_can_start_pan(event.position):
+				_rmb_press_time = Time.get_ticks_msec()
+				_rmb_press_pos = event.position
+				_rmb_pan_active = true
+				_is_panning = true
+				_pan_start_mouse = event.position
+				get_viewport().set_input_as_handled()
+				return
+		else:
+			if _rmb_pan_active:
+				var was_short_click := _rmb_is_short_click(event.position)
+				_rmb_pan_active = false
+				_is_panning = false
+				if not was_short_click:
+					# Consume release so it doesn't trigger context menu
+					get_viewport().set_input_as_handled()
+				return
 
 	# Don't zoom when scrolling over any UI element (e.g. asset browser list)
 	# Don't zoom while dragging - scroll wheel is used for token height adjustment
@@ -509,6 +539,25 @@ func _is_mouse_over_gui() -> bool:
 	return true
 
 
+## Whether RMB can start a pan at this screen position.
+## Requires: not over a token, not over GUI, measure tool not active, not dragging.
+func _rmb_can_start_pan(screen_pos: Vector2) -> bool:
+	if _measure_tool and _measure_tool.is_active():
+		return false
+	if drag_and_drop_node and drag_and_drop_node.is_dragging():
+		return false
+	if _is_mouse_over_token(screen_pos):
+		return false
+	return true
+
+
+## Check if an RMB release qualifies as a short click (not a pan gesture).
+func _rmb_is_short_click(release_pos: Vector2) -> bool:
+	var elapsed := Time.get_ticks_msec() - _rmb_press_time
+	var distance := release_pos.distance_to(_rmb_press_pos)
+	return elapsed < RMB_PAN_CLICK_THRESHOLD_MS and distance < RMB_PAN_MOVE_THRESHOLD_PX
+
+
 func _setup_context_menu() -> void:
 	# Load and add the context menu to the UI layer
 	var context_menu_scene = load("uid://bh84knb3smm3y")
@@ -525,6 +574,7 @@ func _setup_context_menu() -> void:
 		# Connect context menu signals
 		_context_menu.hp_adjustment_requested.connect(_on_context_menu_hp_adjustment_requested)
 		_context_menu.visibility_toggled.connect(_on_context_menu_visibility_toggled)
+		_context_menu.reset_transform_requested.connect(_on_context_menu_reset_transform)
 		_context_menu.control_requested.connect(_on_context_menu_control_requested)
 		_context_menu.control_revoked.connect(_on_context_menu_control_revoked)
 
@@ -545,6 +595,14 @@ func _on_context_menu_hp_adjustment_requested(amount: int) -> void:
 func _on_context_menu_visibility_toggled() -> void:
 	if _context_menu and _context_menu.target_token:
 		_context_menu.target_token.toggle_visibility()
+
+
+func _on_context_menu_reset_transform() -> void:
+	if _context_menu and _context_menu.target_token:
+		var token: BoardToken = _context_menu.target_token
+		var controller := token.get_node_or_null("BoardTokenController") as BoardTokenController
+		if controller:
+			controller._reset_rotation_and_scale()
 
 
 func _on_context_menu_control_requested(token: BoardToken) -> void:
@@ -662,7 +720,7 @@ func _on_drag_started_grid(obj: DraggingObject3D) -> void:
 	_update_grid_visibility()
 	# Show "Shift: Free move" hint when grid snap is active
 	if drag_and_drop_node and drag_and_drop_node.grid_snap_enabled:
-		UIManager.add_hint("Shift", "Free Move")
+		UIManager.add_hint(InputProfile.label(&"free_move"), "Free Move")
 	# Start cell highlighting
 	if obj and obj.objectBody:
 		_drag_highlight_active = true
@@ -673,7 +731,7 @@ func _on_drag_stopped_grid(_obj: DraggingObject3D) -> void:
 	_grid_auto_show_drag = false
 	_drag_highlight_active = false
 	_update_grid_visibility()
-	UIManager.remove_hint("Shift")
+	UIManager.remove_hint(InputProfile.label(&"free_move"))
 	if _grid_overlay:
 		_grid_overlay.clear_drag_highlight()
 

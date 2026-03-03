@@ -53,7 +53,13 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
 		NetworkManager.connection_state_changed.disconnect(_on_connection_state_changed)
+	if InputProfile.profile_changed.is_connected(_on_input_profile_changed):
+		InputProfile.profile_changed.disconnect(_on_input_profile_changed)
 	UIManager.clear_hints()
+
+
+func _on_input_profile_changed(_new_profile: InputProfile.Profile) -> void:
+	_set_default_hints()
 
 
 ## Setup with a reference to the level play controller
@@ -67,6 +73,7 @@ func setup(level_play_controller: LevelPlayController) -> void:
 
 	# Show default gameplay input hints
 	_set_default_hints()
+	InputProfile.profile_changed.connect(_on_input_profile_changed)
 
 	# Update UI state
 	_update_asset_browser_button_state()
@@ -452,12 +459,12 @@ func _set_default_hints() -> void:
 		UIManager
 		. set_hints(
 			[
-				{"key": "ESC", "action": "Pause"},
-				{"key": "WASD", "action": "Pan"},
-				{"key": "Scroll", "action": "Zoom"},
-				{"key": "Home", "action": "Reset Camera"},
-				{"key": "M", "action": "Measure"},
-				{"key": "G", "action": "Grid"},
+				{"key": InputProfile.label(&"pause"), "action": "Pause"},
+				{"key": InputProfile.label(&"wasd"), "action": "Pan"},
+				{"key": InputProfile.label(&"zoom"), "action": "Zoom"},
+				{"key": InputProfile.label(&"reset_camera"), "action": "Reset Camera"},
+				{"key": InputProfile.label(&"measure"), "action": "Measure"},
+				{"key": InputProfile.label(&"grid"), "action": "Grid"},
 			]
 		)
 	)
