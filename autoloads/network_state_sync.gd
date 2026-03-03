@@ -22,27 +22,37 @@ extends Node
 signal full_state_received(state_dict: Dictionary)
 
 ## Rate limiting for transform updates
-const TRANSFORM_SEND_INTERVAL := 0.05 # 20 updates/sec max per token
-var _transform_throttle: Dictionary = {} # network_id -> last_send_time (float)
+const TRANSFORM_SEND_INTERVAL := 0.05  # 20 updates/sec max per token
+var _transform_throttle: Dictionary = {}  # network_id -> last_send_time (float)
 
 ## Pending transform updates (for batching)
-var _pending_transforms: Dictionary = {} # network_id -> {position, rotation, scale}
+var _pending_transforms: Dictionary = {}  # network_id -> {position, rotation, scale}
 var _transform_batch_timer: Timer = null
-const TRANSFORM_BATCH_INTERVAL := 0.033 # ~30fps batch rate
+const TRANSFORM_BATCH_INTERVAL := 0.033  # ~30fps batch rate
 
 
 func _ready() -> void:
 	# Connect to NetworkManager signals for receiving data
 	NetworkManager.game_state_received.connect(_on_game_state_received)
-	
-	# Setup batch timer for transform updates
+	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
+
+	# Setup batch timer for transform updates (starts when hosting)
 	_setup_batch_timer()
+
+
+func _on_connection_state_changed(
+	_old_state: NetworkManager.ConnectionState, new_state: NetworkManager.ConnectionState
+) -> void:
+	if new_state == NetworkManager.ConnectionState.HOSTING:
+		_transform_batch_timer.start()
+	elif new_state == NetworkManager.ConnectionState.OFFLINE:
+		_transform_batch_timer.stop()
 
 
 func _setup_batch_timer() -> void:
 	_transform_batch_timer = Timer.new()
 	_transform_batch_timer.wait_time = TRANSFORM_BATCH_INTERVAL
-	_transform_batch_timer.autostart = true
+	_transform_batch_timer.autostart = false
 	_transform_batch_timer.timeout.connect(_flush_pending_transforms)
 	add_child(_transform_batch_timer)
 
@@ -51,24 +61,25 @@ func _setup_batch_timer() -> void:
 # HOST-SIDE: BROADCASTING
 # =============================================================================
 
+
 ## Broadcast a token's transform (position, rotation, scale) to all clients.
 ## Uses unreliable channel and rate limiting for efficiency.
 ## Call this for high-frequency updates like dragging.
 func broadcast_token_transform(token: BoardToken) -> void:
 	if not NetworkManager.is_host():
 		return
-	
+
 	var network_id = token.network_id
-	
+
 	# Rate limiting check
 	var now = Time.get_ticks_msec() / 1000.0
 	var last_send = _transform_throttle.get(network_id, 0.0)
-	
+
 	if now - last_send < TRANSFORM_SEND_INTERVAL:
 		# Queue for next batch instead of sending immediately
 		_queue_transform_update(token)
 		return
-	
+
 	_transform_throttle[network_id] = now
 	_send_transform_update(token)
 
@@ -86,10 +97,10 @@ func _queue_transform_update(token: BoardToken) -> void:
 ## Send a single token's transform immediately
 func _send_transform_update(token: BoardToken) -> void:
 	var state = TokenState.from_board_token(token)
-	
+
 	# Also update GameState
 	GameState.sync_from_board_token(token)
-	
+
 	# Send via unreliable RPC
 	NetworkManager._rpc_receive_token_transform.rpc(
 		token.network_id,
@@ -103,10 +114,10 @@ func _send_transform_update(token: BoardToken) -> void:
 func _flush_pending_transforms() -> void:
 	if not NetworkManager.is_host():
 		return
-	
+
 	if _pending_transforms.is_empty():
 		return
-	
+
 	# Send batch update
 	NetworkManager._rpc_receive_transform_batch.rpc(_pending_transforms.duplicate())
 	_pending_transforms.clear()
@@ -117,14 +128,14 @@ func _flush_pending_transforms() -> void:
 func broadcast_token_properties(token: BoardToken) -> void:
 	if not NetworkManager.is_host():
 		return
-	
+
 	# Update GameState
 	GameState.sync_from_board_token(token)
-	
+
 	var state = GameState.get_token_state(token.network_id)
 	if not state:
 		return
-	
+
 	# Send via reliable RPC
 	NetworkManager._rpc_receive_token_state.rpc(token.network_id, state.to_dict())
 
@@ -142,12 +153,16 @@ func broadcast_client_token_transform(
 		# Skip the host itself (peer 1) and the original sender
 		if peer_id == 1 or peer_id == exclude_peer:
 			continue
-		NetworkManager._rpc_receive_token_transform.rpc_id(
-			peer_id,
-			network_id,
-			_vector3_to_array(pos),
-			_vector3_to_array(rot),
-			_vector3_to_array(scl),
+		(
+			NetworkManager
+			. _rpc_receive_token_transform
+			. rpc_id(
+				peer_id,
+				network_id,
+				_vector3_to_array(pos),
+				_vector3_to_array(rot),
+				_vector3_to_array(scl),
+			)
 		)
 
 
@@ -155,11 +170,11 @@ func broadcast_client_token_transform(
 func broadcast_token_removed(network_id: String) -> void:
 	if not NetworkManager.is_host():
 		return
-	
+
 	# Clean up any queued transform data for this token
 	_pending_transforms.erase(network_id)
 	_transform_throttle.erase(network_id)
-	
+
 	NetworkManager._rpc_receive_token_removed.rpc(network_id)
 
 
@@ -167,7 +182,7 @@ func broadcast_token_removed(network_id: String) -> void:
 func broadcast_full_state() -> void:
 	if not NetworkManager.is_host():
 		return
-	
+
 	NetworkManager.broadcast_game_state(GameState.get_full_state_dict())
 
 
@@ -175,7 +190,7 @@ func broadcast_full_state() -> void:
 func send_full_state_to_peer(peer_id: int) -> void:
 	if not NetworkManager.is_host():
 		return
-	
+
 	NetworkManager.send_game_state_to_peer(peer_id, GameState.get_full_state_dict())
 
 
@@ -183,13 +198,14 @@ func send_full_state_to_peer(peer_id: int) -> void:
 # CLIENT-SIDE: RECEIVING
 # =============================================================================
 
+
 func _on_game_state_received(state_dict: Dictionary) -> void:
 	# Apply to GameState
 	GameState.apply_full_state_dict(state_dict)
-	
+
 	# Emit signal for visual layer
 	full_state_received.emit(state_dict)
-	
+
 	# Send ACK back to host (for late joiner sync tracking)
 	if not NetworkManager.is_host() and multiplayer.multiplayer_peer:
 		NetworkManager._rpc_state_sync_ack.rpc_id(1)
@@ -198,6 +214,7 @@ func _on_game_state_received(state_dict: Dictionary) -> void:
 # =============================================================================
 # HELPERS
 # =============================================================================
+
 
 ## Convert Vector3 to array for network transmission (more compact than dict)
 func _vector3_to_array(v: Vector3) -> Array:

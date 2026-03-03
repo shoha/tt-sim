@@ -54,13 +54,9 @@ static func on_token_transform_received(
 static func on_transform_batch_received(controller: LevelPlayController, batch: Dictionary) -> void:
 	for network_id in batch:
 		var data = batch[network_id]
-		var pos_arr = data["position"]
-		var rot_arr = data["rotation"]
-		var scl_arr = data["scale"]
-
-		var pos = Vector3(pos_arr[0], pos_arr[1], pos_arr[2])
-		var rot = Vector3(rot_arr[0], rot_arr[1], rot_arr[2])
-		var scl = Vector3(scl_arr[0], scl_arr[1], scl_arr[2])
+		var pos := SerializationUtils.array_to_vec3(data["position"])
+		var rot := SerializationUtils.array_to_vec3(data["rotation"])
+		var scl := SerializationUtils.array_to_vec3(data["scale"], Vector3.ONE)
 
 		var token = controller.spawned_tokens.get(network_id) as BoardToken
 		if token and is_instance_valid(token):
