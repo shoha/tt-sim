@@ -701,7 +701,7 @@ func _on_after_animate_out() -> void:
 
 
 func _on_export_pressed() -> void:
-	export_dialog.current_file = LevelManager._sanitize_filename(current_level.level_name) + ".json"
+	export_dialog.current_file = Paths.sanitize_level_name(current_level.level_name) + ".json"
 	export_dialog.popup_centered(POPUP_SIZE_LARGE)
 
 

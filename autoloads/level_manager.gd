@@ -37,7 +37,7 @@ func save_level(level_data: LevelData, file_name: String = "") -> String:
 	_ensure_levels_directory()
 
 	if file_name == "":
-		file_name = _sanitize_filename(level_data.level_name)
+		file_name = Paths.sanitize_level_name(level_data.level_name)
 
 	if not file_name.ends_with(LEVEL_FILE_EXTENSION):
 		file_name += LEVEL_FILE_EXTENSION
@@ -540,69 +540,14 @@ func _create_token_from_placement(placement: TokenPlacement) -> BoardToken:
 	return BoardTokenFactory.create_from_placement_async(placement).token
 
 
-## Sanitize a filename
-func _sanitize_filename(file_name_input: String) -> String:
-	var sanitized = file_name_input.strip_edges().to_lower()
-	sanitized = sanitized.replace(" ", "_")
-
-	# Remove invalid characters
-	var valid_chars = "abcdefghijklmnopqrstuvwxyz0123456789_-"
-	var result = ""
-	for c in sanitized:
-		if c in valid_chars:
-			result += c
-
-	if result == "":
-		result = "level_" + str(Time.get_unix_time_from_system())
-
-	return result
-
-
 ## Export level to a portable JSON format
 func export_level_json(level_data: LevelData, file_path: String) -> bool:
-	var data = {
-		"level_name": level_data.level_name,
-		"level_description": level_data.level_description,
-		"author": level_data.author,
-		"created_at": level_data.created_at,
-		"modified_at": level_data.modified_at,
-		"map_path": level_data.map_path,
-		"map_scale":
-		{"x": level_data.map_scale.x, "y": level_data.map_scale.y, "z": level_data.map_scale.z},
-		"map_offset":
-		{"x": level_data.map_offset.x, "y": level_data.map_offset.y, "z": level_data.map_offset.z},
-		"light_intensity_scale": level_data.light_intensity_scale,
-		"environment_preset": level_data.environment_preset,
-		"environment_overrides":
-		EnvironmentPresets.overrides_to_json(level_data.environment_overrides),
-		"token_placements": []
-	}
-
-	for placement in level_data.token_placements:
-		data.token_placements.append(
-			{
-				"placement_id": placement.placement_id,
-				"pack_id": placement.pack_id,
-				"asset_id": placement.asset_id,
-				"variant_id": placement.variant_id,
-				"position":
-				{"x": placement.position.x, "y": placement.position.y, "z": placement.position.z},
-				"rotation_y": placement.rotation_y,
-				"scale": {"x": placement.scale.x, "y": placement.scale.y, "z": placement.scale.z},
-				"token_name": placement.token_name,
-				"is_player_controlled": placement.is_player_controlled,
-				"max_health": placement.max_health,
-				"current_health": placement.current_health,
-				"is_visible_to_players": placement.is_visible_to_players
-			}
-		)
-
+	var data = level_data.to_dict()
 	var json_string = JSON.stringify(data, "\t")
 	var file = FileAccess.open(file_path, FileAccess.WRITE)
 	if not file:
-		push_error("LevelManager: Cannot write to " + file_path)
+		push_error("LevelManager: Failed to open export file: " + file_path)
 		return false
-
 	file.store_string(json_string)
 	file.close()
 	return true
@@ -612,58 +557,13 @@ func export_level_json(level_data: LevelData, file_path: String) -> bool:
 func import_level_json(file_path: String) -> LevelData:
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	if not file:
-		push_error("LevelManager: Cannot read " + file_path)
+		push_error("LevelManager: Failed to open import file: " + file_path)
 		return null
-
 	var json_string = file.get_as_text()
 	file.close()
-
 	var json = JSON.new()
-	var error = json.parse(json_string)
-	if error != OK:
+	var parse_err = json.parse(json_string)
+	if parse_err != OK:
 		push_error("LevelManager: Failed to parse JSON: " + json.get_error_message())
 		return null
-
-	var data = json.data
-	var level = LevelData.new()
-
-	level.level_name = data.get("level_name", "Imported Level")
-	level.level_description = data.get("level_description", "")
-	level.author = data.get("author", "")
-	level.created_at = data.get("created_at", int(Time.get_unix_time_from_system()))
-	level.modified_at = data.get("modified_at", level.created_at)
-	level.map_path = data.get("map_path", "")
-
-	if data.has("map_scale"):
-		level.map_scale = Vector3(data.map_scale.x, data.map_scale.y, data.map_scale.z)
-	if data.has("map_offset"):
-		level.map_offset = Vector3(data.map_offset.x, data.map_offset.y, data.map_offset.z)
-
-	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
-	level.environment_preset = data.get("environment_preset", "")
-	level.environment_overrides = EnvironmentPresets.overrides_from_json(
-		data.get("environment_overrides", {})
-	)
-
-	for placement_data in data.get("token_placements", []):
-		var placement = TokenPlacement.new()
-		placement.placement_id = placement_data.get("placement_id", TokenPlacement._generate_id())
-		placement.pack_id = placement_data.get("pack_id", "")
-		placement.asset_id = placement_data.get("asset_id", "")
-		placement.variant_id = placement_data.get("variant_id", "default")
-		placement.position = Vector3(
-			placement_data.position.x, placement_data.position.y, placement_data.position.z
-		)
-		placement.rotation_y = placement_data.get("rotation_y", 0.0)
-		if placement_data.has("scale"):
-			placement.scale = Vector3(
-				placement_data.scale.x, placement_data.scale.y, placement_data.scale.z
-			)
-		placement.token_name = placement_data.get("token_name", "")
-		placement.is_player_controlled = placement_data.get("is_player_controlled", false)
-		placement.max_health = placement_data.get("max_health", 100)
-		placement.current_health = placement_data.get("current_health", 100)
-		placement.is_visible_to_players = placement_data.get("is_visible_to_players", true)
-		level.token_placements.append(placement)
-
-	return level
+	return LevelData.from_dict(json.data)
