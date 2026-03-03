@@ -317,7 +317,8 @@ await settings.closed  # Wait for user to close
 
 **Controls Tab:**
 
-- Read-only keybinding display
+- Input Device selector (Auto / Mouse / Trackpad) — sets `InputProfile` active profile
+- Read-only keybinding display (labels update dynamically based on active profile)
 
 ### Persistence
 
