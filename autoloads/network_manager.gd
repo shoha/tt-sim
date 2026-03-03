@@ -280,6 +280,8 @@ func host_game(server_override: String = "", port_override: int = 0) -> void:
 	var err = await Noray.connect_to_host(target_server, target_port)
 	_log("[HOST STEP 1] connect_to_host returned err=%d (%s)" % [err, error_string(err)])
 	_dump_noray_state("after connect_to_host")
+	if _connection_state != ConnectionState.CONNECTING:
+		return
 	if err != OK:
 		_handle_connection_error(
 			"Failed to connect to noray server (err=%d: %s)" % [err, error_string(err)]
@@ -308,6 +310,8 @@ func _on_host_oid_received(oid: String) -> void:
 	if not Noray.pid:
 		_log("[HOST STEP 3] PID not yet received, waiting for on_pid ...")
 		await Noray.on_pid
+	if _connection_state != ConnectionState.CONNECTING:
+		return
 	_log("[HOST STEP 3] PID received: '%s'" % Noray.pid)
 	_dump_noray_state("before register_remote")
 
@@ -316,6 +320,8 @@ func _on_host_oid_received(oid: String) -> void:
 	var err = await Noray.register_remote()
 	_log("[HOST STEP 4] register_remote returned err=%d (%s)" % [err, error_string(err)])
 	_dump_noray_state("after register_remote")
+	if _connection_state != ConnectionState.CONNECTING:
+		return
 	if err != OK:
 		_handle_connection_error(
 			"Failed to register remote address (err=%d: %s)" % [err, error_string(err)]
@@ -459,6 +465,8 @@ func join_game(
 	var err = await Noray.connect_to_host(target_server, target_port)
 	_log("[JOIN STEP 1] connect_to_host returned err=%d (%s)" % [err, error_string(err)])
 	_dump_noray_state("after connect_to_host")
+	if _connection_state != ConnectionState.CONNECTING:
+		return
 	if err != OK:
 		_handle_connection_error(
 			"Failed to connect to noray server (err=%d: %s)" % [err, error_string(err)]
@@ -467,12 +475,14 @@ func join_game(
 
 	# Step 2: Register as host to get PID (even as "client" we need this)
 	_log("[JOIN STEP 2] Registering host (for PID) ...")
-	Noray.on_pid.connect(func(_pid): pass, CONNECT_ONE_SHOT)  # Need PID for register_remote
 	Noray.register_host()  # This gets us a PID even as a "client"
 
-	# Wait for PID
-	_log("[JOIN STEP 2] Waiting for PID ...")
-	await Noray.on_pid
+	# Wait for PID (guard mirrors the host path in _on_host_oid_received)
+	if not Noray.pid:
+		_log("[JOIN STEP 2] PID not yet received, waiting for on_pid ...")
+		await Noray.on_pid
+	if _connection_state != ConnectionState.CONNECTING:
+		return
 	_log("[JOIN STEP 2] PID received: '%s'" % Noray.pid)
 	_dump_noray_state("after PID received")
 
@@ -481,6 +491,8 @@ func join_game(
 	err = await Noray.register_remote()
 	_log("[JOIN STEP 3] register_remote returned err=%d (%s)" % [err, error_string(err)])
 	_dump_noray_state("after register_remote")
+	if _connection_state != ConnectionState.CONNECTING:
+		return
 	if err != OK:
 		_handle_connection_error(
 			"Failed to register remote address (err=%d: %s)" % [err, error_string(err)]
@@ -837,6 +849,8 @@ func _rpc_receive_game_state(state_dict: Dictionary) -> void:
 func _rpc_receive_token_transform(
 	network_id: String, pos_arr: Array, rot_arr: Array, scale_arr: Array
 ) -> void:
+	if pos_arr.size() != 3 or rot_arr.size() != 3 or scale_arr.size() != 3:
+		return
 	var pos = Vector3(pos_arr[0], pos_arr[1], pos_arr[2])
 	var rot = Vector3(rot_arr[0], rot_arr[1], rot_arr[2])
 	var scl = Vector3(scale_arr[0], scale_arr[1], scale_arr[2])
@@ -874,6 +888,8 @@ func _rpc_client_token_transform(
 	network_id: String, pos_arr: Array, rot_arr: Array, scale_arr: Array
 ) -> void:
 	if not is_host():
+		return
+	if pos_arr.size() != 3 or rot_arr.size() != 3 or scale_arr.size() != 3:
 		return
 	var sender_id = multiplayer.get_remote_sender_id()
 	var pos = Vector3(pos_arr[0], pos_arr[1], pos_arr[2])
@@ -995,11 +1011,15 @@ func send_client_token_transform(
 
 ## Client sends a drag lock claim to the host.
 func send_drag_lock_claim(network_id: String) -> void:
+	if not is_client() or not multiplayer.multiplayer_peer:
+		return
 	_rpc_client_claim_drag_lock.rpc_id(1, network_id)
 
 
 ## Client sends a drag lock release to the host.
 func send_drag_lock_release(network_id: String) -> void:
+	if not is_client() or not multiplayer.multiplayer_peer:
+		return
 	_rpc_client_release_drag_lock.rpc_id(1, network_id)
 
 
