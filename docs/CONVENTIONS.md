@@ -362,6 +362,7 @@ Settings use a single `user://settings.cfg` (ConfigFile) but are **decentralized
 | `network` | `noray_server`, `noray_port`, `debug_logging`, `p2p_enabled` | `NetworkManager`, `SettingsMenu` |
 | `player` | `name` | `NetworkManager` |
 | `updates` | `check_prereleases` | `UpdateManager`, `SettingsMenu` |
+| `controls` | `input_profile` | `InputProfile` |
 
 ### Adding New Settings
 
@@ -568,7 +569,19 @@ Custom input actions defined in `project.godot`:
 | `camera_zoom_in` | Mouse wheel up | `game_map.gd` — orthographic zoom |
 | `camera_zoom_out` | Mouse wheel down | `game_map.gd` — orthographic zoom |
 | `rotate_model` | Middle mouse | `board_token_controller.gd` — token rotation (Shift = scale) |
+| `camera_reset` | Home, C | `game_map.gd` — reset camera to default position |
 | `select_token` | Left double-click | Defined but not currently referenced in code |
+
+**Alternative bindings (trackpad / compact keyboard):** In addition to the primary bindings above, several actions have alternative bindings that always work regardless of profile:
+
+| Action | Primary (Mouse) | Alternative (Trackpad) |
+|--------|-----------------|------------------------|
+| Camera pan | MMB drag | RMB drag on empty space |
+| Token rotate | MMB drag on token | R + LMB drag |
+| Token scale | Shift+MMB drag on token | Shift+R + LMB drag |
+| Camera reset | Home | C (added to `camera_reset` action) |
+
+`InputProfile` autoload manages which labels appear in the hint overlay and settings. See `autoloads/input_profile.gd`.
 
 **Undo/Redo**: `Ctrl+Z` / `Ctrl+Y` are handled directly via `_unhandled_key_input()` in `level_editor.gd`, not through the input map.
 

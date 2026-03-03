@@ -97,6 +97,7 @@ Autoloads are registered in `project.godot` and available globally.
 | `LevelManager` | `autoloads/level_manager.gd` | Level save/load operations           |
 | `UIManager`    | `autoloads/ui_manager.gd`    | UI systems (dialogs, toasts, etc.)   |
 | `AudioManager` | `autoloads/audio_manager.gd` | Audio playback and bus control       |
+| `InputProfile` | `autoloads/input_profile.gd` | Input device profiles (Mouse/Trackpad) and key label lookup |
 
 ### Networking Autoloads
 
