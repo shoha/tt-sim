@@ -1187,8 +1187,15 @@ func clear_level_tokens() -> void:
 
 	spawned_tokens.clear()
 	_network_id_to_placement.clear()
-	_token_signal_connections.clear()
 	active_level_data = null
+
+	# Disconnect host-side token signals before clearing the stored callables
+	for network_id in _token_signal_connections.keys():
+		var info: Dictionary = _token_signal_connections[network_id]
+		var t: BoardToken = info["token"]
+		if is_instance_valid(t):
+			_disconnect_token_state_signals(t)
+	_token_signal_connections.clear()
 
 	# Disconnect client transform signals before clearing
 	for network_id in _client_connected_tokens.keys():
