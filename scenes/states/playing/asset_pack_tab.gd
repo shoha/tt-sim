@@ -16,6 +16,10 @@ var _items_thread: Thread
 var _exit_thread := false
 var _needs_populate := false
 
+# Thread-safe snapshots: written on main thread under _items_mutex, read by worker
+var _current_filter: String = ""
+var _pack_snapshot: Array = []
+
 @onready var search_filter: LineEdit = $Content/Header/SearchFilter
 @onready var item_list: ItemList = $Content/ItemList
 
@@ -38,14 +42,40 @@ func _ready() -> void:
 func setup(pack_id: String) -> void:
 	_pack_id = pack_id
 	_needs_populate = true
-	_items_sem.post()
+	_request_populate()
 
 
 ## Refresh the items (call when tab becomes visible)
 func refresh() -> void:
 	if _pack_id != "":
 		_needs_populate = true
-		_items_sem.post()
+		_request_populate()
+
+
+## Snapshot pack data on the main thread and wake the worker.
+## All AssetManager access happens here (main thread only).
+func _request_populate() -> void:
+	_items_mutex.lock()
+	_current_filter = _filter
+	var pack = AssetManager.get_pack(_pack_id)
+	if pack:
+		_pack_snapshot = []
+		for asset in pack.get_all_assets():
+			(
+				_pack_snapshot
+				. append(
+					{
+						"asset_id": asset.asset_id,
+						"display_name": asset.display_name,
+						"has_variants": asset.has_variants(),
+						"variant_ids": asset.get_variant_ids(),
+					}
+				)
+			)
+	else:
+		_pack_snapshot = []
+	_items_mutex.unlock()
+	_items_sem.post()
 
 
 func _items_thread_function() -> void:
@@ -61,41 +91,48 @@ func _items_thread_function() -> void:
 
 		_items_mutex.lock()
 		_populate_items()
+		# _populate_items() returns with the mutex locked; unlock here
 		_items_mutex.unlock()
 
 
+## Build filtered items from snapshot data. Called with _items_mutex locked;
+## returns with it locked (but unlocks in the middle for the filtering work).
 func _populate_items() -> void:
 	call_deferred("_clear_list")
+
+	# Copy snapshot data under mutex (already locked by caller)
+	var filter := _current_filter
+	var snapshot := _pack_snapshot.duplicate()
+	var pack_id := _pack_id
 	_items.clear()
+	_items_mutex.unlock()
 
-	var pack = AssetManager.get_pack(_pack_id)
-	if not pack:
-		return
-
-	# Collect asset info in background thread (no node access needed)
+	# Filter and build items list without any lock held
 	var items_to_add: Array = []
-	for asset in pack.get_all_assets():
-		var display_name = asset.display_name
-
-		# Apply filter
-		if _filter == "" or _filter.to_lower() in display_name.to_lower():
-			items_to_add.append(
-				{
-					"pack_id": _pack_id,
-					"asset_id": asset.asset_id,
-					"variant_id": "default",
-					"name": display_name,
-					"has_variants": asset.has_variants(),
-					"variants": asset.get_variant_ids()
-				}
+	for entry in snapshot:
+		var display_name: String = entry.display_name
+		if filter == "" or filter.to_lower() in display_name.to_lower():
+			(
+				items_to_add
+				. append(
+					{
+						"pack_id": pack_id,
+						"asset_id": entry.asset_id,
+						"variant_id": "default",
+						"name": display_name,
+						"has_variants": entry.has_variants,
+						"variants": entry.variant_ids,
+					}
+				)
 			)
 
+	# Re-lock to write results
+	_items_mutex.lock()
 	_items = items_to_add
 
 	if _items.is_empty():
-		call_deferred("_show_empty_state")
+		call_deferred("_show_empty_state", filter)
 	else:
-		# Add items to list on main thread
 		for item in _items:
 			call_deferred("_add_item_to_list", item)
 
@@ -112,10 +149,10 @@ func _add_item_to_list(item: Dictionary) -> void:
 	item_list.add_item(item.name)
 
 
-func _show_empty_state() -> void:
+func _show_empty_state(filter_text: String = "") -> void:
 	if not is_instance_valid(self):
 		return
-	var msg = 'No results for "%s"' % _filter if _filter != "" else "No assets in this pack"
+	var msg = 'No results for "%s"' % filter_text if filter_text != "" else "No assets in this pack"
 	item_list.add_item(msg)
 	item_list.set_item_disabled(0, true)
 	item_list.set_item_selectable(0, false)
@@ -124,21 +161,25 @@ func _show_empty_state() -> void:
 func _on_filter_changed(new_text: String) -> void:
 	_filter = new_text
 	_needs_populate = true
-	_items_sem.post()
+	_request_populate()
 
 
 func _on_item_activated(index: int) -> void:
+	_items_mutex.lock()
+	var items_copy := _items.duplicate()
+	_items_mutex.unlock()
+
 	print(
 		(
 			"AssetPackTab: item_activated index=%d, _items.size()=%d, pack=%s"
-			% [index, _items.size(), _pack_id]
+			% [index, items_copy.size(), _pack_id]
 		)
 	)
-	if index < 0 or index >= _items.size():
-		push_warning("AssetPackTab: index %d out of range (items=%d)" % [index, _items.size()])
+	if index < 0 or index >= items_copy.size():
+		push_warning("AssetPackTab: index %d out of range (items=%d)" % [index, items_copy.size()])
 		return
 
-	var selected = _items[index]
+	var selected = items_copy[index]
 	print(
 		(
 			"AssetPackTab: emitting asset_selected %s/%s/%s"
