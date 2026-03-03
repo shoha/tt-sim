@@ -62,6 +62,7 @@ var variant_id: String = "default"
 
 # Selection/highlight state
 var is_highlighted: bool = false
+var _highlight_count: int = 0
 
 ## Tracks the last value passed to set_interactive() for lock-release restoration.
 var _is_interactive: bool = false
@@ -213,13 +214,34 @@ func _update_visibility_visuals() -> void:
 
 
 # Highlight/selection management
-func set_highlighted(highlighted: bool) -> void:
-	if is_highlighted == highlighted:
-		return
 
-	is_highlighted = highlighted
-	_update_highlight_visuals()
-	highlight_changed.emit(is_highlighted)
+
+## Add one highlight layer. The glow stays visible until all layers are removed.
+func add_highlight(color: Color = SelectionGlowRenderer.DEFAULT_GLOW_COLOR) -> void:
+	_highlight_count += 1
+	set_highlight_color(color)
+	if not is_highlighted:
+		is_highlighted = true
+		_update_highlight_visuals()
+		highlight_changed.emit(is_highlighted)
+
+
+## Remove one highlight layer. Glow hides only when the last layer is removed.
+func remove_highlight() -> void:
+	_highlight_count = max(0, _highlight_count - 1)
+	if _highlight_count == 0 and is_highlighted:
+		set_highlight_color(SelectionGlowRenderer.DEFAULT_GLOW_COLOR)
+		is_highlighted = false
+		_update_highlight_visuals()
+		highlight_changed.emit(is_highlighted)
+
+
+## Boolean convenience wrapper for add/remove_highlight (backwards-compatible).
+func set_highlighted(highlighted: bool) -> void:
+	if highlighted:
+		add_highlight()
+	else:
+		remove_highlight()
 
 
 func _update_highlight_visuals() -> void:

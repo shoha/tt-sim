@@ -100,7 +100,7 @@ func _on_mouse_entered() -> void:
 	# Show hover highlight
 	var board_token = get_parent() as BoardToken
 	if board_token:
-		board_token.set_highlighted(true)
+		board_token.add_highlight()
 	# Cursor: show pointing hand when hovering (not during drag)
 	if not draggable_token or not draggable_token.is_being_dragged():
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
@@ -113,7 +113,7 @@ func _on_mouse_exited() -> void:
 	# Hide hover highlight
 	var board_token = get_parent() as BoardToken
 	if board_token:
-		board_token.set_highlighted(false)
+		board_token.remove_highlight()
 	# Cursor: restore to arrow (only if not currently dragging)
 	if not draggable_token or not draggable_token.is_being_dragged():
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
