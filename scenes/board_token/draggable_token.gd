@@ -358,10 +358,12 @@ func _on_settle_complete() -> void:
 	_is_cancel_settle = false
 
 	# Re-enable hover detection now that the settle animation is done,
-	# but respect the token's interactive state (e.g. hidden tokens stay non-pickable)
+	# but respect the token's interactive state (e.g. hidden tokens stay non-pickable).
+	# Must go through set_interactive() to preserve network-aware logic
+	# (non-GM players always keep input_ray_pickable = true for context menus).
 	var board_token := get_parent() as BoardToken
 	if board_token:
-		rigid_body.input_ray_pickable = board_token._is_interactive
+		board_token.set_interactive(board_token._is_interactive)
 	else:
 		rigid_body.input_ray_pickable = true
 
