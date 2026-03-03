@@ -79,6 +79,8 @@ func _setup_ui_components() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
+		# Clean stale overlays
+		_overlay_stack = _overlay_stack.filter(func(o): return is_instance_valid(o))
 		# Priority 1: Close modals
 		if _modal_stack.size() > 0:
 			close_top_modal()
@@ -98,7 +100,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _close_top_overlay() -> void:
 	if _overlay_stack.size() > 0:
-		var overlay = _overlay_stack[-1]
+		var overlay = _overlay_stack.pop_back()
+		if not is_instance_valid(overlay):
+			return
 		# Try animate_out first, then close, then just hide
 		if overlay.has_method("animate_out"):
 			overlay.animate_out()
