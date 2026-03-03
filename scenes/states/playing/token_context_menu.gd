@@ -51,8 +51,8 @@ func _update_menu_content() -> void:
 	if not target_token or not is_instance_valid(target_token):
 		return
 
-	var is_gm = NetworkManager.has_gm_access()
-	var is_networked = NetworkManager.is_networked()
+	var is_gm: bool = NetworkManager.has_gm_access()
+	var is_networked: bool = NetworkManager.is_networked()
 	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
 
 	# Update visibility toggle button text
@@ -88,7 +88,7 @@ func _update_menu_content() -> void:
 	# Reset Transform button — visible for anyone with input authority
 	var reset_transform_button = get_node_or_null("MenuPanel/VBoxContainer/ResetTransformButton")
 	if reset_transform_button:
-		var has_authority := is_gm
+		var has_authority: bool = is_gm
 		if not has_authority and is_networked and multiplayer.multiplayer_peer:
 			has_authority = (
 				GameState
