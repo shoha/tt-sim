@@ -241,6 +241,9 @@ func _load_settings() -> void:
 
 func _save_settings() -> void:
 	var config = ConfigFile.new()
+	var err = config.load(Paths.SETTINGS_PATH)
+	if err != OK and err != ERR_FILE_NOT_FOUND:
+		push_warning("SettingsMenu: failed to load settings for save: %d" % err)
 
 	config.set_value("audio", "master", master_slider.value)
 	config.set_value("audio", "music", music_slider.value)
