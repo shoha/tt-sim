@@ -49,6 +49,10 @@ class_name LevelData
 ## Empty dictionary uses defaults from the scene/shader
 @export var lofi_overrides: Dictionary = {}
 
+## Weather effect intensities (0.0 = off, 1.0 = max)
+## Keys: "rain_intensity", "snow_intensity", "fog_intensity", "wind_intensity"
+@export var weather_overrides: Dictionary = {}
+
 ## Scale & Measurement
 @export_group("Scale")
 ## Size of one grid cell in world units (meters), as measured in the loaded scene.
@@ -170,6 +174,7 @@ func duplicate_level() -> LevelData:
 	new_level.environment_preset = environment_preset
 	new_level.environment_overrides = environment_overrides.duplicate()
 	new_level.lofi_overrides = lofi_overrides.duplicate()
+	new_level.weather_overrides = weather_overrides.duplicate()
 	new_level.grid_cell_size = grid_cell_size
 	new_level.display_unit = display_unit
 	new_level.display_unit_per_cell = display_unit_per_cell
@@ -241,6 +246,7 @@ func to_dict() -> Dictionary:
 		"environment_preset": environment_preset,
 		"environment_overrides": EnvironmentPresets.overrides_to_json(environment_overrides),
 		"lofi_overrides": lofi_overrides.duplicate(),
+		"weather_overrides": weather_overrides.duplicate(),
 		"grid_cell_size": grid_cell_size,
 		"display_unit": display_unit,
 		"display_unit_per_cell": display_unit_per_cell,
@@ -276,6 +282,8 @@ static func from_dict(data: Dictionary) -> LevelData:
 	)
 	var lofi_raw = data.get("lofi_overrides", {})
 	level.lofi_overrides = lofi_raw.duplicate() if lofi_raw is Dictionary else {}
+	var weather_raw = data.get("weather_overrides", {})
+	level.weather_overrides = weather_raw.duplicate() if weather_raw is Dictionary else {}
 
 	level.grid_cell_size = data.get("grid_cell_size", 1.524)
 	level.display_unit = data.get("display_unit", "ft")
