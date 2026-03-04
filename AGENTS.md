@@ -39,13 +39,14 @@
 - **UIDs** – Godot `.uid` files are auto-generated; avoid manual edits
 - **CanvasLayer ordering** – Layer numbers are centralized in `Constants` (`LAYER_*`). Check screen region comments before adding UI to avoid overlaps. See `.cursor/rules/canvas-layers.mdc`
 - **mouse_filter** – Set `mouse_filter = IGNORE` on pure layout containers (`Control`, `MarginContainer`, `HBoxContainer`, etc.). Only interactive controls and modal backdrops should keep the default `STOP`
+- **Weather effects** – `WeatherRenderer` (`scenes/effects/weather_renderer.gd`) provides combinable visual weather (rain, snow, wind particles + fog overlay). Intensities stored in `LevelData.weather_overrides`. Created per level load in the SubViewport via `GameMap.setup_weather()`, freed via `GameMap.clear_weather()`. UI sliders in `LevelEditPanel` Weather section. See `docs/lighting-and-environment.md` Weather Effects section
 - **Environment system** – Environment settings use a layering model: `PROPERTY_DEFAULTS` → map defaults → named preset → user overrides. See `docs/lighting-and-environment.md`. Key points:
   - `LevelData.environment_preset` defaults to `""` (empty = use map defaults)
   - Map defaults are extracted at load time, never baked into `level_data`
   - Use `EnvironmentPresets.apply_to_world_environment()` with `map_defaults` parameter
   - Embedded `WorldEnvironment` nodes are stripped from maps after extraction
 - **Settings persistence** – Each system reads/writes its own section in `Paths.SETTINGS_PATH` (`user://settings.cfg`). Always check `ConfigFile.load()` return value before overwriting — ignore `ERR_FILE_NOT_FOUND` but warn on other errors. See `docs/CONVENTIONS.md` Settings Persistence
-- **In-game editing** – `LevelEditPanel` (extends `DrawerContainer`, right edge) provides real-time editing during gameplay. `GameplayMenuController` routes changes to `LevelPlayController`. Cancel reverts; save persists to disk
+- **In-game editing** – `LevelEditPanel` (extends `DrawerContainer`, right edge) provides real-time editing during gameplay (map, lighting, environment, post-processing, weather). `GameplayMenuController` routes changes to `LevelPlayController`. Cancel reverts; save persists to disk
 - **Scale convention** – 1 world unit = 1 meter (glTF standard). `LevelData.grid_cell_size` adapts meters to game units. Use `ScaleUtils` for all distance conversion and formatting
 - **Measure tool** – `MeasureTool` (Node child of GameMap) provides distance measurement. Renders 2D on `LAYER_MEASURE_OVERLAY` (layer 8) to stay crisp above the lo-fi shader. M key toggles. Disables token dragging while active. Input routed through `GameMap._input()` with GUI click guard. Tab cycles mode: Line → Sphere → Cylinder → Line. VolumeOverlay (child of MeasureTool, created in setup()) renders 3D wireframe + transparent fill inside the SubViewport, plus a 2D label. Tabbing from a line waypoint uses that point as the volume center.
 - **Grid overlay** – `GridOverlay` (MeshInstance3D child of Camera3D inside SubViewport) projects a procedural grid via depth-buffer shader. Uses cell tint (theme `color_surface1` at 65% with 10% inset) instead of grid lines for readability on bright maps. Height filter (`grid_y_level`/`grid_y_tolerance`) prevents projection onto tokens. Animated fade in/out (0.2s). G key toggles (local per-client). Auto-shows during measure tool and token drag (configurable via `LevelData`). Managed by `GameMap`
@@ -74,7 +75,7 @@ After making architectural or API changes, update the relevant documentation. Ch
 - **Scene tree changes** (new nodes, reparenting) – update the Scene Hierarchy in `docs/ARCHITECTURE.md`
 - **Asset/model loading changes** – update `docs/ASSET_MANAGEMENT.md`
 - **UI system changes** – update `docs/UI_SYSTEMS.md`
-- **Environment/lighting changes** – update `docs/lighting-and-environment.md`
+- **Environment/lighting/weather changes** – update `docs/lighting-and-environment.md`
 - **New conventions or patterns** – update this file (`AGENTS.md`) and `.cursor/rules/project-overview.mdc`
 - **New gotchas or coding patterns** – update `docs/CONVENTIONS.md`
 - **New RPC or network patterns** – update `docs/CONVENTIONS.md` and `docs/NETWORKING.md`
@@ -132,7 +133,7 @@ gdlint path/to/file.gd
 ```
 autoloads/     # Singletons, static class_name scripts, and facade sub-components
 resources/     # Custom Resource classes (LevelData, TokenState, TokenPlacement, TokenConfig, AssetPack)
-scenes/        # States, board_token, level_editor, level_loader, ui
+scenes/        # States, board_token, effects, level_editor, level_loader, ui
 utils/         # GlbUtils, SerializationUtils, EnvironmentPresets, TabUtils
 shaders/       # GLSL shaders (lo-fi, occlusion fade, selection glow)
 themes/        # dark_theme.gd → generated/dark_theme.tres

@@ -1,6 +1,6 @@
 # Lighting and Environment System
 
-This document describes the lighting and environment configuration system for levels in TT-Sim, including the in-game edit panel, environment presets, map defaults, sky presets, and the configuration layering model.
+This document describes the lighting and environment configuration system for levels in TT-Sim, including the in-game edit panel, environment presets, map defaults, sky presets, the configuration layering model, and weather effects.
 
 ## Table of Contents
 
@@ -16,6 +16,7 @@ This document describes the lighting and environment configuration system for le
 - [Data Storage](#data-storage)
 - [Runtime Application](#runtime-application)
 - [API Reference](#api-reference)
+- [Weather Effects](#weather-effects)
 - [Best Practices](#best-practices)
 
 ## Overview
@@ -27,6 +28,7 @@ The lighting and environment system allows Dungeon Masters (DMs) to configure ho
 3. **Map Defaults** — Environment settings extracted from a map's embedded `WorldEnvironment` node
 4. **Environment Overrides** — Fine-tuned adjustments to individual environment properties
 5. **Post-Processing (Lo-Fi) Overrides** — Shader-based effects like pixelation, color depth, and color fade
+6. **Weather Effects** — Combinable particle-based weather (rain, snow, wind) and fog overlay
 
 All settings are stored in `LevelData` and serialized to `level.json` for folder-based levels. Changes can be made in real time using the in-game edit panel.
 
@@ -323,6 +325,10 @@ Lo-fi overrides are stored in `LevelData.lofi_overrides` and applied via `GameMa
 
 # Post-processing
 @export var lofi_overrides: Dictionary = {}
+
+# Weather effects (0.0 = off, 1.0 = max)
+# Keys: "rain_intensity", "snow_intensity", "fog_intensity", "wind_intensity"
+@export var weather_overrides: Dictionary = {}
 ```
 
 **Important:** `environment_preset` defaults to `""` (empty string), not a named preset. This means new levels start with map defaults when available.
@@ -344,6 +350,10 @@ For folder-based levels, settings are stored in `level.json`:
   "lofi_overrides": {
     "pixelation": 2.0,
     "color_depth": 16.0
+  },
+  "weather_overrides": {
+    "rain_intensity": 0.7,
+    "fog_intensity": 0.3
   }
 }
 ```
@@ -367,6 +377,7 @@ When a level is loaded for play, `LevelPlayController` handles the environment s
 3. Creates a programmatic `WorldEnvironment` node ("LevelEnvironment")
 4. Applies the layered configuration via `EnvironmentPresets.apply_to_world_environment()`
 5. Applies lo-fi shader overrides if any are set
+6. Sets up `WeatherRenderer` and applies persisted weather overrides
 
 ```gdscript
 func _apply_level_environment(level_data: LevelData) -> void:
@@ -484,6 +495,88 @@ A standalone test scene is available at `tests/test_glb_lights.tscn` for:
 - Previewing environment presets
 - Experimenting with overrides
 - Copying settings as JSON for `level.json`
+
+## Weather Effects
+
+The weather system adds combinable visual atmosphere effects to maps. All effects are purely cosmetic with no gameplay mechanics.
+
+### Architecture
+
+Weather uses a hybrid rendering approach:
+
+- **Rain, Snow, Wind** — `GPUParticles3D` emitters inside the SubViewport (depth-correct, affected by lo-fi post-process)
+- **Fog** — Delta applied to the existing environment fog density (layers on top of whatever the host configured in lighting)
+
+`WeatherRenderer` (`scenes/effects/weather_renderer.gd`) is the core class. It is created as a child of the SubViewport by `GameMap.setup_weather()` during level load, and freed on level unload via `GameMap.clear_weather()`.
+
+### Data Model
+
+Weather state is stored in `LevelData.weather_overrides` as a flat Dictionary of floats:
+
+```gdscript
+{
+    "rain_intensity": 0.0,   # 0.0 (off) to 1.0 (heavy)
+    "snow_intensity": 0.0,
+    "fog_intensity": 0.0,
+    "wind_intensity": 0.0,
+}
+```
+
+All values default to 0.0. An empty dictionary means no weather. Multiple effects can be active simultaneously.
+
+### UI Controls
+
+The "Weather" section in `LevelEditPanel` (between Post-Processing and the action buttons) provides four `SliderSpinBox` controls (0.0-1.0, step 0.05). Changes apply in real-time. Save/Cancel handles weather alongside other override dictionaries.
+
+### Network Sync
+
+Weather piggybacks on the existing `broadcast_visual_settings` / `visual_settings_received` path with a `"weather_overrides"` key. No new RPCs or signals. Included in full state sync for late joiners (part of `LevelData.to_dict()`).
+
+### Particle Details
+
+| Effect | Particles | Mesh | Key Properties |
+|--------|-----------|------|----------------|
+| Rain | 1000 | BoxMesh (thin streak) | Fast fall (12-16 vel), `particle_flag_align_y`, collision via `GPUParticlesCollisionHeightField3D` |
+| Snow | 600 | SphereMesh | Slow drift (1-2 vel), turbulence enabled for natural lateral movement |
+| Wind | 200 | BoxMesh (elongated wisp) | Diagonal travel, `particle_flag_align_y`, medium speed (6-10 vel) |
+| Fog | N/A | N/A | Adds up to 0.05 to base `fog_density` at max intensity |
+
+### Camera Tracking
+
+`WeatherRenderer._process()` positions emitters above the camera holder and scales emission box extents proportionally with `camera.size`. Only runs when at least one emitter is active (checked via `emitter.emitting`).
+
+### Transitions
+
+All intensity changes animate smoothly over 2 seconds via tweens on `amount_ratio`. Fog density is also tweened. Setting intensity to 0 stops the emitter after the tween completes.
+
+### Lifecycle
+
+- **Level load**: `LevelPlayController._finalize_map_loading()` calls `game_map.setup_weather(_environment_manager)` after environment is applied
+- **Level unload**: `LevelPlayController.clear_level_map()` calls `game_map.clear_weather()` which frees the renderer via `queue_free()`
+- **Re-creation**: A fresh `WeatherRenderer` is created on each level load (no stale state across levels)
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `scenes/effects/weather_renderer.gd` | Core renderer class (emitters, fog, camera tracking, transitions) |
+| `resources/level_data.gd` | `weather_overrides` field (serialization, duplication) |
+| `scenes/states/playing/level_edit_panel.gd` | Weather UI section (sliders, signals) |
+| `scenes/states/playing/gameplay_menu_controller.gd` | Signal routing, snapshot/revert, network broadcast |
+| `scenes/states/playing/level_play_controller.gd` | Lifecycle (setup, network sync, teardown) |
+| `scenes/states/playing/game_map.gd` | `setup_weather()`, `apply_weather_overrides()`, `clear_weather()` |
+
+### Tuning Parameters
+
+All particle parameters (counts, velocities, scales, colors, alpha curves) are defined programmatically in `WeatherRenderer._create_*_emitter()` methods. To tune:
+
+1. Adjust constants in the `_create_rain_emitter()`, `_create_snow_emitter()`, or `_create_wind_emitter()` methods
+2. For fog, change the density multiplier (currently `0.05`) in `_transition_fog()`
+3. Transition speed is controlled by `TRANSITION_DURATION` (currently 2.0 seconds)
+
+### Future Enhancements
+
+- **Snow buildup**: Shader on map geometry that blends snow texture onto upward-facing surfaces, with coverage driven by snow intensity and elapsed time
 
 ## Best Practices
 
