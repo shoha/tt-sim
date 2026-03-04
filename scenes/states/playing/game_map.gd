@@ -669,24 +669,25 @@ func _grant_token_control(token: BoardToken, peer_id: int) -> void:
 
 	GameState.grant_token_permission(token.network_id, peer_id, TokenPermissions.Permission.CONTROL)
 
-	# Broadcast updated permissions to all clients
-	NetworkManager.permissions.broadcast_token_permissions(
-		TokenPermissions.to_dict(GameState.get_token_permissions())
-	)
+	if NetworkManager.is_host():
+		# Broadcast updated permissions to all clients
+		NetworkManager.permissions.broadcast_token_permissions(
+			TokenPermissions.to_dict(GameState.get_token_permissions())
+		)
 
-	# Notify the assigned player
-	NetworkManager.permissions.send_permission_response(
-		peer_id, token.network_id, TokenPermissions.Permission.CONTROL, true
-	)
+		# Notify the assigned player
+		NetworkManager.permissions.send_permission_response(
+			peer_id, token.network_id, TokenPermissions.Permission.CONTROL, true
+		)
 
-	# Toast on host
-	var token_state = GameState.get_token_state(token.network_id)
-	var token_name: String = token_state.token_name if token_state else "token"
-	var players = NetworkManager.get_players()
-	var player_name: String = (
-		players[peer_id].get("name", "Player") if players.has(peer_id) else "Player"
-	)
-	UIManager.show_success('%s can now control "%s"' % [player_name, token_name])
+		# Toast on host
+		var token_state = GameState.get_token_state(token.network_id)
+		var token_name: String = token_state.token_name if token_state else "token"
+		var players = NetworkManager.get_players()
+		var player_name: String = (
+			players[peer_id].get("name", "Player") if players.has(peer_id) else "Player"
+		)
+		UIManager.show_success('%s can now control "%s"' % [player_name, token_name])
 
 
 ## Setup the SubViewport for proper rendering
