@@ -573,6 +573,7 @@ func _setup_context_menu() -> void:
 
 		# Connect context menu signals
 		_context_menu.hp_adjustment_requested.connect(_on_context_menu_hp_adjustment_requested)
+		_context_menu.max_hp_changed.connect(_on_context_menu_max_hp_changed)
 		_context_menu.visibility_toggled.connect(_on_context_menu_visibility_toggled)
 		_context_menu.reset_transform_requested.connect(_on_context_menu_reset_transform)
 		_context_menu.control_requested.connect(_on_context_menu_control_requested)
@@ -591,6 +592,11 @@ func _on_context_menu_hp_adjustment_requested(amount: int) -> void:
 			_context_menu.target_token.heal(amount)
 		else:
 			_context_menu.target_token.take_damage(amount)
+
+
+func _on_context_menu_max_hp_changed(new_max: int) -> void:
+	if _context_menu and _context_menu.target_token:
+		_context_menu.target_token.set_max_health(new_max)
 
 
 func _on_context_menu_visibility_toggled() -> void:
