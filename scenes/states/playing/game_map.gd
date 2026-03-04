@@ -1172,7 +1172,9 @@ func apply_weather_overrides(overrides: Dictionary) -> void:
 		_weather_renderer.apply_weather(overrides)
 
 
-## Remove all active weather effects.
+## Remove all active weather effects and free the renderer.
+## A fresh renderer is created on the next setup_weather() call.
 func clear_weather() -> void:
 	if _weather_renderer:
-		_weather_renderer.clear()
+		_weather_renderer.queue_free()
+		_weather_renderer = null
