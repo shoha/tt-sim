@@ -84,9 +84,11 @@ func _create_rain_emitter() -> GPUParticles3D:
 	mat.gravity = Vector3(0, -9.8, 0)
 	mat.damping_min = 0.0
 	mat.damping_max = 0.0
-	mat.scale_min = 0.02
-	mat.scale_max = 0.04
+	mat.scale_min = 0.5
+	mat.scale_max = 1.0
 	mat.color = Color(0.7, 0.75, 0.85, 0.5)
+	# Align Y axis to velocity so rain streaks face their fall direction
+	mat.transform_align = ParticleProcessMaterial.TRANSFORM_ALIGN_Y_TO_VELOCITY
 
 	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
 	mat.emission_box_extents = Vector3(15, 0.5, 15)
@@ -107,12 +109,14 @@ func _create_rain_emitter() -> GPUParticles3D:
 
 	emitter.process_material = mat
 
+	# Thin elongated quad — visible as a rain streak
 	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.01, 0.15, 0.01)
+	mesh.size = Vector3(0.02, 0.3, 0.02)
 	var rain_mat := StandardMaterial3D.new()
-	rain_mat.albedo_color = Color(0.7, 0.78, 0.9, 0.4)
+	rain_mat.albedo_color = Color(0.7, 0.78, 0.9, 0.5)
 	rain_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	rain_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rain_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	mesh.material = rain_mat
 	emitter.draw_pass_1 = mesh
 
@@ -190,9 +194,11 @@ func _create_wind_emitter() -> GPUParticles3D:
 	mat.gravity = Vector3(0, -0.3, 0)
 	mat.damping_min = 0.0
 	mat.damping_max = 0.5
-	mat.scale_min = 0.01
-	mat.scale_max = 0.03
-	mat.color = Color(0.8, 0.8, 0.75, 0.3)
+	mat.scale_min = 0.3
+	mat.scale_max = 0.8
+	mat.color = Color(0.85, 0.85, 0.8, 0.4)
+	# Align to velocity so streaks elongate along travel direction
+	mat.transform_align = ParticleProcessMaterial.TRANSFORM_ALIGN_Y_TO_VELOCITY
 
 	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
 	mat.emission_box_extents = Vector3(15, 3, 15)
@@ -208,12 +214,14 @@ func _create_wind_emitter() -> GPUParticles3D:
 
 	emitter.process_material = mat
 
+	# Elongated streak visible as a wind wisp
 	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.3, 0.005, 0.005)
+	mesh.size = Vector3(0.03, 0.5, 0.03)
 	var wind_mat := StandardMaterial3D.new()
-	wind_mat.albedo_color = Color(0.85, 0.85, 0.8, 0.25)
+	wind_mat.albedo_color = Color(0.9, 0.9, 0.85, 0.35)
 	wind_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	wind_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	wind_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	mesh.material = wind_mat
 	emitter.draw_pass_1 = mesh
 
