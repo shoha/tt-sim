@@ -225,10 +225,10 @@ func _create_wind_emitter() -> GPUParticles3D:
 
 func _update_emitter_positions() -> void:
 	# Orthographic: camera holder position is the view center on the ground plane
-	var holder := _camera.get_parent()
+	var holder := _camera.get_parent() as Node3D
 	if not holder:
 		return
-	var center := holder.global_position
+	var center: Vector3 = holder.global_position
 	var rain_pos := Vector3(center.x, center.y + 10.0, center.z)
 	var snow_pos := Vector3(center.x, center.y + 8.0, center.z)
 	var wind_pos := Vector3(center.x, center.y + 2.0, center.z)
