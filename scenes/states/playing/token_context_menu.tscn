@@ -59,6 +59,28 @@ layout_mode = 2
 theme_type_variation = &"Success"
 text = "Apply"
 
+[node name="MaxHPContainer" type="HBoxContainer" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="MaxHPLabel" type="Label" parent="MenuPanel/VBoxContainer/MaxHPContainer"]
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Max HP"
+
+[node name="MaxHPInput" type="SpinBox" parent="MenuPanel/VBoxContainer/MaxHPContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 1.0
+max_value = 99999.0
+value = 100.0
+alignment = 1
+
+[node name="SetMaxHPButton" type="Button" parent="MenuPanel/VBoxContainer/MaxHPContainer"]
+script = ExtResource("animated_btn")
+layout_mode = 2
+theme_type_variation = &"Success"
+text = "Set"
+
 [node name="HSeparator4" type="HSeparator" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
 
@@ -111,4 +133,5 @@ text = "Close"
 [connection signal="pressed" from="MenuPanel/VBoxContainer/RequestControlButton" to="." method="_on_request_control_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/RevokeControlButton" to="." method="_on_revoke_control_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/AssignControlButton" to="." method="_on_assign_control_pressed"]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/MaxHPContainer/SetMaxHPButton" to="." method="_on_set_max_hp_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/CloseButton" to="." method="_on_close_button_pressed"]

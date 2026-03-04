@@ -5,6 +5,7 @@ class_name TokenContextMenu
 ## Provides actions like dealing damage, healing, and toggling visibility
 
 signal hp_adjustment_requested(amount: int)
+signal max_hp_changed(new_max: int)
 signal visibility_toggled
 signal reset_transform_requested
 signal control_requested(token: BoardToken)
@@ -17,6 +18,8 @@ var target_token: BoardToken = null
 @onready var input_field: LineEdit = $MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentInput
 @onready
 var heal_hurt_toggle: CheckButton = $MenuPanel/VBoxContainer/CustomDamageContainer/HealHurtToggle
+@onready var max_hp_container: HBoxContainer = $MenuPanel/VBoxContainer/MaxHPContainer
+@onready var max_hp_input: SpinBox = $MenuPanel/VBoxContainer/MaxHPContainer/MaxHPInput
 @onready var request_control_button: Button = $MenuPanel/VBoxContainer/RequestControlButton
 @onready var revoke_control_button: Button = $MenuPanel/VBoxContainer/RevokeControlButton
 @onready var assign_control_button: Button = $MenuPanel/VBoxContainer/AssignControlButton
@@ -99,6 +102,10 @@ func _update_menu_content() -> void:
 		damage_label.visible = show_gm_actions
 	if damage_container:
 		damage_container.visible = show_gm_actions
+	if max_hp_container:
+		max_hp_container.visible = show_gm_actions
+		if show_gm_actions and target_token:
+			max_hp_input.value = target_token.max_health
 	if separator2:
 		separator2.visible = show_gm_actions
 	if separator4:
@@ -238,6 +245,15 @@ func _on_hp_adjustment_requested(input_amount: String = "") -> void:
 		# Brief flash on the health label to confirm the change
 		_flash_health_label(amount > 0)
 		close_menu()
+
+
+func _on_set_max_hp_pressed() -> void:
+	if target_token and is_instance_valid(target_token):
+		var new_max: int = int(max_hp_input.value)
+		if new_max > 0:
+			max_hp_changed.emit(new_max)
+			_update_menu_content()
+			close_menu()
 
 
 func _on_toggle_visibility_pressed() -> void:
