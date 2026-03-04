@@ -67,10 +67,27 @@ func _update_menu_content() -> void:
 		# Only DM can toggle visibility
 		visibility_button.visible = is_gm
 
-	# Update health label
+	# Update health label — visible to DM and players with CONTROL permission
 	var health_label = get_node_or_null("MenuPanel/VBoxContainer/HealthLabel")
+	var separator1 = get_node_or_null("MenuPanel/VBoxContainer/HSeparator1")
 	if health_label:
-		health_label.text = "HP: %d/%d" % [target_token.current_health, target_token.max_health]
+		var can_see_health: bool = is_gm
+		if not can_see_health and is_networked and multiplayer.multiplayer_peer:
+			can_see_health = (
+				GameState
+				. has_token_permission(
+					target_token.network_id,
+					my_peer_id,
+					TokenPermissions.Permission.CONTROL,
+				)
+			)
+		if not can_see_health and not is_networked:
+			can_see_health = true
+		health_label.visible = can_see_health
+		if can_see_health:
+			health_label.text = "HP: %d/%d" % [target_token.current_health, target_token.max_health]
+	if separator1:
+		separator1.visible = health_label.visible if health_label else true
 
 	# Hide DM-only actions for players
 	var damage_label = get_node_or_null("MenuPanel/VBoxContainer/DamageLabel")
