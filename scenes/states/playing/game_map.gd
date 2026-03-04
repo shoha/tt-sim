@@ -64,6 +64,7 @@ var _occlusion_fade_enabled: bool = true  # Whether the occlusion fade effect is
 var _measure_tool: MeasureTool = null
 var _grid_overlay: GridOverlay = null
 var _drag_ruler: DragRuler = null
+var _weather_renderer: WeatherRenderer = null
 
 # Grid visibility state (local client-side override)
 var _grid_explicit_toggle: bool = false  # Set by G key, persists until toggled or level change
@@ -1152,3 +1153,26 @@ func _sync_lofi_pixelation() -> void:
 		if val != null:
 			px = float(val)
 	occlusion_fade.set_lofi_pixelation(px)
+
+
+## Create and attach a WeatherRenderer to the world viewport.
+## Called once per level load; subsequent calls are no-ops.
+func setup_weather(environment_manager: LevelEnvironmentManager) -> void:
+	if _weather_renderer:
+		return
+	_weather_renderer = WeatherRenderer.new()
+	_weather_renderer.name = "WeatherRenderer"
+	world_viewport.add_child(_weather_renderer)
+	_weather_renderer.setup(camera_node, environment_manager)
+
+
+## Forward weather override parameters to the active WeatherRenderer.
+func apply_weather_overrides(overrides: Dictionary) -> void:
+	if _weather_renderer:
+		_weather_renderer.apply_weather(overrides)
+
+
+## Remove all active weather effects.
+func clear_weather() -> void:
+	if _weather_renderer:
+		_weather_renderer.clear()

@@ -504,6 +504,13 @@ func _finalize_map_loading(map: Node3D) -> void:
 	if active_level_data:
 		_environment_manager.apply_level_environment(active_level_data, _game_map.world_viewport)
 
+	# Set up weather renderer (must happen after environment is applied)
+	var game_map = get_game_map()
+	if game_map:
+		game_map.setup_weather(_environment_manager)
+		if active_level_data and active_level_data.weather_overrides.size() > 0:
+			game_map.apply_weather_overrides(active_level_data.weather_overrides)
+
 	# Rebuild occlusion fade mesh cache now that map geometry is in the scene tree
 	_game_map.notify_map_loaded()
 
@@ -1218,6 +1225,11 @@ func clear_level_map() -> void:
 		loaded_map_instance.queue_free()
 		loaded_map_instance = null
 
+	# Clear weather effects before environment state
+	var game_map = get_game_map()
+	if game_map:
+		game_map.clear_weather()
+
 	# Clear environment state (lights, WorldEnvironment, map config)
 	_environment_manager.clear()
 
@@ -1283,6 +1295,12 @@ func _on_visual_settings_received(settings: Dictionary) -> void:
 			game_map.apply_lofi_overrides(settings["lofi_overrides"])
 		if active_level_data:
 			active_level_data.lofi_overrides = settings["lofi_overrides"].duplicate()
+	if settings.has("weather_overrides"):
+		var game_map = get_game_map()
+		if game_map:
+			game_map.apply_weather_overrides(settings["weather_overrides"])
+		if active_level_data:
+			active_level_data.weather_overrides = settings["weather_overrides"].duplicate()
 
 
 ## Check if a level is currently loaded
