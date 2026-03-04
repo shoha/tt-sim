@@ -9,6 +9,7 @@ signal visibility_toggled
 signal reset_transform_requested
 signal control_requested(token: BoardToken)
 signal control_revoked(token: BoardToken)
+signal control_assign_requested(token: BoardToken)
 signal menu_closed
 
 var target_token: BoardToken = null
@@ -18,6 +19,7 @@ var target_token: BoardToken = null
 var heal_hurt_toggle: CheckButton = $MenuPanel/VBoxContainer/CustomDamageContainer/HealHurtToggle
 @onready var request_control_button: Button = $MenuPanel/VBoxContainer/RequestControlButton
 @onready var revoke_control_button: Button = $MenuPanel/VBoxContainer/RevokeControlButton
+@onready var assign_control_button: Button = $MenuPanel/VBoxContainer/AssignControlButton
 
 
 func _ready() -> void:
@@ -115,6 +117,8 @@ func _update_permission_buttons(is_gm: bool, is_networked: bool, my_peer_id: int
 			request_control_button.visible = false
 		if revoke_control_button:
 			revoke_control_button.visible = false
+		if assign_control_button:
+			assign_control_button.visible = false
 		# HSeparator5 stays visible (original separator before Close)
 		# HSeparator6 is hidden (no permission buttons between them)
 		if separator_after:
@@ -147,11 +151,16 @@ func _update_permission_buttons(is_gm: bool, is_networked: bool, my_peer_id: int
 		else:
 			revoke_control_button.visible = false
 
+	# "Assign Control" — shown for DM in networked games
+	if assign_control_button:
+		assign_control_button.visible = is_gm
+
 	# Separators: when permission buttons are visible, show both separators
 	# (one before buttons, one after). When hidden, keep only the original separator.
 	var any_button_visible = (
 		(request_control_button and request_control_button.visible)
 		or (revoke_control_button and revoke_control_button.visible)
+		or (assign_control_button and assign_control_button.visible)
 	)
 	if separator_before:
 		separator_before.visible = true  # Always visible (original separator)
@@ -255,6 +264,13 @@ func _on_request_control_pressed() -> void:
 func _on_revoke_control_pressed() -> void:
 	if target_token and is_instance_valid(target_token):
 		control_revoked.emit(target_token)
+		AudioManager.play_tick()
+		close_menu()
+
+
+func _on_assign_control_pressed() -> void:
+	if target_token and is_instance_valid(target_token):
+		control_assign_requested.emit(target_token)
 		AudioManager.play_tick()
 		close_menu()
 
