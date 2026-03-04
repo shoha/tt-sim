@@ -11,6 +11,7 @@ signal save_requested(
 	environment_preset: String,
 	environment_overrides: Dictionary,
 	lofi_overrides: Dictionary,
+	weather_overrides: Dictionary,
 	grid_cell_size: float,
 	display_unit: String,
 	display_unit_per_cell: float
@@ -22,6 +23,7 @@ signal scale_config_changed(
 )
 signal environment_changed(preset: String, overrides: Dictionary)
 signal lofi_changed(overrides: Dictionary)
+signal weather_changed(overrides: Dictionary)
 signal revert_to_map_defaults_requested
 
 ## Emitted when the drawer opens (before the animation starts).
@@ -88,9 +90,16 @@ const TONEMAP_MODES = {
 @onready var vignette_slider_spin: SliderSpinBox = %VignetteSliderSpin
 @onready var grain_slider_spin: SliderSpinBox = %GrainSliderSpin
 
+# Weather controls
+@onready var rain_slider_spin: SliderSpinBox = %RainSliderSpin
+@onready var snow_slider_spin: SliderSpinBox = %SnowSliderSpin
+@onready var fog_slider_spin: SliderSpinBox = %FogSliderSpin
+@onready var wind_slider_spin: SliderSpinBox = %WindSliderSpin
+
 var current_preset: String = ""
 var current_overrides: Dictionary = {}
 var current_lofi_overrides: Dictionary = {}
+var current_weather_overrides: Dictionary = {}
 var light_intensity_scale: float = 1.0
 var current_grid_cell_size: float = 1.524
 var current_display_unit: String = "ft"
@@ -200,6 +209,15 @@ func _connect_control_signals() -> void:
 	]:
 		binding[0].connect(binding[1], _on_lofi_override_changed.bind(binding[2]))
 
+	# Weather overrides: [control, signal_name, override_key]
+	for binding in [
+		[rain_slider_spin, "value_changed", "rain_intensity"],
+		[snow_slider_spin, "value_changed", "snow_intensity"],
+		[fog_slider_spin, "value_changed", "fog_intensity"],
+		[wind_slider_spin, "value_changed", "wind_intensity"],
+	]:
+		binding[0].connect(binding[1], _on_weather_override_changed.bind(binding[2]))
+
 	revert_to_map_button.pressed.connect(func() -> void: revert_to_map_defaults_requested.emit())
 	save_button.pressed.connect(_on_save_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
@@ -293,6 +311,7 @@ func initialize(
 	preset: String,
 	overrides: Dictionary,
 	lofi_overrides: Dictionary = {},
+	weather_overrides: Dictionary = {},
 	map_defaults: Dictionary = {},
 	has_map_sky: bool = false,
 	grid_cell_size: float = 1.524,
@@ -303,6 +322,7 @@ func initialize(
 	current_preset = preset
 	current_overrides = overrides.duplicate()
 	current_lofi_overrides = lofi_overrides.duplicate()
+	current_weather_overrides = weather_overrides.duplicate()
 	_map_defaults = map_defaults
 
 	# Set scale controls
@@ -333,6 +353,7 @@ func initialize(
 	# Sync environment and lo-fi controls from stored values
 	_sync_controls_from_config()
 	_sync_lofi_controls()
+	_sync_weather_controls()
 
 
 ## Apply new environment state from outside (e.g. after reverting to map defaults)
@@ -540,6 +561,7 @@ func _on_save_pressed() -> void:
 			current_preset,
 			current_overrides,
 			current_lofi_overrides,
+			current_weather_overrides,
 			current_grid_cell_size,
 			current_display_unit,
 			current_display_unit_per_cell,
@@ -586,3 +608,17 @@ func _sync_lofi_controls() -> void:
 func _on_lofi_override_changed(value: Variant, key: String) -> void:
 	current_lofi_overrides[key] = value
 	lofi_changed.emit(current_lofi_overrides)
+
+
+## Generic handler for config-driven weather overrides.
+func _on_weather_override_changed(value: Variant, key: String) -> void:
+	current_weather_overrides[key] = value
+	weather_changed.emit(current_weather_overrides)
+
+
+## Sync weather controls from current_weather_overrides
+func _sync_weather_controls() -> void:
+	rain_slider_spin.set_value_no_signal(current_weather_overrides.get("rain_intensity", 0.0))
+	snow_slider_spin.set_value_no_signal(current_weather_overrides.get("snow_intensity", 0.0))
+	fog_slider_spin.set_value_no_signal(current_weather_overrides.get("fog_intensity", 0.0))
+	wind_slider_spin.set_value_no_signal(current_weather_overrides.get("wind_intensity", 0.0))
