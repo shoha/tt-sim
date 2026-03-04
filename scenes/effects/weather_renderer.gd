@@ -29,10 +29,8 @@ var _environment_manager: LevelEnvironmentManager = null
 var _base_fog_density := 0.0
 var _has_base_fog := false
 
-# Tweens for smooth transitions
-var _rain_tween: Tween = null
-var _snow_tween: Tween = null
-var _wind_tween: Tween = null
+# Tweens for smooth transitions (keyed by emitter name)
+var _emitter_tweens: Dictionary = {}
 var _fog_tween: Tween = null
 
 
@@ -284,8 +282,7 @@ func _transition_emitter(
 		emitter.amount_ratio = 0.0
 		emitter.emitting = true
 
-	var tween_var := "_" + emitter_name + "_tween"
-	var existing_tween: Tween = get(tween_var)
+	var existing_tween: Tween = _emitter_tweens.get(emitter_name)
 	if existing_tween and existing_tween.is_valid():
 		existing_tween.kill()
 
@@ -296,7 +293,7 @@ func _transition_emitter(
 			if to <= 0.0:
 				emitter.emitting = false
 	)
-	set(tween_var, tween)
+	_emitter_tweens[emitter_name] = tween
 
 
 func _transition_fog(target_intensity: float) -> void:
@@ -305,10 +302,12 @@ func _transition_fog(target_intensity: float) -> void:
 	if is_equal_approx(_fog_intensity, target_intensity):
 		return
 
+	var env := _environment_manager.get_world_environment()
+	if not env or not env.environment:
+		return
+
 	if not _has_base_fog:
-		var env := _environment_manager.get_world_environment()
-		if env and env.environment:
-			_base_fog_density = env.environment.fog_density
+		_base_fog_density = env.environment.fog_density
 		_has_base_fog = true
 
 	if _fog_tween and _fog_tween.is_valid():
@@ -316,10 +315,6 @@ func _transition_fog(target_intensity: float) -> void:
 
 	# Intensity 1.0 adds 0.05 to base density (substantial visible fog)
 	var target_density := _base_fog_density + target_intensity * 0.05
-
-	var env := _environment_manager.get_world_environment()
-	if not env or not env.environment:
-		return
 
 	if target_intensity > 0.0:
 		env.environment.fog_enabled = true
