@@ -89,6 +89,12 @@ layout_mode = 2
 theme_type_variation = &"Danger"
 text = "Revoke Control"
 
+[node name="AssignControlButton" type="Button" parent="MenuPanel/VBoxContainer"]
+script = ExtResource("animated_btn")
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Assign Control"
+
 [node name="HSeparator6" type="HSeparator" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
 
@@ -104,4 +110,5 @@ text = "Close"
 [connection signal="pressed" from="MenuPanel/VBoxContainer/ResetTransformButton" to="." method="_on_reset_transform_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/RequestControlButton" to="." method="_on_request_control_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/RevokeControlButton" to="." method="_on_revoke_control_pressed"]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/AssignControlButton" to="." method="_on_assign_control_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/CloseButton" to="." method="_on_close_button_pressed"]
