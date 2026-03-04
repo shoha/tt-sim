@@ -577,6 +577,7 @@ func _setup_context_menu() -> void:
 		_context_menu.reset_transform_requested.connect(_on_context_menu_reset_transform)
 		_context_menu.control_requested.connect(_on_context_menu_control_requested)
 		_context_menu.control_revoked.connect(_on_context_menu_control_revoked)
+		_context_menu.control_assign_requested.connect(_on_context_menu_control_assign_requested)
 
 
 func _on_token_context_menu_requested(token: BoardToken, menu_position: Vector2) -> void:
@@ -629,6 +630,63 @@ func _on_context_menu_control_revoked(token: BoardToken) -> void:
 				TokenPermissions.to_dict(GameState.get_token_permissions())
 			)
 			UIManager.show_info("Token control revoked")
+
+
+func _on_context_menu_control_assign_requested(token: BoardToken) -> void:
+	# DM assigns CONTROL permission — show player selection popup
+	if not GameState.has_authority() or not is_instance_valid(token):
+		return
+
+	var players = NetworkManager.get_players()
+	if players.size() <= 1:
+		UIManager.show_warning("No players connected")
+		return
+
+	var dialog_scene = load("res://scenes/ui/player_selection_dialog.tscn")
+	var dialog = dialog_scene.instantiate()
+	get_tree().root.add_child(dialog)
+
+	# Exclude host (peer_id 1) from the list
+	var exclude: Array[int] = [1]
+	var token_name: String = ""
+	var token_state = GameState.get_token_state(token.network_id)
+	if token_state:
+		token_name = token_state.token_name
+
+	dialog.setup('Assign Control: "%s"' % token_name, players, exclude)
+	dialog.player_selected.connect(
+		func(peer_id: int): _grant_token_control(token, peer_id),
+		CONNECT_ONE_SHOT,
+	)
+
+
+func _grant_token_control(token: BoardToken, peer_id: int) -> void:
+	if not is_instance_valid(token):
+		return
+	if not NetworkManager.get_players().has(peer_id):
+		UIManager.show_warning("Player disconnected")
+		return
+
+	GameState.grant_token_permission(token.network_id, peer_id, TokenPermissions.Permission.CONTROL)
+
+	# Broadcast updated permissions to all clients
+	NetworkManager.permissions.broadcast_token_permissions(
+		TokenPermissions.to_dict(GameState.get_token_permissions())
+	)
+
+	# Notify the assigned player
+	NetworkManager.permissions.send_permission_response(
+		peer_id, token.network_id, TokenPermissions.Permission.CONTROL, true
+	)
+
+	# Toast on host
+	var token_state = GameState.get_token_state(token.network_id)
+	var token_name: String = token_state.token_name if token_state else "token"
+	var players = NetworkManager.get_players()
+	var player_name: String = (
+		players[peer_id].get("name", "Player") if players.has(peer_id) else "Player"
+	)
+	UIManager.show_success('%s can now control "%s"' % [player_name, token_name])
 
 
 ## Setup the SubViewport for proper rendering
