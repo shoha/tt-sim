@@ -87,8 +87,8 @@ func _create_rain_emitter() -> GPUParticles3D:
 	mat.scale_min = 0.5
 	mat.scale_max = 1.0
 	mat.color = Color(0.7, 0.75, 0.85, 0.5)
-	# Align Y axis to velocity so rain streaks face their fall direction
-	mat.transform_align = ParticleProcessMaterial.TRANSFORM_ALIGN_Y_TO_VELOCITY
+	# Align Y axis to velocity so rain streaks orient along fall direction
+	mat.particle_flag_align_y = true
 
 	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
 	mat.emission_box_extents = Vector3(15, 0.5, 15)
@@ -116,7 +116,7 @@ func _create_rain_emitter() -> GPUParticles3D:
 	rain_mat.albedo_color = Color(0.7, 0.78, 0.9, 0.5)
 	rain_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	rain_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rain_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	# Note: billboard conflicts with particle_flag_align_y, so omitted
 	mesh.material = rain_mat
 	emitter.draw_pass_1 = mesh
 
@@ -197,8 +197,8 @@ func _create_wind_emitter() -> GPUParticles3D:
 	mat.scale_min = 0.3
 	mat.scale_max = 0.8
 	mat.color = Color(0.85, 0.85, 0.8, 0.4)
-	# Align to velocity so streaks elongate along travel direction
-	mat.transform_align = ParticleProcessMaterial.TRANSFORM_ALIGN_Y_TO_VELOCITY
+	# Align Y axis to velocity so streaks elongate along travel direction
+	mat.particle_flag_align_y = true
 
 	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
 	mat.emission_box_extents = Vector3(15, 3, 15)
@@ -221,7 +221,7 @@ func _create_wind_emitter() -> GPUParticles3D:
 	wind_mat.albedo_color = Color(0.9, 0.9, 0.85, 0.35)
 	wind_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	wind_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	wind_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	# Note: billboard conflicts with particle_flag_align_y, so omitted
 	mesh.material = wind_mat
 	emitter.draw_pass_1 = mesh
 
