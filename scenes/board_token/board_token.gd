@@ -159,8 +159,10 @@ func heal(amount: int) -> void:
 
 func set_max_health(new_max: int) -> void:
 	var old_health = current_health
+	var was_full: bool = current_health == max_health
 	max_health = new_max
-	current_health = min(current_health, max_health)
+	if was_full:
+		current_health = max_health
 	health_changed.emit(current_health, max_health, old_health)
 
 
