@@ -46,7 +46,8 @@ Root (Node3D)
 │   │           ├── CameraHolder / Camera3D
 │   │           │   └── GridOverlay (MeshInstance3D) - depth-projected grid overlay shader
 │   │           ├── MapContainer (Node3D) - map geometry added here
-│   │           └── DragAndDrop3D - tokens added here (grid snap support)
+│   │           ├── DragAndDrop3D - tokens added here (grid snap support)
+│   │           └── [Dynamic] WeatherRenderer (Node3D) - particle weather effects
 │   ├── MeasureTool (Node) - distance measurement, 2D overlay on LAYER_MEASURE_OVERLAY
 │   ├── DragRuler (Node) - movement distance during token drag, 2D overlay on LAYER_DRAG_RULER
 │   ├── GameplayMenu (CanvasLayer)
@@ -497,6 +498,7 @@ var light_intensity_scale: float = 1.0
 var environment_preset: String = ""          # "" = use map defaults
 var environment_overrides: Dictionary = {}   # Fine-tuned property tweaks
 var lofi_overrides: Dictionary = {}          # Post-processing shader overrides
+var weather_overrides: Dictionary = {}       # Weather effect intensities (rain, snow, fog, wind)
 
 ## Tokens
 var token_placements: Array[TokenPlacement] = []
@@ -566,11 +568,12 @@ See [CONVENTIONS.md](CONVENTIONS.md) for the full `level.json` schema and path r
    - **Extracts and strips** embedded `WorldEnvironment` nodes from the map (preserves settings as map defaults)
    - Adds map to `GameMap.map_container` (dedicated Node3D inside SubViewport)
    - **Applies environment** via layered config: PROPERTY_DEFAULTS → map defaults → preset → overrides
+   - **Sets up weather** via `GameMap.setup_weather()` and applies persisted `weather_overrides`
    - Preloads token models via `AssetManager.preload_models()`
    - Spawns tokens progressively (yields to keep UI responsive)
    - Emits progress signals for loading overlay
    - Manages active gameplay
-4. **In-game editing** — `LevelEditPanel` (drawer on right edge) allows real-time adjustments to map scale, lighting, environment, and post-processing. `GameplayMenuController` routes changes to `LevelPlayController` for immediate application. Cancel reverts all changes; save persists to disk.
+4. **In-game editing** — `LevelEditPanel` (drawer on right edge) allows real-time adjustments to map scale, lighting, environment, post-processing, and weather. `GameplayMenuController` routes changes to `LevelPlayController` for immediate application. Cancel reverts all changes; save persists to disk.
 5. **Root** transitions state based on level events
 
 ### Scale & Measurement
@@ -755,13 +758,13 @@ See [CONVENTIONS.md](CONVENTIONS.md) for the full token transform hierarchy, pla
 `GameplayMenuController` (`scenes/states/playing/gameplay_menu_controller.gd`) routes between gameplay UI and `LevelPlayController`:
 
 - **Asset browser** → `LevelPlayController.spawn_asset()` (token spawning)
-- **LevelEditPanel** → `LevelPlayController` methods (map scale, lighting, environment, lo-fi)
+- **LevelEditPanel** → `LevelPlayController` methods (map scale, lighting, environment, lo-fi, weather)
 - **Save/cancel** → `LevelManager.save_level_folder()` / revert
 - **Network changes** → Updates visibility of GM-only controls (asset browser, save, edit drawer)
 
 **GM-only controls:** When connected as a client (not host), the asset browser, save button, and level edit drawer are hidden. `GameplayMenuController` listens to `NetworkManager.connection_state_changed` to toggle visibility.
 
-**Edit mode:** When the edit drawer opens, the controller snapshots all current values (`_original_map_scale`, `_original_light_scale`, etc.). On cancel, it restores the originals and re-applies them to the live viewport. When networked, visual changes are broadcast to clients via `NetworkManager`.
+**Edit mode:** When the edit drawer opens, the controller snapshots all current values (`_original_map_scale`, `_original_light_scale`, `_original_weather_overrides`, etc.). On cancel, it restores the originals and re-applies them to the live viewport. When networked, visual changes are broadcast to clients via `NetworkManager`.
 
 ### Token State
 
@@ -914,6 +917,7 @@ project/
 ├── scenes/
 │   ├── root.gd / root.tscn  # Root controller, state stack
 │   ├── board_token/     # Token system (BoardToken, Factory, animations, drag)
+│   ├── effects/         # Visual effects (WeatherRenderer)
 │   ├── states/          # Application states
 │   │   ├── title_screen/  # Main menu
 │   │   ├── lobby/         # Host/client lobby
