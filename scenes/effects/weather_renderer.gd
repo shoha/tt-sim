@@ -43,7 +43,14 @@ func setup(camera: Camera3D, environment_manager: LevelEnvironmentManager) -> vo
 
 
 func _process(_delta: float) -> void:
-	if _camera and is_instance_valid(_camera):
+	if not _camera or not is_instance_valid(_camera):
+		return
+	var any_active := (
+		(_rain_emitter and _rain_emitter.emitting)
+		or (_snow_emitter and _snow_emitter.emitting)
+		or (_wind_emitter and _wind_emitter.emitting)
+	)
+	if any_active:
 		_update_emitter_positions()
 
 
@@ -95,6 +102,7 @@ func _create_rain_emitter() -> GPUParticles3D:
 	alpha_curve.curve = curve
 	mat.alpha_curve = alpha_curve
 
+	# Collision mode for rain splashes on map geometry
 	mat.collision_mode = ParticleProcessMaterial.COLLISION_RIGID
 	mat.collision_friction = 1.0
 	mat.collision_bounce = 0.0
@@ -216,6 +224,7 @@ func _create_wind_emitter() -> GPUParticles3D:
 
 
 func _update_emitter_positions() -> void:
+	# Orthographic: camera holder position is the view center on the ground plane
 	var holder := _camera.get_parent()
 	if not holder:
 		return
@@ -305,6 +314,7 @@ func _transition_fog(target_intensity: float) -> void:
 	if _fog_tween and _fog_tween.is_valid():
 		_fog_tween.kill()
 
+	# Intensity 1.0 adds 0.05 to base density (substantial visible fog)
 	var target_density := _base_fog_density + target_intensity * 0.05
 
 	var env := _environment_manager.get_world_environment()
