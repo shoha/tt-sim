@@ -70,6 +70,19 @@ func notify_middle_click() -> void:
 	if active_profile == Profile.MOUSE:
 		return
 	active_profile = Profile.MOUSE
+	_save_detected_profile()
+	profile_changed.emit(active_profile)
+
+
+## Call when a trackpad gesture (pan, magnify) is observed.
+## If the user is in AUTO mode, this resolves the profile to TRACKPAD.
+func notify_trackpad_gesture() -> void:
+	if _selected_profile != Profile.AUTO:
+		return
+	if active_profile == Profile.TRACKPAD:
+		return
+	active_profile = Profile.TRACKPAD
+	_save_detected_profile()
 	profile_changed.emit(active_profile)
 
 
@@ -85,8 +98,11 @@ func _resolve_profile() -> void:
 	elif _selected_profile == Profile.TRACKPAD:
 		active_profile = Profile.TRACKPAD
 	else:
-		# AUTO: use touchscreen heuristic
-		if DisplayServer.is_touchscreen_available():
+		# AUTO: use last-detected hardware if available, otherwise heuristic
+		var detected := _load_detected_profile()
+		if detected != Profile.AUTO:
+			active_profile = detected
+		elif DisplayServer.is_touchscreen_available():
 			active_profile = Profile.TRACKPAD
 		else:
 			active_profile = Profile.MOUSE
@@ -109,3 +125,22 @@ func _save_profile() -> void:
 		push_warning("InputProfile: failed to load settings for save: %d" % err)
 	config.set_value("controls", "input_profile", _selected_profile)
 	config.save(Paths.SETTINGS_PATH)
+
+
+## Persist the auto-detected hardware profile so it survives across sessions.
+func _save_detected_profile() -> void:
+	var config := ConfigFile.new()
+	var err := config.load(Paths.SETTINGS_PATH)
+	if err != OK and err != ERR_FILE_NOT_FOUND:
+		push_warning("InputProfile: failed to load settings for save: %d" % err)
+	config.set_value("controls", "detected_profile", active_profile)
+	config.save(Paths.SETTINGS_PATH)
+
+
+## Load the previously auto-detected hardware profile, or AUTO if none saved.
+func _load_detected_profile() -> Profile:
+	var config := ConfigFile.new()
+	var err := config.load(Paths.SETTINGS_PATH)
+	if err != OK:
+		return Profile.AUTO
+	return config.get_value("controls", "detected_profile", Profile.AUTO) as Profile
