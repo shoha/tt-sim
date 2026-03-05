@@ -302,6 +302,10 @@ func _input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventPanGesture:
+		if _is_mouse_over_gui():
+			return
+		if drag_and_drop_node and drag_and_drop_node.is_dragging():
+			return
 		if event.delta.y < 0:
 			_target_zoom = clampf(
 				_target_zoom - zoom_step * pan_gesture_zoom_factor, min_zoom, max_zoom
@@ -310,6 +314,7 @@ func _input(event: InputEvent) -> void:
 			_target_zoom = clampf(
 				_target_zoom + zoom_step * pan_gesture_zoom_factor, min_zoom, max_zoom
 			)
+		return
 
 	if event is not InputEventMouseButton:
 		return
