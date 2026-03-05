@@ -33,6 +33,7 @@ var _environment_manager: LevelEnvironmentManager = null
 
 # Fog baseline (captured when weather is first applied)
 var _base_fog_density := 0.0
+var _base_fog_enabled := false
 var _has_base_fog := false
 
 # Tweens for smooth transitions (keyed by emitter name)
@@ -340,6 +341,7 @@ func _transition_fog(target_intensity: float) -> void:
 
 	if not _has_base_fog:
 		_base_fog_density = env.environment.fog_density
+		_base_fog_enabled = env.environment.fog_enabled
 		_has_base_fog = true
 
 	if _fog_tween and _fog_tween.is_valid():
@@ -355,8 +357,8 @@ func _transition_fog(target_intensity: float) -> void:
 	_fog_tween.tween_property(env.environment, "fog_density", target_density, TRANSITION_DURATION)
 	_fog_tween.tween_callback(
 		func() -> void:
-			if target_intensity <= 0.0 and _base_fog_density <= 0.0:
-				env.environment.fog_enabled = false
+			if target_intensity <= 0.0:
+				env.environment.fog_enabled = _base_fog_enabled
 	)
 
 
