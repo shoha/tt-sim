@@ -253,7 +253,7 @@ func _update_emitter_positions() -> void:
 	if _wind_emitter:
 		_wind_emitter.global_position = wind_pos
 
-	var viewport_size := _camera.get_viewport().size
+	var viewport_size: Vector2i = _camera.get_viewport().size
 	var aspect := float(viewport_size.x) / float(viewport_size.y)
 	var half_h := _camera.size * 0.5
 	var half_w := half_h * aspect
