@@ -314,6 +314,7 @@ func _input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventPanGesture:
+		InputProfile.notify_trackpad_gesture()
 		if _is_mouse_over_gui():
 			return
 		if drag_and_drop_node and drag_and_drop_node.is_dragging():
