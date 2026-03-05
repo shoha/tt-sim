@@ -55,6 +55,7 @@ var occlusion_fade: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewpor
 
 var _camera_move_dir: Vector3
 var _camera_velocity: Vector3 = Vector3.ZERO  # Smoothed camera movement velocity
+var _iso_vertical_comp: float = 1.0  # Foreshortening compensation for screen-vertical panning
 var _target_zoom: float = 0.0  # Target zoom level (smoothly interpolated toward)
 var _current_edge_pan: Vector2 = Vector2.ZERO  # Smoothed edge pan direction
 var _context_menu = null  # TokenContextMenu - dynamically typed to avoid load order issues
@@ -166,6 +167,9 @@ func _ready() -> void:
 	# These are the reference values for proportional offset scaling.
 	_base_camera_offset = camera_node.position
 	_base_camera_size = camera_node.size
+	# Isometric foreshortening: the camera's elevation angle compresses vertical
+	# screen movement by sin(elevation).  Compensate by 1/sin = hypotenuse/opposite.
+	_iso_vertical_comp = _base_camera_offset.length() / _base_camera_offset.y
 	# Initialize target zoom from the camera's current size (reference 16:9 height)
 	_target_zoom = camera_node.size
 	# Apply aspect correction immediately using the actual window size.
@@ -206,8 +210,16 @@ func _process(delta: float) -> void:
 
 
 func handle_movement(delta: float) -> void:
+	# Compensate for isometric foreshortening: scale the screen-vertical
+	# component of the movement direction so W/S feels the same as A/D.
+	var screen_v_axis := Vector3(-1.0, 0.0, -1.0).normalized()
+	var v_component := _camera_move_dir.dot(screen_v_axis)
+	var compensated_dir := (
+		_camera_move_dir + screen_v_axis * v_component * (_iso_vertical_comp - 1.0)
+	)
+
 	# Smoothly accelerate toward target velocity and decelerate when keys released
-	var target_velocity = _camera_move_dir * move_speed
+	var target_velocity = compensated_dir * move_speed
 	var smooth_factor = 1.0 - exp(-move_accel_speed * delta)
 	_camera_velocity = _camera_velocity.lerp(target_velocity, smooth_factor)
 
@@ -1029,11 +1041,13 @@ func _handle_edge_pan(delta: float) -> void:
 		_current_edge_pan = Vector2.ZERO
 		return
 
-	# Convert screen-space pan direction to isometric camera movement
-	# Same coordinate mapping as keyboard: up=(-1,-1), down=(+1,+1), left=(-1,+1), right=(+1,-1)
+	# Convert screen-space pan direction to isometric camera movement.
+	# Same coordinate mapping as keyboard: up=(-1,-1), down=(+1,+1), left=(-1,+1), right=(+1,-1).
+	# Vertical component scaled by foreshortening compensation to match keyboard panning.
+	var vert := _current_edge_pan.y * _iso_vertical_comp
 	var cam_move = Vector3.ZERO
-	cam_move.x = _current_edge_pan.x + _current_edge_pan.y
-	cam_move.z = -_current_edge_pan.x + _current_edge_pan.y
+	cam_move.x = _current_edge_pan.x + vert
+	cam_move.z = -_current_edge_pan.x + vert
 
 	var pan_speed = drag_and_drop_node.edge_pan_speed if drag_and_drop_node else 4.0
 	cameraholder_node.translate(cam_move * pan_speed * delta)
