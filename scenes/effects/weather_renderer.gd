@@ -6,6 +6,7 @@ extends Node3D
 ## Call apply_weather() to set intensities; transitions are automatic.
 
 const TRANSITION_DURATION := 1.0
+const EMISSION_MARGIN := 1.25  # 25% beyond visible area to prevent pop-in at edges
 const WIND_DIRECTION := Vector3(0.707107, 0.0, -0.707107)  # Vector3(1, 0, -1).normalized()
 const RAIN_BASE_GRAVITY := Vector3(0, -9.8, 0)
 const SNOW_BASE_GRAVITY := Vector3(0, -1.5, 0)
@@ -252,13 +253,18 @@ func _update_emitter_positions() -> void:
 	if _wind_emitter:
 		_wind_emitter.global_position = wind_pos
 
-	var half_size := _camera.size * 0.6
-	_update_emission_extents(_rain_emitter, Vector3(half_size, 0.5, half_size))
-	_update_emission_extents(_snow_emitter, Vector3(half_size, 0.5, half_size))
-	_update_emission_extents(_wind_emitter, Vector3(half_size, 3.0, half_size))
+	var viewport_size := _camera.get_viewport().size
+	var aspect := float(viewport_size.x) / float(viewport_size.y)
+	var half_h := _camera.size * 0.5
+	var half_w := half_h * aspect
+	var half_extent := maxf(half_w, half_h) * EMISSION_MARGIN
+	_update_emission_extents(_rain_emitter, Vector3(half_extent, 0.5, half_extent))
+	_update_emission_extents(_snow_emitter, Vector3(half_extent, 0.5, half_extent))
+	_update_emission_extents(_wind_emitter, Vector3(half_extent, 3.0, half_extent))
 
 	if _rain_collision:
-		_rain_collision.size = Vector3(half_size * 2.5, 20, half_size * 2.5)
+		var collision_extent := half_extent * 2.0
+		_rain_collision.size = Vector3(collision_extent, 20, collision_extent)
 
 
 func _update_emission_extents(emitter: GPUParticles3D, extents: Vector3) -> void:
