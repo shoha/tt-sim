@@ -181,6 +181,7 @@ func _populate_controls_list() -> void:
 		[InputProfile.label(&"pan"), "Pan camera"],
 		[InputProfile.label(&"rotate"), "Rotate token"],
 		[InputProfile.label(&"scale"), "Scale token"],
+		[InputProfile.label(&"reset_transform"), "Reset token transform"],
 		[InputProfile.label(&"reset_camera"), "Reset camera"],
 		[InputProfile.label(&"wasd"), "Move camera"],
 		[InputProfile.label(&"measure"), "Measure tool"],
