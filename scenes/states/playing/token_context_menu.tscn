@@ -123,7 +123,7 @@ layout_mode = 2
 [node name="CloseButton" type="Button" parent="MenuPanel/VBoxContainer"]
 script = ExtResource("animated_btn")
 layout_mode = 2
-theme_type_variation = &"Danger"
+theme_type_variation = &"Secondary"
 text = "Close"
 
 [connection signal="text_submitted" from="MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentInput" to="." method="_on_hp_adjustment_requested"]

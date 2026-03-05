@@ -31,7 +31,7 @@ The theme uses a semantic color system where colors are named by their purpose, 
 | `color_secondary`      | Secondary actions, less prominent elements         |
 | `color_success`        | Positive actions (Apply, Confirm, Play)            |
 | `color_warning`        | Caution states                                     |
-| `color_danger`         | Destructive actions (Delete, Close)                |
+| `color_danger`         | Destructive actions (Delete, Quit, Leave)          |
 
 ### Text Colors
 
@@ -159,27 +159,41 @@ Font sizes form a clear hierarchy for visual organization:
 
 Buttons have semantic variants to communicate their purpose:
 
-| Variant     | Color         | Usage                                            |
-| ----------- | ------------- | ------------------------------------------------ |
-| (default)   | Accent/Orange | Primary actions                                  |
-| `Secondary` | Teal          | Less prominent actions (New, Load, Save, Select) |
-| `Success`   | Green         | Positive/confirm actions (Apply, Play)           |
-| `Warning`   | Yellow        | Caution actions                                  |
-| `Danger`    | Red           | Destructive actions (Delete, Close)              |
+| Variant     | Color         | Usage                                                       |
+| ----------- | ------------- | ----------------------------------------------------------- |
+| (default)   | Accent/Orange | Utility actions (Settings, Level Editor)                    |
+| `Secondary` | Teal          | Standard actions (New, Load, Save, Select, Host, Join, Close) |
+| `Success`   | Green         | Primary CTA / positive actions (Play Level, Apply, Start)   |
+| `Warning`   | Yellow        | Caution actions                                             |
+| `Danger`    | Red           | Destructive / irreversible actions (Delete, Quit, Leave)    |
+
+### Choosing the Right Variant
+
+Use color to communicate **action weight**, not arbitrary grouping:
+
+- **Success** (green): The primary call-to-action on a screen -- what most users came here to do
+- **Secondary** (teal): Standard actions that aren't the primary CTA (file ops, navigation, close/dismiss)
+- **Default** (accent): Utility actions that aren't game actions (Settings, Level Editor)
+- **Danger** (red): Only for actions that are destructive or abandon state (Delete, Quit, Leave)
+
+Closing or dismissing a menu is **not** destructive -- use `Secondary`, not `Danger`.
 
 ### Example Button Bar
 
 ```gdscript
-# File operations - secondary importance
+# File operations - standard actions
 NewButton.theme_type_variation = "Secondary"
 LoadButton.theme_type_variation = "Secondary"
 SaveButton.theme_type_variation = "Secondary"
 
-# Playtest - positive action
+# Playtest - primary CTA
 PlayButton.theme_type_variation = "Success"
 
-# Close - destructive
-CloseButton.theme_type_variation = "Danger"
+# Close - dismissal, not destructive
+CloseButton.theme_type_variation = "Secondary"
+
+# Delete - destructive
+DeleteButton.theme_type_variation = "Danger"
 ```
 
 ### In .tscn Files
@@ -637,10 +651,10 @@ MarginContainer (outer padding)
 ### Step 3: Apply Button Variants
 
 1. Identify action types:
-   - Primary action → default (accent)
-   - File/secondary operations → `Secondary`
-   - Confirm/positive → `Success`
-   - Destructive → `Danger`
+   - Primary CTA / positive → `Success`
+   - Standard actions (file ops, navigation, close) → `Secondary`
+   - Utility actions (settings, tools) → default (accent)
+   - Destructive / irreversible → `Danger`
 
 2. Group related buttons with `VSeparator` between groups
 
