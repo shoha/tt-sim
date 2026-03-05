@@ -36,7 +36,6 @@ alignment = 2
 script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Secondary"
 text = "Level Editor"
 
 [connection signal="pressed" from="AppMenu/BottomButtons/LevelEditorButton" to="AppMenu" method="_on_level_editor_button_pressed"]
