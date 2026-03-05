@@ -288,15 +288,32 @@ func _revert_edit_mode_values() -> void:
 		game_map.apply_lofi_overrides(Constants.LOFI_DEFAULTS)
 		if _original_lofi_overrides.size() > 0:
 			game_map.apply_lofi_overrides(_original_lofi_overrides)
-		game_map.apply_weather_overrides(_original_weather_overrides)
+		# Always reset weather to zero first, then overlay the original overrides.
+		# apply_weather_overrides only sets keys present in the dict — an empty
+		# dict (no weather when the drawer opened) would leave edited effects stuck.
+		var weather_defaults := {
+			"rain_intensity": 0.0,
+			"snow_intensity": 0.0,
+			"fog_intensity": 0.0,
+			"wind_intensity": 0.0,
+		}
+		weather_defaults.merge(_original_weather_overrides, true)
+		game_map.apply_weather_overrides(weather_defaults)
 
 	# Broadcast reverted values to clients so they also snap back.
-	# Lo-fi overrides must include full defaults merged with originals, because
-	# apply_lofi_overrides() only sets keys present in the dictionary — a sparse
-	# original dict would leave edited parameters (e.g. grain, color fade) stuck.
+	# Lo-fi / weather overrides must include full defaults merged with originals,
+	# because apply_*_overrides() only sets keys present in the dictionary — a
+	# sparse original dict would leave edited parameters stuck on clients.
 	if NetworkManager.is_networked() and NetworkManager.is_host():
 		var full_lofi = Constants.LOFI_DEFAULTS.duplicate()
 		full_lofi.merge(_original_lofi_overrides, true)
+		var full_weather := {
+			"rain_intensity": 0.0,
+			"snow_intensity": 0.0,
+			"fog_intensity": 0.0,
+			"wind_intensity": 0.0,
+		}
+		full_weather.merge(_original_weather_overrides, true)
 		(
 			NetworkManager
 			. broadcast_visual_settings(
@@ -305,7 +322,7 @@ func _revert_edit_mode_values() -> void:
 					"environment_preset": _original_environment_preset,
 					"environment_overrides": _original_environment_overrides,
 					"lofi_overrides": full_lofi,
-					"weather_overrides": _original_weather_overrides,
+					"weather_overrides": full_weather,
 				}
 			)
 		)
