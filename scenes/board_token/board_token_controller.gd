@@ -24,8 +24,9 @@ class_name BoardTokenController
 const ROTATION_SNAP_DEGREES: float = 45.0  # Rotation snaps to this increment
 const ROTATION_INPUT_THRESHOLD: float = 60.0  # Accumulated pixel distance before each rotation snap
 const ROTATION_TWEEN_DURATION: float = 0.1  # Duration of rotation snap animation
-const SCALE_FACTOR: float = 0.0001
-const SCALE_SMOOTH_SPEED: float = 15.0  # Smoothing rate for scale interpolation
+const SCALE_SNAP_INCREMENT: float = 0.25  # Scale snaps by this amount per step
+const SCALE_INPUT_THRESHOLD: float = 60.0  # Accumulated pixel distance before each scale snap
+const SCALE_TWEEN_DURATION: float = 0.1  # Duration of scale snap animation
 
 @export var rigid_body: RigidBody3D
 @export var draggable_token: DraggableToken
@@ -42,8 +43,9 @@ const SCALE_MAX: float = 10.0
 var _rotation_accumulator: float = 0.0
 var _rotation_tween: Tween = null
 
-# Smooth scaling state
-var _target_scale: Vector3 = Vector3.ONE
+# Scale snapping state
+var _scale_accumulator: float = 0.0
+var _scale_tween: Tween = null
 
 # R+LMB alternative rotate/scale state
 var _r_key_rotating: bool = false
@@ -177,7 +179,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		# Check if shift is held to determine scaling vs rotation
 		if Input.is_key_pressed(KEY_SHIFT):
 			_scaling = true
-			_target_scale = rigid_body.scale
+			_scale_accumulator = 0.0
 		else:
 			_rotating = true
 			_rotation_accumulator = 0.0
@@ -212,7 +214,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if Input.is_key_pressed(KEY_SHIFT):
 			_r_key_scaling = true
 			_scaling = true
-			_target_scale = rigid_body.scale
+			_scale_accumulator = 0.0
 		else:
 			_r_key_rotating = true
 			_rotating = true
@@ -247,14 +249,8 @@ func _finalize_rotate_scale() -> void:
 	_rotating = false
 	_scaling = false
 	_rotation_accumulator = 0.0
+	_scale_accumulator = 0.0
 	set_process(false)
-
-	# Snap to target scale on release to finalize
-	if was_scaling:
-		_adjust_position_for_scale(rigid_body.scale, _target_scale)
-		rigid_body.scale = _target_scale
-		if draggable_token:
-			draggable_token.update_height_offset()
 
 	# Emit signal for network sync when rotation/scale changes complete
 	var board_token := get_parent() as BoardToken
@@ -291,14 +287,44 @@ func _handle_rotation(event: InputEventMouseMotion) -> void:
 		)
 
 
+## Handle scaling input with increment snapping.
+## Accumulates mouse Y movement until a threshold is reached, then snaps to the next scale
+## increment with a smooth tween animation. Mouse up = scale up, mouse down = scale down.
 func _handle_scaling(event: InputEventMouseMotion) -> void:
-	var velocity_y = event.screen_velocity.y
-	# Use negative velocity_y so moving mouse up scales up, down scales down
-	var scale_change = -velocity_y * SCALE_FACTOR
-	# Update the target scale (actual scale is smoothed toward this in _process)
-	_target_scale = (_target_scale + Vector3.ONE * scale_change).clamp(
-		Vector3.ONE * SCALE_MIN, Vector3.ONE * SCALE_MAX
-	)
+	# Negative so mouse-up = scale-up
+	_scale_accumulator -= event.relative.y
+
+	if abs(_scale_accumulator) >= SCALE_INPUT_THRESHOLD:
+		var direction = sign(_scale_accumulator)
+		_scale_accumulator = 0.0
+
+		var current_scale_val = rigid_body.scale.x
+		var target_scale_val = current_scale_val + SCALE_SNAP_INCREMENT * direction
+
+		# Snap to nearest multiple of the snap increment
+		target_scale_val = snapped(target_scale_val, SCALE_SNAP_INCREMENT)
+		target_scale_val = clampf(target_scale_val, SCALE_MIN, SCALE_MAX)
+
+		var target_scale = Vector3.ONE * target_scale_val
+
+		# Adjust position so the bottom stays grounded
+		_adjust_position_for_scale(rigid_body.scale, target_scale)
+
+		# Smoothly animate to the snapped scale
+		if _scale_tween and _scale_tween.is_valid():
+			_scale_tween.kill()
+		_scale_tween = create_tween()
+		(
+			_scale_tween
+			. tween_property(rigid_body, "scale", target_scale, SCALE_TWEEN_DURATION)
+			. set_trans(Tween.TRANS_CUBIC)
+			. set_ease(Tween.EASE_OUT)
+		)
+		_scale_tween.tween_callback(
+			func() -> void:
+				if draggable_token:
+					draggable_token.update_height_offset()
+		)
 
 
 func _adjust_position_for_scale(old_scale: Vector3, new_scale: Vector3) -> void:
@@ -347,16 +373,6 @@ func _reset_rotation_and_scale() -> void:
 
 
 func _process(delta: float) -> void:
-	# Smoothly interpolate scale toward target during scaling
-	if _scaling:
-		var old_scale = rigid_body.scale
-		var smooth_factor = 1.0 - exp(-SCALE_SMOOTH_SPEED * delta)
-		var new_scale = old_scale.lerp(_target_scale, smooth_factor)
-		_adjust_position_for_scale(old_scale, new_scale)
-		rigid_body.scale = new_scale
-		if draggable_token:
-			draggable_token.update_height_offset()
-
 	# Emit throttled transform updates during rotation/scaling for network sync
 	if _rotating or _scaling:
 		_transform_update_timer += delta
