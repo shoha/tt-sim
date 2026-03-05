@@ -189,6 +189,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			_finalize_rotate_scale()
 			return
 
+	# --- R+double-click LMB to reset rotation and scale (alternative binding) ---
+	if (
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_LEFT
+		and event.double_click
+		and _mouse_over
+		and Input.is_key_pressed(KEY_R)
+	):
+		_reset_rotation_and_scale()
+		get_viewport().set_input_as_handled()
+		return
+
 	# --- R+LMB rotate/scale (alternative binding) ---
 	if (
 		event is InputEventMouseButton

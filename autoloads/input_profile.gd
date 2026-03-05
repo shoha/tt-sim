@@ -25,6 +25,7 @@ const LABELS := {
 	&"reset_camera": ["Home", "C"],
 	&"rotate": ["MMB Drag", "R+Drag"],
 	&"scale": ["Shift+MMB", "Shift+R+Drag"],
+	&"reset_transform": ["MMB DblClick", "R+DblClick"],
 	&"measure": ["M", "M"],
 	&"grid": ["G", "G"],
 	&"pause": ["ESC", "ESC"],
