@@ -5,7 +5,12 @@ extends Node3D
 ## Lives inside the SubViewport as a sibling of MapContainer.
 ## Call apply_weather() to set intensities; transitions are automatic.
 
-const TRANSITION_DURATION := 2.0
+const TRANSITION_DURATION := 1.0
+const WIND_DIRECTION := Vector3(0.707107, 0.0, -0.707107)  # Vector3(1, 0, -1).normalized()
+const RAIN_BASE_GRAVITY := Vector3(0, -9.8, 0)
+const SNOW_BASE_GRAVITY := Vector3(0, -1.5, 0)
+const RAIN_WIND_STRENGTH := 6.0  # horizontal m/s^2 at wind intensity 1.0
+const SNOW_WIND_STRENGTH := 2.0
 
 # Intensity targets (0.0-1.0)
 var _rain_intensity := 0.0
@@ -102,10 +107,8 @@ func _create_rain_emitter() -> GPUParticles3D:
 	alpha_curve.curve = curve
 	mat.alpha_curve = alpha_curve
 
-	# Collision mode for rain splashes on map geometry
-	mat.collision_mode = ParticleProcessMaterial.COLLISION_RIGID
-	mat.collision_friction = 1.0
-	mat.collision_bounce = 0.0
+	# Hide particles on contact with map geometry
+	mat.collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
 
 	emitter.process_material = mat
 
@@ -159,6 +162,9 @@ func _create_snow_emitter() -> GPUParticles3D:
 	curve.add_point(Vector2(1.0, 0.0))
 	alpha_curve.curve = curve
 	mat.alpha_curve = alpha_curve
+
+	# Hide particles on contact with map geometry
+	mat.collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
 
 	emitter.process_material = mat
 
@@ -278,6 +284,18 @@ func apply_weather(overrides: Dictionary) -> void:
 	_snow_intensity = snow
 	_fog_intensity = fog
 	_wind_intensity = wind
+
+	_apply_wind_to_precipitation()
+
+
+func _apply_wind_to_precipitation() -> void:
+	var wind_offset := WIND_DIRECTION * _wind_intensity
+	if _rain_emitter and _rain_emitter.process_material:
+		var mat := _rain_emitter.process_material as ParticleProcessMaterial
+		mat.gravity = RAIN_BASE_GRAVITY + wind_offset * RAIN_WIND_STRENGTH
+	if _snow_emitter and _snow_emitter.process_material:
+		var mat := _snow_emitter.process_material as ParticleProcessMaterial
+		mat.gravity = SNOW_BASE_GRAVITY + wind_offset * SNOW_WIND_STRENGTH
 
 
 func _transition_emitter(
