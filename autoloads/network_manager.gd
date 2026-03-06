@@ -606,10 +606,6 @@ func disconnect_game() -> void:
 	# Disconnect Noray signals (client-side join)
 	_disconnect_join_signals()
 
-	# Stop netfox time sync before closing the peer — our manual disconnect
-	# bypasses NetworkEvents' automatic NetworkTime.stop() call.
-	NetworkTime.stop()
-
 	# Disconnect from noray
 	Noray.disconnect_from_host()
 
