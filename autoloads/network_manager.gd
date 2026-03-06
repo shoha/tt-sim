@@ -14,7 +14,6 @@ enum ConnectionState {
 	CONNECTING,  ## Connecting to noray or game server
 	HOSTING,  ## Hosting a game, waiting for players or playing
 	JOINED,  ## Joined a game as client
-	RECONNECTING,  ## Attempting to reconnect after disconnection
 }
 
 ## Signals
@@ -24,7 +23,6 @@ signal player_joined(peer_id: int, player_info: Dictionary)
 signal player_left(peer_id: int, player_info: Dictionary)
 signal connection_failed(reason: String)
 signal connection_timeout
-signal reconnecting(attempt: int, max_attempts: int)
 signal game_starting
 signal level_data_received(level_dict: Dictionary)
 signal late_joiner_connected(peer_id: int)  ## Emitted when a player joins mid-game
@@ -55,9 +53,6 @@ var _connection_state: ConnectionState = ConnectionState.OFFLINE
 
 ## Room code (OID from Noray) when hosting
 var _room_code: String = ""
-
-## Room code used to join (stored for reconnection)
-var _joined_room_code: String = ""
 
 ## Connected players: peer_id -> player_info dictionary
 var _players: Dictionary = {}
@@ -116,9 +111,6 @@ var _connection_timer: Timer = null
 ## Game state tracking (for late joiner detection)
 var _game_in_progress: bool = false
 
-## Delegated reconnection state machine
-var _reconnection: NetworkReconnection
-
 ## Permission request/response sub-component
 var permissions: NetworkPermissions
 
@@ -151,12 +143,9 @@ func is_client() -> bool:
 
 
 ## Check if we're in a networked game (host or client).
-## Returns true during reconnection — the game is still networked, just temporarily disconnected.
 func is_networked() -> bool:
 	return (
-		_connection_state == ConnectionState.HOSTING
-		or _connection_state == ConnectionState.JOINED
-		or _reconnection.is_reconnecting()
+		_connection_state == ConnectionState.HOSTING or _connection_state == ConnectionState.JOINED
 	)
 
 
@@ -200,25 +189,6 @@ func _ready() -> void:
 	_connection_timer.one_shot = true
 	_connection_timer.timeout.connect(_on_connection_timeout)
 	add_child(_connection_timer)
-
-	# Setup reconnection handler
-	_reconnection = NetworkReconnection.new(
-		self,
-		func(code: String) -> void:
-			# Clean up peer before attempting rejoin
-			if multiplayer.multiplayer_peer:
-				multiplayer.multiplayer_peer.close()
-				multiplayer.multiplayer_peer = null
-			join_game(code),
-		func(state: int) -> void: _set_connection_state(state as ConnectionState),
-		ConnectionState.RECONNECTING,
-	)
-	_reconnection.reconnecting.connect(
-		func(attempt: int, max_attempts: int) -> void: reconnecting.emit(attempt, max_attempts)
-	)
-	_reconnection.reconnection_failed.connect(
-		func(reason: String) -> void: _handle_connection_error(reason)
-	)
 
 	# Setup permissions sub-component
 	permissions = NetworkPermissions.new()
@@ -448,22 +418,15 @@ func join_game(
 		)
 	)
 
-	# Allow joining when offline or reconnecting
-	if (
-		_connection_state != ConnectionState.OFFLINE
-		and _connection_state != ConnectionState.RECONNECTING
-	):
+	if _connection_state != ConnectionState.OFFLINE:
 		_log(
 			(
-				"!!! join_game() aborted: state is %s, expected OFFLINE or RECONNECTING"
+				"!!! join_game() aborted: state is %s, expected OFFLINE"
 				% ConnectionState.keys()[_connection_state]
 			)
 		)
 		push_warning("NetworkManager: Already connected, disconnect first")
 		return
-
-	# Store room code for potential reconnection (used by _reconnection handler)
-	_joined_room_code = room_code_input
 
 	_set_connection_state(ConnectionState.CONNECTING)
 	_start_connection_timeout()
@@ -544,12 +507,7 @@ func _on_noray_command_during_join(command: String, data: String) -> void:
 		)
 		push_warning("NetworkManager: Host not found (room code may be invalid or expired)")
 		_disconnect_join_signals()
-		if _reconnection.is_reconnecting():
-			# During reconnection: route through retry logic
-			_on_connection_failed()
-		else:
-			# Initial join attempt: give a descriptive error
-			_handle_connection_error("Host not found (room code may be invalid or expired)")
+		_handle_connection_error("Host not found (room code may be invalid or expired)")
 
 
 ## Disconnect all client-side join signal handlers from Noray.
@@ -592,9 +550,6 @@ func disconnect_game() -> void:
 		_log("Already offline, nothing to disconnect")
 		return
 
-	# Stop any pending reconnection attempts
-	_reconnection.stop()
-
 	# Set state to OFFLINE *before* closing connections so that any signals
 	# triggered by the teardown (e.g. server_disconnected from peer.close())
 	# see OFFLINE and short-circuit instead of starting a reconnection cycle.
@@ -617,7 +572,6 @@ func disconnect_game() -> void:
 	# Clear state
 	_players.clear()
 	_room_code = ""
-	_joined_room_code = ""
 	_game_in_progress = false
 	_current_level_dict.clear()
 	_stop_connection_timeout()
@@ -723,55 +677,24 @@ func _on_connected_to_server() -> void:
 	_stop_connection_timeout()
 	_players[multiplayer.get_unique_id()] = _local_player_info.duplicate()
 
-	# If we were reconnecting, reset reconnection state
-	if _connection_state == ConnectionState.RECONNECTING or _reconnection.is_reconnecting():
-		_log("Reconnection successful, resetting reconnection state")
-		_reconnection.stop()
-
 	_set_connection_state(ConnectionState.JOINED)
 
 
 func _on_connection_failed() -> void:
-	# Ignore stale signals from a peer we already closed (e.g. if the
-	# connection is torn down before ENet finishes connecting).
 	if not multiplayer.multiplayer_peer:
 		_log("Ignoring stale connection_failed (peer already closed)")
 		return
 
-	_log(
-		(
-			"!!! CONNECTION FAILED — state=%s, reconnecting=%s"
-			% [ConnectionState.keys()[_connection_state], _reconnection.is_reconnecting()]
-		)
-	)
+	_log("!!! CONNECTION FAILED — state=%s" % [ConnectionState.keys()[_connection_state]])
 	_dump_noray_state("connection failed")
-
-	# If we're reconnecting, delegate retry/give-up logic to the handler
-	if _reconnection.is_reconnecting():
-		_reconnection.on_attempt_failed()
-	else:
-		_handle_connection_error("Failed to connect to game server")
+	_handle_connection_error("Failed to connect to game server")
 
 
 func _on_server_disconnected() -> void:
 	_log("!!! SERVER DISCONNECTED — state=%s" % ConnectionState.keys()[_connection_state])
 	_dump_noray_state("server disconnected")
-	# Only attempt reconnection if we were previously joined as a client
 	if _connection_state == ConnectionState.JOINED:
-		# Partial cleanup: close ENet connection but preserve room code for reconnection
-		if multiplayer.multiplayer_peer:
-			multiplayer.multiplayer_peer.close()
-			multiplayer.multiplayer_peer = null
-
-		# Clear players but keep room code
-		_players.clear()
-		_stop_connection_timeout()
-
-		# Start reconnection process via handler — use the room code the client
-		# originally joined with (for clients _room_code is empty since it's the
-		# host OID; for hosts _joined_room_code is empty so fall back to _room_code)
-		var code_for_reconnect = _joined_room_code if _joined_room_code != "" else _room_code
-		_reconnection.start(code_for_reconnect)
+		_handle_connection_error("Host disconnected")
 	else:
 		disconnect_game()
 

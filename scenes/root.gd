@@ -55,7 +55,6 @@ func _ready() -> void:
 
 	# Connect network signals (for handling disconnects and player events while in-game)
 	NetworkManager.connection_state_changed.connect(_on_network_state_changed)
-	NetworkManager.reconnecting.connect(_on_network_reconnecting)
 	NetworkManager.player_left.connect(_on_network_player_left)
 
 	# Connect EventBus signals — allows UIManager and other systems to request
@@ -389,22 +388,11 @@ func _on_network_state_changed(
 			and old_state != NetworkManager.ConnectionState.HOSTING
 		):
 			_show_disconnect_dialog()
-	elif new_state == NetworkManager.ConnectionState.JOINED:
-		# Successfully reconnected
-		_hide_disconnect_indicator()
 
 
 func _on_network_player_left(_peer_id: int, player_info: Dictionary) -> void:
 	var player_name: String = player_info.get("name", "A player")
 	UIManager.show_warning("%s disconnected" % player_name)
-
-
-func _on_network_reconnecting(attempt: int, max_attempts: int) -> void:
-	# Show persistent indicator while reconnecting
-	if get_current_state() == State.PLAYING:
-		_show_disconnect_indicator(
-			"Disconnected — Reconnecting (%d/%d)..." % [attempt, max_attempts]
-		)
 
 
 func _show_disconnect_dialog() -> void:
