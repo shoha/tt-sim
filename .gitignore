@@ -13,5 +13,8 @@
 /user_assets/
 .vscode/
 
+# Steam — App ID is environment-specific (480/SpaceWar for dev, real ID for release)
+steam_appid.txt
+
 # Claude Code — local overrides are machine-specific
 .claude/settings.local.json
