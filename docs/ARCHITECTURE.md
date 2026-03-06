@@ -107,7 +107,6 @@ Autoloads are registered in `project.godot` and available globally.
 | `NetworkManager`   | `autoloads/network_manager.gd`    | Connection lifecycle, RPC routing |
 | `NetworkStateSync` | `autoloads/network_state_sync.gd` | State broadcasting and batching   |
 | `GameState`        | `autoloads/game_state.gd`         | Authoritative game state storage  |
-| `Noray`            | `addons/netfox.noray/noray.gd`    | NAT punchthrough client           |
 
 ### Asset Management
 
@@ -298,8 +297,8 @@ The project uses a **host-authoritative architecture** for multiplayer.
 
 ### Key Concepts
 
-- **Host** acts as the server, clients connect via room codes
-- **Noray** provides NAT punchthrough for peer-to-peer connections
+- **Host** acts as the server, clients connect via room codes or Steam invite
+- **Steam Networking** provides relay transport via Valve's SDR network (no server infrastructure)
 - **GameState** is the single source of truth (host-authoritative)
 - **NetworkStateSync** handles rate-limited state broadcasting
 
@@ -307,13 +306,13 @@ The project uses a **host-authoritative architecture** for multiplayer.
 
 ```
 Host Flow:
-1. Connect to Noray → Get room code (OID)
-2. Start ENet server → Wait for clients
+1. Initialize Steam → Create Steam lobby
+2. Start SteamMultiplayerPeer host → Emit room code (base-36 lobby ID)
 3. Clients connect → Send level data and game state
 
 Client Flow:
-1. Enter room code → Connect to Noray
-2. NAT punchthrough → Connect to host
+1. Enter room code (or accept Steam invite) → Join Steam lobby
+2. Create SteamMultiplayerPeer client → Connect to host
 3. Receive level data → Receive game state → Play
 ```
 
