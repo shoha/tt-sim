@@ -13,9 +13,9 @@ static func encode(lobby_id: int) -> String:
 	var result := ""
 	var value := lobby_id
 	while value > 0:
-		@warning_ignore("integer_division")
 		var remainder := value % BASE
 		result = ALPHABET[remainder] + result
+		@warning_ignore("integer_division")
 		value = value / BASE
 	return result
 
