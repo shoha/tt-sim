@@ -242,7 +242,7 @@ func _stop_connection_timeout() -> void:
 
 ## Start hosting a game.
 ## Creates a Steam lobby and starts a SteamMultiplayerPeer host.
-func host_game(server_override: String = "", port_override: int = 0) -> void:
+func host_game() -> void:
 	if _connection_state != ConnectionState.OFFLINE:
 		push_warning("NetworkManager: Already connected, disconnect first")
 		return
@@ -294,9 +294,7 @@ func _on_lobby_created(result: int, lobby_id: int) -> void:
 
 
 ## Join a game using a room code (base-36 encoded Steam lobby ID).
-func join_game(
-	room_code_input: String, server_override: String = "", port_override: int = 0
-) -> void:
+func join_game(room_code_input: String) -> void:
 	if _connection_state != ConnectionState.OFFLINE:
 		push_warning("NetworkManager: Already connected, disconnect first")
 		return

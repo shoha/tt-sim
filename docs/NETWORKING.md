@@ -346,10 +346,10 @@ Player name is stored in `Paths.SETTINGS_PATH` (`user://settings.cfg`) under the
 
 ```gdscript
 # Host a game
-func host_game(server_override: String = "", port_override: int = 0) -> void
+func host_game() -> void
 
 # Join a game with room code (base-36 encoded lobby ID)
-func join_game(room_code: String, server_override: String = "", port_override: int = 0) -> void
+func join_game(room_code: String) -> void
 
 # Disconnect from current game
 func disconnect_game() -> void
