@@ -11,8 +11,9 @@ This document covers the multiplayer networking system, including connection man
 - [Player Roles](#player-roles)
 - [Late Joiner Support](#late-joiner-support)
 - [Token Synchronization](#token-synchronization)
-- [Configuration](#configuration)
+- [Development Setup](#development-setup)
 - [API Reference](#api-reference)
+- [Steam Integration](#steam-integration)
 
 ---
 
@@ -316,20 +317,83 @@ NetworkStateSync.broadcast_token_removed(network_id)
 
 ---
 
-## Configuration
+## Development Setup
 
 ### Steam App ID
 
 The Steam App ID is read from `steam_appid.txt` in the project root. This file is **gitignored** — each environment provides its own:
 
-- **Development:** `480` (Valve's SpaceWar test app)
-- **Production:** Real Steam App ID
+- **Development:** `480` (Valve's SpaceWar test app) — works with any Steam account
+- **Production:** Real Steam App ID (4591070)
+- **CI builds:** Written from the `STEAM_APP_ID` GitHub Actions secret
 
-### Settings
+A template is provided at `steam_appid.txt.example`. Copy it to get started:
+
+```bash
+cp steam_appid.txt.example steam_appid.txt
+```
+
+For production testing, replace `480` with `4591070`.
+
+### Prerequisites
+
+- **Steam must be running** before launching the game or editor
+- GodotSteam GDExtension is bundled at `addons/godotsteam/` (no separate install needed)
+- If Steam is not running, the game shows a dialog prompting the user to launch it
+
+### Local Multiplayer Testing
+
+Testing multiplayer requires **two game instances with different Steam accounts**. The recommended setup runs the Godot editor as one peer and an exported debug build as the second.
+
+#### One-time setup
+
+1. **Create a free second Steam account** at [store.steampowered.com](https://store.steampowered.com). No purchase needed — App ID 480 (SpaceWar) works with any account.
+
+2. **Launch the secondary Steam client** and log in:
+
+```powershell
+.\scripts\launch-test-peer.ps1 -SetupSteam
+```
+
+This runs `steam.exe -master_ipc_name_override tt-sim-testing -userchooser`, which opens a separate Steam client with its own IPC channel. Log in with the second account. The secondary client stays running in the background — you only need to do this once per session.
+
+#### Testing workflow
+
+1. Open tt-sim in the **Godot editor** and hit Play. Host a game — you'll get a room code.
+
+2. In a **PowerShell terminal**, launch the second peer:
+
+```powershell
+.\scripts\launch-test-peer.ps1
+```
+
+This exports a debug build to `build/windows-debug/` and launches it connected to the secondary Steam account. Join with the room code from step 1.
+
+#### Script options
+
+| Flag | Effect |
+|------|--------|
+| `-SetupSteam` | Launch the secondary Steam client for login |
+| `-SkipExport` | Reuse the last debug build (faster when only host-side code changed) |
+| `-ExportOnly` | Export the debug build without launching |
+| (no flags) | Export + launch |
+
+#### How it works
+
+Steam identifies peers by Steam ID. Two instances on the same account share the same ID and cannot form a connection. The script solves this by running a second Steam client with a separate IPC name (`-master_ipc_name_override`) and pointing the debug build at it via the `steam_master_ipc_name_override` environment variable. Each instance then has a distinct Steam ID.
+
+#### Limitations
+
+- The debug build must be re-exported to pick up code changes. Use `-SkipExport` when you only changed host-side logic and just need a connected peer.
+- Both instances share the same machine's resources (CPU, GPU, network). Performance profiling should use separate machines.
+
+### Configuration
+
+#### Settings
 
 Player name is stored in `Paths.SETTINGS_PATH` (`user://settings.cfg`) under the `[player]` section.
 
-### Constants
+#### Constants
 
 | Setting            | Value | Description                  |
 | ------------------ | ----- | ---------------------------- |
@@ -478,5 +542,5 @@ var lobby_id = LobbyCode.decode("1ABC2D")  # same result
 The host lobby includes an **Invite** button that opens the Steam overlay invite dialog:
 
 ```gdscript
-Steam.activateGameOverlayInviteDialog(lobby_id)
+NetworkManager.open_invite_overlay()
 ```
