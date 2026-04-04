@@ -325,7 +325,7 @@ func join_game(room_code_input: String) -> void:
 	Steam.joinLobby(_lobby_id)
 
 
-func _on_lobby_joined(lobby_id: int, _permissions: int, _locked: bool, result: int) -> void:
+func _on_lobby_joined(lobby_id: int, _lobby_permissions: int, _locked: bool, result: int) -> void:
 	if _connection_state != ConnectionState.CONNECTING:
 		return
 
