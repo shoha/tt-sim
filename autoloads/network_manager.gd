@@ -189,13 +189,20 @@ func _process(_delta: float) -> void:
 
 
 ## Lazily initialize Steam on first multiplayer attempt.
+## Retries once on IPC failure (Steam's pipe can go stale).
 ## Returns true if Steam is ready, false if initialization failed.
 func _ensure_steam_initialized() -> bool:
 	if _steam_initialized:
 		return true
 
-	var init_result: Dictionary = Steam.steamInitEx()
-	print("NetworkManager: steamInitEx() returned: ", init_result)
+	var init_result: Dictionary = _try_steam_init()
+
+	# Retry once on IPC pipe failure — Steam's named pipe can go stale
+	if init_result.status == 2:
+		push_warning("NetworkManager: Steam IPC failed, retrying in 1s...")
+		await get_tree().create_timer(1.0).timeout
+		init_result = _try_steam_init()
+
 	if init_result.status == 0:
 		_steam_initialized = true
 		return true
@@ -209,6 +216,12 @@ func _ensure_steam_initialized() -> bool:
 	push_warning("NetworkManager: ", reason)
 	connection_failed.emit(reason)
 	return false
+
+
+func _try_steam_init() -> Dictionary:
+	var result: Dictionary = Steam.steamInitEx()
+	print("NetworkManager: steamInitEx() returned: ", result)
+	return result
 
 
 func _on_connection_timeout() -> void:
@@ -240,7 +253,7 @@ func host_game() -> void:
 		push_warning("NetworkManager: Already connected, disconnect first")
 		return
 
-	if not _ensure_steam_initialized():
+	if not await _ensure_steam_initialized():
 		return
 
 	_set_connection_state(ConnectionState.CONNECTING)
@@ -292,7 +305,7 @@ func join_game(room_code_input: String) -> void:
 		push_warning("NetworkManager: Already connected, disconnect first")
 		return
 
-	if not _ensure_steam_initialized():
+	if not await _ensure_steam_initialized():
 		return
 
 	# Decode base-36 room code to lobby ID
