@@ -70,6 +70,9 @@ jobs:
           echo "Injecting version: $VERSION"
           sed -i "s/config\/version=\"[^\"]*\"/config\/version=\"$VERSION\"/" project.godot
 
+      - name: Write Steam App ID
+        run: echo "${{ secrets.STEAM_APP_ID }}" > steam_appid.txt
+
       - name: Import project
         run: godot --headless --import
 
