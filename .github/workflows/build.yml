@@ -314,19 +314,34 @@ jobs:
           fi
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.version.outputs.tag_name }}
-          name: ${{ steps.version.outputs.is_tag == 'true' && steps.version.outputs.version || format('Build {0}', steps.version.outputs.version) }}
-          body: |
-            ${{ steps.version.outputs.is_tag == 'true' && format('## Release {0}', steps.version.outputs.version) || 'Automated build from commit' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag_name }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          IS_TAG="${{ steps.version.outputs.is_tag }}"
+          COMMIT="${{ github.sha }}"
+          COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
 
-            **Commit:** [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
-            ${{ steps.version.outputs.is_tag != 'true' && format('**Branch:** `{0}`', github.ref_name) || '' }}
-          files: |
-            TTSim-Windows.zip
-            TTSim-macOS.zip
+          if [ "$IS_TAG" = "true" ]; then
+            TITLE="$VERSION"
+            BODY="## Release ${VERSION}
+
+          **Commit:** [\`${COMMIT}\`](${COMMIT_URL})"
+            PRERELEASE=""
+          else
+            TITLE="Build ${VERSION}"
+            BODY="Automated build from commit
+
+          **Commit:** [\`${COMMIT}\`](${COMMIT_URL})
+          **Branch:** \`${{ github.ref_name }}\`"
+            PRERELEASE="--prerelease"
+          fi
+
+          gh release create "$TAG" \
+            --title "$TITLE" \
+            --notes "$BODY" \
+            $PRERELEASE \
+            TTSim-Windows.zip \
+            TTSim-macOS.zip \
             TTSim-Linux.zip
-          prerelease: ${{ steps.version.outputs.is_tag != 'true' }}
