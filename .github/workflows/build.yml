@@ -35,7 +35,7 @@ jobs:
             folder: "build/linux"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           lfs: true
 
@@ -80,7 +80,7 @@ jobs:
         run: godot --headless --export-release "${{ matrix.preset }}" ${{ matrix.output }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.folder }}/
@@ -92,7 +92,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Download Windows artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: TTSim-Windows
           path: artifacts/windows
@@ -113,7 +113,7 @@ jobs:
           timestamp-digest: SHA256
 
       - name: Upload signed Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: TTSim-Windows-Signed
           path: artifacts/windows/
@@ -125,10 +125,10 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download macOS artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: TTSim-macOS
           path: artifacts/macos
@@ -254,7 +254,7 @@ jobs:
         run: ditto -c -k --keepParent artifacts/macos/TTSim.app artifacts/macos/TTSim.zip
 
       - name: Upload signed macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: TTSim-macOS-Signed
           path: artifacts/macos/TTSim.zip
@@ -268,22 +268,22 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download Windows artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: TTSim-Windows-Signed
           path: artifacts/windows
 
       - name: Download macOS artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: TTSim-macOS-Signed
           path: artifacts/macos
 
       - name: Download Linux artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: TTSim-Linux
           path: artifacts/linux
