@@ -80,9 +80,8 @@ func _on_player_left(_peer_id: int, _player_info: Dictionary) -> void:
 
 
 func _on_connection_failed(reason: String) -> void:
-	status_label.text = "Connection failed: " + reason
-	room_code_value.text = "Error"
-	start_button.disabled = true
+	UIManager.show_error(reason)
+	cancel_requested.emit()
 
 
 func _on_connection_state_changed(

@@ -200,31 +200,14 @@ func _ensure_steam_initialized() -> bool:
 		_steam_initialized = true
 		return true
 
-	# Emit connection_failed so the lobby UI can react (e.g. navigate back)
-	connection_failed.emit("Steam initialization failed")
-
-	# Status 2 = Steam client not running
+	var reason: String
 	if init_result.status == 2:
-		UIManager.show_confirmation(
-			"Steam Required",
-			"Steam is not running.\nPlease start Steam and relaunch tt-sim.",
-			"Launch Steam & Quit",
-			"Back",
-			func():
-				OS.shell_open("steam://")
-				get_tree().quit(),
-		)
+		reason = "Steam is not running. Please start Steam and try again."
 	else:
-		UIManager.show_confirmation(
-			"Steam Error",
-			(
-				"Failed to initialize Steam (status %d).\n%s"
-				% [init_result.status, init_result.verbal]
-			),
-			"Quit",
-			"Back",
-			func(): get_tree().quit(),
-		)
+		reason = "Steam error (status %d): %s" % [init_result.status, init_result.verbal]
+
+	push_warning("NetworkManager: ", reason)
+	connection_failed.emit(reason)
 	return false
 
 
