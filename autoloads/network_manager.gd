@@ -195,9 +195,13 @@ func _ensure_steam_initialized() -> bool:
 		return true
 
 	var init_result: Dictionary = Steam.steamInitEx()
+	print("NetworkManager: steamInitEx() returned: ", init_result)
 	if init_result.status == 0:
 		_steam_initialized = true
 		return true
+
+	# Emit connection_failed so the lobby UI can react (e.g. navigate back)
+	connection_failed.emit("Steam initialization failed")
 
 	# Status 2 = Steam client not running
 	if init_result.status == 2:
@@ -205,7 +209,7 @@ func _ensure_steam_initialized() -> bool:
 			"Steam Required",
 			"Steam is not running.\nPlease start Steam and relaunch tt-sim.",
 			"Launch Steam & Quit",
-			"",
+			"Back",
 			func():
 				OS.shell_open("steam://")
 				get_tree().quit(),
@@ -218,7 +222,7 @@ func _ensure_steam_initialized() -> bool:
 				% [init_result.status, init_result.verbal]
 			),
 			"Quit",
-			"",
+			"Back",
 			func(): get_tree().quit(),
 		)
 	return false
