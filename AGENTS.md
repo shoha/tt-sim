@@ -12,7 +12,7 @@
 | [docs/UI_SYSTEMS.md](docs/UI_SYSTEMS.md) | UIManager, dialogs, toasts, overlays |
 | [docs/ASSET_MANAGEMENT.md](docs/ASSET_MANAGEMENT.md) | Asset packs, model loading, caching |
 | [docs/SOUND_EFFECTS.md](docs/SOUND_EFFECTS.md) | Audio files, wiring, normalization, adding new sounds |
-| [docs/NETWORKING.md](docs/NETWORKING.md) | Multiplayer, Noray, state sync |
+| [docs/NETWORKING.md](docs/NETWORKING.md) | Multiplayer, Steam networking, state sync |
 | [docs/lighting-and-environment.md](docs/lighting-and-environment.md) | Environment presets, map defaults, sky, in-game editing |
 | [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | RPC patterns, signal cleanup, token hierarchy, camera, settings, gotchas |
 
@@ -22,7 +22,7 @@
 - **Language**: GDScript
 - **Physics**: Jolt Physics
 - **Renderer**: Forward Plus
-- **Networking**: Netfox + Noray (relay-only)
+- **Networking**: GodotSteam (SteamMultiplayerPeer, Steam Lobbies)
 
 ## Key Conventions
 

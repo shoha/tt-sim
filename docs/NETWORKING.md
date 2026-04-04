@@ -20,7 +20,7 @@ This document covers the multiplayer networking system, including connection man
 
 The networking system uses a **host-authoritative architecture** where one player acts as the host (server) and others connect as clients. Key features:
 
-- **Relay via Noray** — clients connect through the Noray relay server directly (no NAT punchthrough)
+- **Steam Networking** — connections use Steam lobbies and `SteamMultiplayerPeer` (Valve SDR relay, no server infrastructure)
 - **State Synchronization** for game state and token transforms
 - **Late Joiner Support** with full state catch-up
 - **Rate-Limited Updates** to prevent network flooding
@@ -32,7 +32,13 @@ The networking system uses a **host-authoritative architecture** where one playe
 | `NetworkManager`   | Connection lifecycle, player tracking, RPC routing |
 | `NetworkStateSync` | State broadcasting, rate limiting, batching        |
 | `GameState`        | Authoritative game state storage                   |
-| `Noray`            | Relay server client (room codes, relay connections) |
+
+### Dependencies
+
+| Component | Source |
+|-----------|--------|
+| GodotSteam GDExtension | `addons/godotsteam/` — provides `Steam` singleton and `SteamMultiplayerPeer` |
+| `LobbyCode` | `utils/lobby_code.gd` — base-36 encode/decode for Steam lobby IDs |
 
 ---
 
@@ -43,10 +49,9 @@ The networking system uses a **host-authoritative architecture** where one playe
 ```gdscript
 enum ConnectionState {
     OFFLINE,       # Not connected
-    CONNECTING,    # Connecting to Noray or game server
+    CONNECTING,    # Creating/joining Steam lobby
     HOSTING,       # Hosting a game
     JOINED,        # Connected as client
-    RECONNECTING,  # Attempting automatic reconnection (client only)
 }
 ```
 
@@ -58,7 +63,6 @@ signal connection_state_changed(old_state, new_state)
 signal room_code_received(code: String)
 signal connection_failed(reason: String)
 signal connection_timeout()
-signal reconnecting(attempt: int, max_attempts: int)  # Emitted during auto-reconnection
 
 # Player management
 signal player_joined(peer_id: int, player_info: Dictionary)
@@ -74,15 +78,21 @@ signal game_state_received(state_dict: Dictionary)
 signal token_transform_received(network_id, position, rotation, scale)
 signal token_state_received(network_id, token_dict)
 signal token_removed_received(network_id)
-signal transform_batch_received(batch: Array)
+signal transform_batch_received(batch: Dictionary)
 
-# Map updates (clients)
-signal map_scale_received(uniform_scale: float)
+# Visual settings (clients)
+signal visual_settings_received(settings: Dictionary)
 ```
 
 ---
 
 ## Connection Flow
+
+### Steam Initialization
+
+Steam is initialized **lazily** on the first `host_game()` or `join_game()` call via `_ensure_steam_initialized()`. This calls `Steam.steamInitEx()` which reads the App ID from `steam_appid.txt`. If Steam is not running, a dialog prompts the user to launch Steam and quit.
+
+`Steam.run_callbacks()` is called every frame in `_process()` once initialized.
 
 ### Hosting a Game
 
@@ -98,19 +108,19 @@ NetworkManager.room_code_received.connect(func(code):
 
 **Internal Flow:**
 
-1. Connect to Noray server
-2. Register as host → receive OID (room code)
-3. Wait for PID (private ID)
-4. Register remote address → get `local_port`
-5. Pre-punch NAT holes for Noray relay ports (so relay traffic can reach the ENet server)
-6. Start ENet server on registered port
-7. Ready for client connections
+1. Initialize Steam (if not already)
+2. `Steam.createLobby(LOBBY_TYPE_PRIVATE, MAX_PLAYERS)`
+3. On `lobby_created` callback: create `SteamMultiplayerPeer` host
+4. Encode lobby ID to base-36 room code via `LobbyCode.encode()`
+5. Emit `room_code_received` — ready for client connections
 
 ### Joining a Game
 
+Players can join via **room code** (typed in lobby UI) or **Steam invite** (overlay).
+
 ```gdscript
 # Join with room code
-NetworkManager.join_game("ABC123")
+NetworkManager.join_game("1abc2d")
 
 # Handle success
 NetworkManager.connection_state_changed.connect(func(old, new):
@@ -121,13 +131,12 @@ NetworkManager.connection_state_changed.connect(func(old, new):
 
 **Internal Flow:**
 
-1. Connect to Noray server
-2. Register to get PID
-3. Register remote address → get `local_port`
-4. Request relay connection with room code
-5. Receive relay address and port
-6. Create ENet client and connect via relay
-7. Receive level data and game state
+1. Initialize Steam (if not already)
+2. Decode base-36 room code to lobby ID via `LobbyCode.decode()`
+3. `Steam.joinLobby(lobby_id)`
+4. On `lobby_joined` callback: get host Steam ID, create `SteamMultiplayerPeer` client
+5. Wait for Godot's `connected_to_server` signal
+6. Receive level data and game state
 
 ### Disconnecting
 
@@ -135,26 +144,11 @@ NetworkManager.connection_state_changed.connect(func(old, new):
 NetworkManager.disconnect_game()
 ```
 
-### Automatic Reconnection
+Leaves the Steam lobby, closes the multiplayer peer, and clears all state.
 
-When a **client** loses connection to the host, NetworkManager automatically attempts to reconnect using exponential backoff. Hosts do not reconnect — they fully disconnect instead.
+### Transport Resilience
 
-**Behavior:**
-
-- Up to `MAX_RECONNECT_ATTEMPTS` (5) retries
-- Exponential backoff delay: `min(1.0 * 2^attempt, 16.0)` seconds
-- State transitions to `RECONNECTING` during retries
-- Emits `reconnecting(attempt, max_attempts)` for UI feedback
-- On success, state returns to `JOINED` and normal gameplay resumes
-- On failure after all attempts, state goes to `OFFLINE` and `connection_failed` is emitted
-- Room code is preserved during reconnection attempts
-
-```gdscript
-# React to reconnection attempts in the UI
-NetworkManager.reconnecting.connect(func(attempt, max_attempts):
-    status_label.text = "Reconnecting (attempt %d/%d)..." % [attempt, max_attempts]
-)
-```
+Steam SDR (Steam Datagram Relay) handles transport-level resilience including packet retransmission and route optimization. There is no application-level reconnection logic — if the connection drops entirely, the client is disconnected and must rejoin.
 
 ---
 
@@ -320,44 +314,27 @@ NetworkManager.token_transform_received.connect(func(id, pos, rot, scale):
 NetworkStateSync.broadcast_token_removed(network_id)
 ```
 
-### Map Scale (Reliable)
-
-The GM can adjust map scale in real-time via the Map Scale slider. Changes are broadcast to all clients so everyone sees the same scale.
-
-```gdscript
-# Host broadcasts map scale to all clients
-NetworkManager.broadcast_map_scale(uniform_scale)
-```
-
-On clients, `LevelPlayController` listens for `NetworkManager.map_scale_received` and applies the scale locally. The scale is also part of `LevelData` serialization, so late joiners receive the correct value during level sync.
-
 ---
 
 ## Configuration
 
-### Network Settings
+### Steam App ID
 
-Settings are stored in `Paths.SETTINGS_PATH` (`user://settings.cfg`):
+The Steam App ID is read from `steam_appid.txt` in the project root. This file is **gitignored** — each environment provides its own:
 
-```gdscript
-# Change Noray server
-NetworkManager.set_noray_server("my-server.com", 8890)
-NetworkManager.save_network_settings()
+- **Development:** `480` (Valve's SpaceWar test app)
+- **Production:** Real Steam App ID
 
-# Get current settings
-var server = NetworkManager.noray_server_address
-var port = NetworkManager.noray_server_port
-```
+### Settings
 
-### Default Values
+Player name is stored in `Paths.SETTINGS_PATH` (`user://settings.cfg`) under the `[player]` section.
 
-| Setting            | Default         | Description                  |
-| ------------------ | --------------- | ---------------------------- |
-| Noray Server       | `192.168.0.244` | Noray server address         |
-| Noray Port         | `8890`          | Noray server port            |
-| Game Port          | `7777`          | ENet game server port        |
-| Max Players        | `8`             | Maximum connected players    |
-| Connection Timeout | `15s`           | Time before connection fails |
+### Constants
+
+| Setting            | Value | Description                  |
+| ------------------ | ----- | ---------------------------- |
+| Max Players        | `8`   | Maximum connected players    |
+| Connection Timeout | `15s` | Time before connection fails |
 
 ---
 
@@ -368,10 +345,10 @@ var port = NetworkManager.noray_server_port
 #### Connection Methods
 
 ```gdscript
-# Host a game (optional server override)
+# Host a game
 func host_game(server_override: String = "", port_override: int = 0) -> void
 
-# Join a game with room code
+# Join a game with room code (base-36 encoded lobby ID)
 func join_game(room_code: String, server_override: String = "", port_override: int = 0) -> void
 
 # Disconnect from current game
@@ -402,7 +379,7 @@ func get_local_role() -> PlayerRole
 func notify_game_starting() -> void
 func broadcast_level_data(level_dict: Dictionary) -> void
 func broadcast_game_state(state_dict: Dictionary) -> void
-func broadcast_map_scale(uniform_scale: float) -> void
+func broadcast_visual_settings(settings: Dictionary) -> void
 ```
 
 ### NetworkStateSync
@@ -469,33 +446,37 @@ NetworkManager.connection_timeout.connect(func():
 
 ### Server Disconnection
 
-```gdscript
-# Clients are notified when host disconnects
-multiplayer.server_disconnected.connect(func():
-    UIManager.show_error("Host disconnected")
-    NetworkManager.disconnect_game()
-)
-```
+When the host disconnects, clients receive a `connection_failed("Host disconnected")` signal and transition to `OFFLINE`. A disconnect dialog is shown automatically.
 
 ---
 
-## Noray Integration
+## Steam Integration
 
-The project uses [netfox.noray](https://github.com/foxssake/netfox.noray) for relay-based connections.
+The project uses [GodotSteam](https://codeberg.org/godotsteam/godotsteam) GDExtension for Steam API access.
 
 ### How It Works
 
-1. Both host and clients connect to a central Noray server
-2. Clients connect to the host via Noray relay directly (no NAT punchthrough attempt)
-3. The host pre-punches its own NAT for the relay port range at server start so relay traffic can reach it
+1. Host creates a **private Steam lobby** — only invited players or those with the room code can join
+2. Room codes are **base-36 encoded lobby IDs** (e.g., `1abc2d`) — shorter and case-insensitive
+3. `SteamMultiplayerPeer` wraps Steam Networking Sockets, providing the same `MultiplayerPeer` interface as `ENetMultiplayerPeer`
+4. All traffic routes through **Valve's SDR relay network** — no port forwarding or NAT punchthrough needed
 
 ### Room Codes
 
-Room codes (OIDs) are 6-character alphanumeric strings generated by Noray:
+Room codes are base-36 encoded Steam lobby IDs, produced by the `LobbyCode` utility:
 
 ```gdscript
-NetworkManager.room_code_received.connect(func(code):
-    # code example: "A1B2C3"
-    share_code_with_friends(code)
-)
+# Encoding (host side)
+var code = LobbyCode.encode(lobby_id)  # e.g., "1abc2d"
+
+# Decoding (client side, case-insensitive)
+var lobby_id = LobbyCode.decode("1ABC2D")  # same result
+```
+
+### Steam Invite
+
+The host lobby includes an **Invite** button that opens the Steam overlay invite dialog:
+
+```gdscript
+Steam.activateGameOverlayInviteDialog(lobby_id)
 ```

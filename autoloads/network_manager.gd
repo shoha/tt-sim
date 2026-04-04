@@ -1,20 +1,19 @@
 extends Node
 
 ## Centralized network manager for multiplayer functionality.
-## Handles Noray connection, ENet game server/client, and player tracking.
+## Handles Steam lobby creation/joining, SteamMultiplayerPeer, and player tracking.
 ##
 ## Usage:
-##   NetworkManager.host_game("noray.example.com")
-##   NetworkManager.join_game("ABC123", "noray.example.com")
+##   NetworkManager.host_game()
+##   NetworkManager.join_game("ROOMCODE")
 ##   NetworkManager.disconnect_game()
 
 ## Connection states
 enum ConnectionState {
 	OFFLINE,  ## Not connected to any network
-	CONNECTING,  ## Connecting to noray or game server
+	CONNECTING,  ## Connecting to Steam lobby or game server
 	HOSTING,  ## Hosting a game, waiting for players or playing
 	JOINED,  ## Joined a game as client
-	RECONNECTING,  ## Attempting to reconnect after disconnection
 }
 
 ## Signals
@@ -24,7 +23,6 @@ signal player_joined(peer_id: int, player_info: Dictionary)
 signal player_left(peer_id: int, player_info: Dictionary)
 signal connection_failed(reason: String)
 signal connection_timeout
-signal reconnecting(attempt: int, max_attempts: int)
 signal game_starting
 signal level_data_received(level_dict: Dictionary)
 signal late_joiner_connected(peer_id: int)  ## Emitted when a player joins mid-game
@@ -53,11 +51,8 @@ signal client_drag_lock_released(sender_id: int, network_id: String)
 ## Current connection state
 var _connection_state: ConnectionState = ConnectionState.OFFLINE
 
-## Room code (OID from Noray) when hosting
+## Room code (base-36 encoded lobby ID) when hosting
 var _room_code: String = ""
-
-## Room code used to join (stored for reconnection)
-var _joined_room_code: String = ""
 
 ## Connected players: peer_id -> player_info dictionary
 var _players: Dictionary = {}
@@ -80,33 +75,8 @@ const DEFAULT_PLAYER_NAME := "Player"
 ## Current level data (for late joiners)
 var _current_level_dict: Dictionary = {}
 
-## Noray server addresses
-## Local server is used when running in the editor; production is used in exports.
-const LOCAL_NORAY_SERVER := "192.168.0.244"
-const PRODUCTION_NORAY_SERVER := "134.209.44.68"
-const DEFAULT_NORAY_PORT := 8890
-
-## Noray relay port range — the host pre-punches these ports so relay traffic
-## can reach the ENet server through the host's NAT. Must match the noray
-## server's udpRelay.ports configuration.
-const NORAY_RELAY_PORT_START := 49152
-const NORAY_RELAY_PORT_END := 49201
-
-
-## Returns the default noray server for the current build context.
-static func _get_default_noray_server() -> String:
-	if OS.has_feature("editor"):
-		return LOCAL_NORAY_SERVER
-	return PRODUCTION_NORAY_SERVER
-
-
-## Configurable noray settings (loaded from settings file)
-var noray_server: String
-var noray_port: int = DEFAULT_NORAY_PORT
-
-## ENet configuration
+## Maximum players per lobby
 const MAX_PLAYERS := 8
-const DEFAULT_PORT := 7777
 
 ## Connection timeout (seconds)
 const CONNECTION_TIMEOUT := 15.0
@@ -116,14 +86,14 @@ var _connection_timer: Timer = null
 ## Game state tracking (for late joiner detection)
 var _game_in_progress: bool = false
 
-## Delegated reconnection state machine
-var _reconnection: NetworkReconnection
-
 ## Permission request/response sub-component
 var permissions: NetworkPermissions
 
-## Debug logging
-var debug_logging: bool = false
+## Steam initialization state
+var _steam_initialized: bool = false
+
+## Current Steam lobby ID (0 when not in a lobby)
+var _lobby_id: int = 0
 
 # =============================================================================
 # PUBLIC PROPERTIES
@@ -151,12 +121,9 @@ func is_client() -> bool:
 
 
 ## Check if we're in a networked game (host or client).
-## Returns true during reconnection — the game is still networked, just temporarily disconnected.
 func is_networked() -> bool:
 	return (
-		_connection_state == ConnectionState.HOSTING
-		or _connection_state == ConnectionState.JOINED
-		or _reconnection.is_reconnecting()
+		_connection_state == ConnectionState.HOSTING or _connection_state == ConnectionState.JOINED
 	)
 
 
@@ -201,47 +168,58 @@ func _ready() -> void:
 	_connection_timer.timeout.connect(_on_connection_timeout)
 	add_child(_connection_timer)
 
-	# Setup reconnection handler
-	_reconnection = NetworkReconnection.new(
-		self,
-		func(code: String) -> void:
-			# Clean up peer before attempting rejoin
-			if multiplayer.multiplayer_peer:
-				multiplayer.multiplayer_peer.close()
-				multiplayer.multiplayer_peer = null
-			join_game(code),
-		func(state: int) -> void: _set_connection_state(state as ConnectionState),
-		ConnectionState.RECONNECTING,
-	)
-	_reconnection.reconnecting.connect(
-		func(attempt: int, max_attempts: int) -> void: reconnecting.emit(attempt, max_attempts)
-	)
-	_reconnection.reconnection_failed.connect(
-		func(reason: String) -> void: _handle_connection_error(reason)
-	)
-
 	# Setup permissions sub-component
 	permissions = NetworkPermissions.new()
 	permissions.name = "Permissions"
 	add_child(permissions)
 
-	# Load network settings
-	_load_network_settings()
+	# Load player name from settings
+	_load_player_name()
 
-	# DEBUG: Hook into all Noray commands for verbose logging
-	Noray.on_command.connect(_on_noray_command_debug)
-	Noray.on_connect_to_host.connect(func(): _log("[NORAY EVENT] on_connect_to_host fired"))
-	Noray.on_disconnect_from_host.connect(
-		func(): _log("[NORAY EVENT] on_disconnect_from_host fired")
-	)
-	_log("=== NetworkManager ready — debug logging ENABLED ===")
-	_log("Target noray server: %s:%d" % [noray_server, noray_port])
+
+func _process(_delta: float) -> void:
+	if _steam_initialized:
+		Steam.run_callbacks()
+
+
+## Lazily initialize Steam on first multiplayer attempt.
+## Returns true if Steam is ready, false if initialization failed.
+func _ensure_steam_initialized() -> bool:
+	if _steam_initialized:
+		return true
+
+	var init_result: Dictionary = Steam.steamInitEx()
+	if init_result.status == 0:
+		_steam_initialized = true
+		return true
+
+	# Status 2 = Steam client not running
+	if init_result.status == 2:
+		UIManager.show_confirmation(
+			"Steam Required",
+			"Steam is not running.\nPlease start Steam and relaunch tt-sim.",
+			"Launch Steam & Quit",
+			"",
+			func():
+				OS.shell_open("steam://")
+				get_tree().quit(),
+		)
+	else:
+		UIManager.show_confirmation(
+			"Steam Error",
+			(
+				"Failed to initialize Steam (status %d).\n%s"
+				% [init_result.status, init_result.verbal]
+			),
+			"Quit",
+			"",
+			func(): get_tree().quit(),
+		)
+	return false
 
 
 func _on_connection_timeout() -> void:
 	if _connection_state == ConnectionState.CONNECTING:
-		_log("!!! CONNECTION TIMEOUT after %d seconds" % CONNECTION_TIMEOUT)
-		_dump_noray_state("timeout")
 		connection_timeout.emit()
 		_handle_connection_error("Connection timed out")
 
@@ -262,22 +240,14 @@ func _stop_connection_timeout() -> void:
 # =============================================================================
 
 
-## Start hosting a game
-## Connects to noray, gets a room code, and starts the ENet server
-## If no server specified, uses the configured noray_server/noray_port
+## Start hosting a game.
+## Creates a Steam lobby and starts a SteamMultiplayerPeer host.
 func host_game(server_override: String = "", port_override: int = 0) -> void:
-	var target_server = server_override if server_override != "" else noray_server
-	var target_port = port_override if port_override > 0 else noray_port
-	_log(">>> host_game() called — server=%s, port=%d" % [target_server, target_port])
-
 	if _connection_state != ConnectionState.OFFLINE:
-		_log(
-			(
-				"!!! host_game() aborted: state is %s, expected OFFLINE"
-				% ConnectionState.keys()[_connection_state]
-			)
-		)
 		push_warning("NetworkManager: Already connected, disconnect first")
+		return
+
+	if not _ensure_steam_initialized():
 		return
 
 	_set_connection_state(ConnectionState.CONNECTING)
@@ -286,147 +256,36 @@ func host_game(server_override: String = "", port_override: int = 0) -> void:
 	# Host is always GM
 	_local_player_info["role"] = PlayerRole.GM
 
-	# Step 1: Connect to noray server
-	_log("[HOST STEP 1] Connecting to noray at %s:%d ..." % [target_server, target_port])
-	_dump_noray_state("before connect_to_host")
-	var err = await Noray.connect_to_host(target_server, target_port)
-	_log("[HOST STEP 1] connect_to_host returned err=%d (%s)" % [err, error_string(err)])
-	_dump_noray_state("after connect_to_host")
+	# Create Steam lobby
+	Steam.lobby_created.connect(_on_lobby_created, CONNECT_ONE_SHOT)
+	Steam.createLobby(Steam.LOBBY_TYPE_PRIVATE, MAX_PLAYERS)
+
+
+func _on_lobby_created(result: int, lobby_id: int) -> void:
 	if _connection_state != ConnectionState.CONNECTING:
 		return
-	if err != OK:
-		_handle_connection_error(
-			"Failed to connect to noray server (err=%d: %s)" % [err, error_string(err)]
-		)
+
+	if result != Steam.RESULT_OK:
+		_handle_connection_error("Failed to create Steam lobby (result=%d)" % result)
 		return
 
-	# Step 2: Register as host to get OID
-	_log("[HOST STEP 2] Registering as host ...")
-	Noray.on_oid.connect(_on_host_oid_received, CONNECT_ONE_SHOT)
-	err = Noray.register_host()
-	_log("[HOST STEP 2] register_host returned err=%d (%s)" % [err, error_string(err)])
-	if err != OK:
-		_handle_connection_error(
-			"Failed to register as host (err=%d: %s)" % [err, error_string(err)]
-		)
-		return
-	_log("[HOST STEP 2] Waiting for OID from noray ...")
+	_lobby_id = lobby_id
 
-
-func _on_host_oid_received(oid: String) -> void:
-	_log("[HOST STEP 3] OID received: '%s'" % oid)
-	_room_code = oid
-	room_code_received.emit(oid)
-
-	# Wait for PID before registering remote (register_remote requires PID)
-	if not Noray.pid:
-		_log("[HOST STEP 3] PID not yet received, waiting for on_pid ...")
-		await Noray.on_pid
-	if _connection_state != ConnectionState.CONNECTING:
-		return
-	_log("[HOST STEP 3] PID received: '%s'" % Noray.pid)
-	_dump_noray_state("before register_remote")
-
-	# Step 4: Register remote address for relay port binding
-	_log("[HOST STEP 4] Registering remote address ...")
-	var err = await Noray.register_remote()
-	_log("[HOST STEP 4] register_remote returned err=%d (%s)" % [err, error_string(err)])
-	_dump_noray_state("after register_remote")
-	if _connection_state != ConnectionState.CONNECTING:
-		return
-	if err != OK:
-		_handle_connection_error(
-			"Failed to register remote address (err=%d: %s)" % [err, error_string(err)]
-		)
-		return
-
-	# Step 5: Start ENet server on the registered port
-	_log("[HOST STEP 5] Starting ENet server ...")
-	_start_enet_server()
-
-
-func _start_enet_server() -> void:
-	var port = Noray.local_port if Noray.local_port > 0 else DEFAULT_PORT
-	_log("[HOST STEP 5] ENet server port=%d (Noray.local_port=%d)" % [port, Noray.local_port])
-
-	# Pre-punch NAT holes for the noray relay port range BEFORE ENet binds.
-	# At this point the UDP socket from register_remote is closed so the port
-	# is free.  By sending from the ENet port to every relay port on the noray
-	# server, we create NAT mappings that allow the relay to reach us later —
-	# even through port-restricted NATs.
-	if Noray.local_port > 0:
-		_prepunch_relay_nat(port)
-
-	var peer = ENetMultiplayerPeer.new()
-	var err = peer.create_server(port, MAX_PLAYERS)
-	_log("[HOST STEP 5] create_server returned err=%d (%s)" % [err, error_string(err)])
-	if err != OK:
-		_handle_connection_error(
-			"Failed to create ENet server on port %d (err=%d: %s)" % [port, err, error_string(err)]
-		)
-		return
-
+	# Create SteamMultiplayerPeer as host
+	var peer := SteamMultiplayerPeer.new()
+	peer.create_host(0)
 	multiplayer.multiplayer_peer = peer
 
 	# Add self to players list
 	_players[1] = _local_player_info.duplicate()
 
 	_stop_connection_timeout()
+
+	# Emit room code as base-36 encoded lobby ID
+	_room_code = LobbyCode.encode(_lobby_id)
+	room_code_received.emit(_room_code)
+
 	_set_connection_state(ConnectionState.HOSTING)
-
-	# Listen for incoming relay connections
-	Noray.on_connect_relay.connect(_on_client_relay_connect)
-
-	_log("=== HOST READY === room_code='%s', listening on port %d" % [_room_code, port])
-	_dump_noray_state("host ready")
-
-
-func _on_client_relay_connect(address: String, port: int) -> void:
-	_log(
-		(
-			"Client connecting via relay through %s:%d — NAT holes were pre-punched at server start"
-			% [address, port]
-		)
-	)
-
-
-## Pre-punch NAT holes for every noray relay port.
-## Called just before `create_server` while the registered local port is still
-## free (register_remote has already closed its socket).  Each outbound UDP
-## packet creates a NAT mapping from our ENet port to the relay port on the
-## noray server, so that relay traffic can reach us later.
-func _prepunch_relay_nat(local_port: int) -> void:
-	var udp = PacketPeerUDP.new()
-	var err = udp.bind(local_port)
-	if err != OK:
-		_log(
-			(
-				"[HOST] Failed to bind UDP port %d for relay NAT pre-punch (err=%d: %s)"
-				% [local_port, err, error_string(err)]
-			)
-		)
-		return
-
-	var server_ip = noray_server
-	var count := 0
-	for p in range(NORAY_RELAY_PORT_START, NORAY_RELAY_PORT_END + 1):
-		udp.set_dest_address(server_ip, p)
-		udp.put_packet("punch".to_utf8_buffer())
-		count += 1
-
-	# Also punch the registrar port (8809) as a safety net — register_remote
-	# already did this, but repeating from the same local port reinforces the
-	# NAT mapping.
-	udp.set_dest_address(server_ip, 8809)
-	udp.put_packet("punch".to_utf8_buffer())
-
-	udp.close()
-	_log(
-		(
-			"[HOST] Pre-punched NAT for %d relay ports (%d-%d) + registrar on %s from local port %d"
-			% [count, NORAY_RELAY_PORT_START, NORAY_RELAY_PORT_END, server_ip, local_port]
-		)
-	)
 
 
 # =============================================================================
@@ -434,36 +293,22 @@ func _prepunch_relay_nat(local_port: int) -> void:
 # =============================================================================
 
 
-## Join a game using a room code
-## If no server specified, uses the configured noray_server/noray_port
+## Join a game using a room code (base-36 encoded Steam lobby ID).
 func join_game(
 	room_code_input: String, server_override: String = "", port_override: int = 0
 ) -> void:
-	var target_server = server_override if server_override != "" else noray_server
-	var target_port = port_override if port_override > 0 else noray_port
-	_log(
-		(
-			">>> join_game() called — room='%s', server=%s, port=%d"
-			% [room_code_input, target_server, target_port]
-		)
-	)
-
-	# Allow joining when offline or reconnecting
-	if (
-		_connection_state != ConnectionState.OFFLINE
-		and _connection_state != ConnectionState.RECONNECTING
-	):
-		_log(
-			(
-				"!!! join_game() aborted: state is %s, expected OFFLINE or RECONNECTING"
-				% ConnectionState.keys()[_connection_state]
-			)
-		)
+	if _connection_state != ConnectionState.OFFLINE:
 		push_warning("NetworkManager: Already connected, disconnect first")
 		return
 
-	# Store room code for potential reconnection (used by _reconnection handler)
-	_joined_room_code = room_code_input
+	if not _ensure_steam_initialized():
+		return
+
+	# Decode base-36 room code to lobby ID
+	var decoded_id := LobbyCode.decode(room_code_input)
+	if decoded_id < 0:
+		_handle_connection_error("Invalid room code")
+		return
 
 	_set_connection_state(ConnectionState.CONNECTING)
 	_start_connection_timeout()
@@ -471,113 +316,26 @@ func join_game(
 	# Clients are players by default
 	_local_player_info["role"] = PlayerRole.PLAYER
 
-	# Step 1: Connect to noray server
-	_log("[JOIN STEP 1] Connecting to noray at %s:%d ..." % [target_server, target_port])
-	_dump_noray_state("before connect_to_host")
-	var err = await Noray.connect_to_host(target_server, target_port)
-	_log("[JOIN STEP 1] connect_to_host returned err=%d (%s)" % [err, error_string(err)])
-	_dump_noray_state("after connect_to_host")
+	_lobby_id = decoded_id
+	Steam.lobby_joined.connect(_on_lobby_joined, CONNECT_ONE_SHOT)
+	Steam.joinLobby(_lobby_id)
+
+
+func _on_lobby_joined(lobby_id: int, _permissions: int, _locked: bool, result: int) -> void:
 	if _connection_state != ConnectionState.CONNECTING:
 		return
-	if err != OK:
-		_handle_connection_error(
-			"Failed to connect to noray server (err=%d: %s)" % [err, error_string(err)]
-		)
+
+	if result != Steam.RESULT_OK:
+		_handle_connection_error("Failed to join Steam lobby (result=%d)" % result)
 		return
 
-	# Step 2: Register as host to get PID (even as "client" we need this)
-	_log("[JOIN STEP 2] Registering host (for PID) ...")
-	Noray.register_host()  # This gets us a PID even as a "client"
+	_lobby_id = lobby_id
 
-	# Wait for PID (guard mirrors the host path in _on_host_oid_received)
-	if not Noray.pid:
-		_log("[JOIN STEP 2] PID not yet received, waiting for on_pid ...")
-		await Noray.on_pid
-	if _connection_state != ConnectionState.CONNECTING:
-		return
-	_log("[JOIN STEP 2] PID received: '%s'" % Noray.pid)
-	_dump_noray_state("after PID received")
-
-	# Step 3: Register remote address
-	_log("[JOIN STEP 3] Registering remote address ...")
-	err = await Noray.register_remote()
-	_log("[JOIN STEP 3] register_remote returned err=%d (%s)" % [err, error_string(err)])
-	_dump_noray_state("after register_remote")
-	if _connection_state != ConnectionState.CONNECTING:
-		return
-	if err != OK:
-		_handle_connection_error(
-			"Failed to register remote address (err=%d: %s)" % [err, error_string(err)]
-		)
-		return
-
-	# Step 4: Request relay connection via noray
-	_log("[JOIN STEP 4] Requesting relay connection to room '%s' ..." % room_code_input)
-	_disconnect_join_signals()
-	Noray.on_connect_relay.connect(_on_join_relay_received, CONNECT_ONE_SHOT)
-	Noray.on_command.connect(_on_noray_command_during_join)
-
-	err = Noray.connect_relay(room_code_input)
-	_log("[JOIN STEP 4] connect_relay returned err=%d (%s)" % [err, error_string(err)])
-	if err != OK:
-		_handle_connection_error(
-			"Failed to request relay connection (err=%d: %s)" % [err, error_string(err)]
-		)
-		return
-
-	_log("[JOIN STEP 4] Waiting for relay response from noray ...")
-
-
-func _on_join_relay_received(address: String, port: int) -> void:
-	_log("[JOIN STEP 5] Relay connection info received: %s:%d" % [address, port])
-	_disconnect_join_signals()
-	_connect_enet_client(address, port)
-
-
-## Detect invalid connect responses from noray (e.g. host OID no longer exists).
-## The noray server sends a bare "connect" with empty data when the host is gone.
-func _on_noray_command_during_join(command: String, data: String) -> void:
-	_log("[JOIN] Noray command during join: cmd='%s', data='%s'" % [command, data])
-	if command == "connect" and not data.contains(":"):
-		_log(
-			"!!! Host not found — noray returned bare 'connect' (no address:port). Room code may be invalid or host disconnected."
-		)
-		push_warning("NetworkManager: Host not found (room code may be invalid or expired)")
-		_disconnect_join_signals()
-		if _reconnection.is_reconnecting():
-			# During reconnection: route through retry logic
-			_on_connection_failed()
-		else:
-			# Initial join attempt: give a descriptive error
-			_handle_connection_error("Host not found (room code may be invalid or expired)")
-
-
-## Disconnect all client-side join signal handlers from Noray.
-func _disconnect_join_signals() -> void:
-	if Noray.on_connect_relay.is_connected(_on_join_relay_received):
-		Noray.on_connect_relay.disconnect(_on_join_relay_received)
-	if Noray.on_command.is_connected(_on_noray_command_during_join):
-		Noray.on_command.disconnect(_on_noray_command_during_join)
-
-
-func _connect_enet_client(address: String, port: int) -> void:
-	var peer = ENetMultiplayerPeer.new()
-
-	# Bind to our registered local port so the relay can match us to our
-	# registration.
-	var local_port = Noray.local_port if Noray.local_port > 0 else 0
-	_log("[JOIN] Creating ENet client — remote=%s:%d, local_port=%d" % [address, port, local_port])
-
-	var err = peer.create_client(address, port, 0, 0, 0, local_port)
-	_log("[JOIN] create_client returned err=%d (%s)" % [err, error_string(err)])
-	if err != OK:
-		_handle_connection_error(
-			"Failed to create ENet client (err=%d: %s)" % [err, error_string(err)]
-		)
-		return
-
+	# Get host's Steam ID and connect as client
+	var host_steam_id: int = Steam.getLobbyOwner(lobby_id)
+	var peer := SteamMultiplayerPeer.new()
+	peer.create_client(host_steam_id, 0)
 	multiplayer.multiplayer_peer = peer
-	_log("[JOIN] ENet peer assigned, waiting for connected_to_server signal ...")
 
 
 # =============================================================================
@@ -587,33 +345,17 @@ func _connect_enet_client(address: String, port: int) -> void:
 
 ## Disconnect from the current game
 func disconnect_game() -> void:
-	_log(">>> disconnect_game() called — state=%s" % ConnectionState.keys()[_connection_state])
 	if _connection_state == ConnectionState.OFFLINE:
-		_log("Already offline, nothing to disconnect")
 		return
 
-	# Stop any pending reconnection attempts
-	_reconnection.stop()
-
-	# Set state to OFFLINE *before* closing connections so that any signals
-	# triggered by the teardown (e.g. server_disconnected from peer.close())
-	# see OFFLINE and short-circuit instead of starting a reconnection cycle.
+	# Set state to OFFLINE before closing connections to prevent signal cascades
 	_set_connection_state(ConnectionState.OFFLINE)
 
-	# Disconnect Noray signals (host-side)
-	if Noray.on_connect_relay.is_connected(_on_client_relay_connect):
-		Noray.on_connect_relay.disconnect(_on_client_relay_connect)
-	# Disconnect Noray signals (client-side join)
-	_disconnect_join_signals()
+	# Leave Steam lobby
+	if _lobby_id > 0:
+		Steam.leaveLobby(_lobby_id)
 
-	# Stop netfox time sync before closing the peer — our manual disconnect
-	# bypasses NetworkEvents' automatic NetworkTime.stop() call.
-	NetworkTime.stop()
-
-	# Disconnect from noray
-	Noray.disconnect_from_host()
-
-	# Close ENet connection
+	# Close multiplayer peer
 	if multiplayer.multiplayer_peer:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = null
@@ -621,12 +363,10 @@ func disconnect_game() -> void:
 	# Clear state
 	_players.clear()
 	_room_code = ""
-	_joined_room_code = ""
+	_lobby_id = 0
 	_game_in_progress = false
 	_current_level_dict.clear()
 	_stop_connection_timeout()
-
-	_log("Disconnected")
 
 
 # =============================================================================
@@ -635,15 +375,12 @@ func disconnect_game() -> void:
 
 
 func _on_peer_connected(peer_id: int) -> void:
-	_log("Peer connected: %d" % peer_id)
-
 	if is_host():
 		# Send current player list to new peer
 		_rpc_sync_player_list.rpc_id(peer_id, _players)
 
 		# Handle late joiner - send current level and game state
 		if _game_in_progress and not _current_level_dict.is_empty():
-			_log("Late joiner detected, sending current level and state to peer %d" % peer_id)
 			# Use event-driven sync instead of hardcoded delays
 			_sync_late_joiner(peer_id)
 
@@ -664,9 +401,6 @@ func _sync_late_joiner(peer_id: int) -> void:
 	var ack_received := await _await_signal_or_timeout(
 		level_sync_complete, peer_id, LATE_JOINER_SYNC_TIMEOUT
 	)
-
-	if not ack_received:
-		_log("Level sync timeout for peer %d, proceeding anyway" % peer_id)
 
 	# Send game state
 	NetworkStateSync.send_full_state_to_peer(peer_id)
@@ -709,7 +443,6 @@ func _await_signal_or_timeout(sig: Signal, peer_id: int, timeout_seconds: float)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
-	_log("Peer disconnected: %d" % peer_id)
 	if _players.has(peer_id):
 		var player_info: Dictionary = _players[peer_id].duplicate()
 		_players.erase(peer_id)
@@ -722,60 +455,20 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _on_connected_to_server() -> void:
-	_log("=== CONNECTED TO SERVER === peer_id=%d" % multiplayer.get_unique_id())
-	_dump_noray_state("connected to server")
 	_stop_connection_timeout()
 	_players[multiplayer.get_unique_id()] = _local_player_info.duplicate()
-
-	# If we were reconnecting, reset reconnection state
-	if _connection_state == ConnectionState.RECONNECTING or _reconnection.is_reconnecting():
-		_log("Reconnection successful, resetting reconnection state")
-		_reconnection.stop()
-
 	_set_connection_state(ConnectionState.JOINED)
 
 
 func _on_connection_failed() -> void:
-	# Ignore stale signals from a peer we already closed (e.g. if the
-	# connection is torn down before ENet finishes connecting).
 	if not multiplayer.multiplayer_peer:
-		_log("Ignoring stale connection_failed (peer already closed)")
 		return
-
-	_log(
-		(
-			"!!! CONNECTION FAILED — state=%s, reconnecting=%s"
-			% [ConnectionState.keys()[_connection_state], _reconnection.is_reconnecting()]
-		)
-	)
-	_dump_noray_state("connection failed")
-
-	# If we're reconnecting, delegate retry/give-up logic to the handler
-	if _reconnection.is_reconnecting():
-		_reconnection.on_attempt_failed()
-	else:
-		_handle_connection_error("Failed to connect to game server")
+	_handle_connection_error("Failed to connect to game server")
 
 
 func _on_server_disconnected() -> void:
-	_log("!!! SERVER DISCONNECTED — state=%s" % ConnectionState.keys()[_connection_state])
-	_dump_noray_state("server disconnected")
-	# Only attempt reconnection if we were previously joined as a client
 	if _connection_state == ConnectionState.JOINED:
-		# Partial cleanup: close ENet connection but preserve room code for reconnection
-		if multiplayer.multiplayer_peer:
-			multiplayer.multiplayer_peer.close()
-			multiplayer.multiplayer_peer = null
-
-		# Clear players but keep room code
-		_players.clear()
-		_stop_connection_timeout()
-
-		# Start reconnection process via handler — use the room code the client
-		# originally joined with (for clients _room_code is empty since it's the
-		# host OID; for hosts _joined_room_code is empty so fall back to _room_code)
-		var code_for_reconnect = _joined_room_code if _joined_room_code != "" else _room_code
-		_reconnection.start(code_for_reconnect)
+		_handle_connection_error("Host disconnected")
 	else:
 		disconnect_game()
 
@@ -821,7 +514,6 @@ func _rpc_sync_player_list(players: Dictionary) -> void:
 
 @rpc("authority", "reliable")
 func _rpc_game_starting() -> void:
-	_log("Received game_starting RPC")
 	game_starting.emit()
 
 
@@ -838,7 +530,6 @@ func _rpc_level_sync_ack() -> void:
 	if not is_host():
 		return
 	var peer_id = multiplayer.get_remote_sender_id()
-	_log("Received level sync ACK from peer %d" % peer_id)
 	level_sync_complete.emit(peer_id)
 
 
@@ -848,7 +539,6 @@ func _rpc_state_sync_ack() -> void:
 	if not is_host():
 		return
 	var peer_id = multiplayer.get_remote_sender_id()
-	_log("Received state sync ACK from peer %d" % peer_id)
 	state_sync_complete.emit(peer_id)
 
 
@@ -954,12 +644,10 @@ func notify_game_starting() -> void:
 		return
 
 	_game_in_progress = true
-	_log("Notifying all clients that game is starting (players: %s)" % str(_players.keys()))
 
 	# Send to all connected clients (not to self - peer 1)
 	for peer_id in _players:
 		if peer_id != 1:
-			_log("Sending game_starting RPC to peer %d" % peer_id)
 			_rpc_game_starting.rpc_id(peer_id)
 
 
@@ -1039,15 +727,10 @@ func send_drag_lock_release(network_id: String) -> void:
 func _set_connection_state(new_state: ConnectionState) -> void:
 	var old_state = _connection_state
 	_connection_state = new_state
-	_log(
-		"[STATE] %s -> %s" % [ConnectionState.keys()[old_state], ConnectionState.keys()[new_state]]
-	)
 	connection_state_changed.emit(old_state, new_state)
 
 
 func _handle_connection_error(reason: String) -> void:
-	_log("!!! CONNECTION ERROR: %s" % reason)
-	_dump_noray_state("connection error")
 	push_warning("NetworkManager: ", reason)
 	connection_failed.emit(reason)
 	disconnect_game()
@@ -1080,7 +763,6 @@ func save_player_name(player_name: String) -> void:
 		)
 	config.set_value("player", "name", player_name)
 	config.save(Paths.SETTINGS_PATH)
-	_log("Saved player name: %s" % player_name)
 
 
 ## Set the local player's role
@@ -1121,95 +803,9 @@ func clear_level_data() -> void:
 # =============================================================================
 
 
-## Load network settings from config file
-func _load_network_settings() -> void:
-	var config = ConfigFile.new()
-	var err = config.load(Paths.SETTINGS_PATH)
-
-	var default_server := _get_default_noray_server()
-	noray_server = default_server
-
+## Load player name from config file
+func _load_player_name() -> void:
+	var config := ConfigFile.new()
+	var err := config.load(Paths.SETTINGS_PATH)
 	if err == OK:
-		noray_server = config.get_value("network", "noray_server", default_server)
-		noray_port = config.get_value("network", "noray_port", DEFAULT_NORAY_PORT)
-		debug_logging = config.get_value("network", "debug_logging", false)
 		_local_player_info["name"] = config.get_value("player", "name", DEFAULT_PLAYER_NAME)
-		_log("Settings file loaded OK (err=%d)" % err)
-	else:
-		_log("Settings file not found or failed to load (err=%d), using defaults" % err)
-
-	_log(
-		(
-			"Loaded network settings: noray=%s:%d, player=%s, is_editor=%s"
-			% [noray_server, noray_port, _local_player_info["name"], OS.has_feature("editor")]
-		)
-	)
-	_log(
-		(
-			"PRODUCTION_NORAY_SERVER=%s, LOCAL_NORAY_SERVER=%s"
-			% [PRODUCTION_NORAY_SERVER, LOCAL_NORAY_SERVER]
-		)
-	)
-
-
-## Save network settings to config file
-func save_network_settings() -> void:
-	var config = ConfigFile.new()
-	var err = config.load(Paths.SETTINGS_PATH)
-	if err != OK and err != ERR_FILE_NOT_FOUND:
-		push_warning(
-			"NetworkManager: Failed to load settings (err=%d), writing network section only" % err
-		)
-
-	config.set_value("network", "noray_server", noray_server)
-	config.set_value("network", "noray_port", noray_port)
-	config.set_value("network", "debug_logging", debug_logging)
-
-	config.save(Paths.SETTINGS_PATH)
-	_log("Saved network settings")
-
-
-## Set the Noray server address
-func set_noray_server(server: String, port: int = DEFAULT_NORAY_PORT) -> void:
-	noray_server = server
-	noray_port = port
-	save_network_settings()
-
-
-# =============================================================================
-# DEBUG LOGGING
-# =============================================================================
-
-
-## Log a message if debug logging is enabled
-func _log(message: String) -> void:
-	if debug_logging:
-		print("[%s] NetworkManager: %s" % [_timestamp(), message])
-
-
-## Return a human-readable timestamp for debug logs
-func _timestamp() -> String:
-	var t := Time.get_time_dict_from_system()
-	var ms := Time.get_ticks_msec() % 1000
-	return "%02d:%02d:%02d.%03d" % [t.hour, t.minute, t.second, ms]
-
-
-## Dump current Noray state for debugging
-func _dump_noray_state(label: String = "snapshot") -> void:
-	if not debug_logging:
-		return
-	var connected := Noray.is_connected_to_host() if Noray else false
-	var oid_val: String = Noray.oid if Noray else "<null>"
-	var pid_val: String = Noray.pid if Noray else "<null>"
-	var lport: int = Noray.local_port if Noray else -1
-	_log(
-		(
-			"[NORAY STATE @ %s] connected=%s, oid='%s', pid='%s', local_port=%d"
-			% [label, connected, oid_val, pid_val, lport]
-		)
-	)
-
-
-## Global handler that logs every command received from the Noray server
-func _on_noray_command_debug(command: String, data: String) -> void:
-	_log("[NORAY CMD] << %s %s" % [command, data])

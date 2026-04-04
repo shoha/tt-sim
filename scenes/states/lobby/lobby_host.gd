@@ -14,6 +14,7 @@ signal cancel_requested
 @onready var cancel_button: Button = %CancelButton
 @onready var status_label: Label = %StatusLabel
 @onready var copy_button: Button = %CopyCodeButton
+@onready var invite_button: Button = %InviteButton
 
 
 func _ready() -> void:
@@ -21,6 +22,7 @@ func _ready() -> void:
 	start_button.pressed.connect(_on_start_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	copy_button.pressed.connect(_on_copy_code_pressed)
+	invite_button.pressed.connect(_on_invite_pressed)
 	player_name_input.text_changed.connect(_on_player_name_changed)
 
 	# Connect network signals
@@ -115,6 +117,10 @@ func _on_start_pressed() -> void:
 
 func _on_cancel_pressed() -> void:
 	cancel_requested.emit()
+
+
+func _on_invite_pressed() -> void:
+	Steam.activateGameOverlayInviteDialog(NetworkManager._lobby_id)
 
 
 func _on_copy_code_pressed() -> void:
