@@ -120,7 +120,7 @@ func _on_cancel_pressed() -> void:
 
 
 func _on_invite_pressed() -> void:
-	Steam.activateGameOverlayInviteDialog(NetworkManager._lobby_id)
+	NetworkManager.open_invite_overlay()
 
 
 func _on_copy_code_pressed() -> void:

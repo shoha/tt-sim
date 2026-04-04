@@ -110,6 +110,12 @@ var room_code: String:
 		return _room_code
 
 
+## Open the Steam overlay invite dialog for the current lobby.
+func open_invite_overlay() -> void:
+	if _lobby_id > 0:
+		Steam.activateGameOverlayInviteDialog(_lobby_id)
+
+
 ## Check if we're the host/server
 func is_host() -> bool:
 	return _connection_state == ConnectionState.HOSTING
