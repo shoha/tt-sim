@@ -6,7 +6,7 @@ extends Node
 ## Architecture:
 ##   - Single source of truth for all synchronized game state
 ##   - Emits signals when state changes (for UI/visual updates)
-##   - Designed to integrate with netfox for network synchronization
+##   - Designed for network synchronization via NetworkStateSync
 ##
 ## Network Model:
 ##   - Host: Has full authority, makes all state changes
