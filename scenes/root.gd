@@ -67,7 +67,9 @@ func _ready() -> void:
 	push_state(State.TITLE_SCREEN)
 
 	# Check for updates after a short delay to let the UI settle
-	_check_for_updates_on_startup()
+	# Skip in-app updates for Steam users — Steam handles updates
+	if OS.get_environment("SteamAppId").is_empty():
+		_check_for_updates_on_startup()
 
 
 func _setup_download_notifications() -> void:
