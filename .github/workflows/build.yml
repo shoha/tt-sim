@@ -358,3 +358,60 @@ jobs:
             TTSim-Windows.zip \
             TTSim-macOS.zip \
             TTSim-Linux.zip
+
+  deploy-steam:
+    name: Deploy to Steam
+    needs: [export, sign-windows, sign-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: TTSim-Windows-Signed
+          path: depot-windows
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: TTSim-macOS-Signed
+          path: depot-macos-zip
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: TTSim-Linux
+          path: depot-linux
+
+      - name: Extract macOS app bundle
+        run: unzip -q depot-macos-zip/TTSim.zip -d depot-macos
+
+      - name: Get version info
+        id: version
+        run: |
+          BASE_VERSION=$(sed -n 's/config\/version="\([^"]*\)"/\1/p' project.godot)
+          if [[ -z "$BASE_VERSION" ]]; then
+            echo "ERROR: Could not read version from project.godot"
+            exit 1
+          fi
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "version=${BASE_VERSION}" >> $GITHUB_OUTPUT
+          else
+            SHORT_SHA=$(git rev-parse --short HEAD)
+            echo "version=${BASE_VERSION}-build.${SHORT_SHA}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to Steam
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: ${{ secrets.STEAM_APP_ID }}
+          buildDescription: ${{ steps.version.outputs.version }}
+          rootPath: .
+          depot1Path: depot-windows
+          depot2Path: depot-macos
+          depot3Path: depot-linux
+          releaseBranch: testing
