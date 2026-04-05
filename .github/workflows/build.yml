@@ -79,6 +79,19 @@ jobs:
       - name: Export ${{ matrix.preset }}
         run: godot --headless --export-release "${{ matrix.preset }}" ${{ matrix.output }}
 
+      - name: Include steam_appid.txt in build
+        run: |
+          if [ "${{ matrix.preset }}" = "macOS" ]; then
+            # macOS: inject into .app bundle so it's next to the executable
+            unzip -q ${{ matrix.output }} -d ${{ matrix.folder }}/
+            cp steam_appid.txt "${{ matrix.folder }}/TTSim.app/Contents/MacOS/steam_appid.txt"
+            rm ${{ matrix.output }}
+            cd ${{ matrix.folder }} && zip -r -q TTSim.zip TTSim.app && rm -rf TTSim.app
+          else
+            # Windows/Linux: place next to the executable
+            cp steam_appid.txt ${{ matrix.folder }}/steam_appid.txt
+          fi
+
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
