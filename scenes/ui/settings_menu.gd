@@ -49,6 +49,7 @@ var _last_slider_tick_time: float = 0.0
 @onready var cache_info_label: Label = %CacheInfo
 
 # Update controls
+@onready var updates_tab: ScrollContainer = %Updates
 @onready var version_label: Label = %VersionLabel
 @onready var prereleases_check: CheckButton = %PrereleasesCheck
 @onready var check_updates_button: Button = %CheckUpdatesButton
@@ -140,6 +141,10 @@ func _on_panel_ready() -> void:
 	# Updates
 	prereleases_check.toggled.connect(_on_prereleases_toggled)
 	check_updates_button.pressed.connect(_on_check_updates_pressed)
+
+	# Hide Updates tab for Steam users — Steam handles updates
+	if not OS.get_environment("SteamAppId").is_empty():
+		tab_container.set_tab_hidden(updates_tab.get_index(), true)
 
 	# Tab transition animation
 	tab_container.tab_changed.connect(_on_tab_changed)

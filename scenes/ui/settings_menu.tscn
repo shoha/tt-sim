@@ -449,6 +449,7 @@ Clear to force re-download of all assets."
 horizontal_alignment = 1
 
 [node name="Updates" type="ScrollContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
+unique_name_in_owner = true
 visible = false
 layout_mode = 2
 horizontal_scroll_mode = 0
