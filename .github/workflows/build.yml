@@ -82,9 +82,9 @@ jobs:
       - name: Include steam_appid.txt in build
         run: |
           if [ "${{ matrix.preset }}" = "macOS" ]; then
-            # macOS: inject into .app bundle so it's next to the executable
+            # macOS: inject into Resources (not MacOS — files in MacOS must be signed code)
             unzip -q ${{ matrix.output }} -d ${{ matrix.folder }}/
-            cp steam_appid.txt "${{ matrix.folder }}/TTSim.app/Contents/MacOS/steam_appid.txt"
+            cp steam_appid.txt "${{ matrix.folder }}/TTSim.app/Contents/Resources/steam_appid.txt"
             rm ${{ matrix.output }}
             cd ${{ matrix.folder }} && zip -r -q TTSim.zip TTSim.app && rm -rf TTSim.app
           else
