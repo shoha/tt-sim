@@ -43,8 +43,9 @@ server.tool(
       const msg = await pm.launch({ scene });
       return { content: [{ type: "text" as const, text: msg }] };
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       return {
-        content: [{ type: "text" as const, text: `Launch failed: ${(e as Error).message}` }],
+        content: [{ type: "text" as const, text: `Launch failed: ${msg}` }],
         isError: true,
       };
     }
@@ -67,8 +68,9 @@ server.tool(
       const msg = await pm.reload({ scene });
       return { content: [{ type: "text" as const, text: msg }] };
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       return {
-        content: [{ type: "text" as const, text: `Reload failed: ${(e as Error).message}` }],
+        content: [{ type: "text" as const, text: `Reload failed: ${msg}` }],
         isError: true,
       };
     }
@@ -260,30 +262,50 @@ server.tool(
 
     for (const step of steps) {
       switch (step.action) {
-        case "click":
-          await pm.bridge.send({
+        case "click": {
+          const result = await pm.bridge.send({
             cmd: "input", type: "click",
             x: step.x, y: step.y, button: step.button,
           });
+          if (!result.ok) {
+            content.push({ type: "text", text: `Step failed (click): ${result.error}` });
+          }
           break;
-        case "drag":
-          await pm.bridge.send({
+        }
+        case "drag": {
+          const result = await pm.bridge.send({
             cmd: "input", type: "drag",
             x1: step.x1, y1: step.y1, x2: step.x2, y2: step.y2,
           });
+          if (!result.ok) {
+            content.push({ type: "text", text: `Step failed (drag): ${result.error}` });
+          }
           break;
-        case "key":
-          await pm.bridge.send({ cmd: "input", type: "key", key: step.key });
+        }
+        case "key": {
+          const result = await pm.bridge.send({ cmd: "input", type: "key", key: step.key });
+          if (!result.ok) {
+            content.push({ type: "text", text: `Step failed (key): ${result.error}` });
+          }
           break;
-        case "scroll":
-          await pm.bridge.send({
+        }
+        case "scroll": {
+          const result = await pm.bridge.send({
             cmd: "input", type: "scroll",
             x: step.x, y: step.y, delta: step.delta,
           });
+          if (!result.ok) {
+            content.push({ type: "text", text: `Step failed (scroll): ${result.error}` });
+          }
           break;
-        case "wait":
-          await pm.bridge.send({ cmd: "wait", seconds: step.seconds });
+        }
+        case "wait": {
+          const result = await pm.bridge.send({ cmd: "wait", seconds: step.seconds });
+          if (!result.ok) {
+            content.push({ type: "text", text: `Step failed (wait): ${result.error}` });
+          }
           break;
+        }
         case "screenshot": {
           const result = await pm.bridge.send({ cmd: "screenshot" });
           if (result.ok) {

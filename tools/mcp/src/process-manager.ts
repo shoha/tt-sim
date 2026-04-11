@@ -100,15 +100,16 @@ export class ProcessManager {
 
     this.bridge.disconnect();
 
+    const proc = this.process;
     const exitPromise = new Promise<void>((resolve) => {
-      if (this.process) {
-        this.process.on("exit", () => resolve());
+      if (proc) {
+        proc.on("exit", () => resolve());
       } else {
         resolve();
       }
     });
 
-    this.process!.kill();
+    proc?.kill();
     await exitPromise;
     this.process = null;
     return "Game stopped.";
@@ -127,7 +128,9 @@ export class ProcessManager {
         l.includes("ERROR") ||
         l.includes("SCRIPT ERROR") ||
         l.includes("Parse Error") ||
-        l.includes("Invalid") ||
+        l.includes("Invalid get index") ||
+        l.includes("Invalid call") ||
+        l.includes("Invalid operands") ||
         (l.includes("push_error") && !l.includes("ValidationBridge"))
     );
   }
