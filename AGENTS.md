@@ -120,6 +120,104 @@ Filter to just errors: pipe output through `grep -E "ERROR:|SCRIPT ERROR:"`.
 gdlint path/to/file.gd
 ```
 
+## Validation Bridge (MCP)
+
+An MCP server that lets agents launch the game, interact with it, capture screenshots, query state, and validate code changes without human intervention. Registered as `tt-sim-validator` in Claude Code.
+
+### When to Use
+
+After making code changes that affect runtime behavior or visuals, use the validation tools to verify the change works. The workflow:
+
+1. **After any code edit**: call `game_reload` to restart with new code
+2. **Check for errors**: call `game_state` — look at `console_errors` for crashes
+3. **Exercise the feature**: call `game_interact` with a sequence of inputs
+4. **Evaluate visually**: call `game_screenshot` and inspect the result
+5. **If broken**: fix the code and repeat from step 1
+
+### Available Tools
+
+| Tool | Purpose |
+|------|---------|
+| `game_launch` | Start Godot with the validation bridge. Call this first. Optional `scene` parameter for a specific scene |
+| `game_stop` | Kill the running Godot instance |
+| `game_reload` | Stop and relaunch. Use after code changes |
+| `game_screenshot` | Capture viewport as PNG image |
+| `game_state` | Query game state: app state, tokens, UI panels, camera, scene tree, console errors |
+| `game_click` | Click at (x, y) viewport coords. Optional `button`: "left" (default), "right", "middle" |
+| `game_drag` | Drag from (x1, y1) to (x2, y2) with interpolated motion |
+| `game_key` | Press a key by name (e.g. "M", "Escape", "Home", "Space", "G") |
+| `game_scroll` | Mouse wheel at (x, y). Positive delta = zoom in, negative = zoom out |
+| `game_wait` | Wait N seconds for animations/transitions to settle |
+| `game_interact` | **Preferred for multi-step validation.** Execute a sequence of actions and return collected screenshots + state in one call |
+
+### game_interact Example
+
+Instead of making 10 tool calls, send one batch:
+
+```json
+{
+  "steps": [
+    {"action": "click", "x": 960, "y": 540},
+    {"action": "wait", "seconds": 0.5},
+    {"action": "key", "key": "M"},
+    {"action": "wait", "seconds": 0.3},
+    {"action": "screenshot"},
+    {"action": "state"}
+  ]
+}
+```
+
+Returns all screenshots and the final state in one response.
+
+### game_state Response
+
+```json
+{
+  "ok": true,
+  "app_state": "PLAYING",
+  "tokens": [
+    {"network_id": "abc", "name": "Goblin", "position": {"x": 1, "y": 0, "z": 2}, "visible": true, "health": 30, "max_health": 30, "alive": true}
+  ],
+  "ui": {
+    "PlayerListDrawer": {"open": false},
+    "LevelEditPanel": {"open": true}
+  },
+  "camera": {"position": {"x": 5, "y": 0, "z": 5}, "zoom": 8.0},
+  "scene_tree": {"name": "Root", "type": "Node3D", "children": [...]},
+  "console_errors": []
+}
+```
+
+Use `app_state` to verify scene transitions worked. Use `tokens` to verify token operations. Use `console_errors` to catch runtime errors.
+
+### Validation Levels
+
+1. **Smoke test** (always do this): `game_reload` + `game_state` — catches compile errors and crashes
+2. **Targeted interaction**: reason about what you changed and exercise that feature
+3. **Acceptance criteria**: if the task specifies expected behavior, verify with screenshots + state
+
+### What You Can vs. Cannot Catch
+
+**Can catch**: crashes, missing UI, wrong colors (bold), features not responding to input, state corruption, layout obviously wrong
+
+**Cannot catch reliably**: subtle animation timing, 1px alignment, slight color shades, performance regressions, drag interaction "feel"
+
+### Architecture
+
+```
+Agent → MCP Server (TypeScript, tools/mcp/) → TCP localhost:7777 → Validation Bridge (GDScript autoload, addons/validation_bridge/)
+```
+
+The bridge only activates when Godot is launched with `-- --validation-bridge`. Normal gameplay, editor play, and release builds are unaffected.
+
+### Troubleshooting
+
+- **"Game is not running"**: call `game_launch` first
+- **Launch timeout**: check that `godot` is on PATH, or set `GODOT_PATH` env var
+- **Bridge not connecting**: port 7777 may be in use from a previous session. `game_stop` then `game_launch`
+- **Stale errors after reload**: `console_errors` accumulates since launch. Check timestamps/context
+- **Viewport size**: defaults to project settings (1920x1080). Screenshot coordinates use viewport pixels
+
 ## CI/CD
 
 - **GitHub Actions** – `.github/workflows/build.yml` exports Windows, macOS, and Linux builds on push to `main` or version tags (`v*`). Uses `barichello/godot-ci:4.6` container.
@@ -131,17 +229,19 @@ gdlint path/to/file.gd
 ## File Layout
 
 ```
-autoloads/     # Singletons, static class_name scripts, and facade sub-components
-resources/     # Custom Resource classes (LevelData, TokenState, TokenPlacement, TokenConfig, AssetPack)
-scenes/        # States, board_token, effects, level_editor, level_loader, ui
-utils/         # GlbUtils, SerializationUtils, EnvironmentPresets, TabUtils
-shaders/       # GLSL shaders (lo-fi, occlusion fade, selection glow)
-themes/        # dark_theme.gd → generated/dark_theme.tres
-tests/         # GUT unit tests + runnable test scenes (F6 in editor)
-tools/         # Python scripts (audio normalization, hooks, manifest generation)
-data/          # Static data files (pokemon.json)
-docs/          # Authoritative documentation
-assets/        # Audio, icons, models, maps
-.github/       # CI/CD workflows
-.cursor/rules/ # Cursor IDE rules for AI agent guidance
+autoloads/                  # Singletons, static class_name scripts, and facade sub-components
+resources/                  # Custom Resource classes (LevelData, TokenState, TokenPlacement, TokenConfig, AssetPack)
+scenes/                     # States, board_token, effects, level_editor, level_loader, ui
+utils/                      # GlbUtils, SerializationUtils, EnvironmentPresets, TabUtils
+shaders/                    # GLSL shaders (lo-fi, occlusion fade, selection glow)
+themes/                     # dark_theme.gd → generated/dark_theme.tres
+tests/                      # GUT unit tests + runnable test scenes (F6 in editor)
+tools/                      # Python scripts (audio normalization, hooks, manifest generation)
+tools/mcp/                  # TypeScript MCP server for agent validation bridge
+addons/validation_bridge/   # GDScript autoload for in-game validation (TCP server)
+data/                       # Static data files (pokemon.json)
+docs/                       # Authoritative documentation
+assets/                     # Audio, icons, models, maps
+.github/                    # CI/CD workflows
+.cursor/rules/              # Cursor IDE rules for AI agent guidance
 ```

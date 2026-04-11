@@ -41,3 +41,17 @@ godot --headless --import --path .
 - GUT v9.5.0 vendored at `addons/gut/`
 - 2 pre-existing failures in `test_token_placement_serialization` and
   `test_token_state_serialization` — known, do not investigate
+
+## Validation Bridge
+
+After making code changes, use the `tt-sim-validator` MCP tools to verify your work:
+
+```
+game_reload  → restart game with new code
+game_state   → check for console errors
+game_interact → exercise the feature (click, drag, key, screenshot, state in one batch)
+```
+
+See `AGENTS.md` "Validation Bridge (MCP)" section for full tool reference, examples, and
+troubleshooting. Always smoke-test (`game_reload` + `game_state`) after edits that affect
+runtime behavior.
