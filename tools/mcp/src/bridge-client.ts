@@ -55,6 +55,7 @@ export class BridgeClient {
     if (!this.socket || this.socket.destroyed) {
       throw new Error("Not connected to bridge");
     }
+    const socket = this.socket;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending = null;
@@ -62,7 +63,7 @@ export class BridgeClient {
       }, timeoutMs);
 
       this.pending = { resolve, reject, timer };
-      this.socket!.write(JSON.stringify(cmd) + "\n");
+      socket.write(JSON.stringify(cmd) + "\n");
     });
   }
 
