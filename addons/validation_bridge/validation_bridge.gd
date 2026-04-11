@@ -87,6 +87,10 @@ func _try_process_command() -> void:
 
 	var cmd: Dictionary = json.data
 	_processing = true
+	# _handle_command is async but called without await intentionally.
+	# The coroutine starts, suspends at its first await, and resumes on a later frame.
+	# The _processing flag (checked in _process) prevents re-entry while the command
+	# is in flight. _handle_command sets _processing = false when it completes.
 	_handle_command(cmd)
 
 
@@ -191,16 +195,27 @@ func _get_ui_state() -> Dictionary:
 	if root_scene == null:
 		return result
 
-	var nodes := _find_nodes_of_class(root_scene, "DrawerContainer")
-	for node in nodes:
-		if "is_open" in node:
-			result[str(node.name)] = {"open": node.is_open}
+	for node in _find_drawers(root_scene):
+		result[str(node.name)] = {"open": node.is_open}
 
 	var pause_overlay := root_scene.find_child("PauseOverlay", true, false)
 	if pause_overlay:
 		result["PauseOverlay"] = {"visible": pause_overlay.visible}
 
 	return result
+
+
+func _find_drawers(node: Node) -> Array[Node]:
+	var found: Array[Node] = []
+	_find_drawers_recursive(node, found)
+	return found
+
+
+func _find_drawers_recursive(node: Node, found: Array[Node]) -> void:
+	if node is DrawerContainer:
+		found.append(node)
+	for child in node.get_children():
+		_find_drawers_recursive(child, found)
 
 
 func _get_camera_state() -> Dictionary:
@@ -248,19 +263,6 @@ func _get_scene_tree(node: Node, depth: int, max_depth: int) -> Dictionary:
 	elif node.get_child_count() > 0:
 		result["child_count"] = node.get_child_count()
 	return result
-
-
-func _find_nodes_of_class(root: Node, class_name_str: String) -> Array[Node]:
-	var found: Array[Node] = []
-	_find_nodes_of_class_recursive(root, class_name_str, found)
-	return found
-
-
-func _find_nodes_of_class_recursive(node: Node, class_name_str: String, found: Array[Node]) -> void:
-	if node.get_class() == class_name_str or (node.get_script() and node is DrawerContainer):
-		found.append(node)
-	for child in node.get_children():
-		_find_nodes_of_class_recursive(child, class_name_str, found)
 
 
 # ---------------------------------------------------------------------------
