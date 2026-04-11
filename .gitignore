@@ -21,3 +21,7 @@ steam_appid.txt
 
 # Claude Code — local overrides are machine-specific
 .claude/settings.local.json
+
+# Validation bridge MCP server (build artifacts + deps)
+tools/mcp/node_modules/
+tools/mcp/dist/

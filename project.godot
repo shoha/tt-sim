@@ -39,6 +39,7 @@ NetworkStateSync="*res://autoloads/network_state_sync.gd"
 UpdateManager="*res://autoloads/update_manager.gd"
 EventBus="*res://autoloads/event_bus.gd"
 AssetManager="*res://autoloads/asset_manager.gd"
+ValidationBridge="*res://addons/validation_bridge/validation_bridge.gd"
 
 [debug]
 
