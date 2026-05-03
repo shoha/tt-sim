@@ -123,6 +123,14 @@ static func apply_game_state_to_tokens(controller: LevelPlayController, game_map
 				controller.spawned_tokens[network_id] = new_token
 				controller._connect_token_context_menu(new_token)
 
+	# Apply any active drag locks to visual tokens (for late joiners)
+	for network_id in GameState.get_all_token_states():
+		var lock_holder := GameState.get_drag_lock(network_id)
+		if lock_holder > 0:
+			var token = controller.spawned_tokens.get(network_id)
+			if token and is_instance_valid(token):
+				(token as BoardToken).set_drag_lock(lock_holder)
+
 
 ## Create a BoardToken from a TokenState (for network-spawned tokens)
 static func create_token_from_state(token_state: TokenState) -> BoardToken:
