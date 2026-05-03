@@ -1076,6 +1076,17 @@ func _on_client_drag_lock_released(sender_id: int, network_id: String) -> void:
 	if token:
 		token.clear_drag_lock()
 
+		# Snap the host's visual to GameState's authoritative position.
+		# GameState has the exact position from the client's last RPC,
+		# but the host's visual may still be interpolating toward it.
+		var state := GameState.get_token_state(network_id)
+		if state:
+			token.set_transform_immediate(state.position, state.rotation, state.scale)
+
+		# Broadcast the final authoritative position to all clients so
+		# everyone converges to the same resting position.
+		NetworkStateSync.broadcast_token_transform(token)
+
 	# Broadcast release to all clients
 	NetworkManager._rpc_drag_lock_released.rpc(network_id)
 
