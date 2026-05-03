@@ -916,7 +916,8 @@ func save_level() -> String:
 
 
 ## Sync all token positions to network (call after drags, etc.)
-## Uses full state broadcast for reconciliation to ensure consistency
+## Skips tokens currently under client authority to avoid overwriting GameState
+## with stale interpolation data from the host's visual.
 func broadcast_token_positions() -> void:
 	if not NetworkManager.is_host():
 		return
@@ -924,10 +925,30 @@ func broadcast_token_positions() -> void:
 	for placement_id in spawned_tokens:
 		var token = spawned_tokens[placement_id] as BoardToken
 		if is_instance_valid(token):
+			# Skip tokens currently under client authority:
+			# 1. Drag-locked by a non-host peer (client is actively dragging)
+			var lock_holder := GameState.get_drag_lock(token.network_id)
+			if lock_holder > 1:
+				continue
+			# 2. Still network-interpolating on the host (client just dropped,
+			#    host visual hasn't converged yet)
+			if token._dragging_object and token._dragging_object.is_network_interpolating():
+				continue
 			GameState.sync_from_board_token(token)
 
-	# Use full state for reconciliation to ensure all clients are in sync
-	NetworkStateSync.broadcast_full_state()
+	# Use per-token transforms instead of full state blast to avoid
+	# clearing client-side permissions and drag locks every 2 seconds.
+	_broadcast_reconciliation_transforms()
+
+
+## Send per-token transform updates for reconciliation instead of a full state
+## blast. This avoids the destructive clear-and-rebuild path in
+## apply_full_state_dict which clears permissions and drag locks on clients.
+func _broadcast_reconciliation_transforms() -> void:
+	for placement_id in spawned_tokens:
+		var token = spawned_tokens[placement_id] as BoardToken
+		if is_instance_valid(token):
+			NetworkStateSync.broadcast_token_transform(token)
 
 
 ## Sync placement data from a token's current state
