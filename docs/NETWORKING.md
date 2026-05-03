@@ -182,7 +182,8 @@ var tokens = GameState.get_all_token_states()
 
 # Export/import full state
 var state_dict = GameState.get_full_state_dict()
-GameState.apply_full_state_dict(state_dict)
+GameState.apply_full_state_dict(state_dict)  # Destructive: clears and rebuilds (initial sync)
+GameState.merge_full_state_dict(state_dict)  # Non-destructive: updates in place (reconciliation)
 ```
 
 ### Batch Updates
@@ -314,6 +315,18 @@ NetworkManager.token_transform_received.connect(func(id, pos, rot, scale):
 # Host notifies all clients
 NetworkStateSync.broadcast_token_removed(network_id)
 ```
+
+### Periodic Reconciliation
+
+The host runs a 2-second reconciliation timer that syncs token positions to all clients. This catches any drift between GameState and the visual tokens.
+
+**Important:** Reconciliation skips tokens that are currently under client authority:
+- Tokens drag-locked by a non-host peer (the client is actively dragging)
+- Tokens still network-interpolating on the host (client just dropped, host visual hasn't converged)
+
+This prevents the host's interpolating visual position from overwriting GameState with stale data, which would cause tokens to snap back on the client.
+
+Reconciliation uses per-token transform broadcasts (unreliable channel) rather than full state blasts, avoiding the destructive clear-and-rebuild path that would reset client-side permissions and drag locks.
 
 ---
 
@@ -490,7 +503,19 @@ func end_batch_update() -> void
 ```gdscript
 func get_full_state_dict() -> Dictionary
 func apply_full_state_dict(data: Dictionary) -> void
+func merge_full_state_dict(data: Dictionary) -> void
 ```
+
+#### Drag Locks
+
+```gdscript
+func claim_drag_lock(network_id: String, peer_id: int) -> bool
+func release_drag_lock(network_id: String) -> void
+func get_drag_lock(network_id: String) -> int
+func clear_drag_locks_for_peer(peer_id: int) -> void
+```
+
+Drag locks are included in `get_full_state_dict()` (when non-empty) so late joiners know which tokens are currently being dragged. They are preserved by `merge_full_state_dict()` and restored by `apply_full_state_dict()`.
 
 ---
 
