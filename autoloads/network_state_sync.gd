@@ -200,8 +200,12 @@ func send_full_state_to_peer(peer_id: int) -> void:
 
 
 func _on_game_state_received(state_dict: Dictionary) -> void:
-	# Apply to GameState
-	GameState.apply_full_state_dict(state_dict)
+	# Use non-destructive merge if we already have state (reconciliation).
+	# Use destructive apply only for initial sync (no existing tokens).
+	if GameState.get_token_count() > 0:
+		GameState.merge_full_state_dict(state_dict)
+	else:
+		GameState.apply_full_state_dict(state_dict)
 
 	# Emit signal for visual layer
 	full_state_received.emit(state_dict)

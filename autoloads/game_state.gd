@@ -482,3 +482,43 @@ func apply_full_state_dict(data: Dictionary) -> void:
 	# Apply permissions if present
 	if data.has("permissions"):
 		apply_token_permissions(data["permissions"])
+
+
+## Merge a full state dictionary non-destructively (for reconciliation).
+## Unlike apply_full_state_dict, this does NOT clear existing state.
+## It updates existing tokens, adds new ones, and removes stale ones.
+## Permissions are updated only if present in the data.
+## Drag locks are preserved (they are session-ephemeral, not serialized).
+func merge_full_state_dict(data: Dictionary) -> void:
+	var token_data: Dictionary
+	if data.has("tokens"):
+		token_data = data["tokens"]
+	else:
+		token_data = data
+
+	# Track which tokens are in the incoming data
+	var incoming_ids: Dictionary = {}
+	for network_id in token_data:
+		incoming_ids[network_id] = true
+
+	# Remove tokens that no longer exist in the incoming data
+	var existing_ids := _token_states.keys()
+	for network_id in existing_ids:
+		if not incoming_ids.has(network_id):
+			_token_states.erase(network_id)
+			clear_permissions_for_token(network_id)
+			token_removed.emit(network_id)
+
+	# Update existing and add new tokens
+	for network_id in token_data:
+		var state = TokenState.from_dict(token_data[network_id])
+		var is_new = not _token_states.has(network_id)
+		_token_states[network_id] = state
+		if is_new:
+			token_added.emit(network_id, state)
+		else:
+			token_state_changed.emit(network_id, "_all", null, state)
+
+	# Update permissions if present (non-destructive)
+	if data.has("permissions"):
+		apply_token_permissions(data["permissions"])
