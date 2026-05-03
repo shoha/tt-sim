@@ -159,6 +159,12 @@ func is_being_dragged() -> bool:
 	return _is_currently_dragging or _is_settling
 
 
+## Whether this token is currently interpolating toward a network target
+## (i.e., another peer is moving it and the visual is still catching up).
+func is_network_interpolating() -> bool:
+	return _network_interpolating
+
+
 # -------------------------------------------------------------------------
 # Drag Lifecycle
 # -------------------------------------------------------------------------
