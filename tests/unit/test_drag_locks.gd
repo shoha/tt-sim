@@ -58,3 +58,24 @@ func test_clear_all_locks_removes_everything() -> void:
 	GameState.clear_all_drag_locks()
 	assert_eq(GameState.get_drag_lock("token_1"), 0)
 	assert_eq(GameState.get_drag_lock("token_2"), 0)
+
+
+func test_full_state_dict_includes_drag_locks() -> void:
+	GameState.claim_drag_lock("token_1", 42)
+	var state_dict := GameState.get_full_state_dict()
+	assert_true(state_dict.has("drag_locks"), "Expected drag_locks in full state dict")
+	assert_eq(state_dict["drag_locks"]["token_1"], 42)
+
+
+func test_full_state_dict_omits_drag_locks_when_empty() -> void:
+	var state_dict := GameState.get_full_state_dict()
+	assert_false(state_dict.has("drag_locks"), "Expected no drag_locks key when empty")
+
+
+func test_apply_full_state_restores_drag_locks() -> void:
+	GameState.claim_drag_lock("token_1", 42)
+	var state_dict := GameState.get_full_state_dict()
+	GameState.clear_all_drag_locks()
+	assert_eq(GameState.get_drag_lock("token_1"), 0, "Lock should be cleared")
+	GameState.apply_full_state_dict(state_dict)
+	assert_eq(GameState.get_drag_lock("token_1"), 42, "Lock should be restored")
