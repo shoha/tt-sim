@@ -461,6 +461,9 @@ func get_full_state_dict() -> Dictionary:
 		tokens[network_id] = _token_states[network_id].to_dict()
 	result["tokens"] = tokens
 	result["permissions"] = TokenPermissions.to_dict(_token_permissions)
+	# Include active drag locks so late joiners know which tokens are in use
+	if not _drag_locks.is_empty():
+		result["drag_locks"] = _drag_locks.duplicate()
 	return result
 
 
@@ -482,6 +485,10 @@ func apply_full_state_dict(data: Dictionary) -> void:
 	# Apply permissions if present
 	if data.has("permissions"):
 		apply_token_permissions(data["permissions"])
+
+	# Apply drag locks if present (for late joiners)
+	if data.has("drag_locks"):
+		_drag_locks = data["drag_locks"].duplicate()
 
 
 ## Merge a full state dictionary non-destructively (for reconciliation).
@@ -522,3 +529,7 @@ func merge_full_state_dict(data: Dictionary) -> void:
 	# Update permissions if present (non-destructive)
 	if data.has("permissions"):
 		apply_token_permissions(data["permissions"])
+
+	# Apply drag locks if present (for late joiners)
+	if data.has("drag_locks"):
+		_drag_locks = data["drag_locks"].duplicate()
