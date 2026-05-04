@@ -3,6 +3,8 @@ extends AnimatedVisibilityContainer
 ## Container for the asset browser overlay.
 ## Handles showing/hiding the browser and connecting to asset selection.
 
+signal asset_drag_started(pack_id: String, asset_id: String, variant_id: String, icon: Texture2D)
+
 const AddPackDialogScene := preload("res://scenes/ui/add_pack_dialog.tscn")
 
 @onready var asset_browser: AssetBrowser = $PanelContainer/VBox/AssetBrowser
@@ -21,6 +23,7 @@ func _ready() -> void:
 	play_open_close_sounds = false
 
 	asset_browser.asset_selected.connect(_on_asset_selected)
+	asset_browser.asset_drag_started.connect(_on_asset_drag_started)
 	if add_pack_button:
 		add_pack_button.pressed.connect(_on_add_pack_pressed)
 	AssetManager.pack_download_completed.connect(_on_pack_download_completed)
@@ -37,6 +40,14 @@ func _on_pack_download_completed(_pack_id: String) -> void:
 
 func _on_asset_selected(_pack_id: String, _asset_id: String, _variant_id: String) -> void:
 	# Close the overlay after an asset is selected
+	animate_out()
+
+
+func _on_asset_drag_started(
+	pack_id: String, asset_id: String, variant_id: String, icon: Texture2D
+) -> void:
+	asset_drag_started.emit(pack_id, asset_id, variant_id, icon)
+	# Close browser to reveal viewport
 	animate_out()
 
 

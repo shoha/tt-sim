@@ -5,6 +5,8 @@ extends Control
 ## Only active when a level is loaded.
 ## Adding tokens, saving positions, and editing level settings are only available to the GM.
 
+signal drag_place_started(pack_id: String, asset_id: String, variant_id: String, icon: Texture2D)
+
 var _level_play_controller: LevelPlayController = null
 
 # Original values snapshot for edit mode cancel/revert
@@ -28,6 +30,10 @@ func _ready() -> void:
 	var asset_browser: AssetBrowser = $AssetBrowserContainer/PanelContainer/VBox/AssetBrowser
 	if asset_browser:
 		asset_browser.asset_selected.connect(_on_asset_selected)
+
+	var asset_browser_container = $AssetBrowserContainer
+	if asset_browser_container and asset_browser_container.has_signal("asset_drag_started"):
+		asset_browser_container.asset_drag_started.connect(_on_asset_drag_started)
 
 	# Connect level edit panel (drawer) signals
 	if level_edit_panel:
@@ -182,6 +188,14 @@ func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -
 	var token = _level_play_controller.spawn_asset(pack_id, asset_id, variant_id, spawn_pos)
 	if not token:
 		UIManager.show_error("Failed to add token — asset may still be downloading")
+
+
+func _on_asset_drag_started(
+	pack_id: String, asset_id: String, variant_id: String, icon: Texture2D
+) -> void:
+	if NetworkManager.is_restricted_client():
+		return
+	drag_place_started.emit(pack_id, asset_id, variant_id, icon)
 
 
 ## Get the world position where the camera center intersects the Y=0 ground plane.

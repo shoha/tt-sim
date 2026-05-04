@@ -68,6 +68,12 @@ var _drag_ruler: DragRuler = null
 var _weather_renderer: WeatherRenderer = null
 var _action_history: GameplayActionHistory = null
 
+# Drag-to-place state
+var _drag_placing: bool = false
+var _drag_place_info: Dictionary = {}
+var _drag_ghost: TextureRect = null
+var _drag_ghost_layer: CanvasLayer = null
+
 # Grid visibility state (local client-side override)
 var _grid_explicit_toggle: bool = false  # Set by G key, persists until toggled or level change
 var _grid_auto_show_measure: bool = false
@@ -201,6 +207,8 @@ func setup(level_play_controller: LevelPlayController) -> void:
 		var menu_controller = gameplay_menu.get_node_or_null("GameplayMenu")
 		if menu_controller and menu_controller.has_method("setup"):
 			menu_controller.setup(level_play_controller)
+			if menu_controller.has_signal("drag_place_started"):
+				menu_controller.drag_place_started.connect(_on_drag_place_started)
 
 
 func _process(delta: float) -> void:
@@ -277,6 +285,33 @@ func _input(event: InputEvent) -> void:
 	# Always track mouse position for zoom-toward-cursor, even during measurement
 	if event is InputEventMouseMotion:
 		_last_mouse_position = event.position
+
+	# Drag-to-place: track ghost and handle drop/cancel
+	if _drag_placing:
+		if event is InputEventMouseMotion and _drag_ghost:
+			_drag_ghost.position = event.position - Vector2(32, 32)
+			get_viewport().set_input_as_handled()
+			return
+		if (
+			event is InputEventMouseButton
+			and event.button_index == MOUSE_BUTTON_LEFT
+			and not event.pressed
+		):
+			_complete_drag_place(event.position)
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			_cancel_drag_place()
+			get_viewport().set_input_as_handled()
+			return
+		if (
+			event is InputEventMouseButton
+			and event.button_index == MOUSE_BUTTON_RIGHT
+			and event.pressed
+		):
+			_cancel_drag_place()
+			get_viewport().set_input_as_handled()
+			return
 
 	# Toggle measure tool — handled in _input (not _unhandled_key_input) because
 	# SubViewportContainer routing can swallow key events before they reach
@@ -1255,6 +1290,108 @@ func _clamp_position_to_bounds(pos: Vector3) -> Vector3:
 ## Called after any camera translation to prevent panning into the void.
 func _clamp_camera_to_bounds() -> void:
 	cameraholder_node.global_position = _clamp_position_to_bounds(cameraholder_node.global_position)
+
+
+## ============================================================================
+## Drag-to-place from asset browser
+## ============================================================================
+
+
+func _on_drag_place_started(
+	pack_id: String, asset_id: String, variant_id: String, icon: Texture2D
+) -> void:
+	_drag_placing = true
+	_drag_place_info = {
+		"pack_id": pack_id,
+		"asset_id": asset_id,
+		"variant_id": variant_id,
+	}
+	# Create ghost icon on a high canvas layer
+	_drag_ghost_layer = CanvasLayer.new()
+	_drag_ghost_layer.layer = Constants.LAYER_DIALOG
+	add_child(_drag_ghost_layer)
+
+	_drag_ghost = TextureRect.new()
+	if icon:
+		_drag_ghost.texture = icon
+	else:
+		# Fallback: small colored square
+		var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+		img.fill(Color(1.0, 0.6, 0.2, 0.6))
+		_drag_ghost.texture = ImageTexture.create_from_image(img)
+	_drag_ghost.custom_minimum_size = Vector2(64, 64)
+	_drag_ghost.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_drag_ghost.modulate = Color(1, 1, 1, 0.6)
+	_drag_ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_drag_ghost.position = get_viewport().get_mouse_position() - Vector2(32, 32)
+	_drag_ghost_layer.add_child(_drag_ghost)
+
+	Input.set_default_cursor_shape(Input.CURSOR_CROSS)
+
+
+func _cancel_drag_place() -> void:
+	_drag_placing = false
+	_drag_place_info.clear()
+	if _drag_ghost_layer:
+		_drag_ghost_layer.queue_free()
+		_drag_ghost_layer = null
+		_drag_ghost = null
+	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+
+
+func _complete_drag_place(screen_pos: Vector2) -> void:
+	var ground_pos := _get_ground_position(screen_pos)
+	if ground_pos == Vector3.INF:
+		ground_pos = _get_camera_ground_position()
+	ground_pos = _snap_to_grid_if_enabled(ground_pos)
+
+	if _level_play_controller:
+		var token = (
+			_level_play_controller
+			. spawn_asset(
+				_drag_place_info.get("pack_id", ""),
+				_drag_place_info.get("asset_id", ""),
+				_drag_place_info.get("variant_id", "default"),
+				ground_pos,
+			)
+		)
+		if not token:
+			UIManager.show_error("Failed to place token")
+
+	_cancel_drag_place()
+
+
+## Get the world position where a screen point intersects the Y=0 ground plane.
+## Returns Vector3.INF if the ray doesn't intersect (camera pointing up).
+func _get_ground_position(screen_pos: Vector2) -> Vector3:
+	if not camera_node:
+		return Vector3.INF
+	var origin := camera_node.project_ray_origin(screen_pos)
+	var direction := camera_node.project_ray_normal(screen_pos)
+	if abs(direction.y) < 0.0001:
+		return Vector3.INF
+	var t := -origin.y / direction.y
+	if t < 0:
+		return Vector3.INF
+	return origin + direction * t
+
+
+## Get the ground position at viewport center (where the camera looks).
+func _get_camera_ground_position() -> Vector3:
+	var center := Vector2(world_viewport.size) / 2.0
+	var pos := _get_ground_position(center)
+	if pos == Vector3.INF:
+		pos = Vector3(cameraholder_node.global_position.x, 0, cameraholder_node.global_position.z)
+	return pos
+
+
+## Snap a world position to the grid if grid snap is enabled.
+func _snap_to_grid_if_enabled(world_pos: Vector3) -> Vector3:
+	if not drag_and_drop_node or not drag_and_drop_node.grid_snap_enabled:
+		return world_pos
+	return ScaleUtils.snap_to_grid(
+		world_pos, drag_and_drop_node.grid_cell_size, drag_and_drop_node.grid_origin
+	)
 
 
 ## Override lo-fi shader parameters from map data
