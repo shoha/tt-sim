@@ -503,6 +503,7 @@ func _set_default_hints() -> void:
 				{"key": InputProfile.label(&"reset_camera"), "action": "Reset Camera"},
 				{"key": InputProfile.label(&"measure"), "action": "Measure"},
 				{"key": InputProfile.label(&"grid"), "action": "Grid"},
+				{"key": "F1", "action": "Help"},
 			]
 		)
 	)

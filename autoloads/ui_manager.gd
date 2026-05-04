@@ -24,12 +24,14 @@ const TOAST_CONTAINER_SCENE := preload("res://scenes/ui/toast_container.tscn")
 const TRANSITION_OVERLAY_SCENE := preload("res://scenes/ui/transition_overlay.tscn")
 const INPUT_HINTS_SCENE := preload("res://scenes/ui/input_hints.tscn")
 const DOWNLOAD_QUEUE_SCENE := preload("res://scenes/ui/download_queue.tscn")
+const HELP_OVERLAY_SCENE := preload("res://scenes/ui/help_overlay.tscn")
 
 # Persistent UI components
 var _toast_container: Node = null
 var _transition_overlay: Node = null
 var _input_hints: Node = null
 var _download_queue: Node = null
+var _help_overlay: Node = null
 
 
 func _ready() -> void:
@@ -264,3 +266,27 @@ func open_settings() -> Node:
 	var settings = SETTINGS_MENU_SCENE.instantiate()
 	get_tree().root.add_child(settings)
 	return settings
+
+
+## Open the help overlay (F1)
+func open_help() -> void:
+	if _help_overlay and is_instance_valid(_help_overlay):
+		return
+	_help_overlay = HELP_OVERLAY_SCENE.instantiate()
+	get_tree().root.add_child(_help_overlay)
+
+
+## Close the help overlay
+func close_help() -> void:
+	if _help_overlay and is_instance_valid(_help_overlay):
+		if _help_overlay.has_method("animate_out"):
+			_help_overlay.animate_out()
+		_help_overlay = null
+
+
+## Toggle the help overlay
+func toggle_help() -> void:
+	if _help_overlay and is_instance_valid(_help_overlay):
+		close_help()
+	else:
+		open_help()
