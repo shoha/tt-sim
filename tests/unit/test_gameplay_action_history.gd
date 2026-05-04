@@ -1,0 +1,118 @@
+extends GutTest
+
+## Tests for GameplayActionHistory undo stack.
+
+const TEST_TOKEN_ID := "test_token_1"
+
+var _history: GameplayActionHistory
+
+
+func before_each() -> void:
+	_history = GameplayActionHistory.new()
+	add_child(_history)
+	_register_test_token(TEST_TOKEN_ID)
+
+
+func after_each() -> void:
+	_history.queue_free()
+	GameState.remove_token_state(TEST_TOKEN_ID)
+
+
+func _register_test_token(nid: String) -> void:
+	var state := TokenState.new()
+	state.network_id = nid
+	state.current_health = 100
+	state.max_health = 100
+	state.is_visible_to_players = true
+	state.is_alive = true
+	GameState.register_token(state)
+
+
+func test_empty_stack_cannot_undo() -> void:
+	assert_false(_history.can_undo())
+	assert_eq(_history.undo(), "")
+
+
+func test_record_and_undo_property_change() -> void:
+	_history.record_property_change(TEST_TOKEN_ID, "current_health", 100, 80)
+	assert_true(_history.can_undo())
+	assert_eq(_history.get_count(), 1)
+
+
+func test_undo_returns_description() -> void:
+	_history.record_property_change(TEST_TOKEN_ID, "current_health", 100, 80)
+	var desc := _history.undo()
+	assert_string_contains(desc, "damage")
+
+
+func test_undo_pops_from_stack() -> void:
+	_history.record_property_change(TEST_TOKEN_ID, "current_health", 100, 80)
+	_history.undo()
+	assert_false(_history.can_undo())
+	assert_eq(_history.get_count(), 0)
+
+
+func test_max_history_evicts_oldest() -> void:
+	for i in range(GameplayActionHistory.MAX_HISTORY + 5):
+		_history.record_property_change(TEST_TOKEN_ID, "current_health", 100, 100 - i)
+	assert_eq(_history.get_count(), GameplayActionHistory.MAX_HISTORY)
+
+
+func test_clear_empties_stack() -> void:
+	_history.record_property_change(TEST_TOKEN_ID, "current_health", 100, 80)
+	_history.record_property_change(TEST_TOKEN_ID, "is_visible_to_players", true, false)
+	_history.clear()
+	assert_false(_history.can_undo())
+	assert_eq(_history.get_count(), 0)
+
+
+func test_compound_action_records_as_one() -> void:
+	var changes: Array[Dictionary] = [
+		{
+			"network_id": "t1",
+			"property": "current_health",
+			"old_value": 100,
+			"new_value": 50,
+			"description": "dealt 50 damage",
+		},
+		{
+			"network_id": "t1",
+			"property": "max_health",
+			"old_value": 100,
+			"new_value": 50,
+			"description": "max HP change",
+		},
+	]
+	_history.record_compound_property_change(changes)
+	assert_eq(_history.get_count(), 1)
+
+
+func test_removal_record_and_undo_emits_signal() -> void:
+	var received := []
+	_history.removal_undo_requested.connect(func(a: Dictionary) -> void: received.append(a))
+	# Directly push a removal record (bypassing the BoardToken-based API)
+	var removal_action := {
+		"type": GameplayActionHistory.ActionType.TOKEN_REMOVAL,
+		"network_id": TEST_TOKEN_ID,
+		"token_state_dict": {},
+		"pack_id": "test_pack",
+		"asset_id": "test_asset",
+		"variant_id": "default",
+		"description": 'removed "Goblin"',
+	}
+	_history._push(removal_action)
+	_history.undo()
+	assert_eq(received.size(), 1)
+	assert_eq(received[0].network_id, TEST_TOKEN_ID)
+
+
+func test_visibility_description() -> void:
+	_history.record_property_change(TEST_TOKEN_ID, "is_visible_to_players", true, false)
+	var desc := _history.undo()
+	assert_eq(desc, "toggled visibility")
+
+
+func test_heal_description() -> void:
+	_history.record_property_change(TEST_TOKEN_ID, "current_health", 80, 100)
+	var desc := _history.undo()
+	assert_string_contains(desc, "healed")
