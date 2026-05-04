@@ -8,6 +8,7 @@ signal asset_selected(pack_id: String, asset_id: String, variant_id: String)
 var _pack_id: String = ""
 var _items: Array = []
 var _filter: String = ""
+var _icon_cache: Dictionary = {}  # asset_id -> ImageTexture
 
 var _exit_mutex: Mutex
 var _items_mutex: Mutex
@@ -69,6 +70,7 @@ func _request_populate() -> void:
 						"display_name": asset.display_name,
 						"has_variants": asset.has_variants(),
 						"variant_ids": asset.get_variant_ids(),
+						"icon_path": pack.get_icon_path(asset.asset_id, "default"),
 					}
 				)
 			)
@@ -122,6 +124,7 @@ func _populate_items() -> void:
 						"name": display_name,
 						"has_variants": entry.has_variants,
 						"variants": entry.variant_ids,
+						"icon_path": entry.icon_path,
 					}
 				)
 			)
@@ -146,7 +149,37 @@ func _clear_list() -> void:
 func _add_item_to_list(item: Dictionary) -> void:
 	if not is_instance_valid(self):
 		return
-	item_list.add_item(item.name)
+	var index := item_list.add_item(item.name)
+	var icon_path: String = item.get("icon_path", "")
+	if icon_path == "":
+		return
+	var cache_key: String = item.asset_id
+	if _icon_cache.has(cache_key):
+		item_list.set_item_icon(index, _icon_cache[cache_key])
+		return
+	if not FileAccess.file_exists(icon_path):
+		return
+	ResourceLoader.load_threaded_request(icon_path, "Image")
+	_poll_icon_load.call_deferred(icon_path, cache_key, index)
+
+
+## Poll for threaded icon load completion. Retries next frame if still loading.
+func _poll_icon_load(path: String, cache_key: String, index: int) -> void:
+	if not is_instance_valid(self):
+		return
+	var status := ResourceLoader.load_threaded_get_status(path)
+	if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		_poll_icon_load.call_deferred(path, cache_key, index)
+		return
+	if status != ResourceLoader.THREAD_LOAD_LOADED:
+		return
+	var image: Image = ResourceLoader.load_threaded_get(path)
+	if not image or not is_instance_valid(self):
+		return
+	var texture := ImageTexture.create_from_image(image)
+	_icon_cache[cache_key] = texture
+	if index < item_list.item_count:
+		item_list.set_item_icon(index, texture)
 
 
 func _show_empty_state(filter_text: String = "") -> void:
