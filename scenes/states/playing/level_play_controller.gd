@@ -96,6 +96,11 @@ func setup(game_map: GameMap) -> void:
 	add_child(_permission_handler)
 	_permission_handler.setup()
 
+	# Connect action history for removal undo
+	var history := _game_map.get_action_history()
+	if history and not history.removal_undo_requested.is_connected(_on_removal_undo_requested):
+		history.removal_undo_requested.connect(_on_removal_undo_requested)
+
 
 func _exit_tree() -> void:
 	# Disconnect network signals
@@ -808,7 +813,12 @@ func _clear_existing_maps() -> void:
 ## Supports remote assets - will show placeholder while downloading
 ## If the model isn't cached yet, a placeholder appears instantly and upgrades
 ## asynchronously once the model finishes loading (no main-thread stall).
-func spawn_asset(pack_id: String, asset_id: String, variant_id: String = "default") -> BoardToken:
+func spawn_asset(
+	pack_id: String,
+	asset_id: String,
+	variant_id: String = "default",
+	spawn_position: Vector3 = Vector3.ZERO,
+) -> BoardToken:
 	if not _game_map or not active_level_data:
 		push_warning("LevelPlayController: Cannot spawn asset - no GameMap or active level")
 		return null
@@ -830,6 +840,11 @@ func spawn_asset(pack_id: String, asset_id: String, variant_id: String = "defaul
 		)
 
 	_game_map.drag_and_drop_node.add_child(token)
+
+	# Set spawn position before the token renders at origin
+	if spawn_position != Vector3.ZERO and token.rigid_body:
+		token.rigid_body.global_position = spawn_position
+
 	_connect_token_context_menu(token)
 	add_token_to_level(token, pack_id, asset_id, variant_id)
 	# Immediate pop-in for single token placement
@@ -1280,6 +1295,12 @@ func clear_level() -> void:
 	NetworkStateSync.clear_throttle_state()
 	GameState.clear_all_drag_locks()
 
+	# Clear undo history (stale network_ids would be meaningless)
+	if _game_map:
+		var history := _game_map.get_action_history()
+		if history:
+			history.clear()
+
 	clear_level_tokens()
 	clear_level_map()
 
@@ -1333,6 +1354,47 @@ func _on_visual_settings_received(settings: Dictionary) -> void:
 			game_map.apply_weather_overrides(settings["weather_overrides"])
 		if active_level_data:
 			active_level_data.weather_overrides = settings["weather_overrides"].duplicate()
+
+
+## Handle undo of a token removal: re-create the token from saved state.
+func _on_removal_undo_requested(action: Dictionary) -> void:
+	if not NetworkManager.has_gm_access() or not _game_map:
+		return
+	var token_state := TokenState.from_dict(action.token_state_dict)
+	var token := RootNetworkHandler.create_token_from_state(token_state)
+	if not token:
+		UIManager.show_error("Failed to undo token removal")
+		return
+	_game_map.drag_and_drop_node.add_child(token)
+	_track_token_from_undo(token, token_state, action.pack_id, action.asset_id, action.variant_id)
+	_connect_token_context_menu(token)
+	token.play_spawn_animation()
+	if NetworkManager.is_host():
+		NetworkStateSync.broadcast_full_state()
+
+
+## Track a token re-created by undo. Similar to add_token_to_level but
+## reuses the original network_id and placement_id.
+func _track_token_from_undo(
+	token: BoardToken,
+	token_state: TokenState,
+	pack_id: String,
+	asset_id: String,
+	variant_id: String,
+) -> void:
+	token.pack_id = pack_id
+	token.asset_id = asset_id
+	token.variant_id = variant_id
+
+	var placement_id: String = token_state.network_id
+	spawned_tokens[placement_id] = token
+	_network_id_to_placement[token.network_id] = placement_id
+
+	token.set_interactive(NetworkManager.has_gm_access())
+
+	if GameState.has_authority():
+		GameState.register_token(token_state)
+		_connect_token_state_signals(token)
 
 
 ## Check if a level is currently loaded
