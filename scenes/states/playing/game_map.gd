@@ -293,6 +293,12 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 
+			var is_f1_key: bool = event.is_action_pressed("help_toggle") or event.keycode == KEY_F1
+			if is_f1_key:
+				UIManager.toggle_help()
+				get_viewport().set_input_as_handled()
+				return
+
 	# Measure tool gets first look at input when active.
 	# handle_input returns true if the event was consumed (clicks on terrain, etc.).
 	# Mouse motion is never consumed — it always falls through to camera handling.
