@@ -168,18 +168,65 @@ func _update_asset_browser_button_state() -> void:
 
 func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -> void:
 	print("GameplayMenuController: _on_asset_selected %s/%s/%s" % [pack_id, asset_id, variant_id])
-	# Only GM can add tokens
 	if NetworkManager.is_restricted_client():
 		UIManager.show_error("Only the GM can add tokens")
 		return
 
-	# Spawn the asset via LevelPlayController
-	if _level_play_controller:
-		var token = _level_play_controller.spawn_asset(pack_id, asset_id, variant_id)
-		if not token:
-			UIManager.show_error("Failed to add token — asset may still be downloading")
-	else:
+	if not _level_play_controller:
 		UIManager.show_error("Cannot add token — no level is loaded")
+		return
+
+	# Spawn at camera ground position instead of world origin
+	var spawn_pos := _get_camera_ground_position()
+
+	var token = _level_play_controller.spawn_asset(pack_id, asset_id, variant_id, spawn_pos)
+	if not token:
+		UIManager.show_error("Failed to add token — asset may still be downloading")
+
+
+## Get the world position where the camera center intersects the Y=0 ground plane.
+## Uses math-only plane intersection (no physics query).
+func _get_camera_ground_position() -> Vector3:
+	if not _level_play_controller:
+		return Vector3.ZERO
+	var game_map := _level_play_controller.get_game_map()
+	if not game_map or not game_map.camera_node or not game_map.world_viewport:
+		return Vector3.ZERO
+
+	var viewport_center := Vector2(game_map.world_viewport.size) / 2.0
+	var origin := game_map.camera_node.project_ray_origin(viewport_center)
+	var direction := game_map.camera_node.project_ray_normal(viewport_center)
+
+	# Intersect ray with Y=0 plane
+	if abs(direction.y) < 0.0001:
+		# Ray is parallel to ground -- fallback to camera holder XZ
+		return Vector3(
+			game_map.cameraholder_node.global_position.x,
+			0,
+			game_map.cameraholder_node.global_position.z,
+		)
+	var t := -origin.y / direction.y
+	if t < 0:
+		# Ray points away from ground -- fallback
+		return Vector3(
+			game_map.cameraholder_node.global_position.x,
+			0,
+			game_map.cameraholder_node.global_position.z,
+		)
+	var ground_pos := origin + direction * t
+
+	# Apply grid snap if enabled
+	if game_map.drag_and_drop_node and game_map.drag_and_drop_node.grid_snap_enabled:
+		ground_pos = (
+			ScaleUtils
+			. snap_to_grid(
+				ground_pos,
+				game_map.drag_and_drop_node.grid_cell_size,
+				game_map.drag_and_drop_node.grid_origin,
+			)
+		)
+
+	return ground_pos
 
 
 func _on_token_added(_token: BoardToken) -> void:
