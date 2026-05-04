@@ -66,6 +66,7 @@ var _measure_tool: MeasureTool = null
 var _grid_overlay: GridOverlay = null
 var _drag_ruler: DragRuler = null
 var _weather_renderer: WeatherRenderer = null
+var _action_history: GameplayActionHistory = null
 
 # Grid visibility state (local client-side override)
 var _grid_explicit_toggle: bool = false  # Set by G key, persists until toggled or level change
@@ -159,6 +160,9 @@ func _update_camera_offset() -> void:
 
 func _ready() -> void:
 	_setup_context_menu()
+	_action_history = GameplayActionHistory.new()
+	_action_history.name = "GameplayActionHistory"
+	add_child(_action_history)
 	_setup_viewport()
 	_load_lofi_setting()
 	_load_occlusion_fade_setting()
@@ -298,6 +302,19 @@ func _input(event: InputEvent) -> void:
 				UIManager.toggle_help()
 				get_viewport().set_input_as_handled()
 				return
+
+			# Undo (Ctrl+Z) — GM only
+			if event.keycode == KEY_Z and event.ctrl_pressed and not event.shift_pressed:
+				if (
+					_action_history
+					and NetworkManager.has_gm_access()
+					and _action_history.can_undo()
+				):
+					var desc := _action_history.undo()
+					if desc != "":
+						UIManager.show_info("Undone: %s" % desc)
+					get_viewport().set_input_as_handled()
+					return
 
 	# Measure tool gets first look at input when active.
 	# handle_input returns true if the event was consumed (clicks on terrain, etc.).
@@ -612,29 +629,112 @@ func _on_token_context_menu_requested(token: BoardToken, menu_position: Vector2)
 
 
 func _on_context_menu_hp_adjustment_requested(amount: int) -> void:
-	if _context_menu and _context_menu.target_token:
-		if amount > 0:
-			_context_menu.target_token.heal(amount)
-		else:
-			_context_menu.target_token.take_damage(amount)
+	if not _context_menu or not _context_menu.target_token:
+		return
+	var token: BoardToken = _context_menu.target_token
+	if _action_history and NetworkManager.has_gm_access():
+		(
+			_action_history
+			. record_property_change(
+				token.network_id,
+				"current_health",
+				token.current_health,
+				clamp(token.current_health + amount, 0, token.max_health),
+			)
+		)
+	if amount > 0:
+		token.heal(amount)
+	else:
+		token.take_damage(amount)
 
 
 func _on_context_menu_max_hp_changed(new_max: int) -> void:
-	if _context_menu and _context_menu.target_token:
-		_context_menu.target_token.set_max_health(new_max)
+	if not _context_menu or not _context_menu.target_token:
+		return
+	var token: BoardToken = _context_menu.target_token
+	if _action_history and NetworkManager.has_gm_access():
+		var was_full: bool = token.current_health == token.max_health
+		var changes: Array[Dictionary] = []
+		(
+			changes
+			. append(
+				{
+					"network_id": token.network_id,
+					"property": "max_health",
+					"old_value": token.max_health,
+					"new_value": new_max,
+					"description": "max HP %d -> %d" % [token.max_health, new_max],
+				}
+			)
+		)
+		if was_full and new_max != token.max_health:
+			(
+				changes
+				. append(
+					{
+						"network_id": token.network_id,
+						"property": "current_health",
+						"old_value": token.current_health,
+						"new_value": new_max,
+						"description": "HP adjusted with max",
+					}
+				)
+			)
+		_action_history.record_compound_property_change(changes)
+	token.set_max_health(new_max)
 
 
 func _on_context_menu_visibility_toggled() -> void:
-	if _context_menu and _context_menu.target_token:
-		_context_menu.target_token.toggle_visibility()
+	if not _context_menu or not _context_menu.target_token:
+		return
+	var token: BoardToken = _context_menu.target_token
+	if _action_history and NetworkManager.has_gm_access():
+		(
+			_action_history
+			. record_property_change(
+				token.network_id,
+				"is_visible_to_players",
+				token.is_visible_to_players,
+				not token.is_visible_to_players,
+			)
+		)
+	token.toggle_visibility()
 
 
 func _on_context_menu_reset_transform() -> void:
-	if _context_menu and _context_menu.target_token:
-		var token: BoardToken = _context_menu.target_token
-		var controller := token.get_node_or_null("BoardTokenController") as BoardTokenController
-		if controller:
-			controller._reset_rotation_and_scale()
+	if not _context_menu or not _context_menu.target_token:
+		return
+	var token: BoardToken = _context_menu.target_token
+	if _action_history and NetworkManager.has_gm_access():
+		var rigid_body := token.get_rigid_body()
+		if rigid_body:
+			(
+				_action_history
+				. record_compound_property_change(
+					(
+						[
+							{
+								"network_id": token.network_id,
+								"property": "rotation",
+								"old_value": rigid_body.global_rotation,
+								"new_value": Vector3.ZERO,
+								"description": "reset transform",
+							},
+							{
+								"network_id": token.network_id,
+								"property": "scale",
+								"old_value": rigid_body.scale,
+								"new_value": Vector3.ONE,
+								"description": "reset transform",
+							},
+						]
+						as Array[Dictionary]
+					)
+				)
+			)
+	var controller := token.get_node_or_null("BoardTokenController") as BoardTokenController
+	if controller:
+		controller._reset_rotation_and_scale()
 
 
 func _on_context_menu_control_requested(token: BoardToken) -> void:
@@ -759,6 +859,11 @@ func setup_measure_tool() -> void:
 ## Return the MeasureTool instance (may be null before setup).
 func get_measure_tool() -> MeasureTool:
 	return _measure_tool
+
+
+## Get the action history (for undo recording from external code).
+func get_action_history() -> GameplayActionHistory:
+	return _action_history
 
 
 ## Disable token dragging while the measure tool is active, re-enable when it's not.
