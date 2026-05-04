@@ -4,6 +4,11 @@ class_name AssetPackTab
 ## A tab displaying assets from a single pack with search filtering.
 
 signal asset_selected(pack_id: String, asset_id: String, variant_id: String)
+signal asset_drag_started(pack_id: String, asset_id: String, variant_id: String, icon: Texture2D)
+
+var _drag_pressed_index: int = -1
+var _drag_press_pos: Vector2 = Vector2.ZERO
+const DRAG_THRESHOLD_PX: float = 8.0
 
 var _pack_id: String = ""
 var _items: Array = []
@@ -37,6 +42,7 @@ func _ready() -> void:
 	# Connect signals
 	search_filter.text_changed.connect(_on_filter_changed)
 	item_list.item_activated.connect(_on_item_activated)
+	item_list.gui_input.connect(_on_item_list_gui_input)
 
 
 ## Initialize this tab for a specific pack
@@ -231,6 +237,37 @@ func clear_filter() -> void:
 ## Focus the search field
 func focus_search() -> void:
 	search_filter.grab_focus()
+
+
+func _on_item_list_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			var idx := item_list.get_item_at_position(event.position, true)
+			if idx >= 0:
+				_drag_pressed_index = idx
+				_drag_press_pos = event.position
+			else:
+				_drag_pressed_index = -1
+		else:
+			_drag_pressed_index = -1
+
+	if event is InputEventMouseMotion and _drag_pressed_index >= 0:
+		if event.position.distance_to(_drag_press_pos) >= DRAG_THRESHOLD_PX:
+			_start_drag(_drag_pressed_index)
+			_drag_pressed_index = -1
+
+
+func _start_drag(index: int) -> void:
+	_items_mutex.lock()
+	var items_copy := _items.duplicate()
+	_items_mutex.unlock()
+
+	if index < 0 or index >= items_copy.size():
+		return
+
+	var selected: Dictionary = items_copy[index]
+	var icon: Texture2D = _icon_cache.get(selected.asset_id, null)
+	asset_drag_started.emit(selected.pack_id, selected.asset_id, selected.variant_id, icon)
 
 
 func _exit_tree() -> void:

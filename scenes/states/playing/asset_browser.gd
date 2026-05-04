@@ -5,6 +5,7 @@ class_name AssetBrowser
 ## Each tab contains assets from one pack with its own search filter.
 
 signal asset_selected(pack_id: String, asset_id: String, variant_id: String)
+signal asset_drag_started(pack_id: String, asset_id: String, variant_id: String, icon: Texture2D)
 
 const AssetPackTabScene = preload("res://scenes/states/playing/asset_pack_tab.tscn")
 
@@ -47,6 +48,7 @@ func _create_tabs() -> void:
 		tab_container.add_child(tab)
 		tab.setup(pack.pack_id)
 		tab.asset_selected.connect(_on_asset_selected)
+		tab.asset_drag_started.connect(_on_asset_drag_started)
 		_tabs[pack.pack_id] = tab
 
 	# Refresh the first tab
@@ -71,6 +73,12 @@ func _refresh_current_tab() -> void:
 func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -> void:
 	print("AssetBrowser: relaying asset_selected %s/%s/%s" % [pack_id, asset_id, variant_id])
 	asset_selected.emit(pack_id, asset_id, variant_id)
+
+
+func _on_asset_drag_started(
+	pack_id: String, asset_id: String, variant_id: String, icon: Texture2D
+) -> void:
+	asset_drag_started.emit(pack_id, asset_id, variant_id, icon)
 
 
 ## Clear all search filters
