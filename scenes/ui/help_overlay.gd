@@ -5,6 +5,12 @@ extends AnimatedCanvasLayerPanel
 ## Built programmatically from a data array for easy maintenance.
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		UIManager.close_help()
+		get_viewport().set_input_as_handled()
+
+
 func _on_panel_ready() -> void:
 	var panel: PanelContainer = get_node("CenterContainer/PanelContainer")
 	var scroll := ScrollContainer.new()
@@ -45,6 +51,18 @@ func _on_panel_ready() -> void:
 	close_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
 	close_label.add_theme_font_size_override("font_size", 12)
 	vbox.add_child(close_label)
+
+	# Register as overlay (cast to Control for type compatibility)
+	UIManager.register_overlay($ColorRect as Control)
+
+
+func _on_before_animate_out() -> void:
+	UIManager.unregister_overlay($ColorRect as Control)
+
+
+func _on_after_animate_out() -> void:
+	UIManager.on_help_overlay_closed()
+	queue_free()
 
 
 func _get_shortcut_data() -> Array:

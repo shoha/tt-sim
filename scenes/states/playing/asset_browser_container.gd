@@ -34,8 +34,8 @@ func _exit_tree() -> void:
 		AssetManager.pack_download_completed.disconnect(_on_pack_download_completed)
 
 
-func _on_pack_download_completed(_pack_id: String) -> void:
-	asset_browser._create_tabs()
+func _on_pack_download_completed(pack_id: String) -> void:
+	asset_browser._add_or_refresh_tab(pack_id)
 
 
 func _on_asset_selected(_pack_id: String, _asset_id: String, _variant_id: String) -> void:
