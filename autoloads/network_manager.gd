@@ -8,14 +8,6 @@ extends Node
 ##   NetworkManager.join_game("ROOMCODE")
 ##   NetworkManager.disconnect_game()
 
-## Connection states
-enum ConnectionState {
-	OFFLINE,  ## Not connected to any network
-	CONNECTING,  ## Connecting to Steam lobby or game server
-	HOSTING,  ## Hosting a game, waiting for players or playing
-	JOINED,  ## Joined a game as client
-}
-
 ## Signals
 signal connection_state_changed(old_state: ConnectionState, new_state: ConnectionState)
 signal room_code_received(code: String)
@@ -48,14 +40,13 @@ signal client_token_transform_received(
 signal client_drag_lock_claimed(sender_id: int, network_id: String)
 signal client_drag_lock_released(sender_id: int, network_id: String)
 
-## Current connection state
-var _connection_state: ConnectionState = ConnectionState.OFFLINE
-
-## Room code (base-36 encoded lobby ID) when hosting
-var _room_code: String = ""
-
-## Connected players: peer_id -> player_info dictionary
-var _players: Dictionary = {}
+## Connection states
+enum ConnectionState {
+	OFFLINE,  ## Not connected to any network
+	CONNECTING,  ## Connecting to Steam lobby or game server
+	HOSTING,  ## Hosting a game, waiting for players or playing
+	JOINED,  ## Joined a game as client
+}
 
 ## Player roles
 enum PlayerRole {
@@ -63,43 +54,25 @@ enum PlayerRole {
 	GM,  ## Game Master - full control
 }
 
-## Local player info
-var _local_player_info: Dictionary = {
-	"name": "Player",
-	"role": PlayerRole.PLAYER,
-}
-
 ## Default player name
 const DEFAULT_PLAYER_NAME := "Player"
-
-## Current level data (for late joiners)
-var _current_level_dict: Dictionary = {}
 
 ## Maximum players per lobby
 const MAX_PLAYERS := 8
 
 ## Connection timeout (seconds)
 const CONNECTION_TIMEOUT := 15.0
-const LATE_JOINER_SYNC_TIMEOUT := 5.0
-var _connection_timer: Timer = null
 
-## Game state tracking (for late joiner detection)
-var _game_in_progress: bool = false
+## Timeout waiting for a late joiner's level/state sync ACK (seconds)
+const LATE_JOINER_SYNC_TIMEOUT := 5.0
 
 ## Rate limiting for inbound client-sent token transform RPCs (mirrors
 ## NetworkStateSync.TRANSFORM_SEND_INTERVAL). Bounds how often a single token's
 ## transform is processed regardless of how fast a client sends updates.
 const CLIENT_TRANSFORM_RATE_LIMIT := 0.05
-var _client_transform_throttle: Dictionary = {}  # network_id -> last_received_time (float)
 
 ## Permission request/response sub-component
 var permissions: NetworkPermissions
-
-## Steam initialization state
-var _steam_initialized: bool = false
-
-## Current Steam lobby ID (0 when not in a lobby)
-var _lobby_id: int = 0
 
 # =============================================================================
 # PUBLIC PROPERTIES
@@ -114,6 +87,39 @@ var connection_state: ConnectionState:
 var room_code: String:
 	get:
 		return _room_code
+
+## Current connection state
+var _connection_state: ConnectionState = ConnectionState.OFFLINE
+
+## Room code (base-36 encoded lobby ID) when hosting
+var _room_code: String = ""
+
+## Connected players: peer_id -> player_info dictionary
+var _players: Dictionary = {}
+
+## Local player info
+var _local_player_info: Dictionary = {
+	"name": "Player",
+	"role": PlayerRole.PLAYER,
+}
+
+## Current level data (for late joiners)
+var _current_level_dict: Dictionary = {}
+
+## Timer tracking CONNECTION_TIMEOUT / LATE_JOINER_SYNC_TIMEOUT
+var _connection_timer: Timer = null
+
+## Game state tracking (for late joiner detection)
+var _game_in_progress: bool = false
+
+## Last-received timestamp per token, checked against CLIENT_TRANSFORM_RATE_LIMIT
+var _client_transform_throttle: Dictionary = {}  # network_id -> last_received_time (float)
+
+## Steam initialization state
+var _steam_initialized: bool = false
+
+## Current Steam lobby ID (0 when not in a lobby)
+var _lobby_id: int = 0
 
 
 ## Open the Steam overlay invite dialog for the current lobby.

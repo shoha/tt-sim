@@ -1,5 +1,5 @@
-extends AnimatedCanvasLayerPanel
 class_name SettingsMenu
+extends AnimatedCanvasLayerPanel
 
 ## Settings menu with Audio, Graphics, and Controls tabs.
 ##
@@ -9,6 +9,8 @@ class_name SettingsMenu
 signal closed
 
 const SLIDER_TICK_INTERVAL := 0.08  # Minimum seconds between slider tick sounds
+
+var _last_slider_tick_time: float = 0.0
 
 # Audio controls
 @onready var master_slider: HSlider = %MasterVolumeSlider
@@ -22,8 +24,6 @@ const SLIDER_TICK_INTERVAL := 0.08  # Minimum seconds between slider tick sounds
 
 # Tab container for cross-fade transitions
 @onready var tab_container: TabContainer = %TabContainer
-
-var _last_slider_tick_time: float = 0.0
 
 # Graphics controls
 @onready var fullscreen_check: CheckButton = %FullscreenCheck

@@ -1,5 +1,5 @@
-extends DrawerContainer
 class_name LevelEditPanel
+extends DrawerContainer
 
 ## Slide-out drawer for real-time visual tuning during gameplay.
 ## Provides controls for map scale, lighting, environment, and post-processing.
@@ -40,6 +40,19 @@ const TONEMAP_MODES = {
 	"Filmic": Environment.TONE_MAPPER_FILMIC,
 	"ACES": Environment.TONE_MAPPER_ACES,
 }
+
+var current_preset: String = ""
+var current_overrides: Dictionary = {}
+var current_lofi_overrides: Dictionary = {}
+var current_weather_overrides: Dictionary = {}
+var light_intensity_scale: float = 1.0
+var current_grid_cell_size: float = 1.524
+var current_display_unit: String = "ft"
+var current_display_unit_per_cell: float = 5.0
+var _current_scale_preset_key: String = ScaleUtils.DEFAULT_PRESET
+## Environment config extracted from the map's embedded WorldEnvironment.
+## Used as the base layer when current_preset is "" (no explicit choice).
+var _map_defaults: Dictionary = {}
 
 # Scale & measurement controls
 @onready var scale_preset_dropdown: OptionButton = %ScalePresetDropdown
@@ -95,19 +108,6 @@ const TONEMAP_MODES = {
 @onready var snow_slider_spin: SliderSpinBox = %SnowSliderSpin
 @onready var fog_slider_spin: SliderSpinBox = %FogSliderSpin
 @onready var wind_slider_spin: SliderSpinBox = %WindSliderSpin
-
-var current_preset: String = ""
-var current_overrides: Dictionary = {}
-var current_lofi_overrides: Dictionary = {}
-var current_weather_overrides: Dictionary = {}
-var light_intensity_scale: float = 1.0
-var current_grid_cell_size: float = 1.524
-var current_display_unit: String = "ft"
-var current_display_unit_per_cell: float = 5.0
-var _current_scale_preset_key: String = ScaleUtils.DEFAULT_PRESET
-## Environment config extracted from the map's embedded WorldEnvironment.
-## Used as the base layer when current_preset is "" (no explicit choice).
-var _map_defaults: Dictionary = {}
 
 
 func _on_ready() -> void:

@@ -1,5 +1,5 @@
-extends Node
 class_name VolumeOverlay
+extends Node
 
 ## Renders a 3D volume indicator (sphere or cylinder) for MeasureTool.
 ## Adds MeshInstance3D geometry directly to the SubViewport for world-space rendering,
@@ -10,6 +10,8 @@ class_name VolumeOverlay
 ## opaque geometry, so both meshes render after the lo-fi pass and appear crisp.
 ## This is intentional — they read clearly as UI overlay elements distinct from world geometry.
 
+enum Shape { SPHERE, CYLINDER }
+
 const CYLINDER_HEIGHT: float = 10.0  # World meters (~33 ft). Covers most TTRPG column spells.
 const RING_SEGMENTS: int = 32
 const VERTICAL_LINES: int = 8
@@ -18,23 +20,6 @@ const WIRE_COLOR_LOCKED := Color(1.0, 0.85, 0.2, 1.0)
 const WIRE_COLOR_PREVIEW := Color(1.0, 0.85, 0.2, 0.5)
 const FILL_COLOR_LOCKED := Color(1.0, 0.85, 0.2, 0.12)
 const FILL_COLOR_PREVIEW := Color(1.0, 0.85, 0.2, 0.06)
-
-enum Shape { SPHERE, CYLINDER }
-
-
-## Build vertex pairs for a horizontal ring at center + (0, y_offset, 0).
-## Returns PackedVector3Array with 2*segments vertices (pairs for PRIMITIVE_LINES).
-static func build_horizontal_ring(
-	center: Vector3, radius: float, y_offset: float, segments: int
-) -> PackedVector3Array:
-	var verts := PackedVector3Array()
-	for i in range(segments):
-		var a := TAU * i / segments
-		var b := TAU * (i + 1) / segments
-		verts.append(center + Vector3(cos(a) * radius, y_offset, sin(a) * radius))
-		verts.append(center + Vector3(cos(b) * radius, y_offset, sin(b) * radius))
-	return verts
-
 
 ## References — set once via setup()
 var _camera: Camera3D
@@ -63,6 +48,20 @@ var _label: Label
 var _center: Vector3 = Vector3.ZERO
 var _radius: float = 0.0
 var _is_showing: bool = false
+
+
+## Build vertex pairs for a horizontal ring at center + (0, y_offset, 0).
+## Returns PackedVector3Array with 2*segments vertices (pairs for PRIMITIVE_LINES).
+static func build_horizontal_ring(
+	center: Vector3, radius: float, y_offset: float, segments: int
+) -> PackedVector3Array:
+	var verts := PackedVector3Array()
+	for i in range(segments):
+		var a := TAU * i / segments
+		var b := TAU * (i + 1) / segments
+		verts.append(center + Vector3(cos(a) * radius, y_offset, sin(a) * radius))
+		verts.append(center + Vector3(cos(b) * radius, y_offset, sin(b) * radius))
+	return verts
 
 
 func _ready() -> void:

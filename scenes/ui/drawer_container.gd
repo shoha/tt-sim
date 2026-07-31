@@ -1,5 +1,5 @@
-extends Control
 class_name DrawerContainer
+extends Control
 
 ## Reusable slide-in/slide-out drawer panel with a visible tab handle.
 ##
@@ -19,6 +19,21 @@ class_name DrawerContainer
 # -- Configuration ----------------------------------------------------------
 
 enum DrawerEdge { LEFT, RIGHT }
+
+# -- Colours -----------------------------------------------------------------
+# Surface colours from the dark theme, used for programmatic styling.
+
+const _PANEL_COLOR := Color("#2c1f2b")  # color_surface1 — panel background
+const _TAB_COLOR_NORMAL := Color("#2c1f2b")  # color_surface1 — same as panel
+const _TAB_COLOR_HOVER := Color("#3e2b3c")  # color_surface2 — hover highlight
+const _TAB_COLOR_PRESSED := Color("#1a121a")  # color_background — pressed depression
+const _TAB_BORDER_COLOR := Color("#50374d")  # color_surface3 — subtle border
+const _TAB_ICON_COLOR := Color("#db924b")  # color_accent — icon tint
+
+# -- Icon tab padding -------------------------------------------------------
+# Standard insets for icon-mode tabs so all icon tabs look consistent.
+const _TAB_ICON_PAD_H := 6  # Horizontal (left + right) padding
+const _TAB_ICON_PAD_V := 14  # Vertical (top + bottom) padding
 
 @export var edge: DrawerEdge = DrawerEdge.LEFT
 ## Width of the sliding content panel.
@@ -80,21 +95,6 @@ var _tab_icon_rect: TextureRect
 var _slide_tween: Tween
 var _is_animating: bool = false
 var _closing_from_open: bool = false  ## True when the current animation is a close/conceal from an open state
-
-# -- Colours -----------------------------------------------------------------
-# Surface colours from the dark theme, used for programmatic styling.
-
-const _PANEL_COLOR := Color("#2c1f2b")  # color_surface1 — panel background
-const _TAB_COLOR_NORMAL := Color("#2c1f2b")  # color_surface1 — same as panel
-const _TAB_COLOR_HOVER := Color("#3e2b3c")  # color_surface2 — hover highlight
-const _TAB_COLOR_PRESSED := Color("#1a121a")  # color_background — pressed depression
-const _TAB_BORDER_COLOR := Color("#50374d")  # color_surface3 — subtle border
-const _TAB_ICON_COLOR := Color("#db924b")  # color_accent — icon tint
-
-# -- Icon tab padding -------------------------------------------------------
-# Standard insets for icon-mode tabs so all icon tabs look consistent.
-const _TAB_ICON_PAD_H := 6   # Horizontal (left + right) padding
-const _TAB_ICON_PAD_V := 14  # Vertical (top + bottom) padding
 
 # -- Lifecycle ---------------------------------------------------------------
 

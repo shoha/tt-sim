@@ -1,10 +1,15 @@
-extends AnimatedCanvasLayerPanel
 class_name UpdateDialogUI
+extends AnimatedCanvasLayerPanel
 
 ## Dialog shown when a game update is available.
 ## Displays version info, release notes, and provides download functionality.
 
 signal closed
+
+const GITHUB_COMMIT_URL := "https://github.com/shoha/tt-sim/commit/"
+
+var _release_info: Dictionary = {}
+var _download_path: String = ""
 
 @onready var title_label: Label = %TitleLabel
 @onready var version_label: Label = %VersionLabel
@@ -22,11 +27,6 @@ signal closed
 @onready var restart_button: Button = %RestartButton
 @onready var later_button: Button = %LaterButton
 @onready var open_folder_button: Button = %OpenFolderButton
-
-const GITHUB_COMMIT_URL := "https://github.com/shoha/tt-sim/commit/"
-
-var _release_info: Dictionary = {}
-var _download_path: String = ""
 
 
 func _on_panel_ready() -> void:

@@ -1,5 +1,5 @@
-extends Node
 class_name NetworkPermissions
+extends Node
 
 ## Token permission request/response sub-component of NetworkManager.
 ##

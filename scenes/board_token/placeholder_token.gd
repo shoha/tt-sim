@@ -1,5 +1,5 @@
-extends Node3D
 class_name PlaceholderToken
+extends Node3D
 
 ## A simple placeholder shown while a token's model is being downloaded.
 ## Displays a pulsing/spinning cube that indicates loading state.

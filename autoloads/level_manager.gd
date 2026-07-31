@@ -7,14 +7,14 @@ extends Node
 ## - Legacy: .tres files in user://levels/
 ## - New: Folder-based with level.json + map.glb in user://levels/{level_name}/
 
-const LEVEL_FILE_EXTENSION = ".tres"
-const LEVEL_JSON_NAME = "level.json"
-const LEVEL_MAP_NAME = "map.glb"
-
 ## Signals
 signal level_loaded(level_data: LevelData)
 signal level_saved(path: String)
 signal level_list_updated(levels: Array[String])
+
+const LEVEL_FILE_EXTENSION = ".tres"
+const LEVEL_JSON_NAME = "level.json"
+const LEVEL_MAP_NAME = "map.glb"
 
 ## Current loaded level
 var current_level: LevelData = null

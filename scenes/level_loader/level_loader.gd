@@ -1,8 +1,11 @@
-extends Node3D
 class_name LevelLoader
+extends Node3D
 
 ## Loads and instantiates a level from LevelData
 ## Can be used as the main scene or instantiated dynamically
+
+signal level_loaded(level_data: LevelData)
+signal token_spawned(token: BoardToken, placement: TokenPlacement)
 
 @export var level_data: LevelData
 
@@ -13,9 +16,6 @@ var game_map: GameMap = null
 
 # References set after loading
 var loaded_tokens: Array[BoardToken] = []
-
-signal level_loaded(level_data: LevelData)
-signal token_spawned(token: BoardToken, placement: TokenPlacement)
 
 
 func _ready() -> void:

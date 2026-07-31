@@ -11,19 +11,6 @@ extends Node
 ## - On startup, _apply_pending_update() handles any leftover pending marker as a
 ##   fallback (e.g. if the game was quit before the user confirmed restart)
 
-const GITHUB_API_URL: String = "https://api.github.com/repos/shoha/tt-sim/releases"
-const GITHUB_RELEASES_URL: String = "https://github.com/shoha/tt-sim/releases"
-const UPDATE_CHECK_TIMEOUT: float = 15.0
-const DOWNLOAD_TIMEOUT: float = 300.0  # 5 minutes for large downloads
-const UPDATES_DIR: String = "user://updates/"
-const PENDING_UPDATE_FILE: String = "user://updates/pending_update.json"
-const UPDATE_SUCCESS_FILE: String = "user://updates/update_success.txt"
-const UPDATE_LOG_FILE: String = "user://updates/update_log.txt"
-
-## Result of the last update attempt (for showing toast after UIManager is ready)
-var _pending_toast_message: String = ""
-var _pending_toast_is_error: bool = false
-
 ## Emitted when a new update is available
 signal update_available(release_info: Dictionary)
 
@@ -48,6 +35,15 @@ signal applying_pending_update(version: String)
 ## Emitted when update cannot be applied due to App Translocation (macOS)
 signal update_blocked_by_translocation
 
+const GITHUB_API_URL: String = "https://api.github.com/repos/shoha/tt-sim/releases"
+const GITHUB_RELEASES_URL: String = "https://github.com/shoha/tt-sim/releases"
+const UPDATE_CHECK_TIMEOUT: float = 15.0
+const DOWNLOAD_TIMEOUT: float = 300.0  # 5 minutes for large downloads
+const UPDATES_DIR: String = "user://updates/"
+const PENDING_UPDATE_FILE: String = "user://updates/pending_update.json"
+const UPDATE_SUCCESS_FILE: String = "user://updates/update_success.txt"
+const UPDATE_LOG_FILE: String = "user://updates/update_log.txt"
+
 ## Latest available release info (populated after check)
 var latest_release: Dictionary = {}
 
@@ -59,6 +55,10 @@ var is_downloading: bool = false
 
 ## Current download progress (0.0 to 1.0)
 var download_progress: float = 0.0
+
+## Result of the last update attempt (for showing toast after UIManager is ready)
+var _pending_toast_message: String = ""
+var _pending_toast_is_error: bool = false
 
 var _http_check: HTTPRequest
 var _http_download: HTTPRequest

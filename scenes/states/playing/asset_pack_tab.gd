@@ -1,14 +1,15 @@
-extends MarginContainer
 class_name AssetPackTab
+extends MarginContainer
 
 ## A tab displaying assets from a single pack with search filtering.
 
 signal asset_selected(pack_id: String, asset_id: String, variant_id: String)
 signal asset_drag_started(pack_id: String, asset_id: String, variant_id: String, icon: Texture2D)
 
+const DRAG_THRESHOLD_PX: float = 8.0
+
 var _drag_pressed_index: int = -1
 var _drag_press_pos: Vector2 = Vector2.ZERO
-const DRAG_THRESHOLD_PX: float = 8.0
 
 var _pack_id: String = ""
 var _items: Array = []

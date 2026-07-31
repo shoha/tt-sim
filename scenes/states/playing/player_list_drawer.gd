@@ -1,5 +1,5 @@
-extends DrawerContainer
 class_name PlayerListDrawer
+extends DrawerContainer
 
 ## Slide-out drawer showing connected players and their roles.
 ##

@@ -1,18 +1,19 @@
-extends Node3D
 class_name BoardTokenAnimationTree
+extends Node3D
 
 ## Animation tree component for BoardToken.
 ##
 ## @warning Do not create with .new() - use BoardTokenAnimationTreeFactory instead.
 ## This class requires its scene structure to function properly.
 
-@onready var tree: AnimationTree = $AnimationTree
 @export var anim_player: AnimationPlayer
 
 ## Set to true by BoardTokenAnimationTreeFactory - detects improper instantiation
 var _factory_created: bool = false
 var _board_token: BoardToken
 var _state_machine: AnimationNodeStateMachinePlayback
+
+@onready var tree: AnimationTree = $AnimationTree
 
 
 func _enter_tree() -> void:

@@ -1,5 +1,5 @@
-extends Node3D
 class_name GameMap
+extends Node3D
 
 ## Main game map controller for the playing state.
 ## Manages camera movement/zoom, the lo-fi visual effect, and token context menus.
@@ -30,6 +30,22 @@ class_name GameMap
 ## Toggle via set_lofi_enabled(bool) or Settings menu. The effect is applied
 ## by setting a ShaderMaterial on viewport_container. See lofi_canvas.gdshader.
 
+# RMB pan thresholds (short-click vs. drag detection)
+const RMB_PAN_CLICK_THRESHOLD_MS: int = 150  # Max ms for a short-click (not a drag)
+const RMB_PAN_MOVE_THRESHOLD_PX: float = 5.0  # Min movement to count as drag
+
+# Camera soft bounds / near-plane safety margin
+const MAP_BOUNDS_MARGIN_FACTOR := 0.15  # Extra margin as fraction of map size on each side
+const NEAR_PLANE_GROUND_MARGIN := 0.5  # Keep bottom-corner ray origins at least this far above Y=0
+
+# Camera shake
+const SHAKE_MAX_INTENSITY := 0.05  # Max shake offset in world units
+const SHAKE_DURATION := 0.15  # Duration of shake effect
+
+const EDGE_PAN_SMOOTH_SPEED: float = 8.0  # Smoothing rate for edge panning ramp-up/coast-out
+const TOKEN_COLLISION_LAYER: int = 2  # Physics layer for tokens (layer 1 = terrain)
+const REFERENCE_ASPECT := 16.0 / 9.0  # Reference window aspect ratio for frustum consistency
+
 @export var move_speed: float = 10.0
 @export var move_accel_speed: float = 15.0  # Smoothing rate for camera movement acceleration/deceleration
 @export var zoom_step: float = 1.5  # How much each scroll tick changes the target zoom
@@ -37,21 +53,6 @@ class_name GameMap
 @export var pan_gesture_zoom_factor: float = 0.05
 @export var min_zoom: float = 2.0
 @export var max_zoom: float = 20.0
-@onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
-@onready var world_viewport: SubViewport = $WorldViewportLayer/SubViewportContainer/SubViewport
-@onready
-var cameraholder_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder
-@onready
-var camera_node: Camera3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D
-@onready
-var tiltshift_node: MeshInstance3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D/MeshInstance3D
-@onready
-var map_container: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/MapContainer
-@onready
-var drag_and_drop_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/DragAndDrop3D
-@onready  # OcclusionFadeManager - type resolved at runtime after editor imports the new script
-var occlusion_fade: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/OcclusionFadeManager
-@onready var gameplay_menu: CanvasLayer = $GameplayMenu
 
 var _camera_move_dir: Vector3
 var _camera_velocity: Vector3 = Vector3.ZERO  # Smoothed camera movement velocity
@@ -91,8 +92,6 @@ var _last_mouse_position: Vector2 = Vector2.ZERO  # Tracked for zoom-toward-curs
 var _rmb_pan_active: bool = false  # True when RMB is being used for panning
 var _rmb_press_time: int = 0  # Timestamp (msec) of RMB press for short-click detection
 var _rmb_press_pos: Vector2 = Vector2.ZERO  # Screen position of RMB press
-const RMB_PAN_CLICK_THRESHOLD_MS: int = 150  # Max ms for a short-click (not a drag)
-const RMB_PAN_MOVE_THRESHOLD_PX: float = 5.0  # Min movement to count as drag
 
 # Camera home position (stored on level load for reset)
 var _home_position: Vector3 = Vector3.ZERO
@@ -106,18 +105,26 @@ var _base_camera_size: float  # Camera3D orthographic size at base zoom (from sc
 # Camera soft bounds (computed from map geometry)
 var _map_bounds: AABB = AABB()
 var _has_map_bounds: bool = false
-const MAP_BOUNDS_MARGIN_FACTOR := 0.15  # Extra margin as fraction of map size on each side
-const NEAR_PLANE_GROUND_MARGIN := 0.5  # Keep bottom-corner ray origins at least this far above Y=0
 
 # Camera shake state
 var _shake_tween: Tween = null
 var _shake_offset: Vector3 = Vector3.ZERO
-const SHAKE_MAX_INTENSITY := 0.05  # Max shake offset in world units
-const SHAKE_DURATION := 0.15  # Duration of shake effect
 
-const EDGE_PAN_SMOOTH_SPEED: float = 8.0  # Smoothing rate for edge panning ramp-up/coast-out
-const TOKEN_COLLISION_LAYER: int = 2  # Physics layer for tokens (layer 1 = terrain)
-const REFERENCE_ASPECT := 16.0 / 9.0  # Reference window aspect ratio for frustum consistency
+@onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
+@onready var world_viewport: SubViewport = $WorldViewportLayer/SubViewportContainer/SubViewport
+@onready
+var cameraholder_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder
+@onready
+var camera_node: Camera3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D
+@onready
+var tiltshift_node: MeshInstance3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D/MeshInstance3D
+@onready
+var map_container: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/MapContainer
+@onready
+var drag_and_drop_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/DragAndDrop3D
+@onready  # OcclusionFadeManager - type resolved at runtime after editor imports the new script
+var occlusion_fade: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/OcclusionFadeManager
+@onready var gameplay_menu: CanvasLayer = $GameplayMenu
 
 
 ## Return the camera size needed to show at least as much horizontal world space

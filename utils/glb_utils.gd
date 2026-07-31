@@ -1,5 +1,5 @@
-extends RefCounted
 class_name GlbUtils
+extends RefCounted
 
 ## Shared utilities for loading and processing GLB files at runtime.
 ## Used by BoardTokenFactory, LevelPlayController, and any future streaming asset systems.

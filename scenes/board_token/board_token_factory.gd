@@ -1,5 +1,5 @@
-extends RefCounted
 class_name BoardTokenFactory
+extends RefCounted
 
 ## Factory for creating BoardToken instances from model scenes.
 ## Centralizes all scene construction and component wiring logic.

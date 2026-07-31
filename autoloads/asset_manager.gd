@@ -21,6 +21,28 @@ extends Node
 ##   preload_models()              — batch preload with progress
 ##   clear_model_cache()           — free memory cache
 
+# =========================================================================
+# Signals
+# =========================================================================
+
+## Signal emitted when all packs have been loaded
+signal packs_loaded
+
+## Signal emitted when a remote asset becomes available after download
+signal asset_available(pack_id: String, asset_id: String, variant_id: String, local_path: String)
+
+## Signal emitted when a remote asset download fails
+signal asset_download_failed(pack_id: String, asset_id: String, variant_id: String, error: String)
+
+## Signal emitted during pack download (downloaded_count, total_count)
+signal pack_download_progress(pack_id: String, downloaded: int, total: int)
+
+## Signal emitted when an entire pack has finished downloading
+signal pack_download_completed(pack_id: String)
+
+## Signal emitted when a pack download fails (e.g., manifest fetch or parse error)
+signal pack_download_failed(pack_id: String, error: String)
+
 const AssetCacheManagerScript = preload("res://autoloads/asset_cache_manager.gd")
 const AssetDownloaderScript = preload("res://autoloads/asset_downloader.gd")
 const AssetStreamerScript = preload("res://autoloads/asset_streamer.gd")
@@ -57,28 +79,6 @@ var _packs: Dictionary = {}
 
 ## Delegated model-instance cache (loaded lazily in _ready)
 var _model_cache_handler: AssetModelCache
-
-# =========================================================================
-# Signals
-# =========================================================================
-
-## Signal emitted when all packs have been loaded
-signal packs_loaded
-
-## Signal emitted when a remote asset becomes available after download
-signal asset_available(pack_id: String, asset_id: String, variant_id: String, local_path: String)
-
-## Signal emitted when a remote asset download fails
-signal asset_download_failed(pack_id: String, asset_id: String, variant_id: String, error: String)
-
-## Signal emitted during pack download (downloaded_count, total_count)
-signal pack_download_progress(pack_id: String, downloaded: int, total: int)
-
-## Signal emitted when an entire pack has finished downloading
-signal pack_download_completed(pack_id: String)
-
-## Signal emitted when a pack download fails (e.g., manifest fetch or parse error)
-signal pack_download_failed(pack_id: String, error: String)
 
 # =========================================================================
 # Lifecycle

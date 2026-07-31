@@ -1,5 +1,5 @@
-extends CanvasLayer
 class_name ToastContainer
+extends CanvasLayer
 
 ## Container for displaying toast notifications.
 ##
@@ -11,9 +11,9 @@ enum ToastType { INFO, SUCCESS, WARNING, ERROR }
 const MAX_VISIBLE_TOASTS := 5
 const DEFAULT_DURATION := 3.0
 
-@onready var toast_vbox: VBoxContainer = %VBoxContainer
-
 var _active_toasts: Array[Control] = []
+
+@onready var toast_vbox: VBoxContainer = %VBoxContainer
 
 
 func show_toast(

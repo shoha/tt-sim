@@ -23,12 +23,15 @@ signal full_state_received(state_dict: Dictionary)
 
 ## Rate limiting for transform updates
 const TRANSFORM_SEND_INTERVAL := 0.05  # 20 updates/sec max per token
+
+## Batching interval for pending transform updates
+const TRANSFORM_BATCH_INTERVAL := 0.033  # ~30fps batch rate
+
 var _transform_throttle: Dictionary = {}  # network_id -> last_send_time (float)
 
 ## Pending transform updates (for batching)
 var _pending_transforms: Dictionary = {}  # network_id -> {position, rotation, scale}
 var _transform_batch_timer: Timer = null
-const TRANSFORM_BATCH_INTERVAL := 0.033  # ~30fps batch rate
 
 
 func _ready() -> void:

@@ -1,5 +1,5 @@
-extends Node
 class_name GameplayActionHistory
+extends Node
 
 ## Undo stack for gameplay actions (damage, visibility, removal).
 ## Host/GM only. Records actions before they happen and replays reversals
@@ -7,9 +7,11 @@ class_name GameplayActionHistory
 ## registered) through the live token's real mutators as well — see
 ## set_token_lookup().
 
-const MAX_HISTORY := 30
+signal removal_undo_requested(action: Dictionary)
 
 enum ActionType { PROPERTY_CHANGE, TOKEN_REMOVAL }
+
+const MAX_HISTORY := 30
 
 var _stack: Array[Dictionary] = []
 
@@ -165,9 +167,6 @@ func _apply_property_to_live_token(network_id: String, property: String, value: 
 
 func _undo_token_removal(action: Dictionary) -> void:
 	removal_undo_requested.emit(action)
-
-
-signal removal_undo_requested(action: Dictionary)
 
 
 func _describe_property_change(property: String, old_value: Variant, new_value: Variant) -> String:

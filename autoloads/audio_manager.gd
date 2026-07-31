@@ -14,6 +14,10 @@ const BUS_UI := "UI"
 ## Set to true to re-enable the hover sound on buttons.
 const BUTTON_HOVER_SOUND_ENABLED := false
 
+# Audio player pool sizes
+const UI_PLAYER_POOL_SIZE := 4
+const SFX_PLAYER_POOL_SIZE := 4
+
 # UI Sound effects (paths will be updated when actual audio files are added)
 var _ui_sounds := {
 	"click": null,  # "res://assets/audio/ui/click.wav"
@@ -40,11 +44,9 @@ var _sfx_sounds := {
 
 # Audio players pool for UI sounds
 var _ui_players: Array[AudioStreamPlayer] = []
-const UI_PLAYER_POOL_SIZE := 4
 
 # Audio players pool for SFX sounds
 var _sfx_players: Array[AudioStreamPlayer] = []
-const SFX_PLAYER_POOL_SIZE := 4
 
 
 func _ready() -> void:

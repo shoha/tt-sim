@@ -16,18 +16,6 @@ extends Node
 ##   - Automatic fallback through resolution stages
 ##   - Integrated with disk cache for unified caching
 
-## Injected reference to the disk cache.
-var _cache_manager: Node
-
-## Injected reference to the HTTP downloader.
-var _downloader: Node
-
-## Injected reference to the P2P streamer.
-var _streamer: Node
-
-## Injected reference to the AssetManager facade.
-var _asset_manager: Node
-
 ## Emitted when async resolution completes successfully
 signal asset_resolved(
 	request_id: String, pack_id: String, asset_id: String, variant_id: String, local_path: String
@@ -43,6 +31,24 @@ signal resolution_progress(request_id: String, stage: String, progress: float)
 
 ## Resolution stages
 enum Stage { LOCAL, CACHE, HTTP, P2P, FAILED }  ## Checking local pack files  ## Checking disk cache  ## Downloading from URL  ## Streaming from host  ## All sources exhausted
+
+## Injected reference to the disk cache.
+var _cache_manager: Node
+
+## Injected reference to the HTTP downloader.
+var _downloader: Node
+
+## Injected reference to the P2P streamer.
+var _streamer: Node
+
+## Injected reference to the AssetManager facade.
+var _asset_manager: Node
+
+## Active resolution requests (request_id -> ResolutionRequest)
+var _active_requests: Dictionary = {}
+
+## Mapping from asset key to request_id (for deduplication)
+var _key_to_request: Dictionary = {}
 
 
 ## Pending resolution requests
@@ -72,13 +78,6 @@ class ResolutionRequest:
 
 	static func _generate_id() -> String:
 		return "%d_%d" % [Time.get_ticks_msec(), randi()]
-
-
-## Active resolution requests (request_id -> ResolutionRequest)
-var _active_requests: Dictionary = {}
-
-## Mapping from asset key to request_id (for deduplication)
-var _key_to_request: Dictionary = {}
 
 
 func _ready() -> void:

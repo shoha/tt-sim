@@ -1,5 +1,5 @@
-extends MeshInstance3D
 class_name GridOverlay
+extends MeshInstance3D
 
 ## Full-screen quad that projects a grid onto all visible geometry via a
 ## depth-buffer shader. Parented to Camera3D inside the SubViewport so the

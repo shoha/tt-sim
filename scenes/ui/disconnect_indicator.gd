@@ -1,5 +1,5 @@
-extends CanvasLayer
 class_name DisconnectIndicator
+extends CanvasLayer
 
 ## Top-center banner shown during network reconnection attempts.
 ## Instantiate via the scene; call show_message() / hide_indicator().

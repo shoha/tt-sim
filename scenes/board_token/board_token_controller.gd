@@ -1,5 +1,5 @@
-extends Node
 class_name BoardTokenController
+extends Node
 
 ## Handles user interaction and visual manipulation for tokens
 ## Manages rotation, scaling, and selection input
@@ -21,12 +21,17 @@ class_name BoardTokenController
 ## - In single-player, authority is always granted
 ## - When networking is added, this will check for host/authority status
 
+signal context_menu_requested(token: BoardToken, position: Vector2)
+signal focus_requested(position: Vector3)  # Double-click to center camera on token
+
 const ROTATION_SNAP_DEGREES: float = 45.0  # Rotation snaps to this increment
 const ROTATION_INPUT_THRESHOLD: float = 60.0  # Accumulated pixel distance before each rotation snap
 const ROTATION_TWEEN_DURATION: float = 0.1  # Duration of rotation snap animation
 const SCALE_SNAP_INCREMENT: float = 0.25  # Scale snaps by this amount per step
 const SCALE_INPUT_THRESHOLD: float = 60.0  # Accumulated pixel distance before each scale snap
 const SCALE_TWEEN_DURATION: float = 0.1  # Duration of scale snap animation
+const SCALE_MIN: float = 0.1
+const SCALE_MAX: float = 10.0
 
 @export var rigid_body: RigidBody3D
 @export var draggable_token: DraggableToken
@@ -36,8 +41,6 @@ var _rotating: bool = false
 var _scaling: bool = false
 var _mouse_over: bool = false
 var _transform_update_timer: float = 0.0
-const SCALE_MIN: float = 0.1
-const SCALE_MAX: float = 10.0
 
 # Rotation snapping state
 var _rotation_accumulator: float = 0.0
@@ -50,9 +53,6 @@ var _scale_tween: Tween = null
 # R+LMB alternative rotate/scale state
 var _r_key_rotating: bool = false
 var _r_key_scaling: bool = false
-
-signal context_menu_requested(token: BoardToken, position: Vector2)
-signal focus_requested(position: Vector3)  # Double-click to center camera on token
 
 
 ## Check if this client has authority to manipulate this token.

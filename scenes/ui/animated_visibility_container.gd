@@ -1,5 +1,5 @@
-extends Control
 class_name AnimatedVisibilityContainer
+extends Control
 
 ## Base class for UI containers with smooth show/hide animations
 ## Extend this class and override animation properties to customize behavior
@@ -23,15 +23,18 @@ class_name AnimatedVisibilityContainer
 var tween: Tween
 var _is_animating: bool = false
 
+
 func _ready() -> void:
 	if start_hidden:
 		modulate.a = 0
 		hide()
 	_on_ready()
 
+
 # Override this in child classes for custom initialization
 func _on_ready() -> void:
 	pass
+
 
 ## Smoothly show the container with animation
 func animate_in() -> void:
@@ -40,7 +43,7 @@ func animate_in() -> void:
 
 	_is_animating = true
 	show()
-	
+
 	# Set pivot to center so scale animates from center
 	pivot_offset = size / 2
 
@@ -64,13 +67,14 @@ func animate_in() -> void:
 
 	_on_before_animate_in()
 
+
 ## Smoothly hide the container with animation
 func animate_out() -> void:
 	if tween:
 		tween.kill()
 
 	_is_animating = true
-	
+
 	# Set pivot to center so scale animates from center
 	pivot_offset = size / 2
 
@@ -93,6 +97,7 @@ func animate_out() -> void:
 
 	_on_before_animate_out()
 
+
 ## Toggle visibility with animation
 func toggle_animated(show_container: bool) -> void:
 	if show_container:
@@ -100,26 +105,33 @@ func toggle_animated(show_container: bool) -> void:
 	else:
 		animate_out()
 
+
 ## Check if currently animating
 func is_animating() -> bool:
 	return _is_animating
+
 
 # Callbacks for child classes to override
 func _on_before_animate_in() -> void:
 	pass
 
+
 func _on_after_animate_in() -> void:
 	pass
+
 
 func _on_before_animate_out() -> void:
 	pass
 
+
 func _on_after_animate_out() -> void:
 	pass
+
 
 func _on_animate_in_finished() -> void:
 	_is_animating = false
 	_on_after_animate_in()
+
 
 func _on_animate_out_finished() -> void:
 	hide()

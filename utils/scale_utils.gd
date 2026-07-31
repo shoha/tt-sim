@@ -1,5 +1,5 @@
-extends RefCounted
 class_name ScaleUtils
+extends RefCounted
 
 ## Static utility class for converting between world-space distances and game-unit
 ## distances.  TTSim follows the glTF standard: 1 Godot world unit = 1 meter.

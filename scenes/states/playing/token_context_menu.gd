@@ -1,5 +1,5 @@
-extends AnimatedVisibilityContainer
 class_name TokenContextMenu
+extends AnimatedVisibilityContainer
 
 ## Context menu for board tokens
 ## Provides actions like dealing damage, healing, and toggling visibility

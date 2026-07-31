@@ -1,5 +1,5 @@
-extends RefCounted
 class_name BoardTokenAnimationTreeFactory
+extends RefCounted
 
 ## Factory for creating BoardTokenAnimationTree instances.
 ##

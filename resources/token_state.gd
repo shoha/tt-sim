@@ -1,5 +1,5 @@
-extends Resource
 class_name TokenState
+extends Resource
 
 ## Runtime state data for a token, designed for network synchronization.
 ## This resource contains all data needed to represent and sync a token's

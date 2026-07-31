@@ -1,5 +1,5 @@
-extends Resource
 class_name TokenConfig
+extends Resource
 
 ## Configuration resource for token creation
 ## Defines how a token should be built from a model scene
