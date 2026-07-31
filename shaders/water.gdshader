@@ -28,7 +28,7 @@ uniform vec4 water_color : source_color = vec4(0.04, 0.22, 0.28, 0.75);
 // Shallow-water tint blended in near the shoreline (see depth_tex below) -- lighter and
 // more saturated than water_color so the same plane reads as "shallow" near shore and
 // "deep" further out, instead of a single flat tint across the whole mesh.
-uniform vec4 shore_color : source_color = vec4(0.35, 0.75, 0.7, 0.55);
+uniform vec4 shore_color : source_color = vec4(0.35, 0.75, 0.7, 0.65);
 // How many view-space units of depth separation from shore -> "fully deep" -- small
 // values give a thin, crisp shoreline band; large values fade the shore tint gradually
 // across most of the water body, which reads wrong for tabletop-scale ponds/lakes.
@@ -158,7 +158,7 @@ void fragment() {
 	// sampling outside the screen texture at the viewport edges.
 	vec2 refract_uv = clamp(SCREEN_UV + grad * refraction_strength, vec2(0.001), vec2(0.999));
 	vec3 refracted = textureLod(screen_tex, refract_uv, 0.0).rgb;
-	vec3 final_color = mix(base_color, refracted, (1.0 - depth_diff) * 0.6);
+	vec3 final_color = mix(base_color, refracted, (1.0 - depth_diff) * 0.4);
 
 	ALBEDO = final_color;
 	ALPHA = clamp(depth_alpha + fresnel * fresnel_strength, 0.0, 1.0);
