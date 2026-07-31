@@ -480,6 +480,22 @@ func clear_failed_cache() -> void:
 	_failed_downloads.clear()
 
 
+## Clear only the failed-download entries belonging to a single pack, allowing
+## just that pack's assets to be retried without wiping unrelated failures.
+## Dedup keys for pack downloads are either "pack_id/asset_id/variant_id" or,
+## for user_assets downloads with a target_path, the target_path itself
+## (which is always prefixed with "user://user_assets/<pack_id>/").
+func clear_failed_for_pack(pack_id: String) -> void:
+	var key_prefix := "%s/" % pack_id
+	var path_prefix := "user://user_assets/%s/" % pack_id
+	var keys_to_erase: Array = []
+	for key in _failed_downloads:
+		if (key as String).begins_with(key_prefix) or (key as String).begins_with(path_prefix):
+			keys_to_erase.append(key)
+	for key in keys_to_erase:
+		_failed_downloads.erase(key)
+
+
 ## Clear all caches (for testing/debugging)
 func clear_all_caches() -> void:
 	_completed_cache.clear()

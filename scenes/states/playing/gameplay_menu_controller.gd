@@ -509,6 +509,23 @@ func _on_edit_save_requested(
 	level_data.display_unit = new_display_unit
 	level_data.display_unit_per_cell = new_display_unit_per_cell
 
+	# Re-broadcast the saved values so the host's late-joiner snapshot
+	# (_current_level_dict) is guaranteed to reflect what was just saved, even
+	# if this save wasn't preceded by a live-edit broadcast for every field.
+	if NetworkManager.is_networked() and NetworkManager.is_host():
+		(
+			NetworkManager
+			. broadcast_visual_settings(
+				{
+					"light_intensity": new_intensity,
+					"environment_preset": new_preset,
+					"environment_overrides": new_overrides,
+					"lofi_overrides": new_lofi_overrides,
+					"weather_overrides": new_weather_overrides,
+				}
+			)
+		)
+
 	# Save to disk — use folder format when the level came from a folder
 	var save_path := ""
 	if level_data.level_folder != "":

@@ -148,6 +148,16 @@ func broadcast_client_token_transform(
 	if not NetworkManager.is_host():
 		return
 
+	# Rate limit relays the same way the host throttles its own outbound
+	# broadcasts (TRANSFORM_SEND_INTERVAL), so a client sending updates faster
+	# than that can't force disproportionate relay traffic to every other peer.
+	# Drop (don't error) — the client will simply send another update shortly.
+	var now = Time.get_ticks_msec() / 1000.0
+	var last_send = _transform_throttle.get(network_id, 0.0)
+	if now - last_send < TRANSFORM_SEND_INTERVAL:
+		return
+	_transform_throttle[network_id] = now
+
 	var players = NetworkManager.get_players()
 	for peer_id in players:
 		# Skip the host itself (peer 1) and the original sender

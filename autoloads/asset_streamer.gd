@@ -28,9 +28,18 @@ var _cache_manager: Node
 var _asset_manager: Node
 
 ## Signals
-signal asset_received(pack_id: String, asset_id: String, variant_id: String, local_path: String)
-signal asset_failed(pack_id: String, asset_id: String, variant_id: String, error: String)
-signal transfer_progress(pack_id: String, asset_id: String, variant_id: String, progress: float)
+## Note: file_type is appended as a trailing parameter so existing listeners
+## that only declared the original 4 parameters keep working unmodified
+## (Godot drops extra trailing signal arguments for callables with fewer params).
+signal asset_received(
+	pack_id: String, asset_id: String, variant_id: String, local_path: String, file_type: String
+)
+signal asset_failed(
+	pack_id: String, asset_id: String, variant_id: String, error: String, file_type: String
+)
+signal transfer_progress(
+	pack_id: String, asset_id: String, variant_id: String, progress: float, file_type: String
+)
 
 ## Active transfers on host (peer_id -> Array of active transfer keys)
 var _host_transfers: Dictionary = {}
@@ -74,31 +83,34 @@ func _load_settings() -> void:
 ## @param level_folder: The level folder name (e.g., "my_dungeon")
 ## @param priority: Download priority (lower = higher priority)
 func request_map_from_host(level_folder: String, priority: int = 50) -> void:
-	request_from_host(Paths.LEVEL_MAPS_PACK_ID, level_folder, "map", priority)
+	request_from_host(Paths.LEVEL_MAPS_PACK_ID, level_folder, "map", "model", priority)
 
 
 ## Request an asset from the host
 ## Called by AssetDownloader when no URL is available
+## @param file_type: "model" or "icon" — determines which path/URL the host resolves
+## and which cache slot the client stores the result under.
 func request_from_host(
 	pack_id: String,
 	asset_id: String,
 	variant_id: String,
+	file_type: String = "model",
 	priority: int = Constants.ASSET_PRIORITY_DEFAULT,
 ) -> void:
 	if not _enabled:
-		asset_failed.emit(pack_id, asset_id, variant_id, "P2P streaming disabled")
+		asset_failed.emit(pack_id, asset_id, variant_id, "P2P streaming disabled", file_type)
 		return
 
 	if not multiplayer.has_multiplayer_peer():
-		asset_failed.emit(pack_id, asset_id, variant_id, "Not connected to network")
+		asset_failed.emit(pack_id, asset_id, variant_id, "Not connected to network", file_type)
 		return
 
 	if NetworkManager.is_host():
 		# Host doesn't need to request from itself - asset should be local
-		asset_failed.emit(pack_id, asset_id, variant_id, "Host cannot request from host")
+		asset_failed.emit(pack_id, asset_id, variant_id, "Host cannot request from host", file_type)
 		return
 
-	var key = "%s/%s/%s" % [pack_id, asset_id, variant_id]
+	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 
 	# Already downloading?
 	if _client_downloads.has(key):
@@ -116,6 +128,7 @@ func request_from_host(
 			"pack_id": pack_id,
 			"asset_id": asset_id,
 			"variant_id": variant_id,
+			"file_type": file_type,
 			"priority": priority
 		}
 	)
@@ -148,6 +161,7 @@ func _start_request(request: Dictionary) -> void:
 			"pack_id": request.pack_id,
 			"asset_id": request.asset_id,
 			"variant_id": request.variant_id,
+			"file_type": request.file_type,
 			"chunks": [],
 			"total_chunks": 0,
 			"received_count": 0,
@@ -157,7 +171,13 @@ func _start_request(request: Dictionary) -> void:
 
 	# Send request to host (peer_id 1) with resume info
 	rpc_id(
-		1, "_rpc_request_asset", request.pack_id, request.asset_id, request.variant_id, resume_from
+		1,
+		"_rpc_request_asset",
+		request.pack_id,
+		request.asset_id,
+		request.variant_id,
+		request.file_type,
+		resume_from
 	)
 	print("AssetStreamer: Requesting %s from host (resume_from=%d)" % [key, resume_from])
 
@@ -165,13 +185,17 @@ func _start_request(request: Dictionary) -> void:
 ## RPC: Client requests an asset from host (with optional resume)
 @rpc("any_peer", "reliable")
 func _rpc_request_asset(
-	pack_id: String, asset_id: String, variant_id: String, resume_from_chunk: int = 0
+	pack_id: String,
+	asset_id: String,
+	variant_id: String,
+	file_type: String = "model",
+	resume_from_chunk: int = 0
 ) -> void:
 	if not NetworkManager.is_host():
 		return
 
 	var peer_id = multiplayer.get_remote_sender_id()
-	var key = "%s/%s/%s" % [pack_id, asset_id, variant_id]
+	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 
 	if resume_from_chunk > 0:
 		print(
@@ -183,31 +207,60 @@ func _rpc_request_asset(
 	else:
 		print("AssetStreamer: Peer %d requesting asset %s" % [peer_id, key])
 
-	# If the pack has a public URL, redirect the client to HTTP rather than
-	# streaming through the relay (faster, zero relay bandwidth).
-	# Level map assets are always local on the host — skip them.
-	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
-		var model_url = _asset_manager.get_model_url(pack_id, asset_id, variant_id)
-		if model_url != "":
-			print("AssetStreamer: Redirecting peer %d to URL for %s" % [peer_id, key])
-			rpc_id(peer_id, "_rpc_redirect_to_url", pack_id, asset_id, variant_id, model_url)
+	# Level map assets: asset_id is a client-controlled level folder name. Sanitize it
+	# the same way LevelManager does when writing level folders, and only ever serve the
+	# level the host currently has loaded — never an arbitrary saved level, and never a
+	# path-traversal escape out of user://levels/.
+	if pack_id == Paths.LEVEL_MAPS_PACK_ID:
+		var sanitized_level := Paths.sanitize_level_name(asset_id)
+		var current_level_folder := NetworkManager.get_current_level_folder()
+		if current_level_folder == "" or sanitized_level != current_level_folder:
+			push_warning(
+				(
+					"AssetStreamer: Peer %d requested map for level '%s' which is not the active level — denied"
+					% [peer_id, asset_id]
+				)
+			)
+			rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id, file_type)
 			return
 
-	# Resolve the file path based on pack type
-	var file_path: String
-	if pack_id == Paths.LEVEL_MAPS_PACK_ID:
-		# Special handling for level maps - asset_id is the level folder name
-		file_path = Paths.get_level_map_path(asset_id)
-	else:
-		# Regular asset pack - use AssetManager
-		file_path = _asset_manager.get_model_path(pack_id, asset_id, variant_id)
+		var file_path = Paths.get_level_map_path(sanitized_level)
+		if file_path == "" or not FileAccess.file_exists(file_path):
+			rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id, file_type)
+			return
+
+		_send_asset_to_peer(
+			peer_id, pack_id, asset_id, variant_id, file_type, file_path, resume_from_chunk
+		)
+		return
+
+	# If the pack has a public URL, redirect the client to HTTP rather than
+	# streaming through the relay (faster, zero relay bandwidth).
+	var url: String = (
+		_asset_manager.get_model_url(pack_id, asset_id, variant_id)
+		if file_type == "model"
+		else _asset_manager.get_icon_url(pack_id, asset_id, variant_id)
+	)
+	if url != "":
+		print("AssetStreamer: Redirecting peer %d to URL for %s" % [peer_id, key])
+		rpc_id(peer_id, "_rpc_redirect_to_url", pack_id, asset_id, variant_id, file_type, url)
+		return
+
+	# Resolve the file path based on file_type
+	var file_path: String = (
+		_asset_manager.get_model_path(pack_id, asset_id, variant_id)
+		if file_type == "model"
+		else _asset_manager.get_icon_path(pack_id, asset_id, variant_id)
+	)
 
 	if file_path == "" or not FileAccess.file_exists(file_path):
-		rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id)
+		rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id, file_type)
 		return
 
 	# Read and send the file (with resume support)
-	_send_asset_to_peer(peer_id, pack_id, asset_id, variant_id, file_path, resume_from_chunk)
+	_send_asset_to_peer(
+		peer_id, pack_id, asset_id, variant_id, file_type, file_path, resume_from_chunk
+	)
 
 
 ## Send an asset file to a peer in chunks (with resume support)
@@ -216,12 +269,13 @@ func _send_asset_to_peer(
 	pack_id: String,
 	asset_id: String,
 	variant_id: String,
+	file_type: String,
 	file_path: String,
 	resume_from_chunk: int = 0
 ) -> void:
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	if not file:
-		rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id)
+		rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id, file_type)
 		return
 
 	var data = file.get_buffer(file.get_length())
@@ -235,7 +289,7 @@ func _send_asset_to_peer(
 		(
 			"AssetStreamer: Sending %s to peer %d (%d bytes, %d chunks, starting from %d)"
 			% [
-				"%s/%s/%s" % [pack_id, asset_id, variant_id],
+				"%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type],
 				peer_id,
 				compressed.size(),
 				total_chunks,
@@ -245,11 +299,27 @@ func _send_asset_to_peer(
 	)
 
 	# Send header (always send so client knows total)
-	rpc_id(peer_id, "_rpc_asset_header", pack_id, asset_id, variant_id, total_chunks, data.size())
+	rpc_id(
+		peer_id,
+		"_rpc_asset_header",
+		pack_id,
+		asset_id,
+		variant_id,
+		file_type,
+		total_chunks,
+		data.size()
+	)
 
 	# Send chunks starting from resume point (spread across frames to avoid blocking)
 	_send_chunks_async(
-		peer_id, pack_id, asset_id, variant_id, compressed, total_chunks, resume_from_chunk
+		peer_id,
+		pack_id,
+		asset_id,
+		variant_id,
+		file_type,
+		compressed,
+		total_chunks,
+		resume_from_chunk
 	)
 
 
@@ -259,6 +329,7 @@ func _send_chunks_async(
 	pack_id: String,
 	asset_id: String,
 	variant_id: String,
+	file_type: String,
 	compressed: PackedByteArray,
 	total_chunks: int,
 	start_chunk: int = 0
@@ -268,7 +339,7 @@ func _send_chunks_async(
 		var end = mini(start + CHUNK_SIZE, compressed.size())
 		var chunk = compressed.slice(start, end)
 
-		rpc_id(peer_id, "_rpc_asset_chunk", pack_id, asset_id, variant_id, i, chunk)
+		rpc_id(peer_id, "_rpc_asset_chunk", pack_id, asset_id, variant_id, file_type, i, chunk)
 
 		# Yield every few chunks to avoid blocking
 		if (i - start_chunk) % 4 == 3:
@@ -279,20 +350,22 @@ func _send_chunks_async(
 	var chunks_sent = total_chunks - start_chunk
 	print(
 		(
-			"AssetStreamer: Finished sending %s/%s/%s to peer %d (%d chunks)"
-			% [pack_id, asset_id, variant_id, peer_id, chunks_sent]
+			"AssetStreamer: Finished sending %s/%s/%s/%s to peer %d (%d chunks)"
+			% [pack_id, asset_id, variant_id, file_type, peer_id, chunks_sent]
 		)
 	)
 
 
 ## RPC: Asset not found on host
 @rpc("authority", "reliable")
-func _rpc_asset_not_found(pack_id: String, asset_id: String, variant_id: String) -> void:
-	var key = "%s/%s/%s" % [pack_id, asset_id, variant_id]
+func _rpc_asset_not_found(
+	pack_id: String, asset_id: String, variant_id: String, file_type: String = "model"
+) -> void:
+	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 	_client_downloads.erase(key)
 
 	push_error("AssetStreamer: Asset not found on host: " + key)
-	asset_failed.emit(pack_id, asset_id, variant_id, "Asset not found on host")
+	asset_failed.emit(pack_id, asset_id, variant_id, "Asset not found on host", file_type)
 
 	_process_request_queue()
 
@@ -301,12 +374,12 @@ func _rpc_asset_not_found(pack_id: String, asset_id: String, variant_id: String)
 ## Avoids relay streaming when the pack has a CDN/GitHub URL.
 @rpc("authority", "reliable")
 func _rpc_redirect_to_url(
-	pack_id: String, asset_id: String, variant_id: String, url: String
+	pack_id: String, asset_id: String, variant_id: String, file_type: String, url: String
 ) -> void:
 	if not NetworkManager.is_client():
 		return
 
-	var key = "%s/%s/%s" % [pack_id, asset_id, variant_id]
+	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 
 	# Clean up P2P state so the concurrency slot is freed and the queue advances.
 	_client_downloads.erase(key)
@@ -317,16 +390,23 @@ func _rpc_redirect_to_url(
 
 	# Trigger HTTP download. The resolver's _on_http_download_completed callback
 	# handles completion → asset_resolved → asset_available → factory upgrade.
-	_asset_manager.downloader.request_download(pack_id, asset_id, variant_id, url)
+	_asset_manager.downloader.request_download(
+		pack_id, asset_id, variant_id, url, Constants.ASSET_PRIORITY_DEFAULT, file_type
+	)
 	_process_request_queue()
 
 
 ## RPC: Asset header (starts a transfer)
 @rpc("authority", "reliable")
 func _rpc_asset_header(
-	pack_id: String, asset_id: String, variant_id: String, total_chunks: int, original_size: int
+	pack_id: String,
+	asset_id: String,
+	variant_id: String,
+	file_type: String,
+	total_chunks: int,
+	original_size: int
 ) -> void:
-	var key = "%s/%s/%s" % [pack_id, asset_id, variant_id]
+	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 
 	if not _client_downloads.has(key):
 		return
@@ -345,10 +425,11 @@ func _rpc_asset_chunk(
 	pack_id: String,
 	asset_id: String,
 	variant_id: String,
+	file_type: String,
 	chunk_index: int,
 	chunk_data: PackedByteArray
 ) -> void:
-	var key = "%s/%s/%s" % [pack_id, asset_id, variant_id]
+	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 
 	if not _client_downloads.has(key):
 		return
@@ -370,7 +451,7 @@ func _rpc_asset_chunk(
 
 	# Emit progress
 	var progress = float(received) / float(download.total_chunks)
-	transfer_progress.emit(pack_id, asset_id, variant_id, progress)
+	transfer_progress.emit(pack_id, asset_id, variant_id, progress, file_type)
 
 	# Check if complete
 	if received >= download.total_chunks:
@@ -390,10 +471,16 @@ func _finalize_download(key: String) -> void:
 	# Decompress
 	var data = compressed.decompress(download.original_size, FileAccess.COMPRESSION_ZSTD)
 
+	var file_type: String = download.get("file_type", "model")
+
 	if data.size() != download.original_size:
 		push_error("AssetStreamer: Decompression failed for " + key)
 		asset_failed.emit(
-			download.pack_id, download.asset_id, download.variant_id, "Decompression failed"
+			download.pack_id,
+			download.asset_id,
+			download.variant_id,
+			"Decompression failed",
+			file_type
 		)
 		_client_downloads.erase(key)
 		_process_request_queue()
@@ -401,12 +488,16 @@ func _finalize_download(key: String) -> void:
 
 	# Store via AssetCacheManager
 	var cache_path = _cache_manager.store_asset(
-		download.pack_id, download.asset_id, download.variant_id, data, "model"
+		download.pack_id, download.asset_id, download.variant_id, data, file_type
 	)
 	if cache_path == "":
 		push_error("AssetStreamer: Failed to store asset in cache")
 		asset_failed.emit(
-			download.pack_id, download.asset_id, download.variant_id, "Failed to cache file"
+			download.pack_id,
+			download.asset_id,
+			download.variant_id,
+			"Failed to cache file",
+			file_type
 		)
 		_client_downloads.erase(key)
 		_process_request_queue()
@@ -416,7 +507,9 @@ func _finalize_download(key: String) -> void:
 
 	# Clean up and emit success
 	_client_downloads.erase(key)
-	asset_received.emit(download.pack_id, download.asset_id, download.variant_id, cache_path)
+	asset_received.emit(
+		download.pack_id, download.asset_id, download.variant_id, cache_path, file_type
+	)
 
 	_process_request_queue()
 
@@ -481,13 +574,13 @@ func get_cached_map_path(level_folder: String) -> String:
 
 ## Check if a map download is in progress for a level
 func is_map_downloading(level_folder: String) -> bool:
-	var key = "%s/%s/map" % [Paths.LEVEL_MAPS_PACK_ID, level_folder]
+	var key = "%s/%s/map/model" % [Paths.LEVEL_MAPS_PACK_ID, level_folder]
 	return _client_downloads.has(key)
 
 
 ## Check if a map download is queued for a level
 func is_map_queued(level_folder: String) -> bool:
-	var key = "%s/%s/map" % [Paths.LEVEL_MAPS_PACK_ID, level_folder]
+	var key = "%s/%s/map/model" % [Paths.LEVEL_MAPS_PACK_ID, level_folder]
 	for req in _request_queue:
 		if req.key == key:
 			return true

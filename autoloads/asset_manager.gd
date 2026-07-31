@@ -489,7 +489,11 @@ func _check_incomplete_pack(pack_id: String, pack_dir: String, state_path: Strin
 		)
 		return {}
 
-	# Count how many variants have all their files present
+	# Count how many variants have all their files present. Only variants with
+	# at least one actual downloadable URL are counted, matching
+	# _queue_pack_downloads()'s variant_file_counts -- otherwise this total would
+	# include variants _queue_pack_downloads never queues (or counts), and the
+	# "resume download" UI would show a different total than the live progress bar.
 	var total_variants := 0
 	var downloaded_variants := 0
 	for asset in pack.get_all_assets():
@@ -497,14 +501,26 @@ func _check_incomplete_pack(pack_id: String, pack_dir: String, state_path: Strin
 			var variant := asset.get_variant(variant_id)
 			if not variant:
 				continue
+			var has_model_download := (
+				variant.model_file != "" and pack.get_model_url(asset.asset_id, variant_id) != ""
+			)
+			var has_icon_download := (
+				variant.icon_file != "" and pack.get_icon_url(asset.asset_id, variant_id) != ""
+			)
+			if not has_model_download and not has_icon_download:
+				continue
 			total_variants += 1
 			var all_present := true
-			if variant.model_file != "" and pack.get_model_url(asset.asset_id, variant_id) != "":
-				if not FileAccess.file_exists(pack_dir + "models/" + variant.model_file):
-					all_present = false
-			if variant.icon_file != "" and pack.get_icon_url(asset.asset_id, variant_id) != "":
-				if not FileAccess.file_exists(pack_dir + "icons/" + variant.icon_file):
-					all_present = false
+			if (
+				has_model_download
+				and not FileAccess.file_exists(pack_dir + "models/" + variant.model_file)
+			):
+				all_present = false
+			if (
+				has_icon_download
+				and not FileAccess.file_exists(pack_dir + "icons/" + variant.icon_file)
+			):
+				all_present = false
 			if all_present:
 				downloaded_variants += 1
 
@@ -530,6 +546,9 @@ func resume_pack_download(pack_id: String) -> void:
 	if not pack:
 		pack_download_failed.emit(pack_id, "Pack not found")
 		return
+	# Clear this pack's failed-download record so assets that failed earlier this
+	# session are retried instead of instantly re-failing from the failed cache.
+	downloader.clear_failed_for_pack(pack_id)
 	_queue_pack_downloads(pack_id, {})
 
 
