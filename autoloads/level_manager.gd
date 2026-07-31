@@ -110,7 +110,6 @@ func save_level_folder(
 	current_level_path = folder_path
 	level_saved.emit(folder_path)
 
-	print("LevelManager: Saved level folder: " + folder_path)
 	return folder_path
 
 
@@ -171,7 +170,6 @@ func copy_map_to_level(source_path: String, folder_name: String) -> bool:
 	dest_file.store_buffer(data)
 	dest_file.close()
 
-	print("LevelManager: Copied map to " + dest_path)
 	return true
 
 
@@ -492,7 +490,6 @@ func delete_level_folder(folder_path: String) -> bool:
 		current_level = null
 		current_level_path = ""
 
-	print("LevelManager: Deleted level folder: " + folder_path)
 	return true
 
 
@@ -503,41 +500,6 @@ func create_new_level(level_name: String = "New Level") -> LevelData:
 	current_level = level
 	current_level_path = ""
 	return level
-
-
-## Instantiate a loaded level into the scene
-## Returns the map node with all tokens added
-func instantiate_level(level_data: LevelData, parent: Node3D) -> Node3D:
-	if level_data.map_path == "":
-		push_error("LevelManager: No map path specified")
-		return null
-
-	# Load the map using the unified pipeline (handles res:// and user:// paths)
-	var map_instance = GlbUtils.load_map(level_data.map_path, true)
-	if not map_instance:
-		push_error("LevelManager: Failed to load map: " + level_data.map_path)
-		return null
-
-	map_instance.scale = level_data.map_scale
-	map_instance.position = level_data.map_offset
-	parent.add_child(map_instance)
-
-	# Create all token placements
-	var tokens_container = Node3D.new()
-	tokens_container.name = "Tokens"
-	parent.add_child(tokens_container)
-
-	for placement in level_data.token_placements:
-		var token = _create_token_from_placement(placement)
-		if token:
-			tokens_container.add_child(token)
-
-	return map_instance
-
-
-## Create a BoardToken from a TokenPlacement
-func _create_token_from_placement(placement: TokenPlacement) -> BoardToken:
-	return BoardTokenFactory.create_from_placement_async(placement).token
 
 
 ## Export level to a portable JSON format

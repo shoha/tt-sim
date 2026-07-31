@@ -26,10 +26,5 @@ signal state_changed(old_state: int, new_state: int)
 # Level lifecycle
 # ---------------------------------------------------------------------------
 
-## Emitted when any system wants to start playing a level.
-## Root listens and orchestrates the state transition + network broadcast.
-signal play_level_requested(level_data: LevelData)
-
 ## Emitted when any system wants to open the level editor.
 signal open_editor_requested
-

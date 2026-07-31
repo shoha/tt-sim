@@ -31,6 +31,10 @@ var _reconciliation_timer: Timer = null
 var _pending_map_level_folder: String = ""  # Level folder waiting for map download
 var _streamer_connected: bool = false
 var _is_loading: bool = false  # True while async loading is in progress
+var _load_generation: int = 0  # Bumped on every new load / reset_loading_state() call.
+# Lets a suspended _play_level_async coroutine detect that it has been
+# superseded (e.g. Root exited/re-entered PLAYING with a new GameMap) so it
+# can abort instead of mutating state that now belongs to a newer load.
 var _environment_manager := LevelEnvironmentManager.new()  # Manages lighting/atmosphere
 var _permission_handler: TokenPermissionHandler = null
 
@@ -96,10 +100,14 @@ func setup(game_map: GameMap) -> void:
 	add_child(_permission_handler)
 	_permission_handler.setup()
 
-	# Connect action history for removal undo
+	# Connect action history for removal undo, and give it a way to look up
+	# live tokens so property-change undo/redo can replay through the token's
+	# real mutators (not just GameState) — see GameplayActionHistory.
 	var history := _game_map.get_action_history()
-	if history and not history.removal_undo_requested.is_connected(_on_removal_undo_requested):
-		history.removal_undo_requested.connect(_on_removal_undo_requested)
+	if history:
+		if not history.removal_undo_requested.is_connected(_on_removal_undo_requested):
+			history.removal_undo_requested.connect(_on_removal_undo_requested)
+		history.set_token_lookup(find_token_by_network_id)
 
 
 func _exit_tree() -> void:
@@ -283,6 +291,13 @@ func play_level(level_data: LevelData) -> bool:
 
 ## Internal async implementation of level loading
 func _play_level_async(level_data: LevelData) -> void:
+	# Bump the generation and capture it locally. If reset_loading_state() (or
+	# another _play_level_async call) bumps _load_generation again while this
+	# coroutine is suspended on an await, the captured value goes stale and
+	# every checkpoint below will abort instead of mutating shared state.
+	_load_generation += 1
+	var generation: int = _load_generation
+
 	_is_loading = true
 	level_loading_started.emit()
 	level_loading_progress.emit(0.0, "Preparing...")
@@ -295,8 +310,7 @@ func _play_level_async(level_data: LevelData) -> void:
 		await get_tree().process_frame
 
 	# Check if we're still valid (user might have navigated away)
-	if not _is_valid_for_loading():
-		_abort_loading()
+	if _should_abort_load(generation):
 		return
 
 	# Clear any previously loaded level first (also clears model cache)
@@ -306,8 +320,7 @@ func _play_level_async(level_data: LevelData) -> void:
 	await get_tree().process_frame
 
 	# Check validity again after yield
-	if not _is_valid_for_loading():
-		_abort_loading()
+	if _should_abort_load(generation):
 		return
 
 	# Store reference to active level
@@ -319,8 +332,7 @@ func _play_level_async(level_data: LevelData) -> void:
 	var map_loaded = await _load_level_map_async(level_data)
 
 	# Check validity after async map load
-	if not _is_valid_for_loading():
-		_abort_loading()
+	if _should_abort_load(generation):
 		return
 
 	if not map_loaded:
@@ -364,8 +376,7 @@ func _play_level_async(level_data: LevelData) -> void:
 			)
 
 		# Check validity after async model preload
-		if not _is_valid_for_loading():
-			_abort_loading()
+		if _should_abort_load(generation):
 			return
 
 	# Now spawn tokens - this is fast since models are already cached
@@ -374,8 +385,7 @@ func _play_level_async(level_data: LevelData) -> void:
 
 	for placement in level_data.token_placements:
 		# Check validity before spawning each batch
-		if not _is_valid_for_loading():
-			_abort_loading()
+		if _should_abort_load(generation):
 			return
 
 		var token = BoardTokenFactory.create_from_placement_async(placement).token
@@ -403,6 +413,10 @@ func _play_level_async(level_data: LevelData) -> void:
 	# Yield a couple frames to let all tokens render before hiding loading screen
 	for i in range(2):
 		await get_tree().process_frame
+
+	# Final check before flipping shared state / notifying listeners
+	if _should_abort_load(generation):
+		return
 
 	_is_loading = false
 	level_loading_completed.emit()
@@ -657,6 +671,24 @@ func _is_valid_for_loading() -> bool:
 	return is_instance_valid(_game_map) and is_inside_tree()
 
 
+## Checkpoint for _play_level_async: returns true if the calling coroutine's
+## captured generation no longer matches _load_generation (superseded by a
+## newer load or reset_loading_state()) or if the GameMap context is no
+## longer valid. Callers must return immediately when this returns true —
+## a stale coroutine must never mutate shared state (spawned_tokens,
+## active_level_data, _game_map's children, etc.) after this point, since
+## that state may already belong to a different load.
+func _should_abort_load(generation: int) -> bool:
+	if generation != _load_generation:
+		# Superseded — another invocation (or reset_loading_state()) now owns
+		# _is_loading and shared state. Abort silently without touching them.
+		return true
+	if not _is_valid_for_loading():
+		_abort_loading()
+		return true
+	return false
+
+
 ## Abort an in-progress async loading operation
 func _abort_loading() -> void:
 	push_warning("LevelPlayController: Aborting async loading (context no longer valid)")
@@ -763,6 +795,12 @@ func _disconnect_token_state_signals(token: BoardToken) -> void:
 
 ## Handle property changes (health, visibility, status) - uses reliable channel
 func _on_token_property_changed(token: BoardToken) -> void:
+	# Keep GameState an accurate mirror of the live token for every authority
+	# (host or local single-player) so undo/redo and other GameState-based
+	# systems see the same values the token actually holds.
+	if GameState.has_authority():
+		GameState.sync_from_board_token(token)
+
 	if not NetworkManager.is_host():
 		return
 	NetworkStateSync.broadcast_token_properties(token)
@@ -1036,6 +1074,12 @@ func _on_client_transform_received(
 	):
 		return
 
+	# Reject non-finite values so a buggy/malicious client can't inject NaN/Inf into
+	# shared state -- this would otherwise propagate to every other client via the
+	# broadcast below and to disk on next save.
+	if not (pos.is_finite() and rot.is_finite() and scl.is_finite()):
+		return
+
 	# Apply transform to the host's local BoardToken (with interpolation)
 	var token = _find_token_by_network_id(network_id)
 	if not token:
@@ -1232,6 +1276,13 @@ func _find_token_by_network_id(network_id: String) -> BoardToken:
 	return null
 
 
+## Public wrapper around _find_token_by_network_id for external callers that
+## don't have direct access to spawned_tokens (e.g. GameplayActionHistory's
+## undo/redo replay, which needs to invoke a live token's real mutators).
+func find_token_by_network_id(network_id: String) -> BoardToken:
+	return _find_token_by_network_id(network_id)
+
+
 ## Clear spawned tokens
 func clear_level_tokens() -> void:
 	for placement_id in spawned_tokens:
@@ -1316,6 +1367,11 @@ func reset_loading_state() -> void:
 	_queued_level_data = null
 	_pending_map_level_folder = ""
 	is_editor_preview = false
+	# Invalidate any in-flight _play_level_async coroutine still suspended on
+	# an await — its captured generation will no longer match, so it will
+	# abort at its next checkpoint instead of mutating state for a level it
+	# no longer owns (see _should_abort_load()).
+	_load_generation += 1
 	_disconnect_asset_streamer()
 
 
