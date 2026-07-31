@@ -17,6 +17,14 @@ var _overlay_stack: Array[Control] = []
 ## Values match RootScript.State enum (TITLE_SCREEN=0, ..., PLAYING=3, PAUSED=4).
 var _current_state: int = -1
 
+## Local mirrors of Root.State (scenes/root.gd), kept as plain ints rather than
+## a preloaded reference to Root's script. Root's script eagerly preloads all
+## of its scenes (title screen, game map, pause overlay, etc.), so importing
+## it here would make this always-loaded autoload pull that whole scene graph
+## in at engine startup. Update these if Root.State is ever reordered.
+const ROOT_STATE_PLAYING := 3
+const ROOT_STATE_PAUSED := 4
+
 # Preload scene resources at script load time
 const CONFIRMATION_DIALOG_SCENE := preload("res://scenes/ui/confirmation_dialog.tscn")
 const SETTINGS_MENU_SCENE := preload("res://scenes/ui/settings_menu.tscn")
@@ -32,6 +40,7 @@ var _transition_overlay: Node = null
 var _input_hints: Node = null
 var _download_queue: Node = null
 var _help_overlay: Node = null
+var _help_closing: bool = false
 
 
 func _ready() -> void:
@@ -72,10 +81,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_top_overlay()
 			get_viewport().set_input_as_handled()
 		# Priority 2: Toggle pause if playing
-		elif _current_state == 3:  # Root.State.PLAYING
+		elif _current_state == ROOT_STATE_PLAYING:
 			EventBus.pause_requested.emit()
 			get_viewport().set_input_as_handled()
-		elif _current_state == 4:  # Root.State.PAUSED
+		elif _current_state == ROOT_STATE_PAUSED:
 			EventBus.resume_requested.emit()
 			get_viewport().set_input_as_handled()
 
@@ -270,6 +279,10 @@ func open_settings() -> Node:
 
 ## Open the help overlay (F1)
 func open_help() -> void:
+	# Guard against a rapid re-press landing while the previous instance is
+	# still fading out (its animate_out() tween hasn't finished/freed it yet).
+	if _help_closing:
+		return
 	if _help_overlay and is_instance_valid(_help_overlay):
 		return
 	_help_overlay = HELP_OVERLAY_SCENE.instantiate()
@@ -278,10 +291,23 @@ func open_help() -> void:
 
 ## Close the help overlay
 func close_help() -> void:
+	if _help_closing:
+		return
 	if _help_overlay and is_instance_valid(_help_overlay):
+		_help_closing = true
 		if _help_overlay.has_method("animate_out"):
 			_help_overlay.animate_out()
-		_help_overlay = null
+		else:
+			_help_overlay.queue_free()
+			on_help_overlay_closed()
+
+
+## Called by the help overlay itself once its close animation finishes
+## (see HelpOverlay._on_after_animate_out()). Clears tracking state so
+## open_help() can create a fresh instance again.
+func on_help_overlay_closed() -> void:
+	_help_overlay = null
+	_help_closing = false
 
 
 ## Toggle the help overlay

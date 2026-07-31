@@ -59,6 +59,35 @@ func _create_tabs() -> void:
 	tab_container.tab_changed.connect(_on_tab_changed)
 
 
+## Add a tab for a newly-completed pack download, or refresh it if a tab for
+## this pack_id already exists. Unlike _create_tabs(), this touches only the
+## one affected tab instead of tearing down and rebuilding every tab (which
+## would reset the user's tab selection/search filter and block the main
+## thread once per existing tab via AssetPackTab._exit_tree()'s thread join).
+func _add_or_refresh_tab(pack_id: String) -> void:
+	if _tabs.has(pack_id):
+		_tabs[pack_id].refresh()
+		return
+
+	var pack = AssetManager.get_pack(pack_id)
+	if pack == null:
+		push_warning("AssetBrowser: _add_or_refresh_tab called for unknown pack_id: " + pack_id)
+		return
+
+	var tab = AssetPackTabScene.instantiate() as AssetPackTab
+	tab.name = pack.display_name
+	tab_container.add_child(tab)
+	tab.setup(pack.pack_id)
+	tab.asset_selected.connect(_on_asset_selected)
+	tab.asset_drag_started.connect(_on_asset_drag_started)
+	_tabs[pack_id] = tab
+
+	# _create_tabs() may not have run yet (e.g. this pack finished downloading
+	# before the initial catalog loaded), so make sure tab_changed is wired up.
+	if not tab_container.tab_changed.is_connected(_on_tab_changed):
+		tab_container.tab_changed.connect(_on_tab_changed)
+
+
 func _on_tab_changed(_tab_index: int) -> void:
 	_refresh_current_tab()
 	TabUtils.animate_tab_change(tab_container, self)
