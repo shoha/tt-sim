@@ -43,10 +43,29 @@ def main():
     rel_from_root = os.path.relpath(hook_source, project_root).replace("\\", "/")
 
     if platform.system() == "Windows":
-        # Write a tiny shell script that git for Windows (bash) can run
+        # Write a tiny shell script that git for Windows (bash) can run.
+        # Windows sometimes shadows python/python3/py ALL with a non-functional Microsoft
+        # Store alias stub ahead of a real install on PATH, so `command -v` alone isn't
+        # enough -- actually invoke each candidate and check it succeeds. If none work,
+        # skip (exit 0) rather than fail the commit: audio normalization is a nice-to-have,
+        # not something that should ever block a commit when the tooling is unavailable.
         with open(hook_dest, "w", newline="\n") as f:
             f.write("#!/bin/sh\n")
-            f.write(f'python "{rel_from_root}" "$@"\n')
+            f.write("PY=\"\"\n")
+            f.write("for candidate in python3 python py; do\n")
+            f.write('    if "$candidate" --version >/dev/null 2>&1; then\n')
+            f.write('        PY="$candidate"\n')
+            f.write("        break\n")
+            f.write("    fi\n")
+            f.write("done\n")
+            f.write('if [ -z "$PY" ]; then\n')
+            f.write(
+                '    echo "Warning: no working Python interpreter found on PATH --'
+                ' skipping pre-commit hook (audio normalization)." >&2\n'
+            )
+            f.write("    exit 0\n")
+            f.write("fi\n")
+            f.write(f'"$PY" "{rel_from_root}" "$@"\n')
     else:
         # Unix: symlink (must be relative to .git/hooks/ for the symlink itself)
         rel_for_symlink = os.path.relpath(hook_source, git_hooks_dir)

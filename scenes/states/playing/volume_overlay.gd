@@ -6,11 +6,11 @@ class_name VolumeOverlay
 ## and a 2D radius label in a CanvasLayer above the lo-fi shader.
 ##
 ## NOTE: Both the wireframe and fill use TRANSPARENCY_ALPHA (the preview wire color
-## has alpha=0.5). Godot's lo-fi post-process (lofi_composite.gdshader) only captures
+## has alpha=0.5). Godot's lo-fi post-process (lofi_canvas.gdshader) only captures
 ## opaque geometry, so both meshes render after the lo-fi pass and appear crisp.
 ## This is intentional — they read clearly as UI overlay elements distinct from world geometry.
 
-const CYLINDER_HEIGHT: float = 10.0   # World meters (~33 ft). Covers most TTRPG column spells.
+const CYLINDER_HEIGHT: float = 10.0  # World meters (~33 ft). Covers most TTRPG column spells.
 const RING_SEGMENTS: int = 32
 const VERTICAL_LINES: int = 8
 
@@ -38,8 +38,8 @@ static func build_horizontal_ring(
 
 ## References — set once via setup()
 var _camera: Camera3D
-var _world_viewport: SubViewport   # kept to free children in _exit_tree()
-var _overlay_parent: Node          # kept to free _canvas_layer in _exit_tree()
+var _world_viewport: SubViewport  # kept to free children in _exit_tree()
+var _overlay_parent: Node  # kept to free _canvas_layer in _exit_tree()
 
 ## 3D geometry nodes — added as children of _world_viewport
 var _fill_instance: MeshInstance3D

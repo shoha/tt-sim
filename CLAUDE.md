@@ -39,8 +39,6 @@ godot --headless --import --path .
 ## Testing Notes
 
 - GUT v9.5.0 vendored at `addons/gut/`
-- 2 pre-existing failures in `test_token_placement_serialization` and
-  `test_token_state_serialization` — known, do not investigate
 
 ## Validation Bridge
 

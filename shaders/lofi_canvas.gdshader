@@ -46,8 +46,7 @@
  * - Vignette: Increase strength for more dramatic framing
  * - Grain: Keep subtle (< 0.05) to avoid distraction, 0 to disable
  * 
- * NOTE: This replaced lofi_composite.gdshader which had transparency limitations.
- * See lofi_composite.gdshader header comments for migration history.
+ * NOTE: This replaced lofi_composite.gdshader (removed) which had transparency limitations.
  */
 
 shader_type canvas_item;

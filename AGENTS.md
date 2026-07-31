@@ -1,6 +1,6 @@
 # TTSim – Agent Quick Reference
 
-**TTSim** is a Godot 4.6 tabletop simulator (GDScript). This file helps AI agents understand the project quickly.
+**TTSim** is a Godot 4.7 tabletop simulator (GDScript). This file helps AI agents understand the project quickly.
 
 ## Essential Reading
 
@@ -18,7 +18,7 @@
 
 ## Tech Stack
 
-- **Engine**: Godot 4.6
+- **Engine**: Godot 4.7
 - **Language**: GDScript
 - **Physics**: Jolt Physics
 - **Renderer**: Forward Plus
@@ -26,7 +26,7 @@
 
 ## Key Conventions
 
-- **EventBus** – `EventBus` is a small autoload with cross-system signals (`pause_requested`, `play_level_requested`, `state_changed`, `player_disconnected`, etc.). Use it only for signals that genuinely span system boundaries. Prefer direct signal connections for parent-child communication and autoload services for global operations
+- **EventBus** – `EventBus` is a small autoload with cross-system signals (`pause_requested`, `state_changed`, `player_disconnected`, etc.). Use it only for signals that genuinely span system boundaries. Prefer direct signal connections for parent-child communication and autoload services for global operations
 - **State stack** – Root manages states: `change_state()`, `push_state()`, `pop_state()`
 - **Static classes** – `Constants`, `Paths`, `NodeUtils`, `TokenPermissions`, `SerializationUtils`, `EnvironmentPresets`, `ScaleUtils`, and `MapOverlayUtils` are `class_name` scripts (not autoloads). They provide globally accessible constants and static utility functions without a Node in the tree
 - **Autoloads** – UIManager, LevelManager, AssetManager, NetworkManager, EventBus, GameState, NetworkStateSync, AudioManager, UpdateManager, InputProfile (see project.godot). Always reference autoloads directly (e.g. `AssetManager.method()`), never via `has_node("/root/X")` or `get_node("/root/X")`

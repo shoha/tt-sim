@@ -547,7 +547,7 @@ Weather piggybacks on the existing `broadcast_visual_settings` / `visual_setting
 
 ### Transitions
 
-All intensity changes animate smoothly over 2 seconds via tweens on `amount_ratio`. Fog density is also tweened. Setting intensity to 0 stops the emitter after the tween completes.
+All intensity changes animate smoothly over 1 second via tweens on `amount_ratio`. Fog density is also tweened. Setting intensity to 0 stops the emitter after the tween completes.
 
 ### Lifecycle
 
@@ -572,7 +572,7 @@ All particle parameters (counts, velocities, scales, colors, alpha curves) are d
 
 1. Adjust constants in the `_create_rain_emitter()`, `_create_snow_emitter()`, or `_create_wind_emitter()` methods
 2. For fog, change the density multiplier (currently `0.05`) in `_transition_fog()`
-3. Transition speed is controlled by `TRANSITION_DURATION` (currently 2.0 seconds)
+3. Transition speed is controlled by `TRANSITION_DURATION` (currently 1.0 seconds)
 
 ### Future Enhancements
 

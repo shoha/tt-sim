@@ -741,7 +741,7 @@ UI elements are organized by layer for proper z-ordering. All layer numbers are 
 | 7     | `LAYER_DRAG_RULER`     | DragRuler          | Movement distance line during drag  |
 | 8     | `LAYER_MEASURE_OVERLAY`| MeasureTool        | Distance measurement lines & labels |
 | 10    | `LAYER_PAUSE`          | PauseOverlay       | Pause menu                         |
-| 80    | `LAYER_INPUT_HINTS`    | InputHints         | Keybinding hints (bottom-center)   |
+| 1     | `LAYER_INPUT_HINTS`    | InputHints         | Keybinding hints (bottom-center)   |
 | 90    | `LAYER_TOAST`          | ToastContainer     | Notifications (bottom-center)      |
 | 95    | `LAYER_SETTINGS`       | SettingsMenu       | Settings overlay (centered)        |
 | 100   | `LAYER_DIALOG`         | ConfirmationDialog | Modals, download queue             |
