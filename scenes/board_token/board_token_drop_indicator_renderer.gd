@@ -6,7 +6,7 @@ class_name DropIndicatorRenderer
 ##
 ## RENDER ORDER NOTE:
 ## This uses OPAQUE rendering (TRANSPARENCY_DISABLED) intentionally. The lo-fi
-## post-processing shader (lofi_composite.gdshader) uses hint_screen_texture which
+## post-processing shader (lofi_canvas.gdshader) uses hint_screen_texture which
 ## only captures opaque objects. Transparent objects would render AFTER the screen
 ## texture is captured and thus wouldn't receive the lo-fi effect, making them
 ## visually inconsistent with the rest of the scene.
@@ -17,11 +17,11 @@ class_name DropIndicatorRenderer
 const DOT_LENGTH: float = 0.15
 const DOT_GAP: float = 0.1
 const LINE_THICKNESS: float = 0.03
-const CIRCLE_RADIUS: float = 0.3 # Default/max circle radius
-const MAX_CIRCLE_RADIUS: float = 0.4 # Cap to keep the indicator compact on large tokens
+const CIRCLE_RADIUS: float = 0.3  # Default/max circle radius
+const MAX_CIRCLE_RADIUS: float = 0.4  # Cap to keep the indicator compact on large tokens
 const CIRCLE_SEGMENTS: int = 32
 const RAYCAST_LENGTH: float = 100.0
-const TERRAIN_COLLISION_LAYER: int = 1 # Only raycast against terrain, not other tokens
+const TERRAIN_COLLISION_LAYER: int = 1  # Only raycast against terrain, not other tokens
 
 ## Pulsing animation settings
 const PULSE_SPEED: float = 3.0
@@ -129,7 +129,7 @@ func update(start_position: Vector3) -> void:
 func _raycast_down(from: Vector3) -> Dictionary:
 	var space_state = get_world_3d().direct_space_state
 	var query = PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * RAYCAST_LENGTH)
-	query.collision_mask = TERRAIN_COLLISION_LAYER # Only hit terrain, not other tokens
+	query.collision_mask = TERRAIN_COLLISION_LAYER  # Only hit terrain, not other tokens
 	if exclude_body:
 		query.exclude = [exclude_body.get_rid()]
 	return space_state.intersect_ray(query)
@@ -168,8 +168,8 @@ func _draw_thick_segment(start: Vector3, end: Vector3, perp1: Vector3, perp2: Ve
 	var offsets = [
 		perp1 * half_thickness,
 		perp2 * half_thickness,
-		- perp1 * half_thickness,
-		- perp2 * half_thickness
+		-perp1 * half_thickness,
+		-perp2 * half_thickness
 	]
 
 	# Draw 4 rectangular faces around the line
