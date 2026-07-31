@@ -13,6 +13,11 @@ const SNOW_BASE_GRAVITY := Vector3(0, -1.5, 0)
 const RAIN_WIND_STRENGTH := 6.0  # horizontal m/s^2 at wind intensity 1.0
 const SNOW_WIND_STRENGTH := 2.0
 
+# Baseline (local-space) visibility_aabb half-extents, matching the AABB each
+# emitter is created with. _grow_visibility_aabb() never shrinks below these.
+const BASE_VISIBILITY_HALF_EXTENT := 30.0
+const BASE_VISIBILITY_HALF_HEIGHT := 15.0
+
 # Intensity targets (0.0-1.0)
 var _rain_intensity := 0.0
 var _snow_intensity := 0.0
@@ -263,9 +268,29 @@ func _update_emitter_positions() -> void:
 	_update_emission_extents(_snow_emitter, Vector3(half_extent, 0.5, half_extent))
 	_update_emission_extents(_wind_emitter, Vector3(half_extent, 3.0, half_extent))
 
+	# Grow (never shrink below) each emitter's visibility_aabb to cover the current
+	# emission box, so particles aren't culled when zoomed out on a wide aspect ratio.
+	_grow_visibility_aabb(_rain_emitter, half_extent)
+	_grow_visibility_aabb(_snow_emitter, half_extent)
+	_grow_visibility_aabb(_wind_emitter, half_extent)
+
 	if _rain_collision:
 		var collision_extent := half_extent * 2.0
 		_rain_collision.size = Vector3(collision_extent, 20, collision_extent)
+
+
+## Grow (never shrink) an emitter's local-space visibility_aabb so its horizontal
+## half-extent covers at least [param horizontal_half_extent]. Keeps culling from
+## kicking in when the dynamic emission box (see _update_emitter_positions()) grows
+## past the fixed AABB the emitter was created with, e.g. zoomed out on a wide aspect.
+func _grow_visibility_aabb(emitter: GPUParticles3D, horizontal_half_extent: float) -> void:
+	if not emitter:
+		return
+	var target_half := maxf(BASE_VISIBILITY_HALF_EXTENT, horizontal_half_extent)
+	emitter.visibility_aabb = AABB(
+		Vector3(-target_half, -BASE_VISIBILITY_HALF_HEIGHT, -target_half),
+		Vector3(target_half * 2.0, BASE_VISIBILITY_HALF_HEIGHT * 2.0, target_half * 2.0)
+	)
 
 
 func _update_emission_extents(emitter: GPUParticles3D, extents: Vector3) -> void:

@@ -593,6 +593,13 @@ static func _apply_config_to_environment(
 		# Not BG_SKY — clear any existing sky to free memory
 		env.sky = null
 
+	# Cross-validate: sky-sourced ambient light requires an actual sky. A config can
+	# set ambient_light_source to AMBIENT_SOURCE_SKY independently of background_mode
+	# (e.g. a partial override), which would otherwise silently zero out ambient light
+	# once env.sky is nulled above. Fall back to the color source in that case.
+	if env.ambient_light_source == Environment.AMBIENT_SOURCE_SKY and not env.sky:
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+
 
 ## Extract all supported settings from an existing Environment resource into a
 ## config dictionary.  This is the inverse of _apply_config_to_environment() and
