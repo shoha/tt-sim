@@ -1,16 +1,16 @@
-extends AnimatedCanvasLayerPanel
 class_name PlayerSelectionDialog
+extends AnimatedCanvasLayerPanel
 
 ## Modal dialog that lists connected players as buttons.
 ## Emits player_selected(peer_id) when a player is chosen.
 
 signal player_selected(peer_id: int)
 
+var _closing: bool = false
+
 @onready var title_label: Label = %TitleLabel
 @onready var player_list: VBoxContainer = %PlayerList
 @onready var cancel_button: Button = %CancelButton
-
-var _closing: bool = false
 
 
 func _on_panel_ready() -> void:

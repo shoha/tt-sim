@@ -1,5 +1,5 @@
-extends GPUParticles3D
 class_name SparkleBurst
+extends GPUParticles3D
 
 ## One-shot sparkle particle burst for "model ready" feedback.
 ##

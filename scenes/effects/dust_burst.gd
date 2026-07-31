@@ -1,5 +1,5 @@
-extends GPUParticles3D
 class_name DustBurst
+extends GPUParticles3D
 
 ## One-shot dust particle burst for token drop impact.
 ##

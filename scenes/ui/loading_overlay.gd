@@ -1,5 +1,5 @@
-extends CanvasLayer
 class_name LoadingOverlay
+extends CanvasLayer
 
 ## Loading screen overlay for async operations.
 ##
@@ -7,13 +7,13 @@ class_name LoadingOverlay
 
 signal loading_complete
 
-@onready var loading_label: Label = %LoadingLabel
-@onready var progress_bar: ProgressBar = %ProgressBar
-@onready var status_label: Label = %StatusLabel
-
 var _tween: Tween
 var _shimmer_tween: Tween
 var _target_progress := 0.0
+
+@onready var loading_label: Label = %LoadingLabel
+@onready var progress_bar: ProgressBar = %ProgressBar
+@onready var status_label: Label = %StatusLabel
 
 
 func _ready() -> void:

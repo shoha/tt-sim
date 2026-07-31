@@ -1,5 +1,5 @@
-extends CanvasLayer
 class_name AnimatedCanvasLayerPanel
+extends CanvasLayer
 
 ## Base class for CanvasLayer panels with backdrop + centered panel animation and sounds.
 ##

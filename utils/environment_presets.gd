@@ -1,5 +1,5 @@
-extends RefCounted
 class_name EnvironmentPresets
+extends RefCounted
 
 ## Environment preset definitions and utilities for map lighting/mood.
 ## Presets define ambient light, fog, background, and post-processing settings.

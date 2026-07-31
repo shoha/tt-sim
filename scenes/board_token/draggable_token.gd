@@ -1,7 +1,7 @@
 @tool
 
-extends DraggingObject3D
 class_name DraggableToken
+extends DraggingObject3D
 
 ## Adds drag-and-drop functionality to a token's RigidBody3D
 ## Handles visual feedback during dragging (drop indicators, lean effects, settle animations)
@@ -22,6 +22,27 @@ const SCALE_PUNCH_AMOUNT: float = 1.05  # Scale multiplier for the pickup punch 
 const DRAG_SCALE_AMOUNT: float = 1.08  # Sustained scale-up while dragging for "lifted" feel
 const TERRAIN_COLLISION_LAYER: int = 1  # Physics layer for terrain/board surfaces
 
+# Whoosh sound thresholds
+const WHOOSH_SPEED_THRESHOLD: float = 48.0  # Minimum horizontal speed (units/sec) to trigger whoosh
+const WHOOSH_COOLDOWN_DURATION: float = 0.15  # Minimum time between whoosh sounds
+const WHOOSH_PITCH_MIN: float = 0.85  # Pitch at threshold speed
+const WHOOSH_PITCH_MAX: float = 1.3  # Pitch at very high speed
+const WHOOSH_SPEED_MAX: float = 18.0  # Speed at which pitch reaches maximum
+
+# Network interpolation tuning
+const NETWORK_INTERPOLATION_SPEED: float = 15.0
+const NETWORK_INTERPOLATION_TIMEOUT: float = 0.3  # Stop interpolating if no updates for this long
+const NETWORK_SYNC_POSITION_THRESHOLD: float = 0.05  # Skip interpolation if within this distance
+const NETWORK_SYNC_ROTATION_THRESHOLD: float = 0.02  # Skip interpolation if rotation within this (radians)
+const NETWORK_SYNC_SCALE_THRESHOLD: float = 0.01  # Skip interpolation if scale within this
+
+@export var rigid_body: RigidBody3D
+@export var collision_shape: CollisionShape3D
+
+## When false, left-click will not initiate a drag (hover & right-click still work).
+## Set by BoardToken.set_interactive() to prevent unauthorized dragging.
+var dragging_allowed: bool = true
+
 var _base_height_offset: float = 0.0
 var _last_drag_position: Vector3 = Vector3.ZERO
 var _drag_velocity: Vector3 = Vector3.ZERO
@@ -35,36 +56,18 @@ var _transform_update_timer: float = 0.0
 var _last_drop_height: float = 0.0  # Stored during settle for token_landed signal
 var _is_cancel_settle: bool = false  # True when settling back to start after cancel (skip effects)
 
-# Whoosh sound state
 var _whoosh_cooldown: float = 0.0
-const WHOOSH_SPEED_THRESHOLD: float = 48.0  # Minimum horizontal speed (units/sec) to trigger whoosh
-const WHOOSH_COOLDOWN_DURATION: float = 0.15  # Minimum time between whoosh sounds
-const WHOOSH_PITCH_MIN: float = 0.85  # Pitch at threshold speed
-const WHOOSH_PITCH_MAX: float = 1.3  # Pitch at very high speed
-const WHOOSH_SPEED_MAX: float = 18.0  # Speed at which pitch reaches maximum
 
 # Tweens
 var _pickup_tween: Tween = null
 var _settle_tween: Tween = null
 
-# Network interpolation state (for smooth client-side motion)
+# Network interpolation state
 var _network_interpolating: bool = false
 var _network_target_position: Vector3 = Vector3.ZERO
 var _network_target_rotation: Vector3 = Vector3.ZERO
 var _network_target_scale: Vector3 = Vector3.ONE
 var _network_interpolation_timeout: float = 0.0
-const NETWORK_INTERPOLATION_SPEED: float = 15.0
-const NETWORK_INTERPOLATION_TIMEOUT: float = 0.3  # Stop interpolating if no updates for this long
-const NETWORK_SYNC_POSITION_THRESHOLD: float = 0.05  # Skip interpolation if within this distance
-const NETWORK_SYNC_ROTATION_THRESHOLD: float = 0.02  # Skip interpolation if rotation within this (radians)
-const NETWORK_SYNC_SCALE_THRESHOLD: float = 0.01  # Skip interpolation if scale within this
-
-## When false, left-click will not initiate a drag (hover & right-click still work).
-## Set by BoardToken.set_interactive() to prevent unauthorized dragging.
-var dragging_allowed: bool = true
-
-@export var rigid_body: RigidBody3D
-@export var collision_shape: CollisionShape3D
 
 
 func _ready() -> void:

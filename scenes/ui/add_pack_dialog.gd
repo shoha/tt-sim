@@ -1,5 +1,5 @@
-extends AnimatedCanvasLayerPanel
 class_name AddPackDialog
+extends AnimatedCanvasLayerPanel
 
 ## Dialog for downloading an asset pack from a manifest URL.
 ## Replaces the procedural dialog that was built in asset_browser_container.gd.
@@ -7,14 +7,14 @@ class_name AddPackDialog
 signal closed
 signal pack_downloaded(pack_id: String)
 
+var _downloading_pack_id: String = ""
+
 @onready var title_label: Label = %TitleLabel
 @onready var description_label: Label = %DescriptionLabel
 @onready var url_edit: LineEdit = %URLEdit
 @onready var progress_label: Label = %ProgressLabel
 @onready var download_button: Button = %DownloadButton
 @onready var cancel_button: Button = %CancelButton
-
-var _downloading_pack_id: String = ""
 
 
 func _on_panel_ready() -> void:

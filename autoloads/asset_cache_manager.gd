@@ -15,10 +15,6 @@ extends Node
 ##   AssetCacheManager.store_asset("pack", "asset", "variant", data) -> stored path
 ##   AssetCacheManager.has_cached("pack", "asset", "variant") -> bool
 
-const CACHE_DIR := "user://asset_cache/"
-const MAX_CACHE_SIZE_MB := 500
-const CACHE_INDEX_FILE := "user://asset_cache_index.json"
-
 ## Emitted when an asset is added to the cache
 signal cache_updated(cache_key: String, path: String)
 
@@ -27,6 +23,19 @@ signal cache_evicted(cache_keys: Array[String])
 
 ## Emitted when cache is cleared
 signal cache_cleared
+
+const CACHE_DIR := "user://asset_cache/"
+const MAX_CACHE_SIZE_MB := 500
+const CACHE_INDEX_FILE := "user://asset_cache_index.json"
+
+## Cache index: cache_key -> CacheEntry
+var _cache_index: Dictionary = {}
+
+## Total size of cached files in bytes
+var _total_cache_size: int = 0
+
+## Lock for thread safety
+var _cache_mutex := Mutex.new()
 
 
 ## Cache entry structure
@@ -57,16 +66,6 @@ class CacheEntry:
 		entry.last_access = data.get("last_access", 0.0)
 		entry.file_type = data.get("file_type", "model")
 		return entry
-
-
-## Cache index: cache_key -> CacheEntry
-var _cache_index: Dictionary = {}
-
-## Total size of cached files in bytes
-var _total_cache_size: int = 0
-
-## Lock for thread safety
-var _cache_mutex := Mutex.new()
 
 
 func _ready() -> void:

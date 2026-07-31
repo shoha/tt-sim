@@ -1,5 +1,5 @@
-extends RefCounted
 class_name MapOverlayUtils
+extends RefCounted
 
 ## Shared utilities for 2D overlay tools (MeasureTool, DragRuler, etc.).
 ## Provides factory methods for creating CanvasLayer overlays and styled

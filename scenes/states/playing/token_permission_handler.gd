@@ -1,5 +1,5 @@
-extends Node
 class_name TokenPermissionHandler
+extends Node
 
 ## Manages all token permission request/response logic for a level session.
 ##

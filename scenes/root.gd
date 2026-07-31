@@ -7,15 +7,7 @@ extends Node3D
 ## - push_state(): Adds overlay state on top of current state
 ## - pop_state(): Removes top overlay state, returning to previous
 
-const TITLE_SCREEN_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
-const APP_MENU_SCENE := preload("res://scenes/ui/app_menu.tscn")
-const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
-const PAUSE_OVERLAY_SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
-const LOBBY_HOST_SCENE := preload("res://scenes/states/lobby/lobby_host.tscn")
-const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn")
-const UPDATE_DIALOG_SCENE := preload("res://scenes/ui/update_dialog.tscn")
-const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
-const DISCONNECT_INDICATOR_SCENE := preload("res://scenes/ui/disconnect_indicator.tscn")
+signal state_changed(old_state: State, new_state: State)
 
 enum State {
 	TITLE_SCREEN,
@@ -25,7 +17,15 @@ enum State {
 	PAUSED,
 }
 
-signal state_changed(old_state: State, new_state: State)
+const TITLE_SCREEN_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
+const APP_MENU_SCENE := preload("res://scenes/ui/app_menu.tscn")
+const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
+const PAUSE_OVERLAY_SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
+const LOBBY_HOST_SCENE := preload("res://scenes/states/lobby/lobby_host.tscn")
+const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn")
+const UPDATE_DIALOG_SCENE := preload("res://scenes/ui/update_dialog.tscn")
+const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
+const DISCONNECT_INDICATOR_SCENE := preload("res://scenes/ui/disconnect_indicator.tscn")
 
 var _state_stack: Array[State] = []
 var _title_screen: CanvasLayer = null
@@ -38,6 +38,7 @@ var _level_play_controller: LevelPlayController = null
 var _pending_level_data: LevelData = null
 var _loading_overlay: LoadingOverlay = null
 var _disconnect_indicator: Node = null
+var _startup_update_check_pending: bool = false
 
 
 func _ready() -> void:
@@ -566,8 +567,6 @@ func _on_level_loading_completed() -> void:
 # ============================================================================
 # Update Checking
 # ============================================================================
-
-var _startup_update_check_pending: bool = false
 
 
 func _check_for_updates_on_startup() -> void:

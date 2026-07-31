@@ -1,5 +1,5 @@
-extends Resource
 class_name TokenPlacement
+extends Resource
 
 ## Represents a placed token in a level definition (static, design-time data).
 ## Stores the asset identity, position, and custom stats used when spawning.

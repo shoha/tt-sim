@@ -1,5 +1,5 @@
-extends Node3D
 class_name SelectionGlowRenderer
+extends Node3D
 
 ## Renders a glow effect behind selected/hovered tokens.
 ##
@@ -29,11 +29,11 @@ class_name SelectionGlowRenderer
 ##   token.get_selection_glow().show_glow()
 ##   token.get_selection_glow().set_glow_color(Color.RED)
 
-const GLOW_SHADER = preload("res://shaders/selection_glow.gdshader")
-
 ## Glow appearance states — HOVER is the default (triggered by mouse-over),
 ## SELECTED is reserved for a future multi-select system (brighter, steadier).
 enum GlowState { NONE, HOVER, SELECTED }
+
+const GLOW_SHADER = preload("res://shaders/selection_glow.gdshader")
 
 ## Shader parameters for each glow state
 const GLOW_STATE_PARAMS := {
@@ -56,7 +56,8 @@ const GLOW_STATE_PARAMS := {
 ## Default glow color (golden yellow, reduced intensity for a subtler hover)
 const DEFAULT_GLOW_COLOR = Color(1.0, 0.8, 0.2, 0.6)
 
-var _current_glow_state: int = GlowState.NONE
+## Duration of the fade in/out animation
+const FADE_DURATION: float = 0.12
 
 ## Size multiplier for the glow relative to the token
 @export var size_multiplier: float = 1.2
@@ -67,8 +68,7 @@ var _current_glow_state: int = GlowState.NONE
 ## Vertical offset from token base (slightly above ground to prevent z-fighting)
 @export var ground_offset: float = 0.02
 
-## Duration of the fade in/out animation
-const FADE_DURATION: float = 0.12
+var _current_glow_state: int = GlowState.NONE
 
 var _glow_mesh_instance: MeshInstance3D
 var _glow_material: ShaderMaterial

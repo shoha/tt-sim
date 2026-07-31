@@ -1,5 +1,5 @@
-extends Node
 class_name LevelPlayController
+extends Node
 
 ## Manages level playback: loading maps, spawning tokens, tracking state.
 ## Extracted from MapMenuController to follow single-responsibility principle.
@@ -47,6 +47,9 @@ var _token_signal_connections: Dictionary = {}  # network_id -> Dictionary with 
 
 # Reverse index for O(1) network_id -> placement_id lookup
 var _network_id_to_placement: Dictionary = {}  # network_id -> placement_id
+
+## Stores pending level data when a new level is requested during loading
+var _queued_level_data: LevelData = null
 
 
 ## Initialize with a reference to the game map
@@ -268,10 +271,6 @@ func _update_all_token_state() -> void:
 ## Load and play a level (async version - does not block main thread)
 ## Returns true if loading started successfully, false on immediate failure
 ## Listen to level_loaded signal for completion
-## Stores pending level data when a new level is requested during loading
-var _queued_level_data: LevelData = null
-
-
 func play_level(level_data: LevelData) -> bool:
 	if not _game_map:
 		push_error("LevelPlayController: No GameMap set. Call setup() first.")

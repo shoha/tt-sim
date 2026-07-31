@@ -1,8 +1,5 @@
-extends Node3D
 class_name BoardToken
-
-## Godot group name for all active board tokens — used for efficient tree queries
-const GROUP_NAME := "board_tokens"
+extends Node3D
 
 ## Represents a PC or NPC token on the game board.
 ## Manages entity data like health, visibility, status, and visual feedback.
@@ -35,60 +32,6 @@ const GROUP_NAME := "board_tokens"
 ##   Use BoardTokenFactory.create_from_scene() or BoardTokenFactory.create_from_config()
 ##   to create properly configured BoardToken instances.
 
-## Set to true by BoardTokenFactory - detects improper instantiation
-var _factory_created: bool = false
-
-# Network identification - stable unique ID for network synchronization
-@export var network_id: String = ""
-
-# Entity identification
-@export var token_name: String = "Token"
-@export var is_player_controlled: bool = false
-@export var character_id: String = ""
-
-# Asset identification — set by BoardTokenFactory, used for network state capture
-var pack_id: String = ""
-var asset_id: String = ""
-var variant_id: String = "default"
-
-# Health and status
-@export var max_health: int = 100
-@export var current_health: int = 100
-@export var is_alive: bool = true
-
-# Visibility and game state
-@export var is_visible_to_players: bool = true
-@export var is_hidden_from_gm: bool = false
-
-# Selection/highlight state
-var is_highlighted: bool = false
-## Ordered stack of active highlight colors (one entry per add_highlight() call, LIFO).
-## Lets remove_highlight() restore whichever color the next-remaining highlight should show
-## instead of always resetting to the default (see MEMORY.md SelectionGlowRenderer notes).
-var _highlight_colors: Array[Color] = []
-
-## Tracks the last value passed to set_interactive() for lock-release restoration.
-var _is_interactive: bool = false
-
-## peer_id currently holding the drag lock on this token, or 0 if free.
-var _drag_locked_by: int = 0
-
-# Status effects (could be expanded to a proper status effect system)
-@export var status_effects: Array[String] = []
-
-# Spawn/removal animation constants
-const SPAWN_ANIM_DURATION: float = 0.25
-const REMOVAL_ANIM_DURATION: float = 0.2
-
-# References to child components (set by BoardTokenFactory)
-var _dragging_object: DraggableToken
-var _token_controller: BoardTokenController
-var _selection_glow: SelectionGlowRenderer
-var rigid_body: RigidBody3D
-var _spawn_tween: Tween
-var _removal_tween: Tween
-var _spawn_target_scale: Vector3 = Vector3.ONE
-
 # Signals for game state changes
 signal health_changed(new_health: int, max_health: int, old_health: int)
 signal died
@@ -100,6 +43,68 @@ signal transform_changed  # Emitted for any position/rotation/scale change
 signal transform_updated  # Emitted during continuous manipulation (drag/rotate/scale)
 signal highlight_changed(is_highlighted: bool)
 signal token_landed(drop_height: float)  # Emitted when a locally-dragged token settles
+
+## Godot group name for all active board tokens — used for efficient tree queries
+const GROUP_NAME := "board_tokens"
+
+# Spawn/removal animation constants
+const SPAWN_ANIM_DURATION: float = 0.25
+const REMOVAL_ANIM_DURATION: float = 0.2
+
+# Network identification - stable unique ID for network synchronization
+@export var network_id: String = ""
+
+# Entity identification
+@export var token_name: String = "Token"
+@export var is_player_controlled: bool = false
+@export var character_id: String = ""
+
+# Health and status
+@export var max_health: int = 100
+@export var current_health: int = 100
+@export var is_alive: bool = true
+
+# Visibility and game state
+@export var is_visible_to_players: bool = true
+@export var is_hidden_from_gm: bool = false
+
+# Status effects (could be expanded to a proper status effect system)
+@export var status_effects: Array[String] = []
+
+# Asset identification — set by BoardTokenFactory, used for network state capture
+var pack_id: String = ""
+var asset_id: String = ""
+var variant_id: String = "default"
+
+# Selection/highlight state
+var is_highlighted: bool = false
+
+# Reference to child rigid body (set by BoardTokenFactory)
+var rigid_body: RigidBody3D
+
+## Set to true by BoardTokenFactory - detects improper instantiation
+var _factory_created: bool = false
+
+## Ordered stack of active highlight colors (one entry per add_highlight() call, LIFO).
+## Lets remove_highlight() restore whichever color the next-remaining highlight should show
+## instead of always resetting to the default (see MEMORY.md SelectionGlowRenderer notes).
+var _highlight_colors: Array[Color] = []
+
+## Tracks the last value passed to set_interactive() for lock-release restoration.
+var _is_interactive: bool = false
+
+## peer_id currently holding the drag lock on this token, or 0 if free.
+var _drag_locked_by: int = 0
+
+# References to child components (set by BoardTokenFactory)
+var _dragging_object: DraggableToken
+var _token_controller: BoardTokenController
+var _selection_glow: SelectionGlowRenderer
+
+# Spawn/removal animation state
+var _spawn_tween: Tween
+var _removal_tween: Tween
+var _spawn_target_scale: Vector3 = Vector3.ONE
 
 
 func _enter_tree() -> void:

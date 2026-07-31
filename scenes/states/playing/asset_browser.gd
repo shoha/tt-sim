@@ -1,5 +1,5 @@
-extends VBoxContainer
 class_name AssetBrowser
+extends VBoxContainer
 
 ## A tabbed browser for all asset packs.
 ## Each tab contains assets from one pack with its own search filter.
@@ -9,9 +9,9 @@ signal asset_drag_started(pack_id: String, asset_id: String, variant_id: String,
 
 const AssetPackTabScene = preload("res://scenes/states/playing/asset_pack_tab.tscn")
 
-@onready var tab_container: TabContainer = $TabContainer
-
 var _tabs: Dictionary = {}  # pack_id -> AssetPackTab
+
+@onready var tab_container: TabContainer = $TabContainer
 
 
 func _ready() -> void:

@@ -5,6 +5,11 @@ extends CanvasLayer
 
 signal leave_requested
 
+var _is_connected: bool = false
+## Suppresses join sounds/flash during the initial player list sync so only
+## the "you connected" sound plays, not an extra sound for every existing player.
+var _suppressing_join_sounds: bool = false
+
 @onready var player_name_input: LineEdit = %PlayerNameInput
 @onready var room_code_input: LineEdit = %RoomCodeInput
 @onready var connect_button: Button = %ConnectButton
@@ -14,11 +19,6 @@ signal leave_requested
 @onready var player_list: ItemList = %PlayerList
 @onready var waiting_container: Control = %WaitingContainer
 @onready var input_container: Control = %InputContainer
-
-var _is_connected: bool = false
-## Suppresses join sounds/flash during the initial player list sync so only
-## the "you connected" sound plays, not an extra sound for every existing player.
-var _suppressing_join_sounds: bool = false
 
 
 func _ready() -> void:

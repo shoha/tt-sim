@@ -1,5 +1,5 @@
-extends CanvasLayer
 class_name TransitionOverlay
+extends CanvasLayer
 
 ## Screen transition overlay for smooth state changes.
 ##
@@ -17,7 +17,9 @@ signal transition_complete
 
 enum TransitionType { FADE, IRIS, CURTAIN }
 
-@onready var color_rect: ColorRect = %ColorRect
+# Configuration
+var fade_duration := 0.3
+var fade_color := Color(0.102, 0.071, 0.102, 1.0)  # Dark theme background
 
 var _tween: Tween
 var _is_transitioning := false
@@ -26,9 +28,7 @@ var _current_type: int = TransitionType.FADE
 # Iris wipe shader material (created lazily)
 var _iris_material: ShaderMaterial = null
 
-# Configuration
-var fade_duration := 0.3
-var fade_color := Color(0.102, 0.071, 0.102, 1.0)  # Dark theme background
+@onready var color_rect: ColorRect = %ColorRect
 
 
 func _ready() -> void:

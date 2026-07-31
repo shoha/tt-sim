@@ -1,5 +1,5 @@
-extends Node
 class_name MeasureTool
+extends Node
 
 ## Measurement tool for the game map.
 ## Allows players to measure distances between points on the terrain (or tokens).
@@ -28,12 +28,6 @@ signal toggled(active: bool)
 enum State {INACTIVE, PLACING_START, PLACING_WAYPOINT, PLACING_VOLUME_CENTER, PLACING_VOLUME_RADIUS}
 
 enum Mode { LINE, SPHERE, CYLINDER }
-
-
-## Returns the next mode in the cycle: LINE -> SPHERE -> CYLINDER -> LINE.
-static func advance_mode(current: Mode) -> Mode:
-	return (current + 1) % 3 as Mode
-
 
 const TERRAIN_COLLISION_LAYER: int = 1
 const TOKEN_COLLISION_LAYER: int = 2
@@ -100,6 +94,11 @@ var _needs_redraw: bool = false
 ## Camera state tracking — detect zoom/pan so we redraw when the camera moves
 var _last_camera_size: float = 0.0
 var _last_camera_pos: Vector3 = Vector3.ZERO
+
+
+## Returns the next mode in the cycle: LINE -> SPHERE -> CYLINDER -> LINE.
+static func advance_mode(current: Mode) -> Mode:
+	return (current + 1) % 3 as Mode
 
 
 func _ready() -> void:

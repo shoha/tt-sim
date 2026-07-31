@@ -1,5 +1,5 @@
-extends CanvasLayer
 class_name DownloadQueue
+extends CanvasLayer
 
 ## UI widget showing active asset downloads.
 ##
@@ -16,14 +16,6 @@ const COLOR_SURFACE2 := Color("#3e2b3c")
 const COLOR_SURFACE3 := Color("#50374d")
 const COLOR_TEXT_ON_ACCENT := Color("#2c1f2b")
 
-@onready var icon_button: Button = %IconButton
-@onready var detail_panel: PanelContainer = %DetailPanel
-@onready var title_label: Label = %TitleLabel
-@onready var items_container: VBoxContainer = %ItemsContainer
-@onready var queue_label: Label = %QueueLabel
-@onready var packs_container: VBoxContainer = %PacksContainer
-@onready var packs_separator: HSeparator = %PacksSeparator
-
 var _download_items: Dictionary = {}  # key -> {container, label, progress_bar}
 var _pack_items: Dictionary = {}  # pack_id -> {container, label, count_label, progress_bar}
 var _resume_items: Dictionary = {}  # pack_id -> {container}
@@ -34,6 +26,14 @@ var _tween: Tween
 var _pulse_time: float = 0.0
 var _badge_container: PanelContainer
 var _badge_label: Label
+
+@onready var icon_button: Button = %IconButton
+@onready var detail_panel: PanelContainer = %DetailPanel
+@onready var title_label: Label = %TitleLabel
+@onready var items_container: VBoxContainer = %ItemsContainer
+@onready var queue_label: Label = %QueueLabel
+@onready var packs_container: VBoxContainer = %PacksContainer
+@onready var packs_separator: HSeparator = %PacksSeparator
 
 
 func _ready() -> void:

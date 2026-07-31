@@ -1,5 +1,5 @@
-extends Button
 class_name AnimatedButton
+extends Button
 
 ## Button subclass with a subtle press scale animation for tactile feedback.
 ##

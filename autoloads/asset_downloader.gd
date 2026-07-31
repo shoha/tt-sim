@@ -7,12 +7,6 @@ extends Node
 ## This is an internal sub-component of AssetManager. External code should
 ## access it via AssetManager.downloader rather than as a standalone autoload.
 
-const MAX_CONCURRENT_DOWNLOADS: int = 3
-const DOWNLOAD_TIMEOUT: float = 60.0  # seconds
-
-## Injected reference to the disk cache (set by AssetManager.setup).
-var _cache_manager: Node
-
 ## Emitted when an asset download completes successfully
 signal download_completed(pack_id: String, asset_id: String, variant_id: String, local_path: String)
 
@@ -24,6 +18,24 @@ signal download_progress(pack_id: String, asset_id: String, variant_id: String, 
 
 ## Emitted when all queued downloads are complete
 signal all_downloads_completed
+
+const MAX_CONCURRENT_DOWNLOADS: int = 3
+const DOWNLOAD_TIMEOUT: float = 60.0  # seconds
+
+## Injected reference to the disk cache (set by AssetManager.setup).
+var _cache_manager: Node
+
+## Queue of pending downloads
+var _download_queue: Array[DownloadRequest] = []
+
+## Currently active downloads (key -> DownloadRequest)
+var _active_downloads: Dictionary = {}
+
+## Completed download cache (key -> local_path)
+var _completed_cache: Dictionary = {}
+
+## Failed downloads that should not be retried this session
+var _failed_downloads: Dictionary = {}
 
 
 class DownloadRequest:
@@ -43,19 +55,6 @@ class DownloadRequest:
 
 	func get_dedup_key() -> String:
 		return target_path if target_path != "" else get_key()
-
-
-## Queue of pending downloads
-var _download_queue: Array[DownloadRequest] = []
-
-## Currently active downloads (key -> DownloadRequest)
-var _active_downloads: Dictionary = {}
-
-## Completed download cache (key -> local_path)
-var _completed_cache: Dictionary = {}
-
-## Failed downloads that should not be retried this session
-var _failed_downloads: Dictionary = {}
 
 
 func _ready() -> void:

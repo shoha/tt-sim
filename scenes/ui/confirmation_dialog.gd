@@ -1,5 +1,5 @@
-extends AnimatedCanvasLayerPanel
 class_name ConfirmationDialogUI
+extends AnimatedCanvasLayerPanel
 
 ## Reusable confirmation dialog component.
 ##
@@ -14,16 +14,17 @@ class_name ConfirmationDialogUI
 
 signal closed(confirmed: bool)
 
-@onready var title_label: Label = %TitleLabel
-@onready var message_label: Label = %MessageLabel
-@onready var confirm_button: Button = %ConfirmButton
-@onready var cancel_button: Button = %CancelButton
-
 var _confirm_callback: Callable
 var _cancel_callback: Callable
 var _confirm_sound_override: Callable
 var _confirmed: bool = false
 var _closing: bool = false
+var _is_danger: bool = false
+
+@onready var title_label: Label = %TitleLabel
+@onready var message_label: Label = %MessageLabel
+@onready var confirm_button: Button = %ConfirmButton
+@onready var cancel_button: Button = %CancelButton
 
 
 func _on_panel_ready() -> void:
@@ -54,9 +55,6 @@ func setup(
 	_cancel_callback = cancel_callback
 	_confirm_sound_override = confirm_sound_override
 	_is_danger = confirm_style == "Danger"
-
-
-var _is_danger: bool = false
 
 
 func _on_after_animate_in() -> void:

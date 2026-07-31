@@ -1,15 +1,15 @@
-extends CanvasLayer
 class_name InputHints
+extends CanvasLayer
 
 ## Contextual input hints displayed at the bottom of the screen.
 ##
 ## Shows current available actions based on context.
 ## Automatically updates based on game state.
 
-@onready var hints_container: HBoxContainer = %HBoxContainer
-
 var _current_hints: Array[Dictionary] = []
 var _tween: Tween
+
+@onready var hints_container: HBoxContainer = %HBoxContainer
 
 
 func _ready() -> void:

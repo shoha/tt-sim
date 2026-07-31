@@ -1,5 +1,5 @@
-extends Node3D
 class_name OcclusionFadeManager
+extends Node3D
 
 ## Fades map geometry that occludes tokens using a per-pixel spatial shader.
 ##
@@ -18,6 +18,8 @@ class_name OcclusionFadeManager
 ## after the map has been loaded. The manager converts map materials to the
 ## occlusion shader and updates token positions every few physics frames.
 
+const MAX_TOKENS := 32
+
 ## Multiplier applied to the token's collision extent to compute its fade radius.
 ## Higher = geometry fades further away from the token; lower = tighter fade zone.
 @export var fade_radius_multiplier: float = 1.5
@@ -32,8 +34,6 @@ class_name OcclusionFadeManager
 @export_range(1, 8) var lofi_dither_scale: float = 1.0
 ## Run token position updates every N physics frames.
 @export_range(1, 10) var update_interval: int = 2
-
-const MAX_TOKENS := 32
 
 # References (set via setup())
 var _camera: Camera3D

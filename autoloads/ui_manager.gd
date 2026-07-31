@@ -11,12 +11,6 @@ extends Node
 ## - Scene transitions
 ## - Input hints
 
-var _overlay_stack: Array[Control] = []
-
-## Cached current state (updated via EventBus.state_changed).
-## Values match RootScript.State enum (TITLE_SCREEN=0, ..., PLAYING=3, PAUSED=4).
-var _current_state: int = -1
-
 ## Local mirrors of Root.State (scenes/root.gd), kept as plain ints rather than
 ## a preloaded reference to Root's script. Root's script eagerly preloads all
 ## of its scenes (title screen, game map, pause overlay, etc.), so importing
@@ -33,6 +27,18 @@ const TRANSITION_OVERLAY_SCENE := preload("res://scenes/ui/transition_overlay.ts
 const INPUT_HINTS_SCENE := preload("res://scenes/ui/input_hints.tscn")
 const DOWNLOAD_QUEUE_SCENE := preload("res://scenes/ui/download_queue.tscn")
 const HELP_OVERLAY_SCENE := preload("res://scenes/ui/help_overlay.tscn")
+
+## Toast type constants (must match ToastContainer.ToastType)
+const TOAST_INFO := 0
+const TOAST_SUCCESS := 1
+const TOAST_WARNING := 2
+const TOAST_ERROR := 3
+
+var _overlay_stack: Array[Control] = []
+
+## Cached current state (updated via EventBus.state_changed).
+## Values match RootScript.State enum (TITLE_SCREEN=0, ..., PLAYING=3, PAUSED=4).
+var _current_state: int = -1
 
 # Persistent UI components
 var _toast_container: Node = null
@@ -178,12 +184,6 @@ func show_danger_confirmation(
 
 
 # --- Toast Notifications ---
-
-## Toast type constants (must match ToastContainer.ToastType)
-const TOAST_INFO := 0
-const TOAST_SUCCESS := 1
-const TOAST_WARNING := 2
-const TOAST_ERROR := 3
 
 
 ## Show a toast notification

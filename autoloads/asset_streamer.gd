@@ -17,16 +17,6 @@ extends Node
 ##   - Chunked transfers with progress tracking
 ##   - Transfer resume support for interrupted downloads
 
-const CHUNK_SIZE := 32768  # 32KB chunks
-const MAX_CONCURRENT_TRANSFERS := 2
-const TRANSFER_TIMEOUT := 60.0  # seconds
-
-## Injected reference to the disk cache (set by AssetManager.setup).
-var _cache_manager: Node
-
-## Injected reference to the AssetManager facade (set by AssetManager.setup).
-var _asset_manager: Node
-
 ## Signals
 ## Note: file_type is appended as a trailing parameter so existing listeners
 ## that only declared the original 4 parameters keep working unmodified
@@ -40,6 +30,16 @@ signal asset_failed(
 signal transfer_progress(
 	pack_id: String, asset_id: String, variant_id: String, progress: float, file_type: String
 )
+
+const CHUNK_SIZE := 32768  # 32KB chunks
+const MAX_CONCURRENT_TRANSFERS := 2
+const TRANSFER_TIMEOUT := 60.0  # seconds
+
+## Injected reference to the disk cache (set by AssetManager.setup).
+var _cache_manager: Node
+
+## Injected reference to the AssetManager facade (set by AssetManager.setup).
+var _asset_manager: Node
 
 ## Active transfers on host (peer_id -> Array of active transfer keys)
 var _host_transfers: Dictionary = {}

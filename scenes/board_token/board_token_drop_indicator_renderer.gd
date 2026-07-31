@@ -1,5 +1,5 @@
-extends Node3D
 class_name DropIndicatorRenderer
+extends Node3D
 
 ## Renders drop indicator visuals (dotted line + landing circle) during token dragging.
 ## This is a pure visual component - attach as child to a draggable object.
@@ -27,13 +27,13 @@ const TERRAIN_COLLISION_LAYER: int = 1  # Only raycast against terrain, not othe
 const PULSE_SPEED: float = 3.0
 const PULSE_AMOUNT: float = 0.15
 
+## The RigidBody3D to exclude from raycasts (the token being dragged)
+var exclude_body: RigidBody3D
+
 var _line_mesh_instance: MeshInstance3D
 var _line_immediate_mesh: ImmediateMesh
 var _circle_mesh_instance: MeshInstance3D
 var _circle_immediate_mesh: ImmediateMesh
-
-## The RigidBody3D to exclude from raycasts (the token being dragged)
-var exclude_body: RigidBody3D
 
 ## Dynamic circle radius (set from token collision footprint)
 var _circle_radius: float = CIRCLE_RADIUS

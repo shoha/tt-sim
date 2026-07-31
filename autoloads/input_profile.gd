@@ -8,15 +8,9 @@ extends Node
 ##
 ## Persisted in user://settings.cfg [controls] section.
 
-enum Profile { AUTO, MOUSE, TRACKPAD }
-
-## The resolved profile (never AUTO — AUTO resolves to MOUSE or TRACKPAD).
-var active_profile: Profile = Profile.MOUSE
-
-## The user-chosen profile setting (may be AUTO).
-var _selected_profile: Profile = Profile.AUTO
-
 signal profile_changed(new_profile: Profile)
+
+enum Profile { AUTO, MOUSE, TRACKPAD }
 
 ## Label table: action_id -> [mouse_label, trackpad_label]
 const LABELS := {
@@ -39,6 +33,12 @@ const LABELS := {
 	&"cycle_mode": ["Tab", "Tab"],
 	&"done": ["M", "M"],
 }
+
+## The resolved profile (never AUTO — AUTO resolves to MOUSE or TRACKPAD).
+var active_profile: Profile = Profile.MOUSE
+
+## The user-chosen profile setting (may be AUTO).
+var _selected_profile: Profile = Profile.AUTO
 
 
 func _ready() -> void:

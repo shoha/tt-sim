@@ -1,5 +1,5 @@
-extends Node
 class_name DragRuler
+extends Node
 
 ## Shows a distance ruler line from a token's start position to its current
 ## position while dragging. Renders as a 2D overlay on its own CanvasLayer

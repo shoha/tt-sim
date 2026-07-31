@@ -42,10 +42,10 @@ signal value_changed(new_value: float)
 		allow_lesser = v
 		_sync_properties()
 
+var _syncing: bool = false
+
 @onready var _slider: HSlider = $Slider
 @onready var _spin_box: SpinBox = $SpinBox
-
-var _syncing: bool = false
 
 
 func _ready() -> void:

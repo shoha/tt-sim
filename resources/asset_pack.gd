@@ -1,5 +1,5 @@
-extends Resource
 class_name AssetPack
+extends Resource
 
 ## Represents a user-loadable asset pack containing models and icons for tokens.
 ## Packs are discovered automatically from the user_assets/ directory.

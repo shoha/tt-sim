@@ -10,12 +10,12 @@ signal play_level_requested(level_data: LevelData)
 
 const LevelEditorScene = preload("res://scenes/level_editor/level_editor.tscn")
 
-@onready var _level_editor_button: Button = %LevelEditorButton
-
 var _level_editor_instance: LevelEditor = null
 var _editor_canvas_layer: CanvasLayer = null
 var _level_play_controller: LevelPlayController = null
 var _force_hide_button: bool = false
+
+@onready var _level_editor_button: Button = %LevelEditorButton
 
 
 func _ready() -> void:

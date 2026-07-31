@@ -1,5 +1,5 @@
-extends AnimatedCanvasLayerPanel
 class_name PauseOverlay
+extends AnimatedCanvasLayerPanel
 
 ## Pause menu overlay with resume, settings, and return to title options.
 

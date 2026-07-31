@@ -1,5 +1,5 @@
-extends Resource
 class_name LevelData
+extends Resource
 
 ## Stores all data for a game level
 ## Includes the map model and all token placements

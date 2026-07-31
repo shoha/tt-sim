@@ -1,5 +1,5 @@
-extends AnimatedCanvasLayerPanel
 class_name LevelBrowserDialog
+extends AnimatedCanvasLayerPanel
 
 ## Dialog that lists saved levels for quick local play.
 ## Loads the selected level via LevelManager which triggers the
