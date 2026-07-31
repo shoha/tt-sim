@@ -321,7 +321,7 @@ func _try_p2p_download(request: ResolutionRequest) -> bool:
 		return false
 
 	_streamer.request_from_host(
-		request.pack_id, request.asset_id, request.variant_id, request.priority
+		request.pack_id, request.asset_id, request.variant_id, request.file_type, request.priority
 	)
 
 	resolution_progress.emit(request.request_id, "p2p", 0.0)
@@ -336,15 +336,19 @@ func _try_p2p_download(request: ResolutionRequest) -> bool:
 func _on_http_download_completed(
 	pack_id: String, asset_id: String, variant_id: String, local_path: String
 ) -> void:
-	var key = "%s/%s/%s/model" % [pack_id, asset_id, variant_id]
-	_handle_download_complete(key, local_path)
+	# The same pack/asset/variant can have both a model and an icon download in
+	# flight concurrently. Guard each key symmetrically by extension so that
+	# whichever one finishes first can't be misattributed to the other's key
+	# (e.g. an icon completing doesn't complete the model resolution request).
+	var is_icon_path = local_path.ends_with(".png") or local_path.ends_with(".jpg")
 
-	# Also check icon key
+	var key = "%s/%s/%s/model" % [pack_id, asset_id, variant_id]
+	if not is_icon_path and _key_to_request.has(key):
+		_handle_download_complete(key, local_path)
+
 	var icon_key = "%s/%s/%s/icon" % [pack_id, asset_id, variant_id]
-	if _key_to_request.has(icon_key):
-		# Check if this was an icon download based on path extension
-		if local_path.ends_with(".png") or local_path.ends_with(".jpg"):
-			_handle_download_complete(icon_key, local_path)
+	if is_icon_path and _key_to_request.has(icon_key):
+		_handle_download_complete(icon_key, local_path)
 
 
 func _on_http_download_failed(
@@ -376,16 +380,16 @@ func _on_http_download_progress(
 
 
 func _on_p2p_asset_received(
-	pack_id: String, asset_id: String, variant_id: String, local_path: String
+	pack_id: String, asset_id: String, variant_id: String, local_path: String, file_type: String
 ) -> void:
-	var key = "%s/%s/%s/model" % [pack_id, asset_id, variant_id]
+	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 	_handle_download_complete(key, local_path)
 
 
 func _on_p2p_asset_failed(
-	pack_id: String, asset_id: String, variant_id: String, error: String
+	pack_id: String, asset_id: String, variant_id: String, error: String, file_type: String
 ) -> void:
-	var key = "%s/%s/%s/model" % [pack_id, asset_id, variant_id]
+	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 
 	if not _key_to_request.has(key):
 		return
@@ -395,9 +399,9 @@ func _on_p2p_asset_failed(
 
 
 func _on_p2p_transfer_progress(
-	pack_id: String, asset_id: String, variant_id: String, progress: float
+	pack_id: String, asset_id: String, variant_id: String, progress: float, file_type: String
 ) -> void:
-	var key = "%s/%s/%s/model" % [pack_id, asset_id, variant_id]
+	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 	if _key_to_request.has(key):
 		var request_id = _key_to_request[key]
 		resolution_progress.emit(request_id, "p2p", progress)

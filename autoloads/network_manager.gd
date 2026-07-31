@@ -86,6 +86,12 @@ var _connection_timer: Timer = null
 ## Game state tracking (for late joiner detection)
 var _game_in_progress: bool = false
 
+## Rate limiting for inbound client-sent token transform RPCs (mirrors
+## NetworkStateSync.TRANSFORM_SEND_INTERVAL). Bounds how often a single token's
+## transform is processed regardless of how fast a client sends updates.
+const CLIENT_TRANSFORM_RATE_LIMIT := 0.05
+var _client_transform_throttle: Dictionary = {}  # network_id -> last_received_time (float)
+
 ## Permission request/response sub-component
 var permissions: NetworkPermissions
 
@@ -370,6 +376,7 @@ func disconnect_game() -> void:
 	_lobby_id = 0
 	_game_in_progress = false
 	_current_level_dict.clear()
+	_client_transform_throttle.clear()
 	_stop_connection_timeout()
 
 
@@ -484,8 +491,21 @@ func _on_server_disconnected() -> void:
 @rpc("any_peer", "reliable")
 func _rpc_send_player_info(info: Dictionary) -> void:
 	var sender_id = multiplayer.get_remote_sender_id()
-	_players[sender_id] = info
-	player_joined.emit(sender_id, info)
+
+	var received_info := info
+	if is_host():
+		# Only the host receives this RPC from an untrusted remote peer (when a
+		# client receives it, the sender is the host, which is already
+		# authoritative about itself). Accept the client's display name, but
+		# never its self-reported role -- keep whatever role we already have on
+		# record for this peer (or the default PLAYER for a peer we haven't
+		# seen yet). Otherwise a client could claim "role": GM and get the GM
+		# badge shown host-wide.
+		var existing_role = _players.get(sender_id, {}).get("role", PlayerRole.PLAYER)
+		received_info = {"name": info.get("name", DEFAULT_PLAYER_NAME), "role": existing_role}
+
+	_players[sender_id] = received_info
+	player_joined.emit(sender_id, received_info)
 
 	# If we're the host, broadcast updated player list
 	if is_host():
@@ -593,6 +613,17 @@ func _rpc_client_token_transform(
 ) -> void:
 	if not is_host():
 		return
+
+	# Rate limit: drop (don't error) inbound updates for a token that arrive
+	# faster than the host's own broadcast interval. Prevents a misbehaving or
+	# malicious client from flooding the host with more transform updates than
+	# the game ever needs to process.
+	var now = Time.get_ticks_msec() / 1000.0
+	var last_received = _client_transform_throttle.get(network_id, 0.0)
+	if now - last_received < CLIENT_TRANSFORM_RATE_LIMIT:
+		return
+	_client_transform_throttle[network_id] = now
+
 	var sender_id = multiplayer.get_remote_sender_id()
 	var pos := SerializationUtils.array_to_vec3(pos_arr)
 	var rot := SerializationUtils.array_to_vec3(rot_arr)
@@ -697,6 +728,31 @@ func broadcast_visual_settings(settings: Dictionary) -> void:
 		)
 	_rpc_receive_visual_settings.rpc(net_settings)
 
+	# Keep the late-joiner snapshot in sync -- broadcast_level_data() only runs at
+	# level start, so without this a client joining after a live visual-settings
+	# edit (before the next full level broadcast) would see stale values.
+	_patch_current_level_dict(net_settings)
+
+
+## Patch the fields of _current_level_dict that correspond to live
+## visual-settings broadcasts. No-op if no level is currently active.
+## net_settings must already be network-serialized (e.g. environment_overrides
+## as produced by EnvironmentPresets.overrides_to_json), matching the format
+## LevelData.to_dict() uses for the same keys.
+func _patch_current_level_dict(net_settings: Dictionary) -> void:
+	if _current_level_dict.is_empty():
+		return
+	if net_settings.has("light_intensity"):
+		_current_level_dict["light_intensity_scale"] = net_settings["light_intensity"]
+	if net_settings.has("environment_preset"):
+		_current_level_dict["environment_preset"] = net_settings["environment_preset"]
+	if net_settings.has("environment_overrides"):
+		_current_level_dict["environment_overrides"] = net_settings["environment_overrides"]
+	if net_settings.has("lofi_overrides"):
+		_current_level_dict["lofi_overrides"] = net_settings["lofi_overrides"]
+	if net_settings.has("weather_overrides"):
+		_current_level_dict["weather_overrides"] = net_settings["weather_overrides"]
+
 
 ## Called by client to send a token transform to the host
 func send_client_token_transform(
@@ -800,6 +856,13 @@ func is_game_in_progress() -> bool:
 func clear_level_data() -> void:
 	_current_level_dict.clear()
 	_game_in_progress = false
+
+
+## Get the level_folder of the level currently being served to peers (host side).
+## Returns "" if no level is active. Used by AssetStreamer to restrict map streaming
+## to the level the host actually has loaded, rather than any saved level by name.
+func get_current_level_folder() -> String:
+	return _current_level_dict.get("level_folder", "")
 
 
 # =============================================================================

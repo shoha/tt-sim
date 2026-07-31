@@ -82,7 +82,7 @@ static func on_token_state_received(
 		token_state.apply_to_token(token)
 	else:
 		# Token doesn't exist — create it
-		var new_token = create_token_from_state(token_state)
+		var new_token = create_token_from_state(token_state, controller)
 		if new_token and game_map:
 			game_map.drag_and_drop_node.add_child(new_token)
 			controller.spawned_tokens[network_id] = new_token
@@ -117,7 +117,7 @@ static func apply_game_state_to_tokens(controller: LevelPlayController, game_map
 		if token and is_instance_valid(token):
 			token_state.apply_to_token(token)
 		else:
-			var new_token = create_token_from_state(token_state)
+			var new_token = create_token_from_state(token_state, controller)
 			if new_token:
 				drag_and_drop.add_child(new_token)
 				controller.spawned_tokens[network_id] = new_token
@@ -133,7 +133,13 @@ static func apply_game_state_to_tokens(controller: LevelPlayController, game_map
 
 
 ## Create a BoardToken from a TokenState (for network-spawned tokens)
-static func create_token_from_state(token_state: TokenState) -> BoardToken:
+## @param controller: Optional LevelPlayController, used to compute interactivity
+## the same way locally-driven token creation does (GM sees all tokens as
+## interactive; players only tokens they hold CONTROL permission for). Without
+## it, interactivity falls back to has_gm_access() only.
+static func create_token_from_state(
+	token_state: TokenState, controller: LevelPlayController = null
+) -> BoardToken:
 	if token_state.pack_id == "" or token_state.asset_id == "":
 		push_warning("RootNetworkHandler: Cannot create token — missing pack_id or asset_id")
 		return null
@@ -161,5 +167,20 @@ static func create_token_from_state(token_state: TokenState) -> BoardToken:
 
 	# Apply state without interpolation for initial placement
 	token_state.apply_to_token(token, false)
+
+	# Wire up interactivity the same way locally-driven token creation does
+	# (level_play_controller.gd's _track_token / add_token_to_level). Without this,
+	# DraggableToken.dragging_allowed defaults to true and a freshly
+	# network-created token is draggable by clients without permission until the
+	# next full sync happens to touch it.
+	var is_gm = NetworkManager.has_gm_access()
+	var can_interact = is_gm
+	if not can_interact and controller and controller.multiplayer.multiplayer_peer:
+		can_interact = GameState.has_token_permission(
+			token.network_id,
+			controller.multiplayer.get_unique_id(),
+			TokenPermissions.Permission.CONTROL
+		)
+	token.set_interactive(can_interact)
 
 	return token
