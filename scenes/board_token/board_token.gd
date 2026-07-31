@@ -62,7 +62,10 @@ var variant_id: String = "default"
 
 # Selection/highlight state
 var is_highlighted: bool = false
-var _highlight_count: int = 0
+## Ordered stack of active highlight colors (one entry per add_highlight() call, LIFO).
+## Lets remove_highlight() restore whichever color the next-remaining highlight should show
+## instead of always resetting to the default (see MEMORY.md SelectionGlowRenderer notes).
+var _highlight_colors: Array[Color] = []
 
 ## Tracks the last value passed to set_interactive() for lock-release restoration.
 var _is_interactive: bool = false
@@ -219,8 +222,10 @@ func _update_visibility_visuals() -> void:
 
 
 ## Add one highlight layer. The glow stays visible until all layers are removed.
+## Layers are tracked LIFO: removing a layer restores whichever color the
+## next-remaining layer wants, instead of clobbering an existing highlight color.
 func add_highlight(color: Color = SelectionGlowRenderer.DEFAULT_GLOW_COLOR) -> void:
-	_highlight_count += 1
+	_highlight_colors.append(color)
 	set_highlight_color(color)
 	if not is_highlighted:
 		is_highlighted = true
@@ -228,14 +233,19 @@ func add_highlight(color: Color = SelectionGlowRenderer.DEFAULT_GLOW_COLOR) -> v
 		highlight_changed.emit(is_highlighted)
 
 
-## Remove one highlight layer. Glow hides only when the last layer is removed.
+## Remove one highlight layer. Glow hides only when the last layer is removed;
+## otherwise the color reverts to whatever the next-remaining layer set.
 func remove_highlight() -> void:
-	_highlight_count = max(0, _highlight_count - 1)
-	if _highlight_count == 0 and is_highlighted:
-		set_highlight_color(SelectionGlowRenderer.DEFAULT_GLOW_COLOR)
-		is_highlighted = false
-		_update_highlight_visuals()
-		highlight_changed.emit(is_highlighted)
+	if not _highlight_colors.is_empty():
+		_highlight_colors.remove_at(_highlight_colors.size() - 1)
+	if _highlight_colors.is_empty():
+		if is_highlighted:
+			set_highlight_color(SelectionGlowRenderer.DEFAULT_GLOW_COLOR)
+			is_highlighted = false
+			_update_highlight_visuals()
+			highlight_changed.emit(is_highlighted)
+	else:
+		set_highlight_color(_highlight_colors[-1])
 
 
 ## Boolean convenience wrapper for add/remove_highlight (backwards-compatible).

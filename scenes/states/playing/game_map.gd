@@ -297,7 +297,10 @@ func _input(event: InputEvent) -> void:
 			and event.button_index == MOUSE_BUTTON_LEFT
 			and not event.pressed
 		):
-			_complete_drag_place(event.position)
+			if _is_mouse_over_gui():
+				_cancel_drag_place()
+			else:
+				_complete_drag_place(event.position)
 			get_viewport().set_input_as_handled()
 			return
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
