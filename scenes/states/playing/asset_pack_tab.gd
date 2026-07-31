@@ -165,22 +165,23 @@ func _add_item_to_list(item: Dictionary) -> void:
 		return
 	if not FileAccess.file_exists(icon_path):
 		return
-	ResourceLoader.load_threaded_request(icon_path, "Image")
-	_poll_icon_load.call_deferred(icon_path, cache_key, index)
+	WorkerThreadPool.add_task(_load_icon_task.bind(icon_path, cache_key, index))
 
 
-## Poll for threaded icon load completion. Retries next frame if still loading.
-func _poll_icon_load(path: String, cache_key: String, index: int) -> void:
+## Decode the icon PNG on a worker thread via Image.load() rather than
+## ResourceLoader.load_threaded_request() -- the threaded ResourceLoader path is prone to
+## spurious "resource file not found" failures for files that demonstrably exist when a
+## pack's icon count causes many concurrent load requests (e.g. the 65+ asset trainers/
+## pokemon packs), a known Godot reliability gap. Image.load() has no such issue.
+func _load_icon_task(path: String, cache_key: String, index: int) -> void:
+	var image := Image.new()
+	if image.load(path) != OK:
+		return
+	_apply_icon.call_deferred(image, cache_key, index)
+
+
+func _apply_icon(image: Image, cache_key: String, index: int) -> void:
 	if not is_instance_valid(self):
-		return
-	var status := ResourceLoader.load_threaded_get_status(path)
-	if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-		_poll_icon_load.call_deferred(path, cache_key, index)
-		return
-	if status != ResourceLoader.THREAD_LOAD_LOADED:
-		return
-	var image: Image = ResourceLoader.load_threaded_get(path)
-	if not image or not is_instance_valid(self):
 		return
 	var texture := ImageTexture.create_from_image(image)
 	_icon_cache[cache_key] = texture
