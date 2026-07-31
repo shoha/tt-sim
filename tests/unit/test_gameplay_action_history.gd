@@ -4,6 +4,36 @@ extends GutTest
 
 const TEST_TOKEN_ID := "test_token_1"
 
+
+## Minimal stand-in for BoardToken's relevant public API. Used to verify that
+## undo replays through a live token's real mutators (not just GameState),
+## without standing up a full BoardToken scene tree.
+class FakeToken:
+	var current_health: int = 100
+	var max_health: int = 100
+	var is_visible_to_players: bool = true
+	var heal_calls: Array[int] = []
+	var take_damage_calls: Array[int] = []
+	var set_max_health_calls: Array[int] = []
+	var set_visible_calls: Array[bool] = []
+
+	func heal(amount: int) -> void:
+		heal_calls.append(amount)
+		current_health = min(max_health, current_health + amount)
+
+	func take_damage(amount: int) -> void:
+		take_damage_calls.append(amount)
+		current_health = max(0, current_health + amount)
+
+	func set_max_health(new_max: int) -> void:
+		set_max_health_calls.append(new_max)
+		max_health = new_max
+
+	func set_visible_to_players(is_visible_value: bool) -> void:
+		set_visible_calls.append(is_visible_value)
+		is_visible_to_players = is_visible_value
+
+
 var _history: GameplayActionHistory
 
 
@@ -116,3 +146,34 @@ func test_heal_description() -> void:
 	_history.record_property_change(TEST_TOKEN_ID, "current_health", 80, 100)
 	var desc := _history.undo()
 	assert_string_contains(desc, "healed")
+
+
+func test_undo_applies_to_live_token_not_just_game_state() -> void:
+	# Regression test: undo must mutate the live token through its real
+	# public API (heal/take_damage/etc.), not just GameState's copy —
+	# otherwise Ctrl+Z shows a toast but nothing visibly changes.
+	var fake_token := FakeToken.new()
+	fake_token.current_health = 80
+	_history.set_token_lookup(
+		func(nid: String): return fake_token if nid == TEST_TOKEN_ID else null
+	)
+
+	_history.record_property_change(TEST_TOKEN_ID, "current_health", 100, 80)
+	_history.undo()
+
+	assert_eq(fake_token.current_health, 100)
+	assert_eq(fake_token.heal_calls, [20])
+
+
+func test_undo_applies_visibility_to_live_token() -> void:
+	var fake_token := FakeToken.new()
+	fake_token.is_visible_to_players = false
+	_history.set_token_lookup(
+		func(nid: String): return fake_token if nid == TEST_TOKEN_ID else null
+	)
+
+	_history.record_property_change(TEST_TOKEN_ID, "is_visible_to_players", true, false)
+	_history.undo()
+
+	assert_true(fake_token.is_visible_to_players)
+	assert_eq(fake_token.set_visible_calls, [true])

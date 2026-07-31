@@ -335,7 +335,6 @@ func _enter_lobby_client_state() -> void:
 	# Listen for game starting from host
 	if not NetworkManager.game_starting.is_connected(_on_network_game_starting):
 		NetworkManager.game_starting.connect(_on_network_game_starting)
-		print("Root: Connected game_starting signal handler")
 
 
 func _exit_lobby_client_state() -> void:
@@ -372,15 +371,16 @@ func _on_lobby_cancel() -> void:
 
 func _on_network_game_starting() -> void:
 	# Client received game starting signal from host
-	print("Root: Received game_starting signal, transitioning to PLAYING state")
 	change_state(State.PLAYING)
 
 
 func _on_network_state_changed(
 	old_state: NetworkManager.ConnectionState, new_state: NetworkManager.ConnectionState
 ) -> void:
-	# Handle disconnect while in PLAYING state
-	if new_state == NetworkManager.ConnectionState.OFFLINE and get_current_state() == State.PLAYING:
+	# Handle disconnect while in PLAYING state.
+	# PAUSED is pushed on top of PLAYING (not swapped), so check the whole
+	# stack rather than just the top — otherwise pausing hides this branch.
+	if new_state == NetworkManager.ConnectionState.OFFLINE and State.PLAYING in _state_stack:
 		_hide_disconnect_indicator()
 		# Show disconnect dialog if we were in any networked state.
 		# Exclude OFFLINE→OFFLINE (redundant) and HOSTING (host disconnects via
