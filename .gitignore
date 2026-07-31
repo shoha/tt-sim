@@ -16,6 +16,10 @@
 # Steam — App ID is environment-specific (480/SpaceWar for dev, real ID for release)
 steam_appid.txt
 
+# GodotSteam GDExtension shadow-copy DLLs — Godot copies the real DLL to a `~`-prefixed
+# file on load (Windows) so it can keep running without locking the original file.
+addons/godotsteam/**/~*
+
 # Local debug builds (for multiplayer testing)
 /build/windows-debug/
 
