@@ -182,6 +182,20 @@ func _start_request(request: Dictionary) -> void:
 	print("AssetStreamer: Requesting %s from host (resume_from=%d)" % [key, resume_from])
 
 
+## Whether a client-requested level map name is authorized to be served: it must sanitize
+## (see Paths.sanitize_level_name()) to exactly the level the host currently has active.
+## A pack requesting an empty/no active level, or any name that doesn't match after
+## sanitization (including traversal payloads, which sanitize to something else entirely
+## or fall back to a generated name), is denied. Pure and static specifically so this
+## security-critical decision can be unit-tested without a real multiplayer peer.
+static func is_level_request_authorized(
+	requested_name: String, active_level_folder: String
+) -> bool:
+	if active_level_folder == "":
+		return false
+	return Paths.sanitize_level_name(requested_name) == active_level_folder
+
+
 ## RPC: Client requests an asset from host (with optional resume)
 @rpc("any_peer", "reliable")
 func _rpc_request_asset(
@@ -207,14 +221,13 @@ func _rpc_request_asset(
 	else:
 		print("AssetStreamer: Peer %d requesting asset %s" % [peer_id, key])
 
-	# Level map assets: asset_id is a client-controlled level folder name. Sanitize it
-	# the same way LevelManager does when writing level folders, and only ever serve the
-	# level the host currently has loaded — never an arbitrary saved level, and never a
-	# path-traversal escape out of user://levels/.
+	# Level map assets: asset_id is a client-controlled level folder name. Only ever serve
+	# the level the host currently has loaded — never an arbitrary saved level, and never a
+	# path-traversal escape out of user://levels/. Extracted into a static helper (rather
+	# than left inline) so this security-critical decision is unit-testable without a real
+	# multiplayer peer -- see is_level_request_authorized() and its tests.
 	if pack_id == Paths.LEVEL_MAPS_PACK_ID:
-		var sanitized_level := Paths.sanitize_level_name(asset_id)
-		var current_level_folder := NetworkManager.get_current_level_folder()
-		if current_level_folder == "" or sanitized_level != current_level_folder:
+		if not is_level_request_authorized(asset_id, NetworkManager.get_current_level_folder()):
 			push_warning(
 				(
 					"AssetStreamer: Peer %d requested map for level '%s' which is not the active level — denied"
@@ -224,7 +237,7 @@ func _rpc_request_asset(
 			rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id, file_type)
 			return
 
-		var file_path = Paths.get_level_map_path(sanitized_level)
+		var file_path = Paths.get_level_map_path(Paths.sanitize_level_name(asset_id))
 		if file_path == "" or not FileAccess.file_exists(file_path):
 			rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id, file_type)
 			return
