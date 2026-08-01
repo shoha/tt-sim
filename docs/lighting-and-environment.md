@@ -601,7 +601,7 @@ All particle parameters (counts, velocities, scales, colors, alpha curves) are d
 
 ## Best Practices
 
-1. **For Blender exports**: Use "Unitless" lighting mode when possible. If using "Standard" mode, expect to use `light_intensity_scale` values around 0.001–0.01.
+1. **For Blender exports**: Use "Unitless" lighting mode when possible. If using "Standard" mode, expect to use `light_intensity_scale` values around 0.001–0.01. Maps exported via the companion `terrain-paint` addon's Export glTF operator always use Unitless mode (`export_import_convert_lighting_mode='COMPAT'`, hardcoded, not user-configurable) specifically so `light_intensity_scale`'s default of `1.0` works correctly with no manual tuning — this only matters if you're exporting from Blender by some other means (e.g. File > Export directly, bypassing terrain-paint).
 
 2. **Start with map defaults**: If the map has embedded lighting, start with "Map Defaults" and use overrides to tweak from there.
 
