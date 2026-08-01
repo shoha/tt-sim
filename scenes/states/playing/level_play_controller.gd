@@ -28,14 +28,13 @@ var loaded_map_instance: Node3D = null
 var is_editor_preview: bool = false  # True when playing a level from the level editor
 var _game_map: GameMap = null
 var _reconciliation_timer: Timer = null
-var _pending_map_level_folder: String = ""  # Level folder waiting for map download
-var _streamer_connected: bool = false
 var _is_loading: bool = false  # True while async loading is in progress
 var _load_generation: int = 0  # Bumped on every new load / reset_loading_state() call.
 # Lets a suspended _play_level_async coroutine detect that it has been
 # superseded (e.g. Root exited/re-entered PLAYING with a new GameMap) so it
 # can abort instead of mutating state that now belongs to a newer load.
 var _environment_manager := LevelEnvironmentManager.new()  # Manages lighting/atmosphere
+var _map_download_coordinator := MapDownloadCoordinator.new()  # Manages map downloads
 var _permission_handler: TokenPermissionHandler = null
 
 # Token permission state
@@ -61,7 +60,24 @@ func setup(game_map: GameMap) -> void:
 	_game_map.setup_grid_overlay()
 	_game_map.setup_drag_ruler()
 	_setup_reconciliation_timer()
-	_connect_asset_streamer()
+	_map_download_coordinator.setup(_load_map_from_path, _finalize_map_loading)
+	_map_download_coordinator.connect_asset_streamer()
+	if not _map_download_coordinator.map_download_started.is_connected(
+		_on_coordinator_download_started
+	):
+		_map_download_coordinator.map_download_started.connect(_on_coordinator_download_started)
+	if not _map_download_coordinator.map_download_progress.is_connected(
+		_on_coordinator_download_progress
+	):
+		_map_download_coordinator.map_download_progress.connect(_on_coordinator_download_progress)
+	if not _map_download_coordinator.map_download_completed.is_connected(
+		_on_coordinator_download_completed
+	):
+		_map_download_coordinator.map_download_completed.connect(_on_coordinator_download_completed)
+	if not _map_download_coordinator.map_download_failed.is_connected(
+		_on_coordinator_download_failed
+	):
+		_map_download_coordinator.map_download_failed.connect(_on_coordinator_download_failed)
 
 	# Listen for network state changes to update token interactivity
 	if not NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
@@ -138,84 +154,26 @@ func _exit_tree() -> void:
 		NetworkManager.drag_lock_released.disconnect(_on_drag_lock_released)
 
 	# Disconnect AssetStreamer signals
-	_disconnect_asset_streamer()
+	_map_download_coordinator.disconnect_asset_streamer()
 
 
-## Connect to AssetStreamer for map downloads
-func _connect_asset_streamer() -> void:
-	if _streamer_connected:
-		return
-
-	if not AssetManager.streamer.asset_received.is_connected(_on_map_received):
-		AssetManager.streamer.asset_received.connect(_on_map_received)
-	if not AssetManager.streamer.asset_failed.is_connected(_on_map_failed):
-		AssetManager.streamer.asset_failed.connect(_on_map_failed)
-	if not AssetManager.streamer.transfer_progress.is_connected(_on_map_transfer_progress):
-		AssetManager.streamer.transfer_progress.connect(_on_map_transfer_progress)
-	_streamer_connected = true
+## Relay MapDownloadCoordinator signals through this facade's own signals so
+## external listeners connected to LevelPlayController are unaffected by the
+## extraction.
+func _on_coordinator_download_started(level_folder: String) -> void:
+	map_download_started.emit(level_folder)
 
 
-## Disconnect from AssetStreamer signals
-func _disconnect_asset_streamer() -> void:
-	if not _streamer_connected:
-		return
-
-	if AssetManager.streamer.asset_received.is_connected(_on_map_received):
-		AssetManager.streamer.asset_received.disconnect(_on_map_received)
-	if AssetManager.streamer.asset_failed.is_connected(_on_map_failed):
-		AssetManager.streamer.asset_failed.disconnect(_on_map_failed)
-	if AssetManager.streamer.transfer_progress.is_connected(_on_map_transfer_progress):
-		AssetManager.streamer.transfer_progress.disconnect(_on_map_transfer_progress)
-	_streamer_connected = false
+func _on_coordinator_download_progress(level_folder: String, progress: float) -> void:
+	map_download_progress.emit(level_folder, progress)
 
 
-## Handle map download completion from AssetStreamer
-func _on_map_received(
-	pack_id: String, asset_id: String, _variant_id: String, local_path: String
-) -> void:
-	# Only handle map downloads
-	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
-		return
-
-	# Check if this is the map we're waiting for
-	if asset_id != _pending_map_level_folder:
-		return
-
-	print("LevelPlayController: Map downloaded for level: " + asset_id)
-	map_download_completed.emit(asset_id)
-
-	# Now load the map
-	var map = _load_map_from_path(local_path)
-	if map:
-		_finalize_map_loading(map)
-	else:
-		push_error("LevelPlayController: Failed to load downloaded map")
-		map_download_failed.emit(asset_id, "Failed to load map file")
-
-	_pending_map_level_folder = ""
+func _on_coordinator_download_completed(level_folder: String) -> void:
+	map_download_completed.emit(level_folder)
 
 
-## Handle map download failure from AssetStreamer
-func _on_map_failed(pack_id: String, asset_id: String, _variant_id: String, error: String) -> void:
-	# Only handle map downloads
-	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
-		return
-
-	if asset_id == _pending_map_level_folder:
-		push_error("LevelPlayController: Map download failed: " + error)
-		map_download_failed.emit(asset_id, error)
-		_pending_map_level_folder = ""
-
-
-## Handle map download progress
-func _on_map_transfer_progress(
-	pack_id: String, asset_id: String, _variant_id: String, progress: float
-) -> void:
-	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
-		return
-
-	if asset_id == _pending_map_level_folder:
-		map_download_progress.emit(asset_id, progress)
+func _on_coordinator_download_failed(level_folder: String, error: String) -> void:
+	map_download_failed.emit(level_folder, error)
 
 
 func _setup_reconciliation_timer() -> void:
@@ -469,12 +427,12 @@ func _load_level_map_async(level_data: LevelData) -> bool:
 			path_to_load = map_path
 		else:
 			# Check cache (for clients who downloaded from host)
-			var cached_path = _get_cached_map_path(level_data.level_folder)
+			var cached_path = _map_download_coordinator.get_cached_map_path(level_data.level_folder)
 			if cached_path != "":
 				path_to_load = cached_path
 			elif NetworkManager.is_client():
 				# Request map from host - this is already async
-				return _request_map_download(level_data.level_folder)
+				return _map_download_coordinator.request_map_download(level_data.level_folder)
 			else:
 				push_error("LevelPlayController: Map file not found: " + map_path)
 				return false
@@ -632,32 +590,6 @@ func _deactivate_measure_tool() -> void:
 	var tool := _game_map.get_measure_tool()
 	if tool and tool.is_active():
 		tool.deactivate()
-
-
-## Get the cached map path for a level (if it exists)
-func _get_cached_map_path(level_folder: String) -> String:
-	return AssetManager.streamer.get_cached_map_path(level_folder)
-
-
-## Request map download from host
-func _request_map_download(level_folder: String) -> bool:
-	if not AssetManager.streamer.is_enabled():
-		push_error("LevelPlayController: P2P streaming is disabled")
-		return false
-
-	_pending_map_level_folder = level_folder
-	AssetManager.streamer.request_map_from_host(level_folder)
-
-	print("LevelPlayController: Requesting map download for level: " + level_folder)
-	map_download_started.emit(level_folder)
-
-	# Return true to indicate level loading will continue async
-	return true
-
-
-## Check if a map download is in progress
-func is_map_downloading() -> bool:
-	return _pending_map_level_folder != ""
 
 
 ## Check if level loading is in progress (async loading)
@@ -1365,14 +1297,13 @@ func clear_level() -> void:
 func reset_loading_state() -> void:
 	_is_loading = false
 	_queued_level_data = null
-	_pending_map_level_folder = ""
 	is_editor_preview = false
 	# Invalidate any in-flight _play_level_async coroutine still suspended on
 	# an await — its captured generation will no longer match, so it will
 	# abort at its next checkpoint instead of mutating state for a level it
 	# no longer owns (see _should_abort_load()).
 	_load_generation += 1
-	_disconnect_asset_streamer()
+	_map_download_coordinator.reset()
 
 
 ## Set map scale in real-time (used by gameplay UI and network sync)
