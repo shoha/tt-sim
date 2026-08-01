@@ -48,3 +48,17 @@ func test_returns_empty_dict_with_no_extras_and_no_world_environment() -> void:
 	assert_true(config.is_empty())
 
 	root.free()
+
+
+func test_lighting_extras_survive_world_environment_node_with_no_environment_resource() -> void:
+	var root := Node3D.new()
+	root.set_meta("tt_lighting_extras", {"tt_ambient_light_energy": 2.5})
+	var world_env := WorldEnvironment.new()
+	root.add_child(world_env)
+	var manager := LevelEnvironmentManager.new()
+
+	var config := manager.extract_and_strip_map_environment(root)
+
+	assert_eq(config.get("ambient_light_energy"), 2.5)
+
+	root.free()
