@@ -12,18 +12,29 @@ func _build_minimal_glb(scene_extras: Dictionary) -> PackedByteArray:
 	var gltf_json := {
 		"asset": {"version": "2.0"},
 		"scene": 0,
-		"scenes": [{"nodes": [], "extras": scene_extras}],
+		"scenes": [{"nodes": [0], "extras": scene_extras}],
+		"nodes": [{"name": "Empty"}],
 	}
 	var json_bytes := JSON.stringify(gltf_json).to_utf8_buffer()
 	while json_bytes.size() % 4 != 0:
 		json_bytes.append(0x20)  # space-pad JSON chunk per glTF spec
 
-	var chunk_header := PackedByteArray()
-	chunk_header.resize(8)
-	chunk_header.encode_u32(0, json_bytes.size())
-	chunk_header.encode_u32(4, 0x4E4F534A)  # "JSON"
+	var json_chunk_header := PackedByteArray()
+	json_chunk_header.resize(8)
+	json_chunk_header.encode_u32(0, json_bytes.size())
+	json_chunk_header.encode_u32(4, 0x4E4F534A)  # "JSON"
 
-	var body := chunk_header + json_bytes
+	# Godot's GLB parser unconditionally tries to read a second chunk header after the
+	# JSON chunk -- with no BIN chunk at all it reads past EOF and emits a "Reading
+	# less data than requested" warning (harmless to the parse result, but GUT treats
+	# any warning as a test failure). An explicit, zero-length BIN chunk avoids this.
+	var bin_bytes := PackedByteArray()
+	var bin_chunk_header := PackedByteArray()
+	bin_chunk_header.resize(8)
+	bin_chunk_header.encode_u32(0, bin_bytes.size())
+	bin_chunk_header.encode_u32(4, 0x004E4942)  # "BIN\0"
+
+	var body := json_chunk_header + json_bytes + bin_chunk_header + bin_bytes
 	var header := PackedByteArray()
 	header.resize(12)
 	header.encode_u32(0, 0x46546C67)  # "glTF"
