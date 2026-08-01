@@ -24,7 +24,7 @@ static func is_newer(version_a: String, version_b: String) -> bool:
 	for i in range(3):
 		if parts_a[i] > parts_b[i]:
 			return true
-		elif parts_a[i] < parts_b[i]:
+		if parts_a[i] < parts_b[i]:
 			return false
 
 	# Same base version — check prerelease suffix
@@ -67,7 +67,7 @@ static func parse(version: String) -> Array:
 static func normalize_tag(tag: String) -> String:
 	if tag.begins_with("v"):
 		return tag.substr(1)
-	elif tag.begins_with("build-"):
+	if tag.begins_with("build-"):
 		return "0.0.0-build." + tag.substr(6)
 	return tag
 

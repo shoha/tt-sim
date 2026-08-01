@@ -33,7 +33,7 @@ const WHOOSH_SPEED_MAX: float = 18.0  # Speed at which pitch reaches maximum
 const NETWORK_INTERPOLATION_SPEED: float = 15.0
 const NETWORK_INTERPOLATION_TIMEOUT: float = 0.3  # Stop interpolating if no updates for this long
 const NETWORK_SYNC_POSITION_THRESHOLD: float = 0.05  # Skip interpolation if within this distance
-const NETWORK_SYNC_ROTATION_THRESHOLD: float = 0.02  # Skip interpolation if rotation within this (radians)
+const NETWORK_SYNC_ROTATION_THRESHOLD: float = 0.02  # Skip interpolation if rotation is close (rad)
 const NETWORK_SYNC_SCALE_THRESHOLD: float = 0.01  # Skip interpolation if scale within this
 
 @export var rigid_body: RigidBody3D

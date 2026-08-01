@@ -15,7 +15,9 @@ signal menu_closed
 
 var target_token: BoardToken = null
 
-@onready var input_field: LineEdit = $MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentInput
+@onready var input_field: LineEdit = get_node(
+	"MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentInput"
+)
 @onready
 var heal_hurt_toggle: CheckButton = $MenuPanel/VBoxContainer/CustomDamageContainer/HealHurtToggle
 @onready var max_hp_container: HBoxContainer = $MenuPanel/VBoxContainer/MaxHPContainer

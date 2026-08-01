@@ -40,7 +40,8 @@ var _permission_handler: TokenPermissionHandler = null
 
 # Token permission state
 var _client_transform_throttle: Dictionary = {}  # network_id -> last_send_time (client-side)
-var _client_connected_tokens: Dictionary = {}  # network_id -> { "changed": Callable, "updated": Callable }
+## network_id -> {"changed": Callable, "updated": Callable}
+var _client_connected_tokens: Dictionary = {}
 
 # Signal connection tracking for proper disconnect (prevents lambda accumulation)
 var _token_signal_connections: Dictionary = {}  # network_id -> Dictionary with handlers
@@ -364,7 +365,7 @@ func _play_level_async(level_data: LevelData) -> void:
 
 		if assets_to_preload.size() > 0:
 			# Pre-load with progress callback (create_static_bodies=false for tokens)
-			var _loaded_count = await AssetManager.preload_models(
+			var loaded_count = await AssetManager.preload_models(
 				assets_to_preload,
 				func(loaded: int, total: int):
 					var model_progress = 0.2 + (0.4 * loaded / max(total, 1))

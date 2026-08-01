@@ -222,8 +222,7 @@ func validate() -> Array[String]:
 func _map_file_exists(path: String) -> bool:
 	if path.begins_with("res://"):
 		return ResourceLoader.exists(path)
-	else:
-		return FileAccess.file_exists(path)
+	return FileAccess.file_exists(path)
 
 
 ## Convert to dictionary for network transmission

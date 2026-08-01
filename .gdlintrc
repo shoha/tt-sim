@@ -1,0 +1,59 @@
+class-definitions-order:
+- tools
+- classnames
+- extends
+- docstrings
+- signals
+- enums
+- consts
+- staticvars
+- exports
+- pubvars
+- prvvars
+- onreadypubvars
+- onreadyprvvars
+- others
+class-load-variable-name: (([A-Z][a-z0-9]*)+|_?[a-z][a-z0-9]*(_[a-z0-9]+)*)
+class-name: ([A-Z][a-z0-9]*)+
+class-variable-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
+comparison-with-itself: null
+constant-name: _?[A-Z][A-Z0-9]*(_[A-Z0-9]+)*
+disable: []
+duplicated-load: null
+enum-element-name: '[A-Z][A-Z0-9]*(_[A-Z0-9]+)*'
+enum-name: ([A-Z][a-z0-9]*)+
+excluded_directories: !!set
+  .git: null
+expression-not-assigned: null
+function-argument-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
+function-arguments-number: 10
+function-name: (_on_([A-Z][a-z0-9]*)+(_[a-z0-9]+)*|_?[a-z][a-z0-9]*(_[a-z0-9]+)*)
+function-preload-variable-name: ([A-Z][a-z0-9]*)+
+function-variable-name: '[a-z][a-z0-9]*(_[a-z0-9]+)*'
+load-constant-name: (([A-Z][a-z0-9]*)+|_?[A-Z][A-Z0-9]*(_[A-Z0-9]+)*)
+loop-variable-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
+# Raised from the gdlint default (1000): game_map.gd and level_play_controller.gd are
+# ~1460 lines each -- legitimately large core gameplay files (camera/drag-drop/weather/grid
+# for one, level loading/token spawning/network sync for the other). Splitting them is a
+# real architectural refactor, not something to force as a side effect of a lint pass.
+max-file-lines: 1600
+max-line-length: 100
+# Raised from the gdlint default (20): several core autoloads/classes are intentionally
+# wide facades consolidating a subsystem's public API (see AGENTS.md's "facade
+# sub-components" convention) -- game_state.gd alone has 42 public methods. Cutting these
+# down would mean fragmenting single subsystems across many small classes for no
+# functional benefit.
+max-public-methods: 45
+# Raised from the gdlint default (6): several flagged functions are dispatcher-style
+# input handlers (_input, _unhandled_input) or async loaders with many independent
+# early-exit guard clauses -- a readable pattern, not deep nesting or hidden control flow.
+max-returns: 25
+mixed-tabs-and-spaces: null
+no-elif-return: null
+no-else-return: null
+signal-name: '[a-z][a-z0-9]*(_[a-z0-9]+)*'
+sub-class-name: _?([A-Z][a-z0-9]*)+
+tab-characters: 1
+trailing-whitespace: null
+unnecessary-pass: null
+unused-argument: null

@@ -156,7 +156,8 @@ static func _load_glb_thread_work(path: String, result: Dictionary) -> void:
 ## @param path: Path to the GLB file
 ## @param create_static_bodies: If true, creates StaticBody3D for collision meshes (for maps)
 ##                              If false, just hides collision mesh indicators (for tokens)
-## @param light_intensity_scale: Multiplier for light energies (1.0 = no change, use < 1.0 for Blender "Standard" mode exports)
+## @param light_intensity_scale: Multiplier for light energies (1.0 = no change, use < 1.0
+## for Blender "Standard" mode exports)
 ## @return: The fully processed Node3D scene, or null on failure
 static func load_glb_with_processing(
 	path: String, create_static_bodies: bool = false, light_intensity_scale: float = 1.0
@@ -178,7 +179,8 @@ static func load_glb_with_processing(
 ## @param path: Path to the GLB file
 ## @param create_static_bodies: If true, creates StaticBody3D for collision meshes (for maps)
 ##                              If false, just hides collision mesh indicators (for tokens)
-## @param light_intensity_scale: Multiplier for light energies (1.0 = no change, use < 1.0 for Blender "Standard" mode exports)
+## @param light_intensity_scale: Multiplier for light energies (1.0 = no change, use < 1.0
+## for Blender "Standard" mode exports)
 ## @return: AsyncLoadResult with fully processed scene or error
 static func load_glb_with_processing_async(
 	path: String, create_static_bodies: bool = false, light_intensity_scale: float = 1.0
@@ -330,7 +332,8 @@ static func _find_water_mesh_nodes(node: Node, result: Array[MeshInstance3D]) ->
 
 
 ## Recursively find nodes that are collision meshes based on naming convention
-## Godot standard suffixes: https://docs.godotengine.org/en/stable/tutorials/assets_pipeline/importing_3d_scenes/node_type_customization.html
+## Godot standard suffixes (see Godot docs: assets_pipeline/importing_3d_scenes/
+## node_type_customization)
 static func _find_collision_mesh_nodes(node: Node, result: Array[Dictionary]) -> void:
 	var name_lower = node.name.to_lower()
 
@@ -430,7 +433,8 @@ static func _find_non_node3d_with_3d_children(node: Node, result: Array[Node]) -
 
 
 ## Load a map from any path (res://, user://) and apply standard post-processing.
-## For res:// paths, loads via ResourceLoader and applies flatten + collision + animation processing.
+## For res:// paths, loads via ResourceLoader and applies flatten + collision + animation
+## processing.
 ## For user:// (or other) paths, delegates to load_glb_with_processing.
 ## Returns the processed Node3D ready for adding to the scene tree, or null on failure.
 ## @param path: Path to the map file (res://, user://, or absolute)
@@ -465,7 +469,8 @@ static func load_map(
 
 
 ## Load a map asynchronously from any path (res://, user://) with standard post-processing.
-## For res:// paths, uses threaded ResourceLoader and applies flatten + collision + animation processing.
+## For res:// paths, uses threaded ResourceLoader and applies flatten + collision + animation
+## processing.
 ## For user:// (or other) paths, delegates to load_glb_with_processing_async.
 ## @param path: Path to the map file (res://, user://, or absolute)
 ## @param create_static_bodies: If true, creates StaticBody3D for collision meshes
@@ -534,13 +539,13 @@ static func load_map_async(
 		if not result.success:
 			push_error("GlbUtils: " + result.error)
 		return result
-	else:
-		var glb_result = await load_glb_with_processing_async(
-			path, create_static_bodies, light_intensity_scale
-		)
-		if glb_result.success and glb_result.scene:
-			disable_static_body_picking(glb_result.scene)
-		return glb_result
+
+	var glb_result = await load_glb_with_processing_async(
+		path, create_static_bodies, light_intensity_scale
+	)
+	if glb_result.success and glb_result.scene:
+		disable_static_body_picking(glb_result.scene)
+	return glb_result
 
 
 ## Disable input_ray_pickable on all StaticBody3D nodes in a map scene tree.

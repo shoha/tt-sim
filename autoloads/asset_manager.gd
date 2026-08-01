@@ -447,7 +447,8 @@ func register_remote_pack(manifest: Dictionary) -> bool:
 
 
 ## Scan user://user_assets/ for packs with download_state.json that have missing files.
-## Returns an array of dictionaries: {pack_id, display_name, manifest_url, total_variants, downloaded_variants}
+## Returns an array of dictionaries:
+## {pack_id, display_name, manifest_url, total_variants, downloaded_variants}
 func get_incomplete_downloads() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var dir := DirAccess.open(USER_ASSETS_USER_DIR)
@@ -817,7 +818,7 @@ func _queue_pack_downloads(
 	var state := {"finished_variants": already_done_variants, "has_failure": false}
 	var handlers := {}
 
-	var _on_file_done := func(p_id: String, a_id: String, v_id: String) -> void:
+	var on_file_done := func(p_id: String, a_id: String, v_id: String) -> void:
 		if p_id != pack.pack_id:
 			return
 		var vk := "%s/%s" % [a_id, v_id]
@@ -838,11 +839,11 @@ func _queue_pack_downloads(
 			packs_loaded.emit()
 
 	handlers.completed = func(p_id: String, a_id: String, v_id: String, _path: String) -> void:
-		_on_file_done.call(p_id, a_id, v_id)
+		on_file_done.call(p_id, a_id, v_id)
 
 	handlers.failed = func(p_id: String, a_id: String, v_id: String, _error: String) -> void:
 		state["has_failure"] = true
-		_on_file_done.call(p_id, a_id, v_id)
+		on_file_done.call(p_id, a_id, v_id)
 
 	downloader.download_completed.connect(handlers.completed)
 	downloader.download_failed.connect(handlers.failed)

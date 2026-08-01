@@ -390,18 +390,17 @@ static func create_from_asset_async(
 			print("BoardTokenFactory: model cached, creating synchronously")
 			var ready_token = _create_from_model_path(model_path, pack_id, asset_id, variant_id)
 			return {"token": ready_token, "is_placeholder": false}
-		else:
-			# Model file exists but needs loading — use a placeholder to avoid
-			# blocking the main thread with GLB parsing. The placeholder will
-			# auto-upgrade once the async load finishes.
-			print("BoardTokenFactory: model on disk, creating placeholder for async load")
-			var loading_token = _create_placeholder_token(pack_id, asset_id, variant_id)
-			if loading_token:
-				var upgrade_path = model_path
-				loading_token.tree_entered.connect(
-					func(): loading_token._async_upgrade_placeholder(upgrade_path), CONNECT_ONE_SHOT
-				)
-			return {"token": loading_token, "is_placeholder": true}
+		# Model file exists but needs loading — use a placeholder to avoid
+		# blocking the main thread with GLB parsing. The placeholder will
+		# auto-upgrade once the async load finishes.
+		print("BoardTokenFactory: model on disk, creating placeholder for async load")
+		var loading_token = _create_placeholder_token(pack_id, asset_id, variant_id)
+		if loading_token:
+			var upgrade_path = model_path
+			loading_token.tree_entered.connect(
+				func(): loading_token._async_upgrade_placeholder(upgrade_path), CONNECT_ONE_SHOT
+			)
+		return {"token": loading_token, "is_placeholder": true}
 
 	# Asset needs downloading - check if download was queued
 	var needs_dl = AssetManager.needs_download(pack_id, asset_id, variant_id)

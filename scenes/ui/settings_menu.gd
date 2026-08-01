@@ -498,12 +498,11 @@ func _get_dir_size(path: String) -> int:
 func _format_size(bytes: int) -> String:
 	if bytes < 1024:
 		return "%d B" % bytes
-	elif bytes < 1024 * 1024:
+	if bytes < 1024 * 1024:
 		return "%.1f KB" % (bytes / 1024.0)
-	elif bytes < 1024 * 1024 * 1024:
+	if bytes < 1024 * 1024 * 1024:
 		return "%.1f MB" % (bytes / (1024.0 * 1024.0))
-	else:
-		return "%.1f GB" % (bytes / (1024.0 * 1024.0 * 1024.0))
+	return "%.1f GB" % (bytes / (1024.0 * 1024.0 * 1024.0))
 
 
 func _on_apply_pressed() -> void:
@@ -534,7 +533,7 @@ func _apply_tooltips() -> void:
 	cell_tint_opacity_slider.tooltip_text = "Opacity of the cell fill shading on the grid"
 	line_thickness_slider.tooltip_text = "Thickness of the grid lines"
 	fade_distance_slider.tooltip_text = "How far the grid extends from the camera center"
-	input_device_option.tooltip_text = "Choose which key labels to show in hints (Auto detects your device)"
+	input_device_option.tooltip_text = "Choose which key labels to show in hints (Auto detects device)"
 	p2p_enabled_check.tooltip_text = "Allow peer-to-peer asset sharing with other players"
 	clear_cache_button.tooltip_text = "Delete downloaded asset files to free disk space"
 	prereleases_check.tooltip_text = "Include pre-release versions when checking for updates"
@@ -555,8 +554,8 @@ func _on_check_updates_pressed() -> void:
 			var version = UpdateManager.latest_release.get("version", "?")
 			update_status_label.text = "Update available: v" + version
 			# Show the update dialog
-			var dialog_scene = preload("res://scenes/ui/update_dialog.tscn")
-			var dialog = dialog_scene.instantiate()
+			var DialogScene = preload("res://scenes/ui/update_dialog.tscn")
+			var dialog = DialogScene.instantiate()
 			get_tree().root.add_child(dialog)
 			dialog.setup(UpdateManager.latest_release)
 		else:

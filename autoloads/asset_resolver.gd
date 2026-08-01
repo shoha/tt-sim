@@ -30,7 +30,9 @@ signal asset_failed(
 signal resolution_progress(request_id: String, stage: String, progress: float)
 
 ## Resolution stages
-enum Stage { LOCAL, CACHE, HTTP, P2P, FAILED }  ## Checking local pack files  ## Checking disk cache  ## Downloading from URL  ## Streaming from host  ## All sources exhausted
+## LOCAL: checking local pack files. CACHE: checking disk cache. HTTP: downloading
+## from URL. P2P: streaming from host. FAILED: all sources exhausted.
+enum Stage { LOCAL, CACHE, HTTP, P2P, FAILED }
 
 ## Injected reference to the disk cache.
 var _cache_manager: Node
