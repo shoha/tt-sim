@@ -220,11 +220,12 @@ JSON blob attached to the file, independent of any mesh/node data).
 `GlbUtils.extract_lighting_config()` reads this back after loading a `.glb` map and
 maps it onto `ambient_light_color`/`ambient_light_energy` -- the same keys
 `EnvironmentPresets.PROPERTY_DEFAULTS` uses. `LevelEnvironmentManager
-.extract_and_strip_map_environment()` merges it into the map-defaults layer beneath
-anything extracted from an embedded `WorldEnvironment` node, so the two sources
-compose rather than conflict -- in practice a single map only ever provides one or the
-other, since `.tscn` (Godot-authored) maps use the `WorldEnvironment` path and
-Blender-exported `.glb` maps use the extras path.
+.extract_and_strip_map_environment()` merges it into the map-defaults layer as the
+base, with anything extracted from an embedded `WorldEnvironment` node fully
+overwriting the overlapping keys when one exists -- in practice a single map only ever
+provides one or the other, since `.tscn` (Godot-authored) maps use the
+`WorldEnvironment` path and Blender-exported `.glb` maps use the extras path, so this
+rarely matters in practice.
 
 As with `light_intensity_scale`, the Blender-side value is a starting point, not a
 precise conversion -- tune further with the in-game edit panel if it looks off.
