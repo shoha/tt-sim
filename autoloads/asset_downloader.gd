@@ -469,11 +469,6 @@ func get_queued_variant_count() -> int:
 	return variants.size()
 
 
-## Cancel all pending downloads (does not cancel active downloads)
-func cancel_pending_downloads() -> void:
-	_download_queue.clear()
-
-
 ## Clear the failed downloads cache, allowing retries
 func clear_failed_cache() -> void:
 	_failed_downloads.clear()

@@ -7,6 +7,7 @@ signal asset_selected(pack_id: String, asset_id: String, variant_id: String)
 signal asset_drag_started(pack_id: String, asset_id: String, variant_id: String, icon: Texture2D)
 
 const DRAG_THRESHOLD_PX: float = 8.0
+const SEARCH_DEBOUNCE_SEC: float = 0.2
 
 var _drag_pressed_index: int = -1
 var _drag_press_pos: Vector2 = Vector2.ZERO
@@ -22,6 +23,8 @@ var _items_sem: Semaphore
 var _items_thread: Thread
 var _exit_thread := false
 var _needs_populate := false
+
+var _search_debounce_timer: Timer
 
 # Thread-safe snapshots: written on main thread under _items_mutex, read by worker
 var _current_filter: String = ""
@@ -39,6 +42,13 @@ func _ready() -> void:
 
 	_exit_thread = false
 	_items_thread.start(_items_thread_function)
+
+	_search_debounce_timer = Timer.new()
+	_search_debounce_timer.one_shot = true
+	_search_debounce_timer.autostart = false
+	_search_debounce_timer.wait_time = SEARCH_DEBOUNCE_SEC
+	add_child(_search_debounce_timer)
+	_search_debounce_timer.timeout.connect(_on_search_debounce_timeout)
 
 	# Connect signals
 	search_filter.text_changed.connect(_on_filter_changed)
@@ -202,6 +212,10 @@ func _show_empty_state(filter_text: String = "") -> void:
 func _on_filter_changed(new_text: String) -> void:
 	_filter = new_text
 	_needs_populate = true
+	_search_debounce_timer.start()
+
+
+func _on_search_debounce_timeout() -> void:
 	_request_populate()
 
 

@@ -234,16 +234,6 @@ func _resolve_async(
 	return request.request_id
 
 
-## Cancel an active resolution request
-func cancel_request(request_id: String) -> void:
-	if not _active_requests.has(request_id):
-		return
-
-	var request: ResolutionRequest = _active_requests[request_id]
-	_key_to_request.erase(request.get_key())
-	_active_requests.erase(request_id)
-
-
 # =============================================================================
 # RESOLUTION STAGES
 # =============================================================================
