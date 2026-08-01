@@ -23,9 +23,16 @@ const TOKENS_PER_FRAME: int = 3  # How many tokens to spawn per frame during pro
 const CLIENT_TRANSFORM_SEND_INTERVAL: float = 0.05  # 20 updates/sec max (same as host)
 
 var active_level_data: LevelData = null
-var spawned_tokens: Dictionary = {}  # placement_id -> BoardToken
 var loaded_map_instance: Node3D = null
 var is_editor_preview: bool = false  # True when playing a level from the level editor
+
+## Read-only view onto TokenSpawner's storage (placement_id -> BoardToken) so
+## external callers that pre-date the extraction (e.g. RootNetworkHandler)
+## can keep using direct dictionary access unchanged.
+var spawned_tokens: Dictionary:
+	get:
+		return _token_spawner.get_spawned_tokens()
+
 var _game_map: GameMap = null
 var _reconciliation_timer: Timer = null
 var _is_loading: bool = false  # True while async loading is in progress
@@ -35,18 +42,13 @@ var _load_generation: int = 0  # Bumped on every new load / reset_loading_state(
 # can abort instead of mutating state that now belongs to a newer load.
 var _environment_manager := LevelEnvironmentManager.new()  # Manages lighting/atmosphere
 var _map_download_coordinator := MapDownloadCoordinator.new()  # Manages map downloads
+var _token_spawner := TokenSpawner.new()  # Manages token spawning/tracking/clearing
 var _permission_handler: TokenPermissionHandler = null
 
 # Token permission state
 var _client_transform_throttle: Dictionary = {}  # network_id -> last_send_time (client-side)
 ## network_id -> {"changed": Callable, "updated": Callable}
 var _client_connected_tokens: Dictionary = {}
-
-# Signal connection tracking for proper disconnect (prevents lambda accumulation)
-var _token_signal_connections: Dictionary = {}  # network_id -> Dictionary with handlers
-
-# Reverse index for O(1) network_id -> placement_id lookup
-var _network_id_to_placement: Dictionary = {}  # network_id -> placement_id
 
 ## Stores pending level data when a new level is requested during loading
 var _queued_level_data: LevelData = null
@@ -78,6 +80,10 @@ func setup(game_map: GameMap) -> void:
 		_on_coordinator_download_failed
 	):
 		_map_download_coordinator.map_download_failed.connect(_on_coordinator_download_failed)
+
+	_token_spawner.setup(game_map, _get_active_level_data)
+	if not _token_spawner.token_added.is_connected(_on_token_spawner_token_added):
+		_token_spawner.token_added.connect(_on_token_spawner_token_added)
 
 	# Listen for network state changes to update token interactivity
 	if not NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
@@ -125,9 +131,11 @@ func setup(game_map: GameMap) -> void:
 	# real mutators (not just GameState) — see GameplayActionHistory.
 	var history := _game_map.get_action_history()
 	if history:
-		if not history.removal_undo_requested.is_connected(_on_removal_undo_requested):
-			history.removal_undo_requested.connect(_on_removal_undo_requested)
-		history.set_token_lookup(find_token_by_network_id)
+		if not history.removal_undo_requested.is_connected(
+			_token_spawner._on_removal_undo_requested
+		):
+			history.removal_undo_requested.connect(_token_spawner._on_removal_undo_requested)
+		history.set_token_lookup(_token_spawner.find_token_by_network_id)
 
 
 func _exit_tree() -> void:
@@ -176,6 +184,20 @@ func _on_coordinator_download_failed(level_folder: String, error: String) -> voi
 	map_download_failed.emit(level_folder, error)
 
 
+## Relay TokenSpawner's token_added signal through this facade's own signal so
+## external listeners connected to LevelPlayController are unaffected by the
+## extraction.
+func _on_token_spawner_token_added(token: BoardToken) -> void:
+	token_added.emit(token)
+
+
+## Getter injected into TokenSpawner so it can read the currently active level
+## data (owned here, reassigned on every level load) without a direct field
+## reference.
+func _get_active_level_data() -> LevelData:
+	return active_level_data
+
+
 func _setup_reconciliation_timer() -> void:
 	if _reconciliation_timer:
 		return
@@ -209,8 +231,9 @@ func _update_all_token_state() -> void:
 	var is_gm = NetworkManager.has_gm_access()
 	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
 
-	for placement_id in spawned_tokens:
-		var token = spawned_tokens[placement_id] as BoardToken
+	var tokens := _token_spawner.get_spawned_tokens()
+	for placement_id in tokens:
+		var token = tokens[placement_id] as BoardToken
 		if is_instance_valid(token):
 			var can_interact = is_gm
 			# Players can interact with tokens they have CONTROL permission for
@@ -349,7 +372,7 @@ func _play_level_async(level_data: LevelData) -> void:
 		var token = BoardTokenFactory.create_from_placement_async(placement).token
 		if token and is_instance_valid(drag_and_drop):
 			drag_and_drop.add_child(token)
-			_track_token(token, placement)
+			_token_spawner._track_token(token, placement)
 			_connect_token_context_menu(token)
 			# Staggered pop-in animation — sequential cascade instead of random
 			token.play_spawn_animation(spawned_count * 0.05)
@@ -646,127 +669,11 @@ func has_queued_level() -> bool:
 	return _queued_level_data != null
 
 
-## Track a spawned token
-func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
-	spawned_tokens[placement.placement_id] = token
-	_network_id_to_placement[token.network_id] = placement.placement_id
-
-	# GM can interact with all tokens; players only with tokens they control
-	var is_gm = NetworkManager.has_gm_access()
-	var can_interact = is_gm
-	if not can_interact and multiplayer.multiplayer_peer:
-		can_interact = GameState.has_token_permission(
-			token.network_id, multiplayer.get_unique_id(), TokenPermissions.Permission.CONTROL
-		)
-	token.set_interactive(can_interact)
-
-	# Register with GameState for network synchronization
-	if GameState.has_authority():
-		GameState.register_token_from_board_token(token)
-
-		# Connect to token signals for state change broadcasting
-		_connect_token_state_signals(token)
-
-
-## Connect to token signals for broadcasting state changes over network.
-## Stores callables so they can be disconnected later (prevents lambda accumulation).
-func _connect_token_state_signals(token: BoardToken) -> void:
-	if not GameState.has_authority():
-		return
-	_disconnect_token_state_signals(token)
-
-	# Property changes use reliable channel (important, must arrive)
-	# Optional args handle varying signal signatures (health_changed has 3 args, died has 0, etc.)
-	var prop_handler := func(_a = null, _b = null, _c = null): _on_token_property_changed(token)
-	var transform_handler := func(): _on_token_transform_changed(token)
-
-	token.health_changed.connect(prop_handler)
-	token.token_visibility_changed.connect(prop_handler)
-	token.status_effect_added.connect(prop_handler)
-	token.status_effect_removed.connect(prop_handler)
-	token.died.connect(prop_handler)
-	token.revived.connect(prop_handler)
-
-	# Transform changes use unreliable channel with rate limiting (high-frequency, can drop)
-	token.transform_changed.connect(transform_handler)
-	token.transform_updated.connect(transform_handler)
-
-	_token_signal_connections[token.network_id] = {
-		"token": token,
-		"prop_handler": prop_handler,
-		"transform_handler": transform_handler,
-	}
-
-
-## Disconnect stored token signal handlers (idempotent).
-func _disconnect_token_state_signals(token: BoardToken) -> void:
-	if not _token_signal_connections.has(token.network_id):
-		return
-	var info: Dictionary = _token_signal_connections[token.network_id]
-	var t: BoardToken = info["token"]
-	if not is_instance_valid(t):
-		_token_signal_connections.erase(token.network_id)
-		return
-	var ph: Callable = info["prop_handler"]
-	var th: Callable = info["transform_handler"]
-	for sig in [
-		t.health_changed,
-		t.token_visibility_changed,
-		t.status_effect_added,
-		t.status_effect_removed,
-		t.died,
-		t.revived,
-	]:
-		if sig.is_connected(ph):
-			sig.disconnect(ph)
-	for sig in [t.transform_changed, t.transform_updated]:
-		if sig.is_connected(th):
-			sig.disconnect(th)
-	_token_signal_connections.erase(token.network_id)
-
-
-## Handle property changes (health, visibility, status) - uses reliable channel
-func _on_token_property_changed(token: BoardToken) -> void:
-	# Keep GameState an accurate mirror of the live token for every authority
-	# (host or local single-player) so undo/redo and other GameState-based
-	# systems see the same values the token actually holds.
-	if GameState.has_authority():
-		GameState.sync_from_board_token(token)
-
-	if not NetworkManager.is_host():
-		return
-	NetworkStateSync.broadcast_token_properties(token)
-
-
-## Handle transform changes (position, rotation, scale) - uses unreliable channel with rate limiting
-func _on_token_transform_changed(token: BoardToken) -> void:
-	if not NetworkManager.is_host():
-		return
-	NetworkStateSync.broadcast_token_transform(token)
-
-
-## Connect token's context menu signal and other per-token signals to game map
+## Connect token's context menu signal and other per-token signals to game map.
+## Forwards to TokenSpawner -- kept as a same-named method here since
+## RootNetworkHandler calls this directly on the LevelPlayController instance.
 func _connect_token_context_menu(token: BoardToken) -> void:
-	var token_controller = token.get_controller_component()
-	if token_controller and token_controller.has_signal("context_menu_requested"):
-		if _game_map and _game_map.has_method("_on_token_context_menu_requested"):
-			token_controller.context_menu_requested.connect(
-				_game_map._on_token_context_menu_requested
-			)
-
-	# Camera shake on token drop (local drops only — signal not emitted for network tokens)
-	if _game_map:
-		token.token_landed.connect(_on_token_landed.bind(token))
-
-	# Double-click to center camera on token (any player)
-	if token_controller and _game_map:
-		token_controller.focus_requested.connect(_game_map.focus_camera_on)
-
-
-## Handle token landing — apply camera shake proportional to drop height and token scale.
-## NOTE: Screen shake disabled for now — uncomment the call below to re-enable.
-func _on_token_landed(_drop_height: float, _token: BoardToken) -> void:
-	pass
+	_token_spawner._connect_token_context_menu(token)
 
 
 ## Clear any existing map models from the MapContainer
@@ -783,90 +690,16 @@ func _clear_existing_maps() -> void:
 ## Supports remote assets - will show placeholder while downloading
 ## If the model isn't cached yet, a placeholder appears instantly and upgrades
 ## asynchronously once the model finishes loading (no main-thread stall).
+## Forwards to TokenSpawner -- kept as a same-named method here since
+## DragPlaceController (via game_map.gd) binds this as a string Callable on
+## this LevelPlayController instance.
 func spawn_asset(
 	pack_id: String,
 	asset_id: String,
 	variant_id: String = "default",
 	spawn_position: Vector3 = Vector3.ZERO,
 ) -> BoardToken:
-	if not _game_map or not active_level_data:
-		push_warning("LevelPlayController: Cannot spawn asset - no GameMap or active level")
-		return null
-
-	# The factory returns the real token if the model is cached, or a placeholder
-	# that auto-upgrades when the async load completes (see create_from_asset_async).
-	var result = BoardTokenFactory.create_from_asset_async(pack_id, asset_id, variant_id)
-	var token = result.token as BoardToken
-
-	if not token:
-		push_error(
-			"LevelPlayController: Failed to create board token for %s/%s" % [pack_id, asset_id]
-		)
-		return null
-
-	if result.is_placeholder:
-		print(
-			"LevelPlayController: Spawning placeholder for %s/%s (loading...)" % [pack_id, asset_id]
-		)
-
-	_game_map.drag_and_drop_node.add_child(token)
-
-	# Set spawn position before the token renders at origin
-	if spawn_position != Vector3.ZERO and token.rigid_body:
-		token.rigid_body.global_position = spawn_position
-
-	_connect_token_context_menu(token)
-	add_token_to_level(token, pack_id, asset_id, variant_id)
-	# Immediate pop-in for single token placement
-	token.play_spawn_animation()
-	token_added.emit(token)
-	return token
-
-
-## Add a new token to the active level
-func add_token_to_level(
-	token: BoardToken, pack_id: String, asset_id: String, variant_id: String = "default"
-) -> void:
-	if not active_level_data:
-		return
-
-	# Create a new placement for this token
-	var placement = TokenPlacement.new()
-	placement.pack_id = pack_id
-	placement.asset_id = asset_id
-	placement.variant_id = variant_id
-	placement.position = Vector3.ZERO  # Will be updated when saved
-
-	# Set default name from asset
-	placement.token_name = AssetManager.get_asset_display_name(pack_id, asset_id)
-
-	# Add to level data
-	active_level_data.add_token_placement(placement)
-
-	# Track the token with metadata
-	token.set_meta("placement_id", placement.placement_id)
-	token.pack_id = pack_id
-	token.asset_id = asset_id
-	token.variant_id = variant_id
-	spawned_tokens[placement.placement_id] = token
-	_network_id_to_placement[token.network_id] = placement.placement_id
-
-	# GM can interact with all tokens; players only with tokens they control
-	var is_gm = NetworkManager.has_gm_access()
-	var can_interact_new = is_gm
-	if not can_interact_new and multiplayer.multiplayer_peer:
-		can_interact_new = GameState.has_token_permission(
-			token.network_id, multiplayer.get_unique_id(), TokenPermissions.Permission.CONTROL
-		)
-	token.set_interactive(can_interact_new)
-
-	# Register with GameState for network synchronization
-	if GameState.has_authority():
-		GameState.register_token_from_board_token(token)
-		_connect_token_state_signals(token)
-		# Broadcast new token to clients (use full state so clients can create the token)
-		if NetworkManager.is_host():
-			NetworkStateSync.broadcast_full_state()
+	return _token_spawner.spawn_asset(pack_id, asset_id, variant_id, spawn_position)
 
 
 ## Save current token positions to level data
@@ -881,11 +714,12 @@ func save_level() -> String:
 		active_level_data.map_offset = loaded_map_instance.position
 
 	# Update each placement with current token position
+	var tokens := _token_spawner.get_spawned_tokens()
 	for placement in active_level_data.token_placements:
-		if spawned_tokens.has(placement.placement_id):
-			var token = spawned_tokens[placement.placement_id] as BoardToken
+		if tokens.has(placement.placement_id):
+			var token = tokens[placement.placement_id] as BoardToken
 			if is_instance_valid(token):
-				_sync_placement_from_token(placement, token)
+				_token_spawner._sync_placement_from_token(placement, token)
 				# Also sync to GameState
 				if GameState.has_authority():
 					GameState.sync_from_board_token(token)
@@ -907,8 +741,9 @@ func broadcast_token_positions() -> void:
 	if not NetworkManager.is_host():
 		return
 
-	for placement_id in spawned_tokens:
-		var token = spawned_tokens[placement_id] as BoardToken
+	var tokens := _token_spawner.get_spawned_tokens()
+	for placement_id in tokens:
+		var token = tokens[placement_id] as BoardToken
 		if is_instance_valid(token):
 			# Skip tokens currently under client authority:
 			# 1. Drag-locked by a non-host peer (client is actively dragging)
@@ -930,31 +765,11 @@ func broadcast_token_positions() -> void:
 ## blast. This avoids the destructive clear-and-rebuild path in
 ## apply_full_state_dict which clears permissions and drag locks on clients.
 func _broadcast_reconciliation_transforms() -> void:
-	for placement_id in spawned_tokens:
-		var token = spawned_tokens[placement_id] as BoardToken
+	var tokens := _token_spawner.get_spawned_tokens()
+	for placement_id in tokens:
+		var token = tokens[placement_id] as BoardToken
 		if is_instance_valid(token):
 			NetworkStateSync.broadcast_token_transform(token)
-
-
-## Sync placement data from a token's current state
-func _sync_placement_from_token(placement: TokenPlacement, token: BoardToken) -> void:
-	# The rigid_body is what actually gets moved/scaled during dragging
-	var rigid_body = token.get_rigid_body()
-	if rigid_body:
-		placement.position = rigid_body.global_position
-		placement.rotation_y = rigid_body.rotation.y
-		placement.scale = rigid_body.scale
-	else:
-		placement.position = token.global_position
-		placement.rotation_y = token.rotation.y
-		placement.scale = token.scale
-
-	# Also sync current stats
-	placement.token_name = token.token_name
-	placement.max_health = token.max_health
-	placement.current_health = token.current_health
-	placement.is_visible_to_players = token.is_visible_to_players
-	placement.is_player_controlled = token.is_player_controlled
 
 
 # =============================================================================
@@ -974,7 +789,7 @@ func _on_permissions_changed(network_id: String, _peer_id: int) -> void:
 	var is_gm = NetworkManager.has_gm_access()
 	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
 
-	var token = _find_token_by_network_id(network_id)
+	var token = _token_spawner._find_token_by_network_id(network_id)
 	if token:
 		var can_interact = is_gm
 		if not can_interact and my_peer_id > 0:
@@ -1013,7 +828,7 @@ func _on_client_transform_received(
 		return
 
 	# Apply transform to the host's local BoardToken (with interpolation)
-	var token = _find_token_by_network_id(network_id)
+	var token = _token_spawner._find_token_by_network_id(network_id)
 	if not token:
 		return  # Token doesn't exist on host — don't update GameState or broadcast
 	token.set_interpolation_target(pos, rot, scl)
@@ -1042,7 +857,7 @@ func _on_client_drag_lock_claimed(sender_id: int, network_id: String) -> void:
 
 	if GameState.claim_drag_lock(network_id, sender_id):
 		# Granted — apply to host's local token and broadcast to all clients
-		var token = _find_token_by_network_id(network_id)
+		var token = _token_spawner._find_token_by_network_id(network_id)
 		if token:
 			token.set_drag_lock(sender_id)
 		NetworkManager._rpc_drag_lock_granted.rpc(network_id, sender_id)
@@ -1063,7 +878,7 @@ func _on_client_drag_lock_released(sender_id: int, network_id: String) -> void:
 	GameState.release_drag_lock(network_id)
 
 	# Apply to host's local token
-	var token = _find_token_by_network_id(network_id)
+	var token = _token_spawner._find_token_by_network_id(network_id)
 	if token:
 		token.clear_drag_lock()
 
@@ -1085,7 +900,7 @@ func _on_client_drag_lock_released(sender_id: int, network_id: String) -> void:
 ## Client-side: another peer (or the host) has locked this token.
 ## Disables dragging on the local copy.
 func _on_drag_lock_granted(network_id: String, locker_peer_id: int) -> void:
-	var token = _find_token_by_network_id(network_id)
+	var token = _token_spawner._find_token_by_network_id(network_id)
 	if token:
 		token.set_drag_lock(locker_peer_id)
 
@@ -1093,7 +908,7 @@ func _on_drag_lock_granted(network_id: String, locker_peer_id: int) -> void:
 ## Client-side: this client's lock claim was denied.
 ## Cancel the in-progress drag via the cancel-settle path.
 func _on_drag_lock_denied(network_id: String) -> void:
-	var token = _find_token_by_network_id(network_id)
+	var token = _token_spawner._find_token_by_network_id(network_id)
 	if not token:
 		return
 	var draggable := token._dragging_object as DraggableToken
@@ -1103,7 +918,7 @@ func _on_drag_lock_denied(network_id: String) -> void:
 
 ## Client-side: a drag lock has been released, token is free to drag again.
 func _on_drag_lock_released(network_id: String) -> void:
-	var token = _find_token_by_network_id(network_id)
+	var token = _token_spawner._find_token_by_network_id(network_id)
 	if token:
 		token.clear_drag_lock()
 
@@ -1142,7 +957,7 @@ func _update_client_transform_wiring() -> void:
 
 ## Connect transform signals for a client-controlled token.
 func _connect_client_transform_signals(network_id: String) -> void:
-	var token = _find_token_by_network_id(network_id)
+	var token = _token_spawner._find_token_by_network_id(network_id)
 	if not token:
 		return
 
@@ -1197,42 +1012,12 @@ func _on_client_token_transform_changed(token: BoardToken) -> void:
 	)
 
 
-## Find a token by its network_id in spawned_tokens (O(1) via reverse index).
-func _find_token_by_network_id(network_id: String) -> BoardToken:
-	var placement_id: String = _network_id_to_placement.get(network_id, "")
-	if placement_id == "":
-		return null
-	var token = spawned_tokens.get(placement_id)
-	if token and is_instance_valid(token):
-		return token
-	return null
-
-
-## Public wrapper around _find_token_by_network_id for external callers that
-## don't have direct access to spawned_tokens (e.g. GameplayActionHistory's
-## undo/redo replay, which needs to invoke a live token's real mutators).
-func find_token_by_network_id(network_id: String) -> BoardToken:
-	return _find_token_by_network_id(network_id)
-
-
-## Clear spawned tokens
+## Clear spawned tokens. Forwards the token-storage cleanup to TokenSpawner;
+## the remaining state below (_client_connected_tokens, throttle, GameState)
+## is not part of the TokenSpawner extraction and stays here.
 func clear_level_tokens() -> void:
-	for placement_id in spawned_tokens:
-		var token = spawned_tokens[placement_id]
-		if is_instance_valid(token):
-			token.queue_free()
-
-	spawned_tokens.clear()
-	_network_id_to_placement.clear()
+	_token_spawner.clear_level_tokens()
 	active_level_data = null
-
-	# Disconnect host-side token signals before clearing the stored callables
-	for network_id in _token_signal_connections.keys():
-		var info: Dictionary = _token_signal_connections[network_id]
-		var t: BoardToken = info["token"]
-		if is_instance_valid(t):
-			_disconnect_token_state_signals(t)
-	_token_signal_connections.clear()
 
 	# Disconnect client transform signals before clearing
 	for network_id in _client_connected_tokens.keys():
@@ -1343,52 +1128,12 @@ func _on_visual_settings_received(settings: Dictionary) -> void:
 			active_level_data.weather_overrides = settings["weather_overrides"].duplicate()
 
 
-## Handle undo of a token removal: re-create the token from saved state.
-func _on_removal_undo_requested(action: Dictionary) -> void:
-	if not NetworkManager.has_gm_access() or not _game_map:
-		return
-	var token_state := TokenState.from_dict(action.token_state_dict)
-	var token := RootNetworkHandler.create_token_from_state(token_state)
-	if not token:
-		UIManager.show_error("Failed to undo token removal")
-		return
-	_game_map.drag_and_drop_node.add_child(token)
-	_track_token_from_undo(token, token_state, action.pack_id, action.asset_id, action.variant_id)
-	_connect_token_context_menu(token)
-	token.play_spawn_animation()
-	if NetworkManager.is_host():
-		NetworkStateSync.broadcast_full_state()
-
-
-## Track a token re-created by undo. Similar to add_token_to_level but
-## reuses the original network_id and placement_id.
-func _track_token_from_undo(
-	token: BoardToken,
-	token_state: TokenState,
-	pack_id: String,
-	asset_id: String,
-	variant_id: String,
-) -> void:
-	token.pack_id = pack_id
-	token.asset_id = asset_id
-	token.variant_id = variant_id
-
-	var placement_id: String = token_state.network_id
-	spawned_tokens[placement_id] = token
-	_network_id_to_placement[token.network_id] = placement_id
-
-	token.set_interactive(NetworkManager.has_gm_access())
-
-	if GameState.has_authority():
-		GameState.register_token(token_state)
-		_connect_token_state_signals(token)
-
-
 ## Check if a level is currently loaded
 func has_active_level() -> bool:
 	return active_level_data != null
 
 
-## Get token count
+## Get token count. Forwards to TokenSpawner -- kept as a same-named method
+## here since gameplay_menu_controller.gd calls this directly.
 func get_token_count() -> int:
-	return spawned_tokens.size()
+	return _token_spawner.get_token_count()
