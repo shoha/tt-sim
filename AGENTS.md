@@ -109,6 +109,16 @@ godot --headless --import --path .
 ```
 Then run tests normally.
 
+**After any batch of file renames/deletions** (e.g. an agent-driven refactor moving code between
+files), run the import step again before reopening the editor, even if nothing new needs
+registering. `.godot/` (gitignored, local-only) caches UIDs and editor session state; if it drifts
+from what's on disk you'll see spurious `Unrecognized UID` or `Cannot load shader/script`
+errors on next editor launch for files that were renamed or deleted. These are cache staleness,
+not real bugs -- reimporting resyncs the cache. If they persist, delete the `.godot/` folder
+entirely (safe, fully regenerated) and reimport. Prefer closing the GUI editor before a large
+agent-driven restructuring pass and reopening it after, rather than leaving it open while files
+change underneath it.
+
 **Check for GDScript compilation errors** (loads the project, reports all parse/compile errors, exits):
 ```
 godot --headless --path . --quit-after 1

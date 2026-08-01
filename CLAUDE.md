@@ -36,6 +36,10 @@ godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tes
 godot --headless --import --path .
 ```
 
+After any batch of file renames/deletions (e.g. a multi-step refactor), re-run the import step
+before the user reopens the editor. See AGENTS.md's "Running tests from the CLI" section for why
+(stale `.godot/` cache -> spurious `Unrecognized UID`/`Cannot load shader` errors) and the fix.
+
 ## Testing Notes
 
 - GUT v9.5.0 vendored at `addons/gut/`
