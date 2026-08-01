@@ -32,11 +32,7 @@ function-preload-variable-name: ([A-Z][a-z0-9]*)+
 function-variable-name: '[a-z][a-z0-9]*(_[a-z0-9]+)*'
 load-constant-name: (([A-Z][a-z0-9]*)+|_?[A-Z][A-Z0-9]*(_[A-Z0-9]+)*)
 loop-variable-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
-# Raised from the gdlint default (1000): game_map.gd and level_play_controller.gd are
-# ~1460 lines each -- legitimately large core gameplay files (camera/drag-drop/weather/grid
-# for one, level loading/token spawning/network sync for the other). Splitting them is a
-# real architectural refactor, not something to force as a side effect of a lint pass.
-max-file-lines: 1600
+max-file-lines: 1000
 max-line-length: 100
 # Raised from the gdlint default (20): several core autoloads/classes are intentionally
 # wide facades consolidating a subsystem's public API (see AGENTS.md's "facade
