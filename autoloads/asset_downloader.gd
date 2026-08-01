@@ -95,8 +95,7 @@ func get_cached_path(
 		var cached_path = _completed_cache[key]
 		if FileAccess.file_exists(cached_path):
 			return cached_path
-		else:
-			_completed_cache.erase(key)
+		_completed_cache.erase(key)
 
 	# Delegate to AssetCacheManager
 	return _cache_manager.get_cached_path(pack_id, asset_id, variant_id, file_type)
@@ -113,7 +112,8 @@ func _get_cache_path(
 ## If already cached/present, emits download_completed immediately
 ## If already downloading, does nothing (will emit when complete)
 ## Otherwise, queues the download
-## @param target_path: Optional. When set, download to this path instead of cache (e.g. user://user_assets/pack/models/file.glb)
+## @param target_path: Optional. When set, download to this path instead of cache
+## (e.g. user://user_assets/pack/models/file.glb)
 func request_download(
 	pack_id: String,
 	asset_id: String,

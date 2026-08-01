@@ -130,14 +130,18 @@ func _show_translocation_dialog() -> void:
 	await get_tree().process_frame
 
 	var title = "Update Requires App Relocation"
-	var message = """An update is ready but cannot be installed because macOS is running the app from a temporary location.
-
-To install the update:
-1. Quit the app
-2. Move TTSim.app to your Applications folder (or another permanent location)
-3. Open the app from its new location
-
-The update will install automatically when you next open the app from a permanent location."""
+	var message = (
+		"An update is ready but cannot be installed because macOS is running the app "
+		+ "from a temporary location.\n"
+		+ "\n"
+		+ "To install the update:\n"
+		+ "1. Quit the app\n"
+		+ "2. Move TTSim.app to your Applications folder (or another permanent location)\n"
+		+ "3. Open the app from its new location\n"
+		+ "\n"
+		+ "The update will install automatically when you next open the app from a "
+		+ "permanent location."
+	)
 
 	UIManager.show_confirmation(
 		title,

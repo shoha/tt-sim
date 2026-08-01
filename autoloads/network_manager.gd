@@ -415,7 +415,7 @@ func _sync_late_joiner(peer_id: int) -> void:
 	_rpc_receive_level_data.rpc_id(peer_id, _current_level_dict)
 
 	# Wait for client ACK with timeout — signal-driven, no polling
-	var _ack_received := await _await_signal_or_timeout(
+	var ack_received := await _await_signal_or_timeout(
 		level_sync_complete, peer_id, LATE_JOINER_SYNC_TIMEOUT
 	)
 

@@ -25,7 +25,7 @@ var _history: LevelEditorHistory
 var _filtered_pokemon: Array = []
 var _selected_level_path_for_delete: String = ""
 var _is_updating_ui: bool = false  # Flag to prevent feedback loops when setting UI values
-var _pending_map_source_path: String = ""  # Source map path to be bundled on save (for new/edited levels)
+var _pending_map_source_path: String = ""  # Source map to bundle on save (new/edited levels)
 var _metadata_debounce_timer: Timer
 
 # UI References

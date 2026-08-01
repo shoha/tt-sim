@@ -94,7 +94,7 @@ var _tab_label: Label
 var _tab_icon_rect: TextureRect
 var _slide_tween: Tween
 var _is_animating: bool = false
-var _closing_from_open: bool = false  ## True when the current animation is a close/conceal from an open state
+var _closing_from_open: bool = false  ## True when closing/concealing from an open state
 
 # -- Lifecycle ---------------------------------------------------------------
 
@@ -346,17 +346,14 @@ func _get_sled_x() -> float:
 	if edge == DrawerEdge.LEFT:
 		if is_open:
 			return 0.0
-		elif is_revealed:
+		if is_revealed:
 			return -drawer_width
-		else:
-			return -(drawer_width + tab_width + 20)
-	else:
-		if is_open:
-			return size.x - drawer_width - tab_width
-		elif is_revealed:
-			return size.x - tab_width
-		else:
-			return size.x + 20
+		return -(drawer_width + tab_width + 20)
+	if is_open:
+		return size.x - drawer_width - tab_width
+	if is_revealed:
+		return size.x - tab_width
+	return size.x + 20
 
 
 # -- Animation ---------------------------------------------------------------

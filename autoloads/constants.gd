@@ -26,11 +26,13 @@ class_name Constants
 
 const LAYER_WORLD_VIEWPORT := -1  ## 3D scene rendering (SubViewportContainer)
 const LAYER_APP_MENU := 2  ## Always-visible app chrome (Level Editor button) — bottom-right
-const LAYER_GAMEPLAY_MENU := 2  ## In-game UI (tokens, save, edit drawer) — right edge & bottom-right
+const LAYER_GAMEPLAY_MENU := 2  ## In-game UI (tokens, save, edit drawer) — right & bottom-right
 const LAYER_LEVEL_EDITOR := 3  ## Level Editor overlay (full-screen, above gameplay)
 const LAYER_LOBBY := 5  ## Host/client lobby (centered, full-screen backdrop)
-const LAYER_DRAG_RULER := 7  ## Drag ruler overlay (distance during token drag) — above gameplay, below measure
-const LAYER_MEASURE_OVERLAY := 8  ## Measure tool lines + distance label — above gameplay, below pause
+## Drag ruler overlay (distance during token drag) — above gameplay, below measure
+const LAYER_DRAG_RULER := 7
+## Measure tool lines + distance label — above gameplay, below pause
+const LAYER_MEASURE_OVERLAY := 8
 const LAYER_PAUSE := 10  ## Pause overlay (centered, full-screen backdrop)
 const LAYER_INPUT_HINTS := 1  ## Contextual keyboard hints — bottom-center, below gameplay panels
 const LAYER_TOAST := 90  ## Toast notifications — bottom-center

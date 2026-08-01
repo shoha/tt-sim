@@ -175,8 +175,7 @@ func _describe_property_change(property: String, old_value: Variant, new_value: 
 			var diff: int = int(new_value) - int(old_value)
 			if diff > 0:
 				return "healed %d HP" % diff
-			else:
-				return "dealt %d damage" % abs(diff)
+			return "dealt %d damage" % abs(diff)
 		"max_health":
 			return "max HP %d -> %d" % [old_value, new_value]
 		"is_visible_to_players":

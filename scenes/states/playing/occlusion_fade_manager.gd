@@ -45,7 +45,8 @@ var _shader: Shader
 
 # Tracks converted materials for restoration.
 # Key: MeshInstance3D instance_id -> Array of Dictionaries per surface:
-#   { "surface_index": int, "original_material": Material or null, "shader_material": ShaderMaterial }
+#   { "surface_index": int, "original_material": Material or null,
+#     "shader_material": ShaderMaterial }
 var _converted_meshes: Dictionary = {}
 
 # Flat list of all ShaderMaterials we created (for fast uniform updates)

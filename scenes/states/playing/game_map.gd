@@ -47,7 +47,7 @@ const TOKEN_COLLISION_LAYER: int = 2  # Physics layer for tokens (layer 1 = terr
 const REFERENCE_ASPECT := 16.0 / 9.0  # Reference window aspect ratio for frustum consistency
 
 @export var move_speed: float = 10.0
-@export var move_accel_speed: float = 15.0  # Smoothing rate for camera movement acceleration/deceleration
+@export var move_accel_speed: float = 15.0  # Smoothing rate for camera move accel/decel
 @export var zoom_step: float = 1.5  # How much each scroll tick changes the target zoom
 @export var zoom_smooth_speed: float = 12.0  # Smoothing rate for zoom interpolation
 @export var pan_gesture_zoom_factor: float = 0.05
@@ -114,16 +114,21 @@ var _shake_offset: Vector3 = Vector3.ZERO
 @onready var world_viewport: SubViewport = $WorldViewportLayer/SubViewportContainer/SubViewport
 @onready
 var cameraholder_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder
-@onready
-var camera_node: Camera3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D
-@onready
-var tiltshift_node: MeshInstance3D = $WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D/MeshInstance3D
+@onready var camera_node: Camera3D = get_node(
+	"WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D"
+)
+@onready var tiltshift_node: MeshInstance3D = get_node(
+	"WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D/MeshInstance3D"
+)
 @onready
 var map_container: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/MapContainer
 @onready
 var drag_and_drop_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/DragAndDrop3D
-@onready  # OcclusionFadeManager - type resolved at runtime after editor imports the new script
-var occlusion_fade: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/OcclusionFadeManager
+
+# OcclusionFadeManager - type resolved at runtime after editor imports the new script
+@onready var occlusion_fade: Node3D = get_node(
+	"WorldViewportLayer/SubViewportContainer/SubViewport/OcclusionFadeManager"
+)
 @onready var gameplay_menu: CanvasLayer = $GameplayMenu
 
 
