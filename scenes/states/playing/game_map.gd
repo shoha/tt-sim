@@ -61,13 +61,12 @@ var _target_zoom: float = 0.0  # Target zoom level (smoothly interpolated toward
 var _current_edge_pan: Vector2 = Vector2.ZERO  # Smoothed edge pan direction
 var _context_menu = null  # TokenContextMenu - dynamically typed to avoid load order issues
 var _level_play_controller: LevelPlayController = null
-var _lofi_material: ShaderMaterial = null  # Cached lo-fi material (from scene or created)
-var _occlusion_fade_enabled: bool = true  # Whether the occlusion fade effect is active
 var _measure_tool: MeasureTool = null
 var _grid_overlay: GridOverlay = null
 var _drag_ruler: DragRuler = null
 var _weather_renderer: WeatherRenderer = null
 var _action_history: GameplayActionHistory = null
+var _visual_effects: VisualEffectsController = null
 
 # Drag-to-place state
 var _drag_placing: bool = false
@@ -182,9 +181,10 @@ func _ready() -> void:
 	_action_history.name = "GameplayActionHistory"
 	add_child(_action_history)
 	_setup_viewport()
-	_load_lofi_setting()
-	_load_occlusion_fade_setting()
-	_setup_occlusion_fade()
+	_visual_effects = VisualEffectsController.new()
+	_visual_effects.name = "VisualEffectsController"
+	add_child(_visual_effects)
+	_visual_effects.setup(self)
 	# Capture the scene-default camera offset and size before any modification.
 	# These are the reference values for proportional offset scaling.
 	_base_camera_offset = camera_node.position
@@ -874,10 +874,6 @@ func _grant_token_control(token: BoardToken, peer_id: int) -> void:
 ## Setup the SubViewport for proper rendering
 ## With SubViewportContainer.stretch = true, viewport size is managed automatically
 func _setup_viewport() -> void:
-	# Cache the lo-fi material from the scene (if present)
-	# This allows editor-tweaked values to be preserved
-	if viewport_container and viewport_container.material is ShaderMaterial:
-		_lofi_material = viewport_container.material as ShaderMaterial
 	# React to viewport resizes (e.g. window resize) so aspect correction stays current
 	world_viewport.size_changed.connect(_on_viewport_size_changed)
 
@@ -931,7 +927,7 @@ func setup_grid_overlay() -> void:
 	if _grid_overlay:
 		return
 	_grid_overlay = GridOverlay.create(camera_node)
-	_load_grid_visual_settings()
+	_visual_effects.load_grid_visual_settings()
 
 
 ## Return the GridOverlay instance (may be null before setup).
@@ -1062,107 +1058,28 @@ func reset_grid_state() -> void:
 		_drag_ruler.deactivate()
 
 
-## Load lo-fi filter setting from config
-func _load_lofi_setting() -> void:
-	var config = ConfigFile.new()
-	var err = config.load(Paths.SETTINGS_PATH)
-
-	# Default to enabled if no setting exists
-	var lofi_enabled = true
-	if err == OK:
-		lofi_enabled = config.get_value("graphics", "lofi_enabled", true)
-
-	set_lofi_enabled(lofi_enabled)
-
-
 ## Enable or disable the lo-fi visual filter
 func set_lofi_enabled(enabled: bool) -> void:
-	if viewport_container:
-		if enabled:
-			# Use the cached material (from scene) or create a default one
-			if not _lofi_material:
-				_lofi_material = _create_default_lofi_material()
-			viewport_container.material = _lofi_material
-		else:
-			# Remove the shader to show unprocessed viewport
-			viewport_container.material = null
-	# Keep occlusion dither grid aligned with lo-fi pixelation
-	_sync_lofi_pixelation()
-
-
-## Create a default lo-fi material with sensible defaults
-## Used as fallback if no material is defined in the scene
-func _create_default_lofi_material() -> ShaderMaterial:
-	var shader = load("res://shaders/lofi_canvas.gdshader")
-	var material = ShaderMaterial.new()
-	material.shader = shader
-	# Apply shared defaults — prefer setting values in the scene's material
-	for param_name in Constants.LOFI_DEFAULTS:
-		material.set_shader_parameter(param_name, Constants.LOFI_DEFAULTS[param_name])
-	return material
-
-
-## Load grid visual settings from config and apply to the overlay.
-func _load_grid_visual_settings() -> void:
-	var config = ConfigFile.new()
-	var err = config.load(Paths.SETTINGS_PATH)
-	if err != OK:
-		return
-	if not _grid_overlay:
-		return
-	var cell_tint_opacity: float = config.get_value("grid_visuals", "cell_tint_opacity", 0.65)
-	var line_thickness: float = config.get_value("grid_visuals", "line_thickness", 2.0)
-	var fade_radius: float = config.get_value("grid_visuals", "fade_radius", 30.0)
-	_grid_overlay.apply_visual_settings(cell_tint_opacity, line_thickness, fade_radius)
+	_visual_effects.set_lofi_enabled(enabled)
 
 
 ## Apply grid visual settings from the settings menu.
 func apply_grid_visual_settings(
 	cell_tint_opacity: float, line_thickness: float, fade_radius: float
 ) -> void:
-	if _grid_overlay:
-		_grid_overlay.apply_visual_settings(cell_tint_opacity, line_thickness, fade_radius)
-
-
-## Load occlusion fade setting from config
-func _load_occlusion_fade_setting() -> void:
-	var config = ConfigFile.new()
-	var err = config.load(Paths.SETTINGS_PATH)
-	var enabled = true
-	if err == OK:
-		enabled = config.get_value("graphics", "occlusion_fade_enabled", true)
-	set_occlusion_fade_enabled(enabled)
+	_visual_effects.apply_grid_visual_settings(cell_tint_opacity, line_thickness, fade_radius)
 
 
 ## Enable or disable the occlusion fade effect
 func set_occlusion_fade_enabled(enabled: bool) -> void:
-	_occlusion_fade_enabled = enabled
-	if not occlusion_fade:
-		return
-	if enabled:
-		# Re-setup if a map is already loaded
-		if map_container and map_container.get_child_count() > 0:
-			occlusion_fade.setup(camera_node, map_container, drag_and_drop_node)
-			_sync_lofi_pixelation()
-	else:
-		occlusion_fade.clear()
-
-
-## Initialize the occlusion fade manager with node references.
-## The mesh cache is rebuilt separately when a map loads (see notify_map_loaded).
-func _setup_occlusion_fade() -> void:
-	if occlusion_fade and _occlusion_fade_enabled:
-		occlusion_fade.setup(camera_node, map_container, drag_and_drop_node)
-		_sync_lofi_pixelation()
+	_visual_effects.set_occlusion_fade_enabled(enabled)
 
 
 ## Notify the occlusion fade manager that a new map has been loaded.
 ## Re-initializes and rebuilds the internal mesh cache so occlusion detection
 ## works with the new geometry. Also computes camera soft bounds from map AABB.
 func notify_map_loaded() -> void:
-	if occlusion_fade and _occlusion_fade_enabled:
-		occlusion_fade.setup(camera_node, map_container, drag_and_drop_node)
-		_sync_lofi_pixelation()
+	_visual_effects.setup_occlusion_fade()
 
 	# Compute camera soft bounds from map geometry and snap the camera into
 	# the allowed range immediately so the first user input doesn't jump.
@@ -1413,29 +1330,7 @@ func _snap_to_grid_if_enabled(world_pos: Vector3) -> Vector3:
 ## Call this after loading a map to apply map-specific visual settings
 ## Parameters dict can contain any subset of shader parameter names
 func apply_lofi_overrides(overrides: Dictionary) -> void:
-	if not _lofi_material:
-		_lofi_material = _create_default_lofi_material()
-
-	for param_name in overrides:
-		_lofi_material.set_shader_parameter(param_name, overrides[param_name])
-
-	# If pixelation was among the overrides, sync it to the occlusion shader
-	if "pixelation" in overrides:
-		_sync_lofi_pixelation()
-
-
-## Sync the lo-fi pixelation value to the occlusion fade manager so its dither
-## grid aligns with the post-process pixelation. Pass 0 when lo-fi is off.
-func _sync_lofi_pixelation() -> void:
-	if not occlusion_fade:
-		return
-	var px := 0.0
-	if viewport_container and viewport_container.material is ShaderMaterial:
-		var mat := viewport_container.material as ShaderMaterial
-		var val = mat.get_shader_parameter("pixelation")
-		if val != null:
-			px = float(val)
-	occlusion_fade.set_lofi_pixelation(px)
+	_visual_effects.apply_lofi_overrides(overrides)
 
 
 ## Create and attach a WeatherRenderer to the world viewport.
