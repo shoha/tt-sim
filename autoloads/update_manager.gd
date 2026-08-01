@@ -29,9 +29,6 @@ signal update_check_failed(error: String)
 ## Emitted when update check completes (whether update found or not)
 signal update_check_complete(has_update: bool)
 
-## Emitted when a pending update is being applied (before restart)
-signal applying_pending_update(version: String)
-
 ## Emitted when update cannot be applied due to App Translocation (macOS)
 signal update_blocked_by_translocation
 
@@ -581,7 +578,6 @@ func _apply_pending_update() -> void:
 		return
 
 	_log("Applying pending update v%s..." % version)
-	applying_pending_update.emit(version)
 
 	# Apply the update based on platform (delegating to UpdateInstaller)
 	var log_fn := Callable(self, "_log")
@@ -716,7 +712,6 @@ func _apply_and_restart_windows(zip_path: String) -> void:
 	DirAccess.remove_absolute(test_path)
 
 	_log("Extracting update v%s before restart..." % version)
-	applying_pending_update.emit(version)
 	await get_tree().process_frame  # Let the UI render "Installing..." before blocking
 
 	var log_fn := Callable(self, "_log")
@@ -751,7 +746,6 @@ func _apply_and_restart_macos(zip_path: String) -> void:
 	var version = pending.get("version", "unknown")
 
 	_log("Extracting update v%s before restart..." % version)
-	applying_pending_update.emit(version)
 	await get_tree().process_frame  # Let the UI render "Installing..." before blocking
 
 	var success = _extract_update_macos(zip_path)
