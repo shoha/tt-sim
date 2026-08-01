@@ -34,8 +34,8 @@ func extract_and_strip_map_environment(root: Node3D) -> Dictionary:
 	GlbUtils._find_world_environments(root, env_nodes)
 	if env_nodes.is_empty():
 		_map_sky_resource = null
-		_map_environment_config = lighting_config
-		return lighting_config
+		_map_environment_config = lighting_config.duplicate()
+		return _map_environment_config
 
 	var world_env := env_nodes[0] as WorldEnvironment
 	var config := lighting_config.duplicate()

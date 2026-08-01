@@ -20,7 +20,7 @@ extends RefCounted
 ## thread is never blocked. Godot 4's RenderingServer command buffer makes this safe.
 
 const _WATER_SUFFIX := "-water"
-const _LIGHTING_EXTRAS_META := "tt_lighting_extras"
+const _SCENE_EXTRAS_META := "tt_gltf_scene_extras"
 
 static var _water_material: ShaderMaterial = null
 
@@ -63,7 +63,9 @@ static func load_glb(path: String) -> Node3D:
 		push_error("GlbUtils: Failed to generate scene from GLB: " + path)
 		return null
 
-	scene.set_meta(_LIGHTING_EXTRAS_META, _extract_scene_extras(gltf_state))
+	var extras := _extract_scene_extras(gltf_state)
+	if not extras.is_empty():
+		scene.set_meta(_SCENE_EXTRAS_META, extras)
 
 	return scene
 
@@ -152,7 +154,9 @@ static func _load_glb_thread_work(path: String, result: Dictionary) -> void:
 		result.error = "Failed to generate scene from GLB: " + path
 		return
 
-	scene.set_meta(_LIGHTING_EXTRAS_META, _extract_scene_extras(gltf_state))
+	var extras := _extract_scene_extras(gltf_state)
+	if not extras.is_empty():
+		scene.set_meta(_SCENE_EXTRAS_META, extras)
 
 	result.scene = scene
 
@@ -336,38 +340,6 @@ static func _find_water_mesh_nodes(node: Node, result: Array[MeshInstance3D]) ->
 		_find_water_mesh_nodes(child, result)
 
 
-## Lighting Extras
-## Extract this GLB's active scene's glTF "extras" (arbitrary JSON metadata a glTF
-## file can attach to a scene). terrain-paint (the companion Blender addon) writes a
-## couple of ambient-light keys directly into the exported file's JSON here, bypassing
-## Blender's own Custom Properties export entirely -- see extract_lighting_config()
-## below for why, and engine/world_lighting.py in that repo for the write side.
-static func _extract_scene_extras(gltf_state: GLTFState) -> Dictionary:
-	var raw: Dictionary = gltf_state.get_json()
-	var scenes: Array = raw.get("scenes", [])
-	var scene_index: int = raw.get("scene", 0)
-	if scene_index < 0 or scene_index >= scenes.size():
-		return {}
-	var scene_entry: Dictionary = scenes[scene_index]
-	return scene_entry.get("extras", {})
-
-
-## Map a loaded GLB's scene-level extras (see _extract_scene_extras, attached as meta
-## by load_glb()/_load_glb_thread_work()) into a config dictionary using the same key
-## names as EnvironmentPresets.PROPERTY_DEFAULTS, so it can be merged directly into
-## LevelEnvironmentManager's map-defaults layer.
-static func extract_lighting_config(root: Node) -> Dictionary:
-	var extras: Dictionary = root.get_meta(_LIGHTING_EXTRAS_META, {})
-	var config := {}
-	if extras.has("tt_ambient_light_color"):
-		var c: Array = extras["tt_ambient_light_color"]
-		if c.size() >= 3:
-			config["ambient_light_color"] = Color(c[0], c[1], c[2])
-	if extras.has("tt_ambient_light_energy"):
-		config["ambient_light_energy"] = float(extras["tt_ambient_light_energy"])
-	return config
-
-
 ## Recursively find nodes that are collision meshes based on naming convention
 ## Godot standard suffixes (see Godot docs: assets_pipeline/importing_3d_scenes/
 ## node_type_customization)
@@ -393,6 +365,52 @@ static func _find_collision_mesh_nodes(node: Node, result: Array[Dictionary]) ->
 	# Recurse into children
 	for child in node.get_children():
 		_find_collision_mesh_nodes(child, result)
+
+
+# ============================================================================
+# Lighting Extras
+# ============================================================================
+
+
+## Extract this GLB's active scene's glTF "extras" (arbitrary JSON metadata a glTF
+## file can attach to a scene). terrain-paint (the companion Blender addon) writes a
+## couple of ambient-light keys directly into the exported file's JSON here, bypassing
+## Blender's own Custom Properties export entirely -- see extract_lighting_config()
+## below for why, and engine/world_lighting.py in that repo for the write side.
+##
+## Per the glTF 2.0 spec, "extras" may be any JSON value (not necessarily an object),
+## so this guards against non-Dictionary values (e.g. an Array or String) rather than
+## letting a malformed-but-spec-legal file abort the whole load with a type error.
+static func _extract_scene_extras(gltf_state: GLTFState) -> Dictionary:
+	var raw: Dictionary = gltf_state.get_json()
+	var scenes: Array = raw.get("scenes", [])
+	var scene_index: int = raw.get("scene", 0)
+	if scene_index < 0 or scene_index >= scenes.size():
+		return {}
+	var scene_entry: Dictionary = scenes[scene_index]
+	var extras_value: Variant = scene_entry.get("extras", {})
+	return extras_value if extras_value is Dictionary else {}
+
+
+## Map a loaded GLB's scene-level extras (see _extract_scene_extras, attached as meta
+## by load_glb()/_load_glb_thread_work()) into a config dictionary using the same key
+## names as EnvironmentPresets.PROPERTY_DEFAULTS, so it can be merged directly into
+## LevelEnvironmentManager's map-defaults layer.
+##
+## Each key is guarded individually since the source is untrusted network input (maps
+## are downloaded from a host peer) -- a malformed value is skipped rather than raising.
+static func extract_lighting_config(root: Node) -> Dictionary:
+	var extras: Dictionary = root.get_meta(_SCENE_EXTRAS_META, {})
+	var config := {}
+	if extras.has("tt_ambient_light_color"):
+		var c: Variant = extras["tt_ambient_light_color"]
+		if c is Array and c.size() >= 3:
+			config["ambient_light_color"] = Color(c[0], c[1], c[2])
+	if extras.has("tt_ambient_light_energy"):
+		var e: Variant = extras["tt_ambient_light_energy"]
+		if e is float or e is int:
+			config["ambient_light_energy"] = float(e)
+	return config
 
 
 ## Fix broken transform chains in a scene loaded from GLB.
