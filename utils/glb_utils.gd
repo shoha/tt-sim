@@ -20,6 +20,7 @@ extends RefCounted
 ## thread is never blocked. Godot 4's RenderingServer command buffer makes this safe.
 
 const _WATER_SUFFIX := "-water"
+const _LIGHTING_EXTRAS_META := "tt_lighting_extras"
 
 static var _water_material: ShaderMaterial = null
 
@@ -61,6 +62,8 @@ static func load_glb(path: String) -> Node3D:
 	if not scene:
 		push_error("GlbUtils: Failed to generate scene from GLB: " + path)
 		return null
+
+	scene.set_meta(_LIGHTING_EXTRAS_META, _extract_scene_extras(gltf_state))
 
 	return scene
 
@@ -148,6 +151,8 @@ static func _load_glb_thread_work(path: String, result: Dictionary) -> void:
 	if not scene:
 		result.error = "Failed to generate scene from GLB: " + path
 		return
+
+	scene.set_meta(_LIGHTING_EXTRAS_META, _extract_scene_extras(gltf_state))
 
 	result.scene = scene
 
@@ -329,6 +334,38 @@ static func _find_water_mesh_nodes(node: Node, result: Array[MeshInstance3D]) ->
 		result.append(node)
 	for child in node.get_children():
 		_find_water_mesh_nodes(child, result)
+
+
+## Lighting Extras
+## Extract this GLB's active scene's glTF "extras" (arbitrary JSON metadata a glTF
+## file can attach to a scene). terrain-paint (the companion Blender addon) writes a
+## couple of ambient-light keys directly into the exported file's JSON here, bypassing
+## Blender's own Custom Properties export entirely -- see extract_lighting_config()
+## below for why, and engine/world_lighting.py in that repo for the write side.
+static func _extract_scene_extras(gltf_state: GLTFState) -> Dictionary:
+	var raw: Dictionary = gltf_state.get_json()
+	var scenes: Array = raw.get("scenes", [])
+	var scene_index: int = raw.get("scene", 0)
+	if scene_index < 0 or scene_index >= scenes.size():
+		return {}
+	var scene_entry: Dictionary = scenes[scene_index]
+	return scene_entry.get("extras", {})
+
+
+## Map a loaded GLB's scene-level extras (see _extract_scene_extras, attached as meta
+## by load_glb()/_load_glb_thread_work()) into a config dictionary using the same key
+## names as EnvironmentPresets.PROPERTY_DEFAULTS, so it can be merged directly into
+## LevelEnvironmentManager's map-defaults layer.
+static func extract_lighting_config(root: Node) -> Dictionary:
+	var extras: Dictionary = root.get_meta(_LIGHTING_EXTRAS_META, {})
+	var config := {}
+	if extras.has("tt_ambient_light_color"):
+		var c: Array = extras["tt_ambient_light_color"]
+		if c.size() >= 3:
+			config["ambient_light_color"] = Color(c[0], c[1], c[2])
+	if extras.has("tt_ambient_light_energy"):
+		config["ambient_light_energy"] = float(extras["tt_ambient_light_energy"])
+	return config
 
 
 ## Recursively find nodes that are collision meshes based on naming convention
