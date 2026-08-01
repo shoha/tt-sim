@@ -28,25 +28,27 @@ func setup(game_map: Node) -> void:
 ## programmatic LevelEnvironment.  Returns the extracted config dictionary
 ## (empty if the map had no WorldEnvironment).
 func extract_and_strip_map_environment(root: Node3D) -> Dictionary:
+	var lighting_config := GlbUtils.extract_lighting_config(root)
+
 	var env_nodes: Array[Node] = []
 	GlbUtils._find_world_environments(root, env_nodes)
 	if env_nodes.is_empty():
 		_map_sky_resource = null
-		_map_environment_config = {}
-		return {}
+		_map_environment_config = lighting_config
+		return lighting_config
 
 	var world_env := env_nodes[0] as WorldEnvironment
-	var config := {}
+	var config := lighting_config.duplicate()
 	if world_env and world_env.environment:
-		config = EnvironmentPresets.extract_from_environment(world_env.environment)
+		var extracted := EnvironmentPresets.extract_from_environment(world_env.environment)
+		for key in extracted:
+			config[key] = extracted[key]
 		if world_env.environment.sky:
 			_map_sky_resource = world_env.environment.sky.duplicate()
 			print("LevelEnvironmentManager: Extracted sky from map node '%s'" % world_env.name)
 		else:
 			_map_sky_resource = null
-		print(
-			"LevelEnvironmentManager: Extracted environment from map node '%s'" % world_env.name
-		)
+		print("LevelEnvironmentManager: Extracted environment from map node '%s'" % world_env.name)
 
 	GlbUtils.strip_world_environments(root)
 	_map_environment_config = config
@@ -97,12 +99,15 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		_world_environment.name = "LevelEnvironment"
 		world_viewport.add_child(_world_environment)
 
-	EnvironmentPresets.apply_to_world_environment(
-		_world_environment,
-		level_data.environment_preset,
-		level_data.environment_overrides,
-		_map_sky_resource,
-		_map_environment_config,
+	(
+		EnvironmentPresets
+		. apply_to_world_environment(
+			_world_environment,
+			level_data.environment_preset,
+			level_data.environment_overrides,
+			_map_sky_resource,
+			_map_environment_config,
+		)
 	)
 
 	# Apply lo-fi shader overrides if any are set
@@ -111,8 +116,10 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 
 	if level_data.environment_preset != "":
 		print(
-			"LevelEnvironmentManager: Applied environment preset '%s'"
-			% level_data.environment_preset
+			(
+				"LevelEnvironmentManager: Applied environment preset '%s'"
+				% level_data.environment_preset
+			)
 		)
 	elif not _map_environment_config.is_empty():
 		print("LevelEnvironmentManager: Applied map default environment")

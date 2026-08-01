@@ -45,6 +45,9 @@
   - Map defaults are extracted at load time, never baked into `level_data`
   - Use `EnvironmentPresets.apply_to_world_environment()` with `map_defaults` parameter
   - Embedded `WorldEnvironment` nodes are stripped from maps after extraction
+  - Blender-exported `.glb` maps carry ambient light via glTF scene-level `extras`
+    instead (see `GlbUtils.extract_lighting_config()`), since glTF has no
+    `WorldEnvironment` equivalent
 - **Settings persistence** – Each system reads/writes its own section in `Paths.SETTINGS_PATH` (`user://settings.cfg`). Always check `ConfigFile.load()` return value before overwriting — ignore `ERR_FILE_NOT_FOUND` but warn on other errors. See `docs/CONVENTIONS.md` Settings Persistence
 - **In-game editing** – `LevelEditPanel` (extends `DrawerContainer`, right edge) provides real-time editing during gameplay (map, lighting, environment, post-processing, weather). `GameplayMenuController` routes changes to `LevelPlayController`. Cancel reverts; save persists to disk
 - **Scale convention** – 1 world unit = 1 meter (glTF standard). `LevelData.grid_cell_size` adapts meters to game units. Use `ScaleUtils` for all distance conversion and formatting

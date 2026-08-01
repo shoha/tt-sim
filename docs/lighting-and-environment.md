@@ -209,6 +209,26 @@ Map defaults are derived from the map file itself, not stored in `level_data`. T
 - No stale data accumulates in `level.json`
 - The layering model stays clean: `level_data` only stores the DM's intentional choices (preset name + overrides)
 
+### Blender-Authored Ambient Light (glTF Extras)
+
+Maps exported directly from Blender via the companion `terrain-paint` addon have no
+embedded `WorldEnvironment` node at all -- glTF has no representation for one. Instead,
+enabling **Ambient Light** in that addon's Export glTF dialog writes the World's
+Background Color/Strength into the exported file's scene-level glTF `extras` (a small
+JSON blob attached to the file, independent of any mesh/node data).
+
+`GlbUtils.extract_lighting_config()` reads this back after loading a `.glb` map and
+maps it onto `ambient_light_color`/`ambient_light_energy` -- the same keys
+`EnvironmentPresets.PROPERTY_DEFAULTS` uses. `LevelEnvironmentManager
+.extract_and_strip_map_environment()` merges it into the map-defaults layer beneath
+anything extracted from an embedded `WorldEnvironment` node, so the two sources
+compose rather than conflict -- in practice a single map only ever provides one or the
+other, since `.tscn` (Godot-authored) maps use the `WorldEnvironment` path and
+Blender-exported `.glb` maps use the extras path.
+
+As with `light_intensity_scale`, the Blender-side value is a starting point, not a
+precise conversion -- tune further with the in-game edit panel if it looks off.
+
 ## Environment Overrides
 
 Overrides allow fine-tuning individual properties without creating a new preset:
