@@ -582,4 +582,13 @@ func set_map_scale(uniform_scale: float) -> void:
 
 ## Check if a level is currently loaded
 func has_active_level() -> bool:
-	return _level_play_controller.active_level_data != null
+	# _level_play_controller stays null until LevelPlayController.setup(game_map) runs,
+	# which only happens once Root actually enters State.PLAYING -- but
+	# app_menu_controller.gd hands this loader's owning LevelPlayController to the App
+	# Menu at startup (Root._setup_app_menu(), before any state transition), and the
+	# Level Editor button is reachable from the title screen specifically so a map can
+	# be tested before hosting/joining a game. Calling has_active_level() from there
+	# used to crash with "Invalid access ... on a base object of type 'Nil'" instead of
+	# just correctly reporting "no active level" -- which is exactly what's true at
+	# that point.
+	return _level_play_controller != null and _level_play_controller.active_level_data != null
