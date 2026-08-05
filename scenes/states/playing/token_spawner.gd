@@ -45,8 +45,20 @@ func get_spawned_tokens() -> Dictionary:
 
 
 ## Get the local multiplayer API without requiring Node inheritance.
+## Reads it off _game_map (a real, live Node this class already holds a reference to
+## and that's guaranteed to be in the tree at both of this method's call sites --
+## _track_token()/add_token_to_level() only ever run once a token has actually been
+## added as a child under it) rather than (Engine.get_main_loop() as SceneTree).multiplayer,
+## which was found to intermittently raise "Invalid access to property or key
+## 'multiplayer' on a base object of type 'SceneTree'" when called from deep inside
+## the async level-loading coroutine chain (level_loader.gd's _play_level_async,
+## itself resumed through several await boundaries, some backed by
+## AssetModelCache/GlbUtils' own WorkerThreadPool-based async loading). Node.multiplayer
+## is the same underlying SceneMultiplayer the tree-level property would have returned
+## (confirmed via probe), so this is a strictly safer way to reach it, not a behavior
+## change.
 func _get_multiplayer_api() -> MultiplayerAPI:
-	return (Engine.get_main_loop() as SceneTree).multiplayer
+	return _game_map.multiplayer
 
 
 ## Track a spawned token
