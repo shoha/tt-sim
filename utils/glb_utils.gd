@@ -21,6 +21,7 @@ extends RefCounted
 
 const _WATER_SUFFIX := "-water"
 const _SCENE_EXTRAS_META := "tt_gltf_scene_extras"
+const _SCATTER_INSTANCES_EXTRAS_KEY := "tt_scatter_instances"
 
 static var _water_material: ShaderMaterial = null
 
@@ -180,6 +181,7 @@ static func load_glb_with_processing(
 	process_animations(scene)
 	process_lights(scene, light_intensity_scale)
 	process_water_meshes(scene)
+	process_scatter_instances(scene)
 
 	return scene
 
@@ -203,6 +205,7 @@ static func load_glb_with_processing_async(
 		process_animations(result.scene)
 		process_lights(result.scene, light_intensity_scale)
 		process_water_meshes(result.scene)
+		process_scatter_instances(result.scene)
 
 	return result
 
@@ -338,6 +341,124 @@ static func _find_water_mesh_nodes(node: Node, result: Array[MeshInstance3D]) ->
 		result.append(node)
 	for child in node.get_children():
 		_find_water_mesh_nodes(child, result)
+
+
+## Prototype: build a real MultiMeshInstance3D for each group of Geoscatter instance
+## transforms terrain-paint wrote into this GLB's scene extras (see
+## engine/scatter_instancing.py in the terrain-paint repo for the write side), instead
+## of the many-real-duplicated-triangles shape a "Bake Scatter to Mesh" export produces.
+##
+## Each extras entry is keyed by the exact Blender object name of the single low-poly
+## asset Geoscatter was instancing -- that same object was exported normally alongside
+## the transform data (a plain MeshInstance3D node with that name, wherever Blender
+## happened to place it), purely to get its Mesh resource (and baked material) into the
+## file. This function finds that node by name, builds a MultiMesh from its Mesh, and
+## frees the original node so it doesn't also render once, standalone, at whatever
+## arbitrary transform it had in the Blender scene.
+##
+## Only wired into load_glb_with_processing()/_async() (the live user://-uploaded-map
+## path) -- NOT load_map()'s res:// PackedScene branch, since that path never parses a
+## live GLB and has no scene extras meta to read at all (see _extract_scene_extras).
+##
+## Values are untrusted network input (maps are downloaded from a host peer), same as
+## extract_lighting_config() above -- guarded the same way: a malformed group or row is
+## skipped rather than raising.
+static func process_scatter_instances(scene: Node3D) -> void:
+	var extras: Dictionary = scene.get_meta(_SCENE_EXTRAS_META, {})
+	if not extras.has(_SCATTER_INSTANCES_EXTRAS_KEY):
+		return
+	var groups: Variant = extras[_SCATTER_INSTANCES_EXTRAS_KEY]
+	if not groups is Dictionary:
+		return
+
+	for source_name in groups.keys():
+		var transforms: Variant = groups[source_name]
+		if not transforms is Array or transforms.is_empty():
+			continue
+		var source_node := find_node_by_name(scene, String(source_name))
+		if not source_node is MeshInstance3D:
+			continue
+		var mesh_node := source_node as MeshInstance3D
+		if not mesh_node.mesh:
+			continue
+		_build_multimesh_from_transforms(scene, mesh_node, transforms)
+
+
+## Builds one MultiMeshInstance3D (sharing mesh_node's Mesh and material) from a flat
+## array of [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] rows, then removes mesh_node.
+##
+## Each row is a Blender WORLD-space (matrix_world) transform, already axis-converted
+## into glTF/Godot's convention on the Python side (terrain-paint's
+## scatter_instancing.py) -- these are the exact same translation/rotation/scale
+## components a glTF node itself would carry relative to an IDENTITY scene root, no
+## further axis conversion needed here. That's the reason scene_root is a required
+## parameter rather than just using mesh_node.get_parent(): glTF/Godot compose node
+## transforms up the tree starting from an identity scene root, so a node's cumulative
+## transform-to-root always reconstructs its own recorded world matrix regardless of
+## how many intermediate Blender-side parent objects existed along the way. The new
+## MultiMeshInstance3D must sit DIRECTLY under scene_root with an identity transform
+## (the Node3D default, left untouched here) to land in that same frame -- parenting
+## it under mesh_node's own parent, or copying mesh_node's own local transform onto it,
+## would double-apply mesh_node's individual placement in the Blender scene on top of
+## the already-absolute per-instance transforms.
+static func _build_multimesh_from_transforms(
+	scene_root: Node3D, mesh_node: MeshInstance3D, transforms: Array
+) -> void:
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = mesh_node.mesh
+
+	var valid_transforms: Array[Transform3D] = []
+	for row in transforms:
+		var xform: Variant = _row_to_transform(row)
+		if xform != null:
+			valid_transforms.append(xform)
+
+	if valid_transforms.is_empty():
+		return
+
+	multimesh.instance_count = valid_transforms.size()
+	for i in valid_transforms.size():
+		multimesh.set_instance_transform(i, valid_transforms[i])
+
+	var multimesh_instance := MultiMeshInstance3D.new()
+	multimesh_instance.name = mesh_node.name + "_MultiMesh"
+	multimesh_instance.multimesh = multimesh
+	# MultiMesh itself has no material slot -- Godot renders every instance with
+	# mesh_node.mesh's own surface material(s) unless overridden here. Copying
+	# mesh_node's own (possibly null) override verbatim preserves whatever rendering
+	# result mesh_node itself would have had, whether or not it actually had one set.
+	multimesh_instance.material_override = mesh_node.material_override
+	scene_root.add_child(multimesh_instance)
+
+	var old_parent := mesh_node.get_parent()
+	if old_parent:
+		old_parent.remove_child(mesh_node)
+	mesh_node.free()
+
+
+## Converts one [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] row into a Transform3D, or
+## null if the row is malformed. Deliberately isolated from
+## _build_multimesh_from_transforms as its own testable function rather than inlined
+## in that loop -- confirmed via a real headless probe that
+## MultiMesh.get_instance_transform() always reads back an identity transform
+## regardless of what set_instance_transform() was actually given, under Godot's
+## headless/dummy rendering driver (reproduced with zero scene tree involvement at
+## all, so it's not something this module or its caller could work around). That
+## makes MultiMesh itself a dead end for verifying this math in an automated test
+## run -- this function exists so the row -> Transform3D conversion can be checked
+## directly, independent of MultiMesh's own set/get round trip.
+static func _row_to_transform(row: Variant) -> Variant:
+	if not row is Array or row.size() < 10:
+		return null
+	for component in row:
+		if not (component is float or component is int):
+			return null
+
+	var origin := Vector3(row[0], row[1], row[2])
+	var rotation := Quaternion(row[3], row[4], row[5], row[6]).normalized()
+	var scale := Vector3(row[7], row[8], row[9])
+	return Transform3D(Basis(rotation).scaled(scale), origin)
 
 
 ## Recursively find nodes that are collision meshes based on naming convention
