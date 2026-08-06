@@ -19,17 +19,22 @@ func _make_scene_with_template(template_name: String) -> Dictionary:
 func test_builds_multimesh_with_correct_instance_count() -> void:
 	var built := _make_scene_with_template("GrassBlade")
 	var scene: Node3D = built.scene
-	scene.set_meta(
-		"tt_gltf_scene_extras",
-		{
-			"tt_scatter_instances": {
-				"GrassBlade": [
-					[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
-					[2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
-					[3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
-				]
+	(
+		scene
+		. set_meta(
+			"tt_gltf_scene_extras",
+			{
+				"tt_scatter_instances":
+				{
+					"GrassBlade":
+					[
+						[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+						[2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+						[3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+					]
+				}
 			}
-		}
+		)
 	)
 
 	GlbUtils.process_scatter_instances(scene)
@@ -122,7 +127,9 @@ func test_multimesh_instance_sits_directly_under_scene_root_with_identity_transf
 
 	GlbUtils.process_scatter_instances(scene)
 
-	var multimesh_instance := GlbUtils.find_node_by_name(scene, "GrassBlade_MultiMesh") as MultiMeshInstance3D
+	var multimesh_instance := (
+		GlbUtils.find_node_by_name(scene, "GrassBlade_MultiMesh") as MultiMeshInstance3D
+	)
 	assert_not_null(multimesh_instance)
 	assert_eq(multimesh_instance.get_parent(), scene)
 	assert_eq(multimesh_instance.transform, Transform3D.IDENTITY)
@@ -140,14 +147,18 @@ func test_groups_two_distinct_instance_names_into_two_multimeshes() -> void:
 	flower.name = "Flower"
 	flower.mesh = SphereMesh.new()
 	scene.add_child(flower)
-	scene.set_meta(
-		"tt_gltf_scene_extras",
-		{
-			"tt_scatter_instances": {
-				"Fern": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1], [1, 0, 0, 0, 0, 0, 1, 1, 1, 1]],
-				"Flower": [[2, 0, 0, 0, 0, 0, 1, 1, 1, 1]],
+	(
+		scene
+		. set_meta(
+			"tt_gltf_scene_extras",
+			{
+				"tt_scatter_instances":
+				{
+					"Fern": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1], [1, 0, 0, 0, 0, 0, 1, 1, 1, 1]],
+					"Flower": [[2, 0, 0, 0, 0, 0, 1, 1, 1, 1]],
+				}
 			}
-		}
+		)
 	)
 
 	GlbUtils.process_scatter_instances(scene)
@@ -195,17 +206,22 @@ func test_ignores_a_reference_to_a_name_not_present_in_the_scene() -> void:
 func test_skips_a_malformed_row_without_raising() -> void:
 	var built := _make_scene_with_template("GrassBlade")
 	var scene: Node3D = built.scene
-	scene.set_meta(
-		"tt_gltf_scene_extras",
-		{
-			"tt_scatter_instances": {
-				"GrassBlade": [
-					[0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-					["not", "enough", "numbers"],
-					[1, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-				]
+	(
+		scene
+		. set_meta(
+			"tt_gltf_scene_extras",
+			{
+				"tt_scatter_instances":
+				{
+					"GrassBlade":
+					[
+						[0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+						["not", "enough", "numbers"],
+						[1, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+					]
+				}
 			}
-		}
+		)
 	)
 
 	GlbUtils.process_scatter_instances(scene)
@@ -221,9 +237,7 @@ func test_skips_a_malformed_row_without_raising() -> void:
 func test_leaves_scene_untouched_when_extras_group_is_not_an_array() -> void:
 	var built := _make_scene_with_template("GrassBlade")
 	var scene: Node3D = built.scene
-	scene.set_meta(
-		"tt_gltf_scene_extras", {"tt_scatter_instances": {"GrassBlade": "not an array"}}
-	)
+	scene.set_meta("tt_gltf_scene_extras", {"tt_scatter_instances": {"GrassBlade": "not an array"}})
 
 	GlbUtils.process_scatter_instances(scene)
 

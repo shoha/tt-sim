@@ -133,6 +133,60 @@ Filter to just errors: pipe output through `grep -E "ERROR:|SCRIPT ERROR:"`.
 gdlint path/to/file.gd
 ```
 
+### Headless testing cannot verify real rendering output
+
+`--headless` runs Godot's dummy rendering driver, which accepts rendering-server
+calls without error but cannot produce real pixels or reliably round-trip certain
+GPU-resource state. Confirmed via direct probe: `MultiMesh.set_instance_transform()`
+succeeds with no error under `--headless`, but `MultiMesh.get_instance_transform()`
+always reads back an *identity* transform afterward, regardless of what was set --
+reproduced with zero scene tree involvement at all, so it's not something caller
+code can work around. If a GUT test needs to assert on a `MultiMesh`'s actual
+per-instance transform values, don't round-trip through the `MultiMesh` API at all
+-- isolate the pure transform-computing logic into its own function and test that
+directly (see `GlbUtils._row_to_transform` and its tests in
+`tests/unit/test_glb_utils_scatter_instances.gd` for the pattern).
+
+More generally, if a bug report describes something that *should* be visible not
+rendering (invisible geometry, wrong material, etc.), a headless GUT test that only
+checks node/resource *existence* (right node type, right instance count, right mesh
+assigned) can pass while the actual rendered result is still broken -- it proves the
+data pipeline is wired correctly, not that anything is visible. To actually see
+whether something renders, run a real scene non-headlessly and capture a screenshot:
+
+```gdscript
+# minimal probe pattern -- a Node3D script + matching .tscn, run via:
+#   godot --path . res://path/to/probe.tscn
+func _ready() -> void:
+	# ... build/load the scene under test, add camera/light/WorldEnvironment ...
+	pass
+
+func _process(_delta: float) -> void:
+	frames_waited += 1
+	if frames_waited == 10:  # let a few real frames render first
+		get_viewport().get_texture().get_image().save_png("user://probe_render.png")
+		get_tree().quit(0)
+```
+
+This is how a real "textures baked correctly but scattered instances still render
+completely invisible in-game" bug was actually root-caused (2026-08-05, see
+terrain-paint's `CLAUDE.md` "Scatter Instances" section for the Blender-side half of
+the story): headless checks confirmed the `MultiMeshInstance3D` was built with the
+right instance count and mesh, but only a real Vulkan/Forward+ render -- comparing
+the exact mesh+material against a forced-opaque copy of the same mesh side by side
+-- revealed the real material was rendering nothing at all, isolating the bug to
+material/UV handling rather than the instancing mechanism. `Camera3D.look_at()`
+requires the camera to already be `is_inside_tree()`; use
+`look_at_from_position(pos, target, up)` instead when building a probe scene
+programmatically, since it doesn't have that requirement and works immediately
+after construction.
+
+Camera-view screenshots taken this way land under `user://` -- Godot's app-data
+directory for this project (`%APPDATA%\Godot\app_userdata\TTSim\` on Windows), not
+inside the repo -- so they're safe to leave behind but won't show up in `git status`
+either way. Delete throwaway probe `.gd`/`.tscn` files (and their `.uid` sidecars)
+from `tests/unit/` once done; they're not real tests and shouldn't be committed.
+
 ## Validation Bridge (MCP)
 
 An MCP server that lets agents launch the game, interact with it, capture screenshots, query state, and validate code changes without human intervention. Registered as `tt-sim-validator` in Claude Code.
