@@ -12,6 +12,7 @@ signal save_requested(
 	environment_overrides: Dictionary,
 	lofi_overrides: Dictionary,
 	weather_overrides: Dictionary,
+	foliage_overrides: Dictionary,
 	grid_cell_size: float,
 	display_unit: String,
 	display_unit_per_cell: float
@@ -24,6 +25,7 @@ signal scale_config_changed(
 signal environment_changed(preset: String, overrides: Dictionary)
 signal lofi_changed(overrides: Dictionary)
 signal weather_changed(overrides: Dictionary)
+signal foliage_changed(overrides: Dictionary)
 signal revert_to_map_defaults_requested
 
 ## Emitted when the drawer opens (before the animation starts).
@@ -45,6 +47,7 @@ var current_preset: String = ""
 var current_overrides: Dictionary = {}
 var current_lofi_overrides: Dictionary = {}
 var current_weather_overrides: Dictionary = {}
+var current_foliage_overrides: Dictionary = {}
 var light_intensity_scale: float = 1.0
 var current_grid_cell_size: float = 1.524
 var current_display_unit: String = "ft"
@@ -108,6 +111,12 @@ var _map_defaults: Dictionary = {}
 @onready var snow_slider_spin: SliderSpinBox = %SnowSliderSpin
 @onready var fog_slider_spin: SliderSpinBox = %FogSliderSpin
 @onready var wind_slider_spin: SliderSpinBox = %WindSliderSpin
+
+# Foliage controls
+@onready var tree_sway_speed_slider_spin: SliderSpinBox = %TreeSwaySpeedSliderSpin
+@onready var tree_sway_amplitude_slider_spin: SliderSpinBox = %TreeSwayAmplitudeSliderSpin
+@onready var grass_sway_speed_slider_spin: SliderSpinBox = %GrassSwaySpeedSliderSpin
+@onready var grass_sway_amplitude_slider_spin: SliderSpinBox = %GrassSwayAmplitudeSliderSpin
 
 
 func _on_ready() -> void:
@@ -218,6 +227,15 @@ func _connect_control_signals() -> void:
 	]:
 		binding[0].connect(binding[1], _on_weather_override_changed.bind(binding[2]))
 
+	# Foliage overrides: [control, signal_name, override_key]
+	for binding in [
+		[tree_sway_speed_slider_spin, "value_changed", "tree_sway_speed"],
+		[tree_sway_amplitude_slider_spin, "value_changed", "tree_sway_amplitude"],
+		[grass_sway_speed_slider_spin, "value_changed", "grass_sway_speed"],
+		[grass_sway_amplitude_slider_spin, "value_changed", "grass_sway_amplitude"],
+	]:
+		binding[0].connect(binding[1], _on_foliage_override_changed.bind(binding[2]))
+
 	revert_to_map_button.pressed.connect(func() -> void: revert_to_map_defaults_requested.emit())
 	save_button.pressed.connect(_on_save_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
@@ -312,6 +330,7 @@ func initialize(
 	overrides: Dictionary,
 	lofi_overrides: Dictionary = {},
 	weather_overrides: Dictionary = {},
+	foliage_overrides: Dictionary = {},
 	map_defaults: Dictionary = {},
 	has_map_sky: bool = false,
 	grid_cell_size: float = 1.524,
@@ -323,6 +342,7 @@ func initialize(
 	current_overrides = overrides.duplicate()
 	current_lofi_overrides = lofi_overrides.duplicate()
 	current_weather_overrides = weather_overrides.duplicate()
+	current_foliage_overrides = foliage_overrides.duplicate()
 	_map_defaults = map_defaults
 
 	# Set scale controls
@@ -354,6 +374,7 @@ func initialize(
 	_sync_controls_from_config()
 	_sync_lofi_controls()
 	_sync_weather_controls()
+	_sync_foliage_controls()
 
 
 ## Apply new environment state from outside (e.g. after reverting to map defaults)
@@ -562,6 +583,7 @@ func _on_save_pressed() -> void:
 			current_overrides,
 			current_lofi_overrides,
 			current_weather_overrides,
+			current_foliage_overrides,
 			current_grid_cell_size,
 			current_display_unit,
 			current_display_unit_per_cell,
@@ -622,3 +644,19 @@ func _sync_weather_controls() -> void:
 	snow_slider_spin.set_value_no_signal(current_weather_overrides.get("snow_intensity", 0.0))
 	fog_slider_spin.set_value_no_signal(current_weather_overrides.get("fog_intensity", 0.0))
 	wind_slider_spin.set_value_no_signal(current_weather_overrides.get("wind_intensity", 0.0))
+
+
+## Sync foliage controls from current_foliage_overrides (or WindFoliage presets)
+func _sync_foliage_controls() -> void:
+	var tree_preset := WindFoliage.get_effective_preset("tree", current_foliage_overrides)
+	var grass_preset := WindFoliage.get_effective_preset("grass", current_foliage_overrides)
+	tree_sway_speed_slider_spin.set_value_no_signal(tree_preset["sway_speed"])
+	tree_sway_amplitude_slider_spin.set_value_no_signal(tree_preset["sway_amplitude"])
+	grass_sway_speed_slider_spin.set_value_no_signal(grass_preset["sway_speed"])
+	grass_sway_amplitude_slider_spin.set_value_no_signal(grass_preset["sway_amplitude"])
+
+
+## Generic handler for config-driven foliage sway overrides.
+func _on_foliage_override_changed(value: Variant, key: String) -> void:
+	current_foliage_overrides[key] = value
+	foliage_changed.emit(current_foliage_overrides)
