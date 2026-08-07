@@ -53,6 +53,11 @@ extends Resource
 ## Keys: "rain_intensity", "snow_intensity", "fog_intensity", "wind_intensity"
 @export var weather_overrides: Dictionary = {}
 
+## Wind-sway tuning overrides, per WindFoliage category.
+## Keys: "tree_sway_speed", "tree_sway_amplitude", "grass_sway_speed", "grass_sway_amplitude"
+## Empty dictionary uses the defaults from WindFoliage.PRESETS.
+@export var foliage_overrides: Dictionary = {}
+
 ## Scale & Measurement
 @export_group("Scale")
 ## Size of one grid cell in world units (meters), as measured in the loaded scene.
@@ -175,6 +180,7 @@ func duplicate_level() -> LevelData:
 	new_level.environment_overrides = environment_overrides.duplicate()
 	new_level.lofi_overrides = lofi_overrides.duplicate()
 	new_level.weather_overrides = weather_overrides.duplicate()
+	new_level.foliage_overrides = foliage_overrides.duplicate()
 	new_level.grid_cell_size = grid_cell_size
 	new_level.display_unit = display_unit
 	new_level.display_unit_per_cell = display_unit_per_cell
@@ -246,6 +252,7 @@ func to_dict() -> Dictionary:
 		"environment_overrides": EnvironmentPresets.overrides_to_json(environment_overrides),
 		"lofi_overrides": lofi_overrides.duplicate(),
 		"weather_overrides": weather_overrides.duplicate(),
+		"foliage_overrides": foliage_overrides.duplicate(),
 		"grid_cell_size": grid_cell_size,
 		"display_unit": display_unit,
 		"display_unit_per_cell": display_unit_per_cell,
@@ -283,6 +290,8 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.lofi_overrides = lofi_raw.duplicate() if lofi_raw is Dictionary else {}
 	var weather_raw = data.get("weather_overrides", {})
 	level.weather_overrides = weather_raw.duplicate() if weather_raw is Dictionary else {}
+	var foliage_raw = data.get("foliage_overrides", {})
+	level.foliage_overrides = foliage_raw.duplicate() if foliage_raw is Dictionary else {}
 
 	level.grid_cell_size = data.get("grid_cell_size", 1.524)
 	level.display_unit = data.get("display_unit", "ft")
