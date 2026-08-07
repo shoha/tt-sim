@@ -57,6 +57,35 @@ func test_classify_category_defaults_to_grass_for_ambiguous_real_names() -> void
 	assert_eq(WindFoliage.classify_category("GS Nettle 01"), "grass")
 
 
+func test_get_effective_preset_returns_base_preset_when_no_overrides() -> void:
+	var preset := WindFoliage.get_effective_preset("grass", {})
+	assert_eq(preset["sway_speed"], WindFoliage.PRESETS["grass"]["sway_speed"])
+	assert_eq(preset["sway_amplitude"], WindFoliage.PRESETS["grass"]["sway_amplitude"])
+
+
+func test_get_effective_preset_applies_matching_category_overrides() -> void:
+	var preset := WindFoliage.get_effective_preset(
+		"tree", {"tree_sway_speed": 2.5, "tree_sway_amplitude": 0.5}
+	)
+	assert_eq(preset["sway_speed"], 2.5)
+	assert_eq(preset["sway_amplitude"], 0.5)
+
+
+func test_get_effective_preset_ignores_another_categorys_override_keys() -> void:
+	var preset := WindFoliage.get_effective_preset("tree", {"grass_sway_speed": 9.9})
+	assert_eq(preset["sway_speed"], WindFoliage.PRESETS["tree"]["sway_speed"])
+
+
+func test_get_effective_preset_leaves_frequency_fixed() -> void:
+	var preset := WindFoliage.get_effective_preset("grass", {"grass_sway_speed": 9.9})
+	assert_eq(preset["sway_frequency"], WindFoliage.PRESETS["grass"]["sway_frequency"])
+
+
+func test_get_effective_preset_returns_empty_dict_for_unknown_category() -> void:
+	assert_eq(WindFoliage.get_effective_preset("", {}), {})
+	assert_eq(WindFoliage.get_effective_preset("not_a_real_category", {}), {})
+
+
 func test_apply_material_is_a_noop_for_the_deny_category() -> void:
 	var original := _make_orm_material(Color.GREEN)
 	var mesh := BoxMesh.new()
@@ -86,6 +115,29 @@ func test_apply_material_replaces_the_surface_material_with_the_wind_shader() ->
 	var grass_preset: Dictionary = WindFoliage.PRESETS["grass"]
 	assert_eq(wind_material.get_shader_parameter("sway_speed"), grass_preset["sway_speed"])
 	assert_eq(wind_material.get_shader_parameter("sway_amplitude"), grass_preset["sway_amplitude"])
+
+
+func test_apply_material_applies_override_values() -> void:
+	var material := _make_orm_material(Color.GREEN)
+	var mesh := BoxMesh.new()
+	mesh.material = material
+
+	WindFoliage.apply_material(mesh, "grass", {"grass_sway_speed": 3.3})
+
+	var wind_material := mesh.surface_get_material(0) as ShaderMaterial
+	assert_eq(wind_material.get_shader_parameter("sway_speed"), 3.3)
+
+
+func test_apply_material_tags_the_material_with_its_wind_category() -> void:
+	var material := _make_orm_material(Color.GREEN)
+	var mesh := BoxMesh.new()
+	mesh.material = material
+
+	WindFoliage.apply_material(mesh, "tree")
+
+	var wind_material := mesh.surface_get_material(0) as ShaderMaterial
+	assert_true(wind_material.has_meta("wind_category"))
+	assert_eq(wind_material.get_meta("wind_category"), "tree")
 
 
 func test_apply_material_skips_a_surface_with_no_basematerial3d() -> void:
