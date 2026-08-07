@@ -219,3 +219,25 @@ func test_process_scatter_instances_applies_wind_to_a_grass_multimesh() -> void:
 	assert_true(multimesh_instance.multimesh.mesh.surface_get_material(0) is ShaderMaterial)
 
 	scene.free()
+
+
+func test_process_scatter_instances_bakes_foliage_overrides_into_the_material() -> void:
+	var scene := Node3D.new()
+	var grass := MeshInstance3D.new()
+	grass.name = "GrassBlade"
+	var mesh := BoxMesh.new()
+	mesh.material = _make_orm_material(Color.GREEN)
+	grass.mesh = mesh
+	scene.add_child(grass)
+	scene.set_meta(
+		"tt_gltf_scene_extras",
+		{"tt_scatter_instances": {"GrassBlade": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]]}}
+	)
+
+	GlbUtils.process_scatter_instances(scene, {"grass_sway_speed": 4.4})
+
+	var multimesh_instance := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
+	var material := multimesh_instance.multimesh.mesh.surface_get_material(0) as ShaderMaterial
+	assert_eq(material.get_shader_parameter("sway_speed"), 4.4)
+
+	scene.free()

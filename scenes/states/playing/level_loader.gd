@@ -245,7 +245,9 @@ func _load_level_map_async(level_data: LevelData) -> bool:
 
 	# 1. Check if it's a res:// path (legacy format)
 	if map_path.begins_with("res://"):
-		var result = await GlbUtils.load_map_async(map_path, true, _get_light_intensity_scale())
+		var result = await GlbUtils.load_map_async(
+			map_path, true, _get_light_intensity_scale(), _get_foliage_overrides()
+		)
 		if result.success:
 			map = result.scene
 
@@ -351,13 +353,15 @@ func _finalize_map_loading(map: Node3D) -> void:
 ## Load a map file synchronously using the unified GlbUtils.load_map pipeline.
 ## Handles both res:// and user:// paths with full post-processing.
 func _load_map_from_path(path: String) -> Node3D:
-	return GlbUtils.load_map(path, true, _get_light_intensity_scale())
+	return GlbUtils.load_map(path, true, _get_light_intensity_scale(), _get_foliage_overrides())
 
 
 ## Load a map file asynchronously using the unified GlbUtils.load_map_async pipeline.
 ## Handles both res:// and user:// paths with full post-processing.
 func _load_map_from_path_async(path: String) -> Node3D:
-	var result = await GlbUtils.load_map_async(path, true, _get_light_intensity_scale())
+	var result = await GlbUtils.load_map_async(
+		path, true, _get_light_intensity_scale(), _get_foliage_overrides()
+	)
 	if result.success:
 		return result.scene
 	return null
@@ -368,6 +372,13 @@ func _get_light_intensity_scale() -> float:
 	if _level_play_controller.active_level_data:
 		return _level_play_controller.active_level_data.light_intensity_scale
 	return 1.0
+
+
+## Get the foliage sway overrides from the active level data (or {} if none)
+func _get_foliage_overrides() -> Dictionary:
+	if _level_play_controller.active_level_data:
+		return _level_play_controller.active_level_data.foliage_overrides
+	return {}
 
 
 ## Pass current scale settings from level data to the measure tool.
