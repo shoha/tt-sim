@@ -170,7 +170,10 @@ static func _load_glb_thread_work(path: String, result: Dictionary) -> void:
 ## for Blender "Standard" mode exports)
 ## @return: The fully processed Node3D scene, or null on failure
 static func load_glb_with_processing(
-	path: String, create_static_bodies: bool = false, light_intensity_scale: float = 1.0
+	path: String,
+	create_static_bodies: bool = false,
+	light_intensity_scale: float = 1.0,
+	foliage_overrides: Dictionary = {}
 ) -> Node3D:
 	var scene = load_glb(path)
 	if not scene:
@@ -181,7 +184,7 @@ static func load_glb_with_processing(
 	process_animations(scene)
 	process_lights(scene, light_intensity_scale)
 	process_water_meshes(scene)
-	process_scatter_instances(scene)
+	process_scatter_instances(scene, foliage_overrides)
 
 	return scene
 
@@ -194,7 +197,10 @@ static func load_glb_with_processing(
 ## for Blender "Standard" mode exports)
 ## @return: AsyncLoadResult with fully processed scene or error
 static func load_glb_with_processing_async(
-	path: String, create_static_bodies: bool = false, light_intensity_scale: float = 1.0
+	path: String,
+	create_static_bodies: bool = false,
+	light_intensity_scale: float = 1.0,
+	foliage_overrides: Dictionary = {}
 ) -> AsyncLoadResult:
 	var result = await load_glb_async(path)
 
@@ -205,7 +211,7 @@ static func load_glb_with_processing_async(
 		process_animations(result.scene)
 		process_lights(result.scene, light_intensity_scale)
 		process_water_meshes(result.scene)
-		process_scatter_instances(result.scene)
+		process_scatter_instances(result.scene, foliage_overrides)
 
 	return result
 
@@ -363,7 +369,7 @@ static func _find_water_mesh_nodes(node: Node, result: Array[MeshInstance3D]) ->
 ## Values are untrusted network input (maps are downloaded from a host peer), same as
 ## extract_lighting_config() above -- guarded the same way: a malformed group or row is
 ## skipped rather than raising.
-static func process_scatter_instances(scene: Node3D) -> void:
+static func process_scatter_instances(scene: Node3D, foliage_overrides: Dictionary = {}) -> void:
 	var extras: Dictionary = scene.get_meta(_SCENE_EXTRAS_META, {})
 	if not extras.has(_SCATTER_INSTANCES_EXTRAS_KEY):
 		return
@@ -382,7 +388,9 @@ static func process_scatter_instances(scene: Node3D) -> void:
 		if not mesh_node.mesh:
 			continue
 		var wind_category := WindFoliage.classify_category(String(source_name))
-		_build_multimesh_from_transforms(scene, mesh_node, transforms, wind_category)
+		_build_multimesh_from_transforms(
+			scene, mesh_node, transforms, wind_category, foliage_overrides
+		)
 
 
 ## Builds one MultiMeshInstance3D (sharing mesh_node's Mesh, and by default its
@@ -406,7 +414,11 @@ static func process_scatter_instances(scene: Node3D) -> void:
 ## would double-apply mesh_node's individual placement in the Blender scene on top of
 ## the already-absolute per-instance transforms.
 static func _build_multimesh_from_transforms(
-	scene_root: Node3D, mesh_node: MeshInstance3D, transforms: Array, wind_category: String = ""
+	scene_root: Node3D,
+	mesh_node: MeshInstance3D,
+	transforms: Array,
+	wind_category: String = "",
+	foliage_overrides: Dictionary = {}
 ) -> void:
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -434,7 +446,7 @@ static func _build_multimesh_from_transforms(
 	# on multimesh_instance -- MultiMeshInstance3D has no per-surface override API (see
 	# WindFoliage.apply_material's own docstring). No-op (mesh keeps its own imported
 	# static material) when wind_category is "".
-	WindFoliage.apply_material(mesh_node.mesh, wind_category)
+	WindFoliage.apply_material(mesh_node.mesh, wind_category, foliage_overrides)
 	scene_root.add_child(multimesh_instance)
 
 	var old_parent := mesh_node.get_parent()
@@ -624,7 +636,10 @@ static func _find_non_node3d_with_3d_children(node: Node, result: Array[Node]) -
 ## @param light_intensity_scale: Multiplier for light energies
 ## @return: The fully processed Node3D scene, or null on failure
 static func load_map(
-	path: String, create_static_bodies: bool = true, light_intensity_scale: float = 1.0
+	path: String,
+	create_static_bodies: bool = true,
+	light_intensity_scale: float = 1.0,
+	foliage_overrides: Dictionary = {}
 ) -> Node3D:
 	var scene: Node3D = null
 
@@ -643,7 +658,9 @@ static func load_map(
 		process_lights(scene, light_intensity_scale)
 		process_water_meshes(scene)
 	else:
-		scene = load_glb_with_processing(path, create_static_bodies, light_intensity_scale)
+		scene = load_glb_with_processing(
+			path, create_static_bodies, light_intensity_scale, foliage_overrides
+		)
 
 	if scene:
 		disable_static_body_picking(scene)
@@ -659,7 +676,10 @@ static func load_map(
 ## @param light_intensity_scale: Multiplier for light energies
 ## @return: AsyncLoadResult with fully processed scene or error
 static func load_map_async(
-	path: String, create_static_bodies: bool = true, light_intensity_scale: float = 1.0
+	path: String,
+	create_static_bodies: bool = true,
+	light_intensity_scale: float = 1.0,
+	foliage_overrides: Dictionary = {}
 ) -> AsyncLoadResult:
 	var result = AsyncLoadResult.new()
 
@@ -723,7 +743,7 @@ static func load_map_async(
 		return result
 
 	var glb_result = await load_glb_with_processing_async(
-		path, create_static_bodies, light_intensity_scale
+		path, create_static_bodies, light_intensity_scale, foliage_overrides
 	)
 	if glb_result.success and glb_result.scene:
 		disable_static_body_picking(glb_result.scene)
