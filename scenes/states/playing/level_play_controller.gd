@@ -381,6 +381,10 @@ func _on_visual_settings_received(settings: Dictionary) -> void:
 			game_map.apply_weather_overrides(settings["weather_overrides"])
 		if active_level_data:
 			active_level_data.weather_overrides = settings["weather_overrides"].duplicate()
+	if settings.has("foliage_overrides"):
+		apply_foliage_overrides(settings["foliage_overrides"])
+		if active_level_data:
+			active_level_data.foliage_overrides = settings["foliage_overrides"].duplicate()
 
 
 ## Check if a level is currently loaded
