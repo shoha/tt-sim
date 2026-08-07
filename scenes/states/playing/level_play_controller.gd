@@ -213,6 +213,11 @@ func apply_light_intensity_scale(intensity_scale: float) -> void:
 	_environment_manager.apply_light_intensity_scale(intensity_scale, active_level_data)
 
 
+## Apply foliage sway overrides to all cached wind materials in the loaded map.
+func apply_foliage_overrides(overrides: Dictionary) -> void:
+	_environment_manager.apply_foliage_overrides(overrides)
+
+
 ## Apply environment settings to the live WorldEnvironment.
 func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 	_environment_manager.apply_environment_settings(preset, overrides)

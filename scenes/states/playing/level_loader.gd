@@ -323,6 +323,11 @@ func _finalize_map_loading(map: Node3D) -> void:
 		_level_play_controller.loaded_map_instance
 	)
 
+	# Cache wind-sway materials for real-time foliage tuning
+	_level_play_controller._environment_manager.store_wind_materials(
+		_level_play_controller.loaded_map_instance
+	)
+
 	# Apply environment settings from level data (map defaults used as a layer)
 	if _level_play_controller.active_level_data:
 		_level_play_controller._environment_manager.apply_level_environment(

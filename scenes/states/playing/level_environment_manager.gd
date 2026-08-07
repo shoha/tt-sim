@@ -11,6 +11,7 @@ var _world_environment: WorldEnvironment = null
 var _map_environment_config: Dictionary = {}
 var _map_sky_resource: Sky = null
 var _original_light_energies: Dictionary = {}  # instance_id -> base energy
+var _wind_materials: Dictionary = {}  # category (String) -> Array[ShaderMaterial]
 var _game_map: Node = null  # GameMap reference (for viewport & lo-fi access)
 
 
@@ -82,6 +83,49 @@ func apply_light_intensity_scale(intensity_scale: float, level_data: LevelData =
 			light.light_energy = _original_light_energies[instance_id] * intensity_scale
 	if level_data:
 		level_data.light_intensity_scale = intensity_scale
+
+
+# ============================================================================
+# Foliage Sway
+# ============================================================================
+
+
+## Cache every wind-sway ShaderMaterial in a loaded map's tree, keyed by the
+## WindFoliage category it was built for (tagged via set_meta("wind_category", ...)
+## in WindFoliage._build_shader_material). Called once after map load, mirroring
+## store_original_light_energies -- lets apply_foliage_overrides() re-tune live
+## materials without re-walking or reloading the scene tree on every slider drag.
+func store_wind_materials(node: Node) -> void:
+	_wind_materials.clear()
+	_collect_wind_materials(node)
+
+
+func _collect_wind_materials(node: Node) -> void:
+	if node is MultiMeshInstance3D and node.multimesh and node.multimesh.mesh:
+		var mesh: Mesh = node.multimesh.mesh
+		for i in mesh.get_surface_count():
+			var material := mesh.surface_get_material(i)
+			if material is ShaderMaterial and material.has_meta("wind_category"):
+				var category: String = material.get_meta("wind_category")
+				if not _wind_materials.has(category):
+					_wind_materials[category] = []
+				_wind_materials[category].append(material)
+	for child in node.get_children():
+		_collect_wind_materials(child)
+
+
+## Re-tune every cached wind-sway material's speed/amplitude in place, with no
+## map reload. overrides uses the same flat key shape as
+## LevelData.foliage_overrides ("<category>_sway_speed" / "<category>_sway_amplitude").
+func apply_foliage_overrides(overrides: Dictionary) -> void:
+	for category in _wind_materials:
+		var preset := WindFoliage.get_effective_preset(category, overrides)
+		if preset.is_empty():
+			continue
+		for material in _wind_materials[category]:
+			if is_instance_valid(material):
+				material.set_shader_parameter("sway_speed", preset["sway_speed"])
+				material.set_shader_parameter("sway_amplitude", preset["sway_amplitude"])
 
 
 # ============================================================================
@@ -162,6 +206,7 @@ func get_map_sky_resource() -> Sky:
 ## Clear environment state (called when level is unloaded).
 func clear() -> void:
 	_original_light_energies.clear()
+	_wind_materials.clear()
 	if is_instance_valid(_world_environment):
 		_world_environment.queue_free()
 		_world_environment = null
