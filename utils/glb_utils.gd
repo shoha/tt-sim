@@ -381,11 +381,15 @@ static func process_scatter_instances(scene: Node3D) -> void:
 		var mesh_node := source_node as MeshInstance3D
 		if not mesh_node.mesh:
 			continue
-		_build_multimesh_from_transforms(scene, mesh_node, transforms)
+		var wind_category := WindFoliage.classify_category(String(source_name))
+		_build_multimesh_from_transforms(scene, mesh_node, transforms, wind_category)
 
 
-## Builds one MultiMeshInstance3D (sharing mesh_node's Mesh and material) from a flat
-## array of [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] rows, then removes mesh_node.
+## Builds one MultiMeshInstance3D (sharing mesh_node's Mesh, and by default its
+## surface material(s) too) from a flat array of [lx, ly, lz, qx, qy, qz, qw, sx, sy,
+## sz] rows, then removes mesh_node. `wind_category` ("" for none, otherwise a
+## WindFoliage.PRESETS key from WindFoliage.classify_category) swaps in a per-surface
+## wind-sway ShaderMaterial instead -- see WindFoliage.apply_material.
 ##
 ## Each row is a Blender WORLD-space (matrix_world) transform, already axis-converted
 ## into glTF/Godot's convention on the Python side (terrain-paint's
@@ -402,7 +406,7 @@ static func process_scatter_instances(scene: Node3D) -> void:
 ## would double-apply mesh_node's individual placement in the Blender scene on top of
 ## the already-absolute per-instance transforms.
 static func _build_multimesh_from_transforms(
-	scene_root: Node3D, mesh_node: MeshInstance3D, transforms: Array
+	scene_root: Node3D, mesh_node: MeshInstance3D, transforms: Array, wind_category: String = ""
 ) -> void:
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -425,10 +429,12 @@ static func _build_multimesh_from_transforms(
 	multimesh_instance.name = mesh_node.name + "_MultiMesh"
 	multimesh_instance.multimesh = multimesh
 	# MultiMesh itself has no material slot -- Godot renders every instance with
-	# mesh_node.mesh's own surface material(s) unless overridden here. Copying
-	# mesh_node's own (possibly null) override verbatim preserves whatever rendering
-	# result mesh_node itself would have had, whether or not it actually had one set.
-	multimesh_instance.material_override = mesh_node.material_override
+	# mesh_node.mesh's own surface material(s) as-is unless mutated here. Mutates
+	# mesh_node.mesh's own per-surface materials directly rather than setting anything
+	# on multimesh_instance -- MultiMeshInstance3D has no per-surface override API (see
+	# WindFoliage.apply_material's own docstring). No-op (mesh keeps its own imported
+	# static material) when wind_category is "".
+	WindFoliage.apply_material(mesh_node.mesh, wind_category)
 	scene_root.add_child(multimesh_instance)
 
 	var old_parent := mesh_node.get_parent()
