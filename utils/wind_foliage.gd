@@ -34,6 +34,23 @@ const PRESETS := {
 	"grass": {"sway_speed": 1.6, "sway_amplitude": 0.03, "sway_frequency": 0.4},
 }
 
+
+## Merge a level's foliage_overrides onto a category's base preset. Only
+## "<category>_sway_speed" / "<category>_sway_amplitude" keys are recognized --
+## sway_frequency is not exposed for per-level tuning. Returns an empty dict for
+## an unknown category, matching apply_material's own no-op-for-unknown-category
+## behavior.
+static func get_effective_preset(category: String, overrides: Dictionary) -> Dictionary:
+	if not PRESETS.has(category):
+		return {}
+	var preset: Dictionary = PRESETS[category].duplicate()
+	if overrides.has(category + "_sway_speed"):
+		preset["sway_speed"] = overrides[category + "_sway_speed"]
+	if overrides.has(category + "_sway_amplitude"):
+		preset["sway_amplitude"] = overrides[category + "_sway_amplitude"]
+	return preset
+
+
 static var _shader: Shader = null
 
 
@@ -71,9 +88,14 @@ static func classify_category(instance_name: String) -> String:
 ## parsed fresh on every load_glb call, so a static ShaderMaterial cache would only
 ## ever accumulate stale per-map texture references for no benefit, since this runs
 ## once per unique instance_name per load anyway.
-static func _build_shader_material(source: BaseMaterial3D, preset: Dictionary) -> ShaderMaterial:
+static func _build_shader_material(
+	source: BaseMaterial3D, preset: Dictionary, category: String
+) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = get_shader()
+	# Tagged so LevelEnvironmentManager.store_wind_materials() can find and re-tune
+	# this exact material instance later without re-walking or reloading the scene.
+	material.set_meta("wind_category", category)
 	material.set_shader_parameter("albedo_texture", source.albedo_texture)
 	if source is ORMMaterial3D:
 		material.set_shader_parameter("orm_texture", source.orm_texture)
@@ -100,14 +122,14 @@ static func _build_shader_material(source: BaseMaterial3D, preset: Dictionary) -
 ## material_override would apply whichever surface's texture set got harvested to
 ## every surface, silently painting the wrong texture onto the others. No-op if
 ## category is "" (the mesh keeps its own imported static material, e.g. a scattered
-## rock).
-static func apply_material(mesh: Mesh, category: String) -> void:
+## rock). Optional `overrides` allows per-level tuning of sway speed and amplitude.
+static func apply_material(mesh: Mesh, category: String, overrides: Dictionary = {}) -> void:
 	if category == "" or not PRESETS.has(category):
 		return
-	var preset: Dictionary = PRESETS[category]
+	var preset := get_effective_preset(category, overrides)
 	for i in mesh.get_surface_count():
 		var source_material := mesh.surface_get_material(i)
 		if not source_material is BaseMaterial3D:
 			continue
-		var wind_material := _build_shader_material(source_material, preset)
+		var wind_material := _build_shader_material(source_material, preset, category)
 		mesh.surface_set_material(i, wind_material)
