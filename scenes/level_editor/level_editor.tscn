@@ -556,7 +556,7 @@ layout_mode = 2
 theme_type_variation = &"Danger"
 text = "Delete Selected Level"
 
-[node name="DeleteConfirmDialog" type="ConfirmationDialog" parent="."]
+[node name="DeleteConfirmDialog" type="ConfirmationDialog" parent="LoadDialog"]
 unique_name_in_owner = true
 oversampling_override = 1.0
 title = "Delete Level"
