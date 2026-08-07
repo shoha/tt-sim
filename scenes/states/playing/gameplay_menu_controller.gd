@@ -15,6 +15,7 @@ var _original_environment_preset: String = ""
 var _original_environment_overrides: Dictionary = {}
 var _original_lofi_overrides: Dictionary = {}
 var _original_weather_overrides: Dictionary = {}
+var _original_foliage_overrides: Dictionary = {}
 var _original_grid_cell_size: float = 1.524
 var _original_display_unit: String = "ft"
 var _original_display_unit_per_cell: float = 5.0
@@ -44,6 +45,7 @@ func _ready() -> void:
 		level_edit_panel.environment_changed.connect(_on_edit_environment_changed)
 		level_edit_panel.lofi_changed.connect(_on_edit_lofi_changed)
 		level_edit_panel.weather_changed.connect(_on_edit_weather_changed)
+		level_edit_panel.foliage_changed.connect(_on_edit_foliage_changed)
 		level_edit_panel.revert_to_map_defaults_requested.connect(_on_revert_to_map_defaults)
 		level_edit_panel.save_requested.connect(_on_edit_save_requested)
 		level_edit_panel.cancel_requested.connect(_on_edit_cancel_requested)
@@ -294,6 +296,7 @@ func _enter_edit_mode() -> void:
 	_original_environment_overrides = level_data.environment_overrides.duplicate()
 	_original_lofi_overrides = level_data.lofi_overrides.duplicate()
 	_original_weather_overrides = level_data.weather_overrides.duplicate()
+	_original_foliage_overrides = level_data.foliage_overrides.duplicate()
 	_original_grid_cell_size = level_data.grid_cell_size
 	_original_display_unit = level_data.display_unit
 	_original_display_unit_per_cell = level_data.display_unit_per_cell
@@ -309,6 +312,7 @@ func _enter_edit_mode() -> void:
 			level_data.environment_overrides,
 			level_data.lofi_overrides,
 			level_data.weather_overrides,
+			level_data.foliage_overrides,
 			map_defaults,
 			has_map_sky,
 			level_data.grid_cell_size,
@@ -331,6 +335,7 @@ func _revert_edit_mode_values() -> void:
 	level_data.environment_overrides = _original_environment_overrides.duplicate()
 	level_data.lofi_overrides = _original_lofi_overrides.duplicate()
 	level_data.weather_overrides = _original_weather_overrides.duplicate()
+	level_data.foliage_overrides = _original_foliage_overrides.duplicate()
 	level_data.grid_cell_size = _original_grid_cell_size
 	level_data.display_unit = _original_display_unit
 	level_data.display_unit_per_cell = _original_display_unit_per_cell
@@ -340,6 +345,7 @@ func _revert_edit_mode_values() -> void:
 	_level_play_controller.apply_environment_settings(
 		_original_environment_preset, _original_environment_overrides
 	)
+	_level_play_controller.apply_foliage_overrides(_original_foliage_overrides)
 
 	var game_map = _level_play_controller.get_game_map()
 	if game_map:
@@ -384,6 +390,7 @@ func _revert_edit_mode_values() -> void:
 					"environment_overrides": _original_environment_overrides,
 					"lofi_overrides": full_lofi,
 					"weather_overrides": full_weather,
+					"foliage_overrides": _original_foliage_overrides,
 				}
 			)
 		)
@@ -483,6 +490,16 @@ func _on_edit_weather_changed(overrides: Dictionary) -> void:
 		NetworkManager.broadcast_visual_settings({"weather_overrides": overrides})
 
 
+## Real-time foliage sway change from the edit panel
+func _on_edit_foliage_changed(overrides: Dictionary) -> void:
+	if _level_play_controller:
+		_level_play_controller.apply_foliage_overrides(overrides)
+		if _level_play_controller.active_level_data:
+			_level_play_controller.active_level_data.foliage_overrides = overrides.duplicate()
+	if NetworkManager.is_networked() and NetworkManager.is_host():
+		NetworkManager.broadcast_visual_settings({"foliage_overrides": overrides})
+
+
 ## Save all edited values to level data and persist to disk
 func _on_edit_save_requested(
 	new_intensity: float,
@@ -490,6 +507,7 @@ func _on_edit_save_requested(
 	new_overrides: Dictionary,
 	new_lofi_overrides: Dictionary,
 	new_weather_overrides: Dictionary,
+	new_foliage_overrides: Dictionary,
 	new_grid_cell_size: float,
 	new_display_unit: String,
 	new_display_unit_per_cell: float,
@@ -505,6 +523,7 @@ func _on_edit_save_requested(
 	level_data.environment_overrides = new_overrides.duplicate()
 	level_data.lofi_overrides = new_lofi_overrides.duplicate()
 	level_data.weather_overrides = new_weather_overrides.duplicate()
+	level_data.foliage_overrides = new_foliage_overrides.duplicate()
 	level_data.grid_cell_size = new_grid_cell_size
 	level_data.display_unit = new_display_unit
 	level_data.display_unit_per_cell = new_display_unit_per_cell
@@ -522,6 +541,7 @@ func _on_edit_save_requested(
 					"environment_overrides": new_overrides,
 					"lofi_overrides": new_lofi_overrides,
 					"weather_overrides": new_weather_overrides,
+					"foliage_overrides": new_foliage_overrides,
 				}
 			)
 		)
