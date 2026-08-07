@@ -70,6 +70,23 @@ func test_apply_foliage_overrides_only_touches_the_matching_category() -> void:
 	root.free()
 
 
+func test_apply_foliage_overrides_with_an_empty_dict_restores_preset_defaults() -> void:
+	var root := Node3D.new()
+	var mm := _make_multimesh_instance("grass")
+	root.add_child(mm)
+	var manager := LevelEnvironmentManager.new()
+	manager.store_wind_materials(root)
+	manager.apply_foliage_overrides({"grass_sway_speed": 9.0})
+
+	manager.apply_foliage_overrides({})
+
+	var material := mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
+	assert_eq(
+		material.get_shader_parameter("sway_speed"), WindFoliage.PRESETS["grass"]["sway_speed"]
+	)
+	root.free()
+
+
 func test_store_wind_materials_ignores_untagged_materials() -> void:
 	var root := Node3D.new()
 	var mesh := BoxMesh.new()
