@@ -52,6 +52,7 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 clip_text = true
+fit_to_longest_item = false
 
 [node name="GridCellSizeRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
 layout_mode = 2
@@ -92,6 +93,8 @@ text = "Preset:"
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+clip_text = true
+fit_to_longest_item = false
 
 [node name="IntensityRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
 layout_mode = 2
@@ -317,6 +320,8 @@ text = "Sky:"
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+clip_text = true
+fit_to_longest_item = false
 
 [node name="FogEnergyRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
 layout_mode = 2
@@ -387,6 +392,8 @@ text = "Tonemap:"
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+clip_text = true
+fit_to_longest_item = false
 
 [node name="TonemapWhiteRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
 layout_mode = 2
