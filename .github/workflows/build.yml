@@ -33,7 +33,7 @@ jobs:
         run: |
           apt-get update -qq
           apt-get install -y -qq python3-pip
-          pip install gdtoolkit
+          pip install --break-system-packages gdtoolkit
 
       - name: Lint GDScript
         run: gdlint autoloads/ scenes/ utils/ resources/ tests/unit/
