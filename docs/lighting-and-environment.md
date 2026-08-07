@@ -350,6 +350,10 @@ Lo-fi overrides are stored in `LevelData.lofi_overrides` and applied via `GameMa
 # Weather effects (0.0 = off, 1.0 = max)
 # Keys: "rain_intensity", "snow_intensity", "fog_intensity", "wind_intensity"
 @export var weather_overrides: Dictionary = {}
+
+# Foliage wind-sway tuning (per-category speed/amplitude for scattered foliage)
+# Keys: "tree_sway_speed", "tree_sway_amplitude", "grass_sway_speed", "grass_sway_amplitude"
+@export var foliage_overrides: Dictionary = {}
 ```
 
 **Important:** `environment_preset` defaults to `""` (empty string), not a named preset. This means new levels start with map defaults when available.
@@ -375,6 +379,10 @@ For folder-based levels, settings are stored in `level.json`:
   "weather_overrides": {
     "rain_intensity": 0.7,
     "fog_intensity": 0.3
+  },
+  "foliage_overrides": {
+    "tree_sway_speed": 0.8,
+    "grass_sway_amplitude": 0.05
   }
 }
 ```
@@ -553,6 +561,8 @@ The "Weather" section in `LevelEditPanel` (between Post-Processing and the actio
 
 Weather piggybacks on the existing `broadcast_visual_settings` / `visual_settings_received` path with a `"weather_overrides"` key. No new RPCs or signals. Included in full state sync for late joiners (part of `LevelData.to_dict()`).
 
+Foliage wind-sway tuning (see [Data Storage](#data-storage) for `LevelData.foliage_overrides`) is broadcast the same way, via a `"foliage_overrides"` key on the same `broadcast_visual_settings` / `visual_settings_received` path — no new RPCs or signals for it either.
+
 ### Particle Details
 
 | Effect | Particles | Mesh | Key Properties |
@@ -586,6 +596,11 @@ All intensity changes animate smoothly over 1 second via tweens on `amount_ratio
 | `scenes/states/playing/gameplay_menu_controller.gd` | Signal routing, snapshot/revert, network broadcast |
 | `scenes/states/playing/level_play_controller.gd` | Lifecycle (setup, network sync, teardown) |
 | `scenes/states/playing/game_map.gd` | `setup_weather()`, `apply_weather_overrides()`, `clear_weather()` |
+| `utils/wind_foliage.gd` | `PRESETS`, `get_effective_preset()` — foliage wind-sway classification and per-category preset merging |
+| `utils/glb_utils.gd` | Bakes `foliage_overrides` into wind `ShaderMaterial`s at map-load time (`process_scatter_instances()`) |
+| `resources/level_data.gd` | `foliage_overrides` field (serialization, duplication) |
+| `scenes/states/playing/level_environment_manager.gd` | `store_wind_materials()`, `apply_foliage_overrides()` — live re-tuning of already-loaded materials |
+| `scenes/states/playing/level_play_controller.gd` | `apply_foliage_overrides()` — delegates to `LevelEnvironmentManager`, network sync |
 
 ### Tuning Parameters
 
