@@ -166,9 +166,16 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		world_viewport.add_child(_sun_light)
 	_configure_sun_light(level_data.sun_overrides)
 
-	# Apply lo-fi shader overrides if any are set
-	if level_data.lofi_overrides.size() > 0 and is_instance_valid(_game_map):
-		_game_map.apply_lofi_overrides(level_data.lofi_overrides)
+	# Apply lo-fi shader overrides. Unlike WorldEnvironment/sun light (freshly
+	# recomputed every load regardless of override emptiness) and weather
+	# (a fresh WeatherRenderer every load), the lo-fi ShaderMaterial is a
+	# single persistent resource reused for this GameMap's whole lifetime --
+	# so a level with no overrides must still get a full reset to defaults,
+	# not a skipped call that leaves a previous level's live values in place.
+	if is_instance_valid(_game_map):
+		var lofi_config := Constants.LOFI_DEFAULTS.duplicate()
+		lofi_config.merge(level_data.lofi_overrides, true)
+		_game_map.apply_lofi_overrides(lofi_config)
 
 	if level_data.environment_preset != "":
 		print(
