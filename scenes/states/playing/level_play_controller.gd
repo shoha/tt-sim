@@ -218,6 +218,11 @@ func apply_foliage_overrides(overrides: Dictionary) -> void:
 	_environment_manager.apply_foliage_overrides(overrides)
 
 
+## Apply sun light overrides to the live level (mode + time of day).
+func apply_sun_overrides(overrides: Dictionary) -> void:
+	_environment_manager.apply_sun_overrides(overrides)
+
+
 ## Apply environment settings to the live WorldEnvironment.
 func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 	_environment_manager.apply_environment_settings(preset, overrides)
@@ -385,6 +390,10 @@ func _on_visual_settings_received(settings: Dictionary) -> void:
 		apply_foliage_overrides(settings["foliage_overrides"])
 		if active_level_data:
 			active_level_data.foliage_overrides = settings["foliage_overrides"].duplicate()
+	if settings.has("sun_overrides"):
+		apply_sun_overrides(settings["sun_overrides"])
+		if active_level_data:
+			active_level_data.sun_overrides = settings["sun_overrides"].duplicate()
 
 
 ## Check if a level is currently loaded
