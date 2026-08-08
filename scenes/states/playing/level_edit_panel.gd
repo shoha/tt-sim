@@ -325,30 +325,22 @@ func _on_closed() -> void:
 ## embedded WorldEnvironment (empty dict if none).  It is used as the base
 ## layer when preset is "" and for the "Map Defaults" dropdown option.
 func initialize(
-	intensity: float,
-	preset: String,
-	overrides: Dictionary,
-	lofi_overrides: Dictionary = {},
-	weather_overrides: Dictionary = {},
-	foliage_overrides: Dictionary = {},
-	map_defaults: Dictionary = {},
-	has_map_sky: bool = false,
-	grid_cell_size: float = 1.524,
-	display_unit: String = "ft",
-	display_unit_per_cell: float = 5.0,
+	level_data: LevelData, map_defaults: Dictionary = {}, has_map_sky: bool = false
 ) -> void:
+	var intensity := level_data.light_intensity_scale
+	var preset := level_data.environment_preset
 	light_intensity_scale = intensity
 	current_preset = preset
-	current_overrides = overrides.duplicate()
-	current_lofi_overrides = lofi_overrides.duplicate()
-	current_weather_overrides = weather_overrides.duplicate()
-	current_foliage_overrides = foliage_overrides.duplicate()
+	current_overrides = level_data.environment_overrides.duplicate()
+	current_lofi_overrides = level_data.lofi_overrides.duplicate()
+	current_weather_overrides = level_data.weather_overrides.duplicate()
+	current_foliage_overrides = level_data.foliage_overrides.duplicate()
 	_map_defaults = map_defaults
 
 	# Set scale controls
-	current_grid_cell_size = grid_cell_size
-	current_display_unit = display_unit
-	current_display_unit_per_cell = display_unit_per_cell
+	current_grid_cell_size = level_data.grid_cell_size
+	current_display_unit = level_data.display_unit
+	current_display_unit_per_cell = level_data.display_unit_per_cell
 	_sync_scale_controls()
 
 	# Set intensity control

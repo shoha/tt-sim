@@ -304,22 +304,7 @@ func _enter_edit_mode() -> void:
 	# Initialize the edit panel with current values
 	var map_defaults = _level_play_controller.get_map_environment_config()
 	var has_map_sky = _level_play_controller.get_map_sky_resource() != null
-	(
-		level_edit_panel
-		. initialize(
-			level_data.light_intensity_scale,
-			level_data.environment_preset,
-			level_data.environment_overrides,
-			level_data.lofi_overrides,
-			level_data.weather_overrides,
-			level_data.foliage_overrides,
-			map_defaults,
-			has_map_sky,
-			level_data.grid_cell_size,
-			level_data.display_unit,
-			level_data.display_unit_per_cell,
-		)
-	)
+	level_edit_panel.initialize(level_data, map_defaults, has_map_sky)
 
 
 ## Revert all live changes to the original snapshot values.

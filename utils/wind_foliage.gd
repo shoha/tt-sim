@@ -34,6 +34,8 @@ const PRESETS := {
 	"grass": {"sway_speed": 1.6, "sway_amplitude": 0.03, "sway_frequency": 0.4},
 }
 
+static var _shader: Shader = null
+
 
 ## Merge a level's foliage_overrides onto a category's base preset. Only
 ## "<category>_sway_speed" / "<category>_sway_amplitude" keys are recognized --
@@ -49,9 +51,6 @@ static func get_effective_preset(category: String, overrides: Dictionary) -> Dic
 	if overrides.has(category + "_sway_amplitude"):
 		preset["sway_amplitude"] = overrides[category + "_sway_amplitude"]
 	return preset
-
-
-static var _shader: Shader = null
 
 
 ## Get the shared wind foliage Shader resource, building it once on first use --
