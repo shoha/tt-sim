@@ -51,11 +51,19 @@ float bayer16(vec2 screen_coord) {
 }
 
 
-// Call from fragment() with the fragment's world-space normal. Discards the
-// fragment (dithered, never fully) if it sits between the camera and any tracked
-// token within that token's fade radius. No-op if occlusion is disabled, there are
-// no tokens, or this fragment belongs to a floor-like surface (see floor_threshold).
-void apply_occlusion_fade(vec3 world_normal) {
+// Call from fragment() with the fragment's world-space normal, view-space vertex
+// position, the view matrix, and the fragment coordinate/viewport size. Discards
+// the fragment (dithered, never fully) if it sits between the camera and any
+// tracked token within that token's fade radius. No-op if occlusion is disabled,
+// there are no tokens, or this fragment belongs to a floor-like surface (see
+// floor_threshold). Takes VERTEX/VIEW_MATRIX/FRAGCOORD/VIEWPORT_SIZE as explicit
+// parameters rather than reading the built-ins directly -- confirmed via a real
+// headless probe that Godot's shader compiler does not resolve stage built-ins
+// referenced inside a plain (non-vertex/fragment) function, even one called from
+// fragment(); the caller must read them itself and pass the values in.
+void apply_occlusion_fade(
+	vec3 world_normal, vec3 vertex_view, mat4 view_matrix, vec2 frag_coord, vec2 viewport_size
+) {
 	bool is_floor = world_normal.y > floor_threshold;
 	if (!enable_occlusion || token_count <= 0 || is_floor) {
 		return;
@@ -66,13 +74,13 @@ void apply_occlusion_fade(vec3 world_normal) {
 		if (i >= token_count) break;
 
 		// Transform token world position to view space
-		vec3 token_view = (VIEW_MATRIX * vec4(token_positions[i], 1.0)).xyz;
+		vec3 token_view = (view_matrix * vec4(token_positions[i], 1.0)).xyz;
 
 		// Skip if this fragment is behind (further from camera than) the token
-		if (VERTEX.z <= token_view.z) continue;
+		if (vertex_view.z <= token_view.z) continue;
 
 		// Distance in the camera's XY plane (screen-space proximity)
-		float dist = distance(VERTEX.xy, token_view.xy);
+		float dist = distance(vertex_view.xy, token_view.xy);
 		float radius = token_radii[i];
 
 		if (dist < radius) {
@@ -88,10 +96,10 @@ void apply_occlusion_fade(vec3 world_normal) {
 
 	float target_alpha = mix(1.0, min_alpha, fade_intensity);
 
-	vec2 dither_coord = FRAGCOORD.xy;
+	vec2 dither_coord = frag_coord;
 	if (lofi_pixelation > 0.0) {
 		float aspect = 16.0 / 9.0;
-		vec2 uv_here = FRAGCOORD.xy / VIEWPORT_SIZE;
+		vec2 uv_here = frag_coord / viewport_size;
 		vec2 lofi_cell = vec2(lofi_pixelation / aspect, lofi_pixelation);
 		// Subdivide each lo-fi pixel into lofi_dither_scale x lofi_dither_scale
 		// dither cells. Scale=1 matches the lo-fi grid exactly; scale=2 gives
