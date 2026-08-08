@@ -11,6 +11,7 @@ This document describes the lighting and environment configuration system for le
 - [Sky Presets](#sky-presets)
 - [Map Defaults](#map-defaults)
 - [Environment Overrides](#environment-overrides)
+- [Default Sun Light](#default-sun-light)
 - [In-Game Edit Panel](#in-game-edit-panel)
 - [Post-Processing (Lo-Fi) Overrides](#post-processing-lo-fi-overrides)
 - [Data Storage](#data-storage)
@@ -249,6 +250,49 @@ Overrides allow fine-tuning individual properties without creating a new preset:
 ```
 
 Overrides are merged on top of the selected preset's values (or map defaults when no preset is selected). Only changed properties need to be included — everything else comes from the preset/defaults.
+
+## Default Sun Light
+
+Maps with no lights of their own get a default shadow-casting `DirectionalLight3D`
+("LevelSunLight") so tokens and foliage read as grounded in the scene rather than
+lit only by flat ambient light. Maps that bring their own lights are left alone.
+
+### Data Model
+
+```gdscript
+# In LevelData
+@export var sun_overrides: Dictionary = {}
+# Keys:
+#   "mode"        : String — "auto" | "on" | "off"  (default "auto")
+#   "time_of_day" : float  — 0.0-24.0                (default 14.0)
+```
+
+- `"auto"` (default): the sun is shown only if the map has no lights of its own.
+- `"on"`: the sun is always shown, even if the map has its own lights.
+- `"off"`: the sun is never shown, even if the map has no lights.
+
+### Time of Day
+
+`time_of_day` is a static, per-level setting (not an animated day/night cycle). It
+drives the sun light's elevation, color, and energy by interpolating between hand-
+authored keyframes (`utils/default_sun.gd`, `DefaultSun.KEYFRAMES`) at dawn (6:00),
+noon (12:00), dusk (18:00), and night (0:00/24:00). It does **not** affect the
+separate ambient/`Environment` config — the sun and the ambient/preset system are
+independent layers.
+
+### Edit Panel
+
+The "Sun" section in `LevelEditPanel` (between the advanced Lighting & Environment
+controls and Post-Processing Effects) provides a Mode dropdown (Auto/On/Off) and a
+Time of Day slider (0-24). Changes apply in real time and are included in
+save/cancel snapshotting and network sync, following the same pattern as Weather
+and Foliage overrides.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `utils/default_sun.gd` | `DefaultSun.configure_directional_light()` -- time-of-day keyframe interpolation for the default sun light |
 
 ## In-Game Edit Panel
 
