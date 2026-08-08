@@ -13,6 +13,7 @@ signal save_requested(
 	lofi_overrides: Dictionary,
 	weather_overrides: Dictionary,
 	foliage_overrides: Dictionary,
+	sun_overrides: Dictionary,
 	grid_cell_size: float,
 	display_unit: String,
 	display_unit_per_cell: float
@@ -26,6 +27,7 @@ signal environment_changed(preset: String, overrides: Dictionary)
 signal lofi_changed(overrides: Dictionary)
 signal weather_changed(overrides: Dictionary)
 signal foliage_changed(overrides: Dictionary)
+signal sun_changed(overrides: Dictionary)
 signal revert_to_map_defaults_requested
 
 ## Emitted when the drawer opens (before the animation starts).
@@ -43,11 +45,18 @@ const TONEMAP_MODES = {
 	"ACES": Environment.TONE_MAPPER_ACES,
 }
 
+const SUN_MODES = {
+	"Auto": "auto",
+	"On": "on",
+	"Off": "off",
+}
+
 var current_preset: String = ""
 var current_overrides: Dictionary = {}
 var current_lofi_overrides: Dictionary = {}
 var current_weather_overrides: Dictionary = {}
 var current_foliage_overrides: Dictionary = {}
+var current_sun_overrides: Dictionary = {}
 var light_intensity_scale: float = 1.0
 var current_grid_cell_size: float = 1.524
 var current_display_unit: String = "ft"
@@ -118,6 +127,10 @@ var _map_defaults: Dictionary = {}
 @onready var grass_sway_speed_slider_spin: SliderSpinBox = %GrassSwaySpeedSliderSpin
 @onready var grass_sway_amplitude_slider_spin: SliderSpinBox = %GrassSwayAmplitudeSliderSpin
 
+# Sun controls
+@onready var sun_mode_dropdown: OptionButton = %SunModeDropdown
+@onready var sun_time_of_day_slider_spin: SliderSpinBox = %SunTimeOfDaySliderSpin
+
 
 func _on_ready() -> void:
 	# Configure drawer
@@ -161,6 +174,7 @@ func _on_ready() -> void:
 	_populate_preset_dropdown()
 	_populate_sky_preset_dropdown()
 	_populate_tonemap_mode_dropdown()
+	_populate_sun_mode_dropdown()
 
 
 func _connect_control_signals() -> void:
@@ -174,6 +188,8 @@ func _connect_control_signals() -> void:
 	advanced_toggle.toggled.connect(_on_advanced_toggled)
 	sky_preset_dropdown.item_selected.connect(_on_sky_preset_selected)
 	tonemap_mode_dropdown.item_selected.connect(_on_tonemap_mode_selected)
+	sun_mode_dropdown.item_selected.connect(_on_sun_mode_selected)
+	sun_time_of_day_slider_spin.value_changed.connect(_on_sun_time_of_day_changed)
 
 	# Config-driven environment overrides: [control, signal_name, override_key]
 	for binding in [
@@ -297,6 +313,15 @@ func _populate_tonemap_mode_dropdown() -> void:
 		idx += 1
 
 
+func _populate_sun_mode_dropdown() -> void:
+	sun_mode_dropdown.clear()
+	var idx := 0
+	for label in SUN_MODES:
+		sun_mode_dropdown.add_item(label, idx)
+		sun_mode_dropdown.set_item_metadata(idx, SUN_MODES[label])
+		idx += 1
+
+
 # ============================================================================
 # Drawer Lifecycle
 # ============================================================================
@@ -335,6 +360,7 @@ func initialize(
 	current_lofi_overrides = level_data.lofi_overrides.duplicate()
 	current_weather_overrides = level_data.weather_overrides.duplicate()
 	current_foliage_overrides = level_data.foliage_overrides.duplicate()
+	current_sun_overrides = level_data.sun_overrides.duplicate()
 	_map_defaults = map_defaults
 
 	# Set scale controls
@@ -367,6 +393,7 @@ func initialize(
 	_sync_lofi_controls()
 	_sync_weather_controls()
 	_sync_foliage_controls()
+	_sync_sun_controls()
 
 
 ## Apply new environment state from outside (e.g. after reverting to map defaults)
@@ -576,6 +603,7 @@ func _on_save_pressed() -> void:
 			current_lofi_overrides,
 			current_weather_overrides,
 			current_foliage_overrides,
+			current_sun_overrides,
 			current_grid_cell_size,
 			current_display_unit,
 			current_display_unit_per_cell,
@@ -652,3 +680,26 @@ func _sync_foliage_controls() -> void:
 func _on_foliage_override_changed(value: Variant, key: String) -> void:
 	current_foliage_overrides[key] = value
 	foliage_changed.emit(current_foliage_overrides)
+
+
+func _on_sun_mode_selected(index: int) -> void:
+	var mode: String = sun_mode_dropdown.get_item_metadata(index)
+	current_sun_overrides["mode"] = mode
+	sun_changed.emit(current_sun_overrides)
+
+
+func _on_sun_time_of_day_changed(value: float) -> void:
+	current_sun_overrides["time_of_day"] = value
+	sun_changed.emit(current_sun_overrides)
+
+
+## Sync sun controls from current_sun_overrides.
+func _sync_sun_controls() -> void:
+	var mode: String = current_sun_overrides.get("mode", "auto")
+	for i in range(sun_mode_dropdown.item_count):
+		if sun_mode_dropdown.get_item_metadata(i) == mode:
+			sun_mode_dropdown.select(i)
+			break
+	sun_time_of_day_slider_spin.set_value_no_signal(
+		current_sun_overrides.get("time_of_day", DefaultSun.DEFAULT_TIME_OF_DAY)
+	)
