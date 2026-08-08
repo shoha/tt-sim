@@ -556,7 +556,7 @@ The panel is divided into sections:
 The panel emits granular signals for each type of change:
 
 ```gdscript
-signal save_requested(map_scale, light_intensity_scale, environment_preset, environment_overrides, lofi_overrides)
+signal save_requested(light_intensity_scale, environment_preset, environment_overrides, lofi_overrides, weather_overrides, foliage_overrides, sun_overrides, grid_cell_size, display_unit, display_unit_per_cell)
 signal cancel_requested
 signal map_scale_changed(new_scale: float)
 signal intensity_changed(new_scale: float)
