@@ -245,3 +245,36 @@ func test_leaves_scene_untouched_when_extras_group_is_not_an_array() -> void:
 	assert_null(scene.get_node_or_null("GrassBlade_MultiMesh"))
 
 	scene.free()
+
+
+func test_tags_a_tree_named_instance_with_the_tree_wind_foliage_category() -> void:
+	var built := _make_scene_with_template("OakTree")
+	var scene: Node3D = built.scene
+	scene.set_meta(
+		"tt_gltf_scene_extras",
+		{"tt_scatter_instances": {"OakTree": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]]}}
+	)
+
+	GlbUtils.process_scatter_instances(scene)
+
+	var multimesh_instance := scene.get_node_or_null("OakTree_MultiMesh") as MultiMeshInstance3D
+	assert_not_null(multimesh_instance)
+	assert_eq(multimesh_instance.get_meta("wind_foliage_category", ""), "tree")
+
+	scene.free()
+
+
+func test_tags_an_unrecognized_instance_name_with_the_grass_wind_foliage_category() -> void:
+	var built := _make_scene_with_template("GrassBlade")
+	var scene: Node3D = built.scene
+	scene.set_meta(
+		"tt_gltf_scene_extras",
+		{"tt_scatter_instances": {"GrassBlade": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]]}}
+	)
+
+	GlbUtils.process_scatter_instances(scene)
+
+	var multimesh_instance := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
+	assert_eq(multimesh_instance.get_meta("wind_foliage_category", ""), "grass")
+
+	scene.free()

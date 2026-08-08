@@ -397,7 +397,10 @@ static func process_scatter_instances(scene: Node3D, foliage_overrides: Dictiona
 ## surface material(s) too) from a flat array of [lx, ly, lz, qx, qy, qz, qw, sx, sy,
 ## sz] rows, then removes mesh_node. `wind_category` ("" for none, otherwise a
 ## WindFoliage.PRESETS key from WindFoliage.classify_category) swaps in a per-surface
-## wind-sway ShaderMaterial instead -- see WindFoliage.apply_material.
+## wind-sway ShaderMaterial instead -- see WindFoliage.apply_material. The built node
+## is also tagged with a "wind_foliage_category" meta of this same value, letting
+## OcclusionFadeManager find tree-category instances without re-deriving the
+## classification itself.
 ##
 ## Each row is a Blender WORLD-space (matrix_world) transform, already axis-converted
 ## into glTF/Godot's convention on the Python side (terrain-paint's
@@ -440,6 +443,10 @@ static func _build_multimesh_from_transforms(
 	var multimesh_instance := MultiMeshInstance3D.new()
 	multimesh_instance.name = mesh_node.name + "_MultiMesh"
 	multimesh_instance.multimesh = multimesh
+	# Tags the node itself (not the Mesh resource) with its wind category so
+	# OcclusionFadeManager._collect_tree_materials() can find tree-category instances
+	# without re-deriving WindFoliage.classify_category()'s result.
+	multimesh_instance.set_meta("wind_foliage_category", wind_category)
 	# MultiMesh itself has no material slot -- Godot renders every instance with
 	# mesh_node.mesh's own surface material(s) as-is unless mutated here. Mutates
 	# mesh_node.mesh's own per-surface materials directly rather than setting anything
