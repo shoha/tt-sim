@@ -58,6 +58,12 @@ extends Resource
 ## Empty dictionary uses the defaults from WindFoliage.PRESETS.
 @export var foliage_overrides: Dictionary = {}
 
+## Default sun light configuration (see utils/default_sun.gd and
+## LevelEnvironmentManager). Keys: "mode" ("auto" | "on" | "off", "auto" when
+## absent means: add the sun only if the map has no lights of its own) and
+## "time_of_day" (0.0-24.0, DefaultSun.DEFAULT_TIME_OF_DAY when absent).
+@export var sun_overrides: Dictionary = {}
+
 ## Scale & Measurement
 @export_group("Scale")
 ## Size of one grid cell in world units (meters), as measured in the loaded scene.
@@ -181,6 +187,7 @@ func duplicate_level() -> LevelData:
 	new_level.lofi_overrides = lofi_overrides.duplicate()
 	new_level.weather_overrides = weather_overrides.duplicate()
 	new_level.foliage_overrides = foliage_overrides.duplicate()
+	new_level.sun_overrides = sun_overrides.duplicate()
 	new_level.grid_cell_size = grid_cell_size
 	new_level.display_unit = display_unit
 	new_level.display_unit_per_cell = display_unit_per_cell
@@ -253,6 +260,7 @@ func to_dict() -> Dictionary:
 		"lofi_overrides": lofi_overrides.duplicate(),
 		"weather_overrides": weather_overrides.duplicate(),
 		"foliage_overrides": foliage_overrides.duplicate(),
+		"sun_overrides": sun_overrides.duplicate(),
 		"grid_cell_size": grid_cell_size,
 		"display_unit": display_unit,
 		"display_unit_per_cell": display_unit_per_cell,
@@ -292,6 +300,8 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.weather_overrides = weather_raw.duplicate() if weather_raw is Dictionary else {}
 	var foliage_raw = data.get("foliage_overrides", {})
 	level.foliage_overrides = foliage_raw.duplicate() if foliage_raw is Dictionary else {}
+	var sun_raw = data.get("sun_overrides", {})
+	level.sun_overrides = sun_raw.duplicate() if sun_raw is Dictionary else {}
 
 	level.grid_cell_size = data.get("grid_cell_size", 1.524)
 	level.display_unit = data.get("display_unit", "ft")
