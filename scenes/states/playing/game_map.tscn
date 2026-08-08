@@ -74,14 +74,6 @@ near = 0.001
 far = 1000.0
 script = ExtResource("4_kjinj")
 
-[node name="DirectionalLight3D" type="OmniLight3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D" unique_id=345852792]
-visible = false
-light_energy = 2.0
-shadow_enabled = true
-omni_range = 50.0
-omni_attenuation = 0.247
-omni_shadow_mode = 0
-
 [node name="MeshInstance3D" type="MeshInstance3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D" unique_id=1855205540]
 visible = false
 extra_cull_margin = 16384.0
