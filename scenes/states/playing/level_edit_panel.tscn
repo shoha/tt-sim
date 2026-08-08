@@ -502,6 +502,47 @@ text = "Global Illumination"
 [node name="HSeparator3" type="HSeparator" parent="ScrollContainer/VBox"]
 layout_mode = 2
 
+[node name="SunLabel" type="Label" parent="ScrollContainer/VBox"]
+layout_mode = 2
+text = "Sun"
+horizontal_alignment = 1
+
+[node name="SunModeRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SunModeLabel" type="Label" parent="ScrollContainer/VBox/SunModeRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Mode:"
+
+[node name="SunModeDropdown" type="OptionButton" parent="ScrollContainer/VBox/SunModeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+clip_text = true
+fit_to_longest_item = false
+
+[node name="SunTimeOfDayRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SunTimeOfDayLabel" type="Label" parent="ScrollContainer/VBox/SunTimeOfDayRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Time of Day:"
+
+[node name="SunTimeOfDaySliderSpin" parent="ScrollContainer/VBox/SunTimeOfDayRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 24.0
+step = 0.5
+value = 14.0
+
+[node name="HSeparatorSun" type="HSeparator" parent="ScrollContainer/VBox"]
+layout_mode = 2
+
 [node name="EffectsLabel" type="Label" parent="ScrollContainer/VBox"]
 layout_mode = 2
 text = "Post-Processing Effects"
