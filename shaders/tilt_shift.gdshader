@@ -12,7 +12,7 @@ uniform vec3 focal_point = vec3(0.0);
 uniform float DoF = 5;
 /** Maximum amount of blur based off of distance from focal plane
  */
-uniform float blur_cap: hint_range(0.0,8.0) = 2.0;
+uniform float blur_cap: hint_range(0.0,8.0) = 1.0;
 /** How quickly blur occurs away from focal plane
  * Bigger number is slower, smaller number is faster
  */

@@ -10,14 +10,14 @@
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_lofi_canvas"]
 shader = ExtResource("5_lofi_canvas")
-shader_parameter/pixelation = 0.0050000002375
-shader_parameter/saturation = 0.85
-shader_parameter/color_tint = Color(1.02, 1, 0.96, 1)
-shader_parameter/color_levels = 8.000000284999999
-shader_parameter/dither_strength = 0.50000002375
-shader_parameter/vignette_strength = 0.550000026125
-shader_parameter/vignette_radius = 0.750000035625
-shader_parameter/grain_intensity = 0.025
+shader_parameter/pixelation = 0.0
+shader_parameter/saturation = 1.0
+shader_parameter/color_tint = Color(1, 1, 1, 1)
+shader_parameter/color_levels = 256.0
+shader_parameter/dither_strength = 0.0
+shader_parameter/vignette_strength = 0.15
+shader_parameter/vignette_radius = 0.85
+shader_parameter/grain_intensity = 0.012
 shader_parameter/grain_speed = 0.2
 shader_parameter/grain_scale = 0.12
 
@@ -33,7 +33,7 @@ render_priority = 0
 shader = ExtResource("4_hgeeq")
 shader_parameter/focal_point = Vector3(0, 0, 0)
 shader_parameter/DoF = 5.0
-shader_parameter/blur_cap = 2.0
+shader_parameter/blur_cap = 1.0
 shader_parameter/blur_rate = 2.0
 shader_parameter/vertical_bias = 1.0
 

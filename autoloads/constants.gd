@@ -48,16 +48,16 @@ const LAYER_TRANSITION := 110  ## Scene transition fade (full-screen, hidden whe
 # Used by GameMap and the LevelEditor lighting preview.
 
 const LOFI_DEFAULTS := {
-	"pixelation": 0.005,
-	"saturation": 0.85,
-	"color_tint": Color(1.02, 1.0, 0.96),
-	"vignette_strength": 0.55,
-	"vignette_radius": 0.75,
-	"grain_intensity": 0.025,
+	"pixelation": 0.0,
+	"saturation": 1.0,
+	"color_tint": Color(1.0, 1.0, 1.0),
+	"vignette_strength": 0.15,
+	"vignette_radius": 0.85,
+	"grain_intensity": 0.012,
 	"grain_speed": 0.2,
 	"grain_scale": 0.12,
-	"color_levels": 8.0,
-	"dither_strength": 0.5,
+	"color_levels": 256.0,
+	"dither_strength": 0.0,
 }
 
 # =============================================================================

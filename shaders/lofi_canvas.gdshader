@@ -58,14 +58,14 @@ shader_type canvas_item;
 // PIXELATION
 // =============================================================================
 group_uniforms pixelation;
-uniform float pixelation : hint_range(0.0, 0.01) = 0.003;
+uniform float pixelation : hint_range(0.0, 0.01) = 0.0;
 
 // =============================================================================
 // COLOR GRADING
 // =============================================================================
 group_uniforms color_grading;
-uniform float saturation : hint_range(0.0, 1.5) = 0.85;
-uniform vec3 color_tint : source_color = vec3(1.02, 1.0, 0.96);
+uniform float saturation : hint_range(0.0, 1.5) = 1.0;
+uniform vec3 color_tint : source_color = vec3(1.0, 1.0, 1.0);
 
 // =============================================================================
 // DITHERING (color quantization with ordered dithering)
@@ -73,22 +73,22 @@ uniform vec3 color_tint : source_color = vec3(1.02, 1.0, 0.96);
 group_uniforms dithering;
 // Number of color levels per channel (lower = more retro, 256 = disabled)
 // Common values: 8 (3-bit), 16 (4-bit), 32 (5-bit), 64 (6-bit)
-uniform float color_levels : hint_range(2.0, 256.0) = 32.0;
+uniform float color_levels : hint_range(2.0, 256.0) = 256.0;
 // Dither strength - how much the Bayer pattern affects quantization
-uniform float dither_strength : hint_range(0.0, 1.0) = 0.5;
+uniform float dither_strength : hint_range(0.0, 1.0) = 0.0;
 
 // =============================================================================
 // VIGNETTE
 // =============================================================================
 group_uniforms vignette;
-uniform float vignette_strength : hint_range(0.0, 1.0) = 0.3;
-uniform float vignette_radius : hint_range(0.0, 2.0) = 0.8;
+uniform float vignette_strength : hint_range(0.0, 1.0) = 0.15;
+uniform float vignette_radius : hint_range(0.0, 2.0) = 0.85;
 
 // =============================================================================
 // FILM GRAIN
 // =============================================================================
 group_uniforms film_grain;
-uniform float grain_intensity : hint_range(0.0, 0.1) = 0.025;
+uniform float grain_intensity : hint_range(0.0, 0.1) = 0.012;
 uniform float grain_speed : hint_range(0.0, 1.0) = 0.2;
 uniform float grain_scale : hint_range(0.05, 0.5) = 0.12;
 group_uniforms;
