@@ -35,6 +35,13 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
  * MANAGED BY: GlbUtils._get_wind_foliage_shader() loads this once and reuses the
  * compiled Shader resource across every species -- each species still gets its own
  * ShaderMaterial instance (different textures), built fresh per map load.
+ *
+ * OCCLUSION FADE: tree-category instances (see WindFoliage.classify_category) also
+ * fade out when a token is hidden behind them, same as map geometry -- see
+ * occlusion_fade_include.gdshaderinc, included below, and
+ * OcclusionFadeManager._collect_tree_materials() (scenes/states/playing/
+ * occlusion_fade_manager.gd), which finds and feeds token uniforms to these exact
+ * materials via their node's wind_foliage_category == "tree" metadata.
  */
 
 uniform sampler2D albedo_texture : source_color, filter_linear_mipmap;
@@ -48,6 +55,10 @@ uniform float alpha_scissor_threshold : hint_range(0.0, 1.0) = 0.5;
 uniform float sway_speed : hint_range(0.0, 5.0) = 1.0;
 uniform float sway_amplitude : hint_range(0.0, 1.0) = 0.05;
 uniform float sway_frequency : hint_range(0.05, 2.0) = 0.3;
+
+// Occlusion fade: lets a token show through tree foliage the same way it shows
+// through map geometry. See occlusion_fade_include.gdshaderinc.
+#include "res://shaders/occlusion_fade_include.gdshaderinc"
 
 
 void vertex() {
@@ -86,4 +97,7 @@ void fragment() {
 		NORMAL_MAP = texture(normal_texture, UV).rgb;
 		NORMAL_MAP_DEPTH = 1.0;
 	}
+
+	vec3 world_normal = mat3(INV_VIEW_MATRIX) * NORMAL;
+	apply_occlusion_fade(world_normal);
 }
