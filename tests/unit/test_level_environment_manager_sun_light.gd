@@ -1,0 +1,90 @@
+extends GutTest
+
+## Unit tests for LevelEnvironmentManager's default sun light lifecycle
+## (apply_level_environment's sun-light setup, apply_sun_overrides, clear()) --
+## see docs/superpowers/specs/2026-08-08-lighting-rendering-defaults-design.md
+## for the auto/on/off mode semantics.
+
+
+func test_apply_level_environment_adds_a_visible_sun_light_when_map_has_no_lights() -> void:
+	var manager := LevelEnvironmentManager.new()
+	var root := Node3D.new()  # No lights stored -- store_original_light_energies() not called.
+	var level_data := LevelData.new()
+
+	manager.apply_level_environment(level_data, root)
+
+	var sun := root.get_node_or_null("LevelSunLight") as DirectionalLight3D
+	assert_not_null(sun)
+	assert_true(sun.visible)
+	root.free()
+
+
+func test_apply_level_environment_hides_the_sun_light_when_map_has_its_own_lights_in_auto_mode() -> void:
+	var manager := LevelEnvironmentManager.new()
+	var root := Node3D.new()
+	root.add_child(DirectionalLight3D.new())
+	manager.store_original_light_energies(root)
+	var level_data := LevelData.new()
+
+	manager.apply_level_environment(level_data, root)
+
+	var sun := root.get_node_or_null("LevelSunLight") as DirectionalLight3D
+	assert_not_null(sun)
+	assert_false(sun.visible)
+	root.free()
+
+
+func test_apply_level_environment_forces_sun_light_on_even_with_map_lights_in_on_mode() -> void:
+	var manager := LevelEnvironmentManager.new()
+	var root := Node3D.new()
+	root.add_child(DirectionalLight3D.new())
+	manager.store_original_light_energies(root)
+	var level_data := LevelData.new()
+	level_data.sun_overrides = {"mode": "on"}
+
+	manager.apply_level_environment(level_data, root)
+
+	var sun := root.get_node_or_null("LevelSunLight") as DirectionalLight3D
+	assert_true(sun.visible)
+	root.free()
+
+
+func test_apply_level_environment_forces_sun_light_off_even_without_map_lights_in_off_mode() -> void:
+	var manager := LevelEnvironmentManager.new()
+	var root := Node3D.new()
+	var level_data := LevelData.new()
+	level_data.sun_overrides = {"mode": "off"}
+
+	manager.apply_level_environment(level_data, root)
+
+	var sun := root.get_node_or_null("LevelSunLight") as DirectionalLight3D
+	assert_false(sun.visible)
+	root.free()
+
+
+func test_apply_sun_overrides_updates_the_existing_light_without_recreating_it() -> void:
+	var manager := LevelEnvironmentManager.new()
+	var root := Node3D.new()
+	var level_data := LevelData.new()
+	manager.apply_level_environment(level_data, root)
+	var sun := root.get_node_or_null("LevelSunLight") as DirectionalLight3D
+
+	manager.apply_sun_overrides({"mode": "on", "time_of_day": 0.0})
+
+	var same_sun := root.get_node_or_null("LevelSunLight") as DirectionalLight3D
+	assert_eq(sun, same_sun)
+	assert_almost_eq(same_sun.light_energy, float(DefaultSun.KEYFRAMES[0.0]["energy"]), 0.001)
+	root.free()
+
+
+func test_clear_frees_the_sun_light() -> void:
+	var manager := LevelEnvironmentManager.new()
+	var root := Node3D.new()
+	var level_data := LevelData.new()
+	manager.apply_level_environment(level_data, root)
+	var sun := root.get_node_or_null("LevelSunLight") as DirectionalLight3D
+
+	manager.clear()
+
+	assert_true(sun.is_queued_for_deletion())
+	root.free()
