@@ -52,6 +52,12 @@ var _converted_meshes: Dictionary = {}
 # Flat list of all ShaderMaterials we created (for fast uniform updates)
 var _all_shader_materials: Array[ShaderMaterial] = []
 
+# Tree-category wind_foliage.gdshader materials registered for the occlusion fade
+# (grass is excluded -- see design spec). These are never created or restored by
+# this class (WindFoliage builds them at map-load time); we only register them for
+# token uniform pushes and flip their enable_occlusion uniform on clear()/setup().
+var _tree_materials: Array[ShaderMaterial] = []
+
 var _frame_counter: int = 0
 var _is_setup: bool = false
 var _lofi_pixelation: float = 0.0  # Mirror of lo-fi shader's pixelation value (0 = disabled)
@@ -76,6 +82,7 @@ func setup(camera: Camera3D, map_container: Node3D, tokens_container: Node3D) ->
 		return
 
 	_convert_map_materials()
+	_collect_tree_materials()
 	_is_setup = true
 	set_physics_process(true)
 
@@ -83,8 +90,10 @@ func setup(camera: Camera3D, map_container: Node3D, tokens_container: Node3D) ->
 ## Clear all state and restore original materials. Call before loading a new map.
 func clear() -> void:
 	_restore_all_materials()
+	_disable_tree_materials()
 	_converted_meshes.clear()
 	_all_shader_materials.clear()
+	_tree_materials.clear()
 	_is_setup = false
 	set_physics_process(false)
 
@@ -204,6 +213,53 @@ func _create_shader_material_from(std_mat: StandardMaterial3D) -> ShaderMaterial
 	return mat
 
 
+## Find tree-category MultiMeshInstance3D nodes (built by GlbUtils/WindFoliage, tagged
+## with wind_foliage_category meta) and register their wind_foliage.gdshader surface
+## materials for the occlusion fade. Unlike _convert_map_materials, nothing is
+## swapped here -- these materials already run wind_foliage.gdshader, which now
+## includes the same fade logic as this class's own shader (see
+## occlusion_fade_include.gdshaderinc). Idempotent: re-running skips materials
+## already registered.
+func _collect_tree_materials() -> void:
+	if not _map_container:
+		return
+
+	var multimeshes: Array[MultiMeshInstance3D] = []
+	_collect_tree_multimeshes(_map_container, multimeshes)
+
+	for mm_inst in multimeshes:
+		if not mm_inst.multimesh or not mm_inst.multimesh.mesh:
+			continue
+		var mesh := mm_inst.multimesh.mesh
+		for surface_idx in range(mesh.get_surface_count()):
+			var mat := mesh.surface_get_material(surface_idx)
+			if not mat is ShaderMaterial:
+				continue
+			var shader_mat := mat as ShaderMaterial
+			if shader_mat.shader != WindFoliage.get_shader():
+				continue
+			if shader_mat in _tree_materials:
+				continue
+
+			shader_mat.set_shader_parameter("enable_occlusion", true)
+			shader_mat.set_shader_parameter("min_alpha", min_alpha)
+			shader_mat.set_shader_parameter("lofi_pixelation", _lofi_pixelation)
+			shader_mat.set_shader_parameter("lofi_dither_scale", lofi_dither_scale)
+
+			_tree_materials.append(shader_mat)
+			_all_shader_materials.append(shader_mat)
+
+
+## Stop tree materials from dithering with stale token data once physics_process
+## stops pushing updates (called from clear()). Map materials don't need this: they
+## get swapped back to StandardMaterial3D by _restore_all_materials() instead, so
+## the shader (and its stale uniforms) simply stops being used.
+func _disable_tree_materials() -> void:
+	for mat in _tree_materials:
+		if is_instance_valid(mat):
+			mat.set_shader_parameter("enable_occlusion", false)
+
+
 # =============================================================================
 # Token position uniform updates
 # =============================================================================
@@ -315,3 +371,19 @@ static func _collect_mesh_instances(node: Node, result: Array[MeshInstance3D]) -
 			if mesh_inst.mesh:
 				result.append(mesh_inst)
 		_collect_mesh_instances(child, result)
+
+
+## Recursively collect visible MultiMeshInstance3D nodes tagged as tree-category
+## foliage (wind_foliage_category meta, set by
+## GlbUtils._build_multimesh_from_transforms from WindFoliage.classify_category).
+## Grass and untagged nodes are skipped -- see design spec for why grass doesn't
+## participate in the occlusion fade.
+static func _collect_tree_multimeshes(node: Node, result: Array[MultiMeshInstance3D]) -> void:
+	for child in node.get_children():
+		if (
+			child is MultiMeshInstance3D
+			and child.visible
+			and child.get_meta("wind_foliage_category", "") == "tree"
+		):
+			result.append(child as MultiMeshInstance3D)
+		_collect_tree_multimeshes(child, result)
