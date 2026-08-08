@@ -4,6 +4,9 @@
 # Git worktrees
 .worktrees/
 
+# Subagent-driven-development scratch workspace (ledgers, briefs, review packages)
+.superpowers/
+
 # Godot 4+ specific ignores
 .godot/
 /android/
