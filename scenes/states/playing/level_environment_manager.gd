@@ -8,6 +8,7 @@ class_name LevelEnvironmentManager
 ## loading, tokens, and network sync.
 
 var _world_environment: WorldEnvironment = null
+var _sun_light: DirectionalLight3D = null
 var _map_environment_config: Dictionary = {}
 var _map_sky_resource: Sky = null
 var _original_light_energies: Dictionary = {}  # instance_id -> base energy
@@ -154,6 +155,17 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		)
 	)
 
+	# Create the default sun light if it doesn't exist, then configure it per
+	# level_data.sun_overrides (auto/on/off + time of day).
+	if not is_instance_valid(_sun_light):
+		_sun_light = DirectionalLight3D.new()
+		_sun_light.name = "LevelSunLight"
+		_sun_light.shadow_enabled = true
+		_sun_light.shadow_blur = 2.0
+		_sun_light.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+		world_viewport.add_child(_sun_light)
+	_configure_sun_light(level_data.sun_overrides)
+
 	# Apply lo-fi shader overrides if any are set
 	if level_data.lofi_overrides.size() > 0 and is_instance_valid(_game_map):
 		_game_map.apply_lofi_overrides(level_data.lofi_overrides)
@@ -179,6 +191,27 @@ func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 		)
 	else:
 		push_warning("LevelEnvironmentManager: WorldEnvironment is null")
+
+
+## Apply sun overrides to the live sun light (real-time editing). The light
+## must already exist -- created by apply_level_environment() at load time.
+func apply_sun_overrides(overrides: Dictionary) -> void:
+	if not is_instance_valid(_sun_light):
+		push_warning("LevelEnvironmentManager: sun light is null")
+		return
+	_configure_sun_light(overrides)
+
+
+## Resolve mode ("auto" | "on" | "off") against whether the map brought its own
+## lights, then show/hide and (if visible) re-angle the sun light.
+func _configure_sun_light(overrides: Dictionary) -> void:
+	var mode: String = overrides.get("mode", "auto")
+	var map_has_lights := not _original_light_energies.is_empty()
+	var enabled: bool = mode == "on" or (mode == "auto" and not map_has_lights)
+	_sun_light.visible = enabled
+	if enabled:
+		var time_of_day: float = overrides.get("time_of_day", DefaultSun.DEFAULT_TIME_OF_DAY)
+		DefaultSun.configure_directional_light(_sun_light, time_of_day)
 
 
 # ============================================================================
@@ -210,5 +243,8 @@ func clear() -> void:
 	if is_instance_valid(_world_environment):
 		_world_environment.queue_free()
 		_world_environment = null
+	if is_instance_valid(_sun_light):
+		_sun_light.queue_free()
+		_sun_light = null
 	_map_environment_config = {}
 	_map_sky_resource = null
