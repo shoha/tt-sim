@@ -325,6 +325,10 @@ The `LevelEditPanel` is a slide-out drawer (extends `DrawerContainer`) that appe
 - SSAO, SSR, SDFGI toggles
 - Fog height density
 
+**Sun:**
+- **Mode dropdown** — Auto / On / Off
+- **Time of Day slider** — 0-24
+
 **Post-Processing Effects:**
 - Pixelation
 - Color Depth
@@ -349,6 +353,7 @@ LevelEditPanel (UI)
   ├── intensity_changed(scale) ──→ GameplayMenuController ──→ LevelPlayController
   ├── map_scale_changed(scale) ──→ GameplayMenuController ──→ LevelPlayController
   ├── lofi_changed(overrides) ──→ GameplayMenuController ──→ GameMap.apply_lofi_overrides()
+  ├── sun_changed(overrides) ──→ GameplayMenuController ──→ LevelPlayController.apply_sun_overrides()
   ├── save_requested(...) ──→ GameplayMenuController._on_edit_save_requested()
   ├── cancel_requested ──→ GameplayMenuController (reverts all changes)
   └── revert_to_map_defaults_requested ──→ GameplayMenuController._on_revert_to_map_defaults()
@@ -398,6 +403,10 @@ Lo-fi overrides are stored in `LevelData.lofi_overrides` and applied via `GameMa
 # Foliage wind-sway tuning (per-category speed/amplitude for scattered foliage)
 # Keys: "tree_sway_speed", "tree_sway_amplitude", "grass_sway_speed", "grass_sway_amplitude"
 @export var foliage_overrides: Dictionary = {}
+
+# Default sun light (see Default Sun Light above)
+# Keys: "mode" ("auto" | "on" | "off"), "time_of_day" (0.0-24.0)
+@export var sun_overrides: Dictionary = {}
 ```
 
 **Important:** `environment_preset` defaults to `""` (empty string), not a named preset. This means new levels start with map defaults when available.
