@@ -113,5 +113,5 @@ void fragment() {
 	// occlusion_fade_include.gdshaderinc for the full fade/discard logic, shared
 	// with wind_foliage.gdshader.
 	vec3 world_normal = mat3(INV_VIEW_MATRIX) * NORMAL;
-	apply_occlusion_fade(world_normal);
+	apply_occlusion_fade(world_normal, VERTEX, VIEW_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE);
 }
