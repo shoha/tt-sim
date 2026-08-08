@@ -37,6 +37,12 @@
  * pixel scale. Larger matrices give smoother gradients but repeat over more
  * pixels. The 16x16 repeats every 16 lo-fi pixels (~80 screen pixels).
  *
+ * SHARED LOGIC:
+ * The occlusion uniforms, Bayer dither functions, and the fade/discard decision
+ * itself live in occlusion_fade_include.gdshaderinc, not in this file -- shared
+ * with wind_foliage.gdshader so tree-category scattered foliage participates in
+ * the same fade using one source of truth.
+ *
  * MANAGED BY: OcclusionFadeManager (scenes/states/playing/occlusion_fade_manager.gd)
  * - Converts map StandardMaterial3D → this shader at map load time.
  * - Updates token_positions, token_radii, and token_count every few physics frames.
@@ -73,45 +79,9 @@ uniform float emission_energy = 0.0;
 uniform vec3 uv1_scale = vec3(1.0);
 uniform vec3 uv1_offset = vec3(0.0);
 
-// --- Occlusion fade parameters (set by OcclusionFadeManager each frame) ---
-group_uniforms occlusion;
-uniform int token_count = 0;
-uniform vec3 token_positions[32]; // World-space positions (visual center, not feet)
-uniform float token_radii[32];    // Per-token fade radius (view-space), derived from collision shape
-uniform float min_alpha = 0.3;    // Target opacity at the center of the fade zone
-uniform float floor_threshold = 0.5; // World-space normal Y above this = floor (never fades)
-uniform float lofi_pixelation = 0.0; // Pixelation from the lo-fi shader (0 = disabled, aligns dither grid)
-uniform float lofi_dither_scale = 1.0; // Dither subdivisions per lo-fi pixel (1 = 1:1 with grid)
-
-
-// 16x16 Bayer ordered dither via recursive construction.
-// Builds from 2x2 -> 4x4 -> 8x8 -> 16x16, giving 256 threshold levels for
-// near-smooth gradients that still look clean with the lo-fi pixelation grid.
-// Returns a value in [0, 1) based on screen/grid pixel position.
-float bayer2(float x, float y) {
-	// 2x2 base matrix: 0 2 / 3 1
-	float v = x + y * 2.0;
-	if (v < 0.5) return 0.0;
-	if (v < 1.5) return 2.0;
-	if (v < 2.5) return 3.0;
-	return 1.0;
-}
-
-float bayer4(float x, float y) {
-	return 4.0 * bayer2(mod(x, 2.0), mod(y, 2.0))
-	     + bayer2(floor(x / 2.0), floor(y / 2.0));
-}
-
-float bayer8(float x, float y) {
-	return 4.0 * bayer4(mod(x, 4.0), mod(y, 4.0))
-	     + bayer2(floor(x / 4.0), floor(y / 4.0));
-}
-
-float bayer16(vec2 screen_coord) {
-	vec2 p = mod(floor(screen_coord), 16.0);
-	return (4.0 * bayer8(mod(p.x, 8.0), mod(p.y, 8.0))
-	      + bayer2(floor(p.x / 8.0), floor(p.y / 8.0))) / 256.0;
-}
+// --- Occlusion fade parameters and dither logic ---
+// Shared with wind_foliage.gdshader -- see occlusion_fade_include.gdshaderinc.
+#include "res://shaders/occlusion_fade_include.gdshaderinc"
 
 
 void vertex() {
@@ -139,62 +109,9 @@ void fragment() {
 	}
 
 	// --- Per-pixel occlusion fade ---
-	// VERTEX in the fragment shader is in VIEW SPACE (camera space).
-	// View space: -Z is into the screen; larger Z values are closer to camera.
-	// A fragment "in front of" a token has a larger (less negative) Z.
-	//
-	// Floor check: convert the surface normal back to world space and skip
-	// any surface whose normal points mostly upward (floors, ground, ramps).
-	// These surfaces are beneath tokens, not in front of them.
+	// VERTEX in the fragment shader is in VIEW SPACE (camera space). See
+	// occlusion_fade_include.gdshaderinc for the full fade/discard logic, shared
+	// with wind_foliage.gdshader.
 	vec3 world_normal = mat3(INV_VIEW_MATRIX) * NORMAL;
-	bool is_floor = world_normal.y > floor_threshold;
-
-	if (token_count > 0 && !is_floor) {
-		float fade_intensity = 0.0;
-
-		for (int i = 0; i < 32; i++) {
-			if (i >= token_count) break;
-
-			// Transform token world position to view space
-			vec3 token_view = (VIEW_MATRIX * vec4(token_positions[i], 1.0)).xyz;
-
-			// Skip if this fragment is behind (further from camera than) the token
-			if (VERTEX.z <= token_view.z) continue;
-
-			// Distance in the camera's XY plane (screen-space proximity)
-			float dist = distance(VERTEX.xy, token_view.xy);
-			float radius = token_radii[i];
-
-			if (dist < radius) {
-				// Smooth gradient: full fade at center, zero at edge
-				float fade = 1.0 - smoothstep(0.0, radius, dist);
-				fade_intensity = max(fade_intensity, fade);
-			}
-		}
-
-		// Discard fragments using ordered dithering for screen-door transparency.
-		// When the lo-fi pixelation post-process is active, snap the dither grid
-		// to the same pixel grid so each lo-fi pixel gets a single consistent
-		// dither value (avoids ugly noise from misaligned grids).
-		if (fade_intensity > 0.01) {
-			float target_alpha = mix(1.0, min_alpha, fade_intensity);
-
-			vec2 dither_coord = FRAGCOORD.xy;
-			if (lofi_pixelation > 0.0) {
-				float aspect = 16.0 / 9.0;
-				vec2 uv_here = FRAGCOORD.xy / VIEWPORT_SIZE;
-				vec2 lofi_cell = vec2(lofi_pixelation / aspect, lofi_pixelation);
-				// Subdivide each lo-fi pixel into lofi_dither_scale x lofi_dither_scale
-				// dither cells. Scale=1 matches the lo-fi grid exactly; scale=2 gives
-				// 2x2 finer cells per lo-fi pixel while staying grid-aligned.
-				dither_coord = floor(uv_here * lofi_dither_scale / lofi_cell);
-			}
-
-			float threshold = bayer16(dither_coord);
-
-			if (target_alpha < threshold) {
-				discard;
-			}
-		}
-	}
+	apply_occlusion_fade(world_normal);
 }
