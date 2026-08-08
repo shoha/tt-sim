@@ -16,7 +16,7 @@ const PROPERTY_DEFAULTS = {
 	# AMBIENT_SOURCE_COLOR or AMBIENT_SOURCE_SKY
 	"ambient_light_source": Environment.AMBIENT_SOURCE_COLOR,
 	"ambient_light_color": Color(0.4, 0.4, 0.45),
-	"ambient_light_energy": 0.5,
+	"ambient_light_energy": 0.55,
 	# Fog
 	"fog_enabled": false,
 	"fog_light_color": Color(0.5, 0.5, 0.55),
@@ -30,13 +30,13 @@ const PROPERTY_DEFAULTS = {
 	"tonemap_exposure": 1.0,
 	"tonemap_white": 1.0,
 	# Glow/Bloom
-	"glow_enabled": false,
-	"glow_intensity": 0.8,
+	"glow_enabled": true,
+	"glow_intensity": 0.3,
 	"glow_strength": 1.0,
-	"glow_bloom": 0.0,
+	"glow_bloom": 0.05,
 	# SSAO (Screen Space Ambient Occlusion)
-	"ssao_enabled": false,
-	"ssao_intensity": 2.0,
+	"ssao_enabled": true,
+	"ssao_intensity": 1.0,
 	# SSR (Screen Space Reflections)
 	"ssr_enabled": false,
 	# SDFGI (Signed Distance Field Global Illumination)
