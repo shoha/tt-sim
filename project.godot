@@ -127,6 +127,8 @@ help_toggle={
 
 [rendering]
 
+renderer/rendering_method="forward_plus"
+renderer/rendering_method.macos="mobile"
 textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=5
 lights_and_shadows/positional_shadow/soft_shadow_filter_quality=5
