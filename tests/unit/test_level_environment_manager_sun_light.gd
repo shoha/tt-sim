@@ -64,14 +64,33 @@ func test_apply_level_environment_forces_sun_light_off_even_without_map_lights_i
 	root.free()
 
 
+func test_apply_level_environment_does_not_force_orthogonal_shadow_mode() -> void:
+	# Regression test: explicitly forcing directional_shadow_mode to
+	# SHADOW_ORTHOGONAL (the simplest, single-frustum mode) produced no
+	# visible shadows at all in this project's camera setup -- confirmed by
+	# a live visual A/B test, not just a code-level assumption. Leaving the
+	# property untouched (engine default: cascaded SHADOW_PARALLEL_4_SPLITS)
+	# is what made shadows appear. This test pins "don't touch this
+	# property" so a future refactor can't silently reintroduce it.
+	var manager := LevelEnvironmentManager.new()
+	var root := Node3D.new()
+	var level_data := LevelData.new()
+
+	manager.apply_level_environment(level_data, root)
+
+	var sun := root.get_node_or_null("LevelSunLight") as DirectionalLight3D
+	assert_ne(sun.directional_shadow_mode, DirectionalLight3D.SHADOW_ORTHOGONAL)
+	root.free()
+
+
 func test_apply_level_environment_uses_small_shadow_biases_so_small_tokens_keep_their_shadow(
 ) -> void:
 	# Regression test: Godot's DirectionalLight3D engine defaults
 	# (shadow_bias=0.1, shadow_normal_bias=2.0) are tuned for room/building-
 	# scale geometry. A token is well under 1 unit tall, so the default
-	# normal_bias detaches its shadow from the ground entirely ("peter-
-	# panning") -- confirmed visually: tokens showed no cast shadow at all
-	# with the engine defaults, and a clearly visible one at these values.
+	# normal_bias risks detaching its shadow from the ground ("peter-
+	# panning") -- these smaller values keep shadows attached to small
+	# objects while still avoiding shadow acne on the terrain.
 	var manager := LevelEnvironmentManager.new()
 	var root := Node3D.new()
 	var level_data := LevelData.new()
