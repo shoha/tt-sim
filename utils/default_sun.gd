@@ -11,21 +11,55 @@ extends RefCounted
 
 const DEFAULT_TIME_OF_DAY: float = 14.0
 
-## Fixed azimuth (rotation around Y, degrees) so shadows fall toward the lower-
-## right of the screen -- the standard isometric lighting convention -- given
-## the game's fixed camera direction (see game_map.tscn's Camera3D transform).
-## The camera never rotates, so one azimuth works for every level.
-const AZIMUTH_DEGREES: float = 135.0
+## Azimuth (rotation around Y, degrees) sweeps a full 360 degrees over the day,
+## matching a real sun/moon's apparent compass rotation (the Earth's rotation
+## changes which direction the sun is in, not just how high) -- so shadows
+## actually reverse direction between morning and evening instead of just
+## changing length. Anchored (see KEYFRAMES below) so DEFAULT_TIME_OF_DAY
+## (14.0) lands on 135 degrees, the value this game's fixed isometric camera
+## was originally tuned against (see game_map.tscn's Camera3D transform --
+## the camera never rotates, so existing/default-configured levels look
+## unchanged by this anchoring).
 
-## hour (0.0-24.0) -> {elevation_degrees, color, energy}.
+## hour (0.0-24.0) -> {elevation_degrees, color, energy, azimuth_degrees}.
 ## 0.0 and 24.0 are both "night" (identical values) so time_of_day wraps
 ## seamlessly across midnight.
 const KEYFRAMES = {
-	0.0: {"elevation_degrees": -10.0, "color": Color(0.4, 0.5, 0.75), "energy": 0.15},
-	6.0: {"elevation_degrees": 5.0, "color": Color(1.0, 0.6, 0.35), "energy": 0.5},
-	12.0: {"elevation_degrees": 70.0, "color": Color(1.0, 0.98, 0.92), "energy": 1.1},
-	18.0: {"elevation_degrees": 5.0, "color": Color(1.0, 0.55, 0.3), "energy": 0.5},
-	24.0: {"elevation_degrees": -10.0, "color": Color(0.4, 0.5, 0.75), "energy": 0.15},
+	0.0:
+	{
+		"elevation_degrees": -10.0,
+		"color": Color(0.4, 0.5, 0.75),
+		"energy": 0.15,
+		"azimuth_degrees": 285.0
+	},
+	6.0:
+	{
+		"elevation_degrees": 5.0,
+		"color": Color(1.0, 0.6, 0.35),
+		"energy": 0.5,
+		"azimuth_degrees": 15.0
+	},
+	12.0:
+	{
+		"elevation_degrees": 70.0,
+		"color": Color(1.0, 0.98, 0.92),
+		"energy": 1.1,
+		"azimuth_degrees": 105.0
+	},
+	18.0:
+	{
+		"elevation_degrees": 5.0,
+		"color": Color(1.0, 0.55, 0.3),
+		"energy": 0.5,
+		"azimuth_degrees": 195.0
+	},
+	24.0:
+	{
+		"elevation_degrees": -10.0,
+		"color": Color(0.4, 0.5, 0.75),
+		"energy": 0.15,
+		"azimuth_degrees": 285.0
+	},
 }
 
 const _HOURS: Array[float] = [0.0, 6.0, 12.0, 18.0, 24.0]
@@ -51,9 +85,10 @@ static func configure_directional_light(light: DirectionalLight3D, time_of_day: 
 	var f := 0.0 if span == 0.0 else (t - lo_hour) / span
 
 	var elevation: float = lerpf(lo["elevation_degrees"], hi["elevation_degrees"], f)
+	var azimuth: float = lerpf(lo["azimuth_degrees"], hi["azimuth_degrees"], f)
 	var color: Color = lo["color"].lerp(hi["color"], f)
 	var energy: float = lerpf(lo["energy"], hi["energy"], f)
 
-	light.rotation_degrees = Vector3(-elevation, AZIMUTH_DEGREES, 0.0)
+	light.rotation_degrees = Vector3(-elevation, azimuth, 0.0)
 	light.light_color = color
 	light.light_energy = energy

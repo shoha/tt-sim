@@ -13,6 +13,7 @@ func test_configure_directional_light_matches_noon_keyframe_exactly() -> void:
 	var noon: Dictionary = DefaultSun.KEYFRAMES[12.0]
 
 	assert_almost_eq(light.rotation_degrees.x, -float(noon["elevation_degrees"]), 0.001)
+	assert_almost_eq(light.rotation_degrees.y, float(noon["azimuth_degrees"]), 0.001)
 	assert_eq(light.light_color, noon["color"])
 	assert_almost_eq(light.light_energy, float(noon["energy"]), 0.001)
 	light.free()
@@ -37,23 +38,48 @@ func test_configure_directional_light_interpolates_halfway_between_night_and_daw
 	var expected_elevation: float = lerpf(
 		night["elevation_degrees"], dawn["elevation_degrees"], 0.5
 	)
+	var expected_azimuth: float = lerpf(night["azimuth_degrees"], dawn["azimuth_degrees"], 0.5)
 	var expected_energy: float = lerpf(night["energy"], dawn["energy"], 0.5)
 
 	DefaultSun.configure_directional_light(light, 3.0)
 
 	assert_almost_eq(light.rotation_degrees.x, -expected_elevation, 0.001)
+	assert_almost_eq(light.rotation_degrees.y, expected_azimuth, 0.001)
 	assert_almost_eq(light.light_energy, expected_energy, 0.001)
 	light.free()
 
 
-func test_configure_directional_light_uses_a_fixed_azimuth_regardless_of_time() -> void:
+func test_configure_directional_light_sweeps_azimuth_across_the_day() -> void:
 	var light := DirectionalLight3D.new()
 
 	DefaultSun.configure_directional_light(light, 9.0)
-	assert_almost_eq(light.rotation_degrees.y, DefaultSun.AZIMUTH_DEGREES, 0.001)
+	var azimuth_morning := light.rotation_degrees.y
 
 	DefaultSun.configure_directional_light(light, 21.0)
-	assert_almost_eq(light.rotation_degrees.y, DefaultSun.AZIMUTH_DEGREES, 0.001)
+	var azimuth_evening := light.rotation_degrees.y
+
+	assert_ne(azimuth_morning, azimuth_evening)
+	light.free()
+
+
+func test_configure_directional_light_reverses_direction_between_dawn_and_dusk() -> void:
+	# Regression test for the real-world behavior this sweep exists to
+	# reproduce: a real sun's azimuth differs by ~180 degrees between sunrise
+	# and sunset, which is why shadows point opposite directions at dawn vs.
+	# dusk (not just different lengths, as a fixed-azimuth sun would give).
+	var light := DirectionalLight3D.new()
+	var dawn: Dictionary = DefaultSun.KEYFRAMES[6.0]
+	var dusk: Dictionary = DefaultSun.KEYFRAMES[18.0]
+
+	DefaultSun.configure_directional_light(light, 6.0)
+	var azimuth_dawn := light.rotation_degrees.y
+
+	DefaultSun.configure_directional_light(light, 18.0)
+	var azimuth_dusk := light.rotation_degrees.y
+
+	assert_almost_eq(azimuth_dawn, float(dawn["azimuth_degrees"]), 0.001)
+	assert_almost_eq(azimuth_dusk, float(dusk["azimuth_degrees"]), 0.001)
+	assert_almost_eq(absf(azimuth_dusk - azimuth_dawn), 180.0, 0.001)
 	light.free()
 
 
