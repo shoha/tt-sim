@@ -49,6 +49,7 @@ uniform sampler2D orm_texture : hint_default_white, filter_linear_mipmap;
 uniform sampler2D normal_texture : hint_normal, filter_linear_mipmap;
 uniform bool has_normal_texture = false;
 uniform float alpha_scissor_threshold : hint_range(0.0, 1.0) = 0.5;
+uniform float specular_reflectance : hint_range(0.0, 1.0) = 0.2;
 
 // Per-category wind tuning (set once per species at construction from a preset --
 // see GlbUtils._WIND_PRESETS -- never authored per-map).
@@ -94,6 +95,7 @@ void fragment() {
 	AO = orm.r;
 	ROUGHNESS = orm.g;
 	METALLIC = orm.b;
+	SPECULAR = specular_reflectance;
 
 	if (has_normal_texture) {
 		NORMAL_MAP = texture(normal_texture, UV).rgb;
