@@ -16,25 +16,38 @@ func test_format_header_matches_column_order() -> void:
 
 
 func test_format_row_orders_and_formats_values() -> void:
-	var row := PerformanceLogFormatter.format_row(
-		{
-			"elapsed_s": 12.3,
-			"map_name": "River",
-			"fps_avg": 34.5,
-			"frame_time_avg_ms": 29.4,
-			"frame_time_max_ms": 51.0,
-			"draw_calls": 812,
-			"primitives": 1200000,
-			"video_mem_mb": 780.5,
-			"physics_objects": 340,
-			"perf_occlusion_fade_ms": 4.1,
-			"perf_camera_update_ms": 0.2,
-			"perf_grid_overlay_ms": 0.15,
-		}
+	# draw_calls/primitives/physics_objects are passed as floats here to match
+	# what Performance.get_monitor() actually returns in production -- the
+	# int() coercion in format_row() must still produce "812" not "812.0".
+	var row := (
+		PerformanceLogFormatter
+		. format_row(
+			{
+				"elapsed_s": 12.3,
+				"map_name": "River",
+				"fps_avg": 34.5,
+				"frame_time_avg_ms": 29.4,
+				"frame_time_max_ms": 51.0,
+				"draw_calls": 812.0,
+				"primitives": 1200000.0,
+				"video_mem_mb": 780.5,
+				"physics_objects": 340.0,
+				"perf_occlusion_fade_ms": 4.1,
+				"perf_camera_update_ms": 0.2,
+				"perf_grid_overlay_ms": 0.15,
+			}
+		)
 	)
-	assert_eq(row, "12.30,River,34.50,29.40,51.00,812,1200000,780.50,340,4.10,0.20,0.15")
+	assert_eq(row, '12.30,"River",34.50,29.40,51.00,812,1200000,780.50,340,4.10,0.20,0.15')
+
+
+func test_format_row_quotes_map_name_containing_comma_and_quote() -> void:
+	# map_name is arbitrary user-editable text; a comma here would otherwise
+	# split into an extra CSV field and shift every later column.
+	var row := PerformanceLogFormatter.format_row({"map_name": 'River, Night "Update"'})
+	assert_eq(row, '0.00,"River, Night ""Update""",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00')
 
 
 func test_format_row_defaults_missing_columns() -> void:
 	var row := PerformanceLogFormatter.format_row({})
-	assert_eq(row, "0.00,,0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00")
+	assert_eq(row, '0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00')
