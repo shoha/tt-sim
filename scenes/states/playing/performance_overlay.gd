@@ -22,6 +22,14 @@ const _CUSTOM_MONITOR_NAMES: PackedStringArray = [
 var _game_map: GameMap = null
 var _visible: bool = false
 var _elapsed_since_sample: float = 0.0
+var _session_elapsed_sec: float = 0.0
+
+var _frame_time_sum_ms: float = 0.0
+var _frame_time_max_ms: float = 0.0
+var _frame_count: int = 0
+
+var _log_file: FileAccess = null
+var _log_file_disabled: bool = false
 
 var _canvas_layer: CanvasLayer
 var _panel: PanelContainer
@@ -37,9 +45,9 @@ func setup(game_map: GameMap) -> void:
 	_create_overlay(game_map)
 
 
-## Toggle overlay visibility and PerformanceMonitor instrumentation together --
-## the overlay is the only consumer of the custom timers, so there is no
-## reason to pay their (small) per-call overhead while it is hidden.
+## Toggle overlay visibility, PerformanceMonitor instrumentation, and file
+## logging together -- the overlay is the only consumer of the custom timers
+## and the log file, so there is no reason to pay their overhead while hidden.
 func toggle() -> void:
 	_visible = not _visible
 	PerformanceMonitor.enabled = _visible
@@ -47,7 +55,16 @@ func toggle() -> void:
 	set_process(_visible)
 	if _visible:
 		_elapsed_since_sample = 0.0
+		_session_elapsed_sec = 0.0
+		_reset_frame_accumulators()
+		_open_log_file()
 		_update_display()
+	else:
+		_close_log_file()
+
+
+func _exit_tree() -> void:
+	_close_log_file()
 
 
 func is_visible_overlay() -> bool:
@@ -55,11 +72,15 @@ func is_visible_overlay() -> bool:
 
 
 func _process(delta: float) -> void:
+	_accumulate_frame_sample()
 	_elapsed_since_sample += delta
+	_session_elapsed_sec += delta
 	if _elapsed_since_sample < SAMPLE_INTERVAL_SEC:
 		return
 	_elapsed_since_sample = 0.0
 	_update_display()
+	_write_log_row()
+	_reset_frame_accumulators()
 
 
 func _update_display() -> void:
@@ -84,6 +105,76 @@ func _update_display() -> void:
 				"%s: %.2f ms" % [monitor_name, Performance.get_custom_monitor(monitor_name)]
 			)
 	_label.text = "\n".join(lines)
+
+
+func _accumulate_frame_sample() -> void:
+	var frame_ms: float = Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+	_frame_time_sum_ms += frame_ms
+	_frame_time_max_ms = maxf(_frame_time_max_ms, frame_ms)
+	_frame_count += 1
+
+
+func _reset_frame_accumulators() -> void:
+	_frame_time_sum_ms = 0.0
+	_frame_time_max_ms = 0.0
+	_frame_count = 0
+
+
+func _open_log_file() -> void:
+	_log_file_disabled = false
+	var dir_err := DirAccess.make_dir_recursive_absolute(Paths.PERF_LOG_DIR)
+	if dir_err != OK and dir_err != ERR_ALREADY_EXISTS:
+		push_warning(
+			(
+				"PerformanceOverlay: could not create %s (%s) -- file logging disabled"
+				% [Paths.PERF_LOG_DIR, error_string(dir_err)]
+			)
+		)
+		_log_file_disabled = true
+		return
+	var file_path := "%sperf_%d.csv" % [Paths.PERF_LOG_DIR, Time.get_unix_time_from_system()]
+	_log_file = FileAccess.open(file_path, FileAccess.WRITE)
+	if not _log_file:
+		push_warning(
+			(
+				"PerformanceOverlay: could not open %s (%s) -- file logging disabled"
+				% [file_path, error_string(FileAccess.get_open_error())]
+			)
+		)
+		_log_file_disabled = true
+		return
+	_log_file.store_line(PerformanceLogFormatter.format_header())
+
+
+func _close_log_file() -> void:
+	if _log_file:
+		_log_file.close()
+		_log_file = null
+
+
+func _write_log_row() -> void:
+	if _log_file_disabled or not _log_file:
+		return
+	var frame_time_avg_ms: float = _frame_time_sum_ms / maxf(float(_frame_count), 1.0)
+	var data := {
+		"elapsed_s": _session_elapsed_sec,
+		"map_name": _game_map.get_current_map_name(),
+		"fps_avg": Performance.get_monitor(Performance.TIME_FPS),
+		"frame_time_avg_ms": frame_time_avg_ms,
+		"frame_time_max_ms": _frame_time_max_ms,
+		"draw_calls": Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+		"primitives": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
+		"video_mem_mb": Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
+		"physics_objects": Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS),
+	}
+	for monitor_name in _CUSTOM_MONITOR_NAMES:
+		var column := String(monitor_name).replace("/", "_")
+		data[column] = (
+			Performance.get_custom_monitor(monitor_name)
+			if Performance.has_custom_monitor(monitor_name)
+			else 0.0
+		)
+	_log_file.store_line(PerformanceLogFormatter.format_row(data))
 
 
 func _create_overlay(overlay_parent: Node) -> void:
