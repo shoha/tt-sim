@@ -19,6 +19,9 @@ const CSV_COLUMNS: PackedStringArray = [
 	"perf_occlusion_fade_ms",
 	"perf_camera_update_ms",
 	"perf_grid_overlay_ms",
+	"render_cpu_ms",
+	"video_adapter_name",
+	"video_adapter_vendor",
 ]
 
 ## Columns rendered with 2 decimal places; every other column uses str(value).
@@ -31,6 +34,16 @@ const _FLOAT_COLUMNS: PackedStringArray = [
 	"perf_occlusion_fade_ms",
 	"perf_camera_update_ms",
 	"perf_grid_overlay_ms",
+	"render_cpu_ms",
+]
+
+## Columns holding arbitrary text (not user-editable in every case, but never
+## guaranteed comma/quote-free) -- quoted and escaped per minimal CSV quoting
+## rules so they can't shift subsequent columns.
+const _STRING_COLUMNS: PackedStringArray = [
+	"map_name",
+	"video_adapter_name",
+	"video_adapter_vendor",
 ]
 
 
@@ -39,18 +52,15 @@ static func format_header() -> String:
 
 
 ## [param data] should contain a value for every key in CSV_COLUMNS. Missing
-## keys default to 0 for numeric columns or "" for map_name.
+## keys default to 0 for numeric columns or "" for string columns.
 static func format_row(data: Dictionary) -> String:
 	var values: Array[String] = []
 	for column in CSV_COLUMNS:
 		if column in _FLOAT_COLUMNS:
 			values.append("%.2f" % float(data.get(column, 0.0)))
-		elif column == "map_name":
-			# map_name is arbitrary user-editable text and may contain commas
-			# or quotes -- quote it and escape internal quotes per minimal
-			# CSV quoting rules so it can't shift subsequent columns.
-			var map_name: String = str(data.get(column, ""))
-			values.append('"%s"' % map_name.replace('"', '""'))
+		elif column in _STRING_COLUMNS:
+			var text: String = str(data.get(column, ""))
+			values.append('"%s"' % text.replace('"', '""'))
 		else:
 			# Remaining columns are integer-valued engine monitors.
 			# Performance.get_monitor() always returns float, so coerce to
