@@ -24,6 +24,11 @@ var _visible: bool = false
 var _elapsed_since_sample: float = 0.0
 var _session_elapsed_sec: float = 0.0
 
+## Fetched once in setup() -- adapter/driver identity doesn't change at
+## runtime, so there is no reason to re-query RenderingServer every interval.
+var _video_adapter_name: String = ""
+var _video_adapter_vendor: String = ""
+
 var _frame_time_sum_ms: float = 0.0
 var _frame_time_max_ms: float = 0.0
 var _frame_count: int = 0
@@ -42,6 +47,8 @@ func _ready() -> void:
 
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
+	_video_adapter_name = RenderingServer.get_video_adapter_name()
+	_video_adapter_vendor = RenderingServer.get_video_adapter_vendor()
 	_create_overlay(game_map)
 
 
@@ -99,6 +106,8 @@ func _update_display() -> void:
 			% (Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0)
 		),
 		"Physics objects: %d" % Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS),
+		"Render (CPU): %.2f ms" % _get_render_cpu_ms(),
+		"GPU: %s (%s)" % [_video_adapter_name, _video_adapter_vendor],
 	]
 	for monitor_name in _CUSTOM_MONITOR_NAMES:
 		if Performance.has_custom_monitor(monitor_name):
@@ -106,6 +115,20 @@ func _update_display() -> void:
 				"%s: %.2f ms" % [monitor_name, Performance.get_custom_monitor(monitor_name)]
 			)
 	_label.text = "\n".join(lines)
+
+
+## Render-thread CPU time for the 3D game-world SubViewport specifically
+## (excludes 2D UI layers), read via RenderingServer rather than the
+## Performance singleton (which has no per-viewport render-time monitor).
+## The matching GPU-time query is deliberately not used: it is a known,
+## unfixed Godot limitation that it always returns 0.0 on Metal (the M1
+## Air's backend) because Metal's tile-based renderer reorders GPU commands
+## in a way that breaks Godot's timestamp-based measurement -- see
+## https://github.com/godotengine/godot/issues/102968. Logging that number
+## would just be a confident-looking zero, not a real measurement.
+func _get_render_cpu_ms() -> float:
+	var viewport_rid := _game_map.world_viewport.get_viewport_rid()
+	return RenderingServer.viewport_get_measured_render_time_cpu(viewport_rid)
 
 
 ## [param delta] is the real per-frame wall-clock interval from _process(),
@@ -171,6 +194,9 @@ func _write_log_row() -> void:
 		"primitives": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
 		"video_mem_mb": Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
 		"physics_objects": Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS),
+		"render_cpu_ms": _get_render_cpu_ms(),
+		"video_adapter_name": _video_adapter_name,
+		"video_adapter_vendor": _video_adapter_vendor,
 	}
 	for monitor_name in _CUSTOM_MONITOR_NAMES:
 		var column := String(monitor_name).replace("/", "_")

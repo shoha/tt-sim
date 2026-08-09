@@ -10,7 +10,8 @@ func test_format_header_matches_column_order() -> void:
 		(
 			"elapsed_s,map_name,fps_avg,frame_time_avg_ms,frame_time_max_ms,"
 			+ "draw_calls,primitives,video_mem_mb,physics_objects,"
-			+ "perf_occlusion_fade_ms,perf_camera_update_ms,perf_grid_overlay_ms"
+			+ "perf_occlusion_fade_ms,perf_camera_update_ms,perf_grid_overlay_ms,"
+			+ "render_cpu_ms,video_adapter_name,video_adapter_vendor"
 		),
 	)
 
@@ -35,19 +36,40 @@ func test_format_row_orders_and_formats_values() -> void:
 				"perf_occlusion_fade_ms": 4.1,
 				"perf_camera_update_ms": 0.2,
 				"perf_grid_overlay_ms": 0.15,
+				"render_cpu_ms": 3.7,
+				"video_adapter_name": "Apple M1",
+				"video_adapter_vendor": "Apple",
 			}
 		)
 	)
-	assert_eq(row, '12.30,"River",34.50,29.40,51.00,812,1200000,780.50,340,4.10,0.20,0.15')
+	assert_eq(
+		row,
+		(
+			'12.30,"River",34.50,29.40,51.00,812,1200000,780.50,340,4.10,0.20,0.15,3.70,'
+			+ '"Apple M1","Apple"'
+		),
+	)
 
 
 func test_format_row_quotes_map_name_containing_comma_and_quote() -> void:
 	# map_name is arbitrary user-editable text; a comma here would otherwise
 	# split into an extra CSV field and shift every later column.
 	var row := PerformanceLogFormatter.format_row({"map_name": 'River, Night "Update"'})
-	assert_eq(row, '0.00,"River, Night ""Update""",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00')
+	assert_eq(
+		row,
+		'0.00,"River, Night ""Update""",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,"",""',
+	)
+
+
+func test_format_row_quotes_video_adapter_name_containing_comma() -> void:
+	# Some GPU driver strings legitimately contain commas (e.g. vendor lists),
+	# so the same quoting must apply to every string column, not just map_name.
+	var row := PerformanceLogFormatter.format_row({"video_adapter_name": "Apple M1, 8-core GPU"})
+	assert_eq(
+		row, '0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,"Apple M1, 8-core GPU",""'
+	)
 
 
 func test_format_row_defaults_missing_columns() -> void:
 	var row := PerformanceLogFormatter.format_row({})
-	assert_eq(row, '0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00')
+	assert_eq(row, '0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,"",""')
