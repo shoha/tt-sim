@@ -23,6 +23,9 @@ const CSV_COLUMNS: PackedStringArray = [
 	"video_adapter_name",
 	"video_adapter_vendor",
 	"camera_zoom",
+	"screen_scale",
+	"viewport_width",
+	"viewport_height",
 ]
 
 ## Columns rendered with 2 decimal places; every other column uses str(value).
@@ -37,6 +40,7 @@ const _FLOAT_COLUMNS: PackedStringArray = [
 	"perf_grid_overlay_ms",
 	"render_cpu_ms",
 	"camera_zoom",
+	"screen_scale",
 ]
 
 ## Columns holding arbitrary text (not user-editable in every case, but never
