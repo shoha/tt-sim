@@ -19,7 +19,8 @@ func test_apply_level_environment_adds_a_visible_sun_light_when_map_has_no_light
 	root.free()
 
 
-func test_apply_level_environment_hides_the_sun_light_when_map_has_its_own_lights_in_auto_mode() -> void:
+func test_apply_level_environment_hides_the_sun_light_when_map_has_its_own_lights_in_auto_mode(
+) -> void:
 	var manager := LevelEnvironmentManager.new()
 	var root := Node3D.new()
 	root.add_child(DirectionalLight3D.new())
@@ -49,7 +50,8 @@ func test_apply_level_environment_forces_sun_light_on_even_with_map_lights_in_on
 	root.free()
 
 
-func test_apply_level_environment_forces_sun_light_off_even_without_map_lights_in_off_mode() -> void:
+func test_apply_level_environment_forces_sun_light_off_even_without_map_lights_in_off_mode(
+) -> void:
 	var manager := LevelEnvironmentManager.new()
 	var root := Node3D.new()
 	var level_data := LevelData.new()
@@ -59,6 +61,26 @@ func test_apply_level_environment_forces_sun_light_off_even_without_map_lights_i
 
 	var sun := root.get_node_or_null("LevelSunLight") as DirectionalLight3D
 	assert_false(sun.visible)
+	root.free()
+
+
+func test_apply_level_environment_uses_small_shadow_biases_so_small_tokens_keep_their_shadow(
+) -> void:
+	# Regression test: Godot's DirectionalLight3D engine defaults
+	# (shadow_bias=0.1, shadow_normal_bias=2.0) are tuned for room/building-
+	# scale geometry. A token is well under 1 unit tall, so the default
+	# normal_bias detaches its shadow from the ground entirely ("peter-
+	# panning") -- confirmed visually: tokens showed no cast shadow at all
+	# with the engine defaults, and a clearly visible one at these values.
+	var manager := LevelEnvironmentManager.new()
+	var root := Node3D.new()
+	var level_data := LevelData.new()
+
+	manager.apply_level_environment(level_data, root)
+
+	var sun := root.get_node_or_null("LevelSunLight") as DirectionalLight3D
+	assert_lt(sun.shadow_bias, 0.1)
+	assert_lt(sun.shadow_normal_bias, 2.0)
 	root.free()
 
 
