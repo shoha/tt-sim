@@ -111,7 +111,10 @@ try {
 
     # --- Test suite ---
     Write-Host "Running GUT test suite..." -ForegroundColor Cyan
-    & godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
+    # The -gconfig arg must be quoted -- unquoted, the godot.cmd Scoop shim's
+    # batch-file argument forwarding splits it apart (observed: Godot receives
+    # "tests/" and ".gutconfig.json" as two separate/unknown arguments).
+    & godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- "-gconfig=tests/.gutconfig.json"
     if ($LASTEXITCODE -ne 0) {
         throw "Test suite failed (exit code $LASTEXITCODE). Fix failing tests before cutting a release."
     }
