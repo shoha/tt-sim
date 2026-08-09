@@ -54,6 +54,7 @@ func setup(game_map: GameMap) -> void:
 	_game_map.setup_measure_tool()
 	_game_map.setup_grid_overlay()
 	_game_map.setup_drag_ruler()
+	_game_map.setup_performance_overlay()
 	_level_loader.setup(self)
 	_map_download_coordinator.setup(
 		_level_loader._load_map_from_path, _level_loader._finalize_map_loading

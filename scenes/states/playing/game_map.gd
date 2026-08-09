@@ -41,6 +41,7 @@ var _grid_visibility: GridVisibilityController = null
 var _token_context_menu: TokenContextMenuController = null
 var _drag_place: DragPlaceController = null
 var _camera_controller: CameraController = null
+var _perf_overlay: PerformanceOverlay = null
 
 @onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
 @onready var world_viewport: SubViewport = $WorldViewportLayer/SubViewportContainer/SubViewport
@@ -149,6 +150,14 @@ func _input(event: InputEvent) -> void:
 			var is_f1_key: bool = event.is_action_pressed("help_toggle") or event.keycode == KEY_F1
 			if is_f1_key:
 				UIManager.toggle_help()
+				get_viewport().set_input_as_handled()
+				return
+
+			var is_f3_key: bool = (
+				event.is_action_pressed("perf_overlay_toggle") or event.keycode == KEY_F3
+			)
+			if is_f3_key and _perf_overlay:
+				_perf_overlay.toggle()
 				get_viewport().set_input_as_handled()
 				return
 
@@ -345,6 +354,30 @@ func setup_drag_ruler() -> void:
 ## Return the DragRuler instance (may be null before setup).
 func get_drag_ruler() -> DragRuler:
 	return _drag_ruler
+
+
+## Create and configure the PerformanceOverlay.
+## Toggled by the perf_overlay_toggle action (F3); off by default each session.
+func setup_performance_overlay() -> void:
+	if _perf_overlay:
+		return
+	_perf_overlay = PerformanceOverlay.new()
+	_perf_overlay.name = "PerformanceOverlay"
+	add_child(_perf_overlay)
+	_perf_overlay.setup(self)
+
+
+## Return the PerformanceOverlay instance (may be null before setup).
+func get_performance_overlay() -> PerformanceOverlay:
+	return _perf_overlay
+
+
+## Return the currently loaded level's display name, or "unknown" if none is
+## loaded. Used by PerformanceOverlay to tag log rows with the active map.
+func get_current_map_name() -> String:
+	if _level_play_controller and _level_play_controller.active_level_data:
+		return _level_play_controller.active_level_data.level_name
+	return "unknown"
 
 
 ## Configure grid overlay and drag systems from LevelData.
