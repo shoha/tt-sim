@@ -46,7 +46,7 @@ func test_apply_level_environment_resets_lofi_to_defaults_when_new_level_has_no_
 	assert_eq(
 		game_map.last_overrides.get("pixelation"),
 		Constants.LOFI_DEFAULTS["pixelation"],
-		"Level B has no lofi_overrides, so pixelation must reset to the default, not stay at Level A's 0.05"
+		"Level B has no overrides -- pixelation must reset to default, not stay at Level A's 0.05"
 	)
 
 	root.free()
