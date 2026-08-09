@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
+render_mode cull_disabled, diffuse_burley, specular_schlick_ggx, alpha_to_coverage;
 
 /*
  * Wind Foliage Shader
@@ -87,6 +87,8 @@ void fragment() {
 	ALBEDO = albedo_sample.rgb;
 	ALPHA = albedo_sample.a;
 	ALPHA_SCISSOR_THRESHOLD = alpha_scissor_threshold;
+	ALPHA_ANTIALIASING_EDGE = alpha_scissor_threshold * 0.5;
+	ALPHA_TEXTURE_COORDINATE = UV * vec2(textureSize(albedo_texture, 0));
 
 	vec3 orm = texture(orm_texture, UV).rgb;
 	AO = orm.r;
