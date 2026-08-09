@@ -103,7 +103,9 @@ func _physics_process(_delta: float) -> void:
 	if _frame_counter % update_interval != 0:
 		return
 
+	PerformanceMonitor.start_timer(&"perf/occlusion_fade_ms")
 	_update_token_uniforms()
+	PerformanceMonitor.stop_timer(&"perf/occlusion_fade_ms")
 
 
 ## Update the lo-fi pixelation value so the dither grid aligns with the

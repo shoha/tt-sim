@@ -135,9 +135,11 @@ func _process(delta: float) -> void:
 	# Don't process camera movement while a level is loading
 	if _game_map._is_level_loading():
 		return
+	PerformanceMonitor.start_timer(&"perf/camera_update_ms")
 	handle_movement(delta)
 	handle_zoom(delta)
 	_handle_edge_pan(delta)
+	PerformanceMonitor.stop_timer(&"perf/camera_update_ms")
 
 
 func _unhandled_key_input(event: InputEvent) -> void:

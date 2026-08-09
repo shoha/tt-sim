@@ -175,6 +175,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if not _material:
 		return
+	PerformanceMonitor.start_timer(&"perf/grid_overlay_ms")
 	# Update the fade center to where the camera is looking on the floor plane.
 	# For orthographic/isometric cameras the camera position itself is high up
 	# and offset — project its forward ray onto the grid_y_level plane.
@@ -191,3 +192,4 @@ func _process(_delta: float) -> void:
 			if t > 0.0:
 				look_center = ray_origin + ray_dir * t
 		_material.set_shader_parameter("grid_center", look_center)
+	PerformanceMonitor.stop_timer(&"perf/grid_overlay_ms")
