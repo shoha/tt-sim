@@ -109,6 +109,11 @@ func _update_display() -> void:
 		"Render (CPU): %.2f ms" % _get_render_cpu_ms(),
 		"GPU: %s (%s)" % [_video_adapter_name, _video_adapter_vendor],
 		"Camera zoom: %.2f" % _game_map.camera_node.size,
+		"Screen scale: %.2f" % DisplayServer.screen_get_scale(),
+		(
+			"World viewport: %dx%d"
+			% [_game_map.world_viewport.size.x, _game_map.world_viewport.size.y]
+		),
 	]
 	for monitor_name in _CUSTOM_MONITOR_NAMES:
 		if Performance.has_custom_monitor(monitor_name):
@@ -199,6 +204,9 @@ func _write_log_row() -> void:
 		"video_adapter_name": _video_adapter_name,
 		"video_adapter_vendor": _video_adapter_vendor,
 		"camera_zoom": _game_map.camera_node.size,
+		"screen_scale": DisplayServer.screen_get_scale(),
+		"viewport_width": _game_map.world_viewport.size.x,
+		"viewport_height": _game_map.world_viewport.size.y,
 	}
 	for monitor_name in _CUSTOM_MONITOR_NAMES:
 		var column := String(monitor_name).replace("/", "_")
