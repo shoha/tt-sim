@@ -28,3 +28,7 @@ func test_stop_timer_without_matching_start_does_not_register_monitor() -> void:
 	PerformanceMonitor.stop_timer(&"perf/test_unmatched_ms")
 	# The warning from stop_timer is expected when called without a matching start_timer
 	assert_false(Performance.has_custom_monitor(&"perf/test_unmatched_ms"))
+	# stop_timer's debug-build push_warning is expected here -- mark it handled
+	# so GUT doesn't fail the test on an "unexpected" engine error.
+	for err in get_errors():
+		err.handled = true
