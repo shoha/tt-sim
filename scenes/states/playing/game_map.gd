@@ -42,6 +42,7 @@ var _token_context_menu: TokenContextMenuController = null
 var _drag_place: DragPlaceController = null
 var _camera_controller: CameraController = null
 var _perf_overlay: PerformanceOverlay = null
+var _foliage_hidden: bool = false
 
 @onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
 @onready var world_viewport: SubViewport = $WorldViewportLayer/SubViewportContainer/SubViewport
@@ -158,6 +159,17 @@ func _input(event: InputEvent) -> void:
 			)
 			if is_f3_key and _perf_overlay:
 				_perf_overlay.toggle()
+				get_viewport().set_input_as_handled()
+				return
+
+			# Debug-only: hide/show scattered foliage (trees + grass) to check
+			# whether foliage rendering itself is a performance cost,
+			# independent of camera zoom/position. No formal input action --
+			# this is a diagnostic aid, not a documented feature, matching the
+			# G-key grid toggle's raw-keycode convention above.
+			var is_f4_key: bool = event.keycode == KEY_F4
+			if is_f4_key:
+				_toggle_foliage_visibility()
 				get_viewport().set_input_as_handled()
 				return
 
@@ -378,6 +390,26 @@ func get_current_map_name() -> String:
 	if _level_play_controller and _level_play_controller.active_level_data:
 		return _level_play_controller.active_level_data.level_name
 	return "unknown"
+
+
+## Debug-only performance diagnostic (F4): show/hide every scattered-foliage
+## MultiMeshInstance3D (trees + grass) so the F3 overlay's FPS reading can be
+## compared with and without foliage rendering, isolating foliage cost from
+## camera zoom/position. Does not persist across a map reload -- a freshly
+## loaded map's foliage always starts visible regardless of this flag.
+func _toggle_foliage_visibility() -> void:
+	_foliage_hidden = not _foliage_hidden
+	_set_foliage_visible_recursive(map_container, not _foliage_hidden)
+
+
+## wind_foliage_category meta is set on tree AND grass MultiMeshInstance3D
+## nodes by GlbUtils._build_multimesh_from_transforms (see WindFoliage.classify_category)
+## -- untagged MultiMeshInstance3D nodes, if any, are left untouched.
+static func _set_foliage_visible_recursive(node: Node, should_be_visible: bool) -> void:
+	for child in node.get_children():
+		if child is MultiMeshInstance3D and child.get_meta("wind_foliage_category", "") != "":
+			child.visible = should_be_visible
+		_set_foliage_visible_recursive(child, should_be_visible)
 
 
 ## Configure grid overlay and drag systems from LevelData.
