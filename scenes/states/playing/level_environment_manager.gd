@@ -162,15 +162,24 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		_sun_light.name = "LevelSunLight"
 		_sun_light.shadow_enabled = true
 		_sun_light.shadow_blur = 2.0
-		# Godot's engine defaults (shadow_bias=0.1, shadow_normal_bias=2.0) are
-		# tuned for room/building-scale geometry. Tokens are small (well under
-		# 1 unit tall), so the default normal_bias pushes the shadow-map lookup
-		# far enough off the surface that small props cast no visible shadow at
-		# all ("peter-panning"). These smaller values keep shadows attached to
-		# small objects while still avoiding shadow acne on the terrain.
+		# Leave directional_shadow_mode at its engine default (cascaded
+		# PARALLEL_4_SPLITS). Explicitly forcing SHADOW_ORTHOGONAL (the
+		# simplest, single-frustum mode) produced no visible shadows at all
+		# in this project's camera setup -- confirmed by visual A/B test:
+		# switching away from SHADOW_ORTHOGONAL is what made shadows appear,
+		# most likely because the single-frustum fit degenerates against this
+		# project's orthogonal Camera3D (see the "Near-plane culling fix" note
+		# in game_map.gd for its unusual near=0.001/far=1000 range).
+		#
+		# Godot's engine defaults for the biases (shadow_bias=0.1,
+		# shadow_normal_bias=2.0) are tuned for room/building-scale geometry.
+		# Tokens are small (well under 1 unit tall), so the default
+		# normal_bias pushes the shadow-map lookup far enough off the surface
+		# that small props can lose their shadow entirely ("peter-panning").
+		# These smaller values keep shadows attached to small objects while
+		# still avoiding shadow acne on the terrain.
 		_sun_light.shadow_bias = 0.02
 		_sun_light.shadow_normal_bias = 0.1
-		_sun_light.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 		world_viewport.add_child(_sun_light)
 	_configure_sun_light(level_data.sun_overrides)
 
