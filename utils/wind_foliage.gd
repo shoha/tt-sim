@@ -96,8 +96,15 @@ static func _build_shader_material(
 	# this exact material instance later without re-walking or reloading the scene.
 	material.set_meta("wind_category", category)
 	material.set_shader_parameter("albedo_texture", source.albedo_texture)
-	if source is ORMMaterial3D:
+	if source is ORMMaterial3D and source.orm_texture:
 		material.set_shader_parameter("orm_texture", source.orm_texture)
+	elif source is StandardMaterial3D and source.metallic_texture:
+		# Godot's glTF importer does not create ORMMaterial3D for terrain-paint's
+		# packed R=Occlusion/G=Roughness/B=Metallic bake -- it imports as
+		# StandardMaterial3D with ao_texture/metallic_texture/roughness_texture
+		# all pointing at the same shared packed image. metallic_texture is as
+		# good a handle on that shared image as any of the three.
+		material.set_shader_parameter("orm_texture", source.metallic_texture)
 	if source.normal_enabled and source.normal_texture:
 		material.set_shader_parameter("normal_texture", source.normal_texture)
 		material.set_shader_parameter("has_normal_texture", true)
