@@ -86,9 +86,13 @@ try {
         throw "Not on main (currently on '$branch'). Switch to main before cutting a release."
     }
 
-    $dirty = git status --porcelain
+    # Untracked files are ignored -- this project deliberately leaves plan/spec
+    # docs (docs/superpowers/**) untracked forever, so a plain `git status
+    # --porcelain` would false-positive on every normal working tree. Only
+    # changes to already-tracked files (staged or unstaged) block the release.
+    $dirty = git status --porcelain --untracked-files=no
     if ($dirty) {
-        throw "Working tree is not clean:`n$dirty`nCommit or stash before cutting a release."
+        throw "Working tree has uncommitted changes to tracked files:`n$dirty`nCommit or stash before cutting a release."
     }
 
     Write-Host "Fetching tags from origin to check for collisions..." -ForegroundColor Cyan
