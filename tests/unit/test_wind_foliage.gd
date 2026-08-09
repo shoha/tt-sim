@@ -117,6 +117,35 @@ func test_apply_material_replaces_the_surface_material_with_the_wind_shader() ->
 	assert_eq(wind_material.get_shader_parameter("sway_amplitude"), grass_preset["sway_amplitude"])
 
 
+func test_apply_material_extracts_the_shared_orm_texture_from_a_standard_material3d_source(
+) -> void:
+	# Regression test: Godot's glTF importer does NOT produce an ORMMaterial3D for
+	# terrain-paint's packed R=Occlusion/G=Roughness/B=Metallic bake -- confirmed via a
+	# real headless probe against the actual exported GLB (terrain-paint's all.glb,
+	# used as map.glb in the "River" level). It instead produces a plain
+	# StandardMaterial3D with ao_texture/metallic_texture/roughness_texture all pointing
+	# at the SAME shared packed ImageTexture. The old `source is ORMMaterial3D` check
+	# never fired for this real-world shape, so orm_texture was never set and the
+	# shader fell back to its solid-white default -- forcing METALLIC to 1.0 for every
+	# scattered grass/fern/leaf and killing their diffuse lighting response.
+	var albedo := _make_test_texture(Color.GREEN)
+	var shared_orm := _make_test_texture(Color.WHITE)
+	var material := StandardMaterial3D.new()
+	material.albedo_texture = albedo
+	material.ao_texture = shared_orm
+	material.metallic_texture = shared_orm
+	material.roughness_texture = shared_orm
+	var mesh := BoxMesh.new()
+	mesh.material = material
+
+	WindFoliage.apply_material(mesh, "grass")
+
+	var wind_material := mesh.surface_get_material(0) as ShaderMaterial
+	assert_not_null(wind_material)
+	assert_eq(wind_material.get_shader_parameter("albedo_texture"), albedo)
+	assert_eq(wind_material.get_shader_parameter("orm_texture"), shared_orm)
+
+
 func test_apply_material_applies_override_values() -> void:
 	var material := _make_orm_material(Color.GREEN)
 	var mesh := BoxMesh.new()
