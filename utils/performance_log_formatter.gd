@@ -45,6 +45,15 @@ static func format_row(data: Dictionary) -> String:
 	for column in CSV_COLUMNS:
 		if column in _FLOAT_COLUMNS:
 			values.append("%.2f" % float(data.get(column, 0.0)))
+		elif column == "map_name":
+			# map_name is arbitrary user-editable text and may contain commas
+			# or quotes -- quote it and escape internal quotes per minimal
+			# CSV quoting rules so it can't shift subsequent columns.
+			var map_name: String = str(data.get(column, ""))
+			values.append('"%s"' % map_name.replace('"', '""'))
 		else:
-			values.append(str(data.get(column, "" if column == "map_name" else 0)))
+			# Remaining columns are integer-valued engine monitors.
+			# Performance.get_monitor() always returns float, so coerce to
+			# int explicitly to avoid a trailing ".0" in the CSV.
+			values.append(str(int(data.get(column, 0))))
 	return ",".join(values)

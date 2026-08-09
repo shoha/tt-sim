@@ -65,6 +65,7 @@ func toggle() -> void:
 
 func _exit_tree() -> void:
 	_close_log_file()
+	PerformanceMonitor.enabled = false
 
 
 func is_visible_overlay() -> bool:
@@ -72,7 +73,7 @@ func is_visible_overlay() -> bool:
 
 
 func _process(delta: float) -> void:
-	_accumulate_frame_sample()
+	_accumulate_frame_sample(delta)
 	_elapsed_since_sample += delta
 	_session_elapsed_sec += delta
 	if _elapsed_since_sample < SAMPLE_INTERVAL_SEC:
@@ -107,8 +108,12 @@ func _update_display() -> void:
 	_label.text = "\n".join(lines)
 
 
-func _accumulate_frame_sample() -> void:
-	var frame_ms: float = Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+## [param delta] is the real per-frame wall-clock interval from _process(),
+## used (rather than Performance.TIME_PROCESS, which is script-time only and
+## excludes rendering/GPU/vsync) so the CSV avg/max columns reflect true
+## frame time and can catch GPU-bound stutters.
+func _accumulate_frame_sample(delta: float) -> void:
+	var frame_ms: float = delta * 1000.0
 	_frame_time_sum_ms += frame_ms
 	_frame_time_max_ms = maxf(_frame_time_max_ms, frame_ms)
 	_frame_count += 1
@@ -175,6 +180,7 @@ func _write_log_row() -> void:
 			else 0.0
 		)
 	_log_file.store_line(PerformanceLogFormatter.format_row(data))
+	_log_file.flush()
 
 
 func _create_overlay(overlay_parent: Node) -> void:

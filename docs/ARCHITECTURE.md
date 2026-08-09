@@ -153,6 +153,7 @@ var restored = TokenPermissions.from_dict(dict)
 | Autoload              | File                                | Purpose                                       |
 | --------------------- | ----------------------------------- | --------------------------------------------- |
 | `UpdateManager`       | `autoloads/update_manager.gd`       | GitHub release checking and in-app updates     |
+| `PerformanceMonitor`  | `autoloads/performance_monitor.gd`  | Custom timer registration for the F3 performance overlay |
 
 ### UIManager Responsibilities
 
