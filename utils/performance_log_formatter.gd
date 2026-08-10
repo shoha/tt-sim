@@ -24,10 +24,10 @@ const CSV_COLUMNS: PackedStringArray = [
 	"video_adapter_vendor",
 	"camera_zoom",
 	"screen_scale",
+	"antialiasing",
 	"viewport_width",
 	"viewport_height",
 	"toggle_foliage_visible",
-	"toggle_foliage_aa",
 	"toggle_tree_shadows",
 	"toggle_grass_shadows",
 	"toggle_map_shadows",
@@ -55,6 +55,7 @@ const _STRING_COLUMNS: PackedStringArray = [
 	"map_name",
 	"video_adapter_name",
 	"video_adapter_vendor",
+	"antialiasing",
 ]
 
 
