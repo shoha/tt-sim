@@ -25,6 +25,7 @@ const CSV_COLUMNS: PackedStringArray = [
 	"camera_zoom",
 	"screen_scale",
 	"antialiasing",
+	"rendering_method",
 	"viewport_width",
 	"viewport_height",
 	"toggle_foliage_visible",
@@ -56,6 +57,7 @@ const _STRING_COLUMNS: PackedStringArray = [
 	"video_adapter_name",
 	"video_adapter_vendor",
 	"antialiasing",
+	"rendering_method",
 ]
 
 
