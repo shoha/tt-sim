@@ -15,6 +15,7 @@ var _game_map: GameMap = null
 
 var _lofi_material: ShaderMaterial = null  # Cached lo-fi material (from scene or created)
 var _occlusion_fade_enabled: bool = true  # Whether the occlusion fade effect is active
+var _foliage_antialiasing_level: int = Viewport.MSAA_DISABLED  # Current Antialiasing setting
 
 
 ## Wire this controller to its owning GameMap and run initial setup:
@@ -31,6 +32,8 @@ func setup(game_map: GameMap) -> void:
 	_load_lofi_setting()
 	_load_occlusion_fade_setting()
 	setup_occlusion_fade()
+	_load_foliage_antialiasing_setting()
+	apply_foliage_antialiasing()
 
 
 ## Load lo-fi filter setting from config
@@ -162,3 +165,50 @@ func setup_occlusion_fade() -> void:
 			_game_map.camera_node, _game_map.map_container, _game_map.drag_and_drop_node
 		)
 		_sync_lofi_pixelation()
+
+
+## Load the foliage antialiasing setting from config.
+func _load_foliage_antialiasing_setting() -> void:
+	var config = ConfigFile.new()
+	var err = config.load(Paths.SETTINGS_PATH)
+	var level = Viewport.MSAA_DISABLED
+	if err == OK:
+		level = config.get_value("graphics", "antialiasing", Viewport.MSAA_DISABLED)
+	_foliage_antialiasing_level = level
+
+
+## Set the foliage antialiasing level (a Viewport.MSAA enum value) and apply it
+## immediately -- called by the Settings menu, so a change takes effect mid-session,
+## not just on the next map load.
+func set_foliage_antialiasing_level(level: int) -> void:
+	_foliage_antialiasing_level = level
+	apply_foliage_antialiasing()
+
+
+## Apply the current foliage antialiasing level: sets the game-world SubViewport's
+## MSAA level and swaps every foliage ShaderMaterial between the antialiased and
+## plain-cutout shader variants. Called from setup() and again from
+## GameMap.notify_map_loaded() whenever a new map finishes loading -- freshly loaded
+## foliage materials always default to the antialiased shader
+## (WindFoliage.apply_material() always assigns get_shader()), so the "off" state
+## must be reapplied on every map load, not just once.
+func apply_foliage_antialiasing() -> void:
+	if _game_map.world_viewport:
+		_game_map.world_viewport.msaa_3d = _foliage_antialiasing_level
+	var materials := WindFoliage.collect_foliage_shader_materials(_game_map.map_container)
+	if _foliage_antialiasing_level == Viewport.MSAA_DISABLED:
+		var no_aa_shader := WindFoliage.get_shader_no_aa()
+		if not no_aa_shader:
+			push_warning(
+				(
+					"VisualEffectsController: wind_foliage_no_aa.gdshader failed to load -- "
+					+ "foliage antialiasing setting has no effect on shader selection"
+				)
+			)
+			return
+		for mat in materials:
+			mat.shader = no_aa_shader
+	else:
+		var aa_shader := WindFoliage.get_shader()
+		for mat in materials:
+			mat.shader = aa_shader
