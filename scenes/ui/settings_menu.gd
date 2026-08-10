@@ -10,6 +10,20 @@ signal closed
 
 const SLIDER_TICK_INTERVAL := 0.08  # Minimum seconds between slider tick sounds
 
+## Maps the "Renderer" OptionButton's item ids to the string values Godot's
+## rendering/renderer/rendering_method project setting and --rendering-method
+## command-line argument both accept. Index 0 ("" / Default) means "don't
+## force anything -- respect project.godot's own per-platform choice,"
+## matching the behavior shipped before this setting existed. Item ids in the
+## .tscn are authored to equal these indices exactly (0-3) -- this is the
+## single source of truth both directions must agree with.
+const _RENDERING_METHOD_VALUES: PackedStringArray = [
+	"",
+	"forward_plus",
+	"mobile",
+	"gl_compatibility",
+]
+
 var _last_slider_tick_time: float = 0.0
 
 # Audio controls
@@ -103,6 +117,33 @@ static func _set_window_fullscreen(enable: bool) -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	elif not enable and is_currently_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+
+## Pure comparison: true only when [param saved] names a specific renderer
+## (never for "" / Default, which means "don't force anything") and it
+## differs from [param active].
+static func _rendering_method_needs_relaunch(saved: String, active: String) -> bool:
+	return saved != "" and saved != active
+
+
+## Build a new command-line argument list from [param current_args] with any
+## existing "--rendering-method <value>" pair removed and a fresh one for
+## [param method] appended -- preserves every other argument the process was
+## originally launched with (e.g. --quit-after, Steam-injected flags).
+static func _build_relaunch_args(
+	current_args: PackedStringArray, method: String
+) -> PackedStringArray:
+	var result: Array[String] = []
+	var i := 0
+	while i < current_args.size():
+		if current_args[i] == "--rendering-method":
+			i += 2  # skip the flag and its value
+			continue
+		result.append(current_args[i])
+		i += 1
+	result.append("--rendering-method")
+	result.append(method)
+	return PackedStringArray(result)
 
 
 func _on_panel_ready() -> void:
