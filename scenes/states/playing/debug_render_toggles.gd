@@ -82,6 +82,15 @@ func refresh() -> void:
 	_tree_shadows = true
 	_grass_shadows = true
 	_map_shadows = true
+	# _on_foliage_aa_toggled() is the only place that writes world_viewport.msaa_3d, and
+	# it is wired only to the checkbox's `toggled` signal, which set_pressed_no_signal()
+	# below deliberately does not emit. msaa_3d is a scalar on the Viewport that persists
+	# across map loads (unlike the per-node shader materials, which are freshly collected
+	# above from the newly loaded map's nodes and already default to the AA shader), so it
+	# must be reset here explicitly or a previously-disabled MSAA setting would silently
+	# survive a reload while the checkbox shows re-checked.
+	if _game_map and _game_map.world_viewport:
+		_game_map.world_viewport.msaa_3d = Viewport.MSAA_4X
 	for key in _checkboxes:
 		if not _checkboxes[key].disabled:
 			_checkboxes[key].set_pressed_no_signal(true)
