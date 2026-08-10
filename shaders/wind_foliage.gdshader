@@ -62,24 +62,28 @@ void vertex() {
 
 
 void fragment() {
-	vec4 albedo_sample = texture(albedo_texture, UV);
-	ALBEDO = albedo_sample.rgb;
-	ALPHA = albedo_sample.a;
-	ALPHA_SCISSOR_THRESHOLD = alpha_scissor_threshold;
-	ALPHA_ANTIALIASING_EDGE = alpha_scissor_threshold * 0.5;
-	ALPHA_TEXTURE_COORDINATE = UV * vec2(textureSize(albedo_texture, 0));
+	vec3 pbr_albedo;
+	float pbr_alpha;
+	float pbr_ao;
+	float pbr_roughness;
+	float pbr_metallic;
+	vec3 pbr_normal_map;
 
-	vec3 orm = texture(orm_texture, UV).rgb;
-	AO = orm.r;
-	ROUGHNESS = orm.g;
-	METALLIC = orm.b;
+	apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, VIEW_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE,
+		pbr_albedo, pbr_alpha, pbr_ao, pbr_roughness, pbr_metallic, pbr_normal_map);
+
+	ALBEDO = pbr_albedo;
+	ALPHA = pbr_alpha;
+	AO = pbr_ao;
+	ROUGHNESS = pbr_roughness;
+	METALLIC = pbr_metallic;
 	SPECULAR = specular_reflectance;
-
 	if (has_normal_texture) {
-		NORMAL_MAP = texture(normal_texture, UV).rgb;
+		NORMAL_MAP = pbr_normal_map;
 		NORMAL_MAP_DEPTH = 1.0;
 	}
 
-	vec3 world_normal = mat3(INV_VIEW_MATRIX) * NORMAL;
-	apply_occlusion_fade(world_normal, VERTEX, VIEW_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE);
+	ALPHA_SCISSOR_THRESHOLD = alpha_scissor_threshold;
+	ALPHA_ANTIALIASING_EDGE = alpha_scissor_threshold * 0.5;
+	ALPHA_TEXTURE_COORDINATE = UV * vec2(textureSize(albedo_texture, 0));
 }
