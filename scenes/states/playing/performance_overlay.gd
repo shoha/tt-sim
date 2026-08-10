@@ -105,6 +105,16 @@ static func _msaa_level_label(msaa_level: int) -> String:
 			return "None"
 
 
+## Live-read via RenderingServer, NOT ProjectSettings.get_setting(
+## "rendering/renderer/rendering_method") -- that only returns project.godot's
+## base value and ignores both --rendering-method CLI overrides and per-
+## platform overrides (this project's own renderer/rendering_method.macos),
+## which would make this column report the wrong renderer on macOS.
+func _rendering_method_label() -> String:
+	var method := RenderingServer.get_current_rendering_method()
+	return method if method != "" else "?"
+
+
 func _update_display() -> void:
 	var lines: PackedStringArray = [
 		"FPS: %.0f" % Performance.get_monitor(Performance.TIME_FPS),
@@ -129,7 +139,7 @@ func _update_display() -> void:
 			% [_game_map.world_viewport.size.x, _game_map.world_viewport.size.y]
 		),
 		"Antialiasing: %s" % _msaa_level_label(_game_map.world_viewport.msaa_3d),
-		"Renderer: %s" % ProjectSettings.get_setting("rendering/renderer/rendering_method", "?"),
+		"Renderer: %s" % _rendering_method_label(),
 	]
 	for monitor_name in _CUSTOM_MONITOR_NAMES:
 		if Performance.has_custom_monitor(monitor_name):
@@ -222,7 +232,7 @@ func _write_log_row() -> void:
 		"camera_zoom": _game_map.camera_node.size,
 		"screen_scale": DisplayServer.screen_get_scale(),
 		"antialiasing": _msaa_level_label(_game_map.world_viewport.msaa_3d),
-		"rendering_method": ProjectSettings.get_setting("rendering/renderer/rendering_method", "?"),
+		"rendering_method": _rendering_method_label(),
 		"viewport_width": _game_map.world_viewport.size.x,
 		"viewport_height": _game_map.world_viewport.size.y,
 	}
