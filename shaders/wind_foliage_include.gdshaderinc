@@ -6,11 +6,15 @@
 // its softened cutout edges. See
 // docs/superpowers/specs/2026-08-10-performance-debug-toggles-design.md.
 //
-// Functions take VERTEX/MODEL_MATRIX/TIME/etc. as explicit parameters rather than
-// reading stage built-ins directly -- confirmed via a real headless probe (see
-// occlusion_fade_include.gdshaderinc, which documents the same constraint) that
-// Godot's shader compiler does not resolve stage built-ins referenced inside a
-// plain (non-vertex/fragment) function, even one called from vertex()/fragment().
+// Godot's shader compiler has a real limitation: fragment stage output built-ins
+// (ALBEDO, ROUGHNESS, METALLIC, AO, etc.) can only be assigned directly inside
+// vertex()/fragment(), not from any called function. To share the complete PBR and
+// occlusion-fade logic without code duplication (which would let the two variants
+// drift out of sync), apply_wind_foliage_pbr() uses out-parameters: the function
+// computes all PBR values and passes them back to the caller, which then assigns them
+// to the built-ins. Functions like wind_sway_vertex_offset take stage built-ins as
+// explicit parameters rather than reading them directly, matching the pattern already
+// used in occlusion_fade_include.gdshaderinc.
 
 uniform sampler2D albedo_texture : source_color, filter_linear_mipmap;
 uniform sampler2D orm_texture : hint_default_white, filter_linear_mipmap;
@@ -50,4 +54,46 @@ vec3 wind_sway_vertex_offset(vec3 vertex, mat4 model_matrix, float time) {
 	// the correct visual whether the current species preset is "grass" or "tree".
 	float height_weight = max(vertex.y, 0.0);
 	return vec3(sway * height_weight, 0.0, sway * height_weight * 0.6);
+}
+
+
+// Computes PBR and occlusion-fade fragment values. Uses out-parameters to pass
+// results back to the caller (which then assigns them to built-ins) -- a workaround
+// for Godot's limitation that output built-ins can only be assigned directly inside
+// fragment(), not from a called function. Samples textures, unpacks ORM, applies
+// normal mapping, and calls apply_occlusion_fade() to determine final alpha values.
+// Caller is responsible for assigning the out-parameters to their corresponding
+// built-ins and setting variant-specific ALPHA_SCISSOR_THRESHOLD/antialiasing values.
+void apply_wind_foliage_pbr(
+	vec2 uv,
+	mat4 inv_view_matrix,
+	vec3 normal,
+	vec3 vertex_view,
+	mat4 view_matrix,
+	vec2 frag_coord,
+	vec2 viewport_size,
+	out vec3 out_albedo,
+	out float out_alpha,
+	out float out_ao,
+	out float out_roughness,
+	out float out_metallic,
+	out vec3 out_normal_map
+) {
+	vec4 albedo_sample = texture(albedo_texture, uv);
+	out_albedo = albedo_sample.rgb;
+	out_alpha = albedo_sample.a;
+
+	vec3 orm = texture(orm_texture, uv).rgb;
+	out_ao = orm.r;
+	out_roughness = orm.g;
+	out_metallic = orm.b;
+
+	if (has_normal_texture) {
+		out_normal_map = texture(normal_texture, uv).rgb;
+	} else {
+		out_normal_map = vec3(0.0);
+	}
+
+	vec3 world_normal = mat3(inv_view_matrix) * normal;
+	apply_occlusion_fade(world_normal, vertex_view, view_matrix, frag_coord, viewport_size);
 }
