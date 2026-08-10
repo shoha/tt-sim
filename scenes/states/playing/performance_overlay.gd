@@ -19,21 +19,6 @@ const _CUSTOM_MONITOR_NAMES: PackedStringArray = [
 	&"perf/grid_overlay_ms",
 ]
 
-
-## Maps a Viewport.MSAA enum value to the short label used in the on-screen display
-## and the CSV log's antialiasing column.
-static func _msaa_level_label(msaa_level: int) -> String:
-	match msaa_level:
-		Viewport.MSAA_2X:
-			return "2x"
-		Viewport.MSAA_4X:
-			return "4x"
-		Viewport.MSAA_8X:
-			return "8x"
-		_:
-			return "None"
-
-
 var _game_map: GameMap = null
 var _visible: bool = false
 var _elapsed_since_sample: float = 0.0
@@ -104,6 +89,20 @@ func _process(delta: float) -> void:
 	_update_display()
 	_write_log_row()
 	_reset_frame_accumulators()
+
+
+## Maps a Viewport.MSAA enum value to the short label used in the on-screen display
+## and the CSV log's antialiasing column.
+static func _msaa_level_label(msaa_level: int) -> String:
+	match msaa_level:
+		Viewport.MSAA_2X:
+			return "2x"
+		Viewport.MSAA_4X:
+			return "4x"
+		Viewport.MSAA_8X:
+			return "8x"
+		_:
+			return "None"
 
 
 func _update_display() -> void:

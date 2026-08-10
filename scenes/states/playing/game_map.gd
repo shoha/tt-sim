@@ -384,7 +384,7 @@ func get_current_map_name() -> String:
 
 
 ## Create and configure DebugRenderToggles (the F3 overlay's checkbox panel:
-## foliage visibility, foliage AA/MSAA A/B, and per-category shadow toggles).
+## foliage visibility and per-category (tree/grass/map) shadow toggles).
 ## Replaces the old undiscoverable F4 foliage-visibility hotkey outright.
 func setup_debug_render_toggles() -> void:
 	if _debug_render_toggles:
