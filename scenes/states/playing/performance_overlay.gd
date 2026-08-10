@@ -208,6 +208,9 @@ func _write_log_row() -> void:
 		"viewport_width": _game_map.world_viewport.size.x,
 		"viewport_height": _game_map.world_viewport.size.y,
 	}
+	var debug_toggles := _game_map.get_debug_render_toggles()
+	if debug_toggles:
+		data.merge(debug_toggles.get_toggle_states())
 	for monitor_name in _CUSTOM_MONITOR_NAMES:
 		var column := String(monitor_name).replace("/", "_")
 		data[column] = (

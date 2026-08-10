@@ -26,6 +26,11 @@ const CSV_COLUMNS: PackedStringArray = [
 	"screen_scale",
 	"viewport_width",
 	"viewport_height",
+	"toggle_foliage_visible",
+	"toggle_foliage_aa",
+	"toggle_tree_shadows",
+	"toggle_grass_shadows",
+	"toggle_map_shadows",
 ]
 
 ## Columns rendered with 2 decimal places; every other column uses str(value).
