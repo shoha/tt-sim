@@ -19,6 +19,18 @@ var _tree_shadows: bool = true
 var _grass_shadows: bool = true
 var _map_shadows: bool = true
 
+var _game_map: GameMap = null
+var _map_container: Node3D = null
+
+var _tree_multimeshes: Array[MultiMeshInstance3D] = []
+var _grass_multimeshes: Array[MultiMeshInstance3D] = []
+var _map_meshes: Array[MeshInstance3D] = []
+var _foliage_shader_materials: Array[ShaderMaterial] = []
+
+var _canvas_layer: CanvasLayer
+var _panel: PanelContainer
+var _checkboxes: Dictionary = {}  # String -> CheckBox
+
 
 ## Current state of every toggle, keyed by the exact CSV column name
 ## PerformanceLogFormatter uses for each -- PerformanceOverlay reads this directly
@@ -31,6 +43,134 @@ func get_toggle_states() -> Dictionary:
 		"toggle_grass_shadows": _grass_shadows,
 		"toggle_map_shadows": _map_shadows,
 	}
+
+
+func setup(game_map: GameMap) -> void:
+	_game_map = game_map
+	_map_container = game_map.map_container
+	_create_panel(game_map)
+	if not WindFoliage.get_shader_no_aa():
+		push_warning(
+			(
+				"DebugRenderToggles: wind_foliage_no_aa.gdshader failed to load -- "
+				+ "Foliage AA toggle disabled for this session"
+			)
+		)
+		_checkboxes["foliage_aa"].disabled = true
+	refresh()
+
+
+func set_panel_visible(should_be_visible: bool) -> void:
+	_panel.visible = should_be_visible
+
+
+## Re-collect node/material references against the currently loaded map and reset
+## every toggle to its default (on) state. Called once from setup() and again from
+## GameMap.notify_map_loaded() whenever a new map finishes loading -- map_container's
+## previous children are gone by then (freed by the level loader), and no toggle
+## persists across a map switch (design spec, "Toggles (v1)"). Without this, the
+## cached node lists from the first map would go stale (pointing at freed nodes) and
+## the newly loaded map's foliage would never be collected at all.
+func refresh() -> void:
+	_tree_multimeshes.clear()
+	_grass_multimeshes.clear()
+	_map_meshes.clear()
+	_foliage_shader_materials.clear()
+	_collect_nodes()
+	_foliage_visible = true
+	_foliage_aa = true
+	_tree_shadows = true
+	_grass_shadows = true
+	_map_shadows = true
+	for key in _checkboxes:
+		if not _checkboxes[key].disabled:
+			_checkboxes[key].set_pressed_no_signal(true)
+
+
+func _collect_nodes() -> void:
+	if not _map_container:
+		return
+	_collect_multimeshes_by_category(_map_container, "tree", _tree_multimeshes)
+	_collect_multimeshes_by_category(_map_container, "grass", _grass_multimeshes)
+	_collect_mesh_instances(_map_container, _map_meshes)
+	for mm_inst in _tree_multimeshes + _grass_multimeshes:
+		_collect_foliage_materials(mm_inst, _foliage_shader_materials)
+
+
+func _create_panel(overlay_parent: Node) -> void:
+	_canvas_layer = CanvasLayer.new()
+	_canvas_layer.layer = Constants.LAYER_PERF_OVERLAY
+	overlay_parent.add_child(_canvas_layer)
+
+	var labels: PackedStringArray = [
+		"Foliage visible",
+		"Foliage AA (4x MSAA)",
+		"Tree shadows",
+		"Grass shadows",
+		"Map shadows",
+	]
+	var result: Dictionary = MapOverlayUtils.create_checkbox_panel(labels)
+	_panel = result.panel
+	var checkboxes: Array[CheckBox] = result.checkboxes
+	_checkboxes = {
+		"foliage_visible": checkboxes[0],
+		"foliage_aa": checkboxes[1],
+		"tree_shadows": checkboxes[2],
+		"grass_shadows": checkboxes[3],
+		"map_shadows": checkboxes[4],
+	}
+	_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	# Positioned below PerformanceOverlay's metrics panel (which starts at y=16).
+	# Confirmed via manual smoke test (F3 in a live level) that y=260 overlaps the
+	# metrics panel's now-14 lines (grown since this offset was chosen -- see
+	# camera zoom / screen scale / world viewport rows added in recent commits);
+	# bumped to clear it. Re-verify and adjust again if the metrics panel grows further.
+	_panel.position = Vector2(16, 320)
+	_canvas_layer.add_child(_panel)
+
+	_checkboxes["foliage_visible"].toggled.connect(_on_foliage_visible_toggled)
+	_checkboxes["foliage_aa"].toggled.connect(_on_foliage_aa_toggled)
+	_checkboxes["tree_shadows"].toggled.connect(_on_tree_shadows_toggled)
+	_checkboxes["grass_shadows"].toggled.connect(_on_grass_shadows_toggled)
+	_checkboxes["map_shadows"].toggled.connect(_on_map_shadows_toggled)
+
+
+func _on_foliage_visible_toggled(pressed: bool) -> void:
+	_foliage_visible = pressed
+	for mm_inst in _tree_multimeshes:
+		if is_instance_valid(mm_inst):
+			mm_inst.visible = pressed
+	for mm_inst in _grass_multimeshes:
+		if is_instance_valid(mm_inst):
+			mm_inst.visible = pressed
+
+
+func _on_foliage_aa_toggled(pressed: bool) -> void:
+	_foliage_aa = pressed
+	var no_aa_shader := WindFoliage.get_shader_no_aa()
+	if not no_aa_shader:
+		return
+	var target_shader: Shader = WindFoliage.get_shader() if pressed else no_aa_shader
+	for mat in _foliage_shader_materials:
+		if is_instance_valid(mat):
+			mat.shader = target_shader
+	if _game_map and _game_map.world_viewport:
+		_game_map.world_viewport.msaa_3d = Viewport.MSAA_4X if pressed else Viewport.MSAA_DISABLED
+
+
+func _on_tree_shadows_toggled(pressed: bool) -> void:
+	_tree_shadows = pressed
+	_apply_shadow_setting(_tree_multimeshes, pressed)
+
+
+func _on_grass_shadows_toggled(pressed: bool) -> void:
+	_grass_shadows = pressed
+	_apply_shadow_setting(_grass_multimeshes, pressed)
+
+
+func _on_map_shadows_toggled(pressed: bool) -> void:
+	_map_shadows = pressed
+	_apply_shadow_setting(_map_meshes, pressed)
 
 
 ## Recursively collect visible MultiMeshInstance3D nodes tagged with the given
