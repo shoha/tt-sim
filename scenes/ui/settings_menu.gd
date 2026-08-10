@@ -104,6 +104,43 @@ static func apply_startup_graphics_settings() -> void:
 	_set_window_fullscreen.call_deferred(fullscreen)
 
 
+## Check whether the saved rendering-method preference differs from whatever
+## is actually active this boot, and relaunch the process with the correct
+## --rendering-method flag if so. Call this early (e.g. from Root._ready(),
+## alongside apply_startup_graphics_settings()) so a normal launch -- which
+## never knows to pass this flag on its own -- still ends up on the player's
+## saved choice. Godot decides the rendering method when the rendering server
+## boots, before any GDScript runs, so there is no live "just apply it" path
+## the way there is for MSAA/antialiasing; a relaunch is the only lever.
+##
+## No-ops entirely under a headless run (DisplayServer.get_name() ==
+## "headless") -- without this guard, `godot --headless --path . --quit-after 1`
+## (which, unlike GUT's test runner, does boot the real Root main scene) would
+## attempt a relaunch on any machine with a non-default local preference
+## saved, on every syntax check.
+static func apply_startup_rendering_method() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var config = ConfigFile.new()
+	if config.load(Paths.SETTINGS_PATH) != OK:
+		return
+
+	var saved: String = config.get_value("graphics", "rendering_method", "")
+	var active: String = ProjectSettings.get_setting("rendering/renderer/rendering_method", "")
+	if not _rendering_method_needs_relaunch(saved, active):
+		return
+
+	var args := _build_relaunch_args(OS.get_cmdline_args(), saved)
+	var pid := OS.create_process(OS.get_executable_path(), args)
+	if pid <= 0:
+		push_warning(
+			"SettingsMenu: failed to relaunch with --rendering-method %s (pid %d)" % [saved, pid]
+		)
+		return
+	Engine.get_main_loop().quit()
+
+
 ## Set the window fullscreen mode, guarding against redundant toggles.
 ## Extracted as a static helper so it can be used with call_deferred().
 static func _set_window_fullscreen(enable: bool) -> void:

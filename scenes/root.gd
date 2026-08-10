@@ -42,6 +42,11 @@ var _startup_update_check_pending: bool = false
 
 
 func _ready() -> void:
+	# Check the saved renderer preference first -- it may relaunch the process
+	# entirely (see its own doc comment), so there is no reason to do any other
+	# startup work first.
+	SettingsMenu.apply_startup_rendering_method()
+
 	# Apply saved graphics settings (fullscreen, vsync) before any UI is shown
 	SettingsMenu.apply_startup_graphics_settings()
 
