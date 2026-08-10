@@ -14,6 +14,14 @@ func test_rendering_method_values_round_trip_for_every_item() -> void:
 		assert_eq(SettingsMenu._RENDERING_METHOD_VALUES.find(value), i)
 
 
+func test_rendering_method_values_has_the_exact_required_order() -> void:
+	assert_eq(SettingsMenu._RENDERING_METHOD_VALUES[0], "")
+	assert_eq(SettingsMenu._RENDERING_METHOD_VALUES[1], "forward_plus")
+	assert_eq(SettingsMenu._RENDERING_METHOD_VALUES[2], "mobile")
+	assert_eq(SettingsMenu._RENDERING_METHOD_VALUES[3], "gl_compatibility")
+	assert_eq(SettingsMenu._RENDERING_METHOD_VALUES.size(), 4)
+
+
 func test_needs_relaunch_is_false_for_default() -> void:
 	assert_false(SettingsMenu._rendering_method_needs_relaunch("", "forward_plus"))
 	assert_false(SettingsMenu._rendering_method_needs_relaunch("", "mobile"))
@@ -52,3 +60,9 @@ func test_build_relaunch_args_preserves_other_flags_and_order() -> void:
 			)
 		),
 	)
+
+
+func test_build_relaunch_args_handles_existing_flag_at_the_very_end() -> void:
+	var args := PackedStringArray(["--fullscreen", "--rendering-method", "forward_plus"])
+	var result := SettingsMenu._build_relaunch_args(args, "mobile")
+	assert_eq(result, PackedStringArray(["--fullscreen", "--rendering-method", "mobile"]))
