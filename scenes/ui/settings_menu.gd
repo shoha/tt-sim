@@ -30,6 +30,7 @@ var _last_slider_tick_time: float = 0.0
 @onready var vsync_check: CheckButton = %VSyncCheck
 @onready var lofi_check: CheckButton = %LofiCheck
 @onready var occlusion_fade_check: CheckButton = %OcclusionFadeCheck
+@onready var antialiasing_option: OptionButton = %AntialiasingOption
 
 # Grid visual controls
 @onready var cell_tint_opacity_slider: HSlider = %CellTintOpacitySlider
@@ -124,6 +125,7 @@ func _on_panel_ready() -> void:
 	vsync_check.toggled.connect(_on_vsync_toggled)
 	lofi_check.toggled.connect(_on_lofi_toggled)
 	occlusion_fade_check.toggled.connect(_on_occlusion_fade_toggled)
+	antialiasing_option.item_selected.connect(_on_antialiasing_selected)
 
 	# Grid visuals
 	cell_tint_opacity_slider.value_changed.connect(_on_cell_tint_opacity_changed)
@@ -226,6 +228,9 @@ func _load_settings() -> void:
 		occlusion_fade_check.button_pressed = config.get_value(
 			"graphics", "occlusion_fade_enabled", true
 		)
+		antialiasing_option.selected = config.get_value(
+			"graphics", "antialiasing", Viewport.MSAA_DISABLED
+		)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
 		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
 		cell_tint_opacity_slider.value = (
@@ -259,6 +264,7 @@ func _save_settings() -> void:
 	config.set_value("graphics", "vsync", vsync_check.button_pressed)
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
 	config.set_value("graphics", "occlusion_fade_enabled", occlusion_fade_check.button_pressed)
+	config.set_value("graphics", "antialiasing", antialiasing_option.selected)
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
 	config.set_value("updates", "check_prereleases", prereleases_check.button_pressed)
 	config.set_value("grid_visuals", "cell_tint_opacity", cell_tint_opacity_slider.value / 100.0)
@@ -288,6 +294,9 @@ func _apply_settings() -> void:
 
 	# Apply occlusion fade setting
 	_apply_occlusion_fade_setting()
+
+	# Apply foliage antialiasing setting
+	_apply_foliage_antialiasing_setting()
 
 	# Apply grid visual settings
 	_apply_grid_visual_settings()
@@ -351,6 +360,10 @@ func _on_occlusion_fade_toggled(_pressed: bool) -> void:
 	pass
 
 
+func _on_antialiasing_selected(_index: int) -> void:
+	pass
+
+
 func _apply_lofi_setting() -> void:
 	# Find active GameMap and apply lo-fi setting
 	var game_map = _find_game_map()
@@ -362,6 +375,12 @@ func _apply_occlusion_fade_setting() -> void:
 	var game_map = _find_game_map()
 	if game_map:
 		game_map.set_occlusion_fade_enabled(occlusion_fade_check.button_pressed)
+
+
+func _apply_foliage_antialiasing_setting() -> void:
+	var game_map = _find_game_map()
+	if game_map:
+		game_map.set_foliage_antialiasing_level(antialiasing_option.selected)
 
 
 func _apply_grid_visual_settings() -> void:
@@ -433,6 +452,7 @@ func _on_reset_pressed() -> void:
 	vsync_check.button_pressed = true
 	lofi_check.button_pressed = true
 	occlusion_fade_check.button_pressed = true
+	antialiasing_option.selected = Viewport.MSAA_DISABLED
 	p2p_enabled_check.button_pressed = true
 	prereleases_check.button_pressed = false
 	input_device_option.selected = InputProfile.Profile.AUTO
@@ -530,6 +550,9 @@ func _apply_tooltips() -> void:
 	vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
 	lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
 	occlusion_fade_check.tooltip_text = "Fade map geometry that hides tokens from view"
+	antialiasing_option.tooltip_text = (
+		"Smooths jagged edges on foliage and scene geometry (uses more GPU memory and bandwidth)"
+	)
 	cell_tint_opacity_slider.tooltip_text = "Opacity of the cell fill shading on the grid"
 	line_thickness_slider.tooltip_text = "Thickness of the grid lines"
 	fade_distance_slider.tooltip_text = "How far the grid extends from the camera center"
