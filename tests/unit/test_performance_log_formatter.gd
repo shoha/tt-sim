@@ -12,8 +12,9 @@ func test_format_header_matches_column_order() -> void:
 			+ "draw_calls,primitives,video_mem_mb,physics_objects,"
 			+ "perf_occlusion_fade_ms,perf_camera_update_ms,perf_grid_overlay_ms,"
 			+ "render_cpu_ms,video_adapter_name,video_adapter_vendor,camera_zoom,"
-			+ "screen_scale,viewport_width,viewport_height,toggle_foliage_visible,"
-			+ "toggle_foliage_aa,toggle_tree_shadows,toggle_grass_shadows,toggle_map_shadows"
+			+ "screen_scale,antialiasing,viewport_width,viewport_height,"
+			+ "toggle_foliage_visible,toggle_tree_shadows,toggle_grass_shadows,"
+			+ "toggle_map_shadows"
 		),
 	)
 
@@ -23,7 +24,8 @@ func test_format_row_orders_and_formats_values() -> void:
 	# what Performance.get_monitor() actually returns in production -- the
 	# int() coercion in format_row() must still produce "812" not "812.0". The
 	# toggle_* columns are real bools, matching what DebugRenderToggles.get_toggle_states()
-	# returns -- int(true)/int(false) must produce "1"/"0".
+	# returns -- int(true)/int(false) must produce "1"/"0". antialiasing is a plain
+	# label string ("None"/"2x"/"4x"), read live from the viewport by PerformanceOverlay.
 	var row := (
 		PerformanceLogFormatter
 		. format_row(
@@ -45,10 +47,10 @@ func test_format_row_orders_and_formats_values() -> void:
 				"video_adapter_vendor": "Apple",
 				"camera_zoom": 5.5,
 				"screen_scale": 2.0,
+				"antialiasing": "4x",
 				"viewport_width": 1280.0,
 				"viewport_height": 800.0,
 				"toggle_foliage_visible": true,
-				"toggle_foliage_aa": false,
 				"toggle_tree_shadows": true,
 				"toggle_grass_shadows": true,
 				"toggle_map_shadows": false,
@@ -59,7 +61,7 @@ func test_format_row_orders_and_formats_values() -> void:
 		row,
 		(
 			'12.30,"River",34.50,29.40,51.00,812,1200000,780.50,340,4.10,0.20,0.15,3.70,'
-			+ '"Apple M1","Apple",5.50,2.00,1280,800,1,0,1,1,0'
+			+ '"Apple M1","Apple",5.50,2.00,"4x",1280,800,1,1,1,0'
 		),
 	)
 
@@ -72,7 +74,7 @@ func test_format_row_quotes_map_name_containing_comma_and_quote() -> void:
 		row,
 		(
 			'0.00,"River, Night ""Update""",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,"","",'
-			+ "0.00,0.00,0,0,0,0,0,0,0"
+			+ '0.00,0.00,"",0,0,0,0,0,0'
 		),
 	)
 
@@ -85,7 +87,7 @@ func test_format_row_quotes_video_adapter_name_containing_comma() -> void:
 		row,
 		(
 			'0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,"Apple M1, 8-core GPU","",'
-			+ "0.00,0.00,0,0,0,0,0,0,0"
+			+ '0.00,0.00,"",0,0,0,0,0,0'
 		),
 	)
 
@@ -94,5 +96,5 @@ func test_format_row_defaults_missing_columns() -> void:
 	var row := PerformanceLogFormatter.format_row({})
 	assert_eq(
 		row,
-		'0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,"","",0.00,0.00,0,0,0,0,0,0,0',
+		'0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,"","",0.00,0.00,"",0,0,0,0,0,0',
 	)

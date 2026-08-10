@@ -19,6 +19,21 @@ const _CUSTOM_MONITOR_NAMES: PackedStringArray = [
 	&"perf/grid_overlay_ms",
 ]
 
+
+## Maps a Viewport.MSAA enum value to the short label used in the on-screen display
+## and the CSV log's antialiasing column.
+static func _msaa_level_label(msaa_level: int) -> String:
+	match msaa_level:
+		Viewport.MSAA_2X:
+			return "2x"
+		Viewport.MSAA_4X:
+			return "4x"
+		Viewport.MSAA_8X:
+			return "8x"
+		_:
+			return "None"
+
+
 var _game_map: GameMap = null
 var _visible: bool = false
 var _elapsed_since_sample: float = 0.0
@@ -114,6 +129,7 @@ func _update_display() -> void:
 			"World viewport: %dx%d"
 			% [_game_map.world_viewport.size.x, _game_map.world_viewport.size.y]
 		),
+		"Antialiasing: %s" % _msaa_level_label(_game_map.world_viewport.msaa_3d),
 	]
 	for monitor_name in _CUSTOM_MONITOR_NAMES:
 		if Performance.has_custom_monitor(monitor_name):
@@ -205,6 +221,7 @@ func _write_log_row() -> void:
 		"video_adapter_vendor": _video_adapter_vendor,
 		"camera_zoom": _game_map.camera_node.size,
 		"screen_scale": DisplayServer.screen_get_scale(),
+		"antialiasing": _msaa_level_label(_game_map.world_viewport.msaa_3d),
 		"viewport_width": _game_map.world_viewport.size.x,
 		"viewport_height": _game_map.world_viewport.size.y,
 	}
