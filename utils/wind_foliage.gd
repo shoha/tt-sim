@@ -76,6 +76,44 @@ static func get_shader_no_aa() -> Shader:
 	return _shader_no_aa
 
 
+## Recursively collect every visible MultiMeshInstance3D tagged as wind foliage
+## (either "tree" or "grass" category) under [param node]. Combines both categories
+## in one traversal since foliage antialiasing applies to all wind foliage uniformly
+## -- unlike DebugRenderToggles (scenes/states/playing/debug_render_toggles.gd),
+## which tracks tree/grass separately for independent shadow toggles.
+static func _collect_wind_foliage_multimeshes(
+	node: Node, result: Array[MultiMeshInstance3D]
+) -> void:
+	for child in node.get_children():
+		if child is MultiMeshInstance3D and child.visible:
+			var category: String = child.get_meta("wind_foliage_category", "")
+			if category == "tree" or category == "grass":
+				result.append(child as MultiMeshInstance3D)
+		_collect_wind_foliage_multimeshes(child, result)
+
+
+## Collect every ShaderMaterial used across all wind-foliage MultiMeshInstance3D
+## surfaces under [param map_container] -- used by VisualEffectsController to swap
+## every foliage material between the antialiased and plain-cutout shader variants
+## when the player's Antialiasing setting changes. Returns an empty array if
+## map_container is null or has no wind foliage.
+static func collect_foliage_shader_materials(map_container: Node3D) -> Array[ShaderMaterial]:
+	var result: Array[ShaderMaterial] = []
+	if not map_container:
+		return result
+	var multimeshes: Array[MultiMeshInstance3D] = []
+	_collect_wind_foliage_multimeshes(map_container, multimeshes)
+	for mm_inst in multimeshes:
+		if not mm_inst.multimesh or not mm_inst.multimesh.mesh:
+			continue
+		var mesh := mm_inst.multimesh.mesh
+		for surface_idx in range(mesh.get_surface_count()):
+			var mat := mesh.surface_get_material(surface_idx)
+			if mat is ShaderMaterial and mat not in result:
+				result.append(mat as ShaderMaterial)
+	return result
+
+
 ## Classifies a Geoscatter instance-source object's name into a PRESETS key, or "" for
 ## "never sway" -- pure and case-insensitive so it's directly unit-testable against
 ## real documented Geoscatter asset names. Deny-list (rocks/stones) is checked before
