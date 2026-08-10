@@ -129,6 +129,7 @@ func _update_display() -> void:
 			% [_game_map.world_viewport.size.x, _game_map.world_viewport.size.y]
 		),
 		"Antialiasing: %s" % _msaa_level_label(_game_map.world_viewport.msaa_3d),
+		"Renderer: %s" % ProjectSettings.get_setting("rendering/renderer/rendering_method", "?"),
 	]
 	for monitor_name in _CUSTOM_MONITOR_NAMES:
 		if Performance.has_custom_monitor(monitor_name):
@@ -221,6 +222,7 @@ func _write_log_row() -> void:
 		"camera_zoom": _game_map.camera_node.size,
 		"screen_scale": DisplayServer.screen_get_scale(),
 		"antialiasing": _msaa_level_label(_game_map.world_viewport.msaa_3d),
+		"rendering_method": ProjectSettings.get_setting("rendering/renderer/rendering_method", "?"),
 		"viewport_width": _game_map.world_viewport.size.x,
 		"viewport_height": _game_map.world_viewport.size.y,
 	}
