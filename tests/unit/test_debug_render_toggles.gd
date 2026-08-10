@@ -139,25 +139,6 @@ func test_collect_mesh_instances_ignores_invisible_mesh_instance() -> void:
 	root.free()
 
 
-func test_collect_foliage_materials_gathers_shader_materials_from_the_multimesh() -> void:
-	var mm_inst := MultiMeshInstance3D.new()
-	var multimesh := MultiMesh.new()
-	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.mesh = BoxMesh.new()
-	var mat := ShaderMaterial.new()
-	mat.shader = WindFoliage.get_shader()
-	multimesh.mesh.surface_set_material(0, mat)
-	mm_inst.multimesh = multimesh
-
-	var result: Array[ShaderMaterial] = []
-	DebugRenderToggles._collect_foliage_materials(mm_inst, result)
-
-	assert_eq(result.size(), 1)
-	assert_eq(result[0], mat)
-
-	mm_inst.free()
-
-
 func test_get_toggle_states_defaults_to_everything_on() -> void:
 	var toggles := DebugRenderToggles.new()
 	add_child_autofree(toggles)
@@ -165,7 +146,6 @@ func test_get_toggle_states_defaults_to_everything_on() -> void:
 	var states := toggles.get_toggle_states()
 
 	assert_true(states["toggle_foliage_visible"])
-	assert_true(states["toggle_foliage_aa"])
 	assert_true(states["toggle_tree_shadows"])
 	assert_true(states["toggle_grass_shadows"])
 	assert_true(states["toggle_map_shadows"])

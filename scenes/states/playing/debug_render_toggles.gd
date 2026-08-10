@@ -6,11 +6,13 @@ extends Node
 ## undiscoverable F4 foliage-visibility keycode outright. See
 ## docs/superpowers/specs/2026-08-10-performance-debug-toggles-design.md.
 ##
-## All five toggles reset to their default (current shipped behavior) on every map
-## reload -- state is never persisted across a map switch.
+## All four toggles reset to their default (current shipped behavior) on every map
+## reload -- state is never persisted across a map switch. Foliage antialiasing used
+## to be a fifth toggle here but is now a real, persisted graphics setting -- see
+## VisualEffectsController.set_foliage_antialiasing_level() and
+## docs/superpowers/specs/2026-08-10-foliage-antialiasing-setting-design.md.
 
 var _foliage_visible: bool = true
-var _foliage_aa: bool = true
 var _tree_shadows: bool = true
 var _grass_shadows: bool = true
 var _map_shadows: bool = true
@@ -21,12 +23,10 @@ var _map_container: Node3D = null
 var _tree_multimeshes: Array[MultiMeshInstance3D] = []
 var _grass_multimeshes: Array[MultiMeshInstance3D] = []
 var _map_meshes: Array[MeshInstance3D] = []
-var _foliage_shader_materials: Array[ShaderMaterial] = []
 
 var _canvas_layer: CanvasLayer
 var _panel: PanelContainer
 var _checkboxes: Dictionary = {}  # String -> CheckBox
-var _default_msaa_3d: int = 0
 
 
 ## Current state of every toggle, keyed by the exact CSV column name
@@ -35,7 +35,6 @@ var _default_msaa_3d: int = 0
 func get_toggle_states() -> Dictionary:
 	return {
 		"toggle_foliage_visible": _foliage_visible,
-		"toggle_foliage_aa": _foliage_aa,
 		"toggle_tree_shadows": _tree_shadows,
 		"toggle_grass_shadows": _grass_shadows,
 		"toggle_map_shadows": _map_shadows,
@@ -45,18 +44,7 @@ func get_toggle_states() -> Dictionary:
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
 	_map_container = game_map.map_container
-	if _game_map.world_viewport:
-		_default_msaa_3d = _game_map.world_viewport.msaa_3d
 	_create_panel(game_map)
-	if not WindFoliage.get_shader_no_aa():
-		push_warning(
-			(
-				"DebugRenderToggles: wind_foliage_no_aa.gdshader failed to load -- "
-				+ "Foliage AA toggle disabled for this session"
-			)
-		)
-		_checkboxes["foliage_aa"].set_pressed_no_signal(true)
-		_checkboxes["foliage_aa"].disabled = true
 	refresh()
 
 
@@ -77,22 +65,11 @@ func refresh() -> void:
 	_tree_multimeshes.clear()
 	_grass_multimeshes.clear()
 	_map_meshes.clear()
-	_foliage_shader_materials.clear()
 	_collect_nodes()
 	_foliage_visible = true
-	_foliage_aa = true
 	_tree_shadows = true
 	_grass_shadows = true
 	_map_shadows = true
-	# _on_foliage_aa_toggled() is the only place that writes world_viewport.msaa_3d, and
-	# it is wired only to the checkbox's `toggled` signal, which set_pressed_no_signal()
-	# below deliberately does not emit. msaa_3d is a scalar on the Viewport that persists
-	# across map loads (unlike the per-node shader materials, which are freshly collected
-	# above from the newly loaded map's nodes and already default to the AA shader), so it
-	# must be reset here explicitly or a previously-disabled MSAA setting would silently
-	# survive a reload while the checkbox shows re-checked.
-	if _game_map and _game_map.world_viewport:
-		_game_map.world_viewport.msaa_3d = _default_msaa_3d
 	for key in _checkboxes:
 		_checkboxes[key].set_pressed_no_signal(true)
 
@@ -103,8 +80,6 @@ func _collect_nodes() -> void:
 	_collect_multimeshes_by_category(_map_container, "tree", _tree_multimeshes)
 	_collect_multimeshes_by_category(_map_container, "grass", _grass_multimeshes)
 	_collect_mesh_instances(_map_container, _map_meshes)
-	for mm_inst in _tree_multimeshes + _grass_multimeshes:
-		_collect_foliage_materials(mm_inst, _foliage_shader_materials)
 
 
 func _create_panel(overlay_parent: Node) -> void:
@@ -114,7 +89,6 @@ func _create_panel(overlay_parent: Node) -> void:
 
 	var labels: PackedStringArray = [
 		"Foliage visible",
-		"Foliage AA (4x MSAA)",
 		"Tree shadows",
 		"Grass shadows",
 		"Map shadows",
@@ -124,22 +98,19 @@ func _create_panel(overlay_parent: Node) -> void:
 	var checkboxes: Array[CheckBox] = result.checkboxes
 	_checkboxes = {
 		"foliage_visible": checkboxes[0],
-		"foliage_aa": checkboxes[1],
-		"tree_shadows": checkboxes[2],
-		"grass_shadows": checkboxes[3],
-		"map_shadows": checkboxes[4],
+		"tree_shadows": checkboxes[1],
+		"grass_shadows": checkboxes[2],
+		"map_shadows": checkboxes[3],
 	}
 	_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	# Positioned below PerformanceOverlay's metrics panel (which starts at y=16).
-	# Confirmed via manual smoke test (F3 in a live level) that y=260 overlaps the
-	# metrics panel's now-~15 lines (grown since this offset was chosen -- see
-	# camera zoom / screen scale / world viewport rows added in recent commits);
-	# bumped to clear it. Re-verify and adjust again if the metrics panel grows further.
+	# The metrics panel gained an "Antialiasing" line in this change -- re-verify via
+	# manual smoke test (F3 in a live level) that y=320 still clears it, and adjust
+	# again if not.
 	_panel.position = Vector2(16, 320)
 	_canvas_layer.add_child(_panel)
 
 	_checkboxes["foliage_visible"].toggled.connect(_on_foliage_visible_toggled)
-	_checkboxes["foliage_aa"].toggled.connect(_on_foliage_aa_toggled)
 	_checkboxes["tree_shadows"].toggled.connect(_on_tree_shadows_toggled)
 	_checkboxes["grass_shadows"].toggled.connect(_on_grass_shadows_toggled)
 	_checkboxes["map_shadows"].toggled.connect(_on_map_shadows_toggled)
@@ -153,19 +124,6 @@ func _on_foliage_visible_toggled(pressed: bool) -> void:
 	for mm_inst in _grass_multimeshes:
 		if is_instance_valid(mm_inst):
 			mm_inst.visible = pressed
-
-
-func _on_foliage_aa_toggled(pressed: bool) -> void:
-	_foliage_aa = pressed
-	var no_aa_shader := WindFoliage.get_shader_no_aa()
-	if not no_aa_shader:
-		return
-	var target_shader: Shader = WindFoliage.get_shader() if pressed else no_aa_shader
-	for mat in _foliage_shader_materials:
-		if is_instance_valid(mat):
-			mat.shader = target_shader
-	if _game_map and _game_map.world_viewport:
-		_game_map.world_viewport.msaa_3d = _default_msaa_3d if pressed else Viewport.MSAA_DISABLED
 
 
 func _on_tree_shadows_toggled(pressed: bool) -> void:
@@ -211,20 +169,6 @@ static func _collect_mesh_instances(node: Node, result: Array[MeshInstance3D]) -
 			if mesh_inst.mesh:
 				result.append(mesh_inst)
 		_collect_mesh_instances(child, result)
-
-
-## Collect every ShaderMaterial used by a foliage MultiMeshInstance3D's surfaces
-## (built by WindFoliage.apply_material at map-load time).
-static func _collect_foliage_materials(
-	mm_inst: MultiMeshInstance3D, result: Array[ShaderMaterial]
-) -> void:
-	if not mm_inst.multimesh or not mm_inst.multimesh.mesh:
-		return
-	var mesh := mm_inst.multimesh.mesh
-	for surface_idx in range(mesh.get_surface_count()):
-		var mat := mesh.surface_get_material(surface_idx)
-		if mat is ShaderMaterial and mat not in result:
-			result.append(mat as ShaderMaterial)
 
 
 ## Set cast_shadow on every node in [param nodes] (MeshInstance3D or
