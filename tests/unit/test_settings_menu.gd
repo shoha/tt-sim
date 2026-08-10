@@ -1,0 +1,54 @@
+extends GutTest
+
+## Unit tests for SettingsMenu's pure renderer-method helpers
+## (scenes/ui/settings_menu.gd). The actual process-spawning/relaunch path and
+## the ProjectSettings read are not covered here -- not meaningfully testable
+## headlessly, and dangerous to even try (a test that accidentally invoked the
+## real relaunch path would spawn processes during CI). See the design spec's
+## manual smoke test for that coverage.
+
+
+func test_rendering_method_values_round_trip_for_every_item() -> void:
+	for i in range(SettingsMenu._RENDERING_METHOD_VALUES.size()):
+		var value := SettingsMenu._RENDERING_METHOD_VALUES[i]
+		assert_eq(SettingsMenu._RENDERING_METHOD_VALUES.find(value), i)
+
+
+func test_needs_relaunch_is_false_for_default() -> void:
+	assert_false(SettingsMenu._rendering_method_needs_relaunch("", "forward_plus"))
+	assert_false(SettingsMenu._rendering_method_needs_relaunch("", "mobile"))
+
+
+func test_needs_relaunch_is_false_when_already_matching() -> void:
+	assert_false(SettingsMenu._rendering_method_needs_relaunch("mobile", "mobile"))
+
+
+func test_needs_relaunch_is_true_when_mismatched() -> void:
+	assert_true(SettingsMenu._rendering_method_needs_relaunch("forward_plus", "mobile"))
+
+
+func test_build_relaunch_args_appends_when_no_existing_flag() -> void:
+	var args := PackedStringArray(["--fullscreen"])
+	var result := SettingsMenu._build_relaunch_args(args, "mobile")
+	assert_eq(result, PackedStringArray(["--fullscreen", "--rendering-method", "mobile"]))
+
+
+func test_build_relaunch_args_replaces_existing_flag() -> void:
+	var args := PackedStringArray(["--rendering-method", "forward_plus", "--fullscreen"])
+	var result := SettingsMenu._build_relaunch_args(args, "mobile")
+	assert_eq(result, PackedStringArray(["--fullscreen", "--rendering-method", "mobile"]))
+
+
+func test_build_relaunch_args_preserves_other_flags_and_order() -> void:
+	var args := PackedStringArray(
+		["--quit-after", "1", "--rendering-method", "mobile", "--verbose"]
+	)
+	var result := SettingsMenu._build_relaunch_args(args, "gl_compatibility")
+	assert_eq(
+		result,
+		(
+			PackedStringArray(
+				["--quit-after", "1", "--verbose", "--rendering-method", "gl_compatibility"]
+			)
+		),
+	)
