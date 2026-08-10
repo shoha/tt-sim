@@ -253,6 +253,29 @@ popup/item_1/id = 1
 popup/item_2/text = "MSAA x4"
 popup/item_2/id = 2
 
+[node name="RendererMethod" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/RendererMethod"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Renderer"
+
+[node name="RendererMethodOption" type="OptionButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/RendererMethod"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 4
+selected = 0
+popup/item_0/text = "Default"
+popup/item_1/text = "Forward+"
+popup/item_1/id = 1
+popup/item_2/text = "Mobile"
+popup/item_2/id = 2
+popup/item_3/text = "Compatibility"
+popup/item_3/id = 3
+
 [node name="Grid" type="ScrollContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
 visible = false
 layout_mode = 2

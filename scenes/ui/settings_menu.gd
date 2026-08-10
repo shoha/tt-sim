@@ -45,6 +45,7 @@ var _last_slider_tick_time: float = 0.0
 @onready var lofi_check: CheckButton = %LofiCheck
 @onready var occlusion_fade_check: CheckButton = %OcclusionFadeCheck
 @onready var antialiasing_option: OptionButton = %AntialiasingOption
+@onready var renderer_method_option: OptionButton = %RendererMethodOption
 
 # Grid visual controls
 @onready var cell_tint_opacity_slider: HSlider = %CellTintOpacitySlider
@@ -204,6 +205,7 @@ func _on_panel_ready() -> void:
 	lofi_check.toggled.connect(_on_lofi_toggled)
 	occlusion_fade_check.toggled.connect(_on_occlusion_fade_toggled)
 	antialiasing_option.item_selected.connect(_on_antialiasing_selected)
+	renderer_method_option.item_selected.connect(_on_renderer_method_selected)
 
 	# Grid visuals
 	cell_tint_opacity_slider.value_changed.connect(_on_cell_tint_opacity_changed)
@@ -323,6 +325,16 @@ func _load_settings() -> void:
 	)
 	antialiasing_option.select(antialiasing_option.get_item_index(antialiasing_value))
 
+	# Renderer selection must also be set unconditionally (see the comment
+	# above) -- ids here are arbitrary strings, not a coincidentally-matching
+	# int enum, so lookup is always via the explicit _RENDERING_METHOD_VALUES
+	# table. Clamp to index 0 ("Default") if the saved value is ever not one
+	# of the four known strings (e.g. a hand-edited config), rather than
+	# leaving the OptionButton deselected.
+	var renderer_method_value: String = config.get_value("graphics", "rendering_method", "")
+	var renderer_method_idx := _RENDERING_METHOD_VALUES.find(renderer_method_value)
+	renderer_method_option.select(renderer_method_idx if renderer_method_idx >= 0 else 0)
+
 	# Input device profile (reads from InputProfile autoload, not config)
 	input_device_option.selected = InputProfile.get_selected_profile() as int
 
@@ -349,6 +361,14 @@ func _save_settings() -> void:
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
 	config.set_value("graphics", "occlusion_fade_enabled", occlusion_fade_check.button_pressed)
 	config.set_value("graphics", "antialiasing", antialiasing_option.get_selected_id())
+	(
+		config
+		. set_value(
+			"graphics",
+			"rendering_method",
+			_RENDERING_METHOD_VALUES[renderer_method_option.get_selected_id()],
+		)
+	)
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
 	config.set_value("updates", "check_prereleases", prereleases_check.button_pressed)
 	config.set_value("grid_visuals", "cell_tint_opacity", cell_tint_opacity_slider.value / 100.0)
@@ -448,6 +468,10 @@ func _on_antialiasing_selected(_index: int) -> void:
 	pass
 
 
+func _on_renderer_method_selected(_index: int) -> void:
+	pass
+
+
 func _apply_lofi_setting() -> void:
 	# Find active GameMap and apply lo-fi setting
 	var game_map = _find_game_map()
@@ -537,6 +561,7 @@ func _on_reset_pressed() -> void:
 	lofi_check.button_pressed = true
 	occlusion_fade_check.button_pressed = true
 	antialiasing_option.select(antialiasing_option.get_item_index(Viewport.MSAA_DISABLED))
+	renderer_method_option.select(0)
 	p2p_enabled_check.button_pressed = true
 	prereleases_check.button_pressed = false
 	input_device_option.selected = InputProfile.Profile.AUTO
@@ -610,10 +635,53 @@ func _format_size(bytes: int) -> String:
 
 
 func _on_apply_pressed() -> void:
+	var previous_rendering_method := _get_saved_rendering_method()
+	var new_rendering_method: String = _RENDERING_METHOD_VALUES[
+		renderer_method_option.get_selected_id()
+	]
+
 	_apply_settings()
 	_save_settings()
 
 	UIManager.show_toast("Settings saved", 0)  # INFO type
+
+	if new_rendering_method != previous_rendering_method:
+		_offer_rendering_method_restart(new_rendering_method)
+
+
+## Read the currently-saved rendering_method value directly from disk (not
+## from the OptionButton, which may already reflect the player's new,
+## not-yet-saved choice) -- used by _on_apply_pressed() to detect whether this
+## Apply actually changed it, before _save_settings() overwrites it.
+func _get_saved_rendering_method() -> String:
+	var config = ConfigFile.new()
+	config.load(Paths.SETTINGS_PATH)
+	return config.get_value("graphics", "rendering_method", "")
+
+
+## Offer an immediate relaunch when the renderer choice changed. Declining
+## does not lose the choice -- SettingsMenu.apply_startup_rendering_method()
+## applies it automatically the next time the app starts normally.
+func _offer_rendering_method_restart(new_value: String) -> void:
+	UIManager.show_confirmation(
+		"Restart Required",
+		"The renderer change will take effect the next time you restart the app. Restart now?",
+		"Restart Now",
+		"Later",
+		func(): _relaunch_with_rendering_method(new_value),
+		Callable(),
+	)
+
+
+func _relaunch_with_rendering_method(value: String) -> void:
+	var args := _build_relaunch_args(OS.get_cmdline_args(), value)
+	var pid := OS.create_process(OS.get_executable_path(), args)
+	if pid <= 0:
+		push_warning(
+			"SettingsMenu: failed to relaunch with --rendering-method %s (pid %d)" % [value, pid]
+		)
+		return
+	get_tree().quit()
 
 
 func _update_version_info() -> void:
@@ -635,6 +703,10 @@ func _apply_tooltips() -> void:
 	lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
 	occlusion_fade_check.tooltip_text = "Fade map geometry that hides tokens from view"
 	antialiasing_option.tooltip_text = "Smooths jagged edges on foliage (uses more GPU memory)"
+	renderer_method_option.tooltip_text = (
+		"Which Godot rendering backend to use (Default follows the platform's "
+		+ "normal choice). Changing this requires a restart."
+	)
 	cell_tint_opacity_slider.tooltip_text = "Opacity of the cell fill shading on the grid"
 	line_thickness_slider.tooltip_text = "Thickness of the grid lines"
 	fade_distance_slider.tooltip_text = "How far the grid extends from the camera center"
