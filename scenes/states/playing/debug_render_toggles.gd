@@ -6,10 +6,6 @@ extends Node
 ## undiscoverable F4 foliage-visibility keycode outright. See
 ## docs/superpowers/specs/2026-08-10-performance-debug-toggles-design.md.
 ##
-## This file covers node-collection helpers and toggle-state defaults only. The
-## checkbox panel, signal wiring, and per-toggle apply logic are added in a later
-## pass (see the design spec's Architecture section).
-##
 ## All five toggles reset to their default (current shipped behavior) on every map
 ## reload -- state is never persisted across a map switch.
 
@@ -30,6 +26,7 @@ var _foliage_shader_materials: Array[ShaderMaterial] = []
 var _canvas_layer: CanvasLayer
 var _panel: PanelContainer
 var _checkboxes: Dictionary = {}  # String -> CheckBox
+var _default_msaa_3d: int = 0
 
 
 ## Current state of every toggle, keyed by the exact CSV column name
@@ -48,6 +45,8 @@ func get_toggle_states() -> Dictionary:
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
 	_map_container = game_map.map_container
+	if _game_map.world_viewport:
+		_default_msaa_3d = _game_map.world_viewport.msaa_3d
 	_create_panel(game_map)
 	if not WindFoliage.get_shader_no_aa():
 		push_warning(
@@ -56,21 +55,24 @@ func setup(game_map: GameMap) -> void:
 				+ "Foliage AA toggle disabled for this session"
 			)
 		)
+		_checkboxes["foliage_aa"].set_pressed_no_signal(true)
 		_checkboxes["foliage_aa"].disabled = true
 	refresh()
 
 
 func set_panel_visible(should_be_visible: bool) -> void:
-	_panel.visible = should_be_visible
+	if _panel:
+		_panel.visible = should_be_visible
 
 
 ## Re-collect node/material references against the currently loaded map and reset
 ## every toggle to its default (on) state. Called once from setup() and again from
 ## GameMap.notify_map_loaded() whenever a new map finishes loading -- map_container's
-## previous children are gone by then (freed by the level loader), and no toggle
-## persists across a map switch (design spec, "Toggles (v1)"). Without this, the
-## cached node lists from the first map would go stale (pointing at freed nodes) and
-## the newly loaded map's foliage would never be collected at all.
+## previous children have been queue_freed and, because map loading awaits across a
+## frame, are out of the tree by then, and no toggle persists across a map switch
+## (design spec, "Toggles (v1)"). Without this, the cached node lists from the first
+## map would go stale (pointing at freed nodes) and the newly loaded map's foliage
+## would never be collected at all.
 func refresh() -> void:
 	_tree_multimeshes.clear()
 	_grass_multimeshes.clear()
@@ -90,10 +92,9 @@ func refresh() -> void:
 	# must be reset here explicitly or a previously-disabled MSAA setting would silently
 	# survive a reload while the checkbox shows re-checked.
 	if _game_map and _game_map.world_viewport:
-		_game_map.world_viewport.msaa_3d = Viewport.MSAA_4X
+		_game_map.world_viewport.msaa_3d = _default_msaa_3d
 	for key in _checkboxes:
-		if not _checkboxes[key].disabled:
-			_checkboxes[key].set_pressed_no_signal(true)
+		_checkboxes[key].set_pressed_no_signal(true)
 
 
 func _collect_nodes() -> void:
@@ -131,7 +132,7 @@ func _create_panel(overlay_parent: Node) -> void:
 	_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	# Positioned below PerformanceOverlay's metrics panel (which starts at y=16).
 	# Confirmed via manual smoke test (F3 in a live level) that y=260 overlaps the
-	# metrics panel's now-14 lines (grown since this offset was chosen -- see
+	# metrics panel's now-~15 lines (grown since this offset was chosen -- see
 	# camera zoom / screen scale / world viewport rows added in recent commits);
 	# bumped to clear it. Re-verify and adjust again if the metrics panel grows further.
 	_panel.position = Vector2(16, 320)
@@ -164,7 +165,7 @@ func _on_foliage_aa_toggled(pressed: bool) -> void:
 		if is_instance_valid(mat):
 			mat.shader = target_shader
 	if _game_map and _game_map.world_viewport:
-		_game_map.world_viewport.msaa_3d = Viewport.MSAA_4X if pressed else Viewport.MSAA_DISABLED
+		_game_map.world_viewport.msaa_3d = _default_msaa_3d if pressed else Viewport.MSAA_DISABLED
 
 
 func _on_tree_shadows_toggled(pressed: bool) -> void:
