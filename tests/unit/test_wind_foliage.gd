@@ -282,3 +282,94 @@ func test_get_shader_no_aa_is_cached_across_calls() -> void:
 
 func test_get_shader_no_aa_differs_from_the_antialiased_shader() -> void:
 	assert_ne(WindFoliage.get_shader_no_aa(), WindFoliage.get_shader())
+
+
+func test_collect_wind_foliage_multimeshes_gathers_tree_and_grass() -> void:
+	var root := Node3D.new()
+	var tree_mm := MultiMeshInstance3D.new()
+	tree_mm.set_meta("wind_foliage_category", "tree")
+	root.add_child(tree_mm)
+	var grass_mm := MultiMeshInstance3D.new()
+	grass_mm.set_meta("wind_foliage_category", "grass")
+	root.add_child(grass_mm)
+
+	var result: Array[MultiMeshInstance3D] = []
+	WindFoliage._collect_wind_foliage_multimeshes(root, result)
+
+	assert_eq(result.size(), 2)
+	assert_true(tree_mm in result)
+	assert_true(grass_mm in result)
+
+	root.free()
+
+
+func test_collect_wind_foliage_multimeshes_ignores_untagged_and_invisible() -> void:
+	var root := Node3D.new()
+	var untagged_mm := MultiMeshInstance3D.new()
+	root.add_child(untagged_mm)
+	var invisible_tree_mm := MultiMeshInstance3D.new()
+	invisible_tree_mm.set_meta("wind_foliage_category", "tree")
+	invisible_tree_mm.visible = false
+	root.add_child(invisible_tree_mm)
+
+	var result: Array[MultiMeshInstance3D] = []
+	WindFoliage._collect_wind_foliage_multimeshes(root, result)
+
+	assert_true(result.is_empty())
+
+	root.free()
+
+
+func test_collect_wind_foliage_multimeshes_recurses_into_nested_children() -> void:
+	var root := Node3D.new()
+	var wrapper := Node3D.new()
+	root.add_child(wrapper)
+	var grass_mm := MultiMeshInstance3D.new()
+	grass_mm.set_meta("wind_foliage_category", "grass")
+	wrapper.add_child(grass_mm)
+
+	var result: Array[MultiMeshInstance3D] = []
+	WindFoliage._collect_wind_foliage_multimeshes(root, result)
+
+	assert_eq(result.size(), 1)
+
+	root.free()
+
+
+func test_collect_foliage_shader_materials_gathers_from_tree_and_grass() -> void:
+	var root := Node3D.new()
+
+	var tree_mm := MultiMeshInstance3D.new()
+	tree_mm.set_meta("wind_foliage_category", "tree")
+	var tree_multimesh := MultiMesh.new()
+	tree_multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	tree_multimesh.mesh = BoxMesh.new()
+	var tree_mat := ShaderMaterial.new()
+	tree_mat.shader = WindFoliage.get_shader()
+	tree_multimesh.mesh.surface_set_material(0, tree_mat)
+	tree_mm.multimesh = tree_multimesh
+	root.add_child(tree_mm)
+
+	var grass_mm := MultiMeshInstance3D.new()
+	grass_mm.set_meta("wind_foliage_category", "grass")
+	var grass_multimesh := MultiMesh.new()
+	grass_multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	grass_multimesh.mesh = BoxMesh.new()
+	var grass_mat := ShaderMaterial.new()
+	grass_mat.shader = WindFoliage.get_shader()
+	grass_multimesh.mesh.surface_set_material(0, grass_mat)
+	grass_mm.multimesh = grass_multimesh
+	root.add_child(grass_mm)
+
+	var result := WindFoliage.collect_foliage_shader_materials(root)
+
+	assert_eq(result.size(), 2)
+	assert_true(tree_mat in result)
+	assert_true(grass_mat in result)
+
+	root.free()
+
+
+func test_collect_foliage_shader_materials_returns_empty_for_null_container() -> void:
+	var result := WindFoliage.collect_foliage_shader_materials(null)
+	assert_true(result.is_empty())
