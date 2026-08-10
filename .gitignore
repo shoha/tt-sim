@@ -1,5 +1,6 @@
 # Design docs (local planning notes, not for repo)
 /docs/plans/
+/docs/superpowers/
 
 # Git worktrees
 .worktrees/
