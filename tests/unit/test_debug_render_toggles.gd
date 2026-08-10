@@ -52,6 +52,50 @@ func test_collects_a_grass_tagged_multimesh() -> void:
 	root.free()
 
 
+func test_ignores_an_untagged_multimesh_instance() -> void:
+	var root := Node3D.new()
+	var untagged_mm := MultiMeshInstance3D.new()
+	root.add_child(untagged_mm)
+
+	var result: Array[MultiMeshInstance3D] = []
+	DebugRenderToggles._collect_multimeshes_by_category(root, "tree", result)
+
+	assert_true(result.is_empty())
+
+	root.free()
+
+
+func test_ignores_an_invisible_tree_tagged_multimesh_instance() -> void:
+	var root := Node3D.new()
+	var tree_mm := MultiMeshInstance3D.new()
+	tree_mm.set_meta("wind_foliage_category", "tree")
+	tree_mm.visible = false
+	root.add_child(tree_mm)
+
+	var result: Array[MultiMeshInstance3D] = []
+	DebugRenderToggles._collect_multimeshes_by_category(root, "tree", result)
+
+	assert_true(result.is_empty())
+
+	root.free()
+
+
+func test_recurses_into_nested_children_for_multimeshes() -> void:
+	var root := Node3D.new()
+	var wrapper := Node3D.new()
+	root.add_child(wrapper)
+	var tree_mm := MultiMeshInstance3D.new()
+	tree_mm.set_meta("wind_foliage_category", "tree")
+	wrapper.add_child(tree_mm)
+
+	var result: Array[MultiMeshInstance3D] = []
+	DebugRenderToggles._collect_multimeshes_by_category(root, "tree", result)
+
+	assert_eq(result.size(), 1)
+
+	root.free()
+
+
 func test_collect_mesh_instances_finds_a_visible_mesh_with_geometry() -> void:
 	var root := Node3D.new()
 	var mesh_inst := MeshInstance3D.new()
@@ -70,6 +114,21 @@ func test_collect_mesh_instances_finds_a_visible_mesh_with_geometry() -> void:
 func test_collect_mesh_instances_skips_a_mesh_instance_with_no_mesh_resource() -> void:
 	var root := Node3D.new()
 	var mesh_inst := MeshInstance3D.new()
+	root.add_child(mesh_inst)
+
+	var result: Array[MeshInstance3D] = []
+	DebugRenderToggles._collect_mesh_instances(root, result)
+
+	assert_true(result.is_empty())
+
+	root.free()
+
+
+func test_collect_mesh_instances_ignores_invisible_mesh_instance() -> void:
+	var root := Node3D.new()
+	var mesh_inst := MeshInstance3D.new()
+	mesh_inst.mesh = BoxMesh.new()
+	mesh_inst.visible = false
 	root.add_child(mesh_inst)
 
 	var result: Array[MeshInstance3D] = []
