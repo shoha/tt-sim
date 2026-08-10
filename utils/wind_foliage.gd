@@ -63,6 +63,19 @@ static func get_shader() -> Shader:
 	return _shader
 
 
+static var _shader_no_aa: Shader = null
+
+
+## Get the no-antialiasing variant Shader (plain ALPHA_SCISSOR cutout, no
+## alpha_to_coverage / MSAA dependency) -- used by DebugRenderToggles' "Foliage AA"
+## checkbox to A/B test whether alpha_to_coverage's viewport-wide MSAA cost is worth
+## its softened cutout edges. See shaders/wind_foliage_no_aa.gdshader.
+static func get_shader_no_aa() -> Shader:
+	if _shader_no_aa == null:
+		_shader_no_aa = load("res://shaders/wind_foliage_no_aa.gdshader")
+	return _shader_no_aa
+
+
 ## Classifies a Geoscatter instance-source object's name into a PRESETS key, or "" for
 ## "never sway" -- pure and case-insensitive so it's directly unit-testable against
 ## real documented Geoscatter asset names. Deny-list (rocks/stones) is checked before

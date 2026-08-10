@@ -32,54 +32,32 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx, alpha_to_covera
  * which has no sort-order dependency -- the standard choice for instanced foliage in
  * every engine for exactly this reason.
  *
- * MANAGED BY: GlbUtils._get_wind_foliage_shader() loads this once and reuses the
- * compiled Shader resource across every species -- each species still gets its own
- * ShaderMaterial instance (different textures), built fresh per map load.
+ * ANTIALIASED CUTOUT: uses render_mode alpha_to_coverage to soften the hard cutout
+ * edge, which requires MSAA on the rendering viewport (4x MSAA is enabled on the
+ * game map SubViewport specifically for this). See wind_foliage_no_aa.gdshader for
+ * a plain-cutout variant with no MSAA dependency, swapped in by DebugRenderToggles'
+ * "Foliage AA" checkbox (F3 overlay) to A/B test whether that MSAA cost is worth it --
+ * see docs/superpowers/specs/2026-08-10-performance-debug-toggles-design.md. Shared
+ * sway/PBR/occlusion-fade logic lives in wind_foliage_include.gdshaderinc so the two
+ * variants can't drift out of sync.
  *
  * OCCLUSION FADE: tree-category instances (see WindFoliage.classify_category) also
  * fade out when a token is hidden behind them, same as map geometry -- see
- * occlusion_fade_include.gdshaderinc, included below, and
+ * occlusion_fade_include.gdshaderinc (included transitively below), and
  * OcclusionFadeManager._collect_tree_materials() (scenes/states/playing/
  * occlusion_fade_manager.gd), which finds and feeds token uniforms to these exact
  * materials via their node's wind_foliage_category == "tree" metadata.
+ *
+ * MANAGED BY: WindFoliage.get_shader() (utils/wind_foliage.gd) loads this once and
+ * reuses the compiled Shader resource across every species -- each species still
+ * gets its own ShaderMaterial instance (different textures), built fresh per map load.
  */
 
-uniform sampler2D albedo_texture : source_color, filter_linear_mipmap;
-uniform sampler2D orm_texture : hint_default_white, filter_linear_mipmap;
-uniform sampler2D normal_texture : hint_normal, filter_linear_mipmap;
-uniform bool has_normal_texture = false;
-uniform float alpha_scissor_threshold : hint_range(0.0, 1.0) = 0.5;
-uniform float specular_reflectance : hint_range(0.0, 1.0) = 0.2;
-
-// Per-category wind tuning (set once per species at construction from a preset --
-// see GlbUtils._WIND_PRESETS -- never authored per-map).
-uniform float sway_speed : hint_range(0.0, 5.0) = 1.0;
-uniform float sway_amplitude : hint_range(0.0, 1.0) = 0.05;
-uniform float sway_frequency : hint_range(0.05, 2.0) = 0.3;
-
-// Occlusion fade: lets a token show through tree foliage the same way it shows
-// through map geometry. See occlusion_fade_include.gdshaderinc.
-#include "res://shaders/occlusion_fade_include.gdshaderinc"
+#include "res://shaders/wind_foliage_include.gdshaderinc"
 
 
 void vertex() {
-	vec3 world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	// Phase derived from world-space XZ position (not a per-instance uniform) so every
-	// MultiMesh instance -- each with its own MODEL_MATRIX -- naturally desyncs from
-	// its neighbors with no extra per-instance data needed, same idiom water.gdshader's
-	// own vertex() already uses for its bob.
-	float phase = (world_pos.x + world_pos.z) * sway_frequency;
-	float t = TIME * sway_speed + phase;
-	float sway = sin(t) * sway_amplitude;
-	// Local (object-space) height weights the sway so a card's base -- assumed to sit
-	// at/near the mesh's local Y origin, the standard authoring convention for
-	// grass/foliage cards -- barely moves while its tip sways the most. Deliberately
-	// unnormalized (not divided by the mesh's own bounding height): a taller mesh
-	// naturally accumulates more absolute sway at its tip than a short one, which is
-	// the correct visual whether the current species preset is "grass" or "tree".
-	float height_weight = max(VERTEX.y, 0.0);
-	VERTEX.x += sway * height_weight;
-	VERTEX.z += sway * height_weight * 0.6;
+	VERTEX += wind_sway_vertex_offset(VERTEX, MODEL_MATRIX, TIME);
 }
 
 

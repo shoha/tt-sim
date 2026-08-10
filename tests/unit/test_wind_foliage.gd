@@ -270,3 +270,15 @@ func test_process_scatter_instances_bakes_foliage_overrides_into_the_material() 
 	assert_eq(material.get_shader_parameter("sway_speed"), 4.4)
 
 	scene.free()
+
+
+func test_get_shader_no_aa_returns_a_shader_resource() -> void:
+	assert_not_null(WindFoliage.get_shader_no_aa())
+
+
+func test_get_shader_no_aa_is_cached_across_calls() -> void:
+	assert_eq(WindFoliage.get_shader_no_aa(), WindFoliage.get_shader_no_aa())
+
+
+func test_get_shader_no_aa_differs_from_the_antialiased_shader() -> void:
+	assert_ne(WindFoliage.get_shader_no_aa(), WindFoliage.get_shader())
