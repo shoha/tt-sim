@@ -427,11 +427,17 @@ func set_occlusion_fade_enabled(enabled: bool) -> void:
 	_visual_effects.set_occlusion_fade_enabled(enabled)
 
 
+## Set the foliage antialiasing level (a Viewport.MSAA enum value) from the settings menu.
+func set_foliage_antialiasing_level(level: int) -> void:
+	_visual_effects.set_foliage_antialiasing_level(level)
+
+
 ## Notify the occlusion fade manager that a new map has been loaded.
 ## Re-initializes and rebuilds the internal mesh cache so occlusion detection
 ## works with the new geometry. Also computes camera soft bounds from map AABB.
 func notify_map_loaded() -> void:
 	_visual_effects.setup_occlusion_fade()
+	_visual_effects.apply_foliage_antialiasing()
 
 	# Compute camera soft bounds from map geometry and snap the camera into
 	# the allowed range immediately so the first user input doesn't jump.
