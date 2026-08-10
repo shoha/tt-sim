@@ -67,9 +67,10 @@ static var _shader_no_aa: Shader = null
 
 
 ## Get the no-antialiasing variant Shader (plain ALPHA_SCISSOR cutout, no
-## alpha_to_coverage / MSAA dependency) -- used by DebugRenderToggles' "Foliage AA"
-## checkbox to A/B test whether alpha_to_coverage's viewport-wide MSAA cost is worth
-## its softened cutout edges. See shaders/wind_foliage_no_aa.gdshader.
+## alpha_to_coverage / MSAA dependency) -- used by
+## VisualEffectsController.apply_foliage_antialiasing() to swap foliage materials to
+## the plain-cutout variant when the player's Antialiasing setting is set to None. See
+## shaders/wind_foliage_no_aa.gdshader.
 static func get_shader_no_aa() -> Shader:
 	if _shader_no_aa == null:
 		_shader_no_aa = load("res://shaders/wind_foliage_no_aa.gdshader")
@@ -92,6 +93,22 @@ static func _collect_wind_foliage_multimeshes(
 		_collect_wind_foliage_multimeshes(child, result)
 
 
+## Like _collect_wind_foliage_multimeshes, but does not filter on visibility --
+## a hidden foliage multimesh's material still needs the correct shader applied for
+## when it becomes visible again (e.g. after DebugRenderToggles' foliage-visibility
+## checkbox or the F4 debug toggle hide it, then the player changes the Antialiasing
+## setting while it's hidden).
+static func _collect_all_wind_foliage_multimeshes(
+	node: Node, result: Array[MultiMeshInstance3D]
+) -> void:
+	for child in node.get_children():
+		if child is MultiMeshInstance3D:
+			var category: String = child.get_meta("wind_foliage_category", "")
+			if category == "tree" or category == "grass":
+				result.append(child as MultiMeshInstance3D)
+		_collect_all_wind_foliage_multimeshes(child, result)
+
+
 ## Collect every ShaderMaterial used across all wind-foliage MultiMeshInstance3D
 ## surfaces under [param map_container] -- used by VisualEffectsController to swap
 ## every foliage material between the antialiased and plain-cutout shader variants
@@ -102,7 +119,7 @@ static func collect_foliage_shader_materials(map_container: Node3D) -> Array[Sha
 	if not map_container:
 		return result
 	var multimeshes: Array[MultiMeshInstance3D] = []
-	_collect_wind_foliage_multimeshes(map_container, multimeshes)
+	_collect_all_wind_foliage_multimeshes(map_container, multimeshes)
 	for mm_inst in multimeshes:
 		if not mm_inst.multimesh or not mm_inst.multimesh.mesh:
 			continue

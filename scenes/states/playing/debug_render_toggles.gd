@@ -17,7 +17,6 @@ var _tree_shadows: bool = true
 var _grass_shadows: bool = true
 var _map_shadows: bool = true
 
-var _game_map: GameMap = null
 var _map_container: Node3D = null
 
 var _tree_multimeshes: Array[MultiMeshInstance3D] = []
@@ -42,7 +41,6 @@ func get_toggle_states() -> Dictionary:
 
 
 func setup(game_map: GameMap) -> void:
-	_game_map = game_map
 	_map_container = game_map.map_container
 	_create_panel(game_map)
 	refresh()
@@ -53,8 +51,8 @@ func set_panel_visible(should_be_visible: bool) -> void:
 		_panel.visible = should_be_visible
 
 
-## Re-collect node/material references against the currently loaded map and reset
-## every toggle to its default (on) state. Called once from setup() and again from
+## Re-collect node references against the currently loaded map and reset every
+## toggle to its default (on) state. Called once from setup() and again from
 ## GameMap.notify_map_loaded() whenever a new map finishes loading -- map_container's
 ## previous children have been queue_freed and, because map loading awaits across a
 ## frame, are out of the tree by then, and no toggle persists across a map switch

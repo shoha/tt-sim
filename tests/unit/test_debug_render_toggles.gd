@@ -2,10 +2,10 @@ extends GutTest
 
 ## Unit tests for DebugRenderToggles' node-collection helpers and toggle-state
 ## defaults (scenes/states/playing/debug_render_toggles.gd). Mirrors the
-## collection-helper test style in test_occlusion_fade_manager.gd. UI wiring, the
-## shader swap, and real shadow/MSAA behavior are not covered here -- GUT's
-## --headless mode cannot verify real rendering output (see AGENTS.md); see the
-## manual smoke test in Task 4 of this plan.
+## collection-helper test style in test_occlusion_fade_manager.gd. UI wiring and real
+## shadow-casting rendering behavior are not covered here -- GUT's --headless mode
+## cannot verify real rendering output (see AGENTS.md); see the manual smoke test in
+## Task 4 of this plan.
 
 
 func test_collects_a_tree_tagged_multimesh() -> void:

@@ -373,3 +373,31 @@ func test_collect_foliage_shader_materials_gathers_from_tree_and_grass() -> void
 func test_collect_foliage_shader_materials_returns_empty_for_null_container() -> void:
 	var result := WindFoliage.collect_foliage_shader_materials(null)
 	assert_true(result.is_empty())
+
+
+func test_collect_foliage_shader_materials_includes_invisible_multimeshes() -> void:
+	# Unlike _collect_wind_foliage_multimeshes (used for the visibility toggle),
+	# collect_foliage_shader_materials is also used to swap the Antialiasing shader --
+	# a hidden multimesh's material still needs the correct shader for when it becomes
+	# visible again (e.g. after the F3 debug panel's foliage-visibility checkbox or the
+	# F4 debug toggle hide it, then the player changes the Antialiasing setting).
+	var root := Node3D.new()
+
+	var hidden_mm := MultiMeshInstance3D.new()
+	hidden_mm.set_meta("wind_foliage_category", "tree")
+	hidden_mm.visible = false
+	var hidden_multimesh := MultiMesh.new()
+	hidden_multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	hidden_multimesh.mesh = BoxMesh.new()
+	var hidden_mat := ShaderMaterial.new()
+	hidden_mat.shader = WindFoliage.get_shader()
+	hidden_multimesh.mesh.surface_set_material(0, hidden_mat)
+	hidden_mm.multimesh = hidden_multimesh
+	root.add_child(hidden_mm)
+
+	var result := WindFoliage.collect_foliage_shader_materials(root)
+
+	assert_eq(result.size(), 1)
+	assert_true(hidden_mat in result)
+
+	root.free()

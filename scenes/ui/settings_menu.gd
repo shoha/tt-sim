@@ -228,9 +228,6 @@ func _load_settings() -> void:
 		occlusion_fade_check.button_pressed = config.get_value(
 			"graphics", "occlusion_fade_enabled", true
 		)
-		antialiasing_option.selected = config.get_value(
-			"graphics", "antialiasing", Viewport.MSAA_DISABLED
-		)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
 		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
 		cell_tint_opacity_slider.value = (
@@ -238,6 +235,15 @@ func _load_settings() -> void:
 		)
 		line_thickness_slider.value = config.get_value("grid_visuals", "line_thickness", 2.0)
 		fade_distance_slider.value = config.get_value("grid_visuals", "fade_radius", 30.0)
+
+	# Antialiasing selection must be set unconditionally (not just when a config
+	# file exists) so a fresh install without user://settings.cfg still lands on
+	# a valid item instead of leaving the OptionButton at selected == -1. Index
+	# and item id are not guaranteed to match, so resolve via id lookup.
+	var antialiasing_value: int = config.get_value(
+		"graphics", "antialiasing", Viewport.MSAA_DISABLED
+	)
+	antialiasing_option.select(antialiasing_option.get_item_index(antialiasing_value))
 
 	# Input device profile (reads from InputProfile autoload, not config)
 	input_device_option.selected = InputProfile.get_selected_profile() as int
@@ -264,7 +270,7 @@ func _save_settings() -> void:
 	config.set_value("graphics", "vsync", vsync_check.button_pressed)
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
 	config.set_value("graphics", "occlusion_fade_enabled", occlusion_fade_check.button_pressed)
-	config.set_value("graphics", "antialiasing", antialiasing_option.selected)
+	config.set_value("graphics", "antialiasing", antialiasing_option.get_selected_id())
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
 	config.set_value("updates", "check_prereleases", prereleases_check.button_pressed)
 	config.set_value("grid_visuals", "cell_tint_opacity", cell_tint_opacity_slider.value / 100.0)
@@ -452,7 +458,7 @@ func _on_reset_pressed() -> void:
 	vsync_check.button_pressed = true
 	lofi_check.button_pressed = true
 	occlusion_fade_check.button_pressed = true
-	antialiasing_option.selected = Viewport.MSAA_DISABLED
+	antialiasing_option.select(antialiasing_option.get_item_index(Viewport.MSAA_DISABLED))
 	p2p_enabled_check.button_pressed = true
 	prereleases_check.button_pressed = false
 	input_device_option.selected = InputProfile.Profile.AUTO
@@ -550,9 +556,7 @@ func _apply_tooltips() -> void:
 	vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
 	lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
 	occlusion_fade_check.tooltip_text = "Fade map geometry that hides tokens from view"
-	antialiasing_option.tooltip_text = (
-		"Smooths jagged edges on foliage and scene geometry (uses more GPU memory and bandwidth)"
-	)
+	antialiasing_option.tooltip_text = "Smooths jagged edges on foliage (uses more GPU memory)"
 	cell_tint_opacity_slider.tooltip_text = "Opacity of the cell fill shading on the grid"
 	line_thickness_slider.tooltip_text = "Thickness of the grid lines"
 	fade_distance_slider.tooltip_text = "How far the grid extends from the camera center"
