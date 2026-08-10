@@ -24,6 +24,16 @@ const _RENDERING_METHOD_VALUES: PackedStringArray = [
 	"gl_compatibility",
 ]
 
+## Appended (after a "--" separator) to every relaunch this file triggers, and
+## checked for on every boot before considering a relaunch at all. Guarantees
+## at most one relaunch hop per real launch even if the requested renderer
+## turns out unsupported and the engine silently falls back to a different
+## one -- without this, a boot that keeps disagreeing with its own saved
+## preference would relaunch forever. OS.get_cmdline_args() only returns
+## engine-consumed arguments and never anything after "--", so this sentinel
+## must be read via OS.get_cmdline_user_args() instead.
+const _RELAUNCH_SENTINEL_ARG := "--renderer-relaunched"
+
 var _last_slider_tick_time: float = 0.0
 
 # Audio controls
@@ -119,8 +129,14 @@ static func apply_startup_graphics_settings() -> void:
 ## (which, unlike GUT's test runner, does boot the real Root main scene) would
 ## attempt a relaunch on any machine with a non-default local preference
 ## saved, on every syntax check.
+## Guards against relaunching more than once per real launch via a sentinel
+## user argument (see _RELAUNCH_SENTINEL_ARG) -- necessary because a requested
+## renderer that turns out unsupported on the player's GPU would otherwise
+## disagree with its own saved preference forever.
 static func apply_startup_rendering_method() -> void:
 	if DisplayServer.get_name() == "headless":
+		return
+	if OS.get_cmdline_user_args().has(_RELAUNCH_SENTINEL_ARG):
 		return
 
 	var config = ConfigFile.new()
@@ -128,7 +144,7 @@ static func apply_startup_rendering_method() -> void:
 		return
 
 	var saved: String = config.get_value("graphics", "rendering_method", "")
-	var active: String = ProjectSettings.get_setting("rendering/renderer/rendering_method", "")
+	var active: String = _get_active_rendering_method()
 	if not _rendering_method_needs_relaunch(saved, active):
 		return
 
@@ -157,6 +173,18 @@ static func _set_window_fullscreen(enable: bool) -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 
 
+## Single source of truth for "what rendering method is actually active this
+## boot." Deliberately NOT ProjectSettings.get_setting(
+## "rendering/renderer/rendering_method") -- that always returns
+## project.godot's base value, ignoring both a --rendering-method CLI
+## override and this project's own per-platform feature-tag override
+## (renderer/rendering_method.macos). RenderingServer reflects the true,
+## resolved-and-initialized method, including CLI overrides, platform
+## overrides, and hardware-forced fallbacks.
+static func _get_active_rendering_method() -> String:
+	return RenderingServer.get_current_rendering_method()
+
+
 ## Pure comparison: true only when [param saved] names a specific renderer
 ## (never for "" / Default, which means "don't force anything") and it
 ## differs from [param active].
@@ -166,8 +194,15 @@ static func _rendering_method_needs_relaunch(saved: String, active: String) -> b
 
 ## Build a new command-line argument list from [param current_args] with any
 ## existing "--rendering-method <value>" pair removed and a fresh one for
-## [param method] appended -- preserves every other argument the process was
-## originally launched with (e.g. --quit-after, Steam-injected flags).
+## [param method] appended, followed by a "--" separator and
+## _RELAUNCH_SENTINEL_ARG (see its own doc comment for why).
+##
+## [param current_args] is OS.get_cmdline_args(), which only contains
+## arguments the *engine* itself did not already consume -- flags a player's
+## original launch used that Godot recognizes (--fullscreen, --max-fps,
+## --path, a Steam launch option) are already gone from this list before this
+## function ever sees it and cannot be recovered here. This is a Godot API
+## limitation, not a bug in this function.
 static func _build_relaunch_args(
 	current_args: PackedStringArray, method: String
 ) -> PackedStringArray:
@@ -181,6 +216,8 @@ static func _build_relaunch_args(
 		i += 1
 	result.append("--rendering-method")
 	result.append(method)
+	result.append("--")
+	result.append(_RELAUNCH_SENTINEL_ARG)
 	return PackedStringArray(result)
 
 
