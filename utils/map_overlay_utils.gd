@@ -56,3 +56,44 @@ static func create_label_panel(
 	panel.add_child(lbl)
 
 	return {"panel": panel, "label": lbl}
+
+
+## Create a styled PanelContainer + VBoxContainer of CheckBox rows, one per label in
+## [param labels], in order. Unlike create_label_panel, neither the panel nor its
+## checkboxes set MOUSE_FILTER_IGNORE -- these controls need real mouse input to be
+## clickable.
+## Returns {"panel": PanelContainer, "checkboxes": Array[CheckBox]} (checkboxes in
+## the same order as labels).
+static func create_checkbox_panel(
+	labels: PackedStringArray,
+	font_size: int = 13,
+	font_color: Color = Color(0.8, 1.0, 0.8),
+) -> Dictionary:
+	var panel := PanelContainer.new()
+	panel.visible = false
+
+	var stylebox := StyleBoxFlat.new()
+	stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.7)
+	stylebox.corner_radius_top_left = 4
+	stylebox.corner_radius_top_right = 4
+	stylebox.corner_radius_bottom_left = 4
+	stylebox.corner_radius_bottom_right = 4
+	stylebox.content_margin_left = 8.0
+	stylebox.content_margin_right = 8.0
+	stylebox.content_margin_top = 4.0
+	stylebox.content_margin_bottom = 4.0
+	panel.add_theme_stylebox_override("panel", stylebox)
+
+	var vbox := VBoxContainer.new()
+	panel.add_child(vbox)
+
+	var checkboxes: Array[CheckBox] = []
+	for label_text in labels:
+		var checkbox := CheckBox.new()
+		checkbox.text = label_text
+		checkbox.add_theme_font_size_override("font_size", font_size)
+		checkbox.add_theme_color_override("font_color", font_color)
+		vbox.add_child(checkbox)
+		checkboxes.append(checkbox)
+
+	return {"panel": panel, "checkboxes": checkboxes}
