@@ -349,6 +349,18 @@ static func _find_water_mesh_nodes(node: Node, result: Array[MeshInstance3D]) ->
 		_find_water_mesh_nodes(child, result)
 
 
+## Apply a named Water Style preset (see WaterPresets) to the shared water
+## ShaderMaterial. Called both from the level editor (live, on dropdown
+## selection) and from the runtime level-load path, since the style choice
+## lives on LevelData but the material is a single shared instance created
+## lazily on first use (see _get_water_material()).
+static func apply_water_style(style: String) -> void:
+	var preset := WaterPresets.get_preset(style)
+	var material := _get_water_material()
+	for key in preset.keys():
+		material.set_shader_parameter(key, preset[key])
+
+
 ## Prototype: build a real MultiMeshInstance3D for each group of Geoscatter instance
 ## transforms terrain-paint wrote into this GLB's scene extras (see
 ## engine/scatter_instancing.py in the terrain-paint repo for the write side), instead

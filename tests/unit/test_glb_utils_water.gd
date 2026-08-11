@@ -64,3 +64,23 @@ func test_shares_one_material_instance_across_multiple_meshes() -> void:
 	assert_eq(water_a.material_override, water_b.material_override)
 
 	root.free()
+
+
+func test_apply_water_style_sets_preset_values_on_the_shared_material() -> void:
+	GlbUtils.apply_water_style("realistic")
+
+	var material := GlbUtils._get_water_material()
+	var expected := WaterPresets.get_preset("realistic")
+	assert_eq(material.get_shader_parameter("water_color"), expected["water_color"])
+	assert_almost_eq(material.get_shader_parameter("ripple_scale"), expected["ripple_scale"], 0.001)
+	assert_almost_eq(
+		material.get_shader_parameter("sky_blend_strength"), expected["sky_blend_strength"], 0.001
+	)
+
+
+func test_apply_water_style_falls_back_to_stylized_for_unknown_name() -> void:
+	GlbUtils.apply_water_style("not_a_real_style")
+
+	var material := GlbUtils._get_water_material()
+	var expected := WaterPresets.get_preset("stylized")
+	assert_eq(material.get_shader_parameter("water_color"), expected["water_color"])
