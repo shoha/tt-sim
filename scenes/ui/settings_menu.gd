@@ -62,6 +62,9 @@ var _last_slider_tick_time: float = 0.0
 @onready var antialiasing_option: OptionButton = %AntialiasingOption
 @onready var shadow_quality_option: OptionButton = %ShadowQualityOption
 @onready var water_quality_option: OptionButton = %WaterQualityOption
+@onready var ssao_check: CheckButton = %SSAOCheck
+@onready var ssr_check: CheckButton = %SSRCheck
+@onready var sdfgi_check: CheckButton = %SDFGICheck
 @onready var renderer_method_option: OptionButton = %RendererMethodOption
 
 # Grid visual controls
@@ -268,6 +271,9 @@ func _on_panel_ready() -> void:
 	vsync_check.toggled.connect(_on_vsync_toggled)
 	lofi_check.toggled.connect(_on_lofi_toggled)
 	occlusion_fade_check.toggled.connect(_on_occlusion_fade_toggled)
+	ssao_check.toggled.connect(_on_ssao_toggled)
+	ssr_check.toggled.connect(_on_ssr_toggled)
+	sdfgi_check.toggled.connect(_on_sdfgi_toggled)
 	antialiasing_option.item_selected.connect(_on_antialiasing_selected)
 	shadow_quality_option.item_selected.connect(_on_shadow_quality_selected)
 	water_quality_option.item_selected.connect(_on_water_quality_selected)
@@ -374,6 +380,9 @@ func _load_settings() -> void:
 		occlusion_fade_check.button_pressed = config.get_value(
 			"graphics", "occlusion_fade_enabled", true
 		)
+		ssao_check.button_pressed = config.get_value("graphics", "ssao_enabled", true)
+		ssr_check.button_pressed = config.get_value("graphics", "ssr_enabled", false)
+		sdfgi_check.button_pressed = config.get_value("graphics", "sdfgi_enabled", false)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
 		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
 		cell_tint_opacity_slider.value = (
@@ -439,6 +448,9 @@ func _save_settings() -> void:
 	config.set_value("graphics", "vsync", vsync_check.button_pressed)
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
 	config.set_value("graphics", "occlusion_fade_enabled", occlusion_fade_check.button_pressed)
+	config.set_value("graphics", "ssao_enabled", ssao_check.button_pressed)
+	config.set_value("graphics", "ssr_enabled", ssr_check.button_pressed)
+	config.set_value("graphics", "sdfgi_enabled", sdfgi_check.button_pressed)
 	config.set_value("graphics", "antialiasing", antialiasing_option.get_selected_id())
 	config.set_value("graphics", "shadow_quality", shadow_quality_option.get_selected_id())
 	config.set_value("graphics", "water_quality", water_quality_option.get_selected_id())
@@ -488,6 +500,9 @@ func _apply_settings() -> void:
 
 	# Apply water quality setting
 	_apply_water_quality_setting()
+
+	# Apply global rendering toggles (SSAO/SSR/SDFGI)
+	_apply_rendering_toggles_setting()
 
 	# Apply grid visual settings
 	_apply_grid_visual_settings()
@@ -551,6 +566,18 @@ func _on_occlusion_fade_toggled(_pressed: bool) -> void:
 	pass
 
 
+func _on_ssao_toggled(_pressed: bool) -> void:
+	pass
+
+
+func _on_ssr_toggled(_pressed: bool) -> void:
+	pass
+
+
+func _on_sdfgi_toggled(_pressed: bool) -> void:
+	pass
+
+
 func _on_antialiasing_selected(_index: int) -> void:
 	pass
 
@@ -599,28 +626,29 @@ func _apply_shadow_quality_setting() -> void:
 	)
 
 
-## Unlike most other _apply_*_setting() functions, the fine-detail/refraction
-## half of this needs no GameMap/LevelPlayController lookup -- global shader
-## uniforms apply engine-wide regardless of whether a level (or any water
-## material) is currently loaded, exactly like _apply_shadow_quality_setting().
-## The SSR half genuinely does need the current level's environment, so it
-## goes through _find_level_play_controller() and is a safe no-op if no level
-## is loaded (title screen) -- it takes effect on next level load instead, via
-## LevelEnvironmentManager.apply_environment_settings()'s own tail call.
+## Unlike most other _apply_*_setting() functions, this needs no
+## GameMap/LevelPlayController lookup -- global shader uniforms apply
+## engine-wide regardless of whether a level (or any water material) is
+## currently loaded, exactly like _apply_shadow_quality_setting(). Water
+## Quality no longer has any SSR-related behavior -- see
+## _apply_rendering_toggles_setting() for the (now purely global, independent
+## of Water Quality) Screen-Space Reflections toggle.
 func _apply_water_quality_setting() -> void:
 	var quality := water_quality_option.get_selected_id()
 	var skip_low_detail := quality == WaterQuality.LOW
 	RenderingServer.global_shader_parameter_set("water_quality_skip_fine_detail", skip_low_detail)
 	RenderingServer.global_shader_parameter_set("water_quality_skip_refraction", skip_low_detail)
 
+
+## Like _apply_water_quality_setting()'s SSR half, this needs the current
+## level's LevelEnvironmentManager and is a safe no-op if no level is loaded
+## (title screen) -- it takes effect on next level load instead, via
+## LevelEnvironmentManager.apply_level_environment()'s own inline config read.
+func _apply_rendering_toggles_setting() -> void:
 	var controller := _find_level_play_controller()
 	if controller:
-		var environment_manager := controller.get_environment_manager()
-		var current_style := ""
-		if controller.active_level_data:
-			current_style = controller.active_level_data.water_style
-		environment_manager.apply_water_quality_ssr_override(
-			current_style, quality == WaterQuality.HIGH
+		controller.get_environment_manager().apply_rendering_toggles(
+			ssao_check.button_pressed, ssr_check.button_pressed, sdfgi_check.button_pressed
 		)
 
 
@@ -708,6 +736,9 @@ func _on_reset_pressed() -> void:
 		shadow_quality_option.get_item_index(RenderingServer.SHADOW_QUALITY_SOFT_ULTRA)
 	)
 	water_quality_option.select(water_quality_option.get_item_index(WaterQuality.MEDIUM))
+	ssao_check.button_pressed = true
+	ssr_check.button_pressed = false
+	sdfgi_check.button_pressed = false
 	renderer_method_option.select(0)
 	p2p_enabled_check.button_pressed = true
 	prereleases_check.button_pressed = false
@@ -852,8 +883,18 @@ func _apply_tooltips() -> void:
 	antialiasing_option.tooltip_text = "Smooths jagged edges on foliage (uses more GPU memory)"
 	shadow_quality_option.tooltip_text = "Shadow edge softness (Hard is fastest, Ultra is priciest)"
 	water_quality_option.tooltip_text = (
-		"Water ripple detail and reflection quality (Low is fastest, High adds "
-		+ "real reflections for the Realistic water style)"
+		"Water ripple detail and refraction quality (Low is fastest, " + "High is highest fidelity)"
+	)
+	ssao_check.tooltip_text = (
+		"Screen-space ambient occlusion -- softens contact shadows in corners and crevices "
+		+ "(uses more GPU)"
+	)
+	ssr_check.tooltip_text = (
+		"Reflects nearby geometry in reflective surfaces like water " + "(uses more GPU)"
+	)
+	sdfgi_check.tooltip_text = (
+		"Signed distance field global illumination for more realistic indirect lighting "
+		+ "(uses significantly more GPU)"
 	)
 	renderer_method_option.tooltip_text = (
 		"Which Godot rendering backend to use (Default follows the platform's "
