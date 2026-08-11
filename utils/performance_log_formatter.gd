@@ -33,6 +33,7 @@ const CSV_COLUMNS: PackedStringArray = [
 	"toggle_grass_shadows",
 	"toggle_map_shadows",
 	"toggle_trivial_foliage_shader",
+	"toggle_unshaded_foliage_textured",
 ]
 
 ## Columns rendered with 2 decimal places; every other column uses str(value).
