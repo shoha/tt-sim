@@ -35,6 +35,7 @@ const PRESETS := {
 }
 
 static var _shader: Shader = null
+static var _shader_no_aa: Shader = null
 
 
 ## Merge a level's foliage_overrides onto a category's base preset. Only
@@ -61,9 +62,6 @@ static func get_shader() -> Shader:
 	if _shader == null:
 		_shader = load("res://shaders/wind_foliage.gdshader")
 	return _shader
-
-
-static var _shader_no_aa: Shader = null
 
 
 ## Get the no-antialiasing variant Shader (plain ALPHA_SCISSOR cutout, no
