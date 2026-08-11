@@ -49,22 +49,58 @@ extends Node
 ## (and therefore whether every lit fragment pays for a shadow-map lookup). If turning
 ## this off recovers the framerate with the real (unmodified) foliage shader, the cost
 ## is shadow-map sampling, not the BRDF math cheap lighting targeted.
+##
+## It was: disabling "Grass shadows" (grass no longer a shadow CASTER) only recovered
+## 2-3 FPS, far short of disabling "Sun shadows" entirely -- ruling out caster instance
+## count as the driver. project.godot has
+## rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality=5
+## (SHADOW_QUALITY_SOFT_ULTRA), the most expensive PCF filter setting, applied
+## per-fragment to every shaded pixel regardless of which geometry it belongs to --
+## consistent with both of the above results. "Hard sun shadows" tests this directly
+## via RenderingServer.directional_soft_shadow_filter_set_quality(), swapping to
+## SHADOW_QUALITY_HARD (no filtering) without touching the light's shadow_enabled or
+## any material/shader. This is a global renderer setting, not tied to a specific
+## node, so unlike the other toggles above it needs no map_container/world_viewport
+## lookup -- just a direct RenderingServer call.
 
 ## Checkbox keys for the mutually-exclusive foliage debug shader toggles, in panel
-## order. Used to uncheck the other two whenever one is turned on, and to identify
-## which checkboxes refresh() should default to unpressed (unlike the four
-## visibility/shadow toggles above, which default pressed=on).
+## order. Used to uncheck the other two whenever one is turned on. A subset of
+## _DEFAULT_OFF_CHECKBOX_KEYS below (that one also includes "hard_sun_shadows", which
+## isn't part of this mutual-exclusion group).
 const _DEBUG_SHADER_CHECKBOX_KEYS := [
 	"trivial_foliage_shader",
 	"unshaded_foliage_textured",
 	"cheap_lighting_foliage",
 ]
 
+## Checkbox keys refresh() should default to UNPRESSED (unlike the visibility/shadow
+## toggles, which default pressed=on to match current shipped behavior).
+const _DEFAULT_OFF_CHECKBOX_KEYS := [
+	"trivial_foliage_shader",
+	"unshaded_foliage_textured",
+	"cheap_lighting_foliage",
+	"hard_sun_shadows",
+]
+
+## Project setting backing rendering/lights_and_shadows/directional_shadow/
+## soft_shadow_filter_quality -- read once in setup() so "Hard sun shadows" can
+## restore the project's actual configured quality on toggle-off/refresh(), rather
+## than hardcoding an assumption of what it's set to. Split into a category/key pair
+## (rather than one literal) purely to keep the line under gdlint's length limit.
+const _SHADOW_QUALITY_SETTING_CATEGORY := "rendering/lights_and_shadows/directional_shadow/"
+const _SHADOW_QUALITY_SETTING_KEY := "soft_shadow_filter_quality"
+
 var _foliage_visible: bool = true
 var _tree_shadows: bool = true
 var _grass_shadows: bool = true
 var _map_shadows: bool = true
 var _sun_shadows: bool = true
+var _hard_sun_shadows: bool = false
+
+## The project's configured directional soft-shadow filter quality (see
+## _SHADOW_QUALITY_SETTING_PATH), read once in setup() -- what "Hard sun shadows"
+## restores to on toggle-off/refresh().
+var _default_shadow_quality: int = RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
 
 ## Which foliage debug shader (if any) is currently swapped in: "", "trivial",
 ## "unshaded", or "cheap_lighting". A String rather than independent bools because the
@@ -105,6 +141,7 @@ func get_toggle_states() -> Dictionary:
 		"toggle_grass_shadows": _grass_shadows,
 		"toggle_map_shadows": _map_shadows,
 		"toggle_sun_shadows": _sun_shadows,
+		"toggle_hard_sun_shadows": _hard_sun_shadows,
 		"toggle_trivial_foliage_shader": _foliage_debug_shader == "trivial",
 		"toggle_unshaded_foliage_textured": _foliage_debug_shader == "unshaded",
 		"toggle_cheap_lighting_foliage": _foliage_debug_shader == "cheap_lighting",
@@ -114,6 +151,10 @@ func get_toggle_states() -> Dictionary:
 func setup(game_map: GameMap) -> void:
 	_map_container = game_map.map_container
 	_world_viewport = game_map.world_viewport
+	_default_shadow_quality = ProjectSettings.get_setting(
+		_SHADOW_QUALITY_SETTING_CATEGORY + _SHADOW_QUALITY_SETTING_KEY,
+		RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
+	)
 	_create_panel(game_map)
 	refresh()
 
@@ -141,13 +182,18 @@ func refresh() -> void:
 	_grass_shadows = true
 	_map_shadows = true
 	_sun_shadows = true
+	# Global renderer setting, not tied to the previous map's nodes -- must be
+	# explicitly restored here (unlike _original_foliage_shaders below) since it
+	# doesn't get reset just because the map's scene tree was torn down.
+	_hard_sun_shadows = false
+	RenderingServer.directional_soft_shadow_filter_set_quality(_default_shadow_quality)
 	# Not restored via _original_foliage_shaders: the previous map's materials are
 	# already queue_freed by the time this runs (see this function's own docstring),
 	# so there is nothing left to restore -- just drop the stale references.
 	_foliage_debug_shader = ""
 	_original_foliage_shaders.clear()
 	for key in _checkboxes:
-		_checkboxes[key].set_pressed_no_signal(key not in _DEBUG_SHADER_CHECKBOX_KEYS)
+		_checkboxes[key].set_pressed_no_signal(key not in _DEFAULT_OFF_CHECKBOX_KEYS)
 
 
 func _collect_nodes() -> void:
@@ -167,6 +213,7 @@ func _create_panel(overlay_parent: GameMap) -> void:
 		"Grass shadows",
 		"Map shadows",
 		"Sun shadows",
+		"Hard sun shadows",
 		"Trivial foliage shader",
 		"Unshaded foliage (full textures)",
 		"Cheap lighting foliage",
@@ -180,9 +227,10 @@ func _create_panel(overlay_parent: GameMap) -> void:
 		"grass_shadows": checkboxes[2],
 		"map_shadows": checkboxes[3],
 		"sun_shadows": checkboxes[4],
-		"trivial_foliage_shader": checkboxes[5],
-		"unshaded_foliage_textured": checkboxes[6],
-		"cheap_lighting_foliage": checkboxes[7],
+		"hard_sun_shadows": checkboxes[5],
+		"trivial_foliage_shader": checkboxes[6],
+		"unshaded_foliage_textured": checkboxes[7],
+		"cheap_lighting_foliage": checkboxes[8],
 	}
 	# Stacked below PerformanceOverlay's metrics panel inside GameMap's shared perf
 	# overlay VBoxContainer (see GameMap.get_perf_overlay_container()) -- the container
@@ -194,6 +242,7 @@ func _create_panel(overlay_parent: GameMap) -> void:
 	_checkboxes["grass_shadows"].toggled.connect(_on_grass_shadows_toggled)
 	_checkboxes["map_shadows"].toggled.connect(_on_map_shadows_toggled)
 	_checkboxes["sun_shadows"].toggled.connect(_on_sun_shadows_toggled)
+	_checkboxes["hard_sun_shadows"].toggled.connect(_on_hard_sun_shadows_toggled)
 	_checkboxes["trivial_foliage_shader"].toggled.connect(_on_trivial_foliage_shader_toggled)
 	_checkboxes["unshaded_foliage_textured"].toggled.connect(_on_unshaded_foliage_textured_toggled)
 	_checkboxes["cheap_lighting_foliage"].toggled.connect(_on_cheap_lighting_foliage_toggled)
@@ -233,6 +282,16 @@ func _on_sun_shadows_toggled(pressed: bool) -> void:
 	_sun_shadows = pressed
 	if is_instance_valid(_sun_light):
 		_sun_light.shadow_enabled = pressed
+
+
+## Global renderer setting, not tied to _sun_light or any material -- swaps between
+## SHADOW_QUALITY_HARD (no PCF filtering) and the project's actual configured quality
+## (_default_shadow_quality) to isolate filter-quality cost specifically, independent
+## of "Sun shadows" above (which removes shadows entirely) or any foliage shader.
+func _on_hard_sun_shadows_toggled(pressed: bool) -> void:
+	_hard_sun_shadows = pressed
+	var quality := RenderingServer.SHADOW_QUALITY_HARD if pressed else _default_shadow_quality
+	RenderingServer.directional_soft_shadow_filter_set_quality(quality)
 
 
 func _on_trivial_foliage_shader_toggled(pressed: bool) -> void:

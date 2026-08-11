@@ -33,6 +33,7 @@ const CSV_COLUMNS: PackedStringArray = [
 	"toggle_grass_shadows",
 	"toggle_map_shadows",
 	"toggle_sun_shadows",
+	"toggle_hard_sun_shadows",
 	"toggle_trivial_foliage_shader",
 	"toggle_unshaded_foliage_textured",
 	"toggle_cheap_lighting_foliage",
