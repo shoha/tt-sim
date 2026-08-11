@@ -3,8 +3,9 @@ extends Node
 
 ## On-screen diagnostic overlay showing engine + custom performance monitors.
 ## Toggled by the perf_overlay_toggle action (F3). Off by default each session.
-## Renders on Constants.LAYER_PERF_OVERLAY via MapOverlayUtils' label-panel
-## styling, matching the MeasureTool/DragRuler overlay conventions.
+## Renders via MapOverlayUtils' label-panel styling, stacked inside GameMap's shared
+## perf overlay VBoxContainer (see GameMap.get_perf_overlay_container()) alongside
+## DebugRenderToggles' checkbox panel.
 ##
 ## Usage:
 ##   var overlay = PerformanceOverlay.new()
@@ -36,7 +37,6 @@ var _frame_count: int = 0
 var _log_file: FileAccess = null
 var _log_file_disabled: bool = false
 
-var _canvas_layer: CanvasLayer
 var _panel: PanelContainer
 var _label: Label
 
@@ -250,14 +250,8 @@ func _write_log_row() -> void:
 	_log_file.flush()
 
 
-func _create_overlay(overlay_parent: Node) -> void:
-	_canvas_layer = CanvasLayer.new()
-	_canvas_layer.layer = Constants.LAYER_PERF_OVERLAY
-	overlay_parent.add_child(_canvas_layer)
-
+func _create_overlay(overlay_parent: GameMap) -> void:
 	var result: Dictionary = MapOverlayUtils.create_label_panel(13, Color(0.8, 1.0, 0.8))
 	_panel = result.panel
 	_label = result.label
-	_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_panel.position = Vector2(16, 16)
-	_canvas_layer.add_child(_panel)
+	overlay_parent.get_perf_overlay_container().add_child(_panel)

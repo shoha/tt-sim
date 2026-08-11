@@ -151,6 +151,15 @@ func test_get_toggle_states_defaults_to_everything_on() -> void:
 	assert_true(states["toggle_map_shadows"])
 
 
+func test_get_toggle_states_defaults_trivial_foliage_shader_to_off() -> void:
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+
+	var states := toggles.get_toggle_states()
+
+	assert_false(states["toggle_trivial_foliage_shader"])
+
+
 func test_apply_shadow_setting_true_sets_cast_shadow_on() -> void:
 	var mesh_inst := MeshInstance3D.new()
 	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -170,3 +179,50 @@ func test_apply_shadow_setting_false_sets_cast_shadow_off() -> void:
 	assert_eq(mesh_inst.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 
 	mesh_inst.free()
+
+
+func _make_wind_foliage_multimesh(category: String) -> MultiMeshInstance3D:
+	var mm_inst := MultiMeshInstance3D.new()
+	mm_inst.set_meta("wind_foliage_category", category)
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = BoxMesh.new()
+	var mat := ShaderMaterial.new()
+	mat.shader = WindFoliage.get_shader()
+	multimesh.mesh.surface_set_material(0, mat)
+	mm_inst.multimesh = multimesh
+	return mm_inst
+
+
+func test_trivial_foliage_shader_toggled_on_swaps_material_to_the_debug_shader() -> void:
+	var root := Node3D.new()
+	var grass_mm := _make_wind_foliage_multimesh("grass")
+	root.add_child(grass_mm)
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+	toggles._map_container = root
+
+	toggles._on_trivial_foliage_shader_toggled(true)
+
+	var mat := grass_mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
+	assert_eq(mat.shader, WindFoliage.get_shader_debug_trivial())
+
+	root.free()
+
+
+func test_trivial_foliage_shader_toggled_off_restores_the_original_shader() -> void:
+	var root := Node3D.new()
+	var tree_mm := _make_wind_foliage_multimesh("tree")
+	root.add_child(tree_mm)
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+	toggles._map_container = root
+	var mat := tree_mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
+	var original_shader := mat.shader
+
+	toggles._on_trivial_foliage_shader_toggled(true)
+	toggles._on_trivial_foliage_shader_toggled(false)
+
+	assert_eq(mat.shader, original_shader)
+
+	root.free()

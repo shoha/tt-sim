@@ -43,6 +43,7 @@ var _drag_place: DragPlaceController = null
 var _camera_controller: CameraController = null
 var _perf_overlay: PerformanceOverlay = null
 var _debug_render_toggles: DebugRenderToggles = null
+var _perf_overlay_container: VBoxContainer = null
 
 @onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
 @onready var world_viewport: SubViewport = $WorldViewportLayer/SubViewportContainer/SubViewport
@@ -398,6 +399,27 @@ func setup_debug_render_toggles() -> void:
 ## Return the DebugRenderToggles instance (may be null before setup).
 func get_debug_render_toggles() -> DebugRenderToggles:
 	return _debug_render_toggles
+
+
+## Shared top-left VBoxContainer (on Constants.LAYER_PERF_OVERLAY) that PerformanceOverlay's
+## metrics panel and DebugRenderToggles' checkbox panel both add themselves to, so the two
+## stack automatically as either one's content grows or shrinks -- avoids the two panels
+## needing a hardcoded Y offset between them that silently goes stale (and overlaps) whenever
+## a line/checkbox is added to either. Created lazily since either consumer may call this
+## first depending on setup order.
+func get_perf_overlay_container() -> VBoxContainer:
+	if not _perf_overlay_container:
+		var canvas_layer := CanvasLayer.new()
+		canvas_layer.layer = Constants.LAYER_PERF_OVERLAY
+		add_child(canvas_layer)
+
+		_perf_overlay_container = VBoxContainer.new()
+		_perf_overlay_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_perf_overlay_container.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		_perf_overlay_container.position = Vector2(16, 16)
+		_perf_overlay_container.add_theme_constant_override("separation", 8)
+		canvas_layer.add_child(_perf_overlay_container)
+	return _perf_overlay_container
 
 
 ## Configure grid overlay and drag systems from LevelData.

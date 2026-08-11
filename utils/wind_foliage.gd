@@ -36,6 +36,7 @@ const PRESETS := {
 
 static var _shader: Shader = null
 static var _shader_no_aa: Shader = null
+static var _shader_debug_trivial: Shader = null
 
 
 ## Merge a level's foliage_overrides onto a category's base preset. Only
@@ -73,6 +74,16 @@ static func get_shader_no_aa() -> Shader:
 	if _shader_no_aa == null:
 		_shader_no_aa = load("res://shaders/wind_foliage_no_aa.gdshader")
 	return _shader_no_aa
+
+
+## Get the debug-only trivial Shader (unshaded, albedo-only, no PBR/occlusion-fade
+## math) used by DebugRenderToggles' "Trivial foliage shader" checkbox to isolate the
+## real shader's fragment cost from plain geometry/overdraw cost. See
+## shaders/wind_foliage_debug_trivial.gdshader.
+static func get_shader_debug_trivial() -> Shader:
+	if _shader_debug_trivial == null:
+		_shader_debug_trivial = load("res://shaders/wind_foliage_debug_trivial.gdshader")
+	return _shader_debug_trivial
 
 
 ## Recursively collect every visible MultiMeshInstance3D tagged as wind foliage

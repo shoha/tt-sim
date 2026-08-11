@@ -6,16 +6,24 @@ extends Node
 ## undiscoverable F4 foliage-visibility keycode outright. See
 ## docs/superpowers/specs/2026-08-10-performance-debug-toggles-design.md.
 ##
-## All four toggles reset to their default (current shipped behavior) on every map
-## reload -- state is never persisted across a map switch. Foliage antialiasing used
-## to be a fifth toggle here but is now a real, persisted graphics setting -- see
-## VisualEffectsController.set_foliage_antialiasing_level() and
-## docs/superpowers/specs/2026-08-10-foliage-antialiasing-setting-design.md.
+## The four visibility/shadow toggles reset to their default (current shipped
+## behavior, pressed=on) on every map reload -- state is never persisted across a map
+## switch. Foliage antialiasing used to be a fifth toggle here but is now a real,
+## persisted graphics setting -- see VisualEffectsController.set_foliage_antialiasing_level()
+## and docs/superpowers/specs/2026-08-10-foliage-antialiasing-setting-design.md.
+##
+## "Trivial foliage shader" is a fifth, differently-defaulted (pressed=off) toggle:
+## it swaps every wind-foliage material to a minimal unshaded debug shader (same
+## alpha-scissor cutout, no PBR/lighting/occlusion-fade math) to isolate whether the
+## real shader's fragment cost -- as opposed to geometry/overdraw from the instance
+## count -- is what's driving a framerate drop. See WindFoliage.get_shader_debug_trivial()
+## and shaders/wind_foliage_debug_trivial.gdshader.
 
 var _foliage_visible: bool = true
 var _tree_shadows: bool = true
 var _grass_shadows: bool = true
 var _map_shadows: bool = true
+var _trivial_foliage_shader: bool = false
 
 var _map_container: Node3D = null
 
@@ -23,7 +31,12 @@ var _tree_multimeshes: Array[MultiMeshInstance3D] = []
 var _grass_multimeshes: Array[MultiMeshInstance3D] = []
 var _map_meshes: Array[MeshInstance3D] = []
 
-var _canvas_layer: CanvasLayer
+## Shaders each foliage ShaderMaterial had before being swapped to the debug trivial
+## shader, so toggling off restores exactly what was active (which may itself be
+## either the antialiased or plain-cutout variant, depending on the player's
+## Antialiasing setting) rather than assuming which one to restore to.
+var _original_foliage_shaders: Dictionary = {}  # ShaderMaterial -> Shader
+
 var _panel: PanelContainer
 var _checkboxes: Dictionary = {}  # String -> CheckBox
 
@@ -37,6 +50,7 @@ func get_toggle_states() -> Dictionary:
 		"toggle_tree_shadows": _tree_shadows,
 		"toggle_grass_shadows": _grass_shadows,
 		"toggle_map_shadows": _map_shadows,
+		"toggle_trivial_foliage_shader": _trivial_foliage_shader,
 	}
 
 
@@ -68,8 +82,13 @@ func refresh() -> void:
 	_tree_shadows = true
 	_grass_shadows = true
 	_map_shadows = true
+	# Not restored via _original_foliage_shaders: the previous map's materials are
+	# already queue_freed by the time this runs (see this function's own docstring),
+	# so there is nothing left to restore -- just drop the stale references.
+	_trivial_foliage_shader = false
+	_original_foliage_shaders.clear()
 	for key in _checkboxes:
-		_checkboxes[key].set_pressed_no_signal(true)
+		_checkboxes[key].set_pressed_no_signal(key != "trivial_foliage_shader")
 
 
 func _collect_nodes() -> void:
@@ -80,16 +99,13 @@ func _collect_nodes() -> void:
 	_collect_mesh_instances(_map_container, _map_meshes)
 
 
-func _create_panel(overlay_parent: Node) -> void:
-	_canvas_layer = CanvasLayer.new()
-	_canvas_layer.layer = Constants.LAYER_PERF_OVERLAY
-	overlay_parent.add_child(_canvas_layer)
-
+func _create_panel(overlay_parent: GameMap) -> void:
 	var labels: PackedStringArray = [
 		"Foliage visible",
 		"Tree shadows",
 		"Grass shadows",
 		"Map shadows",
+		"Trivial foliage shader",
 	]
 	var result: Dictionary = MapOverlayUtils.create_checkbox_panel(labels)
 	_panel = result.panel
@@ -99,19 +115,18 @@ func _create_panel(overlay_parent: Node) -> void:
 		"tree_shadows": checkboxes[1],
 		"grass_shadows": checkboxes[2],
 		"map_shadows": checkboxes[3],
+		"trivial_foliage_shader": checkboxes[4],
 	}
-	_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	# Positioned below PerformanceOverlay's metrics panel (which starts at y=16).
-	# The metrics panel gained an "Antialiasing" line in this change -- re-verify via
-	# manual smoke test (F3 in a live level) that y=320 still clears it, and adjust
-	# again if not.
-	_panel.position = Vector2(16, 320)
-	_canvas_layer.add_child(_panel)
+	# Stacked below PerformanceOverlay's metrics panel inside GameMap's shared perf
+	# overlay VBoxContainer (see GameMap.get_perf_overlay_container()) -- the container
+	# flows both panels automatically, so no hardcoded Y offset to keep in sync here.
+	overlay_parent.get_perf_overlay_container().add_child(_panel)
 
 	_checkboxes["foliage_visible"].toggled.connect(_on_foliage_visible_toggled)
 	_checkboxes["tree_shadows"].toggled.connect(_on_tree_shadows_toggled)
 	_checkboxes["grass_shadows"].toggled.connect(_on_grass_shadows_toggled)
 	_checkboxes["map_shadows"].toggled.connect(_on_map_shadows_toggled)
+	_checkboxes["trivial_foliage_shader"].toggled.connect(_on_trivial_foliage_shader_toggled)
 
 
 func _on_foliage_visible_toggled(pressed: bool) -> void:
@@ -137,6 +152,27 @@ func _on_grass_shadows_toggled(pressed: bool) -> void:
 func _on_map_shadows_toggled(pressed: bool) -> void:
 	_map_shadows = pressed
 	_apply_shadow_setting(_map_meshes, pressed)
+
+
+## Swap every wind-foliage material (tree and grass) to the minimal unshaded debug
+## shader, or restore each to whatever shader it had before (see
+## _original_foliage_shaders' docstring). Uses WindFoliage.collect_foliage_shader_materials
+## rather than this class's own cached _tree_multimeshes/_grass_multimeshes so it also
+## reaches materials currently hidden by the "Foliage visible" toggle above.
+func _on_trivial_foliage_shader_toggled(pressed: bool) -> void:
+	_trivial_foliage_shader = pressed
+	var materials := WindFoliage.collect_foliage_shader_materials(_map_container)
+	if pressed:
+		var debug_shader := WindFoliage.get_shader_debug_trivial()
+		for mat in materials:
+			if not _original_foliage_shaders.has(mat):
+				_original_foliage_shaders[mat] = mat.shader
+			mat.shader = debug_shader
+	else:
+		for mat in materials:
+			if is_instance_valid(mat) and _original_foliage_shaders.has(mat):
+				mat.shader = _original_foliage_shaders[mat]
+		_original_foliage_shaders.clear()
 
 
 ## Recursively collect visible MultiMeshInstance3D nodes tagged with the given
