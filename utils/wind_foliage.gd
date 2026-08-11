@@ -37,6 +37,7 @@ const PRESETS := {
 static var _shader: Shader = null
 static var _shader_no_aa: Shader = null
 static var _shader_debug_trivial: Shader = null
+static var _shader_debug_unshaded: Shader = null
 
 
 ## Merge a level's foliage_overrides onto a category's base preset. Only
@@ -84,6 +85,16 @@ static func get_shader_debug_trivial() -> Shader:
 	if _shader_debug_trivial == null:
 		_shader_debug_trivial = load("res://shaders/wind_foliage_debug_trivial.gdshader")
 	return _shader_debug_trivial
+
+
+## Get the debug-only unshaded-full-textures Shader (same albedo/ORM/normal texture
+## sampling as the real shader, but no lighting) used by DebugRenderToggles' "Unshaded
+## foliage (full textures)" checkbox to isolate texture-bandwidth cost from
+## lighting/BRDF cost. See shaders/wind_foliage_debug_unshaded.gdshader.
+static func get_shader_debug_unshaded() -> Shader:
+	if _shader_debug_unshaded == null:
+		_shader_debug_unshaded = load("res://shaders/wind_foliage_debug_unshaded.gdshader")
+	return _shader_debug_unshaded
 
 
 ## Recursively collect every visible MultiMeshInstance3D tagged as wind foliage
