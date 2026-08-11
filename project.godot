@@ -142,6 +142,10 @@ water_quality_skip_refraction={
 "type": "bool",
 "value": false
 }
+water_ambient_reflection_color={
+"type": "vec3",
+"value": Vector3(0.55, 0.65, 0.75)
+}
 
 [steam]
 
