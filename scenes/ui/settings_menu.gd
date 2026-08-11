@@ -55,6 +55,7 @@ var _last_slider_tick_time: float = 0.0
 @onready var lofi_check: CheckButton = %LofiCheck
 @onready var occlusion_fade_check: CheckButton = %OcclusionFadeCheck
 @onready var antialiasing_option: OptionButton = %AntialiasingOption
+@onready var shadow_quality_option: OptionButton = %ShadowQualityOption
 @onready var renderer_method_option: OptionButton = %RendererMethodOption
 
 # Grid visual controls
@@ -93,10 +94,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## Apply saved graphics settings (fullscreen, vsync) at startup.
+## Apply saved graphics settings (fullscreen, vsync, shadow quality) at startup.
 ## Call this early (e.g. from Root._ready()) so the window mode is correct
 ## before any UI is shown.  Fullscreen is deferred so the window is fully
-## presented first — required on macOS where native fullscreen is async.
+## presented first — required on macOS where native fullscreen is async. A
+## fresh install with no settings.cfg returns early and simply keeps whatever
+## project.godot's own boot-time default already applied (see
+## rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality)
+## -- there is nothing saved yet to override it with.
 static func apply_startup_graphics_settings() -> void:
 	var config = ConfigFile.new()
 	if config.load(Paths.SETTINGS_PATH) != OK:
@@ -109,6 +114,11 @@ static func apply_startup_graphics_settings() -> void:
 	DisplayServer.window_set_vsync_mode(
 		DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED
 	)
+
+	var shadow_quality: int = config.get_value(
+		"graphics", "shadow_quality", RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
+	)
+	RenderingServer.directional_soft_shadow_filter_set_quality(shadow_quality)
 
 	# Defer fullscreen — macOS native fullscreen requires the window to be
 	# fully presented before `toggleFullScreen:` will take effect.
@@ -242,6 +252,7 @@ func _on_panel_ready() -> void:
 	lofi_check.toggled.connect(_on_lofi_toggled)
 	occlusion_fade_check.toggled.connect(_on_occlusion_fade_toggled)
 	antialiasing_option.item_selected.connect(_on_antialiasing_selected)
+	shadow_quality_option.item_selected.connect(_on_shadow_quality_selected)
 	renderer_method_option.item_selected.connect(_on_renderer_method_selected)
 
 	# Grid visuals
@@ -362,6 +373,14 @@ func _load_settings() -> void:
 	)
 	antialiasing_option.select(antialiasing_option.get_item_index(antialiasing_value))
 
+	# Same unconditional-select reasoning as antialiasing above. Defaults to Ultra --
+	# project.godot's own configured value -- so a fresh install matches the engine's
+	# own boot-time default rather than silently downgrading shadow quality.
+	var shadow_quality_value: int = config.get_value(
+		"graphics", "shadow_quality", RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
+	)
+	shadow_quality_option.select(shadow_quality_option.get_item_index(shadow_quality_value))
+
 	# Renderer selection must also be set unconditionally (see the comment
 	# above) -- ids here are arbitrary strings, not a coincidentally-matching
 	# int enum, so lookup is always via the explicit _RENDERING_METHOD_VALUES
@@ -398,6 +417,7 @@ func _save_settings() -> void:
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
 	config.set_value("graphics", "occlusion_fade_enabled", occlusion_fade_check.button_pressed)
 	config.set_value("graphics", "antialiasing", antialiasing_option.get_selected_id())
+	config.set_value("graphics", "shadow_quality", shadow_quality_option.get_selected_id())
 	(
 		config
 		. set_value(
@@ -438,6 +458,9 @@ func _apply_settings() -> void:
 
 	# Apply foliage antialiasing setting
 	_apply_foliage_antialiasing_setting()
+
+	# Apply shadow quality setting
+	_apply_shadow_quality_setting()
 
 	# Apply grid visual settings
 	_apply_grid_visual_settings()
@@ -505,6 +528,10 @@ func _on_antialiasing_selected(_index: int) -> void:
 	pass
 
 
+func _on_shadow_quality_selected(_index: int) -> void:
+	pass
+
+
 func _on_renderer_method_selected(_index: int) -> void:
 	pass
 
@@ -526,6 +553,19 @@ func _apply_foliage_antialiasing_setting() -> void:
 	var game_map = _find_game_map()
 	if game_map:
 		game_map.set_foliage_antialiasing_level(antialiasing_option.selected)
+
+
+## Unlike the other _apply_*_setting() functions, this needs no GameMap lookup --
+## RenderingServer.directional_soft_shadow_filter_set_quality() is a global renderer
+## setting, not tied to a specific light or map, so it applies (and is safe to call)
+## even from the title screen before any level is loaded. Scoped to directional
+## shadows only, matching what the debug-panel investigation this setting grew out of
+## actually tested (see DebugRenderToggles' "Hard sun shadows" toggle) -- positional
+## shadow quality is a separate, untouched project setting.
+func _apply_shadow_quality_setting() -> void:
+	RenderingServer.directional_soft_shadow_filter_set_quality(
+		shadow_quality_option.get_selected_id()
+	)
 
 
 func _apply_grid_visual_settings() -> void:
@@ -598,6 +638,9 @@ func _on_reset_pressed() -> void:
 	lofi_check.button_pressed = true
 	occlusion_fade_check.button_pressed = true
 	antialiasing_option.select(antialiasing_option.get_item_index(Viewport.MSAA_DISABLED))
+	shadow_quality_option.select(
+		shadow_quality_option.get_item_index(RenderingServer.SHADOW_QUALITY_SOFT_ULTRA)
+	)
 	renderer_method_option.select(0)
 	p2p_enabled_check.button_pressed = true
 	prereleases_check.button_pressed = false
@@ -740,6 +783,7 @@ func _apply_tooltips() -> void:
 	lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
 	occlusion_fade_check.tooltip_text = "Fade map geometry that hides tokens from view"
 	antialiasing_option.tooltip_text = "Smooths jagged edges on foliage (uses more GPU memory)"
+	shadow_quality_option.tooltip_text = "Shadow edge softness (Hard is fastest, Ultra is priciest)"
 	renderer_method_option.tooltip_text = (
 		"Which Godot rendering backend to use (Default follows the platform's "
 		+ "normal choice). Changing this requires a restart."
