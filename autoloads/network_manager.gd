@@ -723,7 +723,7 @@ func send_game_state_to_peer(peer_id: int, state_dict: Dictionary) -> void:
 ## Called by host to broadcast visual settings to all clients.
 ## Accepts a dictionary with any subset of keys: "map_scale", "light_intensity",
 ## "environment_preset", "environment_overrides", "lofi_overrides", "weather_overrides",
-## "foliage_overrides", "sun_overrides".
+## "foliage_overrides", "sun_overrides", "water_style".
 func broadcast_visual_settings(settings: Dictionary) -> void:
 	if not is_host():
 		return
@@ -763,6 +763,8 @@ func _patch_current_level_dict(net_settings: Dictionary) -> void:
 		_current_level_dict["foliage_overrides"] = net_settings["foliage_overrides"]
 	if net_settings.has("sun_overrides"):
 		_current_level_dict["sun_overrides"] = net_settings["sun_overrides"]
+	if net_settings.has("water_style"):
+		_current_level_dict["water_style"] = net_settings["water_style"]
 
 
 ## Called by client to send a token transform to the host

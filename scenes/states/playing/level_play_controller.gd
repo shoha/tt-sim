@@ -225,6 +225,21 @@ func apply_sun_overrides(overrides: Dictionary) -> void:
 	_environment_manager.apply_sun_overrides(overrides)
 
 
+## Apply a water style ("stylized"/"realistic") to the live level's water
+## meshes, plus the SSR override that depends on the current Water Quality
+## setting.
+func apply_water_style_setting(style: String) -> void:
+	WaterGlbUtils.apply_water_style(style)
+	var config := ConfigFile.new()
+	config.load(Paths.SETTINGS_PATH)
+	var quality: int = config.get_value(
+		"graphics", "water_quality", SettingsMenu.WaterQuality.MEDIUM
+	)
+	_environment_manager.apply_water_quality_ssr_override(
+		style, quality == SettingsMenu.WaterQuality.HIGH
+	)
+
+
 ## Apply environment settings to the live WorldEnvironment.
 func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 	_environment_manager.apply_environment_settings(preset, overrides)
@@ -396,6 +411,11 @@ func _on_visual_settings_received(settings: Dictionary) -> void:
 		apply_sun_overrides(settings["sun_overrides"])
 		if active_level_data:
 			active_level_data.sun_overrides = settings["sun_overrides"].duplicate()
+	if settings.has("water_style"):
+		var style: String = settings["water_style"]
+		apply_water_style_setting(style)
+		if active_level_data:
+			active_level_data.water_style = style
 
 
 ## Check if a level is currently loaded

@@ -6,18 +6,7 @@ extends DrawerContainer
 ## Changes apply immediately to the live game viewport.
 ## Uses DrawerContainer with edge = RIGHT so the tab appears on the left.
 
-signal save_requested(
-	light_intensity_scale: float,
-	environment_preset: String,
-	environment_overrides: Dictionary,
-	lofi_overrides: Dictionary,
-	weather_overrides: Dictionary,
-	foliage_overrides: Dictionary,
-	sun_overrides: Dictionary,
-	grid_cell_size: float,
-	display_unit: String,
-	display_unit_per_cell: float
-)
+signal save_requested(values: Dictionary)
 signal cancel_requested
 signal intensity_changed(new_scale: float)
 signal scale_config_changed(
@@ -28,6 +17,7 @@ signal lofi_changed(overrides: Dictionary)
 signal weather_changed(overrides: Dictionary)
 signal foliage_changed(overrides: Dictionary)
 signal sun_changed(overrides: Dictionary)
+signal water_style_changed(style: String)
 signal revert_to_map_defaults_requested
 
 ## Emitted when the drawer opens (before the animation starts).
@@ -53,6 +43,7 @@ const SUN_MODES = {
 
 var current_preset: String = ""
 var current_overrides: Dictionary = {}
+var current_water_style: String = "stylized"
 var current_lofi_overrides: Dictionary = {}
 var current_weather_overrides: Dictionary = {}
 var current_foliage_overrides: Dictionary = {}
@@ -72,6 +63,7 @@ var _map_defaults: Dictionary = {}
 
 # Lighting controls — basic
 @onready var preset_dropdown: OptionButton = %PresetDropdown
+@onready var water_style_dropdown: OptionButton = %WaterStyleDropdown
 @onready var intensity_slider_spin: SliderSpinBox = %IntensitySliderSpin
 @onready var bg_color_picker: ColorPickerButton = %BgColorPicker
 @onready var ambient_color_picker: ColorPickerButton = %AmbientColorPicker
@@ -172,6 +164,7 @@ func _on_ready() -> void:
 	_connect_control_signals()
 	_populate_scale_preset_dropdown()
 	_populate_preset_dropdown()
+	_populate_water_style_dropdown()
 	_populate_sky_preset_dropdown()
 	_populate_tonemap_mode_dropdown()
 	_populate_sun_mode_dropdown()
@@ -184,6 +177,7 @@ func _connect_control_signals() -> void:
 
 	# Special-case controls (preset selection, dropdowns with complex logic)
 	preset_dropdown.item_selected.connect(_on_preset_selected)
+	water_style_dropdown.item_selected.connect(_on_water_style_selected)
 	intensity_slider_spin.value_changed.connect(_on_intensity_changed)
 	advanced_toggle.toggled.connect(_on_advanced_toggled)
 	sky_preset_dropdown.item_selected.connect(_on_sky_preset_selected)
@@ -277,6 +271,15 @@ func _populate_preset_dropdown(has_map_defaults: bool = false) -> void:
 		idx += 1
 
 
+func _populate_water_style_dropdown() -> void:
+	water_style_dropdown.clear()
+	var idx := 0
+	for style_name in WaterPresets.get_preset_names():
+		water_style_dropdown.add_item(style_name.capitalize(), idx)
+		water_style_dropdown.set_item_metadata(idx, style_name)
+		idx += 1
+
+
 ## Populate the sky preset dropdown.
 ## [param has_map_sky] adds the "map_default" option when the loaded map has
 ## an embedded Sky resource.
@@ -356,6 +359,10 @@ func initialize(
 	var preset := level_data.environment_preset
 	light_intensity_scale = intensity
 	current_preset = preset
+	current_water_style = level_data.water_style
+	for i in range(water_style_dropdown.item_count):
+		if water_style_dropdown.get_item_metadata(i) == current_water_style:
+			water_style_dropdown.select(i)
 	current_overrides = level_data.environment_overrides.duplicate()
 	current_lofi_overrides = level_data.lofi_overrides.duplicate()
 	current_weather_overrides = level_data.weather_overrides.duplicate()
@@ -547,6 +554,11 @@ func _on_intensity_changed(value: float) -> void:
 	intensity_changed.emit(value)
 
 
+func _on_water_style_selected(index: int) -> void:
+	current_water_style = water_style_dropdown.get_item_metadata(index)
+	water_style_changed.emit(current_water_style)
+
+
 ## Generic handler for config-driven environment overrides.
 func _on_env_override_changed(value: Variant, key: String) -> void:
 	current_overrides[key] = value
@@ -597,16 +609,19 @@ func _on_save_pressed() -> void:
 	(
 		save_requested
 		. emit(
-			light_intensity_scale,
-			current_preset,
-			current_overrides,
-			current_lofi_overrides,
-			current_weather_overrides,
-			current_foliage_overrides,
-			current_sun_overrides,
-			current_grid_cell_size,
-			current_display_unit,
-			current_display_unit_per_cell,
+			{
+				"light_intensity_scale": light_intensity_scale,
+				"environment_preset": current_preset,
+				"environment_overrides": current_overrides,
+				"lofi_overrides": current_lofi_overrides,
+				"weather_overrides": current_weather_overrides,
+				"foliage_overrides": current_foliage_overrides,
+				"sun_overrides": current_sun_overrides,
+				"grid_cell_size": current_grid_cell_size,
+				"display_unit": current_display_unit,
+				"display_unit_per_cell": current_display_unit_per_cell,
+				"water_style": current_water_style,
+			}
 		)
 	)
 
