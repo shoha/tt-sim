@@ -19,11 +19,8 @@ extends RefCounted
 ## generation (generate_scene) entirely on a WorkerThreadPool thread, so the main
 ## thread is never blocked. Godot 4's RenderingServer command buffer makes this safe.
 
-const _WATER_SUFFIX := "-water"
 const _SCENE_EXTRAS_META := "tt_gltf_scene_extras"
 const _SCATTER_INSTANCES_EXTRAS_KEY := "tt_scatter_instances"
-
-static var _water_material: ShaderMaterial = null
 
 
 ## Result structure for async loading
@@ -183,7 +180,7 @@ static func load_glb_with_processing(
 	process_collision_meshes(scene, create_static_bodies)
 	process_animations(scene)
 	process_lights(scene, light_intensity_scale)
-	process_water_meshes(scene)
+	WaterGlbUtils.process_water_meshes(scene)
 	process_scatter_instances(scene, foliage_overrides)
 
 	return scene
@@ -210,7 +207,7 @@ static func load_glb_with_processing_async(
 		await _process_collision_meshes_async(result.scene, create_static_bodies)
 		process_animations(result.scene)
 		process_lights(result.scene, light_intensity_scale)
-		process_water_meshes(result.scene)
+		WaterGlbUtils.process_water_meshes(result.scene)
 		process_scatter_instances(result.scene, foliage_overrides)
 
 	return result
@@ -315,50 +312,6 @@ static func _process_single_collision_node(
 			mesh_node.free()
 		else:
 			mesh_node.visible = false
-
-
-## Get the shared water ShaderMaterial, building it once on first use. Every "-water"
-## suffixed mesh across every loaded map shares this single instance -- there's no
-## per-map tuning yet, matching the naming-convention-only water feature (see
-## terrain-paint's README "Water" section for the Blender-side naming convention).
-static func _get_water_material() -> ShaderMaterial:
-	if _water_material == null:
-		_water_material = ShaderMaterial.new()
-		_water_material.shader = load("res://shaders/water.gdshader")
-	return _water_material
-
-
-## Apply the shared water shader to any mesh named with a "-water" suffix (case-
-## insensitive), e.g. a terrain-paint "Lake-water" plane. Mirrors
-## _find_collision_mesh_nodes' suffix-matching approach so water gets the same
-## zero-manual-setup treatment as collision meshes.
-static func process_water_meshes(node: Node) -> void:
-	var water_nodes: Array[MeshInstance3D] = []
-	_find_water_mesh_nodes(node, water_nodes)
-	if water_nodes.is_empty():
-		return
-	var material := _get_water_material()
-	for mesh_node in water_nodes:
-		mesh_node.material_override = material
-
-
-static func _find_water_mesh_nodes(node: Node, result: Array[MeshInstance3D]) -> void:
-	if node is MeshInstance3D and node.name.to_lower().ends_with(_WATER_SUFFIX):
-		result.append(node)
-	for child in node.get_children():
-		_find_water_mesh_nodes(child, result)
-
-
-## Apply a named Water Style preset (see WaterPresets) to the shared water
-## ShaderMaterial. Called both from the level editor (live, on dropdown
-## selection) and from the runtime level-load path, since the style choice
-## lives on LevelData but the material is a single shared instance created
-## lazily on first use (see _get_water_material()).
-static func apply_water_style(style: String) -> void:
-	var preset := WaterPresets.get_preset(style)
-	var material := _get_water_material()
-	for key in preset.keys():
-		material.set_shader_parameter(key, preset[key])
 
 
 ## Prototype: build a real MultiMeshInstance3D for each group of Geoscatter instance
@@ -675,7 +628,7 @@ static func load_map(
 		process_collision_meshes(scene, create_static_bodies)
 		process_animations(scene)
 		process_lights(scene, light_intensity_scale)
-		process_water_meshes(scene)
+		WaterGlbUtils.process_water_meshes(scene)
 	else:
 		scene = load_glb_with_processing(
 			path, create_static_bodies, light_intensity_scale, foliage_overrides
@@ -730,7 +683,7 @@ static func load_map_async(
 					await _process_collision_meshes_async(scene, create_static_bodies)
 					process_animations(scene)
 					process_lights(scene, light_intensity_scale)
-					process_water_meshes(scene)
+					WaterGlbUtils.process_water_meshes(scene)
 					disable_static_body_picking(scene)
 					result.scene = scene
 					result.success = true
@@ -748,7 +701,7 @@ static func load_map_async(
 					process_collision_meshes(scene, create_static_bodies)
 					process_animations(scene)
 					process_lights(scene, light_intensity_scale)
-					process_water_meshes(scene)
+					WaterGlbUtils.process_water_meshes(scene)
 					disable_static_body_picking(scene)
 					result.scene = scene
 					result.success = true
