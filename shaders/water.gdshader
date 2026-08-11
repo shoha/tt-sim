@@ -6,7 +6,7 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
  * ============
  *
  * PURPOSE:
- * Automatically applied by WaterGlbUtils.process_water_meshes() (utils/glb_utils.gd) to any
+ * Automatically applied by WaterGlbUtils.process_water_meshes() (utils/water_glb_utils.gd) to any
  * mesh whose name ends in "-water" in a runtime-loaded GLB map. Gives terrain-paint
  * water planes (see the terrain-paint Blender addon's README "Water" section) a real
  * animated look with zero per-map setup -- the Blender-side plane only needs the right
@@ -48,10 +48,11 @@ uniform float fresnel_power : hint_range(0.5, 8.0) = 4.0;
 uniform float fresnel_strength : hint_range(0.0, 1.0) = 0.5;
 // Fresnel-weighted blend toward water_ambient_reflection_color (see the global
 // uniform below) at grazing angles -- a cheap stand-in for a real reflection,
-// always active for the "realistic" Water Style preset (WaterPresets), off
-// (0.0) for "stylized". Not gated by Water Quality since it's inexpensive;
-// contrast with Environment.ssr_enabled, the actual expensive reflection this
-// project uses, gated to Water Quality High (see LevelEnvironmentManager).
+// active for both Water Style presets (WaterPresets): subtle (0.15) for
+// "stylized", stronger (0.4) for "realistic". Not gated by Water Quality
+// since it's inexpensive; contrast with Environment.ssr_enabled, the actual
+// expensive reflection this project uses, gated to Water Quality High (see
+// LevelEnvironmentManager).
 uniform float sky_blend_strength : hint_range(0.0, 1.0) = 0.15;
 // Screen-space refraction strength -- reuses the ripple gradient (see grad below) as a
 // UV offset so refraction distorts in sync with the visible ripple normal instead of
@@ -67,7 +68,7 @@ uniform sampler2D screen_tex : hint_screen_texture, repeat_disable, filter_linea
 // Water Quality graphics setting (Settings > Graphics) -- engine-wide global uniforms
 // rather than per-material uniforms, so SettingsMenu can apply them via
 // RenderingServer.global_shader_parameter_set() even before any water material
-// exists yet (GlbUtils creates the shared water material lazily on first map
+// exists yet (WaterGlbUtils creates the shared water material lazily on first map
 // load). See docs/superpowers/specs/2026-08-11-water-shader-quality-design.md.
 global uniform bool water_quality_skip_fine_detail;
 global uniform bool water_quality_skip_refraction;

@@ -100,7 +100,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## Apply saved graphics settings (fullscreen, vsync, shadow quality) at startup.
+## Apply saved graphics settings (fullscreen, vsync, shadow quality, water quality) at startup.
 ## Call this early (e.g. from Root._ready()) so the window mode is correct
 ## before any UI is shown.  Fullscreen is deferred so the window is fully
 ## presented first — required on macOS where native fullscreen is async. A
@@ -125,6 +125,17 @@ static func apply_startup_graphics_settings() -> void:
 		"graphics", "shadow_quality", RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
 	)
 	RenderingServer.directional_soft_shadow_filter_set_quality(shadow_quality)
+
+	var water_quality_value: int = config.get_value(
+		"graphics", "water_quality", WaterQuality.MEDIUM
+	)
+	var water_skip_low_detail := water_quality_value == WaterQuality.LOW
+	RenderingServer.global_shader_parameter_set(
+		"water_quality_skip_fine_detail", water_skip_low_detail
+	)
+	RenderingServer.global_shader_parameter_set(
+		"water_quality_skip_refraction", water_skip_low_detail
+	)
 
 	# Defer fullscreen — macOS native fullscreen requires the window to be
 	# fully presented before `toggleFullScreen:` will take effect.

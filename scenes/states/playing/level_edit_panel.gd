@@ -360,9 +360,19 @@ func initialize(
 	light_intensity_scale = intensity
 	current_preset = preset
 	current_water_style = level_data.water_style
+	var water_style_matched := false
 	for i in range(water_style_dropdown.item_count):
 		if water_style_dropdown.get_item_metadata(i) == current_water_style:
 			water_style_dropdown.select(i)
+			water_style_matched = true
+			break
+	if not water_style_matched:
+		# Corrupt/unrecognized save data -- fall back to the default preset
+		# rather than leaving the dropdown showing a stale/mismatched item.
+		for i in range(water_style_dropdown.item_count):
+			if water_style_dropdown.get_item_metadata(i) == WaterPresets.DEFAULT_PRESET:
+				water_style_dropdown.select(i)
+				break
 	current_overrides = level_data.environment_overrides.duplicate()
 	current_lofi_overrides = level_data.lofi_overrides.duplicate()
 	current_weather_overrides = level_data.weather_overrides.duplicate()

@@ -20,6 +20,7 @@ var _original_sun_overrides: Dictionary = {}
 var _original_grid_cell_size: float = 1.524
 var _original_display_unit: String = "ft"
 var _original_display_unit_per_cell: float = 5.0
+var _original_water_style: String = ""
 
 @onready var save_level_button: Button = %SaveLevelButton
 @onready var toggle_asset_browser_button: Button = %ToggleAssetBrowserButton
@@ -304,6 +305,7 @@ func _enter_edit_mode() -> void:
 	_original_grid_cell_size = level_data.grid_cell_size
 	_original_display_unit = level_data.display_unit
 	_original_display_unit_per_cell = level_data.display_unit_per_cell
+	_original_water_style = level_data.water_style
 
 	# Initialize the edit panel with current values
 	var map_defaults = _level_play_controller.get_map_environment_config()
@@ -329,6 +331,7 @@ func _revert_edit_mode_values() -> void:
 	level_data.grid_cell_size = _original_grid_cell_size
 	level_data.display_unit = _original_display_unit
 	level_data.display_unit_per_cell = _original_display_unit_per_cell
+	level_data.water_style = _original_water_style
 
 	# Re-apply original values to the live game
 	_level_play_controller.apply_light_intensity_scale(_original_light_intensity)
@@ -337,6 +340,7 @@ func _revert_edit_mode_values() -> void:
 	)
 	_level_play_controller.apply_foliage_overrides(_original_foliage_overrides)
 	_level_play_controller.apply_sun_overrides(_original_sun_overrides)
+	_level_play_controller.apply_water_style_setting(_original_water_style)
 
 	var game_map = _level_play_controller.get_game_map()
 	if game_map:
@@ -383,6 +387,7 @@ func _revert_edit_mode_values() -> void:
 					"weather_overrides": full_weather,
 					"foliage_overrides": _original_foliage_overrides,
 					"sun_overrides": _original_sun_overrides,
+					"water_style": _original_water_style,
 				}
 			)
 		)

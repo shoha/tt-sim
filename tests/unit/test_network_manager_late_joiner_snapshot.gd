@@ -57,6 +57,7 @@ func test_patch_current_level_dict_mirrors_every_broadcast_visual_settings_key()
 		"weather_overrides": {"rain_intensity": 0.5},
 		"foliage_overrides": {"grass_sway_speed": 9.0},
 		"sun_overrides": {"mode": "off"},
+		"water_style": "realistic",
 	}
 	NetworkManager._patch_current_level_dict(net_settings)
 
@@ -69,3 +70,4 @@ func test_patch_current_level_dict_mirrors_every_broadcast_visual_settings_key()
 	assert_eq(NetworkManager._current_level_dict["weather_overrides"], {"rain_intensity": 0.5})
 	assert_eq(NetworkManager._current_level_dict["foliage_overrides"], {"grass_sway_speed": 9.0})
 	assert_eq(NetworkManager._current_level_dict["sun_overrides"], {"mode": "off"})
+	assert_eq(NetworkManager._current_level_dict["water_style"], "realistic")
