@@ -46,6 +46,13 @@ uniform float ripple_strength : hint_range(0.0, 2.0) = 0.6;
 uniform float bob_height : hint_range(0.0, 0.2) = 0.02;
 uniform float fresnel_power : hint_range(0.5, 8.0) = 4.0;
 uniform float fresnel_strength : hint_range(0.0, 1.0) = 0.5;
+// Fresnel-weighted blend toward water_ambient_reflection_color (see the global
+// uniform below) at grazing angles -- a cheap stand-in for a real reflection,
+// always active for the "realistic" Water Style preset (WaterPresets), off
+// (0.0) for "stylized". Not gated by Water Quality since it's inexpensive;
+// contrast with Environment.ssr_enabled, the actual expensive reflection this
+// project uses, gated to Water Quality High (see LevelEnvironmentManager).
+uniform float sky_blend_strength : hint_range(0.0, 1.0) = 0.15;
 // Screen-space refraction strength -- reuses the ripple gradient (see grad below) as a
 // UV offset so refraction distorts in sync with the visible ripple normal instead of
 // needing its own noise pass. Capped low (hint_range max 0.2) because at tabletop zoom
@@ -64,6 +71,10 @@ uniform sampler2D screen_tex : hint_screen_texture, repeat_disable, filter_linea
 // load). See docs/superpowers/specs/2026-08-11-water-shader-quality-design.md.
 global uniform bool water_quality_skip_fine_detail;
 global uniform bool water_quality_skip_refraction;
+// Updated by LevelEnvironmentManager whenever it applies environment settings,
+// so the fresnel sky-blend above tracks the level's actual ambient/sky color
+// instead of a hardcoded value.
+global uniform vec3 water_ambient_reflection_color;
 
 varying vec3 world_pos;
 
@@ -190,6 +201,8 @@ void fragment() {
 		vec3 refracted = textureLod(screen_tex, refract_uv, 0.0).rgb;
 		final_color = mix(base_color, refracted, (1.0 - depth_diff) * 0.4);
 	}
+
+	final_color = mix(final_color, water_ambient_reflection_color, fresnel * sky_blend_strength);
 
 	ALBEDO = final_color;
 	ALPHA = clamp(depth_alpha + fresnel * fresnel_strength, 0.0, 1.0);
