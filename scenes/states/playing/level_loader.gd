@@ -282,6 +282,7 @@ func _load_level_map_async(level_data: LevelData) -> bool:
 		return false
 
 	_finalize_map_loading(map)
+	WaterGlbUtils.apply_water_style(level_data.water_style)
 	return true
 
 
