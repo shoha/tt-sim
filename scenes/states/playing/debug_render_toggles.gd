@@ -35,6 +35,20 @@ extends Node
 ## See WindFoliage.get_shader_debug_trivial()/get_shader_debug_unshaded()/
 ## get_shader_debug_cheap_lighting() and shaders/wind_foliage_debug_trivial.gdshader /
 ## wind_foliage_debug_unshaded.gdshader / wind_foliage_debug_cheap_lighting.gdshader.
+##
+## Surprise finding: "Cheap lighting" alone did NOT recover the framerate on the M1,
+## even though "Unshaded (full textures)" -- with identical texture sampling -- did.
+## The difference between those two is that unshaded skips Godot's ENTIRE lighting
+## pipeline (direct BRDF, shadow-map sampling, and ambient/GI lookups), while cheap
+## lighting only swaps the direct BRDF term and still pays for whatever else "shaded"
+## costs. "Sun shadows" isolates one specific candidate within that gap: it flips the
+## level's DirectionalLight3D's own shadow_enabled (found via _find_directional_light,
+## since the sun light is a sibling of map_container under the world SubViewport, not
+## a descendant of it) -- unlike "Tree/Grass/Map shadows" above, which control whether
+## that geometry CASTS a shadow, this controls whether the light casts one at all
+## (and therefore whether every lit fragment pays for a shadow-map lookup). If turning
+## this off recovers the framerate with the real (unmodified) foliage shader, the cost
+## is shadow-map sampling, not the BRDF math cheap lighting targeted.
 
 ## Checkbox keys for the mutually-exclusive foliage debug shader toggles, in panel
 ## order. Used to uncheck the other two whenever one is turned on, and to identify
@@ -50,6 +64,7 @@ var _foliage_visible: bool = true
 var _tree_shadows: bool = true
 var _grass_shadows: bool = true
 var _map_shadows: bool = true
+var _sun_shadows: bool = true
 
 ## Which foliage debug shader (if any) is currently swapped in: "", "trivial",
 ## "unshaded", or "cheap_lighting". A String rather than independent bools because the
@@ -57,10 +72,18 @@ var _map_shadows: bool = true
 var _foliage_debug_shader: String = ""
 
 var _map_container: Node3D = null
+## Root to search for the level's DirectionalLight3D (see _sun_light) -- the sun light
+## is a sibling of map_container under the world SubViewport, not a descendant of it,
+## so it needs its own search root distinct from _map_container.
+var _world_viewport: SubViewport = null
 
 var _tree_multimeshes: Array[MultiMeshInstance3D] = []
 var _grass_multimeshes: Array[MultiMeshInstance3D] = []
 var _map_meshes: Array[MeshInstance3D] = []
+## The level's sun light, if any -- re-found on every refresh() since
+## LevelEnvironmentManager may recreate it per map load. See "Sun shadows" in this
+## class's docstring.
+var _sun_light: DirectionalLight3D = null
 
 ## Shaders each foliage ShaderMaterial had before being swapped to a debug shader, so
 ## restoring (toggling both off) puts back exactly what was active (which may itself
@@ -81,6 +104,7 @@ func get_toggle_states() -> Dictionary:
 		"toggle_tree_shadows": _tree_shadows,
 		"toggle_grass_shadows": _grass_shadows,
 		"toggle_map_shadows": _map_shadows,
+		"toggle_sun_shadows": _sun_shadows,
 		"toggle_trivial_foliage_shader": _foliage_debug_shader == "trivial",
 		"toggle_unshaded_foliage_textured": _foliage_debug_shader == "unshaded",
 		"toggle_cheap_lighting_foliage": _foliage_debug_shader == "cheap_lighting",
@@ -89,6 +113,7 @@ func get_toggle_states() -> Dictionary:
 
 func setup(game_map: GameMap) -> void:
 	_map_container = game_map.map_container
+	_world_viewport = game_map.world_viewport
 	_create_panel(game_map)
 	refresh()
 
@@ -115,6 +140,7 @@ func refresh() -> void:
 	_tree_shadows = true
 	_grass_shadows = true
 	_map_shadows = true
+	_sun_shadows = true
 	# Not restored via _original_foliage_shaders: the previous map's materials are
 	# already queue_freed by the time this runs (see this function's own docstring),
 	# so there is nothing left to restore -- just drop the stale references.
@@ -125,6 +151,8 @@ func refresh() -> void:
 
 
 func _collect_nodes() -> void:
+	if _world_viewport:
+		_sun_light = _find_directional_light(_world_viewport)
 	if not _map_container:
 		return
 	_collect_multimeshes_by_category(_map_container, "tree", _tree_multimeshes)
@@ -138,6 +166,7 @@ func _create_panel(overlay_parent: GameMap) -> void:
 		"Tree shadows",
 		"Grass shadows",
 		"Map shadows",
+		"Sun shadows",
 		"Trivial foliage shader",
 		"Unshaded foliage (full textures)",
 		"Cheap lighting foliage",
@@ -150,9 +179,10 @@ func _create_panel(overlay_parent: GameMap) -> void:
 		"tree_shadows": checkboxes[1],
 		"grass_shadows": checkboxes[2],
 		"map_shadows": checkboxes[3],
-		"trivial_foliage_shader": checkboxes[4],
-		"unshaded_foliage_textured": checkboxes[5],
-		"cheap_lighting_foliage": checkboxes[6],
+		"sun_shadows": checkboxes[4],
+		"trivial_foliage_shader": checkboxes[5],
+		"unshaded_foliage_textured": checkboxes[6],
+		"cheap_lighting_foliage": checkboxes[7],
 	}
 	# Stacked below PerformanceOverlay's metrics panel inside GameMap's shared perf
 	# overlay VBoxContainer (see GameMap.get_perf_overlay_container()) -- the container
@@ -163,6 +193,7 @@ func _create_panel(overlay_parent: GameMap) -> void:
 	_checkboxes["tree_shadows"].toggled.connect(_on_tree_shadows_toggled)
 	_checkboxes["grass_shadows"].toggled.connect(_on_grass_shadows_toggled)
 	_checkboxes["map_shadows"].toggled.connect(_on_map_shadows_toggled)
+	_checkboxes["sun_shadows"].toggled.connect(_on_sun_shadows_toggled)
 	_checkboxes["trivial_foliage_shader"].toggled.connect(_on_trivial_foliage_shader_toggled)
 	_checkboxes["unshaded_foliage_textured"].toggled.connect(_on_unshaded_foliage_textured_toggled)
 	_checkboxes["cheap_lighting_foliage"].toggled.connect(_on_cheap_lighting_foliage_toggled)
@@ -191,6 +222,17 @@ func _on_grass_shadows_toggled(pressed: bool) -> void:
 func _on_map_shadows_toggled(pressed: bool) -> void:
 	_map_shadows = pressed
 	_apply_shadow_setting(_map_meshes, pressed)
+
+
+## Unlike the three _apply_shadow_setting-based toggles above (which control whether
+## a given category of geometry CASTS a shadow), this controls whether the sun light
+## casts one AT ALL -- and therefore whether every lit fragment anywhere on the map
+## pays for a shadow-map lookup. See this class's own docstring for why this toggle
+## exists.
+func _on_sun_shadows_toggled(pressed: bool) -> void:
+	_sun_shadows = pressed
+	if is_instance_valid(_sun_light):
+		_sun_light.shadow_enabled = pressed
 
 
 func _on_trivial_foliage_shader_toggled(pressed: bool) -> void:
@@ -297,6 +339,21 @@ static func _collect_mesh_instances(node: Node, result: Array[MeshInstance3D]) -
 			if mesh_inst.mesh:
 				result.append(mesh_inst)
 		_collect_mesh_instances(child, result)
+
+
+## Recursively find the first DirectionalLight3D under [param node] -- the level's sun
+## light (LevelEnvironmentManager._sun_light), which lives as a sibling of
+## map_container under the world SubViewport rather than inside map_container itself,
+## so it needs its own search separate from the MultiMesh/MeshInstance3D collectors
+## above. Returns the first match; a level is expected to have at most one sun light.
+static func _find_directional_light(node: Node) -> DirectionalLight3D:
+	for child in node.get_children():
+		if child is DirectionalLight3D:
+			return child as DirectionalLight3D
+		var found := _find_directional_light(child)
+		if found:
+			return found
+	return null
 
 
 ## Set cast_shadow on every node in [param nodes] (MeshInstance3D or

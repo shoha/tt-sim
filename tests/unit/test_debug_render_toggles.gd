@@ -178,6 +178,78 @@ func test_get_toggle_states_defaults_cheap_lighting_foliage_to_off() -> void:
 	assert_false(states["toggle_cheap_lighting_foliage"])
 
 
+func test_get_toggle_states_defaults_sun_shadows_to_on() -> void:
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+
+	var states := toggles.get_toggle_states()
+
+	assert_true(states["toggle_sun_shadows"])
+
+
+func test_finds_a_directional_light_child() -> void:
+	var root := Node3D.new()
+	var sun := DirectionalLight3D.new()
+	root.add_child(sun)
+
+	var found := DebugRenderToggles._find_directional_light(root)
+
+	assert_eq(found, sun)
+
+	root.free()
+
+
+func test_finds_a_directional_light_in_nested_children() -> void:
+	var root := Node3D.new()
+	var wrapper := Node3D.new()
+	root.add_child(wrapper)
+	var sun := DirectionalLight3D.new()
+	wrapper.add_child(sun)
+
+	var found := DebugRenderToggles._find_directional_light(root)
+
+	assert_eq(found, sun)
+
+	root.free()
+
+
+func test_find_directional_light_returns_null_when_none_present() -> void:
+	var root := Node3D.new()
+
+	var found := DebugRenderToggles._find_directional_light(root)
+
+	assert_null(found)
+
+	root.free()
+
+
+func test_sun_shadows_toggled_off_disables_shadow_on_the_sun_light() -> void:
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+	var sun := DirectionalLight3D.new()
+	toggles._sun_light = sun
+
+	toggles._on_sun_shadows_toggled(false)
+
+	assert_false(sun.shadow_enabled)
+
+	sun.free()
+
+
+func test_sun_shadows_toggled_on_re_enables_shadow_on_the_sun_light() -> void:
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+	var sun := DirectionalLight3D.new()
+	sun.shadow_enabled = false
+	toggles._sun_light = sun
+
+	toggles._on_sun_shadows_toggled(true)
+
+	assert_true(sun.shadow_enabled)
+
+	sun.free()
+
+
 func test_apply_shadow_setting_true_sets_cast_shadow_on() -> void:
 	var mesh_inst := MeshInstance3D.new()
 	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
