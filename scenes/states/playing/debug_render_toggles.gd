@@ -12,10 +12,9 @@ extends Node
 ## persisted graphics setting -- see VisualEffectsController.set_foliage_antialiasing_level()
 ## and docs/superpowers/specs/2026-08-10-foliage-antialiasing-setting-design.md.
 ##
-## "Trivial foliage shader" and "Unshaded foliage (full textures)" are two further,
-## differently-defaulted (pressed=off), mutually exclusive toggles that each swap
-## every wind-foliage material to a debug shader, isolating two different candidate
-## costs behind a framerate drop from the real shader's fragment stage:
+## "Trivial foliage shader", "Unshaded foliage (full textures)", and "Cheap lighting
+## foliage" are three further, differently-defaulted (pressed=off), mutually exclusive
+## toggles that each swap every wind-foliage material to a debug shader:
 ## - Trivial: albedo texture only, unshaded, no ORM/normal sampling, no lighting.
 ##   If this alone recovers the framerate, the cost is somewhere in the real
 ##   shader's fragment stage generally (either texture traffic or lighting).
@@ -24,17 +23,37 @@ extends Node
 ##   ALSO recovers the framerate, the cost is the lighting/BRDF evaluation, not the
 ##   texture reads; if it stays slow like the real shader, the cost is the texture
 ##   reads themselves.
-## See WindFoliage.get_shader_debug_trivial()/get_shader_debug_unshaded() and
-## shaders/wind_foliage_debug_trivial.gdshader / wind_foliage_debug_unshaded.gdshader.
+## Both of the above confirmed the cost is the lighting/BRDF evaluation (Godot's
+## diffuse_burley + specular_schlick_ggx), not texture bandwidth -- see an M1 Xcode/
+## Instruments GPU capture, which also showed the fragment stage dominating by ~10x
+## any other stage.
+## - Cheap lighting: a candidate real fix, not another isolation shader -- identical
+##   PBR texture sampling, wind sway, and occlusion fade to the real shader, but
+##   diffuse_lambert + specular_disabled instead of diffuse_burley +
+##   specular_schlick_ggx. Exists as a toggle rather than the shipped default so the
+##   visual difference can be judged in-game before committing to it.
+## See WindFoliage.get_shader_debug_trivial()/get_shader_debug_unshaded()/
+## get_shader_debug_cheap_lighting() and shaders/wind_foliage_debug_trivial.gdshader /
+## wind_foliage_debug_unshaded.gdshader / wind_foliage_debug_cheap_lighting.gdshader.
+
+## Checkbox keys for the mutually-exclusive foliage debug shader toggles, in panel
+## order. Used to uncheck the other two whenever one is turned on, and to identify
+## which checkboxes refresh() should default to unpressed (unlike the four
+## visibility/shadow toggles above, which default pressed=on).
+const _DEBUG_SHADER_CHECKBOX_KEYS := [
+	"trivial_foliage_shader",
+	"unshaded_foliage_textured",
+	"cheap_lighting_foliage",
+]
 
 var _foliage_visible: bool = true
 var _tree_shadows: bool = true
 var _grass_shadows: bool = true
 var _map_shadows: bool = true
 
-## Which foliage debug shader (if any) is currently swapped in: "", "trivial", or
-## "unshaded". A String rather than two independent bools because the two debug
-## shaders are mutually exclusive -- a material can only have one shader at a time.
+## Which foliage debug shader (if any) is currently swapped in: "", "trivial",
+## "unshaded", or "cheap_lighting". A String rather than independent bools because the
+## debug shaders are mutually exclusive -- a material can only have one shader at a time.
 var _foliage_debug_shader: String = ""
 
 var _map_container: Node3D = null
@@ -64,6 +83,7 @@ func get_toggle_states() -> Dictionary:
 		"toggle_map_shadows": _map_shadows,
 		"toggle_trivial_foliage_shader": _foliage_debug_shader == "trivial",
 		"toggle_unshaded_foliage_textured": _foliage_debug_shader == "unshaded",
+		"toggle_cheap_lighting_foliage": _foliage_debug_shader == "cheap_lighting",
 	}
 
 
@@ -100,9 +120,8 @@ func refresh() -> void:
 	# so there is nothing left to restore -- just drop the stale references.
 	_foliage_debug_shader = ""
 	_original_foliage_shaders.clear()
-	var debug_shader_keys := ["trivial_foliage_shader", "unshaded_foliage_textured"]
 	for key in _checkboxes:
-		_checkboxes[key].set_pressed_no_signal(key not in debug_shader_keys)
+		_checkboxes[key].set_pressed_no_signal(key not in _DEBUG_SHADER_CHECKBOX_KEYS)
 
 
 func _collect_nodes() -> void:
@@ -121,6 +140,7 @@ func _create_panel(overlay_parent: GameMap) -> void:
 		"Map shadows",
 		"Trivial foliage shader",
 		"Unshaded foliage (full textures)",
+		"Cheap lighting foliage",
 	]
 	var result: Dictionary = MapOverlayUtils.create_checkbox_panel(labels)
 	_panel = result.panel
@@ -132,6 +152,7 @@ func _create_panel(overlay_parent: GameMap) -> void:
 		"map_shadows": checkboxes[3],
 		"trivial_foliage_shader": checkboxes[4],
 		"unshaded_foliage_textured": checkboxes[5],
+		"cheap_lighting_foliage": checkboxes[6],
 	}
 	# Stacked below PerformanceOverlay's metrics panel inside GameMap's shared perf
 	# overlay VBoxContainer (see GameMap.get_perf_overlay_container()) -- the container
@@ -144,6 +165,7 @@ func _create_panel(overlay_parent: GameMap) -> void:
 	_checkboxes["map_shadows"].toggled.connect(_on_map_shadows_toggled)
 	_checkboxes["trivial_foliage_shader"].toggled.connect(_on_trivial_foliage_shader_toggled)
 	_checkboxes["unshaded_foliage_textured"].toggled.connect(_on_unshaded_foliage_textured_toggled)
+	_checkboxes["cheap_lighting_foliage"].toggled.connect(_on_cheap_lighting_foliage_toggled)
 
 
 func _on_foliage_visible_toggled(pressed: bool) -> void:
@@ -173,11 +195,7 @@ func _on_map_shadows_toggled(pressed: bool) -> void:
 
 func _on_trivial_foliage_shader_toggled(pressed: bool) -> void:
 	if pressed:
-		# Checked directly against the dict (not indexed) so tests that invoke this
-		# handler on a bare instance -- with no panel/checkboxes ever created -- don't
-		# hit a null dereference.
-		if _checkboxes.has("unshaded_foliage_textured"):
-			_checkboxes["unshaded_foliage_textured"].set_pressed_no_signal(false)
+		_uncheck_other_debug_shader_checkboxes("trivial_foliage_shader")
 		_set_foliage_debug_shader("trivial")
 	elif _foliage_debug_shader == "trivial":
 		_set_foliage_debug_shader("")
@@ -185,23 +203,43 @@ func _on_trivial_foliage_shader_toggled(pressed: bool) -> void:
 
 func _on_unshaded_foliage_textured_toggled(pressed: bool) -> void:
 	if pressed:
-		if _checkboxes.has("trivial_foliage_shader"):
-			_checkboxes["trivial_foliage_shader"].set_pressed_no_signal(false)
+		_uncheck_other_debug_shader_checkboxes("unshaded_foliage_textured")
 		_set_foliage_debug_shader("unshaded")
 	elif _foliage_debug_shader == "unshaded":
 		_set_foliage_debug_shader("")
 
 
+func _on_cheap_lighting_foliage_toggled(pressed: bool) -> void:
+	if pressed:
+		_uncheck_other_debug_shader_checkboxes("cheap_lighting_foliage")
+		_set_foliage_debug_shader("cheap_lighting")
+	elif _foliage_debug_shader == "cheap_lighting":
+		_set_foliage_debug_shader("")
+
+
+## Uncheck every _DEBUG_SHADER_CHECKBOX_KEYS entry except [param except_key], keeping
+## the panel's visual state in sync with the mutual-exclusion enforced by
+## _set_foliage_debug_shader. Checked against the dict via has() (not indexed
+## directly) so tests that invoke a toggle handler on a bare instance -- with no
+## panel/checkboxes ever created -- don't hit a null dereference. Uses
+## set_pressed_no_signal so unchecking a checkbox here never re-enters that
+## checkbox's own toggled handler.
+func _uncheck_other_debug_shader_checkboxes(except_key: String) -> void:
+	for key in _DEBUG_SHADER_CHECKBOX_KEYS:
+		if key != except_key and _checkboxes.has(key):
+			_checkboxes[key].set_pressed_no_signal(false)
+
+
 ## Swap every wind-foliage material (tree and grass) to [param mode]'s debug shader
-## ("trivial" or "unshaded"), or restore each to whatever shader it had before when
-## [param mode] is "" (see _original_foliage_shaders' docstring). Uses
+## ("trivial", "unshaded", or "cheap_lighting"), or restore each to whatever shader it
+## had before when [param mode] is "" (see _original_foliage_shaders' docstring). Uses
 ## WindFoliage.collect_foliage_shader_materials rather than this class's own cached
 ## _tree_multimeshes/_grass_multimeshes so it also reaches materials currently hidden
 ## by the "Foliage visible" toggle above. No-op if [param mode] is already active.
-## Switching directly between the two debug modes (without passing through "") is
-## safe: _original_foliage_shaders is only populated when a material doesn't already
-## have an entry, so a mid-switch material's debug shader is never mistaken for its
-## real original.
+## Switching directly between debug modes (without passing through "") is safe:
+## _original_foliage_shaders is only populated when a material doesn't already have an
+## entry, so a mid-switch material's debug shader is never mistaken for its real
+## original.
 func _set_foliage_debug_shader(mode: String) -> void:
 	if mode == _foliage_debug_shader:
 		return
@@ -212,16 +250,23 @@ func _set_foliage_debug_shader(mode: String) -> void:
 				mat.shader = _original_foliage_shaders[mat]
 		_original_foliage_shaders.clear()
 	else:
-		var debug_shader := (
-			WindFoliage.get_shader_debug_trivial()
-			if mode == "trivial"
-			else WindFoliage.get_shader_debug_unshaded()
-		)
+		var debug_shader := _get_debug_shader_for_mode(mode)
 		for mat in materials:
 			if not _original_foliage_shaders.has(mat):
 				_original_foliage_shaders[mat] = mat.shader
 			mat.shader = debug_shader
 	_foliage_debug_shader = mode
+
+
+static func _get_debug_shader_for_mode(mode: String) -> Shader:
+	match mode:
+		"trivial":
+			return WindFoliage.get_shader_debug_trivial()
+		"unshaded":
+			return WindFoliage.get_shader_debug_unshaded()
+		"cheap_lighting":
+			return WindFoliage.get_shader_debug_cheap_lighting()
+	return null
 
 
 ## Recursively collect visible MultiMeshInstance3D nodes tagged with the given
