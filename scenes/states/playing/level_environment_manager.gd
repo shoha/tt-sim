@@ -213,6 +213,7 @@ func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 		EnvironmentPresets.apply_to_world_environment(
 			_world_environment, preset, overrides, _map_sky_resource, _map_environment_config
 		)
+		_push_water_ambient_reflection_uniform()
 	else:
 		push_warning("LevelEnvironmentManager: WorldEnvironment is null")
 
@@ -245,6 +246,33 @@ func _configure_sun_light(overrides: Dictionary) -> void:
 
 func get_world_environment() -> WorldEnvironment:
 	return _world_environment
+
+
+## Force real-time screen-space reflections on for the "realistic" Water Style
+## preset when Water Quality is at its highest tier -- the one Water Quality
+## knob that isn't a shader uniform (Environment.ssr_enabled lives on the live
+## WorldEnvironment, not on the water material). Never turns SSR off on behalf
+## of a lower tier/style -- if the resolved environment preset/overrides
+## already enabled it for their own reasons, that choice is left alone.
+func apply_water_quality_ssr_override(water_style: String, ssr_quality_enabled: bool) -> void:
+	if not is_instance_valid(_world_environment) or not _world_environment.environment:
+		return
+	if water_style == "realistic" and ssr_quality_enabled:
+		_world_environment.environment.ssr_enabled = true
+
+
+## Push the level's actual ambient/sky color to the water shader's
+## water_ambient_reflection_color global uniform, so the "realistic" Water
+## Style's fresnel sky-blend (see sky_blend_strength in water.gdshader) tracks
+## the current level's atmosphere instead of a hardcoded default.
+func _push_water_ambient_reflection_uniform() -> void:
+	if not is_instance_valid(_world_environment) or not _world_environment.environment:
+		return
+	var env := _world_environment.environment
+	var ambient := env.ambient_light_color * env.ambient_light_energy
+	RenderingServer.global_shader_parameter_set(
+		"water_ambient_reflection_color", Vector3(ambient.r, ambient.g, ambient.b)
+	)
 
 
 func get_map_environment_config() -> Dictionary:
