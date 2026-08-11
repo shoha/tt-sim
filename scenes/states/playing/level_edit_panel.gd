@@ -90,10 +90,6 @@ var _map_defaults: Dictionary = {}
 @onready var tonemap_white_slider_spin: SliderSpinBox = %TonemapWhiteSliderSpin
 @onready var glow_strength_slider_spin: SliderSpinBox = %GlowStrengthSliderSpin
 @onready var glow_bloom_slider_spin: SliderSpinBox = %GlowBloomSliderSpin
-@onready var ssao_enabled_check: CheckBox = %SSAOEnabledCheck
-@onready var ssao_intensity_slider_spin: SliderSpinBox = %SSAOIntensitySliderSpin
-@onready var ssr_enabled_check: CheckBox = %SSREnabledCheck
-@onready var sdfgi_enabled_check: CheckBox = %SDFGIEnabledCheck
 
 # Action buttons
 @onready var save_button: Button = %SaveButton
@@ -202,10 +198,6 @@ func _connect_control_signals() -> void:
 		[tonemap_white_slider_spin, "value_changed", "tonemap_white"],
 		[glow_strength_slider_spin, "value_changed", "glow_strength"],
 		[glow_bloom_slider_spin, "value_changed", "glow_bloom"],
-		[ssao_enabled_check, "toggled", "ssao_enabled"],
-		[ssao_intensity_slider_spin, "value_changed", "ssao_intensity"],
-		[ssr_enabled_check, "toggled", "ssr_enabled"],
-		[sdfgi_enabled_check, "toggled", "sdfgi_enabled"],
 	]:
 		binding[0].connect(binding[1], _on_env_override_changed.bind(binding[2]))
 
@@ -473,12 +465,6 @@ func _sync_controls_from_config() -> void:
 	# Advanced controls — glow details
 	glow_strength_slider_spin.set_value_no_signal(config.get("glow_strength", 1.0))
 	glow_bloom_slider_spin.set_value_no_signal(config.get("glow_bloom", 0.0))
-
-	# Advanced controls — SSAO, SSR, SDFGI
-	ssao_enabled_check.set_pressed_no_signal(config.get("ssao_enabled", false))
-	ssao_intensity_slider_spin.set_value_no_signal(config.get("ssao_intensity", 2.0))
-	ssr_enabled_check.set_pressed_no_signal(config.get("ssr_enabled", false))
-	sdfgi_enabled_check.set_pressed_no_signal(config.get("sdfgi_enabled", false))
 
 
 # ============================================================================
