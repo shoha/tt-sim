@@ -226,18 +226,11 @@ func apply_sun_overrides(overrides: Dictionary) -> void:
 
 
 ## Apply a water style ("stylized"/"realistic") to the live level's water
-## meshes, plus the SSR override that depends on the current Water Quality
-## setting.
+## meshes. Real-time reflections (SSR) are a separate, purely global Settings
+## toggle now (see LevelEnvironmentManager.apply_rendering_toggles()) --
+## Water Style no longer has any SSR-specific behavior of its own.
 func apply_water_style_setting(style: String) -> void:
 	WaterGlbUtils.apply_water_style(style)
-	var config := ConfigFile.new()
-	config.load(Paths.SETTINGS_PATH)
-	var quality: int = config.get_value(
-		"graphics", "water_quality", SettingsMenu.WaterQuality.MEDIUM
-	)
-	_environment_manager.apply_water_quality_ssr_override(
-		style, quality == SettingsMenu.WaterQuality.HIGH
-	)
 
 
 ## Apply environment settings to the live WorldEnvironment.
