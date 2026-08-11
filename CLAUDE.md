@@ -21,7 +21,24 @@ After editing any `.gd` file, run the formatter before committing:
 gdformat path/to/file.gd
 ```
 
-Lint (optional): `gdlint path/to/file.gd`
+Lint (optional, single file): `gdlint path/to/file.gd`
+
+## Pre-Push Gate (REQUIRED)
+
+CI (`.github/workflows/build.yml`) treats `gdlint` as a hard, build-blocking gate — the whole
+release pipeline (export/sign/notarize/release/Steam deploy) is skipped if it fails. Before pushing
+to `main` or pushing any tag, always run the full CI-equivalent check against the **whole tree**,
+not just files touched in the current change — a lint regression can live in an untouched file from
+an earlier session and will still fail CI and block a release:
+
+```
+gdlint autoloads/ scenes/ utils/ resources/ tests/unit/
+godot --headless --path . --quit-after 1
+godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
+```
+
+All three must be clean before pushing. Do not rely on per-file `gdformat`/`gdlint` runs during
+editing as a substitute — those only cover files touched in the current task.
 
 ## Godot CLI
 
