@@ -57,6 +57,14 @@ uniform float refraction_strength : hint_range(0.0, 0.2) = 0.04;
 uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;
 uniform sampler2D screen_tex : hint_screen_texture, repeat_disable, filter_linear;
 
+// Water Quality graphics setting (Settings > Graphics) -- engine-wide global uniforms
+// rather than per-material uniforms, so SettingsMenu can apply them via
+// RenderingServer.global_shader_parameter_set() even before any water material
+// exists yet (GlbUtils creates the shared water material lazily on first map
+// load). See docs/superpowers/specs/2026-08-11-water-shader-quality-design.md.
+global uniform bool water_quality_skip_fine_detail;
+global uniform bool water_quality_skip_refraction;
+
 varying vec3 world_pos;
 
 // Cheap hash-based value noise -- no texture asset needed, matches this project's other
@@ -103,7 +111,10 @@ void fragment() {
 	// pattern's large single-scale "blocky" cells into finer sparkle detail, which
 	// reads much more like water glinting than plain value noise does on its own.
 	vec2 uv_c = rot * world_pos.xz * ripple_scale * 5.1 + vec2(t * 0.6, -t * 0.5);
-	float n_c = water_noise(uv_c);
+	// Water Quality "Low" skips this sample outright (compute saving) rather than
+	// merely fading it like the antialiasing fix does -- n_c lands on the same
+	// neutral 0.5 either way, so "blended" below needs no further change.
+	float n_c = water_quality_skip_fine_detail ? 0.5 : water_noise(uv_c);
 
 	// Screen-space-derivative antialiasing: fwidth(uv) grows large once a noise
 	// layer's world-space frequency exceeds what the current screen pixel density
@@ -173,9 +184,12 @@ void fragment() {
 	// terrain underneath (matching real water's transparency at low depth) while deep
 	// water leans on the tinted color instead -- clamped well inside [0,1] to avoid
 	// sampling outside the screen texture at the viewport edges.
-	vec2 refract_uv = clamp(SCREEN_UV + grad * refraction_strength, vec2(0.001), vec2(0.999));
-	vec3 refracted = textureLod(screen_tex, refract_uv, 0.0).rgb;
-	vec3 final_color = mix(base_color, refracted, (1.0 - depth_diff) * 0.4);
+	vec3 final_color = base_color;
+	if (!water_quality_skip_refraction) {
+		vec2 refract_uv = clamp(SCREEN_UV + grad * refraction_strength, vec2(0.001), vec2(0.999));
+		vec3 refracted = textureLod(screen_tex, refract_uv, 0.0).rgb;
+		final_color = mix(base_color, refracted, (1.0 - depth_diff) * 0.4);
+	}
 
 	ALBEDO = final_color;
 	ALPHA = clamp(depth_alpha + fresnel * fresnel_strength, 0.0, 1.0);

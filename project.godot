@@ -132,6 +132,17 @@ lights_and_shadows/directional_shadow/soft_shadow_filter_quality=5
 lights_and_shadows/positional_shadow/soft_shadow_filter_quality=5
 renderer/rendering_method.macos="mobile"
 
+[shader_globals]
+
+water_quality_skip_fine_detail={
+"type": "bool",
+"value": false
+}
+water_quality_skip_refraction={
+"type": "bool",
+"value": false
+}
+
 [steam]
 
 initialization/app_id=0
