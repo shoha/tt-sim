@@ -41,6 +41,10 @@ extends Resource
 ## Colors should be Color objects or hex strings like "#ff0000"
 @export var environment_overrides: Dictionary = {}
 
+## Water Style preset name ("stylized" or "realistic") applied to any
+## "-water"-suffixed mesh via GlbUtils.apply_water_style(). See WaterPresets.
+@export var water_style: String = "stylized"
+
 ## Visual Effects (lo-fi shader)
 @export_group("Effects")
 ## Optional overrides for lo-fi post-processing shader parameters
@@ -184,6 +188,7 @@ func duplicate_level() -> LevelData:
 	new_level.light_intensity_scale = light_intensity_scale
 	new_level.environment_preset = environment_preset
 	new_level.environment_overrides = environment_overrides.duplicate()
+	new_level.water_style = water_style
 	new_level.lofi_overrides = lofi_overrides.duplicate()
 	new_level.weather_overrides = weather_overrides.duplicate()
 	new_level.foliage_overrides = foliage_overrides.duplicate()
@@ -257,6 +262,7 @@ func to_dict() -> Dictionary:
 		"light_intensity_scale": light_intensity_scale,
 		"environment_preset": environment_preset,
 		"environment_overrides": EnvironmentPresets.overrides_to_json(environment_overrides),
+		"water_style": water_style,
 		"lofi_overrides": lofi_overrides.duplicate(),
 		"weather_overrides": weather_overrides.duplicate(),
 		"foliage_overrides": foliage_overrides.duplicate(),
@@ -294,6 +300,7 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.environment_overrides = EnvironmentPresets.overrides_from_json(
 		data.get("environment_overrides", {})
 	)
+	level.water_style = data.get("water_style", "stylized")
 	var lofi_raw = data.get("lofi_overrides", {})
 	level.lofi_overrides = lofi_raw.duplicate() if lofi_raw is Dictionary else {}
 	var weather_raw = data.get("weather_overrides", {})
