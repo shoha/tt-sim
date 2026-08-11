@@ -58,7 +58,7 @@ static func get_effective_preset(category: String, overrides: Dictionary) -> Dic
 
 
 ## Get the shared wind foliage Shader resource, building it once on first use --
-## mirrors GlbUtils._get_water_material()'s lazy-load-once pattern. Unlike water, each
+## mirrors WaterGlbUtils._get_water_material()'s lazy-load-once pattern. Unlike water, each
 ## species still gets its own ShaderMaterial instance (see _build_shader_material):
 ## only the compiled Shader itself is shared, since the textures differ per species.
 static func get_shader() -> Shader:

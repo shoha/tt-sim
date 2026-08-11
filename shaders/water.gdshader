@@ -6,7 +6,7 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
  * ============
  *
  * PURPOSE:
- * Automatically applied by GlbUtils.process_water_meshes() (utils/glb_utils.gd) to any
+ * Automatically applied by WaterGlbUtils.process_water_meshes() (utils/glb_utils.gd) to any
  * mesh whose name ends in "-water" in a runtime-loaded GLB map. Gives terrain-paint
  * water planes (see the terrain-paint Blender addon's README "Water" section) a real
  * animated look with zero per-map setup -- the Blender-side plane only needs the right
@@ -19,7 +19,7 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
  * "water" read comes from a procedural (no texture asset) scrolling-noise ripple normal
  * plus a fresnel-driven rim, both clearly visible from any oblique angle.
  *
- * MANAGED BY: GlbUtils._get_water_material() builds one shared ShaderMaterial instance
+ * MANAGED BY: WaterGlbUtils._get_water_material() builds one shared ShaderMaterial instance
  * from this shader at the defaults below and reuses it across every map -- there's no
  * per-map tuning yet (matches the naming-convention-only, zero-manual-setup design).
  */

@@ -2,9 +2,9 @@ class_name WaterPresets
 extends RefCounted
 
 ## Named Water Style presets applied to the shared water ShaderMaterial by
-## GlbUtils.apply_water_style() -- mirrors EnvironmentPresets' dictionary-of-
+## WaterGlbUtils.apply_water_style() -- mirrors EnvironmentPresets' dictionary-of-
 ## property-values pattern. Keys match shaders/water.gdshader uniform names
-## exactly, so GlbUtils can set them directly as shader_parameter/<key>.
+## exactly, so WaterGlbUtils can set them directly as shader_parameter/<key>.
 ## See docs/superpowers/specs/2026-08-11-water-shader-quality-design.md.
 
 const PRESETS := {

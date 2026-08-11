@@ -42,7 +42,7 @@ extends Resource
 @export var environment_overrides: Dictionary = {}
 
 ## Water Style preset name ("stylized" or "realistic") applied to any
-## "-water"-suffixed mesh via GlbUtils.apply_water_style(). See WaterPresets.
+## "-water"-suffixed mesh via WaterGlbUtils.apply_water_style(). See WaterPresets.
 @export var water_style: String = "stylized"
 
 ## Visual Effects (lo-fi shader)
