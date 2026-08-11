@@ -154,6 +154,7 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 			_map_environment_config,
 		)
 	)
+	_push_water_ambient_reflection_uniform()
 
 	# Create the default sun light if it doesn't exist, then configure it per
 	# level_data.sun_overrides (auto/on/off + time of day).

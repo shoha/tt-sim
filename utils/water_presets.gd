@@ -45,4 +45,4 @@ static func get_preset_names() -> Array[String]:
 ## Falls back to DEFAULT_PRESET for an unrecognized name (corrupt save data,
 ## or a preset removed in a future version) rather than erroring.
 static func get_preset(preset_name: String) -> Dictionary:
-	return PRESETS.get(preset_name, PRESETS[DEFAULT_PRESET])
+	return PRESETS.get(preset_name, PRESETS[DEFAULT_PRESET]).duplicate()
