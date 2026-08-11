@@ -38,6 +38,7 @@ static var _shader: Shader = null
 static var _shader_no_aa: Shader = null
 static var _shader_debug_trivial: Shader = null
 static var _shader_debug_unshaded: Shader = null
+static var _shader_debug_cheap_lighting: Shader = null
 
 
 ## Merge a level's foliage_overrides onto a category's base preset. Only
@@ -95,6 +96,20 @@ static func get_shader_debug_unshaded() -> Shader:
 	if _shader_debug_unshaded == null:
 		_shader_debug_unshaded = load("res://shaders/wind_foliage_debug_unshaded.gdshader")
 	return _shader_debug_unshaded
+
+
+## Get the debug-only cheap-lighting Shader (identical PBR texture sampling to the
+## real shader, but diffuse_lambert + specular_disabled instead of diffuse_burley +
+## specular_schlick_ggx) used by DebugRenderToggles' "Cheap lighting foliage" checkbox
+## to preview a candidate real fix for the lighting/BRDF cost confirmed by
+## get_shader_debug_trivial()/get_shader_debug_unshaded(). See
+## shaders/wind_foliage_debug_cheap_lighting.gdshader.
+static func get_shader_debug_cheap_lighting() -> Shader:
+	if _shader_debug_cheap_lighting == null:
+		_shader_debug_cheap_lighting = load(
+			"res://shaders/wind_foliage_debug_cheap_lighting.gdshader"
+		)
+	return _shader_debug_cheap_lighting
 
 
 ## Recursively collect every visible MultiMeshInstance3D tagged as wind foliage
