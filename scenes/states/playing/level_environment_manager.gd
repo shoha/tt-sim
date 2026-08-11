@@ -156,6 +156,14 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 	)
 	_push_water_ambient_reflection_uniform()
 
+	var rendering_toggles_config := ConfigFile.new()
+	rendering_toggles_config.load(Paths.SETTINGS_PATH)
+	apply_rendering_toggles(
+		rendering_toggles_config.get_value("graphics", "ssao_enabled", true),
+		rendering_toggles_config.get_value("graphics", "ssr_enabled", false),
+		rendering_toggles_config.get_value("graphics", "sdfgi_enabled", false),
+	)
+
 	# Create the default sun light if it doesn't exist, then configure it per
 	# level_data.sun_overrides (auto/on/off + time of day).
 	if not is_instance_valid(_sun_light):
@@ -249,17 +257,20 @@ func get_world_environment() -> WorldEnvironment:
 	return _world_environment
 
 
-## Force real-time screen-space reflections on for the "realistic" Water Style
-## preset when Water Quality is at its highest tier -- the one Water Quality
-## knob that isn't a shader uniform (Environment.ssr_enabled lives on the live
-## WorldEnvironment, not on the water material). Never turns SSR off on behalf
-## of a lower tier/style -- if the resolved environment preset/overrides
-## already enabled it for their own reasons, that choice is left alone.
-func apply_water_quality_ssr_override(water_style: String, ssr_quality_enabled: bool) -> void:
+## Write the three global rendering-quality toggles (SSAO, SSR, SDFGI) onto the
+## live WorldEnvironment. Takes explicit values rather than reading
+## settings.cfg itself, so both call sites can supply the right source: the
+## level-load path (apply_level_environment()) reads the saved config once,
+## while a live Settings-menu change passes the checkboxes' current in-memory
+## state directly -- reading from disk here would show a stale (not-yet-saved)
+## value on a live toggle.
+func apply_rendering_toggles(ssao_enabled: bool, ssr_enabled: bool, sdfgi_enabled: bool) -> void:
 	if not is_instance_valid(_world_environment) or not _world_environment.environment:
 		return
-	if water_style == "realistic" and ssr_quality_enabled:
-		_world_environment.environment.ssr_enabled = true
+	var env := _world_environment.environment
+	env.ssao_enabled = ssao_enabled
+	env.ssr_enabled = ssr_enabled
+	env.sdfgi_enabled = sdfgi_enabled
 
 
 ## Push the level's actual ambient/sky color to the water shader's
