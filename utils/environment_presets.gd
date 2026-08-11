@@ -34,13 +34,6 @@ const PROPERTY_DEFAULTS = {
 	"glow_intensity": 0.3,
 	"glow_strength": 1.0,
 	"glow_bloom": 0.05,
-	# SSAO (Screen Space Ambient Occlusion)
-	"ssao_enabled": true,
-	"ssao_intensity": 1.0,
-	# SSR (Screen Space Reflections)
-	"ssr_enabled": false,
-	# SDFGI (Signed Distance Field Global Illumination)
-	"sdfgi_enabled": false,
 	# Reflected light (relevant when using a Sky)
 	"reflected_light_source": Environment.REFLECTION_SOURCE_BG,
 	# Color Adjustments
@@ -106,8 +99,6 @@ const PRESETS = {
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 1.0,
 		"tonemap_white": 1.2,
-		"ssao_enabled": true,
-		"ssao_intensity": 1.0,
 	},
 	"outdoor_overcast":
 	{
@@ -124,8 +115,6 @@ const PRESETS = {
 		"fog_density": 0.002,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 0.95,
-		"ssao_enabled": true,
-		"ssao_intensity": 1.2,
 	},
 	"outdoor_sunset":
 	{
@@ -166,8 +155,6 @@ const PRESETS = {
 		"glow_enabled": true,
 		"glow_intensity": 0.3,
 		"glow_bloom": 0.05,
-		"ssao_enabled": true,
-		"ssao_intensity": 1.5,
 	},
 	# ========== INDOOR/DUNGEON PRESETS ==========
 	"indoor_neutral":
@@ -177,8 +164,6 @@ const PRESETS = {
 		"background_color": Color(0.15, 0.15, 0.15),
 		"ambient_light_color": Color(0.5, 0.48, 0.45),
 		"ambient_light_energy": 0.4,
-		"ssao_enabled": true,
-		"ssao_intensity": 1.5,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 1.0,
 		"tonemap_white": 1.0,
@@ -194,8 +179,6 @@ const PRESETS = {
 		"fog_light_color": Color(0.05, 0.04, 0.03),
 		"fog_light_energy": 0.5,
 		"fog_density": 0.02,
-		"ssao_enabled": true,
-		"ssao_intensity": 2.5,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 0.9,
 		"tonemap_white": 0.9,
@@ -216,8 +199,6 @@ const PRESETS = {
 		"fog_density": 0.025,
 		"fog_height": -1.0,
 		"fog_height_density": 0.5,
-		"ssao_enabled": true,
-		"ssao_intensity": 2.0,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 0.85,
 		"glow_enabled": true,
@@ -236,8 +217,6 @@ const PRESETS = {
 		"fog_light_energy": 0.6,
 		"fog_density": 0.015,
 		"fog_height_density": 0.2,
-		"ssao_enabled": true,
-		"ssao_intensity": 2.0,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 0.9,
 	},
@@ -253,8 +232,6 @@ const PRESETS = {
 		"fog_light_color": Color(0.3, 0.2, 0.1),
 		"fog_light_energy": 0.8,
 		"fog_density": 0.008,
-		"ssao_enabled": true,
-		"ssao_intensity": 1.5,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 1.0,
 		"glow_enabled": true,
@@ -276,8 +253,6 @@ const PRESETS = {
 		"fog_light_energy": 0.9,
 		"fog_density": 0.006,
 		"fog_height_density": 0.3,
-		"ssao_enabled": true,
-		"ssao_intensity": 1.8,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 1.0,
 	},
@@ -294,8 +269,6 @@ const PRESETS = {
 		"fog_density": 0.04,
 		"fog_height": -2.0,
 		"fog_height_density": 1.0,
-		"ssao_enabled": true,
-		"ssao_intensity": 2.0,
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 0.9,
 		"glow_enabled": true,
@@ -319,7 +292,6 @@ const PRESETS = {
 		"glow_enabled": true,
 		"glow_intensity": 0.3,
 		"glow_bloom": 0.08,
-		"ssr_enabled": true,
 	},
 	"hell":
 	{
@@ -374,7 +346,6 @@ const PRESETS = {
 		"tonemap_mode": Environment.TONE_MAPPER_FILMIC,
 		"tonemap_exposure": 1.1,
 		"tonemap_white": 1.2,
-		"ssr_enabled": true,
 	},
 	"desert":
 	{
@@ -558,16 +529,6 @@ static func _apply_config_to_environment(
 	env.glow_strength = config.get("glow_strength", 1.0)
 	env.glow_bloom = config.get("glow_bloom", 0.0)
 
-	# SSAO
-	env.ssao_enabled = config.get("ssao_enabled", false)
-	env.ssao_intensity = config.get("ssao_intensity", 2.0)
-
-	# SSR
-	env.ssr_enabled = config.get("ssr_enabled", false)
-
-	# SDFGI
-	env.sdfgi_enabled = config.get("sdfgi_enabled", false)
-
 	# Reflected light source
 	env.reflected_light_source = config.get(
 		"reflected_light_source", Environment.REFLECTION_SOURCE_BG
@@ -627,10 +588,6 @@ static func extract_from_environment(env: Environment) -> Dictionary:
 		"glow_intensity": env.glow_intensity,
 		"glow_strength": env.glow_strength,
 		"glow_bloom": env.glow_bloom,
-		"ssao_enabled": env.ssao_enabled,
-		"ssao_intensity": env.ssao_intensity,
-		"ssr_enabled": env.ssr_enabled,
-		"sdfgi_enabled": env.sdfgi_enabled,
 		"reflected_light_source": env.reflected_light_source,
 		"adjustment_enabled": env.adjustment_enabled,
 		"adjustment_brightness": env.adjustment_brightness,
