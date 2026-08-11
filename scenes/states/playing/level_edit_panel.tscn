@@ -96,6 +96,22 @@ size_flags_horizontal = 3
 clip_text = true
 fit_to_longest_item = false
 
+[node name="WaterStyleRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="WaterStyleLabel" type="Label" parent="ScrollContainer/VBox/WaterStyleRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Water:"
+
+[node name="WaterStyleDropdown" type="OptionButton" parent="ScrollContainer/VBox/WaterStyleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+clip_text = true
+fit_to_longest_item = false
+
 [node name="IntensityRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2

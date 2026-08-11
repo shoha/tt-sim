@@ -48,6 +48,7 @@ func _ready() -> void:
 		level_edit_panel.weather_changed.connect(_on_edit_weather_changed)
 		level_edit_panel.foliage_changed.connect(_on_edit_foliage_changed)
 		level_edit_panel.sun_changed.connect(_on_edit_sun_changed)
+		level_edit_panel.water_style_changed.connect(_on_edit_water_style_changed)
 		level_edit_panel.revert_to_map_defaults_requested.connect(_on_revert_to_map_defaults)
 		level_edit_panel.save_requested.connect(_on_edit_save_requested)
 		level_edit_panel.cancel_requested.connect(_on_edit_cancel_requested)
@@ -501,35 +502,35 @@ func _on_edit_sun_changed(overrides: Dictionary) -> void:
 		NetworkManager.broadcast_visual_settings({"sun_overrides": overrides})
 
 
+## Real-time water style change from the edit panel
+func _on_edit_water_style_changed(style: String) -> void:
+	if _level_play_controller:
+		_level_play_controller.apply_water_style_setting(style)
+		if _level_play_controller.active_level_data:
+			_level_play_controller.active_level_data.water_style = style
+	if NetworkManager.is_networked() and NetworkManager.is_host():
+		NetworkManager.broadcast_visual_settings({"water_style": style})
+
+
 ## Save all edited values to level data and persist to disk
-func _on_edit_save_requested(
-	new_intensity: float,
-	new_preset: String,
-	new_overrides: Dictionary,
-	new_lofi_overrides: Dictionary,
-	new_weather_overrides: Dictionary,
-	new_foliage_overrides: Dictionary,
-	new_sun_overrides: Dictionary,
-	new_grid_cell_size: float,
-	new_display_unit: String,
-	new_display_unit_per_cell: float,
-) -> void:
+func _on_edit_save_requested(values: Dictionary) -> void:
 	if not _level_play_controller or not _level_play_controller.has_active_level():
 		return
 
 	var level_data = _level_play_controller.active_level_data
 
 	# Apply all values to level data
-	level_data.light_intensity_scale = new_intensity
-	level_data.environment_preset = new_preset
-	level_data.environment_overrides = new_overrides.duplicate()
-	level_data.lofi_overrides = new_lofi_overrides.duplicate()
-	level_data.weather_overrides = new_weather_overrides.duplicate()
-	level_data.foliage_overrides = new_foliage_overrides.duplicate()
-	level_data.sun_overrides = new_sun_overrides.duplicate()
-	level_data.grid_cell_size = new_grid_cell_size
-	level_data.display_unit = new_display_unit
-	level_data.display_unit_per_cell = new_display_unit_per_cell
+	level_data.light_intensity_scale = values["light_intensity_scale"]
+	level_data.environment_preset = values["environment_preset"]
+	level_data.environment_overrides = values["environment_overrides"].duplicate()
+	level_data.lofi_overrides = values["lofi_overrides"].duplicate()
+	level_data.weather_overrides = values["weather_overrides"].duplicate()
+	level_data.foliage_overrides = values["foliage_overrides"].duplicate()
+	level_data.sun_overrides = values["sun_overrides"].duplicate()
+	level_data.grid_cell_size = values["grid_cell_size"]
+	level_data.display_unit = values["display_unit"]
+	level_data.display_unit_per_cell = values["display_unit_per_cell"]
+	level_data.water_style = values["water_style"]
 
 	# Re-broadcast the saved values so the host's late-joiner snapshot
 	# (_current_level_dict) is guaranteed to reflect what was just saved, even
@@ -539,13 +540,14 @@ func _on_edit_save_requested(
 			NetworkManager
 			. broadcast_visual_settings(
 				{
-					"light_intensity": new_intensity,
-					"environment_preset": new_preset,
-					"environment_overrides": new_overrides,
-					"lofi_overrides": new_lofi_overrides,
-					"weather_overrides": new_weather_overrides,
-					"foliage_overrides": new_foliage_overrides,
-					"sun_overrides": new_sun_overrides,
+					"light_intensity": values["light_intensity_scale"],
+					"environment_preset": values["environment_preset"],
+					"environment_overrides": values["environment_overrides"],
+					"lofi_overrides": values["lofi_overrides"],
+					"weather_overrides": values["weather_overrides"],
+					"foliage_overrides": values["foliage_overrides"],
+					"sun_overrides": values["sun_overrides"],
+					"water_style": values["water_style"],
 				}
 			)
 		)
