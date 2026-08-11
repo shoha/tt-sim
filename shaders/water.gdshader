@@ -105,13 +105,27 @@ void fragment() {
 	vec2 uv_c = rot * world_pos.xz * ripple_scale * 5.1 + vec2(t * 0.6, -t * 0.5);
 	float n_c = water_noise(uv_c);
 
+	// Screen-space-derivative antialiasing: fwidth(uv) grows large once a noise
+	// layer's world-space frequency exceeds what the current screen pixel density
+	// can resolve, at which point plain per-pixel sampling degrades into a
+	// TV-static/moire pattern instead of a smooth ripple. Fading each layer toward
+	// a flat 0.5 (this noise function's mid-range) as that happens keeps the result
+	// smooth at any zoom/distance instead of aliasing. uv_c (the finest layer) is
+	// the one that produced the reported static look and gets the tightest
+	// threshold; uv_a/uv_b are coarser and only fade at extreme zoom-out.
+	float aa_ab = 1.0 - smoothstep(1.6, 3.0, length(fwidth(uv_a)) + length(fwidth(uv_b)));
+	float aa_c = 1.0 - smoothstep(0.6, 1.4, length(fwidth(uv_c)));
+
 	// Approximate a normal-map perturbation from each noise layer's local gradient
 	// (proper finite-difference derivative, divided by eps) rather than sampling an
 	// actual normal texture -- cheap, tileless, and seamless at any scale or map size.
 	float eps = 0.08;
 	vec2 grad_a = vec2(water_noise(uv_a + vec2(eps, 0.0)) - n_a, water_noise(uv_a + vec2(0.0, eps)) - n_a) / eps;
 	vec2 grad_b = vec2(water_noise(uv_b + vec2(eps, 0.0)) - n_b, water_noise(uv_b + vec2(0.0, eps)) - n_b) / eps;
-	vec2 grad = (grad_a + grad_b) * ripple_strength * 0.15;
+	// aa_ab fades the whole ripple-normal contribution as its source octaves alias,
+	// rather than fading grad_a/grad_b individually -- keeps the finite-difference
+	// pair internally consistent (both derived from the same unfaded n_a/n_b).
+	vec2 grad = (grad_a + grad_b) * ripple_strength * 0.15 * aa_ab;
 
 	NORMAL_MAP = normalize(vec3(-grad, 1.0)) * 0.5 + 0.5;
 	NORMAL_MAP_DEPTH = 1.0;
@@ -139,7 +153,10 @@ void fragment() {
 	// ambient light. Averaging three differently-scaled/rotated layers (rather than
 	// thresholding a single one) softens plain value noise's characteristic blocky
 	// cell edges into finer, more organic-looking sparkle.
-	float blended = (n_a + n_b + n_c) / 3.0;
+	// Same antialiasing fade applied here, independently of the grad fade above --
+	// this is the ALBEDO-visible sparkle read, which is exactly where the reported
+	// static was most visible.
+	float blended = (mix(0.5, n_a, aa_ab) + mix(0.5, n_b, aa_ab) + mix(0.5, n_c, aa_c)) / 3.0;
 	float shimmer = smoothstep(0.45, 0.85, blended) * shimmer_strength;
 
 	// Depth-blended base replaces the old flat water_color -- shore_color near the bank,
