@@ -465,56 +465,6 @@ max_value = 1.0
 step = 0.01
 value = 0.0
 
-[node name="SSAORow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
-layout_mode = 2
-mouse_filter = 2
-
-[node name="SSAOLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/SSAORow"]
-custom_minimum_size = Vector2(80, 0)
-layout_mode = 2
-text = "SSAO:"
-
-[node name="SSAOEnabledCheck" type="CheckBox" parent="ScrollContainer/VBox/AdvancedContainer/SSAORow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(32, 0)
-layout_mode = 2
-
-[node name="SSAOIntensitySliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/SSAORow" instance=ExtResource("2_slider_spin_box")]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-max_value = 5.0
-step = 0.01
-value = 2.0
-
-[node name="SSRRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
-layout_mode = 2
-mouse_filter = 2
-
-[node name="SSRLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/SSRRow"]
-custom_minimum_size = Vector2(80, 0)
-layout_mode = 2
-text = "SSR:"
-
-[node name="SSREnabledCheck" type="CheckBox" parent="ScrollContainer/VBox/AdvancedContainer/SSRRow"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Reflections"
-
-[node name="SDFGIRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
-layout_mode = 2
-mouse_filter = 2
-
-[node name="SDFGILabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/SDFGIRow"]
-custom_minimum_size = Vector2(80, 0)
-layout_mode = 2
-text = "SDFGI:"
-
-[node name="SDFGIEnabledCheck" type="CheckBox" parent="ScrollContainer/VBox/AdvancedContainer/SDFGIRow"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Global Illumination"
-
 [node name="HSeparator3" type="HSeparator" parent="ScrollContainer/VBox"]
 layout_mode = 2
 
