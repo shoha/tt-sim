@@ -187,6 +187,31 @@ func test_get_toggle_states_defaults_sun_shadows_to_on() -> void:
 	assert_true(states["toggle_sun_shadows"])
 
 
+func test_get_toggle_states_defaults_hard_sun_shadows_to_off() -> void:
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+
+	var states := toggles.get_toggle_states()
+
+	assert_false(states["toggle_hard_sun_shadows"])
+
+
+func test_hard_sun_shadows_toggle_round_trip_updates_state() -> void:
+	# No RenderingServer getter exists to read back the applied shadow quality (only
+	# the setter, directional_soft_shadow_filter_set_quality) -- this covers the
+	# toggle's own state tracking; the setter call itself is exercised, not asserted
+	# on directly. Ends on toggled(false) so the global renderer setting is left at
+	# _default_shadow_quality, not SHADOW_QUALITY_HARD, for whatever test runs next.
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+
+	toggles._on_hard_sun_shadows_toggled(true)
+	assert_true(toggles.get_toggle_states()["toggle_hard_sun_shadows"])
+
+	toggles._on_hard_sun_shadows_toggled(false)
+	assert_false(toggles.get_toggle_states()["toggle_hard_sun_shadows"])
+
+
 func test_finds_a_directional_light_child() -> void:
 	var root := Node3D.new()
 	var sun := DirectionalLight3D.new()
