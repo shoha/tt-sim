@@ -157,9 +157,6 @@ Each preset can configure any combination of the following properties:
 - `adjustment_brightness`, `adjustment_contrast`, `adjustment_saturation`
 
 **Advanced:**
-- `ssao_enabled`, `ssao_intensity`
-- `ssr_enabled`
-- `sdfgi_enabled`
 - `reflected_light_source` — `REFLECTION_SOURCE_BG` or `REFLECTION_SOURCE_SKY`
 
 ## Sky Presets
@@ -322,7 +319,6 @@ The `LevelEditPanel` is a slide-out drawer (extends `DrawerContainer`) that appe
 - Sky preset
 - Ambient light source
 - Reflected light source
-- SSAO, SSR, SDFGI toggles
 - Fog height density
 
 **Sun:**

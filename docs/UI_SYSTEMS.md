@@ -543,7 +543,7 @@ The panel is divided into sections:
 
 **Advanced (collapsible):**
 - Background mode/color, sky preset, ambient source, reflected light source
-- SSAO, SSR, SDFGI toggles, fog height density
+- Fog height density
 
 **Post-Processing Effects:**
 - Pixelation, Color Depth, Color Fade, Outline

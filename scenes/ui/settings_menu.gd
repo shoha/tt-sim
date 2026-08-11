@@ -640,10 +640,11 @@ func _apply_water_quality_setting() -> void:
 	RenderingServer.global_shader_parameter_set("water_quality_skip_refraction", skip_low_detail)
 
 
-## Like _apply_water_quality_setting()'s SSR half, this needs the current
-## level's LevelEnvironmentManager and is a safe no-op if no level is loaded
-## (title screen) -- it takes effect on next level load instead, via
-## LevelEnvironmentManager.apply_level_environment()'s own inline config read.
+## Unlike the other _apply_*_setting() functions in this file, this needs the
+## current level's LevelEnvironmentManager (via _find_level_play_controller()),
+## and is a safe no-op if no level is loaded (title screen) -- it takes effect
+## on next level load instead, via LevelEnvironmentManager
+## .apply_level_environment()'s own inline config read.
 func _apply_rendering_toggles_setting() -> void:
 	var controller := _find_level_play_controller()
 	if controller:

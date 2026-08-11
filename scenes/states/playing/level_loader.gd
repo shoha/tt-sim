@@ -334,8 +334,7 @@ func _finalize_map_loading(map: Node3D) -> void:
 			_level_play_controller.active_level_data,
 			_level_play_controller._game_map.world_viewport
 		)
-		# Apply the level's water style (plus the SSR override that depends on
-		# the current Water Quality setting). Done here -- the shared seam both
+		# Apply the level's water style. Done here -- the shared seam both
 		# the direct-load path (_load_level_map_async) and the client
 		# map-download path (MapDownloadCoordinator -> _finalize_map_loading)
 		# go through -- rather than only after the direct path's call site, so
