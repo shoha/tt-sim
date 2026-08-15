@@ -56,9 +56,38 @@ func _ready() -> void:
 	body_exited.connect(_on_body_exited)
 
 
-func _on_body_entered(_body: Node3D) -> void:
-	pass  # filled in once WaterRippleRegistry/DraggableToken.set_submerged exist (Task 7)
+## Handle a token's collision shape entering the water zone -- registers it for the
+## persistent ripple, sinks its visuals, and spawns an entry splash. See the design
+## spec's "Token water detection" section for why this is safe to key purely off
+## body.get_parent() (the documented DraggableToken hierarchy) rather than needing the
+## token to register itself with water in advance.
+func _on_body_entered(body: Node3D) -> void:
+	WaterRippleRegistry.register(body.get_instance_id(), body)
+	var token := body.get_parent() as DraggableToken
+	if token:
+		token.set_submerged(true)
+	var splash := SplashBurst.create_at(body.global_position, true)
+	body.get_viewport().add_child(splash)
+	AudioManager.play_splash_enter()
 
 
-func _on_body_exited(_body: Node3D) -> void:
-	pass  # filled in once WaterRippleRegistry/DraggableToken.set_submerged exist (Task 7)
+## Handle a token's collision shape exiting the water zone -- mirrors
+## _on_body_entered(). Guards against the body already being freed (e.g. deleted
+## mid-drag) before this signal is processed.
+func _on_body_exited(body: Node3D) -> void:
+	if not is_instance_valid(body):
+		return
+	WaterRippleRegistry.unregister(body.get_instance_id())
+	var token := body.get_parent() as DraggableToken
+	if token:
+		token.set_submerged(false)
+	var splash := SplashBurst.create_at(body.global_position, false)
+	body.get_viewport().add_child(splash)
+	AudioManager.play_splash_exit()
+
+
+## Push every currently-submerged token's position (from every WaterZone, not just
+## this one) onto the shared water material each frame. Redundant across multiple
+## zones on the same map -- see WaterGlbUtils.push_disturbance_points().
+func _process(_delta: float) -> void:
+	WaterGlbUtils.push_disturbance_points(WaterRippleRegistry.build_disturbance_array())
