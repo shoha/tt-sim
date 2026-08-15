@@ -40,6 +40,8 @@ var _sfx_sounds := {
 	"token_slide": null,  # "res://assets/audio/sfx/token_slide.wav"
 	"token_hover": null,  # "res://assets/audio/sfx/token_hover.wav"
 	"token_whoosh": null,  # "res://assets/audio/sfx/token_whoosh.wav"
+	"splash_enter": null,  # "res://assets/audio/sfx/splash_enter.wav"
+	"splash_exit": null,  # "res://assets/audio/sfx/splash_exit.wav"
 }
 
 # Audio players pool for UI sounds
@@ -282,6 +284,16 @@ func play_token_whoosh(pitch_scale: float = 1.0) -> void:
 		player.volume_db = -3.0
 		player.pitch_scale = pitch_scale + randf_range(-0.08, 0.08)
 		player.play()
+
+
+## Play splash sound for a token entering water (bigger splash)
+func play_splash_enter() -> void:
+	play_sfx("splash_enter")
+
+
+## Play splash sound for a token exiting water (smaller splash)
+func play_splash_exit() -> void:
+	play_sfx("splash_exit", -3.0)
 
 
 func _get_available_sfx_player() -> AudioStreamPlayer:
