@@ -68,28 +68,49 @@ func _ready() -> void:
 ## persistent ripple, sinks its visuals, and spawns an entry splash. See the design
 ## spec's "Token water detection" section for why this is safe to key purely off
 ## body.get_parent() (the documented DraggableToken hierarchy) rather than needing the
-## token to register itself with water in advance.
+## token to register itself with water in advance. The registry is refcounted (see
+## WaterRippleRegistry.register()), so entering a second, overlapping WaterZone while
+## already submerged is a no-op here -- only the true 0->1 transition sinks visuals and
+## spawns a splash. The splash spawns at the token's XZ but this zone's own Y (the water
+## surface), not the token's collision height, which can sit well above/below the
+## surface within VERTICAL_BAND_HEIGHT's generous tolerance.
 func _on_body_entered(body: Node3D) -> void:
-	WaterRippleRegistry.register(body.get_instance_id(), body)
+	var first_entry := WaterRippleRegistry.register(body.get_instance_id(), body)
+	if not first_entry:
+		return
 	var token := body.get_parent() as DraggableToken
 	if token:
 		token.set_submerged(true)
-	var splash := SplashBurst.create_at(body.global_position, true)
+	var splash := SplashBurst.create_at(
+		Vector3(body.global_position.x, global_position.y, body.global_position.z), true
+	)
 	body.get_viewport().add_child(splash)
 	AudioManager.play_splash_enter()
 
 
 ## Handle a token's collision shape exiting the water zone -- mirrors
-## _on_body_entered(). Guards against the body already being freed (e.g. deleted
-## mid-drag) before this signal is processed.
+## _on_body_entered(). Two guards: (1) the body may already be freed (e.g. deleted
+## mid-drag) before this signal is processed, in which case there's nothing to read from
+## it at all; (2) even when valid, Godot also emits body_exited when a body leaves the
+## scene tree (not only when it leaves the detection volume), e.g. token deletion or
+## level teardown while submerged -- in that case body.get_viewport() would be a
+## viewport that's being torn down, so visual/audio side-effects are skipped. Both cases
+## still unregister from WaterRippleRegistry so it doesn't leak an entry for a token
+## that's gone. The registry is refcounted, so exiting one of several overlapping zones
+## is also a no-op here unless this was the token's last active zone (true 1->0
+## transition).
 func _on_body_exited(body: Node3D) -> void:
 	if not is_instance_valid(body):
 		return
-	WaterRippleRegistry.unregister(body.get_instance_id())
+	var fully_exited := WaterRippleRegistry.unregister(body.get_instance_id())
+	if not fully_exited or not body.is_inside_tree():
+		return
 	var token := body.get_parent() as DraggableToken
 	if token:
 		token.set_submerged(false)
-	var splash := SplashBurst.create_at(body.global_position, false)
+	var splash := SplashBurst.create_at(
+		Vector3(body.global_position.x, global_position.y, body.global_position.z), false
+	)
 	body.get_viewport().add_child(splash)
 	AudioManager.play_splash_exit()
 

@@ -12,19 +12,39 @@ extends RefCounted
 const MAX_DISTURBANCE_POINTS := 8
 
 static var _submerged: Dictionary = {}  # instance_id (int) -> Node3D
+static var _refcounts: Dictionary = {}  # instance_id (int) -> int, zones claiming this token
 
 
-## Register a token as submerged. Safe to call again for an already-registered id --
-## just overwrites with the latest node reference.
-static func register(id: int, body: Node3D) -> void:
+## Register a token as submerged by one zone. Safe to call again for an
+## already-registered id -- overwrites with the latest node reference and
+## increments the refcount, so a token inside multiple overlapping WaterZones
+## stays correctly submerged until it has left all of them (see unregister()).
+## Returns true if this is the token's FIRST active zone (refcount 0 -> 1) --
+## callers should only trigger entry side-effects (visual sink, splash) on a
+## true return, so entering a second overlapping zone doesn't re-trigger them.
+static func register(id: int, body: Node3D) -> bool:
 	_submerged[id] = body
+	var count: int = _refcounts.get(id, 0) + 1
+	_refcounts[id] = count
+	return count == 1
 
 
-## Unregister a token. No-op if the id was never registered or already removed --
-## tokens can be freed while submerged (e.g. deleted mid-drag), and WaterZone's
-## body_exited handler must not error in that case.
-static func unregister(id: int) -> void:
+## Unregister one zone's claim on a token. No-op if the id was never
+## registered or already fully unregistered -- tokens can be freed while
+## submerged (e.g. deleted mid-drag), and WaterZone's body_exited handler must
+## not error in that case. Returns true if this was the token's LAST active
+## zone (refcount reached zero) -- callers should only trigger exit
+## side-effects (visual un-sink, splash) on a true return, since the token may
+## still be inside another overlapping WaterZone.
+static func unregister(id: int) -> bool:
+	if not _refcounts.has(id):
+		return false
+	_refcounts[id] -= 1
+	if _refcounts[id] > 0:
+		return false
+	_refcounts.erase(id)
 	_submerged.erase(id)
+	return true
 
 
 ## Build the fixed-size array pushed to the shared material's water_disturbance_points
@@ -50,3 +70,4 @@ static func build_disturbance_array() -> Array:
 ## (static var persists across test cases within the same run).
 static func clear() -> void:
 	_submerged.clear()
+	_refcounts.clear()

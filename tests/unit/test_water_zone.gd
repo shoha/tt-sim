@@ -79,6 +79,21 @@ func test_body_exited_unregisters_token_and_clears_submerged() -> void:
 		assert_eq(point.w, 0.0)
 
 
+func test_second_zone_entry_does_not_resubmerge_or_double_splash() -> void:
+	var token := _make_token_with_rigid_body()
+	add_child_autofree(token)
+	var zone_a := WaterZone.new()
+	add_child_autofree(zone_a)
+	var zone_b := WaterZone.new()
+	add_child_autofree(zone_b)
+
+	zone_a._on_body_entered(token.rigid_body)
+	zone_b._on_body_entered(token.rigid_body)
+	zone_a._on_body_exited(token.rigid_body)
+
+	assert_true(token._is_submerged)
+
+
 func test_creates_a_box_shape_matching_the_mesh_footprint() -> void:
 	var mesh_node := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
