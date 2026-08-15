@@ -65,6 +65,14 @@ uniform float refraction_strength : hint_range(0.0, 0.2) = 0.04;
 // before this transparent pass, which is exactly the terrain/tokens under the water.
 uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;
 uniform sampler2D screen_tex : hint_screen_texture, repeat_disable, filter_linear;
+// Positions of tokens currently resting in water (see WaterRippleRegistry /
+// WaterZone), pushed via WaterGlbUtils.push_disturbance_points() every frame. xy =
+// world XZ position, w = 1.0 if active / 0.0 if this slot is unused. A plain
+// (non-global) uniform is correct here -- see the design spec's "Persistent ripple"
+// section for why this doesn't need to be a global uniform.
+uniform vec4 water_disturbance_points[8];
+uniform float disturbance_ripple_radius : hint_range(0.1, 5.0) = 1.2;
+uniform float disturbance_ripple_strength : hint_range(0.0, 2.0) = 0.5;
 
 // Water Quality graphics setting (Settings > Graphics) -- engine-wide global uniforms
 // rather than per-material uniforms, so SettingsMenu can apply them via
@@ -151,6 +159,27 @@ void fragment() {
 	// pair internally consistent (both derived from the same unfaded n_a/n_b).
 	vec2 grad = (grad_a + grad_b) * ripple_strength * 0.15 * aa_ab;
 
+	// Persistent ripple rings around any token currently standing in the water (see
+	// WaterRippleRegistry / WaterZone) -- distance-based falloff around each active
+	// disturbance point, layered on top of the ambient two-octave ripple above.
+	vec2 disturbance_grad = vec2(0.0);
+	float disturbance_boost = 0.0;
+	for (int i = 0; i < 8; i++) {
+		if (water_disturbance_points[i].w < 0.5) {
+			continue;
+		}
+		vec2 to_point = world_pos.xz - water_disturbance_points[i].xy;
+		float dist = length(to_point);
+		float falloff = 1.0 - smoothstep(0.0, disturbance_ripple_radius, dist);
+		if (falloff <= 0.0) {
+			continue;
+		}
+		float ring = sin(dist * 6.0 - t * 3.0) * falloff;
+		disturbance_grad += normalize(to_point + 0.0001) * ring * disturbance_ripple_strength;
+		disturbance_boost += falloff * disturbance_ripple_strength;
+	}
+	grad += disturbance_grad * 0.2;
+
 	NORMAL_MAP = normalize(vec3(-grad, 1.0)) * 0.5 + 0.5;
 	NORMAL_MAP_DEPTH = 1.0;
 
@@ -181,7 +210,9 @@ void fragment() {
 	// this is the ALBEDO-visible sparkle read, which is exactly where the reported
 	// static was most visible.
 	float blended = (mix(0.5, n_a, aa_ab) + mix(0.5, n_b, aa_ab) + mix(0.5, n_c, aa_c)) / 3.0;
-	float shimmer = smoothstep(0.45, 0.85, blended) * shimmer_strength;
+	float shimmer = clamp(
+		smoothstep(0.45, 0.85, blended) * shimmer_strength + disturbance_boost * 0.3, 0.0, 1.0
+	);
 
 	// Depth-blended base replaces the old flat water_color -- shore_color near the bank,
 	// water_color further out -- with the shimmer sparkle layered on top of that blend
