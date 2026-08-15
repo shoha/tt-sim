@@ -29,6 +29,10 @@ const WHOOSH_PITCH_MIN: float = 0.85  # Pitch at threshold speed
 const WHOOSH_PITCH_MAX: float = 1.3  # Pitch at very high speed
 const WHOOSH_SPEED_MAX: float = 18.0  # Speed at which pitch reaches maximum
 
+# Water interaction (see WaterZone)
+const SUBMERGE_SINK_AMOUNT: float = 0.04  # How far visuals sink while standing in water
+const SUBMERGE_TWEEN_DURATION: float = 0.25
+
 # Network interpolation tuning
 const NETWORK_INTERPOLATION_SPEED: float = 15.0
 const NETWORK_INTERPOLATION_TIMEOUT: float = 0.3  # Stop interpolating if no updates for this long
@@ -57,6 +61,10 @@ var _last_drop_height: float = 0.0  # Stored during settle for token_landed sign
 var _is_cancel_settle: bool = false  # True when settling back to start after cancel (skip effects)
 
 var _whoosh_cooldown: float = 0.0
+
+# Water interaction state (see WaterZone / set_submerged())
+var _is_submerged: bool = false
+var _submerge_tween: Tween = null
 
 # Tweens
 var _pickup_tween: Tween = null
@@ -174,6 +182,8 @@ func is_network_interpolating() -> bool:
 
 
 func _exit_tree() -> void:
+	_kill_submerge_tween()
+
 	# Clean up input hints if the token is freed mid-drag (e.g. level clear)
 	if _is_currently_dragging or _is_settling:
 		UIManager.remove_hint(InputProfile.label(&"cancel_drag"))
@@ -463,6 +473,31 @@ func _restore_visual_scale() -> void:
 				. set_trans(Tween.TRANS_CUBIC)
 				. set_ease(Tween.EASE_OUT)
 			)
+
+
+## Called by WaterZone when this token's RigidBody3D enters/exits a `-water` mesh's
+## detection zone. Tweens the visual children down slightly to read as "standing in
+## water" -- deliberately does not touch rigid_body.global_position, since that's
+## already owned by the settle tween and network interpolation (touching it here would
+## fight both).
+func set_submerged(submerged: bool) -> void:
+	if submerged == _is_submerged:
+		return
+	_is_submerged = submerged
+
+	_kill_submerge_tween()
+	_submerge_tween = create_tween()
+	_submerge_tween.set_parallel(true)
+	var target_y := -SUBMERGE_SINK_AMOUNT if submerged else 0.0
+	for child in _visual_children:
+		if is_instance_valid(child):
+			_submerge_tween.tween_property(child, "position:y", target_y, SUBMERGE_TWEEN_DURATION)
+
+
+func _kill_submerge_tween() -> void:
+	if _submerge_tween and _submerge_tween.is_valid():
+		_submerge_tween.kill()
+	_submerge_tween = null
 
 
 func _reset_lean() -> void:
