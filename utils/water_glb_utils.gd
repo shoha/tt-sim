@@ -24,7 +24,9 @@ static func _get_water_material() -> ShaderMaterial:
 ## Apply the shared water shader to any mesh named with a "-water" suffix (case-
 ## insensitive), e.g. a terrain-paint "Lake-water" plane. Mirrors
 ## _find_collision_mesh_nodes' suffix-matching approach so water gets the same
-## zero-manual-setup treatment as collision meshes.
+## zero-manual-setup treatment as collision meshes. Also attaches a WaterZone sibling
+## to each mesh so token/water interaction (see WaterZone) works with the same
+## zero-setup convention.
 static func process_water_meshes(node: Node) -> void:
 	var water_nodes: Array[MeshInstance3D] = []
 	_find_water_mesh_nodes(node, water_nodes)
@@ -33,6 +35,31 @@ static func process_water_meshes(node: Node) -> void:
 	var material := _get_water_material()
 	for mesh_node in water_nodes:
 		mesh_node.material_override = material
+		_attach_water_zone(mesh_node)
+
+
+## Attach a WaterZone sibling to mesh_node, mirroring
+## GlbUtils._process_single_collision_node()'s StaticBody3D-sibling convention. No-op if
+## the mesh's footprint is degenerate (see WaterZone.create_for_mesh()) or it has no
+## parent to attach a sibling to.
+static func _attach_water_zone(mesh_node: MeshInstance3D) -> void:
+	var parent := mesh_node.get_parent()
+	if not parent:
+		return
+	var zone := WaterZone.create_for_mesh(mesh_node)
+	if not zone:
+		return
+	zone.transform = mesh_node.transform
+	parent.add_child(zone)
+
+
+## Push the latest submerged-token disturbance points onto the shared water material's
+## water_disturbance_points uniform (see water.gdshader). Called every frame by every
+## live WaterZone (see WaterZone._process()) -- redundant if multiple zones exist, but
+## harmless since it's the same small fixed-size array written to the same shared
+## material each time.
+static func push_disturbance_points(points: Array) -> void:
+	_get_water_material().set_shader_parameter("water_disturbance_points", points)
 
 
 static func _find_water_mesh_nodes(node: Node, result: Array[MeshInstance3D]) -> void:

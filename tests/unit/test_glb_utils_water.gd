@@ -66,6 +66,32 @@ func test_shares_one_material_instance_across_multiple_meshes() -> void:
 	root.free()
 
 
+func test_attaches_a_water_zone_sibling_to_the_water_mesh() -> void:
+	var root := Node3D.new()
+	var water_mesh := MeshInstance3D.new()
+	water_mesh.name = "Pond-water"
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(4.0, 4.0)
+	water_mesh.mesh = plane
+	root.add_child(water_mesh)
+
+	WaterGlbUtils.process_water_meshes(root)
+
+	var zone := root.get_node_or_null("Pond-water_zone")
+	assert_not_null(zone)
+	assert_true(zone is WaterZone)
+
+	root.free()
+
+
+func test_push_disturbance_points_sets_the_shared_material_parameter() -> void:
+	var points: Array = [Vector4(1.0, 2.0, 0.0, 1.0)]
+	WaterGlbUtils.push_disturbance_points(points)
+
+	var material := WaterGlbUtils._get_water_material()
+	assert_eq(material.get_shader_parameter("water_disturbance_points"), points)
+
+
 func test_apply_water_style_sets_preset_values_on_the_shared_material() -> void:
 	WaterGlbUtils.apply_water_style("realistic")
 
