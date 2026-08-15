@@ -157,11 +157,21 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 	_push_water_ambient_reflection_uniform()
 
 	var rendering_toggles_config := ConfigFile.new()
-	rendering_toggles_config.load(Paths.SETTINGS_PATH)
+	var err := rendering_toggles_config.load(Paths.SETTINGS_PATH)
+	if err != OK and err != ERR_FILE_NOT_FOUND:
+		push_warning(
+			"LevelEnvironmentManager: failed to load settings for rendering toggles: %d" % err
+		)
 	apply_rendering_toggles(
-		rendering_toggles_config.get_value("graphics", "ssao_enabled", true),
-		rendering_toggles_config.get_value("graphics", "ssr_enabled", false),
-		rendering_toggles_config.get_value("graphics", "sdfgi_enabled", false),
+		rendering_toggles_config.get_value(
+			"graphics", "ssao_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"]
+		),
+		rendering_toggles_config.get_value(
+			"graphics", "ssr_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["ssr_enabled"]
+		),
+		rendering_toggles_config.get_value(
+			"graphics", "sdfgi_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"]
+		),
 	)
 
 	# Create the default sun light if it doesn't exist, then configure it per

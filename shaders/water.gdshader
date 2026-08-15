@@ -51,8 +51,9 @@ uniform float fresnel_strength : hint_range(0.0, 1.0) = 0.5;
 // active for both Water Style presets (WaterPresets): subtle (0.15) for
 // "stylized", stronger (0.4) for "realistic". Not gated by Water Quality
 // since it's inexpensive; contrast with Environment.ssr_enabled, the actual
-// expensive reflection this project uses, gated to Water Quality High (see
-// LevelEnvironmentManager).
+// expensive reflection this project uses, controlled by its own independent
+// global Screen-Space Reflections setting (Settings > Graphics > SSR; see
+// LevelEnvironmentManager.apply_rendering_toggles()).
 uniform float sky_blend_strength : hint_range(0.0, 1.0) = 0.15;
 // Screen-space refraction strength -- reuses the ripple gradient (see grad below) as a
 // UV offset so refraction distorts in sync with the visible ripple normal instead of

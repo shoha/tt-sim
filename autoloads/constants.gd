@@ -64,6 +64,20 @@ const LOFI_DEFAULTS := {
 }
 
 # =============================================================================
+# RENDERING TOGGLES DEFAULTS
+# =============================================================================
+# Default values for the global SSAO/SSR/SDFGI graphics settings (Settings >
+# Graphics). Shared by SettingsMenu (_load_settings(), _on_reset_pressed())
+# and LevelEnvironmentManager (apply_level_environment()'s settings.cfg read)
+# so a shipped default can't drift between the independent read sites.
+
+const RENDERING_TOGGLES_DEFAULTS := {
+	"ssao_enabled": true,
+	"ssr_enabled": false,
+	"sdfgi_enabled": false,
+}
+
+# =============================================================================
 # UI ANIMATION
 # =============================================================================
 # Standard durations used across all UI fade/slide animations.

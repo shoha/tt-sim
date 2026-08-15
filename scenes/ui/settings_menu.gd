@@ -380,9 +380,15 @@ func _load_settings() -> void:
 		occlusion_fade_check.button_pressed = config.get_value(
 			"graphics", "occlusion_fade_enabled", true
 		)
-		ssao_check.button_pressed = config.get_value("graphics", "ssao_enabled", true)
-		ssr_check.button_pressed = config.get_value("graphics", "ssr_enabled", false)
-		sdfgi_check.button_pressed = config.get_value("graphics", "sdfgi_enabled", false)
+		ssao_check.button_pressed = config.get_value(
+			"graphics", "ssao_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"]
+		)
+		ssr_check.button_pressed = config.get_value(
+			"graphics", "ssr_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["ssr_enabled"]
+		)
+		sdfgi_check.button_pressed = config.get_value(
+			"graphics", "sdfgi_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"]
+		)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
 		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
 		cell_tint_opacity_slider.value = (
@@ -737,9 +743,9 @@ func _on_reset_pressed() -> void:
 		shadow_quality_option.get_item_index(RenderingServer.SHADOW_QUALITY_SOFT_ULTRA)
 	)
 	water_quality_option.select(water_quality_option.get_item_index(WaterQuality.MEDIUM))
-	ssao_check.button_pressed = true
-	ssr_check.button_pressed = false
-	sdfgi_check.button_pressed = false
+	ssao_check.button_pressed = Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"]
+	ssr_check.button_pressed = Constants.RENDERING_TOGGLES_DEFAULTS["ssr_enabled"]
+	sdfgi_check.button_pressed = Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"]
 	renderer_method_option.select(0)
 	p2p_enabled_check.button_pressed = true
 	prereleases_check.button_pressed = false
