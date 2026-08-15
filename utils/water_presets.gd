@@ -18,6 +18,11 @@ const PRESETS := {
 		"roughness_value": 0.08,
 		"specular_value": 0.6,
 		"sky_blend_strength": 0.15,
+		"disturbance_ripple_radius": 1.2,
+		"disturbance_ripple_strength": 0.5,
+		"foam_color": Color(0.85, 0.92, 0.95, 0.9),
+		"foam_edge_sensitivity": 0.15,
+		"foam_strength": 0.8,
 	},
 	"realistic":
 	{
@@ -29,6 +34,11 @@ const PRESETS := {
 		"roughness_value": 0.04,
 		"specular_value": 0.9,
 		"sky_blend_strength": 0.4,
+		"disturbance_ripple_radius": 1.2,
+		"disturbance_ripple_strength": 0.5,
+		"foam_color": Color(0.85, 0.92, 0.95, 0.9),
+		"foam_edge_sensitivity": 0.15,
+		"foam_strength": 0.8,
 	},
 }
 

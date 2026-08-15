@@ -18,6 +18,11 @@ func test_stylized_preset_values() -> void:
 	assert_almost_eq(preset["roughness_value"], 0.08, 0.001)
 	assert_almost_eq(preset["specular_value"], 0.6, 0.001)
 	assert_almost_eq(preset["sky_blend_strength"], 0.15, 0.001)
+	assert_almost_eq(preset["disturbance_ripple_radius"], 1.2, 0.001)
+	assert_almost_eq(preset["disturbance_ripple_strength"], 0.5, 0.001)
+	assert_eq(preset["foam_color"], Color(0.85, 0.92, 0.95, 0.9))
+	assert_almost_eq(preset["foam_edge_sensitivity"], 0.15, 0.001)
+	assert_almost_eq(preset["foam_strength"], 0.8, 0.001)
 
 
 func test_realistic_preset_values() -> void:
@@ -30,6 +35,11 @@ func test_realistic_preset_values() -> void:
 	assert_almost_eq(preset["roughness_value"], 0.04, 0.001)
 	assert_almost_eq(preset["specular_value"], 0.9, 0.001)
 	assert_almost_eq(preset["sky_blend_strength"], 0.4, 0.001)
+	assert_almost_eq(preset["disturbance_ripple_radius"], 1.2, 0.001)
+	assert_almost_eq(preset["disturbance_ripple_strength"], 0.5, 0.001)
+	assert_eq(preset["foam_color"], Color(0.85, 0.92, 0.95, 0.9))
+	assert_almost_eq(preset["foam_edge_sensitivity"], 0.15, 0.001)
+	assert_almost_eq(preset["foam_strength"], 0.8, 0.001)
 
 
 func test_unknown_preset_falls_back_to_stylized() -> void:
