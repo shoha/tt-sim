@@ -13,7 +13,7 @@ extends Area3D
 ## (docs/superpowers/specs/2026-08-15-water-token-interaction-design.md).
 
 const TOKEN_COLLISION_LAYER_MASK := 2
-const VERTICAL_BAND_HEIGHT := 0.6  # +/- 0.3 around the mesh's surface Y
+const VERTICAL_BAND_HEIGHT := 4.0  # +/- 2.0 around the mesh's surface Y
 const MIN_FOOTPRINT_SIZE := 0.0001  # below this, treat the mesh AABB as degenerate
 
 
@@ -22,8 +22,16 @@ const MIN_FOOTPRINT_SIZE := 0.0001  # below this, treat the mesh AABB as degener
 ## detect against) or it has no mesh at all. A BoxShape3D approximates the footprint
 ## rather than the exact mesh trimesh -- a zero-thickness exact shape risks flaky
 ## touching-vs-overlapping detection right at the resting height where tokens sit; a
-## thin slab guarantees real volume overlap. The caller is responsible for matching
-## this node's transform to mesh_node's and adding it as a sibling (see
+## thin slab guarantees real volume overlap. VERTICAL_BAND_HEIGHT is generous (+/- 2.0)
+## because a token's resting collision height relative to the water mesh's own Y isn't
+## guaranteed to be close -- verified directly against a real map where a flat,
+## disconnected collision proxy sits 0.59 units above the water mesh, and a future
+## well-authored map could equally plausibly have collision *below* the water mesh's Y
+## at the bottom of a carved basin. The wide, symmetric margin tolerates that mismatch
+## in either direction without needing to query live physics at construction time,
+## which this function can't do anyway -- it runs before the mesh is in the scene tree,
+## before any physics space exists for it. The caller is responsible for matching this
+## node's transform to mesh_node's and adding it as a sibling (see
 ## WaterGlbUtils.process_water_meshes()).
 static func create_for_mesh(mesh_node: MeshInstance3D) -> WaterZone:
 	if not mesh_node.mesh:
