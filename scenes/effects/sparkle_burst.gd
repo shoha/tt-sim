@@ -1,5 +1,5 @@
 class_name SparkleBurst
-extends GPUParticles3D
+extends OneShotParticleBurst3D
 
 ## One-shot sparkle particle burst for "model ready" feedback.
 ##
@@ -12,8 +12,6 @@ extends GPUParticles3D
 const PARTICLE_COUNT := 6
 const LIFETIME := 0.5
 
-var _spawn_position := Vector3.ZERO
-
 
 static func create_at(pos: Vector3) -> SparkleBurst:
 	var sparkle := SparkleBurst.new()
@@ -21,17 +19,15 @@ static func create_at(pos: Vector3) -> SparkleBurst:
 	return sparkle
 
 
-func _ready() -> void:
-	global_position = _spawn_position
-	emitting = false
-	one_shot = true
-	explosiveness = 1.0
-	amount = PARTICLE_COUNT
-	lifetime = LIFETIME
-	fixed_fps = 0
-	interpolate = true
+func _get_particle_count() -> int:
+	return PARTICLE_COUNT
 
-	# Build process material
+
+func _get_lifetime() -> float:
+	return LIFETIME
+
+
+func _build_process_material() -> ParticleProcessMaterial:
 	var mat := ParticleProcessMaterial.new()
 	mat.direction = Vector3(0, 1, 0)
 	mat.spread = 180.0  # Full sphere
@@ -56,16 +52,15 @@ func _ready() -> void:
 	# Emissive glow for sparkle effect
 	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
 	mat.emission_sphere_radius = 0.2
+	return mat
 
-	process_material = mat
 
-	# Use a simple sphere mesh for sparkle particles
+func _build_mesh() -> Mesh:
 	var mesh := SphereMesh.new()
 	mesh.radius = 0.5
 	mesh.height = 1.0
 	mesh.radial_segments = 4
 	mesh.rings = 2
-
 	# Make particles glow with emissive material
 	var spark_mat := StandardMaterial3D.new()
 	spark_mat.albedo_color = Color(1.0, 0.9, 0.5)
@@ -74,15 +69,4 @@ func _ready() -> void:
 	spark_mat.emission_energy_multiplier = 2.0
 	spark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mesh.material = spark_mat
-
-	draw_pass_1 = mesh
-
-	# Auto-free when done
-	finished.connect(queue_free)
-
-	# Start emitting on next frame to ensure transforms are applied
-	_start_emitting.call_deferred()
-
-
-func _start_emitting() -> void:
-	emitting = true
+	return mesh

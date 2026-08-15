@@ -1,5 +1,5 @@
 class_name DustBurst
-extends GPUParticles3D
+extends OneShotParticleBurst3D
 
 ## One-shot dust particle burst for token drop impact.
 ##
@@ -14,8 +14,6 @@ const LIFETIME := 0.4
 const SPREAD_RADIUS := 0.3  # XZ spread
 const RISE_SPEED := 0.2  # Slight upward drift
 
-var _spawn_position := Vector3.ZERO
-
 
 static func create_at(pos: Vector3) -> DustBurst:
 	var dust := DustBurst.new()
@@ -23,18 +21,15 @@ static func create_at(pos: Vector3) -> DustBurst:
 	return dust
 
 
-func _ready() -> void:
-	global_position = _spawn_position
-	emitting = false
-	one_shot = true
-	explosiveness = 1.0
-	amount = PARTICLE_COUNT
-	lifetime = LIFETIME
-	# No fixed velocity — controlled by process material
-	fixed_fps = 0
-	interpolate = true
+func _get_particle_count() -> int:
+	return PARTICLE_COUNT
 
-	# Build process material
+
+func _get_lifetime() -> float:
+	return LIFETIME
+
+
+func _build_process_material() -> ParticleProcessMaterial:
 	var mat := ParticleProcessMaterial.new()
 	mat.direction = Vector3(0, 1, 0)
 	mat.spread = 180.0  # Full ring
@@ -57,23 +52,13 @@ func _ready() -> void:
 	mat.alpha_curve = alpha_curve
 	# Warm grey-brown color
 	mat.color = Color(0.55, 0.50, 0.42, 0.6)
+	return mat
 
-	process_material = mat
 
-	# Use a simple sphere mesh for particles
+func _build_mesh() -> Mesh:
 	var mesh := SphereMesh.new()
 	mesh.radius = 0.5
 	mesh.height = 1.0
 	mesh.radial_segments = 4
 	mesh.rings = 2
-	draw_pass_1 = mesh
-
-	# Auto-free when done
-	finished.connect(queue_free)
-
-	# Start emitting on next frame to ensure transforms are applied
-	_start_emitting.call_deferred()
-
-
-func _start_emitting() -> void:
-	emitting = true
+	return mesh
