@@ -384,6 +384,14 @@ func get_current_map_name() -> String:
 	return "unknown"
 
 
+## Return the level play controller this GameMap was set up with (see
+## setup()), or null before setup() runs. Lets other code (e.g. SettingsMenu)
+## reach it through the same GameMap lookup they already use, instead of
+## re-implementing GameMap's own scene-tree search a second time.
+func get_level_play_controller() -> LevelPlayController:
+	return _level_play_controller
+
+
 ## Create and configure DebugRenderToggles (the F3 overlay's checkbox panel:
 ## foliage visibility and per-category (tree/grass/map) shadow toggles).
 ## Replaces the old undiscoverable F4 foliage-visibility hotkey outright.

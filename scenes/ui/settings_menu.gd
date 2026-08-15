@@ -705,12 +705,9 @@ func _find_game_map() -> GameMap:
 
 
 func _find_level_play_controller() -> LevelPlayController:
-	var root = get_tree().root
-	for child in root.get_children():
-		if child.name == "Root":
-			for subchild in child.get_children():
-				if subchild is LevelPlayController:
-					return subchild
+	var game_map := _find_game_map()
+	if game_map:
+		return game_map.get_level_play_controller()
 	return null
 
 
