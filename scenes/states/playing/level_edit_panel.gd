@@ -361,6 +361,13 @@ func initialize(
 	if not water_style_matched:
 		# Corrupt/unrecognized save data -- fall back to the default preset
 		# rather than leaving the dropdown showing a stale/mismatched item.
+		# Must also update current_water_style directly (not just the
+		# dropdown's visual selection): .select() doesn't emit item_selected,
+		# so _on_water_style_selected() -- the only place that normally
+		# updates current_water_style -- never runs here. Without this, Save
+		# without touching the dropdown would silently re-persist the corrupt
+		# value while the UI shows "Stylized".
+		current_water_style = WaterPresets.DEFAULT_PRESET
 		for i in range(water_style_dropdown.item_count):
 			if water_style_dropdown.get_item_metadata(i) == WaterPresets.DEFAULT_PRESET:
 				water_style_dropdown.select(i)
