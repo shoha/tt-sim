@@ -201,7 +201,8 @@ func test_hard_sun_shadows_toggle_round_trip_updates_state() -> void:
 	# the setter, directional_soft_shadow_filter_set_quality) -- this covers the
 	# toggle's own state tracking; the setter call itself is exercised, not asserted
 	# on directly. Ends on toggled(false) so the global renderer setting is left at
-	# _default_shadow_quality, not SHADOW_QUALITY_HARD, for whatever test runs next.
+	# _get_configured_shadow_quality(), not SHADOW_QUALITY_HARD, for whatever test runs
+	# next.
 	var toggles := DebugRenderToggles.new()
 	add_child_autofree(toggles)
 
@@ -316,8 +317,9 @@ func test_trivial_foliage_shader_toggled_on_swaps_material_to_the_debug_shader()
 	var toggles := DebugRenderToggles.new()
 	add_child_autofree(toggles)
 	toggles._map_container = root
+	toggles._collect_nodes()
 
-	toggles._on_trivial_foliage_shader_toggled(true)
+	toggles._on_debug_shader_checkbox_toggled(true, "trivial_foliage_shader", "trivial")
 
 	var mat := grass_mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
 	assert_eq(mat.shader, WindFoliage.get_shader_debug_trivial())
@@ -332,11 +334,12 @@ func test_trivial_foliage_shader_toggled_off_restores_the_original_shader() -> v
 	var toggles := DebugRenderToggles.new()
 	add_child_autofree(toggles)
 	toggles._map_container = root
+	toggles._collect_nodes()
 	var mat := tree_mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
 	var original_shader := mat.shader
 
-	toggles._on_trivial_foliage_shader_toggled(true)
-	toggles._on_trivial_foliage_shader_toggled(false)
+	toggles._on_debug_shader_checkbox_toggled(true, "trivial_foliage_shader", "trivial")
+	toggles._on_debug_shader_checkbox_toggled(false, "trivial_foliage_shader", "trivial")
 
 	assert_eq(mat.shader, original_shader)
 
@@ -350,8 +353,9 @@ func test_unshaded_foliage_textured_toggled_on_swaps_material_to_the_debug_shade
 	var toggles := DebugRenderToggles.new()
 	add_child_autofree(toggles)
 	toggles._map_container = root
+	toggles._collect_nodes()
 
-	toggles._on_unshaded_foliage_textured_toggled(true)
+	toggles._on_debug_shader_checkbox_toggled(true, "unshaded_foliage_textured", "unshaded")
 
 	var mat := grass_mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
 	assert_eq(mat.shader, WindFoliage.get_shader_debug_unshaded())
@@ -366,11 +370,12 @@ func test_unshaded_foliage_textured_toggled_off_restores_the_original_shader() -
 	var toggles := DebugRenderToggles.new()
 	add_child_autofree(toggles)
 	toggles._map_container = root
+	toggles._collect_nodes()
 	var mat := tree_mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
 	var original_shader := mat.shader
 
-	toggles._on_unshaded_foliage_textured_toggled(true)
-	toggles._on_unshaded_foliage_textured_toggled(false)
+	toggles._on_debug_shader_checkbox_toggled(true, "unshaded_foliage_textured", "unshaded")
+	toggles._on_debug_shader_checkbox_toggled(false, "unshaded_foliage_textured", "unshaded")
 
 	assert_eq(mat.shader, original_shader)
 
@@ -384,8 +389,9 @@ func test_cheap_lighting_foliage_toggled_on_swaps_material_to_the_debug_shader()
 	var toggles := DebugRenderToggles.new()
 	add_child_autofree(toggles)
 	toggles._map_container = root
+	toggles._collect_nodes()
 
-	toggles._on_cheap_lighting_foliage_toggled(true)
+	toggles._on_debug_shader_checkbox_toggled(true, "cheap_lighting_foliage", "cheap_lighting")
 
 	var mat := grass_mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
 	assert_eq(mat.shader, WindFoliage.get_shader_debug_cheap_lighting())
@@ -400,11 +406,12 @@ func test_cheap_lighting_foliage_toggled_off_restores_the_original_shader() -> v
 	var toggles := DebugRenderToggles.new()
 	add_child_autofree(toggles)
 	toggles._map_container = root
+	toggles._collect_nodes()
 	var mat := tree_mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
 	var original_shader := mat.shader
 
-	toggles._on_cheap_lighting_foliage_toggled(true)
-	toggles._on_cheap_lighting_foliage_toggled(false)
+	toggles._on_debug_shader_checkbox_toggled(true, "cheap_lighting_foliage", "cheap_lighting")
+	toggles._on_debug_shader_checkbox_toggled(false, "cheap_lighting_foliage", "cheap_lighting")
 
 	assert_eq(mat.shader, original_shader)
 
@@ -418,6 +425,7 @@ func test_switching_from_trivial_to_unshaded_swaps_shader_and_unchecks_the_other
 	var toggles := DebugRenderToggles.new()
 	add_child_autofree(toggles)
 	toggles._map_container = root
+	toggles._collect_nodes()
 	var trivial_checkbox := CheckBox.new()
 	var unshaded_checkbox := CheckBox.new()
 	var cheap_lighting_checkbox := CheckBox.new()
@@ -429,21 +437,21 @@ func test_switching_from_trivial_to_unshaded_swaps_shader_and_unchecks_the_other
 	var mat := grass_mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
 	var original_shader := mat.shader
 
-	toggles._on_trivial_foliage_shader_toggled(true)
+	toggles._on_debug_shader_checkbox_toggled(true, "trivial_foliage_shader", "trivial")
 	assert_eq(mat.shader, WindFoliage.get_shader_debug_trivial())
 
-	toggles._on_unshaded_foliage_textured_toggled(true)
+	toggles._on_debug_shader_checkbox_toggled(true, "unshaded_foliage_textured", "unshaded")
 	assert_eq(mat.shader, WindFoliage.get_shader_debug_unshaded())
 	assert_false(trivial_checkbox.button_pressed)
 
-	toggles._on_cheap_lighting_foliage_toggled(true)
+	toggles._on_debug_shader_checkbox_toggled(true, "cheap_lighting_foliage", "cheap_lighting")
 	assert_eq(mat.shader, WindFoliage.get_shader_debug_cheap_lighting())
 	assert_false(trivial_checkbox.button_pressed)
 	assert_false(unshaded_checkbox.button_pressed)
 
 	# Restoration after a chain of direct debug-to-debug switches must still recover
 	# the real original shader, not one of the debug shaders it passed through.
-	toggles._on_cheap_lighting_foliage_toggled(false)
+	toggles._on_debug_shader_checkbox_toggled(false, "cheap_lighting_foliage", "cheap_lighting")
 	assert_eq(mat.shader, original_shader)
 
 	trivial_checkbox.free()
