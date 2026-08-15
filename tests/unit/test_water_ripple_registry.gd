@@ -39,7 +39,8 @@ func test_unregister_unknown_id_is_a_no_op() -> void:
 	WaterRippleRegistry.unregister(999999)
 
 	assert_eq(
-		WaterRippleRegistry.build_disturbance_array().size(), WaterRippleRegistry.MAX_DISTURBANCE_POINTS
+		WaterRippleRegistry.build_disturbance_array().size(),
+		WaterRippleRegistry.MAX_DISTURBANCE_POINTS
 	)
 
 
@@ -69,3 +70,33 @@ func test_build_disturbance_array_skips_freed_nodes() -> void:
 
 	for point in points:
 		assert_eq(point, Vector4(0.0, 0.0, 0.0, 0.0))
+
+
+func test_register_returns_true_only_on_first_registration() -> void:
+	var token := Node3D.new()
+	add_child_autofree(token)
+	var id := token.get_instance_id()
+
+	var first := WaterRippleRegistry.register(id, token)
+	var second := WaterRippleRegistry.register(id, token)
+
+	assert_true(first)
+	assert_false(second)
+
+
+func test_unregister_returns_true_only_when_refcount_reaches_zero() -> void:
+	var token := Node3D.new()
+	add_child_autofree(token)
+	var id := token.get_instance_id()
+
+	WaterRippleRegistry.register(id, token)
+	WaterRippleRegistry.register(id, token)
+
+	var first_unregister := WaterRippleRegistry.unregister(id)
+	assert_false(first_unregister)
+	assert_eq(WaterRippleRegistry.build_disturbance_array()[0].w, 1.0)
+
+	var second_unregister := WaterRippleRegistry.unregister(id)
+	assert_true(second_unregister)
+	for point in WaterRippleRegistry.build_disturbance_array():
+		assert_eq(point.w, 0.0)
