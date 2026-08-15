@@ -206,10 +206,18 @@ void fragment() {
 	float water_surface_depth = -VERTEX.z;
 	float depth_diff = clamp((scene_depth - water_surface_depth) / shore_depth_range, 0.0, 1.0);
 
-	// depth_diff jumps sharply right where a rock breaks the surface -- nowhere else
-	// does it change that fast -- so its screen-space derivative is a cheap, textureless
-	// edge detector for "something solid is poking through here".
-	float foam_edge = smoothstep(foam_edge_sensitivity, foam_edge_sensitivity * 2.0, fwidth(depth_diff));
+	// Normalize by world-units-per-screen-pixel (length(fwidth(world_pos.xz))) so this
+	// measures true world-space steepness rather than a screen-space derivative -- the
+	// unnormalized version scaled with camera zoom (this project's isometric camera has
+	// variable camera.size), so a sensitivity tuned at one zoom level misfired at
+	// another. As a side effect, this also makes the metric a genuine physical-steepness
+	// measure: a gradual shoreline slope has a small world-space depth_diff gradient and
+	// won't trigger this, while a sharp rock edge (a near-discontinuous depth change over
+	// a tiny world distance) will -- addressing both zoom-dependence and the
+	// rock-vs-gentle-shore false positives.
+	float world_units_per_pixel = length(fwidth(world_pos.xz)) + 0.0001;
+	float depth_diff_slope = fwidth(depth_diff) / world_units_per_pixel;
+	float foam_edge = smoothstep(foam_edge_sensitivity, foam_edge_sensitivity * 2.0, depth_diff_slope);
 	float foam = foam_edge * foam_strength;
 
 	// Bright sparkle patches wherever the blended noise layers peak -- guarantees
