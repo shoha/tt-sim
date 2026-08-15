@@ -73,6 +73,12 @@ uniform sampler2D screen_tex : hint_screen_texture, repeat_disable, filter_linea
 uniform vec4 water_disturbance_points[8];
 uniform float disturbance_ripple_radius : hint_range(0.1, 5.0) = 1.2;
 uniform float disturbance_ripple_strength : hint_range(0.0, 2.0) = 0.5;
+// Foam where opaque geometry (e.g. a rock) breaks the water surface -- see the design
+// spec's "Static geometry: rock foam" section. No CPU-side tracking: depth_diff (below)
+// already reads the depth prepass, which already includes static rocks.
+uniform vec4 foam_color : source_color = vec4(0.85, 0.92, 0.95, 0.9);
+uniform float foam_edge_sensitivity : hint_range(0.01, 1.0) = 0.15;
+uniform float foam_strength : hint_range(0.0, 2.0) = 0.8;
 
 // Water Quality graphics setting (Settings > Graphics) -- engine-wide global uniforms
 // rather than per-material uniforms, so SettingsMenu can apply them via
@@ -200,6 +206,12 @@ void fragment() {
 	float water_surface_depth = -VERTEX.z;
 	float depth_diff = clamp((scene_depth - water_surface_depth) / shore_depth_range, 0.0, 1.0);
 
+	// depth_diff jumps sharply right where a rock breaks the surface -- nowhere else
+	// does it change that fast -- so its screen-space derivative is a cheap, textureless
+	// edge detector for "something solid is poking through here".
+	float foam_edge = smoothstep(foam_edge_sensitivity, foam_edge_sensitivity * 2.0, fwidth(depth_diff));
+	float foam = foam_edge * foam_strength;
+
 	// Bright sparkle patches wherever the blended noise layers peak -- guarantees
 	// visible ripple variation in ALBEDO itself, not just in the (much subtler)
 	// lighting response to NORMAL_MAP, so the effect still reads even under flat/
@@ -236,9 +248,10 @@ void fragment() {
 	}
 
 	final_color = mix(final_color, water_ambient_reflection_color, fresnel * sky_blend_strength);
+	final_color = mix(final_color, foam_color.rgb, clamp(foam, 0.0, 1.0));
 
 	ALBEDO = final_color;
-	ALPHA = clamp(depth_alpha + fresnel * fresnel_strength, 0.0, 1.0);
+	ALPHA = clamp(depth_alpha + fresnel * fresnel_strength + foam * 0.3, 0.0, 1.0);
 	SPECULAR = specular_value;
 	// Shimmer peaks get slightly smoother (lower roughness) instead of a flat
 	// roughness_value everywhere -- a uniform roughness makes the shimmer read as a
