@@ -74,21 +74,11 @@ const _DEBUG_SHADER_CHECKBOX_KEYS := [
 ]
 
 ## Checkbox keys refresh() should default to UNPRESSED (unlike the visibility/shadow
-## toggles, which default pressed=on to match current shipped behavior).
-const _DEFAULT_OFF_CHECKBOX_KEYS := [
-	"trivial_foliage_shader",
-	"unshaded_foliage_textured",
-	"cheap_lighting_foliage",
-	"hard_sun_shadows",
-]
-
-## Project setting backing rendering/lights_and_shadows/directional_shadow/
-## soft_shadow_filter_quality -- read once in setup() so "Hard sun shadows" can
-## restore the project's actual configured quality on toggle-off/refresh(), rather
-## than hardcoding an assumption of what it's set to. Split into a category/key pair
-## (rather than one literal) purely to keep the line under gdlint's length limit.
-const _SHADOW_QUALITY_SETTING_CATEGORY := "rendering/lights_and_shadows/directional_shadow/"
-const _SHADOW_QUALITY_SETTING_KEY := "soft_shadow_filter_quality"
+## toggles, which default pressed=on to match current shipped behavior). Derived from
+## _DEBUG_SHADER_CHECKBOX_KEYS (all three of those toggles also default off) plus
+## "hard_sun_shadows", which isn't part of that mutual-exclusion group but is also
+## off-by-default.
+const _DEFAULT_OFF_CHECKBOX_KEYS := _DEBUG_SHADER_CHECKBOX_KEYS + ["hard_sun_shadows"]
 
 var _foliage_visible: bool = true
 var _tree_shadows: bool = true
@@ -96,11 +86,6 @@ var _grass_shadows: bool = true
 var _map_shadows: bool = true
 var _sun_shadows: bool = true
 var _hard_sun_shadows: bool = false
-
-## The project's configured directional soft-shadow filter quality (see
-## _SHADOW_QUALITY_SETTING_PATH), read once in setup() -- what "Hard sun shadows"
-## restores to on toggle-off/refresh().
-var _default_shadow_quality: int = RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
 
 ## Which foliage debug shader (if any) is currently swapped in: "", "trivial",
 ## "unshaded", or "cheap_lighting". A String rather than independent bools because the
@@ -116,6 +101,14 @@ var _world_viewport: SubViewport = null
 var _tree_multimeshes: Array[MultiMeshInstance3D] = []
 var _grass_multimeshes: Array[MultiMeshInstance3D] = []
 var _map_meshes: Array[MeshInstance3D] = []
+## Every wind-foliage ShaderMaterial in the current map, cached once per map
+## load (see _collect_nodes()) so _set_foliage_debug_shader() doesn't re-walk
+## the whole map_container subtree on every debug-shader checkbox click.
+## Deliberately NOT filtered by node visibility (see
+## WindFoliage.collect_foliage_shader_materials()), unlike
+## _tree_multimeshes/_grass_multimeshes above, so materials on foliage
+## currently hidden by the "Foliage visible" toggle are still reachable.
+var _foliage_shader_materials: Array[ShaderMaterial] = []
 ## The level's sun light, if any -- re-found on every refresh() since
 ## LevelEnvironmentManager may recreate it per map load. See "Sun shadows" in this
 ## class's docstring.
@@ -151,10 +144,6 @@ func get_toggle_states() -> Dictionary:
 func setup(game_map: GameMap) -> void:
 	_map_container = game_map.map_container
 	_world_viewport = game_map.world_viewport
-	_default_shadow_quality = ProjectSettings.get_setting(
-		_SHADOW_QUALITY_SETTING_CATEGORY + _SHADOW_QUALITY_SETTING_KEY,
-		RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
-	)
 	_create_panel(game_map)
 	refresh()
 
@@ -184,9 +173,11 @@ func refresh() -> void:
 	_sun_shadows = true
 	# Global renderer setting, not tied to the previous map's nodes -- must be
 	# explicitly restored here (unlike _original_foliage_shaders below) since it
-	# doesn't get reset just because the map's scene tree was torn down.
+	# doesn't get reset just because the map's scene tree was torn down. Reads the
+	# player's persisted choice fresh via _get_configured_shadow_quality() rather than
+	# a value snapshotted once at startup.
 	_hard_sun_shadows = false
-	RenderingServer.directional_soft_shadow_filter_set_quality(_default_shadow_quality)
+	RenderingServer.directional_soft_shadow_filter_set_quality(_get_configured_shadow_quality())
 	# Not restored via _original_foliage_shaders: the previous map's materials are
 	# already queue_freed by the time this runs (see this function's own docstring),
 	# so there is nothing left to restore -- just drop the stale references.
@@ -204,6 +195,7 @@ func _collect_nodes() -> void:
 	_collect_multimeshes_by_category(_map_container, "tree", _tree_multimeshes)
 	_collect_multimeshes_by_category(_map_container, "grass", _grass_multimeshes)
 	_collect_mesh_instances(_map_container, _map_meshes)
+	_foliage_shader_materials = WindFoliage.collect_foliage_shader_materials(_map_container)
 
 
 func _create_panel(overlay_parent: GameMap) -> void:
@@ -243,9 +235,15 @@ func _create_panel(overlay_parent: GameMap) -> void:
 	_checkboxes["map_shadows"].toggled.connect(_on_map_shadows_toggled)
 	_checkboxes["sun_shadows"].toggled.connect(_on_sun_shadows_toggled)
 	_checkboxes["hard_sun_shadows"].toggled.connect(_on_hard_sun_shadows_toggled)
-	_checkboxes["trivial_foliage_shader"].toggled.connect(_on_trivial_foliage_shader_toggled)
-	_checkboxes["unshaded_foliage_textured"].toggled.connect(_on_unshaded_foliage_textured_toggled)
-	_checkboxes["cheap_lighting_foliage"].toggled.connect(_on_cheap_lighting_foliage_toggled)
+	_checkboxes["trivial_foliage_shader"].toggled.connect(
+		_on_debug_shader_checkbox_toggled.bind("trivial_foliage_shader", "trivial")
+	)
+	_checkboxes["unshaded_foliage_textured"].toggled.connect(
+		_on_debug_shader_checkbox_toggled.bind("unshaded_foliage_textured", "unshaded")
+	)
+	_checkboxes["cheap_lighting_foliage"].toggled.connect(
+		_on_debug_shader_checkbox_toggled.bind("cheap_lighting_foliage", "cheap_lighting")
+	)
 
 
 func _on_foliage_visible_toggled(pressed: bool) -> void:
@@ -285,36 +283,37 @@ func _on_sun_shadows_toggled(pressed: bool) -> void:
 
 
 ## Global renderer setting, not tied to _sun_light or any material -- swaps between
-## SHADOW_QUALITY_HARD (no PCF filtering) and the project's actual configured quality
-## (_default_shadow_quality) to isolate filter-quality cost specifically, independent
-## of "Sun shadows" above (which removes shadows entirely) or any foliage shader.
+## SHADOW_QUALITY_HARD (no PCF filtering) and _get_configured_shadow_quality() (the
+## player's persisted Shadow Quality setting) to isolate filter-quality cost
+## specifically, independent of "Sun shadows" above (which removes shadows entirely)
+## or any foliage shader.
 func _on_hard_sun_shadows_toggled(pressed: bool) -> void:
 	_hard_sun_shadows = pressed
-	var quality := RenderingServer.SHADOW_QUALITY_HARD if pressed else _default_shadow_quality
+	var quality := (
+		RenderingServer.SHADOW_QUALITY_HARD if pressed else _get_configured_shadow_quality()
+	)
 	RenderingServer.directional_soft_shadow_filter_set_quality(quality)
 
 
-func _on_trivial_foliage_shader_toggled(pressed: bool) -> void:
+## Read the player's persisted Shadow Quality choice (Settings > Graphics)
+## from user://settings.cfg -- the same source SettingsMenu._load_settings()
+## and apply_startup_graphics_settings() read from -- so "Hard sun shadows"
+## and refresh() restore the player's actual setting instead of a value
+## snapshotted once at startup, which would go stale the moment the player
+## changes Shadow Quality mid-session. Falls back to SHADOW_QUALITY_SOFT_ULTRA,
+## matching every other read site's fallback, when settings.cfg has no saved
+## value yet.
+static func _get_configured_shadow_quality() -> int:
+	var config := ConfigFile.new()
+	config.load(Paths.SETTINGS_PATH)
+	return config.get_value("graphics", "shadow_quality", RenderingServer.SHADOW_QUALITY_SOFT_ULTRA)
+
+
+func _on_debug_shader_checkbox_toggled(pressed: bool, checkbox_key: String, mode: String) -> void:
 	if pressed:
-		_uncheck_other_debug_shader_checkboxes("trivial_foliage_shader")
-		_set_foliage_debug_shader("trivial")
-	elif _foliage_debug_shader == "trivial":
-		_set_foliage_debug_shader("")
-
-
-func _on_unshaded_foliage_textured_toggled(pressed: bool) -> void:
-	if pressed:
-		_uncheck_other_debug_shader_checkboxes("unshaded_foliage_textured")
-		_set_foliage_debug_shader("unshaded")
-	elif _foliage_debug_shader == "unshaded":
-		_set_foliage_debug_shader("")
-
-
-func _on_cheap_lighting_foliage_toggled(pressed: bool) -> void:
-	if pressed:
-		_uncheck_other_debug_shader_checkboxes("cheap_lighting_foliage")
-		_set_foliage_debug_shader("cheap_lighting")
-	elif _foliage_debug_shader == "cheap_lighting":
+		_uncheck_other_debug_shader_checkboxes(checkbox_key)
+		_set_foliage_debug_shader(mode)
+	elif _foliage_debug_shader == mode:
 		_set_foliage_debug_shader("")
 
 
@@ -334,25 +333,25 @@ func _uncheck_other_debug_shader_checkboxes(except_key: String) -> void:
 ## Swap every wind-foliage material (tree and grass) to [param mode]'s debug shader
 ## ("trivial", "unshaded", or "cheap_lighting"), or restore each to whatever shader it
 ## had before when [param mode] is "" (see _original_foliage_shaders' docstring). Uses
-## WindFoliage.collect_foliage_shader_materials rather than this class's own cached
-## _tree_multimeshes/_grass_multimeshes so it also reaches materials currently hidden
-## by the "Foliage visible" toggle above. No-op if [param mode] is already active.
-## Switching directly between debug modes (without passing through "") is safe:
-## _original_foliage_shaders is only populated when a material doesn't already have an
-## entry, so a mid-switch material's debug shader is never mistaken for its real
-## original.
+## the cached _foliage_shader_materials list (populated once per map load in
+## _collect_nodes()) rather than re-walking map_container on every debug-shader
+## checkbox click, while still reaching materials currently hidden by the "Foliage
+## visible" toggle above, since _foliage_shader_materials isn't visibility-filtered.
+## No-op if [param mode] is already active. Switching directly between debug modes
+## (without passing through "") is safe: _original_foliage_shaders is only populated
+## when a material doesn't already have an entry, so a mid-switch material's debug
+## shader is never mistaken for its real original.
 func _set_foliage_debug_shader(mode: String) -> void:
 	if mode == _foliage_debug_shader:
 		return
-	var materials := WindFoliage.collect_foliage_shader_materials(_map_container)
 	if mode == "":
-		for mat in materials:
+		for mat in _foliage_shader_materials:
 			if is_instance_valid(mat) and _original_foliage_shaders.has(mat):
 				mat.shader = _original_foliage_shaders[mat]
 		_original_foliage_shaders.clear()
 	else:
 		var debug_shader := _get_debug_shader_for_mode(mode)
-		for mat in materials:
+		for mat in _foliage_shader_materials:
 			if not _original_foliage_shaders.has(mat):
 				_original_foliage_shaders[mat] = mat.shader
 			mat.shader = debug_shader
