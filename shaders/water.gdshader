@@ -73,7 +73,9 @@ uniform sampler2D screen_tex : hint_screen_texture, repeat_disable, filter_linea
 uniform vec4 water_disturbance_points[8];
 uniform float disturbance_ripple_radius : hint_range(0.1, 5.0) = 1.2;
 uniform float disturbance_ripple_strength : hint_range(0.0, 2.0) = 0.5;
-// Foam where opaque geometry (e.g. a rock) breaks the water surface -- see the design
+// Foam wherever depth_diff changes sharply over a short world distance -- typically a
+// rock breaking the surface, but also any genuinely steep shoreline slope, since both
+// produce the same signal (there's no depth-only way to tell them apart). See the design
 // spec's "Static geometry: rock foam" section. No CPU-side tracking: depth_diff (below)
 // already reads the depth prepass, which already includes static rocks.
 uniform vec4 foam_color : source_color = vec4(0.85, 0.92, 0.95, 0.9);
@@ -210,11 +212,10 @@ void fragment() {
 	// measures true world-space steepness rather than a screen-space derivative -- the
 	// unnormalized version scaled with camera zoom (this project's isometric camera has
 	// variable camera.size), so a sensitivity tuned at one zoom level misfired at
-	// another. As a side effect, this also makes the metric a genuine physical-steepness
-	// measure: a gradual shoreline slope has a small world-space depth_diff gradient and
-	// won't trigger this, while a sharp rock edge (a near-discontinuous depth change over
-	// a tiny world distance) will -- addressing both zoom-dependence and the
-	// rock-vs-gentle-shore false positives.
+	// another. This does NOT distinguish a rock from a steep-but-ordinary shoreline --
+	// both produce the same fast depth_diff-per-world-distance signal, and ordinary
+	// shorelines getting a foam band at their waterline reads as correct/expected anyway
+	// (real shorelines foam too), so this is accepted as-is rather than chased further.
 	float world_units_per_pixel = length(fwidth(world_pos.xz)) + 0.0001;
 	float depth_diff_slope = fwidth(depth_diff) / world_units_per_pixel;
 	float foam_edge = smoothstep(foam_edge_sensitivity, foam_edge_sensitivity * 2.0, depth_diff_slope);
