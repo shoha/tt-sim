@@ -22,6 +22,19 @@ extends RefCounted
 const _SCENE_EXTRAS_META := "tt_gltf_scene_extras"
 const _SCATTER_INSTANCES_EXTRAS_KEY := "tt_scatter_instances"
 
+# Standard Godot collision mesh suffixes (order matters - check longer suffixes first).
+# See Godot docs: assets_pipeline/importing_3d_scenes/node_type_customization
+# Public because MeshInstancingUtils needs the same list to keep collision indicator
+# meshes out of a MultiMesh.
+const COLLISION_SUFFIXES := [
+	"-convcolonly",  # Convex collision only (no visual)
+	"-convco",  # Convex collision only (short form)
+	"-convcol",  # Convex collision (keeps visual)
+	"-colonly",  # Trimesh collision only (no visual)
+	"-trimesh",  # Trimesh collision
+	"-col",  # Generic collision
+]
+
 
 ## Result structure for async loading
 class AsyncLoadResult:
@@ -457,17 +470,7 @@ static func _row_to_transform(row: Variant) -> Variant:
 static func _find_collision_mesh_nodes(node: Node, result: Array[Dictionary]) -> void:
 	var name_lower = node.name.to_lower()
 
-	# Standard Godot collision mesh suffixes (order matters - check longer suffixes first)
-	var collision_suffixes = [
-		"-convcolonly",  # Convex collision only (no visual)
-		"-convco",  # Convex collision only (short form)
-		"-convcol",  # Convex collision (keeps visual)
-		"-colonly",  # Trimesh collision only (no visual)
-		"-trimesh",  # Trimesh collision
-		"-col",  # Generic collision
-	]
-
-	for suffix in collision_suffixes:
+	for suffix in COLLISION_SUFFIXES:
 		if name_lower.ends_with(suffix):
 			if node is MeshInstance3D:
 				result.append({"node": node, "suffix": suffix})
@@ -635,6 +638,7 @@ static func load_map(
 		)
 
 	if scene:
+		MeshInstancingUtils.process_duplicate_mesh_instancing(scene)
 		disable_static_body_picking(scene)
 	return scene
 
@@ -684,6 +688,7 @@ static func load_map_async(
 					process_animations(scene)
 					process_lights(scene, light_intensity_scale)
 					WaterGlbUtils.process_water_meshes(scene)
+					MeshInstancingUtils.process_duplicate_mesh_instancing(scene)
 					disable_static_body_picking(scene)
 					result.scene = scene
 					result.success = true
@@ -702,6 +707,7 @@ static func load_map_async(
 					process_animations(scene)
 					process_lights(scene, light_intensity_scale)
 					WaterGlbUtils.process_water_meshes(scene)
+					MeshInstancingUtils.process_duplicate_mesh_instancing(scene)
 					disable_static_body_picking(scene)
 					result.scene = scene
 					result.success = true
@@ -718,6 +724,7 @@ static func load_map_async(
 		path, create_static_bodies, light_intensity_scale, foliage_overrides
 	)
 	if glb_result.success and glb_result.scene:
+		MeshInstancingUtils.process_duplicate_mesh_instancing(glb_result.scene)
 		disable_static_body_picking(glb_result.scene)
 	return glb_result
 
