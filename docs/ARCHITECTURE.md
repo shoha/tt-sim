@@ -391,9 +391,69 @@ Maps use a unified pipeline that handles both `res://` and `user://` paths:
    - process_collision_meshes() — create StaticBody3D from naming conventions
    - process_animations() — strip _loop suffix, set loop mode
    - process_lights() — apply intensity scaling
+   - WaterGlbUtils.process_water_meshes() — animated water on "-water" meshes
+   - MeshInstancingUtils.process_duplicate_mesh_instancing() — collapse duplicates
+     sharing one Mesh into MultiMeshInstance3D nodes (must run last: it depends on
+     collision meshes already being hidden and water planes already claimed)
 4. validate_transform_chain() — safety assertion after loading
 5. Add to GameMap.map_container
 ```
+
+Duplicate mesh instancing is a load-time draw-call optimisation: Blender linked
+duplicates (Shift+D, or a Place Helper scatter stroke) arrive as N nodes sharing one
+Mesh resource, and each group of 25+ small ones becomes a single MultiMeshInstance3D.
+It needs nothing from the exporting tool, so it also applies to user-uploaded maps
+authored without terrain-paint — unlike `process_scatter_instances()`, whose
+Geoscatter instances are not real objects in the file and must be carried as scene
+extras. Groups are skipped when instancing would break something else: large meshes
+(OcclusionFadeManager only fades real MeshInstance3D surfaces), skinned or animated
+nodes, and anything with a material override. Source nodes that have children — a
+prop's own collision body, typically — are kept with `mesh = null` rather than freed,
+so collision survives.
+
+#### Known limitations and future iterations
+
+Recorded from the first pass so a later one doesn't have to rediscover them. None are
+bugs; each is a deliberate trade made to keep the first version safe.
+
+1. **Instanced props get no occlusion fade.** OcclusionFadeManager swaps
+   StandardMaterial3D for its fade shader per MeshInstance3D surface, which a
+   MultiMesh has no equivalent of. Worked around today by the `max_extent` guard
+   (2.0m), which keeps anything token-sized out of a MultiMesh entirely. *Real fix:*
+   run the fade logic in the MultiMesh's own material, exactly as wind foliage already
+   does — `occlusion_fade_include.gdshaderinc` is shared, and
+   `OcclusionFadeManager._collect_tree_materials()` already registers ShaderMaterials
+   found on a MultiMesh's mesh surfaces. Note the material has to be set on the shared
+   `Mesh`'s surfaces, not as an override: MultiMeshInstance3D has no per-surface
+   override API (see `WindFoliage.apply_material`). Once that exists, `max_extent`
+   could be raised or dropped.
+2. **A MultiMesh is culled as one AABB.** Props spread across a whole map are drawn
+   whenever any part of the group is on screen, so this trades per-instance frustum
+   culling for the draw-call saving. Fine for the small props it currently accepts.
+   *If profiling ever shows fill/vertex cost dominating:* build one MultiMesh per
+   spatial grid cell instead of one per mesh, so each has a tight AABB.
+3. **No per-instance picking or per-instance state.** Harmless today because map
+   StaticBody3D nodes are `input_ray_pickable = false` anyway, but a future
+   "click this rock" feature would need instanced props excluded — by name suffix, or
+   by keeping their visual node.
+4. **Thresholds are constants, not content-tunable.** `DUPLICATE_INSTANCING_MIN_COUNT`
+   (25) and `DUPLICATE_INSTANCING_MAX_EXTENT` (2.0) are already parameters on the
+   function; if real maps disagree about the right values, surface them through
+   `LevelData` alongside `foliage_overrides`.
+5. **Only shared-Mesh duplicates group.** Objects duplicated with independent mesh
+   data (Blender's full copy, or Place Helper's "Object" duplicate mode rather than
+   "Instance") each carry their own Mesh resource and are left alone, even when
+   geometrically identical. *Options if that becomes common:* hash surface arrays to
+   detect equivalent meshes (expensive at load time), or merge duplicate mesh
+   datablocks on the Blender side before export — the authoring-side fix is much
+   cheaper than the runtime one.
+6. **Retired source nodes stay in the tree** (with `mesh = null`) whenever they have
+   children, so node count doesn't drop even though draw calls do. Reparenting those
+   children up one level with composed transforms would let the node be freed, but
+   that's more scene surgery than the saving justifies.
+7. **`cast_shadow` is taken from the group's first node.** Duplicates that disagree
+   about shadow casting will all follow the representative. If that ever matters, add
+   `cast_shadow` to the grouping key rather than special-casing it.
 
 For mid-game token spawns, `BoardTokenFactory.create_from_asset_async()` shows a
 placeholder token instantly when the model isn't cached, then upgrades it

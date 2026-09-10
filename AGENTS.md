@@ -33,6 +33,7 @@
 - **Shared constants** – Use `Constants.LOFI_DEFAULTS`, `Constants.NETWORK_TRANSFORM_UPDATE_INTERVAL`, etc. for values shared across files. Use `Paths.SETTINGS_PATH` for the settings file path (never hardcode `"user://settings.cfg"`). Add file-local constants for single-file magic numbers
 - **Map loading** – Use `GlbUtils.load_map_async()` (or `load_map()` sync) for maps; handles both `res://` and `user://` paths with full post-processing
 - **GLB loading** – Use `GlbUtils.load_glb_with_processing_async()` for non-map GLBs (tokens use `AssetManager` instead)
+- **Duplicate mesh instancing** – `MeshInstancingUtils.process_duplicate_mesh_instancing()` runs last in the map pipeline, collapsing groups of 25+ small MeshInstance3D nodes that share one Mesh resource (Blender linked duplicates) into one MultiMeshInstance3D each. Large/skinned/animated/material-overridden nodes are skipped, and source nodes with children keep their place with `mesh = null` so their collision bodies survive. Known limitations and their planned workarounds are listed in `docs/ARCHITECTURE.md` Map Loading Flow — read those before extending it
 - **Models** – Use `AssetManager.get_model_instance()` for cached model loading
 - **Signal cleanup** – Disconnect autoload signals in `_exit_tree()` for non-autoload nodes. Always guard with `is_connected()` before disconnecting. Use `CONNECT_ONE_SHOT` for transient signals. Guard `call_deferred()` callbacks with `is_instance_valid(self)`. See `docs/CONVENTIONS.md` for full patterns
 - **Process optimization** – Call `set_process(false)` / `set_physics_process(false)` in `_ready()` unless the node needs to tick immediately. Toggle on when work begins, off when idle. Same for `_physics_process()`. This avoids unnecessary per-frame overhead
@@ -146,7 +147,8 @@ code can work around. If a GUT test needs to assert on a `MultiMesh`'s actual
 per-instance transform values, don't round-trip through the `MultiMesh` API at all
 -- isolate the pure transform-computing logic into its own function and test that
 directly (see `GlbUtils._row_to_transform` and its tests in
-`tests/unit/test_glb_utils_scatter_instances.gd` for the pattern).
+`tests/unit/test_glb_utils_scatter_instances.gd` for the pattern, and
+`MeshInstancingUtils.transform_relative_to`, which is public for exactly this reason).
 
 More generally, if a bug report describes something that *should* be visible not
 rendering (invisible geometry, wrong material, etc.), a headless GUT test that only
