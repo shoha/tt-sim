@@ -29,7 +29,7 @@ func after_each() -> void:
 	NetworkManager._current_level_dict.clear()
 
 
-func test_late_joiner_snapshot_reflects_live_sun_override_edit() -> void:
+func test_late_joiner_snapshot_reflects_live_sun_settings_edit() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
 	NetworkManager._current_level_dict = {
 		"level_folder": "sectest_level",

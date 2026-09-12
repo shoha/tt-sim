@@ -16,7 +16,11 @@ var _original_environment_overrides: Dictionary = {}
 var _original_lofi_overrides: Dictionary = {}
 var _original_weather_overrides: Dictionary = {}
 var _original_foliage_overrides: Dictionary = {}
-var _original_visual_settings: VisualSettings = null
+## Snapshot taken when the edit drawer opens, restored on cancel. Initialized to
+## a real VisualSettings rather than null: _snapshot_original_values() always
+## replaces it before either consumer runs, but both consumers dereference .sun
+## unguarded, so a null would be a hard crash instead of a wrong-but-live sun.
+var _original_visual_settings: VisualSettings = VisualSettings.default()
 var _original_grid_cell_size: float = 1.524
 var _original_display_unit: String = "ft"
 var _original_display_unit_per_cell: float = 5.0
@@ -345,7 +349,10 @@ func _revert_edit_mode_values() -> void:
 		_original_environment_preset, _original_environment_overrides
 	)
 	_level_play_controller.apply_foliage_overrides(_original_foliage_overrides)
-	_level_play_controller.apply_sun_settings(_original_visual_settings.sun)
+	# .copy_settings() so the snapshot cannot be mutated through the reference we
+	# hand out. Both consumers are read-only today; this keeps that guarantee
+	# local instead of resting on behaviour in another file.
+	_level_play_controller.apply_sun_settings(_original_visual_settings.sun.copy_settings())
 	_level_play_controller.apply_water_style_setting(_original_water_style)
 
 	var game_map = _level_play_controller.get_game_map()
@@ -392,7 +399,10 @@ func _revert_edit_mode_values() -> void:
 					"lofi_overrides": full_lofi,
 					"weather_overrides": full_weather,
 					"foliage_overrides": _original_foliage_overrides,
-					"sun_settings": _original_visual_settings.sun.to_dict(),
+					# .copy_settings() for the same reason as the apply above:
+					# to_dict() is read-only, but the snapshot should not be
+					# reachable from outside this function at all.
+					"sun_settings": _original_visual_settings.sun.copy_settings().to_dict(),
 					"water_style": _original_water_style,
 				}
 			)

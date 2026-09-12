@@ -441,6 +441,11 @@ func initialize(
 	_sync_foliage_controls()
 	_sync_sun_controls()
 
+	# The gizmo does not survive a level change, so the toggle must not either.
+	# initialize() resyncs every other sun control from the new level; without
+	# this the button could stay latched against a freed SunGizmoTool.
+	set_aim_sun_pressed(false)
+
 
 ## Apply new environment state from outside (e.g. after reverting to map defaults)
 ## and refresh all controls to match.
@@ -740,9 +745,11 @@ func _on_foliage_override_changed(value: Variant, key: String) -> void:
 	foliage_changed.emit(current_foliage_overrides)
 
 
+## The one sun control that must NOT promote auto to on: it is the control that
+## chooses the mode.
 func _on_sun_mode_selected(index: int) -> void:
 	current_sun.mode = sun_mode_dropdown.get_item_metadata(index)
-	sun_changed.emit(current_sun)
+	_emit_sun_changed()
 
 
 ## Time of day is a GENERATOR, not the sun's interface: it regenerates direction,
@@ -755,7 +762,10 @@ func _on_sun_time_of_day_changed(value: float) -> void:
 	generated.softness = current_sun.softness
 	generated.shadow_darkness = current_sun.shadow_darkness
 	current_sun = generated
-	sun_changed.emit(current_sun)
+	# Must come after the reassignment above: generated.mode was copied from the
+	# old current_sun, so promoting before it would be overwritten here.
+	_promote_auto_mode_to_on()
+	_emit_sun_changed()
 	_sync_sun_controls()
 
 
@@ -779,7 +789,8 @@ func _sync_sun_controls() -> void:
 
 
 ## Emit the current sun and refresh the derived parts of the UI. Every sun
-## control funnels through here.
+## control funnels through here -- including Mode and Time of Day, which used to
+## emit sun_changed directly and so skipped the derived-state refresh.
 func _emit_sun_changed() -> void:
 	sun_changed.emit(current_sun)
 	_update_sun_generated_state()
