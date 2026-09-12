@@ -47,6 +47,13 @@ extends Resource
 @export var time_of_day: float = DefaultSun.DEFAULT_TIME_OF_DAY
 
 
+## The product's default sun: whatever the keyframes say at the default hour.
+## Derived rather than written as literals so DefaultSun.KEYFRAMES stays the
+## single source of truth for what "default lighting" looks like.
+static func default() -> SunSettings:
+	return DefaultSun.settings_for_time(DefaultSun.DEFAULT_TIME_OF_DAY)
+
+
 ## JSON-safe dictionary. Colors become "#rrggbb" strings, matching the existing
 ## convention in EnvironmentPresets.overrides_to_json(). Used for both the
 ## on-disk level format and the network payload, so there is one format.

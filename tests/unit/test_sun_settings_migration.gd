@@ -64,19 +64,8 @@ func _assert_lights_match(
 	assert_almost_eq(actual.light_color.b, expected.light_color.b, 0.0001, "color.b at %f" % hour)
 	assert_almost_eq(actual.light_energy, expected.light_energy, 0.0001, "energy at %f" % hour)
 
-
-func test_frozen_reference_matches_live_implementation_across_the_day() -> void:
-	# Proves the frozen copy faithfully records the shipped algorithm. Once
-	# DefaultSun.configure_directional_light() is deleted in Task 3, this test
-	# is removed and the frozen copy becomes the sole oracle.
-	for hour in _SWEEP:
-		var live := DirectionalLight3D.new()
-		var frozen := DirectionalLight3D.new()
-
-		DefaultSun.configure_directional_light(live, hour)
-		_reference_configure(frozen, hour)
-
-		_assert_lights_match(live, frozen, hour)
-
-		live.free()
-		frozen.free()
+# The test that proved _reference_configure() faithful against the live
+# pre-schema DefaultSun.configure_directional_light() lived here. That function
+# no longer exists, so the check cannot be re-run; it passed in the commit that
+# introduced this file, which is what makes the frozen copy trustworthy.
+# Task 4's migration tests are the ongoing consumers of the oracle.
