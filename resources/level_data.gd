@@ -4,6 +4,16 @@ extends Resource
 ## Stores all data for a game level
 ## Includes the map model and all token placements
 
+## On-disk schema version for level.json. Bumped whenever a field's shape
+## changes in a way that needs migrating in from_dict(). Version 0 means "no
+## format_version key", i.e. a level saved before versioning existed.
+const FORMAT_VERSION: int = 1
+
+## Schema version this instance conforms to. Always FORMAT_VERSION in memory --
+## from_dict() migrates older payloads forward rather than retaining their
+## version.
+@export var format_version: int = FORMAT_VERSION
+
 ## Level metadata
 @export var level_name: String = "Untitled Level"
 @export var level_description: String = ""
@@ -62,11 +72,10 @@ extends Resource
 ## Empty dictionary uses the defaults from WindFoliage.PRESETS.
 @export var foliage_overrides: Dictionary = {}
 
-## Default sun light configuration (see utils/default_sun.gd and
-## LevelEnvironmentManager). Keys: "mode" ("auto" | "on" | "off", "auto" when
-## absent means: add the sun only if the map has no lights of its own) and
-## "time_of_day" (0.0-24.0, DefaultSun.DEFAULT_TIME_OF_DAY when absent).
-@export var sun_overrides: Dictionary = {}
+## Typed visual configuration (sun and shadow today). Replaced the flat
+## sun_overrides dictionary in format version 1; pre-version levels are migrated
+## on load by from_dict(). See resources/visual_settings.gd.
+@export var visual_settings: VisualSettings = VisualSettings.default()
 
 ## Scale & Measurement
 @export_group("Scale")
@@ -182,6 +191,7 @@ func duplicate_level() -> LevelData:
 	new_level.level_description = level_description
 	new_level.author = author
 	new_level.level_folder = ""  # Duplicates need to be saved to a new folder
+	new_level.format_version = format_version
 	new_level.map_path = map_path
 	new_level.map_scale = map_scale
 	new_level.map_offset = map_offset
@@ -192,7 +202,7 @@ func duplicate_level() -> LevelData:
 	new_level.lofi_overrides = lofi_overrides.duplicate()
 	new_level.weather_overrides = weather_overrides.duplicate()
 	new_level.foliage_overrides = foliage_overrides.duplicate()
-	new_level.sun_overrides = sun_overrides.duplicate()
+	new_level.visual_settings = visual_settings.copy_settings()
 	new_level.grid_cell_size = grid_cell_size
 	new_level.display_unit = display_unit
 	new_level.display_unit_per_cell = display_unit_per_cell
@@ -250,6 +260,7 @@ func to_dict() -> Dictionary:
 		placements_array.append(placement.to_dict())
 
 	return {
+		"format_version": FORMAT_VERSION,
 		"level_name": level_name,
 		"level_description": level_description,
 		"author": author,
@@ -266,7 +277,7 @@ func to_dict() -> Dictionary:
 		"lofi_overrides": lofi_overrides.duplicate(),
 		"weather_overrides": weather_overrides.duplicate(),
 		"foliage_overrides": foliage_overrides.duplicate(),
-		"sun_overrides": sun_overrides.duplicate(),
+		"visual_settings": visual_settings.to_dict(),
 		"grid_cell_size": grid_cell_size,
 		"display_unit": display_unit,
 		"display_unit_per_cell": display_unit_per_cell,
@@ -307,8 +318,24 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.weather_overrides = weather_raw.duplicate() if weather_raw is Dictionary else {}
 	var foliage_raw = data.get("foliage_overrides", {})
 	level.foliage_overrides = foliage_raw.duplicate() if foliage_raw is Dictionary else {}
-	var sun_raw = data.get("sun_overrides", {})
-	level.sun_overrides = sun_raw.duplicate() if sun_raw is Dictionary else {}
+	# Schema migration. A missing format_version means the level predates
+	# versioning, so its sun lives in the legacy flat sun_overrides dictionary.
+	# SunSettings.from_legacy() reproduces the exact light state the old runtime
+	# produced -- see tests/unit/test_sun_settings_migration.gd.
+	level.format_version = FORMAT_VERSION
+	if int(data.get("format_version", 0)) >= 1:
+		var visual_raw: Variant = data.get("visual_settings", {})
+		level.visual_settings = (
+			VisualSettings.from_dict(visual_raw)
+			if visual_raw is Dictionary
+			else VisualSettings.default()
+		)
+	else:
+		var legacy_raw: Variant = data.get("sun_overrides", {})
+		level.visual_settings = VisualSettings.new()
+		level.visual_settings.sun = SunSettings.from_legacy(
+			legacy_raw if legacy_raw is Dictionary else {}
+		)
 
 	level.grid_cell_size = data.get("grid_cell_size", 1.524)
 	level.display_unit = data.get("display_unit", "ft")
