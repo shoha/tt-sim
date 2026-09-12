@@ -10,13 +10,18 @@ extends GutTest
 ## until the next full level broadcast. This mirrors the existing precedent in
 ## test_network_manager_security.gd
 ## (test_late_joiner_snapshot_reflects_live_visual_settings_edit) but targets
-## sun_overrides specifically (missing until this fix), plus a generalized
-## check across every key GameplayMenuController actually broadcasts.
+## the sun specifically (missing until this fix), plus a generalized check
+## across every key GameplayMenuController actually broadcasts.
 ##
 ## NetworkManager is a live autoload, not a doubled instance (see
 ## test_network_manager_security.gd's header comment for why -- GUT's
 ## stub()/double() only works on instances you construct yourself), so these
 ## tests drive it directly and restore its state in after_each().
+##
+## The sun mirror writes into visual_settings.sun (not a top-level key) because
+## _current_level_dict is a LevelData.to_dict()-shaped dictionary and
+## LevelData.from_dict() only looks for the sun nested there -- see
+## NetworkManager._patch_current_level_dict().
 
 
 func after_each() -> void:
@@ -27,15 +32,21 @@ func after_each() -> void:
 func test_late_joiner_snapshot_reflects_live_sun_override_edit() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
 	NetworkManager._current_level_dict = {
-		"level_folder": "sectest_level", "sun_overrides": {"mode": "auto", "time_of_day": 14.0}
+		"level_folder": "sectest_level",
+		"visual_settings": {"sun": {"mode": "auto", "time_of_day": 14.0}},
 	}
 
-	NetworkManager._patch_current_level_dict({"sun_overrides": {"mode": "on", "time_of_day": 8.0}})
+	NetworkManager._patch_current_level_dict({"sun_settings": {"mode": "on", "time_of_day": 8.0}})
 
 	assert_eq(
-		NetworkManager._current_level_dict["sun_overrides"],
+		NetworkManager._current_level_dict["visual_settings"]["sun"],
 		{"mode": "on", "time_of_day": 8.0},
 		"A live Sun edit must update the late-joiner snapshot, not just the live broadcast"
+	)
+	assert_eq(
+		NetworkManager._current_level_dict["format_version"],
+		LevelData.FORMAT_VERSION,
+		"The mirrored snapshot must be stamped so LevelData.from_dict() reads the nested sun"
 	)
 
 
@@ -43,8 +54,8 @@ func test_late_joiner_snapshot_reflects_live_sun_override_edit() -> void:
 ## _on_edit_*_changed handlers and _on_edit_save_requested) -- every one of
 ## them needs a corresponding branch in _patch_current_level_dict(), or a late
 ## joiner sees a stale value for whichever key was forgotten. This
-## generalizes the regression beyond sun_overrides alone: an identical gap
-## for any of these keys would have the same symptom.
+## generalizes the regression beyond the sun alone: an identical gap for any of
+## these keys would have the same symptom.
 func test_patch_current_level_dict_mirrors_every_broadcast_visual_settings_key() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
 	NetworkManager._current_level_dict = {"level_folder": "sectest_level"}
@@ -56,18 +67,19 @@ func test_patch_current_level_dict_mirrors_every_broadcast_visual_settings_key()
 		"lofi_overrides": {"pixelation": 2.0},
 		"weather_overrides": {"rain_intensity": 0.5},
 		"foliage_overrides": {"grass_sway_speed": 9.0},
-		"sun_overrides": {"mode": "off"},
+		"sun_settings": {"mode": "off"},
 		"water_style": "realistic",
 	}
 	NetworkManager._patch_current_level_dict(net_settings)
 
 	# "light_intensity" is special-cased to the LevelData field name it
-	# actually corresponds to; every other key is a 1:1 mirror.
+	# actually corresponds to; "sun_settings" nests under visual_settings.sun
+	# (see class-level comment); every other key is a 1:1 mirror.
 	assert_eq(NetworkManager._current_level_dict["light_intensity_scale"], 0.4)
 	assert_eq(NetworkManager._current_level_dict["environment_preset"], "night")
 	assert_eq(NetworkManager._current_level_dict["environment_overrides"], {"fog_enabled": true})
 	assert_eq(NetworkManager._current_level_dict["lofi_overrides"], {"pixelation": 2.0})
 	assert_eq(NetworkManager._current_level_dict["weather_overrides"], {"rain_intensity": 0.5})
 	assert_eq(NetworkManager._current_level_dict["foliage_overrides"], {"grass_sway_speed": 9.0})
-	assert_eq(NetworkManager._current_level_dict["sun_overrides"], {"mode": "off"})
+	assert_eq(NetworkManager._current_level_dict["visual_settings"]["sun"], {"mode": "off"})
 	assert_eq(NetworkManager._current_level_dict["water_style"], "realistic")

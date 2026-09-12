@@ -16,7 +16,7 @@ var _original_environment_overrides: Dictionary = {}
 var _original_lofi_overrides: Dictionary = {}
 var _original_weather_overrides: Dictionary = {}
 var _original_foliage_overrides: Dictionary = {}
-var _original_sun_overrides: Dictionary = {}
+var _original_visual_settings: VisualSettings = null
 var _original_grid_cell_size: float = 1.524
 var _original_display_unit: String = "ft"
 var _original_display_unit_per_cell: float = 5.0
@@ -301,7 +301,9 @@ func _enter_edit_mode() -> void:
 	_original_lofi_overrides = level_data.lofi_overrides.duplicate()
 	_original_weather_overrides = level_data.weather_overrides.duplicate()
 	_original_foliage_overrides = level_data.foliage_overrides.duplicate()
-	_original_sun_overrides = level_data.sun_overrides.duplicate()
+	# copy_settings(), not assignment: VisualSettings is a Resource, so an alias
+	# would let live edits overwrite the snapshot and silently break cancel.
+	_original_visual_settings = level_data.visual_settings.copy_settings()
 	_original_grid_cell_size = level_data.grid_cell_size
 	_original_display_unit = level_data.display_unit
 	_original_display_unit_per_cell = level_data.display_unit_per_cell
@@ -327,7 +329,7 @@ func _revert_edit_mode_values() -> void:
 	level_data.lofi_overrides = _original_lofi_overrides.duplicate()
 	level_data.weather_overrides = _original_weather_overrides.duplicate()
 	level_data.foliage_overrides = _original_foliage_overrides.duplicate()
-	level_data.sun_overrides = _original_sun_overrides.duplicate()
+	level_data.visual_settings = _original_visual_settings.copy_settings()
 	level_data.grid_cell_size = _original_grid_cell_size
 	level_data.display_unit = _original_display_unit
 	level_data.display_unit_per_cell = _original_display_unit_per_cell
@@ -339,7 +341,7 @@ func _revert_edit_mode_values() -> void:
 		_original_environment_preset, _original_environment_overrides
 	)
 	_level_play_controller.apply_foliage_overrides(_original_foliage_overrides)
-	_level_play_controller.apply_sun_overrides(_original_sun_overrides)
+	_level_play_controller.apply_sun_settings(_original_visual_settings.sun)
 	_level_play_controller.apply_water_style_setting(_original_water_style)
 
 	var game_map = _level_play_controller.get_game_map()
@@ -386,7 +388,7 @@ func _revert_edit_mode_values() -> void:
 					"lofi_overrides": full_lofi,
 					"weather_overrides": full_weather,
 					"foliage_overrides": _original_foliage_overrides,
-					"sun_overrides": _original_sun_overrides,
+					"sun_settings": _original_visual_settings.sun.to_dict(),
 					"water_style": _original_water_style,
 				}
 			)
@@ -498,13 +500,14 @@ func _on_edit_foliage_changed(overrides: Dictionary) -> void:
 
 
 ## Real-time sun change from the edit panel
-func _on_edit_sun_changed(overrides: Dictionary) -> void:
+func _on_edit_sun_changed(settings: SunSettings) -> void:
 	if _level_play_controller:
-		_level_play_controller.apply_sun_overrides(overrides)
-		if _level_play_controller.active_level_data:
-			_level_play_controller.active_level_data.sun_overrides = overrides.duplicate()
+		_level_play_controller.apply_sun_settings(settings)
+		var level_data = _level_play_controller.active_level_data
+		if level_data:
+			level_data.visual_settings.sun = settings.copy_settings()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings({"sun_overrides": overrides})
+		NetworkManager.broadcast_visual_settings({"sun_settings": settings.to_dict()})
 
 
 ## Real-time water style change from the edit panel
@@ -531,7 +534,7 @@ func _on_edit_save_requested(values: Dictionary) -> void:
 	level_data.lofi_overrides = values["lofi_overrides"].duplicate()
 	level_data.weather_overrides = values["weather_overrides"].duplicate()
 	level_data.foliage_overrides = values["foliage_overrides"].duplicate()
-	level_data.sun_overrides = values["sun_overrides"].duplicate()
+	level_data.visual_settings.sun = (values["sun_settings"] as SunSettings).copy_settings()
 	level_data.grid_cell_size = values["grid_cell_size"]
 	level_data.display_unit = values["display_unit"]
 	level_data.display_unit_per_cell = values["display_unit_per_cell"]
@@ -551,7 +554,7 @@ func _on_edit_save_requested(values: Dictionary) -> void:
 					"lofi_overrides": values["lofi_overrides"],
 					"weather_overrides": values["weather_overrides"],
 					"foliage_overrides": values["foliage_overrides"],
-					"sun_overrides": values["sun_overrides"],
+					"sun_settings": (values["sun_settings"] as SunSettings).to_dict(),
 					"water_style": values["water_style"],
 				}
 			)

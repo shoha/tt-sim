@@ -221,8 +221,8 @@ func apply_foliage_overrides(overrides: Dictionary) -> void:
 
 
 ## Apply sun light overrides to the live level (mode + time of day).
-func apply_sun_overrides(overrides: Dictionary) -> void:
-	_environment_manager.apply_sun_overrides(overrides)
+func apply_sun_settings(settings: SunSettings) -> void:
+	_environment_manager.apply_sun_settings(settings)
 
 
 ## Apply a water style ("stylized"/"realistic") to the live level's water
@@ -400,10 +400,11 @@ func _on_visual_settings_received(settings: Dictionary) -> void:
 		apply_foliage_overrides(settings["foliage_overrides"])
 		if active_level_data:
 			active_level_data.foliage_overrides = settings["foliage_overrides"].duplicate()
-	if settings.has("sun_overrides"):
-		apply_sun_overrides(settings["sun_overrides"])
+	if settings.has("sun_settings"):
+		var sun := SunSettings.from_dict(settings["sun_settings"])
+		apply_sun_settings(sun)
 		if active_level_data:
-			active_level_data.sun_overrides = settings["sun_overrides"].duplicate()
+			active_level_data.visual_settings.sun = sun
 	if settings.has("water_style"):
 		var style: String = settings["water_style"]
 		apply_water_style_setting(style)
