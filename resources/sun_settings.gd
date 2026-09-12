@@ -54,6 +54,21 @@ static func default() -> SunSettings:
 	return DefaultSun.settings_for_time(DefaultSun.DEFAULT_TIME_OF_DAY)
 
 
+## Migrate a pre-version-1 LevelData.sun_overrides dictionary, whose only keys
+## were "mode" and "time_of_day".
+##
+## Appearance-preserving by construction: direction, color, and energy come from
+## the same DefaultSun keyframe lerp the old runtime used, and the three shadow
+## fields keep their SunSettings defaults, which are the values that were in
+## effect when shadows were hardcoded. See
+## tests/unit/test_sun_settings_migration.gd for the proof.
+static func from_legacy(sun_overrides: Dictionary) -> SunSettings:
+	var hour: float = float(sun_overrides.get("time_of_day", DefaultSun.DEFAULT_TIME_OF_DAY))
+	var settings := DefaultSun.settings_for_time(hour)
+	settings.mode = str(sun_overrides.get("mode", "auto"))
+	return settings
+
+
 ## JSON-safe dictionary. Colors become "#rrggbb" strings, matching the existing
 ## convention in EnvironmentPresets.overrides_to_json(). Used for both the
 ## on-disk level format and the network payload, so there is one format.
