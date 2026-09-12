@@ -84,8 +84,7 @@ static func from_dict(data: Dictionary) -> SunSettings:
 ## the drawer's cancel path depends on this being a real copy. Field-by-field
 ## rather than a to_dict()/from_dict() round-trip, because hex serialization
 ## would quantize the color.
-@warning_ignore("native_method_override")
-func duplicate_deep(_p_deep_mode = null) -> Resource:
+func copy_settings() -> SunSettings:
 	var s := SunSettings.new()
 	s.mode = mode
 	s.azimuth_degrees = azimuth_degrees
