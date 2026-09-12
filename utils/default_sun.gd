@@ -1,13 +1,19 @@
 class_name DefaultSun
 extends RefCounted
 
-## Computes DirectionalLight3D angle/color/energy for a given time-of-day
-## (0.0-24.0), interpolating between hand-authored keyframes -- matching the
-## existing convention of curated dictionaries (EnvironmentPresets
-## .SKY_PRESETS/PRESETS) rather than a procedural formula, so each keyframe can
-## be tuned independently. Time-of-day only drives the sun light itself; it
-## never touches the separate ambient/Environment config (see
-## LevelEnvironmentManager).
+## Generates sun light configuration for a given time-of-day (0.0-24.0),
+## interpolating between hand-authored keyframes -- matching the existing
+## convention of curated dictionaries (EnvironmentPresets.SKY_PRESETS/PRESETS)
+## rather than a procedural formula, so each keyframe can be tuned
+## independently.
+##
+## This is a GENERATOR, not the lighting interface. settings_for_time() produces
+## a SunSettings which the level stores and the user is then free to hand-edit
+## (aim, recolor, change energy, tune shadows) without being dragged back onto
+## the curve. apply() is a dumb applier with no interpolation of its own.
+##
+## Time-of-day only drives the sun light itself; it never touches the separate
+## ambient/Environment config (see LevelEnvironmentManager).
 
 const DEFAULT_TIME_OF_DAY: float = 14.0
 
@@ -65,9 +71,11 @@ const KEYFRAMES = {
 const _HOURS: Array[float] = [0.0, 6.0, 12.0, 18.0, 24.0]
 
 
-## Configure [param light] for [param time_of_day] (clamped to 0.0-24.0).
-## Interpolates elevation, color, and energy between the two nearest keyframes.
-static func configure_directional_light(light: DirectionalLight3D, time_of_day: float) -> void:
+## Generate the sun configuration for [param time_of_day] (clamped to
+## 0.0-24.0), interpolating elevation, azimuth, color, and energy between the
+## two nearest keyframes. Fields the keyframes say nothing about (mode and the
+## three shadow fields) keep their SunSettings defaults.
+static func settings_for_time(time_of_day: float) -> SunSettings:
 	var t := clampf(time_of_day, 0.0, 24.0)
 
 	var lo_hour := 0.0
@@ -84,11 +92,21 @@ static func configure_directional_light(light: DirectionalLight3D, time_of_day: 
 	var span := hi_hour - lo_hour
 	var f := 0.0 if span == 0.0 else (t - lo_hour) / span
 
-	var elevation: float = lerpf(lo["elevation_degrees"], hi["elevation_degrees"], f)
-	var azimuth: float = lerpf(lo["azimuth_degrees"], hi["azimuth_degrees"], f)
-	var color: Color = lo["color"].lerp(hi["color"], f)
-	var energy: float = lerpf(lo["energy"], hi["energy"], f)
+	var settings := SunSettings.new()
+	settings.time_of_day = t
+	settings.elevation_degrees = lerpf(lo["elevation_degrees"], hi["elevation_degrees"], f)
+	settings.azimuth_degrees = lerpf(lo["azimuth_degrees"], hi["azimuth_degrees"], f)
+	settings.color = lo["color"].lerp(hi["color"], f)
+	settings.energy = lerpf(lo["energy"], hi["energy"], f)
+	return settings
 
-	light.rotation_degrees = Vector3(-elevation, azimuth, 0.0)
-	light.light_color = color
-	light.light_energy = energy
+
+## Write [param settings] onto [param light]. No interpolation and no defaulting
+## -- whatever the SunSettings says is what the light gets.
+static func apply(light: DirectionalLight3D, settings: SunSettings) -> void:
+	light.rotation_degrees = Vector3(-settings.elevation_degrees, settings.azimuth_degrees, 0.0)
+	light.light_color = settings.color
+	light.light_energy = settings.energy
+	light.shadow_enabled = settings.shadows_enabled
+	light.light_angular_distance = settings.softness
+	light.shadow_opacity = settings.shadow_darkness
