@@ -14,56 +14,61 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_script")
 
-[node name="ScrollContainer" type="ScrollContainer" parent="."]
+[node name="RootVBox" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
 layout_mode = 0
 offset_right = 320.0
 offset_bottom = 600.0
+
+[node name="ScrollContainer" type="ScrollContainer" parent="RootVBox"]
+layout_mode = 2
+size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="VBox" type="VBoxContainer" parent="ScrollContainer"]
+[node name="VBox" type="VBoxContainer" parent="RootVBox/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="Title" type="Label" parent="ScrollContainer/VBox"]
+[node name="Title" type="Label" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 text = "Visuals"
 horizontal_alignment = 1
 
-[node name="HSeparator0" type="HSeparator" parent="ScrollContainer/VBox"]
+[node name="HSeparator0" type="HSeparator" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 
-[node name="ScaleLabel" type="Label" parent="ScrollContainer/VBox"]
+[node name="ScaleLabel" type="Label" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 text = "Scale & Measurement"
 horizontal_alignment = 1
 
-[node name="ScalePresetRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="ScalePresetRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="ScalePresetLabel" type="Label" parent="ScrollContainer/VBox/ScalePresetRow"]
+[node name="ScalePresetLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/ScalePresetRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "System:"
 
-[node name="ScalePresetDropdown" type="OptionButton" parent="ScrollContainer/VBox/ScalePresetRow"]
+[node name="ScalePresetDropdown" type="OptionButton" parent="RootVBox/ScrollContainer/VBox/ScalePresetRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 clip_text = true
 fit_to_longest_item = false
 
-[node name="GridCellSizeRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="GridCellSizeRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="GridCellSizeLabel" type="Label" parent="ScrollContainer/VBox/GridCellSizeRow"]
+[node name="GridCellSizeLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/GridCellSizeRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Cell Size (m):"
 
-[node name="GridCellSizeSliderSpin" parent="ScrollContainer/VBox/GridCellSizeRow" instance=ExtResource("2_slider_spin_box")]
+[node name="GridCellSizeSliderSpin" parent="RootVBox/ScrollContainer/VBox/GridCellSizeRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -72,56 +77,56 @@ max_value = 10.0
 step = 0.001
 value = 1.524
 
-[node name="HSeparator" type="HSeparator" parent="ScrollContainer/VBox"]
+[node name="HSeparator" type="HSeparator" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 
-[node name="LightingLabel" type="Label" parent="ScrollContainer/VBox"]
+[node name="LightingLabel" type="Label" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 text = "Lighting & Environment"
 horizontal_alignment = 1
 
-[node name="PresetRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="PresetRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="PresetLabel" type="Label" parent="ScrollContainer/VBox/PresetRow"]
+[node name="PresetLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/PresetRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Preset:"
 
-[node name="PresetDropdown" type="OptionButton" parent="ScrollContainer/VBox/PresetRow"]
+[node name="PresetDropdown" type="OptionButton" parent="RootVBox/ScrollContainer/VBox/PresetRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 clip_text = true
 fit_to_longest_item = false
 
-[node name="WaterStyleRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="WaterStyleRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="WaterStyleLabel" type="Label" parent="ScrollContainer/VBox/WaterStyleRow"]
+[node name="WaterStyleLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/WaterStyleRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Water:"
 
-[node name="WaterStyleDropdown" type="OptionButton" parent="ScrollContainer/VBox/WaterStyleRow"]
+[node name="WaterStyleDropdown" type="OptionButton" parent="RootVBox/ScrollContainer/VBox/WaterStyleRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 clip_text = true
 fit_to_longest_item = false
 
-[node name="IntensityRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="IntensityRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="IntensityLabelTitle" type="Label" parent="ScrollContainer/VBox/IntensityRow"]
+[node name="IntensityLabelTitle" type="Label" parent="RootVBox/ScrollContainer/VBox/IntensityRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Light Scale:"
 
-[node name="IntensitySliderSpin" parent="ScrollContainer/VBox/IntensityRow" instance=ExtResource("2_slider_spin_box")]
+[node name="IntensitySliderSpin" parent="RootVBox/ScrollContainer/VBox/IntensityRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 0.0001
@@ -131,7 +136,7 @@ value = 1.0
 exp_edit = true
 allow_greater = true
 
-[node name="RevertToMapButton" type="Button" parent="ScrollContainer/VBox"]
+[node name="RevertToMapButton" type="Button" parent="RootVBox/ScrollContainer/VBox"]
 script = ExtResource("animated_btn")
 unique_name_in_owner = true
 visible = false
@@ -139,43 +144,43 @@ layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Revert to Map Defaults"
 
-[node name="OverridesLabel" type="Label" parent="ScrollContainer/VBox"]
+[node name="OverridesLabel" type="Label" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Overrides"
 horizontal_alignment = 1
 
-[node name="BgColorRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="BgColorRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="BgColorLabel" type="Label" parent="ScrollContainer/VBox/BgColorRow"]
+[node name="BgColorLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/BgColorRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Background:"
 
-[node name="BgColorPicker" type="ColorPickerButton" parent="ScrollContainer/VBox/BgColorRow"]
+[node name="BgColorPicker" type="ColorPickerButton" parent="RootVBox/ScrollContainer/VBox/BgColorRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 color = Color(0.3, 0.3, 0.3, 1)
 
-[node name="AmbientRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="AmbientRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="AmbientLabel" type="Label" parent="ScrollContainer/VBox/AmbientRow"]
+[node name="AmbientLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AmbientRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Ambient:"
 
-[node name="AmbientColorPicker" type="ColorPickerButton" parent="ScrollContainer/VBox/AmbientRow"]
+[node name="AmbientColorPicker" type="ColorPickerButton" parent="RootVBox/ScrollContainer/VBox/AmbientRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(32, 0)
 layout_mode = 2
 color = Color(0.4, 0.4, 0.45, 1)
 
-[node name="AmbientEnergySliderSpin" parent="ScrollContainer/VBox/AmbientRow" instance=ExtResource("2_slider_spin_box")]
+[node name="AmbientEnergySliderSpin" parent="RootVBox/ScrollContainer/VBox/AmbientRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 2.0
@@ -183,27 +188,27 @@ step = 0.01
 value = 0.5
 allow_greater = true
 
-[node name="FogRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="FogRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="FogLabel" type="Label" parent="ScrollContainer/VBox/FogRow"]
+[node name="FogLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/FogRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Fog:"
 
-[node name="FogEnabledCheck" type="CheckBox" parent="ScrollContainer/VBox/FogRow"]
+[node name="FogEnabledCheck" type="CheckBox" parent="RootVBox/ScrollContainer/VBox/FogRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(32, 0)
 layout_mode = 2
 
-[node name="FogColorPicker" type="ColorPickerButton" parent="ScrollContainer/VBox/FogRow"]
+[node name="FogColorPicker" type="ColorPickerButton" parent="RootVBox/ScrollContainer/VBox/FogRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(32, 0)
 layout_mode = 2
 color = Color(0.5, 0.5, 0.55, 1)
 
-[node name="FogDensitySliderSpin" parent="ScrollContainer/VBox/FogRow" instance=ExtResource("2_slider_spin_box")]
+[node name="FogDensitySliderSpin" parent="RootVBox/ScrollContainer/VBox/FogRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -214,21 +219,21 @@ value = 0.01
 exp_edit = true
 allow_greater = true
 
-[node name="GlowRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="GlowRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="GlowLabel" type="Label" parent="ScrollContainer/VBox/GlowRow"]
+[node name="GlowLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/GlowRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Glow:"
 
-[node name="GlowEnabledCheck" type="CheckBox" parent="ScrollContainer/VBox/GlowRow"]
+[node name="GlowEnabledCheck" type="CheckBox" parent="RootVBox/ScrollContainer/VBox/GlowRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(32, 0)
 layout_mode = 2
 
-[node name="GlowIntensitySliderSpin" parent="ScrollContainer/VBox/GlowRow" instance=ExtResource("2_slider_spin_box")]
+[node name="GlowIntensitySliderSpin" parent="RootVBox/ScrollContainer/VBox/GlowRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 2.0
@@ -236,16 +241,16 @@ step = 0.01
 value = 0.8
 allow_greater = true
 
-[node name="ExposureRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="ExposureRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="ExposureLabel" type="Label" parent="ScrollContainer/VBox/ExposureRow"]
+[node name="ExposureLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/ExposureRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Exposure:"
 
-[node name="ExposureSliderSpin" parent="ScrollContainer/VBox/ExposureRow" instance=ExtResource("2_slider_spin_box")]
+[node name="ExposureSliderSpin" parent="RootVBox/ScrollContainer/VBox/ExposureRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -255,16 +260,16 @@ step = 0.01
 value = 1.0
 allow_greater = true
 
-[node name="BrightnessRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="BrightnessRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="BrightnessLabel" type="Label" parent="ScrollContainer/VBox/BrightnessRow"]
+[node name="BrightnessLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/BrightnessRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Brightness:"
 
-[node name="BrightnessSliderSpin" parent="ScrollContainer/VBox/BrightnessRow" instance=ExtResource("2_slider_spin_box")]
+[node name="BrightnessSliderSpin" parent="RootVBox/ScrollContainer/VBox/BrightnessRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -273,16 +278,16 @@ max_value = 3.0
 step = 0.01
 value = 1.0
 
-[node name="ContrastRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="ContrastRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="ContrastLabel" type="Label" parent="ScrollContainer/VBox/ContrastRow"]
+[node name="ContrastLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/ContrastRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Contrast:"
 
-[node name="ContrastSliderSpin" parent="ScrollContainer/VBox/ContrastRow" instance=ExtResource("2_slider_spin_box")]
+[node name="ContrastSliderSpin" parent="RootVBox/ScrollContainer/VBox/ContrastRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -291,16 +296,16 @@ max_value = 3.0
 step = 0.01
 value = 1.0
 
-[node name="SaturationRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SaturationRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SaturationLabel" type="Label" parent="ScrollContainer/VBox/SaturationRow"]
+[node name="SaturationLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SaturationRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Saturation:"
 
-[node name="SaturationSliderSpin" parent="ScrollContainer/VBox/SaturationRow" instance=ExtResource("2_slider_spin_box")]
+[node name="SaturationSliderSpin" parent="RootVBox/ScrollContainer/VBox/SaturationRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -309,7 +314,7 @@ max_value = 3.0
 step = 0.01
 value = 1.0
 
-[node name="AdvancedToggle" type="Button" parent="ScrollContainer/VBox"]
+[node name="AdvancedToggle" type="Button" parent="RootVBox/ScrollContainer/VBox"]
 script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
@@ -317,38 +322,38 @@ toggle_mode = true
 theme_type_variation = &"Caption"
 text = "Advanced ▼"
 
-[node name="AdvancedContainer" type="VBoxContainer" parent="ScrollContainer/VBox"]
+[node name="AdvancedContainer" type="VBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="SkyPresetRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+[node name="SkyPresetRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SkyLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/SkyPresetRow"]
+[node name="SkyLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/SkyPresetRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Sky:"
 
-[node name="SkyPresetDropdown" type="OptionButton" parent="ScrollContainer/VBox/AdvancedContainer/SkyPresetRow"]
+[node name="SkyPresetDropdown" type="OptionButton" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/SkyPresetRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 clip_text = true
 fit_to_longest_item = false
 
-[node name="FogEnergyRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+[node name="FogEnergyRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="FogEnergyLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/FogEnergyRow"]
+[node name="FogEnergyLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/FogEnergyRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Fog Energy:"
 
-[node name="FogEnergySliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/FogEnergyRow" instance=ExtResource("2_slider_spin_box")]
+[node name="FogEnergySliderSpin" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/FogEnergyRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -357,16 +362,16 @@ step = 0.01
 value = 1.0
 allow_greater = true
 
-[node name="FogHeightRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+[node name="FogHeightRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="FogHeightLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/FogHeightRow"]
+[node name="FogHeightLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/FogHeightRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Fog Height:"
 
-[node name="FogHeightSliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/FogHeightRow" instance=ExtResource("2_slider_spin_box")]
+[node name="FogHeightSliderSpin" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/FogHeightRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -377,16 +382,16 @@ value = 0.0
 allow_greater = true
 allow_lesser = true
 
-[node name="FogHeightDensityRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+[node name="FogHeightDensityRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="FogHDLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/FogHeightDensityRow"]
+[node name="FogHDLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/FogHeightDensityRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Fog H.Dens:"
 
-[node name="FogHeightDensitySliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/FogHeightDensityRow" instance=ExtResource("2_slider_spin_box")]
+[node name="FogHeightDensitySliderSpin" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/FogHeightDensityRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -395,32 +400,32 @@ step = 0.01
 value = 0.0
 allow_greater = true
 
-[node name="TonemapModeRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+[node name="TonemapModeRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="TonemapLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/TonemapModeRow"]
+[node name="TonemapLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/TonemapModeRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Tonemap:"
 
-[node name="TonemapModeDropdown" type="OptionButton" parent="ScrollContainer/VBox/AdvancedContainer/TonemapModeRow"]
+[node name="TonemapModeDropdown" type="OptionButton" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/TonemapModeRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 clip_text = true
 fit_to_longest_item = false
 
-[node name="TonemapWhiteRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+[node name="TonemapWhiteRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="TmWhiteLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/TonemapWhiteRow"]
+[node name="TmWhiteLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/TonemapWhiteRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "TM White:"
 
-[node name="TonemapWhiteSliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/TonemapWhiteRow" instance=ExtResource("2_slider_spin_box")]
+[node name="TonemapWhiteSliderSpin" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/TonemapWhiteRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -430,16 +435,16 @@ step = 0.01
 value = 1.0
 allow_greater = true
 
-[node name="GlowStrengthRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+[node name="GlowStrengthRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="GlowStrLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/GlowStrengthRow"]
+[node name="GlowStrLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/GlowStrengthRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Glow Str:"
 
-[node name="GlowStrengthSliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/GlowStrengthRow" instance=ExtResource("2_slider_spin_box")]
+[node name="GlowStrengthSliderSpin" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/GlowStrengthRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -448,16 +453,16 @@ step = 0.01
 value = 1.0
 allow_greater = true
 
-[node name="GlowBloomRow" type="HBoxContainer" parent="ScrollContainer/VBox/AdvancedContainer"]
+[node name="GlowBloomRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="GlowBloomLabel" type="Label" parent="ScrollContainer/VBox/AdvancedContainer/GlowBloomRow"]
+[node name="GlowBloomLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/GlowBloomRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Bloom:"
 
-[node name="GlowBloomSliderSpin" parent="ScrollContainer/VBox/AdvancedContainer/GlowBloomRow" instance=ExtResource("2_slider_spin_box")]
+[node name="GlowBloomSliderSpin" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/GlowBloomRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -465,55 +470,55 @@ max_value = 1.0
 step = 0.01
 value = 0.0
 
-[node name="HSeparator3" type="HSeparator" parent="ScrollContainer/VBox"]
+[node name="HSeparator3" type="HSeparator" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 
-[node name="SunLabel" type="Label" parent="ScrollContainer/VBox"]
+[node name="SunLabel" type="Label" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 text = "Sun"
 horizontal_alignment = 1
 
-[node name="SunModeRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SunModeRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SunModeLabel" type="Label" parent="ScrollContainer/VBox/SunModeRow"]
+[node name="SunModeLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SunModeRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Mode:"
 
-[node name="SunModeDropdown" type="OptionButton" parent="ScrollContainer/VBox/SunModeRow"]
+[node name="SunModeDropdown" type="OptionButton" parent="RootVBox/ScrollContainer/VBox/SunModeRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 clip_text = true
 fit_to_longest_item = false
 
-[node name="AimSunRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="AimSunRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="AimSunLabel" type="Label" parent="ScrollContainer/VBox/AimSunRow"]
+[node name="AimSunLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AimSunRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Aim"
 
-[node name="AimSunButton" type="Button" parent="ScrollContainer/VBox/AimSunRow"]
+[node name="AimSunButton" type="Button" parent="RootVBox/ScrollContainer/VBox/AimSunRow"]
 unique_name_in_owner = true
 layout_mode = 2
 toggle_mode = true
 text = "Aim Sun"
 
-[node name="SunAzimuthRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SunAzimuthRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SunAzimuthLabel" type="Label" parent="ScrollContainer/VBox/SunAzimuthRow"]
+[node name="SunAzimuthLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SunAzimuthRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Azimuth"
 
-[node name="SunAzimuthSliderSpin" parent="ScrollContainer/VBox/SunAzimuthRow" instance=ExtResource("2_slider_spin_box")]
+[node name="SunAzimuthSliderSpin" parent="RootVBox/ScrollContainer/VBox/SunAzimuthRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -521,16 +526,16 @@ min_value = 0.0
 max_value = 360.0
 step = 1.0
 
-[node name="SunElevationRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SunElevationRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SunElevationLabel" type="Label" parent="ScrollContainer/VBox/SunElevationRow"]
+[node name="SunElevationLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SunElevationRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Elevation"
 
-[node name="SunElevationSliderSpin" parent="ScrollContainer/VBox/SunElevationRow" instance=ExtResource("2_slider_spin_box")]
+[node name="SunElevationSliderSpin" parent="RootVBox/ScrollContainer/VBox/SunElevationRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -538,31 +543,31 @@ min_value = -15.0
 max_value = 90.0
 step = 1.0
 
-[node name="SunColorRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SunColorRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SunColorLabel" type="Label" parent="ScrollContainer/VBox/SunColorRow"]
+[node name="SunColorLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SunColorRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Color"
 
-[node name="SunColorPicker" type="ColorPickerButton" parent="ScrollContainer/VBox/SunColorRow"]
+[node name="SunColorPicker" type="ColorPickerButton" parent="RootVBox/ScrollContainer/VBox/SunColorRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(32, 0)
 layout_mode = 2
 color = Color(1, 1, 1, 1)
 
-[node name="SunEnergyRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SunEnergyRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SunEnergyLabel" type="Label" parent="ScrollContainer/VBox/SunEnergyRow"]
+[node name="SunEnergyLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SunEnergyRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Energy"
 
-[node name="SunEnergySliderSpin" parent="ScrollContainer/VBox/SunEnergyRow" instance=ExtResource("2_slider_spin_box")]
+[node name="SunEnergySliderSpin" parent="RootVBox/ScrollContainer/VBox/SunEnergyRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -571,31 +576,31 @@ max_value = 4.0
 step = 0.05
 value = 1.0
 
-[node name="SunShadowsRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SunShadowsRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SunShadowsLabel" type="Label" parent="ScrollContainer/VBox/SunShadowsRow"]
+[node name="SunShadowsLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SunShadowsRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = ""
 
-[node name="SunShadowsCheck" type="CheckBox" parent="ScrollContainer/VBox/SunShadowsRow"]
+[node name="SunShadowsCheck" type="CheckBox" parent="RootVBox/ScrollContainer/VBox/SunShadowsRow"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 text = "Shadows"
 
-[node name="SunSoftnessRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SunSoftnessRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SunSoftnessLabel" type="Label" parent="ScrollContainer/VBox/SunSoftnessRow"]
+[node name="SunSoftnessLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SunSoftnessRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Softness"
 
-[node name="SunSoftnessSliderSpin" parent="ScrollContainer/VBox/SunSoftnessRow" instance=ExtResource("2_slider_spin_box")]
+[node name="SunSoftnessSliderSpin" parent="RootVBox/ScrollContainer/VBox/SunSoftnessRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -603,16 +608,16 @@ min_value = 0.0
 max_value = 5.0
 step = 0.05
 
-[node name="SunDarknessRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SunDarknessRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SunDarknessLabel" type="Label" parent="ScrollContainer/VBox/SunDarknessRow"]
+[node name="SunDarknessLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SunDarknessRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Darkness"
 
-[node name="SunDarknessSliderSpin" parent="ScrollContainer/VBox/SunDarknessRow" instance=ExtResource("2_slider_spin_box")]
+[node name="SunDarknessSliderSpin" parent="RootVBox/ScrollContainer/VBox/SunDarknessRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -621,52 +626,53 @@ max_value = 1.0
 step = 0.01
 value = 1.0
 
-[node name="SunTimeOfDayRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SunTimeOfDayRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SunTimeOfDayLabel" type="Label" parent="ScrollContainer/VBox/SunTimeOfDayRow"]
+[node name="SunTimeOfDayLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SunTimeOfDayRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
-text = "Time of Day (generates)"
+text = "Time of Day:"
 
-[node name="SunTimeOfDaySliderSpin" parent="ScrollContainer/VBox/SunTimeOfDayRow" instance=ExtResource("2_slider_spin_box")]
+[node name="SunTimeOfDaySliderSpin" parent="RootVBox/ScrollContainer/VBox/SunTimeOfDayRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+tooltip_text = "Regenerates direction, colour and energy from this hour. Any hand-aimed values are replaced."
 max_value = 24.0
 step = 0.5
 value = 14.0
 
-[node name="SunRegenerateRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SunRegenerateRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SunRegenerateButton" type="Button" parent="ScrollContainer/VBox/SunRegenerateRow"]
+[node name="SunRegenerateButton" type="Button" parent="RootVBox/ScrollContainer/VBox/SunRegenerateRow"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Back to generated"
 
-[node name="HSeparator6" type="HSeparator" parent="ScrollContainer/VBox"]
+[node name="HSeparator6" type="HSeparator" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 
-[node name="EffectsLabel" type="Label" parent="ScrollContainer/VBox"]
+[node name="EffectsLabel" type="Label" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 text = "Post-Processing Effects"
 horizontal_alignment = 1
 
-[node name="PixelationRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="PixelationRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="PixelationLabel" type="Label" parent="ScrollContainer/VBox/PixelationRow"]
+[node name="PixelationLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/PixelationRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Pixelate:"
 
-[node name="PixelationSliderSpin" parent="ScrollContainer/VBox/PixelationRow" instance=ExtResource("2_slider_spin_box")]
+[node name="PixelationSliderSpin" parent="RootVBox/ScrollContainer/VBox/PixelationRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 0.01
@@ -674,32 +680,32 @@ step = 0.0001
 value = 0.003
 allow_greater = true
 
-[node name="ColorFadeRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="ColorFadeRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="ColorFadeLabel" type="Label" parent="ScrollContainer/VBox/ColorFadeRow"]
+[node name="ColorFadeLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/ColorFadeRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Color Fade:"
 
-[node name="ColorFadeSliderSpin" parent="ScrollContainer/VBox/ColorFadeRow" instance=ExtResource("2_slider_spin_box")]
+[node name="ColorFadeSliderSpin" parent="RootVBox/ScrollContainer/VBox/ColorFadeRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 1.5
 step = 0.01
 value = 0.85
 
-[node name="ColorLevelsRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="ColorLevelsRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="ColorLevelsLabel" type="Label" parent="ScrollContainer/VBox/ColorLevelsRow"]
+[node name="ColorLevelsLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/ColorLevelsRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Colors:"
 
-[node name="ColorLevelsSliderSpin" parent="ScrollContainer/VBox/ColorLevelsRow" instance=ExtResource("2_slider_spin_box")]
+[node name="ColorLevelsSliderSpin" parent="RootVBox/ScrollContainer/VBox/ColorLevelsRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 2.0
@@ -707,48 +713,48 @@ max_value = 256.0
 step = 1.0
 value = 32.0
 
-[node name="DitherRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="DitherRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="DitherLabel" type="Label" parent="ScrollContainer/VBox/DitherRow"]
+[node name="DitherLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/DitherRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Dither:"
 
-[node name="DitherSliderSpin" parent="ScrollContainer/VBox/DitherRow" instance=ExtResource("2_slider_spin_box")]
+[node name="DitherSliderSpin" parent="RootVBox/ScrollContainer/VBox/DitherRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 1.0
 step = 0.01
 value = 0.5
 
-[node name="VignetteRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="VignetteRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="VignetteLabel" type="Label" parent="ScrollContainer/VBox/VignetteRow"]
+[node name="VignetteLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/VignetteRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Vignette:"
 
-[node name="VignetteSliderSpin" parent="ScrollContainer/VBox/VignetteRow" instance=ExtResource("2_slider_spin_box")]
+[node name="VignetteSliderSpin" parent="RootVBox/ScrollContainer/VBox/VignetteRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 1.0
 step = 0.01
 value = 0.3
 
-[node name="GrainRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="GrainRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="GrainLabel" type="Label" parent="ScrollContainer/VBox/GrainRow"]
+[node name="GrainLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/GrainRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Grain:"
 
-[node name="GrainSliderSpin" parent="ScrollContainer/VBox/GrainRow" instance=ExtResource("2_slider_spin_box")]
+[node name="GrainSliderSpin" parent="RootVBox/ScrollContainer/VBox/GrainRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 0.1
@@ -756,96 +762,96 @@ step = 0.001
 value = 0.025
 allow_greater = true
 
-[node name="HSeparator4" type="HSeparator" parent="ScrollContainer/VBox"]
+[node name="HSeparator4" type="HSeparator" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 
-[node name="WeatherLabel" type="Label" parent="ScrollContainer/VBox"]
+[node name="WeatherLabel" type="Label" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 text = "Weather"
 horizontal_alignment = 1
 
-[node name="RainRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="RainRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="RainLabel" type="Label" parent="ScrollContainer/VBox/RainRow"]
+[node name="RainLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/RainRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Rain:"
 
-[node name="RainSliderSpin" parent="ScrollContainer/VBox/RainRow" instance=ExtResource("2_slider_spin_box")]
+[node name="RainSliderSpin" parent="RootVBox/ScrollContainer/VBox/RainRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 max_value = 1.0
 step = 0.05
 
-[node name="SnowRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="SnowRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="SnowLabel" type="Label" parent="ScrollContainer/VBox/SnowRow"]
+[node name="SnowLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SnowRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Snow:"
 
-[node name="SnowSliderSpin" parent="ScrollContainer/VBox/SnowRow" instance=ExtResource("2_slider_spin_box")]
+[node name="SnowSliderSpin" parent="RootVBox/ScrollContainer/VBox/SnowRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 max_value = 1.0
 step = 0.05
 
-[node name="FogRow2" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="FogRow2" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="FogLabel2" type="Label" parent="ScrollContainer/VBox/FogRow2"]
+[node name="FogLabel2" type="Label" parent="RootVBox/ScrollContainer/VBox/FogRow2"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Fog:"
 
-[node name="FogSliderSpin" parent="ScrollContainer/VBox/FogRow2" instance=ExtResource("2_slider_spin_box")]
+[node name="FogSliderSpin" parent="RootVBox/ScrollContainer/VBox/FogRow2" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 max_value = 1.0
 step = 0.05
 
-[node name="WindRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="WindRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="WindLabel" type="Label" parent="ScrollContainer/VBox/WindRow"]
+[node name="WindLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/WindRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Wind:"
 
-[node name="WindSliderSpin" parent="ScrollContainer/VBox/WindRow" instance=ExtResource("2_slider_spin_box")]
+[node name="WindSliderSpin" parent="RootVBox/ScrollContainer/VBox/WindRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 max_value = 1.0
 step = 0.05
 
-[node name="HSeparator5" type="HSeparator" parent="ScrollContainer/VBox"]
+[node name="HSeparator5" type="HSeparator" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 
-[node name="FoliageLabel" type="Label" parent="ScrollContainer/VBox"]
+[node name="FoliageLabel" type="Label" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 text = "Foliage"
 horizontal_alignment = 1
 
-[node name="TreeSwaySpeedRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="TreeSwaySpeedRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="TreeSwaySpeedLabel" type="Label" parent="ScrollContainer/VBox/TreeSwaySpeedRow"]
+[node name="TreeSwaySpeedLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/TreeSwaySpeedRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Tree Speed:"
 
-[node name="TreeSwaySpeedSliderSpin" parent="ScrollContainer/VBox/TreeSwaySpeedRow" instance=ExtResource("2_slider_spin_box")]
+[node name="TreeSwaySpeedSliderSpin" parent="RootVBox/ScrollContainer/VBox/TreeSwaySpeedRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -853,16 +859,16 @@ max_value = 5.0
 step = 0.05
 value = 0.6
 
-[node name="TreeSwayAmplitudeRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="TreeSwayAmplitudeRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="TreeSwayAmplitudeLabel" type="Label" parent="ScrollContainer/VBox/TreeSwayAmplitudeRow"]
+[node name="TreeSwayAmplitudeLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/TreeSwayAmplitudeRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Tree Amount:"
 
-[node name="TreeSwayAmplitudeSliderSpin" parent="ScrollContainer/VBox/TreeSwayAmplitudeRow" instance=ExtResource("2_slider_spin_box")]
+[node name="TreeSwayAmplitudeSliderSpin" parent="RootVBox/ScrollContainer/VBox/TreeSwayAmplitudeRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -870,16 +876,16 @@ max_value = 1.0
 step = 0.01
 value = 0.06
 
-[node name="GrassSwaySpeedRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="GrassSwaySpeedRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="GrassSwaySpeedLabel" type="Label" parent="ScrollContainer/VBox/GrassSwaySpeedRow"]
+[node name="GrassSwaySpeedLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/GrassSwaySpeedRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Grass Speed:"
 
-[node name="GrassSwaySpeedSliderSpin" parent="ScrollContainer/VBox/GrassSwaySpeedRow" instance=ExtResource("2_slider_spin_box")]
+[node name="GrassSwaySpeedSliderSpin" parent="RootVBox/ScrollContainer/VBox/GrassSwaySpeedRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -887,16 +893,16 @@ max_value = 5.0
 step = 0.05
 value = 1.6
 
-[node name="GrassSwayAmplitudeRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="GrassSwayAmplitudeRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="GrassSwayAmplitudeLabel" type="Label" parent="ScrollContainer/VBox/GrassSwayAmplitudeRow"]
+[node name="GrassSwayAmplitudeLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/GrassSwayAmplitudeRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Grass Amount:"
 
-[node name="GrassSwayAmplitudeSliderSpin" parent="ScrollContainer/VBox/GrassSwayAmplitudeRow" instance=ExtResource("2_slider_spin_box")]
+[node name="GrassSwayAmplitudeSliderSpin" parent="RootVBox/ScrollContainer/VBox/GrassSwayAmplitudeRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -904,16 +910,12 @@ max_value = 1.0
 step = 0.01
 value = 0.03
 
-[node name="Spacer" type="Control" parent="ScrollContainer/VBox"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="ButtonsRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+[node name="ButtonsRow" type="HBoxContainer" parent="RootVBox"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="CancelButton" type="Button" parent="ScrollContainer/VBox/ButtonsRow"]
+[node name="CancelButton" type="Button" parent="RootVBox/ButtonsRow"]
 script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
@@ -921,7 +923,7 @@ size_flags_horizontal = 3
 theme_type_variation = &"Secondary"
 text = "Cancel"
 
-[node name="SaveButton" type="Button" parent="ScrollContainer/VBox/ButtonsRow"]
+[node name="SaveButton" type="Button" parent="RootVBox/ButtonsRow"]
 script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
