@@ -94,3 +94,10 @@ func test_copy_settings_preserves_full_color_precision() -> void:
 	var copy := original.copy_settings()
 
 	assert_eq(copy.color, original.color)
+
+
+func test_from_dict_falls_back_to_white_for_an_unusable_color_value() -> void:
+	# Reachable via a hand-edited or corrupt level.json: a level must still load
+	# rather than erroring out on a bad colour.
+	assert_eq(SunSettings.from_dict({"color": 42}).color, Color.WHITE)
+	assert_eq(SunSettings.from_dict({"color": "not-a-hex"}).color, Color.WHITE)
