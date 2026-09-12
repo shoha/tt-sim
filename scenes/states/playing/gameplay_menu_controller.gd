@@ -49,6 +49,7 @@ func _ready() -> void:
 		level_edit_panel.weather_changed.connect(_on_edit_weather_changed)
 		level_edit_panel.foliage_changed.connect(_on_edit_foliage_changed)
 		level_edit_panel.sun_changed.connect(_on_edit_sun_changed)
+		level_edit_panel.aim_sun_toggled.connect(_on_edit_aim_sun_toggled)
 		level_edit_panel.water_style_changed.connect(_on_edit_water_style_changed)
 		level_edit_panel.revert_to_map_defaults_requested.connect(_on_revert_to_map_defaults)
 		level_edit_panel.save_requested.connect(_on_edit_save_requested)
@@ -283,8 +284,11 @@ func _on_edit_drawer_opened() -> void:
 
 ## Called when the drawer finishes closing (via tab or programmatically).
 ## Changes are kept — the user can Cancel to revert, or Save to persist to disk.
+## Also deactivates the sun gizmo so it cannot outlive the drawer.
 func _on_edit_drawer_closed() -> void:
-	pass
+	var gizmo := _get_sun_gizmo()
+	if gizmo and gizmo.is_active():
+		gizmo.deactivate()
 
 
 ## Snapshot current level values and initialize the edit panel.
@@ -508,6 +512,42 @@ func _on_edit_sun_changed(settings: SunSettings) -> void:
 			level_data.visual_settings.sun = settings.copy_settings()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
 		NetworkManager.broadcast_visual_settings({"sun_settings": settings.to_dict()})
+
+
+## Toggle the sun-aiming gizmo, and keep the panel's numeric fields and toggle
+## button in step with it. The gizmo is created per level load, so it is looked
+## up on demand rather than cached.
+func _on_edit_aim_sun_toggled(active: bool) -> void:
+	var gizmo := _get_sun_gizmo()
+	if not gizmo:
+		return
+	if active:
+		var sun: SunSettings = _level_play_controller.active_level_data.visual_settings.sun
+		gizmo.set_direction(sun.azimuth_degrees, sun.elevation_degrees)
+		if not gizmo.direction_changed.is_connected(_on_sun_gizmo_direction_changed):
+			gizmo.direction_changed.connect(_on_sun_gizmo_direction_changed)
+			gizmo.toggled.connect(_on_sun_gizmo_toggled_externally)
+	if gizmo.is_active() != active:
+		gizmo.toggle()
+
+
+func _on_sun_gizmo_direction_changed(azimuth_degrees: float, elevation_degrees: float) -> void:
+	if level_edit_panel:
+		level_edit_panel.set_sun_direction_from_gizmo(azimuth_degrees, elevation_degrees)
+
+
+## The gizmo can deactivate without the panel asking (RMB, or the measure tool
+## taking over), so mirror its state back onto the toggle button.
+func _on_sun_gizmo_toggled_externally(active: bool) -> void:
+	if level_edit_panel:
+		level_edit_panel.set_aim_sun_pressed(active)
+
+
+func _get_sun_gizmo() -> SunGizmoTool:
+	if not _level_play_controller or not _level_play_controller.has_active_level():
+		return null
+	var game_map = _level_play_controller.get_game_map()
+	return game_map.get_sun_gizmo() if game_map else null
 
 
 ## Real-time water style change from the edit panel
