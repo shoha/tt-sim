@@ -118,19 +118,57 @@ func _rendering_method_label() -> String:
 func _update_display() -> void:
 	var lines: PackedStringArray = [
 		"FPS: %.0f" % Performance.get_monitor(Performance.TIME_FPS),
-		"Frame (script): %.2f ms" % (Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0),
+		# TIME_PROCESS is the whole main-thread frame time (per Godot's own docs),
+		# not script execution alone -- do not read this as "script cost".
+		"Frame (main): %.2f ms" % (Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0),
 		(
 			"Frame (physics): %.2f ms"
 			% (Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)
 		),
-		"Draw calls: %d" % Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
-		"Primitives: %d" % Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
+		# All-viewport totals (include 2D UI, e.g. individual Label glyphs) --
+		# see the world-viewport-scoped visible/shadow rows below for the
+		# render-pass breakdown attributable to the 3D map itself.
+		(
+			"Draw calls (all viewports): %d"
+			% (Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+		),
+		(
+			"Primitives (all viewports): %d"
+			% (Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+		),
 		(
 			"Video mem: %.1f MB"
 			% (Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0)
 		),
 		"Physics objects: %d" % Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS),
 		"Render (CPU): %.2f ms" % _get_render_cpu_ms(),
+		"Render (GPU): %.2f ms" % _get_render_gpu_ms(),
+		(
+			"Visible: %d primitives, %d draw calls"
+			% [
+				_get_render_info(
+					RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE,
+					RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME
+				),
+				_get_render_info(
+					RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE,
+					RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME
+				),
+			]
+		),
+		(
+			"Shadow: %d primitives, %d draw calls"
+			% [
+				_get_render_info(
+					RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW,
+					RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME
+				),
+				_get_render_info(
+					RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW,
+					RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME
+				),
+			]
+		),
 		"GPU: %s (%s)" % [_video_adapter_name, _video_adapter_vendor],
 		"Camera zoom: %.2f" % _game_map.camera_node.size,
 		"Screen scale: %.2f" % DisplayServer.screen_get_scale(),
@@ -152,15 +190,44 @@ func _update_display() -> void:
 ## Render-thread CPU time for the 3D game-world SubViewport specifically
 ## (excludes 2D UI layers), read via RenderingServer rather than the
 ## Performance singleton (which has no per-viewport render-time monitor).
-## The matching GPU-time query is deliberately not used: it is a known,
-## unfixed Godot limitation that it always returns 0.0 on Metal (the M1
-## Air's backend) because Metal's tile-based renderer reorders GPU commands
-## in a way that breaks Godot's timestamp-based measurement -- see
-## https://github.com/godotengine/godot/issues/102968. Logging that number
-## would just be a confident-looking zero, not a real measurement.
 func _get_render_cpu_ms() -> float:
 	var viewport_rid := _game_map.world_viewport.get_viewport_rid()
 	return RenderingServer.viewport_get_measured_render_time_cpu(viewport_rid)
+
+
+## Render-thread GPU time for the 3D game-world SubViewport. A prior version
+## of this file deliberately skipped this query, citing a known Godot
+## limitation that it always returns 0.0 on Metal (the M1 Air's backend)
+## because Metal's tile-based renderer reorders GPU commands in a way that
+## breaks Godot's timestamp-based measurement -- see
+## https://github.com/godotengine/godot/issues/102968. That bug report is
+## Metal-specific, so it is now logged on the assumption it works correctly
+## on this rig's Windows/Vulkan backend. NOT yet empirically confirmed
+## nonzero here: --headless does not run a real render pass at all (a
+## synthetic-scene probe showed VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME == 0
+## and even the already-trusted CPU counterpart,
+## viewport_get_measured_render_time_cpu(), also reads 0.0 headlessly), so
+## this can only be confirmed in a real windowed session -- verify the first
+## few logged rows are nonzero once this is run outside --headless.
+func _get_render_gpu_ms() -> float:
+	var viewport_rid := _game_map.world_viewport.get_viewport_rid()
+	return RenderingServer.viewport_get_measured_render_time_gpu(viewport_rid)
+
+
+## Per-render-pass object/primitive/draw-call counts for the 3D game-world
+## SubViewport, scoped the same way as _get_render_cpu_ms() above. Unlike
+## Performance.RENDER_TOTAL_*_IN_FRAME (which is a global total across every
+## viewport, including 2D UI), this can isolate the shadow-pass cost from the
+## main visible pass -- e.g. a map rendered once per visible pass plus once
+## per shadow cascade will show up here as separate visible/shadow rows.
+## [param info_type] is RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE or
+## _TYPE_SHADOW. [param info] is one of the VIEWPORT_RENDER_INFO_*_IN_FRAME
+## constants (objects, primitives, or draw calls).
+func _get_render_info(
+	info_type: RenderingServer.ViewportRenderInfoType, info: RenderingServer.ViewportRenderInfo
+) -> int:
+	var viewport_rid := _game_map.world_viewport.get_viewport_rid()
+	return RenderingServer.viewport_get_render_info(viewport_rid, info_type, info)
 
 
 ## [param delta] is the real per-frame wall-clock interval from _process(),
@@ -227,6 +294,37 @@ func _write_log_row() -> void:
 		"video_mem_mb": Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
 		"physics_objects": Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS),
 		"render_cpu_ms": _get_render_cpu_ms(),
+		"render_gpu_ms": _get_render_gpu_ms(),
+		"visible_objects":
+		_get_render_info(
+			RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE,
+			RenderingServer.VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME
+		),
+		"visible_primitives":
+		_get_render_info(
+			RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE,
+			RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME
+		),
+		"visible_draw_calls":
+		_get_render_info(
+			RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE,
+			RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME
+		),
+		"shadow_objects":
+		_get_render_info(
+			RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW,
+			RenderingServer.VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME
+		),
+		"shadow_primitives":
+		_get_render_info(
+			RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW,
+			RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME
+		),
+		"shadow_draw_calls":
+		_get_render_info(
+			RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW,
+			RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME
+		),
 		"video_adapter_name": _video_adapter_name,
 		"video_adapter_vendor": _video_adapter_vendor,
 		"camera_zoom": _game_map.camera_node.size,
