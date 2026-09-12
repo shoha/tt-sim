@@ -166,6 +166,25 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 
+			# 1..9 flip the nine DebugRenderToggles switches in panel order, but ONLY
+			# while the perf overlay (F3) is open -- so these digits stay free during
+			# normal play and the shortcut is live only when the panel it mirrors is on
+			# screen. Deliberately unmodified rather than Shift+digit: the validation
+			# bridge's _inject_key() sets an InputEventKey's `keycode` and nothing else,
+			# so `shift_pressed` is always false for injected keys and a modifier combo
+			# could never be driven automatically. See
+			# DebugRenderToggles.toggle_by_index() for why a keyboard path is needed.
+			if (
+				event.keycode >= KEY_1
+				and event.keycode <= KEY_9
+				and _debug_render_toggles
+				and _perf_overlay
+				and _perf_overlay.is_visible_overlay()
+			):
+				_debug_render_toggles.toggle_by_index(event.keycode - KEY_1)
+				get_viewport().set_input_as_handled()
+				return
+
 			# Undo (Ctrl+Z) — GM only
 			if event.keycode == KEY_Z and event.ctrl_pressed and not event.shift_pressed:
 				if (

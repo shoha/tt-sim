@@ -80,6 +80,20 @@ const _DEBUG_SHADER_CHECKBOX_KEYS := [
 ## off-by-default.
 const _DEFAULT_OFF_CHECKBOX_KEYS := _DEBUG_SHADER_CHECKBOX_KEYS + ["hard_sun_shadows"]
 
+## Checkbox keys in the same order they appear in the panel, so toggle_by_index()
+## (and therefore the Shift+1..9 shortcuts) match what a reader sees on screen.
+const PANEL_ORDER_KEYS := [
+	"foliage_visible",
+	"tree_shadows",
+	"grass_shadows",
+	"map_shadows",
+	"sun_shadows",
+	"hard_sun_shadows",
+	"trivial_foliage_shader",
+	"unshaded_foliage_textured",
+	"cheap_lighting_foliage",
+]
+
 var _foliage_visible: bool = true
 var _tree_shadows: bool = true
 var _grass_shadows: bool = true
@@ -139,6 +153,26 @@ func get_toggle_states() -> Dictionary:
 		"toggle_unshaded_foliage_textured": _foliage_debug_shader == "unshaded",
 		"toggle_cheap_lighting_foliage": _foliage_debug_shader == "cheap_lighting",
 	}
+
+
+## Flip the toggle at [param index] in panel order, as if its checkbox were clicked.
+## Assigning `button_pressed` fires the checkbox's `toggled` signal, so every existing
+## handler (including the mutual-exclusion logic between the three foliage debug
+## shaders) runs unchanged -- this is only an alternative way to reach them.
+##
+## Exists because the checkbox panel cannot be driven by the validation bridge's
+## injected mouse clicks: it lives under GameMap.get_perf_overlay_container(), and
+## clicks on it never reach the checkboxes (setting that container's mouse_filter to
+## PASS instead of IGNORE was tried and did not help, so the cause is something else
+## in the hit-test path and is still unexplained). Keyboard input DOES reach the game
+## through the bridge, so Shift+1..9 in GameMap._input() routes here, which makes the
+## nine isolation switches sweepable automatically instead of by hand.
+func toggle_by_index(index: int) -> void:
+	if index < 0 or index >= PANEL_ORDER_KEYS.size():
+		return
+	var checkbox: CheckBox = _checkboxes.get(PANEL_ORDER_KEYS[index])
+	if checkbox:
+		checkbox.button_pressed = not checkbox.button_pressed
 
 
 func setup(game_map: GameMap) -> void:
