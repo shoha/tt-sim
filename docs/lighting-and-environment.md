@@ -17,6 +17,7 @@ This document describes the lighting and environment configuration system for le
 - [Data Storage](#data-storage)
 - [Runtime Application](#runtime-application)
 - [API Reference](#api-reference)
+- [Testing Tools](#testing-tools)
 - [Weather Effects](#weather-effects)
 - [Best Practices](#best-practices)
 
@@ -324,7 +325,7 @@ independent layers.
 | `resources/sun_settings.gd` | `SunSettings` -- typed field data, `to_dict()`/`from_dict()`, `from_legacy()` migration, `copy_settings()` |
 | `resources/visual_settings.gd` | `VisualSettings` -- wraps `sun`; `to_dict()`/`from_dict()`/`copy_settings()` |
 | `utils/default_sun.gd` | `DefaultSun.settings_for_time()` (generator) and `DefaultSun.apply()` (applier) |
-| `scenes/states/playing/level_environment_manager.gd` | `apply_sun_settings()` -- creates the light, resolves `mode` against whether the map brought its own lights, calls `DefaultSun.apply()` |
+| `scenes/states/playing/level_environment_manager.gd` | `apply_sun_settings()` -- re-configures the already-created sun light (created separately by `apply_level_environment()` at load time), resolving `mode` against whether the map brought its own lights and calling `DefaultSun.apply()` |
 | `scenes/states/playing/sun_gizmo_tool.gd` | `SunGizmoTool` -- interactive ground-compass aiming tool; see [In-Game Edit Panel](#in-game-edit-panel) |
 
 ## In-Game Edit Panel
@@ -353,9 +354,11 @@ needs the live 3D view that `LevelEditor` does not have.
   `-water`-suffixed mesh via `WaterGlbUtils.apply_water_style()`
 - **Lighting Power** — Light intensity multiplier for embedded lights
 - **Ambient Light** — Color and energy
-- **Fog** — Toggle, color, density, height
-- **Glow/Bloom** — Toggle, intensity, strength, bloom
-- **Exposure** — Tone mapping mode, exposure, white point
+- **Fog** — Toggle, color, density (fog energy, height, and height density are
+  in Advanced)
+- **Glow/Bloom** — Toggle, intensity (glow strength and bloom are in Advanced)
+- **Exposure** — Exposure value only (tone mapping mode and white point are in
+  Advanced)
 - **Brightness / Contrast / Saturation** — Adjustment controls
 
 **Advanced (collapsible):**
@@ -364,7 +367,7 @@ needs the live 3D view that `LevelEditor` does not have.
   `AMBIENT_SOURCE_SKY`/`AMBIENT_SOURCE_COLOR`; there is no separate
   background-mode, ambient-source, or reflected-source control in the panel
 - Fog energy, fog height, fog height density
-- Tone mapping white point
+- Tone mapping mode, tone mapping white point
 - Glow strength, glow bloom
 
 **Sun** (ten controls; see [Sun and Shadow](#sun-and-shadow) for the
@@ -517,7 +520,7 @@ For folder-based levels, settings are stored in `level.json`:
   },
   "lofi_overrides": {
     "pixelation": 2.0,
-    "color_depth": 16.0
+    "color_levels": 16.0
   },
   "weather_overrides": {
     "rain_intensity": 0.7,
@@ -744,6 +747,8 @@ The "Weather" section in `LevelEditPanel` (between Post-Processing and the actio
 Weather piggybacks on the existing `broadcast_visual_settings` / `visual_settings_received` path with a `"weather_overrides"` key. No new RPCs or signals. Included in full state sync for late joiners (part of `LevelData.to_dict()`).
 
 Foliage wind-sway tuning (see [Data Storage](#data-storage) for `LevelData.foliage_overrides`) is broadcast the same way, via a `"foliage_overrides"` key on the same `broadcast_visual_settings` / `visual_settings_received` path — no new RPCs or signals for it either.
+
+Sun and shadow settings (see [Sun and Shadow](#sun-and-shadow)) also piggyback on this path, via a flat `"sun_settings"` key carrying `SunSettings.to_dict()`. The late-joiner mirror is the one place this key is *not* flat: `NetworkManager._patch_current_level_dict()` nests it under `visual_settings.sun` and stamps `format_version`, because `_current_level_dict` is in `LevelData.to_dict()` shape and a top-level `sun_settings` key would be silently ignored by `LevelData.from_dict()` -- a client joining after a live sun edit would otherwise see the default sun instead of the host's. See `autoloads/network_manager.gd`'s `broadcast_visual_settings()` and `_patch_current_level_dict()`.
 
 ### Particle Details
 
