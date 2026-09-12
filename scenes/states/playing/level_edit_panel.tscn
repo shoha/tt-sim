@@ -38,37 +38,52 @@ horizontal_alignment = 1
 [node name="HSeparator0" type="HSeparator" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 
-[node name="ScaleLabel" type="Label" parent="RootVBox/ScrollContainer/VBox"]
+[node name="MapGridToggle" type="Button" parent="RootVBox/ScrollContainer/VBox"]
+script = ExtResource("animated_btn")
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_pressed = false
+theme_type_variation = &"Caption"
+text = "Map & Grid ▼"
+
+[node name="MapGridContainer" type="VBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ScaleLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/MapGridContainer"]
 layout_mode = 2
 text = "Scale & Measurement"
 horizontal_alignment = 1
 
-[node name="ScalePresetRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
+[node name="ScalePresetRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox/MapGridContainer"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="ScalePresetLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/ScalePresetRow"]
+[node name="ScalePresetLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/MapGridContainer/ScalePresetRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "System:"
 
-[node name="ScalePresetDropdown" type="OptionButton" parent="RootVBox/ScrollContainer/VBox/ScalePresetRow"]
+[node name="ScalePresetDropdown" type="OptionButton" parent="RootVBox/ScrollContainer/VBox/MapGridContainer/ScalePresetRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 clip_text = true
 fit_to_longest_item = false
 
-[node name="GridCellSizeRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox"]
+[node name="GridCellSizeRow" type="HBoxContainer" parent="RootVBox/ScrollContainer/VBox/MapGridContainer"]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="GridCellSizeLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/GridCellSizeRow"]
+[node name="GridCellSizeLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/MapGridContainer/GridCellSizeRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Cell Size (m):"
 
-[node name="GridCellSizeSliderSpin" parent="RootVBox/ScrollContainer/VBox/GridCellSizeRow" instance=ExtResource("2_slider_spin_box")]
+[node name="GridCellSizeSliderSpin" parent="RootVBox/ScrollContainer/VBox/MapGridContainer/GridCellSizeRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3

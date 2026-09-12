@@ -62,6 +62,8 @@ var _current_scale_preset_key: String = ScaleUtils.DEFAULT_PRESET
 var _map_defaults: Dictionary = {}
 
 # Scale & measurement controls
+@onready var map_grid_toggle: Button = %MapGridToggle
+@onready var map_grid_container: VBoxContainer = %MapGridContainer
 @onready var scale_preset_dropdown: OptionButton = %ScalePresetDropdown
 @onready var grid_cell_size_slider_spin: SliderSpinBox = %GridCellSizeSliderSpin
 
@@ -186,6 +188,7 @@ func _on_ready() -> void:
 
 func _connect_control_signals() -> void:
 	# Scale & measurement
+	map_grid_toggle.toggled.connect(_on_map_grid_toggled)
 	scale_preset_dropdown.item_selected.connect(_on_scale_preset_selected)
 	grid_cell_size_slider_spin.value_changed.connect(_on_grid_cell_size_changed)
 
@@ -610,6 +613,16 @@ func _on_adjustment_override_changed(value: Variant, key: String) -> void:
 func _on_advanced_toggled(pressed: bool) -> void:
 	advanced_container.visible = pressed
 	advanced_toggle.text = "Advanced ▲" if pressed else "Advanced ▼"
+
+
+## Map scale and grid calibration are set once when a map is imported and never
+## revisited while tuning a level's look, so they live in their own collapsed
+## group rather than in the lighting flow. They stay in this drawer, not the
+## Level Editor, because calibrating the grid means dragging it until it lines up
+## with the map's visible squares -- which needs the live 3D view.
+func _on_map_grid_toggled(pressed: bool) -> void:
+	map_grid_container.visible = pressed
+	map_grid_toggle.text = "Map & Grid ▲" if pressed else "Map & Grid ▼"
 
 
 # ============================================================================
