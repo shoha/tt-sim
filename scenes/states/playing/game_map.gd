@@ -343,9 +343,11 @@ func get_sun_gizmo() -> SunGizmoTool:
 	return _sun_gizmo
 
 
+## Suppress token dragging while the sun gizmo is active, re-enable when it's not.
+## Uses _update_dragging_enabled() rather than `not active` directly -- see that
+## function's doc comment for why.
 func _on_sun_gizmo_toggled(active: bool) -> void:
-	if drag_and_drop_node:
-		drag_and_drop_node.dragging_enabled = not active
+	_update_dragging_enabled()
 	# Mutual exclusion between the two modal tools lives here, in the node that
 	# owns both, so neither tool needs to know the other exists. No recursion:
 	# deactivate() emits toggled(false), which fails this `active` guard.
@@ -358,14 +360,29 @@ func get_action_history() -> GameplayActionHistory:
 	return _action_history
 
 
-## Disable token dragging while the measure tool is active, re-enable when it's not.
-## Also auto-show/hide the grid overlay during measurement.
+## Suppress token dragging while the measure tool is active, re-enable when
+## it's not. Also auto-show/hide the grid overlay during measurement.
 func _on_measure_tool_toggled(active: bool) -> void:
-	if drag_and_drop_node:
-		drag_and_drop_node.dragging_enabled = not active
+	_update_dragging_enabled()
 	_grid_visibility.set_auto_show_measure(active)
 	if active and _sun_gizmo and _sun_gizmo.is_active():
 		_sun_gizmo.deactivate()
+
+
+## Token dragging is suppressed while either modal map tool is active.
+##
+## Derived from both tools rather than from the toggling tool's own `active`
+## argument: switching tools deactivates the other one synchronously, so a
+## handler writing `not active` from its own perspective gets overwritten by the
+## other handler's callback and leaves dragging enabled mid-aim.
+func _update_dragging_enabled() -> void:
+	if not drag_and_drop_node:
+		return
+	var tool_active: bool = (
+		(_measure_tool != null and _measure_tool.is_active())
+		or (_sun_gizmo != null and _sun_gizmo.is_active())
+	)
+	drag_and_drop_node.dragging_enabled = not tool_active
 
 
 ## Create and configure the GridOverlay.
