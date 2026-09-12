@@ -70,7 +70,7 @@ func test_from_dict_accepts_a_raw_color_object() -> void:
 	assert_almost_eq(restored.color.g, 1.0, 0.0001)
 
 
-func test_duplicate_deep_returns_an_independent_object() -> void:
+func test_copy_settings_returns_an_independent_object() -> void:
 	# SunSettings is a Resource, so plain assignment aliases. GameplayMenuController
 	# snapshots settings on drawer open and restores them on cancel, so an alias
 	# would silently break cancel.
@@ -78,7 +78,7 @@ func test_duplicate_deep_returns_an_independent_object() -> void:
 	original.azimuth_degrees = 90.0
 	original.color = Color(1.0, 0.0, 0.0)
 
-	var copy := original.duplicate_deep()
+	var copy := original.copy_settings()
 	copy.azimuth_degrees = 270.0
 	copy.color = Color(0.0, 0.0, 1.0)
 
@@ -86,11 +86,11 @@ func test_duplicate_deep_returns_an_independent_object() -> void:
 	assert_almost_eq(original.color.r, 1.0, 0.0001)
 
 
-func test_duplicate_deep_preserves_full_color_precision() -> void:
+func test_copy_settings_preserves_full_color_precision() -> void:
 	# Unlike to_dict/from_dict, the in-memory copy must not quantize.
 	var original := SunSettings.new()
 	original.color = Color(0.123456, 0.654321, 0.314159)
 
-	var copy := original.duplicate_deep()
+	var copy := original.copy_settings()
 
 	assert_eq(copy.color, original.color)
