@@ -80,31 +80,28 @@ static func from_dict(data: Dictionary) -> SunSettings:
 	return s
 
 
-## Independent copy. Resource is a reference type, so plain assignment aliases;
-## the drawer's cancel path depends on this being a real copy. Field-by-field
-## rather than a to_dict()/from_dict() round-trip, because hex serialization
-## would quantize the color.
+## Independent copy. Resource is a reference type, so plain assignment aliases,
+## and the drawer's cancel path depends on this being a real copy.
+##
+## Resource.duplicate() copies every @export field by value, which is exactly
+## what is needed here: all nine fields are value types (String, float, Color,
+## bool) and there are no sub-resources. Deliberately NOT a to_dict()/from_dict()
+## round-trip, which would quantize the color to 8 bits per channel -- see
+## test_copy_settings_preserves_full_color_precision.
+##
+## Note for wrappers: a resource that OWNS a sub-resource must NOT use plain
+## duplicate(), because shallow duplication aliases the child. VisualSettings
+## copies its `sun` explicitly for that reason.
 func copy_settings() -> SunSettings:
-	var s := SunSettings.new()
-	s.mode = mode
-	s.azimuth_degrees = azimuth_degrees
-	s.elevation_degrees = elevation_degrees
-	s.color = color
-	s.energy = energy
-	s.shadows_enabled = shadows_enabled
-	s.softness = softness
-	s.shadow_darkness = shadow_darkness
-	s.time_of_day = time_of_day
-	return s
+	return duplicate() as SunSettings
 
 
-## Accept a hex string (on-disk), a live Color (network), or a component
-## dictionary (older serialization), mirroring EnvironmentPresets.overrides_from_json().
+## Accept a hex string (both disk and network carry to_dict()'s hex form) or a
+## live Color (in-memory dictionaries). Anything else falls back to white rather
+## than failing the level load.
 static func _color_from_json(value: Variant) -> Color:
 	if value is Color:
 		return value
 	if value is String and (value as String).begins_with("#"):
 		return Color.from_string(value, Color.WHITE)
-	if value is Dictionary:
-		return SerializationUtils.dict_to_color(value)
 	return Color.WHITE
