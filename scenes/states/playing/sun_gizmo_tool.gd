@@ -35,8 +35,11 @@ signal direction_changed(azimuth_degrees: float, elevation_degrees: float)
 ## Ring radius in WORLD units on the Y=0 ground plane. 4.5 units is roughly
 ## three default grid cells (1.524 each) and about a third of the ground span
 ## the default camera size (13.85) shows -- large enough to aim precisely,
-## small enough not to blanket the map. Fixed rather than derived from zoom so
-## the drag sensitivity does not change under the user mid-aim.
+## small enough not to blanket the map. Being in world units means the ring
+## grows and shrinks on screen with zoom, unlike the fixed-pixel ring it
+## replaced; that is the point, since the compass now belongs to the ground
+## rather than to the screen, and the elevation each ground radius maps to stays
+## the same no matter how the user zooms mid-aim.
 const RING_RADIUS_WORLD: float = 4.5
 
 ## Segment count for the unprojected ground circle. 64 is smooth enough that
