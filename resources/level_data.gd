@@ -117,6 +117,22 @@ func _init() -> void:
 	modified_at = created_at
 
 
+## Absorb the pre-version-1 `sun_overrides` property during deserialization.
+## Legacy .tres levels are loaded by ResourceLoader (see
+## LevelManager.load_level()), which bypasses from_dict() and therefore the
+## migration branch there, so without this hook their sun configuration would be
+## silently discarded and replaced by the default sun -- and because
+## format_version is @exported with a FORMAT_VERSION initializer, the object
+## would still report itself as v1, leaving a later version-keyed migration no
+## way to detect the loss.
+func _set(property: StringName, value: Variant) -> bool:
+	if property == &"sun_overrides" and value is Dictionary:
+		visual_settings = VisualSettings.new()
+		visual_settings.sun = SunSettings.from_legacy(value)
+		return true
+	return false
+
+
 ## Add a new token placement
 func add_token_placement(placement: TokenPlacement) -> void:
 	token_placements.append(placement)

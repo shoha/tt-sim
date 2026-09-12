@@ -123,3 +123,49 @@ func test_a_snapshot_taken_with_copy_settings_survives_later_edits() -> void:
 	level.visual_settings = snapshot.copy_settings()
 
 	assert_almost_eq(level.visual_settings.sun.azimuth_degrees, 100.0, 0.001)
+
+
+func test_two_fresh_levels_do_not_share_one_visual_settings() -> void:
+	# The bottom rung of the aliasing ladder: `@export var visual_settings:
+	# VisualSettings = VisualSettings.default()` must produce a new resource per
+	# instance, not one shared default that every level then edits in common.
+	var first := LevelData.new()
+	var second := LevelData.new()
+
+	first.visual_settings.sun.azimuth_degrees = 42.0
+
+	assert_false(
+		first.visual_settings == second.visual_settings, "fresh levels must not share an instance"
+	)
+	assert_false(first.visual_settings.sun == second.visual_settings.sun, "nor a shared sun")
+	var fresh := SunSettings.default()
+	assert_almost_eq(second.visual_settings.sun.azimuth_degrees, fresh.azimuth_degrees, 0.001)
+	assert_almost_eq(first.visual_settings.sun.azimuth_degrees, 42.0, 0.001)
+
+
+func test_setting_the_legacy_property_directly_migrates_the_sun() -> void:
+	# Exercises LevelData._set() the same way ResourceLoader does when it reads a
+	# legacy .tres that still carries a sun_overrides property. That path never
+	# reaches from_dict(), so without the hook the sun would be silently lost.
+	var level := LevelData.new()
+
+	level.set("sun_overrides", {"mode": "off", "time_of_day": 20.0})
+
+	assert_eq(level.visual_settings.sun.mode, "off")
+	assert_almost_eq(level.visual_settings.sun.time_of_day, 20.0, 0.001)
+	var expected := DefaultSun.settings_for_time(20.0)
+	assert_almost_eq(level.visual_settings.sun.azimuth_degrees, expected.azimuth_degrees, 0.001)
+	assert_almost_eq(level.visual_settings.sun.elevation_degrees, expected.elevation_degrees, 0.001)
+	assert_almost_eq(level.visual_settings.sun.energy, expected.energy, 0.001)
+
+
+func test_setting_a_genuinely_unknown_property_is_still_rejected() -> void:
+	# _set() must return false for anything but the one legacy key, so typos and
+	# unrelated stray properties keep failing loudly instead of being swallowed.
+	var level := LevelData.new()
+
+	level.set("no_such_property_at_all", 7)
+
+	assert_false(
+		level.get("no_such_property_at_all") != null, "unknown properties must not be stored"
+	)

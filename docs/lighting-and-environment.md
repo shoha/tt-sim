@@ -587,6 +587,17 @@ guessing at it:
   dictionary, currently just `{"sun": {...}}`) and ignores any stray
   `sun_overrides` key that might still be present in the raw data.
 - Saving a level via either save path writes `format_version: 1`.
+- **Legacy `.tres` levels take a second migration route.** `LevelData` has two
+  deserializers: `from_dict()` (used by `level.json` folder levels and by
+  network payloads) and `ResourceLoader`, which
+  `LevelManager.load_level()` still uses for `.tres` levels with `res://` map
+  paths. `ResourceLoader` sets `@export` properties directly and never calls
+  `from_dict()`, so the migration branch above cannot fire for it. A
+  `LevelData._set()` hook absorbs the removed `sun_overrides` property and runs
+  `SunSettings.from_legacy()` on it; without that hook the value would be
+  discarded as an unknown property and the level would silently come up with
+  the 14:00 default sun. Any future removal of a `LevelData` `@export` needs
+  the same treatment.
 - This is a one-way door: an older build opening a version-1 level finds no
   `sun_overrides` key and falls back to the default sun. Because level
   exports are shared between users who may be on different game versions,
