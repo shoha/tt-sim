@@ -20,6 +20,10 @@ signal sun_changed(settings: SunSettings)
 signal water_style_changed(style: String)
 signal revert_to_map_defaults_requested
 
+## Emitted when the user toggles "Aim Sun". GameplayMenuController owns the
+## GameMap reference, so it toggles the actual tool.
+signal aim_sun_toggled(active: bool)
+
 ## Emitted when the drawer opens (before the animation starts).
 ## The controller should snapshot current values and call initialize().
 signal drawer_opened
@@ -118,6 +122,15 @@ var _map_defaults: Dictionary = {}
 # Sun controls
 @onready var sun_mode_dropdown: OptionButton = %SunModeDropdown
 @onready var sun_time_of_day_slider_spin: SliderSpinBox = %SunTimeOfDaySliderSpin
+@onready var aim_sun_button: Button = %AimSunButton
+@onready var sun_azimuth_slider_spin: SliderSpinBox = %SunAzimuthSliderSpin
+@onready var sun_elevation_slider_spin: SliderSpinBox = %SunElevationSliderSpin
+@onready var sun_color_picker: ColorPickerButton = %SunColorPicker
+@onready var sun_energy_slider_spin: SliderSpinBox = %SunEnergySliderSpin
+@onready var sun_shadows_check: CheckBox = %SunShadowsCheck
+@onready var sun_softness_slider_spin: SliderSpinBox = %SunSoftnessSliderSpin
+@onready var sun_darkness_slider_spin: SliderSpinBox = %SunDarknessSliderSpin
+@onready var sun_regenerate_button: Button = %SunRegenerateButton
 
 
 func _on_ready() -> void:
@@ -180,6 +193,15 @@ func _connect_control_signals() -> void:
 	tonemap_mode_dropdown.item_selected.connect(_on_tonemap_mode_selected)
 	sun_mode_dropdown.item_selected.connect(_on_sun_mode_selected)
 	sun_time_of_day_slider_spin.value_changed.connect(_on_sun_time_of_day_changed)
+	aim_sun_button.toggled.connect(_on_aim_sun_toggled)
+	sun_azimuth_slider_spin.value_changed.connect(_on_sun_azimuth_changed)
+	sun_elevation_slider_spin.value_changed.connect(_on_sun_elevation_changed)
+	sun_color_picker.color_changed.connect(_on_sun_color_changed)
+	sun_energy_slider_spin.value_changed.connect(_on_sun_energy_changed)
+	sun_shadows_check.toggled.connect(_on_sun_shadows_toggled)
+	sun_softness_slider_spin.value_changed.connect(_on_sun_softness_changed)
+	sun_darkness_slider_spin.value_changed.connect(_on_sun_darkness_changed)
+	sun_regenerate_button.pressed.connect(_on_sun_regenerate_pressed)
 
 	# Config-driven environment overrides: [control, signal_name, override_key]
 	for binding in [
@@ -725,4 +747,120 @@ func _sync_sun_controls() -> void:
 		if sun_mode_dropdown.get_item_metadata(i) == current_sun.mode:
 			sun_mode_dropdown.select(i)
 			break
+	sun_azimuth_slider_spin.set_value_no_signal(current_sun.azimuth_degrees)
+	sun_elevation_slider_spin.set_value_no_signal(current_sun.elevation_degrees)
+	sun_color_picker.color = current_sun.color
+	sun_energy_slider_spin.set_value_no_signal(current_sun.energy)
+	sun_shadows_check.set_pressed_no_signal(current_sun.shadows_enabled)
+	sun_softness_slider_spin.set_value_no_signal(current_sun.softness)
+	sun_softness_slider_spin.editable = current_sun.shadows_enabled
+	sun_darkness_slider_spin.set_value_no_signal(current_sun.shadow_darkness)
+	sun_darkness_slider_spin.editable = current_sun.shadows_enabled
 	sun_time_of_day_slider_spin.set_value_no_signal(current_sun.time_of_day)
+	_update_sun_generated_state()
+
+
+## Emit the current sun and refresh the derived parts of the UI. Every sun
+## control funnels through here.
+func _emit_sun_changed() -> void:
+	sun_changed.emit(current_sun)
+	_update_sun_generated_state()
+
+
+## A sun the user has deliberately shaped must actually be visible. In "auto"
+## mode a map that brought its own lights hides the sun entirely, so editing any
+## sun property while auto is selected promotes the mode to "on" -- otherwise the
+## edit is a silent no-op.
+func _promote_auto_mode_to_on() -> void:
+	if current_sun.mode != "auto":
+		return
+	current_sun.mode = "on"
+	for i in range(sun_mode_dropdown.item_count):
+		if sun_mode_dropdown.get_item_metadata(i) == "on":
+			sun_mode_dropdown.select(i)
+			break
+
+
+## Show the regenerate affordance only when the sun has been hand-aimed, i.e.
+## when it no longer matches what the generator would produce for its recorded
+## hour. Derived rather than tracked with a flag, so there is no second piece of
+## state to keep in sync.
+func _update_sun_generated_state() -> void:
+	var generated := DefaultSun.settings_for_time(current_sun.time_of_day)
+	var diverged := (
+		not is_equal_approx(generated.azimuth_degrees, current_sun.azimuth_degrees)
+		or not is_equal_approx(generated.elevation_degrees, current_sun.elevation_degrees)
+		or not is_equal_approx(generated.energy, current_sun.energy)
+		or generated.color != current_sun.color
+	)
+	sun_regenerate_button.visible = diverged
+
+
+func _on_aim_sun_toggled(pressed: bool) -> void:
+	aim_sun_toggled.emit(pressed)
+
+
+func _on_sun_azimuth_changed(value: float) -> void:
+	current_sun.azimuth_degrees = value
+	_promote_auto_mode_to_on()
+	_emit_sun_changed()
+
+
+func _on_sun_elevation_changed(value: float) -> void:
+	current_sun.elevation_degrees = value
+	_promote_auto_mode_to_on()
+	_emit_sun_changed()
+
+
+func _on_sun_color_changed(color: Color) -> void:
+	current_sun.color = color
+	_promote_auto_mode_to_on()
+	_emit_sun_changed()
+
+
+func _on_sun_energy_changed(value: float) -> void:
+	current_sun.energy = value
+	_promote_auto_mode_to_on()
+	_emit_sun_changed()
+
+
+func _on_sun_shadows_toggled(pressed: bool) -> void:
+	current_sun.shadows_enabled = pressed
+	sun_softness_slider_spin.editable = pressed
+	sun_darkness_slider_spin.editable = pressed
+	_promote_auto_mode_to_on()
+	_emit_sun_changed()
+
+
+func _on_sun_softness_changed(value: float) -> void:
+	current_sun.softness = value
+	_promote_auto_mode_to_on()
+	_emit_sun_changed()
+
+
+func _on_sun_darkness_changed(value: float) -> void:
+	current_sun.shadow_darkness = value
+	_promote_auto_mode_to_on()
+	_emit_sun_changed()
+
+
+func _on_sun_regenerate_pressed() -> void:
+	_on_sun_time_of_day_changed(current_sun.time_of_day)
+
+
+## Called by GameplayMenuController when the gizmo reports a drag, so the
+## numeric fields track the handle.
+func set_sun_direction_from_gizmo(azimuth_degrees: float, elevation_degrees: float) -> void:
+	current_sun.azimuth_degrees = azimuth_degrees
+	current_sun.elevation_degrees = elevation_degrees
+	sun_azimuth_slider_spin.set_value_no_signal(azimuth_degrees)
+	sun_elevation_slider_spin.set_value_no_signal(elevation_degrees)
+	_promote_auto_mode_to_on()
+	_emit_sun_changed()
+
+
+## Called by GameplayMenuController when the gizmo deactivates by any route
+## (RMB, or the measure tool taking over), so the toggle button cannot be left
+## showing a pressed state for an inactive tool.
+func set_aim_sun_pressed(pressed: bool) -> void:
+	aim_sun_button.set_pressed_no_signal(pressed)

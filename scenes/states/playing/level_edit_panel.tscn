@@ -489,6 +489,138 @@ size_flags_horizontal = 3
 clip_text = true
 fit_to_longest_item = false
 
+[node name="AimSunRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="AimSunLabel" type="Label" parent="ScrollContainer/VBox/AimSunRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Aim"
+
+[node name="AimSunButton" type="Button" parent="ScrollContainer/VBox/AimSunRow"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "Aim Sun"
+
+[node name="SunAzimuthRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SunAzimuthLabel" type="Label" parent="ScrollContainer/VBox/SunAzimuthRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Azimuth"
+
+[node name="SunAzimuthSliderSpin" parent="ScrollContainer/VBox/SunAzimuthRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 360.0
+step = 1.0
+
+[node name="SunElevationRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SunElevationLabel" type="Label" parent="ScrollContainer/VBox/SunElevationRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Elevation"
+
+[node name="SunElevationSliderSpin" parent="ScrollContainer/VBox/SunElevationRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -15.0
+max_value = 90.0
+step = 1.0
+
+[node name="SunColorRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SunColorLabel" type="Label" parent="ScrollContainer/VBox/SunColorRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Color"
+
+[node name="SunColorPicker" type="ColorPickerButton" parent="ScrollContainer/VBox/SunColorRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 0)
+layout_mode = 2
+color = Color(1, 1, 1, 1)
+
+[node name="SunEnergyRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SunEnergyLabel" type="Label" parent="ScrollContainer/VBox/SunEnergyRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Energy"
+
+[node name="SunEnergySliderSpin" parent="ScrollContainer/VBox/SunEnergyRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 4.0
+step = 0.05
+value = 1.0
+
+[node name="SunShadowsRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SunShadowsLabel" type="Label" parent="ScrollContainer/VBox/SunShadowsRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = ""
+
+[node name="SunShadowsCheck" type="CheckBox" parent="ScrollContainer/VBox/SunShadowsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "Shadows"
+
+[node name="SunSoftnessRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SunSoftnessLabel" type="Label" parent="ScrollContainer/VBox/SunSoftnessRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Softness"
+
+[node name="SunSoftnessSliderSpin" parent="ScrollContainer/VBox/SunSoftnessRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 5.0
+step = 0.05
+
+[node name="SunDarknessRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SunDarknessLabel" type="Label" parent="ScrollContainer/VBox/SunDarknessRow"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Darkness"
+
+[node name="SunDarknessSliderSpin" parent="ScrollContainer/VBox/SunDarknessRow" instance=ExtResource("2_slider_spin_box")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 1.0
+step = 0.01
+value = 1.0
+
 [node name="SunTimeOfDayRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
 layout_mode = 2
 mouse_filter = 2
@@ -496,7 +628,7 @@ mouse_filter = 2
 [node name="SunTimeOfDayLabel" type="Label" parent="ScrollContainer/VBox/SunTimeOfDayRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
-text = "Time of Day:"
+text = "Time of Day (generates)"
 
 [node name="SunTimeOfDaySliderSpin" parent="ScrollContainer/VBox/SunTimeOfDayRow" instance=ExtResource("2_slider_spin_box")]
 unique_name_in_owner = true
@@ -505,6 +637,17 @@ size_flags_horizontal = 3
 max_value = 24.0
 step = 0.5
 value = 14.0
+
+[node name="SunRegenerateRow" type="HBoxContainer" parent="ScrollContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SunRegenerateButton" type="Button" parent="ScrollContainer/VBox/SunRegenerateRow"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Back to generated"
 
 [node name="HSeparator6" type="HSeparator" parent="ScrollContainer/VBox"]
 layout_mode = 2

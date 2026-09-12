@@ -42,6 +42,14 @@ signal value_changed(new_value: float)
 		allow_lesser = v
 		_sync_properties()
 
+## Forwarded to both the slider and the spin box. Lets callers grey out the
+## whole control (e.g. shadow softness/darkness when shadows are disabled)
+## without reaching into its children.
+@export var editable: bool = true:
+	set(v):
+		editable = v
+		_sync_properties()
+
 var _syncing: bool = false
 
 @onready var _slider: HSlider = $Slider
@@ -79,6 +87,8 @@ func _sync_properties() -> void:
 	_spin_box.allow_greater = allow_greater
 	_spin_box.allow_lesser = allow_lesser
 	_spin_box.set_value_no_signal(value)
+	_slider.editable = editable
+	_spin_box.editable = editable
 	_syncing = false
 
 
