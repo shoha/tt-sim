@@ -50,14 +50,20 @@
   - Blender-exported `.glb` maps carry ambient light via glTF scene-level `extras`
     instead (see `GlbUtils.extract_lighting_config()`), since glTF has no
     `WorldEnvironment` equivalent
+  - Sun and shadow configuration is a separate axis from this layering model: it
+    lives in `LevelData.visual_settings.sun` as a typed `SunSettings`, not in
+    `PROPERTY_DEFAULTS`/`environment_overrides`. `LevelData.format_version` gates
+    migration of pre-`SunSettings` payloads in `from_dict()`. See
+    `docs/lighting-and-environment.md`'s Sun and Shadow section
 - **Settings persistence** – Each system reads/writes its own section in `Paths.SETTINGS_PATH` (`user://settings.cfg`). Always check `ConfigFile.load()` return value before overwriting — ignore `ERR_FILE_NOT_FOUND` but warn on other errors. See `docs/CONVENTIONS.md` Settings Persistence
-- **In-game editing** – `LevelEditPanel` (extends `DrawerContainer`, right edge) provides real-time editing during gameplay (map, lighting, environment, post-processing, weather). `GameplayMenuController` routes changes to `LevelPlayController`. Cancel reverts; save persists to disk
+- **In-game editing** – `LevelEditPanel` (extends `DrawerContainer`, right edge) provides real-time editing during gameplay (map, lighting, environment, post-processing, weather). `GameplayMenuController` routes changes to `LevelPlayController`. Cancel reverts; save persists to disk. The Sun section offers direction (numeric Azimuth/Elevation fields plus the interactive `SunGizmoTool` ground-compass), color, energy, and shadow enable/softness/darkness, with Time of Day acting as a generator that can (re)populate direction/color/energy from an hour rather than driving them directly
 - **Scale convention** – 1 world unit = 1 meter (glTF standard). `LevelData.grid_cell_size` adapts meters to game units. Use `ScaleUtils` for all distance conversion and formatting
 - **Measure tool** – `MeasureTool` (Node child of GameMap) provides distance measurement. Renders 2D on `LAYER_MEASURE_OVERLAY` (layer 8) to stay crisp above the lo-fi shader. M key toggles. Disables token dragging while active. Input routed through `GameMap._input()` with GUI click guard. Tab cycles mode: Line → Sphere → Cylinder → Line. VolumeOverlay (child of MeasureTool, created in setup()) renders 3D wireframe + transparent fill inside the SubViewport, plus a 2D label. Tabbing from a line waypoint uses that point as the volume center.
 - **Grid overlay** – `GridOverlay` (MeshInstance3D child of Camera3D inside SubViewport) projects a procedural grid via depth-buffer shader. Uses cell tint (theme `color_surface1` at 65% with 10% inset) instead of grid lines for readability on bright maps. Height filter (`grid_y_level`/`grid_y_tolerance`) prevents projection onto tokens. Animated fade in/out (0.2s). G key toggles (local per-client). Auto-shows during measure tool and token drag (configurable via `LevelData`). Managed by `GameMap`
 - **Grid snap** – `DragAndDrop3D` snaps to grid cell centers when `grid_snap_enabled = true`. Hold Shift for free move override. Configured from `LevelData` via `GameMap.configure_grid()`
 - **Drag ruler** – `DragRuler` (Node child of GameMap) shows movement distance during token drag. Renders 2D on `LAYER_DRAG_RULER` (layer 7). Activates/deactivates via DragAndDrop3D signals. Uses `MapOverlayUtils` for 2D overlay boilerplate
 - **MapOverlayUtils** – Shared factory for creating CanvasLayer/Control overlays and styled label panels. Used by both `MeasureTool` and `DragRuler`
+- **Modal map tools** – `MeasureTool` and `SunGizmoTool` share a contract (`is_active()`, `activate()`, `deactivate()`, `toggle()`, `handle_input()`, a `toggled` signal). Both are created and owned by `GameMap` (`setup_measure_tool()`/`setup_sun_gizmo()`), dispatched from the same branch structure in `GameMap._input()`, and wired into `CameraController` (`set_measure_tool()`/`set_sun_gizmo()`) to suppress right-mouse-button pan while either is active. `GameMap` keeps the two mutually exclusive by connecting each tool's `toggled` signal and deactivating the other on activation, so neither tool needs to know the other exists
 
 ## Adding Features
 
@@ -69,7 +75,8 @@
 - **New level/token logic**: See LevelPlayController, BoardTokenFactory (tokens MUST be created via factory), GameState, TokenPermissions
 - **New RPC**: Follow conventions in `docs/CONVENTIONS.md` — `@rpc` with `_rpc_` prefix, use `Array` not `Vector3` for parameters, emit signals from RPC methods
 - **New environment preset**: Add to `EnvironmentPresets.PRESETS` in `utils/environment_presets.gd`
-- **New environment property**: Add to `PROPERTY_DEFAULTS`, update `_apply_config_to_environment()`, `extract_from_environment()`, and `LevelEditPanel` controls
+- **New environment property**: Add to `PROPERTY_DEFAULTS`, update `_apply_config_to_environment()`, `extract_from_environment()`, and `LevelEditPanel` controls. Sun and shadow properties are the exception: they go on `SunSettings` instead (field, `to_dict()`, `from_dict()`, `copy_settings()`, `DefaultSun.apply()`, and the panel's Sun section), not on `PROPERTY_DEFAULTS`
+- **New level schema field**: Add the `@export`, update `to_dict()`/`from_dict()`/`duplicate_level()`. If the shape of an existing field changes, bump `LevelData.FORMAT_VERSION`, add a migration branch in `from_dict()`, and add a test proving old payloads still load correctly
 - **Level editor**: Supports undo/redo (`Ctrl+Z`/`Ctrl+Y`) and autosave (30s interval, recovery on startup)
 
 ## Documentation
