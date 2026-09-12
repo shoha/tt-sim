@@ -11,9 +11,20 @@ extends Node
 ## both. Being modal is what keeps it from conflicting with DragAndDrop3D token
 ## dragging: tokens are not draggable while the gizmo is active.
 ##
-## The compass mapping: drag angle around the ring centre sets azimuth, drag
-## radius sets elevation, centre meaning overhead and rim meaning horizon.
-## Screen Y grows downward, so "up the screen" is -Y and reads as azimuth 0.
+## The compass mapping is done in WORLD space on the Y=0 ground plane, not in
+## screen pixels: the pointer ray is intersected with the ground and the offset
+## from the ring centre is measured there. Direction around the ring sets
+## azimuth, distance from the centre sets elevation, centre meaning overhead and
+## rim meaning horizon. The handle is placed along the direction the light
+## travels across the ground, so the handle always points the way the shadows
+## fall.
+##
+## Doing this in screen space instead would silently bake in the camera's fixed
+## 45-degree yaw and its isometric foreshortening, aiming the sun 70 to 200
+## degrees away from the handle depending on the azimuth. World space is
+## camera-independent, so an azimuth means the same world direction no matter
+## where the camera sits or how far it is zoomed.
+##
 ## The ring covers the above-horizon hemisphere only; below-horizon elevations
 ## (night, which DefaultSun.KEYFRAMES does use) remain reachable through the
 ## time-of-day generator and the numeric elevation field.
@@ -21,9 +32,16 @@ extends Node
 signal toggled(active: bool)
 signal direction_changed(azimuth_degrees: float, elevation_degrees: float)
 
-## Ring radius in pixels. Fixed rather than derived from zoom so the drag
-## sensitivity does not change under the user mid-aim.
-const RING_RADIUS_PX: float = 120.0
+## Ring radius in WORLD units on the Y=0 ground plane. 4.5 units is roughly
+## three default grid cells (1.524 each) and about a third of the ground span
+## the default camera size (13.85) shows -- large enough to aim precisely,
+## small enough not to blanket the map. Fixed rather than derived from zoom so
+## the drag sensitivity does not change under the user mid-aim.
+const RING_RADIUS_WORLD: float = 4.5
+
+## Segment count for the unprojected ground circle. 64 is smooth enough that
+## the ellipse reads as a curve at any zoom this camera reaches.
+const RING_SEGMENTS: int = 64
 const RING_COLOR := Color(1.0, 0.85, 0.2, 0.8)
 const HANDLE_RADIUS_PX: float = 7.0
 const HANDLE_COLOR := Color(1.0, 0.95, 0.6, 1.0)
@@ -44,27 +62,31 @@ var _last_camera_size: float = -1.0
 var _last_camera_pos := Vector3.INF
 
 
-## Map a drag offset from the ring centre, in pixels, to
-## Vector2(azimuth_degrees, elevation_degrees).
-static func direction_from_drag(offset: Vector2, ring_radius: float) -> Vector2:
-	var azimuth := fposmod(rad_to_deg(atan2(offset.x, -offset.y)), 360.0)
-	var normalized := 0.0
+## Map a ground offset from the ring centre, in world units on the Y=0 plane,
+## to Vector2(azimuth_degrees, elevation_degrees). Pure and camera-independent.
+##
+## DefaultSun.apply() writes azimuth as rotation_degrees.y and elevation as
+## -rotation_degrees.x, which makes a DirectionalLight3D's travel direction
+## (-basis.z) equal (-sin A * cos E, -sin E, -cos A * cos E). Its ground
+## component is therefore (-sin A, 0, -cos A), and placing the handle along that
+## direction -- where the shadows go -- inverts to A = atan2(-x, -z).
+static func direction_from_ground_offset(offset: Vector3, ring_radius: float) -> Vector2:
+	var azimuth := fposmod(rad_to_deg(atan2(-offset.x, -offset.z)), 360.0)
+	var normalized := 1.0
 	if ring_radius > 0.0:
-		normalized = clampf(offset.length() / ring_radius, 0.0, 1.0)
-	else:
-		normalized = 1.0
+		normalized = clampf(Vector2(offset.x, offset.z).length() / ring_radius, 0.0, 1.0)
 	return Vector2(azimuth, 90.0 * (1.0 - normalized))
 
 
-## Inverse of direction_from_drag: where the handle sits, as an offset from the
-## ring centre in pixels, for a given direction.
-static func drag_from_direction(
+## Inverse of direction_from_ground_offset: where the handle sits, as a world
+## offset from the ring centre on the Y=0 plane, for a given direction.
+static func ground_offset_from_direction(
 	azimuth_degrees: float, elevation_degrees: float, ring_radius: float
-) -> Vector2:
+) -> Vector3:
 	var normalized := clampf(elevation_degrees, 0.0, 90.0) / 90.0
 	var radius := ring_radius * (1.0 - normalized)
 	var angle := deg_to_rad(azimuth_degrees)
-	return Vector2(sin(angle), -cos(angle)) * radius
+	return Vector3(-sin(angle), 0.0, -cos(angle)) * radius
 
 
 func _ready() -> void:
@@ -151,46 +173,48 @@ func handle_input(event: InputEvent) -> bool:
 
 
 ## Read the pointer from the SubViewport rather than from the event, matching
-## MeasureTool: the ring centre comes from Camera3D.unproject_position(), which
-## is in SubViewport space, so the cursor must be read in that same space.
-## InputEvent.position is in window space and only happens to agree today
-## because SubViewportContainer has stretch = true.
+## MeasureTool: the ray projection below is in SubViewport space, so the cursor
+## must be read in that same space. InputEvent.position is in window space and
+## only happens to agree today because SubViewportContainer has stretch = true.
+##
+## Both the ring centre and the pointer are resolved onto the Y=0 ground plane,
+## so the drag is measured in world units and the resulting azimuth is a world
+## direction rather than a screen angle.
 func _apply_drag() -> void:
-	if not _world_viewport:
+	if not _camera or not _world_viewport:
 		return
-	var centre := _ring_centre_screen()
-	if centre == Vector2.INF:
+	var centre := _viewport_centre_ground_point()
+	if centre == Vector3.INF:
 		return
-	var pointer := _world_viewport.get_mouse_position()
-	var direction := direction_from_drag(pointer - centre, RING_RADIUS_PX)
+	var pointer := _ground_point_at(_world_viewport.get_mouse_position())
+	if pointer == Vector3.INF:
+		return
+	var direction := direction_from_ground_offset(pointer - centre, RING_RADIUS_WORLD)
 	_azimuth_degrees = direction.x
 	_elevation_degrees = direction.y
 	_mark_dirty()
 	direction_changed.emit(_azimuth_degrees, _elevation_degrees)
 
 
-## Screen position of the ring centre: the point on the Y=0 ground plane at the
-## centre of the viewport, so the compass sits in the world rather than floating
-## in screen space.
-func _ring_centre_screen() -> Vector2:
-	if not _camera or not _world_viewport:
-		return Vector2.INF
-	var ground := _viewport_centre_ground_point()
-	if ground == Vector3.INF:
-		return Vector2.INF
-	return _camera.unproject_position(ground)
-
-
-func _viewport_centre_ground_point() -> Vector3:
-	var centre := Vector2(_world_viewport.size) * 0.5
-	var from := _camera.project_ray_origin(centre)
-	var dir := _camera.project_ray_normal(centre)
+## World point where the ray through [param screen_pos] (in SubViewport space)
+## meets the Y=0 ground plane, or Vector3.INF if it never does.
+func _ground_point_at(screen_pos: Vector2) -> Vector3:
+	var from := _camera.project_ray_origin(screen_pos)
+	var dir := _camera.project_ray_normal(screen_pos)
 	if absf(dir.y) < 0.001:
 		return Vector3.INF
 	var t := -from.y / dir.y
 	if t < 0.0:
 		return Vector3.INF
 	return from + dir * t
+
+
+## Ring centre: the point on the Y=0 ground plane at the centre of the viewport,
+## so the compass sits in the world rather than floating in screen space.
+func _viewport_centre_ground_point() -> Vector3:
+	if not _camera or not _world_viewport:
+		return Vector3.INF
+	return _ground_point_at(Vector2(_world_viewport.size) * 0.5)
 
 
 func _mark_dirty() -> void:
@@ -223,15 +247,33 @@ func _create_overlay(overlay_parent: Node) -> void:
 
 
 func _on_draw_control_draw() -> void:
-	if not _active or not _draw_control:
+	if not _active or not _draw_control or not _camera:
 		return
-	var centre := _ring_centre_screen()
-	if centre == Vector2.INF:
+	var centre := _viewport_centre_ground_point()
+	if centre == Vector3.INF:
 		return
 
-	_draw_control.draw_arc(centre, RING_RADIUS_PX, 0.0, TAU, 64, RING_COLOR, 2.0, true)
-	_draw_control.draw_arc(centre, RING_RADIUS_PX * 0.5, 0.0, TAU, 48, RING_COLOR, 1.0, true)
+	_draw_ground_ring(centre, RING_RADIUS_WORLD, 2.0)
+	_draw_ground_ring(centre, RING_RADIUS_WORLD * 0.5, 1.0)
 
-	var handle := centre + drag_from_direction(_azimuth_degrees, _elevation_degrees, RING_RADIUS_PX)
-	_draw_control.draw_line(centre, handle, RAY_COLOR, 2.0, true)
-	_draw_control.draw_circle(handle, HANDLE_RADIUS_PX, HANDLE_COLOR)
+	var offset := ground_offset_from_direction(
+		_azimuth_degrees, _elevation_degrees, RING_RADIUS_WORLD
+	)
+	var centre_screen := _camera.unproject_position(centre)
+	var handle_screen := _camera.unproject_position(centre + offset)
+	_draw_control.draw_line(centre_screen, handle_screen, RAY_COLOR, 2.0, true)
+	_draw_control.draw_circle(handle_screen, HANDLE_RADIUS_PX, HANDLE_COLOR)
+
+
+## Draw a circle that lives on the Y=0 ground plane, by unprojecting points
+## around it. Under the fixed isometric camera this reads as a ground ellipse,
+## which is both truer to where the compass actually is and a clearer cue that
+## the handle's direction is a world direction, not a screen one.
+func _draw_ground_ring(centre: Vector3, radius: float, width: float) -> void:
+	var points := PackedVector2Array()
+	for i in range(RING_SEGMENTS + 1):
+		var angle := TAU * float(i) / float(RING_SEGMENTS)
+		points.append(
+			_camera.unproject_position(centre + Vector3(cos(angle), 0.0, sin(angle)) * radius)
+		)
+	_draw_control.draw_polyline(points, RING_COLOR, width, true)
