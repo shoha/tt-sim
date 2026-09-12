@@ -64,8 +64,69 @@ func _assert_lights_match(
 	assert_almost_eq(actual.light_color.b, expected.light_color.b, 0.0001, "color.b at %f" % hour)
 	assert_almost_eq(actual.light_energy, expected.light_energy, 0.0001, "energy at %f" % hour)
 
+
 # The test that proved _reference_configure() faithful against the live
 # pre-schema DefaultSun.configure_directional_light() lived here. That function
 # no longer exists, so the check cannot be re-run; it passed in the commit that
 # introduced this file, which is what makes the frozen copy trustworthy.
 # Task 4's migration tests are the ongoing consumers of the oracle.
+
+
+func test_migrated_legacy_sun_renders_identically_across_the_day() -> void:
+	# The load-bearing migration guarantee: for every time_of_day a pre-schema
+	# level could have stored, migrating and applying must put the light in
+	# exactly the state the old code would have.
+	for hour in _SWEEP:
+		var migrated_light := DirectionalLight3D.new()
+		var frozen_light := DirectionalLight3D.new()
+
+		var settings := SunSettings.from_legacy({"mode": "on", "time_of_day": hour})
+		DefaultSun.apply(migrated_light, settings)
+		_reference_configure(frozen_light, hour)
+
+		_assert_lights_match(migrated_light, frozen_light, hour)
+
+		migrated_light.free()
+		frozen_light.free()
+
+
+func test_migrated_legacy_sun_with_no_time_of_day_uses_the_default_hour() -> void:
+	var migrated_light := DirectionalLight3D.new()
+	var frozen_light := DirectionalLight3D.new()
+
+	var settings := SunSettings.from_legacy({"mode": "auto"})
+	DefaultSun.apply(migrated_light, settings)
+	_reference_configure(frozen_light, DefaultSun.DEFAULT_TIME_OF_DAY)
+
+	_assert_lights_match(migrated_light, frozen_light, DefaultSun.DEFAULT_TIME_OF_DAY)
+
+	migrated_light.free()
+	frozen_light.free()
+
+
+func test_migration_preserves_the_shadow_state_that_was_in_effect_before() -> void:
+	# Before the schema, shadow_enabled was hardcoded true, and
+	# light_angular_distance / shadow_opacity were never touched, so they sat at
+	# their engine defaults of 0.0 and 1.0. Migration must reproduce that or
+	# existing levels change appearance.
+	var settings := SunSettings.from_legacy({"mode": "on", "time_of_day": 10.0})
+
+	assert_eq(settings.shadows_enabled, true)
+	assert_almost_eq(settings.softness, 0.0, 0.0001)
+	assert_almost_eq(settings.shadow_darkness, 1.0, 0.0001)
+
+
+func test_migration_carries_the_mode_through_unchanged() -> void:
+	assert_eq(SunSettings.from_legacy({"mode": "off"}).mode, "off")
+	assert_eq(SunSettings.from_legacy({"mode": "on"}).mode, "on")
+	assert_eq(SunSettings.from_legacy({"mode": "auto"}).mode, "auto")
+
+
+func test_migration_defaults_mode_to_auto_when_absent() -> void:
+	assert_eq(SunSettings.from_legacy({}).mode, "auto")
+
+
+func test_migration_records_the_hour_it_came_from() -> void:
+	# So the edit panel can still offer "regenerate from this time of day" on a
+	# migrated level.
+	assert_almost_eq(SunSettings.from_legacy({"time_of_day": 7.25}).time_of_day, 7.25, 0.001)
