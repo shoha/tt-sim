@@ -384,16 +384,32 @@ underlying schema):
 | Shadows | `CheckBox` | gates the two below |
 | Softness | `SliderSpinBox` | 0 to 5 (degrees of angular distance) |
 | Darkness | `SliderSpinBox` | 0 to 1 |
-| Time of Day | `SliderSpinBox` | 0 to 24, relabelled as a generator |
+| Time of Day | `SliderSpinBox` | 0 to 24, labelled "Time of Day:"; that it regenerates rather than nudges is conveyed by its tooltip plus the "Back to generated" button |
 
 `SunGizmoTool` draws a compass ring on the ground at the view centre when
-"Aim Sun" is active. Dragging its handle maps drag angle around the centre to
-Azimuth and drag radius to Elevation (centre = 90, overhead; rim = 0,
-horizon); Azimuth and Elevation are two-way synced, so dragging updates the
-numeric fields and editing the fields moves the handle. Right mouse button
-deactivates the gizmo. It shares its modal-tool contract with `MeasureTool`
-and the two are kept mutually exclusive by `GameMap` (see `AGENTS.md`'s
-"Modal map tools" note).
+"Aim Sun" is active. The mapping is done in **world space on the Y=0 ground
+plane**, not in screen pixels: the pointer ray is intersected with the ground
+and the offset from the ring centre is measured there. Direction around the
+ring sets Azimuth and distance from the centre sets Elevation (centre = 90,
+overhead; rim = 0, horizon, with the rim at `RING_RADIUS_WORLD` = 4.5 world
+units). The handle sits along the light's ground travel direction
+`(-sin A, 0, -cos A)`, so the handle points the way the shadows fall. The ring
+is drawn by unprojecting a world circle, so it reads as a ground ellipse under
+the fixed isometric camera.
+
+Screen-space would not work here: the camera is yawed 45 degrees and
+isometrically foreshortened (its Y axis projects to 0.368 of its X axis on the
+ground), so a screen-angle mapping aims the sun 70 to 200 degrees away from the
+handle depending on the azimuth. See
+`tests/unit/test_sun_gizmo_tool.gd`, which anchors azimuths to absolute world
+directions and closes the loop through `DefaultSun.apply()` on a real
+`DirectionalLight3D`.
+
+Azimuth and Elevation are two-way synced, so dragging updates the numeric
+fields and editing the fields moves the handle. Right mouse button deactivates
+the gizmo. It shares its modal-tool contract with `MeasureTool` and the two are
+kept mutually exclusive by `GameMap` (see `AGENTS.md`'s "Modal map tools"
+note).
 
 Editing any sun property while Mode is "Auto" promotes it to "On" — otherwise
 the edit would be a silent no-op on a map that already brings its own lights,
