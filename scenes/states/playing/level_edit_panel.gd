@@ -148,18 +148,23 @@ func _on_ready() -> void:
 		margin_node.add_theme_constant_override("margin_top", 16)
 		margin_node.add_theme_constant_override("margin_bottom", 16)
 
-	# Reparent the scene-defined ScrollContainer into the drawer's content area.
-	# Must set size_flags so the VBoxContainer allocates full height to it.
-	var scroll = $ScrollContainer
-	if scroll:
-		scroll.get_parent().remove_child(scroll)
-		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		content_container.add_child(scroll)
+	# Reparent the scene-defined root VBox -- the ScrollContainer plus the
+	# Cancel/Save ButtonsRow pinned below it -- into the drawer's content area.
+	# Must set size_flags so the DrawerContainer's VBoxContainer allocates full
+	# height to it. ButtonsRow lives outside the ScrollContainer so Cancel/Save
+	# are always visible without scrolling; only the ScrollContainer itself
+	# expands to fill the remaining space (set in the .tscn).
+	var root_vbox = %RootVBox
+	if root_vbox:
+		root_vbox.get_parent().remove_child(root_vbox)
+		root_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		root_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		content_container.add_child(root_vbox)
 
 		# Wrap the VBox in an inner MarginContainer so the right padding sits
 		# *between* the content and the scrollbar, not outside the scrollbar.
-		var vbox = scroll.get_child(0)
+		var scroll = root_vbox.get_node("ScrollContainer")
+		var vbox = scroll.get_child(0) if scroll else null
 		if vbox:
 			var inner_margin := MarginContainer.new()
 			inner_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
