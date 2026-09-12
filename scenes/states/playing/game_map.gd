@@ -32,6 +32,7 @@ extends Node3D
 
 var _level_play_controller: LevelPlayController = null
 var _measure_tool: MeasureTool = null
+var _sun_gizmo: SunGizmoTool = null
 var _grid_overlay: GridOverlay = null
 var _drag_ruler: DragRuler = null
 var _weather_renderer: WeatherRenderer = null
@@ -178,6 +179,17 @@ func _input(event: InputEvent) -> void:
 					get_viewport().set_input_as_handled()
 					return
 
+	# Sun gizmo gets first look at input when active, ahead of the measure tool
+	# (the two are mutually exclusive, so at most one is ever active). Skip
+	# mouse buttons over GUI so the edit drawer's own controls still work.
+	if _sun_gizmo and _sun_gizmo.is_active():
+		var is_gizmo_click: bool = event is InputEventMouseButton and event.pressed
+		if is_gizmo_click and _is_mouse_over_gui():
+			pass
+		elif _sun_gizmo.handle_input(event):
+			get_viewport().set_input_as_handled()
+			return
+
 	# Measure tool gets first look at input when active.
 	# handle_input returns true if the event was consumed (clicks on terrain, etc.).
 	# Mouse motion is never consumed — it always falls through to camera handling.
@@ -312,6 +324,35 @@ func get_measure_tool() -> MeasureTool:
 	return _measure_tool
 
 
+## Create the sun-aiming gizmo. Mirrors setup_measure_tool(): the tool doesn't
+## exist when CameraController is constructed in _ready(), so the reference is
+## wired here instead.
+func setup_sun_gizmo() -> void:
+	if _sun_gizmo:
+		return
+	_sun_gizmo = SunGizmoTool.new()
+	_sun_gizmo.name = "SunGizmoTool"
+	add_child(_sun_gizmo)
+	_sun_gizmo.setup(camera_node, world_viewport, self)
+	_sun_gizmo.toggled.connect(_on_sun_gizmo_toggled)
+	_camera_controller.set_sun_gizmo(_sun_gizmo)
+
+
+## Return the SunGizmoTool instance (may be null before setup).
+func get_sun_gizmo() -> SunGizmoTool:
+	return _sun_gizmo
+
+
+func _on_sun_gizmo_toggled(active: bool) -> void:
+	if drag_and_drop_node:
+		drag_and_drop_node.dragging_enabled = not active
+	# Mutual exclusion between the two modal tools lives here, in the node that
+	# owns both, so neither tool needs to know the other exists. No recursion:
+	# deactivate() emits toggled(false), which fails this `active` guard.
+	if active and _measure_tool and _measure_tool.is_active():
+		_measure_tool.deactivate()
+
+
 ## Get the action history (for undo recording from external code).
 func get_action_history() -> GameplayActionHistory:
 	return _action_history
@@ -323,6 +364,8 @@ func _on_measure_tool_toggled(active: bool) -> void:
 	if drag_and_drop_node:
 		drag_and_drop_node.dragging_enabled = not active
 	_grid_visibility.set_auto_show_measure(active)
+	if active and _sun_gizmo and _sun_gizmo.is_active():
+		_sun_gizmo.deactivate()
 
 
 ## Create and configure the GridOverlay.

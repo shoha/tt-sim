@@ -52,6 +52,7 @@ func setup(game_map: GameMap) -> void:
 	_game_map = game_map
 	_environment_manager.setup(game_map)
 	_game_map.setup_measure_tool()
+	_game_map.setup_sun_gizmo()
 	_game_map.setup_grid_overlay()
 	_game_map.setup_drag_ruler()
 	_game_map.setup_performance_overlay()

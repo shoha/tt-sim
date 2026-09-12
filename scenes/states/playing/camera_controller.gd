@@ -54,6 +54,7 @@ const REFERENCE_ASPECT := 16.0 / 9.0  # Reference window aspect ratio for frustu
 
 var _game_map: GameMap = null
 var _measure_tool: MeasureTool = null
+var _sun_gizmo: SunGizmoTool = null
 
 var _camera_move_dir: Vector3
 var _camera_velocity: Vector3 = Vector3.ZERO  # Smoothed camera movement velocity
@@ -129,6 +130,14 @@ func capture_home_position() -> void:
 ## setup_measure_tool() instead of passing it in via setup().
 func set_measure_tool(measure_tool: MeasureTool) -> void:
 	_measure_tool = measure_tool
+
+
+## Wire the SunGizmoTool reference used by rmb_can_start_pan() to suppress RMB
+## pan while the gizmo is active -- the gizmo uses RMB to exit, so a pan must not
+## start on the same press. Wired by GameMap.setup_sun_gizmo() for the same
+## construction-order reason as set_measure_tool().
+func set_sun_gizmo(sun_gizmo: SunGizmoTool) -> void:
+	_sun_gizmo = sun_gizmo
 
 
 func _process(delta: float) -> void:
@@ -483,9 +492,12 @@ func is_mouse_over_token(screen_pos: Vector2) -> bool:
 
 
 ## Whether RMB can start a pan at this screen position.
-## Requires: not over a token, not over GUI, measure tool not active, not dragging.
+## Requires: not over a token, not over GUI, measure tool and sun gizmo both
+## inactive, not dragging.
 func rmb_can_start_pan(screen_pos: Vector2) -> bool:
 	if _measure_tool and _measure_tool.is_active():
+		return false
+	if _sun_gizmo and _sun_gizmo.is_active():
 		return false
 	if _game_map.drag_and_drop_node and _game_map.drag_and_drop_node.is_dragging():
 		return false
