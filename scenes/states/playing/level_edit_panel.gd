@@ -16,7 +16,7 @@ signal environment_changed(preset: String, overrides: Dictionary)
 signal lofi_changed(overrides: Dictionary)
 signal weather_changed(overrides: Dictionary)
 signal foliage_changed(overrides: Dictionary)
-signal sun_changed(overrides: Dictionary)
+signal sun_changed(settings: SunSettings)
 signal water_style_changed(style: String)
 signal revert_to_map_defaults_requested
 
@@ -47,7 +47,7 @@ var current_water_style: String = "stylized"
 var current_lofi_overrides: Dictionary = {}
 var current_weather_overrides: Dictionary = {}
 var current_foliage_overrides: Dictionary = {}
-var current_sun_overrides: Dictionary = {}
+var current_sun: SunSettings = SunSettings.default()
 var light_intensity_scale: float = 1.0
 var current_grid_cell_size: float = 1.524
 var current_display_unit: String = "ft"
@@ -376,7 +376,7 @@ func initialize(
 	current_lofi_overrides = level_data.lofi_overrides.duplicate()
 	current_weather_overrides = level_data.weather_overrides.duplicate()
 	current_foliage_overrides = level_data.foliage_overrides.duplicate()
-	current_sun_overrides = level_data.sun_overrides.duplicate()
+	current_sun = level_data.visual_settings.sun.copy_settings()
 	_map_defaults = map_defaults
 
 	# Set scale controls
@@ -619,7 +619,7 @@ func _on_save_pressed() -> void:
 				"lofi_overrides": current_lofi_overrides,
 				"weather_overrides": current_weather_overrides,
 				"foliage_overrides": current_foliage_overrides,
-				"sun_overrides": current_sun_overrides,
+				"sun_settings": current_sun,
 				"grid_cell_size": current_grid_cell_size,
 				"display_unit": current_display_unit,
 				"display_unit_per_cell": current_display_unit_per_cell,
@@ -701,23 +701,28 @@ func _on_foliage_override_changed(value: Variant, key: String) -> void:
 
 
 func _on_sun_mode_selected(index: int) -> void:
-	var mode: String = sun_mode_dropdown.get_item_metadata(index)
-	current_sun_overrides["mode"] = mode
-	sun_changed.emit(current_sun_overrides)
+	current_sun.mode = sun_mode_dropdown.get_item_metadata(index)
+	sun_changed.emit(current_sun)
 
 
+## Time of day is a GENERATOR, not the sun's interface: it regenerates direction,
+## color, and energy from the keyframes, discarding any hand-aiming. The shadow
+## fields and mode are user choices and are carried across.
 func _on_sun_time_of_day_changed(value: float) -> void:
-	current_sun_overrides["time_of_day"] = value
-	sun_changed.emit(current_sun_overrides)
+	var generated := DefaultSun.settings_for_time(value)
+	generated.mode = current_sun.mode
+	generated.shadows_enabled = current_sun.shadows_enabled
+	generated.softness = current_sun.softness
+	generated.shadow_darkness = current_sun.shadow_darkness
+	current_sun = generated
+	sun_changed.emit(current_sun)
+	_sync_sun_controls()
 
 
-## Sync sun controls from current_sun_overrides.
+## Sync sun controls from current_sun.
 func _sync_sun_controls() -> void:
-	var mode: String = current_sun_overrides.get("mode", "auto")
 	for i in range(sun_mode_dropdown.item_count):
-		if sun_mode_dropdown.get_item_metadata(i) == mode:
+		if sun_mode_dropdown.get_item_metadata(i) == current_sun.mode:
 			sun_mode_dropdown.select(i)
 			break
-	sun_time_of_day_slider_spin.set_value_no_signal(
-		current_sun_overrides.get("time_of_day", DefaultSun.DEFAULT_TIME_OF_DAY)
-	)
+	sun_time_of_day_slider_spin.set_value_no_signal(current_sun.time_of_day)

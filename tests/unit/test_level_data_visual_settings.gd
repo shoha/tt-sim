@@ -108,3 +108,18 @@ func test_duplicate_level_copies_visual_settings_independently() -> void:
 	copy.visual_settings.sun.mode = "off"
 
 	assert_eq(level.visual_settings.sun.mode, "on")
+
+
+func test_a_snapshot_taken_with_copy_settings_survives_later_edits() -> void:
+	# This is the aliasing hazard the drawer's cancel path depends on:
+	# GameplayMenuController snapshots visual_settings on open, the user edits
+	# the live settings, and cancel restores the snapshot. If the snapshot
+	# aliased, the edits would have overwritten it and cancel would do nothing.
+	var level := LevelData.new()
+	level.visual_settings.sun.azimuth_degrees = 100.0
+
+	var snapshot := level.visual_settings.copy_settings()
+	level.visual_settings.sun.azimuth_degrees = 300.0
+	level.visual_settings = snapshot.copy_settings()
+
+	assert_almost_eq(level.visual_settings.sun.azimuth_degrees, 100.0, 0.001)
