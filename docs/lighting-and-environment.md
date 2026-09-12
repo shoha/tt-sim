@@ -11,7 +11,7 @@ This document describes the lighting and environment configuration system for le
 - [Sky Presets](#sky-presets)
 - [Map Defaults](#map-defaults)
 - [Environment Overrides](#environment-overrides)
-- [Default Sun Light](#default-sun-light)
+- [Sun and Shadow](#sun-and-shadow)
 - [In-Game Edit Panel](#in-game-edit-panel)
 - [Post-Processing (Lo-Fi) Overrides](#post-processing-lo-fi-overrides)
 - [Data Storage](#data-storage)
@@ -28,8 +28,9 @@ The lighting and environment system allows Dungeon Masters (DMs) to configure ho
 2. **Environment Presets** — Pre-configured mood settings (fog, ambient light, glow, sky, tone mapping, etc.)
 3. **Map Defaults** — Environment settings extracted from a map's embedded `WorldEnvironment` node
 4. **Environment Overrides** — Fine-tuned adjustments to individual environment properties
-5. **Post-Processing (Lo-Fi) Overrides** — Shader-based effects like pixelation, color depth, and color fade
+5. **Post-Processing (Lo-Fi) Overrides** — Shader-based effects like pixelation, color levels, and color fade
 6. **Weather Effects** — Combinable particle-based weather (rain, snow, wind) and fog overlay
+7. **Sun and Shadow** — Independently art-directable direction, color, energy, and shadow softness/darkness for the level's default sun
 
 All settings are stored in `LevelData` and serialized to `level.json` for folder-based levels. Changes can be made in real time using the in-game edit panel.
 
@@ -248,7 +249,7 @@ Overrides allow fine-tuning individual properties without creating a new preset:
 
 Overrides are merged on top of the selected preset's values (or map defaults when no preset is selected). Only changed properties need to be included — everything else comes from the preset/defaults.
 
-## Default Sun Light
+## Sun and Shadow
 
 Maps with no lights of their own get a default shadow-casting `DirectionalLight3D`
 ("LevelSunLight") so tokens and foliage read as grounded in the scene rather than
@@ -256,40 +257,75 @@ lit only by flat ambient light. Maps that bring their own lights are left alone.
 
 ### Data Model
 
-```gdscript
-# In LevelData
-@export var sun_overrides: Dictionary = {}
-# Keys:
-#   "mode"        : String — "auto" | "on" | "off"  (default "auto")
-#   "time_of_day" : float  — 0.0-24.0                (default 14.0)
-```
+Sun and shadow configuration is a typed `SunSettings` resource
+(`resources/sun_settings.gd`), held at `LevelData.visual_settings.sun`
+(`resources/visual_settings.gd`). It replaced the old flat `sun_overrides`
+dictionary, which carried only `mode` and `time_of_day` and therefore locked
+direction, color, and energy together on a single hand-authored curve.
+
+| Field | Type | Applied to | Notes |
+| --- | --- | --- | --- |
+| `mode` | `String` | -- | `"auto"` / `"on"` / `"off"`; semantics unchanged |
+| `azimuth_degrees` | `float` | `rotation_degrees.y` | |
+| `elevation_degrees` | `float` | `-rotation_degrees.x` | |
+| `color` | `Color` | `light_color` | |
+| `energy` | `float` | `light_energy` | |
+| `shadows_enabled` | `bool` | `shadow_enabled` | promoted from hardcoded `true` |
+| `softness` | `float` | `light_angular_distance` | sun angular size in degrees; sharp at contact, softens with distance |
+| `shadow_darkness` | `float` | `shadow_opacity` | lifts shadows toward ambient without removing them |
+| `time_of_day` | `float` | -- | the generator's last input; retained for UI |
 
 - `"auto"` (default): the sun is shown only if the map has no lights of its own.
 - `"on"`: the sun is always shown, even if the map has its own lights.
 - `"off"`: the sun is never shown, even if the map has no lights.
 
-### Time of Day
+### Time of Day Is a Generator, Not the Lighting Interface
 
-`time_of_day` is a static, per-level setting (not an animated day/night cycle). It
-drives the sun light's elevation, color, and energy by interpolating between hand-
-authored keyframes (`utils/default_sun.gd`, `DefaultSun.KEYFRAMES`) at dawn (6:00),
-noon (12:00), dusk (18:00), and night (0:00/24:00). It does **not** affect the
-separate ambient/`Environment` config — the sun and the ambient/preset system are
+`utils/default_sun.gd`'s `DefaultSun` used to mutate a light directly via
+`configure_directional_light()`. That method is gone, replaced by an inverted
+pair:
+
+- `DefaultSun.settings_for_time(hour: float) -> SunSettings` interpolates the
+  hand-authored `KEYFRAMES` (dawn 6:00, noon 12:00, dusk 18:00, night
+  0:00/24:00) and returns a `SunSettings`. It is a pure generator with no side
+  effects.
+- `DefaultSun.apply(light: DirectionalLight3D, settings: SunSettings) -> void`
+  is a dumb applier: it writes whatever the `SunSettings` says onto the light,
+  with no interpolation of its own.
+
+`time_of_day` is a static, per-level setting (not an animated day/night
+cycle), and it is no longer the lighting interface itself -- it is one way to
+populate one. A level's sun can be hand-aimed (direction, color, energy)
+independently of `time_of_day`; changing `time_of_day` afterwards does not
+silently overwrite that edit; it only offers to regenerate from the hour (see
+"Back to generated" below). Time of day does **not** affect the separate
+ambient/`Environment` config — the sun and the ambient/preset system are
 independent layers.
 
-### Edit Panel
+### Shadow Tuning
 
-The "Sun" section in `LevelEditPanel` (between the advanced Lighting & Environment
-controls and Post-Processing Effects) provides a Mode dropdown (Auto/On/Off) and a
-Time of Day slider (0-24). Changes apply in real time and are included in
-save/cancel snapshotting and network sync, following the same pattern as Weather
-and Foliage overrides.
+- `softness` (applied to `light_angular_distance`) gives distance-correct
+  penumbra: shadows are sharp at the contact point and soften with distance
+  from the caster, which is what makes it the artistically meaningful shadow
+  dial. `shadow_blur` stays fixed at its tuned value of `2.0` and is **not**
+  exposed -- it is a flat uniform filter rather than a physically motivated
+  one.
+- `shadow_bias` and `shadow_normal_bias` remain hardcoded engine tuning at the
+  sun's creation site in `level_environment_manager.gd`, calibrated for this
+  project's small object scale (tokens are well under 1 unit tall) to avoid
+  "peter-panning" (shadows detaching from small objects). They are correctness
+  tuning for this game's geometry, not artistic dials, so they are not exposed
+  on `SunSettings` or in the panel.
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
-| `utils/default_sun.gd` | `DefaultSun.configure_directional_light()` -- time-of-day keyframe interpolation for the default sun light |
+| `resources/sun_settings.gd` | `SunSettings` -- typed field data, `to_dict()`/`from_dict()`, `from_legacy()` migration, `copy_settings()` |
+| `resources/visual_settings.gd` | `VisualSettings` -- wraps `sun`; `to_dict()`/`from_dict()`/`copy_settings()` |
+| `utils/default_sun.gd` | `DefaultSun.settings_for_time()` (generator) and `DefaultSun.apply()` (applier) |
+| `scenes/states/playing/level_environment_manager.gd` | `apply_sun_settings()` -- creates the light, resolves `mode` against whether the map brought its own lights, calls `DefaultSun.apply()` |
+| `scenes/states/playing/sun_gizmo_tool.gd` | `SunGizmoTool` -- interactive ground-compass aiming tool; see [In-Game Edit Panel](#in-game-edit-panel) |
 
 ## In-Game Edit Panel
 
@@ -303,10 +339,18 @@ The `LevelEditPanel` is a slide-out drawer (extends `DrawerContainer`) that appe
 
 ### Panel Sections
 
-**Map Scale** — Uniform scale slider for the map geometry.
+**Map & Grid** (collapsible, collapsed by default) — Scale preset dropdown and
+Grid Cell Size slider, calibrating `grid_cell_size`/`display_unit`/
+`display_unit_per_cell` against the map's visible geometry. Set once when a
+map is imported and rarely revisited afterward, so it lives outside the mood
+flow at the top of the drawer rather than in `LevelEditor` -- calibrating the
+grid means dragging it until it lines up with the map's visible squares, which
+needs the live 3D view that `LevelEditor` does not have.
 
 **Lighting & Environment:**
 - **Preset dropdown** — Choose a named preset or "Map Defaults"
+- **Water Style dropdown** — "Stylized" or "Realistic", applied to any
+  `-water`-suffixed mesh via `WaterGlbUtils.apply_water_style()`
 - **Lighting Power** — Light intensity multiplier for embedded lights
 - **Ambient Light** — Color and energy
 - **Fog** — Toggle, color, density, height
@@ -315,27 +359,70 @@ The `LevelEditPanel` is a slide-out drawer (extends `DrawerContainer`) that appe
 - **Brightness / Contrast / Saturation** — Adjustment controls
 
 **Advanced (collapsible):**
-- Background mode and color
-- Sky preset
-- Ambient light source
-- Reflected light source
-- Fog height density
+- Sky preset — selecting a named sky also switches `background_mode` between
+  `BG_SKY`/`BG_COLOR` and `ambient_light_source` between
+  `AMBIENT_SOURCE_SKY`/`AMBIENT_SOURCE_COLOR`; there is no separate
+  background-mode, ambient-source, or reflected-source control in the panel
+- Fog energy, fog height, fog height density
+- Tone mapping white point
+- Glow strength, glow bloom
 
-**Sun:**
-- **Mode dropdown** — Auto / On / Off
-- **Time of Day slider** — 0-24
+**Sun** (ten controls; see [Sun and Shadow](#sun-and-shadow) for the
+underlying schema):
+
+| Control | Type | Range |
+| --- | --- | --- |
+| Mode | `OptionButton` | Auto / On / Off (unchanged) |
+| Aim Sun | toggle `Button` | activates `SunGizmoTool` |
+| Azimuth | `SliderSpinBox` | 0 to 360 |
+| Elevation | `SliderSpinBox` | -15 to 90 |
+| Color | `ColorPickerButton` | |
+| Energy | `SliderSpinBox` | 0 to 4 |
+| Shadows | `CheckBox` | gates the two below |
+| Softness | `SliderSpinBox` | 0 to 5 (degrees of angular distance) |
+| Darkness | `SliderSpinBox` | 0 to 1 |
+| Time of Day | `SliderSpinBox` | 0 to 24, relabelled as a generator |
+
+`SunGizmoTool` draws a compass ring on the ground at the view centre when
+"Aim Sun" is active. Dragging its handle maps drag angle around the centre to
+Azimuth and drag radius to Elevation (centre = 90, overhead; rim = 0,
+horizon); Azimuth and Elevation are two-way synced, so dragging updates the
+numeric fields and editing the fields moves the handle. Right mouse button
+deactivates the gizmo. It shares its modal-tool contract with `MeasureTool`
+and the two are kept mutually exclusive by `GameMap` (see `AGENTS.md`'s
+"Modal map tools" note).
+
+Editing any sun property while Mode is "Auto" promotes it to "On" — otherwise
+the edit would be a silent no-op on a map that already brings its own lights,
+since Auto only shows the default sun when the map has none. When the current
+settings diverge from what `DefaultSun.settings_for_time()` would generate for
+the current Time of Day, a "Back to generated" button appears, offering to
+regenerate direction, color, and energy from that hour.
 
 **Post-Processing Effects:**
 - Pixelation
-- Color Depth
 - Color Fade (lo-fi shader saturation)
-- Outline
+- Color Levels
+- Dither
+- Vignette
+- Grain
+
+**Weather:** Rain, Snow, Fog, and Wind sliders (0.0-1.0). See
+[Weather Effects](#weather-effects).
+
+**Foliage:** Tree Sway Speed/Amplitude and Grass Sway Speed/Amplitude
+sliders. See [Weather Effects](#weather-effects), which documents foliage
+tuning alongside its shared network-sync path.
 
 **Actions:**
 - **Revert to Map Defaults** — Restores the map's embedded environment (visible only when the map has defaults)
 - **Edit Details** — Opens the dedicated Level Editor for token placement and metadata
 - **Save Level** — Persists all changes to disk
 - **Cancel** — Reverts all changes and closes the panel
+
+Cancel and Save are pinned outside the panel's `ScrollContainer` (under a
+`RootVBox` that wraps both the scroll area and the button row), so they stay
+visible regardless of how tall the scrolling content is.
 
 ### Signal Flow
 
@@ -349,7 +436,7 @@ LevelEditPanel (UI)
   ├── intensity_changed(scale) ──→ GameplayMenuController ──→ LevelPlayController
   ├── map_scale_changed(scale) ──→ GameplayMenuController ──→ LevelPlayController
   ├── lofi_changed(overrides) ──→ GameplayMenuController ──→ GameMap.apply_lofi_overrides()
-  ├── sun_changed(overrides) ──→ GameplayMenuController ──→ LevelPlayController.apply_sun_overrides()
+  ├── sun_changed(settings: SunSettings) ──→ GameplayMenuController ──→ LevelPlayController.apply_sun_settings()
   ├── save_requested(...) ──→ GameplayMenuController._on_edit_save_requested()
   ├── cancel_requested ──→ GameplayMenuController (reverts all changes)
   └── revert_to_map_defaults_requested ──→ GameplayMenuController._on_revert_to_map_defaults()
@@ -370,9 +457,12 @@ The game map uses a lo-fi shader for optional retro-style post-processing. These
 | Property | Description |
 |----------|-------------|
 | `pixelation` | Pixel size for retro pixelation effect |
-| `color_depth` | Bit depth for color quantization |
 | `saturation` | Color fade — desaturates the lo-fi output (labeled "Color Fade" in the UI to distinguish from environment saturation) |
-| `outline` | Edge detection outline effect |
+| `color_levels` | Color quantization step count (labeled "Color Levels" in the UI) |
+| `dither_strength` | Ordered-dither strength, breaks up quantization banding |
+| `vignette_strength` | Screen-edge darkening strength |
+| `vignette_radius` | Vignette falloff radius (a valid `lofi_overrides` key; not exposed as a panel control, so it only changes via `Constants.LOFI_DEFAULTS` or direct edits to a level's data) |
+| `grain_intensity` | Film-grain noise intensity |
 
 Lo-fi overrides are stored in `LevelData.lofi_overrides` and applied via `GameMap.apply_lofi_overrides()`.
 
@@ -381,6 +471,9 @@ Lo-fi overrides are stored in `LevelData.lofi_overrides` and applied via `GameMa
 ### LevelData Resource
 
 ```gdscript
+# On-disk schema version (see Schema Versions below).
+@export var format_version: int = 1
+
 # Map lighting
 @export var light_intensity_scale: float = 1.0
 
@@ -400,9 +493,9 @@ Lo-fi overrides are stored in `LevelData.lofi_overrides` and applied via `GameMa
 # Keys: "tree_sway_speed", "tree_sway_amplitude", "grass_sway_speed", "grass_sway_amplitude"
 @export var foliage_overrides: Dictionary = {}
 
-# Default sun light (see Default Sun Light above)
-# Keys: "mode" ("auto" | "on" | "off"), "time_of_day" (0.0-24.0)
-@export var sun_overrides: Dictionary = {}
+# Typed sun and shadow configuration (see Sun and Shadow above). Replaced the
+# flat sun_overrides dictionary in format_version 1.
+@export var visual_settings: VisualSettings = VisualSettings.default()
 ```
 
 **Important:** `environment_preset` defaults to `""` (empty string), not a named preset. This means new levels start with map defaults when available.
@@ -413,6 +506,7 @@ For folder-based levels, settings are stored in `level.json`:
 
 ```json
 {
+  "format_version": 1,
   "level_name": "Dark Dungeon",
   "light_intensity_scale": 0.005,
   "environment_preset": "dungeon_dark",
@@ -432,6 +526,19 @@ For folder-based levels, settings are stored in `level.json`:
   "foliage_overrides": {
     "tree_sway_speed": 0.8,
     "grass_sway_amplitude": 0.05
+  },
+  "visual_settings": {
+    "sun": {
+      "mode": "on",
+      "azimuth_degrees": 135.0,
+      "elevation_degrees": 48.333,
+      "color": "#ffd5b6",
+      "energy": 0.9,
+      "shadows_enabled": true,
+      "softness": 0.0,
+      "shadow_darkness": 1.0,
+      "time_of_day": 14.0
+    }
   }
 }
 ```
@@ -440,6 +547,32 @@ Notes:
 - Color values are stored as hex strings in JSON and converted back to `Color` objects when loaded
 - An empty `environment_preset` (`""`) means "use map defaults"
 - Conversion is handled by `EnvironmentPresets.overrides_to_json()` / `overrides_from_json()`
+
+### Schema Versions
+
+`LevelData.format_version` (`FORMAT_VERSION = 1` today) tracks the shape of
+the serialized level so `from_dict()` can migrate old data forward instead of
+guessing at it:
+
+- **Version 0** means "no `format_version` key" — a level saved before
+  versioning existed. Its sun configuration lives in the legacy flat
+  `sun_overrides` dictionary (`{"mode": ..., "time_of_day": ...}`), and
+  `SunSettings.from_legacy()` migrates it into a `SunSettings`
+  appearance-preservingly: direction, color, and energy come from the same
+  `DefaultSun.settings_for_time()` lerp the old runtime used, and the three
+  newly-exposed shadow fields take the values that were hardcoded before this
+  change (`shadows_enabled = true`, `softness = 0.0`,
+  `shadow_darkness = 1.0`). This is exact, not approximate — see
+  `tests/unit/test_sun_settings_migration.gd`.
+- **Version 1** stores `visual_settings` directly (a `VisualSettings`
+  dictionary, currently just `{"sun": {...}}`) and ignores any stray
+  `sun_overrides` key that might still be present in the raw data.
+- Saving a level via either save path writes `format_version: 1`.
+- This is a one-way door: an older build opening a version-1 level finds no
+  `sun_overrides` key and falls back to the default sun. Because level
+  exports are shared between users who may be on different game versions,
+  downgrading to an older build is lossy for sun configuration on levels
+  saved by a newer one. This is an accepted, deliberate trade-off, not a bug.
 
 ## Runtime Application
 
