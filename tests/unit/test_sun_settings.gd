@@ -13,6 +13,13 @@ func test_new_instance_has_neutral_defaults() -> void:
 	assert_almost_eq(s.softness, 0.0, 0.0001)
 	assert_almost_eq(s.shadow_darkness, 1.0, 0.0001)
 	assert_almost_eq(s.time_of_day, DefaultSun.DEFAULT_TIME_OF_DAY, 0.0001)
+	# The remaining four matter as much as the five above: they are also
+	# from_dict()'s missing-key fallbacks, so a partial network payload lands on
+	# exactly these values.
+	assert_almost_eq(s.azimuth_degrees, 0.0, 0.0001)
+	assert_almost_eq(s.elevation_degrees, 45.0, 0.0001)
+	assert_eq(s.color, Color.WHITE)
+	assert_almost_eq(s.energy, 1.0, 0.0001)
 
 
 func test_to_dict_serializes_color_as_hex_string() -> void:

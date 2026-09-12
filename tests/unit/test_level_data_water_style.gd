@@ -1,7 +1,8 @@
 extends GutTest
 
 ## Round-trip tests for LevelData.water_style -- mirrors
-## tests/unit/test_level_data_sun_overrides.gd's style for a simple scalar field.
+## tests/unit/test_level_data_visual_settings.gd's style for a simple scalar
+## field.
 
 
 func test_to_dict_includes_water_style() -> void:

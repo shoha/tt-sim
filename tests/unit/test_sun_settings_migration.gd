@@ -109,6 +109,18 @@ func test_migration_preserves_the_shadow_state_that_was_in_effect_before() -> vo
 	# light_angular_distance / shadow_opacity were never touched, so they sat at
 	# their engine defaults of 0.0 and 1.0. Migration must reproduce that or
 	# existing levels change appearance.
+	#
+	# Pin the engine side of that claim too, on a bare light: the justification
+	# above is only as good as those defaults, so a Godot version bump that moved
+	# either one would otherwise change every migrated level's shadows silently
+	# while this test stayed green. shadow_enabled is deliberately NOT asserted
+	# here -- a bare DirectionalLight3D has shadows OFF, and it is our applier
+	# that turns them on, which is exactly what the hardcoded `true` reproduced.
+	var bare := DirectionalLight3D.new()
+	assert_almost_eq(bare.light_angular_distance, 0.0, 0.0001, "engine softness default moved")
+	assert_almost_eq(bare.shadow_opacity, 1.0, 0.0001, "engine shadow_opacity default moved")
+	bare.free()
+
 	var settings := SunSettings.from_legacy({"mode": "on", "time_of_day": 10.0})
 
 	assert_eq(settings.shadows_enabled, true)
