@@ -175,11 +175,10 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 	)
 
 	# Create the default sun light if it doesn't exist, then configure it per
-	# level_data.sun_overrides (auto/on/off + time of day).
+	# level_data.visual_settings.sun (mode, direction, color, energy, shadows).
 	if not is_instance_valid(_sun_light):
 		_sun_light = DirectionalLight3D.new()
 		_sun_light.name = "LevelSunLight"
-		_sun_light.shadow_enabled = true
 		_sun_light.shadow_blur = 2.0
 		# Leave directional_shadow_mode at its engine default (cascaded
 		# PARALLEL_4_SPLITS). Explicitly forcing SHADOW_ORTHOGONAL (the
@@ -197,10 +196,15 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		# that small props can lose their shadow entirely ("peter-panning").
 		# These smaller values keep shadows attached to small objects while
 		# still avoiding shadow acne on the terrain.
+		#
+		# shadow_enabled, light_angular_distance, and shadow_opacity are NOT set
+		# here -- they are per-level artistic settings written by
+		# DefaultSun.apply() on every _configure_sun_light() call. The biases
+		# below are engine tuning for this project's object scale and stay fixed.
 		_sun_light.shadow_bias = 0.02
 		_sun_light.shadow_normal_bias = 0.1
 		world_viewport.add_child(_sun_light)
-	_configure_sun_light(level_data.sun_overrides)
+	_configure_sun_light(level_data.visual_settings.sun)
 
 	# Apply lo-fi shader overrides. Unlike WorldEnvironment/sun light (freshly
 	# recomputed every load regardless of override emptiness) and weather
@@ -237,25 +241,23 @@ func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 		push_warning("LevelEnvironmentManager: WorldEnvironment is null")
 
 
-## Apply sun overrides to the live sun light (real-time editing). The light
-## must already exist -- created by apply_level_environment() at load time.
-func apply_sun_overrides(overrides: Dictionary) -> void:
+## Apply sun settings to the live sun light (real-time editing). The light must
+## already exist -- created by apply_level_environment() at load time.
+func apply_sun_settings(settings: SunSettings) -> void:
 	if not is_instance_valid(_sun_light):
 		push_warning("LevelEnvironmentManager: sun light is null")
 		return
-	_configure_sun_light(overrides)
+	_configure_sun_light(settings)
 
 
 ## Resolve mode ("auto" | "on" | "off") against whether the map brought its own
-## lights, then show/hide and (if visible) re-angle the sun light.
-func _configure_sun_light(overrides: Dictionary) -> void:
-	var mode: String = overrides.get("mode", "auto")
+## lights, then show/hide and (if visible) re-apply the full sun configuration.
+func _configure_sun_light(settings: SunSettings) -> void:
 	var map_has_lights := not _original_light_energies.is_empty()
-	var enabled: bool = mode == "on" or (mode == "auto" and not map_has_lights)
+	var enabled: bool = settings.mode == "on" or (settings.mode == "auto" and not map_has_lights)
 	_sun_light.visible = enabled
 	if enabled:
-		var time_of_day: float = overrides.get("time_of_day", DefaultSun.DEFAULT_TIME_OF_DAY)
-		DefaultSun.configure_directional_light(_sun_light, time_of_day)
+		DefaultSun.apply(_sun_light, settings)
 
 
 # ============================================================================
@@ -265,6 +267,11 @@ func _configure_sun_light(overrides: Dictionary) -> void:
 
 func get_world_environment() -> WorldEnvironment:
 	return _world_environment
+
+
+## Return the level's sun light (may be null before a level is loaded).
+func get_sun_light() -> DirectionalLight3D:
+	return _sun_light
 
 
 ## Write the three global rendering-quality toggles (SSAO, SSR, SDFGI) onto the
