@@ -17,12 +17,14 @@ extends RefCounted
 ## Maximum total foliage primitives (triangles) across all scatter species in one map.
 ##
 ## PROVISIONAL. Derived from one scene on one GPU: on a dense forest map an RTX 3080
-## spent ~11 ms of a 14.5 ms frame on 16.3M foliage primitives, and hiding foliage
-## entirely took the frame to 3.5 ms. 8M is roughly half that load, putting foliage at
-## ~5-6 ms there and leaving headroom under a 60 FPS budget for a weaker GPU. This needs
-## validating on slower hardware before release -- the mechanism is the deliverable, the
-## threshold is a tunable. Deliberately NOT overridable per level: a budget a map can opt
-## out of does not bound anything.
+## spent ~11 ms of a 14.5 ms frame on 16.3M foliage primitives (the in-game debug toggle's
+## definition of "foliage", which excludes rock scatter), and hiding foliage entirely took
+## the frame to 3.5 ms. The real total this budget actually caps -- foliage plus rock
+## scatter -- measured 19.17M primitives on that same map, so 8M is 41.7% of the real
+## load, not "roughly half" as earlier estimated from the narrower toggle figure. This
+## needs validating on slower hardware before release -- the mechanism is the deliverable,
+## the threshold is a tunable. Deliberately NOT overridable per level: a budget a map can
+## opt out of does not bound anything.
 const PRIMITIVE_BUDGET: int = 8_000_000
 
 # FNV-1a 32-bit parameters. GDScript ints are 64-bit, so every step masks back to 32.
@@ -71,7 +73,12 @@ static func primitives_per_instance(mesh: Mesh) -> int:
 ## and on every machine -- which a host and its clients both depend on.
 ##
 ## WARNING: changing the seeding or the shuffle here changes which instances survive in
-## every map that already exists. test_pins_the_current_selection_algorithm guards it.
+## every map that already exists. So does a Godot engine upgrade that changes
+## RandomNumberGenerator's own behavior (documented as PCG32, but with no cross-version
+## compatibility guarantee) -- it has exactly the same effect as a deliberate edit to this
+## function. test_pins_the_current_selection_algorithm's golden index arrays are what
+## catch either case; a failure there after an engine bump means the engine changed, not
+## that you broke something.
 static func select_indices(count: int, keep: int, seed_source: String) -> PackedInt32Array:
 	if count <= 0 or keep <= 0:
 		return PackedInt32Array()
@@ -114,19 +121,21 @@ static func _stable_hash(text: String) -> int:
 ## "instances_before": int, "instances_after": int}, where "kept" always names every
 ## species given, thinned or not.
 ##
-## Allocation is proportional: every species keeps the same fraction of its instances, so
-## the map's visual composition survives instead of one species being sacrificed to save
-## another. A known trade-off is that a deliberately sparse hero species thins by the same
-## fraction as dense filler -- per-species importance would need authoring metadata that
-## does not exist.
+## Allocation keeps an equal INSTANCE FRACTION per species -- not equal visual weight.
+## Per-instance visual importance correlates with per-instance cost, so charging by
+## primitives makes high-cost landmark species absorb the largest visible share of the
+## loss. Measured on Sandy Clearing at this budget: 132 of 225 trees (59%) are removed
+## while the grass reduction is essentially imperceptible.
 ##
 ## `budget` is a parameter only so tests can drive thinning at counts a test can build;
 ## production always takes the PRIMITIVE_BUDGET default. Nothing user-facing sets it, and
 ## nothing should: the budget is fixed by design.
 ##
 ## A species with at least one instance always keeps at least one, even when its
-## proportional share rounds down to zero -- this can put the true total up to one
-## instance per species over budget.
+## proportional share rounds down to zero. That is not a one-instance-per-species
+## overshoot: the bound is in primitives, not instances -- it is the sum of
+## primitives_per_instance over every species the floor rescues, and a single rescued
+## instance can itself be tens of thousands of primitives.
 static func plan(species: Dictionary, budget: int = PRIMITIVE_BUDGET) -> Dictionary:
 	var kept := {}
 	var total_before := 0
@@ -160,13 +169,9 @@ static func plan(species: Dictionary, budget: int = PRIMITIVE_BUDGET) -> Diction
 			# Cost unknown, so thinning buys nothing measurable. Keep all of it.
 			instances_after += count
 			continue
-		# Never allocate zero to a species that has instances. A zero share would leave
-		# ScatterGlbUtils' template MeshInstance3D unfreed -- its builder returns early on
-		# an empty transform list, before it frees the template or adds the MultiMesh -- so
-		# the species would vanish from its authored positions and render exactly once at
-		# whatever arbitrary transform the Blender template object happened to sit at. At a
-		# realistic ratio near 0.5 that is every 1- and 2-instance species, which is where
-		# hero landmarks live. Costs at most one instance per species against the cap. The
+		# plan()'s own contract: never allocate zero to a species that has instances -- see
+		# ScatterGlbUtils._build_multimesh_from_transforms for what a zero allocation would
+		# do to a caller. Costs at most one instance per species against the cap; the
 		# mini(..., count) clamp keeps that floor-to-1 from inventing an instance for a
 		# species that has none.
 		var allowed := mini(maxi(int(floor(count * ratio)), 1), count)
@@ -174,7 +179,10 @@ static func plan(species: Dictionary, budget: int = PRIMITIVE_BUDGET) -> Diction
 		total_after += allowed * per_instance
 		instances_after += allowed
 
-	report.thinned = true
+	# Every non-empty species floors to at least 1, so if every species' share already
+	# floored to 1 anyway, nothing was actually removed. Equality with instances_before is
+	# exactly that case -- allocations only ever decrease, never increase.
+	report.thinned = instances_after < instances_before
 	report.total_after = total_after
 	report.instances_after = instances_after
 	return report

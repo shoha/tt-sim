@@ -24,7 +24,7 @@ uniform float alpha_scissor_threshold : hint_range(0.0, 1.0) = 0.5;
 uniform float specular_reflectance : hint_range(0.0, 1.0) = 0.2;
 
 // Per-category wind tuning (set once per species at construction from a preset --
-// see GlbUtils._WIND_PRESETS -- never authored per-map).
+// see WindFoliage.PRESETS -- never authored per-map).
 uniform float sway_speed : hint_range(0.0, 5.0) = 1.0;
 uniform float sway_amplitude : hint_range(0.0, 1.0) = 0.05;
 uniform float sway_frequency : hint_range(0.05, 2.0) = 0.3;

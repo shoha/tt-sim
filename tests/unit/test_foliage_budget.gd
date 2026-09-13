@@ -59,6 +59,31 @@ func test_ignores_non_triangle_surfaces() -> void:
 	assert_eq(FoliageBudget.primitives_per_instance(mesh), 0)
 
 
+func test_sums_multiple_triangle_surfaces() -> void:
+	# Two indexed triangle surfaces on one mesh, each a box's 12 triangles (36 indices) --
+	# the trunk/leaves shape a real multi-material tree GLB takes. A count() that only
+	# looked at surface 0 would pass all six single-surface tests above and still miss
+	# half of this mesh's real cost.
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, BoxMesh.new().surface_get_arrays(0))
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, BoxMesh.new().surface_get_arrays(0))
+	assert_eq(FoliageBudget.primitives_per_instance(mesh), 24)
+
+
+func test_counts_a_triangle_surface_and_skips_a_line_surface_in_the_same_mesh() -> void:
+	# Guards the continue-plus-accumulate interaction specifically: distinct from
+	# test_ignores_non_triangle_surfaces (a line-only mesh), where an implementation that
+	# abandoned the whole mesh on hitting a non-triangle surface would also pass. Here the
+	# triangle surface's 12 must survive the line surface being skipped.
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, BoxMesh.new().surface_get_arrays(0))
+	var line_arrays: Array = []
+	line_arrays.resize(Mesh.ARRAY_MAX)
+	line_arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3.ZERO, Vector3.RIGHT])
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, line_arrays)
+	assert_eq(FoliageBudget.primitives_per_instance(mesh), 12)
+
+
 func test_keeps_every_index_when_keep_meets_or_exceeds_count() -> void:
 	assert_eq(Array(FoliageBudget.select_indices(5, 9, "x")), [0, 1, 2, 3, 4])
 	assert_eq(Array(FoliageBudget.select_indices(5, 5, "x")), [0, 1, 2, 3, 4])

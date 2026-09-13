@@ -33,14 +33,60 @@ is the cost driver, not density per unit area and not what is in frame.**
 `utils/foliage_budget.gd` caps total scatter primitives per map at `PRIMITIVE_BUDGET`
 (8,000,000) and thins any imported map that exceeds it, proportionally across species,
 by seeded shuffle. `ScatterGlbUtils.process_scatter_instances()` applies it;
-`level_loader.gd` shows the player one toast when it fires.
+`level_loader.gd` shows the player one toast when it fires. Allocation keeps an equal
+instance fraction per species, not equal visual weight -- see "Real-map validation"
+below for what that costs the map's landmark trees in practice.
 
-The threshold is **provisional** -- derived from one scene on one GPU, roughly half that
-map's foliage load. It needs validating on slower hardware. The budget is deliberately
-not overridable per level: a budget a map can opt out of does not bound anything.
+The threshold is **provisional** -- derived from one scene on one GPU. The frame-time
+table above (16.3M foliage primitives, -76%) used the in-game debug toggle's definition
+of "foliage", which excludes rock scatter -- but the budget covers scatter of every kind,
+rock included. The real total the budget has to bound, measured by running the actual
+pipeline against the real GLB, is **19,170,768 primitives** (see below). Both figures are
+correct for what they measure: 16.3M is still the right number for the frame-time table,
+captured with that toggle; 19.17M is the right number for what `PRIMITIVE_BUDGET` bounds.
+8M is **41.7%** of 19.17M, not "roughly half" as an earlier estimate against the narrower
+toggle figure put it. This needs validating on slower hardware before release -- the
+mechanism is the deliverable, the threshold is a tunable. The budget is deliberately not
+overridable per level: a budget a map can opt out of does not bound anything.
 
 Only `user://` imported maps are affected. `load_map()`'s `res://` branch never calls
-the scatter pipeline, so built-in maps are untouched.
+the scatter pipeline, so built-in maps are untouched. **Known gap:**
+`MeshInstancingUtils.process_duplicate_mesh_instancing()` (`utils/glb_utils.gd`, called
+after every scatter-pipeline call site) runs AFTER `ScatterGlbUtils.process_scatter_instances()`,
+so any foliage arriving through the duplicate-collapse path is not bounded by this budget
+at all -- not yet addressed.
+
+### Real-map validation (Sandy Clearing, 112 MB)
+
+Ran the real pipeline against the actual Sandy Clearing GLB, not a synthetic test fixture.
+
+- **Real scatter load: 19,170,768 primitives across 52,154 instances in 57 species.** (The
+  16.3M figure above is the in-game debug toggle's narrower "foliage" definition, which
+  excludes rock scatter; this total is what the budget itself actually bounds.)
+- **Three tree species hold 12,511,854 primitives -- 65% of all scatter cost -- in just
+  225 instances (0.4% of all scattered instances)**, at 37,382 / 54,865 / 76,856
+  primitives per instance. A typical game tree is 2,000-10,000 primitives. This is the
+  single most actionable performance finding in this document, and it points at content,
+  not code: three authored assets are one to two orders of magnitude heavier than they
+  need to be.
+- Consequence: 225 trees alone are **156% of the 8M budget** by themselves. The ceiling
+  for trees at 8M is 144 instances (64% of 225), reachable only by deleting every other
+  scattered instance on the map to leave the entire budget for trees. Keeping all 225
+  needs ~19.2M, i.e. no thinning at all. **This map cannot be made cheap by any budget
+  policy at any threshold; only lighter tree assets can fix it.**
+- End-to-end pipeline verification: the budget fired, 21,736 instances were built exactly
+  matching what `plan()` promised, totaling 7,957,006 primitives (under the 8M cap), the
+  `FOLIAGE_BUDGET_REPORT_META` report was set on the scene, and zero template nodes were
+  left unfreed.
+
+**Unverified: the frame-time effect of the budget on this map.** The validator MCP bridge
+could not activate the title screen's buttons to get from title into a loaded level --
+clicks in both screen and viewport coordinate spaces, and Enter on the focused button,
+all failed, and this was confirmed not to be an artifact of the measurement harness
+itself. This is the second time this bridge limitation has cost a measurement. Do not
+treat any frame-time number for this budget as measured until that path is fixed -- the
+primitive-count and pipeline-correctness numbers above are measured; the frame-time
+consequence of applying them is not.
 
 ## Known dead ends -- do not revisit without new evidence
 

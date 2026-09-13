@@ -381,6 +381,9 @@ func test_a_deny_listed_rock_species_is_still_budgeted() -> void:
 	var built := scene.get_node_or_null("RockCluster_MultiMesh") as MultiMeshInstance3D
 	assert_not_null(built)
 	assert_eq(built.multimesh.instance_count, 50)
+	# Confirms the species really was deny-listed (wind category "") rather than merely
+	# having "rock" in its name while some future keyword change reclassified it as grass.
+	assert_eq(built.get_meta("wind_foliage_category", "unset"), "")
 	scene.free()
 
 
@@ -404,4 +407,27 @@ func test_every_species_is_thinned_when_several_share_the_budget() -> void:
 	var pine := scene.get_node_or_null("PineTree_MultiMesh") as MultiMeshInstance3D
 	assert_eq(grass.multimesh.instance_count, 50)
 	assert_eq(pine.multimesh.instance_count, 50)
+	scene.free()
+
+
+func test_thinned_single_instance_species_still_frees_its_template_node() -> void:
+	# Pipeline-level regression guard for FoliageBudget.plan()'s floor-to-1: a species whose
+	# proportional share rounds down to zero would otherwise leave
+	# _build_multimesh_from_transforms' early-return path taken, its template MeshInstance3D
+	# never freed, and HeroTree rendering once, standalone, at its Blender template
+	# transform instead of being replaced by a MultiMesh at its one authored position.
+	#
+	# Both species use a BoxMesh (12 primitives/instance, see _scatter_scene). 1000
+	# GrassBlade + 1 HeroTree = 1001 instances x 12 = 12,012 total primitives. At a 6000
+	# budget, ratio = 6000/12012 = 0.4995...; HeroTree's raw share is
+	# floor(1 * 0.4995) = 0, which plan()'s floor bumps to 1. GrassBlade's share is
+	# floor(1000 * 0.4995) = 499, unaffected by the floor.
+	var scene := _scatter_scene({"GrassBlade": 1000, "HeroTree": 1})
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 6000)
+
+	assert_null(scene.get_node_or_null("HeroTree"))
+	var hero := scene.get_node_or_null("HeroTree_MultiMesh") as MultiMeshInstance3D
+	assert_not_null(hero)
+	assert_eq(hero.multimesh.instance_count, 1)
+
 	scene.free()
