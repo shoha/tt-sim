@@ -7,6 +7,13 @@ class_name LevelEnvironmentManager
 ## (environment & lighting) while LevelPlayController focuses on level
 ## loading, tokens, and network sync.
 
+## Distance (world units) beyond which the sun stops casting shadows. Explicit at
+## Godot's own default for now so it can be swept: an orthographic camera's visible
+## ground extent scales with camera.size (max zoom 20), so a value derived from map
+## bounds alone could pop shadows out at the far edge when zoomed out. Measure before
+## tightening.
+const SUN_SHADOW_MAX_DISTANCE: float = 100.0
+
 var _world_environment: WorldEnvironment = null
 var _sun_light: DirectionalLight3D = null
 var _map_environment_config: Dictionary = {}
@@ -203,6 +210,7 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		# below are engine tuning for this project's object scale and stay fixed.
 		_sun_light.shadow_bias = 0.02
 		_sun_light.shadow_normal_bias = 0.1
+		_sun_light.directional_shadow_max_distance = SUN_SHADOW_MAX_DISTANCE
 		world_viewport.add_child(_sun_light)
 	_configure_sun_light(level_data.visual_settings.sun)
 
