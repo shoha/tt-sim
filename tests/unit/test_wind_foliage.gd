@@ -205,6 +205,67 @@ func test_apply_material_gives_each_surface_its_own_independently_textured_mater
 	assert_ne(leaf_wind_material, stem_wind_material)
 
 
+func test_apply_material_sets_blade_height_from_mesh_aabb_for_grass() -> void:
+	var material := _make_orm_material(Color.GREEN)
+	var mesh := BoxMesh.new()  # unit cube -- AABB.size.y == 1.0
+	mesh.material = material
+
+	WindFoliage.apply_material(mesh, "grass")
+
+	var wind_material := mesh.surface_get_material(0) as ShaderMaterial
+	assert_eq(wind_material.get_shader_parameter("blade_height"), mesh.get_aabb().size.y)
+
+
+func test_apply_material_sets_base_darken_for_grass() -> void:
+	var material := _make_orm_material(Color.GREEN)
+	var mesh := BoxMesh.new()
+	mesh.material = material
+
+	WindFoliage.apply_material(mesh, "grass")
+
+	var wind_material := mesh.surface_get_material(0) as ShaderMaterial
+	var base_darken: Variant = wind_material.get_shader_parameter("base_darken")
+	assert_not_null(base_darken)
+	assert_true(base_darken > 0.0 and base_darken < 1.0)
+
+
+func test_apply_material_leaves_blade_height_and_base_darken_unset_for_tree() -> void:
+	# Trees still cast real shadows and must not be double-darkened by the grass-only
+	# base-dark/tip-light gradient -- see apply_material's own docstring. Unset (rather
+	# than explicitly 0.0) is confirmed distinguishable here: get_shader_parameter()
+	# returns null for a uniform never explicitly set on this ShaderMaterial instance
+	# (Godot does not surface the shader's own declared default through that API -- see
+	# test_level_environment_manager_wind_materials.gd's _make_tagged_material comment).
+	var material := _make_orm_material(Color.GREEN)
+	var mesh := BoxMesh.new()
+	mesh.material = material
+
+	WindFoliage.apply_material(mesh, "tree")
+
+	var wind_material := mesh.surface_get_material(0) as ShaderMaterial
+	assert_null(wind_material.get_shader_parameter("blade_height"))
+	assert_null(wind_material.get_shader_parameter("base_darken"))
+
+
+func test_apply_material_sets_a_finite_zero_blade_height_for_a_flat_grass_mesh() -> void:
+	# A flat mesh (AABB.size.y == 0.0, e.g. a degenerate scatter card) must not produce
+	# NaN/Inf on the Godot side -- the shader's own guard (blade_height > 0.0 ? ... :
+	# 1.0 in wind_foliage_include.gdshaderinc) depends on this uniform actually being
+	# the plain value 0.0, not something a division upstream already corrupted.
+	var material := _make_orm_material(Color.GREEN)
+	var mesh := PlaneMesh.new()
+	mesh.material = material
+	assert_eq(mesh.get_aabb().size.y, 0.0)
+
+	WindFoliage.apply_material(mesh, "grass")
+
+	var wind_material := mesh.surface_get_material(0) as ShaderMaterial
+	var blade_height: float = wind_material.get_shader_parameter("blade_height")
+	assert_eq(blade_height, 0.0)
+	assert_false(is_nan(blade_height))
+	assert_false(is_inf(blade_height))
+
+
 func test_process_scatter_instances_leaves_a_rock_multimesh_with_no_wind_override() -> void:
 	var scene := Node3D.new()
 	var rock := MeshInstance3D.new()
