@@ -224,3 +224,11 @@ func test_a_species_is_never_allocated_zero_instances() -> void:
 	assert_true(report.thinned)
 	assert_eq(report.kept["HeroTree"], 1)
 	assert_gt(report.kept["Grass"], 0)
+
+
+func test_an_empty_species_is_never_allocated_a_phantom_instance() -> void:
+	# The floor-to-1 must not invent an instance for a species that has none, or the report
+	# would count a phantom and a caller could index an empty transform array.
+	var report := FoliageBudget.plan({"Grass": _species(1000, 10), "Empty": _species(0, 50)}, 3000)
+	assert_true(report.thinned)
+	assert_eq(report.kept["Empty"], 0)
