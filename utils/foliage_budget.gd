@@ -166,8 +166,10 @@ static func plan(species: Dictionary, budget: int = PRIMITIVE_BUDGET) -> Diction
 		# the species would vanish from its authored positions and render exactly once at
 		# whatever arbitrary transform the Blender template object happened to sit at. At a
 		# realistic ratio near 0.5 that is every 1- and 2-instance species, which is where
-		# hero landmarks live. Costs at most one instance per species against the cap.
-		var allowed := maxi(int(floor(count * ratio)), 1)
+		# hero landmarks live. Costs at most one instance per species against the cap. The
+		# mini(..., count) clamp keeps that floor-to-1 from inventing an instance for a
+		# species that has none.
+		var allowed := mini(maxi(int(floor(count * ratio)), 1), count)
 		kept[species_name] = allowed
 		total_after += allowed * per_instance
 		instances_after += allowed
