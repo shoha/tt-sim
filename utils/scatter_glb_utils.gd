@@ -41,6 +41,11 @@ const FOLIAGE_BUDGET_REPORT_META := "tt_foliage_budget_report"
 ## species' share can be decided from inside its own build. A map whose total exceeds
 ## `primitive_budget` gets every species thinned proportionally, and the outcome is
 ## recorded on the scene as FOLIAGE_BUDGET_REPORT_META so the caller can tell the player.
+##
+## `primitive_budget` exists only so tests can drive thinning at counts a test can build;
+## it is the more exposed of the two budget-override parameters (see FoliageBudget.plan's
+## own "nothing should set this" note), so nothing user-facing should ever wire it to
+## something like LevelData -- the budget is fixed by design, not a per-level setting.
 static func process_scatter_instances(
 	scene: Node3D,
 	foliage_overrides: Dictionary = {},
