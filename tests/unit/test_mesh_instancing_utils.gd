@@ -85,7 +85,7 @@ func test_instance_transforms_include_parent_transforms() -> void:
 	# Checked through transform_relative_to() rather than by reading the built
 	# MultiMesh back: under the headless rendering driver
 	# MultiMesh.get_instance_transform() always returns identity regardless of what
-	# was set (see GlbUtils._row_to_transform's docstring for the same finding).
+	# was set (see ScatterGlbUtils._row_to_transform's docstring for the same finding).
 	var scene := Node3D.new()
 	var group := Node3D.new()
 	group.name = "PropGroup"

@@ -31,7 +31,7 @@ uniform float sway_frequency : hint_range(0.05, 2.0) = 0.3;
 
 // Base-dark/tip-light gradient, grass-category only (see WindFoliage.apply_material) --
 // replaces the contact-darkening a real shadow would have given grass now that it no
-// longer casts one (GlbUtils._build_multimesh_from_transforms' SHADOW_CASTING_SETTING_OFF).
+// longer casts one (ScatterGlbUtils._build_multimesh_from_transforms' SHADOW_CASTING_SETTING_OFF).
 // blade_height is the mesh's own local-space AABB height in world units; left at its 0.0
 // default for every other category (e.g. "tree", which still casts a real shadow), which
 // apply_wind_foliage_pbr below treats as "no gradient" rather than dividing by zero.

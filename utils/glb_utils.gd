@@ -19,8 +19,10 @@ extends RefCounted
 ## generation (generate_scene) entirely on a WorkerThreadPool thread, so the main
 ## thread is never blocked. Godot 4's RenderingServer command buffer makes this safe.
 
-const _SCENE_EXTRAS_META := "tt_gltf_scene_extras"
-const _SCATTER_INSTANCES_EXTRAS_KEY := "tt_scatter_instances"
+## Scene-meta key holding the glTF scene extras dictionary parsed out of a loaded GLB.
+## Public because ScatterGlbUtils reads the same key -- it is a wire-format key shared
+## with terrain-paint's exporter, so it must not be duplicated as a literal.
+const SCENE_EXTRAS_META := "tt_gltf_scene_extras"
 
 # Standard Godot collision mesh suffixes (order matters - check longer suffixes first).
 # See Godot docs: assets_pipeline/importing_3d_scenes/node_type_customization
@@ -76,7 +78,7 @@ static func load_glb(path: String) -> Node3D:
 
 	var extras := _extract_scene_extras(gltf_state)
 	if not extras.is_empty():
-		scene.set_meta(_SCENE_EXTRAS_META, extras)
+		scene.set_meta(SCENE_EXTRAS_META, extras)
 
 	return scene
 
@@ -167,7 +169,7 @@ static func _load_glb_thread_work(path: String, result: Dictionary) -> void:
 
 	var extras := _extract_scene_extras(gltf_state)
 	if not extras.is_empty():
-		scene.set_meta(_SCENE_EXTRAS_META, extras)
+		scene.set_meta(SCENE_EXTRAS_META, extras)
 
 	result.scene = scene
 
@@ -194,7 +196,7 @@ static func load_glb_with_processing(
 	process_animations(scene)
 	process_lights(scene, light_intensity_scale)
 	WaterGlbUtils.process_water_meshes(scene)
-	process_scatter_instances(scene, foliage_overrides)
+	ScatterGlbUtils.process_scatter_instances(scene, foliage_overrides)
 
 	return scene
 
@@ -221,7 +223,7 @@ static func load_glb_with_processing_async(
 		process_animations(result.scene)
 		process_lights(result.scene, light_intensity_scale)
 		WaterGlbUtils.process_water_meshes(result.scene)
-		process_scatter_instances(result.scene, foliage_overrides)
+		ScatterGlbUtils.process_scatter_instances(result.scene, foliage_overrides)
 
 	return result
 
@@ -327,157 +329,6 @@ static func _process_single_collision_node(
 			mesh_node.visible = false
 
 
-## Prototype: build a real MultiMeshInstance3D for each group of Geoscatter instance
-## transforms terrain-paint wrote into this GLB's scene extras (see
-## engine/scatter_instancing.py in the terrain-paint repo for the write side), instead
-## of the many-real-duplicated-triangles shape a "Bake Scatter to Mesh" export produces.
-##
-## Each extras entry is keyed by the exact Blender object name of the single low-poly
-## asset Geoscatter was instancing -- that same object was exported normally alongside
-## the transform data (a plain MeshInstance3D node with that name, wherever Blender
-## happened to place it), purely to get its Mesh resource (and baked material) into the
-## file. This function finds that node by name, builds a MultiMesh from its Mesh, and
-## frees the original node so it doesn't also render once, standalone, at whatever
-## arbitrary transform it had in the Blender scene.
-##
-## Only wired into load_glb_with_processing()/_async() (the live user://-uploaded-map
-## path) -- NOT load_map()'s res:// PackedScene branch, since that path never parses a
-## live GLB and has no scene extras meta to read at all (see _extract_scene_extras).
-##
-## Values are untrusted network input (maps are downloaded from a host peer), same as
-## extract_lighting_config() above -- guarded the same way: a malformed group or row is
-## skipped rather than raising.
-static func process_scatter_instances(scene: Node3D, foliage_overrides: Dictionary = {}) -> void:
-	var extras: Dictionary = scene.get_meta(_SCENE_EXTRAS_META, {})
-	if not extras.has(_SCATTER_INSTANCES_EXTRAS_KEY):
-		return
-	var groups: Variant = extras[_SCATTER_INSTANCES_EXTRAS_KEY]
-	if not groups is Dictionary:
-		return
-
-	for source_name in groups.keys():
-		var transforms: Variant = groups[source_name]
-		if not transforms is Array or transforms.is_empty():
-			continue
-		var source_node := find_node_by_name(scene, String(source_name))
-		if not source_node is MeshInstance3D:
-			continue
-		var mesh_node := source_node as MeshInstance3D
-		if not mesh_node.mesh:
-			continue
-		var wind_category := WindFoliage.classify_category(String(source_name))
-		_build_multimesh_from_transforms(
-			scene, mesh_node, transforms, wind_category, foliage_overrides
-		)
-
-
-## Builds one MultiMeshInstance3D (sharing mesh_node's Mesh, and by default its
-## surface material(s) too) from a flat array of [lx, ly, lz, qx, qy, qz, qw, sx, sy,
-## sz] rows, then removes mesh_node. `wind_category` ("" for none, otherwise a
-## WindFoliage.PRESETS key from WindFoliage.classify_category) swaps in a per-surface
-## wind-sway ShaderMaterial instead -- see WindFoliage.apply_material. The built node
-## is also tagged with a "wind_foliage_category" meta of this same value, letting
-## OcclusionFadeManager find tree-category instances without re-deriving the
-## classification itself. Grass-category instances also get cast_shadow forced to
-## SHADOW_CASTING_SETTING_OFF -- see the inline comment where it's assigned below for
-## why (measured perf finding, not a default carried by MultiMeshInstance3D itself).
-##
-## Each row is a Blender WORLD-space (matrix_world) transform, already axis-converted
-## into glTF/Godot's convention on the Python side (terrain-paint's
-## scatter_instancing.py) -- these are the exact same translation/rotation/scale
-## components a glTF node itself would carry relative to an IDENTITY scene root, no
-## further axis conversion needed here. That's the reason scene_root is a required
-## parameter rather than just using mesh_node.get_parent(): glTF/Godot compose node
-## transforms up the tree starting from an identity scene root, so a node's cumulative
-## transform-to-root always reconstructs its own recorded world matrix regardless of
-## how many intermediate Blender-side parent objects existed along the way. The new
-## MultiMeshInstance3D must sit DIRECTLY under scene_root with an identity transform
-## (the Node3D default, left untouched here) to land in that same frame -- parenting
-## it under mesh_node's own parent, or copying mesh_node's own local transform onto it,
-## would double-apply mesh_node's individual placement in the Blender scene on top of
-## the already-absolute per-instance transforms.
-static func _build_multimesh_from_transforms(
-	scene_root: Node3D,
-	mesh_node: MeshInstance3D,
-	transforms: Array,
-	wind_category: String = "",
-	foliage_overrides: Dictionary = {}
-) -> void:
-	var multimesh := MultiMesh.new()
-	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.mesh = mesh_node.mesh
-
-	var valid_transforms: Array[Transform3D] = []
-	for row in transforms:
-		var xform: Variant = _row_to_transform(row)
-		if xform != null:
-			valid_transforms.append(xform)
-
-	if valid_transforms.is_empty():
-		return
-
-	multimesh.instance_count = valid_transforms.size()
-	for i in valid_transforms.size():
-		multimesh.set_instance_transform(i, valid_transforms[i])
-
-	var multimesh_instance := MultiMeshInstance3D.new()
-	multimesh_instance.name = mesh_node.name + "_MultiMesh"
-	multimesh_instance.multimesh = multimesh
-	# Tags the node itself (not the Mesh resource) with its wind category so
-	# OcclusionFadeManager._collect_tree_materials() can find tree-category instances
-	# without re-deriving WindFoliage.classify_category()'s result.
-	multimesh_instance.set_meta("wind_foliage_category", wind_category)
-	if wind_category == "grass":
-		# Grass no longer casts shadows: Godot runs the shadow pass's fragment() with the
-		# exact same code as the color pass (no shadow-only variant -- see
-		# godot-proposals#4443), and this shader's alpha-cutout discard disables early-Z
-		# for that draw. Dense overlapping grass therefore pays full fragment cost per
-		# covered sample in the shadow depth pass, disproportionate to its actual primitive
-		# count (measured -2.53ms/-17% of total frame time removing this on a forest map,
-		# more than trees' shadow removal despite trees contributing 3x the shadow-pass
-		# primitives). Trees keep casting real shadows -- this branch only fires for
-		# "grass". WindFoliage.apply_material's base_darken/blade_height gradient replaces
-		# the contact-darkening a real shadow would otherwise have given grass at its base.
-		multimesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# MultiMesh itself has no material slot -- Godot renders every instance with
-	# mesh_node.mesh's own surface material(s) as-is unless mutated here. Mutates
-	# mesh_node.mesh's own per-surface materials directly rather than setting anything
-	# on multimesh_instance -- MultiMeshInstance3D has no per-surface override API (see
-	# WindFoliage.apply_material's own docstring). No-op (mesh keeps its own imported
-	# static material) when wind_category is "".
-	WindFoliage.apply_material(mesh_node.mesh, wind_category, foliage_overrides)
-	scene_root.add_child(multimesh_instance)
-
-	var old_parent := mesh_node.get_parent()
-	if old_parent:
-		old_parent.remove_child(mesh_node)
-	mesh_node.free()
-
-
-## Converts one [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] row into a Transform3D, or
-## null if the row is malformed. Deliberately isolated from
-## _build_multimesh_from_transforms as its own testable function rather than inlined
-## in that loop -- confirmed via a real headless probe that
-## MultiMesh.get_instance_transform() always reads back an identity transform
-## regardless of what set_instance_transform() was actually given, under Godot's
-## headless/dummy rendering driver (reproduced with zero scene tree involvement at
-## all, so it's not something this module or its caller could work around). That
-## makes MultiMesh itself a dead end for verifying this math in an automated test
-## run -- this function exists so the row -> Transform3D conversion can be checked
-## directly, independent of MultiMesh's own set/get round trip.
-static func _row_to_transform(row: Variant) -> Variant:
-	if not row is Array or row.size() < 10:
-		return null
-	for component in row:
-		if not (component is float or component is int):
-			return null
-
-	var origin := Vector3(row[0], row[1], row[2])
-	var rotation := Quaternion(row[3], row[4], row[5], row[6]).normalized()
-	var scale := Vector3(row[7], row[8], row[9])
-	return Transform3D(Basis(rotation).scaled(scale), origin)
-
-
 ## Recursively find nodes that are collision meshes based on naming convention
 ## Godot standard suffixes (see Godot docs: assets_pipeline/importing_3d_scenes/
 ## node_type_customization)
@@ -528,7 +379,7 @@ static func _extract_scene_extras(gltf_state: GLTFState) -> Dictionary:
 ## Each key is guarded individually since the source is untrusted network input (maps
 ## are downloaded from a host peer) -- a malformed value is skipped rather than raising.
 static func extract_lighting_config(root: Node) -> Dictionary:
-	var extras: Dictionary = root.get_meta(_SCENE_EXTRAS_META, {})
+	var extras: Dictionary = root.get_meta(SCENE_EXTRAS_META, {})
 	var config := {}
 	if extras.has("tt_ambient_light_color"):
 		var c: Variant = extras["tt_ambient_light_color"]

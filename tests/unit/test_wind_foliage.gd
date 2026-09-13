@@ -1,7 +1,7 @@
 extends GutTest
 
-## Unit tests for WindFoliage (utils/wind_foliage.gd) -- the wind-sway shader GlbUtils
-## applies to scattered foliage built by process_scatter_instances() (see
+## Unit tests for WindFoliage (utils/wind_foliage.gd) -- the wind-sway shader
+## ScatterGlbUtils applies to scattered foliage built by process_scatter_instances() (see
 ## test_glb_utils_scatter_instances.gd for that feature's own tests). Covers
 ## classify_category (pure, tested directly against real documented Geoscatter asset
 ## names -- see terrain-paint's docs/scatter-integration.md) and apply_material's
@@ -280,7 +280,7 @@ func test_process_scatter_instances_leaves_a_rock_multimesh_with_no_wind_overrid
 		{"tt_scatter_instances": {"Rock_0_000": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]]}}
 	)
 
-	GlbUtils.process_scatter_instances(scene)
+	ScatterGlbUtils.process_scatter_instances(scene)
 
 	var multimesh_instance := scene.get_node_or_null("Rock_0_000_MultiMesh") as MultiMeshInstance3D
 	assert_not_null(multimesh_instance)
@@ -302,7 +302,7 @@ func test_process_scatter_instances_applies_wind_to_a_grass_multimesh() -> void:
 		{"tt_scatter_instances": {"GrassBlade": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]]}}
 	)
 
-	GlbUtils.process_scatter_instances(scene)
+	ScatterGlbUtils.process_scatter_instances(scene)
 
 	var multimesh_instance := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
 	assert_not_null(multimesh_instance)
@@ -324,7 +324,7 @@ func test_process_scatter_instances_bakes_foliage_overrides_into_the_material() 
 		{"tt_scatter_instances": {"GrassBlade": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]]}}
 	)
 
-	GlbUtils.process_scatter_instances(scene, {"grass_sway_speed": 4.4})
+	ScatterGlbUtils.process_scatter_instances(scene, {"grass_sway_speed": 4.4})
 
 	var multimesh_instance := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
 	var material := multimesh_instance.multimesh.mesh.surface_get_material(0) as ShaderMaterial
