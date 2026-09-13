@@ -112,10 +112,11 @@ static func process_scatter_instances(
 		# WindFoliage.apply_material's own docstring). No-op (mesh keeps its own imported
 		# static material) when wind_category is "".
 		#
-		# Hoisted out of _build_multimesh_from_transforms for chunking: this builds a fresh
-		# ShaderMaterial on every call and assigns it to the Mesh that every chunk of this
-		# species shares, so a per-chunk call would construct one material per chunk and keep
-		# only the last.
+		# Hoisted out of _build_multimesh_from_transforms for chunking: a per-chunk call
+		# would repeat this pointlessly, since WindFoliage.apply_material skips any surface
+		# whose material is no longer a BaseMaterial3D -- its own first call replaces the
+		# surface material with a ShaderMaterial, so calls 2..N would be no-ops that keep
+		# the first material rather than the last.
 		WindFoliage.apply_material(mesh_node.mesh, wind_category, foliage_overrides)
 		var buckets := ScatterChunker.bucket_by_cell(kept_transforms, chunk_size)
 		for cell in buckets.keys():
@@ -145,11 +146,11 @@ static func process_scatter_instances(
 
 ## Builds one MultiMeshInstance3D (sharing mesh_node's Mesh, and by default its
 ## surface material(s) too) from an array of already-converted Transform3D values (see
-## _collect_valid_transforms for the row format they started as), then removes
-## mesh_node. `wind_category` ("" for none, otherwise a
-## WindFoliage.PRESETS key from WindFoliage.classify_category) swaps in a per-surface
-## wind-sway ShaderMaterial instead -- see WindFoliage.apply_material. The built node
-## is also tagged with a "wind_foliage_category" meta of this same value, letting
+## _collect_valid_transforms for the row format they started as). `wind_category` ("" for
+## none, otherwise a WindFoliage.PRESETS key from WindFoliage.classify_category) tags the
+## built node's "wind_foliage_category" meta and gates the grass cast_shadow branch below
+## -- the wind-sway ShaderMaterial itself is applied once per species by
+## process_scatter_instances, not here. The "wind_foliage_category" meta lets
 ## OcclusionFadeManager find tree-category instances without re-deriving the
 ## classification itself. Grass-category instances also get cast_shadow forced to
 ## SHADOW_CASTING_SETTING_OFF -- see the inline comment where it's assigned below for

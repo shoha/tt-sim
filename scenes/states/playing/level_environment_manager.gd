@@ -129,7 +129,8 @@ func _collect_wind_materials(node: Node) -> void:
 				var category: String = material.get_meta("wind_category")
 				if not _wind_materials.has(category):
 					_wind_materials[category] = []
-				_wind_materials[category].append(material)
+				if material not in _wind_materials[category]:
+					_wind_materials[category].append(material)
 	for child in node.get_children():
 		_collect_wind_materials(child)
 
