@@ -29,6 +29,25 @@ uniform float sway_speed : hint_range(0.0, 5.0) = 1.0;
 uniform float sway_amplitude : hint_range(0.0, 1.0) = 0.05;
 uniform float sway_frequency : hint_range(0.05, 2.0) = 0.3;
 
+// Base-dark/tip-light gradient, grass-category only (see WindFoliage.apply_material) --
+// replaces the contact-darkening a real shadow would have given grass now that it no
+// longer casts one (GlbUtils._build_multimesh_from_transforms' SHADOW_CASTING_SETTING_OFF).
+// blade_height is the mesh's own local-space AABB height in world units; left at its 0.0
+// default for every other category (e.g. "tree", which still casts a real shadow), which
+// apply_wind_foliage_pbr below treats as "no gradient" rather than dividing by zero.
+uniform float blade_height : hint_range(0.0, 10.0) = 0.0;
+uniform float base_darken : hint_range(0.0, 1.0) = 0.55;
+
+// Object-space (local) vertex height, captured by each variant's vertex() before
+// wind_sway_vertex_offset is added (that offset never touches VERTEX.y, so capturing
+// before vs. after would be equivalent regardless -- captured before purely to read as
+// "the unswayed height"). Needed because VERTEX in fragment() is view-space, not
+// object-space -- see wind_sway_vertex_offset's own vertex-stage VERTEX parameter for
+// contrast. Deliberately a SEPARATE value from wind_sway_vertex_offset's own
+// height_weight (object-space too, but intentionally unnormalized for sway falloff --
+// see that function's comment): do not conflate the two or reuse one for the other.
+varying float local_vertex_y;
+
 // Occlusion fade: lets a token show through tree foliage the same way it shows
 // through map geometry. See occlusion_fade_include.gdshaderinc.
 #include "res://shaders/occlusion_fade_include.gdshaderinc"
@@ -72,6 +91,7 @@ void apply_wind_foliage_pbr(
 	mat4 view_matrix,
 	vec2 frag_coord,
 	vec2 viewport_size,
+	float vertex_local_y,
 	out vec3 out_albedo,
 	out float out_alpha,
 	out float out_ao,
@@ -82,6 +102,13 @@ void apply_wind_foliage_pbr(
 	vec4 albedo_sample = texture(albedo_texture, uv);
 	out_albedo = albedo_sample.rgb;
 	out_alpha = albedo_sample.a;
+
+	// Normalized (0 at base, 1 at tip) height for the base-dark/tip-light gradient --
+	// guarded against blade_height == 0.0 (trees, or a degenerate/flat mesh) so this
+	// never divides by zero: h resolves to 1.0 in that case, and mix(base_darken, 1.0,
+	// 1.0) == 1.0, a pure no-op on out_albedo.
+	float h = blade_height > 0.0 ? clamp(vertex_local_y / blade_height, 0.0, 1.0) : 1.0;
+	out_albedo *= mix(base_darken, 1.0, h);
 
 	vec3 orm = texture(orm_texture, uv).rgb;
 	out_ao = orm.r;

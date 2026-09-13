@@ -34,6 +34,15 @@ const PRESETS := {
 	"grass": {"sway_speed": 1.6, "sway_amplitude": 0.03, "sway_frequency": 0.4},
 }
 
+## Default albedo darkening at a grass blade's base (see wind_foliage_include.gdshaderinc's
+## base_darken uniform), applied only to the "grass" category in apply_material below.
+## Grass no longer casts real shadows (see GlbUtils._build_multimesh_from_transforms'
+## SHADOW_CASTING_SETTING_OFF for why), so this cheap per-fragment gradient replaces the
+## contact-darkening a real shadow would have given the blade base. Trees still cast real
+## shadows and are left at the shader's own blade_height=0.0 default, which the include
+## treats as "no gradient" -- see apply_material's own docstring.
+const _GRASS_BASE_DARKEN: float = 0.55
+
 static var _shader: Shader = null
 static var _shader_no_aa: Shader = null
 static var _shader_debug_trivial: Shader = null
@@ -232,13 +241,25 @@ static func _build_shader_material(
 ## every surface, silently painting the wrong texture onto the others. No-op if
 ## category is "" (the mesh keeps its own imported static material, e.g. a scattered
 ## rock). Optional `overrides` allows per-level tuning of sway speed and amplitude.
+##
+## For the "grass" category only, also sets `blade_height` (the Mesh's own AABB height,
+## since grass cards are authored with their base at local Y origin -- same assumption
+## wind_sway_vertex_offset's height_weight already makes) and `base_darken` (see
+## _GRASS_BASE_DARKEN) shader parameters, which wind_foliage_include.gdshaderinc uses to
+## darken albedo toward the blade base. Left unset (at the shader's own 0.0/no-gradient
+## default) for every other category, including "tree" -- trees still cast real shadows
+## and must not be double-darkened.
 static func apply_material(mesh: Mesh, category: String, overrides: Dictionary = {}) -> void:
 	if category == "" or not PRESETS.has(category):
 		return
 	var preset := get_effective_preset(category, overrides)
+	var blade_height := mesh.get_aabb().size.y if category == "grass" else 0.0
 	for i in mesh.get_surface_count():
 		var source_material := mesh.surface_get_material(i)
 		if not source_material is BaseMaterial3D:
 			continue
 		var wind_material := _build_shader_material(source_material, preset, category)
+		if category == "grass":
+			wind_material.set_shader_parameter("blade_height", blade_height)
+			wind_material.set_shader_parameter("base_darken", _GRASS_BASE_DARKEN)
 		mesh.surface_set_material(i, wind_material)
