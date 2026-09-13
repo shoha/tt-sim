@@ -295,7 +295,11 @@ The bridge only activates when Godot is launched with `-- --validation-bridge`. 
 - **Launch timeout**: check that `godot` is on PATH, or set `GODOT_PATH` env var
 - **Bridge not connecting**: port 7777 may be in use from a previous session. `game_stop` then `game_launch`
 - **Stale errors after reload**: `console_errors` accumulates since launch. Check timestamps/context
-- **Viewport size**: defaults to project settings (1920x1080). Screenshot coordinates use viewport pixels
+- **Clicks land on nothing / buttons do not react**: almost always a coordinate-space mismatch, not a broken bridge. `game_state` reports `viewport.window_size`, `viewport.viewport_size` and `viewport.hovered_control` — check `hovered_control` after a click to confirm what you actually hit before concluding anything else
+- **Viewport size**: `project.godot` sets a 1920x1080 base with `window/stretch/aspect="expand"`, so the viewport is NOT a fixed size — its height is `1920 / window_aspect`. A 1278x1360 window gives a 1920x2043 viewport, which quietly quadruples fill cost and invalidates any FPS number taken that way
+- **Click coordinates are WINDOW pixels; screenshots are VIEWPORT pixels.** They only coincide when the two sizes match. With an `override.cfg` pinning `aspect="keep"`, a 1920x1080 viewport inside a 1278x1360 window is letterboxed: scale 0.6656 with ~320px black bars top and bottom, so screenshot `(x, y)` becomes window `(x, y + 320)`. Read both sizes from `game_state` and convert, or you will click empty space and conclude the bridge is broken
+- **A click "not working" may have worked**: `app_state` only changes on real state transitions, and `_get_scene_tree()` walks `get_tree().current_scene`, so anything parented to `get_tree().root` (dialogs, including the level browser) is invisible to it. Take a screenshot before concluding a click failed
+- **`game_interact` steps time out after 30 s total**: split long waits across several calls
 
 ## CI/CD
 

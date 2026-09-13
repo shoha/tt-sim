@@ -150,7 +150,28 @@ func _cmd_state() -> Dictionary:
 		"tokens": _get_tokens(),
 		"ui": _get_ui_state(),
 		"camera": _get_camera_state(),
+		"viewport": _get_viewport_state(),
 		"scene_tree": _get_scene_tree(get_tree().current_scene, 0, SCENE_TREE_MAX_DEPTH),
+	}
+
+
+## Window and viewport geometry, plus which Control the GUI currently considers hovered.
+##
+## Reported because `window/stretch/aspect="expand"` makes the viewport size depend on the
+## window's aspect ratio, so viewport coordinates and window pixels are NOT interchangeable
+## unless the two happen to agree. Every performance measurement and every injected click
+## depends on knowing which space it is working in, and not reporting it has now caused a
+## wrong conclusion in three separate sessions. `hovered_control` is the ground truth for
+## whether an injected click actually landed on the Control the caller aimed at.
+func _get_viewport_state() -> Dictionary:
+	var viewport := get_viewport()
+	var visible_size := viewport.get_visible_rect().size
+	var hovered := viewport.gui_get_hovered_control()
+	return {
+		"window_size": [get_window().size.x, get_window().size.y],
+		"viewport_size": [int(visible_size.x), int(visible_size.y)],
+		"mouse_position": [viewport.get_mouse_position().x, viewport.get_mouse_position().y],
+		"hovered_control": hovered.get_path() if hovered != null else "",
 	}
 
 
@@ -276,7 +297,7 @@ func _cmd_input(cmd: Dictionary) -> Dictionary:
 		"click":
 			var button_str: String = cmd.get("button", "left")
 			var button := _parse_mouse_button(button_str)
-			_inject_click(cmd.get("x", 0.0), cmd.get("y", 0.0), button)
+			await _inject_click(cmd.get("x", 0.0), cmd.get("y", 0.0), button)
 		"drag":
 			await _inject_drag(
 				cmd.get("x1", 0.0),
@@ -295,14 +316,36 @@ func _cmd_input(cmd: Dictionary) -> Dictionary:
 	return {"ok": true}
 
 
+## Injects a click at a viewport position.
+##
+## Sends a mouse-motion event first and puts a frame boundary between press and release,
+## rather than firing press+release back to back. Both matter for Control nodes: Godot's GUI
+## dispatch establishes which control is hovered from mouse motion, and BaseButton only
+## emits `pressed` when it saw the press and the release as distinct events. Without them,
+## events injected here still reach `_input`/`_unhandled_input` -- so key shortcuts and
+## 3D-world clicks worked -- while buttons, checkboxes and other Controls silently ignored
+## every click. That cost three separate measurement sessions before it was tracked down.
+##
+## _inject_drag already had the frame boundary, which is why drags sometimes worked where
+## clicks never did.
 func _inject_click(x: float, y: float, button: MouseButton = MOUSE_BUTTON_LEFT) -> void:
 	var pos := Vector2(x, y)
+
+	var motion := InputEventMouseMotion.new()
+	motion.position = pos
+	motion.global_position = pos
+	Input.parse_input_event(motion)
+	Input.flush_buffered_events()
+	await get_tree().process_frame
+
 	var press := InputEventMouseButton.new()
 	press.button_index = button
 	press.pressed = true
 	press.position = pos
 	press.global_position = pos
 	Input.parse_input_event(press)
+	Input.flush_buffered_events()
+	await get_tree().process_frame
 
 	var release := InputEventMouseButton.new()
 	release.button_index = button
@@ -310,6 +353,7 @@ func _inject_click(x: float, y: float, button: MouseButton = MOUSE_BUTTON_LEFT) 
 	release.position = pos
 	release.global_position = pos
 	Input.parse_input_event(release)
+	Input.flush_buffered_events()
 
 
 func _inject_key(key_string: String) -> void:
