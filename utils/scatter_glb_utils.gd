@@ -9,6 +9,11 @@ extends RefCounted
 
 const _SCATTER_INSTANCES_EXTRAS_KEY := "tt_scatter_instances"
 
+## Scene-meta key holding the FoliageBudget report when a map was thinned; absent when it
+## was not. Read by scenes/states/playing/level_loader.gd, which shows the player one
+## toast -- utils/ must not reference UIManager or any other autoload.
+const FOLIAGE_BUDGET_REPORT_META := "tt_foliage_budget_report"
+
 
 ## Prototype: build a real MultiMeshInstance3D for each group of Geoscatter instance
 ## transforms terrain-paint wrote into this GLB's scene extras (see
@@ -30,7 +35,17 @@ const _SCATTER_INSTANCES_EXTRAS_KEY := "tt_scatter_instances"
 ## Values are untrusted network input (maps are downloaded from a host peer), same as
 ## extract_lighting_config() above -- guarded the same way: a malformed group or row is
 ## skipped rather than raising.
-static func process_scatter_instances(scene: Node3D, foliage_overrides: Dictionary = {}) -> void:
+##
+## Two-pass so FoliageBudget.plan() can allocate a single global primitive cap across
+## every species before any MultiMesh is built -- the budget is global, so no one
+## species' share can be decided from inside its own build. A map whose total exceeds
+## `primitive_budget` gets every species thinned proportionally, and the outcome is
+## recorded on the scene as FOLIAGE_BUDGET_REPORT_META so the caller can tell the player.
+static func process_scatter_instances(
+	scene: Node3D,
+	foliage_overrides: Dictionary = {},
+	primitive_budget: int = FoliageBudget.PRIMITIVE_BUDGET
+) -> void:
 	var extras: Dictionary = scene.get_meta(GlbUtils.SCENE_EXTRAS_META, {})
 	if not extras.has(_SCATTER_INSTANCES_EXTRAS_KEY):
 		return
@@ -38,6 +53,10 @@ static func process_scatter_instances(scene: Node3D, foliage_overrides: Dictiona
 	if not groups is Dictionary:
 		return
 
+	# Pass one: resolve every species' template mesh and surviving transforms. The budget
+	# is global, so no single species' share can be decided from inside its own build.
+	var resolved: Array[Dictionary] = []
+	var species := {}
 	for source_name in groups.keys():
 		var transforms: Variant = groups[source_name]
 		if not transforms is Array or transforms.is_empty():
@@ -48,10 +67,47 @@ static func process_scatter_instances(scene: Node3D, foliage_overrides: Dictiona
 		var mesh_node := source_node as MeshInstance3D
 		if not mesh_node.mesh:
 			continue
-		var wind_category := WindFoliage.classify_category(String(source_name))
+		var valid := _collect_valid_transforms(transforms)
+		if valid.is_empty():
+			continue
+		var key := String(source_name)
+		resolved.append({"key": key, "mesh_node": mesh_node, "transforms": valid})
+		species[key] = {
+			"count": valid.size(),
+			"primitives_per_instance": FoliageBudget.primitives_per_instance(mesh_node.mesh),
+		}
+
+	var report := FoliageBudget.plan(species, primitive_budget)
+
+	# Pass two: build each species' MultiMesh, truncated to its allocated share.
+	for entry in resolved:
+		var key: String = entry.key
+		var all_transforms: Array[Transform3D] = entry.transforms
+		var keep: int = report.kept.get(key, all_transforms.size())
+		var kept_transforms: Array[Transform3D] = all_transforms
+		if keep < all_transforms.size():
+			var subset: Array[Transform3D] = []
+			for index in FoliageBudget.select_indices(all_transforms.size(), keep, key):
+				subset.append(all_transforms[index])
+			kept_transforms = subset
 		_build_multimesh_from_transforms(
-			scene, mesh_node, transforms, wind_category, foliage_overrides
+			scene,
+			entry.mesh_node,
+			kept_transforms,
+			WindFoliage.classify_category(key),
+			foliage_overrides
 		)
+
+	if report.thinned:
+		scene.set_meta(FOLIAGE_BUDGET_REPORT_META, report)
+		print("ScatterGlbUtils: ", FoliageBudget.describe(report))
+		for key in report.kept.keys():
+			print(
+				(
+					"ScatterGlbUtils:   %s kept %d of %d instances"
+					% [key, report.kept[key], species[key]["count"]]
+				)
+			)
 
 
 ## Builds one MultiMeshInstance3D (sharing mesh_node's Mesh, and by default its
@@ -65,8 +121,9 @@ static func process_scatter_instances(scene: Node3D, foliage_overrides: Dictiona
 ## SHADOW_CASTING_SETTING_OFF -- see the inline comment where it's assigned below for
 ## why (measured perf finding, not a default carried by MultiMeshInstance3D itself).
 ##
-## Each row is a Blender WORLD-space (matrix_world) transform, already axis-converted
-## into glTF/Godot's convention on the Python side (terrain-paint's
+## Each entry in `valid_transforms` is a Blender WORLD-space (matrix_world) transform,
+## already converted from its row form by the caller (see _collect_valid_transforms) and
+## already axis-converted into glTF/Godot's convention on the Python side (terrain-paint's
 ## scatter_instancing.py) -- these are the exact same translation/rotation/scale
 ## components a glTF node itself would carry relative to an IDENTITY scene root, no
 ## further axis conversion needed here. That's the reason scene_root is a required
@@ -82,19 +139,13 @@ static func process_scatter_instances(scene: Node3D, foliage_overrides: Dictiona
 static func _build_multimesh_from_transforms(
 	scene_root: Node3D,
 	mesh_node: MeshInstance3D,
-	transforms: Array,
+	valid_transforms: Array[Transform3D],
 	wind_category: String = "",
 	foliage_overrides: Dictionary = {}
 ) -> void:
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.mesh = mesh_node.mesh
-
-	var valid_transforms: Array[Transform3D] = []
-	for row in transforms:
-		var xform: Variant = _row_to_transform(row)
-		if xform != null:
-			valid_transforms.append(xform)
 
 	if valid_transforms.is_empty():
 		return
@@ -135,6 +186,18 @@ static func _build_multimesh_from_transforms(
 	if old_parent:
 		old_parent.remove_child(mesh_node)
 	mesh_node.free()
+
+
+## Rows -> Transform3D, dropping any row _row_to_transform rejects. Split out of
+## _build_multimesh_from_transforms so process_scatter_instances' first pass can count a
+## species' real surviving instances before the budget is allocated.
+static func _collect_valid_transforms(rows: Array) -> Array[Transform3D]:
+	var valid: Array[Transform3D] = []
+	for row in rows:
+		var xform: Variant = _row_to_transform(row)
+		if xform != null:
+			valid.append(xform)
+	return valid
 
 
 ## Converts one [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] row into a Transform3D, or
