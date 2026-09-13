@@ -125,7 +125,9 @@ static func _stable_hash(text: String) -> int:
 ## Per-instance visual importance correlates with per-instance cost, so charging by
 ## primitives makes high-cost landmark species absorb the largest visible share of the
 ## loss. Measured on Sandy Clearing at this budget: 132 of 225 trees (59%) are removed
-## while the grass reduction is essentially imperceptible.
+## while the grass reduction is essentially imperceptible. Weighting allocation by visual
+## importance instead would need per-species authoring metadata that does not exist, so
+## it was considered and rejected rather than overlooked -- see docs/PERFORMANCE.md.
 ##
 ## `budget` is a parameter only so tests can drive thinning at counts a test can build;
 ## production always takes the PRIMITIVE_BUDGET default. Nothing user-facing sets it, and
