@@ -278,3 +278,40 @@ func test_tags_an_unrecognized_instance_name_with_the_grass_wind_foliage_categor
 	assert_eq(multimesh_instance.get_meta("wind_foliage_category", ""), "grass")
 
 	scene.free()
+
+
+func test_grass_category_multimesh_has_shadow_casting_disabled() -> void:
+	# Measured perf fix (see GlbUtils._build_multimesh_from_transforms' inline comment):
+	# Godot runs the same fragment() code (with discard) in the shadow pass as the color
+	# pass for an alpha-cutout shader, disabling early-Z there -- dense overlapping grass
+	# pays full fragment cost per covered shadow-pass sample. Grass no longer casts.
+	var built := _make_scene_with_template("GrassBlade")
+	var scene: Node3D = built.scene
+	scene.set_meta(
+		"tt_gltf_scene_extras",
+		{"tt_scatter_instances": {"GrassBlade": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]]}}
+	)
+
+	GlbUtils.process_scatter_instances(scene)
+
+	var multimesh_instance := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
+	assert_eq(multimesh_instance.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+
+	scene.free()
+
+
+func test_tree_category_multimesh_keeps_shadow_casting_on() -> void:
+	# Trees keep casting real shadows -- only "grass" gets SHADOW_CASTING_SETTING_OFF.
+	var built := _make_scene_with_template("OakTree")
+	var scene: Node3D = built.scene
+	scene.set_meta(
+		"tt_gltf_scene_extras",
+		{"tt_scatter_instances": {"OakTree": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]]}}
+	)
+
+	GlbUtils.process_scatter_instances(scene)
+
+	var multimesh_instance := scene.get_node_or_null("OakTree_MultiMesh") as MultiMeshInstance3D
+	assert_eq(multimesh_instance.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+
+	scene.free()

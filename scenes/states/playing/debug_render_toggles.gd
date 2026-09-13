@@ -7,8 +7,12 @@ extends Node
 ## docs/superpowers/specs/2026-08-10-performance-debug-toggles-design.md.
 ##
 ## The four visibility/shadow toggles reset to their default (current shipped
-## behavior, pressed=on) on every map reload -- state is never persisted across a map
-## switch. Foliage antialiasing used to be a fifth toggle here but is now a real,
+## behavior) on every map reload -- state is never persisted across a map switch. Three
+## of the four default pressed=on ("Foliage visible", "Tree shadows", "Map shadows");
+## "Grass shadows" defaults unchecked/off, since grass no longer casts real shadows by
+## default (a measured perf fix -- see _DEFAULT_OFF_CHECKBOX_KEYS' docstring). Checking
+## any shadow checkbox restores real shadow casting for that category, for diagnosis.
+## Foliage antialiasing used to be a fifth toggle here but is now a real,
 ## persisted graphics setting -- see VisualEffectsController.set_foliage_antialiasing_level()
 ## and docs/superpowers/specs/2026-08-10-foliage-antialiasing-setting-design.md.
 ##
@@ -73,12 +77,24 @@ const _DEBUG_SHADER_CHECKBOX_KEYS := [
 	"cheap_lighting_foliage",
 ]
 
-## Checkbox keys refresh() should default to UNPRESSED (unlike the visibility/shadow
-## toggles, which default pressed=on to match current shipped behavior). Derived from
-## _DEBUG_SHADER_CHECKBOX_KEYS (all three of those toggles also default off) plus
-## "hard_sun_shadows", which isn't part of that mutual-exclusion group but is also
-## off-by-default.
-const _DEFAULT_OFF_CHECKBOX_KEYS := _DEBUG_SHADER_CHECKBOX_KEYS + ["hard_sun_shadows"]
+## Checkbox keys refresh() should default to UNPRESSED (unlike the remaining
+## visibility/shadow toggles, which default pressed=on to match current shipped
+## behavior). Derived from _DEBUG_SHADER_CHECKBOX_KEYS (all three of those toggles
+## also default off) plus "hard_sun_shadows" (not part of that mutual-exclusion
+## group but also off-by-default) and "grass_shadows": grass-category
+## MultiMeshInstance3D nodes are now built with cast_shadow already OFF (see
+## GlbUtils._build_multimesh_from_transforms) as a measured perf fix, so the shipped
+## baseline is grass-not-casting. refresh() below applies this default via
+## set_pressed_no_signal, which does NOT fire _on_grass_shadows_toggled -- so it never
+## touches the real cast_shadow property either way -- but it does set the internal
+## _grass_shadows bool and the checkbox's visual state below. Leaving "grass_shadows"
+## out of this list would desync both of those from the real (already-off) baseline:
+## get_toggle_states() (read directly by PerformanceLogFormatter for CSV rows) would
+## report "grass shadows on" while shadows were actually off. Checking the box still
+## restores real shadow casting via _on_grass_shadows_toggled, for diagnosis.
+const _DEFAULT_OFF_CHECKBOX_KEYS := (
+	_DEBUG_SHADER_CHECKBOX_KEYS + ["hard_sun_shadows", "grass_shadows"]
+)
 
 ## Checkbox keys in the same order they appear in the panel, so toggle_by_index()
 ## (and therefore the Shift+1..9 shortcuts) match what a reader sees on screen.
@@ -96,7 +112,9 @@ const PANEL_ORDER_KEYS := [
 
 var _foliage_visible: bool = true
 var _tree_shadows: bool = true
-var _grass_shadows: bool = true
+## Default false, unlike the other three visibility/shadow toggles above: grass no
+## longer casts real shadows by default (see _DEFAULT_OFF_CHECKBOX_KEYS' docstring).
+var _grass_shadows: bool = false
 var _map_shadows: bool = true
 var _sun_shadows: bool = true
 var _hard_sun_shadows: bool = false
@@ -188,7 +206,9 @@ func set_panel_visible(should_be_visible: bool) -> void:
 
 
 ## Re-collect node references against the currently loaded map and reset every
-## toggle to its default (on) state. Called once from setup() and again from
+## toggle to its default state -- pressed=on for every visibility/shadow toggle
+## except "grass_shadows", which defaults to off/unchecked (see
+## _DEFAULT_OFF_CHECKBOX_KEYS' docstring for why). Called once from setup() and again from
 ## GameMap.notify_map_loaded() whenever a new map finishes loading -- map_container's
 ## previous children have been queue_freed and, because map loading awaits across a
 ## frame, are out of the tree by then, and no toggle persists across a map switch
@@ -202,7 +222,7 @@ func refresh() -> void:
 	_collect_nodes()
 	_foliage_visible = true
 	_tree_shadows = true
-	_grass_shadows = true
+	_grass_shadows = false
 	_map_shadows = true
 	_sun_shadows = true
 	# Global renderer setting, not tied to the previous map's nodes -- must be

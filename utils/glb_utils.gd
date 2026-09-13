@@ -378,7 +378,9 @@ static func process_scatter_instances(scene: Node3D, foliage_overrides: Dictiona
 ## wind-sway ShaderMaterial instead -- see WindFoliage.apply_material. The built node
 ## is also tagged with a "wind_foliage_category" meta of this same value, letting
 ## OcclusionFadeManager find tree-category instances without re-deriving the
-## classification itself.
+## classification itself. Grass-category instances also get cast_shadow forced to
+## SHADOW_CASTING_SETTING_OFF -- see the inline comment where it's assigned below for
+## why (measured perf finding, not a default carried by MultiMeshInstance3D itself).
 ##
 ## Each row is a Blender WORLD-space (matrix_world) transform, already axis-converted
 ## into glTF/Godot's convention on the Python side (terrain-paint's
@@ -425,6 +427,18 @@ static func _build_multimesh_from_transforms(
 	# OcclusionFadeManager._collect_tree_materials() can find tree-category instances
 	# without re-deriving WindFoliage.classify_category()'s result.
 	multimesh_instance.set_meta("wind_foliage_category", wind_category)
+	if wind_category == "grass":
+		# Grass no longer casts shadows: Godot runs the shadow pass's fragment() with the
+		# exact same code as the color pass (no shadow-only variant -- see
+		# godot-proposals#4443), and this shader's alpha-cutout discard disables early-Z
+		# for that draw. Dense overlapping grass therefore pays full fragment cost per
+		# covered sample in the shadow depth pass, disproportionate to its actual primitive
+		# count (measured -2.53ms/-17% of total frame time removing this on a forest map,
+		# more than trees' shadow removal despite trees contributing 3x the shadow-pass
+		# primitives). Trees keep casting real shadows -- this branch only fires for
+		# "grass". WindFoliage.apply_material's base_darken/blade_height gradient replaces
+		# the contact-darkening a real shadow would otherwise have given grass at its base.
+		multimesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# MultiMesh itself has no material slot -- Godot renders every instance with
 	# mesh_node.mesh's own surface material(s) as-is unless mutated here. Mutates
 	# mesh_node.mesh's own per-surface materials directly rather than setting anything
