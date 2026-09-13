@@ -7,11 +7,23 @@ class_name LevelEnvironmentManager
 ## (environment & lighting) while LevelPlayController focuses on level
 ## loading, tokens, and network sync.
 
-## Distance (world units) beyond which the sun stops casting shadows. Explicit at
-## Godot's own default for now so it can be swept: an orthographic camera's visible
-## ground extent scales with camera.size (max zoom 20), so a value derived from map
-## bounds alone could pop shadows out at the far edge when zoomed out. Measure before
-## tightening.
+## Distance (world units) beyond which the sun stops casting shadows. Left at Godot's
+## own default deliberately: tightening it was MEASURED and does nothing on a map of
+## this scale.
+##
+## Swept 100.0 / 50.0 / 30.0 on the dense forest map at 1920x1080 with vsync off and a
+## deterministic camera pose, normalising each run against a "foliage hidden" reference
+## sample to cancel the GPU clock drift that makes cross-run absolute times unusable
+## (see docs/superpowers/specs for the measurement method). Normalised foliage cost came
+## out at 2.47 / 2.44 / 2.46 -- identical within noise -- and shadow-pass primitives were
+## byte-identical at 15,586,440 for all three values. Every shadow caster on that map is
+## already inside 30 units, so a shorter cascade distance excludes nothing.
+##
+## Kept as an explicit named constant rather than reverted to an implicit engine default
+## so the next person does not re-investigate this. It would only become a lever for a
+## map substantially larger than the camera's visible extent, and note the extent scales
+## with camera.size (max zoom 20), so any future value must cover the zoomed-out view,
+## not just the map bounds.
 const SUN_SHADOW_MAX_DISTANCE: float = 100.0
 
 var _world_environment: WorldEnvironment = null
