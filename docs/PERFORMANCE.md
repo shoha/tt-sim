@@ -145,8 +145,9 @@ at all):
 | 5 | 2747 | 0 / 0 | 0 / 0 | 4 / 147,376 | 1193 / 5,310,072 |
 
 The chosen value is **10.0**, for these reasons: 25 is dominated (barely better than
-unchunked while tripling node count); 5 adds 1,136 draw calls over baseline at full
-zoom-out to save 33% of primitives, the trade most likely to cost more than it buys; and
+unchunked while tripling node count); 5 was passed over because it adds 1,136 draw calls
+over baseline at full zoom-out, which looked at the time like the trade most likely to
+cost more than it bought; and
 between 15 and 10, 10 saves 62% more primitives at typical play zoom for three more draw
 calls, which is where players spend their time. 15 is better only at full zoom-out, where
 both figures are large and the primitive budget rather than chunking is the binding
