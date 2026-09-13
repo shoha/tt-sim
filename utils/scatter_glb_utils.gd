@@ -46,10 +46,17 @@ const FOLIAGE_BUDGET_REPORT_META := "tt_foliage_budget_report"
 ## it is the more exposed of the two budget-override parameters (see FoliageBudget.plan's
 ## own "nothing should set this" note), so nothing user-facing should ever wire it to
 ## something like LevelData -- the budget is fixed by design, not a per-level setting.
+##
+## Each species' surviving transforms are further split into ScatterChunker cells, one
+## MultiMeshInstance3D per occupied cell, so a MultiMeshInstance3D's single-AABB frustum
+## culling can discard the off-screen ones instead of processing every instance whenever
+## any part of that species is on screen. `chunk_size` exists for tests, the same way
+## `primitive_budget` does -- nothing user-facing should ever set it either.
 static func process_scatter_instances(
 	scene: Node3D,
 	foliage_overrides: Dictionary = {},
-	primitive_budget: int = FoliageBudget.PRIMITIVE_BUDGET
+	primitive_budget: int = FoliageBudget.PRIMITIVE_BUDGET,
+	chunk_size: float = ScatterChunker.CHUNK_SIZE_WORLD_UNITS
 ) -> void:
 	var extras: Dictionary = scene.get_meta(GlbUtils.SCENE_EXTRAS_META, {})
 	if not extras.has(_SCATTER_INSTANCES_EXTRAS_KEY):
@@ -84,9 +91,11 @@ static func process_scatter_instances(
 
 	var report := FoliageBudget.plan(species, primitive_budget)
 
-	# Pass two: build each species' MultiMesh, truncated to its allocated share.
+	# Pass two: build each species' MultiMesh set, truncated to its allocated share and split
+	# into spatial cells so frustum culling can discard the off-screen ones.
 	for entry in resolved:
 		var key: String = entry.key
+		var mesh_node: MeshInstance3D = entry.mesh_node
 		var all_transforms: Array[Transform3D] = entry.transforms
 		var keep: int = report.kept.get(key, all_transforms.size())
 		var kept_transforms: Array[Transform3D] = all_transforms
@@ -95,13 +104,32 @@ static func process_scatter_instances(
 			for index in FoliageBudget.select_indices(all_transforms.size(), keep, key):
 				subset.append(all_transforms[index])
 			kept_transforms = subset
-		_build_multimesh_from_transforms(
-			scene,
-			entry.mesh_node,
-			kept_transforms,
-			WindFoliage.classify_category(key),
-			foliage_overrides
-		)
+		var wind_category := WindFoliage.classify_category(key)
+		# MultiMesh itself has no material slot -- Godot renders every instance with
+		# mesh_node.mesh's own surface material(s) as-is unless mutated here. Mutates
+		# mesh_node.mesh's own per-surface materials directly rather than setting anything
+		# on multimesh_instance -- MultiMeshInstance3D has no per-surface override API (see
+		# WindFoliage.apply_material's own docstring). No-op (mesh keeps its own imported
+		# static material) when wind_category is "".
+		#
+		# Hoisted out of _build_multimesh_from_transforms for chunking: this builds a fresh
+		# ShaderMaterial on every call and assigns it to the Mesh that every chunk of this
+		# species shares, so a per-chunk call would construct one material per chunk and keep
+		# only the last.
+		WindFoliage.apply_material(mesh_node.mesh, wind_category, foliage_overrides)
+		var buckets := ScatterChunker.bucket_by_cell(kept_transforms, chunk_size)
+		for cell in buckets.keys():
+			# A species that fits in one cell keeps its original `<Species>_MultiMesh` name,
+			# so the suffix reads as a signal that a species was split rather than noise on
+			# every foliage node.
+			var suffix := "" if buckets.size() == 1 else ScatterChunker.cell_suffix(cell)
+			_build_multimesh_from_transforms(scene, mesh_node, buckets[cell], wind_category, suffix)
+		# Hoisted out of _build_multimesh_from_transforms too: it used to free the template
+		# as its last statement, which would free the same node once per chunk.
+		var old_parent := mesh_node.get_parent()
+		if old_parent:
+			old_parent.remove_child(mesh_node)
+		mesh_node.free()
 
 	if report.thinned:
 		scene.set_meta(FOLIAGE_BUDGET_REPORT_META, report)
@@ -127,6 +155,9 @@ static func process_scatter_instances(
 ## SHADOW_CASTING_SETTING_OFF -- see the inline comment where it's assigned below for
 ## why (measured perf finding, not a default carried by MultiMeshInstance3D itself).
 ##
+## `name_suffix` is appended to the built node's name (see ScatterChunker.cell_suffix) --
+## "" for a species that fits in a single cell, keeping its name unsuffixed.
+##
 ## Each entry in `valid_transforms` is a Blender WORLD-space (matrix_world) transform,
 ## already converted from its row form by the caller (see _collect_valid_transforms) and
 ## already axis-converted into glTF/Godot's convention on the Python side (terrain-paint's
@@ -147,7 +178,7 @@ static func _build_multimesh_from_transforms(
 	mesh_node: MeshInstance3D,
 	valid_transforms: Array[Transform3D],
 	wind_category: String = "",
-	foliage_overrides: Dictionary = {}
+	name_suffix: String = ""
 ) -> void:
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -161,7 +192,7 @@ static func _build_multimesh_from_transforms(
 		multimesh.set_instance_transform(i, valid_transforms[i])
 
 	var multimesh_instance := MultiMeshInstance3D.new()
-	multimesh_instance.name = mesh_node.name + "_MultiMesh"
+	multimesh_instance.name = mesh_node.name + "_MultiMesh" + name_suffix
 	multimesh_instance.multimesh = multimesh
 	# Tags the node itself (not the Mesh resource) with its wind category so
 	# OcclusionFadeManager._collect_tree_materials() can find tree-category instances
@@ -179,19 +210,7 @@ static func _build_multimesh_from_transforms(
 		# "grass". WindFoliage.apply_material's base_darken/blade_height gradient replaces
 		# the contact-darkening a real shadow would otherwise have given grass at its base.
 		multimesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# MultiMesh itself has no material slot -- Godot renders every instance with
-	# mesh_node.mesh's own surface material(s) as-is unless mutated here. Mutates
-	# mesh_node.mesh's own per-surface materials directly rather than setting anything
-	# on multimesh_instance -- MultiMeshInstance3D has no per-surface override API (see
-	# WindFoliage.apply_material's own docstring). No-op (mesh keeps its own imported
-	# static material) when wind_category is "".
-	WindFoliage.apply_material(mesh_node.mesh, wind_category, foliage_overrides)
 	scene_root.add_child(multimesh_instance)
-
-	var old_parent := mesh_node.get_parent()
-	if old_parent:
-		old_parent.remove_child(mesh_node)
-	mesh_node.free()
 
 
 ## Converts a flat array of [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] rows to Transform3D,
