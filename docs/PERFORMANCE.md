@@ -88,6 +88,58 @@ treat any frame-time number for this budget as measured until that path is fixed
 primitive-count and pipeline-correctness numbers above are measured; the frame-time
 consequence of applying them is not.
 
+## Spatial foliage chunking
+
+A `MultiMeshInstance3D` is frustum-culled as a single AABB. Foliage was one map-wide
+MultiMesh per species, so every instance was vertex-processed whenever any part of that
+species was on screen. The unchunked baseline measures **57 nodes and 7,957,006
+primitives at EVERY zoom level** -- the number does not move, because one AABB per
+species is always drawn. That is the premise the whole sub-project rests on, now
+confirmed directly.
+
+The map has a literal clearing at its centre: zero surviving scatter instances within
+plus or minus 10 units of the origin (16% of the map area), and only 4.8% of instances
+within plus or minus 15 units. The Home camera pose sits in that clearing. So at close
+zoom, chunking culls 100% of foliage where the unchunked build processes all 7,957,006
+primitives. A coarse per-species AABB covers the clearing even though nothing is in it;
+fine chunks around an empty clearing are culled outright.
+
+The sweep (nodes, then visible draws/primitives per camera zoom, across the 50 x 50
+reference map):
+
+| chunk size | nodes | zoom 2 | zoom 5 | zoom 10 | zoom 20 |
+| --- | --- | --- | --- | --- | --- |
+| unchunked | 57 | 57 / 7,957,006 | 57 / 7,957,006 | 57 / 7,957,006 | 57 / 7,957,006 |
+| 25 | 199 | 137 / 4,094,814 | 150 / 6,283,242 | 174 / 7,610,722 | 176 / 7,843,338 |
+| 15 | 656 | 0 / 0 | 2 / 4,320 | 14 / 1,151,794 | 284 / 6,222,732 |
+| 10 | 1335 | 0 / 0 | 0 / 0 | 17 / 431,868 | 731 / 5,932,752 |
+| 8 | 1885 | 0 / 0 | 0 / 0 | 3 / 586,032 | 831 / 6,143,696 |
+| 5 | 2747 | 0 / 0 | 0 / 0 | 4 / 147,376 | 1193 / 5,310,072 |
+
+The chosen value is **10.0**, for these reasons: 25 is dominated (barely better than
+unchunked while tripling node count); 5 adds 1,136 draw calls over baseline at full
+zoom-out to save 33% of primitives, the trade most likely to cost more than it buys; and
+between 15 and 10, 10 saves 62% more primitives at typical play zoom for three more draw
+calls, which is where players spend their time. 15 is better only at full zoom-out, where
+both figures are large and the primitive budget rather than chunking is the binding
+constraint.
+
+**Frame time was NOT measured.** The validator MCP bridge cannot activate the title
+screen's buttons -- clicks at window coordinates, clicks at 1920x1080-space coordinates,
+Enter on the focused button, and Tab-then-Enter were all tried across two sessions, and
+it was confirmed not to be caused by the measurement harness. So no rendered before/after
+exists. The sweep figures are geometric: exact about what culling can discard, silent
+about what it costs. The open risk to name is the 731 draw calls at full zoom-out.
+
+**The shadow-cascade hypothesis is still untested.** The existing entry below concludes
+that shortening `directional_shadow_max_distance` does nothing because "every caster is
+already inside 30 units" from shadow primitives being byte-identical at 15,586,440 across
+100 / 50 / 30. The hypothesis was that this was an artefact of one map-wide AABB per
+species intersecting every shadow cascade, so nothing could be culled -- and that chunking
+might unlock it. Measuring `shadow_primitives` needs a real render, which the bridge could
+not provide. Chunking has now landed; re-testing the shadow-distance lever against a
+chunked build is an open follow-up.
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **General triangle budgets.** 420x the geometry cost only 9.2x the frame time. Raw
@@ -104,7 +156,10 @@ consequence of applying them is not.
 - **PCF shadow filter tuning.** Measured at 0.6 ms. Not worth touching.
 - **Shortening `directional_shadow_max_distance`.** Swept 100/50/30: shadow-pass
   primitives were byte-identical at 15,586,440 for all three, because every caster is
-  already inside 30 units. Recorded in `level_environment_manager.gd`.
+  already inside 30 units -- this may have been an artefact of one map-wide AABB per
+  species intersecting every shadow cascade. Spatial chunking has now landed; re-testing
+  this lever against a chunked build is an open follow-up. Recorded in
+  `level_environment_manager.gd`.
 - **`alpha_to_coverage` for the shadow pass.** Does not help (godotengine/godot#84242).
 - **`visibility_range` to skip distant foliage.** Hidden instances stop casting
   directional shadows entirely (godotengine/godot#98993), which changes lighting.
