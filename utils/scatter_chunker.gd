@@ -15,11 +15,28 @@ extends RefCounted
 
 ## Edge length in world units of one chunk cell, on both X and Z.
 ##
-## PROVISIONAL until the sweep in this sub-project replaces it with a measured value. 10.0 on
-## the 50 x 50 reference map gives a 5 x 5 grid, so up to about 1,400 nodes across 57 species
-## against 57 today, with visible draw calls at mid zoom estimated near today's 251. Smaller
-## cells cull better but cost draw calls; larger cells cull poorly when zoomed in, which is
-## where the waste is worst (0.3% of the map visible at maximum zoom in).
+## Chosen by sweeping unchunked / 25 / 15 / 10 / 8 / 5 against the real 50 x 50 reference
+## map, replaying the actual pipeline (FoliageBudget.plan, select_indices, bucket_by_cell)
+## and counting, per camera zoom, which chunk AABBs intersect the view. Unchunked is 57
+## nodes and 7,957,006 primitives at EVERY zoom, since one AABB per species is always drawn.
+##
+##   chunk | nodes | zoom 10 (typical play) | zoom 20 (fully zoomed out)
+##      25 |   199 |  174 draws / 7,610,722 |  176 draws / 7,843,338
+##      15 |   656 |   14 draws / 1,151,794 |  284 draws / 6,222,732
+##      10 |  1335 |   17 draws /   431,868 |  731 draws / 5,932,752
+##       5 |  2747 |    4 draws /   147,376 | 1193 draws / 5,310,072
+##
+## 25 is dominated: barely better than unchunked while tripling node count. 5 adds 1,136
+## draw calls over baseline at full zoom-out to save 33% of primitives, which is the trade
+## most likely to cost more than it buys. Between 15 and 10, 10 saves 62% more primitives at
+## typical play zoom for three more draw calls, and that is where players spend their time;
+## 15 is the better of the two only at full zoom-out, where both are large and the primitive
+## budget rather than chunking is the binding constraint.
+##
+## NOT VALIDATED AGAINST FRAME TIME. The validator bridge cannot activate the title screen's
+## buttons, so no rendered before/after was captured. The figures above are geometric --
+## exact about what culling can discard, silent about what it costs. The open risk is the
+## 731 draw calls at full zoom-out. See docs/PERFORMANCE.md for the measurement procedure.
 const CHUNK_SIZE_WORLD_UNITS: float = 10.0
 
 
