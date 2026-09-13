@@ -139,7 +139,7 @@ func test_collect_mesh_instances_ignores_invisible_mesh_instance() -> void:
 	root.free()
 
 
-func test_get_toggle_states_defaults_to_everything_on() -> void:
+func test_get_toggle_states_defaults_to_everything_on_except_grass_shadows() -> void:
 	var toggles := DebugRenderToggles.new()
 	add_child_autofree(toggles)
 
@@ -147,8 +147,18 @@ func test_get_toggle_states_defaults_to_everything_on() -> void:
 
 	assert_true(states["toggle_foliage_visible"])
 	assert_true(states["toggle_tree_shadows"])
-	assert_true(states["toggle_grass_shadows"])
 	assert_true(states["toggle_map_shadows"])
+
+
+func test_get_toggle_states_defaults_grass_shadows_to_off() -> void:
+	# Grass no longer casts real shadows by default (measured perf fix) -- see
+	# DebugRenderToggles' _DEFAULT_OFF_CHECKBOX_KEYS docstring.
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+
+	var states := toggles.get_toggle_states()
+
+	assert_false(states["toggle_grass_shadows"])
 
 
 func test_get_toggle_states_defaults_trivial_foliage_shader_to_off() -> void:
