@@ -512,13 +512,37 @@ func test_every_grass_chunk_keeps_its_category_meta_and_shadow_setting() -> void
 	scene.free()
 
 
+func _instances_for_species(scene: Node3D, species_name: String) -> int:
+	var total := 0
+	for child in scene.get_children():
+		if child is MultiMeshInstance3D and child.name.begins_with(species_name + "_MultiMesh"):
+			total += (child as MultiMeshInstance3D).multimesh.instance_count
+	return total
+
+
+func _chunk_count_for_species(scene: Node3D, species_name: String) -> int:
+	var found := 0
+	for child in scene.get_children():
+		if child is MultiMeshInstance3D and child.name.begins_with(species_name + "_MultiMesh"):
+			found += 1
+	return found
+
+
 func test_thinning_and_chunking_compose() -> void:
-	# 100 instances x 12 primitives (BoxMesh) = 1200 against a 600 budget -> 50 survive.
-	# select_indices shuffles then sorts, so the survivors are spread across the whole
-	# 0..99 index range rather than being a prefix, and _rows puts instance i at x = i --
-	# so the kept transforms still span most of cells 0..9 and must occupy more than one.
-	var scene := _scatter_scene({"GrassBlade": 100})
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 600, 10.0)
-	assert_eq(_total_instances(scene), 50)
-	assert_gt(_count_multimesh_children(scene), 1)
+	# Two species x 100 instances x 12 primitives (BoxMesh) = 2400 total, against a 1200
+	# budget -> ratio 1200/2400 = 0.5, so each species' floor(100 * 0.5) = 50 survive (the
+	# same arithmetic as test_every_species_is_thinned_when_several_share_the_budget, which
+	# is single-cell because it pins chunk_size; this test exercises the same thinning at
+	# the real default chunk_size instead). select_indices shuffles then sorts per species
+	# (keyed by species name, so GrassBlade and PineTree get independent shuffles), so each
+	# species' survivors are spread across its own whole 0..99 index range rather than
+	# being a prefix, and _rows puts instance i at x = i -- so each species' kept
+	# transforms still span most of cells 0..9 and must occupy more than one, independently
+	# of the other species.
+	var scene := _scatter_scene({"GrassBlade": 100, "PineTree": 100})
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 1200, 10.0)
+	assert_eq(_instances_for_species(scene, "GrassBlade"), 50)
+	assert_eq(_instances_for_species(scene, "PineTree"), 50)
+	assert_gt(_chunk_count_for_species(scene, "GrassBlade"), 1)
+	assert_gt(_chunk_count_for_species(scene, "PineTree"), 1)
 	scene.free()
