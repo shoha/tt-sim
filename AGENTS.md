@@ -153,7 +153,7 @@ reproduced with zero scene tree involvement at all, so it's not something caller
 code can work around. If a GUT test needs to assert on a `MultiMesh`'s actual
 per-instance transform values, don't round-trip through the `MultiMesh` API at all
 -- isolate the pure transform-computing logic into its own function and test that
-directly (see `GlbUtils._row_to_transform` and its tests in
+directly (see `ScatterGlbUtils._row_to_transform` and its tests in
 `tests/unit/test_glb_utils_scatter_instances.gd` for the pattern, and
 `MeshInstancingUtils.transform_relative_to`, which is public for exactly this reason).
 

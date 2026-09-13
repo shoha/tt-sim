@@ -27,7 +27,7 @@ const DUPLICATE_INSTANCING_MAX_EXTENT := 2.0
 ##
 ## That is the whole reason this lives here rather than in terrain-paint: it needs
 ## nothing from the authoring tool, so it also optimises maps uploaded by users who
-## have never run that addon. GlbUtils.process_scatter_instances() cannot work this
+## have never run that addon. ScatterGlbUtils.process_scatter_instances() cannot work this
 ## way and still needs its export-side extras -- Geoscatter instances are Geometry
 ## Nodes output, not real objects, so there is nothing in the file for a load-time
 ## scan to find.
@@ -103,7 +103,7 @@ static func process_duplicate_mesh_instancing(
 			multimesh.set_instance_transform(i, transforms[i])
 
 		# Sits directly under scene with an identity transform, for the same reason
-		# GlbUtils._build_multimesh_from_transforms' node does: every instance
+		# ScatterGlbUtils._build_multimesh_from_transforms' node does: every instance
 		# transform above is already relative to scene, so any local transform here
 		# would double-apply.
 		var multimesh_instance := MultiMeshInstance3D.new()
@@ -191,7 +191,7 @@ static func _has_collision_suffix(node_name: String) -> bool:
 ## being added to the SceneTree, and this keeps the result independent of that.
 ##
 ## Public purely so it can be tested directly, for the reason
-## GlbUtils._row_to_transform already documents: under the headless/dummy rendering
+## ScatterGlbUtils._row_to_transform already documents: under the headless/dummy rendering
 ## driver MultiMesh.get_instance_transform() always reads back identity regardless of
 ## what was set, so asserting on a built MultiMesh's contents is a dead end and the
 ## transform math has to be checked on its own.

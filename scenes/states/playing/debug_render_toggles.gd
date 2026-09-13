@@ -83,7 +83,7 @@ const _DEBUG_SHADER_CHECKBOX_KEYS := [
 ## also default off) plus "hard_sun_shadows" (not part of that mutual-exclusion
 ## group but also off-by-default) and "grass_shadows": grass-category
 ## MultiMeshInstance3D nodes are now built with cast_shadow already OFF (see
-## GlbUtils._build_multimesh_from_transforms) as a measured perf fix, so the shipped
+## ScatterGlbUtils._build_multimesh_from_transforms) as a measured perf fix, so the shipped
 ## baseline is grass-not-casting. refresh() below applies this default via
 ## set_pressed_no_signal, which does NOT fire _on_grass_shadows_toggled -- so it never
 ## touches the real cast_shadow property either way -- but it does set the internal
@@ -424,7 +424,7 @@ static func _get_debug_shader_for_mode(mode: String) -> Shader:
 
 
 ## Recursively collect visible MultiMeshInstance3D nodes tagged with the given
-## wind_foliage_category (set by GlbUtils._build_multimesh_from_transforms, see
+## wind_foliage_category (set by ScatterGlbUtils._build_multimesh_from_transforms, see
 ## WindFoliage.classify_category). Mirrors
 ## OcclusionFadeManager._collect_tree_multimeshes, generalized to any category since
 ## tree and grass shadows are toggled independently here.

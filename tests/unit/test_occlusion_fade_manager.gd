@@ -1,7 +1,7 @@
 extends GutTest
 
 ## Unit tests for OcclusionFadeManager's tree-foliage support -- the piece that lets
-## tree-category scattered foliage (built by GlbUtils.process_scatter_instances(),
+## tree-category scattered foliage (built by ScatterGlbUtils.process_scatter_instances(),
 ## tagged via wind_foliage_category meta) participate in the occlusion fade without
 ## pulling in grass or untagged nodes.
 

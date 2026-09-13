@@ -377,7 +377,7 @@ static func _collect_mesh_instances(node: Node, result: Array[MeshInstance3D]) -
 
 ## Recursively collect visible MultiMeshInstance3D nodes tagged as tree-category
 ## foliage (wind_foliage_category meta, set by
-## GlbUtils._build_multimesh_from_transforms from WindFoliage.classify_category).
+## ScatterGlbUtils._build_multimesh_from_transforms from WindFoliage.classify_category).
 ## Grass and untagged nodes are skipped -- see design spec for why grass doesn't
 ## participate in the occlusion fade.
 static func _collect_tree_multimeshes(node: Node, result: Array[MultiMeshInstance3D]) -> void:

@@ -2,7 +2,7 @@ class_name WindFoliage
 extends RefCounted
 
 ## Wind-sway shader application for scattered foliage built by
-## GlbUtils.process_scatter_instances() from terrain-paint's "tt_scatter_instances"
+## ScatterGlbUtils.process_scatter_instances() from terrain-paint's "tt_scatter_instances"
 ## glTF scene extras (see engine/scatter_instancing.py in the terrain-paint repo).
 ## Split out of glb_utils.gd (which was pushing gdlint's max-file-lines limit) rather
 ## than left inline, matching this directory's existing convention of small, focused
@@ -36,7 +36,7 @@ const PRESETS := {
 
 ## Default albedo darkening at a grass blade's base (see wind_foliage_include.gdshaderinc's
 ## base_darken uniform), applied only to the "grass" category in apply_material below.
-## Grass no longer casts real shadows (see GlbUtils._build_multimesh_from_transforms'
+## Grass no longer casts real shadows (see ScatterGlbUtils._build_multimesh_from_transforms'
 ## SHADOW_CASTING_SETTING_OFF for why), so this cheap per-fragment gradient replaces the
 ## contact-darkening a real shadow would have given the blade base. Trees still cast real
 ## shadows and are left at the shader's own blade_height=0.0 default, which the include
