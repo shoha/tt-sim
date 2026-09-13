@@ -123,6 +123,10 @@ static func _stable_hash(text: String) -> int:
 ## `budget` is a parameter only so tests can drive thinning at counts a test can build;
 ## production always takes the PRIMITIVE_BUDGET default. Nothing user-facing sets it, and
 ## nothing should: the budget is fixed by design.
+##
+## A species with at least one instance always keeps at least one, even when its
+## proportional share rounds down to zero -- this can put the true total up to one
+## instance per species over budget.
 static func plan(species: Dictionary, budget: int = PRIMITIVE_BUDGET) -> Dictionary:
 	var kept := {}
 	var total_before := 0
@@ -156,7 +160,14 @@ static func plan(species: Dictionary, budget: int = PRIMITIVE_BUDGET) -> Diction
 			# Cost unknown, so thinning buys nothing measurable. Keep all of it.
 			instances_after += count
 			continue
-		var allowed := int(floor(count * ratio))
+		# Never allocate zero to a species that has instances. A zero share would leave
+		# ScatterGlbUtils' template MeshInstance3D unfreed -- its builder returns early on
+		# an empty transform list, before it frees the template or adds the MultiMesh -- so
+		# the species would vanish from its authored positions and render exactly once at
+		# whatever arbitrary transform the Blender template object happened to sit at. At a
+		# realistic ratio near 0.5 that is every 1- and 2-instance species, which is where
+		# hero landmarks live. Costs at most one instance per species against the cap.
+		var allowed := maxi(int(floor(count * ratio)), 1)
 		kept[species_name] = allowed
 		total_after += allowed * per_instance
 		instances_after += allowed
