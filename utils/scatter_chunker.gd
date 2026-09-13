@@ -31,12 +31,15 @@ extends RefCounted
 ##       8 |  1885 |    3 draws /   586,032 |  831 draws / 6,143,696
 ##       5 |  2747 |    4 draws /   147,376 | 1193 draws / 5,310,072
 ##
-## 25 is dominated: barely better than unchunked while tripling node count. 5 adds 1,136
-## draw calls over baseline at full zoom-out to save 33% of primitives, which is the trade
-## most likely to cost more than it buys. Between 15 and 10, 10 saves 62% more primitives at
-## typical play zoom for three more draw calls, and that is where players spend their time;
-## 15 is the better of the two only at full zoom-out, where both are large and the primitive
-## budget rather than chunking is the binding constraint.
+## 25 is dominated: barely better than unchunked while tripling node count. Between 15 and
+## 10, 10 saves 62% more primitives at typical play zoom for three more draw calls, and that
+## is where players spend their time; 15 is better only at full zoom-out, where both are
+## large and the primitive budget rather than chunking is the binding constraint.
+##
+## 5 was passed over on the grounds that it adds 1,136 draw calls over baseline at full
+## zoom-out, which looked like the trade most likely to cost more than it bought. The
+## rendered measurement below has since undercut exactly that reasoning -- draw calls did
+## not cost what was feared -- so 5 is worth rendering before assuming 10 is optimal.
 ##
 ## VALIDATED AGAINST FRAME TIME on a real render (Sandy Clearing, 1920x1080, vsync off,
 ## RTX 3080, via the validator bridge). Chunked at 10 beats unchunked (chunk size 0, one
