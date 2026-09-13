@@ -129,8 +129,11 @@ primitives. A coarse per-species AABB covers the clearing even though nothing is
 fine chunks around an empty clearing are culled outright.
 
 The sweep (nodes, then visible draws/primitives per camera zoom, across the 50 x 50
-reference map). **These are geometric figures -- counts of which chunk AABBs the probe
-found intersecting the view -- not rendered output from a GPU:**
+reference map). **This is the exploratory chunk-size comparison -- geometric figures,
+counts of which chunk AABBs the probe found intersecting the view, NOT rendered output
+from a GPU.** It is not evidence that chunking helps; it is only a way to compare chunk
+sizes against each other (see the rendered measurements below for whether chunking helps
+at all):
 
 | chunk size | nodes | zoom 2 | zoom 5 | zoom 10 | zoom 20 |
 | --- | --- | --- | --- | --- | --- |
@@ -147,23 +150,70 @@ zoom-out to save 33% of primitives, the trade most likely to cost more than it b
 between 15 and 10, 10 saves 62% more primitives at typical play zoom for three more draw
 calls, which is where players spend their time. 15 is better only at full zoom-out, where
 both figures are large and the primitive budget rather than chunking is the binding
-constraint.
+constraint. This choice among sizes still rests entirely on the geometric sweep above --
+only chunk size 10 has been rendered (see below); 25 / 15 / 8 / 5 have not. Now that the
+draw-call fear below is disproven, size 5 -- geometrically the strongest option at
+typical play zoom -- is worth rendering before assuming 10 is optimal.
 
-**Frame time was NOT measured.** The validator MCP bridge cannot activate the title
-screen's buttons -- clicks at window coordinates, clicks at 1920x1080-space coordinates,
-Enter on the focused button, and Tab-then-Enter were all tried across two sessions, and
-it was confirmed not to be caused by the measurement harness. So no rendered before/after
-exists. The sweep figures are geometric: exact about what culling can discard, silent
-about what it costs. The open risk to name is the 731 draw calls at full zoom-out.
+**The geometric figures above are not accurate in absolute terms, and must not be read as
+predictions of rendered numbers.** The geometric sweep predicted 431,868 visible
+primitives at zoom 10 for chunk size 10; the rendered measurement below shows 5,242,617
+visible primitives at the comparable Home pose -- over 12x higher. Two reasons: the
+geometric probe counted only foliage chunk AABBs, while the rendered `visible_primitives`
+column includes terrain, tokens, water and everything else on screen; and the probe's
+view-box model was too small for the isometric projection, which sees further than the
+vertical `camera.size` extent alone suggests. The sweep remains useful for what it was
+built for -- comparing chunk sizes against each other, where this systematic error
+largely cancels out -- and that comparison is how size 10 was chosen. It is not useful,
+and was never validated, as an absolute prediction of rendered primitive counts, draw
+calls, or frame time.
 
-**The shadow-cascade hypothesis is still untested.** The existing entry below concludes
-that shortening `directional_shadow_max_distance` does nothing because "every caster is
-already inside 30 units" from shadow primitives being byte-identical at 15,586,440 across
-100 / 50 / 30. The hypothesis was that this was an artefact of one map-wide AABB per
-species intersecting every shadow cascade, so nothing could be culled -- and that chunking
-might unlock it. Measuring `shadow_primitives` needs a real render, which the bridge could
-not provide. Chunking has now landed; re-testing the shadow-distance lever against a
-chunked build is an open follow-up.
+### Rendered measurement: chunking vs. unchunked (Sandy Clearing, real render)
+
+The validator bridge's title-screen click blocker, which previously prevented any
+rendered measurement here, is fixed. This is a real render, on the real Sandy Clearing
+map, 1920x1080 viewport pinned via `override.cfg` with `aspect="keep"` (confirmed via the
+perf log's `viewport_width`/`viewport_height` columns), vsync disabled, RTX 3080, debug
+build via the validator bridge. Both configurations were measured at two camera poses,
+Home and full zoom-out, each pose sampled within a single run and segmented by the log's
+`camera_zoom` column.
+
+**Unchunked**, obtained through the real code path by setting the chunk size to 0, which
+`bucket_by_cell` maps to a single bucket per species (this is byte-for-byte the
+pre-chunking one-MultiMesh-per-species behaviour, not a simulation of it):
+
+| pose | frame_ms | FPS | visible prims | visible draws | shadow prims | shadow draws |
+| --- | --- | --- | --- | --- | --- | --- |
+| Home, zoom 13.85 | 9.62 | 104.5 | 8,147,748 | 88 | 6,591,594 | 47 |
+| max zoom out, zoom 20 | 13.42 | 75.8 | 8,159,600 | 89 | 6,603,446 | 48 |
+
+**Chunked at 10 world units** (the shipped value):
+
+| pose | frame_ms | FPS | visible prims | visible draws | shadow prims | shadow draws |
+| --- | --- | --- | --- | --- | --- | --- |
+| Home, zoom 13.85 | 8.41 | 119.6 | 5,242,617 | 767 | 4,421,617 | 264 |
+| max zoom out, zoom 20 | 11.12 | 91.7 | 7,273,964 | 1,145 | 5,980,046 | 370 |
+
+What this confirms:
+
+1. **The premise is confirmed in a rendered build.** Unchunked visible primitives are
+   8,147,748 at Home and 8,159,600 at full zoom-out -- essentially identical despite a
+   large change in what is on screen. That is "one AABB per species is always drawn",
+   now measured rather than argued.
+2. **Chunking is a win at both poses.** Home goes 9.62 -> 8.41 ms, a 1.21 ms / 12.6%
+   improvement (104.5 -> 119.6 FPS). Full zoom-out goes 13.42 -> 11.12 ms, a 2.30 ms /
+   17.1% improvement (75.8 -> 91.7 FPS).
+3. **The draw-call risk did not materialise, and this reverses the previously stated
+   open risk.** The worry was that roughly 731 extra draw calls at full zoom-out might
+   cost more than the primitives they save. Measured, full zoom-out goes from 89 to 1,145
+   visible draw calls -- 13x more -- and still gets 2.30 ms FASTER, the LARGER of the two
+   improvements. The risk was tested and disproven.
+4. **The shadow-cascade hypothesis is CONFIRMED.** Shadow-pass primitives fall from
+   6,591,594 to 4,421,617 at Home, a 33% reduction, while shadow draw calls rise 47 ->
+   264. Chunking demonstrably enables directional-shadow-cascade culling that could not
+   happen before one map-wide AABB per species stopped intersecting every cascade. See
+   the "Known dead ends" entry for `directional_shadow_max_distance` below for what this
+   means for that lever.
 
 **Map load time was NOT measured.** The design that proposed chunking named load time as
 a user-visible cost a frame-time win does not excuse, and that cost has not been
@@ -187,12 +237,21 @@ species before chunking), so it is expected to be small -- but expected is not m
 - **Occlusion culling.** A `MultiMeshInstance3D` cannot be an occludee in the bake
   workflow, and all foliage here is MultiMesh.
 - **PCF shadow filter tuning.** Measured at 0.6 ms. Not worth touching.
-- **Shortening `directional_shadow_max_distance`.** Swept 100/50/30: shadow-pass
-  primitives were byte-identical at 15,586,440 for all three, because every caster is
-  already inside 30 units -- this may have been an artefact of one map-wide AABB per
-  species intersecting every shadow cascade. Spatial chunking has now landed; re-testing
-  this lever against a chunked build is an open follow-up. Recorded in
-  `level_environment_manager.gd`.
+- **Shortening `directional_shadow_max_distance` (SUPERSEDED, no longer a dead end).**
+  Originally swept 100/50/30 and found shadow-pass primitives byte-identical at
+  15,586,440 for all three, concluding "every caster is already inside 30 units" so the
+  lever does nothing. That conclusion was an artefact of unchunked geometry: one map-wide
+  AABB per species intersected every shadow cascade regardless of distance, so nothing
+  could ever be culled by shortening it. Spatial chunking has now demonstrably enabled
+  shadow-pass culling -- see "Spatial foliage chunking" above, where chunking cuts shadow
+  primitives 33% (6,591,594 -> 4,421,617 at the Home pose) purely from frustum culling,
+  with `directional_shadow_max_distance` untouched. Caveat: the old 15,586,440 figure
+  predates the foliage primitive budget (`utils/foliage_budget.gd`), which roughly halved
+  foliage primitives in between, so it is NOT directly comparable to the 6,591,594
+  unchunked figure measured here -- the 33% claim comes from the chunked-vs-unchunked
+  comparison within this measurement, not from comparing against the old number.
+  Re-testing the distance lever against a chunked build is worth doing now that chunking
+  has unblocked it. Recorded in `level_environment_manager.gd`.
 - **`alpha_to_coverage` for the shadow pass.** Does not help (godotengine/godot#84242).
 - **`visibility_range` to skip distant foliage.** Hidden instances stop casting
   directional shadows entirely (godotengine/godot#98993), which changes lighting.
@@ -243,6 +302,13 @@ settings at boot and overrides `override.cfg`. Then per run: load the level, pre
 the overlay is open), wait ~30 s, and read `user://perf_logs/` filtering `elapsed_s > 5`.
 Confirm `primitives` and `draw_calls` match between samples before comparing them; if
 they differ, the camera differed and the pair is invalid.
+
+The validator bridge can now drive this end to end, including the title-screen navigation
+that previously blocked it: `game_state` reports `viewport.window_size`,
+`viewport.viewport_size` and `viewport.hovered_control`; click coordinates are window
+pixels while screenshots are viewport pixels; and `hovered_control` is how you confirm a
+click landed where intended. See `AGENTS.md`'s Validation Bridge troubleshooting list for
+the coordinate-space detail rather than duplicating it here.
 
 Prefer the F3 digit toggles to A/B *inside* one run, then group the CSV by the
 `toggle_*` columns -- that is immune to drift. When a change cannot be toggled at
