@@ -12,6 +12,10 @@ extends RefCounted
 ## a dense forest map, visible-pass primitives read an identical 19,361,510 at every
 ## camera pose tried, and panning changed nothing. Total instance count per map -- not
 ## density per unit area, and not what happens to be in frame -- is the cost driver.
+## Superseded by spatial chunking (ScatterChunker, see docs/PERFORMANCE.md's "Spatial
+## foliage chunking" section): true for every map before chunking landed, now only the
+## worst case, reached at full zoom-out. The budget itself is unaffected -- it still
+## bounds total instance count, which chunking does not change.
 ## See docs/PERFORMANCE.md for the full attribution.
 
 ## Maximum total foliage primitives (triangles) across all scatter species in one map.
@@ -172,10 +176,11 @@ static func plan(species: Dictionary, budget: int = PRIMITIVE_BUDGET) -> Diction
 			instances_after += count
 			continue
 		# plan()'s own contract: never allocate zero to a species that has instances -- see
-		# ScatterGlbUtils._build_multimesh_from_transforms for what a zero allocation would
-		# do to a caller. Costs at most one instance per species against the cap; the
-		# mini(..., count) clamp keeps that floor-to-1 from inventing an instance for a
-		# species that has none.
+		# ScatterGlbUtils.process_scatter_instances for what a zero allocation would do to
+		# a caller (an empty kept_transforms means bucket_by_cell returns no occupied
+		# cells, so no MultiMesh is built at all and the species vanishes). Costs at most
+		# one instance per species against the cap; the mini(..., count) clamp keeps that
+		# floor-to-1 from inventing an instance for a species that has none.
 		var allowed := mini(maxi(int(floor(count * ratio)), 1), count)
 		kept[species_name] = allowed
 		total_after += allowed * per_instance

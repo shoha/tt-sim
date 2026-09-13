@@ -230,9 +230,11 @@ static func _build_shader_material(
 ## real headless probe that MultiMeshInstance3D has no set_surface_override_material
 ## method at all (unlike MeshInstance3D, it does not extend that class -- it only
 ## inherits GeometryInstance3D's single, whole-mesh material_override). Mutating the
-## Mesh resource in place is safe here: by the time this runs, mesh_node (the only
-## other thing that referenced it) is about to be freed, and this Mesh resource isn't
-## shared with anything else in the scene.
+## Mesh resource in place is safe here: this runs once per species, before any of its
+## chunks are built (see ScatterGlbUtils.process_scatter_instances' hoist comment), so
+## up to N per-cell MultiMeshInstance3D nodes end up referencing the one mutated Mesh --
+## safe because every one of them wants the exact same wind material for this species,
+## not because nothing else references it.
 ##
 ## Deliberately per-surface, not a single material_override -- a real Geoscatter asset
 ## can have multiple materials on disjoint faces of one mesh (terrain-paint's docs

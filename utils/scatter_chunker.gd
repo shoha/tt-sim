@@ -20,10 +20,15 @@ extends RefCounted
 ## and counting, per camera zoom, which chunk AABBs intersect the view. Unchunked is 57
 ## nodes and 7,957,006 primitives at EVERY zoom, since one AABB per species is always drawn.
 ##
+## Abridged below to the two zooms the decision turns on, to stay under this file's line
+## length limit -- docs/PERFORMANCE.md's "Spatial foliage chunking" section has the
+## complete sweep, all six chunk sizes across all four zooms swept (2, 5, 10 and 20).
+##
 ##   chunk | nodes | zoom 10 (typical play) | zoom 20 (fully zoomed out)
 ##      25 |   199 |  174 draws / 7,610,722 |  176 draws / 7,843,338
 ##      15 |   656 |   14 draws / 1,151,794 |  284 draws / 6,222,732
 ##      10 |  1335 |   17 draws /   431,868 |  731 draws / 5,932,752
+##       8 |  1885 |    3 draws /   586,032 |  831 draws / 6,143,696
 ##       5 |  2747 |    4 draws /   147,376 | 1193 draws / 5,310,072
 ##
 ## 25 is dominated: barely better than unchunked while tripling node count. 5 adds 1,136
@@ -37,6 +42,13 @@ extends RefCounted
 ## buttons, so no rendered before/after was captured. The figures above are geometric --
 ## exact about what culling can discard, silent about what it costs. The open risk is the
 ## 731 draw calls at full zoom-out. See docs/PERFORMANCE.md for the measurement procedure.
+##
+## Two more risks the design named that the tree does not yet record a fix for:
+## - Node count is now bounded by surviving instance count, not species count. Before this
+##   branch every map built exactly 57 nodes; the reference map now builds about 1,335, and
+##   a sparse enough large map is unbounded in principle. Maps are untrusted network input.
+## - Map load time cost is unmeasured -- see docs/PERFORMANCE.md's "Spatial foliage
+##   chunking" section for what is known about it by inspection instead.
 const CHUNK_SIZE_WORLD_UNITS: float = 10.0
 
 

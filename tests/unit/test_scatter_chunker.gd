@@ -33,9 +33,12 @@ func test_a_position_on_a_cell_boundary_goes_to_the_higher_cell() -> void:
 
 
 func test_cell_for_ignores_y() -> void:
+	# Asserting low == high alone would pass a broken guard that returns Vector2i.ZERO for
+	# both, so pin the actual expected cell too.
 	var low := ScatterChunker.cell_for(Vector3(5.0, -100.0, 5.0), 10.0)
 	var high := ScatterChunker.cell_for(Vector3(5.0, 100.0, 5.0), 10.0)
-	assert_eq(low, high)
+	assert_eq(low, Vector2i(0, 0))
+	assert_eq(high, Vector2i(0, 0))
 
 
 func test_cell_suffix_formats_positive_and_negative_cells() -> void:
@@ -76,16 +79,27 @@ func test_bucket_by_cell_handles_empty_input() -> void:
 
 func test_bucket_by_cell_is_deterministic() -> void:
 	# A map must chunk identically on every load and every machine, or a host and its
-	# clients would disagree about what exists.
-	var transforms: Array[Transform3D] = []
-	for i in 30:
-		transforms.append(_at(float(i) * 1.7, float(i) * -2.3))
-	var first := ScatterChunker.bucket_by_cell(transforms, 10.0)
-	var second := ScatterChunker.bucket_by_cell(transforms, 10.0)
-	assert_eq(first.keys().size(), second.keys().size())
-	for cell in first.keys():
-		assert_true(second.has(cell))
-		assert_eq((first[cell] as Array).size(), (second[cell] as Array).size())
+	# clients would disagree about what exists. Pins the exact cell set and per-cell
+	# counts for a fixed input, rather than only comparing two calls against each other --
+	# there is no state, RNG or iteration-order dependence in bucket_by_cell, so no
+	# implementation could pass the first call and fail the second, which made the
+	# two-calls version of this test unable to fail against a broken implementation.
+	var transforms: Array[Transform3D] = [
+		_at(1.0, 1.0),
+		_at(2.0, 2.0),
+		_at(3.0, 3.0),  # cell (0, 0)
+		_at(15.0, 1.0),
+		_at(16.0, 2.0),  # cell (1, 0)
+		_at(1.0, 25.0),  # cell (0, 2)
+		_at(-5.0, -5.0),
+		_at(-1.0, -1.0),  # cell (-1, -1)
+	]
+	var buckets := ScatterChunker.bucket_by_cell(transforms, 10.0)
+	assert_eq(buckets.keys().size(), 4)
+	assert_eq((buckets[Vector2i(0, 0)] as Array).size(), 3)
+	assert_eq((buckets[Vector2i(1, 0)] as Array).size(), 2)
+	assert_eq((buckets[Vector2i(0, 2)] as Array).size(), 1)
+	assert_eq((buckets[Vector2i(-1, -1)] as Array).size(), 2)
 
 
 func test_bucket_by_cell_degrades_safely_on_a_nonpositive_chunk_size() -> void:
