@@ -38,10 +38,16 @@ extends RefCounted
 ## 15 is the better of the two only at full zoom-out, where both are large and the primitive
 ## budget rather than chunking is the binding constraint.
 ##
-## NOT VALIDATED AGAINST FRAME TIME. The validator bridge cannot activate the title screen's
-## buttons, so no rendered before/after was captured. The figures above are geometric --
-## exact about what culling can discard, silent about what it costs. The open risk is the
-## 731 draw calls at full zoom-out. See docs/PERFORMANCE.md for the measurement procedure.
+## VALIDATED AGAINST FRAME TIME on a real render (Sandy Clearing, 1920x1080, vsync off,
+## RTX 3080, via the validator bridge). Chunked at 10 beats unchunked (chunk size 0, one
+## bucket per species) at both poses tried: Home 9.62 -> 8.41 ms (+12.6% FPS), full
+## zoom-out 13.42 -> 11.12 ms (+17.1% FPS) -- the larger win at the pose with more draw
+## calls. The feared draw-call cost did not materialise: full zoom-out goes 89 -> 1,145
+## visible draw calls and is still faster, not slower. Shadow-pass primitives fall 33% at
+## Home (6,591,594 -> 4,421,617), confirming chunking also enables shadow-cascade culling
+## that one map-wide AABB per species could not. See docs/PERFORMANCE.md's "Spatial
+## foliage chunking" section for the full rendered tables and the geometric sweep that
+## chose this value. Only chunk size 10 has been rendered; 25/15/8/5 remain geometric-only.
 ##
 ## Two more risks the design named that the tree does not yet record a fix for:
 ## - Node count is now bounded by surviving instance count, not species count. Before this
