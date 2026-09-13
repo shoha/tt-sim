@@ -315,3 +315,93 @@ func test_tree_category_multimesh_keeps_shadow_casting_on() -> void:
 	assert_eq(multimesh_instance.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
 
 	scene.free()
+
+
+func _rows(count: int) -> Array:
+	var rows: Array = []
+	for i in count:
+		rows.append([float(i), 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0])
+	return rows
+
+
+func _scatter_scene(species: Dictionary) -> Node3D:
+	# species maps a template node name to a row count.
+	var scene := Node3D.new()
+	var groups := {}
+	for species_name in species.keys():
+		var template := MeshInstance3D.new()
+		template.name = species_name
+		template.mesh = BoxMesh.new()
+		scene.add_child(template)
+		groups[species_name] = _rows(species[species_name])
+	scene.set_meta("tt_gltf_scene_extras", {"tt_scatter_instances": groups})
+	return scene
+
+
+func test_scatter_within_budget_keeps_every_instance() -> void:
+	var scene := _scatter_scene({"GrassBlade": 40})
+	# A BoxMesh is 12 triangles, so 40 instances cost 480 -- inside a 10000 budget.
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 10000)
+	var built := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
+	assert_not_null(built)
+	assert_eq(built.multimesh.instance_count, 40)
+	assert_false(scene.has_meta("tt_foliage_budget_report"))
+	scene.free()
+
+
+func test_scatter_over_budget_is_thinned() -> void:
+	var scene := _scatter_scene({"GrassBlade": 100})
+	# 100 instances x 12 triangles = 1200, against a 600 budget -> half survive.
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 600)
+	var built := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
+	assert_not_null(built)
+	assert_eq(built.multimesh.instance_count, 50)
+	scene.free()
+
+
+func test_thinning_records_a_report_on_the_scene() -> void:
+	# The report leaves utils/ as scene meta because nothing in utils/ may touch an
+	# autoload; level_loader.gd reads it back and shows the toast.
+	var scene := _scatter_scene({"GrassBlade": 100})
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 600)
+	assert_true(scene.has_meta("tt_foliage_budget_report"))
+	var report: Dictionary = scene.get_meta("tt_foliage_budget_report")
+	assert_true(report.thinned)
+	assert_eq(report.instances_before, 100)
+	assert_eq(report.instances_after, 50)
+	scene.free()
+
+
+func test_a_deny_listed_rock_species_is_still_budgeted() -> void:
+	# WindFoliage.classify_category() returns "" for rock/stone/boulder names, but that
+	# decides what sways in the wind, not what costs primitives. Budgeting only tree and
+	# grass would let a map escape the cap by naming its species "rock_grass".
+	var scene := _scatter_scene({"RockCluster": 100})
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 600)
+	var built := scene.get_node_or_null("RockCluster_MultiMesh") as MultiMeshInstance3D
+	assert_not_null(built)
+	assert_eq(built.multimesh.instance_count, 50)
+	scene.free()
+
+
+func test_thinning_is_identical_across_two_loads_of_the_same_map() -> void:
+	var first := _scatter_scene({"GrassBlade": 100})
+	ScatterGlbUtils.process_scatter_instances(first, {}, 600)
+	var second := _scatter_scene({"GrassBlade": 100})
+	ScatterGlbUtils.process_scatter_instances(second, {}, 600)
+	var first_built := first.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
+	var second_built := second.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
+	assert_eq(first_built.multimesh.instance_count, second_built.multimesh.instance_count)
+	first.free()
+	second.free()
+
+
+func test_every_species_is_thinned_when_several_share_the_budget() -> void:
+	var scene := _scatter_scene({"GrassBlade": 100, "PineTree": 100})
+	# 200 instances x 12 = 2400, against 1200 -> each keeps half.
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 1200)
+	var grass := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
+	var pine := scene.get_node_or_null("PineTree_MultiMesh") as MultiMeshInstance3D
+	assert_eq(grass.multimesh.instance_count, 50)
+	assert_eq(pine.multimesh.instance_count, 50)
+	scene.free()
