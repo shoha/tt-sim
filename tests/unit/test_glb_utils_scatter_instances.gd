@@ -341,11 +341,13 @@ func _scatter_scene(species: Dictionary) -> Node3D:
 func test_scatter_within_budget_keeps_every_instance() -> void:
 	var scene := _scatter_scene({"GrassBlade": 40})
 	# A BoxMesh is 12 triangles, so 40 instances cost 480 -- inside a 10000 budget.
-	# Explicit chunk_size large enough to keep the species in one spatial cell. These
-	# budget tests are about thinning, not chunking, so they pin the orthogonal variable
-	# the same way they already pin primitive_budget -- and that keeps their unsuffixed
-	# `<Species>_MultiMesh` lookups valid. Chunking with thinning is covered separately by
-	# test_thinning_and_chunking_compose.
+	# Explicit chunk_size large enough that these all-positive-x fixtures land in one cell
+	# (ScatterChunker.cell_for uses floori, so coordinates straddling zero land in cell -1
+	# and cell 0 at ANY chunk size -- this only works because _rows emits every instance at
+	# x >= 0, z = 0). These budget tests are about thinning, not chunking, so they pin the
+	# orthogonal variable the same way they already pin primitive_budget -- and that keeps
+	# their unsuffixed `<Species>_MultiMesh` lookups valid. Chunking with thinning is
+	# covered separately by test_thinning_and_chunking_compose.
 	ScatterGlbUtils.process_scatter_instances(scene, {}, 10000, 10000.0)
 	var built := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
 	assert_not_null(built)
@@ -417,10 +419,12 @@ func test_every_species_is_thinned_when_several_share_the_budget() -> void:
 
 func test_thinned_single_instance_species_still_frees_its_template_node() -> void:
 	# Pipeline-level regression guard for FoliageBudget.plan()'s floor-to-1: a species whose
-	# proportional share rounds down to zero would otherwise leave
-	# _build_multimesh_from_transforms' early-return path taken, its template MeshInstance3D
-	# never freed, and HeroTree rendering once, standalone, at its Blender template
-	# transform instead of being replaced by a MultiMesh at its one authored position.
+	# proportional share rounds down to zero would otherwise leave kept_transforms empty,
+	# so bucket_by_cell would build no chunk at all for HeroTree -- but
+	# process_scatter_instances frees the template node unconditionally after the per-cell
+	# build loop regardless of how many chunks that loop built, so HeroTree would not
+	# render standalone at its Blender template transform, it would just silently vanish
+	# instead of being replaced by a MultiMesh at its one authored position.
 	#
 	# Both species use a BoxMesh (12 primitives/instance, see _scatter_scene). 1000
 	# GrassBlade + 1 HeroTree = 1001 instances x 12 = 12,012 total primitives. At a 6000
@@ -455,11 +459,22 @@ func _total_instances(scene: Node3D) -> int:
 
 
 func test_a_species_spanning_several_cells_becomes_several_multimesh_nodes() -> void:
-	# 25 instances at x = 0..24 with chunk_size 10 occupy cells 0, 1 and 2.
+	# 25 instances at x = 0..24 with chunk_size 10 occupy cells 0, 1 and 2: x = 0..9 is cell
+	# 0 (10 instances), x = 10..19 is cell 1 (10 instances), x = 20..24 is cell 2 (5
+	# instances). Asserting only node count (3) and total instances (25), as this test used
+	# to, would also pass a 1/1/23 mis-split -- neither number distinguishes an even split
+	# from a lopsided one, so assert each node's own count instead.
 	var scene := _scatter_scene({"GrassBlade": 25})
 	ScatterGlbUtils.process_scatter_instances(scene, {}, 1 << 40, 10.0)
-	assert_eq(_count_multimesh_children(scene), 3)
-	assert_eq(_total_instances(scene), 25)
+	var cell0 := scene.get_node_or_null("GrassBlade_MultiMesh_c0_0") as MultiMeshInstance3D
+	var cell1 := scene.get_node_or_null("GrassBlade_MultiMesh_c1_0") as MultiMeshInstance3D
+	var cell2 := scene.get_node_or_null("GrassBlade_MultiMesh_c2_0") as MultiMeshInstance3D
+	assert_not_null(cell0)
+	assert_not_null(cell1)
+	assert_not_null(cell2)
+	assert_eq(cell0.multimesh.instance_count, 10)
+	assert_eq(cell1.multimesh.instance_count, 10)
+	assert_eq(cell2.multimesh.instance_count, 5)
 	scene.free()
 
 
@@ -545,4 +560,50 @@ func test_thinning_and_chunking_compose() -> void:
 	assert_eq(_instances_for_species(scene, "PineTree"), 50)
 	assert_gt(_chunk_count_for_species(scene, "GrassBlade"), 1)
 	assert_gt(_chunk_count_for_species(scene, "PineTree"), 1)
+	scene.free()
+
+
+func test_pipeline_chunks_along_both_axes_across_the_origin() -> void:
+	# _rows emits every instance at x = i, z = 0, so every other pipeline test in this file
+	# chunks along +X only, with z pinned at 0 -- ScatterChunker's own unit tests cover
+	# negative cells and both axes thoroughly, but nothing here does. _scatter_scene/_rows
+	# cannot express instances straddling the origin on both axes, so this builds the
+	# extras dictionary directly, the same way _scatter_scene does internally.
+	#
+	# At ScatterChunker.CHUNK_SIZE_WORLD_UNITS (10.0): cell_for(-5, 0, -5) is
+	# (floori(-5.0 / 10.0), floori(-5.0 / 10.0)) = (floori(-0.5), floori(-0.5)) = (-1, -1).
+	# cell_for(5, 0, 5) is (floori(5.0 / 10.0), floori(5.0 / 10.0)) = (floori(0.5),
+	# floori(0.5)) = (0, 0). So this also covers ScatterChunker.cell_suffix's hyphenated
+	# node name ("_c-1_-1") landing on a real node via add_child -- cell_suffix's own tests
+	# only ever check the returned string, never a real node name.
+	var built := _make_scene_with_template("GrassBlade")
+	var scene: Node3D = built.scene
+	(
+		scene
+		. set_meta(
+			"tt_gltf_scene_extras",
+			{
+				"tt_scatter_instances":
+				{
+					"GrassBlade":
+					[
+						[-5.0, 0.0, -5.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+						[5.0, 0.0, 5.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+					]
+				}
+			}
+		)
+	)
+
+	ScatterGlbUtils.process_scatter_instances(scene)
+
+	var negative_cell := (
+		scene.get_node_or_null("GrassBlade_MultiMesh_c-1_-1") as MultiMeshInstance3D
+	)
+	var origin_cell := scene.get_node_or_null("GrassBlade_MultiMesh_c0_0") as MultiMeshInstance3D
+	assert_not_null(negative_cell)
+	assert_not_null(origin_cell)
+	assert_eq(negative_cell.multimesh.instance_count, 1)
+	assert_eq(origin_cell.multimesh.instance_count, 1)
+
 	scene.free()

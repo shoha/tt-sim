@@ -181,12 +181,17 @@ static func _build_multimesh_from_transforms(
 	wind_category: String = "",
 	name_suffix: String = ""
 ) -> void:
+	# Defensive, not reachable today: the only caller (process_scatter_instances) builds
+	# valid_transforms from ScatterChunker.bucket_by_cell, which returns only occupied
+	# cells, so every bucket handed here already has at least one transform. Kept as a
+	# guard against a future caller that isn't so careful. Checked before any allocation
+	# so a hit returns having done nothing rather than leaking a MultiMesh.
+	if valid_transforms.is_empty():
+		return
+
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.mesh = mesh_node.mesh
-
-	if valid_transforms.is_empty():
-		return
 
 	multimesh.instance_count = valid_transforms.size()
 	for i in valid_transforms.size():
@@ -211,6 +216,13 @@ static func _build_multimesh_from_transforms(
 		# "grass". WindFoliage.apply_material's base_darken/blade_height gradient replaces
 		# the contact-darkening a real shadow would otherwise have given grass at its base.
 		multimesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# The wind shader displaces vertices beyond the mesh's own AABB (see
+	# shaders/wind_foliage_include.gdshaderinc's wind_sway_vertex_offset, an unnormalized
+	# object-space height times sway_amplitude, up to 0.06 for trees), but Godot culls
+	# against the un-displaced AABB. A map-wide per-species AABB was always big enough to
+	# absorb that overhang; these tight, chunk-sized AABBs are not, so displaced tips can
+	# poke outside their own chunk's cull volume and flicker at the screen edge while panning.
+	multimesh_instance.extra_cull_margin = 1.0
 	scene_root.add_child(multimesh_instance)
 
 

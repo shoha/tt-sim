@@ -27,6 +27,9 @@ MultiMesh per species spanning the whole map. If any part of a species is on scr
 every instance is vertex-processed: visible-pass primitives read an identical 19,361,510
 at every camera pose tried, and panning changed nothing. **Total instance count per map
 is the cost driver, not density per unit area and not what is in frame.**
+**Superseded by spatial chunking (see "Spatial foliage chunking" below): this was true for
+every map before chunking landed, and is now only the worst case, reached at full
+zoom-out.**
 
 ## The foliage primitive budget
 
@@ -92,10 +95,31 @@ consequence of applying them is not.
 
 A `MultiMeshInstance3D` is frustum-culled as a single AABB. Foliage was one map-wide
 MultiMesh per species, so every instance was vertex-processed whenever any part of that
-species was on screen. The unchunked baseline measures **57 nodes and 7,957,006
-primitives at EVERY zoom level** -- the number does not move, because one AABB per
-species is always drawn. That is the premise the whole sub-project rests on, now
-confirmed directly.
+species was on screen. All the figures below come from a probe that replays the real
+pipeline -- `FoliageBudget.plan`, `FoliageBudget.select_indices` and
+`ScatterChunker.bucket_by_cell`, the same functions `process_scatter_instances` calls --
+against the real map, then counts per camera zoom which chunk AABBs intersect the view.
+At the unchunked baseline (one bucket per species) that probe puts every camera zoom at
+the same **57 nodes and 7,957,006 primitives** -- the number does not move, because one
+AABB per species is always drawn regardless of what the camera can actually see. That is
+the premise the whole sub-project rests on.
+
+Why chunking can help at all: the camera is orthographic, so `camera.size` is the
+vertical world extent of what it sees, and the scatter footprint is a 50 x 50 world-unit
+square. At a 16:9 screen aspect, visible ground area is a small and shrinking fraction of
+that footprint as the player zooms in -- these are lower bounds, since the 45-degree
+isometric view makes the true visible ground footprint deeper than the vertical extent
+alone suggests:
+
+| `camera.size` | Visible ground | % of the 50x50 footprint |
+| --- | --- | --- |
+| 2.0 (max zoom in) | 3.6 x 2.0 | 0.3% |
+| 5.0 | 8.9 x 5.0 | 1.8% |
+| 10.0 | 17.8 x 10.0 | 7.1% |
+| 20.0 (max zoom out) | 35.6 x 20.0 | 28.4% |
+
+One map-wide AABB per species cannot exploit any of that headroom; splitting into chunks
+is what lets frustum culling discard the part of the footprint the player cannot see.
 
 The map has a literal clearing at its centre: zero surviving scatter instances within
 plus or minus 10 units of the origin (16% of the map area), and only 4.8% of instances
@@ -105,7 +129,8 @@ primitives. A coarse per-species AABB covers the clearing even though nothing is
 fine chunks around an empty clearing are culled outright.
 
 The sweep (nodes, then visible draws/primitives per camera zoom, across the 50 x 50
-reference map):
+reference map). **These are geometric figures -- counts of which chunk AABBs the probe
+found intersecting the view -- not rendered output from a GPU:**
 
 | chunk size | nodes | zoom 2 | zoom 5 | zoom 10 | zoom 20 |
 | --- | --- | --- | --- | --- | --- |
@@ -139,6 +164,14 @@ species intersecting every shadow cascade, so nothing could be culled -- and tha
 might unlock it. Measuring `shadow_primitives` needs a real render, which the bridge could
 not provide. Chunking has now landed; re-testing the shadow-distance lever against a
 chunked build is an open follow-up.
+
+**Map load time was NOT measured.** The design that proposed chunking named load time as
+a user-visible cost a frame-time win does not excuse, and that cost has not been
+measured on this branch. What is known by inspection: per-instance work is unchanged
+(the same transforms are read and the same number of `MultiMesh.set_instance_transform`
+calls happen either way), and the added cost is roughly 1,278 extra `MultiMesh`
+allocations and node additions on the reference map (1,335 chunk nodes built vs. 57
+species before chunking), so it is expected to be small -- but expected is not measured.
 
 ## Known dead ends -- do not revisit without new evidence
 
