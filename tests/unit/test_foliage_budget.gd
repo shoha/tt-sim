@@ -57,3 +57,73 @@ func test_ignores_non_triangle_surfaces() -> void:
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
 	assert_eq(FoliageBudget.primitives_per_instance(mesh), 0)
+
+
+func test_keeps_every_index_when_keep_meets_or_exceeds_count() -> void:
+	assert_eq(Array(FoliageBudget.select_indices(5, 9, "x")), [0, 1, 2, 3, 4])
+	assert_eq(Array(FoliageBudget.select_indices(5, 5, "x")), [0, 1, 2, 3, 4])
+
+
+func test_keeps_nothing_when_keep_is_zero_or_negative() -> void:
+	assert_eq(FoliageBudget.select_indices(5, 0, "x").size(), 0)
+	assert_eq(FoliageBudget.select_indices(5, -3, "x").size(), 0)
+
+
+func test_keeps_nothing_when_count_is_zero() -> void:
+	assert_eq(FoliageBudget.select_indices(0, 4, "x").size(), 0)
+
+
+func test_returns_exactly_keep_indices() -> void:
+	assert_eq(FoliageBudget.select_indices(1000, 250, "GrassBlade").size(), 250)
+
+
+func test_indices_are_distinct_and_in_range() -> void:
+	var picked := FoliageBudget.select_indices(200, 50, "GrassBlade")
+	var seen := {}
+	for index in picked:
+		assert_true(index >= 0 and index < 200, "index %d out of range" % index)
+		assert_false(seen.has(index), "index %d appeared twice" % index)
+		seen[index] = true
+
+
+func test_is_deterministic_for_the_same_seed_source() -> void:
+	# Load-bearing: a map must thin identically on every load and on every machine, or
+	# its appearance would change between sessions and between a host and its clients.
+	var first := FoliageBudget.select_indices(500, 120, "GrassBlade")
+	var second := FoliageBudget.select_indices(500, 120, "GrassBlade")
+	assert_eq(Array(first), Array(second))
+
+
+func test_varies_with_the_seed_source() -> void:
+	# Different species must not thin to the same index pattern in lockstep.
+	var grass := FoliageBudget.select_indices(500, 120, "GrassBlade")
+	var pine := FoliageBudget.select_indices(500, 120, "PineTree")
+	assert_ne(Array(grass), Array(pine))
+
+
+func test_spreads_across_the_whole_range() -> void:
+	# Scatter transforms arrive in brush-stroke or row order, so dropping a suffix would
+	# leave a bald patch. Every quarter of the range must still be represented.
+	var picked := FoliageBudget.select_indices(100, 20, "GrassBlade")
+	var quartiles := [0, 0, 0, 0]
+	for index in picked:
+		quartiles[index / 25] += 1
+	for quartile in quartiles:
+		assert_gt(quartile, 0, "a quarter of the range was dropped entirely: %s" % [quartiles])
+
+
+func test_pins_the_current_selection_algorithm() -> void:
+	# Golden values, intentionally brittle. Changing the seeding or the shuffle silently
+	# changes which instances survive in every existing map, so that must never happen as
+	# an accident of refactoring -- if this test fails, the change was deliberate or it
+	# is a bug, and either way someone has to look.
+	assert_eq(Array(FoliageBudget.select_indices(10, 4, "GrassBlade")), [0, 1, 3, 5])
+	assert_eq(Array(FoliageBudget.select_indices(10, 4, "PineTree")), [0, 4, 5, 6])
+
+
+func test_stable_hash_is_fnv1a_and_not_the_engines_hash() -> void:
+	# FNV-1a's defining property: the empty string hashes to the offset basis. Asserted
+	# so the seeding cannot be quietly swapped for Godot's own hash(), which is an engine
+	# implementation detail and would tie every map's appearance to an engine version.
+	assert_eq(FoliageBudget._stable_hash(""), 2166136261)
+	assert_eq(FoliageBudget._stable_hash("GrassBlade"), 445990121)

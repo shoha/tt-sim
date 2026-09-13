@@ -25,6 +25,11 @@ extends RefCounted
 ## out of does not bound anything.
 const PRIMITIVE_BUDGET: int = 8_000_000
 
+# FNV-1a 32-bit parameters. GDScript ints are 64-bit, so every step masks back to 32.
+const _FNV_OFFSET_BASIS: int = 0x811c9dc5
+const _FNV_PRIME: int = 16777619
+const _UINT32_MASK: int = 0xffffffff
+
 
 ## Triangles in one instance of `mesh`, summed over its triangle surfaces.
 ##
@@ -51,3 +56,52 @@ static func primitives_per_instance(mesh: Mesh) -> int:
 		else:
 			total += array_mesh.surface_get_array_len(surface) / 3
 	return total
+
+
+## Which `keep` of `count` instances survive, as ascending indices.
+##
+## Seeded shuffle then truncate, rather than a suffix drop or a fixed stride. Scatter
+## transform arrays come out of the authoring tool in brush-stroke or row order, so
+## dropping the tail would carve a bald patch out of the map and a fixed stride could
+## beat against a planted grid into visible stripes. A shuffle is unbiased with respect
+## to whatever ordering the exporter happened to use.
+##
+## Deterministic by construction: the seed comes only from `seed_source` (the species
+## name), never from time or engine RNG state, so a map thins identically on every load
+## and on every machine -- which a host and its clients both depend on.
+##
+## WARNING: changing the seeding or the shuffle here changes which instances survive in
+## every map that already exists. test_pins_the_current_selection_algorithm guards it.
+static func select_indices(count: int, keep: int, seed_source: String) -> PackedInt32Array:
+	if count <= 0 or keep <= 0:
+		return PackedInt32Array()
+	var order := PackedInt32Array()
+	order.resize(count)
+	for i in count:
+		order[i] = i
+	if keep >= count:
+		return order
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _stable_hash(seed_source)
+	# Partial Fisher-Yates: only the first `keep` slots need to be settled.
+	for i in keep:
+		var j := rng.randi_range(i, count - 1)
+		var swapped := order[i]
+		order[i] = order[j]
+		order[j] = swapped
+	var picked := order.slice(0, keep)
+	# Ascending so the surviving instances keep their original relative order.
+	picked.sort()
+	return picked
+
+
+## FNV-1a over `text`'s UTF-8 bytes. Deliberately not Godot's built-in hash(): this value
+## decides which instances survive in every imported map, so it has to stay identical
+## across engine versions and platforms, and hash() is an engine implementation detail
+## under no such guarantee.
+static func _stable_hash(text: String) -> int:
+	var hash_value := _FNV_OFFSET_BASIS
+	for byte in text.to_utf8_buffer():
+		hash_value = (hash_value ^ byte) & _UINT32_MASK
+		hash_value = (hash_value * _FNV_PRIME) & _UINT32_MASK
+	return hash_value
