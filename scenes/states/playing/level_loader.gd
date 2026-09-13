@@ -362,6 +362,21 @@ func _finalize_map_loading(map: Node3D) -> void:
 	# Configure measure tool and grid with scale settings from level data
 	_configure_measure_tool()
 	_configure_grid()
+	_notify_if_foliage_was_thinned(map)
+
+
+## Shows one toast if the loaded map's scattered foliage was thinned to fit the fixed
+## primitive budget. The report is left on the map node as meta by
+## ScatterGlbUtils.process_scatter_instances -- utils/ scripts must not reference
+## UIManager, so the notification has to happen here, at the single point both the sync
+## and async load paths converge on. Only user:// imported maps carry scatter data at
+## all, so built-in res:// maps never reach the `if`.
+func _notify_if_foliage_was_thinned(map: Node3D) -> void:
+	if not map or not map.has_meta(ScatterGlbUtils.FOLIAGE_BUDGET_REPORT_META):
+		return
+	var report: Dictionary = map.get_meta(ScatterGlbUtils.FOLIAGE_BUDGET_REPORT_META)
+	# Longer than show_warning's 3 s default: this names two numbers worth reading.
+	UIManager.show_toast(FoliageBudget.describe(report), UIManager.TOAST_WARNING, 6.0)
 
 
 ## Load a map file synchronously using the unified GlbUtils.load_map pipeline.
