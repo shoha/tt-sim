@@ -212,3 +212,15 @@ func test_describe_names_the_before_and_after_counts_and_the_reason() -> void:
 	assert_string_contains(message, "400")
 	assert_string_contains(message, "1,000")
 	assert_string_contains(message, "performance")
+
+
+func test_a_species_is_never_allocated_zero_instances() -> void:
+	# A zero allocation would leave ScatterGlbUtils' template node unfreed and rendering at
+	# a stray transform, so a species with instances always keeps at least one even when its
+	# proportional share rounds to nothing.
+	var report := FoliageBudget.plan(
+		{"Grass": _species(1000, 10), "HeroTree": _species(1, 100)}, 3000
+	)
+	assert_true(report.thinned)
+	assert_eq(report.kept["HeroTree"], 1)
+	assert_gt(report.kept["Grass"], 0)

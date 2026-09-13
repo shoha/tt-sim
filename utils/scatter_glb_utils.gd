@@ -111,8 +111,9 @@ static func process_scatter_instances(
 
 
 ## Builds one MultiMeshInstance3D (sharing mesh_node's Mesh, and by default its
-## surface material(s) too) from a flat array of [lx, ly, lz, qx, qy, qz, qw, sx, sy,
-## sz] rows, then removes mesh_node. `wind_category` ("" for none, otherwise a
+## surface material(s) too) from an array of already-converted Transform3D values (see
+## _collect_valid_transforms for the row format they started as), then removes
+## mesh_node. `wind_category` ("" for none, otherwise a
 ## WindFoliage.PRESETS key from WindFoliage.classify_category) swaps in a per-surface
 ## wind-sway ShaderMaterial instead -- see WindFoliage.apply_material. The built node
 ## is also tagged with a "wind_foliage_category" meta of this same value, letting
@@ -188,7 +189,8 @@ static func _build_multimesh_from_transforms(
 	mesh_node.free()
 
 
-## Rows -> Transform3D, dropping any row _row_to_transform rejects. Split out of
+## Converts a flat array of [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] rows to Transform3D,
+## dropping any row _row_to_transform rejects. Split out of
 ## _build_multimesh_from_transforms so process_scatter_instances' first pass can count a
 ## species' real surviving instances before the budget is allocated.
 static func _collect_valid_transforms(rows: Array) -> Array[Transform3D]:
