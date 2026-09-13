@@ -105,3 +105,86 @@ static func _stable_hash(text: String) -> int:
 		hash_value = (hash_value ^ byte) & _UINT32_MASK
 		hash_value = (hash_value * _FNV_PRIME) & _UINT32_MASK
 	return hash_value
+
+
+## Decides how many instances of each scatter species to keep.
+##
+## `species` maps a species name to {"count": int, "primitives_per_instance": int}.
+## Returns {"kept": {name: int}, "thinned": bool, "total_before": int, "total_after": int,
+## "instances_before": int, "instances_after": int}, where "kept" always names every
+## species given, thinned or not.
+##
+## Allocation is proportional: every species keeps the same fraction of its instances, so
+## the map's visual composition survives instead of one species being sacrificed to save
+## another. A known trade-off is that a deliberately sparse hero species thins by the same
+## fraction as dense filler -- per-species importance would need authoring metadata that
+## does not exist.
+##
+## `budget` is a parameter only so tests can drive thinning at counts a test can build;
+## production always takes the PRIMITIVE_BUDGET default. Nothing user-facing sets it, and
+## nothing should: the budget is fixed by design.
+static func plan(species: Dictionary, budget: int = PRIMITIVE_BUDGET) -> Dictionary:
+	var kept := {}
+	var total_before := 0
+	var instances_before := 0
+	for species_name in species.keys():
+		var entry: Dictionary = species[species_name]
+		var count: int = entry.get("count", 0)
+		kept[species_name] = count
+		instances_before += count
+		total_before += count * int(entry.get("primitives_per_instance", 0))
+
+	var report := {
+		"kept": kept,
+		"thinned": false,
+		"total_before": total_before,
+		"total_after": total_before,
+		"instances_before": instances_before,
+		"instances_after": instances_before,
+	}
+	if total_before <= budget or total_before <= 0:
+		return report
+
+	var ratio := float(budget) / float(total_before)
+	var total_after := 0
+	var instances_after := 0
+	for species_name in species.keys():
+		var entry: Dictionary = species[species_name]
+		var count: int = entry.get("count", 0)
+		var per_instance: int = entry.get("primitives_per_instance", 0)
+		if per_instance <= 0:
+			# Cost unknown, so thinning buys nothing measurable. Keep all of it.
+			instances_after += count
+			continue
+		var allowed := int(floor(count * ratio))
+		kept[species_name] = allowed
+		total_after += allowed * per_instance
+		instances_after += allowed
+
+	report.thinned = true
+	report.total_after = total_after
+	report.instances_after = instances_after
+	return report
+
+
+## One-line explanation of a thinning, for the toast the player sees. Pure so the wording
+## is unit-testable; ScatterGlbUtils stashes the report and a scenes/ script shows it,
+## because nothing in utils/ may reference an autoload.
+static func describe(report: Dictionary) -> String:
+	var before: int = report.get("instances_before", 0)
+	var after: int = report.get("instances_after", 0)
+	return (
+		"This map's foliage was thinned for performance: %s of %s scattered instances kept."
+		% [_with_thousands_separators(after), _with_thousands_separators(before)]
+	)
+
+
+## 1234567 -> "1,234,567". String.num_int64() has no grouping option and %d does not group.
+static func _with_thousands_separators(value: int) -> String:
+	var digits := str(absi(value))
+	var grouped := ""
+	for offset in digits.length():
+		if offset > 0 and offset % 3 == 0:
+			grouped = "," + grouped
+		grouped = digits[digits.length() - 1 - offset] + grouped
+	return "-" + grouped if value < 0 else grouped

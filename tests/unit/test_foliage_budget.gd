@@ -127,3 +127,88 @@ func test_stable_hash_is_fnv1a_and_not_the_engines_hash() -> void:
 	# implementation detail and would tie every map's appearance to an engine version.
 	assert_eq(FoliageBudget._stable_hash(""), 2166136261)
 	assert_eq(FoliageBudget._stable_hash("GrassBlade"), 445990121)
+
+
+func _species(count: int, per_instance: int) -> Dictionary:
+	return {"count": count, "primitives_per_instance": per_instance}
+
+
+func test_a_map_under_budget_is_left_alone() -> void:
+	var report := FoliageBudget.plan({"Grass": _species(1000, 10)}, 100000)
+	assert_false(report.thinned)
+	assert_eq(report.kept["Grass"], 1000)
+	assert_eq(report.total_before, 10000)
+	assert_eq(report.total_after, 10000)
+
+
+func test_a_map_exactly_on_budget_is_left_alone() -> void:
+	var report := FoliageBudget.plan({"Grass": _species(100, 10)}, 1000)
+	assert_false(report.thinned)
+	assert_eq(report.kept["Grass"], 100)
+
+
+func test_a_map_over_budget_is_thinned_to_within_budget() -> void:
+	var report := FoliageBudget.plan({"Grass": _species(1000, 10)}, 4000)
+	assert_true(report.thinned)
+	assert_lte(report.total_after, 4000)
+	assert_eq(report.kept["Grass"], 400)
+
+
+func test_allocation_is_proportional_across_equal_species() -> void:
+	# Same primitive load each, so each keeps the same fraction -- the map's composition
+	# is preserved rather than one species being sacrificed to save another.
+	var report := FoliageBudget.plan(
+		{"Grass": _species(1000, 10), "Fern": _species(1000, 10)}, 10000
+	)
+	assert_true(report.thinned)
+	assert_eq(report.kept["Grass"], 500)
+	assert_eq(report.kept["Fern"], 500)
+
+
+func test_allocation_scales_a_heavier_species_by_the_same_fraction() -> void:
+	# Trees cost 10x per instance here. Both keep half their instances; the tree species
+	# still surrenders 10x as many primitives, which is the point.
+	var report := FoliageBudget.plan(
+		{"Grass": _species(1000, 10), "Tree": _species(1000, 100)}, 55000
+	)
+	assert_true(report.thinned)
+	assert_eq(report.kept["Grass"], 500)
+	assert_eq(report.kept["Tree"], 500)
+
+
+func test_a_species_with_no_countable_primitives_is_never_thinned() -> void:
+	# primitives_per_instance of 0 means the mesh's cost could not be determined. Thinning
+	# it would be silent content loss for no measurable saving.
+	var report := FoliageBudget.plan(
+		{"Grass": _species(1000, 10), "Unknown": _species(50, 0)}, 4000
+	)
+	assert_true(report.thinned)
+	assert_eq(report.kept["Unknown"], 50)
+	assert_eq(report.kept["Grass"], 400)
+
+
+func test_an_empty_species_set_is_not_thinned() -> void:
+	var report := FoliageBudget.plan({}, 4000)
+	assert_false(report.thinned)
+	assert_eq(report.total_before, 0)
+	assert_eq(report.instances_before, 0)
+
+
+func test_reports_instance_counts_before_and_after() -> void:
+	var report := FoliageBudget.plan({"Grass": _species(1000, 10), "Fern": _species(500, 10)}, 7500)
+	assert_eq(report.instances_before, 1500)
+	assert_eq(report.instances_after, 750)
+
+
+func test_defaults_to_the_shipped_budget() -> void:
+	# Called without an explicit budget, a map far under PRIMITIVE_BUDGET is untouched.
+	var report := FoliageBudget.plan({"Grass": _species(10, 10)})
+	assert_false(report.thinned)
+
+
+func test_describe_names_the_before_and_after_counts_and_the_reason() -> void:
+	var report := FoliageBudget.plan({"Grass": _species(1000, 10)}, 4000)
+	var message := FoliageBudget.describe(report)
+	assert_string_contains(message, "400")
+	assert_string_contains(message, "1,000")
+	assert_string_contains(message, "performance")
