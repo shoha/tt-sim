@@ -318,6 +318,11 @@ independent layers.
   tuning for this game's geometry, not artistic dials, so they are not exposed
   on `SunSettings` or in the panel.
 
+Shadow cost was measured directly rather than estimated: sun shadows are 41% of the
+frame on a dense forest map, but PCF filter quality is only 0.6 ms of it and shortening
+`directional_shadow_max_distance` changes nothing at all (every caster is already inside
+30 units). Grass no longer casts shadows for this reason. See `docs/PERFORMANCE.md`.
+
 ### Key Files
 
 | File | Purpose |
