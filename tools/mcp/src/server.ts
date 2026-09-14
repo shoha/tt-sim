@@ -132,7 +132,7 @@ server.tool(
 
 server.tool(
   "game_screenshot",
-  "Capture a screenshot of the current game viewport. Returns the image.",
+  "Capture a screenshot of the game window. Returns the image.",
   {},
   async () => {
     const err = requireBridge();
@@ -187,10 +187,10 @@ server.tool(
 
 server.tool(
   "game_click",
-  "Click at viewport coordinates.",
+  "Click at window coordinates.",
   {
-    x: z.number().describe("X coordinate in viewport pixels"),
-    y: z.number().describe("Y coordinate in viewport pixels"),
+    x: z.number().describe("X coordinate in window pixels (same space as game_screenshot pixels)"),
+    y: z.number().describe("Y coordinate in window pixels (same space as game_screenshot pixels)"),
     button: z
       .enum(["left", "right", "middle"])
       .default("left")
@@ -209,12 +209,12 @@ server.tool(
 
 server.tool(
   "game_drag",
-  "Drag from one viewport position to another.",
+  "Drag from one window position to another.",
   {
-    x1: z.number().describe("Start X"),
-    y1: z.number().describe("Start Y"),
-    x2: z.number().describe("End X"),
-    y2: z.number().describe("End Y"),
+    x1: z.number().describe("Start X, in window pixels (same space as game_screenshot pixels)"),
+    y1: z.number().describe("Start Y, in window pixels (same space as game_screenshot pixels)"),
+    x2: z.number().describe("End X, in window pixels (same space as game_screenshot pixels)"),
+    y2: z.number().describe("End Y, in window pixels (same space as game_screenshot pixels)"),
   },
   async ({ x1, y1, x2, y2 }) => {
     const err = requireBridge();
@@ -248,10 +248,10 @@ server.tool(
 
 server.tool(
   "game_scroll",
-  "Scroll the mouse wheel at a viewport position.",
+  "Scroll the mouse wheel at a window position.",
   {
-    x: z.number().describe("X coordinate"),
-    y: z.number().describe("Y coordinate"),
+    x: z.number().describe("X coordinate, in window pixels (same space as game_screenshot pixels)"),
+    y: z.number().describe("Y coordinate, in window pixels (same space as game_screenshot pixels)"),
     delta: z.number().describe("Scroll amount (positive = zoom in, negative = zoom out)"),
   },
   async ({ x, y, delta }) => {
