@@ -76,6 +76,27 @@ static func compute_aspect_corrected_size(
 	return CameraController.compute_aspect_corrected_size(height, vp_size, reference_aspect)
 
 
+## Whether [param event] must skip the active modal world tool (sun gizmo,
+## measure tool) in _input() and be left for the GUI.
+##
+## A mouse button landing on a UI control belongs to that control -- the release
+## every bit as much as the press. Godot's Slider clears its drag grab only when
+## its own gui_input() sees the button-up (scene/gui/slider.cpp), so a release
+## consumed out here leaves the slider tracking the pointer with the button up,
+## until something else happens to drop the viewport's mouse focus. That was the
+## Visuals drawer's stuck sliders while Aim Sun was on.
+##
+## [param tool_is_dragging] is the one exception: a drag that began out on the
+## 3D view owns the whole gesture and still needs its release, even if the
+## pointer has since crossed over a panel.
+static func should_bypass_world_tool(
+	event: InputEvent, over_gui: bool, tool_is_dragging: bool
+) -> bool:
+	if event is not InputEventMouseButton:
+		return false
+	return over_gui and not tool_is_dragging
+
+
 func _ready() -> void:
 	_action_history = GameplayActionHistory.new()
 	_action_history.name = "GameplayActionHistory"
@@ -202,8 +223,7 @@ func _input(event: InputEvent) -> void:
 	# (the two are mutually exclusive, so at most one is ever active). Skip
 	# mouse buttons over GUI so the edit drawer's own controls still work.
 	if _sun_gizmo and _sun_gizmo.is_active():
-		var is_gizmo_click: bool = event is InputEventMouseButton and event.pressed
-		if is_gizmo_click and _is_mouse_over_gui():
+		if should_bypass_world_tool(event, _is_mouse_over_gui(), _sun_gizmo.is_dragging()):
 			pass
 		elif _sun_gizmo.handle_input(event):
 			get_viewport().set_input_as_handled()
@@ -213,9 +233,9 @@ func _input(event: InputEvent) -> void:
 	# handle_input returns true if the event was consumed (clicks on terrain, etc.).
 	# Mouse motion is never consumed — it always falls through to camera handling.
 	# Skip mouse button events over GUI so UI elements (asset browser, etc.) still work.
+	# The tool has no cross-GUI drag of its own, so it never claims a release.
 	if _measure_tool and _measure_tool.is_active():
-		var is_click: bool = event is InputEventMouseButton and event.pressed
-		if is_click and _is_mouse_over_gui():
+		if should_bypass_world_tool(event, _is_mouse_over_gui(), false):
 			pass
 		elif _measure_tool.handle_input(event):
 			get_viewport().set_input_as_handled()
