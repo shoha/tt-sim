@@ -300,6 +300,7 @@ The bridge only activates when Godot is launched with `-- --validation-bridge`. 
 - **Click coordinates are WINDOW pixels; screenshots are VIEWPORT pixels.** They only coincide when the two sizes match. With an `override.cfg` pinning `aspect="keep"`, a 1920x1080 viewport inside a 1278x1360 window is letterboxed: scale 0.6656 with ~320px black bars top and bottom, so screenshot `(x, y)` becomes window `(x, y + 320)`. Read both sizes from `game_state` and convert, or you will click empty space and conclude the bridge is broken
 - **A click "not working" may have worked**: `app_state` only changes on real state transitions, and `_get_scene_tree()` walks `get_tree().current_scene`, so anything parented to `get_tree().root` (dialogs, including the level browser) is invisible to it. Take a screenshot before concluding a click failed
 - **`game_interact` steps time out after 30 s total**: split long waits across several calls
+- **The pause menu IS testable.** `Escape` used to appear to hang the bridge, because `scenes/root.gd` sets `get_tree().paused = true` and that stopped `_process` on the bridge autoload. It now runs with `PROCESS_MODE_ALWAYS`, so pressing `Escape` and driving the pause menu and Settings screen works normally. If a future autoload needs to stay live while paused, it needs the same process mode
 
 ## CI/CD
 
