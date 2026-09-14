@@ -20,6 +20,13 @@ var _active: bool = false
 func _ready() -> void:
 	if not "--validation-bridge" in OS.get_cmdline_user_args():
 		return
+	# Keep polling while the SceneTree is paused. Entering the pause overlay sets
+	# get_tree().paused = true (scenes/root.gd), which stops _process on every node using
+	# the default inherited process mode -- including this one. The bridge would then stop
+	# servicing its socket for as long as the game was paused, so every command after an
+	# Escape keypress timed out and the bridge looked hung. That made the entire pause menu,
+	# and the settings screen behind it, untestable through this harness.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_active = true
 	_server = TCPServer.new()
 	var err := _server.listen(PORT, HOST)
