@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { ProcessManager } from "./process-manager.js";
+import type { BridgeResponse } from "./bridge-client.js";
 
 const pm = new ProcessManager();
 
@@ -272,7 +273,7 @@ server.tool(
     const err = requireBridge();
     if (err) return { content: [{ type: "text" as const, text: err }], isError: true };
 
-    let result;
+    let result: BridgeResponse;
     switch (action) {
       case "freeze":
         result = await pm.bridge.send({ cmd: "freeze" });
@@ -308,7 +309,8 @@ server.tool(
   "Evaluate a GDScript expression against the running game's current scene and return the value. " +
     "Use this to read state that game_state does not report, instead of editing the bridge. " +
     "Expressions cannot declare variables, loop, or assign, but can read properties and call " +
-    "methods, e.g. 'find_child(\"GameMap\").camera_node.size' or 'GameState.get_all_token_states().size()'.",
+    "methods, e.g. 'find_child(\"GameMap\", true, false).camera_node.size' or " +
+    "'get_node(\"/root/GameState\").get_all_token_states().size()'.",
   {
     expression: z.string().describe("GDScript expression, evaluated with the current scene as self"),
   },
@@ -326,9 +328,11 @@ server.tool(
 
 server.tool(
   "game_controls",
-  "List every Control node in the running game with its viewport-space rect and centre point. " +
-    "Walks from the window root, so dialogs and overlays parented outside the current scene are " +
-    "included (game_state's scene_tree does not see those). Use this to find what to click.",
+  "List Control nodes in the running game with their viewport-space rect and centre point, up " +
+    "to 200 (the walk stops there with no truncation marker in the response, so a control you " +
+    "expect but don't see may be past the cap rather than absent). Walks from the window root, " +
+    "so dialogs and overlays parented outside the current scene are included (game_state's " +
+    "scene_tree does not see those). Use this to find what to click.",
   {
     visibleOnly: z
       .boolean()
@@ -351,7 +355,9 @@ server.tool(
   "game_click_control",
   "Click a Control by node name, node path, or exact button text. Prefer this over game_click: " +
     "it needs no coordinate conversion, so it cannot miss because of the viewport/window size " +
-    "mismatch. Fails loudly when the query matches nothing or is ambiguous.",
+    "mismatch. Fails loudly when the query matches nothing or is ambiguous. Cannot click items " +
+    "inside an open OptionButton popup menu (a Godot PopupMenu is a Window, not a Control) -- " +
+    "use game_key with arrow keys and Enter for those.",
   {
     query: z.string().describe("Node name, node path, or exact button/label text"),
     button: z.enum(["left", "right", "middle"]).default("left").describe("Mouse button"),
