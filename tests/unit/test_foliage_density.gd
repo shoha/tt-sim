@@ -37,6 +37,18 @@ func _visible_total(root: Node3D) -> int:
 	return total
 
 
+## Recurses, unlike _visible_total -- used only by the nested-chunk test below, so a future
+## regression in recursion still fails loudly on every flat-fixture test rather than being
+## silently masked by a helper that always recurses.
+func _visible_total_recursive(node: Node) -> int:
+	var total := 0
+	for child in node.get_children():
+		if child is MultiMeshInstance3D:
+			total += (child as MultiMeshInstance3D).multimesh.visible_instance_count
+		total += _visible_total_recursive(child)
+	return total
+
+
 func test_a_map_under_budget_shows_every_instance() -> void:
 	# 100 instances of a 12-primitive BoxMesh is 1,200 -- far inside any real budget.
 	var root := _scene_with({"GrassBlade": [50, 50]})
@@ -52,6 +64,28 @@ func test_a_map_over_budget_is_reduced_to_fit() -> void:
 	var report := FoliageDensityController.apply(root, 600)
 	assert_true(report.thinned)
 	assert_eq(_visible_total(root), 50)
+	root.free()
+
+
+func test_chunks_nested_below_the_root_are_still_applied() -> void:
+	# The production topology: ScatterGlbUtils parents chunks under the GLB scene root,
+	# level_loader parents that root under map_container as "LevelMap", and
+	# GameMap.apply_foliage_density passes map_container. So every chunk sits two levels
+	# down. A write-back that only resolved direct children would leave them untouched at
+	# -1 here while still counting them into the plan -- which is exactly the bug this
+	# test exists to prevent, and which a flat fixture cannot see.
+	#
+	# 100 instances of a 12-primitive BoxMesh is 1,200 primitives against a 600 budget:
+	# ratio 600/1200 = 0.5, so 50 of the 100 instances stay visible.
+	var root := Node3D.new()
+	var level_map := Node3D.new()
+	level_map.name = "LevelMap"
+	root.add_child(level_map)
+	_chunk(level_map, "GrassBlade_MultiMesh_c0_0", 50, "grass")
+	_chunk(level_map, "GrassBlade_MultiMesh_c1_0", 50, "grass")
+	var report := FoliageDensityController.apply(root, 600)
+	assert_true(report.thinned)
+	assert_eq(_visible_total_recursive(root), 50)
 	root.free()
 
 
@@ -96,8 +130,9 @@ func test_a_species_is_never_reduced_to_zero_instances() -> void:
 
 
 func test_nodes_without_the_foliage_meta_are_ignored() -> void:
-	# -1 is Godot's "draw every instance" default, so asserting it here means the node was
-	# never touched at all -- which is the invariant, not an incidental value.
+	# Asserting "unchanged from whatever it was before apply() ran" states the real
+	# invariant directly -- this node was never touched at all -- rather than via an
+	# engine default constant that could shift across Godot versions.
 	#
 	# This matters beyond tidiness: MeshInstancingUtils collapses duplicate static map
 	# meshes into MultiMeshInstance3D nodes under the same map_container this controller
@@ -113,7 +148,8 @@ func test_nodes_without_the_foliage_meta_are_ignored() -> void:
 	mm.instance_count = 100
 	other.multimesh = mm
 	root.add_child(other)
+	var baseline := mm.visible_instance_count
 	var report := FoliageDensityController.apply(root, 600)
 	assert_false(report.thinned)
-	assert_eq(mm.visible_instance_count, -1)
+	assert_eq(mm.visible_instance_count, baseline)
 	root.free()
