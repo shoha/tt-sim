@@ -210,22 +210,17 @@ static func plan(species: Dictionary, budget: int = PRIMITIVE_BUDGET) -> Diction
 ## than raw instance counts, because the slider the player is being sent to is denominated
 ## in millions of triangles, and a percentage is the only one of the two units that relates
 ## to it at all.
+##
+## The percentage is clamped to 1-99 rather than reported raw. This message is only ever
+## shown when the map DID exceed the budget, so rounding up to "100%" would contradict the
+## sentence it appears in, and "0%" would claim nothing is drawn when plan()'s floor keeps
+## at least one instance of every species.
 static func describe(report: Dictionary) -> String:
 	var before: int = report.get("instances_before", 0)
 	var after: int = report.get("instances_after", 0)
 	var percent := 100 if before <= 0 else int(round(100.0 * after / before))
+	percent = clampi(percent, 1, 99)
 	return "Foliage shown at %d%% -- this map exceeds your Foliage Density setting." % percent
-
-
-## 1234567 -> "1,234,567". String.num_int64() has no grouping option and %d does not group.
-static func _with_thousands_separators(value: int) -> String:
-	var digits := str(absi(value))
-	var grouped := ""
-	for offset in digits.length():
-		if offset > 0 and offset % 3 == 0:
-			grouped = "," + grouped
-		grouped = digits[digits.length() - 1 - offset] + grouped
-	return "-" + grouped if value < 0 else grouped
 
 
 ## Splits a species' allocation across its chunks, proportionally to each chunk's size.
