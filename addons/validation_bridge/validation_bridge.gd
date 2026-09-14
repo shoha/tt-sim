@@ -9,6 +9,8 @@ const PORT: int = 7777
 const HOST: String = "127.0.0.1"
 const SCENE_TREE_MAX_DEPTH: int = 3
 const SCENE_TREE_MAX_CHILDREN: int = 20
+## Frames a step_until will advance before giving up, when the caller does not say.
+const STEP_UNTIL_DEFAULT_MAX_FRAMES: int = 300
 
 var _server: TCPServer = null
 var _client: StreamPeerTCP = null
@@ -121,6 +123,12 @@ func _handle_command(cmd: Dictionary) -> void:
 			response = _cmd_resume()
 		"step":
 			response = await _cmd_step(cmd)
+		"eval":
+			response = _cmd_eval(cmd)
+		"step_until":
+			response = await _cmd_step_until(cmd)
+		"controls":
+			response = _cmd_controls(cmd)
 		_:
 			response = {"ok": false, "error": "Unknown command: %s" % cmd.get("cmd", "")}
 	_send_response(response)
@@ -324,6 +332,25 @@ func _cmd_input(cmd: Dictionary) -> Dictionary:
 			_inject_key(cmd.get("key", ""))
 		"scroll":
 			_inject_scroll(cmd.get("x", 0.0), cmd.get("y", 0.0), cmd.get("delta", 1.0))
+		"click_control":
+			var query: String = cmd.get("query", "")
+			if query.is_empty():
+				return {"ok": false, "error": "click_control requires a non-empty 'query'"}
+			var matches := BridgeInspector.find_matches(get_tree().root, query, true)
+			if matches.is_empty():
+				return {"ok": false, "error": "No visible Control matches '%s'" % query}
+			if matches.size() > 1:
+				var paths: Array = matches.map(
+					func(entry: Dictionary) -> String: return entry["path"]
+				)
+				return {
+					"ok": false,
+					"error": "'%s' is ambiguous" % query,
+					"matches": paths,
+				}
+			var center: Array = matches[0]["center"]
+			var target_button := _parse_mouse_button(cmd.get("button", "left"))
+			await _inject_click(float(center[0]), float(center[1]), target_button)
 		_:
 			return {"ok": false, "error": "Unknown input type: %s" % input_type}
 	await _advance_one_step()
@@ -549,6 +576,89 @@ func _cmd_wait(cmd: Dictionary) -> Dictionary:
 	else:
 		await get_tree().process_frame
 	return {"ok": true}
+
+
+# ---------------------------------------------------------------------------
+# Expression evaluation and Control discovery
+# ---------------------------------------------------------------------------
+
+
+## Expressions run against the current scene, so `find_child("GameMap").camera_node.size` and
+## similar reach the game's own nodes directly. Falls back to the bridge itself before the first
+## scene is up, which keeps `get_tree()` available rather than failing outright.
+func _eval_base() -> Object:
+	var root_scene := get_tree().current_scene
+	return root_scene if root_scene != null else self
+
+
+func _cmd_eval(cmd: Dictionary) -> Dictionary:
+	var text: String = cmd.get("expression", "")
+	if text.is_empty():
+		return {"ok": false, "error": "eval requires a non-empty 'expression'"}
+	return BridgeEval.evaluate(text, _eval_base())
+
+
+## Advances game time one physics frame at a time until `expression` is truthy.
+##
+## This is the answer to every "wait 0.5s and hope" in an interaction script: the caller states the
+## condition it is actually waiting for, and gets back how much game time it took, or a clear
+## `satisfied: false` when the condition never held.
+func _cmd_step_until(cmd: Dictionary) -> Dictionary:
+	var text: String = cmd.get("expression", "")
+	if text.is_empty():
+		return {"ok": false, "error": "step_until requires a non-empty 'expression'"}
+
+	var max_frames: int = int(cmd.get("max_frames", STEP_UNTIL_DEFAULT_MAX_FRAMES))
+	max_frames = clampi(max_frames, 1, BridgeTimeControl.MAX_STEP_FRAMES)
+
+	var ticks := Engine.physics_ticks_per_second
+	var frames := 0
+	var last: Dictionary = BridgeEval.evaluate(text, _eval_base())
+	if not last.get("ok", false):
+		return last
+
+	while frames < max_frames and not _is_truthy(last.get("value")):
+		await _advance_physics_frames(1)
+		frames += 1
+		last = BridgeEval.evaluate(text, _eval_base())
+		if not last.get("ok", false):
+			return last
+
+	return {
+		"ok": true,
+		"satisfied": _is_truthy(last.get("value")),
+		"frames": frames,
+		"seconds": BridgeTimeControl.duration_for_frames(frames, ticks),
+		"value": last.get("value"),
+	}
+
+
+## Comparing mismatched Variant types (bool against int, for example) is a runtime script error
+## in GDScript, not a clean "not equal" -- a plain `value != false and value != 0` throws on every
+## call whose value isn't already a bool, which made step_until always report false. Branching on
+## typeof() avoids ever comparing across types.
+func _is_truthy(value: Variant) -> bool:
+	match typeof(value):
+		TYPE_NIL:
+			return false
+		TYPE_BOOL:
+			return value
+		TYPE_INT, TYPE_FLOAT:
+			return value != 0
+		_:
+			return true
+
+
+## Walks from the window root, not the current scene, so dialogs and overlays parented to
+## get_tree().root are reported. Those are invisible to _get_scene_tree() and have previously made a
+## successful click look like a failed one.
+##
+## A Godot PopupMenu is a Window, not a Control, so this cannot see popup menu entries and
+## click_control cannot click them -- confirmed empirically in Task 4, where injected clicks on an
+## OptionButton's popup did not register; navigate those with arrow keys and Enter instead.
+func _cmd_controls(cmd: Dictionary) -> Dictionary:
+	var visible_only: bool = bool(cmd.get("visible_only", true))
+	return {"ok": true, "controls": BridgeInspector.collect_controls(get_tree().root, visible_only)}
 
 
 # ---------------------------------------------------------------------------
