@@ -376,8 +376,9 @@ func _cmd_input(cmd: Dictionary) -> Dictionary:
 					"matches": paths,
 				}
 			var center: Array = matches[0]["center"]
+			var target := _canvas_to_injected_point(Vector2(float(center[0]), float(center[1])))
 			var target_button := _parse_mouse_button(cmd.get("button", "left"))
-			await _inject_click(float(center[0]), float(center[1]), target_button)
+			await _inject_click(target.x, target.y, target_button)
 		_:
 			return {"ok": false, "error": "Unknown input type: %s" % input_type}
 	await _advance_one_step()
@@ -385,7 +386,37 @@ func _cmd_input(cmd: Dictionary) -> Dictionary:
 	return {"ok": true}
 
 
-## Injects a click at a viewport position.
+## Converts a Control's reported centre into the space injected mouse events are actually read in.
+##
+## These are two different spaces and the gap between them is silent. BridgeInspector reports rects
+## and centres from `Control.get_global_rect()`, which is canvas space -- the 1920x1080-based space
+## `window/stretch/mode="canvas_items"` lays the UI out in. An event pushed through
+## `Input.parse_input_event`, by contrast, goes through `get_final_transform().affine_inverse()`
+## before GUI dispatch, exactly as a real mouse event from the OS does, so its position is read as
+## WINDOW pixels. With `window/stretch/aspect="expand"` the two diverge whenever the window is not
+## the base size: a 1278x1360 window produces a 1920x2043 viewport, a factor of 0.6656, so clicking
+## a reported centre of (960, 1057) arrived at (1442, 1588) in canvas space and missed the Control
+## completely -- while still answering `{"ok": true}`, because click_control only ever verified that
+## it FOUND the Control, never that the click landed. That is the same silent-wrong-answer shape as
+## step_until's old truthiness bug, and it defeated the entire reason click_control exists.
+##
+## `get_final_transform()` is the engine's own canvas-to-window mapping, so this is exact rather
+## than a hand-computed size ratio, and it is the identity when window and viewport agree -- the
+## matched case is unchanged.
+##
+## Not covered: a CanvasLayer that sets its own transform. `get_final_transform()` carries the
+## stretch and the root canvas transform, not a layer's. No layer in this project sets one, and the
+## centre BridgeInspector reports would already be wrong for such a layer independently of this.
+func _canvas_to_injected_point(point: Vector2) -> Vector2:
+	return get_viewport().get_final_transform() * point
+
+
+## Injects a click at a window-space position.
+##
+## Callers passing raw coordinates (the "click", "drag" and "scroll" input types) are supplying
+## window pixels, NOT the canvas-space coordinates BridgeInspector reports. That contract is
+## unchanged here deliberately -- scripts in the wild compensate for it by hand, and silently
+## redefining their coordinate space would break them. click_control is the path that converts.
 ##
 ## Sends a mouse-motion event first and puts a frame boundary between press and release,
 ## rather than firing press+release back to back. Both matter for Control nodes: Godot's GUI
