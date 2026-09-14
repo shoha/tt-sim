@@ -200,15 +200,21 @@ static func plan(species: Dictionary, budget: int = PRIMITIVE_BUDGET) -> Diction
 
 
 ## One-line explanation of a thinning, for the toast the player sees. Pure so the wording
-## is unit-testable; ScatterGlbUtils stashes the report and a scenes/ script shows it,
-## because nothing in utils/ may reference an autoload.
+## is unit-testable; FoliageDensityController.apply() returns the report and level_loader.gd
+## shows it, because nothing in utils/ may reference an autoload.
+##
+## Present tense and names the setting, not the map, as the cause: this is a live dial the
+## player can raise back up with no reload, not a one-time, irreversible thing done to the
+## map, and the sentence level_loader.gd appends immediately tells the player to go change
+## that setting -- past tense would contradict it. Expressed as a density percentage rather
+## than raw instance counts, because the slider the player is being sent to is denominated
+## in millions of triangles, and a percentage is the only one of the two units that relates
+## to it at all.
 static func describe(report: Dictionary) -> String:
 	var before: int = report.get("instances_before", 0)
 	var after: int = report.get("instances_after", 0)
-	return (
-		"This map's foliage was thinned for performance: %s of %s scattered instances kept."
-		% [_with_thousands_separators(after), _with_thousands_separators(before)]
-	)
+	var percent := 100 if before <= 0 else int(round(100.0 * after / before))
+	return "Foliage shown at %d%% -- this map exceeds your Foliage Density setting." % percent
 
 
 ## 1234567 -> "1,234,567". String.num_int64() has no grouping option and %d does not group.
@@ -226,12 +232,34 @@ static func _with_thousands_separators(value: int) -> String:
 ##
 ## `chunk_counts` maps a chunk key to how many instances that chunk holds; `kept` is what
 ## FoliageBudget.plan() allocated the species; `total` is the species' full instance count.
-## Returns the same keys mapped to how many instances each chunk should draw.
+## Returns the same keys mapped to how many instances each chunk should draw. Keys may be
+## any hashable value: this function only ever hashes and returns them, never dereferences
+## them, so it stays pure regardless of what a caller uses -- the production caller
+## (FoliageDensityController.apply()) keys by the MultiMeshInstance3D node itself, while the
+## tests key by Vector2i.
 ##
-## Proportional rather than filling chunks in order: filling in order would leave whole
-## cells empty and reintroduce exactly the spatial bias that shuffled_order exists to
-## prevent. Clamped to each chunk's own count because writing a visible_instance_count
-## above instance_count is invalid in Godot.
+## Post-condition: sum(visible.values()) == min(kept, total) exactly, every value is clamped
+## between 0 and its own chunk's count, and no value is negative.
+##
+## Uses largest-remainder (Hamilton) apportionment rather than rounding each chunk
+## independently. Independent rounding is the obvious approach here, and it is broken: the
+## sum of independently rounded shares is not `kept`, and the error scales with the NUMBER
+## of chunks, not with rounding noise. Two failure modes that motivated this rewrite, both on
+## real maps: a species spread across many small chunks can round every chunk down to zero
+## and vanish entirely even though `kept` was positive (round(3 * 0.09) = 0 on 24 chunks of
+## 3), and a species spread across many single-instance chunks can round every chunk up to 1
+## and double the allocation, blowing the budget the user set (round(1 * 0.5) = 1 on 100
+## chunks of 1). It also silently defeated plan()'s floor-of-one guarantee for any species
+## occupying more than two cells.
+##
+## Hamilton apportionment: give each chunk floor(exact share) clamped to its own count, then
+## hand out the shortfall between that sum and the target one instance at a time to the
+## chunks with the largest fractional remainders, skipping any chunk already at its ceiling.
+## Remainders are computed by iterating chunk_counts in its own insertion order (GDScript
+## Dictionaries preserve insertion order, and _collect() inserts in scene-tree order, which
+## is stable across loads on one machine) and ties are broken by that same order, so which
+## instances appear and disappear as the density slider moves is deterministic rather than
+## reshuffling.
 static func visible_counts_for_chunks(
 	chunk_counts: Dictionary, kept: int, total: int
 ) -> Dictionary:
@@ -240,8 +268,46 @@ static func visible_counts_for_chunks(
 		for key in chunk_counts.keys():
 			visible[key] = 0
 		return visible
-	var fraction := clampf(float(kept) / float(total), 0.0, 1.0)
+
+	var target := clampi(kept, 0, total)
+	var assigned := 0
+	var remainders: Array[Dictionary] = []
+	var insertion_index := 0
 	for key in chunk_counts.keys():
 		var count: int = chunk_counts[key]
-		visible[key] = clampi(int(round(count * fraction)), 0, count)
+		var exact_share := float(count) * float(target) / float(total)
+		var floor_share := clampi(int(floor(exact_share)), 0, count)
+		visible[key] = floor_share
+		assigned += floor_share
+		(
+			remainders
+			. append(
+				{
+					"key": key,
+					"count": count,
+					"remainder": exact_share - floor(exact_share),
+					"insertion_index": insertion_index,
+				}
+			)
+		)
+		insertion_index += 1
+
+	var shortfall := target - assigned
+	if shortfall > 0:
+		remainders.sort_custom(
+			func(a: Dictionary, b: Dictionary) -> bool:
+				if a["remainder"] != b["remainder"]:
+					return a["remainder"] > b["remainder"]
+				# Equal remainders: fall back to insertion order so ties are deterministic
+				# regardless of whether sort_custom's underlying sort is stable.
+				return a["insertion_index"] < b["insertion_index"]
+		)
+		for entry in remainders:
+			if shortfall <= 0:
+				break
+			var key = entry["key"]
+			var count: int = entry["count"]
+			if visible[key] < count:
+				visible[key] += 1
+				shortfall -= 1
 	return visible

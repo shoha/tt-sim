@@ -121,11 +121,22 @@ func test_a_deny_listed_rock_species_is_budgeted_too() -> void:
 
 
 func test_a_species_is_never_reduced_to_zero_instances() -> void:
-	# plan()'s floor of one applies here too: a hero species must not vanish entirely.
-	var root := _scene_with({"GrassBlade": [1000], "HeroTree": [1]})
+	# plan()'s floor of one applies here too: a hero species must not vanish entirely, even
+	# once its allocation has to be split across several chunks. Three chunks of 1 instance
+	# each, not one chunk of 1: with a single chunk, visible_counts_for_chunks' fraction is
+	# 1.0 and returns 1 unconditionally regardless of rounding, so that fixture could never
+	# have caught independent-per-chunk rounding losing the species. Here, kept=1 against
+	# total=3 gives each chunk an exact share of 1/3 -- round(1 * 0.333) = 0 on every chunk
+	# under the old arithmetic, losing HeroTree entirely; largest-remainder apportionment
+	# must instead hand the one allocated instance to one of the three chunks.
+	var root := _scene_with({"GrassBlade": [1000], "HeroTree": [1, 1, 1]})
 	FoliageDensityController.apply(root, 3000)
-	var hero := root.get_node_or_null("HeroTree_MultiMesh") as MultiMeshInstance3D
-	assert_eq(hero.multimesh.visible_instance_count, 1)
+	var hero_visible := 0
+	for child in root.get_children():
+		var mmi := child as MultiMeshInstance3D
+		if mmi and String(mmi.name).begins_with("HeroTree"):
+			hero_visible += mmi.multimesh.visible_instance_count
+	assert_eq(hero_visible, 1)
 	root.free()
 
 
@@ -153,3 +164,51 @@ func test_nodes_without_the_foliage_meta_are_ignored() -> void:
 	assert_false(report.thinned)
 	assert_eq(mm.visible_instance_count, baseline)
 	root.free()
+
+
+func test_applying_a_budget_never_exceeds_it_in_primitives() -> void:
+	# Closes the loop Fix 1 fixed: nothing else multiplies visible counts by
+	# primitives_per_instance and checks the result against the budget, which is the actual
+	# quantity the budget promises to bound -- the per-species report alone doesn't prove it,
+	# since visible_counts_for_chunks could still over-allocate a chunk.
+	#
+	# Five chunks of 7 BoxMesh (12-primitive) instances each: 35 instances, 420 primitives
+	# before thinning. Against a 200-primitive budget, plan()'s ratio is 200/420 = 0.47619,
+	# so it allocates floor(35 * 0.47619) = floor(16.667) = 16 instances to the species.
+	# Splitting 16 across 5 equal chunks of 7 gives each an exact share of 7 * 16 / 35 = 3.2 --
+	# not an integer, so this genuinely exercises rounding rather than dividing evenly.
+	# 16 instances * 12 primitives = 192, which must land at or under the 200 budget.
+	var root := _scene_with({"GrassBlade": [7, 7, 7, 7, 7]})
+	var report := FoliageDensityController.apply(root, 200)
+	assert_true(report.thinned)
+	var total_primitives := 0
+	for child in root.get_children():
+		var mmi := child as MultiMeshInstance3D
+		if mmi and mmi.multimesh:
+			total_primitives += (
+				mmi.multimesh.visible_instance_count
+				* FoliageBudget.primitives_per_instance(mmi.multimesh.mesh)
+			)
+	assert_eq(total_primitives, 192)
+	assert_lte(total_primitives, 200)
+	root.free()
+
+
+func test_budget_from_settings_round_trips_a_saved_value() -> void:
+	var path := "user://test_foliage_budget_from_settings_round_trip.cfg"
+	var config := ConfigFile.new()
+	config.set_value(
+		FoliageDensityController.SETTINGS_SECTION, FoliageDensityController.SETTINGS_KEY, 5_000_000
+	)
+	config.save(path)
+	assert_eq(FoliageDensityController.budget_from_settings(path), 5_000_000)
+	DirAccess.remove_absolute(path)
+
+
+func test_budget_from_settings_defaults_when_the_key_is_absent() -> void:
+	var path := "user://test_foliage_budget_from_settings_missing_key.cfg"
+	var config := ConfigFile.new()
+	config.set_value(FoliageDensityController.SETTINGS_SECTION, "some_other_key", 1)
+	config.save(path)
+	assert_eq(FoliageDensityController.budget_from_settings(path), FoliageBudget.PRIMITIVE_BUDGET)
+	DirAccess.remove_absolute(path)

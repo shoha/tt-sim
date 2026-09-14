@@ -127,10 +127,11 @@ consequence of applying them is not.
 
 A `MultiMeshInstance3D` is frustum-culled as a single AABB. Foliage was one map-wide
 MultiMesh per species, so every instance was vertex-processed whenever any part of that
-species was on screen. All the figures below come from a probe that replays the real
-pipeline -- `FoliageBudget.plan`, `FoliageBudget.select_indices` and
-`ScatterChunker.bucket_by_cell`, the same functions `process_scatter_instances` calls --
-against the real map, then counts per camera zoom which chunk AABBs intersect the view.
+species was on screen. All the figures below come from a probe that replays the real allocation and chunking
+logic -- `FoliageBudget.plan`, the allocator `FoliageDensityController.apply()` now runs at
+runtime, and `ScatterChunker.bucket_by_cell`, which `process_scatter_instances` still runs
+at import to split each species into cells -- against the real map, then counts per camera
+zoom which chunk AABBs intersect the view.
 At the unchunked baseline (one bucket per species) that probe puts every camera zoom at
 the same **57 nodes and 7,957,006 primitives** -- the number does not move, because one
 AABB per species is always drawn regardless of what the camera can actually see. That is

@@ -367,11 +367,12 @@ func _finalize_map_loading(map: Node3D) -> void:
 
 
 ## Applies the player's foliage density setting to a freshly loaded map, and tells them
-## once if the map exceeded their budget. The toast text itself is still
-## FoliageBudget.describe()'s unchanged "X of Y scattered instances kept" wording; this
-## function's only addition is appending a pointer to where the setting lives, since
-## nothing here is a one-time, unrecoverable loss any more -- the player can raise the
-## dial back up without a reload.
+## once if the map exceeded their budget. FoliageBudget.describe() names the density
+## percentage and the setting as the cause; this function's only addition is appending a
+## pointer to where the setting lives. Shown as an informational toast, not a warning --
+## a user-configured setting behaving exactly as configured isn't a warning, and nothing
+## here is a one-time, unrecoverable loss any more: the player can raise the dial back up
+## without a reload.
 func _apply_foliage_density_and_notify(map: Node3D) -> void:
 	if not map:
 		return
@@ -380,7 +381,7 @@ func _apply_foliage_density_and_notify(map: Node3D) -> void:
 	if report.thinned:
 		UIManager.show_toast(
 			"%s Adjust Foliage Density in Settings > Graphics." % FoliageBudget.describe(report),
-			UIManager.TOAST_WARNING,
+			UIManager.TOAST_INFO,
 			6.0
 		)
 
