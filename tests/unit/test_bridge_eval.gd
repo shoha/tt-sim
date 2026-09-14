@@ -39,6 +39,16 @@ func test_serializes_vector2() -> void:
 	assert_eq(value, {"x": 4.0, "y": 5.0})
 
 
+func test_serializes_vector2i() -> void:
+	var value: Variant = BridgeEval.to_json_safe(Vector2i(4, 5), 0)
+	assert_eq(value, {"x": 4.0, "y": 5.0})
+
+
+func test_serializes_vector3i() -> void:
+	var value: Variant = BridgeEval.to_json_safe(Vector3i(1, 2, 3), 0)
+	assert_eq(value, {"x": 1.0, "y": 2.0, "z": 3.0})
+
+
 func test_serializes_color() -> void:
 	var value: Variant = BridgeEval.to_json_safe(Color(1.0, 0.5, 0.25, 1.0), 0)
 	assert_eq(value, {"r": 1.0, "g": 0.5, "b": 0.25, "a": 1.0})
