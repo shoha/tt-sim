@@ -36,7 +36,8 @@ static func _collect_recursive(node: Node, visible_only: bool, out: Array) -> vo
 		_collect_recursive(child, visible_only, out)
 
 
-## Describes one Control, including the viewport-space point an injected click should target.
+## Describes one Control, including its centre as a viewport-space point. `_cmd_input`'s
+## `click_control` branch converts this to window space before injecting a click.
 static func describe_control(control: Control) -> Dictionary:
 	var rect := control.get_global_rect()
 	var center := rect.get_center()
