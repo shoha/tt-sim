@@ -33,24 +33,30 @@ zoom-out.**
 
 ## The foliage primitive budget
 
-`utils/foliage_budget.gd` caps total scatter primitives per map at `PRIMITIVE_BUDGET`
-(8,000,000) and thins any imported map that exceeds it, proportionally across species,
-by seeded shuffle. `ScatterGlbUtils.process_scatter_instances()` applies it;
-`level_loader.gd` shows the player one toast when it fires. Allocation keeps an equal
-instance fraction per species, not equal visual weight -- see "Real-map validation"
-below for what that costs the map's landmark trees in practice.
+`utils/foliage_budget.gd` defines `PRIMITIVE_BUDGET` (8,000,000) as the DEFAULT of a
+per-user setting, `graphics/foliage_budget` in `user://settings.cfg`, ranging 2,000,000 to
+24,000,000 and adjustable in Settings > Graphics. Import
+(`ScatterGlbUtils.process_scatter_instances()`) no longer thins anything -- it builds every
+scatter instance and shuffles each chunk so any prefix of it is a spatially even sample.
+The budget is applied at runtime, live in both directions with no map reload, by
+`FoliageDensityController.apply()`, which writes `MultiMesh.visible_instance_count` on
+every scatter chunk to keep the visible total within the player's configured value.
+Allocation keeps an equal instance fraction per species, not equal visual weight -- see
+"Real-map validation" below for what that costs the map's landmark trees in practice.
 
-The threshold is **provisional** -- derived from one scene on one GPU. The frame-time
-table above (16.3M foliage primitives, -76%) used the in-game debug toggle's definition
-of "foliage", which excludes rock scatter -- but the budget covers scatter of every kind,
-rock included. The real total the budget has to bound, measured by running the actual
-pipeline against the real GLB, is **19,170,768 primitives** (see below). Both figures are
-correct for what they measure: 16.3M is still the right number for the frame-time table,
-captured with that toggle; 19.17M is the right number for what `PRIMITIVE_BUDGET` bounds.
-8M is **41.7%** of 19.17M, not "roughly half" as an earlier estimate against the narrower
-toggle figure put it. This needs validating on slower hardware before release -- the
-mechanism is the deliverable, the threshold is a tunable. The budget is deliberately not
-overridable per level: a budget a map can opt out of does not bound anything.
+The default is derived from one scene on one GPU. The frame-time table above (16.3M
+foliage primitives, -76%) used the in-game debug toggle's definition of "foliage", which
+excludes rock scatter -- but the budget covers scatter of every kind, rock included. The
+real total the budget has to bound, measured by running the actual pipeline against the
+real GLB, is **19,170,768 primitives** (see below). Both figures are correct for what they
+measure: 16.3M is still the right number for the frame-time table, captured with that
+toggle; 19.17M is the right number for what `PRIMITIVE_BUDGET` bounds. 8M is **41.7%** of
+19.17M, not "roughly half" as an earlier estimate against the narrower toggle figure put
+it. Whether 8M suits hardware weaker than the RTX 3080 it was measured on is no longer an
+open question the default has to answer alone -- the per-user setting resolves it: each
+player raises or lowers their own budget in Settings > Graphics to fit their own machine.
+The budget is still deliberately not overridable per level: a map cannot opt out of the
+cap, only the player's own setting moves it, the same way for every map.
 
 Only `user://` imported maps are affected. `load_map()`'s `res://` branch never calls
 the scatter pipeline, so built-in maps are untouched. **Known gap:**
@@ -59,9 +65,35 @@ after every scatter-pipeline call site) runs AFTER `ScatterGlbUtils.process_scat
 so any foliage arriving through the duplicate-collapse path is not bounded by this budget
 at all -- not yet addressed.
 
+### The budget as a per-user runtime setting
+
+Measured on the reference map (Sandy Clearing), building every scatter instance at import
+instead of thinning to `PRIMITIVE_BUDGET` there costs **+6.8 ms and +1.4 MB** of import
+time and memory, for only **37 extra nodes** (1,335 to 1,372) -- the additional instances
+mostly land in cells that already exist, rather than creating new ones. That is the price
+of moving the budget from an import-time, one-shot decision to a runtime dial: every
+instance has to exist so the dial can reveal or hide any of them without a reimport.
+
+The setting is per-user and deliberately **not networked** -- a host and its clients may
+run different densities to suit their own hardware. This is safe because scatter foliage
+carries no collision, so peers disagreeing about how much of it is visible cannot desync
+anything.
+
+Verified in-game: with the setting at its minimum (2,000,000), loading the reference map
+gave **162,587 visible primitives and 844 visible draw calls**. This is a functional
+confirmation that the setting is applied end to end, from the config value through
+`visible_instance_count` to what the renderer actually draws -- **not a timing
+measurement**: it was read at a 1920x2043 viewport (not the pinned 1920x1080 used
+elsewhere in this document) with the GPU contended by an unrelated application, so no
+frame-time or FPS number from this sample would be comparable to anything else here.
+
 ### Real-map validation (Sandy Clearing, 112 MB)
 
 Ran the real pipeline against the actual Sandy Clearing GLB, not a synthetic test fixture.
+This predates the per-user density setting and exercised `plan()`/thinning as it ran at
+import at the time; the allocation arithmetic is unchanged, but
+`FoliageDensityController.apply()` now invokes it at runtime instead (see above) -- the
+instance-count and primitive-count findings below remain accurate.
 
 - **Real scatter load: 19,170,768 primitives across 52,154 instances in 57 species.** (The
   16.3M figure above is the in-game debug toggle's narrower "foliage" definition, which
@@ -272,9 +304,11 @@ map -- about **0.5% of map load time**. Negligible.
   being pursued: chunking delivered the win they were intended to chase -- without the
   visual-fidelity trade either would have required -- and did so most strongly at full
   zoom-out, precisely the regime C2 targeted. Frame time on the reference map is now
-  5.27 ms at the Home pose. The remaining open risk is unrelated to chunking: validating
-  `FoliageBudget.PRIMITIVE_BUDGET` on weaker hardware (see "The foliage primitive budget"
-  above).
+  5.27 ms at the Home pose. The remaining open risk this section used to name -- whether
+  `FoliageBudget.PRIMITIVE_BUDGET` suits weaker hardware -- is resolved by the per-user
+  `graphics/foliage_budget` setting rather than by further validation here (see "The
+  foliage primitive budget" above): each player tunes their own value instead of the
+  project needing one default to fit every machine.
 - **Automatic mesh LOD.** Godot picks one LOD per MultiMesh node, not per instance, and
   orthographic screen coverage does not vary with distance.
 - **Occlusion culling.** A `MultiMeshInstance3D` cannot be an occludee in the bake
