@@ -1,10 +1,12 @@
 class_name FoliageBudget
 extends RefCounted
 
-## Fixed global cap on how many scattered-foliage primitives an imported map may render,
-## with the arithmetic for thinning one that exceeds it. Pure statics only -- no node
-## access and no side effects, so the whole allocator is unit-testable without a scene
-## tree or a renderer. Applied by ScatterGlbUtils.process_scatter_instances().
+## Arithmetic for how many scattered-foliage primitives a map keeps under a budget, and how
+## an over-budget species gets thinned proportionally. Pure statics only -- no node access
+## and no side effects, so the whole allocator is unit-testable without a scene tree or a
+## renderer. Applied at runtime by FoliageDensityController.apply() (see
+## scenes/states/playing/foliage_density_controller.gd) against a full, unthinned instance
+## set that ScatterGlbUtils.process_scatter_instances() builds at import.
 ##
 ## Why a cap is needed at all: a MultiMeshInstance3D is frustum-culled as a SINGLE AABB,
 ## and foliage is built as one MultiMesh per species spanning the whole map. If any part
@@ -18,17 +20,25 @@ extends RefCounted
 ## bounds total instance count, which chunking does not change.
 ## See docs/PERFORMANCE.md for the full attribution.
 
-## Maximum total foliage primitives (triangles) across all scatter species in one map.
+## Default total foliage primitives (triangles) across all scatter species in one map, for
+## the per-user `graphics/foliage_budget` setting stored in `user://settings.cfg`. Applied
+## at runtime by FoliageDensityController (see
+## scenes/states/playing/foliage_density_controller.gd) via MultiMesh.visible_instance_count
+## -- not enforced at import. ScatterGlbUtils.process_scatter_instances() now builds every
+## instance, and the player's Settings > Graphics slider (2,000,000 to 24,000,000) dials how
+## many of them are visible, live, with no map reload.
 ##
-## PROVISIONAL. Derived from one scene on one GPU: on a dense forest map an RTX 3080
-## spent ~11 ms of a 14.5 ms frame on 16.3M foliage primitives (the in-game debug toggle's
-## definition of "foliage", which excludes rock scatter), and hiding foliage entirely took
-## the frame to 3.5 ms. The real total this budget actually caps -- foliage plus rock
-## scatter -- measured 19.17M primitives on that same map, so 8M is 41.7% of the real
-## load, not "roughly half" as earlier estimated from the narrower toggle figure. This
-## needs validating on slower hardware before release -- the mechanism is the deliverable,
-## the threshold is a tunable. Deliberately NOT overridable per level: a budget a map can
-## opt out of does not bound anything.
+## Derived from one scene on one GPU: on a dense forest map an RTX 3080 spent ~11 ms of a
+## 14.5 ms frame on 16.3M foliage primitives (the in-game debug toggle's definition of
+## "foliage", which excludes rock scatter), and hiding foliage entirely took the frame to
+## 3.5 ms. The real total this budget actually caps -- foliage plus rock scatter --
+## measured 19.17M primitives on that same map, so 8M is 41.7% of the real load, not
+## "roughly half" as earlier estimated from the narrower toggle figure. Whether this default
+## suits hardware weaker than the RTX 3080 it was measured on is resolved not by further
+## validation here but by the setting itself -- each player raises or lowers it in Settings
+## > Graphics to fit their own machine. Still deliberately NOT overridable per level: a map
+## cannot opt out of the cap, only the player's own setting moves it, the same way for every
+## map.
 const PRIMITIVE_BUDGET: int = 8_000_000
 
 # FNV-1a 32-bit parameters. GDScript ints are 64-bit, so every step masks back to 32.
@@ -125,9 +135,11 @@ static func _stable_hash(text: String) -> int:
 ## importance instead would need per-species authoring metadata that does not exist, so
 ## it was considered and rejected rather than overlooked -- see docs/PERFORMANCE.md.
 ##
-## `budget` is a parameter only so tests can drive thinning at counts a test can build;
-## production always takes the PRIMITIVE_BUDGET default. Nothing user-facing sets it, and
-## nothing should: the budget is fixed by design.
+## `budget` is a parameter so both tests and production callers can supply their own value.
+## Production is FoliageDensityController.apply(), which reads the player's configured
+## budget via FoliageDensityController.budget_from_settings() and falls back to
+## PRIMITIVE_BUDGET only when no setting has been saved yet; the default parameter here
+## exists so tests that don't care about the setting can omit it.
 ##
 ## A species with at least one instance always keeps at least one, even when its
 ## proportional share rounds down to zero. That is not a one-instance-per-species
