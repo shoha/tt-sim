@@ -635,18 +635,16 @@ func _cmd_step_until(cmd: Dictionary) -> Dictionary:
 
 ## Comparing mismatched Variant types (bool against int, for example) is a runtime script error
 ## in GDScript, not a clean "not equal" -- a plain `value != false and value != 0` throws on every
-## call whose value isn't already a bool, which made step_until always report false. Branching on
-## typeof() avoids ever comparing across types.
+## call whose value isn't already a bool, which made step_until always report false.
+##
+## Delegating to `if value:` instead follows GDScript's own truthiness rules, which is also the
+## contract callers should expect here: an empty String, Array or Dictionary is false, same as
+## `if` would treat it, not merely "not null". A caller that means "exists at all" rather than
+## "is non-empty" should write an explicit size check instead of relying on this function.
 func _is_truthy(value: Variant) -> bool:
-	match typeof(value):
-		TYPE_NIL:
-			return false
-		TYPE_BOOL:
-			return value
-		TYPE_INT, TYPE_FLOAT:
-			return value != 0
-		_:
-			return true
+	if value:
+		return true
+	return false
 
 
 ## Walks from the window root, not the current scene, so dialogs and overlays parented to
