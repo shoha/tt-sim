@@ -144,17 +144,14 @@ at all):
 | 8 | 1885 | 0 / 0 | 0 / 0 | 3 / 586,032 | 831 / 6,143,696 |
 | 5 | 2747 | 0 / 0 | 0 / 0 | 4 / 147,376 | 1193 / 5,310,072 |
 
-The chosen value is **10.0**, for these reasons: 25 is dominated (barely better than
-unchunked while tripling node count); 5 was passed over because it adds 1,136 draw calls
-over baseline at full zoom-out, which looked at the time like the trade most likely to
-cost more than it bought; and
-between 15 and 10, 10 saves 62% more primitives at typical play zoom for three more draw
-calls, which is where players spend their time. 15 is better only at full zoom-out, where
-both figures are large and the primitive budget rather than chunking is the binding
-constraint. This choice among sizes still rests entirely on the geometric sweep above --
-only chunk size 10 has been rendered (see below); 25 / 15 / 8 / 5 have not. Now that the
-draw-call fear below is disproven, size 5 -- geometrically the strongest option at
-typical play zoom -- is worth rendering before assuming 10 is optimal.
+The chosen value is **10.0**. The geometric sweep above first favoured it over 25 (barely
+better than unchunked while tripling node count) and over 15 (10 saves 62% more primitives
+at typical play zoom for three more draw calls, which is where players spend their time;
+15 only wins at full zoom-out, where the primitive budget rather than chunking is the
+binding constraint). Size 5 was originally passed over on a fear that its extra draw calls
+at full zoom-out would cost more than they bought. Chunk sizes 10 and 5 have since been
+rendered (see below), and 10 is confirmed as the right value -- but not for the originally
+feared reason; see the rendered comparison for the nuance. 25 and 15 remain geometric-only.
 
 **The geometric figures above are not accurate in absolute terms, and must not be read as
 predictions of rendered numbers.** The geometric sweep predicted 431,868 visible
@@ -209,20 +206,58 @@ What this confirms:
    cost more than the primitives they save. Measured, full zoom-out goes from 89 to 1,145
    visible draw calls -- 13x more -- and still gets 2.30 ms FASTER, the LARGER of the two
    improvements. The risk was tested and disproven.
-4. **The shadow-cascade hypothesis is CONFIRMED.** Shadow-pass primitives fall from
+4. **Chunking enables shadow-cascade frustum culling.** Shadow-pass primitives fall from
    6,591,594 to 4,421,617 at Home, a 33% reduction, while shadow draw calls rise 47 ->
-   264. Chunking demonstrably enables directional-shadow-cascade culling that could not
-   happen before one map-wide AABB per species stopped intersecting every cascade. See
-   the "Known dead ends" entry for `directional_shadow_max_distance` below for what this
-   means for that lever.
+   264. Chunking lets whole chunk AABBs be discarded from the shadow cascades by frustum
+   culling -- a different mechanism from the `directional_shadow_max_distance` knob, which
+   was re-tested against this chunked build and remains inert (byte-identical shadow
+   primitives at 30 and 100 units). See the "Known dead ends" entry for
+   `directional_shadow_max_distance` below.
 
-**Map load time was NOT measured.** The design that proposed chunking named load time as
-a user-visible cost a frame-time win does not excuse, and that cost has not been
-measured on this branch. What is known by inspection: per-instance work is unchanged
-(the same transforms are read and the same number of `MultiMesh.set_instance_transform`
-calls happen either way), and the added cost is roughly 1,278 extra `MultiMesh`
-allocations and node additions on the reference map (1,335 chunk nodes built vs. 57
-species before chunking), so it is expected to be small -- but expected is not measured.
+### Rendered measurement: chunk size 5 vs. 10 (Sandy Clearing, real render)
+
+Same conditions as above, Home pose only. Each configuration sampled its own
+foliage-hidden reference within the same run, so configurations are compared by foliage
+cost (foliage-on frame time minus the reference) rather than by absolute frame time -- see
+"How to measure without fooling yourself" below for why absolute frame time is not
+comparable across sessions; the 5.27 ms figure for chunk 10 here is from a later session
+than the 8.41 ms figure above and the two must not be compared directly, only the
+within-session deltas below are meaningful:
+
+| config | frame_ms (foliage on) | reference (foliage off) | foliage cost | visible prims | visible draws | shadow prims | shadow draws |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| chunk 10 (shipped) | 5.27 | 2.47 | 2.80 ms | 5,242,617 | 767 | 4,421,617 | 264 |
+| chunk 5 | 5.20 | 2.43 | 2.77 ms | 4,683,736 | 1,361 | 4,011,580 | 411 |
+
+Chunk 5 cuts visible primitives by 11% and adds 77% more draw calls, and the two effects
+cancel: foliage cost differs by 0.03 ms, about 1%, within noise. Combined with chunk 5
+costing 2,747 nodes against 1,335 and more processing time at load (see "Map load cost"
+below), **10 is confirmed as the right value on measured grounds.**
+
+The nuance matters: the earlier reasoning for preferring 10 was that size 5's extra draw
+calls would cost more than they bought. That specific fear was wrong -- the draw calls did
+not hurt, consistent with the unchunked-vs-10 comparison above already showing chunk 10's
+own extra draw calls costing nothing. But the conclusion holds anyway, for a different
+measured reason: size 5's primitive saving simply does not convert into frame time. Both
+things are true at once, and only the second one still argues for 10.
+
+### Map load cost (Sandy Clearing, headless)
+
+**Measured.** The design that proposed chunking named load time as a user-visible cost a
+frame-time win does not excuse. Timed headless (so unaffected by GPU state), instrumenting
+`ScatterGlbUtils.process_scatter_instances` against the same map with a fresh scene each
+time, minimum of three repetitions per configuration (the robust estimator here -- run
+times are noisy run to run; one outlier hit 542 ms):
+
+| chunk | nodes | scatter processing |
+| --- | --- | --- |
+| unchunked | 57 | 88.1 ms |
+| 25 | 199 | 89.5 ms |
+| 10 (shipped) | 1335 | 101.7 ms |
+| 5 | 2747 | 112.6 ms |
+
+Chunking at 10 costs **+13.6 ms** against a GLB parse of roughly 2,474 ms for this 112 MB
+map -- about **0.5% of map load time**. Negligible.
 
 ## Known dead ends -- do not revisit without new evidence
 
@@ -232,27 +267,37 @@ species before chunking), so it is expected to be small -- but expected is not m
 - **Distance-based LOD, billboards, impostors keyed on camera distance.** The camera is
   orthographic, so apparent size does not shrink with depth -- degrading distant foliage
   is *more* visible here than in a perspective game. The orthographic-correct
-  reformulation is zoom-based, driven by `camera.size`. Not yet attempted.
+  reformulation would be zoom-based, driven by `camera.size` (zoom-based foliage density
+  and orthographic billboards/impostors, tracked as sub-projects C2 and C3). Neither is
+  being pursued: chunking delivered the win they were intended to chase -- without the
+  visual-fidelity trade either would have required -- and did so most strongly at full
+  zoom-out, precisely the regime C2 targeted. Frame time on the reference map is now
+  5.27 ms at the Home pose. The remaining open risk is unrelated to chunking: validating
+  `FoliageBudget.PRIMITIVE_BUDGET` on weaker hardware (see "The foliage primitive budget"
+  above).
 - **Automatic mesh LOD.** Godot picks one LOD per MultiMesh node, not per instance, and
   orthographic screen coverage does not vary with distance.
 - **Occlusion culling.** A `MultiMeshInstance3D` cannot be an occludee in the bake
   workflow, and all foliage here is MultiMesh.
 - **PCF shadow filter tuning.** Measured at 0.6 ms. Not worth touching.
-- **Shortening `directional_shadow_max_distance` (SUPERSEDED, no longer a dead end).**
-  Originally swept 100/50/30 and found shadow-pass primitives byte-identical at
-  15,586,440 for all three, concluding "every caster is already inside 30 units" so the
-  lever does nothing. That conclusion was an artefact of unchunked geometry: one map-wide
-  AABB per species intersected every shadow cascade regardless of distance, so nothing
-  could ever be culled by shortening it. Spatial chunking has now demonstrably enabled
-  shadow-pass culling -- see "Spatial foliage chunking" above, where chunking cuts shadow
-  primitives 33% (6,591,594 -> 4,421,617 at the Home pose) purely from frustum culling,
-  with `directional_shadow_max_distance` untouched. Caveat: the old 15,586,440 figure
-  predates the foliage primitive budget (`utils/foliage_budget.gd`), which roughly halved
-  foliage primitives in between, so it is NOT directly comparable to the 6,591,594
-  unchunked figure measured here -- the 33% claim comes from the chunked-vs-unchunked
-  comparison within this measurement, not from comparing against the old number.
-  Re-testing the distance lever against a chunked build is worth doing now that chunking
-  has unblocked it. Recorded in `level_environment_manager.gd`.
+- **Shortening `directional_shadow_max_distance`.** Swept 100/50/30 twice, once before
+  chunking and once after, and both sweeps found shadow-pass primitives byte-identical
+  across all values tested -- 15,586,440 unchunked (pre-chunking build) and 4,421,617
+  chunked (30 vs. 100, this session's re-test on the shipped chunk-10 build; frame time
+  5.30 ms vs. 5.27 ms, within noise; shadow draw calls 264 in both cases). **Every caster
+  really is already inside 30 units, and the lever does nothing. This is now verified
+  twice.** An earlier version of this entry hypothesised that the first null result was an
+  artefact of unchunked geometry -- one map-wide AABB per species intersecting every
+  shadow cascade regardless of distance -- and that chunking would unblock the lever. That
+  hypothesis was tested directly and is WRONG, not merely unconfirmed: chunking changed
+  nothing about the distance lever's effect. What chunking DOES do -- cut shadow-pass
+  primitives 33% (6,591,594 -> 4,421,617 at the Home pose, see "Spatial foliage chunking"
+  above) -- is a separate mechanism, frustum culling of whole chunk AABBs out of the
+  cascades, and must not be conflated with the distance knob; that reduction happens with
+  `directional_shadow_max_distance` untouched. Caveat: the old 15,586,440 figure predates
+  the foliage primitive budget (`utils/foliage_budget.gd`), which roughly halved foliage
+  primitives in between, so it is NOT directly comparable to the 6,591,594 unchunked figure
+  measured here. Recorded in `level_environment_manager.gd`.
 - **`alpha_to_coverage` for the shadow pass.** Does not help (godotengine/godot#84242).
 - **`visibility_range` to skip distant foliage.** Hidden instances stop casting
   directional shadows entirely (godotengine/godot#98993), which changes lighting.
@@ -266,8 +311,8 @@ shadow used to provide.
 
 ## How to measure without fooling yourself
 
-Three separate instrument failures produced three wrong conclusions during this work.
-All three are avoidable:
+Four separate instrument failures produced four wrong conclusions during this work.
+All four are avoidable:
 
 1. **Pin the viewport.** `project.godot` sets `window/stretch/aspect="expand"`, so a
    window taller than 16:9 inflates the SubViewport (height = 1920 / window_aspect). A
@@ -283,6 +328,17 @@ All three are avoidable:
    hours, cleanly multiplicative across three configurations. A cross-run A/B shows
    several ms of pure drift. An unexplained uniform offset across every configuration is
    drift, not a regression -- check that before blaming the change.
+4. **Absolute frame times are not comparable across sessions.** The identical shipped
+   configuration, same map, same pose, byte-identical geometry (5,242,617 visible
+   primitives every time), measured 8.41 ms in one session, 5.27 ms in a later session
+   with the GPU verified idle (10% utilisation, 47 C, P8), and 123.98 ms while an
+   unrelated game held the GPU at 99% utilisation. The 15x case was caught only because
+   the foliage-hidden reference sample also collapsed (2.47 ms -> 59.58 ms) with
+   primitive counts unchanged -- a uniform slowdown across all content with identical
+   geometry means the device, not the code, changed. Practical rule: check GPU
+   utilisation (`nvidia-smi` or equivalent) before measuring, always capture an in-run
+   reference configuration, and compare configurations by their delta against that
+   reference rather than by absolute milliseconds.
 
 Working procedure. Write an untracked `override.cfg` in the project root (Godot reads it
 at runtime and it survives `git checkout`, so both branches measure identically):

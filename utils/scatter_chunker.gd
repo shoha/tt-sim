@@ -37,9 +37,10 @@ extends RefCounted
 ## large and the primitive budget rather than chunking is the binding constraint.
 ##
 ## 5 was passed over on the grounds that it adds 1,136 draw calls over baseline at full
-## zoom-out, which looked like the trade most likely to cost more than it bought. The
-## rendered measurement below has since undercut exactly that reasoning -- draw calls did
-## not cost what was feared -- so 5 is worth rendering before assuming 10 is optimal.
+## zoom-out, which looked like the trade most likely to cost more than it bought. Chunk
+## size 5 has since been rendered too (see below): that specific fear was wrong, the draw
+## calls did not cost what was feared, but 10 is still confirmed as the right value --
+## size 5's primitive saving simply does not convert into frame time.
 ##
 ## VALIDATED AGAINST FRAME TIME on a real render (Sandy Clearing, 1920x1080, vsync off,
 ## RTX 3080, via the validator bridge). Chunked at 10 beats unchunked (chunk size 0, one
@@ -47,17 +48,30 @@ extends RefCounted
 ## zoom-out 13.42 -> 11.12 ms (+17.1% FPS) -- the larger win at the pose with more draw
 ## calls. The feared draw-call cost did not materialise: full zoom-out goes 89 -> 1,145
 ## visible draw calls and is still faster, not slower. Shadow-pass primitives fall 33% at
-## Home (6,591,594 -> 4,421,617), confirming chunking also enables shadow-cascade culling
-## that one map-wide AABB per species could not. See docs/PERFORMANCE.md's "Spatial
-## foliage chunking" section for the full rendered tables and the geometric sweep that
-## chose this value. Only chunk size 10 has been rendered; 25/15/8/5 remain geometric-only.
+## Home (6,591,594 -> 4,421,617) from chunking's frustum culling of chunk AABBs out of the
+## shadow cascades -- a separate mechanism from `directional_shadow_max_distance`, which
+## was re-tested against this chunked build and remains inert (byte-identical shadow
+## primitives at 30 and 100 units; see docs/PERFORMANCE.md's "Known dead ends" section).
 ##
-## Two more risks the design named that the tree does not yet record a fix for:
-## - Node count is now bounded by surviving instance count, not species count. Before this
-##   branch every map built exactly 57 nodes; the reference map now builds about 1,335, and
-##   a sparse enough large map is unbounded in principle. Maps are untrusted network input.
-## - Map load time cost is unmeasured -- see docs/PERFORMANCE.md's "Spatial foliage
-##   chunking" section for what is known about it by inspection instead.
+## Chunk 5 was also rendered against chunk 10, same Home pose, each with its own
+## foliage-hidden reference: chunk 10's foliage cost is 2.80 ms against chunk 5's 2.77 ms,
+## a ~1% difference within noise, even though chunk 5 cuts visible primitives 11% (its
+## 77% more draw calls cancel the saving, exactly as chunk 10's own extra draw calls cost
+## nothing above). Combined with chunk 5 costing more nodes (2,747 vs. 1,335) and more
+## time at load (see below), 10 is confirmed as the right value on measured grounds. See
+## docs/PERFORMANCE.md's "Spatial foliage chunking" section for the full rendered tables
+## and the geometric sweep that chose this value. Chunk sizes 10 and 5 have been
+## rendered; 25/15/8 remain geometric-only.
+##
+## One more risk the design named that the tree does not yet record a fix for: node count
+## is now bounded by surviving instance count, not species count. Before this branch every
+## map built exactly 57 nodes; the reference map now builds about 1,335, and a sparse
+## enough large map is unbounded in principle. Maps are untrusted network input.
+##
+## Map load cost IS measured: timing `ScatterGlbUtils.process_scatter_instances` headless
+## against the reference map, chunk 10 costs +13.6 ms of scatter processing over unchunked
+## (101.7 ms vs. 88.1 ms, minimum of three reps each) -- about 0.5% of this map's ~2,474 ms
+## GLB parse time. Negligible. See docs/PERFORMANCE.md's "Map load cost" section.
 const CHUNK_SIZE_WORLD_UNITS: float = 10.0
 
 
