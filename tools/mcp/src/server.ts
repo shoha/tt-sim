@@ -410,8 +410,13 @@ server.tool(
 server.tool(
   "game_click_control",
   "Click a Control by node name, node path, or exact button text. Prefer this over game_click: " +
-    "it needs no coordinate conversion, so it cannot miss because of the viewport/window size " +
-    "mismatch. Fails loudly when the query matches nothing or is ambiguous. Cannot click items " +
+    "the bridge converts the Control's canvas-space centre into window space before injecting, so " +
+    "the caller does no coordinate math and the click cannot miss because of the viewport/window " +
+    "size mismatch (verified live at a 1278x1360 window over a 1920x2043 viewport, and at a " +
+    "matched 1920x1080 window where the conversion is the identity). Raw game_click, game_drag " +
+    "and game_scroll get no such conversion. Fails loudly when the query matches nothing or is " +
+    "ambiguous, though note that success means the click was injected at the Control's centre, " +
+    "not that the Control reacted. Cannot click items " +
     "inside an open OptionButton popup menu (a Godot PopupMenu is a Window, not a Control) -- " +
     "use game_key with arrow keys and Enter for those.",
   {
