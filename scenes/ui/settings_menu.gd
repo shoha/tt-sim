@@ -393,7 +393,11 @@ func _load_settings() -> void:
 			"graphics", "sdfgi_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"]
 		)
 		foliage_density_slider.value = (
-			config.get_value("graphics", "foliage_budget", FoliageBudget.PRIMITIVE_BUDGET)
+			config.get_value(
+				FoliageDensityController.SETTINGS_SECTION,
+				FoliageDensityController.SETTINGS_KEY,
+				FoliageBudget.PRIMITIVE_BUDGET
+			)
 			/ 1000000.0
 		)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
@@ -475,7 +479,11 @@ func _save_settings() -> void:
 			_RENDERING_METHOD_VALUES[renderer_method_option.get_selected_id()],
 		)
 	)
-	config.set_value("graphics", "foliage_budget", int(foliage_density_slider.value * 1000000))
+	config.set_value(
+		FoliageDensityController.SETTINGS_SECTION,
+		FoliageDensityController.SETTINGS_KEY,
+		int(foliage_density_slider.value * 1000000)
+	)
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
 	config.set_value("updates", "check_prereleases", prereleases_check.button_pressed)
 	config.set_value("grid_visuals", "cell_tint_opacity", cell_tint_opacity_slider.value / 100.0)
@@ -685,6 +693,7 @@ func _apply_grid_visual_settings() -> void:
 
 func _on_foliage_density_changed(value: float) -> void:
 	foliage_density_label.text = "%.1fM" % value
+	_try_play_slider_tick()
 
 
 func _apply_foliage_density() -> void:
