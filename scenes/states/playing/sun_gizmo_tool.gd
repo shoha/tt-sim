@@ -121,6 +121,13 @@ func is_active() -> bool:
 	return _active
 
 
+## Whether a ring drag is in progress. GameMap checks this before letting a
+## mouse button over the GUI bypass the gizmo: a drag started on the 3D view
+## still needs its release even if the pointer has wandered onto a panel.
+func is_dragging() -> bool:
+	return _dragging
+
+
 func activate() -> void:
 	if _active:
 		return
