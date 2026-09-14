@@ -27,6 +27,54 @@ type ContentItem =
   | { type: "image"; data: string; mimeType: string };
 
 // ---------------------------------------------------------------------------
+// Helper: timeouts for commands that block the bridge for a known length of time
+// ---------------------------------------------------------------------------
+
+/** Project default for physics_ticks_per_second; only used to turn frames into a wall-clock bound. */
+const PHYSICS_TICKS_PER_SECOND = 60;
+
+/** Matches BridgeTimeControl.MAX_STEP_FRAMES, the bridge's own cap on a single step. */
+const MAX_STEP_FRAMES = 6000;
+
+/** Matches ValidationBridge.STEP_UNTIL_DEFAULT_MAX_FRAMES, applied when the caller omits maxFrames. */
+const DEFAULT_STEP_UNTIL_MAX_FRAMES = 300;
+
+/** Never wait less than this, so a short step still tolerates a slow frame or a loaded host. */
+const STEP_TIMEOUT_FLOOR_MS = 30_000;
+
+/** Slack on top of the frames' own duration, for scene work the step triggers on its way through. */
+const STEP_TIMEOUT_OVERHEAD_MS = 15_000;
+
+/**
+ * Wall-clock budget for a `step` or `step_until` that may run up to `frames` physics frames.
+ *
+ * A step holds the bridge's socket for roughly its own game-time duration, and the bridge's cap is
+ * 6000 frames -- about 100 real seconds at 60 Hz -- comfortably past the client's 30s default. The
+ * global default is deliberately NOT raised to cover that: a 115-second timeout on every command
+ * would turn a genuinely hung bridge into a two-minute stall on a `state` query. Only the two
+ * commands whose duration is known up front get the longer budget, derived from that duration.
+ */
+function stepTimeoutMs(frames: number | undefined, seconds: number | undefined): number {
+  const requested =
+    frames !== undefined && frames > 0
+      ? frames
+      : seconds !== undefined && seconds > 0
+        ? seconds * PHYSICS_TICKS_PER_SECOND
+        : 0;
+  const bounded = Math.min(Math.max(requested, 0), MAX_STEP_FRAMES);
+  const durationMs = (bounded / PHYSICS_TICKS_PER_SECOND) * 1000;
+  return Math.max(STEP_TIMEOUT_FLOOR_MS, durationMs + STEP_TIMEOUT_OVERHEAD_MS);
+}
+
+/** As stepTimeoutMs, for step_until, whose bound is maxFrames and whose default is 300 frames. */
+function stepUntilTimeoutMs(maxFrames: number | undefined): number {
+  return stepTimeoutMs(
+    maxFrames !== undefined && maxFrames > 0 ? maxFrames : DEFAULT_STEP_UNTIL_MAX_FRAMES,
+    undefined
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Lifecycle tools
 // ---------------------------------------------------------------------------
 
@@ -111,7 +159,9 @@ server.tool(
 
 server.tool(
   "game_state",
-  "Query current game state: app state, tokens, UI panels, camera, scene tree, and console errors.",
+  "Query current game state: app state, tokens, UI panels, camera, scene tree, console errors, " +
+    "and the clock ('frozen' and 'time_scale'). Check 'frozen' first when nothing seems to move: " +
+    "a frozen game is indistinguishable from a hung one until you look at it.",
   {},
   async () => {
     const err = requireBridge();
@@ -282,14 +332,20 @@ server.tool(
         result = await pm.bridge.send({ cmd: "resume" });
         break;
       case "step":
-        result = await pm.bridge.send({ cmd: "step", seconds, frames });
+        result = await pm.bridge.send(
+          { cmd: "step", seconds, frames },
+          stepTimeoutMs(frames, seconds)
+        );
         break;
       case "step_until":
-        result = await pm.bridge.send({
-          cmd: "step_until",
-          expression,
-          max_frames: maxFrames,
-        });
+        result = await pm.bridge.send(
+          {
+            cmd: "step_until",
+            expression,
+            max_frames: maxFrames,
+          },
+          stepUntilTimeoutMs(maxFrames)
+        );
         break;
     }
 
@@ -329,10 +385,10 @@ server.tool(
 server.tool(
   "game_controls",
   "List Control nodes in the running game with their viewport-space rect and centre point, up " +
-    "to 200 (the walk stops there with no truncation marker in the response, so a control you " +
-    "expect but don't see may be past the cap rather than absent). Walks from the window root, " +
-    "so dialogs and overlays parented outside the current scene are included (game_state's " +
-    "scene_tree does not see those). Use this to find what to click.",
+    "to 200. The response carries a 'truncated' flag: when it is true the walk hit the cap, so a " +
+    "control you expect but don't see may be past the cap rather than absent from the scene. " +
+    "Walks from the window root, so dialogs and overlays parented outside the current scene are " +
+    "included (game_state's scene_tree does not see those). Use this to find what to click.",
   {
     visibleOnly: z
       .boolean()
@@ -483,22 +539,31 @@ server.tool(
           break;
         }
         case "step": {
-          const result = await pm.bridge.send({
-            cmd: "step",
-            seconds: step.seconds,
-            frames: step.frames,
-          });
+          // Same derived timeout as the standalone game_time tool: this is an independent code
+          // path, and leaving it on the 30s default is what lets a long step's late reply be
+          // mistaken for the next step's result.
+          const result = await pm.bridge.send(
+            {
+              cmd: "step",
+              seconds: step.seconds,
+              frames: step.frames,
+            },
+            stepTimeoutMs(step.frames, step.seconds)
+          );
           if (!result.ok) {
             content.push({ type: "text", text: `Step failed (step): ${result.error}` });
           }
           break;
         }
         case "step_until": {
-          const result = await pm.bridge.send({
-            cmd: "step_until",
-            expression: step.expression,
-            max_frames: step.maxFrames,
-          });
+          const result = await pm.bridge.send(
+            {
+              cmd: "step_until",
+              expression: step.expression,
+              max_frames: step.maxFrames,
+            },
+            stepUntilTimeoutMs(step.maxFrames)
+          );
           content.push({ type: "text", text: JSON.stringify(result, null, 2) });
           break;
         }
