@@ -16,7 +16,7 @@ extends RefCounted
 ## Edge length in world units of one chunk cell, on both X and Z.
 ##
 ## Chosen by sweeping unchunked / 25 / 15 / 10 / 8 / 5 against the real 50 x 50 reference
-## map, replaying the actual pipeline (FoliageBudget.plan, select_indices, bucket_by_cell)
+## map, replaying the actual pipeline (FoliageBudget.plan, shuffled_order, bucket_by_cell)
 ## and counting, per camera zoom, which chunk AABBs intersect the view. Unchunked is 57
 ## nodes and 7,957,006 primitives at EVERY zoom, since one AABB per species is always drawn.
 ##

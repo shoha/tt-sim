@@ -64,46 +64,38 @@ static func primitives_per_instance(mesh: Mesh) -> int:
 	return total
 
 
-## Which `keep` of `count` instances survive, as ascending indices.
+## A deterministic shuffled ordering of `count` instance indices.
 ##
-## Seeded shuffle then truncate, rather than a suffix drop or a fixed stride. Scatter
-## transform arrays come out of the authoring tool in brush-stroke or row order, so
-## dropping the tail would carve a bald patch out of the map and a fixed stride could
-## beat against a planted grid into visible stripes. A shuffle is unbiased with respect
-## to whatever ordering the exporter happened to use.
+## This IS the order instances are written into a chunk's MultiMesh, which makes any
+## PREFIX of it a spatially even sample of that chunk -- the property
+## MultiMesh.visible_instance_count depends on to act as a density dial. Ordering them by
+## position instead would make a prefix carve a bald patch out of one side of the cell.
 ##
-## Deterministic by construction: the seed comes only from `seed_source` (the species
-## name), never from time or engine RNG state, so a map thins identically on every load
-## and on every machine -- which a host and its clients both depend on.
+## Deterministic by construction: the seed comes only from `seed_source`, never from time
+## or engine RNG state, so a map looks the same across loads on one machine and instances
+## appear and disappear predictably as the density slider moves rather than reshuffling.
+## Peers may differ in density, which is intended -- density is a per-user setting.
 ##
-## WARNING: changing the seeding or the shuffle here changes which instances survive in
-## every map that already exists. So does a Godot engine upgrade that changes
-## RandomNumberGenerator's own behavior (documented as PCG32, but with no cross-version
-## compatibility guarantee) -- it has exactly the same effect as a deliberate edit to this
-## function. test_pins_the_current_selection_algorithm's golden index arrays are what
-## catch either case; a failure there after an engine bump means the engine changed, not
-## that you broke something.
-static func select_indices(count: int, keep: int, seed_source: String) -> PackedInt32Array:
-	if count <= 0 or keep <= 0:
+## WARNING: changing the seeding or the shuffle changes which instances a user sees at any
+## density below 100%, in every map. A Godot RNG change on an engine upgrade has exactly
+## the same effect as a deliberate edit here; test_shuffled_order_pins_the_current_algorithm
+## is what catches either case.
+static func shuffled_order(count: int, seed_source: String) -> PackedInt32Array:
+	if count <= 0:
 		return PackedInt32Array()
 	var order := PackedInt32Array()
 	order.resize(count)
 	for i in count:
 		order[i] = i
-	if keep >= count:
-		return order
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _stable_hash(seed_source)
-	# Partial Fisher-Yates: only the first `keep` slots need to be settled.
-	for i in keep:
+	# Full Fisher-Yates: every slot is settled, because any prefix length may be drawn.
+	for i in count - 1:
 		var j := rng.randi_range(i, count - 1)
 		var swapped := order[i]
 		order[i] = order[j]
 		order[j] = swapped
-	var picked := order.slice(0, keep)
-	# Ascending so the surviving instances keep their original relative order.
-	picked.sort()
-	return picked
+	return order
 
 
 ## FNV-1a over `text`'s UTF-8 bytes. Deliberately not Godot's built-in hash(): this value
@@ -216,3 +208,28 @@ static func _with_thousands_separators(value: int) -> String:
 			grouped = "," + grouped
 		grouped = digits[digits.length() - 1 - offset] + grouped
 	return "-" + grouped if value < 0 else grouped
+
+
+## Splits a species' allocation across its chunks, proportionally to each chunk's size.
+##
+## `chunk_counts` maps a chunk key to how many instances that chunk holds; `kept` is what
+## FoliageBudget.plan() allocated the species; `total` is the species' full instance count.
+## Returns the same keys mapped to how many instances each chunk should draw.
+##
+## Proportional rather than filling chunks in order: filling in order would leave whole
+## cells empty and reintroduce exactly the spatial bias that shuffled_order exists to
+## prevent. Clamped to each chunk's own count because writing a visible_instance_count
+## above instance_count is invalid in Godot.
+static func visible_counts_for_chunks(
+	chunk_counts: Dictionary, kept: int, total: int
+) -> Dictionary:
+	var visible := {}
+	if total <= 0:
+		for key in chunk_counts.keys():
+			visible[key] = 0
+		return visible
+	var fraction := clampf(float(kept) / float(total), 0.0, 1.0)
+	for key in chunk_counts.keys():
+		var count: int = chunk_counts[key]
+		visible[key] = clampi(int(round(count * fraction)), 0, count)
+	return visible

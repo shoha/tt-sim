@@ -84,74 +84,106 @@ func test_counts_a_triangle_surface_and_skips_a_line_surface_in_the_same_mesh() 
 	assert_eq(FoliageBudget.primitives_per_instance(mesh), 12)
 
 
-func test_keeps_every_index_when_keep_meets_or_exceeds_count() -> void:
-	assert_eq(Array(FoliageBudget.select_indices(5, 9, "x")), [0, 1, 2, 3, 4])
-	assert_eq(Array(FoliageBudget.select_indices(5, 5, "x")), [0, 1, 2, 3, 4])
-
-
-func test_keeps_nothing_when_keep_is_zero_or_negative() -> void:
-	assert_eq(FoliageBudget.select_indices(5, 0, "x").size(), 0)
-	assert_eq(FoliageBudget.select_indices(5, -3, "x").size(), 0)
-
-
-func test_keeps_nothing_when_count_is_zero() -> void:
-	assert_eq(FoliageBudget.select_indices(0, 4, "x").size(), 0)
-
-
-func test_returns_exactly_keep_indices() -> void:
-	assert_eq(FoliageBudget.select_indices(1000, 250, "GrassBlade").size(), 250)
-
-
-func test_indices_are_distinct_and_in_range() -> void:
-	var picked := FoliageBudget.select_indices(200, 50, "GrassBlade")
+func test_shuffled_order_is_a_full_permutation() -> void:
+	# Nothing may be lost or duplicated: this order IS the instance order in the
+	# MultiMesh, so a missing index is a missing plant and a repeat is a double-drawn one.
+	var order := FoliageBudget.shuffled_order(200, "GrassBlade")
+	assert_eq(order.size(), 200)
 	var seen := {}
-	for index in picked:
+	for index in order:
 		assert_true(index >= 0 and index < 200, "index %d out of range" % index)
 		assert_false(seen.has(index), "index %d appeared twice" % index)
 		seen[index] = true
 
 
-func test_is_deterministic_for_the_same_seed_source() -> void:
-	# Load-bearing: a map must thin identically on every load and on every machine, or
-	# its appearance would change between sessions and between a host and its clients.
-	var first := FoliageBudget.select_indices(500, 120, "GrassBlade")
-	var second := FoliageBudget.select_indices(500, 120, "GrassBlade")
+func test_shuffled_order_is_deterministic_for_the_same_seed_source() -> void:
+	# A map must look the same across loads on one machine, and instances must appear and
+	# disappear predictably as the density slider moves rather than reshuffling.
+	var first := FoliageBudget.shuffled_order(500, "GrassBlade")
+	var second := FoliageBudget.shuffled_order(500, "GrassBlade")
 	assert_eq(Array(first), Array(second))
 
 
-func test_varies_with_the_seed_source() -> void:
-	# Different species must not thin to the same index pattern in lockstep.
-	var grass := FoliageBudget.select_indices(500, 120, "GrassBlade")
-	var pine := FoliageBudget.select_indices(500, 120, "PineTree")
+func test_shuffled_order_varies_with_the_seed_source() -> void:
+	var grass := FoliageBudget.shuffled_order(500, "GrassBlade")
+	var pine := FoliageBudget.shuffled_order(500, "PineTree")
 	assert_ne(Array(grass), Array(pine))
 
 
-func test_spreads_across_the_whole_range() -> void:
-	# Scatter transforms arrive in brush-stroke or row order, so dropping a suffix would
-	# leave a bald patch. Every quarter of the range must still be represented.
-	var picked := FoliageBudget.select_indices(100, 20, "GrassBlade")
+func test_shuffled_order_prefixes_spread_across_the_whole_range() -> void:
+	# This is the property visible_instance_count depends on: drawing the first N of the
+	# order must sample the whole cell evenly, not carve a bald patch out of one side.
+	var order := FoliageBudget.shuffled_order(100, "GrassBlade")
 	var quartiles := [0, 0, 0, 0]
-	for index in picked:
-		quartiles[index / 25] += 1
+	for i in 20:
+		quartiles[order[i] / 25] += 1
 	for quartile in quartiles:
-		assert_gt(quartile, 0, "a quarter of the range was dropped entirely: %s" % [quartiles])
+		assert_gt(quartile, 0, "a quarter of the range is absent from the prefix: %s" % [quartiles])
 
 
-func test_pins_the_current_selection_algorithm() -> void:
-	# Golden values, intentionally brittle. Changing the seeding or the shuffle silently
-	# changes which instances survive in every existing map, so that must never happen as
-	# an accident of refactoring -- if this test fails, the change was deliberate or it
-	# is a bug, and either way someone has to look.
-	assert_eq(Array(FoliageBudget.select_indices(10, 4, "GrassBlade")), [0, 1, 3, 5])
-	assert_eq(Array(FoliageBudget.select_indices(10, 4, "PineTree")), [0, 4, 5, 6])
+func test_shuffled_order_is_empty_for_a_nonpositive_count() -> void:
+	assert_eq(FoliageBudget.shuffled_order(0, "x").size(), 0)
+	assert_eq(FoliageBudget.shuffled_order(-5, "x").size(), 0)
+
+
+func test_shuffled_order_pins_the_current_algorithm() -> void:
+	# Golden values, intentionally brittle. This order decides which instances a user sees
+	# at any density below 100%, so it must not drift as an accident of refactoring -- and
+	# an engine RNG change on a Godot upgrade has the same effect as a deliberate edit.
+	var order := FoliageBudget.shuffled_order(8, "GrassBlade")
+	assert_eq(Array(order), [5, 6, 7, 3, 1, 4, 2, 0])
 
 
 func test_stable_hash_is_fnv1a_and_not_the_engines_hash() -> void:
-	# FNV-1a's defining property: the empty string hashes to the offset basis. Asserted
-	# so the seeding cannot be quietly swapped for Godot's own hash(), which is an engine
-	# implementation detail and would tie every map's appearance to an engine version.
+	# FNV-1a's defining property: the empty string hashes to the offset basis. Asserted so
+	# the seeding cannot be quietly swapped for Godot's hash(), which is an engine detail
+	# that would tie every map's appearance to an engine version.
 	assert_eq(FoliageBudget._stable_hash(""), 2166136261)
 	assert_eq(FoliageBudget._stable_hash("GrassBlade"), 445990121)
+
+
+func test_visible_counts_distribute_proportionally() -> void:
+	var counts := FoliageBudget.visible_counts_for_chunks(
+		{Vector2i(0, 0): 100, Vector2i(1, 0): 100}, 100, 200
+	)
+	assert_eq(counts[Vector2i(0, 0)], 50)
+	assert_eq(counts[Vector2i(1, 0)], 50)
+
+
+func test_visible_counts_respect_uneven_chunks() -> void:
+	var counts := FoliageBudget.visible_counts_for_chunks(
+		{Vector2i(0, 0): 80, Vector2i(1, 0): 20}, 50, 100
+	)
+	assert_eq(counts[Vector2i(0, 0)], 40)
+	assert_eq(counts[Vector2i(1, 0)], 10)
+
+
+func test_visible_counts_show_everything_when_kept_equals_total() -> void:
+	var counts := FoliageBudget.visible_counts_for_chunks(
+		{Vector2i(0, 0): 30, Vector2i(1, 0): 70}, 100, 100
+	)
+	assert_eq(counts[Vector2i(0, 0)], 30)
+	assert_eq(counts[Vector2i(1, 0)], 70)
+
+
+func test_visible_counts_never_exceed_a_chunks_instance_count() -> void:
+	# Writing a visible_instance_count above instance_count is invalid in Godot.
+	var counts := FoliageBudget.visible_counts_for_chunks(
+		{Vector2i(0, 0): 10, Vector2i(1, 0): 10}, 500, 20
+	)
+	assert_eq(counts[Vector2i(0, 0)], 10)
+	assert_eq(counts[Vector2i(1, 0)], 10)
+
+
+func test_visible_counts_are_zero_for_a_zero_allocation() -> void:
+	var counts := FoliageBudget.visible_counts_for_chunks({Vector2i(0, 0): 40}, 0, 40)
+	assert_eq(counts[Vector2i(0, 0)], 0)
+
+
+func test_visible_counts_handle_empty_and_degenerate_input() -> void:
+	assert_eq(FoliageBudget.visible_counts_for_chunks({}, 10, 10).size(), 0)
+	var counts := FoliageBudget.visible_counts_for_chunks({Vector2i(0, 0): 10}, 5, 0)
+	assert_eq(counts[Vector2i(0, 0)], 0)
 
 
 func _species(count: int, per_instance: int) -> Dictionary:
