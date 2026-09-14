@@ -457,10 +457,14 @@ func _inject_drag(x1: float, y1: float, x2: float, y2: float) -> void:
 ## input and answering commands while the world is held still.
 ##
 ## The pre-freeze scale is remembered rather than assumed to be 1.0, so freezing does not quietly
-## discard a time scale the game set for itself.
+## discard a time scale the game set for itself. A non-positive scale is never recorded, though:
+## if something else had already zeroed Engine.time_scale before freeze ran, later lifting the
+## freeze back to that same 0.0 would leave get_tree().physics_frame never firing, hanging
+## _advance_physics_frames (and therefore "step") forever. Falling back to 1.0 keeps
+## _prefreeze_time_scale always liftable.
 func _cmd_freeze() -> Dictionary:
 	if not _frozen:
-		_prefreeze_time_scale = Engine.time_scale
+		_prefreeze_time_scale = Engine.time_scale if Engine.time_scale > 0.0 else 1.0
 		Engine.time_scale = 0.0
 		_frozen = true
 	return {"ok": true, "frozen": true, "restored_time_scale": _prefreeze_time_scale}
@@ -497,8 +501,22 @@ func _cmd_step(cmd: Dictionary) -> Dictionary:
 
 ## Runs exactly `frames` physics frames, holding the freeze open around them.
 ##
+## What this guarantees is exact: `frames` physics ticks means `_physics_process` state advances
+## by exactly `frames / physics_ticks_per_second` of game time, independent of host framerate.
+## `_process`-driven state (Tweens, camera-zoom smoothing, and the like) is not covered by that
+## guarantee -- it advances by whatever wall-clock time these `frames` physics ticks happened to
+## take on this host, which varies with framerate. A step is still far more controlled than a bare
+## wait for that kind of state, just not frame-rate independent for it.
+##
 ## The time scale must be lifted before awaiting: at a scale of 0.0 the physics accumulator never
-## fills, so `get_tree().physics_frame` would never fire and the await would hang forever.
+## fills, so `get_tree().physics_frame` would never fire and the await would hang forever. This is
+## also why `_cmd_freeze` refuses to record a non-positive `_prefreeze_time_scale` -- restoring a
+## scale of 0.0 here would reproduce the same hang.
+##
+## A large `frames` value blocks the bridge's socket for roughly that much real time --
+## `BridgeTimeControl.MAX_STEP_FRAMES` (6000) is about 100 real seconds at the default 60 Hz tick
+## rate -- with `_processing` held throughout, so a client that times out mid-step leaves the
+## bridge partway through the step rather than aborting it.
 func _advance_physics_frames(frames: int) -> void:
 	var was_frozen := _frozen
 	if was_frozen:
