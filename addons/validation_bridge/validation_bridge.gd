@@ -335,6 +335,12 @@ func _cmd_input(cmd: Dictionary) -> Dictionary:
 ##
 ## _inject_drag already had the frame boundary, which is why drags sometimes worked where
 ## clicks never did.
+##
+## _inject_drag's own failure mode was different: it never called flush_buffered_events at all.
+## With agile input flushing, unflushed events queued via Input.parse_input_event are delivered
+## at the engine's own flush point instead of at the frame boundaries awaited here, so the press,
+## the motion sequence, and the release could coalesce or arrive out of step with each other --
+## this is what made drags succeed only intermittently.
 func _inject_click(x: float, y: float, button: MouseButton = MOUSE_BUTTON_LEFT) -> void:
 	var pos := Vector2(x, y)
 
@@ -400,6 +406,7 @@ func _inject_drag(x1: float, y1: float, x2: float, y2: float) -> void:
 	press.position = from
 	press.global_position = from
 	Input.parse_input_event(press)
+	Input.flush_buffered_events()
 
 	await get_tree().process_frame
 
@@ -413,6 +420,7 @@ func _inject_drag(x1: float, y1: float, x2: float, y2: float) -> void:
 		motion.relative = (to - from) / float(steps)
 		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
 		Input.parse_input_event(motion)
+		Input.flush_buffered_events()
 		if i < steps:
 			await get_tree().process_frame
 
@@ -422,6 +430,7 @@ func _inject_drag(x1: float, y1: float, x2: float, y2: float) -> void:
 	release.position = to
 	release.global_position = to
 	Input.parse_input_event(release)
+	Input.flush_buffered_events()
 
 
 func _cmd_wait(cmd: Dictionary) -> Dictionary:
