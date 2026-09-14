@@ -23,9 +23,12 @@ const MULTIMESH_SUFFIX := "_MultiMesh"
 ## slider always writes a float or int, but a hand-edited or corrupt settings.cfg could
 ## hold a String or bool, which would otherwise be a hard runtime type error on every map
 ## load instead of a coerced number.
-static func budget_from_settings() -> int:
+##
+## `path` defaults to the real settings file and exists so tests can point this at a
+## disposable user:// path instead -- production callers never pass it.
+static func budget_from_settings(path: String = Paths.SETTINGS_PATH) -> int:
 	var config := ConfigFile.new()
-	if config.load(Paths.SETTINGS_PATH) != OK:
+	if config.load(path) != OK:
 		return FoliageBudget.PRIMITIVE_BUDGET
 	return int(config.get_value(SETTINGS_SECTION, SETTINGS_KEY, FoliageBudget.PRIMITIVE_BUDGET))
 

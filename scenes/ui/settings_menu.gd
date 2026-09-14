@@ -939,7 +939,7 @@ func _apply_tooltips() -> void:
 	foliage_density_slider.tooltip_text = (
 		"Maximum scattered foliage detail, in millions of triangles. Lower this if maps "
 		+ "with heavy foliage run poorly; raise it if your machine has headroom. Applies "
-		+ "immediately, and each player chooses their own."
+		+ "without a map reload, and each player chooses their own."
 	)
 	cell_tint_opacity_slider.tooltip_text = "Opacity of the cell fill shading on the grid"
 	line_thickness_slider.tooltip_text = "Thickness of the grid lines"

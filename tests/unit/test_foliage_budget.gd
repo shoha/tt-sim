@@ -186,6 +186,32 @@ func test_visible_counts_handle_empty_and_degenerate_input() -> void:
 	assert_eq(counts[Vector2i(0, 0)], 0)
 
 
+func test_visible_counts_never_lose_a_species_to_rounding() -> void:
+	# Independent per-chunk rounding returns 0 for all three here (round(1/3) = 0), losing
+	# the species entirely. Largest-remainder apportionment must hand the whole allocation
+	# to one chunk instead.
+	var counts := FoliageBudget.visible_counts_for_chunks(
+		{Vector2i(0, 0): 1, Vector2i(1, 0): 1, Vector2i(2, 0): 1}, 1, 3
+	)
+	var total := 0
+	for key in counts.keys():
+		total += counts[key]
+	assert_eq(total, 1)
+
+
+func test_visible_counts_never_exceed_the_allocation_through_rounding() -> void:
+	# Independent rounding gives round(0.5) = 1 on every chunk here, doubling the
+	# allocation and blowing the budget the user set.
+	var chunk_counts := {}
+	for i in 100:
+		chunk_counts[Vector2i(i, 0)] = 1
+	var counts := FoliageBudget.visible_counts_for_chunks(chunk_counts, 50, 100)
+	var total := 0
+	for key in counts.keys():
+		total += counts[key]
+	assert_eq(total, 50)
+
+
 func _species(count: int, per_instance: int) -> Dictionary:
 	return {"count": count, "primitives_per_instance": per_instance}
 
@@ -263,12 +289,25 @@ func test_defaults_to_the_shipped_budget() -> void:
 	assert_false(report.thinned)
 
 
-func test_describe_names_the_before_and_after_counts_and_the_reason() -> void:
+func test_describe_names_the_density_percentage_and_the_reason() -> void:
+	# 400 kept of 1,000 before is 40%. Present tense and names the setting (not the map) as
+	# the cause, since this is a live dial the player can raise back up, not a one-time loss.
 	var report := FoliageBudget.plan({"Grass": _species(1000, 10)}, 4000)
 	var message := FoliageBudget.describe(report)
-	assert_string_contains(message, "400")
-	assert_string_contains(message, "1,000")
-	assert_string_contains(message, "performance")
+	assert_string_contains(message, "40%")
+	assert_string_contains(message, "Foliage Density")
+
+
+func test_describe_formats_the_percentage_as_a_whole_number() -> void:
+	# 250 of 749 is 33.377...%, which must read as a clean "33%" -- not "33.4%" and not
+	# "33.0%" -- since the wording is meant to be skimmed in a toast, not read precisely.
+	var report := {"instances_before": 749, "instances_after": 250}
+	var message := FoliageBudget.describe(report)
+	assert_string_contains(message, "33%")
+	# Isolate the number itself rather than the whole sentence, which legitimately ends in
+	# its own, unrelated period.
+	var percent_text := message.split("%")[0]
+	assert_false(percent_text.contains("."), "percentage must not include a decimal point")
 
 
 func test_a_species_is_never_allocated_zero_instances() -> void:
