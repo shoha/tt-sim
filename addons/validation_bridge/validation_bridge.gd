@@ -336,11 +336,13 @@ func _cmd_input(cmd: Dictionary) -> Dictionary:
 ## _inject_drag already had the frame boundary, which is why drags sometimes worked where
 ## clicks never did.
 ##
-## _inject_drag's own failure mode was different: it never called flush_buffered_events at all.
-## With agile input flushing, unflushed events queued via Input.parse_input_event are delivered
-## at the engine's own flush point instead of at the frame boundaries awaited here, so the press,
-## the motion sequence, and the release could coalesce or arrive out of step with each other --
-## this is what made drags succeed only intermittently.
+## _inject_drag's own asymmetry was different: unlike _inject_click above, it never called
+## flush_buffered_events at all, so its events were left to agile input flushing's own
+## delivery point instead of the frame boundaries awaited here. The hypothesis was that this
+## explained drags succeeding only intermittently; a 10-iteration before/after measurement in
+## this environment did not bear that out (0/10 both ways), so a second cause is still open.
+## The flush call stays regardless -- unflushed injected events are nondeterministic on their
+## own terms, independent of whether they were the drag's actual failure mode.
 func _inject_click(x: float, y: float, button: MouseButton = MOUSE_BUTTON_LEFT) -> void:
 	var pos := Vector2(x, y)
 
