@@ -66,6 +66,8 @@ var _last_slider_tick_time: float = 0.0
 @onready var ssr_check: CheckButton = %SSRCheck
 @onready var sdfgi_check: CheckButton = %SDFGICheck
 @onready var renderer_method_option: OptionButton = %RendererMethodOption
+@onready var foliage_density_slider: HSlider = %FoliageDensitySlider
+@onready var foliage_density_label: Label = %FoliageDensityLabel
 
 # Grid visual controls
 @onready var cell_tint_opacity_slider: HSlider = %CellTintOpacitySlider
@@ -278,6 +280,7 @@ func _on_panel_ready() -> void:
 	shadow_quality_option.item_selected.connect(_on_shadow_quality_selected)
 	water_quality_option.item_selected.connect(_on_water_quality_selected)
 	renderer_method_option.item_selected.connect(_on_renderer_method_selected)
+	foliage_density_slider.value_changed.connect(_on_foliage_density_changed)
 
 	# Grid visuals
 	cell_tint_opacity_slider.value_changed.connect(_on_cell_tint_opacity_changed)
@@ -389,6 +392,10 @@ func _load_settings() -> void:
 		sdfgi_check.button_pressed = config.get_value(
 			"graphics", "sdfgi_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"]
 		)
+		foliage_density_slider.value = (
+			config.get_value("graphics", "foliage_budget", FoliageBudget.PRIMITIVE_BUDGET)
+			/ 1000000.0
+		)
 		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
 		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
 		cell_tint_opacity_slider.value = (
@@ -468,6 +475,7 @@ func _save_settings() -> void:
 			_RENDERING_METHOD_VALUES[renderer_method_option.get_selected_id()],
 		)
 	)
+	config.set_value("graphics", "foliage_budget", int(foliage_density_slider.value * 1000000))
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
 	config.set_value("updates", "check_prereleases", prereleases_check.button_pressed)
 	config.set_value("grid_visuals", "cell_tint_opacity", cell_tint_opacity_slider.value / 100.0)
@@ -512,6 +520,9 @@ func _apply_settings() -> void:
 
 	# Apply grid visual settings
 	_apply_grid_visual_settings()
+
+	# Apply foliage density setting
+	_apply_foliage_density()
 
 	# Apply network settings
 	_apply_network_settings()
@@ -672,6 +683,16 @@ func _apply_grid_visual_settings() -> void:
 		)
 
 
+func _on_foliage_density_changed(value: float) -> void:
+	foliage_density_label.text = "%.1fM" % value
+
+
+func _apply_foliage_density() -> void:
+	var game_map = _find_game_map()
+	if game_map:
+		game_map.apply_foliage_density(int(foliage_density_slider.value * 1000000))
+
+
 func _on_cell_tint_opacity_changed(value: float) -> void:
 	cell_tint_opacity_label.text = "%d%%" % int(value)
 	_try_play_slider_tick()
@@ -691,6 +712,7 @@ func _update_grid_labels() -> void:
 	cell_tint_opacity_label.text = "%d%%" % int(cell_tint_opacity_slider.value)
 	line_thickness_label.text = "%.1f" % line_thickness_slider.value
 	fade_distance_label.text = "%d" % int(fade_distance_slider.value)
+	foliage_density_label.text = "%.1fM" % foliage_density_slider.value
 
 
 func _find_game_map() -> GameMap:
@@ -729,6 +751,7 @@ func _on_reset_pressed() -> void:
 	tw.tween_property(cell_tint_opacity_slider, "value", 65.0, 0.3)
 	tw.tween_property(line_thickness_slider, "value", 2.0, 0.3)
 	tw.tween_property(fade_distance_slider, "value", 30.0, 0.3)
+	tw.tween_property(foliage_density_slider, "value", 8.0, 0.3)
 
 	# Snap toggles immediately (no meaningful tween for booleans)
 	fullscreen_check.button_pressed = false
@@ -903,6 +926,11 @@ func _apply_tooltips() -> void:
 	renderer_method_option.tooltip_text = (
 		"Which Godot rendering backend to use (Default follows the platform's "
 		+ "normal choice). Changing this requires a restart."
+	)
+	foliage_density_slider.tooltip_text = (
+		"Maximum scattered foliage detail, in millions of triangles. Lower this if maps "
+		+ "with heavy foliage run poorly; raise it if your machine has headroom. Applies "
+		+ "immediately, and each player chooses their own."
 	)
 	cell_tint_opacity_slider.tooltip_text = "Opacity of the cell fill shading on the grid"
 	line_thickness_slider.tooltip_text = "Thickness of the grid lines"
