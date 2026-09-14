@@ -367,9 +367,11 @@ func _finalize_map_loading(map: Node3D) -> void:
 
 
 ## Applies the player's foliage density setting to a freshly loaded map, and tells them
-## once if the map exceeded their budget. Reworded from a warning about permanent thinning:
-## nothing is lost any more, the density is a setting they can move, so the message's job
-## is to explain the reduction and point at where to change it.
+## once if the map exceeded their budget. The toast text itself is still
+## FoliageBudget.describe()'s unchanged "X of Y scattered instances kept" wording; this
+## function's only addition is appending a pointer to where the setting lives, since
+## nothing here is a one-time, unrecoverable loss any more -- the player can raise the
+## dial back up without a reload.
 func _apply_foliage_density_and_notify(map: Node3D) -> void:
 	if not map:
 		return

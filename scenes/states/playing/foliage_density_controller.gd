@@ -18,12 +18,16 @@ const SETTINGS_KEY := "foliage_budget"
 const MULTIMESH_SUFFIX := "_MultiMesh"
 
 
-## The player's configured budget, or FoliageBudget.PRIMITIVE_BUDGET when unset.
+## The player's configured budget, or FoliageBudget.PRIMITIVE_BUDGET when unset. Wrapped in
+## int(...) because ConfigFile.get_value returns whatever Variant type is on disk -- a
+## slider always writes a float or int, but a hand-edited or corrupt settings.cfg could
+## hold a String or bool, which would otherwise be a hard runtime type error on every map
+## load instead of a coerced number.
 static func budget_from_settings() -> int:
 	var config := ConfigFile.new()
 	if config.load(Paths.SETTINGS_PATH) != OK:
 		return FoliageBudget.PRIMITIVE_BUDGET
-	return config.get_value(SETTINGS_SECTION, SETTINGS_KEY, FoliageBudget.PRIMITIVE_BUDGET)
+	return int(config.get_value(SETTINGS_SECTION, SETTINGS_KEY, FoliageBudget.PRIMITIVE_BUDGET))
 
 
 ## Writes visible_instance_count on every scatter chunk under `map_root` so the total stays
@@ -51,15 +55,24 @@ static func apply(map_root: Node3D, budget: int) -> Dictionary:
 		var total: int = species[name]["count"]
 		var kept: int = report.kept.get(name, total)
 		var visible := FoliageBudget.visible_counts_for_chunks(chunk_counts, kept, total)
-		for node_path in visible.keys():
-			var node := map_root.get_node_or_null(node_path) as MultiMeshInstance3D
-			if node and node.multimesh:
-				node.multimesh.visible_instance_count = visible[node_path]
+		for node in visible.keys():
+			var mmi := node as MultiMeshInstance3D
+			if mmi and mmi.multimesh:
+				mmi.multimesh.visible_instance_count = visible[node]
 	return report
 
 
 ## Groups scatter chunks by species name, recording each chunk's instance count keyed by
-## its own node name, plus one primitives-per-instance figure per species.
+## the MultiMeshInstance3D node itself (not its name or path), plus one
+## primitives-per-instance figure per species.
+##
+## Keyed by node object rather than name or NodePath: `_collect` recurses arbitrarily deep
+## (ScatterGlbUtils parents chunks under the GLB scene root, which level_loader then
+## parents under map_container as "LevelMap", so real chunks sit two levels below the root
+## `apply()` is given), and a bare node name can only ever be resolved back to a DIRECT
+## child via get_node_or_null -- silently dropping the write-back for anything deeper. Node
+## objects also can't collide the way two identically-named chunks in different subtrees
+## would under a name-keyed dictionary, which would otherwise undercount one of them.
 static func _collect(node: Node, chunks_by_species: Dictionary, per_instance: Dictionary) -> void:
 	for child in node.get_children():
 		if child is MultiMeshInstance3D and child.has_meta("wind_foliage_category"):
@@ -71,12 +84,19 @@ static func _collect(node: Node, chunks_by_species: Dictionary, per_instance: Di
 					per_instance[species_name] = FoliageBudget.primitives_per_instance(
 						mmi.multimesh.mesh
 					)
-				chunks_by_species[species_name][String(mmi.name)] = mmi.multimesh.instance_count
+				chunks_by_species[species_name][mmi] = mmi.multimesh.instance_count
 		_collect(child, chunks_by_species, per_instance)
 
 
 ## "GrassBlade_MultiMesh_c-1_2" -> "GrassBlade". A species occupying one cell has no cell
 ## suffix, so the species name is simply everything before "_MultiMesh".
+##
+## rfind, not find: a species whose own name contains "_MultiMesh" (e.g. a chunk literally
+## named "Rock_MultiMeshFoo_MultiMesh") would otherwise cut at the first occurrence and
+## collapse into the same species as a plain "Rock_MultiMesh" chunk, merging two unrelated
+## groups under one name and costing the merged group with whichever mesh was recorded
+## first. Cell suffixes ("_c<x>_<z>") never contain "_MultiMesh", so the last occurrence is
+## always the real separator.
 static func _species_of(node_name: String) -> String:
-	var cut := node_name.find(MULTIMESH_SUFFIX)
+	var cut := node_name.rfind(MULTIMESH_SUFFIX)
 	return node_name.substr(0, cut) if cut > 0 else node_name
