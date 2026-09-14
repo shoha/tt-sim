@@ -5,7 +5,7 @@ extends RefCounted
 ## keep both files under this repo's gdlint max-file-lines gate, the same way
 ## WaterGlbUtils and MeshInstancingUtils were. See utils/glb_utils.gd for GLB
 ## loading/processing in general, and utils/foliage_budget.gd for the primitive budget
-## this pipeline enforces on imported maps.
+## FoliageDensityController applies at runtime to what this pipeline builds.
 
 const _SCATTER_INSTANCES_EXTRAS_KEY := "tt_scatter_instances"
 
@@ -202,8 +202,10 @@ static func _shuffled(transforms: Array[Transform3D], seed_source: String) -> Ar
 
 ## Converts a flat array of [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] rows to Transform3D,
 ## dropping any row _row_to_transform rejects. Split out of
-## _build_multimesh_from_transforms so process_scatter_instances' first pass can count a
-## species' real surviving instances before the budget is allocated.
+## _build_multimesh_from_transforms so the row -> Transform3D conversion can be tested
+## directly: MultiMesh.get_instance_transform() reads back identity under Godot's
+## headless/dummy rendering driver regardless of what was set, so MultiMesh itself is a
+## dead end for verifying this math (see _row_to_transform's own docstring).
 static func _collect_valid_transforms(rows: Array) -> Array[Transform3D]:
 	var valid: Array[Transform3D] = []
 	for row in rows:

@@ -531,6 +531,15 @@ func apply_grid_visual_settings(
 	_visual_effects.apply_grid_visual_settings(cell_tint_opacity, line_thickness, fade_radius)
 
 
+## Apply the player's foliage density setting to the loaded map. Called by the settings
+## menu when the slider moves, and at map load. Returns nothing: the load-time caller owns
+## whether to tell the player, because only it knows this is a fresh map rather than a
+## slider nudge.
+func apply_foliage_density(budget: int) -> void:
+	if map_container:
+		FoliageDensityController.apply(map_container, budget)
+
+
 ## Enable or disable the occlusion fade effect
 func set_occlusion_fade_enabled(enabled: bool) -> void:
 	_visual_effects.set_occlusion_fade_enabled(enabled)
