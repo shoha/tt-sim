@@ -101,7 +101,7 @@ static func process_scatter_instances(
 		var kept_transforms: Array[Transform3D] = all_transforms
 		if keep < all_transforms.size():
 			var subset: Array[Transform3D] = []
-			for index in FoliageBudget.select_indices(all_transforms.size(), keep, key):
+			for index in FoliageBudget.shuffled_order(all_transforms.size(), key).slice(0, keep):
 				subset.append(all_transforms[index])
 			kept_transforms = subset
 		var wind_category := WindFoliage.classify_category(key)
