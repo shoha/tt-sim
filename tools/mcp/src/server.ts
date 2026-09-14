@@ -234,6 +234,141 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Deterministic time control
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "game_time",
+  "Control game time deterministically. 'freeze' stops the clock (physics stops, process delta " +
+    "becomes 0, rendering and this bridge keep running). 'step' advances an exact slice of game " +
+    "time. 'step_until' advances until a GDScript expression is truthy. 'resume' restores normal " +
+    "time. Prefer freeze + step + step_until over game_wait: waits race the game, steps do not.",
+  {
+    action: z
+      .enum(["freeze", "resume", "step", "step_until"])
+      .describe("Which time operation to perform"),
+    seconds: z
+      .number()
+      .optional()
+      .describe("For 'step': game time to advance. Converted to whole physics frames."),
+    frames: z
+      .number()
+      .int()
+      .optional()
+      .describe("For 'step': exact physics frames to advance. Takes precedence over seconds."),
+    expression: z
+      .string()
+      .optional()
+      .describe(
+        "For 'step_until': GDScript expression evaluated against the current scene each frame."
+      ),
+    maxFrames: z
+      .number()
+      .int()
+      .optional()
+      .describe("For 'step_until': frames to advance before giving up. Defaults to 300."),
+  },
+  async ({ action, seconds, frames, expression, maxFrames }) => {
+    const err = requireBridge();
+    if (err) return { content: [{ type: "text" as const, text: err }], isError: true };
+
+    let result;
+    switch (action) {
+      case "freeze":
+        result = await pm.bridge.send({ cmd: "freeze" });
+        break;
+      case "resume":
+        result = await pm.bridge.send({ cmd: "resume" });
+        break;
+      case "step":
+        result = await pm.bridge.send({ cmd: "step", seconds, frames });
+        break;
+      case "step_until":
+        result = await pm.bridge.send({
+          cmd: "step_until",
+          expression,
+          max_frames: maxFrames,
+        });
+        break;
+    }
+
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      isError: !result.ok,
+    };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Inspection
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "game_eval",
+  "Evaluate a GDScript expression against the running game's current scene and return the value. " +
+    "Use this to read state that game_state does not report, instead of editing the bridge. " +
+    "Expressions cannot declare variables, loop, or assign, but can read properties and call " +
+    "methods, e.g. 'find_child(\"GameMap\").camera_node.size' or 'GameState.get_all_token_states().size()'.",
+  {
+    expression: z.string().describe("GDScript expression, evaluated with the current scene as self"),
+  },
+  async ({ expression }) => {
+    const err = requireBridge();
+    if (err) return { content: [{ type: "text" as const, text: err }], isError: true };
+
+    const result = await pm.bridge.send({ cmd: "eval", expression });
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      isError: !result.ok,
+    };
+  }
+);
+
+server.tool(
+  "game_controls",
+  "List every Control node in the running game with its viewport-space rect and centre point. " +
+    "Walks from the window root, so dialogs and overlays parented outside the current scene are " +
+    "included (game_state's scene_tree does not see those). Use this to find what to click.",
+  {
+    visibleOnly: z
+      .boolean()
+      .default(true)
+      .describe("Only report Controls currently visible in the tree"),
+  },
+  async ({ visibleOnly }) => {
+    const err = requireBridge();
+    if (err) return { content: [{ type: "text" as const, text: err }], isError: true };
+
+    const result = await pm.bridge.send({ cmd: "controls", visible_only: visibleOnly });
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      isError: !result.ok,
+    };
+  }
+);
+
+server.tool(
+  "game_click_control",
+  "Click a Control by node name, node path, or exact button text. Prefer this over game_click: " +
+    "it needs no coordinate conversion, so it cannot miss because of the viewport/window size " +
+    "mismatch. Fails loudly when the query matches nothing or is ambiguous.",
+  {
+    query: z.string().describe("Node name, node path, or exact button/label text"),
+    button: z.enum(["left", "right", "middle"]).default("left").describe("Mouse button"),
+  },
+  async ({ query, button }) => {
+    const err = requireBridge();
+    if (err) return { content: [{ type: "text" as const, text: err }], isError: true };
+
+    const result = await pm.bridge.send({ cmd: "input", type: "click_control", query, button });
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      isError: !result.ok,
+    };
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Batch tool
 // ---------------------------------------------------------------------------
 
@@ -245,6 +380,13 @@ const StepSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("wait"), seconds: z.number() }),
   z.object({ action: z.literal("screenshot") }),
   z.object({ action: z.literal("state") }),
+  z.object({ action: z.literal("freeze") }),
+  z.object({ action: z.literal("resume") }),
+  z.object({ action: z.literal("step"), seconds: z.number().optional(), frames: z.number().int().optional() }),
+  z.object({ action: z.literal("step_until"), expression: z.string(), maxFrames: z.number().int().optional() }),
+  z.object({ action: z.literal("eval"), expression: z.string() }),
+  z.object({ action: z.literal("controls"), visibleOnly: z.boolean().default(true) }),
+  z.object({ action: z.literal("click_control"), query: z.string(), button: z.enum(["left", "right", "middle"]).default("left") }),
 ]);
 
 server.tool(
@@ -324,6 +466,62 @@ server.tool(
           const errors = pm.getErrors();
           const state = { ...result, console_errors: errors };
           content.push({ type: "text", text: JSON.stringify(state, null, 2) });
+          break;
+        }
+        case "freeze":
+        case "resume": {
+          const result = await pm.bridge.send({ cmd: step.action });
+          if (!result.ok) {
+            content.push({ type: "text", text: `Step failed (${step.action}): ${result.error}` });
+          }
+          break;
+        }
+        case "step": {
+          const result = await pm.bridge.send({
+            cmd: "step",
+            seconds: step.seconds,
+            frames: step.frames,
+          });
+          if (!result.ok) {
+            content.push({ type: "text", text: `Step failed (step): ${result.error}` });
+          }
+          break;
+        }
+        case "step_until": {
+          const result = await pm.bridge.send({
+            cmd: "step_until",
+            expression: step.expression,
+            max_frames: step.maxFrames,
+          });
+          content.push({ type: "text", text: JSON.stringify(result, null, 2) });
+          break;
+        }
+        case "eval": {
+          const result = await pm.bridge.send({ cmd: "eval", expression: step.expression });
+          content.push({ type: "text", text: JSON.stringify(result, null, 2) });
+          break;
+        }
+        case "controls": {
+          const result = await pm.bridge.send({
+            cmd: "controls",
+            visible_only: step.visibleOnly,
+          });
+          content.push({ type: "text", text: JSON.stringify(result, null, 2) });
+          break;
+        }
+        case "click_control": {
+          const result = await pm.bridge.send({
+            cmd: "input",
+            type: "click_control",
+            query: step.query,
+            button: step.button,
+          });
+          if (!result.ok) {
+            content.push({
+              type: "text",
+              text: `Step failed (click_control): ${JSON.stringify(result)}`,
+            });
+          }
           break;
         }
       }
