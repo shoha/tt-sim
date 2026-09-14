@@ -363,6 +363,25 @@ func _finalize_map_loading(map: Node3D) -> void:
 	_configure_measure_tool()
 	_configure_grid()
 
+	_apply_foliage_density_and_notify(map)
+
+
+## Applies the player's foliage density setting to a freshly loaded map, and tells them
+## once if the map exceeded their budget. Reworded from a warning about permanent thinning:
+## nothing is lost any more, the density is a setting they can move, so the message's job
+## is to explain the reduction and point at where to change it.
+func _apply_foliage_density_and_notify(map: Node3D) -> void:
+	if not map:
+		return
+	var budget := FoliageDensityController.budget_from_settings()
+	var report := FoliageDensityController.apply(map, budget)
+	if report.thinned:
+		UIManager.show_toast(
+			"%s Adjust Foliage Density in Settings > Graphics." % FoliageBudget.describe(report),
+			UIManager.TOAST_WARNING,
+			6.0
+		)
+
 
 ## Load a map file synchronously using the unified GlbUtils.load_map pipeline.
 ## Handles both res:// and user:// paths with full post-processing.
