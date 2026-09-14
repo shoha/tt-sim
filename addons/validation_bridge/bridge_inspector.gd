@@ -30,7 +30,7 @@ static func _collect_recursive(node: Node, visible_only: bool, out: Array) -> vo
 		var control: Control = node
 		if not visible_only or control.is_visible_in_tree():
 			out.append(describe_control(control))
-	for child in node.get_children():
+	for child: Node in node.get_children():
 		if out.size() >= MAX_CONTROLS:
 			return
 		_collect_recursive(child, visible_only, out)

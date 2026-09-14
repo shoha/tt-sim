@@ -21,7 +21,15 @@ const MAX_DEPTH: int = 4
 const MAX_ARRAY_ITEMS: int = 50
 
 
-## Parses and runs `text` with `base_instance` as `self`, returning a JSON-safe result.
+## Parses and runs `text` with `base_instance` as `self`.
+##
+## Returns `{ok: false, error: String}` on a parse or execution failure, otherwise
+## `{ok: true, value: Variant, truthy: bool}` where `value` is the JSON-safe rendering of the
+## result and `truthy` is GDScript's own truthiness of the RAW result, computed before
+## serialization. Callers wanting to branch on the result -- `step_until` above all -- must use
+## `truthy` and never re-derive it from `value`: `to_json_safe` renders `Vector2.ZERO` and the
+## default `Color` as non-empty Dictionaries, which are truthy where the values themselves are
+## false.
 static func evaluate(text: String, base_instance: Object) -> Dictionary:
 	var expression := Expression.new()
 	if expression.parse(text) != OK:
@@ -29,7 +37,22 @@ static func evaluate(text: String, base_instance: Object) -> Dictionary:
 	var result: Variant = expression.execute([], base_instance, false)
 	if expression.has_execute_failed():
 		return {"ok": false, "error": "Execution failed: %s" % expression.get_error_text()}
-	return {"ok": true, "value": to_json_safe(result, 0)}
+	return {"ok": true, "value": to_json_safe(result, 0), "truthy": is_truthy(result)}
+
+
+## GDScript's own truthiness for an arbitrary Variant.
+##
+## Delegating to `if value:` rather than comparing against literals is deliberate: comparing
+## mismatched Variant types (a bool against an int, say) is a runtime script error in GDScript, not
+## a clean "not equal", so a hand-rolled `value != false and value != 0` throws on every value that
+## is not already a bool. Going through `if` also gives callers the contract they should expect --
+## an empty String, Array or Dictionary is false, exactly as `if` would treat it, not merely "not
+## null". A caller meaning "exists at all" rather than "is non-empty" should write an explicit size
+## check instead of relying on this.
+static func is_truthy(value: Variant) -> bool:
+	if value:
+		return true
+	return false
 
 
 ## Converts an arbitrary Variant into something JSON.stringify can encode without losing meaning.
