@@ -338,110 +338,6 @@ func _scatter_scene(species: Dictionary) -> Node3D:
 	return scene
 
 
-func test_scatter_within_budget_keeps_every_instance() -> void:
-	var scene := _scatter_scene({"GrassBlade": 40})
-	# A BoxMesh is 12 triangles, so 40 instances cost 480 -- inside a 10000 budget.
-	# Explicit chunk_size large enough that these all-positive-x fixtures land in one cell
-	# (ScatterChunker.cell_for uses floori, so coordinates straddling zero land in cell -1
-	# and cell 0 at ANY chunk size -- this only works because _rows emits every instance at
-	# x >= 0, z = 0). These budget tests are about thinning, not chunking, so they pin the
-	# orthogonal variable the same way they already pin primitive_budget -- and that keeps
-	# their unsuffixed `<Species>_MultiMesh` lookups valid. Chunking with thinning is
-	# covered separately by test_thinning_and_chunking_compose.
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 10000, 10000.0)
-	var built := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
-	assert_not_null(built)
-	assert_eq(built.multimesh.instance_count, 40)
-	assert_false(scene.has_meta("tt_foliage_budget_report"))
-	scene.free()
-
-
-func test_scatter_over_budget_is_thinned() -> void:
-	var scene := _scatter_scene({"GrassBlade": 100})
-	# 100 instances x 12 triangles = 1200, against a 600 budget -> half survive.
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 600, 10000.0)
-	var built := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
-	assert_not_null(built)
-	assert_eq(built.multimesh.instance_count, 50)
-	scene.free()
-
-
-func test_thinning_records_a_report_on_the_scene() -> void:
-	# The report leaves utils/ as scene meta because nothing in utils/ may touch an
-	# autoload; level_loader.gd reads it back and shows the toast.
-	var scene := _scatter_scene({"GrassBlade": 100})
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 600)
-	assert_true(scene.has_meta("tt_foliage_budget_report"))
-	var report: Dictionary = scene.get_meta("tt_foliage_budget_report")
-	assert_true(report.thinned)
-	assert_eq(report.instances_before, 100)
-	assert_eq(report.instances_after, 50)
-	scene.free()
-
-
-func test_a_deny_listed_rock_species_is_still_budgeted() -> void:
-	# WindFoliage.classify_category() returns "" for rock/stone/boulder names, but that
-	# decides what sways in the wind, not what costs primitives. Budgeting only tree and
-	# grass would let a map escape the cap by naming its species "rock_grass".
-	var scene := _scatter_scene({"RockCluster": 100})
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 600, 10000.0)
-	var built := scene.get_node_or_null("RockCluster_MultiMesh") as MultiMeshInstance3D
-	assert_not_null(built)
-	assert_eq(built.multimesh.instance_count, 50)
-	# Confirms the species really was deny-listed (wind category "") rather than merely
-	# having "rock" in its name while some future keyword change reclassified it as grass.
-	assert_eq(built.get_meta("wind_foliage_category", "unset"), "")
-	scene.free()
-
-
-func test_thinning_is_identical_across_two_loads_of_the_same_map() -> void:
-	var first := _scatter_scene({"GrassBlade": 100})
-	ScatterGlbUtils.process_scatter_instances(first, {}, 600, 10000.0)
-	var second := _scatter_scene({"GrassBlade": 100})
-	ScatterGlbUtils.process_scatter_instances(second, {}, 600, 10000.0)
-	var first_built := first.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
-	var second_built := second.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
-	assert_eq(first_built.multimesh.instance_count, second_built.multimesh.instance_count)
-	first.free()
-	second.free()
-
-
-func test_every_species_is_thinned_when_several_share_the_budget() -> void:
-	var scene := _scatter_scene({"GrassBlade": 100, "PineTree": 100})
-	# 200 instances x 12 = 2400, against 1200 -> each keeps half.
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 1200, 10000.0)
-	var grass := scene.get_node_or_null("GrassBlade_MultiMesh") as MultiMeshInstance3D
-	var pine := scene.get_node_or_null("PineTree_MultiMesh") as MultiMeshInstance3D
-	assert_eq(grass.multimesh.instance_count, 50)
-	assert_eq(pine.multimesh.instance_count, 50)
-	scene.free()
-
-
-func test_thinned_single_instance_species_still_frees_its_template_node() -> void:
-	# Pipeline-level regression guard for FoliageBudget.plan()'s floor-to-1: a species whose
-	# proportional share rounds down to zero would otherwise leave kept_transforms empty,
-	# so bucket_by_cell would build no chunk at all for HeroTree -- but
-	# process_scatter_instances frees the template node unconditionally after the per-cell
-	# build loop regardless of how many chunks that loop built, so HeroTree would not
-	# render standalone at its Blender template transform, it would just silently vanish
-	# instead of being replaced by a MultiMesh at its one authored position.
-	#
-	# Both species use a BoxMesh (12 primitives/instance, see _scatter_scene). 1000
-	# GrassBlade + 1 HeroTree = 1001 instances x 12 = 12,012 total primitives. At a 6000
-	# budget, ratio = 6000/12012 = 0.4995...; HeroTree's raw share is
-	# floor(1 * 0.4995) = 0, which plan()'s floor bumps to 1. GrassBlade's share is
-	# floor(1000 * 0.4995) = 499, unaffected by the floor.
-	var scene := _scatter_scene({"GrassBlade": 1000, "HeroTree": 1})
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 6000)
-
-	assert_null(scene.get_node_or_null("HeroTree"))
-	var hero := scene.get_node_or_null("HeroTree_MultiMesh") as MultiMeshInstance3D
-	assert_not_null(hero)
-	assert_eq(hero.multimesh.instance_count, 1)
-
-	scene.free()
-
-
 func _count_multimesh_children(scene: Node3D) -> int:
 	var found := 0
 	for child in scene.get_children():
@@ -465,7 +361,7 @@ func test_a_species_spanning_several_cells_becomes_several_multimesh_nodes() -> 
 	# to, would also pass a 1/1/23 mis-split -- neither number distinguishes an even split
 	# from a lopsided one, so assert each node's own count instead.
 	var scene := _scatter_scene({"GrassBlade": 25})
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 1 << 40, 10.0)
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 10.0)
 	var cell0 := scene.get_node_or_null("GrassBlade_MultiMesh_c0_0") as MultiMeshInstance3D
 	var cell1 := scene.get_node_or_null("GrassBlade_MultiMesh_c1_0") as MultiMeshInstance3D
 	var cell2 := scene.get_node_or_null("GrassBlade_MultiMesh_c2_0") as MultiMeshInstance3D
@@ -480,7 +376,7 @@ func test_a_species_spanning_several_cells_becomes_several_multimesh_nodes() -> 
 
 func test_chunk_nodes_carry_the_cell_suffix() -> void:
 	var scene := _scatter_scene({"GrassBlade": 25})
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 1 << 40, 10.0)
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 10.0)
 	assert_not_null(scene.get_node_or_null("GrassBlade_MultiMesh_c0_0"))
 	assert_not_null(scene.get_node_or_null("GrassBlade_MultiMesh_c1_0"))
 	assert_not_null(scene.get_node_or_null("GrassBlade_MultiMesh_c2_0"))
@@ -491,7 +387,7 @@ func test_a_single_cell_species_keeps_its_unsuffixed_name() -> void:
 	# Deliberate: an unchunked species keeps today's naming contract, so the suffix reads as
 	# a signal that a species was split rather than noise on every foliage node.
 	var scene := _scatter_scene({"GrassBlade": 5})
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 1 << 40, 100.0)
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 100.0)
 	assert_eq(_count_multimesh_children(scene), 1)
 	assert_not_null(scene.get_node_or_null("GrassBlade_MultiMesh"))
 	scene.free()
@@ -504,7 +400,7 @@ func test_chunking_frees_the_template_exactly_once() -> void:
 	var scene := _scatter_scene({"GrassBlade": 25})
 	var template := scene.get_node_or_null("GrassBlade") as MeshInstance3D
 	assert_not_null(template)
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 1 << 40, 10.0)
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 10.0)
 	assert_false(is_instance_valid(template))
 	assert_null(scene.get_node_or_null("GrassBlade"))
 	scene.free()
@@ -515,7 +411,7 @@ func test_every_grass_chunk_keeps_its_category_meta_and_shadow_setting() -> void
 	# OcclusionFadeManager finds foliage, and cast_shadow OFF is a measured -17% frame-time
 	# change for grass.
 	var scene := _scatter_scene({"GrassBlade": 25})
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 1 << 40, 10.0)
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 10.0)
 	var checked := 0
 	for child in scene.get_children():
 		if child is MultiMeshInstance3D:
@@ -541,26 +437,6 @@ func _chunk_count_for_species(scene: Node3D, species_name: String) -> int:
 		if child is MultiMeshInstance3D and child.name.begins_with(species_name + "_MultiMesh"):
 			found += 1
 	return found
-
-
-func test_thinning_and_chunking_compose() -> void:
-	# Two species x 100 instances x 12 primitives (BoxMesh) = 2400 total, against a 1200
-	# budget -> ratio 1200/2400 = 0.5, so each species' floor(100 * 0.5) = 50 survive (the
-	# same arithmetic as test_every_species_is_thinned_when_several_share_the_budget, which
-	# is single-cell because it pins chunk_size; this test exercises the same thinning at
-	# the real default chunk_size instead). select_indices shuffles then sorts per species
-	# (keyed by species name, so GrassBlade and PineTree get independent shuffles), so each
-	# species' survivors are spread across its own whole 0..99 index range rather than
-	# being a prefix, and _rows puts instance i at x = i -- so each species' kept
-	# transforms still span most of cells 0..9 and must occupy more than one, independently
-	# of the other species.
-	var scene := _scatter_scene({"GrassBlade": 100, "PineTree": 100})
-	ScatterGlbUtils.process_scatter_instances(scene, {}, 1200, 10.0)
-	assert_eq(_instances_for_species(scene, "GrassBlade"), 50)
-	assert_eq(_instances_for_species(scene, "PineTree"), 50)
-	assert_gt(_chunk_count_for_species(scene, "GrassBlade"), 1)
-	assert_gt(_chunk_count_for_species(scene, "PineTree"), 1)
-	scene.free()
 
 
 func test_pipeline_chunks_along_both_axes_across_the_origin() -> void:
@@ -606,4 +482,28 @@ func test_pipeline_chunks_along_both_axes_across_the_origin() -> void:
 	assert_eq(negative_cell.multimesh.instance_count, 1)
 	assert_eq(origin_cell.multimesh.instance_count, 1)
 
+	scene.free()
+
+
+func test_import_builds_every_instance_regardless_of_size() -> void:
+	# Import no longer thins. The density dial is applied at runtime over the full set, so
+	# everything must be present in the MultiMesh for the slider to be able to raise.
+	var scene := _scatter_scene({"GrassBlade": 100})
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 10.0)
+	assert_eq(_total_instances(scene), 100)
+	assert_false(scene.has_meta("tt_foliage_budget_report"))
+	scene.free()
+
+
+func test_import_frees_the_template_of_a_single_instance_species() -> void:
+	# The builder returns early on an empty transform list, before it frees the template,
+	# so a species reduced to nothing used to strand a MeshInstance3D rendering standalone
+	# at an arbitrary Blender transform. Nothing is reduced at import any more, but the
+	# guard is cheap to keep honest.
+	var scene := _scatter_scene({"GrassBlade": 1000, "HeroTree": 1})
+	var template := scene.get_node_or_null("HeroTree") as MeshInstance3D
+	assert_not_null(template)
+	ScatterGlbUtils.process_scatter_instances(scene, {}, 10.0)
+	assert_false(is_instance_valid(template))
+	assert_eq(_instances_for_species(scene, "HeroTree"), 1)
 	scene.free()

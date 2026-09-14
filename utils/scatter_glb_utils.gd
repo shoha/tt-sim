@@ -9,11 +9,6 @@ extends RefCounted
 
 const _SCATTER_INSTANCES_EXTRAS_KEY := "tt_scatter_instances"
 
-## Scene-meta key holding the FoliageBudget report when a map was thinned; absent when it
-## was not. Read by scenes/states/playing/level_loader.gd, which shows the player one
-## toast -- utils/ must not reference UIManager or any other autoload.
-const FOLIAGE_BUDGET_REPORT_META := "tt_foliage_budget_report"
-
 
 ## Prototype: build a real MultiMeshInstance3D for each group of Geoscatter instance
 ## transforms terrain-paint wrote into this GLB's scene extras (see
@@ -36,26 +31,19 @@ const FOLIAGE_BUDGET_REPORT_META := "tt_foliage_budget_report"
 ## extract_lighting_config() above -- guarded the same way: a malformed group or row is
 ## skipped rather than raising.
 ##
-## Two-pass so FoliageBudget.plan() can allocate a single global primitive cap across
-## every species before any MultiMesh is built -- the budget is global, so no one
-## species' share can be decided from inside its own build. A map whose total exceeds
-## `primitive_budget` gets every species thinned proportionally, and the outcome is
-## recorded on the scene as FOLIAGE_BUDGET_REPORT_META so the caller can tell the player.
+## Each species' transforms are split into ScatterChunker cells, one MultiMeshInstance3D
+## per occupied cell, so a MultiMeshInstance3D's single-AABB frustum culling can discard
+## the off-screen ones instead of processing every instance whenever any part of that
+## species is on screen. `chunk_size` exists for tests -- nothing user-facing should ever
+## set it.
 ##
-## `primitive_budget` exists only so tests can drive thinning at counts a test can build;
-## it is the more exposed of the two budget-override parameters (see FoliageBudget.plan's
-## own "nothing should set this" note), so nothing user-facing should ever wire it to
-## something like LevelData -- the budget is fixed by design, not a per-level setting.
-##
-## Each species' surviving transforms are further split into ScatterChunker cells, one
-## MultiMeshInstance3D per occupied cell, so a MultiMeshInstance3D's single-AABB frustum
-## culling can discard the off-screen ones instead of processing every instance whenever
-## any part of that species is on screen. `chunk_size` exists for tests, the same way
-## `primitive_budget` does -- nothing user-facing should ever set it either.
+## Import no longer thins to a primitive budget: every instance terrain-paint wrote is
+## built. FoliageDensityController applies the density setting at runtime by adjusting
+## each built MultiMesh's visible_instance_count over this full set, and can only ever
+## raise that count as high as what was actually built here.
 static func process_scatter_instances(
 	scene: Node3D,
 	foliage_overrides: Dictionary = {},
-	primitive_budget: int = FoliageBudget.PRIMITIVE_BUDGET,
 	chunk_size: float = ScatterChunker.CHUNK_SIZE_WORLD_UNITS
 ) -> void:
 	var extras: Dictionary = scene.get_meta(GlbUtils.SCENE_EXTRAS_META, {})
@@ -65,10 +53,8 @@ static func process_scatter_instances(
 	if not groups is Dictionary:
 		return
 
-	# Pass one: resolve every species' template mesh and surviving transforms. The budget
-	# is global, so no single species' share can be decided from inside its own build.
+	# Pass one: resolve every species' template mesh and valid transforms.
 	var resolved: Array[Dictionary] = []
-	var species := {}
 	for source_name in groups.keys():
 		var transforms: Variant = groups[source_name]
 		if not transforms is Array or transforms.is_empty():
@@ -84,26 +70,15 @@ static func process_scatter_instances(
 			continue
 		var key := String(source_name)
 		resolved.append({"key": key, "mesh_node": mesh_node, "transforms": valid})
-		species[key] = {
-			"count": valid.size(),
-			"primitives_per_instance": FoliageBudget.primitives_per_instance(mesh_node.mesh),
-		}
 
-	var report := FoliageBudget.plan(species, primitive_budget)
-
-	# Pass two: build each species' MultiMesh set, truncated to its allocated share and split
-	# into spatial cells so frustum culling can discard the off-screen ones.
+	# Pass two: build every instance, split into spatial cells so frustum culling can
+	# discard the off-screen ones. Density is applied at runtime by
+	# FoliageDensityController via MultiMesh.visible_instance_count, over the full set
+	# built here -- which is why nothing is thinned at import any more.
 	for entry in resolved:
 		var key: String = entry.key
 		var mesh_node: MeshInstance3D = entry.mesh_node
 		var all_transforms: Array[Transform3D] = entry.transforms
-		var keep: int = report.kept.get(key, all_transforms.size())
-		var kept_transforms: Array[Transform3D] = all_transforms
-		if keep < all_transforms.size():
-			var subset: Array[Transform3D] = []
-			for index in FoliageBudget.shuffled_order(all_transforms.size(), key).slice(0, keep):
-				subset.append(all_transforms[index])
-			kept_transforms = subset
 		var wind_category := WindFoliage.classify_category(key)
 		# MultiMesh itself has no material slot -- Godot renders every instance with
 		# mesh_node.mesh's own surface material(s) as-is unless mutated here. Mutates
@@ -118,30 +93,18 @@ static func process_scatter_instances(
 		# surface material with a ShaderMaterial, so calls 2..N would be no-ops that keep
 		# the first material rather than the last.
 		WindFoliage.apply_material(mesh_node.mesh, wind_category, foliage_overrides)
-		var buckets := ScatterChunker.bucket_by_cell(kept_transforms, chunk_size)
+		var buckets := ScatterChunker.bucket_by_cell(all_transforms, chunk_size)
 		for cell in buckets.keys():
-			# A species that fits in one cell keeps its original `<Species>_MultiMesh` name,
-			# so the suffix reads as a signal that a species was split rather than noise on
-			# every foliage node.
 			var suffix := "" if buckets.size() == 1 else ScatterChunker.cell_suffix(cell)
-			_build_multimesh_from_transforms(scene, mesh_node, buckets[cell], wind_category, suffix)
+			_build_multimesh_from_transforms(
+				scene, mesh_node, _shuffled(buckets[cell], key + suffix), wind_category, suffix
+			)
 		# Hoisted out of _build_multimesh_from_transforms too: it used to free the template
 		# as its last statement, which would free the same node once per chunk.
 		var old_parent := mesh_node.get_parent()
 		if old_parent:
 			old_parent.remove_child(mesh_node)
 		mesh_node.free()
-
-	if report.thinned:
-		scene.set_meta(FOLIAGE_BUDGET_REPORT_META, report)
-		print("ScatterGlbUtils: ", FoliageBudget.describe(report))
-		for key in report.kept.keys():
-			print(
-				(
-					"ScatterGlbUtils:   %s kept %d of %d instances"
-					% [key, report.kept[key], species[key]["count"]]
-				)
-			)
 
 
 ## Builds one MultiMeshInstance3D (sharing mesh_node's Mesh, and by default its
@@ -224,6 +187,17 @@ static func _build_multimesh_from_transforms(
 	# poke outside their own chunk's cull volume and flicker at the screen edge while panning.
 	multimesh_instance.extra_cull_margin = 1.0
 	scene_root.add_child(multimesh_instance)
+
+
+## Reorders a chunk's transforms into FoliageBudget.shuffled_order, so that drawing a
+## prefix of the MultiMesh -- which is how the density setting works -- samples the whole
+## cell evenly instead of carving a bald patch out of one side of it. Seeded per chunk, so
+## two cells of the same species do not thin in an identical pattern.
+static func _shuffled(transforms: Array[Transform3D], seed_source: String) -> Array[Transform3D]:
+	var reordered: Array[Transform3D] = []
+	for index in FoliageBudget.shuffled_order(transforms.size(), seed_source):
+		reordered.append(transforms[index])
+	return reordered
 
 
 ## Converts a flat array of [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] rows to Transform3D,
