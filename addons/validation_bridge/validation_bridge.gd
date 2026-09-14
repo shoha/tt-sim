@@ -15,6 +15,8 @@ var _client: StreamPeerTCP = null
 var _buffer: String = ""
 var _processing: bool = false
 var _active: bool = false
+var _frozen: bool = false
+var _prefreeze_time_scale: float = 1.0
 
 
 func _ready() -> void:
@@ -113,6 +115,12 @@ func _handle_command(cmd: Dictionary) -> void:
 			response = await _cmd_input(cmd)
 		"wait":
 			response = await _cmd_wait(cmd)
+		"freeze":
+			response = _cmd_freeze()
+		"resume":
+			response = _cmd_resume()
+		"step":
+			response = await _cmd_step(cmd)
 		_:
 			response = {"ok": false, "error": "Unknown command: %s" % cmd.get("cmd", "")}
 	_send_response(response)
@@ -318,8 +326,8 @@ func _cmd_input(cmd: Dictionary) -> Dictionary:
 			_inject_scroll(cmd.get("x", 0.0), cmd.get("y", 0.0), cmd.get("delta", 1.0))
 		_:
 			return {"ok": false, "error": "Unknown input type: %s" % input_type}
-	await get_tree().process_frame
-	await get_tree().process_frame
+	await _advance_one_step()
+	await _advance_one_step()
 	return {"ok": true}
 
 
@@ -351,7 +359,7 @@ func _inject_click(x: float, y: float, button: MouseButton = MOUSE_BUTTON_LEFT) 
 	motion.global_position = pos
 	Input.parse_input_event(motion)
 	Input.flush_buffered_events()
-	await get_tree().process_frame
+	await _advance_one_step()
 
 	var press := InputEventMouseButton.new()
 	press.button_index = button
@@ -360,7 +368,7 @@ func _inject_click(x: float, y: float, button: MouseButton = MOUSE_BUTTON_LEFT) 
 	press.global_position = pos
 	Input.parse_input_event(press)
 	Input.flush_buffered_events()
-	await get_tree().process_frame
+	await _advance_one_step()
 
 	var release := InputEventMouseButton.new()
 	release.button_index = button
@@ -410,7 +418,7 @@ func _inject_drag(x1: float, y1: float, x2: float, y2: float) -> void:
 	Input.parse_input_event(press)
 	Input.flush_buffered_events()
 
-	await get_tree().process_frame
+	await _advance_one_step()
 
 	var steps := 10
 	for i in range(steps + 1):
@@ -424,7 +432,7 @@ func _inject_drag(x1: float, y1: float, x2: float, y2: float) -> void:
 		Input.parse_input_event(motion)
 		Input.flush_buffered_events()
 		if i < steps:
-			await get_tree().process_frame
+			await _advance_one_step()
 
 	var release := InputEventMouseButton.new()
 	release.button_index = MOUSE_BUTTON_LEFT
@@ -435,10 +443,91 @@ func _inject_drag(x1: float, y1: float, x2: float, y2: float) -> void:
 	Input.flush_buffered_events()
 
 
+# ---------------------------------------------------------------------------
+# Deterministic time control
+# ---------------------------------------------------------------------------
+
+
+## Stops game time by zeroing Engine.time_scale.
+##
+## At a time scale of 0.0 no physics ticks accumulate, so _physics_process stops being called
+## outright, and _process receives a delta of 0.0. Tweens, SceneTreeTimers and AnimationPlayers all
+## run on scaled time and therefore stop with it. Rendering continues, so screenshots still work and
+## `await get_tree().process_frame` still resolves -- which is what lets the bridge keep injecting
+## input and answering commands while the world is held still.
+##
+## The pre-freeze scale is remembered rather than assumed to be 1.0, so freezing does not quietly
+## discard a time scale the game set for itself.
+func _cmd_freeze() -> Dictionary:
+	if not _frozen:
+		_prefreeze_time_scale = Engine.time_scale
+		Engine.time_scale = 0.0
+		_frozen = true
+	return {"ok": true, "frozen": true, "restored_time_scale": _prefreeze_time_scale}
+
+
+func _cmd_resume() -> Dictionary:
+	if _frozen:
+		Engine.time_scale = _prefreeze_time_scale
+		_frozen = false
+	return {"ok": true, "frozen": false, "time_scale": Engine.time_scale}
+
+
+## Advances game time by an exact number of physics frames, then restores the freeze.
+##
+## Accepts either `frames` (exact) or `seconds` (converted at the project's tick rate). Stepping
+## while not frozen is allowed and simply advances real time, so a caller does not have to freeze
+## first for the command to mean something.
+func _cmd_step(cmd: Dictionary) -> Dictionary:
+	var ticks := Engine.physics_ticks_per_second
+	var frames: int = int(cmd.get("frames", 0))
+	if frames <= 0:
+		frames = BridgeTimeControl.frames_for_duration(float(cmd.get("seconds", 0.0)), ticks)
+	if frames <= 0:
+		return {"ok": false, "error": "step requires a positive 'frames' or 'seconds'"}
+	frames = mini(frames, BridgeTimeControl.MAX_STEP_FRAMES)
+	await _advance_physics_frames(frames)
+	return {
+		"ok": true,
+		"frames": frames,
+		"seconds": BridgeTimeControl.duration_for_frames(frames, ticks),
+		"frozen": _frozen,
+	}
+
+
+## Runs exactly `frames` physics frames, holding the freeze open around them.
+##
+## The time scale must be lifted before awaiting: at a scale of 0.0 the physics accumulator never
+## fills, so `get_tree().physics_frame` would never fire and the await would hang forever.
+func _advance_physics_frames(frames: int) -> void:
+	var was_frozen := _frozen
+	if was_frozen:
+		Engine.time_scale = _prefreeze_time_scale
+	for _i in range(frames):
+		await get_tree().physics_frame
+	if was_frozen:
+		Engine.time_scale = 0.0
+
+
+## One unit of progress between injected input events.
+##
+## While frozen this is a single physics frame of game time; otherwise it is a rendered frame, which
+## is what the injectors did before time control existed. Routing both injectors through here is
+## what makes a drag reproducible: the motion sequence advances the world by a fixed amount between
+## events instead of by however long the host took to render.
+func _advance_one_step() -> void:
+	if _frozen:
+		await _advance_physics_frames(1)
+	else:
+		await get_tree().process_frame
+
+
 func _cmd_wait(cmd: Dictionary) -> Dictionary:
 	var seconds: float = cmd.get("seconds", 0.5)
 	if seconds > 0.0:
-		await get_tree().create_timer(seconds).timeout
+		# ignore_time_scale = true: a frozen clock must not stall the bridge's own waits. Callers
+		# wanting game time to pass should use "step", which is the deterministic option anyway.
+		await get_tree().create_timer(seconds, true, false, true).timeout
 	else:
 		await get_tree().process_frame
 	return {"ok": true}
