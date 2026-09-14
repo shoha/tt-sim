@@ -58,6 +58,7 @@ func _poll_server() -> void:
 		var new_client := _server.take_connection()
 		if _client != null:
 			_client.disconnect_from_host()
+			_resume_after_client_loss()
 		_client = new_client
 		_buffer = ""
 		print("ValidationBridge: Client connected")
@@ -69,6 +70,7 @@ func _poll_server() -> void:
 	if _client.get_status() != StreamPeerTCP.STATUS_CONNECTED:
 		_client = null
 		_buffer = ""
+		_resume_after_client_loss()
 		return
 
 	var available := _client.get_available_bytes()
@@ -81,6 +83,25 @@ func _poll_server() -> void:
 
 	_buffer += (result[1] as PackedByteArray).get_string_from_utf8()
 	_try_process_command()
+
+
+## Lifts a freeze that the departing client left behind.
+##
+## Engine.time_scale = 0.0 outlives the connection that set it. Without this, an agent that crashed,
+## timed out, or simply exited between "freeze" and "resume" leaves the game stopped for good:
+## physics never ticks again, and the next agent to connect sees a world where nothing moves and
+## no command explains why. Scoping the freeze to the session that asked for it is the
+## only state the bridge can safely assume a disconnected client no longer wants. The print is
+## deliberate -- a silent time-scale change is exactly the kind of invisible state that made this
+## worth fixing.
+func _resume_after_client_loss() -> void:
+	if not _frozen:
+		return
+	Engine.time_scale = _prefreeze_time_scale
+	_frozen = false
+	print(
+		"ValidationBridge: Client lost while frozen; time resumed at scale %s" % Engine.time_scale
+	)
 
 
 func _try_process_command() -> void:
@@ -166,9 +187,15 @@ func _cmd_screenshot() -> Dictionary:
 # ---------------------------------------------------------------------------
 
 
+## Reports `frozen` and `time_scale` alongside the world state so a connecting agent can tell a
+## stopped clock from a broken game. A frozen world looks identical to a hung one from the outside:
+## tokens never move and every step_until runs to its frame cap. Naming the freeze in the snapshot
+## every agent already takes first is what makes that diagnosable without knowing to ask.
 func _cmd_state() -> Dictionary:
 	return {
 		"ok": true,
+		"frozen": _frozen,
+		"time_scale": Engine.time_scale,
 		"app_state": _get_app_state(),
 		"tokens": _get_tokens(),
 		"ui": _get_ui_state(),
@@ -603,6 +630,11 @@ func _cmd_eval(cmd: Dictionary) -> Dictionary:
 ## This is the answer to every "wait 0.5s and hope" in an interaction script: the caller states the
 ## condition it is actually waiting for, and gets back how much game time it took, or a clear
 ## `satisfied: false` when the condition never held.
+##
+## The condition is read from BridgeEval's `truthy` field, which is computed on the raw Variant.
+## Re-deriving truthiness from the returned `value` would be wrong: that is the JSON-safe rendering,
+## in which `Vector2.ZERO` is the non-empty Dictionary `{"x": 0.0, "y": 0.0}` and therefore truthy,
+## the opposite of what GDScript says about the value itself.
 func _cmd_step_until(cmd: Dictionary) -> Dictionary:
 	var text: String = cmd.get("expression", "")
 	if text.is_empty():
@@ -617,7 +649,7 @@ func _cmd_step_until(cmd: Dictionary) -> Dictionary:
 	if not last.get("ok", false):
 		return last
 
-	while frames < max_frames and not _is_truthy(last.get("value")):
+	while frames < max_frames and not bool(last.get("truthy", false)):
 		await _advance_physics_frames(1)
 		frames += 1
 		last = BridgeEval.evaluate(text, _eval_base())
@@ -626,25 +658,11 @@ func _cmd_step_until(cmd: Dictionary) -> Dictionary:
 
 	return {
 		"ok": true,
-		"satisfied": _is_truthy(last.get("value")),
+		"satisfied": bool(last.get("truthy", false)),
 		"frames": frames,
 		"seconds": BridgeTimeControl.duration_for_frames(frames, ticks),
 		"value": last.get("value"),
 	}
-
-
-## Comparing mismatched Variant types (bool against int, for example) is a runtime script error
-## in GDScript, not a clean "not equal" -- a plain `value != false and value != 0` throws on every
-## call whose value isn't already a bool, which made step_until always report false.
-##
-## Delegating to `if value:` instead follows GDScript's own truthiness rules, which is also the
-## contract callers should expect here: an empty String, Array or Dictionary is false, same as
-## `if` would treat it, not merely "not null". A caller that means "exists at all" rather than
-## "is non-empty" should write an explicit size check instead of relying on this function.
-func _is_truthy(value: Variant) -> bool:
-	if value:
-		return true
-	return false
 
 
 ## Walks from the window root, not the current scene, so dialogs and overlays parented to
@@ -654,9 +672,19 @@ func _is_truthy(value: Variant) -> bool:
 ## A Godot PopupMenu is a Window, not a Control, so this cannot see popup menu entries and
 ## click_control cannot click them -- confirmed empirically in Task 4, where injected clicks on an
 ## OptionButton's popup did not register; navigate those with arrow keys and Enter instead.
+##
+## `truncated` is reported because BridgeInspector stops walking at MAX_CONTROLS with no marker of
+## its own. Without the flag a caller cannot tell a complete list from a cut-off one, so a Control
+## that exists but sits past the cap reads as absent from the scene -- a wrong conclusion this
+## harness has already drawn once.
 func _cmd_controls(cmd: Dictionary) -> Dictionary:
 	var visible_only: bool = bool(cmd.get("visible_only", true))
-	return {"ok": true, "controls": BridgeInspector.collect_controls(get_tree().root, visible_only)}
+	var controls := BridgeInspector.collect_controls(get_tree().root, visible_only)
+	return {
+		"ok": true,
+		"controls": controls,
+		"truncated": controls.size() >= BridgeInspector.MAX_CONTROLS,
+	}
 
 
 # ---------------------------------------------------------------------------
