@@ -280,6 +280,32 @@ popup/item_4/id = 4
 popup/item_5/text = "Ultra"
 popup/item_5/id = 5
 
+[node name="FoliageDensity" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/FoliageDensity"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Foliage Density"
+
+[node name="FoliageDensitySlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/FoliageDensity"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 2.0
+max_value = 24.0
+step = 0.5
+value = 8.0
+
+[node name="FoliageDensityLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/FoliageDensity"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "8.0M"
+horizontal_alignment = 2
+
 [node name="WaterQuality" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2
 
