@@ -190,11 +190,12 @@ func _input(event: InputEvent) -> void:
 			# 1..9 flip the nine DebugRenderToggles switches in panel order, but ONLY
 			# while the perf overlay (F3) is open -- so these digits stay free during
 			# normal play and the shortcut is live only when the panel it mirrors is on
-			# screen. Deliberately unmodified rather than Shift+digit: the validation
-			# bridge's _inject_key() sets an InputEventKey's `keycode` and nothing else,
-			# so `shift_pressed` is always false for injected keys and a modifier combo
-			# could never be driven automatically. See
-			# DebugRenderToggles.toggle_by_index() for why a keyboard path is needed.
+			# screen. Deliberately unmodified rather than Shift+digit: a bare digit is
+			# the fastest thing to hit while watching the overlay, and gating on the
+			# overlay already keeps it out of the way the rest of the time. (The
+			# validation bridge's _inject_key() does parse chords such as "Shift+1",
+			# so a modifier combo would be drivable -- that is no longer the reason.)
+			# See DebugRenderToggles.toggle_by_index() for why a keyboard path is needed.
 			if (
 				event.keycode >= KEY_1
 				and event.keycode <= KEY_9
@@ -331,6 +332,13 @@ func _is_mouse_over_gui() -> bool:
 	if hovered == viewport_container:
 		return false
 	return true
+
+
+## Public wrapper around _is_mouse_over_gui() for external callers (e.g.
+## DragPlaceController) that need the same GUI-hover check but aren't part
+## of this class.
+func is_mouse_over_gui() -> bool:
+	return _is_mouse_over_gui()
 
 
 ## Forward a token's context-menu request to TokenContextMenuController.

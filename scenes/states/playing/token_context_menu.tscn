@@ -96,6 +96,40 @@ layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Reset Transform"
 
+[node name="HSeparator7" type="HSeparator" parent="MenuPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="RenameContainer" type="HBoxContainer" parent="MenuPanel/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="RenameInput" type="LineEdit" parent="MenuPanel/VBoxContainer/RenameContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Name"
+
+[node name="RenameButton" type="Button" parent="MenuPanel/VBoxContainer/RenameContainer"]
+unique_name_in_owner = true
+script = ExtResource("animated_btn")
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Rename"
+
+[node name="DuplicateButton" type="Button" parent="MenuPanel/VBoxContainer"]
+unique_name_in_owner = true
+script = ExtResource("animated_btn")
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Duplicate"
+
+[node name="RemoveButton" type="Button" parent="MenuPanel/VBoxContainer"]
+unique_name_in_owner = true
+script = ExtResource("animated_btn")
+layout_mode = 2
+theme_type_variation = &"Danger"
+text = "Remove Token"
+
 [node name="HSeparator5" type="HSeparator" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
 
@@ -130,6 +164,10 @@ text = "Close"
 [connection signal="pressed" from="MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentButton" to="." method="_on_hp_adjustment_requested"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/ToggleVisibilityButton" to="." method="_on_toggle_visibility_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/ResetTransformButton" to="." method="_on_reset_transform_pressed"]
+[connection signal="text_submitted" from="MenuPanel/VBoxContainer/RenameContainer/RenameInput" to="." method="_on_rename_button_pressed"]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/RenameContainer/RenameButton" to="." method="_on_rename_button_pressed"]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/DuplicateButton" to="." method="_on_duplicate_button_pressed"]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/RemoveButton" to="." method="_on_remove_button_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/RequestControlButton" to="." method="_on_request_control_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/RevokeControlButton" to="." method="_on_revoke_control_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/AssignControlButton" to="." method="_on_assign_control_pressed"]

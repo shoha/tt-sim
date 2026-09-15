@@ -74,7 +74,7 @@
 - **New UI panel (in-scene)**: Extend `AnimatedVisibilityContainer`, register with `UIManager.register_overlay()` for ESC handling
 - **New UI overlay (full-screen dialog)**: Extend `AnimatedCanvasLayerPanel`, override `_on_panel_ready()` for setup
 - **New slide-out drawer**: Extend `DrawerContainer`, configure `edge`, `drawer_width`, `tab_text` in `_on_ready()`. If the drawer can hold unsaved edits, override `_can_close_from_tab()` to veto a tab close and use `set_tab_badge()` for an unsaved indicator (see `LevelEditPanel`)
-- **New level/token logic**: See LevelPlayController, BoardTokenFactory (tokens MUST be created via factory), GameState, TokenPermissions
+- **New level/token logic**: See LevelPlayController, BoardTokenFactory (tokens MUST be created via factory), GameState, TokenPermissions. Removal, rename, and duplicate go through `TokenSpawner` (`LevelPlayController.remove_token()`/`rename_token()`/`duplicate_token()` forward to it) — it is the single owner of spawned-token storage, the matching `TokenPlacement`, and `GameState` together. Never `queue_free()` a token node directly outside TokenSpawner
 - **New RPC**: Follow conventions in `docs/CONVENTIONS.md` — `@rpc` with `_rpc_` prefix, use `Array` not `Vector3` for parameters, emit signals from RPC methods
 - **New environment preset**: Add to `EnvironmentPresets.PRESETS` in `utils/environment_presets.gd`
 - **New environment property**: Add to `PROPERTY_DEFAULTS`, update `_apply_config_to_environment()`, `extract_from_environment()`, and `LevelEditPanel` controls. Sun and shadow properties are the exception: they go on `SunSettings` instead (field, `to_dict()`, `from_dict()`, `DefaultSun.apply()`, and the panel's Sun section), not on `PROPERTY_DEFAULTS`. `copy_settings()` needs no change for a value-type field — it is `duplicate()`-based, so only a nested `Resource` field would require a new deep-copy line
@@ -234,7 +234,7 @@ After making code changes that affect runtime behavior or visuals, use the valid
 | `game_state` | Query game state: app state, tokens, UI panels, camera, scene tree, console errors, plus `frozen` and `time_scale` |
 | `game_click` | Click at (x, y) window coords (same space as `game_screenshot` pixels). Optional `button`: "left" (default), "right", "middle" |
 | `game_drag` | Drag from (x1, y1) to (x2, y2) with interpolated motion |
-| `game_key` | Press a key by name (e.g. "M", "Escape", "Home", "Space", "G") |
+| `game_key` | Press a key by name (e.g. "M", "Escape", "Home", "Space", "G"), or a modifier chord (e.g. "Ctrl+Z", "Shift+Alt+F") |
 | `game_scroll` | Mouse wheel at (x, y). Positive delta = zoom in, negative = zoom out |
 | `game_wait` | Wait N seconds for animations/transitions to settle |
 | `game_interact` | **Preferred for multi-step validation.** Execute a sequence of actions and return collected screenshots + state in one call |

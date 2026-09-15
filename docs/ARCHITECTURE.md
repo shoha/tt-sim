@@ -832,6 +832,30 @@ BoardToken (Node3D)
 
 See [CONVENTIONS.md](CONVENTIONS.md) for the full token transform hierarchy, placeholder upgrade flow, drag-and-drop integration, and animation system details.
 
+### TokenSpawner
+
+`TokenSpawner` (`scenes/states/playing/token_spawner.gd`) is a plain-object sub-component of `LevelPlayController` (not a Node) that owns spawned-token storage — the `placement_id -> BoardToken` map and the `network_id` reverse index — together with the operations that mutate it, the matching `TokenPlacement`, and `GameState`:
+
+- `remove_token(token) -> bool` — disconnects the token's state signals, forgets it in both indices, removes its `TokenPlacement` from the active `LevelData`, removes it from `GameState`, and broadcasts the removal. Requires authority; does not record undo (the caller owns action history, since it knows to record before removing).
+- `rename_token(token, new_name)` — trims and ignores blank/whitespace-only names, updates the live token, the matching `TokenPlacement.token_name` if one exists, and calls `notify_token_properties_changed()`.
+- `notify_token_properties_changed(token)` — public wrapper around the same property-change handler used for signal-driven changes (health, visibility, status effects), so a rename syncs to `GameState` and broadcasts to clients the same way.
+- `_track_token_from_undo()` — re-registers a token re-created by `_on_removal_undo_requested` (Ctrl+Z on a removal), restoring both the spawner's indices and the level placement.
+
+`LevelPlayController.remove_token()` / `rename_token()` are same-named forwards to the `TokenSpawner` methods above (kept as same-named wrappers since the context menu and `GameplayActionHistory`'s undo/redo replay call them on `LevelPlayController`). `LevelPlayController.duplicate_token(token) -> BoardToken` spawns a copy of the same asset one grid cell over in +X (`LevelData.grid_cell_size`, or 1.5 m without an active level), then copies name, max health, and current health onto the new token via `rename_token()` / `set_max_health()` / `heal()` / `take_damage()`, plus the source's rotation and scale (`set_transform_immediate()` followed by an explicit `transform_changed` emit, since that setter emits nothing itself) and its player visibility (`set_visible_to_players()`, so a hidden source produces a hidden copy and the network sees it). Permissions are not copied — the copy starts GM-only. It requires authority (returns `null` otherwise), and the context menu records a `GameplayActionHistory.record_token_spawn()` entry afterwards so Ctrl+Z removes the copy again through `TokenSpawner.remove_token()`.
+
+TokenSpawner is the single place removal and rename touch storage, placement data, and `GameState` together — never `queue_free()` a token node directly outside TokenSpawner.
+
+### Drag-to-Place (Asset Browser)
+
+`DragPlaceController` (`scenes/states/playing/drag_place_controller.gd`), a child `Node` of `GameMap`, handles dragging an asset out of the asset browser and dropping it on the map to spawn a new token — distinct from `DragAndDrop3D`'s dragging of already-placed tokens on the board.
+
+- `raycast_terrain(camera, space_state, screen_pos)` — a static, independently-testable raycast against physics layer 1 (terrain/board) only, up to 1000 world meters, used to find the terrain surface (including slopes) under the cursor.
+- Falls back to the existing Y=0 ground-plane intersection when the terrain raycast misses (e.g. camera pointed off the map).
+- Dropping while the mouse is over GUI (`GameMap.is_mouse_over_gui()`) cancels the placement instead of spawning.
+- **Snap, then resolve the height.** Grid snap moves X/Z by up to half a cell while preserving Y (`ScaleUtils.snap_to_grid` keeps `y`), so the camera hit's height is only correct for the unsnapped point — on a slope it leaves the token below the surface, where `DraggableToken._find_landing_position()`'s downward ray from the collision bottom cannot recover it. So `_complete_drag_place()` snaps X/Z first and then, when the camera ray actually hit terrain, re-resolves the height with `raycast_terrain_down(space_state, xz)` — a second static helper that casts straight down from `TERRAIN_DOWNCAST_HEIGHT` — spawning at the hit plus `PLACE_CLEARANCE` (0.25). A downcast miss (snapped off the edge of the terrain) keeps the snapped position.
+- On a successful drop, calls `LevelPlayController.spawn_asset(..., settle := true)`, which drops the token the remaining clearance onto the ground via `DraggableToken.drop_to_ground()`. `TokenSpawner.spawn_asset()` runs that settle **after** `add_token_to_level()`: the settle clears `input_ray_pickable` for the landing tween and `_on_settle_complete()` restores it, so tracking (which also calls `set_interactive()`) must not run in the middle of the tween.
+- The asset browser's double-click/select path (`GameplayMenuController._on_asset_selected()`) resolves its camera-centre position the same way — `raycast_terrain_down` plus `settle := true` — so both placement routes land on terrain.
+
 ### GameplayMenuController
 
 `GameplayMenuController` (`scenes/states/playing/gameplay_menu_controller.gd`) routes between gameplay UI and `LevelPlayController`:

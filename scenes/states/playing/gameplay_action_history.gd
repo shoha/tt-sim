@@ -9,7 +9,7 @@ extends Node
 
 signal removal_undo_requested(action: Dictionary)
 
-enum ActionType { PROPERTY_CHANGE, TOKEN_REMOVAL }
+enum ActionType { PROPERTY_CHANGE, TOKEN_REMOVAL, TOKEN_SPAWN }
 
 const MAX_HISTORY := 30
 
@@ -22,12 +22,39 @@ var _stack: Array[Dictionary] = []
 ## isolated unit tests, in which case undo falls back to GameState-only.
 var _token_lookup: Callable = Callable()
 
+## Optional Callable(token: BoardToken, new_name: String) -> void used to replay
+## a "token_name" undo through TokenSpawner.rename_token (so it also updates the
+## level placement and notifies property listeners), instead of just assigning
+## token.token_name directly. Set via set_rename_callable() by whoever owns
+## renaming (LevelPlayController). Left unset in isolated unit tests, in which
+## case undo falls back to a direct assignment.
+var _rename_callable: Callable = Callable()
+
+## Optional Callable(token: BoardToken) -> bool used to undo a spawn by removing
+## the token through the real removal path (TokenSpawner.remove_token), so the
+## level placement, GameState and clients all learn about it. Set via
+## set_remove_callable() by whoever owns the spawner (LevelPlayController). Left
+## unset in isolated unit tests, in which case a spawn undo is a no-op.
+var _remove_callable: Callable = Callable()
+
 
 ## Provide a lookup Callable(network_id: String) -> BoardToken (or any object
 ## that responds to the relevant mutators) used to find live tokens for
 ## undo/redo replay.
 func set_token_lookup(lookup: Callable) -> void:
 	_token_lookup = lookup
+
+
+## Provide a Callable(token: BoardToken, new_name: String) -> void used to
+## replay a "token_name" undo through the real rename path (TokenSpawner.rename_token).
+func set_rename_callable(callable: Callable) -> void:
+	_rename_callable = callable
+
+
+## Provide a Callable(token: BoardToken) -> bool used to undo a spawn through the
+## real removal path (TokenSpawner.remove_token).
+func set_remove_callable(callable: Callable) -> void:
+	_remove_callable = callable
 
 
 ## Record a single property change. Call BEFORE applying the mutation.
@@ -79,6 +106,19 @@ func record_token_removal(token: BoardToken, token_state: TokenState) -> void:
 	)
 
 
+## Record a token spawn (currently only duplicate). Call AFTER the spawn, since
+## the new token's network_id only exists once it has been created. Undo removes
+## the spawned token again via the remove callable.
+func record_token_spawn(network_id: String, token_name: String) -> void:
+	_push(
+		{
+			"type": ActionType.TOKEN_SPAWN,
+			"network_id": network_id,
+			"description": 'duplicated "%s"' % token_name,
+		}
+	)
+
+
 ## Undo the most recent action. Returns a description string, or "" if empty.
 func undo() -> String:
 	if _stack.is_empty():
@@ -89,6 +129,8 @@ func undo() -> String:
 			_undo_property_change(action)
 		ActionType.TOKEN_REMOVAL:
 			_undo_token_removal(action)
+		ActionType.TOKEN_SPAWN:
+			_undo_token_spawn(action)
 	return action.get("description", "action")
 
 
@@ -141,6 +183,11 @@ func _apply_property_to_live_token(network_id: String, property: String, value: 
 		return
 
 	match property:
+		"token_name":
+			if _rename_callable.is_valid():
+				_rename_callable.call(token, str(value))
+			else:
+				token.token_name = str(value)
 		"current_health":
 			var diff: int = int(value) - int(token.current_health)
 			if diff > 0:
@@ -169,6 +216,18 @@ func _undo_token_removal(action: Dictionary) -> void:
 	removal_undo_requested.emit(action)
 
 
+## Undo a spawn: look the live token up and remove it through the real removal
+## path. No-ops quietly if no lookup/remove callable is registered or the token
+## is already gone.
+func _undo_token_spawn(action: Dictionary) -> void:
+	if not _token_lookup.is_valid() or not _remove_callable.is_valid():
+		return
+	var token = _token_lookup.call(action.network_id)
+	if not is_instance_valid(token):
+		return
+	_remove_callable.call(token)
+
+
 func _describe_property_change(property: String, old_value: Variant, new_value: Variant) -> String:
 	match property:
 		"current_health":
@@ -182,5 +241,7 @@ func _describe_property_change(property: String, old_value: Variant, new_value: 
 			return "toggled visibility"
 		"is_alive":
 			return "toggled alive state"
+		"token_name":
+			return 'renamed "%s" to "%s"' % [old_value, new_value]
 		_:
 			return "%s changed" % property
