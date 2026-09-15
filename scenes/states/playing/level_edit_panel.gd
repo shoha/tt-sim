@@ -6,7 +6,7 @@ extends DrawerContainer
 ## Changes apply immediately to the live game viewport.
 ## Uses DrawerContainer with edge = RIGHT so the tab appears on the left.
 
-signal save_requested(values: Dictionary)
+signal save_requested(state: LevelVisualState)
 signal cancel_requested
 signal intensity_changed(new_scale: float)
 signal scale_config_changed(
@@ -48,9 +48,9 @@ const SUN_MODES = {
 var current_preset: String = ""
 var current_overrides: Dictionary = {}
 var current_water_style: String = "stylized"
-var current_lofi_overrides: Dictionary = {}
-var current_weather_overrides: Dictionary = {}
-var current_foliage_overrides: Dictionary = {}
+var current_lofi: LofiSettings = LofiSettings.default()
+var current_weather: WeatherSettings = WeatherSettings.default()
+var current_foliage: FoliageSettings = FoliageSettings.default()
 var current_sun: SunSettings = SunSettings.default()
 var light_intensity_scale: float = 1.0
 var current_grid_cell_size: float = 1.524
@@ -403,9 +403,9 @@ func initialize(
 				water_style_dropdown.select(i)
 				break
 	current_overrides = level_data.environment_overrides.duplicate()
-	current_lofi_overrides = level_data.lofi_overrides.duplicate()
-	current_weather_overrides = level_data.weather_overrides.duplicate()
-	current_foliage_overrides = level_data.foliage_overrides.duplicate()
+	current_lofi = level_data.lofi.copy_settings()
+	current_weather = level_data.weather.copy_settings()
+	current_foliage = level_data.foliage.copy_settings()
 	current_sun = level_data.visual_settings.sun.copy_settings()
 	_map_defaults = map_defaults
 
@@ -654,24 +654,24 @@ func _on_tonemap_mode_selected(index: int) -> void:
 
 
 func _on_save_pressed() -> void:
-	(
-		save_requested
-		. emit(
-			{
-				"light_intensity_scale": light_intensity_scale,
-				"environment_preset": current_preset,
-				"environment_overrides": current_overrides,
-				"lofi_overrides": current_lofi_overrides,
-				"weather_overrides": current_weather_overrides,
-				"foliage_overrides": current_foliage_overrides,
-				"sun_settings": current_sun,
-				"grid_cell_size": current_grid_cell_size,
-				"display_unit": current_display_unit,
-				"display_unit_per_cell": current_display_unit_per_cell,
-				"water_style": current_water_style,
-			}
-		)
-	)
+	save_requested.emit(_build_state())
+
+
+## Everything the drawer currently shows, as one independent LevelVisualState.
+func _build_state() -> LevelVisualState:
+	var state := LevelVisualState.new()
+	state.light_intensity_scale = light_intensity_scale
+	state.environment_preset = current_preset
+	state.environment_overrides = current_overrides.duplicate()
+	state.water_style = current_water_style
+	state.lofi = current_lofi.copy_settings()
+	state.weather = current_weather.copy_settings()
+	state.foliage = current_foliage.copy_settings()
+	state.sun = current_sun.copy_settings()
+	state.grid_cell_size = current_grid_cell_size
+	state.display_unit = current_display_unit
+	state.display_unit_per_cell = current_display_unit_per_cell
+	return state
 
 
 func _on_cancel_pressed() -> void:
@@ -683,66 +683,49 @@ func _on_cancel_pressed() -> void:
 # ============================================================================
 
 
-## Sync lo-fi controls from current_lofi_overrides (or defaults)
+## Sync lo-fi controls from current_lofi. Every field is always present, so
+## there is nothing to fall back to.
 func _sync_lofi_controls() -> void:
-	# Use stored overrides or defaults
-	var pixelation = current_lofi_overrides.get("pixelation", Constants.LOFI_DEFAULTS["pixelation"])
-	var saturation = current_lofi_overrides.get("saturation", Constants.LOFI_DEFAULTS["saturation"])
-	var color_levels = current_lofi_overrides.get(
-		"color_levels", Constants.LOFI_DEFAULTS["color_levels"]
-	)
-	var dither_strength = current_lofi_overrides.get(
-		"dither_strength", Constants.LOFI_DEFAULTS["dither_strength"]
-	)
-	var vignette_strength = current_lofi_overrides.get(
-		"vignette_strength", Constants.LOFI_DEFAULTS["vignette_strength"]
-	)
-	var grain_intensity = current_lofi_overrides.get(
-		"grain_intensity", Constants.LOFI_DEFAULTS["grain_intensity"]
-	)
-
-	pixelation_slider_spin.set_value_no_signal(pixelation)
-	color_fade_slider_spin.set_value_no_signal(saturation)
-	color_levels_slider_spin.set_value_no_signal(color_levels)
-	dither_slider_spin.set_value_no_signal(dither_strength)
-	vignette_slider_spin.set_value_no_signal(vignette_strength)
-	grain_slider_spin.set_value_no_signal(grain_intensity)
+	pixelation_slider_spin.set_value_no_signal(current_lofi.pixelation)
+	color_fade_slider_spin.set_value_no_signal(current_lofi.saturation)
+	color_levels_slider_spin.set_value_no_signal(current_lofi.color_levels)
+	dither_slider_spin.set_value_no_signal(current_lofi.dither_strength)
+	vignette_slider_spin.set_value_no_signal(current_lofi.vignette_strength)
+	grain_slider_spin.set_value_no_signal(current_lofi.grain_intensity)
 
 
 ## Generic handler for config-driven lo-fi overrides.
 func _on_lofi_override_changed(value: Variant, key: String) -> void:
-	current_lofi_overrides[key] = value
-	lofi_changed.emit(current_lofi_overrides)
+	current_lofi.set(key, float(value))
+	lofi_changed.emit(current_lofi.to_dict())
 
 
 ## Generic handler for config-driven weather overrides.
 func _on_weather_override_changed(value: Variant, key: String) -> void:
-	current_weather_overrides[key] = value
-	weather_changed.emit(current_weather_overrides)
+	current_weather.set(key, float(value))
+	weather_changed.emit(current_weather.to_dict())
 
 
-## Sync weather controls from current_weather_overrides
+## Sync weather controls from current_weather
 func _sync_weather_controls() -> void:
-	rain_slider_spin.set_value_no_signal(current_weather_overrides.get("rain_intensity", 0.0))
-	snow_slider_spin.set_value_no_signal(current_weather_overrides.get("snow_intensity", 0.0))
-	fog_slider_spin.set_value_no_signal(current_weather_overrides.get("fog_intensity", 0.0))
-	wind_slider_spin.set_value_no_signal(current_weather_overrides.get("wind_intensity", 0.0))
+	rain_slider_spin.set_value_no_signal(current_weather.rain_intensity)
+	snow_slider_spin.set_value_no_signal(current_weather.snow_intensity)
+	fog_slider_spin.set_value_no_signal(current_weather.fog_intensity)
+	wind_slider_spin.set_value_no_signal(current_weather.wind_intensity)
 
 
-## Sync foliage controls from current_foliage_overrides (or WindFoliage presets)
+## Sync foliage controls from current_foliage
 func _sync_foliage_controls() -> void:
-	var tree_preset := WindFoliage.get_effective_preset("tree", current_foliage_overrides)
-	var grass_preset := WindFoliage.get_effective_preset("grass", current_foliage_overrides)
-	tree_sway_speed_slider_spin.set_value_no_signal(tree_preset["sway_speed"])
-	tree_sway_amplitude_slider_spin.set_value_no_signal(tree_preset["sway_amplitude"])
-	grass_sway_speed_slider_spin.set_value_no_signal(grass_preset["sway_speed"])
-	grass_sway_amplitude_slider_spin.set_value_no_signal(grass_preset["sway_amplitude"])
+	tree_sway_speed_slider_spin.set_value_no_signal(current_foliage.tree_sway_speed)
+	tree_sway_amplitude_slider_spin.set_value_no_signal(current_foliage.tree_sway_amplitude)
+	grass_sway_speed_slider_spin.set_value_no_signal(current_foliage.grass_sway_speed)
+	grass_sway_amplitude_slider_spin.set_value_no_signal(current_foliage.grass_sway_amplitude)
 
 
 ## Generic handler for config-driven foliage sway overrides.
 func _on_foliage_override_changed(value: Variant, key: String) -> void:
-	current_foliage_overrides[key] = value
-	foliage_changed.emit(current_foliage_overrides)
+	current_foliage.set(key, float(value))
+	foliage_changed.emit(current_foliage.to_dict())
 
 
 ## The one sun control that must NOT promote auto to on: it is the control that

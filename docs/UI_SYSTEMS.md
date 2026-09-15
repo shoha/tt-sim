@@ -556,7 +556,7 @@ The panel is divided into sections:
 The panel emits granular signals for each type of change:
 
 ```gdscript
-signal save_requested(values: Dictionary)
+signal save_requested(state: LevelVisualState)
 signal cancel_requested
 signal map_scale_changed(new_scale: float)
 signal intensity_changed(new_scale: float)

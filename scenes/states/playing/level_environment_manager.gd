@@ -137,7 +137,7 @@ func _collect_wind_materials(node: Node) -> void:
 
 ## Re-tune every cached wind-sway material's speed/amplitude in place, with no
 ## map reload. overrides uses the same flat key shape as
-## LevelData.foliage_overrides ("<category>_sway_speed" / "<category>_sway_amplitude").
+## LevelData.foliage.to_dict() ("<category>_sway_speed" / "<category>_sway_amplitude").
 func apply_foliage_overrides(overrides: Dictionary) -> void:
 	for category in _wind_materials:
 		var preset := WindFoliage.get_effective_preset(category, overrides)
@@ -227,15 +227,20 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		world_viewport.add_child(_sun_light)
 	_configure_sun_light(level_data.visual_settings.sun)
 
-	# Apply lo-fi shader overrides. Unlike WorldEnvironment/sun light (freshly
-	# recomputed every load regardless of override emptiness) and weather
-	# (a fresh WeatherRenderer every load), the lo-fi ShaderMaterial is a
-	# single persistent resource reused for this GameMap's whole lifetime --
-	# so a level with no overrides must still get a full reset to defaults,
-	# not a skipped call that leaves a previous level's live values in place.
+	# Apply lo-fi shader parameters. Unlike WorldEnvironment/sun light (freshly
+	# recomputed every load) and weather (a fresh WeatherRenderer every load),
+	# the lo-fi ShaderMaterial is a single persistent resource reused for this
+	# GameMap's whole lifetime, so every parameter must be written on every load
+	# or a previous level's value survives.
+	#
+	# LofiSettings.to_dict() is already complete over the seven level-editable
+	# parameters, so the merge is not there to fill gaps in it. It is there for
+	# the three parameters LofiSettings deliberately does not model --
+	# color_tint, grain_speed and grain_scale -- which are not level-editable
+	# and would otherwise keep whatever the previous level left on the material.
 	if is_instance_valid(_game_map):
 		var lofi_config := Constants.LOFI_DEFAULTS.duplicate()
-		lofi_config.merge(level_data.lofi_overrides, true)
+		lofi_config.merge(level_data.lofi.to_dict(), true)
 		_game_map.apply_lofi_overrides(lofi_config)
 
 	if level_data.environment_preset != "":
