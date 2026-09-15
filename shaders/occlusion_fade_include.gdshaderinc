@@ -6,13 +6,17 @@
 // populates occlusion_tokens (a shared token data texture) and the
 // occlusion_token_count global below.
 //
-// enable_occlusion exists because tree foliage materials are never swapped away
-// from this shader when the effect is toggled off (unlike map materials, which get
-// replaced back to StandardMaterial3D) -- OcclusionFadeManager flips this uniform
-// instead. Map materials leave it at its default (true) and are unaffected.
+// enable_occlusion is opt-in (defaults to false): OcclusionFadeManager sets it to
+// true on every material it converts or registers (map surfaces and tree-category
+// foliage) and back to false on tree materials in clear(). Materials it never
+// touches (grass, anything else that includes this file) therefore skip the loop
+// entirely by default -- this matters because occlusion_token_count below is a
+// process-global and cannot gate per material on its own; the per-material
+// enable_occlusion flag is the only thing keeping an unregistered material out of
+// the fade loop.
 
 group_uniforms occlusion;
-uniform bool enable_occlusion = true;
+uniform bool enable_occlusion = false;
 // One shared 32x1 RGBAF texture bound once per material by OcclusionFadeManager:
 // pixel i = (world x, world y, world z, fade radius) for token i. Updating the
 // texture once per tick reaches every material at once, instead of pushing three

@@ -19,9 +19,9 @@ extends Node3D
 ## occlusion shader, then packs token positions into one shared texture and
 ## publishes the count as a global every few physics frames.
 
+## Max tracked tokens, and the width of the shared token data texture (one pixel
+## per token slot).
 const MAX_TOKENS := 32
-## Width of the shared token data texture (one pixel per token slot).
-const TOKEN_TEXTURE_WIDTH := MAX_TOKENS
 ## Global shader parameter carrying the number of valid token slots.
 const GLOBAL_TOKEN_COUNT := &"occlusion_token_count"
 ## Per-material sampler uniform the shared token texture is bound to.
@@ -82,9 +82,9 @@ var _last_token_count: int = 0
 
 # Source StandardMaterial3D instance id -> the ShaderMaterial that replaces it, so
 # surfaces sharing one source material keep sharing one converted material.
-var _shader_material_by_source: Dictionary = {}
+var _shader_material_by_source: Dictionary[int, ShaderMaterial] = {}
 # Shape3D RID -> local AABB. The debug-mesh AABB is constant for a given shape.
-var _aabb_cache: Dictionary = {}
+var _aabb_cache: Dictionary[RID, AABB] = {}
 # Entries published on the previous tick; identical ticks skip the GPU update.
 var _last_entries: Array[Vector4] = []
 
@@ -244,6 +244,7 @@ func _create_shader_material_from(std_mat: StandardMaterial3D) -> ShaderMaterial
 	mat.set_shader_parameter("uv1_offset", std_mat.uv1_offset)
 
 	# --- Occlusion parameters ---
+	mat.set_shader_parameter("enable_occlusion", true)
 	mat.set_shader_parameter("min_alpha", min_alpha)
 	mat.set_shader_parameter(TOKEN_TEXTURE_UNIFORM, _token_texture)
 	mat.set_shader_parameter("lofi_pixelation", _lofi_pixelation)
@@ -361,11 +362,11 @@ func _collect_token_entries() -> Array[Vector4]:
 	return entries
 
 
-## Pack (x, y, z, radius) entries into a TOKEN_TEXTURE_WIDTH x 1 RGBAF image.
+## Pack (x, y, z, radius) entries into a MAX_TOKENS x 1 RGBAF image.
 ## Unused slots are zero, which the shader treats as "no token" (radius 0).
 static func build_token_image(entries: Array[Vector4]) -> Image:
-	var image := Image.create_empty(TOKEN_TEXTURE_WIDTH, 1, false, Image.FORMAT_RGBAF)
-	var count := mini(entries.size(), TOKEN_TEXTURE_WIDTH)
+	var image := Image.create_empty(MAX_TOKENS, 1, false, Image.FORMAT_RGBAF)
+	var count := mini(entries.size(), MAX_TOKENS)
 	for i in range(count):
 		var e := entries[i]
 		image.set_pixel(i, 0, Color(e.x, e.y, e.z, e.w))
