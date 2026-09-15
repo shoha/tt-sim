@@ -22,12 +22,26 @@ var _stack: Array[Dictionary] = []
 ## isolated unit tests, in which case undo falls back to GameState-only.
 var _token_lookup: Callable = Callable()
 
+## Optional Callable(token: BoardToken, new_name: String) -> void used to replay
+## a "token_name" undo through TokenSpawner.rename_token (so it also updates the
+## level placement and notifies property listeners), instead of just assigning
+## token.token_name directly. Set via set_rename_callable() by whoever owns
+## renaming (LevelPlayController). Left unset in isolated unit tests, in which
+## case undo falls back to a direct assignment.
+var _rename_callable: Callable = Callable()
+
 
 ## Provide a lookup Callable(network_id: String) -> BoardToken (or any object
 ## that responds to the relevant mutators) used to find live tokens for
 ## undo/redo replay.
 func set_token_lookup(lookup: Callable) -> void:
 	_token_lookup = lookup
+
+
+## Provide a Callable(token: BoardToken, new_name: String) -> void used to
+## replay a "token_name" undo through the real rename path (TokenSpawner.rename_token).
+func set_rename_callable(callable: Callable) -> void:
+	_rename_callable = callable
 
 
 ## Record a single property change. Call BEFORE applying the mutation.
@@ -141,6 +155,11 @@ func _apply_property_to_live_token(network_id: String, property: String, value: 
 		return
 
 	match property:
+		"token_name":
+			if _rename_callable.is_valid():
+				_rename_callable.call(token, str(value))
+			else:
+				token.token_name = str(value)
 		"current_health":
 			var diff: int = int(value) - int(token.current_health)
 			if diff > 0:

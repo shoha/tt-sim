@@ -18,6 +18,10 @@ signal level_loading_started
 signal level_loading_progress(progress: float, status: String)
 signal level_loading_completed
 
+## Fallback spawn offset (world units) for duplicate_token() when no level is
+## loaded (active_level_data null, so grid_cell_size isn't available).
+const DUPLICATE_OFFSET_FALLBACK := 1.5
+
 var active_level_data: LevelData = null
 var loaded_map_instance: Node3D = null
 var is_editor_preview: bool = false  # True when playing a level from the level editor
@@ -123,6 +127,7 @@ func setup(game_map: GameMap) -> void:
 		):
 			history.removal_undo_requested.connect(_token_spawner._on_removal_undo_requested)
 		history.set_token_lookup(_token_spawner.find_token_by_network_id)
+		history.set_rename_callable(_token_spawner.rename_token)
 
 
 func _exit_tree() -> void:
@@ -350,6 +355,43 @@ func spawn_asset(
 	spawn_position: Vector3 = Vector3.ZERO,
 ) -> BoardToken:
 	return _token_spawner.spawn_asset(pack_id, asset_id, variant_id, spawn_position)
+
+
+## Remove a token from the level. Forwards to TokenSpawner -- kept as a
+## same-named method here for the context menu (game_map.gd) to call directly
+## on this LevelPlayController instance. Does not record undo -- callers that
+## want undo support must record it themselves before calling this.
+func remove_token(token: BoardToken) -> bool:
+	return _token_spawner.remove_token(token)
+
+
+## Rename a token. Forwards to TokenSpawner -- kept as a same-named method
+## here for the context menu (game_map.gd) and GameplayActionHistory's rename
+## undo replay to call directly on this LevelPlayController instance.
+func rename_token(token: BoardToken, new_name: String) -> void:
+	_token_spawner.rename_token(token, new_name)
+
+
+## Duplicate a token: spawns a fresh copy of the same asset one grid cell over
+## from the source token, then copies its name and health across.
+func duplicate_token(token: BoardToken) -> BoardToken:
+	var offset: float = (
+		active_level_data.grid_cell_size if active_level_data else DUPLICATE_OFFSET_FALLBACK
+	)
+	var spawn_position: Vector3 = token.rigid_body.global_position + Vector3(offset, 0, 0)
+	var new_token := spawn_asset(token.pack_id, token.asset_id, token.variant_id, spawn_position)
+	if not new_token:
+		return null
+
+	rename_token(new_token, token.token_name)
+	new_token.set_max_health(token.max_health)
+	var health_diff: int = token.current_health - new_token.current_health
+	if health_diff > 0:
+		new_token.heal(health_diff)
+	elif health_diff < 0:
+		new_token.take_damage(health_diff)
+	_token_spawner.notify_token_properties_changed(new_token)
+	return new_token
 
 
 ## Save current token positions to level data

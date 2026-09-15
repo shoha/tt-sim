@@ -9,6 +9,7 @@ const TEST_TOKEN_ID := "test_token_1"
 ## undo replays through a live token's real mutators (not just GameState),
 ## without standing up a full BoardToken scene tree.
 class FakeToken:
+	var token_name: String = "Goblin"
 	var current_health: int = 100
 	var max_health: int = 100
 	var is_visible_to_players: bool = true
@@ -177,3 +178,16 @@ func test_undo_applies_visibility_to_live_token() -> void:
 
 	assert_true(fake_token.is_visible_to_players)
 	assert_eq(fake_token.set_visible_calls, [true])
+
+
+func test_undo_rename_uses_the_rename_callable() -> void:
+	var fake := FakeToken.new()
+	fake.token_name = "New"
+	_history.set_token_lookup(func(_id: String) -> Variant: return fake)
+	var renamed: Array[String] = []
+	_history.set_rename_callable(func(_t: Variant, name: String) -> void: renamed.append(name))
+	_history.record_property_change(TEST_TOKEN_ID, "token_name", "Old", "New")
+
+	_history.undo()
+
+	assert_eq(renamed, ["Old"])
