@@ -553,9 +553,7 @@ func save_level() -> String:
 		NetworkStateSync.broadcast_full_state()
 
 	# Save the level — use folder format when the level came from a folder
-	if _level_play_controller.active_level_data.level_folder != "":
-		return LevelManager.save_level_folder(_level_play_controller.active_level_data)
-	return LevelManager.save_level(_level_play_controller.active_level_data)
+	return LevelManager.save_level_in_place(_level_play_controller.active_level_data)
 
 
 ## Clear the loaded level map

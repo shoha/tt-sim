@@ -250,6 +250,9 @@ Overrides allow fine-tuning individual properties without creating a new preset:
 
 Overrides are merged on top of the selected preset's values (or map defaults when no preset is selected). Only changed properties need to be included — everything else comes from the preset/defaults.
 
+A Sky override survives a preset switch like every other override, by design; the per-row reset and
+"Clear overrides" are the way back to the preset's own sky.
+
 ## Sun and Shadow
 
 Maps with no lights of their own get a default shadow-casting `DirectionalLight3D`

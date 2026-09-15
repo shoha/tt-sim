@@ -528,11 +528,7 @@ func _on_edit_save_requested(state: LevelVisualState) -> void:
 		NetworkManager.broadcast_visual_settings(state.to_broadcast_dict())
 
 	# Save to disk — use folder format when the level came from a folder
-	var save_path := ""
-	if level_data.level_folder != "":
-		save_path = LevelManager.save_level_folder(level_data)
-	else:
-		save_path = LevelManager.save_level(level_data)
+	var save_path := LevelManager.save_level_in_place(level_data)
 	if save_path != "":
 		UIManager.show_success("Level settings saved")
 

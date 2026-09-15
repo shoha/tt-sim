@@ -32,9 +32,9 @@ var lofi: LofiSettings = LofiSettings.default()
 var weather: WeatherSettings = WeatherSettings.default()
 var foliage: FoliageSettings = FoliageSettings.default()
 var sun: SunSettings = SunSettings.default()
-var grid_cell_size: float = 1.524
-var display_unit: String = "ft"
-var display_unit_per_cell: float = 5.0
+var grid_cell_size: float = LevelData.DEFAULT_GRID_CELL_SIZE
+var display_unit: String = LevelData.DEFAULT_DISPLAY_UNIT
+var display_unit_per_cell: float = LevelData.DEFAULT_DISPLAY_UNIT_PER_CELL
 
 
 ## Independent snapshot of the level's editable visuals.

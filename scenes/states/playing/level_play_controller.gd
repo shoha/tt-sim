@@ -261,6 +261,11 @@ func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 ## Callers that change those fields on level data (the drawer's Cancel path)
 ## call update_measure_tool_scale() themselves.
 func apply_visual_state(state: LevelVisualState) -> void:
+	# The client receive path can arrive before a level is loaded (e.g. a
+	# throttled broadcast landing during the load window); silently no-op
+	# rather than applying visual settings against no active level.
+	if not has_active_level():
+		return
 	apply_light_intensity_scale(state.light_intensity_scale)
 	apply_environment_settings(state.environment_preset, state.environment_overrides)
 	apply_foliage_overrides(state.foliage.to_dict())
