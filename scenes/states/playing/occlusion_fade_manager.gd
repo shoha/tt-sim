@@ -80,6 +80,14 @@ var _token_texture: ImageTexture
 # -- this field lets tests observe the published count without that getter.
 var _last_token_count: int = 0
 
+# Source StandardMaterial3D instance id -> the ShaderMaterial that replaces it, so
+# surfaces sharing one source material keep sharing one converted material.
+var _shader_material_by_source: Dictionary = {}
+# Shape3D RID -> local AABB. The debug-mesh AABB is constant for a given shape.
+var _aabb_cache: Dictionary = {}
+# Entries published on the previous tick; identical ticks skip the GPU update.
+var _last_entries: Array[Vector4] = []
+
 
 func _ready() -> void:
 	set_physics_process(false)
@@ -114,6 +122,9 @@ func clear() -> void:
 	_converted_meshes.clear()
 	_all_shader_materials.clear()
 	_tree_materials.clear()
+	_shader_material_by_source.clear()
+	_aabb_cache.clear()
+	_last_entries = []
 	RenderingServer.global_shader_parameter_set(GLOBAL_TOKEN_COUNT, 0)
 	_last_token_count = 0
 	_is_setup = false
@@ -176,10 +187,14 @@ func _convert_mesh_materials(mesh_inst: MeshInstance3D) -> void:
 			continue
 
 		var std_mat := original_mat as StandardMaterial3D
-		var shader_mat := _create_shader_material_from(std_mat)
+		var source_id := std_mat.get_instance_id()
+		var shader_mat: ShaderMaterial = _shader_material_by_source.get(source_id)
+		if shader_mat == null:
+			shader_mat = _create_shader_material_from(std_mat)
+			_shader_material_by_source[source_id] = shader_mat
+			_all_shader_materials.append(shader_mat)
 
 		mesh_inst.set_surface_override_material(surface_idx, shader_mat)
-		_all_shader_materials.append(shader_mat)
 
 		(
 			surface_entries
@@ -292,13 +307,18 @@ func _disable_tree_materials() -> void:
 
 ## Collect token world centres and per-token fade radii, pack them into the shared
 ## token texture, and publish the count as a global. One texture update plus one
-## global set per tick, regardless of how many materials are converted.
-func _update_token_uniforms() -> void:
+## global set per tick, regardless of how many materials are converted. Returns
+## false (and touches nothing) when no token moved since the previous tick.
+func _update_token_uniforms() -> bool:
 	var entries := _collect_token_entries()
+	if entries == _last_entries:
+		return false
+	_last_entries = entries
 	_token_image = build_token_image(entries)
 	_token_texture.update(_token_image)
 	RenderingServer.global_shader_parameter_set(GLOBAL_TOKEN_COUNT, entries.size())
 	_last_token_count = entries.size()
+	return true
 
 
 ## Per-token (world centre, fade radius) as Vector4(x, y, z, radius). Uses the
@@ -320,7 +340,7 @@ func _collect_token_entries() -> Array[Vector4]:
 		var token_radius := min_fade_radius
 		var col_shape := _find_collision_shape(token.rigid_body)
 		if col_shape and col_shape.shape:
-			var aabb := col_shape.shape.get_debug_mesh().get_aabb()
+			var aabb := _get_shape_aabb(col_shape.shape)
 			var local_center_y: float = aabb.position.y + aabb.size.y * 0.5
 			var token_scale: Vector3 = token.rigid_body.scale
 			center_pos += Vector3.UP * local_center_y * token_scale.y
@@ -393,6 +413,18 @@ static func _find_collision_shape(node: Node) -> CollisionShape3D:
 		if child is CollisionShape3D:
 			return child
 	return null
+
+
+## Local AABB of a collision shape, cached by shape RID. The debug mesh AABB is
+## constant for a shape resource, so it is computed once per shape rather than
+## per token per tick.
+func _get_shape_aabb(shape: Shape3D) -> AABB:
+	var key := shape.get_rid()
+	if _aabb_cache.has(key):
+		return _aabb_cache[key]
+	var aabb := shape.get_debug_mesh().get_aabb()
+	_aabb_cache[key] = aabb
+	return aabb
 
 
 ## Recursively collect all visible MeshInstance3D nodes with geometry.
