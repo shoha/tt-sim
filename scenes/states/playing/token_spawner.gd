@@ -246,11 +246,16 @@ func spawn_asset(
 	if spawn_position != Vector3.ZERO and token.rigid_body:
 		token.rigid_body.global_position = spawn_position
 
-	if settle and token.get_dragging_object():
-		token.get_dragging_object().drop_to_ground()
-
 	_connect_token_context_menu(token)
 	add_token_to_level(token, pack_id, asset_id, variant_id)
+
+	# Settle AFTER tracking, never before: _settle_to_position() clears
+	# rigid_body.input_ray_pickable for the duration of the landing tween and
+	# _on_settle_complete() restores it via set_interactive(). add_token_to_level()
+	# also calls set_interactive(), so settling first let tracking re-enable ray
+	# picking mid-tween and the token could be hovered/picked while still falling.
+	if settle and token.get_dragging_object():
+		token.get_dragging_object().drop_to_ground()
 	# Immediate pop-in for single token placement
 	token.play_spawn_animation()
 	token_added.emit(token)

@@ -190,10 +190,20 @@ func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -
 		UIManager.show_error("Cannot add token — no level is loaded")
 		return
 
-	# Spawn at camera ground position instead of world origin
+	# Spawn at camera ground position instead of world origin. That position is
+	# a Y=0 plane intersection, so re-resolve the real surface height straight
+	# down at its X/Z (same snap-then-resolve order drag-place uses) and spawn
+	# with settle := true so the token lands on terrain instead of hovering.
 	var spawn_pos := _get_camera_ground_position()
+	var game_map := _level_play_controller.get_game_map()
+	if game_map:
+		var resolved := DragPlaceController.raycast_terrain_down(
+			game_map.get_world_3d().direct_space_state, spawn_pos
+		)
+		if resolved != Vector3.INF:
+			spawn_pos = resolved + Vector3(0, DragPlaceController.PLACE_CLEARANCE, 0)
 
-	var token = _level_play_controller.spawn_asset(pack_id, asset_id, variant_id, spawn_pos)
+	var token = _level_play_controller.spawn_asset(pack_id, asset_id, variant_id, spawn_pos, true)
 	if not token:
 		UIManager.show_error("Failed to add token — asset may still be downloading")
 

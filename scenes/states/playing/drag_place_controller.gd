@@ -21,6 +21,11 @@ extends Node
 
 const TERRAIN_RAY_LENGTH: float = 1000.0
 const TERRAIN_COLLISION_LAYER: int = 1  # Terrain/board physics layer, matches draggable_token.gd
+## Height a vertical terrain probe starts from, well above any playable surface.
+const TERRAIN_DOWNCAST_HEIGHT: float = 100.0
+## Spawn height above the resolved terrain surface, so DraggableToken.drop_to_ground()
+## has a real gap to settle through instead of starting exactly on (or under) the ground.
+const PLACE_CLEARANCE: float = 0.25
 
 var _game_map: GameMap = null
 var _spawn_asset_fn: Callable
@@ -122,10 +127,28 @@ func _cancel_drag_place() -> void:
 
 
 func _complete_drag_place(screen_pos: Vector2) -> void:
-	var ground_pos := _get_ground_position(screen_pos)
+	# Grid snap moves X/Z by up to half a cell while preserving Y (ScaleUtils.snap_to_grid
+	# keeps y), so the camera raycast's exact surface hit is only valid for the UNSNAPPED
+	# point. On a slope that leaves the token below the surface, where drop_to_ground()'s
+	# downward ray from the collision bottom can no longer find it. So: snap first, then
+	# re-resolve the height straight down at the snapped X/Z.
+	var space_state := _game_map.get_world_3d().direct_space_state
+	var terrain_pos := Vector3.INF
+	if _game_map.camera_node:
+		terrain_pos = raycast_terrain(_game_map.camera_node, space_state, screen_pos)
+	var hit_terrain := terrain_pos != Vector3.INF
+
+	var ground_pos := terrain_pos if hit_terrain else _get_ground_position(screen_pos)
 	if ground_pos == Vector3.INF:
 		ground_pos = _get_camera_ground_position()
 	ground_pos = _snap_to_grid_if_enabled(ground_pos)
+
+	if hit_terrain:
+		var resolved := raycast_terrain_down(space_state, ground_pos)
+		# A downcast miss (snapped off the edge of the terrain) keeps the snapped
+		# position: the camera hit's height is still the best estimate available.
+		if resolved != Vector3.INF:
+			ground_pos = resolved + Vector3(0, PLACE_CLEARANCE, 0)
 
 	if _spawn_asset_fn.is_valid():
 		var token = (
@@ -157,6 +180,30 @@ static func raycast_terrain(
 	var origin := camera.project_ray_origin(screen_pos)
 	var direction := camera.project_ray_normal(screen_pos)
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * TERRAIN_RAY_LENGTH)
+	query.collision_mask = TERRAIN_COLLISION_LAYER
+	var hit := space_state.intersect_ray(query)
+	if hit.is_empty():
+		return Vector3.INF
+	return hit.position as Vector3
+
+
+## Raycast straight down onto the terrain collision layer at an X/Z position.
+## Used to re-resolve the surface height after grid snap has moved X/Z away from
+## the point the camera raycast actually hit. Pure given its inputs, like
+## raycast_terrain above, so it is unit-testable on its own.
+## Returns the hit position, or Vector3.INF if nothing on TERRAIN_COLLISION_LAYER
+## was hit below from_height.
+static func raycast_terrain_down(
+	space_state: PhysicsDirectSpaceState3D,
+	xz: Vector3,
+	from_height: float = TERRAIN_DOWNCAST_HEIGHT,
+) -> Vector3:
+	if not space_state:
+		return Vector3.INF
+	var origin := Vector3(xz.x, from_height, xz.z)
+	var query := PhysicsRayQueryParameters3D.create(
+		origin, origin + Vector3.DOWN * TERRAIN_RAY_LENGTH
+	)
 	query.collision_mask = TERRAIN_COLLISION_LAYER
 	var hit := space_state.intersect_ray(query)
 	if hit.is_empty():
