@@ -159,9 +159,12 @@ func _on_level_cleared() -> void:
 	# Also untoggle the buttons if they were pressed
 	if toggle_asset_browser_button:
 		toggle_asset_browser_button.button_pressed = false
-	# Close the edit drawer if open
-	if level_edit_panel and level_edit_panel.is_open:
-		level_edit_panel.close()
+	# Close the edit drawer if open. The unsaved edits belonged to the level that
+	# just went away, so there is nothing left to prompt about.
+	if level_edit_panel:
+		level_edit_panel.mark_clean()
+		if level_edit_panel.is_open:
+			level_edit_panel.close()
 
 
 func _update_asset_browser_button_state() -> void:
@@ -296,8 +299,11 @@ func _enter_edit_mode() -> void:
 
 	var level_data = _level_play_controller.active_level_data
 
-	# Snapshot original values for cancel/revert
-	_original_state = LevelVisualState.from_level_data(level_data)
+	# Snapshot original values for cancel/revert. A drawer closed from its tab
+	# with unsaved edits keeps its first snapshot, so a later Cancel still
+	# returns to the state the level had before any of those edits.
+	if not level_edit_panel.is_dirty():
+		_original_state = LevelVisualState.from_level_data(level_data)
 
 	# Initialize the edit panel with current values
 	var map_defaults = _level_play_controller.get_map_environment_config()
@@ -508,12 +514,19 @@ func _on_edit_save_requested(state: LevelVisualState) -> void:
 	else:
 		UIManager.show_error("Failed to save level settings")
 
-	level_edit_panel.close()
+	# The drawer no longer closes on Save, so the revert snapshot has to advance
+	# with it -- otherwise a later Cancel would undo work already written to disk.
+	_original_state = state.copy()
+
+	# The drawer stays open after a save so tuning can continue; only the
+	# unsaved-changes flag is cleared.
+	level_edit_panel.mark_clean()
 
 
 ## Cancel editing: revert to the snapshot taken when the drawer was opened
 func _on_edit_cancel_requested() -> void:
 	_revert_edit_mode_values()
+	level_edit_panel.mark_clean()
 	level_edit_panel.close()
 
 

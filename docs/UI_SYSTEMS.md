@@ -466,6 +466,10 @@ Reusable slide-in/out drawer panel with a tab handle. Extends `Control`.
 - `open()` / `close()` / `toggle()` for the drawer itself
 - Optional open/close sounds via `play_sounds` export
 - Subclass lifecycle hook: override `_on_ready()` to configure and populate content
+- `set_tab_badge(visible)` toggles a small accent dot at the tab's top-right corner
+- `set_tab_tooltip(text)` sets the tooltip shown when hovering the tab handle
+- Subclass hook: override `_can_close_from_tab()` to veto a close started from the tab
+  button (e.g. to prompt about unsaved changes). A programmatic `close()` is never vetoed
 
 ### Usage
 
@@ -572,9 +576,18 @@ signal revert_to_map_defaults_requested
 signal aim_sun_toggled(active: bool)
 signal drawer_opened   # Controller should snapshot values and call initialize()
 signal drawer_closed   # Controller should revert if not saved
+signal dirty_changed(dirty: bool)   # Unsaved-changes flag flipped
 ```
 
 `GameplayMenuController` connects these signals and routes them to `LevelPlayController` for live application. On `drawer_opened` it snapshots the current level as a `LevelVisualState` (`LevelVisualState.from_level_data()`); both Save and Cancel go through `LevelPlayController.apply_visual_state()` — Save applies the panel's emitted `state`, Cancel re-applies the snapshot taken at open time.
+
+### Unsaved Changes
+
+Every live edit calls `_mark_dirty()`, which raises the unsaved-changes flag, shows the accent dot on the tab, switches the tab tooltip to "Visuals (unsaved changes)", and emits `dirty_changed`. Only `mark_clean()` lowers the flag; the controller calls it on Save, on Cancel, and when the level is cleared. Reopening the drawer (`initialize()`) does not clear it.
+
+A dirty drawer refuses to close from its tab (`_can_close_from_tab()` returns `false`) and calls `request_close()` instead, which shows a "Discard changes" danger confirmation. Confirming emits `cancel_requested`, so the controller reverts and closes. Escape takes the same route: the panel registers itself with `UIManager.register_overlay()` in `open()`, and `UIManager._close_top_overlay()` prefers an overlay's `request_close()` over `animate_out()`/`close()`.
+
+Save no longer closes the drawer — it clears the flag so tuning can continue — and advances the revert snapshot to the state just written to disk. A drawer closed from the tab while dirty keeps its original snapshot on the next open, so a later Cancel still returns to the pre-edit state.
 
 ### Cancel Behavior
 

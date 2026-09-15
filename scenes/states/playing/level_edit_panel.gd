@@ -32,6 +32,12 @@ signal drawer_opened
 ## The controller should revert changes if not saved.
 signal drawer_closed
 
+## Emitted when the unsaved-changes flag flips, so other UI can follow it.
+signal dirty_changed(dirty: bool)
+
+const TAB_TOOLTIP_CLEAN := "Visuals"
+const TAB_TOOLTIP_DIRTY := "Visuals (unsaved changes)"
+
 const TONEMAP_MODES = {
 	"Linear": Environment.TONE_MAPPER_LINEAR,
 	"Reinhardt": Environment.TONE_MAPPER_REINHARDT,
@@ -60,6 +66,9 @@ var _current_scale_preset_key: String = ScaleUtils.DEFAULT_PRESET
 ## Environment config extracted from the map's embedded WorldEnvironment.
 ## Used as the base layer when current_preset is "" (no explicit choice).
 var _map_defaults: Dictionary = {}
+## True once a live edit has been made and neither saved nor cancelled.
+## Only mark_clean() clears it -- reopening the drawer does not.
+var _dirty: bool = false
 
 # Scale & measurement controls
 @onready var map_grid_toggle: Button = %MapGridToggle
@@ -184,6 +193,7 @@ func _on_ready() -> void:
 	_populate_sky_preset_dropdown()
 	_populate_tonemap_mode_dropdown()
 	_populate_sun_mode_dropdown()
+	_refresh_dirty_visuals()
 
 
 func _connect_control_signals() -> void:
@@ -268,7 +278,7 @@ func _connect_control_signals() -> void:
 	]:
 		binding[0].connect(binding[1], _on_foliage_override_changed.bind(binding[2]))
 
-	revert_to_map_button.pressed.connect(func() -> void: revert_to_map_defaults_requested.emit())
+	revert_to_map_button.pressed.connect(_on_revert_to_map_defaults_pressed)
 	save_button.pressed.connect(_on_save_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
 
@@ -354,14 +364,81 @@ func _populate_sun_mode_dropdown() -> void:
 
 ## Override open to emit signal before the animation starts.
 ## The controller uses this to snapshot values and initialize the panel.
+## Registering as an overlay routes Escape through request_close().
 func open() -> void:
+	UIManager.register_overlay(self)
 	drawer_opened.emit()
 	super.open()
 
 
 ## Override _on_closed to notify the controller when the drawer finishes closing.
 func _on_closed() -> void:
+	UIManager.unregister_overlay(self)
 	drawer_closed.emit()
+
+
+# ============================================================================
+# Unsaved Changes
+# ============================================================================
+
+
+## Whether the drawer holds live edits that have been neither saved nor reverted.
+func is_dirty() -> bool:
+	return _dirty
+
+
+## Called by the controller after Save, Cancel or a level change.
+func mark_clean() -> void:
+	if not _dirty:
+		_refresh_dirty_visuals()
+		return
+	_dirty = false
+	_refresh_dirty_visuals()
+	dirty_changed.emit(false)
+
+
+func _mark_dirty() -> void:
+	if _dirty:
+		return
+	_dirty = true
+	_refresh_dirty_visuals()
+	dirty_changed.emit(true)
+
+
+func _refresh_dirty_visuals() -> void:
+	set_tab_badge(_dirty)
+	set_tab_tooltip(TAB_TOOLTIP_DIRTY if _dirty else TAB_TOOLTIP_CLEAN)
+
+
+## Close if clean; otherwise ask before discarding. Used by the tab button and
+## by UIManager's Escape handling.
+func request_close() -> void:
+	if not _dirty:
+		close()
+		return
+	# The drawer stays open, so it must stay on the overlay stack: Escape reaches
+	# here through _close_top_overlay(), which has already popped it. Registering
+	# is idempotent, so the tab-button route is unaffected.
+	UIManager.register_overlay(self)
+	UIManager.show_danger_confirmation(
+		"Unsaved visual changes",
+		"Discard the changes made in this drawer? Save is still available in the drawer.",
+		_on_discard_confirmed,
+		"Discard changes"
+	)
+
+
+## The tab button must not close a drawer with unsaved work; it prompts instead.
+func _can_close_from_tab() -> bool:
+	if _dirty:
+		request_close()
+		return false
+	return true
+
+
+## The controller listens for cancel_requested: it reverts and closes the drawer.
+func _on_discard_confirmed() -> void:
+	cancel_requested.emit()
 
 
 # ============================================================================
@@ -550,8 +627,10 @@ func _on_scale_preset_selected(index: int) -> void:
 	var key: String = scale_preset_dropdown.get_item_metadata(index)
 	_current_scale_preset_key = key
 	if key == "custom":
+		# Selecting "Custom" changes nothing on its own, so it is not an edit.
 		return
 	if ScaleUtils.PRESETS.has(key):
+		_mark_dirty()
 		var p: Dictionary = ScaleUtils.PRESETS[key]
 		current_grid_cell_size = p.grid_cell_size
 		current_display_unit = p.display_unit
@@ -563,6 +642,7 @@ func _on_scale_preset_selected(index: int) -> void:
 
 
 func _on_grid_cell_size_changed(value: float) -> void:
+	_mark_dirty()
 	current_grid_cell_size = value
 	# Manually changing the slider switches to "Custom"
 	_current_scale_preset_key = "custom"
@@ -581,6 +661,7 @@ func _on_grid_cell_size_changed(value: float) -> void:
 
 
 func _on_preset_selected(index: int) -> void:
+	_mark_dirty()
 	current_preset = preset_dropdown.get_item_metadata(index)
 	current_overrides.clear()
 	environment_changed.emit(current_preset, current_overrides)
@@ -588,23 +669,27 @@ func _on_preset_selected(index: int) -> void:
 
 
 func _on_intensity_changed(value: float) -> void:
+	_mark_dirty()
 	light_intensity_scale = value
 	intensity_changed.emit(value)
 
 
 func _on_water_style_selected(index: int) -> void:
+	_mark_dirty()
 	current_water_style = water_style_dropdown.get_item_metadata(index)
 	water_style_changed.emit(current_water_style)
 
 
 ## Generic handler for config-driven environment overrides.
 func _on_env_override_changed(value: Variant, key: String) -> void:
+	_mark_dirty()
 	current_overrides[key] = value
 	environment_changed.emit(current_preset, current_overrides)
 
 
 ## Handler for adjustment overrides that also enables the adjustment system.
 func _on_adjustment_override_changed(value: Variant, key: String) -> void:
+	_mark_dirty()
 	current_overrides[key] = value
 	current_overrides["adjustment_enabled"] = true
 	environment_changed.emit(current_preset, current_overrides)
@@ -636,6 +721,7 @@ func _on_map_grid_toggled(pressed: bool) -> void:
 
 
 func _on_sky_preset_selected(index: int) -> void:
+	_mark_dirty()
 	var sky_name: String = sky_preset_dropdown.get_item_metadata(index)
 	current_overrides["sky_preset"] = sky_name
 	# When a sky is selected, switch to BG_SKY; when "None", revert to BG_COLOR
@@ -649,6 +735,7 @@ func _on_sky_preset_selected(index: int) -> void:
 
 
 func _on_tonemap_mode_selected(index: int) -> void:
+	_mark_dirty()
 	current_overrides["tonemap_mode"] = tonemap_mode_dropdown.get_item_metadata(index)
 	environment_changed.emit(current_preset, current_overrides)
 
@@ -678,6 +765,13 @@ func _on_cancel_pressed() -> void:
 	cancel_requested.emit()
 
 
+## Reverting is an edit like any other -- the controller rewrites the live level
+## data, so the drawer has unsaved work afterwards.
+func _on_revert_to_map_defaults_pressed() -> void:
+	_mark_dirty()
+	revert_to_map_defaults_requested.emit()
+
+
 # ============================================================================
 # Lo-Fi Post-Processing Handlers
 # ============================================================================
@@ -696,12 +790,14 @@ func _sync_lofi_controls() -> void:
 
 ## Generic handler for config-driven lo-fi overrides.
 func _on_lofi_override_changed(value: Variant, key: String) -> void:
+	_mark_dirty()
 	current_lofi.set(key, float(value))
 	lofi_changed.emit(current_lofi.to_dict())
 
 
 ## Generic handler for config-driven weather overrides.
 func _on_weather_override_changed(value: Variant, key: String) -> void:
+	_mark_dirty()
 	current_weather.set(key, float(value))
 	weather_changed.emit(current_weather.to_dict())
 
@@ -724,6 +820,7 @@ func _sync_foliage_controls() -> void:
 
 ## Generic handler for config-driven foliage sway overrides.
 func _on_foliage_override_changed(value: Variant, key: String) -> void:
+	_mark_dirty()
 	current_foliage.set(key, float(value))
 	foliage_changed.emit(current_foliage.to_dict())
 
@@ -773,8 +870,10 @@ func _sync_sun_controls() -> void:
 
 ## Emit the current sun and refresh the derived parts of the UI. Every sun
 ## control funnels through here -- including Mode and Time of Day, which used to
-## emit sun_changed directly and so skipped the derived-state refresh.
+## emit sun_changed directly and so skipped the derived-state refresh. Marking
+## dirty here rather than in each handler covers the gizmo path too.
 func _emit_sun_changed() -> void:
+	_mark_dirty()
 	sun_changed.emit(current_sun)
 	_update_sun_generated_state()
 
