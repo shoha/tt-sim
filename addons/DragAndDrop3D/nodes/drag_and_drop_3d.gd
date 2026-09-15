@@ -54,8 +54,6 @@ var _has_target_position: bool = false
 # Drag threshold state
 var _pending_drag_object: DraggingObject3D = null
 var _drag_start_mouse_pos: Vector2 = Vector2.ZERO
-## True once _drag_start_mouse_pos has been seeded from a real InputEventMouseMotion.
-var _drag_start_seeded: bool = false
 
 # Height control during drag
 var _drag_height_offset: float = 0.0
@@ -103,16 +101,17 @@ var grid_origin: Vector2 = Vector2.ZERO
 
 ## Called when a draggable object receives mouse down.
 ## Starts a pending drag that only activates after the mouse moves past the threshold.
-func set_dragging_object(object: DraggingObject3D) -> void:
+## `press_position` is the triggering InputEventMouseButton's own position (see
+## DraggingObject3D._on_object_body_3d_input_event), already in this viewport's local
+## coordinate space -- the same space _input()'s InputEventMouseMotion.position is later
+## compared against, so a single past-threshold motion event is enough to activate the drag.
+func set_dragging_object(press_position: Vector2, object: DraggingObject3D) -> void:
 	if not dragging_enabled:
 		return
 	if _currentDraggingObject or _pending_drag_object:
 		return  # Already dragging or pending
 	_pending_drag_object = object
-	# No InputEvent is available at mouse-down (this runs from a signal callback, not
-	# _input()), so the threshold anchor is seeded later, from the first
-	# InputEventMouseMotion's own position -- see _input().
-	_drag_start_seeded = false
+	_drag_start_mouse_pos = press_position
 
 
 ## Actually begin the drag after the movement threshold is met.
@@ -131,19 +130,11 @@ func _input(event: InputEvent) -> void:
 			# that cached cursor position only tracks genuine OS mouse motion and does
 			# not update for synthetically-injected InputEventMouseMotion (confirmed
 			# experimentally), which would make the threshold never fire for injected
-			# drags. event.position is already in this viewport's coordinate space and
-			# is correct for both real and injected input.
-			#
-			# The anchor itself is seeded from the first motion event's position rather
-			# than read from the viewport at mouse-down: mouse-down has no InputEvent to
-			# read a position from, and for an injected drag the mouse-down is also
-			# synthetic, so it is subject to the same stale-cache problem as motion
-			# events. Seeding from the first motion event keeps the anchor correct
-			# (and independent of viewport state) for both real and injected input.
-			if not _drag_start_seeded:
-				_drag_start_mouse_pos = event.position
-				_drag_start_seeded = true
-			elif event.position.distance_to(_drag_start_mouse_pos) >= drag_threshold_px:
+			# drags. event.position is already in this viewport's coordinate space --
+			# the same space _drag_start_mouse_pos was seeded in from the mouse-down
+			# InputEventMouseButton's position (see set_dragging_object()) -- so a
+			# single past-threshold motion event is enough to activate the drag.
+			if event.position.distance_to(_drag_start_mouse_pos) >= drag_threshold_px:
 				_begin_drag(_pending_drag_object)
 				_update_target_position(event.position)
 		elif event is InputEventMouseButton:
