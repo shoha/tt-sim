@@ -393,6 +393,8 @@ func _on_revert_to_map_defaults() -> void:
 	# Update the panel's internal state and controls to match
 	level_edit_panel.apply_environment_state("", {})
 
+	UIManager.show_info("Environment reset to the map's defaults; overrides cleared.")
+
 
 ## Real-time lo-fi shader change from the edit panel
 func _on_edit_lofi_changed(overrides: Dictionary) -> void:
