@@ -364,15 +364,21 @@ func remove_token(token: BoardToken) -> bool:
 
 
 ## Rename a token: trims and ignores blank/whitespace-only names. Updates the
-## live token, the matching level placement (if any), and notifies property
-## listeners the same way a signal-driven property change would (GameState
-## sync + network broadcast).
+## live token, its scene-tree node name, the matching level placement (if any),
+## and notifies property listeners the same way a signal-driven property change
+## would (GameState sync + network broadcast). No-ops without authority, the
+## same as remove_token().
 func rename_token(token: BoardToken, new_name: String) -> void:
+	if not GameState.has_authority():
+		return
 	var trimmed_name: String = new_name.strip_edges()
 	if trimmed_name == "":
 		return
 
 	token.token_name = trimmed_name
+	# Keep the node name in step with the display name, as BoardTokenFactory does
+	# when it upgrades a placeholder, so the scene tree reads the same as the board.
+	token.name = trimmed_name
 
 	var placement_id: String = _network_id_to_placement.get(token.network_id, token.network_id)
 	var active_level_data: LevelData = _get_active_level_data_fn.call()

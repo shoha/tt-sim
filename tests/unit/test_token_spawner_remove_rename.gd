@@ -70,6 +70,7 @@ func test_rename_token_updates_token_placement_and_state() -> void:
 	spawner.rename_token(token, "  Hobgoblin ")
 
 	assert_eq(token.token_name, "Hobgoblin")
+	assert_eq(String(token.name), "Hobgoblin", "The scene-tree node name follows the display name")
 	assert_eq(level.token_placements[0].token_name, "Hobgoblin")
 	assert_eq(GameState.get_token_state(TOKEN_ID).token_name, "Hobgoblin")
 

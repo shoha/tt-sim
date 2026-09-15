@@ -229,9 +229,14 @@ server.tool(
 
 server.tool(
   "game_key",
-  "Press and release a key.",
+  "Press and release a key, optionally with modifiers.",
   {
-    key: z.string().describe("Key name (e.g. 'M', 'Escape', 'Home', 'Space')"),
+    key: z
+      .string()
+      .describe(
+        "Key name (e.g. 'M', 'Escape', 'Home', 'Space'), or a chord with " +
+          "'Ctrl'/'Shift'/'Alt' prefixes joined by '+' (e.g. 'Ctrl+Z', 'Shift+Alt+F')"
+      ),
   },
   async ({ key }) => {
     const err = requireBridge();
@@ -445,7 +450,15 @@ server.tool(
 const StepSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("click"), x: z.number(), y: z.number(), button: z.enum(["left", "right", "middle"]).default("left") }),
   z.object({ action: z.literal("drag"), x1: z.number(), y1: z.number(), x2: z.number(), y2: z.number() }),
-  z.object({ action: z.literal("key"), key: z.string() }),
+  z.object({
+    action: z.literal("key"),
+    key: z
+      .string()
+      .describe(
+        "Key name (e.g. 'M', 'Escape'), or a chord with 'Ctrl'/'Shift'/'Alt' " +
+          "prefixes joined by '+' (e.g. 'Ctrl+Z', 'Shift+Alt+F')"
+      ),
+  }),
   z.object({ action: z.literal("scroll"), x: z.number(), y: z.number(), delta: z.number() }),
   z.object({ action: z.literal("wait"), seconds: z.number() }),
   z.object({ action: z.literal("screenshot") }),

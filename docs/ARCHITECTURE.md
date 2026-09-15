@@ -843,7 +843,7 @@ See [CONVENTIONS.md](CONVENTIONS.md) for the full token transform hierarchy, pla
 
 `LevelPlayController.remove_token()` / `rename_token()` are same-named forwards to the `TokenSpawner` methods above (kept as same-named wrappers since the context menu and `GameplayActionHistory`'s undo/redo replay call them on `LevelPlayController`). `LevelPlayController.duplicate_token(token) -> BoardToken` spawns a copy of the same asset one grid cell over in +X (`LevelData.grid_cell_size`, or 1.5 m without an active level), then copies name, max health, and current health onto the new token via `rename_token()` / `set_max_health()` / `heal()` / `take_damage()`, plus the source's rotation and scale (`set_transform_immediate()` followed by an explicit `transform_changed` emit, since that setter emits nothing itself) and its player visibility (`set_visible_to_players()`, so a hidden source produces a hidden copy and the network sees it). Permissions are not copied — the copy starts GM-only. It requires authority (returns `null` otherwise), and the context menu records a `GameplayActionHistory.record_token_spawn()` entry afterwards so Ctrl+Z removes the copy again through `TokenSpawner.remove_token()`.
 
-TokenSpawner is the single place removal and rename touch storage, placement data, and `GameState` together — never `queue_free()` a token node directly.
+TokenSpawner is the single place removal and rename touch storage, placement data, and `GameState` together — never `queue_free()` a token node directly outside TokenSpawner.
 
 ### Drag-to-Place (Asset Browser)
 
