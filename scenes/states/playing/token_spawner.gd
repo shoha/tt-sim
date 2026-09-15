@@ -84,6 +84,25 @@ func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 		_connect_token_state_signals(token)
 
 
+## Track a token that was created from network state (RootNetworkHandler's
+## create_token_from_state). Interactivity was already decided there; this only
+## registers storage and the reverse index so find_token_by_network_id() works
+## for tokens the host spawned mid-game.
+func track_network_token(token: BoardToken) -> void:
+	var placement_id: String = token.get_meta("placement_id", token.network_id)
+	spawned_tokens[placement_id] = token
+	_network_id_to_placement[token.network_id] = placement_id
+	token_added.emit(token)
+
+
+## Forget a network-tracked token (host removed it). Safe to call for ids that
+## were never tracked.
+func untrack_network_token(network_id: String) -> void:
+	var placement_id: String = _network_id_to_placement.get(network_id, network_id)
+	spawned_tokens.erase(placement_id)
+	_network_id_to_placement.erase(network_id)
+
+
 ## Connect to token signals for broadcasting state changes over network.
 ## Stores callables so they can be disconnected later (prevents lambda accumulation).
 func _connect_token_state_signals(token: BoardToken) -> void:
