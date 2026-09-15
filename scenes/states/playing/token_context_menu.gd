@@ -12,6 +12,9 @@ signal control_requested(token: BoardToken)
 signal control_revoked(token: BoardToken)
 signal control_assign_requested(token: BoardToken)
 signal menu_closed
+signal remove_requested(token: BoardToken)
+signal duplicate_requested(token: BoardToken)
+signal rename_requested(token: BoardToken, new_name: String)
 
 var target_token: BoardToken = null
 
@@ -25,6 +28,10 @@ var heal_hurt_toggle: CheckButton = $MenuPanel/VBoxContainer/CustomDamageContain
 @onready var request_control_button: Button = $MenuPanel/VBoxContainer/RequestControlButton
 @onready var revoke_control_button: Button = $MenuPanel/VBoxContainer/RevokeControlButton
 @onready var assign_control_button: Button = $MenuPanel/VBoxContainer/AssignControlButton
+@onready var rename_container: HBoxContainer = %RenameContainer
+@onready var rename_input: LineEdit = %RenameInput
+@onready var duplicate_button: Button = %DuplicateButton
+@onready var remove_button: Button = %RemoveButton
 
 
 func _ready() -> void:
@@ -61,6 +68,11 @@ func _update_menu_content() -> void:
 	var is_gm: bool = NetworkManager.has_gm_access()
 	var is_networked: bool = NetworkManager.is_networked()
 	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
+
+	# Title shows the token's current name
+	var title_label = get_node_or_null("MenuPanel/VBoxContainer/TitleLabel")
+	if title_label:
+		title_label.text = target_token.token_name
 
 	# Update visibility toggle button text
 	var visibility_button = get_node_or_null("MenuPanel/VBoxContainer/ToggleVisibilityButton")
@@ -127,6 +139,19 @@ func _update_menu_content() -> void:
 				)
 			)
 		reset_transform_button.visible = has_authority
+
+	# Rename / Duplicate / Remove rows — GM only
+	var separator7 = get_node_or_null("MenuPanel/VBoxContainer/HSeparator7")
+	if separator7:
+		separator7.visible = is_gm
+	if rename_container:
+		rename_container.visible = is_gm
+		if is_gm:
+			rename_input.text = target_token.token_name
+	if duplicate_button:
+		duplicate_button.visible = is_gm
+	if remove_button:
+		remove_button.visible = is_gm
 
 	# Permission buttons
 	_update_permission_buttons(is_gm, is_networked, my_peer_id)
@@ -282,6 +307,27 @@ func _on_reset_transform_pressed() -> void:
 		reset_transform_requested.emit()
 		AudioManager.play_tick()
 		close_menu()
+
+
+func _on_duplicate_button_pressed() -> void:
+	if target_token and is_instance_valid(target_token):
+		duplicate_requested.emit(target_token)
+		AudioManager.play_tick()
+
+
+func _on_remove_button_pressed() -> void:
+	if target_token and is_instance_valid(target_token):
+		remove_requested.emit(target_token)
+		AudioManager.play_tick()
+
+
+## Also connected to RenameInput's text_submitted signal (Enter key), which
+## passes the submitted text as an argument the Button's pressed signal does
+## not provide -- mirrors _on_hp_adjustment_requested's optional-param pattern.
+func _on_rename_button_pressed(_submitted_text: String = "") -> void:
+	if target_token and is_instance_valid(target_token):
+		rename_requested.emit(target_token, rename_input.text)
+		AudioManager.play_tick()
 
 
 func _on_request_control_pressed() -> void:
