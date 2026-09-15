@@ -292,6 +292,10 @@ func _on_context_menu_duplicate_requested(token: BoardToken) -> void:
 		var copy := lpc.duplicate_token(token)
 		if not copy:
 			UIManager.show_warning("Could not duplicate token")
+		# Recorded AFTER the spawn, unlike every other action here: the undo entry
+		# needs the copy's network_id, which only exists once it has been created.
+		elif _game_map._action_history and NetworkManager.has_gm_access():
+			_game_map._action_history.record_token_spawn(copy.network_id, copy.token_name)
 	if _context_menu:
 		_context_menu.close_menu()
 
