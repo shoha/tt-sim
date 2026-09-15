@@ -107,12 +107,16 @@ func test_legacy_set_covers_sun_overrides_and_rejects_unknown_properties() -> vo
 	level.set("lofi_overrides", {"pixelation": 0.07})
 	level.set("weather_overrides", {"wind_intensity": 0.4})
 	level.set("foliage_overrides", {"grass_sway_speed": 3.1})
-	var legacy_sun := {"mode": "auto", "time_of_day": 14.0}
+	# Deliberately not the defaults (mode "auto", 14.0): a default legacy dict
+	# would pass whether or not _set() intercepted sun_overrides at all.
+	var legacy_sun := {"mode": "on", "time_of_day": 6.0}
 	level.set("sun_overrides", legacy_sun)
 
 	assert_almost_eq(level.lofi.pixelation, 0.07, 0.000001)
 	assert_almost_eq(level.weather.wind_intensity, 0.4, 0.000001)
 	assert_almost_eq(level.foliage.grass_sway_speed, 3.1, 0.000001)
+	assert_eq(level.visual_settings.sun.mode, "on")
+	assert_almost_eq(level.visual_settings.sun.time_of_day, 6.0, 0.000001)
 	assert_eq(level.visual_settings.sun.to_dict(), SunSettings.from_legacy(legacy_sun).to_dict())
 
 	assert_false(level._set(&"not_a_real_property", "value"), "unknown property must return false")

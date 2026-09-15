@@ -280,7 +280,7 @@ loading_overlay.show_indeterminate("Please wait...")
 
 - Smooth progress bar animation (lerped toward the target value, with a looping shimmer)
 - Status text updates
-- Blocks mouse input while visible (full-screen opaque `ColorRect`, default `mouse_filter`)
+- Blocks mouse input while visible (full-screen near-opaque `ColorRect`, default `mouse_filter`)
 - Animated show/hide
 
 ---
