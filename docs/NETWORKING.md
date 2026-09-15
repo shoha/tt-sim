@@ -459,6 +459,16 @@ func broadcast_game_state(state_dict: Dictionary) -> void
 func broadcast_visual_settings(settings: Dictionary) -> void
 ```
 
+`broadcast_visual_settings()`'s `settings` payload is `LevelVisualState.to_broadcast_dict()`
+(`resources/level_visual_state.gd`) -- full snapshot from `GameplayMenuController` Save/Cancel, or a
+partial per-field batch from `VisualBroadcastThrottle` during live edits (any subset of the same
+keys: `light_intensity`, `environment_preset`, `environment_overrides`, `lofi_overrides`,
+`weather_overrides`, `foliage_overrides`, `sun_settings`, `water_style`). On the client,
+`visual_settings_received` is handled by `LevelPlayController._on_visual_settings_received()`, which
+rebuilds a `LevelVisualState` from the current level, patches it with `patch_from_broadcast_dict()`,
+writes it back with `apply_to_level_data()`, and re-applies the *whole* state via
+`apply_visual_state()` -- not just the changed fields -- for every (throttled) broadcast.
+
 ### NetworkStateSync
 
 #### Broadcast Methods (Host Only)
