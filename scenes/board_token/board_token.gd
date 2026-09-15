@@ -157,7 +157,12 @@ func take_damage(amount: int) -> void:
 
 
 func heal(amount: int) -> void:
+	# A downed token comes back through revive() so is_alive, `revived` and the
+	# health signal all fire together. This is what the context menu's heal and
+	# GameplayActionHistory's undo-of-a-killing-blow both rely on.
 	if not is_alive:
+		if amount > 0:
+			revive(amount)
 		return
 
 	var old_health = current_health
