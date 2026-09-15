@@ -47,8 +47,8 @@ func _on_asset_drag_started(
 	pack_id: String, asset_id: String, variant_id: String, icon: Texture2D
 ) -> void:
 	asset_drag_started.emit(pack_id, asset_id, variant_id, icon)
-	# Close browser to reveal viewport
-	animate_out()
+	# Browser stays open during drag-place so the player can see the viewport
+	# behind it and drag again without reopening it.
 
 
 func _on_button_toggled(toggled_on: bool) -> void:
@@ -62,10 +62,10 @@ func _on_before_animate_in() -> void:
 	UIManager.register_overlay(self)
 
 
-# Unregister and clear filters when closing
+# Unregister when closing. Filters persist across close/open (cleared only
+# when the player clears them explicitly), including across a drag-place.
 func _on_before_animate_out() -> void:
 	UIManager.unregister_overlay(self)
-	asset_browser.clear_filters()
 	# If the button is still pressed, the close came from ESC or asset selection
 	# rather than the toggle button (which already plays its own click sound).
 	if toggle_button.button_pressed:

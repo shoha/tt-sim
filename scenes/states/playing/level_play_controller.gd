@@ -353,8 +353,9 @@ func spawn_asset(
 	asset_id: String,
 	variant_id: String = "default",
 	spawn_position: Vector3 = Vector3.ZERO,
+	settle: bool = false,
 ) -> BoardToken:
-	return _token_spawner.spawn_asset(pack_id, asset_id, variant_id, spawn_position)
+	return _token_spawner.spawn_asset(pack_id, asset_id, variant_id, spawn_position, settle)
 
 
 ## Remove a token from the level. Forwards to TokenSpawner -- kept as a

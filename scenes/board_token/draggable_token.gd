@@ -344,6 +344,13 @@ func _settle_to_ground() -> void:
 	_settle_to_position(landing_pos)
 
 
+## Public wrapper around _settle_to_ground() for external callers that just
+## placed this token and want it to drop onto whatever terrain is below its
+## current position (e.g. TokenSpawner.spawn_asset() after a drag-place).
+func drop_to_ground() -> void:
+	_settle_to_ground()
+
+
 ## Settle the token to a specific position (used for both drop and cancel).
 func _settle_to_position(target_pos: Vector3) -> void:
 	_is_settling = true

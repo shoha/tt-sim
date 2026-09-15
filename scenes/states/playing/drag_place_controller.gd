@@ -19,6 +19,9 @@ extends Node
 ## keeps running at the exact same point in GameMap's input handling order
 ## as it did before the extraction.
 
+const TERRAIN_RAY_LENGTH: float = 1000.0
+const TERRAIN_COLLISION_LAYER: int = 1  # Terrain/board physics layer, matches draggable_token.gd
+
 var _game_map: GameMap = null
 var _spawn_asset_fn: Callable
 
@@ -29,7 +32,7 @@ var _drag_ghost_layer: CanvasLayer = null
 
 
 ## Wire this controller to its owning GameMap and the token-spawning callable.
-## spawn_asset_fn(pack_id, asset_id, variant_id, spawn_position) -> BoardToken
+## spawn_asset_fn(pack_id, asset_id, variant_id, spawn_position, settle) -> BoardToken
 func setup(game_map: GameMap, spawn_asset_fn: Callable) -> void:
 	_game_map = game_map
 	_spawn_asset_fn = spawn_asset_fn
@@ -51,7 +54,7 @@ func handle_input(event: InputEvent) -> bool:
 		and event.button_index == MOUSE_BUTTON_LEFT
 		and not event.pressed
 	):
-		if _game_map._is_mouse_over_gui():
+		if _game_map.is_mouse_over_gui():
 			_cancel_drag_place()
 		else:
 			_complete_drag_place(event.position)
@@ -132,6 +135,7 @@ func _complete_drag_place(screen_pos: Vector2) -> void:
 				_drag_place_info.get("asset_id", ""),
 				_drag_place_info.get("variant_id", "default"),
 				ground_pos,
+				true,
 			)
 		)
 		if not token:
@@ -140,11 +144,39 @@ func _complete_drag_place(screen_pos: Vector2) -> void:
 	_cancel_drag_place()
 
 
-## Get the world position where a screen point intersects the Y=0 ground plane.
-## Returns Vector3.INF if the ray doesn't intersect (camera pointing up).
+## Raycast from a screen position against the terrain collision layer only.
+## Pure given its inputs (no reliance on controller state), so it can be
+## unit-tested without a fully wired-up DragPlaceController/GameMap.
+## Returns the hit position, or Vector3.INF if nothing on TERRAIN_COLLISION_LAYER
+## was hit.
+static func raycast_terrain(
+	camera: Camera3D, space_state: PhysicsDirectSpaceState3D, screen_pos: Vector2
+) -> Vector3:
+	if not camera or not space_state:
+		return Vector3.INF
+	var origin := camera.project_ray_origin(screen_pos)
+	var direction := camera.project_ray_normal(screen_pos)
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * TERRAIN_RAY_LENGTH)
+	query.collision_mask = TERRAIN_COLLISION_LAYER
+	var hit := space_state.intersect_ray(query)
+	if hit.is_empty():
+		return Vector3.INF
+	return hit.position as Vector3
+
+
+## Get the world position where a screen point lands on the map: a terrain
+## raycast first (so drop position follows actual ground height/slopes), then
+## falling back to the existing Y=0 ground-plane maths when nothing on
+## TERRAIN_COLLISION_LAYER is hit (e.g. camera pointing off the map).
 func _get_ground_position(screen_pos: Vector2) -> Vector3:
 	if not _game_map.camera_node:
 		return Vector3.INF
+	var terrain_pos := raycast_terrain(
+		_game_map.camera_node, _game_map.get_world_3d().direct_space_state, screen_pos
+	)
+	if terrain_pos != Vector3.INF:
+		return terrain_pos
+
 	var origin := _game_map.camera_node.project_ray_origin(screen_pos)
 	var direction := _game_map.camera_node.project_ray_normal(screen_pos)
 	if abs(direction.y) < 0.0001:

@@ -333,6 +333,13 @@ func _is_mouse_over_gui() -> bool:
 	return true
 
 
+## Public wrapper around _is_mouse_over_gui() for external callers (e.g.
+## DragPlaceController) that need the same GUI-hover check but aren't part
+## of this class.
+func is_mouse_over_gui() -> bool:
+	return _is_mouse_over_gui()
+
+
 ## Forward a token's context-menu request to TokenContextMenuController.
 ## Must keep this exact name/signature -- LevelPlayController connects
 ## directly to it:
