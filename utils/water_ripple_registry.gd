@@ -101,7 +101,9 @@ static func flush_disturbances() -> void:
 static func _prune_freed_bodies() -> void:
 	if _submerged.is_empty():
 		return
-	var freed_ids = null
+	# Allocated only once an invalid entry is found, so the idle path stays
+	# allocation-free.
+	var freed_ids: Variant = null
 	for id in _submerged:
 		if not is_instance_valid(_submerged[id]):
 			if freed_ids == null:
