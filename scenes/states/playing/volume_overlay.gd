@@ -76,7 +76,6 @@ func setup(cam: Camera3D, viewport: SubViewport, overlay_parent: Node) -> void:
 	_create_materials()
 	_create_mesh_instances()
 	_create_label(overlay_parent)
-	set_process(true)
 
 
 func _exit_tree() -> void:
@@ -90,6 +89,7 @@ func _exit_tree() -> void:
 
 func clear() -> void:
 	_is_showing = false
+	set_process(false)
 	if _fill_instance:
 		_fill_instance.visible = false
 	if _wire_instance:
@@ -157,6 +157,7 @@ func show(
 	_center = center
 	_radius = radius
 	_is_showing = true
+	set_process(true)
 
 	_wire_material.albedo_color = WIRE_COLOR_PREVIEW if is_preview else WIRE_COLOR_LOCKED
 	_fill_material.albedo_color = FILL_COLOR_PREVIEW if is_preview else FILL_COLOR_LOCKED
