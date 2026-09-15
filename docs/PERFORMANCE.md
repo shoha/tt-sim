@@ -123,6 +123,10 @@ treat any frame-time number for this budget as measured until that path is fixed
 primitive-count and pipeline-correctness numbers above are measured; the frame-time
 consequence of applying them is not.
 
+**Update (2026-09-14): that blocker is gone.** `game_click_control` targets a Control by
+name and converts viewport space to window space itself, which is what the raw-coordinate
+attempts above were failing to do. This measurement can now be retaken.
+
 ## Spatial foliage chunking
 
 A `MultiMeshInstance3D` is frustum-culled as a single AABB. Foliage was one map-wide
@@ -398,10 +402,12 @@ they differ, the camera differed and the pair is invalid.
 
 The validator bridge can now drive this end to end, including the title-screen navigation
 that previously blocked it: `game_state` reports `viewport.window_size`,
-`viewport.viewport_size` and `viewport.hovered_control`; click coordinates are window
-pixels while screenshots are viewport pixels; and `hovered_control` is how you confirm a
-click landed where intended. See `AGENTS.md`'s Validation Bridge troubleshooting list for
-the coordinate-space detail rather than duplicating it here.
+`viewport.viewport_size` and `viewport.hovered_control`; and `hovered_control` is how you
+confirm a click landed where intended. Prefer `game_click_control`, which targets a named
+Control and converts coordinate spaces itself, over raw `game_click`. See `AGENTS.md`'s
+Validation Bridge troubleshooting list for the coordinate-space detail rather than
+duplicating it here -- an earlier version of this paragraph duplicated it and got it
+backwards, which is why it now only points.
 
 Prefer the F3 digit toggles to A/B *inside* one run, then group the CSV by the
 `toggle_*` columns -- that is immune to drift. When a change cannot be toggled at
