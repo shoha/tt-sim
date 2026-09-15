@@ -58,6 +58,14 @@ func test_clear_override_keys_resets_row_and_emits() -> void:
 	assert_signal_emitted(_panel, "environment_changed")
 
 
+func test_clearing_a_row_with_no_override_leaves_the_panel_clean() -> void:
+	_panel.mark_clean()
+	watch_signals(_panel)
+	_panel._clear_override_keys(["fog_enabled", "fog_light_color", "fog_density"])
+	assert_false(_panel.is_dirty())
+	assert_signal_not_emitted(_panel, "environment_changed")
+
+
 func test_clearing_last_adjustment_key_drops_adjustment_enabled() -> void:
 	_panel._on_adjustment_override_changed(1.2, "adjustment_brightness")
 	assert_true(_panel.current_overrides.get("adjustment_enabled", false))

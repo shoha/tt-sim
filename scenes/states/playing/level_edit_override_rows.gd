@@ -70,14 +70,19 @@ func refresh(overrides: Dictionary, clear_button: Button) -> void:
 
 
 ## Erase [param keys] from [param overrides]; drop adjustment_enabled too if
-## that was the last remaining adjustment_* override.
-static func keys_after_clear(overrides: Dictionary, keys: Array) -> void:
+## that was the last remaining adjustment_* override. Returns true if at least
+## one key was actually erased (false is a no-op: nothing to mark dirty over).
+static func erase_keys(overrides: Dictionary, keys: Array) -> bool:
+	var erased_any := false
 	var cleared_adjustment_key := false
 	for key in keys:
-		if overrides.erase(key) and key.begins_with("adjustment_"):
-			cleared_adjustment_key = true
+		if overrides.erase(key):
+			erased_any = true
+			if key.begins_with("adjustment_"):
+				cleared_adjustment_key = true
 	if cleared_adjustment_key and not _has_remaining_adjustment_override(overrides):
 		overrides.erase("adjustment_enabled")
+	return erased_any
 
 
 static func _has_remaining_adjustment_override(overrides: Dictionary) -> bool:

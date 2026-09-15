@@ -413,7 +413,8 @@ func request_close() -> void:
 		"Unsaved visual changes",
 		"Discard the changes made in this drawer? Save is still available in the drawer.",
 		_on_discard_confirmed,
-		"Discard changes"
+		"Discard changes",
+		"Keep editing"
 	)
 	if _close_prompt:
 		_close_prompt.closed.connect(_on_close_prompt_closed)
@@ -569,9 +570,13 @@ func _sync_controls_from_config() -> void:
 	glow_bloom_slider_spin.set_value_no_signal(config.get("glow_bloom", 0.0))
 
 
+## Invariant: every path that changes current_overrides must either emit
+## environment_changed or call _refresh_override_indicators() explicitly
+## (initialize() and apply_environment_state() do the latter).
 func _setup_override_rows() -> void:
 	_override_rows = LevelEditOverrideRows.new(self, _clear_override_keys)
 	environment_changed.connect(func(_preset, _overrides): _refresh_override_indicators())
+	_refresh_override_indicators()
 
 
 func _refresh_override_indicators() -> void:
@@ -579,7 +584,8 @@ func _refresh_override_indicators() -> void:
 
 
 func _clear_override_keys(keys: Array) -> void:
-	LevelEditOverrideRows.keys_after_clear(current_overrides, keys)
+	if not LevelEditOverrideRows.erase_keys(current_overrides, keys):
+		return
 	_mark_dirty()
 	environment_changed.emit(current_preset, current_overrides)
 	_sync_controls_from_config()
@@ -600,7 +606,7 @@ func _setup_sun_section() -> void:
 func _on_sun_section_changed(settings: SunSettings) -> void:
 	current_sun = settings
 	_mark_dirty()
-	sun_changed.emit(current_sun.copy_settings())
+	sun_changed.emit(current_sun)
 
 
 ## Select the dropdown item whose metadata equals [param value]; true if found.
