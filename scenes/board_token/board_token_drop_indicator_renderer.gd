@@ -27,6 +27,10 @@ const TERRAIN_COLLISION_LAYER: int = 1  # Only raycast against terrain, not othe
 const PULSE_SPEED: float = 3.0
 const PULSE_AMOUNT: float = 0.15
 
+## Skip the raycast + line rebuild when start_position has barely moved since
+## the last update() call -- avoids rebuilding the ImmediateMesh every frame.
+const REBUILD_EPSILON: float = 0.001
+
 ## The RigidBody3D to exclude from raycasts (the token being dragged)
 var exclude_body: RigidBody3D
 
@@ -41,6 +45,15 @@ var _circle_radius: float = CIRCLE_RADIUS
 ## Pulse animation time
 var _pulse_time: float = 0.0
 
+## Cached raycast inputs/outputs from the last rebuild, so update() can skip
+## re-raycasting and redrawing the line when the token hasn't moved.
+var _last_start: Vector3 = Vector3.INF
+var _last_hit: Dictionary = {}
+
+## Debug counter: how many times the dotted line has actually been rebuilt.
+## Exists so tests can assert a rebuild was (or wasn't) skipped.
+var _line_rebuilds: int = 0
+
 
 func _ready() -> void:
 	_create_meshes()
@@ -50,19 +63,25 @@ func _ready() -> void:
 func _create_meshes() -> void:
 	var material = _create_indicator_material()
 
-	# Line mesh
+	# Line mesh: rebuilt in world space whenever the drag start or raycast hit moves.
+	# top_level = true so its transform is independent of the token and geometry can
+	# be built directly in world space (no to_local conversions).
 	_line_immediate_mesh = ImmediateMesh.new()
 	_line_mesh_instance = MeshInstance3D.new()
 	_line_mesh_instance.mesh = _line_immediate_mesh
 	_line_mesh_instance.material_override = material
+	_line_mesh_instance.top_level = true
 	add_child(_line_mesh_instance)
 
-	# Circle mesh
+	# Circle mesh: built once below as a unit-radius fan at the origin facing +Y,
+	# then simply posed (transform + scale) every frame instead of being rebuilt.
 	_circle_immediate_mesh = ImmediateMesh.new()
 	_circle_mesh_instance = MeshInstance3D.new()
 	_circle_mesh_instance.mesh = _circle_immediate_mesh
 	_circle_mesh_instance.material_override = material.duplicate()
+	_circle_mesh_instance.top_level = true
 	add_child(_circle_mesh_instance)
+	_build_circle_mesh()
 
 
 func _create_indicator_material() -> StandardMaterial3D:
@@ -95,16 +114,18 @@ func show_indicator() -> void:
 
 
 func hide_indicator() -> void:
-	_clear_meshes()
+	_clear_line_mesh()
+	# Force a fresh raycast + line rebuild on the next drag rather than trusting
+	# stale cached values from whatever the previous drag last saw.
+	_last_start = Vector3.INF
+	_last_hit = {}
 	_line_mesh_instance.hide()
 	_circle_mesh_instance.hide()
 
 
-func _clear_meshes() -> void:
+func _clear_line_mesh() -> void:
 	if _line_immediate_mesh:
 		_line_immediate_mesh.clear_surfaces()
-	if _circle_immediate_mesh:
-		_circle_immediate_mesh.clear_surfaces()
 
 
 ## Updates the drop indicator based on the token's current position
@@ -113,17 +134,29 @@ func update(start_position: Vector3) -> void:
 	if not is_instance_valid(_line_mesh_instance):
 		return
 
-	_clear_meshes()
-
 	# Advance pulse animation
 	_pulse_time += get_process_delta_time()
 
-	var hit_result = _raycast_down(start_position)
-	if hit_result:
-		_draw_dotted_line(start_position, hit_result.position)
-		# Apply pulsing to the landing circle radius
-		var pulse_scale = 1.0 + sin(_pulse_time * PULSE_SPEED) * PULSE_AMOUNT
-		_draw_landing_circle(hit_result.position, hit_result.normal, _circle_radius * pulse_scale)
+	if start_position.distance_to(_last_start) > REBUILD_EPSILON:
+		_last_start = start_position
+		_last_hit = _raycast_down(start_position)
+		_rebuild_line(start_position)
+
+	if _last_hit.is_empty():
+		return
+
+	# Apply pulsing to the landing circle radius
+	var pulse_scale: float = 1.0 + sin(_pulse_time * PULSE_SPEED) * PULSE_AMOUNT
+	_pose_circle(_last_hit.position, _last_hit.normal, _circle_radius * pulse_scale)
+
+
+## Clears and redraws the dotted line for the current _last_start/_last_hit.
+## Split out of update() so the raycast-skip branch above stays simple.
+func _rebuild_line(start_position: Vector3) -> void:
+	_clear_line_mesh()
+	if not _last_hit.is_empty():
+		_draw_dotted_line(start_position, _last_hit.position)
+	_line_rebuilds += 1
 
 
 func _raycast_down(from: Vector3) -> Dictionary:
@@ -162,67 +195,76 @@ func _draw_dotted_line(from: Vector3, to: Vector3) -> void:
 	_line_immediate_mesh.surface_end()
 
 
+## top_level means the mesh instance's local space IS world space, so vertices
+## are built directly in world space with no to_local conversion.
 func _draw_thick_segment(start: Vector3, end: Vector3, perp1: Vector3, perp2: Vector3) -> void:
-	var half_thickness = LINE_THICKNESS * 0.5
+	var half_thickness: float = LINE_THICKNESS * 0.5
 
-	var offsets = [
-		perp1 * half_thickness,
-		perp2 * half_thickness,
-		-perp1 * half_thickness,
-		-perp2 * half_thickness
-	]
+	var offset1: Vector3 = perp1 * half_thickness
+	var offset2: Vector3 = perp2 * half_thickness
+	var offset3: Vector3 = -offset1
+	var offset4: Vector3 = -offset2
 
 	# Draw 4 rectangular faces around the line
-	for i in range(4):
-		var next_i = (i + 1) % 4
-		var offset1 = offsets[i]
-		var offset2 = offsets[next_i]
-
-		var p1 = _line_mesh_instance.to_local(start + offset1)
-		var p2 = _line_mesh_instance.to_local(start + offset2)
-		var p3 = _line_mesh_instance.to_local(end + offset2)
-		var p4 = _line_mesh_instance.to_local(end + offset1)
-
-		# First triangle
-		_line_immediate_mesh.surface_add_vertex(p1)
-		_line_immediate_mesh.surface_add_vertex(p2)
-		_line_immediate_mesh.surface_add_vertex(p3)
-
-		# Second triangle
-		_line_immediate_mesh.surface_add_vertex(p1)
-		_line_immediate_mesh.surface_add_vertex(p3)
-		_line_immediate_mesh.surface_add_vertex(p4)
+	_add_segment_face(start, end, offset1, offset2)
+	_add_segment_face(start, end, offset2, offset3)
+	_add_segment_face(start, end, offset3, offset4)
+	_add_segment_face(start, end, offset4, offset1)
 
 
-func _draw_landing_circle(hit_position: Vector3, normal: Vector3, radius: float) -> void:
-	# Offset slightly above surface to prevent z-fighting
-	var offset_position = hit_position + normal * 0.01
+func _add_segment_face(start: Vector3, end: Vector3, offset_a: Vector3, offset_b: Vector3) -> void:
+	var p1: Vector3 = start + offset_a
+	var p2: Vector3 = start + offset_b
+	var p3: Vector3 = end + offset_b
+	var p4: Vector3 = end + offset_a
 
+	# First triangle
+	_line_immediate_mesh.surface_add_vertex(p1)
+	_line_immediate_mesh.surface_add_vertex(p2)
+	_line_immediate_mesh.surface_add_vertex(p3)
+
+	# Second triangle
+	_line_immediate_mesh.surface_add_vertex(p1)
+	_line_immediate_mesh.surface_add_vertex(p3)
+	_line_immediate_mesh.surface_add_vertex(p4)
+
+
+## Builds the landing circle once as a unit-radius fan at the origin facing +Y.
+## Posing it per frame (see _pose_circle) reorients/rescales this same prebuilt
+## geometry instead of rebuilding the mesh every frame.
+func _build_circle_mesh() -> void:
+	_circle_immediate_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	var angle_step: float = TAU / CIRCLE_SEGMENTS
+	var center: Vector3 = Vector3.ZERO
+
+	for i in range(CIRCLE_SEGMENTS):
+		var angle1: float = i * angle_step
+		var angle2: float = (i + 1) * angle_step
+
+		var p1: Vector3 = Vector3(cos(angle1), 0.0, sin(angle1))
+		var p2: Vector3 = Vector3(cos(angle2), 0.0, sin(angle2))
+
+		_circle_immediate_mesh.surface_add_vertex(center)
+		_circle_immediate_mesh.surface_add_vertex(p1)
+		_circle_immediate_mesh.surface_add_vertex(p2)
+
+	_circle_immediate_mesh.surface_end()
+
+
+## Poses the prebuilt unit circle to land on the hit point, oriented to the
+## surface normal and scaled to the (pulsing) radius.
+func _pose_circle(hit_position: Vector3, normal: Vector3, radius: float) -> void:
 	# Create a basis oriented to the surface
-	var up = normal
-	var right = up.cross(Vector3.FORWARD)
+	var up: Vector3 = normal
+	var right: Vector3 = up.cross(Vector3.FORWARD)
 	if right.length_squared() < 0.001:
 		right = up.cross(Vector3.RIGHT)
 	right = right.normalized()
-	var forward = right.cross(up).normalized()
+	var forward: Vector3 = right.cross(up).normalized()
 
-	_circle_immediate_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Offset slightly above the surface to prevent z-fighting
+	var origin: Vector3 = hit_position + normal * 0.01
 
-	var angle_step = TAU / CIRCLE_SEGMENTS
-
-	for i in range(CIRCLE_SEGMENTS):
-		var angle1 = i * angle_step
-		var angle2 = (i + 1) * angle_step
-
-		var p1 = offset_position + (right * cos(angle1) + forward * sin(angle1)) * radius
-		var p2 = offset_position + (right * cos(angle2) + forward * sin(angle2)) * radius
-
-		var local_center = _circle_mesh_instance.to_local(offset_position)
-		var local_p1 = _circle_mesh_instance.to_local(p1)
-		var local_p2 = _circle_mesh_instance.to_local(p2)
-
-		_circle_immediate_mesh.surface_add_vertex(local_center)
-		_circle_immediate_mesh.surface_add_vertex(local_p1)
-		_circle_immediate_mesh.surface_add_vertex(local_p2)
-
-	_circle_immediate_mesh.surface_end()
+	_circle_mesh_instance.global_transform = Transform3D(Basis(right, up, forward), origin)
+	_circle_mesh_instance.scale = Vector3.ONE * radius
