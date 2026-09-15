@@ -128,6 +128,7 @@ func setup(game_map: GameMap) -> void:
 			history.removal_undo_requested.connect(_token_spawner._on_removal_undo_requested)
 		history.set_token_lookup(_token_spawner.find_token_by_network_id)
 		history.set_rename_callable(_token_spawner.rename_token)
+		history.set_remove_callable(_token_spawner.remove_token)
 
 
 func _exit_tree() -> void:
@@ -374,14 +375,24 @@ func rename_token(token: BoardToken, new_name: String) -> void:
 
 
 ## Duplicate a token: spawns a fresh copy of the same asset one grid cell over
-## from the source token, then copies its name and health across. No trailing
-## notify_token_properties_changed() call is needed here -- rename_token()
-## already calls it internally for the name, and set_max_health()/heal()/
-## take_damage() all unconditionally emit health_changed, which
+## from the source token, then copies its name, health, rotation, scale and
+## player visibility across. Permissions are deliberately not copied -- the copy
+## starts GM-only, like any freshly spawned token.
+##
+## No trailing notify_token_properties_changed() call is needed here --
+## rename_token() already calls it internally for the name, set_max_health()/
+## heal()/take_damage() all unconditionally emit health_changed, and
+## set_visible_to_players() emits token_visibility_changed, all of which
 ## TokenSpawner._connect_token_state_signals() (wired up by spawn_asset() ->
-## add_token_to_level() for every authoritative peer) already routes to the
-## same handler.
+## add_token_to_level() for every authoritative peer) already routes to the same
+## handler. The transform is the exception: set_transform_immediate() emits
+## nothing, so transform_changed is emitted explicitly afterwards -- the same
+## thing BoardTokenController._reset_rotation_and_scale() does.
+##
+## Returns null without authority (mirrors remove_token()).
 func duplicate_token(token: BoardToken) -> BoardToken:
+	if not GameState.has_authority():
+		return null
 	if not token.rigid_body:
 		return null
 
@@ -389,6 +400,8 @@ func duplicate_token(token: BoardToken) -> BoardToken:
 		active_level_data.grid_cell_size if active_level_data else DUPLICATE_OFFSET_FALLBACK
 	)
 	var spawn_position: Vector3 = token.rigid_body.global_position + Vector3(offset, 0, 0)
+	var source_rotation: Vector3 = token.rigid_body.global_rotation
+	var source_scale: Vector3 = token.rigid_body.scale
 	var new_token := spawn_asset(token.pack_id, token.asset_id, token.variant_id, spawn_position)
 	if not new_token:
 		return null
@@ -400,6 +413,12 @@ func duplicate_token(token: BoardToken) -> BoardToken:
 		new_token.heal(health_diff)
 	elif health_diff < 0:
 		new_token.take_damage(health_diff)
+
+	new_token.set_transform_immediate(spawn_position, source_rotation, source_scale)
+	new_token.transform_changed.emit()
+	# A hidden source produces a hidden copy. Goes through the setter so the
+	# visibility visuals update and the network sees it.
+	new_token.set_visible_to_players(token.is_visible_to_players)
 	return new_token
 
 
