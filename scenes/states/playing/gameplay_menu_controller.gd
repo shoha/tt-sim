@@ -310,7 +310,8 @@ func _revert_edit_mode_values() -> void:
 	if not _level_play_controller or not _level_play_controller.has_active_level():
 		return
 	var level_data: LevelData = _level_play_controller.active_level_data
-	# Level data first: apply_visual_state() re-reads the grid fields from it.
+	# Level data first: update_measure_tool_scale() below re-reads the grid fields
+	# from it; apply_visual_state() itself takes the state object.
 	_original_state.apply_to_level_data(level_data)
 	_level_play_controller.apply_visual_state(_original_state)
 	# apply_visual_state() deliberately does not reconfigure the grid (grid scale
