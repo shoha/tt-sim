@@ -11,3 +11,6 @@ extends RefCounted
 ## theme regeneration quietly: the committed .tres simply stops updating.
 
 const ACCENT := Color("#db924b")
+
+## color_text_on_dark at 70%: muted captions, chevrons, tick icons.
+const TEXT_MUTED := Color(0.875, 0.875, 0.875, 0.7)
