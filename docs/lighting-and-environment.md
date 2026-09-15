@@ -481,6 +481,27 @@ weather, foliage, sun, and the grid scale fields). When the panel is closed with
    `apply_visual_state()`)
 3. Any pending `VisualBroadcastThrottle` batch is dropped and the full snapshot is re-broadcast
 
+### Unsaved Changes and the Close Prompt
+
+`LevelEditPanel.is_dirty()` tracks whether a live edit has been made since the last Save/Cancel/
+level-clear; every edit handler calls `_mark_dirty()`, which shows an accent-colored badge on the
+drawer's tab and switches its tooltip to "Visuals (unsaved changes)". A dirty drawer will not close
+from its tab or from Escape — both route through `request_close()`, which shows a "Discard changes"
+/ "Keep editing" confirmation before reverting; confirming discards by emitting `cancel_requested`
+(the same path described above). `_enter_edit_mode()` only re-snapshots `_original_state` when the
+drawer is clean, so Cancel still returns to the state from before the first unsaved edit even across
+a conceal/reopen while dirty.
+
+Save (`_on_edit_save_requested()`) no longer closes the drawer: it persists to disk, advances
+`_original_state` to the just-saved values, calls `level_edit_panel.mark_clean()`, and deactivates
+the sun-aiming gizmo the same way a close would — tuning can continue immediately afterward.
+
+Switching the preset dropdown keeps any environment overrides already set (a toast reports how many
+were kept), and each overridden property's row is tinted and right-click-resettable individually.
+See [UI_SYSTEMS.md's LevelEditPanel section](UI_SYSTEMS.md#leveleditpanel-in-game-edit-mode) for the
+override-row and helper-class details. "Revert to Map Defaults" is the one action that clears the
+preset and every override together.
+
 ## Post-Processing (Lo-Fi) Overrides
 
 The game map uses a lo-fi shader for optional retro-style post-processing. These settings are independent of the `Environment` resource.

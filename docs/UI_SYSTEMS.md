@@ -143,6 +143,26 @@ UIManager.show_danger_confirmation(
 )
 ```
 
+### `show_danger_confirmation` Signature
+
+`show_danger_confirmation` is a thin wrapper over `show_confirmation` with `confirm_style` fixed to
+`"Danger"` and no `cancel_callback`:
+
+```gdscript
+func show_danger_confirmation(
+    title: String,
+    message: String,
+    confirm_callback: Callable = Callable(),
+    confirm_text: String = "Delete",
+    cancel_text: String = "Cancel",
+) -> Node
+```
+
+`LevelEditPanel`'s unsaved-changes prompt calls it with `confirm_text = "Discard changes"` and
+`cancel_text = "Keep editing"` — relabelling both buttons, since a bare "Cancel" next to the
+drawer's own Cancel button would be ambiguous about which one it cancelled. See
+[Unsaved Changes](#unsaved-changes) below.
+
 ### Parameters
 
 | Parameter          | Type     | Default   | Description                      |
@@ -446,9 +466,13 @@ func _on_before_animate_out() -> void:
 
 ### Overlay Requirements
 
-Overlays must implement one of:
+`UIManager._close_top_overlay()` checks for these methods in order and calls the first one present:
 
-- `animate_out()` method (preferred)
+- `request_close()` method — preferred for an overlay that may need to veto or prompt before
+  closing (e.g. an unsaved-changes confirmation). The overlay owns the decision entirely;
+  `_close_top_overlay()` does nothing else once it calls this. See `LevelEditPanel`'s
+  `request_close()` in the [LevelEditPanel](#leveleditpanel-in-game-edit-mode) section below.
+- `animate_out()` method
 - `close()` method
 - `hide()` method (fallback)
 
@@ -591,6 +615,27 @@ Save no longer closes the drawer — it clears the flag so tuning can continue �
 
 `_enter_edit_mode()` re-snapshots only when the drawer is clean. The tab now vetoes a dirty close, so that guard covers the routes that bypass the prompt: `conceal()` when GM access is lost mid-edit (the drawer hides without reverting) and any programmatic reopen while dirty. In both cases the original snapshot survives, so a later Cancel still returns to the state from before the first unsaved edit.
 
+### Environment Overrides & Preset Switching
+
+Switching the preset dropdown (`_on_preset_selected()`) keeps whatever environment overrides are
+already set — it re-emits `environment_changed` with the new preset and the same
+`current_overrides`, and shows an info toast ("Preset changed. N override(s) kept.") whenever there
+is at least one override to keep. "Revert to Map Defaults" is the one action that clears both
+together, resetting preset and overrides via `apply_environment_state("", {})`.
+
+Each overridden property is surfaced on its own row: `LevelEditOverrideRows`
+(`scenes/states/playing/level_edit_override_rows.gd`) tints that row's label with the theme accent
+color, sets a tooltip ("Overridden. Right-click to reset to the preset value."), and wires a
+right-click handler that erases just that row's key(s) from `current_overrides` (dropping
+`adjustment_enabled` too if that was the last remaining `adjustment_*` override). The panel's
+"Clear overrides" button is disabled whenever `current_overrides` is empty and otherwise clears
+every override at once (with its own "Overrides cleared." toast).
+
+`LevelEditOverrideRows` and `LevelEditSunSection` (`scenes/states/playing/level_edit_sun_section.gd`,
+which owns the Sun section's controls, mode-dropdown population, and the auto-to-on promotion rule)
+are `LevelEditPanel`'s two extracted sub-components, split out to keep `level_edit_panel.gd` under
+the project's max-file-lines lint budget.
+
 ### Cancel Behavior
 
 When the drawer closes without saving, `GameplayMenuController` restores the `LevelVisualState` snapshotted at open time and re-applies it to the live viewport via `LevelPlayController.apply_visual_state()`.
@@ -626,6 +671,8 @@ See [lighting-and-environment.md](lighting-and-environment.md) for the full envi
 | `scenes/ui/drawer_container.gd`              | Base class for slide-out drawers      |
 | `scenes/states/playing/level_edit_panel.gd`  | In-game real-time level editing panel |
 | `scenes/states/playing/level_edit_panel.tscn`| UI layout for the edit panel          |
+| `scenes/states/playing/level_edit_override_rows.gd` | Override-row indicators, tooltips, per-row right-click reset |
+| `scenes/states/playing/level_edit_sun_section.gd`   | Sun section controls, mode dropdown, auto-to-on promotion |
 | `scenes/states/playing/measure_tool.gd`      | Distance measurement tool (2D overlay)|
 | `utils/scale_utils.gd`                       | Scale conversion and formatting       |
 
