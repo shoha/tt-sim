@@ -341,9 +341,11 @@ func find_token_by_network_id(network_id: String) -> BoardToken:
 ## above) -- deliberately does not touch _game_map so this stays callable from
 ## a bare, unconfigured spawner. Does NOT record undo -- the caller owns the
 ## action history, since it's the one that knows to record before removing.
-## Returns false without authority.
+## Returns false without authority, or for a null/freed token.
 func remove_token(token: BoardToken) -> bool:
 	if not GameState.has_authority():
+		return false
+	if not is_instance_valid(token):
 		return false
 
 	var network_id: String = token.network_id
@@ -421,6 +423,17 @@ func _on_removal_undo_requested(action: Dictionary) -> void:
 	if not NetworkManager.has_gm_access() or not _game_map:
 		return
 	var token_state := TokenState.from_dict(action.token_state_dict)
+	# A remove immediately followed by Ctrl+Z can land while the removed token's node
+	# is still playing its 0.2s removal tween (play_removal_animation) -- it hasn't
+	# been freed yet. Free it now so the recreated token below doesn't end up sharing
+	# its network_id with a still-alive outgoing node.
+	for child in _game_map.drag_and_drop_node.get_children():
+		if (
+			child is BoardToken
+			and child.network_id == token_state.network_id
+			and not child.is_queued_for_deletion()
+		):
+			child.queue_free()
 	var token := RootNetworkHandler.create_token_from_state(token_state)
 	if not token:
 		UIManager.show_error("Failed to undo token removal")

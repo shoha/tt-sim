@@ -35,6 +35,12 @@ var _get_settings: Callable
 var _on_changed: Callable
 
 
+## Couples by name to these members on [param panel]: sun_mode_dropdown,
+## sun_time_of_day_slider_spin, aim_sun_button, sun_azimuth_slider_spin,
+## sun_elevation_slider_spin, sun_color_picker, sun_energy_slider_spin,
+## sun_shadows_check, sun_softness_slider_spin, sun_darkness_slider_spin,
+## sun_regenerate_button. Renaming any of these on the panel fails at runtime,
+## not compile time.
 func _init(
 	panel: Node, get_settings: Callable, on_changed: Callable, on_aim_toggled: Callable
 ) -> void:
@@ -75,7 +81,7 @@ func populate_mode_dropdown() -> void:
 
 ## Sync every sun control from [param settings].
 func sync_controls(settings: SunSettings) -> void:
-	LevelEditPanel._select_by_metadata(_mode_dropdown, settings.mode)
+	OptionButtonUtils.select_by_metadata(_mode_dropdown, settings.mode)
 	_azimuth_slider_spin.set_value_no_signal(settings.azimuth_degrees)
 	_elevation_slider_spin.set_value_no_signal(settings.elevation_degrees)
 	_color_picker.color = settings.color
@@ -135,7 +141,7 @@ func _promote_auto_to_on(settings: SunSettings) -> void:
 	if settings.mode != "auto":
 		return
 	settings.mode = "on"
-	LevelEditPanel._select_by_metadata(_mode_dropdown, "on")
+	OptionButtonUtils.select_by_metadata(_mode_dropdown, "on")
 
 
 ## The one sun control that must NOT promote auto to on: it is the control that

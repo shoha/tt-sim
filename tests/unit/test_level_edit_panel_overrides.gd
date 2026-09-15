@@ -18,6 +18,25 @@ func before_each() -> void:
 	_panel.initialize(LevelData.new())
 
 
+## Freeing the host does not undo either side effect of a prompt: the discard
+## dialog is parented to the tree root (layer 100, grabs focus, traps Tab) and
+## the panel re-registers itself with UIManager. Both would leak into the rest
+## of the suite.
+func after_each() -> void:
+	if not is_instance_valid(_panel):
+		_panel = null
+		return
+	UIManager.unregister_overlay(_panel)
+	_free_close_prompt()
+	_panel = null
+
+
+func _free_close_prompt() -> void:
+	var prompt: Node = _panel._close_prompt
+	if is_instance_valid(prompt) and not prompt.is_queued_for_deletion():
+		prompt.queue_free()
+
+
 func _select_preset_named(preset: String) -> void:
 	for i in range(_panel.preset_dropdown.item_count):
 		if _panel.preset_dropdown.get_item_metadata(i) == preset:
@@ -45,8 +64,8 @@ func test_preset_switch_emits_environment_changed_with_overrides() -> void:
 
 func test_override_marks_its_row_label() -> void:
 	_panel._on_env_override_changed(2.0, "ambient_light_energy")
-	assert_true(_panel.ambient_label.has_theme_color_override("font_color"))
-	assert_false(_panel.fog_label.has_theme_color_override("font_color"))
+	assert_true(_panel.get_node("%AmbientLabel").has_theme_color_override("font_color"))
+	assert_false(_panel.get_node("%FogLabel").has_theme_color_override("font_color"))
 
 
 func test_clear_override_keys_resets_row_and_emits() -> void:
@@ -54,7 +73,7 @@ func test_clear_override_keys_resets_row_and_emits() -> void:
 	watch_signals(_panel)
 	_panel._clear_override_keys(["ambient_light_color", "ambient_light_energy"])
 	assert_false(_panel.current_overrides.has("ambient_light_energy"))
-	assert_false(_panel.ambient_label.has_theme_color_override("font_color"))
+	assert_false(_panel.get_node("%AmbientLabel").has_theme_color_override("font_color"))
 	assert_signal_emitted(_panel, "environment_changed")
 
 

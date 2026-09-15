@@ -196,9 +196,12 @@ func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -
 	# with settle := true so the token lands on terrain instead of hovering.
 	var spawn_pos := _get_camera_ground_position()
 	var game_map := _level_play_controller.get_game_map()
-	if game_map:
+	if game_map and game_map.world_viewport:
+		# world_viewport.find_world_3d(), not this node's get_world_3d(): it reads
+		# the world tokens actually live in. The world_3d property would be null
+		# here because the SubViewport does not own its world (own_world_3d).
 		var resolved := DragPlaceController.raycast_terrain_down(
-			game_map.get_world_3d().direct_space_state, spawn_pos
+			game_map.world_viewport.find_world_3d().direct_space_state, spawn_pos
 		)
 		if resolved != Vector3.INF:
 			spawn_pos = resolved + Vector3(0, DragPlaceController.PLACE_CLEARANCE, 0)
@@ -525,11 +528,7 @@ func _on_edit_save_requested(state: LevelVisualState) -> void:
 		NetworkManager.broadcast_visual_settings(state.to_broadcast_dict())
 
 	# Save to disk — use folder format when the level came from a folder
-	var save_path := ""
-	if level_data.level_folder != "":
-		save_path = LevelManager.save_level_folder(level_data)
-	else:
-		save_path = LevelManager.save_level(level_data)
+	var save_path := LevelManager.save_level_in_place(level_data)
 	if save_path != "":
 		UIManager.show_success("Level settings saved")
 
