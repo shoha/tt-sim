@@ -211,11 +211,17 @@ func _on_token_landed(_drop_height: float, _token: BoardToken) -> void:
 ## Supports remote assets - will show placeholder while downloading
 ## If the model isn't cached yet, a placeholder appears instantly and upgrades
 ## asynchronously once the model finishes loading (no main-thread stall).
+## settle: when true, drops the token onto whatever terrain is below
+## spawn_position after positioning (used by drag-place, which resolves a
+## ground/terrain hit but may still land slightly above the true surface).
+## Defaults to false so the level loader path (which places tokens at their
+## saved, already-settled positions) is unchanged.
 func spawn_asset(
 	pack_id: String,
 	asset_id: String,
 	variant_id: String = "default",
 	spawn_position: Vector3 = Vector3.ZERO,
+	settle: bool = false,
 ) -> BoardToken:
 	var active_level_data: LevelData = _get_active_level_data_fn.call()
 	if not _game_map or not active_level_data:
@@ -239,6 +245,9 @@ func spawn_asset(
 	# Set spawn position before the token renders at origin
 	if spawn_position != Vector3.ZERO and token.rigid_body:
 		token.rigid_body.global_position = spawn_position
+
+	if settle and token.get_dragging_object():
+		token.get_dragging_object().drop_to_ground()
 
 	_connect_token_context_menu(token)
 	add_token_to_level(token, pack_id, asset_id, variant_id)

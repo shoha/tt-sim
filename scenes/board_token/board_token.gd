@@ -340,6 +340,10 @@ func get_controller_component() -> Node:
 	return _token_controller
 
 
+func get_dragging_object() -> DraggableToken:
+	return _dragging_object
+
+
 func get_rigid_body() -> RigidBody3D:
 	return rigid_body
 
