@@ -54,6 +54,8 @@ var _has_target_position: bool = false
 # Drag threshold state
 var _pending_drag_object: DraggingObject3D = null
 var _drag_start_mouse_pos: Vector2 = Vector2.ZERO
+## True once _drag_start_mouse_pos has been seeded from a real InputEventMouseMotion.
+var _drag_start_seeded: bool = false
 
 # Height control during drag
 var _drag_height_offset: float = 0.0
@@ -107,7 +109,10 @@ func set_dragging_object(object: DraggingObject3D) -> void:
 	if _currentDraggingObject or _pending_drag_object:
 		return  # Already dragging or pending
 	_pending_drag_object = object
-	_drag_start_mouse_pos = get_viewport().get_mouse_position()
+	# No InputEvent is available at mouse-down (this runs from a signal callback, not
+	# _input()), so the threshold anchor is seeded later, from the first
+	# InputEventMouseMotion's own position -- see _input().
+	_drag_start_seeded = false
 
 
 ## Actually begin the drag after the movement threshold is met.
@@ -122,10 +127,25 @@ func _input(event: InputEvent) -> void:
 	# --- Pending drag: waiting for mouse to move past threshold ---
 	if _pending_drag_object and not _currentDraggingObject:
 		if event is InputEventMouseMotion:
-			var current_mouse = get_viewport().get_mouse_position()
-			if current_mouse.distance_to(_drag_start_mouse_pos) >= drag_threshold_px:
+			# Use the event's own position, not get_viewport().get_mouse_position():
+			# that cached cursor position only tracks genuine OS mouse motion and does
+			# not update for synthetically-injected InputEventMouseMotion (confirmed
+			# experimentally), which would make the threshold never fire for injected
+			# drags. event.position is already in this viewport's coordinate space and
+			# is correct for both real and injected input.
+			#
+			# The anchor itself is seeded from the first motion event's position rather
+			# than read from the viewport at mouse-down: mouse-down has no InputEvent to
+			# read a position from, and for an injected drag the mouse-down is also
+			# synthetic, so it is subject to the same stale-cache problem as motion
+			# events. Seeding from the first motion event keeps the anchor correct
+			# (and independent of viewport state) for both real and injected input.
+			if not _drag_start_seeded:
+				_drag_start_mouse_pos = event.position
+				_drag_start_seeded = true
+			elif event.position.distance_to(_drag_start_mouse_pos) >= drag_threshold_px:
 				_begin_drag(_pending_drag_object)
-				_update_target_position()
+				_update_target_position(event.position)
 		elif event is InputEventMouseButton:
 			if event.button_index == 1 and not event.is_pressed():
 				# Released before threshold - this was a click, not a drag
@@ -147,14 +167,14 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.is_pressed():
 			_drag_height_offset += height_step
-			_update_target_position()
+			_update_target_position(event.position)
 			get_viewport().set_input_as_handled()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.is_pressed():
 			_drag_height_offset -= height_step
-			_update_target_position()
+			_update_target_position(event.position)
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
-		_update_target_position()
+		_update_target_position(event.position)
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		cancel_drag()
 		get_viewport().set_input_as_handled()
@@ -208,8 +228,8 @@ func is_dragging() -> bool:
 	return _currentDraggingObject != null
 
 
-func _update_target_position() -> void:
-	var mousePosition3D = _get_3d_mouse_position()
+func _update_target_position(mouse_position: Vector2) -> void:
+	var mousePosition3D = _get_3d_mouse_position(mouse_position)
 
 	if not mousePosition3D:
 		return
@@ -249,13 +269,24 @@ func _update_edge_pan() -> void:
 	edge_pan_direction = pan
 
 
-func _get_3d_mouse_position():
-	var mousePosition := get_viewport().get_mouse_position()
+## Raycasts from the camera through `mouse_position` (this viewport's local coordinate space)
+## to find the 3D point currently under the pointer.
+##
+## Takes the position explicitly rather than reading get_viewport().get_mouse_position(): that
+## cached cursor position only tracks genuine OS mouse motion and does not update for a
+## synthetically-injected InputEventMouseMotion/InputEventMouseButton (confirmed
+## experimentally, same underlying limitation as the drag-activation threshold above). Reading
+## it here made the raycast during an injected drag always fire from a stale, unrelated point --
+## typically missing the map/token geometry entirely -- so the dragged object's target position
+## was never updated even after the drag correctly activated. Every caller already has an
+## InputEvent in hand (mouse motion or a wheel button), so its own position is both correct and
+## available at every call site.
+func _get_3d_mouse_position(mouse_position: Vector2):
 	var currentCamera := get_viewport().get_camera_3d()
 	var params := PhysicsRayQueryParameters3D.new()
 
-	params.from = currentCamera.project_ray_origin(mousePosition)
-	params.to = currentCamera.project_position(mousePosition, mousePositionDepth)
+	params.from = currentCamera.project_ray_origin(mouse_position)
+	params.to = currentCamera.project_position(mouse_position, mousePositionDepth)
 	params.collide_with_areas = true
 	params.exclude = _get_excluded_objects()
 	params.set_collision_mask(collisionMask)

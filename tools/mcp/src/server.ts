@@ -366,7 +366,10 @@ server.tool(
     "Use this to read state that game_state does not report, instead of editing the bridge. " +
     "Expressions cannot declare variables, loop, or assign, but can read properties and call " +
     "methods, e.g. 'find_child(\"GameMap\", true, false).camera_node.size' or " +
-    "'get_node(\"/root/GameState\").get_all_token_states().size()'.",
+    "'get_node(\"/root/GameState\").get_all_token_states().size()'. Project autoloads must be " +
+    "reached via get_node(\"/root/<Autoload>\") (bare autoload names do not resolve here); " +
+    "engine singletons such as Input are not reachable at all, since this evaluates through " +
+    "Expression, which does not resolve global singletons.",
   {
     expression: z.string().describe("GDScript expression, evaluated with the current scene as self"),
   },
