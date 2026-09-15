@@ -361,10 +361,10 @@ per frame in `_process` (drag-and-drop's `_process` now runs only while dragging
 `WaterRippleRegistry.flush_disturbances()` is the single owner of the water uniform push
 (once per frame while anything is submerged, one cleared push after the last exit, silent
 otherwise, freed bodies pruned); weather and volume-overlay `_process` loops run only while
-they have work; the grid drag highlight and the placeholder pulse write their parameters
-only on change; the token input gate checks hover and event type before the permission
-lookup; the drop indicator poses a prebuilt landing circle and rebuilds its dotted line only
-when the token moved more than 1 mm.
+they have work; the grid drag highlight writes its parameters only on change; the token
+input gate checks hover and event type before the permission lookup; the drop indicator
+poses a prebuilt landing circle and rebuilds its dotted line only when the token moved more
+than 1 mm.
 
 Measured (coordinator, 2026-09-15): Sandy Clearing via `tests/test_play_level.tscn`,
 1920x1080 pinned with override.cfg (which also disables vsync; `root.gd` does not run in the
@@ -392,14 +392,18 @@ behaviourally at runtime (drag, drop indicator, water, undo) rather than by fram
 Method note: the log now carries a `process_time_avg_ms` column (main-thread
 `Performance.TIME_PROCESS`, no GPU or vsync wait) appended after the toggle columns; it is
 the column to compare for CPU-side changes when the frame is GPU-bound or vsync-capped.
+`Performance.TIME_PROCESS` covers `_process` callbacks only -- not `_input`/
+`_unhandled_input`, `_physics_process`, tweens, or signal handlers -- so input-gate changes
+need a different probe.
 
 ## Known dead ends -- do not revisit without new evidence
 
 - **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one
   `set_instance_transform()` per instance (2026-09-15). Headless, timing
   `ScatterGlbUtils.process_scatter_instances` on the real Sandy Clearing map, two process
-  launches x five reps each: loop 119.7 ms median, buffer 144.8 ms median, non-overlapping.
-  Twelve GDScript `PackedFloat32Array` writes per instance cost more than one native call;
+  launches x five reps each: loop 119.7 ms median, buffer 144.8 ms median, medians
+  non-overlapping across both launches (raw samples overlap: loop max 148.3 ms, buffer min
+  137.9 ms). Twelve GDScript `PackedFloat32Array` writes per instance cost more than one native call;
   the per-call RenderingServer overhead the idea was meant to avoid is not where the time
   goes. Reverted in cfec47c. If the 52k-instance build ever needs to shrink, move the whole
   build onto the worker thread that already parses the GLB rather than changing the upload.

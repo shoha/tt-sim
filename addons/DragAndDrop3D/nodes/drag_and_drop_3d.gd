@@ -126,6 +126,7 @@ func _begin_drag(object: DraggingObject3D) -> void:
 	_currentDraggingObject = object
 	_pending_drag_object = null
 	_drag_height_offset = 0.0
+	_pointer_dirty = false
 	set_process(true)
 	dragging_started.emit(_currentDraggingObject)
 
@@ -226,6 +227,7 @@ func stop_drag() -> void:
 	_currentDraggingObject = null
 	_has_target_position = false
 	_drag_height_offset = 0.0
+	_pointer_dirty = false
 	set_process(false)
 
 
@@ -240,6 +242,7 @@ func cancel_drag() -> void:
 	_currentDraggingObject = null
 	_has_target_position = false
 	_drag_height_offset = 0.0
+	_pointer_dirty = false
 	set_process(false)
 
 

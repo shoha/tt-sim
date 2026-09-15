@@ -316,3 +316,95 @@ func test_two_motion_events_same_frame_defer_raycast_to_process() -> void:
 	drag_and_drop._process(0.016)
 
 	assert_false(drag_and_drop._pointer_dirty, "_process() should consume the pending raycast once")
+
+
+func test_stop_drag_clears_pointer_dirty_flag() -> void:
+	var drag_and_drop := _make_drag_and_drop()
+	var object := _make_dragging_object()
+	add_child_autofree(object)
+
+	var press_position := _press_event()
+	drag_and_drop.set_dragging_object(press_position, object)
+	var activate_event := InputEventMouseMotion.new()
+	activate_event.position = press_position + Vector2(drag_and_drop.drag_threshold_px + 1.0, 0)
+	drag_and_drop._input(activate_event)
+	assert_true(drag_and_drop.is_dragging(), "Setup: drag should be active")
+
+	# Simulate a motion event and the release landing in the same input flush: the flag is
+	# set dirty but _process() never runs before stop_drag() -- the exact regression
+	# scenario where a stale dirty flag would leak into the next drag's first _process().
+	drag_and_drop._pointer_dirty = true
+	drag_and_drop._pending_pointer_position = Vector2(999, 999)
+
+	drag_and_drop.stop_drag()
+
+	assert_false(
+		drag_and_drop._pointer_dirty,
+		(
+			"stop_drag() must clear a pointer-dirty flag left over from"
+			+ " a motion event that arrived just before the release"
+		)
+	)
+
+
+func test_cancel_drag_clears_pointer_dirty_flag() -> void:
+	var drag_and_drop := _make_drag_and_drop()
+	var object := _make_dragging_object()
+	add_child_autofree(object)
+
+	var press_position := _press_event()
+	drag_and_drop.set_dragging_object(press_position, object)
+	var activate_event := InputEventMouseMotion.new()
+	activate_event.position = press_position + Vector2(drag_and_drop.drag_threshold_px + 1.0, 0)
+	drag_and_drop._input(activate_event)
+	assert_true(drag_and_drop.is_dragging(), "Setup: drag should be active")
+
+	drag_and_drop._pointer_dirty = true
+	drag_and_drop._pending_pointer_position = Vector2(999, 999)
+
+	drag_and_drop.cancel_drag()
+
+	assert_false(
+		drag_and_drop._pointer_dirty,
+		(
+			"cancel_drag() must clear a pointer-dirty flag left over from a motion event that"
+			+ " arrived just before the cancel"
+		)
+	)
+
+
+func test_begin_drag_clears_pointer_dirty_flag_from_previous_drag() -> void:
+	var drag_and_drop := _make_drag_and_drop()
+	var first_object := _make_dragging_object()
+	add_child_autofree(first_object)
+
+	# First drag: activate, then leave a dirty flag behind as if a motion event and the
+	# release landed in the same input flush (stop_drag disables _process before it can be
+	# consumed).
+	drag_and_drop.set_dragging_object(Vector2(0, 0), first_object)
+	var first_move := InputEventMouseMotion.new()
+	first_move.position = Vector2(10, 0)
+	drag_and_drop._input(first_move)
+	assert_true(drag_and_drop.is_dragging(), "First drag should have activated")
+
+	drag_and_drop._pointer_dirty = true
+	drag_and_drop._pending_pointer_position = Vector2(500, 500)
+	drag_and_drop.stop_drag()
+	assert_false(drag_and_drop.is_dragging(), "First drag should have stopped")
+
+	# Directly re-arm the leaked dirty flag to prove _begin_drag() itself clears it,
+	# independent of stop_drag() having already cleared it above.
+	drag_and_drop._pointer_dirty = true
+	drag_and_drop._pending_pointer_position = Vector2(500, 500)
+
+	var second_object := _make_dragging_object()
+	add_child_autofree(second_object)
+	drag_and_drop._begin_drag(second_object)
+
+	assert_false(
+		drag_and_drop._pointer_dirty,
+		(
+			"_begin_drag() must clear any pointer-dirty flag leaked from a previous drag so the"
+			+ " new drag's first _process() does not consume the old drag's stale pointer position"
+		)
+	)

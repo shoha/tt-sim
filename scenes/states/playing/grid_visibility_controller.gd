@@ -88,25 +88,13 @@ func _update_drag_cell_highlight() -> void:
 	var drag_node := _game_map.drag_and_drop_node
 	if not drag_node.is_dragging() or not drag_node._has_target_position:
 		return
-	var current_cell := _snapped_cell(drag_node._target_drag_position, drag_node)
+	var current_cell := _game_map._grid_overlay.snapped_cell(drag_node._target_drag_position)
 	if current_cell == _last_highlight_cell:
 		return
 	_last_highlight_cell = current_cell
 	_game_map._grid_overlay.set_drag_highlight(
 		drag_node._target_drag_position, _drag_highlight_start_pos
 	)
-
-
-## Compute the same integer cell index GridOverlay.set_drag_highlight() snaps [param pos]
-## to, so the caller can detect a no-op update without touching the shader. Returns
-## Vector2.INF (never equal to a real cell) when grid_cell_size is non-positive, so a
-## degenerate config always falls through to a write rather than silently sticking.
-func _snapped_cell(pos: Vector3, drag_node: Node3D) -> Vector2:
-	var cell_size: float = drag_node.grid_cell_size
-	if cell_size <= 0.0:
-		return Vector2.INF
-	var origin: Vector2 = drag_node.grid_origin
-	return Vector2(floorf((pos.x - origin.x) / cell_size), floorf((pos.z - origin.y) / cell_size))
 
 
 ## Configure grid overlay and drag systems from LevelData.
@@ -118,6 +106,11 @@ func configure_grid(level_data: LevelData) -> void:
 	_grid_explicit_toggle = level_data.grid_visible
 	_grid_show_on_measure = level_data.grid_show_on_measure
 	_grid_show_on_drag = level_data.grid_show_on_drag
+	# A mid-drag reconfigure (scale edit, Cancel) changes cell_size/grid_origin out from
+	# under an in-progress highlight; without this reset, the next
+	# _update_drag_cell_highlight() could compare a freshly-recomputed cell against a stale
+	# one from before the reconfigure and wrongly skip pushing the new highlight.
+	_last_highlight_cell = Vector2.INF
 
 	if _game_map._grid_overlay:
 		_game_map._grid_overlay.configure(
