@@ -156,9 +156,12 @@ func _on_token_property_changed(token: BoardToken) -> void:
 
 ## Handle transform changes (position, rotation, scale) - uses unreliable channel with rate limiting
 func _on_token_transform_changed(token: BoardToken) -> void:
-	if not NetworkManager.is_host():
-		return
-	NetworkStateSync.broadcast_token_transform(token)
+	if NetworkManager.is_host():
+		NetworkStateSync.broadcast_token_transform(token)
+	elif GameState.has_authority():
+		# Single-player: no peers to broadcast to, but GameState is still the model
+		# that undo, the validation bridge and a later host_game() read from.
+		GameState.sync_from_board_token(token)
 
 
 ## Connect token's context menu signal and other per-token signals to game map
