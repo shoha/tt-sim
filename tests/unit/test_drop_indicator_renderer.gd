@@ -67,3 +67,23 @@ func test_update_rebuilds_line_when_start_moves() -> void:
 		rebuilds_before_move,
 		"Moving the start position beyond REBUILD_EPSILON should rebuild the line"
 	)
+
+
+func test_circle_visibility_tracks_hit_state() -> void:
+	assert_false(
+		_renderer._circle_mesh_instance.visible,
+		"show_indicator() alone should not show the circle -- it has no valid pose yet"
+	)
+
+	_renderer.update(Vector3(0, 2, 0))
+	assert_true(
+		_renderer._circle_mesh_instance.visible,
+		"update() finding a hit should show the circle once it has been posed"
+	)
+
+	# Far outside the test floor's footprint, so the downward raycast misses entirely.
+	_renderer.update(Vector3(1000, 2, 0))
+	assert_false(
+		_renderer._circle_mesh_instance.visible,
+		"update() with no terrain hit should hide the circle rather than leave it frozen"
+	)

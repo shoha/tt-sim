@@ -54,6 +54,11 @@ var _last_hit: Dictionary = {}
 ## Exists so tests can assert a rebuild was (or wasn't) skipped.
 var _line_rebuilds: int = 0
 
+## True between show_indicator() and hide_indicator(). The circle mesh instance
+## itself is only shown once _pose_circle() has actually posed it for a hit, so a
+## fresh drag never flashes the circle at the origin or at a stale prior pose.
+var _showing: bool = false
+
 
 func _ready() -> void:
 	_create_meshes()
@@ -109,8 +114,12 @@ func set_token_footprint(collision_shape: CollisionShape3D) -> void:
 
 func show_indicator() -> void:
 	_pulse_time = 0.0
+	_showing = true
 	_line_mesh_instance.show()
-	_circle_mesh_instance.show()
+	# The circle is intentionally left hidden here -- it has no valid pose yet, and
+	# showing it now would flash it at the origin (first drag) or at whatever pose
+	# a previous drag last left it at. _pose_circle() shows it once update() has
+	# actually posed it against a real hit.
 
 
 func hide_indicator() -> void:
@@ -119,6 +128,7 @@ func hide_indicator() -> void:
 	# stale cached values from whatever the previous drag last saw.
 	_last_start = Vector3.INF
 	_last_hit = {}
+	_showing = false
 	_line_mesh_instance.hide()
 	_circle_mesh_instance.hide()
 
@@ -137,12 +147,16 @@ func update(start_position: Vector3) -> void:
 	# Advance pulse animation
 	_pulse_time += get_process_delta_time()
 
-	if start_position.distance_to(_last_start) > REBUILD_EPSILON:
+	if start_position.distance_squared_to(_last_start) > REBUILD_EPSILON * REBUILD_EPSILON:
 		_last_start = start_position
 		_last_hit = _raycast_down(start_position)
 		_rebuild_line(start_position)
 
 	if _last_hit.is_empty():
+		# No terrain under the drag -- match the old per-frame-rebuild behaviour of
+		# not drawing a circle for a frame with no hit, instead of leaving it frozen
+		# at its last pose.
+		_circle_mesh_instance.hide()
 		return
 
 	# Apply pulsing to the landing circle radius
@@ -268,3 +282,5 @@ func _pose_circle(hit_position: Vector3, normal: Vector3, radius: float) -> void
 
 	_circle_mesh_instance.global_transform = Transform3D(Basis(right, up, forward), origin)
 	_circle_mesh_instance.scale = Vector3.ONE * radius
+	if _showing:
+		_circle_mesh_instance.show()
