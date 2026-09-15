@@ -379,7 +379,11 @@ func get_saved_levels() -> Array[Dictionary]:
 			var level = (
 				ResourceLoader.load(full_path, "", ResourceLoader.CACHE_MODE_IGNORE) as LevelData
 			)
-			if level:
+			if level and level.map_path.is_empty():
+				push_warning(
+					"LevelManager: Skipping unloadable level (no map assigned): " + entry_name
+				)
+			elif level:
 				levels.append(
 					{
 						"path": full_path,
@@ -404,7 +408,12 @@ func get_saved_levels() -> Array[Dictionary]:
 	return levels
 
 
-## Get info about a folder-based level
+## Get info about a folder-based level.
+## Returns an empty Dictionary (falsy, skipped by callers) if the folder cannot be
+## read/parsed, or if it has no map assigned yet -- e.g. the "_autosave" scratch
+## slot, which is written without validation (see level_editor_history.gd
+## _perform_autosave()) so it can capture in-progress edits before a map is chosen.
+## Such an entry can never be played, so it is excluded from every level list.
 func _get_folder_level_info(folder_name: String) -> Dictionary:
 	var json_path = Paths.get_level_json_path(folder_name)
 
@@ -420,6 +429,10 @@ func _get_folder_level_info(folder_name: String) -> Dictionary:
 		return {}
 
 	var data = json.data
+	var map_path: String = data.get("map_path", "")
+	if map_path.is_empty():
+		return {}
+
 	var token_count = 0
 	if data.has("token_placements") and data.token_placements is Array:
 		token_count = data.token_placements.size()
