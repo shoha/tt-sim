@@ -84,6 +84,17 @@ func test_register_returns_true_only_on_first_registration() -> void:
 	assert_false(second)
 
 
+func test_flush_disturbances_with_nothing_registered_pushes_at_most_once() -> void:
+	WaterRippleRegistry.flush_disturbances()
+	var frame_after_first_flush: int = WaterRippleRegistry._last_push_frame
+	var cleared_after_first_flush: bool = WaterRippleRegistry._cleared
+
+	WaterRippleRegistry.flush_disturbances()
+
+	assert_true(cleared_after_first_flush)
+	assert_eq(WaterRippleRegistry._last_push_frame, frame_after_first_flush)
+
+
 func test_unregister_returns_true_only_when_refcount_reaches_zero() -> void:
 	var token := Node3D.new()
 	add_child_autofree(token)

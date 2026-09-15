@@ -135,6 +135,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		focus_requested.emit(rigid_body.global_position)
 		return
 
+	# Mouse motion only drives an already-active rotate/scale gesture -- authority was
+	# already confirmed by the button press that started the gesture (see the MMB/R+LMB
+	# branches below), so handle it here and return before the authority lookup, which
+	# otherwise ran on every single mouse-motion event even though motion never needs a
+	# fresh permission check. Mouse-motion events fire far more often than button presses.
+	if event is InputEventMouseMotion:
+		if _rotating:
+			_handle_rotation(event)
+		elif _scaling:
+			_handle_scaling(event)
+		return
+
+	# Everything below only ever acts on an InputEventMouseButton; return before the
+	# authority lookup for anything else (unrelated keys, etc.) instead of paying for a
+	# permission check that no branch here would use.
+	if not (event is InputEventMouseButton):
+		return
+
 	# Gate all mutating input behind authority check
 	# Context menu is allowed for all (read-only viewing), but actions within may be gated
 	if not _has_input_authority():
@@ -234,12 +252,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		_finalize_rotate_scale()
 		get_viewport().set_input_as_handled()
 		return
-
-	if _rotating and event is InputEventMouseMotion:
-		_handle_rotation(event)
-
-	if _scaling and event is InputEventMouseMotion:
-		_handle_scaling(event)
 
 
 ## Shared finalize logic for ending a rotate/scale gesture (MMB or R+LMB).

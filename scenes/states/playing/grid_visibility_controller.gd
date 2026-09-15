@@ -26,6 +26,7 @@ var _grid_show_on_measure: bool = true  # From LevelData
 var _grid_show_on_drag: bool = true  # From LevelData
 var _drag_highlight_active: bool = false
 var _drag_highlight_start_pos: Vector3 = Vector3.ZERO
+var _last_highlight_cell: Vector2 = Vector2.INF  # sentinel: no highlight pushed yet this drag
 
 
 ## Wire this controller to its owning GameMap.
@@ -68,9 +69,15 @@ func _on_drag_stopped_grid(_obj: DraggingObject3D) -> void:
 	UIManager.remove_hint(InputProfile.label(&"free_move"))
 	if _game_map._grid_overlay:
 		_game_map._grid_overlay.clear_drag_highlight()
+	_last_highlight_cell = Vector2.INF
 
 
-## Update the grid shader's highlighted cell each frame during a drag.
+## Update the grid shader's highlighted cell each frame during a drag. Only pushes to
+## GridOverlay when the snapped cell actually changed since the last push -- GridOverlay
+## snaps drag_node._target_drag_position to an integer cell (see set_drag_highlight()),
+## and the raw world position changes every frame during a drag even though the cell it
+## snaps to usually doesn't, so recomputing the same snap here avoids three redundant
+## shader-parameter writes per frame while a token sits still within one cell.
 func _update_drag_cell_highlight() -> void:
 	if (
 		not _drag_highlight_active
@@ -81,9 +88,25 @@ func _update_drag_cell_highlight() -> void:
 	var drag_node := _game_map.drag_and_drop_node
 	if not drag_node.is_dragging() or not drag_node._has_target_position:
 		return
+	var current_cell := _snapped_cell(drag_node._target_drag_position, drag_node)
+	if current_cell == _last_highlight_cell:
+		return
+	_last_highlight_cell = current_cell
 	_game_map._grid_overlay.set_drag_highlight(
 		drag_node._target_drag_position, _drag_highlight_start_pos
 	)
+
+
+## Compute the same integer cell index GridOverlay.set_drag_highlight() snaps [param pos]
+## to, so the caller can detect a no-op update without touching the shader. Returns
+## Vector2.INF (never equal to a real cell) when grid_cell_size is non-positive, so a
+## degenerate config always falls through to a write rather than silently sticking.
+func _snapped_cell(pos: Vector3, drag_node: Node3D) -> Vector2:
+	var cell_size: float = drag_node.grid_cell_size
+	if cell_size <= 0.0:
+		return Vector2.INF
+	var origin: Vector2 = drag_node.grid_origin
+	return Vector2(floorf((pos.x - origin.x) / cell_size), floorf((pos.z - origin.y) / cell_size))
 
 
 ## Configure grid overlay and drag systems from LevelData.
@@ -151,6 +174,7 @@ func reset_grid_state() -> void:
 	_grid_auto_show_drag = false
 	_grid_level_default = false
 	_drag_highlight_active = false
+	_last_highlight_cell = Vector2.INF
 	if _game_map._grid_overlay:
 		_game_map._grid_overlay.clear_drag_highlight()
 		_game_map._grid_overlay.hide_grid_immediate()

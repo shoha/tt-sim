@@ -115,8 +115,8 @@ func _on_body_exited(body: Node3D) -> void:
 	AudioManager.play_splash_exit()
 
 
-## Push every currently-submerged token's position (from every WaterZone, not just
-## this one) onto the shared water material each frame. Redundant across multiple
-## zones on the same map -- see WaterGlbUtils.push_disturbance_points().
+## Ask WaterRippleRegistry to push the latest submerged-token disturbance state onto
+## the shared water material, at most once per frame across every live WaterZone and
+## only when it changed -- see WaterRippleRegistry.flush_disturbances().
 func _process(_delta: float) -> void:
-	WaterGlbUtils.push_disturbance_points(WaterRippleRegistry.build_disturbance_array())
+	WaterRippleRegistry.flush_disturbances()
