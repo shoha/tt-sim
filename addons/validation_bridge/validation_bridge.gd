@@ -9,12 +9,16 @@ const PORT: int = 7777
 const HOST: String = "127.0.0.1"
 const SCENE_TREE_MAX_DEPTH: int = 3
 const SCENE_TREE_MAX_CHILDREN: int = 20
+## Frames a step_until will advance before giving up, when the caller does not say.
+const STEP_UNTIL_DEFAULT_MAX_FRAMES: int = 300
 
 var _server: TCPServer = null
 var _client: StreamPeerTCP = null
 var _buffer: String = ""
 var _processing: bool = false
 var _active: bool = false
+var _frozen: bool = false
+var _prefreeze_time_scale: float = 1.0
 
 
 func _ready() -> void:
@@ -54,6 +58,7 @@ func _poll_server() -> void:
 		var new_client := _server.take_connection()
 		if _client != null:
 			_client.disconnect_from_host()
+			_resume_after_client_loss()
 		_client = new_client
 		_buffer = ""
 		print("ValidationBridge: Client connected")
@@ -65,6 +70,7 @@ func _poll_server() -> void:
 	if _client.get_status() != StreamPeerTCP.STATUS_CONNECTED:
 		_client = null
 		_buffer = ""
+		_resume_after_client_loss()
 		return
 
 	var available := _client.get_available_bytes()
@@ -77,6 +83,25 @@ func _poll_server() -> void:
 
 	_buffer += (result[1] as PackedByteArray).get_string_from_utf8()
 	_try_process_command()
+
+
+## Lifts a freeze that the departing client left behind.
+##
+## Engine.time_scale = 0.0 outlives the connection that set it. Without this, an agent that crashed,
+## timed out, or simply exited between "freeze" and "resume" leaves the game stopped for good:
+## physics never ticks again, and the next agent to connect sees a world where nothing moves and
+## no command explains why. Scoping the freeze to the session that asked for it is the
+## only state the bridge can safely assume a disconnected client no longer wants. The print is
+## deliberate -- a silent time-scale change is exactly the kind of invisible state that made this
+## worth fixing.
+func _resume_after_client_loss() -> void:
+	if not _frozen:
+		return
+	Engine.time_scale = _prefreeze_time_scale
+	_frozen = false
+	print(
+		"ValidationBridge: Client lost while frozen; time resumed at scale %s" % Engine.time_scale
+	)
 
 
 func _try_process_command() -> void:
@@ -113,6 +138,18 @@ func _handle_command(cmd: Dictionary) -> void:
 			response = await _cmd_input(cmd)
 		"wait":
 			response = await _cmd_wait(cmd)
+		"freeze":
+			response = _cmd_freeze()
+		"resume":
+			response = _cmd_resume()
+		"step":
+			response = await _cmd_step(cmd)
+		"eval":
+			response = _cmd_eval(cmd)
+		"step_until":
+			response = await _cmd_step_until(cmd)
+		"controls":
+			response = _cmd_controls(cmd)
 		_:
 			response = {"ok": false, "error": "Unknown command: %s" % cmd.get("cmd", "")}
 	_send_response(response)
@@ -150,9 +187,15 @@ func _cmd_screenshot() -> Dictionary:
 # ---------------------------------------------------------------------------
 
 
+## Reports `frozen` and `time_scale` alongside the world state so a connecting agent can tell a
+## stopped clock from a broken game. A frozen world looks identical to a hung one from the outside:
+## tokens never move and every step_until runs to its frame cap. Naming the freeze in the snapshot
+## every agent already takes first is what makes that diagnosable without knowing to ask.
 func _cmd_state() -> Dictionary:
 	return {
 		"ok": true,
+		"frozen": _frozen,
+		"time_scale": Engine.time_scale,
 		"app_state": _get_app_state(),
 		"tokens": _get_tokens(),
 		"ui": _get_ui_state(),
@@ -316,14 +359,64 @@ func _cmd_input(cmd: Dictionary) -> Dictionary:
 			_inject_key(cmd.get("key", ""))
 		"scroll":
 			_inject_scroll(cmd.get("x", 0.0), cmd.get("y", 0.0), cmd.get("delta", 1.0))
+		"click_control":
+			var query: String = cmd.get("query", "")
+			if query.is_empty():
+				return {"ok": false, "error": "click_control requires a non-empty 'query'"}
+			var matches := BridgeInspector.find_matches(get_tree().root, query, true)
+			if matches.is_empty():
+				return {"ok": false, "error": "No visible Control matches '%s'" % query}
+			if matches.size() > 1:
+				var paths: Array = matches.map(
+					func(entry: Dictionary) -> String: return entry["path"]
+				)
+				return {
+					"ok": false,
+					"error": "'%s' is ambiguous" % query,
+					"matches": paths,
+				}
+			var center: Array = matches[0]["center"]
+			var target := _canvas_to_injected_point(Vector2(float(center[0]), float(center[1])))
+			var target_button := _parse_mouse_button(cmd.get("button", "left"))
+			await _inject_click(target.x, target.y, target_button)
 		_:
 			return {"ok": false, "error": "Unknown input type: %s" % input_type}
-	await get_tree().process_frame
-	await get_tree().process_frame
+	await _advance_one_step()
+	await _advance_one_step()
 	return {"ok": true}
 
 
-## Injects a click at a viewport position.
+## Converts a Control's reported centre into the space injected mouse events are actually read in.
+##
+## These are two different spaces and the gap between them is silent. BridgeInspector reports rects
+## and centres from `Control.get_global_rect()`, which is canvas space -- the 1920x1080-based space
+## `window/stretch/mode="canvas_items"` lays the UI out in. An event pushed through
+## `Input.parse_input_event`, by contrast, goes through `get_final_transform().affine_inverse()`
+## before GUI dispatch, exactly as a real mouse event from the OS does, so its position is read as
+## WINDOW pixels. With `window/stretch/aspect="expand"` the two diverge whenever the window is not
+## the base size: a 1278x1360 window produces a 1920x2043 viewport, a factor of 0.6656, so clicking
+## a reported centre of (960, 1057) arrived at (1442, 1588) in canvas space and missed the Control
+## completely -- while still answering `{"ok": true}`, because click_control only ever verified that
+## it FOUND the Control, never that the click landed. That is the same silent-wrong-answer shape as
+## step_until's old truthiness bug, and it defeated the entire reason click_control exists.
+##
+## `get_final_transform()` is the engine's own canvas-to-window mapping, so this is exact rather
+## than a hand-computed size ratio, and it is the identity when window and viewport agree -- the
+## matched case is unchanged.
+##
+## Not covered: a CanvasLayer that sets its own transform. `get_final_transform()` carries the
+## stretch and the root canvas transform, not a layer's. No layer in this project sets one, and the
+## centre BridgeInspector reports would already be wrong for such a layer independently of this.
+func _canvas_to_injected_point(point: Vector2) -> Vector2:
+	return get_viewport().get_final_transform() * point
+
+
+## Injects a click at a window-space position.
+##
+## Callers passing raw coordinates (the "click", "drag" and "scroll" input types) are supplying
+## window pixels, NOT the canvas-space coordinates BridgeInspector reports. That contract is
+## unchanged here deliberately -- scripts in the wild compensate for it by hand, and silently
+## redefining their coordinate space would break them. click_control is the path that converts.
 ##
 ## Sends a mouse-motion event first and puts a frame boundary between press and release,
 ## rather than firing press+release back to back. Both matter for Control nodes: Godot's GUI
@@ -335,6 +428,14 @@ func _cmd_input(cmd: Dictionary) -> Dictionary:
 ##
 ## _inject_drag already had the frame boundary, which is why drags sometimes worked where
 ## clicks never did.
+##
+## _inject_drag's own asymmetry was different: unlike _inject_click above, it never called
+## flush_buffered_events at all, so its events were left to agile input flushing's own
+## delivery point instead of the frame boundaries awaited here. The hypothesis was that this
+## explained drags succeeding only intermittently; a 10-iteration before/after measurement in
+## this environment did not bear that out (0/10 both ways), so a second cause is still open.
+## The flush call stays regardless -- unflushed injected events are nondeterministic on their
+## own terms, independent of whether they were the drag's actual failure mode.
 func _inject_click(x: float, y: float, button: MouseButton = MOUSE_BUTTON_LEFT) -> void:
 	var pos := Vector2(x, y)
 
@@ -343,7 +444,7 @@ func _inject_click(x: float, y: float, button: MouseButton = MOUSE_BUTTON_LEFT) 
 	motion.global_position = pos
 	Input.parse_input_event(motion)
 	Input.flush_buffered_events()
-	await get_tree().process_frame
+	await _advance_one_step()
 
 	var press := InputEventMouseButton.new()
 	press.button_index = button
@@ -352,7 +453,7 @@ func _inject_click(x: float, y: float, button: MouseButton = MOUSE_BUTTON_LEFT) 
 	press.global_position = pos
 	Input.parse_input_event(press)
 	Input.flush_buffered_events()
-	await get_tree().process_frame
+	await _advance_one_step()
 
 	var release := InputEventMouseButton.new()
 	release.button_index = button
@@ -400,8 +501,9 @@ func _inject_drag(x1: float, y1: float, x2: float, y2: float) -> void:
 	press.position = from
 	press.global_position = from
 	Input.parse_input_event(press)
+	Input.flush_buffered_events()
 
-	await get_tree().process_frame
+	await _advance_one_step()
 
 	var steps := 10
 	for i in range(steps + 1):
@@ -413,8 +515,9 @@ func _inject_drag(x1: float, y1: float, x2: float, y2: float) -> void:
 		motion.relative = (to - from) / float(steps)
 		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
 		Input.parse_input_event(motion)
+		Input.flush_buffered_events()
 		if i < steps:
-			await get_tree().process_frame
+			await _advance_one_step()
 
 	var release := InputEventMouseButton.new()
 	release.button_index = MOUSE_BUTTON_LEFT
@@ -422,15 +525,197 @@ func _inject_drag(x1: float, y1: float, x2: float, y2: float) -> void:
 	release.position = to
 	release.global_position = to
 	Input.parse_input_event(release)
+	Input.flush_buffered_events()
+
+
+# ---------------------------------------------------------------------------
+# Deterministic time control
+# ---------------------------------------------------------------------------
+
+
+## Stops game time by zeroing Engine.time_scale.
+##
+## At a time scale of 0.0 no physics ticks accumulate, so _physics_process stops being called
+## outright, and _process receives a delta of 0.0. Tweens, SceneTreeTimers and AnimationPlayers all
+## run on scaled time and therefore stop with it. Rendering continues, so screenshots still work and
+## `await get_tree().process_frame` still resolves -- which is what lets the bridge keep injecting
+## input and answering commands while the world is held still.
+##
+## The pre-freeze scale is remembered rather than assumed to be 1.0, so freezing does not quietly
+## discard a time scale the game set for itself. A non-positive scale is never recorded, though:
+## if something else had already zeroed Engine.time_scale before freeze ran, later lifting the
+## freeze back to that same 0.0 would leave get_tree().physics_frame never firing, hanging
+## _advance_physics_frames (and therefore "step") forever. Falling back to 1.0 keeps
+## _prefreeze_time_scale always liftable.
+func _cmd_freeze() -> Dictionary:
+	if not _frozen:
+		_prefreeze_time_scale = Engine.time_scale if Engine.time_scale > 0.0 else 1.0
+		Engine.time_scale = 0.0
+		_frozen = true
+	return {"ok": true, "frozen": true, "restored_time_scale": _prefreeze_time_scale}
+
+
+func _cmd_resume() -> Dictionary:
+	if _frozen:
+		Engine.time_scale = _prefreeze_time_scale
+		_frozen = false
+	return {"ok": true, "frozen": false, "time_scale": Engine.time_scale}
+
+
+## Advances game time by an exact number of physics frames, then restores the freeze.
+##
+## Accepts either `frames` (exact) or `seconds` (converted at the project's tick rate). Stepping
+## while not frozen is allowed and simply advances real time, so a caller does not have to freeze
+## first for the command to mean something.
+func _cmd_step(cmd: Dictionary) -> Dictionary:
+	var ticks := Engine.physics_ticks_per_second
+	var frames: int = int(cmd.get("frames", 0))
+	if frames <= 0:
+		frames = BridgeTimeControl.frames_for_duration(float(cmd.get("seconds", 0.0)), ticks)
+	if frames <= 0:
+		return {"ok": false, "error": "step requires a positive 'frames' or 'seconds'"}
+	frames = mini(frames, BridgeTimeControl.MAX_STEP_FRAMES)
+	await _advance_physics_frames(frames)
+	return {
+		"ok": true,
+		"frames": frames,
+		"seconds": BridgeTimeControl.duration_for_frames(frames, ticks),
+		"frozen": _frozen,
+	}
+
+
+## Runs exactly `frames` physics frames, holding the freeze open around them.
+##
+## What this guarantees is exact: `frames` physics ticks means `_physics_process` state advances
+## by exactly `frames / physics_ticks_per_second` of game time, independent of host framerate.
+## `_process`-driven state (Tweens, camera-zoom smoothing, and the like) is not covered by that
+## guarantee -- it advances by whatever wall-clock time these `frames` physics ticks happened to
+## take on this host, which varies with framerate. A step is still far more controlled than a bare
+## wait for that kind of state, just not frame-rate independent for it.
+##
+## The time scale must be lifted before awaiting: at a scale of 0.0 the physics accumulator never
+## fills, so `get_tree().physics_frame` would never fire and the await would hang forever. This is
+## also why `_cmd_freeze` refuses to record a non-positive `_prefreeze_time_scale` -- restoring a
+## scale of 0.0 here would reproduce the same hang.
+##
+## A large `frames` value blocks the bridge's socket for roughly that much real time --
+## `BridgeTimeControl.MAX_STEP_FRAMES` (6000) is about 100 real seconds at the default 60 Hz tick
+## rate -- with `_processing` held throughout, so a client that times out mid-step leaves the
+## bridge partway through the step rather than aborting it.
+func _advance_physics_frames(frames: int) -> void:
+	var was_frozen := _frozen
+	if was_frozen:
+		Engine.time_scale = _prefreeze_time_scale
+	for _i in range(frames):
+		await get_tree().physics_frame
+	if was_frozen:
+		Engine.time_scale = 0.0
+
+
+## One unit of progress between injected input events.
+##
+## While frozen this is a single physics frame of game time; otherwise it is a rendered frame, which
+## is what the injectors did before time control existed. Routing both injectors through here is
+## what makes a drag reproducible: the motion sequence advances the world by a fixed amount between
+## events instead of by however long the host took to render.
+func _advance_one_step() -> void:
+	if _frozen:
+		await _advance_physics_frames(1)
+	else:
+		await get_tree().process_frame
 
 
 func _cmd_wait(cmd: Dictionary) -> Dictionary:
 	var seconds: float = cmd.get("seconds", 0.5)
 	if seconds > 0.0:
-		await get_tree().create_timer(seconds).timeout
+		# ignore_time_scale = true: a frozen clock must not stall the bridge's own waits. Callers
+		# wanting game time to pass should use "step", which is the deterministic option anyway.
+		await get_tree().create_timer(seconds, true, false, true).timeout
 	else:
 		await get_tree().process_frame
 	return {"ok": true}
+
+
+# ---------------------------------------------------------------------------
+# Expression evaluation and Control discovery
+# ---------------------------------------------------------------------------
+
+
+## Expressions run against the current scene, so `find_child("GameMap").camera_node.size` and
+## similar reach the game's own nodes directly. Falls back to the bridge itself before the first
+## scene is up, which keeps `get_tree()` available rather than failing outright.
+func _eval_base() -> Object:
+	var root_scene := get_tree().current_scene
+	return root_scene if root_scene != null else self
+
+
+func _cmd_eval(cmd: Dictionary) -> Dictionary:
+	var text: String = cmd.get("expression", "")
+	if text.is_empty():
+		return {"ok": false, "error": "eval requires a non-empty 'expression'"}
+	return BridgeEval.evaluate(text, _eval_base())
+
+
+## Advances game time one physics frame at a time until `expression` is truthy.
+##
+## This is the answer to every "wait 0.5s and hope" in an interaction script: the caller states the
+## condition it is actually waiting for, and gets back how much game time it took, or a clear
+## `satisfied: false` when the condition never held.
+##
+## The condition is read from BridgeEval's `truthy` field, which is computed on the raw Variant.
+## Re-deriving truthiness from the returned `value` would be wrong: that is the JSON-safe rendering,
+## in which `Vector2.ZERO` is the non-empty Dictionary `{"x": 0.0, "y": 0.0}` and therefore truthy,
+## the opposite of what GDScript says about the value itself.
+func _cmd_step_until(cmd: Dictionary) -> Dictionary:
+	var text: String = cmd.get("expression", "")
+	if text.is_empty():
+		return {"ok": false, "error": "step_until requires a non-empty 'expression'"}
+
+	var max_frames: int = int(cmd.get("max_frames", STEP_UNTIL_DEFAULT_MAX_FRAMES))
+	max_frames = clampi(max_frames, 1, BridgeTimeControl.MAX_STEP_FRAMES)
+
+	var ticks := Engine.physics_ticks_per_second
+	var frames := 0
+	var last: Dictionary = BridgeEval.evaluate(text, _eval_base())
+	if not last.get("ok", false):
+		return last
+
+	while frames < max_frames and not bool(last.get("truthy", false)):
+		await _advance_physics_frames(1)
+		frames += 1
+		last = BridgeEval.evaluate(text, _eval_base())
+		if not last.get("ok", false):
+			return last
+
+	return {
+		"ok": true,
+		"satisfied": bool(last.get("truthy", false)),
+		"frames": frames,
+		"seconds": BridgeTimeControl.duration_for_frames(frames, ticks),
+		"value": last.get("value"),
+	}
+
+
+## Walks from the window root, not the current scene, so dialogs and overlays parented to
+## get_tree().root are reported. Those are invisible to _get_scene_tree() and have previously made a
+## successful click look like a failed one.
+##
+## A Godot PopupMenu is a Window, not a Control, so this cannot see popup menu entries and
+## click_control cannot click them -- confirmed empirically in Task 4, where injected clicks on an
+## OptionButton's popup did not register; navigate those with arrow keys and Enter instead.
+##
+## `truncated` is reported because BridgeInspector stops walking at MAX_CONTROLS with no marker of
+## its own. Without the flag a caller cannot tell a complete list from a cut-off one, so a Control
+## that exists but sits past the cap reads as absent from the scene -- a wrong conclusion this
+## harness has already drawn once.
+func _cmd_controls(cmd: Dictionary) -> Dictionary:
+	var visible_only: bool = bool(cmd.get("visible_only", true))
+	var controls := BridgeInspector.collect_controls(get_tree().root, visible_only)
+	return {
+		"ok": true,
+		"controls": controls,
+		"truncated": controls.size() >= BridgeInspector.MAX_CONTROLS,
+	}
 
 
 # ---------------------------------------------------------------------------

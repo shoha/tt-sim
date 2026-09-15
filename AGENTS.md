@@ -209,9 +209,18 @@ After making code changes that affect runtime behavior or visuals, use the valid
 
 1. **After any code edit**: call `game_reload` to restart with new code
 2. **Check for errors**: call `game_state` — look at `console_errors` for crashes
-3. **Exercise the feature**: call `game_interact` with a sequence of inputs
-4. **Evaluate visually**: call `game_screenshot` and inspect the result
-5. **If broken**: fix the code and repeat from step 1
+3. **Freeze the clock**: call `game_time` with `freeze` before driving anything. A frozen game
+   cannot race your interaction, and screenshots show a settled world rather than whatever the
+   renderer had mid-frame
+4. **Find what to click**: call `game_controls`, then `game_click_control` by name. Only fall back
+   to `game_click` with raw coordinates for 3D world clicks, which have no Control to name
+5. **Advance deliberately**: call `game_time` with `step_until` and the condition you are actually
+   waiting for, or `step` for an exact slice. Use `game_wait` only for real-time waits that game
+   time cannot express
+6. **Evaluate**: `game_screenshot`, `game_state`, and `game_eval` for anything the fixed state
+   snapshot does not report
+7. **Resume and stop**: `game_time` with `resume`, then `game_stop`. Idle instances waste resources
+   and throttle later measurement runs
 
 ### Available Tools
 
@@ -220,14 +229,18 @@ After making code changes that affect runtime behavior or visuals, use the valid
 | `game_launch` | Start Godot with the validation bridge. Call this first. Optional `scene` parameter for a specific scene |
 | `game_stop` | Kill the running Godot instance |
 | `game_reload` | Stop and relaunch. Use after code changes |
-| `game_screenshot` | Capture viewport as PNG image |
-| `game_state` | Query game state: app state, tokens, UI panels, camera, scene tree, console errors |
-| `game_click` | Click at (x, y) viewport coords. Optional `button`: "left" (default), "right", "middle" |
+| `game_screenshot` | Capture the game window as PNG image |
+| `game_state` | Query game state: app state, tokens, UI panels, camera, scene tree, console errors, plus `frozen` and `time_scale` |
+| `game_click` | Click at (x, y) window coords (same space as `game_screenshot` pixels). Optional `button`: "left" (default), "right", "middle" |
 | `game_drag` | Drag from (x1, y1) to (x2, y2) with interpolated motion |
 | `game_key` | Press a key by name (e.g. "M", "Escape", "Home", "Space", "G") |
 | `game_scroll` | Mouse wheel at (x, y). Positive delta = zoom in, negative = zoom out |
 | `game_wait` | Wait N seconds for animations/transitions to settle |
 | `game_interact` | **Preferred for multi-step validation.** Execute a sequence of actions and return collected screenshots + state in one call |
+| `game_time` | Deterministic time control: `freeze`, `step`, `step_until`, `resume`. Prefer over `game_wait` |
+| `game_eval` | Evaluate a GDScript expression against the current scene and return the value |
+| `game_controls` | List Controls (max 200, with a `truncated` flag) with viewport-space rect and centre. Sees dialogs parented to the window root |
+| `game_click_control` | Click a Control by name, path, or button text. The bridge converts canvas space to window space, so the caller does no coordinate math |
 
 ### game_interact Example
 
@@ -277,9 +290,9 @@ Use `app_state` to verify scene transitions worked. Use `tokens` to verify token
 
 ### What You Can vs. Cannot Catch
 
-**Can catch**: crashes, missing UI, wrong colors (bold), features not responding to input, state corruption, layout obviously wrong
+**Can catch**: crashes, missing UI, wrong colors (bold), features not responding to input, state corruption, layout obviously wrong, state that only settles after N frames (via `step_until`)
 
-**Cannot catch reliably**: subtle animation timing, 1px alignment, slight color shades, performance regressions, drag interaction "feel"
+**Cannot catch reliably**: subtle animation timing, 1px alignment, slight color shades, performance regressions, drag interaction "feel", anything requiring a second game instance (multiplayer sync)
 
 ### Architecture
 
@@ -295,12 +308,19 @@ The bridge only activates when Godot is launched with `-- --validation-bridge`. 
 - **Launch timeout**: check that `godot` is on PATH, or set `GODOT_PATH` env var
 - **Bridge not connecting**: port 7777 may be in use from a previous session. `game_stop` then `game_launch`
 - **Stale errors after reload**: `console_errors` accumulates since launch. Check timestamps/context
-- **Clicks land on nothing / buttons do not react**: almost always a coordinate-space mismatch, not a broken bridge. `game_state` reports `viewport.window_size`, `viewport.viewport_size` and `viewport.hovered_control` — check `hovered_control` after a click to confirm what you actually hit before concluding anything else
+- **Clicks land on nothing / buttons do not react**: almost always a coordinate-space mismatch, not a broken bridge. `game_state` reports `viewport.window_size`, `viewport.viewport_size` and `viewport.hovered_control` — check `hovered_control` after a click to confirm what you actually hit before concluding anything else. `game_click_control` avoids this problem — the bridge converts the Control's canvas-space centre into window space with `get_viewport().get_final_transform()` before injecting, so the caller does no coordinate math — and is the right default; reach for `game_click` with raw coordinates only for 3D world clicks. (This conversion was missing until it was measured: `click_control` used to inject the unconverted centre, miss the Control, and still answer `{"ok": true}`, because it only ever checked that it had *found* the Control. Verify with `hovered_control` if a named click ever looks wrong.)
 - **Viewport size**: `project.godot` sets a 1920x1080 base with `window/stretch/aspect="expand"`, so the viewport is NOT a fixed size — its height is `1920 / window_aspect`. A 1278x1360 window gives a 1920x2043 viewport, which quietly quadruples fill cost and invalidates any FPS number taken that way
-- **Click coordinates are WINDOW pixels; screenshots are VIEWPORT pixels.** They only coincide when the two sizes match. With an `override.cfg` pinning `aspect="keep"`, a 1920x1080 viewport inside a 1278x1360 window is letterboxed: scale 0.6656 with ~320px black bars top and bottom, so screenshot `(x, y)` becomes window `(x, y + 320)`. Read both sizes from `game_state` and convert, or you will click empty space and conclude the bridge is broken
-- **A click "not working" may have worked**: `app_state` only changes on real state transitions, and `_get_scene_tree()` walks `get_tree().current_scene`, so anything parented to `get_tree().root` (dialogs, including the level browser) is invisible to it. Take a screenshot before concluding a click failed
-- **`game_interact` steps time out after 30 s total**: split long waits across several calls
+- **Click coordinates and screenshots are both WINDOW pixels, not VIEWPORT pixels.** Under this project's normal `aspect="expand"` config the two already coincide, so no conversion is needed between a screenshot and a `game_click`/`game_drag`/`game_scroll` call. The exception is an `override.cfg` forcing `aspect="keep"`: a 1920x1080 viewport inside a 1278x1360 window is then letterboxed — scale 0.6656 with ~320px black bars top and bottom, so screenshot `(x, y)` becomes window `(x, y + 320)`. Read both sizes from `game_state` and convert in that case, or you will click empty space and conclude the bridge is broken. `game_click`, `game_drag` and `game_scroll` pass the caller's coordinates to the injector untouched, so that conversion (when needed) is on the caller — but it is no longer the only option: `game_click_control` does the conversion for you for anything that is a named Control, and is the reason to prefer it
+- **A click "not working" may have worked**: `app_state` only changes on real state transitions, and `_get_scene_tree()` walks `get_tree().current_scene`, so anything parented to `get_tree().root` (dialogs, including the level browser) is invisible to it. `game_controls` is not blind to the window root, so it is the way to check whether a dialog actually opened; take a screenshot too before concluding a click failed
+- **Bridge commands time out after 30 s**, except `step` and `step_until`, which get a budget derived from the frames they may run (the bridge's cap of 6000 frames is ~100 real seconds). A timed-out command is not cancelled on the bridge — it finishes and answers late — so the client discards that late reply rather than matching it to whatever request is outstanding by then. The protocol has no request ids; this keeps the stream aligned but is not a substitute for them
+- **A freeze does not survive a disconnect.** The bridge resumes normal time when its client goes away, so a crashed or timed-out agent cannot leave the game stopped for the next one. `game_state` reports `frozen` and `time_scale`, so check those first when nothing appears to move
 - **The pause menu IS testable.** `Escape` used to appear to hang the bridge, because `scenes/root.gd` sets `get_tree().paused = true` and that stopped `_process` on the bridge autoload. It now runs with `PROCESS_MODE_ALWAYS`, so pressing `Escape` and driving the pause menu and Settings screen works normally. If a future autoload needs to stay live while paused, it needs the same process mode
+- **Token drags are still unreliable, and the cause is not isolated.** `_inject_drag` had a real flush asymmetry — it never called `Input.flush_buffered_events()` — and that has been corrected. But three separate 10-iteration measurements in `res://tests/test_play_level.tscn` all came back 0/10: before the flush fix, after it, and again with the full freeze-plus-stepping stack and no fixed waits. The flush fix did not move the number. Do not assume the root cause is understood, and do not treat a single failed drag as proof the agent's coordinates were wrong. Separately, project memory records roughly 1-in-5 to 1-in-8 success historically against the real PLAYING scene driven through MCP — a different context (real scene, not the test scene) from the 0/10 runs above, so neither number should be read onto the other
+- **`game_wait` ignores the time scale**, so it still works while the game is frozen — but a frozen game does not advance during it, so nothing happens. Use `game_time` with `step` when game time actually needs to pass
+- **`step` only guarantees `_physics_process` state.** A step advances an exact number of physics frames, so anything driven by `_physics_process` advances exactly and repeatably. State driven by `_process` (camera smoothing, `_process`-based tweens) advances by however much wall-clock those frames happened to consume, and is NOT frame-rate independent even under `step`. It is still far more controlled than a bare `game_wait`, just not exact for `_process`-driven state
+- **`game_controls` returns at most 200 Controls and says so.** The response carries a `truncated` boolean; when it is `true` the walk hit the cap, and a control you cannot find may be past the cap rather than absent from the scene. Narrow the search (`visibleOnly`) or use `game_click_control`, which matches by name/path/text rather than requiring you to spot the entry
+- **Injected clicks cannot reach `OptionButton` popup menu items.** The popup is a Godot `PopupMenu`, which is a `Window`, not a `Control` — `game_controls` cannot see its entries and `game_click_control` cannot click them. Drive the popup with `game_key` (arrow keys, then Enter) instead. Note also that the popup drops the first keypress and resets to index 0 every time it opens
+- **`game_eval` runs against the current scene, not the tree root.** Bare autoload names do not resolve — use `get_node("/root/GameState")` instead of `GameState`. `find_child` also needs `find_child("Name", true, false)` to see nodes added without an owner, which includes `GameMap`
 
 ## CI/CD
 
