@@ -259,6 +259,11 @@ func _grant_token_control(token: BoardToken, peer_id: int) -> void:
 func _on_context_menu_remove_requested(token: BoardToken) -> void:
 	if not is_instance_valid(token):
 		return
+	# Close synchronously before the confirmation dialog opens -- the menu's
+	# own _input() click-outside handler stays live while it is fully visible
+	# and would otherwise swallow the first click on the dialog's buttons.
+	if _context_menu:
+		_context_menu.close_menu()
 	UIManager.show_danger_confirmation(
 		"Remove token",
 		'Remove "%s" from the board? Ctrl+Z undoes it.' % token.token_name,
@@ -277,8 +282,6 @@ func _remove_token_confirmed(token: BoardToken) -> void:
 	if lpc:
 		lpc.remove_token(token)
 	UIManager.show_info('Removed "%s"' % removed_name)
-	if _context_menu:
-		_context_menu.close_menu()
 
 
 func _on_context_menu_duplicate_requested(token: BoardToken) -> void:
@@ -307,5 +310,4 @@ func _on_context_menu_rename_requested(token: BoardToken, new_name: String) -> v
 	if lpc:
 		lpc.rename_token(token, trimmed_name)
 	if _context_menu:
-		_context_menu._update_menu_content()
 		_context_menu.close_menu()
