@@ -19,6 +19,25 @@ func before_each() -> void:
 	_panel.initialize(LevelData.new())
 
 
+## Freeing the host does not undo either side effect of a prompt: the discard
+## dialog is parented to the tree root (layer 100, grabs focus, traps Tab) and
+## the panel re-registers itself with UIManager. Both would leak into the rest
+## of the suite.
+func after_each() -> void:
+	if not is_instance_valid(_panel):
+		_panel = null
+		return
+	UIManager.unregister_overlay(_panel)
+	_free_close_prompt()
+	_panel = null
+
+
+func _free_close_prompt() -> void:
+	var prompt: Node = _panel._close_prompt
+	if is_instance_valid(prompt) and not prompt.is_queued_for_deletion():
+		prompt.queue_free()
+
+
 func test_starts_clean() -> void:
 	assert_false(_panel.is_dirty())
 	assert_true(_panel._can_close_from_tab())
@@ -58,6 +77,29 @@ func test_mark_clean_clears_and_allows_tab_close() -> void:
 func test_dirty_panel_refuses_tab_close() -> void:
 	_panel._on_weather_override_changed(0.3, "rain_intensity")
 	assert_false(_panel._can_close_from_tab(), "A dirty drawer must prompt instead of closing")
+	assert_true(is_instance_valid(_panel._close_prompt), "The discard prompt must be on screen")
+	_free_close_prompt()
+
+
+func test_second_close_request_reuses_the_open_prompt() -> void:
+	_panel._on_weather_override_changed(0.3, "rain_intensity")
+	_panel.request_close()
+	var first_prompt: Node = _panel._close_prompt
+	_panel.request_close()
+	assert_eq(_panel._close_prompt, first_prompt, "A second request must not stack a second dialog")
+	_free_close_prompt()
+
+
+func test_close_request_during_animation_keeps_the_overlay_registered() -> void:
+	# close() is a no-op while animating, and Escape has already popped the panel
+	# off the overlay stack by the time request_close() runs.
+	UIManager.unregister_overlay(_panel)
+	var before: int = UIManager.get_overlay_count()
+	_panel._is_animating = true
+	_panel.request_close()
+	assert_eq(
+		UIManager.get_overlay_count(), before + 1, "Escape mid-animation must keep the Escape route"
+	)
 
 
 func test_initialize_does_not_clear_dirty() -> void:

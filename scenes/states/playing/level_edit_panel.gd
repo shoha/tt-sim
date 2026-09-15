@@ -69,6 +69,9 @@ var _map_defaults: Dictionary = {}
 ## True once a live edit has been made and neither saved nor cancelled.
 ## Only mark_clean() clears it -- reopening the drawer does not.
 var _dirty: bool = false
+## The live "discard changes" prompt, while one is on screen. Kept so a second
+## close request reuses it instead of stacking a second dialog.
+var _close_prompt: Node = null
 
 # Scale & measurement controls
 @onready var map_grid_toggle: Button = %MapGridToggle
@@ -410,22 +413,38 @@ func _refresh_dirty_visuals() -> void:
 	set_tab_tooltip(TAB_TOOLTIP_DIRTY if _dirty else TAB_TOOLTIP_CLEAN)
 
 
-## Close if clean; otherwise ask before discarding. Used by the tab button and
-## by UIManager's Escape handling.
+## Close if clean; otherwise ask before discarding. Used by the tab button and by
+## UIManager's Escape handling, which pops the overlay before dispatching -- so
+## every branch that leaves the drawer open re-registers it, or the next Escape
+## falls through to the pause menu. register_overlay() is idempotent.
 func request_close() -> void:
+	# close() is a no-op mid-animation, and a second Escape must not stack a
+	# second dialog -- both leave the drawer open with nothing else to do.
+	if _is_animating or _is_close_prompt_open():
+		UIManager.register_overlay(self)
+		return
 	if not _dirty:
 		close()
 		return
-	# The drawer stays open, so it must stay on the overlay stack: Escape reaches
-	# here through _close_top_overlay(), which has already popped it. Registering
-	# is idempotent, so the tab-button route is unaffected.
 	UIManager.register_overlay(self)
-	UIManager.show_danger_confirmation(
+	_close_prompt = UIManager.show_danger_confirmation(
 		"Unsaved visual changes",
 		"Discard the changes made in this drawer? Save is still available in the drawer.",
 		_on_discard_confirmed,
 		"Discard changes"
 	)
+	if _close_prompt:
+		_close_prompt.closed.connect(_on_close_prompt_closed)
+
+
+## Whether the discard prompt is currently on screen.
+func _is_close_prompt_open() -> bool:
+	return is_instance_valid(_close_prompt) and _close_prompt.is_inside_tree()
+
+
+## The dialog frees itself after animating out, so drop the reference with it.
+func _on_close_prompt_closed(_confirmed: bool) -> void:
+	_close_prompt = null
 
 
 ## The tab button must not close a drawer with unsaved work; it prompts instead.

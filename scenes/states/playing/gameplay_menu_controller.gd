@@ -287,6 +287,12 @@ func _on_edit_drawer_opened() -> void:
 ## Changes are kept — the user can Cancel to revert, or Save to persist to disk.
 ## Also deactivates the sun gizmo so it cannot outlive the drawer.
 func _on_edit_drawer_closed() -> void:
+	_deactivate_sun_gizmo()
+
+
+## The gizmo is an aiming mode, not a setting: it must not outlive the drawer
+## closing or survive a Save that ends the editing pass.
+func _deactivate_sun_gizmo() -> void:
 	var gizmo := _get_sun_gizmo()
 	if gizmo and gizmo.is_active():
 		gizmo.deactivate()
@@ -299,9 +305,12 @@ func _enter_edit_mode() -> void:
 
 	var level_data = _level_play_controller.active_level_data
 
-	# Snapshot original values for cancel/revert. A drawer closed from its tab
-	# with unsaved edits keeps its first snapshot, so a later Cancel still
-	# returns to the state the level had before any of those edits.
+	# Snapshot original values for cancel/revert, but never over a snapshot that
+	# still has unsaved edits standing against it. The tab now vetoes a dirty
+	# close, so this guards the routes that bypass the prompt: conceal() when GM
+	# access is lost mid-edit (the drawer hides without reverting), and any
+	# programmatic reopen while dirty. In both cases Cancel must still return to
+	# the state the level had before the first of those edits.
 	if not level_edit_panel.is_dirty():
 		_original_state = LevelVisualState.from_level_data(level_data)
 
@@ -521,8 +530,10 @@ func _on_edit_save_requested(state: LevelVisualState) -> void:
 	_original_state = state.copy()
 
 	# The drawer stays open after a save so tuning can continue; only the
-	# unsaved-changes flag is cleared.
+	# unsaved-changes flag is cleared. Save still ends the editing pass, though,
+	# so the aiming gizmo goes away exactly as it would on a close.
 	level_edit_panel.mark_clean()
+	_deactivate_sun_gizmo()
 
 
 ## Cancel editing: revert to the snapshot taken when the drawer was opened
