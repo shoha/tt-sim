@@ -336,8 +336,7 @@ func remove_token(token: BoardToken) -> bool:
 	var placement_id: String = _network_id_to_placement.get(network_id, network_id)
 
 	_disconnect_token_state_signals(token)
-	spawned_tokens.erase(placement_id)
-	_network_id_to_placement.erase(network_id)
+	untrack_network_token(network_id)
 
 	var active_level_data: LevelData = _get_active_level_data_fn.call()
 	if active_level_data:
@@ -361,9 +360,9 @@ func rename_token(token: BoardToken, new_name: String) -> void:
 
 	token.token_name = trimmed_name
 
-	var placement_id: String = _network_id_to_placement.get(token.network_id, "")
+	var placement_id: String = _network_id_to_placement.get(token.network_id, token.network_id)
 	var active_level_data: LevelData = _get_active_level_data_fn.call()
-	if active_level_data and placement_id != "":
+	if active_level_data:
 		var placement := active_level_data.get_token_placement(placement_id)
 		if placement:
 			placement.token_name = trimmed_name

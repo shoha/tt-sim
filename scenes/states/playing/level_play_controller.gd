@@ -373,8 +373,17 @@ func rename_token(token: BoardToken, new_name: String) -> void:
 
 
 ## Duplicate a token: spawns a fresh copy of the same asset one grid cell over
-## from the source token, then copies its name and health across.
+## from the source token, then copies its name and health across. No trailing
+## notify_token_properties_changed() call is needed here -- rename_token()
+## already calls it internally for the name, and set_max_health()/heal()/
+## take_damage() all unconditionally emit health_changed, which
+## TokenSpawner._connect_token_state_signals() (wired up by spawn_asset() ->
+## add_token_to_level() for every authoritative peer) already routes to the
+## same handler.
 func duplicate_token(token: BoardToken) -> BoardToken:
+	if not token.rigid_body:
+		return null
+
 	var offset: float = (
 		active_level_data.grid_cell_size if active_level_data else DUPLICATE_OFFSET_FALLBACK
 	)
@@ -390,7 +399,6 @@ func duplicate_token(token: BoardToken) -> BoardToken:
 		new_token.heal(health_diff)
 	elif health_diff < 0:
 		new_token.take_damage(health_diff)
-	_token_spawner.notify_token_properties_changed(new_token)
 	return new_token
 
 
