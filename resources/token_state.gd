@@ -226,6 +226,7 @@ func diff(other: TokenState) -> Dictionary:
 		"position",
 		"rotation",
 		"scale",
+		"token_name",
 		"current_health",
 		"max_health",
 		"is_alive",
