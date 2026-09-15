@@ -51,6 +51,12 @@ var _otherObjectOnPosition: DraggingObject3D
 var _target_drag_position: Vector3 = Vector3.ZERO
 var _has_target_position: bool = false
 
+# Deferred pointer raycast — mouse motion/wheel handlers during an active drag store the
+# latest pointer position here instead of raycasting immediately; _process() consumes it
+# at most once per frame.
+var _pending_pointer_position: Vector2 = Vector2.ZERO
+var _pointer_dirty: bool = false
+
 # Drag threshold state
 var _pending_drag_object: DraggingObject3D = null
 var _drag_start_mouse_pos: Vector2 = Vector2.ZERO
@@ -64,6 +70,7 @@ var edge_pan_direction: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
+	set_process(false)
 	if (
 		not Engine.is_editor_hint()
 		and not DragAndDropGroupHelper.is_connected("group_added", _set_dragging_object_signals)
@@ -119,6 +126,7 @@ func _begin_drag(object: DraggingObject3D) -> void:
 	_currentDraggingObject = object
 	_pending_drag_object = null
 	_drag_height_offset = 0.0
+	set_process(true)
 	dragging_started.emit(_currentDraggingObject)
 
 
@@ -158,14 +166,17 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.is_pressed():
 			_drag_height_offset += height_step
-			_update_target_position(event.position)
+			_pending_pointer_position = event.position
+			_pointer_dirty = true
 			get_viewport().set_input_as_handled()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.is_pressed():
 			_drag_height_offset -= height_step
-			_update_target_position(event.position)
+			_pending_pointer_position = event.position
+			_pointer_dirty = true
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
-		_update_target_position(event.position)
+		_pending_pointer_position = event.position
+		_pointer_dirty = true
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		cancel_drag()
 		get_viewport().set_input_as_handled()
@@ -174,6 +185,12 @@ func _input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
+
+	# Raycast at most once per frame, regardless of how many motion/wheel events
+	# arrived this frame -- consumes the last one's position.
+	if _pointer_dirty:
+		_pointer_dirty = false
+		_update_target_position(_pending_pointer_position)
 
 	# Frame-rate independent exponential smoothing
 	if _currentDraggingObject and _has_target_position:
@@ -209,6 +226,7 @@ func stop_drag() -> void:
 	_currentDraggingObject = null
 	_has_target_position = false
 	_drag_height_offset = 0.0
+	set_process(false)
 
 
 ## Cancel the current drag and signal the dragged object to return to its start position.
@@ -222,6 +240,7 @@ func cancel_drag() -> void:
 	_currentDraggingObject = null
 	_has_target_position = false
 	_drag_height_offset = 0.0
+	set_process(false)
 
 
 ## Check if a drag is currently active (used by camera to block zoom and enable edge pan).
@@ -376,6 +395,7 @@ func _swap_dragging_objects() -> bool:
 	_currentDraggingObject.objectBody.global_position = position
 	_currentDraggingObject = _otherObjectOnPosition
 	_otherObjectOnPosition = null
+	set_process(true)
 
 	return true
 
