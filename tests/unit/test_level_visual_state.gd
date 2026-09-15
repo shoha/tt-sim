@@ -77,6 +77,14 @@ func test_copy_is_independent() -> void:
 	assert_eq(state.water_style, "realistic")
 
 
+# The exact-size assertion below (data.keys().size() == expected.size()) is also
+# the regression pin for the phase3-visual-state review finding: grid_cell_size,
+# display_unit and display_unit_per_cell must never appear in the broadcast
+# payload, because apply_visual_state() deliberately does not re-run grid
+# reconfiguration on receive (GridVisibilityController.configure_grid() would
+# unconditionally clear a client's grid auto-show-on-measure/-on-drag flags on
+# every broadcast, up to 10 Hz mid-interaction, if grid scale were ever added
+# here and applied on receive).
 func test_to_broadcast_dict_has_the_network_keys() -> void:
 	var state := LevelVisualState.from_level_data(_make_level())
 

@@ -12,6 +12,14 @@ extends RefCounted
 ## from_level_data(), apply_to_level_data(), copy(), to_broadcast_dict() and
 ## patch_from_broadcast_dict(), one apply line in
 ## LevelPlayController.apply_visual_state(), and the panel control.
+##
+## The three grid fields (grid_cell_size, display_unit, display_unit_per_cell)
+## are the exception: they ride along in from_level_data()/apply_to_level_data()/
+## copy() for the drawer's snapshot/restore, but are deliberately absent from
+## to_broadcast_dict()/patch_from_broadcast_dict() -- grid scale is not networked
+## -- and are not applied by LevelPlayController.apply_visual_state(). A caller
+## that changes them must call LevelPlayController.update_measure_tool_scale()
+## itself after writing them to level data.
 
 var light_intensity_scale: float = 1.0
 var environment_preset: String = ""
