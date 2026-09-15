@@ -311,28 +311,40 @@ fade radius) bound once per material as `occlusion_tokens`, updated with
 `occlusion_token_count` (declared in `project.godot`) -- Godot global shader parameters
 have no array types, which is why the data is a texture and only the count is a global.
 Converted materials are deduplicated by source StandardMaterial3D. Ticks where no token
-moved skip the GPU update entirely. Collision AABBs are cached per shape.
+moved skip the GPU update entirely. Collision AABBs are cached per shape. `enable_occlusion`
+now defaults to `false` and is set explicitly, per material, by `OcclusionFadeManager` on
+every material it converts or registers -- see the gate-fix note below and the "Known dead
+ends" bullet on process-global shader parameters.
 
-Measured (coordinator, 2026-09-14): Sandy Clearing via `tests/test_play_level.tscn`,
-1920x1080 pinned with override.cfg, vsync off, Home camera pose, 2 tokens, 14 converted
-materials, samples with elapsed_s > 5, primitives identical between runs (24,543,623 with
-foliage, 3,725,814 with foliage hidden):
+Measured (coordinator, 2026-09-14, re-measured after the gate fix in ec2e24e): Sandy
+Clearing via `tests/test_play_level.tscn`, 1920x1080 pinned with override.cfg, vsync off,
+Home camera pose, 2 static tokens, 14 converted materials, samples with elapsed_s > 5,
+primitives identical in every run (24,543,623 with foliage, 3,725,814 with foliage hidden):
 
-| Build | Foliage | frame_time_avg_ms | perf_occlusion_fade_ms | draw_calls |
-| --- | --- | --- | --- | --- |
-| before (9c96f04) | visible | 10.72 | 0.0609 | 1191 |
-| after (1730e08) | visible | 10.91 | 0.0375 | 1189 |
-| before | hidden | 8.37 | 0.0514 | 474 |
-| after | hidden | 8.37 | 0.0346 | 472 |
+| Run | Build | foliage on frame_ms | foliage off frame_ms (in-run reference) | foliage cost (delta) | occlusion tick ms (foliage on) | draw_calls (on/off) |
+| --- | --- | --- | --- | --- | --- | --- |
+| A1 | before (9c96f04) | 10.72 | 8.37 | 2.35 | 0.0609 | 1191 / 474 |
+| B1 | texture, before gate fix (1730e08) | 10.91 | 8.37 | 2.54 | 0.0375 | 1189 / 472 |
+| A2 | before (9c96f04), repeat | 10.79 | 8.36 | 2.43 | 0.0609 | 1191 / 474 |
+| B2 | texture + opt-in gate (9268723) | 10.81 | 8.37 | 2.44 | 0.0391 | 1189 / 472 |
 
-The per-tick CPU cost fell by about 38% (the remaining cost is collecting entries; the
-skip path avoids the GPU update when tokens are static), and draw calls fell by 2 from
-material sharing. Frame time is unchanged within run-to-run noise on this scene -- the
-GPU-side saving (3 x N uniform uploads per tick replaced by one texture update) scales
-with the number of converted materials and token movement, and is not resolvable on a
-14-material scene; a prop-heavy map with hundreds of surfaces is where it matters. The
-two frame_ms figures with foliage differ by 0.19 ms, which is within the within-build
-variance this document already documents (up to 3.2 ms).
+The A-A spread (two runs of the same build) is 0.08 ms of foliage cost; that is this
+session's noise floor for the delta. B1's +0.19 ms over A1 was outside that spread and was
+a real regression: moving the token count to a process-global left `enable_occlusion`
+(default true) as the only gate on grass foliage materials the manager never registers, so
+every grass fragment ran the fade loop. The first draft of this section called that
+difference noise by citing the cross-session absolute-frame-time drift figure instead of
+comparing deltas against the in-run reference -- exactly the mistake rule 4 below warns
+against; it is recorded here so the next reader does not repeat it.
+
+B2, with the opt-in gate, sits inside the A spread: the per-fragment `texelFetch` on
+registered tree materials is not measurable on this scene. The CPU-side occlusion tick
+fell from 0.061 to 0.039 ms; on static tokens nearly all of that is the skip-if-unchanged
+path (entries are still collected each tick), so 38% is the static-token best case. The
+texture's own benefit (one upload instead of three uniform-array uploads per converted
+material) applies on ticks where tokens move and scales with the number of converted
+materials; it was not isolated on this 14-material scene. Draw calls fell by 2 from
+material sharing.
 
 Related change, same session: the sky-preset cache and the 100 ms live-broadcast
 throttle (`VisualBroadcastThrottle`) were verified behaviourally at runtime rather than
@@ -383,6 +395,13 @@ not a steady-state cost.
 - **`alpha_to_coverage` for the shadow pass.** Does not help (godotengine/godot#84242).
 - **`visibility_range` to skip distant foliage.** Hidden instances stop casting
   directional shadows entirely (godotengine/godot#98993), which changes lighting.
+- **A process-global shader parameter cannot gate per material.** Moving
+  `occlusion_token_count` to a global shader parameter left `enable_occlusion` (default
+  true) as the only per-material gate, and every grass material the manager never
+  registers ran the fade loop unconditionally. Anything that used to rely on a
+  per-material default of zero needs an explicit per-material opt-in; fixed in ec2e24e by
+  defaulting `enable_occlusion` to false and having `OcclusionFadeManager` set it true on
+  every material it converts or registers.
 
 Grass no longer casts shadows (measured -16% of frame time): Godot runs the shadow
 pass's `fragment()` with the same code as the colour pass (godot-proposals#4443), and
