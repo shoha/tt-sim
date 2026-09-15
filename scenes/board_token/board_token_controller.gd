@@ -390,6 +390,15 @@ func _process(delta: float) -> void:
 		_transform_update_timer += delta
 		if _transform_update_timer >= Constants.NETWORK_TRANSFORM_UPDATE_INTERVAL:
 			_transform_update_timer = 0.0
+			# _unhandled_input()'s mouse-motion branch no longer re-checks authority per
+			# event (it runs ahead of the authority gate so a permission lookup isn't paid
+			# on every motion frame -- see the comment there), so this throttled tick is
+			# the one place that still confirms the gesture is authorized. If CONTROL was
+			# revoked mid-gesture, end it now instead of continuing to rotate/scale and
+			# broadcast indefinitely.
+			if not _has_input_authority():
+				_finalize_rotate_scale()
+				return
 			var board_token = get_parent() as BoardToken
 			if board_token:
 				board_token.transform_updated.emit()

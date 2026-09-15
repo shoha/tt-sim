@@ -74,10 +74,12 @@ static func build_disturbance_array() -> Array:
 ## the same map and, while any zone exists but nothing is submerged, was pushing the
 ## same all-inactive array every frame for no reason. Skips entirely once the
 ## all-inactive array has already been pushed (idle water), and re-pushes once more the
-## instant the last token unregisters so the shader sees the cleared state.
+## instant the last token unregisters (or is pruned, see _prune_freed_bodies()) so the
+## shader sees the cleared state.
 static func flush_disturbances() -> void:
 	if Engine.get_process_frames() == _last_push_frame:
 		return
+	_prune_freed_bodies()
 	if _submerged.is_empty():
 		if _cleared:
 			return
@@ -87,6 +89,23 @@ static func flush_disturbances() -> void:
 		WaterGlbUtils.push_disturbance_points(build_disturbance_array())
 		_cleared = false
 	_last_push_frame = Engine.get_process_frames()
+
+
+## Drop any registered token whose body has been freed without a matching unregister()
+## call (e.g. deleted mid-drag while still submerged -- see unregister()'s doc comment).
+## Runs before the emptiness check in flush_disturbances() so a single freed body left
+## behind can't keep _submerged permanently non-empty and the registry pushing every
+## frame forever -- build_disturbance_array() already skips freed bodies per-call, but
+## never removed them, so flush_disturbances() alone couldn't tell submerged had truly
+## gone empty.
+static func _prune_freed_bodies() -> void:
+	var freed_ids: Array = []
+	for id in _submerged:
+		if not is_instance_valid(_submerged[id]):
+			freed_ids.append(id)
+	for id in freed_ids:
+		_submerged.erase(id)
+		_refcounts.erase(id)
 
 
 ## Test-only: clear all registered tokens so tests don't leak state into each other
