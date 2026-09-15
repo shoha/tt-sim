@@ -157,8 +157,7 @@ static func _build_multimesh_from_transforms(
 	multimesh.mesh = mesh_node.mesh
 
 	multimesh.instance_count = valid_transforms.size()
-	for i in valid_transforms.size():
-		multimesh.set_instance_transform(i, valid_transforms[i])
+	multimesh.buffer = _transforms_to_buffer(valid_transforms)
 
 	var multimesh_instance := MultiMeshInstance3D.new()
 	multimesh_instance.name = mesh_node.name + "_MultiMesh" + name_suffix
@@ -213,6 +212,40 @@ static func _collect_valid_transforms(rows: Array) -> Array[Transform3D]:
 		if xform != null:
 			valid.append(xform)
 	return valid
+
+
+## Flattens every Transform3D into one PackedFloat32Array in MultiMesh.buffer's
+## TRANSFORM_3D layout (12 floats/instance, row-major over the 3x4 transform: each row is
+## [basis.x.<axis>, basis.y.<axis>, basis.z.<axis>, origin.<axis>] for axis in x, y, z), so
+## _build_multimesh_from_transforms can upload every instance in one MultiMesh.buffer
+## assignment instead of one set_instance_transform() call per instance (measured: ~52k
+## calls for a dense species on Sandy Clearing). Layout confirmed against the Godot 4
+## MultiMesh.buffer docs and, separately, against a real headless probe: a MultiMesh built
+## this way round-trips through its own `buffer` getter byte-for-byte, unlike
+## set_instance_transform()'s loop form, whose `buffer` getter reads back empty under the
+## headless/dummy rendering driver -- see test_transforms_to_buffer_matches_the_documented_layout
+## for why this function (not a MultiMesh round trip via get_instance_transform(), which
+## always reads back identity headless regardless of which path built it -- see
+## _row_to_transform's docstring) is what's actually tested.
+static func _transforms_to_buffer(valid_transforms: Array[Transform3D]) -> PackedFloat32Array:
+	var buffer := PackedFloat32Array()
+	buffer.resize(valid_transforms.size() * 12)
+	for i in valid_transforms.size():
+		var xform: Transform3D = valid_transforms[i]
+		var offset := i * 12
+		buffer[offset + 0] = xform.basis.x.x
+		buffer[offset + 1] = xform.basis.y.x
+		buffer[offset + 2] = xform.basis.z.x
+		buffer[offset + 3] = xform.origin.x
+		buffer[offset + 4] = xform.basis.x.y
+		buffer[offset + 5] = xform.basis.y.y
+		buffer[offset + 6] = xform.basis.z.y
+		buffer[offset + 7] = xform.origin.y
+		buffer[offset + 8] = xform.basis.x.z
+		buffer[offset + 9] = xform.basis.y.z
+		buffer[offset + 10] = xform.basis.z.z
+		buffer[offset + 11] = xform.origin.z
+	return buffer
 
 
 ## Converts one [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] row into a Transform3D, or
