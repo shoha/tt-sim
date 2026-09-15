@@ -91,6 +91,10 @@ var _show_cursor_dot: bool = false
 ## Dirty flag — only redraw when something changed
 var _needs_redraw: bool = false
 
+## Deferred preview raycast — mouse motion sets this instead of raycasting immediately;
+## _process() consumes it at most once per frame.
+var _preview_dirty: bool = false
+
 ## Camera state tracking — detect zoom/pan so we redraw when the camera moves
 var _last_camera_size: float = 0.0
 var _last_camera_pos: Vector3 = Vector3.ZERO
@@ -110,6 +114,10 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_check_camera_changed()
+	# Raycast at most once per frame, regardless of how many motion events arrived.
+	if _preview_dirty:
+		_preview_dirty = false
+		_update_preview()
 	if not _needs_redraw:
 		return
 	_needs_redraw = false
@@ -195,7 +203,7 @@ func handle_input(event: InputEvent) -> bool:
 		return false
 
 	if event is InputEventMouseMotion:
-		_update_preview()
+		_preview_dirty = true
 		return false
 
 	if event is InputEventMouseButton:

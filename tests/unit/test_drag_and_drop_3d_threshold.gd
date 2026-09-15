@@ -276,3 +276,43 @@ func test_get_3d_mouse_position_uses_passed_position_not_viewport_cursor() -> vo
 	assert_null(
 		miss_result, "Raycast through a far-off-screen passed position should miss the target"
 	)
+
+
+func test_two_motion_events_same_frame_defer_raycast_to_process() -> void:
+	var drag_and_drop := _make_drag_and_drop()
+	var object := _make_dragging_object()
+	add_child_autofree(object)
+
+	var press_position := _press_event()
+	drag_and_drop.set_dragging_object(press_position, object)
+	var activate_event := InputEventMouseMotion.new()
+	activate_event.position = press_position + Vector2(drag_and_drop.drag_threshold_px + 1.0, 0)
+	drag_and_drop._input(activate_event)
+	assert_true(drag_and_drop.is_dragging(), "Setup: drag should be active")
+
+	# Two motion events injected in the same frame during an active drag must not each
+	# raycast synchronously -- only the LAST one's position should end up pending.
+	var first_move := InputEventMouseMotion.new()
+	first_move.position = Vector2(300, 300)
+	drag_and_drop._input(first_move)
+
+	var second_move := InputEventMouseMotion.new()
+	second_move.position = Vector2(320, 340)
+	drag_and_drop._input(second_move)
+
+	assert_true(
+		drag_and_drop._pointer_dirty,
+		"Motion during an active drag should defer to a pending raycast, not fire immediately"
+	)
+	assert_eq(
+		drag_and_drop._pending_pointer_position,
+		second_move.position,
+		"Pending position should be the LAST event's position, not the first"
+	)
+
+	# No test raycast target is set up in this harness (see _make_dragging_object), so the
+	# consumed raycast itself cannot be observed here; assert on the dirty flag and stored
+	# position only, per the brief's fallback for an unobservable _update_target_position call.
+	drag_and_drop._process(0.016)
+
+	assert_false(drag_and_drop._pointer_dirty, "_process() should consume the pending raycast once")
