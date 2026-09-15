@@ -321,6 +321,7 @@ The bridge only activates when Godot is launched with `-- --validation-bridge`. 
 - **`game_controls` returns at most 200 Controls and says so.** The response carries a `truncated` boolean; when it is `true` the walk hit the cap, and a control you cannot find may be past the cap rather than absent from the scene. Narrow the search (`visibleOnly`) or use `game_click_control`, which matches by name/path/text rather than requiring you to spot the entry
 - **Injected clicks cannot reach `OptionButton` popup menu items.** The popup is a Godot `PopupMenu`, which is a `Window`, not a `Control` — `game_controls` cannot see its entries and `game_click_control` cannot click them. Drive the popup with `game_key` (arrow keys, then Enter) instead. Note also that the popup drops the first keypress and resets to index 0 every time it opens
 - **`game_eval` runs against the current scene, not the tree root.** Bare autoload names do not resolve — use `get_node("/root/GameState")` instead of `GameState`. `find_child` also needs `find_child("Name", true, false)` to see nodes added without an owner, which includes `GameMap`
+- **`game_eval` cannot reach Godot engine singletons.** It evaluates the expression through `Expression`, which does not resolve global singletons like `Input` — an expression referencing `Input` fails to parse/resolve. Project autoloads are still reachable via `get_node("/root/<Autoload>")` as above; a true engine singleton (`Input`, `Engine`, etc.) is simply unavailable through `game_eval`
 
 ## CI/CD
 
