@@ -196,9 +196,12 @@ func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -
 	# with settle := true so the token lands on terrain instead of hovering.
 	var spawn_pos := _get_camera_ground_position()
 	var game_map := _level_play_controller.get_game_map()
-	if game_map:
+	if game_map and game_map.world_viewport:
+		# world_viewport.world_3d, not get_world_3d(): the SubViewport doesn't set
+		# own_world_3d today so the two worlds coincide, but this explicit form keeps
+		# reading the world tokens actually live in if that flag ever changes.
 		var resolved := DragPlaceController.raycast_terrain_down(
-			game_map.get_world_3d().direct_space_state, spawn_pos
+			game_map.world_viewport.world_3d.direct_space_state, spawn_pos
 		)
 		if resolved != Vector3.INF:
 			spawn_pos = resolved + Vector3(0, DragPlaceController.PLACE_CLEARANCE, 0)
