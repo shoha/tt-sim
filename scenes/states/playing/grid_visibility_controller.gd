@@ -26,6 +26,7 @@ var _grid_show_on_measure: bool = true  # From LevelData
 var _grid_show_on_drag: bool = true  # From LevelData
 var _drag_highlight_active: bool = false
 var _drag_highlight_start_pos: Vector3 = Vector3.ZERO
+var _last_highlight_cell: Vector2 = Vector2.INF  # sentinel: no highlight pushed yet this drag
 
 
 ## Wire this controller to its owning GameMap.
@@ -68,9 +69,15 @@ func _on_drag_stopped_grid(_obj: DraggingObject3D) -> void:
 	UIManager.remove_hint(InputProfile.label(&"free_move"))
 	if _game_map._grid_overlay:
 		_game_map._grid_overlay.clear_drag_highlight()
+	_last_highlight_cell = Vector2.INF
 
 
-## Update the grid shader's highlighted cell each frame during a drag.
+## Update the grid shader's highlighted cell each frame during a drag. Only pushes to
+## GridOverlay when the snapped cell actually changed since the last push -- GridOverlay
+## snaps drag_node._target_drag_position to an integer cell (see set_drag_highlight()),
+## and the raw world position changes every frame during a drag even though the cell it
+## snaps to usually doesn't, so recomputing the same snap here avoids three redundant
+## shader-parameter writes per frame while a token sits still within one cell.
 func _update_drag_cell_highlight() -> void:
 	if (
 		not _drag_highlight_active
@@ -81,6 +88,10 @@ func _update_drag_cell_highlight() -> void:
 	var drag_node := _game_map.drag_and_drop_node
 	if not drag_node.is_dragging() or not drag_node._has_target_position:
 		return
+	var current_cell := _game_map._grid_overlay.snapped_cell(drag_node._target_drag_position)
+	if current_cell == _last_highlight_cell:
+		return
+	_last_highlight_cell = current_cell
 	_game_map._grid_overlay.set_drag_highlight(
 		drag_node._target_drag_position, _drag_highlight_start_pos
 	)
@@ -95,6 +106,11 @@ func configure_grid(level_data: LevelData) -> void:
 	_grid_explicit_toggle = level_data.grid_visible
 	_grid_show_on_measure = level_data.grid_show_on_measure
 	_grid_show_on_drag = level_data.grid_show_on_drag
+	# A mid-drag reconfigure (scale edit, Cancel) changes cell_size/grid_origin out from
+	# under an in-progress highlight; without this reset, the next
+	# _update_drag_cell_highlight() could compare a freshly-recomputed cell against a stale
+	# one from before the reconfigure and wrongly skip pushing the new highlight.
+	_last_highlight_cell = Vector2.INF
 
 	if _game_map._grid_overlay:
 		_game_map._grid_overlay.configure(
@@ -151,6 +167,7 @@ func reset_grid_state() -> void:
 	_grid_auto_show_drag = false
 	_grid_level_default = false
 	_drag_highlight_active = false
+	_last_highlight_cell = Vector2.INF
 	if _game_map._grid_overlay:
 		_game_map._grid_overlay.clear_drag_highlight()
 		_game_map._grid_overlay.hide_grid_immediate()

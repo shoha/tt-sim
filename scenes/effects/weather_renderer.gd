@@ -47,22 +47,33 @@ var _emitter_tweens: Dictionary = {}
 var _fog_tween: Tween = null
 
 
+func _ready() -> void:
+	set_process(false)
+
+
 func setup(camera: Camera3D, environment_manager: LevelEnvironmentManager) -> void:
 	_camera = camera
 	_environment_manager = environment_manager
 	_create_emitters()
+	_refresh_process_state()
 
 
 func _process(_delta: float) -> void:
 	if not _camera or not is_instance_valid(_camera):
 		return
+	_update_emitter_positions()
+
+
+## Enable _process only while at least one emitter is actively emitting -- called
+## whenever an emitter's `emitting` flag changes (see _transition_emitter()) so idle
+## weather (all intensities at zero) costs nothing per frame.
+func _refresh_process_state() -> void:
 	var any_active := (
 		(_rain_emitter and _rain_emitter.emitting)
 		or (_snow_emitter and _snow_emitter.emitting)
 		or (_wind_emitter and _wind_emitter.emitting)
 	)
-	if any_active:
-		_update_emitter_positions()
+	set_process(any_active)
 
 
 func _create_emitters() -> void:
@@ -340,6 +351,7 @@ func _transition_emitter(
 	if from <= 0.0 and to > 0.0:
 		emitter.amount_ratio = 0.0
 		emitter.emitting = true
+		_refresh_process_state()
 
 	var existing_tween: Tween = _emitter_tweens.get(emitter_name)
 	if existing_tween and existing_tween.is_valid():
@@ -351,6 +363,7 @@ func _transition_emitter(
 		func() -> void:
 			if to <= 0.0:
 				emitter.emitting = false
+				_refresh_process_state()
 	)
 	_emitter_tweens[emitter_name] = tween
 

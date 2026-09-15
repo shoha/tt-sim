@@ -135,6 +135,27 @@ func _unhandled_input(event: InputEvent) -> void:
 		focus_requested.emit(rigid_body.global_position)
 		return
 
+	# Mouse motion only drives an already-active rotate/scale gesture -- authority was
+	# already confirmed by the button press that started the gesture (see the MMB/R+LMB
+	# branches below), so handle it here and return before the authority lookup, which
+	# otherwise ran on every single mouse-motion event even though motion never needs a
+	# fresh permission check. Mouse-motion events fire far more often than button presses.
+	if event is InputEventMouseMotion:
+		if _rotating:
+			_handle_rotation(event)
+		elif _scaling:
+			_handle_scaling(event)
+		return
+
+	# Everything below only ever acts on an InputEventMouseButton; return before the
+	# authority lookup for anything else (unrelated keys, etc.) instead of paying for a
+	# permission check that no branch here would use. This early return is safe only while
+	# rotate_model and the other gated actions below stay mouse-bound (MMB drag, R+LMB,
+	# right-click context menu) -- a keyboard rebind of any of them would need this gate
+	# widened to check for the relevant InputEventKey too.
+	if not (event is InputEventMouseButton):
+		return
+
 	# Gate all mutating input behind authority check
 	# Context menu is allowed for all (read-only viewing), but actions within may be gated
 	if not _has_input_authority():
@@ -234,12 +255,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		_finalize_rotate_scale()
 		get_viewport().set_input_as_handled()
 		return
-
-	if _rotating and event is InputEventMouseMotion:
-		_handle_rotation(event)
-
-	if _scaling and event is InputEventMouseMotion:
-		_handle_scaling(event)
 
 
 ## Shared finalize logic for ending a rotate/scale gesture (MMB or R+LMB).
@@ -378,6 +393,15 @@ func _process(delta: float) -> void:
 		_transform_update_timer += delta
 		if _transform_update_timer >= Constants.NETWORK_TRANSFORM_UPDATE_INTERVAL:
 			_transform_update_timer = 0.0
+			# _unhandled_input()'s mouse-motion branch no longer re-checks authority per
+			# event (it runs ahead of the authority gate so a permission lookup isn't paid
+			# on every motion frame -- see the comment there), so this throttled tick is
+			# the one place that still confirms the gesture is authorized. If CONTROL was
+			# revoked mid-gesture, end it now instead of continuing to rotate/scale and
+			# broadcast indefinitely.
+			if not _has_input_authority():
+				_finalize_rotate_scale()
+				return
 			var board_token = get_parent() as BoardToken
 			if board_token:
 				board_token.transform_updated.emit()
