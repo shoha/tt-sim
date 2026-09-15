@@ -250,13 +250,10 @@ func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 ## environment, foliage, sun, water style, lo-fi, weather. It does not write
 ## level data, except that apply_light_intensity_scale() mirrors the scale into
 ## active_level_data (already the same value for every caller). Grid scale
-## (grid_cell_size, display_unit, display_unit_per_cell) is not networked and is
-## not re-applied here: GridVisibilityController.configure_grid() unconditionally
-## resets grid auto-show state on every call, so running it on every broadcast
-## receive (up to 10 Hz while the host drags a slider) would clear a client's
-## auto-show-on-measure/-on-drag flags mid-interaction. A caller that changed the
-## grid fields on level data must call update_measure_tool_scale() itself
-## afterwards (the drawer's Cancel path does).
+## (grid_cell_size, display_unit, display_unit_per_cell) is not networked -- it
+## never appears in the broadcast payload -- so it is not re-applied here.
+## Callers that change those fields on level data (the drawer's Cancel path)
+## call update_measure_tool_scale() themselves.
 func apply_visual_state(state: LevelVisualState) -> void:
 	apply_light_intensity_scale(state.light_intensity_scale)
 	apply_environment_settings(state.environment_preset, state.environment_overrides)
@@ -309,6 +306,12 @@ func track_network_token(token: BoardToken) -> void:
 ## Forget a network-tracked token after the host removed it. See TokenSpawner.untrack_network_token.
 func untrack_network_token(network_id: String) -> void:
 	_token_spawner.untrack_network_token(network_id)
+
+
+## O(1) lookup by network id through TokenSpawner's reverse index. Use this
+## rather than reading spawned_tokens, which is keyed by placement id.
+func find_token_by_network_id(network_id: String) -> BoardToken:
+	return _token_spawner.find_token_by_network_id(network_id)
 
 
 ## Check if level loading is in progress (async loading)

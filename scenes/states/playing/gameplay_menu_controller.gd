@@ -314,10 +314,9 @@ func _revert_edit_mode_values() -> void:
 	# from it; apply_visual_state() itself takes the state object.
 	_original_state.apply_to_level_data(level_data)
 	_level_play_controller.apply_visual_state(_original_state)
-	# apply_visual_state() deliberately does not reconfigure the grid (grid scale
-	# is not broadcast, and reconfiguring it on every broadcast reset the grid
-	# auto-show flags), but the measure tool, snap and overlay read the grid
-	# fields at configure time, so it must be re-applied explicitly here.
+	# apply_visual_state() does not touch the grid fields. The measure tool, snap
+	# and overlay read them at configure time, so they must be re-applied
+	# explicitly here.
 	_level_play_controller.update_measure_tool_scale()
 	# A pending partial batch must not land after this full snapshot.
 	_visual_broadcast.drop()
