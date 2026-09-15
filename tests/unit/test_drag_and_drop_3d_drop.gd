@@ -98,3 +98,39 @@ func test_whoosh_threshold_is_below_max_speed() -> void:
 		DraggableToken.WHOOSH_SPEED_MAX,
 		"Whoosh threshold must be reachable and below the max-pitch speed"
 	)
+
+
+func _make_draggable_token() -> DraggableToken:
+	var rigid_body := RigidBody3D.new()
+	var collision_shape := CollisionShape3D.new()
+	collision_shape.shape = BoxShape3D.new()
+	rigid_body.add_child(collision_shape)
+	var token := DraggableToken.new()
+	token.rigid_body = rigid_body
+	token.collision_shape = collision_shape
+	token.add_child(rigid_body)
+	add_child_autofree(token)
+	return token
+
+
+func test_whoosh_fires_once_per_burst_above_threshold() -> void:
+	var token := _make_draggable_token()
+	var fast := DraggableToken.WHOOSH_SPEED_THRESHOLD + 1.0
+	assert_true(token._should_play_whoosh(fast, 0.016), "First crossing fires")
+	assert_false(token._should_play_whoosh(fast, 0.016), "Sustained speed does not refire")
+	assert_false(
+		token._should_play_whoosh(fast, 1.0), "Still no refire even after the cooldown expires"
+	)
+
+
+func test_whoosh_rearms_after_speed_drops_below_threshold() -> void:
+	var token := _make_draggable_token()
+	var fast := DraggableToken.WHOOSH_SPEED_THRESHOLD + 1.0
+	assert_true(token._should_play_whoosh(fast, 0.016))
+	assert_false(token._should_play_whoosh(0.0, 1.0), "Slow frame re-arms without firing")
+	assert_true(token._should_play_whoosh(fast, 0.016), "Next crossing fires again")
+
+
+func test_whoosh_below_threshold_never_fires() -> void:
+	var token := _make_draggable_token()
+	assert_false(token._should_play_whoosh(DraggableToken.WHOOSH_SPEED_THRESHOLD - 0.01, 0.016))
