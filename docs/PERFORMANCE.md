@@ -340,7 +340,7 @@ against; it is recorded here so the next reader does not repeat it.
 B2, with the opt-in gate, sits inside the A spread: the per-fragment `texelFetch` on
 registered tree materials is not measurable on this scene. The CPU-side occlusion tick
 fell from 0.061 to 0.039 ms; on static tokens nearly all of that is the skip-if-unchanged
-path (entries are still collected each tick), so 38% is the static-token best case. The
+path (entries are still collected each tick), so roughly a third off is the static-token best case. The
 texture's own benefit (one upload instead of three uniform-array uploads per converted
 material) applies on ticks where tokens move and scales with the number of converted
 materials; it was not isolated on this 14-material scene. Draw calls fell by 2 from
