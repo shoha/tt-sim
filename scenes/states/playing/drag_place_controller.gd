@@ -222,15 +222,17 @@ static func raycast_terrain_down(
 ## falling back to the existing Y=0 ground-plane maths when nothing on
 ## TERRAIN_COLLISION_LAYER is hit (e.g. camera pointing off the map).
 func _get_ground_position(screen_pos: Vector2) -> Vector3:
-	if not _game_map.camera_node or not _game_map.world_viewport:
+	if not _game_map.camera_node:
 		return Vector3.INF
 	# world_viewport.world_3d, not get_world_3d() -- see the comment in
-	# _complete_drag_place() above.
-	var terrain_pos := raycast_terrain(
-		_game_map.camera_node, _game_map.world_viewport.world_3d.direct_space_state, screen_pos
-	)
-	if terrain_pos != Vector3.INF:
-		return terrain_pos
+	# _complete_drag_place() above. Only the raycast needs the viewport; the
+	# plane maths below works from the camera alone.
+	if _game_map.world_viewport:
+		var terrain_pos := raycast_terrain(
+			_game_map.camera_node, _game_map.world_viewport.world_3d.direct_space_state, screen_pos
+		)
+		if terrain_pos != Vector3.INF:
+			return terrain_pos
 
 	var origin := _game_map.camera_node.project_ray_origin(screen_pos)
 	var direction := _game_map.camera_node.project_ray_normal(screen_pos)
