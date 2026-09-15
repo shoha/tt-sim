@@ -145,7 +145,7 @@ func _on_ready() -> void:
 	# Configure drawer
 	edge = DrawerEdge.RIGHT
 	drawer_width = 350.0
-	tab_icon = preload("res://assets/icons/ui/Sun.svg")
+	tab_icon = preload("res://assets/icons/ui/sun.svg")
 	play_sounds = true
 
 	# Increase content padding inside the drawer panel.

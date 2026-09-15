@@ -15,7 +15,7 @@ var _player_list_vbox: VBoxContainer
 
 func _on_ready() -> void:
 	drawer_width = 200.0
-	tab_icon = preload("res://assets/icons/ui/Users.svg")
+	tab_icon = preload("res://assets/icons/ui/users.svg")
 
 	_build_player_list_ui()
 	_update_player_list()
