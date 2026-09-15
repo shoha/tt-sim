@@ -17,6 +17,8 @@ This guide documents the UI infrastructure and reusable components available in 
 - [Overlay & Modal System](#overlay--modal-system)
 - [LevelEditPanel (In-Game Edit Mode)](#leveleditpanel-in-game-edit-mode)
 - [Measure Tool](#measure-tool)
+- [Token Context Menu](#token-context-menu)
+- [Asset Browser](#asset-browser)
 
 ---
 
@@ -788,6 +790,66 @@ Uses `MapOverlayUtils` for overlay and label creation. Renders on `Constants.LAY
 - Created by `GameMap.setup_drag_ruler()` during level setup.
 - Connects to `DragAndDrop3D` signals: `dragging_started`, `dragging_stopped`, `dragging_cancelled`.
 - Deactivated automatically on level clear via `GameMap.reset_grid_state()`.
+
+---
+
+## Token Context Menu
+
+Right-click a token to open `TokenContextMenu` (`scenes/states/playing/token_context_menu.tscn` /
+`.gd`), managed by `TokenContextMenuController` (`scenes/states/playing/token_context_menu_controller.gd`),
+a sub-component of `GameMap`.
+
+### Content
+
+- **Title** — shows the token's current name (`target_token.token_name`).
+- **HP adjustment, visibility toggle, reset transform** — existing actions.
+- **Rename** — a `LineEdit` (`%RenameInput`) pre-filled with the current name, plus a button;
+  pressing Enter (the LineEdit's `text_submitted` signal) submits the same as clicking the button.
+  GM-only.
+- **Duplicate** — GM-only button.
+- **Remove Token** — GM-only button, styled as the danger variant.
+
+### GM Gating
+
+Rename, Duplicate, and Remove Token (plus their separator) are visible only when
+`NetworkManager.has_gm_access()` is true — `TokenContextMenu._update_menu_content()` sets
+`rename_container.visible`, `duplicate_button.visible`, and `remove_button.visible` accordingly.
+
+### Remove: Confirmation and Undo
+
+Requesting Remove closes the context menu first (`_context_menu.close_menu()`) before showing
+`UIManager.show_danger_confirmation("Remove token", ..., "Remove")` — the menu closes before the
+dialog opens so its own click-outside handler doesn't swallow the dialog's first click. On confirm,
+`TokenContextMenuController._remove_token_confirmed()` records
+`GameplayActionHistory.record_token_removal(token, TokenState.from_board_token(token))` (when the
+local peer has GM access) before calling `LevelPlayController.remove_token(token)`, so Ctrl+Z
+restores both the token and its level placement.
+
+### Rename and Duplicate
+
+- **Rename** emits `rename_requested(token, new_name)`; the controller records a `"token_name"`
+  property change via `GameplayActionHistory.record_property_change()` — so Ctrl+Z restores the old
+  name through `GameplayActionHistory.set_rename_callable()` routing to `TokenSpawner.rename_token()`
+  — then calls `LevelPlayController.rename_token()`.
+- **Duplicate** emits `duplicate_requested(token)`; the controller calls
+  `LevelPlayController.duplicate_token(token)`, which spawns a copy of the same asset one grid cell
+  over in +X (`LevelData.grid_cell_size`, falling back to 1.5 m without an active level), then copies
+  name, max health, and current health onto the new token.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) Token System / TokenSpawner for the storage-level details.
+
+---
+
+## Asset Browser
+
+`AssetBrowserContainer` (`scenes/states/playing/asset_browser_container.gd`) wraps `AssetBrowser` and
+manages the overlay.
+
+- **Stays open while placing** — dragging an asset out of the browser (`asset_drag_started`) no
+  longer closes the overlay, so the player can see the viewport behind it and start another drag
+  without reopening it. Double-click placement (`asset_selected`) still closes it.
+- **Search filters persist** — filters are not cleared when the browser closes and reopens; they're
+  only cleared when the player clears them explicitly.
 
 ---
 

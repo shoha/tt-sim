@@ -832,6 +832,28 @@ BoardToken (Node3D)
 
 See [CONVENTIONS.md](CONVENTIONS.md) for the full token transform hierarchy, placeholder upgrade flow, drag-and-drop integration, and animation system details.
 
+### TokenSpawner
+
+`TokenSpawner` (`scenes/states/playing/token_spawner.gd`) is a plain-object sub-component of `LevelPlayController` (not a Node) that owns spawned-token storage — the `placement_id -> BoardToken` map and the `network_id` reverse index — together with the operations that mutate it, the matching `TokenPlacement`, and `GameState`:
+
+- `remove_token(token) -> bool` — disconnects the token's state signals, forgets it in both indices, removes its `TokenPlacement` from the active `LevelData`, removes it from `GameState`, and broadcasts the removal. Requires authority; does not record undo (the caller owns action history, since it knows to record before removing).
+- `rename_token(token, new_name)` — trims and ignores blank/whitespace-only names, updates the live token, the matching `TokenPlacement.token_name` if one exists, and calls `notify_token_properties_changed()`.
+- `notify_token_properties_changed(token)` — public wrapper around the same property-change handler used for signal-driven changes (health, visibility, status effects), so a rename syncs to `GameState` and broadcasts to clients the same way.
+- `_track_token_from_undo()` — re-registers a token re-created by `_on_removal_undo_requested` (Ctrl+Z on a removal), restoring both the spawner's indices and the level placement.
+
+`LevelPlayController.remove_token()` / `rename_token()` are same-named forwards to the `TokenSpawner` methods above (kept as same-named wrappers since the context menu and `GameplayActionHistory`'s undo/redo replay call them on `LevelPlayController`). `LevelPlayController.duplicate_token(token) -> BoardToken` spawns a copy of the same asset one grid cell over in +X (`LevelData.grid_cell_size`, or 1.5 m without an active level), then copies name, max health, and current health onto the new token via `rename_token()` / `set_max_health()` / `heal()` / `take_damage()`.
+
+TokenSpawner is the single place removal and rename touch storage, placement data, and `GameState` together — never `queue_free()` a token node directly.
+
+### Drag-to-Place (Asset Browser)
+
+`DragPlaceController` (`scenes/states/playing/drag_place_controller.gd`), a child `Node` of `GameMap`, handles dragging an asset out of the asset browser and dropping it on the map to spawn a new token — distinct from `DragAndDrop3D`'s dragging of already-placed tokens on the board.
+
+- `raycast_terrain(camera, space_state, screen_pos)` — a static, independently-testable raycast against physics layer 1 (terrain/board) only, up to 1000 world meters, used to land the new token on the actual terrain surface (including slopes) under the cursor.
+- Falls back to the existing Y=0 ground-plane intersection when the terrain raycast misses (e.g. camera pointed off the map).
+- Dropping while the mouse is over GUI (`GameMap.is_mouse_over_gui()`) cancels the placement instead of spawning.
+- On a successful drop, calls `LevelPlayController.spawn_asset(..., settle := true)`, which drops the token onto the ground via `DraggableToken.drop_to_ground()` after positioning — needed because the terrain hit can still land slightly above the true surface.
+
 ### GameplayMenuController
 
 `GameplayMenuController` (`scenes/states/playing/gameplay_menu_controller.gd`) routes between gameplay UI and `LevelPlayController`:
