@@ -218,6 +218,9 @@ func _update_visibility_visuals() -> void:
 			# Visible to everyone
 			rigid_body.visible = true
 			_set_mesh_transparency(rigid_body, 1.0)
+			# The player-side hide branch below clears input_ray_pickable; re-derive it
+			# from the permission state so a re-shown token can be hovered again.
+			set_interactive(_is_interactive)
 		elif NetworkManager.has_gm_access():
 			# GM/local: show as semi-transparent so they can still see and interact
 			rigid_body.visible = true
