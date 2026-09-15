@@ -110,12 +110,6 @@ func _on_asset_drag_started(
 	asset_drag_started.emit(pack_id, asset_id, variant_id, icon)
 
 
-## Clear all search filters
-func clear_filters() -> void:
-	for tab in _tabs.values():
-		tab.clear_filter()
-
-
 ## Focus the search field in the current tab
 func focus_current_search() -> void:
 	var current_tab = tab_container.get_current_tab_control()

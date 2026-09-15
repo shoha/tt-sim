@@ -276,11 +276,18 @@ func _remove_token_confirmed(token: BoardToken) -> void:
 	if not is_instance_valid(token):
 		return
 	var removed_name: String = token.token_name
-	if _game_map._action_history and NetworkManager.has_gm_access():
-		_game_map._action_history.record_token_removal(token, TokenState.from_board_token(token))
+	# The TokenState has to be captured before the removal (it reads the live
+	# token, which remove_token() untracks and animates away), but recorded only
+	# once the removal actually happened: remove_token() returns false without
+	# authority, and an undo entry for a token still on the board would re-create
+	# a duplicate of it. Same reason the toast waits for the true return.
+	var can_record: bool = _game_map._action_history != null and NetworkManager.has_gm_access()
+	var token_state: TokenState = TokenState.from_board_token(token) if can_record else null
 	var lpc := _game_map.get_level_play_controller()
-	if lpc:
-		lpc.remove_token(token)
+	if not lpc or not lpc.remove_token(token):
+		return
+	if token_state:
+		_game_map._action_history.record_token_removal(token, token_state)
 	UIManager.show_info('Removed "%s"' % removed_name)
 
 
