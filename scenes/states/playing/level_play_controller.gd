@@ -401,17 +401,17 @@ func _on_visual_settings_received(settings: Dictionary) -> void:
 		if game_map:
 			game_map.apply_lofi_overrides(settings["lofi_overrides"])
 		if active_level_data:
-			active_level_data.lofi_overrides = settings["lofi_overrides"].duplicate()
+			active_level_data.lofi = LofiSettings.from_dict(settings["lofi_overrides"])
 	if settings.has("weather_overrides"):
 		var game_map = get_game_map()
 		if game_map:
 			game_map.apply_weather_overrides(settings["weather_overrides"])
 		if active_level_data:
-			active_level_data.weather_overrides = settings["weather_overrides"].duplicate()
+			active_level_data.weather = WeatherSettings.from_dict(settings["weather_overrides"])
 	if settings.has("foliage_overrides"):
 		apply_foliage_overrides(settings["foliage_overrides"])
 		if active_level_data:
-			active_level_data.foliage_overrides = settings["foliage_overrides"].duplicate()
+			active_level_data.foliage = FoliageSettings.from_dict(settings["foliage_overrides"])
 	if settings.has("sun_settings"):
 		var sun := SunSettings.from_dict(settings["sun_settings"])
 		apply_sun_settings(sun)

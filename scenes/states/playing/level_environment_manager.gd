@@ -137,7 +137,7 @@ func _collect_wind_materials(node: Node) -> void:
 
 ## Re-tune every cached wind-sway material's speed/amplitude in place, with no
 ## map reload. overrides uses the same flat key shape as
-## LevelData.foliage_overrides ("<category>_sway_speed" / "<category>_sway_amplitude").
+## LevelData.foliage.to_dict() ("<category>_sway_speed" / "<category>_sway_amplitude").
 func apply_foliage_overrides(overrides: Dictionary) -> void:
 	for category in _wind_materials:
 		var preset := WindFoliage.get_effective_preset(category, overrides)
@@ -235,7 +235,7 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 	# not a skipped call that leaves a previous level's live values in place.
 	if is_instance_valid(_game_map):
 		var lofi_config := Constants.LOFI_DEFAULTS.duplicate()
-		lofi_config.merge(level_data.lofi_overrides, true)
+		lofi_config.merge(level_data.lofi.to_dict(), true)
 		_game_map.apply_lofi_overrides(lofi_config)
 
 	if level_data.environment_preset != "":

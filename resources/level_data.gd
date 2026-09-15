@@ -57,20 +57,18 @@ const FORMAT_VERSION: int = 1
 
 ## Visual Effects (lo-fi shader)
 @export_group("Effects")
-## Optional overrides for lo-fi post-processing shader parameters
-## Keys: "pixelation", "saturation", "color_levels", "dither_strength",
-##       "vignette_strength", "vignette_radius", "grain_intensity"
-## Empty dictionary uses defaults from the scene/shader
-@export var lofi_overrides: Dictionary = {}
+## Lo-fi post-processing parameters. Serialised under the "lofi_overrides" key
+## as a complete dictionary; older files with sparse dictionaries load with
+## defaults for the missing keys. See resources/lofi_settings.gd.
+@export var lofi: LofiSettings = LofiSettings.default()
 
-## Weather effect intensities (0.0 = off, 1.0 = max)
-## Keys: "rain_intensity", "snow_intensity", "fog_intensity", "wind_intensity"
-@export var weather_overrides: Dictionary = {}
+## Weather effect intensities. Serialised under "weather_overrides". See
+## resources/weather_settings.gd.
+@export var weather: WeatherSettings = WeatherSettings.default()
 
-## Wind-sway tuning overrides, per WindFoliage category.
-## Keys: "tree_sway_speed", "tree_sway_amplitude", "grass_sway_speed", "grass_sway_amplitude"
-## Empty dictionary uses the defaults from WindFoliage.PRESETS.
-@export var foliage_overrides: Dictionary = {}
+## Wind-sway tuning per WindFoliage category. Serialised under
+## "foliage_overrides". See resources/foliage_settings.gd.
+@export var foliage: FoliageSettings = FoliageSettings.default()
 
 ## Typed visual configuration (sun and shadow today). Replaced the flat
 ## sun_overrides dictionary in format version 1; pre-version levels are migrated
@@ -129,6 +127,17 @@ func _set(property: StringName, value: Variant) -> bool:
 	if property == &"sun_overrides" and value is Dictionary:
 		visual_settings = VisualSettings.new()
 		visual_settings.sun = SunSettings.from_legacy(value)
+		return true
+	# Pre-typed .tres levels carry these three as Dictionaries; the JSON path goes
+	# through from_dict() and never reaches here.
+	if property == &"lofi_overrides" and value is Dictionary:
+		lofi = LofiSettings.from_dict(value)
+		return true
+	if property == &"weather_overrides" and value is Dictionary:
+		weather = WeatherSettings.from_dict(value)
+		return true
+	if property == &"foliage_overrides" and value is Dictionary:
+		foliage = FoliageSettings.from_dict(value)
 		return true
 	return false
 
@@ -215,9 +224,9 @@ func duplicate_level() -> LevelData:
 	new_level.environment_preset = environment_preset
 	new_level.environment_overrides = environment_overrides.duplicate()
 	new_level.water_style = water_style
-	new_level.lofi_overrides = lofi_overrides.duplicate()
-	new_level.weather_overrides = weather_overrides.duplicate()
-	new_level.foliage_overrides = foliage_overrides.duplicate()
+	new_level.lofi = lofi.copy_settings()
+	new_level.weather = weather.copy_settings()
+	new_level.foliage = foliage.copy_settings()
 	new_level.visual_settings = visual_settings.copy_settings()
 	new_level.grid_cell_size = grid_cell_size
 	new_level.display_unit = display_unit
@@ -290,9 +299,9 @@ func to_dict() -> Dictionary:
 		"environment_preset": environment_preset,
 		"environment_overrides": EnvironmentPresets.overrides_to_json(environment_overrides),
 		"water_style": water_style,
-		"lofi_overrides": lofi_overrides.duplicate(),
-		"weather_overrides": weather_overrides.duplicate(),
-		"foliage_overrides": foliage_overrides.duplicate(),
+		"lofi_overrides": lofi.to_dict(),
+		"weather_overrides": weather.to_dict(),
+		"foliage_overrides": foliage.to_dict(),
 		"visual_settings": visual_settings.to_dict(),
 		"grid_cell_size": grid_cell_size,
 		"display_unit": display_unit,
@@ -328,12 +337,9 @@ static func from_dict(data: Dictionary) -> LevelData:
 		data.get("environment_overrides", {})
 	)
 	level.water_style = data.get("water_style", "stylized")
-	var lofi_raw = data.get("lofi_overrides", {})
-	level.lofi_overrides = lofi_raw.duplicate() if lofi_raw is Dictionary else {}
-	var weather_raw = data.get("weather_overrides", {})
-	level.weather_overrides = weather_raw.duplicate() if weather_raw is Dictionary else {}
-	var foliage_raw = data.get("foliage_overrides", {})
-	level.foliage_overrides = foliage_raw.duplicate() if foliage_raw is Dictionary else {}
+	level.lofi = LofiSettings.from_dict(data.get("lofi_overrides", {}))
+	level.weather = WeatherSettings.from_dict(data.get("weather_overrides", {}))
+	level.foliage = FoliageSettings.from_dict(data.get("foliage_overrides", {}))
 	# Schema migration. A missing format_version means the level predates
 	# versioning, so its sun lives in the legacy flat sun_overrides dictionary.
 	# SunSettings.from_legacy() reproduces the exact light state the old runtime
