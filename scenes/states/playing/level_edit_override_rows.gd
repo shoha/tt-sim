@@ -37,7 +37,10 @@ var _rows: Array[Array] = []
 ## for right-click reset via [param on_clear_keys].
 func _init(panel: Node, on_clear_keys: Callable) -> void:
 	for label_name in _KEYS_BY_LABEL_NAME:
-		var label := panel.find_child(label_name, true, false) as Label
+		var label := panel.get_node_or_null("%" + label_name) as Label
+		if not label:
+			push_error("LevelEditOverrideRows: missing label %s" % label_name)
+			continue
 		_rows.append([label, _KEYS_BY_LABEL_NAME[label_name]])
 	for row in _rows:
 		var label: Label = row[0]

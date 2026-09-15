@@ -189,6 +189,13 @@ func _on_ready() -> void:
 			inner_margin.add_child(vbox)
 			scroll.add_child(inner_margin)
 
+		# remove_child() clears `owner` on the whole moved subtree (Godot drops it
+		# on tree-exit so a node that never returns doesn't keep a stale owner
+		# reference) -- which breaks every %unique_name lookup under root_vbox,
+		# including all 16 override-row labels. Re-establish ownership now that
+		# the moves above are done, or LevelEditOverrideRows would find nothing.
+		NodeUtils.set_own_children(self)
+
 	_connect_control_signals()
 	_populate_scale_preset_dropdown()
 	_populate_preset_dropdown()
@@ -374,6 +381,7 @@ func is_dirty() -> bool:
 
 ## Called by the controller after Save, Cancel or a level change.
 func mark_clean() -> void:
+	_dismiss_close_prompt()
 	if not _dirty:
 		_refresh_dirty_visuals()
 		return
@@ -427,6 +435,17 @@ func _is_close_prompt_open() -> bool:
 
 ## The dialog frees itself after animating out, so drop the reference with it.
 func _on_close_prompt_closed(_confirmed: bool) -> void:
+	_close_prompt = null
+
+
+## Dismiss any open close prompt so it cannot outlive the state it was asked
+## about -- e.g. a level change that calls mark_clean() while the "Discard
+## changes" prompt from the OLD level is still on screen. queue_free() bypasses
+## the dialog's own animate-out/closed signal, so the reference is dropped here
+## directly rather than relying on _on_close_prompt_closed.
+func _dismiss_close_prompt() -> void:
+	if _is_close_prompt_open():
+		_close_prompt.queue_free()
 	_close_prompt = null
 
 

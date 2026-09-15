@@ -611,7 +611,7 @@ Every live edit calls `_mark_dirty()`, which raises the unsaved-changes flag, sh
 
 A dirty drawer refuses to close from its tab (`_can_close_from_tab()` returns `false`) and calls `request_close()` instead, which shows a "Discard changes" / "Keep editing" danger confirmation (the cancel button is relabelled via `show_danger_confirmation()`'s `cancel_text` parameter, since a bare "Cancel" next to the drawer's own Cancel button was ambiguous about which one it cancelled). Confirming emits `cancel_requested`, so the controller reverts and closes. Escape takes the same route: the panel registers itself with `UIManager.register_overlay()` in `open()`, and `UIManager._close_top_overlay()` prefers an overlay's `request_close()` over `animate_out()`/`close()`.
 
-Save no longer closes the drawer — it clears the flag so tuning can continue — and advances the revert snapshot to the state just written to disk, then deactivates the sun gizmo the way a close would.
+Save no longer closes the drawer — it clears the flag so tuning can continue — and advances the revert snapshot to the state just written to disk, then deactivates the sun gizmo the way a close would. A failed disk write shows the error toast only: the drawer stays dirty and the snapshot is left untouched.
 
 `_enter_edit_mode()` re-snapshots only when the drawer is clean. The tab now vetoes a dirty close, so that guard covers the routes that bypass the prompt: `conceal()` when GM access is lost mid-edit (the drawer hides without reverting) and any programmatic reopen while dirty. In both cases the original snapshot survives, so a later Cancel still returns to the state from before the first unsaved edit.
 
