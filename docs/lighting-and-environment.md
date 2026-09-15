@@ -798,7 +798,7 @@ The "Weather" section in `LevelEditPanel` (between Post-Processing and the actio
 
 Weather piggybacks on the existing `broadcast_visual_settings` / `visual_settings_received` path with a `"weather_overrides"` key. No new RPCs or signals. Included in full state sync for late joiners (part of `LevelData.to_dict()`).
 
-Foliage wind-sway tuning (see [Data Storage](#data-storage) for `LevelData.foliage_overrides`) is broadcast the same way, via a `"foliage_overrides"` key on the same `broadcast_visual_settings` / `visual_settings_received` path — no new RPCs or signals for it either.
+Foliage wind-sway tuning (`LevelData.foliage`, see [Data Storage](#data-storage)) is broadcast the same way, via a `"foliage_overrides"` key on the same `broadcast_visual_settings` / `visual_settings_received` path — no new RPCs or signals for it either.
 
 Sun and shadow settings (see [Sun and Shadow](#sun-and-shadow)) also piggyback on this path, via a flat `"sun_settings"` key carrying `SunSettings.to_dict()`. The late-joiner mirror is the one place this key is *not* flat: `NetworkManager._patch_current_level_dict()` nests it under `visual_settings.sun` and stamps `format_version`, because `_current_level_dict` is in `LevelData.to_dict()` shape and a top-level `sun_settings` key would be silently ignored by `LevelData.from_dict()` -- a client joining after a live sun edit would otherwise see the default sun instead of the host's. See `autoloads/network_manager.gd`'s `broadcast_visual_settings()` and `_patch_current_level_dict()`.
 

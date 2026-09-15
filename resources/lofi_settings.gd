@@ -10,7 +10,9 @@ extends Resource
 ## to_dict() is complete (every key, every time) and uses the shader parameter
 ## names as keys, so GameMap.apply_lofi_overrides() consumes it unchanged and a
 ## full application never leaves a previous level's value behind. from_dict()
-## accepts the sparse dictionaries older level files contain.
+## accepts the sparse dictionaries older level files contain. A saved level
+## stores explicit values and therefore pins the lo-fi parameters it was
+## authored with, even if Constants.LOFI_DEFAULTS changes later.
 
 const KEYS: Array[String] = [
 	"pixelation",
