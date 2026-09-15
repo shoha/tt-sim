@@ -849,10 +849,12 @@ TokenSpawner is the single place removal and rename touch storage, placement dat
 
 `DragPlaceController` (`scenes/states/playing/drag_place_controller.gd`), a child `Node` of `GameMap`, handles dragging an asset out of the asset browser and dropping it on the map to spawn a new token — distinct from `DragAndDrop3D`'s dragging of already-placed tokens on the board.
 
-- `raycast_terrain(camera, space_state, screen_pos)` — a static, independently-testable raycast against physics layer 1 (terrain/board) only, up to 1000 world meters, used to land the new token on the actual terrain surface (including slopes) under the cursor.
+- `raycast_terrain(camera, space_state, screen_pos)` — a static, independently-testable raycast against physics layer 1 (terrain/board) only, up to 1000 world meters, used to find the terrain surface (including slopes) under the cursor.
 - Falls back to the existing Y=0 ground-plane intersection when the terrain raycast misses (e.g. camera pointed off the map).
 - Dropping while the mouse is over GUI (`GameMap.is_mouse_over_gui()`) cancels the placement instead of spawning.
-- On a successful drop, calls `LevelPlayController.spawn_asset(..., settle := true)`, which drops the token onto the ground via `DraggableToken.drop_to_ground()` after positioning — needed because the terrain hit can still land slightly above the true surface.
+- **Snap, then resolve the height.** Grid snap moves X/Z by up to half a cell while preserving Y (`ScaleUtils.snap_to_grid` keeps `y`), so the camera hit's height is only correct for the unsnapped point — on a slope it leaves the token below the surface, where `DraggableToken._find_landing_position()`'s downward ray from the collision bottom cannot recover it. So `_complete_drag_place()` snaps X/Z first and then, when the camera ray actually hit terrain, re-resolves the height with `raycast_terrain_down(space_state, xz)` — a second static helper that casts straight down from `TERRAIN_DOWNCAST_HEIGHT` — spawning at the hit plus `PLACE_CLEARANCE` (0.25). A downcast miss (snapped off the edge of the terrain) keeps the snapped position.
+- On a successful drop, calls `LevelPlayController.spawn_asset(..., settle := true)`, which drops the token the remaining clearance onto the ground via `DraggableToken.drop_to_ground()`. `TokenSpawner.spawn_asset()` runs that settle **after** `add_token_to_level()`: the settle clears `input_ray_pickable` for the landing tween and `_on_settle_complete()` restores it, so tracking (which also calls `set_interactive()`) must not run in the middle of the tween.
+- The asset browser's double-click/select path (`GameplayMenuController._on_asset_selected()`) resolves its camera-centre position the same way — `raycast_terrain_down` plus `settle := true` — so both placement routes land on terrain.
 
 ### GameplayMenuController
 
