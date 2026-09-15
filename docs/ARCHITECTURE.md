@@ -342,6 +342,13 @@ RootNetworkHandler.disconnect_client_signals(self)
 
 See [NETWORKING.md](NETWORKING.md) and [CONVENTIONS.md](CONVENTIONS.md) for complete documentation.
 
+#### Token tracking API
+
+- `TokenSpawner.track_network_token(token)` / `untrack_network_token(network_id)` register and forget tokens created from network state, keeping the `network_id` reverse index that `find_token_by_network_id()` (drag locks, permissions, undo) depends on. `RootNetworkHandler` calls the `LevelPlayController` forwards of the same names and never writes `spawned_tokens` directly.
+- `TokenPlacement.sync_from_board_token(token)` is the single place that copies live token state (transform, stats, `is_alive`, `status_effects`) into a placement; both `from_board_token()` and the in-play Save Level path use it.
+- `BoardToken.heal(amount)` on a downed token revives it via `revive(amount)`, so context-menu heals and undo of a killing blow bring the token back.
+- In single-player, `TokenSpawner._on_token_transform_changed` syncs moves into `GameState` directly (there is no host broadcast offline).
+
 ---
 
 ## Asset Management
@@ -711,6 +718,8 @@ The height filter (`grid_y_level` / `grid_y_tolerance`) prevents the grid from p
 ### Grid-Snapped Movement
 
 When `LevelData.grid_snap_enabled` is `true`, dragged tokens snap to the nearest grid cell center on XZ. This is implemented directly in `DragAndDrop3D._update_target_position()` via `ScaleUtils.snap_to_grid()`.
+
+On release, `DragAndDrop3D.stop_drag()` writes the last snapped target's X and Z onto the body before emitting `dragging_stopped`, so the token lands on the cell the drag ruler and grid highlight showed rather than wherever the frame-rate-dependent follow lerp happened to leave it. Y is left to `DraggableToken`'s settle tween.
 
 - **Shift modifier**: Hold Shift during drag to bypass grid snap (free move). Shift always means "free move" regardless of settings.
 - **Configuration**: `GameMap.configure_grid()` sets `DragAndDrop3D.grid_snap_enabled`, `grid_cell_size`, and `grid_origin` from `LevelData`.

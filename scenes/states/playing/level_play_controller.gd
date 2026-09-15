@@ -266,6 +266,17 @@ func update_measure_tool_scale() -> void:
 	_level_loader.update_measure_tool_scale()
 
 
+## Register a token created from network state so TokenSpawner's reverse index
+## can find it (drag locks, permissions, undo). See RootNetworkHandler.
+func track_network_token(token: BoardToken) -> void:
+	_token_spawner.track_network_token(token)
+
+
+## Forget a network-tracked token after the host removed it. See TokenSpawner.untrack_network_token.
+func untrack_network_token(network_id: String) -> void:
+	_token_spawner.untrack_network_token(network_id)
+
+
 ## Check if level loading is in progress (async loading)
 ## Forwards to LevelPlayLoader -- kept as a same-named method here since
 ## scenes/root.gd, root_network_handler.gd, and game_map.gd call this directly.

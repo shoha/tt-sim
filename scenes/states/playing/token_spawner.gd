@@ -84,6 +84,25 @@ func _track_token(token: BoardToken, placement: TokenPlacement) -> void:
 		_connect_token_state_signals(token)
 
 
+## Track a token that was created from network state (RootNetworkHandler's
+## create_token_from_state). Interactivity was already decided there; this only
+## registers storage and the reverse index so find_token_by_network_id() works
+## for tokens the host spawned mid-game.
+func track_network_token(token: BoardToken) -> void:
+	var placement_id: String = token.get_meta("placement_id", token.network_id)
+	spawned_tokens[placement_id] = token
+	_network_id_to_placement[token.network_id] = placement_id
+	token_added.emit(token)
+
+
+## Forget a network-tracked token (host removed it). Safe to call for ids that
+## were never tracked.
+func untrack_network_token(network_id: String) -> void:
+	var placement_id: String = _network_id_to_placement.get(network_id, network_id)
+	spawned_tokens.erase(placement_id)
+	_network_id_to_placement.erase(network_id)
+
+
 ## Connect to token signals for broadcasting state changes over network.
 ## Stores callables so they can be disconnected later (prevents lambda accumulation).
 func _connect_token_state_signals(token: BoardToken) -> void:
@@ -156,9 +175,12 @@ func _on_token_property_changed(token: BoardToken) -> void:
 
 ## Handle transform changes (position, rotation, scale) - uses unreliable channel with rate limiting
 func _on_token_transform_changed(token: BoardToken) -> void:
-	if not NetworkManager.is_host():
-		return
-	NetworkStateSync.broadcast_token_transform(token)
+	if NetworkManager.is_host():
+		NetworkStateSync.broadcast_token_transform(token)
+	elif GameState.has_authority():
+		# Single-player: no peers to broadcast to, but GameState is still the model
+		# that undo, the validation bridge and a later host_game() read from.
+		GameState.sync_from_board_token(token)
 
 
 ## Connect token's context menu signal and other per-token signals to game map
@@ -277,23 +299,7 @@ func add_token_to_level(
 
 ## Sync placement data from a token's current state
 func _sync_placement_from_token(placement: TokenPlacement, token: BoardToken) -> void:
-	# The rigid_body is what actually gets moved/scaled during dragging
-	var rigid_body = token.get_rigid_body()
-	if rigid_body:
-		placement.position = rigid_body.global_position
-		placement.rotation_y = rigid_body.rotation.y
-		placement.scale = rigid_body.scale
-	else:
-		placement.position = token.global_position
-		placement.rotation_y = token.rotation.y
-		placement.scale = token.scale
-
-	# Also sync current stats
-	placement.token_name = token.token_name
-	placement.max_health = token.max_health
-	placement.current_health = token.current_health
-	placement.is_visible_to_players = token.is_visible_to_players
-	placement.is_player_controlled = token.is_player_controlled
+	placement.sync_from_board_token(token)
 
 
 ## Find a token by its network_id in spawned_tokens (O(1) via reverse index).

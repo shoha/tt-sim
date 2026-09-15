@@ -85,7 +85,7 @@ static func on_token_state_received(
 		var new_token = create_token_from_state(token_state, controller)
 		if new_token and game_map:
 			game_map.drag_and_drop_node.add_child(new_token)
-			controller.spawned_tokens[network_id] = new_token
+			controller.track_network_token(new_token)
 			controller._connect_token_context_menu(new_token)
 
 
@@ -96,7 +96,7 @@ static func on_token_removed_received(controller: LevelPlayController, network_i
 	var token = controller.spawned_tokens.get(network_id)
 	if token and is_instance_valid(token):
 		token.play_removal_animation()
-	controller.spawned_tokens.erase(network_id)
+	controller.untrack_network_token(network_id)
 
 
 ## Apply full GameState to all visual tokens (initial sync or reconciliation)
@@ -120,7 +120,7 @@ static func apply_game_state_to_tokens(controller: LevelPlayController, game_map
 			var new_token = create_token_from_state(token_state, controller)
 			if new_token:
 				drag_and_drop.add_child(new_token)
-				controller.spawned_tokens[network_id] = new_token
+				controller.track_network_token(new_token)
 				controller._connect_token_context_menu(new_token)
 
 	# Apply any active drag locks to visual tokens (for late joiners)
