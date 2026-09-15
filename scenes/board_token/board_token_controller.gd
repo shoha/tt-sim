@@ -149,7 +149,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# Everything below only ever acts on an InputEventMouseButton; return before the
 	# authority lookup for anything else (unrelated keys, etc.) instead of paying for a
-	# permission check that no branch here would use.
+	# permission check that no branch here would use. This early return is safe only while
+	# rotate_model and the other gated actions below stay mouse-bound (MMB drag, R+LMB,
+	# right-click context menu) -- a keyboard rebind of any of them would need this gate
+	# widened to check for the relevant InputEventKey too.
 	if not (event is InputEventMouseButton):
 		return
 

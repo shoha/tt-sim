@@ -99,10 +99,16 @@ static func flush_disturbances() -> void:
 ## never removed them, so flush_disturbances() alone couldn't tell submerged had truly
 ## gone empty.
 static func _prune_freed_bodies() -> void:
-	var freed_ids: Array = []
+	if _submerged.is_empty():
+		return
+	var freed_ids = null
 	for id in _submerged:
 		if not is_instance_valid(_submerged[id]):
+			if freed_ids == null:
+				freed_ids = []
 			freed_ids.append(id)
+	if freed_ids == null:
+		return
 	for id in freed_ids:
 		_submerged.erase(id)
 		_refcounts.erase(id)

@@ -66,25 +66,35 @@ func set_floor_level(y_level: float, tolerance: float = 0.5) -> void:
 	_material.set_shader_parameter("grid_y_tolerance", tolerance)
 
 
+## Compute the integer grid cell (floor-divided by cell_size, offset by grid_origin) that
+## [param world_pos] falls into, reading cell_size/grid_origin from the same material
+## set_drag_highlight() writes to -- the single source of truth for "which cell is this
+## world position in" so callers never keep their own copy of this formula. Returns
+## Vector2.INF (never equal to a real cell) when the material is missing or cell_size is
+## non-positive, so a degenerate config always falls through to a write rather than
+## silently sticking.
+func snapped_cell(world_pos: Vector3) -> Vector2:
+	if not _material:
+		return Vector2.INF
+	var cell_size: float = _material.get_shader_parameter("cell_size")
+	if cell_size <= 0.0:
+		return Vector2.INF
+	var origin: Vector2 = _material.get_shader_parameter("grid_origin")
+	return Vector2(
+		floorf((world_pos.x - origin.x) / cell_size), floorf((world_pos.z - origin.y) / cell_size)
+	)
+
+
 ## Activate cell highlighting for a drag in progress.
 ## [param current_pos] World position of the hovered/snapped cell center.
 ## [param start_pos] World position of the drag origin cell center.
 func set_drag_highlight(current_pos: Vector3, start_pos: Vector3) -> void:
 	if not _material:
 		return
-	var cell_size: float = _material.get_shader_parameter("cell_size")
-	var origin: Vector2 = _material.get_shader_parameter("grid_origin")
-	if cell_size <= 0.0:
+	var current_cell := snapped_cell(current_pos)
+	if current_cell == Vector2.INF:
 		return
-	# Convert world positions to integer cell indices
-	var current_cell := Vector2(
-		floorf((current_pos.x - origin.x) / cell_size),
-		floorf((current_pos.z - origin.y) / cell_size),
-	)
-	var start_cell := Vector2(
-		floorf((start_pos.x - origin.x) / cell_size),
-		floorf((start_pos.z - origin.y) / cell_size),
-	)
+	var start_cell := snapped_cell(start_pos)
 	_material.set_shader_parameter("drag_active", true)
 	_material.set_shader_parameter("drag_current_cell", current_cell)
 	_material.set_shader_parameter("drag_start_cell", start_cell)

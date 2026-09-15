@@ -4,8 +4,6 @@ extends Node3D
 ## A simple placeholder shown while a token's model is being downloaded.
 ## Displays a pulsing/spinning cube that indicates loading state.
 
-const PULSE_QUANTIZE_STEPS: float = 64.0  # write granularity; avoids material churn every frame
-
 @export var spin_speed: float = 2.0
 @export var pulse_speed: float = 1.5
 @export var base_color: Color = Color(0.4, 0.6, 0.9, 0.8)
@@ -13,7 +11,6 @@ const PULSE_QUANTIZE_STEPS: float = 64.0  # write granularity; avoids material c
 var _mesh_instance: MeshInstance3D
 var _material: StandardMaterial3D
 var _time: float = 0.0
-var _last_written_pulse: float = -1.0  # quantized value last written; -1.0 never matches
 
 
 func _ready() -> void:
@@ -54,18 +51,13 @@ func _process(delta: float) -> void:
 	if _mesh_instance:
 		_mesh_instance.rotation.y += spin_speed * delta
 
-	# Pulse the alpha and emissive energy, but only write the material when the
-	# quantized pulse value actually changed -- skips two StandardMaterial3D property
-	# writes per frame while the value would round to the same step anyway.
+	# Pulse the alpha and emissive energy
 	if _material:
-		var pulse: float = (sin(_time * pulse_speed * TAU) + 1.0) * 0.5
-		var quantized_pulse: float = roundf(pulse * PULSE_QUANTIZE_STEPS) / PULSE_QUANTIZE_STEPS
-		if not is_equal_approx(quantized_pulse, _last_written_pulse):
-			_last_written_pulse = quantized_pulse
-			var alpha: float = lerp(0.4, 0.9, quantized_pulse)
-			_material.albedo_color.a = alpha
-			# Emissive shimmer: oscillates 0.0 → 0.3 alongside the alpha pulse
-			_material.emission_energy_multiplier = quantized_pulse * 0.3
+		var pulse = (sin(_time * pulse_speed * TAU) + 1.0) * 0.5
+		var alpha = lerp(0.4, 0.9, pulse)
+		_material.albedo_color.a = alpha
+		# Emissive shimmer: oscillates 0.0 → 0.3 alongside the alpha pulse
+		_material.emission_energy_multiplier = pulse * 0.3
 
 
 ## Set the color of the placeholder
