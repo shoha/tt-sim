@@ -415,7 +415,13 @@ func duplicate_token(token: BoardToken) -> BoardToken:
 		new_token.take_damage(health_diff)
 
 	new_token.set_transform_immediate(spawn_position, source_rotation, source_scale)
+	# Sync GameState and the network from the copied transform first: the pop-in
+	# tween below starts at near-zero scale, and a sync taken mid-tween would
+	# record that instead of the real scale.
 	new_token.transform_changed.emit()
+	# spawn_asset() already started the pop-in tween towards the default scale;
+	# restart it so it targets the copied scale instead of snapping back to 1.
+	new_token.play_spawn_animation()
 	# A hidden source produces a hidden copy. Goes through the setter so the
 	# visibility visuals update and the network sees it.
 	new_token.set_visible_to_players(token.is_visible_to_players)
