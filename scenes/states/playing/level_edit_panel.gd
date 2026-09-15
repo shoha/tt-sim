@@ -458,7 +458,11 @@ func _can_close_from_tab() -> bool:
 
 
 ## The controller listens for cancel_requested: it reverts and closes the drawer.
+## The dialog is still inside its own confirm handler here and will animate out
+## by itself, so the reference is dropped first: otherwise the controller's
+## mark_clean() would queue_free() it mid-handler and cut the fade short.
 func _on_discard_confirmed() -> void:
+	_close_prompt = null
 	cancel_requested.emit()
 
 

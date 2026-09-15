@@ -126,6 +126,27 @@ func test_mark_clean_dismisses_open_close_prompt() -> void:
 	)
 
 
+func test_discard_confirm_lets_the_prompt_animate_out() -> void:
+	# The controller answers cancel_requested with mark_clean() while the
+	# dialog is still inside its own confirm handler; the dialog must be left
+	# to close itself rather than being queue_freed mid-handler.
+	_panel._on_weather_override_changed(0.3, "rain_intensity")
+	_panel.request_close()
+	var prompt: Node = _panel._close_prompt
+	assert_true(is_instance_valid(prompt), "The discard prompt must be on screen")
+	_panel.cancel_requested.connect(_panel.mark_clean)
+
+	_panel._on_discard_confirmed()
+
+	assert_eq(_panel._close_prompt, null, "Discard must drop the prompt reference")
+	assert_false(_panel.is_dirty(), "The controller's mark_clean must still run")
+	assert_true(
+		is_instance_valid(prompt) and not prompt.is_queued_for_deletion(),
+		"The dialog must be left to animate itself out"
+	)
+	prompt.queue_free()
+
+
 func test_badge_and_tooltip_follow_dirty_flag() -> void:
 	_panel._mark_dirty()
 	assert_true(_panel._tab_badge.visible, "Badge must be visible while dirty")
