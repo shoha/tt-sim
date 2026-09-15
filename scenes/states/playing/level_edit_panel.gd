@@ -32,17 +32,17 @@ signal drawer_opened
 ## The controller should revert changes if not saved.
 signal drawer_closed
 
+## Emitted when the unsaved-changes flag flips, so other UI can follow it.
+signal dirty_changed(dirty: bool)
+
+const TAB_TOOLTIP_CLEAN := "Visuals"
+const TAB_TOOLTIP_DIRTY := "Visuals (unsaved changes)"
+
 const TONEMAP_MODES = {
 	"Linear": Environment.TONE_MAPPER_LINEAR,
 	"Reinhardt": Environment.TONE_MAPPER_REINHARDT,
 	"Filmic": Environment.TONE_MAPPER_FILMIC,
 	"ACES": Environment.TONE_MAPPER_ACES,
-}
-
-const SUN_MODES = {
-	"Auto": "auto",
-	"On": "on",
-	"Off": "off",
 }
 
 var current_preset: String = ""
@@ -60,6 +60,14 @@ var _current_scale_preset_key: String = ScaleUtils.DEFAULT_PRESET
 ## Environment config extracted from the map's embedded WorldEnvironment.
 ## Used as the base layer when current_preset is "" (no explicit choice).
 var _map_defaults: Dictionary = {}
+## True once a live edit has been made and neither saved nor cancelled.
+## Only mark_clean() clears it -- reopening the drawer does not.
+var _dirty: bool = false
+## The live "discard changes" prompt, while one is on screen. Kept so a second
+## close request reuses it instead of stacking a second dialog.
+var _close_prompt: Node = null
+var _override_rows: LevelEditOverrideRows
+var _sun_section: LevelEditSunSection
 
 # Scale & measurement controls
 @onready var map_grid_toggle: Button = %MapGridToggle
@@ -84,6 +92,7 @@ var _map_defaults: Dictionary = {}
 @onready var contrast_slider_spin: SliderSpinBox = %ContrastSliderSpin
 @onready var saturation_slider_spin: SliderSpinBox = %SaturationSliderSpin
 @onready var revert_to_map_button: Button = %RevertToMapButton
+@onready var clear_overrides_button: Button = %ClearOverridesButton
 
 # Lighting controls — advanced
 @onready var advanced_toggle: Button = %AdvancedToggle
@@ -96,6 +105,9 @@ var _map_defaults: Dictionary = {}
 @onready var tonemap_white_slider_spin: SliderSpinBox = %TonemapWhiteSliderSpin
 @onready var glow_strength_slider_spin: SliderSpinBox = %GlowStrengthSliderSpin
 @onready var glow_bloom_slider_spin: SliderSpinBox = %GlowBloomSliderSpin
+
+@onready var ambient_label: Label = %AmbientLabel
+@onready var fog_label: Label = %FogLabel
 
 # Action buttons
 @onready var save_button: Button = %SaveButton
@@ -177,13 +189,22 @@ func _on_ready() -> void:
 			inner_margin.add_child(vbox)
 			scroll.add_child(inner_margin)
 
+		# remove_child() clears `owner` on the whole moved subtree (Godot drops it
+		# on tree-exit so a node that never returns doesn't keep a stale owner
+		# reference) -- which breaks every %unique_name lookup under root_vbox,
+		# including all 16 override-row labels. Re-establish ownership now that
+		# the moves above are done, or LevelEditOverrideRows would find nothing.
+		NodeUtils.set_own_children(self)
+
 	_connect_control_signals()
 	_populate_scale_preset_dropdown()
 	_populate_preset_dropdown()
 	_populate_water_style_dropdown()
 	_populate_sky_preset_dropdown()
 	_populate_tonemap_mode_dropdown()
-	_populate_sun_mode_dropdown()
+	_refresh_dirty_visuals()
+	_setup_override_rows()
+	_setup_sun_section()
 
 
 func _connect_control_signals() -> void:
@@ -199,17 +220,6 @@ func _connect_control_signals() -> void:
 	advanced_toggle.toggled.connect(_on_advanced_toggled)
 	sky_preset_dropdown.item_selected.connect(_on_sky_preset_selected)
 	tonemap_mode_dropdown.item_selected.connect(_on_tonemap_mode_selected)
-	sun_mode_dropdown.item_selected.connect(_on_sun_mode_selected)
-	sun_time_of_day_slider_spin.value_changed.connect(_on_sun_time_of_day_changed)
-	aim_sun_button.toggled.connect(_on_aim_sun_toggled)
-	sun_azimuth_slider_spin.value_changed.connect(_on_sun_azimuth_changed)
-	sun_elevation_slider_spin.value_changed.connect(_on_sun_elevation_changed)
-	sun_color_picker.color_changed.connect(_on_sun_color_changed)
-	sun_energy_slider_spin.value_changed.connect(_on_sun_energy_changed)
-	sun_shadows_check.toggled.connect(_on_sun_shadows_toggled)
-	sun_softness_slider_spin.value_changed.connect(_on_sun_softness_changed)
-	sun_darkness_slider_spin.value_changed.connect(_on_sun_darkness_changed)
-	sun_regenerate_button.pressed.connect(_on_sun_regenerate_pressed)
 
 	# Config-driven environment overrides: [control, signal_name, override_key]
 	for binding in [
@@ -268,7 +278,8 @@ func _connect_control_signals() -> void:
 	]:
 		binding[0].connect(binding[1], _on_foliage_override_changed.bind(binding[2]))
 
-	revert_to_map_button.pressed.connect(func() -> void: revert_to_map_defaults_requested.emit())
+	revert_to_map_button.pressed.connect(_on_revert_to_map_defaults_pressed)
+	clear_overrides_button.pressed.connect(_on_clear_overrides_pressed)
 	save_button.pressed.connect(_on_save_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
 
@@ -338,15 +349,6 @@ func _populate_tonemap_mode_dropdown() -> void:
 		idx += 1
 
 
-func _populate_sun_mode_dropdown() -> void:
-	sun_mode_dropdown.clear()
-	var idx := 0
-	for label in SUN_MODES:
-		sun_mode_dropdown.add_item(label, idx)
-		sun_mode_dropdown.set_item_metadata(idx, SUN_MODES[label])
-		idx += 1
-
-
 # ============================================================================
 # Drawer Lifecycle
 # ============================================================================
@@ -354,14 +356,114 @@ func _populate_sun_mode_dropdown() -> void:
 
 ## Override open to emit signal before the animation starts.
 ## The controller uses this to snapshot values and initialize the panel.
+## Registering as an overlay routes Escape through request_close().
 func open() -> void:
+	UIManager.register_overlay(self)
 	drawer_opened.emit()
 	super.open()
 
 
 ## Override _on_closed to notify the controller when the drawer finishes closing.
 func _on_closed() -> void:
+	UIManager.unregister_overlay(self)
 	drawer_closed.emit()
+
+
+# ============================================================================
+# Unsaved Changes
+# ============================================================================
+
+
+## Whether the drawer holds live edits that have been neither saved nor reverted.
+func is_dirty() -> bool:
+	return _dirty
+
+
+## Called by the controller after Save, Cancel or a level change.
+func mark_clean() -> void:
+	_dismiss_close_prompt()
+	if not _dirty:
+		_refresh_dirty_visuals()
+		return
+	_dirty = false
+	_refresh_dirty_visuals()
+	dirty_changed.emit(false)
+
+
+func _mark_dirty() -> void:
+	if _dirty:
+		return
+	_dirty = true
+	_refresh_dirty_visuals()
+	dirty_changed.emit(true)
+
+
+func _refresh_dirty_visuals() -> void:
+	set_tab_badge(_dirty)
+	set_tab_tooltip(TAB_TOOLTIP_DIRTY if _dirty else TAB_TOOLTIP_CLEAN)
+
+
+## Close if clean; otherwise ask before discarding. Used by the tab button and by
+## UIManager's Escape handling, which pops the overlay before dispatching -- so
+## every branch that leaves the drawer open re-registers it, or the next Escape
+## falls through to the pause menu. register_overlay() is idempotent.
+func request_close() -> void:
+	# close() is a no-op mid-animation, and a second Escape must not stack a
+	# second dialog -- both leave the drawer open with nothing else to do.
+	if _is_animating or _is_close_prompt_open():
+		UIManager.register_overlay(self)
+		return
+	if not _dirty:
+		close()
+		return
+	UIManager.register_overlay(self)
+	_close_prompt = UIManager.show_danger_confirmation(
+		"Unsaved visual changes",
+		"Discard the changes made in this drawer? Save is still available in the drawer.",
+		_on_discard_confirmed,
+		"Discard changes",
+		"Keep editing"
+	)
+	if _close_prompt:
+		_close_prompt.closed.connect(_on_close_prompt_closed)
+
+
+## Whether the discard prompt is currently on screen.
+func _is_close_prompt_open() -> bool:
+	return is_instance_valid(_close_prompt) and _close_prompt.is_inside_tree()
+
+
+## The dialog frees itself after animating out, so drop the reference with it.
+func _on_close_prompt_closed(_confirmed: bool) -> void:
+	_close_prompt = null
+
+
+## Dismiss any open close prompt so it cannot outlive the state it was asked
+## about -- e.g. a level change that calls mark_clean() while the "Discard
+## changes" prompt from the OLD level is still on screen. queue_free() bypasses
+## the dialog's own animate-out/closed signal, so the reference is dropped here
+## directly rather than relying on _on_close_prompt_closed.
+func _dismiss_close_prompt() -> void:
+	if _is_close_prompt_open():
+		_close_prompt.queue_free()
+	_close_prompt = null
+
+
+## The tab button must not close a drawer with unsaved work; it prompts instead.
+func _can_close_from_tab() -> bool:
+	if _dirty:
+		request_close()
+		return false
+	return true
+
+
+## The controller listens for cancel_requested: it reverts and closes the drawer.
+## The dialog is still inside its own confirm handler here and will animate out
+## by itself, so the reference is dropped first: otherwise the controller's
+## mark_clean() would queue_free() it mid-handler and cut the fade short.
+func _on_discard_confirmed() -> void:
+	_close_prompt = null
+	cancel_requested.emit()
 
 
 # ============================================================================
@@ -382,12 +484,7 @@ func initialize(
 	light_intensity_scale = intensity
 	current_preset = preset
 	current_water_style = level_data.water_style
-	var water_style_matched := false
-	for i in range(water_style_dropdown.item_count):
-		if water_style_dropdown.get_item_metadata(i) == current_water_style:
-			water_style_dropdown.select(i)
-			water_style_matched = true
-			break
+	var water_style_matched := _select_by_metadata(water_style_dropdown, current_water_style)
 	if not water_style_matched:
 		# Corrupt/unrecognized save data -- fall back to the default preset
 		# rather than leaving the dropdown showing a stale/mismatched item.
@@ -398,10 +495,7 @@ func initialize(
 		# without touching the dropdown would silently re-persist the corrupt
 		# value while the UI shows "Stylized".
 		current_water_style = WaterPresets.DEFAULT_PRESET
-		for i in range(water_style_dropdown.item_count):
-			if water_style_dropdown.get_item_metadata(i) == WaterPresets.DEFAULT_PRESET:
-				water_style_dropdown.select(i)
-				break
+		_select_by_metadata(water_style_dropdown, WaterPresets.DEFAULT_PRESET)
 	current_overrides = level_data.environment_overrides.duplicate()
 	current_lofi = level_data.lofi.copy_settings()
 	current_weather = level_data.weather.copy_settings()
@@ -423,10 +517,7 @@ func initialize(
 	_populate_preset_dropdown(has_map_defaults)
 
 	# Select preset in dropdown
-	for i in range(preset_dropdown.item_count):
-		if preset_dropdown.get_item_metadata(i) == preset:
-			preset_dropdown.select(i)
-			break
+	_select_by_metadata(preset_dropdown, preset)
 
 	# Show revert button only when the map provided its own environment
 	revert_to_map_button.visible = has_map_defaults
@@ -439,12 +530,13 @@ func initialize(
 	_sync_lofi_controls()
 	_sync_weather_controls()
 	_sync_foliage_controls()
-	_sync_sun_controls()
+	_sun_section.sync_controls(current_sun)
 
 	# The gizmo does not survive a level change, so the toggle must not either.
 	# initialize() resyncs every other sun control from the new level; without
 	# this the button could stay latched against a freed SunGizmoTool.
 	set_aim_sun_pressed(false)
+	_refresh_override_indicators()
 
 
 ## Apply new environment state from outside (e.g. after reverting to map defaults)
@@ -454,12 +546,10 @@ func apply_environment_state(preset: String, overrides: Dictionary) -> void:
 	current_overrides = overrides.duplicate()
 
 	# Update preset dropdown selection
-	for i in range(preset_dropdown.item_count):
-		if preset_dropdown.get_item_metadata(i) == preset:
-			preset_dropdown.select(i)
-			break
+	_select_by_metadata(preset_dropdown, preset)
 
 	_sync_controls_from_config()
+	_refresh_override_indicators()
 
 
 ## Sync the environment controls to match the resolved preset + overrides config.
@@ -486,10 +576,7 @@ func _sync_controls_from_config() -> void:
 
 	# Advanced controls — sky preset
 	var sky_preset_name: String = config.get("sky_preset", "")
-	for i in range(sky_preset_dropdown.item_count):
-		if sky_preset_dropdown.get_item_metadata(i) == sky_preset_name:
-			sky_preset_dropdown.select(i)
-			break
+	_select_by_metadata(sky_preset_dropdown, sky_preset_name)
 
 	# Advanced controls — fog details
 	fog_energy_slider_spin.set_value_no_signal(config.get("fog_light_energy", 1.0))
@@ -498,15 +585,60 @@ func _sync_controls_from_config() -> void:
 
 	# Advanced controls — tonemap
 	var tm_mode: int = config.get("tonemap_mode", Environment.TONE_MAPPER_FILMIC)
-	for i in range(tonemap_mode_dropdown.item_count):
-		if tonemap_mode_dropdown.get_item_metadata(i) == tm_mode:
-			tonemap_mode_dropdown.select(i)
-			break
+	_select_by_metadata(tonemap_mode_dropdown, tm_mode)
 	tonemap_white_slider_spin.set_value_no_signal(config.get("tonemap_white", 1.0))
 
 	# Advanced controls — glow details
 	glow_strength_slider_spin.set_value_no_signal(config.get("glow_strength", 1.0))
 	glow_bloom_slider_spin.set_value_no_signal(config.get("glow_bloom", 0.0))
+
+
+## Invariant: every path that changes current_overrides must either emit
+## environment_changed or call _refresh_override_indicators() explicitly
+## (initialize() and apply_environment_state() do the latter).
+func _setup_override_rows() -> void:
+	_override_rows = LevelEditOverrideRows.new(self, _clear_override_keys)
+	environment_changed.connect(func(_preset, _overrides): _refresh_override_indicators())
+	_refresh_override_indicators()
+
+
+func _refresh_override_indicators() -> void:
+	_override_rows.refresh(current_overrides, clear_overrides_button)
+
+
+func _clear_override_keys(keys: Array) -> void:
+	if not LevelEditOverrideRows.erase_keys(current_overrides, keys):
+		return
+	_mark_dirty()
+	environment_changed.emit(current_preset, current_overrides)
+	_sync_controls_from_config()
+
+
+func _on_clear_overrides_pressed() -> void:
+	_clear_override_keys(current_overrides.keys())
+	UIManager.show_info("Overrides cleared.")
+
+
+func _setup_sun_section() -> void:
+	_sun_section = LevelEditSunSection.new(
+		self, func(): return current_sun, _on_sun_section_changed, _on_aim_sun_toggled
+	)
+	_sun_section.populate_mode_dropdown()
+
+
+func _on_sun_section_changed(settings: SunSettings) -> void:
+	current_sun = settings
+	_mark_dirty()
+	sun_changed.emit(current_sun)
+
+
+## Select the dropdown item whose metadata equals [param value]; true if found.
+static func _select_by_metadata(dropdown: OptionButton, value: Variant) -> bool:
+	for i in range(dropdown.item_count):
+		if dropdown.get_item_metadata(i) == value:
+			dropdown.select(i)
+			return true
+	return false
 
 
 # ============================================================================
@@ -540,18 +672,17 @@ func _sync_scale_controls() -> void:
 			break
 
 	# Select the matching item in the dropdown
-	for i in range(scale_preset_dropdown.item_count):
-		if scale_preset_dropdown.get_item_metadata(i) == _current_scale_preset_key:
-			scale_preset_dropdown.select(i)
-			break
+	_select_by_metadata(scale_preset_dropdown, _current_scale_preset_key)
 
 
 func _on_scale_preset_selected(index: int) -> void:
 	var key: String = scale_preset_dropdown.get_item_metadata(index)
 	_current_scale_preset_key = key
 	if key == "custom":
+		# Selecting "Custom" changes nothing on its own, so it is not an edit.
 		return
 	if ScaleUtils.PRESETS.has(key):
+		_mark_dirty()
 		var p: Dictionary = ScaleUtils.PRESETS[key]
 		current_grid_cell_size = p.grid_cell_size
 		current_display_unit = p.display_unit
@@ -563,13 +694,11 @@ func _on_scale_preset_selected(index: int) -> void:
 
 
 func _on_grid_cell_size_changed(value: float) -> void:
+	_mark_dirty()
 	current_grid_cell_size = value
 	# Manually changing the slider switches to "Custom"
 	_current_scale_preset_key = "custom"
-	for i in range(scale_preset_dropdown.item_count):
-		if scale_preset_dropdown.get_item_metadata(i) == "custom":
-			scale_preset_dropdown.select(i)
-			break
+	_select_by_metadata(scale_preset_dropdown, "custom")
 	scale_config_changed.emit(
 		current_grid_cell_size, current_display_unit, current_display_unit_per_cell
 	)
@@ -581,30 +710,36 @@ func _on_grid_cell_size_changed(value: float) -> void:
 
 
 func _on_preset_selected(index: int) -> void:
+	_mark_dirty()
 	current_preset = preset_dropdown.get_item_metadata(index)
-	current_overrides.clear()
 	environment_changed.emit(current_preset, current_overrides)
 	_sync_controls_from_config()
+	if not current_overrides.is_empty():
+		UIManager.show_info("Preset changed. %d override(s) kept." % current_overrides.size())
 
 
 func _on_intensity_changed(value: float) -> void:
+	_mark_dirty()
 	light_intensity_scale = value
 	intensity_changed.emit(value)
 
 
 func _on_water_style_selected(index: int) -> void:
+	_mark_dirty()
 	current_water_style = water_style_dropdown.get_item_metadata(index)
 	water_style_changed.emit(current_water_style)
 
 
 ## Generic handler for config-driven environment overrides.
 func _on_env_override_changed(value: Variant, key: String) -> void:
+	_mark_dirty()
 	current_overrides[key] = value
 	environment_changed.emit(current_preset, current_overrides)
 
 
 ## Handler for adjustment overrides that also enables the adjustment system.
 func _on_adjustment_override_changed(value: Variant, key: String) -> void:
+	_mark_dirty()
 	current_overrides[key] = value
 	current_overrides["adjustment_enabled"] = true
 	environment_changed.emit(current_preset, current_overrides)
@@ -636,6 +771,7 @@ func _on_map_grid_toggled(pressed: bool) -> void:
 
 
 func _on_sky_preset_selected(index: int) -> void:
+	_mark_dirty()
 	var sky_name: String = sky_preset_dropdown.get_item_metadata(index)
 	current_overrides["sky_preset"] = sky_name
 	# When a sky is selected, switch to BG_SKY; when "None", revert to BG_COLOR
@@ -649,6 +785,7 @@ func _on_sky_preset_selected(index: int) -> void:
 
 
 func _on_tonemap_mode_selected(index: int) -> void:
+	_mark_dirty()
 	current_overrides["tonemap_mode"] = tonemap_mode_dropdown.get_item_metadata(index)
 	environment_changed.emit(current_preset, current_overrides)
 
@@ -678,6 +815,13 @@ func _on_cancel_pressed() -> void:
 	cancel_requested.emit()
 
 
+## Reverting is an edit like any other -- the controller rewrites the live level
+## data, so the drawer has unsaved work afterwards.
+func _on_revert_to_map_defaults_pressed() -> void:
+	_mark_dirty()
+	revert_to_map_defaults_requested.emit()
+
+
 # ============================================================================
 # Lo-Fi Post-Processing Handlers
 # ============================================================================
@@ -696,12 +840,14 @@ func _sync_lofi_controls() -> void:
 
 ## Generic handler for config-driven lo-fi overrides.
 func _on_lofi_override_changed(value: Variant, key: String) -> void:
+	_mark_dirty()
 	current_lofi.set(key, float(value))
 	lofi_changed.emit(current_lofi.to_dict())
 
 
 ## Generic handler for config-driven weather overrides.
 func _on_weather_override_changed(value: Variant, key: String) -> void:
+	_mark_dirty()
 	current_weather.set(key, float(value))
 	weather_changed.emit(current_weather.to_dict())
 
@@ -724,155 +870,29 @@ func _sync_foliage_controls() -> void:
 
 ## Generic handler for config-driven foliage sway overrides.
 func _on_foliage_override_changed(value: Variant, key: String) -> void:
+	_mark_dirty()
 	current_foliage.set(key, float(value))
 	foliage_changed.emit(current_foliage.to_dict())
-
-
-## The one sun control that must NOT promote auto to on: it is the control that
-## chooses the mode.
-func _on_sun_mode_selected(index: int) -> void:
-	current_sun.mode = sun_mode_dropdown.get_item_metadata(index)
-	_emit_sun_changed()
-
-
-## Time of day is a GENERATOR, not the sun's interface: it regenerates direction,
-## color, and energy from the keyframes, discarding any hand-aiming. The shadow
-## fields and mode are user choices and are carried across.
-func _on_sun_time_of_day_changed(value: float) -> void:
-	var generated := DefaultSun.settings_for_time(value)
-	generated.mode = current_sun.mode
-	generated.shadows_enabled = current_sun.shadows_enabled
-	generated.softness = current_sun.softness
-	generated.shadow_darkness = current_sun.shadow_darkness
-	current_sun = generated
-	# Must come after the reassignment above: generated.mode was copied from the
-	# old current_sun, so promoting before it would be overwritten here.
-	_promote_auto_mode_to_on()
-	_emit_sun_changed()
-	_sync_sun_controls()
-
-
-## Sync sun controls from current_sun.
-func _sync_sun_controls() -> void:
-	for i in range(sun_mode_dropdown.item_count):
-		if sun_mode_dropdown.get_item_metadata(i) == current_sun.mode:
-			sun_mode_dropdown.select(i)
-			break
-	sun_azimuth_slider_spin.set_value_no_signal(current_sun.azimuth_degrees)
-	sun_elevation_slider_spin.set_value_no_signal(current_sun.elevation_degrees)
-	sun_color_picker.color = current_sun.color
-	sun_energy_slider_spin.set_value_no_signal(current_sun.energy)
-	sun_shadows_check.set_pressed_no_signal(current_sun.shadows_enabled)
-	sun_softness_slider_spin.set_value_no_signal(current_sun.softness)
-	sun_softness_slider_spin.editable = current_sun.shadows_enabled
-	sun_darkness_slider_spin.set_value_no_signal(current_sun.shadow_darkness)
-	sun_darkness_slider_spin.editable = current_sun.shadows_enabled
-	sun_time_of_day_slider_spin.set_value_no_signal(current_sun.time_of_day)
-	_update_sun_generated_state()
-
-
-## Emit the current sun and refresh the derived parts of the UI. Every sun
-## control funnels through here -- including Mode and Time of Day, which used to
-## emit sun_changed directly and so skipped the derived-state refresh.
-func _emit_sun_changed() -> void:
-	sun_changed.emit(current_sun)
-	_update_sun_generated_state()
-
-
-## A sun the user has deliberately shaped must actually be visible. In "auto"
-## mode a map that brought its own lights hides the sun entirely, so editing any
-## sun property while auto is selected promotes the mode to "on" -- otherwise the
-## edit is a silent no-op.
-func _promote_auto_mode_to_on() -> void:
-	if current_sun.mode != "auto":
-		return
-	current_sun.mode = "on"
-	for i in range(sun_mode_dropdown.item_count):
-		if sun_mode_dropdown.get_item_metadata(i) == "on":
-			sun_mode_dropdown.select(i)
-			break
-
-
-## Show the regenerate affordance only when the sun has been hand-aimed, i.e.
-## when it no longer matches what the generator would produce for its recorded
-## hour. Derived rather than tracked with a flag, so there is no second piece of
-## state to keep in sync.
-func _update_sun_generated_state() -> void:
-	var generated := DefaultSun.settings_for_time(current_sun.time_of_day)
-	var diverged := (
-		not is_equal_approx(generated.azimuth_degrees, current_sun.azimuth_degrees)
-		or not is_equal_approx(generated.elevation_degrees, current_sun.elevation_degrees)
-		or not is_equal_approx(generated.energy, current_sun.energy)
-		or generated.color != current_sun.color
-	)
-	sun_regenerate_button.visible = diverged
 
 
 func _on_aim_sun_toggled(pressed: bool) -> void:
 	aim_sun_toggled.emit(pressed)
 
 
-func _on_sun_azimuth_changed(value: float) -> void:
-	current_sun.azimuth_degrees = value
-	_promote_auto_mode_to_on()
-	_emit_sun_changed()
-
-
-func _on_sun_elevation_changed(value: float) -> void:
-	current_sun.elevation_degrees = value
-	_promote_auto_mode_to_on()
-	_emit_sun_changed()
-
-
-func _on_sun_color_changed(color: Color) -> void:
-	current_sun.color = color
-	_promote_auto_mode_to_on()
-	_emit_sun_changed()
-
-
+## Forwards to LevelEditSunSection; kept because
+## tests/unit/test_level_edit_panel_dirty.gd calls it directly by name.
 func _on_sun_energy_changed(value: float) -> void:
-	current_sun.energy = value
-	_promote_auto_mode_to_on()
-	_emit_sun_changed()
+	_sun_section.on_energy_changed(value)
 
 
-func _on_sun_shadows_toggled(pressed: bool) -> void:
-	current_sun.shadows_enabled = pressed
-	sun_softness_slider_spin.editable = pressed
-	sun_darkness_slider_spin.editable = pressed
-	_promote_auto_mode_to_on()
-	_emit_sun_changed()
-
-
-func _on_sun_softness_changed(value: float) -> void:
-	current_sun.softness = value
-	_promote_auto_mode_to_on()
-	_emit_sun_changed()
-
-
-func _on_sun_darkness_changed(value: float) -> void:
-	current_sun.shadow_darkness = value
-	_promote_auto_mode_to_on()
-	_emit_sun_changed()
-
-
-func _on_sun_regenerate_pressed() -> void:
-	_on_sun_time_of_day_changed(current_sun.time_of_day)
-
-
-## Called by GameplayMenuController when the gizmo reports a drag, so the
-## numeric fields track the handle.
+## Forwards to LevelEditSunSection; GameplayMenuController calls this when the
+## gizmo reports a drag.
 func set_sun_direction_from_gizmo(azimuth_degrees: float, elevation_degrees: float) -> void:
-	current_sun.azimuth_degrees = azimuth_degrees
-	current_sun.elevation_degrees = elevation_degrees
-	sun_azimuth_slider_spin.set_value_no_signal(azimuth_degrees)
-	sun_elevation_slider_spin.set_value_no_signal(elevation_degrees)
-	_promote_auto_mode_to_on()
-	_emit_sun_changed()
+	_sun_section.apply_gizmo_direction(azimuth_degrees, elevation_degrees)
 
 
-## Called by GameplayMenuController when the gizmo deactivates by any route
-## (RMB, or the measure tool taking over), so the toggle button cannot be left
-## showing a pressed state for an inactive tool.
+## Forwards to LevelEditSunSection; GameplayMenuController calls this when the
+## gizmo deactivates by any route (RMB, or the measure tool taking over), so the
+## toggle button cannot be left showing a pressed state for an inactive tool.
 func set_aim_sun_pressed(pressed: bool) -> void:
-	aim_sun_button.set_pressed_no_signal(pressed)
+	_sun_section.set_aim_pressed(pressed)

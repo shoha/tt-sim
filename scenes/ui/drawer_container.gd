@@ -35,6 +35,11 @@ const _TAB_ICON_COLOR := Color("#db924b")  # color_accent — icon tint
 const _TAB_ICON_PAD_H := 6  # Horizontal (left + right) padding
 const _TAB_ICON_PAD_V := 14  # Vertical (top + bottom) padding
 
+# -- Tab badge ---------------------------------------------------------------
+# Small accent dot drawn at the tab's top-right corner, e.g. for unsaved changes.
+const _TAB_BADGE_SIZE := 8.0
+const _TAB_BADGE_MARGIN := 4.0
+
 @export var edge: DrawerEdge = DrawerEdge.LEFT
 ## Width of the sliding content panel.
 @export var drawer_width: float = 220.0
@@ -92,6 +97,7 @@ var _panel: PanelContainer  ## The sliding content panel
 var _tab_button: Button  ## The clickable tab handle
 var _tab_label: Label
 var _tab_icon_rect: TextureRect
+var _tab_badge: Panel  ## Accent dot overlaid on the tab handle
 var _slide_tween: Tween
 var _is_animating: bool = false
 var _closing_from_open: bool = false  ## True when closing/concealing from an open state
@@ -183,6 +189,24 @@ func toggle() -> void:
 		open()
 
 
+## Show or hide the small accent dot on the tab (e.g. unsaved changes).
+func set_tab_badge(badge_visible: bool) -> void:
+	if _tab_badge:
+		_tab_badge.visible = badge_visible
+
+
+## Tooltip shown when hovering the tab handle.
+func set_tab_tooltip(text: String) -> void:
+	if _tab_button:
+		_tab_button.tooltip_text = text
+
+
+## Subclasses may veto a close initiated from the tab button (e.g. to prompt
+## about unsaved changes). Programmatic close() is never vetoed.
+func _can_close_from_tab() -> bool:
+	return true
+
+
 # -- UI Construction ---------------------------------------------------------
 
 
@@ -258,6 +282,19 @@ func _build_ui() -> void:
 	_tab_icon_rect.texture = tab_icon
 	_tab_button.add_child(_tab_icon_rect)
 
+	# Unsaved-changes dot. Hidden until a subclass calls set_tab_badge(true).
+	_tab_badge = Panel.new()
+	_tab_badge.name = "TabBadge"
+	_tab_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tab_badge.custom_minimum_size = Vector2(_TAB_BADGE_SIZE, _TAB_BADGE_SIZE)
+	_tab_badge.size = Vector2(_TAB_BADGE_SIZE, _TAB_BADGE_SIZE)
+	var badge_style := StyleBoxFlat.new()
+	badge_style.bg_color = _TAB_ICON_COLOR
+	badge_style.set_corner_radius_all(int(_TAB_BADGE_SIZE / 2.0))
+	_tab_badge.add_theme_stylebox_override("panel", badge_style)
+	_tab_badge.visible = false
+	_tab_button.add_child(_tab_badge)
+
 
 func _apply_panel_style() -> void:
 	# Square-cornered panel — no rounded corners so the 3D scene behind
@@ -290,6 +327,14 @@ func _apply_tab_style() -> void:
 
 	var style_pressed := style_normal.duplicate()
 	style_pressed.bg_color = _TAB_COLOR_PRESSED
+
+	# Badge position depends on tab_width, which a subclass may change in
+	# _on_ready(). This runs again afterwards, so it lands on the final width.
+	# Null on the first call from _build_ui(), where the badge does not exist yet.
+	if _tab_badge:
+		_tab_badge.position = Vector2(
+			tab_width - _TAB_BADGE_SIZE - _TAB_BADGE_MARGIN, _TAB_BADGE_MARGIN
+		)
 
 	_tab_button.add_theme_stylebox_override("normal", style_normal)
 	_tab_button.add_theme_stylebox_override("hover", style_hover)
@@ -393,4 +438,6 @@ func _on_slide_finished() -> void:
 
 
 func _on_tab_pressed() -> void:
+	if is_open and not _can_close_from_tab():
+		return
 	toggle()
