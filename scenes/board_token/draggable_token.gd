@@ -23,7 +23,7 @@ const DRAG_SCALE_AMOUNT: float = 1.08  # Sustained scale-up while dragging for "
 const TERRAIN_COLLISION_LAYER: int = 1  # Physics layer for terrain/board surfaces
 
 # Whoosh sound thresholds
-const WHOOSH_SPEED_THRESHOLD: float = 48.0  # Minimum horizontal speed (units/sec) to trigger whoosh
+const WHOOSH_SPEED_THRESHOLD: float = 6.0  # Minimum horizontal speed (units/sec) to trigger whoosh
 const WHOOSH_COOLDOWN_DURATION: float = 0.15  # Minimum time between whoosh sounds
 const WHOOSH_PITCH_MIN: float = 0.85  # Pitch at threshold speed
 const WHOOSH_PITCH_MAX: float = 1.3  # Pitch at very high speed
