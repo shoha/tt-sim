@@ -61,6 +61,13 @@ func test_remove_token_untracks_and_removes_placement_and_state() -> void:
 	assert_null(GameState.get_token_state(TOKEN_ID))
 
 
+func test_remove_token_returns_false_for_null_token() -> void:
+	var parts := _make_level_with_token()
+	var spawner: TokenSpawner = parts[0]
+
+	assert_false(spawner.remove_token(null))
+
+
 func test_rename_token_updates_token_placement_and_state() -> void:
 	var parts := _make_level_with_token()
 	var spawner: TokenSpawner = parts[0]
