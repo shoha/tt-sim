@@ -7,11 +7,12 @@ extends Resource
 ## SunSettings directly so that the intent-level look schema (fog, bloom, grade)
 ## can be added here additively, without another change to LevelData's shape.
 ##
-## The four remaining untyped override bags on LevelData
-## (environment_overrides, lofi_overrides, weather_overrides,
-## foliage_overrides) are deliberately NOT migrated into this resource yet --
-## they move in a later sub-project, once the intent-dial vocabulary has been
-## validated against working UI.
+## The lo-fi, weather and foliage bags are now typed resources of their own on
+## LevelData (`lofi`, `weather`, `foliage`); they are deliberately NOT nested
+## here yet -- they move in a later sub-project, once the intent-dial vocabulary
+## has been validated against working UI. LevelData.environment_overrides stays
+## an open-keyed dictionary, because its key set is
+## EnvironmentPresets.PROPERTY_DEFAULTS rather than a fixed field list.
 
 @export var sun: SunSettings = SunSettings.new()
 

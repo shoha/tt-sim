@@ -564,14 +564,24 @@ var light_intensity_scale: float = 1.0
 ## Environment
 var environment_preset: String = ""          # "" = use map defaults
 var environment_overrides: Dictionary = {}   # Fine-tuned property tweaks
-var lofi_overrides: Dictionary = {}          # Post-processing shader overrides
-var weather_overrides: Dictionary = {}       # Weather effect intensities (rain, snow, fog, wind)
+var lofi: LofiSettings                       # Typed post-processing shader params; serialized as "lofi_overrides"
+var weather: WeatherSettings                 # Typed weather intensities (rain, snow, fog, wind); serialized as "weather_overrides"
+var foliage: FoliageSettings                 # Typed wind-sway tuning; serialized as "foliage_overrides"
 
 ## Tokens
 var token_placements: Array[TokenPlacement] = []
 ```
 
 Key methods: `get_absolute_map_path()` (resolves relative paths for folder-based levels), `is_folder_based()`, `to_dict()` / `from_dict()` (for network serialization), `duplicate_level()`, `validate()`.
+
+`lofi`, `weather`, and `foliage` are typed `Resource` fields (`resources/lofi_settings.gd`,
+`resources/weather_settings.gd`, `resources/foliage_settings.gd`), not raw dictionaries. Each has a
+`KEYS` array, `default()`, a complete `to_dict()` (every key, every time), a sparse-tolerant
+`from_dict()` (older level files with only some keys still load, filling the rest with defaults),
+and `copy_settings()`. The JSON keys under which they serialize (`lofi_overrides`,
+`weather_overrides`, `foliage_overrides`) are unchanged from the old dictionary-based fields, so
+existing level files load without migration; `_set()` also absorbs the legacy dictionary shape from
+older `.tres` files.
 
 See [lighting-and-environment.md](lighting-and-environment.md) for the environment configuration layering model and how `environment_preset`, `environment_overrides`, and map defaults interact.
 
@@ -640,7 +650,7 @@ See [CONVENTIONS.md](CONVENTIONS.md) for the full `level.json` schema and path r
    - Spawns tokens progressively (yields to keep UI responsive)
    - Emits progress signals for loading overlay
    - Manages active gameplay
-4. **In-game editing** — `LevelEditPanel` (drawer on right edge) allows real-time adjustments to map scale, lighting, environment, post-processing, and weather. `GameplayMenuController` routes changes to `LevelPlayController` for immediate application. Cancel reverts all changes; save persists to disk.
+4. **In-game editing** — `LevelEditPanel` (drawer on right edge) allows real-time adjustments to map scale, lighting, environment, post-processing, and weather. `GameplayMenuController` routes changes to `LevelPlayController` for immediate application. Cancel reverts all changes; save persists to disk. The drawer snapshots and restores a `LevelVisualState` (`resources/level_visual_state.gd`), a transient bundle of every live-editable visual field; `LevelPlayController.apply_visual_state()` is the single live apply path used by Cancel, Save, and the client receive path alike. See "GameplayMenuController" below.
 5. **Root** transitions state based on level events
 
 ### Scale & Measurement
@@ -833,7 +843,7 @@ See [CONVENTIONS.md](CONVENTIONS.md) for the full token transform hierarchy, pla
 
 **GM-only controls:** When connected as a client (not host), the asset browser, save button, and level edit drawer are hidden. `GameplayMenuController` listens to `NetworkManager.connection_state_changed` to toggle visibility.
 
-**Edit mode:** When the edit drawer opens, the controller snapshots all current values (`_original_map_scale`, `_original_light_scale`, `_original_weather_overrides`, etc.). On cancel, it restores the originals and re-applies them to the live viewport. When networked, visual changes are broadcast to clients via `NetworkManager`. Live edits are applied locally at once but the network broadcast is coalesced by `VisualBroadcastThrottle` (`scenes/states/playing/visual_broadcast_throttle.gd`) into one merged RPC per 100 ms; Save and Cancel drop any pending batch before sending their own full snapshot.
+**Edit mode:** When the edit drawer opens, the controller snapshots the live level into one `_original_state: LevelVisualState` (`resources/level_visual_state.gd`) — a transient bundle of every live-editable visual field (light intensity, environment preset + overrides, water style, lo-fi, weather, foliage, sun, and the grid scale fields). Cancel calls `_original_state.apply_to_level_data()` then `LevelPlayController.apply_visual_state(_original_state)` plus `update_measure_tool_scale()` (grid fields aren't part of `apply_visual_state()` itself), drops any pending throttle batch, and re-broadcasts the full snapshot. Save calls `state.apply_to_level_data()`, drops the pending batch, re-broadcasts the full snapshot so the host's late-joiner copy (`NetworkManager._current_level_dict`) reflects it, then persists to disk via `LevelManager`. `LevelEditPanel.save_requested` carries the edited `LevelVisualState` directly. When networked, live edits are applied locally at once but the per-field network broadcast is coalesced by `VisualBroadcastThrottle` (`scenes/states/playing/visual_broadcast_throttle.gd`) into one merged RPC per 100 ms, built from `LevelVisualState.to_broadcast_dict()`; Save and Cancel drop any pending batch before sending their own full snapshot. The client receive path (`LevelPlayController._on_visual_settings_received`) rebuilds a `LevelVisualState` from the current level data, patches it with `patch_from_broadcast_dict()`, writes it back with `apply_to_level_data()`, and applies it with `apply_visual_state()`.
 
 ### Token State
 

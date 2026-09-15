@@ -12,6 +12,7 @@ const RAIN_BASE_GRAVITY := Vector3(0, -9.8, 0)
 const SNOW_BASE_GRAVITY := Vector3(0, -1.5, 0)
 const RAIN_WIND_STRENGTH := 6.0  # horizontal m/s^2 at wind intensity 1.0
 const SNOW_WIND_STRENGTH := 2.0
+const FOG_DENSITY_PER_INTENSITY := 0.05  # density added at base per unit of fog intensity
 
 # Baseline (local-space) visibility_aabb half-extents, matching the AABB each
 # emitter is created with. _grow_visibility_aabb() never shrinks below these.
@@ -372,8 +373,8 @@ func _transition_fog(target_intensity: float) -> void:
 	if _fog_tween and _fog_tween.is_valid():
 		_fog_tween.kill()
 
-	# Intensity 1.0 adds 0.05 to base density (substantial visible fog)
-	var target_density := _base_fog_density + target_intensity * 0.05
+	# Intensity 1.0 adds FOG_DENSITY_PER_INTENSITY to base density (substantial visible fog)
+	var target_density := _base_fog_density + target_intensity * FOG_DENSITY_PER_INTENSITY
 
 	if target_intensity > 0.0:
 		env.environment.fog_enabled = true
@@ -385,6 +386,27 @@ func _transition_fog(target_intensity: float) -> void:
 			if target_intensity <= 0.0:
 				env.environment.fog_enabled = _base_fog_enabled
 	)
+
+
+## Re-read the environment's fog as the new base and re-add this renderer's
+## contribution immediately. Call after the environment has been (re)applied
+## from config: EnvironmentPresets writes fog_density/fog_enabled unconditionally,
+## which discards the weather delta, and _transition_fog() would not restore it
+## because the commanded intensity is unchanged.
+func rebase_fog() -> void:
+	if not _environment_manager:
+		return
+	var env := _environment_manager.get_world_environment()
+	if not env or not env.environment:
+		return
+	if _fog_tween and _fog_tween.is_valid():
+		_fog_tween.kill()
+	_base_fog_density = env.environment.fog_density
+	_base_fog_enabled = env.environment.fog_enabled
+	_has_base_fog = true
+	if _fog_intensity > 0.0:
+		env.environment.fog_enabled = true
+		env.environment.fog_density = _base_fog_density + _fog_intensity * FOG_DENSITY_PER_INTENSITY
 
 
 func clear() -> void:

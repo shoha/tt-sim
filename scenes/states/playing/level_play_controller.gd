@@ -237,6 +237,40 @@ func apply_water_style_setting(style: String) -> void:
 ## Apply environment settings to the live WorldEnvironment.
 func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 	_environment_manager.apply_environment_settings(preset, overrides)
+	# The environment apply overwrote fog_density/fog_enabled from config; give
+	# the weather renderer its fog contribution back.
+	var game_map := get_game_map()
+	if game_map:
+		game_map.rebase_weather_fog()
+
+
+## Apply a whole LevelVisualState to the running level. This is the single live
+## apply path: the Visuals drawer's Cancel and Save, and the client receive path,
+## all go through here. Applies the live visual fields only -- light intensity,
+## environment, foliage, sun, water style, lo-fi, weather. It does not write
+## level data, except that apply_light_intensity_scale() mirrors the scale into
+## active_level_data (already the same value for every caller). Grid scale
+## (grid_cell_size, display_unit, display_unit_per_cell) is not networked and is
+## not re-applied here: GridVisibilityController.configure_grid() unconditionally
+## resets grid auto-show state on every call, so running it on every broadcast
+## receive (up to 10 Hz while the host drags a slider) would clear a client's
+## auto-show-on-measure/-on-drag flags mid-interaction. A caller that changed the
+## grid fields on level data must call update_measure_tool_scale() itself
+## afterwards (the drawer's Cancel path does).
+func apply_visual_state(state: LevelVisualState) -> void:
+	apply_light_intensity_scale(state.light_intensity_scale)
+	apply_environment_settings(state.environment_preset, state.environment_overrides)
+	apply_foliage_overrides(state.foliage.to_dict())
+	apply_sun_settings(state.sun.copy_settings())
+	apply_water_style_setting(state.water_style)
+	var game_map := get_game_map()
+	if game_map:
+		# Merge over the full defaults so the three non-editable lo-fi parameters
+		# are reset too (LofiSettings carries only the editable seven).
+		var lofi_config := Constants.LOFI_DEFAULTS.duplicate()
+		lofi_config.merge(state.lofi.to_dict(), true)
+		game_map.apply_lofi_overrides(lofi_config)
+		game_map.apply_weather_overrides(state.weather.to_dict())
 
 
 ## Get the live WorldEnvironment node (or null if not created yet).
@@ -381,47 +415,18 @@ func reset_loading_state() -> void:
 	_level_loader.reset_loading_state()
 
 
-## Called on clients when the host changes visual settings (map scale, lighting, environment, lo-fi)
+## Called on clients when the host changes visual settings. Partial payloads are
+## patched onto a snapshot of the current level state and the whole state is
+## re-applied, so every key goes through the one apply path.
 func _on_visual_settings_received(settings: Dictionary) -> void:
 	if settings.has("map_scale"):
 		_level_loader.set_map_scale(settings["map_scale"])
-	if settings.has("light_intensity"):
-		apply_light_intensity_scale(settings["light_intensity"])
-		if active_level_data:
-			active_level_data.light_intensity_scale = settings["light_intensity"]
-	if settings.has("environment_preset"):
-		var preset: String = settings["environment_preset"]
-		var overrides: Dictionary = settings.get("environment_overrides", {})
-		apply_environment_settings(preset, overrides)
-		if active_level_data:
-			active_level_data.environment_preset = preset
-			active_level_data.environment_overrides = overrides.duplicate()
-	if settings.has("lofi_overrides"):
-		var game_map = get_game_map()
-		if game_map:
-			game_map.apply_lofi_overrides(settings["lofi_overrides"])
-		if active_level_data:
-			active_level_data.lofi_overrides = settings["lofi_overrides"].duplicate()
-	if settings.has("weather_overrides"):
-		var game_map = get_game_map()
-		if game_map:
-			game_map.apply_weather_overrides(settings["weather_overrides"])
-		if active_level_data:
-			active_level_data.weather_overrides = settings["weather_overrides"].duplicate()
-	if settings.has("foliage_overrides"):
-		apply_foliage_overrides(settings["foliage_overrides"])
-		if active_level_data:
-			active_level_data.foliage_overrides = settings["foliage_overrides"].duplicate()
-	if settings.has("sun_settings"):
-		var sun := SunSettings.from_dict(settings["sun_settings"])
-		apply_sun_settings(sun)
-		if active_level_data:
-			active_level_data.visual_settings.sun = sun
-	if settings.has("water_style"):
-		var style: String = settings["water_style"]
-		apply_water_style_setting(style)
-		if active_level_data:
-			active_level_data.water_style = style
+	if not active_level_data:
+		return
+	var state := LevelVisualState.from_level_data(active_level_data)
+	state.patch_from_broadcast_dict(settings)
+	state.apply_to_level_data(active_level_data)
+	apply_visual_state(state)
 
 
 ## Check if a level is currently loaded

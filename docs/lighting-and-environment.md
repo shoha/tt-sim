@@ -468,11 +468,18 @@ LevelEditPanel (UI)
 
 ### Cancel / Revert Behavior
 
-When the panel is closed without saving:
+`GameplayMenuController` snapshots the live level into one `_original_state: LevelVisualState`
+(`resources/level_visual_state.gd`) when the drawer opens — a transient bundle of every
+live-editable visual field (light intensity, environment preset + overrides, water style, lo-fi,
+weather, foliage, sun, and the grid scale fields). When the panel is closed without saving:
 
 1. `GameplayMenuController` detects the drawer closed without a save
-2. Restores all original values (map scale, light intensity, preset, overrides, lo-fi overrides)
-3. Re-applies the original environment settings to the live viewport
+2. `_original_state.apply_to_level_data()` writes the snapshot back onto `LevelData`, then
+   `LevelPlayController.apply_visual_state(_original_state)` re-applies it to the live viewport (see
+   [Data Storage](#data-storage) and `docs/ARCHITECTURE.md`'s GameplayMenuController section for the
+   full apply path, including the client receive path, which goes through the same
+   `apply_visual_state()`)
+3. Any pending `VisualBroadcastThrottle` batch is dropped and the full snapshot is re-broadcast
 
 ## Post-Processing (Lo-Fi) Overrides
 
@@ -488,7 +495,7 @@ The game map uses a lo-fi shader for optional retro-style post-processing. These
 | `vignette_radius` | Vignette falloff radius (a valid `lofi_overrides` key; not exposed as a panel control, so it only changes via `Constants.LOFI_DEFAULTS` or direct edits to a level's data) |
 | `grain_intensity` | Film-grain noise intensity |
 
-Lo-fi overrides are stored in `LevelData.lofi_overrides` and applied via `GameMap.apply_lofi_overrides()`.
+Lo-fi overrides are stored in `LevelData.lofi` (a typed `LofiSettings`) and applied via `GameMap.apply_lofi_overrides()`.
 
 ## Data Storage
 
@@ -506,21 +513,32 @@ Lo-fi overrides are stored in `LevelData.lofi_overrides` and applied via `GameMa
 @export var environment_preset: String = ""
 @export var environment_overrides: Dictionary = {}
 
-# Post-processing
-@export var lofi_overrides: Dictionary = {}
+# Post-processing (typed; serialized under "lofi_overrides")
+@export var lofi: LofiSettings = LofiSettings.default()
 
-# Weather effects (0.0 = off, 1.0 = max)
+# Weather effects (0.0 = off, 1.0 = max), typed; serialized under "weather_overrides"
 # Keys: "rain_intensity", "snow_intensity", "fog_intensity", "wind_intensity"
-@export var weather_overrides: Dictionary = {}
+@export var weather: WeatherSettings = WeatherSettings.default()
 
-# Foliage wind-sway tuning (per-category speed/amplitude for scattered foliage)
+# Foliage wind-sway tuning (per-category speed/amplitude for scattered foliage),
+# typed; serialized under "foliage_overrides"
 # Keys: "tree_sway_speed", "tree_sway_amplitude", "grass_sway_speed", "grass_sway_amplitude"
-@export var foliage_overrides: Dictionary = {}
+@export var foliage: FoliageSettings = FoliageSettings.default()
 
 # Typed sun and shadow configuration (see Sun and Shadow above). Replaced the
 # flat sun_overrides dictionary in format_version 1.
 @export var visual_settings: VisualSettings = VisualSettings.default()
 ```
+
+`lofi`, `weather`, and `foliage` replaced the old sparse `lofi_overrides`/`weather_overrides`/
+`foliage_overrides` `Dictionary` fields with typed `Resource`s (`resources/lofi_settings.gd`,
+`resources/weather_settings.gd`, `resources/foliage_settings.gd`), each with a `KEYS` array,
+`default()`, a complete `to_dict()` (every key, every time — so a full apply can never leave a
+previous level's value behind), a sparse-tolerant `from_dict()` (a level file with only some keys
+set still loads, filling the rest with defaults), and `copy_settings()`. The JSON keys these
+serialize under (`lofi_overrides`, `weather_overrides`, `foliage_overrides`) are unchanged, `level.json`
+below is still accurate, and `FORMAT_VERSION` stays 1 — `LevelData._set()` also absorbs the legacy
+dictionary-typed property from older `.tres` files.
 
 **Important:** `environment_preset` defaults to `""` (empty string), not a named preset. This means new levels start with map defaults when available.
 
@@ -757,7 +775,9 @@ Weather uses a hybrid rendering approach:
 
 ### Data Model
 
-Weather state is stored in `LevelData.weather_overrides` as a flat Dictionary of floats:
+Weather state is stored in `LevelData.weather` as a typed `WeatherSettings` resource
+(`resources/weather_settings.gd`); its `to_dict()` produces the same flat dictionary of floats as
+before, serialized under the `weather_overrides` key:
 
 ```gdscript
 {
@@ -772,13 +792,13 @@ All values default to 0.0. An empty dictionary means no weather. Multiple effect
 
 ### UI Controls
 
-The "Weather" section in `LevelEditPanel` (between Post-Processing and the action buttons) provides four `SliderSpinBox` controls (0.0-1.0, step 0.05). Changes apply in real-time. Save/Cancel handles weather alongside other override dictionaries.
+The "Weather" section in `LevelEditPanel` (between Post-Processing and the action buttons) provides four `SliderSpinBox` controls (0.0-1.0, step 0.05). Changes apply in real-time. Save/Cancel handles weather as one field of the `LevelVisualState` snapshot alongside the other visual fields (see [Cancel / Revert Behavior](#cancel--revert-behavior)).
 
 ### Network Sync
 
 Weather piggybacks on the existing `broadcast_visual_settings` / `visual_settings_received` path with a `"weather_overrides"` key. No new RPCs or signals. Included in full state sync for late joiners (part of `LevelData.to_dict()`).
 
-Foliage wind-sway tuning (see [Data Storage](#data-storage) for `LevelData.foliage_overrides`) is broadcast the same way, via a `"foliage_overrides"` key on the same `broadcast_visual_settings` / `visual_settings_received` path — no new RPCs or signals for it either.
+Foliage wind-sway tuning (`LevelData.foliage`, see [Data Storage](#data-storage)) is broadcast the same way, via a `"foliage_overrides"` key on the same `broadcast_visual_settings` / `visual_settings_received` path — no new RPCs or signals for it either.
 
 Sun and shadow settings (see [Sun and Shadow](#sun-and-shadow)) also piggyback on this path, via a flat `"sun_settings"` key carrying `SunSettings.to_dict()`. The late-joiner mirror is the one place this key is *not* flat: `NetworkManager._patch_current_level_dict()` nests it under `visual_settings.sun` and stamps `format_version`, because `_current_level_dict` is in `LevelData.to_dict()` shape and a top-level `sun_settings` key would be silently ignored by `LevelData.from_dict()` -- a client joining after a live sun edit would otherwise see the default sun instead of the host's. See `autoloads/network_manager.gd`'s `broadcast_visual_settings()` and `_patch_current_level_dict()`.
 
@@ -812,14 +832,14 @@ All intensity changes animate smoothly over 1 second via tweens on `amount_ratio
 | File | Purpose |
 |------|---------|
 | `scenes/effects/weather_renderer.gd` | Core renderer class (emitters, fog, camera tracking, transitions) |
-| `resources/level_data.gd` | `weather_overrides` field (serialization, duplication) |
+| `resources/level_data.gd` | `weather` field (typed `WeatherSettings`; serialization, duplication) |
 | `scenes/states/playing/level_edit_panel.gd` | Weather UI section (sliders, signals) |
 | `scenes/states/playing/gameplay_menu_controller.gd` | Signal routing, snapshot/revert, network broadcast |
 | `scenes/states/playing/level_play_controller.gd` | Lifecycle (setup, network sync, teardown) |
 | `scenes/states/playing/game_map.gd` | `setup_weather()`, `apply_weather_overrides()`, `clear_weather()` |
 | `utils/wind_foliage.gd` | `PRESETS`, `get_effective_preset()` — foliage wind-sway classification and per-category preset merging |
 | `utils/glb_utils.gd` | Bakes `foliage_overrides` into wind `ShaderMaterial`s at map-load time (`process_scatter_instances()`) |
-| `resources/level_data.gd` | `foliage_overrides` field (serialization, duplication) |
+| `resources/level_data.gd` | `foliage` field (typed `FoliageSettings`; serialization, duplication) |
 | `scenes/states/playing/level_environment_manager.gd` | `store_wind_materials()`, `apply_foliage_overrides()` — live re-tuning of already-loaded materials |
 | `scenes/states/playing/level_play_controller.gd` | `apply_foliage_overrides()` — delegates to `LevelEnvironmentManager`, network sync |
 
