@@ -549,7 +549,7 @@ The panel is divided into sections:
 - Pixelation, Color Depth, Color Fade, Outline
 
 **Actions:**
-- Revert to Map Defaults, Edit Details, Save Level, Cancel
+- Revert to Map Defaults, Cancel, Save
 
 ### Signal Architecture
 
