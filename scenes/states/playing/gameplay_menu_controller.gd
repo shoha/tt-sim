@@ -9,22 +9,9 @@ signal drag_place_started(pack_id: String, asset_id: String, variant_id: String,
 
 var _level_play_controller: LevelPlayController = null
 
-# Original values snapshot for edit mode cancel/revert
-var _original_light_intensity: float = 1.0
-var _original_environment_preset: String = ""
-var _original_environment_overrides: Dictionary = {}
-var _original_lofi_overrides: Dictionary = {}
-var _original_weather_overrides: Dictionary = {}
-var _original_foliage_overrides: Dictionary = {}
-## Snapshot taken when the edit drawer opens, restored on cancel. Initialized to
-## a real VisualSettings rather than null: _snapshot_original_values() always
-## replaces it before either consumer runs, but both consumers dereference .sun
-## unguarded, so a null would be a hard crash instead of a wrong-but-live sun.
-var _original_visual_settings: VisualSettings = VisualSettings.default()
-var _original_grid_cell_size: float = 1.524
-var _original_display_unit: String = "ft"
-var _original_display_unit_per_cell: float = 5.0
-var _original_water_style: String = ""
+## Snapshot of every editable visual field, taken when the drawer opens and
+## restored on Cancel. See LevelVisualState.
+var _original_state: LevelVisualState = LevelVisualState.new()
 
 ## Coalesces per-tick visual-settings RPCs from the drawer into one send per interval.
 var _visual_broadcast := VisualBroadcastThrottle.new()
@@ -310,19 +297,7 @@ func _enter_edit_mode() -> void:
 	var level_data = _level_play_controller.active_level_data
 
 	# Snapshot original values for cancel/revert
-	_original_light_intensity = level_data.light_intensity_scale
-	_original_environment_preset = level_data.environment_preset
-	_original_environment_overrides = level_data.environment_overrides.duplicate()
-	_original_lofi_overrides = level_data.lofi.to_dict()
-	_original_weather_overrides = level_data.weather.to_dict()
-	_original_foliage_overrides = level_data.foliage.to_dict()
-	# copy_settings(), not assignment: VisualSettings is a Resource, so an alias
-	# would let live edits overwrite the snapshot and silently break cancel.
-	_original_visual_settings = level_data.visual_settings.copy_settings()
-	_original_grid_cell_size = level_data.grid_cell_size
-	_original_display_unit = level_data.display_unit
-	_original_display_unit_per_cell = level_data.display_unit_per_cell
-	_original_water_style = level_data.water_style
+	_original_state = LevelVisualState.from_level_data(level_data)
 
 	# Initialize the edit panel with current values
 	var map_defaults = _level_play_controller.get_map_environment_config()
@@ -330,74 +305,23 @@ func _enter_edit_mode() -> void:
 	level_edit_panel.initialize(level_data, map_defaults, has_map_sky)
 
 
-## Revert all live changes to the original snapshot values.
+## Revert all live changes to the snapshot taken when the drawer opened.
 func _revert_edit_mode_values() -> void:
 	if not _level_play_controller or not _level_play_controller.has_active_level():
 		return
-
-	var level_data = _level_play_controller.active_level_data
-
-	# Restore original values to level data
-	level_data.light_intensity_scale = _original_light_intensity
-	level_data.environment_preset = _original_environment_preset
-	level_data.environment_overrides = _original_environment_overrides.duplicate()
-	level_data.lofi = LofiSettings.from_dict(_original_lofi_overrides)
-	level_data.weather = WeatherSettings.from_dict(_original_weather_overrides)
-	level_data.foliage = FoliageSettings.from_dict(_original_foliage_overrides)
-	level_data.visual_settings = _original_visual_settings.copy_settings()
-	level_data.grid_cell_size = _original_grid_cell_size
-	level_data.display_unit = _original_display_unit
-	level_data.display_unit_per_cell = _original_display_unit_per_cell
-	level_data.water_style = _original_water_style
-
-	# Grid cell size / units are consumed by the measure tool, snap and overlay at
-	# configure time, so restoring the fields alone leaves the live grid on the
-	# edited value (compare the live path in _on_edit_scale_config_changed).
+	var level_data: LevelData = _level_play_controller.active_level_data
+	# Level data first: apply_visual_state() re-reads the grid fields from it.
+	_original_state.apply_to_level_data(level_data)
+	_level_play_controller.apply_visual_state(_original_state)
+	# apply_visual_state() deliberately does not reconfigure the grid (grid scale
+	# is not broadcast, and reconfiguring it on every broadcast reset the grid
+	# auto-show flags), but the measure tool, snap and overlay read the grid
+	# fields at configure time, so it must be re-applied explicitly here.
 	_level_play_controller.update_measure_tool_scale()
-
-	# Re-apply original values to the live game
-	_level_play_controller.apply_light_intensity_scale(_original_light_intensity)
-	_level_play_controller.apply_environment_settings(
-		_original_environment_preset, _original_environment_overrides
-	)
-	_level_play_controller.apply_foliage_overrides(_original_foliage_overrides)
-	# .copy_settings() so the snapshot cannot be mutated through the reference we
-	# hand out. Both consumers are read-only today; this keeps that guarantee
-	# local instead of resting on behaviour in another file.
-	_level_play_controller.apply_sun_settings(_original_visual_settings.sun.copy_settings())
-	_level_play_controller.apply_water_style_setting(_original_water_style)
-
-	var game_map = _level_play_controller.get_game_map()
-	if game_map:
-		# The snapshots are LofiSettings.to_dict() / WeatherSettings.to_dict(), so
-		# they carry every editable key. No reset-then-overlay is needed: a single
-		# apply already puts every parameter back where it was.
-		game_map.apply_lofi_overrides(_original_lofi_overrides)
-		game_map.apply_weather_overrides(_original_weather_overrides)
-
-	# Broadcast reverted values to clients so they also snap back, for the same
-	# reason complete dictionaries matter locally.
 	# A pending partial batch must not land after this full snapshot.
 	_visual_broadcast.drop()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		(
-			NetworkManager
-			. broadcast_visual_settings(
-				{
-					"light_intensity": _original_light_intensity,
-					"environment_preset": _original_environment_preset,
-					"environment_overrides": _original_environment_overrides,
-					"lofi_overrides": _original_lofi_overrides,
-					"weather_overrides": _original_weather_overrides,
-					"foliage_overrides": _original_foliage_overrides,
-					# .copy_settings() for the same reason as the apply above:
-					# to_dict() is read-only, but the snapshot should not be
-					# reachable from outside this function at all.
-					"sun_settings": _original_visual_settings.sun.copy_settings().to_dict(),
-					"water_style": _original_water_style,
-				}
-			)
-		)
+		NetworkManager.broadcast_visual_settings(_original_state.to_broadcast_dict())
 
 
 # --- Edit Panel Signal Handlers ---
@@ -558,24 +482,12 @@ func _on_edit_water_style_changed(style: String) -> void:
 
 
 ## Save all edited values to level data and persist to disk
-func _on_edit_save_requested(values: Dictionary) -> void:
+func _on_edit_save_requested(state: LevelVisualState) -> void:
 	if not _level_play_controller or not _level_play_controller.has_active_level():
 		return
 
-	var level_data = _level_play_controller.active_level_data
-
-	# Apply all values to level data
-	level_data.light_intensity_scale = values["light_intensity_scale"]
-	level_data.environment_preset = values["environment_preset"]
-	level_data.environment_overrides = values["environment_overrides"].duplicate()
-	level_data.lofi = LofiSettings.from_dict(values["lofi_overrides"])
-	level_data.weather = WeatherSettings.from_dict(values["weather_overrides"])
-	level_data.foliage = FoliageSettings.from_dict(values["foliage_overrides"])
-	level_data.visual_settings.sun = (values["sun_settings"] as SunSettings).copy_settings()
-	level_data.grid_cell_size = values["grid_cell_size"]
-	level_data.display_unit = values["display_unit"]
-	level_data.display_unit_per_cell = values["display_unit_per_cell"]
-	level_data.water_style = values["water_style"]
+	var level_data: LevelData = _level_play_controller.active_level_data
+	state.apply_to_level_data(level_data)
 
 	# Re-broadcast the saved values so the host's late-joiner snapshot
 	# (_current_level_dict) is guaranteed to reflect what was just saved, even
@@ -583,21 +495,7 @@ func _on_edit_save_requested(values: Dictionary) -> void:
 	# A pending partial batch must not land after this full snapshot.
 	_visual_broadcast.drop()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		(
-			NetworkManager
-			. broadcast_visual_settings(
-				{
-					"light_intensity": values["light_intensity_scale"],
-					"environment_preset": values["environment_preset"],
-					"environment_overrides": values["environment_overrides"],
-					"lofi_overrides": values["lofi_overrides"],
-					"weather_overrides": values["weather_overrides"],
-					"foliage_overrides": values["foliage_overrides"],
-					"sun_settings": (values["sun_settings"] as SunSettings).to_dict(),
-					"water_style": values["water_style"],
-				}
-			)
-		)
+		NetworkManager.broadcast_visual_settings(state.to_broadcast_dict())
 
 	# Save to disk — use folder format when the level came from a folder
 	var save_path := ""

@@ -6,7 +6,7 @@ extends DrawerContainer
 ## Changes apply immediately to the live game viewport.
 ## Uses DrawerContainer with edge = RIGHT so the tab appears on the left.
 
-signal save_requested(values: Dictionary)
+signal save_requested(state: LevelVisualState)
 signal cancel_requested
 signal intensity_changed(new_scale: float)
 signal scale_config_changed(
@@ -654,24 +654,24 @@ func _on_tonemap_mode_selected(index: int) -> void:
 
 
 func _on_save_pressed() -> void:
-	(
-		save_requested
-		. emit(
-			{
-				"light_intensity_scale": light_intensity_scale,
-				"environment_preset": current_preset,
-				"environment_overrides": current_overrides,
-				"lofi_overrides": current_lofi.to_dict(),
-				"weather_overrides": current_weather.to_dict(),
-				"foliage_overrides": current_foliage.to_dict(),
-				"sun_settings": current_sun,
-				"grid_cell_size": current_grid_cell_size,
-				"display_unit": current_display_unit,
-				"display_unit_per_cell": current_display_unit_per_cell,
-				"water_style": current_water_style,
-			}
-		)
-	)
+	save_requested.emit(_build_state())
+
+
+## Everything the drawer currently shows, as one independent LevelVisualState.
+func _build_state() -> LevelVisualState:
+	var state := LevelVisualState.new()
+	state.light_intensity_scale = light_intensity_scale
+	state.environment_preset = current_preset
+	state.environment_overrides = current_overrides.duplicate()
+	state.water_style = current_water_style
+	state.lofi = current_lofi.copy_settings()
+	state.weather = current_weather.copy_settings()
+	state.foliage = current_foliage.copy_settings()
+	state.sun = current_sun.copy_settings()
+	state.grid_cell_size = current_grid_cell_size
+	state.display_unit = current_display_unit
+	state.display_unit_per_cell = current_display_unit_per_cell
+	return state
 
 
 func _on_cancel_pressed() -> void:
