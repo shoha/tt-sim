@@ -16,9 +16,16 @@ extends Node3D
 ## SETUP:
 ## Call setup() with references to the camera, map container, and token container
 ## after the map has been loaded. The manager converts map materials to the
-## occlusion shader and updates token positions every few physics frames.
+## occlusion shader, then packs token positions into one shared texture and
+## publishes the count as a global every few physics frames.
 
 const MAX_TOKENS := 32
+## Width of the shared token data texture (one pixel per token slot).
+const TOKEN_TEXTURE_WIDTH := MAX_TOKENS
+## Global shader parameter carrying the number of valid token slots.
+const GLOBAL_TOKEN_COUNT := &"occlusion_token_count"
+## Per-material sampler uniform the shared token texture is bound to.
+const TOKEN_TEXTURE_UNIFORM := &"occlusion_tokens"
 
 ## Multiplier applied to the token's collision extent to compute its fade radius.
 ## Higher = geometry fades further away from the token; lower = tighter fade zone.
@@ -62,12 +69,25 @@ var _frame_counter: int = 0
 var _is_setup: bool = false
 var _lofi_pixelation: float = 0.0  # Mirror of lo-fi shader's pixelation value (0 = disabled)
 
+# Shared token data: pixel i = (world x, y, z, fade radius). Bound once to every
+# material; one update() per tick reaches all of them.
+var _token_image: Image
+var _token_texture: ImageTexture
+
+# Mirrors the value last published to GLOBAL_TOKEN_COUNT. RenderingServer's global
+# shader parameter getter only returns real values inside the editor process (it
+# warns and returns null from a running game, GUT tests included, headless or not)
+# -- this field lets tests observe the published count without that getter.
+var _last_token_count: int = 0
+
 
 func _ready() -> void:
 	set_physics_process(false)
 	_shader = load("res://shaders/occlusion_fade.gdshader") as Shader
 	if not _shader:
 		push_error("OcclusionFadeManager: Failed to load occlusion_fade.gdshader")
+	_token_image = build_token_image([])
+	_token_texture = ImageTexture.create_from_image(_token_image)
 
 
 ## Initialize the manager with required node references.
@@ -94,6 +114,8 @@ func clear() -> void:
 	_converted_meshes.clear()
 	_all_shader_materials.clear()
 	_tree_materials.clear()
+	RenderingServer.global_shader_parameter_set(GLOBAL_TOKEN_COUNT, 0)
+	_last_token_count = 0
 	_is_setup = false
 	set_physics_process(false)
 
@@ -208,7 +230,7 @@ func _create_shader_material_from(std_mat: StandardMaterial3D) -> ShaderMaterial
 
 	# --- Occlusion parameters ---
 	mat.set_shader_parameter("min_alpha", min_alpha)
-	mat.set_shader_parameter("token_count", 0)
+	mat.set_shader_parameter(TOKEN_TEXTURE_UNIFORM, _token_texture)
 	mat.set_shader_parameter("lofi_pixelation", _lofi_pixelation)
 	mat.set_shader_parameter("lofi_dither_scale", lofi_dither_scale)
 
@@ -244,6 +266,7 @@ func _collect_tree_materials() -> void:
 				continue
 
 			shader_mat.set_shader_parameter("enable_occlusion", true)
+			shader_mat.set_shader_parameter(TOKEN_TEXTURE_UNIFORM, _token_texture)
 			shader_mat.set_shader_parameter("min_alpha", min_alpha)
 			shader_mat.set_shader_parameter("lofi_pixelation", _lofi_pixelation)
 			shader_mat.set_shader_parameter("lofi_dither_scale", lofi_dither_scale)
@@ -267,59 +290,66 @@ func _disable_tree_materials() -> void:
 # =============================================================================
 
 
-## Collect token world positions and per-token fade radii, then push to shaders.
-## Uses the collision shape AABB center as the token position and derives the
-## fade radius from the AABB extent so small tokens get a tight zone and large
-## tokens get a proportionally larger one.
+## Collect token world centres and per-token fade radii, pack them into the shared
+## token texture, and publish the count as a global. One texture update plus one
+## global set per tick, regardless of how many materials are converted.
 func _update_token_uniforms() -> void:
-	var positions: Array = []
-	var radii: Array = []
-	var count := 0
+	var entries := _collect_token_entries()
+	_token_image = build_token_image(entries)
+	_token_texture.update(_token_image)
+	RenderingServer.global_shader_parameter_set(GLOBAL_TOKEN_COUNT, entries.size())
+	_last_token_count = entries.size()
 
+
+## Per-token (world centre, fade radius) as Vector4(x, y, z, radius). Uses the
+## collision shape AABB centre as the token position and derives the fade radius
+## from the AABB extent so small tokens get a tight zone and large tokens get a
+## proportionally larger one. Capped at MAX_TOKENS.
+func _collect_token_entries() -> Array[Vector4]:
+	var entries: Array[Vector4] = []
 	for child in _tokens_container.get_children():
-		if child is BoardToken:
-			var token := child as BoardToken
-			if not token.rigid_body or not token.rigid_body.visible:
-				continue
+		if child is not BoardToken:
+			continue
+		var token := child as BoardToken
+		if not token.rigid_body or not token.rigid_body.visible:
+			continue
 
-			# Find the token model's center and extent from its collision shape AABB.
-			# This excludes the SelectionGlow disc (which is a separate mesh).
-			var center_pos := token.rigid_body.global_position
-			var token_radius := min_fade_radius
-			var col_shape := _find_collision_shape(token.rigid_body)
-			if col_shape and col_shape.shape:
-				var aabb := col_shape.shape.get_debug_mesh().get_aabb()
-				var local_center_y: float = aabb.position.y + aabb.size.y * 0.5
-				var token_scale: Vector3 = token.rigid_body.scale
-				center_pos += Vector3.UP * local_center_y * token_scale.y
+		# Find the token model's center and extent from its collision shape AABB.
+		# This excludes the SelectionGlow disc (which is a separate mesh).
+		var center_pos := token.rigid_body.global_position
+		var token_radius := min_fade_radius
+		var col_shape := _find_collision_shape(token.rigid_body)
+		if col_shape and col_shape.shape:
+			var aabb := col_shape.shape.get_debug_mesh().get_aabb()
+			var local_center_y: float = aabb.position.y + aabb.size.y * 0.5
+			var token_scale: Vector3 = token.rigid_body.scale
+			center_pos += Vector3.UP * local_center_y * token_scale.y
 
-				# Compute the fade radius from the token's horizontal footprint.
-				# Use the larger of X/Z (ground-plane extent) rather than the
-				# full 3D diagonal, which over-estimates for tall models.
-				var scaled_size := aabb.size * token_scale
-				var half_extent := maxf(scaled_size.x, scaled_size.z) * 0.5
-				token_radius = maxf(half_extent * fade_radius_multiplier, min_fade_radius)
-			else:
-				# Fallback: use a flat height offset and default radius
-				center_pos += Vector3.UP * token_ray_height
+			# Compute the fade radius from the token's horizontal footprint.
+			# Use the larger of X/Z (ground-plane extent) rather than the
+			# full 3D diagonal, which over-estimates for tall models.
+			var scaled_size := aabb.size * token_scale
+			var half_extent := maxf(scaled_size.x, scaled_size.z) * 0.5
+			token_radius = maxf(half_extent * fade_radius_multiplier, min_fade_radius)
+		else:
+			# Fallback: use a flat height offset and default radius
+			center_pos += Vector3.UP * token_ray_height
 
-			positions.append(center_pos)
-			radii.append(token_radius)
-			count += 1
-			if count >= MAX_TOKENS:
-				break
+		entries.append(Vector4(center_pos.x, center_pos.y, center_pos.z, token_radius))
+		if entries.size() >= MAX_TOKENS:
+			break
+	return entries
 
-	# Pad to 32 entries (shader arrays are fixed size)
-	while positions.size() < MAX_TOKENS:
-		positions.append(Vector3.ZERO)
-		radii.append(0.0)
 
-	# Update all shader materials with the new token data
-	for mat in _all_shader_materials:
-		if is_instance_valid(mat):
-			mat.set_shader_parameter("token_count", count)
-			mat.set_shader_parameter("token_positions", positions)
-			mat.set_shader_parameter("token_radii", radii)
+## Pack (x, y, z, radius) entries into a TOKEN_TEXTURE_WIDTH x 1 RGBAF image.
+## Unused slots are zero, which the shader treats as "no token" (radius 0).
+static func build_token_image(entries: Array[Vector4]) -> Image:
+	var image := Image.create_empty(TOKEN_TEXTURE_WIDTH, 1, false, Image.FORMAT_RGBAF)
+	var count := mini(entries.size(), TOKEN_TEXTURE_WIDTH)
+	for i in range(count):
+		var e := entries[i]
+		image.set_pixel(i, 0, Color(e.x, e.y, e.z, e.w))
+	return image
 
 
 # =============================================================================

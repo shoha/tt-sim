@@ -2,8 +2,9 @@
 // show through when geometry sits between them and the camera. Included by both
 // occlusion_fade.gdshader (map geometry) and wind_foliage.gdshader (tree-category
 // scattered foliage) so the dither/discard math has exactly one source of truth --
-// see OcclusionFadeManager (scenes/states/playing/occlusion_fade_manager.gd) for how
-// the uniforms below are populated.
+// see OcclusionFadeManager (scenes/states/playing/occlusion_fade_manager.gd), which
+// populates occlusion_tokens (a shared token data texture) and the
+// occlusion_token_count global below.
 //
 // enable_occlusion exists because tree foliage materials are never swapped away
 // from this shader when the effect is toggled off (unlike map materials, which get
@@ -12,13 +13,19 @@
 
 group_uniforms occlusion;
 uniform bool enable_occlusion = true;
-uniform int token_count = 0;
-uniform vec3 token_positions[32]; // World-space positions (visual center, not feet)
-uniform float token_radii[32];    // Per-token fade radius (view-space), derived from collision shape
+// One shared 32x1 RGBAF texture bound once per material by OcclusionFadeManager:
+// pixel i = (world x, world y, world z, fade radius) for token i. Updating the
+// texture once per tick reaches every material at once, instead of pushing three
+// uniform arrays to each of them.
+uniform sampler2D occlusion_tokens : filter_nearest, repeat_disable;
 uniform float min_alpha = 0.3;    // Target opacity at the center of the fade zone
 uniform float floor_threshold = 0.5; // World-space normal Y above this = floor (never fades)
 uniform float lofi_pixelation = 0.0; // Pixelation from the lo-fi shader (0 = disabled, aligns dither grid)
 uniform float lofi_dither_scale = 1.0; // Dither subdivisions per lo-fi pixel (1 = 1:1 with grid)
+
+// Number of valid entries in occlusion_tokens. Global so the manager sets it once per
+// tick for every material (see project.godot [shader_globals]).
+global uniform int occlusion_token_count;
 
 
 // 16x16 Bayer ordered dither via recursive construction. Builds from 2x2 -> 4x4 ->
@@ -65,23 +72,26 @@ void apply_occlusion_fade(
 	vec3 world_normal, vec3 vertex_view, mat4 view_matrix, vec2 frag_coord, vec2 viewport_size
 ) {
 	bool is_floor = world_normal.y > floor_threshold;
-	if (!enable_occlusion || token_count <= 0 || is_floor) {
+	if (!enable_occlusion || occlusion_token_count <= 0 || is_floor) {
 		return;
 	}
 
 	float fade_intensity = 0.0;
 	for (int i = 0; i < 32; i++) {
-		if (i >= token_count) break;
+		if (i >= occlusion_token_count) break;
+
+		vec4 token_data = texelFetch(occlusion_tokens, ivec2(i, 0), 0);
+		float radius = token_data.w;
+		if (radius <= 0.0) continue;
 
 		// Transform token world position to view space
-		vec3 token_view = (view_matrix * vec4(token_positions[i], 1.0)).xyz;
+		vec3 token_view = (view_matrix * vec4(token_data.xyz, 1.0)).xyz;
 
 		// Skip if this fragment is behind (further from camera than) the token
 		if (vertex_view.z <= token_view.z) continue;
 
 		// Distance in the camera's XY plane (screen-space proximity)
 		float dist = distance(vertex_view.xy, token_view.xy);
-		float radius = token_radii[i];
 
 		if (dist < radius) {
 			// Smooth gradient: full fade at center, zero at edge
