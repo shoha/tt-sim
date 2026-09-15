@@ -182,10 +182,11 @@ func show_danger_confirmation(
 	title: String,
 	message: String,
 	confirm_callback: Callable = Callable(),
-	confirm_text: String = "Delete"
+	confirm_text: String = "Delete",
+	cancel_text: String = "Cancel"
 ) -> Node:
 	return show_confirmation(
-		title, message, confirm_text, "Cancel", confirm_callback, Callable(), "Danger"
+		title, message, confirm_text, cancel_text, confirm_callback, Callable(), "Danger"
 	)
 
 
