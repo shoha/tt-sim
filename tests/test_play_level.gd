@@ -28,6 +28,7 @@ var _selector_canvas: CanvasLayer = null
 var _selector_panel: PanelContainer = null
 var _level_dropdown: OptionButton = null
 var _play_button: Button = null
+var _selector_status_label: Label = null
 var _hud_panel: PanelContainer = null
 var _level_name_label: Label = null
 
@@ -40,8 +41,7 @@ func _ready() -> void:
 	_refresh_level_list()
 
 	if auto_play and _saved_levels.size() > 0:
-		# Auto-play the most recently modified level
-		_play_level_at_index(0)
+		_auto_play_first_valid_level()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -110,9 +110,26 @@ func _refresh_level_list() -> void:
 		_level_dropdown.add_item(label_text, i)
 
 
-func _play_level_at_index(index: int) -> void:
+## Try each saved level in order (newest first) until one loads and plays.
+## Falls back to the selector UI with a clear message if none are playable --
+## e.g. if the only saved entry is an in-progress autosave with no map assigned.
+func _auto_play_first_valid_level() -> void:
+	for i in range(_saved_levels.size()):
+		if _play_level_at_index(i):
+			return
+
+	push_warning("TestPlayLevel: No playable saved levels found; showing selector.")
+	_set_selector_status(
+		"No playable levels found (%d saved, none has a map assigned)." % _saved_levels.size()
+	)
+
+
+## Load and start playing the level at `index`. Returns true on success, false if
+## the level could not be loaded or has no map assigned -- in which case the
+## selector UI stays visible instead of erroring out silently.
+func _play_level_at_index(index: int) -> bool:
 	if index < 0 or index >= _saved_levels.size():
-		return
+		return false
 
 	var info = _saved_levels[index]
 	var level_data: LevelData = null
@@ -123,11 +140,17 @@ func _play_level_at_index(index: int) -> void:
 		level_data = LevelManager.load_level(info.path, false)
 
 	if not level_data:
-		push_error("TestPlayLevel: Failed to load level: " + info.name)
-		return
+		push_warning("TestPlayLevel: Failed to load level: " + info.name)
+		return false
+
+	if level_data.map_path.is_empty():
+		push_warning("TestPlayLevel: Skipping unplayable level (no map assigned): " + info.name)
+		return false
 
 	_active_level_data = level_data
 	_start_playing(level_data)
+	_set_selector_status("")
+	return true
 
 
 func _play_current_level() -> void:
@@ -295,6 +318,14 @@ func _build_selector_ui() -> void:
 	_play_button.pressed.connect(_on_play_pressed)
 	vbox.add_child(_play_button)
 
+	# Status message (e.g. "no playable levels found")
+	_selector_status_label = Label.new()
+	_selector_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_selector_status_label.add_theme_font_size_override("font_size", 13)
+	_selector_status_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.4))
+	_selector_status_label.visible = false
+	vbox.add_child(_selector_status_label)
+
 
 func _build_hud_ui() -> void:
 	var canvas = CanvasLayer.new()
@@ -339,4 +370,12 @@ func _build_hud_ui() -> void:
 func _on_play_pressed() -> void:
 	var index = _level_dropdown.selected
 	if index >= 0:
-		_play_level_at_index(index)
+		if not _play_level_at_index(index):
+			_set_selector_status("Could not play that level (no map assigned).")
+
+
+func _set_selector_status(message: String) -> void:
+	if not _selector_status_label:
+		return
+	_selector_status_label.text = message
+	_selector_status_label.visible = not message.is_empty()
