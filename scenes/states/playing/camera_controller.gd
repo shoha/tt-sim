@@ -9,7 +9,7 @@ extends Node
 ##
 ## Created as a child Node of GameMap in _ready() (mirrors the AssetManager
 ## facade/sub-component pattern). Reads node references (camera_node,
-## world_viewport, cameraholder_node, tiltshift_node, map_container,
+## world_viewport, cameraholder_node, map_container,
 ## drag_and_drop_node) directly from the injected GameMap reference at call
 ## time, since these nodes live inside the SubViewport and are shared with
 ## other sub-components.
@@ -279,6 +279,11 @@ func handle_zoom(delta: float) -> void:
 	# because the tween would overwrite our correction each frame causing wobble.
 	var tween_active := _reset_tween and _reset_tween.is_valid() and _reset_tween.is_running()
 
+	# Already at the target size with no reset/focus tween running: the size lerp,
+	# cursor-position correction, and offset update below are all no-ops. Skip them.
+	if not zooming and not tween_active:
+		return
+
 	var world_before: Vector3
 	if zooming and not tween_active:
 		world_before = camera_node.project_position(_last_mouse_position, 0)
@@ -296,10 +301,6 @@ func handle_zoom(delta: float) -> void:
 	# Scale camera offset to match current size — no visual effect for orthographic,
 	# but keeps the near plane ahead of all visible ground geometry.
 	_update_camera_offset()
-
-	# Update tilt-shift DoF from logical zoom (_target_zoom, independent of aspect correction)
-	var zoom_percentage: float = (_target_zoom - min_zoom) / (max_zoom - min_zoom)
-	_game_map.tiltshift_node.mesh.material.set_shader_parameter(&"DoF", 5 * zoom_percentage)
 
 
 ## Record the latest mouse position (tracked every frame, even during

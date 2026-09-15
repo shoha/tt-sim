@@ -53,9 +53,6 @@ var cameraholder_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubView
 @onready var camera_node: Camera3D = get_node(
 	"WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D"
 )
-@onready var tiltshift_node: MeshInstance3D = get_node(
-	"WorldViewportLayer/SubViewportContainer/SubViewport/CameraHolder/Camera3D/MeshInstance3D"
-)
 @onready
 var map_container: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/MapContainer
 @onready
