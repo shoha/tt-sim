@@ -23,7 +23,7 @@ const DRAG_SCALE_AMOUNT: float = 1.08  # Sustained scale-up while dragging for "
 const TERRAIN_COLLISION_LAYER: int = 1  # Physics layer for terrain/board surfaces
 
 # Whoosh sound thresholds
-const WHOOSH_SPEED_THRESHOLD: float = 48.0  # Minimum horizontal speed (units/sec) to trigger whoosh
+const WHOOSH_SPEED_THRESHOLD: float = 10.0  # Minimum horizontal speed (units/sec) to trigger whoosh
 const WHOOSH_COOLDOWN_DURATION: float = 0.15  # Minimum time between whoosh sounds
 const WHOOSH_PITCH_MIN: float = 0.85  # Pitch at threshold speed
 const WHOOSH_PITCH_MAX: float = 1.3  # Pitch at very high speed
@@ -61,6 +61,7 @@ var _last_drop_height: float = 0.0  # Stored during settle for token_landed sign
 var _is_cancel_settle: bool = false  # True when settling back to start after cancel (skip effects)
 
 var _whoosh_cooldown: float = 0.0
+var _whoosh_armed: bool = true  # Re-armed only after speed drops back below the threshold
 
 # Water interaction state (see WaterZone / set_submerged())
 var _is_submerged: bool = false
@@ -208,6 +209,8 @@ func _on_dragging_started() -> void:
 
 	_last_drag_position = rigid_body.global_position
 	_drag_velocity = Vector3.ZERO
+	_whoosh_armed = true
+	_whoosh_cooldown = 0.0
 
 	# Show drop indicator
 	if _drop_indicator:
@@ -506,6 +509,24 @@ func _reset_lean() -> void:
 			child.transform.basis = Basis.IDENTITY
 
 
+## Decide whether a whoosh should play for this frame's horizontal speed.
+## Rising-edge triggered: fires once when speed crosses WHOOSH_SPEED_THRESHOLD
+## upward and does not fire again until speed has dropped back below it, so a
+## sustained fast drag produces one whoosh per acceleration burst rather than
+## one every cooldown tick. The cooldown remains as a secondary guard against
+## jitter straddling the threshold.
+func _should_play_whoosh(speed: float, delta: float) -> bool:
+	_whoosh_cooldown = max(_whoosh_cooldown - delta, 0.0)
+	if speed < WHOOSH_SPEED_THRESHOLD:
+		_whoosh_armed = true
+		return false
+	if not _whoosh_armed or _whoosh_cooldown > 0.0:
+		return false
+	_whoosh_armed = false
+	_whoosh_cooldown = WHOOSH_COOLDOWN_DURATION
+	return true
+
+
 func _update_inertia_lean(delta: float) -> void:
 	var current_position = rigid_body.global_position
 	var position_delta = current_position - _last_drag_position
@@ -530,15 +551,13 @@ func _update_inertia_lean(delta: float) -> void:
 				current_basis.slerp(_target_lean_rotation, LEAN_SMOOTHING * delta).orthonormalized()
 			)
 
-	# Whoosh sound when dragging fast
-	_whoosh_cooldown = max(_whoosh_cooldown - delta, 0.0)
-	if speed >= WHOOSH_SPEED_THRESHOLD and _whoosh_cooldown <= 0.0:
-		var speed_t = clamp(
+	# Whoosh sound when a drag accelerates past the threshold (see _should_play_whoosh)
+	if _should_play_whoosh(speed, delta):
+		var speed_t := clampf(
 			(speed - WHOOSH_SPEED_THRESHOLD) / (WHOOSH_SPEED_MAX - WHOOSH_SPEED_THRESHOLD), 0.0, 1.0
 		)
-		var pitch = lerp(WHOOSH_PITCH_MIN, WHOOSH_PITCH_MAX, speed_t)
+		var pitch := lerpf(WHOOSH_PITCH_MIN, WHOOSH_PITCH_MAX, speed_t)
 		AudioManager.play_token_whoosh(pitch)
-		_whoosh_cooldown = WHOOSH_COOLDOWN_DURATION
 
 
 # -------------------------------------------------------------------------

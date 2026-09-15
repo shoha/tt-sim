@@ -193,6 +193,16 @@ func stop_drag() -> void:
 	if swaped:
 		return
 
+	# Land on the exact (possibly grid-snapped) target rather than wherever the
+	# frame-rate-dependent lerp in _process() happened to leave the body when the
+	# button came up. Y is left alone: DraggableToken's settle tween owns the descent.
+	if _has_target_position and _currentDraggingObject and _currentDraggingObject.objectBody:
+		var body: Node3D = _currentDraggingObject.objectBody
+		var landed := body.global_position
+		landed.x = _target_drag_position.x
+		landed.z = _target_drag_position.z
+		body.global_position = landed
+
 	edge_pan_direction = Vector2.ZERO
 	dragging_stopped.emit(_currentDraggingObject)
 
