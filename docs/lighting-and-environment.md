@@ -494,7 +494,9 @@ a conceal/reopen while dirty.
 
 Save (`_on_edit_save_requested()`) no longer closes the drawer: it persists to disk, advances
 `_original_state` to the just-saved values, calls `level_edit_panel.mark_clean()`, and deactivates
-the sun-aiming gizmo the same way a close would — tuning can continue immediately afterward.
+the sun-aiming gizmo the same way a close would — tuning can continue immediately afterward. If the
+disk write fails, only the error toast is shown: the drawer stays dirty and `_original_state` is
+left untouched.
 
 Switching the preset dropdown keeps any environment overrides already set (a toast reports how many
 were kept), and each overridden property's row is tinted and right-click-resettable individually.

@@ -522,17 +522,21 @@ func _on_edit_save_requested(state: LevelVisualState) -> void:
 		save_path = LevelManager.save_level(level_data)
 	if save_path != "":
 		UIManager.show_success("Level settings saved")
+
+		# The drawer no longer closes on Save, so the revert snapshot has to
+		# advance with it -- otherwise a later Cancel would undo work already
+		# written to disk.
+		_original_state = state.copy()
+
+		# The drawer stays open after a save so tuning can continue; only the
+		# unsaved-changes flag is cleared. Save still ends the editing pass,
+		# though, so the aiming gizmo goes away exactly as it would on a close.
+		level_edit_panel.mark_clean()
 	else:
 		UIManager.show_error("Failed to save level settings")
+		# The disk write failed: the panel stays dirty and the revert snapshot
+		# is left untouched so Cancel still reverts to the last known-good state.
 
-	# The drawer no longer closes on Save, so the revert snapshot has to advance
-	# with it -- otherwise a later Cancel would undo work already written to disk.
-	_original_state = state.copy()
-
-	# The drawer stays open after a save so tuning can continue; only the
-	# unsaved-changes flag is cleared. Save still ends the editing pass, though,
-	# so the aiming gizmo goes away exactly as it would on a close.
-	level_edit_panel.mark_clean()
 	_deactivate_sun_gizmo()
 
 

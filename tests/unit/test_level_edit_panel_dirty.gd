@@ -106,3 +106,32 @@ func test_initialize_does_not_clear_dirty() -> void:
 	_panel._on_weather_override_changed(0.3, "rain_intensity")
 	_panel.initialize(LevelData.new())
 	assert_true(_panel.is_dirty(), "Reopening a dirty drawer keeps the unsaved state")
+
+
+## A prompt must not outlive the state it was asked about: e.g. the level clears,
+## a new level loads and calls mark_clean(), and the stale "Discard changes"
+## prompt from the OLD level must not survive to revert the NEW one.
+func test_mark_clean_dismisses_open_close_prompt() -> void:
+	_panel._on_weather_override_changed(0.3, "rain_intensity")
+	_panel.request_close()
+	var prompt: Node = _panel._close_prompt
+	assert_true(is_instance_valid(prompt), "The discard prompt must be on screen before mark_clean")
+
+	_panel.mark_clean()
+
+	assert_eq(_panel._close_prompt, null, "mark_clean must drop the close-prompt reference")
+	assert_true(
+		not is_instance_valid(prompt) or prompt.is_queued_for_deletion(),
+		"mark_clean must queue_free the stale prompt"
+	)
+
+
+func test_badge_and_tooltip_follow_dirty_flag() -> void:
+	_panel._mark_dirty()
+	assert_true(_panel._tab_badge.visible, "Badge must be visible while dirty")
+	assert_eq(_panel._tab_button.tooltip_text, LevelEditPanel.TAB_TOOLTIP_DIRTY)
+
+	_panel.mark_clean()
+
+	assert_false(_panel._tab_badge.visible, "Badge must hide once clean")
+	assert_eq(_panel._tab_button.tooltip_text, LevelEditPanel.TAB_TOOLTIP_CLEAN)
