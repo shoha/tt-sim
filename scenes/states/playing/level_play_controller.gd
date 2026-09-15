@@ -311,6 +311,12 @@ func untrack_network_token(network_id: String) -> void:
 	_token_spawner.untrack_network_token(network_id)
 
 
+## O(1) lookup by network id through TokenSpawner's reverse index. Use this
+## rather than reading spawned_tokens, which is keyed by placement id.
+func find_token_by_network_id(network_id: String) -> BoardToken:
+	return _token_spawner.find_token_by_network_id(network_id)
+
+
 ## Check if level loading is in progress (async loading)
 ## Forwards to LevelPlayLoader -- kept as a same-named method here since
 ## scenes/root.gd, root_network_handler.gd, and game_map.gd call this directly.

@@ -62,3 +62,14 @@ func test_level_play_controller_delegates_tracking() -> void:
 	controller.untrack_network_token("net_d")
 	assert_false(controller.spawned_tokens.has("net_d"))
 	controller.free()
+
+
+func test_level_play_controller_forwards_find_token_by_network_id() -> void:
+	var controller := LevelPlayController.new()
+	var token := _make_token("net_e")
+
+	controller.track_network_token(token)
+
+	assert_eq(controller.find_token_by_network_id("net_e"), token)
+	assert_null(controller.find_token_by_network_id("missing"))
+	controller.free()
