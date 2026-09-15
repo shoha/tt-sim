@@ -45,7 +45,7 @@ static func disconnect_client_signals(handler: Node) -> void:
 static func on_token_transform_received(
 	controller: LevelPlayController, network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
 ) -> void:
-	var token = controller.spawned_tokens.get(network_id) as BoardToken
+	var token = controller.find_token_by_network_id(network_id)
 	if token and is_instance_valid(token):
 		token.set_interpolation_target(pos, rot, scl)
 
@@ -58,7 +58,7 @@ static func on_transform_batch_received(controller: LevelPlayController, batch: 
 		var rot := SerializationUtils.array_to_vec3(data["rotation"])
 		var scl := SerializationUtils.array_to_vec3(data["scale"], Vector3.ONE)
 
-		var token = controller.spawned_tokens.get(network_id) as BoardToken
+		var token = controller.find_token_by_network_id(network_id)
 		if token and is_instance_valid(token):
 			token.set_interpolation_target(pos, rot, scl)
 
@@ -77,7 +77,7 @@ static func on_token_state_received(
 		return
 
 	# Apply to visual token
-	var token = controller.spawned_tokens.get(network_id) as BoardToken
+	var token = controller.find_token_by_network_id(network_id)
 	if token and is_instance_valid(token):
 		token_state.apply_to_token(token)
 	else:
@@ -93,7 +93,7 @@ static func on_token_state_received(
 static func on_token_removed_received(controller: LevelPlayController, network_id: String) -> void:
 	GameState.remove_token_state(network_id)
 
-	var token = controller.spawned_tokens.get(network_id)
+	var token = controller.find_token_by_network_id(network_id)
 	if token and is_instance_valid(token):
 		token.play_removal_animation()
 	controller.untrack_network_token(network_id)
@@ -112,7 +112,7 @@ static func apply_game_state_to_tokens(controller: LevelPlayController, game_map
 
 	for network_id in GameState.get_all_token_states():
 		var token_state: TokenState = GameState.get_token_state(network_id)
-		var token = controller.spawned_tokens.get(network_id)
+		var token = controller.find_token_by_network_id(network_id)
 
 		if token and is_instance_valid(token):
 			token_state.apply_to_token(token)
@@ -127,7 +127,7 @@ static func apply_game_state_to_tokens(controller: LevelPlayController, game_map
 	for network_id in GameState.get_all_token_states():
 		var lock_holder := GameState.get_drag_lock(network_id)
 		if lock_holder > 0:
-			var token = controller.spawned_tokens.get(network_id)
+			var token = controller.find_token_by_network_id(network_id)
 			if token and is_instance_valid(token):
 				(token as BoardToken).set_drag_lock(lock_holder)
 

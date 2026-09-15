@@ -111,7 +111,10 @@ func _connect_token_state_signals(token: BoardToken) -> void:
 	_disconnect_token_state_signals(token)
 
 	# Property changes use reliable channel (important, must arrive)
-	# Optional args handle varying signal signatures (health_changed has 3 args, died has 0, etc.)
+	# Optional args handle varying signal signatures (health_changed has 3 args, etc.)
+	# health_changed carries is_alive in its final state, so died/revived need no
+	# separate sync (wiring both produced two syncs, and on a host two reliable
+	# RPCs, per death or revive).
 	var prop_handler := func(_a = null, _b = null, _c = null): _on_token_property_changed(token)
 	var transform_handler := func(): _on_token_transform_changed(token)
 
@@ -119,8 +122,6 @@ func _connect_token_state_signals(token: BoardToken) -> void:
 	token.token_visibility_changed.connect(prop_handler)
 	token.status_effect_added.connect(prop_handler)
 	token.status_effect_removed.connect(prop_handler)
-	token.died.connect(prop_handler)
-	token.revived.connect(prop_handler)
 
 	# Transform changes use unreliable channel with rate limiting (high-frequency, can drop)
 	token.transform_changed.connect(transform_handler)
@@ -149,8 +150,6 @@ func _disconnect_token_state_signals(token: BoardToken) -> void:
 		t.token_visibility_changed,
 		t.status_effect_added,
 		t.status_effect_removed,
-		t.died,
-		t.revived,
 	]:
 		if sig.is_connected(ph):
 			sig.disconnect(ph)
