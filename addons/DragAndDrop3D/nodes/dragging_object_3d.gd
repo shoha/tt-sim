@@ -2,10 +2,10 @@
 extends Node3D
 class_name DraggingObject3D
 
-signal object_body_mouse_down()
-signal dragging_started()
-signal dragging_stopped()
-signal dragging_cancelled()
+signal object_body_mouse_down(press_position: Vector2)
+signal dragging_started
+signal dragging_stopped
+signal dragging_cancelled
 
 @export var heightOffset := 0.0
 @export var input_ray_pickable := true:
@@ -14,6 +14,7 @@ signal dragging_cancelled()
 
 var objectBody: CollisionObject3D
 var snapPosition: Vector3
+
 
 func _ready() -> void:
 	_check_editor_child()
@@ -26,22 +27,27 @@ func _ready() -> void:
 
 	_set_group()
 
-
 	if not Engine.is_editor_hint():
 		_set_default_snap_position()
 		_set_late_signals()
 
+
 func _set_group() -> void:
-	if Engine.is_editor_hint(): return
+	if Engine.is_editor_hint():
+		return
 
 	if !get_tree().current_scene.is_node_ready():
 		await get_tree().current_scene.ready
 
 	DragAndDropGroupHelper.add_node_to_group(self, "draggingObjects")
 
+
 func _set_default_snap_position() -> void:
 	await get_tree().physics_frame
-	snapPosition = Vector3(global_position.x, global_position.y - get_height_offset(), global_position.z)
+	snapPosition = Vector3(
+		global_position.x, global_position.y - get_height_offset(), global_position.z
+	)
+
 
 func _set_late_signals() -> void:
 	if !get_tree().current_scene.is_node_ready():
@@ -56,6 +62,7 @@ func _set_late_signals() -> void:
 	dragAndDrop3D.dragging_stopped.connect(_is_dragging.bind(false))
 	dragAndDrop3D.dragging_cancelled.connect(_on_drag_cancelled)
 
+
 func _get_object_body() -> CollisionObject3D:
 	var body = find_children("*", "CollisionObject3D", true, false)
 
@@ -66,47 +73,72 @@ func _get_object_body() -> CollisionObject3D:
 
 	return null
 
-func _is_dragging(draggingObject, boolean) -> void:
-	if not draggingObject == self: return
 
-	if boolean: dragging_started.emit()
-	else: dragging_stopped.emit()
+func _is_dragging(draggingObject, boolean) -> void:
+	if not draggingObject == self:
+		return
+
+	if boolean:
+		dragging_started.emit()
+	else:
+		dragging_stopped.emit()
+
 
 func _on_drag_cancelled(draggingObject) -> void:
-	if not draggingObject == self: return
+	if not draggingObject == self:
+		return
 	dragging_cancelled.emit()
 
-func _on_object_body_3d_input_event(camera: Node, event: InputEvent, event_position: Vector3, normal: Vector3, shape_idx: int) -> void:
-	if event is InputEventMouseButton:
-		var leftClicked = event.button_index == 1 and event.is_pressed()
 
-		if leftClicked: object_body_mouse_down.emit()
+func _on_object_body_3d_input_event(
+	camera: Node, event: InputEvent, event_position: Vector3, normal: Vector3, shape_idx: int
+) -> void:
+	if event is InputEventMouseButton:
+		var mouse_button_event := event as InputEventMouseButton
+		var leftClicked = mouse_button_event.button_index == 1 and mouse_button_event.is_pressed()
+
+		# Pass the press position through so DragAndDrop3D can seed its drag-activation
+		# threshold anchor from the true mouse-down point, in this viewport's local
+		# coordinate space (event.position here is already SubViewport-local, the same
+		# space _input()'s InputEventMouseMotion.position is later compared against).
+		if leftClicked:
+			object_body_mouse_down.emit(mouse_button_event.position)
+
 
 func get_rid() -> RID:
 	return objectBody.get_rid()
 
+
 func get_height_offset() -> float:
 	return heightOffset
 
+
 #Editor Settings
 func _check_editor_child() -> void:
-	if not Engine.is_editor_hint(): return
+	if not Engine.is_editor_hint():
+		return
 
 	child_entered_tree.connect(_on_dragging_object_child_entered_tree)
 	child_exiting_tree.connect(_on_dragging_object_child_exiting_tree)
 
+
 func _on_dragging_object_child_entered_tree(node: Node) -> void:
-	if objectBody: return
+	if objectBody:
+		return
 
 	if node is CollisionObject3D:
 		objectBody = node
+
 
 func _on_dragging_object_child_exiting_tree(node: Node) -> void:
 	if node == objectBody:
 		objectBody = null
 
+
 func _get_configuration_warnings() -> PackedStringArray:
 	if objectBody is not CollisionObject3D:
-		return ["This node has no CollisionObject, so you can't interact with it\n\nConsider adding a StaticBody3D, CharacterBody3D, RigigBody3D or Area3D as a child to difine its body"]
+		return [
+			"This node has no CollisionObject, so you can't interact with it\n\nConsider adding a StaticBody3D, CharacterBody3D, RigigBody3D or Area3D as a child to difine its body"
+		]
 	else:
 		return []
