@@ -241,9 +241,15 @@ func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 
 ## Apply a whole LevelVisualState to the running level. This is the single live
 ## apply path: the Visuals drawer's Cancel and Save, and the client receive path,
-## all go through here. Does not write level data; callers that changed grid
-## values write the state to active_level_data first, because
-## update_measure_tool_scale() reads the grid fields from there.
+## all go through here. Applies the live visual fields only -- light intensity,
+## environment, foliage, sun, water style, lo-fi, weather. Grid scale
+## (grid_cell_size, display_unit, display_unit_per_cell) is not networked and is
+## not re-applied here: GridVisibilityController.configure_grid() unconditionally
+## resets grid auto-show state on every call, so running it on every broadcast
+## receive (up to 10 Hz while the host drags a slider) would clear a client's
+## auto-show-on-measure/-on-drag flags mid-interaction. A caller that changed the
+## grid fields on level data must call update_measure_tool_scale() itself
+## afterwards (the drawer's Cancel path does).
 func apply_visual_state(state: LevelVisualState) -> void:
 	apply_light_intensity_scale(state.light_intensity_scale)
 	apply_environment_settings(state.environment_preset, state.environment_overrides)
@@ -258,7 +264,6 @@ func apply_visual_state(state: LevelVisualState) -> void:
 		lofi_config.merge(state.lofi.to_dict(), true)
 		game_map.apply_lofi_overrides(lofi_config)
 		game_map.apply_weather_overrides(state.weather.to_dict())
-	update_measure_tool_scale()
 
 
 ## Get the live WorldEnvironment node (or null if not created yet).
