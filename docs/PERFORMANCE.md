@@ -351,7 +351,58 @@ throttle (`VisualBroadcastThrottle`) were verified behaviourally at runtime rath
 frame-time measured, since the cost they remove was a one-off re-bake/RPC per edit tick,
 not a steady-state cost.
 
+## Per-frame idle and drag work removed (2026-09-15)
+
+What changed (branch `review/perf-medium`): the invisible tilt-shift quad under the camera
+and its per-frame raycast plus DoF write are deleted; `handle_zoom()` skips its size lerp,
+cursor correction and offset update when the camera is already at its target; drag-and-drop
+and the measure tool record the latest pointer position on input and raycast at most once
+per frame in `_process` (drag-and-drop's `_process` now runs only while dragging);
+`WaterRippleRegistry.flush_disturbances()` is the single owner of the water uniform push
+(once per frame while anything is submerged, one cleared push after the last exit, silent
+otherwise, freed bodies pruned); weather and volume-overlay `_process` loops run only while
+they have work; the grid drag highlight and the placeholder pulse write their parameters
+only on change; the token input gate checks hover and event type before the permission
+lookup; the drop indicator poses a prebuilt landing circle and rebuilds its dotted line only
+when the token moved more than 1 mm.
+
+Measured (coordinator, 2026-09-15): Sandy Clearing via `tests/test_play_level.tscn`,
+1920x1080 pinned with override.cfg (which also disables vsync; `root.gd` does not run in the
+test scene, so `settings.cfg`'s vsync flag is not applied there), Home pose, 2 static
+tokens, B/A/B in one session (branch, main, branch), samples with `elapsed_s` 6-44 (idle)
+and 49-78 (a held drag started through the bridge with edge pan disabled), primitives
+identical across runs (24,543,623 idle, 24,546,111 drag). The GPU was shared with desktop
+applications at 40-70% utilisation throughout, so wall-clock frame time drifted by more
+than the changes could move it:
+
+| Run | idle frame_ms | idle process_ms | idle camera_update_ms | drag frame_ms | drag camera_update_ms | drag grid_overlay_ms |
+|---|---|---|---|---|---|---|
+| B1 branch | 15.38 | 17.13 | 0.024 | 14.79 | 0.013 | 0.013 |
+| A1 main | 13.15 | 15.89 | 0.035 | 13.85 | 0.027 | 0.011 |
+| B2 branch | 12.88 | 15.43 | 0.025 | 12.98 | 0.015 | 0.016 |
+
+Reading: B1 versus B2 (same build) differ by 2.5 ms, which is the session's drift, so the
+wall-clock columns cannot resolve sub-millisecond CPU savings on this GPU-bound scene, and
+this section claims no frame-time win from them. The camera monitor is the one stable
+signal: 0.035 -> 0.024/0.025 ms idle and 0.027 -> 0.013/0.015 ms during a drag, consistent
+across both branch runs, which is the idle-zoom skip. The other changes remove work that
+was demonstrably redundant (per-event raycasts collapsing into one per frame, uniform
+pushes with nothing submerged, ImmediateMesh rebuilds with nothing moved) and were verified
+behaviourally at runtime (drag, drop indicator, water, undo) rather than by frame time.
+Method note: the log now carries a `process_time_avg_ms` column (main-thread
+`Performance.TIME_PROCESS`, no GPU or vsync wait) appended after the toggle columns; it is
+the column to compare for CPU-side changes when the frame is GPU-bound or vsync-capped.
+
 ## Known dead ends -- do not revisit without new evidence
+
+- **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one
+  `set_instance_transform()` per instance (2026-09-15). Headless, timing
+  `ScatterGlbUtils.process_scatter_instances` on the real Sandy Clearing map, two process
+  launches x five reps each: loop 119.7 ms median, buffer 144.8 ms median, non-overlapping.
+  Twelve GDScript `PackedFloat32Array` writes per instance cost more than one native call;
+  the per-call RenderingServer overhead the idea was meant to avoid is not where the time
+  goes. Reverted in cfec47c. If the 52k-instance build ever needs to shrink, move the whole
+  build onto the worker thread that already parses the GLB rather than changing the upload.
 
 - **General triangle budgets.** 420x the geometry cost only 9.2x the frame time. Raw
   triangle count is not the binding constraint; foliage instance count is.
