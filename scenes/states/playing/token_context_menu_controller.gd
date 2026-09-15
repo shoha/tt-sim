@@ -46,6 +46,9 @@ func _setup_context_menu() -> void:
 		_context_menu.control_requested.connect(_on_context_menu_control_requested)
 		_context_menu.control_revoked.connect(_on_context_menu_control_revoked)
 		_context_menu.control_assign_requested.connect(_on_context_menu_control_assign_requested)
+		_context_menu.remove_requested.connect(_on_context_menu_remove_requested)
+		_context_menu.duplicate_requested.connect(_on_context_menu_duplicate_requested)
+		_context_menu.rename_requested.connect(_on_context_menu_rename_requested)
 
 
 ## Open the context menu for a token at the given screen position.
@@ -251,3 +254,58 @@ func _grant_token_control(token: BoardToken, peer_id: int) -> void:
 			players[peer_id].get("name", "Player") if players.has(peer_id) else "Player"
 		)
 		UIManager.show_success('%s can now control "%s"' % [player_name, token_name])
+
+
+func _on_context_menu_remove_requested(token: BoardToken) -> void:
+	if not is_instance_valid(token):
+		return
+	UIManager.show_danger_confirmation(
+		"Remove token",
+		'Remove "%s" from the board? Ctrl+Z undoes it.' % token.token_name,
+		func() -> void: _remove_token_confirmed(token),
+		"Remove",
+	)
+
+
+func _remove_token_confirmed(token: BoardToken) -> void:
+	if not is_instance_valid(token):
+		return
+	var removed_name: String = token.token_name
+	if _game_map._action_history and NetworkManager.has_gm_access():
+		_game_map._action_history.record_token_removal(token, TokenState.from_board_token(token))
+	var lpc := _game_map.get_level_play_controller()
+	if lpc:
+		lpc.remove_token(token)
+	UIManager.show_info('Removed "%s"' % removed_name)
+	if _context_menu:
+		_context_menu.close_menu()
+
+
+func _on_context_menu_duplicate_requested(token: BoardToken) -> void:
+	if not is_instance_valid(token):
+		return
+	var lpc := _game_map.get_level_play_controller()
+	if lpc:
+		var copy := lpc.duplicate_token(token)
+		if not copy:
+			UIManager.show_warning("Could not duplicate token")
+	if _context_menu:
+		_context_menu.close_menu()
+
+
+func _on_context_menu_rename_requested(token: BoardToken, new_name: String) -> void:
+	if not is_instance_valid(token):
+		return
+	var trimmed_name: String = new_name.strip_edges()
+	if trimmed_name.is_empty() or trimmed_name == token.token_name:
+		return
+	if _game_map._action_history and NetworkManager.has_gm_access():
+		_game_map._action_history.record_property_change(
+			token.network_id, "token_name", token.token_name, trimmed_name
+		)
+	var lpc := _game_map.get_level_play_controller()
+	if lpc:
+		lpc.rename_token(token, trimmed_name)
+	if _context_menu:
+		_context_menu._update_menu_content()
+		_context_menu.close_menu()
