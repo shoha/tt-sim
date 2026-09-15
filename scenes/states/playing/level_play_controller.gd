@@ -247,7 +247,9 @@ func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 ## Apply a whole LevelVisualState to the running level. This is the single live
 ## apply path: the Visuals drawer's Cancel and Save, and the client receive path,
 ## all go through here. Applies the live visual fields only -- light intensity,
-## environment, foliage, sun, water style, lo-fi, weather. Grid scale
+## environment, foliage, sun, water style, lo-fi, weather. It does not write
+## level data, except that apply_light_intensity_scale() mirrors the scale into
+## active_level_data (already the same value for every caller). Grid scale
 ## (grid_cell_size, display_unit, display_unit_per_cell) is not networked and is
 ## not re-applied here: GridVisibilityController.configure_grid() unconditionally
 ## resets grid auto-show state on every call, so running it on every broadcast

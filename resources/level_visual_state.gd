@@ -11,7 +11,10 @@ extends RefCounted
 ## Adding a live-synced visual property means: a field here, one line in
 ## from_level_data(), apply_to_level_data(), copy(), to_broadcast_dict() and
 ## patch_from_broadcast_dict(), one apply line in
-## LevelPlayController.apply_visual_state(), and the panel control.
+## LevelPlayController.apply_visual_state(), and the panel control. A new field
+## on VisualSettings also needs a line in apply_to_level_data() -- it assigns
+## level_data.visual_settings.sun (the one field it currently carries), not the
+## whole visual_settings, so a sibling field needs its own assignment line too.
 ##
 ## The three grid fields (grid_cell_size, display_unit, display_unit_per_cell)
 ## are the exception: they ride along in from_level_data()/apply_to_level_data()/
