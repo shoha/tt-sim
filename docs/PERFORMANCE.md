@@ -297,6 +297,48 @@ times are noisy run to run; one outlier hit 542 ms):
 Chunking at 10 costs **+13.6 ms** against a GLB parse of roughly 2,474 ms for this 112 MB
 map -- about **0.5% of map load time**. Negligible.
 
+## Occlusion fade: token data as a shared texture (2026-09-14)
+
+Before: `OcclusionFadeManager._update_token_uniforms()` pushed three uniform arrays
+(`token_count`, `token_positions[32]`, `token_radii[32]`) to every converted
+ShaderMaterial -- one per map surface plus every tree species material -- every second
+physics frame, and every surface got its own ShaderMaterial even when several surfaces
+shared one source StandardMaterial3D.
+
+After: token data is packed into one 32x1 RGBAF `ImageTexture` (pixel i = world x, y, z,
+fade radius) bound once per material as `occlusion_tokens`, updated with
+`ImageTexture.update()` once per tick; the count is the global shader parameter
+`occlusion_token_count` (declared in `project.godot`) -- Godot global shader parameters
+have no array types, which is why the data is a texture and only the count is a global.
+Converted materials are deduplicated by source StandardMaterial3D. Ticks where no token
+moved skip the GPU update entirely. Collision AABBs are cached per shape.
+
+Measured (coordinator, 2026-09-14): Sandy Clearing via `tests/test_play_level.tscn`,
+1920x1080 pinned with override.cfg, vsync off, Home camera pose, 2 tokens, 14 converted
+materials, samples with elapsed_s > 5, primitives identical between runs (24,543,623 with
+foliage, 3,725,814 with foliage hidden):
+
+| Build | Foliage | frame_time_avg_ms | perf_occlusion_fade_ms | draw_calls |
+| --- | --- | --- | --- | --- |
+| before (9c96f04) | visible | 10.72 | 0.0609 | 1191 |
+| after (1730e08) | visible | 10.91 | 0.0375 | 1189 |
+| before | hidden | 8.37 | 0.0514 | 474 |
+| after | hidden | 8.37 | 0.0346 | 472 |
+
+The per-tick CPU cost fell by about 38% (the remaining cost is collecting entries; the
+skip path avoids the GPU update when tokens are static), and draw calls fell by 2 from
+material sharing. Frame time is unchanged within run-to-run noise on this scene -- the
+GPU-side saving (3 x N uniform uploads per tick replaced by one texture update) scales
+with the number of converted materials and token movement, and is not resolvable on a
+14-material scene; a prop-heavy map with hundreds of surfaces is where it matters. The
+two frame_ms figures with foliage differ by 0.19 ms, which is within the within-build
+variance this document already documents (up to 3.2 ms).
+
+Related change, same session: the sky-preset cache and the 100 ms live-broadcast
+throttle (`VisualBroadcastThrottle`) were verified behaviourally at runtime rather than
+frame-time measured, since the cost they remove was a one-off re-bake/RPC per edit tick,
+not a steady-state cost.
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **General triangle budgets.** 420x the geometry cost only 9.2x the frame time. Raw

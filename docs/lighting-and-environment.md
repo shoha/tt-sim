@@ -782,6 +782,8 @@ Foliage wind-sway tuning (see [Data Storage](#data-storage) for `LevelData.folia
 
 Sun and shadow settings (see [Sun and Shadow](#sun-and-shadow)) also piggyback on this path, via a flat `"sun_settings"` key carrying `SunSettings.to_dict()`. The late-joiner mirror is the one place this key is *not* flat: `NetworkManager._patch_current_level_dict()` nests it under `visual_settings.sun` and stamps `format_version`, because `_current_level_dict` is in `LevelData.to_dict()` shape and a top-level `sun_settings` key would be silently ignored by `LevelData.from_dict()` -- a client joining after a live sun edit would otherwise see the default sun instead of the host's. See `autoloads/network_manager.gd`'s `broadcast_visual_settings()` and `_patch_current_level_dict()`.
 
+While the drawer is open, live edits are applied to the local viewport immediately but `VisualBroadcastThrottle` merges successive `broadcast_visual_settings` calls into one RPC every 100 ms rather than sending one per slider tick; Save and Cancel discard any pending merged batch first and send their own full, authoritative snapshot instead.
+
 ### Particle Details
 
 | Effect | Particles | Mesh | Key Properties |
