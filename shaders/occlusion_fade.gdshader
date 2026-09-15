@@ -45,12 +45,13 @@
  *
  * MANAGED BY: OcclusionFadeManager (scenes/states/playing/occlusion_fade_manager.gd)
  * - Converts map StandardMaterial3D → this shader at map load time.
- * - Updates token_positions, token_radii, and token_count every few physics frames.
+ * - Updates the shared occlusion_tokens texture and the occlusion_token_count global
+ *   every few physics frames.
  * - Syncs lofi_pixelation from the lo-fi post-process shader.
  * - Restores original materials on map unload or when the effect is disabled.
  *
  * LIMITATIONS:
- * - Max 32 tokens (uniform array size).
+ * - Max 32 tokens (token texture width).
  * - Only replaces StandardMaterial3D; existing ShaderMaterials are left as-is.
  * - Does not copy all StandardMaterial3D features (e.g., detail textures,
  *   transparency modes, backlight, subsurface scattering).

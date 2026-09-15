@@ -833,7 +833,7 @@ See [CONVENTIONS.md](CONVENTIONS.md) for the full token transform hierarchy, pla
 
 **GM-only controls:** When connected as a client (not host), the asset browser, save button, and level edit drawer are hidden. `GameplayMenuController` listens to `NetworkManager.connection_state_changed` to toggle visibility.
 
-**Edit mode:** When the edit drawer opens, the controller snapshots all current values (`_original_map_scale`, `_original_light_scale`, `_original_weather_overrides`, etc.). On cancel, it restores the originals and re-applies them to the live viewport. When networked, visual changes are broadcast to clients via `NetworkManager`.
+**Edit mode:** When the edit drawer opens, the controller snapshots all current values (`_original_map_scale`, `_original_light_scale`, `_original_weather_overrides`, etc.). On cancel, it restores the originals and re-applies them to the live viewport. When networked, visual changes are broadcast to clients via `NetworkManager`. Live edits are applied locally at once but the network broadcast is coalesced by `VisualBroadcastThrottle` (`scenes/states/playing/visual_broadcast_throttle.gd`) into one merged RPC per 100 ms; Save and Cancel drop any pending batch before sending their own full snapshot.
 
 ### Token State
 

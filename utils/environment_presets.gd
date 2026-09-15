@@ -385,6 +385,11 @@ const PRESETS = {
 	},
 }
 
+## One Sky per preset name, built on first use. Assigning a Sky to an Environment
+## re-bakes its radiance cubemap, so callers that apply the environment repeatedly
+## (every slider tick in the Visuals drawer) must reuse the same instance.
+static var _sky_cache: Dictionary = {}
+
 
 ## Get list of all available sky preset names
 static func get_sky_preset_names() -> Array[String]:
@@ -415,6 +420,16 @@ static func create_sky_from_preset(preset_name: String) -> Sky:
 	material.ground_horizon_color = config.get("ground_horizon_color", Color(0.65, 0.67, 0.67))
 	var sky = Sky.new()
 	sky.sky_material = material
+	return sky
+
+
+## Cached Sky for a sky preset, or null for an unknown name.
+static func get_sky_for_preset(preset_name: String) -> Sky:
+	if _sky_cache.has(preset_name):
+		return _sky_cache[preset_name]
+	var sky := create_sky_from_preset(preset_name)
+	if sky:
+		_sky_cache[preset_name] = sky
 	return sky
 
 
@@ -540,16 +555,20 @@ static func _apply_config_to_environment(
 	env.adjustment_contrast = config.get("adjustment_contrast", 1.0)
 	env.adjustment_saturation = config.get("adjustment_saturation", 1.0)
 
-	# Sky — create or assign Sky resource when background mode is BG_SKY
+	# Sky -- assign only when it actually changes: setting Environment.sky, even to an
+	# equivalent resource, re-bakes the radiance cubemap.
 	var sky_preset_name: String = config.get("sky_preset", "")
 	if env.background_mode == Environment.BG_SKY:
+		var target_sky: Sky = null
 		if sky_preset_name == "map_default" and map_sky:
-			env.sky = map_sky
+			target_sky = map_sky
 		elif SKY_PRESETS.has(sky_preset_name):
-			env.sky = create_sky_from_preset(sky_preset_name)
+			target_sky = get_sky_for_preset(sky_preset_name)
 		elif not env.sky:
-			# BG_SKY requested but no preset specified and no existing sky — use default
-			env.sky = create_sky_from_preset("clear_day")
+			# BG_SKY requested but no preset specified and no existing sky -- use default
+			target_sky = get_sky_for_preset("clear_day")
+		if target_sky and env.sky != target_sky:
+			env.sky = target_sky
 	else:
 		# Not BG_SKY — clear any existing sky to free memory
 		env.sky = null
