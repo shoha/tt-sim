@@ -599,8 +599,7 @@ func notify_map_loaded() -> void:
 ## Clear occlusion fade state. Call before loading a new map.
 ## The manager will be re-activated when notify_map_loaded() is called.
 func notify_map_clearing() -> void:
-	if occlusion_fade:
-		occlusion_fade.clear()
+	_visual_effects.clear_occlusion_fade()
 
 	# Clean up any in-progress shake so the offset doesn't persist into the next level
 	_camera_controller.notify_map_clearing()

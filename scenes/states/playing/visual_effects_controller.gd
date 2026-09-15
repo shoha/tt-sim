@@ -171,6 +171,15 @@ func set_occlusion_fade_enabled(enabled: bool) -> void:
 		_last_synced_pixelation = -1.0
 
 
+## Clear the occlusion fade manager ahead of a map change. Called from
+## GameMap.notify_map_clearing() so the pixelation cache is dropped together
+## with the manager state it describes.
+func clear_occlusion_fade() -> void:
+	if _game_map.occlusion_fade:
+		_game_map.occlusion_fade.clear()
+	_last_synced_pixelation = -1.0
+
+
 ## Initialize the occlusion fade manager with node references.
 ## Called from setup() and again from GameMap.notify_map_loaded() whenever a
 ## new map finishes loading (the mesh cache must be rebuilt for new geometry).
