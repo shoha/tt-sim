@@ -280,13 +280,6 @@ Right (D) = (+1, 0, -1)    (up-right on screen)
 - Zoom is disabled while dragging (scroll controls token height during drag)
 - Zoom is disabled when mouse is over GUI panels
 
-### Tilt-Shift DoF
-
-`camera_3d.gd` drives the tilt-shift depth-of-field focal point:
-- Raycasts from camera to find the world point under the cursor
-- Updates `focal_point` shader parameter on a fullscreen quad
-- DoF intensity scales with zoom level (0 at min zoom, stronger at max zoom)
-
 ### Camera Offset Scaling (Near-Plane Culling Prevention)
 
 The Camera3D sits at a local offset from CameraHolder. At large `camera.size` values (zoom out or aspect correction on narrow windows), the bottom screen edge's ray origin can drop below Y=0 — meaning ground geometry is behind the near plane and gets culled.

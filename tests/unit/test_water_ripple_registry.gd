@@ -84,6 +84,62 @@ func test_register_returns_true_only_on_first_registration() -> void:
 	assert_false(second)
 
 
+func test_flush_disturbances_pushes_at_most_once_per_frame() -> void:
+	var token := Node3D.new()
+	add_child_autofree(token)
+	var id := token.get_instance_id()
+	WaterRippleRegistry.register(id, token)
+
+	WaterRippleRegistry.flush_disturbances()
+	assert_eq(WaterRippleRegistry._last_push_frame, Engine.get_process_frames())
+	var frame_with_token: int = WaterRippleRegistry._last_push_frame
+
+	# Same frame -- the frame guard should make this a no-op, even though the token is
+	# still submerged (submerged, not cleared).
+	WaterRippleRegistry.flush_disturbances()
+	assert_eq(WaterRippleRegistry._last_push_frame, frame_with_token)
+
+	await get_tree().process_frame
+
+	WaterRippleRegistry.unregister(id)
+	WaterRippleRegistry.flush_disturbances()
+	assert_true(WaterRippleRegistry._cleared)
+	assert_eq(WaterRippleRegistry._last_push_frame, Engine.get_process_frames())
+	var frame_after_clear: int = WaterRippleRegistry._last_push_frame
+
+	# Same frame again -- already cleared, so this is a no-op too.
+	WaterRippleRegistry.flush_disturbances()
+	assert_eq(WaterRippleRegistry._last_push_frame, frame_after_clear)
+
+
+func test_flush_disturbances_prunes_a_freed_body_so_it_stops_pushing() -> void:
+	var token := Node3D.new()
+	add_child_autofree(token)
+	var id := token.get_instance_id()
+	WaterRippleRegistry.register(id, token)
+
+	WaterRippleRegistry.flush_disturbances()
+	assert_false(WaterRippleRegistry._cleared)
+
+	await get_tree().process_frame
+	token.free()
+
+	# Freed without a matching unregister() -- flush_disturbances() must prune it itself
+	# (build_disturbance_array() skipping it per-call isn't enough: without pruning,
+	# _submerged would stay non-empty forever and this would push every frame).
+	WaterRippleRegistry.flush_disturbances()
+	assert_true(WaterRippleRegistry._submerged.is_empty())
+	assert_true(WaterRippleRegistry._cleared)
+	var frame_after_prune: int = WaterRippleRegistry._last_push_frame
+	assert_eq(frame_after_prune, Engine.get_process_frames())
+
+	await get_tree().process_frame
+
+	# Second flush, new frame: submerged is empty and already cleared, so it stays silent.
+	WaterRippleRegistry.flush_disturbances()
+	assert_eq(WaterRippleRegistry._last_push_frame, frame_after_prune)
+
+
 func test_unregister_returns_true_only_when_refcount_reaches_zero() -> void:
 	var token := Node3D.new()
 	add_child_autofree(token)
