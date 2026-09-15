@@ -90,6 +90,10 @@ func broadcast_token_transform(token: BoardToken) -> void:
 ## Queue a transform update for the next batch send
 func _queue_transform_update(token: BoardToken) -> void:
 	var state = TokenState.from_board_token(token)
+
+	# Keep GameState in step with the wire, exactly as _send_transform_update does.
+	GameState.sync_from_board_token(token)
+
 	_pending_transforms[token.network_id] = {
 		"position": _vector3_to_array(state.position),
 		"rotation": _vector3_to_array(state.rotation),
