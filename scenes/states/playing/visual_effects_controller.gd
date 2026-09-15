@@ -17,6 +17,12 @@ var _lofi_material: ShaderMaterial = null  # Cached lo-fi material (from scene o
 var _occlusion_fade_enabled: bool = true  # Whether the occlusion fade effect is active
 var _foliage_antialiasing_level: int = Viewport.MSAA_DISABLED  # Current Antialiasing setting
 
+## Last pixelation value pushed to the occlusion fade manager. The Visuals
+## drawer calls apply_lofi_overrides() on every slider tick, so _sync_lofi_pixelation()
+## uses this to skip redundant pushes. -1.0 (never a valid pixelation value)
+## means "not yet synced", forcing the next sync through.
+var _last_synced_pixelation: float = -1.0
+
 
 ## Wire this controller to its owning GameMap and run initial setup:
 ## cache the scene's lo-fi material, load lo-fi/occlusion settings from
@@ -102,7 +108,12 @@ func _sync_lofi_pixelation() -> void:
 		var val = mat.get_shader_parameter("pixelation")
 		if val != null:
 			px = float(val)
+	# The drawer calls apply_lofi_overrides() on every slider tick -- skip the
+	# push when the value has not actually changed.
+	if px == _last_synced_pixelation:
+		return
 	_game_map.occlusion_fade.set_lofi_pixelation(px)
+	_last_synced_pixelation = px
 
 
 ## Load grid visual settings from config and apply to the overlay.
@@ -151,9 +162,13 @@ func set_occlusion_fade_enabled(enabled: bool) -> void:
 			_game_map.occlusion_fade.setup(
 				_game_map.camera_node, _game_map.map_container, _game_map.drag_and_drop_node
 			)
+			# The manager was just rebuilt, so force the next sync through even
+			# if the pixelation value happens to match the cached one.
+			_last_synced_pixelation = -1.0
 			_sync_lofi_pixelation()
 	else:
 		_game_map.occlusion_fade.clear()
+		_last_synced_pixelation = -1.0
 
 
 ## Initialize the occlusion fade manager with node references.
@@ -164,6 +179,9 @@ func setup_occlusion_fade() -> void:
 		_game_map.occlusion_fade.setup(
 			_game_map.camera_node, _game_map.map_container, _game_map.drag_and_drop_node
 		)
+		# The manager was just rebuilt, so force the next sync through even if
+		# the pixelation value happens to match the cached one.
+		_last_synced_pixelation = -1.0
 		_sync_lofi_pixelation()
 
 

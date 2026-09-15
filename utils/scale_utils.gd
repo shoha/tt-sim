@@ -15,16 +15,16 @@ const PRESETS := {
 	"dnd_5ft":
 	{
 		"label": "D&D / Pathfinder (5 ft squares)",
-		"grid_cell_size": 1.524,
+		"grid_cell_size": LevelData.DEFAULT_GRID_CELL_SIZE,
 		"display_unit": "ft",
 		"display_unit_per_cell": 5.0,
 	},
 	"dnd_metric":
 	{
 		"label": "D&D / Pathfinder (1.5 m squares)",
-		"grid_cell_size": 1.524,
+		"grid_cell_size": LevelData.DEFAULT_GRID_CELL_SIZE,
 		"display_unit": "m",
-		"display_unit_per_cell": 1.524,
+		"display_unit_per_cell": LevelData.DEFAULT_GRID_CELL_SIZE,
 	},
 	"metric_1m":
 	{

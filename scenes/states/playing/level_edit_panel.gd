@@ -50,9 +50,9 @@ var current_weather: WeatherSettings = WeatherSettings.default()
 var current_foliage: FoliageSettings = FoliageSettings.default()
 var current_sun: SunSettings = SunSettings.default()
 var light_intensity_scale: float = 1.0
-var current_grid_cell_size: float = 1.524
-var current_display_unit: String = "ft"
-var current_display_unit_per_cell: float = 5.0
+var current_grid_cell_size: float = LevelData.DEFAULT_GRID_CELL_SIZE
+var current_display_unit: String = LevelData.DEFAULT_DISPLAY_UNIT
+var current_display_unit_per_cell: float = LevelData.DEFAULT_DISPLAY_UNIT_PER_CELL
 var _current_scale_preset_key: String = ScaleUtils.DEFAULT_PRESET
 ## Environment config extracted from the map's embedded WorldEnvironment.
 ## Used as the base layer when current_preset is "" (no explicit choice).

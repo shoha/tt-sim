@@ -98,6 +98,30 @@ func test_legacy_tres_dictionary_properties_are_absorbed_by_set() -> void:
 	assert_almost_eq(level.foliage.tree_sway_amplitude, 0.2, 0.000001)
 
 
+func test_legacy_set_covers_sun_overrides_and_rejects_unknown_properties() -> void:
+	# _set() intercepts four legacy dictionary keys from pre-typed .tres levels;
+	# everything else must return false so Object.set() falls back to the
+	# engine's default property setter and real @export fields are unaffected.
+	var level := LevelData.new()
+
+	level.set("lofi_overrides", {"pixelation": 0.07})
+	level.set("weather_overrides", {"wind_intensity": 0.4})
+	level.set("foliage_overrides", {"grass_sway_speed": 3.1})
+	var legacy_sun := {"mode": "auto", "time_of_day": 14.0}
+	level.set("sun_overrides", legacy_sun)
+
+	assert_almost_eq(level.lofi.pixelation, 0.07, 0.000001)
+	assert_almost_eq(level.weather.wind_intensity, 0.4, 0.000001)
+	assert_almost_eq(level.foliage.grass_sway_speed, 3.1, 0.000001)
+	assert_eq(level.visual_settings.sun.to_dict(), SunSettings.from_legacy(legacy_sun).to_dict())
+
+	assert_false(level._set(&"not_a_real_property", "value"), "unknown property must return false")
+
+	# A real @export property is unaffected by _set()'s legacy interception.
+	level.set("level_name", "Renamed")
+	assert_eq(level.level_name, "Renamed")
+
+
 func test_typed_settings_survive_a_tres_save_and_load() -> void:
 	# LevelManager.save_level() persists through ResourceSaver, not to_dict(), so
 	# the three sub-resources have to survive .tres serialisation independently:
