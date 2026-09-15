@@ -7,8 +7,10 @@
       1. Verify the working tree is clean and on main, and the local tag list is
          up to date with the remote.
       2. Run the GUT test suite; abort if anything fails.
-      3. Bump project.godot's config/version to the release version (defaults to
-         the current version's patch+1), commit it, and tag it (vX.Y.Z).
+      3. Tag the release version (vX.Y.Z). It defaults to the CURRENT
+         config/version, which by convention is the version being worked toward;
+         pass -Version to release something else, in which case project.godot is
+         bumped to it and committed first.
       4. Immediately bump project.godot again to the next dev version and commit
          it -- this is the step that has been missed twice by hand (v0.1.10 and
          v0.1.11 both shipped without it), leaving main re-using the just-shipped
@@ -35,7 +37,7 @@
 
 .EXAMPLE
     .\scripts\cut-release.ps1
-    Dry run: bumps to the next patch version, tags locally, bumps main to the
+    Dry run: tags the current config/version locally, bumps main to the
     following dev version -- nothing pushed.
 
 .EXAMPLE
@@ -101,7 +103,10 @@ try {
     $currentVersion = Get-CurrentVersion
     Write-Host "Current project.godot version: $currentVersion" -ForegroundColor Cyan
 
-    $releaseVersion = if ($Version) { $Version } else { Get-NextPatch $currentVersion }
+    # config/version holds the version being worked toward (AGENTS.md), so the
+    # normal release is the CURRENT version, not the next patch. -Version still
+    # overrides for minor/major bumps.
+    $releaseVersion = if ($Version) { $Version } else { $currentVersion }
     $tagName = "v$releaseVersion"
 
     $existingTag = git tag --list $tagName
@@ -119,11 +124,16 @@ try {
         throw "Test suite failed (exit code $LASTEXITCODE). Fix failing tests before cutting a release."
     }
 
-    # --- Bump to release version, commit, tag ---
-    Write-Host "Bumping to release version $releaseVersion and tagging $tagName..." -ForegroundColor Cyan
-    Set-Version $releaseVersion
-    git add project.godot
-    git commit -m "Bump version to $releaseVersion"
+    # --- Bump to release version (if it differs), commit, tag ---
+    if ($releaseVersion -ne $currentVersion) {
+        Write-Host "Bumping to release version $releaseVersion..." -ForegroundColor Cyan
+        Set-Version $releaseVersion
+        git add project.godot
+        git commit -m "Bump version to $releaseVersion"
+    } else {
+        Write-Host "project.godot already at release version $releaseVersion; tagging HEAD." -ForegroundColor Cyan
+    }
+    Write-Host "Tagging $tagName..." -ForegroundColor Cyan
     git tag $tagName
 
     # --- Immediately bump to next dev version, commit ---
