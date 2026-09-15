@@ -159,6 +159,13 @@ layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Revert to Map Defaults"
 
+[node name="ClearOverridesButton" type="Button" parent="RootVBox/ScrollContainer/VBox"]
+script = ExtResource("animated_btn")
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Clear overrides"
+
 [node name="OverridesLabel" type="Label" parent="RootVBox/ScrollContainer/VBox"]
 layout_mode = 2
 theme_type_variation = &"Caption"
@@ -170,6 +177,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="BgColorLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/BgColorRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Background:"
@@ -185,6 +193,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="AmbientLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AmbientRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Ambient:"
@@ -208,6 +217,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="FogLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/FogRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Fog:"
@@ -239,6 +249,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="GlowLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/GlowRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Glow:"
@@ -261,6 +272,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="ExposureLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/ExposureRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Exposure:"
@@ -280,6 +292,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="BrightnessLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/BrightnessRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Brightness:"
@@ -298,6 +311,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="ContrastLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/ContrastRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Contrast:"
@@ -316,6 +330,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="SaturationLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/SaturationRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Saturation:"
@@ -348,6 +363,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="SkyLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/SkyPresetRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Sky:"
@@ -364,6 +380,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="FogEnergyLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/FogEnergyRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Fog Energy:"
@@ -382,6 +399,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="FogHeightLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/FogHeightRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Fog Height:"
@@ -402,6 +420,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="FogHDLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/FogHeightDensityRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Fog H.Dens:"
@@ -420,6 +439,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="TonemapLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/TonemapModeRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Tonemap:"
@@ -436,6 +456,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="TmWhiteLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/TonemapWhiteRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "TM White:"
@@ -455,6 +476,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="GlowStrLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/GlowStrengthRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Glow Str:"
@@ -473,6 +495,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="GlowBloomLabel" type="Label" parent="RootVBox/ScrollContainer/VBox/AdvancedContainer/GlowBloomRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 text = "Bloom:"

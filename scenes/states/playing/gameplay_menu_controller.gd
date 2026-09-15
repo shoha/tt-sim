@@ -159,9 +159,12 @@ func _on_level_cleared() -> void:
 	# Also untoggle the buttons if they were pressed
 	if toggle_asset_browser_button:
 		toggle_asset_browser_button.button_pressed = false
-	# Close the edit drawer if open
-	if level_edit_panel and level_edit_panel.is_open:
-		level_edit_panel.close()
+	# Close the edit drawer if open. The unsaved edits belonged to the level that
+	# just went away, so there is nothing left to prompt about.
+	if level_edit_panel:
+		level_edit_panel.mark_clean()
+		if level_edit_panel.is_open:
+			level_edit_panel.close()
 
 
 func _update_asset_browser_button_state() -> void:
@@ -284,6 +287,12 @@ func _on_edit_drawer_opened() -> void:
 ## Changes are kept — the user can Cancel to revert, or Save to persist to disk.
 ## Also deactivates the sun gizmo so it cannot outlive the drawer.
 func _on_edit_drawer_closed() -> void:
+	_deactivate_sun_gizmo()
+
+
+## The gizmo is an aiming mode, not a setting: it must not outlive the drawer
+## closing or survive a Save that ends the editing pass.
+func _deactivate_sun_gizmo() -> void:
 	var gizmo := _get_sun_gizmo()
 	if gizmo and gizmo.is_active():
 		gizmo.deactivate()
@@ -296,8 +305,14 @@ func _enter_edit_mode() -> void:
 
 	var level_data = _level_play_controller.active_level_data
 
-	# Snapshot original values for cancel/revert
-	_original_state = LevelVisualState.from_level_data(level_data)
+	# Snapshot original values for cancel/revert, but never over a snapshot that
+	# still has unsaved edits standing against it. The tab now vetoes a dirty
+	# close, so this guards the routes that bypass the prompt: conceal() when GM
+	# access is lost mid-edit (the drawer hides without reverting), and any
+	# programmatic reopen while dirty. In both cases Cancel must still return to
+	# the state the level had before the first of those edits.
+	if not level_edit_panel.is_dirty():
+		_original_state = LevelVisualState.from_level_data(level_data)
 
 	# Initialize the edit panel with current values
 	var map_defaults = _level_play_controller.get_map_environment_config()
@@ -386,6 +401,8 @@ func _on_revert_to_map_defaults() -> void:
 
 	# Update the panel's internal state and controls to match
 	level_edit_panel.apply_environment_state("", {})
+
+	UIManager.show_info("Environment reset to the map's defaults; overrides cleared.")
 
 
 ## Real-time lo-fi shader change from the edit panel
@@ -505,15 +522,28 @@ func _on_edit_save_requested(state: LevelVisualState) -> void:
 		save_path = LevelManager.save_level(level_data)
 	if save_path != "":
 		UIManager.show_success("Level settings saved")
+
+		# The drawer no longer closes on Save, so the revert snapshot has to
+		# advance with it -- otherwise a later Cancel would undo work already
+		# written to disk.
+		_original_state = state.copy()
+
+		# The drawer stays open after a save so tuning can continue; only the
+		# unsaved-changes flag is cleared. Save still ends the editing pass,
+		# though, so the aiming gizmo goes away exactly as it would on a close.
+		level_edit_panel.mark_clean()
 	else:
 		UIManager.show_error("Failed to save level settings")
+		# The disk write failed: the panel stays dirty and the revert snapshot
+		# is left untouched so Cancel still reverts to the last known-good state.
 
-	level_edit_panel.close()
+	_deactivate_sun_gizmo()
 
 
 ## Cancel editing: revert to the snapshot taken when the drawer was opened
 func _on_edit_cancel_requested() -> void:
 	_revert_edit_mode_values()
+	level_edit_panel.mark_clean()
 	level_edit_panel.close()
 
 

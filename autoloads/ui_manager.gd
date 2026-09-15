@@ -100,8 +100,11 @@ func _close_top_overlay() -> void:
 		var overlay = _overlay_stack.pop_back()
 		if not is_instance_valid(overlay):
 			return
-		# Try animate_out first, then close, then just hide
-		if overlay.has_method("animate_out"):
+		# request_close() first: overlays that may need to prompt (unsaved changes)
+		# own the decision. Then animate_out, then close, then just hide.
+		if overlay.has_method("request_close"):
+			overlay.request_close()
+		elif overlay.has_method("animate_out"):
 			overlay.animate_out()
 		elif overlay.has_method("close"):
 			overlay.close()
@@ -176,10 +179,14 @@ func show_confirmation(
 
 ## Show a danger confirmation (e.g., for delete actions)
 func show_danger_confirmation(
-	title: String, message: String, confirm_callback: Callable = Callable()
+	title: String,
+	message: String,
+	confirm_callback: Callable = Callable(),
+	confirm_text: String = "Delete",
+	cancel_text: String = "Cancel"
 ) -> Node:
 	return show_confirmation(
-		title, message, "Delete", "Cancel", confirm_callback, Callable(), "Danger"
+		title, message, confirm_text, cancel_text, confirm_callback, Callable(), "Danger"
 	)
 
 
