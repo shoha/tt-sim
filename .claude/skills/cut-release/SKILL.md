@@ -13,9 +13,10 @@ holds the version being worked *toward*, not the one last shipped.
 1. `scripts/cut-release.ps1` (run without `-Push` first) does all of this locally:
    - Verifies the tree is clean, on `main`, and tags are fetched.
    - Runs the full GUT test suite -- aborts on any failure.
-   - Bumps `config/version` to the release version (next patch by default, or
-     pass `-Version X.Y.Z` explicitly), commits `"Bump version to X.Y.Z"`,
-     tags `vX.Y.Z`.
+   - Tags `vX.Y.Z` at the current `config/version` (which by convention is
+     the version being worked toward, so no bump commit is needed); pass
+     `-Version X.Y.Z` to release a different version, in which case it bumps
+     `config/version` first and commits `"Bump version to X.Y.Z"`.
    - **Immediately** bumps `config/version` again to the *next* dev version
      and commits that too, so subsequent untagged CI builds on `main` version
      themselves correctly as `<next>-build.<sha>` pre-releases. This step has
