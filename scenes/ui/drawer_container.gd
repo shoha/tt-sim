@@ -288,9 +288,6 @@ func _build_ui() -> void:
 	_tab_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tab_badge.custom_minimum_size = Vector2(_TAB_BADGE_SIZE, _TAB_BADGE_SIZE)
 	_tab_badge.size = Vector2(_TAB_BADGE_SIZE, _TAB_BADGE_SIZE)
-	_tab_badge.position = Vector2(
-		tab_width - _TAB_BADGE_SIZE - _TAB_BADGE_MARGIN, _TAB_BADGE_MARGIN
-	)
 	var badge_style := StyleBoxFlat.new()
 	badge_style.bg_color = _TAB_ICON_COLOR
 	badge_style.set_corner_radius_all(int(_TAB_BADGE_SIZE / 2.0))
@@ -330,6 +327,14 @@ func _apply_tab_style() -> void:
 
 	var style_pressed := style_normal.duplicate()
 	style_pressed.bg_color = _TAB_COLOR_PRESSED
+
+	# Badge position depends on tab_width, which a subclass may change in
+	# _on_ready(). This runs again afterwards, so it lands on the final width.
+	# Null on the first call from _build_ui(), where the badge does not exist yet.
+	if _tab_badge:
+		_tab_badge.position = Vector2(
+			tab_width - _TAB_BADGE_SIZE - _TAB_BADGE_MARGIN, _TAB_BADGE_MARGIN
+		)
 
 	_tab_button.add_theme_stylebox_override("normal", style_normal)
 	_tab_button.add_theme_stylebox_override("hover", style_hover)
