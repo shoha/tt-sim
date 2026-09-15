@@ -53,9 +53,9 @@ var _camera: Camera3D
 var _world_viewport: SubViewport
 
 ## Scale configuration — updated via configure()
-var _grid_cell_size: float = 1.524
-var _display_unit: String = "ft"
-var _display_unit_per_cell: float = 5.0
+var _grid_cell_size: float = LevelData.DEFAULT_GRID_CELL_SIZE
+var _display_unit: String = LevelData.DEFAULT_DISPLAY_UNIT
+var _display_unit_per_cell: float = LevelData.DEFAULT_DISPLAY_UNIT_PER_CELL
 
 ## State
 var _state: State = State.INACTIVE

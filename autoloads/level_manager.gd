@@ -113,6 +113,18 @@ func save_level_folder(
 	return folder_path
 
 
+## Save a level to disk in whatever format it already uses, routing to
+## save_level_folder() for folder-based levels and save_level() for legacy
+## ones. Folder levels must never be downgraded to a legacy .tres -- that would
+## silently drop the bundled map.glb. Callers that already know the format
+## (e.g. always creating a new folder level) should call the specific method
+## instead.
+func save_level_in_place(level_data: LevelData) -> String:
+	if level_data.level_folder != "":
+		return save_level_folder(level_data)
+	return save_level(level_data)
+
+
 ## Get a unique folder name by appending a number if needed
 func _get_unique_folder_name(base_name: String) -> String:
 	var folder_name = base_name

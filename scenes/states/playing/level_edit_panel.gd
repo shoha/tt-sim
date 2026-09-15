@@ -32,9 +32,6 @@ signal drawer_opened
 ## The controller should revert changes if not saved.
 signal drawer_closed
 
-## Emitted when the unsaved-changes flag flips, so other UI can follow it.
-signal dirty_changed(dirty: bool)
-
 const TAB_TOOLTIP_CLEAN := "Visuals"
 const TAB_TOOLTIP_DIRTY := "Visuals (unsaved changes)"
 
@@ -53,9 +50,9 @@ var current_weather: WeatherSettings = WeatherSettings.default()
 var current_foliage: FoliageSettings = FoliageSettings.default()
 var current_sun: SunSettings = SunSettings.default()
 var light_intensity_scale: float = 1.0
-var current_grid_cell_size: float = 1.524
-var current_display_unit: String = "ft"
-var current_display_unit_per_cell: float = 5.0
+var current_grid_cell_size: float = LevelData.DEFAULT_GRID_CELL_SIZE
+var current_display_unit: String = LevelData.DEFAULT_DISPLAY_UNIT
+var current_display_unit_per_cell: float = LevelData.DEFAULT_DISPLAY_UNIT_PER_CELL
 var _current_scale_preset_key: String = ScaleUtils.DEFAULT_PRESET
 ## Environment config extracted from the map's embedded WorldEnvironment.
 ## Used as the base layer when current_preset is "" (no explicit choice).
@@ -105,9 +102,6 @@ var _sun_section: LevelEditSunSection
 @onready var tonemap_white_slider_spin: SliderSpinBox = %TonemapWhiteSliderSpin
 @onready var glow_strength_slider_spin: SliderSpinBox = %GlowStrengthSliderSpin
 @onready var glow_bloom_slider_spin: SliderSpinBox = %GlowBloomSliderSpin
-
-@onready var ambient_label: Label = %AmbientLabel
-@onready var fog_label: Label = %FogLabel
 
 # Action buttons
 @onready var save_button: Button = %SaveButton
@@ -387,7 +381,6 @@ func mark_clean() -> void:
 		return
 	_dirty = false
 	_refresh_dirty_visuals()
-	dirty_changed.emit(false)
 
 
 func _mark_dirty() -> void:
@@ -395,7 +388,6 @@ func _mark_dirty() -> void:
 		return
 	_dirty = true
 	_refresh_dirty_visuals()
-	dirty_changed.emit(true)
 
 
 func _refresh_dirty_visuals() -> void:
@@ -428,7 +420,10 @@ func request_close() -> void:
 		_close_prompt.closed.connect(_on_close_prompt_closed)
 
 
-## Whether the discard prompt is currently on screen.
+## Whether the discard prompt is currently on screen. Also true while the
+## prompt is animating out (about 0.2 s after "Keep editing"), so a tab press
+## or Escape in that window is a no-op rather than a second prompt -- that is
+## intended.
 func _is_close_prompt_open() -> bool:
 	return is_instance_valid(_close_prompt) and _close_prompt.is_inside_tree()
 
@@ -484,7 +479,9 @@ func initialize(
 	light_intensity_scale = intensity
 	current_preset = preset
 	current_water_style = level_data.water_style
-	var water_style_matched := _select_by_metadata(water_style_dropdown, current_water_style)
+	var water_style_matched := OptionButtonUtils.select_by_metadata(
+		water_style_dropdown, current_water_style
+	)
 	if not water_style_matched:
 		# Corrupt/unrecognized save data -- fall back to the default preset
 		# rather than leaving the dropdown showing a stale/mismatched item.
@@ -495,7 +492,7 @@ func initialize(
 		# without touching the dropdown would silently re-persist the corrupt
 		# value while the UI shows "Stylized".
 		current_water_style = WaterPresets.DEFAULT_PRESET
-		_select_by_metadata(water_style_dropdown, WaterPresets.DEFAULT_PRESET)
+		OptionButtonUtils.select_by_metadata(water_style_dropdown, WaterPresets.DEFAULT_PRESET)
 	current_overrides = level_data.environment_overrides.duplicate()
 	current_lofi = level_data.lofi.copy_settings()
 	current_weather = level_data.weather.copy_settings()
@@ -517,7 +514,7 @@ func initialize(
 	_populate_preset_dropdown(has_map_defaults)
 
 	# Select preset in dropdown
-	_select_by_metadata(preset_dropdown, preset)
+	OptionButtonUtils.select_by_metadata(preset_dropdown, preset)
 
 	# Show revert button only when the map provided its own environment
 	revert_to_map_button.visible = has_map_defaults
@@ -546,7 +543,7 @@ func apply_environment_state(preset: String, overrides: Dictionary) -> void:
 	current_overrides = overrides.duplicate()
 
 	# Update preset dropdown selection
-	_select_by_metadata(preset_dropdown, preset)
+	OptionButtonUtils.select_by_metadata(preset_dropdown, preset)
 
 	_sync_controls_from_config()
 	_refresh_override_indicators()
@@ -576,7 +573,7 @@ func _sync_controls_from_config() -> void:
 
 	# Advanced controls — sky preset
 	var sky_preset_name: String = config.get("sky_preset", "")
-	_select_by_metadata(sky_preset_dropdown, sky_preset_name)
+	OptionButtonUtils.select_by_metadata(sky_preset_dropdown, sky_preset_name)
 
 	# Advanced controls — fog details
 	fog_energy_slider_spin.set_value_no_signal(config.get("fog_light_energy", 1.0))
@@ -585,7 +582,7 @@ func _sync_controls_from_config() -> void:
 
 	# Advanced controls — tonemap
 	var tm_mode: int = config.get("tonemap_mode", Environment.TONE_MAPPER_FILMIC)
-	_select_by_metadata(tonemap_mode_dropdown, tm_mode)
+	OptionButtonUtils.select_by_metadata(tonemap_mode_dropdown, tm_mode)
 	tonemap_white_slider_spin.set_value_no_signal(config.get("tonemap_white", 1.0))
 
 	# Advanced controls — glow details
@@ -615,6 +612,8 @@ func _clear_override_keys(keys: Array) -> void:
 
 
 func _on_clear_overrides_pressed() -> void:
+	if current_overrides.is_empty():
+		return
 	_clear_override_keys(current_overrides.keys())
 	UIManager.show_info("Overrides cleared.")
 
@@ -630,15 +629,6 @@ func _on_sun_section_changed(settings: SunSettings) -> void:
 	current_sun = settings
 	_mark_dirty()
 	sun_changed.emit(current_sun)
-
-
-## Select the dropdown item whose metadata equals [param value]; true if found.
-static func _select_by_metadata(dropdown: OptionButton, value: Variant) -> bool:
-	for i in range(dropdown.item_count):
-		if dropdown.get_item_metadata(i) == value:
-			dropdown.select(i)
-			return true
-	return false
 
 
 # ============================================================================
@@ -672,7 +662,7 @@ func _sync_scale_controls() -> void:
 			break
 
 	# Select the matching item in the dropdown
-	_select_by_metadata(scale_preset_dropdown, _current_scale_preset_key)
+	OptionButtonUtils.select_by_metadata(scale_preset_dropdown, _current_scale_preset_key)
 
 
 func _on_scale_preset_selected(index: int) -> void:
@@ -698,7 +688,7 @@ func _on_grid_cell_size_changed(value: float) -> void:
 	current_grid_cell_size = value
 	# Manually changing the slider switches to "Custom"
 	_current_scale_preset_key = "custom"
-	_select_by_metadata(scale_preset_dropdown, "custom")
+	OptionButtonUtils.select_by_metadata(scale_preset_dropdown, "custom")
 	scale_config_changed.emit(
 		current_grid_cell_size, current_display_unit, current_display_unit_per_cell
 	)

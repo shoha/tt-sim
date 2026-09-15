@@ -9,6 +9,13 @@ extends Resource
 ## format_version key", i.e. a level saved before versioning existed.
 const FORMAT_VERSION: int = 1
 
+## Default 1.524 = 5 feet, the standard D&D/Pathfinder grid square.
+const DEFAULT_GRID_CELL_SIZE := 1.524
+## Default distance-display unit label.
+const DEFAULT_DISPLAY_UNIT := "ft"
+## Default display units per grid cell (e.g., 5.0 for "5 ft per square").
+const DEFAULT_DISPLAY_UNIT_PER_CELL := 5.0
+
 ## Schema version this instance conforms to. Always FORMAT_VERSION in memory --
 ## from_dict() migrates older payloads forward rather than retaining their
 ## version.
@@ -80,11 +87,11 @@ const FORMAT_VERSION: int = 1
 ## Size of one grid cell in world units (meters), as measured in the loaded scene.
 ## Default 1.524 = 5 feet, the standard D&D/Pathfinder grid square.
 ## For maps authored at "1 unit = 1 square" convention, set to 1.0.
-@export var grid_cell_size: float = 1.524
+@export var grid_cell_size: float = DEFAULT_GRID_CELL_SIZE
 ## Unit label for distance display (e.g., "ft", "m", "in", "sq")
-@export var display_unit: String = "ft"
+@export var display_unit: String = DEFAULT_DISPLAY_UNIT
 ## How many display units each grid cell represents (e.g., 5.0 for "5 ft per square")
-@export var display_unit_per_cell: float = 5.0
+@export var display_unit_per_cell: float = DEFAULT_DISPLAY_UNIT_PER_CELL
 
 ## Grid overlay & snapping
 @export_group("Grid")
@@ -359,9 +366,9 @@ static func from_dict(data: Dictionary) -> LevelData:
 			legacy_raw if legacy_raw is Dictionary else {}
 		)
 
-	level.grid_cell_size = data.get("grid_cell_size", 1.524)
-	level.display_unit = data.get("display_unit", "ft")
-	level.display_unit_per_cell = data.get("display_unit_per_cell", 5.0)
+	level.grid_cell_size = data.get("grid_cell_size", DEFAULT_GRID_CELL_SIZE)
+	level.display_unit = data.get("display_unit", DEFAULT_DISPLAY_UNIT)
+	level.display_unit_per_cell = data.get("display_unit_per_cell", DEFAULT_DISPLAY_UNIT_PER_CELL)
 	level.grid_visible = data.get("grid_visible", false)
 	level.grid_snap_enabled = data.get("grid_snap_enabled", true)
 	level.grid_show_on_measure = data.get("grid_show_on_measure", true)

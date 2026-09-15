@@ -44,10 +44,10 @@ await UIManager.fade_out()
 await UIManager.fade_in()
 await UIManager.transition(func(): change_scene())
 
-# Loading screen
-UIManager.show_loading("Loading level...")
-UIManager.set_loading_progress(0.5, "Loading tokens...")
-await UIManager.hide_loading()
+# Loading screen -- owned by Root, not UIManager (see Loading Screen section below)
+loading_overlay.show_loading("Loading level...")
+loading_overlay.set_progress(0.5, "Loading tokens...")
+await loading_overlay.hide_loading()
 
 # Input hints
 UIManager.set_hints([{"key": "ESC", "action": "Pause"}])
@@ -156,7 +156,7 @@ func show_danger_confirmation(
     message: String,
     confirm_callback: Callable = Callable(),
     confirm_text: String = "Delete",
-    cancel_text: String = "Cancel",
+    cancel_text: String = "Cancel"
 ) -> Node
 ```
 
@@ -176,6 +176,7 @@ drawer's own Cancel button would be ambiguous about which one it cancelled. See
 | `confirm_callback` | Callable | empty     | Called on confirm                |
 | `cancel_callback`  | Callable | empty     | Called on cancel                 |
 | `confirm_style`    | String   | "Success" | Theme variant for confirm button |
+| `confirm_sound_override` | Callable | empty | Played instead of the default confirm sound, if set |
 
 ### Signals
 
@@ -185,7 +186,7 @@ drawer's own Cancel button would be ambiguous about which one it cancelled. See
 
 ## Toast Notifications
 
-Non-blocking notifications that appear in the bottom-right corner.
+Non-blocking notifications that appear bottom-center of the screen.
 
 ### Types
 
@@ -251,33 +252,35 @@ Fade color: Dark theme background (#1a121a)
 
 ## Loading Screen
 
-Progress indicator for async operations.
+Progress indicator for async operations. `LoadingOverlay` (`scenes/ui/loading_overlay.gd`) is not a
+UIManager-registered dialog -- `Root` instantiates and owns one directly (`_loading_overlay`) and
+calls it during level loading. There is no `UIManager.show_loading()`/`hide_loading()` wrapper.
 
 ### Usage
 
 ```gdscript
 # Show loading
-UIManager.show_loading("Loading Level...")
+loading_overlay.show_loading("Loading Level...")
 
 # Update progress (0.0 to 1.0)
-UIManager.set_loading_progress(0.25, "Loading map...")
-UIManager.set_loading_progress(0.50, "Spawning tokens...")
-UIManager.set_loading_progress(0.75, "Configuring camera...")
-UIManager.set_loading_progress(1.0, "Done!")
+loading_overlay.set_progress(0.25, "Loading map...")
+loading_overlay.set_progress(0.50, "Spawning tokens...")
+loading_overlay.set_progress(0.75, "Configuring camera...")
+loading_overlay.set_progress(1.0, "Done!")
 
-# Hide when complete
-await UIManager.hide_loading()
+# Hide when complete (async -- awaits the fade-out tween, emits loading_complete)
+await loading_overlay.hide_loading()
 
 # For indeterminate loading (no progress bar)
-UIManager.show_loading("Please wait...")
-# Progress bar is hidden, just shows spinner/message
+loading_overlay.show_indeterminate("Please wait...")
+# Progress bar is hidden, just shows spinner/message; show_progress_bar() restores it
 ```
 
 ### Features
 
-- Smooth progress bar animation
+- Smooth progress bar animation (lerped toward the target value, with a looping shimmer)
 - Status text updates
-- Blocks input while visible
+- Blocks mouse input while visible (full-screen near-opaque `ColorRect`, default `mouse_filter`)
 - Animated show/hide
 
 ---
@@ -314,7 +317,8 @@ UIManager.clear_hints()
 
 ## Settings Menu
 
-Tabbed settings interface with Audio, Graphics, and Controls.
+Tabbed settings interface (`scenes/ui/settings_menu.gd`) with six tabs: Audio, Graphics, Grid,
+Controls, Network, and Updates.
 
 ### Opening
 
@@ -334,13 +338,31 @@ await settings.closed  # Wait for user to close
 
 **Graphics Tab:**
 
-- Fullscreen toggle
-- VSync toggle
+- Fullscreen toggle, VSync toggle
+- Lo-fi filter toggle, occlusion fade toggle
+- Antialiasing, shadow quality, water quality, renderer method option buttons
+- SSAO, SSR, SDFGI toggles
+- Foliage density slider
+
+**Grid Tab:**
+
+- Cell tint opacity, line thickness, and fade distance sliders for the grid overlay
 
 **Controls Tab:**
 
-- Input Device selector (Auto / Mouse / Trackpad) — sets `InputProfile` active profile
+- Input Device selector (sets `InputProfile` active profile)
 - Read-only keybinding display (labels update dynamically based on active profile)
+
+**Network Tab:**
+
+- P2P enabled toggle
+- Clear asset cache button, with cache size info
+
+**Updates Tab:**
+
+- Current version display
+- Prereleases toggle
+- Check for updates button and status label
 
 ### Persistence
 
@@ -350,18 +372,23 @@ Settings are saved to `Paths.SETTINGS_PATH` (`user://settings.cfg`) and loaded o
 
 ## Pause Menu
 
-The pause menu is shown when the game is paused (ESC during gameplay).
+`PauseOverlay` (`scenes/states/paused/pause_overlay.gd`) is shown when the game is paused (ESC
+during gameplay).
 
 ### Features
 
 - **Resume** - Continue playing
+- **Edit Level** - GM-only (`NetworkManager.has_gm_access()`); resumes and opens the level editor
 - **Settings** - Open settings menu
 - **Return to Title** - Exit to main menu (with confirmation)
+- **Quit Game** - Exit the application (with confirmation)
 
 ### Behavior
 
-- Game tree is paused (`get_tree().paused = true`)
-- UI elements with `process_mode = PROCESS_MODE_WHEN_PAUSED` remain interactive
+- Game tree is paused (`get_tree().paused = true`) only in local, non-networked games — a networked
+  game keeps running with the pause menu as an overlay, so other players are unaffected
+- `PauseOverlay` itself runs with `process_mode = PROCESS_MODE_ALWAYS` so it stays interactive and
+  animates whether or not the tree is actually paused
 - ESC toggles pause on/off
 
 ---
@@ -426,13 +453,18 @@ AudioManager will automatically load them on startup.
 
 ## Overlay & Modal System
 
-UIManager tracks overlays and modals for proper ESC key handling.
+UIManager tracks registered overlays and the app state for ESC key handling.
 
 ### Priority Order (ESC key)
 
-1. **Modals** - Confirmation dialogs, etc.
-2. **Overlays** - Level Editor, Pokemon List, Settings
-3. **Pause Toggle** - If playing, pause/unpause
+1. **Overlays** - anything registered via `register_overlay()`: Level Editor, Settings, Help,
+   Asset Browser, the `LevelEditPanel` Visuals drawer, etc. `UIManager._unhandled_input()` closes
+   the top of the overlay stack first, before anything else
+2. **Pause Toggle** - if no overlay is open and the app state is `PLAYING`/`PAUSED`, pause/unpause
+
+Confirmation dialogs (modals) are not part of this stack: `ConfirmationDialog` consumes `ui_cancel`
+in its own `_unhandled_input()` independently, so an open dialog dismisses on Escape without going
+through `UIManager`'s overlay or pause handling.
 
 ### Registering Overlays
 
@@ -602,14 +634,13 @@ signal revert_to_map_defaults_requested
 signal aim_sun_toggled(active: bool)
 signal drawer_opened   # Controller should snapshot values and call initialize()
 signal drawer_closed   # Controller should revert if not saved
-signal dirty_changed(dirty: bool)   # Unsaved-changes flag flipped
 ```
 
 `GameplayMenuController` connects these signals and routes them to `LevelPlayController` for live application. On `drawer_opened` it snapshots the current level as a `LevelVisualState` (`LevelVisualState.from_level_data()`); both Save and Cancel go through `LevelPlayController.apply_visual_state()` — Save applies the panel's emitted `state`, Cancel re-applies the snapshot taken at open time.
 
 ### Unsaved Changes
 
-Every live edit calls `_mark_dirty()`, which raises the unsaved-changes flag, shows the accent dot on the tab, switches the tab tooltip to "Visuals (unsaved changes)", and emits `dirty_changed`. Only `mark_clean()` lowers the flag; the controller calls it on Save, on Cancel, and when the level is cleared. Reopening the drawer (`initialize()`) does not clear it.
+Every live edit calls `_mark_dirty()`, which raises the unsaved-changes flag, shows the accent dot on the tab, and switches the tab tooltip to "Visuals (unsaved changes)". Only `mark_clean()` lowers the flag; the controller calls it on Save, on Cancel, and when the level is cleared. Reopening the drawer (`initialize()`) does not clear it.
 
 A dirty drawer refuses to close from its tab (`_can_close_from_tab()` returns `false`) and calls `request_close()` instead, which shows a "Discard changes" / "Keep editing" danger confirmation (the cancel button is relabelled via `show_danger_confirmation()`'s `cancel_text` parameter, since a bare "Cancel" next to the drawer's own Cancel button was ambiguous about which one it cancelled). Confirming emits `cancel_requested`, so the controller reverts and closes. Escape takes the same route: the panel registers itself with `UIManager.register_overlay()` in `open()`, and `UIManager._close_top_overlay()` prefers an overlay's `request_close()` over `animate_out()`/`close()`.
 
@@ -637,6 +668,9 @@ every override at once (with its own "Overrides cleared." toast).
 which owns the Sun section's controls, mode-dropdown population, and the auto-to-on promotion rule)
 are `LevelEditPanel`'s two extracted sub-components, split out to keep `level_edit_panel.gd` under
 the project's max-file-lines lint budget.
+
+A Sky override survives a preset switch like every other override, by design; the per-row reset and
+"Clear overrides" are the way back to the preset's own sky.
 
 ### Cancel Behavior
 

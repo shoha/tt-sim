@@ -24,7 +24,7 @@ const color_surface3: Color = Color("#50374d")  # Higher elevation (was content3
 const color_surface4: Color = Color("#62435f")  # Highest elevation (was content4)
 
 # -- Interactive/Accent Colors --
-const color_accent: Color = Color("#db924b")  # Primary interactive elements (was primary)
+const color_accent: Color = ThemeColors.ACCENT  # Primary interactive elements (was primary)
 var color_accent_lighter: Color = color_accent.lightened(COLOR_ADJUSTMENT)  # Hover state
 var color_accent_darker: Color = color_accent.darkened(COLOR_ADJUSTMENT)  # Pressed state
 var color_accent_darkest: Color = color_accent.darkened(COLOR_ADJUSTMENT * 2)  # Guides/lines

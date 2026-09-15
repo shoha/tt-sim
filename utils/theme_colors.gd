@@ -1,0 +1,13 @@
+class_name ThemeColors
+extends RefCounted
+
+## Colours that code (not the theme resource) needs, e.g. an accent-tinted
+## indicator or icon tint outside of a themed Control's style boxes. Only the
+## accent lives here so far; other literals in drawer_container.gd and
+## download_queue.gd still mirror `themes/dark_theme.gd` by hand.
+##
+## `themes/dark_theme.gd` reads ACCENT from here when the ProgrammaticTheme
+## addon regenerates the theme on save, so moving or renaming this file breaks
+## theme regeneration quietly: the committed .tres simply stops updating.
+
+const ACCENT := Color("#db924b")

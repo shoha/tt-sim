@@ -11,7 +11,7 @@ const HIDE_DELAY := 2.0  # Seconds to wait before hiding after all downloads com
 const PULSE_SPEED := 3.0  # Pulse animation speed
 
 # Theme colors (matching dark_theme.gd)
-const COLOR_ACCENT := Color("#db924b")
+const COLOR_ACCENT := ThemeColors.ACCENT
 const COLOR_SURFACE2 := Color("#3e2b3c")
 const COLOR_SURFACE3 := Color("#50374d")
 const COLOR_TEXT_ON_ACCENT := Color("#2c1f2b")

@@ -15,15 +15,17 @@ const PRESETS := {
 	"dnd_5ft":
 	{
 		"label": "D&D / Pathfinder (5 ft squares)",
-		"grid_cell_size": 1.524,
-		"display_unit": "ft",
-		"display_unit_per_cell": 5.0,
+		"grid_cell_size": LevelData.DEFAULT_GRID_CELL_SIZE,
+		"display_unit": LevelData.DEFAULT_DISPLAY_UNIT,
+		"display_unit_per_cell": LevelData.DEFAULT_DISPLAY_UNIT_PER_CELL,
 	},
 	"dnd_metric":
 	{
 		"label": "D&D / Pathfinder (1.5 m squares)",
-		"grid_cell_size": 1.524,
+		"grid_cell_size": LevelData.DEFAULT_GRID_CELL_SIZE,
 		"display_unit": "m",
+		# 5 ft expressed in metres: a display quantity, not the cell size, so it
+		# stays a literal even though it equals DEFAULT_GRID_CELL_SIZE today.
 		"display_unit_per_cell": 1.524,
 	},
 	"metric_1m":
