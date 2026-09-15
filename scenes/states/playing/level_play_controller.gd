@@ -272,6 +272,7 @@ func track_network_token(token: BoardToken) -> void:
 	_token_spawner.track_network_token(token)
 
 
+## Forget a network-tracked token after the host removed it. See TokenSpawner.untrack_network_token.
 func untrack_network_token(network_id: String) -> void:
 	_token_spawner.untrack_network_token(network_id)
 
