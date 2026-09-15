@@ -73,5 +73,17 @@ func test_apply_level_environment_merges_level_overrides_over_full_defaults() ->
 	assert_eq(game_map.last_overrides.get("pixelation"), Constants.LOFI_DEFAULTS["pixelation"])
 	assert_eq(game_map.last_overrides.get("vignette_strength"), 0.5)
 
+	# The seven assertions above cannot fail if the Constants.LOFI_DEFAULTS merge
+	# were dropped, because LofiSettings' own defaults are those same values.
+	# These three keys are what the merge is actually for: they are not
+	# LofiSettings fields, so only the merge puts them in the dictionary at all,
+	# and without it the persistent material would keep the previous level's.
+	for key: String in ["color_tint", "grain_speed", "grain_scale"]:
+		assert_eq(
+			game_map.last_overrides.get(key),
+			Constants.LOFI_DEFAULTS[key],
+			"%s is not a LofiSettings field -- only the defaults merge resets it" % key
+		)
+
 	root.free()
 	game_map.free()
