@@ -767,8 +767,8 @@ UIManager.show_error("Failed to load")
 
 | Component      | Access                           | Purpose                 |
 | -------------- | -------------------------------- | ----------------------- |
-| Settings Menu  | `UIManager.open_settings()`      | Audio/Graphics/Controls |
-| Loading Screen | `UIManager.show_loading()`       | Progress indicator      |
+| Settings Menu  | `UIManager.open_settings()`      | Audio/Graphics/Grid/Controls/Network/Updates |
+| Loading Screen | `LoadingOverlay.show_loading()` (owned by `Root`) | Progress indicator      |
 | Input Hints    | `UIManager.set_hints([...])`     | Contextual keybindings  |
 | Transitions    | `UIManager.transition(callback)` | Fade between scenes     |
 
