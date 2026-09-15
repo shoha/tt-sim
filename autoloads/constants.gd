@@ -87,6 +87,17 @@ const RENDERING_TOGGLES_DEFAULTS := {
 const ANIM_FADE_IN_DURATION: float = 0.2
 const ANIM_FADE_OUT_DURATION: float = 0.15
 
+# Motion tokens for the UI primitives (scenes/ui/primitives/). Hover and press
+# are tweened on Control.offset_transform_scale so containers never relayout.
+const ANIM_HOVER_IN: float = 0.12
+const ANIM_HOVER_OUT: float = 0.10
+const ANIM_PRESS: float = 0.06
+const ANIM_PANE_SWAP: float = 0.16
+const ANIM_PANE_SWAP_OFFSET_PX: float = 8.0
+const ANIM_FOLDOUT: float = 0.16
+const UI_HOVER_SCALE := Vector2(1.06, 1.06)
+const UI_PRESS_SCALE := Vector2(0.96, 0.96)
+
 # =============================================================================
 # UI COLORS (mirrors theme values for programmatic use)
 # =============================================================================

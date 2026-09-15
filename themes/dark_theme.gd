@@ -188,6 +188,7 @@ func define_theme():
 
 	_define_label()
 	_define_button()
+	_define_icon_buttons()
 	_define_checkbox_and_checkbutton()
 	_define_menu_button()
 	_define_panel()
@@ -334,7 +335,21 @@ func _button_styles(base_color: Color, lighter: Color, darker: Color) -> Diction
 
 func _define_button():
 	# Primary button (default)
-	define_style("Button", _button_styles(color_accent, color_accent_lighter, color_accent_darker))
+	define_style(
+		"Button",
+		inherit(
+			_button_styles(color_accent, color_accent_lighter, color_accent_darker),
+			{
+				icon_max_width = 20,
+				icon_normal_color = color_text_on_accent,
+				icon_hover_color = color_text_on_accent,
+				icon_pressed_color = color_text_on_accent,
+				icon_hover_pressed_color = color_text_on_accent,
+				icon_focus_color = color_text_on_accent,
+				icon_disabled_color = Color(color_text_on_accent, 0.5),
+			}
+		)
+	)
 
 	# Button variants
 	define_variant_style(
@@ -357,6 +372,138 @@ func _define_button():
 
 	define_variant_style(
 		"Danger", "Button", _button_styles(color_danger, color_danger_lighter, color_danger_darker)
+	)
+
+
+# Flat icon-only buttons, selectable tiles, inline value chips, rail labels and
+# foldout headers used by scenes/ui/primitives/. White SVG icons take the
+# icon_*_color tints, so no per-instance colour code is needed.
+func _define_icon_buttons():
+	var flat_normal = stylebox_flat(
+		{
+			bg_color = color_transparent,
+			corner_ = corner_radius(corner_r),
+			content_margin_ = content_margins(6, 6),
+		}
+	)
+	var flat_hover = inherit(flat_normal, {bg_color = color_surface2})
+	var flat_pressed = inherit(flat_normal, {bg_color = color_background})
+	var muted_icon_colors = {
+		icon_max_width = 20,
+		icon_normal_color = color_text_on_dark,
+		icon_hover_color = color_accent_lighter,
+		icon_pressed_color = color_accent,
+		icon_hover_pressed_color = color_accent,
+		icon_focus_color = color_text_on_dark,
+		icon_disabled_color = Color(color_text_on_dark, 0.4),
+	}
+	var icon_button = inherit(
+		{
+			normal = flat_normal,
+			hover = flat_hover,
+			pressed = flat_pressed,
+			hover_pressed = flat_pressed,
+			disabled = flat_normal,
+			focus = style_focus_ring,
+		},
+		muted_icon_colors
+	)
+	define_variant_style("IconButton", "Button", icon_button)
+	define_variant_style(
+		"IconButtonActive",
+		"Button",
+		inherit(
+			icon_button,
+			{
+				normal = inherit(flat_normal, {bg_color = color_surface2}),
+				hover = inherit(flat_normal, {bg_color = color_surface3}),
+				icon_normal_color = color_accent,
+				icon_hover_color = color_accent_lighter,
+				icon_focus_color = color_accent,
+			}
+		)
+	)
+
+	var tile_normal = stylebox_flat(
+		{
+			bg_color = color_surface1,
+			border_color = color_surface3,
+			border_ = border_width(border_w),
+			corner_ = corner_radius(corner_r),
+			content_margin_ = content_margins(spacing_md, spacing_sm),
+		}
+	)
+	define_variant_style(
+		"Tile",
+		"Button",
+		inherit(
+			muted_icon_colors,
+			{
+				normal = tile_normal,
+				hover = inherit(tile_normal, {bg_color = color_surface2}),
+				pressed =
+				inherit(tile_normal, {bg_color = color_surface2, border_color = color_accent}),
+				hover_pressed =
+				inherit(tile_normal, {bg_color = color_surface3, border_color = color_accent}),
+				disabled = inherit(tile_normal, {bg_color = Color(color_surface1, 0.5)}),
+				focus = style_focus_ring,
+				font_size = font_size_caption,
+				font_color = color_text_on_dark,
+				font_hover_color = color_text_on_dark,
+				font_pressed_color = color_accent,
+				font_hover_pressed_color = color_accent,
+				font_focus_color = color_text_on_dark,
+				font_disabled_color = Color(color_text_on_dark, 0.4),
+				icon_max_width = 24,
+				icon_hover_color = color_text_on_dark,
+				h_separation = spacing_sm,
+			}
+		)
+	)
+
+	define_variant_style(
+		"ValueChip",
+		"LineEdit",
+		{
+			font_size = font_size_caption,
+			font_color = color_text_on_dark,
+			normal =
+			stylebox_flat(
+				{
+					bg_color = color_background,
+					corner_ = corner_radius(corner_r),
+					content_margin_ = content_margins(spacing_sm, 2),
+				}
+			),
+			focus = style_focus_ring,
+		}
+	)
+
+	define_variant_style(
+		"RailLabel",
+		"Label",
+		{
+			font_size = font_size_caption,
+			font_color = Color(color_text_on_dark, 0.7),
+		}
+	)
+
+	define_variant_style(
+		"FoldoutHeader",
+		"Button",
+		inherit(
+			icon_button,
+			{
+				font_size = font_size_caption,
+				font_color = Color(color_text_on_dark, 0.7),
+				font_hover_color = color_text_on_dark,
+				font_pressed_color = color_text_on_dark,
+				font_hover_pressed_color = color_text_on_dark,
+				font_focus_color = color_text_on_dark,
+				icon_max_width = 16,
+				h_separation = spacing_sm,
+			}
+		)
 	)
 
 
