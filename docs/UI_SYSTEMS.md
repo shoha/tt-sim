@@ -558,33 +558,35 @@ The panel emits granular signals for each type of change:
 ```gdscript
 signal save_requested(state: LevelVisualState)
 signal cancel_requested
-signal map_scale_changed(new_scale: float)
 signal intensity_changed(new_scale: float)
+signal scale_config_changed(
+    grid_cell_size: float, display_unit: String, display_unit_per_cell: float
+)
 signal environment_changed(preset: String, overrides: Dictionary)
 signal lofi_changed(overrides: Dictionary)
+signal weather_changed(overrides: Dictionary)
+signal foliage_changed(overrides: Dictionary)
+signal sun_changed(settings: SunSettings)
+signal water_style_changed(style: String)
 signal revert_to_map_defaults_requested
-signal open_editor_requested
+signal aim_sun_toggled(active: bool)
 signal drawer_opened   # Controller should snapshot values and call initialize()
 signal drawer_closed   # Controller should revert if not saved
 ```
 
-`GameplayMenuController` connects these signals and routes them to `LevelPlayController` for live application.
+`GameplayMenuController` connects these signals and routes them to `LevelPlayController` for live application. On `drawer_opened` it snapshots the current level as a `LevelVisualState` (`LevelVisualState.from_level_data()`); both Save and Cancel go through `LevelPlayController.apply_visual_state()` — Save applies the panel's emitted `state`, Cancel re-applies the snapshot taken at open time.
 
 ### Cancel Behavior
 
-When the drawer closes without saving, `GameplayMenuController` restores all original values (snapshotted at open time) and re-applies them to the live viewport.
+When the drawer closes without saving, `GameplayMenuController` restores the `LevelVisualState` snapshotted at open time and re-applies it to the live viewport via `LevelPlayController.apply_visual_state()`.
 
 ### Initialization
 
 ```gdscript
 level_edit_panel.initialize(
-    current_map_scale,
-    light_intensity_scale,
-    environment_preset,
-    environment_overrides,
-    lofi_overrides,
-    map_defaults,       # Dictionary from LevelPlayController.get_map_environment_config()
-    has_map_sky,        # true if the map had an embedded Sky resource
+    level_data,     # LevelData -- current values are read from this
+    map_defaults,   # Dictionary from LevelPlayController.get_map_environment_config()
+    has_map_sky,    # true if the map had an embedded Sky resource
 )
 ```
 
