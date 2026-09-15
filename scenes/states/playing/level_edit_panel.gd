@@ -72,6 +72,7 @@ var _dirty: bool = false
 ## The live "discard changes" prompt, while one is on screen. Kept so a second
 ## close request reuses it instead of stacking a second dialog.
 var _close_prompt: Node = null
+var _override_rows: LevelEditOverrideRows
 
 # Scale & measurement controls
 @onready var map_grid_toggle: Button = %MapGridToggle
@@ -96,6 +97,7 @@ var _close_prompt: Node = null
 @onready var contrast_slider_spin: SliderSpinBox = %ContrastSliderSpin
 @onready var saturation_slider_spin: SliderSpinBox = %SaturationSliderSpin
 @onready var revert_to_map_button: Button = %RevertToMapButton
+@onready var clear_overrides_button: Button = %ClearOverridesButton
 
 # Lighting controls — advanced
 @onready var advanced_toggle: Button = %AdvancedToggle
@@ -108,6 +110,9 @@ var _close_prompt: Node = null
 @onready var tonemap_white_slider_spin: SliderSpinBox = %TonemapWhiteSliderSpin
 @onready var glow_strength_slider_spin: SliderSpinBox = %GlowStrengthSliderSpin
 @onready var glow_bloom_slider_spin: SliderSpinBox = %GlowBloomSliderSpin
+
+@onready var ambient_label: Label = %AmbientLabel
+@onready var fog_label: Label = %FogLabel
 
 # Action buttons
 @onready var save_button: Button = %SaveButton
@@ -197,6 +202,7 @@ func _on_ready() -> void:
 	_populate_tonemap_mode_dropdown()
 	_populate_sun_mode_dropdown()
 	_refresh_dirty_visuals()
+	_setup_override_rows()
 
 
 func _connect_control_signals() -> void:
@@ -282,6 +288,7 @@ func _connect_control_signals() -> void:
 		binding[0].connect(binding[1], _on_foliage_override_changed.bind(binding[2]))
 
 	revert_to_map_button.pressed.connect(_on_revert_to_map_defaults_pressed)
+	clear_overrides_button.pressed.connect(_on_clear_overrides_pressed)
 	save_button.pressed.connect(_on_save_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
 
@@ -541,6 +548,7 @@ func initialize(
 	# initialize() resyncs every other sun control from the new level; without
 	# this the button could stay latched against a freed SunGizmoTool.
 	set_aim_sun_pressed(false)
+	_refresh_override_indicators()
 
 
 ## Apply new environment state from outside (e.g. after reverting to map defaults)
@@ -556,6 +564,7 @@ func apply_environment_state(preset: String, overrides: Dictionary) -> void:
 			break
 
 	_sync_controls_from_config()
+	_refresh_override_indicators()
 
 
 ## Sync the environment controls to match the resolved preset + overrides config.
@@ -603,6 +612,27 @@ func _sync_controls_from_config() -> void:
 	# Advanced controls — glow details
 	glow_strength_slider_spin.set_value_no_signal(config.get("glow_strength", 1.0))
 	glow_bloom_slider_spin.set_value_no_signal(config.get("glow_bloom", 0.0))
+
+
+func _setup_override_rows() -> void:
+	_override_rows = LevelEditOverrideRows.new(self, _clear_override_keys)
+	environment_changed.connect(func(_preset, _overrides): _refresh_override_indicators())
+
+
+func _refresh_override_indicators() -> void:
+	_override_rows.refresh(current_overrides, clear_overrides_button)
+
+
+func _clear_override_keys(keys: Array) -> void:
+	LevelEditOverrideRows.keys_after_clear(current_overrides, keys)
+	_mark_dirty()
+	environment_changed.emit(current_preset, current_overrides)
+	_sync_controls_from_config()
+
+
+func _on_clear_overrides_pressed() -> void:
+	_clear_override_keys(current_overrides.keys())
+	UIManager.show_info("Overrides cleared.")
 
 
 # ============================================================================
