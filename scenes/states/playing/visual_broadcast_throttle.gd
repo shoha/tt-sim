@@ -15,7 +15,7 @@ var interval: float = DEFAULT_INTERVAL
 ## Called with the merged settings Dictionary. Typically NetworkManager.broadcast_visual_settings.
 var send: Callable
 
-var _pending: Dictionary = {}
+var _pending: Dictionary[String, Variant] = {}
 var _time_until_send: float = 0.0
 
 
@@ -28,7 +28,9 @@ func queue(settings: Dictionary) -> void:
 	if _pending.is_empty():
 		_time_until_send = interval
 		set_process(true)
-	_pending.merge(settings, true)
+	# Duplicate: callers (LevelEditPanel) mutate their override dictionaries in
+	# place, and the batch may sit pending for up to `interval` seconds.
+	_pending.merge(settings.duplicate(true), true)
 
 
 ## Send whatever is pending right now.
