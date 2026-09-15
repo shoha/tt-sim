@@ -19,7 +19,7 @@ GameMap (game_map.gd)
 │
 OcclusionFadeManager (occlusion_fade_manager.gd)
 ├── Converts map StandardMaterial3D → ShaderMaterial (occlusion_fade.gdshader)
-├── Every N physics frames, collects token positions + radii → pushes to shader uniforms
+├── Every N physics frames, collects token positions + radii → packs into the shared `occlusion_tokens` texture + `occlusion_token_count` global
 ├── Restores original materials on clear() or when disabled
 │
 occlusion_fade.gdshader
@@ -82,7 +82,7 @@ Token positions are derived from the CollisionShape3D's AABB center, not the Rig
 ## Gotchas
 
 - **Godot shader language:** `return` is not allowed in `fragment()` / `vertex()` processor functions. Wrap early-exit logic in `if` blocks instead.
-- **Shader arrays:** Uniform arrays like `token_positions[32]` must be padded to full size when setting from GDScript (pad with `Vector3.ZERO` / `0.0`).
+- **Token texture:** Token data lives in one 32x1 RGBAF `ImageTexture` (xyz = world centre, w = radius) bound once per material; update it with `ImageTexture.update()` (same size and format) rather than re-binding. Godot global shader parameters have no array types, which is why the count is a global int and the data is a texture.
 - **Lo-fi aspect ratio:** The lo-fi shader hardcodes `aspect = 16.0 / 9.0`. The occlusion shader must use the same value for grid alignment.
 - **Material restoration:** `clear()` restores original materials via surface overrides. If the original material was the mesh's own (not an override), the override is set to `null` to remove it cleanly.
 - **`lofi_dither_scale > 1` causes blurring:** The lo-fi post-process point-samples one pixel per block. If multiple dither values exist within a block, the result is inconsistent. Keep at 1 for production.

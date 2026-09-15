@@ -146,6 +146,10 @@ water_ambient_reflection_color={
 "type": "vec3",
 "value": Vector3(0.55, 0.65, 0.75)
 }
+occlusion_token_count={
+"type": "int",
+"value": 0
+}
 
 [steam]
 
