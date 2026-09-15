@@ -18,7 +18,8 @@ func test_format_header_matches_column_order() -> void:
 			+ "viewport_height,toggle_foliage_visible,toggle_tree_shadows,"
 			+ "toggle_grass_shadows,toggle_map_shadows,toggle_sun_shadows,"
 			+ "toggle_hard_sun_shadows,toggle_trivial_foliage_shader,"
-			+ "toggle_unshaded_foliage_textured,toggle_cheap_lighting_foliage"
+			+ "toggle_unshaded_foliage_textured,toggle_cheap_lighting_foliage,"
+			+ "process_time_avg_ms"
 		),
 	)
 
@@ -76,7 +77,7 @@ func test_format_row_orders_and_formats_values() -> void:
 		(
 			'12.30,"River",34.50,29.40,51.00,812,1200000,780.50,340,4.10,0.20,0.15,3.70,2.50,'
 			+ "500,1000000,600,2000,4000000,2400,"
-			+ '"Apple M1","Apple",5.50,2.00,"4x","forward_plus",1280,800,1,1,1,0,1,0,0,0,0'
+			+ '"Apple M1","Apple",5.50,2.00,"4x","forward_plus",1280,800,1,1,1,0,1,0,0,0,0,0.00'
 		),
 	)
 
@@ -89,7 +90,7 @@ func test_format_row_quotes_map_name_containing_comma_and_quote() -> void:
 		row,
 		(
 			'0.00,"River, Night ""Update""",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,0.00,'
-			+ '0,0,0,0,0,0,"","",0.00,0.00,"","",0,0,0,0,0,0,0,0,0,0,0'
+			+ '0,0,0,0,0,0,"","",0.00,0.00,"","",0,0,0,0,0,0,0,0,0,0,0,0.00'
 		),
 	)
 
@@ -102,7 +103,7 @@ func test_format_row_quotes_video_adapter_name_containing_comma() -> void:
 		row,
 		(
 			'0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,0.00,0,0,0,0,0,0,'
-			+ '"Apple M1, 8-core GPU","",0.00,0.00,"","",0,0,0,0,0,0,0,0,0,0,0'
+			+ '"Apple M1, 8-core GPU","",0.00,0.00,"","",0,0,0,0,0,0,0,0,0,0,0,0.00'
 		),
 	)
 
@@ -113,7 +114,7 @@ func test_format_row_defaults_missing_columns() -> void:
 		row,
 		(
 			'0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,0.00,0,0,0,0,0,0,"","",'
-			+ '0.00,0.00,"","",0,0,0,0,0,0,0,0,0,0,0'
+			+ '0.00,0.00,"","",0,0,0,0,0,0,0,0,0,0,0,0.00'
 		),
 	)
 

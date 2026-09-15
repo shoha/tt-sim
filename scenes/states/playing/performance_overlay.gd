@@ -32,6 +32,7 @@ var _video_adapter_vendor: String = ""
 
 var _frame_time_sum_ms: float = 0.0
 var _frame_time_max_ms: float = 0.0
+var _process_time_sum_ms: float = 0.0
 var _frame_count: int = 0
 
 var _log_file: FileAccess = null
@@ -238,12 +239,15 @@ func _accumulate_frame_sample(delta: float) -> void:
 	var frame_ms: float = delta * 1000.0
 	_frame_time_sum_ms += frame_ms
 	_frame_time_max_ms = maxf(_frame_time_max_ms, frame_ms)
+	# Script-side time only (no GPU/vsync wait): the CPU-cost signal.
+	_process_time_sum_ms += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
 	_frame_count += 1
 
 
 func _reset_frame_accumulators() -> void:
 	_frame_time_sum_ms = 0.0
 	_frame_time_max_ms = 0.0
+	_process_time_sum_ms = 0.0
 	_frame_count = 0
 
 
@@ -282,13 +286,15 @@ func _close_log_file() -> void:
 func _write_log_row() -> void:
 	if _log_file_disabled or not _log_file:
 		return
-	var frame_time_avg_ms: float = _frame_time_sum_ms / maxf(float(_frame_count), 1.0)
+	var sample_frames: float = maxf(float(_frame_count), 1.0)
+	var frame_time_avg_ms: float = _frame_time_sum_ms / sample_frames
 	var data := {
 		"elapsed_s": _session_elapsed_sec,
 		"map_name": _game_map.get_current_map_name(),
 		"fps_avg": Performance.get_monitor(Performance.TIME_FPS),
 		"frame_time_avg_ms": frame_time_avg_ms,
 		"frame_time_max_ms": _frame_time_max_ms,
+		"process_time_avg_ms": _process_time_sum_ms / sample_frames,
 		"draw_calls": Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 		"primitives": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
 		"video_mem_mb": Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,

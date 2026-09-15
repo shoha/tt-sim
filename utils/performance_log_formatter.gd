@@ -44,6 +44,11 @@ const CSV_COLUMNS: PackedStringArray = [
 	"toggle_trivial_foliage_shader",
 	"toggle_unshaded_foliage_textured",
 	"toggle_cheap_lighting_foliage",
+	# Appended last so older analyses keyed by column index keep working.
+	# Script-side main-thread time (Performance.TIME_PROCESS) averaged over the
+	# sample: unlike frame_time_avg_ms it excludes GPU and vsync waits, so CPU
+	# changes stay measurable on a GPU-bound or vsync-capped frame.
+	"process_time_avg_ms",
 ]
 
 ## Columns rendered with 2 decimal places; every other column uses str(value).
@@ -52,6 +57,7 @@ const _FLOAT_COLUMNS: PackedStringArray = [
 	"fps_avg",
 	"frame_time_avg_ms",
 	"frame_time_max_ms",
+	"process_time_avg_ms",
 	"video_mem_mb",
 	"perf_occlusion_fade_ms",
 	"perf_camera_update_ms",
