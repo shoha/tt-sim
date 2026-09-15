@@ -87,14 +87,14 @@ func _update_drag_cell_highlight() -> void:
 
 
 ## Configure grid overlay and drag systems from LevelData.
+## Auto-show flags are transient interaction state owned by the measure tool and drag
+## handlers; reconfiguring the grid (level load, scale edits, Cancel) must not clear them
+## mid-interaction.
 func configure_grid(level_data: LevelData) -> void:
 	_grid_level_default = level_data.grid_visible
 	_grid_explicit_toggle = level_data.grid_visible
 	_grid_show_on_measure = level_data.grid_show_on_measure
 	_grid_show_on_drag = level_data.grid_show_on_drag
-	# Auto-show flags are transient interaction state owned by the measure tool and drag
-	# handlers; reconfiguring the grid (level load, scale edits, Cancel) must not clear them
-	# mid-interaction.
 
 	if _game_map._grid_overlay:
 		_game_map._grid_overlay.configure(

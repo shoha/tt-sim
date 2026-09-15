@@ -152,7 +152,8 @@ func take_damage(amount: int) -> void:
 	current_health = max(0, current_health + amount)
 	var depleted: bool = current_health == 0 and old_health > 0
 	# Flip is_alive before health_changed so a single listener (TokenSpawner's
-	# GameState sync) sees the final state; died follows for visuals.
+	# GameState sync) sees the final state. `died` is kept as public API with no
+	# listener today -- visuals run off health_changed.
 	if depleted:
 		is_alive = false
 	health_changed.emit(current_health, max_health, old_health)
@@ -195,7 +196,8 @@ func revive(health_amount: int = -1) -> void:
 		current_health = min(health_amount, max_health)
 
 	# is_alive is already true above so a single listener (TokenSpawner's
-	# GameState sync) sees the final state on health_changed; revived follows for visuals.
+	# GameState sync) sees the final state on health_changed. `revived` is kept
+	# as public API with no listener today -- visuals run off health_changed.
 	health_changed.emit(current_health, max_health, old_health)
 	revived.emit()
 
