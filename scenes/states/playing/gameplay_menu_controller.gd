@@ -313,9 +313,9 @@ func _enter_edit_mode() -> void:
 	_original_light_intensity = level_data.light_intensity_scale
 	_original_environment_preset = level_data.environment_preset
 	_original_environment_overrides = level_data.environment_overrides.duplicate()
-	_original_lofi_overrides = level_data.lofi_overrides.duplicate()
-	_original_weather_overrides = level_data.weather_overrides.duplicate()
-	_original_foliage_overrides = level_data.foliage_overrides.duplicate()
+	_original_lofi_overrides = level_data.lofi.to_dict()
+	_original_weather_overrides = level_data.weather.to_dict()
+	_original_foliage_overrides = level_data.foliage.to_dict()
 	# copy_settings(), not assignment: VisualSettings is a Resource, so an alias
 	# would let live edits overwrite the snapshot and silently break cancel.
 	_original_visual_settings = level_data.visual_settings.copy_settings()
@@ -341,9 +341,9 @@ func _revert_edit_mode_values() -> void:
 	level_data.light_intensity_scale = _original_light_intensity
 	level_data.environment_preset = _original_environment_preset
 	level_data.environment_overrides = _original_environment_overrides.duplicate()
-	level_data.lofi_overrides = _original_lofi_overrides.duplicate()
-	level_data.weather_overrides = _original_weather_overrides.duplicate()
-	level_data.foliage_overrides = _original_foliage_overrides.duplicate()
+	level_data.lofi = LofiSettings.from_dict(_original_lofi_overrides)
+	level_data.weather = WeatherSettings.from_dict(_original_weather_overrides)
+	level_data.foliage = FoliageSettings.from_dict(_original_foliage_overrides)
 	level_data.visual_settings = _original_visual_settings.copy_settings()
 	level_data.grid_cell_size = _original_grid_cell_size
 	level_data.display_unit = _original_display_unit
@@ -369,40 +369,17 @@ func _revert_edit_mode_values() -> void:
 
 	var game_map = _level_play_controller.get_game_map()
 	if game_map:
-		# Always reset to full defaults first, then overlay the original overrides.
-		# This ensures parameters that were added during editing but weren't in the
-		# original set are properly reverted back to their default values.
-		game_map.apply_lofi_overrides(Constants.LOFI_DEFAULTS)
-		if _original_lofi_overrides.size() > 0:
-			game_map.apply_lofi_overrides(_original_lofi_overrides)
-		# Always reset weather to zero first, then overlay the original overrides.
-		# apply_weather_overrides only sets keys present in the dict — an empty
-		# dict (no weather when the drawer opened) would leave edited effects stuck.
-		var weather_defaults := {
-			"rain_intensity": 0.0,
-			"snow_intensity": 0.0,
-			"fog_intensity": 0.0,
-			"wind_intensity": 0.0,
-		}
-		weather_defaults.merge(_original_weather_overrides, true)
-		game_map.apply_weather_overrides(weather_defaults)
+		# The snapshots are LofiSettings.to_dict() / WeatherSettings.to_dict(), so
+		# they carry every editable key. No reset-then-overlay is needed: a single
+		# apply already puts every parameter back where it was.
+		game_map.apply_lofi_overrides(_original_lofi_overrides)
+		game_map.apply_weather_overrides(_original_weather_overrides)
 
-	# Broadcast reverted values to clients so they also snap back.
-	# Lo-fi / weather overrides must include full defaults merged with originals,
-	# because apply_*_overrides() only sets keys present in the dictionary — a
-	# sparse original dict would leave edited parameters stuck on clients.
+	# Broadcast reverted values to clients so they also snap back, for the same
+	# reason complete dictionaries matter locally.
 	# A pending partial batch must not land after this full snapshot.
 	_visual_broadcast.drop()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		var full_lofi = Constants.LOFI_DEFAULTS.duplicate()
-		full_lofi.merge(_original_lofi_overrides, true)
-		var full_weather := {
-			"rain_intensity": 0.0,
-			"snow_intensity": 0.0,
-			"fog_intensity": 0.0,
-			"wind_intensity": 0.0,
-		}
-		full_weather.merge(_original_weather_overrides, true)
 		(
 			NetworkManager
 			. broadcast_visual_settings(
@@ -410,8 +387,8 @@ func _revert_edit_mode_values() -> void:
 					"light_intensity": _original_light_intensity,
 					"environment_preset": _original_environment_preset,
 					"environment_overrides": _original_environment_overrides,
-					"lofi_overrides": full_lofi,
-					"weather_overrides": full_weather,
+					"lofi_overrides": _original_lofi_overrides,
+					"weather_overrides": _original_weather_overrides,
 					"foliage_overrides": _original_foliage_overrides,
 					# .copy_settings() for the same reason as the apply above:
 					# to_dict() is read-only, but the snapshot should not be
@@ -495,7 +472,7 @@ func _on_edit_lofi_changed(overrides: Dictionary) -> void:
 			game_map.apply_lofi_overrides(overrides)
 		# Keep level_data in sync so changes survive drawer close/reopen
 		if _level_play_controller.active_level_data:
-			_level_play_controller.active_level_data.lofi_overrides = overrides.duplicate()
+			_level_play_controller.active_level_data.lofi = LofiSettings.from_dict(overrides)
 	# Broadcast to clients so they see the same lo-fi settings
 	if NetworkManager.is_networked() and NetworkManager.is_host():
 		_visual_broadcast.queue({"lofi_overrides": overrides})
@@ -508,7 +485,7 @@ func _on_edit_weather_changed(overrides: Dictionary) -> void:
 		if game_map:
 			game_map.apply_weather_overrides(overrides)
 		if _level_play_controller.active_level_data:
-			_level_play_controller.active_level_data.weather_overrides = overrides.duplicate()
+			_level_play_controller.active_level_data.weather = WeatherSettings.from_dict(overrides)
 	if NetworkManager.is_networked() and NetworkManager.is_host():
 		_visual_broadcast.queue({"weather_overrides": overrides})
 
@@ -518,7 +495,7 @@ func _on_edit_foliage_changed(overrides: Dictionary) -> void:
 	if _level_play_controller:
 		_level_play_controller.apply_foliage_overrides(overrides)
 		if _level_play_controller.active_level_data:
-			_level_play_controller.active_level_data.foliage_overrides = overrides.duplicate()
+			_level_play_controller.active_level_data.foliage = FoliageSettings.from_dict(overrides)
 	if NetworkManager.is_networked() and NetworkManager.is_host():
 		_visual_broadcast.queue({"foliage_overrides": overrides})
 
@@ -591,9 +568,9 @@ func _on_edit_save_requested(values: Dictionary) -> void:
 	level_data.light_intensity_scale = values["light_intensity_scale"]
 	level_data.environment_preset = values["environment_preset"]
 	level_data.environment_overrides = values["environment_overrides"].duplicate()
-	level_data.lofi_overrides = values["lofi_overrides"].duplicate()
-	level_data.weather_overrides = values["weather_overrides"].duplicate()
-	level_data.foliage_overrides = values["foliage_overrides"].duplicate()
+	level_data.lofi = LofiSettings.from_dict(values["lofi_overrides"])
+	level_data.weather = WeatherSettings.from_dict(values["weather_overrides"])
+	level_data.foliage = FoliageSettings.from_dict(values["foliage_overrides"])
 	level_data.visual_settings.sun = (values["sun_settings"] as SunSettings).copy_settings()
 	level_data.grid_cell_size = values["grid_cell_size"]
 	level_data.display_unit = values["display_unit"]

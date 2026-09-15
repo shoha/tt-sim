@@ -348,12 +348,11 @@ func _finalize_map_loading(map: Node3D) -> void:
 	var game_map = _level_play_controller.get_game_map()
 	if game_map:
 		game_map.setup_weather(_level_play_controller._environment_manager)
-		if (
-			_level_play_controller.active_level_data
-			and _level_play_controller.active_level_data.weather_overrides.size() > 0
-		):
+		if _level_play_controller.active_level_data:
+			# Unconditional: the renderer is freshly created, and an all-zero
+			# WeatherSettings is a no-op on it.
 			game_map.apply_weather_overrides(
-				_level_play_controller.active_level_data.weather_overrides
+				_level_play_controller.active_level_data.weather.to_dict()
 			)
 
 	# Rebuild occlusion fade mesh cache now that map geometry is in the scene tree
@@ -413,7 +412,7 @@ func _get_light_intensity_scale() -> float:
 ## Get the foliage sway overrides from the active level data (or {} if none)
 func _get_foliage_overrides() -> Dictionary:
 	if _level_play_controller.active_level_data:
-		return _level_play_controller.active_level_data.foliage_overrides
+		return _level_play_controller.active_level_data.foliage.to_dict()
 	return {}
 
 
