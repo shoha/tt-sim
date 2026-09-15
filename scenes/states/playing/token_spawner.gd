@@ -277,23 +277,7 @@ func add_token_to_level(
 
 ## Sync placement data from a token's current state
 func _sync_placement_from_token(placement: TokenPlacement, token: BoardToken) -> void:
-	# The rigid_body is what actually gets moved/scaled during dragging
-	var rigid_body = token.get_rigid_body()
-	if rigid_body:
-		placement.position = rigid_body.global_position
-		placement.rotation_y = rigid_body.rotation.y
-		placement.scale = rigid_body.scale
-	else:
-		placement.position = token.global_position
-		placement.rotation_y = token.rotation.y
-		placement.scale = token.scale
-
-	# Also sync current stats
-	placement.token_name = token.token_name
-	placement.max_health = token.max_health
-	placement.current_health = token.current_health
-	placement.is_visible_to_players = token.is_visible_to_players
-	placement.is_player_controlled = token.is_player_controlled
+	placement.sync_from_board_token(token)
 
 
 ## Find a token by its network_id in spawned_tokens (O(1) via reverse index).

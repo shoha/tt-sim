@@ -58,26 +58,32 @@ static func from_board_token(
 	placement.pack_id = pack
 	placement.asset_id = asset
 	placement.variant_id = variant
-
-	# Read position from rigid_body since that's what gets moved during gameplay
-	var rigid_body = token.get_rigid_body()
-	if rigid_body:
-		placement.position = rigid_body.global_position
-		placement.rotation_y = rigid_body.rotation.y
-		placement.scale = rigid_body.scale
-	else:
-		placement.position = token.global_position
-		placement.rotation_y = token.rotation.y
-		placement.scale = token.scale
-
-	placement.token_name = token.token_name
-	placement.is_player_controlled = token.is_player_controlled
-	placement.max_health = token.max_health
-	placement.current_health = token.current_health
-	placement.is_visible_to_players = token.is_visible_to_players
-	placement.status_effects = token.status_effects.duplicate()
-	placement.is_alive = token.is_alive
+	placement.sync_from_board_token(token)
 	return placement
+
+
+## Copy the live token's transform and stats into this placement. Leaves the
+## asset ids and placement_id alone. This is the single place that knows which
+## BoardToken fields a placement persists; the in-play save path uses it too.
+func sync_from_board_token(token: BoardToken) -> void:
+	# Read position from rigid_body since that's what gets moved during gameplay
+	var rigid_body := token.get_rigid_body()
+	if rigid_body:
+		position = rigid_body.global_position
+		rotation_y = rigid_body.rotation.y
+		scale = rigid_body.scale
+	else:
+		position = token.global_position
+		rotation_y = token.rotation.y
+		scale = token.scale
+
+	token_name = token.token_name
+	is_player_controlled = token.is_player_controlled
+	max_health = token.max_health
+	current_health = token.current_health
+	is_visible_to_players = token.is_visible_to_players
+	status_effects = token.status_effects.duplicate()
+	is_alive = token.is_alive
 
 
 ## Apply this placement's properties to a BoardToken
