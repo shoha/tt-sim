@@ -663,9 +663,10 @@ func _on_grid_cell_size_changed(value: float) -> void:
 func _on_preset_selected(index: int) -> void:
 	_mark_dirty()
 	current_preset = preset_dropdown.get_item_metadata(index)
-	current_overrides.clear()
 	environment_changed.emit(current_preset, current_overrides)
 	_sync_controls_from_config()
+	if not current_overrides.is_empty():
+		UIManager.show_info("Preset changed. %d override(s) kept." % current_overrides.size())
 
 
 func _on_intensity_changed(value: float) -> void:
