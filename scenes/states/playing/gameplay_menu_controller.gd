@@ -343,6 +343,11 @@ func _revert_edit_mode_values() -> void:
 	level_data.display_unit_per_cell = _original_display_unit_per_cell
 	level_data.water_style = _original_water_style
 
+	# Grid cell size / units are consumed by the measure tool, snap and overlay at
+	# configure time, so restoring the fields alone leaves the live grid on the
+	# edited value (compare the live path in _on_edit_scale_config_changed).
+	_level_play_controller.update_measure_tool_scale()
+
 	# Re-apply original values to the live game
 	_level_play_controller.apply_light_intensity_scale(_original_light_intensity)
 	_level_play_controller.apply_environment_settings(
