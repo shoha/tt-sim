@@ -216,7 +216,7 @@ func _build_control_panel() -> void:
 	_drawer = DrawerContainer.new()
 	_drawer.edge = DrawerContainer.DrawerEdge.RIGHT
 	_drawer.drawer_width = 270.0
-	_drawer.tab_icon = preload("res://assets/icons/ui/Sun.svg")
+	_drawer.tab_icon = preload("res://assets/icons/ui/sun.svg")
 	_drawer.start_revealed = true
 	_drawer.start_open = true
 	_drawer.play_sounds = false
@@ -474,7 +474,11 @@ func _add_checkbox(parent: Control, text: String, default: bool, callback: Calla
 
 
 func _add_slider(
-	parent: Control, label_text: String, min_val: float, max_val: float, default: float,
+	parent: Control,
+	label_text: String,
+	min_val: float,
+	max_val: float,
+	default: float,
 	callback: Callable
 ) -> HSlider:
 	var hbox = HBoxContainer.new()
@@ -500,9 +504,10 @@ func _add_slider(
 	slider.step = 0.01
 	slider.value = default
 	slider.custom_minimum_size = Vector2(0, 20)
-	slider.value_changed.connect(func(val):
-		callback.call(val)
-		value_label.text = "%.2f" % val
+	slider.value_changed.connect(
+		func(val):
+			callback.call(val)
+			value_label.text = "%.2f" % val
 	)
 	parent.add_child(slider)
 
