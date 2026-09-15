@@ -76,7 +76,8 @@ static func from_board_token(token: BoardToken) -> TokenState:
 	if rigid_body:
 		state.position = rigid_body.global_position
 		state.rotation = rigid_body.global_rotation
-		state.scale = rigid_body.scale
+		# Not rigid_body.scale: the spawn pop-in tween makes that transient.
+		state.scale = token.get_logical_scale()
 	else:
 		state.position = token.global_position
 		state.rotation = token.global_rotation
