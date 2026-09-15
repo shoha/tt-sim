@@ -132,13 +132,13 @@ func _complete_drag_place(screen_pos: Vector2) -> void:
 	# point. On a slope that leaves the token below the surface, where drop_to_ground()'s
 	# downward ray from the collision bottom can no longer find it. So: snap first, then
 	# re-resolve the height straight down at the snapped X/Z.
-	# Read the world through world_viewport explicitly (not get_world_3d()) so the
-	# raycast always queries the world tokens actually live in. The SubViewport
-	# doesn't set own_world_3d today, so the two coincide -- but this form keeps
-	# working if that flag ever changes.
+	# Read the world through world_viewport explicitly (not this node's
+	# get_world_3d()) so the raycast always queries the world tokens actually
+	# live in. find_world_3d(), not the world_3d property: that property is only
+	# set when the SubViewport owns its world (own_world_3d), and is null today.
 	var space_state: PhysicsDirectSpaceState3D = null
 	if _game_map.world_viewport:
-		space_state = _game_map.world_viewport.world_3d.direct_space_state
+		space_state = _game_map.world_viewport.find_world_3d().direct_space_state
 	var terrain_pos := Vector3.INF
 	if _game_map.camera_node and space_state:
 		terrain_pos = raycast_terrain(_game_map.camera_node, space_state, screen_pos)
@@ -224,12 +224,14 @@ static func raycast_terrain_down(
 func _get_ground_position(screen_pos: Vector2) -> Vector3:
 	if not _game_map.camera_node:
 		return Vector3.INF
-	# world_viewport.world_3d, not get_world_3d() -- see the comment in
+	# world_viewport.find_world_3d(), not get_world_3d() -- see the comment in
 	# _complete_drag_place() above. Only the raycast needs the viewport; the
 	# plane maths below works from the camera alone.
 	if _game_map.world_viewport:
 		var terrain_pos := raycast_terrain(
-			_game_map.camera_node, _game_map.world_viewport.world_3d.direct_space_state, screen_pos
+			_game_map.camera_node,
+			_game_map.world_viewport.find_world_3d().direct_space_state,
+			screen_pos
 		)
 		if terrain_pos != Vector3.INF:
 			return terrain_pos
