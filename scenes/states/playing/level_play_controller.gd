@@ -237,6 +237,11 @@ func apply_water_style_setting(style: String) -> void:
 ## Apply environment settings to the live WorldEnvironment.
 func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 	_environment_manager.apply_environment_settings(preset, overrides)
+	# The environment apply overwrote fog_density/fog_enabled from config; give
+	# the weather renderer its fog contribution back.
+	var game_map := get_game_map()
+	if game_map:
+		game_map.rebase_weather_fog()
 
 
 ## Apply a whole LevelVisualState to the running level. This is the single live

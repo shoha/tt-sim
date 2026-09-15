@@ -622,6 +622,12 @@ func apply_weather_overrides(overrides: Dictionary) -> void:
 		_weather_renderer.apply_weather(overrides)
 
 
+## Let the weather renderer re-add its fog on top of a freshly applied environment.
+func rebase_weather_fog() -> void:
+	if _weather_renderer:
+		_weather_renderer.rebase_fog()
+
+
 ## Remove all active weather effects and free the renderer.
 ## A fresh renderer is created on the next setup_weather() call.
 func clear_weather() -> void:
