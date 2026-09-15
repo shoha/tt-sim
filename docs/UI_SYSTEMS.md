@@ -602,14 +602,13 @@ signal revert_to_map_defaults_requested
 signal aim_sun_toggled(active: bool)
 signal drawer_opened   # Controller should snapshot values and call initialize()
 signal drawer_closed   # Controller should revert if not saved
-signal dirty_changed(dirty: bool)   # Unsaved-changes flag flipped
 ```
 
 `GameplayMenuController` connects these signals and routes them to `LevelPlayController` for live application. On `drawer_opened` it snapshots the current level as a `LevelVisualState` (`LevelVisualState.from_level_data()`); both Save and Cancel go through `LevelPlayController.apply_visual_state()` — Save applies the panel's emitted `state`, Cancel re-applies the snapshot taken at open time.
 
 ### Unsaved Changes
 
-Every live edit calls `_mark_dirty()`, which raises the unsaved-changes flag, shows the accent dot on the tab, switches the tab tooltip to "Visuals (unsaved changes)", and emits `dirty_changed`. Only `mark_clean()` lowers the flag; the controller calls it on Save, on Cancel, and when the level is cleared. Reopening the drawer (`initialize()`) does not clear it.
+Every live edit calls `_mark_dirty()`, which raises the unsaved-changes flag, shows the accent dot on the tab, and switches the tab tooltip to "Visuals (unsaved changes)". Only `mark_clean()` lowers the flag; the controller calls it on Save, on Cancel, and when the level is cleared. Reopening the drawer (`initialize()`) does not clear it.
 
 A dirty drawer refuses to close from its tab (`_can_close_from_tab()` returns `false`) and calls `request_close()` instead, which shows a "Discard changes" / "Keep editing" danger confirmation (the cancel button is relabelled via `show_danger_confirmation()`'s `cancel_text` parameter, since a bare "Cancel" next to the drawer's own Cancel button was ambiguous about which one it cancelled). Confirming emits `cancel_requested`, so the controller reverts and closes. Escape takes the same route: the panel registers itself with `UIManager.register_overlay()` in `open()`, and `UIManager._close_top_overlay()` prefers an overlay's `request_close()` over `animate_out()`/`close()`.
 

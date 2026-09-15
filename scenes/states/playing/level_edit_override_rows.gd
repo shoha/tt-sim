@@ -7,7 +7,7 @@ extends RefCounted
 ## adjustment_* key remains). Split out of level_edit_panel.gd to keep that
 ## file under the project's max-file-lines lint budget.
 
-const OVERRIDE_INDICATOR_COLOR := Color("#db924b")  # color_accent
+const OVERRIDE_INDICATOR_COLOR := ThemeColors.ACCENT
 
 ## Unique node name (%name) of each override row's label -> the
 ## environment_overrides key(s) it reflects.
@@ -57,18 +57,21 @@ func _on_label_gui_input(event: InputEvent, keys: Array, on_clear_keys: Callable
 
 
 ## Tint each row label whose key(s) are overridden; gate [param clear_button].
+## Runs on every environment_changed (i.e. every slider tick), so each write is
+## skipped when the label is already in the right state.
 func refresh(overrides: Dictionary, clear_button: Button) -> void:
 	for row in _rows:
 		var label: Label = row[0]
 		var keys: Array = row[1]
 		var overridden: bool = keys.any(func(k): return overrides.has(k))
-		if overridden:
-			label.add_theme_color_override("font_color", OVERRIDE_INDICATOR_COLOR)
-		else:
-			label.remove_theme_color_override("font_color")
-		label.tooltip_text = (
-			"Overridden. Right-click to reset to the preset value." if overridden else ""
-		)
+		if label.has_theme_color_override("font_color") != overridden:
+			if overridden:
+				label.add_theme_color_override("font_color", OVERRIDE_INDICATOR_COLOR)
+			else:
+				label.remove_theme_color_override("font_color")
+		var tooltip := "Overridden. Right-click to reset to the preset value." if overridden else ""
+		if label.tooltip_text != tooltip:
+			label.tooltip_text = tooltip
 	clear_button.disabled = overrides.is_empty()
 
 

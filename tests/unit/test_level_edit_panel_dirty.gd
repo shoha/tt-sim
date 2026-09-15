@@ -43,12 +43,11 @@ func test_starts_clean() -> void:
 	assert_true(_panel._can_close_from_tab())
 
 
-func test_lofi_edit_marks_dirty_and_emits_once() -> void:
-	watch_signals(_panel)
+func test_lofi_edit_marks_dirty_and_shows_badge() -> void:
 	_panel._on_lofi_override_changed(0.5, "pixelation")
 	_panel._on_lofi_override_changed(0.6, "pixelation")
 	assert_true(_panel.is_dirty())
-	assert_signal_emit_count(_panel, "dirty_changed", 1)
+	assert_true(_panel._tab_badge.visible, "Badge must be visible while dirty")
 
 
 func test_every_live_edit_marks_dirty() -> void:

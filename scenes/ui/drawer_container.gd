@@ -28,7 +28,7 @@ const _TAB_COLOR_NORMAL := Color("#2c1f2b")  # color_surface1 — same as panel
 const _TAB_COLOR_HOVER := Color("#3e2b3c")  # color_surface2 — hover highlight
 const _TAB_COLOR_PRESSED := Color("#1a121a")  # color_background — pressed depression
 const _TAB_BORDER_COLOR := Color("#50374d")  # color_surface3 — subtle border
-const _TAB_ICON_COLOR := Color("#db924b")  # color_accent — icon tint
+const _TAB_ICON_COLOR := ThemeColors.ACCENT  # icon tint
 
 # -- Icon tab padding -------------------------------------------------------
 # Standard insets for icon-mode tabs so all icon tabs look consistent.
