@@ -46,6 +46,9 @@ func _setup_context_menu() -> void:
 		_context_menu.control_requested.connect(_on_context_menu_control_requested)
 		_context_menu.control_revoked.connect(_on_context_menu_control_revoked)
 		_context_menu.control_assign_requested.connect(_on_context_menu_control_assign_requested)
+		_context_menu.remove_requested.connect(_on_context_menu_remove_requested)
+		_context_menu.duplicate_requested.connect(_on_context_menu_duplicate_requested)
+		_context_menu.rename_requested.connect(_on_context_menu_rename_requested)
 
 
 ## Open the context menu for a token at the given screen position.
@@ -251,3 +254,71 @@ func _grant_token_control(token: BoardToken, peer_id: int) -> void:
 			players[peer_id].get("name", "Player") if players.has(peer_id) else "Player"
 		)
 		UIManager.show_success('%s can now control "%s"' % [player_name, token_name])
+
+
+func _on_context_menu_remove_requested(token: BoardToken) -> void:
+	if not is_instance_valid(token):
+		return
+	# Close synchronously before the confirmation dialog opens -- the menu's
+	# own _input() click-outside handler stays live while it is fully visible
+	# and would otherwise swallow the first click on the dialog's buttons.
+	if _context_menu:
+		_context_menu.close_menu()
+	UIManager.show_danger_confirmation(
+		"Remove token",
+		'Remove "%s" from the board? Ctrl+Z undoes it.' % token.token_name,
+		func() -> void: _remove_token_confirmed(token),
+		"Remove",
+	)
+
+
+func _remove_token_confirmed(token: BoardToken) -> void:
+	if not is_instance_valid(token):
+		return
+	var removed_name: String = token.token_name
+	# The TokenState has to be captured before the removal (it reads the live
+	# token, which remove_token() untracks and animates away), but recorded only
+	# once the removal actually happened: remove_token() returns false without
+	# authority, and an undo entry for a token still on the board would re-create
+	# a duplicate of it. Same reason the toast waits for the true return.
+	var can_record: bool = _game_map._action_history != null and NetworkManager.has_gm_access()
+	var token_state: TokenState = TokenState.from_board_token(token) if can_record else null
+	var lpc := _game_map.get_level_play_controller()
+	if not lpc or not lpc.remove_token(token):
+		return
+	if token_state:
+		_game_map._action_history.record_token_removal(token, token_state)
+	UIManager.show_info('Removed "%s"' % removed_name)
+
+
+func _on_context_menu_duplicate_requested(token: BoardToken) -> void:
+	if not is_instance_valid(token):
+		return
+	var lpc := _game_map.get_level_play_controller()
+	if lpc:
+		var copy := lpc.duplicate_token(token)
+		if not copy:
+			UIManager.show_warning("Could not duplicate token")
+		# Recorded AFTER the spawn, unlike every other action here: the undo entry
+		# needs the copy's network_id, which only exists once it has been created.
+		elif _game_map._action_history and NetworkManager.has_gm_access():
+			_game_map._action_history.record_token_spawn(copy.network_id, copy.token_name)
+	if _context_menu:
+		_context_menu.close_menu()
+
+
+func _on_context_menu_rename_requested(token: BoardToken, new_name: String) -> void:
+	if not is_instance_valid(token):
+		return
+	var trimmed_name: String = new_name.strip_edges()
+	if trimmed_name.is_empty() or trimmed_name == token.token_name:
+		return
+	if _game_map._action_history and NetworkManager.has_gm_access():
+		_game_map._action_history.record_property_change(
+			token.network_id, "token_name", token.token_name, trimmed_name
+		)
+	var lpc := _game_map.get_level_play_controller()
+	if lpc:
+		lpc.rename_token(token, trimmed_name)
+	if _context_menu:
+		_context_menu.close_menu()

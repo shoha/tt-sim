@@ -340,6 +340,10 @@ func get_controller_component() -> Node:
 	return _token_controller
 
 
+func get_dragging_object() -> DraggableToken:
+	return _dragging_object
+
+
 func get_rigid_body() -> RigidBody3D:
 	return rigid_body
 
@@ -383,6 +387,15 @@ func clear_drag_lock() -> void:
 	_drag_locked_by = 0
 	if _dragging_object:
 		_dragging_object.dragging_allowed = _is_interactive
+
+
+## The scale this token is meant to have. While the pop-in spawn tween is
+## running rigid_body.scale is transient (it starts near zero), so state
+## snapshots taken mid-tween must report the tween's target instead.
+func get_logical_scale() -> Vector3:
+	if _spawn_tween and _spawn_tween.is_valid() and _spawn_tween.is_running():
+		return _spawn_target_scale
+	return rigid_body.scale if rigid_body else scale
 
 
 ## Play a bouncy pop-in spawn animation.

@@ -80,9 +80,8 @@ func _get_shortcut_data() -> Array:
 			"header": "Tokens",
 			"entries":
 			[
-				["Left Click", "Select token"],
 				["Left Drag", "Move token"],
-				["Right Click", "Context menu"],
+				["Right Click", "Actions (rename, duplicate, remove)"],
 				[InputProfile.label(&"rotate"), "Rotate token"],
 				[InputProfile.label(&"scale"), "Scale token"],
 				[InputProfile.label(&"reset_transform"), "Reset rotation & scale"],

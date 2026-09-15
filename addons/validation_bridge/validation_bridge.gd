@@ -464,18 +464,55 @@ func _inject_click(x: float, y: float, button: MouseButton = MOUSE_BUTTON_LEFT) 
 	Input.flush_buffered_events()
 
 
+## Accepts "Z", "Escape", or a modifier chord such as "Ctrl+Z" / "Shift+Alt+F".
+## Parse a key string such as "Z", "Ctrl+Z" or "Shift+Alt+F" into its keycode and
+## modifier flags. Returns {"keycode": Key, "ctrl": bool, "shift": bool, "alt": bool},
+## with keycode == KEY_NONE when the final segment is not a key name. Static and pure
+## so the chord grammar is testable without a live bridge and socket.
+static func _parse_key_chord(key_string: String) -> Dictionary:
+	var parts := key_string.split("+", false)
+	var key_name: String = parts[parts.size() - 1] if parts.size() > 0 else key_string
+	var chord := {
+		"keycode": OS.find_keycode_from_string(key_name),
+		"ctrl": false,
+		"shift": false,
+		"alt": false,
+	}
+	for i in range(parts.size() - 1):
+		match parts[i].to_lower():
+			"ctrl", "control":
+				chord["ctrl"] = true
+			"shift":
+				chord["shift"] = true
+			"alt":
+				chord["alt"] = true
+			_:
+				push_warning("ValidationBridge: Unknown modifier: %s" % parts[i])
+	return chord
+
+
 func _inject_key(key_string: String) -> void:
-	var keycode := OS.find_keycode_from_string(key_string)
+	var chord := _parse_key_chord(key_string)
+	var keycode: Key = chord["keycode"]
 	if keycode == KEY_NONE:
 		push_warning("ValidationBridge: Unknown key: %s" % key_string)
 		return
+	var ctrl: bool = chord["ctrl"]
+	var shift: bool = chord["shift"]
+	var alt: bool = chord["alt"]
 	var press := InputEventKey.new()
 	press.keycode = keycode
+	press.ctrl_pressed = ctrl
+	press.shift_pressed = shift
+	press.alt_pressed = alt
 	press.pressed = true
 	Input.parse_input_event(press)
 
 	var release := InputEventKey.new()
 	release.keycode = keycode
+	release.ctrl_pressed = ctrl
+	release.shift_pressed = shift
+	release.alt_pressed = alt
 	release.pressed = false
 	Input.parse_input_event(release)
 

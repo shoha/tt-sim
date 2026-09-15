@@ -211,11 +211,17 @@ func _on_token_landed(_drop_height: float, _token: BoardToken) -> void:
 ## Supports remote assets - will show placeholder while downloading
 ## If the model isn't cached yet, a placeholder appears instantly and upgrades
 ## asynchronously once the model finishes loading (no main-thread stall).
+## settle: when true, drops the token onto whatever terrain is below
+## spawn_position after positioning (used by drag-place, which resolves a
+## ground/terrain hit but may still land slightly above the true surface).
+## Defaults to false so the level loader path (which places tokens at their
+## saved, already-settled positions) is unchanged.
 func spawn_asset(
 	pack_id: String,
 	asset_id: String,
 	variant_id: String = "default",
 	spawn_position: Vector3 = Vector3.ZERO,
+	settle: bool = false,
 ) -> BoardToken:
 	var active_level_data: LevelData = _get_active_level_data_fn.call()
 	if not _game_map or not active_level_data:
@@ -242,6 +248,14 @@ func spawn_asset(
 
 	_connect_token_context_menu(token)
 	add_token_to_level(token, pack_id, asset_id, variant_id)
+
+	# Settle AFTER tracking, never before: _settle_to_position() clears
+	# rigid_body.input_ray_pickable for the duration of the landing tween and
+	# _on_settle_complete() restores it via set_interactive(). add_token_to_level()
+	# also calls set_interactive(), so settling first let tracking re-enable ray
+	# picking mid-tween and the token could be hovered/picked while still falling.
+	if settle and token.get_dragging_object():
+		token.get_dragging_object().drop_to_ground()
 	# Immediate pop-in for single token placement
 	token.play_spawn_animation()
 	token_added.emit(token)
@@ -319,6 +333,70 @@ func find_token_by_network_id(network_id: String) -> BoardToken:
 	return _find_token_by_network_id(network_id)
 
 
+## Remove a token: disconnects its state signals, forgets it in spawned_tokens
+## and _network_id_to_placement, removes its placement from the active level
+## data, and removes it from GameState. Broadcasts the removal to clients
+## (broadcast_token_removed no-ops on its own when this peer isn't host, same
+## as the pattern in _on_token_transform_changed/_on_token_property_changed
+## above) -- deliberately does not touch _game_map so this stays callable from
+## a bare, unconfigured spawner. Does NOT record undo -- the caller owns the
+## action history, since it's the one that knows to record before removing.
+## Returns false without authority.
+func remove_token(token: BoardToken) -> bool:
+	if not GameState.has_authority():
+		return false
+
+	var network_id: String = token.network_id
+	var placement_id: String = _network_id_to_placement.get(network_id, network_id)
+
+	_disconnect_token_state_signals(token)
+	untrack_network_token(network_id)
+
+	var active_level_data: LevelData = _get_active_level_data_fn.call()
+	if active_level_data:
+		active_level_data.remove_token_placement(placement_id)
+
+	GameState.remove_token(network_id)
+	NetworkStateSync.broadcast_token_removed(network_id)
+
+	token.play_removal_animation()
+	return true
+
+
+## Rename a token: trims and ignores blank/whitespace-only names. Updates the
+## live token, its scene-tree node name, the matching level placement (if any),
+## and notifies property listeners the same way a signal-driven property change
+## would (GameState sync + network broadcast). No-ops without authority, the
+## same as remove_token().
+func rename_token(token: BoardToken, new_name: String) -> void:
+	if not GameState.has_authority():
+		return
+	var trimmed_name: String = new_name.strip_edges()
+	if trimmed_name == "":
+		return
+
+	token.token_name = trimmed_name
+	# Keep the node name in step with the display name, as BoardTokenFactory does
+	# when it upgrades a placeholder, so the scene tree reads the same as the board.
+	token.name = trimmed_name
+
+	var placement_id: String = _network_id_to_placement.get(token.network_id, token.network_id)
+	var active_level_data: LevelData = _get_active_level_data_fn.call()
+	if active_level_data:
+		var placement := active_level_data.get_token_placement(placement_id)
+		if placement:
+			placement.token_name = trimmed_name
+
+	notify_token_properties_changed(token)
+
+
+## Public wrapper around _on_token_property_changed, for properties that
+## change without a dedicated BoardToken signal (e.g. rename). Keeps GameState
+## in sync and broadcasts to clients when hosting.
+func notify_token_properties_changed(token: BoardToken) -> void:
+	_on_token_property_changed(token)
+
+
 ## Clear spawned tokens
 func clear_level_tokens() -> void:
 	for placement_id in spawned_tokens:
@@ -377,6 +455,16 @@ func _track_token_from_undo(
 	if GameState.has_authority():
 		GameState.register_token(token_state)
 		_connect_token_state_signals(token)
+
+	# An undone removal must be saved again if the level is re-saved without
+	# another explicit edit, so rebuild the placement here rather than relying
+	# on the caller. Only when no placement with this id already exists (e.g.
+	# undoing a removal a second time without an intervening save).
+	var active_level_data: LevelData = _get_active_level_data_fn.call()
+	if active_level_data and not active_level_data.get_token_placement(placement_id):
+		var placement := TokenPlacement.from_board_token(token, pack_id, asset_id, variant_id)
+		placement.placement_id = placement_id
+		active_level_data.add_token_placement(placement)
 
 
 ## Get token count

@@ -244,12 +244,6 @@ func _on_item_activated(index: int) -> void:
 	asset_selected.emit(selected.pack_id, selected.asset_id, selected.variant_id)
 
 
-## Clear the search filter
-func clear_filter() -> void:
-	search_filter.clear()
-	_filter = ""
-
-
 ## Focus the search field
 func focus_search() -> void:
 	search_filter.grab_focus()
