@@ -63,3 +63,28 @@ func test_undo_style_heal_from_zero_restores_previous_health() -> void:
 
 	assert_true(token.is_alive)
 	assert_eq(token.current_health, 30)
+
+
+func test_lethal_damage_flips_is_alive_before_health_changed() -> void:
+	var token := _make_token(5)
+	var alive_at_emit: Array[bool] = []
+	token.health_changed.connect(
+		func(_h: int, _m: int, _o: int) -> void: alive_at_emit.append(token.is_alive)
+	)
+
+	token.take_damage(-5)
+
+	assert_eq(alive_at_emit, [false], "GameState sync on health_changed must see the death")
+
+
+func test_revive_sets_is_alive_before_health_changed() -> void:
+	var token := _make_token(5)
+	token.take_damage(-5)
+	var alive_at_emit: Array[bool] = []
+	token.health_changed.connect(
+		func(_h: int, _m: int, _o: int) -> void: alive_at_emit.append(token.is_alive)
+	)
+
+	token.revive()
+
+	assert_eq(alive_at_emit, [true])
