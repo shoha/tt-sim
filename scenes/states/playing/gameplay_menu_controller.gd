@@ -26,6 +26,9 @@ var _original_display_unit: String = "ft"
 var _original_display_unit_per_cell: float = 5.0
 var _original_water_style: String = ""
 
+## Coalesces per-tick visual-settings RPCs from the drawer into one send per interval.
+var _visual_broadcast := VisualBroadcastThrottle.new()
+
 @onready var save_level_button: Button = %SaveLevelButton
 @onready var toggle_asset_browser_button: Button = %ToggleAssetBrowserButton
 @onready var level_edit_panel: LevelEditPanel = %LevelEditPanel
@@ -41,6 +44,10 @@ func _ready() -> void:
 	var asset_browser_container = $AssetBrowserContainer
 	if asset_browser_container and asset_browser_container.has_signal("asset_drag_started"):
 		asset_browser_container.asset_drag_started.connect(_on_asset_drag_started)
+
+	_visual_broadcast.name = "VisualBroadcastThrottle"
+	_visual_broadcast.send = NetworkManager.broadcast_visual_settings
+	add_child(_visual_broadcast)
 
 	# Connect level edit panel (drawer) signals
 	if level_edit_panel:
@@ -384,6 +391,8 @@ func _revert_edit_mode_values() -> void:
 	# Lo-fi / weather overrides must include full defaults merged with originals,
 	# because apply_*_overrides() only sets keys present in the dictionary — a
 	# sparse original dict would leave edited parameters stuck on clients.
+	# A pending partial batch must not land after this full snapshot.
+	_visual_broadcast.drop()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
 		var full_lofi = Constants.LOFI_DEFAULTS.duplicate()
 		full_lofi.merge(_original_lofi_overrides, true)
@@ -437,7 +446,7 @@ func _on_edit_intensity_changed(new_scale: float) -> void:
 		_level_play_controller.apply_light_intensity_scale(new_scale)
 	# Broadcast to clients so they see the same intensity
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings({"light_intensity": new_scale})
+		_visual_broadcast.queue({"light_intensity": new_scale})
 
 
 ## Real-time environment change from the edit panel
@@ -450,9 +459,7 @@ func _on_edit_environment_changed(preset: String, overrides: Dictionary) -> void
 			_level_play_controller.active_level_data.environment_overrides = overrides.duplicate()
 	# Broadcast to clients so they see the same environment
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings(
-			{"environment_preset": preset, "environment_overrides": overrides}
-		)
+		_visual_broadcast.queue({"environment_preset": preset, "environment_overrides": overrides})
 
 
 ## Revert environment to the map's original embedded settings.
@@ -474,9 +481,7 @@ func _on_revert_to_map_defaults() -> void:
 
 	# Broadcast to clients so they also revert to map defaults
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings(
-			{"environment_preset": "", "environment_overrides": {}}
-		)
+		_visual_broadcast.queue({"environment_preset": "", "environment_overrides": {}})
 
 	# Update the panel's internal state and controls to match
 	level_edit_panel.apply_environment_state("", {})
@@ -493,7 +498,7 @@ func _on_edit_lofi_changed(overrides: Dictionary) -> void:
 			_level_play_controller.active_level_data.lofi_overrides = overrides.duplicate()
 	# Broadcast to clients so they see the same lo-fi settings
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings({"lofi_overrides": overrides})
+		_visual_broadcast.queue({"lofi_overrides": overrides})
 
 
 ## Real-time weather change from the edit panel
@@ -505,7 +510,7 @@ func _on_edit_weather_changed(overrides: Dictionary) -> void:
 		if _level_play_controller.active_level_data:
 			_level_play_controller.active_level_data.weather_overrides = overrides.duplicate()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings({"weather_overrides": overrides})
+		_visual_broadcast.queue({"weather_overrides": overrides})
 
 
 ## Real-time foliage sway change from the edit panel
@@ -515,7 +520,7 @@ func _on_edit_foliage_changed(overrides: Dictionary) -> void:
 		if _level_play_controller.active_level_data:
 			_level_play_controller.active_level_data.foliage_overrides = overrides.duplicate()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings({"foliage_overrides": overrides})
+		_visual_broadcast.queue({"foliage_overrides": overrides})
 
 
 ## Real-time sun change from the edit panel
@@ -526,7 +531,7 @@ func _on_edit_sun_changed(settings: SunSettings) -> void:
 		if level_data:
 			level_data.visual_settings.sun = settings.copy_settings()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings({"sun_settings": settings.to_dict()})
+		_visual_broadcast.queue({"sun_settings": settings.to_dict()})
 
 
 ## Toggle the sun-aiming gizmo, and keep the panel's numeric fields and toggle
@@ -572,7 +577,7 @@ func _on_edit_water_style_changed(style: String) -> void:
 		if _level_play_controller.active_level_data:
 			_level_play_controller.active_level_data.water_style = style
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings({"water_style": style})
+		_visual_broadcast.queue({"water_style": style})
 
 
 ## Save all edited values to level data and persist to disk
@@ -598,6 +603,8 @@ func _on_edit_save_requested(values: Dictionary) -> void:
 	# Re-broadcast the saved values so the host's late-joiner snapshot
 	# (_current_level_dict) is guaranteed to reflect what was just saved, even
 	# if this save wasn't preceded by a live-edit broadcast for every field.
+	# A pending partial batch must not land after this full snapshot.
+	_visual_broadcast.drop()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
 		(
 			NetworkManager
