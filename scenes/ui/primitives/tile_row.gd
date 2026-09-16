@@ -12,7 +12,8 @@ signal selection_changed(id: StringName)
 signal tile_toggled(id: StringName, on: bool)
 
 ## Pointer entered / left a tile. Hosts use these for previews; they never
-## change the selection and never fire from programmatic calls.
+## change the selection, never fire from programmatic calls, and stay silent
+## for disabled tiles (nothing to preview that cannot be picked).
 signal tile_hovered(id: StringName)
 signal tile_unhovered(id: StringName)
 
@@ -119,13 +120,13 @@ func _on_tile_toggled(pressed: bool, id: StringName) -> void:
 
 
 func _on_tile_hover(id: StringName, entered: bool) -> void:
+	var tile: Button = _tiles[id]
+	if tile.disabled:
+		return
 	if entered:
 		tile_hovered.emit(id)
 	else:
 		tile_unhovered.emit(id)
-	var tile: Button = _tiles[id]
-	if tile.disabled:
-		return
 	var target := Constants.UI_HOVER_SCALE if entered else Vector2.ONE
 	var duration := Constants.ANIM_HOVER_IN if entered else Constants.ANIM_HOVER_OUT
 	var trans := Tween.TRANS_BACK if entered else Tween.TRANS_CUBIC
@@ -136,7 +137,12 @@ func _on_tile_hover(id: StringName, entered: bool) -> void:
 ## line. Setting an unchanged custom_minimum_size is a no-op in Godot, so the
 ## resized -> fit -> relayout path settles without looping.
 func _fit_columns() -> void:
-	if columns <= 0 or size.x <= 0.0:
+	if columns <= 0:
+		for id in _tiles:
+			_tiles[id].clip_text = false
+			_tiles[id].custom_minimum_size = tile_min_size
+		return
+	if size.x <= 0.0:
 		return
 	var gap := float(get_theme_constant("h_separation"))
 	var width := floorf((size.x - gap * float(columns - 1)) / float(columns))

@@ -41,3 +41,20 @@ func test_report_covers_every_manifest_key_with_existing_outputs() -> void:
 		assert_between(float(row["sun_azimuth_deg"]), 0.0, 360.0)
 		assert_between(float(row["energy"]), 0.05, 4.0)
 		assert_eq(row["description"], entry["description"])
+
+
+## The runtime table is pasted from the report by hand; a curation rerun that is
+## not pasted back would silently ship stale numbers or paths.
+func test_sky_presets_table_matches_the_curation_report() -> void:
+	var report: Dictionary = _load_json(REPORT_PATH)
+	for key in report:
+		var row: Dictionary = report[key]
+		assert_true(EnvironmentPresets.SKY_PRESETS.has(key), key + " in SKY_PRESETS")
+		var entry: Dictionary = EnvironmentPresets.SKY_PRESETS[key]
+		for field in ["panorama", "tile", "preview"]:
+			assert_eq(entry[field], row[field], "%s %s" % [key, field])
+		assert_almost_eq(
+			float(entry["sun_azimuth_deg"]), float(row["sun_azimuth_deg"]), 0.05, key + " azimuth"
+		)
+		assert_almost_eq(float(entry["energy"]), float(row["energy"]), 0.0005, key + " energy")
+		assert_eq(entry["description"], row["description"], key + " description")

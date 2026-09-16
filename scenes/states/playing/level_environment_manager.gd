@@ -383,3 +383,5 @@ func clear() -> void:
 		_sun_light = null
 	_map_environment_config = {}
 	_map_sky_resource = null
+	_current_sky_key = ""
+	_sun_azimuth_deg = 0.0

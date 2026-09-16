@@ -78,3 +78,14 @@ func test_sky_rotation_follows_the_sun_only_for_hdri_keys() -> void:
 	var wrapped := EnvironmentPresets.sky_rotation_for(sun_for_350, "clear_day")
 	assert_almost_eq(wrapped.y, deg_to_rad(350.0), 0.0001, "wraps into [0, 360)")
 	assert_eq(EnvironmentPresets.get_sky_sun_azimuth("night_sky"), 0.0)
+
+
+## Pins the calibrated convention with a literal, not the formula: on the sunset
+## dome (sky azimuth 270.7) adding versus subtracting the sky azimuth differ by
+## 181 degrees, and the live check on 2026-09-16 proved the sun at azimuth 0
+## needs a yaw of 90.7. A sign or offset regression fails here.
+func test_sunset_yaw_matches_the_live_calibration() -> void:
+	var at_zero := EnvironmentPresets.sky_rotation_for(0.0, "sunset")
+	assert_almost_eq(rad_to_deg(at_zero.y), 90.7, 0.1, "calibrated on the sunset dome")
+	var at_180 := EnvironmentPresets.sky_rotation_for(180.0, "sunset")
+	assert_almost_eq(rad_to_deg(at_180.y), 270.7, 0.1)

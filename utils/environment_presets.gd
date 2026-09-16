@@ -157,10 +157,15 @@ const SKY_PRESETS = {
 ## Environment.sky_rotation needs so that column faces the sun. Godot samples an
 ## equirectangular panorama mirrored relative to the sun azimuth convention
 ## (panorama column c lands at world azimuth 180 - c when unrotated), so the sky's
-## own azimuth is ADDED to the sun's and this half turn closes the gap. Calibrated
-## in the live check on 2026-09-16 (clear_day, sun at 143 and 323 degrees): with
-## the sun off, the boulder's sky-lit side matched the direct sun only under this
-## rule. See docs/lighting-and-environment.md, "Sky follows the sun".
+## own azimuth is ADDED to the sun's and this half turn closes the gap. The sun
+## light's toward-sun vector was read back as (sin az, sin el, cos az) in world
+## space, so azimuth az means "the sun sits at +Z rotated az about Y".
+## Calibrated live on 2026-09-16 in two steps: clear_day (sky azimuth 179.3, sun at
+## 143 and 323 degrees) fixed the half turn, then sunset (sky azimuth 270.7, where
+## adding and subtracting the sky azimuth differ by 181 degrees) fixed the sign:
+## with the sun off, the boulder's sky-lit side matched its sun-lit side at sun
+## azimuth 0 and swung to the opposite side at 180 only under this rule.
+## See docs/lighting-and-environment.md, "Sky follows the sun".
 const SKY_YAW_OFFSET_DEG := 180.0
 
 ## Built-in environment presets
