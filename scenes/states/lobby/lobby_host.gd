@@ -13,6 +13,8 @@ const LEVEL_PICKER_SCENE := preload("res://scenes/ui/level_picker_dialog.tscn")
 ## never reach NetworkManager.host_game() or its signal connections.
 @export var start_hosting: bool = true
 
+var _level: LevelData = null
+
 @onready var player_name_input: LineEdit = %PlayerNameInput
 @onready var room_code_label: Label = %RoomCodeLabel
 @onready var room_code_value: Label = %RoomCodeValue
@@ -166,6 +168,7 @@ func _flash_player_list() -> void:
 
 ## Show the pending level the root handed over (or the replacement after Change).
 func set_level(level: LevelData) -> void:
+	_level = level
 	level_name.text = level.level_name
 	var count := level.token_placements.size()
 	level_caption.text = (
@@ -183,11 +186,21 @@ func set_level(level: LevelData) -> void:
 		level_thumb.texture = SwatchTextures.sky_preview(String(config.get("sky_preset", "")))
 
 
+## The level already picked: its card cannot be deleted from this picker.
+func locked_level_path() -> String:
+	if _level == null or _level.level_folder.is_empty():
+		return ""
+	return LevelManager.folder_path(_level.level_folder)
+
+
 func _on_change_pressed() -> void:
 	var picker: LevelPickerDialog = LEVEL_PICKER_SCENE.instantiate()
-	picker.setup("Change level")
+	picker.setup("Change level", locked_level_path())
 	picker.level_chosen.connect(_on_level_picked)
 	get_tree().root.add_child(picker)
+	# Cancelling the lobby (or otherwise leaving the tree) while the picker is
+	# still open must not strand it floating over whatever comes next.
+	tree_exiting.connect(picker.queue_free)
 
 
 func _on_level_picked(info: Dictionary) -> void:

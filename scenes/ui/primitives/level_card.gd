@@ -106,6 +106,7 @@ func _init() -> void:
 	_rename.visible = false
 	_rename.text_submitted.connect(_on_rename_submitted)
 	_rename.focus_exited.connect(_cancel_rename)
+	_rename.gui_input.connect(_on_rename_gui_input)
 	_column.add_child(_rename)
 	_caption = Label.new()
 	_caption.name = "Caption"
@@ -183,6 +184,14 @@ func _cancel_rename() -> void:
 		return
 	_rename.visible = false
 	_name.visible = true
+
+
+## Escape falls through to a modal picker's _unhandled_input and closes the
+## whole dialog mid-edit unless the rename field claims it first.
+func _on_rename_gui_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		_cancel_rename()
+		_rename.accept_event()
 
 
 func _on_rename_submitted(new_name: String) -> void:

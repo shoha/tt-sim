@@ -108,8 +108,12 @@ func test_inline_rename_commits_on_submit_and_cancels_on_escape() -> void:
 	)
 	assert_false(card._rename.visible)
 	card.begin_rename()
-	card._cancel_rename()
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	card._rename.gui_input.emit(esc)
 	assert_false(card._rename.visible)
+	assert_true(card._name.visible)
 	assert_signal_emit_count(card, "rename_committed", 1)
 
 

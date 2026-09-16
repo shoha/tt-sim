@@ -28,6 +28,14 @@ func test_strip_shows_name_and_token_count() -> void:
 	assert_eq(lobby.level_caption.text, "1 token")
 
 
+func test_locked_level_path_matches_the_saved_levels_path() -> void:
+	var lobby = SCENE.instantiate()
+	lobby.start_hosting = false
+	add_child_autofree(lobby)
+	lobby.set_level(_level("Sandy Clearing", 2))
+	assert_eq(lobby.locked_level_path(), LevelManager.folder_path("camp"))
+
+
 func test_change_relays_the_picked_level() -> void:
 	var lobby = SCENE.instantiate()
 	lobby.start_hosting = false
