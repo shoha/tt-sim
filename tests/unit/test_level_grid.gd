@@ -125,6 +125,29 @@ func test_rename_writes_through_and_refreshes() -> void:
 	assert_eq(grid._cards[0].level_info["name"], "Omega")
 
 
+func test_two_columns_fit_side_by_side_with_a_scrollbar() -> void:
+	var levels: Array[Dictionary] = [
+		_info("a", "Alpha", 100),
+		_info("b", "Bravo", 200),
+		_info("c", "Charlie", 300),
+		_info("d", "Delta", 400),
+		_info("e", "Echo", 500),
+		_info("f", "Foxtrot", 600),
+	]
+	var grid := LevelGrid.new()
+	grid.provider = func() -> Array[Dictionary]: return levels
+	grid.columns = 2
+	grid.size = Vector2(616, 360)
+	add_child_autofree(grid)
+	grid.refresh()
+	await wait_frames(3)
+	assert_gt(grid.card_count(), 5, "needs enough cards to overflow 360 px")
+	var first: Control = grid._cards[0]
+	var second: Control = grid._cards[1]
+	assert_eq(first.position.y, second.position.y, "second card sits beside the first")
+	assert_lt(first.size.x * 2.0 + 8.0 + grid.get_v_scroll_bar().size.x, 617.0)
+
+
 func _write_real_level(folder: String, name: String) -> void:
 	DirAccess.make_dir_recursive_absolute(LevelManager.folder_path(folder))
 	var data := {

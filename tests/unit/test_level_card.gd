@@ -59,6 +59,22 @@ func test_setup_fills_name_caption_and_placeholder() -> void:
 	assert_same(card._thumb.texture, SwatchTextures.sky_preview("clear_day"))
 
 
+func test_placeholder_shows_the_first_letter_and_a_real_thumbnail_hides_it() -> void:
+	var card := LevelCard.new()
+	add_child_autofree(card)
+	card.setup({"name": "sandy clearing", "thumbnail": "", "path": "user://x/a/"})
+	assert_true(card._letter.visible)
+	assert_eq(card._letter.text, "S")
+	# A real thumbnail: write a tiny PNG to user:// and point the card at it.
+	var image := Image.create(4, 4, false, Image.FORMAT_RGB8)
+	image.fill(Color.RED)
+	var path := "user://test_level_card_thumb.png"
+	image.save_png(path)
+	card.setup({"name": "Beta", "thumbnail": path, "path": "user://x/b/"})
+	assert_false(card._letter.visible)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
 func test_press_selects_and_double_press_activates() -> void:
 	var card := _card(_info())
 	watch_signals(card)

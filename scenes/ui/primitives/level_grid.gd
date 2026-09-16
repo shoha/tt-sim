@@ -86,9 +86,14 @@ func _apply_selection() -> void:
 func _fit_columns() -> void:
 	if columns <= 0 or size.x <= 0.0:
 		return
-	var width := floorf((size.x - float(GAP * (columns - 1))) / float(columns))
+	# Always reserve the vertical scrollbar's width so the column count does not
+	# flip when the bar appears (a visible-only rule oscillates at the boundary:
+	# narrower cards are shorter, which can hide the bar, which widens them again).
+	var reserved := get_v_scroll_bar().get_combined_minimum_size().x
+	var available := size.x - reserved - float(GAP * (columns - 1))
+	var width := floorf(available / float(columns))
 	for card in _cards:
-		card.custom_minimum_size = Vector2(width, 0)
+		card.custom_minimum_size.x = width
 
 
 func _on_card_selected(info: Dictionary) -> void:
