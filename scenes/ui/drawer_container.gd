@@ -18,6 +18,9 @@ extends Control
 
 # -- Configuration ----------------------------------------------------------
 
+## Rail mode only: a rail item was chosen. Hosts show the matching pane.
+signal pane_requested(id: StringName)
+
 enum DrawerEdge { LEFT, RIGHT }
 
 # -- Colours -----------------------------------------------------------------
@@ -56,6 +59,12 @@ const _TAB_BADGE_MARGIN := 4.0
 ## Whether the drawer tab is visible on ready. When false (default) the
 ## drawer is completely off-screen until [method reveal] is called.
 @export var start_revealed: bool = false
+## Rail mode. When non-empty the single tab handle is replaced by an IconRail
+## with one item per entry: {"id": StringName, "icon": String, "tooltip":
+## String}. Set in _on_ready(). Clicking an item opens the drawer on that pane
+## (pane_requested); clicking the active item closes the drawer, subject to
+## _can_close_from_tab(). Rail width is tab_width (44 fits 36 px items).
+@export var rail_items: Array[Dictionary] = []
 
 # -- Public state ------------------------------------------------------------
 
@@ -98,6 +107,10 @@ var _tab_button: Button  ## The clickable tab handle
 var _tab_label: Label
 var _tab_icon_rect: TextureRect
 var _tab_badge: Panel  ## Accent dot overlaid on the tab handle
+var _rail: IconRail  ## Rail mode only
+var _rail_panel: PanelContainer  ## Rail mode only: styled backdrop behind the rail
+var _tab_control: Control  ## Whichever handle is in use: _tab_button or _rail_panel
+var _last_rail_id: StringName = &""  ## Pane to reopen on when nothing is selected
 var _slide_tween: Tween
 var _is_animating: bool = false
 var _closing_from_open: bool = false  ## True when closing/concealing from an open state
@@ -111,9 +124,12 @@ func _ready() -> void:
 
 	_build_ui()
 
-	# Let subclasses configure properties (drawer_width, tab_text, etc.)
-	# and populate the content_container.
+	# Let subclasses configure properties (drawer_width, tab_text, rail_items,
+	# etc.) and populate the content_container.
 	_on_ready()
+
+	# The handle depends on rail_items, so it is built after _on_ready().
+	_build_tab()
 
 	# Re-apply panel size, tab style, sled layout, and positions AFTER
 	# _on_ready(), because the subclass may have changed drawer_width,
@@ -159,10 +175,12 @@ func conceal() -> void:
 	_closing_from_open = is_open
 	is_open = false
 	is_revealed = false
+	_remember_rail_selection()
 	_animate_to_state()
 
 
-## Open the drawer with animation.
+## Open the drawer with animation. In rail mode with nothing selected, the
+## last pane (or the first item) is selected and pane_requested is emitted.
 func open() -> void:
 	if is_open or _is_animating:
 		return
@@ -170,6 +188,11 @@ func open() -> void:
 	is_revealed = true
 	_closing_from_open = false
 	_animate_to_state()
+	if _rail and _rail.selected.is_empty():
+		var id := _default_rail_id()
+		if not id.is_empty():
+			_rail.select(id)
+			pane_requested.emit(id)
 
 
 ## Close the drawer with animation (tab stays visible).
@@ -178,7 +201,22 @@ func close() -> void:
 		return
 	_closing_from_open = true
 	is_open = false
+	_remember_rail_selection()
 	_animate_to_state()
+
+
+func _remember_rail_selection() -> void:
+	if _rail and not _rail.selected.is_empty():
+		_last_rail_id = _rail.selected
+		_rail.deselect()
+
+
+func _default_rail_id() -> StringName:
+	if _rail.has_item(_last_rail_id):
+		return _last_rail_id
+	if rail_items.is_empty():
+		return &""
+	return rail_items[0]["id"]
 
 
 ## Toggle the drawer open or closed.
@@ -190,12 +228,24 @@ func toggle() -> void:
 
 
 ## Show or hide the small accent dot on the tab (e.g. unsaved changes).
+## In rail mode `false` clears every item badge; `true` is ignored because
+## badges are per item there (see set_rail_badge).
 func set_tab_badge(badge_visible: bool) -> void:
 	if _tab_badge:
 		_tab_badge.visible = badge_visible
+	if _rail and not badge_visible:
+		for item in rail_items:
+			_rail.set_badge(item["id"], false)
 
 
-## Tooltip shown when hovering the tab handle.
+## Rail mode: badge one item (a pane with unsaved edits).
+func set_rail_badge(id: StringName, on: bool) -> void:
+	if _rail:
+		_rail.set_badge(id, on)
+
+
+## Tooltip shown when hovering the tab handle (single-tab mode only; rail
+## items carry their own tooltips).
 func set_tab_tooltip(text: String) -> void:
 	if _tab_button:
 		_tab_button.tooltip_text = text
@@ -242,6 +292,17 @@ func _build_ui() -> void:
 	content_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(content_container)
 
+
+func _build_tab() -> void:
+	if rail_items.is_empty():
+		_build_tab_button()
+		_tab_control = _tab_button
+	else:
+		_build_rail()
+		_tab_control = _rail_panel
+
+
+func _build_tab_button() -> void:
 	# -- Tab button ----------------------------------------------------------
 	_tab_button = Button.new()
 	_tab_button.custom_minimum_size = Vector2(tab_width, 64)
@@ -296,6 +357,25 @@ func _build_ui() -> void:
 	_tab_button.add_child(_tab_badge)
 
 
+func _build_rail() -> void:
+	_rail_panel = PanelContainer.new()
+	_rail_panel.name = "RailPanel"
+	_rail_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_rail_panel.custom_minimum_size = Vector2(tab_width, 0)
+	_sled.add_child(_rail_panel)
+
+	_rail = IconRail.new()
+	_rail.name = "Rail"
+	_rail.vertical = true
+	_rail.auto_select = false
+	# The indicator sits on the edge facing away from the panel.
+	_rail.indicator_at_end = edge == DrawerEdge.LEFT
+	for item in rail_items:
+		_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
+	_rail.item_pressed.connect(_on_rail_item_pressed)
+	_rail_panel.add_child(_rail)
+
+
 func _apply_panel_style() -> void:
 	# Square-cornered panel — no rounded corners so the 3D scene behind
 	# the drawer never peeks through at the edges.
@@ -336,11 +416,19 @@ func _apply_tab_style() -> void:
 			tab_width - _TAB_BADGE_SIZE - _TAB_BADGE_MARGIN, _TAB_BADGE_MARGIN
 		)
 
-	_tab_button.add_theme_stylebox_override("normal", style_normal)
-	_tab_button.add_theme_stylebox_override("hover", style_hover)
-	_tab_button.add_theme_stylebox_override("pressed", style_pressed)
-	_tab_button.add_theme_stylebox_override("hover_pressed", style_pressed)
-	_tab_button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	if _tab_button:
+		_tab_button.add_theme_stylebox_override("normal", style_normal)
+		_tab_button.add_theme_stylebox_override("hover", style_hover)
+		_tab_button.add_theme_stylebox_override("pressed", style_pressed)
+		_tab_button.add_theme_stylebox_override("hover_pressed", style_pressed)
+		_tab_button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	if _rail_panel:
+		var rail_style: StyleBoxFlat = style_normal.duplicate()
+		rail_style.content_margin_left = 4
+		rail_style.content_margin_right = 4
+		rail_style.content_margin_top = 8
+		rail_style.content_margin_bottom = 8
+		_rail_panel.add_theme_stylebox_override("panel", rail_style)
 
 
 func _on_parent_resized() -> void:
@@ -363,9 +451,9 @@ func _layout_sled() -> void:
 
 	if edge == DrawerEdge.LEFT:
 		_panel.position = Vector2(0, 0)
-		_tab_button.position = Vector2(drawer_width, tab_top_margin)
+		_tab_control.position = Vector2(drawer_width, tab_top_margin)
 	else:
-		_tab_button.position = Vector2(0, tab_top_margin)
+		_tab_control.position = Vector2(0, tab_top_margin)
 		_panel.position = Vector2(tab_width, 0)
 
 	_panel.size = Vector2(drawer_width, size.y)
@@ -441,3 +529,20 @@ func _on_tab_pressed() -> void:
 	if is_open and not _can_close_from_tab():
 		return
 	toggle()
+
+
+func _on_rail_item_pressed(id: StringName) -> void:
+	if not is_open:
+		if _is_animating:
+			return
+		_rail.select(id)
+		pane_requested.emit(id)
+		open()
+		return
+	if id == _rail.selected:
+		if _can_close_from_tab():
+			close()
+		return
+	_rail.select(id)
+	AudioManager.play_tick()
+	pane_requested.emit(id)
