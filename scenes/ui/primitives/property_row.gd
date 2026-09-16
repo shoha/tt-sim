@@ -61,6 +61,29 @@ const OVERRIDE_TOOLTIP := "Overridden. Right-click to reset to the preset value.
 		ticks = value
 		_refresh_ticks()
 @export var label_min_width: float = 96.0
+## Short words drawn under the slider's ends ("Dim" ... "Blazing"). Either
+## may be empty; the strip shows when any hint or tick exists.
+@export var hint_low: String = "":
+	set(value):
+		hint_low = value
+		_refresh_strip()
+@export var hint_high: String = "":
+	set(value):
+		hint_high = value
+		_refresh_strip()
+## Show the numeric chip. Off by default: the drawer's values toggle flips
+## every row at once. Never shows on a sliderless row.
+@export var values_visible: bool = false:
+	set(value):
+		values_visible = value
+		_refresh_chip_visibility()
+## Optional (float) -> String used for the chip text and slider tooltip
+## ("14:30", "143 deg SE", "1.52 m (5 ft)"). Typing into the chip still
+## parses a plain number in the row's native unit.
+var formatter: Callable = Callable():
+	set(value):
+		formatter = value
+		_sync_range()
 
 var color: Color:
 	get:
@@ -85,6 +108,8 @@ var _chip: LineEdit
 var _ticks: Control
 var _tick_textures: Array[Texture2D] = []
 var _syncing: bool = false
+var _hint_font: Font
+var _hint_font_size: int = 12
 
 
 func _ready() -> void:
@@ -119,6 +144,7 @@ func set_control(control: Control) -> void:
 	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_row.add_child(control)
 	_row.move_child(control, _slider.get_index())
+	show_slider = false
 	_slider.visible = false
 	_chip.visible = false
 
@@ -173,9 +199,9 @@ func _build_row() -> void:
 
 	if not show_slider:
 		_slider.visible = false
-		_chip.visible = false
 		if not show_color and not show_check:
 			_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_refresh_chip_visibility()
 
 
 func _build_ticks() -> void:
@@ -186,6 +212,8 @@ func _build_ticks() -> void:
 	_ticks.visible = false
 	_ticks.draw.connect(_on_ticks_draw)
 	add_child(_ticks)
+	_hint_font = _label.get_theme_font("font")
+	_hint_font_size = _label.get_theme_font_size("font_size") - 2
 
 
 func _sync_range() -> void:
@@ -205,7 +233,8 @@ func _sync_range() -> void:
 	_slider.set_value_no_signal(clampf(value, min_value, max_value))
 	_syncing = false
 	_chip.editable = editable
-	_chip.text = _format(value)
+	_chip.text = _display(value)
+	_slider.tooltip_text = _display(value) if show_slider else ""
 	_ticks.queue_redraw()
 
 
@@ -221,6 +250,28 @@ func _format(number: float) -> String:
 	# decimal-width the chip needs. "%.*f" always pads to the given width and
 	# drops the trailing "." when decimals is 0.
 	return "%.*f" % [_decimals(), number]
+
+
+func _display(number: float) -> String:
+	if formatter.is_valid():
+		return String(formatter.call(number))
+	return _format(number)
+
+
+func _refresh_chip_visibility() -> void:
+	if _chip:
+		_chip.visible = values_visible and show_slider
+
+
+func _strip_visible() -> bool:
+	return not ticks.is_empty() or not hint_low.is_empty() or not hint_high.is_empty()
+
+
+func _refresh_strip() -> void:
+	if not _ticks:
+		return
+	_ticks.visible = _strip_visible()
+	_ticks.queue_redraw()
 
 
 func _on_slider_value_changed(new_value: float) -> void:
@@ -240,7 +291,7 @@ func _on_chip_submitted(_text: String) -> void:
 func _commit_chip() -> void:
 	var text := _chip.text.strip_edges()
 	if not text.is_valid_float():
-		_chip.text = _format(value)
+		_chip.text = _display(value)
 		return
 	var parsed := text.to_float()
 	if not allow_greater:
@@ -248,7 +299,7 @@ func _commit_chip() -> void:
 	if not allow_lesser:
 		parsed = maxf(parsed, min_value)
 	if is_equal_approx(parsed, value):
-		_chip.text = _format(value)
+		_chip.text = _display(value)
 		return
 	_syncing = true
 	value = parsed
@@ -288,8 +339,7 @@ func _refresh_ticks() -> void:
 	_tick_textures.clear()
 	for tick in ticks:
 		_tick_textures.append(IconButton.load_icon(String(tick.get("icon", ""))))
-	_ticks.visible = not ticks.is_empty()
-	_sync_ticks_rect()
+	_refresh_strip()
 
 
 func _tick_fraction(tick_value: float) -> float:
@@ -313,3 +363,29 @@ func _on_ticks_draw() -> void:
 		var x := left + width * _tick_fraction(float(ticks[i].get("value", 0.0)))
 		var rect := Rect2(x - TICK_SIZE / 2.0, 0.0, TICK_SIZE, TICK_SIZE)
 		_ticks.draw_texture_rect(texture, rect, false, ThemeColors.TEXT_MUTED)
+	if _hint_font == null:
+		return
+	var baseline := TICK_SIZE - 2.0
+	if not hint_low.is_empty():
+		_ticks.draw_string(
+			_hint_font,
+			Vector2(left, baseline),
+			hint_low,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			_hint_font_size,
+			ThemeColors.TEXT_MUTED
+		)
+	if not hint_high.is_empty():
+		var text_width := (
+			_hint_font.get_string_size(hint_high, HORIZONTAL_ALIGNMENT_LEFT, -1, _hint_font_size).x
+		)
+		_ticks.draw_string(
+			_hint_font,
+			Vector2(left + width - text_width, baseline),
+			hint_high,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			_hint_font_size,
+			ThemeColors.TEXT_MUTED
+		)

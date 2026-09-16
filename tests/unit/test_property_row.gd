@@ -141,3 +141,52 @@ func test_custom_control_replaces_slider() -> void:
 	assert_eq(dropdown.get_parent(), row._row)
 	assert_false(row._slider.visible)
 	assert_false(row._chip.visible)
+
+
+func test_chip_hidden_by_default_and_shown_by_values_visible() -> void:
+	var row := _row()
+	assert_false(row._chip.visible, "numbers hide until the drawer toggle")
+	row.values_visible = true
+	assert_true(row._chip.visible)
+	row.values_visible = false
+	assert_false(row._chip.visible)
+
+
+func test_values_visible_never_shows_a_chip_on_a_sliderless_row() -> void:
+	var row := PropertyRow.new()
+	row.label = "Sky"
+	row.show_slider = false
+	add_child_autofree(row)
+	row.values_visible = true
+	assert_false(row._chip.visible)
+
+
+func test_hints_show_the_strip_only_when_set() -> void:
+	var row := _row()
+	assert_false(row._ticks.visible)
+	row.hint_low = "Dim"
+	row.hint_high = "Blazing"
+	assert_true(row._ticks.visible)
+	row.hint_low = ""
+	row.hint_high = ""
+	assert_false(row._ticks.visible)
+
+
+func test_formatter_drives_chip_text_and_tooltip() -> void:
+	var row := _row()
+	row.formatter = func(v: float) -> String: return "%d%%" % int(round(v * 100.0))
+	row.set_value_no_signal(0.5)
+	assert_eq(row._chip.text, "50%")
+	assert_eq(row._slider.tooltip_text, "50%")
+
+
+func test_chip_typing_still_parses_native_units_with_a_formatter() -> void:
+	var row := _row()
+	row.values_visible = true
+	row.formatter = func(v: float) -> String: return "%d%%" % int(round(v * 100.0))
+	watch_signals(row)
+	row._chip.text = "0.75"
+	row._commit_chip()
+	assert_eq(row.value, 0.75)
+	assert_eq(row._chip.text, "75%")
+	assert_signal_emitted_with_parameters(row, "value_changed", [0.75])
