@@ -1,7 +1,7 @@
 {
 	"clear_day": {
 		"description": "Clear midday sky, cool fill, hard shadows",
-		"energy": 1.347,
+		"energy": 0.754,
 		"panorama": "res://assets/skies/clear_day.exr",
 		"preview": "res://assets/skies/clear_day_preview.png",
 		"source_name": "Day Sky HDRI 055 A",
@@ -12,7 +12,7 @@
 	},
 	"cloudy": {
 		"description": "Bright day with scattered clouds, soft fill",
-		"energy": 0.843,
+		"energy": 0.472,
 		"panorama": "res://assets/skies/cloudy.exr",
 		"preview": "res://assets/skies/cloudy_preview.png",
 		"source_name": "Day Sky HDRI 067 B",
@@ -23,7 +23,7 @@
 	},
 	"dusk": {
 		"description": "Blue dusk after sunset, faint warm horizon",
-		"energy": 1.616,
+		"energy": 0.904,
 		"panorama": "res://assets/skies/dusk.exr",
 		"preview": "res://assets/skies/dusk_preview.png",
 		"source_name": "Evening Sky HDRI 022 B",
@@ -34,7 +34,7 @@
 	},
 	"morning": {
 		"description": "Cool clear dawn, low pale sun",
-		"energy": 1.925,
+		"energy": 1.077,
 		"panorama": "res://assets/skies/morning.exr",
 		"preview": "res://assets/skies/morning_preview.png",
 		"source_name": "Morning Sky HDRI 009 B",
@@ -45,7 +45,7 @@
 	},
 	"overcast": {
 		"description": "Flat grey overcast, shadowless and even",
-		"energy": 1.321,
+		"energy": 0.739,
 		"panorama": "res://assets/skies/overcast.exr",
 		"preview": "res://assets/skies/overcast_preview.png",
 		"source_name": "Day Sky HDRI 021 A",
@@ -56,7 +56,7 @@
 	},
 	"storm": {
 		"description": "Dark thunderstorm sky, dim and dramatic",
-		"energy": 1.274,
+		"energy": 0.713,
 		"panorama": "res://assets/skies/storm.exr",
 		"preview": "res://assets/skies/storm_preview.png",
 		"source_name": "Day Sky HDRI 061 A",
@@ -67,7 +67,7 @@
 	},
 	"sunset": {
 		"description": "Orange sunset with lit clouds, warm fill",
-		"energy": 1.466,
+		"energy": 0.82,
 		"panorama": "res://assets/skies/sunset.exr",
 		"preview": "res://assets/skies/sunset_preview.png",
 		"source_name": "Evening Sky HDRI 032 A",
