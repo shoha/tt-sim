@@ -89,3 +89,37 @@ func test_water_and_foliage_edits_emit() -> void:
 	var params: Array = get_signal_parameters(pane, "foliage_changed")
 	assert_eq(params[0]["grass_sway_speed"], 4.0)
 	assert_signal_emit_count(pane, "changed", 2)
+
+
+func test_load_selects_matching_wind_tile() -> void:
+	var pane := _pane()
+	var state := LevelVisualState.new()
+	pane.load_state(state)
+	assert_eq(pane._wind_field.tiles.selected, &"breeze", "defaults are a breeze")
+	state.foliage.tree_sway_amplitude = 0.0
+	state.foliage.grass_sway_amplitude = 0.0
+	pane.load_state(state)
+	assert_eq(pane._wind_field.tiles.selected, &"still")
+
+
+func test_wind_tile_applies_values_once_and_custom_is_silent() -> void:
+	var pane := _pane()
+	pane.load_state(LevelVisualState.new())
+	watch_signals(pane)
+	pane._on_wind_selected(&"gusty")
+	assert_eq(pane._foliage.tree_sway_speed, 1.2)
+	assert_eq(pane._foliage.grass_sway_amplitude, 0.08)
+	assert_eq(pane._foliage_rows["grass_sway_speed"].value, 2.5)
+	assert_signal_emit_count(pane, "foliage_changed", 1)
+	pane._on_wind_selected(&"custom")
+	assert_signal_emit_count(pane, "foliage_changed", 1)
+	pane._on_foliage_changed(9.9, "tree_sway_speed")
+	assert_eq(pane._wind_field.tiles.selected, &"custom")
+
+
+func test_scale_and_water_tiles_are_fields_and_cell_size_reads_in_units() -> void:
+	var pane := _pane()
+	assert_same(pane._scale_tiles, pane._scale_field.tiles)
+	assert_same(pane._water_tiles, pane._water_field.tiles)
+	assert_eq(WorldPane.format_cell_size(1.524), "1.52 m (5.0 ft)")
+	assert_eq(pane._foliage_rows["tree_sway_amplitude"].hint_high, "Wild")

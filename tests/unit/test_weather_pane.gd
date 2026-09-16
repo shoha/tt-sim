@@ -73,3 +73,9 @@ func test_dragging_intensity_to_zero_unpresses_the_tile_but_keeps_the_row() -> v
 	assert_eq(pane._weather.rain_intensity, 0.0)
 	pane._on_intensity_changed(0.4, "rain")
 	assert_true(pane._tiles.is_on(&"rain"))
+
+
+func test_intensity_rows_read_light_to_heavy() -> void:
+	var pane := _pane()
+	assert_eq(pane._rows["rain"].hint_low, "Light")
+	assert_eq(pane._rows["wind"].hint_high, "Heavy")
