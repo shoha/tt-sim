@@ -154,9 +154,14 @@ const SKY_PRESETS = {
 }
 
 ## Engine convention between the panorama's brightest column and the yaw
-## Environment.sky_rotation needs so that column faces the sun. Calibrated once in
-## the live check (docs/lighting-and-environment.md, "Sky follows the sun").
-const SKY_YAW_OFFSET_DEG := 0.0
+## Environment.sky_rotation needs so that column faces the sun. Godot samples an
+## equirectangular panorama mirrored relative to the sun azimuth convention
+## (panorama column c lands at world azimuth 180 - c when unrotated), so the sky's
+## own azimuth is ADDED to the sun's and this half turn closes the gap. Calibrated
+## in the live check on 2026-09-16 (clear_day, sun at 143 and 323 degrees): with
+## the sun off, the boulder's sky-lit side matched the direct sun only under this
+## rule. See docs/lighting-and-environment.md, "Sky follows the sun".
+const SKY_YAW_OFFSET_DEG := 180.0
 
 ## Built-in environment presets
 ## Each preset overrides only the properties it needs to change from defaults.
@@ -552,7 +557,7 @@ static func sky_rotation_for(sun_azimuth_deg: float, sky_key: String) -> Vector3
 	if not is_hdri_sky(sky_key):
 		return Vector3.ZERO
 	var yaw := wrapf(
-		sun_azimuth_deg - get_sky_sun_azimuth(sky_key) + SKY_YAW_OFFSET_DEG, 0.0, 360.0
+		sun_azimuth_deg + get_sky_sun_azimuth(sky_key) + SKY_YAW_OFFSET_DEG, 0.0, 360.0
 	)
 	return Vector3(0.0, deg_to_rad(yaw), 0.0)
 

@@ -141,4 +141,8 @@ func _fit_columns() -> void:
 	var gap := float(get_theme_constant("h_separation"))
 	var width := floorf((size.x - gap * float(columns - 1)) / float(columns))
 	for id in _tiles:
-		_tiles[id].custom_minimum_size = Vector2(width, tile_min_size.y)
+		var tile: Button = _tiles[id]
+		tile.custom_minimum_size = Vector2(width, tile_min_size.y)
+		# A label wider than its share would widen the tile and break the wrap
+		# count; clip instead. Hosts keep labels short enough to fit.
+		tile.clip_text = true

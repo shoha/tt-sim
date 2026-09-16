@@ -11,7 +11,7 @@
   },
   {
     "key": "cloudy",
-    "label": "Cloudy",
+    "label": "Fair",
     "description": "Bright day with scattered clouds, soft fill",
     "source": "D:/Blender/assets/HDRI/sky/DaySkyHDRI067B_4k.exr",
     "source_name": "Day Sky HDRI 067 B",
@@ -21,7 +21,7 @@
   },
   {
     "key": "overcast",
-    "label": "Overcast",
+    "label": "Cloudy",
     "description": "Flat grey overcast, shadowless and even",
     "source": "D:/Blender/assets/HDRI/sky/DaySkyHDRI021A_4k.exr",
     "source_name": "Day Sky HDRI 021 A",
@@ -31,7 +31,7 @@
   },
   {
     "key": "morning",
-    "label": "Morning",
+    "label": "Dawn",
     "description": "Cool clear dawn, low pale sun",
     "source": "D:/Blender/assets/HDRI/sky/MorningSkyHDRI009B_4k.exr",
     "source_name": "Morning Sky HDRI 009 B",
