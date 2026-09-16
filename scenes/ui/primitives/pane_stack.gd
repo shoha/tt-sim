@@ -48,10 +48,16 @@ func show_pane(id: StringName, animate: bool = true) -> void:
 	if id == current or not _wrappers.has(id):
 		return
 	var outgoing: Control = _wrappers.get(current)
+	var previous := current
 	var incoming: Control = _wrappers[id]
 	current = id
 	if _tween and _tween.is_valid():
 		_tween.kill()
+	for other_id: StringName in _wrappers:
+		if other_id != id and other_id != previous:
+			var other_wrapper: Control = _wrappers[other_id]
+			_reset_wrapper(other_wrapper)
+			other_wrapper.visible = false
 	incoming.visible = true
 	if not animate:
 		if outgoing:
@@ -66,6 +72,7 @@ func show_pane(id: StringName, animate: bool = true) -> void:
 	_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_tween.set_parallel(true)
 	if outgoing:
+		outgoing.offset_transform_position = Vector2.ZERO
 		_tween.tween_property(outgoing, "modulate:a", 0.0, FADE_OUT_DURATION)
 	_tween.tween_property(incoming, "modulate:a", 1.0, Constants.ANIM_PANE_SWAP)
 	_tween.tween_property(
