@@ -2,8 +2,10 @@ extends Control
 
 ## Controller for the AppMenu UI.
 ## Handles Level Editor button and lifecycle.
-## The button is visible on the title screen and hidden during gameplay
-## (the edit drawer provides a "Level Details..." button instead).
+## The title hub has its own Level Editor action, so this floating button only
+## appears in states that call show_editor_button() (currently none — kept for
+## the editor's own flows) and is hidden during gameplay, where the edit drawer
+## provides a "Level Details..." button instead.
 ## Level Editor is only available to the GM, not to regular players.
 
 signal play_level_requested(level_data: LevelData)

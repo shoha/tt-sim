@@ -219,6 +219,11 @@ func _enter_state(state: State) -> void:
 				_title_screen.host_game_requested.connect(_on_host_game_requested)
 			if _title_screen.has_signal("join_game_requested"):
 				_title_screen.join_game_requested.connect(_on_join_game_requested)
+			if _title_screen.has_signal("play_solo_requested"):
+				_title_screen.play_solo_requested.connect(_on_play_solo_requested)
+			var title_app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
+			if title_app_ctrl:
+				title_app_ctrl.hide_editor_button()
 		State.LOBBY_HOST:
 			_enter_lobby_host_state()
 		State.LOBBY_CLIENT:
@@ -307,11 +312,6 @@ func _exit_playing_state() -> void:
 		_game_map.queue_free()
 		_game_map = null
 
-	# Restore the AppMenu "Level Editor" button
-	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
-	if app_ctrl:
-		app_ctrl.show_editor_button()
-
 
 func _enter_lobby_host_state() -> void:
 	_lobby_host = LOBBY_HOST_SCENE.instantiate()
@@ -353,9 +353,23 @@ func _exit_lobby_client_state() -> void:
 		NetworkManager.game_starting.disconnect(_on_network_game_starting)
 
 
-func _on_host_game_requested() -> void:
-	# Transition to host lobby
+## The title hands over the level the host picked; it becomes the pending level
+## the playing state loads and broadcasts when the host presses Start.
+func _on_host_game_requested(level_info: Dictionary) -> void:
+	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
+	if level == null:
+		UIManager.show_error("Could not load that level")
+		return
+	_pending_level_data = level
 	change_state(State.LOBBY_HOST)
+
+
+func _on_play_solo_requested(level_info: Dictionary) -> void:
+	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
+	if level == null:
+		UIManager.show_error("Could not load that level")
+		return
+	_on_play_level_requested(level)
 
 
 func _on_join_game_requested() -> void:
@@ -372,6 +386,7 @@ func _on_lobby_start_game() -> void:
 func _on_lobby_cancel() -> void:
 	# Cancel/leave lobby - disconnect and return to title
 	NetworkManager.disconnect_game()
+	_pending_level_data = null
 	change_state(State.TITLE_SCREEN)
 
 
