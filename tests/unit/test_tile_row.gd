@@ -75,3 +75,11 @@ func test_icon_is_optional() -> void:
 	var row := _single()
 	assert_not_null(row._tiles[&"a"].icon)
 	assert_null(row._tiles[&"b"].icon)
+
+
+func test_texture_icon_wins_over_icon_name() -> void:
+	var row := TileRow.new()
+	add_child_autofree(row)
+	var texture := ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGBA8))
+	var tile := row.add_tile(&"painted", "Painted", "sun", "", texture)
+	assert_eq(tile.icon, texture)

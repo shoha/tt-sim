@@ -32,6 +32,7 @@ var _chevron: TextureRect
 var _title_label: Label
 var _clip: Control
 var _tween: Tween
+var _target_height: float = 0.0
 
 
 func _ready() -> void:
@@ -113,27 +114,42 @@ func _apply_state_immediately() -> void:
 
 
 func _animate_body() -> void:
-	if _tween and _tween.is_valid():
-		_tween.kill()
 	if expanded:
 		body.visible = true
-	var target_height := body.get_combined_minimum_size().y if expanded else 0.0
+	_retarget(body.get_combined_minimum_size().y if expanded else 0.0)
+
+
+## Start (or restart) the height tween towards [param height]. A body that
+## wraps after its first layout reports a taller size mid-tween; retargeting
+## from the clip's current height keeps the motion continuous.
+func _retarget(height: float) -> void:
+	if _tween and _tween.is_valid():
+		_tween.kill()
+	_target_height = height
 	var target_rotation := PI / 2.0 if expanded else 0.0
 	_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_tween.set_parallel(true)
-	_tween.tween_property(_clip, "custom_minimum_size:y", target_height, Constants.ANIM_FOLDOUT)
+	_tween.tween_property(_clip, "custom_minimum_size:y", height, Constants.ANIM_FOLDOUT)
 	_tween.tween_property(_chevron, "rotation", target_rotation, Constants.ANIM_FOLDOUT)
 	_tween.chain().tween_callback(_on_animation_finished)
 
 
 func _on_animation_finished() -> void:
 	body.visible = expanded
+	if expanded:
+		# The body is laid out by now; never leave the clip short of it.
+		_clip.custom_minimum_size.y = body.size.y
 
 
-## Content that grows while expanded (a weather row appearing) must grow the
-## clip with it; while collapsed or mid-animation the tween owns the height.
+## Content that grows (a weather row appearing, a tile row wrapping on its
+## first layout) must grow the clip with it: retarget a running expand tween,
+## or snap when idle. Collapsed bodies are hidden and never resize.
 func _on_body_resized() -> void:
-	if not expanded or (_tween and _tween.is_valid() and _tween.is_running()):
+	if not expanded:
+		return
+	if _tween and _tween.is_valid() and _tween.is_running():
+		if not is_equal_approx(body.size.y, _target_height):
+			_retarget(body.size.y)
 		return
 	_clip.custom_minimum_size.y = body.size.y
 

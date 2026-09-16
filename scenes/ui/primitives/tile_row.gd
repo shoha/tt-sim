@@ -27,7 +27,11 @@ func _ready() -> void:
 
 
 func add_tile(
-	id: StringName, label: String, icon_name: String = "", tooltip: String = ""
+	id: StringName,
+	label: String,
+	icon_name: String = "",
+	tooltip: String = "",
+	icon_texture: Texture2D = null
 ) -> Button:
 	var tile := Button.new()
 	# Node names cannot be empty (Godot errors on set_name("")); a sentinel
@@ -37,7 +41,7 @@ func add_tile(
 	tile.toggle_mode = true
 	tile.theme_type_variation = &"Tile"
 	tile.custom_minimum_size = tile_min_size
-	tile.icon = IconButton.load_icon(icon_name)
+	tile.icon = icon_texture if icon_texture else IconButton.load_icon(icon_name)
 	tile.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tile.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 	tile.tooltip_text = tooltip
