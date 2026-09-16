@@ -111,6 +111,8 @@ var _rail: IconRail  ## Rail mode only
 var _rail_panel: PanelContainer  ## Rail mode only: styled backdrop behind the rail
 var _tab_control: Control  ## Whichever handle is in use: _tab_button or _rail_panel
 var _last_rail_id: StringName = &""  ## Pane to reopen on when nothing is selected
+var _pending_tab_tooltip: String = ""  ## Set via set_tab_tooltip() before the tab button exists
+var _pending_tab_badge: bool = false  ## Set via set_tab_badge() before the tab badge exists
 var _slide_tween: Tween
 var _is_animating: bool = false
 var _closing_from_open: bool = false  ## True when closing/concealing from an open state
@@ -231,6 +233,7 @@ func toggle() -> void:
 ## In rail mode `false` clears every item badge; `true` is ignored because
 ## badges are per item there (see set_rail_badge).
 func set_tab_badge(badge_visible: bool) -> void:
+	_pending_tab_badge = badge_visible
 	if _tab_badge:
 		_tab_badge.visible = badge_visible
 	if _rail and not badge_visible:
@@ -247,6 +250,7 @@ func set_rail_badge(id: StringName, on: bool) -> void:
 ## Tooltip shown when hovering the tab handle (single-tab mode only; rail
 ## items carry their own tooltips).
 func set_tab_tooltip(text: String) -> void:
+	_pending_tab_tooltip = text
 	if _tab_button:
 		_tab_button.tooltip_text = text
 
@@ -356,6 +360,11 @@ func _build_tab_button() -> void:
 	_tab_badge.visible = false
 	_tab_button.add_child(_tab_badge)
 
+	# Apply any tooltip/badge set by a subclass from _on_ready(), before these
+	# nodes existed (set_tab_tooltip()/set_tab_badge() recorded them as pending).
+	_tab_button.tooltip_text = _pending_tab_tooltip
+	_tab_badge.visible = _pending_tab_badge
+
 
 func _build_rail() -> void:
 	_rail_panel = PanelContainer.new()
@@ -410,7 +419,8 @@ func _apply_tab_style() -> void:
 
 	# Badge position depends on tab_width, which a subclass may change in
 	# _on_ready(). This runs again afterwards, so it lands on the final width.
-	# Null on the first call from _build_ui(), where the badge does not exist yet.
+	# Null on the first call, made from _build_tab_button() before the badge
+	# is created.
 	if _tab_badge:
 		_tab_badge.position = Vector2(
 			tab_width - _TAB_BADGE_SIZE - _TAB_BADGE_MARGIN, _TAB_BADGE_MARGIN
