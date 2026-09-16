@@ -26,4 +26,6 @@ static func save_show_values(on: bool) -> void:
 	if err != OK and err != ERR_FILE_NOT_FOUND:
 		push_warning("UiPreferences: failed to load settings for save: %d" % err)
 	config.set_value(SECTION, KEY_SHOW_VALUES, on)
-	config.save(settings_path)
+	var save_err := config.save(settings_path)
+	if save_err != OK:
+		push_warning("UiPreferences: failed to save settings: %d" % save_err)
