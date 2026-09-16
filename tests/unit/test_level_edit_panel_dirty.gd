@@ -200,3 +200,20 @@ func test_gizmo_forwards_reach_the_sun_pane() -> void:
 	assert_true(_panel.sun_pane._aim_button.button_pressed)
 	_panel.initialize(LevelData.new())
 	assert_false(_panel.sun_pane._aim_button.button_pressed, "initialize clears the aim toggle")
+
+
+func test_values_toggle_flips_every_row_and_persists() -> void:
+	UiPreferences.settings_path = "user://test_panel_ui_preferences.cfg"
+	var rows: Array[Node] = _panel._stack.find_children("*", "PropertyRow", true, false)
+	assert_true(rows.size() > 10, "panes expose their rows")
+	for row in rows:
+		assert_false(row.values_visible)
+	_panel._on_rail_footer_pressed(&"values")
+	for row in rows:
+		assert_true(row.values_visible)
+	assert_true(UiPreferences.load_show_values())
+	assert_true(_panel._footer_rail._buttons[&"values"].active)
+	_panel._on_rail_footer_pressed(&"values")
+	assert_false(UiPreferences.load_show_values())
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(UiPreferences.settings_path))
+	UiPreferences.settings_path = Paths.SETTINGS_PATH
