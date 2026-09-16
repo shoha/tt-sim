@@ -41,7 +41,8 @@ func test_write_state_carries_preset_overrides_and_scale() -> void:
 	assert_eq(out.environment_preset, "outdoor_day")
 	assert_eq(out.environment_overrides.get("fog_density"), 0.05)
 	assert_eq(out.light_intensity_scale, 1.4)
-	assert_ne(out.environment_overrides, _model.overrides, "independent copy")
+	out.environment_overrides["probe"] = 1
+	assert_false(_model.overrides.has("probe"), "write_state hands out an independent copy")
 
 
 func test_preset_selection_writes_model_and_emits_changed() -> void:
