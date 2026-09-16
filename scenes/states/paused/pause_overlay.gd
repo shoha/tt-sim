@@ -5,9 +5,13 @@ extends AnimatedCanvasLayerPanel
 
 signal resume_requested
 signal main_menu_requested
+signal change_level_requested(level_info: Dictionary)
+
+const LEVEL_PICKER_SCENE := preload("res://scenes/ui/level_picker_dialog.tscn")
 
 @onready var resume_button: Button = %ResumeButton
 @onready var edit_level_button: Button = %EditLevelButton
+@onready var change_level_button: Button = %ChangeLevelButton
 @onready var settings_button: Button = %SettingsButton
 @onready var main_menu_button: Button = %MainMenuButton
 @onready var quit_game_button: Button = %QuitGameButton
@@ -16,6 +20,7 @@ signal main_menu_requested
 func _on_panel_ready() -> void:
 	resume_button.pressed.connect(_on_resume_pressed)
 	edit_level_button.pressed.connect(_on_edit_level_pressed)
+	change_level_button.pressed.connect(_on_change_level_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
 	main_menu_button.set_meta("ui_silent", true)
 	main_menu_button.pressed.connect(_on_main_menu_pressed)
@@ -23,8 +28,9 @@ func _on_panel_ready() -> void:
 	quit_game_button.pressed.connect(_on_quit_game_pressed)
 	_setup_blur_backdrop()
 
-	# Only show "Edit Level" for the GM / local player
+	# Only show "Edit Level" and "Change Level" for the GM / local player
 	edit_level_button.visible = NetworkManager.has_gm_access()
+	change_level_button.visible = NetworkManager.has_gm_access()
 
 
 ## Replace the flat dark backdrop with a blurred-background shader
@@ -70,6 +76,17 @@ func _on_edit_level_pressed() -> void:
 	# Resume first, then open the editor via EventBus
 	resume_requested.emit()
 	EventBus.open_editor_requested.emit()
+
+
+func _on_change_level_pressed() -> void:
+	var picker: LevelPickerDialog = LEVEL_PICKER_SCENE.instantiate()
+	picker.setup("Change level", LevelManager.current_level_path)
+	picker.level_chosen.connect(_on_level_picked)
+	get_tree().root.add_child(picker)
+
+
+func _on_level_picked(info: Dictionary) -> void:
+	change_level_requested.emit(info)
 
 
 func _on_settings_pressed() -> void:

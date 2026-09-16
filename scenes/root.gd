@@ -322,6 +322,10 @@ func _enter_lobby_host_state() -> void:
 		_lobby_host.start_game_requested.connect(_on_lobby_start_game)
 	if _lobby_host.has_signal("cancel_requested"):
 		_lobby_host.cancel_requested.connect(_on_lobby_cancel)
+	if _lobby_host.has_signal("level_change_requested"):
+		_lobby_host.level_change_requested.connect(_on_lobby_level_change_requested)
+	if _pending_level_data and _lobby_host.has_method("set_level"):
+		_lobby_host.set_level(_pending_level_data)
 
 
 func _exit_lobby_host_state() -> void:
@@ -388,6 +392,16 @@ func _on_lobby_cancel() -> void:
 	NetworkManager.disconnect_game()
 	_pending_level_data = null
 	change_state(State.TITLE_SCREEN)
+
+
+func _on_lobby_level_change_requested(level_info: Dictionary) -> void:
+	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
+	if level == null:
+		UIManager.show_error("Could not load that level")
+		return
+	_pending_level_data = level
+	if _lobby_host and _lobby_host.has_method("set_level"):
+		_lobby_host.set_level(level)
 
 
 func _on_network_game_starting() -> void:
@@ -505,10 +519,32 @@ func _enter_paused_state() -> void:
 		_pause_overlay.resume_requested.connect(_on_pause_resume_requested)
 	if _pause_overlay.has_signal("main_menu_requested"):
 		_pause_overlay.main_menu_requested.connect(_on_pause_main_menu_requested)
+	if _pause_overlay.has_signal("change_level_requested"):
+		_pause_overlay.change_level_requested.connect(_on_pause_change_level_requested)
 
 
 func _on_pause_resume_requested() -> void:
 	pop_state()
+
+
+## Mid-session change: resume, settle the Visuals drawer, then reload in place
+## (the host broadcast happens inside the reload path).
+func _on_pause_change_level_requested(level_info: Dictionary) -> void:
+	pop_state()
+	var menu_ctrl = _game_map.gameplay_menu.get_node_or_null("GameplayMenu") if _game_map else null
+	if menu_ctrl and menu_ctrl.has_method("request_level_change"):
+		menu_ctrl.request_level_change(request_level_change.bind(level_info))
+	else:
+		request_level_change(level_info)
+
+
+## Load a level by info and play it without leaving the current state or room.
+func request_level_change(level_info: Dictionary) -> void:
+	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
+	if level == null:
+		UIManager.show_error("Could not load that level")
+		return
+	_on_play_level_requested(level)
 
 
 func _on_pause_main_menu_requested() -> void:
