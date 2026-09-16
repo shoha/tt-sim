@@ -10,8 +10,8 @@ signal join_game_requested
 signal play_solo_requested(level_info: Dictionary)
 
 const SettingsMenuScene := preload("res://scenes/ui/settings_menu.tscn")
-const ENTRANCE_STAGGER := 0.08
-const ENTRANCE_DURATION := 0.3
+const ENTRANCE_STAGGER := Constants.ANIM_ENTRANCE_STAGGER
+const ENTRANCE_DURATION := Constants.ANIM_ENTRANCE
 const EMPTY_CAPTION := "Make a level in the Level Editor first"
 
 ## Returns the level info list; tests inject a fake before the node enters the tree.
@@ -64,23 +64,25 @@ func _build_left_column() -> void:
 	# is wanted, so override rather than add a variation for a single label.
 	wordmark.add_theme_font_size_override("font_size", 36)
 	_left.add_child(wordmark)
-	_left.add_child(_spacer(12))
-	host_button = _primary_action("Host Game", "network", "Start a table and invite players")
-	host_subtitle = _subtitle_of(host_button)
+	UiActions.spacer(12, _left)
+	host_button = UiActions.primary(
+		"Host Game", "network", "Start a table and invite players", _left
+	)
+	host_subtitle = UiActions.subtitle_of(host_button)
 	host_button.pressed.connect(_on_host_pressed)
-	join_button = _primary_action("Join Game", "users", "Enter a room code")
+	join_button = UiActions.primary("Join Game", "users", "Enter a room code", _left)
 	join_button.pressed.connect(_on_join_pressed)
-	_left.add_child(_spacer(8))
+	UiActions.spacer(8, _left)
 	_left.add_child(HSeparator.new())
-	_left.add_child(_spacer(8))
-	play_button = _secondary_action("Play Solo", "map")
-	play_subtitle = _subtitle_of(play_button)
+	UiActions.spacer(8, _left)
+	play_button = UiActions.secondary("Play Solo", "map", _left)
+	play_subtitle = UiActions.subtitle_of(play_button)
 	play_button.pressed.connect(_on_play_pressed)
-	editor_button = _secondary_action("Level Editor", "wand")
+	editor_button = UiActions.secondary("Level Editor", "wand", _left)
 	editor_button.pressed.connect(_on_editor_pressed)
-	settings_button = _secondary_action("Settings", "settings")
+	settings_button = UiActions.secondary("Settings", "settings", _left)
 	settings_button.pressed.connect(_on_settings_pressed)
-	quit_button = _secondary_action("Quit", "x")
+	quit_button = UiActions.secondary("Quit", "x", _left)
 	quit_button.pressed.connect(_on_quit_pressed)
 
 
@@ -116,61 +118,6 @@ func _build_right_zone() -> void:
 	_right.add_child(grid)
 
 
-## A tall accent button with an icon, a bold label and a caption underneath.
-func _primary_action(label: String, icon: String, caption: String) -> Button:
-	var button := AnimatedButton.new()
-	button.name = label.replace(" ", "")
-	button.text = label
-	button.icon = IconButton.load_icon(icon)
-	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.custom_minimum_size = Vector2(0, 56)
-	button.expand_icon = false
-	_left.add_child(button)
-	var caption_label := Label.new()
-	caption_label.name = "Caption"
-	caption_label.text = caption
-	caption_label.theme_type_variation = &"Caption"
-	caption_label.add_theme_color_override("font_color", ThemeColors.TEXT_MUTED)
-	_left.add_child(caption_label)
-	var subtitle := Label.new()
-	subtitle.name = "Subtitle"
-	subtitle.theme_type_variation = &"Caption"
-	subtitle.visible = false
-	_left.add_child(subtitle)
-	button.set_meta("subtitle", subtitle)
-	return button
-
-
-func _secondary_action(label: String, icon: String) -> Button:
-	var button := AnimatedButton.new()
-	button.name = label.replace(" ", "")
-	button.text = label
-	button.icon = IconButton.load_icon(icon)
-	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.theme_type_variation = &"Secondary"
-	button.custom_minimum_size = Vector2(0, 36)
-	_left.add_child(button)
-	var subtitle := Label.new()
-	subtitle.name = "Subtitle"
-	subtitle.theme_type_variation = &"Caption"
-	subtitle.add_theme_color_override("font_color", ThemeColors.TEXT_MUTED)
-	subtitle.visible = false
-	_left.add_child(subtitle)
-	button.set_meta("subtitle", subtitle)
-	return button
-
-
-func _subtitle_of(button: Button) -> Label:
-	return button.get_meta("subtitle") as Label
-
-
-func _spacer(height: int) -> Control:
-	var spacer := Control.new()
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	spacer.custom_minimum_size = Vector2(0, height)
-	return spacer
-
-
 func _preselect_most_recent() -> void:
 	var levels: Array = level_provider.call()
 	if levels.is_empty():
@@ -199,33 +146,11 @@ func _refresh_actions() -> void:
 
 
 func _play_entrance_animation() -> void:
-	var targets: Array[Control] = []
-	for child in _left.get_children():
-		if child is Control and child.visible:
-			targets.append(child)
-	for child in _right.get_children():
-		if child is Control and child.visible:
-			targets.append(child)
-	for control in targets:
-		control.modulate.a = 0.0
-	# Let every container in both columns settle its layout (the right column's
-	# sort cascades from the Columns HBox sizing it) before capturing target
-	# positions; capturing early leaves the grid tweened onto the heading.
-	await get_tree().process_frame
-	await get_tree().process_frame
+	var targets := UiMotion.visible_children(_left)
+	targets.append_array(UiMotion.visible_children(_right))
+	await UiMotion.stagger_in(targets, self)
 	if not is_instance_valid(self):
 		return
-	for i in range(targets.size()):
-		var control := targets[i]
-		var target_y := control.position.y
-		control.position.y = target_y + 12.0
-		var tween := create_tween()
-		tween.set_parallel(true)
-		tween.set_ease(Tween.EASE_OUT)
-		tween.set_trans(Tween.TRANS_CUBIC)
-		var delay := i * ENTRANCE_STAGGER
-		tween.tween_property(control, "modulate:a", 1.0, ENTRANCE_DURATION).set_delay(delay)
-		tween.tween_property(control, "position:y", target_y, ENTRANCE_DURATION).set_delay(delay)
 	var version_tween := create_tween()
 	version_tween.set_ease(Tween.EASE_OUT)
 	version_tween.set_trans(Tween.TRANS_CUBIC)
