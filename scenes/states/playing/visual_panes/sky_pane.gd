@@ -4,23 +4,31 @@ extends LevelEditPane
 ## Sky preset, background, ambient and fog, with fog colour and fog shape
 ## under Advanced. Environment fields live on the shared EnvironmentEditModel;
 ## this pane is the one that writes preset + overrides into the state on
-## Save.
+## Save. Sky tiles show a thumbnail; a preview strip and caption under them
+## show the hovered or selected sky before it is applied.
 
 signal revert_to_map_defaults_requested
 
 const AMBIENT_KEYS := ["ambient_light_color", "ambient_light_energy"]
 const FOG_KEYS := ["fog_enabled", "fog_light_color", "fog_density"]
 const SKY_KEYS := ["sky_preset", "background_mode", "ambient_light_source"]
-## [sky preset key, label, icon for non-painted tiles]. Real presets get a
-## painted gradient instead of an icon.
+## [sky preset key, label, icon for non-painted tiles]. Sky presets get their
+## thumbnail from SwatchTextures instead of an icon.
 const SKY_TILES := [
 	["", "None", "circle-off"],
 	["map_default", "Map", "map"],
 	["clear_day", "Clear", ""],
-	["sunset", "Sunset", ""],
+	["cloudy", "Cloudy", ""],
 	["overcast", "Overcast", ""],
+	["morning", "Morning", ""],
+	["sunset", "Sunset", ""],
+	["dusk", "Dusk", ""],
+	["storm", "Storm", ""],
 	["night_sky", "Night", ""],
 ]
+const PREVIEW_HEIGHT := 70
+const CAPTION_NONE := "No sky: background colour only"
+const CAPTION_MAP := "The map's own sky"
 
 var _model: EnvironmentEditModel
 var _has_map_defaults: bool = false
@@ -34,6 +42,10 @@ var _bg_row: PropertyRow
 var _ambient_row: PropertyRow
 var _fog_row: PropertyRow
 var _sky_tiles: TileRow
+var _sky_preview: TextureRect
+var _sky_caption: Label
+var _hover_key: StringName = &""
+var _is_hovering: bool = false
 var _fog_color_row: PropertyRow
 var _fog_energy_row: PropertyRow
 var _fog_height_row: PropertyRow
@@ -50,8 +62,9 @@ func _build() -> void:
 	_build_header()
 
 	_sky_field = _add_tile_field("Sky", [])
-	# Five tiles must fit one row at the pane's width, or the last one wraps.
+	# Ten tiles as two even rows of five.
 	_sky_field.tiles.tile_min_size = Vector2(52, 52)
+	_sky_field.tiles.columns = 5
 	for spec in SKY_TILES:
 		var key: String = spec[0]
 		var painted: Texture2D = null
@@ -68,6 +81,19 @@ func _build() -> void:
 	_sky_tiles.set_tile_visible(&"map_default", false)
 	_sky_tiles.selection_changed.connect(_on_sky_selected)
 	_sky_field.reset_requested.connect(_on_reset_requested.bind(SKY_KEYS))
+	_sky_tiles.tile_hovered.connect(_on_sky_tile_hovered)
+	_sky_tiles.tile_unhovered.connect(_on_sky_tile_unhovered)
+
+	_sky_preview = TextureRect.new()
+	_sky_preview.name = "SkyPreview"
+	_sky_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_sky_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_sky_preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_sky_preview.custom_minimum_size = Vector2(0, PREVIEW_HEIGHT)
+	_sky_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_sky_preview.resized.connect(_on_preview_resized)
+	add_child(_sky_preview)
+	_sky_caption = _add_caption("")
 
 	_preset_row = _add_row("Look", 0.0, 1.0, 1.0, 0.0, {"show_slider": false})
 	_preset_dropdown = OptionButton.new()
@@ -262,6 +288,7 @@ func _sync_from_model() -> void:
 	_fog_row.overridden = _model.is_overridden(FOG_KEYS)
 	_sky_tiles.select(StringName(config.get("sky_preset", "")))
 	_sky_field.overridden = _model.is_overridden(SKY_KEYS)
+	_refresh_sky_preview()
 	_fog_color_row.set_color_no_signal(config.get("fog_light_color", Color(0.5, 0.5, 0.55)))
 	_fog_color_row.overridden = _model.is_overridden(["fog_light_color"])
 	_fog_energy_row.set_value_no_signal(config.get("fog_light_energy", 1.0))
@@ -302,6 +329,44 @@ func _on_override_toggle(on: bool, key: String) -> void:
 func _on_sky_selected(id: StringName) -> void:
 	_model.set_sky_preset(String(id))
 	changed.emit()
+
+
+func _on_sky_tile_hovered(id: StringName) -> void:
+	_is_hovering = true
+	_hover_key = id
+	_refresh_sky_preview()
+
+
+func _on_sky_tile_unhovered(id: StringName) -> void:
+	if _hover_key != id:
+		return
+	_is_hovering = false
+	_refresh_sky_preview()
+
+
+## The strip and caption show the hovered tile, else the selected one. Hover is
+## never an edit: nothing here touches the model or the scene.
+func _refresh_sky_preview() -> void:
+	if not _sky_preview:
+		return
+	var key := String(_hover_key) if _is_hovering else String(_sky_tiles.selected)
+	if key == "map_default":
+		_sky_preview.visible = false
+		_sky_caption.text = CAPTION_MAP
+	elif key.is_empty():
+		_sky_preview.visible = false
+		_sky_caption.text = CAPTION_NONE
+	else:
+		_sky_preview.texture = SwatchTextures.sky_preview(key)
+		_sky_preview.visible = true
+		_sky_caption.text = EnvironmentPresets.get_sky_preset_description(key)
+
+
+## Keep the strip at the preview's 4:1 aspect as the pane width changes.
+func _on_preview_resized() -> void:
+	var height := maxf(_sky_preview.size.x / 4.0, float(PREVIEW_HEIGHT))
+	if not is_equal_approx(_sky_preview.custom_minimum_size.y, height):
+		_sky_preview.custom_minimum_size = Vector2(0, height)
 
 
 func _on_reset_requested(keys: Array) -> void:
