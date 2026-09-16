@@ -16,6 +16,8 @@ func before_each() -> void:
 func after_each() -> void:
 	_remove_tree(TEMP_DIR)
 	LevelManager.levels_dir = Paths.LEVELS_DIR
+	LevelManager.current_level = null
+	LevelManager.current_level_path = ""
 
 
 func _remove_tree(path: String) -> void:
@@ -95,6 +97,42 @@ func test_rename_keeps_the_folder_and_changes_the_name() -> void:
 	assert_eq(info["name"], "Dusty Hollow")
 	assert_eq(info["folder"], "clearing")
 	assert_true(FileAccess.file_exists(LevelManager.map_path("clearing")))
+
+
+func test_rename_of_a_legacy_tres_level_removes_the_old_file() -> void:
+	var level := LevelData.new()
+	level.level_name = "Old Camp"
+	level.level_folder = ""
+	level.map_path = "res://map.glb"
+	var old_path := LevelManager.save_level(level)
+	assert_true(FileAccess.file_exists(old_path))
+	var info := _info_by_name("Old Camp")
+	assert_true(LevelManager.rename_level(info, "New Camp"))
+	var levels := LevelManager.get_saved_levels()
+	assert_eq(levels.size(), 1)
+	assert_eq(levels[0]["name"], "New Camp")
+	assert_false(FileAccess.file_exists(old_path))
+
+
+func _info_by_name(name: String) -> Dictionary:
+	for info in LevelManager.get_saved_levels():
+		if info["name"] == name:
+			return info
+	return {}
+
+
+func test_rename_and_duplicate_do_not_move_the_current_level() -> void:
+	_write_level("clearing", "Sandy Clearing", "outdoor_day", 100)
+	LevelManager.current_level_path = "user://elsewhere/"
+	LevelManager.current_level = null
+	assert_true(LevelManager.rename_level(_info("clearing"), "Dusty Hollow"))
+	assert_eq(LevelManager.current_level_path, "user://elsewhere/")
+	assert_null(LevelManager.current_level)
+	LevelManager.current_level_path = "user://elsewhere/"
+	LevelManager.current_level = null
+	assert_ne(LevelManager.duplicate_level(_info("clearing")), "")
+	assert_eq(LevelManager.current_level_path, "user://elsewhere/")
+	assert_null(LevelManager.current_level)
 
 
 func test_duplicate_copies_map_and_thumbnail_into_a_new_folder() -> void:
