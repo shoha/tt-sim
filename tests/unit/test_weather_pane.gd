@@ -62,3 +62,14 @@ func test_turning_off_a_loaded_kind_remembers_its_intensity() -> void:
 	pane._on_tile_toggled(&"rain", false)
 	pane._on_tile_toggled(&"rain", true)
 	assert_eq(pane._weather.rain_intensity, 0.6)
+
+
+func test_dragging_intensity_to_zero_unpresses_the_tile_but_keeps_the_row() -> void:
+	var pane := _pane()
+	pane.load_state(_state())
+	pane._on_intensity_changed(0.0, "rain")
+	assert_false(pane._tiles.is_on(&"rain"), "tile follows the value")
+	assert_true(pane._rows["rain"].visible, "row stays under the cursor")
+	assert_eq(pane._weather.rain_intensity, 0.0)
+	pane._on_intensity_changed(0.4, "rain")
+	assert_true(pane._tiles.is_on(&"rain"))
