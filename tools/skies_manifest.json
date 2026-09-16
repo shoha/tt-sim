@@ -1,0 +1,72 @@
+[
+  {
+    "key": "clear_day",
+    "label": "Clear",
+    "description": "Clear midday sky, cool fill, hard shadows",
+    "source": "D:/Blender/assets/HDRI/sky/DaySkyHDRI055A_4k.exr",
+    "source_name": "Day Sky HDRI 055 A",
+    "source_site": "ambientCG",
+    "source_url": "https://ambientcg.com/a/DaySkyHDRI055A",
+    "energy": null
+  },
+  {
+    "key": "cloudy",
+    "label": "Cloudy",
+    "description": "Bright day with scattered clouds, soft fill",
+    "source": "D:/Blender/assets/HDRI/sky/DaySkyHDRI067B_4k.exr",
+    "source_name": "Day Sky HDRI 067 B",
+    "source_site": "ambientCG",
+    "source_url": "https://ambientcg.com/a/DaySkyHDRI067B",
+    "energy": null
+  },
+  {
+    "key": "overcast",
+    "label": "Overcast",
+    "description": "Flat grey overcast, shadowless and even",
+    "source": "D:/Blender/assets/HDRI/sky/DaySkyHDRI021A_4k.exr",
+    "source_name": "Day Sky HDRI 021 A",
+    "source_site": "ambientCG",
+    "source_url": "https://ambientcg.com/a/DaySkyHDRI021A",
+    "energy": null
+  },
+  {
+    "key": "morning",
+    "label": "Morning",
+    "description": "Cool clear dawn, low pale sun",
+    "source": "D:/Blender/assets/HDRI/sky/MorningSkyHDRI009B_4k.exr",
+    "source_name": "Morning Sky HDRI 009 B",
+    "source_site": "ambientCG",
+    "source_url": "https://ambientcg.com/a/MorningSkyHDRI009B",
+    "energy": null
+  },
+  {
+    "key": "sunset",
+    "label": "Sunset",
+    "description": "Orange sunset with lit clouds, warm fill",
+    "source": "D:/Blender/assets/HDRI/sky/EveningSkyHDRI032A_4k.exr",
+    "source_name": "Evening Sky HDRI 032 A",
+    "source_site": "ambientCG",
+    "source_url": "https://ambientcg.com/a/EveningSkyHDRI032A",
+    "energy": null
+  },
+  {
+    "key": "dusk",
+    "label": "Dusk",
+    "description": "Blue dusk after sunset, faint warm horizon",
+    "source": "D:/Blender/assets/HDRI/sky/EveningSkyHDRI022B_4k.exr",
+    "source_name": "Evening Sky HDRI 022 B",
+    "source_site": "ambientCG",
+    "source_url": "https://ambientcg.com/a/EveningSkyHDRI022B",
+    "energy": null
+  },
+  {
+    "key": "storm",
+    "label": "Storm",
+    "description": "Dark thunderstorm sky, dim and dramatic",
+    "source": "D:/Blender/assets/HDRI/sky/DaySkyHDRI061A_4k.exr",
+    "source_name": "Day Sky HDRI 061 A",
+    "source_site": "ambientCG",
+    "source_url": "https://ambientcg.com/a/DaySkyHDRI061A",
+    "energy": null
+  }
+]
