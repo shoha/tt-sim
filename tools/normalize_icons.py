@@ -34,6 +34,9 @@ def main(argv: list[str]) -> int:
     if names and names[0].startswith("--suffix="):
         suffix = names[0].split("=", 1)[1]
         names = names[1:]
+    if not names:
+        print(__doc__)
+        return 2
     dst.mkdir(parents=True, exist_ok=True)
     missing: list[str] = []
     for name in names:
