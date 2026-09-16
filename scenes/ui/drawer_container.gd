@@ -21,6 +21,10 @@ extends Control
 ## Rail mode only: a rail item was chosen. Hosts show the matching pane.
 signal pane_requested(id: StringName)
 
+## Rail mode only: a footer item (below the pane items) was pressed. Footer
+## items never select a pane or open the drawer; hosts use them for toggles.
+signal rail_footer_pressed(id: StringName)
+
 enum DrawerEdge { LEFT, RIGHT }
 
 # -- Colours -----------------------------------------------------------------
@@ -65,6 +69,9 @@ const _TAB_BADGE_MARGIN := 4.0
 ## (pane_requested); clicking the active item closes the drawer, subject to
 ## _can_close_from_tab(). Rail width is tab_width (44 fits 36 px items).
 @export var rail_items: Array[Dictionary] = []
+## Rail mode: extra items drawn under the pane items after a gap, outside the
+## single-select group. Same entry shape as rail_items.
+@export var rail_footer_items: Array[Dictionary] = []
 
 # -- Public state ------------------------------------------------------------
 
@@ -108,6 +115,7 @@ var _tab_label: Label
 var _tab_icon_rect: TextureRect
 var _tab_badge: Panel  ## Accent dot overlaid on the tab handle
 var _rail: IconRail  ## Rail mode only
+var _footer_rail: IconRail  ## Rail mode only, null without footer items
 var _rail_panel: PanelContainer  ## Rail mode only: styled backdrop behind the rail
 var _tab_control: Control  ## Whichever handle is in use: _tab_button or _rail_panel
 var _last_rail_id: StringName = &""  ## Pane to reopen on when nothing is selected
@@ -247,6 +255,12 @@ func set_rail_badge(id: StringName, on: bool) -> void:
 		_rail.set_badge(id, on)
 
 
+## Rail mode: tint a footer item as on or off.
+func set_footer_item_active(id: StringName, on: bool) -> void:
+	if _footer_rail:
+		_footer_rail.set_item_active(id, on)
+
+
 ## Tooltip shown when hovering the tab handle (single-tab mode only; rail
 ## items carry their own tooltips).
 func set_tab_tooltip(text: String) -> void:
@@ -382,7 +396,27 @@ func _build_rail() -> void:
 	for item in rail_items:
 		_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
 	_rail.item_pressed.connect(_on_rail_item_pressed)
-	_rail_panel.add_child(_rail)
+	var column := VBoxContainer.new()
+	column.name = "RailColumn"
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_theme_constant_override("separation", 0)
+	_rail_panel.add_child(column)
+	column.add_child(_rail)
+	if rail_footer_items.is_empty():
+		return
+	var gap := Control.new()
+	gap.name = "FooterGap"
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gap.custom_minimum_size = Vector2(0, 12)
+	column.add_child(gap)
+	_footer_rail = IconRail.new()
+	_footer_rail.name = "FooterRail"
+	_footer_rail.vertical = true
+	_footer_rail.auto_select = false
+	for item in rail_footer_items:
+		_footer_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
+	_footer_rail.item_pressed.connect(_on_rail_footer_pressed)
+	column.add_child(_footer_rail)
 
 
 func _apply_panel_style() -> void:
@@ -556,3 +590,7 @@ func _on_rail_item_pressed(id: StringName) -> void:
 	_rail.select(id)
 	AudioManager.play_tick()
 	pane_requested.emit(id)
+
+
+func _on_rail_footer_pressed(id: StringName) -> void:
+	rail_footer_pressed.emit(id)

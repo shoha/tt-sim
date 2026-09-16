@@ -44,6 +44,9 @@ const RAIL_ITEMS: Array[Dictionary] = [
 	{"id": &"film", "icon": "grain", "tooltip": "Film"},
 	{"id": &"world", "icon": "ruler-measure", "tooltip": "World"},
 ]
+const RAIL_FOOTER_ITEMS: Array[Dictionary] = [
+	{"id": &"values", "icon": "hash", "tooltip": "Show values"},
+]
 
 var sun_pane: SunPane
 var sky_pane: SkyPane
@@ -54,6 +57,8 @@ var world_pane: WorldPane
 
 var _env_model := EnvironmentEditModel.new()
 var _stack: PaneStack
+## Whether every PropertyRow shows its numeric chip. Persisted per user.
+var _values_visible: bool = false
 ## True once a live edit has been made and neither saved nor cancelled.
 ## Only mark_clean() clears it -- reopening the drawer does not.
 var _dirty: bool = false
@@ -71,6 +76,7 @@ func _on_ready() -> void:
 	tab_width = 44.0
 	play_sounds = true
 	rail_items = RAIL_ITEMS.duplicate()
+	rail_footer_items = RAIL_FOOTER_ITEMS.duplicate()
 
 	var margin_node := _panel.get_child(0) as MarginContainer
 	if margin_node:
@@ -99,6 +105,9 @@ func _on_ready() -> void:
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	pane_requested.connect(_on_pane_requested)
 	_stack.show_pane(&"sun", false)
+	rail_footer_pressed.connect(_on_rail_footer_pressed)
+	_values_visible = UiPreferences.load_show_values()
+	_apply_values_visible()
 
 
 func _build_panes() -> void:
@@ -161,6 +170,21 @@ func _on_closed() -> void:
 
 func _on_pane_requested(id: StringName) -> void:
 	_stack.show_pane(id)
+
+
+func _on_rail_footer_pressed(id: StringName) -> void:
+	if id != &"values":
+		return
+	_values_visible = not _values_visible
+	UiPreferences.save_show_values(_values_visible)
+	_apply_values_visible()
+
+
+## One toggle for every row in every pane, mirrored on the rail footer item.
+func _apply_values_visible() -> void:
+	for row in _stack.find_children("*", "PropertyRow", true, false):
+		row.values_visible = _values_visible
+	set_footer_item_active(&"values", _values_visible)
 
 
 # ============================================================================

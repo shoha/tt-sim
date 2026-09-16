@@ -101,6 +101,12 @@ func set_enabled(id: StringName, on: bool) -> void:
 		_buttons[id].disabled = not on
 
 
+## Tint an item as active without selecting it (footer toggles).
+func set_item_active(id: StringName, on: bool) -> void:
+	if _buttons.has(id):
+		_buttons[id].active = on
+
+
 func set_item_visible(id: StringName, item_visible: bool) -> void:
 	if _items.has(id):
 		_items[id].visible = item_visible

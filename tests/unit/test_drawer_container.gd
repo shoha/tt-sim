@@ -42,6 +42,16 @@ class VetoRailDrawer:
 		return false
 
 
+class FooterRailDrawer:
+	extends DrawerContainer
+
+	func _on_ready() -> void:
+		edge = DrawerEdge.RIGHT
+		tab_width = 44.0
+		rail_items = [{"id": &"a", "icon": "sun", "tooltip": "A"}]
+		rail_footer_items = [{"id": &"values", "icon": "hash", "tooltip": "Show values"}]
+
+
 func _mount(drawer: DrawerContainer) -> DrawerContainer:
 	var host := Control.new()
 	host.size = Vector2(1920, 1080)
@@ -131,3 +141,15 @@ func test_rail_badges() -> void:
 	assert_true(drawer._rail._buttons[&"a"].badge)
 	drawer.set_tab_badge(false)
 	assert_false(drawer._rail._buttons[&"a"].badge)
+
+
+func test_footer_items_press_without_selecting_or_opening() -> void:
+	var drawer := _mount(FooterRailDrawer.new())
+	watch_signals(drawer)
+	assert_true(drawer._footer_rail.has_item(&"values"))
+	drawer._on_rail_footer_pressed(&"values")
+	assert_signal_emitted_with_parameters(drawer, "rail_footer_pressed", [&"values"])
+	assert_false(drawer.is_open)
+	assert_eq(drawer._rail.selected, &"")
+	drawer.set_footer_item_active(&"values", true)
+	assert_true(drawer._footer_rail._buttons[&"values"].active)
