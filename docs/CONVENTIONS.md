@@ -356,6 +356,7 @@ Settings use a single `user://settings.cfg` (ConfigFile) but are **decentralized
 | `player` | `name` | `NetworkManager` |
 | `updates` | `check_prereleases` | `UpdateManager`, `SettingsMenu` |
 | `controls` | `input_profile` | `InputProfile` |
+| `ui` | `show_values` | `UiPreferences` |
 
 ### Adding New Settings
 

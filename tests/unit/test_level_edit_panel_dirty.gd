@@ -6,12 +6,16 @@ extends GutTest
 ## under the panel's public names.
 
 const PANEL_SCENE := preload("res://scenes/states/playing/level_edit_panel.tscn")
+const TEMP_SETTINGS := "user://test_panel_ui_preferences.cfg"
 
 var _host: Control
 var _panel: LevelEditPanel
 
 
 func before_each() -> void:
+	UiPreferences.settings_path = TEMP_SETTINGS
+	if FileAccess.file_exists(TEMP_SETTINGS):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(TEMP_SETTINGS))
 	_host = Control.new()
 	_host.size = Vector2(1920, 1080)
 	add_child_autofree(_host)
@@ -23,8 +27,12 @@ func before_each() -> void:
 ## Freeing the host does not undo either side effect of a prompt: the discard
 ## dialog is parented to the tree root (layer 100, grabs focus, traps Tab) and
 ## the panel re-registers itself with UIManager. Both would leak into the rest
-## of the suite.
+## of the suite. Also restores UiPreferences to the real settings path so the
+## per-user preference redirect never leaks into the rest of the suite.
 func after_each() -> void:
+	if FileAccess.file_exists(TEMP_SETTINGS):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(TEMP_SETTINGS))
+	UiPreferences.settings_path = Paths.SETTINGS_PATH
 	if not is_instance_valid(_panel):
 		_panel = null
 		return
@@ -203,7 +211,6 @@ func test_gizmo_forwards_reach_the_sun_pane() -> void:
 
 
 func test_values_toggle_flips_every_row_and_persists() -> void:
-	UiPreferences.settings_path = "user://test_panel_ui_preferences.cfg"
 	var rows: Array[Node] = _panel._stack.find_children("*", "PropertyRow", true, false)
 	assert_true(rows.size() > 10, "panes expose their rows")
 	for row in rows:
@@ -215,5 +222,3 @@ func test_values_toggle_flips_every_row_and_persists() -> void:
 	assert_true(_panel._footer_rail._buttons[&"values"].active)
 	_panel._on_rail_footer_pressed(&"values")
 	assert_false(UiPreferences.load_show_values())
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(UiPreferences.settings_path))
-	UiPreferences.settings_path = Paths.SETTINGS_PATH
