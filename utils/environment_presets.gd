@@ -385,6 +385,15 @@ const PRESETS = {
 	},
 }
 
+## Picker grouping in display order. Every key in PRESETS appears exactly
+## once (tests/unit/test_environment_presets_groups.gd enforces it).
+const PRESET_GROUPS := {
+	"Outdoor": ["outdoor_day", "outdoor_overcast", "outdoor_sunset", "outdoor_night"],
+	"Indoor": ["indoor_neutral", "dungeon_dark", "dungeon_crypt", "cave", "tavern"],
+	"Fantasy": ["forest", "swamp", "underwater", "hell", "ethereal", "arctic", "desert"],
+	"Other": ["none", "bright_editor"],
+}
+
 ## One Sky per preset name, built on first use. Assigning a Sky to an Environment
 ## re-bakes its radiance cubemap, so callers that apply the environment repeatedly
 ## (every slider tick in the Visuals drawer) must reuse the same instance.
@@ -447,6 +456,21 @@ static func get_preset_description(preset_name: String) -> String:
 	if PRESETS.has(preset_name):
 		return PRESETS[preset_name].get("description", "")
 	return ""
+
+
+static func get_preset_group(preset_name: String) -> String:
+	for group in PRESET_GROUPS:
+		if PRESET_GROUPS[group].has(preset_name):
+			return group
+	return "Other"
+
+
+## Readable picker label: "" is the map's own lighting, otherwise the key with
+## underscores replaced and words capitalised ("outdoor_day" -> "Outdoor Day").
+static func display_name(preset_name: String) -> String:
+	if preset_name.is_empty():
+		return "Map defaults"
+	return preset_name.replace("_", " ").capitalize()
 
 
 ## Get a complete environment configuration by merging layers:
