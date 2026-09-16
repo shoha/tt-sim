@@ -23,6 +23,7 @@ const SKY_TILES := [
 ]
 
 var _model: EnvironmentEditModel
+var _has_map_defaults: bool = false
 var _preset_row: PropertyRow
 var _preset_dropdown: OptionButton
 var _revert_button: IconButton
@@ -196,13 +197,19 @@ func _build_header() -> void:
 
 
 func _populate_presets(has_map_defaults: bool) -> void:
+	_has_map_defaults = has_map_defaults
 	_preset_dropdown.clear()
 	var idx := 0
-	if has_map_defaults:
-		_preset_dropdown.add_item(EnvironmentPresets.display_name(""), idx)
-		_preset_dropdown.set_item_tooltip(idx, "Use the map's embedded lighting")
-		_preset_dropdown.set_item_metadata(idx, "")
-		idx += 1
+	var no_preset_text := EnvironmentPresets.display_name("") if has_map_defaults else "No preset"
+	var no_preset_tooltip := (
+		"Use the map's embedded lighting"
+		if has_map_defaults
+		else "Engine defaults, no preset applied"
+	)
+	_preset_dropdown.add_item(no_preset_text, idx)
+	_preset_dropdown.set_item_tooltip(idx, no_preset_tooltip)
+	_preset_dropdown.set_item_metadata(idx, "")
+	idx += 1
 	for group in EnvironmentPresets.PRESET_GROUPS:
 		_preset_dropdown.add_separator(group)
 		idx += 1
@@ -239,7 +246,9 @@ func _sync_from_model() -> void:
 		return
 	OptionButtonUtils.select_by_metadata(_preset_dropdown, _model.preset)
 	if _model.preset.is_empty():
-		_preset_caption.text = "The map's own lighting"
+		_preset_caption.text = (
+			"The map's own lighting" if _has_map_defaults else "No preset: engine defaults"
+		)
 	else:
 		_preset_caption.text = EnvironmentPresets.get_preset_description(_model.preset)
 	var config := _model.resolve()

@@ -6,12 +6,16 @@ extends GutTest
 ## override dictionary.
 
 const PANEL_SCENE := preload("res://scenes/states/playing/level_edit_panel.tscn")
+const TEMP_SETTINGS := "user://test_panel_overrides_ui_preferences.cfg"
 
 var _host: Control
 var _panel: LevelEditPanel
 
 
 func before_each() -> void:
+	UiPreferences.settings_path = TEMP_SETTINGS
+	if FileAccess.file_exists(TEMP_SETTINGS):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(TEMP_SETTINGS))
 	_host = Control.new()
 	_host.size = Vector2(1920, 1080)
 	add_child_autofree(_host)
@@ -21,6 +25,9 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	if FileAccess.file_exists(TEMP_SETTINGS):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(TEMP_SETTINGS))
+	UiPreferences.settings_path = Paths.SETTINGS_PATH
 	if not is_instance_valid(_panel):
 		_panel = null
 		return

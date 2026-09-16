@@ -107,6 +107,13 @@ func set_item_active(id: StringName, on: bool) -> void:
 		_buttons[id].active = on
 
 
+## Update an item's tooltip in place (e.g. a footer toggle whose meaning
+## flips with its state).
+func set_item_tooltip(id: StringName, text: String) -> void:
+	if _buttons.has(id):
+		_buttons[id].tooltip_text = text
+
+
 func set_item_visible(id: StringName, item_visible: bool) -> void:
 	if _items.has(id):
 		_items[id].visible = item_visible

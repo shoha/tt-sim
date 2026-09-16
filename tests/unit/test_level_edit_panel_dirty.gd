@@ -212,7 +212,12 @@ func test_gizmo_forwards_reach_the_sun_pane() -> void:
 
 func test_values_toggle_flips_every_row_and_persists() -> void:
 	var rows: Array[Node] = _panel._stack.find_children("*", "PropertyRow", true, false)
-	assert_true(rows.size() > 10, "panes expose their rows")
+	assert_true(rows.has(_panel.color_pane._rows["glow_bloom"]), "Advanced color row collected")
+	assert_true(
+		rows.has(_panel.world_pane._foliage_rows["grass_sway_amplitude"]),
+		"Advanced foliage row collected"
+	)
+	assert_true(rows.size() >= 30, "panes expose their rows, including Advanced foldouts")
 	for row in rows:
 		assert_false(row.values_visible)
 	_panel._on_rail_footer_pressed(&"values")
@@ -220,5 +225,7 @@ func test_values_toggle_flips_every_row_and_persists() -> void:
 		assert_true(row.values_visible)
 	assert_true(UiPreferences.load_show_values())
 	assert_true(_panel._footer_rail._buttons[&"values"].active)
+	assert_eq(_panel._footer_rail._buttons[&"values"].tooltip_text, "Hide values")
 	_panel._on_rail_footer_pressed(&"values")
 	assert_false(UiPreferences.load_show_values())
+	assert_eq(_panel._footer_rail._buttons[&"values"].tooltip_text, "Show values")
