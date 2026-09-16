@@ -15,6 +15,7 @@ enum { ACTION_RENAME, ACTION_DUPLICATE, ACTION_DELETE }
 
 const THUMB_ASPECT := 16.0 / 9.0
 const INSET := 4.0
+const THUMB_HOVER_SCALE := Vector2(1.04, 1.04)
 const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 var level_info: Dictionary = {}
@@ -40,7 +41,6 @@ func _init() -> void:
 	theme_type_variation = &"Card"
 	focus_mode = Control.FOCUS_ALL
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	offset_transform_enabled = true
 	text = ""
 	_column = VBoxContainer.new()
 	_column.name = "Column"
@@ -59,6 +59,7 @@ func _init() -> void:
 	thumb_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	thumb_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	thumb_slot.custom_minimum_size = Vector2(0, 90)
+	thumb_slot.clip_contents = true
 	_column.add_child(thumb_slot)
 	_thumb = TextureRect.new()
 	_thumb.name = "Thumb"
@@ -66,6 +67,7 @@ func _init() -> void:
 	_thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_thumb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_thumb.resized.connect(_update_thumb_pivot)
 	thumb_slot.add_child(_thumb)
 	_letter = Label.new()
 	_letter.name = "Letter"
@@ -120,6 +122,8 @@ func _init() -> void:
 	gui_input.connect(_on_gui_input)
 	mouse_entered.connect(_on_hover.bind(true))
 	mouse_exited.connect(_on_hover.bind(false))
+	button_down.connect(_on_button_down)
+	button_up.connect(_on_button_up)
 	_update_minimum_size_from_content()
 
 
@@ -251,10 +255,33 @@ func _on_thumb_slot_resized() -> void:
 	if not is_equal_approx(slot.custom_minimum_size.y, height):
 		slot.custom_minimum_size = Vector2(0, height)
 		_update_minimum_size_from_content()
+	_update_thumb_pivot()
+
+
+func _update_thumb_pivot() -> void:
+	_thumb.pivot_offset = _thumb.size * 0.5
 
 
 func _on_hover(entered: bool) -> void:
-	var target := Constants.UI_HOVER_SCALE if entered else Vector2.ONE
+	if _rename.visible:
+		return
+	if _tween and _tween.is_valid():
+		_tween.kill()
+	var target := THUMB_HOVER_SCALE if entered else Vector2.ONE
 	var duration := Constants.ANIM_HOVER_IN if entered else Constants.ANIM_HOVER_OUT
-	var trans := Tween.TRANS_BACK if entered else Tween.TRANS_CUBIC
-	_tween = UiMotion.scale_to(self, _tween, target, duration, trans)
+	_tween = create_tween()
+	_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(_thumb, "scale", target, duration)
+
+
+func _on_button_down() -> void:
+	if _tween and _tween.is_valid():
+		_tween.kill()
+	_tween = create_tween()
+	_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(_thumb, "scale", Vector2.ONE, Constants.ANIM_PRESS)
+
+
+func _on_button_up() -> void:
+	if is_hovered():
+		_on_hover(true)
