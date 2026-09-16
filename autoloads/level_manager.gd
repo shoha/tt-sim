@@ -565,30 +565,57 @@ func save_thumbnail(level_data: LevelData, image: Image) -> bool:
 
 ## Change a level's display name in place; the folder name never changes so
 ## paths stay stable. Legacy .tres levels are renamed the same way through
-## save_level_in_place.
+## save_level_in_place, which derives the new file name from the new level
+## name -- that leaves the old file on disk, so a folder-less level's old path
+## is removed once the renamed save succeeds. Never moves current_level /
+## current_level_path, even though the load/save calls this makes would
+## otherwise touch them.
 func rename_level(level_info: Dictionary, new_name: String) -> bool:
+	var previous_level := current_level
+	var previous_path := current_level_path
 	var trimmed := new_name.strip_edges()
 	if trimmed.is_empty():
+		current_level = previous_level
+		current_level_path = previous_path
 		return false
-	var level := load_level(level_info.get("path", ""), false)
+	var old_path: String = level_info.get("path", "")
+	var level := load_level(old_path, false)
 	if level == null:
+		current_level = previous_level
+		current_level_path = previous_path
 		return false
 	level.level_name = trimmed
-	return save_level_in_place(level) != ""
+	var new_path := save_level_in_place(level)
+	var success := new_path != ""
+	if success and level.level_folder.is_empty() and new_path != old_path:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(old_path))
+	current_level = previous_level
+	current_level_path = previous_path
+	return success
 
 
 ## Copy a folder level into a new folder ("<name> (Copy)"), including its map
-## and thumbnail. Returns the new folder path, or "" on failure.
+## and thumbnail. Returns the new folder path, or "" on failure. Never moves
+## current_level / current_level_path, even though the load/save calls this
+## makes would otherwise touch them.
 func duplicate_level(level_info: Dictionary) -> String:
+	var previous_level := current_level
+	var previous_path := current_level_path
 	var source_folder: String = level_info.get("folder", "")
 	if source_folder.is_empty():
 		push_warning("LevelManager: only folder levels can be duplicated")
+		current_level = previous_level
+		current_level_path = previous_path
 		return ""
 	var level := load_level_folder(source_folder, false)
 	if level == null:
+		current_level = previous_level
+		current_level_path = previous_path
 		return ""
 	var copy := level.duplicate_level()
 	var new_path := save_level_folder(copy, "", map_path(source_folder))
+	current_level = previous_level
+	current_level_path = previous_path
 	if new_path.is_empty():
 		return ""
 	var source_thumb := thumbnail_path(source_folder)
