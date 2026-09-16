@@ -400,11 +400,12 @@ Reusable controls under `scenes/ui/primitives/`, built in code (no `.tscn`). Eve
 | `IconButton` | Icon-only actions, rail items, pane headers | `icon_name`, `active`, `badge`, `static load_icon(name)` |
 | `IconRail` | One-of-N section choice (drawer rail, Settings sections) | `add_item(id, icon, tooltip)`, `select(id)`, `item_pressed`, `selection_changed`, `set_badge(id, on)`, `show_labels`, `auto_select` |
 | `TileRow` | Enums with six or fewer options; multi-select toggles | `add_tile(id, label, icon)`, `select(id)` (silent), `selection_changed`, `multi_select`, `tile_toggled` |
-| `Foldout` | Advanced or secondary rows | `title`, `expanded`, `body`; children authored in a `.tscn` move into `body` |
-| `PropertyRow` | Label + optional check and colour + slider + inline value | `value`, `min_value`, `max_value`, `step`, `show_check`, `show_color`, `show_slider`, `overridden`, `ticks`, `set_control(control)`, `value_changed`, `reset_requested` |
+| `TileField` | A captioned, full-width tile row (use instead of set_control(TileRow)) | caption, tiles, overridden, reset_requested |
+| `Foldout` | Advanced or secondary rows | `title`, `expanded`, `body`; children authored in a `.tscn` move into `body`; re-measures wrapping bodies mid-animation |
+| `PropertyRow` | Label + optional check and colour + slider + inline value | `value`, `min_value`, `max_value`, `step`, `show_check`, `show_color`, `show_slider`, `overridden`, `ticks`, `hint_low`, `hint_high`, `values_visible`, `formatter`, `set_control(control)`, `value_changed`, `reset_requested` |
 | `PaneStack` | One-visible-pane content area with crossfade | `add_pane(id, pane)`, `show_pane(id)`, `pane_changed` |
 
-Rules: most programmatic setters are silent — `TileRow.select()` and `set_tile_on()`, `PropertyRow.set_*_no_signal()` and its property setters — while user edits emit. `IconRail.select()` is the exception: it DOES emit `selection_changed`, since that is the host's way to drive a selection change programmatically (`item_pressed` is the click). Every primitive owns one `Tween`, kills it before starting another, and runs no `_process`.
+Rules: most programmatic setters are silent — `TileRow.select()` and `set_tile_on()`, `PropertyRow.set_*_no_signal()` and its property setters — while user edits emit. `IconRail.select()` is the exception: it DOES emit `selection_changed`, since that is the host's way to drive a selection change programmatically (`item_pressed` is the click). Every primitive owns one `Tween`, kills it before starting another, and runs no `_process`. Numeric chips are hidden by default; the Visuals drawer's rail footer `hash` item shows them for every row and persists the choice (`UiPreferences`).
 
 `IconButton` sets its own theme type variation in code (`IconButton` normally, `IconButtonActive` when `active` is true), so a different `theme_type_variation` assigned on the node in a scene is overwritten at runtime.
 

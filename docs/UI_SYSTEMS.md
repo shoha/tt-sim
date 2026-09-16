@@ -602,16 +602,18 @@ During gameplay, click a rail item (Sun, Sky, Color, Weather, Film, World) on th
 
 The drawer is a rail of six panes (`scenes/states/playing/visual_panes/`), each a `LevelEditPane` that owns the fields it edits and implements `load_state(state)` / `write_state(state)` over a `LevelVisualState`:
 
-| Rail item | Pane | Primary | Advanced foldout |
-|---|---|---|---|
-| Sun | `SunPane` | time of day (sunrise/noon/sunset ticks), mode tiles, aim on map | azimuth, elevation, colour, energy, shadows, softness, darkness, back to generated |
-| Sky | `SkyPane` | revert / clear overrides, preset, light scale, background, ambient, fog | sky tiles, fog energy, fog height, fog height density |
-| Color | `ColorPane` | exposure, brightness, contrast, saturation, glow | tonemap, white point, glow strength, bloom |
-| Weather | `WeatherPane` | rain, snow, fog, wind toggle tiles with intensity rows | none |
-| Film | `FilmPane` | pixelate, colors, dither, color fade, vignette, grain | none |
-| World | `WorldPane` | scale tiles, cell size, water style, foliage sway | none |
+| Rail item | Primary | Advanced |
+|---|---|---|
+| Sun | time of day (dawn/dusk hints, 14:30 format), Sun tiles Auto/On/Off, Shadows tiles Off/Hard/Soft, aim on map | direction (bearing), height, colour, energy, softness, darkness, back to generated |
+| Sky | painted sky tiles, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog colour, fog energy, fog height, fog height density |
+| Color | brightness (exposure), contrast, saturation, glow | light energy, fine brightness, tonemap, white point, glow strength, bloom |
+| Weather | rain/snow/fog/wind tiles with Light..Heavy intensity | none |
+| Film | Style tiles Off/Subtle/Retro/Heavy (+Custom), pixelate, vignette, grain | colours, dither, colour fade |
+| World | scale tiles, cell size (m and ft), water tiles, Wind tiles Still/Breeze/Gusty (+Custom) | tree/grass speed and amount |
 
-The Sky and Color panes share an `EnvironmentEditModel` (preset + overrides + map defaults); its `changed` signal is the single `environment_changed` broadcast. Every pane emits `changed` on a user edit, which marks the drawer dirty and badges that rail item; `mark_clean()` clears both. Override rows tint their label accent and reset on right-click via `PropertyRow.reset_requested`. Public signals and controller-facing methods (`initialize`, `apply_environment_state`, `set_sun_direction_from_gizmo`, `set_aim_sun_pressed`, `mark_clean`, `is_dirty`, `request_close`) are unchanged.
+Style tiles set several fields at once and show `Custom` when the values match no preset; every slider shows end hints; raw values appear only with the rail footer toggle (persisted in `[ui] show_values`).
+
+The Sky and Color panes share an `EnvironmentEditModel` (preset + overrides + map defaults); its `changed` signal is the single `environment_changed` broadcast. Every pane emits `changed` on a user edit, which marks the drawer dirty and badges that rail item; `mark_clean()` clears both. Override rows tint their label accent and reset on right-click via `PropertyRow.reset_requested`. Public signals and controller-facing methods (`initialize`, `apply_environment_state`, `set_sun_direction_from_gizmo`, `set_aim_sun_pressed`, `mark_clean`, `is_dirty`, `request_close`) are unchanged. A `Foldout`'s clip re-measures a wrapping body mid-animation, so its first expand is never clipped short.
 
 ### Signal Architecture
 
