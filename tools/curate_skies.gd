@@ -7,7 +7,9 @@ extends SceneTree
 ## measures the sun azimuth (brightest column above the horizon) and an exposure
 ## multiplier that brings the sky band's mean luminance to the clear-day gradient's,
 ## then writes assets/skies/curation_report.json and prints SKY_PRESETS entries and
-## licence rows to paste. Idempotent; only touches assets/skies/.
+## licence rows to paste. Tile and preview PNGs are tone-mapped with a display exposure
+## normalised per sky, independent of the engine energy, so thumbnails stay readable
+## whatever energy is tuned to later. Idempotent; only touches assets/skies/.
 ## Run: godot --headless --editor --path . --script res://tools/curate_skies.gd --quit-after 3
 ## (--editor is required for Image.save_exr; --quit-after ends the editor process.)
 
@@ -27,6 +29,7 @@ const SUN_BAND := 0.45
 const ENERGY_BAND := 0.5
 const ENERGY_MIN := 0.05
 const ENERGY_MAX := 4.0
+const PREVIEW_TARGET_LUMINANCE := 0.35
 ## Only the params Godot needs to see before its first import; the editor rewrites the
 ## sidecar with uid, dest paths and every remaining param on import.
 const IMPORT_SIDECAR := """[remap]
@@ -71,16 +74,22 @@ func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 	var reference := _gradient_reference_luminance()
 	var report := {}
+	var skipped := 0
 	for entry in manifest:
 		var row := _curate(entry, reference)
 		if row.is_empty():
+			skipped += 1
 			continue
 		report[entry["key"]] = row
 	var report_file := FileAccess.open(REPORT_PATH, FileAccess.WRITE)
 	report_file.store_string(JSON.stringify(report, "\t"))
 	report_file.close()
 	_print_entries(manifest, report)
-	quit()
+	if skipped > 0:
+		push_error("curate_skies: %d entr%s skipped" % [skipped, "y" if skipped == 1 else "ies"])
+		quit(1)
+	else:
+		quit()
 
 
 func _curate(entry: Dictionary, reference: float) -> Dictionary:
@@ -110,10 +119,11 @@ func _curate(entry: Dictionary, reference: float) -> Dictionary:
 		sidecar.store_string(IMPORT_SIDECAR)
 		sidecar.close()
 
+	var display := _display_exposure(image)
 	var tile_path := OUT_DIR + key + "_tile.png"
-	_tile(image, energy).save_png(tile_path)
+	_tile(image, display).save_png(tile_path)
 	var preview_path := OUT_DIR + key + "_preview.png"
-	_preview(image, energy).save_png(preview_path)
+	_preview(image, display).save_png(preview_path)
 
 	print("%s: %dx%d azimuth %.1f energy %.3f" % [key, width, height, sun_azimuth, energy])
 	return {
@@ -143,6 +153,14 @@ static func _mean_luminance(image: Image, row_from: int, row_to: int) -> float:
 	return total / maxf(float(count), 1.0)
 
 
+## Exposure multiplier for tile/preview tone-mapping only, normalised so the sky band's
+## mean luminance lands at a fixed, readable target. Independent of the engine energy
+## written to the report, so thumbnails stay legible whatever energy is tuned to later.
+static func _display_exposure(image: Image) -> float:
+	var mean := _mean_luminance(image, 0, int(image.get_height() * ENERGY_BAND))
+	return clampf(PREVIEW_TARGET_LUMINANCE / maxf(mean, 0.000001), ENERGY_MIN, ENERGY_MAX)
+
+
 ## Brightest column over the sky band, as degrees of the panorama's own frame.
 static func _sun_azimuth(image: Image) -> float:
 	var rows := int(image.get_height() * SUN_BAND)
@@ -159,11 +177,13 @@ static func _sun_azimuth(image: Image) -> float:
 
 
 ## Mean luminance of the clear-day gradient's sky half: the exposure every HDRI
-## is normalised to so the lighting presets' ambient values keep working.
+## is normalised to so the lighting presets' ambient values keep working. The gradient
+## colours are sRGB material colours; convert to linear first so the comparison is in
+## the same space as the EXR's linear radiance.
 static func _gradient_reference_luminance() -> float:
 	var sky: Dictionary = EnvironmentPresets.SKY_PRESETS["clear_day"]
-	var top: Color = sky["sky_top_color"]
-	var horizon: Color = sky["sky_horizon_color"]
+	var top: Color = (sky["sky_top_color"] as Color).srgb_to_linear()
+	var horizon: Color = (sky["sky_horizon_color"] as Color).srgb_to_linear()
 	return (_luminance(top) + _luminance(horizon)) / 2.0
 
 
