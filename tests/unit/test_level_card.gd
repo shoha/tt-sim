@@ -126,6 +126,31 @@ func test_card_is_as_tall_as_its_content_once_laid_out() -> void:
 	assert_true(card.size.y >= card.get_combined_minimum_size().y)
 
 
+func test_hover_zooms_the_thumbnail_inside_its_slot_and_never_scales_the_card() -> void:
+	var card := _card(_info())
+	card.size = Vector2(300, 240)
+	await wait_frames(2)
+	card._on_hover(true)
+	await wait_seconds(Constants.ANIM_HOVER_IN + 0.05)
+	assert_almost_eq(card._thumb.scale.x, 1.04, 0.001)
+	assert_eq(card.scale, Vector2.ONE)
+	assert_false(card.offset_transform_enabled)
+	assert_true(card._thumb.get_parent().clip_contents)
+	assert_almost_eq(card._thumb.pivot_offset.x, card._thumb.size.x * 0.5, 0.5)
+	card._on_hover(false)
+	await wait_seconds(Constants.ANIM_HOVER_OUT + 0.05)
+	assert_almost_eq(card._thumb.scale.x, 1.0, 0.001)
+
+
+func test_hover_is_inert_during_rename() -> void:
+	var card := _card(_info())
+	await wait_frames(2)
+	card.begin_rename()
+	card._on_hover(true)
+	await wait_seconds(Constants.ANIM_HOVER_IN + 0.05)
+	assert_eq(card._thumb.scale, Vector2.ONE)
+
+
 func _double_click() -> InputEventMouseButton:
 	var event := InputEventMouseButton.new()
 	event.button_index = MOUSE_BUTTON_LEFT

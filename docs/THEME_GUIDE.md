@@ -433,6 +433,7 @@ Timing tokens live in `Constants`:
 | Token | Value | Used by |
 |---|---|---|
 | `ANIM_HOVER_IN` / `ANIM_HOVER_OUT` | 0.12 s back-out / 0.10 s cubic-out | IconButton, Tile hover scale to `UI_HOVER_SCALE` (1.06) |
+| `ANIM_HOVER_IN` / `ANIM_HOVER_OUT` | 0.12 s / 0.10 s cubic-out, no overshoot | LevelCard zooms its thumbnail 4% (`THUMB_HOVER_SCALE`) inside a clipped slot instead of scaling the whole card -- a whole-card scale clips against the grid |
 | `ANIM_PRESS` | 0.06 s | press to `UI_PRESS_SCALE` (0.96) |
 | `ANIM_PANE_SWAP` / `ANIM_PANE_SWAP_OFFSET_PX` | 0.16 s cubic-out, 8 px | PaneStack crossfade, IconRail indicator |
 | `ANIM_FOLDOUT` | 0.16 s cubic-out | Foldout body and chevron |
