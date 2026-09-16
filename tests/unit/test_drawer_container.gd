@@ -14,6 +14,15 @@ class TabDrawer:
 		tab_text = "Tab"
 
 
+class EagerTabDrawer:
+	extends DrawerContainer
+
+	func _on_ready() -> void:
+		tab_text = "Tab"
+		set_tab_tooltip("Eager tooltip")
+		set_tab_badge(true)
+
+
 class RailDrawer:
 	extends DrawerContainer
 
@@ -47,6 +56,12 @@ func test_single_tab_mode_builds_a_button_and_no_rail() -> void:
 	assert_not_null(drawer._tab_button)
 	assert_null(drawer._rail)
 	assert_eq(drawer._tab_control, drawer._tab_button)
+
+
+func test_tooltip_and_badge_set_in_on_ready_survive_tab_build() -> void:
+	var drawer := _mount(EagerTabDrawer.new())
+	assert_eq(drawer._tab_button.tooltip_text, "Eager tooltip")
+	assert_true(drawer._tab_badge.visible)
 
 
 func test_rail_mode_builds_rail_items_and_no_button() -> void:

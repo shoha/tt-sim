@@ -106,3 +106,11 @@ func test_apply_environment_state_resyncs_without_broadcasting() -> void:
 	assert_eq(_panel._env_model.preset, "cave")
 	assert_true(_panel.sky_pane._fog_row.overridden)
 	assert_signal_not_emitted(_panel, "environment_changed")
+
+
+func test_single_override_edit_broadcasts_environment_changed_once() -> void:
+	watch_signals(_panel)
+	_panel.sky_pane._on_override_value(2.0, "ambient_light_energy")
+	assert_signal_emit_count(_panel, "environment_changed", 1)
+	_panel.color_pane._on_row_changed(1.5, "tonemap_exposure", false)
+	assert_signal_emit_count(_panel, "environment_changed", 2)
