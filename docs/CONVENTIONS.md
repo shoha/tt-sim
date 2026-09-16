@@ -414,13 +414,16 @@ The handler takes `LevelPlayController` and `GameMap` as arguments so it can man
 user://levels/
 ├── my_dungeon/
 │   ├── level.json    # LevelData serialized as JSON
-│   └── map.glb       # Bundled map file (copied during save)
+│   ├── map.glb       # Bundled map file (copied during save)
+│   └── thumbnail.png  # 320x180 capture of the last in-play save (optional)
 ├── forest_encounter/
 │   ├── level.json
 │   └── map.glb
 └── _autosave/
     └── level.json    # Autosave (cleared after manual save)
 ```
+
+`LevelManager.levels_dir` is the root of this tree, and tests redirect it to a temp directory so no real save is touched.
 
 ### level.json Format
 

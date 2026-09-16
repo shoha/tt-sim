@@ -11,6 +11,7 @@ This guide documents the UI infrastructure and reusable components available in 
 - [Scene Transitions](#scene-transitions)
 - [Loading Screen](#loading-screen)
 - [Input Hints](#input-hints)
+- [Title Hub](#title-hub)
 - [Settings Menu](#settings-menu)
 - [Pause Menu](#pause-menu)
 - [AudioManager](#audiomanager)
@@ -315,6 +316,73 @@ UIManager.clear_hints()
 
 ---
 
+## Title Hub
+
+`TitleScreen` (`scenes/states/title_screen/title_screen.gd`) is the app's entry screen. It has two
+zones: a left column of actions and a right zone showing the player's saved levels as cards, with
+the d20 sub-viewport as a dimmed backdrop behind both.
+
+### Left Column
+
+Built by `_build_left_column()`. **Host Game** and **Join Game** are tall primary actions
+(`_primary_action()`: icon, bold label, caption underneath); below a separator, **Play Solo**,
+**Level Editor**, **Settings**, and **Quit** are compact secondary actions (`_secondary_action()`).
+Host Game and Play Solo are disabled until a card is selected; once one is, their captions name it
+("with <name>" for Host, the level name for Play Solo).
+
+### Right Zone
+
+A "Your levels" heading with a live count, and a 3-column `LevelGrid` populated from
+`level_provider` (defaults to `LevelManager.get_saved_levels`; tests inject a fake before the node
+enters the tree). The most recently modified level is preselected on `_ready()`
+(`_preselect_most_recent()`). With no saved levels the grid is empty and an empty-state caption
+reads "Make a level in the Level Editor first".
+
+### Signals
+
+- `host_game_requested(level_info: Dictionary)` -- Host Game pressed with a level selected
+- `join_game_requested` -- Join Game pressed
+- `play_solo_requested(level_info: Dictionary)` -- Play Solo pressed, or a card double-clicked or
+  Enter-activated
+
+`level_info` is one entry from `LevelManager.get_saved_levels()` -- the same Dictionary shape
+`LevelCard.setup()` and `LevelCard.caption_for()` consume (see Level Cards below).
+
+### Level Cards
+
+Saved levels are three primitives under `scenes/ui/primitives/`:
+
+- **`LevelCard`** (extends `Button`, `Card` theme variation) -- a thumbnail, name, and caption ("N
+  tokens, edited <relative time>", built by the static `caption_for(info, now_unix)`). Press selects
+  (`toggle_mode = true`); double-click or Enter activates. The overflow menu (the `dots-vertical`
+  icon in the thumbnail's corner) offers Rename (swaps in an inline `LineEdit`), Duplicate, and
+  Delete -- Delete is disabled while `locked` is true (the level currently being played). Signals:
+  `selected(level_info)`, `activated(level_info)`, `action_requested(level_info, action:
+  StringName)`, `rename_committed(level_info, new_name)`.
+- **`LevelGrid`** (extends `ScrollContainer`) -- lays out `LevelCard`s in an `HFlowContainer`.
+  `provider: Callable` returns the level list (defaults to `LevelManager.get_saved_levels`);
+  `columns` sets the grid width; `locked_path` marks one card as locked; `confirm_delete: Callable`
+  lets a caller override the delete confirmation (default `UIManager.show_danger_confirmation`).
+  `refresh()` rebuilds the cards, `select(path)` selects silently, `selected_info()` returns the
+  selected level's info, `card_count()` returns the total. Card actions (rename/duplicate/delete)
+  write through `LevelManager` and call `refresh()`. Signals: `selection_changed(level_info)`,
+  `level_activated(level_info)`.
+- **`LevelPickerDialog`** (`scenes/ui/level_picker_dialog.gd`/`.tscn`, extends
+  `AnimatedCanvasLayerPanel`) -- a modal level chooser wrapping a two-column `LevelGrid`.
+  `setup(title, locked_path = "")` sets the dialog title and an optional locked card. Choose
+  confirms the selected card (double-click chooses directly); Cancel closes without choosing.
+  Signals: `level_chosen(level_info)`, `closed`. Used by the host lobby's Change button and the
+  pause menu's Change Level (see below).
+
+### Lobby
+
+The host lobby (`LobbyHost`, `scenes/states/lobby/lobby_host.gd`) shows the pending level as a
+strip -- thumbnail, name, token-count caption, set via `set_level(level)` -- with a Change button
+that opens a `LevelPickerDialog` and emits `level_change_requested(level_info)` when a different
+level is chosen.
+
+---
+
 ## Settings Menu
 
 Tabbed settings interface (`scenes/ui/settings_menu.gd`) with six sections: Audio, Graphics, Grid,
@@ -384,6 +452,8 @@ during gameplay).
 
 - **Resume** - Continue playing
 - **Edit Level** - GM-only (`NetworkManager.has_gm_access()`); resumes and opens the level editor
+- **Change Level** - GM-only (`NetworkManager.has_gm_access()`); opens `LevelPickerDialog` and
+  swaps the level without leaving the current game (see Change Level below)
 - **Settings** - Open settings menu
 - **Return to Title** - Exit to main menu (with confirmation)
 - **Quit Game** - Exit the application (with confirmation)
@@ -395,6 +465,17 @@ during gameplay).
 - `PauseOverlay` itself runs with `process_mode = PROCESS_MODE_ALWAYS` so it stays interactive and
   animates whether or not the tree is actually paused
 - ESC toggles pause on/off
+
+### Change Level
+
+Picking a level in the `LevelPickerDialog` (locked to the level currently in play) emits
+`change_level_requested(level_info)`; `Root._on_pause_change_level_requested()` resumes first, then
+routes through `GameplayMenuController.request_level_change(on_ready)`. If the Visuals drawer
+(`LevelEditPanel`) has unsaved edits, that shows a "Discard the changes... and change the level?"
+danger confirmation before continuing; a clean drawer proceeds immediately. Once ready,
+`Root.request_level_change(level_info)` loads the new level and reloads it in place in the current
+session (`Root._on_play_level_requested()`), broadcasting the level data to clients if the local
+peer is the host.
 
 ---
 

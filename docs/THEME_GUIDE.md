@@ -145,9 +145,10 @@ Buttons have semantic variants to communicate their purpose:
 | ----------- | ------------- | ----------------------------------------------------------- |
 | (default)   | Accent/Orange | Utility actions (Settings, Level Editor)                    |
 | `Secondary` | Teal          | Standard actions (New, Load, Save, Select, Host, Join, Close) |
-| `Success`   | Green         | Primary CTA / positive actions (Play Level, Apply, Start)   |
+| `Success`   | Green         | Primary CTA / positive actions (Resume, Apply, Start)        |
 | `Warning`   | Yellow        | Caution actions                                             |
 | `Danger`    | Red           | Destructive / irreversible actions (Delete, Quit, Leave)    |
+| `Card`      | --            | Level cards; accent border when pressed                     |
 
 ### Choosing the Right Variant
 
@@ -404,6 +405,10 @@ Reusable controls under `scenes/ui/primitives/`, built in code (no `.tscn`). Eve
 | `Foldout` | Advanced or secondary rows | `title`, `expanded`, `body`; children authored in a `.tscn` move into `body`; re-measures wrapping bodies mid-animation |
 | `PropertyRow` | Label + optional check and colour + slider + inline value | `value`, `min_value`, `max_value`, `step`, `show_check`, `show_color`, `show_slider`, `overridden`, `ticks`, `hint_low`, `hint_high`, `values_visible`, `formatter`, `set_control(control)`, `value_changed`, `reset_requested` |
 | `PaneStack` | One-visible-pane content area with crossfade | `add_pane(id, pane)`, `show_pane(id)`, `pane_changed` |
+| `LevelCard` | A saved level as a selectable, actionable card (title hub, level picker) | `setup(info)`, static `caption_for(info, now_unix)`, `locked`, `begin_rename()`, `selected`, `activated`, `action_requested`, `rename_committed` |
+| `LevelGrid` | Grid of `LevelCard`s over a level provider | `provider`, `columns`, `confirm_delete`, `locked_path`, `refresh()`, `select(path)`, `selected_info()`, `card_count()`, `selection_changed`, `level_activated` |
+
+`LevelCard`'s overflow button uses the `dots-vertical` icon (`assets/icons/ui/dots-vertical.svg`).
 
 Rules: most programmatic setters are silent — `TileRow.select()` and `set_tile_on()`, `PropertyRow.set_*_no_signal()` and its property setters — while user edits emit. `IconRail.select()` is the exception: it DOES emit `selection_changed`, since that is the host's way to drive a selection change programmatically (`item_pressed` is the click). Every primitive owns one `Tween`, kills it before starting another, and runs no `_process`. Numeric chips are hidden by default; the Visuals drawer's rail footer `hash` item shows them for every row and persists the choice (`UiPreferences`).
 
