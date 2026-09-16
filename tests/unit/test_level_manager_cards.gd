@@ -92,7 +92,7 @@ func test_save_thumbnail_refuses_a_level_without_a_folder() -> void:
 
 func test_rename_keeps_the_folder_and_changes_the_name() -> void:
 	_write_level("clearing", "Sandy Clearing", "outdoor_day", 100)
-	assert_true(LevelManager.rename_level(_info("clearing"), "Dusty Hollow"))
+	assert_ne(LevelManager.rename_level(_info("clearing"), "Dusty Hollow"), "")
 	var info := _info("clearing")
 	assert_eq(info["name"], "Dusty Hollow")
 	assert_eq(info["folder"], "clearing")
@@ -107,10 +107,12 @@ func test_rename_of_a_legacy_tres_level_removes_the_old_file() -> void:
 	var old_path := LevelManager.save_level(level)
 	assert_true(FileAccess.file_exists(old_path))
 	var info := _info_by_name("Old Camp")
-	assert_true(LevelManager.rename_level(info, "New Camp"))
+	var new_path := LevelManager.rename_level(info, "New Camp")
+	assert_ne(new_path, "")
 	var levels := LevelManager.get_saved_levels()
 	assert_eq(levels.size(), 1)
 	assert_eq(levels[0]["name"], "New Camp")
+	assert_eq(new_path, levels[0]["path"])
 	assert_false(FileAccess.file_exists(old_path))
 
 
@@ -125,7 +127,7 @@ func test_rename_and_duplicate_do_not_move_the_current_level() -> void:
 	_write_level("clearing", "Sandy Clearing", "outdoor_day", 100)
 	LevelManager.current_level_path = "user://elsewhere/"
 	LevelManager.current_level = null
-	assert_true(LevelManager.rename_level(_info("clearing"), "Dusty Hollow"))
+	assert_ne(LevelManager.rename_level(_info("clearing"), "Dusty Hollow"), "")
 	assert_eq(LevelManager.current_level_path, "user://elsewhere/")
 	assert_null(LevelManager.current_level)
 	LevelManager.current_level_path = "user://elsewhere/"

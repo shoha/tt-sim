@@ -21,7 +21,9 @@ func before_each() -> void:
 func after_each() -> void:
 	# Duplicate folders are named by slugifying the new level name (e.g.
 	# "Alpha (Copy)" -> "alpha_copy"), not by a predictable suffix, so sweep
-	# whatever is actually on disk rather than a fixed folder list.
+	# whatever is actually on disk rather than a fixed folder list. Loose
+	# files (legacy .tres levels saved directly under TEMP_DIR) are swept too,
+	# so they don't leak into later tests in the same run.
 	var dir := DirAccess.open(TEMP_DIR)
 	if dir:
 		dir.list_dir_begin()
@@ -29,6 +31,8 @@ func after_each() -> void:
 		while entry_name != "":
 			if dir.current_is_dir() and not entry_name.begins_with("."):
 				LevelManager.delete_level_folder(TEMP_DIR + entry_name + "/")
+			elif not dir.current_is_dir():
+				DirAccess.remove_absolute(TEMP_DIR + entry_name)
 			entry_name = dir.get_next()
 		dir.list_dir_end()
 		DirAccess.remove_absolute(TEMP_DIR)
@@ -146,6 +150,21 @@ func test_two_columns_fit_side_by_side_with_a_scrollbar() -> void:
 	var second: Control = grid._cards[1]
 	assert_eq(first.position.y, second.position.y, "second card sits beside the first")
 	assert_lt(first.size.x * 2.0 + 8.0 + grid.get_v_scroll_bar().size.x, 617.0)
+
+
+func test_rename_of_a_legacy_level_reselects_by_the_new_path() -> void:
+	var level := LevelData.new()
+	level.level_name = "Old Camp"
+	level.level_folder = ""
+	level.map_path = "res://map.glb"
+	var old_path := LevelManager.save_level(level)
+	var grid := LevelGrid.new()
+	add_child_autofree(grid)
+	grid.refresh()
+	grid.select(old_path)
+	grid._on_card_rename(grid.selected_info(), "New Camp")
+	assert_eq(grid.selected_info().get("name", ""), "New Camp")
+	assert_eq(grid.card_count(), 1)
 
 
 func _write_real_level(folder: String, name: String) -> void:
