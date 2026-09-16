@@ -1,7 +1,10 @@
-[gd_scene load_steps=2 format=3 uid="uid://csettings_menu"]
+[gd_scene load_steps=5 format=3 uid="uid://csettings_menu"]
 
 [ext_resource type="Script" path="res://scenes/ui/settings_menu.gd" id="1_settings"]
 [ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
+[ext_resource type="Script" path="res://scenes/ui/primitives/icon_rail.gd" id="icon_rail"]
+[ext_resource type="Script" path="res://scenes/ui/primitives/foldout.gd" id="foldout"]
+[ext_resource type="Script" path="res://scenes/ui/primitives/icon_button.gd" id="icon_button"]
 
 [node name="SettingsMenu" type="CanvasLayer"]
 layer = 95
@@ -41,14 +44,20 @@ theme_type_variation = &"H1"
 text = "Settings"
 
 [node name="CloseButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/Header"]
-script = ExtResource("animated_btn")
+script = ExtResource("icon_button")
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Danger"
-text = "X"
+icon_name = "x"
 
 [node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
 layout_mode = 2
+
+[node name="SectionRail" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+alignment = 1
+script = ExtResource("icon_rail")
+show_labels = true
 
 [node name="TabContainer" type="TabContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
 unique_name_in_owner = true
@@ -280,32 +289,6 @@ popup/item_4/id = 4
 popup/item_5/text = "Ultra"
 popup/item_5/id = 5
 
-[node name="FoliageDensity" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/FoliageDensity"]
-custom_minimum_size = Vector2(140, 0)
-layout_mode = 2
-theme_type_variation = &"Body"
-text = "Foliage Density"
-
-[node name="FoliageDensitySlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/FoliageDensity"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-min_value = 2.0
-max_value = 24.0
-step = 0.5
-value = 8.0
-
-[node name="FoliageDensityLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/FoliageDensity"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(40, 0)
-layout_mode = 2
-theme_type_variation = &"Body"
-text = "8.0M"
-horizontal_alignment = 2
-
 [node name="WaterQuality" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2
 
@@ -327,56 +310,87 @@ popup/item_1/id = 1
 popup/item_2/text = "High"
 popup/item_2/id = 2
 
-[node name="SSAO" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+[node name="Advanced" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+script = ExtResource("foldout")
+title = "Advanced"
+
+[node name="FoliageDensity" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/SSAO"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced/FoliageDensity"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Foliage Density"
+
+[node name="FoliageDensitySlider" type="HSlider" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced/FoliageDensity"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 2.0
+max_value = 24.0
+step = 0.5
+value = 8.0
+
+[node name="FoliageDensityLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced/FoliageDensity"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "8.0M"
+horizontal_alignment = 2
+
+[node name="SSAO" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced/SSAO"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Ambient Occlusion"
 
-[node name="SSAOCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/SSAO"]
+[node name="SSAOCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced/SSAO"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 
-[node name="SSR" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+[node name="SSR" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/SSR"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced/SSR"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Reflections"
 
-[node name="SSRCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/SSR"]
+[node name="SSRCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced/SSR"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="SDFGI" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+[node name="SDFGI" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/SDFGI"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced/SDFGI"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Global Illumination"
 
-[node name="SDFGICheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/SDFGI"]
+[node name="SDFGICheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced/SDFGI"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="RendererMethod" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+[node name="RendererMethod" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/RendererMethod"]
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced/RendererMethod"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
 text = "Renderer"
 
-[node name="RendererMethodOption" type="OptionButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/RendererMethod"]
+[node name="RendererMethodOption" type="OptionButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Advanced/RendererMethod"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3

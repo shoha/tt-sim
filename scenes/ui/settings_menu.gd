@@ -39,6 +39,16 @@ const _RENDERING_METHOD_VALUES: PackedStringArray = [
 ## must be read via OS.get_cmdline_user_args() instead.
 const _RELAUNCH_SENTINEL_ARG := "--renderer-relaunched"
 
+## [tab node name, Tabler icon]. Node names double as rail ids and labels.
+const SECTIONS := [
+	["Audio", "volume"],
+	["Graphics", "photo"],
+	["Grid", "grid-dots"],
+	["Controls", "mouse"],
+	["Network", "network"],
+	["Updates", "download"],
+]
+
 var _last_slider_tick_time: float = 0.0
 
 # Audio controls
@@ -53,6 +63,7 @@ var _last_slider_tick_time: float = 0.0
 
 # Tab container for cross-fade transitions
 @onready var tab_container: TabContainer = %TabContainer
+@onready var section_rail: IconRail = %SectionRail
 
 # Graphics controls
 @onready var fullscreen_check: CheckButton = %FullscreenCheck
@@ -306,8 +317,12 @@ func _on_panel_ready() -> void:
 	# Tab transition animation
 	tab_container.tab_changed.connect(_on_tab_changed)
 
+	# Sections are chosen from the labelled rail; the native tab bar is hidden.
+	tab_container.tabs_visible = false
+	_populate_section_rail()
+
 	# Apply tooltips to settings controls
-	_apply_tooltips()
+	SettingsTooltips.apply(self)
 
 	# Load current settings
 	_load_settings()
@@ -569,6 +584,21 @@ func _try_play_slider_tick() -> void:
 ## Cross-fade animation when switching settings tabs
 func _on_tab_changed(_tab_idx: int) -> void:
 	TabUtils.animate_tab_change(tab_container, self)
+
+
+func _populate_section_rail() -> void:
+	for spec in SECTIONS:
+		section_rail.add_item(StringName(spec[0]), spec[1], spec[0])
+	section_rail.selection_changed.connect(_on_section_selected)
+	if not OS.get_environment("SteamAppId").is_empty():
+		section_rail.set_item_visible(&"Updates", false)
+	section_rail.select(StringName(tab_container.get_current_tab_control().name))
+
+
+func _on_section_selected(id: StringName) -> void:
+	var tab := tab_container.get_node_or_null(String(id))
+	if tab:
+		tab_container.current_tab = tab.get_index()
 
 
 func _on_fullscreen_toggled(_pressed: bool) -> void:
@@ -904,54 +934,6 @@ func _update_version_info() -> void:
 
 func _on_prereleases_toggled(pressed: bool) -> void:
 	UpdateManager.set_prerelease_enabled(pressed)
-
-
-## Apply helpful tooltips to settings controls
-func _apply_tooltips() -> void:
-	master_slider.tooltip_text = "Overall volume for all audio"
-	music_slider.tooltip_text = "Background music volume"
-	sfx_slider.tooltip_text = "Sound effects for token interactions"
-	ui_slider.tooltip_text = "UI sounds (clicks, hover, panel open/close)"
-	fullscreen_check.tooltip_text = "Toggle fullscreen mode (F11)"
-	vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
-	lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
-	occlusion_fade_check.tooltip_text = "Fade map geometry that hides tokens from view"
-	antialiasing_option.tooltip_text = "Smooths jagged edges on foliage (uses more GPU memory)"
-	shadow_quality_option.tooltip_text = "Shadow edge softness (Hard is fastest, Ultra is priciest)"
-	water_quality_option.tooltip_text = (
-		"Water ripple detail and refraction quality (Low is fastest, " + "High is highest fidelity)"
-	)
-	ssao_check.tooltip_text = (
-		"Screen-space ambient occlusion -- softens contact shadows in corners and crevices "
-		+ "(uses more GPU)"
-	)
-	ssr_check.tooltip_text = (
-		"Reflects nearby geometry in reflective surfaces like water " + "(uses more GPU)"
-	)
-	sdfgi_check.tooltip_text = (
-		"Signed distance field global illumination for more realistic indirect lighting "
-		+ "(uses significantly more GPU)"
-	)
-	renderer_method_option.tooltip_text = (
-		"Which Godot rendering backend to use (Default follows the platform's "
-		+ "normal choice). Changing this requires a restart."
-	)
-	foliage_density_slider.tooltip_text = (
-		"Maximum scattered foliage detail, in millions of triangles. Lower this if maps "
-		+ "with heavy foliage run poorly; raise it if your machine has headroom. Applies "
-		+ "without a map reload, and each player chooses their own."
-	)
-	cell_tint_opacity_slider.tooltip_text = "Opacity of the cell fill shading on the grid"
-	line_thickness_slider.tooltip_text = "Thickness of the grid lines"
-	fade_distance_slider.tooltip_text = "How far the grid extends from the camera center"
-	input_device_option.tooltip_text = "Choose which key labels to show in hints (Auto detects device)"
-	p2p_enabled_check.tooltip_text = "Allow peer-to-peer asset sharing with other players"
-	clear_cache_button.tooltip_text = "Delete downloaded asset files to free disk space"
-	prereleases_check.tooltip_text = "Include pre-release versions when checking for updates"
-	check_updates_button.tooltip_text = "Check for a newer version of TTSim"
-	reset_button.tooltip_text = "Reset all settings to defaults"
-	apply_button.tooltip_text = "Apply and save current settings"
-	close_button.tooltip_text = "Close settings (ESC)"
 
 
 func _on_check_updates_pressed() -> void:
