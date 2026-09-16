@@ -26,6 +26,17 @@ class_name LevelEnvironmentManager
 ## not just the map bounds.
 const SUN_SHADOW_MAX_DISTANCE: float = 100.0
 
+## Field of view Godot uses to draw the sky behind the map. The map camera is
+## orthographic, and Godot draws any sky behind an orthographic camera as if the
+## camera were a wide-angle perspective one, so a panorama shows up as a stretched
+## fisheye horizon beyond the map edge (the old gradients had the same geometry but
+## no features to reveal it). Every pixel of an orthographic camera shares one view
+## direction, so the honest background is the sky sampled in that direction: a
+## near-zero field of view gives exactly that, a flat tone from the sky's ground
+## band. Lighting and reflections come from the baked radiance map and are
+## unaffected. Checked live on 2026-09-16: 2 degrees reads as a soft flat backdrop.
+const SKY_ORTHO_FOV_DEG: float = 2.0
+
 var _world_environment: WorldEnvironment = null
 var _sun_light: DirectionalLight3D = null
 var _map_environment_config: Dictionary = {}
@@ -230,7 +241,7 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		world_viewport.add_child(_sun_light)
 	_configure_sun_light(level_data.visual_settings.sun)
 	_sun_azimuth_deg = level_data.visual_settings.sun.azimuth_degrees
-	_sync_sky_rotation()
+	_sync_sky_view()
 
 	# Apply lo-fi shader parameters. Unlike WorldEnvironment/sun light (freshly
 	# recomputed every load) and weather (a fresh WeatherRenderer every load),
@@ -269,7 +280,7 @@ func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 		)
 		_push_water_ambient_reflection_uniform()
 		_remember_sky_key(preset, overrides)
-		_sync_sky_rotation()
+		_sync_sky_view()
 	else:
 		push_warning("LevelEnvironmentManager: WorldEnvironment is null")
 
@@ -282,7 +293,7 @@ func apply_sun_settings(settings: SunSettings) -> void:
 		return
 	_configure_sun_light(settings)
 	_sun_azimuth_deg = settings.azimuth_degrees
-	_sync_sky_rotation()
+	_sync_sky_view()
 
 
 ## Resolve mode ("auto" | "on" | "off") against whether the map brought its own
@@ -305,13 +316,17 @@ func _remember_sky_key(preset: String, overrides: Dictionary) -> void:
 
 
 ## An HDRI sky turns so its brightest column faces the sun's azimuth (every sun
-## mode, so toggling the sun never snaps the sky); gradients stay at zero.
-func _sync_sky_rotation() -> void:
+## mode, so toggling the sun never snaps the sky); gradients stay at zero. The
+## sky is also drawn at SKY_ORTHO_FOV_DEG here because apply_to_world_environment
+## may have just created the Environment resource.
+func _sync_sky_view() -> void:
 	if not is_instance_valid(_world_environment) or not _world_environment.environment:
 		return
-	_world_environment.environment.sky_rotation = EnvironmentPresets.sky_rotation_for(
+	var environment := _world_environment.environment
+	environment.sky_rotation = EnvironmentPresets.sky_rotation_for(
 		_sun_azimuth_deg, _current_sky_key
 	)
+	environment.sky_custom_fov = SKY_ORTHO_FOV_DEG
 
 
 # ============================================================================

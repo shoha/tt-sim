@@ -190,7 +190,14 @@ When a sky preset is selected:
    when the file is missing, with one warning)
 2. `background_mode` is `BG_SKY`
 3. Sky-sourced ambient and reflections read the panorama
-4. **Sky follows the sun**: `LevelEnvironmentManager` sets `Environment.sky_rotation` to
+4. **The sky is drawn flat**: the map camera is orthographic, and Godot draws any sky behind
+   an orthographic camera as a wide-angle perspective view, which turns a panorama into a
+   stretched fisheye horizon beyond the map edge. `LevelEnvironmentManager` sets
+   `Environment.sky_custom_fov` to `SKY_ORTHO_FOV_DEG` (2 degrees) whenever it syncs the sky,
+   so the background is the sky sampled in the camera's single view direction: a flat tone
+   from the dome's ground band. Lighting and reflections use the radiance map and are
+   unaffected.
+5. **Sky follows the sun**: `LevelEnvironmentManager` sets `Environment.sky_rotation` to
    `EnvironmentPresets.sky_rotation_for(sun azimuth, sky key)` after every environment or sun
    change, in every sun mode. The yaw is
    `sun azimuth + sun_azimuth_deg + SKY_YAW_OFFSET_DEG` wrapped to [0, 360), with the offset

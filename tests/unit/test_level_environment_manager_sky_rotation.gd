@@ -62,3 +62,16 @@ func test_level_load_applies_the_level_sun_azimuth() -> void:
 	level_data.visual_settings.sun.azimuth_degrees = 45.0
 	manager.apply_level_environment(level_data, root)
 	assert_eq(_rotation(manager), EnvironmentPresets.sky_rotation_for(45.0, "clear_day"))
+
+
+## The map camera is orthographic, so the sky is drawn at a near-zero field of
+## view (one flat tone from the view direction) instead of Godot's stretched
+## wide-angle default, on load and after every environment change.
+func test_sky_is_drawn_at_the_orthographic_fov() -> void:
+	var manager := _loaded("outdoor_day")
+	var environment: Environment = manager.get_world_environment().environment
+	assert_eq(environment.sky_custom_fov, LevelEnvironmentManager.SKY_ORTHO_FOV_DEG)
+	environment.sky_custom_fov = 0.0
+	manager.apply_environment_settings("outdoor_night", {})
+	assert_eq(environment.sky_custom_fov, LevelEnvironmentManager.SKY_ORTHO_FOV_DEG)
+	assert_gt(LevelEnvironmentManager.SKY_ORTHO_FOV_DEG, 0.0, "0 means the wide default")
