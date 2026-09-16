@@ -122,7 +122,7 @@ func _save_level() -> void:
 
 	if not _level_play_controller:
 		return
-	var path = _level_play_controller.save_level()
+	var path := _level_play_controller.save_level_with_thumbnail()
 	if path != "":
 		UIManager.show_success("Level saved")
 	else:
@@ -528,8 +528,11 @@ func _on_edit_save_requested(state: LevelVisualState) -> void:
 		NetworkManager.broadcast_visual_settings(state.to_broadcast_dict())
 
 	# Save to disk — use folder format when the level came from a folder
+	var thumbnail := _level_play_controller.capture_thumbnail() if _level_play_controller else null
 	var save_path := LevelManager.save_level_in_place(level_data)
 	if save_path != "":
+		if thumbnail:
+			LevelManager.save_thumbnail(level_data, thumbnail)
 		UIManager.show_success("Level settings saved")
 
 		# The drawer no longer closes on Save, so the revert snapshot has to
