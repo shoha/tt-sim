@@ -64,10 +64,12 @@ func _build() -> void:
 	_time_row.value_changed.connect(_on_time_changed)
 
 	_mode_field = _add_tile_field("Sun", MODES)
+	_mode_field.tiles.columns = 3
 	_mode_tiles = _mode_field.tiles
 	_mode_tiles.selection_changed.connect(_on_mode_selected)
 
 	_shadow_field = _add_tile_field("Shadows", SHADOW_TILES)
+	_shadow_field.tiles.columns = 3
 	_shadow_field.tiles.selection_changed.connect(_on_shadow_tile_selected)
 
 	var aim_row := HBoxContainer.new()

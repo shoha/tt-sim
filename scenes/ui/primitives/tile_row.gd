@@ -1,17 +1,31 @@
 class_name TileRow
 extends HFlowContainer
 
-## Equal-size selectable tiles (icon above a caption label) for enums of six or
+## Equal-size selectable tiles (icon above a caption label) for enums of ten or
 ## fewer options. Single-select by default (one ButtonGroup); [member
 ## multi_select] makes every tile an independent toggle. Signals fire only for
 ## user clicks; [method select] and [method set_tile_on] are silent so panes can
-## sync from state without feedback.
+## sync from state without feedback. Set [member columns] to fill the row width
+## with a fixed number of tiles per line.
 
 signal selection_changed(id: StringName)
 signal tile_toggled(id: StringName, on: bool)
 
+## Pointer entered / left a tile. Hosts use these for previews; they never
+## change the selection and never fire from programmatic calls.
+signal tile_hovered(id: StringName)
+signal tile_unhovered(id: StringName)
+
 @export var multi_select: bool = false
 @export var tile_min_size := Vector2(64, 56)
+
+## Tiles per line when greater than zero: every tile is widened to an equal
+## share of the row, so the row wraps at exactly this count and fills its
+## width. Zero keeps the natural flow (tile_min_size widths).
+@export var columns: int = 0:
+	set(value):
+		columns = value
+		_fit_columns()
 
 var selected: StringName = &""
 
@@ -24,6 +38,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_theme_constant_override("h_separation", 6)
 	add_theme_constant_override("v_separation", 6)
+	resized.connect(_fit_columns)
 
 
 func add_tile(
@@ -59,6 +74,7 @@ func add_tile(
 	tile.mouse_exited.connect(_on_tile_hover.bind(id, false))
 	add_child(tile)
 	_tiles[id] = tile
+	_fit_columns()
 	return tile
 
 
@@ -103,6 +119,10 @@ func _on_tile_toggled(pressed: bool, id: StringName) -> void:
 
 
 func _on_tile_hover(id: StringName, entered: bool) -> void:
+	if entered:
+		tile_hovered.emit(id)
+	else:
+		tile_unhovered.emit(id)
 	var tile: Button = _tiles[id]
 	if tile.disabled:
 		return
@@ -110,3 +130,15 @@ func _on_tile_hover(id: StringName, entered: bool) -> void:
 	var duration := Constants.ANIM_HOVER_IN if entered else Constants.ANIM_HOVER_OUT
 	var trans := Tween.TRANS_BACK if entered else Tween.TRANS_CUBIC
 	_tweens[id] = UiMotion.scale_to(tile, _tweens.get(id), target, duration, trans)
+
+
+## Size every tile to an equal share of the row so exactly `columns` fit per
+## line. Setting an unchanged custom_minimum_size is a no-op in Godot, so the
+## resized -> fit -> relayout path settles without looping.
+func _fit_columns() -> void:
+	if columns <= 0 or size.x <= 0.0:
+		return
+	var gap := float(get_theme_constant("h_separation"))
+	var width := floorf((size.x - gap * float(columns - 1)) / float(columns))
+	for id in _tiles:
+		_tiles[id].custom_minimum_size = Vector2(width, tile_min_size.y)
