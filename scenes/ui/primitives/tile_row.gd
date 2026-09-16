@@ -30,7 +30,9 @@ func add_tile(
 	id: StringName, label: String, icon_name: String = "", tooltip: String = ""
 ) -> Button:
 	var tile := Button.new()
-	tile.name = String(id)
+	# Node names cannot be empty (Godot errors on set_name("")); a sentinel
+	# "no selection" tile (e.g. SkyPane's "None" sky) legitimately has id == "".
+	tile.name = String(id) if not String(id).is_empty() else "Tile%d" % get_child_count()
 	tile.text = label
 	tile.toggle_mode = true
 	tile.theme_type_variation = &"Tile"
