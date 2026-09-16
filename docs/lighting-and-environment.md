@@ -163,27 +163,54 @@ Each preset can configure any combination of the following properties:
 
 ## Sky Presets
 
-Sky presets create procedural skies using Godot's `ProceduralSkyMaterial`. Each defines sky/horizon/ground colors, sun angle, and other parameters.
+Sky presets are HDRI panoramas (`PanoramaSkyMaterial`, 1024x512 EXR, VRAM compressed)
+except Night, which stays a procedural gradient. Every entry also carries gradient colours:
+they are the fallback when a panorama cannot load and what headless tests see.
 
 ### Available Sky Presets
 
-| Preset | Description |
-|--------|-------------|
-| `clear_day` | Clear blue sky with neutral horizon |
-| `sunset` | Warm orange/pink sunset sky |
-| `overcast` | Gray overcast sky |
-| `night_sky` | Dark night sky with faint horizon |
-| `map_default` | Uses the sky resource extracted from the loaded map (only available when the map had an embedded sky) |
+| Preset | Kind | Description |
+|--------|------|-------------|
+| `clear_day` | HDRI | Clear midday sky, cool fill, hard shadows |
+| `cloudy` | HDRI | Bright day with scattered clouds, soft fill |
+| `overcast` | HDRI | Flat grey overcast, shadowless and even |
+| `morning` | HDRI | Cool clear dawn, low pale sun |
+| `sunset` | HDRI | Orange sunset with lit clouds, warm fill |
+| `dusk` | HDRI | Blue dusk after sunset, faint warm horizon |
+| `storm` | HDRI | Dark thunderstorm sky, dim and dramatic |
+| `night_sky` | gradient | Dark night sky with faint horizon |
+| `map_default` | map | The sky resource extracted from the loaded map (only when the map had an embedded sky) |
 
 ### How Skies Work
 
 When a sky preset is selected:
 
-1. `EnvironmentPresets.create_sky_from_preset()` builds a `Sky` resource with a `ProceduralSkyMaterial`
-2. The environment's `background_mode` is set to `BG_SKY`
-3. If `ambient_light_source` is `AMBIENT_SOURCE_SKY`, ambient lighting is derived from the sky
+1. `create_sky_from_preset()` builds a `PanoramaSkyMaterial` from the entry's `panorama` with its
+   `energy` multiplier, or a `ProceduralSkyMaterial` from the gradient colours (also the fallback
+   when the file is missing, with one warning)
+2. `background_mode` is `BG_SKY`
+3. Sky-sourced ambient and reflections read the panorama
+4. **Sky follows the sun**: `LevelEnvironmentManager` sets `Environment.sky_rotation` to
+   `EnvironmentPresets.sky_rotation_for(sun azimuth, sky key)` after every environment or sun
+   change, in every sun mode. The yaw is
+   `sun azimuth - sun_azimuth_deg + SKY_YAW_OFFSET_DEG` (see the constant's comment for the
+   calibrated value)
 
 The special `map_default` preset reuses the `Sky` resource that was extracted from the map's embedded `WorldEnvironment` during loading. This allows maps with custom skies to have their sky preserved and restorable.
+
+### Curating a sky
+
+1. Add a manifest entry to `tools/skies_manifest.json`.
+2. Run `godot --headless --editor --path . --script res://tools/curate_skies.gd --quit-after 3`,
+   then `godot --headless --import --path .`.
+3. Paste the printed entry into `SKY_PRESETS`.
+4. Add the tile to `SkyPane.SKY_TILES`.
+5. Add the licence row in `THIRD_PARTY_LICENSES.md`.
+6. Run `test_skies_manifest` and `test_environment_presets_skies`.
+
+The curation tool measures a panorama's azimuth as the brightest column over the top 45 percent of
+the image, and sets exposure by matching the panorama's sky-band mean luminance to the clear-day
+gradient's (linear reference), with a manifest `energy` field overriding the computed value when set.
 
 ## Map Defaults
 
@@ -359,7 +386,7 @@ the fields it edits and implements `load_state(state)` / `write_state(state)` ov
 | Rail item | Primary | Advanced |
 |---|---|---|
 | Sun | time of day (dawn/dusk hints, 14:30 format), Sun tiles Auto/On/Off, Shadows tiles Off/Hard/Soft, aim on map | direction (bearing), height, color, energy, softness, darkness, back to generated |
-| Sky | painted sky tiles, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog color, fog energy, fog height, fog falloff |
+| Sky | sky tiles with thumbnails (ten, two rows of five), preview strip and caption for the hovered or selected sky, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog color, fog energy, fog height, fog falloff |
 | Color | brightness (exposure), contrast, saturation, glow | light energy (formerly "Light scale"), fine brightness, tonemap, white point, glow strength, bloom |
 | Weather | rain/snow/fog/wind tiles with Light..Heavy intensity | none |
 | Film | Style tiles Off/Subtle/Retro/Heavy (+Custom), pixelate, vignette, grain | colors, dither, color fade |

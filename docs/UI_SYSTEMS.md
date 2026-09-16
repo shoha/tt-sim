@@ -605,13 +605,13 @@ The drawer is a rail of six panes (`SunPane`, `SkyPane`, `ColorPane`, `WeatherPa
 | Rail item | Primary | Advanced |
 |---|---|---|
 | Sun | time of day (dawn/dusk hints, 14:30 format), Sun tiles Auto/On/Off, Shadows tiles Off/Hard/Soft, aim on map | direction (bearing), height, colour, energy, softness, darkness, back to generated |
-| Sky | painted sky tiles, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog colour, fog energy, fog height, fog falloff |
+| Sky | sky tiles with thumbnails (ten, two rows of five), preview strip and caption for the hovered or selected sky, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog colour, fog energy, fog height, fog falloff |
 | Color | brightness (exposure), contrast, saturation, glow | light energy, fine brightness, tonemap, white point, glow strength, bloom |
 | Weather | rain/snow/fog/wind tiles with Light..Heavy intensity | none |
 | Film | Style tiles Off/Subtle/Retro/Heavy (+Custom), pixelate, vignette, grain | colours, dither, colour fade |
 | World | scale tiles, cell size (m and ft), water tiles, Wind tiles Still/Breeze/Gusty (+Custom) | tree/grass speed and amount |
 
-Style tiles set several fields at once and show `Custom` when the values match no preset; every slider shows end hints; raw values appear only with the rail footer toggle (persisted in `[ui] show_values`).
+Style tiles set several fields at once and show `Custom` when the values match no preset; every slider shows end hints; raw values appear only with the rail footer toggle (persisted in `[ui] show_values`). Hovering a sky tile previews it in the strip without touching the model; HDRI skies rotate with the sun (see lighting-and-environment.md).
 
 The Sky and Color panes share an `EnvironmentEditModel` (preset + overrides + map defaults); its `changed` signal is the single `environment_changed` broadcast. Every pane emits `changed` on a user edit, which marks the drawer dirty and badges that rail item; `mark_clean()` clears both. Override rows tint their label accent and reset on right-click via `PropertyRow.reset_requested`. Public signals and controller-facing methods (`initialize`, `apply_environment_state`, `set_sun_direction_from_gizmo`, `set_aim_sun_pressed`, `mark_clean`, `is_dirty`, `request_close`) are unchanged. A `Foldout`'s clip re-measures a wrapping body mid-animation, so its first expand is never clipped short.
 
