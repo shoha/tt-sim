@@ -260,15 +260,6 @@ static func shadow_tile_for(settings: SunSettings) -> StringName:
 	return &"hard" if settings.softness <= SHADOW_HARD_MAX_SOFTNESS else &"soft"
 
 
-func _on_shadows_toggled(pressed: bool) -> void:
-	_sun.shadows_enabled = pressed
-	_softness_row.editable = pressed
-	_darkness_row.editable = pressed
-	_shadow_field.tiles.select(shadow_tile_for(_sun))
-	_promote_auto_to_on()
-	_emit_changed()
-
-
 ## Off / Hard / Soft set the enable flag and a softness bucket in one click;
 ## the exact softness stays editable under Advanced.
 func _on_shadow_tile_selected(id: StringName) -> void:
