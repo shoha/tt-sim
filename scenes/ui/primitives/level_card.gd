@@ -268,9 +268,9 @@ func _on_hover(entered: bool) -> void:
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	var target := THUMB_HOVER_SCALE if entered else Vector2.ONE
-	var duration := Constants.ANIM_HOVER_IN if entered else Constants.ANIM_HOVER_OUT
+	var duration := Constants.ANIM_HOVER_SOFT_IN if entered else Constants.ANIM_HOVER_SOFT_OUT
 	_tween = create_tween()
-	_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_tween.tween_property(_thumb, "scale", target, duration)
 
 
@@ -278,7 +278,7 @@ func _on_button_down() -> void:
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	_tween = create_tween()
-	_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_tween.tween_property(_thumb, "scale", Vector2.ONE, Constants.ANIM_PRESS)
 
 
