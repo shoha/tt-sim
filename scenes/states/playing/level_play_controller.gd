@@ -34,6 +34,11 @@ var spawned_tokens: Dictionary:
 		return _token_spawner.get_spawned_tokens()
 
 var _game_map: GameMap = null
+
+## Seams for tests: the plain save and the thumbnail write.
+var _save_level_impl: Callable = func() -> String: return _level_loader.save_level()
+var _save_thumbnail: Callable = LevelManager.save_thumbnail
+
 var _environment_manager := LevelEnvironmentManager.new()  # Manages lighting/atmosphere
 var _map_download_coordinator := MapDownloadCoordinator.new()  # Manages map downloads
 var _token_spawner := TokenSpawner.new()  # Manages token spawning/tracking/clearing
@@ -438,7 +443,29 @@ func duplicate_token(token: BoardToken) -> BoardToken:
 ## Forwards to LevelPlayLoader -- kept as a same-named method here since
 ## gameplay_menu_controller.gd calls this directly.
 func save_level() -> String:
-	return _level_loader.save_level()
+	return _save_level_impl.call()
+
+
+## The world viewport as an image, or null when no map is loaded. Reads the
+## render target once; callers use it on explicit saves only.
+func capture_thumbnail() -> Image:
+	if not is_instance_valid(_game_map) or not is_instance_valid(_game_map.world_viewport):
+		return null
+	var texture := _game_map.world_viewport.get_texture()
+	if texture == null:
+		return null
+	return texture.get_image()
+
+
+## Save the level, then store a thumbnail of the current view beside it. The
+## thumbnail is best-effort: a failed capture or write never fails the save.
+func save_level_with_thumbnail() -> String:
+	var image := capture_thumbnail()
+	var path := save_level()
+	if path.is_empty() or image == null or active_level_data == null:
+		return path
+	_save_thumbnail.call(active_level_data, image)
+	return path
 
 
 # =============================================================================
