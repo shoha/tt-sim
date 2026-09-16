@@ -32,7 +32,9 @@ func _build() -> void:
 	add_child(_tiles)
 	for spec in KINDS:
 		var kind: String = spec[0]
-		var row := _add_row(spec[1] + " intensity", 0.0, 1.0, 0.05, 0.0)
+		var row := _add_row(
+			spec[1] + " intensity", 0.0, 1.0, 0.05, 0.0, {"hint_low": "Light", "hint_high": "Heavy"}
+		)
 		row.visible = false
 		row.value_changed.connect(_on_intensity_changed.bind(kind))
 		_rows[kind] = row

@@ -20,12 +20,29 @@ const SCALE_TILE_LABELS := {
 	"custom": "Custom",
 }
 const WATER_ICONS := {"stylized": "brush", "realistic": "droplet"}
-## [label, FoliageSettings field, min, max, step]
+const METRES_PER_FOOT := 0.3048
+## Wind presets over WIND_FIELDS, in that order.
+const WIND_FIELDS := [
+	"tree_sway_speed", "tree_sway_amplitude", "grass_sway_speed", "grass_sway_amplitude"
+]
+const WIND := {
+	"still": [0.6, 0.0, 1.6, 0.0],
+	"breeze": [0.6, 0.06, 1.6, 0.03],
+	"gusty": [1.2, 0.15, 2.5, 0.08],
+}
+## [tile id, label, icon]
+const WIND_TILES := [
+	["still", "Still", "leaf"],
+	["breeze", "Breeze", "wind"],
+	["gusty", "Gusty", "tornado"],
+	["custom", "Custom", "adjustments"],
+]
+## [label, FoliageSettings field, min, max, step, hint_low, hint_high]
 const FOLIAGE_ROWS := [
-	["Tree speed", "tree_sway_speed", 0.0, 5.0, 0.05],
-	["Tree amount", "tree_sway_amplitude", 0.0, 1.0, 0.01],
-	["Grass speed", "grass_sway_speed", 0.0, 5.0, 0.05],
-	["Grass amount", "grass_sway_amplitude", 0.0, 1.0, 0.01],
+	["Tree speed", "tree_sway_speed", 0.0, 5.0, 0.05, "Slow", "Fast"],
+	["Tree amount", "tree_sway_amplitude", 0.0, 1.0, 0.01, "Still", "Wild"],
+	["Grass speed", "grass_sway_speed", 0.0, 5.0, 0.05, "Slow", "Fast"],
+	["Grass amount", "grass_sway_amplitude", 0.0, 1.0, 0.01, "Still", "Wild"],
 ]
 
 var grid_cell_size: float = LevelData.DEFAULT_GRID_CELL_SIZE
@@ -38,36 +55,57 @@ var _scale_tiles: TileRow
 var _cell_size_row: PropertyRow
 var _water_tiles: TileRow
 var _foliage_rows: Dictionary = {}
+var _scale_field: TileField
+var _water_field: TileField
+var _wind_field: TileField
 
 
 func _build() -> void:
 	_add_heading("World")
 
-	_add_caption("Scale")
-	_scale_tiles = TileRow.new()
+	_scale_field = _add_tile_field("Scale", [])
 	for option in ScaleUtils.get_preset_options():
 		var key: String = option.key
-		_scale_tiles.add_tile(
+		_scale_field.tiles.add_tile(
 			StringName(key), SCALE_TILE_LABELS.get(key, option.label), "", option.label
 		)
+	_scale_tiles = _scale_field.tiles
 	_scale_tiles.selection_changed.connect(_on_scale_preset_selected)
-	add_child(_scale_tiles)
-	_cell_size_row = _add_row("Cell size (m)", 0.1, 10.0, 0.001, grid_cell_size)
+	_cell_size_row = _add_row(
+		"Cell size",
+		0.1,
+		10.0,
+		0.001,
+		grid_cell_size,
+		{"hint_low": "Small", "hint_high": "Large", "formatter": WorldPane.format_cell_size}
+	)
 	_cell_size_row.value_changed.connect(_on_cell_size_changed)
 
-	_add_caption("Water")
-	_water_tiles = TileRow.new()
+	_water_field = _add_tile_field("Water", [])
 	for style in WaterPresets.get_preset_names():
-		_water_tiles.add_tile(StringName(style), style.capitalize(), WATER_ICONS.get(style, ""))
+		_water_field.tiles.add_tile(
+			StringName(style), style.capitalize(), WATER_ICONS.get(style, "")
+		)
+	_water_tiles = _water_field.tiles
 	_water_tiles.selection_changed.connect(_on_water_selected)
-	add_child(_water_tiles)
 
-	_add_caption("Foliage sway")
+	_wind_field = _add_tile_field("Wind", WIND_TILES)
+	_wind_field.tiles.selection_changed.connect(_on_wind_selected)
+
+	var foldout := _add_foldout()
 	for spec in FOLIAGE_ROWS:
 		var key: String = spec[1]
-		var row := _add_row(spec[0], spec[2], spec[3], spec[4], _foliage.get(key))
+		var row := _add_row(
+			spec[0],
+			spec[2],
+			spec[3],
+			spec[4],
+			_foliage.get(key),
+			{"parent": foldout.body, "hint_low": spec[5], "hint_high": spec[6]}
+		)
 		row.value_changed.connect(_on_foliage_changed.bind(key))
 		_foliage_rows[key] = row
+	_sync_wind_tiles()
 
 
 func load_state(state: LevelVisualState) -> void:
@@ -87,6 +125,7 @@ func load_state(state: LevelVisualState) -> void:
 	_foliage = state.foliage.copy_settings()
 	for key in _foliage_rows:
 		_foliage_rows[key].set_value_no_signal(_foliage.get(key))
+	_sync_wind_tiles()
 
 
 func write_state(state: LevelVisualState) -> void:
@@ -148,5 +187,43 @@ func _on_water_selected(id: StringName) -> void:
 
 func _on_foliage_changed(value: float, key: String) -> void:
 	_foliage.set(key, value)
+	_sync_wind_tiles()
 	foliage_changed.emit(_foliage.to_dict())
 	changed.emit()
+
+
+func _matching_wind() -> String:
+	for id in WIND:
+		var values: Array = WIND[id]
+		var matches := true
+		for i in range(WIND_FIELDS.size()):
+			if not is_equal_approx(float(_foliage.get(WIND_FIELDS[i])), float(values[i])):
+				matches = false
+				break
+		if matches:
+			return id
+	return CUSTOM_KEY
+
+
+func _sync_wind_tiles() -> void:
+	var key := _matching_wind()
+	_wind_field.tiles.set_tile_visible(StringName(CUSTOM_KEY), key == CUSTOM_KEY)
+	_wind_field.tiles.select(StringName(key))
+
+
+func _on_wind_selected(id: StringName) -> void:
+	var key := String(id)
+	if key == CUSTOM_KEY or not WIND.has(key):
+		return
+	var values: Array = WIND[key]
+	for i in range(WIND_FIELDS.size()):
+		var field: String = WIND_FIELDS[i]
+		_foliage.set(field, float(values[i]))
+		_foliage_rows[field].set_value_no_signal(float(values[i]))
+	_wind_field.tiles.set_tile_visible(StringName(CUSTOM_KEY), false)
+	foliage_changed.emit(_foliage.to_dict())
+	changed.emit()
+
+
+static func format_cell_size(metres: float) -> String:
+	return "%.2f m (%.1f ft)" % [metres, metres / METRES_PER_FOOT]
