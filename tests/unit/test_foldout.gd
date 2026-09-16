@@ -73,3 +73,43 @@ func test_authored_children_keep_their_owner() -> void:
 	assert_eq(row.get_parent(), foldout.body)
 	assert_eq(row.owner, host)
 	assert_eq(host.get_node("%Row"), row)
+
+
+## An HFlowContainer body reports one row before layout and wraps to more rows
+## once it has a width, so a resize during the expand tween must retarget the
+## clip, and finishing must snap to the laid-out height.
+func test_body_resize_mid_expand_retargets_the_tween() -> void:
+	var foldout := Foldout.new()
+	var flow := HFlowContainer.new()
+	for i in range(6):
+		var tile := Control.new()
+		tile.custom_minimum_size = Vector2(64, 56)
+		flow.add_child(tile)
+	foldout.add_child(flow)
+	foldout.size = Vector2(200, 0)
+	add_child_autofree(foldout)
+	foldout.expanded = true
+	var first_target := foldout._target_height
+	foldout.body.size = Vector2(200, 130)
+	# body's horizontal anchors stretch (PRESET_TOP_WIDE); setting its size
+	# directly is exactly what a real relayout does and is expected to warn.
+	assert_engine_error(1, "setting body.size directly simulates a relayout")
+	foldout._on_body_resized()
+	assert_ne(foldout._target_height, first_target, "resize mid-tween retargets")
+	assert_eq(foldout._target_height, 130.0)
+	assert_true(foldout._tween != null and foldout._tween.is_valid())
+
+
+func test_finish_snaps_clip_to_laid_out_body_height() -> void:
+	var foldout := Foldout.new()
+	var row := Control.new()
+	row.custom_minimum_size = Vector2(0, 40)
+	foldout.add_child(row)
+	add_child_autofree(foldout)
+	foldout.expanded = true
+	foldout.body.size = Vector2(200, 96)
+	# Same expected relayout warning as above.
+	assert_engine_error(1, "setting body.size directly simulates a relayout")
+	foldout._on_animation_finished()
+	assert_eq(foldout._clip.custom_minimum_size.y, 96.0)
+	assert_true(foldout.body.visible)
