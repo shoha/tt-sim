@@ -10,11 +10,13 @@ extends GutTest
 ## check) could pick it, causing LevelPlayLoader to push_error("No map path in
 ## level data") instead of playing anything.
 ##
-## Fixtures are written under the REAL user://levels/ directory -- the path
-## get_saved_levels() scans is a hardcoded constant, not injectable -- using
-## names namespaced under "_gut_fixture_" so they can never collide with a
-## real save or with the real "_autosave" slot, which this test must never
-## touch (it may hold the user's actual in-progress work).
+## Fixtures are written under a temp directory -- LevelManager.levels_dir is
+## redirected there for the duration of this test so a real save (or the real
+## "_autosave" slot, which may hold the user's actual in-progress work) is
+## never touched -- using names namespaced under "_gut_fixture_" so they can
+## never collide with anything else written to that temp directory.
+
+const TEMP_DIR := "user://test_levels_filtering/"
 
 const _FIXTURE_NO_MAP := "_gut_fixture_no_map"
 const _FIXTURE_VALID_OLD := "_gut_fixture_valid_old"
@@ -24,6 +26,8 @@ var _fixture_folders: Array[String] = [_FIXTURE_NO_MAP, _FIXTURE_VALID_OLD, _FIX
 
 
 func before_each() -> void:
+	LevelManager.levels_dir = TEMP_DIR
+	DirAccess.make_dir_recursive_absolute(TEMP_DIR)
 	# Newest by modified_at, but unloadable -- mirrors the real "_autosave" slot.
 	_write_fixture(_FIXTURE_NO_MAP, "", 3000)
 	_write_fixture(_FIXTURE_VALID_OLD, "res://assets/models/maps/fixture.tscn", 1000)
@@ -33,10 +37,11 @@ func before_each() -> void:
 func after_each() -> void:
 	for folder in _fixture_folders:
 		_remove_fixture(folder)
+	LevelManager.levels_dir = Paths.LEVELS_DIR
 
 
 func _write_fixture(folder: String, map_path: String, modified_at: int) -> void:
-	var dir_path := Paths.get_level_folder(folder)
+	var dir_path := LevelManager.folder_path(folder)
 	DirAccess.make_dir_recursive_absolute(dir_path)
 	var data := {
 		"level_name": folder,
@@ -45,7 +50,7 @@ func _write_fixture(folder: String, map_path: String, modified_at: int) -> void:
 		"level_folder": folder,
 		"token_placements": [],
 	}
-	var file := FileAccess.open(Paths.get_level_json_path(folder), FileAccess.WRITE)
+	var file := FileAccess.open(LevelManager.json_path(folder), FileAccess.WRITE)
 	assert_not_null(file, "Failed to create fixture level.json for " + folder)
 	if file:
 		file.store_string(JSON.stringify(data))
@@ -53,10 +58,10 @@ func _write_fixture(folder: String, map_path: String, modified_at: int) -> void:
 
 
 func _remove_fixture(folder: String) -> void:
-	var json_path := Paths.get_level_json_path(folder)
+	var json_path := LevelManager.json_path(folder)
 	if FileAccess.file_exists(json_path):
 		DirAccess.remove_absolute(json_path)
-	DirAccess.remove_absolute(Paths.get_level_folder(folder).trim_suffix("/"))
+	DirAccess.remove_absolute(LevelManager.folder_path(folder).trim_suffix("/"))
 
 
 ## Filter get_saved_levels() output down to just the fixtures this test wrote,
