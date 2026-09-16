@@ -26,6 +26,7 @@ var locked: bool = false:
 
 var _column: VBoxContainer
 var _thumb: TextureRect
+var _letter: Label
 var _name: Label
 var _caption: Label
 var _menu_button: IconButton
@@ -66,6 +67,15 @@ func _init() -> void:
 	_thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_thumb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	thumb_slot.add_child(_thumb)
+	_letter = Label.new()
+	_letter.name = "Letter"
+	_letter.theme_type_variation = &"H2"
+	_letter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_letter.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_letter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_letter.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_letter.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
+	thumb_slot.add_child(_letter)
 	thumb_slot.resized.connect(_on_thumb_slot_resized)
 
 	_menu_button = IconButton.new()
@@ -123,12 +133,15 @@ func setup(info: Dictionary) -> void:
 		var image := Image.load_from_file(ProjectSettings.globalize_path(thumbnail))
 		if image:
 			texture = ImageTexture.create_from_image(image)
-	if texture == null:
+	var texture_is_placeholder := texture == null
+	if texture_is_placeholder:
 		var config := EnvironmentPresets.get_environment_config(
 			String(info.get("environment_preset", "")), {}, {}
 		)
 		texture = SwatchTextures.sky_preview(String(config.get("sky_preset", "")))
 	_thumb.texture = texture
+	_letter.text = _name.text.substr(0, 1).to_upper()
+	_letter.visible = texture_is_placeholder
 
 
 ## "1 token, edited 3 h ago"; "No tokens" alone when the level is empty and has
