@@ -82,6 +82,10 @@ func _init() -> void:
 			continue
 		report[entry["key"]] = row
 	var report_file := FileAccess.open(REPORT_PATH, FileAccess.WRITE)
+	if report_file == null:
+		push_error("curate_skies: cannot write %s" % REPORT_PATH)
+		quit(1)
+		return
 	report_file.store_string(JSON.stringify(report, "\t"))
 	report_file.close()
 	_print_entries(manifest, report)
@@ -112,18 +116,27 @@ func _curate(entry: Dictionary, reference: float) -> Dictionary:
 	var sun_azimuth := _sun_azimuth(image)
 
 	var panorama_path := OUT_DIR + key + ".exr"
-	image.save_exr(panorama_path, false)
+	if image.save_exr(panorama_path, false) != OK:
+		push_error("curate_skies: cannot write %s" % panorama_path)
+		return {}
 	var sidecar_path := panorama_path + ".import"
 	if not FileAccess.file_exists(sidecar_path):
 		var sidecar := FileAccess.open(sidecar_path, FileAccess.WRITE)
+		if sidecar == null:
+			push_error("curate_skies: cannot write %s" % sidecar_path)
+			return {}
 		sidecar.store_string(IMPORT_SIDECAR)
 		sidecar.close()
 
 	var display := _display_exposure(image)
 	var tile_path := OUT_DIR + key + "_tile.png"
-	_tile(image, display).save_png(tile_path)
 	var preview_path := OUT_DIR + key + "_preview.png"
-	_preview(image, display).save_png(preview_path)
+	if _tile(image, display).save_png(tile_path) != OK:
+		push_error("curate_skies: cannot write %s" % tile_path)
+		return {}
+	if _preview(image, display).save_png(preview_path) != OK:
+		push_error("curate_skies: cannot write %s" % preview_path)
+		return {}
 
 	print("%s: %dx%d azimuth %.1f energy %.3f" % [key, width, height, sun_azimuth, energy])
 	return {

@@ -13,7 +13,10 @@ const AMBIENT_KEYS := ["ambient_light_color", "ambient_light_energy"]
 const FOG_KEYS := ["fog_enabled", "fog_light_color", "fog_density"]
 const SKY_KEYS := ["sky_preset", "background_mode", "ambient_light_source"]
 ## [sky preset key, label, icon for non-painted tiles]. Sky presets get their
-## thumbnail from SwatchTextures instead of an icon.
+## thumbnail from SwatchTextures instead of an icon. Labels are deliberately not
+## the keys: they must fit a fifth of the row, so the "cloudy" key reads Fair and
+## the "overcast" key reads Cloudy; the caption under the tiles carries the
+## full description.
 const SKY_TILES := [
 	["", "None", "circle-off"],
 	["map_default", "Map", "map"],

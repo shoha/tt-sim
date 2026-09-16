@@ -196,8 +196,11 @@ When a sky preset is selected:
    `sun azimuth + sun_azimuth_deg + SKY_YAW_OFFSET_DEG` wrapped to [0, 360), with the offset
    calibrated to 180: Godot samples a panorama mirrored relative to the sun azimuth
    convention (column c sits at world azimuth 180 - c when unrotated), which is why the sky's
-   azimuth is added rather than subtracted. Calibrated live on the clear-day dome by comparing
-   the boulder's sky-lit side (sun off) with its sun-lit side at the same azimuth.
+   azimuth is added rather than subtracted. Calibrated live in two steps by comparing the
+   boulder's sky-lit side (sun off) with its sun-lit side at the same azimuth: the clear-day dome
+   fixed the half turn, and the sunset dome (sky azimuth 270.7, where adding and subtracting the
+   sky azimuth differ by 181 degrees) fixed the sign. `test_sunset_yaw_matches_the_live_calibration`
+   pins the result with a literal.
 
 The special `map_default` preset reuses the `Sky` resource that was extracted from the map's embedded `WorldEnvironment` during loading. This allows maps with custom skies to have their sky preserved and restorable.
 
