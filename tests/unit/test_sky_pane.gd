@@ -1,8 +1,8 @@
 extends GutTest
 
-## SkyPane: preset dropdown and sky tiles write the model, light scale is its
-## own signal, map options toggle the revert button and the map-default sky
-## tile, and write_state carries preset + overrides + light scale.
+## SkyPane: painted sky tiles and the grouped preset dropdown write the model,
+## map options toggle the revert button and the map-default sky tile, and
+## write_state carries preset + overrides.
 
 var _model: EnvironmentEditModel
 
@@ -13,9 +13,7 @@ func _pane() -> SkyPane:
 	var pane := SkyPane.new()
 	pane.set_model(_model)
 	add_child_autofree(pane)
-	var state := LevelVisualState.new()
-	state.light_intensity_scale = 1.4
-	pane.load_state(state)
+	pane.load_state(LevelVisualState.new())
 	return pane
 
 
@@ -26,21 +24,13 @@ func _index_of_preset(pane: SkyPane, preset: String) -> int:
 	return -1
 
 
-func test_load_sets_light_scale_and_selects_preset() -> void:
-	var pane := _pane()
-	assert_eq(pane._intensity_row.value, 1.4)
-	var selected: int = pane._preset_dropdown.selected
-	assert_eq(pane._preset_dropdown.get_item_metadata(selected), "outdoor_day")
-
-
-func test_write_state_carries_preset_overrides_and_scale() -> void:
+func test_write_state_carries_preset_and_overrides() -> void:
 	var pane := _pane()
 	_model.set_override("fog_density", 0.05)
 	var out := LevelVisualState.new()
 	pane.write_state(out)
 	assert_eq(out.environment_preset, "outdoor_day")
 	assert_eq(out.environment_overrides.get("fog_density"), 0.05)
-	assert_eq(out.light_intensity_scale, 1.4)
 	out.environment_overrides["probe"] = 1
 	assert_false(_model.overrides.has("probe"), "write_state hands out an independent copy")
 
@@ -50,15 +40,6 @@ func test_preset_selection_writes_model_and_emits_changed() -> void:
 	watch_signals(pane)
 	pane._on_preset_selected(_index_of_preset(pane, "dungeon_dark"))
 	assert_eq(_model.preset, "dungeon_dark")
-	assert_signal_emitted(pane, "changed")
-
-
-func test_light_scale_edit_emits_intensity_changed() -> void:
-	var pane := _pane()
-	watch_signals(pane)
-	pane._on_intensity_changed(0.5)
-	assert_eq(pane.light_intensity_scale, 0.5)
-	assert_signal_emitted_with_parameters(pane, "intensity_changed", [0.5])
 	assert_signal_emitted(pane, "changed")
 
 
@@ -78,7 +59,7 @@ func test_sky_tile_sets_sky_preset() -> void:
 	pane._on_sky_selected(&"sunset")
 	assert_eq(_model.overrides["sky_preset"], "sunset")
 	assert_eq(_model.overrides["background_mode"], Environment.BG_SKY)
-	assert_true(pane._sky_row.overridden)
+	assert_true(pane._sky_field.overridden)
 
 
 func test_map_options_toggle_revert_and_map_default_tile() -> void:
@@ -102,3 +83,42 @@ func test_revert_and_clear() -> void:
 	pane._on_clear_pressed()
 	assert_true(_model.overrides.is_empty())
 	assert_true(pane._clear_button.disabled)
+
+
+func test_load_selects_preset_and_shows_its_description() -> void:
+	var pane := _pane()
+	var selected: int = pane._preset_dropdown.selected
+	assert_eq(pane._preset_dropdown.get_item_metadata(selected), "outdoor_day")
+	assert_eq(pane._preset_dropdown.get_item_text(selected), "Outdoor Day")
+	assert_eq(pane._preset_caption.text, EnvironmentPresets.get_preset_description("outdoor_day"))
+
+
+func test_picker_has_a_separator_per_group_and_swatches() -> void:
+	var pane := _pane()
+	var separators := 0
+	var swatches := 0
+	for i in range(pane._preset_dropdown.item_count):
+		if pane._preset_dropdown.is_item_separator(i):
+			separators += 1
+		elif pane._preset_dropdown.get_item_icon(i) != null:
+			swatches += 1
+	assert_eq(separators, EnvironmentPresets.PRESET_GROUPS.size())
+	assert_eq(swatches, EnvironmentPresets.PRESETS.size())
+
+
+func test_sky_tiles_are_painted_and_full_width() -> void:
+	var pane := _pane()
+	assert_true(pane._sky_field is TileField)
+	assert_not_null(pane._sky_tiles._tiles[&"clear_day"].icon)
+	assert_same(pane._sky_tiles._tiles[&"sunset"].icon, SwatchTextures.sky_gradient("sunset"))
+
+
+func test_fog_colour_lives_in_advanced_with_its_own_reset() -> void:
+	var pane := _pane()
+	pane._fog_color_row._picker.color = Color.RED
+	pane._fog_color_row._on_color_changed(Color.RED)
+	assert_eq(_model.overrides["fog_light_color"], Color.RED)
+	assert_true(pane._fog_color_row.overridden)
+	pane._on_reset_requested(["fog_light_color"])
+	assert_false(pane._fog_color_row.overridden)
+	assert_eq(pane._fog_row.hint_high, "Thick")

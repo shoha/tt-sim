@@ -126,7 +126,7 @@ func _build_panes() -> void:
 
 	sun_pane.sun_changed.connect(sun_changed.emit)
 	sun_pane.aim_toggled.connect(aim_sun_toggled.emit)
-	sky_pane.intensity_changed.connect(intensity_changed.emit)
+	color_pane.intensity_changed.connect(intensity_changed.emit)
 	sky_pane.revert_to_map_defaults_requested.connect(revert_to_map_defaults_requested.emit)
 	weather_pane.weather_changed.connect(weather_changed.emit)
 	film_pane.lofi_changed.connect(lofi_changed.emit)
