@@ -356,14 +356,14 @@ the fields it edits and implements `load_state(state)` / `write_state(state)` ov
 
 #### Where Each Control Lives
 
-| Rail item | Primary | Advanced foldout |
+| Rail item | Primary | Advanced |
 |---|---|---|
-| Sun | Time of day (sunrise/noon/sunset ticks), mode tiles (Auto/On/Off), aim on map | Azimuth, elevation, color, energy, shadows, softness, darkness, "Back to generated" |
-| Sky | Revert / clear overrides, preset, light scale, background, ambient, fog | Sky tiles, fog energy, fog height, fog height density |
-| Color | Exposure, brightness, contrast, saturation, glow | Tonemap, white point, glow strength, bloom |
-| Weather | Rain, snow, fog, wind toggle tiles, each revealing an intensity row when on | none |
-| Film | Pixelate, colors, dither, color fade, vignette, grain | none |
-| World | Scale tiles, cell size, water style, foliage sway | none |
+| Sun | time of day (dawn/dusk hints, 14:30 format), Sun tiles Auto/On/Off, Shadows tiles Off/Hard/Soft, aim on map | direction (bearing), height, color, energy, softness, darkness, back to generated |
+| Sky | painted sky tiles, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog color, fog energy, fog height, fog height density |
+| Color | brightness (exposure), contrast, saturation, glow | light energy (formerly "Light scale"), fine brightness, tonemap, white point, glow strength, bloom |
+| Weather | rain/snow/fog/wind tiles with Light..Heavy intensity | none |
+| Film | Style tiles Off/Subtle/Retro/Heavy (+Custom), pixelate, vignette, grain | colors, dither, color fade |
+| World | scale tiles, cell size (m and ft), water tiles, Wind tiles Still/Breeze/Gusty (+Custom) | tree/grass speed and amount |
 
 The Sky and Color panes share an `EnvironmentEditModel` (preset + overrides + map defaults); Sky
 writes it into the saved `LevelVisualState`, so Color's `write_state` is a no-op. See
@@ -374,16 +374,16 @@ pane class names and signal wiring.
 
 | Control | Type | Range |
 | --- | --- | --- |
-| Mode | `PropertyRow` (tile control) | Auto / On / Off |
+| Sun mode | tile row (`TileField`/`TileRow`) | Auto / On / Off |
 | Aim Sun | `IconButton` (toggle) | activates `SunGizmoTool` |
-| Azimuth | `PropertyRow` | 0 to 360 |
-| Elevation | `PropertyRow` | -15 to 90 |
+| Direction (azimuth) | `PropertyRow`, formatted as a bearing | 0 to 360 |
+| Height (elevation) | `PropertyRow` | -15 to 90 |
 | Color | `PropertyRow` (color) | |
 | Energy | `PropertyRow` | 0 to 4 |
-| Shadows | `PropertyRow` (check) | gates the two below |
+| Shadows | tile row (`TileField`/`TileRow`); Off/Hard/Soft sets the enable flag and a softness bucket in one click | gates the two below |
 | Softness | `PropertyRow` | 0 to 5 (degrees of angular distance) |
 | Darkness | `PropertyRow` | 0 to 1 |
-| Time of Day | `PropertyRow` | 0 to 24, with sunrise/noon/sunset ticks; that it regenerates rather than nudges is conveyed by its tooltip plus the "Back to generated" button |
+| Time of Day | `PropertyRow`, formatted "14:30" | 0 to 24, with sunrise/noon/sunset ticks; that it regenerates rather than nudges is conveyed by its tooltip plus the "Back to generated" button |
 
 `SunGizmoTool` draws a compass ring on the ground at the view centre when
 "Aim Sun" is active. The mapping is done in **world space on the Y=0 ground
