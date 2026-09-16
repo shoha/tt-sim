@@ -37,6 +37,7 @@ func before_each() -> void:
 func after_each() -> void:
 	for folder in _fixture_folders:
 		_remove_fixture(folder)
+	DirAccess.remove_absolute(TEMP_DIR)
 	LevelManager.levels_dir = Paths.LEVELS_DIR
 
 

@@ -13,7 +13,7 @@ var provider: Callable = LevelManager.get_saved_levels
 
 var _title: String = "Choose a level"
 var _locked_path: String = ""
-var _chosen: bool = false
+var _closing: bool = false
 
 @onready var title_label: Label = %TitleLabel
 @onready var grid_slot: VBoxContainer = %GridSlot
@@ -72,15 +72,18 @@ func _on_choose_pressed() -> void:
 
 
 func _choose(info: Dictionary) -> void:
-	if _chosen:
+	if _closing:
 		return
-	_chosen = true
+	_closing = true
 	AudioManager.play_confirm()
 	level_chosen.emit(info)
 	animate_out()
 
 
 func _on_cancel_pressed() -> void:
+	if _closing:
+		return
+	_closing = true
 	AudioManager.play_cancel()
 	animate_out()
 

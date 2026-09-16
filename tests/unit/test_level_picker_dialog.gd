@@ -52,3 +52,13 @@ func test_cancel_only_closes() -> void:
 	watch_signals(dialog)
 	dialog._on_cancel_pressed()
 	assert_signal_not_emitted(dialog, "level_chosen")
+
+
+func test_cancel_after_choose_is_ignored() -> void:
+	var dialog := _dialog()
+	watch_signals(dialog)
+	dialog.grid._cards[0]._on_pressed()
+	dialog._on_choose_pressed()
+	dialog._on_cancel_pressed()
+	assert_signal_emit_count(dialog, "level_chosen", 1)
+	assert_true(get_signal_emit_count(dialog, "closed") <= 1)
