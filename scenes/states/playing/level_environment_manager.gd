@@ -33,6 +33,8 @@ var _map_sky_resource: Sky = null
 var _original_light_energies: Dictionary = {}  # instance_id -> base energy
 var _wind_materials: Dictionary = {}  # category (String) -> Array[ShaderMaterial]
 var _game_map: Node = null  # GameMap reference (for viewport & lo-fi access)
+var _current_sky_key: String = ""  # sky_preset of the last resolved environment
+var _sun_azimuth_deg: float = 0.0  # azimuth of the last applied SunSettings
 
 
 func setup(game_map: Node) -> void:
@@ -174,6 +176,7 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 			_map_environment_config,
 		)
 	)
+	_remember_sky_key(level_data.environment_preset, level_data.environment_overrides)
 	_push_water_ambient_reflection_uniform()
 
 	var rendering_toggles_config := ConfigFile.new()
@@ -226,6 +229,8 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		_sun_light.directional_shadow_max_distance = SUN_SHADOW_MAX_DISTANCE
 		world_viewport.add_child(_sun_light)
 	_configure_sun_light(level_data.visual_settings.sun)
+	_sun_azimuth_deg = level_data.visual_settings.sun.azimuth_degrees
+	_sync_sky_rotation()
 
 	# Apply lo-fi shader parameters. Unlike WorldEnvironment/sun light (freshly
 	# recomputed every load) and weather (a fresh WeatherRenderer every load),
@@ -263,6 +268,8 @@ func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 			_world_environment, preset, overrides, _map_sky_resource, _map_environment_config
 		)
 		_push_water_ambient_reflection_uniform()
+		_remember_sky_key(preset, overrides)
+		_sync_sky_rotation()
 	else:
 		push_warning("LevelEnvironmentManager: WorldEnvironment is null")
 
@@ -274,6 +281,8 @@ func apply_sun_settings(settings: SunSettings) -> void:
 		push_warning("LevelEnvironmentManager: sun light is null")
 		return
 	_configure_sun_light(settings)
+	_sun_azimuth_deg = settings.azimuth_degrees
+	_sync_sky_rotation()
 
 
 ## Resolve mode ("auto" | "on" | "off") against whether the map brought its own
@@ -284,6 +293,25 @@ func _configure_sun_light(settings: SunSettings) -> void:
 	_sun_light.visible = enabled
 	if enabled:
 		DefaultSun.apply(_sun_light, settings)
+
+
+## The sky key the resolved config selected, so rotation can be recomputed when
+## only the sun changes.
+func _remember_sky_key(preset: String, overrides: Dictionary) -> void:
+	var config := EnvironmentPresets.get_environment_config(
+		preset, overrides, _map_environment_config
+	)
+	_current_sky_key = String(config.get("sky_preset", ""))
+
+
+## An HDRI sky turns so its brightest column faces the sun's azimuth (every sun
+## mode, so toggling the sun never snaps the sky); gradients stay at zero.
+func _sync_sky_rotation() -> void:
+	if not is_instance_valid(_world_environment) or not _world_environment.environment:
+		return
+	_world_environment.environment.sky_rotation = EnvironmentPresets.sky_rotation_for(
+		_sun_azimuth_deg, _current_sky_key
+	)
 
 
 # ============================================================================
