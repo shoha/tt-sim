@@ -2,7 +2,6 @@
 
 [ext_resource type="PackedScene" uid="uid://b3to05sowrppc" path="res://assets/models/dice/d20.glb" id="1_fgkus"]
 [ext_resource type="Script" uid="uid://c3lxhfpdyugkh" path="res://scenes/states/title_screen/title_screen.gd" id="2_script"]
-[ext_resource type="Script" uid="uid://bty0wdb4ndiuw" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_fgkus"]
 sky_top_color = Color(0.7866573, 0.8264243, 0.8797699, 1)
@@ -226,93 +225,48 @@ v_offset = 3.0
 projection = 1
 size = 10.0
 
-[node name="PlaceholderContainer" type="ColorRect" parent="." unique_id=670198466]
+[node name="Dim" type="ColorRect" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.120000005, 0.120000005, 0.15, 0)
+mouse_filter = 2
+color = Color(0.08, 0.07, 0.09, 0.6)
 
-[node name="CenterContainer" type="CenterContainer" parent="PlaceholderContainer" unique_id=813964330]
-layout_mode = 1
+[node name="Hub" type="MarginContainer" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 48
+theme_override_constants/margin_top = 48
+theme_override_constants/margin_right = 48
+theme_override_constants/margin_bottom = 56
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PlaceholderContainer/CenterContainer" unique_id=1823067034]
+[node name="Columns" type="HBoxContainer" parent="Hub"]
 layout_mode = 2
-theme_type_variation = &"BoxContainerSpaced"
+mouse_filter = 2
+theme_override_constants/separation = 48
 
-[node name="PlayLevelButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=1901510867]
+[node name="LeftColumn" type="VBoxContainer" parent="Hub/Columns"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 0)
+custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
-size_flags_horizontal = 4
-theme_type_variation = &"Success"
-text = "Play Level"
-script = ExtResource("animated_btn")
+mouse_filter = 2
+theme_override_constants/separation = 12
 
-[node name="HSeparator1" type="HSeparator" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=1207209466]
-layout_mode = 2
-theme_override_constants/separation = 20
-
-[node name="NetworkLabel" type="Label" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=1084628932]
-layout_mode = 2
-theme_type_variation = &"H2"
-text = "Multiplayer"
-horizontal_alignment = 1
-
-[node name="NetworkButtons" type="HBoxContainer" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=1412160317]
-layout_mode = 2
-theme_override_constants/separation = 16
-alignment = 1
-
-[node name="HostGameButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/NetworkButtons" unique_id=1114653406]
+[node name="RightZone" type="VBoxContainer" parent="Hub/Columns"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
-theme_type_variation = &"Secondary"
-text = "Host Game"
-script = ExtResource("animated_btn")
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 12
 
-[node name="JoinGameButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/NetworkButtons" unique_id=1679235874]
+[node name="VersionLabel" type="Label" parent="."]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 0)
-layout_mode = 2
-theme_type_variation = &"Secondary"
-text = "Join Game"
-script = ExtResource("animated_btn")
-
-[node name="HSeparator2" type="HSeparator" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=1101493498]
-layout_mode = 2
-theme_override_constants/separation = 20
-
-[node name="BottomButtons" type="HBoxContainer" parent="PlaceholderContainer/CenterContainer/VBoxContainer" unique_id=2032261969]
-layout_mode = 2
-theme_override_constants/separation = 16
-alignment = 1
-
-[node name="SettingsButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/BottomButtons" unique_id=1708751033]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 0)
-layout_mode = 2
-text = "Settings"
-script = ExtResource("animated_btn")
-
-[node name="QuitButton" type="Button" parent="PlaceholderContainer/CenterContainer/VBoxContainer/BottomButtons" unique_id=526807849]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 0)
-layout_mode = 2
-theme_type_variation = &"Danger"
-text = "Quit"
-script = ExtResource("animated_btn")
-
-[node name="VersionLabel" type="Label" parent="PlaceholderContainer" unique_id=344598263]
-unique_name_in_owner = true
-layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
