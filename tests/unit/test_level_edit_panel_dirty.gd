@@ -1,8 +1,9 @@
 extends GutTest
 
-## Dirty-state contract of the Visuals drawer: any live edit marks it dirty, only
-## mark_clean() clears it, a dirty drawer refuses to close from its tab, and the badge
-## follows the flag.
+## Dirty-state contract of the Visuals drawer: any live edit in any pane marks
+## it dirty and badges that pane's rail item, only mark_clean() clears both, a
+## dirty drawer refuses to close from its rail, and pane signals are relayed
+## under the panel's public names.
 
 const PANEL_SCENE := preload("res://scenes/states/playing/level_edit_panel.tscn")
 
@@ -38,33 +39,40 @@ func _free_close_prompt() -> void:
 		prompt.queue_free()
 
 
+func _badge(id: StringName) -> bool:
+	return _panel._rail._buttons[id].badge
+
+
 func test_starts_clean() -> void:
 	assert_false(_panel.is_dirty())
 	assert_true(_panel._can_close_from_tab())
+	for id in LevelEditPanel.PANE_IDS:
+		assert_false(_badge(id), str(id))
 
 
-func test_lofi_edit_marks_dirty_and_shows_badge() -> void:
-	_panel._on_lofi_override_changed(0.5, "pixelation")
+func test_rail_has_one_item_per_pane() -> void:
+	for id in LevelEditPanel.PANE_IDS:
+		assert_true(_panel._rail.has_item(id), str(id))
+		assert_not_null(_panel._stack.get_pane(id), str(id))
+
+
+func test_film_edit_marks_dirty_and_badges_only_film() -> void:
+	_panel.film_pane._on_row_changed(0.5, "pixelation")
 	assert_true(_panel.is_dirty())
-	assert_true(_panel._tab_badge.visible, "Badge must be visible while dirty")
-
-	# A second edit while already dirty is a no-op: _mark_dirty() returns before
-	# touching the visuals, so a badge hidden by hand stays hidden.
-	_panel.set_tab_badge(false)
-	_panel._on_lofi_override_changed(0.6, "pixelation")
-	assert_true(_panel.is_dirty())
-	assert_false(_panel._tab_badge.visible, "Repeat edits must not re-run the dirty transition")
+	assert_true(_badge(&"film"))
+	assert_false(_badge(&"sun"))
 
 
 func test_every_live_edit_marks_dirty() -> void:
 	var edits: Array[Callable] = [
-		func() -> void: _panel._on_intensity_changed(0.4),
-		func() -> void: _panel._on_env_override_changed(1.5, "ambient_light_energy"),
-		func() -> void: _panel._on_adjustment_override_changed(1.1, "adjustment_brightness"),
-		func() -> void: _panel._on_weather_override_changed(0.3, "rain_intensity"),
-		func() -> void: _panel._on_foliage_override_changed(2.0, "tree_sway_speed"),
-		func() -> void: _panel._on_sun_energy_changed(0.7),
-		func() -> void: _panel._on_grid_cell_size_changed(2.0),
+		func() -> void: _panel.sky_pane._on_intensity_changed(0.4),
+		func() -> void: _panel.sky_pane._on_override_value(1.5, "ambient_light_energy"),
+		func() -> void: _panel.color_pane._on_row_changed(1.1, "adjustment_brightness", true),
+		func() -> void: _panel.weather_pane._on_intensity_changed(0.3, "rain"),
+		func() -> void: _panel.world_pane._on_foliage_changed(2.0, "tree_sway_speed"),
+		func() -> void: _panel.sun_pane._on_energy_changed(0.7),
+		func() -> void: _panel.world_pane._on_cell_size_changed(2.0),
+		func() -> void: _panel.film_pane._on_row_changed(0.2, "grain_intensity"),
 	]
 	for edit in edits:
 		_panel.mark_clean()
@@ -72,22 +80,25 @@ func test_every_live_edit_marks_dirty() -> void:
 		assert_true(_panel.is_dirty(), str(edit))
 
 
-func test_mark_clean_clears_and_allows_tab_close() -> void:
-	_panel._on_weather_override_changed(0.3, "rain_intensity")
+func test_mark_clean_clears_dirty_badges_and_allows_rail_close() -> void:
+	_panel.weather_pane._on_intensity_changed(0.3, "rain")
+	_panel.sun_pane._on_energy_changed(0.7)
 	_panel.mark_clean()
 	assert_false(_panel.is_dirty())
+	assert_false(_badge(&"weather"))
+	assert_false(_badge(&"sun"))
 	assert_true(_panel._can_close_from_tab())
 
 
-func test_dirty_panel_refuses_tab_close() -> void:
-	_panel._on_weather_override_changed(0.3, "rain_intensity")
+func test_dirty_panel_refuses_rail_close() -> void:
+	_panel.weather_pane._on_intensity_changed(0.3, "rain")
 	assert_false(_panel._can_close_from_tab(), "A dirty drawer must prompt instead of closing")
 	assert_true(is_instance_valid(_panel._close_prompt), "The discard prompt must be on screen")
 	_free_close_prompt()
 
 
 func test_second_close_request_reuses_the_open_prompt() -> void:
-	_panel._on_weather_override_changed(0.3, "rain_intensity")
+	_panel.weather_pane._on_intensity_changed(0.3, "rain")
 	_panel.request_close()
 	var first_prompt: Node = _panel._close_prompt
 	_panel.request_close()
@@ -96,8 +107,6 @@ func test_second_close_request_reuses_the_open_prompt() -> void:
 
 
 func test_close_request_during_animation_keeps_the_overlay_registered() -> void:
-	# close() is a no-op while animating, and Escape has already popped the panel
-	# off the overlay stack by the time request_close() runs.
 	UIManager.unregister_overlay(_panel)
 	var before: int = UIManager.get_overlay_count()
 	_panel._is_animating = true
@@ -108,16 +117,13 @@ func test_close_request_during_animation_keeps_the_overlay_registered() -> void:
 
 
 func test_initialize_does_not_clear_dirty() -> void:
-	_panel._on_weather_override_changed(0.3, "rain_intensity")
+	_panel.weather_pane._on_intensity_changed(0.3, "rain")
 	_panel.initialize(LevelData.new())
 	assert_true(_panel.is_dirty(), "Reopening a dirty drawer keeps the unsaved state")
 
 
-## A prompt must not outlive the state it was asked about: e.g. the level clears,
-## a new level loads and calls mark_clean(), and the stale "Discard changes"
-## prompt from the OLD level must not survive to revert the NEW one.
 func test_mark_clean_dismisses_open_close_prompt() -> void:
-	_panel._on_weather_override_changed(0.3, "rain_intensity")
+	_panel.weather_pane._on_intensity_changed(0.3, "rain")
 	_panel.request_close()
 	var prompt: Node = _panel._close_prompt
 	assert_true(is_instance_valid(prompt), "The discard prompt must be on screen before mark_clean")
@@ -132,10 +138,7 @@ func test_mark_clean_dismisses_open_close_prompt() -> void:
 
 
 func test_discard_confirm_lets_the_prompt_animate_out() -> void:
-	# The controller answers cancel_requested with mark_clean() while the
-	# dialog is still inside its own confirm handler; the dialog must be left
-	# to close itself rather than being queue_freed mid-handler.
-	_panel._on_weather_override_changed(0.3, "rain_intensity")
+	_panel.weather_pane._on_intensity_changed(0.3, "rain")
 	_panel.request_close()
 	var prompt: Node = _panel._close_prompt
 	assert_true(is_instance_valid(prompt), "The discard prompt must be on screen")
@@ -152,12 +155,48 @@ func test_discard_confirm_lets_the_prompt_animate_out() -> void:
 	prompt.queue_free()
 
 
-func test_badge_and_tooltip_follow_dirty_flag() -> void:
-	_panel._mark_dirty()
-	assert_true(_panel._tab_badge.visible, "Badge must be visible while dirty")
-	assert_eq(_panel._tab_button.tooltip_text, LevelEditPanel.TAB_TOOLTIP_DIRTY)
+func test_pane_signals_are_relayed_under_public_names() -> void:
+	watch_signals(_panel)
+	_panel.sun_pane._on_energy_changed(0.7)
+	assert_signal_emitted(_panel, "sun_changed")
+	_panel.film_pane._on_row_changed(0.5, "pixelation")
+	assert_signal_emitted(_panel, "lofi_changed")
+	_panel.weather_pane._on_intensity_changed(0.3, "rain")
+	assert_signal_emitted(_panel, "weather_changed")
+	_panel.world_pane._on_foliage_changed(2.0, "tree_sway_speed")
+	assert_signal_emitted(_panel, "foliage_changed")
+	_panel.world_pane._on_water_selected(&"realistic")
+	assert_signal_emitted_with_parameters(_panel, "water_style_changed", ["realistic"])
+	_panel.world_pane._on_cell_size_changed(2.0)
+	assert_signal_emitted(_panel, "scale_config_changed")
+	_panel.sky_pane._on_intensity_changed(0.4)
+	assert_signal_emitted_with_parameters(_panel, "intensity_changed", [0.4])
+	_panel.color_pane._on_row_changed(1.5, "tonemap_exposure", false)
+	assert_signal_emitted(_panel, "environment_changed")
+	_panel.sun_pane._aim_button.button_pressed = true
+	assert_signal_emitted_with_parameters(_panel, "aim_sun_toggled", [true])
 
-	_panel.mark_clean()
 
-	assert_false(_panel._tab_badge.visible, "Badge must hide once clean")
-	assert_eq(_panel._tab_button.tooltip_text, LevelEditPanel.TAB_TOOLTIP_CLEAN)
+func test_build_state_collects_every_pane() -> void:
+	_panel.film_pane._on_row_changed(0.5, "pixelation")
+	_panel.world_pane._on_cell_size_changed(2.0)
+	_panel.sun_pane._on_energy_changed(0.7)
+	_panel.sky_pane._on_intensity_changed(0.4)
+	_panel.color_pane._on_row_changed(1.5, "tonemap_exposure", false)
+	_panel.weather_pane._on_intensity_changed(0.3, "rain")
+	var state: LevelVisualState = _panel._build_state()
+	assert_eq(state.lofi.pixelation, 0.5)
+	assert_eq(state.grid_cell_size, 2.0)
+	assert_eq(state.sun.energy, 0.7)
+	assert_eq(state.light_intensity_scale, 0.4)
+	assert_eq(state.environment_overrides.get("tonemap_exposure"), 1.5)
+	assert_eq(state.weather.rain_intensity, 0.3)
+
+
+func test_gizmo_forwards_reach_the_sun_pane() -> void:
+	_panel.set_sun_direction_from_gizmo(30.0, 40.0)
+	assert_eq(_panel.sun_pane._azimuth_row.value, 30.0)
+	_panel.set_aim_sun_pressed(true)
+	assert_true(_panel.sun_pane._aim_button.button_pressed)
+	_panel.initialize(LevelData.new())
+	assert_false(_panel.sun_pane._aim_button.button_pressed, "initialize clears the aim toggle")
