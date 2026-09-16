@@ -73,6 +73,7 @@ func _on_tile_toggled(id: StringName, on: bool) -> void:
 func _on_intensity_changed(value: float, kind: String) -> void:
 	if value > 0.0:
 		_last_intensity[kind] = value
+	_tiles.set_tile_on(StringName(kind), value > 0.0)
 	_set_intensity(kind, value)
 
 
