@@ -317,8 +317,14 @@ UIManager.clear_hints()
 
 ## Settings Menu
 
-Tabbed settings interface (`scenes/ui/settings_menu.gd`) with six tabs: Audio, Graphics, Grid,
-Controls, Network, and Updates.
+Tabbed settings interface (`scenes/ui/settings_menu.gd`) with six sections: Audio, Graphics, Grid,
+Controls, Network, and Updates. Sections are chosen from a labelled `IconRail` (`SECTIONS` in
+`settings_menu.gd`) rather than the `TabContainer`'s own tab bar, which is hidden
+(`tabs_visible = false`); the rail drives `tab_container.current_tab` instead. Graphics keeps
+foliage budget and renderer options under an Advanced `Foldout`. The close button is an
+`IconButton`. Keyboard section switching (the native tab bar's Ctrl+Tab) is not available while the
+tab bar is hidden and the rail items are not focusable; a keyboard-navigation pass is a known
+follow-up.
 
 ### Opening
 
@@ -340,9 +346,8 @@ await settings.closed  # Wait for user to close
 
 - Fullscreen toggle, VSync toggle
 - Lo-fi filter toggle, occlusion fade toggle
-- Antialiasing, shadow quality, water quality, renderer method option buttons
-- SSAO, SSR, SDFGI toggles
-- Foliage density slider
+- Antialiasing, shadow quality, water quality option buttons
+- Advanced (`Foldout`): foliage density slider, SSAO/SSR/SDFGI toggles, renderer method option button
 
 **Grid Tab:**
 
@@ -546,23 +551,28 @@ func _on_ready() -> void:
 
 ### Icon Tabs
 
-Use `tab_icon` instead of `tab_text` to show an SVG icon on the tab handle. The icon is tinted with the theme's accent color and padded consistently. SVG files must use `fill="#ffffff"` (white) so the tint applies correctly — see the [SVG Icons section in THEME_GUIDE.md](THEME_GUIDE.md#svg-icons).
+Use `tab_icon` instead of `tab_text` to show an SVG icon on the tab handle. The icon is tinted with the theme's accent color and padded consistently. SVG files must use `fill="#ffffff"` (white) so the tint applies correctly — see the [Icons section in THEME_GUIDE.md](THEME_GUIDE.md#icons).
 
 ```gdscript
 func _on_ready() -> void:
-    tab_icon = preload("res://assets/icons/ui/Sun.svg")
+    tab_icon = preload("res://assets/icons/ui/sun.svg")
     drawer_width = 350.0
 ```
+
+### Rail mode
+
+Set `rail_items` in `_on_ready()` to replace the single tab with an `IconRail` showing one icon per pane instead of one icon for the whole drawer. Clicking an item opens the drawer and emits `pane_requested(id)`; clicking the active item closes it; `open()` with nothing selected reopens the last pane. Badge a single item with `set_rail_badge(id, true)`; `set_tab_tooltip()` only applies in single-tab mode. See [THEME_GUIDE.md's Rail Mode section](THEME_GUIDE.md#rail-mode) for the full example.
 
 ### Exports
 
 | Property          | Type       | Default | Description                           |
 | ----------------- | ---------- | ------- | ------------------------------------- |
-| `edge`            | DrawerEdge | `RIGHT` | Which screen edge the drawer docks to |
+| `edge`            | DrawerEdge | `LEFT`  | Which screen edge the drawer docks to |
 | `drawer_width`    | float      | `220`   | Width of the panel                    |
-| `tab_width`       | float      | `40`    | Width of the tab handle               |
+| `tab_width`       | float      | `36`    | Width of the tab handle               |
 | `tab_text`        | String     | `""`    | Text label on the tab handle          |
 | `tab_icon`        | Texture2D  | `null`  | Icon on the tab (hides text when set) |
+| `rail_items`      | Array[Dictionary] | `[]` | Item specs; replaces the single tab with an `IconRail` (rail mode) |
 | `slide_duration`  | float      | `0.25`  | Animation duration                    |
 | `start_open`      | bool       | `false` | Open on ready                         |
 | `play_sounds`     | bool       | `true`  | Play open/close sounds                |
@@ -573,8 +583,8 @@ func _on_ready() -> void:
 
 | Drawer | Edge | Tab | Purpose |
 |--------|------|-----|---------|
-| `PlayerListDrawer` | LEFT | `Users.svg` icon | Shows connected players during networked games |
-| `LevelEditPanel` | RIGHT | `Sun.svg` icon | Real-time level editing during gameplay (see below) |
+| `PlayerListDrawer` | LEFT | `users.svg` icon | Shows connected players during networked games |
+| `LevelEditPanel` | RIGHT | rail of six icons | Real-time level editing during gameplay (see below) |
 
 See `THEME_GUIDE.md` for styling details.
 
@@ -586,32 +596,22 @@ See `THEME_GUIDE.md` for styling details.
 
 ### Accessing
 
-During gameplay, click the "Edit" tab on the right edge of the screen. The panel slides open with all editing controls.
+During gameplay, click a rail item (Sun, Sky, Color, Weather, Film, World) on the right edge of the screen. The panel slides open on that pane; clicking another rail item switches panes without closing the drawer.
 
 ### Controls
 
-The panel is divided into sections:
+The drawer is a rail of six panes (`scenes/states/playing/visual_panes/`), each a `LevelEditPane` that owns the fields it edits and implements `load_state(state)` / `write_state(state)` over a `LevelVisualState`:
 
-**Map Scale** — Uniform scale slider for map geometry.
+| Rail item | Pane | Primary | Advanced foldout |
+|---|---|---|---|
+| Sun | `SunPane` | time of day (sunrise/noon/sunset ticks), mode tiles, aim on map | azimuth, elevation, colour, energy, shadows, softness, darkness, back to generated |
+| Sky | `SkyPane` | revert / clear overrides, preset, light scale, background, ambient, fog | sky tiles, fog energy, fog height, fog height density |
+| Color | `ColorPane` | exposure, brightness, contrast, saturation, glow | tonemap, white point, glow strength, bloom |
+| Weather | `WeatherPane` | rain, snow, fog, wind toggle tiles with intensity rows | none |
+| Film | `FilmPane` | pixelate, colors, dither, color fade, vignette, grain | none |
+| World | `WorldPane` | scale tiles, cell size, water style, foliage sway | none |
 
-**Lighting & Environment:**
-- Preset dropdown (named presets or "Map Defaults")
-- Lighting Power (light intensity multiplier)
-- Ambient Light (color + energy)
-- Fog (toggle, color, density, height)
-- Glow/Bloom (toggle, intensity, strength, bloom)
-- Exposure (tone map mode, exposure, white point)
-- Brightness, Contrast, Saturation (adjustment controls)
-
-**Advanced (collapsible):**
-- Background mode/color, sky preset, ambient source, reflected light source
-- Fog height density
-
-**Post-Processing Effects:**
-- Pixelation, Color Depth, Color Fade, Outline
-
-**Actions:**
-- Revert to Map Defaults, Cancel, Save
+The Sky and Color panes share an `EnvironmentEditModel` (preset + overrides + map defaults); its `changed` signal is the single `environment_changed` broadcast. Every pane emits `changed` on a user edit, which marks the drawer dirty and badges that rail item; `mark_clean()` clears both. Override rows tint their label accent and reset on right-click via `PropertyRow.reset_requested`. Public signals and controller-facing methods (`initialize`, `apply_environment_state`, `set_sun_direction_from_gizmo`, `set_aim_sun_pressed`, `mark_clean`, `is_dirty`, `request_close`) are unchanged.
 
 ### Signal Architecture
 
@@ -640,7 +640,7 @@ signal drawer_closed   # Controller should revert if not saved
 
 ### Unsaved Changes
 
-Every live edit calls `_mark_dirty()`, which raises the unsaved-changes flag, shows the accent dot on the tab, and switches the tab tooltip to "Visuals (unsaved changes)". Only `mark_clean()` lowers the flag; the controller calls it on Save, on Cancel, and when the level is cleared. Reopening the drawer (`initialize()`) does not clear it.
+Every live edit calls `_mark_dirty()`, which raises the unsaved-changes flag, and each pane's own `changed` signal badges that pane's rail item (`set_rail_badge(id, true)`) via `_on_pane_changed()`. The drawer handle no longer shows one aggregate unsaved tooltip — per-pane badges on the rail replace it, so the GM can see which pane has unsaved edits at a glance. Only `mark_clean()` lowers the flag and clears every badge (`set_tab_badge(false)`); the controller calls it on Save, on Cancel, and when the level is cleared. Reopening the drawer (`initialize()`) does not clear it.
 
 A dirty drawer refuses to close from its tab (`_can_close_from_tab()` returns `false`) and calls `request_close()` instead, which shows a "Discard changes" / "Keep editing" danger confirmation (the cancel button is relabelled via `show_danger_confirmation()`'s `cancel_text` parameter, since a bare "Cancel" next to the drawer's own Cancel button was ambiguous about which one it cancelled). Confirming emits `cancel_requested`, so the controller reverts and closes. Escape takes the same route: the panel registers itself with `UIManager.register_overlay()` in `open()`, and `UIManager._close_top_overlay()` prefers an overlay's `request_close()` over `animate_out()`/`close()`.
 
@@ -650,27 +650,24 @@ Save no longer closes the drawer — it clears the flag so tuning can continue �
 
 ### Environment Overrides & Preset Switching
 
-Switching the preset dropdown (`_on_preset_selected()`) keeps whatever environment overrides are
-already set — it re-emits `environment_changed` with the new preset and the same
-`current_overrides`, and shows an info toast ("Preset changed. N override(s) kept.") whenever there
-is at least one override to keep. "Revert to Map Defaults" is the one action that clears both
-together, resetting preset and overrides via `apply_environment_state("", {})`.
+Switching the Sky pane's preset dropdown (`_on_preset_selected()`) keeps whatever environment
+overrides are already set on the shared `EnvironmentEditModel` — it re-emits `environment_changed`
+with the new preset and the same overrides, and shows an info toast ("Preset changed. N
+override(s) kept.") whenever there is at least one override to keep. The Sky pane's header "restore"
+icon button ("Revert to the map's own lighting", visible only when the map has defaults) is the one
+action that clears both together, resetting preset and overrides via `apply_environment_state("",
+{})`.
 
-Each overridden property is surfaced on its own row: `LevelEditOverrideRows`
-(`scenes/states/playing/level_edit_override_rows.gd`) tints that row's label with the theme accent
-color, sets a tooltip ("Overridden. Right-click to reset to the preset value."), and wires a
-right-click handler that erases just that row's key(s) from `current_overrides` (dropping
-`adjustment_enabled` too if that was the last remaining `adjustment_*` override). The panel's
-"Clear overrides" button is disabled whenever `current_overrides` is empty and otherwise clears
-every override at once (with its own "Overrides cleared." toast).
-
-`LevelEditOverrideRows` and `LevelEditSunSection` (`scenes/states/playing/level_edit_sun_section.gd`,
-which owns the Sun section's controls, mode-dropdown population, and the auto-to-on promotion rule)
-are `LevelEditPanel`'s two extracted sub-components, split out to keep `level_edit_panel.gd` under
-the project's max-file-lines lint budget.
+Each overridden property is surfaced on its own `PropertyRow`: the Sky and Color panes tint that
+row's label with the theme accent color (`overridden = true`), set a tooltip ("Overridden.
+Right-click to reset to the preset value."), and wire `PropertyRow.reset_requested` — a right-click
+handler — to erase just that row's key(s) from the model's overrides (dropping
+`adjustment_enabled` too if that was the last remaining `adjustment_*` override). The Sky pane's
+"eraser" header button is disabled whenever the model has no overrides and otherwise clears every
+override at once (with its own "Overrides cleared." toast).
 
 A Sky override survives a preset switch like every other override, by design; the per-row reset and
-"Clear overrides" are the way back to the preset's own sky.
+the "eraser" header button are the way back to the preset's own sky.
 
 ### Cancel Behavior
 
@@ -705,10 +702,9 @@ See [lighting-and-environment.md](lighting-and-environment.md) for the full envi
 | `scenes/states/paused/pause_overlay.tscn`    | Pause menu                       |
 | `scenes/ui/animated_visibility_container.gd` | Base class for animated panels        |
 | `scenes/ui/drawer_container.gd`              | Base class for slide-out drawers      |
-| `scenes/states/playing/level_edit_panel.gd`  | In-game real-time level editing panel |
+| `scenes/states/playing/level_edit_panel.gd`  | In-game real-time level editing panel (rail + `PaneStack`) |
 | `scenes/states/playing/level_edit_panel.tscn`| UI layout for the edit panel          |
-| `scenes/states/playing/level_edit_override_rows.gd` | Override-row indicators, tooltips, per-row right-click reset |
-| `scenes/states/playing/level_edit_sun_section.gd`   | Sun section controls, mode dropdown, auto-to-on promotion |
+| `scenes/states/playing/visual_panes/`        | The six `LevelEditPane` scripts (sun, sky, color, weather, film, world) plus `EnvironmentEditModel` |
 | `scenes/states/playing/measure_tool.gd`      | Distance measurement tool (2D overlay)|
 | `utils/scale_utils.gd`                       | Scale conversion and formatting       |
 

@@ -18,6 +18,21 @@ Use semantic theme variants from `dark_theme.gd`:
 - **Typography**: `H1`, `H2`, `H3`, `SectionHeader`, `PanelHeader`, `Body`, `Caption`
 - **Spacing**: `spacing_sm`, `spacing_md`, `spacing_lg`, `spacing_xl`
 
+## UI Primitives
+
+Read `docs/THEME_GUIDE.md`'s "UI Primitives" and "Motion" sections. Compose these
+(`scenes/ui/primitives/`) rather than raw Buttons and sliders:
+
+- `IconButton` — icon-only actions, rail items, pane headers
+- `IconRail` — one-of-N section choice (drawer rail, Settings sections)
+- `TileRow` — enums with six or fewer options; multi-select toggles
+- `Foldout` — advanced/secondary rows
+- `PropertyRow` — label + optional check/colour + slider + inline value
+- `PaneStack` — one-visible-pane content area with crossfade
+
+Motion tokens (`Constants`): `ANIM_HOVER_IN`/`ANIM_HOVER_OUT`, `ANIM_PRESS`,
+`ANIM_PANE_SWAP`/`ANIM_PANE_SWAP_OFFSET_PX`, `ANIM_FOLDOUT`.
+
 ## CanvasLayer Order
 
 | Layer | Purpose |

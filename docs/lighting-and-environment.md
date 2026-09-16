@@ -342,57 +342,48 @@ The `LevelEditPanel` is a slide-out drawer (extends `DrawerContainer`) that appe
 
 ### Accessing the Panel
 
-1. During gameplay, the "Edit" tab appears on the right edge of the screen
-2. Click the tab (or it slides out) to open the panel
+1. During gameplay, a rail of six icons (Sun, Sky, Color, Weather, Film, World) appears on the
+   right edge of the screen
+2. Click a rail item to open the drawer on that pane; clicking the active item closes it
 3. All changes are applied to the live viewport immediately
 
 ### Panel Sections
 
-**Map & Grid** (collapsible, collapsed by default) — Scale preset dropdown and
-Grid Cell Size slider, calibrating `grid_cell_size`/`display_unit`/
-`display_unit_per_cell` against the map's visible geometry. Set once when a
-map is imported and rarely revisited afterward, so it lives outside the mood
-flow at the top of the drawer rather than in `LevelEditor` -- calibrating the
-grid means dragging it until it lines up with the map's visible squares, which
-needs the live 3D view that `LevelEditor` does not have.
+The drawer shows one pane at a time from an icon rail (`scenes/states/playing/visual_panes/`),
+with Save and Cancel pinned below the `PaneStack` regardless of which pane is open. Each pane owns
+the fields it edits and implements `load_state(state)` / `write_state(state)` over a
+`LevelVisualState`.
 
-**Lighting & Environment:**
-- **Preset dropdown** — Choose a named preset or "Map Defaults"
-- **Water Style dropdown** — "Stylized" or "Realistic", applied to any
-  `-water`-suffixed mesh via `WaterGlbUtils.apply_water_style()`
-- **Lighting Power** — Light intensity multiplier for embedded lights
-- **Ambient Light** — Color and energy
-- **Fog** — Toggle, color, density (fog energy, height, and height density are
-  in Advanced)
-- **Glow/Bloom** — Toggle, intensity (glow strength and bloom are in Advanced)
-- **Exposure** — Exposure value only (tone mapping mode and white point are in
-  Advanced)
-- **Brightness / Contrast / Saturation** — Adjustment controls
+#### Where Each Control Lives
 
-**Advanced (collapsible):**
-- Sky preset — selecting a named sky also switches `background_mode` between
-  `BG_SKY`/`BG_COLOR` and `ambient_light_source` between
-  `AMBIENT_SOURCE_SKY`/`AMBIENT_SOURCE_COLOR`; there is no separate
-  background-mode, ambient-source, or reflected-source control in the panel
-- Fog energy, fog height, fog height density
-- Tone mapping mode, tone mapping white point
-- Glow strength, glow bloom
+| Rail item | Primary | Advanced foldout |
+|---|---|---|
+| Sun | Time of day (sunrise/noon/sunset ticks), mode tiles (Auto/On/Off), aim on map | Azimuth, elevation, color, energy, shadows, softness, darkness, "Back to generated" |
+| Sky | Revert / clear overrides, preset, light scale, background, ambient, fog | Sky tiles, fog energy, fog height, fog height density |
+| Color | Exposure, brightness, contrast, saturation, glow | Tonemap, white point, glow strength, bloom |
+| Weather | Rain, snow, fog, wind toggle tiles, each revealing an intensity row when on | none |
+| Film | Pixelate, colors, dither, color fade, vignette, grain | none |
+| World | Scale tiles, cell size, water style, foliage sway | none |
 
-**Sun** (ten controls; see [Sun and Shadow](#sun-and-shadow) for the
-underlying schema):
+The Sky and Color panes share an `EnvironmentEditModel` (preset + overrides + map defaults); Sky
+writes it into the saved `LevelVisualState`, so Color's `write_state` is a no-op. See
+[UI_SYSTEMS.md's LevelEditPanel section](UI_SYSTEMS.md#leveleditpanel-in-game-edit-mode) for the
+pane class names and signal wiring.
+
+**Sun** (see [Sun and Shadow](#sun-and-shadow) for the underlying schema):
 
 | Control | Type | Range |
 | --- | --- | --- |
-| Mode | `OptionButton` | Auto / On / Off (unchanged) |
-| Aim Sun | toggle `Button` | activates `SunGizmoTool` |
-| Azimuth | `SliderSpinBox` | 0 to 360 |
-| Elevation | `SliderSpinBox` | -15 to 90 |
-| Color | `ColorPickerButton` | |
-| Energy | `SliderSpinBox` | 0 to 4 |
-| Shadows | `CheckBox` | gates the two below |
-| Softness | `SliderSpinBox` | 0 to 5 (degrees of angular distance) |
-| Darkness | `SliderSpinBox` | 0 to 1 |
-| Time of Day | `SliderSpinBox` | 0 to 24, labelled "Time of Day:"; that it regenerates rather than nudges is conveyed by its tooltip plus the "Back to generated" button |
+| Mode | `PropertyRow` (tile control) | Auto / On / Off |
+| Aim Sun | `IconButton` (toggle) | activates `SunGizmoTool` |
+| Azimuth | `PropertyRow` | 0 to 360 |
+| Elevation | `PropertyRow` | -15 to 90 |
+| Color | `PropertyRow` (color) | |
+| Energy | `PropertyRow` | 0 to 4 |
+| Shadows | `PropertyRow` (check) | gates the two below |
+| Softness | `PropertyRow` | 0 to 5 (degrees of angular distance) |
+| Darkness | `PropertyRow` | 0 to 1 |
+| Time of Day | `PropertyRow` | 0 to 24, with sunrise/noon/sunset ticks; that it regenerates rather than nudges is conveyed by its tooltip plus the "Back to generated" button |
 
 `SunGizmoTool` draws a compass ring on the ground at the view centre when
 "Aim Sun" is active. The mapping is done in **world space on the Y=0 ground
@@ -426,30 +417,16 @@ settings diverge from what `DefaultSun.settings_for_time()` would generate for
 the current Time of Day, a "Back to generated" button appears, offering to
 regenerate direction, color, and energy from that hour.
 
-**Post-Processing Effects:**
-- Pixelation
-- Color Fade (lo-fi shader saturation)
-- Color Levels
-- Dither
-- Vignette
-- Grain
-
-**Weather:** Rain, Snow, Fog, and Wind sliders (0.0-1.0). See
-[Weather Effects](#weather-effects).
-
-**Foliage:** Tree Sway Speed/Amplitude and Grass Sway Speed/Amplitude
-sliders. See [Weather Effects](#weather-effects), which documents foliage
-tuning alongside its shared network-sync path.
+The Film, Weather, and World panes' fields are listed in the table above; see
+[Weather Effects](#weather-effects) for the Weather pane's rain/snow/fog/wind mechanics and the
+foliage sway fields' shared network-sync path.
 
 **Actions:**
-- **Revert to Map Defaults** — Restores the map's embedded environment (visible only when the map has defaults)
-- **Edit Details** — Opens the dedicated Level Editor for token placement and metadata
-- **Save Level** — Persists all changes to disk
-- **Cancel** — Reverts all changes and closes the panel
-
-Cancel and Save are pinned outside the panel's `ScrollContainer` (under a
-`RootVBox` that wraps both the scroll area and the button row), so they stay
-visible regardless of how tall the scrolling content is.
+- **Save** and **Cancel** are pinned below the pane stack (the scene's `ButtonsRow` is moved under
+  the `PaneStack` in `_on_ready()`), so they stay visible regardless of which pane is open.
+- **Revert to Map Defaults** lives on the Sky pane's header ("restore" icon, tooltip "Revert to the
+  map's own lighting") instead of a bottom action button, and is visible only when the map has
+  defaults.
 
 ### Signal Flow
 
@@ -501,10 +478,11 @@ the sun-aiming gizmo the same way a close would — tuning can continue immediat
 disk write fails, only the error toast is shown: the drawer stays dirty and `_original_state` is
 left untouched.
 
-Switching the preset dropdown keeps any environment overrides already set (a toast reports how many
-were kept), and each overridden property's row is tinted and right-click-resettable individually.
-See [UI_SYSTEMS.md's LevelEditPanel section](UI_SYSTEMS.md#leveleditpanel-in-game-edit-mode) for the
-override-row and helper-class details. "Revert to Map Defaults" is the one action that clears the
+Switching the Sky pane's preset dropdown keeps any environment overrides already set (a toast
+reports how many were kept), and each overridden property's `PropertyRow` is tinted and
+right-click-resettable individually. See
+[UI_SYSTEMS.md's LevelEditPanel section](UI_SYSTEMS.md#leveleditpanel-in-game-edit-mode) for the
+override-row details. The Sky pane's "restore" header button is the one action that clears the
 preset and every override together.
 
 ## Post-Processing (Lo-Fi) Overrides
@@ -818,7 +796,7 @@ All values default to 0.0. An empty dictionary means no weather. Multiple effect
 
 ### UI Controls
 
-The "Weather" section in `LevelEditPanel` (between Post-Processing and the action buttons) provides four `SliderSpinBox` controls (0.0-1.0, step 0.05). Changes apply in real-time. Save/Cancel handles weather as one field of the `LevelVisualState` snapshot alongside the other visual fields (see [Cancel / Revert Behavior](#cancel--revert-behavior)).
+The Weather pane (`scenes/states/playing/visual_panes/weather_pane.gd`) shows four toggle tiles (rain, snow, fog, wind); turning a tile on reveals a `PropertyRow` intensity slider (0.0-1.0, step 0.05) for it and remembers the value for the session when turned back off. Changes apply in real-time. Save/Cancel handles weather as one field of the `LevelVisualState` snapshot alongside the other visual fields (see [Cancel / Revert Behavior](#cancel--revert-behavior)).
 
 ### Network Sync
 
