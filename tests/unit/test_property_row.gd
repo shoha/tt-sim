@@ -107,6 +107,17 @@ func test_check_and_color_slots() -> void:
 	assert_signal_emitted_with_parameters(row, "toggled", [false])
 
 
+func test_checked_property_setter_is_silent() -> void:
+	var row := PropertyRow.new()
+	row.label = "Fog"
+	row.show_check = true
+	add_child_autofree(row)
+	watch_signals(row)
+	row.checked = true
+	assert_true(row.checked)
+	assert_signal_not_emitted(row, "toggled")
+
+
 func test_ticks_map_values_to_fractions() -> void:
 	var row := PropertyRow.new()
 	row.label = "Time of day"

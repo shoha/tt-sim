@@ -74,7 +74,7 @@ var checked: bool:
 		return _check.button_pressed if _check else false
 	set(on):
 		if _check:
-			_check.button_pressed = on
+			_check.set_pressed_no_signal(on)
 
 var _row: HBoxContainer
 var _label: Label
