@@ -600,7 +600,7 @@ During gameplay, click a rail item (Sun, Sky, Color, Weather, Film, World) on th
 
 ### Controls
 
-The drawer is a rail of six panes (`scenes/states/playing/visual_panes/`), each a `LevelEditPane` that owns the fields it edits and implements `load_state(state)` / `write_state(state)` over a `LevelVisualState`:
+The drawer is a rail of six panes (`SunPane`, `SkyPane`, `ColorPane`, `WeatherPane`, `FilmPane`, `WorldPane` in `scenes/states/playing/visual_panes/`), each a `LevelEditPane` that owns the fields it edits and implements `load_state(state)` / `write_state(state)` over a `LevelVisualState`:
 
 | Rail item | Primary | Advanced |
 |---|---|---|

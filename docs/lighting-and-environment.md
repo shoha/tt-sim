@@ -366,7 +366,8 @@ the fields it edits and implements `load_state(state)` / `write_state(state)` ov
 | World | scale tiles, cell size (m and ft), water tiles, Wind tiles Still/Breeze/Gusty (+Custom) | tree/grass speed and amount |
 
 The Sky and Color panes share an `EnvironmentEditModel` (preset + overrides + map defaults); Sky
-writes it into the saved `LevelVisualState`, so Color's `write_state` is a no-op. See
+writes it into the saved `LevelVisualState`, while Color's `write_state` carries only the light
+energy scale. See
 [UI_SYSTEMS.md's LevelEditPanel section](UI_SYSTEMS.md#leveleditpanel-in-game-edit-mode) for the
 pane class names and signal wiring.
 
@@ -374,7 +375,7 @@ pane class names and signal wiring.
 
 | Control | Type | Range |
 | --- | --- | --- |
-| Sun mode | tile row (`TileField`/`TileRow`) | Auto / On / Off |
+| Sun | tile row (`TileField`/`TileRow`) | Auto / On / Off |
 | Aim Sun | `IconButton` (toggle) | activates `SunGizmoTool` |
 | Direction (azimuth) | `PropertyRow`, formatted as a bearing | 0 to 360 |
 | Height (elevation) | `PropertyRow` | -15 to 90 |
