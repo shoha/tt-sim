@@ -348,6 +348,10 @@ reads "Make a level in the Level Editor first".
 `level_info` is one entry from `LevelManager.get_saved_levels()` -- the same Dictionary shape
 `LevelCard.setup()` and `LevelCard.caption_for()` consume (see Level Cards below).
 
+A card's thumbnail is captured on every in-play save -- the "Save Level" button and the Visuals
+drawer's Save -- via `LevelManager.save_thumbnail()`; the Level Editor's own save does not write
+one, so a level only edited there (never played) falls back to the placeholder art.
+
 ### Level Cards
 
 Saved levels are three primitives under `scenes/ui/primitives/`:

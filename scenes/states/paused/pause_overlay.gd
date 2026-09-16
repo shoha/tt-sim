@@ -83,6 +83,9 @@ func _on_change_level_pressed() -> void:
 	picker.setup("Change level", LevelManager.current_level_path)
 	picker.level_chosen.connect(_on_level_picked)
 	get_tree().root.add_child(picker)
+	# Returning to the title (or otherwise leaving the tree) while the picker
+	# is still open must not strand it floating over the title screen.
+	tree_exiting.connect(picker.queue_free)
 
 
 func _on_level_picked(info: Dictionary) -> void:

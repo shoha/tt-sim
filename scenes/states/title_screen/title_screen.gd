@@ -43,6 +43,12 @@ func _ready() -> void:
 	_preselect_most_recent()
 	_refresh_actions()
 	_play_entrance_animation()
+	LevelManager.level_saved.connect(_on_level_saved)
+
+
+func _exit_tree() -> void:
+	if LevelManager.level_saved.is_connected(_on_level_saved):
+		LevelManager.level_saved.disconnect(_on_level_saved)
 
 
 func selected_level() -> Dictionary:
@@ -230,6 +236,13 @@ func _play_entrance_animation() -> void:
 
 func _on_selection_changed(_info: Dictionary) -> void:
 	_refresh_actions()
+
+
+## A level saved from the Level Editor overlay (not through the title) must
+## still show up here; refresh() notifies _refresh_actions via levels_changed.
+func _on_level_saved(_path: String) -> void:
+	grid.refresh()
+	_preselect_most_recent()
 
 
 func _on_level_activated(info: Dictionary) -> void:

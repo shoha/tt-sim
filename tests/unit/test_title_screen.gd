@@ -82,6 +82,15 @@ func test_grid_refresh_notifies_actions_when_the_list_changes() -> void:
 	assert_true(title.play_button.disabled)
 
 
+func test_level_saved_refreshes_the_grid() -> void:
+	_levels = [_info("old", "Old Camp", 100)]
+	var title := _title()
+	assert_eq(title.grid.card_count(), 1)
+	_levels.append(_info("new", "New Camp", 200))
+	LevelManager.level_saved.emit("user://x/")
+	assert_eq(title.grid.card_count(), 2)
+
+
 func test_grid_lands_below_the_heading_after_the_entrance() -> void:
 	_levels = [_info("new", "New Camp", 200)]
 	var title := _title()
