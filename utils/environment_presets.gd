@@ -43,33 +43,105 @@ const PROPERTY_DEFAULTS = {
 	"adjustment_saturation": 1.0,
 }
 
-## Built-in procedural sky presets.
-## Each entry defines ProceduralSkyMaterial properties.
-## Used when background_mode == BG_SKY and a sky_preset is selected.
+## Sky presets. Every entry carries a procedural gradient (used as the fallback when
+## a panorama cannot load, and by headless tests). HDRI entries add:
+##   panorama         res:// path of the 1024x512 EXR (VRAM compressed on import)
+##   tile / preview   PNGs painted by tools/curate_skies.gd for the Sky pane
+##   sun_azimuth_deg  brightest column above the horizon, panorama frame
+##   energy           PanoramaSkyMaterial.energy_multiplier (exposure normalised)
+## Add a sky by adding a manifest entry, running tools/curate_skies.gd, and pasting
+## the printed entry here plus a tile in SkyPane.SKY_TILES.
 const SKY_PRESETS = {
 	"clear_day":
 	{
-		"description": "Clear blue sky with neutral horizon",
+		"description": "Clear midday sky, cool fill, hard shadows",
 		"sky_top_color": Color(0.38, 0.45, 0.75),
 		"sky_horizon_color": Color(0.65, 0.72, 0.83),
 		"ground_bottom_color": Color(0.2, 0.17, 0.13),
 		"ground_horizon_color": Color(0.65, 0.67, 0.67),
+		"panorama": "res://assets/skies/clear_day.exr",
+		"tile": "res://assets/skies/clear_day_tile.png",
+		"preview": "res://assets/skies/clear_day_preview.png",
+		"sun_azimuth_deg": 179.3,
+		"energy": 0.754,
 	},
-	"sunset":
+	"cloudy":
 	{
-		"description": "Warm orange/pink sunset sky",
-		"sky_top_color": Color(0.15, 0.15, 0.45),
-		"sky_horizon_color": Color(1.0, 0.55, 0.25),
-		"ground_bottom_color": Color(0.1, 0.05, 0.02),
-		"ground_horizon_color": Color(0.85, 0.45, 0.2),
+		"description": "Bright day with scattered clouds, soft fill",
+		"sky_top_color": Color(0.42, 0.52, 0.78),
+		"sky_horizon_color": Color(0.72, 0.76, 0.84),
+		"ground_bottom_color": Color(0.2, 0.18, 0.14),
+		"ground_horizon_color": Color(0.62, 0.64, 0.64),
+		"panorama": "res://assets/skies/cloudy.exr",
+		"tile": "res://assets/skies/cloudy_tile.png",
+		"preview": "res://assets/skies/cloudy_preview.png",
+		"sun_azimuth_deg": 180.0,
+		"energy": 0.472,
 	},
 	"overcast":
 	{
-		"description": "Gray overcast sky",
+		"description": "Flat grey overcast, shadowless and even",
 		"sky_top_color": Color(0.45, 0.47, 0.52),
 		"sky_horizon_color": Color(0.58, 0.6, 0.63),
 		"ground_bottom_color": Color(0.25, 0.25, 0.25),
 		"ground_horizon_color": Color(0.5, 0.52, 0.55),
+		"panorama": "res://assets/skies/overcast.exr",
+		"tile": "res://assets/skies/overcast_tile.png",
+		"preview": "res://assets/skies/overcast_preview.png",
+		"sun_azimuth_deg": 180.7,
+		"energy": 0.739,
+	},
+	"morning":
+	{
+		"description": "Cool clear dawn, low pale sun",
+		"sky_top_color": Color(0.35, 0.42, 0.62),
+		"sky_horizon_color": Color(0.85, 0.78, 0.7),
+		"ground_bottom_color": Color(0.16, 0.14, 0.12),
+		"ground_horizon_color": Color(0.55, 0.52, 0.5),
+		"panorama": "res://assets/skies/morning.exr",
+		"tile": "res://assets/skies/morning_tile.png",
+		"preview": "res://assets/skies/morning_preview.png",
+		"sun_azimuth_deg": 170.9,
+		"energy": 1.077,
+	},
+	"sunset":
+	{
+		"description": "Orange sunset with lit clouds, warm fill",
+		"sky_top_color": Color(0.15, 0.15, 0.45),
+		"sky_horizon_color": Color(1.0, 0.55, 0.25),
+		"ground_bottom_color": Color(0.1, 0.05, 0.02),
+		"ground_horizon_color": Color(0.85, 0.45, 0.2),
+		"panorama": "res://assets/skies/sunset.exr",
+		"tile": "res://assets/skies/sunset_tile.png",
+		"preview": "res://assets/skies/sunset_preview.png",
+		"sun_azimuth_deg": 270.7,
+		"energy": 0.82,
+	},
+	"dusk":
+	{
+		"description": "Blue dusk after sunset, faint warm horizon",
+		"sky_top_color": Color(0.08, 0.1, 0.28),
+		"sky_horizon_color": Color(0.45, 0.35, 0.4),
+		"ground_bottom_color": Color(0.04, 0.03, 0.04),
+		"ground_horizon_color": Color(0.25, 0.2, 0.22),
+		"panorama": "res://assets/skies/dusk.exr",
+		"tile": "res://assets/skies/dusk_tile.png",
+		"preview": "res://assets/skies/dusk_preview.png",
+		"sun_azimuth_deg": 189.1,
+		"energy": 0.904,
+	},
+	"storm":
+	{
+		"description": "Dark thunderstorm sky, dim and dramatic",
+		"sky_top_color": Color(0.18, 0.2, 0.25),
+		"sky_horizon_color": Color(0.35, 0.36, 0.4),
+		"ground_bottom_color": Color(0.1, 0.1, 0.1),
+		"ground_horizon_color": Color(0.28, 0.28, 0.3),
+		"panorama": "res://assets/skies/storm.exr",
+		"tile": "res://assets/skies/storm_tile.png",
+		"preview": "res://assets/skies/storm_preview.png",
+		"sun_azimuth_deg": 61.5,
+		"energy": 0.713,
 	},
 	"night_sky":
 	{
@@ -80,6 +152,11 @@ const SKY_PRESETS = {
 		"ground_horizon_color": Color(0.03, 0.04, 0.06),
 	},
 }
+
+## Engine convention between the panorama's brightest column and the yaw
+## Environment.sky_rotation needs so that column faces the sun. Calibrated once in
+## the live check (docs/lighting-and-environment.md, "Sky follows the sun").
+const SKY_YAW_OFFSET_DEG := 0.0
 
 ## Built-in environment presets
 ## Each preset overrides only the properties it needs to change from defaults.
@@ -399,6 +476,10 @@ const PRESET_GROUPS := {
 ## (every slider tick in the Visuals drawer) must reuse the same instance.
 static var _sky_cache: Dictionary = {}
 
+## Panorama paths already warned about (missing/unloadable), so
+## create_sky_from_config() warns once per path instead of once per call.
+static var _warned_panoramas: Dictionary = {}
+
 
 ## Get list of all available sky preset names
 static func get_sky_preset_names() -> Array[String]:
@@ -416,20 +497,64 @@ static func get_sky_preset_description(preset_name: String) -> String:
 	return ""
 
 
-## Create a Sky resource with ProceduralSkyMaterial from a sky preset.
-## Returns null if the preset name is not found.
+## Create a Sky resource for a sky preset: a PanoramaSkyMaterial when the entry
+## ships a panorama, else the entry's procedural gradient. Null for unknown names.
 static func create_sky_from_preset(preset_name: String) -> Sky:
 	if not SKY_PRESETS.has(preset_name):
 		return null
-	var config = SKY_PRESETS[preset_name]
-	var material = ProceduralSkyMaterial.new()
+	return create_sky_from_config(SKY_PRESETS[preset_name])
+
+
+## Build a Sky from one SKY_PRESETS-shaped entry. A panorama that cannot be loaded
+## (missing file, headless import not run) falls back to the gradient colours and
+## warns once per path so a broken asset is visible without spamming.
+static func create_sky_from_config(config: Dictionary) -> Sky:
+	var sky := Sky.new()
+	var panorama_path: String = config.get("panorama", "")
+	if not panorama_path.is_empty():
+		var texture: Texture2D = null
+		if ResourceLoader.exists(panorama_path):
+			texture = load(panorama_path) as Texture2D
+		if texture:
+			var panorama := PanoramaSkyMaterial.new()
+			panorama.panorama = texture
+			panorama.energy_multiplier = float(config.get("energy", 1.0))
+			sky.sky_material = panorama
+			return sky
+		if not _warned_panoramas.has(panorama_path):
+			_warned_panoramas[panorama_path] = true
+			push_warning(
+				"EnvironmentPresets: sky panorama missing, using gradient: " + panorama_path
+			)
+	var material := ProceduralSkyMaterial.new()
 	material.sky_top_color = config.get("sky_top_color", Color(0.38, 0.45, 0.75))
 	material.sky_horizon_color = config.get("sky_horizon_color", Color(0.65, 0.72, 0.83))
 	material.ground_bottom_color = config.get("ground_bottom_color", Color(0.2, 0.17, 0.13))
 	material.ground_horizon_color = config.get("ground_horizon_color", Color(0.65, 0.67, 0.67))
-	var sky = Sky.new()
 	sky.sky_material = material
 	return sky
+
+
+static func is_hdri_sky(preset_name: String) -> bool:
+	return SKY_PRESETS.has(preset_name) and SKY_PRESETS[preset_name].has("panorama")
+
+
+## The sun's azimuth inside the panorama (degrees), 0.0 for anything else.
+static func get_sky_sun_azimuth(preset_name: String) -> float:
+	if not is_hdri_sky(preset_name):
+		return 0.0
+	return float(SKY_PRESETS[preset_name].get("sun_azimuth_deg", 0.0))
+
+
+## Environment.sky_rotation that turns an HDRI sky's brightest column to the sun's
+## azimuth. Gradients, "", and "map_default" never rotate.
+static func sky_rotation_for(sun_azimuth_deg: float, sky_key: String) -> Vector3:
+	if not is_hdri_sky(sky_key):
+		return Vector3.ZERO
+	var yaw := wrapf(
+		sun_azimuth_deg - get_sky_sun_azimuth(sky_key) + SKY_YAW_OFFSET_DEG, 0.0, 360.0
+	)
+	return Vector3(0.0, deg_to_rad(yaw), 0.0)
 
 
 ## Cached Sky for a sky preset, or null for an unknown name.
