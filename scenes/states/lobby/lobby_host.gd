@@ -5,6 +5,13 @@ extends CanvasLayer
 
 signal start_game_requested
 signal cancel_requested
+signal level_change_requested(level_info: Dictionary)
+
+const LEVEL_PICKER_SCENE := preload("res://scenes/ui/level_picker_dialog.tscn")
+
+## Tests set this false before adding the lobby to the tree so headless runs
+## never reach NetworkManager.host_game() or its signal connections.
+@export var start_hosting: bool = true
 
 @onready var player_name_input: LineEdit = %PlayerNameInput
 @onready var room_code_label: Label = %RoomCodeLabel
@@ -15,6 +22,10 @@ signal cancel_requested
 @onready var status_label: Label = %StatusLabel
 @onready var copy_button: Button = %CopyCodeButton
 @onready var invite_button: Button = %InviteButton
+@onready var level_thumb: TextureRect = %LevelThumb
+@onready var level_name: Label = %LevelName
+@onready var level_caption: Label = %LevelCaption
+@onready var change_level_button: Button = %ChangeLevelButton
 
 
 func _ready() -> void:
@@ -24,13 +35,15 @@ func _ready() -> void:
 	copy_button.pressed.connect(_on_copy_code_pressed)
 	invite_button.pressed.connect(_on_invite_pressed)
 	player_name_input.text_changed.connect(_on_player_name_changed)
+	change_level_button.pressed.connect(_on_change_pressed)
 
-	# Connect network signals
-	NetworkManager.room_code_received.connect(_on_room_code_received)
-	NetworkManager.player_joined.connect(_on_player_joined)
-	NetworkManager.player_left.connect(_on_player_left)
-	NetworkManager.connection_failed.connect(_on_connection_failed)
-	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
+	if start_hosting:
+		# Connect network signals
+		NetworkManager.room_code_received.connect(_on_room_code_received)
+		NetworkManager.player_joined.connect(_on_player_joined)
+		NetworkManager.player_left.connect(_on_player_left)
+		NetworkManager.connection_failed.connect(_on_connection_failed)
+		NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
 	# Load and display saved player name
 	player_name_input.text = NetworkManager.get_player_name()
@@ -42,7 +55,8 @@ func _ready() -> void:
 	_update_player_list()
 
 	# Start hosting
-	NetworkManager.host_game()
+	if start_hosting:
+		NetworkManager.host_game()
 
 
 func _exit_tree() -> void:
@@ -148,3 +162,33 @@ func _flash_player_list() -> void:
 	var tw = player_list.create_tween()
 	tw.tween_property(player_list, "self_modulate", Color(1.3, 1.2, 1.0, 1.0), 0.1)
 	tw.tween_property(player_list, "self_modulate", Color.WHITE, 0.3)
+
+
+## Show the pending level the root handed over (or the replacement after Change).
+func set_level(level: LevelData) -> void:
+	level_name.text = level.level_name
+	var count := level.token_placements.size()
+	level_caption.text = (
+		"No tokens" if count == 0 else ("1 token" if count == 1 else "%d tokens" % count)
+	)
+	level_thumb.texture = null
+	if not level.level_folder.is_empty():
+		var path := LevelManager.thumbnail_path(level.level_folder)
+		if FileAccess.file_exists(path):
+			var image := Image.load_from_file(ProjectSettings.globalize_path(path))
+			if image:
+				level_thumb.texture = ImageTexture.create_from_image(image)
+	if level_thumb.texture == null:
+		var config := EnvironmentPresets.get_environment_config(level.environment_preset, {}, {})
+		level_thumb.texture = SwatchTextures.sky_preview(String(config.get("sky_preset", "")))
+
+
+func _on_change_pressed() -> void:
+	var picker: LevelPickerDialog = LEVEL_PICKER_SCENE.instantiate()
+	picker.setup("Change level")
+	picker.level_chosen.connect(_on_level_picked)
+	get_tree().root.add_child(picker)
+
+
+func _on_level_picked(info: Dictionary) -> void:
+	level_change_requested.emit(info)
