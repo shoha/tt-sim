@@ -106,3 +106,60 @@ func test_aim_button_round_trip() -> void:
 	pane.set_aim_pressed(false)
 	assert_false(pane._aim_button.button_pressed)
 	assert_signal_emit_count(pane, "aim_toggled", 1, "set_aim_pressed is silent")
+
+
+func test_mode_and_shadow_tiles_live_in_full_width_fields() -> void:
+	var pane := _pane()
+	assert_true(pane._mode_field is TileField)
+	assert_same(pane._mode_tiles, pane._mode_field.tiles)
+	assert_true(pane._shadow_field.tiles.has_tile(&"soft"))
+
+
+func test_load_maps_shadow_settings_to_a_tile() -> void:
+	var pane := _pane()
+	var state := LevelVisualState.new()
+	state.sun.shadows_enabled = true
+	state.sun.softness = 1.5
+	pane.load_state(state)
+	assert_eq(pane._shadow_field.tiles.selected, &"soft")
+	state.sun.softness = 0.1
+	pane.load_state(state)
+	assert_eq(pane._shadow_field.tiles.selected, &"hard")
+	state.sun.shadows_enabled = false
+	pane.load_state(state)
+	assert_eq(pane._shadow_field.tiles.selected, &"off")
+
+
+func test_shadow_tiles_apply_values_and_gate_rows() -> void:
+	var pane := _pane()
+	watch_signals(pane)
+	pane._on_shadow_tile_selected(&"hard")
+	assert_true(pane._sun.shadows_enabled)
+	assert_eq(pane._sun.softness, 0.0)
+	pane._on_shadow_tile_selected(&"soft")
+	assert_eq(pane._sun.softness, SunPane.SHADOW_SOFT_SOFTNESS)
+	assert_true(pane._softness_row.editable)
+	pane._on_shadow_tile_selected(&"off")
+	assert_false(pane._sun.shadows_enabled)
+	assert_false(pane._softness_row.editable)
+	assert_signal_emit_count(pane, "sun_changed", 3)
+	assert_eq(pane._sun.mode, "on", "sun edits promote auto to on")
+
+
+func test_softness_slider_moves_the_shadow_tile() -> void:
+	var pane := _pane()
+	pane._on_shadow_tile_selected(&"hard")
+	pane._on_softness_changed(2.0)
+	assert_eq(pane._shadow_field.tiles.selected, &"soft")
+
+
+func test_formatters() -> void:
+	assert_eq(SunPane.format_time(14.5), "14:30")
+	assert_eq(SunPane.format_time(0.0), "00:00")
+	assert_eq(SunPane.format_time(23.999), "00:00")
+	assert_eq(SunPane.format_bearing(143.0), "143° SE")
+	assert_eq(SunPane.format_bearing(0.0), "0° N")
+	assert_eq(SunPane.format_degrees(43.4), "43°")
+	var pane := _pane()
+	assert_eq(pane._time_row.hint_low, "Dawn")
+	assert_eq(pane._energy_row.hint_high, "Blazing")
