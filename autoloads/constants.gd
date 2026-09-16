@@ -91,6 +91,9 @@ const ANIM_FADE_OUT_DURATION: float = 0.15
 # are tweened on Control.offset_transform_scale so containers never relayout.
 const ANIM_HOVER_IN: float = 0.12
 const ANIM_HOVER_OUT: float = 0.10
+# Soft glide for large surfaces such as level card thumbnails, where the tile snap reads as abrupt.
+const ANIM_HOVER_SOFT_IN: float = 0.24
+const ANIM_HOVER_SOFT_OUT: float = 0.20
 const ANIM_PRESS: float = 0.06
 const ANIM_PANE_SWAP: float = 0.16
 const ANIM_PANE_SWAP_OFFSET_PX: float = 8.0

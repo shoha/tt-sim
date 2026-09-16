@@ -131,14 +131,21 @@ func test_hover_zooms_the_thumbnail_inside_its_slot_and_never_scales_the_card() 
 	card.size = Vector2(300, 240)
 	await wait_frames(2)
 	card._on_hover(true)
-	await wait_seconds(Constants.ANIM_HOVER_IN + 0.05)
+	await wait_seconds(Constants.ANIM_HOVER_SOFT_IN * 0.5)
+	# Midway through the sine glide the zoom is still in flight -- strictly
+	# past 1.0 and meaningfully short of the 1.04 target. The upper bound is
+	# tightened to 1.03 (not the literal 1.04) because an abrupt tween that
+	# already finished lands at ~1.039999 here -- inside (1.0, 1.04) by pure
+	# floating-point noise, which would let a non-eased regression slip by.
+	assert_true(card._thumb.scale.x > 1.0 and card._thumb.scale.x < 1.03)
+	await wait_seconds(Constants.ANIM_HOVER_SOFT_IN * 0.5 + 0.05)
 	assert_almost_eq(card._thumb.scale.x, 1.04, 0.001)
 	assert_eq(card.scale, Vector2.ONE)
 	assert_false(card.offset_transform_enabled)
 	assert_true(card._thumb.get_parent().clip_contents)
 	assert_almost_eq(card._thumb.pivot_offset.x, card._thumb.size.x * 0.5, 0.5)
 	card._on_hover(false)
-	await wait_seconds(Constants.ANIM_HOVER_OUT + 0.05)
+	await wait_seconds(Constants.ANIM_HOVER_SOFT_OUT + 0.05)
 	assert_almost_eq(card._thumb.scale.x, 1.0, 0.001)
 
 
@@ -147,7 +154,7 @@ func test_hover_is_inert_during_rename() -> void:
 	await wait_frames(2)
 	card.begin_rename()
 	card._on_hover(true)
-	await wait_seconds(Constants.ANIM_HOVER_IN + 0.05)
+	await wait_seconds(Constants.ANIM_HOVER_SOFT_IN + 0.05)
 	assert_eq(card._thumb.scale, Vector2.ONE)
 
 
