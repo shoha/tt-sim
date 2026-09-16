@@ -111,6 +111,7 @@ func test_sky_tiles_are_painted_and_full_width() -> void:
 	assert_true(pane._sky_field is TileField)
 	assert_not_null(pane._sky_tiles._tiles[&"clear_day"].icon)
 	assert_same(pane._sky_tiles._tiles[&"sunset"].icon, SwatchTextures.sky_gradient("sunset"))
+	assert_eq(pane._sky_tiles.tile_min_size, Vector2(52, 52))
 
 
 func test_fog_colour_lives_in_advanced_with_its_own_reset() -> void:
@@ -122,3 +123,4 @@ func test_fog_colour_lives_in_advanced_with_its_own_reset() -> void:
 	pane._on_reset_requested(["fog_light_color"])
 	assert_false(pane._fog_color_row.overridden)
 	assert_eq(pane._fog_row.hint_high, "Thick")
+	assert_eq(pane._fog_height_density_row._label.text, "Fog falloff")

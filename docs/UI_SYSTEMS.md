@@ -605,7 +605,7 @@ The drawer is a rail of six panes (`scenes/states/playing/visual_panes/`), each 
 | Rail item | Primary | Advanced |
 |---|---|---|
 | Sun | time of day (dawn/dusk hints, 14:30 format), Sun tiles Auto/On/Off, Shadows tiles Off/Hard/Soft, aim on map | direction (bearing), height, colour, energy, softness, darkness, back to generated |
-| Sky | painted sky tiles, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog colour, fog energy, fog height, fog height density |
+| Sky | painted sky tiles, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog colour, fog energy, fog height, fog falloff |
 | Color | brightness (exposure), contrast, saturation, glow | light energy, fine brightness, tonemap, white point, glow strength, bloom |
 | Weather | rain/snow/fog/wind tiles with Light..Heavy intensity | none |
 | Film | Style tiles Off/Subtle/Retro/Heavy (+Custom), pixelate, vignette, grain | colours, dither, colour fade |

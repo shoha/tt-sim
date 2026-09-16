@@ -359,7 +359,7 @@ the fields it edits and implements `load_state(state)` / `write_state(state)` ov
 | Rail item | Primary | Advanced |
 |---|---|---|
 | Sun | time of day (dawn/dusk hints, 14:30 format), Sun tiles Auto/On/Off, Shadows tiles Off/Hard/Soft, aim on map | direction (bearing), height, color, energy, softness, darkness, back to generated |
-| Sky | painted sky tiles, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog color, fog energy, fog height, fog height density |
+| Sky | painted sky tiles, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog color, fog energy, fog height, fog falloff |
 | Color | brightness (exposure), contrast, saturation, glow | light energy (formerly "Light scale"), fine brightness, tonemap, white point, glow strength, bloom |
 | Weather | rain/snow/fog/wind tiles with Light..Heavy intensity | none |
 | Film | Style tiles Off/Subtle/Retro/Heavy (+Custom), pixelate, vignette, grain | colors, dither, color fade |
