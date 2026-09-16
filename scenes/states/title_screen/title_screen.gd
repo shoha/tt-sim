@@ -201,8 +201,11 @@ func _play_entrance_animation() -> void:
 			targets.append(child)
 	for control in targets:
 		control.modulate.a = 0.0
-	_left.queue_sort()
-	await _left.sort_children
+	# Let every container in both columns settle its layout (the right column's
+	# sort cascades from the Columns HBox sizing it) before capturing target
+	# positions; capturing early leaves the grid tweened onto the heading.
+	await get_tree().process_frame
+	await get_tree().process_frame
 	if not is_instance_valid(self):
 		return
 	for i in range(targets.size()):
