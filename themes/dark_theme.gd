@@ -461,6 +461,33 @@ func _define_icon_buttons():
 		)
 	)
 
+	# Level cards: a flat surface that lifts on hover and takes the accent border
+	# when selected (pressed). Text colours stay neutral; the card's own labels
+	# carry the hierarchy.
+	var card_normal = stylebox_flat(
+		{
+			bg_color = color_surface1,
+			border_color = color_surface3,
+			border_ = border_width(border_w),
+			corner_ = corner_radius(corner_r + 2),
+			content_margin_ = content_margins(spacing_sm, spacing_sm),
+		}
+	)
+	define_variant_style(
+		"Card",
+		"Button",
+		{
+			normal = card_normal,
+			hover = inherit(card_normal, {bg_color = color_surface2}),
+			pressed =
+			inherit(card_normal, {bg_color = color_surface2, border_color = color_accent}),
+			hover_pressed =
+			inherit(card_normal, {bg_color = color_surface3, border_color = color_accent}),
+			disabled = inherit(card_normal, {bg_color = Color(color_surface1, 0.5)}),
+			focus = style_focus_ring,
+		}
+	)
+
 	define_variant_style(
 		"ValueChip",
 		"LineEdit",
