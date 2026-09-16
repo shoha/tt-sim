@@ -78,3 +78,28 @@ func test_model_reload_resyncs_rows() -> void:
 	_model.load_from("outdoor_day", {"tonemap_exposure": 2.2}, {})
 	assert_eq(pane._rows["tonemap_exposure"].value, 2.2)
 	assert_true(pane._rows["tonemap_exposure"].overridden)
+
+
+func test_light_energy_round_trips_and_emits() -> void:
+	var pane := _pane()
+	var state := LevelVisualState.new()
+	state.light_intensity_scale = 1.4
+	pane.load_state(state)
+	assert_eq(pane._intensity_row.value, 1.4)
+	var out := LevelVisualState.new()
+	pane.write_state(out)
+	assert_eq(out.light_intensity_scale, 1.4)
+	watch_signals(pane)
+	pane._on_intensity_changed(0.5)
+	assert_eq(pane.light_intensity_scale, 0.5)
+	assert_signal_emitted_with_parameters(pane, "intensity_changed", [0.5])
+	assert_signal_emitted(pane, "changed")
+	assert_eq(ColorPane.format_percent(0.5), "50%")
+
+
+func test_rows_carry_hints_and_brightness_is_exposure() -> void:
+	var pane := _pane()
+	assert_eq(pane._rows["tonemap_exposure"]._label.text, "Brightness")
+	assert_eq(pane._rows["tonemap_exposure"].hint_high, "Brighter")
+	assert_eq(pane._rows["adjustment_contrast"].hint_low, "Flat")
+	assert_eq(pane._rows["adjustment_brightness"]._label.text, "Fine brightness")

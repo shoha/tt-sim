@@ -65,7 +65,7 @@ func test_film_edit_marks_dirty_and_badges_only_film() -> void:
 
 func test_every_live_edit_marks_dirty() -> void:
 	var edits: Array[Callable] = [
-		func() -> void: _panel.sky_pane._on_intensity_changed(0.4),
+		func() -> void: _panel.color_pane._on_intensity_changed(0.4),
 		func() -> void: _panel.sky_pane._on_override_value(1.5, "ambient_light_energy"),
 		func() -> void: _panel.color_pane._on_row_changed(1.1, "adjustment_brightness", true),
 		func() -> void: _panel.weather_pane._on_intensity_changed(0.3, "rain"),
@@ -169,7 +169,7 @@ func test_pane_signals_are_relayed_under_public_names() -> void:
 	assert_signal_emitted_with_parameters(_panel, "water_style_changed", ["realistic"])
 	_panel.world_pane._on_cell_size_changed(2.0)
 	assert_signal_emitted(_panel, "scale_config_changed")
-	_panel.sky_pane._on_intensity_changed(0.4)
+	_panel.color_pane._on_intensity_changed(0.4)
 	assert_signal_emitted_with_parameters(_panel, "intensity_changed", [0.4])
 	_panel.color_pane._on_row_changed(1.5, "tonemap_exposure", false)
 	assert_signal_emitted(_panel, "environment_changed")
@@ -181,7 +181,7 @@ func test_build_state_collects_every_pane() -> void:
 	_panel.film_pane._on_row_changed(0.5, "pixelation")
 	_panel.world_pane._on_cell_size_changed(2.0)
 	_panel.sun_pane._on_energy_changed(0.7)
-	_panel.sky_pane._on_intensity_changed(0.4)
+	_panel.color_pane._on_intensity_changed(0.4)
 	_panel.color_pane._on_row_changed(1.5, "tonemap_exposure", false)
 	_panel.weather_pane._on_intensity_changed(0.3, "rain")
 	var state: LevelVisualState = _panel._build_state()

@@ -7,26 +7,29 @@ extends LevelEditPane
 ## Sky pane writes the model into the state on Save, so write_state here is a
 ## no-op.
 
+signal intensity_changed(new_scale: float)
+
 const TONEMAP_MODES := {
 	"Linear": Environment.TONE_MAPPER_LINEAR,
 	"Reinhardt": Environment.TONE_MAPPER_REINHARDT,
 	"Filmic": Environment.TONE_MAPPER_FILMIC,
 	"ACES": Environment.TONE_MAPPER_ACES,
 }
-## [label, override key, min, max, step, allow_greater, is_adjustment]
+## [label, override key, min, max, step, allow_greater, is_adjustment, hint_low, hint_high]
 const ROWS := [
-	["Exposure", "tonemap_exposure", 0.1, 4.0, 0.01, true, false],
-	["Brightness", "adjustment_brightness", 0.1, 3.0, 0.01, false, true],
-	["Contrast", "adjustment_contrast", 0.1, 3.0, 0.01, false, true],
-	["Saturation", "adjustment_saturation", 0.0, 3.0, 0.01, false, true],
+	["Brightness", "tonemap_exposure", 0.1, 4.0, 0.01, true, false, "Darker", "Brighter"],
+	["Contrast", "adjustment_contrast", 0.1, 3.0, 0.01, false, true, "Flat", "Punchy"],
+	["Saturation", "adjustment_saturation", 0.0, 3.0, 0.01, false, true, "Grey", "Vivid"],
 ]
-## [label, override key, min, max, step, allow_greater]
 const ADVANCED_ROWS := [
-	["White point", "tonemap_white", 0.1, 16.0, 0.01, true],
-	["Glow strength", "glow_strength", 0.0, 2.0, 0.01, true],
-	["Bloom", "glow_bloom", 0.0, 1.0, 0.01, false],
+	["Fine brightness", "adjustment_brightness", 0.1, 3.0, 0.01, false, true, "Darker", "Brighter"],
+	["White point", "tonemap_white", 0.1, 16.0, 0.01, true, false, "Soft", "Hard"],
+	["Glow strength", "glow_strength", 0.0, 2.0, 0.01, true, false, "Subtle", "Intense"],
+	["Bloom", "glow_bloom", 0.0, 1.0, 0.01, false, false, "Subtle", "Intense"],
 ]
 const GLOW_KEYS := ["glow_enabled", "glow_intensity"]
+
+var light_intensity_scale: float = 1.0
 
 var _model: EnvironmentEditModel
 var _rows: Dictionary = {}
@@ -34,6 +37,7 @@ var _glow_row: PropertyRow
 var _tonemap_row: PropertyRow
 var _tonemap_dropdown: OptionButton
 var _foldout: Foldout
+var _intensity_row: PropertyRow
 
 
 func set_model(model: EnvironmentEditModel) -> void:
@@ -47,12 +51,41 @@ func _build() -> void:
 	for spec in ROWS:
 		_add_override_row(spec, self)
 
-	_glow_row = _add_row("Glow", 0.0, 2.0, 0.01, 0.8, {"show_check": true, "allow_greater": true})
+	_glow_row = _add_row(
+		"Glow",
+		0.0,
+		2.0,
+		0.01,
+		0.8,
+		{
+			"show_check": true,
+			"allow_greater": true,
+			"hint_low": "Subtle",
+			"hint_high": "Intense",
+		}
+	)
 	_glow_row.toggled.connect(_on_glow_toggled)
 	_glow_row.value_changed.connect(_on_glow_value_changed)
 	_glow_row.reset_requested.connect(_on_reset_requested.bind(GLOW_KEYS))
 
 	_foldout = _add_foldout()
+	_intensity_row = _add_row(
+		"Light energy",
+		0.0001,
+		2.0,
+		0.0001,
+		1.0,
+		{
+			"exp_edit": true,
+			"allow_greater": true,
+			"parent": _foldout.body,
+			"hint_low": "Dim",
+			"hint_high": "Bright",
+			"formatter": ColorPane.format_percent,
+			"tooltip": "Scales every light in the map",
+		}
+	)
+	_intensity_row.value_changed.connect(_on_intensity_changed)
 	_tonemap_row = _add_row(
 		"Tonemap", 0.0, 1.0, 1.0, 0.0, {"show_slider": false, "parent": _foldout.body}
 	)
@@ -66,15 +99,18 @@ func _build() -> void:
 	_tonemap_row.set_control(_tonemap_dropdown)
 	_tonemap_row.reset_requested.connect(_on_reset_requested.bind(["tonemap_mode"]))
 	for spec in ADVANCED_ROWS:
-		_add_override_row(
-			[spec[0], spec[1], spec[2], spec[3], spec[4], spec[5], false], _foldout.body
-		)
+		_add_override_row(spec, _foldout.body)
 
 
 func _add_override_row(spec: Array, parent: Node) -> PropertyRow:
 	var key: String = spec[1]
 	var row := _add_row(
-		spec[0], spec[2], spec[3], spec[4], spec[3], {"allow_greater": spec[5], "parent": parent}
+		spec[0],
+		spec[2],
+		spec[3],
+		spec[4],
+		spec[3],
+		{"allow_greater": spec[5], "parent": parent, "hint_low": spec[7], "hint_high": spec[8]}
 	)
 	row.value_changed.connect(_on_row_changed.bind(key, spec[6]))
 	row.reset_requested.connect(_on_reset_requested.bind([key]))
@@ -82,12 +118,14 @@ func _add_override_row(spec: Array, parent: Node) -> PropertyRow:
 	return row
 
 
-func load_state(_state: LevelVisualState) -> void:
+func load_state(state: LevelVisualState) -> void:
+	light_intensity_scale = state.light_intensity_scale
+	_intensity_row.set_value_no_signal(light_intensity_scale)
 	_sync_from_model()
 
 
-func write_state(_state: LevelVisualState) -> void:
-	pass
+func write_state(state: LevelVisualState) -> void:
+	state.light_intensity_scale = light_intensity_scale
 
 
 func _sync_from_model() -> void:
@@ -135,3 +173,13 @@ func _on_tonemap_selected(index: int) -> void:
 func _on_reset_requested(keys: Array) -> void:
 	if _model.erase_keys(keys):
 		changed.emit()
+
+
+static func format_percent(value: float) -> String:
+	return "%d%%" % int(round(value * 100.0))
+
+
+func _on_intensity_changed(value: float) -> void:
+	light_intensity_scale = value
+	intensity_changed.emit(value)
+	changed.emit()
