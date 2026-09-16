@@ -68,3 +68,16 @@ func test_activating_a_card_plays_solo() -> void:
 	watch_signals(title)
 	title.grid.level_activated.emit(_levels[0])
 	assert_signal_emitted_with_parameters(title, "play_solo_requested", [_levels[0]])
+
+
+func test_grid_lands_below_the_heading_after_the_entrance() -> void:
+	_levels = [_info("new", "New Camp", 200)]
+	var title := _title()
+	var settle := TitleScreen.ENTRANCE_DURATION + 12 * TitleScreen.ENTRANCE_STAGGER + 0.1
+	await wait_seconds(settle)
+	var heading: Control = title.get_node("Hub/Columns/RightZone/Heading")
+	assert_gt(
+		title.grid.position.y,
+		heading.position.y + heading.size.y - 1.0,
+		"grid must sit below the heading, not on top of it"
+	)
