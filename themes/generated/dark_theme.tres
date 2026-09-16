@@ -1,6 +1,6 @@
 [gd_resource type="Theme" format=3 uid="uid://gsomug13qq54"]
 
-[ext_resource type="FontFile" path="res://assets/fonts/Inter-VariableFont_opsz,wght.ttf" id="1_j2u8l"]
+[ext_resource type="FontFile" uid="uid://m2x5xpkp2eik" path="res://assets/fonts/Inter-VariableFont_opsz,wght.ttf" id="1_j2u8l"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_j2u8l"]
 content_margin_left = 8.0
