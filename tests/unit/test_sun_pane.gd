@@ -79,13 +79,17 @@ func test_mode_tile_does_not_promote() -> void:
 	assert_eq(settings.mode, "off")
 
 
-func test_shadows_toggle_gates_softness_and_darkness() -> void:
+func test_shadow_tiles_gate_softness_and_darkness() -> void:
 	var pane := _pane()
-	pane._on_shadows_toggled(false)
+	pane._on_shadow_tile_selected(&"off")
 	assert_false(pane._softness_row.editable)
 	assert_false(pane._darkness_row.editable)
-	pane._on_shadows_toggled(true)
+	assert_false(pane._sun.shadows_enabled)
+	pane._on_shadow_tile_selected(&"hard")
 	assert_true(pane._softness_row.editable)
+	assert_true(pane._darkness_row.editable)
+	assert_true(pane._sun.shadows_enabled)
+	assert_eq(pane._sun.softness, 0.0)
 
 
 func test_gizmo_direction_updates_rows_and_emits() -> void:
