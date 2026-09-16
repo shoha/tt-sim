@@ -404,11 +404,13 @@ Reusable controls under `scenes/ui/primitives/`, built in code (no `.tscn`). Eve
 | `PropertyRow` | Label + optional check and colour + slider + inline value | `value`, `min_value`, `max_value`, `step`, `show_check`, `show_color`, `show_slider`, `overridden`, `ticks`, `set_control(control)`, `value_changed`, `reset_requested` |
 | `PaneStack` | One-visible-pane content area with crossfade | `add_pane(id, pane)`, `show_pane(id)`, `pane_changed` |
 
-Rules: programmatic setters never emit (`select`, `set_value_no_signal`, `set_tile_on`); user edits do. Every primitive owns one `Tween`, kills it before starting another, and runs no `_process`.
+Rules: most programmatic setters are silent — `TileRow.select()` and `set_tile_on()`, `PropertyRow.set_*_no_signal()` and its property setters — while user edits emit. `IconRail.select()` is the exception: it DOES emit `selection_changed`, since that is the host's way to drive a selection change programmatically (`item_pressed` is the click). Every primitive owns one `Tween`, kills it before starting another, and runs no `_process`.
+
+`IconButton` sets its own theme type variation in code (`IconButton` normally, `IconButtonActive` when `active` is true), so a different `theme_type_variation` assigned on the node in a scene is overwritten at runtime.
 
 ### Regenerating the theme
 
-`tools/regen_theme.gd` (a `ProgrammaticTheme`/`EditorScript` subclass) rebuilds `themes/generated/dark_theme.tres` from `dark_theme.gd` for CI or an agent with no editor session open. Because `EditorScript` can only be instantiated inside the editor, a plain `--headless` run hangs; pass `--editor` too:
+`tools/regen_theme.gd` (a `SceneTree` subclass) rebuilds `themes/generated/dark_theme.tres` from `dark_theme.gd` for CI or an agent with no editor session open. It loads `dark_theme.gd` (which extends `ProgrammaticTheme`, itself an `EditorScript`) and calls its `_run()` method directly, rather than being an `EditorScript` subclass itself. Because `EditorScript` can only be instantiated inside the editor, a plain `--headless` run hangs; pass `--editor` too:
 
 ```
 godot --headless --editor --path . --script res://tools/regen_theme.gd --quit-after 3
