@@ -6,6 +6,9 @@ alwaysApply: false
 
 # SliderSpinBox Component
 
+For in-game panes and new UI, prefer `PropertyRow` (`scenes/ui/primitives/property_row.gd`);
+`SliderSpinBox` remains for the Level Editor and Settings until they are migrated.
+
 When adding a slider with an accompanying spinbox for precise value entry, use the reusable `SliderSpinBox` component at `scenes/ui/slider_spin_box.tscn`.
 
 ## Usage in .tscn

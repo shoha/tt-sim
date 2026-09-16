@@ -42,55 +42,37 @@ The theme uses a semantic color system where colors are named by their purpose, 
 
 ---
 
-## SVG Icons
+## Icons
 
-SVG icons are used for drawer tab handles and other UI elements. They are imported by Godot as `CompressedTexture2D` and displayed via `TextureRect` nodes. To ensure icons can be tinted correctly at runtime, follow these conventions.
+UI icons are Tabler Icons (MIT, https://tabler.io/icons) normalised for engine tinting and stored in `res://assets/icons/ui/` under their Tabler names (`cloud-rain.svg`; filled variants as `<name>-filled.svg`).
 
-### Preparing SVG Files
+### Adding an icon
 
-**Always set `fill="#ffffff"` (white) on the root `<svg>` element.** This allows the icon to be recolored in code using Godot's `self_modulate` or `modulate` properties.
+1. Download the outline (and optionally filled) SVG from the `@tabler/icons` package into a scratch folder.
+2. Run the normaliser, which replaces `currentColor` with `#ffffff`, strips `class` attributes and Tabler's invisible hit-box path, and never fetches anything:
 
-```xml
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="#ffffff">
-  <path d="..."/>
-</svg>
-```
+   ```
+   python tools/normalize_icons.py <scratch>/outline assets/icons/ui <name>
+   python tools/normalize_icons.py <scratch>/filled assets/icons/ui --suffix=-filled <name>
+   ```
 
-### Why White Fill?
+3. Import once (`godot --headless --import --path .`), then set `svg/scale=3.0` and `mipmaps/generate=true` in the generated `.import` sidecar and import again. Icons are drawn at 16 to 24 px, so a 3x raster with mipmaps stays crisp at every size.
+4. Reference the icon by name: `IconButton.icon_name = "cloud-rain"`, `TileRow.add_tile(id, label, "cloud-rain")`, or `IconButton.load_icon("cloud-rain")` for a raw `Texture2D`.
 
-Godot's `modulate` and `self_modulate` work by **multiplying** the source pixel color with the modulate color. This means:
+### Why literal white
 
-| Source Color | × Modulate         | = Result          |
-| ------------ | ------------------ | ----------------- |
-| White `#fff` | `color_accent`     | `color_accent`    |
-| White `#fff` | `Color.WHITE`      | White (no change) |
-| Black `#000` | Any color          | Black (invisible) |
+Godot's SVG loader renders `currentColor` as black, and `modulate` multiplies the source colour, so a black icon stays black under any tint. A white source icon takes on whatever colour the theme applies: `Button` theme items `icon_normal_color`, `icon_hover_color`, `icon_pressed_color`, `icon_disabled_color` handle every state with no per-instance code.
 
-A white source icon acts as a blank canvas that takes on whatever tint you apply. A black source icon will remain black regardless of modulate, making it invisible on dark backgrounds.
+### Standard icon colours
 
-### Coloring Icons in Code
+| Context | Theme item / colour |
+|---|---|
+| Icon-only buttons | `IconButton` variation: text colour, accent on hover and press |
+| Active rail item or tile | `IconButtonActive` / pressed `Tile`: accent |
+| Muted marks (chevrons, slider ticks) | `ThemeColors.TEXT_MUTED` |
+| Drawer tab (single-tab mode) | `ThemeColors.ACCENT` |
 
-Use `self_modulate` on the `TextureRect` to tint the icon:
-
-```gdscript
-var icon_rect = TextureRect.new()
-icon_rect.texture = preload("res://assets/icons/ui/Sun.svg")
-icon_rect.self_modulate = Color("#db924b")  # color_accent
-```
-
-`self_modulate` only affects the node itself (not children), making it ideal for icon tinting. Use `modulate` if you need the tint to propagate to children.
-
-### Standard Icon Colors
-
-| Context               | Color                          | Hex       |
-| --------------------- | ------------------------------ | --------- |
-| Drawer tab icons      | `color_accent`                 | `#db924b` |
-| Informational / muted | `color_text_on_dark`           | `#e0e0e0` |
-| Status indicators     | Use the relevant status color  | —         |
-
-### Icon File Location
-
-Place UI icons in `res://assets/icons/ui/`. Use PascalCase names matching the icon's subject (e.g., `Sun.svg`, `Users.svg`).
+Licence text lives in `THIRD_PARTY_LICENSES.md` at the repo root.
 
 ---
 
@@ -409,6 +391,47 @@ func _animate_popup_out(popup: Window, content: Control) -> void:
 
 ---
 
+## UI Primitives
+
+Reusable controls under `scenes/ui/primitives/`, built in code (no `.tscn`). Every menu should compose these rather than raw Buttons and sliders.
+
+| Primitive | Use it for | Key API |
+|---|---|---|
+| `IconButton` | Icon-only actions, rail items, pane headers | `icon_name`, `active`, `badge`, `static load_icon(name)` |
+| `IconRail` | One-of-N section choice (drawer rail, Settings sections) | `add_item(id, icon, tooltip)`, `select(id)`, `item_pressed`, `selection_changed`, `set_badge(id, on)`, `show_labels`, `auto_select` |
+| `TileRow` | Enums with six or fewer options; multi-select toggles | `add_tile(id, label, icon)`, `select(id)` (silent), `selection_changed`, `multi_select`, `tile_toggled` |
+| `Foldout` | Advanced or secondary rows | `title`, `expanded`, `body`; children authored in a `.tscn` move into `body` |
+| `PropertyRow` | Label + optional check and colour + slider + inline value | `value`, `min_value`, `max_value`, `step`, `show_check`, `show_color`, `show_slider`, `overridden`, `ticks`, `set_control(control)`, `value_changed`, `reset_requested` |
+| `PaneStack` | One-visible-pane content area with crossfade | `add_pane(id, pane)`, `show_pane(id)`, `pane_changed` |
+
+Rules: programmatic setters never emit (`select`, `set_value_no_signal`, `set_tile_on`); user edits do. Every primitive owns one `Tween`, kills it before starting another, and runs no `_process`.
+
+### Regenerating the theme
+
+`tools/regen_theme.gd` (a `ProgrammaticTheme`/`EditorScript` subclass) rebuilds `themes/generated/dark_theme.tres` from `dark_theme.gd` for CI or an agent with no editor session open. Because `EditorScript` can only be instantiated inside the editor, a plain `--headless` run hangs; pass `--editor` too:
+
+```
+godot --headless --editor --path . --script res://tools/regen_theme.gd --quit-after 3
+```
+
+It preserves the theme resource's UID (captured before saving, restored with `ResourceSaver.set_uid()` after), so `project.godot`'s `gui/theme/custom="uid://..."` reference keeps working across a regeneration.
+
+## Motion
+
+Timing tokens live in `Constants`:
+
+| Token | Value | Used by |
+|---|---|---|
+| `ANIM_HOVER_IN` / `ANIM_HOVER_OUT` | 0.12 s back-out / 0.10 s cubic-out | IconButton, Tile hover scale to `UI_HOVER_SCALE` (1.06) |
+| `ANIM_PRESS` | 0.06 s | press to `UI_PRESS_SCALE` (0.96) |
+| `ANIM_PANE_SWAP` / `ANIM_PANE_SWAP_OFFSET_PX` | 0.16 s cubic-out, 8 px | PaneStack crossfade, IconRail indicator |
+| `ANIM_FOLDOUT` | 0.16 s cubic-out | Foldout body and chevron |
+| `DrawerContainer.slide_duration` | 0.25 s cubic-out | drawer sled |
+
+Scale and position animations use `Control.offset_transform_scale` / `offset_transform_position` (Godot 4.7) via `UiMotion.scale_to()`, so containers never relayout during motion. Sounds reuse `AudioManager.play_tick()`, `play_open()`, `play_close()`.
+
+---
+
 ## Drawer Panels
 
 Use `DrawerContainer` for slide-in/out panels attached to a screen edge with a persistent tab handle. The tab remains visible even when the drawer is closed, providing a clear affordance for the user.
@@ -436,13 +459,30 @@ Set `tab_icon` instead of `tab_text` to show an SVG icon on the tab handle. The 
 
 ```gdscript
 func _on_ready() -> void:
-    tab_icon = preload("res://assets/icons/ui/Sun.svg")
+    tab_icon = preload("res://assets/icons/ui/sun.svg")
     drawer_width = 350.0
 ```
 
 When `tab_icon` is set, `tab_text` is hidden. Setting `tab_icon = null` re-shows the text.
 
-**Important:** SVG icons must use `fill="#ffffff"` (white) so the accent tint applies correctly. See the [SVG Icons](#svg-icons) section for details.
+**Important:** SVG icons must use `fill="#ffffff"` (white) so the accent tint applies correctly. See the [Icons](#icons) section for details.
+
+### Rail Mode
+
+Set `rail_items` in `_on_ready()` to replace the single tab with an `IconRail`:
+
+```gdscript
+func _on_ready() -> void:
+    edge = DrawerEdge.RIGHT
+    tab_width = 44.0
+    rail_items = [
+        {"id": &"sun", "icon": "sun", "tooltip": "Sun"},
+        {"id": &"sky", "icon": "haze", "tooltip": "Sky"},
+    ]
+    pane_requested.connect(_on_pane_requested)
+```
+
+Clicking an item opens the drawer and emits `pane_requested(id)`; clicking the active item closes it (through `_can_close_from_tab()`); `open()` with nothing selected reopens the last pane. Badge a single item with `set_rail_badge(id, true)`; `set_tab_badge(false)` clears all. `set_tab_tooltip()` is single-tab only.
 
 ### Configuration Properties
 
@@ -450,9 +490,10 @@ When `tab_icon` is set, `tab_text` is hidden. Setting `tab_icon = null` re-shows
 | ---------------- | ----------- | ----------------------------------- |
 | `edge`           | `LEFT`      | Which screen edge (`LEFT`, `RIGHT`) |
 | `drawer_width`   | 220px       | Width of the content panel          |
-| `tab_width`      | 32px        | Width of the tab handle button      |
+| `tab_width`      | 36px        | Width of the tab handle button      |
 | `tab_text`       | `""`        | Text label on the tab handle        |
 | `tab_icon`       | `null`      | Icon texture on the tab (hides text)|
+| `rail_items`     | `[]`        | Item specs; replaces the single tab with an `IconRail` (rail mode) |
 | `slide_duration` | 0.25s       | Animation duration                  |
 | `start_open`     | `false`     | Whether to start open               |
 | `play_sounds`    | `true`      | Play open/close sounds              |
