@@ -193,8 +193,11 @@ When a sky preset is selected:
 4. **Sky follows the sun**: `LevelEnvironmentManager` sets `Environment.sky_rotation` to
    `EnvironmentPresets.sky_rotation_for(sun azimuth, sky key)` after every environment or sun
    change, in every sun mode. The yaw is
-   `sun azimuth - sun_azimuth_deg + SKY_YAW_OFFSET_DEG` (see the constant's comment for the
-   calibrated value)
+   `sun azimuth + sun_azimuth_deg + SKY_YAW_OFFSET_DEG` wrapped to [0, 360), with the offset
+   calibrated to 180: Godot samples a panorama mirrored relative to the sun azimuth
+   convention (column c sits at world azimuth 180 - c when unrotated), which is why the sky's
+   azimuth is added rather than subtracted. Calibrated live on the clear-day dome by comparing
+   the boulder's sky-lit side (sun off) with its sun-lit side at the same azimuth.
 
 The special `map_default` preset reuses the `Sky` resource that was extracted from the map's embedded `WorldEnvironment` during loading. This allows maps with custom skies to have their sky preserved and restorable.
 

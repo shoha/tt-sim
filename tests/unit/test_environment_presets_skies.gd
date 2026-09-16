@@ -67,11 +67,14 @@ func test_sky_rotation_follows_the_sun_only_for_hdri_keys() -> void:
 	assert_eq(EnvironmentPresets.sky_rotation_for(90.0, "map_default"), Vector3.ZERO)
 	var sky_azimuth := EnvironmentPresets.get_sky_sun_azimuth("clear_day")
 	var offset := EnvironmentPresets.SKY_YAW_OFFSET_DEG
-	var expected := wrapf(90.0 - sky_azimuth + offset, 0.0, 360.0)
+	var expected := wrapf(90.0 + sky_azimuth + offset, 0.0, 360.0)
 	var rotation := EnvironmentPresets.sky_rotation_for(90.0, "clear_day")
 	assert_eq(rotation.x, 0.0)
 	assert_eq(rotation.z, 0.0)
 	assert_almost_eq(rotation.y, deg_to_rad(expected), 0.0001)
-	var below := EnvironmentPresets.sky_rotation_for(sky_azimuth - offset - 10.0, "clear_day")
-	assert_almost_eq(below.y, deg_to_rad(350.0), 0.0001, "wraps below zero")
+	# A sun azimuth that lands the yaw at 350 once the sky azimuth and offset are
+	# added: proves the wrap rather than a negative angle.
+	var sun_for_350 := wrapf(350.0 - sky_azimuth - offset, 0.0, 360.0)
+	var wrapped := EnvironmentPresets.sky_rotation_for(sun_for_350, "clear_day")
+	assert_almost_eq(wrapped.y, deg_to_rad(350.0), 0.0001, "wraps into [0, 360)")
 	assert_eq(EnvironmentPresets.get_sky_sun_azimuth("night_sky"), 0.0)
