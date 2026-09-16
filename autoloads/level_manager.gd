@@ -15,6 +15,12 @@ signal level_list_updated(levels: Array[String])
 const LEVEL_FILE_EXTENSION = ".tres"
 const LEVEL_JSON_NAME = "level.json"
 const LEVEL_MAP_NAME = "map.glb"
+const LEVEL_THUMBNAIL_NAME = "thumbnail.png"
+const THUMBNAIL_SIZE := Vector2i(320, 180)
+
+## Root of the saved-level folders. Tests point this at a temp directory so no
+## real save is touched (the same pattern as UiPreferences.settings_path).
+static var levels_dir: String = Paths.LEVELS_DIR
 
 ## Current loaded level
 var current_level: LevelData = null
@@ -27,8 +33,24 @@ func _ready() -> void:
 
 ## Ensure the levels directory exists
 func _ensure_levels_directory() -> void:
-	if not DirAccess.dir_exists_absolute(Paths.LEVELS_DIR):
-		DirAccess.make_dir_recursive_absolute(Paths.LEVELS_DIR)
+	if not DirAccess.dir_exists_absolute(levels_dir):
+		DirAccess.make_dir_recursive_absolute(levels_dir)
+
+
+func folder_path(folder_name: String) -> String:
+	return levels_dir + folder_name + "/"
+
+
+func json_path(folder_name: String) -> String:
+	return folder_path(folder_name) + LEVEL_JSON_NAME
+
+
+func map_path(folder_name: String) -> String:
+	return folder_path(folder_name) + LEVEL_MAP_NAME
+
+
+func thumbnail_path(folder_name: String) -> String:
+	return folder_path(folder_name) + LEVEL_THUMBNAIL_NAME
 
 
 ## Save a level to disk (legacy .tres format)
@@ -42,7 +64,7 @@ func save_level(level_data: LevelData, file_name: String = "") -> String:
 	if not file_name.ends_with(LEVEL_FILE_EXTENSION):
 		file_name += LEVEL_FILE_EXTENSION
 
-	var full_path = Paths.LEVELS_DIR + file_name
+	var full_path = levels_dir + file_name
 
 	level_data._update_modified_time()
 
@@ -80,7 +102,7 @@ func save_level_folder(
 	if level_data.level_folder == "":
 		folder_name = _get_unique_folder_name(folder_name)
 
-	var folder_path = Paths.get_level_folder(folder_name)
+	var folder_path = folder_path(folder_name)
 
 	# Create folder if it doesn't exist
 	if not DirAccess.dir_exists_absolute(folder_path):
@@ -101,7 +123,7 @@ func save_level_folder(
 	level_data._update_modified_time()
 
 	# Save level.json
-	var json_path = Paths.get_level_json_path(folder_name)
+	var json_path = json_path(folder_name)
 	if not _save_level_json(level_data, json_path):
 		push_error("LevelManager: Failed to save level.json")
 		return ""
@@ -130,7 +152,7 @@ func _get_unique_folder_name(base_name: String) -> String:
 	var folder_name = base_name
 	var counter = 1
 
-	while DirAccess.dir_exists_absolute(Paths.get_level_folder(folder_name)):
+	while DirAccess.dir_exists_absolute(folder_path(folder_name)):
 		folder_name = base_name + "_" + str(counter)
 		counter += 1
 
@@ -157,10 +179,10 @@ func _save_level_json(level_data: LevelData, json_path: String) -> bool:
 ## @param folder_name: The level folder name
 ## @return: True on success
 func copy_map_to_level(source_path: String, folder_name: String) -> bool:
-	var dest_path = Paths.get_level_map_path(folder_name)
+	var dest_path = map_path(folder_name)
 
 	# Ensure destination folder exists
-	var folder_path = Paths.get_level_folder(folder_name)
+	var folder_path = folder_path(folder_name)
 	if not DirAccess.dir_exists_absolute(folder_path):
 		DirAccess.make_dir_recursive_absolute(folder_path)
 
@@ -224,7 +246,7 @@ func load_level(path: String, notify: bool = true) -> LevelData:
 ## Load a level from a folder (new format)
 ## @param folder_name: The folder name within user://levels/
 func load_level_folder(folder_name: String, notify: bool = true) -> LevelData:
-	var json_path = Paths.get_level_json_path(folder_name)
+	var json_path = json_path(folder_name)
 
 	if not FileAccess.file_exists(json_path):
 		push_error("LevelManager: Level JSON not found: " + json_path)
@@ -250,7 +272,7 @@ func load_level_folder(folder_name: String, notify: bool = true) -> LevelData:
 	level.level_folder = folder_name
 
 	current_level = level
-	current_level_path = Paths.get_level_folder(folder_name)
+	current_level_path = folder_path(folder_name)
 
 	if notify:
 		level_loaded.emit(level)
@@ -313,7 +335,7 @@ func load_level_async(path: String, notify: bool = true) -> LevelData:
 ## Uses WorkerThreadPool for file I/O to avoid blocking
 ## @param folder_name: The folder name within user://levels/
 func load_level_folder_async(folder_name: String, notify: bool = true) -> LevelData:
-	var json_path = Paths.get_level_json_path(folder_name)
+	var json_path = json_path(folder_name)
 
 	if not FileAccess.file_exists(json_path):
 		push_error("LevelManager: Level JSON not found: " + json_path)
@@ -355,7 +377,7 @@ func load_level_folder_async(folder_name: String, notify: bool = true) -> LevelD
 	level.level_folder = folder_name
 
 	current_level = level
-	current_level_path = Paths.get_level_folder(folder_name)
+	current_level_path = folder_path(folder_name)
 
 	if notify:
 		level_loaded.emit(level)
@@ -368,7 +390,7 @@ func get_saved_levels() -> Array[Dictionary]:
 	_ensure_levels_directory()
 
 	var levels: Array[Dictionary] = []
-	var dir = DirAccess.open(Paths.LEVELS_DIR)
+	var dir = DirAccess.open(levels_dir)
 
 	if not dir:
 		push_error("LevelManager: Cannot open levels directory")
@@ -380,14 +402,14 @@ func get_saved_levels() -> Array[Dictionary]:
 	while entry_name != "":
 		if dir.current_is_dir():
 			# Check if it's a folder-based level (has level.json)
-			var json_path = Paths.get_level_json_path(entry_name)
+			var json_path = json_path(entry_name)
 			if FileAccess.file_exists(json_path):
 				var level_info = _get_folder_level_info(entry_name)
 				if level_info:
 					levels.append(level_info)
 		elif entry_name.ends_with(LEVEL_FILE_EXTENSION):
 			# Legacy .tres format
-			var full_path = Paths.LEVELS_DIR + entry_name
+			var full_path = levels_dir + entry_name
 			var level = (
 				ResourceLoader.load(full_path, "", ResourceLoader.CACHE_MODE_IGNORE) as LevelData
 			)
@@ -396,17 +418,22 @@ func get_saved_levels() -> Array[Dictionary]:
 					"LevelManager: Skipping unloadable level (no map assigned): " + entry_name
 				)
 			elif level:
-				levels.append(
-					{
-						"path": full_path,
-						"folder": "",
-						"is_folder_based": false,
-						"name": level.level_name,
-						"description": level.level_description,
-						"author": level.author,
-						"modified_at": level.modified_at,
-						"token_count": level.token_placements.size()
-					}
+				(
+					levels
+					. append(
+						{
+							"path": full_path,
+							"folder": "",
+							"is_folder_based": false,
+							"name": level.level_name,
+							"description": level.level_description,
+							"author": level.author,
+							"modified_at": level.modified_at,
+							"token_count": level.token_placements.size(),
+							"environment_preset": level.environment_preset,
+							"thumbnail": "",
+						}
+					)
 				)
 			else:
 				push_warning("LevelManager: Skipping incompatible level file: " + entry_name)
@@ -427,7 +454,7 @@ func get_saved_levels() -> Array[Dictionary]:
 ## _perform_autosave()) so it can capture in-progress edits before a map is chosen.
 ## Such an entry can never be played, so it is excluded from every level list.
 func _get_folder_level_info(folder_name: String) -> Dictionary:
-	var json_path = Paths.get_level_json_path(folder_name)
+	var json_path = json_path(folder_name)
 
 	var file = FileAccess.open(json_path, FileAccess.READ)
 	if not file:
@@ -449,15 +476,18 @@ func _get_folder_level_info(folder_name: String) -> Dictionary:
 	if data.has("token_placements") and data.token_placements is Array:
 		token_count = data.token_placements.size()
 
+	var thumbnail := thumbnail_path(folder_name)
 	return {
-		"path": Paths.get_level_folder(folder_name),
+		"path": folder_path(folder_name),
 		"folder": folder_name,
 		"is_folder_based": true,
 		"name": data.get("level_name", folder_name),
 		"description": data.get("level_description", ""),
 		"author": data.get("author", ""),
 		"modified_at": data.get("modified_at", 0),
-		"token_count": token_count
+		"token_count": token_count,
+		"environment_preset": String(data.get("environment_preset", "")),
+		"thumbnail": thumbnail if FileAccess.file_exists(thumbnail) else "",
 	}
 
 
@@ -516,6 +546,55 @@ func delete_level_folder(folder_path: String) -> bool:
 		current_level_path = ""
 
 	return true
+
+
+## Write a 320x180 thumbnail beside level.json. Only folder-based levels have a
+## home for it; legacy .tres levels return false with a warning.
+func save_thumbnail(level_data: LevelData, image: Image) -> bool:
+	if level_data.level_folder.is_empty():
+		push_warning("LevelManager: cannot save a thumbnail for a level without a folder")
+		return false
+	var fitted := LevelThumbnail.fit(image)
+	var path := thumbnail_path(level_data.level_folder)
+	var err := fitted.save_png(path)
+	if err != OK:
+		push_error("LevelManager: failed to save thumbnail %s: %d" % [path, err])
+		return false
+	return true
+
+
+## Change a level's display name in place; the folder name never changes so
+## paths stay stable. Legacy .tres levels are renamed the same way through
+## save_level_in_place.
+func rename_level(level_info: Dictionary, new_name: String) -> bool:
+	var trimmed := new_name.strip_edges()
+	if trimmed.is_empty():
+		return false
+	var level := load_level(level_info.get("path", ""), false)
+	if level == null:
+		return false
+	level.level_name = trimmed
+	return save_level_in_place(level) != ""
+
+
+## Copy a folder level into a new folder ("<name> (Copy)"), including its map
+## and thumbnail. Returns the new folder path, or "" on failure.
+func duplicate_level(level_info: Dictionary) -> String:
+	var source_folder: String = level_info.get("folder", "")
+	if source_folder.is_empty():
+		push_warning("LevelManager: only folder levels can be duplicated")
+		return ""
+	var level := load_level_folder(source_folder, false)
+	if level == null:
+		return ""
+	var copy := level.duplicate_level()
+	var new_path := save_level_folder(copy, "", map_path(source_folder))
+	if new_path.is_empty():
+		return ""
+	var source_thumb := thumbnail_path(source_folder)
+	if FileAccess.file_exists(source_thumb):
+		DirAccess.copy_absolute(source_thumb, thumbnail_path(copy.level_folder))
+	return new_path
 
 
 ## Create a new empty level
