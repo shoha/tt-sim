@@ -97,6 +97,15 @@ func test_inline_rename_commits_on_submit_and_cancels_on_escape() -> void:
 	assert_signal_emit_count(card, "rename_committed", 1)
 
 
+func test_card_is_as_tall_as_its_content_once_laid_out() -> void:
+	var card := _card(_info())
+	card.custom_minimum_size = Vector2(300, 0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_gt(card.get_combined_minimum_size().y, 200.0)
+	assert_true(card.size.y >= card.get_combined_minimum_size().y)
+
+
 func _double_click() -> InputEventMouseButton:
 	var event := InputEventMouseButton.new()
 	event.button_index = MOUSE_BUTTON_LEFT

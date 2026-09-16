@@ -14,6 +14,7 @@ signal rename_committed(level_info: Dictionary, new_name: String)
 enum { ACTION_RENAME, ACTION_DUPLICATE, ACTION_DELETE }
 
 const THUMB_ASPECT := 16.0 / 9.0
+const INSET := 4.0
 const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 var level_info: Dictionary = {}
@@ -23,6 +24,7 @@ var locked: bool = false:
 		if _menu:
 			_menu.set_item_disabled(_menu.get_item_index(ACTION_DELETE), locked)
 
+var _column: VBoxContainer
 var _thumb: TextureRect
 var _name: Label
 var _caption: Label
@@ -39,19 +41,24 @@ func _init() -> void:
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	offset_transform_enabled = true
 	text = ""
-	var column := VBoxContainer.new()
-	column.name = "Column"
-	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	column.add_theme_constant_override("separation", 4)
-	add_child(column)
+	_column = VBoxContainer.new()
+	_column.name = "Column"
+	_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_column.offset_left = INSET
+	_column.offset_top = INSET
+	_column.offset_right = -INSET
+	_column.offset_bottom = -INSET
+	_column.add_theme_constant_override("separation", 4)
+	_column.minimum_size_changed.connect(_update_minimum_size_from_content)
+	add_child(_column)
 
 	var thumb_slot := Control.new()
 	thumb_slot.name = "ThumbSlot"
 	thumb_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	thumb_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	thumb_slot.custom_minimum_size = Vector2(0, 90)
-	column.add_child(thumb_slot)
+	_column.add_child(thumb_slot)
 	_thumb = TextureRect.new()
 	_thumb.name = "Thumb"
 	_thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -83,25 +90,26 @@ func _init() -> void:
 	_name.theme_type_variation = &"Body"
 	_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(_name)
+	_column.add_child(_name)
 	_rename = LineEdit.new()
 	_rename.name = "Rename"
 	_rename.visible = false
 	_rename.text_submitted.connect(_on_rename_submitted)
 	_rename.focus_exited.connect(_cancel_rename)
-	column.add_child(_rename)
+	_column.add_child(_rename)
 	_caption = Label.new()
 	_caption.name = "Caption"
 	_caption.theme_type_variation = &"Caption"
 	_caption.add_theme_color_override("font_color", ThemeColors.TEXT_MUTED)
 	_caption.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(_caption)
+	_column.add_child(_caption)
 
 	pressed.connect(_on_pressed)
 	gui_input.connect(_on_gui_input)
 	mouse_entered.connect(_on_hover.bind(true))
 	mouse_exited.connect(_on_hover.bind(false))
+	_update_minimum_size_from_content()
 
 
 func setup(info: Dictionary) -> void:
@@ -201,11 +209,26 @@ func _on_menu_id_pressed(id: int) -> void:
 				action_requested.emit(level_info, &"delete")
 
 
+## Button's own get_minimum_size() (C++) never consults a GDScript
+## `_get_minimum_size()` override, so the card's content height cannot be
+## reported that way. custom_minimum_size is different: Control's
+## get_combined_minimum_size() takes the max of it and the button's own
+## (small, icon/text-only) minimum, so driving custom_minimum_size.y directly
+## from the column's content height is what actually makes the card as tall
+## as its content. Only .y is touched -- .x is LevelGrid's column width
+## (set via custom_minimum_size in _fit_columns()), which this must not clobber.
+func _update_minimum_size_from_content() -> void:
+	if _column == null:
+		return
+	custom_minimum_size.y = _column.get_combined_minimum_size().y + INSET * 2.0
+
+
 func _on_thumb_slot_resized() -> void:
 	var slot := _thumb.get_parent() as Control
 	var height := slot.size.x / THUMB_ASPECT
 	if not is_equal_approx(slot.custom_minimum_size.y, height):
 		slot.custom_minimum_size = Vector2(0, height)
+		_update_minimum_size_from_content()
 
 
 func _on_hover(entered: bool) -> void:
