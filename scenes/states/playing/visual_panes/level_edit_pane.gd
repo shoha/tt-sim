@@ -53,8 +53,9 @@ func _add_caption(text: String, parent: Node = self) -> Label:
 
 
 ## opts: exp_edit, allow_greater, allow_lesser, show_color, show_check,
-## show_slider (default true), tooltip, parent (default self; pass a
-## Foldout's body to place the row inside it).
+## show_slider (default true), tooltip, hint_low, hint_high, formatter
+## (Callable), parent (default self; pass a Foldout's body to place the row
+## inside it).
 func _add_row(
 	label: String,
 	min_value: float,
@@ -76,6 +77,10 @@ func _add_row(
 	row.allow_greater = opts.get("allow_greater", false)
 	row.allow_lesser = opts.get("allow_lesser", false)
 	row.tooltip_text = opts.get("tooltip", "")
+	row.hint_low = opts.get("hint_low", "")
+	row.hint_high = opts.get("hint_high", "")
+	if opts.has("formatter"):
+		row.formatter = opts["formatter"]
 	var parent: Node = opts.get("parent", self)
 	parent.add_child(row)
 	return row
@@ -86,3 +91,14 @@ func _add_foldout(title: String = "Advanced") -> Foldout:
 	foldout.title = title
 	add_child(foldout)
 	return foldout
+
+
+## A captioned, full-width tile row. [param specs] entries are [id, label,
+## icon_name]; pass an empty array to add tiles yourself (painted textures).
+func _add_tile_field(caption: String, specs: Array, parent: Node = self) -> TileField:
+	var field := TileField.new()
+	field.caption = caption
+	for spec in specs:
+		field.tiles.add_tile(StringName(spec[0]), spec[1], spec[2])
+	parent.add_child(field)
+	return field

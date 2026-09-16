@@ -13,21 +13,28 @@ signal aim_toggled(active: bool)
 
 ## [mode value, label, icon]
 const MODES := [["auto", "Auto", "wand"], ["on", "On", "sun"], ["off", "Off", "sun-off"]]
+## [tile id, label, icon]
+const SHADOW_TILES := [
+	["off", "Off", "circle-off"], ["hard", "Hard", "contrast"], ["soft", "Soft", "cloud"]
+]
+const SHADOW_SOFT_SOFTNESS := 1.5
+const SHADOW_HARD_MAX_SOFTNESS := 0.25
+const COMPASS := ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 const TIME_TOOLTIP := (
-	"Regenerates direction, colour and energy from this hour. Any hand-aimed "
-	+ "values are replaced."
+	"Regenerates direction, colour and energy from this hour. "
+	+ "Any hand-aimed values are replaced."
 )
 
 var _sun: SunSettings = SunSettings.default()
 var _time_row: PropertyRow
-var _mode_row: PropertyRow
+var _mode_field: TileField
 var _mode_tiles: TileRow
+var _shadow_field: TileField
 var _aim_button: IconButton
 var _azimuth_row: PropertyRow
 var _elevation_row: PropertyRow
 var _color_row: PropertyRow
 var _energy_row: PropertyRow
-var _shadows_row: PropertyRow
 var _softness_row: PropertyRow
 var _darkness_row: PropertyRow
 var _regenerate_button: Button
@@ -36,7 +43,19 @@ var _regenerate_button: Button
 func _build() -> void:
 	_add_heading("Sun")
 
-	_time_row = _add_row("Time of day", 0.0, 24.0, 0.5, 14.0, {"tooltip": TIME_TOOLTIP})
+	_time_row = _add_row(
+		"Time of day",
+		0.0,
+		24.0,
+		0.5,
+		14.0,
+		{
+			"tooltip": TIME_TOOLTIP,
+			"hint_low": "Dawn",
+			"hint_high": "Dusk",
+			"formatter": SunPane.format_time,
+		}
+	)
 	_time_row.ticks = [
 		{"value": 6.0, "icon": "sunrise"},
 		{"value": 12.0, "icon": "sun"},
@@ -44,13 +63,12 @@ func _build() -> void:
 	]
 	_time_row.value_changed.connect(_on_time_changed)
 
-	_mode_row = _add_row("Mode", 0.0, 1.0, 1.0, 0.0, {"show_slider": false})
-	_mode_tiles = TileRow.new()
-	_mode_tiles.tile_min_size = Vector2(56, 52)
-	for spec in MODES:
-		_mode_tiles.add_tile(StringName(spec[0]), spec[1], spec[2])
+	_mode_field = _add_tile_field("Sun", MODES)
+	_mode_tiles = _mode_field.tiles
 	_mode_tiles.selection_changed.connect(_on_mode_selected)
-	_mode_row.set_control(_mode_tiles)
+
+	_shadow_field = _add_tile_field("Shadows", SHADOW_TILES)
+	_shadow_field.tiles.selection_changed.connect(_on_shadow_tile_selected)
 
 	var aim_row := HBoxContainer.new()
 	aim_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -70,23 +88,34 @@ func _build() -> void:
 
 	var foldout := _add_foldout()
 	var body := foldout.body
-	_azimuth_row = _add_row("Azimuth", 0.0, 360.0, 1.0, 0.0, {"parent": body})
+	_azimuth_row = _add_row(
+		"Direction", 0.0, 360.0, 1.0, 0.0, {"parent": body, "formatter": SunPane.format_bearing}
+	)
 	_azimuth_row.value_changed.connect(_on_azimuth_changed)
-	_elevation_row = _add_row("Elevation", -15.0, 90.0, 1.0, 45.0, {"parent": body})
+	_elevation_row = _add_row(
+		"Height", -15.0, 90.0, 1.0, 45.0, {"parent": body, "formatter": SunPane.format_degrees}
+	)
 	_elevation_row.value_changed.connect(_on_elevation_changed)
 	_color_row = _add_row(
-		"Color", 0.0, 1.0, 1.0, 0.0, {"show_slider": false, "show_color": true, "parent": body}
+		"Colour", 0.0, 1.0, 1.0, 0.0, {"show_slider": false, "show_color": true, "parent": body}
 	)
 	_color_row.color_changed.connect(_on_color_changed)
-	_energy_row = _add_row("Energy", 0.0, 4.0, 0.05, 1.0, {"parent": body})
-	_energy_row.value_changed.connect(_on_energy_changed)
-	_shadows_row = _add_row(
-		"Shadows", 0.0, 1.0, 1.0, 0.0, {"show_slider": false, "show_check": true, "parent": body}
+	_energy_row = _add_row(
+		"Energy", 0.0, 4.0, 0.05, 1.0, {"parent": body, "hint_low": "Dim", "hint_high": "Blazing"}
 	)
-	_shadows_row.toggled.connect(_on_shadows_toggled)
-	_softness_row = _add_row("Softness", 0.0, 5.0, 0.05, 0.0, {"parent": body})
+	_energy_row.value_changed.connect(_on_energy_changed)
+	_softness_row = _add_row(
+		"Softness",
+		0.0,
+		5.0,
+		0.05,
+		0.0,
+		{"parent": body, "hint_low": "Crisp", "hint_high": "Diffuse"}
+	)
 	_softness_row.value_changed.connect(_on_softness_changed)
-	_darkness_row = _add_row("Darkness", 0.0, 1.0, 0.01, 1.0, {"parent": body})
+	_darkness_row = _add_row(
+		"Darkness", 0.0, 1.0, 0.01, 1.0, {"parent": body, "hint_low": "Faint", "hint_high": "Deep"}
+	)
 	_darkness_row.value_changed.connect(_on_darkness_changed)
 	_regenerate_button = Button.new()
 	_regenerate_button.text = "Back to generated"
@@ -124,13 +153,31 @@ func apply_gizmo_direction(azimuth_degrees: float, elevation_degrees: float) -> 
 	_emit_changed()
 
 
+static func format_time(hours: float) -> String:
+	var whole := int(floor(hours))
+	var minutes := int(round((hours - float(whole)) * 60.0))
+	if minutes == 60:
+		whole += 1
+		minutes = 0
+	return "%02d:%02d" % [whole % 24, minutes]
+
+
+static func format_bearing(degrees: float) -> String:
+	var index := int(round(fposmod(degrees, 360.0) / 45.0)) % COMPASS.size()
+	return "%d° %s" % [int(round(degrees)), COMPASS[index]]
+
+
+static func format_degrees(degrees: float) -> String:
+	return "%d°" % int(round(degrees))
+
+
 func _sync_controls() -> void:
 	_mode_tiles.select(StringName(_sun.mode))
 	_azimuth_row.set_value_no_signal(_sun.azimuth_degrees)
 	_elevation_row.set_value_no_signal(_sun.elevation_degrees)
 	_color_row.set_color_no_signal(_sun.color)
 	_energy_row.set_value_no_signal(_sun.energy)
-	_shadows_row.set_checked_no_signal(_sun.shadows_enabled)
+	_shadow_field.tiles.select(shadow_tile_for(_sun))
 	_softness_row.set_value_no_signal(_sun.softness)
 	_softness_row.editable = _sun.shadows_enabled
 	_darkness_row.set_value_no_signal(_sun.shadow_darkness)
@@ -207,16 +254,43 @@ func _on_energy_changed(value: float) -> void:
 	_emit_changed()
 
 
+static func shadow_tile_for(settings: SunSettings) -> StringName:
+	if not settings.shadows_enabled:
+		return &"off"
+	return &"hard" if settings.softness <= SHADOW_HARD_MAX_SOFTNESS else &"soft"
+
+
 func _on_shadows_toggled(pressed: bool) -> void:
 	_sun.shadows_enabled = pressed
 	_softness_row.editable = pressed
 	_darkness_row.editable = pressed
+	_shadow_field.tiles.select(shadow_tile_for(_sun))
+	_promote_auto_to_on()
+	_emit_changed()
+
+
+## Off / Hard / Soft set the enable flag and a softness bucket in one click;
+## the exact softness stays editable under Advanced.
+func _on_shadow_tile_selected(id: StringName) -> void:
+	match id:
+		&"off":
+			_sun.shadows_enabled = false
+		&"hard":
+			_sun.shadows_enabled = true
+			_sun.softness = 0.0
+		&"soft":
+			_sun.shadows_enabled = true
+			_sun.softness = SHADOW_SOFT_SOFTNESS
+	_softness_row.set_value_no_signal(_sun.softness)
+	_softness_row.editable = _sun.shadows_enabled
+	_darkness_row.editable = _sun.shadows_enabled
 	_promote_auto_to_on()
 	_emit_changed()
 
 
 func _on_softness_changed(value: float) -> void:
 	_sun.softness = value
+	_shadow_field.tiles.select(shadow_tile_for(_sun))
 	_promote_auto_to_on()
 	_emit_changed()
 
