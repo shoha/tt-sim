@@ -98,6 +98,11 @@ const ANIM_PRESS: float = 0.06
 const ANIM_PANE_SWAP: float = 0.16
 const ANIM_PANE_SWAP_OFFSET_PX: float = 8.0
 const ANIM_FOLDOUT: float = 0.16
+# Screen entrance: menu bodies fade and lift in, one item after another
+# (UiMotion.stagger_in). Used by the title, pause menu, host lobby and join
+# screen; dialogs use the panel base's scale-and-fade instead.
+const ANIM_ENTRANCE: float = 0.3
+const ANIM_ENTRANCE_STAGGER: float = 0.08
 const UI_HOVER_SCALE := Vector2(1.06, 1.06)
 const UI_PRESS_SCALE := Vector2(0.96, 0.96)
 
