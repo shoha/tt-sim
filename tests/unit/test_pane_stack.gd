@@ -52,3 +52,20 @@ func test_unknown_pane_is_ignored() -> void:
 	stack.show_pane(&"a", false)
 	stack.show_pane(&"zzz")
 	assert_eq(stack.current, &"a")
+
+
+func test_rapid_double_swap_hides_the_first_outgoing_pane() -> void:
+	var stack := _stack()
+	stack.add_pane(&"c", VBoxContainer.new())
+	stack.show_pane(&"a", false)
+	stack.show_pane(&"b")
+	stack.show_pane(&"c")
+	assert_eq(stack.current, &"c")
+	assert_false(
+		stack._wrappers[&"a"].visible, "first outgoing pane is hidden when a new swap starts"
+	)
+	assert_eq(stack._wrappers[&"a"].modulate.a, 1.0)
+	assert_eq(stack._wrappers[&"a"].offset_transform_position, Vector2.ZERO)
+	assert_true(stack._wrappers[&"b"].visible, "the previous pane keeps fading out")
+	assert_eq(stack._wrappers[&"b"].offset_transform_position, Vector2.ZERO)
+	assert_true(stack._wrappers[&"c"].visible)
