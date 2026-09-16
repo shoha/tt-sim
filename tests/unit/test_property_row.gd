@@ -190,3 +190,12 @@ func test_chip_typing_still_parses_native_units_with_a_formatter() -> void:
 	assert_eq(row.value, 0.75)
 	assert_eq(row._chip.text, "75%")
 	assert_signal_emitted_with_parameters(row, "value_changed", [0.75])
+
+
+func test_formatter_widens_the_chip() -> void:
+	var row := _row()
+	assert_eq(row._chip.custom_minimum_size.x, PropertyRow.CHIP_WIDTH)
+	row.formatter = func(v: float) -> String: return "%.2f m" % v
+	assert_eq(row._chip.custom_minimum_size.x, PropertyRow.CHIP_WIDTH_FORMATTED)
+	row.formatter = Callable()
+	assert_eq(row._chip.custom_minimum_size.x, PropertyRow.CHIP_WIDTH)

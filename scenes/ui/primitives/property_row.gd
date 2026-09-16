@@ -13,6 +13,7 @@ signal toggled(on: bool)
 signal reset_requested
 
 const CHIP_WIDTH := 56.0
+const CHIP_WIDTH_FORMATTED := 100.0
 const TICK_SIZE := 14.0
 const TICKS_HEIGHT := 16.0
 const OVERRIDE_TOOLTIP := "Overridden. Right-click to reset to the preset value."
@@ -84,6 +85,7 @@ var formatter: Callable = Callable():
 	set(value):
 		formatter = value
 		_sync_range()
+		_sync_chip_width()
 
 var color: Color:
 	get:
@@ -190,12 +192,12 @@ func _build_row() -> void:
 	_chip = LineEdit.new()
 	_chip.name = "Value"
 	_chip.theme_type_variation = &"ValueChip"
-	_chip.custom_minimum_size = Vector2(CHIP_WIDTH, 0)
 	_chip.alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_chip.context_menu_enabled = false
 	_chip.text_submitted.connect(_on_chip_submitted)
 	_chip.focus_exited.connect(_commit_chip)
 	_row.add_child(_chip)
+	_sync_chip_width()
 
 	if not show_slider:
 		_slider.visible = false
@@ -261,6 +263,16 @@ func _display(number: float) -> String:
 func _refresh_chip_visibility() -> void:
 	if _chip:
 		_chip.visible = values_visible and show_slider
+
+
+## Formatted values ("1.52 m (5.0 ft)") need more room than the plain
+## fixed-decimal chip.
+func _sync_chip_width() -> void:
+	if not _chip:
+		return
+	_chip.custom_minimum_size = Vector2(
+		CHIP_WIDTH_FORMATTED if formatter.is_valid() else CHIP_WIDTH, 0
+	)
 
 
 func _strip_visible() -> bool:

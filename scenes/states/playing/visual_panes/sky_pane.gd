@@ -49,6 +49,8 @@ func _build() -> void:
 	_build_header()
 
 	_sky_field = _add_tile_field("Sky", [])
+	# Five tiles must fit one row at the pane's width, or the last one wraps.
+	_sky_field.tiles.tile_min_size = Vector2(52, 52)
 	for spec in SKY_TILES:
 		var key: String = spec[0]
 		var painted: Texture2D = null
@@ -150,12 +152,18 @@ func _build() -> void:
 	_fog_height_row.value_changed.connect(_on_override_value.bind("fog_height"))
 	_fog_height_row.reset_requested.connect(_on_reset_requested.bind(["fog_height"]))
 	_fog_height_density_row = _add_row(
-		"Fog height density",
+		"Fog falloff",
 		0.0,
 		10.0,
 		0.01,
 		0.0,
-		{"allow_greater": true, "parent": body, "hint_low": "Low", "hint_high": "High"}
+		{
+			"allow_greater": true,
+			"parent": body,
+			"hint_low": "Low",
+			"hint_high": "High",
+			"tooltip": "How quickly the fog thins with height",
+		}
 	)
 	_fog_height_density_row.value_changed.connect(_on_override_value.bind("fog_height_density"))
 	_fog_height_density_row.reset_requested.connect(
