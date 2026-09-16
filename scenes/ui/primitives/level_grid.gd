@@ -8,6 +8,7 @@ extends ScrollContainer
 
 signal selection_changed(level_info: Dictionary)
 signal level_activated(level_info: Dictionary)
+signal levels_changed
 
 const GAP := 12
 
@@ -59,6 +60,7 @@ func refresh() -> void:
 		_cards.append(card)
 	_fit_columns()
 	_apply_selection()
+	levels_changed.emit()
 
 
 func card_count() -> int:

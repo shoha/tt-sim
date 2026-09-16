@@ -106,6 +106,7 @@ func _build_right_zone() -> void:
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	grid.selection_changed.connect(_on_selection_changed)
 	grid.level_activated.connect(_on_level_activated)
+	grid.levels_changed.connect(_refresh_actions)
 	_right.add_child(grid)
 
 

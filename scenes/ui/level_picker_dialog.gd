@@ -38,6 +38,7 @@ func _on_panel_ready() -> void:
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	grid.selection_changed.connect(_on_selection_changed)
 	grid.level_activated.connect(_on_level_activated)
+	grid.levels_changed.connect(_on_levels_changed)
 	grid_slot.add_child(grid)
 	grid.refresh()
 	choose_button.pressed.connect(_on_choose_pressed)
@@ -58,6 +59,10 @@ func _on_after_animate_out() -> void:
 
 func _on_selection_changed(_info: Dictionary) -> void:
 	choose_button.disabled = false
+
+
+func _on_levels_changed() -> void:
+	choose_button.disabled = grid.selected_info().is_empty()
 
 
 func _on_level_activated(info: Dictionary) -> void:

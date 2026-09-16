@@ -18,6 +18,16 @@ func _levels() -> Array[Dictionary]:
 			"environment_preset": "",
 			"thumbnail": ""
 		},
+		{
+			"path": "user://x/b/",
+			"folder": "b",
+			"is_folder_based": true,
+			"name": "Bravo",
+			"token_count": 0,
+			"modified_at": 20,
+			"environment_preset": "",
+			"thumbnail": ""
+		},
 	]
 
 
@@ -52,6 +62,16 @@ func test_cancel_only_closes() -> void:
 	watch_signals(dialog)
 	dialog._on_cancel_pressed()
 	assert_signal_not_emitted(dialog, "level_chosen")
+
+
+func test_refresh_notifies_choose_button_when_the_list_changes() -> void:
+	var dialog := _dialog()
+	dialog.grid.select(_levels()[0]["path"])
+	dialog.grid.refresh()
+	assert_false(dialog.choose_button.disabled)
+	dialog.grid.provider = func() -> Array: return []
+	dialog.grid.refresh()
+	assert_true(dialog.choose_button.disabled)
 
 
 func test_cancel_after_choose_is_ignored() -> void:
