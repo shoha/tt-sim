@@ -121,5 +121,6 @@ func test_scale_and_water_tiles_are_fields_and_cell_size_reads_in_units() -> voi
 	var pane := _pane()
 	assert_same(pane._scale_tiles, pane._scale_field.tiles)
 	assert_same(pane._water_tiles, pane._water_field.tiles)
-	assert_eq(WorldPane.format_cell_size(1.524), "1.52 m (5.0 ft)")
+	assert_eq(WorldPane.format_cell_size(1.524), "1.52 m (5 ft)")
+	assert_eq(WorldPane.format_cell_size(1.0), "1.00 m (3.3 ft)")
 	assert_eq(pane._foliage_rows["tree_sway_amplitude"].hint_high, "Wild")

@@ -129,6 +129,7 @@ func _build() -> void:
 func load_state(state: LevelVisualState) -> void:
 	_sun = state.sun.copy_settings()
 	_sync_controls()
+	_update_generated_state()
 
 
 func write_state(state: LevelVisualState) -> void:
@@ -164,7 +165,8 @@ static func format_time(hours: float) -> String:
 
 static func format_bearing(degrees: float) -> String:
 	var index := int(round(fposmod(degrees, 360.0) / 45.0)) % COMPASS.size()
-	return "%d° %s" % [int(round(degrees)), COMPASS[index]]
+	var wrapped := int(round(fposmod(degrees, 360.0))) % 360
+	return "%d° %s" % [wrapped, COMPASS[index]]
 
 
 static func format_degrees(degrees: float) -> String:
@@ -183,7 +185,6 @@ func _sync_controls() -> void:
 	_darkness_row.set_value_no_signal(_sun.shadow_darkness)
 	_darkness_row.editable = _sun.shadows_enabled
 	_time_row.set_value_no_signal(_sun.time_of_day)
-	_update_generated_state()
 
 
 ## Show the regenerate affordance only when the sun no longer matches what

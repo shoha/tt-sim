@@ -163,6 +163,7 @@ func test_formatters() -> void:
 	assert_eq(SunPane.format_time(23.999), "00:00")
 	assert_eq(SunPane.format_bearing(143.0), "143° SE")
 	assert_eq(SunPane.format_bearing(0.0), "0° N")
+	assert_eq(SunPane.format_bearing(360.0), "0° N")
 	assert_eq(SunPane.format_degrees(43.4), "43°")
 	var pane := _pane()
 	assert_eq(pane._time_row.hint_low, "Dawn")

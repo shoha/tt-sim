@@ -226,4 +226,10 @@ func _on_wind_selected(id: StringName) -> void:
 
 
 static func format_cell_size(metres: float) -> String:
-	return "%.2f m (%.1f ft)" % [metres, metres / METRES_PER_FOOT]
+	var feet := metres / METRES_PER_FOOT
+	var feet_text: String
+	if abs(feet - round(feet)) <= 0.05:
+		feet_text = "%d" % int(round(feet))
+	else:
+		feet_text = "%.1f" % feet
+	return "%.2f m (%s ft)" % [metres, feet_text]

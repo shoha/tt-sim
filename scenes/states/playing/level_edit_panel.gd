@@ -185,6 +185,7 @@ func _apply_values_visible() -> void:
 	for row in _stack.find_children("*", "PropertyRow", true, false):
 		row.values_visible = _values_visible
 	set_footer_item_active(&"values", _values_visible)
+	set_footer_item_tooltip(&"values", "Hide values" if _values_visible else "Show values")
 
 
 # ============================================================================

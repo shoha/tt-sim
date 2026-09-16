@@ -261,6 +261,13 @@ func set_footer_item_active(id: StringName, on: bool) -> void:
 		_footer_rail.set_item_active(id, on)
 
 
+## Rail mode: update a footer item's tooltip (e.g. a toggle whose meaning
+## flips with its state).
+func set_footer_item_tooltip(id: StringName, text: String) -> void:
+	if _footer_rail:
+		_footer_rail.set_item_tooltip(id, text)
+
+
 ## Tooltip shown when hovering the tab handle (single-tab mode only; rail
 ## items carry their own tooltips).
 func set_tab_tooltip(text: String) -> void:

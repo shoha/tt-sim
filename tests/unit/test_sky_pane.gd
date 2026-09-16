@@ -72,6 +72,20 @@ func test_map_options_toggle_revert_and_map_default_tile() -> void:
 	assert_ne(_index_of_preset(pane, ""), -1, "Map Defaults entry present")
 
 
+func test_no_map_defaults_offers_no_preset_and_an_honest_caption() -> void:
+	var pane := _pane()
+	pane.set_map_options(false, false)
+	_model.set_preset("")
+	assert_eq(pane._preset_dropdown.get_item_metadata(pane._preset_dropdown.selected), "")
+	assert_eq(pane._preset_dropdown.get_item_text(pane._preset_dropdown.selected), "No preset")
+	assert_eq(pane._preset_caption.text, "No preset: engine defaults")
+	pane.set_map_options(true, true)
+	var idx := _index_of_preset(pane, "")
+	assert_eq(idx, 0)
+	assert_eq(pane._preset_dropdown.get_item_text(idx), "Map defaults")
+	assert_eq(pane._preset_caption.text, "The map's own lighting")
+
+
 func test_revert_and_clear() -> void:
 	var pane := _pane()
 	watch_signals(pane)

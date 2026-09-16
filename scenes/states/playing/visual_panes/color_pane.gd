@@ -4,8 +4,9 @@ extends LevelEditPane
 ## Tone and colour grading: exposure, brightness, contrast, saturation, glow,
 ## and (advanced) tonemap mode, white point, glow strength, bloom. Every
 ## control is an environment override on the shared EnvironmentEditModel; the
-## Sky pane writes the model into the state on Save, so write_state here is a
-## no-op.
+## Sky pane writes those overrides into the state on Save. This pane
+## additionally owns light_intensity_scale ("Light energy"), which is not
+## part of the model and is the only field its own write_state carries.
 
 signal intensity_changed(new_scale: float)
 
