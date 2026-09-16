@@ -120,12 +120,29 @@ func test_picker_has_a_separator_per_group_and_swatches() -> void:
 	assert_eq(swatches, EnvironmentPresets.PRESETS.size())
 
 
-func test_sky_tiles_are_painted_and_full_width() -> void:
+func test_sky_tiles_are_ten_in_order_five_per_row_with_thumbnails() -> void:
 	var pane := _pane()
 	assert_true(pane._sky_field is TileField)
-	assert_not_null(pane._sky_tiles._tiles[&"clear_day"].icon)
-	assert_same(pane._sky_tiles._tiles[&"sunset"].icon, SwatchTextures.sky_gradient("sunset"))
+	assert_eq(
+		pane._sky_tiles._tiles.keys(),
+		[
+			&"",
+			&"map_default",
+			&"clear_day",
+			&"cloudy",
+			&"overcast",
+			&"morning",
+			&"sunset",
+			&"dusk",
+			&"storm",
+			&"night_sky",
+		]
+	)
+	assert_eq(pane._sky_tiles.columns, 5)
 	assert_eq(pane._sky_tiles.tile_min_size, Vector2(52, 52))
+	assert_same(pane._sky_tiles._tiles[&"storm"].icon, SwatchTextures.sky_gradient("storm"))
+	assert_same(pane._sky_tiles._tiles[&"night_sky"].icon, SwatchTextures.sky_gradient("night_sky"))
+	assert_false(pane._sky_tiles._tiles[&"map_default"].visible)
 
 
 func test_fog_colour_lives_in_advanced_with_its_own_reset() -> void:
@@ -138,3 +155,42 @@ func test_fog_colour_lives_in_advanced_with_its_own_reset() -> void:
 	assert_false(pane._fog_color_row.overridden)
 	assert_eq(pane._fog_row.hint_high, "Thick")
 	assert_eq(pane._fog_height_density_row._label.text, "Fog falloff")
+
+
+func test_preview_shows_the_selected_sky_and_its_description() -> void:
+	var pane := _pane()
+	assert_true(pane._sky_preview.visible)
+	assert_same(pane._sky_preview.texture, SwatchTextures.sky_preview("clear_day"))
+	assert_eq(pane._sky_caption.text, EnvironmentPresets.get_sky_preset_description("clear_day"))
+
+
+func test_hover_previews_without_touching_the_model_then_reverts() -> void:
+	var pane := _pane()
+	watch_signals(pane)
+	pane._on_sky_tile_hovered(&"storm")
+	assert_same(pane._sky_preview.texture, SwatchTextures.sky_preview("storm"))
+	assert_eq(pane._sky_caption.text, EnvironmentPresets.get_sky_preset_description("storm"))
+	assert_eq(_model.resolve().get("sky_preset", ""), "clear_day", "hover is not an edit")
+	assert_signal_not_emitted(pane, "changed")
+	pane._on_sky_tile_unhovered(&"storm")
+	assert_same(pane._sky_preview.texture, SwatchTextures.sky_preview("clear_day"))
+
+
+func test_none_and_map_hide_the_strip_with_honest_captions() -> void:
+	var pane := _pane()
+	pane._on_sky_tile_hovered(&"")
+	assert_false(pane._sky_preview.visible)
+	assert_eq(pane._sky_caption.text, SkyPane.CAPTION_NONE)
+	pane._on_sky_tile_unhovered(&"")
+	pane._on_sky_tile_hovered(&"map_default")
+	assert_false(pane._sky_preview.visible)
+	assert_eq(pane._sky_caption.text, SkyPane.CAPTION_MAP)
+	pane._on_sky_tile_unhovered(&"map_default")
+	assert_true(pane._sky_preview.visible, "back to the selected sky")
+
+
+func test_selecting_a_tile_updates_the_preview() -> void:
+	var pane := _pane()
+	pane._on_sky_selected(&"dusk")
+	assert_same(pane._sky_preview.texture, SwatchTextures.sky_preview("dusk"))
+	assert_eq(pane._sky_caption.text, EnvironmentPresets.get_sky_preset_description("dusk"))
