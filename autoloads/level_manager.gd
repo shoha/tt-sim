@@ -567,31 +567,32 @@ func save_thumbnail(level_data: LevelData, image: Image) -> bool:
 ## paths stay stable. Legacy .tres levels are renamed the same way through
 ## save_level_in_place, which derives the new file name from the new level
 ## name -- that leaves the old file on disk, so a folder-less level's old path
-## is removed once the renamed save succeeds. Never moves current_level /
-## current_level_path, even though the load/save calls this makes would
+## is removed once the renamed save succeeds. Returns the path the level now
+## lives at ("" on failure): the unchanged level_info["path"] for folder
+## levels, or the new .tres path for legacy levels. Never moves current_level
+## / current_level_path, even though the load/save calls this makes would
 ## otherwise touch them.
-func rename_level(level_info: Dictionary, new_name: String) -> bool:
+func rename_level(level_info: Dictionary, new_name: String) -> String:
 	var previous_level := current_level
 	var previous_path := current_level_path
 	var trimmed := new_name.strip_edges()
 	if trimmed.is_empty():
 		current_level = previous_level
 		current_level_path = previous_path
-		return false
+		return ""
 	var old_path: String = level_info.get("path", "")
 	var level := load_level(old_path, false)
 	if level == null:
 		current_level = previous_level
 		current_level_path = previous_path
-		return false
+		return ""
 	level.level_name = trimmed
 	var new_path := save_level_in_place(level)
-	var success := new_path != ""
-	if success and level.level_folder.is_empty() and new_path != old_path:
+	if new_path != "" and level.level_folder.is_empty() and new_path != old_path:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(old_path))
 	current_level = previous_level
 	current_level_path = previous_path
-	return success
+	return new_path
 
 
 ## Copy a folder level into a new folder ("<name> (Copy)"), including its map

@@ -141,12 +141,12 @@ func _delete(info: Dictionary) -> void:
 
 
 func _on_card_rename(info: Dictionary, new_name: String) -> void:
-	if not LevelManager.rename_level(info, new_name):
+	var new_path := LevelManager.rename_level(info, new_name)
+	if new_path.is_empty():
 		UIManager.show_error("Could not rename the level")
 		return
-	var path: String = info.get("path", "")
 	refresh()
-	select(path)
+	select(new_path)
 
 
 func _index_of(path: String) -> int:
