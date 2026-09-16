@@ -70,6 +70,18 @@ func test_activating_a_card_plays_solo() -> void:
 	assert_signal_emitted_with_parameters(title, "play_solo_requested", [_levels[0]])
 
 
+func test_grid_refresh_notifies_actions_when_the_list_changes() -> void:
+	_levels = [_info("old", "Old Camp", 100), _info("new", "New Camp", 200)]
+	var title := _title()
+	assert_false(title.host_button.disabled)
+	title.grid.provider = func() -> Array: return []
+	title.grid.refresh()
+	assert_eq(title.heading_count.text, "0 levels")
+	assert_true(title.empty_caption.visible)
+	assert_true(title.host_button.disabled)
+	assert_true(title.play_button.disabled)
+
+
 func test_grid_lands_below_the_heading_after_the_entrance() -> void:
 	_levels = [_info("new", "New Camp", 200)]
 	var title := _title()
