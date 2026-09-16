@@ -27,6 +27,24 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+## Sky HDRIs (assets/skies/)
+
+The panoramas in `assets/skies/` are ambientCG HDRIs released under the Creative
+Commons CC0 1.0 Universal Public Domain Dedication
+(https://creativecommons.org/publicdomain/zero/1.0/). They were downscaled to 1024x512
+and exposure-normalised by `tools/curate_skies.gd`; no attribution is required, and the
+sources are listed for provenance.
+
+| File | Source | Site | URL |
+|---|---|---|---|
+| `assets/skies/clear_day.exr` | Day Sky HDRI 055 A | ambientCG | https://ambientcg.com/a/DaySkyHDRI055A |
+| `assets/skies/cloudy.exr` | Day Sky HDRI 067 B | ambientCG | https://ambientcg.com/a/DaySkyHDRI067B |
+| `assets/skies/overcast.exr` | Day Sky HDRI 021 A | ambientCG | https://ambientcg.com/a/DaySkyHDRI021A |
+| `assets/skies/morning.exr` | Morning Sky HDRI 009 B | ambientCG | https://ambientcg.com/a/MorningSkyHDRI009B |
+| `assets/skies/sunset.exr` | Evening Sky HDRI 032 A | ambientCG | https://ambientcg.com/a/EveningSkyHDRI032A |
+| `assets/skies/dusk.exr` | Evening Sky HDRI 022 B | ambientCG | https://ambientcg.com/a/EveningSkyHDRI022B |
+| `assets/skies/storm.exr` | Day Sky HDRI 061 A | ambientCG | https://ambientcg.com/a/DaySkyHDRI061A |
+
 ## Vendored addons
 
 Each addon under `addons/` carries its own licence file:
