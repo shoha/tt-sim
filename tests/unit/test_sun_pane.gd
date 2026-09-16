@@ -168,3 +168,9 @@ func test_formatters() -> void:
 	var pane := _pane()
 	assert_eq(pane._time_row.hint_low, "Dawn")
 	assert_eq(pane._energy_row.hint_high, "Blazing")
+
+
+func test_sun_and_shadow_tiles_fill_the_row_in_three_columns() -> void:
+	var pane := _pane()
+	assert_eq(pane._mode_field.tiles.columns, 3)
+	assert_eq(pane._shadow_field.tiles.columns, 3)

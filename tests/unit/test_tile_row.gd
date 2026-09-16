@@ -83,3 +83,39 @@ func test_texture_icon_wins_over_icon_name() -> void:
 	var texture := ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGBA8))
 	var tile := row.add_tile(&"painted", "Painted", "sun", "", texture)
 	assert_eq(tile.icon, texture)
+
+
+func test_columns_size_tiles_evenly_and_wrap_at_the_count() -> void:
+	var row := TileRow.new()
+	row.columns = 3
+	add_child_autofree(row)
+	for id in ["a", "b", "c", "d", "e", "f"]:
+		row.add_tile(StringName(id), id.to_upper())
+	row.size = Vector2(300, 0)
+	row._fit_columns()
+	var expected_width := floorf((300.0 - 2.0 * 6.0) / 3.0)
+	for id in row._tiles:
+		assert_eq(row._tiles[id].custom_minimum_size.x, expected_width, String(id))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_eq(row._tiles[&"a"].position.y, row._tiles[&"c"].position.y, "first line holds three")
+	assert_gt(row._tiles[&"d"].position.y, row._tiles[&"a"].position.y, "fourth tile wraps")
+
+
+func test_columns_zero_keeps_natural_tile_widths() -> void:
+	var row := _single()
+	row.size = Vector2(300, 0)
+	row._fit_columns()
+	assert_eq(row._tiles[&"a"].custom_minimum_size, row.tile_min_size)
+
+
+func test_hover_signals_follow_the_pointer_and_never_select() -> void:
+	var row := _single()
+	watch_signals(row)
+	row._on_tile_hover(&"a", true)
+	assert_signal_emitted_with_parameters(row, "tile_hovered", [&"a"])
+	row._on_tile_hover(&"a", false)
+	assert_signal_emitted_with_parameters(row, "tile_unhovered", [&"a"])
+	assert_signal_not_emitted(row, "selection_changed")
+	row.select(&"b")
+	assert_signal_emit_count(row, "tile_hovered", 1, "select never hovers")
