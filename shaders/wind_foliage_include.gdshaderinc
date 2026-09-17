@@ -38,6 +38,16 @@ uniform float sway_frequency : hint_range(0.05, 2.0) = 0.3;
 uniform float blade_height : hint_range(0.0, 10.0) = 0.0;
 uniform float base_darken : hint_range(0.0, 1.0) = 0.55;
 
+// How much of the baked ORM red (occlusion) channel reaches Godot's AO built-in.
+// 0.0 (default) ignores it entirely: terrain-paint's per-asset foliage bake used to
+// ray-trace each asset against its own intersecting cutout cards (opaque to the AO
+// rays) and wrote ~0 into this channel -- measured 0.008-0.18 on grass and 0.03-0.10
+// on tree leaves in Sandy Clearing -- and since Godot scales every ambient/sky
+// contribution by AO, that made foliage a black silhouette regardless of environment.
+// Newer terrain-paint exports write 1.0 here, so ignoring the channel is harmless for
+// them too. DebugRenderToggles' "Baked foliage AO" checkbox sets 1.0 for A/B.
+uniform float baked_ao_strength : hint_range(0.0, 1.0) = 0.0;
+
 // Object-space (local) vertex height, captured by each variant's vertex() before
 // wind_sway_vertex_offset is added (that offset never touches VERTEX.y, so capturing
 // before vs. after would be equivalent regardless -- captured before purely to read as
@@ -111,7 +121,7 @@ void apply_wind_foliage_pbr(
 	out_albedo *= mix(base_darken, 1.0, h);
 
 	vec3 orm = texture(orm_texture, uv).rgb;
-	out_ao = orm.r;
+	out_ao = mix(1.0, orm.r, baked_ao_strength);
 	out_roughness = orm.g;
 	out_metallic = orm.b;
 

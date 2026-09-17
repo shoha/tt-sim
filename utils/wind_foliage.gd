@@ -43,6 +43,13 @@ const PRESETS := {
 ## treats as "no gradient" -- see apply_material's own docstring.
 const _GRASS_BASE_DARKEN: float = 0.55
 
+## Default for wind_foliage_include.gdshaderinc's baked_ao_strength uniform, pinned
+## explicitly on every wind material by apply_material so DebugRenderToggles' "Baked
+## foliage AO" checkbox has a value to restore. 0.0 ignores the baked ORM occlusion
+## channel: see the uniform's own comment for the measured black-silhouette bake it
+## works around.
+const BAKED_AO_STRENGTH: float = 0.0
+
 static var _shader: Shader = null
 static var _shader_no_aa: Shader = null
 static var _shader_debug_trivial: Shader = null
@@ -250,7 +257,8 @@ static func _build_shader_material(
 ## _GRASS_BASE_DARKEN) shader parameters, which wind_foliage_include.gdshaderinc uses to
 ## darken albedo toward the blade base. Left unset (at the shader's own 0.0/no-gradient
 ## default) for every other category, including "tree" -- trees still cast real shadows
-## and must not be double-darkened.
+## and must not be double-darkened. Every category also gets baked_ao_strength pinned
+## to BAKED_AO_STRENGTH.
 static func apply_material(mesh: Mesh, category: String, overrides: Dictionary = {}) -> void:
 	if category == "" or not PRESETS.has(category):
 		return
@@ -261,6 +269,7 @@ static func apply_material(mesh: Mesh, category: String, overrides: Dictionary =
 		if not source_material is BaseMaterial3D:
 			continue
 		var wind_material := _build_shader_material(source_material, preset, category)
+		wind_material.set_shader_parameter("baked_ao_strength", BAKED_AO_STRENGTH)
 		if category == "grass":
 			wind_material.set_shader_parameter("blade_height", blade_height)
 			wind_material.set_shader_parameter("base_darken", _GRASS_BASE_DARKEN)

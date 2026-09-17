@@ -266,6 +266,26 @@ func test_apply_material_sets_a_finite_zero_blade_height_for_a_flat_grass_mesh()
 	assert_false(is_inf(blade_height))
 
 
+func test_apply_material_disables_baked_ao_for_every_category() -> void:
+	# terrain-paint's per-asset bake used to ray-trace a foliage asset against its own
+	# intersecting cards and write ~0 into the ORM red channel; Godot multiplies all
+	# ambient/sky light by AO, so every already-exported map rendered its foliage as a
+	# black silhouette. The shader ignores that channel unless told otherwise, and
+	# apply_material pins the value explicitly so DebugRenderToggles can restore it.
+	for category in ["grass", "tree"]:
+		var material := _make_orm_material(Color.GREEN)
+		var mesh := BoxMesh.new()
+		mesh.material = material
+
+		WindFoliage.apply_material(mesh, category)
+
+		var wind_material := mesh.surface_get_material(0) as ShaderMaterial
+		assert_eq(
+			wind_material.get_shader_parameter("baked_ao_strength"), WindFoliage.BAKED_AO_STRENGTH
+		)
+		assert_eq(WindFoliage.BAKED_AO_STRENGTH, 0.0)
+
+
 func test_process_scatter_instances_leaves_a_rock_multimesh_with_no_wind_override() -> void:
 	var scene := Node3D.new()
 	var rock := MeshInstance3D.new()
