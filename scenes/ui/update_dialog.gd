@@ -114,6 +114,11 @@ func setup(release_info: Dictionary) -> void:
 		download_button.visible = false
 		download_button.tooltip_text = "No download available for your platform"
 
+	# setup() runs after _ready() built the initial trap, and may have just
+	# shown commit_link or hidden download_button — rebuild so the trap only
+	# names controls that are actually visible.
+	rebuild_focus_trap()
+
 
 func _markdown_to_bbcode(markdown: String) -> String:
 	var text = markdown
@@ -185,6 +190,7 @@ func _on_download_pressed() -> void:
 	tw.set_trans(Tween.TRANS_CUBIC)
 	tw.tween_property(progress_container, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
 
+	rebuild_focus_trap()
 	UpdateManager.download_update()
 
 
@@ -247,6 +253,7 @@ func _on_download_complete(zip_path: String) -> void:
 	tw.set_trans(Tween.TRANS_CUBIC)
 	tw.tween_property(post_download_buttons, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
 
+	rebuild_focus_trap()
 	AudioManager.play_success()
 	restart_button.grab_focus()
 
@@ -260,6 +267,7 @@ func _on_download_failed(error: String) -> void:
 	progress_label.text = "Download failed: " + error
 	progress_container.visible = true
 	progress_bar.visible = false
+	rebuild_focus_trap()
 	AudioManager.play_error()
 
 
