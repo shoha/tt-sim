@@ -104,7 +104,7 @@ const _DEFAULT_OFF_CHECKBOX_KEYS := (
 )
 
 ## Checkbox keys in the same order they appear in the panel, so toggle_by_index()
-## (and therefore the Shift+1..9 shortcuts) match what a reader sees on screen.
+## (and therefore the digit-key 1..9/0 shortcuts) match what a reader sees on screen.
 const PANEL_ORDER_KEYS := [
 	"foliage_visible",
 	"tree_shadows",
@@ -196,8 +196,9 @@ func get_toggle_states() -> Dictionary:
 ## clicks on it never reach the checkboxes (setting that container's mouse_filter to
 ## PASS instead of IGNORE was tried and did not help, so the cause is something else
 ## in the hit-test path and is still unexplained). Keyboard input DOES reach the game
-## through the bridge, so Shift+1..9 in GameMap._input() routes here, which makes the
-## nine isolation switches sweepable automatically instead of by hand.
+## through the bridge, so bare digit keys 1..9 (and 0 for the tenth) in
+## GameMap._input() route here, which makes the ten isolation switches sweepable
+## automatically instead of by hand.
 func toggle_by_index(index: int) -> void:
 	if index < 0 or index >= PANEL_ORDER_KEYS.size():
 		return

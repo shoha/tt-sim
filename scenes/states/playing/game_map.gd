@@ -184,15 +184,16 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 
-			# 1..9 flip the nine DebugRenderToggles switches in panel order, but ONLY
-			# while the perf overlay (F3) is open -- so these digits stay free during
-			# normal play and the shortcut is live only when the panel it mirrors is on
-			# screen. Deliberately unmodified rather than Shift+digit: a bare digit is
-			# the fastest thing to hit while watching the overlay, and gating on the
-			# overlay already keeps it out of the way the rest of the time. (The
-			# validation bridge's _inject_key() does parse chords such as "Shift+1",
-			# so a modifier combo would be drivable -- that is no longer the reason.)
-			# See DebugRenderToggles.toggle_by_index() for why a keyboard path is needed.
+			# 1..9 flip the first nine DebugRenderToggles switches in panel order, and 0
+			# flips the tenth, but ONLY while the perf overlay (F3) is open -- so these
+			# digits stay free during normal play and the shortcut is live only when the
+			# panel it mirrors is on screen. Deliberately unmodified rather than
+			# Shift+digit: a bare digit is the fastest thing to hit while watching the
+			# overlay, and gating on the overlay already keeps it out of the way the rest
+			# of the time. (The validation bridge's _inject_key() does parse chords such
+			# as "Shift+1", so a modifier combo would be drivable -- that is no longer the
+			# reason.) See DebugRenderToggles.toggle_by_index() for why a keyboard path is
+			# needed.
 			if (
 				event.keycode >= KEY_1
 				and event.keycode <= KEY_9
@@ -201,6 +202,16 @@ func _input(event: InputEvent) -> void:
 				and _perf_overlay.is_visible_overlay()
 			):
 				_debug_render_toggles.toggle_by_index(event.keycode - KEY_1)
+				get_viewport().set_input_as_handled()
+				return
+
+			if (
+				event.keycode == KEY_0
+				and _debug_render_toggles
+				and _perf_overlay
+				and _perf_overlay.is_visible_overlay()
+			):
+				_debug_render_toggles.toggle_by_index(9)
 				get_viewport().set_input_as_handled()
 				return
 
