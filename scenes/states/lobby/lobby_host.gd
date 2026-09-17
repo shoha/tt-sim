@@ -85,6 +85,7 @@ func _on_after_animate_out() -> void:
 
 
 func _exit_tree() -> void:
+	super()
 	# Disconnect network signals
 	if NetworkManager.room_code_received.is_connected(_on_room_code_received):
 		NetworkManager.room_code_received.disconnect(_on_room_code_received)
