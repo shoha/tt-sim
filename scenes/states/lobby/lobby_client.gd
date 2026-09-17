@@ -84,13 +84,14 @@ func _exit_tree() -> void:
 func _show_input_state() -> void:
 	input_container.visible = true
 	waiting_container.visible = false
-	status_label.text = "Enter your name and the room code from the host"
+	status_label.text = ""
 	connect_button.disabled = false
 	room_code_input.editable = true
 	player_name_input.editable = true
 	_set_footer_action("Back", "arrow-left")
 	player_name_input.grab_focus()
 	_cross_fade(input_container)
+	rebuild_focus_trap()
 
 
 func _show_connecting_state() -> void:
@@ -99,6 +100,7 @@ func _show_connecting_state() -> void:
 	room_code_input.editable = false
 	player_name_input.editable = false
 	_set_footer_action("Leave", "logout")
+	rebuild_focus_trap()
 
 
 func _show_connected_state() -> void:
@@ -116,6 +118,7 @@ func _show_connected_state() -> void:
 	get_tree().create_timer(1.0).timeout.connect(
 		func(): _suppressing_join_sounds = false, CONNECT_ONE_SHOT
 	)
+	rebuild_focus_trap()
 
 
 func _on_connect_pressed() -> void:

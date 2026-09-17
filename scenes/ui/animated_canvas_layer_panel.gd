@@ -33,7 +33,7 @@ func _ready() -> void:
 
 	# Build focus ring for trapping
 	if trap_focus:
-		_build_focusable_list()
+		rebuild_focus_trap()
 
 	# Animate in
 	animate_in()
@@ -108,8 +108,11 @@ func animate_out() -> void:
 # ---------------------------------------------------------------------------
 
 
-## Collect all focusable controls inside the panel for Tab-wrapping.
-func _build_focusable_list() -> void:
+## Collect all focusable controls inside the panel for Tab-wrapping. Re-callable:
+## a subclass that hides/shows containers after _ready() (see LobbyClient) must
+## call this again after each swap, or the trap keeps naming controls that are
+## no longer visible.
+func rebuild_focus_trap() -> void:
 	_focusable_controls.clear()
 	_collect_focusable($CenterContainer, _focusable_controls)
 
@@ -117,7 +120,11 @@ func _build_focusable_list() -> void:
 func _collect_focusable(node: Node, out: Array[Control]) -> void:
 	if node is Control:
 		var c := node as Control
-		if c.visible and c.focus_mode != Control.FOCUS_NONE and not c.is_set_as_top_level():
+		if (
+			c.is_visible_in_tree()
+			and c.focus_mode != Control.FOCUS_NONE
+			and not c.is_set_as_top_level()
+		):
 			out.append(c)
 	for child in node.get_children():
 		_collect_focusable(child, out)
@@ -134,18 +141,33 @@ func _input(event: InputEvent) -> void:
 
 	var focused := get_viewport().gui_get_focus_owner()
 	if focused == null or not _focusable_controls.has(focused):
-		# Focus escaped — pull it back
-		_focusable_controls[0].grab_focus()
-		get_viewport().set_input_as_handled()
+		# Focus escaped — pull it back to the first visible entry.
+		if _grab_visible(0, 1):
+			get_viewport().set_input_as_handled()
 		return
 
 	var idx := _focusable_controls.find(focused)
 	if event.is_action_pressed("ui_focus_next") and idx == _focusable_controls.size() - 1:
-		_focusable_controls[0].grab_focus()
-		get_viewport().set_input_as_handled()
+		if _grab_visible(0, 1):
+			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("ui_focus_prev") and idx == 0:
-		_focusable_controls[_focusable_controls.size() - 1].grab_focus()
-		get_viewport().set_input_as_handled()
+		if _grab_visible(_focusable_controls.size() - 1, -1):
+			get_viewport().set_input_as_handled()
+
+
+## Grab focus on the first visible entry found walking from [param start_idx]
+## by [param step] (1 forward, -1 backward), wrapping once around the whole
+## list. Returns false without touching focus if nothing in the list is
+## currently visible — the trap must never consume the event in that case.
+func _grab_visible(start_idx: int, step: int) -> bool:
+	var count := _focusable_controls.size()
+	for i in range(count):
+		var idx := (start_idx + i * step + count) % count
+		var control := _focusable_controls[idx]
+		if control.is_visible_in_tree():
+			control.grab_focus()
+			return true
+	return false
 
 
 # ---------------------------------------------------------------------------
