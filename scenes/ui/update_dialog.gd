@@ -8,11 +8,12 @@ signal closed
 
 const GITHUB_COMMIT_URL := "https://github.com/shoha/tt-sim/commit/"
 
+var header: MenuHeader
+var title_label: Label
+
 var _release_info: Dictionary = {}
 var _download_path: String = ""
 
-@onready var title_label: Label = %TitleLabel
-@onready var version_label: Label = %VersionLabel
 @onready var release_notes_container: ScrollContainer = %ReleaseNotesContainer
 @onready var release_notes: RichTextLabel = %ReleaseNotes
 @onready var progress_container: VBoxContainer = %ProgressContainer
@@ -30,6 +31,14 @@ var _download_path: String = ""
 
 
 func _on_panel_ready() -> void:
+	var box: VBoxContainer = $CenterContainer/PanelContainer/VBoxContainer
+	header = MenuHeader.new()
+	header.name = "Header"
+	box.add_child(header)
+	box.move_child(header, 0)
+	header.setup("Update available", "")
+	title_label = header.title_label
+
 	# Connect buttons
 	download_button.pressed.connect(_on_download_pressed)
 	view_button.pressed.connect(_on_view_pressed)
@@ -87,11 +96,12 @@ func setup(release_info: Dictionary) -> void:
 
 	# Update labels
 	if release_info.get("prerelease", false):
-		title_label.text = "Prerelease Update Available"
+		title_label.text = "Prerelease update available"
 	else:
-		title_label.text = "Update Available"
+		title_label.text = "Update available"
 
-	version_label.text = "v%s → v%s" % [current_version, new_version]
+	header.caption_label.text = "v%s → v%s" % [current_version, new_version]
+	header.caption_label.visible = true
 
 	# Show a clickable commit link for dev builds (version contains "build.")
 	var commit_hash := _extract_commit_hash(new_version)
@@ -206,7 +216,7 @@ func _on_restart_pressed() -> void:
 	if not _download_path.is_empty():
 		restart_button.disabled = true
 		later_button.disabled = true
-		title_label.text = "Installing Update..."
+		title_label.text = "Installing update..."
 		release_notes.text = "Please wait while the update is installed."
 		UpdateManager.apply_update(_download_path)
 	else:
@@ -239,7 +249,7 @@ func _on_download_complete(zip_path: String) -> void:
 	button_container.visible = false
 	post_download_buttons.visible = true
 
-	title_label.text = "Ready to Update"
+	title_label.text = "Ready to update"
 	release_notes.text = (
 		"The update has been downloaded and will be installed when the game restarts."
 		+ "\n\nClick 'Restart Now' to apply the update immediately, or 'Later' to continue playing."
