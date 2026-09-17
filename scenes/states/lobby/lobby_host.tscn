@@ -15,7 +15,6 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.10196, 0.070588, 0.10196, 1)
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 anchors_preset = 15
@@ -63,7 +62,6 @@ mouse_filter = 2
 theme_override_constants/separation = 4
 
 [node name="RoomCodeLabel" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/RoomCodeSection"]
-unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Room code"

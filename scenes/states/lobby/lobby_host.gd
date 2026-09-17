@@ -20,7 +20,6 @@ var header: MenuHeader
 var _level: LevelData = null
 
 @onready var player_name_input: LineEdit = %PlayerNameInput
-@onready var room_code_label: Label = %RoomCodeLabel
 @onready var room_code_value: Label = %RoomCodeValue
 @onready var player_list: ItemList = %PlayerList
 @onready var start_button: Button = %StartButton

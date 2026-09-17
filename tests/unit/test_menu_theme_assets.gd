@@ -5,7 +5,7 @@ extends GutTest
 ## ask for by name.
 
 const THEME_PATH := "res://themes/generated/dark_theme.tres"
-const NEW_ICONS := ["player-play", "home", "copy", "link", "logout", "arrow-left", "share"]
+const NEW_ICONS := ["player-play", "home", "copy", "logout", "arrow-left", "share"]
 
 
 func test_key_chip_variation_is_in_the_generated_theme() -> void:
