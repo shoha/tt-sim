@@ -49,6 +49,9 @@ const SECTIONS := [
 	["Updates", "download"],
 ]
 
+var header: MenuHeader
+var close_button: Button
+
 var _last_slider_tick_time: float = 0.0
 
 # Audio controls
@@ -105,7 +108,6 @@ var _last_slider_tick_time: float = 0.0
 @onready var update_status_label: Label = %UpdateStatus
 
 # Buttons
-@onready var close_button: Button = %CloseButton
 @onready var reset_button: Button = %ResetButton
 @onready var apply_button: Button = %ApplyButton
 
@@ -265,8 +267,16 @@ static func _build_relaunch_args(
 
 
 func _on_panel_ready() -> void:
+	var box: VBoxContainer = $CenterContainer/PanelContainer/VBoxContainer
+	header = MenuHeader.new()
+	header.name = "Header"
+	box.add_child(header)
+	box.move_child(header, 0)
+	header.setup("Settings", "", true)
+	header.close_requested.connect(_on_close_pressed)
+	close_button = header.close_button
+
 	# Connect UI signals
-	close_button.pressed.connect(_on_close_pressed)
 	reset_button.pressed.connect(_on_reset_pressed)
 	apply_button.pressed.connect(_on_apply_pressed)
 
