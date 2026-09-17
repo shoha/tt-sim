@@ -1,7 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://cpause_overlay_001"]
 
 [ext_resource type="Script" path="res://scenes/states/paused/pause_overlay.gd" id="1_pause"]
-[ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 
 [node name="PauseOverlay" type="CanvasLayer"]
 layer = 10
@@ -24,70 +23,9 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
-custom_minimum_size = Vector2(300, 0)
+custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer"]
 layout_mode = 2
 theme_type_variation = &"BoxContainerSpaced"
-alignment = 1
-
-[node name="PausedLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer"]
-layout_mode = 2
-theme_type_variation = &"H1"
-text = "PAUSED"
-horizontal_alignment = 1
-
-[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="ResumeButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer"]
-script = ExtResource("animated_btn")
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"Success"
-text = "Resume"
-
-[node name="EditLevelButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer"]
-script = ExtResource("animated_btn")
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"Secondary"
-text = "Edit Level"
-
-[node name="ChangeLevelButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer"]
-script = ExtResource("animated_btn")
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"Secondary"
-text = "Change Level"
-
-[node name="SettingsButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer"]
-script = ExtResource("animated_btn")
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"Secondary"
-text = "Settings"
-
-[node name="MainMenuButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer"]
-script = ExtResource("animated_btn")
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"Danger"
-text = "Return to Title"
-
-[node name="QuitGameButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer"]
-script = ExtResource("animated_btn")
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"Danger"
-text = "Quit Game"
-
-[node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="HintLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer"]
-layout_mode = 2
-theme_type_variation = &"Caption"
-text = "Press ESC to resume"
-horizontal_alignment = 1
