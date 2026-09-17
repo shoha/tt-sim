@@ -393,10 +393,14 @@ server.tool(
 server.tool(
   "game_controls",
   "List Control nodes in the running game with their viewport-space rect and centre point, up " +
-    "to 200. The response carries a 'truncated' flag: when it is true the walk hit the cap, so a " +
-    "control you expect but don't see may be past the cap rather than absent from the scene. " +
-    "Walks from the window root, so dialogs and overlays parented outside the current scene are " +
-    "included (game_state's scene_tree does not see those). Use this to find what to click.",
+    "to 200, plus a window_point (window pixels) for each entry that a raw game_click can take " +
+    "directly, with no coordinate math -- prefer game_click_control when just clicking a Control " +
+    "by name/path/text is enough; window_point is for cases that need the raw pixel position, e.g. " +
+    "a click offset from centre. The response carries a 'truncated' flag: when it is true the walk " +
+    "hit the cap, so a control you expect but don't see may be past the cap rather than absent " +
+    "from the scene. Walks from the window root, so dialogs and overlays parented outside the " +
+    "current scene are included (game_state's scene_tree does not see those). Use this to find " +
+    "what to click.",
   {
     visibleOnly: z
       .boolean()
@@ -468,7 +472,12 @@ const StepSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("step"), seconds: z.number().optional(), frames: z.number().int().optional() }),
   z.object({ action: z.literal("step_until"), expression: z.string(), maxFrames: z.number().int().optional() }),
   z.object({ action: z.literal("eval"), expression: z.string() }),
-  z.object({ action: z.literal("controls"), visibleOnly: z.boolean().default(true) }),
+  z
+    .object({ action: z.literal("controls"), visibleOnly: z.boolean().default(true) })
+    .describe(
+      "List Control nodes with their viewport rect, centre, and window_point (window pixels, " +
+        "usable directly by the 'click' step)."
+    ),
   z.object({ action: z.literal("click_control"), query: z.string(), button: z.enum(["left", "right", "middle"]).default("left") }),
 ]);
 
