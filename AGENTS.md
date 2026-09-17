@@ -251,7 +251,7 @@ After making code changes that affect runtime behavior or visuals, use the valid
 | `game_wait` | Wait N seconds for animations/transitions to settle |
 | `game_interact` | **Preferred for multi-step validation.** Execute a sequence of actions and return collected screenshots + state in one call |
 | `game_time` | Deterministic time control: `freeze`, `step`, `step_until`, `resume`. Prefer over `game_wait` |
-| `game_eval` | Evaluate a GDScript expression against the current scene and return the value |
+| `game_eval` | Evaluate a GDScript expression against the current scene and return the value. Prefix an expression with `@run user://probe.gd` to load that script and call its static `run(base)`; use it for anything Expression cannot do (loops, assignment, class_name statics). Godot caches scripts, so rename the probe after editing it. |
 | `game_controls` | List Controls (max 200, with a `truncated` flag) with viewport-space rect and centre. Sees dialogs parented to the window root |
 | `game_click_control` | Click a Control by name, path, or button text. The bridge converts canvas space to window space, so the caller does no coordinate math |
 
@@ -335,6 +335,7 @@ The bridge only activates when Godot is launched with `-- --validation-bridge`. 
 - **Injected clicks cannot reach `OptionButton` popup menu items.** The popup is a Godot `PopupMenu`, which is a `Window`, not a `Control` — `game_controls` cannot see its entries and `game_click_control` cannot click them. Drive the popup with `game_key` (arrow keys, then Enter) instead. Note also that the popup drops the first keypress and resets to index 0 every time it opens
 - **`game_eval` runs against the current scene, not the tree root.** Bare autoload names do not resolve — use `get_node("/root/GameState")` instead of `GameState`. `find_child` also needs `find_child("Name", true, false)` to see nodes added without an owner, which includes `GameMap`
 - **`game_eval` cannot reach Godot engine singletons.** It evaluates the expression through `Expression`, which does not resolve global singletons like `Input` — an expression referencing `Input` fails to parse/resolve. Project autoloads are still reachable via `get_node("/root/<Autoload>")` as above; a true engine singleton (`Input`, `Engine`, etc.) is simply unavailable through `game_eval`
+- Prefix an expression with `@run user://probe.gd` to load that script and call its static `run(base)`; use it for anything Expression cannot do (loops, assignment, class_name statics). Godot caches scripts, so rename the probe after editing it.
 
 ## CI/CD
 
