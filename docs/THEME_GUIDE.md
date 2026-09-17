@@ -59,6 +59,8 @@ UI icons are Tabler Icons (MIT, https://tabler.io/icons) normalised for engine t
 3. Import once (`godot --headless --import --path .`), then set `svg/scale=3.0` and `mipmaps/generate=true` in the generated `.import` sidecar and import again. Icons are drawn at 16 to 24 px, so a 3x raster with mipmaps stays crisp at every size.
 4. Reference the icon by name: `IconButton.icon_name = "cloud-rain"`, `TileRow.add_tile(id, label, "cloud-rain")`, or `IconButton.load_icon("cloud-rain")` for a raw `Texture2D`.
 
+The Level Editor toolbar added `folder` (Load) and `upload` (Import JSON) alongside the existing `plus`, `device-floppy`, `download`, `player-play`, and `x`.
+
 ### Why literal white
 
 Godot's SVG loader renders `currentColor` as black, and `modulate` multiplies the source colour, so a black icon stays black under any tint. A white source icon takes on whatever colour the theme applies: `Button` theme items `icon_normal_color`, `icon_hover_color`, `icon_pressed_color`, `icon_disabled_color` handle every state with no per-instance code.

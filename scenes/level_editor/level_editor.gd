@@ -12,6 +12,11 @@ const POPUP_SIZE_LARGE := Vector2i(800, 600)
 const DIALOG_SIZE := Vector2i(500, 400)
 const STATUS_FLASH_DURATION := 1.0
 
+## Tests set this false before adding the editor to the tree so headless runs
+## never probe user:// for a leftover autosave file or pop the recovery
+## prompt, mirroring LobbyHost.start_hosting.
+@export var check_autosave_on_ready: bool = true
+
 # State
 var current_level: LevelData = null
 var selected_placement_index: int = -1
@@ -84,6 +89,7 @@ var _metadata_debounce_timer: Timer
 @onready var pokemon_selector_shiny: CheckBox = %PokemonSelectorShiny
 
 @onready var main_container: MarginContainer = $MainContainer
+@onready var level_title_caption: Label = %LevelTitleCaption
 
 
 func _ready() -> void:
@@ -114,7 +120,8 @@ func _ready() -> void:
 			_update_ui_from_level(),
 		_set_status,
 	)
-	_check_autosave_recovery()
+	if check_autosave_on_ready:
+		_check_autosave_recovery()
 	_create_new_level()
 	right_panel.visible = false
 
@@ -228,6 +235,9 @@ func _update_ui_from_level() -> void:
 	level_name_edit.text = current_level.level_name
 	level_description_edit.text = current_level.level_description
 	author_edit.text = current_level.author
+	level_title_caption.text = (
+		current_level.level_name if current_level.level_name != "" else "Untitled level"
+	)
 
 	# Update map path display based on level type
 	if _pending_map_source_path != "":
