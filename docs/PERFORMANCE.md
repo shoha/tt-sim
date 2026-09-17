@@ -567,7 +567,11 @@ window/stretch/aspect="keep"
 
 `aspect="keep"` pins the SubViewport regardless of window shape. Disabling vsync must
 happen in `user://settings.cfg`, not here: `scenes/root.gd` applies saved graphics
-settings at boot and overrides `override.cfg`. Then per run: load the level, press
+settings at boot and overrides `override.cfg`. **Exception:** `tests/test_play_level.tscn`
+never runs `root.gd`, so `user://settings.cfg`'s vsync flag is never applied there --
+measuring through that scene needs vsync disabled in `override.cfg` itself, with
+`display/window/vsync/vsync_mode=0` added to the `[display]` block above (see "Foliage
+backlight (2026-09-16)" for a worked example). Then per run: load the level, press
 **Home** for a deterministic camera pose, press **F3** (perf logging only starts when
 the overlay is open), wait ~30 s, and read `user://perf_logs/` filtering `elapsed_s > 5`.
 Confirm `primitives` and `draw_calls` match between samples before comparing them; if
