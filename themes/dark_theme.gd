@@ -12,7 +12,7 @@ const inter_font = preload("res://assets/fonts/Inter-VariableFont_opsz,wght.ttf"
 const COLOR_ADJUSTMENT: float = 0.2
 
 # -- Core Background Colors --
-const color_background: Color = Color("#1a121a")  # Deepest background (inputs, tracks)
+const color_background: Color = ThemeColors.BACKGROUND  # Deepest background (inputs, tracks)
 var color_background_darker: Color = color_background.darkened(COLOR_ADJUSTMENT)
 var color_background_darkest: Color = color_background.darkened(COLOR_ADJUSTMENT * 2)
 var color_background_lighter: Color = color_background.lightened(COLOR_ADJUSTMENT)
@@ -700,6 +700,25 @@ func _define_panel():
 					border_ = border_width(border_w),
 					corner_ = corner_radius(corner_r),
 					content_margin_ = content_margins(margin_w * 2),
+				}
+			),
+		}
+	)
+
+	# Key chip - a small key cap for a shortcut label (help overlay rows).
+	# Tighter corner and vertical padding than a panel: it wraps one line of text.
+	define_variant_style(
+		"KeyChip",
+		"PanelContainer",
+		{
+			panel =
+			stylebox_flat(
+				{
+					bg_color = color_surface2,
+					border_color = color_surface3,
+					border_ = border_width(border_w),
+					corner_ = corner_radius(4),
+					content_margin_ = content_margins(spacing_md, 2),
 				}
 			),
 		}

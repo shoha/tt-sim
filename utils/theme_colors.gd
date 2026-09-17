@@ -14,3 +14,7 @@ const ACCENT := Color("#db924b")
 
 ## color_text_on_dark at 70%: muted captions, chevrons, tick icons.
 const TEXT_MUTED := Color(0.875, 0.875, 0.875, 0.7)
+
+## The deepest background (themes/dark_theme.gd color_background): solid
+## backdrops that replace the map rather than dim it, such as the lobbies.
+const BACKGROUND := Color("#1a121a")
