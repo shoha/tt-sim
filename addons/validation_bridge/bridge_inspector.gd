@@ -62,8 +62,10 @@ static func describe_control(control: Control) -> Dictionary:
 
 
 ## Adds `window_point` (window pixels, what `click` takes) next to each entry's canvas
-## `center`, using the viewport's final transform. Pure so it is testable without a live
-## viewport; `_cmd_controls` passes `get_viewport().get_final_transform()`.
+## `center`, using the viewport's final transform. Mutates the entries in place and
+## returns the same array. Viewport-free -- the transform is a parameter, so a test can
+## pass any Transform2D and assert the conversion without a live viewport;
+## `_cmd_controls` passes `get_viewport().get_final_transform()`.
 static func add_window_points(entries: Array, final_transform: Transform2D) -> Array:
 	for entry in entries:
 		var center: Array = entry["center"]
