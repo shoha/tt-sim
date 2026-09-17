@@ -468,3 +468,50 @@ func test_switching_from_trivial_to_unshaded_swaps_shader_and_unchecks_the_other
 	unshaded_checkbox.free()
 	cheap_lighting_checkbox.free()
 	root.free()
+
+
+func test_get_toggle_states_defaults_baked_foliage_ao_to_off() -> void:
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+	assert_false(toggles.get_toggle_states()["toggle_baked_foliage_ao"])
+
+
+func test_baked_foliage_ao_toggled_on_sets_full_strength_on_every_foliage_material() -> void:
+	var root := Node3D.new()
+	var grass_mm := _make_wind_foliage_multimesh("grass")
+	var tree_mm := _make_wind_foliage_multimesh("tree")
+	root.add_child(grass_mm)
+	root.add_child(tree_mm)
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+	toggles._map_container = root
+	toggles._collect_nodes()
+
+	toggles._on_baked_foliage_ao_toggled(true)
+
+	for mm in [grass_mm, tree_mm]:
+		var mat := mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
+		assert_eq(
+			mat.get_shader_parameter("baked_ao_strength"),
+			DebugRenderToggles.DEBUG_BAKED_AO_STRENGTH
+		)
+	assert_true(toggles.get_toggle_states()["toggle_baked_foliage_ao"])
+	root.free()
+
+
+func test_baked_foliage_ao_toggled_off_restores_the_shipped_strength() -> void:
+	var root := Node3D.new()
+	var grass_mm := _make_wind_foliage_multimesh("grass")
+	root.add_child(grass_mm)
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+	toggles._map_container = root
+	toggles._collect_nodes()
+
+	toggles._on_baked_foliage_ao_toggled(true)
+	toggles._on_baked_foliage_ao_toggled(false)
+
+	var mat := grass_mm.multimesh.mesh.surface_get_material(0) as ShaderMaterial
+	assert_eq(mat.get_shader_parameter("baked_ao_strength"), WindFoliage.BAKED_AO_STRENGTH)
+	assert_false(toggles.get_toggle_states()["toggle_baked_foliage_ao"])
+	root.free()

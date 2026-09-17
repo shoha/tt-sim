@@ -44,11 +44,14 @@ const CSV_COLUMNS: PackedStringArray = [
 	"toggle_trivial_foliage_shader",
 	"toggle_unshaded_foliage_textured",
 	"toggle_cheap_lighting_foliage",
-	# Appended last so older analyses keyed by column index keep working.
+	# Appended last so older analyses keyed by column index keep working. Any new
+	# toggle column (like toggle_baked_foliage_ao below) goes after this one, for the
+	# same reason.
 	# Script-side main-thread time (Performance.TIME_PROCESS) averaged over the
 	# sample: unlike frame_time_avg_ms it excludes GPU and vsync waits, so CPU
 	# changes stay measurable on a GPU-bound or vsync-capped frame.
 	"process_time_avg_ms",
+	"toggle_baked_foliage_ao",
 ]
 
 ## Columns rendered with 2 decimal places; every other column uses str(value).
