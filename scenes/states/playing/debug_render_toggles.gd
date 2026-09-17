@@ -77,6 +77,13 @@ const _DEBUG_SHADER_CHECKBOX_KEYS := [
 	"cheap_lighting_foliage",
 ]
 
+## Value the "Baked foliage AO" checkbox writes to every foliage material's
+## baked_ao_strength uniform when checked -- the full baked ORM occlusion channel,
+## for A/B against WindFoliage.BAKED_AO_STRENGTH (the shipped default, which ignores
+## it). Exists to compare an old export (self-occluded, near-black AO) against a
+## re-export from a terrain-paint that writes white AO.
+const DEBUG_BAKED_AO_STRENGTH: float = 1.0
+
 ## Checkbox keys refresh() should default to UNPRESSED (unlike the remaining
 ## visibility/shadow toggles, which default pressed=on to match current shipped
 ## behavior). Derived from _DEBUG_SHADER_CHECKBOX_KEYS (all three of those toggles
@@ -93,7 +100,7 @@ const _DEBUG_SHADER_CHECKBOX_KEYS := [
 ## report "grass shadows on" while shadows were actually off. Checking the box still
 ## restores real shadow casting via _on_grass_shadows_toggled, for diagnosis.
 const _DEFAULT_OFF_CHECKBOX_KEYS := (
-	_DEBUG_SHADER_CHECKBOX_KEYS + ["hard_sun_shadows", "grass_shadows"]
+	_DEBUG_SHADER_CHECKBOX_KEYS + ["hard_sun_shadows", "grass_shadows", "baked_foliage_ao"]
 )
 
 ## Checkbox keys in the same order they appear in the panel, so toggle_by_index()
@@ -108,6 +115,7 @@ const PANEL_ORDER_KEYS := [
 	"trivial_foliage_shader",
 	"unshaded_foliage_textured",
 	"cheap_lighting_foliage",
+	"baked_foliage_ao",
 ]
 
 var _foliage_visible: bool = true
@@ -123,6 +131,10 @@ var _hard_sun_shadows: bool = false
 ## "unshaded", or "cheap_lighting". A String rather than independent bools because the
 ## debug shaders are mutually exclusive -- a material can only have one shader at a time.
 var _foliage_debug_shader: String = ""
+
+## Whether the baked ORM occlusion channel is currently applied to foliage (see
+## DEBUG_BAKED_AO_STRENGTH). Off by default to match WindFoliage.BAKED_AO_STRENGTH.
+var _baked_foliage_ao: bool = false
 
 var _map_container: Node3D = null
 ## Root to search for the level's DirectionalLight3D (see _sun_light) -- the sun light
@@ -170,6 +182,7 @@ func get_toggle_states() -> Dictionary:
 		"toggle_trivial_foliage_shader": _foliage_debug_shader == "trivial",
 		"toggle_unshaded_foliage_textured": _foliage_debug_shader == "unshaded",
 		"toggle_cheap_lighting_foliage": _foliage_debug_shader == "cheap_lighting",
+		"toggle_baked_foliage_ao": _baked_foliage_ao,
 	}
 
 
@@ -237,6 +250,12 @@ func refresh() -> void:
 	# so there is nothing left to restore -- just drop the stale references.
 	_foliage_debug_shader = ""
 	_original_foliage_shaders.clear()
+	# Same desync this class's _DEFAULT_OFF_CHECKBOX_KEYS docstring describes for
+	# "grass_shadows": the new map's foliage materials are fresh (WindFoliage.apply_material
+	# pins baked_ao_strength back to BAKED_AO_STRENGTH on every one of them), so leaving this
+	# true here would make get_toggle_states() report the checkbox on while the actual
+	# uniform is already back at its shipped value.
+	_baked_foliage_ao = false
 	for key in _checkboxes:
 		_checkboxes[key].set_pressed_no_signal(key not in _DEFAULT_OFF_CHECKBOX_KEYS)
 
@@ -263,6 +282,7 @@ func _create_panel(overlay_parent: GameMap) -> void:
 		"Trivial foliage shader",
 		"Unshaded foliage (full textures)",
 		"Cheap lighting foliage",
+		"Baked foliage AO",
 	]
 	var result: Dictionary = MapOverlayUtils.create_checkbox_panel(labels)
 	_panel = result.panel
@@ -277,6 +297,7 @@ func _create_panel(overlay_parent: GameMap) -> void:
 		"trivial_foliage_shader": checkboxes[6],
 		"unshaded_foliage_textured": checkboxes[7],
 		"cheap_lighting_foliage": checkboxes[8],
+		"baked_foliage_ao": checkboxes[9],
 	}
 	# Stacked below PerformanceOverlay's metrics panel inside GameMap's shared perf
 	# overlay VBoxContainer (see GameMap.get_perf_overlay_container()) -- the container
@@ -298,6 +319,7 @@ func _create_panel(overlay_parent: GameMap) -> void:
 	_checkboxes["cheap_lighting_foliage"].toggled.connect(
 		_on_debug_shader_checkbox_toggled.bind("cheap_lighting_foliage", "cheap_lighting")
 	)
+	_checkboxes["baked_foliage_ao"].toggled.connect(_on_baked_foliage_ao_toggled)
 
 
 func _on_foliage_visible_toggled(pressed: bool) -> void:
@@ -347,6 +369,17 @@ func _on_hard_sun_shadows_toggled(pressed: bool) -> void:
 		RenderingServer.SHADOW_QUALITY_HARD if pressed else _get_configured_shadow_quality()
 	)
 	RenderingServer.directional_soft_shadow_filter_set_quality(quality)
+
+
+## Writes DEBUG_BAKED_AO_STRENGTH (checked) or WindFoliage.BAKED_AO_STRENGTH (unchecked)
+## to every cached foliage ShaderMaterial's baked_ao_strength uniform. Uses
+## _foliage_shader_materials so materials hidden by "Foliage visible" are covered too.
+func _on_baked_foliage_ao_toggled(pressed: bool) -> void:
+	_baked_foliage_ao = pressed
+	var strength := DEBUG_BAKED_AO_STRENGTH if pressed else WindFoliage.BAKED_AO_STRENGTH
+	for mat in _foliage_shader_materials:
+		if is_instance_valid(mat):
+			mat.set_shader_parameter("baked_ao_strength", strength)
 
 
 ## Read the player's persisted Shadow Quality choice (Settings > Graphics)
