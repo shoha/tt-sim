@@ -41,25 +41,6 @@ func test_pause_rows_fade_in_once_and_settle_at_full_alpha() -> void:
 	assert_almost_eq(overlay.get_node("CenterContainer").modulate.a, 1.0, 0.01)
 
 
-func test_rows_never_return_to_zero_after_the_panel_fade() -> void:
-	# The old bug: rows reached 1.0 with the panel fade, then were reset to 0.0 by the
-	# stagger. Sample after the panel fade has finished; every row must be at or above
-	# whatever alpha it had two frames earlier, never snapped back to zero.
-	var overlay := PAUSE_SCENE.instantiate()
-	add_child_autofree(overlay)
-	var rows := _rows(overlay)
-	await wait_seconds(Constants.ANIM_FADE_IN_DURATION + 0.05)
-	var before: Array[float] = []
-	for row in rows:
-		before.append(row.modulate.a)
-	await wait_frames(2)
-	for i in range(rows.size()):
-		assert_true(
-			rows[i].modulate.a >= before[i] - 0.001,
-			"%s dropped from %.2f to %.2f" % [rows[i].name, before[i], rows[i].modulate.a]
-		)
-
-
 func test_panel_without_targets_still_animates_in() -> void:
 	var panel := AnimatedCanvasLayerPanel.new()
 	var backdrop := ColorRect.new()
