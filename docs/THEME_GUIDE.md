@@ -143,10 +143,10 @@ Buttons have semantic variants to communicate their purpose:
 
 | Variant     | Color         | Usage                                                       |
 | ----------- | ------------- | ----------------------------------------------------------- |
-| (default)   | Accent/Orange | Utility actions (Settings, Level Editor)                    |
+| (default)   | Accent/Orange | The one primary action on a screen (for example Host Game, Resume, Start, Connect, Apply) |
 | `Secondary` | Teal          | Standard actions (New, Load, Save, Select, Host, Join, Close) |
 | `Success`   | Green         | confirmation dialog only                                    |
-| `Warning`   | Yellow        | Caution actions                                             |
+| `Warning`   | Yellow        | Reserved; not currently used by any menu                    |
 | `Danger`    | Red           | confirmation dialog only                                    |
 | `Card`      | --            | Level cards; accent border when pressed                     |
 
@@ -161,29 +161,19 @@ the primary last.
 
 Use color to communicate **action weight**, not arbitrary grouping:
 
-- **Success** (green): The primary call-to-action on a screen -- what most users came here to do
-- **Secondary** (teal): Standard actions that aren't the primary CTA (file ops, navigation, close/dismiss)
-- **Default** (accent): Utility actions that aren't game actions (Settings, Level Editor)
-- **Danger** (red): Only for actions that are destructive or abandon state (Delete, Quit, Leave)
+- **Default** (accent): The one primary action on a screen -- what most users came here to do (Host Game, Resume, Start, Connect, Apply)
+- **Secondary** (teal): Everything else on a menu screen -- file ops, navigation, cancel/close/dismiss
+- **Success** / **Danger** (green / red): `ConfirmationDialogUI`'s confirm button only, never a menu screen's own action
+- **Warning** (yellow): Reserved; not currently used by any menu
 
 Closing or dismissing a menu is **not** destructive -- use `Secondary`, not `Danger`.
 
 ### Example Button Bar
 
 ```gdscript
-# File operations - standard actions
-NewButton.theme_type_variation = "Secondary"
-LoadButton.theme_type_variation = "Secondary"
-SaveButton.theme_type_variation = "Secondary"
-
-# Playtest - primary CTA
-PlayButton.theme_type_variation = "Success"
-
-# Close - dismissal, not destructive
-CloseButton.theme_type_variation = "Secondary"
-
-# Delete - destructive
-DeleteButton.theme_type_variation = "Danger"
+# Footer: secondary actions first, the primary last (HBoxContainer, ALIGNMENT_END)
+CancelButton.theme_type_variation = "Secondary"
+ApplyButton.theme_type_variation = ""  # default variant -- this screen's one accent primary
 ```
 
 ### In .tscn Files
