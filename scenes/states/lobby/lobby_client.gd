@@ -1,9 +1,17 @@
-extends CanvasLayer
+class_name LobbyClient
+extends AnimatedCanvasLayerPanel
 
-## Lobby screen for clients.
-## Allows entering a room code and shows connection status.
+## Lobby screen for clients: enter a room code, then wait for the host.
+## Root frees this node directly on state exit, so _on_after_animate_out() is a
+## no-op here: a stray animate_out() must never free the lobby a second time.
 
 signal leave_requested
+
+## Tests set this false before adding the screen to the tree so headless runs
+## never reach NetworkManager's signals or join_game().
+@export var connect_network: bool = true
+
+var header: MenuHeader
 
 var _is_connected: bool = false
 ## Suppresses join sounds/flash during the initial player list sync so only
@@ -21,24 +29,44 @@ var _suppressing_join_sounds: bool = false
 @onready var input_container: Control = %InputContainer
 
 
-func _ready() -> void:
+func _on_panel_ready() -> void:
+	var box: VBoxContainer = $CenterContainer/PanelContainer/MarginContainer/VBoxContainer
+	header = MenuHeader.new()
+	header.name = "Header"
+	box.add_child(header)
+	box.move_child(header, 0)
+	header.setup("Join a game", "Enter the room code from the host")
+	($ColorRect as ColorRect).color = ThemeColors.BACKGROUND
+
 	# Connect UI signals
 	connect_button.pressed.connect(_on_connect_pressed)
 	leave_button.pressed.connect(_on_leave_pressed)
 	paste_button.pressed.connect(_on_paste_pressed)
 	room_code_input.text_submitted.connect(_on_room_code_submitted)
 
-	# Connect network signals
-	NetworkManager.player_joined.connect(_on_player_joined)
-	NetworkManager.player_left.connect(_on_player_left)
-	NetworkManager.connection_failed.connect(_on_connection_failed)
-	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
+	if connect_network:
+		NetworkManager.player_joined.connect(_on_player_joined)
+		NetworkManager.player_left.connect(_on_player_left)
+		NetworkManager.connection_failed.connect(_on_connection_failed)
+		NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
 	# Load saved player name
 	player_name_input.text = NetworkManager.get_player_name()
 
 	# Initialize UI
 	_show_input_state()
+
+
+func _on_after_animate_in() -> void:
+	UiMotion.stagger_in(
+		UiMotion.visible_children($CenterContainer/PanelContainer/MarginContainer/VBoxContainer),
+		self
+	)
+
+
+## Root owns this node's lifetime — see the class comment.
+func _on_after_animate_out() -> void:
+	pass
 
 
 func _exit_tree() -> void:
@@ -60,6 +88,7 @@ func _show_input_state() -> void:
 	connect_button.disabled = false
 	room_code_input.editable = true
 	player_name_input.editable = true
+	_set_footer_action("Back", "arrow-left")
 	player_name_input.grab_focus()
 	_cross_fade(input_container)
 
@@ -69,12 +98,14 @@ func _show_connecting_state() -> void:
 	connect_button.disabled = true
 	room_code_input.editable = false
 	player_name_input.editable = false
+	_set_footer_action("Leave", "logout")
 
 
 func _show_connected_state() -> void:
 	input_container.visible = false
 	waiting_container.visible = true
 	status_label.text = "Connected! Waiting for host to start..."
+	_set_footer_action("Leave", "logout")
 	_is_connected = true
 	_suppressing_join_sounds = true
 	_update_player_list()
@@ -185,3 +216,10 @@ func _cross_fade(container: Control) -> void:
 	tw.set_ease(Tween.EASE_OUT)
 	tw.set_trans(Tween.TRANS_CUBIC)
 	tw.tween_property(container, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
+
+
+## The footer action is Back while the form is still up and Leave once a
+## connection is under way — the same button, renamed with the situation.
+func _set_footer_action(label: String, icon: String) -> void:
+	leave_button.text = label
+	leave_button.icon = IconButton.load_icon(icon)
