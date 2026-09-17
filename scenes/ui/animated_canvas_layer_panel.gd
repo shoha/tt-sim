@@ -14,6 +14,9 @@ extends CanvasLayer
 ##
 ## Subclasses override _on_panel_ready() instead of _ready() and can hook into
 ## _on_after_animate_in() / _on_before_animate_out() / _on_after_animate_out().
+## Rows that should fade and lift in one after another are returned from
+## _stagger_targets(); the base hides them before the first frame and runs the
+## stagger alongside animate_in().
 
 ## Stack of live panels, topmost last. Only the topmost panel traps Tab, so a
 ## dialog opened over another panel (e.g. LevelPickerDialog over the pause
@@ -45,8 +48,14 @@ func _ready() -> void:
 	# panel must not steal Tab from it.
 	_trap_stack.push_back(self)
 
-	# Animate in
+	# Hide the staggered rows before anything is drawn, then start both entrances in
+	# this same synchronous run: UiMotion.stagger_in zeroes its targets' alpha before
+	# its first await, so no frame ever shows the rows at full alpha, and the rows
+	# begin lifting in two frames later while the panel itself is still fading.
+	var targets := _stagger_targets()
 	animate_in()
+	if not targets.is_empty():
+		UiMotion.stagger_in(targets, self)
 
 
 func _exit_tree() -> void:
@@ -203,6 +212,15 @@ func _grab_visible(start_idx: int, step: int) -> bool:
 ## Called after the animate-in tween finishes (e.g. grab focus on a button).
 func _on_after_animate_in() -> void:
 	pass
+
+
+## Controls to fade and lift in one after another as the panel appears, usually
+## UiMotion.visible_children() of the content box. Return them here rather than
+## calling UiMotion.stagger_in from _on_after_animate_in: that ordering let the rows
+## fade in with the panel and then snapped them to alpha 0 for a second entrance
+## (the pause menu's "appears, vanishes, animates in" report, 2026-09-17).
+func _stagger_targets() -> Array[Control]:
+	return []
 
 
 ## Called before the animate-out tween starts (e.g. unregister overlay).

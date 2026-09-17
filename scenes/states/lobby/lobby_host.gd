@@ -72,11 +72,8 @@ func _on_panel_ready() -> void:
 		NetworkManager.host_game()
 
 
-func _on_after_animate_in() -> void:
-	UiMotion.stagger_in(
-		UiMotion.visible_children($CenterContainer/PanelContainer/MarginContainer/VBoxContainer),
-		self
-	)
+func _stagger_targets() -> Array[Control]:
+	return UiMotion.visible_children($CenterContainer/PanelContainer/MarginContainer/VBoxContainer)
 
 
 ## Root owns this node's lifetime — see the class comment.

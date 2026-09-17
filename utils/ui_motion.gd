@@ -47,7 +47,11 @@ static func visible_children(parent: Node) -> Array[Control]:
 ## re-sort them while the entrance plays (about 1.1 s for a full staggered
 ## group): the tween drives each control's position.y toward the value
 ## captured before it starts, so a layout change mid-entrance leaves it
-## tweening toward a position its container no longer holds.
+## tweening toward a position its container no longer holds. The alpha reset
+## happens synchronously, before the first await, so call this in the same run
+## that makes the parent visible (AnimatedCanvasLayerPanel does this through
+## _stagger_targets()) — never after a fade that already showed the targets, or
+## they will flash at full alpha and then snap back to zero.
 static func stagger_in(targets: Array[Control], owner: Node) -> void:
 	for control in targets:
 		control.modulate.a = 0.0
