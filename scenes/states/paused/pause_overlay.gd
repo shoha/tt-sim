@@ -79,11 +79,12 @@ func _setup_blur_backdrop() -> void:
 	$ColorRect.material = mat
 
 
+func _stagger_targets() -> Array[Control]:
+	return UiMotion.visible_children($CenterContainer/PanelContainer/VBoxContainer)
+
+
 func _on_after_animate_in() -> void:
 	resume_button.grab_focus()
-	UiMotion.stagger_in(
-		UiMotion.visible_children($CenterContainer/PanelContainer/VBoxContainer), self
-	)
 
 
 func _on_resume_pressed() -> void:
