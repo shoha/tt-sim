@@ -283,7 +283,7 @@ own 1024 texture and the other 99% was dilation padding.
 Both are fixed on the `terrain-paint` side: `bake_orm(bake_ao=False)` writes a flat
 white occlusion channel, and the bake runs through a packed temporary UV layer
 (`tp_bake_uv`) that scales the asset's UV bounding box up to fill the texture, so the
-same 1024 texture carries real detail instead of padding. Sandy Clearing's four catalog
+asset gets the whole 1024 instead of a corner of it. Sandy Clearing's four catalog
 biomes (`biome_01/03/07/09`) were re-baked and the map re-exported with the fix.
 Measured on the exported `map.glb`, ORM red mean over opaque texels and UV footprint as
 `sqrt(UV triangle area) x 1024`:
@@ -308,8 +308,22 @@ object with a UV outside [0, 1], because squashing a tiling layout into the unit
 would destroy it. Tree assets carry tiled bark and atlas-sub-region leaves on the same
 mesh, so all 7 trees (and 5 rocks that already filled their UV) keep their original
 layout -- 53 of the map's 65 scatter assets got `tp_bake_uv`. Tree leaves therefore gain
-the white AO but not the resolution; giving them both needs per-material packing, which
-the bake does not do today.
+the white AO but not the larger footprint; giving them both needs per-material packing,
+which the bake does not do today.
+
+**The larger footprint did not buy measurable detail.** The packed bake resamples the
+source material rather than the old texels, so it is not limited by the previous bake --
+but on these assets it had nothing more to read. Cropping each asset's UV box out of the
+old texture, scaling that crop up to the footprint it occupies in the new texture, and
+diffing against the new texture gives a mean absolute error of 0.0017 (fallen leaves),
+0.0031 (ferns) and 0.0004 (grass) per channel; a control that degrades the *new* texture
+back to the old crop's pixel budget and diffs the same way scores 0.0009, 0.0033 and
+0.0003. The new textures are, to within that noise, upscales of what the old ones already
+carried. So the packing is worth keeping for correct mip behaviour and for not shipping
+a texture that is 99% dilation padding, but it is not a resolution win on this library,
+and the source atlas -- not the bake -- is where the remaining detail budget is. (The
+source atlas's own resolution was not inspected, so which of the two limits binds here is
+untested.)
 
 ## Environment Overrides
 
