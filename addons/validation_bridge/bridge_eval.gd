@@ -20,6 +20,13 @@ const MAX_DEPTH: int = 4
 ## How many array entries are reported before truncating with a count of the remainder.
 const MAX_ARRAY_ITEMS: int = 50
 
+## Escape hatch for anything Expression cannot do (loops, assignment, variables): an
+## expression of the form `@run <path>` loads the GDScript at `path` (res:// or user://) and
+## calls its static `run(base)` with the same base instance an expression would get as
+## `self`, returning that function's value. Lets an agent drop a throwaway probe script in
+## user:// and drive it without editing the bridge. Same non-boundary caveat as the file header.
+const RUN_PREFIX: String = "@run "
+
 
 ## Parses and runs `text` with `base_instance` as `self`.
 ##
@@ -31,12 +38,27 @@ const MAX_ARRAY_ITEMS: int = 50
 ## default `Color` as non-empty Dictionaries, which are truthy where the values themselves are
 ## false.
 static func evaluate(text: String, base_instance: Object) -> Dictionary:
+	if text.begins_with(RUN_PREFIX):
+		return _run_script(text.substr(RUN_PREFIX.length()).strip_edges(), base_instance)
 	var expression := Expression.new()
 	if expression.parse(text) != OK:
 		return {"ok": false, "error": "Parse error: %s" % expression.get_error_text()}
 	var result: Variant = expression.execute([], base_instance, false)
 	if expression.has_execute_failed():
 		return {"ok": false, "error": "Execution failed: %s" % expression.get_error_text()}
+	return {"ok": true, "value": to_json_safe(result, 0), "truthy": is_truthy(result)}
+
+
+## Loads `path` as a GDScript and calls its static `run(base_instance)`; see RUN_PREFIX.
+static func _run_script(path: String, base_instance: Object) -> Dictionary:
+	if not ResourceLoader.exists(path):
+		return {"ok": false, "error": "No script at %s" % path}
+	var script: Variant = load(path)
+	if not script is GDScript:
+		return {"ok": false, "error": "%s is not a GDScript" % path}
+	if not (script as GDScript).has_method("run"):
+		return {"ok": false, "error": "%s has no static run(base) method" % path}
+	var result: Variant = (script as GDScript).call("run", base_instance)
 	return {"ok": true, "value": to_json_safe(result, 0), "truthy": is_truthy(result)}
 
 

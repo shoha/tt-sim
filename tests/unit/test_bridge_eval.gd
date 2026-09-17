@@ -1,5 +1,11 @@
 extends GutTest
 
+# Distinct filenames per test, not a single shared path: Godot's ResourceLoader caches a script by
+# path even after the backing file is deleted in after_each, so reusing one path across tests loads
+# the previous test's cached script instead of the freshly written source.
+const _RUN_SCRIPT_PATH_A := "user://_test_bridge_eval_run_a.gd"
+const _RUN_SCRIPT_PATH_B := "user://_test_bridge_eval_run_b.gd"
+
 
 func test_evaluates_arithmetic() -> void:
 	var result := BridgeEval.evaluate("1 + 2", null)
@@ -166,3 +172,45 @@ func test_result_survives_json_stringify() -> void:
 	assert_true(result["ok"])
 	var encoded := JSON.stringify(result["value"])
 	assert_string_contains(encoded, '"x"')
+
+
+func _write_run_script(path: String, source: String) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(source)
+	file.close()
+
+
+func after_each() -> void:
+	for path: String in [_RUN_SCRIPT_PATH_A, _RUN_SCRIPT_PATH_B]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_run_prefix_calls_the_scripts_static_run_with_the_base_instance() -> void:
+	_write_run_script(
+		_RUN_SCRIPT_PATH_A,
+		'extends RefCounted\nstatic func run(base: Object) -> Variant:\n\treturn base.name + "!"\n'
+	)
+	var node := Node.new()
+	node.name = "Probe"
+	autofree(node)
+
+	var result := BridgeEval.evaluate("@run " + _RUN_SCRIPT_PATH_A, node)
+
+	assert_true(result["ok"])
+	assert_eq(result["value"], "Probe!")
+
+
+func test_run_prefix_reports_a_missing_script() -> void:
+	var result := BridgeEval.evaluate("@run user://_does_not_exist.gd", null)
+	assert_false(result["ok"])
+	assert_true(String(result["error"]).contains("No script"))
+
+
+func test_run_prefix_reports_a_script_without_run() -> void:
+	_write_run_script(
+		_RUN_SCRIPT_PATH_B, "extends RefCounted\nstatic func other() -> int:\n\treturn 1\n"
+	)
+	var result := BridgeEval.evaluate("@run " + _RUN_SCRIPT_PATH_B, null)
+	assert_false(result["ok"])
+	assert_true(String(result["error"]).contains("no static run"))
