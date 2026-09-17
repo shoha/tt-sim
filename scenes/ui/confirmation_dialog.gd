@@ -14,6 +14,9 @@ extends AnimatedCanvasLayerPanel
 
 signal closed(confirmed: bool)
 
+var header: MenuHeader
+var title_label: Label
+
 var _confirm_callback: Callable
 var _cancel_callback: Callable
 var _confirm_sound_override: Callable
@@ -21,13 +24,19 @@ var _confirmed: bool = false
 var _closing: bool = false
 var _is_danger: bool = false
 
-@onready var title_label: Label = %TitleLabel
 @onready var message_label: Label = %MessageLabel
 @onready var confirm_button: Button = %ConfirmButton
 @onready var cancel_button: Button = %CancelButton
 
 
 func _on_panel_ready() -> void:
+	var box: VBoxContainer = $CenterContainer/PanelContainer/VBoxContainer
+	header = MenuHeader.new()
+	header.name = "Header"
+	box.add_child(header)
+	box.move_child(header, 0)
+	title_label = header.title_label
+
 	# Opt out of generic click — these buttons play confirm/cancel sounds instead
 	confirm_button.set_meta("ui_silent", true)
 	cancel_button.set_meta("ui_silent", true)
