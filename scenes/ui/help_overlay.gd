@@ -46,7 +46,7 @@ func _on_panel_ready() -> void:
 	for section in sections:
 		_add_section(vbox, section.header, section.entries)
 
-	vbox.add_child(_spacer(8))
+	UiActions.spacer(8, vbox)
 
 	var close_label := Label.new()
 	close_label.text = "Press F1 or Escape to close"
@@ -59,7 +59,7 @@ func _on_panel_ready() -> void:
 
 
 func _on_close_requested() -> void:
-	animate_out()
+	UIManager.close_help()
 
 
 func _on_before_animate_out() -> void:
@@ -119,7 +119,7 @@ func _get_shortcut_data() -> Array:
 
 
 func _add_section(parent: VBoxContainer, header_text: String, entries: Array) -> void:
-	parent.add_child(_spacer(6))
+	UiActions.spacer(6, parent)
 
 	var section_header := Label.new()
 	section_header.text = header_text
@@ -154,10 +154,3 @@ func _create_shortcut_row(key_text: String, action_text: String) -> HBoxContaine
 	row.add_child(action_label)
 
 	return row
-
-
-func _spacer(height: float) -> Control:
-	var s := Control.new()
-	s.custom_minimum_size = Vector2(0, height)
-	s.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return s
