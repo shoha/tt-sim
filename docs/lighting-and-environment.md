@@ -364,9 +364,28 @@ tiled bark UVs are bit-identical before and after, confirming the packer still s
 layout that leaves [0, 1].
 
 The leaf albedo brightened on all three trees, including `FP_Tree_B_002` whose UV layout
-and alpha histogram did not change at all -- so that part is the float-to-8-bit re-encode,
-not the packing. Bark luminance is unchanged across the same re-encode, so it is not a
-global colour shift. `FP_Tree_B_001`'s leaf alpha coverage also went 0.00 -> 0.15, i.e. its
+and alpha histogram did not change at all. A follow-up probe over the exported Sandy
+Clearing GLB textures (mean over opaque texels, sRGB PNG values as stored) pins this down
+to a colourspace bug, not the packing:
+
+| species / surface | yesterday (float-EXR catalog) | today (8-bit catalog) |
+| --- | --- | --- |
+| `FP_Tree_B_002` leaves | (0.097, 0.149, 0.023) | (0.343, 0.420, 0.165) |
+| `FP_Grass_072` | (0.176, 0.166, 0.018) | (0.457, 0.443, 0.144) |
+| `FP_Fallen_Leaves_B_014` | (0.090, 0.036, 0.017) | (0.331, 0.208, 0.139) |
+| `FP_Tree_B_002` bark (already glTF-simple, never baked) | (0.192, 0.144, 0.103) | (0.192, 0.144, 0.103) |
+
+Today's values are, channel by channel, the sRGB transfer function applied to yesterday's
+(0.149 -> 0.420, 0.097 -> 0.343, 0.023 -> 0.165): yesterday's PNGs held scene-linear albedo
+in an sRGB-interpreted file, so every material the catalog actually baked (the complex
+Geoscatter leaf/grass shaders) rendered one gamma too dark since the catalog was first
+built, while pass-through simple materials like bark -- never touched by the baker -- were
+right all along. The 8-bit path is the correct one: terrain-paint's own probe
+(`engine/baking.py`, `_to_byte_image` docstring) shows a 0.6 base colour baking to 0.784
+display-encoded, which Godot decodes back to about 0.58 linear -- consistent, not a second
+bug. The likely mechanism (not proven) is the old float image being packed as OpenEXR, a
+linear container, and re-read as linear-tagged data, so the exporter wrote it out without
+encoding it. `FP_Tree_B_001`'s leaf alpha coverage also went 0.00 -> 0.15, i.e. its
 canopy card was previously almost entirely transparent. Live frames at Home and at a canopy
 zoom confirm the result: the canopy reads as dense, crisp, naturally-lit green instead of
 the dark low-contrast mass it was, with ground, rocks and tokens pixel-unchanged.
