@@ -1,7 +1,10 @@
-extends CanvasLayer
+class_name LobbyHost
+extends AnimatedCanvasLayerPanel
 
 ## Lobby screen for the host.
-## Displays the room code, connected players, and provides a start game button.
+## Shows the room code, the level about to be played, and who has joined.
+## Root frees this node directly on state exit, so _on_after_animate_out() is a
+## no-op here: a stray animate_out() must never free the lobby a second time.
 
 signal start_game_requested
 signal cancel_requested
@@ -13,6 +16,7 @@ const LEVEL_PICKER_SCENE := preload("res://scenes/ui/level_picker_dialog.tscn")
 ## never reach NetworkManager.host_game() or its signal connections.
 @export var start_hosting: bool = true
 
+var header: MenuHeader
 var _level: LevelData = null
 
 @onready var player_name_input: LineEdit = %PlayerNameInput
@@ -30,7 +34,15 @@ var _level: LevelData = null
 @onready var change_level_button: Button = %ChangeLevelButton
 
 
-func _ready() -> void:
+func _on_panel_ready() -> void:
+	var box: VBoxContainer = $CenterContainer/PanelContainer/MarginContainer/VBoxContainer
+	header = MenuHeader.new()
+	header.name = "Header"
+	box.add_child(header)
+	box.move_child(header, 0)
+	header.setup("Host a game", "Share the code, pick a level, start when everyone is in")
+	($ColorRect as ColorRect).color = ThemeColors.BACKGROUND
+
 	# Connect UI signals
 	start_button.pressed.connect(_on_start_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
@@ -59,6 +71,18 @@ func _ready() -> void:
 	# Start hosting
 	if start_hosting:
 		NetworkManager.host_game()
+
+
+func _on_after_animate_in() -> void:
+	UiMotion.stagger_in(
+		UiMotion.visible_children($CenterContainer/PanelContainer/MarginContainer/VBoxContainer),
+		self
+	)
+
+
+## Root owns this node's lifetime — see the class comment.
+func _on_after_animate_out() -> void:
+	pass
 
 
 func _exit_tree() -> void:
@@ -140,15 +164,7 @@ func _on_invite_pressed() -> void:
 
 func _on_copy_code_pressed() -> void:
 	DisplayServer.clipboard_set(room_code_value.text)
-	# Brief visual + color feedback
-	copy_button.text = "Copied!"
-	var original_variant: StringName = copy_button.theme_type_variation
-	copy_button.theme_type_variation = &"Success"
-	await get_tree().create_timer(1.0).timeout
-	if not is_instance_valid(self):
-		return
-	copy_button.text = "Copy"
-	copy_button.theme_type_variation = original_variant
+	UIManager.show_success("Code copied")
 
 
 func _on_player_name_changed(new_name: String) -> void:
