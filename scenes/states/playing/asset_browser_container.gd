@@ -12,7 +12,10 @@ const AddPackDialogScene := preload("res://scenes/ui/add_pack_dialog.tscn")
 @onready var add_pack_button: Button = %AddPackButton
 
 
-func _ready() -> void:
+# Overriding _ready() here (instead of _on_ready()) used to skip the base
+# class's initial hide (modulate.a = 0 + hide()), so every open's fade tween
+# started from full opacity and only the scale-in was visible.
+func _on_ready() -> void:
 	# Slide in from the right instead of a pure scale-up
 	scale_in_from = Vector2(0.95, 0.95)
 	scale_out_to = Vector2(0.97, 0.97)
