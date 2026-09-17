@@ -50,6 +50,14 @@ static func evaluate(text: String, base_instance: Object) -> Dictionary:
 
 
 ## Loads `path` as a GDScript and calls its static `run(base_instance)`; see RUN_PREFIX.
+##
+## The caller gets no failure signal for an error raised inside `run()` itself, or for a
+## `run()` that is not actually static (`script.call("run", ...)` on a non-static method
+## silently returns null rather than raising here) -- both surface identically as
+## `{ok: true, value: null}`, indistinguishable from a probe that legitimately returns
+## nothing. A probe with a compile error fails earlier and differently: `load(path)` returns
+## null rather than a GDScript, so it reports "%s is not a GDScript", not a compile-error
+## message.
 static func _run_script(path: String, base_instance: Object) -> Dictionary:
 	if not ResourceLoader.exists(path):
 		return {"ok": false, "error": "No script at %s" % path}

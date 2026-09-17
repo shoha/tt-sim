@@ -515,3 +515,19 @@ func test_baked_foliage_ao_toggled_off_restores_the_shipped_strength() -> void:
 	assert_eq(mat.get_shader_parameter("baked_ao_strength"), WindFoliage.BAKED_AO_STRENGTH)
 	assert_false(toggles.get_toggle_states()["toggle_baked_foliage_ao"])
 	root.free()
+
+
+func test_toggle_by_index_nine_flips_the_tenth_panel_checkbox() -> void:
+	# PANEL_ORDER_KEYS has ten entries (index 0..9); index 9 ("baked_foliage_ao") is
+	# the tenth checkbox, reached via the KEY_0 shortcut in GameMap._input() -- see
+	# that file's digit-key comment.
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+	var baked_ao_checkbox := CheckBox.new()
+	toggles._checkboxes = {"baked_foliage_ao": baked_ao_checkbox}
+
+	toggles.toggle_by_index(9)
+
+	assert_true(baked_ao_checkbox.button_pressed)
+
+	baked_ao_checkbox.free()

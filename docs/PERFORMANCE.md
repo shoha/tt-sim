@@ -399,9 +399,10 @@ need a different probe.
 ## Foliage backlight (2026-09-16)
 
 Task 7 (commit af68909) added a `backlight` uniform to the wind foliage shaders, written
-to Godot's `BACKLIGHT` built-in, with `WindFoliage.PRESETS["tree"]["backlight"] == 0.3`
-and the same for `"grass"` (`utils/wind_foliage.gd`). This section measures its frame-time
-cost and records the shipped-value decision.
+to Godot's `BACKLIGHT` built-in, and shipped it with `WindFoliage.PRESETS["tree"]["backlight"]
+== 0.3` and the same for `"grass"` (`utils/wind_foliage.gd`); this section's decision then
+changed both presets to 0.0. This section measures its frame-time cost and records the
+shipped-value decision.
 
 Setup: Sandy Clearing via `tests/test_play_level.tscn`, 1920x1080 pinned with
 `override.cfg` (`aspect="keep"`, plus `display/window/vsync/vsync_mode=0` -- `root.gd`
@@ -452,6 +453,14 @@ now sets `PRESETS["tree"]["backlight"]` and `PRESETS["grass"]["backlight"]` to 0
 value is within 0..1) are unchanged, so a future re-measurement at a pose/sun angle where
 the effect reads better can revisit the value with no code changes needed beyond the
 constant.
+
+**Addendum: a later verification at a canopy framing did find a visible effect.** A
+follow-up measurement at zoom 14.85 (closer to the canopy than either framing tried above)
+with `backlight` set back to 0.3 measured +2.2% foliage-band mean luminance from frames
+saved to disk; frame time was not re-measured in that pass. The shipped constant stays 0.0
+-- this result did not reopen the decision above -- but it is the number to start from if
+this value is revisited: a real effect exists at close canopy framing, it was just too
+small to see at the two poses this section originally tried.
 
 ## Known dead ends -- do not revisit without new evidence
 
