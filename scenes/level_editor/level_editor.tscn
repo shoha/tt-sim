@@ -1,8 +1,16 @@
-[gd_scene load_steps=3 format=3 uid="uid://jpfohjr0e8nv"]
+[gd_scene load_steps=11 format=3 uid="uid://jpfohjr0e8nv"]
 
 [ext_resource type="Script" uid="uid://cocec7gcywhnm" path="res://scenes/level_editor/level_editor.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://scenes/ui/slider_spin_box.tscn" id="3_slider_spin_box"]
 [ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
+[ext_resource type="Script" path="res://scenes/ui/primitives/icon_button.gd" id="icon_button"]
+[ext_resource type="Texture2D" uid="uid://cmc5vm51ckgpn" path="res://assets/icons/ui/plus.svg" id="icon_plus"]
+[ext_resource type="Texture2D" uid="uid://blqhqwv0ga0dj" path="res://assets/icons/ui/folder.svg" id="icon_folder"]
+[ext_resource type="Texture2D" uid="uid://4301v72cj6am" path="res://assets/icons/ui/device-floppy.svg" id="icon_save"]
+[ext_resource type="Texture2D" uid="uid://ww6yr27jg038" path="res://assets/icons/ui/download.svg" id="icon_download"]
+[ext_resource type="Texture2D" uid="uid://cvfnrkvhpnwc0" path="res://assets/icons/ui/upload.svg" id="icon_upload"]
+[ext_resource type="Texture2D" uid="uid://duqfvge7l0ya7" path="res://assets/icons/ui/player-play.svg" id="icon_play"]
+[ext_resource type="Texture2D" uid="uid://dpnqwp22ysyc7" path="res://assets/icons/ui/x.svg" id="icon_x"]
 
 [node name="LevelEditor" type="Control"]
 layout_mode = 3
@@ -37,19 +45,29 @@ theme_type_variation = &"BoxContainerSpaced"
 [node name="Header" type="HBoxContainer" parent="MainContainer/VBox"]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="MainContainer/VBox/Header"]
-layout_mode = 2
-text = "Level Editor"
-
-[node name="Spacer" type="Control" parent="MainContainer/VBox/Header"]
+[node name="TitleBlock" type="VBoxContainer" parent="MainContainer/VBox/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Title" type="Label" parent="MainContainer/VBox/Header/TitleBlock"]
+layout_mode = 2
+theme_type_variation = &"H2"
+text = "Level editor"
+
+[node name="LevelTitleCaption" type="Label" parent="MainContainer/VBox/Header/TitleBlock"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Untitled level"
 
 [node name="NewButton" type="Button" parent="MainContainer/VBox/Header"]
 script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
+icon = ExtResource("icon_plus")
+expand_icon = false
 text = "New"
 
 [node name="LoadButton" type="Button" parent="MainContainer/VBox/Header"]
@@ -57,6 +75,8 @@ script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
+icon = ExtResource("icon_folder")
+expand_icon = false
 text = "Load"
 
 [node name="SaveButton" type="Button" parent="MainContainer/VBox/Header"]
@@ -64,6 +84,8 @@ script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
+icon = ExtResource("icon_save")
+expand_icon = false
 text = "Save"
 
 [node name="Separator1" type="VSeparator" parent="MainContainer/VBox/Header"]
@@ -74,6 +96,8 @@ script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
+icon = ExtResource("icon_download")
+expand_icon = false
 text = "Export JSON"
 
 [node name="ImportButton" type="Button" parent="MainContainer/VBox/Header"]
@@ -81,6 +105,8 @@ script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
+icon = ExtResource("icon_upload")
+expand_icon = false
 text = "Import JSON"
 
 [node name="Separator2" type="VSeparator" parent="MainContainer/VBox/Header"]
@@ -90,15 +116,16 @@ layout_mode = 2
 script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Success"
-text = "Play Level"
+icon = ExtResource("icon_play")
+expand_icon = false
+text = "Play level"
 
 [node name="CloseButton" type="Button" parent="MainContainer/VBox/Header"]
-script = ExtResource("animated_btn")
+script = ExtResource("icon_button")
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Danger"
-text = "Close"
+tooltip_text = "Close editor (Esc)"
+icon_name = "x"
 
 [node name="ContentSplit" type="HSplitContainer" parent="MainContainer/VBox"]
 layout_mode = 2
@@ -112,6 +139,7 @@ theme_type_variation = &"BoxContainerSpaced"
 
 [node name="MetadataPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel"]
 layout_mode = 2
+theme_type_variation = &"PanelBordered"
 
 [node name="MetadataVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel"]
 layout_mode = 2
@@ -122,14 +150,14 @@ layout_mode = 2
 theme_type_variation = &"SectionHeader"
 text = "Level Info"
 
-[node name="NameRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
+[node name="NameRow" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
 layout_mode = 2
+theme_override_constants/separation = 2
 
 [node name="NameLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/NameRow"]
-custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Name:"
+theme_type_variation = &"Caption"
+text = "Name"
 
 [node name="LevelNameEdit" type="LineEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/NameRow"]
 unique_name_in_owner = true
@@ -137,14 +165,14 @@ layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "Level name..."
 
-[node name="AuthorRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
+[node name="AuthorRow" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
 layout_mode = 2
+theme_override_constants/separation = 2
 
 [node name="AuthorLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/AuthorRow"]
-custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Author:"
+theme_type_variation = &"Caption"
+text = "Author"
 
 [node name="AuthorEdit" type="LineEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox/AuthorRow"]
 unique_name_in_owner = true
@@ -154,8 +182,8 @@ placeholder_text = "Author name..."
 
 [node name="DescLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Description:"
+theme_type_variation = &"Caption"
+text = "Description"
 
 [node name="LevelDescriptionEdit" type="TextEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/MetadataPanel/MetadataVBox"]
 unique_name_in_owner = true
@@ -165,6 +193,7 @@ placeholder_text = "Level description..."
 
 [node name="MapPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel"]
 layout_mode = 2
+theme_type_variation = &"PanelBordered"
 
 [node name="MapVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel"]
 layout_mode = 2
@@ -203,13 +232,13 @@ layout_mode = 2
 [node name="OffsetLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
 custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Offset:"
+theme_type_variation = &"Caption"
+text = "Offset"
 
 [node name="XLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "X:"
+theme_type_variation = &"Caption"
+text = "X"
 
 [node name="MapOffsetXSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
 unique_name_in_owner = true
@@ -222,8 +251,8 @@ allow_lesser = true
 
 [node name="YLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Y:"
+theme_type_variation = &"Caption"
+text = "Y"
 
 [node name="MapOffsetYSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
 unique_name_in_owner = true
@@ -236,8 +265,8 @@ allow_lesser = true
 
 [node name="ZLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Z:"
+theme_type_variation = &"Caption"
+text = "Z"
 
 [node name="MapOffsetZSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapOffsetRow"]
 unique_name_in_owner = true
@@ -254,8 +283,8 @@ layout_mode = 2
 [node name="ScaleLabel" type="Label" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow"]
 custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Scale:"
+theme_type_variation = &"Caption"
+text = "Scale"
 
 [node name="MapScaleSliderSpin" parent="MainContainer/VBox/ContentSplit/LeftPanel/MapPanel/MapVBox/MapScaleRow" instance=ExtResource("3_slider_spin_box")]
 unique_name_in_owner = true
@@ -269,6 +298,7 @@ allow_greater = true
 [node name="TokensPanel" type="PanelContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel"]
 layout_mode = 2
 size_flags_vertical = 3
+theme_type_variation = &"PanelBordered"
 
 [node name="TokensVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel"]
 layout_mode = 2
@@ -310,6 +340,7 @@ theme_type_variation = &"BoxContainerSpaced"
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
+theme_type_variation = &"PanelBordered"
 
 [node name="PlacementVBox" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel"]
 layout_mode = 2
@@ -326,14 +357,14 @@ layout_mode = 2
 theme_type_variation = &"Body"
 text = "#25 Pikachu"
 
-[node name="NameRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+[node name="NameRow" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
 layout_mode = 2
+theme_override_constants/separation = 2
 
 [node name="Label" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/NameRow"]
-custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Display Name:"
+theme_type_variation = &"Caption"
+text = "Display name"
 
 [node name="PlacementNameEdit" type="LineEdit" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/NameRow"]
 unique_name_in_owner = true
@@ -374,8 +405,8 @@ layout_mode = 2
 [node name="MaxHPLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Max HP:"
+theme_type_variation = &"Caption"
+text = "Max HP"
 
 [node name="PlacementMaxHPSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
 unique_name_in_owner = true
@@ -387,8 +418,8 @@ value = 100.0
 [node name="CurrentHPLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Current:"
+theme_type_variation = &"Caption"
+text = "Current"
 
 [node name="PlacementCurrentHPSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/HealthRow"]
 unique_name_in_owner = true
@@ -409,8 +440,8 @@ layout_mode = 2
 
 [node name="XLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "X:"
+theme_type_variation = &"Caption"
+text = "X"
 
 [node name="PlacementPosXSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
 unique_name_in_owner = true
@@ -423,8 +454,8 @@ allow_lesser = true
 
 [node name="YLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Y:"
+theme_type_variation = &"Caption"
+text = "Y"
 
 [node name="PlacementPosYSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
 unique_name_in_owner = true
@@ -437,8 +468,8 @@ allow_lesser = true
 
 [node name="ZLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Z:"
+theme_type_variation = &"Caption"
+text = "Z"
 
 [node name="PlacementPosZSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/PositionRow"]
 unique_name_in_owner = true
@@ -455,8 +486,8 @@ layout_mode = 2
 [node name="RotLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/RotationRow"]
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
-theme_type_variation = &"H3"
-text = "Rotation:"
+theme_type_variation = &"Caption"
+text = "Rotation"
 
 [node name="PlacementRotationSpin" type="SpinBox" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/RotationRow"]
 unique_name_in_owner = true
@@ -472,8 +503,8 @@ layout_mode = 2
 [node name="ScaleLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow"]
 custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
-theme_type_variation = &"Body"
-text = "Scale:"
+theme_type_variation = &"Caption"
+text = "Scale"
 
 [node name="PlacementScaleSliderSpin" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ScaleRow" instance=ExtResource("3_slider_spin_box")]
 unique_name_in_owner = true
@@ -490,21 +521,25 @@ size_flags_vertical = 3
 
 [node name="ButtonsRow" type="HBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
 layout_mode = 2
-
-[node name="ApplyPlacementButton" type="Button" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ButtonsRow"]
-script = ExtResource("animated_btn")
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-theme_type_variation = &"Success"
-text = "Apply Changes"
+alignment = 2
 
 [node name="DeletePlacementButton" type="Button" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ButtonsRow"]
 script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Danger"
-text = "Delete Token"
+theme_type_variation = &"Secondary"
+icon = ExtResource("icon_x")
+expand_icon = false
+text = "Delete token"
+
+[node name="ApplyPlacementButton" type="Button" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox/ButtonsRow"]
+script = ExtResource("animated_btn")
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Secondary"
+icon = ExtResource("icon_save")
+expand_icon = false
+text = "Apply changes"
 
 [node name="StatusBar" type="HBoxContainer" parent="MainContainer/VBox"]
 layout_mode = 2
@@ -553,8 +588,8 @@ size_flags_vertical = 3
 script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Danger"
-text = "Delete Selected Level"
+theme_type_variation = &"Secondary"
+text = "Delete selected level"
 
 [node name="DeleteConfirmDialog" type="ConfirmationDialog" parent="LoadDialog"]
 unique_name_in_owner = true
