@@ -4,6 +4,11 @@ extends AnimatedCanvasLayerPanel
 ## Triggered by F1. Uses InputProfile.label() for device-aware key labels.
 ## Built programmatically from a data array for easy maintenance.
 
+## Key caps line up in a column wide enough for the longest shortcut label.
+const CHIP_MIN_WIDTH := 140
+
+var header: MenuHeader
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
@@ -31,13 +36,11 @@ func _on_panel_ready() -> void:
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
-	var title := Label.new()
-	title.text = "Keyboard Shortcuts"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 20)
-	vbox.add_child(title)
-
-	vbox.add_child(_spacer(8))
+	header = MenuHeader.new()
+	header.name = "Header"
+	vbox.add_child(header)
+	header.setup("Keyboard shortcuts", "", true)
+	header.close_requested.connect(_on_close_requested)
 
 	var sections := _get_shortcut_data()
 	for section in sections:
@@ -47,13 +50,16 @@ func _on_panel_ready() -> void:
 
 	var close_label := Label.new()
 	close_label.text = "Press F1 or Escape to close"
+	close_label.theme_type_variation = &"Caption"
 	close_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	close_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
-	close_label.add_theme_font_size_override("font_size", 12)
 	vbox.add_child(close_label)
 
 	# Register as overlay (cast to Control for type compatibility)
 	UIManager.register_overlay($ColorRect as Control)
+
+
+func _on_close_requested() -> void:
+	animate_out()
 
 
 func _on_before_animate_out() -> void:
@@ -115,11 +121,10 @@ func _get_shortcut_data() -> Array:
 func _add_section(parent: VBoxContainer, header_text: String, entries: Array) -> void:
 	parent.add_child(_spacer(6))
 
-	var header := Label.new()
-	header.text = header_text
-	header.add_theme_font_size_override("font_size", 15)
-	header.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2, 1.0))
-	parent.add_child(header)
+	var section_header := Label.new()
+	section_header.text = header_text
+	section_header.theme_type_variation = &"SectionHeader"
+	parent.add_child(section_header)
 
 	for entry in entries:
 		var row := _create_shortcut_row(entry[0], entry[1])
@@ -128,31 +133,23 @@ func _add_section(parent: VBoxContainer, header_text: String, entries: Array) ->
 
 func _create_shortcut_row(key_text: String, action_text: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 12)
 
-	var badge_panel := PanelContainer.new()
-	var badge_style := StyleBoxFlat.new()
-	badge_style.bg_color = Color(0.25, 0.25, 0.28, 1.0)
-	badge_style.corner_radius_top_left = 4
-	badge_style.corner_radius_top_right = 4
-	badge_style.corner_radius_bottom_left = 4
-	badge_style.corner_radius_bottom_right = 4
-	badge_style.content_margin_left = 8
-	badge_style.content_margin_right = 8
-	badge_style.content_margin_top = 2
-	badge_style.content_margin_bottom = 2
-	badge_panel.add_theme_stylebox_override("panel", badge_style)
-	badge_panel.custom_minimum_size = Vector2(140, 0)
+	var chip := PanelContainer.new()
+	chip.theme_type_variation = &"KeyChip"
+	chip.custom_minimum_size = Vector2(CHIP_MIN_WIDTH, 0)
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	var key_label := Label.new()
 	key_label.text = key_text
-	key_label.add_theme_font_size_override("font_size", 13)
-	badge_panel.add_child(key_label)
-	row.add_child(badge_panel)
+	key_label.theme_type_variation = &"Body"
+	chip.add_child(key_label)
+	row.add_child(chip)
 
 	var action_label := Label.new()
 	action_label.text = action_text
-	action_label.add_theme_font_size_override("font_size", 13)
+	action_label.theme_type_variation = &"Body"
 	action_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(action_label)
 
