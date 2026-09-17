@@ -15,6 +15,11 @@ extends CanvasLayer
 ## Subclasses override _on_panel_ready() instead of _ready() and can hook into
 ## _on_after_animate_in() / _on_before_animate_out() / _on_after_animate_out().
 
+## Stack of live panels, topmost last. Only the topmost panel traps Tab, so a
+## dialog opened over another panel (e.g. LevelPickerDialog over the pause
+## menu) does not have its Tab presses yanked back into the panel below it.
+static var _trap_stack: Array[AnimatedCanvasLayerPanel] = []
+
 @export var play_sounds: bool = true
 ## When true, Tab/Shift+Tab focus cycling is trapped within the panel.
 @export var trap_focus: bool = true
@@ -35,8 +40,17 @@ func _ready() -> void:
 	if trap_focus:
 		rebuild_focus_trap()
 
+	# Register as the topmost panel, even when trap_focus is false — a
+	# non-trapping panel is still the topmost surface, so a lower trapping
+	# panel must not steal Tab from it.
+	_trap_stack.push_back(self)
+
 	# Animate in
 	animate_in()
+
+
+func _exit_tree() -> void:
+	_trap_stack.erase(self)
 
 
 ## Override this in subclasses instead of _ready().
@@ -130,8 +144,19 @@ func _collect_focusable(node: Node, out: Array[Control]) -> void:
 		_collect_focusable(child, out)
 
 
+## True when this panel is the topmost live panel and should trap Tab.
+## Prunes freed panels from the stack before checking.
+func is_top_trap() -> bool:
+	_trap_stack = _trap_stack.filter(
+		func(p: AnimatedCanvasLayerPanel) -> bool: return is_instance_valid(p)
+	)
+	return not _trap_stack.is_empty() and _trap_stack.back() == self
+
+
 func _input(event: InputEvent) -> void:
 	if not trap_focus or _focusable_controls.is_empty():
+		return
+	if not is_top_trap():
 		return
 	if (
 		not event.is_action_pressed("ui_focus_next")

@@ -560,6 +560,8 @@ drawer.is_open   # Current state (bool)
 
 Use `AnimatedCanvasLayerPanel` for full-screen overlays that dim the background and show a centered dialog — settings menus, confirmation dialogs, pause screens, etc.
 
+The base class keeps a class-level stack of live panels and only the topmost one traps Tab/Shift+Tab; panels that show or hide containers after `_ready()` (rather than just toggling a control's own `visible`) must call `rebuild_focus_trap()` afterward so the trap only names controls that are actually visible.
+
 ### When to Use Which Base Class
 
 | Use case | Base class | Extends |

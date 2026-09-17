@@ -70,6 +70,7 @@ func _on_after_animate_out() -> void:
 
 
 func _exit_tree() -> void:
+	super()
 	# Disconnect network signals
 	if NetworkManager.player_joined.is_connected(_on_player_joined):
 		NetworkManager.player_joined.disconnect(_on_player_joined)
