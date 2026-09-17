@@ -7,10 +7,10 @@ extends AnimatedCanvasLayerPanel
 signal closed
 signal pack_downloaded(pack_id: String)
 
+var header: MenuHeader
+
 var _downloading_pack_id: String = ""
 
-@onready var title_label: Label = %TitleLabel
-@onready var description_label: Label = %DescriptionLabel
 @onready var url_edit: LineEdit = %URLEdit
 @onready var progress_label: Label = %ProgressLabel
 @onready var download_button: Button = %DownloadButton
@@ -18,6 +18,15 @@ var _downloading_pack_id: String = ""
 
 
 func _on_panel_ready() -> void:
+	var box: VBoxContainer = $CenterContainer/PanelContainer/VBoxContainer
+	header = MenuHeader.new()
+	header.name = "Header"
+	box.add_child(header)
+	box.move_child(header, 0)
+	header.setup(
+		"Add asset pack", "Enter the URL to a pack's manifest.json to download all its assets."
+	)
+
 	cancel_button.set_meta("ui_silent", true)
 	download_button.set_meta("ui_silent", true)
 
