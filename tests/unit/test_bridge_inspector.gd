@@ -126,3 +126,14 @@ func test_collection_is_capped() -> void:
 		root.add_child(_make_button("Button%d" % i, "", Rect2(0, 0, 1, 1)))
 
 	assert_eq(BridgeInspector.collect_controls(root, true).size(), BridgeInspector.MAX_CONTROLS)
+
+
+func test_add_window_points_applies_the_viewport_transform_to_each_centre() -> void:
+	var entries: Array = [{"center": [100.0, 50.0]}, {"center": [0.0, 0.0]}]
+	var transform := Transform2D(Vector2(0.5, 0.0), Vector2(0.0, 0.5), Vector2(10.0, 20.0))
+
+	var out := BridgeInspector.add_window_points(entries, transform)
+
+	assert_eq(out[0]["window_point"], [60.0, 45.0])
+	assert_eq(out[1]["window_point"], [10.0, 20.0])
+	assert_eq(out[0]["center"], [100.0, 50.0], "the canvas centre is kept")

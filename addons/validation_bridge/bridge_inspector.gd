@@ -37,7 +37,9 @@ static func _collect_recursive(node: Node, visible_only: bool, out: Array) -> vo
 
 
 ## Describes one Control, including its centre as a viewport-space point. `_cmd_input`'s
-## `click_control` branch converts this to window space before injecting a click.
+## `click_control` branch converts this to window space before injecting a click; `_cmd_controls`
+## also adds a `window_point` to each entry via `add_window_points` so a raw `click` can use it
+## directly.
 static func describe_control(control: Control) -> Dictionary:
 	var rect := control.get_global_rect()
 	var center := rect.get_center()
@@ -57,6 +59,17 @@ static func describe_control(control: Control) -> Dictionary:
 		entry["disabled"] = button.disabled
 		entry["pressed"] = button.button_pressed
 	return entry
+
+
+## Adds `window_point` (window pixels, what `click` takes) next to each entry's canvas
+## `center`, using the viewport's final transform. Pure so it is testable without a live
+## viewport; `_cmd_controls` passes `get_viewport().get_final_transform()`.
+static func add_window_points(entries: Array, final_transform: Transform2D) -> Array:
+	for entry in entries:
+		var center: Array = entry["center"]
+		var point := final_transform * Vector2(float(center[0]), float(center[1]))
+		entry["window_point"] = [point.x, point.y]
+	return entries
 
 
 ## Controls matching `query`, tried as a node path, then a node name, then exact button/label text.

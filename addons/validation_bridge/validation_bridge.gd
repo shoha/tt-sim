@@ -747,7 +747,10 @@ func _cmd_step_until(cmd: Dictionary) -> Dictionary:
 ## harness has already drawn once.
 func _cmd_controls(cmd: Dictionary) -> Dictionary:
 	var visible_only: bool = bool(cmd.get("visible_only", true))
-	var controls := BridgeInspector.collect_controls(get_tree().root, visible_only)
+	var controls := BridgeInspector.add_window_points(
+		BridgeInspector.collect_controls(get_tree().root, visible_only),
+		get_viewport().get_final_transform()
+	)
 	return {
 		"ok": true,
 		"controls": controls,
