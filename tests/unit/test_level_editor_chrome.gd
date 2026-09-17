@@ -69,3 +69,14 @@ func test_title_reads_level_editor() -> void:
 	var editor := _editor()
 	var title: Label = editor.get_node("MainContainer/VBox/Header/TitleBlock/Title")
 	assert_eq(title.text, "Level editor")
+
+
+func test_header_caption_follows_the_level_name_while_typing() -> void:
+	var editor := _editor()
+	editor.level_name_edit.text = "Dusty Hollow"
+	editor.level_name_edit.text_changed.emit("Dusty Hollow")
+	assert_eq(editor.level_title_caption.text, "Dusty Hollow")
+
+	editor.level_name_edit.text = ""
+	editor.level_name_edit.text_changed.emit("")
+	assert_eq(editor.level_title_caption.text, "Untitled level")
