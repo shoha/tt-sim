@@ -48,6 +48,12 @@ uniform float base_darken : hint_range(0.0, 1.0) = 0.55;
 // them too. DebugRenderToggles' "Baked foliage AO" checkbox sets 1.0 for A/B.
 uniform float baked_ao_strength : hint_range(0.0, 1.0) = 0.0;
 
+// Thin-surface translucency: written to Godot's BACKLIGHT built-in by both real shader
+// variants so light hitting the far side of a leaf or blade wraps through instead of
+// leaving cull_disabled back faces flat. Per-category value from WindFoliage.PRESETS;
+// 0.0 disables the term. Measured cost recorded in docs/PERFORMANCE.md.
+uniform float backlight : hint_range(0.0, 1.0) = 0.0;
+
 // Object-space (local) vertex height, captured by each variant's vertex() before
 // wind_sway_vertex_offset is added (that offset never touches VERTEX.y, so capturing
 // before vs. after would be equivalent regardless -- captured before purely to read as

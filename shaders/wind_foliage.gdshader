@@ -79,6 +79,7 @@ void fragment() {
 	ROUGHNESS = pbr_roughness;
 	METALLIC = pbr_metallic;
 	SPECULAR = specular_reflectance;
+	BACKLIGHT = vec3(backlight);
 	if (has_normal_texture) {
 		NORMAL_MAP = pbr_normal_map;
 		NORMAL_MAP_DEPTH = 1.0;
