@@ -55,3 +55,19 @@ func test_leave_press_asks_to_leave() -> void:
 	watch_signals(lobby)
 	lobby._on_leave_pressed()
 	assert_signal_emitted(lobby, "leave_requested")
+
+
+func test_connected_state_rebuilds_the_focus_trap_around_visible_controls() -> void:
+	var lobby := _lobby()
+	lobby._show_connected_state()
+	for control in lobby._focusable_controls:
+		assert_true(control.is_visible_in_tree(), control.name)
+	assert_true(lobby._focusable_controls.has(lobby.leave_button))
+
+
+func test_returning_to_input_state_rebuilds_the_focus_trap() -> void:
+	var lobby := _lobby()
+	lobby._show_connected_state()
+	lobby._show_input_state()
+	assert_true(lobby._focusable_controls.has(lobby.connect_button))
+	assert_false(lobby._focusable_controls.has(lobby.player_list))
