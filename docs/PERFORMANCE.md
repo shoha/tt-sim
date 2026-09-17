@@ -396,6 +396,63 @@ the column to compare for CPU-side changes when the frame is GPU-bound or vsync-
 `_unhandled_input`, `_physics_process`, tweens, or signal handlers -- so input-gate changes
 need a different probe.
 
+## Foliage backlight (2026-09-16)
+
+Task 7 (commit af68909) added a `backlight` uniform to the wind foliage shaders, written
+to Godot's `BACKLIGHT` built-in, with `WindFoliage.PRESETS["tree"]["backlight"] == 0.3`
+and the same for `"grass"` (`utils/wind_foliage.gd`). This section measures its frame-time
+cost and records the shipped-value decision.
+
+Setup: Sandy Clearing via `tests/test_play_level.tscn`, 1920x1080 pinned with
+`override.cfg` (`aspect="keep"`, plus `display/window/vsync/vsync_mode=0` -- `root.gd`
+does not run in the test scene, so `user://settings.cfg`'s vsync flag, which was `true`,
+is never applied there; the project has no vsync override of its own, so the override.cfg
+key was the only way to get vsync off for this scene), Home camera pose (zoom 13.85), F3
+overlay open, GPU idle before the run (6% utilization, 47 C, 210 MHz) and then fully
+occupied by this same Godot instance throughout (99%, 76 C, 1560 MHz) -- a single-process
+load, not contention from another application. Two probe scripts written to
+`user://` (`_bl_on.gd` / `_bl_off.gd`), each setting `backlight` to 0.3 / 0.0 on all 47
+materials from `WindFoliage.collect_foliage_shader_materials(...)`, confirmed by their
+return count every time. Sequence within one run: off, wait ~25 s, on, wait ~25 s, off,
+wait ~25 s, on (held for the rest of the run while screenshots/logs were read). One
+screenshot captured in each state, both at Home pose and again after zooming toward the
+tree canopy (zoom 10.85).
+
+`primitives` (24,671,017), `visible_primitives` (13,306,433), `visible_draw_calls` (849),
+`shadow_primitives` (11,360,848), and `shadow_draw_calls` (311) were identical across
+every sample in the entire run -- expected, since flipping a shader uniform does not
+change geometry, and confirming the camera pose never drifted.
+
+Samples (median `frame_time_avg_ms`, rows with `elapsed_s > 5` within each window,
+excluding the transition frame at each toggle):
+
+| Window | elapsed_s range | n samples | median frame_time_avg_ms |
+| --- | --- | --- | --- |
+| off (1st) | 5-24 | 74 | 9.855 |
+| on (1st) | 27-49 | 86 | 9.805 |
+| off (2nd) | 53-75 | 86 | 9.810 |
+| on (2nd) | 78-160 | 322 | 9.800 |
+
+Off average: 9.8325 ms. On average: 9.8025 ms. **Delta (on minus off): -0.03 ms** -- on
+was marginally faster than off, i.e. the cost is not distinguishable from this session's
+noise floor and is well under the 0.3 ms decision threshold.
+
+Screenshots: at the Home pose, and again zoomed toward the canopy (zoom 10.85), the
+off/on pairs were visually indistinguishable -- no perceptible rim-light/backlit-leaves
+effect and no washed-out look either. The Home pose's foreground is dominated by two
+large boulders with the canopy small and distant, and the sun angle at this pose does not
+put much foliage into backlit silhouette, so 0.3 has no visible payoff here even though it
+also costs nothing measurable.
+
+**Decision: ship `backlight` at 0.0 for both presets.** The frame-time half of the rule
+passed (delta far under 0.3 ms) but the visual half did not (no perceptible improvement at
+the Home pose in either framing tried), and the rule requires both. `utils/wind_foliage.gd`
+now sets `PRESETS["tree"]["backlight"]` and `PRESETS["grass"]["backlight"]` to 0.0; the
+`BACKLIGHT` shader wiring, the uniform, and the existing tests (which only assert the
+value is within 0..1) are unchanged, so a future re-measurement at a pose/sun angle where
+the effect reads better can revisit the value with no code changes needed beyond the
+constant.
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one

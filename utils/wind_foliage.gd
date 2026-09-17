@@ -28,12 +28,16 @@ extends RefCounted
 # docs/scatter-integration.md) has no consistent taxonomy keyword, so an
 # allow-list-with-no-sway-default would silently leave most real foliage motionless.
 # "backlight" feeds the shader's BACKLIGHT term (see wind_foliage_include.gdshaderinc);
-# it is not exposed for per-level tuning, same as sway_frequency.
+# it is not exposed for per-level tuning, same as sway_frequency. Measured at 0.3 and
+# shipped at 0.0: frame-time cost was within noise (see docs/PERFORMANCE.md, "Foliage
+# backlight (2026-09-16)"), but the visual effect was not perceptible at the Home pose on
+# the reference map, so it did not clear the "reads better" half of the decision rule.
+# The uniform, shader wiring, and tests all stay -- only the shipped value changed.
 const _DENY_KEYWORDS := ["rock", "stone", "boulder"]
 const _TREE_KEYWORDS := ["tree", "oak", "pine", "birch", "branch", "canopy"]
 const PRESETS := {
-	"tree": {"sway_speed": 0.6, "sway_amplitude": 0.06, "sway_frequency": 0.15, "backlight": 0.3},
-	"grass": {"sway_speed": 1.6, "sway_amplitude": 0.03, "sway_frequency": 0.4, "backlight": 0.3},
+	"tree": {"sway_speed": 0.6, "sway_amplitude": 0.06, "sway_frequency": 0.15, "backlight": 0.0},
+	"grass": {"sway_speed": 1.6, "sway_amplitude": 0.03, "sway_frequency": 0.4, "backlight": 0.0},
 }
 
 ## Default albedo darkening at a grass blade's base (see wind_foliage_include.gdshaderinc's
