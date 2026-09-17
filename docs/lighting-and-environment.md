@@ -325,6 +325,59 @@ and the source atlas -- not the bake -- is where the remaining detail budget is.
 source atlas's own resolution was not inspected, so which of the two limits binds here is
 untested.)
 
+#### Addendum: whole-catalog re-bake (2026-09-17)
+
+Three `terrain-paint` follow-ups landed after the run above, and the whole `Baked` catalog
+was re-baked with them: UV packing now runs per *material datablock* rather than per
+material slot, the catalog's helper UV layers are pruned *after* the bakes instead of
+before, and baked images are written 8-bit instead of 32-bit float. All 43 biomes across
+`CaseySheep/FloraPaint` (12) and `Plant Library` (31) re-baked cleanly, 3 h 6 min wall
+clock for the two packs run in parallel, zero errors.
+
+| | before | after | |
+| --- | ---: | ---: | --- |
+| Baked catalog, 43 `*.instances.blend` | 39.13 GiB | 2.59 GiB | 15.1x smaller |
+| `sandyclearing.blend` (original) | 219,328,123 | -- | |
+| `sandyclearing_rebaked.blend` | 430,101,154 | 122,772,975 | 3.5x smaller |
+| `map.glb` | 117,243,848 | 99,062,400 | -15.5% |
+
+The catalog drop is the 8-bit conversion alone, not data loss: every albedo/alpha/normal
+was previously a 32-bit float image that packed to a ~12.6 MB float PNG *regardless of
+content*, so a 135-image biome carried ~1.7 GB of mostly-empty float before compression.
+Datablock counts are identical across the old and new files (verified on `biome_09`:
+37 objects / 34 meshes / 135 images / 37 materials), every image is still packed at
+1024x1024, and pixel statistics are non-degenerate everywhere.
+
+**Tree leaves are now packed too**, which the section above called out as the gap that
+needed per-material packing. Measured on the exported `map.glb`:
+
+| Species / surface | UV bbox before | after | leaf albedo lum before | after |
+| --- | --- | --- | ---: | ---: |
+| `FP_Tree_B_001` leaves (surface 1) | 0.116 x 0.100 | **0.969 x 0.835** | 0.201 | 0.479 |
+| `FP_Tree_B_003` leaves (surface 1) | 0.116 x 0.100 | **0.969 x 0.835** | 0.148 | 0.412 |
+| `FP_Tree_B_002` leaves (surface 1) | 1.000 x 0.997 | 1.000 x 0.997 | 0.129 | 0.386 |
+| `FP_Tree_B_00*` bark (surface 0) | tiled | tiled (bit-identical) | 0.151-0.182 | unchanged |
+
+`FP_Tree_B_001` and `FP_Tree_B_003` share one leaf material datablock, which is why the
+per-datablock commit fixed both at once; `FP_Tree_B_002`'s leaves were already packed. The
+tiled bark UVs are bit-identical before and after, confirming the packer still skips any
+layout that leaves [0, 1].
+
+The leaf albedo brightened on all three trees, including `FP_Tree_B_002` whose UV layout
+and alpha histogram did not change at all -- so that part is the float-to-8-bit re-encode,
+not the packing. Bark luminance is unchanged across the same re-encode, so it is not a
+global colour shift. `FP_Tree_B_001`'s leaf alpha coverage also went 0.00 -> 0.15, i.e. its
+canopy card was previously almost entirely transparent. Live frames at Home and at a canopy
+zoom confirm the result: the canopy reads as dense, crisp, naturally-lit green instead of
+the dark low-contrast mass it was, with ground, rocks and tokens pixel-unchanged.
+
+Two invariants from the section above still hold on the new export: all 60 baked ORM
+textures read exactly 1.000 in the occlusion channel, and all 60 scatter mesh surfaces now
+carry exactly one UV set (`TEX_UV` present, `TEX_UV2` absent on every one).
+
+`sandyclearing_rebaked.blend` is the file to adopt as the new `sandyclearing.blend`. The
+pre-re-bake catalog files are kept alongside the new ones as `*.pre-2026-09-17`.
+
 ## Environment Overrides
 
 Overrides allow fine-tuning individual properties without creating a new preset:
