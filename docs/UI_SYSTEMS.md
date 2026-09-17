@@ -11,6 +11,7 @@ This guide documents the UI infrastructure and reusable components available in 
 - [Scene Transitions](#scene-transitions)
 - [Loading Screen](#loading-screen)
 - [Input Hints](#input-hints)
+- [Menu Design Language](#menu-design-language)
 - [Title Hub](#title-hub)
 - [Settings Menu](#settings-menu)
 - [Pause Menu](#pause-menu)
@@ -183,6 +184,10 @@ drawer's own Cancel button would be ambiguous about which one it cancelled. See
 
 - `closed(confirmed: bool)` - Emitted when dialog closes
 
+The dialog's title comes from a `MenuHeader`; the footer is end-aligned with Cancel before Confirm,
+and this is the only screen where `Success` and `Danger` fills remain (see
+[Menu Design Language](#menu-design-language)).
+
 ---
 
 ## Toast Notifications
@@ -316,6 +321,35 @@ UIManager.clear_hints()
 
 ---
 
+## Menu Design Language
+
+Every menu screen -- the title, the pause menu, both lobby screens, Settings, the confirmation
+dialog, and the help overlay -- shares one structure, built from three primitives in
+`scenes/ui/primitives/`:
+
+- **`MenuHeader`** opens the screen: `setup(title, caption = "", closable = false)` sets a
+  sentence-case title, an optional muted caption, and an optional close button on the title's
+  right, with a rule underneath. Callers hold onto `title_label`, `caption_label`, and
+  `close_button` when they need to read or reach them later.
+- **`UiActions`** builds the rows: `UiActions.primary()` for the one tall accent action a screen
+  opens with, `UiActions.secondary()` for every other row. Exactly one primary per screen -- the
+  rest are `Secondary` with an icon.
+- **`UiMotion.stagger_in(UiMotion.visible_children(box), self)`** fades and lifts the body's
+  visible children into place, one after another, once the screen has animated in.
+
+Semantic colour survives only where it started: `Success` and `Danger` fills belong to
+`ConfirmationDialogUI`'s confirm button alone. A destructive menu row (Return to Title, Quit Game,
+Leave, Reset to Defaults) stays `Secondary` -- the confirmation dialog that follows it is what
+carries the red.
+
+Footers are an `HBoxContainer` with `alignment = ALIGNMENT_END`: secondary actions first, the
+primary action last, so they hug the right edge.
+
+See [THEME_GUIDE.md's UI Primitives](THEME_GUIDE.md#ui-primitives) and
+[Button Variants](THEME_GUIDE.md#button-variants) sections for the full API and variant table.
+
+---
+
 ## Title Hub
 
 `TitleScreen` (`scenes/states/title_screen/title_screen.gd`) is the app's entry screen. It has two
@@ -325,8 +359,9 @@ the d20 sub-viewport as a dimmed backdrop behind both.
 ### Left Column
 
 Built by `_build_left_column()`. **Host Game** and **Join Game** are tall primary actions
-(`_primary_action()`: icon, bold label, caption underneath); below a separator, **Play Solo**,
-**Level Editor**, **Settings**, and **Quit** are compact secondary actions (`_secondary_action()`).
+(`UiActions.primary()`: icon, bold label, caption underneath); below a separator, **Play Solo**,
+**Level Editor**, **Settings**, and **Quit** are compact secondary actions
+(`UiActions.secondary()`).
 Host Game and Play Solo are disabled until a card is selected; once one is, their captions name it
 ("with <name>" for Host, the level name for Play Solo).
 
@@ -380,10 +415,28 @@ Saved levels are three primitives under `scenes/ui/primitives/`:
 
 ### Lobby
 
-The host lobby (`LobbyHost`, `scenes/states/lobby/lobby_host.gd`) shows the pending level as a
-strip -- thumbnail, name, token-count caption, set via `set_level(level)` -- with a Change button
-that opens a `LevelPickerDialog` and emits `level_change_requested(level_info)` when a different
-level is chosen.
+`LobbyHost` and `LobbyClient` (`scenes/states/lobby/lobby_host.gd` /
+`scenes/states/lobby/lobby_client.gd`) both extend `AnimatedCanvasLayerPanel` with
+`play_sounds = false` and a no-op `_on_after_animate_out()` -- `Root` frees them directly on state
+exit, so a stray `animate_out()` must never free the lobby a second time.
+
+The host screen opens with its `MenuHeader` ("Host a game"), then Your Name and Room Code fields,
+the room code in a `KeyChip` with a copy button (`DisplayServer.clipboard_set()`, toast "Code
+copied") and an invite button beside it, a framed thumbnail strip showing the pending level --
+thumbnail, name, token-count caption, set via `set_level(level)` -- with a Change button that opens
+a `LevelPickerDialog` and emits `level_change_requested(level_info)` when a different level is
+chosen, the Players list, and an end-aligned footer with Cancel and Start (Start is the only accent
+action).
+
+The join screen opens with its `MenuHeader` ("Join a game"), captioned Your Name and Room Code
+fields, a full-width Connect button, and a footer button that reads "Back" while the form is up and
+"Leave" once a connection attempt is under way or connected (`_set_footer_action()`) -- the same
+button, renamed with the situation.
+
+Both screens guard their network calls for tests: `LobbyHost.start_hosting` (default `true`) gates
+`NetworkManager.host_game()` and its signal connections, and `LobbyClient.connect_network` (default
+`true`) gates the equivalent client-side connections. Tests set these `false` before adding the
+screen to the tree so headless runs never reach the network layer.
 
 ---
 
@@ -393,10 +446,13 @@ Tabbed settings interface (`scenes/ui/settings_menu.gd`) with six sections: Audi
 Controls, Network, and Updates. Sections are chosen from a labelled `IconRail` (`SECTIONS` in
 `settings_menu.gd`) rather than the `TabContainer`'s own tab bar, which is hidden
 (`tabs_visible = false`); the rail drives `tab_container.current_tab` instead. Graphics keeps
-foliage budget and renderer options under an Advanced `Foldout`. The close button is an
-`IconButton`. Keyboard section switching (the native tab bar's Ctrl+Tab) is not available while the
-tab bar is hidden and the rail items are not focusable; a keyboard-navigation pass is a known
-follow-up.
+foliage budget and renderer options under an Advanced `Foldout`. The header is a closable
+`MenuHeader`; `close_button` is `header.close_button`. Keyboard section switching (the native tab
+bar's Ctrl+Tab) is not available while the tab bar is hidden and the rail items are not focusable; a
+keyboard-navigation pass is a known follow-up.
+
+The footer is end-aligned: `Reset to Defaults` is a quiet `Secondary` action, `Apply` carries the
+accent.
 
 ### Opening
 
@@ -454,13 +510,12 @@ during gameplay).
 
 ### Features
 
-- **Resume** - Continue playing
-- **Edit Level** - GM-only (`NetworkManager.has_gm_access()`); resumes and opens the level editor
-- **Change Level** - GM-only (`NetworkManager.has_gm_access()`); opens `LevelPickerDialog` and
-  swaps the level without leaving the current game (see Change Level below)
-- **Settings** - Open settings menu
-- **Return to Title** - Exit to main menu (with confirmation)
-- **Quit Game** - Exit the application (with confirmation)
+The scene holds only the shell: `_on_panel_ready()` builds a `MenuHeader` ("Paused" / "Esc to
+resume") and the rows through `UiActions`. **Resume** is the only accent action, continuing play.
+**Edit Level** and **Change Level** are still GM-gated (`NetworkManager.has_gm_access()`) --
+Edit Level resumes and opens the level editor, Change Level opens `LevelPickerDialog` and swaps the
+level without leaving the current game (see Change Level below). **Settings** opens the settings
+menu. **Return to Title** and **Quit Game** are `Secondary` and still confirm before acting.
 
 ### Behavior
 
@@ -587,6 +642,13 @@ func _on_panel_ready() -> void:
 func _on_before_animate_out() -> void:
     UIManager.unregister_overlay($ColorRect as Control)
 ```
+
+### Help Overlay
+
+`HelpOverlay` (`scenes/ui/help_overlay.gd`, triggered by F1) is built entirely in code from
+`_get_shortcut_data()`: a `MenuHeader` ("Keyboard shortcuts", closable), then one `SectionHeader`
+per group (Navigation, Tokens, Tools, General) with its rows underneath, each row a `KeyChip`
+140 px wide (`CHIP_MIN_WIDTH`) holding the key label next to the action text.
 
 ### Overlay Requirements
 

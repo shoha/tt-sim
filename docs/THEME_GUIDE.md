@@ -145,10 +145,17 @@ Buttons have semantic variants to communicate their purpose:
 | ----------- | ------------- | ----------------------------------------------------------- |
 | (default)   | Accent/Orange | Utility actions (Settings, Level Editor)                    |
 | `Secondary` | Teal          | Standard actions (New, Load, Save, Select, Host, Join, Close) |
-| `Success`   | Green         | Primary CTA / positive actions (Resume, Apply, Start)        |
+| `Success`   | Green         | confirmation dialog only                                    |
 | `Warning`   | Yellow        | Caution actions                                             |
-| `Danger`    | Red           | Destructive / irreversible actions (Delete, Quit, Leave)    |
+| `Danger`    | Red           | confirmation dialog only                                    |
 | `Card`      | --            | Level cards; accent border when pressed                     |
+
+Every menu screen carries exactly one default-variant (accent) action; every other action is
+`Secondary` with an icon. `Success` and `Danger` fills now appear only on `ConfirmationDialogUI`'s
+confirm button; `Warning` fills are used by no menu screen. Destructive menu rows (Return to Title,
+Quit Game, Leave, Reset to Defaults) are `Secondary` -- the confirmation that follows carries the
+red. Footers are an `HBoxContainer` with `alignment = ALIGNMENT_END`, secondary actions first and
+the primary last.
 
 ### Choosing the Right Variant
 
@@ -236,6 +243,7 @@ For consistent tab-change animations, call `TabUtils.animate_tab_change()` from 
 | `PanelElevated` | `surface2`           | Nested panels, emphasis        |
 | `PanelBordered` | Transparent + border | Grouping related controls      |
 | `PanelInset`    | `background`         | Recessed areas (lists, inputs) |
+| `KeyChip`       | `surface2` + border  | Key caps in shortcut rows      |
 
 ---
 
@@ -407,6 +415,8 @@ Reusable controls under `scenes/ui/primitives/`, built in code (no `.tscn`). Eve
 | `PaneStack` | One-visible-pane content area with crossfade | `add_pane(id, pane)`, `show_pane(id)`, `pane_changed` |
 | `LevelCard` | A saved level as a selectable, actionable card (title hub, level picker) | `setup(info)`, static `caption_for(info, now_unix)`, `locked`, `begin_rename()`, `selected`, `activated`, `action_requested`, `rename_committed` |
 | `LevelGrid` | Grid of `LevelCard`s over a level provider | `provider`, `columns`, `confirm_delete`, `locked_path`, `refresh()`, `select(path)`, `selected_info()`, `card_count()`, `selection_changed`, `level_activated` |
+| `UiActions` | The two menu action shapes, as static builders | `primary(label, icon, caption, parent)`, `secondary(label, icon, parent)`, `subtitle_of(button)`, `spacer(height, parent)`, `PRIMARY_HEIGHT` 56, `SECONDARY_HEIGHT` 36 |
+| `MenuHeader` | The title block every menu screen opens with | `setup(title, caption = "", closable = false)`, `title_label`, `caption_label`, `close_button`, `close_requested` |
 
 `LevelCard`'s overflow button uses the `dots-vertical` icon (`assets/icons/ui/dots-vertical.svg`).
 
@@ -438,6 +448,7 @@ Timing tokens live in `Constants`:
 | `ANIM_PANE_SWAP` / `ANIM_PANE_SWAP_OFFSET_PX` | 0.16 s cubic-out, 8 px | PaneStack crossfade, IconRail indicator |
 | `ANIM_FOLDOUT` | 0.16 s cubic-out | Foldout body and chevron |
 | `DrawerContainer.slide_duration` | 0.25 s cubic-out | drawer sled |
+| `ANIM_ENTRANCE` / `ANIM_ENTRANCE_STAGGER` | 0.3 s cubic-out, 0.08 s apart | `UiMotion.stagger_in()`: title, pause menu, host lobby and join screen bodies fade and lift 12 px into place |
 
 Scale and position animations use `Control.offset_transform_scale` / `offset_transform_position` (Godot 4.7) via `UiMotion.scale_to()`, so containers never relayout during motion. Sounds reuse `AudioManager.play_tick()`, `play_open()`, `play_close()`.
 
