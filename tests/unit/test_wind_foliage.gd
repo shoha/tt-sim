@@ -286,6 +286,31 @@ func test_apply_material_disables_baked_ao_for_every_category() -> void:
 		assert_eq(WindFoliage.BAKED_AO_STRENGTH, 0.0)
 
 
+func test_presets_carry_a_backlight_value_per_category() -> void:
+	for category in ["tree", "grass"]:
+		assert_true(WindFoliage.PRESETS[category].has("backlight"))
+		var value: float = WindFoliage.PRESETS[category]["backlight"]
+		assert_true(value >= 0.0 and value <= 1.0)
+
+
+func test_apply_material_sets_backlight_from_the_preset() -> void:
+	var material := _make_orm_material(Color.GREEN)
+	var mesh := BoxMesh.new()
+	mesh.material = material
+
+	WindFoliage.apply_material(mesh, "tree")
+
+	var wind_material := mesh.surface_get_material(0) as ShaderMaterial
+	assert_eq(
+		wind_material.get_shader_parameter("backlight"), WindFoliage.PRESETS["tree"]["backlight"]
+	)
+
+
+func test_get_effective_preset_keeps_backlight_when_overrides_touch_sway() -> void:
+	var preset := WindFoliage.get_effective_preset("grass", {"grass_sway_speed": 9.0})
+	assert_eq(preset["backlight"], WindFoliage.PRESETS["grass"]["backlight"])
+
+
 func test_process_scatter_instances_leaves_a_rock_multimesh_with_no_wind_override() -> void:
 	var scene := Node3D.new()
 	var rock := MeshInstance3D.new()

@@ -27,11 +27,13 @@ extends RefCounted
 # "FP_Small_Plants_001", "GS Forest seedlings 01", "GS Nettle 01" -- see terrain-paint's
 # docs/scatter-integration.md) has no consistent taxonomy keyword, so an
 # allow-list-with-no-sway-default would silently leave most real foliage motionless.
+# "backlight" feeds the shader's BACKLIGHT term (see wind_foliage_include.gdshaderinc);
+# it is not exposed for per-level tuning, same as sway_frequency.
 const _DENY_KEYWORDS := ["rock", "stone", "boulder"]
 const _TREE_KEYWORDS := ["tree", "oak", "pine", "birch", "branch", "canopy"]
 const PRESETS := {
-	"tree": {"sway_speed": 0.6, "sway_amplitude": 0.06, "sway_frequency": 0.15},
-	"grass": {"sway_speed": 1.6, "sway_amplitude": 0.03, "sway_frequency": 0.4},
+	"tree": {"sway_speed": 0.6, "sway_amplitude": 0.06, "sway_frequency": 0.15, "backlight": 0.3},
+	"grass": {"sway_speed": 1.6, "sway_amplitude": 0.03, "sway_frequency": 0.4, "backlight": 0.3},
 }
 
 ## Default albedo darkening at a grass blade's base (see wind_foliage_include.gdshaderinc's
