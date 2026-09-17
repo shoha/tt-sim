@@ -31,23 +31,6 @@ layout_mode = 2
 layout_mode = 2
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="TitleLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"H1"
-text = "Update Available"
-horizontal_alignment = 1
-
-[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="VersionLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"H2"
-text = "v1.0.0 → v1.1.0"
-horizontal_alignment = 1
-
 [node name="CommitLink" type="LinkButton" parent="CenterContainer/PanelContainer/VBoxContainer"]
 unique_name_in_owner = true
 visible = false
@@ -83,7 +66,6 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Downloading... 0%"
-horizontal_alignment = 1
 
 [node name="ProgressBar" type="ProgressBar" parent="CenterContainer/PanelContainer/VBoxContainer/ProgressContainer"]
 unique_name_in_owner = true
@@ -96,23 +78,7 @@ layout_mode = 2
 [node name="ButtonContainer" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-alignment = 1
-
-[node name="DownloadButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
-script = ExtResource("animated_btn")
-unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 0)
-layout_mode = 2
-theme_type_variation = &"Success"
-text = "Download"
-
-[node name="ViewButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
-script = ExtResource("animated_btn")
-unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 0)
-layout_mode = 2
-theme_type_variation = &"Secondary"
-text = "View on GitHub"
+alignment = 2
 
 [node name="SkipButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
 script = ExtResource("animated_btn")
@@ -122,19 +88,26 @@ layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Skip"
 
+[node name="ViewButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
+script = ExtResource("animated_btn")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "View on GitHub"
+
+[node name="DownloadButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/ButtonContainer"]
+script = ExtResource("animated_btn")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Download"
+
 [node name="PostDownloadButtons" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-alignment = 1
-
-[node name="RestartButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/PostDownloadButtons"]
-script = ExtResource("animated_btn")
-unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 0)
-layout_mode = 2
-theme_type_variation = &"Success"
-text = "Restart Now"
+alignment = 2
 
 [node name="LaterButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/PostDownloadButtons"]
 script = ExtResource("animated_btn")
@@ -151,3 +124,10 @@ custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Open Folder"
+
+[node name="RestartButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/PostDownloadButtons"]
+script = ExtResource("animated_btn")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+text = "Restart now"
