@@ -192,8 +192,9 @@ func _input(event: InputEvent) -> void:
 			# overlay, and gating on the overlay already keeps it out of the way the rest
 			# of the time. (The validation bridge's _inject_key() does parse chords such
 			# as "Shift+1", so a modifier combo would be drivable -- that is no longer the
-			# reason.) See DebugRenderToggles.toggle_by_index() for why a keyboard path is
-			# needed.
+			# reason.) A convenience, not a workaround: these checkboxes are also clickable
+			# through the validation bridge's click_control -- see
+			# DebugRenderToggles.toggle_by_index().
 			if (
 				event.keycode >= KEY_1
 				and event.keycode <= KEY_9

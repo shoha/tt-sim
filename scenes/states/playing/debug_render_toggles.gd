@@ -191,14 +191,20 @@ func get_toggle_states() -> Dictionary:
 ## handler (including the mutual-exclusion logic between the three foliage debug
 ## shaders) runs unchanged -- this is only an alternative way to reach them.
 ##
-## Exists because the checkbox panel cannot be driven by the validation bridge's
-## injected mouse clicks: it lives under GameMap.get_perf_overlay_container(), and
-## clicks on it never reach the checkboxes (setting that container's mouse_filter to
-## PASS instead of IGNORE was tried and did not help, so the cause is something else
-## in the hit-test path and is still unexplained). Keyboard input DOES reach the game
-## through the bridge, so bare digit keys 1..9 (and 0 for the tenth) in
-## GameMap._input() route here, which makes the ten isolation switches sweepable
-## automatically instead of by hand.
+## Added when the checkbox panel was believed unclickable through the validation
+## bridge. That belief was wrong and the cause is no longer unexplained: the panel was
+## always hit-testable, but `controls` reports a Control's centre in CANVAS space while
+## a raw `click` takes WINDOW pixels, so a click sent at the reported centre landed
+## somewhere else entirely -- on the 3D map, per `hovered_control` -- while still
+## answering ok. `click_control` converts between the two spaces itself (see
+## ValidationBridge._canvas_to_injected_point) and drives these checkboxes reliably;
+## measured 8/8 on "Baked foliage AO" at a 1278x1360 window over a 1920x2043 viewport,
+## both frozen and running. Neither the perf-overlay CanvasLayer nor its
+## MOUSE_FILTER_IGNORE container blocks anything: Godot still hit-tests the children of
+## an IGNORE Control, and only skips the IGNORE Control itself.
+##
+## The digit keys stay because sweeping ten switches by keystroke is faster and needs no
+## Control lookup, not because clicking is unavailable.
 func toggle_by_index(index: int) -> void:
 	if index < 0 or index >= PANEL_ORDER_KEYS.size():
 		return
