@@ -397,6 +397,71 @@ carry exactly one UV set (`TEX_UV` present, `TEX_UV2` absent on every one).
 `sandyclearing_rebaked.blend` is the file to adopt as the new `sandyclearing.blend`. The
 pre-re-bake catalog files are kept alongside the new ones as `*.pre-2026-09-17`.
 
+#### Addendum: render-active UV fix, adaptive bake size, second re-bake (2026-09-17 evening)
+
+Two more `terrain-paint` findings forced a second whole-catalog re-bake the same day.
+
+**The packed bake sampled the wrong atlas region for 130 Plant Library materials.** Cycles
+reads an Image Texture whose Vector input is unlinked (or fed by `TexCoord.UV` or an unnamed
+`UVMap` node) through the UV layer flagged `active_render`, while the bake *destination* is
+`uv_layers.active`; the two flags are independent. The packer set both to the temporary
+packed layer, so every render-default texture was sampled through the packed coordinates
+and the bake captured a crushed or cropped piece of the atlas. FloraPaint chains name their
+UV layer explicitly (through the `Blur` group), and Sandy Clearing's bark is tiled and never
+repacked, so the Sandy Clearing export above was unaffected; 29 Plant Library biomes were
+not. The packer now moves only `active`; `active_render` follows after the bakes. The gate
+bake on `forest_01` showed complete, correctly framed plant cards where the previous output
+held a whole leaf sprig or dozens of tiny clovers crushed onto one card, and every material
+the library scan predicted unchanged came back byte-identical.
+
+**Bake size now follows the source texels.** The catalog tool sizes each material's bake
+from the largest source-texel footprint over its image textures (UV extent on the layer the
+texture actually reads, times the image side), rounded up to a power of two and clamped to
+`[64, --resolution]`. It walks each texture's Vector chain (`resolve_texture_uv_origin`:
+Mapping with constant scale, Mix/Blur groups, group inputs, `VectorMath` SCALE/MULTIPLY with
+constant factors) and refuses to guess for anything it cannot measure (TEXTURE/NORMAL-mode
+Mapping, MapRange, VectorCurve, VectorDisplacement, driven scales), which forces the full
+`--resolution`. Generated-coordinate gradient textures carry no UV footprint and are
+skipped. `bake_biome_catalog.py --dry-run` prints the per-material `bake N px` decisions
+without baking; diffing that against a run's log is the regression gate, and the final
+code reproduces all 1193 decisions of the run that produced the catalog (0 differences).
+
+Result of the second re-bake (43 biomes, 3 h 20 min for the two packs in parallel, zero
+errors; previous outputs kept as `*.pre-2026-09-17c`):
+
+| | before | after |
+| --- | ---: | ---: |
+| Baked catalog, 43 `*.instances.blend` | 2,709,528,446 | 2,653,169,363 |
+| `map.glb` (installed) | 93,041,788 | 82,462,320 |
+| baked scatter textures at 1024 px | 184 | 121 |
+| at 512 / 256 / 128 px | 0 / 0 / 0 | 18 / 9 / 36 |
+
+The catalog barely shrinks because most Plant Library materials genuinely cover their
+atlas (`forest_01` measured 1024 for all 19 pairs, none forced). Sandy Clearing's leaf and
+grass cards are where the sizing bites: 63 of its 186 baked textures dropped to 128-512 px
+with no visible change at the play zoom, and the live frame at Home is unchanged apart from
+the brighter foliage already documented above.
+
+Two traps found while installing the result, both now guarded in `terrain-paint`:
+
+- `tools/refresh_map_from_catalog.py` lost the terrain's own bakes. The user's map holds
+  `Plane_Albedo.001` and friends as GENERATED images that were never packed or saved to
+  disk; Blender's interactive save keeps their buffers, the background `save_as_mainfile`
+  does not (compressed or not, `copy` or not), and the export then wrote flat black 20 KB
+  terrain PNGs. The tool now packs every unsaved image before saving
+  (`pack_unsaved_images`), and the re-export's terrain PNGs are byte-identical to the
+  previous install.
+- If Geoscatter fails to import at Blender startup (its `pybullet` wheel was transiently
+  absent from `extensions/.local/lib`), the export prints only
+  `Warning: Scatter Instances: Geoscatter isn't installed`, exits 0 and writes a GLB with
+  no scatter objects at all (10 nodes instead of 68). Check for that warning and count
+  `FP_` nodes (57 for Sandy Clearing) before installing any export.
+
+The refreshed source is now `sandyclearing_rebaked2.blend` (built from the user's
+`sandyclearing_rebaked.blend`, so it keeps the re-baked terrain); the previous installed
+map is kept as `map.glb.pre-2026-09-17c` beside `map.glb`. `Baked/Pokemon` (4 biomes) is
+not part of either pack and was not re-baked.
+
 ## Environment Overrides
 
 Overrides allow fine-tuning individual properties without creating a new preset:
