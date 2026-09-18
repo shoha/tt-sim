@@ -505,6 +505,26 @@ decimated branches and no double-applied displacement (the catalog trees carry
 have baked in twice). The old export is kept beside the level as
 `map.glb.pre-decimate-2026-09-18`.
 
+### Correction: the first decimation pass had deleted the trunks
+
+The tree numbers in the section above (9,012 / 19,148 / 31,740 per instance, 8.90 ms)
+were measured on broken assets. A plain Collapse toward 3,000 triangles on these
+twig-heavy trunks spends its whole budget on the few large smooth islands: the trunk
+island was crushed to nothing, two thirds of the twig islands were deleted, and the
+wood surface area went UP (folded geometry) -- all while the triangle total looked like
+a sensible result. Reported by the user as "the trunks are not visible at all, the
+branches are". terrain-paint's `decimate_object_mesh` now prunes sub-pixel twig islands
+(`--min-island-area 0.02`) and clamps the Collapse ratio (`--min-ratio 0.5`); the
+catalog was restored from its pristine backups and re-run. Corrected assets: 18,635 /
+25,554 / 22,713 triangles per tree, trunks intact (verified by island analysis against
+the backup and by screenshots in-game), scatter total 9,499,495 primitives. Home pose
+with every instance drawn, same setup as above but a separate session so not directly
+comparable in absolute terms: **8.09 ms**, 11,267,232 primitives, 6,563,904 visible,
+4,699,598 shadow. The thinning A/B below was run on the broken trees; its delta is a
+fill effect on grass and is unaffected, but its absolute numbers carry the missing
+trunks. The pre-fix export is kept beside the level as
+`map.glb.pre-trunkfix-2026-09-18`.
+
 ## Grass card thinning in the asset catalog (2026-09-18)
 
 Follow-up to the decimation above, aimed at fill rather than primitives. Measured from
