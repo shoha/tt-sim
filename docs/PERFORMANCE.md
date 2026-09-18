@@ -525,6 +525,25 @@ fill effect on grass and is unaffected, but its absolute numbers carry the missi
 trunks. The pre-fix export is kept beside the level as
 `map.glb.pre-trunkfix-2026-09-18`.
 
+### Final assets vs. original export, same session (2026-09-18)
+
+The like-for-like number for the finished catalog work (rocks to 300, trunks pruned and
+clamped, the three 99-card grass clumps thinned), against the untouched export from the
+same morning, in ONE session: final map loaded first, original swapped in and reloaded
+with R, final swapped back and reloaded, 24M budget applied through a probe after each
+load so every instance is drawn, 1920x1080, vsync off, GPU idle beforehand.
+
+| Pose | Original export | Final export (A, then A again) |
+| --- | --- | --- |
+| Home (zoom 13.85) | 10.63 ms, 24.5M prims, 13.3M visible, 11.2M shadow | 8.06 / 8.10 ms, 11.3M prims, 6.6M visible, 4.7M shadow |
+| Grass field (12, 0, 16) | 10.22 ms, 27.2M prims, 13.1M visible, 14.2M shadow | 7.26 / 7.28 ms, 11.9M prims, 6.0M visible, 5.9M shadow |
+
+**-2.5 ms at Home (-24%) and -2.9 ms at the grass field (-29%)**, with the two final-map
+legs agreeing within 0.04 ms, so none of it is drift. Identical instance sets in every
+row (52,154), so the difference is the assets alone. At the default 8M budget the final
+map now shows about 90% of its instances instead of 42%, so a player on defaults sees
+denser foliage at a similar frame time rather than the same foliage faster.
+
 ## Grass card thinning in the asset catalog (2026-09-18)
 
 Follow-up to the decimation above, aimed at fill rather than primitives. Measured from
