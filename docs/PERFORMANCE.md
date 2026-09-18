@@ -462,6 +462,49 @@ saved to disk; frame time was not re-measured in that pass. The shipped constant
 this value is revisited: a real effect exists at close canopy framing, it was just too
 small to see at the two poses this section originally tried.
 
+## Tree trunk and rock decimation in the asset catalog (2026-09-18)
+
+The "Real-map validation" finding above -- three tree species at 37k / 55k / 77k
+primitives per instance are 65% of the map's scatter cost, and only lighter assets can
+fix it -- was acted on in terrain-paint, not here: `tools/decimate_baked_catalog.py`
+gained a `--material-pattern` flag, the FloraPaint catalog's `Wood_material_*` surfaces
+were decimated toward 3,000 and `Rock_material_*` toward 300, and Sandy Clearing was
+refreshed and re-exported. Leaf cards are untouched. The trunks floor out well above
+3,000 (they are thousands of tiny twig islands that Collapse cannot merge): the three
+trees are now 9,012 / 19,148 / 31,740 per instance, and the map's scatter load went from
+19,170,768 to 9,473,704 primitives across the same 52,154 instances.
+
+Measured in one session, `tests/test_play_level.tscn` through the validation bridge,
+1920x1080 pinned via `override.cfg`, vsync off, RTX 3080 idle beforehand (1% utilisation,
+44 C), Home pose (zoom 13.85), 40 s windows, old and new `map.glb` swapped on disk and
+reloaded with R in the same process, A/B/A order:
+
+| Map | Budget | frame_ms | primitives | visible | shadow | visible draws |
+| --- | --- | --- | --- | --- | --- | --- |
+| Old | 24M (all instances) | 10.83 | 24,549,059 | 13,306,433 | 11,238,892 | 849 |
+| New | 24M (all instances) | 8.90 then 8.66 | 10,776,490 | 6,527,062 | 4,245,698 | 849 |
+| Old | 8M (default) | 5.71 / 5.86 | 9,877,485 | 5,314,192 | 4,559,565 | 805 |
+| New | 8M (default) | 7.79 | 9,122,526 | 5,510,620 | 3,608,178 | 840 |
+
+Two readings, and they are not in tension:
+- **Same content, all instances shown: 2.0 ms faster (-18%)**, with visible primitives
+  halved and shadow-pass primitives down 62%. This is the like-for-like effect of the
+  lighter assets; the two New@24M samples bracket the Old sample in time, so it is not
+  drift.
+- **At the default 8M budget the new map is 2 ms slower**, because the budget is spent
+  differently: the old map could only show 42% of its instances under 8M, the new one
+  shows about 84%. Twice the grass and leaf-litter instances on screen is more
+  alpha-tested fill (see "Grass no longer casts shadows" for why fill, not primitive
+  count, is what dense card foliage costs). That is the fidelity the budget was meant to
+  buy; a player who wants the old frame time gets it by lowering the slider, now with
+  the trees intact.
+
+Screenshots at the Home pose and two focused poses showed intact leaf cards, smooth
+decimated branches and no double-applied displacement (the catalog trees carry
+`DISPLACE` + `SIMPLE_DEFORM` modifiers, which the first version of the decimator would
+have baked in twice). The old export is kept beside the level as
+`map.glb.pre-decimate-2026-09-18`.
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one
