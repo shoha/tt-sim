@@ -505,6 +505,49 @@ decimated branches and no double-applied displacement (the catalog trees carry
 have baked in twice). The old export is kept beside the level as
 `map.glb.pre-decimate-2026-09-18`.
 
+## Grass card thinning in the asset catalog (2026-09-18)
+
+Follow-up to the decimation above, aimed at fill rather than primitives. Measured from
+the glb's real triangle areas, Sandy Clearing's grass amounted to 63 "layers" of
+alpha-tested card area per unit of ground, and three species (`FP_Grass_043/044/045`,
+99 single-quad cards per clump, ~1,400 instances each at 2x scale) were 33 of those
+layers from 12% of the grass instances. terrain-paint's catalog tool gained
+`--max-cards`, which keeps an evenly spaced subset of a clump's cards; those three
+species went 99 -> 33 cards, the map's grass card area 63 -> 42 layers, and scatter
+primitives 9.47M -> 8.91M. Same measurement setup as the section above (one session,
+old/new `map.glb` swapped and reloaded with R, 1920x1080, vsync off, 24M budget applied
+through a probe so every instance is drawn), A/B/A order, plus a second pose focused on
+the grass field at (12, 0, 16):
+
+| Pose | Map | frame_ms | visible primitives | shadow primitives |
+| --- | --- | --- | --- | --- |
+| Home (zoom 13.85) | pre-thin | 8.98 | 6,527,062 | 4,245,698 |
+| Home | thinned | 7.85 then 7.86 | 6,116,410 | 4,245,698 |
+| Grass field (zoom 13.85) | pre-thin | 8.12 | 4,295,662 | 5,199,686 |
+| Grass field | thinned | 6.95 then 6.94 | 4,016,614 | 5,199,686 |
+
+**1.1 to 1.2 ms faster at both poses (-13% / -14%)** for a 6% drop in visible
+primitives, which is the fill signature: the saving is card area, not geometry. Grass
+already casts no shadows, so shadow primitives are byte-identical. Screenshots at the
+grass-field pose before and after are near-identical at play zoom; the thinned clumps
+read very slightly sparser. `FP_Grass_039` (50 cards) is the next candidate if grass
+fill needs to come down further. The pre-thin export is kept beside the level as
+`map.glb.pre-thin-2026-09-18`.
+
+Two observations from this session that are not about the assets:
+- The first attempt hung the game: ~26 s into logging at the Home pose, the process
+  stopped responding to Windows messages and to the bridge, spun two cores with the GPU
+  at 0%, and the perf log stopped. No error was printed. Killed and relaunched, the
+  identical map, pose and budget then ran clean for 90 s at the default budget, 90 s at
+  24M, and through the whole A/B/A after that. Not reproduced, so not diagnosed; noted
+  here so a second occurrence is recognised as a pattern rather than a one-off.
+- After an R reload in `test_play_level.tscn`, the default-budget density came up lower
+  than on the initial load (3.6M visible primitives at the Home pose after reload vs
+  5.5M on first load, same map, same budget), for both maps alike. It did not affect
+  the 24M comparisons above, which re-apply the budget explicitly, but it means
+  default-budget numbers taken after an R reload are not comparable with first-load
+  ones.
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one
