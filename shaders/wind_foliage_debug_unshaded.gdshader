@@ -25,7 +25,7 @@ render_mode cull_disabled, unshaded;
 
 void vertex() {
 	local_vertex_y = VERTEX.y;
-	VERTEX += wind_sway_vertex_offset(VERTEX, MODEL_MATRIX, TIME);
+	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
 }
 
 

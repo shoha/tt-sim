@@ -146,6 +146,57 @@ func test_apply_material_extracts_the_shared_orm_texture_from_a_standard_materia
 	assert_eq(wind_material.get_shader_parameter("orm_texture"), shared_orm)
 
 
+func _make_colored_surface_mesh(material: Material) -> ArrayMesh:
+	# A single triangle with a per-vertex colour array, the shape a treecube asset's
+	# COLOR_0 takes after glTF import.
+	var mesh := ArrayMesh.new()
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 2, 0)]
+	)
+	arrays[Mesh.ARRAY_COLOR] = PackedColorArray(
+		[Color(0, 0, 0.5), Color(0.2, 1, 0.5), Color(1, 1, 0.5)]
+	)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, material)
+	return mesh
+
+
+func test_apply_material_enables_vertex_wind_only_when_the_surface_has_colors() -> void:
+	# Godot substitutes white for a missing COLOR array, which the shader would read
+	# as "full sway everywhere", so the switch must come from the surface format.
+	var plain := BoxMesh.new()
+	plain.material = _make_orm_material(Color.GREEN)
+	WindFoliage.apply_material(plain, "tree")
+	var plain_material := plain.surface_get_material(0) as ShaderMaterial
+	assert_false(plain_material.get_shader_parameter("use_vertex_wind"))
+
+	var colored := _make_colored_surface_mesh(_make_orm_material(Color.GREEN))
+	WindFoliage.apply_material(colored, "tree")
+	var colored_material := colored.surface_get_material(0) as ShaderMaterial
+	assert_true(colored_material.get_shader_parameter("use_vertex_wind"))
+
+
+func test_apply_material_sets_mesh_height_for_every_category() -> void:
+	# The authored R weight is 0..1; mesh_height rescales it to the metres the legacy
+	# height weight used, so the amplitude presets keep their meaning.
+	var colored := _make_colored_surface_mesh(_make_orm_material(Color.GREEN))
+	WindFoliage.apply_material(colored, "tree")
+	var material := colored.surface_get_material(0) as ShaderMaterial
+	assert_almost_eq(material.get_shader_parameter("mesh_height"), 2.0, 0.0001)
+
+
+func test_surface_has_vertex_colors_reads_the_surface_format() -> void:
+	var colored := _make_colored_surface_mesh(_make_orm_material(Color.GREEN))
+	assert_true(WindFoliage.surface_has_vertex_colors(colored, 0))
+	var plain := _make_two_surface_mesh(
+		_make_orm_material(Color.GREEN), _make_orm_material(Color.GREEN)
+	)
+	assert_false(WindFoliage.surface_has_vertex_colors(plain, 0))
+	assert_false(WindFoliage.surface_has_vertex_colors(plain, 1))
+
+
 func test_apply_material_applies_override_values() -> void:
 	var material := _make_orm_material(Color.GREEN)
 	var mesh := BoxMesh.new()
