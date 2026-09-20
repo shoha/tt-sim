@@ -38,6 +38,9 @@ func _ready() -> void:
 	var sun_az := float(args[2]) if args.size() > 2 else 120.0
 	var cam_az := float(args[3]) if args.size() > 3 else 300.0
 	_bench = args.size() > 4 and args[4] == "bench"
+	if _bench:
+		# Otherwise every frame reports the monitor's refresh interval.
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	DirAccess.make_dir_recursive_absolute(_out_dir)
 
 	var map := GlbUtils.load_map(map_path, false, 1.0, {})
