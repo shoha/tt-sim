@@ -46,6 +46,30 @@ func test_builds_multimesh_with_correct_instance_count() -> void:
 	scene.free()
 
 
+func test_finds_a_template_whose_name_the_importer_sanitised() -> void:
+	# Blender exports "Grass_Short.001"; Godot's glTF importer names the node
+	# "Grass_Short_001". The extras key keeps the Blender spelling.
+	var built := _make_scene_with_template("Grass_Short.001".validate_node_name())
+	var scene: Node3D = built.scene
+	scene.set_meta(
+		"tt_gltf_scene_extras",
+		{"tt_scatter_instances": {"Grass_Short.001": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]]}}
+	)
+
+	ScatterGlbUtils.process_scatter_instances(scene)
+
+	var found := false
+	for child in scene.get_children():
+		if (
+			child is MultiMeshInstance3D
+			and (child as MultiMeshInstance3D).multimesh.instance_count == 1
+		):
+			found = true
+	assert_true(found, "the sanitised template should still be resolved")
+
+	scene.free()
+
+
 func test_removes_the_original_template_node() -> void:
 	var built := _make_scene_with_template("GrassBlade")
 	var scene: Node3D = built.scene
