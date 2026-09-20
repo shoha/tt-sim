@@ -59,7 +59,7 @@ static func process_scatter_instances(
 		var transforms: Variant = groups[source_name]
 		if not transforms is Array or transforms.is_empty():
 			continue
-		var source_node := GlbUtils.find_node_by_name(scene, String(source_name))
+		var source_node := _find_template(scene, String(source_name))
 		if not source_node is MeshInstance3D:
 			continue
 		var mesh_node := source_node as MeshInstance3D
@@ -105,6 +105,18 @@ static func process_scatter_instances(
 		if old_parent:
 			old_parent.remove_child(mesh_node)
 		mesh_node.free()
+
+
+## The extras key is the exact Blender object name, but Godot's importer rewrites
+## characters a node name may not contain ("." above all: Blender's "Grass.001"
+## arrives as "Grass_001"), so a key that does not match verbatim is retried the
+## way the importer would have spelled it. Without this every duplicate-suffixed
+## asset vanished from the map with no error.
+static func _find_template(scene: Node3D, source_name: String) -> Node:
+	var node := GlbUtils.find_node_by_name(scene, source_name)
+	if node == null:
+		node = GlbUtils.find_node_by_name(scene, source_name.validate_node_name())
+	return node
 
 
 ## Builds one MultiMeshInstance3D (sharing mesh_node's Mesh, and by default its
