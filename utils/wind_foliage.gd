@@ -269,14 +269,31 @@ static func apply_material(mesh: Mesh, category: String, overrides: Dictionary =
 	if category == "" or not PRESETS.has(category):
 		return
 	var preset := get_effective_preset(category, overrides)
-	var blade_height := mesh.get_aabb().size.y if category == "grass" else 0.0
+	var mesh_height := mesh.get_aabb().size.y
+	var blade_height := mesh_height if category == "grass" else 0.0
 	for i in mesh.get_surface_count():
 		var source_material := mesh.surface_get_material(i)
 		if not source_material is BaseMaterial3D:
 			continue
 		var wind_material := _build_shader_material(source_material, preset, category)
 		wind_material.set_shader_parameter("baked_ao_strength", BAKED_AO_STRENGTH)
+		# Authored wind weights (treecube's COLOR_0 convention) are only trusted when
+		# the surface really carries a colour array -- Godot substitutes white for a
+		# missing one, which the shader would read as "full sway everywhere".
+		wind_material.set_shader_parameter("use_vertex_wind", surface_has_vertex_colors(mesh, i))
+		wind_material.set_shader_parameter("mesh_height", mesh_height)
 		if category == "grass":
 			wind_material.set_shader_parameter("blade_height", blade_height)
 			wind_material.set_shader_parameter("base_darken", _GRASS_BASE_DARKEN)
 		mesh.surface_set_material(i, wind_material)
+
+
+## True when surface `index` of `mesh` carries a per-vertex colour array (glTF COLOR_0
+## on import). Used to decide whether the wind shader may read authored weights from
+## COLOR; a surface without one gets the legacy height-weighted sway. Reads the surface
+## arrays rather than surface_get_format(), which only ArrayMesh has -- a PrimitiveMesh
+## (BoxMesh in the unit tests) would throw. This runs once per species per map load,
+## so the array copy is not a concern.
+static func surface_has_vertex_colors(mesh: Mesh, index: int) -> bool:
+	var arrays := mesh.surface_get_arrays(index)
+	return arrays.size() > Mesh.ARRAY_COLOR and arrays[Mesh.ARRAY_COLOR] != null

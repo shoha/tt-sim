@@ -29,6 +29,23 @@ uniform float sway_speed : hint_range(0.0, 5.0) = 1.0;
 uniform float sway_amplitude : hint_range(0.0, 1.0) = 0.05;
 uniform float sway_frequency : hint_range(0.05, 2.0) = 0.3;
 
+// Authored wind weights in the vertex colour (treecube's convention, see that repo's
+// docs/tt-sim-wind-weights.md): R = whole-plant sway weight (0 root .. 1 top),
+// G = flutter weight (branch tips, leaf cards, blade tips), B = phase (0..1) so
+// neighbouring limbs and cards desync. Godot gives COLOR = white when a surface has
+// no colour array, which would mean full sway everywhere, so this switch is set
+// explicitly by WindFoliage.apply_material from the surface format rather than
+// inferred from the colour itself. Off (the default), the sway weight falls back to
+// the unnormalized local height every pre-treecube asset relies on.
+uniform bool use_vertex_wind = false;
+// Mesh AABB height in metres: the authored R weight is 0..1, the legacy height weight
+// is metres, so R is scaled by this to keep the per-category amplitude presets
+// meaning the same thing for both kinds of asset.
+uniform float mesh_height : hint_range(0.0, 100.0) = 1.0;
+// Secondary flutter driven by G and phased by B: faster and smaller than the sway.
+uniform float flutter_amplitude : hint_range(0.0, 0.5) = 0.03;
+uniform float flutter_speed : hint_range(0.0, 20.0) = 5.0;
+
 // Base-dark/tip-light gradient, grass-category only (see WindFoliage.apply_material) --
 // replaces the contact-darkening a real shadow would have given grass now that it no
 // longer casts one (ScatterGlbUtils._build_multimesh_from_transforms' SHADOW_CASTING_SETTING_OFF).
@@ -70,9 +87,11 @@ varying float local_vertex_y;
 
 
 // Wind-sway offset to add to VERTEX. [param vertex] is the un-swayed object-space
-// VERTEX built-in; [param model_matrix]/[param time] are the vertex() stage's
-// MODEL_MATRIX/TIME built-ins, passed in explicitly (see file header).
-vec3 wind_sway_vertex_offset(vec3 vertex, mat4 model_matrix, float time) {
+// VERTEX built-in; [param color] is the vertex() stage's COLOR built-in (the authored
+// wind weights when use_vertex_wind is on, ignored otherwise); [param model_matrix]/
+// [param time] are the vertex() stage's MODEL_MATRIX/TIME built-ins, passed in
+// explicitly (see file header).
+vec3 wind_sway_vertex_offset(vec3 vertex, vec4 color, mat4 model_matrix, float time) {
 	// Phase derived from world-space XZ position (not a per-instance uniform) so every
 	// MultiMesh instance -- each with its own MODEL_MATRIX -- naturally desyncs from
 	// its neighbors with no extra per-instance data needed, same idiom water.gdshader's
@@ -87,8 +106,29 @@ vec3 wind_sway_vertex_offset(vec3 vertex, mat4 model_matrix, float time) {
 	// unnormalized (not divided by the mesh's own bounding height): a taller mesh
 	// naturally accumulates more absolute sway at its tip than a short one, which is
 	// the correct visual whether the current species preset is "grass" or "tree".
-	float height_weight = max(vertex.y, 0.0);
-	return vec3(sway * height_weight, 0.0, sway * height_weight * 0.6);
+	// With authored weights the same metres-scaled quantity comes from R x mesh height,
+	// so a stiff lower trunk (authored R near 0) stays still where the height rule
+	// would already have it moving.
+	float height_weight = use_vertex_wind ? color.r * mesh_height : max(vertex.y, 0.0);
+	vec3 offset = vec3(sway * height_weight, 0.0, sway * height_weight * 0.6);
+	if (use_vertex_wind) {
+		// Flutter: small, quick, per-limb/card phase from B so a canopy shimmers
+		// instead of moving as one block.
+		float flutter = sin(time * flutter_speed + color.b * 6.2831853 + phase) * flutter_amplitude * color.g;
+		offset += vec3(flutter, flutter * 0.4, -flutter * 0.5);
+	}
+	return offset;
+}
+
+
+// Undoes Godot's back-face normal flip on thin double-sided foliage. Every wind
+// variant is cull_disabled, and Godot negates NORMAL on back faces before fragment()
+// runs, so a blade whose authored normal is biased upward, or a leaf card carrying its
+// canopy's outward volume normal, shades from a downward/inward normal whenever its
+// back faces the camera and goes black under a low sun. Treecube's Blender materials
+// apply the identical mix(N, -N, Backfacing) correction, so both tools agree.
+vec3 two_sided_foliage_normal(vec3 normal, bool front_facing) {
+	return front_facing ? normal : -normal;
 }
 
 
