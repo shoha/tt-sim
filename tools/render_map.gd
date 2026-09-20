@@ -8,14 +8,23 @@ extends Node3D
 ##
 ##   godot --path . tools/render_map.tscn -- <map.glb> <out_dir> [sun_az_deg] [cam_az_deg]
 ##
+## With a fifth argument "bench" it keeps running for _BENCH_FRAMES frames after the
+## screenshots and prints the average and worst frame time, so a map's instance
+## budget can be measured on this machine.
+##
 ## Runs as a scene so the project's autoloads exist; a bare --script SceneTree cannot
 ## compile GlbUtils (it references AudioManager and friends at parse time).
 
 const _FRAME_A := 8
 const _FRAME_B := 70
+const _BENCH_FRAMES := 300
 
 var _out_dir := ""
 var _frames := 0
+var _bench := false
+var _bench_total_usec := 0
+var _bench_worst_usec := 0
+var _bench_last_usec := 0
 
 
 func _ready() -> void:
@@ -28,6 +37,7 @@ func _ready() -> void:
 	_out_dir = args[1]
 	var sun_az := float(args[2]) if args.size() > 2 else 120.0
 	var cam_az := float(args[3]) if args.size() > 3 else 300.0
+	_bench = args.size() > 4 and args[4] == "bench"
 	DirAccess.make_dir_recursive_absolute(_out_dir)
 
 	var map := GlbUtils.load_map(map_path, false, 1.0, {})
@@ -80,8 +90,33 @@ func _process(_delta: float) -> void:
 		_shoot("frame_a.png")
 	elif _frames == _FRAME_B:
 		_shoot("frame_b.png")
-		print("DONE")
-		get_tree().quit()
+		if not _bench:
+			print("DONE")
+			get_tree().quit()
+			return
+		_bench_last_usec = Time.get_ticks_usec()
+	elif _bench and _frames > _FRAME_B:
+		var now := Time.get_ticks_usec()
+		var took := now - _bench_last_usec
+		_bench_last_usec = now
+		_bench_total_usec += took
+		_bench_worst_usec = maxi(_bench_worst_usec, took)
+		if _frames >= _FRAME_B + _BENCH_FRAMES:
+			var avg_ms := float(_bench_total_usec) / float(_BENCH_FRAMES) / 1000.0
+			print(
+				(
+					"BENCH frames=%d avg_ms=%.2f worst_ms=%.2f fps=%.1f window=%s"
+					% [
+						_BENCH_FRAMES,
+						avg_ms,
+						float(_bench_worst_usec) / 1000.0,
+						1000.0 / maxf(avg_ms, 0.001),
+						str(get_viewport().size)
+					]
+				)
+			)
+			print("DONE")
+			get_tree().quit()
 
 
 func _shoot(file_name: String) -> void:
