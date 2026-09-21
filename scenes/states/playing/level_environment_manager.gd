@@ -37,6 +37,13 @@ const SUN_SHADOW_MAX_DISTANCE: float = 100.0
 ## unaffected. Checked live on 2026-09-16: 2 degrees reads as a soft flat backdrop.
 const SKY_ORTHO_FOV_DEG: float = 2.0
 
+## Fraction of the map's own extent added on each side of the reflection probe box, so
+## reflections do not cut off exactly at the last mesh.
+const PROBE_MARGIN_FACTOR: float = 0.1
+## Floor on the probe box's height. A perfectly flat map has zero Y extent and a probe
+## with a zero-height box captures nothing at all.
+const PROBE_MIN_HEIGHT: float = 4.0
+
 var _world_environment: WorldEnvironment = null
 var _sun_light: DirectionalLight3D = null
 var _map_environment_config: Dictionary = {}
@@ -46,6 +53,7 @@ var _wind_materials: Dictionary = {}  # category (String) -> Array[ShaderMateria
 var _game_map: Node = null  # GameMap reference (for viewport & lo-fi access)
 var _current_sky_key: String = ""  # sky_preset of the last resolved environment
 var _sun_azimuth_deg: float = 0.0  # azimuth of the last applied SunSettings
+var _reflection_probe: ReflectionProbe = null
 
 
 func setup(game_map: Node) -> void:
@@ -163,6 +171,92 @@ func apply_foliage_overrides(overrides: Dictionary) -> void:
 
 
 # ============================================================================
+# Reflection probe
+# ============================================================================
+
+
+## Union of every MeshInstance3D's world-space AABB under `root`, or a zero-size AABB
+## when the subtree holds no geometry.
+##
+## Scattered foliage (MultiMeshInstance3D) is deliberately NOT included. Headless stores
+## no MultiMesh instance data at all -- verified 2026-09-21: `buffer` is empty and
+## `get_instance_transform()` reads back identity, so both the node's `get_aabb()` and
+## any transform-derived box are unavailable in CI, and bounds built from them would
+## differ silently between headless and a real renderer. Excluding the canopy costs
+## nothing that exists today: geometry outside the probe box simply keeps the sky
+## reflection it already gets, and the terrain -- the surface this is meant to improve --
+## is always inside. This also matches CameraController's own map-bounds walk.
+static func compute_map_bounds(root: Node) -> AABB:
+	var bounds := AABB()
+	var found := false
+	for mesh_inst: MeshInstance3D in _mesh_instances(root):
+		var world_aabb := mesh_inst.global_transform * mesh_inst.mesh.get_aabb()
+		bounds = world_aabb if not found else bounds.merge(world_aabb)
+		found = true
+	return bounds
+
+
+static func _mesh_instances(node: Node, out: Array[MeshInstance3D] = []) -> Array[MeshInstance3D]:
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh:
+		out.append(node)
+	for child in node.get_children():
+		_mesh_instances(child, out)
+	return out
+
+
+## The world-space box a reflection probe should cover for a map with these bounds:
+## the map's own bounds plus a proportional margin, floored to PROBE_MIN_HEIGHT so a
+## flat map still encloses a volume. Kept separate from the node so it can be reasoned
+## about (and tested) without a scene.
+static func compute_probe_box(map_bounds: AABB) -> AABB:
+	var margin := map_bounds.size * PROBE_MARGIN_FACTOR
+	var box := AABB(map_bounds.position - margin, map_bounds.size + margin * 2.0)
+	if box.size.y < PROBE_MIN_HEIGHT:
+		box.position.y -= (PROBE_MIN_HEIGHT - box.size.y) * 0.5
+		box.size.y = PROBE_MIN_HEIGHT
+	return box
+
+
+## Create (or re-size) the level's ReflectionProbe over the currently loaded map.
+##
+## Every environment preset asks for REFLECTION_SOURCE_SKY, so without a probe anything
+## that cannot see open sky gets no environmental reflection at all. A probe is anchored
+## in world space, unlike SDFGI's camera-centred cascades, so it is unaffected by the
+## orthographic camera moving away as camera.size grows.
+##
+## Does nothing when the map has no geometry to bound. Idempotent: re-applying (say on a
+## preset change) re-sizes the existing probe rather than stacking a second one.
+func apply_reflection_probe(world_viewport: Node) -> void:
+	if not is_instance_valid(_game_map) or not ("map_container" in _game_map):
+		return
+	var map_container: Node = _game_map.map_container
+	if map_container == null:
+		return
+	var bounds := compute_map_bounds(map_container)
+	if bounds.size == Vector3.ZERO:
+		return
+	if not is_instance_valid(_reflection_probe):
+		_reflection_probe = ReflectionProbe.new()
+		_reflection_probe.name = "LevelReflectionProbe"
+		world_viewport.add_child(_reflection_probe)
+	configure_reflection_probe(_reflection_probe, bounds)
+
+
+## Size and place a ReflectionProbe over a map with these bounds.
+##
+## UPDATE_ONCE, not UPDATE_ALWAYS: the map is static once loaded, so the cubemap is
+## captured a single time at level load rather than re-rendered per frame -- that is
+## what keeps this affordable. interior stays false so the sky still reaches the
+## capture; it is the main ambient source in most outdoor presets.
+static func configure_reflection_probe(probe: ReflectionProbe, map_bounds: AABB) -> void:
+	var box := compute_probe_box(map_bounds)
+	probe.size = box.size
+	probe.position = box.get_center()
+	probe.update_mode = ReflectionProbe.UPDATE_ONCE
+	probe.interior = false
+
+
+# ============================================================================
 # Environment Application
 # ============================================================================
 
@@ -207,6 +301,10 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 			"graphics", "sdfgi_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"]
 		),
 	)
+
+	# Map geometry is already parented under MapContainer by this point (see
+	# LevelPlayLoader._finalize_map_loading), so its bounds are measurable here.
+	apply_reflection_probe(world_viewport)
 
 	# Create the default sun light if it doesn't exist, then configure it per
 	# level_data.visual_settings.sun (mode, direction, color, energy, shadows).
@@ -396,6 +494,9 @@ func clear() -> void:
 	if is_instance_valid(_sun_light):
 		_sun_light.queue_free()
 		_sun_light = null
+	if is_instance_valid(_reflection_probe):
+		_reflection_probe.queue_free()
+		_reflection_probe = null
 	_map_environment_config = {}
 	_map_sky_resource = null
 	_current_sky_key = ""
