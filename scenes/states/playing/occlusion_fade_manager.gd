@@ -26,6 +26,15 @@ const MAX_TOKENS := 32
 const GLOBAL_TOKEN_COUNT := &"occlusion_token_count"
 ## Per-material sampler uniform the shared token texture is bound to.
 const TOKEN_TEXTURE_UNIFORM := &"occlusion_tokens"
+## Channel masks matching BaseMaterial3D.TextureChannel, dotted against the sampled
+## texel in the shader the way Godot's own material shader does it.
+const CHANNEL_MASKS := {
+	BaseMaterial3D.TEXTURE_CHANNEL_RED: Color(1.0, 0.0, 0.0, 0.0),
+	BaseMaterial3D.TEXTURE_CHANNEL_GREEN: Color(0.0, 1.0, 0.0, 0.0),
+	BaseMaterial3D.TEXTURE_CHANNEL_BLUE: Color(0.0, 0.0, 1.0, 0.0),
+	BaseMaterial3D.TEXTURE_CHANNEL_ALPHA: Color(0.0, 0.0, 0.0, 1.0),
+	BaseMaterial3D.TEXTURE_CHANNEL_GRAYSCALE: Color(0.333333, 0.333333, 0.333333, 0.0),
+}
 
 ## Multiplier applied to the token's collision extent to compute its fade radius.
 ## Higher = geometry fades further away from the token; lower = tighter fade zone.
@@ -226,8 +235,32 @@ func _create_shader_material_from(std_mat: StandardMaterial3D) -> ShaderMaterial
 	else:
 		mat.set_shader_parameter("has_albedo_texture", false)
 
+	# roughness/metallic are multipliers over their texture channel, so the textures
+	# have to come across too -- glTF ORM maps import with the scalars left at 1.0,
+	# and copying those alone renders map geometry fully metallic and fully rough.
 	mat.set_shader_parameter("roughness", std_mat.roughness)
 	mat.set_shader_parameter("metallic", std_mat.metallic)
+	_copy_channel_texture(
+		mat,
+		"roughness",
+		std_mat.get_texture(BaseMaterial3D.TEXTURE_ROUGHNESS),
+		std_mat.roughness_texture_channel
+	)
+	_copy_channel_texture(
+		mat,
+		"metallic",
+		std_mat.get_texture(BaseMaterial3D.TEXTURE_METALLIC),
+		std_mat.metallic_texture_channel
+	)
+
+	var ao_texture := std_mat.get_texture(BaseMaterial3D.TEXTURE_AMBIENT_OCCLUSION)
+	_copy_channel_texture(
+		mat, "ao", ao_texture if std_mat.ao_enabled else null, std_mat.ao_texture_channel
+	)
+	mat.set_shader_parameter("ao_light_affect", std_mat.ao_light_affect)
+	mat.set_shader_parameter("ao_on_uv2", std_mat.ao_on_uv2)
+	mat.set_shader_parameter("uv2_scale", std_mat.uv2_scale)
+	mat.set_shader_parameter("uv2_offset", std_mat.uv2_offset)
 
 	if std_mat.normal_enabled and std_mat.normal_texture:
 		mat.set_shader_parameter("has_normal_texture", true)
@@ -251,6 +284,24 @@ func _create_shader_material_from(std_mat: StandardMaterial3D) -> ShaderMaterial
 	mat.set_shader_parameter("lofi_dither_scale", lofi_dither_scale)
 
 	return mat
+
+
+## Bind one channel-packed data texture (roughness/metallic/ao) and its channel mask
+## onto the shader material, or clear the has_* flag when there is no texture.
+## `prefix` names the uniform family: "<prefix>_texture", "has_<prefix>_texture",
+## "<prefix>_texture_channel".
+func _copy_channel_texture(
+	mat: ShaderMaterial, prefix: String, texture: Texture2D, channel: int
+) -> void:
+	if texture == null:
+		mat.set_shader_parameter("has_%s_texture" % prefix, false)
+		return
+	mat.set_shader_parameter("has_%s_texture" % prefix, true)
+	mat.set_shader_parameter("%s_texture" % prefix, texture)
+	mat.set_shader_parameter(
+		"%s_texture_channel" % prefix,
+		CHANNEL_MASKS.get(channel, CHANNEL_MASKS[BaseMaterial3D.TEXTURE_CHANNEL_RED])
+	)
 
 
 ## Find tree-category MultiMeshInstance3D nodes (built by GlbUtils/WindFoliage, tagged
