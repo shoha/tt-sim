@@ -9,7 +9,8 @@
  *
  * HOW IT WORKS:
  * 1. Replicates the original material's PBR appearance (albedo, roughness,
- *    metallic, normal map, emission, UV transform).
+ *    metallic, ambient occlusion -- including their ORM texture channels --
+ *    normal map, emission, UV transform).
  * 2. In the fragment shader, for each token:
  *    - Transforms the token's world position to view space.
  *    - Checks if this fragment is closer to the camera than the token (Z test).
@@ -70,8 +71,26 @@ group_uniforms material;
 uniform vec4 albedo_color : source_color = vec4(1.0);
 uniform sampler2D albedo_texture : source_color, filter_linear_mipmap, repeat_enable;
 uniform bool has_albedo_texture = false;
+// roughness/metallic are MULTIPLIERS over their texture channel when one is bound,
+// exactly as StandardMaterial3D treats them -- copying the scalar alone while
+// dropping the texture renders ORM map geometry at the scalar (typically 1.0,
+// i.e. fully metallic and fully rough), which is why the textures below exist.
 uniform float roughness : hint_range(0.0, 1.0) = 0.5;
 uniform float metallic : hint_range(0.0, 1.0) = 0.0;
+uniform sampler2D roughness_texture : filter_linear_mipmap, repeat_enable;
+uniform bool has_roughness_texture = false;
+uniform sampler2D metallic_texture : filter_linear_mipmap, repeat_enable;
+uniform bool has_metallic_texture = false;
+uniform sampler2D ao_texture : filter_linear_mipmap, repeat_enable;
+uniform bool has_ao_texture = false;
+uniform bool ao_on_uv2 = false;
+uniform float ao_light_affect : hint_range(0.0, 1.0) = 0.0;
+// Channel masks, dotted against the sampled texel the way BaseMaterial3D does:
+// R=(1,0,0,0) G=(0,1,0,0) B=(0,0,1,0) A=(0,0,0,1) Grayscale=(0.333,0.333,0.333,0).
+// glTF ORM packs Occlusion=R, Roughness=G, Metallic=B into one texture.
+uniform vec4 roughness_texture_channel = vec4(0.0, 1.0, 0.0, 0.0);
+uniform vec4 metallic_texture_channel = vec4(0.0, 0.0, 1.0, 0.0);
+uniform vec4 ao_texture_channel = vec4(1.0, 0.0, 0.0, 0.0);
 uniform sampler2D normal_texture : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform bool has_normal_texture = false;
 uniform float normal_scale : hint_range(-16.0, 16.0) = 1.0;
@@ -79,6 +98,8 @@ uniform vec3 emission : source_color = vec3(0.0);
 uniform float emission_energy = 0.0;
 uniform vec3 uv1_scale = vec3(1.0);
 uniform vec3 uv1_offset = vec3(0.0);
+uniform vec3 uv2_scale = vec3(1.0);
+uniform vec3 uv2_offset = vec3(0.0);
 
 // --- Occlusion fade parameters and dither logic ---
 // Shared with wind_foliage.gdshader -- see occlusion_fade_include.gdshaderinc.
@@ -87,6 +108,7 @@ uniform vec3 uv1_offset = vec3(0.0);
 
 void vertex() {
 	UV = UV * uv1_scale.xy + uv1_offset.xy;
+	UV2 = UV2 * uv2_scale.xy + uv2_offset.xy;
 }
 
 
@@ -97,8 +119,22 @@ void fragment() {
 		albedo *= texture(albedo_texture, UV);
 	}
 	ALBEDO = albedo.rgb;
+
+	// Scalar is a multiplier over the texture channel, matching StandardMaterial3D.
 	ROUGHNESS = roughness;
+	if (has_roughness_texture) {
+		ROUGHNESS *= dot(texture(roughness_texture, UV), roughness_texture_channel);
+	}
 	METALLIC = metallic;
+	if (has_metallic_texture) {
+		METALLIC *= dot(texture(metallic_texture, UV), metallic_texture_channel);
+	}
+
+	if (has_ao_texture) {
+		vec2 ao_uv = ao_on_uv2 ? UV2 : UV;
+		AO = dot(texture(ao_texture, ao_uv), ao_texture_channel);
+		AO_LIGHT_AFFECT = ao_light_affect;
+	}
 
 	if (has_normal_texture) {
 		NORMAL_MAP = texture(normal_texture, UV).rgb;
