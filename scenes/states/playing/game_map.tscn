@@ -47,6 +47,7 @@ physics_object_picking = true
 size = Vector2i(1920, 1080)
 render_target_update_mode = 4
 msaa_3d = 0
+use_debanding = true
 
 [node name="CameraHolder" type="Node3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport" unique_id=85234734]
 
