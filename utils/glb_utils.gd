@@ -33,9 +33,24 @@ const COLLISION_SUFFIXES := [
 	"-convco",  # Convex collision only (short form)
 	"-convcol",  # Convex collision (keeps visual)
 	"-colonly",  # Trimesh collision only (no visual)
-	"-trimesh",  # Trimesh collision
-	"-col",  # Generic collision
+	"-trimesh",  # Trimesh collision (keeps visual)
+	"-col",  # Generic trimesh collision (keeps visual)
 ]
+
+# Suffixes whose visual mesh is discarded once its collision shape has been extracted.
+# Matching Godot's own importer: only the "*only" variants strip the mesh, while
+# -col/-convcol/-trimesh add collision to a mesh that STAYS VISIBLE.
+#
+# Listed explicitly rather than sniffed via suffix.contains("only"), which was wrong in
+# both directions: "-convco" is our own short form for "-convcolonly" and contains no
+# "only", so it was treated as keeps-visual; and -col/-convcol/-trimesh were hidden even
+# though they are the convention's keep-the-mesh variants. That second half silently
+# blanked any map whose terrain object simply happened to be named "<something>-col" --
+# it exported fine and then rendered as nothing.
+const COLLISION_ONLY_SUFFIXES := ["-convcolonly", "-convco", "-colonly"]
+
+# Suffixes that build a convex shape rather than a trimesh one.
+const CONVEX_COLLISION_SUFFIXES := ["-convcolonly", "-convco", "-convcol"]
 
 
 ## Result structure for async loading
@@ -271,10 +286,10 @@ static func _process_single_collision_node(
 	if not mesh_node:
 		return
 
-	var is_only = suffix.contains("only")
+	var is_only = suffix in COLLISION_ONLY_SUFFIXES
 
 	if create_static_bodies and mesh_node.mesh:
-		var is_convex = suffix.contains("conv")
+		var is_convex = suffix in CONVEX_COLLISION_SUFFIXES
 
 		var static_body = StaticBody3D.new()
 		static_body.name = mesh_node.name.replace(suffix, "") + "_collision"
@@ -300,15 +315,15 @@ static func _process_single_collision_node(
 		if is_only:
 			mesh_node.get_parent().remove_child(mesh_node)
 			mesh_node.free()
-		else:
-			mesh_node.visible = false
+		# else: a non-"only" suffix keeps its mesh visible -- the convention means "this
+		# visible mesh also provides collision", not "this is an invisible proxy".
 	else:
 		# For tokens: convert collision meshes to CollisionShape3D nodes
 		# so the token factory can attach them to the RigidBody3D.
 		# Without this, the factory falls back to creating a convex shape from
 		# the visual mesh, which is wrong for skinned meshes (bind-pose vertices).
 		if mesh_node.mesh:
-			var is_convex = suffix.contains("conv")
+			var is_convex = suffix in CONVEX_COLLISION_SUFFIXES
 			var collision_shape = CollisionShape3D.new()
 			collision_shape.name = "CollisionShape3D"
 
@@ -325,8 +340,8 @@ static func _process_single_collision_node(
 		if is_only:
 			mesh_node.get_parent().remove_child(mesh_node)
 			mesh_node.free()
-		else:
-			mesh_node.visible = false
+		# else: a non-"only" suffix keeps its mesh visible -- the convention means "this
+		# visible mesh also provides collision", not "this is an invisible proxy".
 
 
 ## Recursively find nodes that are collision meshes based on naming convention
