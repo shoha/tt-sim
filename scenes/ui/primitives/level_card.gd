@@ -3,15 +3,15 @@ extends Button
 
 ## A saved level as a card: thumbnail, name, and a caption with the token count
 ## and when it was last edited. Press selects, double-click activates, and the
-## overflow menu in the thumbnail corner offers Rename (inline), Duplicate and
-## Delete. Delete is disabled while the card is locked (the level being played).
+## overflow menu in the thumbnail corner offers Edit, Rename (inline), Duplicate
+## and Delete. Delete is disabled while the card is locked (the level being played).
 
 signal selected(level_info: Dictionary)
 signal activated(level_info: Dictionary)
 signal action_requested(level_info: Dictionary, action: StringName)
 signal rename_committed(level_info: Dictionary, new_name: String)
 
-enum { ACTION_RENAME, ACTION_DUPLICATE, ACTION_DELETE }
+enum { ACTION_EDIT, ACTION_RENAME, ACTION_DUPLICATE, ACTION_DELETE }
 
 const THUMB_ASPECT := 16.0 / 9.0
 const INSET := 4.0
@@ -91,6 +91,7 @@ func _init() -> void:
 	thumb_slot.add_child(_menu_button)
 	_menu = PopupMenu.new()
 	_menu.name = "Actions"
+	_menu.add_item("Edit", ACTION_EDIT)
 	_menu.add_item("Rename", ACTION_RENAME)
 	_menu.add_item("Duplicate", ACTION_DUPLICATE)
 	_menu.add_item("Delete", ACTION_DELETE)
@@ -122,8 +123,6 @@ func _init() -> void:
 	gui_input.connect(_on_gui_input)
 	mouse_entered.connect(_on_hover.bind(true))
 	mouse_exited.connect(_on_hover.bind(false))
-	button_down.connect(_on_button_down)
-	button_up.connect(_on_button_up)
 	_update_minimum_size_from_content()
 
 
@@ -226,6 +225,8 @@ func _on_menu_pressed() -> void:
 
 func _on_menu_id_pressed(id: int) -> void:
 	match id:
+		ACTION_EDIT:
+			action_requested.emit(level_info, &"edit")
 		ACTION_RENAME:
 			begin_rename()
 		ACTION_DUPLICATE:
@@ -262,6 +263,13 @@ func _update_thumb_pivot() -> void:
 	_thumb.pivot_offset = _thumb.size * 0.5
 
 
+## The thumbnail zoom is a HOVER affordance only -- pressing deliberately does not
+## touch it. It used to: button_down dipped the scale back to 1.0 over ANIM_PRESS
+## (0.06s) and button_up regrew it over ANIM_HOVER_SOFT_IN (0.24s), each killing the
+## other's tween. A double-click lands well inside 240ms, so the slow regrow was
+## interrupted twice and the thumbnail pumped instead of reading as a press. A single
+## click's real feedback is the selection highlight (Card's pressed style), which is
+## state rather than motion, and Host Game / Play Solo act on that selection.
 func _on_hover(entered: bool) -> void:
 	if _rename.visible:
 		return
@@ -272,16 +280,3 @@ func _on_hover(entered: bool) -> void:
 	_tween = create_tween()
 	_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_tween.tween_property(_thumb, "scale", target, duration)
-
-
-func _on_button_down() -> void:
-	if _tween and _tween.is_valid():
-		_tween.kill()
-	_tween = create_tween()
-	_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	_tween.tween_property(_thumb, "scale", Vector2.ONE, Constants.ANIM_PRESS)
-
-
-func _on_button_up() -> void:
-	if is_hovered():
-		_on_hover(true)

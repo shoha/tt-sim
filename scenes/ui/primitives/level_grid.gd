@@ -8,6 +8,9 @@ extends ScrollContainer
 
 signal selection_changed(level_info: Dictionary)
 signal level_activated(level_info: Dictionary)
+## Opening the level editor is an app-level action, so unlike duplicate/delete this
+## one is forwarded to the owner rather than written through LevelManager here.
+signal level_edit_requested(level_info: Dictionary)
 signal levels_changed
 
 const GAP := 12
@@ -112,6 +115,8 @@ func _on_card_activated(info: Dictionary) -> void:
 
 func _on_card_action(info: Dictionary, action: StringName) -> void:
 	match action:
+		&"edit":
+			level_edit_requested.emit(info)
 		&"duplicate":
 			var new_path := LevelManager.duplicate_level(info)
 			if new_path.is_empty():

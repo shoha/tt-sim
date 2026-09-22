@@ -74,15 +74,20 @@ func _on_level_editor_button_pressed() -> void:
 
 ## Open the level editor overlay.
 ## Called from the button press or externally (e.g. from the edit drawer via Root).
-func open_level_editor() -> void:
+##
+## `level_path` names a saved level to edit, as the title screen's per-card Edit action
+## does. Empty (the default) keeps the original behaviour: edit whichever level is
+## currently playing, if any.
+func open_level_editor(level_path: String = "") -> void:
 	# Only GM can access the level editor
 	if NetworkManager.is_restricted_client():
 		push_warning("AppMenuController: Level editor is only available to the GM")
 		return
 
 	if _level_editor_instance and is_instance_valid(_level_editor_instance):
-		# Sync with active level if one is playing
-		_sync_editor_with_active_level()
+		if not _load_editor_level(level_path):
+			# Sync with active level if one is playing
+			_sync_editor_with_active_level()
 		_level_editor_instance.animate_in()
 		# Re-register in case it was unregistered
 		UIManager.register_overlay(_level_editor_instance)
@@ -102,9 +107,27 @@ func open_level_editor() -> void:
 	# Register with UIManager for ESC handling
 	UIManager.register_overlay(_level_editor_instance)
 
-	# If a level is already playing, load it into the editor
-	_sync_editor_with_active_level()
+	# A named level wins; otherwise fall back to whatever is playing.
+	if not _load_editor_level(level_path):
+		_sync_editor_with_active_level()
 	_level_editor_instance.animate_in()
+
+
+## Load a named saved level into the editor. Returns false when there is nothing to
+## load (no path given, or the level could not be read) so the caller can fall back to
+## the active-level sync rather than opening the editor on nothing.
+func _load_editor_level(level_path: String) -> bool:
+	if level_path.is_empty() or not _level_editor_instance:
+		return false
+	# notify = false: LevelManager.level_loaded is what Root._on_level_loaded turns into
+	# change_state(State.PLAYING). Editing a level is not playing it, so this load must
+	# stay silent or the editor opens with the level starting up underneath it.
+	var level_data := LevelManager.load_level(level_path, false)
+	if level_data == null:
+		UIManager.show_error("Could not open that level for editing")
+		return false
+	_level_editor_instance.set_level(level_data)
+	return true
 
 
 func _sync_editor_with_active_level() -> void:

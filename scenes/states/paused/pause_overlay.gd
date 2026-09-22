@@ -93,9 +93,10 @@ func _on_resume_pressed() -> void:
 
 
 func _on_edit_level_pressed() -> void:
-	# Resume first, then open the editor via EventBus
+	# Resume first, then open the editor via EventBus. Empty path: edit the level
+	# that is currently playing, which is the only one reachable from the pause menu.
 	resume_requested.emit()
-	EventBus.open_editor_requested.emit()
+	EventBus.open_editor_requested.emit("")
 
 
 func _on_change_level_pressed() -> void:

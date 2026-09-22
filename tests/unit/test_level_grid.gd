@@ -182,3 +182,14 @@ func _write_real_level(folder: String, name: String) -> void:
 	var map := FileAccess.open(LevelManager.map_path(folder), FileAccess.WRITE)
 	map.store_string("glb")
 	map.close()
+
+
+## Duplicate and delete are written through LevelManager here, but opening the level
+## editor is an app-level action, so the grid forwards it rather than handling it.
+func test_edit_is_forwarded_rather_than_handled() -> void:
+	var grid := _grid()
+	watch_signals(grid)
+
+	grid._on_card_action(_levels[1], &"edit")
+
+	assert_signal_emitted_with_parameters(grid, "level_edit_requested", [_levels[1]])

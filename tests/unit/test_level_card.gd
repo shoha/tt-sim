@@ -164,3 +164,39 @@ func _double_click() -> InputEventMouseButton:
 	event.pressed = true
 	event.double_click = true
 	return event
+
+
+## A single click selects (Host Game / Play Solo read that selection), so the card must
+## keep reacting to presses as state -- but not as motion. The thumbnail's zoom is a
+## hover affordance; driving it from press/release too made every press kill the hover
+## tween, and because the dip ran at ANIM_PRESS (0.06s) while the regrow ran at
+## ANIM_HOVER_SOFT_IN (0.24s), a double-click interrupted the slow regrow twice and
+## pumped the thumbnail. Hover zoom must now hold steady across clicks.
+func test_pressing_does_not_disturb_the_hover_zoom() -> void:
+	var card := _card(_info())
+	card._on_hover(true)
+	await wait_seconds(Constants.ANIM_HOVER_SOFT_IN + 0.1)
+	var hovered_scale: Vector2 = card._thumb.scale
+
+	card.button_down.emit()
+	card.button_up.emit()
+	await wait_frames(2)
+
+	assert_almost_eq(card._thumb.scale.x, hovered_scale.x, 0.001)
+	assert_almost_eq(card._thumb.scale.y, hovered_scale.y, 0.001)
+
+
+func test_edit_is_the_first_overflow_action() -> void:
+	var card := _card(_info())
+
+	assert_eq(card._menu.get_item_index(LevelCard.ACTION_EDIT), 0)
+	assert_eq(card._menu.get_item_text(0), "Edit")
+
+
+func test_edit_requests_the_edit_action() -> void:
+	var card := _card(_info())
+	watch_signals(card)
+
+	card._on_menu_id_pressed(LevelCard.ACTION_EDIT)
+
+	assert_signal_emitted_with_parameters(card, "action_requested", [card.level_info, &"edit"])
