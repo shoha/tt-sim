@@ -114,6 +114,7 @@ func _build_right_zone() -> void:
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	grid.selection_changed.connect(_on_selection_changed)
 	grid.level_activated.connect(_on_level_activated)
+	grid.level_edit_requested.connect(_on_level_edit_requested)
 	grid.levels_changed.connect(_refresh_actions)
 	_right.add_child(grid)
 
@@ -193,7 +194,13 @@ func _on_play_pressed() -> void:
 
 
 func _on_editor_pressed() -> void:
-	EventBus.open_editor_requested.emit()
+	# The Level Editor button opens the editor with no particular level chosen; the
+	# per-card Edit action is what names one.
+	EventBus.open_editor_requested.emit("")
+
+
+func _on_level_edit_requested(info: Dictionary) -> void:
+	EventBus.open_editor_requested.emit(String(info.get("path", "")))
 
 
 func _on_settings_pressed() -> void:

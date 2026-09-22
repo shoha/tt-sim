@@ -26,5 +26,7 @@ signal state_changed(old_state: int, new_state: int)
 # Level lifecycle
 # ---------------------------------------------------------------------------
 
-## Emitted when any system wants to open the level editor.
-signal open_editor_requested
+## Emitted when any system wants to open the level editor. `level_path` names a saved
+## level to edit (the title screen's per-card Edit action); "" means edit whichever
+## level is currently playing, if any.
+signal open_editor_requested(level_path: String)

@@ -138,10 +138,10 @@ func _setup_app_menu() -> void:
 		app_menu_controller.play_level_requested.connect(_on_play_level_requested)
 
 
-func _on_open_editor_requested() -> void:
+func _on_open_editor_requested(level_path: String = "") -> void:
 	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
 	if app_ctrl:
-		app_ctrl.open_level_editor()
+		app_ctrl.open_level_editor(level_path)
 
 
 func _on_play_level_requested(level_data: LevelData) -> void:
