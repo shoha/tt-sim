@@ -42,6 +42,31 @@ const SKY_ORTHO_FOV_DEG: float = 2.0
 const PROBE_MARGIN_FACTOR: float = 0.1
 ## Floor on the probe box's height. A perfectly flat map has zero Y extent and a probe
 ## with a zero-height box captures nothing at all.
+##
+## On the deciduous map this floor is what actually sets the height: the terrain's own
+## relief is under ~3.3 units across 50x50, so the box comes out 60 x 4 x 60 -- the
+## terrain sits inside it, the canopy does not. That is the conservative choice, kept
+## deliberately. The alternatives were measured on 2026-09-21 (deciduous, 1920x1080,
+## vsync off, sun off, camera at the default pose); don't re-derive them:
+##
+## - No probe at all: 206/206/204 fps.
+## - This shallow box:  196/196/200 fps.
+## - Canopy-height box (60 x 30 x 60): 195 fps.
+##
+## So the ~4% is the per-pixel probe lookup, NOT the volume -- box height is very nearly
+## free. The reason to stay shallow is visual, not performance: a canopy-height box pulls
+## the foliage into the probe's influence and darkens it substantially, because the probe
+## captures the dim forest interior rather than the bright sky. That reads as a plausible
+## forest but it is a style change, not a polish, so it wants a human decision rather than
+## a magic number here. Raising this constant is all it takes if that look is wanted.
+##
+## If the probe ever reads too flat, the step up is VoxelGI, not SDFGI: SDFGI centres its
+## cascades on the camera, and _update_camera_offset() drives the camera away in
+## proportion to camera.size, which is exactly what made it cascade-band across the ground
+## (see docs and the sdfgi_enabled default in Constants). VoxelGI is world-anchored like
+## this probe and supports dynamic lights, which matters because the sun is user-draggable
+## at runtime -- LightmapGI cannot follow that, and cannot bake user-supplied GLBs loaded
+## from user:// anyway. VoxelGI's cost here is unmeasured.
 const PROBE_MIN_HEIGHT: float = 4.0
 
 var _world_environment: WorldEnvironment = null
