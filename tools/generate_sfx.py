@@ -184,6 +184,30 @@ def verify_palette() -> list:
     return failures
 
 
+def install(assets_root: str, seed: int) -> tuple:
+    """Write variant 0 of every sound into assets/audio/ and drop stale .ogg files.
+
+    _load_sounds() in autoloads/audio_manager.gd probes .wav before .ogg, so a
+    surviving .ogg for the same sound name would never be loaded again.
+    """
+    written = []
+    removed = []
+    for name, spec in sfx_spec.SPECS.items():
+        bus_dir = os.path.join(assets_root, "assets", "audio", spec.bus)
+        os.makedirs(bus_dir, exist_ok=True)
+
+        wav_path = os.path.join(bus_dir, "%s.wav" % name)
+        render_wav(wav_path, render_spec(spec, seed=seed))
+        written.append(wav_path)
+
+        for stale in ("%s.ogg" % name, "%s.ogg.import" % name):
+            stale_path = os.path.join(bus_dir, stale)
+            if os.path.exists(stale_path):
+                os.remove(stale_path)
+                removed.append(stale_path)
+    return written, removed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Generate the warm synthesized SFX palette."
@@ -232,6 +256,14 @@ def main(argv: list = None) -> int:
                 print("  " + failure)
             return 1
         print("Palette verification passed: %d sounds." % len(sfx_spec.SPECS))
+        return 0
+
+    if args.install:
+        written, removed = install(args.assets_root, args.seed)
+        print("Installed %d file(s) into %s" % (len(written), args.assets_root))
+        for path in removed:
+            print("  removed superseded %s" % os.path.relpath(path, args.assets_root))
+        print("Next: godot --headless --import --path .")
         return 0
 
     written = generate(args.out, args.only, args.variants, args.seed)
