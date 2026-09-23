@@ -29,6 +29,46 @@ class TestBuildSheet(unittest.TestCase):
         samples, _ = cli.build_sheet("sfx", seed=0)
         self.assertLessEqual(max(abs(v) for v in samples), 1.0)
 
+    def test_printed_order_matches_the_audio(self):
+        # The human judges this palette by listening to a sheet while reading
+        # its printed order. If the two ever drift apart, the judgement is made
+        # on the wrong evidence and nothing else in this suite would notice.
+        for bus in ("ui", "sfx"):
+            samples, names = cli.build_sheet(bus, seed=0)
+            envelope = m.amplitude_envelope(samples)
+            peak = max(envelope)
+            gap = cli.ms_to_samples(cli.SHEET_GAP_MS)
+            cursor = 0
+            for index, name in enumerate(names):
+                if index > 0:
+                    # Measure the middle of the gap. The sliding RMS window
+                    # still holds the previous sound's tail at the gap's
+                    # leading edge, so the edges are not a fair test of silence.
+                    low = cursor + gap // 10
+                    high = cursor + (gap * 9) // 10
+                    self.assertLess(
+                        max(envelope[low:high]),
+                        0.001 * peak,
+                        "%s: gap before %s is not silent" % (bus, name),
+                    )
+                    cursor += gap
+                length = cli.ms_to_samples(sfx_spec.SPECS[name].total_ms)
+                region = envelope[cursor:cursor + length]
+                self.assertTrue(
+                    region, "%s: %s runs past the end of the sheet" % (bus, name)
+                )
+                self.assertGreater(
+                    max(region),
+                    0.05 * peak,
+                    "%s: %s region is silent" % (bus, name),
+                )
+                cursor += length
+            self.assertLess(
+                abs(len(samples) - cursor),
+                3,
+                "%s: sheet length does not match the sum of its parts" % bus,
+            )
+
 
 class TestWriteSheets(unittest.TestCase):
     def test_writes_one_sheet_per_bus(self):
