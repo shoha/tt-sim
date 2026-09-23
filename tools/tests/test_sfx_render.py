@@ -65,6 +65,31 @@ class TestRenderedPaletteMeetsDesignTargets(unittest.TestCase):
         for name, samples in self.rendered.items():
             self.assertLess(abs(samples[-1]), 1e-3, name)
 
+    def test_splash_spatter_decays(self):
+        # A splash is impact, gap, then the displaced water coming back down -
+        # and that spatter must thin out as it falls, not hold a constant level.
+        for name in ("splash_enter", "splash_exit"):
+            spec = sfx_spec.SPECS[name]
+            envelope_values = m.amplitude_envelope(r.render_spec(spec))
+            start = int(spec.noise_delay_ms * 44.1)
+            spatter = envelope_values[start:]
+            third = len(spatter) // 3
+            early = max(spatter[:third])
+            late = max(spatter[2 * third:])
+            self.assertLess(late, 0.6 * early, name)
+
+    def test_new_timeline_fields_default_to_the_original_shape(self):
+        # Every sound that does not set the new fields must be unaffected by
+        # them: tone_ms 0 means a full-length tone, noise_delay_ms 0 means the
+        # noise starts with the tone.
+        for name, spec in sfx_spec.SPECS.items():
+            if name in ("splash_enter", "splash_exit"):
+                continue
+            self.assertEqual(spec.tone_ms, 0.0, name)
+            self.assertEqual(spec.noise_delay_ms, 0.0, name)
+            self.assertEqual(spec.noise_attack_ms, 0.0, name)
+            self.assertEqual(spec.noise_decay_ms, 0.0, name)
+
 
 class TestDeterminism(unittest.TestCase):
     def test_same_seed_gives_identical_output(self):

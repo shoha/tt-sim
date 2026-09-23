@@ -47,19 +47,22 @@ class TestPaletteCoverage(unittest.TestCase):
 
 class TestPaletteRules(unittest.TestCase):
     def test_attacks_are_bimodal(self):
-        # Matching the reference pack: quick interaction sounds onset almost
-        # instantly, deliberate ones swell. A single global minimum was the
-        # original mistake - it made every small sound feel sluggish.
+        # Quick interaction sounds onset almost instantly; deliberate ones swell.
+        # The two chords are exempt: a chord's perceived onset is set by how its
+        # notes beat against each other, not by its declared attack, so they sit
+        # between the two groups by construction.
         quick = {
-            "hover", "click", "tick", "token_hover", "error",
+            "hover", "click", "tick", "token_hover",
             "token_drop", "token_pickup", "splash_enter", "splash_exit",
         }
         for name in quick:
             self.assertGreaterEqual(sfx_spec.SPECS[name].attack_ms, 1.5, name)
             self.assertLessEqual(sfx_spec.SPECS[name].attack_ms, 10.0, name)
-        deliberate = {"confirm", "cancel", "success", "leave_game", "open", "close"}
+        deliberate = {"confirm", "cancel", "leave_game", "open", "close"}
         for name in deliberate:
             self.assertGreaterEqual(sfx_spec.SPECS[name].attack_ms, 40.0, name)
+        for name in ("error", "success"):
+            self.assertTrue(sfx_spec.SPECS[name].chord, name)
 
     def test_every_note_is_in_the_pentatonic_scale(self):
         for name, spec in sfx_spec.SPECS.items():
@@ -104,7 +107,10 @@ class TestPaletteRules(unittest.TestCase):
             self.assertLessEqual(len(spec.notes), 1, name)
 
     def test_total_ms_accounts_for_every_note(self):
-        spec = sfx_spec.SPECS["success"]
+        # "success" is now a chord (total_ms collapses to note_ms), so this
+        # checks the plain multi-note formula against an ordinary, single-note
+        # non-chord sound instead.
+        spec = sfx_spec.SPECS["click"]
         self.assertAlmostEqual(
             spec.total_ms, len(spec.notes) * (spec.note_ms + spec.gap_ms), places=6
         )
