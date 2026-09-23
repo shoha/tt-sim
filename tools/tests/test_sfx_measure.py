@@ -66,9 +66,11 @@ class TestHighBandRatio(unittest.TestCase):
         self.assertLess(m.high_band_ratio_db(signal), -20.0)
 
     def test_bright_tone_is_above_threshold(self):
-        # A 9 kHz sine measures -7.5 dB through the two-pole high-pass. The
-        # warmest palette sound measures -67 dB and the least warm -16.6 dB,
-        # so -10 dB sits clear of both sides.
+        # A 9 kHz sine measures -7.5 dB through the two-pole high-pass.
+        # For scale: the warmest pure tone in the palette's range (A2, 110 Hz)
+        # measures -67 dB, and the least warm sound once rendered whole
+        # (token_whoosh, 90 percent noise) measures -16.6 dB. -10 dB sits
+        # clear of both sides.
         signal = s.tone(9000.0, (1.0,), 44100)
         self.assertGreater(m.high_band_ratio_db(signal), -10.0)
 
