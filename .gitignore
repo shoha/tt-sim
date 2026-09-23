@@ -33,3 +33,7 @@ addons/godotsteam/**/~*
 # Validation bridge MCP server (build artifacts + deps)
 tools/mcp/node_modules/
 tools/mcp/dist/
+
+# Python bytecode from the SFX generation tools
+__pycache__/
+*.pyc
