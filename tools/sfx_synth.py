@@ -145,3 +145,45 @@ def read_wav(path) -> tuple[list[float], int]:
             for i in range(0, len(values), channels)
         ]
     return values, rate
+
+
+def one_pole_lp(
+    samples: Sequence[float], cutoff_hz: float, sample_rate: int = SAMPLE_RATE
+) -> list[float]:
+    """Single-pole low-pass. Rolls off brightness without ringing."""
+    dt = 1.0 / sample_rate
+    rc = 1.0 / (2.0 * math.pi * max(1.0, cutoff_hz))
+    alpha = dt / (rc + dt)
+    out = []
+    y = 0.0
+    for value in samples:
+        y += alpha * (value - y)
+        out.append(y)
+    return out
+
+
+def one_pole_hp(
+    samples: Sequence[float], cutoff_hz: float, sample_rate: int = SAMPLE_RATE
+) -> list[float]:
+    """Single-pole high-pass. Used for measuring high-band energy, not for tone."""
+    dt = 1.0 / sample_rate
+    rc = 1.0 / (2.0 * math.pi * max(1.0, cutoff_hz))
+    alpha = rc / (rc + dt)
+    out = []
+    previous_input = 0.0
+    y = 0.0
+    for value in samples:
+        y = alpha * (y + value - previous_input)
+        previous_input = value
+        out.append(y)
+    return out
+
+
+def noise_bed(n: int, seed: int, cutoff_hz: float = 2000.0) -> list[float]:
+    """Low-passed white noise, deterministic for a given seed.
+
+    Provides the breath and material texture that a pure sine stack lacks.
+    """
+    generator = random.Random(seed)
+    raw = [generator.uniform(-1.0, 1.0) for _ in range(n)]
+    return one_pole_lp(raw, cutoff_hz)
