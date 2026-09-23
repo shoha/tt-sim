@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -51,8 +52,15 @@ class TestInstall(unittest.TestCase):
             stray = os.path.join(tmp, "assets", "audio", "ui", "README.md")
             with open(stray, "w", encoding="utf-8") as handle:
                 handle.write("keep me")
+            for stray_name in ("unrelated.ogg", "unrelated.ogg.import"):
+                stray_path = os.path.join(tmp, "assets", "audio", "ui", stray_name)
+                with open(stray_path, "w", encoding="utf-8") as handle:
+                    handle.write("keep me")
             cli.install(tmp, seed=0)
             self.assertTrue(os.path.isfile(stray))
+            for stray_name in ("unrelated.ogg", "unrelated.ogg.import"):
+                stray_path = os.path.join(tmp, "assets", "audio", "ui", stray_name)
+                self.assertTrue(os.path.isfile(stray_path))
 
     def test_creates_missing_bus_directories(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -68,6 +76,34 @@ class TestInstall(unittest.TestCase):
                 name = os.path.splitext(os.path.basename(path))[0]
                 samples, _rate = read_wav(path)
                 self.assertEqual(cli.verify_samples(name, samples), [], name)
+
+    def test_a_failed_render_leaves_no_partial_wav(self):
+        # audio_manager.gd probes .wav before .ogg, so a truncated .wav would
+        # silently shadow a working .ogg. A failed install must leave nothing.
+        def half_write(path, samples, sample_rate=44100):
+            with open(path, "wb") as handle:
+                handle.write(b"RIFF truncated")
+            raise IOError("disk full")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            _make_fake_assets(tmp)
+            ogg = os.path.join(tmp, "assets", "audio", "ui", "click.ogg")
+            with open(ogg, "w", encoding="utf-8") as handle:
+                handle.write("still good")
+
+            with mock.patch.object(cli, "render_wav", side_effect=half_write):
+                with self.assertRaises(IOError):
+                    cli.install(tmp, seed=0)
+
+            for bus in ("ui", "sfx"):
+                bus_dir = os.path.join(tmp, "assets", "audio", bus)
+                leftovers = [
+                    name
+                    for name in os.listdir(bus_dir)
+                    if name.endswith(".wav") or name.endswith(".tmp")
+                ]
+                self.assertEqual(leftovers, [], bus)
+            self.assertTrue(os.path.exists(ogg))
 
 
 class TestInstallWiring(unittest.TestCase):
