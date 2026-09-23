@@ -1,9 +1,11 @@
 """Tests for the --verify gate."""
 
+import dataclasses
 import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -39,6 +41,15 @@ class TestVerifyExitCode(unittest.TestCase):
     def test_verify_returns_zero_when_the_palette_is_clean(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(cli.main(["--out", tmp, "--verify"]), 0)
+
+    def test_verify_returns_one_when_a_sound_fails(self):
+        # The exit code is the whole point of --verify. Corrupt one sound's
+        # declared attack and confirm the gate actually reports failure, rather
+        # than mocking verify_palette, so this exercises the real path.
+        sharp = dataclasses.replace(sfx_spec.SPECS["click"], attack_ms=0.1)
+        with mock.patch.dict(sfx_spec.SPECS, {"click": sharp}):
+            with tempfile.TemporaryDirectory() as tmp:
+                self.assertEqual(cli.main(["--out", tmp, "--verify"]), 1)
 
 
 if __name__ == "__main__":
