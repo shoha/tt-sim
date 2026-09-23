@@ -12,6 +12,8 @@ Usage:
 
 import argparse
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -19,9 +21,22 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sfx_spec
 from sfx_render import render_spec, variant_spec
-from sfx_synth import render_wav
+from sfx_synth import ms_to_samples, render_wav
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+SHEET_GAP_MS = 600.0
+
+# Approximates default_bus_layout.tres so auditioning matches what the game
+# will actually play. ffmpeg has no true reverb, so aecho stands in for the
+# small-room AudioEffectReverb on the SFX bus.
+#
+# These cutoffs MIRROR default_bus_layout.tres. If you change a bus effect
+# there, change it here too, or the audition preview stops predicting the game.
+BUS_CHAINS = {
+    "ui": "lowpass=f=7000",
+    "sfx": "lowpass=f=7000,aecho=0.9:0.85:20|32:0.12|0.08",
+}
 
 
 def default_out_dir() -> str:
@@ -57,6 +72,61 @@ def generate(out_dir: str, only: list, variants: int, seed: int) -> list:
             path = os.path.join(out_dir, variant_filename(name, index))
             render_wav(path, samples)
             written.append(path)
+    return written
+
+
+def build_sheet(bus: str, seed: int) -> tuple:
+    """Concatenate every sound on a bus, separated by silence.
+
+    Returns the samples and the sound names in the order they appear, so the
+    listener knows what they are hearing.
+    """
+    names = sorted(name for name, spec in sfx_spec.SPECS.items() if spec.bus == bus)
+    gap = [0.0] * ms_to_samples(SHEET_GAP_MS)
+    samples = []
+    for index, name in enumerate(names):
+        if index > 0:
+            samples.extend(gap)
+        samples.extend(render_spec(sfx_spec.SPECS[name], seed=seed))
+    return samples, names
+
+
+def apply_bus_chain(src_path: str, dst_path: str, bus: str) -> bool:
+    """Filter a sheet through an approximation of the game's bus effects."""
+    if shutil.which("ffmpeg") is None:
+        return False
+    result = subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-y",
+            "-i", src_path,
+            "-af", BUS_CHAINS[bus],
+            dst_path,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print("ffmpeg failed for %s: %s" % (bus, result.stderr.strip()))
+        return False
+    return True
+
+
+def write_sheets(out_dir: str, seed: int, as_bus: bool) -> list:
+    """Write one audition sheet per bus. Returns the paths written."""
+    os.makedirs(out_dir, exist_ok=True)
+    written = []
+    for bus in ("sfx", "ui"):
+        samples, names = build_sheet(bus, seed)
+        path = os.path.join(out_dir, "sheet_%s.wav" % bus)
+        render_wav(path, samples)
+        written.append(path)
+        print("sheet_%s.wav order: %s" % (bus, ", ".join(names)))
+        if as_bus:
+            bus_path = os.path.join(out_dir, "sheet_%s_bus.wav" % bus)
+            if apply_bus_chain(path, bus_path, bus):
+                written.append(bus_path)
+            else:
+                print("Skipped --as-bus for %s (ffmpeg unavailable)" % bus)
     return written
 
 
@@ -101,6 +171,9 @@ def main(argv: list = None) -> int:
     args = build_parser().parse_args(argv)
     written = generate(args.out, args.only, args.variants, args.seed)
     print("Wrote %d file(s) to %s" % (len(written), args.out))
+    if args.sheet:
+        sheets = write_sheets(args.out, args.seed, args.as_bus)
+        print("Wrote %d sheet(s) to %s" % (len(sheets), args.out))
     return 0
 
 
