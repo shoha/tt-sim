@@ -61,24 +61,45 @@ def render_spec(spec: SoundSpec, seed: int = 0) -> list[float]:
         names = spec.notes or ("",)
         stride = note_samples + gap_samples
         body = [0.0] * (len(names) * stride)
-        shape = envelope(note_samples, attack, decay_tau, release)
+        tone_samples = (
+            ms_to_samples(spec.tone_ms) if spec.tone_ms > 0.0 else note_samples
+        )
+        tone_samples = max(1, min(tone_samples, note_samples))
+        shape = envelope(tone_samples, attack, decay_tau, release)
         for index, name in enumerate(names):
             if not name:
                 continue
             voice = tone(
-                note_to_freq(name), spec.harmonics, note_samples, spec.sweep_semitones
+                note_to_freq(name), spec.harmonics, tone_samples, spec.sweep_semitones
             )
             start = index * stride
-            for offset in range(note_samples):
+            for offset in range(tone_samples):
                 body[start + offset] += voice[offset] * shape[offset]
 
     if spec.noise_mix > 0.0:
-        bed = noise_bed(len(body), seed, spec.noise_cutoff_hz)
-        bed_shape = envelope(len(body), attack, decay_tau * 2.0, release)
-        body = [
-            (1.0 - spec.noise_mix) * tone_value + spec.noise_mix * noise * shaping
-            for tone_value, noise, shaping in zip(body, bed, bed_shape)
-        ]
+        delay = ms_to_samples(spec.noise_delay_ms)
+        noise_length = max(1, len(body) - delay)
+        bed = noise_bed(noise_length, seed, spec.noise_cutoff_hz)
+        noise_attack = (
+            ms_to_samples(spec.noise_attack_ms)
+            if spec.noise_attack_ms > 0.0
+            else attack
+        )
+        noise_tau = (
+            spec.noise_decay_ms * SAMPLE_RATE / 1000.0
+            if spec.noise_decay_ms > 0.0
+            else decay_tau * 2.0
+        )
+        bed_shape = envelope(noise_length, noise_attack, max(1.0, noise_tau), release)
+        mixed = list(body)
+        for index in range(noise_length):
+            position = delay + index
+            if position < len(mixed):
+                mixed[position] = (
+                    (1.0 - spec.noise_mix) * mixed[position]
+                    + spec.noise_mix * bed[index] * bed_shape[index]
+                )
+        body = mixed
 
     body = one_pole_lp(body, spec.lp_cutoff_hz)
     return peak_normalize(body, PEAK_TARGET_DBFS)
