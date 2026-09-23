@@ -124,7 +124,7 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.folder }}/
-          retention-days: 14
+          retention-days: 1
 
   sign-windows:
     name: Sign Windows executable
@@ -157,7 +157,7 @@ jobs:
         with:
           name: TTSim-Windows-Signed
           path: artifacts/windows/
-          retention-days: 14
+          retention-days: 1
 
   sign-macos:
     name: Sign and Notarize macOS
@@ -298,7 +298,7 @@ jobs:
         with:
           name: TTSim-macOS-Signed
           path: artifacts/macos/TTSim.zip
-          retention-days: 14
+          retention-days: 1
 
   release:
     name: Create Release
@@ -442,3 +442,27 @@ jobs:
           depot2Path: depot-macos
           depot3Path: depot-linux
           releaseBranch: testing
+
+  # Artifacts only hand builds between jobs of this run; the release and Steam
+  # depots are the durable copies. Delete them once everything succeeded so they
+  # do not count against Actions storage. Failed runs keep theirs (1-day
+  # retention) so "Re-run failed jobs" still works.
+  cleanup-artifacts:
+    name: Delete run artifacts
+    needs: [release, deploy-steam]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
+            -q '.artifacts[] | "\(.id) \(.name)"' |
+          while read -r id name; do
+            echo "Deleting $name ($id)"
+            gh api -X DELETE "repos/$REPO/actions/artifacts/$id"
+          done
