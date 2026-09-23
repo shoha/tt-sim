@@ -2,6 +2,7 @@
 
 import math
 import os
+import random
 import sys
 import unittest
 
@@ -14,6 +15,10 @@ def _rms(samples):
     if not samples:
         return 0.0
     return math.sqrt(sum(v * v for v in samples) / len(samples))
+
+
+def _high_band_ratio(samples, cutoff_hz=8000.0):
+    return _rms(s.one_pole_hp(samples, cutoff_hz)) / _rms(samples)
 
 
 class TestOnePoleLowPass(unittest.TestCase):
@@ -57,9 +62,15 @@ class TestNoiseBed(unittest.TestCase):
         self.assertNotEqual(s.noise_bed(500, 7), s.noise_bed(500, 8))
 
     def test_is_darker_than_white_noise(self):
+        rng = random.Random(1)
+        white = [rng.uniform(-1.0, 1.0) for _ in range(44100)]
         bed = s.noise_bed(44100, 1, cutoff_hz=2000.0)
-        high = s.one_pole_hp(bed, 8000.0)
-        self.assertLess(_rms(high), 0.1 * _rms(bed))
+        self.assertLess(_high_band_ratio(bed), _high_band_ratio(white))
+
+    def test_lower_cutoff_gives_a_darker_bed(self):
+        dark = s.noise_bed(44100, 1, cutoff_hz=500.0)
+        bright = s.noise_bed(44100, 1, cutoff_hz=8000.0)
+        self.assertLess(_high_band_ratio(dark), 0.5 * _high_band_ratio(bright))
 
     def test_length_matches_request(self):
         self.assertEqual(len(s.noise_bed(321, 3)), 321)
