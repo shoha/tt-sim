@@ -72,15 +72,25 @@ class TestPaletteRules(unittest.TestCase):
             self.assertLessEqual(spec.noise_mix, 1.0, name)
 
     def test_open_and_close_are_mirrors(self):
-        self.assertEqual(
-            sfx_spec.SPECS["open"].notes, tuple(reversed(sfx_spec.SPECS["close"].notes))
-        )
+        opened = sfx_spec.SPECS["open"]
+        closed = sfx_spec.SPECS["close"]
+        self.assertEqual(opened.sweep_semitones, -closed.sweep_semitones)
+        self.assertGreater(opened.sweep_semitones, 0.0)
 
     def test_splash_pair_are_mirrors(self):
-        self.assertEqual(
-            sfx_spec.SPECS["splash_enter"].notes,
-            tuple(reversed(sfx_spec.SPECS["splash_exit"].notes)),
-        )
+        enter = sfx_spec.SPECS["splash_enter"]
+        exit_spec = sfx_spec.SPECS["splash_exit"]
+        self.assertEqual(enter.sweep_semitones, -exit_spec.sweep_semitones)
+        self.assertGreater(enter.sweep_semitones, 0.0)
+
+    def test_no_sound_plays_a_note_sequence(self):
+        # Note sequences read as little tunes rather than interface feedback.
+        # Motion belongs in a pitch glide within one struck note. A chord is
+        # one event played at once, so it is exempt.
+        for name, spec in sfx_spec.SPECS.items():
+            if spec.chord:
+                continue
+            self.assertLessEqual(len(spec.notes), 1, name)
 
     def test_total_ms_accounts_for_every_note(self):
         spec = sfx_spec.SPECS["success"]
