@@ -78,19 +78,21 @@ Some buttons play specialized sounds instead of the generic click:
 
 ## UI Sounds (Bus: UI)
 
-These are played via `AudioManager.play_<name>()` helper methods. Default pitch variation: ±8%.
+These are played via `AudioManager.play_<name>()` helper methods. Default pitch variation is
+±3% (`play_ui_sound`'s default `pitch_variation` argument). `tick` overrides it to ±12%;
+`transition` and `leave_game` override it to 0 (no variation).
 
 | File                | AudioManager Method    | Volume  | Description                       | Wiring              |
 |---------------------|------------------------|---------|-----------------------------------|----------------------|
 | `click.wav`         | `play_click()`         | 0 dB    | Button press / tap                | **Auto** (all buttons) |
-| `hover.ogg`         | `play_hover()`         | -6 dB   | Button hover / focus              | **Auto** (all buttons) |
-| `open.ogg`          | `play_open()`          | 0 dB    | Menu or panel opening             | **Auto** (panels)    |
-| `close.ogg`         | `play_close()`         | 0 dB    | Menu or panel closing             | **Auto** (panels)    |
+| `hover.wav`         | `play_hover()`         | -6 dB   | Button hover / focus              | **Auto** (all buttons) |
+| `open.wav`          | `play_open()`          | 0 dB    | Menu or panel opening             | **Auto** (panels)    |
+| `close.wav`         | `play_close()`         | 0 dB    | Menu or panel closing             | **Auto** (panels)    |
 | `success.wav`       | `play_success()`       | 0 dB    | Success feedback (e.g. level win) | Manual               |
 | `error.wav`         | `play_error()`         | 0 dB    | Error feedback                    | Manual               |
-| `confirm.ogg`       | `play_confirm()`       | 0 dB    | Confirmation dialog accept        | **Wired**            |
+| `confirm.wav`       | `play_confirm()`       | 0 dB    | Confirmation dialog accept        | **Wired**            |
 | `cancel.wav`        | `play_cancel()`        | 0 dB    | Cancel / back action              | **Wired**            |
-| `tick.ogg`          | `play_tick()`          | -8 dB   | Slider / toggle / checkbox tick   | **Auto** (toggles)   |
+| `tick.wav`          | `play_tick()`          | -8 dB   | Slider / toggle / checkbox tick   | **Auto** (toggles)   |
 | `transition.wav`    | `play_transition()`    | -3 dB   | Scene / state transition whoosh   | **Wired**            |
 | `leave_game.wav`    | `play_leave_game()`    | 0 dB    | Returning to title from a game    | **Wired**            |
 
@@ -98,15 +100,19 @@ These are played via `AudioManager.play_<name>()` helper methods. Default pitch 
 
 ## SFX Sounds (Bus: SFX)
 
-These are played via `AudioManager.play_<name>()` helper methods. Default pitch variation: ±8%.
+These are played via `AudioManager.play_<name>()` helper methods. Default pitch variation is
+±3% (`play_sfx`'s default `pitch_variation` argument); `token_whoosh` bypasses that default and
+instead jitters by ±0.08 on top of a caller-supplied, velocity-scaled `pitch_scale` (see below).
 
 | File                  | AudioManager Method      | Volume  | Description                          | Status        |
 |-----------------------|--------------------------|---------|--------------------------------------|---------------|
 | `token_pickup.wav`    | `play_token_pickup()`    | 0 dB    | Picking up / starting to drag a token| **Wired**     |
 | `token_drop.wav`      | `play_token_drop()`      | 0 dB    | Dropping / placing a token           | **Wired**     |
 | `token_slide.wav`     | `play_token_slide()`     | -3 dB   | Token sliding / movement on board    | Not wired     |
-| `token_hover.ogg`     | `play_token_hover()`     | -6 dB   | Mouse hovering over a board token    | **Wired**     |
+| `token_hover.wav`     | `play_token_hover()`     | -6 dB   | Mouse hovering over a board token    | **Wired**     |
 | `token_whoosh.wav`    | `play_token_whoosh()`    | -3 dB   | Rapid drag swoosh (velocity-based)   | **Wired**     |
+| `splash_enter.wav`    | `play_splash_enter()`    | 0 dB    | Token entering a water zone          | **Wired**     |
+| `splash_exit.wav`     | `play_splash_exit()`     | -3 dB   | Token leaving a water zone           | **Wired**     |
 
 ### Where SFX Sounds Are Used
 
@@ -116,10 +122,16 @@ These are played via `AudioManager.play_<name>()` helper methods. Default pitch 
 | `play_token_drop()`   | `draggable_token.gd`    | Settle start (immediate on drop/cancel) |
 | `play_token_hover()`  | `board_token_controller.gd` | Mouse enters token rigid body |
 | `play_token_whoosh()` | `draggable_token.gd`    | Horizontal drag speed >= 48 units/sec (0.15s cooldown, velocity-scaled pitch) |
+| `play_splash_enter()` | `scenes/effects/water_zone.gd` (`_on_body_entered`, line 88) | Token's collision shape enters a water zone |
+| `play_splash_exit()`  | `scenes/effects/water_zone.gd` (`_on_body_exited`, line 115) | Token's collision shape fully exits a water zone |
+
+`splash_enter` and `splash_exit` were wired into `AudioManager` (`_sfx_sounds` dictionary, and
+called from `water_zone.gd`) before this palette existed, but had no backing files, so they were
+silent no-ops. This palette is what first gives them sound.
 
 ### Additional SFX Candidates (Not Yet in AudioManager)
 
-These are interactions that could benefit from sound effects but don't have corresponding entries in `AudioManager` yet. Adding them would require both a new audio file and a new method in `audio_manager.gd`.
+These are interactions that could benefit from sound effects but don't have corresponding entries in `AudioManager` yet. Adding one now means adding a `SoundSpec` entry to `tools/sfx_spec.py` (see "Regenerating and Iterating" below) plus a new method in `audio_manager.gd` — there is no file to source, since every sound in the palette is synthesized.
 
 | Proposed File           | Proposed Method             | Description                                    | Where to Wire                          |
 |-------------------------|-----------------------------|------------------------------------------------|----------------------------------------|
@@ -166,12 +178,149 @@ The SFX and UI buses have effects applied to achieve a warm, lo-fi aesthetic. Th
 
 ## Sound Design Guidelines
 
-- **UI sounds** should be short (< 200ms), clean, and non-intrusive. Consider subtle clicks and swooshes.
-- **SFX sounds** can be slightly longer but should still be snappy. Token interactions should feel tactile.
-- **Pitch variation** (±8% by default) adds natural variety — avoid perfectly identical repeated sounds.
-- **Format**: `.wav` is preferred for short sound effects (low latency). `.ogg` is acceptable for longer SFX.
-- **Sample rate**: 44100 Hz or 22050 Hz are both fine for short effects.
-- **Channels**: Mono is preferred for UI/SFX (saves memory, no stereo placement needed).
+All 18 sounds are synthesized by a stdlib Python toolchain in `tools/` (`sfx_spec.py`,
+`sfx_synth.py`, `sfx_render.py`, `sfx_measure.py`, driven by `generate_sfx.py`), not sourced as
+audio files. There is no format/sample-rate/channel checklist to follow when adding a sound — the
+renderer always writes 44100 Hz mono `.wav`. What matters is how each sound is specified. The
+table below is the palette as it currently ships; the source of truth is `tools/sfx_spec.py`.
+
+### The Palette
+
+| Sound | Bus | Pitch | Attack | Length | Filter / noise |
+|---|---|---|---|---|---|
+| `click` | ui | E4 | 2 ms | 58 ms | lp 2000 Hz, noise 0.02 |
+| `hover` | ui | E5 | 2 ms | 38 ms | lp 2000 Hz, noise 0.02 |
+| `tick` | ui | A4 | 3 ms | 45 ms | lp 2000 Hz, noise 0.02 |
+| `open` | ui | C4 glide +5 st | 60 ms | 175 ms | lp 2000 Hz, noise 0.02 |
+| `close` | ui | G4 glide -5 st | 60 ms | 175 ms | lp 2000 Hz, noise 0.02 |
+| `confirm` | ui | E4 glide +4 st | 90 ms | 190 ms | lp 2000 Hz, noise 0.02 |
+| `cancel` | ui | D4 glide -4 st | 58 ms | 168 ms | lp 2000 Hz, noise 0.02 |
+| `success` | ui | C4+E4+A4 chord | 14 ms | 300 ms | lp 2400 Hz, noise 0.02 |
+| `error` | ui | C4+D4+E4 chord | 27 ms | 300 ms | lp 2400 Hz, noise 0.02 |
+| `transition` | ui | G4 glide -12 st | 55 ms | 260 ms | lp 2000 Hz, noise 0.42 |
+| `leave_game` | ui | C4 glide -7 st | 100 ms | 460 ms | lp 2000 Hz, noise 0.02 |
+| `token_hover` | sfx | E5 | 2 ms | 38 ms | lp 2000 Hz, noise 0.02 |
+| `token_pickup` | sfx | E3 glide +2 st | 5 ms | 150 ms | lp 2000 Hz, noise 0.02 |
+| `token_drop` | sfx | A2 glide -2 st | 8 ms | 190 ms | lp 1800 Hz, noise 0.02 |
+| `token_slide` | sfx | A2 | 30 ms | 320 ms | lp 1800 Hz, noise 0.02 |
+| `token_whoosh` | sfx | E4 glide -9 st | 45 ms | 340 ms | lp 2000 Hz, noise 0.45 |
+| `splash_enter` | sfx | C3 glide +22 st | 6 ms | 610 ms | lp 2800 Hz, noise 0.66 |
+| `splash_exit` | sfx | G4 glide -22 st | 5 ms | 610 ms | lp 2800 Hz, noise 0.66 |
+
+### Design Rules the Palette Follows
+
+- **Scale.** Every pitch comes from C major pentatonic (C, D, E, G, A). Sounds overlap constantly
+  in play (a hover while a panel closes, a pickup while a tick fires), and restricting every note
+  to one scale means overlapping sounds never clash, regardless of which two happen to land at the
+  same time.
+- **No melodies.** No sound plays a sequence of notes — each is a single struck note (or, for
+  `success`/`error`, a single struck chord). Where a sound needs a sense of direction, that comes
+  from a pitch *glide* within the one note rather than a second note: `open` glides up, `close`
+  glides down, mirroring the action. A note sequence reads as a little tune, which is the wrong
+  register for interface feedback — it draws attention to itself instead of confirming an action.
+  `tools/tests/test_sfx_spec.py::test_no_sound_plays_a_note_sequence` enforces this at the spec
+  level, so a future edit can't reintroduce a melody by accident.
+- **Two chords, mirrored.** `success` is C4+E4+A4, a sixth chord — consonant and warm without
+  reading as a fanfare. `error` is C4+D4+E4, a cluster — the same three-note construction, but
+  built on seconds instead of thirds, so it grinds where `success` resolves. They share attack
+  shape, chord size, and duration on purpose: they are a matched pair, differing only in the
+  interval structure that makes one feel resolved and the other feel wrong.
+- **Attacks are bimodal.** Quick interaction sounds (`click`, `hover`, `tick`, `error`, the token
+  taps) onset in 2-8 ms; deliberate sounds (`open`, `close`, `confirm`, `cancel`, `success`,
+  `leave_game`) swell over 40-115 ms. An earlier version of this palette used a uniform minimum
+  onset of 12 ms, on the theory that a slow attack is what makes a sound feel soft. That was wrong
+  for small sounds — it made `click` and `hover` feel sluggish instead of soft — and it was
+  disproved by measuring a reference CC0 pack whose `click` and `hover` onset in under 2 ms and
+  still sound soft. Softness in a small sound comes from being short and dark, not from a slow
+  onset; length and low-pass cutoff do the work a slow attack was wrongly assigned to do.
+- **Dark at source.** Each sound's low-pass cutoff sits at 1800-2800 Hz, set per sound rather than
+  relying on the bus-level filter (see "Audio Bus Layout" below) to do all the darkening. The two
+  swishes (`transition`, `token_whoosh`) and the two splashes carry real noise (0.42-0.66 mix);
+  everything else is nearly pure tone (0.02 noise mix — present but not audible as texture).
+
+### Physical Limits Worth Knowing
+
+These caused real failures while tuning the palette and will cause them again for anyone who
+edits `tools/sfx_spec.py` without re-running `--verify`:
+
+- **A low fundamental cannot present a fast onset.** One cycle of A2 (110 Hz) is about 9 ms, so
+  `token_drop` cannot honestly declare a 3 ms attack — there isn't enough waveform yet at 3 ms for
+  the envelope to have risen. It declares 8 ms instead, which is close to the physical floor for
+  that pitch.
+- **A chord's onset is governed by how its notes beat, not by its declared attack.** `error` is
+  C4+D4+E4; the closely-spaced frequencies beat against each other at roughly 32 Hz, so the
+  measured envelope doesn't actually peak until about 30 ms in, no matter what attack is declared
+  in the spec. It declares 27 ms, which is why the gate's attack band (see below) has to tolerate
+  some slack rather than demanding an exact match.
+
+### Regenerating and Iterating
+
+`tools/sfx_spec.py` is the file to edit for ordinary tuning — one `SoundSpec` dataclass per
+sound, covering pitch, glide, attack, length, low-pass cutoff, and noise timeline. The rendering
+engine (`sfx_synth.py`, `sfx_render.py`) should not need to change to retune an existing sound or
+add a new one within the existing palette style.
+
+```bash
+python tools/generate_sfx.py --verify                        # check the palette against its targets
+python tools/generate_sfx.py --variants 3 --sheet --as-bus    # audition set plus per-bus sheets
+python tools/generate_sfx.py --only click --variants 5        # work on one sound
+python tools/generate_sfx.py --install                        # write into assets/audio/
+godot --headless --import --path .                            # after installing
+godot --path . tests/test_soundboard.tscn                     # audition in-engine, on the real buses
+```
+
+- `--sheet` writes one WAV per bus (`sheet_ui.wav`, `sheet_sfx.wav`) containing every sound on
+  that bus, separated by 600 ms of silence, so the whole family can be judged together instead of
+  one file at a time — this is how cross-sound consistency (the pentatonic scale, the bimodal
+  attacks) actually gets checked by ear.
+- `--as-bus` additionally filters each sheet through an ffmpeg approximation of the effect chain
+  in `default_bus_layout.tres` (the same low-pass/reverb settings documented in "Audio Bus
+  Layout" below), producing `sheet_ui_bus.wav` / `sheet_sfx_bus.wav`. This is what the sound will
+  actually sound like in-game, not just as a raw render. Silently skipped if `ffmpeg` isn't on
+  PATH.
+- `--variants N` renders N differently-seeded takes of each selected sound; variant 0 is always
+  the plain, unsuffixed filename, since that's the one `--install` uses.
+- `--install` writes variant 0 of every sound into `assets/audio/<bus>/<name>.wav` and removes any
+  stale `.ogg` (and `.ogg.import`) file with the same name, since `_load_sounds()` in
+  `audio_manager.gd` probes `.wav` before `.ogg` and a leftover `.ogg` would otherwise shadow
+  nothing but also never get cleaned up on its own.
+- `tests/test_soundboard.tscn` (backed by `tests/test_soundboard.gd`) is a standalone scene that
+  loads candidate files with `AudioStreamWAV.load_from_file()` (bypassing Godot's resource cache)
+  from a scratch directory — `%TEMP%/tt-sim-sfx` by default, the same directory
+  `generate_sfx.py --out` writes to — fresh on every button press. That means the scene can stay
+  open across a whole tuning session: regenerate a sound with `generate_sfx.py`, click its button
+  in the still-open soundboard, hear the new take through the real UI/SFX buses, repeat.
+
+**Method note:** when feedback on a sound is about character ("too bright", "too soft") rather
+than a specific number, don't regenerate all 18 sounds and hope. Instead, build ONE sound several
+ways, varying a single property at a time (e.g. five `click` variants at different low-pass
+cutoffs, via `--only click --variants 5`), concatenate them into a short sheet, and ask which one
+is closest. That converts a vague judgement call into one short listen and a single answer, and
+it is far cheaper — in both render time and listening time — than regenerating the whole palette
+on a guess.
+
+### What the Gate Checks
+
+`--verify` and the equivalent assertions in `tools/tests/test_sfx_render.py` apply the same four
+checks to every sound in `tools/sfx_spec.py`:
+
+- **Attack.** Measured attack time lands within a band around the sound's own declared
+  `attack_ms`: at least 0.6x the declared value, at most `attack_ms + 5 ms`. The band is
+  asymmetric and generous on the high side because of the physical limits above — a low note or a
+  beating chord can't hit its declared attack exactly.
+- **Warmth (high-band energy).** High-band RMS ratio must sit at or under the sound's own
+  `max_high_band_db` ceiling, and no more than 12 dB below it. This check is deliberately
+  two-sided. An earlier version of the gate had only the ceiling, which meant a palette 20 dB
+  darker than intended — i.e. muffled well past the intended warmth — passed every check while
+  sounding wrong. The floor exists specifically to catch that failure mode.
+- **Peak.** Measured peak must land in [-4, -2] dBFS.
+- **Duration.** Measured duration must be within 20% of the sound's declared `total_ms`.
+
+**What this does and doesn't mean:** the gate verifies that the renderer does what the palette
+declares — that `tools/sfx_spec.py`'s numbers and the actual rendered audio agree. It does not
+encode taste. A sound can pass every one of these four checks and still sound wrong — too bright
+for its role, too similar to a neighboring sound, or just not what was wanted. Passing `--verify`
+is a necessary check after any spec edit, not a substitute for listening to the sheet.
 
 ### Volume Normalization
 
@@ -261,34 +410,47 @@ func _on_after_animate_out() -> void:
 ```
 
 ### New SFX
-1. Add the audio file to `res://assets/audio/sfx/`
-2. Add a key to `_sfx_sounds` dictionary in `audio_manager.gd`
-3. Add a public helper method (e.g. `play_token_snap()`)
-4. Call the method from the appropriate game code
+1. Add a `SoundSpec` entry for it in `tools/sfx_spec.py` (see "Regenerating and Iterating"
+   above) — there is no file to source, since the palette is synthesized, not sampled.
+2. Render and audition it (`generate_sfx.py --only <name> --variants N --sheet`), then run
+   `generate_sfx.py --verify` to confirm it passes the gate.
+3. Install it (`generate_sfx.py --install`) and re-import (`godot --headless --import --path .`).
+4. Add a key to `_sfx_sounds` dictionary in `audio_manager.gd`
+5. Add a public helper method (e.g. `play_token_snap()`)
+6. Call the method from the appropriate game code
 
 ---
 
 ## Implementation Checklist
 
-### Phase 1: Audio Files (15 files)
-- [x] `assets/audio/ui/click.wav` (JDSherbert Tabletop SFX)
-- [x] `assets/audio/ui/hover.ogg` (Kenney Interface Sounds)
-- [x] `assets/audio/ui/open.ogg` (Kenney — pluck)
-- [x] `assets/audio/ui/close.ogg` (Kenney — pluck)
-- [x] `assets/audio/ui/success.wav` (ObsydianX Interface SFX)
-- [x] `assets/audio/ui/error.wav` (ObsydianX Interface SFX)
-- [x] `assets/audio/ui/confirm.ogg` (Kenney Interface Sounds)
-- [x] `assets/audio/ui/cancel.wav` (ObsydianX Interface SFX)
-- [x] `assets/audio/ui/tick.ogg` (Kenney Interface Sounds — tick)
-- [x] `assets/audio/ui/transition.wav` (Shapeforms Audio — whoosh)
+### Phase 1: Audio Files (18 files)
+- [x] `assets/audio/ui/click.wav`
+- [x] `assets/audio/ui/hover.wav`
+- [x] `assets/audio/ui/open.wav`
+- [x] `assets/audio/ui/close.wav`
+- [x] `assets/audio/ui/success.wav`
+- [x] `assets/audio/ui/error.wav`
+- [x] `assets/audio/ui/confirm.wav`
+- [x] `assets/audio/ui/cancel.wav`
+- [x] `assets/audio/ui/tick.wav`
+- [x] `assets/audio/ui/transition.wav`
 - [x] `assets/audio/ui/leave_game.wav`
-- [x] `assets/audio/sfx/token_pickup.wav` (JDSherbert Tabletop SFX)
-- [x] `assets/audio/sfx/token_drop.wav` (JDSherbert Tabletop SFX)
-- [ ] `assets/audio/sfx/token_slide.wav` (JDSherbert Tabletop SFX — file exists, not wired)
-- [x] `assets/audio/sfx/token_hover.ogg` (Kenney — tick)
-- [x] `assets/audio/sfx/token_whoosh.wav` (JDSherbert — swipe)
+- [x] `assets/audio/sfx/token_pickup.wav`
+- [x] `assets/audio/sfx/token_drop.wav`
+- [ ] `assets/audio/sfx/token_slide.wav` (generated and installed, not wired to any trigger yet)
+- [x] `assets/audio/sfx/token_hover.wav`
+- [x] `assets/audio/sfx/token_whoosh.wav`
+- [x] `assets/audio/sfx/splash_enter.wav`
+- [x] `assets/audio/sfx/splash_exit.wav`
 
-All audio files are CC0-licensed. All files are normalized via the pre-commit hook.
+All 18 files are generated by `tools/generate_sfx.py --install` from the `SoundSpec` entries in
+`tools/sfx_spec.py` (see "Regenerating and Iterating" above) — there are no third-party CC0 packs
+to track or license anymore. Regeneration is deterministic: running `--install` from a clean
+checkout reproduces byte-identical files to the ones committed (verified — `--install`, `--seed`
+defaults to 0, and neither `generate_sfx.py` nor `sfx_synth.py` reads any other source of
+randomness for variant 0). All files still pass through the pre-commit normalization hook like
+any other audio file (see "Volume Normalization" above); in practice they already render at the
+palette's own peak target and normalization is a no-op.
 
 ### Phase 2: Wiring (done)
 - [x] Auto-connect all button click/hover sounds via `SceneTree.node_added`
