@@ -13,11 +13,11 @@ const GRID_COLUMNS := 4
 @export var candidates_dir: String = ""
 
 var _resolved_dir: String = ""
-var _stream_cache: Dictionary = {}
 var _ui_player: AudioStreamPlayer
 var _sfx_player: AudioStreamPlayer
 var _status_label: Label
-var _playing_all: Dictionary = {BUS_UI: false, BUS_SFX: false}
+var _play_all_buttons: Array[Button] = []
+var _playing_all: bool = false
 
 
 func _ready() -> void:
@@ -26,6 +26,7 @@ func _ready() -> void:
 		if not candidates_dir.is_empty()
 		else OS.get_environment("TEMP").path_join("tt-sim-sfx")
 	)
+	print("Soundboard: resolved candidates directory: %s" % _resolved_dir)
 
 	_ui_player = AudioStreamPlayer.new()
 	_ui_player.bus = BUS_UI
@@ -75,7 +76,10 @@ func _build_ui() -> void:
 	tabs.add_child(sfx_tab)
 
 	_status_label = Label.new()
-	_status_label.text = "Press a button to audition a sound."
+	if DirAccess.dir_exists_absolute(_resolved_dir):
+		_status_label.text = "candidates directory: %s" % _resolved_dir
+	else:
+		_status_label.text = "candidates directory not found: %s" % _resolved_dir
 	vbox.add_child(_status_label)
 
 
@@ -88,6 +92,7 @@ func _build_bus_tab(names: Array, bus_name: String) -> Control:
 	play_all_button.text = "Play all in order"
 	play_all_button.pressed.connect(_on_play_all_pressed.bind(names, bus_name))
 	container.add_child(play_all_button)
+	_play_all_buttons.append(play_all_button)
 
 	var grid := GridContainer.new()
 	grid.columns = GRID_COLUMNS
@@ -121,25 +126,20 @@ func _candidate_path(sound_name: String) -> String:
 	return _resolved_dir.path_join(sound_name + ".wav")
 
 
-func _get_cached_stream(path: String) -> AudioStreamWAV:
-	if _stream_cache.has(path):
-		return _stream_cache[path]
-
-	if not FileAccess.file_exists(path):
-		return null
-
-	var stream := AudioStreamWAV.load_from_file(path)
-	_stream_cache[path] = stream
-	return stream
-
-
 func _on_sound_button_pressed(sound_name: String, bus_name: String) -> void:
 	_play_sound(sound_name, bus_name)
 
 
+## Loads fresh from disk on every call -- no caching. These are 18 short (60-800 ms)
+## mono files that get regenerated under the same filenames while this scene stays
+## open (listen, retune, regenerate, listen again), so a cached stream would silently
+## serve stale audio the user has already asked to change. Loading is cheap enough at
+## this size that caching would be an optimization with no measurable benefit and a
+## real correctness cost.
 func _play_sound(sound_name: String, bus_name: String) -> void:
-	var stream := _get_cached_stream(_candidate_path(sound_name))
+	var stream := AudioStreamWAV.load_from_file(_candidate_path(sound_name))
 	if stream == null:
+		_status_label.text = "%s  -  FAILED TO LOAD" % sound_name
 		return
 
 	var player := _ui_player if bus_name == BUS_UI else _sfx_player
@@ -151,16 +151,29 @@ func _play_sound(sound_name: String, bus_name: String) -> void:
 
 
 func _on_play_all_pressed(names: Array, bus_name: String) -> void:
-	if _playing_all.get(bus_name, false):
+	if _playing_all:
 		return
 
-	_playing_all[bus_name] = true
+	var existing_names: Array = []
 	for sound_name in names:
+		if FileAccess.file_exists(_candidate_path(sound_name)):
+			existing_names.append(sound_name)
+
+	_playing_all = true
+	_set_play_all_buttons_disabled(true)
+
+	for sound_name in existing_names:
 		if not is_instance_valid(self):
 			return
-		if FileAccess.file_exists(_candidate_path(sound_name)):
-			_play_sound(sound_name, bus_name)
+		_play_sound(sound_name, bus_name)
 		await get_tree().create_timer(PLAY_ALL_INTERVAL_SEC).timeout
 
 	if is_instance_valid(self):
-		_playing_all[bus_name] = false
+		_playing_all = false
+		_set_play_all_buttons_disabled(false)
+
+
+func _set_play_all_buttons_disabled(disabled: bool) -> void:
+	for button in _play_all_buttons:
+		if is_instance_valid(button):
+			button.disabled = disabled
