@@ -197,7 +197,19 @@ def install(assets_root: str, seed: int) -> tuple:
         os.makedirs(bus_dir, exist_ok=True)
 
         wav_path = os.path.join(bus_dir, "%s.wav" % name)
-        render_wav(wav_path, render_spec(spec, seed=seed))
+        # Write to a temporary file beside the target and move it into place.
+        # os.replace is atomic on the same filesystem, so an interrupted render
+        # can never leave a truncated .wav behind. That matters because
+        # _load_sounds() in audio_manager.gd probes .wav before .ogg, so a
+        # half-written file would shadow the working .ogg it is replacing.
+        temp_path = wav_path + ".tmp"
+        try:
+            render_wav(temp_path, render_spec(spec, seed=seed))
+            os.replace(temp_path, wav_path)
+        except Exception:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise
         written.append(wav_path)
 
         for stale in ("%s.ogg" % name, "%s.ogg.import" % name):
@@ -235,7 +247,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--verify", action="store_true", help="check the palette against its targets"
     )
     parser.add_argument(
-        "--install", action="store_true", help="write variant 0 into assets/audio/"
+        "--install",
+        action="store_true",
+        help="write variant 0 into assets/audio/ (ignored if --verify is also given)",
     )
     parser.add_argument(
         "--assets-root",
