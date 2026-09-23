@@ -19,8 +19,15 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import sfx_measure as measure
 import sfx_spec
-from sfx_render import render_spec, variant_spec
+from sfx_render import (
+    ATTACK_FLOOR_MS,
+    DURATION_TOLERANCE,
+    PEAK_WINDOW_DBFS,
+    render_spec,
+    variant_spec,
+)
 from sfx_synth import ms_to_samples, render_wav
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -130,6 +137,51 @@ def write_sheets(out_dir: str, seed: int, as_bus: bool) -> list:
     return written
 
 
+def verify_samples(name: str, samples: list) -> list:
+    """Check one rendered sound against the palette's design targets."""
+    spec = sfx_spec.SPECS[name]
+    failures = []
+
+    attack = measure.attack_time_ms(samples)
+    if attack < ATTACK_FLOOR_MS:
+        failures.append(
+            "%s: attack %.1f ms is below the %.1f ms floor (too sharp)"
+            % (name, attack, ATTACK_FLOOR_MS)
+        )
+
+    peak = measure.peak_dbfs(samples)
+    low, high = PEAK_WINDOW_DBFS
+    if not low <= peak <= high:
+        failures.append(
+            "%s: peak %.2f dBFS is outside [%.1f, %.1f]" % (name, peak, low, high)
+        )
+
+    ratio = measure.high_band_ratio_db(samples)
+    if ratio > spec.max_high_band_db:
+        failures.append(
+            "%s: high-band ratio %.1f dB exceeds %.1f dB (too bright)"
+            % (name, ratio, spec.max_high_band_db)
+        )
+
+    expected = spec.total_ms
+    actual = measure.duration_ms(samples)
+    if abs(actual - expected) / expected > DURATION_TOLERANCE:
+        failures.append(
+            "%s: duration %.0f ms differs from the declared %.0f ms by more than %.0f percent"
+            % (name, actual, expected, DURATION_TOLERANCE * 100.0)
+        )
+
+    return failures
+
+
+def verify_palette() -> list:
+    """Render and check every declared sound. Returns all failures."""
+    failures = []
+    for name, spec in sfx_spec.SPECS.items():
+        failures.extend(verify_samples(name, render_spec(spec)))
+    return failures
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Generate the warm synthesized SFX palette."
@@ -169,6 +221,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.verify:
+        failures = verify_palette()
+        if failures:
+            print("Palette verification FAILED:")
+            for failure in failures:
+                print("  " + failure)
+            return 1
+        print("Palette verification passed: %d sounds." % len(sfx_spec.SPECS))
+        return 0
+
     written = generate(args.out, args.only, args.variants, args.seed)
     print("Wrote %d file(s) to %s" % (len(written), args.out))
     if args.sheet:
