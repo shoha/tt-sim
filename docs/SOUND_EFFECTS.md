@@ -177,14 +177,14 @@ The SFX and UI buses have effects applied to achieve a warm, lo-fi aesthetic. Th
 
 All audio files are automatically normalized on commit via a pre-commit hook. This ensures consistent perceived loudness regardless of the source.
 
-**Two-tier strategy:**
+**Rule:**
 
-| File length | Method | Target | Tolerance |
+| Location | Method | Target | Tolerance |
 |---|---|---|---|
-| >= ~400ms | LUFS (EBU R128 measurement + gain + limiter) | -18 LUFS | ±1.5 dB |
-| < ~400ms | Peak normalization (gain + limiter) | -3 dBFS | ±1.5 dB |
+| `assets/audio/ui/`, `assets/audio/sfx/` | Peak normalization (gain + limiter) | -3 dBFS | ±1.5 dB |
+| Everywhere else (e.g. sustained music) | LUFS (EBU R128 measurement + gain + limiter) | -18 LUFS | ±1.5 dB |
 
-Short files (clicks, pops) can't be measured by the LUFS algorithm, so they fall back to peak normalization automatically.
+One-shot sound effects under `ui/` and `sfx/` are always peak-normalized, regardless of length. A designed palette is authored to a uniform peak ceiling, and the relative levels between sounds are intentional; LUFS normalization matches perceived loudness file by file, which overrides that intent and can limit a long, quiet-tailed effect until it clips. LUFS remains correct for sustained material such as music.
 
 **Setup (one-time):**
 
