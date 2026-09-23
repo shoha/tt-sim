@@ -8,7 +8,7 @@ tests and the --verify command apply exactly the same gate.
 import dataclasses
 import random
 
-from sfx_spec import MIN_ATTACK_MS, SoundSpec
+from sfx_spec import SoundSpec
 from sfx_synth import (
     PEAK_TARGET_DBFS,
     SAMPLE_RATE,
@@ -21,10 +21,18 @@ from sfx_synth import (
     tone,
 )
 
-# A 12 ms raised-cosine attack measures as roughly 9.5 ms, because a raised
-# cosine reaches 0.9 at 79.5 percent of its length. 9.0 ms is the floor that
-# a compliant 12 ms declared attack clears.
-ATTACK_FLOOR_MS = 9.0
+# A sound must land near the attack it DECLARES, rather than clear one global
+# floor. The band is asymmetric because a raised cosine reaches 90 percent at
+# 79.5 percent of its length while the 5 ms RMS window used to measure attack
+# lags a fast onset: a declared 2 ms attack measures near 3 ms, a declared
+# 115 ms attack measures near 100 ms.
+ATTACK_BAND_LOW = 0.6
+ATTACK_BAND_HIGH_MS = 5.0
+
+# Warmth is bounded from BOTH sides. The ceiling stops a sound drifting bright.
+# The floor catches the opposite failure, which this project actually shipped
+# once: a palette so dark it read as muffled rather than warm.
+WARMTH_FLOOR_MARGIN_DB = 12.0
 
 # Peak target of -3.0 dBFS with the same 1.5 dB tolerance the pre-commit
 # normalizer uses, tightened to 1.0 dB because we control generation exactly.
@@ -88,6 +96,6 @@ def variant_spec(spec: SoundSpec, index: int) -> SoundSpec:
     decay = spec.decay_tau_ms * generator.uniform(0.8, 1.3)
     return dataclasses.replace(
         spec,
-        attack_ms=max(MIN_ATTACK_MS, attack),
+        attack_ms=max(1.0, attack),
         decay_tau_ms=decay,
     )

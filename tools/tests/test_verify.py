@@ -43,11 +43,16 @@ class TestVerifyExitCode(unittest.TestCase):
             self.assertEqual(cli.main(["--out", tmp, "--verify"]), 0)
 
     def test_verify_returns_one_when_a_sound_fails(self):
-        # The exit code is the whole point of --verify. Corrupt one sound's
-        # declared attack and confirm the gate actually reports failure, rather
-        # than mocking verify_palette, so this exercises the real path.
-        sharp = dataclasses.replace(sfx_spec.SPECS["click"], attack_ms=0.1)
-        with mock.patch.dict(sfx_spec.SPECS, {"click": sharp}):
+        # The exit code is the whole point of --verify. Declare an onset the
+        # renderer cannot possibly honour - a 500 ms attack on a 58 ms sound,
+        # which envelope() clamps to the sound's length - so the gate sees a
+        # real mismatch between declaration and render.
+        #
+        # Note a tiny attack no longer works as the corruption here: the gate
+        # checks a sound against its OWN declared attack, so declaring 0.1 ms
+        # and rendering 0.3 ms is agreement, not failure.
+        impossible = dataclasses.replace(sfx_spec.SPECS["click"], attack_ms=500.0)
+        with mock.patch.dict(sfx_spec.SPECS, {"click": impossible}):
             with tempfile.TemporaryDirectory() as tmp:
                 self.assertEqual(cli.main(["--out", tmp, "--verify"]), 1)
 
