@@ -152,8 +152,10 @@ def verify_samples(name: str, samples: list) -> list:
     peak = measure.peak_dbfs(samples)
     low, high = PEAK_WINDOW_DBFS
     if not low <= peak <= high:
+        direction = "too quiet" if peak < low else "too loud"
         failures.append(
-            "%s: peak %.2f dBFS is outside [%.1f, %.1f]" % (name, peak, low, high)
+            "%s: peak %.2f dBFS is outside [%.1f, %.1f] (%s)"
+            % (name, peak, low, high, direction)
         )
 
     ratio = measure.high_band_ratio_db(samples)
