@@ -24,7 +24,9 @@ Sound effects are wired up **automatically** wherever possible so that new UI el
 `AudioManager` listens to `SceneTree.node_added`. Every `BaseButton` that enters the scene tree automatically gets:
 
 - **`pressed`** → `play_click()` (click sound)
-- **`mouse_entered`** → `play_hover()` (hover sound, at -6 dB)
+- **`mouse_entered`** → `play_hover()` (hover sound, at -6 dB) -- currently **off**: the connection
+  is skipped unless `AudioManager.BUTTON_HOVER_SOUND_ENABLED` is flipped to `true`. Toggles
+  (`CheckButton`/`CheckBox`) are excluded from it regardless, since they already tick.
 
 **Opting out:** To silence a specific button (e.g. because it plays a specialized sound instead), set metadata before or during `_ready()`:
 
@@ -85,7 +87,7 @@ These are played via `AudioManager.play_<name>()` helper methods. Default pitch 
 | File                | AudioManager Method    | Volume  | Description                       | Wiring              |
 |---------------------|------------------------|---------|-----------------------------------|----------------------|
 | `click.wav`         | `play_click()`         | 0 dB    | Button press / tap                | **Auto** (all buttons) |
-| `hover.wav`         | `play_hover()`         | -6 dB   | Button hover / focus              | **Auto** (all buttons) |
+| `hover.wav`         | `play_hover()`         | -6 dB   | Button hover / focus              | Disabled             |
 | `open.wav`          | `play_open()`          | 0 dB    | Menu or panel opening             | **Auto** (panels)    |
 | `close.wav`         | `play_close()`         | 0 dB    | Menu or panel closing             | **Auto** (panels)    |
 | `success.wav`       | `play_success()`       | 0 dB    | Success feedback (e.g. level win) | Manual               |
@@ -383,7 +385,8 @@ python tools/normalize_audio.py --backup        # Keep originals as .bak
 ## Adding Sounds to New UI Elements
 
 ### Buttons
-No action needed. Any `BaseButton` added to the scene tree will automatically play click and hover sounds. To opt out:
+No action needed. Any `BaseButton` added to the scene tree automatically plays a click sound (and a
+hover sound too, if `AudioManager.BUTTON_HOVER_SOUND_ENABLED` is turned back on). To opt out:
 
 ```gdscript
 my_button.set_meta("ui_silent", true)
@@ -453,7 +456,8 @@ any other audio file (see "Volume Normalization" above); in practice they alread
 palette's own peak target and normalization is a no-op.
 
 ### Phase 2: Wiring (done)
-- [x] Auto-connect all button click/hover sounds via `SceneTree.node_added`
+- [x] Auto-connect all button click/hover sounds via `SceneTree.node_added` -- hover has since been
+  turned off via `AudioManager.BUTTON_HOVER_SOUND_ENABLED`; click stays automatic
 - [x] Panel open/close sounds in `AnimatedVisibilityContainer` base class
 - [x] Panel sounds via `AnimatedCanvasLayerPanel` base class (SettingsMenu, PauseOverlay, ConfirmationDialogUI, UpdateDialogUI)
 - [x] Level editor popup sounds (open/close + X button close on LoadDialog and DeleteConfirmDialog)
