@@ -14,6 +14,9 @@ const BUS_UI := "UI"
 ## Set to true to re-enable the hover sound on buttons.
 const BUTTON_HOVER_SOUND_ENABLED := false
 
+## Set to true to re-enable the whoosh sound on fast token drags.
+const TOKEN_WHOOSH_SOUND_ENABLED := false
+
 # Audio player pool sizes
 const UI_PLAYER_POOL_SIZE := 4
 const SFX_PLAYER_POOL_SIZE := 4
@@ -277,7 +280,12 @@ func play_token_hover() -> void:
 
 ## Play token whoosh sound (rapid drag movement)
 ## pitch_scale allows velocity-based pitch scaling for a natural feel.
+## Disabled by default -- the cue added little over the pickup/drop sounds it sits
+## between. Flip TOKEN_WHOOSH_SOUND_ENABLED to bring it back; the rising-edge trigger in
+## draggable_token.gd stays wired either way.
 func play_token_whoosh(pitch_scale: float = 1.0) -> void:
+	if not TOKEN_WHOOSH_SOUND_ENABLED:
+		return
 	var player = _get_available_sfx_player()
 	if player and _sfx_sounds.has("token_whoosh") and _sfx_sounds["token_whoosh"] != null:
 		player.stream = _sfx_sounds["token_whoosh"]

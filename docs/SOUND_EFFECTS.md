@@ -110,7 +110,7 @@ instead jitters by ±0.08 on top of a caller-supplied, velocity-scaled `pitch_sc
 | `token_drop.wav`      | `play_token_drop()`      | 0 dB    | Dropping / placing a token           | **Wired**     |
 | `token_slide.wav`     | `play_token_slide()`     | -3 dB   | Token sliding / movement on board    | Not wired     |
 | `token_hover.wav`     | `play_token_hover()`     | -6 dB   | Mouse hovering over a board token    | **Wired**     |
-| `token_whoosh.wav`    | `play_token_whoosh()`    | -3 dB   | Rapid drag swoosh (velocity-based)   | **Wired**     |
+| `token_whoosh.wav`    | `play_token_whoosh()`    | -3 dB   | Rapid drag swoosh (velocity-based)   | Disabled      |
 | `splash_enter.wav`    | `play_splash_enter()`    | 0 dB    | Token entering a water zone          | **Wired**     |
 | `splash_exit.wav`     | `play_splash_exit()`     | -3 dB   | Token leaving a water zone           | **Wired**     |
 
@@ -121,7 +121,7 @@ instead jitters by ±0.08 on top of a caller-supplied, velocity-scaled `pitch_sc
 | `play_token_pickup()` | `draggable_token.gd`    | Drag start                      |
 | `play_token_drop()`   | `draggable_token.gd`    | Settle start (immediate on drop/cancel) |
 | `play_token_hover()`  | `board_token_controller.gd` | Mouse enters token rigid body |
-| `play_token_whoosh()` | `draggable_token.gd`    | Horizontal drag speed >= 48 units/sec (0.15s cooldown, velocity-scaled pitch) |
+| `play_token_whoosh()` | `draggable_token.gd`    | Horizontal drag speed >= 10 units/sec (0.15s cooldown, velocity-scaled pitch) -- trigger still wired, but the sound is off via `AudioManager.TOKEN_WHOOSH_SOUND_ENABLED` |
 | `play_splash_enter()` | `scenes/effects/water_zone.gd` (`_on_body_entered`, line 88) | Token's collision shape enters a water zone |
 | `play_splash_exit()`  | `scenes/effects/water_zone.gd` (`_on_body_exited`, line 115) | Token's collision shape fully exits a water zone |
 
@@ -459,7 +459,8 @@ palette's own peak target and normalization is a no-op.
 - [x] Level editor popup sounds (open/close + X button close on LoadDialog and DeleteConfirmDialog)
 - [x] Specialized confirm/cancel sounds in `ConfirmationDialogUI`
 - [x] Token drop sound plays at settle start (immediate feedback on release)
-- [x] Token whoosh sound on rapid drag (velocity-based trigger with pitch scaling)
+- [x] Token whoosh sound on rapid drag (velocity-based trigger with pitch scaling) -- since turned
+  off via `AudioManager.TOKEN_WHOOSH_SOUND_ENABLED`; the trigger stays wired
 - [ ] Wire `AudioManager.play_token_slide()` to token movement
 - [ ] Wire `AudioManager.play_success()` / `play_error()` to relevant feedback points
 
