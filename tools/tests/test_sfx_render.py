@@ -21,18 +21,22 @@ class TestRenderedPaletteMeetsDesignTargets(unittest.TestCase):
             for name, spec in sfx_spec.SPECS.items()
         }
 
-    def test_every_sound_has_a_soft_attack(self):
+    def test_every_sound_honours_its_declared_attack(self):
         for name, samples in self.rendered.items():
-            self.assertGreaterEqual(
-                m.attack_time_ms(samples), r.ATTACK_FLOOR_MS, name
-            )
+            spec = sfx_spec.SPECS[name]
+            measured = m.attack_time_ms(samples)
+            low = r.ATTACK_BAND_LOW * spec.attack_ms
+            high = spec.attack_ms + r.ATTACK_BAND_HIGH_MS
+            self.assertGreaterEqual(measured, low, name)
+            self.assertLessEqual(measured, high, name)
 
-    def test_every_sound_is_warm(self):
+    def test_every_sound_is_warm_but_not_muffled(self):
         for name, samples in self.rendered.items():
-            self.assertLessEqual(
-                m.high_band_ratio_db(samples),
-                sfx_spec.SPECS[name].max_high_band_db,
-                name,
+            spec = sfx_spec.SPECS[name]
+            ratio = m.high_band_ratio_db(samples)
+            self.assertLessEqual(ratio, spec.max_high_band_db, name)
+            self.assertGreaterEqual(
+                ratio, spec.max_high_band_db - r.WARMTH_FLOOR_MARGIN_DB, name
             )
 
     def test_every_sound_hits_the_peak_target(self):
@@ -81,12 +85,10 @@ class TestVariantSpec(unittest.TestCase):
         spec = sfx_spec.SPECS["click"]
         self.assertNotEqual(r.variant_spec(spec, 1), spec)
 
-    def test_variants_respect_the_attack_minimum(self):
+    def test_variants_keep_a_positive_attack(self):
         for spec in sfx_spec.SPECS.values():
             for index in range(4):
-                self.assertGreaterEqual(
-                    r.variant_spec(spec, index).attack_ms, sfx_spec.MIN_ATTACK_MS
-                )
+                self.assertGreater(r.variant_spec(spec, index).attack_ms, 0.0)
 
     def test_variants_are_deterministic(self):
         spec = sfx_spec.SPECS["click"]

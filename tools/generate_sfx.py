@@ -22,9 +22,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sfx_measure as measure
 import sfx_spec
 from sfx_render import (
-    ATTACK_FLOOR_MS,
+    ATTACK_BAND_HIGH_MS,
+    ATTACK_BAND_LOW,
     DURATION_TOLERANCE,
     PEAK_WINDOW_DBFS,
+    WARMTH_FLOOR_MARGIN_DB,
     render_spec,
     variant_spec,
 )
@@ -143,10 +145,12 @@ def verify_samples(name: str, samples: list) -> list:
     failures = []
 
     attack = measure.attack_time_ms(samples)
-    if attack < ATTACK_FLOOR_MS:
+    low = ATTACK_BAND_LOW * spec.attack_ms
+    high = spec.attack_ms + ATTACK_BAND_HIGH_MS
+    if not low <= attack <= high:
         failures.append(
-            "%s: attack %.1f ms is below the %.1f ms floor (too sharp)"
-            % (name, attack, ATTACK_FLOOR_MS)
+            "%s: attack %.1f ms is outside [%.1f, %.1f] for a declared %.1f ms onset"
+            % (name, attack, low, high, spec.attack_ms)
         )
 
     peak = measure.peak_dbfs(samples)
@@ -163,6 +167,11 @@ def verify_samples(name: str, samples: list) -> list:
         failures.append(
             "%s: high-band ratio %.1f dB exceeds %.1f dB (too bright)"
             % (name, ratio, spec.max_high_band_db)
+        )
+    elif ratio < spec.max_high_band_db - WARMTH_FLOOR_MARGIN_DB:
+        failures.append(
+            "%s: high-band ratio %.1f dB is more than %.0f dB below its %.1f dB target (muffled)"
+            % (name, ratio, WARMTH_FLOOR_MARGIN_DB, spec.max_high_band_db)
         )
 
     expected = spec.total_ms

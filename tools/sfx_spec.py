@@ -7,6 +7,17 @@ note sequences read as little tunes rather than interface feedback. Opposing
 actions mirror each other through glide direction (open rises, close falls).
 This is the file to edit when a sound does not feel right; the engine itself
 should not need to change.
+
+Attacks are bimodal, matched to the reference pack: quick interaction sounds
+(hover, click, tick, error, and the token taps) onset in a few milliseconds,
+while deliberate sounds (confirm, cancel, success, open/close, leave_game)
+swell over 60-115 ms. There is no global attack floor - a single minimum was
+the original mistake, since it made every quick sound feel sluggish.
+
+Brightness is a per-sound target, not a blanket "as dark as possible" ceiling.
+Dark is not the same as warm: a palette pushed uniformly dark reads as
+muffled rather than warm, which is why `max_high_band_db` varies sound by
+sound and is checked against both a ceiling and a floor at render time.
 """
 
 from dataclasses import dataclass
@@ -14,14 +25,15 @@ from dataclasses import dataclass
 # C major pentatonic. No other note letters are permitted in the palette.
 PENTATONIC = frozenset({"C", "D", "E", "G", "A"})
 
-# The floor that separates "soft" from "sharp". Sampled UI clicks sit near 1 ms.
-MIN_ATTACK_MS = 12.0
-
 # Default harmonic stack: fundamental plus two steeply attenuated partials.
 WARM_HARMONICS = (1.0, 0.3, 0.08)
 
 # Rounder still, for the low token sounds.
 ROUND_HARMONICS = (1.0, 0.18, 0.04)
+
+# Brighter stacks, for sounds that need air rather than body.
+OPEN_HARMONICS = (1.0, 0.45, 0.18, 0.06)
+BRIGHT_HARMONICS = (1.0, 0.6, 0.32, 0.16, 0.08)
 
 
 @dataclass(frozen=True)
@@ -52,93 +64,113 @@ class SoundSpec:
 
 
 SPECS = {
-    # --- UI bus -----------------------------------------------------------
+    "cancel": SoundSpec(
+        bus="ui", notes=("D4",),
+        attack_ms=58.0, note_ms=168.0, decay_tau_ms=53.8, release_ms=8.0,
+        harmonics=WARM_HARMONICS, noise_mix=0.079, noise_cutoff_hz=12000.0,
+        sweep_semitones=-4.0, lp_cutoff_hz=5000.0, max_high_band_db=-36.0,
+    ),
     "click": SoundSpec(
-        bus="ui", notes=("E4",), attack_ms=20.0, note_ms=130.0,
-        decay_tau_ms=40.0, harmonics=ROUND_HARMONICS, noise_mix=0.14,
-        noise_cutoff_hz=2000.0, lp_cutoff_hz=3200.0,
-    ),
-    "hover": SoundSpec(
-        bus="ui", notes=("E5",), attack_ms=15.0, note_ms=80.0,
-        decay_tau_ms=22.0, harmonics=(1.0, 0.12), lp_cutoff_hz=4200.0,
-    ),
-    "tick": SoundSpec(
-        bus="ui", notes=("A4",), attack_ms=12.0, note_ms=70.0,
-        decay_tau_ms=18.0, harmonics=(1.0, 0.12), lp_cutoff_hz=4000.0,
-    ),
-    "open": SoundSpec(
-        bus="ui", notes=("C4",), attack_ms=22.0, note_ms=200.0,
-        decay_tau_ms=55.0, harmonics=ROUND_HARMONICS, noise_mix=0.12,
-        sweep_semitones=7.0, lp_cutoff_hz=3400.0,
+        bus="ui", notes=("E4",),
+        attack_ms=2.0, note_ms=58.0, decay_tau_ms=18.6, release_ms=3.5,
+        harmonics=BRIGHT_HARMONICS, noise_mix=0.153, noise_cutoff_hz=12000.0,
+        sweep_semitones=0.0, lp_cutoff_hz=14000.0, max_high_band_db=-22.0,
     ),
     "close": SoundSpec(
-        bus="ui", notes=("G4",), attack_ms=22.0, note_ms=200.0,
-        decay_tau_ms=55.0, harmonics=ROUND_HARMONICS, noise_mix=0.12,
-        sweep_semitones=-7.0, lp_cutoff_hz=3400.0,
+        bus="ui", notes=("G4",),
+        attack_ms=60.0, note_ms=175.0, decay_tau_ms=56.0, release_ms=8.0,
+        harmonics=OPEN_HARMONICS, noise_mix=0.111, noise_cutoff_hz=12000.0,
+        sweep_semitones=-5.0, lp_cutoff_hz=9000.0, max_high_band_db=-29.0,
     ),
     "confirm": SoundSpec(
-        bus="ui", notes=("E4",), attack_ms=22.0, note_ms=220.0,
-        decay_tau_ms=70.0, harmonics=ROUND_HARMONICS, noise_mix=0.10,
-        sweep_semitones=5.0, lp_cutoff_hz=3600.0,
-    ),
-    "cancel": SoundSpec(
-        bus="ui", notes=("D4",), attack_ms=26.0, note_ms=240.0,
-        decay_tau_ms=75.0, harmonics=ROUND_HARMONICS, noise_mix=0.10,
-        sweep_semitones=-5.0, lp_cutoff_hz=3000.0,
-    ),
-    "success": SoundSpec(
-        bus="ui", notes=("C4",), attack_ms=22.0, note_ms=340.0,
-        decay_tau_ms=120.0, harmonics=ROUND_HARMONICS, noise_mix=0.10,
-        sweep_semitones=7.0, lp_cutoff_hz=3600.0,
+        bus="ui", notes=("E4",),
+        attack_ms=90.0, note_ms=190.0, decay_tau_ms=60.8, release_ms=8.0,
+        harmonics=OPEN_HARMONICS, noise_mix=0.175, noise_cutoff_hz=12000.0,
+        sweep_semitones=4.0, lp_cutoff_hz=9000.0, max_high_band_db=-25.0,
     ),
     "error": SoundSpec(
-        bus="ui", notes=("D3", "E3"), chord=True, attack_ms=36.0,
-        note_ms=380.0, decay_tau_ms=120.0, harmonics=ROUND_HARMONICS,
-        lp_cutoff_hz=2000.0,
+        bus="ui", notes=("D3", "E3"),
+        chord=True,
+        attack_ms=4.0, note_ms=236.0, decay_tau_ms=75.5, release_ms=8.0,
+        harmonics=ROUND_HARMONICS, noise_mix=0.017, noise_cutoff_hz=12000.0,
+        sweep_semitones=0.0, lp_cutoff_hz=1800.0, max_high_band_db=-52.0,
     ),
-    "transition": SoundSpec(
-        bus="ui", notes=("G4",), attack_ms=50.0, note_ms=320.0,
-        decay_tau_ms=100.0, noise_mix=0.88, noise_cutoff_hz=2800.0,
-        sweep_semitones=-7.0, lp_cutoff_hz=4600.0, max_high_band_db=-14.0,
+    "hover": SoundSpec(
+        bus="ui", notes=("E5",),
+        attack_ms=2.0, note_ms=38.0, decay_tau_ms=12.2, release_ms=2.3,
+        harmonics=BRIGHT_HARMONICS, noise_mix=0.195, noise_cutoff_hz=12000.0,
+        sweep_semitones=0.0, lp_cutoff_hz=14000.0, max_high_band_db=-19.0,
     ),
     "leave_game": SoundSpec(
-        bus="ui", notes=("C4",), attack_ms=28.0, note_ms=420.0,
-        decay_tau_ms=150.0, harmonics=ROUND_HARMONICS, noise_mix=0.10,
-        sweep_semitones=-7.0, lp_cutoff_hz=3000.0,
+        bus="ui", notes=("C4",),
+        attack_ms=100.0, note_ms=460.0, decay_tau_ms=147.2, release_ms=8.0,
+        harmonics=OPEN_HARMONICS, noise_mix=0.136, noise_cutoff_hz=12000.0,
+        sweep_semitones=-7.0, lp_cutoff_hz=9000.0, max_high_band_db=-27.0,
     ),
-    # --- SFX bus ----------------------------------------------------------
-    "token_pickup": SoundSpec(
-        bus="sfx", notes=("E3",), attack_ms=15.0, note_ms=220.0,
-        decay_tau_ms=65.0, harmonics=ROUND_HARMONICS, noise_mix=0.22,
-        noise_cutoff_hz=1800.0, sweep_semitones=2.0, lp_cutoff_hz=2800.0,
-    ),
-    "token_drop": SoundSpec(
-        bus="sfx", notes=("A2",), attack_ms=12.0, note_ms=300.0,
-        decay_tau_ms=75.0, harmonics=ROUND_HARMONICS, noise_mix=0.32,
-        noise_cutoff_hz=1500.0, sweep_semitones=-2.0, lp_cutoff_hz=2200.0,
-    ),
-    "token_slide": SoundSpec(
-        bus="sfx", notes=("A2",), attack_ms=36.0, note_ms=380.0,
-        decay_tau_ms=180.0, harmonics=ROUND_HARMONICS, noise_mix=0.48,
-        noise_cutoff_hz=2200.0, lp_cutoff_hz=2600.0, max_high_band_db=-16.0,
-    ),
-    "token_hover": SoundSpec(
-        bus="sfx", notes=("E5",), attack_ms=12.0, note_ms=55.0,
-        decay_tau_ms=16.0, harmonics=(1.0, 0.10), lp_cutoff_hz=4200.0,
-    ),
-    "token_whoosh": SoundSpec(
-        bus="sfx", notes=("E4",), attack_ms=45.0, note_ms=420.0,
-        decay_tau_ms=130.0, noise_mix=0.92, noise_cutoff_hz=3000.0,
-        sweep_semitones=-5.0, lp_cutoff_hz=4800.0, max_high_band_db=-14.0,
+    "open": SoundSpec(
+        bus="ui", notes=("C4",),
+        attack_ms=60.0, note_ms=175.0, decay_tau_ms=56.0, release_ms=8.0,
+        harmonics=OPEN_HARMONICS, noise_mix=0.140, noise_cutoff_hz=12000.0,
+        sweep_semitones=5.0, lp_cutoff_hz=9000.0, max_high_band_db=-27.0,
     ),
     "splash_enter": SoundSpec(
-        bus="sfx", notes=("C4",), attack_ms=26.0, note_ms=230.0,
-        decay_tau_ms=90.0, harmonics=ROUND_HARMONICS, noise_mix=0.30,
-        noise_cutoff_hz=2400.0, sweep_semitones=7.0, lp_cutoff_hz=3400.0,
+        bus="sfx", notes=("C4",),
+        attack_ms=8.0, note_ms=200.0, decay_tau_ms=64.0, release_ms=8.0,
+        harmonics=OPEN_HARMONICS, noise_mix=0.188, noise_cutoff_hz=12000.0,
+        sweep_semitones=7.0, lp_cutoff_hz=9000.0, max_high_band_db=-23.0,
     ),
     "splash_exit": SoundSpec(
-        bus="sfx", notes=("G4",), attack_ms=26.0, note_ms=230.0,
-        decay_tau_ms=90.0, harmonics=ROUND_HARMONICS, noise_mix=0.30,
-        noise_cutoff_hz=2400.0, sweep_semitones=-7.0, lp_cutoff_hz=3400.0,
+        bus="sfx", notes=("G4",),
+        attack_ms=8.0, note_ms=200.0, decay_tau_ms=64.0, release_ms=8.0,
+        harmonics=OPEN_HARMONICS, noise_mix=0.168, noise_cutoff_hz=12000.0,
+        sweep_semitones=-7.0, lp_cutoff_hz=9000.0, max_high_band_db=-24.0,
+    ),
+    "success": SoundSpec(
+        bus="ui", notes=("C4",),
+        attack_ms=115.0, note_ms=520.0, decay_tau_ms=166.4, release_ms=8.0,
+        harmonics=BRIGHT_HARMONICS, noise_mix=0.188, noise_cutoff_hz=12000.0,
+        sweep_semitones=7.0, lp_cutoff_hz=14000.0, max_high_band_db=-21.0,
+    ),
+    "tick": SoundSpec(
+        bus="ui", notes=("A4",),
+        attack_ms=3.0, note_ms=45.0, decay_tau_ms=14.4, release_ms=2.7,
+        harmonics=BRIGHT_HARMONICS, noise_mix=0.171, noise_cutoff_hz=12000.0,
+        sweep_semitones=0.0, lp_cutoff_hz=14000.0, max_high_band_db=-21.0,
+    ),
+    "token_drop": SoundSpec(
+        bus="sfx", notes=("A2",),
+        attack_ms=8.0, note_ms=190.0, decay_tau_ms=60.8, release_ms=8.0,
+        harmonics=WARM_HARMONICS, noise_mix=0.140, noise_cutoff_hz=12000.0,
+        sweep_semitones=-2.0, lp_cutoff_hz=6000.0, max_high_band_db=-29.0,
+    ),
+    "token_hover": SoundSpec(
+        bus="sfx", notes=("E5",),
+        attack_ms=2.0, note_ms=38.0, decay_tau_ms=12.2, release_ms=2.3,
+        harmonics=BRIGHT_HARMONICS, noise_mix=0.172, noise_cutoff_hz=12000.0,
+        sweep_semitones=0.0, lp_cutoff_hz=14000.0, max_high_band_db=-20.0,
+    ),
+    "token_pickup": SoundSpec(
+        bus="sfx", notes=("E3",),
+        attack_ms=5.0, note_ms=150.0, decay_tau_ms=48.0, release_ms=8.0,
+        harmonics=WARM_HARMONICS, noise_mix=0.158, noise_cutoff_hz=12000.0,
+        sweep_semitones=2.0, lp_cutoff_hz=7000.0, max_high_band_db=-27.0,
+    ),
+    "token_slide": SoundSpec(
+        bus="sfx", notes=("A2",),
+        attack_ms=30.0, note_ms=320.0, decay_tau_ms=102.4, release_ms=8.0,
+        harmonics=WARM_HARMONICS, noise_mix=0.374, noise_cutoff_hz=12000.0,
+        sweep_semitones=0.0, lp_cutoff_hz=9000.0, max_high_band_db=-17.0,
+    ),
+    "token_whoosh": SoundSpec(
+        bus="sfx", notes=("E4",),
+        attack_ms=35.0, note_ms=380.0, decay_tau_ms=121.6, release_ms=8.0,
+        harmonics=WARM_HARMONICS, noise_mix=0.522, noise_cutoff_hz=12000.0,
+        sweep_semitones=-5.0, lp_cutoff_hz=9000.0, max_high_band_db=-13.0,
+    ),
+    "transition": SoundSpec(
+        bus="ui", notes=("G4",),
+        attack_ms=40.0, note_ms=300.0, decay_tau_ms=96.0, release_ms=8.0,
+        harmonics=WARM_HARMONICS, noise_mix=0.525, noise_cutoff_hz=12000.0,
+        sweep_semitones=-7.0, lp_cutoff_hz=9000.0, max_high_band_db=-13.0,
     ),
 }

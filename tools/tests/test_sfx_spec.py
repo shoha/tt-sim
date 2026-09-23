@@ -46,9 +46,20 @@ class TestPaletteCoverage(unittest.TestCase):
 
 
 class TestPaletteRules(unittest.TestCase):
-    def test_every_attack_meets_the_minimum(self):
-        for name, spec in sfx_spec.SPECS.items():
-            self.assertGreaterEqual(spec.attack_ms, sfx_spec.MIN_ATTACK_MS, name)
+    def test_attacks_are_bimodal(self):
+        # Matching the reference pack: quick interaction sounds onset almost
+        # instantly, deliberate ones swell. A single global minimum was the
+        # original mistake - it made every small sound feel sluggish.
+        quick = {
+            "hover", "click", "tick", "token_hover", "error",
+            "token_drop", "token_pickup", "splash_enter", "splash_exit",
+        }
+        for name in quick:
+            self.assertGreaterEqual(sfx_spec.SPECS[name].attack_ms, 1.5, name)
+            self.assertLessEqual(sfx_spec.SPECS[name].attack_ms, 10.0, name)
+        deliberate = {"confirm", "cancel", "success", "leave_game", "open", "close"}
+        for name in deliberate:
+            self.assertGreaterEqual(sfx_spec.SPECS[name].attack_ms, 40.0, name)
 
     def test_every_note_is_in_the_pentatonic_scale(self):
         for name, spec in sfx_spec.SPECS.items():
