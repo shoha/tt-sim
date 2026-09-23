@@ -110,7 +110,45 @@ func test_creates_a_box_shape_matching_the_mesh_footprint() -> void:
 	assert_not_null(shape)
 	assert_almost_eq(shape.size.x, 4.0, 0.01)
 	assert_almost_eq(shape.size.z, 6.0, 0.01)
-	assert_almost_eq(shape.size.y, WaterZone.VERTICAL_BAND_HEIGHT, 0.01)
+	assert_almost_eq(shape.size.y, WaterZone.SUBMERSION_DEPTH + WaterZone.SURFACE_MARGIN, 0.01)
+
+	mesh_node.free()
+
+
+## The detection volume must hang BELOW the water surface, not straddle it. A `-water`
+## plane spans the whole map footprint (the visible river/lake is wherever the terrain
+## dips under it), so a box centered on the surface swallows the dry banks too -- every
+## token then counts as submerged from level load and no crossing is ever detected.
+func test_detection_box_hangs_below_the_water_surface() -> void:
+	var mesh_node := MeshInstance3D.new()
+	mesh_node.mesh = PlaneMesh.new()  # surface at local y = 0
+
+	var zone := WaterZone.create_for_mesh(mesh_node)
+	add_child_autofree(zone)
+
+	var collision_shape := zone.get_child(0) as CollisionShape3D
+	var shape := collision_shape.shape as BoxShape3D
+	var top := collision_shape.position.y + shape.size.y / 2.0
+	var bottom := collision_shape.position.y - shape.size.y / 2.0
+	assert_almost_eq(top, WaterZone.SURFACE_MARGIN, 0.001)
+	assert_almost_eq(bottom, -WaterZone.SUBMERSION_DEPTH, 0.001)
+
+	mesh_node.free()
+
+
+## Regression test for the river map: its banks sit 0.59 above the water plane, and the
+## old symmetric +/-2.0 band counted anything standing there as being in the water.
+func test_a_token_resting_on_a_bank_above_the_surface_is_outside_the_box() -> void:
+	var mesh_node := MeshInstance3D.new()
+	mesh_node.mesh = PlaneMesh.new()  # surface at local y = 0
+
+	var zone := WaterZone.create_for_mesh(mesh_node)
+	add_child_autofree(zone)
+
+	var collision_shape := zone.get_child(0) as CollisionShape3D
+	var shape := collision_shape.shape as BoxShape3D
+	var top := collision_shape.position.y + shape.size.y / 2.0
+	assert_lt(top, 0.59, "a token resting on the bank must be above the detection box")
 
 	mesh_node.free()
 
