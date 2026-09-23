@@ -49,6 +49,21 @@ DEFAULT_PEAK_TARGET = -3.0
 LUFS_TOLERANCE = 1.5
 PEAK_TOLERANCE = 1.5
 
+# Directories holding one-shot sound effects. These are ALWAYS peak normalized,
+# whatever their length. A designed palette is authored to a uniform peak ceiling,
+# and its relative levels are intentional; LUFS normalization matches perceived
+# loudness file by file, which overrides that intent. It is also actively harmful
+# to a long effect with a quiet tail, because reaching the loudness target means
+# limiting the transient until it clips. LUFS remains correct for sustained
+# material such as music, which belongs in its own directory.
+PEAK_ONLY_DIRS = ("assets/audio/ui", "assets/audio/sfx")
+
+
+def is_peak_only(filepath: str) -> bool:
+    """True when a file is a one-shot effect that must not be LUFS normalized."""
+    normalized = filepath.replace("\\", "/")
+    return any(marker in normalized for marker in PEAK_ONLY_DIRS)
+
 
 def find_audio_files(audio_dir: str) -> list[str]:
     """Recursively find all audio files under the given directory."""
@@ -331,7 +346,7 @@ def main():
         input_tp = measurements.get("input_tp", "?")
         current_peak = get_peak_db(measurements)
 
-        if is_lufs_valid(measurements):
+        if is_lufs_valid(measurements) and not is_peak_only(filepath):
             # ---- LUFS path (normal-length files) ----
             current_lufs = float(measurements["input_i"])
             print(f"    Current: {current_lufs:+.1f} LUFS  (peak: {input_tp} dBTP)")
@@ -362,8 +377,9 @@ def main():
                 fail_count += 1
 
         elif current_peak is not None:
-            # ---- Peak path (short files) ----
-            print(f"    Current: too short for LUFS  (peak: {current_peak:+.1f} dBFS)")
+            # ---- Peak path (short files, or one-shot effects by policy) ----
+            reason = "peak-normalized by policy" if is_peak_only(filepath) else "too short for LUFS"
+            print(f"    Current: {reason}  (peak: {current_peak:+.1f} dBFS)")
 
             if abs(current_peak - peak_target) < PEAK_TOLERANCE:
                 print(f"    Already within peak target — skipping")
