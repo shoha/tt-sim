@@ -13,7 +13,8 @@ extends Area3D
 ## (docs/superpowers/specs/2026-08-15-water-token-interaction-design.md).
 
 const TOKEN_COLLISION_LAYER_MASK := 2
-const VERTICAL_BAND_HEIGHT := 4.0  # +/- 2.0 around the mesh's surface Y
+const SUBMERSION_DEPTH := 4.0  # how far below the surface the detection box reaches
+const SURFACE_MARGIN := 0.05  # thin slab above the surface, so grazing it still counts
 const MIN_FOOTPRINT_SIZE := 0.0001  # below this, treat the mesh AABB as degenerate
 
 
@@ -22,17 +23,25 @@ const MIN_FOOTPRINT_SIZE := 0.0001  # below this, treat the mesh AABB as degener
 ## detect against) or it has no mesh at all. A BoxShape3D approximates the footprint
 ## rather than the exact mesh trimesh -- a zero-thickness exact shape risks flaky
 ## touching-vs-overlapping detection right at the resting height where tokens sit; a
-## thin slab guarantees real volume overlap. VERTICAL_BAND_HEIGHT is generous (+/- 2.0)
-## because a token's resting collision height relative to the water mesh's own Y isn't
-## guaranteed to be close -- verified directly against a real map where a flat,
-## disconnected collision proxy sits 0.59 units above the water mesh, and a future
-## well-authored map could equally plausibly have collision *below* the water mesh's Y
-## at the bottom of a carved basin. The wide, symmetric margin tolerates that mismatch
-## in either direction without needing to query live physics at construction time,
-## which this function can't do anyway -- it runs before the mesh is in the scene tree,
-## before any physics space exists for it. The caller is responsible for matching this
-## node's transform to mesh_node's and adding it as a sibling (see
-## WaterGlbUtils.process_water_meshes()).
+## real slab guarantees real volume overlap.
+##
+## The slab hangs BELOW the surface (top at surface + SURFACE_MARGIN, bottom at
+## surface - SUBMERSION_DEPTH) rather than straddling it, because a terrain-paint
+## `-water` mesh is a single plane spanning the map's whole footprint -- the visible
+## river or lake is simply wherever the terrain dips under that plane. A box centered
+## on the surface therefore also swallows the dry banks standing above it: on the river
+## map (banks at y = 0, water plane at y = -0.59) the earlier symmetric +/-2.0 band put
+## every token inside the zone from the moment the level loaded, so no token ever
+## crossed the boundary and neither the splash nor the ripple ever fired. Anything
+## below the surface within the footprint is under water; anything above it is on dry
+## land. SUBMERSION_DEPTH bounds how far down that claim reaches, so a water plane
+## suspended over a valley does not claim tokens on the valley floor far beneath it.
+##
+## The caller is responsible for matching this node's transform to mesh_node's and
+## adding it as a sibling (see WaterGlbUtils.process_water_meshes()). Both constants are
+## in the mesh's local space, which is all this function can work in -- it runs before
+## the mesh is in the scene tree, so there is no world transform or physics space to
+## query yet.
 static func create_for_mesh(mesh_node: MeshInstance3D) -> WaterZone:
 	if not mesh_node.mesh:
 		return null
@@ -47,13 +56,18 @@ static func create_for_mesh(mesh_node: MeshInstance3D) -> WaterZone:
 	zone.monitoring = true
 	zone.monitorable = false
 
+	var slab_height := SUBMERSION_DEPTH + SURFACE_MARGIN
 	var shape := BoxShape3D.new()
-	shape.size = Vector3(aabb.size.x, VERTICAL_BAND_HEIGHT, aabb.size.z)
+	shape.size = Vector3(aabb.size.x, slab_height, aabb.size.z)
 
+	var centre := aabb.position + aabb.size / 2.0
+	var surface_y := aabb.position.y + aabb.size.y
 	var collision_shape := CollisionShape3D.new()
 	collision_shape.name = "CollisionShape3D"
 	collision_shape.shape = shape
-	collision_shape.position = aabb.position + aabb.size / 2.0
+	collision_shape.position = Vector3(
+		centre.x, surface_y + SURFACE_MARGIN - slab_height / 2.0, centre.z
+	)
 	zone.add_child(collision_shape)
 
 	return zone
@@ -72,8 +86,8 @@ func _ready() -> void:
 ## WaterRippleRegistry.register()), so entering a second, overlapping WaterZone while
 ## already submerged is a no-op here -- only the true 0->1 transition sinks visuals and
 ## spawns a splash. The splash spawns at the token's XZ but this zone's own Y (the water
-## surface), not the token's collision height, which can sit well above/below the
-## surface within VERTICAL_BAND_HEIGHT's generous tolerance.
+## surface), not the token's collision height, which sits somewhere in the SUBMERSION_DEPTH
+## of water below it.
 func _on_body_entered(body: Node3D) -> void:
 	var first_entry := WaterRippleRegistry.register(body.get_instance_id(), body)
 	if not first_entry:
