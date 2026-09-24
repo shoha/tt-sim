@@ -1,8 +1,8 @@
 class_name LevelEditPanel
 extends DrawerContainer
 
-## Slide-out drawer for real-time visual tuning during gameplay. A rail of six
-## icons (sun, sky, color, weather, film, world) shows one pane at a time in a
+## Slide-out drawer for real-time visual tuning during gameplay. A rail of seven
+## icons (sun, sky, color, weather, water, film, world) shows one pane at a time in a
 ## PaneStack, with Cancel/Save pinned below it. Each pane owns the fields it
 ## edits (see LevelEditPane); the Sky and Color panes share an
 ## EnvironmentEditModel. The panel relays pane signals under the names
@@ -20,7 +20,7 @@ signal lofi_changed(overrides: Dictionary)
 signal weather_changed(overrides: Dictionary)
 signal foliage_changed(overrides: Dictionary)
 signal sun_changed(settings: SunSettings)
-signal water_style_changed(style: String)
+signal water_changed(overrides: Dictionary)
 signal revert_to_map_defaults_requested
 
 ## Emitted when the user toggles "Aim on map". GameplayMenuController owns the
@@ -35,12 +35,15 @@ signal drawer_opened
 ## The controller should revert changes if not saved.
 signal drawer_closed
 
-const PANE_IDS: Array[StringName] = [&"sun", &"sky", &"color", &"weather", &"film", &"world"]
+const PANE_IDS: Array[StringName] = [
+	&"sun", &"sky", &"color", &"weather", &"water", &"film", &"world"
+]
 const RAIL_ITEMS: Array[Dictionary] = [
 	{"id": &"sun", "icon": "sun", "tooltip": "Sun"},
 	{"id": &"sky", "icon": "haze", "tooltip": "Sky"},
 	{"id": &"color", "icon": "contrast", "tooltip": "Color"},
 	{"id": &"weather", "icon": "cloud-rain", "tooltip": "Weather"},
+	{"id": &"water", "icon": "droplet", "tooltip": "Water"},
 	{"id": &"film", "icon": "grain", "tooltip": "Film"},
 	{"id": &"world", "icon": "ruler-measure", "tooltip": "World"},
 ]
@@ -52,6 +55,7 @@ var sun_pane: SunPane
 var sky_pane: SkyPane
 var color_pane: ColorPane
 var weather_pane: WeatherPane
+var water_pane: WaterPane
 var film_pane: FilmPane
 var world_pane: WorldPane
 
@@ -115,6 +119,7 @@ func _build_panes() -> void:
 	sky_pane = SkyPane.new()
 	color_pane = ColorPane.new()
 	weather_pane = WeatherPane.new()
+	water_pane = WaterPane.new()
 	film_pane = FilmPane.new()
 	world_pane = WorldPane.new()
 	sky_pane.set_model(_env_model)
@@ -124,6 +129,7 @@ func _build_panes() -> void:
 		&"sky": sky_pane,
 		&"color": color_pane,
 		&"weather": weather_pane,
+		&"water": water_pane,
 		&"film": film_pane,
 		&"world": world_pane,
 	}
@@ -140,12 +146,12 @@ func _build_panes() -> void:
 	weather_pane.weather_changed.connect(weather_changed.emit)
 	film_pane.lofi_changed.connect(lofi_changed.emit)
 	world_pane.scale_config_changed.connect(scale_config_changed.emit)
-	world_pane.water_style_changed.connect(water_style_changed.emit)
+	water_pane.water_changed.connect(water_changed.emit)
 	world_pane.foliage_changed.connect(foliage_changed.emit)
 
 
 func _panes() -> Array[LevelEditPane]:
-	return [sun_pane, sky_pane, color_pane, weather_pane, film_pane, world_pane]
+	return [sun_pane, sky_pane, color_pane, weather_pane, water_pane, film_pane, world_pane]
 
 
 # ============================================================================

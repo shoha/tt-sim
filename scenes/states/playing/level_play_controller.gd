@@ -264,7 +264,7 @@ func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 ## Apply a whole LevelVisualState to the running level. This is the single live
 ## apply path: the Visuals drawer's Cancel and Save, and the client receive path,
 ## all go through here. Applies the live visual fields only -- light intensity,
-## environment, foliage, sun, water style, lo-fi, weather. It does not write
+## environment, foliage, sun, water, lo-fi, weather. It does not write
 ## level data, except that apply_light_intensity_scale() mirrors the scale into
 ## active_level_data (already the same value for every caller). Grid scale
 ## (grid_cell_size, display_unit, display_unit_per_cell) is not networked -- it
@@ -282,7 +282,7 @@ func apply_visual_state(state: LevelVisualState) -> void:
 	apply_environment_settings(state.environment_preset, state.environment_overrides)
 	apply_foliage_overrides(state.foliage.to_dict())
 	apply_sun_settings(state.sun.copy_settings())
-	apply_water_style_setting(state.water_style)
+	apply_water_settings(state.water.to_dict())
 	var game_map := get_game_map()
 	if game_map:
 		# Merge over the full defaults so the three non-editable lo-fi parameters
