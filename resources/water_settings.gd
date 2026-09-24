@@ -5,7 +5,8 @@ extends Resource
 ## Water pane can author. Modelled on FoliageSettings, with one difference:
 ## three fields are Colors, which do not survive JSON, so to_dict() writes them
 ## as hex strings (Color.to_html) and from_dict() reads either a hex string or a
-## Color (in-process broadcasts and .tres levels never go through JSON).
+## Color (in-process broadcasts and .tres levels never go through JSON). Use
+## colors_match() for round-trip comparison since hex serialisation quantises to 1/255.
 ##
 ## to_dict() is complete (every key, every time) and uses the uniform names as
 ## keys, so WaterGlbUtils.apply_water_settings() consumes it unchanged and a full
@@ -39,6 +40,10 @@ const KEYS: Array[String] = [
 	"bob_height",
 ]
 const COLOR_KEYS: Array[String] = ["water_color", "shore_color", "foam_color"]
+## Hex serialisation quantises each channel to 1/255, so colours that went through
+## to_dict()/from_dict() (or an 8-bit image) are compared with this tolerance, not
+## is_equal_approx.
+const COLOR_TOLERANCE := 1.0 / 255.0
 
 @export var water_color: Color = Color(0.05, 0.30, 0.38, 0.8)
 @export var shore_color: Color = Color(0.35, 0.75, 0.70, 0.6)
@@ -109,6 +114,15 @@ static func color_from_value(value: Variant, fallback: Color) -> Color:
 		if Color.html_is_valid(parsed_str):
 			return Color.html(parsed_str)
 	return fallback
+
+
+static func colors_match(a: Color, b: Color) -> bool:
+	return (
+		absf(a.r - b.r) <= COLOR_TOLERANCE
+		and absf(a.g - b.g) <= COLOR_TOLERANCE
+		and absf(a.b - b.b) <= COLOR_TOLERANCE
+		and absf(a.a - b.a) <= COLOR_TOLERANCE
+	)
 
 
 func copy_settings() -> WaterSettings:
