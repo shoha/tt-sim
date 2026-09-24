@@ -26,9 +26,11 @@ conventions, key APIs, architecture, and "where to add things". Supplementary de
 
 ## Environment
 
-- Godot 4.7 is installed at `D:/Apps/Godot/Godot.exe`. `godot` on PATH is a wrapper
-  (`~/.local/bin/godot` for bash, `~/scoop/shims/godot.cmd` for PowerShell). Always pass
-  `--headless` for CLI and agent use unless real pixels are needed.
+- Godot installs live one per subfolder under `D:/Apps/Godot/` (currently
+  `Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64.exe`). `godot` on PATH is a
+  wrapper that picks the newest (`~/.local/bin/godot` for bash, `~/scoop/shims/godot.cmd`
+  for PowerShell); the validator MCP server gets the explicit path through `GODOT_PATH` in
+  `.mcp.json`. Always pass `--headless` for CLI and agent use unless real pixels are needed.
 - Permission allowlist: `Bash(git *)`, `Bash(godot *)`, `Bash(gdformat *)`, `Bash(gdlint *)`
   match commands that *start* with that word. `cd dir && git ...` starts with `cd` and prompts;
   use `git -C /d/dev/tt-sim ...` instead. Avoid `bash -c "..."` wrappers and `$(cat <<'EOF' ...)`
