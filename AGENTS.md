@@ -11,6 +11,7 @@
 | [docs/THEME_GUIDE.md](docs/THEME_GUIDE.md) | UI theme variants, typography, colors |
 | [docs/UI_SYSTEMS.md](docs/UI_SYSTEMS.md) | UIManager, dialogs, toasts, overlays |
 | [docs/ASSET_MANAGEMENT.md](docs/ASSET_MANAGEMENT.md) | Asset packs, model loading, caching |
+| [docs/ASSET_PIPELINE.md](docs/ASSET_PIPELINE.md) | Contract with the Blender producers (terrain-paint, treecube): GLB names, extras, attributes, materials, budgets, round-trip checks |
 | [docs/SOUND_EFFECTS.md](docs/SOUND_EFFECTS.md) | Audio files, wiring, normalization, adding new sounds |
 | [docs/NETWORKING.md](docs/NETWORKING.md) | Multiplayer, Steam networking, state sync |
 | [docs/lighting-and-environment.md](docs/lighting-and-environment.md) | Environment presets, map defaults, sky, in-game editing |
