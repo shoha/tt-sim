@@ -28,7 +28,7 @@ func test_from_dict_round_trips() -> void:
 	settings.water_color = Color(0.1, 0.2, 0.3, 0.9)
 	settings.caustic_strength = 1.75
 	var restored := WaterSettings.from_dict(settings.to_dict())
-	assert_true(restored.water_color.is_equal_approx(Color(0.1, 0.2, 0.3, 0.9)))
+	assert_true(WaterSettings.colors_match(restored.water_color, Color(0.1, 0.2, 0.3, 0.9)))
 	assert_almost_eq(restored.caustic_strength, 1.75, 0.0001)
 	assert_eq(restored.to_dict(), settings.to_dict())
 
@@ -62,3 +62,11 @@ func test_copy_settings_is_independent() -> void:
 	copy.water_color = Color.BLUE
 	assert_almost_eq(settings.wave_speed, WaterSettings.default().wave_speed, 0.0001)
 	assert_ne(settings.water_color, Color.BLUE)
+
+
+func test_colors_match_tolerates_hex_quantization_but_not_real_differences() -> void:
+	var original := Color(0.1, 0.2, 0.3, 0.9)
+	var quantized := Color.html(original.to_html(true))
+	assert_false(original.is_equal_approx(quantized), "sanity: hex round trip is lossy")
+	assert_true(WaterSettings.colors_match(original, quantized))
+	assert_false(WaterSettings.colors_match(original, Color(0.1, 0.2, 0.31, 0.9)))
