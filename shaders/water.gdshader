@@ -30,6 +30,10 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
  *   4. Foam that breaks up. Shoreline foam is a soft depth band, modulated by animated
  *      noise into patches and pulsed slowly toward the shore, plus the existing
  *      depth-slope detector for rocks breaking the surface.
+ *   5. Flow. Where terrain-paint baked a flow map, the ripple field, caustics and foam
+ *      breakup are advected along the local flow with a two-phase cross-fade, the swell
+ *      travels downstream, foam stretches into streaks and token ripples become wakes.
+ *      Without a map nothing changes.
  *
  * The world-space normal is written to NORMAL directly (rather than via NORMAL_MAP) so the
  * result does not depend on the GLB plane carrying a sensible tangent basis.
@@ -100,6 +104,17 @@ uniform float disturbance_ripple_strength : hint_range(0.0, 2.0) = 0.5;
 uniform vec4 foam_color : source_color = vec4(0.88, 0.94, 0.96, 0.9);
 uniform float foam_edge_sensitivity : hint_range(0.1, 6.0) = 1.5;
 uniform float foam_strength : hint_range(0.0, 2.0) = 1.0;
+// Flow map: RG = the flow direction in the water plane's LOCAL (Blender XY) axes times a
+// 0..1 speed factor, packed as v * 0.5 + 0.5, sampled by the plane's UV. Baked by
+// terrain-paint from '-flow' curves and carried in the GLB as the preview material's
+// emission texture; WaterGlbUtils.process_water_meshes() moves it here and flags the one
+// plane it belongs to with the per-instance water_flow_present. Every other plane, and
+// every level without a map, renders exactly as before. See
+// docs/superpowers/specs/2026-09-23-water-flow-design.md.
+uniform sampler2D water_flow_map : hint_default_black, filter_linear, repeat_disable;
+instance uniform bool water_flow_present = false;
+// Per-level multiplier on the baked speed (WaterSettings.flow_strength, Motion group).
+uniform float flow_strength : hint_range(0.0, 2.0) = 1.0;
 
 // Water Quality graphics setting (Settings > Graphics) -- engine-wide global uniforms
 // rather than per-material uniforms, so SettingsMenu can apply them via
@@ -123,6 +138,18 @@ const mat2 RIPPLE_ROT_1 = mat2(vec2(0.8, 0.6), vec2(-0.6, 0.8));
 const mat2 RIPPLE_ROT_2 = mat2(vec2(-0.6, 0.8), vec2(-0.8, -0.6));
 const mat2 RIPPLE_ROT_3 = mat2(vec2(0.28, -0.96), vec2(0.96, 0.28));
 const vec2 SWELL_DIR = vec2(0.94, 0.34);
+// World units per second the surface travels at flow magnitude 1 (before flow_strength),
+// so the same curve reads at the same speed on a large and a small map.
+const float FLOW_SPEED_UNITS_PER_SEC = 0.6;
+// Below this decoded magnitude a texel is still water: 8-bit mid-grey decodes to 0.004.
+const float FLOW_DEAD_ZONE = 0.02;
+// Two-phase flow-map advection: each copy of a drifting field is displaced along the
+// flow for this many seconds, then reset; the two copies are half a cycle apart and
+// cross-faded so neither ever stretches far. A single displaced copy shears apart
+// wherever the flow bends, which is exactly the river the map exists for.
+const float FLOW_CYCLE_SECONDS = 4.0;
+// Extra swell phase speed per unit of flow speed, so a fast channel's long wave hurries.
+const float FLOW_SWELL_SPEED_GAIN = 2.0;
 
 varying vec3 world_pos;
 
@@ -181,10 +208,11 @@ vec3 water_ripple_octave(vec2 p, mat2 rot, float freq, vec2 drift, float amp) {
 // Ripple height field: three (four with fine detail) octaves of gradient noise, each
 // rotated and drifting its own way so the surface reads as organic, wandering ripples
 // with no repeating corrugation, plus one long directional swell so it also has a
-// sense of travel. Frequencies are fixed multiples of ripple_scale. aa_fine fades the
-// finest octave as it nears one screen pixel per feature so extreme zoom-out stays
-// smooth instead of aliasing.
-vec3 water_ripple(vec2 p, float t, float aa_fine) {
+// sense of travel; with a flow map the swell travels along the local flow, faster in
+// fast water, otherwise along SWELL_DIR. Frequencies are fixed multiples of ripple_scale.
+// aa_fine fades the finest octave as it nears one screen pixel per feature so extreme
+// zoom-out stays smooth instead of aliasing.
+vec3 water_ripple(vec2 p, float t, float aa_fine, vec2 flow) {
 	float f = ripple_scale;
 	vec3 sum = water_ripple_octave(p, mat2(vec2(1.0, 0.0), vec2(0.0, 1.0)), f, vec2(t * 0.35, t * 0.2), 1.0);
 	sum += water_ripple_octave(p, RIPPLE_ROT_1, f * 2.1, vec2(-t * 0.3, t * 0.45), 0.5);
@@ -192,8 +220,11 @@ vec3 water_ripple(vec2 p, float t, float aa_fine) {
 	if (!water_quality_skip_fine_detail) {
 		sum += water_ripple_octave(p, RIPPLE_ROT_3, f * 8.5, vec2(-t * 0.7, -t * 0.55), 0.12 * aa_fine);
 	}
-	float swell_phase = dot(SWELL_DIR, p) * f * 0.5 - t * 1.2;
-	sum += vec3(sin(swell_phase), cos(swell_phase) * f * 0.5 * SWELL_DIR) * 0.4;
+	float flow_len = length(flow);
+	vec2 swell_dir = flow_len > 0.0 ? flow / flow_len : SWELL_DIR;
+	float swell_speed = 1.2 + flow_len * FLOW_SWELL_SPEED_GAIN;
+	float swell_phase = dot(swell_dir, p) * f * 0.5 - t * swell_speed;
+	sum += vec3(sin(swell_phase), cos(swell_phase) * f * 0.5 * swell_dir) * 0.4;
 	return sum;
 }
 
@@ -216,6 +247,30 @@ float water_scene_depth(vec2 uv, mat4 inv_projection) {
 }
 
 
+// World-XZ flow at this fragment: the plane-local direction from the map, rotated by the
+// plane's own model matrix (which carries its rotation and the level scale), times the
+// baked speed factor, flow_strength and the nominal travel speed. Zero without a map.
+vec2 water_flow(vec2 uv, mat4 model) {
+	if (!water_flow_present) {
+		return vec2(0.0);
+	}
+	vec2 f = texture(water_flow_map, uv).rg * 2.0 - 1.0;
+	float speed = length(f);
+	if (speed <= FLOW_DEAD_ZONE) {
+		return vec2(0.0);
+	}
+	// Blender local (x, y) is glTF/Godot local (x, 0, -y): the swap the exporter applies
+	// to the mesh itself, so the direction lands on the same geometry it was baked over.
+	vec3 local_dir = vec3(f.x, 0.0, -f.y) / speed;
+	vec2 world_dir = (model * vec4(local_dir, 0.0)).xz;
+	float world_len = length(world_dir);
+	if (world_len <= 0.0001) {
+		return vec2(0.0);
+	}
+	return world_dir / world_len * speed * flow_strength * FLOW_SPEED_UNITS_PER_SEC;
+}
+
+
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float t = TIME * wave_speed;
@@ -231,10 +286,27 @@ void fragment() {
 	// exceeds what the current zoom can resolve, and to normalize the slope detector.
 	float world_units_per_pixel = length(fwidth(p)) + 0.0001;
 
+	// ---- Flow -----------------------------------------------------------------------
+	// Two displaced copies of every drifting field (ripples, caustics, foam breakup),
+	// half a cycle apart, cross-faded by flow_w. Zero flow makes p0 == p1 == p and every
+	// branch below skips the second copy, so lakes and older maps pay one branch.
+	vec2 flow_ws = water_flow(UV, MODEL_MATRIX);
+	float flow_speed = length(flow_ws);
+	float flow_phase0 = fract(TIME / FLOW_CYCLE_SECONDS);
+	float flow_phase1 = fract(flow_phase0 + 0.5);
+	// Weight of the second copy: 1 exactly when the first copy resets (hiding its jump),
+	// 0 exactly when the second one resets.
+	float flow_w = abs(2.0 * flow_phase0 - 1.0);
+	vec2 p0 = p - flow_ws * flow_phase0 * FLOW_CYCLE_SECONDS;
+	vec2 p1 = p - flow_ws * flow_phase1 * FLOW_CYCLE_SECONDS;
+
 	// ---- Surface normal from the layered ripple field ---------------------------------
 	float fine_features_per_pixel = ripple_scale * 8.5 * world_units_per_pixel;
 	float aa_fine = 1.0 - smoothstep(0.15, 0.4, fine_features_per_pixel);
-	vec3 wave = water_ripple(p, t, aa_fine);
+	vec3 wave = water_ripple(p0, t, aa_fine, flow_ws);
+	if (flow_speed > 0.0) {
+		wave = mix(wave, water_ripple(p1, t, aa_fine, flow_ws), flow_w);
+	}
 	// Sum of octave amplitudes normalizes the height into roughly [-1, 1] for the crest term.
 	float crest = wave.x / 2.2;
 	vec2 grad = wave.yz * ripple_strength * 0.25;
@@ -291,7 +363,10 @@ void fragment() {
 		if (!water_quality_skip_fine_detail) {
 			float caustic_cycles_per_pixel = caustic_scale * 1.7 * world_units_per_pixel;
 			float aa_caustic = 1.0 - smoothstep(0.12, 0.3, caustic_cycles_per_pixel);
-			float caustic = water_caustic(p * caustic_scale, t) * aa_caustic;
+			float caustic = water_caustic(p0 * caustic_scale, t) * aa_caustic;
+			if (flow_speed > 0.0) {
+				caustic = mix(caustic, water_caustic(p1 * caustic_scale, t) * aa_caustic, flow_w);
+			}
 			// Multiplicative so the pattern keeps the bed's own hue, plus a small additive
 			// lift toward white so it reads as focused light rather than a saturated stain.
 			float caustic_lift = caustic * caustic_strength * (1.0 - depth01);
