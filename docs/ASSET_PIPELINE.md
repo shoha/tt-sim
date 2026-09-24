@@ -15,6 +15,7 @@ Detail that belongs to one side stays in that repo:
 | How terrain-paint bakes, exports collision, writes extras, bakes the flow map | `terrain-paint/docs/baking-export.md`, `terrain-paint/CLAUDE.md` "Water" |
 | How terrain-paint reads Geoscatter and writes scatter instances | `terrain-paint/docs/scatter-integration.md` |
 | How treecube builds meshes, textures, wind weights and biome packages | `treecube/README.md`, `treecube/docs/tt-sim-wind-weights.md` |
+| How treecube paints the tileable terrain surfaces terrain-paint layers use (grass, dirt, cliff) | `treecube/docs/surfaces.md` |
 | How tt-sim loads a map and post-processes it | `docs/ARCHITECTURE.md` "Map Loading Flow", `utils/glb_utils.gd` and the `*_glb_utils.gd` siblings |
 | Lighting extras, foliage AO history, texture packing measurements | `docs/lighting-and-environment.md` |
 | Foliage budget, chunking, decimation measurements | `docs/PERFORMANCE.md` |
