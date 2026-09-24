@@ -2,8 +2,9 @@ class_name SwatchTextures
 extends RefCounted
 
 ## Small textures that show what a choice does: a sky preset's tile and preview
-## (the shipped PNGs for HDRI skies, painted gradients otherwise) and a lighting
-## preset's background colour over its ambient colour for the preset picker.
+## (the shipped PNGs for HDRI skies, painted gradients otherwise), a lighting
+## preset's background colour over its ambient colour, and a water palette's
+## deep colour over its shallows colour for the respective preset pickers.
 ## Loaded or painted once per name and cached for the process; unknown names
 ## paint a neutral grey.
 
@@ -11,6 +12,7 @@ const SKY_SIZE := 24
 const PREVIEW_WIDTH := 280
 const PREVIEW_HEIGHT := 70
 const SWATCH_SIZE := 16
+const WATER_SWATCH_SIZE := 24
 const FALLBACK := Color(0.3, 0.3, 0.3)
 
 static var _cache: Dictionary = {}
@@ -46,6 +48,28 @@ static func preset_swatch(preset_name: String) -> ImageTexture:
 	for y in range(SWATCH_SIZE):
 		var color := background if y < split else ambient
 		for x in range(SWATCH_SIZE):
+			image.set_pixel(x, y, color)
+	var texture := ImageTexture.create_from_image(image)
+	_cache[key] = texture
+	return texture
+
+
+## 24x24 tile for a water palette: deep color over shallows color, opaque (the
+## palette alphas are shader blend weights, not something to show in a swatch).
+static func water_swatch(palette_name: String) -> ImageTexture:
+	var key := "water:" + palette_name
+	if _cache.has(key):
+		return _cache[key]
+	var palette: Dictionary = WaterPresets.PALETTES.get(palette_name, {})
+	var deep: Color = palette.get("water_color", FALLBACK)
+	var shallows: Color = palette.get("shore_color", FALLBACK)
+	deep.a = 1.0
+	shallows.a = 1.0
+	var image := Image.create(WATER_SWATCH_SIZE, WATER_SWATCH_SIZE, false, Image.FORMAT_RGBA8)
+	var split := WATER_SWATCH_SIZE / 2
+	for y in range(WATER_SWATCH_SIZE):
+		var color := deep if y < split else shallows
+		for x in range(WATER_SWATCH_SIZE):
 			image.set_pixel(x, y, color)
 	var texture := ImageTexture.create_from_image(image)
 	_cache[key] = texture
