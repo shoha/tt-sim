@@ -69,13 +69,31 @@ static func _find_water_mesh_nodes(node: Node, result: Array[MeshInstance3D]) ->
 		_find_water_mesh_nodes(child, result)
 
 
-## Apply a named Water Style preset (see WaterPresets) to the shared water
-## ShaderMaterial. Called both from the level editor (live, on dropdown
-## selection) and from the runtime level-load path, since the style choice
-## lives on LevelData but the material is a single shared instance created
-## lazily on first use (see _get_water_material()).
+## Apply a legacy Water Style name (see WaterPresets.STYLE_COMPOSITION) to the
+## shared water ShaderMaterial. Kept for the loader's fallback path and for
+## callers that only know a style name; the drawer and the level-load path use
+## apply_water_settings() with a full WaterSettings dictionary.
 static func apply_water_style(style: String) -> void:
-	var preset := WaterPresets.get_preset(style)
+	apply_water_settings(WaterPresets.get_preset(style))
+
+
+## Apply a WaterSettings.to_dict() (or any subset of it) to the shared water
+## ShaderMaterial. Called from the level editor (live, on every edit), from the
+## runtime level-load path, and from the client receive path -- the material is
+## a single shared instance created lazily on first use (see
+## _get_water_material()), so this is the one seam every path goes through.
+## Colors arrive as Color from in-process callers and as hex strings from JSON
+## and the network; both are accepted. Keys the shader does not declare are
+## skipped so a payload from a newer build cannot error here.
+static func apply_water_settings(settings: Dictionary) -> void:
 	var material := _get_water_material()
-	for key in preset.keys():
-		material.set_shader_parameter(key, preset[key])
+	for key in settings:
+		if key not in WaterSettings.KEYS:
+			continue
+		var value: Variant = settings[key]
+		if key in WaterSettings.COLOR_KEYS:
+			var current: Variant = material.get_shader_parameter(key)
+			var fallback: Color = current if current is Color else Color.WHITE
+			material.set_shader_parameter(key, WaterSettings.color_from_value(value, fallback))
+		else:
+			material.set_shader_parameter(key, float(value))
