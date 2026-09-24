@@ -207,6 +207,15 @@ func copy_map_to_level(source_path: String, folder_name: String) -> bool:
 	return true
 
 
+## Rebuild a legacy .tres level's water from its water_style. ResourceLoader
+## never runs LevelData.from_dict(), so a .tres level's water otherwise stays
+## at the defaults regardless of the style it was saved with -- see
+## LevelData.seed_water_from_legacy_style(). No-op for a null level.
+func _seed_legacy_tres_water(level: LevelData) -> void:
+	if level:
+		level.seed_water_from_legacy_style()
+
+
 ## Load a level from disk (auto-detects format)
 ## Set notify to false when loading for editing (prevents auto-play)
 ## @param path: Either a .tres file path or a level folder path
@@ -233,6 +242,7 @@ func load_level(path: String, notify: bool = true) -> LevelData:
 	if not level:
 		push_error("LevelManager: Failed to load level: " + path)
 		return null
+	_seed_legacy_tres_water(level)
 
 	current_level = level
 	current_level_path = path
@@ -321,6 +331,7 @@ func load_level_async(path: String, notify: bool = true) -> LevelData:
 	if not level:
 		push_error("LevelManager: Failed to load level: " + path)
 		return null
+	_seed_legacy_tres_water(level)
 
 	current_level = level
 	current_level_path = path
@@ -413,6 +424,7 @@ func get_saved_levels() -> Array[Dictionary]:
 			var level = (
 				ResourceLoader.load(full_path, "", ResourceLoader.CACHE_MODE_IGNORE) as LevelData
 			)
+			_seed_legacy_tres_water(level)
 			if level and level.map_path.is_empty():
 				push_warning(
 					"LevelManager: Skipping unloadable level (no map assigned): " + entry_name

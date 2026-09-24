@@ -1,8 +1,9 @@
 extends GutTest
 
-## Round-trip tests for LevelData.water_style -- mirrors
-## tests/unit/test_level_data_visual_settings.gd's style for a simple scalar
-## field.
+## Tests for LevelData.water and water_style: to_dict()/from_dict()
+## serialisation of water_overrides, water_style tracking water.matching_look(),
+## and seed_water_from_legacy_style() rebuilding a legacy .tres's water from the
+## style name it was saved with.
 
 
 func test_to_dict_includes_water_style() -> void:
@@ -67,14 +68,24 @@ func test_duplicate_level_copies_water_independently() -> void:
 	assert_almost_eq(level.water.wave_speed, 1.7, 0.0001)
 
 
-func test_legacy_tres_water_overrides_property_is_absorbed() -> void:
+func test_seed_water_from_legacy_style_rebuilds_from_style() -> void:
 	var level := LevelData.new()
-	var settings := WaterSettings.default()
-	settings.foam_strength = 1.9
+	level.water_style = "realistic"  # simulates ResourceLoader setting this directly
 
-	level.set("water_overrides", settings.to_dict())
+	level.seed_water_from_legacy_style()
 
-	assert_almost_eq(level.water.foam_strength, 1.9, 0.0001)
+	assert_eq(level.water.matching_look(), "realistic")
+	assert_eq(level.water.matching_palette(), "lake")
+
+
+func test_seed_water_from_legacy_style_leaves_edited_water_alone() -> void:
+	var level := LevelData.new()
+	level.water.wave_speed = 2.0
+	level.water_style = "realistic"  # stale relative to the edited water
+
+	level.seed_water_from_legacy_style()
+
+	assert_almost_eq(level.water.wave_speed, 2.0, 0.0001)
 
 
 func test_from_dict_restores_water_style() -> void:

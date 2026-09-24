@@ -82,7 +82,7 @@ const LOOKS := {
 }
 
 ## Deep color, shallows color, foam color, murkiness. Starting values from the
-## design spec; tuned on the River level (see the plan's final task).
+## design spec; tuned by eye on the River level.
 const PALETTES := {
 	"lagoon":
 	{

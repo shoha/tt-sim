@@ -505,7 +505,7 @@ func _get_sun_gizmo() -> SunGizmoTool:
 func _on_edit_water_changed(overrides: Dictionary) -> void:
 	if _level_play_controller:
 		_level_play_controller.apply_water_settings(overrides)
-		var level_data = _level_play_controller.active_level_data
+		var level_data: LevelData = _level_play_controller.active_level_data
 		if level_data:
 			level_data.water = WaterSettings.from_dict(overrides)
 			level_data.water_style = level_data.water.matching_look()

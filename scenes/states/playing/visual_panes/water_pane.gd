@@ -192,8 +192,6 @@ func _on_clarity_changed(value: float) -> void:
 
 func _on_row_changed(value: float, key: String) -> void:
 	_water.set(key, value)
-	if key == "depth_absorption":
-		_clarity_row.set_value_no_signal(CLARITY_MAX - value)
 	_sync_tiles()
 	_emit()
 

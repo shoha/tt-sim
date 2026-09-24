@@ -76,7 +76,7 @@ static func default() -> WaterSettings:
 ## Uniform-name dictionary: every key, current value, colors as hex strings.
 func to_dict() -> Dictionary:
 	var data := {}
-	for key in KEYS:
+	for key: String in KEYS:
 		if key in COLOR_KEYS:
 			data[key] = (get(key) as Color).to_html(true)
 		else:
@@ -92,7 +92,7 @@ static func from_dict(data: Variant) -> WaterSettings:
 	if data is not Dictionary:
 		return settings
 	var dict := data as Dictionary
-	for key in KEYS:
+	for key: String in KEYS:
 		if not dict.has(key):
 			continue
 		if key in COLOR_KEYS:
@@ -109,10 +109,8 @@ static func color_from_value(value: Variant, fallback: Color) -> Color:
 		return value
 	if value is String:
 		var hex_str: String = value
-		# Ensure hex strings have '#' prefix for html_is_valid and html
-		var parsed_str: String = hex_str if hex_str.begins_with("#") else "#" + hex_str
-		if Color.html_is_valid(parsed_str):
-			return Color.html(parsed_str)
+		if Color.html_is_valid(hex_str):
+			return Color.html(hex_str)
 	return fallback
 
 
@@ -139,7 +137,7 @@ static func from_style(style: String) -> WaterSettings:
 ## Overwrite just the keys in values (one preset group's worth), leaving the
 ## other groups untouched -- this is what a tile press does.
 func apply_group(values: Dictionary) -> void:
-	for key in values:
+	for key: String in values:
 		if key in COLOR_KEYS:
 			set(key, color_from_value(values[key], get(key)))
 		elif key in KEYS:
@@ -163,10 +161,10 @@ func matching_motion() -> String:
 ## colors_match (a hex-quantisation tolerance) so a level that went through JSON
 ## still matches the palette it was saved with.
 func _matching(group: Dictionary) -> String:
-	for id in group:
+	for id: String in group:
 		var values: Dictionary = group[id]
 		var matches := true
-		for key in values:
+		for key: String in values:
 			if key in COLOR_KEYS:
 				if not colors_match(get(key), values[key]):
 					matches = false

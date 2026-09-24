@@ -126,3 +126,20 @@ func test_color_row_edit_flips_palette_to_custom() -> void:
 	assert_eq(pane._palette_tiles.selected, &"custom")
 	var emitted: Array = get_signal_parameters(pane, "water_changed")
 	assert_eq(emitted[0]["shore_color"], Color.RED.to_html(true))
+
+
+func test_load_state_emits_nothing() -> void:
+	var pane := _pane()
+	watch_signals(pane)
+	pane.load_state(_state())
+	assert_signal_not_emitted(pane, "changed")
+	assert_signal_not_emitted(pane, "water_changed")
+
+
+func test_look_row_edit_flips_only_look_to_custom() -> void:
+	var pane := _pane()
+	pane.load_state(_state())
+	pane._on_row_changed(0.33, "roughness_value")
+	assert_eq(pane._look_tiles.selected, &"custom")
+	assert_eq(pane._palette_tiles.selected, &"lake")
+	assert_eq(pane._motion_tiles.selected, &"gentle")
