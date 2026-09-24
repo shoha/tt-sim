@@ -150,17 +150,41 @@ func test_foam_alpha_stays_in_the_readable_band() -> void:
 func test_motion_values() -> void:
 	assert_eq(
 		WaterPresets.MOTIONS["still"],
-		{"ripple_strength": 0.15, "ripple_scale": 1.2, "wave_speed": 0.2, "foam_strength": 0.3}
+		{
+			"ripple_strength": 0.15,
+			"ripple_scale": 1.2,
+			"wave_speed": 0.2,
+			"foam_strength": 0.3,
+			"flow_strength": 0.0,
+		}
 	)
 	assert_eq(
 		WaterPresets.MOTIONS["gentle"],
-		{"ripple_strength": 0.5, "ripple_scale": 1.6, "wave_speed": 0.6, "foam_strength": 1.0}
+		{
+			"ripple_strength": 0.5,
+			"ripple_scale": 1.6,
+			"wave_speed": 0.6,
+			"foam_strength": 1.0,
+			"flow_strength": 1.0,
+		}
 	)
 	assert_eq(
 		WaterPresets.MOTIONS["lively"],
-		{"ripple_strength": 0.65, "ripple_scale": 2.0, "wave_speed": 0.9, "foam_strength": 1.0}
+		{
+			"ripple_strength": 0.65,
+			"ripple_scale": 2.0,
+			"wave_speed": 0.9,
+			"foam_strength": 1.0,
+			"flow_strength": 1.0,
+		}
 	)
 	assert_eq(
 		WaterPresets.MOTIONS["rough"],
-		{"ripple_strength": 0.9, "ripple_scale": 2.6, "wave_speed": 1.4, "foam_strength": 1.5}
+		{
+			"ripple_strength": 0.9,
+			"ripple_scale": 2.6,
+			"wave_speed": 1.4,
+			"foam_strength": 1.5,
+			"flow_strength": 1.4,
+		}
 	)

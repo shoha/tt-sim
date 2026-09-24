@@ -8,7 +8,7 @@ extends RefCounted
 ##   distortion, edge foam, token ripples, shallows width, the hidden shimmer /
 ##   fresnel / bob values).
 ## - PALETTES: deep color, shallows color, foam color and murkiness.
-## - MOTIONS: wave amount, ripple detail, speed and foam amount.
+## - MOTIONS: wave amount, ripple detail, speed, foam amount and current strength.
 ##
 ## The Water pane shows one tile row per group and derives the selected tile
 ## by matching values (WaterSettings.matching_*), so a level never stores a
@@ -41,7 +41,7 @@ const LOOK_KEYS: Array[String] = [
 ]
 const PALETTE_KEYS: Array[String] = ["water_color", "shore_color", "foam_color", "depth_absorption"]
 const MOTION_KEYS: Array[String] = [
-	"ripple_strength", "ripple_scale", "wave_speed", "foam_strength"
+	"ripple_strength", "ripple_scale", "wave_speed", "foam_strength", "flow_strength"
 ]
 
 const LOOKS := {
@@ -130,14 +130,41 @@ const PALETTES := {
 	},
 }
 
+## Wave amount, ripple detail, speed, foam amount and current strength. Still pins
+## the current to zero so a pond stays a pond even on a map with a river curve.
 const MOTIONS := {
 	"still":
-	{"ripple_strength": 0.15, "ripple_scale": 1.2, "wave_speed": 0.2, "foam_strength": 0.3},
+	{
+		"ripple_strength": 0.15,
+		"ripple_scale": 1.2,
+		"wave_speed": 0.2,
+		"foam_strength": 0.3,
+		"flow_strength": 0.0,
+	},
 	"gentle":
-	{"ripple_strength": 0.5, "ripple_scale": 1.6, "wave_speed": 0.6, "foam_strength": 1.0},
+	{
+		"ripple_strength": 0.5,
+		"ripple_scale": 1.6,
+		"wave_speed": 0.6,
+		"foam_strength": 1.0,
+		"flow_strength": 1.0,
+	},
 	"lively":
-	{"ripple_strength": 0.65, "ripple_scale": 2.0, "wave_speed": 0.9, "foam_strength": 1.0},
-	"rough": {"ripple_strength": 0.9, "ripple_scale": 2.6, "wave_speed": 1.4, "foam_strength": 1.5},
+	{
+		"ripple_strength": 0.65,
+		"ripple_scale": 2.0,
+		"wave_speed": 0.9,
+		"foam_strength": 1.0,
+		"flow_strength": 1.0,
+	},
+	"rough":
+	{
+		"ripple_strength": 0.9,
+		"ripple_scale": 2.6,
+		"wave_speed": 1.4,
+		"foam_strength": 1.5,
+		"flow_strength": 1.4,
+	},
 }
 
 ## Legacy style name -> [look, palette, motion].

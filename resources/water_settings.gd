@@ -38,6 +38,7 @@ const KEYS: Array[String] = [
 	"fresnel_power",
 	"fresnel_strength",
 	"bob_height",
+	"flow_strength",
 ]
 const COLOR_KEYS: Array[String] = ["water_color", "shore_color", "foam_color"]
 ## Hex serialisation quantises each channel to 1/255, so colours that went through
@@ -67,6 +68,9 @@ const COLOR_TOLERANCE := 1.0 / 255.0
 @export var fresnel_power: float = 4.0
 @export var fresnel_strength: float = 0.5
 @export var bob_height: float = 0.02
+## Multiplies the baked flow map's speed (shaders/water.gdshader flow_strength); 0 stops
+## the current entirely. Has no effect on a level whose map carries no flow map.
+@export var flow_strength: float = 1.0
 
 
 static func default() -> WaterSettings:
