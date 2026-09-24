@@ -35,8 +35,9 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
  * result does not depend on the GLB plane carrying a sensible tangent basis.
  *
  * MANAGED BY: WaterGlbUtils._get_water_material() builds one shared ShaderMaterial instance
- * from this shader and reuses it across every map. Per-level tuning is a named Water Style
- * preset (utils/water_presets.gd) applied by WaterGlbUtils.apply_water_style().
+ * from this shader and reuses it across every map. Per-level tuning is a WaterSettings
+ * resource (resources/water_settings.gd) applied by WaterGlbUtils.apply_water_settings();
+ * WaterPresets groups the starting values into looks, palettes and motions.
  */
 
 // Deep-water tint. Alpha is only used when the screen prepass is unavailable (Water

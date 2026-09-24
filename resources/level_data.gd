@@ -142,7 +142,7 @@ func _set(property: StringName, value: Variant) -> bool:
 		visual_settings = VisualSettings.new()
 		visual_settings.sun = SunSettings.from_legacy(value)
 		return true
-	# Pre-typed .tres levels carry these three as Dictionaries; the JSON path goes
+	# Pre-typed .tres levels carry these four as Dictionaries; the JSON path goes
 	# through from_dict() and never reaches here.
 	if property == &"lofi_overrides" and value is Dictionary:
 		lofi = LofiSettings.from_dict(value)

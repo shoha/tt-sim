@@ -338,7 +338,7 @@ func _finalize_map_loading(map: Node3D) -> void:
 		# the direct-load path (_load_level_map_async) and the client
 		# map-download path (MapDownloadCoordinator -> _finalize_map_loading)
 		# go through -- rather than only after the direct path's call site, so
-		# clients who download a map from the host also get their Water Style
+		# clients who download a map from the host also get their water settings
 		# applied.
 		_level_play_controller.apply_water_settings(
 			_level_play_controller.active_level_data.water.to_dict()

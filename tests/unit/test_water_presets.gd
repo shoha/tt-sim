@@ -89,6 +89,64 @@ func test_stylized_look_values() -> void:
 	assert_almost_eq(look["bob_height"], 0.02, 0.001)
 
 
+## Pinned by value, not just by key: the palettes were tuned by eye on the River
+## level, so a silent numeric drift would change every level's look.
+func test_palette_values() -> void:
+	var expected := {
+		"lagoon":
+		{
+			"water_color": Color(0.05, 0.30, 0.38, 0.8),
+			"shore_color": Color(0.35, 0.75, 0.70, 0.6),
+			"foam_color": Color(0.88, 0.94, 0.96, 0.9),
+			"depth_absorption": 1.4,
+		},
+		"lake":
+		{
+			"water_color": Color(0.02, 0.12, 0.22, 0.9),
+			"shore_color": Color(0.20, 0.50, 0.55, 0.7),
+			"foam_color": Color(0.85, 0.92, 0.95, 0.85),
+			"depth_absorption": 2.2,
+		},
+		"river":
+		{
+			"water_color": Color(0.09, 0.17, 0.11, 0.9),
+			"shore_color": Color(0.42, 0.50, 0.28, 0.7),
+			"foam_color": Color(0.90, 0.91, 0.82, 0.85),
+			"depth_absorption": 2.8,
+		},
+		"swamp":
+		{
+			"water_color": Color(0.07, 0.14, 0.03, 0.95),
+			"shore_color": Color(0.28, 0.35, 0.10, 0.8),
+			"foam_color": Color(0.80, 0.78, 0.55, 0.8),
+			"depth_absorption": 5.0,
+		},
+		"ocean":
+		{
+			"water_color": Color(0.01, 0.05, 0.16, 0.95),
+			"shore_color": Color(0.10, 0.36, 0.55, 0.75),
+			"foam_color": Color(0.92, 0.95, 0.98, 0.9),
+			"depth_absorption": 2.8,
+		},
+		"glacial":
+		{
+			"water_color": Color(0.08, 0.42, 0.52, 0.85),
+			"shore_color": Color(0.50, 0.80, 0.88, 0.65),
+			"foam_color": Color(0.90, 0.96, 1.00, 0.9),
+			"depth_absorption": 1.4,
+		},
+	}
+	assert_eq(WaterPresets.PALETTES.keys(), expected.keys(), "same palettes, same order")
+	for palette_name in expected:
+		assert_eq(WaterPresets.PALETTES.get(palette_name), expected[palette_name], palette_name)
+
+
+func test_foam_alpha_stays_in_the_readable_band() -> void:
+	for palette_name in WaterPresets.PALETTES:
+		var foam: Color = WaterPresets.PALETTES[palette_name]["foam_color"]
+		assert_between(foam.a, 0.8, 0.9, "%s foam alpha" % palette_name)
+
+
 func test_motion_values() -> void:
 	assert_eq(
 		WaterPresets.MOTIONS["still"],

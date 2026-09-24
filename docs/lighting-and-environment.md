@@ -574,8 +574,8 @@ The `LevelEditPanel` is a slide-out drawer (extends `DrawerContainer`) that appe
 
 ### Accessing the Panel
 
-1. During gameplay, a rail of six icons (Sun, Sky, Color, Weather, Film, World) appears on the
-   right edge of the screen
+1. During gameplay, a rail of seven icons (Sun, Sky, Color, Weather, Water, Film, World) appears on
+   the right edge of the screen
 2. Click a rail item to open the drawer on that pane; clicking the active item closes it
 3. All changes are applied to the live viewport immediately
 
@@ -594,8 +594,9 @@ the fields it edits and implements `load_state(state)` / `write_state(state)` ov
 | Sky | sky tiles with thumbnails (ten, two rows of five), preview strip and caption for the hovered or selected sky, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog color, fog energy, fog height, fog falloff |
 | Color | brightness (exposure), contrast, saturation, glow | light energy (formerly "Light scale"), fine brightness, tonemap, white point, glow strength, bloom |
 | Weather | rain/snow/fog/wind tiles with Light..Heavy intensity | none |
+| Water | Look tiles Stylized/Realistic (+Custom), Color tiles Lagoon/Lake/River/Swamp/Ocean/Glacial (+Custom) with painted swatches, Motion tiles Still/Gentle/Lively/Rough (+Custom), Clarity | deep/shallows/foam colors, waves, ripple detail, speed, foam, glint softness, shine, sky reflection, caustics, caustic detail, shallows width, distortion, edge foam cutoff, token ripples, ripple reach |
 | Film | Style tiles Off/Subtle/Retro/Heavy (+Custom), pixelate, vignette, grain | colors, dither, color fade |
-| World | scale tiles, cell size (m and ft), water tiles, Wind tiles Still/Breeze/Gusty (+Custom) | tree/grass speed and amount |
+| World | scale tiles, cell size (m and ft), Wind tiles Still/Breeze/Gusty (+Custom) | tree/grass speed and amount |
 
 The Sky and Color panes share an `EnvironmentEditModel` (preset + overrides + map defaults); Sky
 writes it into the saved `LevelVisualState`, while Color's `write_state` carries only the light
@@ -683,7 +684,7 @@ LevelEditPanel (UI)
 
 `GameplayMenuController` snapshots the live level into one `_original_state: LevelVisualState`
 (`resources/level_visual_state.gd`) when the drawer opens — a transient bundle of every
-live-editable visual field (light intensity, environment preset + overrides, water style, lo-fi,
+live-editable visual field (light intensity, environment preset + overrides, water settings, lo-fi,
 weather, foliage, sun, and the grid scale fields). When the panel is closed without saving:
 
 1. `GameplayMenuController` detects the drawer closed without a save

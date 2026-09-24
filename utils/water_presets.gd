@@ -100,31 +100,33 @@ const PALETTES := {
 	},
 	"river":
 	{
-		"water_color": Color(0.06, 0.18, 0.16, 0.9),
-		"shore_color": Color(0.35, 0.52, 0.38, 0.7),
-		"foam_color": Color(0.90, 0.92, 0.85, 0.85),
-		"depth_absorption": 3.0,
+		"water_color": Color(0.09, 0.17, 0.11, 0.9),
+		"shore_color": Color(0.42, 0.50, 0.28, 0.7),
+		"foam_color": Color(0.90, 0.91, 0.82, 0.85),
+		"depth_absorption": 2.8,
 	},
 	"swamp":
 	{
-		"water_color": Color(0.07, 0.10, 0.05, 0.95),
-		"shore_color": Color(0.28, 0.32, 0.14, 0.8),
+		"water_color": Color(0.07, 0.14, 0.03, 0.95),
+		"shore_color": Color(0.28, 0.35, 0.10, 0.8),
 		"foam_color": Color(0.80, 0.78, 0.55, 0.8),
 		"depth_absorption": 5.0,
 	},
 	"ocean":
 	{
-		"water_color": Color(0.01, 0.06, 0.18, 0.95),
-		"shore_color": Color(0.12, 0.38, 0.55, 0.75),
+		"water_color": Color(0.01, 0.05, 0.16, 0.95),
+		"shore_color": Color(0.10, 0.36, 0.55, 0.75),
 		"foam_color": Color(0.92, 0.95, 0.98, 0.9),
-		"depth_absorption": 2.0,
+		"depth_absorption": 2.8,
 	},
+	# Pale palettes need a low depth_absorption: at 2.6 the deep color saturated
+	# every texel and Glacial read as flat cyan paint instead of milky water.
 	"glacial":
 	{
-		"water_color": Color(0.10, 0.38, 0.55, 0.85),
-		"shore_color": Color(0.55, 0.82, 0.90, 0.65),
+		"water_color": Color(0.08, 0.42, 0.52, 0.85),
+		"shore_color": Color(0.50, 0.80, 0.88, 0.65),
 		"foam_color": Color(0.90, 0.96, 1.00, 0.9),
-		"depth_absorption": 2.6,
+		"depth_absorption": 1.4,
 	},
 }
 
