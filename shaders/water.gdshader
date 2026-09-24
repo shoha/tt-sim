@@ -271,6 +271,9 @@ vec2 water_flow(vec2 uv, mat4 model) {
 	if (speed <= FLOW_DEAD_ZONE) {
 		return vec2(0.0);
 	}
+	// The bake format's speed factor is 0..1; an unbound sampler decodes to black
+	// (0.5, 0.5) -> f = (-1, -1), a 1.41 diagonal, so clamp back into range.
+	speed = min(speed, 1.0);
 	// Blender local (x, y) is glTF/Godot local (x, 0, -y): the swap the exporter applies
 	// to the mesh itself, so the direction lands on the same geometry it was baked over.
 	vec3 local_dir = vec3(f.x, 0.0, -f.y) / speed;

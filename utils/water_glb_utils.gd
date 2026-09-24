@@ -40,10 +40,11 @@ static func _get_water_material() -> ShaderMaterial:
 static func process_water_meshes(node: Node) -> void:
 	var water_nodes: Array[MeshInstance3D] = []
 	_find_water_mesh_nodes(node, water_nodes)
-	if water_nodes.is_empty():
-		return
 	var material := _get_water_material()
-	var flow_plane := _flow_map_plane(water_nodes)
+	if water_nodes.is_empty():
+		material.set_shader_parameter(FLOW_MAP_PARAM, null)
+		return
+	var flow_plane := _flow_map_plane(water_nodes, node)
 	var flow_map: Texture2D = _extract_flow_map(flow_plane) if flow_plane else null
 	material.set_shader_parameter(FLOW_MAP_PARAM, flow_map)
 	for mesh_node in water_nodes:
@@ -55,6 +56,8 @@ static func process_water_meshes(node: Node) -> void:
 ## The imported material's emission texture, which terrain-paint uses to carry the
 ## level's flow map, or null when the plane carries none. Reads the mesh's own surface
 ## material: material_override is what this loader is about to set, never the imported one.
+## Convention, not content inspection: any emission texture on a "-water" plane is taken
+## as a flow map, so a hand-authored emissive water material would be misread as one.
 static func _extract_flow_map(mesh_node: MeshInstance3D) -> Texture2D:
 	if mesh_node == null or mesh_node.mesh == null:
 		return null
@@ -66,17 +69,34 @@ static func _extract_flow_map(mesh_node: MeshInstance3D) -> Texture2D:
 	return imported.emission_texture
 
 
+## XZ footprint of mesh_node in the space of `root`, accumulated through the node
+## transforms between them: the map is not in the tree yet, so global_transform is
+## unavailable, and the mesh's own AABB is the unscaled 1x1 quad terrain-paint exports
+## (the size lives on the node's scale, as glTF carries it).
+static func _footprint_area(mesh_node: MeshInstance3D, root: Node) -> float:
+	var to_root := Transform3D.IDENTITY
+	var current: Node = mesh_node
+	while current != null and current != root:
+		if current is Node3D:
+			to_root = (current as Node3D).transform * to_root
+		current = current.get_parent()
+	var box: AABB = to_root * mesh_node.mesh.get_aabb()
+	return box.size.x * box.size.z
+
+
 ## The plane whose flow map is used: the largest XZ footprint among the planes that carry
-## one. terrain-paint bakes for its largest "-water" plane but shares one preview
-## material across all of them, so every plane arrives carrying the same texture.
-static func _flow_map_plane(water_nodes: Array[MeshInstance3D]) -> MeshInstance3D:
+## one, measured in the map's space through each mesh's node-transform chain (see
+## _footprint_area()) -- the mesh's own local AABB is the same unscaled 1x1 quad for
+## every terrain-paint water plane, so it cannot tell a river from a pond. terrain-paint
+## bakes for its largest "-water" plane but shares one preview material across all of
+## them, so every plane arrives carrying the same texture.
+static func _flow_map_plane(water_nodes: Array[MeshInstance3D], root: Node) -> MeshInstance3D:
 	var best: MeshInstance3D = null
 	var best_area := 0.0
 	for mesh_node in water_nodes:
 		if _extract_flow_map(mesh_node) == null:
 			continue
-		var size := mesh_node.mesh.get_aabb().size
-		var area := size.x * size.z
+		var area := _footprint_area(mesh_node, root)
 		if best == null or area > best_area:
 			best = mesh_node
 			best_area = area
