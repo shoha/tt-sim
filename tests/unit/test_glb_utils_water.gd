@@ -110,3 +110,44 @@ func test_apply_water_style_falls_back_to_stylized_for_unknown_name() -> void:
 	var material := WaterGlbUtils._get_water_material()
 	var expected := WaterPresets.get_preset("stylized")
 	assert_eq(material.get_shader_parameter("water_color"), expected["water_color"])
+
+
+func test_apply_water_settings_sets_floats_colors_and_hex_strings() -> void:
+	(
+		WaterGlbUtils
+		. apply_water_settings(
+			{
+				"wave_speed": 2.25,
+				"water_color": Color(0.1, 0.2, 0.3, 0.4),
+				"foam_color": Color(0.5, 0.6, 0.7, 0.8).to_html(true),
+				"not_a_uniform": 9.0,
+			}
+		)
+	)
+
+	var material := WaterGlbUtils._get_water_material()
+	assert_almost_eq(material.get_shader_parameter("wave_speed"), 2.25, 0.001)
+	assert_true(
+		WaterSettings.colors_match(
+			material.get_shader_parameter("water_color"), Color(0.1, 0.2, 0.3, 0.4)
+		)
+	)
+	assert_true(
+		WaterSettings.colors_match(
+			material.get_shader_parameter("foam_color"), Color(0.5, 0.6, 0.7, 0.8)
+		)
+	)
+	assert_null(material.get_shader_parameter("not_a_uniform"))
+
+
+func test_apply_water_settings_from_resource_round_trips_through_the_material() -> void:
+	var settings := WaterSettings.from_style("realistic")
+	WaterGlbUtils.apply_water_settings(settings.to_dict())
+
+	var material := WaterGlbUtils._get_water_material()
+	assert_true(
+		WaterSettings.colors_match(
+			material.get_shader_parameter("shore_color"), settings.shore_color
+		)
+	)
+	assert_almost_eq(material.get_shader_parameter("roughness_value"), 0.06, 0.001)
