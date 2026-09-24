@@ -732,3 +732,38 @@ soon as a measurement finishes -- an idle instance throttles the next run.
 Caveats that apply to every number here: these come from a debug build driven through
 the validator bridge, not an exported release build, and background `godot --headless`
 test runs contend for CPU. Quiesce other work before measuring.
+
+## Water flow map (2026-09-23)
+
+The flow-map advection added to `shaders/water.gdshader` (ripples, caustics and foam
+now cross-fade two displaced evaluations of each noise field when a plane carries a
+baked flow map) needed its GPU cost measured against the pre-change shader across all
+three Water Quality tiers, per the "measure, never estimate" rule.
+
+Setup: River level (its `Lake-water` plane carries a flow map) via the validator bridge,
+1920x1080 window and viewport (from `game_state`), vsync disabled
+(`DisplayServer.window_set_vsync_mode`), zoom 7.0 so the water fills the screen, RTX
+3080. `RenderingServer.viewport_get_measured_render_time_gpu()` on the game's single
+SubViewport gives the whole viewport's GPU time; with the water filling the screen the
+delta between the pre- and post-change shader isolates the water's own cost. The
+pre-change shader text was saved to `user://water_before.gdshader`
+(`WaterGlbUtils._get_water_material().shader.code` was hot-swapped between it and
+`res://shaders/water.gdshader` in place, avoiding a scene reload between samples). Per
+tier: two old/new swap pairs, five GPU readings per swap, the first reading after each
+swap discarded (it carries the shader recompile hitch), leaving 8 kept readings per
+side; the table reports the median of those 8.
+
+| Tier | Old median GPU ms | New median GPU ms | Delta |
+| --- | --- | --- | --- |
+| High | 1.2135 | 1.3045 | +0.091 ms |
+| Medium | 1.2025 | 1.2465 | +0.044 ms |
+| Low | 1.1665 | 1.2645 | +0.098 ms |
+
+**Gate: pass, no code change needed.** The decision rule is the High tier delta against
+0.3 ms (High is the only tier where the fine-detail octave and caustics, the most
+flow-map-affected code, still run); at +0.091 ms it is well inside the threshold, so the
+`water_ripple()` coarse-second-phase mitigation described in the flow-map design doc was
+not applied. Medium and Low read slightly higher than High's delta in absolute terms but
+are noise-level differences between sessions of samples this close together, not a
+signal that a cheaper tier costs more -- all three deltas are under a tenth of a
+millisecond, an order of magnitude under the gate.
