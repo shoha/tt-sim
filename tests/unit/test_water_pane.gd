@@ -143,3 +143,16 @@ func test_look_row_edit_flips_only_look_to_custom() -> void:
 	assert_eq(pane._look_tiles.selected, &"custom")
 	assert_eq(pane._palette_tiles.selected, &"lake")
 	assert_eq(pane._motion_tiles.selected, &"gentle")
+
+
+func test_current_row_belongs_to_motion() -> void:
+	var pane := _pane()
+	pane.load_state(_state())
+	assert_true(pane._rows.has("flow_strength"), "Current row exists")
+	pane._on_motion_selected(&"rough")
+	assert_almost_eq(pane._rows["flow_strength"].value, 1.4, 0.001)
+	var look_before := pane._water.matching_look()
+	pane._on_row_changed(0.5, "flow_strength")
+	assert_almost_eq(pane._water.flow_strength, 0.5, 0.001)
+	assert_eq(pane._water.matching_motion(), WaterPresets.CUSTOM_KEY)
+	assert_eq(pane._water.matching_look(), look_before)
