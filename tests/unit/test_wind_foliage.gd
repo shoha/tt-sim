@@ -357,6 +357,35 @@ func test_apply_material_sets_backlight_from_the_preset() -> void:
 	)
 
 
+func test_presets_carry_flutter_and_gust_values_per_category() -> void:
+	for category in ["tree", "grass"]:
+		var preset: Dictionary = WindFoliage.PRESETS[category]
+		for key in ["flutter_amplitude", "flutter_speed", "gust_strength"]:
+			assert_true(preset.has(key), "%s preset lacks %s" % [category, key])
+		var gust: float = preset["gust_strength"]
+		assert_true(gust >= 0.0 and gust <= 1.0)
+		# A flutter above a few centimetres reads as a shimmer at the home zoom.
+		var flutter: float = preset["flutter_amplitude"]
+		assert_true(flutter > 0.0 and flutter <= 0.03)
+
+
+func test_apply_material_sets_flutter_and_gust_from_the_preset() -> void:
+	var material := _make_orm_material(Color.GREEN)
+	var mesh := BoxMesh.new()
+	mesh.material = material
+
+	WindFoliage.apply_material(mesh, "grass")
+
+	var wind_material := mesh.surface_get_material(0) as ShaderMaterial
+	for key in ["flutter_amplitude", "flutter_speed", "gust_strength"]:
+		assert_eq(wind_material.get_shader_parameter(key), WindFoliage.PRESETS["grass"][key])
+
+
+func test_get_effective_preset_keeps_gust_strength_when_overrides_touch_sway() -> void:
+	var preset := WindFoliage.get_effective_preset("tree", {"tree_sway_amplitude": 0.2})
+	assert_eq(preset["gust_strength"], WindFoliage.PRESETS["tree"]["gust_strength"])
+
+
 func test_get_effective_preset_keeps_backlight_when_overrides_touch_sway() -> void:
 	var preset := WindFoliage.get_effective_preset("grass", {"grass_sway_speed": 9.0})
 	assert_eq(preset["backlight"], WindFoliage.PRESETS["grass"]["backlight"])
