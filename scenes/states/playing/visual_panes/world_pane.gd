@@ -1,14 +1,13 @@
 class_name WorldPane
 extends LevelEditPane
 
-## Map scale and grid calibration, water style, and foliage sway. Scale and
+## Map scale and grid calibration, and foliage sway. Scale and
 ## grid are set once per map but need the live 3D view to line the grid up,
 ## so they stay in this drawer rather than the Level Editor.
 
 signal scale_config_changed(
 	grid_cell_size: float, display_unit: String, display_unit_per_cell: float
 )
-signal water_style_changed(style: String)
 signal foliage_changed(overrides: Dictionary)
 
 const CUSTOM_KEY := "custom"
@@ -19,7 +18,6 @@ const SCALE_TILE_LABELS := {
 	"generic_squares": "Generic",
 	"custom": "Custom",
 }
-const WATER_ICONS := {"stylized": "brush", "realistic": "droplet"}
 const METRES_PER_FOOT := 0.3048
 ## Wind presets over WIND_FIELDS, in that order.
 const WIND_FIELDS := [
@@ -48,15 +46,12 @@ const FOLIAGE_ROWS := [
 var grid_cell_size: float = LevelData.DEFAULT_GRID_CELL_SIZE
 var display_unit: String = LevelData.DEFAULT_DISPLAY_UNIT
 var display_unit_per_cell: float = LevelData.DEFAULT_DISPLAY_UNIT_PER_CELL
-var water_style: String = WaterPresets.DEFAULT_PRESET
 
 var _foliage: FoliageSettings = FoliageSettings.default()
 var _scale_tiles: TileRow
 var _cell_size_row: PropertyRow
-var _water_tiles: TileRow
 var _foliage_rows: Dictionary = {}
 var _scale_field: TileField
-var _water_field: TileField
 var _wind_field: TileField
 
 
@@ -80,14 +75,6 @@ func _build() -> void:
 		{"hint_low": "Small", "hint_high": "Large", "formatter": WorldPane.format_cell_size}
 	)
 	_cell_size_row.value_changed.connect(_on_cell_size_changed)
-
-	_water_field = _add_tile_field("Water", [])
-	for style in WaterPresets.get_preset_names():
-		_water_field.tiles.add_tile(
-			StringName(style), style.capitalize(), WATER_ICONS.get(style, "")
-		)
-	_water_tiles = _water_field.tiles
-	_water_tiles.selection_changed.connect(_on_water_selected)
 
 	_wind_field = _add_tile_field("Wind", WIND_TILES)
 	_wind_field.tiles.selection_changed.connect(_on_wind_selected)
@@ -115,13 +102,6 @@ func load_state(state: LevelVisualState) -> void:
 	_cell_size_row.set_value_no_signal(grid_cell_size)
 	_sync_scale_tiles()
 
-	# Corrupt or unrecognised save data falls back to the default style, and
-	# the fallback is adopted as the value so Save cannot re-persist the bad one.
-	water_style = state.water_style
-	if not _water_tiles.has_tile(StringName(water_style)):
-		water_style = WaterPresets.DEFAULT_PRESET
-	_water_tiles.select(StringName(water_style))
-
 	_foliage = state.foliage.copy_settings()
 	for key in _foliage_rows:
 		_foliage_rows[key].set_value_no_signal(_foliage.get(key))
@@ -132,7 +112,6 @@ func write_state(state: LevelVisualState) -> void:
 	state.grid_cell_size = grid_cell_size
 	state.display_unit = display_unit
 	state.display_unit_per_cell = display_unit_per_cell
-	state.water_style = water_style
 	state.foliage = _foliage.copy_settings()
 
 
@@ -177,12 +156,6 @@ func _on_cell_size_changed(value: float) -> void:
 	grid_cell_size = value
 	_sync_scale_tiles()
 	_emit_scale()
-
-
-func _on_water_selected(id: StringName) -> void:
-	water_style = String(id)
-	water_style_changed.emit(water_style)
-	changed.emit()
 
 
 func _on_foliage_changed(value: float, key: String) -> void:

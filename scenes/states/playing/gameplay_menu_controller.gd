@@ -48,7 +48,7 @@ func _ready() -> void:
 		level_edit_panel.foliage_changed.connect(_on_edit_foliage_changed)
 		level_edit_panel.sun_changed.connect(_on_edit_sun_changed)
 		level_edit_panel.aim_sun_toggled.connect(_on_edit_aim_sun_toggled)
-		level_edit_panel.water_style_changed.connect(_on_edit_water_style_changed)
+		level_edit_panel.water_changed.connect(_on_edit_water_changed)
 		level_edit_panel.revert_to_map_defaults_requested.connect(_on_revert_to_map_defaults)
 		level_edit_panel.save_requested.connect(_on_edit_save_requested)
 		level_edit_panel.cancel_requested.connect(_on_edit_cancel_requested)
@@ -501,14 +501,16 @@ func _get_sun_gizmo() -> SunGizmoTool:
 	return game_map.get_sun_gizmo() if game_map else null
 
 
-## Real-time water style change from the edit panel
-func _on_edit_water_style_changed(style: String) -> void:
+## Real-time water change from the edit panel
+func _on_edit_water_changed(overrides: Dictionary) -> void:
 	if _level_play_controller:
-		_level_play_controller.apply_water_style_setting(style)
-		if _level_play_controller.active_level_data:
-			_level_play_controller.active_level_data.water_style = style
+		_level_play_controller.apply_water_settings(overrides)
+		var level_data = _level_play_controller.active_level_data
+		if level_data:
+			level_data.water = WaterSettings.from_dict(overrides)
+			level_data.water_style = level_data.water.matching_look()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		_visual_broadcast.queue({"water_style": style})
+		_visual_broadcast.queue({"water_overrides": overrides})
 
 
 ## Save all edited values to level data and persist to disk

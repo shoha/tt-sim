@@ -1,8 +1,7 @@
 extends GutTest
 
 ## WorldPane: scale tiles track the matching preset (Custom appears only when
-## nothing matches), water tiles fall back to the default style for corrupt
-## data, and foliage rows round-trip.
+## nothing matches), and foliage rows round-trip.
 
 
 func _pane() -> WorldPane:
@@ -16,7 +15,6 @@ func _state() -> LevelVisualState:
 	state.grid_cell_size = 1.0
 	state.display_unit = "m"
 	state.display_unit_per_cell = 1.0
-	state.water_style = "realistic"
 	state.foliage.tree_sway_speed = 2.0
 	state.foliage.tree_sway_amplitude = 0.2
 	state.foliage.grass_sway_speed = 3.0
@@ -33,7 +31,6 @@ func test_round_trip_every_field() -> void:
 	assert_eq(out.grid_cell_size, 1.0)
 	assert_eq(out.display_unit, "m")
 	assert_eq(out.display_unit_per_cell, 1.0)
-	assert_eq(out.water_style, "realistic")
 	assert_eq(out.foliage.to_dict(), state.foliage.to_dict())
 
 
@@ -70,25 +67,14 @@ func test_scale_tile_applies_preset() -> void:
 	)
 
 
-func test_corrupt_water_style_falls_back_to_default() -> void:
-	var pane := _pane()
-	var state := _state()
-	state.water_style = "no_such_style"
-	pane.load_state(state)
-	assert_eq(pane.water_style, WaterPresets.DEFAULT_PRESET)
-	assert_eq(pane._water_tiles.selected, StringName(WaterPresets.DEFAULT_PRESET))
-
-
-func test_water_and_foliage_edits_emit() -> void:
+func test_foliage_edit_emits() -> void:
 	var pane := _pane()
 	pane.load_state(_state())
 	watch_signals(pane)
-	pane._on_water_selected(&"stylized")
-	assert_signal_emitted_with_parameters(pane, "water_style_changed", ["stylized"])
 	pane._on_foliage_changed(4.0, "grass_sway_speed")
 	var params: Array = get_signal_parameters(pane, "foliage_changed")
 	assert_eq(params[0]["grass_sway_speed"], 4.0)
-	assert_signal_emit_count(pane, "changed", 2)
+	assert_signal_emit_count(pane, "changed", 1)
 
 
 func test_load_selects_matching_wind_tile() -> void:
@@ -117,10 +103,9 @@ func test_wind_tile_applies_values_once_and_custom_is_silent() -> void:
 	assert_eq(pane._wind_field.tiles.selected, &"custom")
 
 
-func test_scale_and_water_tiles_are_fields_and_cell_size_reads_in_units() -> void:
+func test_scale_tiles_are_a_field_and_cell_size_reads_in_units() -> void:
 	var pane := _pane()
 	assert_same(pane._scale_tiles, pane._scale_field.tiles)
-	assert_same(pane._water_tiles, pane._water_field.tiles)
 	assert_eq(WorldPane.format_cell_size(1.524), "1.52 m (5 ft)")
 	assert_eq(WorldPane.format_cell_size(1.0), "1.00 m (3.3 ft)")
 	assert_eq(pane._foliage_rows["tree_sway_amplitude"].hint_high, "Wild")
