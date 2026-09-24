@@ -165,6 +165,13 @@ const float FOAM_STREAK_SQUEEZE = 0.6;
 // the River level.
 const float WAKE_STRETCH = 2.0;
 const float WAKE_DRIFT = 0.5;
+// Wake foam: the downstream lobe of each token's teardrop is added to the foam sources,
+// gated by the current (still water adds none) and banded by the ring crests so it trails
+// as broken streaks rather than a solid smear. Onset is along * flow_speed, so the foam
+// starts a short way downstream of the token centre and reaches full strength inside the
+// lobe; strength is the weight against the shore and rock foam. Tuned on the River level.
+const float WAKE_FOAM_STRENGTH = 1.2;
+const float WAKE_FOAM_ONSET = 0.3;
 
 varying vec3 world_pos;
 
@@ -363,6 +370,8 @@ void fragment() {
 	// disturbance point, layered on top of the ambient waves above.
 	vec2 disturbance_grad = vec2(0.0);
 	float disturbance_boost = 0.0;
+	// Downstream wake foam per token, consumed by the Foam section below.
+	float wake_foam = 0.0;
 	for (int i = 0; i < 8; i++) {
 		if (water_disturbance_points[i].w < 0.5) {
 			continue;
@@ -390,9 +399,16 @@ void fragment() {
 		// base frequency once WAKE_STRETCH * flow_speed passes 1, which would send crests
 		// marching back upstream instead of trailing the token.
 		float ring_freq_downstream = 6.0 / (1.0 + WAKE_STRETCH * flow_speed);
-		float ring = sin(dist * 6.0 - t * 3.0 - max(along, 0.0) * ring_freq_downstream * WAKE_DRIFT) * falloff;
+		float ring_phase = sin(dist * 6.0 - t * 3.0 - max(along, 0.0) * ring_freq_downstream * WAKE_DRIFT);
+		float ring = ring_phase * falloff;
 		disturbance_grad += normalize(to_point + 0.0001) * ring * disturbance_ripple_strength;
 		disturbance_boost += falloff * disturbance_ripple_strength;
+		// Wake foam: only downstream (along > 0) and only with a current, since along stays
+		// 0 without flow; banded by the ring crests so it trails as broken streaks.
+		if (along > 0.0) {
+			float lobe = falloff * smoothstep(0.0, WAKE_FOAM_ONSET, along * flow_speed);
+			wake_foam += lobe * (0.55 + 0.45 * ring_phase);
+		}
 	}
 	grad += disturbance_grad * 0.2;
 
@@ -476,7 +492,10 @@ void fragment() {
 		foam_noise = mix(foam_noise, foam_noise_1, flow_w);
 	}
 	float foam_pattern = smoothstep(-0.25, 0.45, foam_noise);
-	float foam = clamp((shore_foam + edge_foam * 0.8) * foam_pattern * foam_strength, 0.0, 1.0);
+	// Token wakes join the shore and rock foam here so they share the breakup, the level's
+	// foam colour and the Foam slider (see the disturbance loop for the wake term).
+	float foam_sources = shore_foam + edge_foam * 0.8 + wake_foam * WAKE_FOAM_STRENGTH;
+	float foam = clamp(foam_sources * foam_pattern * foam_strength, 0.0, 1.0);
 	surface = mix(surface, foam_color.rgb, foam * foam_color.a);
 
 	ALBEDO = surface;
