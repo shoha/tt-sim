@@ -155,10 +155,13 @@ const float FLOW_SWELL_SPEED_GAIN = 2.0;
 // pointing downstream. Tuned on the River level.
 const float FOAM_STREAK_STRETCH = 2.5;
 const float FOAM_STREAK_SQUEEZE = 0.6;
-// Token wake: downstream of a submerged token the ring's distance is stretched into a
-// teardrop and its phase drifts with the flow. Tuned on the River level.
+// Token wake: downstream of a submerged token the ring falloff region's distance is
+// compressed so it stretches into a teardrop, and the ring phase drifts downstream.
+// WAKE_DRIFT is the fraction of the downstream ring frequency taken off the phase, in
+// 0..1; 0 is no drift, 1 would flatten the rings, so it can never invert them. Tuned on
+// the River level.
 const float WAKE_STRETCH = 2.0;
-const float WAKE_DRIFT = 2.0;
+const float WAKE_DRIFT = 0.5;
 
 varying vec3 world_pos;
 
@@ -320,7 +323,7 @@ void fragment() {
 	// Two displaced copies of every drifting field (ripples, caustics, foam breakup),
 	// half a cycle apart, cross-faded by flow_w. Zero flow makes p0 == p1 == p and every
 	// branch below skips the second copy, so lakes and older maps pay one branch and a few
-	// ALU ops.
+	// ALU ops, plus one flow_speed test per active disturbance point in the wake code below.
 	vec2 flow_ws = water_flow(UV, MODEL_MATRIX);
 	float flow_speed = length(flow_ws);
 	// Advection runs on raw TIME, not t: flow is a world-units-per-second quantity, so
@@ -371,7 +374,13 @@ void fragment() {
 		if (falloff <= 0.0) {
 			continue;
 		}
-		float ring = sin(dist * 6.0 - t * 3.0 - max(along, 0.0) * flow_speed * WAKE_DRIFT) * falloff;
+		// Drift the phase by a bounded fraction of the downstream ring frequency (rather
+		// than a flow_speed-scaled constant) so the crest spacing can only shrink toward the
+		// falloff's own frequency, never reverse: an unbounded drift term outpaces the 6.0
+		// base frequency once WAKE_STRETCH * flow_speed passes 1, which would send crests
+		// marching back upstream instead of trailing the token.
+		float ring_freq_downstream = 6.0 / (1.0 + WAKE_STRETCH * flow_speed);
+		float ring = sin(dist * 6.0 - t * 3.0 - max(along, 0.0) * ring_freq_downstream * WAKE_DRIFT) * falloff;
 		disturbance_grad += normalize(to_point + 0.0001) * ring * disturbance_ripple_strength;
 		disturbance_boost += falloff * disturbance_ripple_strength;
 	}
