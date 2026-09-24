@@ -151,3 +151,84 @@ func test_apply_water_settings_from_resource_round_trips_through_the_material() 
 		)
 	)
 	assert_almost_eq(material.get_shader_parameter("roughness_value"), 0.06, 0.001)
+
+
+## A "-water" plane as Godot's GLTF importer produces it: a PlaneMesh whose surface
+## material is a StandardMaterial3D, with or without an emission texture (terrain-paint
+## carries the flow map there).
+func _water_plane(name: String, size: float, with_flow: bool) -> MeshInstance3D:
+	var mesh_node := MeshInstance3D.new()
+	mesh_node.name = name
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(size, size)
+	var material := StandardMaterial3D.new()
+	if with_flow:
+		var image := Image.create(4, 4, false, Image.FORMAT_RGB8)
+		image.fill(Color(0.5, 0.5, 0.0))
+		material.emission_texture = ImageTexture.create_from_image(image)
+	plane.material = material
+	mesh_node.mesh = plane
+	return mesh_node
+
+
+func test_extract_flow_map_returns_the_imported_emission_texture() -> void:
+	var plane := _water_plane("Lake-water", 4.0, true)
+	var expected: Texture2D = (
+		(plane.mesh.surface_get_material(0) as BaseMaterial3D).emission_texture
+	)
+	assert_eq(WaterGlbUtils._extract_flow_map(plane), expected)
+	plane.free()
+
+
+func test_extract_flow_map_is_null_without_texture_material_or_mesh() -> void:
+	var bare := _water_plane("Pond-water", 4.0, false)
+	assert_null(WaterGlbUtils._extract_flow_map(bare))
+	bare.free()
+	var no_material := MeshInstance3D.new()
+	no_material.mesh = PlaneMesh.new()
+	assert_null(WaterGlbUtils._extract_flow_map(no_material))
+	no_material.free()
+	var no_mesh := MeshInstance3D.new()
+	assert_null(WaterGlbUtils._extract_flow_map(no_mesh))
+	no_mesh.free()
+	assert_null(WaterGlbUtils._extract_flow_map(null))
+
+
+func test_flow_map_goes_to_the_largest_carrying_plane_only() -> void:
+	var root := Node3D.new()
+	var small := _water_plane("Pond-water", 2.0, true)
+	var big := _water_plane("Lake-water", 8.0, true)
+	var plain := _water_plane("Puddle-water", 20.0, false)
+	root.add_child(small)
+	root.add_child(big)
+	root.add_child(plain)
+
+	WaterGlbUtils.process_water_meshes(root)
+
+	var material := WaterGlbUtils._get_water_material()
+	assert_eq(
+		material.get_shader_parameter(WaterGlbUtils.FLOW_MAP_PARAM),
+		WaterGlbUtils._extract_flow_map(big)
+	)
+	assert_true(big.get_instance_shader_parameter(WaterGlbUtils.FLOW_PRESENT_PARAM))
+	assert_false(bool(small.get_instance_shader_parameter(WaterGlbUtils.FLOW_PRESENT_PARAM)))
+	assert_false(bool(plain.get_instance_shader_parameter(WaterGlbUtils.FLOW_PRESENT_PARAM)))
+	root.free()
+
+
+func test_a_level_without_a_flow_map_clears_the_shared_parameter() -> void:
+	var with_map := Node3D.new()
+	with_map.add_child(_water_plane("Lake-water", 8.0, true))
+	WaterGlbUtils.process_water_meshes(with_map)
+	assert_not_null(
+		WaterGlbUtils._get_water_material().get_shader_parameter(WaterGlbUtils.FLOW_MAP_PARAM)
+	)
+	with_map.free()
+
+	var without := Node3D.new()
+	without.add_child(_water_plane("Pond-water", 8.0, false))
+	WaterGlbUtils.process_water_meshes(without)
+	assert_null(
+		WaterGlbUtils._get_water_material().get_shader_parameter(WaterGlbUtils.FLOW_MAP_PARAM)
+	)
+	without.free()
