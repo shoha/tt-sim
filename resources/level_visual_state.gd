@@ -15,6 +15,8 @@ extends RefCounted
 ## on VisualSettings also needs a line in apply_to_level_data() -- it assigns
 ## level_data.visual_settings.sun (the one field it currently carries), not the
 ## whole visual_settings, so a sibling field needs its own assignment line too.
+## water is carried the same way as foliage: a typed resource field, copied in
+## and out, with water_style derived from it rather than authored independently.
 ##
 ## The three grid fields (grid_cell_size, display_unit, display_unit_per_cell)
 ## are the exception: they ride along in from_level_data()/apply_to_level_data()/
@@ -28,6 +30,7 @@ var light_intensity_scale: float = 1.0
 var environment_preset: String = ""
 var environment_overrides: Dictionary = {}
 var water_style: String = WaterPresets.DEFAULT_PRESET
+var water: WaterSettings = WaterSettings.default()
 var lofi: LofiSettings = LofiSettings.default()
 var weather: WeatherSettings = WeatherSettings.default()
 var foliage: FoliageSettings = FoliageSettings.default()
@@ -44,6 +47,7 @@ static func from_level_data(level_data: LevelData) -> LevelVisualState:
 	state.environment_preset = level_data.environment_preset
 	state.environment_overrides = level_data.environment_overrides.duplicate()
 	state.water_style = level_data.water_style
+	state.water = level_data.water.copy_settings()
 	state.lofi = level_data.lofi.copy_settings()
 	state.weather = level_data.weather.copy_settings()
 	state.foliage = level_data.foliage.copy_settings()
@@ -60,7 +64,10 @@ func apply_to_level_data(level_data: LevelData) -> void:
 	level_data.light_intensity_scale = light_intensity_scale
 	level_data.environment_preset = environment_preset
 	level_data.environment_overrides = environment_overrides.duplicate()
-	level_data.water_style = water_style
+	level_data.water = water.copy_settings()
+	# Derived, not authored: the closest Look for builds that only know the
+	# two style names.
+	level_data.water_style = water.matching_look()
 	level_data.lofi = lofi.copy_settings()
 	level_data.weather = weather.copy_settings()
 	level_data.foliage = foliage.copy_settings()
@@ -76,6 +83,7 @@ func copy() -> LevelVisualState:
 	state.environment_preset = environment_preset
 	state.environment_overrides = environment_overrides.duplicate()
 	state.water_style = water_style
+	state.water = water.copy_settings()
 	state.lofi = lofi.copy_settings()
 	state.weather = weather.copy_settings()
 	state.foliage = foliage.copy_settings()
@@ -98,7 +106,8 @@ func to_broadcast_dict() -> Dictionary:
 		"weather_overrides": weather.to_dict(),
 		"foliage_overrides": foliage.to_dict(),
 		"sun_settings": sun.to_dict(),
-		"water_style": water_style,
+		"water_style": water.matching_look(),
+		"water_overrides": water.to_dict(),
 	}
 
 
@@ -123,5 +132,10 @@ func patch_from_broadcast_dict(settings: Dictionary) -> void:
 	if settings.has("sun_settings"):
 		var raw: Variant = settings["sun_settings"]
 		sun = SunSettings.from_dict(raw) if raw is Dictionary else SunSettings.default()
-	if settings.has("water_style"):
+	if settings.has("water_overrides"):
+		water = WaterSettings.from_dict(settings["water_overrides"])
+		water_style = water.matching_look()
+	elif settings.has("water_style"):
+		# An older host sends only the style name.
 		water_style = str(settings["water_style"])
+		water = WaterSettings.from_style(water_style)
