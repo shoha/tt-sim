@@ -150,6 +150,15 @@ const float FLOW_DEAD_ZONE = 0.02;
 const float FLOW_CYCLE_SECONDS = 4.0;
 // Extra swell phase speed per unit of flow speed, so a fast channel's long wave hurries.
 const float FLOW_SWELL_SPEED_GAIN = 2.0;
+// Foam breakup noise is sampled in a basis aligned to the local flow, compressed along it
+// and squeezed across it in proportion to speed, so foam patches stretch into streaks
+// pointing downstream. Tuned on the River level.
+const float FOAM_STREAK_STRETCH = 2.5;
+const float FOAM_STREAK_SQUEEZE = 0.6;
+// Token wake: downstream of a submerged token the ring's distance is stretched into a
+// teardrop and its phase drifts with the flow. Tuned on the River level.
+const float WAKE_STRETCH = 2.0;
+const float WAKE_DRIFT = 2.0;
 
 varying vec3 world_pos;
 
@@ -271,6 +280,27 @@ vec2 water_flow(vec2 uv, mat4 model) {
 }
 
 
+// Coordinates for the foam breakup noise: unchanged with no flow, otherwise rotated into
+// the (along, across) basis of the local flow and stretched along it.
+vec2 water_flow_aligned(vec2 q, vec2 flow, float speed) {
+	if (speed <= 0.0) {
+		return q;
+	}
+	vec2 d = flow / speed;
+	vec2 n = vec2(-d.y, d.x);
+	return vec2(
+		dot(q, d) / (1.0 + FOAM_STREAK_STRETCH * speed),
+		dot(q, n) * (1.0 + FOAM_STREAK_SQUEEZE * speed)
+	);
+}
+
+// The animated breakup both foam sources share (see the Foam section of fragment()).
+float water_foam_noise(vec2 q, float t) {
+	return water_gnoise(q * 3.1 + vec2(t * 0.35, -t * 0.2)) * 0.6
+		+ water_gnoise(q * 7.4 - vec2(t * 0.2, t * 0.45)) * 0.4;
+}
+
+
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float t = TIME * wave_speed;
@@ -289,9 +319,13 @@ void fragment() {
 	// ---- Flow -----------------------------------------------------------------------
 	// Two displaced copies of every drifting field (ripples, caustics, foam breakup),
 	// half a cycle apart, cross-faded by flow_w. Zero flow makes p0 == p1 == p and every
-	// branch below skips the second copy, so lakes and older maps pay one branch.
+	// branch below skips the second copy, so lakes and older maps pay one branch and a few
+	// ALU ops.
 	vec2 flow_ws = water_flow(UV, MODEL_MATRIX);
 	float flow_speed = length(flow_ws);
+	// Advection runs on raw TIME, not t: flow is a world-units-per-second quantity, so
+	// wave_speed does not slow the current (and wave_speed 0 no longer freezes a flowing
+	// plane).
 	float flow_phase0 = fract(TIME / FLOW_CYCLE_SECONDS);
 	float flow_phase1 = fract(flow_phase0 + 0.5);
 	// Weight of the second copy: 1 exactly when the first copy resets (hiding its jump),
@@ -322,11 +356,22 @@ void fragment() {
 		}
 		vec2 to_point = p - water_disturbance_points[i].xy;
 		float dist = length(to_point);
+		float along = 0.0;
+		if (flow_speed > 0.0) {
+			// Wake: measure distance in the flow basis with the downstream half compressed,
+			// so the ring region becomes a teardrop trailing the token. Flow is read at the
+			// fragment rather than at the token; over a ripple radius the two agree.
+			vec2 d = flow_ws / flow_speed;
+			along = dot(to_point, d);
+			float across = dot(to_point, vec2(-d.y, d.x));
+			float stretched = along > 0.0 ? along / (1.0 + WAKE_STRETCH * flow_speed) : along;
+			dist = length(vec2(stretched, across));
+		}
 		float falloff = 1.0 - smoothstep(0.0, disturbance_ripple_radius, dist);
 		if (falloff <= 0.0) {
 			continue;
 		}
-		float ring = sin(dist * 6.0 - t * 3.0) * falloff;
+		float ring = sin(dist * 6.0 - t * 3.0 - max(along, 0.0) * flow_speed * WAKE_DRIFT) * falloff;
 		disturbance_grad += normalize(to_point + 0.0001) * ring * disturbance_ripple_strength;
 		disturbance_boost += falloff * disturbance_ripple_strength;
 	}
@@ -404,8 +449,13 @@ void fragment() {
 	float depth_slope = fwidth(bed_depth) / world_units_per_pixel;
 	float edge_foam = smoothstep(foam_edge_sensitivity, foam_edge_sensitivity * 3.0, depth_slope);
 	// Animated breakup so both foam sources form patches instead of a flat fill.
-	float foam_noise = water_gnoise(p * 3.1 + vec2(t * 0.35, -t * 0.2)) * 0.6
-		+ water_gnoise(p * 7.4 - vec2(t * 0.2, t * 0.45)) * 0.4;
+	// Streaks: the breakup noise is advected two-phase like the ripples and stretched
+	// along the flow, so shore foam and rock foam both trail downstream.
+	float foam_noise = water_foam_noise(water_flow_aligned(p0, flow_ws, flow_speed), t);
+	if (flow_speed > 0.0) {
+		float foam_noise_1 = water_foam_noise(water_flow_aligned(p1, flow_ws, flow_speed), t);
+		foam_noise = mix(foam_noise, foam_noise_1, flow_w);
+	}
 	float foam_pattern = smoothstep(-0.25, 0.45, foam_noise);
 	float foam = clamp((shore_foam + edge_foam * 0.8) * foam_pattern * foam_strength, 0.0, 1.0);
 	surface = mix(surface, foam_color.rgb, foam * foam_color.a);
