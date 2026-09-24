@@ -237,13 +237,6 @@ func apply_sun_settings(settings: SunSettings) -> void:
 	_environment_manager.apply_sun_settings(settings)
 
 
-## Apply a legacy water style name to the live level's water meshes. The
-## drawer and load paths use apply_water_settings(); this stays for callers
-## that only carry a style name.
-func apply_water_style_setting(style: String) -> void:
-	WaterGlbUtils.apply_water_style(style)
-
-
 ## Apply a full WaterSettings.to_dict() to the live level's water meshes.
 ## Real-time reflections (SSR) are a separate, purely global Settings toggle
 ## (see LevelEnvironmentManager.apply_rendering_toggles()).

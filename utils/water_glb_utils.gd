@@ -87,7 +87,7 @@ static func apply_water_style(style: String) -> void:
 ## skipped so a payload from a newer build cannot error here.
 static func apply_water_settings(settings: Dictionary) -> void:
 	var material := _get_water_material()
-	for key in settings:
+	for key: String in settings:
 		if key not in WaterSettings.KEYS:
 			continue
 		var value: Variant = settings[key]

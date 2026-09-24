@@ -58,8 +58,12 @@ const DEFAULT_DISPLAY_UNIT_PER_CELL := 5.0
 ## Colors should be Color objects or hex strings like "#ff0000"
 @export var environment_overrides: Dictionary = {}
 
-## Water Style preset name ("stylized" or "realistic") applied to any
-## "-water"-suffixed mesh via WaterGlbUtils.apply_water_style(). See WaterPresets.
+## A Look id (or "custom") derived from water.matching_look() every time
+## to_dict() saves. Kept for older builds that only understand style names,
+## and to seed water on levels saved before water_overrides existed
+## (see seed_water_from_legacy_style()). Nothing applies this field directly
+## any more -- live water always goes through the full `water` resource via
+## WaterGlbUtils.apply_water_settings(). See WaterPresets.
 @export var water_style: String = "stylized"
 
 ## Full per-level water tuning, serialised under "water_overrides". water_style
@@ -128,21 +132,24 @@ func _init() -> void:
 	modified_at = created_at
 
 
-## Absorb five legacy property names from pre-typed .tres levels: `sun_overrides`,
-## `lofi_overrides`, `weather_overrides`, `foliage_overrides`, and
-## `water_overrides`. Legacy .tres levels are loaded by ResourceLoader (see
-## LevelManager.load_level()), which bypasses from_dict() and therefore the
-## migration branch there, so without this hook their sun/lofi/weather/foliage/
-## water configuration would be silently discarded and replaced by defaults --
-## and because format_version is @exported with a FORMAT_VERSION initializer,
-## the object would still report itself as v1, leaving a later version-keyed
-## migration no way to detect the loss.
+## Absorb four legacy property names from pre-typed .tres levels: `sun_overrides`,
+## `lofi_overrides`, `weather_overrides`, and `foliage_overrides`. Legacy .tres
+## levels are loaded by ResourceLoader (see LevelManager.load_level()), which
+## bypasses from_dict() and therefore the migration branch there, so without
+## this hook their sun/lofi/weather/foliage configuration would be silently
+## discarded and replaced by defaults -- and because format_version is
+## @exported with a FORMAT_VERSION initializer, the object would still report
+## itself as v1, leaving a later version-keyed migration no way to detect the
+## loss. Water has no such branch: no build ever wrote a `water_overrides`
+## property onto a .tres Resource (only into JSON, which goes through
+## from_dict() and never reaches here), so a legacy .tres's water is seeded
+## from its water_style instead -- see seed_water_from_legacy_style().
 func _set(property: StringName, value: Variant) -> bool:
 	if property == &"sun_overrides" and value is Dictionary:
 		visual_settings = VisualSettings.new()
 		visual_settings.sun = SunSettings.from_legacy(value)
 		return true
-	# Pre-typed .tres levels carry these four as Dictionaries; the JSON path goes
+	# Pre-typed .tres levels carry these three as Dictionaries; the JSON path goes
 	# through from_dict() and never reaches here.
 	if property == &"lofi_overrides" and value is Dictionary:
 		lofi = LofiSettings.from_dict(value)
@@ -153,10 +160,21 @@ func _set(property: StringName, value: Variant) -> bool:
 	if property == &"foliage_overrides" and value is Dictionary:
 		foliage = FoliageSettings.from_dict(value)
 		return true
-	if property == &"water_overrides" and value is Dictionary:
-		water = WaterSettings.from_dict(value)
-		return true
 	return false
+
+
+## Legacy .tres levels are loaded by ResourceLoader, which sets water_style
+## directly and never runs from_dict(), so their water stays at the defaults
+## while water_style still names the look they were saved with. A level saved
+## by this build always has water_style == water.matching_look(), so a default
+## water that disagrees with its style can only be such a legacy (or hand-edited)
+## file; rebuild the water its style meant.
+func seed_water_from_legacy_style() -> void:
+	if water.to_dict() != WaterSettings.default().to_dict():
+		return
+	if water_style == water.matching_look():
+		return
+	water = WaterSettings.from_style(water_style)
 
 
 ## Add a new token placement
@@ -361,6 +379,9 @@ static func from_dict(data: Dictionary) -> LevelData:
 	else:
 		# Pre-water-pane level: rebuild the water its style name meant.
 		level.water = WaterSettings.from_style(level.water_style)
+	# Keep the in-memory value in step with what to_dict() would write, so it
+	# never disagrees with the water it was just seeded or restored from.
+	level.water_style = level.water.matching_look()
 	level.lofi = LofiSettings.from_dict(data.get("lofi_overrides", {}))
 	level.weather = WeatherSettings.from_dict(data.get("weather_overrides", {}))
 	level.foliage = FoliageSettings.from_dict(data.get("foliage_overrides", {}))
