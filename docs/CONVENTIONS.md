@@ -9,6 +9,7 @@ This document covers coding patterns, conventions, and non-obvious gotchas that 
 - [Token Scene Structure & Factory Requirement](#token-scene-structure--factory-requirement)
 - [Token Transform Hierarchy](#token-transform-hierarchy)
 - [Placeholder Token Upgrade Flow](#placeholder-token-upgrade-flow)
+- [Token Highlight (SelectionGlowRenderer)](#token-highlight-selectionglowrenderer)
 - [Camera System](#camera-system)
 - [Drag and Drop Integration](#drag-and-drop-integration)
 - [Settings Persistence](#settings-persistence)
@@ -249,6 +250,17 @@ When a model isn't cached in memory, tokens start as placeholders (pulsing cubes
 
 ---
 
+## Token Highlight (SelectionGlowRenderer)
+
+`scenes/board_token/selection_glow_renderer.gd`, driven through `BoardToken.add_highlight()`, `set_highlight_color()` and `set_highlighted()`.
+
+- `show_glow()` only tweens alpha. RGB is whatever colour was last set, so a stale tint survives until something resets it.
+- On un-highlight call **both** `set_highlight_color(SelectionGlowRenderer.DEFAULT_GLOW_COLOR)` and `set_highlighted(false)`. Skipping the colour reset leaves the previous tint on the next hover.
+- `set_highlighted()` early-returns when the state is unchanged, so set the colour **before** calling `set_highlighted(true)` when changing colours.
+- `DEFAULT_GLOW_COLOR` is gold `Color(1.0, 0.8, 0.2, 0.6)`; the measure tool's AoE highlight is orange `AOE_HIGHLIGHT_COLOR` in `measure_tool.gd`.
+
+---
+
 ## Camera System
 
 Camera control lives in `game_map.gd`, not in a separate camera controller.
@@ -285,6 +297,11 @@ Right (D) = (+1, 0, -1)    (up-right on screen)
 The Camera3D sits at a local offset from CameraHolder. At large `camera.size` values (zoom out or aspect correction on narrow windows), the bottom screen edge's ray origin can drop below Y=0 — meaning ground geometry is behind the near plane and gets culled.
 
 **Fix**: `_update_camera_offset()` scales the Camera3D local position proportionally with `camera.size`. For an orthographic camera, translating along the view direction has zero visual effect but moves the near plane further from the ground, preventing culling. Called after every `camera.size` change (`_ready`, `handle_zoom`, `_on_viewport_size_changed`).
+
+- `_base_camera_offset` and `_base_camera_size` are captured in `_ready()` before any modification.
+- In `handle_zoom()` the offset update must run **after** the zoom-toward-cursor correction, because `world_before` and `world_after` have to be computed from the same camera position.
+- `project_position(corner, 0)` returns near-plane coordinates (Y around 8), not ground level. For any ground-footprint calculation use `project_ray_origin` + `project_ray_normal` and intersect with Y = 0.
+- Side effect worth knowing: because the camera distance scales with `camera.size`, anything centred on the camera (SDFGI cascades, for example) re-centres on zoom. See `docs/lighting-and-environment.md` "SDFGI banding under the orthographic camera".
 
 ### Camera Bounds
 

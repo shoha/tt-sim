@@ -247,6 +247,28 @@ Consumer-side checks:
 - Instance totals must agree three ways: what `rebuild_map_assets.py` prints, the GLB
   extras, and the `MAP_LOADED` line `tools/render_map.gd` prints after loading.
 
+The baked FloraPaint catalog on disk
+(`D:/Blender/scatter library/_biomes_/Baked/CaseySheep/FloraPaint/`) has been through
+three post-bake passes (rock decimation to 300, wood decimation to 3,000 with island
+pruning, 99-card grass thinning; see `docs/PERFORMANCE.md`). Each touched
+`biome_NN.instances.blend` has a `.pre_decimate.bak` sibling holding the pristine state,
+which the decimation tool never refreshes. **Re-baking the catalog undoes all three
+passes; re-run them afterwards.** If a map still shows the old tree counts (37k/55k/77k
+triangles), trunk-less trees or 99-card clumps, run terrain-paint's
+`tools/refresh_map_from_catalog.py` against it. Judge any decimation by island count,
+largest-island survival and surface area, never by triangle count alone.
+
+Two export traps that produce a plausible-looking but wrong GLB, both hit on 2026-09-17:
+
+- If Geoscatter fails to import at Blender startup, terrain-paint's export prints only
+  `Warning: Scatter Instances: Geoscatter isn't installed`, exits 0, and writes a GLB
+  with no scatter objects. Check the export log for that warning and count the scatter
+  source nodes in the GLB before installing.
+- A map whose terrain bakes are unpacked GENERATED images loses their pixels on a
+  background `save_as_mainfile` (the UI save does not), so a refreshed map exports flat
+  black terrain. `refresh_map_from_catalog.py` packs unsaved images first; still compare
+  the terrain PNGs of a new export against the installed GLB before installing.
+
 Pushing a producer change into an existing level:
 `blender --background map.blend --python tools/rebuild_map_assets.py -- out.glb`
 (treecube), then copy `out.glb` over the level's `map.glb`. Keep the previous export
