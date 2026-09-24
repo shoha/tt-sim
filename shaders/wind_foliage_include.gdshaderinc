@@ -43,8 +43,24 @@ uniform bool use_vertex_wind = false;
 // meaning the same thing for both kinds of asset.
 uniform float mesh_height : hint_range(0.0, 100.0) = 1.0;
 // Secondary flutter driven by G and phased by B: faster and smaller than the sway.
-uniform float flutter_amplitude : hint_range(0.0, 0.5) = 0.03;
-uniform float flutter_speed : hint_range(0.0, 20.0) = 5.0;
+// treecube grades G across each leaf card away from its twig (0.35 at the near
+// corners, 1 at the far ones), so a card rustles about its attachment instead of
+// hopping as a rigid quad. Kept small: at tt-sim's home zoom a 3 cm hop of every card
+// read as a shimmer over the whole canopy, not as leaves moving.
+uniform float flutter_amplitude : hint_range(0.0, 0.5) = 0.012;
+uniform float flutter_speed : hint_range(0.0, 20.0) = 3.0;
+
+// Gust field: a slow envelope that travels across the map along wind_direction (two
+// wavelengths, 12 m and 19 m, so it never repeats cleanly) and modulates the sway.
+// During a gust every plant leans over in the wind direction in proportion to its
+// sway weight and springs back as the front passes, so neighbouring trees bend
+// together and the eye reads wind moving across the forest rather than each tree
+// rocking on its own. gust_strength 0 disables it (the sway is then the pure
+// per-vertex oscillation it was before); gust_speed is the front's travel speed in
+// metres per second. Per-category value from WindFoliage.PRESETS, not per-level.
+uniform vec2 wind_direction = vec2(0.857, 0.514);
+uniform float gust_strength : hint_range(0.0, 1.0) = 0.6;
+uniform float gust_speed : hint_range(0.0, 20.0) = 3.0;
 
 // Base-dark/tip-light gradient, grass-category only (see WindFoliage.apply_material) --
 // replaces the contact-darkening a real shadow would have given grass now that it no
@@ -86,6 +102,22 @@ varying float local_vertex_y;
 #include "res://shaders/occlusion_fade_include.gdshaderinc"
 
 
+// Gust envelope in 0..1 at a world XZ position: two sines travelling along the wind
+// direction, softly thresholded so gusts arrive as bursts with calm between them
+// rather than as a constant rocking. A little cross-wind term breaks the fronts up so
+// they are not straight lines across the map.
+float wind_gust(vec2 world_xz, float time) {
+	vec2 dir = normalize(wind_direction);
+	float along = dot(world_xz, dir);
+	float across = dot(world_xz, vec2(-dir.y, dir.x));
+	float k1 = 6.2831853 / 12.0;
+	float k2 = 6.2831853 / 19.0;
+	float wave = 0.55 * sin(along * k1 - time * gust_speed * k1)
+		+ 0.45 * sin(along * k2 + across * 0.25 - time * gust_speed * 0.8 * k2 + 1.7);
+	return smoothstep(-0.2, 0.9, wave);
+}
+
+
 // Wind-sway offset to add to VERTEX. [param vertex] is the un-swayed object-space
 // VERTEX built-in; [param color] is the vertex() stage's COLOR built-in (the authored
 // wind weights when use_vertex_wind is on, ignored otherwise); [param model_matrix]/
@@ -110,13 +142,24 @@ vec3 wind_sway_vertex_offset(vec3 vertex, vec4 color, mat4 model_matrix, float t
 	// so a stiff lower trunk (authored R near 0) stays still where the height rule
 	// would already have it moving.
 	float height_weight = use_vertex_wind ? color.r * mesh_height : max(vertex.y, 0.0);
-	vec3 offset = vec3(sway * height_weight, 0.0, sway * height_weight * 0.6);
+	// Gust: the oscillation grows a little inside a gust, and on top of it the plant
+	// leans over along the wind while the gust passes (1.5x the amplitude at full
+	// strength, weighted by the same height/sway weight so a stiff trunk stays put).
+	float gust = gust_strength > 0.0 ? wind_gust(world_pos.xz, time) : 0.0;
+	sway *= 1.0 + gust_strength * (gust - 0.4);
+	vec2 dir = normalize(wind_direction);
+	float lean = sway_amplitude * gust_strength * gust * 1.5 * height_weight;
+	vec3 offset = vec3(sway * height_weight + lean * dir.x, 0.0, sway * height_weight * 0.6 + lean * dir.y);
 	if (use_vertex_wind) {
-		// Flutter: small, quick, per-limb/card phase from B so a canopy shimmers
-		// instead of moving as one block.
-		float flutter = sin(time * flutter_speed + color.b * 6.2831853 + phase) * flutter_amplitude * color.g;
+		// Flutter: small, quick, per-limb/card phase from B, graded across each card
+		// by G; leaves rustle more inside a gust.
+		float flutter = sin(time * flutter_speed + color.b * 6.2831853 + phase) * flutter_amplitude * color.g * (0.6 + 0.8 * gust);
 		offset += vec3(flutter, flutter * 0.4, -flutter * 0.5);
 	}
+	// Bend, not translate: a vertex swung sideways on a stalk of its own height drops
+	// by about d^2 / (2h), so the crown follows an arc instead of stretching the tree.
+	float horizontal_sq = offset.x * offset.x + offset.z * offset.z;
+	offset.y -= horizontal_sq / (2.0 * max(vertex.y, 0.3));
 	return offset;
 }
 

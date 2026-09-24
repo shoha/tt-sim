@@ -35,9 +35,33 @@ const _TREE_KEYWORDS := ["tree", "oak", "pine", "birch", "branch", "canopy"]
 # backlight (2026-09-16)"), but the visual effect was not perceptible at the Home pose on
 # the reference map, so it did not clear the "reads better" half of the decision rule.
 # The uniform, shader wiring, and tests all stay -- only the shipped value changed.
+# flutter_amplitude / flutter_speed / gust_strength are per-category too and, like
+# sway_frequency, not exposed for per-level tuning: the flutter is treecube's graded
+# per-card rustle (small on purpose -- 3 cm of it read as a shimmer at the home zoom),
+# and the gust field is what makes neighbouring plants bend together (see
+# wind_gust in wind_foliage_include.gdshaderinc). Grass gets a stronger gust and a
+# livelier flutter than trees because its cards are short and the whole tuft is tip.
 const PRESETS := {
-	"tree": {"sway_speed": 0.6, "sway_amplitude": 0.06, "sway_frequency": 0.15, "backlight": 0.0},
-	"grass": {"sway_speed": 1.6, "sway_amplitude": 0.03, "sway_frequency": 0.4, "backlight": 0.0},
+	"tree":
+	{
+		"sway_speed": 0.6,
+		"sway_amplitude": 0.06,
+		"sway_frequency": 0.15,
+		"backlight": 0.0,
+		"flutter_amplitude": 0.012,
+		"flutter_speed": 3.0,
+		"gust_strength": 0.6,
+	},
+	"grass":
+	{
+		"sway_speed": 1.6,
+		"sway_amplitude": 0.03,
+		"sway_frequency": 0.4,
+		"backlight": 0.0,
+		"flutter_amplitude": 0.02,
+		"flutter_speed": 4.0,
+		"gust_strength": 0.7,
+	},
 }
 
 ## Default albedo darkening at a grass blade's base (see wind_foliage_include.gdshaderinc's
