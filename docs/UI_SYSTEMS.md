@@ -731,7 +731,7 @@ Set `rail_items` in `_on_ready()` to replace the single tab with an `IconRail` s
 | Drawer | Edge | Tab | Purpose |
 |--------|------|-----|---------|
 | `PlayerListDrawer` | LEFT | `users.svg` icon | Shows connected players during networked games |
-| `LevelEditPanel` | RIGHT | rail of six icons | Real-time level editing during gameplay (see below) |
+| `LevelEditPanel` | RIGHT | rail of seven icons | Real-time level editing during gameplay (see below) |
 
 See `THEME_GUIDE.md` for styling details.
 
@@ -743,11 +743,11 @@ See `THEME_GUIDE.md` for styling details.
 
 ### Accessing
 
-During gameplay, click a rail item (Sun, Sky, Color, Weather, Film, World) on the right edge of the screen. The panel slides open on that pane; clicking another rail item switches panes without closing the drawer.
+During gameplay, click a rail item (Sun, Sky, Color, Weather, Water, Film, World) on the right edge of the screen. The panel slides open on that pane; clicking another rail item switches panes without closing the drawer.
 
 ### Controls
 
-The drawer is a rail of six panes (`SunPane`, `SkyPane`, `ColorPane`, `WeatherPane`, `FilmPane`, `WorldPane` in `scenes/states/playing/visual_panes/`), each a `LevelEditPane` that owns the fields it edits and implements `load_state(state)` / `write_state(state)` over a `LevelVisualState`:
+The drawer is a rail of seven panes (`SunPane`, `SkyPane`, `ColorPane`, `WeatherPane`, `WaterPane`, `FilmPane`, `WorldPane` in `scenes/states/playing/visual_panes/`), each a `LevelEditPane` that owns the fields it edits and implements `load_state(state)` / `write_state(state)` over a `LevelVisualState`:
 
 | Rail item | Primary | Advanced |
 |---|---|---|
@@ -755,8 +755,9 @@ The drawer is a rail of six panes (`SunPane`, `SkyPane`, `ColorPane`, `WeatherPa
 | Sky | sky tiles with thumbnails (ten, two rows of five), preview strip and caption for the hovered or selected sky, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog colour, fog energy, fog height, fog falloff |
 | Color | brightness (exposure), contrast, saturation, glow | light energy, fine brightness, tonemap, white point, glow strength, bloom |
 | Weather | rain/snow/fog/wind tiles with Light..Heavy intensity | none |
+| Water | Look tiles Stylized/Realistic (+Custom), Color tiles Lagoon/Lake/River/Swamp/Ocean/Glacial (+Custom) with painted swatches, Motion tiles Still/Gentle/Lively/Rough (+Custom), Clarity | deep/shallows/foam colours, waves, ripple detail, speed, foam, glint softness, shine, sky reflection, caustics, caustic detail, shallows width, distortion, edge foam cutoff, token ripples, ripple reach |
 | Film | Style tiles Off/Subtle/Retro/Heavy (+Custom), pixelate, vignette, grain | colours, dither, colour fade |
-| World | scale tiles, cell size (m and ft), water tiles, Wind tiles Still/Breeze/Gusty (+Custom) | tree/grass speed and amount |
+| World | scale tiles, cell size (m and ft), Wind tiles Still/Breeze/Gusty (+Custom) | tree/grass speed and amount |
 
 Style tiles set several fields at once and show `Custom` when the values match no preset; every slider shows end hints; raw values appear only with the rail footer toggle (persisted in `[ui] show_values`). Hovering a sky tile previews it in the strip without touching the model; HDRI skies rotate with the sun (see lighting-and-environment.md).
 
@@ -778,7 +779,7 @@ signal lofi_changed(overrides: Dictionary)
 signal weather_changed(overrides: Dictionary)
 signal foliage_changed(overrides: Dictionary)
 signal sun_changed(settings: SunSettings)
-signal water_style_changed(style: String)
+signal water_changed(overrides: Dictionary)
 signal revert_to_map_defaults_requested
 signal aim_sun_toggled(active: bool)
 signal drawer_opened   # Controller should snapshot values and call initialize()
