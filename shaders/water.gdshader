@@ -143,6 +143,9 @@ const vec2 SWELL_DIR = vec2(0.94, 0.34);
 const float FLOW_SPEED_UNITS_PER_SEC = 0.6;
 // Below this decoded magnitude a texel is still water: 8-bit mid-grey decodes to 0.004.
 const float FLOW_DEAD_ZONE = 0.02;
+// Above this it is not a baked texel at all (the format tops out at 1.0 plus 8-bit
+// quantisation); an unbound sampler reads black, which decodes to 1.41.
+const float FLOW_MAX_VALID = 1.1;
 // Two-phase flow-map advection: each copy of a drifting field is displaced along the
 // flow for this many seconds, then reset; the two copies are half a cycle apart and
 // cross-faded so neither ever stretches far. A single displaced copy shears apart
@@ -271,9 +274,13 @@ vec2 water_flow(vec2 uv, mat4 model) {
 	if (speed <= FLOW_DEAD_ZONE) {
 		return vec2(0.0);
 	}
-	// The bake format's speed factor is 0..1; an unbound sampler decodes to black
-	// (0.5, 0.5) -> f = (-1, -1), a 1.41 diagonal, so clamp back into range.
-	speed = min(speed, 1.0);
+	// The bake format's speed factor is 0..1 (plus 8-bit quantisation), so a larger
+	// magnitude cannot come from a real map: it is the unbound sampler decoding black
+	// (0, 0) -> f = (-1, -1), a 1.41 diagonal. Treat it as still water rather than
+	// clamping it into a full-speed current in a direction nobody authored.
+	if (speed > FLOW_MAX_VALID) {
+		return vec2(0.0);
+	}
 	// Blender local (x, y) is glTF/Godot local (x, 0, -y): the swap the exporter applies
 	// to the mesh itself, so the direction lands on the same geometry it was baked over.
 	vec3 local_dir = vec3(f.x, 0.0, -f.y) / speed;
