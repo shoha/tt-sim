@@ -271,25 +271,31 @@ func test_a_level_without_a_flow_map_clears_the_shared_parameter() -> void:
 	without.free()
 
 
-## The early-return path: a scene with no "-water" mesh at all (not just one carrying no
-## flow map) must still clear the shared sampler, or the previous level's river leaks
-## into a map with no water whatsoever.
-func test_a_scene_with_no_water_mesh_at_all_clears_the_shared_parameter() -> void:
+## Every GLB goes through process_water_meshes, including token models loaded AFTER the
+## level (AssetModelCache -> GlbUtils.load_glb_with_processing). A scene with no "-water"
+## mesh at all must therefore leave the shared sampler alone: clearing it here wiped the
+## River level's flow map the moment the first token model loaded, and the still-flagged
+## plane then decoded the unbound sampler as a full-speed diagonal current. Only a scene
+## that carries water planes (a level swap) may clear it, which the test above covers.
+func test_a_scene_with_no_water_mesh_leaves_the_shared_parameter_alone() -> void:
 	var with_map := Node3D.new()
 	with_map.add_child(_water_plane("Lake-water", 8.0, true))
 	WaterGlbUtils.process_water_meshes(with_map)
-	assert_not_null(
-		WaterGlbUtils._get_water_material().get_shader_parameter(WaterGlbUtils.FLOW_MAP_PARAM)
+	var flow_map: Texture2D = WaterGlbUtils._get_water_material().get_shader_parameter(
+		WaterGlbUtils.FLOW_MAP_PARAM
 	)
-	with_map.free()
+	assert_not_null(flow_map)
 
-	var no_water := Node3D.new()
-	var table_mesh := MeshInstance3D.new()
-	table_mesh.name = "Table"
-	table_mesh.mesh = BoxMesh.new()
-	no_water.add_child(table_mesh)
-	WaterGlbUtils.process_water_meshes(no_water)
-	assert_null(
-		WaterGlbUtils._get_water_material().get_shader_parameter(WaterGlbUtils.FLOW_MAP_PARAM)
+	var token_model := Node3D.new()
+	var body_mesh := MeshInstance3D.new()
+	body_mesh.name = "Bulbasaur"
+	body_mesh.mesh = BoxMesh.new()
+	token_model.add_child(body_mesh)
+	WaterGlbUtils.process_water_meshes(token_model)
+	assert_eq(
+		WaterGlbUtils._get_water_material().get_shader_parameter(WaterGlbUtils.FLOW_MAP_PARAM),
+		flow_map,
+		"a later GLB without water must not clear the level's flow map"
 	)
-	no_water.free()
+	token_model.free()
+	with_map.free()

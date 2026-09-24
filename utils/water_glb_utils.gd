@@ -36,14 +36,21 @@ static func _get_water_material() -> ShaderMaterial:
 ## material's emission texture (see docs/superpowers/specs/2026-09-23-water-flow-design.md).
 ## That texture is lifted onto the shared material here and the plane it belongs to is
 ## flagged with a per-instance uniform; every other plane renders still water. A level
-## with no map clears the sampler so the previous level's rivers cannot leak into it.
+## whose water planes carry no map clears the sampler so the previous level's rivers
+## cannot leak into it.
+##
+## A scene with no "-water" mesh at all must NOT touch the sampler: every GLB comes
+## through here, including token models loaded after the level (AssetModelCache ->
+## GlbUtils.load_glb_with_processing), and clearing on that path wiped the River level's
+## flow map the moment the first token model loaded. The sampler only matters to a
+## plane that is flagged, and flagged planes die with their level, so a stale texture
+## left behind by a level without water is inert.
 static func process_water_meshes(node: Node) -> void:
 	var water_nodes: Array[MeshInstance3D] = []
 	_find_water_mesh_nodes(node, water_nodes)
-	var material := _get_water_material()
 	if water_nodes.is_empty():
-		material.set_shader_parameter(FLOW_MAP_PARAM, null)
 		return
+	var material := _get_water_material()
 	var flow_plane := _flow_map_plane(water_nodes, node)
 	var flow_map: Texture2D = _extract_flow_map(flow_plane) if flow_plane else null
 	material.set_shader_parameter(FLOW_MAP_PARAM, flow_map)
