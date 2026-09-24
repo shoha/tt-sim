@@ -70,3 +70,41 @@ func test_colors_match_tolerates_hex_quantization_but_not_real_differences() -> 
 	assert_false(original.is_equal_approx(quantized), "sanity: hex round trip is lossy")
 	assert_true(WaterSettings.colors_match(original, quantized))
 	assert_false(WaterSettings.colors_match(original, Color(0.1, 0.2, 0.31, 0.9)))
+
+
+func test_from_style_realistic_is_realistic_lake_gentle() -> void:
+	var settings := WaterSettings.from_style("realistic")
+	assert_eq(settings.matching_look(), "realistic")
+	assert_eq(settings.matching_palette(), "lake")
+	assert_eq(settings.matching_motion(), "gentle")
+
+
+func test_from_style_unknown_is_default() -> void:
+	assert_eq(WaterSettings.from_style("nope").to_dict(), WaterSettings.default().to_dict())
+	assert_eq(WaterSettings.from_style("custom").to_dict(), WaterSettings.default().to_dict())
+
+
+func test_defaults_match_stylized_lagoon_gentle() -> void:
+	var settings := WaterSettings.default()
+	assert_eq(settings.matching_look(), "stylized")
+	assert_eq(settings.matching_palette(), "lagoon")
+	assert_eq(settings.matching_motion(), "gentle")
+
+
+func test_one_edit_flips_only_its_group_to_custom() -> void:
+	var settings := WaterSettings.default()
+	settings.wave_speed = 2.5
+	assert_eq(settings.matching_motion(), WaterPresets.CUSTOM_KEY)
+	assert_eq(settings.matching_look(), "stylized")
+	assert_eq(settings.matching_palette(), "lagoon")
+	settings.water_color = Color.RED
+	assert_eq(settings.matching_palette(), WaterPresets.CUSTOM_KEY)
+	assert_eq(settings.matching_look(), "stylized")
+
+
+func test_apply_group_sets_only_those_keys() -> void:
+	var settings := WaterSettings.default()
+	settings.apply_group(WaterPresets.PALETTES["swamp"])
+	assert_eq(settings.matching_palette(), "swamp")
+	assert_eq(settings.matching_look(), "stylized")
+	assert_eq(settings.matching_motion(), "gentle")

@@ -108,9 +108,9 @@ static func color_from_value(value: Variant, fallback: Color) -> Color:
 	if value is Color:
 		return value
 	if value is String:
-		var str: String = value
+		var hex_str: String = value
 		# Ensure hex strings have '#' prefix for html_is_valid and html
-		var parsed_str: String = str if str.begins_with("#") else "#" + str
+		var parsed_str: String = hex_str if hex_str.begins_with("#") else "#" + hex_str
 		if Color.html_is_valid(parsed_str):
 			return Color.html(parsed_str)
 	return fallback
@@ -127,3 +127,53 @@ static func colors_match(a: Color, b: Color) -> bool:
 
 func copy_settings() -> WaterSettings:
 	return duplicate() as WaterSettings
+
+
+## The settings a legacy LevelData.water_style name meant, via
+## WaterPresets.STYLE_COMPOSITION. Unknown names (including "custom") give the
+## defaults, which is what the old preset lookup did too.
+static func from_style(style: String) -> WaterSettings:
+	return WaterSettings.from_dict(WaterPresets.get_preset(style))
+
+
+## Overwrite just the keys in values (one preset group's worth), leaving the
+## other groups untouched -- this is what a tile press does.
+func apply_group(values: Dictionary) -> void:
+	for key in values:
+		if key in COLOR_KEYS:
+			set(key, color_from_value(values[key], get(key)))
+		elif key in KEYS:
+			set(key, float(values[key]))
+
+
+func matching_look() -> String:
+	return _matching(WaterPresets.LOOKS)
+
+
+func matching_palette() -> String:
+	return _matching(WaterPresets.PALETTES)
+
+
+func matching_motion() -> String:
+	return _matching(WaterPresets.MOTIONS)
+
+
+## The id of the preset in group whose every value matches this resource, or
+## WaterPresets.CUSTOM_KEY. Floats compare with is_equal_approx and colors with
+## colors_match (a hex-quantisation tolerance) so a level that went through JSON
+## still matches the palette it was saved with.
+func _matching(group: Dictionary) -> String:
+	for id in group:
+		var values: Dictionary = group[id]
+		var matches := true
+		for key in values:
+			if key in COLOR_KEYS:
+				if not colors_match(get(key), values[key]):
+					matches = false
+					break
+			elif not is_equal_approx(float(get(key)), float(values[key])):
+				matches = false
+				break
+		if matches:
+			return id
+	return WaterPresets.CUSTOM_KEY
