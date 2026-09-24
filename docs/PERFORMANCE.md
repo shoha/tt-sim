@@ -759,11 +759,15 @@ side; the table reports the median of those 8.
 | Medium | 1.2025 | 1.2465 | +0.044 ms |
 | Low | 1.1665 | 1.2645 | +0.098 ms |
 
-**Gate: pass, no code change needed.** The decision rule is the High tier delta against
-0.3 ms (High is the only tier where the fine-detail octave and caustics, the most
-flow-map-affected code, still run); at +0.091 ms it is well inside the threshold, so the
+**Gate: pass on every tier, no code change needed.** `scenes/ui/settings_menu.gd` derives
+both `water_quality_skip_*` globals from `quality == WaterQuality.LOW` alone, so Medium
+and High run the exact same water shader configuration (the fine-detail octave and
+caustics run on both) and only Low skips anything; the default tier is Medium. The
+0.044 ms (Medium) vs 0.091 ms (High) spread between two shader-identical configurations
+is therefore measurement noise, not a real difference -- both are compared against the
+same 0.3 ms threshold. The default tier costs +0.044 ms; quoting the worst-case reading
+across tiers, High's +0.091 ms, it is still well inside the threshold, so the
 `water_ripple()` coarse-second-phase mitigation described in the flow-map design doc was
-not applied. Medium and Low read slightly higher than High's delta in absolute terms but
-are noise-level differences between sessions of samples this close together, not a
-signal that a cheaper tier costs more -- all three deltas are under a tenth of a
-millisecond, an order of magnitude under the gate.
+not applied. Low reads slightly higher again despite skipping the most code, another
+noise-level difference between sampling sessions -- all three deltas are under a tenth
+of a millisecond, an order of magnitude under the gate.

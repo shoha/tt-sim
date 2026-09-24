@@ -155,12 +155,15 @@ func test_apply_water_settings_from_resource_round_trips_through_the_material() 
 
 ## A "-water" plane as Godot's GLTF importer produces it: a PlaneMesh whose surface
 ## material is a StandardMaterial3D, with or without an emission texture (terrain-paint
-## carries the flow map there).
+## carries the flow map there). terrain-paint's Add Water Plane is a 1x1 quad with the
+## size on the object scale, and glTF carries that as node scale -- so the mesh's own
+## PlaneMesh stays 1x1 here and `size` lands on the node's scale instead, mirroring what
+## the importer actually hands the loader.
 func _water_plane(name: String, size: float, with_flow: bool) -> MeshInstance3D:
 	var mesh_node := MeshInstance3D.new()
 	mesh_node.name = name
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(size, size)
+	plane.size = Vector2(1.0, 1.0)
 	var material := StandardMaterial3D.new()
 	if with_flow:
 		var image := Image.create(4, 4, false, Image.FORMAT_RGB8)
@@ -168,6 +171,7 @@ func _water_plane(name: String, size: float, with_flow: bool) -> MeshInstance3D:
 		material.emission_texture = ImageTexture.create_from_image(image)
 	plane.material = material
 	mesh_node.mesh = plane
+	mesh_node.scale = Vector3(size, 1.0, size)
 	return mesh_node
 
 
@@ -216,6 +220,39 @@ func test_flow_map_goes_to_the_largest_carrying_plane_only() -> void:
 	root.free()
 
 
+## Regression for the mesh-local-AABB bug: the mesh's own PlaneMesh is always the same
+## unscaled 1x1 quad, so the footprint has to come from the node-scale chain up to the
+## root passed to process_water_meshes, not mesh.get_aabb(). A carrying plane nested
+## under a scaled intermediate Node3D (scale 4) with a smaller node scale (3, so
+## effective footprint 12x12) must beat a top-level plane with a larger node scale (10)
+## but no parent scale, proving the chain is accumulated rather than read off either
+## node alone.
+func test_flow_map_footprint_accumulates_through_parent_node_scale() -> void:
+	var root := Node3D.new()
+	# top_level is added -- and therefore traversed -- first: with the mesh-local-AABB
+	# bug both planes report the same unscaled 1x1 footprint, a tie that falls through to
+	# traversal order and would pick top_level here, the wrong answer. Only measuring the
+	# footprint through the node-scale chain breaks the tie correctly, in either order.
+	var top_level := _water_plane("Pond-water", 10.0, true)
+	root.add_child(top_level)
+	var wrapper := Node3D.new()
+	wrapper.scale = Vector3(4.0, 1.0, 4.0)
+	root.add_child(wrapper)
+	var nested := _water_plane("River-water", 3.0, true)
+	wrapper.add_child(nested)
+
+	WaterGlbUtils.process_water_meshes(root)
+
+	var material := WaterGlbUtils._get_water_material()
+	assert_eq(
+		material.get_shader_parameter(WaterGlbUtils.FLOW_MAP_PARAM),
+		WaterGlbUtils._extract_flow_map(nested)
+	)
+	assert_true(nested.get_instance_shader_parameter(WaterGlbUtils.FLOW_PRESENT_PARAM))
+	assert_false(bool(top_level.get_instance_shader_parameter(WaterGlbUtils.FLOW_PRESENT_PARAM)))
+	root.free()
+
+
 func test_a_level_without_a_flow_map_clears_the_shared_parameter() -> void:
 	var with_map := Node3D.new()
 	with_map.add_child(_water_plane("Lake-water", 8.0, true))
@@ -232,3 +269,27 @@ func test_a_level_without_a_flow_map_clears_the_shared_parameter() -> void:
 		WaterGlbUtils._get_water_material().get_shader_parameter(WaterGlbUtils.FLOW_MAP_PARAM)
 	)
 	without.free()
+
+
+## The early-return path: a scene with no "-water" mesh at all (not just one carrying no
+## flow map) must still clear the shared sampler, or the previous level's river leaks
+## into a map with no water whatsoever.
+func test_a_scene_with_no_water_mesh_at_all_clears_the_shared_parameter() -> void:
+	var with_map := Node3D.new()
+	with_map.add_child(_water_plane("Lake-water", 8.0, true))
+	WaterGlbUtils.process_water_meshes(with_map)
+	assert_not_null(
+		WaterGlbUtils._get_water_material().get_shader_parameter(WaterGlbUtils.FLOW_MAP_PARAM)
+	)
+	with_map.free()
+
+	var no_water := Node3D.new()
+	var table_mesh := MeshInstance3D.new()
+	table_mesh.name = "Table"
+	table_mesh.mesh = BoxMesh.new()
+	no_water.add_child(table_mesh)
+	WaterGlbUtils.process_water_meshes(no_water)
+	assert_null(
+		WaterGlbUtils._get_water_material().get_shader_parameter(WaterGlbUtils.FLOW_MAP_PARAM)
+	)
+	no_water.free()
