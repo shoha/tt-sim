@@ -62,6 +62,12 @@ const DEFAULT_DISPLAY_UNIT_PER_CELL := 5.0
 ## "-water"-suffixed mesh via WaterGlbUtils.apply_water_style(). See WaterPresets.
 @export var water_style: String = "stylized"
 
+## Full per-level water tuning, serialised under "water_overrides". water_style
+## above is kept as the matching Look (or "custom") so older builds that only
+## understand the two style names still get the closest look; a level with no
+## "water_overrides" is seeded from its water_style in from_dict().
+@export var water: WaterSettings = WaterSettings.default()
+
 ## Visual Effects (lo-fi shader)
 @export_group("Effects")
 ## Lo-fi post-processing parameters. Serialised under the "lofi_overrides" key
@@ -122,14 +128,15 @@ func _init() -> void:
 	modified_at = created_at
 
 
-## Absorb four legacy property names from pre-typed .tres levels: `sun_overrides`,
-## `lofi_overrides`, `weather_overrides`, and `foliage_overrides`. Legacy .tres
-## levels are loaded by ResourceLoader (see LevelManager.load_level()), which
-## bypasses from_dict() and therefore the migration branch there, so without this
-## hook their sun/lofi/weather/foliage configuration would be silently discarded
-## and replaced by defaults -- and because format_version is @exported with a
-## FORMAT_VERSION initializer, the object would still report itself as v1,
-## leaving a later version-keyed migration no way to detect the loss.
+## Absorb five legacy property names from pre-typed .tres levels: `sun_overrides`,
+## `lofi_overrides`, `weather_overrides`, `foliage_overrides`, and
+## `water_overrides`. Legacy .tres levels are loaded by ResourceLoader (see
+## LevelManager.load_level()), which bypasses from_dict() and therefore the
+## migration branch there, so without this hook their sun/lofi/weather/foliage/
+## water configuration would be silently discarded and replaced by defaults --
+## and because format_version is @exported with a FORMAT_VERSION initializer,
+## the object would still report itself as v1, leaving a later version-keyed
+## migration no way to detect the loss.
 func _set(property: StringName, value: Variant) -> bool:
 	if property == &"sun_overrides" and value is Dictionary:
 		visual_settings = VisualSettings.new()
@@ -145,6 +152,9 @@ func _set(property: StringName, value: Variant) -> bool:
 		return true
 	if property == &"foliage_overrides" and value is Dictionary:
 		foliage = FoliageSettings.from_dict(value)
+		return true
+	if property == &"water_overrides" and value is Dictionary:
+		water = WaterSettings.from_dict(value)
 		return true
 	return false
 
@@ -231,6 +241,7 @@ func duplicate_level() -> LevelData:
 	new_level.environment_preset = environment_preset
 	new_level.environment_overrides = environment_overrides.duplicate()
 	new_level.water_style = water_style
+	new_level.water = water.copy_settings()
 	new_level.lofi = lofi.copy_settings()
 	new_level.weather = weather.copy_settings()
 	new_level.foliage = foliage.copy_settings()
@@ -305,7 +316,8 @@ func to_dict() -> Dictionary:
 		"light_intensity_scale": light_intensity_scale,
 		"environment_preset": environment_preset,
 		"environment_overrides": EnvironmentPresets.overrides_to_json(environment_overrides),
-		"water_style": water_style,
+		"water_style": water.matching_look(),
+		"water_overrides": water.to_dict(),
 		"lofi_overrides": lofi.to_dict(),
 		"weather_overrides": weather.to_dict(),
 		"foliage_overrides": foliage.to_dict(),
@@ -344,6 +356,11 @@ static func from_dict(data: Dictionary) -> LevelData:
 		data.get("environment_overrides", {})
 	)
 	level.water_style = data.get("water_style", "stylized")
+	if data.has("water_overrides"):
+		level.water = WaterSettings.from_dict(data["water_overrides"])
+	else:
+		# Pre-water-pane level: rebuild the water its style name meant.
+		level.water = WaterSettings.from_style(level.water_style)
 	level.lofi = LofiSettings.from_dict(data.get("lofi_overrides", {}))
 	level.weather = WeatherSettings.from_dict(data.get("weather_overrides", {}))
 	level.foliage = FoliageSettings.from_dict(data.get("foliage_overrides", {}))
