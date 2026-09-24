@@ -49,3 +49,28 @@ func test_preset_swatch_size_and_cache() -> void:
 func test_unknown_names_produce_textures_without_errors() -> void:
 	assert_not_null(SwatchTextures.sky_gradient("no_such_sky"))
 	assert_not_null(SwatchTextures.preset_swatch("no_such_preset"))
+
+
+func test_water_swatch_paints_deep_over_shallows_and_caches() -> void:
+	var swatch := SwatchTextures.water_swatch("lagoon")
+	assert_eq(swatch.get_width(), SwatchTextures.WATER_SWATCH_SIZE)
+	assert_eq(swatch.get_height(), SwatchTextures.WATER_SWATCH_SIZE)
+	var image := swatch.get_image()
+	var deep: Color = WaterPresets.PALETTES["lagoon"]["water_color"]
+	var shallows: Color = WaterPresets.PALETTES["lagoon"]["shore_color"]
+	# RGBA8 pixels are 8-bit, so compare with the hex-quantisation tolerance.
+	assert_true(
+		WaterSettings.colors_match(image.get_pixel(2, 2), Color(deep.r, deep.g, deep.b, 1.0))
+	)
+	assert_true(
+		WaterSettings.colors_match(
+			image.get_pixel(2, SwatchTextures.WATER_SWATCH_SIZE - 3),
+			Color(shallows.r, shallows.g, shallows.b, 1.0)
+		)
+	)
+	assert_same(swatch, SwatchTextures.water_swatch("lagoon"), "cached per name")
+
+
+func test_water_swatch_unknown_palette_is_grey() -> void:
+	var image := SwatchTextures.water_swatch("no_such_palette").get_image()
+	assert_true(WaterSettings.colors_match(image.get_pixel(0, 0), SwatchTextures.FALLBACK))
