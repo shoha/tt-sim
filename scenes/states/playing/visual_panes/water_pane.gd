@@ -6,8 +6,9 @@ extends LevelEditPane
 ## matching so a Custom tile appears only when nothing matches -- the same
 ## contract as WorldPane's Wind and Scale rows -- plus one primary Clarity
 ## slider and an Advanced foldout with every remaining uniform, captioned by
-## the tile row it un-matches. Presets live in WaterPresets; the pane never
-## stores a tile id.
+## the tile row it un-matches; the Motion caption's Current row scales the
+## map's baked flow (no effect on a level whose map has none). Presets live in
+## WaterPresets; the pane never stores a tile id.
 
 signal water_changed(overrides: Dictionary)
 
@@ -39,6 +40,7 @@ const MOTION_ROWS := [
 	["Ripple detail", "ripple_scale", 0.5, 5.0, 0.05, "Broad", "Fine"],
 	["Speed", "wave_speed", 0.0, 3.0, 0.05, "Still", "Rushing"],
 	["Foam", "foam_strength", 0.0, 2.0, 0.05, "None", "Frothy"],
+	["Current", "flow_strength", 0.0, 2.0, 0.05, "None", "Strong"],
 ]
 const LOOK_ROWS := [
 	["Glint softness", "roughness_value", 0.02, 0.5, 0.01, "Sharp", "Soft"],

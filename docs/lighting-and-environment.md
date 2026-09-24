@@ -594,9 +594,15 @@ the fields it edits and implements `load_state(state)` / `write_state(state)` ov
 | Sky | sky tiles with thumbnails (ten, two rows of five), preview strip and caption for the hovered or selected sky, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog color, fog energy, fog height, fog falloff |
 | Color | brightness (exposure), contrast, saturation, glow | light energy (formerly "Light scale"), fine brightness, tonemap, white point, glow strength, bloom |
 | Weather | rain/snow/fog/wind tiles with Light..Heavy intensity | none |
-| Water | Look tiles Stylized/Realistic (+Custom), Color tiles Lagoon/Lake/River/Swamp/Ocean/Glacial (+Custom) with painted swatches, Motion tiles Still/Gentle/Lively/Rough (+Custom), Clarity | deep/shallows/foam colors, waves, ripple detail, speed, foam, glint softness, shine, sky reflection, caustics, caustic detail, shallows width, distortion, edge foam cutoff, token ripples, ripple reach |
+| Water | Look tiles Stylized/Realistic (+Custom), Color tiles Lagoon/Lake/River/Swamp/Ocean/Glacial (+Custom) with painted swatches, Motion tiles Still/Gentle/Lively/Rough (+Custom), Clarity | deep/shallows/foam colors, waves, ripple detail, speed, foam, glint softness, shine, sky reflection, caustics, caustic detail, shallows width, distortion, edge foam cutoff, token ripples, ripple reach, current |
 | Film | Style tiles Off/Subtle/Retro/Heavy (+Custom), pixelate, vignette, grain | colors, dither, color fade |
 | World | scale tiles, cell size (m and ft), Wind tiles Still/Breeze/Gusty (+Custom) | tree/grass speed and amount |
+
+**Current** scales the river flow baked into the map by terrain-paint (its `-flow` curves;
+see that addon's README "Flow direction"). Ripples, caustics and foam travel along the
+baked direction, foam stretches into streaks and a token standing in the river trails a
+wake. A level whose map carries no flow map ignores the row, and the Still motion tile
+pins it to zero.
 
 The Sky and Color panes share an `EnvironmentEditModel` (preset + overrides + map defaults); Sky
 writes it into the saved `LevelVisualState`, while Color's `write_state` carries only the light
