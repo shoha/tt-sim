@@ -9,7 +9,7 @@ func test_keys_cover_every_export() -> void:
 	var settings := WaterSettings.default()
 	for key in WaterSettings.KEYS:
 		assert_true(key in settings, "%s is a property" % key)
-	assert_eq(WaterSettings.KEYS.size(), 22)
+	assert_eq(WaterSettings.KEYS.size(), 23)
 
 
 func test_to_dict_is_complete_with_hex_colors() -> void:
@@ -108,3 +108,14 @@ func test_apply_group_sets_only_those_keys() -> void:
 	assert_eq(settings.matching_palette(), "swamp")
 	assert_eq(settings.matching_look(), "stylized")
 	assert_eq(settings.matching_motion(), "gentle")
+
+
+func test_flow_strength_defaults_to_one_and_round_trips() -> void:
+	assert_almost_eq(WaterSettings.default().flow_strength, 1.0, 0.0001)
+	var settings := WaterSettings.default()
+	settings.flow_strength = 0.35
+	var restored := WaterSettings.from_dict(settings.to_dict())
+	assert_almost_eq(restored.flow_strength, 0.35, 0.0001)
+	# A level saved before the key existed keeps the default.
+	var legacy := WaterSettings.from_dict({"wave_speed": 0.9})
+	assert_almost_eq(legacy.flow_strength, 1.0, 0.0001)
