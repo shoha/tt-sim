@@ -270,6 +270,46 @@ rarely matters in practice.
 As with `light_intensity_scale`, the Blender-side value is a starting point, not a
 precise conversion -- tune further with the in-game edit panel if it looks off.
 
+### SDFGI banding under the orthographic camera (2026-09-21)
+
+Horizontal bands of lighter and darker ground across the screen, most obvious on large
+flat areas and changing scale as you zoom, are **SDFGI cascade boundaries**. Not colour
+banding, not shadows, not post-processing. Confirmed on the Deciduous map by toggling
+`env.sdfgi_enabled` at runtime in both directions with the sun, shadows, fog, SSAO and the
+lo-fi shader all off.
+
+Why it reads as depth-aligned bands: SDFGI uses four nested cascades centred on the camera
+(`sdfgi_cascade0_distance` 12.8 doubling to `sdfgi_max_distance` 204.8, `min_cell_size`
+0.2), so GI resolution steps at every boundary. Under the 45-degree isometric camera,
+surfaces at constant camera depth project to horizontal screen lines, and the view spans
+more world units than cascade 0 covers, so several boundaries are on screen at once. Zoom
+changes `camera.size`, and `_update_camera_offset()` scales the camera distance with it, so
+the cascades re-centre and the band spacing shifts. SDFGI targets perspective cameras in
+large dynamic scenes; it is a poor fit for this camera.
+
+`Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"]` is **false**, but
+`user://settings.cfg` can carry `sdfgi_enabled=true` from the Settings menu, which
+`level_environment_manager.apply_rendering_toggles()` applies. Check settings.cfg before
+assuming the code default is what is running.
+
+Two findings from the same investigation:
+
+- **Black terrain with the sun off, foliage still lit** was `occlusion_fade.gdshader`
+  dropping the ORM textures and copying only `StandardMaterial3D`'s scalar `metallic`,
+  which glTF leaves at 1.0 as a multiplier. A pure metal has no diffuse lobe, so with no
+  sun, no sky and no GI there was nothing to reflect. The foliage looked lit because
+  `wind_foliage.gdshader` samples the real ORM (metallic about 0). Fixed by copying the
+  ORM; the lit plants were the correct behaviour. Also measured:
+  `ambient_light_sky_contribution` sits at 1.0 even with `ambient_light_source = COLOR`
+  and no sky, and ambient still reaches surfaces normally.
+- **Baked terrain AO is healthy and is ruled out** as a cause of dark ground: a fresh
+  headless AO bake of `Plane-col` in `deciduous.blend` returns about 1.000 with or without
+  occluders, and the shipped `Terrain_ORM` in `map.glb` has AO mean 254.85/255 with
+  metallic exactly 0. Measurement trap that produced the wrong conclusion first: in glTF
+  `occlusionTexture.index` is a **texture** index, not an image index. Resolve it through
+  `textures[i].source` before decoding, or you analyse an unrelated image (here a
+  pine-leaf alpha atlas whose dark texels looked convincingly like a broken AO bake).
+
 ### Baked Foliage AO and Texture Packing (2026-09-16)
 
 `terrain-paint`'s per-asset foliage bake used to ray-trace each scatter asset against

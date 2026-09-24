@@ -733,6 +733,32 @@ Caveats that apply to every number here: these come from a debug build driven th
 the validator bridge, not an exported release build, and background `godot --headless`
 test runs contend for CPU. Quiesce other work before measuring.
 
+### In-run shader A/B by hot-swapping `Shader.code`
+
+For a shader or material change, the `override.cfg` procedure above still needs a
+restart per build and is exposed to clock drift between runs. A handful of
+`@run user://*.gd` probes (static `run(base)`, driven through `game_interact`) give a
+same-run, same-camera A/B in one batch instead. Used for the water shader rework on
+2026-09-23:
+
+- **Hot-swap the shader.** Export the old source with `git show HEAD:shaders/x.gdshader`
+  to `user://`, then from a probe set
+  `<shared material>.shader.code = FileAccess.get_file_as_string("user://x_old.gdshader")`
+  and swap back with the `res://` file. The shared material recompiles in place and global
+  uniforms keep working. The first sample after a swap can carry the recompile hitch
+  (10 ms seen once), so take a second reading.
+- **Vsync and GPU time at runtime.** `DisplayServer.window_set_vsync_mode(VSYNC_DISABLED)`
+  and `RenderingServer.viewport_set_measure_render_time(sub.get_viewport_rid(), true)`, then
+  read `viewport_get_measured_render_time_gpu(rid)` on the SubViewport. That is a
+  single-frame sample, not an average, so read it several times.
+- **Quality tiers.** `RenderingServer.global_shader_parameter_set("water_quality_skip_*",
+  true)` from a probe flips Low quality without touching Settings.
+- **Zoom for fill-cost cases.** `find_child("CameraController", true, false).set("_target_zoom", 7.0)`
+  from plain `game_eval`; setting `camera_node.size` directly is overwritten by the
+  controller's smoothing.
+- Probes live in the user data dir (`%APPDATA%/Godot/app_userdata/TTSim/`), never in the
+  repo; delete them afterwards. Alternate old/new at least twice.
+
 ## Water flow map (2026-09-23)
 
 The flow-map advection added to `shaders/water.gdshader` (ripples, caustics and foam
