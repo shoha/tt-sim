@@ -18,6 +18,8 @@ const LEVEL_MAP_NAME = Paths.LEVEL_MAP_NAME
 const LEVEL_MAP_DOCUMENT_NAME = Paths.LEVEL_MAP_DOCUMENT_NAME
 const LEVEL_THUMBNAIL_NAME = "thumbnail.png"
 const THUMBNAIL_SIZE := Vector2i(320, 180)
+## The autosave slot under levels_dir (LevelEditorHistory, AuthoringAutosave); never listed.
+const AUTOSAVE_FOLDER := "_autosave"
 
 ## Root of the saved-level folders. Tests point this at a temp directory so no
 ## real save is touched (the same pattern as UiPreferences.settings_path).
@@ -150,6 +152,14 @@ func save_level_in_place(level_data: LevelData) -> String:
 	if level_data.level_folder != "":
 		return save_level_folder(level_data)
 	return save_level(level_data)
+
+
+## A folder name for a new level called `level_name` that no level uses yet (sanitized,
+## numbered on a clash). For a caller that must write into the folder before
+## save_level_folder() (authoring writes map.ttmap first, so level.json never names a
+## document that is not there).
+func new_folder_name(level_name: String) -> String:
+	return _get_unique_folder_name(Paths.sanitize_level_name(level_name))
 
 
 ## Get a unique folder name by appending a number if needed
@@ -417,7 +427,8 @@ func get_saved_levels() -> Array[Dictionary]:
 	var entry_name = dir.get_next()
 
 	while entry_name != "":
-		if dir.current_is_dir():
+		# The autosave slot (Level Editor and authoring crash recovery) is never a level.
+		if dir.current_is_dir() and entry_name != AUTOSAVE_FOLDER:
 			# Check if it's a folder-based level (has level.json)
 			var json_path = json_path(entry_name)
 			if FileAccess.file_exists(json_path):

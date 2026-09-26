@@ -6,6 +6,8 @@ extends AnimatedVisibilityContainer
 
 signal editor_closed
 signal play_level_requested(level_data: LevelData)
+## "Build map in game": open authoring mode on the current level (see Root.request_authoring).
+signal build_map_requested(level_data: LevelData)
 
 const POPUP_SIZE_SMALL := Vector2i(400, 500)
 const POPUP_SIZE_LARGE := Vector2i(800, 600)
@@ -39,6 +41,7 @@ var _metadata_debounce_timer: Timer
 @onready var author_edit: LineEdit = %AuthorEdit
 @onready var map_path_label: Label = %MapPathLabel
 @onready var select_map_button: Button = %SelectMapButton
+@onready var build_map_button: Button = %BuildMapButton
 @onready var map_file_dialog: FileDialog = %MapFileDialog
 @onready var map_offset_x_spin: SpinBox = %MapOffsetXSpin
 @onready var map_offset_y_spin: SpinBox = %MapOffsetYSpin
@@ -128,6 +131,7 @@ func _ready() -> void:
 
 func _connect_signals() -> void:
 	select_map_button.pressed.connect(_on_select_map_pressed)
+	build_map_button.pressed.connect(_on_build_map_pressed)
 	map_file_dialog.file_selected.connect(_on_map_file_selected)
 
 	add_token_button.pressed.connect(_on_add_token_pressed)
@@ -429,6 +433,17 @@ func _refresh_saved_levels_list() -> void:
 
 func _on_select_map_pressed() -> void:
 	map_file_dialog.popup_centered(POPUP_SIZE_LARGE)
+
+
+## Hands the current level to authoring mode. A map file chosen but not yet saved is not
+## in the level folder yet, so there is nothing to dress until the level is saved.
+func _on_build_map_pressed() -> void:
+	_on_level_metadata_changed()
+	_on_map_transform_changed()
+	if _pending_map_source_path != "":
+		_set_status("Cannot build in game yet: save the level to bundle its map first")
+		return
+	build_map_requested.emit(current_level)
 
 
 func _on_map_file_selected(path: String) -> void:

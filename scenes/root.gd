@@ -15,6 +15,7 @@ enum State {
 	LOBBY_CLIENT,  ## Joined a game, waiting for host to start
 	PLAYING,
 	PAUSED,
+	AUTHORING,  ## Building or dressing a map in the game view (offline only)
 }
 
 const TITLE_SCREEN_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
@@ -26,6 +27,10 @@ const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn
 const UPDATE_DIALOG_SCENE := preload("res://scenes/ui/update_dialog.tscn")
 const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
 const DISCONNECT_INDICATOR_SCENE := preload("res://scenes/ui/disconnect_indicator.tscn")
+const NEW_MAP_DIALOG_SCENE := preload("res://scenes/states/authoring/new_map_dialog.tscn")
+## Where leaving authoring returns to.
+const RETURN_TO_TITLE := &"title"
+const RETURN_TO_EDITOR := &"editor"
 
 var _state_stack: Array[State] = []
 var _title_screen: CanvasLayer = null
@@ -39,6 +44,11 @@ var _pending_level_data: LevelData = null
 var _loading_overlay: LoadingOverlay = null
 var _disconnect_indicator: Node = null
 var _startup_update_check_pending: bool = false
+var _authoring_controller: AuthoringController = null
+## What the next AUTHORING state opens: {"level": LevelData or null, "new_map": spec,
+## "return_to": RETURN_TO_*}. See request_authoring().
+var _authoring_request: Dictionary = {}
+var _new_map_dialog: NewMapDialog = null
 
 
 func _ready() -> void:
@@ -136,6 +146,9 @@ func _setup_app_menu() -> void:
 	if app_menu_controller:
 		app_menu_controller.setup(_level_play_controller)
 		app_menu_controller.play_level_requested.connect(_on_play_level_requested)
+		app_menu_controller.build_map_requested.connect(
+			func(level: LevelData) -> void: request_authoring(level, RETURN_TO_EDITOR)
+		)
 
 
 func _on_open_editor_requested(level_path: String = "") -> void:
@@ -221,6 +234,12 @@ func _enter_state(state: State) -> void:
 				_title_screen.join_game_requested.connect(_on_join_game_requested)
 			if _title_screen.has_signal("play_solo_requested"):
 				_title_screen.play_solo_requested.connect(_on_play_solo_requested)
+			if _title_screen.has_signal("build_map_requested"):
+				_title_screen.build_map_requested.connect(
+					func() -> void: request_authoring(null, RETURN_TO_TITLE)
+				)
+			if _title_screen.has_signal("edit_map_requested"):
+				_title_screen.edit_map_requested.connect(_on_edit_map_requested)
 			var title_app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
 			if title_app_ctrl:
 				title_app_ctrl.hide_editor_button()
@@ -232,6 +251,8 @@ func _enter_state(state: State) -> void:
 			_enter_playing_state()
 		State.PAUSED:
 			_enter_paused_state()
+		State.AUTHORING:
+			_enter_authoring_state()
 
 
 func _enter_playing_state() -> void:
@@ -293,6 +314,8 @@ func _exit_state(state: State) -> void:
 			_exit_playing_state()
 		State.PAUSED:
 			_exit_paused_state()
+		State.AUTHORING:
+			_exit_authoring_state()
 
 
 func _exit_playing_state() -> void:
@@ -374,6 +397,112 @@ func _on_play_solo_requested(level_info: Dictionary) -> void:
 		UIManager.show_error("Could not load that level")
 		return
 	_on_play_level_requested(level)
+
+
+# ============================================================================
+# Authoring
+# ============================================================================
+
+
+## Opens map building for `level` (null: a level made there). A level with a map opens at
+## once (a GLB-only level as a dressing layer over its Blender map); otherwise the new-map
+## dialog asks for a size and starting biome first, and cancelling it changes nothing.
+## `return_to` (RETURN_TO_TITLE or RETURN_TO_EDITOR) is where leaving goes back to.
+func request_authoring(level: LevelData, return_to: StringName) -> void:
+	var refusal := authoring_refusal(level, NetworkManager.is_networked())
+	if refusal != "":
+		UIManager.show_warning(refusal)
+		return
+	if level != null and level.has_map():
+		_begin_authoring({"level": level, "return_to": return_to})
+		return
+	if is_instance_valid(_new_map_dialog):
+		return
+	_new_map_dialog = NEW_MAP_DIALOG_SCENE.instantiate()
+	_new_map_dialog.map_chosen.connect(
+		func(spec: Dictionary) -> void:
+			_begin_authoring({"level": level, "new_map": spec, "return_to": return_to})
+	)
+	add_child(_new_map_dialog)
+
+
+## Why map building cannot open for `level` right now, or "" when it can. Authoring is
+## offline only (a session only ever receives a finished, saved map), and a built-in res://
+## map has no level folder to write a document into. Pure.
+static func authoring_refusal(level: LevelData, networked: bool) -> String:
+	if networked:
+		return "Maps are built offline. Leave the game to build or edit a map."
+	if level != null and level.map_path.begins_with("res://"):
+		return "Built-in maps cannot be edited in the game."
+	return ""
+
+
+func _begin_authoring(request: Dictionary) -> void:
+	_authoring_request = request
+	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
+	if app_ctrl:
+		app_ctrl.close_level_editor()
+	change_state(State.AUTHORING)
+
+
+func _on_edit_map_requested(level_info: Dictionary) -> void:
+	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
+	if level == null:
+		UIManager.show_error("Could not load that level")
+		return
+	request_authoring(level, RETURN_TO_TITLE)
+
+
+func _enter_authoring_state() -> void:
+	_game_map = GAME_MAP_SCENE.instantiate()
+	add_child(_game_map)
+	_authoring_controller = AuthoringController.new()
+	_authoring_controller.name = "AuthoringController"
+	add_child(_authoring_controller)
+	_authoring_controller.loading_started.connect(_on_authoring_loading_started)
+	_authoring_controller.loading_progress.connect(_on_level_loading_progress)
+	_authoring_controller.loading_completed.connect(_on_authoring_loading_completed)
+	_authoring_controller.exit_requested.connect(_on_authoring_exit_requested)
+	_authoring_controller.setup(_game_map)
+	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
+	if app_ctrl:
+		app_ctrl.hide_editor_button()
+	_authoring_controller.start(_authoring_request)
+
+
+func _exit_authoring_state() -> void:
+	if _authoring_controller:
+		_authoring_controller.teardown()
+		_authoring_controller.queue_free()
+		_authoring_controller = null
+	if _loading_overlay and _loading_overlay.visible:
+		_loading_overlay.hide_loading()
+	if _game_map:
+		_game_map.queue_free()
+		_game_map = null
+
+
+func _on_authoring_loading_started() -> void:
+	if _loading_overlay:
+		_loading_overlay.show_loading("Building the map...")
+
+
+func _on_authoring_loading_completed() -> void:
+	if _loading_overlay:
+		_loading_overlay.hide_loading()
+
+
+## Back to where authoring was opened from: the title (its level list is rebuilt on entry,
+## so a saved map shows with its new thumbnail), or the Level Editor on the same level.
+func _on_authoring_exit_requested(level: LevelData) -> void:
+	var return_to: StringName = _authoring_request.get("return_to", RETURN_TO_TITLE)
+	_authoring_request = {}
+	change_state(State.TITLE_SCREEN)
+	if return_to != RETURN_TO_EDITOR:
+		return
+	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
+	if app_ctrl:
+		app_ctrl.open_level_editor_with_level(level)
 
 
 func _on_join_game_requested() -> void:
