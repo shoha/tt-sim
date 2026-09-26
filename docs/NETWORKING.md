@@ -316,7 +316,8 @@ level folder as asset id, and a variant id naming the file.
   GLB, `Paths.LEVEL_MAP_DOCUMENT_FILE_TYPE` for the document, cached as `.glb` /
   `.ttmap` under `user://asset_cache/_level_maps/<folder>/`). `MapDownloadCoordinator`
   is told which files are missing and which are already here, waits for every one, then
-  loads through the async `LevelPlayLoader.load_map_sources_async` and finalizes. A GLB
+  loads through the async `LevelPlayLoader.load_map_sources_async` (over the shared
+  `MapSourceLoader`) and finalizes. A GLB
   that fails to download fails the map; a document that fails beside a GLB lets the GLB
   load alone (as on the host); a document-only map fails.
 - **Stale cache.** `NetworkManager.broadcast_level_data()` adds `map_hashes` (variant id

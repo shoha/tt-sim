@@ -55,7 +55,15 @@ Root (Node3D)
 │   ├── LevelEditPanel (DrawerContainer) - slide-out editing drawer (right edge)
 │   └── PlayerListDrawer (DrawerContainer) - connected players (left edge)
 │
-└── [Dynamic] PauseOverlay (CanvasLayer) - shown in PAUSED state
+├── [Dynamic] PauseOverlay (CanvasLayer) - shown in PAUSED state
+│
+├── [Dynamic] GameMap (Node3D) - also shown in AUTHORING state, set up with
+│   │                            setup_authoring() (GameplayMenu hidden and disabled)
+│   └── .../MapContainer/LevelMap - AuthoredTerrain or the GLB, AuthoredScatter, AuthoredProps
+└── [Dynamic] AuthoringController (Node) - AUTHORING state
+    ├── AuthoringUI (CanvasLayer, LAYER_AUTHORING)
+    │   └── AuthoringPanel (DrawerContainer, left edge rail) - tools, save, leave
+    └── AutosaveTimer (Timer, 30 s)
 ```
 
 ### Dynamic vs Static Scenes
@@ -66,6 +74,7 @@ Root (Node3D)
 | TitleScreen  | TITLE_SCREEN state | Root.\_enter_state()         |
 | GameMap      | PLAYING state      | Root.\_enter_playing_state() |
 | PauseOverlay | PAUSED state       | Root.\_enter_paused_state()  |
+| GameMap + AuthoringController | AUTHORING state | Root.\_enter_authoring_state() |
 
 ---
 
@@ -244,8 +253,13 @@ enum State {
     LOBBY_CLIENT,   # Joined a game, waiting for host to start
     PLAYING,        # Active gameplay
     PAUSED,         # Game paused (overlay state)
+    AUTHORING,      # Building or dressing a map in the game view (offline only)
 }
 ```
+
+`UIManager` mirrors only `PLAYING` and `PAUSED` as ints; AUTHORING is appended so
+nothing else shifts. Escape in AUTHORING goes through the overlay stack (the
+AuthoringPanel), never the pause menu.
 
 ### State Transitions
 
@@ -289,6 +303,70 @@ func _exit_state(state: State) -> void:
 ```gdscript
 signal state_changed(old_state: State, new_state: State)
 ```
+
+### Authoring Flow
+
+Authoring mode is where a GM builds a map, or dresses a Blender-made one, inside the same
+`GameMap` players see (camera, lighting, sky, weather, grid), so every choice is judged at
+the game camera. Design: `docs/superpowers/specs/2026-09-26-in-game-map-authoring-design.md`
+(local), "Authoring mode (phase 2)".
+
+**Entry.** `Root.request_authoring(level, return_to)` is the one door, refused with a
+toast while hosting or joined (`Root.authoring_refusal()`, pure) and for built-in `res://`
+maps. Three callers: the title's **Build Map** (`TitleScreen.build_map_requested`, a new
+level), a level card's **Edit map** (`LevelCard.ACTION_EDIT_MAP` ->
+`LevelGrid.level_map_edit_requested` -> `TitleScreen.edit_map_requested`), and the Level
+Editor's **Build map in game** (`LevelEditor.build_map_requested` ->
+`AppMenuController.build_map_requested`, refused while a chosen map file is not yet saved
+into the level folder). A level with a map opens at once; one without shows
+`NewMapDialog`, and cancelling it changes nothing. `_begin_authoring()` closes the Level
+Editor overlay and `change_state(State.AUTHORING)`.
+
+**Enter.** `_enter_authoring_state()` instantiates `GameMap` and an `AuthoringController`,
+whose `setup(game_map)` calls `GameMap.setup_authoring()`, `setup_measure_tool()` and
+`setup_grid_overlay()` and builds the `AuthoringPanel`. `start(request)` first offers a
+leftover autosave (`AuthoringAutosave`), then loads:
+
+- a new map: `NewMap.create(size_ft, biome_id, seed)` (the biome's `ground_surface` is the
+  base surface and its masks carry the starting cover), built with
+  `MapSourceLoader.build_async("", doc)`; after install the whole map is passed to
+  `AuthoredScatter.request_region()` so the cover grows in on worker threads;
+- a level with `map.ttmap`: `MapSourceLoader.load_async(glb, document_path)`;
+- a GLB-only level: `build_async(glb, null)`, then `NewMap.create_dressing()` makes an
+  empty document (`has_base_map`) reaching the GLB's farthest geometry, written on the first
+  save.
+
+The loader runs with `separate_props = true` (scatter in `AuthoredScatter`, props in
+`AuthoredProps`, both always present) and `MapSourceLoader.install()` puts the root into
+`MapContainer` exactly as a play-time load does. Then the scatter node gets
+`attach_document(document)`, the camera zoom-out limit becomes
+`max(20, GameMap.fit_zoom_for_extent(extent, 12 m) * 1.08)` (52.4 for a 200 ft map at
+16:9), pan bounds come from the document extent (`GameMap.set_map_bounds`), and every frame
+`LevelEnvironmentManager.fit_shadow_distance_to_view()` keeps the sun's shadows reaching the
+map's far corner (above the fixed 100 m only when zoomed out past the play range).
+
+**Source of truth.** The `MapDocument`. Masks and heights are edited in it in place; the
+scatter and props rows live in their AuthoredScatter nodes while editing and are copied
+back (`_sync_document()`) before every save and autosave. `AuthoringSession` counts
+revisions (dirty = the saved revision is not the current one); `AuthoringHistory` is the
+undo stack brushes record `{label, undo, redo}` entries into.
+
+**Save.** `save_async()` waits for scatter regeneration to land, then
+`AuthoringController.write_level()`: a new level gets `LevelManager.new_folder_name()`,
+`map.ttmap` is written first through `MapDocumentIO.write()` (atomic; invalidates the host
+hash cache), then `level.json` with `map_document` set (`LevelManager.save_level_folder`),
+then a 320x180 thumbnail of the current view (`LevelManager.save_thumbnail`). The drawer
+stays open. Autosave every 30 s while dirty to `user://levels/_autosave/map.ttmap` plus
+`map_level.json` (the Level Editor owns `level.json` in that slot; `get_saved_levels()`
+never lists `_autosave`).
+
+**Leave.** The rail's leave item, or Escape with the drawer closed, calls
+`request_leave()`: at once when clean, else `UIManager.show_choice()` with Keep editing /
+Discard / Save and leave. `exit_requested(level)` makes Root change to TITLE_SCREEN (whose
+grid is rebuilt, so the saved card and thumbnail show) and, when the request came from the
+Level Editor, reopen the editor on the saved level (`open_level_editor_with_level`).
+`_exit_authoring_state()` calls `teardown()` (drops any load in flight, releases Escape)
+and frees both nodes.
 
 ---
 
@@ -424,7 +502,8 @@ change. A species the filter empties is still resolved so its template is freed.
    `MapDownloadCoordinator` resumes the load once every file is here. A host missing its
    GLB fails; a host missing only its document plays the GLB with a warning toast.
 2. `load_map_sources_async(glb_path, document_path)` (shared with the client download
-   path): reads and validates the document and splits its scatter + props rows into
+   path; a thin wrapper over `MapSourceLoader.load_async`, which authoring mode uses too):
+   reads and validates the document and splits its scatter + props rows into
    10 m cells on a worker thread; loads the GLB with the erase filter, or builds a bare
    `LevelMap` root holding an `AuthoredTerrain` (ground textures preloaded on threads,
    chunk meshes built per frame) that carries `AUTHORED_MAP_LIGHTING` as scene extras;
@@ -434,8 +513,10 @@ change. A species the filter empties is still resolved so its template is freed.
    `build_cells` / `end_build`). Props are merged into the same rows (the document on
    `LevelPlayController.loaded_map_document` keeps them apart for the authoring tools).
    An unreadable document beside a GLB loads the GLB alone (warning toast); alone it fails.
-3. `_finalize_map_loading(root)` as for any map, then `AuthoredScatter.species_added` is
-   wired to `GameMap.adopt_foliage_materials()` and `add_wind_materials()`.
+3. `_finalize_map_loading(root)` as for any map: `MapSourceLoader.install()` (environment,
+   water, weather, `notify_map_loaded`, measure tool and grid, and
+   `AuthoredScatter.species_added` wired to `GameMap.adopt_foliage_materials()` and
+   `add_wind_materials()`), then the foliage density budget and its toast.
 
 Measured (headless, main thread only, fully painted 200 ft temperate forest: 30,755 rows,
 1,007 nodes): document read 180-540 ms on a worker, terrain about 100 ms spread over
