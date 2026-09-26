@@ -43,20 +43,25 @@ class CacheEntry:
 	var path: String
 	var size_bytes: int
 	var last_access: float  # Unix timestamp
-	var file_type: String  # "model" or "icon"
+	var file_type: String  # "model", "icon" or Paths.LEVEL_MAP_DOCUMENT_FILE_TYPE
+	## SHA-256 of the file (MapFileHash), or "" until someone needs it: set when a file is
+	## stored from memory, computed once on first comparison otherwise.
+	var content_hash: String = ""
 
-	func _init(p: String = "", s: int = 0, t: String = "model") -> void:
+	func _init(p: String = "", s: int = 0, t: String = "model", h: String = "") -> void:
 		path = p
 		size_bytes = s
 		last_access = Time.get_unix_time_from_system()
 		file_type = t
+		content_hash = h
 
 	func to_dict() -> Dictionary:
 		return {
 			"path": path,
 			"size_bytes": size_bytes,
 			"last_access": last_access,
-			"file_type": file_type
+			"file_type": file_type,
+			"content_hash": content_hash,
 		}
 
 	static func from_dict(data: Dictionary) -> CacheEntry:
@@ -65,6 +70,8 @@ class CacheEntry:
 		entry.size_bytes = data.get("size_bytes", 0)
 		entry.last_access = data.get("last_access", 0.0)
 		entry.file_type = data.get("file_type", "model")
+		var stored: Variant = data.get("content_hash", "")
+		entry.content_hash = stored if MapFileHash.is_valid_hash(stored) else ""
 		return entry
 
 
@@ -101,6 +108,41 @@ func get_cached_path(
 	# Update access time
 	_update_access_time(key)
 	return entry.path
+
+
+## get_cached_path(), but only for a file whose content hash is `expected_hash`: a cached
+## file with a different hash is stale (its source changed since it was cached), so it is
+## removed and "" returned, which makes the caller download it again. An empty
+## `expected_hash` accepts any cached file. The hash is stored in the index beside the
+## entry, computed from the file once if the entry predates hashing.
+func get_cached_path_matching(
+	pack_id: String, asset_id: String, variant_id: String, file_type: String, expected_hash: String
+) -> String:
+	var path := get_cached_path(pack_id, asset_id, variant_id, file_type)
+	if path == "" or expected_hash == "":
+		return path
+	if get_cached_hash(pack_id, asset_id, variant_id, file_type) == expected_hash:
+		return path
+	print("AssetCacheManager: %s is stale; downloading it again" % path)
+	remove_cached(pack_id, asset_id, variant_id, file_type)
+	return ""
+
+
+## The stored content hash of a cached file, computing and storing it once when missing;
+## "" when not cached.
+func get_cached_hash(
+	pack_id: String, asset_id: String, variant_id: String, file_type: String = "model"
+) -> String:
+	var key = _make_key(pack_id, asset_id, variant_id, file_type)
+	_cache_mutex.lock()
+	var entry: CacheEntry = _cache_index.get(key)
+	_cache_mutex.unlock()
+	if not entry:
+		return ""
+	if entry.content_hash == "":
+		entry.content_hash = MapFileHash.hash_file(entry.path)
+		_save_cache_index()
+	return entry.content_hash
 
 
 ## Check if an asset is cached
@@ -143,8 +185,12 @@ func store_asset(
 	file.store_buffer(data)
 	file.close()
 
-	# Add to index
-	_add_to_index(key, cache_path, data_size, file_type)
+	# Add to index. Level map files carry their content hash (hashed while the bytes are in
+	# memory) because get_cached_path_matching() compares it on every level load.
+	var content_hash := ""
+	if pack_id == Paths.LEVEL_MAPS_PACK_ID:
+		content_hash = MapFileHash.hash_bytes(data)
+	_add_to_index(key, cache_path, data_size, file_type, content_hash)
 
 	print("AssetCacheManager: Cached %s (%d bytes)" % [key, data_size])
 	cache_updated.emit(key, cache_path)
@@ -251,8 +297,19 @@ func _make_key(pack_id: String, asset_id: String, variant_id: String, file_type:
 func _get_cache_path(
 	pack_id: String, asset_id: String, variant_id: String, file_type: String
 ) -> String:
-	var extension = ".glb" if file_type == "model" else ".png"
-	return CACHE_DIR + "%s/%s/%s%s" % [pack_id, asset_id, variant_id, extension]
+	return CACHE_DIR + "%s/%s/%s%s" % [pack_id, asset_id, variant_id, extension_for(file_type)]
+
+
+## Cache file extension per file type: a streamed map document is a .ttmap (MapDocumentIO
+## reads any path, but a recognisable name keeps the cache inspectable), models are .glb,
+## everything else (icons) .png.
+static func extension_for(file_type: String) -> String:
+	match file_type:
+		"model":
+			return ".glb"
+		Paths.LEVEL_MAP_DOCUMENT_FILE_TYPE:
+			return ".ttmap"
+	return ".png"
 
 
 ## Ensure the cache directory exists
@@ -262,7 +319,9 @@ func _ensure_cache_dir() -> void:
 
 
 ## Add an entry to the cache index
-func _add_to_index(key: String, path: String, size: int, file_type: String) -> void:
+func _add_to_index(
+	key: String, path: String, size: int, file_type: String, content_hash: String = ""
+) -> void:
 	_cache_mutex.lock()
 
 	# Remove old entry if exists (updating)
@@ -270,7 +329,7 @@ func _add_to_index(key: String, path: String, size: int, file_type: String) -> v
 		var old_entry: CacheEntry = _cache_index[key]
 		_total_cache_size -= old_entry.size_bytes
 
-	var entry = CacheEntry.new(path, size, file_type)
+	var entry = CacheEntry.new(path, size, file_type, content_hash)
 	_cache_index[key] = entry
 	_total_cache_size += size
 

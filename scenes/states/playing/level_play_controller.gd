@@ -24,6 +24,10 @@ const DUPLICATE_OFFSET_FALLBACK := 1.5
 
 var active_level_data: LevelData = null
 var loaded_map_instance: Node3D = null
+## The authored map document of the loaded level (map.ttmap), or null when it has none. Its
+## scatter and props rows are merged into LevelMap's AuthoredScatter at load; the document
+## keeps them apart, and holds the erase and biome masks, for the authoring tools.
+var loaded_map_document: MapDocument = null
 var is_editor_preview: bool = false  # True when playing a level from the level editor
 
 ## Read-only view onto TokenSpawner's storage (placement_id -> BoardToken) so
@@ -68,7 +72,7 @@ func setup(game_map: GameMap) -> void:
 	_game_map.setup_debug_render_toggles()
 	_level_loader.setup(self)
 	_map_download_coordinator.setup(
-		_level_loader._load_map_from_path, _level_loader._finalize_map_loading
+		_level_loader.load_map_sources_async, _level_loader._finalize_map_loading
 	)
 	_map_download_coordinator.connect_asset_streamer()
 	if not _map_download_coordinator.map_download_started.is_connected(

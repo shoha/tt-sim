@@ -398,19 +398,23 @@ func _on_download_progress(
 	_add_or_update_item(pack_id, asset_id, variant_id, progress, "HTTP")
 
 
-# P2P callbacks
+# P2P callbacks. AssetStreamer's signals carry a trailing file_type; Godot 4 refuses to call
+# a handler with fewer parameters than the signal passes ("Method expected 4 argument(s),
+# but called with 5"), so each handler takes it even though it is unused here.
 func _on_p2p_completed(
-	pack_id: String, asset_id: String, variant_id: String, _local_path: String
+	pack_id: String, asset_id: String, variant_id: String, _local_path: String, _file_type := ""
 ) -> void:
 	_on_variant_file_done(pack_id, asset_id, variant_id, true)
 
 
-func _on_p2p_failed(pack_id: String, asset_id: String, variant_id: String, _error: String) -> void:
+func _on_p2p_failed(
+	pack_id: String, asset_id: String, variant_id: String, _error: String, _file_type := ""
+) -> void:
 	_on_variant_file_done(pack_id, asset_id, variant_id, false)
 
 
 func _on_p2p_progress(
-	pack_id: String, asset_id: String, variant_id: String, progress: float
+	pack_id: String, asset_id: String, variant_id: String, progress: float, _file_type := ""
 ) -> void:
 	_add_or_update_item(pack_id, asset_id, variant_id, progress, "P2P")
 
