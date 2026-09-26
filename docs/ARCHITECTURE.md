@@ -702,6 +702,39 @@ rather than in `ASSET_PIPELINE.md`.
   `DirAccess.rename_absolute` replaces an existing file; if the rename fails (for example
   another handle holds the target open) the old file is untouched and the temp removed.
 
+### Authored terrain
+
+`AuthoredTerrain` (`scenes/terrain/authored_terrain.gd`, Node3D, `create(doc)`) is the
+ground of a map without `map.glb`, built from the document heights. It goes under (or is)
+`LevelMap` and must be in `MapContainer` before `apply_level_environment` and
+`notify_map_loaded`, since the reflection probe and camera bounds read chunk AABBs.
+
+- **Chunks:** one `MeshInstance3D` per 10 m `ScatterChunker` cell (`TerrainChunk_c<x>_<z>`),
+  vertices in world space. The sample grid is not aligned to the cells, so a chunk owns the
+  samples from the first at or past its lower cell edge to the first at or past its upper
+  edge; neighbours share that column bit for bit. Normals are central differences on the
+  whole grid, so shared vertices light identically. The pure geometry is
+  `TerrainMeshBuilder` (`utils/terrain_mesh_builder.gd`).
+- **Collision:** one `StaticBody3D` (layer 1 / mask 1, `input_ray_pickable = false`, like
+  GLB map bodies) with a `HeightMapShape3D` of the full grid, the body scaled by the real
+  sample step on X and Z so every sample lands on its document position (the shape is
+  centred like the document). Jolt triangulates each quad on the same diagonal as the mesh.
+- **Sculpting (phase 3):** edit `doc.heights`, then `rebuild_chunks(cells)` (cells within
+  one sample of the edit, for normals) and `update_collision()`.
+- **Ground material:** `shaders/authored_ground.gdshader`, built by
+  `build_ground_material(surface, seed)` from the palette surface (albedo, normal, ORM,
+  height at `tile_m`); a missing surface warns and falls back to a flat earth colour.
+  Anti-tiling is a triangle-grid tile-and-blend (terrain-paint's mosaic idea done live:
+  3 cells per pixel with hashed rotation and offset, sharpened height-weighted blend),
+  plus height-map cavity shading and world-space value-noise brightness and dry/lush
+  drifts. Normals are written from the planar UV frame, no mesh tangents. The tile frame is
+  computed once per pixel so phase 3 splatting adds only per-surface fetches.
+- **Cost (measured 2026-09-26):** a 200 ft map (64 chunks) builds in about 35 ms warm,
+  80-100 ms on first load with the textures. The ground pass costs about 1.4x a
+  StandardMaterial3D ground with the same textures (in-run interleaved A/B at 1920x1080,
+  +0.5 ms; measured while another application held the GPU, so the ratio, not the
+  absolute time, is the number to trust).
+
 ### Scatter generator
 
 `ScatterGenerator` (`utils/scatter_generator.gd`, pure statics) turns a palette biome
