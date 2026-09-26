@@ -1,2 +1,10 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
+
+# Built-in palette binaries (treecube output, docs/ASSET_PIPELINE.md section 9) live in
+# Git LFS so every palette rebuild does not grow the repo history by ~80 MB. palette.json
+# and Godot's .import sidecars stay in plain git. CI restores LFS objects from the
+# Actions cache (.github/workflows/build.yml) to stay inside the free LFS bandwidth.
+assets/palette/**/*.glb filter=lfs diff=lfs merge=lfs -text
+assets/palette/**/*.png filter=lfs diff=lfs merge=lfs -text
+assets/palette/**/*.jpg filter=lfs diff=lfs merge=lfs -text
