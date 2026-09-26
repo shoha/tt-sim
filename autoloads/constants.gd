@@ -28,6 +28,8 @@ class_name Constants
 const LAYER_WORLD_VIEWPORT := -1  ## 3D scene rendering (SubViewportContainer)
 const LAYER_APP_MENU := 2  ## Always-visible app chrome (Level Editor button) — bottom-right
 const LAYER_GAMEPLAY_MENU := 2  ## In-game UI (tokens, save, edit drawer) — right & bottom-right
+## Authoring mode's tool drawer (left edge); takes the gameplay menu's place in that mode
+const LAYER_AUTHORING := 2
 const LAYER_LEVEL_EDITOR := 3  ## Level Editor overlay (full-screen, above gameplay)
 const LAYER_LOBBY := 5  ## Host/client lobby (centered, full-screen backdrop)
 ## Drag ruler overlay (distance during token drag) — above gameplay, below measure

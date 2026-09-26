@@ -66,6 +66,36 @@ func setup(
 	_is_danger = confirm_style == "Danger"
 
 
+## Adds a third choice as a Secondary button between Cancel and the confirm button (for
+## example "Discard" between "Keep editing" and "Save and leave"). Pressing it calls
+## `callback` and closes the dialog; `closed` reports false, as for Cancel. Escape still
+## means Cancel.
+func add_alternate_action(text: String, callback: Callable) -> Button:
+	var button := AnimatedButton.new()
+	button.name = "AlternateButton"
+	button.text = text
+	button.theme_type_variation = &"Secondary"
+	button.custom_minimum_size = Vector2(120, 0)
+	button.set_meta("ui_silent", true)
+	var row := confirm_button.get_parent()
+	row.add_child(button)
+	row.move_child(button, confirm_button.get_index())
+	button.pressed.connect(_on_alternate_pressed.bind(callback))
+	rebuild_focus_trap()
+	return button
+
+
+func _on_alternate_pressed(callback: Callable) -> void:
+	if _closing:
+		return
+	_closing = true
+	AudioManager.play_cancel()
+	_confirmed = false
+	if callback.is_valid():
+		callback.call()
+	animate_out()
+
+
 func _on_after_animate_in() -> void:
 	confirm_button.grab_focus()
 
