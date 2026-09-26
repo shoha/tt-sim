@@ -977,8 +977,14 @@ models, clearance); the generator only evaluates candidates.
 - **Thinning after spacing:** painted density, the pattern noise (Geoscatter's
   `dist_influence` with revert, feature size derived from its noise settings), slope with
   a 10 degree falloff, clump membership, near/avoid relations and clearance around larger
-  classes multiply into one keep probability tested against a hashed uniform. Half paint
-  therefore delivers half even for a saturated packing, and spacing always holds.
+  classes multiply into one keep probability tested against a hashed uniform. Painted
+  density enters through a per-size-class response (`ScatterPlan.DENSITY_RESPONSE`): trees
+  and shrubs lead (`1 - (1 - d)^lead`, 3 for large, 2.5 for medium), ground cover lags
+  (`d^1.6`), small species follow the paint. Every class is exactly 1 at full paint, so
+  the calibration targets hold; a quick brush pass (which leaves 0.3 to 0.8 across its
+  width) stands most of a woodland's trees and shrubs over an open floor instead of a
+  ground-cover carpet with a tree in it, and Thin takes the understory before the trees.
+  The response holds even for a saturated packing, and spacing always holds.
   Intensities are raised by the modelled keep so delivered density lands on the palette
   target; `tests/unit/test_scatter_generator_calibration.gd` prints the per-species table.
 - **Cost (measured 2026-09-26, headless GDScript):** a whole 200 ft map takes 0.3 to 1.3 s

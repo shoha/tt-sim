@@ -235,15 +235,62 @@ func test_painted_density_scales_the_local_density() -> void:
 	assert_true(none.is_empty(), "no paint, no instances")
 
 
-func test_half_paint_halves_even_a_saturated_packing() -> void:
+func test_half_paint_thins_even_a_saturated_packing_by_its_response() -> void:
 	# Thinning after spacing: candidates thinned before packing would repack to almost
-	# the same density, so a soft brush edge would not read as thinner.
+	# the same density, so a soft brush edge would not read as thinner. Large trees lead
+	# (ScatterPlan.DENSITY_RESPONSE), so a quarter paint keeps well over a quarter.
 	var species := _prefix(BOREAL, "large")
 	var bounds := _square(HALF_200FT)
 	var ids := _all_assets(species)
 	var full := _count(_generate(species, bounds), ids)
-	var half := _count(_generate(species, bounds, func(_p: Vector2) -> float: return 0.5), ids)
-	assert_almost_eq(float(half) / full, 0.5, 0.1)
+	var quarter := _count(_generate(species, bounds, func(_p: Vector2) -> float: return 0.25), ids)
+	var expected := ScatterPlan.density_response(0.25, "large")
+	assert_almost_eq(float(quarter) / full, expected, 0.1)
+	assert_lt(float(quarter) / full, 0.75, "still visibly thinner than full paint")
+
+
+func test_density_response_leads_for_trees_and_lags_for_ground_cover() -> void:
+	for size_class in ScatterPlan.SIZE_CLASSES:
+		assert_eq(ScatterPlan.density_response(1.0, size_class), 1.0, "full paint is the target")
+		assert_eq(ScatterPlan.density_response(0.0, size_class), 0.0, "no paint, nothing")
+	var light := 0.4
+	var large := ScatterPlan.density_response(light, "large")
+	var medium := ScatterPlan.density_response(light, "medium")
+	var small := ScatterPlan.density_response(light, "small")
+	var ground := ScatterPlan.density_response(light, "ground")
+	assert_gt(large, medium, "trees lead shrubs")
+	assert_gt(medium, small, "shrubs lead small species")
+	assert_almost_eq(small, light, 1e-6, "small species follow the paint")
+	assert_lt(ground, small, "ground cover lags")
+	assert_almost_eq(ScatterPlan.density_response(light, "unknown"), light, 1e-6)
+	# Monotonic, so a denser stroke never removes anything.
+	for size_class in ScatterPlan.SIZE_CLASSES:
+		var previous := 0.0
+		for step in range(1, 21):
+			var value := ScatterPlan.density_response(step / 20.0, size_class)
+			assert_gte(value, previous, size_class)
+			previous = value
+
+
+func test_a_light_forest_pass_stands_trees_before_ground_cover() -> void:
+	# The quick-stroke read: at a light painted density a forest keeps a larger share of
+	# its trees than of its ground cover.
+	var biome := "temperate_forest_summer_s1"
+	var species := PaletteLibrary.species(biome)
+	var bounds := _square(HALF_200FT)
+	var cells := ScatterGenerator.cells_in_bounds(bounds)
+	var light := func(_p: Vector2) -> float: return 0.35
+	var full_rows := ScatterGenerator.generate(biome, species, _one, _flat, _up, 4, cells, bounds)
+	var light_rows := ScatterGenerator.generate(biome, species, light, _flat, _up, 4, cells, bounds)
+	var share := {}
+	for size_class in ["large", "ground"]:
+		var ids: Array = []
+		for rule in species:
+			if rule.size_class == size_class:
+				ids.append_array(rule.assets)
+		share[size_class] = float(_count(light_rows, ids)) / maxf(_count(full_rows, ids), 1.0)
+	assert_gt(share.large, 0.6, "most trees stand after a light pass")
+	assert_lt(share.ground, 0.35, "ground cover stays open")
 
 
 func test_a_soft_brush_edge_thins_out_gradually() -> void:
