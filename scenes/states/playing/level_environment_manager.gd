@@ -25,6 +25,11 @@ class_name LevelEnvironmentManager
 ## with camera.size (max zoom 20), so any future value must cover the zoomed-out view,
 ## not just the map bounds.
 const SUN_SHADOW_MAX_DISTANCE: float = 100.0
+## DirectionalLight3D.directional_shadow_fade_start (Godot's default, left unchanged):
+## shadows fade out over the last fifth of the max distance.
+const SUN_SHADOW_FADE_START: float = 0.8
+## Headroom beyond the farthest visible ground when the max distance follows the view.
+const SUN_SHADOW_VIEW_MARGIN: float = 5.0
 
 ## Field of view Godot uses to draw the sky behind the map. The map camera is
 ## orthographic, and Godot draws any sky behind an orthographic camera as if the
@@ -491,6 +496,66 @@ func get_world_environment() -> WorldEnvironment:
 ## Return the level's sun light (may be null before a level is loaded).
 func get_sun_light() -> DirectionalLight3D:
 	return _sun_light
+
+
+## The sun's shadow max distance for a view whose farthest visible ground point is
+## `far_depth` metres from the camera (view depth): SUN_SHADOW_MAX_DISTANCE, or enough more
+## that the fade band starts beyond that point. Pure.
+##
+## Why the view: the orthographic camera sits back along its view axis in proportion to
+## camera.size (CameraController._update_camera_offset keeps the near plane above the
+## ground), so the top edge of the screen is about 2.5 x camera.size from the camera. The
+## play camera tops out at 20 (about 57 m to the top of a 16:9 screen, inside the fixed
+## 100 m), but authoring's whole-map zoom (52.4 for a 200 ft map) puts the map's far corner
+## 106 m away (measured 2026-09-26), past the fade band that starts at 80 m: with the fixed
+## distance the whole far half of the map lost its shadows.
+static func shadow_distance_for_depth(far_depth: float) -> float:
+	var needed := far_depth / SUN_SHADOW_FADE_START + SUN_SHADOW_VIEW_MARGIN
+	return maxf(SUN_SHADOW_MAX_DISTANCE, ceilf(needed))
+
+
+## View depth of the farthest point of the Y = 0 plane on screen (the top edge for this
+## camera), or 0 when the top edge does not look down at the ground.
+static func far_ground_depth(camera: Camera3D, viewport_size: Vector2) -> float:
+	var forward := -camera.global_basis.z
+	var deepest := 0.0
+	for corner in [Vector2.ZERO, Vector2(viewport_size.x, 0.0)]:
+		var origin := camera.project_ray_origin(corner)
+		var direction := camera.project_ray_normal(corner)
+		if direction.y > -0.001:
+			continue
+		var ground := origin + direction * (-origin.y / direction.y)
+		deepest = maxf(deepest, (ground - camera.global_position).dot(forward))
+	return deepest
+
+
+## View depth of the farthest corner of `bounds` (world space). Shadows never need to reach
+## past the map, however much empty backdrop a tall window shows above it.
+static func far_bounds_depth(camera: Camera3D, bounds: AABB) -> float:
+	var forward := -camera.global_basis.z
+	var deepest := 0.0
+	for i in 8:
+		deepest = maxf(deepest, (bounds.get_endpoint(i) - camera.global_position).dot(forward))
+	return deepest
+
+
+## Keeps the sun's shadows reaching the far side of the current view of the map (see
+## shadow_distance_for_depth): the nearer of the screen's top edge and the farthest corner
+## of `map_bounds` (world space; an empty AABB means the screen alone). Never below
+## SUN_SHADOW_MAX_DISTANCE, so a view the play camera can reach is unchanged. Returns the
+## distance in effect. Authoring calls it as the camera zooms.
+func fit_shadow_distance_to_view(
+	camera: Camera3D, viewport_size: Vector2, map_bounds: AABB = AABB()
+) -> float:
+	if not is_instance_valid(_sun_light):
+		return 0.0
+	var depth := far_ground_depth(camera, viewport_size)
+	if map_bounds.has_volume() or map_bounds.has_surface():
+		depth = minf(depth, far_bounds_depth(camera, map_bounds))
+	var wanted := shadow_distance_for_depth(depth)
+	if absf(_sun_light.directional_shadow_max_distance - wanted) >= 1.0:
+		_sun_light.directional_shadow_max_distance = wanted
+	return _sun_light.directional_shadow_max_distance
 
 
 ## Write the three global rendering-quality toggles (SSAO, SSR, SDFGI) onto the
