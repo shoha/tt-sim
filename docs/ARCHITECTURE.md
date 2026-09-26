@@ -702,6 +702,43 @@ rather than in `ASSET_PIPELINE.md`.
   `DirAccess.rename_absolute` replaces an existing file; if the rename fails (for example
   another handle holds the target open) the old file is untouched and the temp removed.
 
+### Scatter generator
+
+`ScatterGenerator` (`utils/scatter_generator.gd`, pure statics) turns a palette biome
+(`PaletteLibrary.species()`, rules per `ASSET_PIPELINE.md` section 9) and a painted density
+field into document rows: `generate(biome_id, species, density_at, height_at, normal_at,
+map_seed, cells, bounds)` returns palette asset id -> flat rows for the instances whose
+origin lies in the given 10 m chunk cells and inside the map. The fields are Callables so
+tests pass analytic ones; `document_fields(doc, biome_id)` builds them from a `MapDocument`
+(bilinear density for that biome's slot, bilinear heights, normals from central height
+differences) and `generate_for_document()` wires both together. `ScatterPlan`
+(`utils/scatter_plan.gd`) is the pure planning half: `build()` decides per species which
+candidate field it draws from and how dense that field must be (packing curve, keep
+models, clearance); the generator only evaluates candidates.
+
+- **Region independence:** every species (random species share one field per size class)
+  draws from a global candidate field, four hashed candidates per bucket keyed by map
+  seed, biome, field and bucket, and each candidate's fate is a pure, memoized function
+  of that field. A chunk comes out byte-identical alone, with neighbours or in the whole
+  map, which is what lets a brush regenerate only touched chunks. Relation-driven species
+  (stones near boulders) can change up to a relation's reach beyond a repainted chunk.
+- **Spacing:** Matern III (a candidate survives unless a surviving higher-priority one is
+  within spacing), resolved by a memoized explicit-stack recursion. It packs toward the
+  random sequential packing limit, so boreal's 0.032 trees per m2 at 4.5 m land at about
+  0.93x where Matern II saturates at half that. Candidate intensity inverts a measured
+  packing curve (`ScatterPlan.PACKING_TIMES`), capped at `MAX_PACKING_TIME`; the plan
+  reports any target past the cap as `reachable < 1`.
+- **Thinning after spacing:** painted density, the pattern noise (Geoscatter's
+  `dist_influence` with revert, feature size derived from its noise settings), slope with
+  a 10 degree falloff, clump membership, near/avoid relations and clearance around larger
+  classes multiply into one keep probability tested against a hashed uniform. Half paint
+  therefore delivers half even for a saturated packing, and spacing always holds.
+  Intensities are raised by the modelled keep so delivered density lands on the palette
+  target; `tests/unit/test_scatter_generator_calibration.gd` prints the per-species table.
+- **Cost (measured 2026-09-26, headless GDScript):** a whole 200 ft map takes 0.3 to 1.3 s
+  depending on the biome, one 10 m chunk of the densest biome about 35 ms. Ground cover
+  dominates (about 15 us per candidate).
+
 ### Level Flow
 
 1. **Level Editor** creates/edits `LevelData` (with undo/redo and autosave)

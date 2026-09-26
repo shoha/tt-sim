@@ -374,8 +374,13 @@ Field notes:
 - `name` is the plain biome display name; the season is its own field.
 - `geoscatter_pattern` holds Geoscatter's `s_pattern1_*` settings verbatim with the
   prefix stripped (texture dict, sample method, influences, revert flags), minus the
-  datablock plumbing (`allow`, `texture_ptr`, `texture_is_unique`). tt-sim keeps it
-  for calibration only and does not interpret it.
+  datablock plumbing (`allow`, `texture_ptr`, `texture_is_unique`). tt-sim's
+  `ScatterGenerator` reads only the noise's feature size and shape from it:
+  `texture_dict.scale`, `texture_dict.mapping_scale[0]`, `texture_dict.detail` and
+  `texture_dict.contrast` (noise frequency = mapping_scale * scale, octaves = detail + 1),
+  each falling back to treecube's defaults (2, 0.1, 1, 2) when absent. Everything else
+  in it is kept for calibration only. The share removed and the shrink are the
+  top-level `influence` and `scale_influence`.
 
 Rules both sides rely on:
 
