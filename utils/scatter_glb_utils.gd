@@ -41,6 +41,13 @@ const _SCATTER_INSTANCES_EXTRAS_KEY := "tt_scatter_instances"
 ## built. FoliageDensityController applies the density setting at runtime by adjusting
 ## each built MultiMesh's visible_instance_count over this full set, and can only ever
 ## raise that count as high as what was actually built here.
+##
+## This is the GLB wrapper around build_scatter(): its resolver finds each template by
+## node name inside the scene and classifies its wind category from that name, and once
+## everything is built it frees the templates it handed out, because they belong to the
+## map and would otherwise render once at their Blender transform. A palette-driven caller
+## passes PaletteLibrary's resolver to build_scatter() directly instead, and nothing is
+## freed, since the palette owns its source meshes.
 static func process_scatter_instances(
 	scene: Node3D,
 	foliage_overrides: Dictionary = {},
@@ -53,37 +60,101 @@ static func process_scatter_instances(
 	if not groups is Dictionary:
 		return
 
+	# Filled by the resolver as a side channel (an Array is shared by reference into the
+	# lambda), so the templates freed below are exactly the ones build_scatter used.
+	var used_templates: Array[MeshInstance3D] = []
+	var resolve := func(key: String) -> Dictionary:
+		var source_node := _find_template(scene, key)
+		if not source_node is MeshInstance3D:
+			return {}
+		var mesh_node := source_node as MeshInstance3D
+		if not mesh_node.mesh:
+			return {}
+		used_templates.append(mesh_node)
+		return {
+			"mesh": mesh_node.mesh,
+			"wind_category": WindFoliage.classify_category(key),
+			"name": String(mesh_node.name),
+		}
+	build_scatter(scene, groups, resolve, foliage_overrides, chunk_size)
+
+	# Freed after every species is built, never per chunk: the builder used to free the
+	# template as its last statement, which freed the same node once per chunk.
+	for mesh_node in used_templates:
+		var old_parent := mesh_node.get_parent()
+		if old_parent:
+			old_parent.remove_child(mesh_node)
+		mesh_node.free()
+
+
+## Builds chunked MultiMeshInstance3D nodes under `parent` for every species in `groups`
+## (species key -> array of [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] Y-up rows, the
+## tt_scatter_instances shape), taking each species' template from `resolve`.
+##
+## `resolve.call(key)` returns {"mesh": Mesh, "wind_category": String} and optionally
+## "name" (the node-name stem for the built chunks; defaults to the key made
+## node-name-safe), or {} to skip that species. It is called at most once per key, and
+## only for a species with at least one well-formed row, so a resolver that loads or
+## duplicates a mesh does no work for a group that would build nothing. The wind category
+## is taken as given: this function never classifies by name, which is what lets palette
+## assets carry the explicit category contract section 9 requires.
+##
+## The resolved mesh's surface materials are replaced in place by WindFoliage (see the
+## comment in the loop), so a resolver must hand out a mesh it is willing to have mutated
+## -- the GLB path's own template mesh, or PaletteLibrary's fresh per-call duplicate.
+## Nothing the resolver returns is freed here.
+##
+## Returns the keys that produced at least one chunk.
+static func build_scatter(
+	parent: Node3D,
+	groups: Dictionary,
+	resolve: Callable,
+	foliage_overrides: Dictionary = {},
+	chunk_size: float = ScatterChunker.CHUNK_SIZE_WORLD_UNITS
+) -> Array[String]:
 	# Pass one: resolve every species' template mesh and valid transforms.
 	var resolved: Array[Dictionary] = []
 	for source_name in groups.keys():
 		var transforms: Variant = groups[source_name]
 		if not transforms is Array or transforms.is_empty():
 			continue
-		var source_node := _find_template(scene, String(source_name))
-		if not source_node is MeshInstance3D:
-			continue
-		var mesh_node := source_node as MeshInstance3D
-		if not mesh_node.mesh:
-			continue
 		var valid := _collect_valid_transforms(transforms)
 		if valid.is_empty():
 			continue
 		var key := String(source_name)
-		resolved.append({"key": key, "mesh_node": mesh_node, "transforms": valid})
+		var template: Variant = resolve.call(key)
+		if not template is Dictionary or not template.get("mesh") is Mesh:
+			continue
+		var category: Variant = template.get("wind_category", "")
+		var stem: Variant = template.get("name", "")
+		var node_name := String(stem) if stem is String and stem != "" else key
+		(
+			resolved
+			. append(
+				{
+					"key": key,
+					"mesh": template["mesh"],
+					"wind_category": category if category is String else "",
+					"name": node_name.validate_node_name(),
+					"transforms": valid,
+				}
+			)
+		)
 
 	# Pass two: build every instance, split into spatial cells so frustum culling can
 	# discard the off-screen ones. Density is applied at runtime by
 	# FoliageDensityController via MultiMesh.visible_instance_count, over the full set
 	# built here -- which is why nothing is thinned at import any more.
+	var built: Array[String] = []
 	for entry in resolved:
 		var key: String = entry.key
-		var mesh_node: MeshInstance3D = entry.mesh_node
+		var mesh: Mesh = entry.mesh
+		var wind_category: String = entry.wind_category
 		var all_transforms: Array[Transform3D] = entry.transforms
-		var wind_category := WindFoliage.classify_category(key)
 		# MultiMesh itself has no material slot -- Godot renders every instance with
-		# mesh_node.mesh's own surface material(s) as-is unless mutated here. Mutates
-		# mesh_node.mesh's own per-surface materials directly rather than setting anything
-		# on multimesh_instance -- MultiMeshInstance3D has no per-surface override API (see
+		# the mesh's own surface material(s) as-is unless mutated here. Mutates the mesh's
+		# own per-surface materials directly rather than setting anything on
+		# multimesh_instance -- MultiMeshInstance3D has no per-surface override API (see
 		# WindFoliage.apply_material's own docstring). No-op (mesh keeps its own imported
 		# static material) when wind_category is "".
 		#
@@ -92,19 +163,20 @@ static func process_scatter_instances(
 		# whose material is no longer a BaseMaterial3D -- its own first call replaces the
 		# surface material with a ShaderMaterial, so calls 2..N would be no-ops that keep
 		# the first material rather than the last.
-		WindFoliage.apply_material(mesh_node.mesh, wind_category, foliage_overrides)
+		WindFoliage.apply_material(mesh, wind_category, foliage_overrides)
 		var buckets := ScatterChunker.bucket_by_cell(all_transforms, chunk_size)
 		for cell in buckets.keys():
 			var suffix := "" if buckets.size() == 1 else ScatterChunker.cell_suffix(cell)
 			_build_multimesh_from_transforms(
-				scene, mesh_node, _shuffled(buckets[cell], key + suffix), wind_category, suffix
+				parent,
+				mesh,
+				entry.name,
+				_shuffled(buckets[cell], key + suffix),
+				wind_category,
+				suffix
 			)
-		# Hoisted out of _build_multimesh_from_transforms too: it used to free the template
-		# as its last statement, which would free the same node once per chunk.
-		var old_parent := mesh_node.get_parent()
-		if old_parent:
-			old_parent.remove_child(mesh_node)
-		mesh_node.free()
+		built.append(key)
+	return built
 
 
 ## The extras key is the exact Blender object name, but Godot's importer rewrites
@@ -119,13 +191,13 @@ static func _find_template(scene: Node3D, source_name: String) -> Node:
 	return node
 
 
-## Builds one MultiMeshInstance3D (sharing mesh_node's Mesh, and by default its
-## surface material(s) too) from an array of already-converted Transform3D values (see
-## _collect_valid_transforms for the row format they started as). `wind_category` ("" for
-## none, otherwise a WindFoliage.PRESETS key from WindFoliage.classify_category) tags the
-## built node's "wind_foliage_category" meta and gates the grass cast_shadow branch below
-## -- the wind-sway ShaderMaterial itself is applied once per species by
-## process_scatter_instances, not here. The "wind_foliage_category" meta lets
+## Builds one MultiMeshInstance3D named `<node_stem>_MultiMesh<name_suffix>` (sharing
+## `mesh`, and by default its surface material(s) too) from an array of already-converted
+## Transform3D values (see _collect_valid_transforms for the row format they started as).
+## `wind_category` ("" for none, otherwise a WindFoliage.PRESETS key, from the resolver
+## build_scatter was given) tags the built node's "wind_foliage_category" meta and gates
+## the grass cast_shadow branch below -- the wind-sway ShaderMaterial itself is applied
+## once per species by build_scatter, not here. The "wind_foliage_category" meta lets
 ## OcclusionFadeManager find tree-category instances without re-deriving the
 ## classification itself. Grass-category instances also get cast_shadow forced to
 ## SHADOW_CASTING_SETTING_OFF -- see the inline comment where it's assigned below for
@@ -140,23 +212,24 @@ static func _find_template(scene: Node3D, source_name: String) -> Node:
 ## scatter_instancing.py) -- these are the exact same translation/rotation/scale
 ## components a glTF node itself would carry relative to an IDENTITY scene root, no
 ## further axis conversion needed here. That's the reason scene_root is a required
-## parameter rather than just using mesh_node.get_parent(): glTF/Godot compose node
+## parameter rather than the template node's own parent: glTF/Godot compose node
 ## transforms up the tree starting from an identity scene root, so a node's cumulative
 ## transform-to-root always reconstructs its own recorded world matrix regardless of
 ## how many intermediate Blender-side parent objects existed along the way. The new
 ## MultiMeshInstance3D must sit DIRECTLY under scene_root with an identity transform
 ## (the Node3D default, left untouched here) to land in that same frame -- parenting
-## it under mesh_node's own parent, or copying mesh_node's own local transform onto it,
-## would double-apply mesh_node's individual placement in the Blender scene on top of
+## it under the template's own parent, or copying the template's local transform onto it,
+## would double-apply the template's individual placement in the Blender scene on top of
 ## the already-absolute per-instance transforms.
 static func _build_multimesh_from_transforms(
 	scene_root: Node3D,
-	mesh_node: MeshInstance3D,
+	mesh: Mesh,
+	node_stem: String,
 	valid_transforms: Array[Transform3D],
 	wind_category: String = "",
 	name_suffix: String = ""
 ) -> void:
-	# Defensive, not reachable today: the only caller (process_scatter_instances) builds
+	# Defensive, not reachable today: the only caller (build_scatter) builds
 	# valid_transforms from ScatterChunker.bucket_by_cell, which returns only occupied
 	# cells, so every bucket handed here already has at least one transform. Kept as a
 	# guard against a future caller that isn't so careful. Checked before any allocation
@@ -166,14 +239,14 @@ static func _build_multimesh_from_transforms(
 
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.mesh = mesh_node.mesh
+	multimesh.mesh = mesh
 
 	multimesh.instance_count = valid_transforms.size()
 	for i in valid_transforms.size():
 		multimesh.set_instance_transform(i, valid_transforms[i])
 
 	var multimesh_instance := MultiMeshInstance3D.new()
-	multimesh_instance.name = mesh_node.name + "_MultiMesh" + name_suffix
+	multimesh_instance.name = node_stem + "_MultiMesh" + name_suffix
 	multimesh_instance.multimesh = multimesh
 	# Tags the node itself (not the Mesh resource) with its wind category so
 	# OcclusionFadeManager._collect_tree_materials() can find tree-category instances
