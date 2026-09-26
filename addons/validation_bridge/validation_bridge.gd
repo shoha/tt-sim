@@ -528,6 +528,12 @@ func _inject_scroll(x: float, y: float, delta: float) -> void:
 	event.global_position = pos
 	event.factor = absf(delta)
 	Input.parse_input_event(event)
+	# A real wheel notch arrives as a press and a release. A press alone leaves the viewport's
+	# GUI mouse focus held by the Control under the cursor (its button mask never clears), so
+	# every later click went to that Control instead of the one clicked.
+	var release := event.duplicate() as InputEventMouseButton
+	release.pressed = false
+	Input.parse_input_event(release)
 
 
 func _inject_drag(x1: float, y1: float, x2: float, y2: float) -> void:
