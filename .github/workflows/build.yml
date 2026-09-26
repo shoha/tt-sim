@@ -20,8 +20,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      # LFS objects come from the Actions cache instead of LFS bandwidth. GitHub Free
+      # includes 10 GiB of LFS bandwidth a month and LFS is disabled for the rest of the
+      # month once it runs out; four LFS checkouts per run of the ~80 MB built-in
+      # palette (assets/palette/) would use about 9 GB at September 2026's push rate.
+      # The cache key changes only when an LFS file does. Same steps in the export job.
+      - name: List LFS objects
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache@v4
         with:
-          lfs: true
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+
+      - name: Pull LFS objects
+        run: git lfs pull
 
       - name: Import project
         run: godot --headless --import
@@ -63,8 +80,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      # See the test job: LFS objects from the Actions cache, not LFS bandwidth.
+      - name: List LFS objects
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache@v4
         with:
-          lfs: true
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+
+      - name: Pull LFS objects
+        run: git lfs pull
 
       - name: Setup export templates
         run: |
