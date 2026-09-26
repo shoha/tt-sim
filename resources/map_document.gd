@@ -167,6 +167,46 @@ func sample_index(x: int, z: int) -> int:
 	return z * samples_x() + x
 
 
+## True when the erase-mask sample nearest to world XZ `world_xz` is erased. A point off
+## the map, or any point when there is no mask, is not erased.
+func is_erased(world_xz: Vector2) -> bool:
+	if erase_mask.size() != sample_count():
+		return false
+	var sample := world_to_sample(world_xz).round()
+	if sample.x < 0 or sample.y < 0 or sample.x >= samples_x() or sample.y >= samples_z():
+		return false
+	return erase_mask[sample_index(int(sample.x), int(sample.y))] > ERASE_THRESHOLD
+
+
+## A keep-predicate for GLB scatter rows, `func(origin: Vector3) -> bool`, that drops the
+## instances whose origin falls on an erased sample (is_erased of its X and Z), or an
+## empty Callable when the mask erases nothing, so a caller can skip filtering entirely.
+## Origins are in the GLB-root frame, which is the document's frame: a document that
+## dresses a map.glb sits under the same LevelMap, centred on the same origin.
+func erase_filter() -> Callable:
+	if erase_mask.size() != sample_count():
+		return Callable()
+	var any_erased := false
+	for value in erase_mask:
+		if value > ERASE_THRESHOLD:
+			any_erased = true
+			break
+	if not any_erased:
+		return Callable()
+	# The same arithmetic as is_erased(), hoisted: this runs once per scatter row.
+	var mask := erase_mask
+	var half := extent_m() * 0.5
+	var step := sample_step()
+	var width := samples_x()
+	var depth := samples_z()
+	return func(origin: Vector3) -> bool:
+		var x := roundi((origin.x + half.x) / step.x)
+		var z := roundi((origin.z + half.y) / step.y)
+		if x < 0 or z < 0 or x >= width or z >= depth:
+			return true
+		return mask[z * width + x] <= ERASE_THRESHOLD
+
+
 ## Whole rows across every asset of `rows_by_asset` (scatter or props).
 @warning_ignore("integer_division")
 static func row_count(rows_by_asset: Dictionary[String, PackedFloat32Array]) -> int:

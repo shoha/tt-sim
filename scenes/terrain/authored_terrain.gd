@@ -80,11 +80,39 @@ var _weight_texture: DrawableTexture2D = null
 
 
 ## A terrain for `doc`, fully built: every chunk, the collision body and the material.
-static func create(doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT) -> AuthoredTerrain:
+## With `with_chunks` false the chunk meshes are left for the caller to build with
+## rebuild_chunks() (the play-time load spreads them over frames: about 0.8 ms each, 49 on
+## a 200 ft map).
+static func create(
+	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT, with_chunks: bool = true
+) -> AuthoredTerrain:
 	var terrain := AuthoredTerrain.new()
 	terrain.name = "AuthoredTerrain"
-	terrain.build(doc, root)
+	terrain.build(doc, root, with_chunks)
 	return terrain
+
+
+## Resource paths of every palette texture build() binds for `doc`: the base surface's
+## maps and each painted biome's ground surface maps. A caller can load them on background
+## threads first, so build() finds them in the resource cache instead of loading on the
+## main thread (about 35 ms cold for one surface).
+static func texture_paths(
+	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> PackedStringArray:
+	var surfaces := PaletteLibrary.surfaces(root)
+	var names := [doc.base_surface]
+	for biome_id in doc.biome_ids:
+		names.append(PaletteLibrary.biome(biome_id, root).get("ground_surface", ""))
+	var paths := PackedStringArray()
+	for surface_name in names:
+		var surface: Dictionary = surfaces.get(surface_name, {})
+		for key in LAYER_MAPS:
+			var relative: Variant = surface.get(key, "")
+			if relative is String and relative != "":
+				var path := root.path_join(relative)
+				if not path in paths and ResourceLoader.exists(path):
+					paths.append(path)
+	return paths
 
 
 ## The ground material for palette surface `surface_name`: the authored ground shader
@@ -170,8 +198,11 @@ static func _solid_texture(color: Color) -> ImageTexture:
 	return ImageTexture.create_from_image(image)
 
 
-## Builds (or rebuilds from scratch) everything for `doc`.
-func build(doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT) -> void:
+## Builds (or rebuilds from scratch) everything for `doc`; the chunk meshes only with
+## `with_chunks` (see create()).
+func build(
+	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT, with_chunks: bool = true
+) -> void:
 	document = doc
 	palette_root = root
 	for chunk in _chunks.values():
@@ -179,7 +210,8 @@ func build(doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT) -> void
 	_chunks.clear()
 	_material = build_ground_material(doc.base_surface, doc.map_seed, root)
 	_build_biome_ground()
-	rebuild_chunks(TerrainMeshBuilder.chunk_cells(doc))
+	if with_chunks:
+		rebuild_chunks(TerrainMeshBuilder.chunk_cells(doc))
 	_build_collision()
 
 
