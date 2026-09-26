@@ -51,15 +51,32 @@
  * image) is -v. The sampled xy is rotated back out of each cell's rotation, blended, z is
  * rebuilt, and the result is written to NORMAL directly.
  *
- * PHASE 3 (splatting): sample_surface() takes its textures as arguments and the tile frame
- * (cell weights and transforms) is computed once per pixel in metres, independent of any
- * surface, so up to 8 splat-weighted surfaces can share one frame and each cost only its
- * own fetches (in practice the top 2-3 weights per pixel). SurfaceSample.height is the
- * blended height each surface needs for height-blended transitions between surfaces.
+ * BIOME LAYERS (painted ground; weights from BiomeGroundLayers, utils/):
+ * Up to 4 layer surfaces (layer_*[i]) blend over the base. biome_weights holds one RGBA8
+ * texel per document sample, channel i = the painted density of the biome whose ground is
+ * layer i; the base is the remainder. It is bilinear-filtered, so a 0.25 m grid gives
+ * smooth ramps rather than stair steps. The tile frame is computed once per pixel and
+ * shared: each layer costs only its own 12 fetches, and a layer (or the base) whose weight
+ * is zero at a pixel is not sampled at all.
+ * The painted edge is then made to look like ground rather than a brush circle, the way
+ * terrain-paint's Edge Noise and Height Blend do it in a bake:
+ *   - domain warp: the weight map is read at a noise-displaced position (up to
+ *     biome_edge_warp_m), so a round dab's outline wanders; this frays even a hard edge;
+ *   - edge noise: the painted total is pushed up or down by finer noise, most where it is
+ *     partial (a density falloff, a sparse fill) and not at all where it is 0 or 1, so a
+ *     half-painted stretch breaks into patches instead of a uniform half-blend;
+ *   - height blend: each surface scores weight + (height - 0.5) * biome_height_contrast
+ *     and only surfaces within biome_blend_width of the top score show, so at a boundary
+ *     the taller texture detail (clumps, needles, stones) wins and the line follows the
+ *     textures rather than a gradient.
  *
- * COST: 12 fetches plus 26 small integer hashes per pixel; measured about 1.4x a
- * StandardMaterial3D ground with the same textures (docs/ARCHITECTURE.md "Authored
- * terrain").
+ * PHASE 3 (splatting): SurfaceSample.height is the blended height each surface needs for
+ * height-blended transitions; raising MAX_LAYERS means a second weight texture.
+ *
+ * COST: 12 fetches plus 26 small integer hashes per pixel for the base alone; measured
+ * about 1.4x a StandardMaterial3D ground with the same textures. Biome layers add 3 value
+ * noises and one weight fetch when any layer is bound, plus 12 fetches per surface present
+ * at a pixel (docs/ARCHITECTURE.md "Authored terrain" has the measured ratios).
  *
  * LIGHTING matches the StandardMaterial3D terrain of a Blender-made map: burley diffuse,
  * schlick GGX specular at the default 0.5, AO from ORM.r affecting ambient only
@@ -99,10 +116,39 @@ uniform float variation_tint_amount : hint_range(0.0, 1.0) = 0.6;
 uniform vec3 variation_dry_tint : source_color = vec3(1.12, 1.02, 0.72);
 uniform vec3 variation_lush_tint : source_color = vec3(0.86, 0.95, 0.9);
 
+// Biome layers (see BIOME LAYERS above). Layers at index >= biome_layer_count are unbound.
+uniform int biome_layer_count : hint_range(0, 4) = 0;
+uniform sampler2D biome_weights : hint_default_black, filter_linear, repeat_disable;
+// World XZ of document sample (0, 0) and the real sample step, in metres.
+uniform vec2 biome_grid_origin = vec2(0.0);
+uniform vec2 biome_grid_step = vec2(0.25);
+uniform sampler2D layer_albedo[4] : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+// Sampler arrays take no default or normal hints, so AuthoredTerrain binds every entry.
+uniform sampler2D layer_normal[4] : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D layer_orm[4] : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D layer_height[4] : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform vec4 layer_tile_m = vec4(2.0);
+// Defaults chosen from game-camera renders (docs/ARCHITECTURE.md "Authored terrain"):
+// lower contrast or a wider blend reads as a soft stain, stronger edge noise turns
+// partial paint into hard-edged blobs.
+// Painted density -> ground weight multiplier (clamped to 1).
+uniform float biome_weight_gain : hint_range(1.0, 4.0) = 1.5;
+uniform float biome_edge_warp_m : hint_range(0.0, 4.0) = 1.2;
+uniform float biome_edge_scale_m : hint_range(0.5, 20.0) = 3.0;
+uniform float biome_edge_noise : hint_range(0.0, 1.0) = 0.3;
+uniform float biome_height_contrast : hint_range(0.0, 2.0) = 1.2;
+uniform float biome_blend_width : hint_range(0.01, 0.5) = 0.2;
+
 varying vec3 v_tangent_u;
 varying vec3 v_tangent_v;
 
 const float INV_UINT_MAX = 1.0 / 4294967295.0;
+// A weight at or below this is treated as absent (under half an 8-bit step).
+const float WEIGHT_EPSILON = 0.002;
+const int MAX_LAYERS = 4;
+// Score of a surface not sampled at this pixel: far below any real score, so it never
+// comes within biome_blend_width of the top.
+const float ABSENT_SCORE = -1e6;
 
 // Weights and per-cell transforms of the (up to) three cells blended at one point.
 struct TileFrame {
@@ -235,10 +281,44 @@ vec3 apply_variation(vec3 albedo, vec2 world_xz) {
 	float drift = value_noise(p * 0.8 + vec2(41.7, -9.1)) * 0.7
 		+ value_noise(p * 2.1 + vec2(-3.3, 27.9)) * 0.3;
 	drift = drift * 2.0 - 1.0;
-	float dry = smoothstep(0.1, 0.55, drift) * variation_tint_amount;
-	float lush = smoothstep(0.1, 0.55, -drift) * variation_tint_amount;
+	// The tints are hue shifts for coloured ground (grass, earth); on a near-grey surface
+	// such as snow they would read as dirty yellow and blue stains, so they fade out with
+	// saturation. Grass, soil and sand are all well above the ramp.
+	float top = max(albedo.r, max(albedo.g, albedo.b));
+	float saturation = (top - min(albedo.r, min(albedo.g, albedo.b))) / max(top, 1e-4);
+	float tint = variation_tint_amount * smoothstep(0.08, 0.3, saturation);
+	float dry = smoothstep(0.1, 0.55, drift) * tint;
+	float lush = smoothstep(0.1, 0.55, -drift) * tint;
 	albedo *= mix(vec3(1.0), variation_dry_tint, dry);
 	return albedo * mix(vec3(1.0), variation_lush_tint, lush);
+}
+
+// Per-layer painted weights at a point, with the edge warp and edge noise applied.
+// Channels at or past biome_layer_count read 0.
+vec4 biome_layer_weights(vec2 world_xz) {
+	vec2 p = world_xz / biome_edge_scale_m;
+	vec2 warp = vec2(value_noise(p + vec2(-23.1, 57.7)), value_noise(p + vec2(91.3, -12.9)));
+	vec2 at = world_xz + (warp * 2.0 - 1.0) * biome_edge_warp_m;
+	vec2 grid = vec2(textureSize(biome_weights, 0));
+	vec2 st = ((at - biome_grid_origin) / biome_grid_step + 0.5) / grid;
+	vec4 w = texture(biome_weights, st);
+	w *= step(vec4(0.5, 1.5, 2.5, 3.5), vec4(float(biome_layer_count)));
+	float total = w.x + w.y + w.z + w.w;
+	if (total <= WEIGHT_EPSILON) {
+		return vec4(0.0);
+	}
+	// Gain first, so the ground leads the scatter (which thins linearly with density) out
+	// to the sparse fringe instead of leaving its outer plants standing on the base.
+	float gained = min(total * biome_weight_gain, 1.0);
+	// Finer than the warp, and zero at 0 and 1, so it only reshapes partial paint.
+	float n = value_noise(p * 2.9 + vec2(7.9, 3.1));
+	float bump = 4.0 * gained * (1.0 - gained);
+	float shaped = clamp(gained + (n - 0.5) * 2.0 * biome_edge_noise * bump, 0.0, 1.0);
+	return w * (shaped / total);
+}
+
+float blend_score(float weight, float height) {
+	return weight + (height - 0.5) * biome_height_contrast;
 }
 
 void vertex() {
@@ -252,9 +332,58 @@ void fragment() {
 	vec2 dx = dFdx(world_xz);
 	vec2 dy = dFdy(world_xz);
 	TileFrame frame = tile_frame(world_xz);
-	SurfaceSample ground = sample_surface(
-		albedo_tex, normal_tex, orm_tex, height_tex, tile_m, frame, world_xz, dx, dy
-	);
+
+	// Index 0 is the base, 1..4 the biome layers. A surface is sampled only where it has
+	// weight; the rest keep score ABSENT_SCORE and are never read. Some surface always has
+	// weight: the base does whenever the layers sum to (almost) nothing.
+	vec4 layer_w = vec4(0.0);
+	if (biome_layer_count > 0) {
+		layer_w = biome_layer_weights(world_xz);
+	}
+	float base_w = clamp(1.0 - (layer_w.x + layer_w.y + layer_w.z + layer_w.w), 0.0, 1.0);
+	SurfaceSample samples[5];
+	float scores[5];
+	float top = ABSENT_SCORE;
+	scores[0] = ABSENT_SCORE;
+	if (base_w > WEIGHT_EPSILON) {
+		samples[0] = sample_surface(
+			albedo_tex, normal_tex, orm_tex, height_tex, tile_m, frame, world_xz, dx, dy
+		);
+		scores[0] = blend_score(base_w, samples[0].height);
+		top = scores[0];
+	}
+	for (int i = 0; i < MAX_LAYERS; i++) {
+		scores[i + 1] = ABSENT_SCORE;
+		if (layer_w[i] > WEIGHT_EPSILON) {
+			samples[i + 1] = sample_surface(
+				layer_albedo[i], layer_normal[i], layer_orm[i], layer_height[i],
+				layer_tile_m[i], frame, world_xz, dx, dy
+			);
+			scores[i + 1] = blend_score(layer_w[i], samples[i + 1].height);
+			top = max(top, scores[i + 1]);
+		}
+	}
+	SurfaceSample ground;
+	ground.albedo = vec3(0.0);
+	ground.normal_uv = vec2(0.0);
+	ground.orm = vec3(0.0);
+	ground.height = 0.0;
+	float total = 0.0;
+	for (int i = 0; i < MAX_LAYERS + 1; i++) {
+		float b = scores[i] - (top - biome_blend_width);
+		if (b > 0.0) {
+			ground.albedo += samples[i].albedo * b;
+			ground.normal_uv += samples[i].normal_uv * b;
+			ground.orm += samples[i].orm * b;
+			ground.height += samples[i].height * b;
+			total += b;
+		}
+	}
+	float inv_total = 1.0 / max(total, 1e-5);
+	ground.albedo *= inv_total;
+	ground.normal_uv *= inv_total;
+	ground.orm *= inv_total;
+	ground.height *= inv_total;
 
 	// Cavity depth itself drifts at a few metres, so clumpy and smooth stretches alternate
 	// instead of an even mottle.
