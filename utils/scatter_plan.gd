@@ -40,6 +40,20 @@ const CLUMP_COVERAGE_GAIN_SLOPE := 0.1
 ## class's spaced instances (a bush 1 m from a tree trunk, a log 0.4 m from a boulder), so
 ## smaller classes respect larger ones and a boulder never swallows a trunk.
 const CLEARANCE_FRACTION := 0.5
+## How each size class answers the painted density d (0..1) before it thins its candidates
+## (density_response()). Trees and shrubs lead: 1 - (1 - d)^lead, so a quick pass of the
+## brush, which paints well under full density toward the edges of its stroke, already
+## stands most of the trees a full paint would (a woodland, not a lawn with a tree in it);
+## ground cover lags: d^lag, so the open cover of a light pass is open under the trees too.
+## Both are 1 at d = 1, so a fully painted area delivers exactly the palette targets the
+## calibration tests assert, and both are 0 at d = 0. Thinning takes the understory before
+## the trees for the same reason (Clear still removes everything).
+const DENSITY_RESPONSE := {
+	"large": {"lead": 3.0, "lag": 1.0},
+	"medium": {"lead": 2.5, "lag": 1.0},
+	"small": {"lead": 1.0, "lag": 1.0},
+	"ground": {"lead": 1.0, "lag": 1.6},
+}
 ## A species rule's fields and their neutral defaults (PaletteLibrary fills the same ones
 ## when it validates the palette; tests may pass partial rules).
 const RULE_DEFAULTS := {
@@ -173,6 +187,24 @@ static func packing_coverage(t: float) -> float:
 	return PACKING_COVERAGE[PACKING_COVERAGE.size() - 1]
 
 
+## The keep a painted density `density` (0..1) gives a species of `size_class` (see
+## DENSITY_RESPONSE; an unknown class answers linearly). Pure.
+static func density_response(density: float, size_class: String) -> float:
+	var shape: Dictionary = DENSITY_RESPONSE.get(size_class, {})
+	return respond(density, float(shape.get("lead", 1.0)), float(shape.get("lag", 1.0)))
+
+
+## density_response() with the shape already looked up (ScatterGenerator's per-candidate
+## path reads the entry's response_lead / response_lag).
+static func respond(density: float, lead: float, lag: float) -> float:
+	var d := clampf(density, 0.0, 1.0)
+	if lead != 1.0:
+		d = 1.0 - pow(1.0 - d, lead)
+	if lag != 1.0:
+		d = pow(d, lag)
+	return d
+
+
 ## Whether a rule asks for clumps (a clump block with parents and a radius).
 static func is_clumped(rule: Dictionary) -> bool:
 	var clump: Variant = rule.clump
@@ -218,6 +250,7 @@ static func _plan_species(species: Array[Dictionary], i: int, index_of: Dictiona
 		keep *= _clump_coverage(clump, parent_keep)
 	var slope_max: float = rule.slope_max_deg
 	var scale_floor: Variant = rule.scale_floor
+	var response: Dictionary = DENSITY_RESPONSE.get(rule.size_class, {})
 	return {
 		"key": rule.key,
 		"index": i,
@@ -247,6 +280,8 @@ static func _plan_species(species: Array[Dictionary], i: int, index_of: Dictiona
 		"scale_floor": float(scale_floor) if scale_floor != null else -1.0,
 		"clump_scale": clumped and rule.size_class == "ground",
 		"asset_count": rule.assets.size(),
+		"response_lead": float(response.get("lead", 1.0)),
+		"response_lag": float(response.get("lag", 1.0)),
 	}
 
 

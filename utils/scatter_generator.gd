@@ -29,11 +29,12 @@ extends RefCounted
 ## priorities, so it terminates; it runs on an explicit stack and is memoized, and it is
 ## evaluated the same way whichever chunk asks, which makes chunk borders seamless.
 ##
-## Everything else thins after spacing: painted density, the pattern noise, slope, clump
-## membership, near/avoid relations and the clearance around larger classes each give a
-## keep probability, and one hashed uniform per candidate is tested against their
-## product. Thinning after spacing is what makes a half-density brush deliver half the
-## instances (thinning the candidates instead would barely dent a saturated packing), it
+## Everything else thins after spacing: painted density (through the size class's response,
+## ScatterPlan.DENSITY_RESPONSE: trees lead, ground cover lags), the pattern noise, slope,
+## clump membership, near/avoid relations and the clearance around larger classes each give
+## a keep probability, and one hashed uniform per candidate is tested against their
+## product. Thinning after spacing is what makes a half-density brush deliver the share its
+## response asks for (thinning the candidates instead would barely dent a saturated packing), it
 ## never breaks the spacing, and it matches Geoscatter, whose masks and patterns cull
 ## after its distribution.
 ##
@@ -502,7 +503,8 @@ static func _evaluate(
 	if not bounds.has_point(p):
 		return false
 	var u := _unit(int(cands[c + 5]), _SALT_ACCEPT)
-	var keep: float = ctx.density_at.call(p)
+	# Painted density through the size class's response (ScatterPlan.DENSITY_RESPONSE).
+	var keep := ScatterPlan.respond(ctx.density_at.call(p), entry.response_lead, entry.response_lag)
 	if u >= keep:
 		return false
 	var s: int = entry.index
