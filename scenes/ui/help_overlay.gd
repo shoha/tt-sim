@@ -107,6 +107,18 @@ func _get_shortcut_data() -> Array:
 			],
 		},
 		{
+			"header": "Map building",
+			"entries":
+			[
+				["Left Drag", "Paint, thin, or place (hold still to thicken)"],
+				["Ctrl + Left Drag", "Clear (Thin / Clear tool)"],
+				["Shift + Wheel / [ ]", "Brush size (Place: resize the prop under the cursor)"],
+				["Right Click", "Cancel the stroke, remove a prop, or put the brush down"],
+				["Delete", "Remove the prop under the cursor"],
+				["Ctrl+Z / Ctrl+Y", "Undo / redo a stroke"],
+			],
+		},
+		{
 			"header": "General",
 			"entries":
 			[

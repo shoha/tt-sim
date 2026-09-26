@@ -21,7 +21,8 @@ func test_header_title_and_close_button() -> void:
 
 func test_one_section_header_variation_per_shortcut_section() -> void:
 	var overlay = _overlay()
-	assert_eq(_count_styled(overlay, "Label", &"SectionHeader"), 4)
+	# Camera, Tokens, Tools, Map building, General.
+	assert_eq(_count_styled(overlay, "Label", &"SectionHeader"), 5)
 
 
 func test_key_caps_use_the_key_chip_variation() -> void:

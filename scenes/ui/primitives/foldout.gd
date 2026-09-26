@@ -9,12 +9,16 @@ extends VBoxContainer
 signal expanded_changed(expanded: bool)
 
 const CHEVRON_SIZE := 16.0
+const ICON_SIZE := 28.0
 
 @export var title: String = "Advanced":
 	set(value):
 		title = value
 		if _title_label:
 			_title_label.text = value
+
+## Optional picture beside the title (a biome thumbnail heading a group of tiles).
+@export var icon: Texture2D = null
 
 @export var expanded: bool = false:
 	set(value):
@@ -80,6 +84,17 @@ func _build_header() -> void:
 	_chevron.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_chevron.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_header.add_child(_chevron)
+
+	if icon:
+		var picture := TextureRect.new()
+		picture.name = "Icon"
+		picture.texture = icon
+		picture.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
+		picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		picture.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_header.add_child(picture)
 
 	_title_label = Label.new()
 	_title_label.name = "Title"

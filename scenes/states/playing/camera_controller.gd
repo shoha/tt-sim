@@ -55,6 +55,7 @@ const REFERENCE_ASPECT := 16.0 / 9.0  # Reference window aspect ratio for frustu
 var _game_map: GameMap = null
 var _measure_tool: MeasureTool = null
 var _sun_gizmo: SunGizmoTool = null
+var _brush_tool: BrushTool = null
 
 var _camera_move_dir: Vector3
 var _camera_velocity: Vector3 = Vector3.ZERO  # Smoothed camera movement velocity
@@ -138,6 +139,12 @@ func set_measure_tool(measure_tool: MeasureTool) -> void:
 ## construction-order reason as set_measure_tool().
 func set_sun_gizmo(sun_gizmo: SunGizmoTool) -> void:
 	_sun_gizmo = sun_gizmo
+
+
+## Wire authoring's BrushTool for rmb_can_start_pan(): RMB cancels a stroke or deselects
+## the brush, so a pan must not start on the same press. Wired by GameMap.setup_brush_tool().
+func set_brush_tool(brush_tool: BrushTool) -> void:
+	_brush_tool = brush_tool
 
 
 func _process(delta: float) -> void:
@@ -531,6 +538,8 @@ func rmb_can_start_pan(screen_pos: Vector2) -> bool:
 	if _measure_tool and _measure_tool.is_active():
 		return false
 	if _sun_gizmo and _sun_gizmo.is_active():
+		return false
+	if _brush_tool and _brush_tool.is_active():
 		return false
 	if _game_map.drag_and_drop_node and _game_map.drag_and_drop_node.is_dragging():
 		return false

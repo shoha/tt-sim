@@ -255,6 +255,13 @@ func set_rail_badge(id: StringName, on: bool) -> void:
 		_rail.set_badge(id, on)
 
 
+## Rail mode: tint a pane item as on or off (a tool that stays active while its pane is
+## closed).
+func set_rail_item_active(id: StringName, on: bool) -> void:
+	if _rail:
+		_rail.set_item_active(id, on)
+
+
 ## Rail mode: tint a footer item as on or off.
 func set_footer_item_active(id: StringName, on: bool) -> void:
 	if _footer_rail:

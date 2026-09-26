@@ -40,6 +40,7 @@ var map_loading: bool = false
 var _level_play_controller: LevelPlayController = null
 var _measure_tool: MeasureTool = null
 var _sun_gizmo: SunGizmoTool = null
+var _brush_tool: BrushTool = null
 var _grid_overlay: GridOverlay = null
 var _drag_ruler: DragRuler = null
 var _weather_renderer: WeatherRenderer = null
@@ -271,6 +272,18 @@ func _input(event: InputEvent) -> void:
 					get_viewport().set_input_as_handled()
 					return
 
+	# Authoring's brush, exclusive with the two tools below. Keys typed into a text field
+	# (the map name) are not brush shortcuts; mouse buttons over the drawer stay the
+	# drawer's unless a brush drag started on the map.
+	if _brush_tool and _brush_tool.is_active():
+		if event is InputEventKey and _is_text_input_focused():
+			pass
+		elif should_bypass_world_tool(event, _is_mouse_over_gui(), _brush_tool.is_dragging()):
+			pass
+		elif _brush_tool.handle_input(event):
+			get_viewport().set_input_as_handled()
+			return
+
 	# Sun gizmo gets first look at input when active, ahead of the measure tool
 	# (the two are mutually exclusive, so at most one is ever active). Skip
 	# mouse buttons over GUI so the edit drawer's own controls still work.
@@ -448,11 +461,41 @@ func get_sun_gizmo() -> SunGizmoTool:
 ## function's doc comment for why.
 func _on_sun_gizmo_toggled(active: bool) -> void:
 	_update_dragging_enabled()
-	# Mutual exclusion between the two modal tools lives here, in the node that
-	# owns both, so neither tool needs to know the other exists. No recursion:
+	# Mutual exclusion between the modal tools lives here, in the node that
+	# owns them, so no tool needs to know the others exist. No recursion:
 	# deactivate() emits toggled(false), which fails this `active` guard.
 	if active and _measure_tool and _measure_tool.is_active():
 		_measure_tool.deactivate()
+	if active and _brush_tool and _brush_tool.is_active():
+		_brush_tool.deactivate()
+
+
+## Create authoring's brush tool (see BrushTool). Mirrors setup_sun_gizmo(): owned here,
+## dispatched from _input(), exclusive with the measure tool and the sun gizmo, and wired
+## into CameraController so RMB does not pan while it is active.
+func setup_brush_tool() -> BrushTool:
+	if _brush_tool:
+		return _brush_tool
+	_brush_tool = BrushTool.new()
+	_brush_tool.name = "BrushTool"
+	add_child(_brush_tool)
+	_brush_tool.setup(camera_node, world_viewport, self, _is_mouse_over_gui)
+	_brush_tool.toggled.connect(_on_brush_tool_toggled)
+	_camera_controller.set_brush_tool(_brush_tool)
+	return _brush_tool
+
+
+## Return the BrushTool instance (null outside authoring).
+func get_brush_tool() -> BrushTool:
+	return _brush_tool
+
+
+func _on_brush_tool_toggled(active: bool) -> void:
+	_update_dragging_enabled()
+	if active and _measure_tool and _measure_tool.is_active():
+		_measure_tool.deactivate()
+	if active and _sun_gizmo and _sun_gizmo.is_active():
+		_sun_gizmo.deactivate()
 
 
 ## Get the action history (for undo recording from external code).
@@ -467,6 +510,8 @@ func _on_measure_tool_toggled(active: bool) -> void:
 	_grid_visibility.set_auto_show_measure(active)
 	if active and _sun_gizmo and _sun_gizmo.is_active():
 		_sun_gizmo.deactivate()
+	if active and _brush_tool and _brush_tool.is_active():
+		_brush_tool.deactivate()
 
 
 ## Token dragging is suppressed while either modal map tool is active.
@@ -481,6 +526,7 @@ func _update_dragging_enabled() -> void:
 	var tool_active: bool = (
 		(_measure_tool != null and _measure_tool.is_active())
 		or (_sun_gizmo != null and _sun_gizmo.is_active())
+		or (_brush_tool != null and _brush_tool.is_active())
 	)
 	# Authoring has no tokens to drag, and a drag there would only fight the brushes.
 	drag_and_drop_node.dragging_enabled = not tool_active and not authoring_mode
