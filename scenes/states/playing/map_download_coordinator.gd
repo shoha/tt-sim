@@ -59,7 +59,11 @@ func disconnect_asset_streamer() -> void:
 
 ## Handle map download completion from AssetStreamer
 func _on_map_received(
-	pack_id: String, asset_id: String, _variant_id: String, local_path: String
+	pack_id: String,
+	asset_id: String,
+	_variant_id: String,
+	local_path: String,
+	_file_type: String = ""
 ) -> void:
 	# Only handle map downloads
 	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
@@ -84,7 +88,9 @@ func _on_map_received(
 
 
 ## Handle map download failure from AssetStreamer
-func _on_map_failed(pack_id: String, asset_id: String, _variant_id: String, error: String) -> void:
+func _on_map_failed(
+	pack_id: String, asset_id: String, _variant_id: String, error: String, _file_type: String = ""
+) -> void:
 	# Only handle map downloads
 	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
 		return
@@ -97,7 +103,7 @@ func _on_map_failed(pack_id: String, asset_id: String, _variant_id: String, erro
 
 ## Handle map download progress
 func _on_map_transfer_progress(
-	pack_id: String, asset_id: String, _variant_id: String, progress: float
+	pack_id: String, asset_id: String, _variant_id: String, progress: float, _file_type: String = ""
 ) -> void:
 	if pack_id != Paths.LEVEL_MAPS_PACK_ID:
 		return

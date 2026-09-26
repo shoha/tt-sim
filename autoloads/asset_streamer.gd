@@ -18,9 +18,11 @@ extends Node
 ##   - Transfer resume support for interrupted downloads
 
 ## Signals
-## Note: file_type is appended as a trailing parameter so existing listeners
-## that only declared the original 4 parameters keep working unmodified
-## (Godot drops extra trailing signal arguments for callables with fewer params).
+## Every listener must declare all five parameters, file_type included. Godot 4.7
+## does not drop extra trailing signal arguments: a handler with fewer parameters
+## fails with "Method expected 4 argument(s), but called with 5" and never runs,
+## which silently stalled every client map download
+## (tests/unit/test_asset_streamer_listeners.gd guards this).
 signal asset_received(
 	pack_id: String, asset_id: String, variant_id: String, local_path: String, file_type: String
 )
