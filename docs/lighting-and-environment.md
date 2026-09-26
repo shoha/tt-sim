@@ -267,6 +267,18 @@ provides one or the other, since `.tscn` (Godot-authored) maps use the
 `WorldEnvironment` path and Blender-exported `.glb` maps use the extras path, so this
 rarely matters in practice.
 
+### Authored-map defaults
+
+A map built in tt-sim (`map.ttmap` with no `map.glb`) has no Blender World to take ambient
+light from. Its bare `LevelMap` root carries `LevelPlayLoader.AUTHORED_MAP_LIGHTING` as
+the same scene extras, so a sky-tinted fill (color `(0.5, 0.58, 0.72)`, energy 0.75)
+enters the map-defaults layer exactly as a terrain-paint GLB's would, below any preset or
+override the level sets. With the bare `PROPERTY_DEFAULTS` (`(0.4, 0.4, 0.45)`, 0.55) the
+palette ground read darker and more olive than the river level; a brighter neutral fill
+was tried and made the grass flatter and more khaki. Most of the remaining difference
+from the river is the palette grass albedo itself, not lighting. A map with a GLB keeps
+the GLB's own extras (or none).
+
 As with `light_intensity_scale`, the Blender-side value is a starting point, not a
 precise conversion -- tune further with the in-game edit panel if it looks off.
 

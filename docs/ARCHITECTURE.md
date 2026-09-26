@@ -408,6 +408,42 @@ Maps use a unified pipeline that handles both `res://` and `user://` paths:
 5. Add to GameMap.map_container
 ```
 
+`load_map` / `load_map_async` (and `load_glb_with_processing(_async)`) take an optional
+`scatter_filter`, a keep-predicate `func(origin: Vector3) -> bool` handed to
+`process_scatter_instances(..., row_filter)`: a level's `map.ttmap` passes
+`MapDocument.erase_filter()` so its erase mask removes the Blender scatter under erased
+samples (origins in the GLB-root frame, which is the document's frame). No filter, no
+change. A species the filter empties is still resolved so its template is freed.
+
+**Play-time level load** (`LevelPlayLoader._load_level_map_async`): a folder level has a
+`map.glb` (`map_path`), a `map.ttmap` (`map_document`), or both.
+
+1. `_resolve_map_sources()`: each named file comes from the level folder, else (a client)
+   from the download cache when its content hash matches the host's
+   (`LevelData.map_hashes`), else it is missing. A client requests what is missing and
+   `MapDownloadCoordinator` resumes the load once every file is here. A host missing its
+   GLB fails; a host missing only its document plays the GLB with a warning toast.
+2. `load_map_sources_async(glb_path, document_path)` (shared with the client download
+   path): reads and validates the document and splits its scatter + props rows into
+   10 m cells on a worker thread; loads the GLB with the erase filter, or builds a bare
+   `LevelMap` root holding an `AuthoredTerrain` (ground textures preloaded on threads,
+   chunk meshes built per frame) that carries `AUTHORED_MAP_LIGHTING` as scene extras;
+   then, when the document has rows, one `AuthoredScatter` under the root: species load
+   on threads (`prepare_assets`) and resolve within an 8 ms frame budget
+   (`resolve_prepared`), and cells build within the same budget (`begin_build` /
+   `build_cells` / `end_build`). Props are merged into the same rows (the document on
+   `LevelPlayController.loaded_map_document` keeps them apart for the authoring tools).
+   An unreadable document beside a GLB loads the GLB alone (warning toast); alone it fails.
+3. `_finalize_map_loading(root)` as for any map, then `AuthoredScatter.species_added` is
+   wired to `GameMap.adopt_foliage_materials()` and `add_wind_materials()`.
+
+Measured (headless, main thread only, fully painted 200 ft temperate forest: 30,755 rows,
+1,007 nodes): document read 180-540 ms on a worker, terrain about 100 ms spread over
+frames, species 56 ms (about 0.3-0.6 s with a real renderer), cells 110-125 ms spread,
+budget 7 ms, finalize about 60-70 ms in one frame. Longest load frame 70-84 ms (the last
+cell batch + budget + finalize); warm load 0.53 s, cold 1.1 s headless, about 2 s cold
+with rendering.
+
 Scatter building is split in two. `ScatterGlbUtils.build_scatter(parent, groups,
 resolve, foliage_overrides, chunk_size)` takes rows (species key -> Y-up transform rows)
 and a resolver, `resolve.call(key) -> {"mesh", "wind_category", optional "name"}` or `{}`
@@ -571,8 +607,10 @@ var modified_at: int             # Unix timestamp
 var level_folder: String = ""    # Folder name within user://levels/ (empty = not saved)
 
 ## Map
-var map_path: String = ""        # Relative (folder-based) or absolute (legacy res://)
+var map_path: String = ""        # Relative (folder-based) or absolute (legacy res://); "" = no GLB
+var map_document: String = ""    # "" or "map.ttmap": the authored map document
 var map_scale: Vector3 = Vector3.ONE
+var map_hashes: Dictionary       # Not saved: per-file SHA-256 from the host broadcast
 var map_offset: Vector3 = Vector3.ZERO
 
 ## Scale (1 world unit = 1 meter, per glTF standard)
@@ -594,7 +632,12 @@ var foliage: FoliageSettings                 # Typed wind-sway tuning; serialize
 var token_placements: Array[TokenPlacement] = []
 ```
 
-Key methods: `get_absolute_map_path()` (resolves relative paths for folder-based levels), `is_folder_based()`, `to_dict()` / `from_dict()` (for network serialization), `duplicate_level()`, `validate()`.
+Key methods: `get_absolute_map_path()` (resolves relative paths for folder-based levels), `get_absolute_map_document_path()`, `has_map()` (a GLB, a document, or both), `is_folder_based()`, `to_dict()` / `from_dict()` (for network serialization), `duplicate_level()`, `validate()` (accepts a document-only level and checks every named file exists).
+
+`map_document` arrives from the host in the level dict, so `from_dict()` accepts only `""`
+or `"map.ttmap"`. `map_hashes` (streaming variant id -> SHA-256, see `MapFileHash`) is
+written by `to_dict()` only when non-empty, which only a broadcast level is, and is
+sanitized on read (known variants, 64 lowercase hex characters).
 
 `lofi`, `weather`, and `foliage` are typed `Resource` fields (`resources/lofi_settings.gd`,
 `resources/weather_settings.gd`, `resources/foliage_settings.gd`), not raw dictionaries. Each has a
@@ -649,8 +692,14 @@ var status_effects: Array[String] = []
 ```
 user://levels/{folder_name}/
 ├── level.json    # LevelData serialized as JSON
-└── map.glb       # Bundled map file
+├── map.glb       # Bundled Blender-made map (map_path), optional
+└── map.ttmap     # Authored map document (map_document), optional
 ```
+
+A level needs at least one of the two map files. `LevelManager` lists a level with
+either, `duplicate_level()` copies whichever exist (dropping a named file that is
+missing, refusing a level left with none), and the level editor keeps a level's document
+when it saves (it does not create documents).
 
 **Legacy:** `user://levels/*.tres` (Godot Resource format, read-only migration path).
 
