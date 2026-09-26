@@ -222,7 +222,24 @@ func set_foliage_antialiasing_level(level: int) -> void:
 func apply_foliage_antialiasing() -> void:
 	if _game_map.world_viewport:
 		_game_map.world_viewport.msaa_3d = _foliage_antialiasing_level
-	var materials := WindFoliage.collect_foliage_shader_materials(_game_map.map_container)
+	_apply_antialiasing_variant(
+		WindFoliage.collect_foliage_shader_materials(_game_map.map_container)
+	)
+
+
+## Gives wind materials created after the map loaded (a species first painted mid-session;
+## see AuthoredScatter.species_added) the bookkeeping notify_map_loaded() gives load-time
+## ones: tree materials join the occlusion fade (while it is enabled), then every material
+## gets the current Antialiasing setting's shader variant. Registering before the swap
+## keeps the order setup_occlusion_fade() and apply_foliage_antialiasing() run in at load.
+func adopt_foliage_materials(materials: Array[ShaderMaterial]) -> void:
+	if _game_map.occlusion_fade and _occlusion_fade_enabled:
+		_game_map.occlusion_fade.register_tree_materials(materials)
+	_apply_antialiasing_variant(materials)
+
+
+## Points `materials` at the antialiased or plain-cutout wind shader for the current level.
+func _apply_antialiasing_variant(materials: Array[ShaderMaterial]) -> void:
 	if _foliage_antialiasing_level == Viewport.MSAA_DISABLED:
 		var no_aa_shader := WindFoliage.get_shader_no_aa()
 		if not no_aa_shader:

@@ -206,6 +206,9 @@ static func _find_template(scene: Node3D, source_name: String) -> Node:
 ## `name_suffix` is appended to the built node's name (see ScatterChunker.cell_suffix) --
 ## "" for a species that fits in a single cell, keeping its name unsuffixed.
 ##
+## Returns the node it added under `scene_root`, or null for an empty transform list.
+## build_chunk() is the public name other builders (AuthoredScatter) call.
+##
 ## Each entry in `valid_transforms` is a Blender WORLD-space (matrix_world) transform,
 ## already converted from its row form by the caller (see _collect_valid_transforms) and
 ## already axis-converted into glTF/Godot's convention on the Python side (terrain-paint's
@@ -228,26 +231,17 @@ static func _build_multimesh_from_transforms(
 	valid_transforms: Array[Transform3D],
 	wind_category: String = "",
 	name_suffix: String = ""
-) -> void:
-	# Defensive, not reachable today: the only caller (build_scatter) builds
-	# valid_transforms from ScatterChunker.bucket_by_cell, which returns only occupied
-	# cells, so every bucket handed here already has at least one transform. Kept as a
-	# guard against a future caller that isn't so careful. Checked before any allocation
-	# so a hit returns having done nothing rather than leaking a MultiMesh.
+) -> MultiMeshInstance3D:
+	# Defensive for build_scatter, which builds valid_transforms from
+	# ScatterChunker.bucket_by_cell and so only hands over occupied cells; build_chunk()
+	# callers may pass an empty cell. Checked before any allocation so a hit returns
+	# having done nothing rather than leaking a MultiMesh.
 	if valid_transforms.is_empty():
-		return
-
-	var multimesh := MultiMesh.new()
-	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.mesh = mesh
-
-	multimesh.instance_count = valid_transforms.size()
-	for i in valid_transforms.size():
-		multimesh.set_instance_transform(i, valid_transforms[i])
+		return null
 
 	var multimesh_instance := MultiMeshInstance3D.new()
 	multimesh_instance.name = node_stem + "_MultiMesh" + name_suffix
-	multimesh_instance.multimesh = multimesh
+	multimesh_instance.multimesh = build_multimesh(mesh, valid_transforms)
 	# Tags the node itself (not the Mesh resource) with its wind category so
 	# OcclusionFadeManager._collect_tree_materials() can find tree-category instances
 	# without re-deriving WindFoliage.classify_category()'s result.
@@ -272,6 +266,37 @@ static func _build_multimesh_from_transforms(
 	# poke outside their own chunk's cull volume and flicker at the screen edge while panning.
 	multimesh_instance.extra_cull_margin = 1.0
 	scene_root.add_child(multimesh_instance)
+	return multimesh_instance
+
+
+## One scatter chunk node: the per-chunk half of build_scatter(), for callers that manage
+## their own species (resolved mesh with its wind material already applied) and cells.
+## Same node, name, meta, shadow and cull settings as the GLB path builds; see
+## _build_multimesh_from_transforms. Returns null (adding nothing) for no transforms.
+static func build_chunk(
+	parent: Node3D,
+	mesh: Mesh,
+	node_stem: String,
+	transforms: Array[Transform3D],
+	wind_category: String = "",
+	name_suffix: String = ""
+) -> MultiMeshInstance3D:
+	return _build_multimesh_from_transforms(
+		parent, mesh, node_stem, transforms, wind_category, name_suffix
+	)
+
+
+## A MultiMesh of `mesh` holding `transforms` in order, one set_instance_transform() per
+## instance (the measured-faster upload; see docs/PERFORMANCE.md "Known dead ends").
+## visible_instance_count is left at -1 (all); FoliageDensityController sets it.
+static func build_multimesh(mesh: Mesh, transforms: Array[Transform3D]) -> MultiMesh:
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = mesh
+	multimesh.instance_count = transforms.size()
+	for i in transforms.size():
+		multimesh.set_instance_transform(i, transforms[i])
+	return multimesh
 
 
 ## Reorders a chunk's transforms into FoliageBudget.shuffled_order, so that drawing a

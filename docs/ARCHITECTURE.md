@@ -415,8 +415,11 @@ to skip, and builds the chunked, shuffled, wind-shaded MultiMeshInstance3D nodes
 `parent`; it never classifies by name and never frees what the resolver returned.
 `process_scatter_instances()` is the GLB wrapper: its resolver finds the template node
 by name in the map, classifies its wind category with `WindFoliage.classify_category()`,
-and frees the templates afterwards. In-game authored maps (in progress) pass
-`PaletteLibrary.resolver()` instead (`utils/palette_library.gd`, the built-in palette
+and frees the templates afterwards. In-game authored maps do not go through
+`build_scatter()`: `AuthoredScatter` (see "Authored scatter" below) resolves each palette
+species once, builds each (species, cell) node with `ScatterGlbUtils.build_chunk()`, and
+rebuilds single cells while a brush paints. `PaletteLibrary.resolver()` still plugs a
+palette into `build_scatter()` for one-shot builds (`utils/palette_library.gd`, the built-in palette
 of `docs/ASSET_PIPELINE.md` section 9), which loads each asset GLB once per palette root
 (the editor-imported PackedScene through `ResourceLoader`, since an export ships no raw
 `.glb`; `GLTFDocument` only for a GLB without an import, such as a `user://` test
@@ -771,6 +774,55 @@ models, clearance); the generator only evaluates candidates.
 - **Cost (measured 2026-09-26, headless GDScript):** a whole 200 ft map takes 0.3 to 1.3 s
   depending on the biome, one 10 m chunk of the densest biome about 35 ms. Ground cover
   dominates (about 15 us per candidate).
+- **Relation halo:** `species_reach(plan)` gives, per species, how far painted density can
+  reach into its instances (relations, clump parents' relations and clearance, chained);
+  `generate_species_cells()` takes a cell list per species so a brush regenerates every
+  species where it painted and only the relation-driven ones around it.
+
+### Authored scatter
+
+`AuthoredScatter` (`utils/authored_scatter.gd`, Node3D) builds and owns the palette scatter
+of an authored map: a direct child of `LevelMap` with an identity transform, so
+`store_wind_materials`, `FoliageDensityController` and the other LevelMap walks find it.
+Play-time loading calls `build_all(doc.scatter)`; authoring calls `set_cells()` through the
+brush scheduler, so both build identical nodes.
+
+- **Species:** each palette asset id is resolved once per instance (`PaletteLibrary.resolve`,
+  `WindFoliage.apply_material` with the level's foliage overrides) and kept; rebuilds never
+  create materials. A species first painted mid-session emits `species_added(materials)`;
+  the owner passes them to `GameMap.adopt_foliage_materials()` (occlusion fade registration,
+  then the current Antialiasing shader variant, the order load uses) and
+  `LevelEnvironmentManager.add_wind_materials()` (cached for re-tuning and tuned to the
+  overrides applied last). `prepare_biome()` starts threaded loads of a biome's asset
+  scenes; species then resolve one per frame, and a finished brush job waits for its
+  species instead of loading them on the main thread.
+- **Cells:** one `MultiMeshInstance3D` per (asset id, 10 m cell) named
+  `<asset id made node-safe>_MultiMesh_c<x>_<z>`, always suffixed, built by
+  `ScatterGlbUtils.build_chunk` (same meta, shadow and cull settings as GLB scatter).
+  Instances are ordered by a hash of each instance seeded by that name
+  (`instance_order`), so the density budget's visible prefix keeps the same instances when
+  a rebuild adds or removes others. `set_cells(rows_by_cell)` replaces exactly the given
+  cells (asset id -> flat rows) and leaves every other node and MultiMesh untouched.
+- **Density budget:** re-applied after every rebuild. The budget is map-wide
+  (`FoliageBudget.plan` thins all species by one ratio), so the general case re-plans the
+  whole budget root (default the parent); while the map is under budget only the rebuilt
+  nodes are touched. `GameMap.apply_foliage_density()` hands a changed setting to every
+  instance through the `authored_scatter` group (`set_budget`).
+- **Grow-in:** rows already in a cell stay in its node; new rows go to a temporary
+  `..._grow<n>` node that grows in over `GROW_SECONDS` (0.35 s, cubic ease-out) and is
+  merged back when its tween ends, carrying its visible count so the budget totals do not
+  move. Wind species grow through the `grow` instance uniform that every wind shader
+  variant (AA, no-AA, the three debug ones) multiplies `VERTEX` by; other species (rocks)
+  rise out of the ground by moving the temporary node. Removed instances vanish at once.
+- **Brushes:** `attach_document(doc)`, then `request_region(rect)` with the rectangle of
+  changed mask samples. `ScatterRegen` (`utils/scatter_regen.gd`) marks per cell and biome
+  the species to regenerate (the rectangle grown by each species' reach plus one sample
+  step), coalesces queued cells, and hands out one-cell jobs of plain data; `run()` executes
+  them on `WorkerThreadPool` (at most 4 at once, never more than half the cores) against a
+  copy-on-write snapshot of the document, decoding only the mask window the job can read.
+  Latest wins per cell: every request bumps the cells' generations and a finished job is
+  applied only where nobody has requested since; a dropped job's species stay dirty for the
+  next one. `rows_by_asset()` returns the current rows for saving.
 
 ### Level Flow
 

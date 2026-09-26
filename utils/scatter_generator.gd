@@ -97,12 +97,91 @@ static func generate(
 	cells: Array[Vector2i],
 	bounds: Rect2
 ) -> Dictionary[String, PackedFloat32Array]:
+	var cells_by_species: Array = []
+	cells_by_species.resize(species.size())
+	cells_by_species.fill(cells)
+	return generate_species_cells(
+		biome_id, species, density_at, height_at, normal_at, map_seed, cells_by_species, bounds
+	)
+
+
+## generate() with its own cell list per species: `cells_by_species[s]` (an
+## Array[Vector2i], possibly empty) lists the cells species s is generated for. A brush
+## regenerates every species in the cells its dab touches but only the relation-driven
+## ones in the halo around them (see species_reach), which is most of the saving: the
+## halo species are the sparse ones. Rows of one asset come out in the order generate()
+## gives; species with a shorter or missing list simply place nothing elsewhere.
+static func generate_species_cells(
+	biome_id: String,
+	species: Array[Dictionary],
+	density_at: Callable,
+	height_at: Callable,
+	normal_at: Callable,
+	map_seed: int,
+	cells_by_species: Array,
+	bounds: Rect2
+) -> Dictionary[String, PackedFloat32Array]:
 	var the_plan := ScatterPlan.build(biome_id, species, map_seed)
 	var ctx := _context(the_plan, density_at, height_at, normal_at, bounds)
 	var result: Dictionary[String, PackedFloat32Array] = {}
 	for s in the_plan.species.size():
-		_generate_species(ctx, s, cells, result)
+		var cells: Array[Vector2i] = []
+		if s < cells_by_species.size() and cells_by_species[s] is Array:
+			cells.assign(cells_by_species[s])
+		if not cells.is_empty():
+			_generate_species(ctx, s, cells, result)
 	return result
+
+
+## How far, in metres, the painted density can reach into each species' instances: an
+## instance of species s at p depends on the density within species_reach(plan)[s] of p
+## (plus one sample step for the bilinear lookup), and on nothing painted further away.
+## Spacing, candidate positions and species choice never depend on paint, so a species
+## with no relations or clearance has reach 0: only its own point matters. Otherwise the
+## reach adds up along every dependency, because the instance a relation looks at has
+## its own reach: avoid and near relations (distance plus transition), a clumped
+## species' near relations through its parents (clump radius with jitter plus transition,
+## then the relation), and clearance around larger classes. Dependencies only point to
+## larger size classes, which the palette lists first; the passes repeat until nothing
+## grows so a palette listed in another order still resolves (the chains are acyclic, so
+## at most one pass per species). This is the "relation halo" a brush regenerates beyond
+## the cells it painted.
+static func species_reach(the_plan: Dictionary) -> PackedFloat32Array:
+	var entries: Array = the_plan.species
+	var reach := PackedFloat32Array()
+	reach.resize(entries.size())
+	for _pass in entries.size() + 1:
+		var grew := false
+		for s in entries.size():
+			var r := _reach_of(the_plan, s, reach)
+			if r > reach[s]:
+				reach[s] = r
+				grew = true
+		if not grew:
+			break
+	return reach
+
+
+## One species' reach given the current estimates for the others (see species_reach).
+static func _reach_of(the_plan: Dictionary, s: int, reach: PackedFloat32Array) -> float:
+	var entry: Dictionary = the_plan.species[s]
+	var fields: Array = the_plan.fields
+	var r := 0.0
+	for relation in entry.avoid:
+		r = maxf(r, relation.distance + relation.transition + reach[relation.target])
+	# Clump children take near relations through their parents (_parent_kept), whose
+	# influence spreads over the clump; unclumped species take them directly.
+	var through := 0.0
+	if entry.clumped:
+		var clump: Dictionary = entry.rule.clump
+		through = clump.radius_m * (1.0 + ScatterPlan.CLUMP_RADIUS_JITTER) + clump.transition_m
+	for relation in entry.near:
+		r = maxf(r, through + relation.distance + relation.transition + reach[relation.target])
+	for field_index in entry.clearance:
+		for owner in fields[field_index].owners:
+			if owner != s:
+				r = maxf(r, entry.clearance_m + reach[owner])
+	return r
 
 
 ## generate() for one biome of a MapDocument: its density mask, heights and extent, over
@@ -131,15 +210,32 @@ static func generate_for_document(
 ## (0 where another biome or none is painted), heights and density are bilinear on the
 ## document's sample grid, and the normal comes from central height differences one
 ## sample step apart. Outside the map the density is 0 and heights clamp to the edge.
-static func document_fields(doc: MapDocument, biome_id: String) -> Dictionary:
+##
+## `window` (world XZ), when it has an area, limits the density decode to the samples
+## inside it plus one sample of margin; density reads 0 elsewhere. Decoding the whole
+## mask is a GDScript loop over every sample (about 6 ms on a 200 ft map), which a brush
+## regenerating a few cells does not need. The caller must make the window cover every
+## point generation can look at: the cells plus the deepest species_reach.
+static func document_fields(
+	doc: MapDocument, biome_id: String, window: Rect2 = Rect2()
+) -> Dictionary:
 	var count := doc.sample_count()
 	var slot := doc.biome_ids.find(biome_id) + 1
 	var density := PackedFloat32Array()
 	density.resize(count)
 	if slot > 0 and doc.biome_slots.size() == count and doc.biome_density.size() == count:
-		for i in count:
-			if doc.biome_slots[i] == slot:
-				density[i] = doc.biome_density[i] / 255.0
+		var low := Vector2i.ZERO
+		var high := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
+		if window.has_area():
+			var first := doc.world_to_sample(window.position).floor()
+			var last := doc.world_to_sample(window.end).ceil()
+			low = Vector2i(first).clamp(low, high)
+			high = Vector2i(last).clamp(low, high)
+		var stride := doc.samples_x()
+		for z in range(low.y, high.y + 1):
+			for i in range(z * stride + low.x, z * stride + high.x + 1):
+				if doc.biome_slots[i] == slot:
+					density[i] = doc.biome_density[i] / 255.0
 	var heights := doc.heights
 	if heights.size() != count:
 		heights = PackedFloat32Array()

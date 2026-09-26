@@ -587,6 +587,42 @@ Two observations from this session that are not about the assets:
   default-budget numbers taken after an R reload are not comparable with first-load
   ones.
 
+## Authored scatter rebuilds (2026-09-26)
+
+`AuthoredScatter` rebuilds single 10 m cells while a brush paints (see
+`docs/ARCHITECTURE.md` "Authored scatter"). Measured on temperate forest, the densest
+biome, on a 200 ft map; CPU numbers headless unless marked, render numbers from a real
+Vulkan window while another application held the GPU at 80-99% (so frame times are not
+usable, and the GPU figure is an in-run ratio, not an absolute).
+
+| What | Cost |
+| --- | --- |
+| Worker: regenerate one fully painted cell, all species (`ScatterRegen.run`, 790-850 rows) | 48-57 ms, one thread (T2 measured about 36 ms on a quieter machine) |
+| Worker: one halo-only cell (relation species only) | 2-7 ms |
+| Four-cell dab (radius 3.5 m at a cell corner) | 16 one-cell jobs, 360-400 ms serial; at most 4 run at once |
+| Main thread: apply one dense cell (821 rows) into a fully painted map, with grow-in split | 2.5-3.8 ms |
+| Main thread: full budget re-plan over the map (999 nodes), skipped while under budget | 5.9 ms |
+| Main thread: `build_all` of the whole painted map (30,763 rows, 999 nodes), species resolved | 95-100 ms (real render and headless alike) |
+| Main thread: resolve one species after its scene loaded (duplicate + wind material) | up to 10 ms (resolved one per frame) |
+| Main thread: resolve a whole biome synchronously, cold (25 asset GLBs) | 0.9-2.1 s (real render; why species load on threads) |
+| End to end, real render, species warm: four-cell dab request -> first cell applied / last / grown in | 20 ms / 155 ms / 373 ms |
+| End to end, real render, first dab right after the biome is registered (loads in flight) | first apply 254 ms, settled 1.25 s |
+| GPU: `grow` instance uniform in the wind shader, fully painted map, interleaved A/B (n=145 each) | 5.079 ms with, 5.109 ms without: no measurable cost |
+
+The main-thread apply stays a few milliseconds because only the rebuilt cells' nodes are
+built and the density budget is re-planned map-wide only when the map is (or becomes) over
+budget; `FoliageBudget.plan` thins every species by one ratio, so over budget there is no
+cheaper correct update than the full re-plan. A cell painted exactly edge to edge also
+regenerates its eight neighbours in full: their instances within one sample step of the
+edge read the repainted samples through the bilinear lookup. A brush dab rarely lines up
+with cell edges, so this only matters for rectangular fills.
+
+Refuted while measuring: a fresh MultiMesh filled with `set_instance_transform()` does not
+stall on a GPU readback in the real renderer (200 MultiMeshes x 30 instances: 1.7-2.8 ms
+per-instance calls, 1.8-3.0 ms through `MultiMesh.buffer`, real render; 0.9-1.4 ms and
+1.1 ms headless). An early 7.4 s `build_all` was the probe waiting on 25 threaded GLB loads
+it had just started, not the build.
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one

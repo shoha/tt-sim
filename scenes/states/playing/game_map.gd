@@ -575,6 +575,16 @@ func apply_grid_visual_settings(
 func apply_foliage_density(budget: int) -> void:
 	if map_container:
 		FoliageDensityController.apply(map_container, budget)
+	# Authored scatter re-applies the budget itself after every brush rebuild.
+	get_tree().call_group(AuthoredScatter.GROUP, "set_budget", budget)
+
+
+## Gives wind materials created after load (AuthoredScatter.species_added: a species first
+## painted mid-session) the foliage AA variant and occlusion fade registration that
+## notify_map_loaded() gives load-time ones. Wind re-tuning is the environment manager's:
+## LevelEnvironmentManager.add_wind_materials().
+func adopt_foliage_materials(materials: Array[ShaderMaterial]) -> void:
+	_visual_effects.adopt_foliage_materials(materials)
 
 
 ## Enable or disable the occlusion fade effect
