@@ -431,7 +431,8 @@ The handler takes `LevelPlayController` and `GameMap` as arguments so it can man
 user://levels/
 ├── my_dungeon/
 │   ├── level.json    # LevelData serialized as JSON
-│   ├── map.glb       # Bundled map file (copied during save)
+│   ├── map.glb       # Bundled Blender map (copied during save; optional if map.ttmap exists)
+│   ├── map.ttmap     # Authored map document (optional if map.glb exists)
 │   └── thumbnail.png  # 320x180 capture of the last in-play save (optional)
 ├── forest_encounter/
 │   ├── level.json
@@ -453,6 +454,7 @@ user://levels/
   "modified_at": 1700001000,
   "level_folder": "my_dungeon",
   "map_path": "map.glb",
+  "map_document": "",
   "map_scale": {"x": 1.0, "y": 1.0, "z": 1.0},
   "map_offset": {"x": 0.0, "y": 0.0, "z": 0.0},
   "light_intensity_scale": 0.005,
@@ -491,6 +493,8 @@ user://levels/
 
 - `map_path` is **relative** in folder-based levels (e.g., `"map.glb"`), resolved via `LevelData.get_absolute_map_path()`
 - `map_path` is **absolute** in legacy `.tres` levels (e.g., `"res://assets/models/maps/..."`)
+- `map_document` is `""` or `"map.ttmap"` (the only values `from_dict()` accepts). A folder level has `map_path`, `map_document`, or both; an empty `map_path` is a map built in tt-sim
+- `map_hashes` never appears in a saved `level.json`: the host adds it to the level dict it broadcasts (see NETWORKING.md "Level Map Files")
 - Colors in `environment_overrides` are stored as hex strings (`"#ff0000"`)
 - Autosave writes to `user://levels/_autosave/level.json` and is cleared after manual save
 - Folder names are generated via `Paths.sanitize_level_name()`: lowercase, spaces to underscores, restricted charset

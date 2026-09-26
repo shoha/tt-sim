@@ -10,6 +10,7 @@ This document covers the multiplayer networking system, including connection man
 - [State Synchronization](#state-synchronization)
 - [Player Roles](#player-roles)
 - [Late Joiner Support](#late-joiner-support)
+- [Level Map Files](#level-map-files)
 - [Token Synchronization](#token-synchronization)
 - [Development Setup](#development-setup)
 - [API Reference](#api-reference)
@@ -295,6 +296,46 @@ NetworkManager.game_state_received.connect(func(state_dict):
     apply_game_state(state_dict)
 )
 ```
+
+---
+
+## Level Map Files
+
+A level's map is up to two files in its folder: `map.glb` (Blender-made) and `map.ttmap`
+(authored in tt-sim). A client without them downloads them from the host through
+`AssetStreamer` under the pack id `Paths.LEVEL_MAPS_PACK_ID` (`"_level_maps"`), the
+level folder as asset id, and a variant id naming the file.
+
+- **Host whitelist.** `_rpc_request_asset` serves a level map only through
+  `AssetStreamer.level_map_file_for_request(asset_id, variant_id, active_folder)`: the
+  requested folder must sanitize to the active level (`is_level_request_authorized`,
+  unchanged) and the variant must be `"map"` (map.glb) or `"ttmap"` (map.ttmap)
+  (`Paths.get_level_map_file_for_variant`). Anything else is answered with
+  `_rpc_asset_not_found`; neither client-controlled value ever becomes a path.
+- **Client.** `request_map_file_from_host(folder, variant)` (file type `"model"` for the
+  GLB, `Paths.LEVEL_MAP_DOCUMENT_FILE_TYPE` for the document, cached as `.glb` /
+  `.ttmap` under `user://asset_cache/_level_maps/<folder>/`). `MapDownloadCoordinator`
+  is told which files are missing and which are already here, waits for every one, then
+  loads through the async `LevelPlayLoader.load_map_sources_async` and finalizes. A GLB
+  that fails to download fails the map; a document that fails beside a GLB lets the GLB
+  load alone (as on the host); a document-only map fails.
+- **Stale cache.** `NetworkManager.broadcast_level_data()` adds `map_hashes` (variant id
+  -> SHA-256 of the host's file, `MapFileHash`, cached per file version: about 57 ms for
+  a 15 MB GLB the first time, under 1 ms after) to the level dict it sends and keeps for
+  late joiners. The cache stores each level map file's hash beside its entry (hashed from
+  memory on download, or once from disk for an older entry), and
+  `AssetCacheManager.get_cached_path_matching()` drops a copy whose hash differs, so a map
+  the host re-saved downloads again. A client also ignores a same-named local level file
+  whose hash differs. Hashes are validated (64 lowercase hex, known variants only).
+- **Signal arity.** `AssetStreamer`'s `asset_received` / `asset_failed` /
+  `transfer_progress` pass a trailing `file_type`; every listener must accept it, since
+  Godot 4 refuses to call a handler with fewer parameters. Until 2026-09-26 the
+  coordinator's four-parameter handlers were never called, so client map downloads never
+  completed.
+
+Not yet exercised over a real Steam connection: the unit tests
+(`test_map_download_coordinator.gd`, `test_level_map_streaming.gd`) cover the
+coordinator, whitelist, cache and hash logic with a streamer double.
 
 ---
 
