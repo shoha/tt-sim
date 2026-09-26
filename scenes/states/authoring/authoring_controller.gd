@@ -23,9 +23,11 @@ extends Node
 ## set (LevelManager), then a thumbnail of the current view. Unsaved edits are counted by
 ## AuthoringSession and autosaved every AUTOSAVE_INTERVAL seconds.
 ##
-## Seams for the brush tools (phase 2 T6): `document`, `scatter` (attach_document() is done;
-## call request_region()), `props`, `history` (record an entry per stroke), mark_edited()
-## after every change, and the panel's biome_selected / tool_selected signals.
+## Brushes (phase 2 T6). GameMap's BrushTool does the gestures and the cursor, and an
+## AuthoringEditor made per opened map does the edits (masks, ground, scatter, props,
+## history). The controller connects the two to the panel: a rail item picks the tool, a
+## biome or Place tile picks what it paints or places (and warms it), the Advanced rows set
+## size and strength, and the brush reports its state back (active tool tint, size).
 
 signal loading_started
 signal loading_progress(progress: float, status: String)
@@ -53,6 +55,8 @@ var props: AuthoredScatter = null
 var panel: AuthoringPanel = null
 ## The biome the author last picked (the Biome tool's paint), or "".
 var selected_biome: String = ""
+var brush: BrushTool = null
+var editor: AuthoringEditor = null
 
 var _game_map: GameMap = null
 var _environment := LevelEnvironmentManager.new()
@@ -79,7 +83,13 @@ func setup(game_map: GameMap) -> void:
 	game_map.setup_authoring()
 	game_map.setup_measure_tool()
 	game_map.setup_grid_overlay()
+	brush = game_map.setup_brush_tool()
 	_build_ui()
+	brush.toggled.connect(_on_brush_toggled)
+	brush.radius_changed.connect(
+		func(_radius: float) -> void: panel.set_brush_values(brush.get_radius(), brush.get_flow())
+	)
+	panel.set_brush_values(brush.get_radius(), brush.get_flow())
 	_autosave_timer = Timer.new()
 	_autosave_timer.name = "AutosaveTimer"
 	_autosave_timer.wait_time = AUTOSAVE_INTERVAL
@@ -102,6 +112,10 @@ func _build_ui() -> void:
 	panel.redo_pressed.connect(redo)
 	panel.name_changed.connect(_on_name_changed)
 	panel.biome_selected.connect(_on_biome_selected)
+	panel.tool_selected.connect(_on_tool_selected)
+	panel.place_selected.connect(_on_place_selected)
+	panel.brush_size_changed.connect(func(radius: float) -> void: brush.set_radius(radius))
+	panel.brush_strength_changed.connect(func(flow: float) -> void: brush.set_flow(flow))
 
 
 ## Opens what `request` names ({"level": LevelData or null, "new_map": NewMapDialog spec or
@@ -211,7 +225,7 @@ func _open_async(
 	panel.set_history_state(false, false)
 	if not document.biome_ids.is_empty():
 		panel.select_biome(document.biome_ids[0])
-		selected_biome = document.biome_ids[0]
+		_use_biome(document.biome_ids[0])
 	panel.begin_session()
 	_is_open = true
 	_autosave_timer.start()
@@ -238,6 +252,10 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	scatter.attach_document(document)
 	FoliageDensityController.apply(root, FoliageDensityController.budget_from_settings())
 	_fit_camera()
+	editor = AuthoringEditor.create(document, root, history)
+	editor.edited.connect(mark_edited)
+	brush.deactivate()
+	brush.editor = editor
 
 
 ## Zoom-out reaches a view of the whole map (never less than the play camera's), and panning
@@ -292,13 +310,24 @@ func mark_edited() -> void:
 
 
 func undo() -> void:
+	_finish_brush_gesture()
 	if history.undo() != "":
 		mark_edited()
 
 
 func redo() -> void:
+	_finish_brush_gesture()
 	if history.redo() != "":
 		mark_edited()
+
+
+## A stroke or prop gesture in progress becomes its own history entry before undo or redo
+## moves through the stack.
+func _finish_brush_gesture() -> void:
+	if brush:
+		brush.finish_gesture()
+	elif editor:
+		editor.commit_prop_edit()
 
 
 func _on_history_changed() -> void:
@@ -315,12 +344,88 @@ func _on_name_changed(_new_name: String) -> void:
 		mark_edited()
 
 
-## A picked biome starts loading its assets on background threads, so the first stroke with
-## it does not wait on GLB loads.
+## A picked biome becomes the Biome brush's paint and switches to that brush.
 func _on_biome_selected(biome_id: String) -> void:
+	_use_biome(biome_id)
+	_select_tool(AuthoringPanel.TOOL_BIOME)
+
+
+## Makes `biome_id` the Biome brush's paint and starts loading its assets and ground surface
+## on background threads, so the first stroke with it does not wait on loads.
+func _use_biome(biome_id: String) -> void:
 	selected_biome = biome_id
-	if is_instance_valid(scatter):
+	if editor:
+		editor.prepare_biome(biome_id)
+	elif is_instance_valid(scatter):
 		scatter.prepare_biome(biome_id)
+	if brush:
+		brush.biome_id = biome_id
+		brush.biome_tint = biome_tint(biome_id)
+	# Silent; also opens the biome's group in the Place picker.
+	panel.select_biome(biome_id)
+
+
+func _on_tool_selected(tool_id: StringName) -> void:
+	_select_tool(tool_id)
+
+
+func _on_place_selected(biome_id: String, species_key: String) -> void:
+	if editor == null:
+		return
+	brush.place_rule = editor.species_rule(biome_id, species_key)
+	for asset_id in brush.place_rule.get("assets", []):
+		if is_instance_valid(props):
+			props.prepare_assets([asset_id])
+	_select_tool(AuthoringPanel.TOOL_PLACE)
+
+
+## Switches the brush to `tool_id` and activates it. The Biome brush waits for a biome to be
+## picked (there is nothing to paint with before).
+func _select_tool(tool_id: StringName) -> void:
+	if brush == null or not _is_open:
+		return
+	match tool_id:
+		AuthoringPanel.TOOL_BIOME:
+			brush.set_mode(BrushTool.Mode.BIOME)
+			if selected_biome == "":
+				brush.deactivate()
+				return
+		AuthoringPanel.TOOL_THIN:
+			brush.set_mode(BrushTool.Mode.THIN)
+		AuthoringPanel.TOOL_PLACE:
+			brush.set_mode(BrushTool.Mode.PLACE)
+		_:
+			return
+	brush.activate()
+	panel.set_active_tool(tool_id)
+
+
+func _on_brush_toggled(active: bool) -> void:
+	if not active:
+		panel.set_active_tool(&"")
+		return
+	var ids := {
+		BrushTool.Mode.BIOME: AuthoringPanel.TOOL_BIOME,
+		BrushTool.Mode.THIN: AuthoringPanel.TOOL_THIN,
+		BrushTool.Mode.PLACE: AuthoringPanel.TOOL_PLACE,
+	}
+	panel.set_active_tool(ids[brush.mode])
+
+
+## The cursor tint of a biome: its thumbnail's mean colour, lifted toward white so the ring
+## reads on dark ground too.
+static func biome_tint(biome_id: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> Color:
+	var thumbnail: Variant = PaletteLibrary.biome(biome_id, root).get("thumbnail", "")
+	var texture := SwatchTextures.palette_thumbnail(thumbnail, 8, root)
+	if texture == null:
+		return Color(0.7, 0.9, 0.6)
+	var image := texture.get_image()
+	if image == null or image.is_empty():
+		return Color(0.7, 0.9, 0.6)
+	image.resize(1, 1, Image.INTERPOLATE_BILINEAR)
+	var mean := image.get_pixel(0, 0)
+	mean.a = 1.0
+	return mean.lerp(Color.WHITE, 0.4)
 
 
 ## Copies what the scene holds back into the document and the level: the scatter and props
@@ -463,6 +568,9 @@ func teardown() -> void:
 	_generation += 1
 	_is_open = false
 	set_process(false)
+	if brush:
+		brush.deactivate()
+		brush.editor = null
 	if _autosave_timer:
 		_autosave_timer.stop()
 	if panel:
