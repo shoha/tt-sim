@@ -737,6 +737,44 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   StandardMaterial3D ground with the same textures (in-run interleaved A/B at 1920x1080,
   +0.5 ms; measured while another application held the GPU, so the ratio, not the
   absolute time, is the number to trust).
+- **Biome ground:** each painted biome's palette `ground_surface` blends over the base.
+  The CPU turns `biome_slots` / `biome_density` into one RGBA8 texel per sample
+  (`BiomeGroundLayers`, `utils/biome_ground_layers.gd`, pure): channel i holds the painted
+  density of the biome whose surface is layer i, the base is the remainder. Weights rather
+  than slots because a slot cannot be filtered (bilinear weights give smooth ramps at
+  0.25 m in one fetch), biomes sharing a surface share a channel, and a biome on the base
+  surface (or on a surface the palette lacks) writes nothing and costs nothing. Up to 4
+  layers (`layer_*[4]` sampler arrays; arrays take no default hints, so every entry is
+  bound). Layers are assigned by first appearance and kept for the session; past 4
+  surfaces the least covered fall back to the nearest layer or base by mean albedo (last
+  mip of the albedo), with one warning per surface. In the built-in palette that only
+  happens with five distinct non-grass biomes on a grass map, and savanna grass then draws
+  as forest floor (nearest mean colour), which is a poor match: raise the layer count in
+  phase 3 rather than tune the fallback.
+  The shader reads the weights through a noise domain warp (`biome_edge_warp_m`), adds
+  finer noise to partial totals only (`biome_edge_noise`), multiplies density by
+  `biome_weight_gain` so the ground reaches the sparse fringe of the scatter, and
+  height-blends (`weight + (height - 0.5) * biome_height_contrast`, surfaces within
+  `biome_blend_width` of the top score show), so an edge frays along texture detail
+  instead of following the brush. Surfaces with zero weight at a pixel are not sampled.
+  The dry/lush tints fade out on unsaturated albedo so snow is not stained.
+- **Biome ground updates:** the brush edits the masks, then calls
+  `update_biome_region(sample_rect)`; that recomputes those texels into a CPU mirror
+  (`get_biome_weights()`) and blits just that rectangle into the `DrawableTexture2D` the
+  material samples (`shaders/texel_copy_blit.gdshader`: nearest, blending disabled; the
+  default blit mixes by source alpha, which corrupts the fourth weight). Godot 4.7 has no
+  sub-rectangle upload for an ImageTexture (`ImageTexture.update`,
+  `texture_2d_update` and `RenderingDevice.texture_update` are whole-texture);
+  `DrawableTexture2D.blit_rect` is the partial path. A biome appended to `biome_ids` gets
+  its layer on the next update by setting uniforms; the material is never rebuilt.
+- **Biome ground cost (measured 2026-09-26, GPU held at 99% by another application, so
+  ratios only):** 3 m dab update 0.05 ms median (15 x 14 samples, CPU + blit submit);
+  whole-map update 4 ms; the first dab of a biome with a new surface 21-25 ms (texture
+  loads and binding; T6 should warm the surface when a biome tile is picked); painted
+  200 ft map build 41-44 ms. Ground viewport GPU time at the game camera against no
+  painted biome, in-run interleaved: one forest disc 1.07x, whole view one layer 1.18x,
+  four layer discs 1.11x, a synthetic worst case with every sample a different biome at
+  half density (every pixel blends the base and several layers) 2.04x.
 
 ### Scatter generator
 
