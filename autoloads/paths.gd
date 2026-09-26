@@ -10,6 +10,12 @@ const PERF_LOG_DIR: String = "user://perf_logs/"
 
 # Special pack ID for map streaming (used by AssetStreamer)
 const LEVEL_MAPS_PACK_ID: String = "_level_maps"
+# The map files of a level folder, and the streaming variant id that names each one. A
+# level has a Blender-made map.glb, an authored map.ttmap, or both.
+const LEVEL_MAP_NAME: String = "map.glb"
+const LEVEL_MAP_DOCUMENT_NAME: String = "map.ttmap"
+const LEVEL_MAP_VARIANT: String = "map"
+const LEVEL_MAP_DOCUMENT_VARIANT: String = "ttmap"
 
 # Data files
 const POKEMON_DATA_PATH: String = "res://data/pokemon.json"
@@ -32,7 +38,24 @@ static func get_level_folder(level_name: String) -> String:
 
 ## Get the map GLB path within a level folder
 static func get_level_map_path(level_name: String) -> String:
-	return get_level_folder(level_name) + "map.glb"
+	return get_level_folder(level_name) + LEVEL_MAP_NAME
+
+
+## Get the authored map document (map.ttmap) path within a level folder
+static func get_level_map_document_path(level_name: String) -> String:
+	return get_level_folder(level_name) + LEVEL_MAP_DOCUMENT_NAME
+
+
+## The file a streaming variant id names in a level folder: the whitelist the host serves
+## level map requests through. "" for any variant other than the two map files, so a
+## client-chosen variant can never name another file.
+static func get_level_map_file_for_variant(level_name: String, variant_id: String) -> String:
+	match variant_id:
+		LEVEL_MAP_VARIANT:
+			return get_level_map_path(level_name)
+		LEVEL_MAP_DOCUMENT_VARIANT:
+			return get_level_map_document_path(level_name)
+	return ""
 
 
 ## Get the level.json path within a level folder

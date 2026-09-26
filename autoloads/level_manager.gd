@@ -14,7 +14,8 @@ signal level_list_updated(levels: Array[String])
 
 const LEVEL_FILE_EXTENSION = ".tres"
 const LEVEL_JSON_NAME = "level.json"
-const LEVEL_MAP_NAME = "map.glb"
+const LEVEL_MAP_NAME = Paths.LEVEL_MAP_NAME
+const LEVEL_MAP_DOCUMENT_NAME = Paths.LEVEL_MAP_DOCUMENT_NAME
 const LEVEL_THUMBNAIL_NAME = "thumbnail.png"
 const THUMBNAIL_SIZE := Vector2i(320, 180)
 
@@ -47,6 +48,10 @@ func json_path(folder_name: String) -> String:
 
 func map_path(folder_name: String) -> String:
 	return folder_path(folder_name) + LEVEL_MAP_NAME
+
+
+func map_document_path(folder_name: String) -> String:
+	return folder_path(folder_name) + LEVEL_MAP_DOCUMENT_NAME
 
 
 func thumbnail_path(folder_name: String) -> String:
@@ -203,6 +208,7 @@ func copy_map_to_level(source_path: String, folder_name: String) -> bool:
 
 	dest_file.store_buffer(data)
 	dest_file.close()
+	MapFileHash.invalidate(dest_path)
 
 	return true
 
@@ -461,10 +467,11 @@ func get_saved_levels() -> Array[Dictionary]:
 
 ## Get info about a folder-based level.
 ## Returns an empty Dictionary (falsy, skipped by callers) if the folder cannot be
-## read/parsed, or if it has no map assigned yet -- e.g. the "_autosave" scratch
-## slot, which is written without validation (see level_editor_history.gd
-## _perform_autosave()) so it can capture in-progress edits before a map is chosen.
-## Such an entry can never be played, so it is excluded from every level list.
+## read/parsed, or if it has no map assigned yet (neither a map.glb nor a map.ttmap) --
+## e.g. the "_autosave" scratch slot, which is written without validation (see
+## level_editor_history.gd _perform_autosave()) so it can capture in-progress edits
+## before a map is chosen. Such an entry can never be played, so it is excluded from
+## every level list. A level with only an authored map.ttmap is listed.
 func _get_folder_level_info(folder_name: String) -> Dictionary:
 	var json_path = json_path(folder_name)
 
@@ -480,8 +487,13 @@ func _get_folder_level_info(folder_name: String) -> Dictionary:
 		return {}
 
 	var data = json.data
-	var map_path: String = data.get("map_path", "")
-	if map_path.is_empty():
+	if not data is Dictionary:
+		return {}
+	var map_path: Variant = data.get("map_path", "")
+	var map_document: Variant = data.get("map_document", "")
+	var has_glb: bool = map_path is String and not map_path.is_empty()
+	var has_document: bool = map_document is String and not map_document.is_empty()
+	if not has_glb and not has_document:
 		return {}
 
 	var token_count = 0
@@ -607,8 +619,10 @@ func rename_level(level_info: Dictionary, new_name: String) -> String:
 	return new_path
 
 
-## Copy a folder level into a new folder ("<name> (Copy)"), including its map
-## and thumbnail. Returns the new folder path, or "" on failure. Never moves
+## Copy a folder level into a new folder ("<name> (Copy)"), including whichever map
+## files it has (map.glb, map.ttmap) and its thumbnail. A map file the level names but
+## that is missing on disk is dropped from the copy; a level left with no map at all is
+## not copied. Returns the new folder path, or "" on failure. Never moves
 ## current_level / current_level_path, even though the load/save calls this
 ## makes would otherwise touch them.
 func duplicate_level(level_info: Dictionary) -> String:
@@ -626,11 +640,32 @@ func duplicate_level(level_info: Dictionary) -> String:
 		current_level_path = previous_path
 		return ""
 	var copy := level.duplicate_level()
-	var new_path := save_level_folder(copy, "", map_path(source_folder))
+	var source_map := ""
+	if copy.map_path != "" and not copy.map_path.begins_with("res://"):
+		if FileAccess.file_exists(map_path(source_folder)):
+			source_map = map_path(source_folder)
+		else:
+			copy.map_path = ""
+	var source_document := map_document_path(source_folder)
+	if copy.map_document != "" and not FileAccess.file_exists(source_document):
+		copy.map_document = ""
+	if not copy.has_map():
+		push_warning("LevelManager: '%s' has no map file to copy" % source_folder)
+		current_level = previous_level
+		current_level_path = previous_path
+		return ""
+	var new_path := save_level_folder(copy, "", source_map)
 	current_level = previous_level
 	current_level_path = previous_path
 	if new_path.is_empty():
 		return ""
+	if copy.map_document != "":
+		var target_document := map_document_path(copy.level_folder)
+		if DirAccess.copy_absolute(source_document, target_document) != OK:
+			push_error("LevelManager: failed to copy the map document of '%s'" % source_folder)
+			delete_level_folder(new_path)
+			return ""
+		MapFileHash.invalidate(target_document)
 	var source_thumb := thumbnail_path(source_folder)
 	if FileAccess.file_exists(source_thumb):
 		DirAccess.copy_absolute(source_thumb, thumbnail_path(copy.level_folder))

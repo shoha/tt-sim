@@ -136,6 +136,8 @@ static func write(doc: MapDocument, path: String) -> Error:
 	var err := _write_zip(temp_path, packed["entries"])
 	if err == OK:
 		err = DirAccess.rename_absolute(temp_path, path)
+	if err == OK:
+		MapFileHash.invalidate(path)
 	if err != OK and FileAccess.file_exists(temp_path):
 		DirAccess.remove_absolute(temp_path)
 	return err

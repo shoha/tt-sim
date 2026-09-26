@@ -143,7 +143,7 @@ func _play_level_at_index(index: int) -> bool:
 		push_warning("TestPlayLevel: Failed to load level: " + info.name)
 		return false
 
-	if level_data.map_path.is_empty():
+	if not level_data.has_map():
 		push_warning("TestPlayLevel: Skipping unplayable level (no map assigned): " + info.name)
 		return false
 

@@ -37,6 +37,11 @@ const DEFAULT_DISPLAY_UNIT_PER_CELL := 5.0
 ## For user:// levels: relative path within level folder (e.g., "map.glb")
 ## For legacy res:// levels: full path (e.g., "res://assets/models/maps/map.glb")
 @export var map_path: String = ""
+## The authored map document (Paths.LEVEL_MAP_DOCUMENT_NAME) in the level folder, or ""
+## when the level has none. A folder level has map_path, map_document, or both: a document
+## alone is a map built in tt-sim; beside a GLB it dresses that map. from_dict() accepts
+## only "" and the one file name, because the value arrives from the host peer.
+@export var map_document: String = ""
 @export var map_scale: Vector3 = Vector3.ONE
 @export var map_offset: Vector3 = Vector3.ZERO
 
@@ -125,6 +130,11 @@ const DEFAULT_DISPLAY_UNIT_PER_CELL := 5.0
 ## Token placements
 @export_group("Tokens")
 @export var token_placements: Array[TokenPlacement] = []
+
+## Content hash per map file (streaming variant id -> SHA-256 hex), filled only on a level
+## the host broadcast (see MapFileHash). Never saved: not exported, and to_dict() writes it
+## only when non-empty, which a level loaded from disk never is.
+var map_hashes: Dictionary = {}
 
 
 func _init() -> void:
@@ -238,6 +248,18 @@ func get_absolute_map_path() -> String:
 	return ""
 
 
+## The absolute path of the map document, or "" when the level has none or no folder.
+func get_absolute_map_document_path() -> String:
+	if map_document == "" or level_folder == "":
+		return ""
+	return Paths.get_level_folder(level_folder) + map_document
+
+
+## True when the level names at least one map file (a GLB, a document, or both).
+func has_map() -> bool:
+	return map_path != "" or map_document != ""
+
+
 ## Check if this level uses the new folder-based storage
 func is_folder_based() -> bool:
 	return level_folder != "" and not map_path.begins_with("res://")
@@ -253,6 +275,7 @@ func duplicate_level() -> LevelData:
 	new_level.level_folder = ""  # Duplicates need to be saved to a new folder
 	new_level.format_version = format_version
 	new_level.map_path = map_path
+	new_level.map_document = map_document
 	new_level.map_scale = map_scale
 	new_level.map_offset = map_offset
 	new_level.light_intensity_scale = light_intensity_scale
@@ -290,14 +313,20 @@ func validate() -> Array[String]:
 	if level_name.strip_edges() == "":
 		errors.append("Level name is required")
 
-	if map_path == "":
+	if not has_map():
 		errors.append("Map file is required")
-	else:
+	if map_path != "":
 		var absolute_path = get_absolute_map_path()
 		if absolute_path == "":
 			errors.append("Cannot resolve map path - level_folder may not be set")
 		elif not _map_file_exists(absolute_path):
 			errors.append("Map file does not exist: " + absolute_path)
+	if map_document != "":
+		var document_path := get_absolute_map_document_path()
+		if document_path == "":
+			errors.append("Cannot resolve map document path - level_folder may not be set")
+		elif not FileAccess.file_exists(document_path):
+			errors.append("Map document does not exist: " + document_path)
 
 	for i in range(token_placements.size()):
 		var placement = token_placements[i]
@@ -320,7 +349,7 @@ func to_dict() -> Dictionary:
 	for placement in token_placements:
 		placements_array.append(placement.to_dict())
 
-	return {
+	var data := {
 		"format_version": FORMAT_VERSION,
 		"level_name": level_name,
 		"level_description": level_description,
@@ -329,6 +358,7 @@ func to_dict() -> Dictionary:
 		"modified_at": modified_at,
 		"level_folder": level_folder,
 		"map_path": map_path,
+		"map_document": map_document,
 		"map_scale": SerializationUtils.vec3_to_dict(map_scale),
 		"map_offset": SerializationUtils.vec3_to_dict(map_offset),
 		"light_intensity_scale": light_intensity_scale,
@@ -352,6 +382,9 @@ func to_dict() -> Dictionary:
 		"grid_type": grid_type,
 		"token_placements": placements_array,
 	}
+	if not map_hashes.is_empty():
+		data[MapFileHash.HASHES_KEY] = map_hashes.duplicate()
+	return data
 
 
 ## Create from dictionary (for network reception)
@@ -364,6 +397,15 @@ static func from_dict(data: Dictionary) -> LevelData:
 	level.modified_at = data.get("modified_at", 0)
 	level.level_folder = data.get("level_folder", "")
 	level.map_path = data.get("map_path", "")
+	# Untrusted (the host sends this dict): only "no document" or the one document name.
+	var document: Variant = data.get("map_document", "")
+	if document is String and document == Paths.LEVEL_MAP_DOCUMENT_NAME:
+		level.map_document = document
+	elif document is String and document == "":
+		level.map_document = ""
+	else:
+		push_warning("LevelData: ignoring unexpected map_document value '%s'" % str(document))
+	level.map_hashes = MapFileHash.sanitize(data.get(MapFileHash.HASHES_KEY, {}))
 
 	level.map_scale = SerializationUtils.dict_to_vec3(data.get("map_scale", {}), Vector3.ONE)
 	level.map_offset = SerializationUtils.dict_to_vec3(data.get("map_offset", {}))

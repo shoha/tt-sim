@@ -241,9 +241,14 @@ func _update_ui_from_level() -> void:
 	if _pending_map_source_path != "":
 		# New map selected but not yet saved
 		map_path_label.text = _pending_map_source_path.get_file() + " (will be bundled)"
-	elif current_level.is_folder_based():
-		# Folder-based level with bundled map
+	elif current_level.is_folder_based() and current_level.map_path != "":
+		# Folder-based level with bundled map (and possibly an authored document over it)
 		map_path_label.text = current_level.map_path + " (bundled)"
+		if current_level.map_document != "":
+			map_path_label.text += " + " + current_level.map_document
+	elif current_level.map_document != "":
+		# Map built in tt-sim: only the authored document
+		map_path_label.text = current_level.map_document + " (built in game)"
 	elif current_level.map_path != "":
 		# Legacy res:// path
 		map_path_label.text = current_level.map_path.get_file()
@@ -587,8 +592,9 @@ func _save_level_folder() -> void:
 		_set_status("Error: Level name is required")
 		return
 
-	# Check if we have a map source or existing bundled map
-	if _pending_map_source_path == "" and current_level.map_path == "":
+	# Check if we have a map source, an existing bundled map, or an authored document (the
+	# editor never creates one, but saving a level that has one keeps it)
+	if _pending_map_source_path == "" and not current_level.has_map():
 		_set_status("Error: No map selected")
 		return
 
