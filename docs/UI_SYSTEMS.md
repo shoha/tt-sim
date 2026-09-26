@@ -78,6 +78,7 @@ The application uses a **state stack** managed by the `Root` node.
 | `LOBBY_CLIENT` | Joined a game, waiting for host to start |
 | `PLAYING`      | Active gameplay with GameMap loaded      |
 | `PAUSED`       | Game paused, pause menu visible          |
+| `AUTHORING`    | Building or dressing a map in the game view (offline only); see [Authoring Mode](#authoring-mode) |
 
 ### State Transitions
 
@@ -360,8 +361,9 @@ the d20 sub-viewport as a dimmed backdrop behind both.
 
 Built by `_build_left_column()`. **Host Game** and **Join Game** are tall primary actions
 (`UiActions.primary()`: icon, bold label, caption underneath); below a separator, **Play Solo**,
-**Level Editor**, **Settings**, and **Quit** are compact secondary actions
-(`UiActions.secondary()`).
+**Level Editor**, **Build Map**, **Settings**, and **Quit** are compact secondary actions
+(`UiActions.secondary()`). Build Map emits `build_map_requested`, which Root turns into the
+new-map dialog and then [authoring mode](#authoring-mode).
 Host Game and Play Solo are disabled until a card is selected; once one is, their captions name it
 ("with <name>" for Host, the level name for Play Solo).
 
@@ -394,8 +396,9 @@ Saved levels are three primitives under `scenes/ui/primitives/`:
 - **`LevelCard`** (extends `Button`, `Card` theme variation) -- a thumbnail, name, and caption ("N
   tokens, edited <relative time>", built by the static `caption_for(info, now_unix)`). Press selects
   (`toggle_mode = true`); double-click or Enter activates. The overflow menu (the `dots-vertical`
-  icon in the thumbnail's corner) offers Rename (swaps in an inline `LineEdit`), Duplicate, and
-  Delete -- Delete is disabled while `locked` is true (the level currently being played). Signals:
+  icon in the thumbnail's corner) offers Edit (Level Editor), Edit map (authoring mode; the grid
+  forwards it as `level_map_edit_requested`, the title as `edit_map_requested`), Rename (swaps in
+  an inline `LineEdit`), Duplicate, and Delete -- Delete is disabled while `locked` is true (the level currently being played). Signals:
   `selected(level_info)`, `activated(level_info)`, `action_requested(level_info, action:
   StringName)`, `rename_committed(level_info, new_name)`.
 - **`LevelGrid`** (extends `ScrollContainer`) -- lays out `LevelCard`s in an `HFlowContainer`.
@@ -603,7 +606,8 @@ UIManager tracks registered overlays and the app state for ESC key handling.
 ### Priority Order (ESC key)
 
 1. **Overlays** - anything registered via `register_overlay()`: Level Editor, Settings, Help,
-   Asset Browser, the `LevelEditPanel` Visuals drawer, etc. `UIManager._unhandled_input()` closes
+   Asset Browser, the `LevelEditPanel` Visuals drawer, the `AuthoringPanel` (for the whole
+   authoring session), etc. `UIManager._unhandled_input()` closes
    the top of the overlay stack first, before anything else
 2. **Pause Toggle** - if no overlay is open and the app state is `PLAYING`/`PAUSED`, pause/unpause
 
@@ -732,8 +736,64 @@ Set `rail_items` in `_on_ready()` to replace the single tab with an `IconRail` s
 |--------|------|-----|---------|
 | `PlayerListDrawer` | LEFT | `users.svg` icon | Shows connected players during networked games |
 | `LevelEditPanel` | RIGHT | rail of seven icons | Real-time level editing during gameplay (see below) |
+| `AuthoringPanel` | LEFT | rail of three tools + four footer actions | Authoring mode's tools, save and leave (see [Authoring Mode](#authoring-mode)) |
+
+Rail-mode helpers beyond badges: `set_rail_item_enabled(id, on)` (a tool not available yet),
+`set_footer_item_enabled(id, on)` (Undo with nothing to undo) and `set_footer_badge(id, on)`
+(Save with unsaved changes).
 
 See `THEME_GUIDE.md` for styling details.
+
+---
+
+## Authoring Mode
+
+Root's `AUTHORING` state (`scenes/states/authoring/`; flow and data in
+[ARCHITECTURE.md's Authoring Flow](ARCHITECTURE.md#authoring-flow)). The screen is the game
+view itself, with one piece of chrome: the `AuthoringPanel` rail on the left edge.
+
+### New map dialog
+
+`NewMapDialog` (`new_map_dialog.gd` / `.tscn`, an `AnimatedCanvasLayerPanel` on
+`LAYER_DIALOG`) is the only question before a new map: a `MenuHeader` ("New map", closable),
+a Size `TileField` (100 / 150 / 200 ft, 20 / 30 / 40 squares in the tooltips), a Start from
+`TileField` of the palette biomes' thumbnails plus Bare ground (the bare surface's albedo),
+three columns, `photo_icons` so pictures draw untinted at their size, and a caption naming
+the ground the choice implies ("Ground: forest floor"). Nothing to type. The footer is
+Cancel (Secondary) and Create map (the one primary). Temperate forest is preselected.
+`map_chosen({size_ft, biome_id, seed})` with a fresh seed; Escape, Cancel and the close button
+emit nothing. It registers its backdrop as an overlay like `LevelPickerDialog`.
+
+### Tool drawer
+
+`AuthoringPanel` extends `DrawerContainer` (LEFT, rail mode, 320 px). Rail items: Biome
+(`trees`), Thin / Clear (`eraser`), Place (`tree`); the last two are disabled until the brush
+tools exist. Footer items: Undo (`arrow-back-up`) and Redo (`arrow-forward-up`), disabled
+while `AuthoringHistory` has nothing to offer; Save (`device-floppy`, badged while there are
+unsaved changes); Leave (`door-exit`). Item ids double as node names for
+`game_click_control`: `biome`, `thin_clear`, `place`, `undo`, `redo`, `save_map`,
+`leave_authoring`. The drawer content is a Map name `LineEdit` (`MapNameEdit`, the one text
+field; placeholder "Untitled map") above a `PaneStack` with one pane per tool; the Biome
+pane's `BiomeField` lists the palette biomes (two columns, labels trimmed to the last two
+words, full name in the tooltip) and emits `biome_selected`, which starts that biome's asset
+loads in the background.
+
+Save keeps the drawer open and shows a success toast. Ctrl+Z / Ctrl+Y (`ui_undo` /
+`ui_redo`) go to `AuthoringController.undo()` / `redo()`.
+
+### Escape and leaving
+
+The panel registers itself with `UIManager.register_overlay()` for the whole session
+(`begin_session()`), so Escape never reaches the pause handling. `request_close()` closes the
+drawer when it is open; with the drawer closed it asks to leave. Leaving with everything
+saved is immediate. With unsaved changes `UIManager.show_choice()` asks "Leave with unsaved
+changes?" with Keep editing (Cancel and Escape), Discard (a Secondary alternate action,
+`ConfirmationDialogUI.add_alternate_action`), and Save and leave (the confirm button).
+Leaving goes back to the title, or to the Level Editor on the same level when authoring was
+opened from there.
+
+A leftover autosave is offered when authoring opens ("Recover an unsaved map?": Recover /
+Discard); a recovered map starts unsaved.
 
 ---
 

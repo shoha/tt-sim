@@ -400,7 +400,7 @@ Reusable controls under `scenes/ui/primitives/`, built in code (no `.tscn`). Eve
 |---|---|---|
 | `IconButton` | Icon-only actions, rail items, pane headers | `icon_name`, `active`, `badge`, `static load_icon(name)` |
 | `IconRail` | One-of-N section choice (drawer rail, Settings sections) | `add_item(id, icon, tooltip)`, `select(id)`, `item_pressed`, `selection_changed`, `set_badge(id, on)`, `show_labels`, `auto_select` |
-| `TileRow` | Enums with up to ten options (use `columns` beyond five); multi-select toggles | `add_tile(id, label, icon)`, `select(id)` (silent), `selection_changed`, `multi_select`, `tile_toggled`, `columns`, `tile_hovered`, `tile_unhovered` |
+| `TileRow` | Enums with up to ten options (use `columns` beyond five); multi-select toggles | `add_tile(id, label, icon)`, `select(id)` (silent), `selection_changed`, `multi_select`, `tile_toggled`, `columns`, `tile_hovered`, `tile_unhovered`, `photo_icons` (picture icons such as palette thumbnails: own size, untinted) |
 | `TileField` | A captioned, full-width tile row (use instead of set_control(TileRow)) | caption, tiles, overridden, reset_requested |
 | `Foldout` | Advanced or secondary rows | `title`, `expanded`, `body`; children authored in a `.tscn` move into `body`; re-measures wrapping bodies mid-animation |
 | `PropertyRow` | Label + optional check and colour + slider + inline value | `value`, `min_value`, `max_value`, `step`, `show_check`, `show_color`, `show_slider`, `overridden`, `ticks`, `hint_low`, `hint_high`, `values_visible`, `formatter`, `set_control(control)`, `value_changed`, `reset_requested` |
