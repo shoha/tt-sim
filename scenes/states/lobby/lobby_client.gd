@@ -166,10 +166,15 @@ func _on_player_left(_peer_id: int, _player_info: Dictionary) -> void:
 		AudioManager.play_tick()
 
 
+## NetworkManager emits connection_failed before it goes OFFLINE, so the reason is
+## written after _show_input_state() (which clears the label) and _is_connected is
+## dropped here, keeping the OFFLINE branch below from overwriting the reason with a
+## generic "Disconnected from server".
 func _on_connection_failed(reason: String) -> void:
+	_is_connected = false
+	_show_input_state()
 	status_label.text = "Connection failed: " + reason
 	AudioManager.play_error()
-	_show_input_state()
 
 
 func _on_connection_state_changed(
@@ -180,9 +185,14 @@ func _on_connection_state_changed(
 			_show_connected_state()
 		NetworkManager.ConnectionState.OFFLINE:
 			if _is_connected:
-				status_label.text = "Disconnected from server"
 				_is_connected = false
-			_show_input_state()
+				_show_input_state()
+				status_label.text = "Disconnected from server"
+			elif connect_button.disabled:
+				# Went offline mid-connect without a failure reason: unlock the form.
+				# When a failure reason was shown, the form is already unlocked and the
+				# reason stays on screen.
+				_show_input_state()
 
 
 func _update_player_list() -> void:

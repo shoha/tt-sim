@@ -71,6 +71,13 @@ const LATE_JOINER_SYNC_TIMEOUT := 5.0
 ## transform is processed regardless of how fast a client sends updates.
 const CLIENT_TRANSFORM_RATE_LIMIT := 0.05
 
+## Grace period between the host telling a client its version was rejected and the
+## host dropping that peer (seconds). Disconnecting in the same frame could drop the
+## reliable rejection RPC before delivery, leaving the client with a generic "Host
+## disconnected". A well-behaved client leaves on its own as soon as the RPC arrives;
+## the forced disconnect only matters for one that ignores it.
+const VERSION_REJECT_DISCONNECT_DELAY := 1.0
+
 ## Permission request/response sub-component
 var permissions: NetworkPermissions
 
@@ -97,10 +104,12 @@ var _room_code: String = ""
 ## Connected players: peer_id -> player_info dictionary
 var _players: Dictionary = {}
 
-## Local player info
+## Local player info. "version" is what the host checks against its own version
+## (VersionGate.is_player_info_accepted) when this client's info arrives.
 var _local_player_info: Dictionary = {
 	"name": "Player",
 	"role": PlayerRole.PLAYER,
+	VersionGate.PLAYER_INFO_KEY: UpdateVersion.get_current(),
 }
 
 ## Current level data (for late joiners)
@@ -289,6 +298,10 @@ func _on_lobby_created(result: int, lobby_id: int) -> void:
 
 	_lobby_id = lobby_id
 
+	# Publish our version so a joining client can refuse a mismatch before it connects
+	# (see VersionGate). The host still re-checks each client's reported version.
+	Steam.setLobbyData(lobby_id, VersionGate.LOBBY_DATA_KEY, UpdateVersion.get_current())
+
 	# Create SteamMultiplayerPeer as host
 	var peer := SteamMultiplayerPeer.new()
 	peer.create_host(0)
@@ -347,6 +360,15 @@ func _on_lobby_joined(lobby_id: int, _lobby_permissions: int, _locked: bool, res
 
 	_lobby_id = lobby_id
 
+	# Refuse a host on a different version before connecting at all. A host from before
+	# the version gate publishes no version and reads as "", which is a mismatch.
+	# _handle_connection_error() leaves the lobby through disconnect_game().
+	var host_version: String = Steam.getLobbyData(lobby_id, VersionGate.LOBBY_DATA_KEY)
+	var mismatch := VersionGate.mismatch_message(host_version, UpdateVersion.get_current())
+	if not mismatch.is_empty():
+		_handle_connection_error(mismatch)
+		return
+
 	# Get host's Steam ID and connect as client
 	var host_steam_id: int = Steam.getLobbyOwner(lobby_id)
 	var peer := SteamMultiplayerPeer.new()
@@ -395,11 +417,9 @@ func _on_peer_connected(peer_id: int) -> void:
 	if is_host():
 		# Send current player list to new peer
 		_rpc_sync_player_list.rpc_id(peer_id, _players)
-
-		# Handle late joiner - send current level and game state
-		if _game_in_progress and not _current_level_dict.is_empty():
-			# Use event-driven sync instead of hardcoded delays
-			_sync_late_joiner(peer_id)
+		# A late joiner's level and state sync waits for its player info, so a client on
+		# the wrong version is rejected in the lobby screen instead of being pushed into
+		# PLAYING first -- see _rpc_send_player_info().
 
 	# Request player info from the new peer
 	_rpc_send_player_info.rpc_id(peer_id, _local_player_info)
@@ -499,7 +519,14 @@ func _rpc_send_player_info(info: Dictionary) -> void:
 	var sender_id = multiplayer.get_remote_sender_id()
 
 	var received_info := info
+	var is_new_peer := not _players.has(sender_id)
 	if is_host():
+		# Same-version gate, authoritative half: the client already checked the lobby's
+		# published version, but lobby data is advisory, so the host re-checks the version
+		# the client reports and never admits a mismatch (see VersionGate).
+		if not VersionGate.is_player_info_accepted(info, UpdateVersion.get_current()):
+			_reject_peer_version(sender_id, VersionGate.reported_version(info))
+			return
 		# Only the host receives this RPC from an untrusted remote peer (when a
 		# client receives it, the sender is the host, which is already
 		# authoritative about itself). Accept the client's display name, but
@@ -516,6 +543,54 @@ func _rpc_send_player_info(info: Dictionary) -> void:
 	# If we're the host, broadcast updated player list
 	if is_host():
 		_rpc_sync_player_list.rpc(_players)
+
+		# Handle late joiner - send current level and game state, only once the peer
+		# has passed the version gate above.
+		if is_new_peer and _game_in_progress and not _current_level_dict.is_empty():
+			# Use event-driven sync instead of hardcoded delays
+			_sync_late_joiner(sender_id)
+
+
+## Host side of a version rejection: tell the client why, then drop it after
+## VERSION_REJECT_DISCONNECT_DELAY. The peer is never added to _players, so no
+## player_joined/player_left fires for it.
+func _reject_peer_version(peer_id: int, reported_version: String) -> void:
+	push_warning(
+		(
+			"NetworkManager: Peer %d reported version '%s', host is '%s' -- rejected"
+			% [peer_id, reported_version, UpdateVersion.get_current()]
+		)
+	)
+	# Peer ids 0 (a direct call outside a real RPC, as in tests) and 1 (ourselves) are
+	# not remote clients and cannot be sent to or disconnected.
+	if peer_id <= 1 or not multiplayer.multiplayer_peer:
+		return
+	_rpc_version_rejected.rpc_id(peer_id, UpdateVersion.get_current())
+	get_tree().create_timer(VERSION_REJECT_DISCONNECT_DELAY).timeout.connect(
+		_disconnect_rejected_peer.bind(peer_id), CONNECT_ONE_SHOT
+	)
+
+
+func _disconnect_rejected_peer(peer_id: int) -> void:
+	if not is_host() or not multiplayer.multiplayer_peer:
+		return
+	if peer_id in multiplayer.get_peers():
+		multiplayer.multiplayer_peer.disconnect_peer(peer_id)
+
+
+## RPC: Host tells a client its game version does not match (host -> rejected client).
+## The client leaves on its own with the version message, so the player sees that
+## rather than the generic "Host disconnected" the host's later forced disconnect would
+## produce. Deferred so the multiplayer peer is not closed while it is dispatching
+## this RPC.
+@rpc("authority", "reliable")
+func _rpc_version_rejected(host_version: String) -> void:
+	var message := VersionGate.mismatch_message(host_version, UpdateVersion.get_current())
+	if message.is_empty():
+		# The host only sends this on a mismatch; if the strings somehow agree, still
+		# leave with an honest reason rather than an empty one.
+		message = "The host rejected this game version."
+	_handle_connection_error.call_deferred(message)
 
 
 @rpc("authority", "reliable")
