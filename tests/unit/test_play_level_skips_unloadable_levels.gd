@@ -12,7 +12,7 @@ extends GutTest
 ## "every candidate is unloadable" path deterministically without depending on
 ## whatever levels actually exist on disk. The fixture used has an empty
 ## map_path and is loaded for real via LevelManager.load_level_folder(), so
-## the guard being tested (level_data.map_path.is_empty()) runs against a real
+## the guard being tested (not level_data.has_map()) runs against a real
 ## LevelData instance, not a mock.
 ##
 ## The "skips a bad candidate and successfully plays the next one" case is not
