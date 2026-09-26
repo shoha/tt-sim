@@ -177,6 +177,25 @@ func show_confirmation(
 	return dialog
 
 
+## A three-way choice: Cancel (also Escape), a Secondary alternate action, and the confirm
+## action, in that order along the footer. For "Keep editing / Discard / Save and leave".
+func show_choice(
+	title: String,
+	message: String,
+	confirm_text: String,
+	alternate_text: String,
+	cancel_text: String,
+	confirm_callback: Callable,
+	alternate_callback: Callable,
+	cancel_callback: Callable = Callable()
+) -> Node:
+	var dialog = show_confirmation(
+		title, message, confirm_text, cancel_text, confirm_callback, cancel_callback
+	)
+	dialog.add_alternate_action(alternate_text, alternate_callback)
+	return dialog
+
+
 ## Show a danger confirmation (e.g., for delete actions)
 func show_danger_confirmation(
 	title: String,

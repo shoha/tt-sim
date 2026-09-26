@@ -268,6 +268,24 @@ func set_footer_item_tooltip(id: StringName, text: String) -> void:
 		_footer_rail.set_item_tooltip(id, text)
 
 
+## Rail mode: enable or disable a footer item (e.g. Undo with nothing to undo).
+func set_footer_item_enabled(id: StringName, on: bool) -> void:
+	if _footer_rail:
+		_footer_rail.set_enabled(id, on)
+
+
+## Rail mode: badge a footer item (e.g. Save while there are unsaved changes).
+func set_footer_badge(id: StringName, on: bool) -> void:
+	if _footer_rail:
+		_footer_rail.set_badge(id, on)
+
+
+## Rail mode: enable or disable a pane item (a tool that is not available yet).
+func set_rail_item_enabled(id: StringName, on: bool) -> void:
+	if _rail:
+		_rail.set_enabled(id, on)
+
+
 ## Tooltip shown when hovering the tab handle (single-tab mode only; rail
 ## items carry their own tooltips).
 func set_tab_tooltip(text: String) -> void:

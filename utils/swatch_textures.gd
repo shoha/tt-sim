@@ -76,6 +76,37 @@ static func water_swatch(palette_name: String) -> ImageTexture:
 	return texture
 
 
+## A `size` x `size` tile of a palette image (a biome thumbnail, or a ground surface's
+## albedo for "bare ground"), `relative_path` being relative to the palette root: loaded
+## through the import (an export ships no raw image), centre-cropped square and scaled
+## down once. A missing image paints the neutral grey.
+static func palette_thumbnail(
+	relative_path: String, size: int, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> Texture2D:
+	var key := "palette:%s:%s:%d" % [root, relative_path, size]
+	if _cache.has(key):
+		return _cache[key]
+	var path := root.path_join(relative_path)
+	var image: Image = null
+	if relative_path != "" and ResourceLoader.exists(path):
+		var source := load(path) as Texture2D
+		if source:
+			image = source.get_image()
+	if image == null or image.is_empty():
+		image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+		image.fill(FALLBACK)
+	else:
+		if image.is_compressed():
+			image.decompress()
+		var side := mini(image.get_width(), image.get_height())
+		var offset := Vector2i(image.get_width() - side, image.get_height() - side) / 2
+		image = image.get_region(Rect2i(offset, Vector2i(side, side)))
+		image.resize(size, size, Image.INTERPOLATE_LANCZOS)
+	var texture := ImageTexture.create_from_image(image)
+	_cache[key] = texture
+	return texture
+
+
 static func _sky_texture(
 	prefix: String,
 	preset_name: String,

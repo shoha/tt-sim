@@ -28,6 +28,11 @@ signal tile_unhovered(id: StringName)
 		columns = value
 		_fit_columns()
 
+## Tile icons are pictures (biome thumbnails, surface swatches) rather than tinted glyphs:
+## drawn at their own size and untinted in every state. The Tile variation otherwise caps
+## icons at 24 px and tints them like the white Tabler icons.
+@export var photo_icons: bool = false
+
 var selected: StringName = &""
 
 var _tiles: Dictionary = {}
@@ -65,6 +70,16 @@ func add_tile(
 	tile.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	tile.set_meta("ui_silent", true)
 	tile.offset_transform_enabled = true
+	if photo_icons and tile.icon:
+		tile.add_theme_constant_override("icon_max_width", tile.icon.get_width())
+		for state in [
+			"icon_normal_color",
+			"icon_hover_color",
+			"icon_pressed_color",
+			"icon_hover_pressed_color",
+			"icon_focus_color",
+		]:
+			tile.add_theme_color_override(state, Color.WHITE)
 	if not multi_select:
 		if not _group:
 			_group = ButtonGroup.new()
