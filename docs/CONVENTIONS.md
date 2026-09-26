@@ -572,6 +572,8 @@ func _load_icons_worker():
 
 4. **Post-await validity**: After any `await`, re-check `is_instance_valid(self)` and `is_inside_tree()` before accessing node properties. The node may have been freed during the yield.
 
+5. **Packed arrays are shared, not copied**: in Godot 4.7 GDScript, `var b := a` for a `PackedByteArray` (or any packed array), passing one to a function, or reading one out of a Dictionary or a property, gives a reference to the same buffer; a write through any of them shows in all (measured 2026-09-26). Anything handed to a worker thread, or kept as a "before" copy for undo, must be `.duplicate()`d, and an array a worker may be reading must be replaced (a new array assigned) rather than resized or appended in place. `AuthoredScatter._snapshot()` and `MaskStroke` do this; the older comment that called them copy-on-write was wrong.
+
 ---
 
 ## Input Actions

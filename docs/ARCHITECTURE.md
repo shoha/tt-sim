@@ -50,6 +50,7 @@ Root (Node3D)
 │   │           └── [Dynamic] WeatherRenderer (Node3D) - particle weather effects
 │   ├── MeasureTool (Node) - distance measurement, 2D overlay on LAYER_MEASURE_OVERLAY
 │   ├── DragRuler (Node) - movement distance during token drag, 2D overlay on LAYER_DRAG_RULER
+│   ├── [Authoring] BrushTool (Node) - map brushes, ring cursor on LAYER_MEASURE_OVERLAY
 │   ├── GameplayMenu (CanvasLayer)
 │   │   └── GameplayMenuController - token list, context menus
 │   ├── LevelEditPanel (DrawerContainer) - slide-out editing drawer (right edge)
@@ -349,7 +350,48 @@ map's far corner (above the fixed 100 m only when zoomed out past the play range
 scatter and props rows live in their AuthoredScatter nodes while editing and are copied
 back (`_sync_document()`) before every save and autosave. `AuthoringSession` counts
 revisions (dirty = the saved revision is not the current one); `AuthoringHistory` is the
-undo stack brushes record `{label, undo, redo}` entries into.
+undo stack brushes record `{label, undo, redo, bytes}` entries into (at most 100 entries and
+64 MB of `bytes`, oldest dropped first, the newest always kept).
+
+**Brushes.** `GameMap.setup_brush_tool()` creates `BrushTool` (modal tool contract, like
+`MeasureTool` and `SunGizmoTool`: dispatched from `GameMap._input()` behind the GUI click
+guard, exclusive with the other two through their `toggled` signals, and
+`CameraController.rmb_can_start_pan()` refuses while it is active). The brush reads
+`event.position`, raycasts once per frame on layer 1 (AuthoredTerrain and Blender collision
+alike), and turns gestures into calls on an `AuthoringEditor`
+(`scenes/states/authoring/authoring_editor.gd`, made per opened map) which does the edits:
+
+- **Mask strokes** (`MaskStroke`, rules in the pure `MaskBrush`): each frame the brush
+  exposes the capsule it swept for the frame's seconds times flow times the dwell gain; every
+  sample in it moves `1 - exp(-3 * falloff * seconds)` of the way to its target (falloff
+  `(1 - t^2)^2`), in floats kept for the stroke and written back as bytes. Paint approaches
+  density 1; painting over another biome is a contest (the owner fades as the newcomer
+  would grow on bare ground, and the sample changes hands when the newcomer is the denser);
+  thin decays density; clear decays it six times faster. On a document with `has_base_map`
+  every mode also writes the erase mask as a thin amount (0..127) that becomes 255 (erased)
+  once it passes the sample's hashed noise threshold, so Blender instances disappear with a
+  probability equal to how thinned their spot is (clear compresses the thresholds below
+  0.85). About 1 ms per frame for a 4 m brush and 7 ms for a 12 m one on a dressed 200 ft map
+  (headless, worst case writing both biome and erase masks).
+- **Per frame** `flush()` takes the rectangle of samples whose bytes changed and makes one
+  update each: `AuthoredTerrain.update_biome_region()`, `AuthoredScatter.request_region()`,
+  and `BaseScatterEraser.refresh()`, which re-filters a dressed GLB's own scatter chunks in
+  the touched cells from the unfiltered rows still in the root's scene extras, with the
+  loader's rule (`MapDocument.erase_filter`) and order, keeping each chunk's visible
+  fraction and shrinking the removed instances out. Picking a biome warms its assets
+  (`AuthoredScatter.prepare_biome`) and its ground surface
+  (`AuthoredTerrain.warm_biome_surface`, threaded texture loads).
+- **History:** a stroke records the "before" bytes of every 40 x 40 sample block it first
+  touches and pairs them with the blocks' final bytes at the end, ZSTD-compressed (a 30 m
+  stroke with a 4 m brush: about 5 KB; the scenario session averaged 11 KB per stroke); undo
+  and redo put one side back and refresh exactly its rectangle. A stroke that changes nothing
+  leaves no entry and no trace (a biome it added and masks it allocated are dropped).
+  Cancelling (RMB) reverts the blocks. Props (`PropRows`, rows in `AuthoredProps`) record the
+  one 10 m cell a gesture changed, before and after: a placement plus its turn is one entry,
+  consecutive Shift+wheel notches on one prop are one entry (committed 0.6 s after the last).
+  Placed props are bedded with `DragPlaceController.raycast_terrain_down`, oriented like
+  generated ones (upright or on the ground normal, then yaw), and scaled within the species'
+  spread widened to at least +-25 %.
 
 **Save.** `save_async()` waits for scatter regeneration to land, then
 `AuthoringController.write_level()`: a new level gets `LevelManager.new_folder_name()`,
@@ -981,13 +1023,18 @@ brush scheduler, so both build identical nodes.
   merged back when its tween ends, carrying its visible count so the budget totals do not
   move. Wind species grow through the `grow` instance uniform that every wind shader
   variant (AA, no-AA, the three debug ones) multiplies `VERTEX` by; other species (rocks)
-  rise out of the ground by moving the temporary node. Removed instances vanish at once.
+  rise out of the ground by moving the temporary node. Instances an animated rebuild removes
+  shrink away the same two ways on a self-freeing `..._shrink<n>` node (`ScatterShrink`,
+  0.3 s); an unanimated rebuild (a prop turned or scaled in place) replaces them at once.
 - **Brushes:** `attach_document(doc)`, then `request_region(rect)` with the rectangle of
   changed mask samples. `ScatterRegen` (`utils/scatter_regen.gd`) marks per cell and biome
   the species to regenerate (the rectangle grown by each species' reach plus one sample
   step), coalesces queued cells, and hands out one-cell jobs of plain data; `run()` executes
   them on `WorkerThreadPool` (at most 4 at once, never more than half the cores) against a
-  copy-on-write snapshot of the document, decoding only the mask window the job can read.
+  snapshot of the document, decoding only the mask window the job can read. The snapshot
+  duplicates the masks, heights and biome list (one copy per dispatch, about 0.1 ms):
+  GDScript packed arrays are shared by reference, not copy-on-write, so without it a worker
+  read masks the brush was writing.
   Latest wins per cell: every request bumps the cells' generations and a finished job is
   applied only where nobody has requested since; a dropped job's species stay dirty for the
   next one. `rows_by_asset()` returns the current rows for saving.

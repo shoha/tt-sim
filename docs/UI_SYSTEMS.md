@@ -767,19 +767,63 @@ emit nothing. It registers its backdrop as an overlay like `LevelPickerDialog`.
 ### Tool drawer
 
 `AuthoringPanel` extends `DrawerContainer` (LEFT, rail mode, 320 px). Rail items: Biome
-(`trees`), Thin / Clear (`eraser`), Place (`tree`); the last two are disabled until the brush
-tools exist. Footer items: Undo (`arrow-back-up`) and Redo (`arrow-forward-up`), disabled
-while `AuthoringHistory` has nothing to offer; Save (`device-floppy`, badged while there are
-unsaved changes); Leave (`door-exit`). Item ids double as node names for
-`game_click_control`: `biome`, `thin_clear`, `place`, `undo`, `redo`, `save_map`,
-`leave_authoring`. The drawer content is a Map name `LineEdit` (`MapNameEdit`, the one text
-field; placeholder "Untitled map") above a `PaneStack` with one pane per tool; the Biome
-pane's `BiomeField` lists the palette biomes (two columns, labels trimmed to the last two
-words, full name in the tooltip) and emits `biome_selected`, which starts that biome's asset
-loads in the background.
+(`trees`), Thin / Clear (`eraser`), Place (`tree`). Footer items: Undo (`arrow-back-up`) and
+Redo (`arrow-forward-up`), disabled while `AuthoringHistory` has nothing to offer; Save
+(`device-floppy`, badged while there are unsaved changes); Leave (`door-exit`). Item ids
+double as node names for `game_click_control`: `biome`, `thin_clear`, `place`, `undo`,
+`redo`, `save_map`, `leave_authoring`. The drawer content is a Map name `LineEdit`
+(`MapNameEdit`, the one text field; placeholder "Untitled map") above a `PaneStack` with one
+pane per tool. Each pane is a `MenuHeader` with a short caption, a wrapped caption line
+saying the tool's gestures (`BiomeHint`, `ThinHint`, `PlaceHint`; MenuHeader captions do not
+wrap, so long text there widens the drawer past its closed position), what the tool needs,
+and nothing numeric in the main flow:
 
-Save keeps the drawer open and shows a success toast. Ctrl+Z / Ctrl+Y (`ui_undo` /
-`ui_redo`) go to `AuthoringController.undo()` / `redo()`.
+- **Biome**: `BiomeField` lists the palette biomes (two columns, labels trimmed to the last
+  two words, full name in the tooltip). Picking a tile emits `biome_selected`: the Biome brush
+  paints that biome, its assets and ground surface start loading in the background, and its
+  Place group opens.
+- **Thin / Clear**: nothing to pick.
+- **Place**: one `Foldout` per palette biome headed by its thumbnail (`Foldout.icon`), each a
+  three-column `TileRow` with a tile per species big enough to place by hand (large, medium
+  and small size classes; ground cover is only painted). Tile ids are
+  `<biome id>|<species key>`, labels read "Dwarf pine", icons are the `tree` / `leaf` /
+  `grain` glyphs by kind. One selection across all groups; picking emits `place_selected`.
+  Per-asset thumbnails would read better than glyphs; they could be rendered once at startup
+  from the palette GLBs (not built).
+- Biome and Thin / Clear end in an `Advanced` foldout with Size (1 to 12 m, "Small" /
+  "Large") and Strength (0.25 to 2x, "Gentle" / "Strong") `PropertyRow`s, values hidden like
+  the Visuals drawer's; both follow the gestures (`set_brush_values`).
+
+Picking a rail item selects and activates that brush (`tool_selected`); the Biome brush waits
+for a biome. The active tool's rail item stays tinted (`set_active_tool`,
+`DrawerContainer.set_rail_item_active`) while the drawer is closed, so the map can be painted
+full screen. Save keeps the drawer open and shows a success toast.
+
+### Brushes and gestures
+
+`BrushTool` (`scenes/states/authoring/brush_tool.gd`) is the one brush, in three modes; its
+input table is the pure `BrushTool.decide()`:
+
+| Gesture | Biome | Thin / Clear | Place |
+|---------|-------|--------------|-------|
+| Left drag | paint the biome | thin; with Ctrl at the press, clear | click places a prop (random asset of the species, random yaw), drag while pressed turns it to face the pointer |
+| Hold still while pressed | builds strength (up to 4x after 2 s) | same | - |
+| Plain wheel | camera zoom | camera zoom | camera zoom |
+| Shift+wheel, `[` `]` | brush size, 1 to 12 m (remembered for the app session) | same | over a placed prop: its scale within the species' range (at least +-25 %) |
+| Right click | cancel the stroke in progress (reverted); idle: put the brush down | same | over a placed prop: remove it; during a placement: cancel it |
+| Delete / Backspace | - | - | remove the prop under the pointer |
+| Ctrl+Z / Ctrl+Y | undo / redo one stroke | same | one placement (place and turn), removal, or scale gesture |
+
+The cursor is a ring on the ground at the pointer with the brush radius, re-conformed to the
+ground by downward rays when it moves, drawn on `LAYER_MEASURE_OVERLAY` above the lo-fi pass
+with a dark under-stroke and a light over-stroke so it reads on any ground and in either lo-fi
+theme. Tint: the biome's thumbnail colour, warm white to thin, red to clear (Ctrl), the accent
+for Place (a small marker where a prop will go, a ring around a hovered prop). A faint fill
+shows the reach, and while a stroke is held an inner ring at half strength brightens as dwell
+builds. The ring hides over the drawer. RMB never pans while the brush is active (MMB and the
+keyboard still do). Ctrl+Z / Ctrl+Y (`ui_undo` / `ui_redo`) go to
+`AuthoringController.undo()` / `redo()`, which first ends a gesture in progress. The F1 help
+lists these under "Map building".
 
 ### Escape and leaving
 
