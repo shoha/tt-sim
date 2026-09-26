@@ -77,6 +77,14 @@ var _planned_biomes: int = 0
 var _warned_fallbacks: Dictionary = {}
 var _weights: Image = null
 var _weight_texture: DrawableTexture2D = null
+## Ground texture paths loading on background threads (warm_biome_surface), and the loaded
+## textures held so the cache keeps them.
+var _warming: Dictionary = {}
+var _warm_held: Array[Resource] = []
+
+
+func _ready() -> void:
+	set_process(false)
 
 
 ## A terrain for `doc`, fully built: every chunk, the collision body and the material.
@@ -249,6 +257,51 @@ func update_biome_region(sample_rect: Rect2i) -> void:
 		_weights.blit_rect(region, Rect2i(Vector2i.ZERO, rect.size), rect.position)
 		_upload(region, rect.position)
 	last_biome_update_usec = Time.get_ticks_usec() - start
+
+
+## Starts loading the ground surface textures of palette biome `biome_id` on background
+## threads, so the first dab that gives it a layer binds cached textures instead of loading
+## them on the main thread (21 to 25 ms for a new surface, measured in T3c). Harmless for a
+## biome whose surface is already bound or is the base.
+func warm_biome_surface(biome_id: String) -> void:
+	var surface_name: String = PaletteLibrary.biome(biome_id, palette_root).get(
+		"ground_surface", ""
+	)
+	if surface_name == "" or surface_name == document.base_surface or _layers.has(surface_name):
+		return
+	var surface: Dictionary = PaletteLibrary.surfaces(palette_root).get(surface_name, {})
+	for key in LAYER_MAPS:
+		var relative: Variant = surface.get(key, "")
+		if not relative is String or relative == "":
+			continue
+		var path := palette_root.path_join(relative)
+		if ResourceLoader.has_cached(path) or _warming.has(path) or not ResourceLoader.exists(path):
+			continue
+		if ResourceLoader.load_threaded_request(path) == OK:
+			_warming[path] = true
+	if not _warming.is_empty():
+		set_process(true)
+
+
+## Collects finished warm-up loads, holding each texture until the node goes, so the
+## resource cache keeps it for the layer bind.
+func _process(_delta: float) -> void:
+	for path in _warming.keys():
+		var status := ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			continue
+		_warming.erase(path)
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			_warm_held.append(ResourceLoader.load_threaded_get(path))
+	if _warming.is_empty():
+		set_process(false)
+
+
+func _exit_tree() -> void:
+	for path in _warming.keys():
+		ResourceLoader.load_threaded_get(path)
+	_warming.clear()
+	_warm_held.clear()
 
 
 func _build_biome_ground() -> void:
