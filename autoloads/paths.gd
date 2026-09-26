@@ -16,6 +16,9 @@ const LEVEL_MAP_NAME: String = "map.glb"
 const LEVEL_MAP_DOCUMENT_NAME: String = "map.ttmap"
 const LEVEL_MAP_VARIANT: String = "map"
 const LEVEL_MAP_DOCUMENT_VARIANT: String = "ttmap"
+# AssetStreamer / AssetCacheManager file type of a streamed map document (cached as .ttmap;
+# a streamed map.glb uses the "model" type and is cached as .glb).
+const LEVEL_MAP_DOCUMENT_FILE_TYPE: String = "map_document"
 
 # Data files
 const POKEMON_DATA_PATH: String = "res://data/pokemon.json"
@@ -55,6 +58,17 @@ static func get_level_map_file_for_variant(level_name: String, variant_id: Strin
 			return get_level_map_path(level_name)
 		LEVEL_MAP_DOCUMENT_VARIANT:
 			return get_level_map_document_path(level_name)
+	return ""
+
+
+## The streaming file type of a level map variant ("model" for the GLB, the map-document
+## type for the ttmap), or "" for an unknown variant.
+static func get_level_map_file_type(variant_id: String) -> String:
+	match variant_id:
+		LEVEL_MAP_VARIANT:
+			return "model"
+		LEVEL_MAP_DOCUMENT_VARIANT:
+			return LEVEL_MAP_DOCUMENT_FILE_TYPE
 	return ""
 
 

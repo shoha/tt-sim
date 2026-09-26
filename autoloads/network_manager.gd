@@ -767,16 +767,31 @@ func notify_game_starting() -> void:
 			_rpc_game_starting.rpc_id(peer_id)
 
 
-## Called by host to send level data to all clients
+## Called by host to send level data to all clients. Adds the content hash of each map
+## file (MapFileHash, cached per file version) so a client re-downloads a map it cached
+## before the host last saved it.
 func broadcast_level_data(level_dict: Dictionary) -> void:
 	if not is_host():
 		return
 
+	var payload := with_map_hashes(level_dict)
 	# Store for late joiners
-	_current_level_dict = level_dict.duplicate(true)
+	_current_level_dict = payload.duplicate(true)
 	_game_in_progress = true
 
-	_rpc_receive_level_data.rpc(level_dict)
+	_rpc_receive_level_data.rpc(payload)
+
+
+## A copy of `level_dict` carrying the host's map file hashes under
+## MapFileHash.HASHES_KEY (none for a res:// map, which ships with the game).
+static func with_map_hashes(level_dict: Dictionary) -> Dictionary:
+	var payload := level_dict.duplicate(true)
+	var hashes := MapFileHash.hashes_for_level_dict(payload)
+	if hashes.is_empty():
+		payload.erase(MapFileHash.HASHES_KEY)
+	else:
+		payload[MapFileHash.HASHES_KEY] = hashes
+	return payload
 
 
 ## Called by host to send full game state to all clients

@@ -18,9 +18,10 @@ extends Node
 ##   - Transfer resume support for interrupted downloads
 
 ## Signals
-## Note: file_type is appended as a trailing parameter so existing listeners
-## that only declared the original 4 parameters keep working unmodified
-## (Godot drops extra trailing signal arguments for callables with fewer params).
+## Note: file_type is the trailing parameter, and every listener must accept it: Godot 4
+## does not drop extra signal arguments for a callable with fewer parameters, it refuses
+## the call ("Method expected 4 argument(s), but called with 5"). Listeners that do not
+## need it declare it with a default (see MapDownloadCoordinator).
 signal asset_received(
 	pack_id: String, asset_id: String, variant_id: String, local_path: String, file_type: String
 )
@@ -83,7 +84,21 @@ func _load_settings() -> void:
 ## @param level_folder: The level folder name (e.g., "my_dungeon")
 ## @param priority: Download priority (lower = higher priority)
 func request_map_from_host(level_folder: String, priority: int = 50) -> void:
-	request_from_host(Paths.LEVEL_MAPS_PACK_ID, level_folder, "map", "model", priority)
+	request_map_file_from_host(level_folder, Paths.LEVEL_MAP_VARIANT, priority)
+
+
+## Request one map file of a level from the host: variant "map" (map.glb) or "ttmap" (the
+## authored map.ttmap). Any other variant fails at once, as the host would refuse it.
+func request_map_file_from_host(
+	level_folder: String, variant_id: String, priority: int = 50
+) -> void:
+	var file_type := Paths.get_level_map_file_type(variant_id)
+	if file_type == "":
+		asset_failed.emit(
+			Paths.LEVEL_MAPS_PACK_ID, level_folder, variant_id, "Unknown map file", "model"
+		)
+		return
+	request_from_host(Paths.LEVEL_MAPS_PACK_ID, level_folder, variant_id, file_type, priority)
 
 
 ## Request an asset from the host
@@ -196,6 +211,20 @@ static func is_level_request_authorized(
 	return Paths.sanitize_level_name(requested_name) == active_level_folder
 
 
+## The file the host serves for a level map request, or "" to refuse it: the level must be
+## authorized (is_level_request_authorized) and the variant one of the two map files
+## (Paths.get_level_map_file_for_variant), so neither client-controlled value can name any
+## other file. Pure and static for the same reason as is_level_request_authorized.
+static func level_map_file_for_request(
+	requested_name: String, variant_id: String, active_level_folder: String
+) -> String:
+	if not is_level_request_authorized(requested_name, active_level_folder):
+		return ""
+	return Paths.get_level_map_file_for_variant(
+		Paths.sanitize_level_name(requested_name), variant_id
+	)
+
+
 ## RPC: Client requests an asset from host (with optional resume)
 @rpc("any_peer", "reliable")
 func _rpc_request_asset(
@@ -226,19 +255,22 @@ func _rpc_request_asset(
 	# path-traversal escape out of user://levels/. Extracted into a static helper (rather
 	# than left inline) so this security-critical decision is unit-testable without a real
 	# multiplayer peer -- see is_level_request_authorized() and its tests.
+	# The variant names which map file (whitelist: "map" -> map.glb, "ttmap" -> map.ttmap).
 	if pack_id == Paths.LEVEL_MAPS_PACK_ID:
-		if not is_level_request_authorized(asset_id, NetworkManager.get_current_level_folder()):
+		var file_path := level_map_file_for_request(
+			asset_id, variant_id, NetworkManager.get_current_level_folder()
+		)
+		if file_path == "":
 			push_warning(
 				(
-					"AssetStreamer: Peer %d requested map for level '%s' which is not the active level — denied"
-					% [peer_id, asset_id]
+					"AssetStreamer: Peer %d requested map file '%s' of level '%s' -- %s"
+					% [peer_id, variant_id, asset_id, "not a map file of the active level, denied"]
 				)
 			)
 			rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id, file_type)
 			return
 
-		var file_path = Paths.get_level_map_path(Paths.sanitize_level_name(asset_id))
-		if file_path == "" or not FileAccess.file_exists(file_path):
+		if not FileAccess.file_exists(file_path):
 			rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id, file_type)
 			return
 
@@ -582,7 +614,19 @@ func get_queued_request_count() -> int:
 ## @param level_folder: The level folder name
 ## @return: The cached path, or empty string if not cached
 func get_cached_map_path(level_folder: String) -> String:
-	return _cache_manager.get_cached_path(Paths.LEVEL_MAPS_PACK_ID, level_folder, "map", "model")
+	return get_cached_map_file(level_folder, Paths.LEVEL_MAP_VARIANT, "")
+
+
+## The cached copy of one map file of a level (variant "map" or "ttmap"), or "" when there
+## is none, the variant is unknown, or `expected_hash` is set and differs from the cached
+## file's hash; a stale copy is removed so the next request downloads it again.
+func get_cached_map_file(level_folder: String, variant_id: String, expected_hash: String) -> String:
+	var file_type := Paths.get_level_map_file_type(variant_id)
+	if file_type == "":
+		return ""
+	return _cache_manager.get_cached_path_matching(
+		Paths.LEVEL_MAPS_PACK_ID, level_folder, variant_id, file_type, expected_hash
+	)
 
 
 ## Check if a map download is in progress for a level
