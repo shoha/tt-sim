@@ -65,6 +65,30 @@ func test_connected_state_rebuilds_the_focus_trap_around_visible_controls() -> v
 	assert_true(lobby._focusable_controls.has(lobby.leave_button))
 
 
+func test_connection_failure_reason_stays_on_screen() -> void:
+	# NetworkManager emits connection_failed and then goes OFFLINE; the reason (for
+	# example a version mismatch) must survive both, not be cleared or replaced.
+	var lobby := _lobby()
+	lobby._show_connected_state()
+	lobby._on_connection_failed("The host is running TTSim 9.9.9")
+	lobby._on_connection_state_changed(
+		NetworkManager.ConnectionState.JOINED, NetworkManager.ConnectionState.OFFLINE
+	)
+	assert_eq(lobby.status_label.text, "Connection failed: The host is running TTSim 9.9.9")
+	assert_true(lobby.input_container.visible)
+	assert_false(lobby.connect_button.disabled)
+
+
+func test_losing_a_connection_without_a_reason_says_disconnected() -> void:
+	var lobby := _lobby()
+	lobby._show_connected_state()
+	lobby._on_connection_state_changed(
+		NetworkManager.ConnectionState.JOINED, NetworkManager.ConnectionState.OFFLINE
+	)
+	assert_eq(lobby.status_label.text, "Disconnected from server")
+	assert_true(lobby.input_container.visible)
+
+
 func test_returning_to_input_state_rebuilds_the_focus_trap() -> void:
 	var lobby := _lobby()
 	lobby._show_connected_state()

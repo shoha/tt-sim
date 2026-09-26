@@ -111,7 +111,8 @@ NetworkManager.room_code_received.connect(func(code):
 
 1. Initialize Steam (if not already)
 2. `Steam.createLobby(LOBBY_TYPE_PRIVATE, MAX_PLAYERS)`
-3. On `lobby_created` callback: create `SteamMultiplayerPeer` host
+3. On `lobby_created` callback: publish the game version as lobby data
+   (`VersionGate.LOBBY_DATA_KEY`, `"tt_version"`), then create `SteamMultiplayerPeer` host
 4. Encode lobby ID to base-36 room code via `LobbyCode.encode()`
 5. Emit `room_code_received` — ready for client connections
 
@@ -135,9 +136,35 @@ NetworkManager.connection_state_changed.connect(func(old, new):
 1. Initialize Steam (if not already)
 2. Decode base-36 room code to lobby ID via `LobbyCode.decode()`
 3. `Steam.joinLobby(lobby_id)`
-4. On `lobby_joined` callback: get host Steam ID, create `SteamMultiplayerPeer` client
+4. On `lobby_joined` callback: read the host's `"tt_version"` lobby data and stop with a
+   version-mismatch `connection_failed` if it differs (see [Same-version gate](#same-version-gate));
+   otherwise get host Steam ID, create `SteamMultiplayerPeer` client
 5. Wait for Godot's `connected_to_server` signal
-6. Receive level data and game state
+6. Exchange player info; the host re-checks the reported version before admitting the player
+7. Receive level data and game state (a late joiner's sync starts only after step 6 passes)
+
+### Same-version gate
+
+A player can only join a game hosted on exactly the same version
+(`application/config/version`, via `UpdateVersion.get_current()`); any string difference,
+including a dev-build suffix, is a mismatch. The rules live in `VersionGate`
+(`utils/version_gate.gd`) as pure static functions, tested in `tests/unit/test_version_gate.gd`.
+
+| Check | Where | On mismatch |
+|-------|-------|-------------|
+| Lobby data (fast path) | Client, `_on_lobby_joined()`, before `create_client` | `_handle_connection_error(VersionGate.mismatch_message(...))`: leaves the lobby, never connects |
+| Player info (authoritative) | Host, `_rpc_send_player_info()` via `VersionGate.is_player_info_accepted()` | Peer is not added to `_players`; host sends `_rpc_version_rejected(host_version)`, then force-disconnects the peer after `VERSION_REJECT_DISCONNECT_DELAY` (1 s) |
+
+Clients send their version under `"version"` in `_local_player_info`. A host from before the
+gate publishes no lobby version, which the client reads as `""` and reports as "an older
+version"; a client from before the gate sends no version and the host rejects it.
+
+On `_rpc_version_rejected` the client leaves on its own (deferred `_handle_connection_error`)
+with the version message, before the host's delayed disconnect lands, so the player sees the
+version reason and not "Host disconnected". The host defers a late joiner's
+`_sync_late_joiner()` until the player info passes the gate, so a rejected client is never
+pushed into `PLAYING` and the message appears on the join screen, where `LobbyClient` keeps
+the `connection_failed` reason on screen through the following `OFFLINE` state change.
 
 ### Disconnecting
 
@@ -546,6 +573,13 @@ NetworkManager.connection_timeout.connect(func():
 ### Server Disconnection
 
 When the host disconnects, clients receive a `connection_failed("Host disconnected")` signal and transition to `OFFLINE`. A disconnect dialog is shown automatically.
+
+### Where `connection_failed` reaches the player
+
+Only the lobby screens listen: `LobbyClient._on_connection_failed()` shows
+`"Connection failed: <reason>"` in the join screen's status label, and `LobbyHost` shows the
+reason as an error toast (`UIManager.show_error`) and cancels hosting. Once in `PLAYING`, a drop shows `Root`'s generic "Disconnected" dialog
+instead, which does not include the reason.
 
 ---
 

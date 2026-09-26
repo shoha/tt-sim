@@ -18,10 +18,20 @@ func after_each() -> void:
 	NetworkManager._client_transform_throttle.clear()
 
 
+## Player info as a same-version client sends it; the host rejects info without a
+## matching version before any other check runs (see VersionGate).
+func _info(fields: Dictionary) -> Dictionary:
+	var info := fields.duplicate()
+	info[VersionGate.PLAYER_INFO_KEY] = UpdateVersion.get_current()
+	return info
+
+
 func test_client_supplied_role_is_ignored_when_hosting() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
 	# Simulate a malicious/buggy client claiming GM in its player-info payload.
-	NetworkManager._rpc_send_player_info({"name": "Evil", "role": NetworkManager.PlayerRole.GM})
+	NetworkManager._rpc_send_player_info(
+		_info({"name": "Evil", "role": NetworkManager.PlayerRole.GM})
+	)
 	var stored: Dictionary = NetworkManager._players.values()[0]
 	assert_eq(
 		stored.get("role"),
@@ -33,7 +43,7 @@ func test_client_supplied_role_is_ignored_when_hosting() -> void:
 func test_client_supplied_name_is_still_accepted_when_hosting() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
 	NetworkManager._rpc_send_player_info(
-		{"name": "Legit Name", "role": NetworkManager.PlayerRole.GM}
+		_info({"name": "Legit Name", "role": NetworkManager.PlayerRole.GM})
 	)
 	var stored: Dictionary = NetworkManager._players.values()[0]
 	assert_eq(stored.get("name"), "Legit Name", "Display name is legitimately client-controlled")
@@ -43,10 +53,37 @@ func test_player_info_always_has_a_role_key() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
 	# A payload with no role field at all (or a garbage one) must still resolve to a
 	# real role, never store whatever the client happened to send (or omit).
-	NetworkManager._rpc_send_player_info({"name": "NoRoleField"})
+	NetworkManager._rpc_send_player_info(_info({"name": "NoRoleField"}))
 	var stored: Dictionary = NetworkManager._players.values()[0]
 	assert_has(stored, "role", "Stored player info must always include a resolved role key")
 	assert_eq(stored.get("role"), NetworkManager.PlayerRole.PLAYER, "Default role must be PLAYER")
+
+
+func test_player_info_from_a_different_version_is_rejected_when_hosting() -> void:
+	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
+	watch_signals(NetworkManager)
+	NetworkManager._rpc_send_player_info(
+		{"name": "Stale", VersionGate.PLAYER_INFO_KEY: UpdateVersion.get_current() + "-other"}
+	)
+	assert_true(NetworkManager._players.is_empty(), "A mismatched client must never be admitted")
+	assert_signal_not_emitted(NetworkManager, "player_joined")
+	assert_engine_error(1, "the host logs one warning per rejected peer")
+
+
+func test_player_info_without_a_version_is_rejected_when_hosting() -> void:
+	# A client from before the version gate sends only name and role.
+	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
+	NetworkManager._rpc_send_player_info({"name": "Old", "role": NetworkManager.PlayerRole.PLAYER})
+	assert_true(NetworkManager._players.is_empty(), "A client reporting no version is rejected")
+	assert_engine_error(1, "the host logs one warning per rejected peer")
+
+
+func test_local_player_info_reports_the_game_version() -> void:
+	assert_eq(
+		NetworkManager._local_player_info.get(VersionGate.PLAYER_INFO_KEY),
+		UpdateVersion.get_current(),
+		"Clients must send their version so the host can enforce the same-version rule"
+	)
 
 
 ## NOTE: emit_count is wrapped in an Array, not a plain int -- GDScript lambdas capture
