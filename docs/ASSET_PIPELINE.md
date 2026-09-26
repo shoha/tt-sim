@@ -278,3 +278,97 @@ beside it (`map.glb.pre-<change>-<date>`) until the new one is verified in-game.
 Not yet in place: committed golden GLB fixtures from each producer with a GUT test that
 loads them. That is the intended mechanical guard for drift; until it exists, the manual
 round trip above is the gate.
+
+## 9. Built-in palette (treecube -> tt-sim, for in-game map authoring)
+
+A second path from treecube into tt-sim that bypasses Blender maps entirely: treecube
+builds a palette of assets, ground surfaces and placement rules that ships inside the
+game, and tt-sim's authoring mode places from it. Design:
+`docs/superpowers/specs/2026-09-26-in-game-map-authoring-design.md` (local, gitignored).
+Status: contract agreed 2026-09-26; producer and consumer in progress.
+
+Producer: `treecube/scripts/build_palette.py` (runs `scripts/garden.py --palette` per
+biome and season, sequentially). Consumer: `utils/palette_library.gd` (`PaletteLibrary`),
+feeding `ScatterGlbUtils.build_scatter()`.
+
+### Layout
+
+```
+<palette root>/                 res://assets/palette/ in tt-sim
+  palette.json
+  assets/<biome>_<season>/<object>.glb
+  surfaces/<kind>/<kind>_{albedo,normal,orm,height}.png
+  thumbnails/<biome>_<season>.jpg
+```
+
+Asset GLBs follow treecube's per-asset output contract (section 5 and 6 of this doc and
+treecube's README "Output contract"): one node named `<object>`, one mesh, COLOR_0 wind
+weights on everything that sways, packed constant ORM, two-sided cards. Rocks and
+deadwood carry no COLOR_0.
+
+### `palette.json` (format 1)
+
+```
+{
+  "format": 1,
+  "palette_version": "<treecube commit short sha>",
+  "surfaces": {
+    "<kind>": {"albedo": "surfaces/<kind>/<kind>_albedo.png", "normal": ..., "orm": ...,
+               "height": ..., "tile_m": <world size of one texture repeat, metres>}
+  },
+  "biomes": [
+    {
+      "id": "<biome>_<season>",
+      "biome": "<biome key>", "season": "<season>", "seed": <int>,
+      "name": "<display name>", "climate": "<cold|temperate|warm|dry>",
+      "thumbnail": "thumbnails/<biome>_<season>.jpg",
+      "ground_surface": "<surface kind>",
+      "species": [
+        {
+          "key": "<species key>", "kind": "<tree|grass|flower|rock|deadwood|...>",
+          "size_class": "<large|medium|small|ground>",
+          "density_per_m2": <target instances per m2 for this species>,
+          "min_spacing_m": <float, 0 = none>,
+          "slope_max_deg": <true surface angle>,
+          "scale_spread": <0..0.9, symmetric +-r>,
+          "scale_floor": <float or null>,
+          "yaw_random_deg": <float>,
+          "align": "upright" | "normal",
+          "pattern": {"influence": <0..1>, "scale_influence": <0..1>,
+                      "geoscatter_pattern": {<noise settings verbatim>}} | null,
+          "clump": {"parents_per_m2": ..., "radius_m": ..., "transition_m": ...,
+                    "children_spacing_m": ...} | null,
+          "near":  [{"species": "<key>", "distance_m": ..., "transition_m": ..., "influence": <0..1>}],
+          "avoid": [ ...same shape... ],
+          "assets": ["<asset id>", ...]
+        }
+      ]
+    }
+  ],
+  "assets": {
+    "<asset id>": {"file": "assets/<biome>_<season>/<object>.glb", "node": "<object>",
+                   "wind_category": "tree" | "grass" | "",
+                   "size_class": "...", "dimensions_m": [x, y, z]}
+  }
+}
+```
+
+Rules both sides rely on:
+
+- **Rules are targets, not Geoscatter requests.** Densities, spacing and slope are what
+  the scatter should deliver (what treecube's `audit_biome.py` measures against), never
+  the compensated values treecube writes into Geoscatter presets (`spacing_request`,
+  yields, `slope_setting`). tt-sim's generator is its own and calibrates to targets.
+- **Asset id** = `<biome>_<season>/<object>`. An id is never reused for a different
+  asset. Saved levels reference ids; a level whose id no longer resolves loads without
+  those instances and warns, never fails.
+- **`wind_category` is explicit.** tt-sim never runs `WindFoliage.classify_category()`
+  on palette assets: palette ids contain biome names (`birch_woodland`) that the
+  keyword heuristic would misread. This is the explicit category section 3 anticipated.
+- **Same version required.** Peers must run the same game build to join (decided
+  2026-09-26), so host and clients always hold the same palette. `palette_version`
+  exists for diagnostics and for saved levels, not for negotiation.
+- Everything read from `palette.json` is validated like network input (it ships with
+  the game, but the same loader reads authored map documents that arrive from peers).
+- Budgets: palette assets obey section 7's triangle targets; the foliage budget applies
+  unchanged, since palette scatter builds the same chunked MultiMeshes.
