@@ -8,11 +8,15 @@ extends CanvasLayer
 signal host_game_requested(level_info: Dictionary)
 signal join_game_requested
 signal play_solo_requested(level_info: Dictionary)
+## Build Map: a new map in authoring mode (Root shows the new-map dialog).
+signal build_map_requested
+## A card's "Edit map": open that level's map in authoring mode.
+signal edit_map_requested(level_info: Dictionary)
 
 const SettingsMenuScene := preload("res://scenes/ui/settings_menu.tscn")
 const ENTRANCE_STAGGER := Constants.ANIM_ENTRANCE_STAGGER
 const ENTRANCE_DURATION := Constants.ANIM_ENTRANCE
-const EMPTY_CAPTION := "Make a level in the Level Editor first"
+const EMPTY_CAPTION := "Build a map, or make a level in the Level Editor"
 
 ## Returns the level info list; tests inject a fake before the node enters the tree.
 var level_provider: Callable = LevelManager.get_saved_levels
@@ -21,6 +25,7 @@ var host_button: Button
 var join_button: Button
 var play_button: Button
 var editor_button: Button
+var build_map_button: Button
 var settings_button: Button
 var quit_button: Button
 var host_subtitle: Label
@@ -80,6 +85,8 @@ func _build_left_column() -> void:
 	play_button.pressed.connect(_on_play_pressed)
 	editor_button = UiActions.secondary("Level Editor", "wand", _left)
 	editor_button.pressed.connect(_on_editor_pressed)
+	build_map_button = UiActions.secondary("Build Map", "brush", _left)
+	build_map_button.pressed.connect(_on_build_map_pressed)
 	settings_button = UiActions.secondary("Settings", "settings", _left)
 	settings_button.pressed.connect(_on_settings_pressed)
 	quit_button = UiActions.secondary("Quit", "x", _left)
@@ -115,6 +122,7 @@ func _build_right_zone() -> void:
 	grid.selection_changed.connect(_on_selection_changed)
 	grid.level_activated.connect(_on_level_activated)
 	grid.level_edit_requested.connect(_on_level_edit_requested)
+	grid.level_map_edit_requested.connect(edit_map_requested.emit)
 	grid.levels_changed.connect(_refresh_actions)
 	_right.add_child(grid)
 
@@ -197,6 +205,10 @@ func _on_editor_pressed() -> void:
 	# The Level Editor button opens the editor with no particular level chosen; the
 	# per-card Edit action is what names one.
 	EventBus.open_editor_requested.emit("")
+
+
+func _on_build_map_pressed() -> void:
+	build_map_requested.emit()
 
 
 func _on_level_edit_requested(info: Dictionary) -> void:

@@ -9,6 +9,9 @@ extends Control
 ## Level Editor is only available to the GM, not to regular players.
 
 signal play_level_requested(level_data: LevelData)
+## The editor's "Build map in game": Root opens authoring on this level (or the new-map
+## dialog when it has no map yet).
+signal build_map_requested(level_data: LevelData)
 
 const LevelEditorScene = preload("res://scenes/level_editor/level_editor.tscn")
 
@@ -102,6 +105,7 @@ func open_level_editor(level_path: String = "") -> void:
 	_level_editor_instance = LevelEditorScene.instantiate()
 	_level_editor_instance.editor_closed.connect(_on_editor_closed)
 	_level_editor_instance.play_level_requested.connect(_on_play_level_requested)
+	_level_editor_instance.build_map_requested.connect(build_map_requested.emit)
 	_editor_canvas_layer.add_child(_level_editor_instance)
 
 	# Register with UIManager for ESC handling
@@ -139,6 +143,24 @@ func _sync_editor_with_active_level() -> void:
 	else:
 		# Just refresh token list if no active level
 		_level_editor_instance._refresh_token_list()
+
+
+## Close the editor overlay if it is open (authoring is taking over the screen).
+func close_level_editor() -> void:
+	if _level_editor_instance and is_instance_valid(_level_editor_instance):
+		UIManager.unregister_overlay(_level_editor_instance)
+		_level_editor_instance.animate_out()
+
+
+## Reopen the editor on `level` after authoring: from disk when it was saved (so the editor
+## shows what authoring wrote), else the unsaved LevelData the editor handed over.
+func open_level_editor_with_level(level: LevelData) -> void:
+	if level != null and level.level_folder != "":
+		open_level_editor(LevelManager.folder_path(level.level_folder))
+		return
+	open_level_editor()
+	if level != null and _level_editor_instance:
+		_level_editor_instance.set_level(level)
 
 
 func _on_editor_closed() -> void:

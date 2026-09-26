@@ -3,15 +3,16 @@ extends Button
 
 ## A saved level as a card: thumbnail, name, and a caption with the token count
 ## and when it was last edited. Press selects, double-click activates, and the
-## overflow menu in the thumbnail corner offers Edit, Rename (inline), Duplicate
-## and Delete. Delete is disabled while the card is locked (the level being played).
+## overflow menu in the thumbnail corner offers Edit, Edit map (authoring mode), Rename
+## (inline), Duplicate and Delete. Delete is disabled while the card is locked (the level
+## being played).
 
 signal selected(level_info: Dictionary)
 signal activated(level_info: Dictionary)
 signal action_requested(level_info: Dictionary, action: StringName)
 signal rename_committed(level_info: Dictionary, new_name: String)
 
-enum { ACTION_EDIT, ACTION_RENAME, ACTION_DUPLICATE, ACTION_DELETE }
+enum { ACTION_EDIT, ACTION_RENAME, ACTION_DUPLICATE, ACTION_DELETE, ACTION_EDIT_MAP }
 
 const THUMB_ASPECT := 16.0 / 9.0
 const INSET := 4.0
@@ -92,6 +93,7 @@ func _init() -> void:
 	_menu = PopupMenu.new()
 	_menu.name = "Actions"
 	_menu.add_item("Edit", ACTION_EDIT)
+	_menu.add_item("Edit map", ACTION_EDIT_MAP)
 	_menu.add_item("Rename", ACTION_RENAME)
 	_menu.add_item("Duplicate", ACTION_DUPLICATE)
 	_menu.add_item("Delete", ACTION_DELETE)
@@ -227,6 +229,8 @@ func _on_menu_id_pressed(id: int) -> void:
 	match id:
 		ACTION_EDIT:
 			action_requested.emit(level_info, &"edit")
+		ACTION_EDIT_MAP:
+			action_requested.emit(level_info, &"edit_map")
 		ACTION_RENAME:
 			begin_rename()
 		ACTION_DUPLICATE:
