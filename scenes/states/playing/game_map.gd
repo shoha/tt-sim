@@ -30,6 +30,13 @@ extends Node3D
 ## Toggle via set_lofi_enabled(bool) or Settings menu. The effect is applied
 ## by setting a ShaderMaterial on viewport_container. See lofi_canvas.gdshader.
 
+## True in authoring mode (Root.State.AUTHORING, see setup_authoring()): the GameplayMenu is
+## hidden and never set up, and tokens cannot be dragged.
+var authoring_mode: bool = false
+## Set by an owner that loads a map without a LevelPlayController (AuthoringController), so
+## input and the camera wait during that load exactly as they do during a play-time load.
+var map_loading: bool = false
+
 var _level_play_controller: LevelPlayController = null
 var _measure_tool: MeasureTool = null
 var _sun_gizmo: SunGizmoTool = null
@@ -134,6 +141,41 @@ func setup(level_play_controller: LevelPlayController) -> void:
 			menu_controller.setup(level_play_controller)
 			if menu_controller.has_signal("drag_place_started"):
 				menu_controller.drag_place_started.connect(_drag_place._on_drag_place_started)
+
+
+## Authoring mode's counterpart of setup(): there is no LevelPlayController, so the
+## GameplayMenu (whose controller needs one) is hidden and disabled instead of set up, token
+## drag is off, and the current camera pose becomes Home. The authoring owner calls the
+## setup_* functions it needs itself.
+func setup_authoring() -> void:
+	authoring_mode = true
+	if gameplay_menu:
+		gameplay_menu.visible = false
+		gameplay_menu.process_mode = Node.PROCESS_MODE_DISABLED
+	_camera_controller.capture_home_position()
+	_update_dragging_enabled()
+
+
+## The camera zoom range: camera.size at the 16:9 reference height, see CameraController.
+## Authoring raises the upper limit so a whole map fits the screen.
+func set_zoom_limits(min_size: float, max_size: float) -> void:
+	_camera_controller.set_zoom_limits(min_size, max_size)
+
+
+## The camera size (16:9 reference height) at which a map of `extent_m` (X by Z metres,
+## centred on the origin) with content up to `height_m` tall just fits the view.
+func fit_zoom_for_extent(extent_m: Vector2, height_m: float) -> float:
+	return CameraController.fit_size_for_extent(camera_node.global_basis, extent_m, height_m)
+
+
+## Pan bounds from a known map extent (world space) rather than from the meshes under
+## MapContainer; see CameraController.set_map_bounds.
+func set_map_bounds(bounds: AABB) -> void:
+	_camera_controller.set_map_bounds(bounds)
+
+
+func get_camera_controller() -> CameraController:
+	return _camera_controller
 
 
 func _input(event: InputEvent) -> void:
@@ -315,7 +357,9 @@ func _input(event: InputEvent) -> void:
 
 ## Check if a level is currently being loaded
 func _is_level_loading() -> bool:
-	return _level_play_controller and _level_play_controller.is_loading()
+	if map_loading:
+		return true
+	return _level_play_controller != null and _level_play_controller.is_loading()
 
 
 ## Check if a text input control currently has focus
@@ -438,7 +482,8 @@ func _update_dragging_enabled() -> void:
 		(_measure_tool != null and _measure_tool.is_active())
 		or (_sun_gizmo != null and _sun_gizmo.is_active())
 	)
-	drag_and_drop_node.dragging_enabled = not tool_active
+	# Authoring has no tokens to drag, and a drag there would only fight the brushes.
+	drag_and_drop_node.dragging_enabled = not tool_active and not authoring_mode
 
 
 ## Create and configure the GridOverlay.

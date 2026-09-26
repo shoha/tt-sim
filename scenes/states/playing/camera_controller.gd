@@ -365,6 +365,38 @@ func adjust_zoom(delta: float) -> void:
 	_target_zoom = clampf(_target_zoom + delta, min_zoom, max_zoom)
 
 
+## Replace the zoom range and pull the current target into it. The play camera keeps the
+## exported 2..20; authoring raises the upper limit so a whole map fits.
+func set_zoom_limits(low: float, high: float) -> void:
+	min_zoom = low
+	max_zoom = maxf(high, low)
+	_target_zoom = clampf(_target_zoom, min_zoom, max_zoom)
+
+
+## The orthographic size (the 16:9 reference height, as _target_zoom) at which a map of
+## `extent_m` (X by Z metres, centred on the origin, floor at Y = 0) with content up to
+## `height_m` tall fits a camera with rotation `basis`: the larger of the view height the
+## content spans and the view width it spans divided by `aspect`. Pure. For a 200 ft map
+## at this camera's 45 degree yaw the width decides: the square's diagonal is sqrt(2) x 61 m.
+static func fit_size_for_extent(
+	basis: Basis, extent_m: Vector2, height_m: float, aspect: float = REFERENCE_ASPECT
+) -> float:
+	var right := basis.x.normalized()
+	var up := basis.y.normalized()
+	var half := extent_m * 0.5
+	var low := Vector2(INF, INF)
+	var high := Vector2(-INF, -INF)
+	for x in [-half.x, half.x]:
+		for z in [-half.y, half.y]:
+			for y in [0.0, height_m]:
+				var corner := Vector3(x, y, z)
+				var screen := Vector2(corner.dot(right), corner.dot(up))
+				low = low.min(screen)
+				high = high.max(screen)
+	var span := high - low
+	return maxf(span.y, span.x / aspect)
+
+
 ## Apply a trackpad pan-gesture zoom step (scaled by pan_gesture_zoom_factor).
 func handle_pan_gesture_zoom(delta_y: float) -> void:
 	if delta_y < 0:
@@ -530,6 +562,15 @@ func _on_viewport_size_changed() -> void:
 ## range immediately. Called after a new map finishes loading.
 func notify_map_loaded() -> void:
 	_compute_map_bounds()
+	_clamp_camera_to_bounds()
+
+
+## Use `bounds` (world space) as the map's extent for pan clamping instead of the mesh walk
+## notify_map_loaded() does, and snap the camera into range. Authoring gives the document's
+## extent, which is the map whatever has been painted on it so far.
+func set_map_bounds(bounds: AABB) -> void:
+	_map_bounds = bounds
+	_has_map_bounds = true
 	_clamp_camera_to_bounds()
 
 
