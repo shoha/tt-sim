@@ -399,12 +399,29 @@ Maps use a unified pipeline that handles both `res://` and `user://` paths:
    - process_animations() — strip _loop suffix, set loop mode
    - process_lights() — apply intensity scaling
    - WaterGlbUtils.process_water_meshes() — animated water on "-water" meshes
+   - ScatterGlbUtils.process_scatter_instances() — user:// GLBs only: chunked
+     MultiMeshInstance3D foliage from the tt_scatter_instances scene extras
    - MeshInstancingUtils.process_duplicate_mesh_instancing() — collapse duplicates
      sharing one Mesh into MultiMeshInstance3D nodes (must run last: it depends on
      collision meshes already being hidden and water planes already claimed)
 4. validate_transform_chain() — safety assertion after loading
 5. Add to GameMap.map_container
 ```
+
+Scatter building is split in two. `ScatterGlbUtils.build_scatter(parent, groups,
+resolve, foliage_overrides, chunk_size)` takes rows (species key -> Y-up transform rows)
+and a resolver, `resolve.call(key) -> {"mesh", "wind_category", optional "name"}` or `{}`
+to skip, and builds the chunked, shuffled, wind-shaded MultiMeshInstance3D nodes under
+`parent`; it never classifies by name and never frees what the resolver returned.
+`process_scatter_instances()` is the GLB wrapper: its resolver finds the template node
+by name in the map, classifies its wind category with `WindFoliage.classify_category()`,
+and frees the templates afterwards. In-game authored maps (in progress) pass
+`PaletteLibrary.resolver()` instead (`utils/palette_library.gd`, the built-in palette
+of `docs/ASSET_PIPELINE.md` section 9), which loads each asset GLB once per palette root,
+takes the wind category from `palette.json`, and hands out a fresh `Mesh.duplicate()` per
+call so one map load's wind overrides never leak into the next. The output is the same
+nodes either way, so FoliageDensityController, OcclusionFadeManager and the foliage
+budget apply unchanged.
 
 Duplicate mesh instancing is a load-time draw-call optimisation: Blender linked
 duplicates (Shift+D, or a Place Helper scatter stroke) arrive as N nodes sharing one

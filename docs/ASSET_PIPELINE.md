@@ -289,22 +289,27 @@ Status: contract agreed 2026-09-26; producer and consumer in progress.
 
 Producer: `treecube/scripts/build_palette.py` (runs `scripts/garden.py --palette` per
 biome and season, sequentially). Consumer: `utils/palette_library.gd` (`PaletteLibrary`),
-feeding `ScatterGlbUtils.build_scatter()`.
+whose `resolver()` feeds `ScatterGlbUtils.build_scatter()`.
 
 ### Layout
 
 ```
 <palette root>/                 res://assets/palette/ in tt-sim
   palette.json
-  assets/<biome>_<season>/<object>.glb
-  surfaces/<kind>/<kind>_{albedo,normal,orm,height}.png
-  thumbnails/<biome>_<season>.jpg
+  assets/<package id>/<object>.glb
+  surfaces/<surface>/<surface>_{albedo,normal,orm,height}.png
+  thumbnails/<package id>.jpg
 ```
+
+`<package id>` is `<biome>_<season>_s<seed>` (treecube's `package_basename`). A palette
+holds one seed per (biome, season). `<surface>` is the treecube surface preset name
+(`grass_alpine`, `sand_red`), not the surface kind (`grass`, `sand`) those presets belong
+to.
 
 Asset GLBs follow treecube's per-asset output contract (section 5 and 6 of this doc and
 treecube's README "Output contract"): one node named `<object>`, one mesh, COLOR_0 wind
-weights on everything that sways, packed constant ORM, two-sided cards. Rocks and
-deadwood carry no COLOR_0.
+weights on everything that sways, packed constant ORM, two-sided cards. Rocks, deadwood
+and cacti carry no COLOR_0.
 
 ### `palette.json` (format 1)
 
@@ -313,16 +318,17 @@ deadwood carry no COLOR_0.
   "format": 1,
   "palette_version": "<treecube commit short sha>",
   "surfaces": {
-    "<kind>": {"albedo": "surfaces/<kind>/<kind>_albedo.png", "normal": ..., "orm": ...,
-               "height": ..., "tile_m": <world size of one texture repeat, metres>}
+    "<surface>": {"albedo": "surfaces/<surface>/<surface>_albedo.png", "normal": ...,
+                  "orm": ..., "height": ...,
+                  "tile_m": <world size of one texture repeat, metres>}
   },
   "biomes": [
     {
-      "id": "<biome>_<season>",
+      "id": "<package id>",
       "biome": "<biome key>", "season": "<season>", "seed": <int>,
-      "name": "<display name>", "climate": "<cold|temperate|warm|dry>",
-      "thumbnail": "thumbnails/<biome>_<season>.jpg",
-      "ground_surface": "<surface kind>",
+      "name": "<plain biome display name, no season>", "climate": "<cold|temperate|warm|dry>",
+      "thumbnail": "thumbnails/<package id>.jpg",
+      "ground_surface": "<surface>",
       "species": [
         {
           "key": "<species key>", "kind": "<tree|grass|flower|rock|deadwood|...>",
@@ -335,7 +341,7 @@ deadwood carry no COLOR_0.
           "yaw_random_deg": <float>,
           "align": "upright" | "normal",
           "pattern": {"influence": <0..1>, "scale_influence": <0..1>,
-                      "geoscatter_pattern": {<noise settings verbatim>}} | null,
+                      "geoscatter_pattern": {<s_pattern1_* settings, prefix stripped>}} | null,
           "clump": {"parents_per_m2": ..., "radius_m": ..., "transition_m": ...,
                     "children_spacing_m": ...} | null,
           "near":  [{"species": "<key>", "distance_m": ..., "transition_m": ..., "influence": <0..1>}],
@@ -346,12 +352,24 @@ deadwood carry no COLOR_0.
     }
   ],
   "assets": {
-    "<asset id>": {"file": "assets/<biome>_<season>/<object>.glb", "node": "<object>",
+    "<asset id>": {"file": "assets/<package id>/<object>.glb", "node": "<object>",
                    "wind_category": "tree" | "grass" | "",
-                   "size_class": "...", "dimensions_m": [x, y, z]}
+                   "size_class": "...", "dimensions_m": [x, height, depth]}
   }
 }
 ```
+
+Field notes:
+
+- `dimensions_m` is Y-up, in metres: `[x, height, depth]`.
+- `min_spacing_m` is the clump's children spacing for a clumped species (the class limit
+  distance never applies to clumped layers) and the class limit distance for a random
+  species.
+- `name` is the plain biome display name; the season is its own field.
+- `geoscatter_pattern` holds Geoscatter's `s_pattern1_*` settings verbatim with the
+  prefix stripped (texture dict, sample method, influences, revert flags), minus the
+  datablock plumbing (`allow`, `texture_ptr`, `texture_is_unique`). tt-sim keeps it
+  for calibration only and does not interpret it.
 
 Rules both sides rely on:
 
@@ -359,7 +377,8 @@ Rules both sides rely on:
   the scatter should deliver (what treecube's `audit_biome.py` measures against), never
   the compensated values treecube writes into Geoscatter presets (`spacing_request`,
   yields, `slope_setting`). tt-sim's generator is its own and calibrates to targets.
-- **Asset id** = `<biome>_<season>/<object>`. An id is never reused for a different
+- **Asset id** = `<package id>/<object>`, i.e. `<biome>_<season>_s<seed>/<object>`;
+  the package id is also `biomes[].id`. An id is never reused for a different
   asset. Saved levels reference ids; a level whose id no longer resolves loads without
   those instances and warns, never fails.
 - **`wind_category` is explicit.** tt-sim never runs `WindFoliage.classify_category()`
