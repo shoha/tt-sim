@@ -28,6 +28,7 @@ render_mode cull_disabled, unshaded;
 
 void vertex() {
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
+	VERTEX *= grow;
 }
 
 

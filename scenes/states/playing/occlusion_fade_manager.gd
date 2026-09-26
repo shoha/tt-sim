@@ -327,19 +327,42 @@ func _collect_tree_materials() -> void:
 			if not mat is ShaderMaterial:
 				continue
 			var shader_mat := mat as ShaderMaterial
-			if shader_mat.shader != WindFoliage.get_shader():
+			# Either antialiasing variant: re-enabling the fade mid-session runs this after
+			# the Antialiasing setting has already swapped trees to the no-AA shader.
+			var shader := shader_mat.shader
+			if shader != WindFoliage.get_shader() and shader != WindFoliage.get_shader_no_aa():
 				continue
-			if shader_mat in _tree_materials:
-				continue
+			_register_tree_material(shader_mat)
 
-			shader_mat.set_shader_parameter("enable_occlusion", true)
-			shader_mat.set_shader_parameter(TOKEN_TEXTURE_UNIFORM, _token_texture)
-			shader_mat.set_shader_parameter("min_alpha", min_alpha)
-			shader_mat.set_shader_parameter("lofi_pixelation", _lofi_pixelation)
-			shader_mat.set_shader_parameter("lofi_dither_scale", lofi_dither_scale)
 
-			_tree_materials.append(shader_mat)
-			_all_shader_materials.append(shader_mat)
+## Registers wind materials created after setup() (a species first painted mid-session in
+## authoring; see AuthoredScatter.species_added) exactly as setup() registers load-time
+## ones. Only tree-category materials take part, as in _collect_tree_materials; either
+## antialiasing variant is accepted, since the Antialiasing setting may already have
+## swapped the shader. Does nothing before setup() (setup() will collect them) or after
+## clear().
+func register_tree_materials(materials: Array[ShaderMaterial]) -> void:
+	if not _is_setup:
+		return
+	for material in materials:
+		if material.get_meta("wind_category", "") != "tree":
+			continue
+		var shader := material.shader
+		if shader != WindFoliage.get_shader() and shader != WindFoliage.get_shader_no_aa():
+			continue
+		_register_tree_material(material)
+
+
+func _register_tree_material(shader_mat: ShaderMaterial) -> void:
+	if shader_mat in _tree_materials:
+		return
+	shader_mat.set_shader_parameter("enable_occlusion", true)
+	shader_mat.set_shader_parameter(TOKEN_TEXTURE_UNIFORM, _token_texture)
+	shader_mat.set_shader_parameter("min_alpha", min_alpha)
+	shader_mat.set_shader_parameter("lofi_pixelation", _lofi_pixelation)
+	shader_mat.set_shader_parameter("lofi_dither_scale", lofi_dither_scale)
+	_tree_materials.append(shader_mat)
+	_all_shader_materials.append(shader_mat)
 
 
 ## Stop tree materials from dithering with stale token data once physics_process

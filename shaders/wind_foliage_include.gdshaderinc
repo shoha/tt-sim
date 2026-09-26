@@ -87,6 +87,14 @@ uniform float baked_ao_strength : hint_range(0.0, 1.0) = 0.0;
 // 0.0 disables the term. Measured cost recorded in docs/PERFORMANCE.md.
 uniform float backlight : hint_range(0.0, 1.0) = 0.0;
 
+// Grow-in of freshly painted scatter (AuthoredScatter): every variant's vertex() scales
+// the swayed vertex by this about the instance origin, so a plant grows up out of its
+// base. Per node, not per instance: AuthoredScatter puts a cell's new instances on a
+// temporary node and tweens this on it alone, then merges them into the cell's node,
+// which keeps the default 1.0. Measured free: no difference in GPU time on a fully painted
+// 200 ft forest (docs/PERFORMANCE.md "Authored scatter").
+instance uniform float grow : hint_range(0.0, 1.0) = 1.0;
+
 // Object-space (local) vertex height, captured by each variant's vertex() before
 // wind_sway_vertex_offset is added (that offset never touches VERTEX.y, so capturing
 // before vs. after would be equivalent regardless -- captured before purely to read as

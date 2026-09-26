@@ -75,6 +75,9 @@ var _map_environment_config: Dictionary = {}
 var _map_sky_resource: Sky = null
 var _original_light_energies: Dictionary = {}  # instance_id -> base energy
 var _wind_materials: Dictionary = {}  # category (String) -> Array[ShaderMaterial]
+# The overrides apply_foliage_overrides() applied last, for add_wind_materials().
+var _foliage_overrides: Dictionary = {}
+var _foliage_overrides_applied: bool = false
 var _game_map: Node = null  # GameMap reference (for viewport & lo-fi access)
 var _current_sky_key: String = ""  # sky_preset of the last resolved environment
 var _sun_azimuth_deg: float = 0.0  # azimuth of the last applied SunSettings
@@ -185,14 +188,38 @@ func _collect_wind_materials(node: Node) -> void:
 ## map reload. overrides uses the same flat key shape as
 ## LevelData.foliage.to_dict() ("<category>_sway_speed" / "<category>_sway_amplitude").
 func apply_foliage_overrides(overrides: Dictionary) -> void:
+	_foliage_overrides = overrides.duplicate()
+	_foliage_overrides_applied = true
 	for category in _wind_materials:
-		var preset := WindFoliage.get_effective_preset(category, overrides)
-		if preset.is_empty():
+		_tune_wind_materials(_wind_materials[category], category, overrides)
+
+
+## Adds wind materials created after store_wind_materials() (AuthoredScatter.species_added:
+## a species first painted mid-session) to the cache, so later apply_foliage_overrides()
+## calls reach them, and tunes them to the overrides applied last (if any), in case the
+## sliders moved after the scatter baked its own copy of the level's overrides.
+func add_wind_materials(materials: Array[ShaderMaterial]) -> void:
+	for material in materials:
+		if not material.has_meta("wind_category"):
 			continue
-		for material in _wind_materials[category]:
-			if is_instance_valid(material):
-				material.set_shader_parameter("sway_speed", preset["sway_speed"])
-				material.set_shader_parameter("sway_amplitude", preset["sway_amplitude"])
+		var category: String = material.get_meta("wind_category")
+		if not _wind_materials.has(category):
+			_wind_materials[category] = []
+		if material in _wind_materials[category]:
+			continue
+		_wind_materials[category].append(material)
+		if _foliage_overrides_applied:
+			_tune_wind_materials([material], category, _foliage_overrides)
+
+
+func _tune_wind_materials(materials: Array, category: String, overrides: Dictionary) -> void:
+	var preset := WindFoliage.get_effective_preset(category, overrides)
+	if preset.is_empty():
+		return
+	for material in materials:
+		if is_instance_valid(material):
+			material.set_shader_parameter("sway_speed", preset["sway_speed"])
+			material.set_shader_parameter("sway_amplitude", preset["sway_amplitude"])
 
 
 # ============================================================================
@@ -513,6 +540,8 @@ func get_map_sky_resource() -> Sky:
 func clear() -> void:
 	_original_light_energies.clear()
 	_wind_materials.clear()
+	_foliage_overrides = {}
+	_foliage_overrides_applied = false
 	if is_instance_valid(_world_environment):
 		_world_environment.queue_free()
 		_world_environment = null
