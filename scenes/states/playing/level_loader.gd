@@ -38,21 +38,8 @@ signal level_loading_progress(progress: float, status: String)
 signal level_loading_completed
 
 const TOKENS_PER_FRAME: int = 3  # How many tokens to spawn per frame during progressive loading
-## Main-thread time per frame the authored scatter build (species resolution, then cells)
-## may take before yielding, so a painted map loads without a long stall.
-const FRAME_BUDGET_USEC: int = 8000
-## Map-default lighting for a map with no GLB, written as the same scene extras a
-## terrain-paint GLB carries (GlbUtils.extract_lighting_config reads them into the
-## map-defaults layer, below any preset or override the level sets). Authored maps have no
-## Blender world to take ambient light from, and with the bare PROPERTY_DEFAULTS they read
-## darker and more olive than a Blender-made map. A sky-tinted fill, a little stronger than
-## the default, lifts shadows toward blue and freshens the palette greens; a brighter
-## neutral fill was tried and made the ground flatter and more khaki. Judged at the game
-## camera beside the river level (2026-09-26).
-const AUTHORED_MAP_LIGHTING := {
-	"tt_ambient_light_color": [0.5, 0.58, 0.72],
-	"tt_ambient_light_energy": 0.75,
-}
+## The authored-map lighting; see MapSourceLoader.AUTHORED_MAP_LIGHTING.
+const AUTHORED_MAP_LIGHTING := MapSourceLoader.AUTHORED_MAP_LIGHTING
 
 var _level_play_controller: LevelPlayController = null
 var _is_loading: bool = false  # True while async loading is in progress
@@ -335,189 +322,22 @@ func _resolve_map_file(
 		missing.append(variant)
 
 
-## Builds the map root from its files, ready for _finalize_map_loading(): the GLB (with its
-## scatter filtered by the document's erase mask), or a bare root with an AuthoredTerrain
-## when there is no GLB, plus the document's scatter and props as one AuthoredScatter under
-## the root. Either path may be "" but not both. Returns null on failure, or when a newer
-## load or a reset superseded this one while it was waiting (anything built is freed).
-##
-## The document is read, validated and split into 10 m cells on a worker thread; species
-## load on background threads and resolve a few per frame; cells are built within a
-## per-frame time budget. The shared seam of the direct load and the client download path.
+## Builds the map root from its files, ready for _finalize_map_loading(), through the
+## shared MapSourceLoader (see MapSourceLoader.load_async: the GLB with its scatter
+## filtered by the document's erase mask, or terrain when there is no GLB, plus one
+## AuthoredScatter holding the document's scatter and props). Returns null on failure, or
+## when a newer load or a reset superseded this one while it was waiting. The shared seam
+## of the direct load and the client download path.
 func load_map_sources_async(glb_path: String, document_path: String) -> Node3D:
 	var generation := _load_generation
-	var tree := _level_play_controller.get_tree()
-	var document: MapDocument = null
-	var rows_by_cell := {}
-	if document_path != "":
-		var work := {}
-		var task := WorkerThreadPool.add_task(
-			func() -> void: _read_document_work(document_path, work),
-			false,
-			"LevelPlayLoader map document"
-		)
-		while not WorkerThreadPool.is_task_completed(task):
-			await tree.process_frame
-		WorkerThreadPool.wait_for_task_completion(task)
-		if _superseded(generation):
-			return null
-		for warning in work.get("warnings", PackedStringArray()):
-			push_warning("LevelPlayLoader: map document: " + warning)
-		document = work.get("document")
-		rows_by_cell = work.get("rows_by_cell", {})
-		if document == null:
-			if glb_path == "":
-				push_error("LevelPlayLoader: Map document could not be read: " + document_path)
-				return null
-			_report_document_problem("Map document could not be read: " + document_path)
-
-	var root: Node3D = null
-	if glb_path != "":
-		var result = await GlbUtils.load_map_async(
-			glb_path,
-			true,
-			_get_light_intensity_scale(),
-			_get_foliage_overrides(),
-			document.erase_filter() if document else Callable()
-		)
-		if _superseded(generation):
-			if result.success:
-				result.scene.free()
-			return null
-		if not result.success:
-			return null
-		root = result.scene
-	else:
-		root = await _create_authored_root_async(document, generation)
-		if root == null:
-			return null
-
-	if not rows_by_cell.is_empty():
-		var scatter := AuthoredScatter.create(PaletteLibrary.DEFAULT_ROOT, _get_foliage_overrides())
-		root.add_child(scatter)
-		if not await _build_authored_scatter_async(scatter, rows_by_cell, generation):
-			scatter.release_prepared()
-			root.free()
-			return null
-	_level_play_controller.loaded_map_document = document
+	var loader := MapSourceLoader.new(_level_play_controller.get_tree())
+	loader.light_intensity_scale = _get_light_intensity_scale()
+	loader.foliage_overrides = _get_foliage_overrides()
+	loader.is_superseded = func() -> bool: return _superseded(generation)
+	var root := await loader.load_async(glb_path, document_path)
+	if root != null:
+		_level_play_controller.loaded_map_document = loader.document
 	return root
-
-
-## The root of a map that has no GLB: a bare Node3D (named LevelMap by
-## _finalize_map_loading) holding the document's AuthoredTerrain, and carrying the
-## authored-map lighting as scene extras so it enters the same map-defaults layer a GLB's
-## extras do (see AUTHORED_MAP_LIGHTING).
-static func create_authored_root(document: MapDocument) -> Node3D:
-	var root := _authored_root_shell()
-	root.add_child(AuthoredTerrain.create(document))
-	return root
-
-
-static func _authored_root_shell() -> Node3D:
-	var root := Node3D.new()
-	root.name = "LevelMap"
-	root.set_meta(GlbUtils.SCENE_EXTRAS_META, AUTHORED_MAP_LIGHTING.duplicate(true))
-	return root
-
-
-## create_authored_root() spread over frames: the ground textures load on background
-## threads first (about 35 ms per surface cold on the main thread), then the material,
-## biome weights and collision are built in one frame (about 25 ms) and the chunk meshes
-## within the per-frame budget. Returns null when superseded.
-func _create_authored_root_async(document: MapDocument, generation: int) -> Node3D:
-	var tree := _level_play_controller.get_tree()
-	var pending: Array[String] = []
-	for path in AuthoredTerrain.texture_paths(document):
-		if not ResourceLoader.has_cached(path) and ResourceLoader.load_threaded_request(path) == OK:
-			pending.append(path)
-	var loading := true
-	while loading:
-		loading = false
-		for path in pending:
-			if (
-				ResourceLoader.load_threaded_get_status(path)
-				== ResourceLoader.THREAD_LOAD_IN_PROGRESS
-			):
-				loading = true
-				break
-		if loading:
-			await tree.process_frame
-	# Collect every threaded load (a finished one must be collected to be released) and
-	# hold the textures until the material has taken them from the resource cache.
-	var held: Array[Resource] = []
-	for path in pending:
-		held.append(ResourceLoader.load_threaded_get(path))
-	if _superseded(generation):
-		return null
-	var root := _authored_root_shell()
-	var terrain := AuthoredTerrain.create(document, PaletteLibrary.DEFAULT_ROOT, false)
-	root.add_child(terrain)
-	held.clear()
-	var cells := TerrainMeshBuilder.chunk_cells(document)
-	var next := 0
-	while next < cells.size():
-		await tree.process_frame
-		if _superseded(generation):
-			root.free()
-			return null
-		var start := Time.get_ticks_usec()
-		var batch: Array[Vector2i] = []
-		while next < cells.size() and Time.get_ticks_usec() - start < FRAME_BUDGET_USEC:
-			batch.assign([cells[next]])
-			terrain.rebuild_chunks(batch)
-			next += 1
-	return root
-
-
-## Worker-thread half of load_map_sources_async(): reads and validates the document, then
-## merges its scatter and props rows (props are hand-placed rows of the same assets; the
-## document keeps them apart for saving) and splits them into 10 m cells. Touches no Node
-## and no shared state; results go into `out`.
-static func _read_document_work(path: String, out: Dictionary) -> void:
-	var read := MapDocumentIO.read(path)
-	out["warnings"] = read["warnings"]
-	var document: MapDocument = read["document"]
-	out["document"] = document
-	if document == null:
-		return
-	var rows := {}
-	for source in [document.scatter, document.props]:
-		for asset_id in source:
-			var flat: PackedFloat32Array = rows.get(asset_id, PackedFloat32Array())
-			flat.append_array(source[asset_id])
-			rows[asset_id] = flat
-	out["rows_by_cell"] = AuthoredScatter.rows_by_cell_of(rows)
-
-
-## Preloads the species `rows_by_cell` uses off the main thread, then builds its cells a
-## few per frame. Returns false when superseded mid-way.
-func _build_authored_scatter_async(
-	scatter: AuthoredScatter, rows_by_cell: Dictionary, generation: int
-) -> bool:
-	var tree := _level_play_controller.get_tree()
-	var assets := {}
-	for cell_rows in rows_by_cell.values():
-		for asset_id in cell_rows:
-			assets[asset_id] = true
-	scatter.prepare_assets(assets.keys())
-	while scatter.has_prepared_species():
-		scatter.resolve_prepared(FRAME_BUDGET_USEC)
-		await tree.process_frame
-		if _superseded(generation):
-			return false
-	scatter.begin_build()
-	var cells := rows_by_cell.keys()
-	var next := 0
-	while next < cells.size():
-		var start := Time.get_ticks_usec()
-		while next < cells.size() and Time.get_ticks_usec() - start < FRAME_BUDGET_USEC:
-			scatter.build_cells({cells[next]: rows_by_cell[cells[next]]})
-			next += 1
-		await tree.process_frame
-		if _superseded(generation):
-			return false
-	scatter.end_build()
-	return true
 
 
 ## True when a newer load (or a reset) replaced the one that captured `generation`, or the
@@ -530,15 +350,12 @@ func _superseded(generation: int) -> bool:
 ## A document problem that does not stop the map from loading (there is a GLB to play):
 ## logged, and shown to the player once.
 func _report_document_problem(message: String) -> void:
-	push_warning("LevelPlayLoader: %s; loading the Blender map without it" % message)
-	UIManager.show_toast(
-		"The authored map layer could not be loaded, so the map shows without it.",
-		UIManager.TOAST_WARNING,
-		6.0
-	)
+	MapSourceLoader.report_document_problem(message)
 
 
-## Finalize map loading after the map instance is ready
+## Finalize map loading after the map instance is ready: the shared install
+## (MapSourceLoader.install: environment, water, weather, camera bounds, measure tool and
+## grid, late-species wiring), then this controller's bookkeeping and the density toast.
 func _finalize_map_loading(map: Node3D) -> void:
 	# Check if game map is still valid (might have been freed during async loading)
 	if not is_instance_valid(_level_play_controller._game_map):
@@ -547,79 +364,13 @@ func _finalize_map_loading(map: Node3D) -> void:
 		return
 
 	_level_play_controller.loaded_map_instance = map
-	_level_play_controller.loaded_map_instance.name = "LevelMap"
-
-	# Safety check: warn if transform chain is broken (non-Node3D intermediate parents)
-	GlbUtils.validate_transform_chain(_level_play_controller.loaded_map_instance)
-
-	# Extract environment settings from any embedded WorldEnvironment nodes
-	# before adding the map to the viewport.
-	_level_play_controller._environment_manager.extract_and_strip_map_environment(
-		_level_play_controller.loaded_map_instance
+	MapSourceLoader.install(
+		map,
+		_level_play_controller._game_map,
+		_level_play_controller._environment_manager,
+		_level_play_controller.active_level_data
 	)
-
-	# Add to the dedicated MapContainer
-	_level_play_controller._game_map.map_container.add_child(
-		_level_play_controller.loaded_map_instance
-	)
-
-	if _level_play_controller.active_level_data:
-		_level_play_controller.loaded_map_instance.scale = (
-			_level_play_controller.active_level_data.map_scale
-		)
-		_level_play_controller.loaded_map_instance.position = (
-			_level_play_controller.active_level_data.map_offset
-		)
-
-	# Store original light energies for real-time intensity editing
-	_level_play_controller._environment_manager.store_original_light_energies(
-		_level_play_controller.loaded_map_instance
-	)
-
-	# Cache wind-sway materials for real-time foliage tuning
-	_level_play_controller._environment_manager.store_wind_materials(
-		_level_play_controller.loaded_map_instance
-	)
-
-	# Apply environment settings from level data (map defaults used as a layer)
-	if _level_play_controller.active_level_data:
-		_level_play_controller._environment_manager.apply_level_environment(
-			_level_play_controller.active_level_data,
-			_level_play_controller._game_map.world_viewport
-		)
-		# Apply the level's water settings. Done here -- the shared seam both
-		# the direct-load path (_load_level_map_async) and the client
-		# map-download path (MapDownloadCoordinator -> _finalize_map_loading)
-		# go through -- rather than only after the direct path's call site, so
-		# clients who download a map from the host also get their water settings
-		# applied.
-		_level_play_controller.apply_water_settings(
-			_level_play_controller.active_level_data.water.to_dict()
-		)
-
-	# Set up weather renderer (must happen after environment is applied)
-	var game_map = _level_play_controller.get_game_map()
-	if game_map:
-		game_map.setup_weather(_level_play_controller._environment_manager)
-		if _level_play_controller.active_level_data:
-			# Unconditional: the renderer is freshly created, and an all-zero
-			# WeatherSettings is a no-op on it.
-			game_map.apply_weather_overrides(
-				_level_play_controller.active_level_data.weather.to_dict()
-			)
-
-	# Rebuild occlusion fade mesh cache now that map geometry is in the scene tree
-	_level_play_controller._game_map.notify_map_loaded()
-
-	# Configure measure tool and grid with scale settings from level data
-	_configure_measure_tool()
-	_configure_grid()
-
 	_apply_foliage_density_and_notify(map)
-
-	var scatter := map.get_node_or_null(^"AuthoredScatter") as AuthoredScatter
-	if scatter and not scatter.species_added.is_connected(_on_species_added):
-		scatter.species_added.connect(_on_species_added)
 
 
 ## Applies the player's foliage density setting to a freshly loaded map, and tells them
@@ -640,18 +391,6 @@ func _apply_foliage_density_and_notify(map: Node3D) -> void:
 			UIManager.TOAST_INFO,
 			6.0
 		)
-
-
-## Hands wind materials of a species first resolved after load (AuthoredScatter
-## .species_added) the same bookkeeping load-time materials got in _finalize_map_loading:
-## foliage AA variant and occlusion fade (GameMap), and live wind re-tuning (environment
-## manager). Play time builds every species before finalizing, so this only fires if a
-## species is added later; it is wired here so authoring and play stay consistent.
-func _on_species_added(materials: Array[ShaderMaterial]) -> void:
-	var game_map := _level_play_controller.get_game_map()
-	if is_instance_valid(game_map):
-		game_map.adopt_foliage_materials(materials)
-	_level_play_controller._environment_manager.add_wind_materials(materials)
 
 
 ## Get the light intensity scale from the active level data (or 1.0 if none)
