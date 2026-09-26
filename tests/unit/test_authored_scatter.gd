@@ -51,10 +51,11 @@ func _scatter(animate_grow: bool = true) -> AuthoredScatter:
 	return scatter
 
 
+## The settled and growing chunk nodes (transient shrink-out nodes left out).
 func _chunk_names(scatter: AuthoredScatter) -> Array[String]:
 	var names: Array[String] = []
 	for child in scatter.get_children():
-		if child is MultiMeshInstance3D:
+		if child is MultiMeshInstance3D and not String(child.name).contains(ScatterShrink.INFIX):
 			names.append(String(child.name))
 	names.sort()
 	return names
@@ -403,6 +404,50 @@ func test_an_emptied_cell_frees_its_nodes() -> void:
 	assert_null(scatter.get_cell_node(cell, OAK))
 	assert_eq(_chunk_names(scatter), [] as Array[String])
 	assert_eq(scatter.rows_by_asset(), {} as Dictionary[String, PackedFloat32Array])
+
+
+func test_removed_instances_shrink_out_instead_of_vanishing() -> void:
+	var scatter := _scatter()
+	var cell := Vector2i(1, 1)
+	scatter.build_all({OAK: _cell_rows(cell, 5), BOULDER: _cell_rows(cell, 2, 0.3)})
+	scatter.set_cells({cell: {OAK: _cell_rows(cell, 2)}})
+	var shrinking := {}
+	for child in scatter.get_children():
+		if String(child.name).contains(ScatterShrink.INFIX):
+			var node := child as MultiMeshInstance3D
+			shrinking[String(node.name).get_slice(ScatterShrink.INFIX, 0)] = node
+	var oak_name := AuthoredScatter.node_name_for(OAK, cell)
+	var boulder_name := AuthoredScatter.node_name_for(BOULDER, cell)
+	assert_true(shrinking.has(oak_name), "the three removed oaks shrink")
+	assert_eq((shrinking[oak_name] as MultiMeshInstance3D).multimesh.instance_count, 3)
+	assert_true(shrinking.has(boulder_name), "the removed boulders sink")
+	assert_same(
+		(shrinking[oak_name] as MultiMeshInstance3D).multimesh.mesh,
+		scatter.get_cell_node(cell, OAK).multimesh.mesh,
+		"the shrink node shares the species mesh (no new materials)"
+	)
+	scatter.set_cells({cell: {OAK: _cell_rows(cell, 1)}}, false)
+	var after := 0
+	for child in scatter.get_children():
+		if String(child.name).contains(ScatterShrink.INFIX):
+			after += 1
+	assert_eq(after, shrinking.size(), "an unanimated rebuild removes at once")
+
+
+func test_worker_snapshots_do_not_share_the_document_masks() -> void:
+	var doc := MapDocument.create_flat(Vector2i(4, 4), "grass", "v", 1)
+	var mask := PackedByteArray()
+	mask.resize(doc.sample_count())
+	doc.biome_slots = mask
+	doc.biome_density = mask.duplicate()
+	doc.biome_ids = PackedStringArray([BIOME])
+	var snapshot := AuthoredScatter._snapshot(doc)
+	doc.biome_density[5] = 200
+	doc.biome_slots[5] = 1
+	doc.biome_ids.append("another")
+	assert_eq(snapshot.biome_density[5], 0, "a brush write after dispatch is not seen")
+	assert_eq(snapshot.biome_slots[5], 0)
+	assert_eq(snapshot.biome_ids.size(), 1)
 
 
 func test_rebuilds_create_no_materials_for_resolved_species() -> void:

@@ -36,8 +36,9 @@ extends Node3D
 ## `..._grow<n>` node that grows in over grow_seconds and is then merged back. Wind species
 ## grow through the `grow` instance uniform every wind shader variant multiplies the vertex
 ## by (one per-node value, no per-instance work); anything else, rocks above all, rises out
-## of the ground by moving the temporary node, which needs no shader at all. Instances a
-## rebuild removes vanish at once (no shrink-out yet).
+## of the ground by moving the temporary node, which needs no shader at all. Instances an
+## animated rebuild removes shrink away the same two ways (ScatterShrink); an unanimated
+## rebuild (a prop being rotated or scaled in place) replaces them at once.
 ##
 ## Brushes. attach_document() plus request_region(rect) regenerate the cells a painted
 ## rectangle can affect (ScatterRegen: the cells it touches plus each species' relation
@@ -507,9 +508,12 @@ func _warm_species() -> void:
 
 func _dispatch_jobs() -> void:
 	var limit := clampi(OS.get_processor_count() >> 1, 1, MAX_JOBS)
+	var snapshot: MapDocument = null
 	while _jobs.size() < limit and _regen.has_pending():
 		var job := _regen.take_job()
-		var snapshot := _snapshot(_document)
+		if snapshot == null:
+			# One copy serves every job dispatched this frame; they only read it.
+			snapshot = _snapshot(_document)
 		var work: Dictionary = job.work
 		var result := {}
 		var task := func() -> void: result.merge(ScatterRegen.run(snapshot, work))
@@ -559,19 +563,21 @@ func _apply_ready_jobs() -> void:
 		set_cells(rows_by_cell)
 
 
-## A copy of the parts of `doc` generation reads. Packed arrays are copy-on-write, so this
-## costs nothing until the brush writes the next dab, which then copies the mask it
-## touches; the worker keeps reading the version it was given.
+## A copy of the parts of `doc` generation reads, for a worker. The arrays are duplicated:
+## GDScript packed arrays are shared by reference, not copy-on-write (measured in 4.7: a
+## write through one variable shows in every other holding the array), so without the copy
+## a worker would read masks while the brush writes them, and an append that reallocates
+## would pull the buffer out from under it. About 0.1 ms for a 200 ft map.
 static func _snapshot(doc: MapDocument) -> MapDocument:
 	var copy := MapDocument.new()
 	copy.map_seed = doc.map_seed
 	copy.size_cells = doc.size_cells
 	copy.cell_size_m = doc.cell_size_m
 	copy.sample_spacing_m = doc.sample_spacing_m
-	copy.heights = doc.heights
-	copy.biome_ids = doc.biome_ids
-	copy.biome_slots = doc.biome_slots
-	copy.biome_density = doc.biome_density
+	copy.heights = doc.heights.duplicate()
+	copy.biome_ids = doc.biome_ids.duplicate()
+	copy.biome_slots = doc.biome_slots.duplicate()
+	copy.biome_density = doc.biome_density.duplicate()
 	return copy
 
 
@@ -606,11 +612,19 @@ func _rebuild_asset(
 	var present := {}
 	for key in keys:
 		present[key] = true
+	var was_growing := {}
+	for entry in _growing.get(cell, {}).get(asset_id, []):
+		was_growing.merge(entry.keys)
 	var growing_keys := _refresh_growing(cell, asset_id, rows, keys, present)
 	var old_keys := {}
 	if grow:
-		for key in row_keys(old_rows.to_byte_array().to_int32_array()):
-			old_keys[key] = true
+		var old_list := row_keys(old_rows.to_byte_array().to_int32_array())
+		var removed := PackedInt32Array()
+		for i in old_list.size():
+			old_keys[old_list[i]] = true
+			if not present.has(old_list[i]) and not was_growing.has(old_list[i]):
+				removed.append(i)
+		_shrink_out(species, cell, old_rows, removed)
 	var settled := PackedInt32Array()
 	var fresh := PackedInt32Array()
 	for i in keys.size():
@@ -740,6 +754,26 @@ func _start_growth(
 	if not _growing[cell].has(asset_id):
 		_growing[cell][asset_id] = []
 	_growing[cell][asset_id].append(entry)
+
+
+## Instances a rebuild removed (rows at `indices` of the cell's previous rows) shrink away
+## on a temporary node instead of vanishing (ScatterShrink).
+func _shrink_out(
+	species: Dictionary, cell: Vector2i, old_rows: PackedFloat32Array, indices: PackedInt32Array
+) -> void:
+	if indices.is_empty():
+		return
+	var transforms := transforms_from_rows(old_rows, indices)
+	ScatterShrink.start(
+		self,
+		species.mesh,
+		species.stem,
+		ScatterChunker.cell_suffix(cell),
+		transforms,
+		species.wind_category,
+		ScatterShrink.sink_depth_for(species.mesh, transforms),
+		grow_seconds
+	)
 
 
 func _set_growth(value: float, node: MultiMeshInstance3D, mode: int, lift: float) -> void:

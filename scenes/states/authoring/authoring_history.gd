@@ -11,22 +11,45 @@ extends RefCounted
 ## storage format stays the brush's to choose. Every undo and redo is an edit for
 ## AuthoringSession (the owner marks it), so undoing back to the saved state still counts
 ## as unsaved.
+##
+## Memory. An entry may carry "bytes", the size of what its callables hold (a brush
+## stroke's compressed mask diff, typically 2 to 20 KB). The oldest entries are dropped
+## while the stack holds more than MAX_ENTRIES entries or more than max_bytes in total, so
+## a long session of huge strokes cannot grow without bound. The newest entry always stays.
 
 signal changed
 
 const MAX_ENTRIES := 100
+## Default memory cap across both stacks.
+const MAX_BYTES := 64 * 1024 * 1024
+
+var max_bytes: int = MAX_BYTES
 
 var _undo: Array[Dictionary] = []
 var _redo: Array[Dictionary] = []
 
 
-## Records a done action. Clears the redo stack; drops the oldest entry past MAX_ENTRIES.
+## Records a done action. Clears the redo stack; drops the oldest entries past MAX_ENTRIES or
+## max_bytes.
 func record(entry: Dictionary) -> void:
 	_undo.append(entry)
-	if _undo.size() > MAX_ENTRIES:
-		_undo.pop_front()
 	_redo.clear()
+	while _undo.size() > 1 and (_undo.size() > MAX_ENTRIES or held_bytes() > max_bytes):
+		_undo.pop_front()
 	changed.emit()
+
+
+## Bytes held by every entry that says how much it holds.
+func held_bytes() -> int:
+	var total := 0
+	for stack in [_undo, _redo]:
+		for entry in stack:
+			total += int(entry.get("bytes", 0))
+	return total
+
+
+func undo_count() -> int:
+	return _undo.size()
 
 
 func can_undo() -> bool:
