@@ -417,8 +417,10 @@ to skip, and builds the chunked, shuffled, wind-shaded MultiMeshInstance3D nodes
 by name in the map, classifies its wind category with `WindFoliage.classify_category()`,
 and frees the templates afterwards. In-game authored maps (in progress) pass
 `PaletteLibrary.resolver()` instead (`utils/palette_library.gd`, the built-in palette
-of `docs/ASSET_PIPELINE.md` section 9), which loads each asset GLB once per palette root,
-takes the wind category from `palette.json`, and hands out a fresh `Mesh.duplicate()` per
+of `docs/ASSET_PIPELINE.md` section 9), which loads each asset GLB once per palette root
+(the editor-imported PackedScene through `ResourceLoader`, since an export ships no raw
+`.glb`; `GLTFDocument` only for a GLB without an import, such as a `user://` test
+fixture), takes the wind category from `palette.json`, and hands out a fresh `Mesh.duplicate()` per
 call so one map load's wind overrides never leak into the next. The output is the same
 nodes either way, so FoliageDensityController, OcclusionFadeManager and the foliage
 budget apply unchanged.

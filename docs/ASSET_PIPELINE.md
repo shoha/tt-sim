@@ -275,9 +275,13 @@ Pushing a producer change into an existing level:
 (treecube), then copy `out.glb` over the level's `map.glb`. Keep the previous export
 beside it (`map.glb.pre-<change>-<date>`) until the new one is verified in-game.
 
-Not yet in place: committed golden GLB fixtures from each producer with a GUT test that
-loads them. That is the intended mechanical guard for drift; until it exists, the manual
-round trip above is the gate.
+Golden fixtures: treecube's built-in palette (section 9) is committed under
+`assets/palette/` and is the first real producer output with a GUT test that loads it,
+`tests/unit/test_palette_builtin.gd`: all 180 assets resolve through `PaletteLibrary`, the
+wind categories and COLOR_0 presence match the manifest, every swaying surface harvests
+albedo and ORM, and one species per biome builds chunks through `build_scatter` (about
+0.8 s headless). terrain-paint map exports still have no committed fixture; for them the
+manual round trip above remains the gate.
 
 ## 9. Built-in palette (treecube -> tt-sim, for in-game map authoring)
 
@@ -285,7 +289,9 @@ A second path from treecube into tt-sim that bypasses Blender maps entirely: tre
 builds a palette of assets, ground surfaces and placement rules that ships inside the
 game, and tt-sim's authoring mode places from it. Design:
 `docs/superpowers/specs/2026-09-26-in-game-map-authoring-design.md` (local, gitignored).
-Status: contract agreed 2026-09-26; producer and consumer in progress.
+Status: contract agreed 2026-09-26; the first full palette (8 summer biomes, 180 assets,
+14 surfaces, treecube `ad44aa5`) is committed in tt-sim under Git LFS; authoring mode is
+in progress.
 
 Producer: `treecube/scripts/build_palette.py` (runs `scripts/garden.py --palette` per
 biome and season, sequentially). Consumer: `utils/palette_library.gd` (`PaletteLibrary`),
@@ -391,3 +397,76 @@ Rules both sides rely on:
   the game, but the same loader reads authored map documents that arrive from peers).
 - Budgets: palette assets obey section 7's triangle targets; the foliage budget applies
   unchanged, since palette scatter builds the same chunked MultiMeshes.
+
+### Import path (decided 2026-09-26, measured on Godot 4.7.1)
+
+**Asset GLBs go through Godot's editor import, and `PaletteLibrary` loads the imported
+PackedScene with `ResourceLoader`.** An exported pack holds only the imported `.scn` and
+the `.import` remap, never the raw `.glb`, so a `FileAccess` + `GLTFDocument` loader passes
+every editor test and finds nothing in a shipped game. Checked by exporting the real
+project (`godot --headless --path . --export-pack "Windows Desktop" <tmp>.pck`, which
+needs no export templates) and running a probe with that pack as the main pack
+(`godot --headless --path <empty dir> --main-pack <tmp>.pck --script <probe>`):
+`FileAccess.file_exists` on an asset `.glb` is false, `ResourceLoader.exists` is true,
+`palette.json` is present, all 180 assets resolve, all 56 surface maps load, and
+`build_scatter` of one species per biome harvests albedo, ORM and vertex wind on every
+swaying surface. The alternative, `importer="keep"` in the sidecar, does ship the raw
+`.glb` (checked in a scratch project) and was not needed.
+
+Committed `.glb.import` sidecar settings (anything unlisted is Godot's default):
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| `gltf/embedded_image_handling` | 3, Embed as Uncompressed | See below. The default (1) extracts every texture as a PNG next to the GLB, about 450 extra files per palette. |
+| `meshes/generate_lods` | false | Auto LODs decimate leaf cards (section 7: cards are never decimated). |
+| `meshes/create_shadow_meshes` | false | Parity with the runtime path, which builds none; the gain on 4k-triangle trees is small and the interaction with the wind vertex shader is unmeasured. |
+
+Why uncompressed embedding rather than VRAM-compressed, mipmapped textures: a game-camera
+screenshot pair of temperate_forest's 25 species placed through `build_scatter`
+(orthographic, 13.85 m view height, 22 deg down, wind amplitude 0) showed Basis Universal
+embedding (VRAM-compressed, mipmapped) fading the small flowers at home zoom: daisies turn
+grey and bluebells lose their blue entirely, because their petals are a few texels wide
+and alpha-to-coverage cutout loses them in the lower mips. Treecube's flower atlases also
+carry black RGB under transparent texels (grass atlases are colour-bled), but dilating
+that colour and regenerating mipmaps did not bring the flowers back, so coverage is the
+cause, not colour bleed. With embedding 3 the imported textures are the same unmipmapped
+RGBA8 `ImageTexture`s the runtime `GLTFDocument` load produces (and that every `user://`
+map already renders with); the pair differs only in scattered single pixels on swaying
+foliage and shadow edges (1.0% of pixels against a 0.1% run-to-run floor, consistent with
+the wind clock's phase at capture), while static rocks and logs are pixel-identical. Mipmapped foliage is worth revisiting once the
+alpha cutout keeps its coverage in lower mips (mip-aware alpha scaling in
+`wind_foliage.gdshader`, or coverage-preserving mips from the producer); switching is then
+a sidecar change (`embedded_image_handling=2`) plus the matching line in the test.
+
+Measured for the choice:
+
+- Structure, all 180 assets loaded both ways: identical surface counts, vertex counts,
+  COLOR_0 presence (on every tree and grass surface, on no rock, stone, log or cactus),
+  material transparency and cull mode. No palette asset carries a normal map. The
+  harvest matches: albedo and the constant ORM (1.00, 0.85, 0.00) on all 191 swaying
+  surfaces, `use_vertex_wind` true on each. Godot's COLOR_0-as-albedo quirk (section 5)
+  appears identically in both paths and is irrelevant, since the wind material replaces it.
+- Load time, temperate_forest (25 assets), cold process: 37 ms imported versus 62 ms
+  runtime parse headless; `build_scatter` of the whole biome in a real Vulkan window
+  126 ms versus 153 ms. All 180 assets from the exported pack: about 230 ms.
+- Exported pack delta for the whole palette: +76.0 MB (65.4 to 141.4 MB): asset `.scn`
+  files 22.2 MB (the raw GLBs are 26 MB), surface textures 53.2 MB (albedo 19.6, normal
+  19.6, ORM 9.8, height 4.3), thumbnails 0.3 MB, `palette.json` and sidecars 0.5 MB.
+- Reimporting the 180 GLBs: about 10 s headless.
+
+Surface maps are imported as textures (`surfaces/*/*.png.import`), all with mipmaps:
+albedo VRAM compressed at high quality (BC7: the ground is the largest thing on screen, so
+it gets the better format at twice BC1's size; not yet A/B judged against BC1 in a map),
+normal VRAM compressed as a normal map (BC5, two channels, Z rebuilt), ORM VRAM compressed
+at normal quality (BC1; low-frequency lighting data, half the size of BC7), height
+lossless (the 16-bit PNG loads as 8-bit greyscale, kept exact for any height-based blend
+at the same 1 byte per texel BC7 would cost) with `detect_3d/compress_to=0` so an editor
+session cannot switch it to VRAM compression. Thumbnails keep the default (lossless, no
+mipmaps). No tt-sim code samples the surface maps yet.
+
+**Refreshing the palette:** copy treecube's output over `assets/palette/`, keep the
+existing sidecars, write the three sidecar settings above into a `.glb.import` for every
+new GLB before the first import (otherwise Godot extracts its textures), then
+`godot --headless --import --path .`. Changing a setting in an existing sidecar does not
+trigger a reimport on its own; delete the matching `.godot/imported/*.md5` first.
+`tests/unit/test_palette_builtin.gd` checks the sidecars and fails on a missed one.

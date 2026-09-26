@@ -239,27 +239,21 @@ static func _source_mesh(root: String, asset_id: String, entry: Dictionary) -> M
 	return _source_meshes[cache_key]
 
 
-## Loads the Mesh of node `node_name` from a GLB at runtime through GLTFDocument, the
-## same path GlbUtils uses for user:// maps. Kept as the one function to swap if the
-## editor-import path wins the import probe (plan Task 6): an imported PackedScene would
-## be instantiated here instead, and nothing else in this file would change.
+## Loads the Mesh of node `node_name` from an asset GLB. The built-in res:// palette goes
+## through Godot's editor import (ResourceLoader on the imported PackedScene): an
+## exported game ships only the imported .scn, never the raw .glb, so FileAccess finds
+## nothing there. Its import settings (committed .glb.import sidecars: textures embedded
+## uncompressed, no LODs, no shadow meshes) and the evidence for them are in
+## docs/ASSET_PIPELINE.md section 9 "Import path". A GLB with no import (a user:// palette,
+## the unit-test fixture) is parsed at runtime through GLTFDocument instead, the path
+## GlbUtils uses for user:// maps; with those settings both give the same meshes, vertex
+## colours, materials and unmipmapped textures.
 ##
 ## Returns null (the caller warns) for a missing, oversized or unparseable file or a
 ## missing node. Treecube exports the asset node at the identity transform; one that is
 ## not would be placed without that offset, since only its Mesh is used, so it warns.
 static func _load_asset_mesh(path: String, node_name: String) -> Mesh:
-	if not FileAccess.file_exists(path):
-		return null
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null or file.get_length() > MAX_ASSET_FILE_BYTES:
-		return null
-	var buffer := file.get_buffer(file.get_length())
-	file.close()
-	var document := GLTFDocument.new()
-	var state := GLTFState.new()
-	if document.append_from_buffer(buffer, "", state) != OK:
-		return null
-	var scene := document.generate_scene(state)
+	var scene := _load_asset_scene(path)
 	if scene == null:
 		return null
 	var node := GlbUtils.find_node_by_name(scene, node_name)
@@ -272,6 +266,26 @@ static func _load_asset_mesh(path: String, node_name: String) -> Mesh:
 			push_warning("PaletteLibrary: node '%s' in %s is not at the origin" % [node_name, path])
 	scene.free()
 	return mesh
+
+
+## The instantiated scene of an asset GLB (the caller frees it), or null. Imported
+## resources win over the raw file so the editor exercises the same path as an export.
+static func _load_asset_scene(path: String) -> Node:
+	if ResourceLoader.exists(path, "PackedScene"):
+		var packed := ResourceLoader.load(path, "PackedScene") as PackedScene
+		return packed.instantiate() if packed != null else null
+	if not FileAccess.file_exists(path):
+		return null
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null or file.get_length() > MAX_ASSET_FILE_BYTES:
+		return null
+	var buffer := file.get_buffer(file.get_length())
+	file.close()
+	var document := GLTFDocument.new()
+	var state := GLTFState.new()
+	if document.append_from_buffer(buffer, "", state) != OK:
+		return null
+	return document.generate_scene(state)
 
 
 static func _validate_surfaces(raw: Variant, warnings: Array[String]) -> Dictionary:
