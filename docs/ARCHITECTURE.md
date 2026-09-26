@@ -655,6 +655,53 @@ user://levels/{folder_name}/
 
 See [CONVENTIONS.md](CONVENTIONS.md) for the full `level.json` schema and path resolution details.
 
+### Map document (map.ttmap)
+
+In-game map authoring (in progress) stores everything authored in tt-sim for one level in
+`user://levels/{folder_name}/map.ttmap`, beside `level.json` and the optional `map.glb`.
+Without a `map.glb` it is a fully in-game map; with one (`has_base_map`) it dresses that
+Blender map. The format is tt-sim-internal, not a producer contract, so it lives here
+rather than in `ASSET_PIPELINE.md`.
+
+- **Classes:** `MapDocument` (`resources/map_document.gd`) is the in-memory form and owns
+  the geometry and domain limits; `MapDocumentIO` (`utils/map_document_io.gd`) reads and
+  writes the file: `write(doc, path) -> Error`, `read(path) -> {document, warnings}`,
+  and the pure `parse(entries)` / `serialize(doc)` pair the tests drive.
+- **Container:** one ZIP (`ZIPPacker`/`ZIPReader`), format 1. Entries: `manifest.json`
+  (format, palette version, map seed, size in cells, cell size, sample spacing, tier
+  height, base surface, `has_base_map`), `height.bin` (float32 LE heights), `scatter.json`
+  and `props.json` (palette asset id -> `[lx, ly, lz, qx, qy, qz, qw, sx, sy, sz]` Y-up
+  rows, the `tt_scatter_instances` format), optional `erase.png` (L8, > 127 = erased),
+  optional `authoring/biomes.png` (R = biome slot, 0 none / index + 1; G = density) with
+  `authoring/biomes.json` (`{"biomes": [palette biome id, ...]}`). Unknown entries are
+  ignored, so later phases add `surfaces.png` and `splines.json` without a format bump.
+- **Geometry:** the map is `w * cell_size_m` by `h * cell_size_m`, centred on the origin,
+  floor at Y = 0. Heights and masks share one row-major grid (Z rows, X columns) of
+  `round(extent / sample_spacing_m) + 1` samples per axis whose outermost samples sit on
+  the map edges (the real step is `extent / (samples - 1)`, within half a spacing of the
+  nominal one). `MapDocument.world_to_sample()` / `sample_to_world()` convert.
+- **In memory:** rows are one flat `PackedFloat32Array` per asset (10 floats a row) and
+  masks are `PackedByteArray`s on the sample grid, the forms brushes edit cheaply;
+  `MapDocument.scatter_groups()` converts rows to the Array rows
+  `ScatterGlbUtils.build_scatter()` takes.
+- **Untrusted input:** documents arrive from the host peer, so `parse()` validates like
+  `PaletteLibrary`: caps before allocation (1..64 cells per axis, spacing 0.1..1.0 m, at
+  most 641 samples per axis, per-entry byte caps and 64 MB in total, 200,000 rows per asset
+  and 1,000,000 in all, ids up to 200 characters), NaN/Inf rejected, `height.bin` exactly
+  the grid size, PNG sizes read from the IHDR header and matched to the grid before
+  decoding, malformed rows and optional entries skipped with a warning (at most 50 kept),
+  never raised. A document with no usable manifest or heights is `null`. Unknown asset ids
+  are kept; they resolve against the palette at load.
+- **ZIP bomb guard:** `ZIPReader` cannot report an entry's size, and `read_file()` sizes
+  its buffer from the size the archive declares (measured: a 432-byte archive claiming
+  400 MB allocated 400 MB). `read()` therefore parses the ZIP central directory itself,
+  picking records the way minizip does and refusing Zip64, and reads only entries whose
+  declared size passes the caps.
+- **Atomic write:** `write()` refuses a document the reader would reject or trim, packs
+  into `map.ttmap.tmp` in the same folder, then renames it over the target. On Windows
+  `DirAccess.rename_absolute` replaces an existing file; if the rename fails (for example
+  another handle holds the target open) the old file is untouched and the temp removed.
+
 ### Level Flow
 
 1. **Level Editor** creates/edits `LevelData` (with undo/redo and autosave)
