@@ -48,10 +48,16 @@ const _SCATTER_INSTANCES_EXTRAS_KEY := "tt_scatter_instances"
 ## map and would otherwise render once at their Blender transform. A palette-driven caller
 ## passes PaletteLibrary's resolver to build_scatter() directly instead, and nothing is
 ## freed, since the palette owns its source meshes.
+##
+## `row_filter` (optional, `func(origin: Vector3) -> bool`) keeps only the instances it
+## returns true for, with the origin in this scene's root frame: an authored map.ttmap
+## beside the GLB passes MapDocument.erase_filter() so its erase mask removes Blender
+## scatter. A species it empties is still resolved, so its template is freed like any other.
 static func process_scatter_instances(
 	scene: Node3D,
 	foliage_overrides: Dictionary = {},
-	chunk_size: float = ScatterChunker.CHUNK_SIZE_WORLD_UNITS
+	chunk_size: float = ScatterChunker.CHUNK_SIZE_WORLD_UNITS,
+	row_filter: Callable = Callable()
 ) -> void:
 	var extras: Dictionary = scene.get_meta(GlbUtils.SCENE_EXTRAS_META, {})
 	if not extras.has(_SCATTER_INSTANCES_EXTRAS_KEY):
@@ -76,7 +82,7 @@ static func process_scatter_instances(
 			"wind_category": WindFoliage.classify_category(key),
 			"name": String(mesh_node.name),
 		}
-	build_scatter(scene, groups, resolve, foliage_overrides, chunk_size)
+	build_scatter(scene, groups, resolve, foliage_overrides, chunk_size, row_filter)
 
 	# Freed after every species is built, never per chunk: the builder used to free the
 	# template as its last statement, which freed the same node once per chunk.
@@ -104,13 +110,18 @@ static func process_scatter_instances(
 ## -- the GLB path's own template mesh, or PaletteLibrary's fresh per-call duplicate.
 ## Nothing the resolver returns is freed here.
 ##
+## `row_filter`, when valid, keeps only the transforms whose origin it returns true for
+## (see process_scatter_instances). A species whose rows it removes entirely is still
+## resolved -- so a caller that owns its templates can free them -- but builds nothing.
+##
 ## Returns the keys that produced at least one chunk.
 static func build_scatter(
 	parent: Node3D,
 	groups: Dictionary,
 	resolve: Callable,
 	foliage_overrides: Dictionary = {},
-	chunk_size: float = ScatterChunker.CHUNK_SIZE_WORLD_UNITS
+	chunk_size: float = ScatterChunker.CHUNK_SIZE_WORLD_UNITS,
+	row_filter: Callable = Callable()
 ) -> Array[String]:
 	# Pass one: resolve every species' template mesh and valid transforms.
 	var resolved: Array[Dictionary] = []
@@ -121,8 +132,16 @@ static func build_scatter(
 		var valid := _collect_valid_transforms(transforms)
 		if valid.is_empty():
 			continue
+		if row_filter.is_valid():
+			var kept: Array[Transform3D] = []
+			for xform in valid:
+				if row_filter.call(xform.origin):
+					kept.append(xform)
+			valid = kept
 		var key := String(source_name)
 		var template: Variant = resolve.call(key)
+		if valid.is_empty():
+			continue
 		if not template is Dictionary or not template.get("mesh") is Mesh:
 			continue
 		var category: Variant = template.get("wind_category", "")

@@ -122,6 +122,8 @@ var _known_total: int = -1
 ## Nodes whose MultiMesh the current set_cells() built, for the budget fast path. Untyped:
 ## a node freed later in the same rebuild must not break the loop that skips it.
 var _touched: Array = []
+## True between begin_build() and end_build(): set_cells() skips the budget apply.
+var _budget_deferred: bool = false
 
 
 ## A new, empty instance named for the scene tree; add it under LevelMap before building
@@ -390,6 +392,70 @@ func prepare_biome(biome_id: String) -> void:
 			_request_asset(asset_id)
 	if not _loading.is_empty():
 		set_process(true)
+
+
+## Starts background loads for the given palette asset ids, like prepare_biome() does for
+## a biome's assets. The play-time load knows its ids from the document rows, and calls
+## this before building so build_all()'s species resolution never loads a GLB on the main
+## thread (0.9 to 2.1 s cold for a whole biome, measured).
+func prepare_assets(asset_ids: Array) -> void:
+	for asset_id in asset_ids:
+		_request_asset(asset_id)
+	if not _loading.is_empty() and is_inside_tree():
+		set_process(true)
+
+
+## True while an asset started by prepare_assets() or prepare_biome() is still loading or
+## loaded but not yet resolved.
+func has_prepared_species() -> bool:
+	return not _loading.is_empty()
+
+
+## Resolves prepared species whose background loads have finished, until `budget_usec`
+## of main-thread time is spent (at least one, so progress is guaranteed; one species
+## costs up to about 10 ms). The play-time load calls it once per frame. Returns how many
+## species it resolved.
+func resolve_prepared(budget_usec: int) -> int:
+	var start := Time.get_ticks_usec()
+	var resolved := 0
+	for asset_id in _loading.keys():
+		if resolved > 0 and Time.get_ticks_usec() - start >= budget_usec:
+			break
+		if not _asset_loading(asset_id):
+			_species_for(asset_id)
+			resolved += 1
+	return resolved
+
+
+## Collects every background load still outstanding without resolving it. A scatter that
+## is freed outside the tree (a load abandoned mid-way) never runs _exit_tree, so its
+## owner calls this first.
+func release_prepared() -> void:
+	for path in _loading.values():
+		ResourceLoader.load_threaded_get(path)
+	_loading.clear()
+
+
+## Starts a build spread over several calls: clears everything, then build_cells() adds
+## cells without re-applying the density budget each time (a full re-plan walks the whole
+## map), and end_build() applies it once. The play-time load builds this way so a painted
+## 200 ft map (about 100 ms of MultiMesh building) does not stall one frame.
+func begin_build() -> void:
+	clear()
+	_budget_deferred = true
+
+
+## Adds the given cells (cell -> {asset id -> flat rows}) between begin_build() and
+## end_build(), with no animation.
+func build_cells(rows_by_cell: Dictionary) -> void:
+	set_cells(rows_by_cell, false)
+
+
+## Ends a begin_build() build: applies the density budget across the budget root once.
+func end_build() -> void:
+	_budget_deferred = false
+	_known_total = -1
+	_apply_budget(0)
 
 
 func _register_biomes() -> void:
@@ -815,6 +881,9 @@ func _species_for(asset_id: String) -> Dictionary:
 ## delta, nothing anywhere is thinned, so only the nodes this rebuild built need their
 ## visible count set, which is the common case while painting.
 func _apply_budget(delta: int) -> void:
+	if _budget_deferred:
+		_touched.clear()
+		return
 	if budget < 0:
 		budget = FoliageDensityController.budget_from_settings()
 	if _known_total >= 0 and _known_total + delta <= budget:

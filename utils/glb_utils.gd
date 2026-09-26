@@ -195,12 +195,15 @@ static func _load_glb_thread_work(path: String, result: Dictionary) -> void:
 ##                              If false, just hides collision mesh indicators (for tokens)
 ## @param light_intensity_scale: Multiplier for light energies (1.0 = no change, use < 1.0
 ## for Blender "Standard" mode exports)
+## @param scatter_filter: Optional keep-predicate for scatter instances (see
+## ScatterGlbUtils.process_scatter_instances; MapDocument.erase_filter() for a dressed map)
 ## @return: The fully processed Node3D scene, or null on failure
 static func load_glb_with_processing(
 	path: String,
 	create_static_bodies: bool = false,
 	light_intensity_scale: float = 1.0,
-	foliage_overrides: Dictionary = {}
+	foliage_overrides: Dictionary = {},
+	scatter_filter: Callable = Callable()
 ) -> Node3D:
 	var scene = load_glb(path)
 	if not scene:
@@ -211,7 +214,9 @@ static func load_glb_with_processing(
 	process_animations(scene)
 	process_lights(scene, light_intensity_scale)
 	WaterGlbUtils.process_water_meshes(scene)
-	ScatterGlbUtils.process_scatter_instances(scene, foliage_overrides)
+	ScatterGlbUtils.process_scatter_instances(
+		scene, foliage_overrides, ScatterChunker.CHUNK_SIZE_WORLD_UNITS, scatter_filter
+	)
 
 	return scene
 
@@ -222,12 +227,15 @@ static func load_glb_with_processing(
 ##                              If false, just hides collision mesh indicators (for tokens)
 ## @param light_intensity_scale: Multiplier for light energies (1.0 = no change, use < 1.0
 ## for Blender "Standard" mode exports)
+## @param scatter_filter: Optional keep-predicate for scatter instances (see
+## load_glb_with_processing)
 ## @return: AsyncLoadResult with fully processed scene or error
 static func load_glb_with_processing_async(
 	path: String,
 	create_static_bodies: bool = false,
 	light_intensity_scale: float = 1.0,
-	foliage_overrides: Dictionary = {}
+	foliage_overrides: Dictionary = {},
+	scatter_filter: Callable = Callable()
 ) -> AsyncLoadResult:
 	var result = await load_glb_async(path)
 
@@ -238,7 +246,9 @@ static func load_glb_with_processing_async(
 		process_animations(result.scene)
 		process_lights(result.scene, light_intensity_scale)
 		WaterGlbUtils.process_water_meshes(result.scene)
-		ScatterGlbUtils.process_scatter_instances(result.scene, foliage_overrides)
+		ScatterGlbUtils.process_scatter_instances(
+			result.scene, foliage_overrides, ScatterChunker.CHUNK_SIZE_WORLD_UNITS, scatter_filter
+		)
 
 	return result
 
@@ -489,12 +499,15 @@ static func _find_non_node3d_with_3d_children(node: Node, result: Array[Node]) -
 ## @param path: Path to the map file (res://, user://, or absolute)
 ## @param create_static_bodies: If true, creates StaticBody3D for collision meshes
 ## @param light_intensity_scale: Multiplier for light energies
+## @param scatter_filter: Optional keep-predicate for scatter instances; user:// GLBs only,
+## since a res:// map has no scatter extras
 ## @return: The fully processed Node3D scene, or null on failure
 static func load_map(
 	path: String,
 	create_static_bodies: bool = true,
 	light_intensity_scale: float = 1.0,
-	foliage_overrides: Dictionary = {}
+	foliage_overrides: Dictionary = {},
+	scatter_filter: Callable = Callable()
 ) -> Node3D:
 	var scene: Node3D = null
 
@@ -514,7 +527,7 @@ static func load_map(
 		WaterGlbUtils.process_water_meshes(scene)
 	else:
 		scene = load_glb_with_processing(
-			path, create_static_bodies, light_intensity_scale, foliage_overrides
+			path, create_static_bodies, light_intensity_scale, foliage_overrides, scatter_filter
 		)
 
 	if scene:
@@ -530,12 +543,14 @@ static func load_map(
 ## @param path: Path to the map file (res://, user://, or absolute)
 ## @param create_static_bodies: If true, creates StaticBody3D for collision meshes
 ## @param light_intensity_scale: Multiplier for light energies
+## @param scatter_filter: Optional keep-predicate for scatter instances (see load_map)
 ## @return: AsyncLoadResult with fully processed scene or error
 static func load_map_async(
 	path: String,
 	create_static_bodies: bool = true,
 	light_intensity_scale: float = 1.0,
-	foliage_overrides: Dictionary = {}
+	foliage_overrides: Dictionary = {},
+	scatter_filter: Callable = Callable()
 ) -> AsyncLoadResult:
 	var result = AsyncLoadResult.new()
 
@@ -601,7 +616,7 @@ static func load_map_async(
 		return result
 
 	var glb_result = await load_glb_with_processing_async(
-		path, create_static_bodies, light_intensity_scale, foliage_overrides
+		path, create_static_bodies, light_intensity_scale, foliage_overrides, scatter_filter
 	)
 	if glb_result.success and glb_result.scene:
 		MeshInstancingUtils.process_duplicate_mesh_instancing(glb_result.scene)
