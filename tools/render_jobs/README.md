@@ -145,6 +145,7 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 | `prepare_biomes.gd` | `all` (bool) | `all: true` starts preparing every palette biome on the authoring scatter; a later call without it reports whether preparation finished and how long it took. |
 | `additive_clumps.gd` | `additive` (default true) | Set the static `ScatterPlan.additive_clumps` switch for an A/B; call it before painting. |
 | `ground_check.gd` | `action` (`survey` or `rows`, default `rows`), `near` ([x, z, r]) | Layer-1 downcasts against the opened map. `survey`: one ray per document sample (timed), misses, ground and document height ranges, the 10 m cell with most relief, layer-1 bodies. `rows`: each scatter row's Y against the ground under it (mean and worst \|dY\|, rows off by > 0.1 m) and the mean angle between row up and ground normal for normal-aligned and upright assets. Used for the dressed-map ground fix (P3-0). |
+| `sculpt.gd` | `action` plus its fields (see the script header) | The sculpt pipeline (P3-3a), driven through `AuthoringEditor` since there is no Sculpt tool yet. `stroke` runs a height stroke over real frames (`sculpt`: raise / lower / smooth / flatten / tier; the step's own `op` is `call`) and logs frame times, the worst frame and its breakdown (ray, dab, terrain, collision, snap, rows moved, chunks), `end_stroke`'s cost, then the regeneration tail with the plants grown and shrunk against the instances really added and removed; `compare` times whole-chunk rebuilds against in-place updates; `collision` times the collision rebuild and the CPU ray march; `snap_dense` times snapping the densest cell; `check` tests rays, rows, in-place chunks, AABBs and the near plane; `view_shift` measures how far the view moves when the terrain top rises; `look_bottom` puts a point at the bottom edge. A capture during a stroke lands in its worst frame (about 1 s for the PNG), so measure strokes without one. |
 | `perf.gd` | `action` plus its fields (see the script header) | Performance passes: `start` / `stop` sample every frame's CPU frame time and world-viewport GPU time and log n / median / p95 / worst (run `vsync_off` first); `info` logs visible and shadow draw calls and primitives plus scatter instance counts; `mem` logs engine memory monitors (`ws: true` adds the process working set via one powershell call); `play` / `author` / `dress` time a load, the loading screen and the palette resolve; `scatter`, `ground_std`, `broad`, `layers`, `skirt` toggle ground and scatter configurations for in-run A/Bs. Used for `PERFORMANCE.md` "In-game authoring: pinned performance pass". |
 
 `sample_pixels.gd` (this folder) is a standalone reader for captures, not a probe:
@@ -165,6 +166,12 @@ numerically (for example where a fade or a tint band starts).
   temperate forest strokes, a thinned path, a cleared glade, placed props) at home, zoom 26
   and full zoom-out; the Blender reference levels `river` and `deciduous_clusters` opened in
   authoring at home and full zoom-out; then `INDEX.md`.
+- `jobs/sculpt_pipeline.json`: the sculpt pipeline check (P3-3a, about 100 s): a new temperate
+  forest map with three placed props; a 6-7 m hill (8 m brush), a hollow, smooth, flatten, a
+  tier stub and an edge raise, each followed by its regeneration; the rebuild / in-place
+  comparison; continuous 4 m and 12 m strokes for frame times; `check` after the edits; the
+  hill at the bottom edge of the screen at zoom 13.85 and 8 (near plane); 10 captures and
+  `INDEX.md`. Numbers for `docs/PERFORMANCE.md` "Sculpting".
 
 ## Caveats
 
