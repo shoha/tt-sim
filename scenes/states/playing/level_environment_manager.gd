@@ -519,9 +519,12 @@ static func shadow_distance_for_depth(far_depth: float) -> float:
 	return maxf(SUN_SHADOW_MAX_DISTANCE, ceilf(needed))
 
 
-## View depth of the farthest point of the Y = 0 plane on screen (the top edge for this
-## camera), or 0 when the top edge does not look down at the ground.
-static func far_ground_depth(camera: Camera3D, viewport_size: Vector2) -> float:
+## View depth of the farthest point of the ground plane Y = `ground_y` on screen (the top
+## edge for this camera), or 0 when the top edge does not look down at the ground. Pass the
+## lowest ground of a sculpted map: lower ground is seen farther away.
+static func far_ground_depth(
+	camera: Camera3D, viewport_size: Vector2, ground_y: float = 0.0
+) -> float:
 	var forward := -camera.global_basis.z
 	var deepest := 0.0
 	for corner in [Vector2.ZERO, Vector2(viewport_size.x, 0.0)]:
@@ -529,7 +532,7 @@ static func far_ground_depth(camera: Camera3D, viewport_size: Vector2) -> float:
 		var direction := camera.project_ray_normal(corner)
 		if direction.y > -0.001:
 			continue
-		var ground := origin + direction * (-origin.y / direction.y)
+		var ground := origin + direction * ((ground_y - origin.y) / direction.y)
 		deepest = maxf(deepest, (ground - camera.global_position).dot(forward))
 	return deepest
 
@@ -546,15 +549,16 @@ static func far_bounds_depth(camera: Camera3D, bounds: AABB) -> float:
 
 ## Keeps the sun's shadows reaching the far side of the current view of the map (see
 ## shadow_distance_for_depth): the nearer of the screen's top edge and the farthest corner
-## of `map_bounds` (world space; an empty AABB means the screen alone). Never below
-## SUN_SHADOW_MAX_DISTANCE, so a view the play camera can reach is unchanged. Returns the
-## distance in effect. Authoring calls it as the camera zooms.
+## of `map_bounds` (world space; an empty AABB means the screen alone). The screen edge
+## meets the ground at `ground_y`, the lowest ground (authoring passes the sculpted
+## terrain's). Never below SUN_SHADOW_MAX_DISTANCE, so a view the play camera can reach is
+## unchanged. Returns the distance in effect. Authoring calls it as the camera zooms.
 func fit_shadow_distance_to_view(
-	camera: Camera3D, viewport_size: Vector2, map_bounds: AABB = AABB()
+	camera: Camera3D, viewport_size: Vector2, map_bounds: AABB = AABB(), ground_y: float = 0.0
 ) -> float:
 	if not is_instance_valid(_sun_light):
 		return 0.0
-	var depth := far_ground_depth(camera, viewport_size)
+	var depth := far_ground_depth(camera, viewport_size, ground_y)
 	if map_bounds.has_volume() or map_bounds.has_surface():
 		depth = minf(depth, far_bounds_depth(camera, map_bounds))
 	var wanted := shadow_distance_for_depth(depth)

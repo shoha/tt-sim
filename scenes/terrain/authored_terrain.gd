@@ -16,9 +16,16 @@ extends Node3D
 ## body by the document's real sample step (see TerrainMeshBuilder.collision_transform), so
 ## every sample lands on its document world position.
 ##
-## Phase 3 sculpting edits doc.heights in place, then calls rebuild_chunks() with the
-## touched cells and update_collision() once per stroke (both measured cheap: about 1 ms
-## per chunk and 0.5 ms for the whole 200 ft heightfield).
+## Sculpting (phase 3) edits doc.heights in place and hands the changed sample rectangle to
+## queue_heights(). process_heights() then brings the chunks up to date within a
+## per-frame budget: live, it rewrites only the edited vertex rows of each chunk in place
+## (ArrayMesh.surface_update_vertex_region over a CPU copy of the chunk's vertex stream,
+## TerrainMeshBuilder.chunk_vertex_mirror), which is several times cheaper than rebuilding
+## whole chunks (docs/PERFORMANCE.md "Sculpting"); after settle_heights() (stroke end, undo)
+## it rebuilds each edited chunk once more so the mesh's own AABB, which the bounds walks
+## read and an in-place update cannot change, is exact again. update_collision() pushes the
+## heights into the collision shape (about 0.4 ms for a 200 ft map); refresh_skirt()
+## follows an edit on the map edge.
 ##
 ## Biome ground. Painted biomes also paint the ground: each biome's palette ground_surface
 ## is one of up to four shader layers blended over the base surface by an RGBA8 weight map
@@ -73,6 +80,11 @@ var palette_root: String = PaletteLibrary.DEFAULT_ROOT
 var last_biome_update_usec: int = 0
 ## Microseconds of the last broad refresh (part of update_biome_region()), for measurement.
 var last_broad_update_usec: int = 0
+## Microseconds of the last process_heights() call and chunks it updated, for measurement.
+var last_heights_usec: int = 0
+var last_heights_chunks: int = 0
+## Microseconds of the last refresh_skirt(), for measurement.
+var last_skirt_usec: int = 0
 
 var _material: ShaderMaterial = null
 var _chunks: Dictionary[Vector2i, MeshInstance3D] = {}
@@ -94,6 +106,20 @@ var _broad_texture: ImageTexture = null
 ## textures held so the cache keeps them.
 var _warming: Dictionary = {}
 var _warm_held: Array[Resource] = []
+## cell -> TerrainMeshBuilder.chunk_vertex_mirror() of chunks edited in place.
+var _mirrors: Dictionary = {}
+## cell -> Rect2i of samples waiting for an in-place update, in queue order.
+var _dirty_heights: Dictionary = {}
+## Cells edited in place since the last settle_heights().
+var _edited: Dictionary = {}
+## Cells waiting for their settling rebuild.
+var _settling: Dictionary = {}
+var _skirt_dirty: bool = false
+## The skirt's material, made once per build() so a sculpt refresh reuses it.
+var _skirt_material: ShaderMaterial = null
+## cell -> Vector2(lowest, highest) height of the chunk (grown only by in-place updates,
+## exact after a rebuild).
+var _chunk_heights: Dictionary = {}
 
 
 func _ready() -> void:
@@ -229,6 +255,12 @@ func build(
 	for chunk in _chunks.values():
 		chunk.free()
 	_chunks.clear()
+	_mirrors.clear()
+	_dirty_heights.clear()
+	_edited.clear()
+	_settling.clear()
+	_chunk_heights.clear()
+	_skirt_dirty = false
 	_material = build_ground_material(doc.base_surface, doc.map_seed, root)
 	_build_biome_ground()
 	if with_chunks:
@@ -246,8 +278,8 @@ func get_material() -> ShaderMaterial:
 ## (see SKIRT in shaders/authored_ground.gdshaderinc), so a zoomed-out view shows the map
 ## dissolving into the background instead of a cut rectangle. Decoration only: no
 ## collision, no shadow casting, and Constants.BOUNDS_EXEMPT_META keeps it out of the pan
-## bounds and the reflection probe. Rebuilt by build(); a phase 3 height edit on the map
-## edge should rebuild it too (its inner edge copies the boundary heights).
+## bounds and the reflection probe. Rebuilt by build(); a height edit on the map edge
+## refreshes its geometry (refresh_skirt(); its inner edge copies the boundary heights).
 func get_skirt() -> MeshInstance3D:
 	return get_node_or_null(SKIRT_NAME) as MeshInstance3D
 
@@ -263,23 +295,42 @@ func _build_skirt() -> void:
 		old.free()
 	# The base surface's textures and seed, so the texture continues across the edge; no
 	# biome layers (their weights clamp at the edge and would streak outward).
-	var material := _material.duplicate() as ShaderMaterial
-	material.shader = SKIRT_SHADER
-	material.set_shader_parameter("biome_layer_count", 0)
-	material.set_shader_parameter("skirt_half_extent", document.extent_m() * 0.5)
-	material.set_shader_parameter("skirt_fade_m", SKIRT_FADE_M)
-	material.set_shader_parameter("skirt_wobble", SKIRT_WOBBLE)
+	_skirt_material = _material.duplicate() as ShaderMaterial
+	_skirt_material.shader = SKIRT_SHADER
+	_skirt_material.set_shader_parameter("biome_layer_count", 0)
+	_skirt_material.set_shader_parameter("skirt_half_extent", document.extent_m() * 0.5)
+	_skirt_material.set_shader_parameter("skirt_fade_m", SKIRT_FADE_M)
+	_skirt_material.set_shader_parameter("skirt_wobble", SKIRT_WOBBLE)
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(
 		Mesh.PRIMITIVE_TRIANGLES, TerrainMeshBuilder.build_skirt_arrays(document, skirt_width_m())
 	)
-	mesh.surface_set_material(0, material)
+	mesh.surface_set_material(0, _skirt_material)
 	var skirt := MeshInstance3D.new()
 	skirt.name = SKIRT_NAME
 	skirt.mesh = mesh
 	skirt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	skirt.set_meta(Constants.BOUNDS_EXEMPT_META, true)
 	add_child(skirt)
+
+
+## Rebuilds the skirt's geometry from the current boundary heights (a sculpt edit on the map
+## edge), keeping its node and its material: no material is duplicated, so the ground's
+## uniforms and the shader's compiled pipelines stay as they are.
+func refresh_skirt() -> void:
+	var started := Time.get_ticks_usec()
+	_skirt_dirty = false
+	var skirt := get_skirt()
+	if skirt == null or _skirt_material == null:
+		_build_skirt()
+		return
+	var mesh := skirt.mesh as ArrayMesh
+	mesh.clear_surfaces()
+	mesh.add_surface_from_arrays(
+		Mesh.PRIMITIVE_TRIANGLES, TerrainMeshBuilder.build_skirt_arrays(document, skirt_width_m())
+	)
+	mesh.surface_set_material(0, _skirt_material)
+	last_skirt_usec = Time.get_ticks_usec() - started
 
 
 ## The palette surface of each biome ground layer, in layer (weight channel) order.
@@ -505,17 +556,182 @@ func get_collision_body() -> StaticBody3D:
 ## samples are within one sample of the edit (a sculpt brush's dab rect grown by one step).
 func rebuild_chunks(cells: Array[Vector2i]) -> void:
 	for cell in cells:
-		var mesh := TerrainMeshBuilder.build_chunk_mesh(document, cell, _material)
-		if mesh == null:
+		# The chunk now matches the document; a vertex copy kept for in-place edits may not.
+		_mirrors.erase(cell)
+		_dirty_heights.erase(cell)
+		_settling.erase(cell)
+		_rebuild_chunk(cell)
+
+
+func _rebuild_chunk(cell: Vector2i) -> void:
+	var mesh := TerrainMeshBuilder.build_chunk_mesh(document, cell, _material)
+	if mesh == null:
+		return
+	var chunk: MeshInstance3D = _chunks.get(cell, null)
+	if chunk == null:
+		chunk = MeshInstance3D.new()
+		chunk.name = CHUNK_NAME_PREFIX + ScatterChunker.cell_suffix(cell)
+		add_child(chunk)
+		_chunks[cell] = chunk
+	chunk.mesh = mesh
+	chunk.cast_shadow = chunk_shadow_casting(mesh)
+	var aabb := mesh.get_aabb()
+	_chunk_heights[cell] = Vector2(aabb.position.y, aabb.end.y)
+
+
+## Queues the chunks whose vertices the height samples of `sample_rect` (grid coordinates)
+## change: every sample in it, and the samples one step around it, whose normals read
+## them. process_heights() does the work.
+func queue_heights(sample_rect: Rect2i) -> void:
+	var grid := Rect2i(0, 0, document.samples_x(), document.samples_z())
+	var grown := sample_rect.grow(1).intersection(grid)
+	if not grown.has_area():
+		return
+	var step := document.sample_step()
+	var world := MaskBrush.sample_rect_to_world(document, grown).grow(maxf(step.x, step.y))
+	for cell in ScatterGenerator.cells_in_bounds(world):
+		var rect := TerrainMeshBuilder.chunk_sample_rect(document, cell)
+		if rect.size == Vector2i.ZERO:
 			continue
-		var chunk: MeshInstance3D = _chunks.get(cell, null)
-		if chunk == null:
-			chunk = MeshInstance3D.new()
-			chunk.name = CHUNK_NAME_PREFIX + ScatterChunker.cell_suffix(cell)
-			add_child(chunk)
-			_chunks[cell] = chunk
-		chunk.mesh = mesh
-		chunk.cast_shadow = chunk_shadow_casting(mesh)
+		var part := grown.intersection(Rect2i(rect.position, rect.size + Vector2i.ONE))
+		if not part.has_area():
+			continue
+		var queued: Rect2i = _dirty_heights.get(cell, Rect2i())
+		_dirty_heights.erase(cell)
+		_dirty_heights[cell] = MaskBrush.merge_rect(queued, part)
+	if (
+		grown.position.x == 0
+		or grown.position.y == 0
+		or grown.end.x == grid.end.x
+		or grown.end.y == grid.end.y
+	):
+		_skirt_dirty = true
+
+
+## Updates queued chunks until `budget_usec` of main-thread time is spent (at least one
+## chunk per call, so progress is guaranteed; a negative budget does everything): first the
+## in-place vertex updates, then the skirt, then settling rebuilds. Returns true when no
+## height work is left.
+func process_heights(budget_usec: int = -1) -> bool:
+	var started := Time.get_ticks_usec()
+	var chunks := 0
+	for cell in _dirty_heights.keys():
+		if chunks > 0 and budget_usec >= 0 and Time.get_ticks_usec() - started >= budget_usec:
+			break
+		var part: Rect2i = _dirty_heights[cell]
+		_dirty_heights.erase(cell)
+		_update_chunk_in_place(cell, part)
+		chunks += 1
+	var spent := func() -> bool:
+		return budget_usec >= 0 and Time.get_ticks_usec() - started >= budget_usec
+	if _dirty_heights.is_empty() and _skirt_dirty and not (chunks > 0 and spent.call()):
+		refresh_skirt()
+	if _dirty_heights.is_empty():
+		for cell in _settling.keys():
+			if spent.call() and chunks > 0:
+				break
+			_settling.erase(cell)
+			_rebuild_chunk(cell)
+			chunks += 1
+	last_heights_usec = Time.get_ticks_usec() - started
+	last_heights_chunks = chunks
+	return not has_height_work()
+
+
+## True while height updates, a skirt refresh or settling rebuilds are waiting.
+func has_height_work() -> bool:
+	return not _dirty_heights.is_empty() or _skirt_dirty or not _settling.is_empty()
+
+
+## True while chunks edited in place still differ from a rebuild (their meshes report the
+## AABB they had before the edit); settle_heights() queues their rebuild.
+func has_unsettled_chunks() -> bool:
+	return not _edited.is_empty() or not _settling.is_empty()
+
+
+## Queues a rebuild of every chunk edited in place since the last call (the end of a sculpt
+## stroke, an undo), which process_heights() runs after the in-place work. The rebuilt
+## chunk is the same geometry; what changes is the mesh's AABB, exact again for the bounds
+## walks, and the chunk's shadow casting, which a flattened chunk turns off.
+func settle_heights() -> void:
+	for cell in _edited:
+		_settling[cell] = true
+	_edited.clear()
+
+
+## The lowest and highest ground height (Vector2(min, max), map frame) over every chunk:
+## exact after a rebuild, and never below the truth during a stroke (in-place edits only
+## widen it). Vector2.ZERO for a terrain without chunks.
+func height_range() -> Vector2:
+	if _chunk_heights.is_empty():
+		return Vector2.ZERO
+	var span := Vector2(INF, -INF)
+	for heights: Vector2 in _chunk_heights.values():
+		span.x = minf(span.x, heights.x)
+		span.y = maxf(span.y, heights.y)
+	return span
+
+
+## height_range() in world space (the terrain's global transform applied: the level's map
+## scale and offset).
+func world_height_range() -> Vector2:
+	var span := height_range()
+	if not is_inside_tree():
+		return span
+	var low := global_transform * Vector3(0.0, span.x, 0.0)
+	var high := global_transform * Vector3(0.0, span.y, 0.0)
+	return Vector2(minf(low.y, high.y), maxf(low.y, high.y))
+
+
+func _update_chunk_in_place(cell: Vector2i, part: Rect2i) -> void:
+	var chunk: MeshInstance3D = _chunks.get(cell, null)
+	if chunk == null or not chunk.mesh is ArrayMesh:
+		return
+	var mesh := chunk.mesh as ArrayMesh
+	var mirror: Dictionary = _mirrors.get(cell, {})
+	var rect: Rect2i
+	var first_row := 0
+	var last_row := 0
+	var span := Vector2(INF, -INF)
+	if mirror.is_empty():
+		# First edit of this chunk: the whole stream from the current heights.
+		mirror = TerrainMeshBuilder.chunk_vertex_mirror(document, cell)
+		if mirror.is_empty():
+			return
+		_mirrors[cell] = mirror
+		rect = mirror.rect
+		last_row = int(mirror.rows) - 1
+		span = _mirror_span(mirror)
+	else:
+		rect = mirror.rect
+		span = TerrainMeshBuilder.write_vertex_region(document, mirror, part)
+		first_row = maxi(part.position.y - rect.position.y, 0)
+		last_row = mini(part.end.y - 1 - rect.position.y, int(mirror.rows) - 1)
+	var bytes := TerrainMeshBuilder.vertex_rows_bytes(mirror, first_row, last_row)
+	mesh.surface_update_vertex_region(0, bytes.position_offset, bytes.positions)
+	mesh.surface_update_vertex_region(0, bytes.normal_offset, bytes.normals)
+	_edited[cell] = true
+	# The mesh keeps its build-time AABB; culling reads the custom one, widened to the new
+	# heights (exact again after the settling rebuild).
+	var known: Vector2 = _chunk_heights.get(cell, span)
+	var widened := Vector2(minf(known.x, span.x), maxf(known.y, span.y))
+	_chunk_heights[cell] = widened
+	var base := mesh.get_aabb()
+	mesh.custom_aabb = AABB(
+		Vector3(base.position.x, widened.x, base.position.z),
+		Vector3(base.size.x, maxf(widened.y - widened.x, 0.0), base.size.z)
+	)
+	if widened.y - widened.x > FLAT_CHUNK_M:
+		chunk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+
+static func _mirror_span(mirror: Dictionary) -> Vector2:
+	var positions: PackedFloat32Array = mirror.positions
+	var span := Vector2(INF, -INF)
+	for i in range(1, positions.size(), 3):
+		span.x = minf(span.x, positions[i])
+		span.y = maxf(span.y, positions[i])
+	return span
 
 
 ## Shadow casting for a chunk mesh: off when the chunk is flat. A flat chunk can only

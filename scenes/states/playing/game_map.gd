@@ -164,9 +164,18 @@ func set_zoom_limits(min_size: float, max_size: float) -> void:
 
 
 ## The camera size (16:9 reference height) at which a map of `extent_m` (X by Z metres,
-## centred on the origin) with content up to `height_m` tall just fits the view.
-func fit_zoom_for_extent(extent_m: Vector2, height_m: float) -> float:
-	return CameraController.fit_size_for_extent(camera_node.global_basis, extent_m, height_m)
+## centred on the origin) with content from `floor_m` (its lowest ground) up to `height_m`
+## just fits the view.
+func fit_zoom_for_extent(extent_m: Vector2, height_m: float, floor_m: float = 0.0) -> float:
+	return CameraController.fit_size_for_extent(
+		camera_node.global_basis, extent_m, height_m, CameraController.REFERENCE_ASPECT, floor_m
+	)
+
+
+## The highest ground on the map (world Y) the camera's near plane must stay above; see
+## CameraController.set_ground_top. Only authored terrain sets it.
+func set_ground_top(y: float) -> void:
+	_camera_controller.set_ground_top(y)
 
 
 ## Pan bounds from a known map extent (world space) rather than from the meshes under
