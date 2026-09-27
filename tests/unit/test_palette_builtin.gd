@@ -11,8 +11,45 @@ extends GutTest
 ## imports the project before running tests, so the imported resources exist there.
 
 const BIOME_COUNT := 8
-const SURFACE_COUNT := 14
+const SURFACE_COUNT := 23
+## Surfaces per role (section 9 "Surface role"); the rest of SURFACE_COUNT is ground.
+const CLIFF_SURFACE_COUNT := 3
+const BUILT_SURFACE_COUNT := 5
 const WIND_CATEGORIES := ["tree", "grass"]
+## Committed surface-map sidecar settings per map (section 9 "Import path"), all
+## mipmapped: albedo BC7 (VRAM, high quality), normal BC5 (VRAM, normal-map flag), ORM
+## BC1 (VRAM, normal quality), height lossless with detect_3d off so an editor session
+## cannot silently switch it to VRAM compression. A new surface whose sidecar Godot
+## generated with defaults (lossless, no mipmaps) fails here.
+const SURFACE_IMPORT_PARAMS := {
+	"albedo":
+	{
+		"compress/mode": 2,
+		"compress/high_quality": true,
+		"compress/normal_map": 0,
+		"mipmaps/generate": true,
+	},
+	"normal":
+	{
+		"compress/mode": 2,
+		"compress/high_quality": false,
+		"compress/normal_map": 1,
+		"mipmaps/generate": true,
+	},
+	"orm":
+	{
+		"compress/mode": 2,
+		"compress/high_quality": false,
+		"compress/normal_map": 0,
+		"mipmaps/generate": true,
+	},
+	"height":
+	{
+		"compress/mode": 0,
+		"detect_3d/compress_to": 0,
+		"mipmaps/generate": true,
+	},
+}
 ## Sidecar settings the export path depends on (section 9 "Import path"). A palette
 ## refresh that drops the committed .import files falls back to Godot's defaults, which
 ## extract every embedded texture next to the GLB as a mipmapped PNG (small flowers fade
@@ -62,23 +99,43 @@ func test_every_biome_names_a_shipped_ground_surface_and_thumbnail() -> void:
 		assert_gt(biome.species.size(), 0, biome.id)
 
 
-func test_every_surface_map_is_an_imported_texture() -> void:
+func test_surfaces_carry_their_roles() -> void:
+	var cliffs := PaletteLibrary.surfaces_with_role("cliff")
+	var built := PaletteLibrary.surfaces_with_role("built")
+	var ground := PaletteLibrary.surfaces_with_role("ground")
+	assert_eq(cliffs.size(), CLIFF_SURFACE_COUNT, str(cliffs))
+	assert_eq(built.size(), BUILT_SURFACE_COUNT, str(built))
+	assert_eq(ground.size(), SURFACE_COUNT - CLIFF_SURFACE_COUNT - BUILT_SURFACE_COUNT, str(ground))
+	for surface_name in PaletteLibrary.surfaces():
+		assert_ne(PaletteLibrary.surfaces()[surface_name].kind, "", surface_name)
+
+
+## The loader falls back (with a warning GUT fails on) when a biome names a missing or
+## wrong-role surface, so a resolved, role-correct name here is the one palette.json gave.
+func test_every_biome_resolves_its_cliff_and_scree_surfaces() -> void:
+	var surfaces := PaletteLibrary.surfaces()
+	for biome in PaletteLibrary.biomes():
+		assert_true(surfaces.has(biome.cliff_surface), "%s cliff" % biome.id)
+		assert_true(surfaces.has(biome.scree_surface), "%s scree" % biome.id)
+		if surfaces.has(biome.cliff_surface):
+			assert_eq(surfaces[biome.cliff_surface].role, "cliff", biome.id)
+		if surfaces.has(biome.scree_surface):
+			assert_eq(surfaces[biome.scree_surface].role, "ground", biome.id)
+		if surfaces.has(biome.ground_surface):
+			assert_eq(surfaces[biome.ground_surface].role, "ground", biome.id)
+
+
+func test_every_surface_map_is_an_imported_texture_with_the_committed_settings() -> void:
 	for surface_name in PaletteLibrary.surfaces():
 		var surface: Dictionary = PaletteLibrary.surfaces()[surface_name]
 		for map_name in PaletteLibrary.SURFACE_MAPS:
 			var path := PaletteLibrary.DEFAULT_ROOT.path_join(surface[map_name])
 			assert_true(ResourceLoader.exists(path, "Texture2D"), path)
-		var normal := ConfigFile.new()
-		var normal_path := PaletteLibrary.DEFAULT_ROOT.path_join(surface.normal)
-		assert_eq(normal.load(normal_path + ".import"), OK)
-		assert_eq(normal.get_value("params", "compress/normal_map"), 1, normal_path)
-		# Height stays lossless (exact 8-bit steps for blending); detect_3d off so an
-		# editor session cannot silently switch it to VRAM compression.
-		var height := ConfigFile.new()
-		var height_path := PaletteLibrary.DEFAULT_ROOT.path_join(surface.height)
-		assert_eq(height.load(height_path + ".import"), OK)
-		assert_eq(height.get_value("params", "compress/mode"), 0, height_path)
-		assert_eq(height.get_value("params", "detect_3d/compress_to"), 0, height_path)
+			var sidecar := ConfigFile.new()
+			assert_eq(sidecar.load(path + ".import"), OK, path)
+			var params: Dictionary = SURFACE_IMPORT_PARAMS[map_name]
+			for param in params:
+				assert_eq(sidecar.get_value("params", param), params[param], path + " " + param)
 
 
 func test_every_asset_is_an_editor_import_with_the_committed_settings() -> void:
