@@ -174,7 +174,10 @@ static func authored_root_shell() -> Node3D:
 ## within the per-frame budget. Returns null when superseded.
 func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	var pending: Array[String] = []
-	for path in AuthoredTerrain.texture_paths(doc):
+	# Under the headless dummy renderer the material loads them in place instead
+	# (GlbUtils.threaded_loads_safe).
+	var threaded := GlbUtils.threaded_loads_safe()
+	for path in AuthoredTerrain.texture_paths(doc) if threaded else PackedStringArray():
 		if not ResourceLoader.has_cached(path) and ResourceLoader.load_threaded_request(path) == OK:
 			pending.append(path)
 	var loading := true

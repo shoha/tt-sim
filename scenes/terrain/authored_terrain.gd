@@ -485,7 +485,8 @@ func warm_biome_surface(biome_id: String) -> void:
 ## (see warm_biome_surface; the Paint tool warms a surface when its tile is picked).
 func warm_surface(surface_name: String) -> void:
 	var surface: Dictionary = PaletteLibrary.surfaces(palette_root).get(surface_name, {})
-	for key in LAYER_MAPS:
+	# None under the headless dummy renderer (GlbUtils.threaded_loads_safe): loaded when bound.
+	for key in LAYER_MAPS if GlbUtils.threaded_loads_safe() else {}:
 		var relative: Variant = surface.get(key, "")
 		if not relative is String or relative == "":
 			continue
