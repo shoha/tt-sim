@@ -28,16 +28,15 @@ extends Node3D
 ## follows an edit on the map edge.
 ##
 ## Ground layers (phase 3, P3-4). One table of up to eight shader layers blends over the
-## base surface: hand-painted surfaces (doc.surface_ids / surface_weights), painted biomes'
-## ground surfaces, and the automatic dressing's cliff and scree surfaces (the table, its
-## allocation and overflow rule are GroundLayerTable's; the rules are TerrainRules' and the
-## shader's). Two RGBA8 weight maps on the sample grid (slots 0-3 and 4-7) are
-## DrawableTexture2Ds so a brush stroke uploads only the samples it changed: a brush edits
-## the document's masks in place, then calls update_ground_region() with the changed
-## sample rectangle, which recomputes those texels and blits them in (a texel-exact copy,
-## shaders/texel_copy_blit.gdshader). A biome or surface first painted mid-session takes a
-## free slot by setting uniforms; the material itself is never rebuilt. CPU mirrors of the
-## textures (get_ground_weights()) are kept for tests and anything that reads them back.
+## base: painted surfaces, painted biomes' ground, the automatic cliff and scree, and ground
+## accents (GroundAccents) (the table, its allocation and overflow rule are
+## GroundLayerTable's; the rules are TerrainRules' and the shader's). Two RGBA8 weight maps
+## on the sample grid (slots 0-3 and 4-7) are DrawableTexture2Ds so a brush stroke uploads
+## only the samples it changed: a brush edits the document's masks in place, then calls
+## update_ground_region() with the changed sample rectangle, which recomputes those texels
+## and blits them in (a texel-exact copy, shaders/texel_copy_blit.gdshader). A biome or
+## surface first painted mid-session takes a free slot by setting uniforms; the material is
+## never rebuilt. CPU mirrors of the textures (get_ground_weights()) are kept for tests.
 ##
 ## Rule fields. The automatic dressing reads two per-vertex fields (curvature and
 ## steepness nearby, TerrainRules.sample_fields) carried in the chunks' UV2. They are kept
@@ -172,10 +171,13 @@ static func texture_paths(
 	var names := [doc.base_surface]
 	names.append_array(Array(base_rule_surfaces(doc.base_surface, root)))
 	names.append_array(Array(doc.surface_ids))
+	var accents := GroundAccents.base_accents(doc.base_surface, root)
+	names.append_array(GroundAccents.surface_names(accents))
 	for biome_id in doc.biome_ids:
 		var biome := PaletteLibrary.biome(biome_id, root)
 		for key in ["ground_surface", "cliff_surface", "scree_surface"]:
 			names.append(biome.get(key, ""))
+		names.append_array(GroundAccents.surface_names(biome.get("ground_accents", [])))
 	var paths := PackedStringArray()
 	for surface_name in names:
 		var surface: Dictionary = surfaces.get(surface_name, {})
@@ -338,13 +340,13 @@ func _build_skirt() -> void:
 	if old != null:
 		old.free()
 	# The base surface's textures and seed, so the texture continues across the edge; no
-	# layers (their weights clamp at the edge and would streak outward) and no rules (the
-	# skirt shader compiles them out).
+	# layer weights (they clamp at the edge and would streak outward) and no rules (the
+	# skirt shader compiles them out), only the base's accent patches (GroundAccents).
 	_skirt_material = _material.duplicate() as ShaderMaterial
 	_skirt_material.shader = SKIRT_SHADER
-	_skirt_material.set_shader_parameter("layer_count", 0)
 	_skirt_material.set_shader_parameter("layer_painted_mask", 0)
 	_skirt_material.set_shader_parameter("layer_ground_mask", 0)
+	GroundAccents.sync_skirt(_skirt_material, _material, _plan.get("layers", []).size())
 	_skirt_material.set_shader_parameter("skirt_half_extent", document.extent_m() * 0.5)
 	_skirt_material.set_shader_parameter("skirt_fade_m", SKIRT_FADE_M)
 	_skirt_material.set_shader_parameter("skirt_wobble", SKIRT_WOBBLE)
@@ -463,15 +465,17 @@ func update_ground_region(sample_rect: Rect2i) -> void:
 	last_biome_update_usec = Time.get_ticks_usec() - start
 
 
-## Starts loading the surface textures of palette biome `biome_id` (ground, cliff, scree)
-## on background threads, so the first dab that gives one a slot binds cached textures
-## instead of loading them on the main thread (21 to 25 ms for a new surface, measured in
-## T3c). Harmless for surfaces already bound or the base.
+## Starts loading the surface textures of palette biome `biome_id` (ground, cliff, scree,
+## accents) on background threads, so the first dab that gives one a slot binds cached
+## textures instead of loading them on the main thread (21 to 25 ms for a new surface,
+## measured in T3c). Harmless for surfaces already bound or the base.
 func warm_biome_surface(biome_id: String) -> void:
 	var biome := PaletteLibrary.biome(biome_id, palette_root)
 	var bound := ground_layers()
-	for surface_key in ["ground_surface", "cliff_surface", "scree_surface"]:
-		var surface_name: String = biome.get(surface_key, "")
+	var names := GroundAccents.surface_names(biome.get("ground_accents", []))
+	for key in ["ground_surface", "cliff_surface", "scree_surface"]:
+		names.append(biome.get(key, ""))
+	for surface_name: String in names:
 		if surface_name == "" or surface_name == document.base_surface or bound.has(surface_name):
 			continue
 		warm_surface(surface_name)
@@ -558,6 +562,7 @@ func _plan_layers() -> bool:
 	var grounds := PackedStringArray()
 	var cliffs := PackedStringArray()
 	var screes := PackedStringArray()
+	var accents: Array = []
 	for biome_id in document.biome_ids:
 		var biome := PaletteLibrary.biome(biome_id, root)
 		var ground: String = biome.get("ground_surface", "")
@@ -566,6 +571,7 @@ func _plan_layers() -> bool:
 		grounds.append(ground if available.call(ground) else "")
 		cliffs.append(cliff if available.call(cliff) else "")
 		screes.append(scree if available.call(scree) else "")
+		accents.append(GroundAccents.drawable(biome.get("ground_accents", []), available))
 	var painted := PackedStringArray()
 	for surface in document.surface_ids:
 		painted.append(surface if available.call(surface) else "")
@@ -588,9 +594,16 @@ func _plan_layers() -> bool:
 		"role_of":
 		func(surface: String) -> String: return surfaces.get(surface, {}).get("role", "ground"),
 		"color_of": func(surface: String) -> Variant: return surface_mean_albedo(surface, root),
+		"biome_accents": accents,
+		"base_accents":
+		GroundAccents.drawable(GroundAccents.base_accents(document.base_surface, root), available),
 	}
 	var previous: Array = _plan.get("layers", [])
 	var result := GroundLayerTable.plan(inputs, previous)
+	for surface in result.dropped_accents:
+		if not _warned_fallbacks.has("accent:" + surface):
+			_warned_fallbacks["accent:" + surface] = true
+			push_warning("AuthoredTerrain: ground accent '%s' did not fit the layers" % surface)
 	var fallbacks: Dictionary = result.fallbacks
 	for surface in fallbacks:
 		if not _warned_fallbacks.has(surface):
@@ -644,22 +657,14 @@ func _bind_layers(previous: Array) -> void:
 	var masks := GroundLayerTable.shader_masks(_plan)
 	for uniform in masks:
 		_material.set_shader_parameter(uniform, masks[uniform])
-	_material.set_shader_parameter("rule_cliff_layer", shader_routing(_plan.cliff_of))
-	_material.set_shader_parameter("rule_scree_layer", shader_routing(_plan.scree_of))
-
-
-## A plan's rule routing (cliff_of / scree_of) as the shader reads it: the slot, 8 for the
-## base, -1 for none.
-static func shader_routing(routing: PackedInt32Array) -> PackedInt32Array:
-	var out := PackedInt32Array()
-	for to in routing:
-		if to == GroundLayerTable.BASE:
-			out.append(GroundLayerTable.MAX_LAYERS)
-		elif to == GroundLayerTable.NONE:
-			out.append(-1)
-		else:
-			out.append(to)
-	return out
+	var cliff_of := GroundLayerTable.shader_routing(_plan.cliff_of)
+	_material.set_shader_parameter("rule_cliff_layer", cliff_of)
+	_material.set_shader_parameter(
+		"rule_scree_layer", GroundLayerTable.shader_routing(_plan.scree_of)
+	)
+	GroundAccents.bind(_material, _plan, document.map_seed)
+	if _skirt_material != null:
+		GroundAccents.sync_skirt(_skirt_material, _material, layers.size())
 
 
 func _weight_planes(rect: Rect2i) -> Array[PackedByteArray]:

@@ -1125,7 +1125,7 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   GROUND (a painted biome's `ground_surface`; its channel is that biome's density, biomes
   sharing a surface share it, the base is the remainder) or RULE (a biome's
   `cliff_surface` / `scree_surface` nothing else draws; empty channel, it only receives rule
-  weight). Painted and ground stay in separate slots even for one surface, because the
+  weight) or ACCENT (a ground accent's surface, below; empty channel too). Painted and ground stay in separate slots even for one surface, because the
   shader must tell "painted, overrides the rules" from "biome ground, dressed by the rules";
   a rule surface reuses any slot drawing it, or the base. Two RGBA8 weight maps on the sample
   grid (`layer_weights_a` slots 0-3, `_b` 4-7), filtered, so 0.25 m samples give smooth
@@ -1151,7 +1151,8 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   on one ground surface share the dominant one's pair (never happens in the built-in
   palette, where each ground surface implies one cliff). **Allocation:** existing slots keep
   their index; new ones in priority order: painted (slot order), the base's rule surfaces,
-  biome grounds by coverage, the other rule surfaces. Overflow past 8 is deterministic: a
+  biome grounds by coverage, the other rule surfaces, then ground accents (below; an accent
+  slot is free for any of the others at the next plan). Overflow past 8 is deterministic: a
   ground surface falls back to the nearest GROUND slot or the base by mean albedo, a cliff
   to the nearest cliff-role slot, a scree to the nearest ground-role slot or the base; one
   warning per surface. A painted surface never falls back: it re-plans the table from
@@ -1168,6 +1169,37 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   height-blended in two passes (heights first for the top score, then full samples of the
   surfaces in the band), which keeps register pressure near the old 4-layer shader's.
   The dry/lush tints fade out on unsaturated albedo so snow is not stained.
+- **Ground accents (2026-09-27, the user's fix for a temperate forest that read as one flat
+  brown field):** broad, soft-edged patches of other ground surfaces (moss and grass in a
+  forest's duff) cut out of each biome's ground, from the palette's per-biome
+  `ground_accents` (surface, coverage, scale_m; `PaletteLibrary.ground_accents`, contract
+  section 9). `GroundAccents` (`utils/ground_accents.gd`, pure) is the CPU twin of the mask
+  and packs the uniforms; `GroundLayerTable` gives each ground component (a GROUND slot or the
+  base) the accents of its dominant biome (the biome that picks its cliff and scree; the
+  base: of the biome on the base surface, else the palette's first biome on it,
+  `GroundAccents.base_accents`). **Precedence:** painted > automatic cliff and scree >
+  accents > biome ground: in the shader an accent takes its share of the component's weight
+  after the rules took theirs (`keep`), so paint and rock cover it. **Mask:** three octaves
+  of smooth value noise on a lattice of `scale_m` metres, read from a 32 x 32 lattice
+  texture (`accent_noise`, one bilinear fetch per octave at the smoothstepped position,
+  tiling every 32 cells), domain rotated and offset per surface and map seed (so one surface
+  lines up across two biomes; each map has its own patches), thresholded for the coverage
+  through the noise's measured quantiles (`COVERAGE_THRESHOLDS`) with a soft ramp
+  (`EDGE` 0.045) that the height blend then frays like any other edge. A component's accents
+  are drawn in order, each taking its share of what the earlier ones left, with the
+  thresholds set so each ends up with its own coverage (`drawn_coverages`).
+  `test_ground_accents.gd` measures coverage and patch size on the CPU twin and checks the
+  shader's constants. **Slots:** up to `ACCENTS_PER_COMPONENT` (3) per component (the first
+  entries), reusing any slot or the base that already draws the surface, else a slot of their
+  own after every painted, ground and rule surface; accents never hold a slot against those
+  (a later plan frees accent slots first; their channel is empty, so no texel moves) and
+  re-claim their old slot when it is still free, so their textures stay bound. When slots run
+  out an accent is not drawn (no nearest-colour fallback: a patch of the wrong surface is not
+  an accent), dropped by entry index, then least coverage, then component (base first), one
+  warning per surface. The skirt draws the base's accents too, so patches carry across the
+  map edge (`GroundAccents.sync_skirt`). **Plants:** do not read accents (the contract says
+  the scatter does not; a moss patch under a forest is still forest floor), so there is no
+  `TerrainRules` / `ScatterGround` twin. **Cost:** see `PERFORMANCE.md` "Ground accents".
 - **Automatic dressing (P3-4):** always on, no toggle; the user's decisions are tier edges
   as rock cliffs and hand paint winning, except that ground and built paint yield to the
   rock on faces (P3-6, above). Formulas and defaults live once in
@@ -1239,8 +1271,8 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   painted-surface re-plan rewrites every texel); the material is never rebuilt.
 - **P3-4 cost:** see `PERFORMANCE.md` "Ground shader: 8 layers, rules, steep faces".
 - **Texture bindings and the Mobile renderer (macOS: `rendering_method.macos="mobile"`):**
-  the ground material binds 40 textures in the fragment stage (4 base maps, 2 weight maps,
-  2 broad maps, 8 slots x 4 maps as sampler arrays), plus Godot's scene textures (shadow
+  the ground material binds 41 textures in the fragment stage (4 base maps, 2 weight maps,
+  2 broad maps, 8 slots x 4 maps as sampler arrays, the accent noise lattice), plus Godot's scene textures (shadow
   atlases, decal atlas, reflection atlas, radiance, lightmap array, screen and depth
   buffers, roughly 15-25). Verified: the shader compiles and draws under
   `--rendering-method mobile` (Vulkan, `jobs/mobile_check.json`). Inferred, not verified on

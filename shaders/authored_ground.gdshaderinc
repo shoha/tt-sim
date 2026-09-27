@@ -123,6 +123,21 @@
  *     which is how terrain-paint's height blend factor enters: rock juts out of the grass
  *     where the rock texture is high.
  *
+ * GROUND ACCENTS (2026-09-27; GroundAccents in utils/ is the CPU twin and packs the
+ * uniforms, GroundLayerTable gives the slots): broad, soft-edged patches of other ground
+ * surfaces (moss and grass in a forest's duff) cut out of each ground component's own
+ * ground, so a biome floor is not one field of one tile. Per component j (a ground slot or
+ * the base), up to ACCENTS_PER_COMPONENT accents in accent_layer / accent_params; each is
+ * three octaves of smooth value noise at its own patch size (scale_m), read from a small
+ * lattice texture (accent_noise: one bilinear fetch per octave instead of value_noise's four
+ * hashes), domain rotated and offset per surface and map seed, thresholded for
+ * its coverage with a soft ramp (EDGE).
+ * Accents are drawn in order, each taking its share of what the earlier ones left, from
+ * the component's weight after the rules took theirs (keep): painted surfaces and the
+ * automatic cliff and scree cover them. The patch weight then goes through the same height
+ * blend as every surface, so its edge frays along texture detail. The skirt draws the
+ * base's accents too, so patches carry across the map edge.
+ *
  * AUTOMATIC RULES (rule_weights; formulas and defaults in utils/terrain_rules.gd, whose
  * constants are mirrored below and checked by tests/unit/test_terrain_rules.gd):
  *   - cliff: terrain-paint's slope tail on n.y (CLIFF_START_COS .. CLIFF_END_COS), edge
@@ -234,6 +249,16 @@ uniform float biome_broad_full : hint_range(0.05, 1.0) = 0.4;
 // Most a painted built surface's colour tints the ground around it (worn, trodden grass
 // beside a path; P3-6, judged at the game camera).
 uniform float paint_broad_strength : hint_range(0.0, 1.0) = 0.35;
+// Ground accents (see GROUND ACCENTS). Bit j: component j (slots 0-7, the base at 8) has
+// accents. Entry j * ACCENTS_PER_COMPONENT + i is accent i of component j: the slot its
+// patches add to (8 = the base, -1 = no more accents), and (threshold, 1 / scale_m, domain
+// offset).
+uniform int accent_components = 0;
+uniform int accent_layer[27];
+uniform vec4 accent_params[27];
+// The accent noise lattice (GroundAccents.noise_image): random values per cell, one octave
+// per channel, tiling every ACCENT_NOISE_CELLS cells.
+uniform sampler2D accent_noise : hint_default_black, filter_linear, repeat_enable;
 
 #ifdef GROUND_SKIRT
 // Half the map's extent in UV (document) metres: the skirt fades out from this rectangle.
@@ -309,6 +334,17 @@ const vec2 PAINT_NOISE_OFFSET = vec2(7.9, 3.1);
 // Painted ground and built slots yield this fraction of the cliff rule to the automatic rock
 // (TerrainRules.PAINT_CLIFF_YIELD and compose_paint): paths cover walkable ground only.
 const float PAINT_CLIFF_YIELD = 1.0;
+// Ground accents: the twins of GroundAccents' constants (tests/unit/test_ground_accents.gd).
+const int ACCENTS_PER_COMPONENT = 3;
+const float ACCENT_EDGE = 0.045;
+const float ACCENT_DETAIL = 0.3;
+const float ACCENT_DETAIL_SCALE = 2.3;
+const vec2 ACCENT_DETAIL_OFFSET = vec2(17.3, -5.9);
+const float ACCENT_FINE = 0.15;
+const float ACCENT_FINE_SCALE = 5.3;
+const vec2 ACCENT_FINE_OFFSET = vec2(-31.7, 44.1);
+const vec2 ACCENT_ROTATION = vec2(0.8, 0.6);
+const float ACCENT_NOISE_CELLS = 32.0;
 
 // Weights and per-cell transforms of the (up to) three cells blended at one point.
 struct TileFrame {
@@ -719,6 +755,42 @@ vec2 rule_weights(float ny, vec2 fields, vec3 p) {
 	return vec2(cliff, scree);
 }
 
+// Smooth value noise at lattice point p from the accent lattice (GroundAccents.octave): one
+// bilinear fetch at the cell corner plus the smoothstepped fraction interpolates the four
+// lattice values with smoothstep weights. All four channels come back; the caller picks one.
+vec4 accent_octave(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = p - i;
+	f = f * f * (3.0 - 2.0 * f);
+	return textureLod(accent_noise, (i + f + 0.5) / ACCENT_NOISE_CELLS, 0.0);
+}
+
+// One accent's patch weight 0..1 at map-frame XZ (GroundAccents.mask): params are
+// (threshold, 1 / scale_m, domain offset). Each finer octave is only fetched where it can
+// still change the result, which is exact since the ramp clamps (fetching all three with
+// no branch between them measured the same or slightly slower).
+float accent_mask(vec2 world_xz, vec4 params) {
+	vec2 p = rotate(world_xz, ACCENT_ROTATION) * params.y + params.zw;
+	float low = params.x - ACCENT_EDGE;
+	float high = params.x + ACCENT_EDGE;
+	float n = accent_octave(p).r * (1.0 - ACCENT_DETAIL - ACCENT_FINE);
+	if (n + ACCENT_DETAIL + ACCENT_FINE <= low) {
+		return 0.0;
+	}
+	if (n >= high) {
+		return 1.0;
+	}
+	n += accent_octave(p * ACCENT_DETAIL_SCALE + ACCENT_DETAIL_OFFSET).g * ACCENT_DETAIL;
+	if (n + ACCENT_FINE <= low) {
+		return 0.0;
+	}
+	if (n >= high) {
+		return 1.0;
+	}
+	n += accent_octave(p * ACCENT_FINE_SCALE + ACCENT_FINE_OFFSET).b * ACCENT_FINE;
+	return smoothstep(low, high, n);
+}
+
 // Cubic B-spline sample from four bilinear taps (Sigg and Hadwiger), so a coarse texture
 // reads as a smooth field instead of bilinear diamonds.
 vec4 texture_bspline(sampler2D tex, vec2 uv) {
@@ -871,6 +943,29 @@ void fragment() {
 	float scree = unpainted * rule.y;
 	for (int j = 0; j < 9; j++) {
 		w[j] += g[j] * keep;
+	}
+	if (accent_components != 0 && keep > WEIGHT_EPSILON) {
+		// Accent patches take their share of each component's kept ground, in order (see
+		// GROUND ACCENTS). Constant indices into w[] only, as below.
+		for (int j = 0; j < 9; j++) {
+			float kept = g[j] * keep;
+			if (((accent_components >> j) & 1) == 0 || kept <= WEIGHT_EPSILON) {
+				continue;
+			}
+			float remaining = 1.0;
+			for (int e = 0; e < ACCENTS_PER_COMPONENT; e++) {
+				int index = j * ACCENTS_PER_COMPONENT + e;
+				int to = accent_layer[index];
+				if (to < 0) {
+					break;
+				}
+				float share = remaining * accent_mask(world_xz, accent_params[index]);
+				remaining -= share;
+				for (int k = 0; k < 9; k++) {
+					w[k] += kept * share * (float(to == k) - float(j == k));
+				}
+			}
+		}
 	}
 	if (cliff > 0.0 || scree > 0.0) {
 		// Each ground component hands its share to its rule slots (-1: it keeps it). Constant

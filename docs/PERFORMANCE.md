@@ -999,6 +999,34 @@ settling rebuild of the chunks it changed then spreads over the following frames
 4 ms budget. Mid-stroke the cliff follows the live normals; scree and lip appear at the
 settle, with the regenerated plants.
 
+## Ground accents (2026-09-27)
+
+Setup: RTX 3080, GPU checked idle first (`nvidia-smi`: 0 %, P8, 40 C), 1920x1080 window and
+SubViewport through the render harness, vsync off, world-viewport GPU time
+(`gpu` op, 3 s per sample, medians), in-run interleaved. A new 150 ft temperate forest map
+(seed 1234) at the home view with two accents injected into the palette (moss 0.22 at 7 m,
+grass 0.14 at 5 m; palette v5 was not installed yet), toggled with `accent_components` 0 / on
+(scratchpad jobs `p37d/accents_perf*.json`).
+
+| Configuration | Off (ms) | On (ms) | Delta |
+|---|---|---|---|
+| Home view with plants | 2.69 / 2.86 | 3.14 / 3.25 | +0.45 / +0.38 |
+| Home view, scatter hidden (bare full-screen ground) | 2.03 / 2.07 | 2.61 / 2.63 | +0.58 / +0.56 |
+
+- The shader with accents off costs what the pre-accent shader did (bare view 2.031 against
+  2.034 for the previous commit's include swapped in, `ground_perf.gd shader`, second pair;
+  the first pair sat in warm-up drift): nothing is paid until a biome lists accents.
+- Most of the cost is drawing a second surface where patches meet the ground (the two-pass
+  height blend at every edge pixel), not the mask: a variant whose mask draws a coarser
+  pattern with more edge (one fetch, 50 % coverage) cost more (+0.73 / +0.75), and one whose
+  loop runs without the mask (`share = 0`) cost +0.05.
+- The noise was first the ground's hashed `value_noise` (four pcg2d hashes per octave):
+  +0.68 / +0.64 / +0.65 on the bare view. The 32 x 32 lattice texture read with one bilinear
+  fetch per octave took it to +0.56 / +0.58. Fetching all three octaves unconditionally
+  instead of skipping the finer ones where the result is already decided measured the same
+  or slightly slower (+0.60 / +0.60), so the early-outs stay. Dynamic indexing of the
+  per-component weights was checked too (a constant-index variant: same cost).
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one
