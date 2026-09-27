@@ -73,17 +73,28 @@ func _build_header() -> void:
 	_header.gui_input.connect(_on_header_gui_input)
 	add_child(_header)
 
+	# The chevron rotates inside a plain Control holder, never as a direct child
+	# of the header: a Container resets its children's rotation and scale every
+	# time it re-sorts them (confirmed by probe on 4.7), so hiding and showing
+	# the pane a Foldout sits on snapped an expanded chevron back to "closed"
+	# while the body stayed open.
+	var chevron_holder := Control.new()
+	chevron_holder.name = "ChevronHolder"
+	chevron_holder.custom_minimum_size = Vector2(CHEVRON_SIZE, CHEVRON_SIZE)
+	chevron_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chevron_holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_header.add_child(chevron_holder)
+
 	_chevron = TextureRect.new()
 	_chevron.name = "Chevron"
 	_chevron.texture = IconButton.load_icon("chevron-right")
-	_chevron.custom_minimum_size = Vector2(CHEVRON_SIZE, CHEVRON_SIZE)
+	_chevron.size = Vector2(CHEVRON_SIZE, CHEVRON_SIZE)
 	_chevron.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_chevron.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_chevron.pivot_offset = Vector2(CHEVRON_SIZE, CHEVRON_SIZE) / 2.0
 	_chevron.self_modulate = ThemeColors.TEXT_MUTED
 	_chevron.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_chevron.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_header.add_child(_chevron)
+	chevron_holder.add_child(_chevron)
 
 	if icon:
 		var picture := TextureRect.new()

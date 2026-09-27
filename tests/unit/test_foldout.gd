@@ -35,6 +35,20 @@ func test_starts_expanded_at_natural_height() -> void:
 	assert_almost_eq(foldout._chevron.rotation, PI / 2.0, 0.001)
 
 
+## Leaving a pane and coming back hides and shows the Foldout, and the header
+## container re-sorts. A container resets its children's rotation on every sort,
+## which used to snap an expanded chevron back to "closed" while the body stayed
+## open.
+func test_expanded_chevron_survives_a_hide_and_show() -> void:
+	var foldout := _foldout(true)
+	foldout.visible = false
+	await wait_process_frames(2)
+	foldout.visible = true
+	await wait_process_frames(2)
+	assert_true(foldout.expanded)
+	assert_almost_eq(foldout._chevron.rotation, PI / 2.0, 0.001)
+
+
 func test_toggle_emits_and_starts_tween() -> void:
 	var foldout := _foldout()
 	watch_signals(foldout)
