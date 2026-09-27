@@ -29,7 +29,9 @@ enum State {INACTIVE, PLACING_START, PLACING_WAYPOINT, PLACING_VOLUME_CENTER, PL
 
 enum Mode { LINE, SPHERE, CYLINDER }
 
-const TERRAIN_COLLISION_LAYER: int = 1
+## Ground and water surfaces (WaterSurface.WALKABLE_MASK): a point over a river is on its
+## surface, where the grid is, not on the bed under it.
+const TERRAIN_COLLISION_LAYER: int = WaterSurface.WALKABLE_MASK
 const TOKEN_COLLISION_LAYER: int = 2
 const RAYCAST_LENGTH: float = 200.0
 

@@ -66,6 +66,8 @@ var _whoosh_armed: bool = true  # Re-armed only after speed drops back below the
 # Water interaction state (see WaterZone / set_submerged())
 var _is_submerged: bool = false
 var _submerge_tween: Tween = null
+## Loops while the token floats in deep water (_update_floating()).
+var _bob_tween: Tween = null
 
 # Tweens
 var _pickup_tween: Tween = null
@@ -184,6 +186,7 @@ func is_network_interpolating() -> bool:
 
 func _exit_tree() -> void:
 	_kill_submerge_tween()
+	_kill_bob_tween()
 
 	# Clean up input hints if the token is freed mid-drag (e.g. level clear)
 	if _is_currently_dragging or _is_settling:
@@ -200,6 +203,9 @@ func _on_dragging_started() -> void:
 
 	_is_currently_dragging = true
 	set_process(true)
+	if _bob_tween != null:
+		_kill_bob_tween()
+		_apply_bob(0.0)
 
 	# Store start position for cancel
 	_drag_start_position = rigid_body.global_position
@@ -398,6 +404,7 @@ func _on_settle_complete() -> void:
 
 	# Sync hierarchy positions
 	_sync_parent_position()
+	_update_floating()
 
 	# Only spawn effects and emit signals for real drops, not cancel-to-start
 	if not was_cancel:
@@ -420,6 +427,9 @@ func _on_settle_complete() -> void:
 ## it finished rising, a scroll-lowered drag) still lands on that ground instead of
 ## staying where it is. Starting at the top rather than above the whole map keeps an
 ## overhang above the token (a bridge, a roof on a Blender map) out of the cast.
+## In water the float rule applies (WaterSurface.landing_below): the bed in wadeable water,
+## the surface less a small draft in deep water; the water cast starts higher than the
+## token's top, which can be under the surface of deep water.
 ## Returns Vector3 or null if no surface is found.
 func _find_landing_position() -> Variant:
 	if not rigid_body or not collision_shape or not collision_shape.shape:
@@ -430,18 +440,56 @@ func _find_landing_position() -> Variant:
 	var scaled_top_y = (collision_shape.position.y + aabb.end.y) * rigid_body.scale.y
 	var top_world = rigid_body.global_position + Vector3(0, scaled_top_y, 0)
 
-	var space_state = get_world_3d().direct_space_state
-	var query = PhysicsRayQueryParameters3D.create(top_world, top_world + Vector3.DOWN * 100.0)
-	query.collision_mask = TERRAIN_COLLISION_LAYER  # Only hit terrain, not other tokens
-	query.exclude = [rigid_body.get_rid()]
-	var hit = space_state.intersect_ray(query)
-
-	if not hit:
+	# Terrain and water only (layers 1 and WaterSurface.LAYER), never other tokens.
+	var ground := WaterSurface.landing_below(
+		get_world_3d().direct_space_state, top_world, top_world.y
+	)
+	if ground == Vector3.INF:
 		return null
 
-	# Place token so its bottom sits on the hit surface
-	var landing_y = hit.position.y - scaled_bottom_y
+	# Place token so its bottom sits on the landing ground
+	var landing_y = ground.y - scaled_bottom_y
 	return Vector3(rigid_body.global_position.x, landing_y, rigid_body.global_position.z)
+
+
+## The world position of this token's base (the bottom of its collision shape).
+func _base_position() -> Vector3:
+	var bottom := 0.0
+	if collision_shape and collision_shape.shape:
+		var aabb := collision_shape.shape.get_debug_mesh().get_aabb()
+		bottom = (collision_shape.position.y + aabb.position.y) * rigid_body.scale.y
+	return rigid_body.global_position + Vector3(0, bottom, 0)
+
+
+## Starts or stops the floating bob (WaterSurface.BOB_M over BOB_PERIOD_S on the visual
+## children, on top of the submerge sink) by whether the token now rests at a floating
+## height (WaterSurface.floats_at). Called when a landing or a synced move settles, so every
+## peer bobs its own copy; purely visual, the synced position is untouched.
+func _update_floating() -> void:
+	if not rigid_body or not rigid_body.is_inside_tree():
+		return
+	var floating := WaterSurface.floats_at(get_world_3d().direct_space_state, _base_position())
+	if floating == (_bob_tween != null):
+		return
+	_kill_bob_tween()
+	if not floating:
+		_apply_bob(0.0)
+		return
+	_bob_tween = create_tween().set_loops()
+	_bob_tween.tween_method(_apply_bob, 0.0, TAU, WaterSurface.BOB_PERIOD_S)
+
+
+func _apply_bob(phase: float) -> void:
+	var sink := -SUBMERGE_SINK_AMOUNT if _is_submerged else 0.0
+	for child in _visual_children:
+		if is_instance_valid(child):
+			child.position.y = sink + sin(phase) * WaterSurface.BOB_M
+
+
+func _kill_bob_tween() -> void:
+	if _bob_tween and _bob_tween.is_valid():
+		_bob_tween.kill()
+	_bob_tween = null
 
 
 # -------------------------------------------------------------------------
@@ -791,6 +839,7 @@ func _stop_network_interpolation() -> void:
 	for child in _visual_children:
 		if is_instance_valid(child):
 			child.transform.basis = Basis.IDENTITY
+	_update_floating()
 
 
 ## Directly set transform without interpolation (for initial placement)
@@ -817,6 +866,7 @@ func set_transform_immediate(p_position: Vector3, p_rotation: Vector3, p_scale: 
 	_network_target_position = p_position
 	_network_target_rotation = p_rotation
 	_network_target_scale = p_scale
+	_update_floating()
 
 
 ## Cancel an in-progress drag because the host denied our lock claim.
