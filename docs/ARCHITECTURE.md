@@ -930,6 +930,22 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   `biome_blend_width` of the top score show), so an edge frays along texture detail
   instead of following the brush. Surfaces with zero weight at a pixel are not sampled.
   The dry/lush tints fade out on unsaturated albedo so snow is not stained.
+- **Two-scale edge (T7):** that frayed edge is decimetres wide and alone read like a decal
+  beside a Blender map's layers, which fade over metres. A second, broad scale:
+  `BiomeGroundLayers.broad_image()` box-filters the weight mirror by `BROAD_FACTOR` (14
+  samples, 3.5 m per texel at 0.25 m; natively, via `Image.resize` trilinear), bound as
+  `biome_broad` and read with a cubic B-spline, so each painted layer's mean colour (last
+  albedo mip) recolours the ground around it in a gradient about 7 m wide
+  (`biome_broad_strength` 0.8, full at broad weight `biome_broad_full` 0.4), fading out where
+  the fine edge already shows the layer. The recolour is luminance-based (layer mean x the
+  pixel's luminance over the base mean): a per-channel ratio turned green grass pink at the
+  edge of a brown layer. `update_biome_region()` refreshes the broad texture from the whole
+  mirror (`ImageTexture.update`) after each blit; 25 us measured on a 200 ft map. A forest
+  painted on grass now reads as woodland floor fading into lawn; the duff patches under the
+  undergrowth keep their crisp fine edge inside that halo. GPU cost not measured: the only session
+  had the GPU held by another application (frame GPU times 70-240 ms, no usable A/B); the
+  shader adds 4 bilinear fetches of a small texture per pixel with any layer bound, plus one
+  lowest-mip fetch per layer present.
 - **Biome ground updates:** the brush edits the masks, then calls
   `update_biome_region(sample_rect)`; that recomputes those texels into a CPU mirror
   (`get_biome_weights()`) and blits just that rectangle into the `DrawableTexture2D` the

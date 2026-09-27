@@ -138,6 +138,44 @@ func test_partial_update_touches_only_the_rect_and_matches_full() -> void:
 	assert_eq(terrain.get_biome_weights().get_data(), fresh, "clipped full update matches")
 
 
+func test_broad_image_is_a_box_filtered_weight_map() -> void:
+	var f := BiomeGroundLayers.BROAD_FACTOR
+	var weights := Image.create_empty(8 * f, 6 * f, false, Image.FORMAT_RGBA8)
+	# One 2 x 2 broad-texel painted block in channel G, full density.
+	weights.fill_rect(Rect2i(2 * f, 2 * f, 2 * f, 2 * f), Color8(0, 255, 0, 0))
+	var broad := BiomeGroundLayers.broad_image(weights)
+	assert_eq(broad.get_size(), Vector2i(8, 6), "one texel per BROAD_FACTOR samples")
+	assert_eq(broad.get_format(), Image.FORMAT_RGBA8)
+	var inside := broad.get_pixel(2, 2)
+	var outside := broad.get_pixel(7, 5)
+	assert_gt(inside.g, 0.6, "the painted block stays painted")
+	assert_eq(inside.r, 0.0, "channels stay apart")
+	assert_lt(outside.g, 0.05, "far from the block stays clear")
+	assert_eq(
+		BiomeGroundLayers.broad_size(Vector2i(10 * f + 1, 3 * f)),
+		Vector2i(11, 3),
+		"partial texels round up"
+	)
+	assert_eq(BiomeGroundLayers.broad_size(Vector2i(3, 3)), Vector2i.ONE, "never empty")
+
+
+func test_broad_texture_follows_mask_edits() -> void:
+	var doc := _doc("grass", [FOREST])
+	var terrain := _terrain(doc)
+	var broad := terrain.get_broad_texture()
+	assert_not_null(broad)
+	assert_eq(terrain.get_material().get_shader_parameter("biome_broad"), broad)
+	assert_eq(
+		broad.get_size(),
+		Vector2(BiomeGroundLayers.broad_size(Vector2i(doc.samples_x(), doc.samples_z())))
+	)
+	_paint(doc, Rect2i(0, 0, 40, 40), 1, 255)
+	terrain.update_biome_region(Rect2i(0, 0, 40, 40))
+	assert_eq(terrain.get_material().get_shader_parameter("biome_broad"), broad, "updated in place")
+	var expected := BiomeGroundLayers.broad_image(terrain.get_biome_weights())
+	assert_gt(expected.get_pixel(1, 1).r, 0.9, "the painted corner reads in the broad map")
+
+
 func test_new_biome_mid_session_takes_a_free_layer() -> void:
 	var doc := _doc("grass", [FOREST])
 	_paint(doc, Rect2i(0, 0, 10, 10), 1, 255)
