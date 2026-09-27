@@ -147,6 +147,18 @@
  *     smoothstep, never under the cliff.
  * The noise domain is sheared by height so it varies up a face.
  *
+ * WET DRESSING (phase 4, P4-3; WaterDressing in utils/ computes the field, TerrainRules
+ * .compose_water is the CPU twin of the composition): water_weights holds per document
+ * sample the water bed weight (R: under the water) and the wet shore weight (G: a band just
+ * above it, a couple of metres wide and fading with the height over the water). After the
+ * cliff, the bed takes its share of everything but painted rock, painted ground and built
+ * slots included (PAINT_WATER_YIELD: a path stops at the water and the bed shows under it,
+ * as at a rock face), and the shore takes its share of the ground the rules kept. Both are
+ * handed out per ground component to that component's biome's water bed and shore surfaces
+ * (rule_bed_layer / rule_shore_layer), as cliff and scree are. The field's A is the wet
+ * line (under the water and a strip just above it): the final albedo darkens and the
+ * roughness drops there (WET_*), so any bank reads wet at the waterline.
+ *
  * BROAD EDGE (the second scale of a two-scale edge, added after T7 renders beside the
  * river map): the frayed edge above is a few decimetres wide and on its own reads like a
  * decal laid on the lawn, where a hand-painted Blender layer fades over several metres.
@@ -227,6 +239,14 @@ uniform float layer_tile_m[8];
 // scree (8 = the base, -1 = none).
 uniform int rule_cliff_layer[9];
 uniform int rule_scree_layer[9];
+// Per ground component likewise: the slot drawing its water bed and wet shore (see WET
+// DRESSING; -1 = none, the share stays with the ground).
+uniform int rule_bed_layer[9];
+uniform int rule_shore_layer[9];
+// The wet dressing (WaterDressing): one RGBA8 texel per document sample, R bed weight, G
+// shore weight, A the wet line (B, depth, is for the CPU). water_present 0 skips the fetch.
+uniform int water_present = 0;
+uniform sampler2D water_weights : hint_default_black, filter_linear, repeat_disable;
 // Defaults chosen from game-camera renders (docs/ARCHITECTURE.md "Authored terrain"):
 // lower contrast or a wider blend reads as a soft stain, stronger edge noise turns
 // partial paint into hard-edged blobs.
@@ -334,6 +354,14 @@ const vec2 PAINT_NOISE_OFFSET = vec2(7.9, 3.1);
 // Painted ground and built slots yield this fraction of the cliff rule to the automatic rock
 // (TerrainRules.PAINT_CLIFF_YIELD and compose_paint): paths cover walkable ground only.
 const float PAINT_CLIFF_YIELD = 1.0;
+// And of the water bed (TerrainRules.PAINT_WATER_YIELD and compose_water): paths yield at
+// the water like at rock faces, and the bed shows through.
+const float PAINT_WATER_YIELD = 1.0;
+// The wet line (water_weights.a): albedo darkened by up to WET_DARKEN, roughness pulled
+// toward WET_ROUGHNESS by up to WET_GLOSS. Judged at the game camera (P4-3 look pass).
+const float WET_DARKEN = 0.35;
+const float WET_ROUGHNESS = 0.3;
+const float WET_GLOSS = 0.6;
 // Ground accents: the twins of GroundAccents' constants (tests/unit/test_ground_accents.gd).
 const int ACCENTS_PER_COMPONENT = 3;
 const float ACCENT_EDGE = 0.045;
@@ -924,12 +952,21 @@ void fragment() {
 	float yielding = painted_total - held;
 	float unpainted = clamp(1.0 - painted_total, 0.0, 1.0);
 	vec2 rule = vec2(0.0);
+	vec2 water = vec2(0.0);
+	float wet_line = 0.0;
 #ifndef GROUND_SKIRT
 	if (unpainted + yielding > WEIGHT_EPSILON) {
 		rule = rule_weights(n_geom.y, v_fields, v_position);
 	}
+	if (water_present != 0) {
+		vec4 wet_field = texture(water_weights, weight_uv(world_xz));
+		water = wet_field.rg;
+		wet_line = wet_field.a;
+	}
 #endif
-	float paint_scale = 1.0 - PAINT_CLIFF_YIELD * rule.x;
+	// TerrainRules.compose_water is the CPU twin of these lines.
+	float cliff_scale = 1.0 - PAINT_CLIFF_YIELD * rule.x;
+	float paint_scale = cliff_scale * (1.0 - PAINT_WATER_YIELD * water.x);
 	float g[9];
 	for (int i = 0; i < 4; i++) {
 		g[i] = ground_a[i];
@@ -938,9 +975,12 @@ void fragment() {
 		w[i + 4] = held_b[i] + (painted_b[i] - held_b[i]) * paint_scale;
 	}
 	g[BASE] = clamp(1.0 - dot(ground_a, vec4(1.0)) - dot(ground_b, vec4(1.0)), 0.0, 1.0);
-	float keep = unpainted * (1.0 - rule.x - rule.y);
-	float cliff = unpainted * rule.x + yielding * (1.0 - paint_scale);
-	float scree = unpainted * rule.y;
+	float cliff = unpainted * rule.x + yielding * (1.0 - cliff_scale);
+	float dry = 1.0 - water.x;
+	float bed = water.x * (unpainted * (1.0 - rule.x) + yielding * cliff_scale * PAINT_WATER_YIELD);
+	float scree = unpainted * rule.y * dry;
+	float shore = unpainted * (1.0 - rule.x - rule.y) * dry * water.y;
+	float keep = unpainted * (1.0 - rule.x - rule.y) * dry * (1.0 - water.y);
 	for (int j = 0; j < 9; j++) {
 		w[j] += g[j] * keep;
 	}
@@ -976,6 +1016,18 @@ void fragment() {
 				int to_cliff = rule_cliff_layer[j] >= 0 ? rule_cliff_layer[j] : j;
 				int to_scree = rule_scree_layer[j] >= 0 ? rule_scree_layer[j] : j;
 				add += g[j] * (cliff * float(to_cliff == k) + scree * float(to_scree == k));
+			}
+			w[k] += add;
+		}
+	}
+	if (bed > 0.0 || shore > 0.0) {
+		// The wet dressing, routed the same way (see WET DRESSING).
+		for (int k = 0; k < 9; k++) {
+			float add = 0.0;
+			for (int j = 0; j < 9; j++) {
+				int to_bed = rule_bed_layer[j] >= 0 ? rule_bed_layer[j] : j;
+				int to_shore = rule_shore_layer[j] >= 0 ? rule_shore_layer[j] : j;
+				add += g[j] * (bed * float(to_bed == k) + shore * float(to_shore == k));
 			}
 			w[k] += add;
 		}
@@ -1078,10 +1130,11 @@ void fragment() {
 	float cavity = mix(
 		1.0 - cavity_strength * clumpiness, 1.0, smoothstep(0.0, 0.8, ground.height)
 	);
-	ALBEDO = apply_variation(ground.albedo * cavity, world_xz);
+	// The wet line (WET DRESSING): wet ground is darker and glossier, whatever its surface.
+	ALBEDO = apply_variation(ground.albedo * cavity, world_xz) * (1.0 - WET_DARKEN * wet_line);
 	AO = ground.orm.r;
 	AO_LIGHT_AFFECT = 0.0;
-	ROUGHNESS = ground.orm.g;
+	ROUGHNESS = mix(ground.orm.g, WET_ROUGHNESS, WET_GLOSS * wet_line);
 	METALLIC = ground.orm.b;
 
 	vec3 n_map = normalize(ground.normal + n_geom * 1e-4);

@@ -101,6 +101,10 @@ const PAINT_EDGE_NOISE := 0.35
 ## the automatic rock, so a road painted across a ledge stops at the edge and resumes on
 ## top. Painted cliff-role surfaces never yield (restyling a face is deliberate).
 const PAINT_CLIFF_YIELD := 1.0
+## Likewise under water (P4-3): painted ground and built surfaces yield this fraction of the
+## water bed's weight (WaterDressing) to the bed, so a path runs to the water's edge and a
+## river crossing it shows its bed; painted cliff-role surfaces hold.
+const PAINT_WATER_YIELD := 1.0
 
 const INV_UINT_MAX := 1.0 / 4294967295.0
 const _MASK32 := 0xFFFFFFFF
@@ -294,12 +298,29 @@ static func painted_lookup(xz: Vector2, seed_value: int) -> Vector2:
 ##   keep         the unpainted ground left to the biome ground and base.
 ## Held paint keeps its weight. The shares add up to 1.
 static func compose_paint(yielding: float, held: float, rule: Vector2) -> Vector4:
+	var shares := compose_water(yielding, held, rule, Vector2.ZERO)
+	return Vector4(shares[0], shares[1], shares[2], shares[3])
+
+
+## compose_paint() with the wet dressing (P4-3; `water` = Vector2(bed, shore) weights,
+## WaterDressing): [keep, cliff, scree, paint_scale, bed, shore]. After the cliff, the water
+## bed takes its weight's share of everything left but held paint (the unpainted ground and
+## the yielding paint, PAINT_WATER_YIELD: a path under water shows the bed), then the shore
+## takes its share of the kept ground (paint on a bank stays paint; scree under water turns
+## to bed). The shares add up to 1 with the held paint. The shader writes the same lines.
+static func compose_water(
+	yielding: float, held: float, rule: Vector2, water: Vector2
+) -> PackedFloat32Array:
 	var unpainted := clampf(1.0 - yielding - held, 0.0, 1.0)
-	var paint_scale := 1.0 - PAINT_CLIFF_YIELD * rule.x
-	var cliff := unpainted * rule.x + yielding * (1.0 - paint_scale)
-	var scree := unpainted * rule.y
-	var keep := unpainted * (1.0 - rule.x - rule.y)
-	return Vector4(keep, cliff, scree, paint_scale)
+	var cliff_scale := 1.0 - PAINT_CLIFF_YIELD * rule.x
+	var paint_scale := cliff_scale * (1.0 - PAINT_WATER_YIELD * water.x)
+	var cliff := unpainted * rule.x + yielding * (1.0 - cliff_scale)
+	var dry := 1.0 - water.x
+	var bed := water.x * (unpainted * (1.0 - rule.x) + yielding * cliff_scale * PAINT_WATER_YIELD)
+	var scree := unpainted * rule.y * dry
+	var shore := unpainted * (1.0 - rule.x - rule.y) * dry * water.y
+	var keep := unpainted * (1.0 - rule.x - rule.y) * dry * (1.0 - water.y)
+	return PackedFloat32Array([keep, cliff, scree, paint_scale, bed, shore])
 
 
 # ---------------------------------------------------------------------------------------

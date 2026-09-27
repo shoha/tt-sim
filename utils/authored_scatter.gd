@@ -598,11 +598,10 @@ func _apply_ready_jobs() -> void:
 		set_cells(rows_by_cell)
 
 
-## A copy of the parts of `doc` generation reads, for a worker. The arrays are duplicated:
-## GDScript packed arrays are shared by reference, not copy-on-write (measured in 4.7: a
-## write through one variable shows in every other holding the array), so without the copy
-## a worker would read masks while the brush writes them, and an append that reallocates
-## would pull the buffer out from under it. About 0.1 ms for a 200 ft map.
+## A copy of what generation reads of `doc` (wet dressing too), for a worker, duplicated:
+## GDScript packed arrays are shared by reference (measured in 4.7), so without the copy a
+## worker would read masks while the brush writes them, and an append that reallocates would
+## pull the buffer out from under it. About 0.1 ms for a 200 ft map.
 static func _snapshot(doc: MapDocument) -> MapDocument:
 	var copy := MapDocument.new()
 	copy.map_seed = doc.map_seed
@@ -615,6 +614,7 @@ static func _snapshot(doc: MapDocument) -> MapDocument:
 	copy.biome_density = doc.biome_density.duplicate()
 	copy.surface_ids = doc.surface_ids.duplicate()
 	copy.surface_weights = doc.surface_weights.duplicate()
+	copy.water_dressing = doc.water_dressing.duplicate()
 	return copy
 
 

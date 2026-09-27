@@ -265,7 +265,7 @@ static func sync_skirt(skirt: ShaderMaterial, ground: ShaderMaterial, layer_coun
 
 
 ## The ground accents of base surface `base` where no painted biome says otherwise: those of
-## the palette's first biome on that ground (the biome AuthoredTerrain.base_rule_surfaces
+## the palette's first biome on that ground (the biome GroundPalette.base_rule_surfaces
 ## reads), else none.
 static func base_accents(base: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> Array:
 	for biome in PaletteLibrary.biomes(root):

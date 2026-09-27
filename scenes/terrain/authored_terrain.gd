@@ -38,6 +38,12 @@ extends Node3D
 ## surface first painted mid-session takes a free slot by setting uniforms; the material is
 ## never rebuilt. CPU mirrors of the textures (get_ground_weights()) are kept for tests.
 ##
+## Wet dressing (P4-3). On a map with water the ground also draws each biome's water bed
+## and wet shore where MapDocument.water_dressing says (WaterDressing: bed, shore, wet line
+## per sample; build() computes it, the editor recomputes it after a water or height edit and
+## calls refresh_water_dressing()), as rule surfaces like cliff and scree, and paths yield to
+## the bed. The field is one RGBA8 ImageTexture (water_weights), replaced whole.
+##
 ## Rule fields. The automatic dressing reads two per-vertex fields (curvature and
 ## steepness nearby, TerrainRules.sample_fields) carried in the chunks' UV2. They are kept
 ## for the whole grid (get_rule_fields()); settle_heights() recomputes them
@@ -104,6 +110,10 @@ var _plan: Dictionary = {}
 ## Biome ids and painted surface ids the current plan covers; a change means a re-plan.
 var _planned_biomes: int = -1
 var _planned_surfaces: PackedStringArray = PackedStringArray()
+## Whether the current plan gave the water bed and shore surfaces slots.
+var _planned_water: bool = false
+## The wet dressing texture (MapDocument.water_dressing; WaterDressing), null without water.
+var _water_texture: ImageTexture = null
 ## Overflowed surfaces already warned about (surface -> true).
 var _warned_fallbacks: Dictionary = {}
 ## The weight maps' CPU mirrors (slots 0-3, 4-7), their textures and their broad scales.
@@ -158,133 +168,12 @@ static func create(
 	return terrain
 
 
-## Resource paths of every palette texture build() binds for `doc`: the base surface's
-## maps, each painted biome's ground, cliff and scree surface maps, the painted surfaces'
-## and the base's rule surfaces. A caller can load them on background threads first, so
-## build() finds them in the resource cache instead of loading on the main thread (about
-## 35 ms cold for one surface).
+## Resource paths of every palette texture build() binds for `doc` (GroundPalette, where
+## the palette helpers live).
 static func texture_paths(
 	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> PackedStringArray:
-	var surfaces := PaletteLibrary.surfaces(root)
-	var names := [doc.base_surface]
-	names.append_array(Array(base_rule_surfaces(doc.base_surface, root)))
-	names.append_array(Array(doc.surface_ids))
-	var accents := GroundAccents.base_accents(doc.base_surface, root)
-	names.append_array(GroundAccents.surface_names(accents))
-	for biome_id in doc.biome_ids:
-		var biome := PaletteLibrary.biome(biome_id, root)
-		for key in ["ground_surface", "cliff_surface", "scree_surface"]:
-			names.append(biome.get(key, ""))
-		names.append_array(GroundAccents.surface_names(biome.get("ground_accents", [])))
-	var paths := PackedStringArray()
-	for surface_name in names:
-		var surface: Dictionary = surfaces.get(surface_name, {})
-		for key in LAYER_MAPS:
-			var relative: Variant = surface.get(key, "")
-			if relative is String and relative != "":
-				var path := root.path_join(relative)
-				if not path in paths and ResourceLoader.exists(path):
-					paths.append(path)
-	return paths
-
-
-## The cliff and scree surfaces [cliff, scree] that dress base surface `base` where no
-## painted biome says otherwise: those of the palette's first biome on that ground, else
-## the palette's first cliff surface and no scree ("" = none).
-static func base_rule_surfaces(
-	base: String, root: String = PaletteLibrary.DEFAULT_ROOT
-) -> PackedStringArray:
-	for biome in PaletteLibrary.biomes(root):
-		if biome.get("ground_surface", "") == base:
-			return PackedStringArray(
-				[biome.get("cliff_surface", ""), biome.get("scree_surface", "")]
-			)
-	var cliffs := PaletteLibrary.surfaces_with_role("cliff", root)
-	return PackedStringArray([cliffs[0] if not cliffs.is_empty() else "", ""])
-
-
-## The ground material for palette surface `surface_name`: the authored ground shader
-## with the surface's albedo, normal and ORM bound at its tile size. A surface the palette
-## does not have, or whose albedo does not load, gets flat fallback textures and a
-## warning, and the material carries FALLBACK_META so callers can tell.
-static func build_ground_material(
-	surface_name: String, map_seed: int = 0, root: String = PaletteLibrary.DEFAULT_ROOT
-) -> ShaderMaterial:
-	var material := ShaderMaterial.new()
-	material.shader = GROUND_SHADER
-	material.set_shader_parameter("breakup_seed", map_seed & 0x7fffffff)
-	var surface: Dictionary = PaletteLibrary.surfaces(root).get(surface_name, {})
-	var albedo := _load_texture(root, surface.get("albedo", ""))
-	if albedo == null:
-		push_warning(
-			(
-				"AuthoredTerrain: surface '%s' is not in the palette at %s; using a plain ground"
-				% [surface_name, root]
-			)
-		)
-		material.set_shader_parameter("albedo_tex", _solid_texture(FALLBACK_ALBEDO))
-		material.set_shader_parameter("orm_tex", _solid_texture(FALLBACK_ORM))
-		material.set_meta(FALLBACK_META, true)
-		return material
-	material.set_shader_parameter("albedo_tex", albedo)
-	material.set_shader_parameter("tile_m", float(surface["tile_m"]))
-	var normal := _load_texture(root, surface.get("normal", ""))
-	if normal != null:
-		material.set_shader_parameter("normal_tex", normal)
-	var orm := _load_texture(root, surface.get("orm", ""))
-	material.set_shader_parameter("orm_tex", orm if orm != null else _solid_texture(FALLBACK_ORM))
-	var height := _load_texture(root, surface.get("height", ""))
-	if height != null:
-		material.set_shader_parameter("height_tex", height)
-	return material
-
-
-## Mean albedo of a palette surface (the last mip of its albedo, a box-filtered mean), or
-## null when the surface or its albedo is missing. GroundLayerTable ranks overflow
-## fallbacks by it; about 10 ms per surface (BPTC decompression), paid only on overflow.
-static func surface_mean_albedo(
-	surface_name: String, root: String = PaletteLibrary.DEFAULT_ROOT
-) -> Variant:
-	var surface: Dictionary = PaletteLibrary.surfaces(root).get(surface_name, {})
-	var albedo := _load_texture(root, surface.get("albedo", ""))
-	if albedo == null:
-		return null
-	var image := albedo.get_image()
-	if image == null or image.is_empty():
-		return null
-	if image.is_compressed() and image.decompress() != OK:
-		return null
-	image.convert(Image.FORMAT_RGBA8)
-	if not image.has_mipmaps():
-		image.generate_mipmaps()
-	var offset := image.get_mipmap_offset(image.get_mipmap_count())
-	var data := image.get_data()
-	return Color8(data[offset], data[offset + 1], data[offset + 2])
-
-
-## True when palette surface `surface_name` can be drawn (it exists and its albedo loads).
-static func surface_available(
-	surface_name: String, root: String = PaletteLibrary.DEFAULT_ROOT
-) -> bool:
-	var surface: Dictionary = PaletteLibrary.surfaces(root).get(surface_name, {})
-	var path: String = surface.get("albedo", "")
-	return path != "" and ResourceLoader.exists(root.path_join(path))
-
-
-static func _load_texture(root: String, relative_path: String) -> Texture2D:
-	if relative_path == "":
-		return null
-	var path := root.path_join(relative_path)
-	if not ResourceLoader.exists(path):
-		return null
-	return ResourceLoader.load(path) as Texture2D
-
-
-static func _solid_texture(color: Color) -> ImageTexture:
-	var image := Image.create_empty(1, 1, false, Image.FORMAT_RGBA8)
-	image.fill(color)
-	return ImageTexture.create_from_image(image)
+	return GroundPalette.texture_paths(doc, root)
 
 
 ## Builds (or rebuilds from scratch) everything for `doc`; the chunk meshes only with
@@ -304,8 +193,11 @@ func build(
 	_chunk_heights.clear()
 	_skirt_dirty = false
 	_fields_dirty = Rect2i()
-	_material = build_ground_material(doc.base_surface, doc.map_seed, root)
+	_material = GroundPalette.build_ground_material(doc.base_surface, doc.map_seed, root)
+	# The wet dressing first: whether the map has water decides the layer plan.
+	WaterDressing.refresh(doc)
 	_build_ground_layers()
+	_bind_water_dressing()
 	_fields = TerrainMeshBuilder.grid_fields(doc)
 	if with_chunks:
 		rebuild_chunks(TerrainMeshBuilder.chunk_cells(doc))
@@ -449,7 +341,11 @@ func update_ground_region(sample_rect: Rect2i) -> void:
 	var start := Time.get_ticks_usec()
 	var grid := Rect2i(0, 0, document.samples_x(), document.samples_z())
 	var rect := sample_rect.intersection(grid)
-	if document.biome_ids.size() != _planned_biomes or document.surface_ids != _planned_surfaces:
+	if (
+		document.biome_ids.size() != _planned_biomes
+		or document.surface_ids != _planned_surfaces
+		or _has_water() != _planned_water
+	):
 		if _plan_layers():
 			rect = grid
 	if rect.has_area():
@@ -464,6 +360,43 @@ func update_ground_region(sample_rect: Rect2i) -> void:
 	last_biome_update_usec = Time.get_ticks_usec() - start
 
 
+## Brings the ground's wet dressing up to the document's water_dressing (WaterDressing
+## .refresh(), which the caller runs after a water or height edit): re-plans the layers when
+## the map gains or loses water (the bed and shore surfaces take slots only with water) and
+## uploads the field (the whole texture: about 0.25 MB on a 200 ft map).
+func refresh_water_dressing() -> void:
+	if _has_water() != _planned_water:
+		if _plan_layers():
+			update_ground_region(Rect2i(0, 0, document.samples_x(), document.samples_z()))
+	_bind_water_dressing()
+
+
+## The wet dressing texture (WaterDressing layout), or null with no water. Do not modify.
+func get_water_texture() -> ImageTexture:
+	return _water_texture
+
+
+func _has_water() -> bool:
+	return document != null and not document.water_dressing.is_empty()
+
+
+func _bind_water_dressing() -> void:
+	var field := document.water_dressing
+	var size := Vector2i(document.samples_x(), document.samples_z())
+	if field.size() != size.x * size.y * WaterDressing.CHANNELS:
+		_water_texture = null
+		_material.set_shader_parameter("water_present", 0)
+		_material.set_shader_parameter("water_weights", null)
+		return
+	var image := Image.create_from_data(size.x, size.y, false, Image.FORMAT_RGBA8, field)
+	if _water_texture != null and Vector2i(_water_texture.get_size()) == size:
+		_water_texture.update(image)
+	else:
+		_water_texture = ImageTexture.create_from_image(image)
+	_material.set_shader_parameter("water_weights", _water_texture)
+	_material.set_shader_parameter("water_present", 1)
+
+
 ## Starts loading the surface textures of palette biome `biome_id` (ground, cliff, scree,
 ## accents) on background threads, so the first dab that gives one a slot binds cached
 ## textures instead of loading them on the main thread (21 to 25 ms for a new surface,
@@ -472,7 +405,10 @@ func warm_biome_surface(biome_id: String) -> void:
 	var biome := PaletteLibrary.biome(biome_id, palette_root)
 	var bound := ground_layers()
 	var names := GroundAccents.surface_names(biome.get("ground_accents", []))
-	for key in ["ground_surface", "cliff_surface", "scree_surface"]:
+	var keys := ["ground_surface", "cliff_surface", "scree_surface"]
+	if _has_water():
+		keys.append_array(["water_bed_surface", "shore_surface"])
+	for key in keys:
 		names.append(biome.get(key, ""))
 	for surface_name: String in names:
 		if surface_name == "" or surface_name == document.base_surface or bound.has(surface_name):
@@ -558,33 +494,42 @@ func _build_ground_layers() -> void:
 func _plan_layers() -> bool:
 	var root := palette_root
 	var available := func(surface: String) -> bool:
-		return surface != "" and surface_available(surface, root)
+		return surface != "" and GroundPalette.surface_available(surface, root)
+	var pick := func(biome: Dictionary, key: String) -> String:
+		var surface: String = biome.get(key, "")
+		return surface if available.call(surface) else ""
 	var grounds := PackedStringArray()
 	var cliffs := PackedStringArray()
 	var screes := PackedStringArray()
+	var beds := PackedStringArray()
+	var shores := PackedStringArray()
 	var accents: Array = []
 	for biome_id in document.biome_ids:
 		var biome := PaletteLibrary.biome(biome_id, root)
-		var ground: String = biome.get("ground_surface", "")
-		var cliff: String = biome.get("cliff_surface", "")
-		var scree: String = biome.get("scree_surface", "")
-		grounds.append(ground if available.call(ground) else "")
-		cliffs.append(cliff if available.call(cliff) else "")
-		screes.append(scree if available.call(scree) else "")
+		grounds.append(pick.call(biome, "ground_surface"))
+		cliffs.append(pick.call(biome, "cliff_surface"))
+		screes.append(pick.call(biome, "scree_surface"))
+		beds.append(pick.call(biome, "water_bed_surface"))
+		shores.append(pick.call(biome, "shore_surface"))
 		accents.append(GroundAccents.drawable(biome.get("ground_accents", []), available))
 	var painted := PackedStringArray()
 	for surface in document.surface_ids:
 		painted.append(surface if available.call(surface) else "")
-	var base_rules := base_rule_surfaces(document.base_surface, root)
+	var base_rules := GroundPalette.base_rule_surfaces(document.base_surface, root)
+	base_rules.append_array(GroundPalette.base_water_surfaces(document.base_surface, root))
 	for i in base_rules.size():
 		if not available.call(base_rules[i]):
 			base_rules[i] = ""
+	var water := _has_water()
 	var surfaces := PaletteLibrary.surfaces(root)
 	var inputs := {
 		"base": document.base_surface,
 		"biome_ground": grounds,
 		"biome_cliff": cliffs,
 		"biome_scree": screes,
+		"biome_bed": beds,
+		"biome_shore": shores,
+		"water": water,
 		"biome_coverage":
 		GroundLayerTable.biome_coverage(
 			document.biome_slots, document.biome_density, document.biome_ids.size()
@@ -593,7 +538,8 @@ func _plan_layers() -> bool:
 		"base_rules": base_rules,
 		"role_of":
 		func(surface: String) -> String: return surfaces.get(surface, {}).get("role", "ground"),
-		"color_of": func(surface: String) -> Variant: return surface_mean_albedo(surface, root),
+		"color_of":
+		func(surface: String) -> Variant: return GroundPalette.surface_mean_albedo(surface, root),
 		"biome_accents": accents,
 		"base_accents":
 		GroundAccents.drawable(GroundAccents.base_accents(document.base_surface, root), available),
@@ -623,6 +569,7 @@ func _plan_layers() -> bool:
 	_plan = result
 	_planned_biomes = document.biome_ids.size()
 	_planned_surfaces = document.surface_ids.duplicate()
+	_planned_water = water
 	_bind_layers(previous)
 	return moved
 
@@ -647,8 +594,10 @@ func _bind_layers(previous: Array) -> void:
 				surfaces.get(layers[index].surface, {}) if index < layers.size() else {}
 			)
 			for key in LAYER_MAPS:
-				var texture := _load_texture(palette_root, surface.get(key, ""))
-				maps[key].append(texture if texture else _solid_texture(LAYER_DEFAULTS[key]))
+				var texture := GroundPalette.load_texture(palette_root, surface.get(key, ""))
+				maps[key].append(
+					texture if texture else GroundPalette.solid_texture(LAYER_DEFAULTS[key])
+				)
 			tiles.append(float(surface.get("tile_m", DEFAULT_LAYER_TILE_M)))
 		for key in LAYER_MAPS:
 			_material.set_shader_parameter(LAYER_MAPS[key], maps[key])
@@ -661,6 +610,10 @@ func _bind_layers(previous: Array) -> void:
 	_material.set_shader_parameter("rule_cliff_layer", cliff_of)
 	_material.set_shader_parameter(
 		"rule_scree_layer", GroundLayerTable.shader_routing(_plan.scree_of)
+	)
+	_material.set_shader_parameter("rule_bed_layer", GroundLayerTable.shader_routing(_plan.bed_of))
+	_material.set_shader_parameter(
+		"rule_shore_layer", GroundLayerTable.shader_routing(_plan.shore_of)
 	)
 	GroundAccents.bind(_material, _plan, document.map_seed)
 	if _skirt_material != null:

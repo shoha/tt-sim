@@ -129,6 +129,11 @@ var pond_mask: PackedByteArray = PackedByteArray()
 ## at v = (j + 0.5) / water_flow_size.y (WaterFlowBaker documents the frame). Empty = none.
 var water_flow: PackedByteArray = PackedByteArray()
 var water_flow_size: Vector2i = Vector2i.ZERO
+## Derived, never saved: the wet dressing field (WaterDressing.compute(), RGBA8 per sample:
+## bed, shore, depth) of the current heights and water, kept here so scatter jobs and the
+## ground read one copy. Empty when there is no wet sample. Whoever changes the water or the
+## ground under it calls WaterDressing.refresh() (AuthoringEditor, AuthoredTerrain.build).
+var water_dressing: PackedByteArray = PackedByteArray()
 
 
 ## A flat, empty document with the default cell size (5 ft), sample spacing and tier
