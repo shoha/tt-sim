@@ -623,6 +623,39 @@ per-instance calls, 1.8-3.0 ms through `MultiMesh.buffer`, real render; 0.9-1.4 
 1.1 ms headless). An early 7.4 s `build_all` was the probe waiting on 25 threaded GLB loads
 it had just started, not the build.
 
+## First-use pipeline compilation in authoring (2026-09-26)
+
+The first forest stroke on a fresh map stalled for three frames. The pipeline monitors
+(`Performance.PIPELINE_COMPILATIONS_*`, logged per frame) located it: MESH compilations
+jumped 3 -> 21 -> 33 in the frames right after the biome was picked, before any species had
+resolved or been drawn. They are load-time compilations: the first palette GLB to load
+compiles the pipelines of its imported materials, and all 180 built-in species share the
+same 30 (preparing the whole palette afterwards compiled none). SURFACE compilations
+(14 -> 26, the wind shader's) followed at the first draw of the new cells.
+
+Fix: authoring loads the whole palette from the moment a map opens
+(`AuthoredScatter.prepare_biome()` for every palette biome in
+`AuthoringController._open_async`), and the loading screen waits for the first species
+(at most 2 s) plus three frames, so the one-time mesh compilations land under it; every
+resolved species is drawn once, invisibly, for two frames (`PipelineWarmer`: one instance
+at a thousandth of its size just under the ground at the view centre, a real chunk node so
+the shadow and cull settings match), which moves the surface compilations to resolve time,
+one species per frame. The rest of the palette resolves in about 4 s at one species per
+frame with no frame over 25 ms after the first two. Real render, 1920x1080, vsync on, GPU
+not contended in these runs (median 14 ms), the same session order for before and after:
+
+| First stroke on a new bare map | Before: worst frames | After: worst frame |
+| --- | --- | --- |
+| Temperate forest, stroke starts with the pick (worst case) | 115, 46, 49 ms | 23 ms, no compilations |
+| Same, Godot shader and pipeline caches disabled via `override.cfg` | 103, 71, 93 ms | 27 ms |
+| Alpine meadow right after (pipelines already shared) | 44 ms | 36 ms |
+| Opening the map (loading screen up) | not recorded | 130, 36, 50, 103 ms compile frames under the loading screen |
+
+The NVIDIA driver's own shader cache stayed on (it cannot be disabled per process without
+touching the user's system), so a first-ever run on a clean machine is slower than the
+"caches disabled" row; the earlier ~550 ms report was not reproduced. The alpine stroke's
+remaining 36-44 ms frames are species resolution and cell rebuilds, not pipelines.
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one

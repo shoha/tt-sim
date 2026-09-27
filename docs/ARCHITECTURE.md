@@ -1057,7 +1057,15 @@ brush scheduler, so both build identical nodes.
   `LevelEnvironmentManager.add_wind_materials()` (cached for re-tuning and tuned to the
   overrides applied last). `prepare_biome()` starts threaded loads of a biome's asset
   scenes; species then resolve one per frame, and a finished brush job waits for its
-  species instead of loading them on the main thread.
+  species instead of loading them on the main thread. Authoring calls it for every palette biome
+  as a map opens and holds the loading screen until the first species
+  resolves, because the first palette mesh load compiles the GPU pipelines all palette
+  species share; each resolved species is also drawn once, invisibly, for two frames
+  (`PipelineWarmer`, `utils/pipeline_warmer.gd`, a child made on first use and never in a
+  headless run: `<stem>_PipelineWarm` nodes without the foliage meta, so the density budget
+  and occlusion fade ignore them) so its draw-time pipelines compile then, not in the
+  frame a stroke's cells first appear. `warm_pipelines = false` turns that off for
+  measurement. See `docs/PERFORMANCE.md` "First-use pipeline compilation in authoring".
 - **Cells:** one `MultiMeshInstance3D` per (asset id, 10 m cell) named
   `<asset id made node-safe>_MultiMesh_c<x>_<z>`, always suffixed, built by
   `ScatterGlbUtils.build_chunk` (same meta, shadow and cull settings as GLB scatter).

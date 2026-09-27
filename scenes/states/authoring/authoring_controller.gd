@@ -44,6 +44,11 @@ const PLAY_MAX_ZOOM := 20.0
 const ZOOM_FIT_MARGIN := 1.08
 ## Height the zoom-out fit leaves room for above the ground: the tallest palette trees.
 const CONTENT_HEIGHT_M := 12.0
+## Longest the loading screen waits for the first palette species (see _await_palette_warm).
+const PALETTE_WARM_TIMEOUT_MS := 2000
+## Frames drawn after the first species resolves before the loading screen goes, so its
+## pipeline warm-up node (PipelineWarmer) is drawn under it too.
+const PALETTE_WARM_FRAMES := 3
 
 var level: LevelData = null
 var document: MapDocument = null
@@ -209,6 +214,12 @@ func _open_async(
 		return
 	loading_progress.emit(0.8, "Placing the map...")
 	_install(root, loader.document)
+	loading_progress.emit(0.9, "Preparing the palette...")
+	for biome in PaletteLibrary.biomes(scatter.palette_root):
+		scatter.prepare_biome(String(biome.get("id", "")))
+	await _await_palette_warm(generation)
+	if _superseded(generation):
+		return
 	session = (
 		AuthoringSession.unsaved() if not spec.is_empty() or recovered else AuthoringSession.new()
 	)
@@ -234,6 +245,25 @@ func _open_async(
 
 func _superseded(generation: int) -> bool:
 	return generation != _generation or not is_inside_tree()
+
+
+## Holds the loading screen until the first palette species has resolved and been drawn,
+## at most PALETTE_WARM_TIMEOUT_MS. Authoring prepares every palette biome as a map opens:
+## the first palette mesh load compiles the GPU pipelines all palette species share (30 on
+## the built-in palette, a one-time 100-115 ms stall that otherwise landed on the first
+## stroke), and every biome's first dab then finds its species resolved. The rest of the
+## palette (180 built-in species, about 4 s) resolves in the background, one species per
+## frame (docs/PERFORMANCE.md "First-use pipeline compilation in authoring").
+func _await_palette_warm(generation: int) -> void:
+	var deadline := Time.get_ticks_msec() + PALETTE_WARM_TIMEOUT_MS
+	while Time.get_ticks_msec() < deadline and not _superseded(generation):
+		if not scatter.has_prepared_species() or scatter.resolved_species_count() > 0:
+			break
+		await get_tree().process_frame
+	for _frame in PALETTE_WARM_FRAMES:
+		if _superseded(generation):
+			return
+		await get_tree().process_frame
 
 
 func _install(root: Node3D, loaded: MapDocument) -> void:
