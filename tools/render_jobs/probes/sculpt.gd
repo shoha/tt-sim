@@ -11,11 +11,14 @@ extends RefCounted
 ##                         `target_at` ([x, z]) read at the press, or at `target_y` (world
 ##                         height) when given. Logs, when the stroke
 ##                         ends: frame times, the worst frame and its breakdown (dab,
-##                         terrain, collision, snap, rows moved, chunks), end_stroke's cost;
-##                         then, once regeneration and settling are done, the tail's frame
-##                         times and the plants the regeneration grew and shrank against
-##                         the instances it really added and removed (a plant that only
-##                         moved must do neither).
+##                         terrain, collision, snap, rows moved, chunks), end_stroke's cost
+##                         by part (terrain, collision, snap, rule fields; the rest is the
+##                         rock keeping's start); then, once regeneration and settling are
+##                         done, the tail's frame times, its parts summed over the tail
+##                         (terrain settling, collision, snap, rock keeping's finish,
+##                         regenerated cells applied) and its worst frame's parts, and the
+##                         plants the regeneration grew and shrank against the instances it
+##                         really added and removed (a plant that only moved must do neither).
 ##   compare {at, radius, reps}  alternate, one per frame, a whole-chunk rebuild
 ##                         (rebuild_chunks) and an in-place update (queue_heights +
 ##                         process_heights) of every chunk a brush of `radius` at `at`
@@ -87,6 +90,10 @@ class Stroker:
 	var pending_nodes: Array = []
 	var end_ms := 0.0
 	var tail_start := 0
+	## end_stroke by part (ms), the tail's parts summed over its frames, its worst frame.
+	var end_parts := {}
+	var tail_parts := {}
+	var tail_worst := {}
 
 	func _ready() -> void:
 		process_priority = -90
@@ -177,15 +184,41 @@ class Stroker:
 					worst = sample
 				if dist >= total and held >= float(step.get("hold", 0.0)):
 					_snapshot_keys()
+					editor.terrain.last_fields_usec = 0
 					var started := Time.get_ticks_usec()
 					editor.end_stroke()
 					end_ms = (Time.get_ticks_usec() - started) / 1000.0
+					end_parts = {
+						"terrain": editor.last_terrain_usec / 1000.0,
+						"collision": editor.last_collision_usec / 1000.0,
+						"snap": editor.last_snap_usec / 1000.0,
+						"fields": editor.terrain.last_fields_usec / 1000.0,
+					}
+					_reset_tail_parts()
 					_report_stroke()
 					ctrl.scatter.child_entered_tree.connect(_on_child)
 					tail_start = Time.get_ticks_msec()
 					phase = 2
 			2:
 				tail.append(ms)
+				# What the previous frame (the one `ms` timed) spent on the stroke's leftovers.
+				var sample := {
+					"frame": ms,
+					"terrain": editor.last_terrain_usec / 1000.0,
+					"collision": editor.last_collision_usec / 1000.0,
+					"snap": editor.last_snap_usec / 1000.0,
+					"keep": editor.rock_keeper.last_usec / 1000.0,
+					"apply": ctrl.scatter.last_apply_usec / 1000.0,
+				}
+				for key in sample:
+					if key != "frame":
+						tail_parts[key] = float(tail_parts.get(key, 0.0)) + float(sample[key])
+				if tail.size() == 1:
+					# That frame also ran end_stroke (end_parts).
+					sample["end_stroke"] = end_ms
+				if tail_worst.is_empty() or ms > float(tail_worst.frame):
+					tail_worst = sample
+				_reset_tail_parts()
 				for node in pending_nodes:
 					if is_instance_valid(node) and node.multimesh:
 						if String(node.name).contains(AuthoredScatter.GROWING_INFIX):
@@ -204,6 +237,14 @@ class Stroker:
 				ctrl.scatter.child_entered_tree.disconnect(_on_child)
 				_report_tail()
 				queue_free()
+
+	func _reset_tail_parts() -> void:
+		var editor := ctrl.editor
+		editor.last_terrain_usec = 0
+		editor.last_collision_usec = 0
+		editor.last_snap_usec = 0
+		editor.rock_keeper.last_usec = 0
+		ctrl.scatter.last_apply_usec = 0
 
 	func _on_child(node: Node) -> void:
 		var node_name := String(node.name)
@@ -230,7 +271,7 @@ class Stroker:
 		for key in parts:
 			text += " | %s %s" % [key, Util.stats(parts[key])]
 		text += " | worst frame %s" % JSON.stringify(worst)
-		text += " | end_stroke %.2f ms" % end_ms
+		text += " | end_stroke %.2f ms %s" % [end_ms, JSON.stringify(end_parts)]
 		Util.emit_line(get_tree(), text)
 
 	func _report_tail() -> void:
@@ -248,7 +289,8 @@ class Stroker:
 			(
 				(
 					"stroke %s tail: frames %s | instances added %d grown %d | removed %d shrunk %d"
-					+ " | rows before %d after %d"
+					+ " | rows before %d after %d | parts summed %s | worst frame %s"
+					+ " | rocks kept %d (worker %.1f ms)"
 				)
 				% [
 					step.get("name", ""),
@@ -258,7 +300,11 @@ class Stroker:
 					removed,
 					shrunk,
 					keys_before.size(),
-					after.size()
+					after.size(),
+					JSON.stringify(tail_parts),
+					JSON.stringify(tail_worst),
+					ctrl.editor.rock_keeper.last_kept,
+					ctrl.editor.rock_keeper.last_worker_usec / 1000.0
 				]
 			)
 		)
