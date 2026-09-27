@@ -637,13 +637,17 @@ static func _higher_neighbours(
 
 ## Clump membership at a point: x = 0..1 (1 inside a kept parent's radius, smoothly to 0
 ## across the transition), y = the distance to that parent over its reach (0 at the
-## centre, 1 at the outer edge), for the clump scale falloff.
+## centre, 1 at the outer edge), for the clump scale falloff. With additive clumps
+## (ScatterPlan.additive_clumps) x is the summed membership of every clump over the point
+## over ScatterPlan.CLUMP_SATURATION, capped at 1, and y the nearest centre's.
 static func _membership(ctx: Dictionary, s: int, x: float, z: float) -> Vector2:
 	var entry: Dictionary = ctx.plan.species[s]
 	var size: float = ctx.fields[entry.field].bucket
 	var parents := _parents_near_bucket(ctx, s, floori(x / size), floori(z / size))
 	var transition: float = entry.rule.clump.transition_m
 	var best := Vector2(0.0, 1.0)
+	var additive := ScatterPlan.additive_clumps
+	var total := 0.0
 	for i in range(0, parents.size(), 3):
 		var dx := parents[i] - x
 		var dz := parents[i + 1] - z
@@ -655,8 +659,13 @@ static func _membership(ctx: Dictionary, s: int, x: float, z: float) -> Vector2:
 				continue
 			inside = 1.0 - smoothstep(radius, radius + transition, d)
 		var edge := d / (radius + transition)
-		if inside > best.x or (inside == best.x and edge < best.y):
+		total += inside
+		if additive:
+			best.y = minf(best.y, edge)
+		elif inside > best.x or (inside == best.x and edge < best.y):
 			best = Vector2(inside, edge)
+	if additive:
+		best.x = minf(1.0, total / ScatterPlan.CLUMP_SATURATION)
 	return best
 
 
