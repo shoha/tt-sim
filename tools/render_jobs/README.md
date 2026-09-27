@@ -206,6 +206,14 @@ numerically (for example where a fade or a tint band starts).
   the home view (with an A/B of the trampled fringe, `paint_broad_strength` 0 vs 0.35), undo /
   redo of the last stroke. Frame times per stroke (`record`). `jobs/paint_shoulder.json` (about
   30 s) paints the same track alone and runs `paint_check.gd` along it with a zoom-8 capture.
+- `jobs/phase3_judgment_set.json`: the phase 3 judgment set (P3-7, about 7 minutes): for
+  temperate forest, alpine meadow, rocky badlands and grassland meadow, a new 150 ft map
+  (seed 1234) built with the real Sculpt and Paint tools at human speed (a raised hill, a
+  two-tier plateau with a Shift-smoothed ramp, a sunken hollow, a dirt track up the ramp, a
+  cobblestone path across a tier edge, a flagstone courtyard on the top tier, three placed
+  props), captured at home zoom, home zoom on the plateau, zoom 26 and full zoom-out, each
+  with the grid off and on; then `deciduous_clusters` and `river` in play (read-only) at home
+  (grid off and on) and full zoom-out. 38 captures and `INDEX.md`.
 - `jobs/dressing_look.json`: the automatic dressing judgment set (P3-4, about 75 s): new 200 ft
   maps in temperate forest, alpine meadow and rocky badlands (the three cliff surfaces) with a
   two-tier plateau, a 6 m hill and a sunken hollow, at home and zoom 7 on each, then a painted
