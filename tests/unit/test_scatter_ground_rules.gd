@@ -96,6 +96,32 @@ func test_rocks_gather_on_the_scree() -> void:
 	assert_almost_eq(far, base, 1e-6, "no boost away from cliffs")
 
 
+func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> void:
+	# P3-7: tall grass on a path's shoulder hid a narrow path from the game camera.
+	var doc := _doc()
+	_paint(doc, "cobblestone", Vector2(-12, -0.5), Vector2(-4, 0.5))
+	var fields := ScatterGenerator.document_fields(
+		doc, FOREST, Rect2(), PackedStringArray(["cobblestone"])
+	)
+	var at: Callable = fields.species_density_at
+	var base := DENSITY / 255.0
+	var shoulder := Vector2(-8.0, 1.0)
+	var clear := Vector2(-8.0, 3.0)
+	assert_lt(at.call(shoulder, ScatterGround.ROLE_TALL_COVER), 0.01, "no tall grass on it")
+	assert_lt(at.call(shoulder, ScatterGround.ROLE_SHRUB), 0.01, "nor shrubs")
+	assert_almost_eq(at.call(shoulder, ScatterGround.ROLE_COVER), base, 1e-6, "short cover")
+	assert_almost_eq(at.call(shoulder, ScatterGround.ROLE_TREE), base, 1e-6, "trees stay")
+	assert_almost_eq(at.call(clear, ScatterGround.ROLE_TALL_COVER), base, 1e-6, "3 m out")
+	# The real meadow: tall grass is tall cover, flowers and short grass are not.
+	var roles := {}
+	for rule in PaletteLibrary.species("grassland_meadow_summer_s1"):
+		roles[rule.key] = ScatterPlan.build("g", [rule], 1).species[0].ground_role
+	assert_eq(roles.get("tall_grass"), ScatterGround.ROLE_TALL_COVER)
+	assert_eq(roles.get("grass"), ScatterGround.ROLE_COVER)
+	assert_eq(roles.get("daisy"), ScatterGround.ROLE_COVER)
+	assert_eq(roles.get("bush"), ScatterGround.ROLE_SHRUB)
+
+
 func test_trees_keep_back_from_tier_faces_and_ground_cover_does_not() -> void:
 	# P3-7: terraces must read under a forest, so trees (and shrubs, less) keep back from a
 	# face and its lip; ground cover still grows up to the rock.

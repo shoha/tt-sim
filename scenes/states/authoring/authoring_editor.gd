@@ -345,8 +345,8 @@ func _refresh_ground(sample_rect: Rect2i) -> void:
 	last_flush_usec = Time.get_ticks_usec() - started
 
 
-## Regenerates the scatter over a paint diff's area, grown by the painted edge warp (the
-## shader and ScatterGround read the weights that far off), when the diff involves a
+## Regenerates the scatter over a paint diff's area, grown by the painted edge warp and the
+## path fringe (ScatterGround reads the weights that far off), when the diff involves a
 ## surface whose paint changes what grows (SurfaceStroke.changes_plants).
 func _regenerate_paint(diff: Dictionary) -> void:
 	var rect: Rect2i = diff.get("rect", Rect2i())
@@ -355,10 +355,9 @@ func _regenerate_paint(diff: Dictionary) -> void:
 	if not SurfaceStroke.changes_plants(diff, PaletteLibrary.surfaces(palette_root)):
 		return
 	var step := document.sample_step()
+	var reach := TerrainRules.PAINT_EDGE_WARP_M + ScatterGround.FRINGE_RADIUS_M
 	scatter.request_region(
-		MaskBrush.sample_rect_to_world(document, rect).grow(
-			maxf(step.x, step.y) + TerrainRules.PAINT_EDGE_WARP_M
-		)
+		MaskBrush.sample_rect_to_world(document, rect).grow(maxf(step.x, step.y) + reach)
 	)
 
 

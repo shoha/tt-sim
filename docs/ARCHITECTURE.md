@@ -1286,8 +1286,9 @@ triangles, see below) and `generate_for_document()` wires both together.
   samples on the worker (`ScatterRegen` passes the palette's built and cliff surfaces and
   the snapshot carries the painted weights); a height edit regenerates 1.5 m plus 2 m
   further out.
-- **Terraces stay legible under forest (P3-7):** every species has a ground role
-  (`ScatterGround.role_of`: rock, tree for size class large, shrub for medium, ground cover;
+- **Terraces and paths stay legible (P3-7):** every species has a ground role
+  (`ScatterGround.role_of`: rock, tree for size class large, shrub for medium, tall cover,
+  ground cover;
   `ScatterPlan` entry `ground_role`) and the generator reads
   `document_fields().species_density_at(p, role)` (its optional `species_density_at`
   argument; `density_at` and `rock_density_at` are its cover and rock roles). Trees keep
@@ -1297,6 +1298,13 @@ triangles, see below) and `generate_for_document()` wires both together.
   `smoothstep(0.02, 0.08)` and shrubs over `smoothstep(0.08, 0.13)`, so the rock step and the
   edge of each top show from the game camera instead of an unbroken canopy (a trunk a metre
   from a lip spread its crown over the whole face). Ground cover still grows to the rock.
+  Paths read under tall cover: ground cover whose tallest asset is at least
+  `TALL_COVER_M` (0.75 m; `PaletteLibrary.species()` adds each rule's `height_m` from the
+  manifest's `dimensions_m`) is tall cover, and it and shrubs thin beside built paint (the
+  built weight box-averaged over `FRINGE_RADIUS_M` 1.5 m, cleared over
+  `smoothstep(0.02, 0.2)`: about a metre clear, thinning out by 1.5 m), so meadow tall grass
+  rooted on a path's shoulder no longer lies over a narrow path from the game camera; short
+  grass, flowers and trees stay. A built-paint stroke regenerates 1.5 m further out for it.
 - **Triangle-matched ground (P3-3a):** `triangle_height()` interpolates over the triangle of
   the quad a point is in, each quad split on the same diagonal as the chunk meshes and
   Jolt's `HeightMapShape3D`, (a, a+1, a+cols) and (a+1, a+cols+1, a+cols), so a generated
