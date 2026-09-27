@@ -62,43 +62,64 @@ func _min_height(doc: MapDocument) -> float:
 # --- The tier profile ----------------------------------------------------------------
 
 
+## Steepest slope (degrees) of tier_goal(start, target, inset) over insets 0..`span` in
+## 1 cm steps.
+func _steepest(start: float, target: float, span: float) -> float:
+	var steepest := 0.0
+	var last := start
+	for i in range(1, int(span * 100.0) + 1):
+		var h := HeightBrush.tier_goal(start, target, i * 0.01)
+		steepest = maxf(steepest, absf(h - last) / 0.01)
+		last = h
+	return rad_to_deg(atan(steepest))
+
+
 func test_tier_goal_raises_a_face_a_rounded_lip_then_a_flat_top() -> void:
 	var tier_m := 1.524
-	var lip := HeightBrush.TIER_LIP_M
-	var face := HeightBrush.tier_face_width(tier_m - lip)
-	var width := HeightBrush.TIER_LIP_WIDTH_M
+	var span := HeightBrush.tier_span(tier_m)
 	assert_eq(HeightBrush.tier_goal(0.0, tier_m, 0.0), 0.0, "the ring's edge is the foot")
 	assert_eq(HeightBrush.tier_goal(0.0, tier_m, -1.0), 0.0, "outside the ring")
-	assert_almost_eq(HeightBrush.tier_goal(0.0, tier_m, face), tier_m - lip, EPSILON, "face top")
-	assert_almost_eq(
-		HeightBrush.tier_goal(0.0, tier_m, face + width * 0.5), tier_m - lip * 0.25, EPSILON
-	)
-	assert_eq(HeightBrush.tier_goal(0.0, tier_m, face + width), tier_m, "the top, exactly")
+	assert_eq(HeightBrush.tier_goal(0.0, tier_m, span), tier_m, "the top, exactly")
 	assert_eq(HeightBrush.tier_goal(0.0, tier_m, 10.0), tier_m)
-	# Monotonic, and the lip is a convex shoulder: its slope falls toward the top.
+	assert_lt(HeightBrush.tier_goal(0.0, tier_m, span - 0.05), tier_m, "the lip rounds up to it")
+	assert_lt(HeightBrush.tier_goal(0.0, tier_m, 0.05), 0.01, "the foot eases out of the ground")
+	# Monotonic and smooth (no kink: neighbouring 1 cm slopes differ little), rising steeply
+	# in the middle, and a convex shoulder at the top: the slope falls toward the top.
 	var last := 0.0
-	var last_slope := INF
+	var last_slope := 0.0
+	var steepest_at := 0.0
+	var steepest := 0.0
 	var step := 0.01
-	for i in range(1, 400):
+	for i in range(1, int(span / step) + 10):
 		var inset := i * step
 		var h := HeightBrush.tier_goal(0.0, tier_m, inset)
 		assert_true(h >= last - 1e-9, "never falls inward")
-		if inset > face + step and inset < face + width:
-			var slope := (h - last) / step
-			assert_true(slope <= last_slope + 1e-6, "the lip rounds over")
-			last_slope = slope
+		var slope := (h - last) / step
+		assert_lt(absf(slope - last_slope), 0.2, "no kink at %.2f m" % inset)
+		if slope > steepest:
+			steepest = slope
+			steepest_at = inset
+		elif inset > steepest_at + 0.3 and inset < span:
+			assert_true(slope <= last_slope + 1e-6, "the lip rounds over at %.2f m" % inset)
 		last = h
+		last_slope = slope
+	assert_between(rad_to_deg(atan(steepest)), 62.0, 70.0, "a steep face")
 
 
 func test_tier_goal_cuts_with_the_lip_on_the_rim() -> void:
 	var tier_m := 1.524
-	var lip := HeightBrush.TIER_LIP_M
-	var width := HeightBrush.TIER_LIP_WIDTH_M
-	var face := HeightBrush.tier_face_width(tier_m - lip)
+	var span := HeightBrush.tier_span(tier_m)
 	assert_eq(HeightBrush.tier_goal(0.0, -tier_m, 0.0), 0.0)
-	assert_almost_eq(HeightBrush.tier_goal(0.0, -tier_m, width * 0.5), -lip * 0.25, EPSILON)
-	assert_almost_eq(HeightBrush.tier_goal(0.0, -tier_m, width), -lip, EPSILON, "rim rounded")
-	assert_eq(HeightBrush.tier_goal(0.0, -tier_m, width + face), -tier_m, "the floor, exactly")
+	assert_eq(HeightBrush.tier_goal(0.0, -tier_m, span), -tier_m, "the floor, exactly")
+	# The mirror of the raise: the rim rounds down where the raise's top rounds up.
+	for i in range(0, int(span * 100.0) + 1):
+		var inset := i * 0.01
+		assert_almost_eq(
+			HeightBrush.tier_goal(0.0, -tier_m, inset),
+			HeightBrush.tier_goal(0.0, tier_m, span - inset) - tier_m,
+			1e-9,
+			"mirrored at %.2f m" % inset
+		)
 	var last := 0.0
 	for i in range(1, 300):
 		var h := HeightBrush.tier_goal(0.0, -tier_m, i * 0.01)
@@ -107,18 +128,54 @@ func test_tier_goal_cuts_with_the_lip_on_the_rim() -> void:
 
 
 func test_a_small_rise_keeps_its_lip_in_proportion() -> void:
-	# Extending over an old lip: the new lip is at most TIER_LIP_SHARE of the rise.
+	# Extending over an old lip: the new lip is at most TIER_LIP_SHARE of the rise, and the
+	# small step still ends exactly on the tier.
 	var start := 1.4
-	var face := HeightBrush.tier_face_width(0.124 * (1.0 - HeightBrush.TIER_LIP_SHARE))
-	var at_face := HeightBrush.tier_goal(start, 1.524, face)
-	assert_almost_eq(at_face, 1.524 - 0.124 * HeightBrush.TIER_LIP_SHARE, EPSILON)
+	var span := HeightBrush.tier_span(1.524 - start)
+	assert_eq(HeightBrush.tier_goal(start, 1.524, span), 1.524)
+	assert_lt(_steepest(start, 1.524, span), 30.0, "a gentle step, not a wall")
+	var last := start
+	for i in range(1, int(span * 100.0)):
+		var h := HeightBrush.tier_goal(start, 1.524, i * 0.01)
+		assert_true(h >= last - 1e-9 and h <= 1.524, "between the two levels")
+		last = h
 
 
 func test_tier_face_is_steeper_than_the_full_rock_slope() -> void:
-	var rise := 1.524 - HeightBrush.TIER_LIP_M
-	var angle := rad_to_deg(atan(rise / HeightBrush.tier_face_width(rise)))
-	assert_gt(angle, 70.0, "a near-vertical face")
-	assert_gt(angle, TerrainRules.CLIFF_END_DEG)
+	var tier_m := 1.524
+	var angle := _steepest(0.0, tier_m, HeightBrush.tier_span(tier_m))
+	assert_gt(angle, TerrainRules.CLIFF_END_DEG + 5.0, "a cliff face")
+
+
+func test_diagonal_tier_faces_do_not_saw() -> void:
+	# The sample grid draws each quad as two triangles on a fixed diagonal. A straight tier
+	# face at any angle must come out as a straight face on that mesh: along every line
+	# parallel to it, the drawn height may vary by only a few centimetres (the sharp profile
+	# left teeth up to 0.25 m deep; see HeightBrush's header).
+	for degrees in [0.0, 10.0, 22.5, 30.0, 45.0, 60.0, -15.0, -30.0, -45.0, -60.0]:
+		var doc := _doc()
+		var t := doc.tier_height_m
+		var along := Vector2.from_angle(deg_to_rad(degrees))
+		var across := Vector2(-along.y, along.x)
+		var stroke := HeightStroke.begin(doc, HeightBrush.TIER, t)
+		stroke.dab(-along * 12.0, along * 12.0, 3.0, 0.05)
+		stroke.complete()
+		var worst := 0.0
+		var edge := 3.0 + HeightBrush.TIER_SOFTEN_M
+		var offset := edge - HeightBrush.tier_span(t) - 0.2
+		while offset < edge + 0.2:
+			var low := INF
+			var high := -INF
+			for k in 121:
+				var p := across * offset + along * (-3.0 + k * 0.05)
+				var h := ScatterGenerator.triangle_height(
+					doc.heights, doc.samples_x(), doc.samples_z(), doc.world_to_sample(p)
+				)
+				low = minf(low, h)
+				high = maxf(high, h)
+			worst = maxf(worst, high - low)
+			offset += 0.05
+		assert_lt(worst, 0.08, "face at %s deg: teeth %.3f m" % [degrees, worst])
 
 
 # --- Choosing the tier ---------------------------------------------------------------
@@ -221,7 +278,9 @@ func test_tier_stroke_matches_tier_goal() -> void:
 		for z in doc.samples_z():
 			for x in doc.samples_x():
 				var d := doc.sample_to_world(Vector2(x, z)).distance_to(centre)
-				var expected := HeightBrush.tier_goal(0.0, t, radius - d)
+				var expected := HeightBrush.tier_goal(
+					0.0, t, radius + HeightBrush.TIER_SOFTEN_M - d
+				)
 				worst = maxf(worst, absf(doc.heights[doc.sample_index(x, z)] - expected))
 		assert_lt(worst, 1e-5, "op %d at rest on the profile" % op)
 		stroke.complete()
@@ -245,7 +304,7 @@ func test_tier_face_is_rock_at_the_default_spacing() -> void:
 			var normal := TerrainMeshBuilder.sample_normal(doc, int(s.x), int(s.y))
 			steepest = maxf(steepest, rad_to_deg(acos(clampf(normal.y, -1.0, 1.0))))
 			r += 0.05
-		assert_gt(steepest, TerrainRules.CLIFF_END_DEG + 10.0, "face at %s deg" % degrees)
+		assert_gt(steepest, TerrainRules.CLIFF_END_DEG + 5.0, "face at %s deg" % degrees)
 	var centre := doc.world_to_sample(Vector2(0.5, 0.5)).round()
 	var top := TerrainMeshBuilder.sample_normal(doc, int(centre.x), int(centre.y))
 	assert_almost_eq(top.y, 1.0, EPSILON, "a flat top")

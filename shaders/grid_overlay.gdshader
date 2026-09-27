@@ -19,7 +19,9 @@
  *    is kept only within ground_tolerance of the ground height under it, interpolated on
  *    the field's triangles, so every tier top and slope gets the grid.
  * 4. Reconstructs the surface normal from depth-buffer neighbors (cross product
- *    of partial derivatives) and discards steep/vertical surfaces.
+ *    of partial derivatives) and discards steep/vertical surfaces. With a ground field
+ *    the slope test reads the field's smooth normal instead (ground_normal_at), and the
+ *    facet normal only rejects near-vertical surfaces (ground_facet_threshold).
  * 5. Applies grid math on the XZ plane and fades with distance from grid_center.
  *
  * SETUP:
@@ -57,6 +59,12 @@ uniform mat4 ground_map_to_world = mat4(1.0);
 uniform vec2 ground_grid_origin = vec2(0.0);
 uniform vec2 ground_grid_step = vec2(0.25);
 uniform float ground_tolerance = 0.2;
+// With a ground field, a pixel whose depth-buffer facet is steeper than this (n.y; about 72
+// degrees) is not ground whatever the field says: a token's side, a wall or a trunk within the
+// band. Looser than normal_threshold so a tier face's facets never flicker across it.
+uniform float ground_facet_threshold = 0.3;
+// With a ground field, the grid fades out over this much n.y below normal_threshold.
+uniform float ground_slope_fade = 0.12;
 
 // Neutral cell tint — subtle fill on every cell for readability on bright maps
 // color_surface1 (#2c1f2b) from the theme
@@ -105,6 +113,42 @@ float ground_height_at(vec2 at) {
 	return h11 + (h01 - h11) * (1.0 - t.x) + (h10 - h11) * (1.0 - t.y);
 }
 
+// The ground's shading normal (map frame) at sample `s`: central differences, one-sided at
+// the edge (TerrainMeshBuilder.sample_normal / ScatterGenerator.vertex_normal).
+vec3 ground_vertex_normal(ivec2 s, ivec2 size) {
+	ivec2 x0 = ivec2(max(s.x - 1, 0), s.y);
+	ivec2 x1 = ivec2(min(s.x + 1, size.x - 1), s.y);
+	ivec2 z0 = ivec2(s.x, max(s.y - 1, 0));
+	ivec2 z1 = ivec2(s.x, min(s.y + 1, size.y - 1));
+	float slope_x = (texelFetch(ground_heights, x1, 0).r - texelFetch(ground_heights, x0, 0).r)
+		/ (float(x1.x - x0.x) * ground_grid_step.x);
+	float slope_z = (texelFetch(ground_heights, z1, 0).r - texelFetch(ground_heights, z0, 0).r)
+		/ (float(z1.y - z0.y) * ground_grid_step.y);
+	return normalize(vec3(-slope_x, 1.0, -slope_z));
+}
+
+// The ground's smooth normal at continuous sample coordinates `at`: the vertex normals of the
+// triangle ground_height_at() uses, interpolated (ScatterGenerator.triangle_normal), which is
+// what the ground is lit with and what its rock rule reads. The grid's steep-face filter uses
+// it on the ground instead of the depth buffer's facet normal, whose triangle-by-triangle
+// flicker on a slope near the threshold sawed the grid's edge along tier lips (P3-7).
+vec3 ground_normal_at(vec2 at) {
+	ivec2 size = textureSize(ground_heights, 0);
+	vec2 f = clamp(at, vec2(0.0), vec2(size - ivec2(1)));
+	ivec2 i0 = min(ivec2(floor(f)), max(size - ivec2(2), ivec2(0)));
+	vec2 t = f - vec2(i0);
+	vec3 n10 = ground_vertex_normal(i0 + ivec2(1, 0), size);
+	vec3 n01 = ground_vertex_normal(i0 + ivec2(0, 1), size);
+	vec3 n;
+	if (t.x + t.y <= 1.0) {
+		n = ground_vertex_normal(i0, size) * (1.0 - t.x - t.y) + n10 * t.x + n01 * t.y;
+	} else {
+		n = ground_vertex_normal(i0 + ivec2(1, 1), size) * (t.x + t.y - 1.0)
+			+ n01 * (1.0 - t.x) + n10 * (1.0 - t.y);
+	}
+	return normalize(n);
+}
+
 void vertex() {
 	// Force the quad to fill the screen (Godot 4.3+ reversed-z)
 	POSITION = vec4(VERTEX.xy, 1.0, 1.0);
@@ -148,9 +192,11 @@ void fragment() {
 	// Height filter: only draw grid near the ground. Rejects token surfaces (which extend
 	// above the floor) and ceilings. With a ground field: the ground height under this pixel;
 	// otherwise the fixed band around grid_y_level.
+	vec2 ground_at = vec2(0.0);
 	if (ground_heights_enabled) {
 		vec3 map_pos = (ground_world_to_map * vec4(world_pos, 1.0)).xyz;
-		float h = ground_height_at((map_pos.xz - ground_grid_origin) / ground_grid_step);
+		ground_at = (map_pos.xz - ground_grid_origin) / ground_grid_step;
+		float h = ground_height_at(ground_at);
 		float ground_y = (ground_map_to_world * vec4(map_pos.x, h, map_pos.z, 1.0)).y;
 		if (abs(world_pos.y - ground_y) > ground_tolerance) {
 			discard;
@@ -164,9 +210,23 @@ void fragment() {
 
 	// Reconstruct surface normal from depth-buffer neighbors via cross product
 	vec3 surface_normal = normalize(cross(world_r_pos - world_pos, world_u_pos - world_pos));
+	float facet_up = abs(dot(surface_normal, vec3(0.0, 1.0, 0.0)));
 
-	// Only draw grid on mostly-horizontal surfaces (floors, tabletops, ramps)
-	if (abs(dot(surface_normal, vec3(0.0, 1.0, 0.0))) < normal_threshold) {
+	// Only draw grid on mostly-horizontal surfaces (floors, tabletops, ramps). With a ground
+	// field the slope test reads the ground's smooth normal (ground_normal_at; the map frame is
+	// the world scaled uniformly, so the angle is the same) and fades the grid out over
+	// ground_slope_fade below normal_threshold rather than cutting it: the normal is
+	// interpolated per triangle, and a hard cut along a tier lip running across the grid
+	// traced that as a fine comb. The facet normal only rejects near-vertical surfaces
+	// standing within the band (token sides, walls, trunks).
+	float slope_fade = 1.0;
+	if (ground_heights_enabled) {
+		float ground_up = abs(ground_normal_at(ground_at).y);
+		if (facet_up < ground_facet_threshold || ground_up < normal_threshold - ground_slope_fade) {
+			discard;
+		}
+		slope_fade = smoothstep(normal_threshold - ground_slope_fade, normal_threshold, ground_up);
+	} else if (facet_up < normal_threshold) {
 		discard;
 	}
 
@@ -179,7 +239,7 @@ void fragment() {
 
 	// Distance fade from grid center
 	float dist = length(world_pos.xz - grid_center.xz);
-	float fade = 1.0 - smoothstep(fade_radius * 0.6, fade_radius, dist);
+	float fade = (1.0 - smoothstep(fade_radius * 0.6, fade_radius, dist)) * slope_fade;
 
 	// Compositing layers (bottom to top):
 	//   1. Cell tint   — neutral darkening on every cell

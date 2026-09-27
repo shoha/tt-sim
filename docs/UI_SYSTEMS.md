@@ -864,7 +864,10 @@ the brush is all on the top (a stroke inside it steps up); with Ctrl from a top,
 below, or the press tier itself when higher ground is in reach (cutting it down to here). The
 target stays that tier for the whole stroke, so passing over existing tiers never climbs.
 Every stroke ends exactly on `k * tier_height_m` (5 ft by default) with a rock face at the
-ring's edge, a rounded lip and scree at the foot (ARCHITECTURE.md "Sculpting").
+ring's edge, a rounded lip and scree at the foot (ARCHITECTURE.md "Sculpting"). The face is
+a soft profile (about 66 degrees at its steepest, its toe easing out up to half a metre past
+the ring), so a curved or diagonal tier reads as one continuous rock face rather than stair
+steps along the sample grid, and the grid overlay's edge follows the lip smoothly.
 
 Smooth softens whatever it touches, a tier's edge included: that is how a face becomes a
 ramp (a few passes of a 2.5 m brush across a face lay it back to about 22 degrees). The
