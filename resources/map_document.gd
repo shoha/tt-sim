@@ -34,8 +34,21 @@ extends RefCounted
 ## Images, for the same reason: a brush dab writes bytes by index. MapDocumentIO turns
 ## them into PNG entries on write. An empty mask means the document has none.
 ##
+## Painted surfaces. surface_ids names up to MAX_SURFACES palette surfaces; slot k is
+## surface_ids[k], and its weight at each sample is its coverage 0..255. surface_weights
+## holds all eight slots in two planes, each exactly the RGBA8 pixel data of one weight
+## texture: bytes [0, 4n) are image A (slots 0-3 in R, G, B, A) and [4n, 8n) image B
+## (slots 4-7), for n = sample_count(). Planar rather than eight interleaved bytes per
+## sample because the ground shader samples two RGBA8 textures: surface_plane() hands one
+## plane to Image.create_from_data as a native slice, where an interleaved layout would
+## need a GDScript split loop over every sample on each upload and save. A brush pays one
+## extra multiply-add per channel (surface_offset()). The weights of all slots at one
+## sample sum to at most 255; the remainder is automatic ground (rules and biomes), so a
+## painted surface overrides it in proportion to its weight. set_surface_weight() keeps
+## the sum; the writer and reader normalise any sample that breaks it.
+##
 ## The fields are plain vars because authoring mutates one document for a whole session;
-## every helper here is pure.
+## every helper here is pure except the surface_* mutators, which edit the fields.
 
 const FORMAT := 1
 const ROW_STRIDE := 10
@@ -58,6 +71,9 @@ const MAX_ABS_HEIGHT_M := 1000.0
 const ERASE_THRESHOLD := 127
 ## Biome slots are one byte with 0 meaning none, so at most 255 biomes per document.
 const MAX_BIOMES := 255
+## Painted surface slots: two RGBA8 weight images of SURFACE_CHANNELS slots each.
+const MAX_SURFACES := 8
+const SURFACE_CHANNELS := 4
 
 var palette_version: String = ""
 var map_seed: int = 0
@@ -84,6 +100,12 @@ var biome_ids: PackedStringArray = PackedStringArray()
 var biome_slots: PackedByteArray = PackedByteArray()
 ## One byte per sample: painted density 0..255. Empty exactly when biome_slots is.
 var biome_density: PackedByteArray = PackedByteArray()
+## Palette surface names painted on this map, at most MAX_SURFACES; slot order is
+## channel order (see the header).
+var surface_ids: PackedStringArray = PackedStringArray()
+## sample_count() * 8 bytes in two RGBA8 planes (see the header). Empty exactly when
+## surface_ids is.
+var surface_weights: PackedByteArray = PackedByteArray()
 
 
 ## A flat, empty document with the default cell size (5 ft), sample spacing and tier
@@ -205,6 +227,136 @@ func erase_filter() -> Callable:
 		if x < 0 or z < 0 or x >= width or z >= depth:
 			return true
 		return mask[z * width + x] <= ERASE_THRESHOLD
+
+
+## Byte index of `slot`'s weight at sample `sample` in surface_weights, for a grid of
+## `count` samples (see the header). Static so brush loops can hoist sample_count().
+static func surface_offset(sample: int, slot: int, count: int) -> int:
+	return (slot >> 2) * count * SURFACE_CHANNELS + sample * SURFACE_CHANNELS + (slot & 3)
+
+
+## `slot`'s weight 0..255 at sample `sample`; 0 when there are no painted surfaces or the
+## slot is not in use.
+func surface_weight(sample: int, slot: int) -> int:
+	if slot < 0 or slot >= surface_ids.size() or surface_weights.is_empty():
+		return 0
+	return surface_weights[surface_offset(sample, slot, sample_count())]
+
+
+## Paints `slot` to `value` (clamped to 0..255) at sample `sample`. When the slots would
+## then sum past 255 the other slots are scaled down to fit, so the newest paint wins,
+## as it does over automatic ground. Does nothing for a slot not in use.
+@warning_ignore("integer_division")
+func set_surface_weight(sample: int, slot: int, value: int) -> void:
+	if slot < 0 or slot >= surface_ids.size() or surface_weights.is_empty():
+		return
+	var count := sample_count()
+	var target := clampi(value, 0, 255)
+	var others := 0
+	for other in surface_ids.size():
+		if other != slot:
+			others += surface_weights[surface_offset(sample, other, count)]
+	if others + target > 255:
+		var room := 255 - target
+		for other in surface_ids.size():
+			if other != slot:
+				var at := surface_offset(sample, other, count)
+				surface_weights[at] = surface_weights[at] * room / others
+	surface_weights[surface_offset(sample, slot, count)] = target
+
+
+## The RGBA8 pixel data of weight image `image` (0: slots 0-3, 1: slots 4-7), a copy
+## ready for Image.create_from_data; empty when there are no painted surfaces.
+func surface_plane(image: int) -> PackedByteArray:
+	if surface_weights.is_empty():
+		return PackedByteArray()
+	var plane := sample_count() * SURFACE_CHANNELS
+	return surface_weights.slice(image * plane, (image + 1) * plane)
+
+
+## The slot painting `surface` uses: its existing slot, else a new one (allocating the
+## weights for the first), else the first slot whose weights are all zero, renamed. -1
+## when `surface` is empty or all MAX_SURFACES slots hold paint.
+func ensure_surface(surface: String) -> int:
+	if surface == "":
+		return -1
+	var existing := surface_ids.find(surface)
+	if existing >= 0:
+		return existing
+	if surface_ids.size() < MAX_SURFACES:
+		if surface_weights.is_empty():
+			surface_weights.resize(sample_count() * SURFACE_CHANNELS * 2)
+		surface_ids.append(surface)
+		return surface_ids.size() - 1
+	for slot in surface_ids.size():
+		if surface_slot_unused(slot):
+			surface_ids[slot] = surface
+			return slot
+	return -1
+
+
+## True when `slot` has zero weight at every sample (or is not in use).
+func surface_slot_unused(slot: int) -> bool:
+	if slot < 0 or slot >= surface_ids.size() or surface_weights.is_empty():
+		return true
+	var count := sample_count()
+	for sample in count:
+		if surface_weights[surface_offset(sample, slot, count)] != 0:
+			return false
+	return true
+
+
+## Drops trailing slots with no paint (cheap: no channel moves), and the weights with
+## the last slot, so a map painted with four surfaces or fewer saves one image.
+func trim_unused_surfaces() -> void:
+	while not surface_ids.is_empty() and surface_slot_unused(surface_ids.size() - 1):
+		surface_ids.resize(surface_ids.size() - 1)
+	if surface_ids.is_empty():
+		surface_weights = PackedByteArray()
+
+
+## `weights` (two planes for `count` samples) with the channels of slots `used` and up
+## zeroed and every sample whose slots sum past 255 scaled down to fit. Returns
+## {"weights": PackedByteArray, "stray": samples with paint in an unused slot,
+## "over": samples scaled}. Pure: `weights` is duplicated before the first fix, since
+## packed arrays are shared by reference. Shared by the writer and the reader.
+@warning_ignore("integer_division")
+static func normalized_surface_weights(
+	weights: PackedByteArray, count: int, used: int
+) -> Dictionary:
+	var out := weights
+	var copied := false
+	var stray := 0
+	var over := 0
+	var plane := count * SURFACE_CHANNELS
+	# Image B is only walked when a slot there is in use or it holds anything at all
+	# (a native count, not a per-sample loop): the common case touches one plane.
+	var slots := MAX_SURFACES
+	if used <= SURFACE_CHANNELS and weights.slice(plane).count(0) == plane:
+		slots = SURFACE_CHANNELS
+	for sample in count:
+		var sum := 0
+		var stray_here := false
+		for slot in slots:
+			var value := out[(slot >> 2) * plane + sample * SURFACE_CHANNELS + (slot & 3)]
+			if slot < used:
+				sum += value
+			elif value != 0:
+				stray_here = true
+		if not stray_here and sum <= 255:
+			continue
+		if not copied:
+			out = out.duplicate()
+			copied = true
+		for slot in slots:
+			var at := (slot >> 2) * plane + sample * SURFACE_CHANNELS + (slot & 3)
+			if slot >= used:
+				out[at] = 0
+			elif sum > 255:
+				out[at] = out[at] * 255 / sum
+		stray += 1 if stray_here else 0
+		over += 1 if sum > 255 else 0
+	return {"weights": out, "stray": stray, "over": over}
 
 
 ## Whole rows across every asset of `rows_by_asset` (scatter or props).
