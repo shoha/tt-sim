@@ -20,6 +20,9 @@ extends RefCounted
 ## Before this existed a dressed document's heights stayed flat 0, so everything painted
 ## was generated at Y = 0, floating over dips and buried under rises. snap_rows() moves such
 ## rows onto the sampled ground (see AuthoringController._fit_dressing_to_ground).
+##
+## The same sampler, over any regular grid (begin_grid), gives a Blender map's grid overlay
+## its ground at play time (GroundHeightField, MapSourceLoader.fit_grid_ground_async).
 
 ## Rows that move less than this are left as they are (the float32 round trip of a height).
 const ROW_TOLERANCE_M := 0.002
@@ -30,12 +33,16 @@ var hits: PackedByteArray = PackedByteArray()
 ## Microseconds spent casting rays so far.
 var usec: int = 0
 
-var _doc: MapDocument = null
 var _world: World3D = null
 var _transform: Transform3D = Transform3D.IDENTITY
 var _inverse: Transform3D = Transform3D.IDENTITY
 var _top: float = 0.0
 var _next: int = 0
+## The grid sampled: map-frame XZ of sample (0, 0), the step between samples, and its size.
+var _origin: Vector2 = Vector2.ZERO
+var _step: Vector2 = Vector2.ONE
+var _columns: int = 0
+var _rows: int = 0
 
 
 ## A sampler for `doc`, whose frame is the map root's (`map_transform`, its global
@@ -44,14 +51,40 @@ var _next: int = 0
 static func begin(
 	doc: MapDocument, world: World3D, map_transform: Transform3D, top_y: float
 ) -> DressingGround:
+	return begin_grid(
+		world,
+		map_transform,
+		top_y,
+		-doc.extent_m() * 0.5,
+		doc.sample_step(),
+		doc.samples_x(),
+		doc.samples_z()
+	)
+
+
+## A sampler for a regular grid of `columns` x `rows` samples in the frame placed by
+## `map_transform`: sample (x, z) at map-frame XZ `origin + Vector2(x, z) * step`, row-major.
+## Casts as begin() does.
+static func begin_grid(
+	world: World3D,
+	map_transform: Transform3D,
+	top_y: float,
+	origin: Vector2,
+	step: Vector2,
+	columns: int,
+	rows: int
+) -> DressingGround:
 	var sampler := DressingGround.new()
-	sampler._doc = doc
 	sampler._world = world
 	sampler._transform = map_transform
 	sampler._inverse = map_transform.affine_inverse()
 	sampler._top = top_y
-	sampler.heights.resize(doc.sample_count())
-	sampler.hits.resize(doc.sample_count())
+	sampler._origin = origin
+	sampler._step = step
+	sampler._columns = columns
+	sampler._rows = rows
+	sampler.heights.resize(columns * rows)
+	sampler.hits.resize(columns * rows)
 	return sampler
 
 
@@ -63,11 +96,11 @@ func step(budget_usec: int) -> bool:
 		return true
 	var started := Time.get_ticks_usec()
 	var space := _world.direct_space_state
-	var columns := _doc.samples_x()
+	var columns := _columns
 	while _next < heights.size():
 		var z := _next / columns
 		for x in columns:
-			var local := _doc.sample_to_world(Vector2(x, z))
+			var local := _origin + Vector2(x, z) * _step
 			var world := _transform * Vector3(local.x, 0.0, local.y)
 			var hit := DragPlaceController.raycast_terrain_down(space, world, _top)
 			var index := _next + x
@@ -82,7 +115,7 @@ func step(budget_usec: int) -> bool:
 	usec += Time.get_ticks_usec() - started
 	if _next < heights.size():
 		return false
-	heights = fill_misses(heights, hits, columns, _doc.samples_z())
+	heights = fill_misses(heights, hits, columns, _rows)
 	return true
 
 

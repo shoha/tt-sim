@@ -10,20 +10,23 @@ extends MeshInstance3D
 ##   grid.configure(cell_size, grid_origin, grid_color)
 ##   grid.show_grid()  /  grid.hide_grid()
 ##
-## Which surfaces get the grid. A Blender-made map keeps a fixed height band around Y = 0
-## (set_floor_level). A map with authored terrain (phase 3: sculpted relief and tiers)
-## hands its AuthoredTerrain to set_ground(): the shader then reads the terrain's height
-## texture and draws only where a pixel lies within GROUND_TOLERANCE_M of the ground under
-## it, on the terrain's own triangles, so every tier top and slope gets the grid while
-## tokens and plants standing on it do not; the existing steep-face normal filter keeps
-## cliff faces clean. The fade centre follows the terrain too (look_center()).
+## Which surfaces get the grid. Without a ground field the grid keeps a fixed height band
+## around Y = 0 (set_floor_level). With one (set_ground, a GroundHeightField: authored terrain
+## with sculpted relief and tiers, or a Blender map's ground sampled from its collision) the
+## shader reads the field's height texture and draws only where a pixel lies within
+## GROUND_TOLERANCE_M of the ground under it, interpolated on the field's triangles, so every
+## tier top and slope gets the grid while tokens and plants standing on it do not; the
+## existing steep-face normal filter keeps cliff faces clean. The fade centre follows the
+## ground too (look_center()).
 
 const FADE_DURATION := 0.2
-## Height above or below the authored ground (metres, world) a pixel may be and still get
-## the grid. The shader's ground height matches the terrain mesh exactly (same triangles),
-## so this only has to absorb depth reconstruction error and the grid's own line width; it
-## is kept below a token base's rim and the bulk of grass and flowers. Judged in the P3-3b
-## renders (tier tops, slopes, tokens and meadow plants at the game camera).
+## Height above or below the ground (metres, world) a pixel may be and still get the grid.
+## On authored terrain the shader's ground height matches the terrain mesh exactly (same
+## triangles), so this only has to absorb depth reconstruction error and the grid's own line
+## width; it is kept below a token base's rim and the bulk of grass and flowers. Judged in
+## the P3-3b renders (tier tops, slopes, tokens and meadow plants at the game camera). A
+## Blender map's sampled ground is within a few centimetres of its collision
+## (GroundHeightField.SPACING_M), which leaves most of this margin.
 const GROUND_TOLERANCE_M := 0.2
 ## Fixed-point steps projecting the view centre onto the terrain (look_center()).
 const CENTER_ITERATIONS := 4
@@ -31,8 +34,8 @@ const CENTER_ITERATIONS := 4
 var _material: ShaderMaterial
 var _fade_tween: Tween
 var _showing := false
-## The authored terrain the grid follows (set_ground), or null for the fixed band.
-var _ground: AuthoredTerrain = null
+## The ground the grid follows (set_ground), or null for the fixed band.
+var _ground: GroundHeightField = null
 ## What was last pushed to the shader for _ground: its transform and height texture.
 var _ground_transform: Transform3D = Transform3D()
 var _ground_texture: Texture2D = null
@@ -87,22 +90,22 @@ func set_floor_level(y_level: float, tolerance: float = 0.5) -> void:
 	_material.set_shader_parameter("grid_y_tolerance", tolerance)
 
 
-## Follow authored terrain `terrain` (its height texture and transform), or with null go
-## back to the fixed band of set_floor_level(). A terrain that is freed later (level clear)
-## turns the ground test off by itself.
-func set_ground(terrain: AuthoredTerrain) -> void:
-	_ground = terrain
+## Follow the ground `field` (its height texture, sample grid and transform), or with null
+## go back to the fixed band of set_floor_level(). A field whose source is freed later
+## (level clear) turns the ground test off by itself.
+func set_ground(field: GroundHeightField) -> void:
+	_ground = field
 	_ground_texture = null
 	_sync_ground()
 
 
-## True while the grid follows authored terrain rather than the fixed band.
+## True while the grid follows a ground field rather than the fixed band.
 func follows_ground() -> bool:
-	return is_instance_valid(_ground) and _ground.document != null
+	return _ground != null and _ground.is_valid()
 
 
-## Pushes the terrain's height texture and transform to the shader when either changed (a
-## level scale edit moves the terrain; a new texture only comes with a rebuilt terrain).
+## Pushes the field's height texture and transform to the shader when either changed (a
+## level scale edit moves the map; a new texture only comes with a rebuilt terrain).
 func _sync_ground() -> void:
 	if not _material:
 		return
@@ -111,18 +114,17 @@ func _sync_ground() -> void:
 		_ground_texture = null
 		_material.set_shader_parameter("ground_heights_enabled", false)
 		return
-	var texture := _ground.get_height_texture()
-	var xform := _ground.global_transform if _ground.is_inside_tree() else _ground.transform
+	var texture := _ground.get_texture()
+	var xform := _ground.get_transform()
 	if texture == _ground_texture and xform == _ground_transform:
 		return
 	_ground_texture = texture
 	_ground_transform = xform
-	var doc := _ground.document
 	_material.set_shader_parameter("ground_heights", texture)
 	_material.set_shader_parameter("ground_world_to_map", xform.affine_inverse())
 	_material.set_shader_parameter("ground_map_to_world", xform)
-	_material.set_shader_parameter("ground_grid_origin", -doc.extent_m() * 0.5)
-	_material.set_shader_parameter("ground_grid_step", doc.sample_step())
+	_material.set_shader_parameter("ground_grid_origin", _ground.origin)
+	_material.set_shader_parameter("ground_grid_step", _ground.step)
 	_material.set_shader_parameter("ground_tolerance", GROUND_TOLERANCE_M)
 	_material.set_shader_parameter("ground_heights_enabled", true)
 
@@ -274,7 +276,7 @@ func _process(_delta: float) -> void:
 		_sync_ground()
 	# Update the fade center to where the camera is looking on the ground. For
 	# orthographic/isometric cameras the camera position itself is high up and offset:
-	# project its forward ray onto the grid_y_level plane, then onto authored terrain.
+	# project its forward ray onto the grid_y_level plane, then onto the ground field.
 	var cam := get_parent() as Camera3D
 	if cam:
 		var floor_y: float = _material.get_shader_parameter("grid_y_level")
@@ -282,10 +284,7 @@ func _process(_delta: float) -> void:
 		var center_screen := vp_size * 0.5
 		var height_at := Callable()
 		if _ground != null:
-			var doc := _ground.document
-			var to_world := _ground_transform
-			height_at = func(xz: Vector2) -> float:
-				return TerrainMeshBuilder.world_ground_height(doc, to_world, xz)
+			height_at = _ground.world_height_at
 		var center := look_center(
 			cam.project_ray_origin(center_screen),
 			cam.project_ray_normal(center_screen),

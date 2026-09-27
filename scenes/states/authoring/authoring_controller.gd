@@ -19,7 +19,8 @@ extends Node
 ## GLB is the base and an empty document covering it is made in memory, written on the
 ## first save. A leftover autosave is offered first (AuthoringAutosave). Every dressed map
 ## (has_base_map) has its document heights sampled from the GLB's collision as it opens
-## (_fit_dressing_to_ground), so painted plants stand on the GLB ground.
+## (_fit_dressing_to_ground), so painted plants stand on the GLB ground and the grid overlay
+## draws on it.
 ##
 ## Saving writes map.ttmap atomically (MapDocumentIO), then level.json with map_document
 ## set (LevelManager), then a thumbnail of the current view. Unsaved edits are counted by
@@ -337,6 +338,19 @@ func _fit_dressing_to_ground(generation: int) -> int:
 			return 0
 	var moved := DressingGround.settle(
 		document, sampler.heights, scatter, DressingGround.aligned_assets(document.biome_ids)
+	)
+	# The grid overlay draws on the same sampled ground (a play-time load samples its own,
+	# MapSourceLoader.fit_grid_ground_async).
+	_game_map.set_grid_ground(
+		GroundHeightField.for_glb(
+			map_root,
+			sampler.heights,
+			sampler.hits,
+			document.samples_x(),
+			document.samples_z(),
+			-document.extent_m() * 0.5,
+			document.sample_step()
+		)
 	)
 	ground_fit = {
 		"samples": sampler.heights.size(),
