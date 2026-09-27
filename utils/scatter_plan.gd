@@ -36,6 +36,15 @@ const CLUMP_PARENT_SPACING := 0.5
 ## gain = BASE + SLOPE * x runs through both ends.
 const CLUMP_COVERAGE_GAIN_BASE := 1.05
 const CLUMP_COVERAGE_GAIN_SLOPE := 0.1
+## Additive clumps (see additive_clumps): a child's keep is the summed membership of every
+## clump over it divided by this, capped at 1, so up to this many overlapping clumps add
+## density the way Geoscatter's per-parent children do.
+const CLUMP_SATURATION := 3.0
+## Spaced parents overlap more evenly than Poisson ones, so fewer points see no clump and
+## the mean keep runs above the Poisson estimate by up to this share (additive_coverage).
+## Measured 2026-09-26 with the calibration test: without it, dense ground cover delivered
+## 1.04x (x = 1) to 1.15x (x = 2.5) its target, where x is the mean overlap count.
+const ADDITIVE_REGULARITY_GAIN := 0.12
 ## A spaced random species keeps this share of its own spacing clear of every larger
 ## class's spaced instances (a bush 1 m from a tree trunk, a log 0.4 m from a boulder), so
 ## smaller classes respect larger ones and a boulder never swallows a trunk.
@@ -128,6 +137,14 @@ const PACKING_COVERAGE := [
 ]
 
 const _MASK32 := 0xFFFFFFFF
+
+## Clumps add up where they overlap (a child keeps min(1, summed membership /
+## CLUMP_SATURATION)) instead of the union of clump discs keeping everything they cover.
+## The union made dense ground cover such as alpine flowers (0.35 parents per m2 of 1.2 m
+## clumps cover about 97 % of the ground) an even speckle; summed overlaps vary from one
+## clump to four or five, which reads as drifts. A static switch so a probe can render both
+## in one run; the generator reads it on worker threads, so change it only between jobs.
+static var additive_clumps: bool = true
 
 
 ## The plan for one biome: {"species": [...], "fields": [...]}. Each species entry carries
@@ -293,7 +310,30 @@ static func _clump_coverage(clump: Dictionary, parent_keep: float) -> float:
 	var reach: float = radius + clump.transition_m * 0.5
 	var disc := PI * (reach * reach + pow(CLUMP_RADIUS_JITTER * radius, 2.0) / 3.0)
 	var x: float = clump.parents_per_m2 * parent_keep * disc
+	if additive_clumps:
+		return additive_coverage(x)
 	return 1.0 - exp(-(CLUMP_COVERAGE_GAIN_BASE + CLUMP_COVERAGE_GAIN_SLOPE * x) * x)
+
+
+## Mean keep of additive clumps whose discs overlap a point `x` times on average:
+## E[min(1, n / CLUMP_SATURATION)] with n Poisson(x), raised by ADDITIVE_REGULARITY_GAIN
+## as the overlaps grow (spaced parents vary less than Poisson ones), at most 1.
+static func additive_coverage(x: float) -> float:
+	var gain := 1.0 + ADDITIVE_REGULARITY_GAIN * (1.0 - exp(-x))
+	return minf(1.0, _poisson_saturated_mean(x) * gain)
+
+
+static func _poisson_saturated_mean(x: float) -> float:
+	var mean := 0.0
+	var p := exp(-x)
+	var below := 0.0
+	var n := 0
+	while float(n) < CLUMP_SATURATION:
+		mean += p * float(n) / CLUMP_SATURATION
+		below += p
+		n += 1
+		p *= x / float(n)
+	return mean + (1.0 - below)
 
 
 ## Relations resolved to earlier species (large -> ground), with the target's density for

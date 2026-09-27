@@ -1033,9 +1033,20 @@ models, clearance); the generator only evaluates candidates.
   The response holds even for a saturated packing, and spacing always holds.
   Intensities are raised by the modelled keep so delivered density lands on the palette
   target; `tests/unit/test_scatter_generator_calibration.gd` prints the per-species table.
+- **Additive clumps (T7):** a clumped child keeps `min(1, summed membership /
+  CLUMP_SATURATION)` (3), so overlapping clumps add density as Geoscatter's per-parent
+  children do (`ScatterPlan.additive_clumps`, a static switch kept for A/B renders). The
+  union of clump discs it replaced kept everything any clump covered; dense ground cover
+  (alpine daisies: 0.35 parents per m2 of 1.2 m clumps, about 2.5 overlaps on average)
+  covered about 97 % of the ground and read as an even speckle, where summed overlaps read
+  as drifts. The keep model is the Poisson mean of the capped overlap count, raised by up to
+  12 % (`ADDITIVE_REGULARITY_GAIN`) because spaced parents overlap more evenly than Poisson
+  ones; ground cover then delivers 0.98 to 1.06x its targets. Cost: about +20 % over all
+  eight whole-map generations (7.6 s -> 9.1 s summed, same session), one dense chunk
+  39 -> 43 ms.
 - **Cost (measured 2026-09-26, headless GDScript):** a whole 200 ft map takes 0.3 to 1.3 s
   depending on the biome, one 10 m chunk of the densest biome about 35 ms. Ground cover
-  dominates (about 15 us per candidate).
+  dominates (about 15 us per candidate). Additive clumps add about 20 % (above).
 - **Relation halo:** `species_reach(plan)` gives, per species, how far painted density can
   reach into its instances (relations, clump parents' relations and clearance, chained);
   `generate_species_cells()` takes a cell list per species so a brush regenerates every

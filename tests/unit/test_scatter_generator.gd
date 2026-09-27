@@ -517,6 +517,21 @@ func test_cells_in_bounds_covers_the_200ft_map_with_64_chunks() -> void:
 	assert_eq(cells[-1], Vector2i(3, 3))
 
 
+func test_additive_clump_coverage_grows_with_overlap_and_saturates() -> void:
+	assert_true(ScatterPlan.additive_clumps, "clumps add up by default")
+	assert_almost_eq(ScatterPlan.additive_coverage(0.0), 0.0, 1e-9, "no clumps, no keep")
+	var previous := 0.0
+	for step in range(1, 40):
+		var value := ScatterPlan.additive_coverage(step * 0.25)
+		assert_true(
+			value >= previous and value <= 1.0, "monotone and at most 1 (x %.2f)" % (step * 0.25)
+		)
+		previous = value
+	assert_almost_eq(ScatterPlan.additive_coverage(12.0), 1.0, 1e-3, "saturated")
+	# One clump on average keeps well under a union's coverage: overlaps carry the density.
+	assert_lt(ScatterPlan.additive_coverage(1.0), 0.5)
+
+
 func test_packing_time_inverts_the_coverage_curve() -> void:
 	for t in [0.05, 0.3, 1.0, 4.0, 10.0]:
 		var theta := ScatterPlan.packing_coverage(t)
