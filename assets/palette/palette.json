@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "df5d1c8",
+ "palette_version": "ea3dd78",
  "surfaces": {
   "cliff": {
    "albedo": "surfaces/cliff/cliff_albedo.png",
@@ -196,7 +196,7 @@
    "normal": "surfaces/snow/snow_normal.png",
    "orm": "surfaces/snow/snow_orm.png",
    "height": "surfaces/snow/snow_height.png",
-   "tile_m": 4.0,
+   "tile_m": 8.0,
    "kind": "snow",
    "role": "ground"
   },
