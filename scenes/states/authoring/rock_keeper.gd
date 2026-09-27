@@ -39,10 +39,19 @@ func is_running() -> bool:
 ## Starts the job for a stroke that changed sample rectangle `changed` from heights `before`,
 ## whose regeneration covers map rectangle `area` (before request_region's per-species
 ## growth); `rocks` is RockKeep.rock_assets, `record` the stroke's history record ({
-## "props_before", "props_after", "kept"}), filled by finish(). False (nothing started)
-## when no rock is drawn there.
+## "props_before", "props_after", "kept"}), filled by finish(). `dressing_before` is the wet
+## dressing that went with `before` (a water carve changes it; null: the document's).
+## `keep` (optional, Callable(asset id, row) -> bool) drops rocks the stroke would keep: a
+## water carve lets the ones under the water or blocking its channel go (WaterCarve
+## .keeps_rock). False (nothing started) when no rock is drawn there.
 func start(
-	before: PackedFloat32Array, changed: Rect2i, area: Rect2, record: Dictionary, rocks: Dictionary
+	before: PackedFloat32Array,
+	changed: Rect2i,
+	area: Rect2,
+	record: Dictionary,
+	rocks: Dictionary,
+	dressing_before: Variant = null,
+	keep: Callable = Callable()
 ) -> bool:
 	var cells := _cells(area, rocks)
 	if cells.is_empty():
@@ -50,7 +59,7 @@ func start(
 	var species_by_biome := {}
 	for biome_id in document.biome_ids:
 		species_by_biome[biome_id] = PaletteLibrary.species(biome_id, palette_root)
-	var was := RockKeep.snapshot(document, before)
+	var was := RockKeep.snapshot(document, before, dressing_before)
 	var now := RockKeep.snapshot(document, document.heights)
 	var built := PackedStringArray(PaletteLibrary.surfaces_with_role("built", palette_root))
 	var cliff := PackedStringArray(PaletteLibrary.surfaces_with_role("cliff", palette_root))
@@ -60,7 +69,14 @@ func start(
 		var removed := RockKeep.removed_keys(was, now, species_by_biome, cells, built, cliff)
 		result.merge({"removed": removed, "usec": Time.get_ticks_usec() - started})
 	var id := WorkerThreadPool.add_task(task, false, "Rocks kept by a sculpt stroke")
-	_job = {"id": id, "result": result, "cells": cells, "changed": changed, "record": record}
+	_job = {
+		"id": id,
+		"result": result,
+		"cells": cells,
+		"changed": changed,
+		"record": record,
+		"keep": keep,
+	}
 	return true
 
 
@@ -75,7 +91,9 @@ func finish(wait: bool, rocks: Dictionary, aligned: Dictionary, snap_start: Dict
 	var job := _job
 	_job = {}
 	var started := Time.get_ticks_usec()
-	var kept := _convert(job.result.get("removed", {}), job.cells, rocks, aligned, snap_start)
+	var kept := _convert(
+		job.result.get("removed", {}), job.cells, rocks, aligned, snap_start, job.keep
+	)
 	var record: Dictionary = job.record
 	for cell in kept.props_before:
 		if not record.props_before.has(cell):
@@ -132,15 +150,17 @@ func _cells(area: Rect2, rocks: Dictionary) -> Array[Vector2i]:
 
 ## Every drawn rock of `cells` whose key `removed` lists (RockKeep.removed_keys) leaves the
 ## scatter and becomes a prop (RockKeep.kept_row: tilted as the snap left it, capped, bedded),
-## at once and unanimated. Returns {"props_before": {cell: props rows before, for the cells
-## that gained rocks}, "scatter_start": {cell: {asset id: the kept rows at the stroke's
-## start}}}.
+## at once and unanimated, unless `keep` (Callable(asset id, bedded row) -> bool, optional)
+## refuses it: that one stays in the scatter, and the regeneration shrinks it out. Returns
+## {"props_before": {cell: props rows before, for the cells that gained rocks},
+## "scatter_start": {cell: {asset id: the kept rows at the stroke's start}}}.
 func _convert(
 	removed: Dictionary,
 	cells: Array[Vector2i],
 	rocks: Dictionary,
 	aligned: Dictionary,
-	snap_start: Dictionary
+	snap_start: Dictionary,
+	keep: Callable = Callable()
 ) -> Dictionary:
 	var out := {"props_before": {}, "scatter_start": {}}
 	if removed.is_empty() or not is_instance_valid(scatter) or not is_instance_valid(props):
@@ -161,16 +181,25 @@ func _convert(
 			var flat: PackedFloat32Array = split.kept
 			if flat.is_empty():
 				continue
-			rows[asset_id] = split.rest
-			starts[asset_id] = split.start
+			var rest: PackedFloat32Array = split.rest
+			var start_rows := PackedFloat32Array()
 			var radius := GroundSnap.footing_radius(rocks[asset_id])
 			var bedded := PackedFloat32Array()
 			@warning_ignore("integer_division")
 			for r in flat.size() / MapDocument.ROW_STRIDE:
 				var row := PropRows.row_at(flat, r)
-				bedded.append_array(
-					RockKeep.kept_row(row, document.heights, grid, radius, aligned.has(asset_id))
+				var bed := RockKeep.kept_row(
+					row, document.heights, grid, radius, aligned.has(asset_id)
 				)
+				if keep.is_valid() and not keep.call(asset_id, bed):
+					rest.append_array(row)
+					continue
+				bedded.append_array(bed)
+				start_rows.append_array(PropRows.row_at(split.start, r))
+			rows[asset_id] = rest
+			if bedded.is_empty():
+				continue
+			starts[asset_id] = start_rows
 			gained[asset_id] = bedded
 		if gained.is_empty():
 			continue

@@ -19,35 +19,22 @@ extends RefCounted
 ## the rows of the one 10 m cell it changed, before and after. Undo and redo re-apply the
 ## stored side and refresh exactly the area it covers.
 ##
-## Height strokes (sculpting; HeightStroke, rules in HeightBrush) edit doc.heights on a map
-## with an AuthoredTerrain (not on a dressed GLB, whose ground is the GLB's). Per frame,
-## flush() hands the changed samples to the terrain (in-place chunk updates within
-## TERRAIN_BUDGET_USEC, AuthoredTerrain.process_heights) and snaps the plants and props
-## standing on the changed ground (GroundSnap, applied with AuthoredScatter.move_rows:
-## transforms rewritten in place, no regrowth) within SNAP_BUDGET_USEC; work a frame's
-## budget leaves is carried to the next frames through tick(). The collision is not touched
-## mid-stroke (rebuilding the heightfield costs 2.3 ms a frame in the running game): the
-## brush finds the ground it is shaping with raycast_ground(), a CPU ray march of the
-## document's triangles. end_stroke() finishes that work, updates the collision, queues the
-## settling rebuild of the edited chunks, and asks the scatter to regenerate the stroke's
-## area grown by one more sample step than request_region() adds (normals read a sample
-## either side) plus TerrainRules.CURVATURE_RADIUS_M and ScatterGround.FACE_NEAR_RADIUS_M
-## (the cliff and scree rules and the trees' face clearance read that far), so slope and cliff
-## rules add and remove plants with the grow and shrink animation while every plant that
-## stays keeps its place (AuthoredScatter.row_keys leaves Y out). One history entry per
-## stroke holds the heights diff and the props rows it moved; generated rows are not
-## stored: undo and redo snap them back at once and regenerate the area, and generation is
-## a pure function of the document. Rocks survive terrain changes: a rock the stroke's
-## regeneration would remove becomes a prop in the same entry (RockKeeper).
+## Height strokes (HeightStroke, rules in HeightBrush) edit doc.heights on a map with an
+## AuthoredTerrain. Per frame, flush() updates the terrain's chunks in place within
+## TERRAIN_BUDGET_USEC and snaps the plants and props on the changed ground (GroundSnap,
+## AuthoredScatter.move_rows) within SNAP_BUDGET_USEC, carrying leftovers through tick(); the
+## collision waits for the stroke's end (raycast_ground() marches the document's triangles
+## meanwhile). end_stroke() finishes the work, updates the collision, settles the chunks and
+## regenerates the scatter over the stroke grown by what the slope, cliff and face rules read
+## (_regenerated_area); one history entry holds the heights diff and the props rows moved,
+## and the rocks the regeneration would remove become props in it (RockKeeper).
 ##
-## Surface strokes (the Paint tool; SurfaceStroke) paint a palette surface into the
-## document's painted surfaces, or erase all of them, on a map with an AuthoredTerrain. Per
-## frame, flush() blits the changed texels of the ground's weight maps
-## (AuthoredTerrain.update_ground_region; the layer table is re-planned only when a surface
-## enters or leaves the slot list). Scatter follows at stroke end (and on undo and redo),
-## when a built or cliff-role surface is involved: those clear plants (ScatterGround), and
-## the regenerated cells shrink the covered plants out. Ground-role paint changes no plants
-## (it yields to the rock on faces and is ground elsewhere), so it regenerates nothing.
+## Surface strokes (the Paint tool; SurfaceStroke) paint or erase palette surfaces on a map
+## with an AuthoredTerrain; flush() blits the changed weight texels, and scatter follows at
+## the end (and on undo and redo) only for built or cliff-role surfaces, which clear plants.
+##
+## Water (P4-3): `water` (WaterEditor) carves rivers, paints ponds and erases water; its pond
+## and erase strokes answer stroke_dab / end_stroke / cancel_stroke too.
 
 ## Emitted after every change to the map (strokes, props, undo, redo), for dirty tracking.
 signal edited
@@ -85,6 +72,8 @@ var last_snap_usec: int = 0
 var last_snap_rows: int = 0
 ## Rocks survive terrain changes: the rocks a sculpt stroke keeps (made by create()).
 var rock_keeper: RockKeeper = null
+## The water edits (P4-3; made by create()).
+var water: WaterEditor = null
 
 var _stroke: MaskStroke = null
 var _stroke_label: String = ""
@@ -135,6 +124,7 @@ static func create(
 			# Kept (and placed) rocks keep generated twins from growing inside them.
 			editor.scatter.blocker_source = editor.props
 	editor.rock_keeper = RockKeeper.create(doc, editor.scatter, editor.props, editor.palette_root)
+	editor.water = WaterEditor.create(editor)
 	editor._rng.randomize()
 	return editor
 
@@ -172,13 +162,16 @@ func begin_stroke(mode: int, biome_id: String = "") -> bool:
 
 
 func is_stroking() -> bool:
-	return _stroke != null or _height != null or _surface != null
+	return _stroke != null or _height != null or _surface != null or water.is_stroking()
 
 
 ## Exposes the capsule from `from` to `to` (world space) of world radius `radius` for
-## `seconds`, for whichever stroke is in progress (mask, height or surface). Call flush()
-## once after the frame's dabs.
+## `seconds`, for whichever stroke is in progress (mask, height, surface, or water's pond or
+## erase). Call flush() once after the frame's dabs.
 func stroke_dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> void:
+	if water.is_stroking():
+		water.dab(from, to, radius)
+		return
 	if _height != null:
 		height_dab(from, to, radius, seconds)
 		return
@@ -213,6 +206,8 @@ func flush() -> void:
 
 ## Ends the stroke and records it for undo. True when it changed anything.
 func end_stroke() -> bool:
+	if water.is_stroking():
+		return water.end_stroke()
 	if _height != null:
 		return _end_height_stroke()
 	if _surface != null:
@@ -241,6 +236,9 @@ func end_stroke() -> bool:
 
 ## Abandons the stroke in progress, putting every sample back.
 func cancel_stroke() -> void:
+	if water.is_stroking():
+		water.cancel_stroke()
+		return
 	if _height != null:
 		_cancel_height_stroke()
 		return
@@ -642,6 +640,10 @@ func _end_height_stroke() -> bool:
 		terrain.settle_heights()
 	if diff.is_empty():
 		return false
+	# The water follows the ground under it: dressing, surface, flow (P4-3).
+	var wet := document.water_dressing
+	if not document.water_bodies.is_empty():
+		water.refresh()
 	# The props side for history; the rocks the stroke keeps (RockKeeper) join it when their
 	# worker lands, before anything can read it (finish_height_work), and the regeneration
 	# waits for them.
@@ -652,7 +654,7 @@ func _end_height_stroke() -> bool:
 		record.props_after[cell] = props.cell_rows(cell).duplicate(true)
 		props_bytes += PropRows.rows_bytes(_prop_start[cell]) * 2
 	var area := _regenerated_area(stroke.changed)
-	if not rock_keeper.start(stroke.start_heights, stroke.changed, area, record, _rocks):
+	if not rock_keeper.start(stroke.start_heights, stroke.changed, area, record, _rocks, wet):
 		_regenerate(stroke.changed)
 	(
 		history
@@ -731,6 +733,8 @@ func _apply_height_diff(diff: Dictionary, redo: bool, record: Dictionary) -> voi
 	rock_keeper.swap(record.kept, redo)
 	if is_instance_valid(terrain):
 		terrain.settle_heights()
+	if not document.water_bodies.is_empty():
+		water.refresh()
 	_regenerate(rect)
 
 
