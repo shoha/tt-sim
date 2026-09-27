@@ -96,6 +96,8 @@ var last_apply_usec: int = 0
 var last_worker_usec: int = 0
 ## Draw each species once, invisibly, as it resolves (PipelineWarmer); off to measure.
 var warm_pipelines: bool = true
+## Props (AuthoredProps) whose rocks regeneration grows no twin inside (RockKeep.blockers_of).
+var blocker_source: AuthoredScatter = null
 
 ## asset id -> {"mesh", "wind_category", "stem", "materials", "grow_mode", "height"}, or {}
 ## for an id that did not resolve (its rows are kept, nothing is built).
@@ -540,12 +542,14 @@ func _warm_species() -> void:
 func _dispatch_jobs() -> void:
 	var limit := clampi(OS.get_processor_count() >> 1, 1, MAX_JOBS)
 	var snapshot: MapDocument = null
+	var busy := _jobs.size() >= limit or not _regen.has_pending()
+	var blockers := PackedFloat32Array() if busy else RockKeep.blockers_of(blocker_source)
 	while _jobs.size() < limit and _regen.has_pending():
 		var job := _regen.take_job()
 		if snapshot == null:
 			# One copy serves every job dispatched this frame; they only read it.
 			snapshot = _snapshot(_document)
-		var work: Dictionary = job.work
+		var work: Dictionary = RockKeep.with_blockers(job.work, blockers)
 		var result := {}
 		var task := func() -> void: result.merge(ScatterRegen.run(snapshot, work))
 		var id := WorkerThreadPool.add_task(task, false, "AuthoredScatter regeneration")

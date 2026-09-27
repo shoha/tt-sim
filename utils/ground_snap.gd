@@ -145,7 +145,8 @@ static func grid_of(doc: MapDocument) -> Dictionary:
 ## for a normal-aligned species; only rows whose XZ lies in `window` (map-frame XZ) are
 ## looked at, the rest keep `current`. Returns {"rows": PackedFloat32Array (a copy, or
 ## `current` itself when nothing moved), "moved": PackedInt32Array of the rows that now
-## differ from `current`}.
+## differ from `current`}. A tilted row whose ground turned stands at most `max_tilt`
+## radians off vertical (RockKeep.capped_rotation; rocks pass RockKeep.MAX_TILT_RAD).
 @warning_ignore("integer_division")
 static func snap_rows(
 	start: PackedFloat32Array,
@@ -154,7 +155,8 @@ static func snap_rows(
 	after: PackedFloat32Array,
 	grid: Dictionary,
 	tilt: bool,
-	window: Rect2
+	window: Rect2,
+	max_tilt: float = PI
 ) -> Dictionary:
 	var stride := MapDocument.ROW_STRIDE
 	var columns: int = grid.columns
@@ -177,6 +179,8 @@ static func snap_rows(
 			var to := ScatterGenerator.triangle_normal(after, columns, rows_count, at, step)
 			if from.angle_to(to) > TILT_TOLERANCE_RAD and q.length_squared() > 0.0:
 				q = (Quaternion(from, to) * q.normalized()).normalized()
+				if max_tilt < PI:
+					q = RockKeep.capped_rotation(q, max_tilt)
 		if (
 			absf(y - current[b + 1]) <= 1e-6
 			and is_equal_approx(q.x, current[b + 3])
@@ -204,7 +208,8 @@ static func snap_rows(
 ## `align` (its species stands on the ground normal), the new normal with its own yaw. With
 ## `radius` > 0 (footing_radius of its species) the heights compared and taken are the lowest
 ## under that footprint (lowest_under, scaled by the row's scale), so a prop left on a new
-## rim sinks to the ground instead of hanging over the drop.
+## rim sinks to the ground instead of hanging over the drop. An aligned prop stands at most
+## `max_tilt` radians off vertical (rock props pass RockKeep.MAX_TILT_RAD).
 @warning_ignore("integer_division")
 static func rebed_props(
 	start: PackedFloat32Array,
@@ -214,7 +219,8 @@ static func rebed_props(
 	grid: Dictionary,
 	align: bool,
 	window: Rect2,
-	radius: float = 0.0
+	radius: float = 0.0,
+	max_tilt: float = PI
 ) -> Dictionary:
 	var stride := MapDocument.ROW_STRIDE
 	var columns: int = grid.columns
@@ -238,7 +244,8 @@ static func rebed_props(
 		var row := PropRows.row_at(start, r)
 		if absf(now - was) > TOLERANCE_M or (align and from.angle_to(to) > TILT_TOLERANCE_RAD):
 			var position := Vector3(row[0], now, row[2])
-			row = PropRows.make_row(position, to, align, PropRows.row_yaw(row), row[7])
+			var up := RockKeep.capped_up(to, max_tilt) if max_tilt < PI else to
+			row = PropRows.make_row(position, up, align, PropRows.row_yaw(row), row[7])
 			# Keep a non-uniform scale as it was.
 			row[8] = start[b + 8]
 			row[9] = start[b + 9]

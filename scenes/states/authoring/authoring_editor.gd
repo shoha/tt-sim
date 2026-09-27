@@ -37,7 +37,8 @@ extends RefCounted
 ## stays keeps its place (AuthoredScatter.row_keys leaves Y out). One history entry per
 ## stroke holds the heights diff and the props rows it moved; generated rows are not
 ## stored: undo and redo snap them back at once and regenerate the area, and generation is
-## a pure function of the document.
+## a pure function of the document. Rocks survive terrain changes: a rock the stroke's
+## regeneration would remove becomes a prop in the same entry (RockKeeper).
 ##
 ## Surface strokes (the Paint tool; SurfaceStroke) paint a palette surface into the
 ## document's painted surfaces, or erase all of them, on a map with an AuthoredTerrain. Per
@@ -84,6 +85,8 @@ var last_terrain_usec: int = 0
 var last_collision_usec: int = 0
 var last_snap_usec: int = 0
 var last_snap_rows: int = 0
+## Rocks survive terrain changes: the rocks a sculpt stroke keeps (made by create()).
+var rock_keeper: RockKeeper = null
 
 var _stroke: MaskStroke = null
 var _stroke_label: String = ""
@@ -99,6 +102,8 @@ var _snap_start: Dictionary = {}
 var _prop_start: Dictionary = {}
 ## Scatter asset ids placed normal-aligned (DressingGround.aligned_assets), per stroke.
 var _aligned: Dictionary = {}
+## Scatter asset id -> species rule of the rock species (RockKeep.rock_assets), per stroke.
+var _rocks: Dictionary = {}
 ## Props asset id -> _prop_bedding() (cached).
 var _prop_rules: Dictionary = {}
 ## True when heights changed since the collision was last updated (it is updated once no
@@ -128,6 +133,10 @@ static func create(
 		editor.props = root.get_node_or_null(MapSourceLoader.PROPS_NODE) as AuthoredScatter
 		if doc.has_base_map:
 			editor.eraser = BaseScatterEraser.create(root, doc)
+		if is_instance_valid(editor.scatter) and is_instance_valid(editor.props):
+			# Kept (and placed) rocks keep generated twins from growing inside them.
+			editor.scatter.blocker_source = editor.props
+	editor.rock_keeper = RockKeeper.create(doc, editor.scatter, editor.props, editor.palette_root)
 	editor._rng.randomize()
 	return editor
 
@@ -152,6 +161,8 @@ func begin_stroke(mode: int, biome_id: String = "") -> bool:
 	commit_prop_edit()
 	if is_stroking():
 		end_stroke()
+	# The last sculpt stroke's kept rocks first, so this stroke's regeneration sees them.
+	_finish_keep(true)
 	_stroke = MaskStroke.begin(document, mode, biome_id)
 	if _stroke == null or not _stroke.writes_anything():
 		_stroke = null
@@ -395,6 +406,7 @@ func begin_height_stroke(op: int, target_y: float = 0.0) -> bool:
 	_snap_start.clear()
 	_prop_start.clear()
 	_aligned = DressingGround.aligned_assets(document.biome_ids, palette_root)
+	_rocks = RockKeep.rock_assets(document.biome_ids, palette_root)
 	return true
 
 
@@ -475,12 +487,13 @@ func tier_target(point: Vector3, radius: float, down: bool) -> Dictionary:
 
 
 ## True while terrain, collision or snapping work from a sculpt stroke (or its undo) is
-## still being spread over frames.
+## still being spread over frames, or the stroke's rock keeping is still running.
 func has_height_work() -> bool:
 	return (
 		not _snap_windows.is_empty()
 		or (_collision_dirty and _height == null)
 		or (is_instance_valid(terrain) and terrain.has_height_work())
+		or rock_keeper.is_running()
 	)
 
 
@@ -490,6 +503,7 @@ func has_height_work() -> bool:
 func step_height_work() -> void:
 	if Engine.get_process_frames() != _worked_frame and has_height_work():
 		_work()
+		_finish_keep(false)
 
 
 func _queue_heights(sample_rect: Rect2i) -> void:
@@ -561,7 +575,10 @@ func _snap_cell(cell: Vector2i, window: Rect2) -> int:
 				from = rows.duplicate()
 				start[asset_id] = from
 			var tilt := _aligned.has(asset_id)
-			var snapped := GroundSnap.snap_rows(from, rows, _snap_before, after, grid, tilt, window)
+			var cap := RockKeep.MAX_TILT_RAD if _rocks.has(asset_id) else PI
+			var snapped := GroundSnap.snap_rows(
+				from, rows, _snap_before, after, grid, tilt, window, cap
+			)
 			moved += _apply_moved(scatter, cell, asset_id, snapped)
 	if _snap_props and is_instance_valid(props):
 		var placed: Dictionary = props.cell_rows(cell)
@@ -574,8 +591,9 @@ func _snap_cell(cell: Vector2i, window: Rect2) -> int:
 			if from.size() != rows.size():
 				continue
 			var bed := _prop_bedding(asset_id)
+			var cap := RockKeep.MAX_TILT_RAD if bed.z > 0.0 else PI
 			var snapped := GroundSnap.rebed_props(
-				from, rows, _snap_before, after, grid, bed.x > 0.0, window, bed.y
+				from, rows, _snap_before, after, grid, bed.x > 0.0, window, bed.y, cap
 			)
 			moved += _apply_moved(props, cell, asset_id, snapped)
 	return moved
@@ -594,20 +612,23 @@ func _apply_moved(
 	return moved.size()
 
 
-## Prop asset `asset_id`'s species: x 1 when it stands on the ground normal, y its footing.
-func _prop_bedding(asset_id: String) -> Vector2:
+## Prop asset `asset_id`'s species: x 1 when it stands on the ground normal, y its footing,
+## z 1 for a rock (its tilt is capped at RockKeep.MAX_TILT_RAD).
+func _prop_bedding(asset_id: String) -> Vector3:
 	if not _prop_rules.has(asset_id):
 		var rule := rule_for_asset(asset_id)
 		var align := 1.0 if rule.get("align", "") == "normal" else 0.0
-		_prop_rules[asset_id] = Vector2(align, GroundSnap.footing_radius(rule))
+		var rock := 1.0 if RockKeep.is_rock(rule) else 0.0
+		_prop_rules[asset_id] = Vector3(align, GroundSnap.footing_radius(rule), rock)
 	return _prop_rules[asset_id]
 
 
 ## Does every piece of height work still waiting (terrain, collision, snapping, settling
-## rebuilds), at once.
+## rebuilds, a stroke's rock keeping), at once.
 func finish_height_work() -> void:
 	if has_height_work():
 		_work(true)
+	_finish_keep(true)
 
 
 func _end_height_stroke() -> bool:
@@ -623,28 +644,37 @@ func _end_height_stroke() -> bool:
 		terrain.settle_heights()
 	if diff.is_empty():
 		return false
-	var props_before := {}
-	var props_after := {}
-	for cell in _prop_start:
-		props_before[cell] = (_prop_start[cell] as Dictionary).duplicate(true)
-		props_after[cell] = props.cell_rows(cell).duplicate(true)
-	_regenerate(stroke.changed)
+	# The props side for history; the rocks the stroke keeps (RockKeeper) join it when their
+	# worker lands, before anything can read it (finish_height_work), and the regeneration
+	# waits for them.
+	var record := {"props_before": {}, "props_after": {}, "kept": {}}
 	var props_bytes := 0
-	for cell in props_before:
-		props_bytes += _rows_bytes(props_before[cell]) + _rows_bytes(props_after[cell])
+	for cell in _prop_start:
+		record.props_before[cell] = (_prop_start[cell] as Dictionary).duplicate(true)
+		record.props_after[cell] = props.cell_rows(cell).duplicate(true)
+		props_bytes += PropRows.rows_bytes(_prop_start[cell]) * 2
+	var area := _regenerated_area(stroke.changed)
+	if not rock_keeper.start(stroke.start_heights, stroke.changed, area, record, _rocks):
+		_regenerate(stroke.changed)
 	(
 		history
 		. record(
 			{
 				"label": _stroke_label,
-				"undo": _apply_height_diff.bind(diff, false, props_before),
-				"redo": _apply_height_diff.bind(diff, true, props_after),
+				"undo": _apply_height_diff.bind(diff, false, record),
+				"redo": _apply_height_diff.bind(diff, true, record),
 				"bytes": int(diff.bytes) + props_bytes,
 			}
 		)
 	)
 	edited.emit()
 	return true
+
+
+## Applies the last stroke's kept rocks once their worker is done (`wait`: waits), then
+## requests the stroke's regeneration.
+func _finish_keep(wait: bool) -> void:
+	_regenerate(rock_keeper.finish(wait, _rocks, _aligned, _snap_start))
 
 
 func _cancel_height_stroke() -> void:
@@ -659,7 +689,7 @@ func _cancel_height_stroke() -> void:
 		for asset_id in start:
 			var rows: PackedFloat32Array = current.get(asset_id, PackedFloat32Array())
 			if rows.size() == (start[asset_id] as PackedFloat32Array).size():
-				scatter.move_rows(cell, asset_id, start[asset_id], _all_rows(rows))
+				scatter.move_rows(cell, asset_id, start[asset_id], PropRows.all_rows(rows))
 	for cell in _prop_start:
 		_set_prop_cell(cell, _prop_start[cell])
 	_snap_start.clear()
@@ -675,9 +705,13 @@ func _cancel_height_stroke() -> void:
 
 ## Undo (`redo` false) or redo of a sculpt stroke: the heights side, the terrain and
 ## collision at once, generated plants snapped to the restored ground and their area
-## regenerated, props set to the rows recorded for that side.
-func _apply_height_diff(diff: Dictionary, redo: bool, prop_rows: Dictionary) -> void:
+## regenerated, props set to the rows recorded for that side (`record`: {"props_before",
+## "props_after": {cell: props rows}, "kept": {cell: {asset id: scatter rows at the stroke's
+## start}}}). The rocks the stroke kept go back into the scatter on undo and leave it again
+## on redo, without animation, as the props swap.
+func _apply_height_diff(diff: Dictionary, redo: bool, record: Dictionary) -> void:
 	finish_height_work()
+	var prop_rows: Dictionary = record.props_after if redo else record.props_before
 	var before := document.heights.duplicate()
 	var rect := HeightStroke.apply_diff(document, diff, redo)
 	if not rect.has_area():
@@ -686,14 +720,17 @@ func _apply_height_diff(diff: Dictionary, redo: bool, prop_rows: Dictionary) -> 
 	_snap_start.clear()
 	_prop_start.clear()
 	_aligned = DressingGround.aligned_assets(document.biome_ids, palette_root)
+	_rocks = RockKeep.rock_assets(document.biome_ids, palette_root)
 	_queue_heights(rect)
 	# Props take their recorded rows, not a snap.
 	_snap_props = false
 	_work(true)
 	_snap_props = true
 	_snap_start.clear()
+	# Unanimated: a kept rock changes hands between the scatter and the props in place.
 	for cell in prop_rows:
-		_set_prop_cell(cell, prop_rows[cell])
+		_set_prop_cell(cell, prop_rows[cell], false)
+	rock_keeper.swap(record.kept, redo)
 	if is_instance_valid(terrain):
 		terrain.settle_heights()
 	_regenerate(rect)
@@ -703,21 +740,17 @@ func _apply_height_diff(diff: Dictionary, redo: bool, prop_rows: Dictionary) -> 
 func _regenerate(rect: Rect2i) -> void:
 	if not is_instance_valid(scatter) or not rect.has_area():
 		return
+	scatter.request_region(_regenerated_area(rect))
+
+
+## The map XZ rectangle whose density-side inputs a height edit of sample rectangle `rect`
+## changes; request_region() then grows it by each species' reach plus one step.
+func _regenerated_area(rect: Rect2i) -> Rect2:
 	var step := document.sample_step()
-	# request_region() grows by each species' reach plus one step; normals need one more, the
-	# rules read curvature CURVATURE_RADIUS_M out and face proximity FACE_NEAR_RADIUS_M more.
+	# Normals need one step more than request_region() adds, the rules read curvature
+	# CURVATURE_RADIUS_M out and face proximity FACE_NEAR_RADIUS_M more.
 	var reach := TerrainRules.CURVATURE_RADIUS_M + ScatterGround.FACE_NEAR_RADIUS_M
-	scatter.request_region(
-		MaskBrush.sample_rect_to_world(document, rect).grow(maxf(step.x, step.y) * 2.0 + reach)
-	)
-
-
-static func _all_rows(rows: PackedFloat32Array) -> PackedInt32Array:
-	var all := PackedInt32Array()
-	@warning_ignore("integer_division")
-	for r in rows.size() / MapDocument.ROW_STRIDE:
-		all.append(r)
-	return all
+	return MaskBrush.sample_rect_to_world(document, rect).grow(maxf(step.x, step.y) * 2.0 + reach)
 
 
 # ============================================================================
@@ -778,6 +811,8 @@ func rule_for_asset(asset_id: String) -> Dictionary:
 ## The gesture is recorded when commit_prop_edit() runs (BrushTool calls it on release).
 func place_prop(rule: Dictionary, hit: Vector3, normal: Vector3) -> Dictionary:
 	commit_prop_edit()
+	# A prop gesture records its cell's rows: the last stroke's kept rocks must be in them.
+	_finish_keep(true)
 	if not is_instance_valid(props):
 		return {}
 	var assets: Array = rule.get("assets", [])
@@ -789,7 +824,7 @@ func place_prop(rule: Dictionary, hit: Vector3, normal: Vector3) -> Dictionary:
 	var row := PropRows.make_row(
 		bed, local_normal, rule.get("align", "upright") == "normal", _rng.randf_range(-PI, PI), 1.0
 	)
-	var cell := cell_of(row)
+	var cell := PropRows.cell_of(row)
 	_begin_prop_edit(cell, "Place")
 	var rows := _cell_rows(cell)
 	var joined: PackedFloat32Array = rows.get(asset_id, PackedFloat32Array()).duplicate()
@@ -819,9 +854,10 @@ func scale_prop(handle: Dictionary, notches: float, rule: Dictionary) -> Diction
 ## Removes a prop (it shrinks away) and records the removal.
 func remove_prop(handle: Dictionary) -> void:
 	commit_prop_edit()
-	var cell := cell_of(handle.row)
+	_finish_keep(true)
+	var cell := PropRows.cell_of(handle.row)
 	var rows := _cell_rows(cell)
-	var index := _index_in(rows, handle)
+	var index := PropRows.index_of(rows, handle)
 	if index < 0:
 		return
 	_begin_prop_edit(cell, "Remove")
@@ -888,7 +924,7 @@ func commit_prop_edit() -> void:
 	var after := _cell_rows(cell)
 	var label: String = _prop_edit.label
 	_prop_edit = {}
-	if _same_rows(before, after):
+	if PropRows.same_rows(before, after):
 		return
 	(
 		history
@@ -897,7 +933,7 @@ func commit_prop_edit() -> void:
 				"label": label,
 				"undo": _set_prop_cell.bind(cell, before),
 				"redo": _set_prop_cell.bind(cell, after),
-				"bytes": _rows_bytes(before) + _rows_bytes(after),
+				"bytes": PropRows.rows_bytes(before) + PropRows.rows_bytes(after),
 			}
 		)
 	)
@@ -928,9 +964,10 @@ func tick(delta: float) -> void:
 
 
 func _edit_prop(handle: Dictionary, row: PackedFloat32Array, label: String) -> Dictionary:
-	var cell := cell_of(handle.row)
+	_finish_keep(true)
+	var cell := PropRows.cell_of(handle.row)
 	var rows := _cell_rows(cell)
-	var index := _index_in(rows, handle)
+	var index := PropRows.index_of(rows, handle)
 	if index < 0:
 		return handle
 	if _prop_edit.is_empty() or _prop_edit.cell != cell:
@@ -952,47 +989,12 @@ func _begin_prop_edit(cell: Vector2i, label: String) -> void:
 	_prop_edit_age = 0.0
 
 
-func _set_prop_cell(cell: Vector2i, rows: Dictionary) -> void:
+func _set_prop_cell(cell: Vector2i, rows: Dictionary, animate: bool = true) -> void:
 	if is_instance_valid(props):
-		props.set_cells({cell: rows.duplicate(true)}, true)
+		props.set_cells({cell: rows.duplicate(true)}, animate)
 
 
 ## A deep copy of a props cell's rows (asset id -> flat rows). Deep, because packed arrays
 ## are shared by reference in GDScript and history must not alias the live rows.
 func _cell_rows(cell: Vector2i) -> Dictionary:
 	return props.cell_rows(cell).duplicate(true) if is_instance_valid(props) else {}
-
-
-## The 10 m cell a row's origin falls in.
-static func cell_of(row: PackedFloat32Array) -> Vector2i:
-	var size := ScatterChunker.CHUNK_SIZE_WORLD_UNITS
-	return Vector2i(floori(row[0] / size), floori(row[2] / size))
-
-
-static func _index_in(rows: Dictionary, handle: Dictionary) -> int:
-	var flat: PackedFloat32Array = rows.get(handle.asset_id, PackedFloat32Array())
-	var row: PackedFloat32Array = handle.row
-	@warning_ignore("integer_division")
-	for r in flat.size() / PropRows.STRIDE:
-		if PropRows.row_at(flat, r) == row:
-			return r
-	return -1
-
-
-static func _same_rows(a: Dictionary, b: Dictionary) -> bool:
-	var keys := {}
-	keys.merge(a)
-	keys.merge(b)
-	for asset_id in keys:
-		var left: PackedFloat32Array = a.get(asset_id, PackedFloat32Array())
-		var right: PackedFloat32Array = b.get(asset_id, PackedFloat32Array())
-		if left != right:
-			return false
-	return true
-
-
-static func _rows_bytes(rows: Dictionary) -> int:
-	var total := 0
-	for asset_id in rows:
-		total += (rows[asset_id] as PackedFloat32Array).size() * 4
-	return total

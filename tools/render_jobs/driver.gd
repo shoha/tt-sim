@@ -282,6 +282,9 @@ func _wait_ready(step: Dictionary) -> bool:
 		if is_instance_valid(c.scatter) and (c.scatter.is_regenerating() or c.scatter.is_growing()):
 			_state.t = 0.0
 			return false
+		if c.editor != null and c.editor.has_height_work():
+			_state.t = 0.0
+			return false
 	return _state.t >= settle
 
 
