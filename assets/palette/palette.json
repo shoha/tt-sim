@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "ad44aa5",
+ "palette_version": "db9b826",
  "surfaces": {
   "dirt": {
    "albedo": "surfaces/dirt/dirt_albedo.png",
@@ -5227,9 +5227,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    3.113619804382324,
-    0.5939927697181702,
-    0.667736291885376
+    3.1145143508911133,
+    0.5943898558616638,
+    0.6595872640609741
    ]
   },
   "boreal_taiga_summer_s1/Grass_Short_summer_15": {
@@ -6162,9 +6162,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    3.113619804382324,
-    0.5939927697181702,
-    0.667736291885376
+    3.1145143508911133,
+    0.5943898558616638,
+    0.6595872640609741
    ]
   },
   "temperate_forest_summer_s1/Stone_Small_summer_12": {
