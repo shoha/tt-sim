@@ -38,11 +38,18 @@ const MAX_ASSETS := 8192
 const MAX_ASSETS_PER_SPECIES := 64
 const MAX_SURFACES := 128
 const MAX_RELATIONS := 32
+## Per biome: ground accents and path surfaces (a handful of each in practice).
+const MAX_ACCENTS := 8
+const MAX_PATH_SURFACES := 32
 const MAX_PATTERN_KEYS := 64
 const MAX_VERBATIM_DEPTH := 4
 const MAX_ID_LENGTH := 160
 const MAX_TEXT_LENGTH := 128
 const MAX_PATH_LENGTH := 256
+## A ground accent's patch size when the palette gives none or a non-positive one (contract
+## section 9), and the largest one kept.
+const DEFAULT_ACCENT_SCALE_M := 6.0
+const MAX_ACCENT_SCALE_M := 200.0
 ## At most this many individual warnings are printed per palette load; the rest are
 ## summarised in one line so a badly broken file cannot flood the log.
 const MAX_WARNINGS_PRINTED := 20
@@ -75,9 +82,13 @@ static func palette_version(root: String = DEFAULT_ROOT) -> String:
 
 
 ## Every valid biome, in file order. Each is {id, biome, season, seed, name, climate,
-## thumbnail, ground_surface, cliff_surface, scree_surface, species}; paths are relative
-## to the palette root. cliff_surface names a role-cliff surface or is "" when the palette
-## has none; scree_surface names a role-ground surface or is "" (keep the ground).
+## thumbnail, ground_surface, cliff_surface, scree_surface, ground_accents, path_surfaces,
+## species}; paths are relative to the palette root. cliff_surface names a role-cliff
+## surface or is "" when the palette has none; scree_surface names a role-ground surface or
+## is "" (keep the ground). ground_accents is an Array of {surface, coverage, scale_m} in
+## priority order (role-ground surfaces other than the biome's ground; coverage 0..1,
+## scale_m > 0), path_surfaces an Array[String] of role-built surfaces; both [] when the
+## palette lists none (a palette from before 2026-09-27).
 static func biomes(root: String = DEFAULT_ROOT) -> Array[Dictionary]:
 	var copies: Array[Dictionary] = []
 	for biome in get_palette(root)["biomes"]:
@@ -127,6 +138,21 @@ static func surfaces(root: String = DEFAULT_ROOT) -> Dictionary:
 ## The names of the surfaces with `role` ("ground", "cliff" or "built"), in file order.
 static func surfaces_with_role(role: String, root: String = DEFAULT_ROOT) -> Array[String]:
 	return _names_with_role(get_palette(root)["surfaces"], role)
+
+
+## The ground accents of one biome ({surface, coverage, scale_m}, priority order), or [] for
+## an unknown biome or one without accents.
+static func ground_accents(biome_id: String, root: String = DEFAULT_ROOT) -> Array[Dictionary]:
+	var accents: Array[Dictionary] = []
+	accents.assign(biome(biome_id, root).get("ground_accents", []))
+	return accents
+
+
+## The path surfaces the Paint tool shows first on one biome, in order, or [].
+static func path_surfaces(biome_id: String, root: String = DEFAULT_ROOT) -> Array[String]:
+	var names: Array[String] = []
+	names.assign(biome(biome_id, root).get("path_surfaces", []))
+	return names
 
 
 ## The manifest entry of one asset ({file, node, wind_category, size_class,
@@ -394,6 +420,81 @@ static func _scree_surface_of(
 	return ""
 
 
+## A biome's ground_accents (contract section 9, "Accents and path surfaces degrade, never
+## fail"): absent is [] silently; not an array warns and is []; an entry that is not an
+## object, has no numeric coverage, or names a surface that is absent, not role ground or
+## the biome's own ground warns and is dropped, as is a second entry for one surface;
+## coverage is clamped to 0..1; a missing scale_m is DEFAULT_ACCENT_SCALE_M silently, a
+## non-numeric or non-positive one warns and is too. Order is kept (priority order).
+static func _ground_accents_of(
+	entry: Dictionary, id: String, ground: String, surfaces: Dictionary, warnings: Array[String]
+) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var raw: Variant = entry.get("ground_accents")
+	if raw == null:
+		return result
+	var where := "biome '%s' ground_accents" % id
+	if not raw is Array:
+		warnings.append("%s is not an array, ignored" % where)
+		return result
+	for accent in _capped(raw, MAX_ACCENTS, where, warnings):
+		var surface: Variant = _text(
+			accent.get("surface") if accent is Dictionary else null, MAX_TEXT_LENGTH
+		)
+		var coverage: Variant = _number(
+			accent.get("coverage") if accent is Dictionary else null, 0.0, 1.0
+		)
+		if surface == null or coverage == null:
+			warnings.append("%s: malformed entry '%s' dropped" % [where, _label(accent)])
+			continue
+		if not surfaces.has(surface) or surfaces[surface]["role"] != "ground" or surface == ground:
+			warnings.append(
+				(
+					"%s: '%s' is not a ground surface other than the biome's own, dropped"
+					% [where, _label(surface)]
+				)
+			)
+			continue
+		if result.any(func(kept: Dictionary) -> bool: return kept["surface"] == surface):
+			warnings.append("%s: '%s' listed twice, the second dropped" % [where, surface])
+			continue
+		var scale_m := DEFAULT_ACCENT_SCALE_M
+		var raw_scale: Variant = accent.get("scale_m")
+		if raw_scale != null:
+			var number: Variant = _number(raw_scale, -INF, MAX_ACCENT_SCALE_M)
+			if number != null and number > 0.0:
+				scale_m = number
+			else:
+				warnings.append(
+					"%s: '%s' scale_m is not positive, using %.0f" % [where, surface, scale_m]
+				)
+		result.append({"surface": surface, "coverage": coverage, "scale_m": scale_m})
+	return result
+
+
+## A biome's path_surfaces: absent is [] silently; not an array warns and is []; a name that
+## is absent or not role built warns and is dropped; a duplicate is ignored silently.
+static func _path_surfaces_of(
+	entry: Dictionary, id: String, surfaces: Dictionary, warnings: Array[String]
+) -> Array[String]:
+	var result: Array[String] = []
+	var raw: Variant = entry.get("path_surfaces")
+	if raw == null:
+		return result
+	var where := "biome '%s' path_surfaces" % id
+	if not raw is Array:
+		warnings.append("%s is not an array, ignored" % where)
+		return result
+	for name in _capped(raw, MAX_PATH_SURFACES, where, warnings):
+		var surface: Variant = _text(name, MAX_TEXT_LENGTH)
+		if surface == null or not surfaces.has(surface) or surfaces[surface]["role"] != "built":
+			warnings.append("%s: '%s' is not a built surface, dropped" % [where, _label(name)])
+			continue
+		if not surface in result:
+			result.append(surface)
+	return result
+
+
 static func _validate_assets(raw: Variant, warnings: Array[String]) -> Dictionary:
 	var result := {}
 	if not raw is Dictionary:
@@ -461,6 +562,8 @@ static func _validate_biomes(
 					"ground_surface": ground,
 					"cliff_surface": _cliff_surface_of(entry, id, surfaces, warnings),
 					"scree_surface": _scree_surface_of(entry, id, surfaces, warnings),
+					"ground_accents": _ground_accents_of(entry, id, ground, surfaces, warnings),
+					"path_surfaces": _path_surfaces_of(entry, id, surfaces, warnings),
 					"species": species_rules,
 				}
 			)
