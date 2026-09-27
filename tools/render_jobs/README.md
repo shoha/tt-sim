@@ -162,6 +162,7 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 
 | `terrain_shapes.gd` | `action` plus its fields (see the script header) | The automatic dressing (P3-4) without Sculpt or Paint tools: `plateau` (stacked 1.524 m tiers with one-sample faces and an optional rounded lip), `hill`, `hollow` write the document heights and refresh terrain, collision, plants and ground like an undo; `path` / `area` paint a surface into the document; `stats` counts samples by rule weight (TerrainRules). |
 | `paint_check.gd` | `points` ([[x, z], ...]), `r` (default 0.75) | The Paint tool (P3-6): at each point the document's painted weights, what the ground lets grow there (`ScatterGround`: open, rock and scree shares), the scatter rows within `r` by asset and the nearest row's distance, to tell a plant left on a path by the rules from one on its shoulder. |
+| `rocks.gd` | `action` (`check` default, `survey`), `near` ([x, z, r]), `within`, `top` | Rocks survive terrain changes (P3-7, `RockKeep`): `check` logs the rock props (kept or placed), any standing above its bed (`GroundSnap.bed_under`), their tilt, generated rocks inside a rock prop (twins), rock rows and props within `near`, and the last stroke's keeping (count, main-thread and worker time); `survey` lists the 10 m cells near the centre with most rock rows, to aim strokes at a boulder field. |
 | `height_profile.gd` | `from`, `to` ([x, z]), `n` (default 21) | The authoring map's ground height at `n` points along a line (`AuthoringEditor.ground_height_at`) and the steepest slope between them, for checking a sculpt stroke numerically (tier tops on whole tiers, a face's width, a ramp's slope, a pit's floor). |
 | `ground_perf.gd` | `action` plus its fields (see the script header) | Ground shader A/Bs: `shader` swaps the terrain material to the current include or one read from `user://p34_<version>_ground.zip` (made with `git archive`); `variant` builds a text-replaced copy of the current include; `paint` writes eight painted surfaces as strips or a half-weight checker; `terraces` fills the view with tiers; `fraction` reports the share of steep ground pixels. |
 
@@ -209,11 +210,18 @@ numerically (for example where a fade or a tint band starts).
 - `jobs/phase3_judgment_set.json`: the phase 3 judgment set (P3-7, about 7 minutes): for
   temperate forest, alpine meadow, rocky badlands and grassland meadow, a new 150 ft map
   (seed 1234) built with the real Sculpt and Paint tools at human speed (a raised hill, a
-  two-tier plateau with a Shift-smoothed ramp, a sunken hollow, a dirt track up the ramp, a
-  cobblestone path across a tier edge, a flagstone courtyard on the top tier, three placed
-  props), captured at home zoom, home zoom on the plateau, zoom 26 and full zoom-out, each
+  two-tier plateau with a Shift-smoothed ramp, a sunken hollow, a track up the ramp in the
+  biome's first path surface, a path across a tier edge and a courtyard on the top tier in
+  its first stone path surface (`PaletteLibrary.path_surfaces`; badlands: `dirt_road_caliche`
+  and `flagstone_sandstone`), three placed props), captured at home zoom, home zoom on the plateau, zoom 26 and full zoom-out, each
   with the grid off and on; then `deciduous_clusters` and `river` in play (read-only) at home
   (grid off and on) and full zoom-out. 38 captures and `INDEX.md`.
+- `jobs/rocks_survive.json`: rocks survive terrain changes (P3-7, about 80 s): on new 150 ft
+  alpine meadow and rocky badlands maps, a Tier stroke through the densest boulder field near
+  the centre (before, still pressed, after, close up), on alpine a Flatten back over the new
+  face, and a gentle Raise hill under another group of rocks, with `rocks.gd` checks (kept
+  rocks, floating, tilt, twins) after each. 16 captures and `INDEX.md`.
+  `jobs/rocks_survey.json` (about 12 s) runs `rocks.gd survey` on both maps to pick the spots.
 - `jobs/dressing_look.json`: the automatic dressing judgment set (P3-4, about 75 s): new 200 ft
   maps in temperate forest, alpine meadow and rocky badlands (the three cliff surfaces) with a
   two-tier plateau, a 6 m hill and a sunken hollow, at home and zoom 7 on each, then a painted

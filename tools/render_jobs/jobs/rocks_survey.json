@@ -1,0 +1,19 @@
+{
+ "out_dir": "render_jobs/rocks_survey",
+ "timeout_s": 240,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "alpine_meadow_summer_s1", "size": 150, "seed": 1234},
+  {"op": "wait_ready", "settle": 0.5},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/rocks.gd", "action": "survey", "within": 18, "top": 8},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "rocky_badlands_summer_s1", "size": 150, "seed": 1234},
+  {"op": "wait_ready", "settle": 0.5},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/rocks.gd", "action": "survey", "within": 18, "top": 8},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}
