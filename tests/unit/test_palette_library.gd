@@ -411,6 +411,113 @@ func test_cliff_and_scree_surfaces_with_the_wrong_role_or_absent_warn_and_fall_b
 	assert_eq(result.warnings.size(), 2, str(result.warnings))
 
 
+## _valid_document() plus a moss ground surface, a second built surface, and the biome's
+## ground accents and path surfaces (contract section 9, 2026-09-27).
+func _document_with_accents() -> Dictionary:
+	var document := _valid_document()
+	document.surfaces["moss"] = _surface("moss", "moss", "ground", 2.0)
+	document.surfaces["flagstone"] = _surface("flagstone", "flagstone", "built", 2.0)
+	document.biomes[0]["ground_accents"] = [
+		{"surface": "moss", "coverage": 0.3, "scale_m": 8.0},
+		{"surface": "gravel", "coverage": 0.1, "scale_m": 4.0},
+	]
+	document.biomes[0]["path_surfaces"] = ["flagstone", "cobblestone"]
+	return document
+
+
+func test_accents_and_path_surfaces_are_parsed_in_order() -> void:
+	var result := PaletteLibrary.validate_palette(_document_with_accents())
+	assert_eq(result.warnings.size(), 0, str(result.warnings))
+	var biome: Dictionary = result.palette.biomes[0]
+	assert_eq(
+		biome.ground_accents,
+		[
+			{"surface": "moss", "coverage": 0.3, "scale_m": 8.0},
+			{"surface": "gravel", "coverage": 0.1, "scale_m": 4.0},
+		]
+	)
+	assert_eq(biome.path_surfaces, ["flagstone", "cobblestone"])
+
+
+func test_a_palette_without_accents_or_paths_loads_silently_empty() -> void:
+	var result := PaletteLibrary.validate_palette(_valid_document())
+	assert_eq(result.warnings.size(), 0, str(result.warnings))
+	assert_eq(result.palette.biomes[0].ground_accents, [])
+	assert_eq(result.palette.biomes[0].path_surfaces, [])
+	var empty := _document_with_accents()
+	empty.biomes[0]["ground_accents"] = []
+	empty.biomes[0]["path_surfaces"] = []
+	result = PaletteLibrary.validate_palette(empty)
+	assert_eq(result.warnings.size(), 0, str(result.warnings))
+	assert_eq(result.palette.biomes[0].ground_accents, [])
+
+
+func test_bad_accent_entries_warn_and_are_dropped() -> void:
+	var document := _document_with_accents()
+	document.biomes[0]["ground_accents"] = [
+		"moss",
+		{"surface": "lava", "coverage": 0.2},
+		{"surface": "cliff", "coverage": 0.2},
+		{"surface": "cobblestone", "coverage": 0.2},
+		{"surface": "grass_alpine", "coverage": 0.2},
+		{"surface": "moss", "coverage": true},
+		{"surface": "moss", "coverage": 0.2},
+		{"surface": "moss", "coverage": 0.1},
+	]
+	var result := PaletteLibrary.validate_palette(document)
+	assert_eq(
+		result.palette.biomes[0].ground_accents,
+		[{"surface": "moss", "coverage": 0.2, "scale_m": PaletteLibrary.DEFAULT_ACCENT_SCALE_M}]
+	)
+	# Not an object, absent, cliff, built, the biome's own ground, a bool coverage, and the
+	# second moss.
+	assert_eq(result.warnings.size(), 7, str(result.warnings))
+	document.biomes[0]["ground_accents"] = [{"surface": "moss"}]
+	result = PaletteLibrary.validate_palette(document)
+	assert_eq(result.palette.biomes[0].ground_accents, [], "no coverage is malformed")
+	assert_eq(result.warnings.size(), 1, str(result.warnings))
+
+
+func test_accent_numbers_are_clamped_and_a_bad_scale_becomes_the_default() -> void:
+	var document := _document_with_accents()
+	document.biomes[0]["ground_accents"] = [
+		{"surface": "moss", "coverage": 1.7, "scale_m": -3.0},
+		{"surface": "gravel", "coverage": -0.2, "scale_m": "big"},
+	]
+	var result := PaletteLibrary.validate_palette(document)
+	var accents: Array = result.palette.biomes[0].ground_accents
+	assert_eq(accents[0].coverage, 1.0)
+	assert_eq(accents[1].coverage, 0.0)
+	assert_eq(accents[0].scale_m, PaletteLibrary.DEFAULT_ACCENT_SCALE_M)
+	assert_eq(accents[1].scale_m, PaletteLibrary.DEFAULT_ACCENT_SCALE_M)
+	assert_eq(result.warnings.size(), 2, str(result.warnings))
+
+
+func test_bad_path_surfaces_warn_and_duplicates_are_ignored() -> void:
+	var document := _document_with_accents()
+	document.biomes[0]["path_surfaces"] = ["cobblestone", "gravel", "lava", 4, "cobblestone"]
+	var result := PaletteLibrary.validate_palette(document)
+	assert_eq(result.palette.biomes[0].path_surfaces, ["cobblestone"])
+	assert_eq(result.warnings.size(), 3, "gravel is ground, lava absent, 4 not a name")
+	document.biomes[0]["path_surfaces"] = "cobblestone"
+	document.biomes[0]["ground_accents"] = {"surface": "moss"}
+	result = PaletteLibrary.validate_palette(document)
+	assert_eq(result.palette.biomes[0].path_surfaces, [])
+	assert_eq(result.palette.biomes[0].ground_accents, [])
+	assert_eq(result.warnings.size(), 2, str(result.warnings))
+
+
+func test_accent_and_path_getters() -> void:
+	assert_eq(PaletteLibrary.ground_accents(PACKAGE, ROOT), [])
+	assert_eq(PaletteLibrary.path_surfaces(PACKAGE, ROOT), [])
+	assert_eq(PaletteLibrary.ground_accents("nope", ROOT), [])
+	PaletteLibrary._palettes[ROOT] = (
+		PaletteLibrary.validate_palette(_document_with_accents()).palette
+	)
+	assert_eq(PaletteLibrary.ground_accents(PACKAGE, ROOT).size(), 2)
+	assert_eq(PaletteLibrary.path_surfaces(PACKAGE, ROOT), ["flagstone", "cobblestone"])
+
+
 func test_surfaces_with_role_from_disk() -> void:
 	assert_eq(PaletteLibrary.surfaces_with_role("cliff", ROOT), ["cliff", "cliff_basalt"])
 	assert_eq(PaletteLibrary.surfaces_with_role("built", ROOT), ["cobblestone"])
