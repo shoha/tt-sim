@@ -19,9 +19,12 @@ extends RefCounted
 ##   surfaces.json          {"surfaces": [palette surface name, ...]}, at most 8
 ##   surfaces.png           RGBA8 weights of surface slots 0-3 on the sample grid
 ##   surfaces_b.png         RGBA8 weights of slots 4-7; written only with 5+ surfaces
+##   splines.json           water bodies and flow map metadata         (MapWaterIO)
+##   ponds.png              8-bit pond ids on the sample grid           (MapWaterIO)
+##   water_flow.png         the baked flow map, RG8 as RGB              (MapWaterIO)
 ## Unknown entries are ignored (_known_entries and _extract_entries only look at
-## KNOWN_ENTRIES), so the surfaces entries needed no format bump: an older build reads a
-## painted document as if unpainted. Later phases can add splines.json the same way.
+## KNOWN_ENTRIES), so the surfaces and water entries needed no format bump: an older build
+## reads a painted document as if unpainted, and one with water as if it had none.
 ##
 ## Documents arrive from a host peer, so everything read is untrusted input, validated in
 ## the style of PaletteLibrary.validate_palette(): caps are checked before anything is
@@ -31,13 +34,9 @@ extends RefCounted
 ## JSON is parsed with JSON, PNGs with Image, heights by reinterpreting bytes; nothing
 ## goes through bytes_to_var.
 ##
-## The one allocation ZIPReader makes on the archive's say-so is read_file(), which sizes
-## its buffer from the entry's declared uncompressed size, and ZIPReader has no way to ask
-## for that size first (probed on 4.7.1: its methods are open, close, get_files,
-## read_file, file_exists, get_compression_level). A 432-byte archive whose headers claim
-## 400 MB made read_file allocate 400 MB before failing. So read() parses the ZIP central
-## directory itself (_entry_sizes), selecting the records the way minizip does, and only
-## calls read_file on an entry whose declared size is within its cap and the total.
+## ZIPReader.read_file() sizes its buffer from the size the archive declares, so read()
+## first reads every declared size from the ZIP central directory (ZipEntrySizes, which
+## documents the probe) and only calls read_file on an entry within its cap and the total.
 ##
 ## write() is atomic: the new document is packed into `<path>.tmp` in the same directory
 ## and renamed over the target, so a failure at any step leaves the previous file as it
@@ -67,6 +66,9 @@ const KNOWN_ENTRIES: Array[String] = [
 	SURFACES_JSON_ENTRY,
 	SURFACES_PNG_ENTRY,
 	SURFACES_B_PNG_ENTRY,
+	MapWaterIO.SPLINES_ENTRY,
+	MapWaterIO.PONDS_ENTRY,
+	MapWaterIO.FLOW_ENTRY,
 ]
 const TEMP_SUFFIX := ".tmp"
 
@@ -74,7 +76,8 @@ const TEMP_SUFFIX := ".tmp"
 ## largest grid is under 2 MB even incompressible (641 x 641 x 4 for RGBA). The row entries
 ## bound JSON.parse, which builds its whole Variant tree before any row cap can apply, so
 ## their byte caps are the real bound on parse memory; at about 90 bytes per written row,
-## 32 MB is ~350,000 scatter rows.
+## 32 MB is ~350,000 scatter rows. splines.json at its caps (32 rivers of 512 points) is
+## about 0.8 MB of JSON; a 1024 x 1024 flow map is 3 MB even incompressible.
 const ENTRY_CAPS := {
 	MANIFEST_ENTRY: 64 * 1024,
 	HEIGHT_ENTRY: MapDocument.MAX_SAMPLES_PER_AXIS * MapDocument.MAX_SAMPLES_PER_AXIS * 4,
@@ -86,6 +89,9 @@ const ENTRY_CAPS := {
 	SURFACES_JSON_ENTRY: 64 * 1024,
 	SURFACES_PNG_ENTRY: 4 * 1024 * 1024,
 	SURFACES_B_PNG_ENTRY: 4 * 1024 * 1024,
+	MapWaterIO.SPLINES_ENTRY: 2 * 1024 * 1024,
+	MapWaterIO.PONDS_ENTRY: 4 * 1024 * 1024,
+	MapWaterIO.FLOW_ENTRY: 4 * 1024 * 1024,
 }
 const MAX_TOTAL_BYTES := 64 * 1024 * 1024
 ## The archive file itself, checked before it is opened.
@@ -108,13 +114,6 @@ const MAX_WARNINGS := 50
 const ROW_DECIMALS := 6
 
 const _PNG_SIGNATURE := [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
-const _EOCD_SIGNATURE := 0x06054b50
-const _EOCD_SIZE := 22
-const _MAX_ZIP_COMMENT := 65535
-const _CENTRAL_SIGNATURE := 0x02014b50
-const _CENTRAL_HEADER_SIZE := 46
-const _ZIP64_LOCATOR_SIGNATURE := 0x07064b50
-const _ZIP64_EOCD_SIGNATURE := 0x06064b50
 
 
 ## Bounded warning collector: keeps the first MAX_WARNINGS and counts the rest, so a
@@ -198,6 +197,7 @@ static func serialize(doc: MapDocument) -> Dictionary:
 		entries[BIOMES_PNG_ENTRY] = _png(interleaved, doc, Image.FORMAT_RG8)
 	if not doc.surface_ids.is_empty():
 		_serialize_surfaces(doc, entries)
+	MapWaterIO.serialize(doc, entries)
 	var total := 0
 	for entry_name in entries:
 		var size := entries[entry_name].size()
@@ -329,6 +329,9 @@ static func _writable_problem(doc: MapDocument) -> String:
 	var surfaces := _surfaces_problem(doc, count)
 	if surfaces != "":
 		return surfaces
+	var water := MapWaterIO.problem(doc)
+	if water != "":
+		return water
 	var total_rows := 0
 	for rows_by_asset in [doc.props, doc.scatter]:
 		var rows_problem := _rows_problem(rows_by_asset)
@@ -441,92 +444,14 @@ static func _extract_entries(path: String, log: _WarningLog) -> Variant:
 
 ## Declared uncompressed size of every entry (name -> bytes, the larger one for a
 ## repeated name), read from the ZIP central directory without trusting anything else;
-## null (with a warning) when the file is not a plain ZIP within the caps.
-##
-## Record selection mirrors minizip (thirdparty/minizip/unzip.c), which is what ZIPReader
-## sizes read_file() from: the end-of-central-directory record is the last signature in
-## the tail, the directory is taken to end where that record starts (minizip's
-## byte_before_the_zipfile correction), and a Zip64 locator that points at a Zip64 record
-## makes minizip use that instead, so such an archive is refused rather than parsed with
-## different numbers. ZIPPacker never writes Zip64 for entries under 4 GB.
+## null (with a warning) when the file is not a plain ZIP within the caps (ZipEntrySizes).
 static func _entry_sizes(path: String, log: _WarningLog) -> Variant:
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		log.add("%s cannot be opened" % path)
-		return null
-	var length := file.get_length()
-	if length > MAX_ARCHIVE_BYTES:
-		log.add("%s is %d bytes, over the cap of %d" % [path, length, MAX_ARCHIVE_BYTES])
-		return null
-	var tail_start := maxi(0, length - (_EOCD_SIZE + _MAX_ZIP_COMMENT))
-	file.seek(tail_start)
-	var tail := file.get_buffer(length - tail_start)
-	var eocd := _last_signature(tail, _EOCD_SIGNATURE, _EOCD_SIZE)
-	if eocd < 0 or eocd + _EOCD_SIZE + tail.decode_u16(eocd + 20) != tail.size():
-		log.add("%s is not a ZIP archive" % path)
-		return null
-	if _has_zip64_record(file, tail):
-		log.add("%s is a Zip64 archive, which map documents never are" % path)
-		return null
-	var count := tail.decode_u16(eocd + 10)
-	var directory_size := tail.decode_u32(eocd + 12)
-	var directory_end := tail_start + eocd
-	if count > MAX_ARCHIVE_ENTRIES or directory_size > MAX_CENTRAL_DIRECTORY_BYTES:
-		log.add("%s has an oversized ZIP directory" % path)
-		return null
-	if tail.decode_u32(eocd + 16) + directory_size > directory_end:
-		log.add("%s has an inconsistent ZIP directory" % path)
-		return null
-	file.seek(directory_end - directory_size)
-	var sizes: Variant = _parse_central_directory(file.get_buffer(directory_size), count)
-	if sizes == null:
-		log.add("%s has a malformed ZIP directory" % path)
-	return sizes
-
-
-## Offset of the last occurrence of a little-endian u32 `signature` in `bytes` that has
-## at least `record_size` bytes after it, or -1.
-static func _last_signature(bytes: PackedByteArray, signature: int, record_size: int) -> int:
-	for i in range(bytes.size() - record_size, -1, -1):
-		if bytes.decode_u32(i) == signature:
-			return i
-	return -1
-
-
-## True when the tail holds a Zip64 end-of-directory locator (the last one, as minizip
-## searches) that points at a real Zip64 end-of-directory record.
-static func _has_zip64_record(file: FileAccess, tail: PackedByteArray) -> bool:
-	var locator := _last_signature(tail, _ZIP64_LOCATOR_SIGNATURE, 20)
-	if locator < 0:
-		return false
-	var record := tail.decode_u64(locator + 8)
-	if record < 0 or record + 4 > file.get_length():
-		return false
-	file.seek(record)
-	return file.get_32() == _ZIP64_EOCD_SIGNATURE
-
-
-## Name -> declared uncompressed size for `count` central-directory records, or null
-## when a record is truncated or carries the wrong signature. Pure.
-static func _parse_central_directory(directory: PackedByteArray, count: int) -> Variant:
-	var sizes := {}
-	var at := 0
-	for _record in count:
-		if at + _CENTRAL_HEADER_SIZE > directory.size():
-			return null
-		if directory.decode_u32(at) != _CENTRAL_SIGNATURE:
-			return null
-		var declared := directory.decode_u32(at + 24)
-		var name_length := directory.decode_u16(at + 28)
-		var name_end := at + _CENTRAL_HEADER_SIZE + name_length
-		if name_end > directory.size():
-			return null
-		var entry_name := (
-			directory.slice(at + _CENTRAL_HEADER_SIZE, name_end).get_string_from_utf8()
-		)
-		sizes[entry_name] = maxi(sizes.get(entry_name, 0), declared)
-		at = name_end + directory.decode_u16(at + 30) + directory.decode_u16(at + 32)
-	return sizes
+	var found := ZipEntrySizes.read(
+		path, MAX_ARCHIVE_BYTES, MAX_ARCHIVE_ENTRIES, MAX_CENTRAL_DIRECTORY_BYTES
+	)
+	if found["error"] != "":
+		log.add(found["error"])
+	return found["sizes"]
 
 
 ## True when an entry of `size` bytes may be kept after `total` bytes already were.
@@ -571,6 +496,7 @@ static func _parse_document(entries: Dictionary, log: _WarningLog) -> MapDocumen
 		doc.erase_mask = _parse_mask(blobs[ERASE_ENTRY], doc, Image.FORMAT_L8, ERASE_ENTRY, log)
 	_parse_biomes(blobs, doc, log)
 	_parse_surfaces(blobs, doc, log)
+	MapWaterIO.parse(blobs, doc, log)
 	return doc
 
 

@@ -10,6 +10,8 @@ const BIOME_B := "boreal_taiga_summer_s2"
 ## Samples per axis of a 20 x 20 cell map at the defaults.
 const GRID := 123
 const IDENTITY_ROW := "[0,0,0,0,0,0,1,1,1,1]"
+const RIVER_ID := 3
+const POND_ID := 7
 
 
 ## A 20 x 20 cell document with something in every field.
@@ -44,7 +46,25 @@ static func full_doc() -> MapDocument:
 		density[i] = i % 256
 	doc.biome_slots = slots
 	doc.biome_density = density
+	add_water(doc)
 	return doc
+
+
+## A river (upstream at -X), a pond over a box of samples, and the baked flow map.
+static func add_water(doc: MapDocument) -> void:
+	var line := PackedVector2Array([Vector2(-12, -3), Vector2(-2, 0.5), Vector2(9.25, 4)])
+	var widths := PackedFloat32Array([1.0, 1.5, 2.0])
+	var river := WaterBody.river(RIVER_ID, line, widths, WaterBody.Depth.WAIST, -0.75, 0.8)
+	doc.water_bodies.append(river)
+	doc.water_bodies.append(WaterBody.pond(POND_ID, WaterBody.Depth.DEEP, -1.25))
+	var mask := PackedByteArray()
+	mask.resize(doc.sample_count())
+	for z in range(80, 100):
+		for x in range(10, 40):
+			mask[doc.sample_index(x, z)] = POND_ID
+	doc.pond_mask = mask
+	doc.water_flow_size = WaterFlowBaker.resolution_for(doc.extent_m())
+	doc.water_flow = WaterFlowBaker.bake(doc, doc.water_flow_size)
 
 
 ## A manifest for a 20 x 20 map at the defaults, with `overrides` merged in.
