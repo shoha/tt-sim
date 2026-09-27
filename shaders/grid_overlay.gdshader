@@ -13,11 +13,11 @@
  * 2. The fragment shader samples hint_depth_texture to reconstruct the world
  *    position of each visible pixel.
  * 3. Height filter rejects pixels outside [grid_y_level ± grid_y_tolerance],
- *    preventing the grid from projecting onto tokens and ceilings. On a map with
- *    authored terrain (ground_heights_enabled) the band follows the ground instead:
- *    a pixel is kept only within ground_tolerance of the terrain height under it,
- *    read from the document heights on the terrain's own triangles (GridOverlay
- *    .set_ground), so every tier top and slope gets the grid.
+ *    preventing the grid from projecting onto tokens and ceilings. With a ground field
+ *    (ground_heights_enabled: authored terrain, or a Blender map's ground sampled from
+ *    its collision; GridOverlay.set_ground) the band follows the ground instead: a pixel
+ *    is kept only within ground_tolerance of the ground height under it, interpolated on
+ *    the field's triangles, so every tier top and slope gets the grid.
  * 4. Reconstructs the surface normal from depth-buffer neighbors (cross product
  *    of partial derivatives) and discards steep/vertical surfaces.
  * 5. Applies grid math on the XZ plane and fades with distance from grid_center.
@@ -45,10 +45,11 @@ uniform float normal_threshold = 0.7;
 uniform float grid_y_level = 0.0;       // approximate floor Y in world space
 uniform float grid_y_tolerance = 0.5;   // max height above grid_y_level to draw grid
 
-// Authored terrain (GridOverlay.set_ground): the document heights, one R32F texel per
-// sample (read with texelFetch, so no float filtering is needed), the terrain's transform
-// both ways (the level's map scale and offset), and the sample grid's map-frame origin and
-// step (the ground shader's layer_grid_origin / layer_grid_step).
+// Ground field (GridOverlay.set_ground, a GroundHeightField): the ground heights, one R32F
+// texel per sample (read with texelFetch, so no float filtering is needed), the map frame's
+// transform both ways (the level's map scale and offset), and the sample grid's map-frame
+// origin and step (on authored terrain, the ground shader's layer_grid_origin /
+// layer_grid_step).
 uniform bool ground_heights_enabled = false;
 uniform sampler2D ground_heights : filter_nearest, repeat_disable;
 uniform mat4 ground_world_to_map = mat4(1.0);
@@ -145,8 +146,8 @@ void fragment() {
 	vec3 world_pos = (INV_VIEW_MATRIX * view_c).xyz;
 
 	// Height filter: only draw grid near the ground. Rejects token surfaces (which extend
-	// above the floor) and ceilings. Authored terrain: the ground height under this pixel;
-	// otherwise the fixed band around grid_y_level (Blender maps).
+	// above the floor) and ceilings. With a ground field: the ground height under this pixel;
+	// otherwise the fixed band around grid_y_level.
 	if (ground_heights_enabled) {
 		vec3 map_pos = (ground_world_to_map * vec4(world_pos, 1.0)).xyz;
 		float h = ground_height_at((map_pos.xz - ground_grid_origin) / ground_grid_step);

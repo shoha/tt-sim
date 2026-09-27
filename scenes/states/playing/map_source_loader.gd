@@ -276,6 +276,64 @@ func _build_authored_scatter_async(scatter: AuthoredScatter, rows_by_cell: Dicti
 	return true
 
 
+## Gives a Blender map's grid overlay its ground (GroundHeightField.for_glb): after install(),
+## waits one physics frame so the map's collision is in the space, then samples its layer-1
+## collision on a GroundHeightField.grid_for_bounds() grid over the map's mesh bounds with
+## DressingGround rays, FRAME_BUDGET_USEC per frame, and hands the field to
+## GameMap.set_grid_ground() (null, the fixed band, for a map with no layer-1 collision or
+## whose ground is at Y = 0 already). A map with authored terrain has its field already and
+## is skipped. Returns {"samples", "ray_ms", "missed", "wall_ms", "follows_ground"} for
+## measurement, or {} when skipped or superseded (the map left the container, or
+## is_superseded()).
+func fit_grid_ground_async(map: Node3D, game_map: GameMap) -> Dictionary:
+	if map.get_node_or_null(^"AuthoredTerrain") != null:
+		return {}
+	var started := Time.get_ticks_usec()
+	await tree.physics_frame
+	if not _still_installed(map, game_map):
+		return {}
+	var to_world := map.global_transform
+	var world_bounds := LevelEnvironmentManager.compute_map_bounds(map)
+	var grid := GroundHeightField.grid_for_bounds(to_world.affine_inverse() * world_bounds)
+	var sampler := DressingGround.begin_grid(
+		map.get_world_3d(),
+		to_world,
+		world_bounds.end.y + DragPlaceController.TERRAIN_DOWNCAST_HEIGHT,
+		grid.origin,
+		grid.step,
+		grid.columns,
+		grid.rows
+	)
+	while not sampler.step(FRAME_BUDGET_USEC):
+		await tree.process_frame
+		if not _still_installed(map, game_map):
+			return {}
+	var field := GroundHeightField.for_glb(
+		map, sampler.heights, sampler.hits, grid.columns, grid.rows, grid.origin, grid.step
+	)
+	game_map.set_grid_ground(field)
+	return {
+		"samples": sampler.heights.size(),
+		"columns": grid.columns,
+		"rows": grid.rows,
+		"step": grid.step,
+		"ray_ms": sampler.usec / 1000.0,
+		"missed": sampler.miss_count(),
+		"wall_ms": (Time.get_ticks_usec() - started) / 1000.0,
+		"follows_ground": field != null,
+	}
+
+
+func _still_installed(map: Node3D, game_map: GameMap) -> bool:
+	return (
+		not is_superseded.call()
+		and is_instance_valid(map)
+		and is_instance_valid(game_map)
+		and map.is_inside_tree()
+		and map.get_parent() == game_map.map_container
+	)
+
+
 ## A document problem that does not stop the map from loading (there is a GLB to show):
 ## logged, and shown to the player once.
 static func report_document_problem(message: String) -> void:
@@ -327,7 +385,8 @@ static func install(
 	if terrain:
 		game_map.set_ground_top(terrain.world_height_range().y)
 	# The grid draws on authored ground and token drags re-resolve their height on it; a
-	# Blender map (null) keeps the fixed grid band and the cursor-hit drag height.
+	# Blender map (null) keeps the cursor-hit drag height, and the fixed grid band until
+	# fit_grid_ground_async() has sampled its ground.
 	game_map.set_ground_terrain(terrain)
 	if level:
 		var tool := game_map.get_measure_tool()

@@ -58,6 +58,8 @@ var _debug_render_toggles: DebugRenderToggles = null
 var _perf_overlay_container: VBoxContainer = null
 ## The map's authored terrain, or null (set_ground_terrain).
 var _ground_terrain: AuthoredTerrain = null
+## The ground the grid overlay draws on, or null for the fixed band (set_grid_ground).
+var _grid_ground: GroundHeightField = null
 
 @onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
 @onready var world_viewport: SubViewport = $WorldViewportLayer/SubViewportContainer/SubViewport
@@ -556,8 +558,8 @@ func setup_grid_overlay() -> void:
 		return
 	_grid_overlay = GridOverlay.create(camera_node)
 	_visual_effects.load_grid_visual_settings()
-	if is_instance_valid(_ground_terrain):
-		_grid_overlay.set_ground(_ground_terrain)
+	if _grid_ground != null and _grid_ground.is_valid():
+		_grid_overlay.set_ground(_grid_ground)
 
 
 ## Return the GridOverlay instance (may be null before setup).
@@ -667,18 +669,33 @@ func reset_grid_state() -> void:
 
 
 ## The map's authored terrain (MapSourceLoader.install passes it, or null for a Blender map
-## without one): the grid overlay draws on its ground instead of the fixed Y = 0 band, and a
-## dragged token's height is re-resolved on it at the snapped cell (DragAndDrop3D
-## .ground_resolver) so a drag across a tier edge lands on the right tier. With null both
-## keep their Blender-map behaviour.
+## without one): the grid overlay draws on its ground instead of the fixed Y = 0 band
+## (set_grid_ground), and a dragged token's height is re-resolved on it at the snapped cell
+## (DragAndDrop3D.ground_resolver) so a drag across a tier edge lands on the right tier. With
+## null both keep their Blender-map behaviour (the grid's ground may be set later from the
+## map's collision, set_grid_ground).
 func set_ground_terrain(terrain: AuthoredTerrain) -> void:
 	_ground_terrain = terrain
-	if _grid_overlay:
-		_grid_overlay.set_ground(terrain)
+	set_grid_ground(GroundHeightField.from_terrain(terrain))
 	if drag_and_drop_node:
 		drag_and_drop_node.ground_resolver = (
 			_resolve_drag_ground if terrain != null else Callable()
 		)
+
+
+## The ground the grid overlay draws on (GridOverlay.set_ground): authored terrain's field
+## (set_ground_terrain), a Blender map's ground sampled from its collision
+## (MapSourceLoader.fit_grid_ground_async, AuthoringController._fit_dressing_to_ground), or
+## null for the fixed Y = 0 band.
+func set_grid_ground(field: GroundHeightField) -> void:
+	_grid_ground = field
+	if _grid_overlay:
+		_grid_overlay.set_ground(field)
+
+
+## The ground the grid overlay draws on, or null (the fixed band).
+func get_grid_ground() -> GroundHeightField:
+	return _grid_ground
 
 
 ## The terrain under `point` (straight down on the terrain collision layer, as a browser drop
