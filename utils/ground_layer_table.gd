@@ -35,21 +35,40 @@ extends RefCounted
 ## ground surface share one rule pair (the dominant one's); in the built-in palette every
 ## ground surface implies one cliff surface, so it never shows.
 ##
+## Ground accents (2026-09-27, GroundAccents): each ground component also carries the
+## ground_accents of the biome that dominates it (the same biome as its rule pair), broad
+## patches of other ground surfaces the shader cuts out of that component's own ground after
+## the rules took their share (painted > rules > accents > biome ground). An accent is
+##   - ACCENT: a slot of its own with an empty channel (like RULE: it only receives the
+##     patch weight the shader computes from noise), or any slot already drawing its surface,
+##     or the base when it is the base surface.
+## Accents come last and never hold a slot against anything else: an ACCENT slot of `fixed`
+## is free for painted, ground and rule surfaces (its channel is empty, so nothing moves in
+## the weight maps), and accents re-claim what is left, their old slot first so their
+## textures stay bound. When slots run out the accents that do not fit are not drawn (no
+## nearest-colour fallback: a patch of the wrong surface is not an accent), dropped in
+## order of entry index (the palette lists them by priority), then least coverage, then
+## component (base first); at most ACCENTS_PER_COMPONENT per component are drawn. The caller
+## warns once per dropped surface.
+##
 ## Allocation. Slots already assigned keep their index (`fixed`), so painting never moves
 ## a surface to another channel; new surfaces take free slots in priority order: painted
 ## surfaces (slot order), the base's rule surfaces, biome ground surfaces by painted
 ## coverage (ties by first appearance), the other rule surfaces by the coverage of the
-## ground they dress. Beyond MAX_LAYERS a surface falls back, deterministically, to the
-## slot (or the base) nearest by mean albedo among those of the same role: a ground surface
+## ground they dress, then accents (above). Beyond MAX_LAYERS a surface other than an
+## accent falls back, deterministically, to the slot (or the base) nearest by mean albedo
+## among those of the same role: a ground surface
 ## among GROUND slots and the base (its channel must stay a ground channel), a cliff among
 ## slots whose surface has role cliff (any slot if there is none), a scree among ground-role
 ## slots and the base. The caller warns once per surface. A painted surface never falls
 ## back: when one finds no free slot, the table is replanned from scratch with painted
 ## surfaces first (at most MAX_LAYERS are painted, MapDocument.MAX_SURFACES).
 
-enum Source { PAINTED, GROUND, RULE }
+enum Source { PAINTED, GROUND, RULE, ACCENT }
 
 const MAX_LAYERS := 8
+## Ground accents drawn per ground component (the shader's ACCENTS_PER_COMPONENT).
+const ACCENTS_PER_COMPONENT := 3
 const CHANNELS := 4
 ## Weight images: slots 0-3 in the first, 4-7 in the second.
 const PLANES := 2
@@ -74,9 +93,17 @@ const BROAD_FACTOR := 14
 ##   base_rules: PackedStringArray [cliff, scree], the base's rule pair when no painted
 ##     biome is on the base surface;
 ##   role_of: Callable(surface) -> String ("ground" / "cliff" / "built");
-##   color_of: Callable(surface) -> Color or null (mean albedo; only called on overflow).
+##   color_of: Callable(surface) -> Color or null (mean albedo; only called on overflow);
+##   biome_accents: Array, per document biome its ground accents ({surface, coverage,
+##     scale_m}, priority order; PaletteLibrary.ground_accents), undrawable ones left out;
+##   base_accents: Array, the base's accents when no painted biome is on the base surface.
 ## `fixed` is a previous plan's "layers" (kept in place). Returns:
-##   "layers": Array of {"surface", "source" (Source), "role"}, at most MAX_LAYERS;
+##   "layers": Array of {"surface", "source" (Source), "role"}, at most MAX_LAYERS (a free
+##     slot between others, left by an accent that is no longer drawn, has surface "");
+##   "accents": Array of MAX_LAYERS + 1 Arrays (the slots, then the base), each the drawn
+##     accents of that ground component in entry order: {"slot" (a slot or BASE),
+##     "surface", "coverage", "scale_m"}; empty for a slot that is not GROUND;
+##   "dropped_accents": PackedStringArray, accent surfaces not drawn for want of a slot;
 ##   "biome_layers": PackedInt32Array, biome slot (0 = none) -> GROUND slot or BASE;
 ##   "painted_layers": PackedInt32Array, painted slot -> PAINTED slot or NONE;
 ##   "cliff_of", "scree_of": PackedInt32Array of MAX_LAYERS + 1, per ground component (the
@@ -104,8 +131,15 @@ static func _plan(inputs: Dictionary, fixed: Array) -> Dictionary:
 	var role_of: Callable = inputs.get("role_of", func(_s: String) -> String: return "ground")
 	var color_of: Callable = inputs.get("color_of", func(_s: String) -> Variant: return null)
 	var layers: Array = []
+	# Accent slots from `fixed` are free for everything else; accents re-claim them last.
+	var was_accent := {}
 	for layer in fixed:
-		layers.append((layer as Dictionary).duplicate())
+		if (layer as Dictionary).get("source") == Source.ACCENT:
+			if String(layer.surface) != "":
+				was_accent[layers.size()] = String(layer.surface)
+			layers.append(_free_slot())
+		else:
+			layers.append((layer as Dictionary).duplicate())
 	var fallbacks := {}
 	var painted_overflow := false
 	# 1. Painted surfaces.
@@ -198,16 +232,151 @@ static func _plan(inputs: Dictionary, fixed: Array) -> Dictionary:
 		scree_of[j] = _route(layers, screes[b], base, fallbacks)
 	cliff_of[MAX_LAYERS] = _route(layers, base_pair[0], base, fallbacks)
 	scree_of[MAX_LAYERS] = _route(layers, base_pair[1], base, fallbacks)
+	# 5. Accents of each ground component: its dominant biome's (the base: as its rules).
+	var biome_accents: Array = inputs.get("biome_accents", [])
+	var component_accents: Array = []
+	component_accents.resize(MAX_LAYERS + 1)
+	component_accents.fill([])
+	for j in layers.size():
+		var layer: Dictionary = layers[j]
+		if layer.source == Source.GROUND and slot_biome.has(layer.surface):
+			var b: int = slot_biome[layer.surface].x
+			component_accents[j] = biome_accents[b] if b < biome_accents.size() else []
+	if rule_biome.has(base):
+		var bb: int = rule_biome[base].x
+		component_accents[MAX_LAYERS] = biome_accents[bb] if bb < biome_accents.size() else []
+	else:
+		component_accents[MAX_LAYERS] = inputs.get("base_accents", [])
+	var placed := _place_accents(layers, component_accents, base, was_accent, role_of)
+	while not layers.is_empty() and String(layers[-1].surface) == "":
+		layers.pop_back()
 	return {
 		"layers": layers,
 		"biome_layers": biome_layers,
 		"painted_layers": painted_layers,
 		"cliff_of": cliff_of,
 		"scree_of": scree_of,
+		"accents": placed.accents,
+		"dropped_accents": placed.dropped,
 		"fallbacks": fallbacks,
 		"replanned": false,
 		"painted_overflow": painted_overflow,
 	}
+
+
+## Gives the accents of every ground component a slot (see the header): `component_accents`
+## per component (slots, then the base at MAX_LAYERS) its palette accents in priority order.
+## Returns {"accents": the plan's "accents", "dropped": PackedStringArray}.
+static func _place_accents(
+	layers: Array, component_accents: Array, base: String, was_accent: Dictionary, role_of: Callable
+) -> Dictionary:
+	# Candidates: per component its first ACCENTS_PER_COMPONENT usable entries; the rest drop.
+	var dropped := PackedStringArray()
+	var candidates: Array[Dictionary] = []
+	var order := [MAX_LAYERS]
+	for j in MAX_LAYERS:
+		order.append(j)
+	for rank in order.size():
+		var j: int = order[rank]
+		var own: String = (
+			base if j == MAX_LAYERS else (layers[j].surface if j < layers.size() else "")
+		)
+		var seen := {}
+		for entry in component_accents[j]:
+			var surface := String((entry as Dictionary).get("surface", ""))
+			var coverage := float(entry.get("coverage", 0.0))
+			if surface == "" or surface == own or seen.has(surface) or coverage <= 0.0:
+				continue
+			seen[surface] = true
+			if seen.size() > ACCENTS_PER_COMPONENT:
+				if not surface in dropped:
+					dropped.append(surface)
+				continue
+			(
+				candidates
+				. append(
+					{
+						"component": j,
+						"rank": rank,
+						"index": seen.size() - 1,
+						"surface": surface,
+						"coverage": coverage,
+						"scale_m": float(entry.get("scale_m", 0.0)),
+					}
+				)
+			)
+	candidates.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			if a.index != b.index:
+				return a.index < b.index
+			if a.coverage != b.coverage:
+				return a.coverage > b.coverage
+			return a.rank < b.rank
+	)
+	var slot_of := {}
+	for candidate in candidates:
+		var surface: String = candidate.surface
+		if not slot_of.has(surface):
+			slot_of[surface] = _accent_slot(layers, surface, base, was_accent, role_of)
+		if int(slot_of[surface]) == NONE and not surface in dropped:
+			dropped.append(surface)
+	var accents: Array = []
+	for j in MAX_LAYERS + 1:
+		accents.append([])
+	# Back to per-component entry order.
+	candidates.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return a.rank < b.rank if a.rank != b.rank else a.index < b.index
+	)
+	for candidate in candidates:
+		var slot: int = slot_of[candidate.surface]
+		if slot == NONE:
+			continue
+		(
+			(accents[candidate.component] as Array)
+			. append(
+				{
+					"slot": slot,
+					"surface": candidate.surface,
+					"coverage": candidate.coverage,
+					"scale_m": candidate.scale_m,
+				}
+			)
+		)
+	return {"accents": accents, "dropped": dropped}
+
+
+## Where accent `surface` is drawn: BASE for the base surface, any slot already drawing it,
+## else a free slot (the one it held before first) or a new one; NONE when the table is full.
+static func _accent_slot(
+	layers: Array, surface: String, base: String, was_accent: Dictionary, role_of: Callable
+) -> int:
+	if surface == base:
+		return BASE
+	for j in layers.size():
+		if layers[j].surface == surface:
+			return j
+	var free := -1
+	for j in layers.size():
+		if String(layers[j].surface) == "":
+			if was_accent.get(j, "") == surface:
+				free = j
+				break
+			if free < 0:
+				free = j
+	var slot := {"surface": surface, "source": Source.ACCENT, "role": String(role_of.call(surface))}
+	if free >= 0:
+		layers[free] = slot
+		return free
+	if layers.size() >= MAX_LAYERS:
+		return NONE
+	layers.append(slot)
+	return layers.size() - 1
+
+
+## A slot no surface holds (an accent's, freed for the plan).
+static func _free_slot() -> Dictionary:
+	return {"surface": "", "source": Source.ACCENT, "role": ""}
 
 
 ## Index of the slot drawing `surface` for `source` (a RULE want accepts any slot), or -1.
@@ -227,11 +396,17 @@ static func _find(layers: Array, surface: String, source: int) -> int:
 	return -1
 
 
-## Appends a slot for `surface`; false when the table is full.
+## Takes a free slot (one an accent left) or appends one for `surface`; false when the
+## table is full.
 static func _claim(layers: Array, surface: String, source: int, role_of: Callable) -> bool:
+	var slot := {"surface": surface, "source": source, "role": String(role_of.call(surface))}
+	for j in layers.size():
+		if String(layers[j].surface) == "":
+			layers[j] = slot
+			return true
 	if layers.size() >= MAX_LAYERS:
 		return false
-	layers.append({"surface": surface, "source": source, "role": String(role_of.call(surface))})
+	layers.append(slot)
 	return true
 
 
@@ -317,6 +492,20 @@ static func biome_coverage(
 		if slot != NO_SLOT and slot <= biome_count:
 			per_slot[slot] += density[i]
 	return per_slot.slice(1)
+
+
+## A plan's rule routing (cliff_of / scree_of) as the shader reads it: the slot, 8 for the
+## base, -1 for none.
+static func shader_routing(routing: PackedInt32Array) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for to in routing:
+		if to == BASE:
+			out.append(MAX_LAYERS)
+		elif to == NONE:
+			out.append(-1)
+		else:
+			out.append(to)
+	return out
 
 
 ## Bitmask of the slots of `plan` with source `source` (bit j = slot j), for the shader.

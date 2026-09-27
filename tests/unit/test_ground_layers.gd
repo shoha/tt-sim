@@ -84,7 +84,7 @@ func test_plan_orders_painted_base_rules_ground_then_other_rules() -> void:
 	assert_eq(GroundLayerTable.source_mask(the_plan, P), 1)
 	assert_eq(GroundLayerTable.source_mask(the_plan, G), (1 << 3) | (1 << 4))
 	assert_eq(
-		AuthoredTerrain.shader_routing(the_plan.cliff_of),
+		GroundLayerTable.shader_routing(the_plan.cliff_of),
 		PackedInt32Array([-1, -1, -1, 1, 5, -1, -1, -1, 1]),
 		"the shader reads 8 for the base and -1 for none"
 	)
