@@ -21,11 +21,18 @@ extends RefCounted
 ## seam. At the map edge the difference is one-sided.
 ##
 ## UVs are world XZ in metres; the ground shader divides by each surface's tile size.
+## UV2 carries the automatic dressing's per-vertex fields (phase 3, P3-4): x the curvature
+## and y the steepness nearby of TerrainRules.sample_fields(), which read heights up to
+## TerrainRules.CURVATURE_RADIUS_M away, so a height edit changes them that far out.
 
 const CHUNK_SIZE_M := ScatterChunker.CHUNK_SIZE_WORLD_UNITS
 ## Slack, in samples, for a sample that lands on a cell edge within float error: it
 ## counts as on the edge (ScatterChunker puts an edge point in the higher cell).
 const EDGE_EPSILON_SAMPLES := 1e-4
+## Rings of the ground skirt past its inner edge (build_skirt_arrays), spaced closer near
+## the map where the fall-off curves most.
+const SKIRT_RINGS := 8
+const SKIRT_RING_SPACING_POWER := 1.5
 
 
 ## Index of the first sample at or past world coordinate `edge_m` on an axis of `samples`
@@ -100,21 +107,41 @@ static func sample_normal(doc: MapDocument, x: int, z: int) -> Vector3:
 	return Vector3(-slope_x, 1.0, -slope_z).normalized()
 
 
-## Mesh arrays (vertex, normal, UV, index) for one chunk, or [] when the cell is not part
-## of the map. Vertices are in world space, so the chunk node sits at the identity and
+## The rule fields (TerrainRules.sample_fields) of the whole grid of `doc`:
+## {"curvature": PackedFloat32Array, "steep": PackedFloat32Array}, one value per sample.
+static func grid_fields(doc: MapDocument) -> Dictionary:
+	var fields := TerrainRules.sample_fields(
+		collision_heights(doc),
+		doc.samples_x(),
+		doc.samples_z(),
+		doc.sample_step(),
+		Rect2i(0, 0, doc.samples_x(), doc.samples_z())
+	)
+	return {"curvature": fields.curvature, "steep": fields.steep}
+
+
+## Mesh arrays (vertex, normal, UV, UV2, index) for one chunk, or [] when the cell is not
+## part of the map. Vertices are in world space, so the chunk node sits at the identity and
 ## its AABB is the chunk's world bounds (camera bounds and the reflection probe read it).
-static func build_chunk_arrays(doc: MapDocument, cell: Vector2i) -> Array:
+## `fields` is grid_fields() of the document (computed for the chunk alone when empty).
+static func build_chunk_arrays(doc: MapDocument, cell: Vector2i, fields: Dictionary = {}) -> Array:
 	var rect := chunk_sample_rect(doc, cell)
 	if rect.size == Vector2i.ZERO:
 		return []
 	var columns := rect.size.x + 1
 	var rows := rect.size.y + 1
+	if fields.is_empty():
+		fields = _local_fields(doc, Rect2i(rect.position, Vector2i(columns, rows)))
+	var curvature: PackedFloat32Array = fields.curvature
+	var steep: PackedFloat32Array = fields.steep
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var uvs := PackedVector2Array()
+	var uv2s := PackedVector2Array()
 	vertices.resize(columns * rows)
 	normals.resize(columns * rows)
 	uvs.resize(columns * rows)
+	uv2s.resize(columns * rows)
 	# The hot loop inlines sample_position() and sample_normal() (same arithmetic, same
 	# results): the per-vertex helper calls cost about 10x the rest of the build.
 	var heights := collision_heights(doc)
@@ -140,6 +167,7 @@ static func build_chunk_arrays(doc: MapDocument, cell: Vector2i) -> Array:
 			vertices[i] = Vector3(x_m, heights[here + sx], z_m)
 			normals[i] = Vector3(-slope_x, 1.0, -slope_z).normalized()
 			uvs[i] = Vector2(x_m, z_m)
+			uv2s[i] = Vector2(curvature[here + sx], steep[here + sx])
 	var indices := PackedInt32Array()
 	indices.resize((columns - 1) * (rows - 1) * 6)
 	var k := 0
@@ -159,8 +187,23 @@ static func build_chunk_arrays(doc: MapDocument, cell: Vector2i) -> Array:
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_TEX_UV2] = uv2s
 	arrays[Mesh.ARRAY_INDEX] = indices
 	return arrays
+
+
+## grid_fields()-shaped arrays (whole-grid size, zero outside) holding the fields of `rect`
+## only: what a chunk built on its own needs.
+static func _local_fields(doc: MapDocument, rect: Rect2i) -> Dictionary:
+	var curvature := PackedFloat32Array()
+	var steep := PackedFloat32Array()
+	curvature.resize(doc.sample_count())
+	steep.resize(doc.sample_count())
+	var fields := TerrainRules.sample_fields(
+		collision_heights(doc), doc.samples_x(), doc.samples_z(), doc.sample_step(), rect
+	)
+	TerrainRules.store_fields(fields, doc.samples_x(), curvature, steep)
+	return {"curvature": curvature, "steep": steep}
 
 
 ## The vertex stream of a chunk as ArrayMesh stores it, kept on the CPU so a height edit can
@@ -171,30 +214,86 @@ static func build_chunk_arrays(doc: MapDocument, cell: Vector2i) -> Array:
 ## normal and tangent as two octahedral 16-bit pairs (8 bytes per vertex); UVs live in the
 ## separate attribute buffer and never change. Returns {"rect": chunk_sample_rect(),
 ## "columns", "rows", "positions": PackedFloat32Array (x, y, z per vertex), "normals":
-## PackedInt32Array (normal, tangent per vertex)}, or {} when the cell is not on the map.
-static func chunk_vertex_mirror(doc: MapDocument, cell: Vector2i) -> Dictionary:
+## PackedInt32Array (normal, tangent per vertex), "attributes": PackedFloat32Array (the
+## attribute stream: UV then UV2, interleaved, four floats per vertex; verified the same
+## way)}, or {} when the cell is not on the map. `fields` is grid_fields() (computed for
+## the chunk alone when empty).
+static func chunk_vertex_mirror(
+	doc: MapDocument, cell: Vector2i, fields: Dictionary = {}
+) -> Dictionary:
 	var rect := chunk_sample_rect(doc, cell)
 	if rect.size == Vector2i.ZERO:
 		return {}
 	var columns := rect.size.x + 1
 	var rows := rect.size.y + 1
+	var owned := Rect2i(rect.position, Vector2i(columns, rows))
+	if fields.is_empty():
+		fields = _local_fields(doc, owned)
 	var positions := PackedFloat32Array()
 	positions.resize(columns * rows * 3)
+	var attributes := PackedFloat32Array()
+	attributes.resize(columns * rows * 4)
 	var half := doc.extent_m() * 0.5
 	var step := doc.sample_step()
 	for row in rows:
 		var z_m := (rect.position.y + row) * step.y - half.y
 		for column in columns:
 			var i := (row * columns + column) * 3
-			positions[i] = (rect.position.x + column) * step.x - half.x
+			var x_m := (rect.position.x + column) * step.x - half.x
+			positions[i] = x_m
 			positions[i + 2] = z_m
+			var a := (row * columns + column) * 4
+			attributes[a] = x_m
+			attributes[a + 1] = z_m
 	var normals := PackedInt32Array()
 	normals.resize(columns * rows * 2)
 	var mirror := {
-		"rect": rect, "columns": columns, "rows": rows, "positions": positions, "normals": normals
+		"rect": rect,
+		"columns": columns,
+		"rows": rows,
+		"positions": positions,
+		"normals": normals,
+		"attributes": attributes,
 	}
-	write_vertex_region(doc, mirror, Rect2i(rect.position, Vector2i(columns, rows)))
+	write_vertex_region(doc, mirror, owned)
+	write_attribute_region(mirror, owned, fields, doc.samples_x())
 	return mirror
+
+
+## Copies the rule fields of the samples of `part` (grid coordinates, clipped to the chunk)
+## from whole-grid `fields` (grid_fields() layout, `grid_columns` wide) into a mirror's
+## attribute stream (UV2).
+static func write_attribute_region(
+	mirror: Dictionary, part: Rect2i, fields: Dictionary, grid_columns: int
+) -> void:
+	var rect: Rect2i = mirror.rect
+	var columns: int = mirror.columns
+	var region := part.intersection(Rect2i(rect.position, Vector2i(columns, mirror.rows)))
+	if not region.has_area():
+		return
+	var attributes: PackedFloat32Array = mirror.attributes
+	var curvature: PackedFloat32Array = fields.curvature
+	var steep: PackedFloat32Array = fields.steep
+	for sz in range(region.position.y, region.end.y):
+		var base := (sz - rect.position.y) * columns - rect.position.x
+		var here := sz * grid_columns
+		for sx in range(region.position.x, region.end.x):
+			var a := (base + sx) * 4
+			attributes[a + 2] = curvature[here + sx]
+			attributes[a + 3] = steep[here + sx]
+
+
+## The bytes of mirror rows `first_row`..`last_row` of the attribute stream (UV and UV2,
+## 16 bytes per vertex) for surface_update_attribute_region(): {"attributes": bytes,
+## "attribute_offset": int}.
+static func attribute_rows_bytes(mirror: Dictionary, first_row: int, last_row: int) -> Dictionary:
+	var columns: int = mirror.columns
+	var attributes: PackedFloat32Array = mirror.attributes
+	return {
+		"attributes":
+		attributes.slice(first_row * columns * 4, (last_row + 1) * columns * 4).to_byte_array(),
+		"attribute_offset": first_row * columns * 16,
+	}
 
 
 ## Rewrites the heights and normals of the samples of `part` (grid coordinates, clipped to
@@ -281,8 +380,10 @@ static func vertex_rows_bytes(mirror: Dictionary, first_row: int, last_row: int)
 
 ## One chunk as an ArrayMesh with `material` on its surface, or null when the cell is not
 ## part of the map.
-static func build_chunk_mesh(doc: MapDocument, cell: Vector2i, material: Material) -> ArrayMesh:
-	var arrays := build_chunk_arrays(doc, cell)
+static func build_chunk_mesh(
+	doc: MapDocument, cell: Vector2i, material: Material, fields: Dictionary = {}
+) -> ArrayMesh:
+	var arrays := build_chunk_arrays(doc, cell, fields)
 	if arrays.is_empty():
 		return null
 	var mesh := ArrayMesh.new()
@@ -291,21 +392,42 @@ static func build_chunk_mesh(doc: MapDocument, cell: Vector2i, material: Materia
 	return mesh
 
 
+## The skirt's height `distance_m` past the map edge where the map's boundary height is
+## `edge_y`: back down to the base level (0, the map floor) over `fall_m`, eased at both
+## ends (smoothstep) so the ground rolls off the edge and settles instead of carrying a
+## raised edge straight out into the backdrop. Pure.
+static func skirt_height(edge_y: float, distance_m: float, fall_m: float) -> float:
+	var t := clampf(distance_m / maxf(fall_m, 1e-4), 0.0, 1.0)
+	return edge_y * (1.0 - t * t * (3.0 - 2.0 * t))
+
+
+## d skirt_height / d distance.
+static func _skirt_slope(edge_y: float, distance_m: float, fall_m: float) -> float:
+	var fall := maxf(fall_m, 1e-4)
+	var t := clampf(distance_m / fall, 0.0, 1.0)
+	return -edge_y * 6.0 * t * (1.0 - t) / fall
+
+
 ## Mesh arrays (vertex, normal, UV, index) for the ground skirt: a ring around the map
-## `width_m` wide, one quad per boundary sample step. Its inner edge is the map's boundary
-## vertices exactly (same positions and heights as the chunks'), its outer edge those
-## pushed straight out (diagonally at the corners, so the ring is a square annulus) at the
-## same height. UVs are world XZ like the chunks', so the ground shader continues across
-## the edge without a seam. Normals point up; every triangle faces +Y.
-static func build_skirt_arrays(doc: MapDocument, width_m: float) -> Array:
+## `width_m` wide, one quad per boundary sample step and ring. Its inner edge is the map's
+## boundary vertices exactly (same positions and heights as the chunks'); SKIRT_RINGS rings
+## step out from them (diagonally at the corners, so each ring is a square annulus) with
+## the height falling back to the map floor over `fall_m` (skirt_height; `fall_m` <= 0 means
+## `width_m`), so a raised or sunken edge rolls off into the base level. UVs are world XZ
+## like the chunks', so the ground shader continues across the edge without a seam. Normals
+## follow the fall-off; every triangle faces +Y. Vertex r * count + i is ring r's copy of
+## boundary sample i (ring 0 is the inner edge).
+static func build_skirt_arrays(doc: MapDocument, width_m: float, fall_m: float = -1.0) -> Array:
 	var loop := boundary_samples(doc)
 	var count := loop.size()
+	var fall := fall_m if fall_m > 0.0 else width_m
+	var rings := SKIRT_RINGS + 1
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var uvs := PackedVector2Array()
-	vertices.resize(count * 2)
-	normals.resize(count * 2)
-	uvs.resize(count * 2)
+	vertices.resize(count * rings)
+	normals.resize(count * rings)
+	uvs.resize(count * rings)
 	var last := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
 	for i in count:
 		var sample := loop[i]
@@ -315,19 +437,28 @@ static func build_skirt_arrays(doc: MapDocument, width_m: float) -> Array:
 			0.0,
 			-1.0 if sample.y == 0 else (1.0 if sample.y == last.y else 0.0)
 		)
-		var outer := inner + out * width_m
-		vertices[i] = inner
-		vertices[count + i] = outer
-		normals[i] = Vector3.UP
-		normals[count + i] = Vector3.UP
-		uvs[i] = Vector2(inner.x, inner.z)
-		uvs[count + i] = Vector2(outer.x, outer.z)
+		var along := out.normalized()
+		for r in rings:
+			var distance := width_m * pow(float(r) / SKIRT_RINGS, SKIRT_RING_SPACING_POWER)
+			var point := inner + out * distance
+			point.y = skirt_height(inner.y, distance, fall)
+			var slope := _skirt_slope(inner.y, distance, fall)
+			var k := r * count + i
+			vertices[k] = point
+			normals[k] = Vector3(-along.x * slope, 1.0, -along.z * slope).normalized()
+			uvs[k] = Vector2(point.x, point.z)
 	var indices := PackedInt32Array()
-	indices.resize(count * 6)
-	for i in count:
-		var j := (i + 1) % count
-		_add_up_triangle(indices, i * 6, vertices, i, j, count + j)
-		_add_up_triangle(indices, i * 6 + 3, vertices, i, count + j, count + i)
+	indices.resize(count * SKIRT_RINGS * 6)
+	for r in SKIRT_RINGS:
+		var inner_ring := r * count
+		var outer_ring := (r + 1) * count
+		for i in count:
+			var j := (i + 1) % count
+			var at := (r * count + i) * 6
+			_add_up_triangle(indices, at, vertices, inner_ring + i, inner_ring + j, outer_ring + j)
+			_add_up_triangle(
+				indices, at + 3, vertices, inner_ring + i, outer_ring + j, outer_ring + i
+			)
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices

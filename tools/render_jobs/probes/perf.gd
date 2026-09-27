@@ -440,7 +440,7 @@ static func _broad(gm: GameMap, on: bool) -> String:
 			_ground_shader = mat.shader
 			var wrapper := FileAccess.get_file_as_string("res://shaders/authored_ground.gdshader")
 			var inc := FileAccess.get_file_as_string("res://shaders/authored_ground.gdshaderinc")
-			var call := "ground.albedo = apply_broad_edge(ground.albedo, world_xz, layer_w);"
+			var call := "ground.albedo = apply_broad_edge(ground.albedo, world_xz, ground_a, ground_b);"
 			if not inc.contains(call):
 				return "broad: call not found in the include"
 			inc = inc.replace(call, "")
@@ -491,10 +491,10 @@ static func _layers(base: Node, mode: String) -> String:
 				density[i] = 255 if mode == "4" else 128
 	doc.biome_slots = slots
 	doc.biome_density = density
-	terrain.update_biome_region(Rect2i(0, 0, doc.samples_x(), doc.samples_z()))
-	if forced >= 0:
-		mat.set_shader_parameter("biome_layer_count", forced)
+	terrain.update_ground_region(Rect2i(0, 0, doc.samples_x(), doc.samples_z()))
+	if forced == 0:
+		mat.set_shader_parameter("layer_ground_mask", 0)
 	return (
 		"layers %s: ground layers %s, layer_count %s"
-		% [mode, str(terrain.ground_layers()), str(mat.get_shader_parameter("biome_layer_count"))]
+		% [mode, str(terrain.ground_layers()), str(mat.get_shader_parameter("layer_count"))]
 	)

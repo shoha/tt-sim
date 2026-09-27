@@ -373,6 +373,9 @@ func species_materials(asset_id: String) -> Array[ShaderMaterial]:
 func attach_document(doc: MapDocument) -> void:
 	_document = doc
 	_regen = ScatterRegen.for_document(doc)
+	_regen.built_surfaces = PackedStringArray(
+		PaletteLibrary.surfaces_with_role("built", palette_root)
+	)
 	_register_biomes()
 
 
@@ -603,6 +606,8 @@ static func _snapshot(doc: MapDocument) -> MapDocument:
 	copy.biome_ids = doc.biome_ids.duplicate()
 	copy.biome_slots = doc.biome_slots.duplicate()
 	copy.biome_density = doc.biome_density.duplicate()
+	copy.surface_ids = doc.surface_ids.duplicate()
+	copy.surface_weights = doc.surface_weights.duplicate()
 	return copy
 
 
