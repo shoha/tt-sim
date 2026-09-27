@@ -2,7 +2,8 @@ extends GutTest
 
 ## ScatterGenerator.document_fields and the ground's automatic dressing (TerrainRules):
 ## plants thin on automatic rock and under painted built surfaces, a hand-painted ground
-## surface overrides the rock, and rock species gather on the scree at a cliff's foot.
+## surface yields to the rock on a face (P3-6), and rock species gather on the scree at a
+## cliff's foot.
 
 const FOREST := "temperate_forest_summer_s1"
 const DENSITY := 128
@@ -61,14 +62,15 @@ func test_plants_thin_on_rock_and_under_built_paint() -> void:
 	assert_eq(fields.rock_density_at.call(Vector2(-10.0, 0.0)), 0.0, "rocks too")
 
 
-func test_painted_ground_overrides_the_rock() -> void:
+func test_painted_ground_yields_to_the_rock_on_faces() -> void:
+	# The user's cliff-face decision (2026-09-27): ground paint covers walkable ground only.
 	var doc := _doc()
 	_paint(doc, "grass", Vector2(STEP_X - 2.0, -4), Vector2(STEP_X + 2.0, 4))
 	var fields := ScatterGenerator.document_fields(
 		doc, FOREST, Rect2(), PackedStringArray(["cobblestone"])
 	)
 	var face: float = fields.density_at.call(Vector2(_face_x(doc), 0.0))
-	assert_almost_eq(face, DENSITY / 255.0, 1e-6, "grass painted over the face: plants grow")
+	assert_lt(face, 0.01, "grass painted over the face: still rock, nothing grows")
 
 
 func test_rocks_gather_on_the_scree() -> void:

@@ -635,20 +635,15 @@ func _bind_layers(previous: Array) -> void:
 			)
 			for key in LAYER_MAPS:
 				var texture := _load_texture(palette_root, surface.get(key, ""))
-				maps[key].append(
-					texture if texture != null else _solid_texture(LAYER_DEFAULTS[key])
-				)
+				maps[key].append(texture if texture else _solid_texture(LAYER_DEFAULTS[key]))
 			tiles.append(float(surface.get("tile_m", DEFAULT_LAYER_TILE_M)))
 		for key in LAYER_MAPS:
 			_material.set_shader_parameter(LAYER_MAPS[key], maps[key])
 		_material.set_shader_parameter("layer_tile_m", tiles)
 	_material.set_shader_parameter("layer_count", layers.size())
-	_material.set_shader_parameter(
-		"layer_painted_mask", GroundLayerTable.source_mask(_plan, GroundLayerTable.Source.PAINTED)
-	)
-	_material.set_shader_parameter(
-		"layer_ground_mask", GroundLayerTable.source_mask(_plan, GroundLayerTable.Source.GROUND)
-	)
+	var masks := GroundLayerTable.shader_masks(_plan)
+	for uniform in masks:
+		_material.set_shader_parameter(uniform, masks[uniform])
 	_material.set_shader_parameter("rule_cliff_layer", shader_routing(_plan.cliff_of))
 	_material.set_shader_parameter("rule_scree_layer", shader_routing(_plan.scree_of))
 

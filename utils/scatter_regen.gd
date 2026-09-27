@@ -35,6 +35,8 @@ var sample_step: float = 0.25
 ## Palette surfaces with role "built" (read on the main thread): painted ones clear the
 ## plants under them (ScatterGenerator.document_fields).
 var built_surfaces: PackedStringArray = PackedStringArray()
+## Palette surfaces with role "cliff" (main thread): painted rock clears plants too.
+var cliff_surfaces: PackedStringArray = PackedStringArray()
 
 ## biome id -> {"species": Array[Dictionary], "reach": PackedFloat32Array,
 ## "assets": Array[PackedStringArray] per species, "groups": Array[PackedInt32Array]
@@ -155,6 +157,7 @@ func take_job(max_cells: int = DEFAULT_CELLS_PER_JOB) -> Dictionary:
 		entry.window = _cells_rect(cells).grow(entry.depth + 2.0 * sample_step)
 		entry.erase("depth")
 		entry.built = built_surfaces.duplicate()
+		entry.cliff = cliff_surfaces.duplicate()
 	return {"cells": cells, "generations": generations, "regenerated": regenerated, "work": work}
 
 
@@ -179,7 +182,11 @@ static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
 	for biome_id in work:
 		var entry: Dictionary = work[biome_id]
 		var fields := ScatterGenerator.document_fields(
-			snapshot, biome_id, entry.window, entry.get("built", PackedStringArray())
+			snapshot,
+			biome_id,
+			entry.window,
+			entry.get("built", PackedStringArray()),
+			entry.get("cliff", PackedStringArray())
 		)
 		var species: Array[Dictionary] = []
 		species.assign(entry.species)

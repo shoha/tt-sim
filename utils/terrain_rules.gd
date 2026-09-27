@@ -43,7 +43,10 @@ extends RefCounted
 ##   - scree: concave curvature times steepness nearby (the foot of a steep face), edge
 ##     noise, EASE, and never where the cliff already is: (1 - cliff) * scree.
 ## The shader gives the cliff share to the biome's cliff_surface and the scree share to its
-## scree_surface, over the part of the ground nobody painted (GroundLayerTable).
+## scree_surface, over the part of the ground nobody painted (GroundLayerTable). Painted
+## ground and built surfaces yield to the cliff rule too (compose_paint, PAINT_CLIFF_YIELD):
+## they cover walkable ground, and a face under them stays rock unless it is painted with a
+## cliff-role surface.
 
 ## Cliff slope tail, degrees from horizontal (terrain-paint slope start / end).
 const CLIFF_START_DEG := 38.0
@@ -88,6 +91,11 @@ const CURVATURE_RADIUS_M := 1.5
 const PAINT_EDGE_WARP_M := 0.3
 const PAINT_EDGE_SCALE_M := 1.4
 const PAINT_EDGE_NOISE := 0.35
+## Painted ground and built surfaces cover walkable ground only (the user's cliff-face
+## decision, 2026-09-27): on a face they yield this fraction of the cliff rule's weight to
+## the automatic rock, so a road painted across a ledge stops at the edge and resumes on
+## top. Painted cliff-role surfaces never yield (restyling a face is deliberate).
+const PAINT_CLIFF_YIELD := 1.0
 
 const INV_UINT_MAX := 1.0 / 4294967295.0
 const _MASK32 := 0xFFFFFFFF
@@ -143,8 +151,11 @@ static func slope_tail(normal_y: float) -> float:
 # ---------------------------------------------------------------------------------------
 
 
-## pcg2d (Jarzynski and Olano), 32-bit unsigned, as the shader computes it.
-static func pcg2d(x: int, y: int) -> Vector2i:
+## The x lane of pcg2d (Jarzynski and Olano), 32-bit unsigned, as the shader computes it,
+## returned as a non-negative int (0 .. 2^32 - 1). Not a Vector2i: its components are
+## int32, which wrapped every value from 2^31 negative and put the CPU's value_noise
+## outside [0, 1] half the time (found in P3-6; the shader reads uint).
+static func pcg2d_x(x: int, y: int) -> int:
 	var vx := (x * 1664525 + 1013904223) & _MASK32
 	var vy := (y * 1664525 + 1013904223) & _MASK32
 	vx = (vx + vy * 1664525) & _MASK32
@@ -152,10 +163,7 @@ static func pcg2d(x: int, y: int) -> Vector2i:
 	vx = vx ^ (vx >> 16)
 	vy = vy ^ (vy >> 16)
 	vx = (vx + vy * 1664525) & _MASK32
-	vy = (vy + vx * 1664525) & _MASK32
-	vx = vx ^ (vx >> 16)
-	vy = vy ^ (vy >> 16)
-	return Vector2i(vx, vy)
+	return vx ^ (vx >> 16)
 
 
 ## The shader's value_noise(p): smooth value noise in [0, 1] on the unit lattice, the
@@ -167,10 +175,10 @@ static func value_noise(p: Vector2, seed_value: int) -> float:
 	u = u * u * (Vector2(3.0, 3.0) - 2.0 * u)
 	var cx := (ix + seed_value) & _MASK32
 	var cz := (iz + ((seed_value * 7919) & _MASK32)) & _MASK32
-	var a := float(pcg2d(cx, cz).x)
-	var b := float(pcg2d((cx + 1) & _MASK32, cz).x)
-	var d := float(pcg2d(cx, (cz + 1) & _MASK32).x)
-	var e := float(pcg2d((cx + 1) & _MASK32, (cz + 1) & _MASK32).x)
+	var a := float(pcg2d_x(cx, cz))
+	var b := float(pcg2d_x((cx + 1) & _MASK32, cz))
+	var d := float(pcg2d_x(cx, (cz + 1) & _MASK32))
+	var e := float(pcg2d_x((cx + 1) & _MASK32, (cz + 1) & _MASK32))
 	return lerpf(lerpf(a, b, u.x), lerpf(d, e, u.x), u.y) * INV_UINT_MAX
 
 
@@ -267,6 +275,26 @@ static func painted_lookup(xz: Vector2, seed_value: int) -> Vector2:
 		value_noise(p + PAINT_WARP_OFFSET_B, seed_value)
 	)
 	return xz + (warp * 2.0 - Vector2.ONE) * PAINT_EDGE_WARP_M
+
+
+## How the painted weights and the automatic rules share a point (the shader's fragment
+## composition, which is the twin): `yielding` is the shaped weight of painted ground and
+## built surfaces, `held` that of painted cliff-role surfaces, `rule` the unpainted rules
+## (weights(): cliff, scree). Returns Vector4(keep, cliff, scree, paint_scale):
+##   paint_scale  what each yielding painted channel keeps, 1 - PAINT_CLIFF_YIELD * cliff;
+##   cliff        the automatic rock: the cliff rule over the unpainted ground plus what the
+##                yielding paint gave up;
+##   scree        the scree rule over the unpainted ground only (paint at a cliff's foot
+##                stays paint);
+##   keep         the unpainted ground left to the biome ground and base.
+## Held paint keeps its weight. The shares add up to 1.
+static func compose_paint(yielding: float, held: float, rule: Vector2) -> Vector4:
+	var unpainted := clampf(1.0 - yielding - held, 0.0, 1.0)
+	var paint_scale := 1.0 - PAINT_CLIFF_YIELD * rule.x
+	var cliff := unpainted * rule.x + yielding * (1.0 - paint_scale)
+	var scree := unpainted * rule.y
+	var keep := unpainted * (1.0 - rule.x - rule.y)
+	return Vector4(keep, cliff, scree, paint_scale)
 
 
 # ---------------------------------------------------------------------------------------
