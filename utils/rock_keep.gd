@@ -39,8 +39,8 @@ extends RefCounted
 ## instead of pointing out of it, and a hill flank (under 45) keeps its full tilt. Judged by
 ## eye at the game camera (P3-7 rocks-survive renders).
 const MAX_TILT_RAD := 0.9599310885968813
-## A prop's footprint: this share of its widest dimension (AuthoringEditor
-## .FOOTPRINT_FRACTION's value).
+## A prop's footprint: this share of its widest dimension (also what props are picked by,
+## PropRows.pick_radius).
 const FOOTPRINT_FRACTION := 0.45
 ## Footprint when the asset's size is unknown.
 const DEFAULT_FOOTPRINT_M := 0.5

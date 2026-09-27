@@ -905,7 +905,9 @@ with a dark under-stroke and a light over-stroke so it reads on any ground and i
 theme. Tint: the biome's thumbnail colour, warm white to thin, red to clear (Ctrl), the accent
 for Place (a small marker where a prop will go, red where the prop's base would straddle a
 drop of more than 0.25 m, such as a tier's rim, since it is sunk to the lowest ground under
-its base so it never floats; a ring around a hovered prop); for Sculpt,
+its base so it never floats; a ring around a hovered prop, showing where a click takes it:
+the footprint for rocks, logs and shrubs, the trunk for trees, never under 0.35 m so a small
+stone is easy to hit, `PropRows.pick_radius`); for Sculpt,
 sand to raise or build a tier, blue-grey to lower or cut, the accent to flatten, pale green to
 smooth; for Paint, the surface's swatch colour lifted toward white
 (`AuthoringController.surface_tint`), red to erase (Ctrl). A faint fill shows the reach (a fan from the centre drawn with explicit indices: a
