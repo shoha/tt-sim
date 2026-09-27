@@ -74,14 +74,15 @@ func test_a_sculpt_stroke_moves_plants_and_props_and_undoes_as_one() -> void:
 	assert_almost_eq(rows[1], _ground(near), 1e-5, "onto the ground")
 	assert_almost_eq(rows[11], 0.0, 1e-6, "the plant off the hill did not move")
 	var prop: PackedFloat32Array = editor.props.rows_by_asset()[handle.asset_id]
-	# Re-bedded at the lowest ground under its base (GroundSnap.footing_radius), so on the
-	# hill's flank no part of the boulder floats.
+	# A rock prop stands on the flank's normal and is re-bedded on its tilted base
+	# (GroundSnap.bed_under over GroundSnap.footing_radius), so no part of the boulder floats.
 	var base := GroundSnap.footing_radius(rule) * prop[7]
-	var lowest := GroundSnap.lowest_under(
-		_doc.heights, GroundSnap.grid_of(_doc), Vector2(1, 1), base
+	var bed := GroundSnap.bed_under(
+		_doc.heights, GroundSnap.grid_of(_doc), Vector2(1, 1), base, PropRows.row_up(prop)
 	)
 	assert_gt(base, 0.0)
-	assert_almost_eq(prop[1], lowest, 1e-5, "the prop is re-bedded")
+	assert_gt(PropRows.row_up(prop).angle_to(Vector3.UP), 0.1, "tilted with the flank")
+	assert_almost_eq(prop[1], bed, 1e-5, "the prop is re-bedded")
 	assert_lt(prop[1], _ground(Vector2(1, 1)), "below its origin's ground on the slope")
 	var raised_props := editor.props.rows_by_asset()
 	editor.finish_height_work()

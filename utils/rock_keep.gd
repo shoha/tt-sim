@@ -25,8 +25,8 @@ extends RefCounted
 ##
 ## How they stand (kept_row). As during the stroke: on the new ground normal, keeping yaw and
 ## lean, but never tilted more than MAX_TILT_RAD off vertical (capped_rotation), so no rock
-## sticks straight out of a sheer face; bedded with the footing rule (GroundSnap.lowest_under
-## over its footprint), so none floats.
+## sticks straight out of a sheer face; bedded with the footing rule on its own tilted base
+## (GroundSnap.bed_under over its footprint), so none floats and none is buried in a face.
 ##
 ## Duplicates (blockers). A later regeneration must not grow a generated instance inside a
 ## kept rock (a second stroke that brings the ground back would otherwise recreate the
@@ -111,8 +111,10 @@ static func capped_rotation(rotation: Quaternion, max_tilt: float) -> Quaternion
 
 ## The prop row a kept rock becomes: `row` (the instance as drawn at the stroke's end, on the
 ## new ground) with its rotation capped at `max_tilt` (when `tilt`, a normal-aligned species)
-## and its Y bedded at the lowest ground of `heights` under a footprint of `radius` (its
-## species' GroundSnap.footing_radius, scaled by the row's scale) around its XZ.
+## and its Y bedded on `heights` so its tilted base floats nowhere under a footprint of
+## `radius` (its species' GroundSnap.footing_radius, scaled by the row's scale): the footing
+## rule on the rock's own base plane (GroundSnap.bed_under). The lowest ground under the
+## footprint would bury a small rock lying on a face.
 static func kept_row(
 	row: PackedFloat32Array,
 	heights: PackedFloat32Array,
@@ -123,13 +125,15 @@ static func kept_row(
 ) -> PackedFloat32Array:
 	var out := row.duplicate()
 	var p := Vector2(row[0], row[2])
-	out[1] = GroundSnap.lowest_under(heights, grid, p, radius * absf(row[7]))
+	var up := Vector3.UP
 	if tilt:
 		var q := capped_rotation(Quaternion(row[3], row[4], row[5], row[6]), max_tilt)
 		out[3] = q.x
 		out[4] = q.y
 		out[5] = q.z
 		out[6] = q.w
+		up = q.normalized() * Vector3.UP
+	out[1] = GroundSnap.bed_under(heights, grid, p, radius * absf(row[7]), up)
 	return out
 
 
