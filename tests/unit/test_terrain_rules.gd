@@ -36,6 +36,7 @@ const MIRRORED := [
 	"PAINT_WARP_OFFSET_A",
 	"PAINT_WARP_OFFSET_B",
 	"PAINT_NOISE_OFFSET",
+	"PAINT_CLIFF_YIELD",
 ]
 const STEP := Vector2(0.25, 0.25)
 const EPS := 1e-4
@@ -123,6 +124,17 @@ func test_value_noise_is_smooth_bounded_and_seeded() -> void:
 	assert_almost_eq(left, right, 1e-4)
 	# 32-bit wrap: a seed near the int32 limit and negative lattice cells stay in range.
 	assert_between(TerrainRules.value_noise(Vector2(-1234.5, 987.25), 0x7FFFFFFF), 0.0, 1.0)
+	# Every lattice hash is an unsigned 32-bit value (a Vector2i return wrapped half of them
+	# negative, so the noise left [0, 1] like the shader's uint never does).
+	var low := 1.0
+	var high := 0.0
+	for k in 400:
+		var n := TerrainRules.value_noise(Vector2(k * 0.37 - 70.0, k * 0.61 - 120.0), 21)
+		low = minf(low, n)
+		high = maxf(high, n)
+	assert_true(low >= 0.0 and high <= 1.0, "noise within [0, 1]: %f .. %f" % [low, high])
+	assert_lt(low, 0.2, "and it spans the range")
+	assert_gt(high, 0.8)
 
 
 func _step_grid(columns: int, rows: int, at: int, height: float) -> PackedFloat32Array:
@@ -252,3 +264,18 @@ func test_shader_constants_mirror_the_rules() -> void:
 			assert_almost_eq(float(shader[name]), float(cpu), 1e-6, name)
 	assert_almost_eq(shader.get("CLIFF_START_COS", 0.0), TerrainRules.cliff_start_cos(), 1e-6)
 	assert_almost_eq(shader.get("CLIFF_END_COS", 0.0), TerrainRules.cliff_end_cos(), 1e-6)
+
+
+## The cliff-face rule is written the same way in the shader as in compose_paint(): painted
+## ground and built weight scaled by 1 - PAINT_CLIFF_YIELD * rule.x, painted rock held, the
+## yielded part added to the rock, scree over the unpainted ground only.
+func test_shader_composes_paint_like_compose_paint() -> void:
+	var text := FileAccess.get_file_as_string(SHADER_PATH).replace(" ", "")
+	for line in [
+		"floatpaint_scale=1.0-PAINT_CLIFF_YIELD*rule.x;",
+		"w[i]=held_a[i]+(painted_a[i]-held_a[i])*paint_scale;",
+		"floatcliff=unpainted*rule.x+yielding*(1.0-paint_scale);",
+		"floatscree=unpainted*rule.y;",
+		"floatkeep=unpainted*(1.0-rule.x-rule.y);",
+	]:
+		assert_true(text.contains(line), "the shader has: %s" % line)

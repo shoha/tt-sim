@@ -376,6 +376,9 @@ func attach_document(doc: MapDocument) -> void:
 	_regen.built_surfaces = PackedStringArray(
 		PaletteLibrary.surfaces_with_role("built", palette_root)
 	)
+	_regen.cliff_surfaces = PackedStringArray(
+		PaletteLibrary.surfaces_with_role("cliff", palette_root)
+	)
 	_register_biomes()
 
 

@@ -93,7 +93,11 @@
  * layer_ground_mask say which; a slot in neither is a rule slot with an empty channel):
  *   - painted: a hand-painted surface; its channel is its painted weight, read through a
  *     small warp and edge noise (PAINT_*: a path keeps its line). Painted weight is drawn
- *     first and always wins: everything else shares 1 - the painted total.
+ *     first and wins over the biome ground and scree: everything else shares 1 - the
+ *     painted total. Exception (cliff faces, the user's 2026-09-27 decision): painted ground
+ *     and built slots cover walkable ground only and give the cliff rule's share of their
+ *     weight to the automatic rock (PAINT_CLIFF_YIELD), so a path stops at a ledge and
+ *     resumes on top; slots in layer_cliff_paint_mask (painted cliff-role rock) never yield.
  *   - ground: a painted biome's ground surface; its channel is the biome's painted density,
  *     shaped as below. The base surface is the ground's remainder.
  *   - rule: a biome's cliff or scree surface that nothing else draws.
@@ -134,7 +138,9 @@
  * layer_broad_a/b are the weight maps box-filtered to GroundLayerTable.BROAD_FACTOR samples
  * per texel (3.5 m at the default 0.25 m step) and read with a cubic B-spline, so around
  * each painted biome the ground slot's mean colour (the last mip of its albedo) recolours
- * the ground in a gradient about 7 m wide. Ground slots only: a painted path gets no halo.
+ * the ground in a gradient about 7 m wide. Painted built slots (layer_trample_mask, P3-6)
+ * get the same halo at paint_broad_strength, a faint trodden fringe that seats a path in
+ * the grass instead of leaving it a clean-edged decal; other painted slots get none.
  * It recolours by luminance (layer mean x the pixel's luminance relative to the base
  * mean), so the base texture keeps its detail and no hue is amplified. The tint fades out
  * where the fine edge already shows the layer itself.
@@ -186,6 +192,11 @@ uniform int layer_count : hint_range(0, 8) = 0;
 // Bit j set: slot j is a painted surface / a biome ground surface.
 uniform int layer_painted_mask = 0;
 uniform int layer_ground_mask = 0;
+// Bit j set: slot j is a painted surface with role cliff (it never yields to the rules).
+uniform int layer_cliff_paint_mask = 0;
+// Bit j set: slot j is a painted built surface; its broad weight tints the ground around it
+// faintly (a trampled fringe, see BROAD EDGE), at paint_broad_strength.
+uniform int layer_trample_mask = 0;
 uniform sampler2D layer_weights_a : hint_default_black, filter_linear, repeat_disable;
 uniform sampler2D layer_weights_b : hint_default_black, filter_linear, repeat_disable;
 // World XZ of document sample (0, 0) and the real sample step, in metres.
@@ -220,6 +231,9 @@ uniform sampler2D layer_broad_b : hint_default_black, filter_linear, repeat_disa
 uniform float biome_broad_strength : hint_range(0.0, 1.0) = 0.8;
 // Broad weight at which the tint reaches full strength.
 uniform float biome_broad_full : hint_range(0.05, 1.0) = 0.4;
+// Most a painted built surface's colour tints the ground around it (worn, trodden grass
+// beside a path; P3-6, judged at the game camera).
+uniform float paint_broad_strength : hint_range(0.0, 1.0) = 0.35;
 
 #ifdef GROUND_SKIRT
 // Half the map's extent in UV (document) metres: the skirt fades out from this rectangle.
@@ -292,6 +306,9 @@ const float PAINT_EDGE_NOISE = 0.35;
 const vec2 PAINT_WARP_OFFSET_A = vec2(-23.1, 57.7);
 const vec2 PAINT_WARP_OFFSET_B = vec2(91.3, -12.9);
 const vec2 PAINT_NOISE_OFFSET = vec2(7.9, 3.1);
+// Painted ground and built slots yield this fraction of the cliff rule to the automatic rock
+// (TerrainRules.PAINT_CLIFF_YIELD and compose_paint): paths cover walkable ground only.
+const float PAINT_CLIFF_YIELD = 1.0;
 
 // Weights and per-cell transforms of the (up to) three cells blended at one point.
 struct TileFrame {
@@ -728,11 +745,12 @@ vec4 texture_bspline(sampler2D tex, vec2 uv) {
 // edge (fine_a / fine_b) already shows the layer itself.
 vec3 apply_broad_edge(vec3 albedo, vec2 world_xz, vec4 fine_a, vec4 fine_b) {
 	vec2 st = weight_uv(world_xz);
+	int tinted = layer_ground_mask | layer_trample_mask;
 	vec4 broad[2];
-	broad[0] = texture_bspline(layer_broad_a, st) * mask_channels(layer_ground_mask, 0);
+	broad[0] = texture_bspline(layer_broad_a, st) * mask_channels(tinted, 0);
 	broad[1] = vec4(0.0);
-	if ((layer_ground_mask >> 4) != 0) {
-		broad[1] = texture_bspline(layer_broad_b, st) * mask_channels(layer_ground_mask, 4);
+	if ((tinted >> 4) != 0) {
+		broad[1] = texture_bspline(layer_broad_b, st) * mask_channels(tinted, 4);
 	}
 	vec4 fine[2];
 	fine[0] = fine_a;
@@ -747,7 +765,9 @@ vec3 apply_broad_edge(vec3 albedo, vec2 world_xz, vec4 fine_a, vec4 fine_b) {
 		if (i >= layer_count || w <= WEIGHT_EPSILON) {
 			continue;
 		}
-		float tint = biome_broad_strength * smoothstep(0.0, biome_broad_full, w);
+		float strength = ((layer_trample_mask >> i) & 1) != 0 ? paint_broad_strength
+			: biome_broad_strength;
+		float tint = strength * smoothstep(0.0, biome_broad_full, w);
 		tint *= 1.0 - smoothstep(0.2, 0.8, fine[i / 4][i % 4]);
 		if (tint > 0.001) {
 			vec3 mean = textureLod(layer_albedo[i], vec2(0.5), 16.0).rgb;
@@ -802,9 +822,9 @@ void fragment() {
 	TileFrame frame = tile_frame(world_xz);
 	vec3 proj = projection_weights(n_geom);
 
-	// Weights per slot (0-7) and the base (BASE). Painted first; the rest of the ground
-	// (biome ground and base) shares what the painting leaves, and the rules take their
-	// share of that.
+	// Weights per slot (0-7) and the base (BASE). Painted first (ground and built paint minus
+	// what it yields to the cliff rule); the rest of the ground (biome ground and base) shares
+	// what the painting leaves, and the rules take their share of that.
 	float w[9];
 	for (int i = 0; i < 9; i++) {
 		w[i] = 0.0;
@@ -824,23 +844,30 @@ void fragment() {
 	}
 #endif
 	float painted_total = dot(painted_a, vec4(1.0)) + dot(painted_b, vec4(1.0));
+	// Painted cliff-role surfaces hold their weight; painted ground and built surfaces yield
+	// to the automatic rock on faces (TerrainRules.compose_paint is the CPU twin).
+	vec4 held_a = painted_a * mask_channels(layer_cliff_paint_mask, 0);
+	vec4 held_b = painted_b * mask_channels(layer_cliff_paint_mask, 4);
+	float held = dot(held_a, vec4(1.0)) + dot(held_b, vec4(1.0));
+	float yielding = painted_total - held;
 	float unpainted = clamp(1.0 - painted_total, 0.0, 1.0);
+	vec2 rule = vec2(0.0);
+#ifndef GROUND_SKIRT
+	if (unpainted + yielding > WEIGHT_EPSILON) {
+		rule = rule_weights(n_geom.y, v_fields, v_position);
+	}
+#endif
+	float paint_scale = 1.0 - PAINT_CLIFF_YIELD * rule.x;
 	float g[9];
 	for (int i = 0; i < 4; i++) {
 		g[i] = ground_a[i];
 		g[i + 4] = ground_b[i];
-		w[i] = painted_a[i];
-		w[i + 4] = painted_b[i];
+		w[i] = held_a[i] + (painted_a[i] - held_a[i]) * paint_scale;
+		w[i + 4] = held_b[i] + (painted_b[i] - held_b[i]) * paint_scale;
 	}
 	g[BASE] = clamp(1.0 - dot(ground_a, vec4(1.0)) - dot(ground_b, vec4(1.0)), 0.0, 1.0);
-	vec2 rule = vec2(0.0);
-#ifndef GROUND_SKIRT
-	if (unpainted > WEIGHT_EPSILON) {
-		rule = rule_weights(n_geom.y, v_fields, v_position);
-	}
-#endif
 	float keep = unpainted * (1.0 - rule.x - rule.y);
-	float cliff = unpainted * rule.x;
+	float cliff = unpainted * rule.x + yielding * (1.0 - paint_scale);
 	float scree = unpainted * rule.y;
 	for (int j = 0; j < 9; j++) {
 		w[j] += g[j] * keep;
@@ -941,8 +968,12 @@ void fragment() {
 	ground.orm *= inv_total;
 	ground.height *= inv_total;
 #ifndef GROUND_SKIRT
-	if (layer_ground_mask != 0) {
-		ground.albedo = apply_broad_edge(ground.albedo, world_xz, ground_a, ground_b);
+	if ((layer_ground_mask | layer_trample_mask) != 0) {
+		// The fine weights fade the tint where the layer itself shows: each slot is either
+		// a ground or a painted slot, so the two sets add without overlap.
+		ground.albedo = apply_broad_edge(
+			ground.albedo, world_xz, ground_a + painted_a, ground_b + painted_b
+		);
 	}
 #endif
 

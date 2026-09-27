@@ -329,6 +329,29 @@ static func source_mask(the_plan: Dictionary, source: int) -> int:
 	return mask
 
 
+## The ground shader's slot mask uniforms for `plan`: which slots are painted, biome ground,
+## painted rock (layer_cliff_paint_mask: never yields to the automatic rules) and painted
+## built surfaces (layer_trample_mask: a faint trampled fringe around them, P3-6).
+static func shader_masks(the_plan: Dictionary) -> Dictionary:
+	return {
+		"layer_painted_mask": source_mask(the_plan, Source.PAINTED),
+		"layer_ground_mask": source_mask(the_plan, Source.GROUND),
+		"layer_cliff_paint_mask": painted_role_mask(the_plan, "cliff"),
+		"layer_trample_mask": painted_role_mask(the_plan, "built"),
+	}
+
+
+## Bitmask of the PAINTED slots of `plan` whose surface has role `role` (bit j = slot j).
+static func painted_role_mask(the_plan: Dictionary, role: String) -> int:
+	var mask := 0
+	var layers: Array = the_plan.get("layers", [])
+	for j in layers.size():
+		var layer: Dictionary = layers[j]
+		if layer.source == Source.PAINTED and String(layer.get("role", "")) == role:
+			mask |= 1 << j
+	return mask
+
+
 ## The two RGBA8 weight images' bytes for the samples of `rect` (sample coordinates,
 ## clipped to the grid by the caller): [plane A (slots 0-3), plane B (slots 4-7)], each
 ## row-major, 4 bytes per sample. A GROUND slot's channel holds the density of the sample's

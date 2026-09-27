@@ -203,7 +203,8 @@ static func generate_for_document(
 		doc,
 		biome_id,
 		Rect2(),
-		PackedStringArray(PaletteLibrary.surfaces_with_role("built", palette_root))
+		PackedStringArray(PaletteLibrary.surfaces_with_role("built", palette_root)),
+		PackedStringArray(PaletteLibrary.surfaces_with_role("cliff", palette_root))
 	)
 	var cells_by_species: Array = []
 	var species := PaletteLibrary.species(biome_id, palette_root)
@@ -226,8 +227,9 @@ static func generate_for_document(
 ## {density_at, rock_density_at, height_at, normal_at, bounds}. Density is the biome's
 ## painted density (0 where another biome or none is painted), bilinear on the document's
 ## sample grid, times what the ground lets grow there (ScatterGround: nothing on automatic
-## rock or under a painted built surface, `built_surfaces` naming the palette surfaces
-## with role "built"); rock_density_at, which rock species read, gathers on scree.
+## rock, under a painted built surface or on painted rock, `built_surfaces` and
+## `cliff_surfaces` naming the palette surfaces with role "built" and "cliff");
+## rock_density_at, which rock species read, gathers on scree.
 ## Heights and normals follow the terrain's own triangles (triangle_height,
 ## triangle_normal): the rendered chunks and the collision heightfield split every quad
 ## on the same diagonal, and a bilinear height differs from that surface by up to
@@ -245,7 +247,8 @@ static func document_fields(
 	doc: MapDocument,
 	biome_id: String,
 	window: Rect2 = Rect2(),
-	built_surfaces: PackedStringArray = PackedStringArray()
+	built_surfaces: PackedStringArray = PackedStringArray(),
+	cliff_surfaces: PackedStringArray = PackedStringArray()
 ) -> Dictionary:
 	var count := doc.sample_count()
 	var slot := doc.biome_ids.find(biome_id) + 1
@@ -280,7 +283,7 @@ static func document_fields(
 	var ground_at := Callable()
 	if painted:
 		var samples := Rect2i(low, high - low + Vector2i.ONE)
-		ground_at = ScatterGround.sampler(doc, heights, samples, built_surfaces)
+		ground_at = ScatterGround.sampler(doc, heights, samples, built_surfaces, cliff_surfaces)
 	var plain_at := func(p: Vector2) -> float:
 		var at := (p + half) / step
 		if at.x < 0.0 or at.y < 0.0 or at.x > columns - 1 or at.y > rows - 1:
