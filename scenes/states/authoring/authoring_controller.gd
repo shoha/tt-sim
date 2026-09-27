@@ -599,6 +599,21 @@ func _refresh_paint_limits() -> void:
 	if document.surface_ids.size() >= MapDocument.MAX_SURFACES:
 		reason = editor.surface_refusal("")
 	panel.set_paint_limits(reason, document.surface_ids)
+	_refresh_paint_order()
+
+
+## Orders the Paint tool's Built tiles for the biomes on the map: the painted ones in
+## document order, then the base's (the palette's first biome on the base surface), whose
+## palette path_surfaces come first. A default the author has not replaced follows.
+func _refresh_paint_order() -> void:
+	var biomes := document.biome_ids.duplicate()
+	for biome in PaletteLibrary.biomes(panel.palette_root):
+		if biome.get("ground_surface", "") == document.base_surface:
+			if not biomes.has(String(biome.id)):
+				biomes.append(String(biome.id))
+			break
+	if panel.order_paint_tiles(biomes):
+		_use_surface(panel.get_paint_surface())
 
 
 ## Switches the brush to `tool_id` and activates it. The Biome brush waits for a biome to be

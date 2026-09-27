@@ -27,7 +27,11 @@ extends DrawerContainer
 ## paths and yards are what the tool is mostly for) of palette surface swatches, one
 ## selection across the groups. The swatches cost a texture decode each (the whole albedo
 ## tile, cropped and scaled), so they are built once, by ensure_paint_tiles(), which the
-## controller calls under the loading screen and the pane calls on first show.
+## controller calls under the loading screen and the pane calls on first show. The Built
+## tiles are ordered for the map (order_paint_tiles, 2026-09-27): the path surfaces of the
+## biomes on it first (palette path_surfaces, in biome order), then the rest in palette
+## order, so a badlands map offers its caliche track and sandstone flags before the grey
+## flagstone; until the author picks a surface, the first of them is the one selected.
 
 signal save_pressed
 signal leave_pressed
@@ -176,6 +180,10 @@ var _place_foldouts: Dictionary = {}
 var _paint_tiles: Dictionary = {}
 var _paint_tooltips: Dictionary = {}
 var _paint_surface: String = DEFAULT_PAINT_SURFACE
+## True once the author picked a Paint tile; until then ordering may change the default.
+var _paint_picked: bool = false
+## The biomes the Built tiles were last ordered for (order_paint_tiles).
+var _paint_order_biomes: PackedStringArray = PackedStringArray()
 var _active_tool: StringName = &""
 ## True while the controller's leave prompt is on screen, so Escape does not stack another.
 var _leave_pending: bool = false
@@ -450,6 +458,59 @@ func ensure_paint_tiles() -> void:
 			_paint_tiles[surface] = tile
 			_paint_tooltips[surface] = tooltip
 	select_paint_surface(_paint_surface)
+	_apply_paint_order()
+
+
+## Orders the Built tiles for a map with the palette biomes `biome_ids` on it (see the
+## header); a no-op when they are unchanged. Returns true when the selected surface changed
+## because the author has not picked one yet (the caller hands it to the brush).
+func order_paint_tiles(biome_ids: PackedStringArray) -> bool:
+	if biome_ids == _paint_order_biomes:
+		return false
+	_paint_order_biomes = biome_ids.duplicate()
+	var before := _paint_surface
+	_apply_paint_order()
+	return _paint_surface != before
+
+
+func _apply_paint_order() -> void:
+	if _paint_tiles.is_empty():
+		return
+	var field: TileField = paint_fields.get("built")
+	var built := PaletteLibrary.surfaces_with_role("built", palette_root)
+	var order := paint_order(built, _paint_order_biomes, palette_root)
+	for index in order.size():
+		var tile: Button = _paint_tiles.get(order[index])
+		if tile != null:
+			field.tiles.move_child(tile, index)
+	if not _paint_picked:
+		var listed := listed_paths(built, _paint_order_biomes, palette_root)
+		select_paint_surface(listed[0] if not listed.is_empty() else DEFAULT_PAINT_SURFACE)
+
+
+## The Built tiles' order for a map with `biome_ids` on it: every listed biome's
+## path_surfaces, in biome order and deduplicated, then the other `built` surfaces in their
+## own (palette) order. Only surfaces in `built` appear; with no paths listed it is `built`.
+static func paint_order(
+	built: Array[String], biome_ids: PackedStringArray, root: String
+) -> Array[String]:
+	var order := listed_paths(built, biome_ids, root)
+	for surface in built:
+		if not surface in order:
+			order.append(surface)
+	return order
+
+
+## The path surfaces `biome_ids` list (in biome order, deduplicated) that are in `built`.
+static func listed_paths(
+	built: Array[String], biome_ids: PackedStringArray, root: String
+) -> Array[String]:
+	var listed: Array[String] = []
+	for biome_id in biome_ids:
+		for surface in PaletteLibrary.path_surfaces(biome_id, root):
+			if surface in built and not surface in listed:
+				listed.append(surface)
+	return listed
 
 
 ## A palette surface's readable name ("dirt_road_packed" -> "Dirt track"): the Paint tiles'
@@ -491,6 +552,7 @@ func _on_paint_tile(id: StringName, source: TileRow) -> void:
 	var surface := paint_tile_surface(id)
 	if surface != "":
 		_paint_surface = surface
+		_paint_picked = true
 		paint_selected.emit(surface)
 
 
