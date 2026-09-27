@@ -107,6 +107,50 @@ func test_clear_resets_global_count() -> void:
 	assert_eq(manager._last_token_count, 0)
 
 
+func test_focus_is_published_first_and_cleared() -> void:
+	var manager := OcclusionFadeManager.new()
+	add_child_autofree(manager)
+	var tokens_container := Node3D.new()
+	add_child_autofree(tokens_container)
+	tokens_container.add_child(_make_token(Vector3(10, 0, 5)))
+	var map_container: Node3D = autofree(Node3D.new())
+	var camera: Camera3D = autofree(Camera3D.new())
+	manager.setup(camera, map_container, tokens_container)
+
+	manager.set_focus(Vector3(1, 2, 3), 5.4)
+	manager._update_token_uniforms()
+	assert_eq(manager._last_token_count, 2, "the focus plus the token")
+	assert_eq(manager._token_image.get_pixel(0, 0), Color(1, 2, 3, 5.4), "focus first")
+	assert_almost_eq(manager._token_image.get_pixel(1, 0).r, 10.0, 0.0001)
+
+	manager.clear_focus()
+	manager._update_token_uniforms()
+	assert_eq(manager._last_token_count, 1, "cleared on the next tick")
+	assert_almost_eq(manager._token_image.get_pixel(0, 0).r, 10.0, 0.0001)
+
+
+func test_tree_foliage_has_no_floor_exemption() -> void:
+	var manager := OcclusionFadeManager.new()
+	add_child_autofree(manager)
+	var tokens_container: Node3D = autofree(Node3D.new())
+	var map_container: Node3D = autofree(Node3D.new())
+	var camera: Camera3D = autofree(Camera3D.new())
+	manager.setup(camera, map_container, tokens_container)
+	var mat := ShaderMaterial.new()
+	mat.shader = WindFoliage.get_shader()
+	mat.set_meta("wind_category", "tree")
+	var materials: Array[ShaderMaterial] = [mat]
+
+	manager.register_tree_materials(materials)
+
+	assert_eq(mat.get_shader_parameter("enable_occlusion"), true)
+	assert_eq(
+		mat.get_shader_parameter("floor_threshold"),
+		OcclusionFadeManager.FOLIAGE_FLOOR_THRESHOLD,
+		"upward-facing leaves fade too"
+	)
+
+
 func test_created_material_is_bound_to_the_shared_token_texture() -> void:
 	var manager := OcclusionFadeManager.new()
 	add_child_autofree(manager)

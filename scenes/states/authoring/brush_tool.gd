@@ -73,6 +73,10 @@ const THIN_TINT := Color(0.98, 0.93, 0.82)
 const CLEAR_TINT := Color(1.0, 0.52, 0.42)
 const PLACE_TINT := ThemeColors.ACCENT
 const PLACE_MARKER_M := 0.6
+## Thin / Clear canopy fade radius as a multiple of the brush radius (view-plane metres).
+## The fade falls off from the centre to this radius, so it has to reach past the ring for
+## the canopy over the ring's edge to open up.
+const FADE_RADIUS_FACTOR := 1.35
 
 ## Remembered for the whole app session, like the Visuals drawer's last pane.
 static var session_radius: float = DEFAULT_RADIUS
@@ -86,6 +90,12 @@ var place_rule: Dictionary = {}
 ## Ring tint of the Biome tool (the biome's colour).
 var biome_tint: Color = Color(0.7, 0.9, 0.6)
 var editor: AuthoringEditor = null
+## While Thin / Clear is the tool, the ring is this manager's focus (set_focus), so canopies
+## between the camera and the ground being thinned fade like geometry over a token. Set by
+## GameMap.setup_brush_tool(); null for none.
+var occlusion_fade: OcclusionFadeManager = null
+## FADE_RADIUS_FACTOR, as a var so a tuning probe can change it in a running game.
+var fade_radius_factor: float = FADE_RADIUS_FACTOR
 
 var _camera: Camera3D = null
 var _world_viewport: SubViewport = null
@@ -217,6 +227,8 @@ func deactivate() -> void:
 	finish_gesture()
 	_active = false
 	_hover = {}
+	if occlusion_fade != null:
+		occlusion_fade.clear_focus()
 	if _canvas_layer:
 		_canvas_layer.visible = false
 	set_process(false)
@@ -362,6 +374,7 @@ func _scale_hovered(steps: int) -> void:
 func _process(delta: float) -> void:
 	var seconds := minf(delta, MAX_FRAME_SECONDS)
 	_resolve_hit()
+	_update_fade()
 	if _press_pending and _hit != Vector3.INF:
 		_start_gesture(0.0)
 	if _stroking and _hit != Vector3.INF:
@@ -458,6 +471,17 @@ func _resolve_hit() -> void:
 		return
 	_hit = result.position
 	_hit_normal = result.normal
+
+
+## Thin / Clear: the ring is the occlusion fade's focus, so the canopy over it opens up.
+## Any other tool, or no ground under the pointer, clears it.
+func _update_fade() -> void:
+	if occlusion_fade == null:
+		return
+	if _active and mode == Mode.THIN and _hit != Vector3.INF:
+		occlusion_fade.set_focus(_hit, session_radius * fade_radius_factor)
+	else:
+		occlusion_fade.clear_focus()
 
 
 ## A point bedded on the ground below `point`: DragPlaceController's downward terrain ray,

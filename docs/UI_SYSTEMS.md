@@ -820,7 +820,12 @@ with a dark under-stroke and a light over-stroke so it reads on any ground and i
 theme. Tint: the biome's thumbnail colour, warm white to thin, red to clear (Ctrl), the accent
 for Place (a small marker where a prop will go, a ring around a hovered prop). A faint fill
 shows the reach, and while a stroke is held an inner ring at half strength brightens as dwell
-builds. The ring hides over the drawer. RMB never pans while the brush is active (MMB and the
+builds. The ring hides over the drawer. While Thin / Clear is the tool, tree canopies between
+the camera and the ring dither away like geometry over a token (the ring is
+`OcclusionFadeManager.set_focus()`, radius 1.35x the brush), so the ground being thinned stays
+visible under a forest. It rides on the occlusion fade and so follows the player's Occlusion
+fade setting (on by default); it is not forced on in authoring, because turning the manager on
+also converts a dressed Blender map's materials. RMB never pans while the brush is active (MMB and the
 keyboard still do). Ctrl+Z / Ctrl+Y (`ui_undo` / `ui_redo`) go to
 `AuthoringController.undo()` / `redo()`, which first ends a gesture in progress. The F1 help
 lists these under "Map building".

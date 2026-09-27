@@ -392,6 +392,14 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   Placed props are bedded with `DragPlaceController.raycast_terrain_down`, oriented like
   generated ones (upright or on the ground normal, then yaw), and scaled within the species'
   spread widened to at least +-25 %.
+- **Canopy fade:** while Thin / Clear is the tool, `BrushTool` makes its ring the
+  `OcclusionFadeManager` focus (`set_focus(centre, 1.35 x radius)`, first entry in the token
+  texture, cleared for other tools and on deactivate), so tree canopies between the camera and
+  the ring dither away as they do over a token. Tree foliage materials are registered with
+  `floor_threshold` 2.0 (`FOLIAGE_FLOOR_THRESHOLD`): the floor exemption meant for map floors
+  also exempted every upward-facing leaf card, which left canopies mostly opaque, over tokens
+  in play as well. Follows the player's occlusion fade setting (not forced on in authoring:
+  enabling the manager converts a dressed GLB's materials).
 
 **Save.** `save_async()` waits for scatter regeneration to land, then
 `AuthoringController.write_level()`: a new level gets `LevelManager.new_folder_name()`,

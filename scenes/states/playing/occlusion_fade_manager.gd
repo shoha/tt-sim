@@ -35,6 +35,11 @@ const CHANNEL_MASKS := {
 	BaseMaterial3D.TEXTURE_CHANNEL_ALPHA: Color(0.0, 0.0, 0.0, 1.0),
 	BaseMaterial3D.TEXTURE_CHANNEL_GRAYSCALE: Color(0.333333, 0.333333, 0.333333, 0.0),
 }
+## floor_threshold for tree foliage: above any normal's y, so no leaf counts as floor. The
+## floor exemption keeps a map's floors under a token solid; on foliage it exempted every
+## upward-facing leaf card, and a canopy over a token (or the Thin / Clear ring) stayed
+## mostly opaque (T7 renders, 2026-09-26).
+const FOLIAGE_FLOOR_THRESHOLD := 2.0
 
 ## Multiplier applied to the token's collision extent to compute its fade radius.
 ## Higher = geometry fades further away from the token; lower = tighter fade zone.
@@ -96,6 +101,10 @@ var _shader_material_by_source: Dictionary[int, ShaderMaterial] = {}
 var _aabb_cache: Dictionary[RID, AABB] = {}
 # Entries published on the previous tick; identical ticks skip the GPU update.
 var _last_entries: Array[Vector4] = []
+# A fade entry that is not a token, (world centre, radius), or zero for none: authoring's
+# Thin / Clear brush sets it at its ring (set_focus). It goes first in the entry list so a
+# full token list never drops it.
+var _focus: Vector4 = Vector4.ZERO
 
 
 func _ready() -> void:
@@ -134,10 +143,24 @@ func clear() -> void:
 	_shader_material_by_source.clear()
 	_aabb_cache.clear()
 	_last_entries = []
+	_focus = Vector4.ZERO
 	RenderingServer.global_shader_parameter_set(GLOBAL_TOKEN_COUNT, 0)
 	_last_token_count = 0
 	_is_setup = false
 	set_physics_process(false)
+
+
+## Fades what stands between the camera and `centre` within `radius` (metres in the view
+## plane), exactly as for a token there. Authoring's Thin / Clear brush calls it every frame
+## at its ring so canopies over the ground being thinned turn see-through. Only visible while
+## the manager is set up, i.e. while the player's occlusion fade setting is on.
+func set_focus(centre: Vector3, radius: float) -> void:
+	_focus = Vector4(centre.x, centre.y, centre.z, maxf(radius, 0.0))
+
+
+## Removes the set_focus() entry (published on the next tick).
+func clear_focus() -> void:
+	_focus = Vector4.ZERO
 
 
 func _physics_process(_delta: float) -> void:
@@ -359,6 +382,7 @@ func _register_tree_material(shader_mat: ShaderMaterial) -> void:
 	shader_mat.set_shader_parameter("enable_occlusion", true)
 	shader_mat.set_shader_parameter(TOKEN_TEXTURE_UNIFORM, _token_texture)
 	shader_mat.set_shader_parameter("min_alpha", min_alpha)
+	shader_mat.set_shader_parameter("floor_threshold", FOLIAGE_FLOOR_THRESHOLD)
 	shader_mat.set_shader_parameter("lofi_pixelation", _lofi_pixelation)
 	shader_mat.set_shader_parameter("lofi_dither_scale", lofi_dither_scale)
 	_tree_materials.append(shader_mat)
@@ -399,9 +423,12 @@ func _update_token_uniforms() -> bool:
 ## Per-token (world centre, fade radius) as Vector4(x, y, z, radius). Uses the
 ## collision shape AABB centre as the token position and derives the fade radius
 ## from the AABB extent so small tokens get a tight zone and large tokens get a
-## proportionally larger one. Capped at MAX_TOKENS.
+## proportionally larger one. The set_focus() entry, if any, comes first. Capped at
+## MAX_TOKENS.
 func _collect_token_entries() -> Array[Vector4]:
 	var entries: Array[Vector4] = []
+	if _focus.w > 0.0:
+		entries.append(_focus)
 	for child in _tokens_container.get_children():
 		if child is not BoardToken:
 			continue
