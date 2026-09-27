@@ -27,6 +27,13 @@ Do not pass `--headless`: captures need real pixels. The run takes as long as th
 steps (the judgment set is about 6 minutes) and quits by itself when the last step is done
 or `timeout_s` passes. Progress lines are printed with the prefix `RJ|`.
 
+A hung run kills itself (see `hang_s` below). This matters because `timeout_s` is checked
+on the main thread, which a hang blocks, and on Windows stopping the shell task that
+launched Godot (Claude Code's TaskStop, or the Bash tool's own timeout) does not stop the
+Godot process: a hung Mobile-renderer run in September 2026 kept its window and GPU context
+alive for 26 minutes after its task was "stopped", contending with every later run. If a
+`Godot_v4.7.1-stable_win64` process is still listed after a job, stop it by id.
+
 `run.gd` loads the main scene, waits about 3 seconds for it to settle, then forces the
 window onto the primary screen at 1920x1080 and adds `driver.gd`, which runs the steps.
 
@@ -73,6 +80,7 @@ Top-level keys:
 | `steps` | required | Array of step objects, run in order, each over one or more frames. |
 | `out_dir` | `user://render_jobs/<job name>` | Output folder (see above). `--out` overrides it. |
 | `timeout_s` | 300 | Hard stop in seconds from launch; the run quits even if steps remain. |
+| `hang_s` | 60 | Watchdog: when no frame completes for this many seconds, log a `HANG:` line (stderr and `log.txt`) and kill the process. The same watchdog kills a run still alive 30 s past `timeout_s`. The last `step` line before the `HANG` line is the step that hung. |
 | `remove_override` | false | Delete `res://override.cfg` right after startup (the engine has already read it). Use it when you drop in a temporary `override.cfg` for one run (for example to pin a setting), so the file never outlives the run. The harness never creates one itself. |
 
 Every step has an `op`. Steps that finish immediately advance on the same frame; `wait`,
@@ -191,6 +199,11 @@ numerically (for example where a fade or a tint band starts).
   temperate forest map with the three shapes), for iterating on the shader.
 - `jobs/mobile_check.json`: a bare 100 ft map shaped and painted under
   `--rendering-method mobile`, to check the ground shader in the Mobile renderer.
+- `jobs/mobile_maps.json`: the Mobile renderer with scatter (about 40 s): a new 200 ft
+  temperate forest map, the Blender levels `deciduous_clusters` and `river` in play, and
+  `river` opened for dressing, one capture each. Run it with `--rendering-method mobile`
+  after any change to foliage, scatter or pipeline warm-up; its first map open is where
+  the one hang seen under Mobile stopped (docs/PERFORMANCE.md "Mobile renderer hang").
 
 ## Caveats
 

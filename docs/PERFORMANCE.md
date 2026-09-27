@@ -656,6 +656,35 @@ touching the user's system), so a first-ever run on a clean machine is slower th
 "caches disabled" row; the earlier ~550 ms report was not reproduced. The alpine stroke's
 remaining 36-44 ms frames are species resolution and cell rebuilds, not pipelines.
 
+## Mobile renderer hang (2026-09-26): one occurrence, not reproduced
+
+macOS runs the Mobile renderer (`rendering_method.macos="mobile"`), so a load that hangs
+under `--rendering-method mobile` would hang Mac players. One run did: `dressing_look`
+under Mobile on `authoring-phase3` (working tree between 2e0401e and a8ea4bd, shader
+include already final) stopped at its first map, a new 200 ft alpine meadow map, after
+"Applied map default environment" and before `wait_ready` finished. The process was "Not
+Responding" with its CPU time flat at about 20 s for 26 minutes: the main thread was
+blocked in a wait (not spinning, not compiling). It survived because stopping the shell
+task does not stop Godot on Windows; the render-job watchdog (`hang_s`) now kills such a
+run and logs the step it hung in.
+
+It was not reproduced. Same machine, RTX 3080, Mobile, all with plants:
+
+| Branch | Runs | Result |
+| --- | --- | --- |
+| `authoring-phase3` d8e9064 | about 55 authored map opens (8 biomes, 100 and 200 ft, fresh process and repeated in one process), 9 Blender-map loads in play, 2 opened for dressing; `dressing_look` twice in full; Godot shader and pipeline caches disabled; window minimized during the load; three instances at once; the 2e0401e ground include swapped in | all loaded and drew |
+| `main` 18c25b4 (the `testing` build) | 17 authored map opens, 4 Blender-map loads in play, 1 dressing | all loaded and drew |
+| `authoring-phase3`, Forward+ | 17 opens, 4 plays, 1 dressing (one run alongside two Mobile runs) | all loaded |
+
+Ruled out by those runs: the wind foliage shaders and `PipelineWarmer` under Mobile
+(every run compiles and warms them), cold shader and pipeline caches, the ground shader's
+dynamic `layer_count` loops (the P3-4 probe drew them under Mobile), MultiMesh counts at
+full 200 ft density, GPU contention between instances. Not ruled out: a rare deadlock
+between the main thread and the threaded palette loads (`load_threaded_get` in
+`AuthoredScatter`, `WorkerThreadPool` waits) or a driver wait, which the flat CPU time
+fits; a stack of the hung process would decide it, and no debugger was on the machine.
+Not tested: real Mac hardware (Metal). `jobs/mobile_maps.json` is the regression check.
+
 ## In-game authoring: pinned performance pass (2026-09-26)
 
 The pass owed before merging `in-game-authoring`: play-time cost of authored maps against
