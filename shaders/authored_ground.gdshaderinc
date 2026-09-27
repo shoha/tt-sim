@@ -277,8 +277,8 @@ const float PROJECTION_BAND = 0.12;
 
 // Automatic rules: the twins of TerrainRules' constants (tests/unit/test_terrain_rules.gd
 // checks every value). CLIFF_*_COS are cos(CLIFF_START_DEG) and cos(CLIFF_END_DEG).
-const float CLIFF_START_COS = 0.788011;
-const float CLIFF_END_COS = 0.573576;
+const float CLIFF_START_COS = 0.719340;
+const float CLIFF_END_COS = 0.529919;
 const float CLIFF_EDGE_NOISE = 0.35;
 const float LIP_CURVATURE_START = 0.03;
 const float LIP_CURVATURE_END = 0.12;

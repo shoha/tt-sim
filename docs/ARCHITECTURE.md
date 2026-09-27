@@ -1175,8 +1175,10 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   (`tests/unit/test_terrain_rules.gd` fails when they drift): terrain-paint's mask tails
   (`clamp((v - start) / (end - start))`), edge noise, shaping ramp (0.2..0.8, EASE), and
   the shader's score blend as the height blend. Cliff: slope tail on the shading normal's
-  y from 38 to 55 degrees (a tier face, shading normal about 70 degrees, is fully rock at
-  any noise; a 30 degree slope never is), edge noise +-0.35 added to the tail before the
+  y from 44 to 58 degrees (a tier face, shading normal about 63 degrees, is fully rock at
+  any noise; a 40 degree slope never is; P3-7 raised it from 38..55, which put rock patches
+  and a scree ring on a hill raised with the Raise brush, whose flanks run 35 to 47
+  degrees, and left it a bare mound in a forest), edge noise +-0.35 added to the tail before the
   clamp (terrain-paint adds it after, which scatters rock patches on flat ground), and a
   convex-lip rule taking up to 60 % of the rock back on rounded shoulders, fading out on
   sheer faces (tail 1..2) so the face stays rock under a grassy lip. Scree: concave
@@ -1311,7 +1313,10 @@ models, clearance); the generator only evaluates candidates.
   reports any target past the cap as `reachable < 1`.
 - **Thinning after spacing:** painted density, the pattern noise (Geoscatter's
   `dist_influence` with revert, feature size derived from its noise settings), slope with
-  a 10 degree falloff, clump membership, near/avoid relations and clearance around larger
+  a 10 degree falloff (the palette's `slope_max_deg` plus `ScatterPlan.SLOPE_ALLOWANCE_DEG`,
+  10: the limits are Geoscatter's for Blender terrains without a rock rule, and in game the
+  automatic rock already clears steep ground; unrelaxed they stripped the trees off a
+  raised hill), clump membership, near/avoid relations and clearance around larger
   classes multiply into one keep probability tested against a hashed uniform. Painted
   density enters through a per-size-class response (`ScatterPlan.DENSITY_RESPONSE`): trees
   and shrubs lead (`1 - (1 - d)^lead`, 3 for large, 2.5 for medium), ground cover lags

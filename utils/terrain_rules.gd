@@ -37,9 +37,10 @@ extends RefCounted
 ## Rules:
 ##   - cliff: tail of n.y from cos(CLIFF_START_DEG) to cos(CLIFF_END_DEG) (TP's slope source
 ##     uses normal.z the same way), edge noise, then a convex lip takes some rock back so a
-##     tier's top reads as a rounded grassy lip, then EASE. Defaults: fully rock from 55
-##     degrees (a tier face, whose shading normal is about 70 degrees), none below 38 (a 30
-##     degree hill keeps its ground except where the noise frays the band).
+##     tier's top reads as a rounded grassy lip, then EASE. Defaults: fully rock from 58
+##     degrees (a tier face, whose shading normal is about 63 degrees), none below 44 (a
+##     raised hill's 35 to 47 degree flanks keep their ground and plants, with a rare outcrop
+##     where the noise frays the band).
 ##   - scree: concave curvature times steepness nearby (the foot of a steep face), edge
 ##     noise, EASE, and never where the cliff already is: (1 - cliff) * scree.
 ## The shader gives the cliff share to the biome's cliff_surface and the scree share to its
@@ -48,9 +49,13 @@ extends RefCounted
 ## they cover walkable ground, and a face under them stays rock unless it is painted with a
 ## cliff-role surface.
 
-## Cliff slope tail, degrees from horizontal (terrain-paint slope start / end).
-const CLIFF_START_DEG := 38.0
-const CLIFF_END_DEG := 55.0
+## Cliff slope tail, degrees from horizontal (terrain-paint slope start / end). 44..58 since
+## P3-7: at 38..55 a hill raised with the Raise brush (35 to 47 degrees on its flanks) wore
+## rock patches and a ring of scree at its foot and lost its plants, a bare mound in a forest;
+## a tier face (63 degrees by its shading normals) is full rock under any edge noise either
+## way (test_tier_face_is_rock_at_the_default_spacing).
+const CLIFF_START_DEG := 44.0
+const CLIFF_END_DEG := 58.0
 ## Edge noise amplitude of the cliff tail (TP edge noise s).
 const CLIFF_EDGE_NOISE := 0.35
 ## Convex curvature (m) over which the lip rule takes rock back, and how much at most. The

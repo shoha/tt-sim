@@ -144,7 +144,7 @@ func test_a_small_rise_keeps_its_lip_in_proportion() -> void:
 func test_tier_face_is_steeper_than_the_full_rock_slope() -> void:
 	var tier_m := 1.524
 	var angle := _steepest(0.0, tier_m, HeightBrush.tier_span(tier_m))
-	assert_gt(angle, TerrainRules.CLIFF_END_DEG + 5.0, "a cliff face")
+	assert_gt(angle, TerrainRules.CLIFF_END_DEG + 3.0, "a cliff face")
 
 
 func test_diagonal_tier_faces_do_not_saw() -> void:
@@ -293,18 +293,19 @@ func test_tier_face_is_rock_at_the_default_spacing() -> void:
 	_tier(doc, HeightBrush.TIER, t, [Vector2.ZERO], 4.0)
 	assert_almost_eq(doc.sample_step().x, MapDocument.DEFAULT_SAMPLE_SPACING_M, 0.01)
 	# Across the face in several directions (on and off the grid axes): the shading normal
-	# (central differences, what the ground shader and TerrainRules read) is past the full
-	# rock slope, and the top and the ground beyond are flat.
+	# (central differences, what the ground shader and TerrainRules read) makes the face full
+	# rock even where the edge noise pulls hardest the other way (noise 0), and the top and
+	# the ground beyond are flat.
 	for degrees in [0.0, 22.5, 45.0, 60.0, 90.0]:
 		var direction := Vector2.from_angle(deg_to_rad(degrees))
-		var steepest := 0.0
+		var lowest_ny := 1.0
 		var r := 2.5
 		while r < 5.0:
 			var s := doc.world_to_sample(direction * r).round()
 			var normal := TerrainMeshBuilder.sample_normal(doc, int(s.x), int(s.y))
-			steepest = maxf(steepest, rad_to_deg(acos(clampf(normal.y, -1.0, 1.0))))
+			lowest_ny = minf(lowest_ny, normal.y)
 			r += 0.05
-		assert_gt(steepest, TerrainRules.CLIFF_END_DEG + 5.0, "face at %s deg" % degrees)
+		assert_gt(TerrainRules.cliff_from(lowest_ny, 0.0, 0.0), 0.999, "face at %s deg" % degrees)
 	var centre := doc.world_to_sample(Vector2(0.5, 0.5)).round()
 	var top := TerrainMeshBuilder.sample_normal(doc, int(centre.x), int(centre.y))
 	assert_almost_eq(top.y, 1.0, EPSILON, "a flat top")

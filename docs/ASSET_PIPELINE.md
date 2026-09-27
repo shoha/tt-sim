@@ -426,6 +426,10 @@ Rules both sides rely on:
   the scatter should deliver (what treecube's `audit_biome.py` measures against), never
   the compensated values treecube writes into Geoscatter presets (`spacing_request`,
   yields, `slope_setting`). tt-sim's generator is its own and calibrates to targets.
+  One deliberate exception (P3-7): in game every `slope_max_deg` is read 10 degrees
+  higher (`ScatterPlan.SLOPE_ALLOWANCE_DEG`), because tt-sim's automatic rock rule already
+  clears steep ground and the Blender-tuned limits stripped trees off gentle raised hills.
+  Producers keep writing the true angle.
 - **Asset id** = `<package id>/<object>`, i.e. `<biome>_<season>_s<seed>/<object>`;
   the package id is also `biomes[].id`. An id is never reused for a different
   asset. Saved levels reference ids; a level whose id no longer resolves loads without

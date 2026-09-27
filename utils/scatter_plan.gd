@@ -45,6 +45,14 @@ const CLUMP_SATURATION := 3.0
 ## Measured 2026-09-26 with the calibration test: without it, dense ground cover delivered
 ## 1.04x (x = 1) to 1.15x (x = 2.5) its target, where x is the mean overlap count.
 const ADDITIVE_REGULARITY_GAIN := 0.12
+## Degrees added to every species' slope_max_deg (P3-7). The palette's limits are
+## Geoscatter's (trees 35, shrubs 40, ground cover 50, each fading out over 10 more), made
+## for Blender terrains with no rock rule; ScatterGenerator only runs on in-game documents,
+## where TerrainRules already turns steep ground to rock and ScatterGround keeps plants off
+## it. On top of that the raw limits stripped the trees and shrubs off a hill raised with the
+## Raise brush (35 to 47 degree flanks), leaving a bare mound in a forest. With 10 more,
+## trees stand to 45 degrees and thin out by 55, and the rock rule (44..58) takes over.
+const SLOPE_ALLOWANCE_DEG := 10.0
 ## A spaced random species keeps this share of its own spacing clear of every larger
 ## class's spaced instances (a bush 1 m from a tree trunk, a log 0.4 m from a boulder), so
 ## smaller classes respect larger ones and a boulder never swallows a trunk.
@@ -265,7 +273,7 @@ static func _plan_species(species: Array[Dictionary], i: int, index_of: Dictiona
 		keep *= 1.0 - _relation_covered(relation) * relation.influence
 	if clumped:
 		keep *= _clump_coverage(clump, parent_keep)
-	var slope_max: float = rule.slope_max_deg
+	var slope_max: float = minf(rule.slope_max_deg + SLOPE_ALLOWANCE_DEG, 90.0)
 	var scale_floor: Variant = rule.scale_floor
 	var response: Dictionary = DENSITY_RESPONSE.get(rule.size_class, {})
 	return {
