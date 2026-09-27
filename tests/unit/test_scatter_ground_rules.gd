@@ -2,8 +2,8 @@ extends GutTest
 
 ## ScatterGenerator.document_fields and the ground's automatic dressing (TerrainRules):
 ## plants thin on automatic rock and under painted built surfaces, a hand-painted ground
-## surface yields to the rock on a face (P3-6), and rock species gather on the scree at a
-## cliff's foot.
+## surface yields to the rock on a face (P3-6), rock species gather on the scree at a
+## cliff's foot, and trees keep back from tier faces (P3-7).
 
 const FOREST := "temperate_forest_summer_s1"
 const DENSITY := 128
@@ -94,3 +94,42 @@ func test_rocks_gather_on_the_scree() -> void:
 	assert_eq(wrong, 0, "where rocks gather the other plants thin, never the reverse")
 	var far: float = fields.rock_density_at.call(Vector2(-10.0, 0.0))
 	assert_almost_eq(far, base, 1e-6, "no boost away from cliffs")
+
+
+func test_trees_keep_back_from_tier_faces_and_ground_cover_does_not() -> void:
+	# P3-7: terraces must read under a forest, so trees (and shrubs, less) keep back from a
+	# face and its lip; ground cover still grows up to the rock.
+	var doc := _doc()
+	var fields := ScatterGenerator.document_fields(doc, FOREST, Rect2(), PackedStringArray())
+	var at: Callable = fields.species_density_at
+	var base := DENSITY / 255.0
+	var face_x := _face_x(doc)
+	for side in [-1.0, 1.0]:
+		var lip := Vector2(face_x + side * 1.0, 0.0)
+		var clear := Vector2(face_x + side * 5.0, 0.0)
+		assert_lt(at.call(lip, ScatterGround.ROLE_TREE), 0.01, "no tree a metre from the face")
+		# (Below the face the scree thins it a little, as before P3-7.)
+		assert_gt(at.call(lip, ScatterGround.ROLE_COVER), base * 0.9, "cover stays")
+		assert_almost_eq(at.call(clear, ScatterGround.ROLE_TREE), base, 1e-6, "trees 5 m out")
+		assert_almost_eq(at.call(clear, ScatterGround.ROLE_SHRUB), base, 1e-6, "shrubs 5 m out")
+	var three := Vector2(face_x - 3.0, 0.0)
+	var two := Vector2(face_x - 2.0, 0.0)
+	assert_gt(at.call(three, ScatterGround.ROLE_TREE), at.call(two, ScatterGround.ROLE_TREE))
+	assert_gt(
+		at.call(two, ScatterGround.ROLE_SHRUB),
+		at.call(two, ScatterGround.ROLE_TREE),
+		"shrubs come closer than trees"
+	)
+	assert_eq(fields.density_at.call(two), at.call(two, ScatterGround.ROLE_COVER))
+	assert_eq(
+		ScatterGround.role_of({"kind": "tree", "size_class": "large"}), ScatterGround.ROLE_TREE
+	)
+	assert_eq(
+		ScatterGround.role_of({"kind": "rock", "size_class": "medium"}), ScatterGround.ROLE_ROCK
+	)
+	assert_eq(
+		ScatterGround.role_of({"kind": "bush", "size_class": "medium"}), ScatterGround.ROLE_SHRUB
+	)
+	assert_eq(
+		ScatterGround.role_of({"kind": "grass", "size_class": "ground"}), ScatterGround.ROLE_COVER
+	)

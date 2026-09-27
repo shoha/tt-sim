@@ -33,7 +33,7 @@ static func run(root: Node, step: Dictionary) -> String:
 			var w := doc.surface_weight(sample, s)
 			if w > 0:
 				weights.append("%s %d" % [doc.surface_ids[s], w])
-		var g: Vector3 = sampler.call(p)
+		var g: Vector3 = sampler.call(p, ScatterGround.ROLE_COVER)
 		var near := {}
 		var closest := INF
 		for asset_id in rows:
