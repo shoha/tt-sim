@@ -50,6 +50,21 @@ const MAX_PATH_LENGTH := 256
 ## section 9), and the largest one kept.
 const DEFAULT_ACCENT_SCALE_M := 6.0
 const MAX_ACCENT_SCALE_M := 200.0
+## A biome's water surfaces when the palette names none (contract section 9, optional
+## water_bed_surface and shore_surface, P4-3), by biome key: [bed, shore]. Judged at the game
+## camera on carved rivers; unknown biomes take DEFAULT_WATER_SURFACES. A default the
+## palette lacks as a ground surface is dropped ("": the ground stays).
+const WATER_SURFACE_DEFAULTS := {
+	"alpine_meadow": ["riverbed", "gravel"],
+	"birch_woodland": ["riverbed", "mud"],
+	"boreal_taiga": ["riverbed", "mud"],
+	"grassland_meadow": ["riverbed", "mud"],
+	"rocky_badlands": ["gravel_sandstone", "gravel_sandstone"],
+	"savanna": ["riverbed", "sand"],
+	"temperate_forest": ["riverbed", "mud"],
+	"wetland_riparian": ["riverbed", "mud"],
+}
+const DEFAULT_WATER_SURFACES := ["riverbed", "mud"]
 ## At most this many individual warnings are printed per palette load; the rest are
 ## summarised in one line so a badly broken file cannot flood the log.
 const MAX_WARNINGS_PRINTED := 20
@@ -82,13 +97,15 @@ static func palette_version(root: String = DEFAULT_ROOT) -> String:
 
 
 ## Every valid biome, in file order. Each is {id, biome, season, seed, name, climate,
-## thumbnail, ground_surface, cliff_surface, scree_surface, ground_accents, path_surfaces,
-## species}; paths are relative to the palette root. cliff_surface names a role-cliff
-## surface or is "" when the palette has none; scree_surface names a role-ground surface or
-## is "" (keep the ground). ground_accents is an Array of {surface, coverage, scale_m} in
-## priority order (role-ground surfaces other than the biome's ground; coverage 0..1,
-## scale_m > 0), path_surfaces an Array[String] of role-built surfaces; both [] when the
-## palette lists none (a palette from before 2026-09-27).
+## thumbnail, ground_surface, cliff_surface, scree_surface, water_bed_surface,
+## shore_surface, ground_accents, path_surfaces, species}; paths are relative to the palette
+## root. cliff_surface names a role-cliff surface or is "" when the palette has none;
+## scree_surface names a role-ground surface or is "" (keep the ground);
+## water_bed_surface and shore_surface name role-ground surfaces (the palette's, else
+## WATER_SURFACE_DEFAULTS) or are "" (keep the ground). ground_accents is an Array of
+## {surface, coverage, scale_m} in priority order (role-ground surfaces other than the
+## biome's ground; coverage 0..1, scale_m > 0), path_surfaces an Array[String] of role-built
+## surfaces; both [] when the palette lists none (a palette from before 2026-09-27).
 static func biomes(root: String = DEFAULT_ROOT) -> Array[Dictionary]:
 	var copies: Array[Dictionary] = []
 	for biome in get_palette(root)["biomes"]:
@@ -420,6 +437,36 @@ static func _scree_surface_of(
 	return ""
 
 
+## A biome's water bed (`key` "water_bed_surface", index 0 of the defaults) or shore surface
+## ("shore_surface", index 1): the named surface when it is ground; absent, the default for
+## the biome key (WATER_SURFACE_DEFAULTS) when the palette has it as ground, else ""; named
+## but absent or not ground, a warning and the default.
+static func _water_surface_of(
+	entry: Dictionary,
+	id: String,
+	key: String,
+	index: int,
+	surfaces: Dictionary,
+	warnings: Array[String]
+) -> String:
+	var defaults: Array = WATER_SURFACE_DEFAULTS.get(
+		_text_or(entry.get("biome"), MAX_TEXT_LENGTH, ""), DEFAULT_WATER_SURFACES
+	)
+	var fallback := String(defaults[index])
+	if not surfaces.has(fallback) or surfaces[fallback]["role"] != "ground":
+		fallback = ""
+	var raw: Variant = entry.get(key)
+	if raw == null:
+		return fallback
+	var named := _text_or(raw, MAX_TEXT_LENGTH, "")
+	if surfaces.has(named) and surfaces[named]["role"] == "ground":
+		return named
+	warnings.append(
+		"biome '%s': %s '%s' is not a ground surface, using '%s'" % [id, key, _label(raw), fallback]
+	)
+	return fallback
+
+
 ## A biome's ground_accents (contract section 9, "Accents and path surfaces degrade, never
 ## fail"): absent is [] silently; not an array warns and is []; an entry that is not an
 ## object, has no numeric coverage, or names a surface that is absent, not role ground or
@@ -562,6 +609,10 @@ static func _validate_biomes(
 					"ground_surface": ground,
 					"cliff_surface": _cliff_surface_of(entry, id, surfaces, warnings),
 					"scree_surface": _scree_surface_of(entry, id, surfaces, warnings),
+					"water_bed_surface":
+					_water_surface_of(entry, id, "water_bed_surface", 0, surfaces, warnings),
+					"shore_surface":
+					_water_surface_of(entry, id, "shore_surface", 1, surfaces, warnings),
 					"ground_accents": _ground_accents_of(entry, id, ground, surfaces, warnings),
 					"path_surfaces": _path_surfaces_of(entry, id, surfaces, warnings),
 					"species": species_rules,
