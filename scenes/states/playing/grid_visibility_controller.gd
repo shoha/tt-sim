@@ -120,6 +120,8 @@ func configure_grid(level_data: LevelData) -> void:
 		# GLB maps are authored with floors at Y≈0; the AABB bottom includes
 		# mesh undersides/foundations so we default to Y=0 instead.
 		# Tolerance covers slight elevation (rugs, ramps) but excludes tokens.
+		# A map with authored terrain ignores this band: the grid follows its ground
+		# (GridOverlay.set_ground, from MapSourceLoader.install).
 		var floor_y := 0.0
 		var tolerance: float = maxf(level_data.grid_cell_size * 0.4, 0.5)
 		_game_map._grid_overlay.set_floor_level(floor_y, tolerance)

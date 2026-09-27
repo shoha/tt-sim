@@ -105,6 +105,16 @@ var grid_snap_enabled: bool = false
 var grid_cell_size: float = 1.524
 var grid_origin: Vector2 = Vector2.ZERO
 
+## Optional func(point: Vector3) -> Vector3: the ground under `point`'s XZ, or Vector3.INF.
+## When set, the drag target's height is re-resolved on it after the grid snap (see
+## resolve_target_ground), so a token snapped across a tier edge rides on the tier its cell
+## is on, not on the height the cursor ray hit. GameMap sets it only for maps with authored
+## terrain; Blender maps leave it empty and keep the cursor-hit height.
+var ground_resolver: Callable = Callable()
+## The drag target on the ground (after snap and ground_resolver, before the token's height
+## offsets). The drag ruler reads it for the elevation change.
+var _target_ground_position: Vector3 = Vector3.ZERO
+
 
 ## Called when a draggable object receives mouse down.
 ## Starts a pending drag that only activates after the mouse moves past the threshold.
@@ -213,12 +223,16 @@ func stop_drag() -> void:
 
 	# Land on the exact (possibly grid-snapped) target rather than wherever the
 	# frame-rate-dependent lerp in _process() happened to leave the body when the
-	# button came up. Y is left alone: DraggableToken's settle tween owns the descent.
+	# button came up. Y is left alone: DraggableToken's settle tween owns the descent. With a
+	# ground resolver (authored terrain) a body still rising toward a higher tier is lifted to
+	# the target height first, so it never settles from inside the tier's cliff.
 	if _has_target_position and _currentDraggingObject and _currentDraggingObject.objectBody:
 		var body: Node3D = _currentDraggingObject.objectBody
 		var landed := body.global_position
 		landed.x = _target_drag_position.x
 		landed.z = _target_drag_position.z
+		if ground_resolver.is_valid():
+			landed.y = maxf(landed.y, _target_drag_position.y)
 		body.global_position = landed
 
 	edge_pan_direction = Vector2.ZERO
@@ -257,14 +271,39 @@ func _update_target_position(mouse_position: Vector2) -> void:
 	if not mousePosition3D:
 		return
 
-	# Grid snap: snap XZ to cell centers unless Shift is held (free move override)
-	if grid_snap_enabled and not Input.is_key_pressed(KEY_SHIFT):
-		mousePosition3D = ScaleUtils.snap_to_grid(mousePosition3D, grid_cell_size, grid_origin)
+	# Grid snap: snap XZ to cell centers unless Shift is held (free move override); then the
+	# ground height at the snapped cell, when the map resolves it.
+	var snap := grid_snap_enabled and not Input.is_key_pressed(KEY_SHIFT)
+	mousePosition3D = resolve_target_ground(
+		mousePosition3D, snap, grid_cell_size, grid_origin, ground_resolver
+	)
+	_target_ground_position = mousePosition3D
 
 	mousePosition3D.y += _currentDraggingObject.get_height_offset()
 	mousePosition3D.y += _drag_height_offset
 	_target_drag_position = mousePosition3D
 	_has_target_position = true
+
+
+## The ground point a drag targets for cursor hit `hit`: snapped to the grid cell centre on
+## XZ when `snap` (ScaleUtils.snap_to_grid keeps the hit's Y), then, when `resolver` is valid
+## and finds ground there (not Vector3.INF), at that ground's height. A resolver miss (snapped
+## off the terrain's edge) keeps the hit height, as a browser drop does. Pure.
+static func resolve_target_ground(
+	hit: Vector3, snap: bool, cell_size: float, origin: Vector2, resolver: Callable
+) -> Vector3:
+	var point := ScaleUtils.snap_to_grid(hit, cell_size, origin) if snap else hit
+	if resolver.is_valid():
+		var ground: Vector3 = resolver.call(point)
+		if ground != Vector3.INF:
+			point.y = ground.y
+	return point
+
+
+## The current drag target on the ground (see _target_ground_position); valid while
+## _has_target_position.
+func get_target_ground_position() -> Vector3:
+	return _target_ground_position
 
 
 ## Compute edge pan direction based on mouse proximity to screen edges.

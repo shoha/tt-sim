@@ -138,6 +138,9 @@ var _skirt_rect: Rect2i = Rect2i()
 ## cell -> Vector2(lowest, highest) height of the chunk (grown only by in-place updates,
 ## exact after a rebuild).
 var _chunk_heights: Dictionary = {}
+## get_height_texture(), and whether height edits made it stale since settle_heights().
+var _height_texture: ImageTexture = null
+var _height_texture_stale: bool = false
 
 
 func _ready() -> void:
@@ -307,6 +310,7 @@ func build(
 		rebuild_chunks(TerrainMeshBuilder.chunk_cells(doc))
 	_build_collision()
 	_build_skirt()
+	_refresh_height_texture()
 
 
 ## The shared ground material.
@@ -751,6 +755,7 @@ func _rebuild_chunk(cell: Vector2i) -> void:
 ## catch up when the stroke settles, with the plants.
 func queue_heights(sample_rect: Rect2i) -> void:
 	var grid := Rect2i(0, 0, document.samples_x(), document.samples_z())
+	_height_texture_stale = true
 	var step := document.sample_step()
 	var reach := TerrainRules.radius_samples(minf(step.x, step.y)) + 1
 	var fields_rect := sample_rect.grow(reach).intersection(grid)
@@ -829,8 +834,10 @@ func has_unsettled_chunks() -> bool:
 ## It also brings the rule fields up to date for everything queued since the last call (one
 ## TerrainRules.sample_fields pass over the edit grown by CURVATURE_RADIUS_M) and queues the
 ## rebuild of every chunk they changed, which carries them in UV2; vertex copies kept for
-## in-place edits get the new fields too.
+## in-place edits get the new fields too, and the height texture (get_height_texture()).
 func settle_heights() -> void:
+	if _height_texture_stale:
+		_refresh_height_texture()
 	if _fields_dirty.has_area():
 		var started := Time.get_ticks_usec()
 		var columns := document.samples_x()
@@ -885,6 +892,25 @@ func world_height_range() -> Vector2:
 	var low := global_transform * Vector3(0.0, span.x, 0.0)
 	var high := global_transform * Vector3(0.0, span.y, 0.0)
 	return Vector2(minf(low.y, high.y), maxf(low.y, high.y))
+
+
+## The heights for the grid overlay (TerrainMeshBuilder.height_image, GridOverlay.set_ground),
+## updated in place by build() and settle_heights() (stroke end, cancel, undo, redo).
+func get_height_texture() -> ImageTexture:
+	if _height_texture == null:
+		_refresh_height_texture()
+	return _height_texture
+
+
+func _refresh_height_texture() -> void:
+	_height_texture_stale = false
+	if document == null:
+		return
+	var image := TerrainMeshBuilder.height_image(document)
+	if _height_texture == null or Vector2i(_height_texture.get_size()) != image.get_size():
+		_height_texture = ImageTexture.create_from_image(image)
+	else:
+		_height_texture.update(image)
 
 
 func _update_chunk_in_place(cell: Vector2i, part: Rect2i) -> void:
