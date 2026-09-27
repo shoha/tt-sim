@@ -88,6 +88,17 @@ func _assert_same_document(actual: MapDocument, expected: MapDocument) -> void:
 	assert_true(actual.biome_density == expected.biome_density, "biome density")
 	assert_eq(actual.surface_ids, expected.surface_ids)
 	assert_true(actual.surface_weights == expected.surface_weights, "surface weights")
+	assert_eq(actual.water_bodies.size(), expected.water_bodies.size(), "water bodies")
+	for i in mini(actual.water_bodies.size(), expected.water_bodies.size()):
+		var got := actual.water_bodies[i]
+		var want := expected.water_bodies[i]
+		assert_eq([got.id, got.kind, got.depth], [want.id, want.kind, want.depth])
+		assert_eq([got.level_m, got.speed], [want.level_m, want.speed], "exact numbers")
+		assert_true(got.points == want.points, "river points are bit-exact")
+		assert_true(got.half_widths == want.half_widths, "half-widths are bit-exact")
+	assert_true(actual.pond_mask == expected.pond_mask, "pond mask")
+	assert_eq(actual.water_flow_size, expected.water_flow_size)
+	assert_true(actual.water_flow == expected.water_flow, "flow map")
 
 
 # --- round trips ------------------------------------------------------------------
@@ -117,6 +128,8 @@ func test_flat_document_round_trips_without_optional_entries() -> void:
 	var entries := _entries(doc)
 	assert_false(entries.has("erase.png"))
 	assert_false(entries.has("authoring/biomes.png"))
+	for water_entry in ["splines.json", "ponds.png", "water_flow.png"]:
+		assert_false(entries.has(water_entry), "no water, no " + water_entry)
 	var result := MapDocumentIO.parse(entries)
 	assert_eq(result["warnings"], PackedStringArray())
 	_assert_same_document(result["document"], doc)
@@ -133,10 +146,12 @@ func test_write_replaces_an_existing_file() -> void:
 	assert_eq(doc.size_cells, Vector2i(30, 30))
 
 
+## This is also how an older build treats the water entries (splines.json, ponds.png,
+## water_flow.png): only KNOWN_ENTRIES are read, so a map with water loads without it.
 func test_unknown_entries_in_a_real_archive_are_ignored() -> void:
 	var path := DIR.path_join("unknown.ttmap")
 	var extra := {
-		"splines.json": "[]".to_utf8_buffer(),
+		"roads.json": "[]".to_utf8_buffer(),
 		"future.png": Fixtures.mask_png(Vector2i(4, 4), Image.FORMAT_RGBA8),
 	}
 	_write_zip(path, Fixtures.minimal_entries(extra))
@@ -260,5 +275,5 @@ func test_unreadable_archives() -> void:
 
 
 func test_central_directory_parser_rejects_truncation() -> void:
-	assert_null(MapDocumentIO._parse_central_directory(PackedByteArray([0x50, 0x4b]), 1))
-	assert_eq(MapDocumentIO._parse_central_directory(PackedByteArray(), 0), {})
+	assert_null(ZipEntrySizes.parse_central_directory(PackedByteArray([0x50, 0x4b]), 1))
+	assert_eq(ZipEntrySizes.parse_central_directory(PackedByteArray(), 0), {})
