@@ -91,6 +91,32 @@ func test_dwell_builds_strength_up_to_a_cap() -> void:
 	assert_almost_eq(BrushTool.dwell_gain(99.0), BrushTool.dwell_gain(BrushTool.DWELL_MAX), 1e-6)
 
 
+func test_thin_ring_is_the_occlusion_fade_focus() -> void:
+	var brush := BrushTool.new()
+	add_child_autofree(brush)
+	var fade := OcclusionFadeManager.new()
+	add_child_autofree(fade)
+	brush.occlusion_fade = fade
+	brush.set_mode(BrushTool.Mode.THIN)
+	brush.activate()
+	brush._hit = Vector3(3.0, 0.5, -2.0)
+	brush._update_fade()
+	var radius := BrushTool.session_radius * BrushTool.FADE_RADIUS_FACTOR
+	assert_eq(fade._focus, Vector4(3.0, 0.5, -2.0, radius), "ring centre, widened radius")
+	brush.set_mode(BIOME)
+	brush._update_fade()
+	assert_eq(fade._focus, Vector4.ZERO, "only Thin / Clear fades the canopy")
+	brush.set_mode(BrushTool.Mode.THIN)
+	brush._update_fade()
+	brush._hit = Vector3.INF
+	brush._update_fade()
+	assert_eq(fade._focus, Vector4.ZERO, "no ground under the pointer")
+	brush._hit = Vector3.ZERO
+	brush._update_fade()
+	brush.deactivate()
+	assert_eq(fade._focus, Vector4.ZERO, "putting the brush down clears it")
+
+
 func test_radius_steps_are_multiplicative_and_clamped() -> void:
 	var grown := BrushTool.stepped_radius(4.0, 1)
 	assert_almost_eq(grown, 4.0 * BrushTool.RADIUS_STEP, 1e-5)
