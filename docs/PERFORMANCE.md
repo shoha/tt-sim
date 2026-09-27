@@ -828,6 +828,91 @@ frames against deciduous's 29. **Verdict:** between the two Blender maps; accept
 matters later, a larger per-frame budget while the loading screen is up would cut roughly
 0.3-0.5 s (not tried: it trades loading-screen smoothness and needs an A/B across runs).
 
+## Sculpting (2026-09-26, P3-3a)
+
+The height pipeline behind the Sculpt tool (no UI yet; see `docs/ARCHITECTURE.md`
+"Authored terrain" and "Authoring Flow"). **How:** the render-job harness
+(`tools/render_jobs/jobs/sculpt_pipeline.json`, probe `probes/sculpt.gd`), a real
+1920x1080 window with a 1920x1080 viewport, vsync off, debug build, strokes driven through
+`AuthoringEditor` over real frames on a new 200 ft temperate forest map (seed 1234, its
+starting cover: 8.5k rows, the densest 10 m cell 424). The GPU was not checked for other
+load, so absolute frame times are indicative; every comparison below was made in one run.
+Frame times are CPU wall clock between frames; the per-part numbers are
+`AuthoringEditor.last_*_usec`.
+
+**Terrain: in place, not rebuilt.** 9 chunks under a 12 m brush, every sample nudged,
+alternating one per frame (12 each, one run):
+
+| Update | Call, median / p95 | Frame it lands in, median |
+| --- | --- | --- |
+| `rebuild_chunks` (new ArrayMesh per chunk) | 7.10 / 7.33 ms | 13.89 ms |
+| In place (`queue_heights` + `process_heights`, `surface_update_vertex_region` of the edited rows) | 5.03 / 5.11 ms | 11.74 ms |
+
+A 12 m brush covers whole chunks, so that is the smallest gain; the in-place cost follows
+the edited samples (about 0.5 us each, normals and tangent included), a rebuild the chunks
+touched (0.8 ms each). Per-frame terrain part during strokes, median: 3 m flatten 0.40 ms,
+4 m raise 0.63 ms (rebuild: about 3.2 ms for its 4 chunks), 5 m 0.91 ms, 6 m smooth 1.20
+ms, 8 m 2.33 ms, 12 m 4.26 ms (the 4 ms budget; the rest carries to the next frame). A 5 m
+stroke on the map edge costs 3.95 ms instead of 0.91: the skirt refresh rebuilds the whole
+ring every frame (about 3 ms, `build_skirt_arrays`); an in-place ring update would remove
+it if edge sculpting turns out common.
+
+**Collision: not per frame.** In the running game (not headless, where the same update is
+0.4 ms):
+
+| What | Median |
+| --- | --- |
+| `update_collision()`: the whole 245 x 245 `HeightMapShape3D` | 2.30 ms |
+| One 41 x 41 chunk-sized shape on its own body (probe) | 0.07 ms |
+| Per-chunk shapes, 64 in one body: the chunks under a 4 m / 8 m / 12 m brush | 1.86 / 3.89 / 3.89 ms |
+| Per-chunk shapes, one body per chunk: same | 1.85 / 3.78 / 3.79 ms |
+| `TerrainMeshBuilder.raycast` (CPU walk of the triangles), camera rays | 0.02 ms; 0.08-0.23 ms per stroke frame |
+
+Per-chunk collision was rejected: an edited chunk cost about 0.45 ms whichever way the
+shapes were grouped (six times the lone test shape; not explained further). The brush's
+ray marches the document instead and agrees with the physics ray (200 random rays: same
+point within 5 mm, same facet normal); the collision is rebuilt once when the stroke ends,
+inside `end_stroke` (2.9-3.8 ms for 3-8 m strokes, 9.5 ms for 12 m, which also finishes
+the leftover terrain and snapping work).
+
+**Plants and props on the moving ground.** Snapping the densest cell (424 rows, every row
+moved: Y, and the arc turn of normal-aligned species) takes 2.1 ms, about 5 us per row
+with the transform upload (`move_rows`, no rebuild). Per stroke frame, median / p95: 4 m
+1.22 / 1.68 ms (103 rows), 8 m 1.33 / 1.41 ms, 12 m 2.73 / 3.65 ms (352 rows; the 2.5 ms
+budget, at least one cell per frame).
+
+**Strokes.** Frame time median / p95 / worst (n), and the whole `flush()` median:
+
+| Stroke | Frames | flush |
+| --- | --- | --- |
+| Raise, 4 m brush at 6 m/s, 43 m serpentine | 3.29 / 3.81 / 7.23 ms (2592) | 1.88 ms |
+| Raise, 12 m brush at 4 m/s, 44 m | 11.60 / 12.70 / 15.88 ms (921) | 7.13 ms |
+| Raise, 8 m, a 7 m hill (a capture fell mid-stroke) | 6.45 / 6.73 ms (720) | 3.73 ms |
+| Lower, 5 m, a 3.5 m hollow | 3.95 / 5.51 / 7.67 ms (518) | 1.46 ms |
+| Smooth, 6 m | 5.00 / 5.29 / 5.77 ms (1224) | 2.04 ms |
+| Flatten, 3 m | 4.25 / 5.53 / 5.94 ms (623) | 0.78 ms |
+| Tier stub, 5 m | 4.95 / 5.33 / 6.84 ms (605) | 2.56 ms |
+| Raise, 5 m on the map edge (skirt refresh) | 7.63 / 8.01 / 9.09 ms (392) | 5.72 ms |
+
+**Worst stroke frame: 15.88 ms** (12 m brush over the forest): dab 2.79, terrain 4.01 (16
+chunks), snap 2.82 (350 rows), ray 0.14 ms, collision 0; the rest is the frame itself
+(the forest renders in about 2-4 ms here). With the collision in the frame the same stroke
+ran 13.4 ms median, 14.8 ms p95 (whole map rebuilt every frame, 2.4 ms) and 15.5 ms
+median, 18.8 ms worst (per-chunk shapes, 4.3 ms). A capture during
+a stroke costs about 1 s (the PNG save) and lands in that stroke's worst frame, so the
+job measures strokes without one.
+
+**Regeneration after a stroke** (reach + 2 steps, on workers): every stroke grew exactly
+the instances it added and shrank exactly those it removed (the 7 m hill: 10 removed by
+the slope rule, 0 regrown; smooth: 6 added; the tier stub: 31 removed), so no unchanged
+plant pops. Tail frames median 2-5 ms, worst 20-27 ms for 3-8 m strokes and 38.7 ms after
+the 12 m one (its 16 regenerated cells landing: the existing per-cell apply cost, see
+"Authored scatter rebuilds").
+
+**Camera.** Raising the ground top by 8 m used to move the picture 130 px at the home zoom
+(69 px at zoom 26) because the near-plane guard scaled the camera's base offset, which is
+not its view axis; it now moves back along the view axis: 0 px.
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one

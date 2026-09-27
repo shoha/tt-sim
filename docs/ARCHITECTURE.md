@@ -416,6 +416,47 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   Placed props are bedded with `DragPlaceController.raycast_terrain_down`, oriented like
   generated ones (upright or on the ground normal, then yaw), and scaled within the species'
   spread widened to at least +-25 %.
+- **Height strokes (sculpting, P3-3a; the Sculpt tool is P3-5):** `begin_height_stroke(op,
+  target_y)` with a `HeightBrush` operation (raise, lower, smooth, flatten, tier),
+  `stroke_dab()` (or `height_dab()`), `flush()` once per frame, `end_stroke()` /
+  `cancel_stroke()`; `can_sculpt()` is false on a dressed GLB (its ground is the GLB's).
+  `HeightBrush` holds the pure rules: raise / lower add `RAISE_M_PER_S` x falloff x
+  exposure; smooth, flatten and tier approach their goal by `MaskBrush.amount()` (smooth
+  toward a box mean over a window 15 % of the radius, `box_mean`; tier toward a target
+  height with a flat-topped steep profile, `tier_weight`, a stub P3-5 turns into the cliff
+  profile); results clamp to +-`MapDocument.MAX_ABS_HEIGHT_M`. `HeightStroke` mirrors
+  `MaskStroke`: a copy of the heights at the start (`start_heights`), per-frame
+  `take_pending()` rectangles, 40 x 40 blocks diffed as ZSTD float bytes by `finish()`,
+  `revert()`, `apply_diff()`. Per frame the editor sends the changed samples to
+  `AuthoredTerrain.queue_heights()` / `process_heights()` within `TERRAIN_BUDGET_USEC`
+  (4 ms) and snaps the plants and props standing on them within `SNAP_BUDGET_USEC`
+  (2.5 ms): `GroundSnap.snap_rows()` (Y from the triangle height, normal-aligned species
+  turned by the arc from the old ground normal to the new, keeping yaw and lean) and
+  `GroundSnap.rebed_props()` (a prop whose ground changed takes the new Y, and a
+  normal-aligned one the new normal with its own yaw), both relative to the rows and
+  heights at the stroke's start, applied with `AuthoredScatter.move_rows()`; a frame's
+  leftover work carries over through `tick()` / `step_height_work()` (the controller
+  calls it every frame, so it drains with the brush put away). The collision is not
+  updated mid-stroke; `raycast_ground(origin, direction)` (and `BrushTool._resolve_hit`
+  while `is_sculpting()`) marches the document's triangles instead
+  (`TerrainMeshBuilder.raycast`, 0.02-0.3 ms). `end_stroke()` finishes the work, updates
+  the collision once, queues the settling chunk rebuilds, asks the scatter to regenerate
+  the stroke's area grown by one more sample step than `request_region()` adds (normals
+  read a sample either side; reach + 2 steps in all), so slope rules add and remove plants
+  with the grow / shrink animation, and records one history entry: the heights diff plus
+  the props rows the stroke moved. Generated rows are not stored: undo and redo snap them
+  to the restored ground at once and regenerate the area, and generation is a pure
+  function of the document. `ground_height_at(point)` gives the Flatten / Tier target.
+- **Bounds on relief:** the camera's near plane stays above the terrain's top
+  (`CameraController.set_ground_top`, set by `MapSourceLoader.install` for any map with an
+  `AuthoredTerrain`, play time included, and every frame in authoring; the camera moves back
+  along its own view axis, which leaves the picture unchanged; a Blender map keeps 0 and the
+  old behaviour). Authoring's zoom fit, pan bounds and shadow bounds span the lowest ground
+  to the highest plus `CONTENT_HEIGHT_M` (`fit_size_for_extent(..., floor_m)`,
+  `far_ground_depth(..., ground_y)`); once a sculpt edit (or its undo) has settled, the
+  controller refits them and resizes the reflection probe when the range changed. A map
+  loaded with relief needs nothing extra: its chunks are built before the probe and camera
+  bounds are measured.
 - **Canopy fade:** while Thin / Clear is the tool, `BrushTool` makes its ring the
   `OcclusionFadeManager` focus (`set_focus(centre, 1.35 x radius)`, first entry in the token
   texture, cleared for other tools and on deactivate), so tree canopies between the camera and
@@ -951,9 +992,29 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   GLB map bodies) with a `HeightMapShape3D` of the full grid, the body scaled by the real
   sample step on X and Z so every sample lands on its document position (the shape is
   centred like the document). Jolt triangulates each quad on the same diagonal as the mesh.
-- **Sculpting (phase 3):** edit `doc.heights`, then `rebuild_chunks(cells)` (cells within
-  one sample of the edit, for normals) and `update_collision()`; an edit on the map edge
-  should also rebuild the skirt (`build()` does, or `_build_skirt()`).
+- **Sculpting (phase 3, P3-3a):** edit `doc.heights` in place (a `HeightStroke`, see
+  "Authoring Flow"), then `queue_heights(sample_rect)` and `process_heights(budget_usec)`
+  each frame. Live, a chunk is updated in place: `TerrainMeshBuilder.chunk_vertex_mirror()`
+  keeps a CPU copy of its vertex stream (positions, then octahedral normal and tangent
+  pairs: the uncompressed Godot 4.7 layout, bit-identical to the engine's own encoding, a
+  test compares them against `RenderingServer.mesh_get_surface`) and only the edited rows
+  (the edit grown by one sample, whose normals read it) are rewritten and uploaded with
+  `ArrayMesh.surface_update_vertex_region`; the mesh's `custom_aabb` is widened so culling
+  sees the new heights and a chunk that stops being flat starts casting shadows. An
+  in-place update cannot change the mesh's own AABB, which the bounds walks
+  (`compute_map_bounds`, camera bounds) read, so `settle_heights()` (stroke end, undo,
+  cancel) queues one rebuild of every edited chunk after the live work; the vertex copies
+  stay valid through it. `height_range()` / `world_height_range()` give the ground's
+  lowest and highest point from the chunks (never narrower than the truth mid-stroke).
+  An edit touching the map edge refreshes the skirt's geometry (`refresh_skirt()`, same
+  node and material, no duplicate per call). The collision is one `HeightMapShape3D` as
+  before and is not touched mid-stroke: `update_collision()` rebuilds the whole
+  heightfield (2.3 ms on a 200 ft map in the running game), which the editor does once
+  the stroke ends; mid-stroke the brush finds the ground it is shaping with
+  `TerrainMeshBuilder.raycast()`, a CPU walk of the same triangles (see "Authoring Flow").
+  Splitting the collision per chunk was measured and rejected: Jolt rebuilds an edited
+  chunk's heightfield for about 0.45 ms however the shapes are grouped, 1.9 ms per frame
+  for a 4 m brush and 3.8 ms for a 12 m one (`PERFORMANCE.md` "Sculpting").
 - **Shadows:** a flat chunk (height span <= `FLAT_CHUNK_M`) casts no shadow
   (`chunk_shadow_casting()`); it could only shadow itself, and that self-shadowing darkened
   flat ground about 10 % in steps along the cascade splits (a horizontal line across a
@@ -1048,8 +1109,18 @@ field into document rows: `generate(biome_id, species, density_at, height_at, no
 map_seed, cells, bounds)` returns palette asset id -> flat rows for the instances whose
 origin lies in the given 10 m chunk cells and inside the map. The fields are Callables so
 tests pass analytic ones; `document_fields(doc, biome_id)` builds them from a `MapDocument`
-(bilinear density for that biome's slot, bilinear heights, normals from central height
-differences) and `generate_for_document()` wires both together. `ScatterPlan`
+(bilinear density for that biome's slot; heights and normals on the terrain's own
+triangles, see below) and `generate_for_document()` wires both together.
+
+- **Triangle-matched ground (P3-3a):** `triangle_height()` interpolates over the triangle of
+  the quad a point is in, each quad split on the same diagonal as the chunk meshes and
+  Jolt's `HeightMapShape3D`, (a, a+1, a+cols) and (a+1, a+cols+1, a+cols), so a generated
+  instance stands exactly on the ground that is drawn and collided with; bilinear was off
+  by up to |h00 + h11 - h10 - h01| / 4 (0.38 m on a tier step). `triangle_normal()` mixes
+  that triangle's vertex normals (the central differences the mesh is lit with)
+  barycentrically: the shading normal, smooth across triangles, so slope rules and
+  normal-aligned species do not flicker facet by facet. On flat and planar ground both
+  equal the old bilinear values. `ScatterPlan`
 (`utils/scatter_plan.gd`) is the pure planning half: `build()` decides per species which
 candidate field it draws from and how dense that field must be (packing curve, keep
 models, clearance); the generator only evaluates candidates.
@@ -1127,9 +1198,25 @@ brush scheduler, so both build identical nodes.
   `<asset id made node-safe>_MultiMesh_c<x>_<z>`, always suffixed, built by
   `ScatterGlbUtils.build_chunk` (same meta, shadow and cull settings as GLB scatter).
   Instances are ordered by a hash of each instance seeded by that name
-  (`instance_order`), so the density budget's visible prefix keeps the same instances when
-  a rebuild adds or removes others. `set_cells(rows_by_cell)` replaces exactly the given
-  cells (asset id -> flat rows) and leaves every other node and MultiMesh untouched.
+  (`ScatterRows.instance_order`), so the density budget's visible prefix keeps the same
+  instances when a rebuild adds or removes others. `set_cells(rows_by_cell)` replaces
+  exactly the given cells (asset id -> flat rows) and leaves every other node and MultiMesh
+  untouched.
+- **Identity:** a row is identified by the bits of its X, Z and scale
+  (`ScatterRows.row_keys`, forwarded as `AuthoredScatter.row_keys`), never its Y or
+  rotation (P3-3a): a height edit moves an instance's Y and tilts a normal-aligned one
+  without making it another instance, so the regeneration after a sculpt stroke keeps every
+  plant still wanted in place (measured: a 7 m hill regenerated 10 removals and 0
+  regrowths, the removals being plants the slope rule now thins). A generated instance's
+  X and Z come from its hashed candidate and a prop is its own position, so nothing else
+  needed Y in the key. The pure row helpers (`row_keys`, `instance_order`,
+  `transforms_from_rows`, `row_transform`) live in `ScatterRows` (`utils/scatter_rows.gd`).
+- **Moving rows in place:** `move_rows(cell, asset_id, rows, moved)` takes the cell's rows
+  of one asset with only Y and rotation changed (same rows, same order) and rewrites just
+  the moved instances' transforms (`set_instance_transform` through the settled node's
+  cached instance order; a growing node is rebuilt, it is small). No regrowth, no shrink, no
+  density-budget work; false when the rows do not match, so the caller can fall back to
+  `set_cells(..., false)`. Sculpting snaps plants and props with it every frame.
 - **Density budget:** re-applied after every rebuild. The budget is map-wide
   (`FoliageBudget.plan` thins all species by one ratio), so the general case re-plans the
   whole budget root (default the parent); while the map is under budget only the rebuilt
