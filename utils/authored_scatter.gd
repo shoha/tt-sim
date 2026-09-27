@@ -95,6 +95,8 @@ var grow_seconds: float = GROW_SECONDS
 ## Microseconds of the last set_cells() call and of the last worker job, for measurement.
 var last_apply_usec: int = 0
 var last_worker_usec: int = 0
+## Draw each species once, invisibly, as it resolves (PipelineWarmer); off to measure.
+var warm_pipelines: bool = true
 
 ## asset id -> {"mesh", "wind_category", "stem", "materials", "grow_mode", "height"}, or {}
 ## for an id that did not resolve (its rows are kept, nothing is built).
@@ -125,6 +127,8 @@ var _known_total: int = -1
 var _touched: Array = []
 ## True between begin_build() and end_build(): set_cells() skips the budget apply.
 var _budget_deferred: bool = false
+## Created on first use (never in a headless run, so tests see no extra child).
+var _warmer: PipelineWarmer = null
 
 
 ## A new, empty instance named for the scene tree; add it under LevelMap before building
@@ -219,6 +223,24 @@ static func rows_by_cell_of(rows_by_asset: Dictionary) -> Dictionary:
 func _ready() -> void:
 	set_process(false)
 	add_to_group(GROUP)
+	# Species resolved off-tree (the play-time load) are warmed once the map is installed.
+	_warm_resolved.call_deferred()
+
+
+func _warm_resolved() -> void:
+	for species: Dictionary in _species.values():
+		_warm(species)
+
+
+## Draws a resolved species once, invisibly, so its draw-time pipelines compile now.
+func _warm(species: Dictionary) -> void:
+	if species.is_empty() or not warm_pipelines or not PipelineWarmer.available(self):
+		return
+	if _warmer == null:
+		_warmer = PipelineWarmer.new()
+		_warmer.name = "PipelineWarmer"
+		add_child(_warmer)
+	_warmer.warm(species.mesh, String(species.stem), String(species.wind_category))
 
 
 ## A new foliage density budget (the player moved the setting). The nodes themselves were
@@ -393,6 +415,11 @@ func prepare_biome(biome_id: String) -> void:
 			_request_asset(asset_id)
 	if not _loading.is_empty():
 		set_process(true)
+
+
+## How many species have been resolved (including ids that failed to).
+func resolved_species_count() -> int:
+	return _species.size()
 
 
 ## Starts background loads for the given palette asset ids, like prepare_biome() does for
@@ -905,6 +932,9 @@ func _species_for(asset_id: String) -> Dictionary:
 	}
 	if not materials.is_empty():
 		species_added.emit(materials)
+	# After species_added: its handler may swap the wind shader variant (foliage AA), and
+	# the variant that will be drawn is the one to warm.
+	_warm(_species[asset_id])
 	return _species[asset_id]
 
 
