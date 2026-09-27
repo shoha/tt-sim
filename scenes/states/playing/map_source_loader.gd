@@ -132,6 +132,7 @@ func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
 	else:
 		push_error("MapSourceLoader: a map needs a GLB or a document")
 		return null
+	add_authored_water(root, document, separate_props)
 
 	var groups: Array = [[SCATTER_NODE, cells.get(SCATTER_NODE, {})]]
 	if separate_props:
@@ -159,6 +160,21 @@ static func create_authored_root(doc: MapDocument) -> Node3D:
 	var root := authored_root_shell()
 	root.add_child(AuthoredTerrain.create(doc))
 	return root
+
+
+## Adds the document's water (AuthoredWater) to a map root, authored or a dressed GLB's, and
+## gives every water mesh in the root the shared water material (a dressed GLB's own planes
+## were processed by its load; the pass is safe to repeat, and the authored flow map wins,
+## WaterGlbUtils._flow_map_plane). `always` (authoring) adds the node even with no water
+## yet, so the water tools and the grid's ground have it from the start. Nothing without a
+## document. Returns the node or null.
+static func add_authored_water(root: Node3D, doc: MapDocument, always: bool) -> AuthoredWater:
+	if doc == null or (doc.water_bodies.is_empty() and not always):
+		return null
+	var water := AuthoredWater.create(doc)
+	root.add_child(water)
+	WaterGlbUtils.process_water_meshes(root)
+	return water
 
 
 static func authored_root_shell() -> Node3D:
@@ -281,7 +297,8 @@ func _build_authored_scatter_async(scatter: AuthoredScatter, rows_by_cell: Dicti
 
 ## Gives a Blender map's grid overlay its ground (GroundHeightField.for_glb): after install(),
 ## waits one physics frame so the map's collision is in the space, then samples its layer-1
-## collision on a GroundHeightField.grid_for_bounds() grid over the map's mesh bounds with
+## collision and water surfaces (WaterSurface.WALKABLE_MASK: the grid lies on the water) on a
+## GroundHeightField.grid_for_bounds() grid over the map's mesh bounds with
 ## DressingGround rays, FRAME_BUDGET_USEC per frame, and hands the field to
 ## GameMap.set_grid_ground() (null, the fixed band, for a map with no layer-1 collision or
 ## whose ground is at Y = 0 already). A map with authored terrain has its field already and
@@ -305,14 +322,22 @@ func fit_grid_ground_async(map: Node3D, game_map: GameMap) -> Dictionary:
 		grid.origin,
 		grid.step,
 		grid.columns,
-		grid.rows
+		grid.rows,
+		WaterSurface.WALKABLE_MASK
 	)
 	while not sampler.step(FRAME_BUDGET_USEC):
 		await tree.process_frame
 		if not _still_installed(map, game_map):
 			return {}
 	var field := GroundHeightField.for_glb(
-		map, sampler.heights, sampler.hits, grid.columns, grid.rows, grid.origin, grid.step
+		map,
+		sampler.heights,
+		sampler.hits,
+		grid.columns,
+		grid.rows,
+		grid.origin,
+		grid.step,
+		sampler.water
 	)
 	game_map.set_grid_ground(field)
 	return {
@@ -324,6 +349,7 @@ func fit_grid_ground_async(map: Node3D, game_map: GameMap) -> Dictionary:
 		"missed": sampler.miss_count(),
 		"wall_ms": (Time.get_ticks_usec() - started) / 1000.0,
 		"follows_ground": field != null,
+		"water_samples": sampler.water.count(1),
 	}
 
 
@@ -389,8 +415,9 @@ static func install(
 		game_map.set_ground_top(terrain.world_height_range().y)
 	# The grid draws on authored ground and token drags re-resolve their height on it; a
 	# Blender map (null) keeps the cursor-hit drag height, and the fixed grid band until
-	# fit_grid_ground_async() has sampled its ground.
-	game_map.set_ground_terrain(terrain)
+	# fit_grid_ground_async() has sampled its ground. Water (either kind) raises both to its
+	# surface where it is deep enough to float in (WaterSurface).
+	game_map.set_ground_terrain(terrain, WaterGlbUtils.has_water(map))
 	if level:
 		var tool := game_map.get_measure_tool()
 		if tool:

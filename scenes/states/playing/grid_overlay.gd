@@ -17,7 +17,8 @@ extends MeshInstance3D
 ## GROUND_TOLERANCE_M of the ground under it, interpolated on the field's triangles, so every
 ## tier top and slope gets the grid while tokens and plants standing on it do not; the
 ## existing steep-face normal filter keeps cliff faces clean. The fade centre follows the
-## ground too (look_center()).
+## ground too (look_center()). Where the field is a water surface (GroundHeightField, phase 4)
+## the grid lies on the water, not on the bed under it.
 
 const FADE_DURATION := 0.2
 ## Height above or below the ground (metres, world) a pixel may be and still get the grid.
@@ -30,6 +31,9 @@ const FADE_DURATION := 0.2
 const GROUND_TOLERANCE_M := 0.2
 ## Fixed-point steps projecting the view centre onto the terrain (look_center()).
 const CENTER_ITERATIONS := 4
+## Transparent sort priority above the water material's (0), so the grid composites over a
+## water surface it lies on.
+const RENDER_PRIORITY := 10
 
 var _material: ShaderMaterial
 var _fade_tween: Tween
@@ -56,6 +60,8 @@ static func create(camera: Camera3D) -> GridOverlay:
 	var shader := load("res://shaders/grid_overlay.gdshader") as Shader
 	instance._material = ShaderMaterial.new()
 	instance._material.shader = shader
+	# Drawn after the water (both are transparent), so the grid lies on its surface.
+	instance._material.render_priority = RENDER_PRIORITY
 	instance.material_override = instance._material
 
 	camera.add_child(instance)

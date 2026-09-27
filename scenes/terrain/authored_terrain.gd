@@ -84,17 +84,16 @@ static var _texel_copy: ShaderMaterial = null
 
 var document: MapDocument = null
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
-## Microseconds of the last update_ground_region() call, for measurement.
+## Microseconds, for measurement, of the last update_ground_region() call, its broad refresh,
+## the last process_heights() call (and chunks it updated), the last refresh_skirt(), and the
+## rule fields the last settle_heights() recomputed.
 var last_biome_update_usec: int = 0
-## Microseconds of the last broad refresh (part of update_ground_region()), for measurement.
 var last_broad_update_usec: int = 0
-## Microseconds of the last process_heights() call and chunks it updated, for measurement.
 var last_heights_usec: int = 0
 var last_heights_chunks: int = 0
-## Microseconds of the last refresh_skirt(), for measurement.
 var last_skirt_usec: int = 0
-## Microseconds the last settle_heights() spent recomputing rule fields, for measurement.
 var last_fields_usec: int = 0
+var height_version: int = 0  ## Bumped per height texture refresh (GroundHeightField follows).
 
 var _material: ShaderMaterial = null
 var _chunks: Dictionary[Vector2i, MeshInstance3D] = {}
@@ -905,6 +904,7 @@ func get_height_texture() -> ImageTexture:
 
 func _refresh_height_texture() -> void:
 	_height_texture_stale = false
+	height_version += 1
 	if document == null:
 		return
 	var image := TerrainMeshBuilder.height_image(document)

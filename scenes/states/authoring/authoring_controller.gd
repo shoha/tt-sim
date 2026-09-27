@@ -360,16 +360,34 @@ func _fit_dressing_to_ground(generation: int) -> int:
 		document, sampler.heights, scatter, DressingGround.aligned_assets(document.biome_ids)
 	)
 	# The grid overlay draws on the same sampled ground (a play-time load samples its own,
-	# MapSourceLoader.fit_grid_ground_async).
+	# MapSourceLoader.fit_grid_ground_async), or, where the map has water, on the surface:
+	# sampled again with the water surfaces, since the plants need the bed.
+	var grid := sampler
+	if WaterGlbUtils.has_water(map_root):
+		grid = DressingGround.begin_grid(
+			map_root.get_world_3d(),
+			map_root.global_transform,
+			top,
+			-document.extent_m() * 0.5,
+			document.sample_step(),
+			document.samples_x(),
+			document.samples_z(),
+			WaterSurface.WALKABLE_MASK
+		)
+		while not grid.step(MapSourceLoader.FRAME_BUDGET_USEC):
+			await get_tree().process_frame
+			if _superseded(generation):
+				return moved
 	_game_map.set_grid_ground(
 		GroundHeightField.for_glb(
 			map_root,
-			sampler.heights,
-			sampler.hits,
+			grid.heights,
+			grid.hits,
 			document.samples_x(),
 			document.samples_z(),
 			-document.extent_m() * 0.5,
-			document.sample_step()
+			document.sample_step(),
+			grid.water
 		)
 	)
 	ground_fit = {

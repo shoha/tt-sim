@@ -17,7 +17,9 @@
  *    (ground_heights_enabled: authored terrain, or a Blender map's ground sampled from
  *    its collision; GridOverlay.set_ground) the band follows the ground instead: a pixel
  *    is kept only within ground_tolerance of the ground height under it, interpolated on
- *    the field's triangles, so every tier top and slope gets the grid.
+ *    the field's triangles, so every tier top and slope gets the grid. Where the field is a
+ *    water surface (its second channel), a pixel seen under the surface is lifted onto it
+ *    along its view ray, so the grid lies on the water (GridOverlay draws after the water).
  * 4. Reconstructs the surface normal from depth-buffer neighbors (cross product
  *    of partial derivatives) and discards steep/vertical surfaces. With a ground field
  *    the slope test reads the field's smooth normal instead (ground_normal_at), and the
@@ -113,6 +115,21 @@ float ground_height_at(vec2 at) {
 	return h11 + (h01 - h11) * (1.0 - t.x) + (h10 - h11) * (1.0 - t.y);
 }
 
+// The field's water flag at continuous sample coordinates `at` (the second channel of an RGF
+// field: 1 on samples raised to a water surface, GroundHeightField; 0 in a one-channel field):
+// the largest over the triangle ground_height_at() uses, so any triangle touching water
+// counts.
+float ground_water_at(vec2 at) {
+	ivec2 size = textureSize(ground_heights, 0);
+	vec2 f = clamp(at, vec2(0.0), vec2(size - ivec2(1)));
+	ivec2 i0 = min(ivec2(floor(f)), max(size - ivec2(2), ivec2(0)));
+	vec2 t = f - vec2(i0);
+	float w = max(texelFetch(ground_heights, i0 + ivec2(1, 0), 0).g,
+		texelFetch(ground_heights, i0 + ivec2(0, 1), 0).g);
+	ivec2 last = (t.x + t.y <= 1.0) ? i0 : i0 + ivec2(1, 1);
+	return max(w, texelFetch(ground_heights, last, 0).g);
+}
+
 // The ground's shading normal (map frame) at sample `s`: central differences, one-sided at
 // the edge (TerrainMeshBuilder.sample_normal / ScatterGenerator.vertex_normal).
 vec3 ground_vertex_normal(ivec2 s, ivec2 size) {
@@ -193,11 +210,33 @@ void fragment() {
 	// above the floor) and ceilings. With a ground field: the ground height under this pixel;
 	// otherwise the fixed band around grid_y_level.
 	vec2 ground_at = vec2(0.0);
+	bool on_water = false;
 	if (ground_heights_enabled) {
 		vec3 map_pos = (ground_world_to_map * vec4(world_pos, 1.0)).xyz;
 		ground_at = (map_pos.xz - ground_grid_origin) / ground_grid_step;
 		float h = ground_height_at(ground_at);
 		float ground_y = (ground_map_to_world * vec4(map_pos.x, h, map_pos.z, 1.0)).y;
+		// Seen under a water surface (the bed, or a wading token's legs, through the water):
+		// the grid lies on the surface, where this pixel's view ray crosses it, so squares stay
+		// continuous across a river. The depth buffer holds only opaque geometry, so the pixel
+		// is the bed; the ray (from the near plane, perspective or orthographic alike) is
+		// stepped onto the field under each crossing: a flat surface settles at once, a bank's
+		// slope within the few steps.
+		if (world_pos.y < ground_y && ground_water_at(ground_at) > 0.5) {
+			vec4 near_view = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, 1.0, 1.0);
+			vec3 near_pos = (INV_VIEW_MATRIX * vec4(near_view.xyz / near_view.w, 1.0)).xyz;
+			vec3 ray = near_pos - world_pos;
+			if (ray.y > 0.0001) {
+				for (int i = 0; i < 3; i++) {
+					world_pos += ray * ((ground_y - world_pos.y) / ray.y);
+					map_pos = (ground_world_to_map * vec4(world_pos, 1.0)).xyz;
+					ground_at = (map_pos.xz - ground_grid_origin) / ground_grid_step;
+					h = ground_height_at(ground_at);
+					ground_y = (ground_map_to_world * vec4(map_pos.x, h, map_pos.z, 1.0)).y;
+				}
+				on_water = true;
+			}
+		}
 		if (abs(world_pos.y - ground_y) > ground_tolerance) {
 			discard;
 		}
@@ -218,11 +257,13 @@ void fragment() {
 	// ground_slope_fade below normal_threshold rather than cutting it: the normal is
 	// interpolated per triangle, and a hard cut along a tier lip running across the grid
 	// traced that as a fine comb. The facet normal only rejects near-vertical surfaces
-	// standing within the band (token sides, walls, trunks).
+	// standing within the band (token sides, walls, trunks). On water the facet is the bed's
+	// (or a wading token's side), not the surface the grid lies on, so it is not tested.
 	float slope_fade = 1.0;
 	if (ground_heights_enabled) {
 		float ground_up = abs(ground_normal_at(ground_at).y);
-		if (facet_up < ground_facet_threshold || ground_up < normal_threshold - ground_slope_fade) {
+		bool facet_steep = facet_up < ground_facet_threshold && !on_water;
+		if (facet_steep || ground_up < normal_threshold - ground_slope_fade) {
 			discard;
 		}
 		slope_fade = smoothstep(normal_threshold - ground_slope_fade, normal_threshold, ground_up);

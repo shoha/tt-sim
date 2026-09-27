@@ -19,6 +19,15 @@ extends RefCounted
 ##   band (keeps_fixed_band: a dungeon or room floor at the glTF origin), gets no field and
 ##   keeps the band exactly as before.
 ##
+## Water (phase 4). The grid lies on the water surface, so squares stay continuous across a
+## river: the field is max(ground, water level) on wet samples, and the texture's second
+## channel (RGF) marks those samples, where the grid shader lifts a pixel seen under the
+## surface onto it. Authored terrain composes the document heights with the map's
+## AuthoredWater levels (recomposed whenever either changes: AuthoredTerrain.height_version,
+## AuthoredWater.version); a GLB map's rays hit the water surface bodies
+## (WaterSurface.WALKABLE_MASK), whose hits come with their flags. Without water the texture
+## is the plain one-channel field as before.
+##
 ## Sample spacing for GLB maps: SPACING_M, widened only when a map would need more than
 ## MAX_SAMPLES rays. Measured against the collision at 4000 random points (P3-3c, the
 ## tools/render_jobs/probes/grid_ground.gd survey): at 0.25 m the interpolated surface is
@@ -47,12 +56,22 @@ var rows: int = 0
 ## Row-major map-frame heights (a sampled field; a terrain's live in its document).
 var heights: PackedFloat32Array = PackedFloat32Array()
 
+## One byte per sample of a sampled field: 1 where the height is a water surface.
+var water_flags: PackedByteArray = PackedByteArray()
+
 var _frame: Node3D = null
 var _terrain: AuthoredTerrain = null
 var _texture: ImageTexture = null
+## Authored terrain with water: the map's AuthoredWater, and the composition cached for
+## (terrain height_version, water version).
+var _water: AuthoredWater = null
+var _composed: PackedFloat32Array = PackedFloat32Array()
+var _composed_key: Vector2i = Vector2i(-1, -1)
+var _composed_texture: ImageTexture = null
 
 
-## The field of authored terrain `terrain` (null for null).
+## The field of authored terrain `terrain` (null for null), raised to the surface of the
+## map's AuthoredWater (the terrain's sibling), if any.
 static func from_terrain(terrain: AuthoredTerrain) -> GroundHeightField:
 	if terrain == null or terrain.document == null:
 		return null
@@ -60,6 +79,9 @@ static func from_terrain(terrain: AuthoredTerrain) -> GroundHeightField:
 	var doc := terrain.document
 	field._terrain = terrain
 	field._frame = terrain
+	var parent := terrain.get_parent()
+	if parent != null:
+		field._water = parent.get_node_or_null(AuthoredWater.NODE_NAME) as AuthoredWater
 	field.origin = -doc.extent_m() * 0.5
 	field.step = doc.sample_step()
 	field.columns = doc.samples_x()
@@ -69,14 +91,15 @@ static func from_terrain(terrain: AuthoredTerrain) -> GroundHeightField:
 
 ## A field of sampled heights `values` (row-major, `grid_columns` x `grid_rows`, no misses
 ## left), sample (0, 0) at map-frame XZ `grid_origin`, `grid_step` apart, in the frame of
-## `frame` (the map root).
+## `frame` (the map root); `water` marks the samples that are a water surface (empty: none).
 static func from_samples(
 	frame: Node3D,
 	values: PackedFloat32Array,
 	grid_columns: int,
 	grid_rows: int,
 	grid_origin: Vector2,
-	grid_step: Vector2
+	grid_step: Vector2,
+	water: PackedByteArray = PackedByteArray()
 ) -> GroundHeightField:
 	var field := GroundHeightField.new()
 	field._frame = frame
@@ -85,12 +108,72 @@ static func from_samples(
 	field.rows = grid_rows
 	field.origin = grid_origin
 	field.step = grid_step
+	field.water_flags = water
 	return field
 
 
+## Ground heights raised to the water: [heights, wet flags], the sample's water level where
+## its ground is below it (wet, flag 1), else its ground (flag 0). `levels` per sample,
+## WaterGeometry.DRY where there is no water; the wet test is against `ground` as it is now,
+## so a sculpt settling under the water keeps the field right. Pure.
+static func raise_to_water(ground: PackedFloat32Array, levels: PackedFloat32Array) -> Array:
+	var out := ground.duplicate()
+	var flags := PackedByteArray()
+	flags.resize(ground.size())
+	if levels.size() != ground.size():
+		return [out, flags]
+	for i in out.size():
+		if levels[i] > out[i]:
+			out[i] = levels[i]
+			flags[i] = 1
+	return [out, flags]
+
+
+## The R32F (no water) or RGF (heights, water flag) image of a field. Pure.
+static func field_image(
+	values: PackedFloat32Array, flags: PackedByteArray, image_columns: int, image_rows: int
+) -> Image:
+	if flags.size() != values.size() or not flags.has(1):
+		return Image.create_from_data(
+			image_columns, image_rows, false, Image.FORMAT_RF, values.to_byte_array()
+		)
+	var pairs := PackedFloat32Array()
+	pairs.resize(values.size() * 2)
+	for i in values.size():
+		pairs[2 * i] = values[i]
+		pairs[2 * i + 1] = float(flags[i])
+	return Image.create_from_data(
+		image_columns, image_rows, false, Image.FORMAT_RGF, pairs.to_byte_array()
+	)
+
+
+## True when the field has water: authored water with a surface, or sampled water hits.
+func has_water() -> bool:
+	if _terrain != null:
+		return is_instance_valid(_water) and _water.wet.has(1)
+	return water_flags.has(1)
+
+
+## Brings the authored composition up to date (see the header).
+func _compose() -> void:
+	var key := Vector2i(_terrain.height_version, _water.version)
+	if key == _composed_key and _composed_texture != null:
+		return
+	_composed_key = key
+	var raised := raise_to_water(
+		TerrainMeshBuilder.collision_heights(_terrain.document), _water.levels
+	)
+	_composed = raised[0]
+	var image := field_image(_composed, raised[1], columns, rows)
+	if _composed_texture == null or Vector2i(_composed_texture.get_size()) != image.get_size():
+		_composed_texture = ImageTexture.create_from_image(image)
+	else:
+		_composed_texture.update(image)
+
+
 ## The grid overlay's field for a GLB map from its sampled collision (DressingGround heights,
-## misses filled, and its hit bytes), or null when the map keeps the fixed band
-## (keeps_fixed_band: no collision was hit, or the ground is at Y = 0 already).
+## misses filled, its hit bytes and its water bytes), or null when the map keeps the fixed
+## band (keeps_fixed_band: no collision was hit, or the ground is at Y = 0 already).
 static func for_glb(
 	frame: Node3D,
 	values: PackedFloat32Array,
@@ -98,12 +181,13 @@ static func for_glb(
 	grid_columns: int,
 	grid_rows: int,
 	grid_origin: Vector2,
-	grid_step: Vector2
+	grid_step: Vector2,
+	water: PackedByteArray = PackedByteArray()
 ) -> GroundHeightField:
 	var to_world := frame.global_transform if frame.is_inside_tree() else frame.transform
 	if keeps_fixed_band(values, hit, grid_columns, grid_origin, grid_step, to_world):
 		return null
-	return from_samples(frame, values, grid_columns, grid_rows, grid_origin, grid_step)
+	return from_samples(frame, values, grid_columns, grid_rows, grid_origin, grid_step, water)
 
 
 ## True when a GLB map's sampled ground should leave the grid on the fixed Y = 0 band: no
@@ -168,16 +252,18 @@ func is_valid() -> bool:
 	return is_instance_valid(_frame)
 
 
-## The heights as one R32F texel per sample. A terrain's own texture (refreshed in place as
-## its heights settle); a sampled field's is built once.
+## The heights as one R32F texel per sample, or RGF (heights, water flag) with water. A
+## terrain's own texture (refreshed in place as its heights settle), or with water its
+## composition with the water levels (updated in place as either changes); a sampled field's
+## is built once.
 func get_texture() -> Texture2D:
 	if _terrain != null:
-		return _terrain.get_height_texture()
+		if not has_water():
+			return _terrain.get_height_texture()
+		_compose()
+		return _composed_texture
 	if _texture == null:
-		var image := Image.create_from_data(
-			columns, rows, false, Image.FORMAT_RF, heights.to_byte_array()
-		)
-		_texture = ImageTexture.create_from_image(image)
+		_texture = ImageTexture.create_from_image(field_image(heights, water_flags, columns, rows))
 	return _texture
 
 
@@ -192,9 +278,13 @@ func get_transform() -> Transform3D:
 ## the grid the edge heights continue.
 func world_height_at(world_xz: Vector2) -> float:
 	var to_world := get_transform()
+	var values := heights
 	if _terrain != null:
-		return TerrainMeshBuilder.world_ground_height(_terrain.document, to_world, world_xz)
+		if not has_water():
+			return TerrainMeshBuilder.world_ground_height(_terrain.document, to_world, world_xz)
+		_compose()
+		values = _composed
 	var local := to_world.affine_inverse() * Vector3(world_xz.x, 0.0, world_xz.y)
 	var at := (Vector2(local.x, local.z) - origin) / step
-	var h := ScatterGenerator.triangle_height(heights, columns, rows, at)
+	var h := ScatterGenerator.triangle_height(values, columns, rows, at)
 	return (to_world * Vector3(local.x, h, local.z)).y

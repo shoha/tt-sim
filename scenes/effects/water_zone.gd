@@ -73,6 +73,53 @@ static func create_for_mesh(mesh_node: MeshInstance3D) -> WaterZone:
 	return zone
 
 
+## A WaterZone for one flat authored body (AuthoredWater): its surface at `level` and its
+## footprint `tiles` (map-frame XZ rectangles, WaterMeshBuilder's per-tile bounds of the
+## body's water), one slab box per tile hanging below the surface as in create_for_mesh().
+## The zone's own origin sits on the surface (Y = `level`, in the frame of the parent it is
+## added to), so the splash height (global_position.y) is the surface. Bodies at different
+## levels each get their own zone, so a token in the lower reach of a river is under that
+## reach's surface, not the upper one's. Null with no tile of real size.
+static func create_for_footprint(zone_name: String, level: float, tiles: Array[Rect2]) -> WaterZone:
+	var zone: WaterZone = null
+	var slab_height := SUBMERSION_DEPTH + SURFACE_MARGIN
+	for tile in tiles:
+		if tile.size.x <= MIN_FOOTPRINT_SIZE or tile.size.y <= MIN_FOOTPRINT_SIZE:
+			continue
+		if zone == null:
+			zone = WaterZone.new()
+			zone.name = zone_name
+			zone.collision_layer = 0
+			zone.collision_mask = TOKEN_COLLISION_LAYER_MASK
+			zone.monitoring = true
+			zone.monitorable = false
+			zone.position = Vector3(0.0, level, 0.0)
+		var shape := BoxShape3D.new()
+		shape.size = Vector3(tile.size.x, slab_height, tile.size.y)
+		var collision_shape := CollisionShape3D.new()
+		collision_shape.name = "Tile%d" % zone.get_child_count()
+		collision_shape.shape = shape
+		var centre := tile.get_center()
+		collision_shape.position = Vector3(centre.x, SURFACE_MARGIN - slab_height / 2.0, centre.y)
+		zone.add_child(collision_shape)
+	return zone
+
+
+## Lets go of every token this zone holds without a splash, before the zone is replaced
+## (AuthoredWater.apply()): a freed Area3D does not report its bodies leaving, so the ripple
+## registry would keep them registered and the token sunk for good. The replacement zone
+## registers them again when it sees them.
+func release_bodies() -> void:
+	if not is_inside_tree():
+		return
+	for body in get_overlapping_bodies():
+		if not WaterRippleRegistry.unregister(body.get_instance_id()):
+			continue
+		var token := body.get_parent() as DraggableToken
+		if token:
+			token.set_submerged(false)
+
+
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
