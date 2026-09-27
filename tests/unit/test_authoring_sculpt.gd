@@ -102,19 +102,28 @@ func test_a_cancelled_sculpt_leaves_no_trace() -> void:
 	assert_false(editor.is_stroking())
 
 
-func test_the_brush_ray_hits_the_new_ground_after_each_flush() -> void:
+func test_the_brush_finds_the_new_ground_mid_stroke_and_the_collision_at_the_end() -> void:
 	var editor := _editor()
 	await wait_physics_frames(2)
 	_raise(editor, Vector3.ZERO)
+	assert_true(editor.is_sculpting())
+	var down := Vector3(0.4, -1.0, 0.3).normalized()
+	var ground := editor.raycast_ground(Vector3(0.3, 0, 0.2) - down * 40.0, down)
+	assert_false(ground.is_empty(), "the march finds the ground")
+	var at: Vector3 = ground.get("position", Vector3.ZERO)
+	assert_almost_eq(at.y, _ground(Vector2(at.x, at.z)), 0.001, "on the surface")
+	assert_gt(at.y, 1.0, "the raised surface")
 	var space := _map.get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(
 		Vector3(0.3, 50, 0.2), Vector3(0.3, -50, 0.2), 1
 	)
+	var stale := space.intersect_ray(query)
+	assert_almost_eq(float(stale.get("position", Vector3.ONE).y), 0.0, 0.001, "not mid-stroke")
+	editor.end_stroke()
 	var hit := space.intersect_ray(query)
 	assert_false(hit.is_empty())
 	if not hit.is_empty():
-		assert_almost_eq(hit.position.y, _ground(Vector2(0.3, 0.2)), 0.01)
-	editor.end_stroke()
+		assert_almost_eq(hit.position.y, _ground(Vector2(0.3, 0.2)), 0.01, "collision at the end")
 
 
 func test_sculpting_is_refused_on_a_dressed_map() -> void:

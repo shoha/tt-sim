@@ -37,6 +37,8 @@ var start_heights: PackedFloat32Array = PackedFloat32Array()
 var pending: Rect2i = Rect2i()
 ## Samples changed during the whole stroke.
 var changed: Rect2i = Rect2i()
+## Lowest and highest height the stroke has written (Vector2(INF, -INF) before any).
+var written_span: Vector2 = Vector2(INF, -INF)
 
 ## Per block: 1 once the stroke has written a sample in it.
 var _touched := PackedByteArray()
@@ -92,6 +94,8 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 	var lut_top := float(AMOUNT_STEPS - 1)
 	var low := Vector2i(rect.end)
 	var high := Vector2i(-1, -1)
+	var lowest := INF
+	var highest := -INF
 	# Everything per sample is inlined, as in MaskStroke: a call per sample doubles the cost.
 	for z in range(rect.position.y, rect.end.y):
 		var pz := origin.y + z * step.y - from.y
@@ -130,8 +134,11 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 			heights[i] = value
 			low = low.min(Vector2i(x, z))
 			high = high.max(Vector2i(x, z))
+			lowest = minf(lowest, value)
+			highest = maxf(highest, value)
 	if high.x < 0:
 		return false
+	written_span = Vector2(minf(written_span.x, lowest), maxf(written_span.y, highest))
 	var dirty := Rect2i(low, high - low + Vector2i.ONE)
 	pending = MaskBrush.merge_rect(pending, dirty)
 	changed = MaskBrush.merge_rect(changed, dirty)

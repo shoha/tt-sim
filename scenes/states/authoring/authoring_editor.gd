@@ -22,13 +22,15 @@ extends RefCounted
 ## Height strokes (sculpting; HeightStroke, rules in HeightBrush) edit doc.heights on a map
 ## with an AuthoredTerrain (not on a dressed GLB, whose ground is the GLB's). Per frame,
 ## flush() hands the changed samples to the terrain (in-place chunk updates within
-## TERRAIN_BUDGET_USEC, AuthoredTerrain.process_heights), pushes the heights into the
-## collision shape once (so the brush's own raycast hits the surface it is shaping on the
-## next frame), and snaps the plants and props standing on the changed ground (GroundSnap,
-## applied with AuthoredScatter.move_rows: transforms rewritten in place, no regrowth)
-## within SNAP_BUDGET_USEC; work a frame's budget leaves is carried to the next frames
-## through tick(). end_stroke() finishes that work, queues the settling rebuild of the
-## edited chunks, and asks the scatter to regenerate the stroke's area grown by one more
+## TERRAIN_BUDGET_USEC, AuthoredTerrain.process_heights) and snaps the plants and props
+## standing on the changed ground (GroundSnap, applied with AuthoredScatter.move_rows:
+## transforms rewritten in place, no regrowth) within SNAP_BUDGET_USEC; work a frame's
+## budget leaves is carried to the next frames through tick(). The collision is not touched
+## mid-stroke (rebuilding the heightfield costs 2.3 ms a frame in the running game): the
+## brush finds the ground it is shaping with raycast_ground(), a CPU ray march of the
+## document's triangles. end_stroke() finishes that work, updates the collision, queues the
+## settling rebuild of the edited chunks, and asks the scatter to regenerate the stroke's
+## area grown by one more
 ## sample step than request_region() adds (normals read a sample either side), so slope
 ## rules add and remove plants with the grow and shrink animation while every plant that
 ## stays keeps its place (AuthoredScatter.row_keys leaves Y out). One history entry per
@@ -87,6 +89,8 @@ var _prop_start: Dictionary = {}
 var _aligned: Dictionary = {}
 ## Props asset id -> true when its species stands on the ground normal (cached).
 var _prop_aligned: Dictionary = {}
+## True when heights changed since the collision was last updated (it is updated once no
+## sculpt stroke is in progress; see raycast_ground).
 var _collision_dirty: bool = false
 ## False while an undo sets props from history instead of snapping them.
 var _snap_props: bool = true
@@ -282,6 +286,39 @@ func height_dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> vo
 	last_dab_usec = Time.get_ticks_usec() - started
 
 
+## True while a sculpt (height) stroke is in progress.
+func is_sculpting() -> bool:
+	return _height != null
+
+
+## Where a ray (world space) meets the ground of the document as it is now: {"position",
+## "normal"} in world space, or {} for a miss. The collision is only brought up to date
+## when a sculpt stroke ends (rebuilding the whole heightfield costs 2.3 ms on a 200 ft map
+## in the running game, too much for every frame), so while one is in progress the brush
+## finds the ground it is shaping here: TerrainMeshBuilder.raycast over the same triangles.
+func raycast_ground(
+	origin: Vector3, direction: Vector3, max_distance: float = 1000.0
+) -> Dictionary:
+	var inverse := (
+		map_root.global_transform.affine_inverse()
+		if is_instance_valid(map_root)
+		else Transform3D.IDENTITY
+	)
+	var span := terrain.height_range() if is_instance_valid(terrain) else Vector2.ZERO
+	if _height != null:
+		# Chunks the terrain has not caught up with yet are not in its range.
+		span = Vector2(minf(span.x, _height.written_span.x), maxf(span.y, _height.written_span.y))
+	var hit := TerrainMeshBuilder.raycast(
+		document, inverse * origin, inverse.basis * direction, max_distance / map_scale(), span
+	)
+	if hit.is_empty():
+		return {}
+	var normal: Vector3 = hit.normal
+	if is_instance_valid(map_root):
+		normal = (map_root.global_transform.basis.inverse().transposed() * normal).normalized()
+	return {"position": to_world(hit.position), "normal": normal}
+
+
 ## The ground height (world Y) under world point `point`, on the terrain's own triangles:
 ## the height Flatten holds and the one a Tier steps from.
 func ground_height_at(point: Vector3) -> float:
@@ -299,7 +336,7 @@ func ground_height_at(point: Vector3) -> float:
 func has_height_work() -> bool:
 	return (
 		not _snap_windows.is_empty()
-		or _collision_dirty
+		or (_collision_dirty and _height == null)
 		or (is_instance_valid(terrain) and terrain.has_height_work())
 	)
 
@@ -336,9 +373,11 @@ func _work(everything: bool = false) -> void:
 		terrain.process_heights(-1 if everything else TERRAIN_BUDGET_USEC)
 	last_terrain_usec = Time.get_ticks_usec() - started
 	started = Time.get_ticks_usec()
-	if _collision_dirty and is_instance_valid(terrain):
+	# Not mid-stroke: the whole heightfield is rebuilt (2.3 ms on a 200 ft map in the running
+	# game), and the brush reads the document meanwhile (raycast_ground).
+	if _collision_dirty and _height == null and is_instance_valid(terrain):
 		terrain.update_collision()
-	_collision_dirty = false
+		_collision_dirty = false
 	last_collision_usec = Time.get_ticks_usec() - started
 	_snap(-1 if everything else SNAP_BUDGET_USEC)
 
@@ -426,10 +465,11 @@ func finish_height_work() -> void:
 
 
 func _end_height_stroke() -> bool:
-	flush()
-	_work(true)
 	var stroke := _height
 	_height = null
+	# The last frame's changes, then everything left, the collision included (no stroke now).
+	_queue_heights(stroke.take_pending())
+	_work(true)
 	var diff := stroke.finish()
 	if is_instance_valid(terrain):
 		terrain.settle_heights()
@@ -476,12 +516,13 @@ func _cancel_height_stroke() -> void:
 		_set_prop_cell(cell, _prop_start[cell])
 	_snap_start.clear()
 	_prop_start.clear()
-	if rect.has_area():
-		if is_instance_valid(terrain):
-			terrain.queue_heights(rect)
-			terrain.settle_heights()
-		_collision_dirty = true
-		_work(true)
+	# The collision was never updated during the stroke, so it already has these heights.
+	_collision_dirty = false
+	if rect.has_area() and is_instance_valid(terrain):
+		terrain.queue_heights(rect)
+	_work(true)
+	if is_instance_valid(terrain):
+		terrain.settle_heights()
 
 
 ## Undo (`redo` false) or redo of a sculpt stroke: the heights side, the terrain and

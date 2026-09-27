@@ -458,10 +458,18 @@ func _resolve_hit() -> void:
 		return
 	if _over_gui.is_valid() and _over_gui.call() and not _pressed:
 		return
+	var origin := _camera.project_ray_origin(_pointer)
+	if editor != null and editor.is_sculpting():
+		# The collision is brought up to date when the stroke ends; until then the ground
+		# the brush is shaping is only in the document, so the ray marches its heights.
+		var ground := editor.raycast_ground(origin, _camera.project_ray_normal(_pointer))
+		if not ground.is_empty():
+			_hit = ground.position
+			_hit_normal = ground.normal
+		return
 	var space := _world_viewport.find_world_3d().direct_space_state
 	if space == null:
 		return
-	var origin := _camera.project_ray_origin(_pointer)
 	var query := PhysicsRayQueryParameters3D.create(
 		origin, origin + _camera.project_ray_normal(_pointer) * RAY_LENGTH
 	)

@@ -364,6 +364,123 @@ static func _add_up_triangle(
 	indices[at + 2] = c if facing < 0.0 else b
 
 
+## Where a ray (map frame; `direction` need not be unit length) first meets the terrain
+## surface, the same triangles the chunks draw and the collision uses, within
+## `max_distance`: {"position": Vector3, "normal": Vector3 (the triangle's, facing up),
+## "distance": float}, or {} for a miss. `height_span` (lowest, highest ground; anything that
+## encloses them) clips the ray to the slab the surface lives in, so only the quads under
+## that part of the ray are tested, walked in order (Amanatides-Woo over the sample grid):
+## a few dozen quads for a camera ray, well under a tenth of a millisecond. This is how the
+## sculpt brush finds the ground it is shaping while the collision still has the heights of
+## the stroke's start.
+static func raycast(
+	doc: MapDocument, origin: Vector3, direction: Vector3, max_distance: float, height_span: Vector2
+) -> Dictionary:
+	var dir := direction.normalized()
+	if dir == Vector3.ZERO:
+		return {}
+	var heights := collision_heights(doc)
+	var columns := doc.samples_x()
+	var rows := doc.samples_z()
+	var step := doc.sample_step()
+	var half := doc.extent_m() * 0.5
+	var low := Vector3(-half.x, height_span.x - 0.01, -half.y)
+	var high := Vector3(half.x, height_span.y + 0.01, half.y)
+	var t0 := 0.0
+	var t1 := max_distance
+	for axis in 3:
+		if absf(dir[axis]) < 1e-9:
+			if origin[axis] < low[axis] or origin[axis] > high[axis]:
+				return {}
+			continue
+		var ta := (low[axis] - origin[axis]) / dir[axis]
+		var tb := (high[axis] - origin[axis]) / dir[axis]
+		t0 = maxf(t0, minf(ta, tb))
+		t1 = minf(t1, maxf(ta, tb))
+	if t0 > t1:
+		return {}
+	var start := origin + dir * t0
+	var sx := (start.x + half.x) / step.x
+	var sz := (start.z + half.y) / step.y
+	var ix := clampi(floori(sx), 0, columns - 2)
+	var iz := clampi(floori(sz), 0, rows - 2)
+	var dsx := dir.x / step.x
+	var dsz := dir.z / step.y
+	var next_x := INF
+	var next_z := INF
+	var delta_x := INF
+	var delta_z := INF
+	if absf(dsx) > 1e-12:
+		next_x = t0 + (ix + (1 if dsx > 0.0 else 0) - sx) / dsx
+		delta_x = 1.0 / absf(dsx)
+	if absf(dsz) > 1e-12:
+		next_z = t0 + (iz + (1 if dsz > 0.0 else 0) - sz) / dsz
+		delta_z = 1.0 / absf(dsz)
+	for _quad in (columns + rows) * 2:
+		var hit := _quad_hit(heights, columns, ix, iz, step, half, origin, dir)
+		if not hit.is_empty() and float(hit.distance) <= t1 + 0.001:
+			return hit
+		if next_x < next_z:
+			if next_x > t1:
+				break
+			ix += 1 if dsx > 0.0 else -1
+			next_x += delta_x
+		else:
+			if next_z > t1:
+				break
+			iz += 1 if dsz > 0.0 else -1
+			next_z += delta_z
+		if ix < 0 or iz < 0 or ix > columns - 2 or iz > rows - 2:
+			break
+	return {}
+
+
+## The nearest hit of the ray with the two triangles of quad (ix, iz), or {}.
+static func _quad_hit(
+	heights: PackedFloat32Array,
+	columns: int,
+	ix: int,
+	iz: int,
+	step: Vector2,
+	half: Vector2,
+	origin: Vector3,
+	dir: Vector3
+) -> Dictionary:
+	var i := iz * columns + ix
+	var x0 := ix * step.x - half.x
+	var z0 := iz * step.y - half.y
+	var a := Vector3(x0, heights[i], z0)
+	var b := Vector3(x0 + step.x, heights[i + 1], z0)
+	var c := Vector3(x0, heights[i + columns], z0 + step.y)
+	var d := Vector3(x0 + step.x, heights[i + columns + 1], z0 + step.y)
+	var best := {}
+	for triangle in [[a, b, c], [b, d, c]]:
+		var p: Vector3 = triangle[0]
+		var e1: Vector3 = triangle[1] - p
+		var e2: Vector3 = triangle[2] - p
+		var pv := dir.cross(e2)
+		var det := e1.dot(pv)
+		if absf(det) < 1e-12:
+			continue
+		var inv := 1.0 / det
+		var tv := origin - p
+		var u := tv.dot(pv) * inv
+		if u < -1e-6 or u > 1.0 + 1e-6:
+			continue
+		var qv := tv.cross(e1)
+		var v := dir.dot(qv) * inv
+		if v < -1e-6 or u + v > 1.0 + 1e-6:
+			continue
+		var t := e2.dot(qv) * inv
+		if t < 0.0 or (not best.is_empty() and t >= float(best.distance)):
+			continue
+		var normal := e1.cross(e2).normalized()
+		if normal.y < 0.0:
+			normal = -normal
+		best = {"position": origin + dir * t, "normal": normal, "distance": t}
+	return best
+
+
 ## Heights for a HeightMapShape3D over the whole grid: the document heights when they
 ## match the grid, else a flat field of the right size.
 static func collision_heights(doc: MapDocument) -> PackedFloat32Array:

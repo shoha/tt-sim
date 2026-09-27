@@ -268,14 +268,29 @@ func _update_camera_offset() -> void:
 	# Check the actual ray origins and add exactly enough extra offset.
 	var vp_size := _game_map.world_viewport.size
 	if vp_size.x > 0 and vp_size.y > 0:
-		var bl := camera_node.project_ray_origin(Vector2(0, vp_size.y))
-		var br := camera_node.project_ray_origin(Vector2(vp_size.x, vp_size.y))
-		var min_y := minf(bl.y, br.y)
-		var floor_y := ground_top_y + NEAR_PLANE_GROUND_MARGIN
-		if min_y < floor_y:
-			var deficit := floor_y - min_y
+		var min_y := _bottom_ray_origin_y(Vector2(vp_size))
+		if min_y < NEAR_PLANE_GROUND_MARGIN:
+			var deficit := NEAR_PLANE_GROUND_MARGIN - min_y
 			offset_scale += deficit / _base_camera_offset.y
 			camera_node.position = _base_camera_offset * offset_scale
+		# Raised authored ground: back further along the camera's own view axis. The base
+		# offset is not exactly that axis, so scaling it for the terrain's height shifted the
+		# picture while sculpting (zooming hides the same drift with its cursor correction);
+		# along the view axis an orthographic camera shows exactly the same frame.
+		if ground_top_y > 0.0:
+			min_y = _bottom_ray_origin_y(Vector2(vp_size))
+			var floor_y := ground_top_y + NEAR_PLANE_GROUND_MARGIN
+			var back := camera_node.global_basis.z.normalized()
+			if min_y < floor_y and back.y > 0.001:
+				camera_node.global_position += back * ((floor_y - min_y) / back.y)
+
+
+## The lower of the two bottom screen corners' ray origins (world Y).
+func _bottom_ray_origin_y(vp_size: Vector2) -> float:
+	var camera_node := _game_map.camera_node
+	var bl := camera_node.project_ray_origin(Vector2(0, vp_size.y))
+	var br := camera_node.project_ray_origin(vp_size)
+	return minf(bl.y, br.y)
 
 
 func handle_movement(delta: float) -> void:
