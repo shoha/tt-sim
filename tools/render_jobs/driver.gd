@@ -198,6 +198,27 @@ func _process(delta: float) -> void:
 			)
 		"stroke":
 			done = _stroke(step)
+		"release":
+			# Ends a stroke left pressed by `release: false`, keeping the brush active.
+			var brush := ctrl().brush
+			brush.set("_pressed", false)
+			brush.call("finish_gesture")
+		"hover":
+			# The Sculpt tool with `tile` over map point `at`, not pressed, `ctrl` held: the
+			# cursor and its readout as an author sees them before pressing.
+			var c := ctrl()
+			var tiles := {
+				"raise": HeightBrush.RAISE,
+				"smooth": HeightBrush.SMOOTH,
+				"flatten": HeightBrush.FLATTEN,
+				"tier": HeightBrush.TIER,
+			}
+			c.call("_on_sculpt_selected", int(tiles.get(String(step.get("tile", "tier")), 0)))
+			if step.has("radius"):
+				c.brush.set_radius(float(step.radius))
+			c.brush.set("_ctrl", bool(step.get("ctrl", false)))
+			var at: Array = step.at
+			_set_pointer(c.brush, Vector3(float(at[0]), 0.0, float(at[1])))
 		"place":
 			var c := ctrl()
 			var rule := c.editor.species_rule(String(step.biome), String(step.species))
@@ -270,20 +291,36 @@ func _stroke(step: Dictionary) -> bool:
 		var mode := String(step.get("mode", "paint"))
 		brush.set_radius(float(step.get("radius", 4.0)))
 		brush.set_flow(float(step.get("flow", 1.0)))
+		_state.ctrl = mode == "clear"
+		_state.shift = false
 		if mode == "paint":
 			c.call("_use_biome", String(step.biome))
 			c.call("_select_tool", AuthoringPanel.TOOL_BIOME)
+		elif mode == "sculpt":
+			# The Sculpt tool through its tile, with the press's modifiers (P3-5).
+			var tiles := {
+				"raise": HeightBrush.RAISE,
+				"smooth": HeightBrush.SMOOTH,
+				"flatten": HeightBrush.FLATTEN,
+				"tier": HeightBrush.TIER,
+			}
+			c.call("_on_sculpt_selected", int(tiles.get(String(step.get("tile", "raise")), 0)))
+			_state.ctrl = bool(step.get("ctrl", false))
+			_state.shift = bool(step.get("shift", false))
 		else:
 			c.call("_select_tool", AuthoringPanel.TOOL_THIN)
 		_state.phase = 1
 		_state.dist = 0.0
-		_state.ctrl = mode == "clear"
+		# The modifiers held for the whole stroke (a `hover` step may have left Ctrl on).
+		brush.set("_ctrl", _state.ctrl)
+		brush.set("_shift", _state.shift)
 		_set_pointer(brush, _point_at(points, 0.0))
 		return false
 	if _state.phase == 1:
 		brush.set("_pressed", true)
 		brush.set("_press_pending", true)
 		brush.set("_press_ctrl", _state.ctrl)
+		brush.set("_press_shift", _state.shift)
 		_state.phase = 2
 		return false
 	var speed := float(step.get("speed", 6.0))
@@ -295,6 +332,9 @@ func _stroke(step: Dictionary) -> bool:
 		_state.held = float(_state.get("held", 0.0)) + get_process_delta_time()
 		if _state.held < hold:
 			return false
+		if not bool(step.get("release", true)):
+			# Still pressed at the end point (a capture mid-stroke); a `release` step ends it.
+			return true
 		if bool(step.get("keep_active", false)):
 			brush.set("_pressed", false)
 			brush.call("finish_gesture")
@@ -306,6 +346,11 @@ func _stroke(step: Dictionary) -> bool:
 
 
 func _set_pointer(brush: BrushTool, world: Vector3) -> void:
+	# On sculptable ground the point is lifted onto the ground, so the pointer aims at the
+	# map point on raised or sunken ground too (a still pointer then stays still).
+	var c := ctrl()
+	if c != null and c.editor != null and c.editor.can_sculpt():
+		world.y = c.editor.ground_height_at(world)
 	var screen := gm().camera_node.unproject_position(world)
 	brush.set("_pointer", screen)
 	brush.set("_has_pointer", true)
