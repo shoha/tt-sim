@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "ea3dd78",
+ "palette_version": "715e428",
  "surfaces": {
   "cliff": {
    "albedo": "surfaces/cliff/cliff_albedo.png",
@@ -56,6 +56,15 @@
    "kind": "dirt",
    "role": "ground"
   },
+  "dirt_road_caliche": {
+   "albedo": "surfaces/dirt_road_caliche/dirt_road_caliche_albedo.png",
+   "normal": "surfaces/dirt_road_caliche/dirt_road_caliche_normal.png",
+   "orm": "surfaces/dirt_road_caliche/dirt_road_caliche_orm.png",
+   "height": "surfaces/dirt_road_caliche/dirt_road_caliche_height.png",
+   "tile_m": 4.0,
+   "kind": "dirt_road",
+   "role": "built"
+  },
   "dirt_road_packed": {
    "albedo": "surfaces/dirt_road_packed/dirt_road_packed_albedo.png",
    "normal": "surfaces/dirt_road_packed/dirt_road_packed_normal.png",
@@ -70,6 +79,15 @@
    "normal": "surfaces/flagstone/flagstone_normal.png",
    "orm": "surfaces/flagstone/flagstone_orm.png",
    "height": "surfaces/flagstone/flagstone_height.png",
+   "tile_m": 3.0,
+   "kind": "flagstone",
+   "role": "built"
+  },
+  "flagstone_sandstone": {
+   "albedo": "surfaces/flagstone_sandstone/flagstone_sandstone_albedo.png",
+   "normal": "surfaces/flagstone_sandstone/flagstone_sandstone_normal.png",
+   "orm": "surfaces/flagstone_sandstone/flagstone_sandstone_orm.png",
+   "height": "surfaces/flagstone_sandstone/flagstone_sandstone_height.png",
    "tile_m": 3.0,
    "kind": "flagstone",
    "role": "built"
@@ -222,6 +240,18 @@
    "ground_surface": "grass_alpine",
    "cliff_surface": "cliff_basalt",
    "scree_surface": "gravel",
+   "ground_accents": [
+    {
+     "surface": "gravel",
+     "coverage": 0.09,
+     "scale_m": 4.0
+    }
+   ],
+   "path_surfaces": [
+    "flagstone",
+    "dirt_road_packed",
+    "cobblestone"
+   ],
    "species": [
     {
      "key": "dwarf_pine",
@@ -793,6 +823,19 @@
    "ground_surface": "grass",
    "cliff_surface": "cliff",
    "scree_surface": "gravel",
+   "ground_accents": [
+    {
+     "surface": "forest_floor",
+     "coverage": 0.14,
+     "scale_m": 6.0
+    }
+   ],
+   "path_surfaces": [
+    "dirt_road_packed",
+    "flagstone",
+    "planks",
+    "cobblestone"
+   ],
    "species": [
     {
      "key": "oak",
@@ -1360,6 +1403,19 @@
    "ground_surface": "pine_duff",
    "cliff_surface": "cliff_basalt",
    "scree_surface": "gravel",
+   "ground_accents": [
+    {
+     "surface": "moss",
+     "coverage": 0.15,
+     "scale_m": 6.0
+    }
+   ],
+   "path_surfaces": [
+    "dirt_road_packed",
+    "planks",
+    "flagstone",
+    "cobblestone"
+   ],
    "species": [
     {
      "key": "birch",
@@ -1810,6 +1866,24 @@
    "ground_surface": "grass",
    "cliff_surface": "cliff",
    "scree_surface": "gravel",
+   "ground_accents": [
+    {
+     "surface": "grass_alpine",
+     "coverage": 0.1,
+     "scale_m": 8.0
+    },
+    {
+     "surface": "grass_savanna",
+     "coverage": 0.06,
+     "scale_m": 6.0
+    }
+   ],
+   "path_surfaces": [
+    "dirt_road_packed",
+    "cobblestone",
+    "flagstone",
+    "stone_tiles"
+   ],
    "species": [
     {
      "key": "oak",
@@ -2372,6 +2446,18 @@
    "ground_surface": "sand_red",
    "cliff_surface": "cliff_sandstone",
    "scree_surface": "gravel_sandstone",
+   "ground_accents": [
+    {
+     "surface": "gravel_sandstone",
+     "coverage": 0.12,
+     "scale_m": 5.0
+    }
+   ],
+   "path_surfaces": [
+    "dirt_road_caliche",
+    "flagstone_sandstone",
+    "planks"
+   ],
    "species": [
     {
      "key": "acacia",
@@ -2831,6 +2917,19 @@
    "ground_surface": "grass_savanna",
    "cliff_surface": "cliff_sandstone",
    "scree_surface": "gravel_sandstone",
+   "ground_accents": [
+    {
+     "surface": "dirt",
+     "coverage": 0.12,
+     "scale_m": 6.0
+    }
+   ],
+   "path_surfaces": [
+    "dirt_road_caliche",
+    "flagstone_sandstone",
+    "dirt_road_packed",
+    "planks"
+   ],
    "species": [
     {
      "key": "palm",
@@ -3333,6 +3432,25 @@
    "ground_surface": "forest_floor",
    "cliff_surface": "cliff",
    "scree_surface": "gravel",
+   "ground_accents": [
+    {
+     "surface": "moss",
+     "coverage": 0.12,
+     "scale_m": 5.0
+    },
+    {
+     "surface": "grass",
+     "coverage": 0.06,
+     "scale_m": 8.0
+    }
+   ],
+   "path_surfaces": [
+    "dirt_road_packed",
+    "flagstone",
+    "planks",
+    "cobblestone",
+    "stone_tiles"
+   ],
    "species": [
     {
      "key": "pine",
@@ -4118,6 +4236,23 @@
    "ground_surface": "grass",
    "cliff_surface": "cliff",
    "scree_surface": "gravel",
+   "ground_accents": [
+    {
+     "surface": "mud",
+     "coverage": 0.1,
+     "scale_m": 5.0
+    },
+    {
+     "surface": "grass_alpine",
+     "coverage": 0.08,
+     "scale_m": 7.0
+    }
+   ],
+   "path_surfaces": [
+    "planks",
+    "dirt_road_packed",
+    "flagstone"
+   ],
    "species": [
     {
      "key": "poplar",

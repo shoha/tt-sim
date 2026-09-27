@@ -327,8 +327,12 @@ func test_new_biome_or_surface_mid_session_keeps_every_slot() -> void:
 	_paint_surface(doc, "planks", Rect2i(5, 60, 5, 5), 255)
 	terrain.update_ground_region(Rect2i(5, 60, 5, 5))
 	var now := terrain.ground_layers()
+	# The forest's ground accents (palette v5) may yield their slots to weight surfaces; every
+	# slot that holds weights stays put.
+	var accents := GroundAccents.surface_names(PaletteLibrary.ground_accents(FOREST))
 	for j in first.size():
-		assert_eq(now[j], first[j], "slot %d kept" % j)
+		if not first[j] in accents:
+			assert_eq(now[j], first[j], "slot %d kept" % j)
 	assert_true(now.has("pine_duff"))
 	assert_true(now.has("planks"))
 	assert_eq(terrain.get_material(), material, "same material")
@@ -354,8 +358,9 @@ func test_overflow_in_a_real_document_warns_once() -> void:
 	doc.biome_ids.append("wetland_riparian_summer_s1")
 	terrain.update_ground_region(Rect2i(0, 0, 40, 40))
 	# grass_savanna (ground), cliff_basalt and cliff_sandstone (cliff: drawn as cliff) and
-	# gravel_sandstone (scree): one warning each.
-	assert_engine_error(4, "one warning per overflowed surface")
+	# gravel_sandstone (scree): one warning each. Two palette v5 ground accents (moss,
+	# gravel_sandstone) find no slot left: one warning each too.
+	assert_engine_error(6, "one warning per overflowed surface or dropped accent")
 	assert_eq(terrain.ground_layers().size(), GroundLayerTable.MAX_LAYERS)
 	assert_eq(terrain.ground_layers()[0], "cobblestone", "painted surfaces keep their slots")
 	assert_eq(terrain.ground_layers()[1], "flagstone")

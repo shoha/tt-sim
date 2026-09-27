@@ -11,10 +11,10 @@ extends GutTest
 ## imports the project before running tests, so the imported resources exist there.
 
 const BIOME_COUNT := 8
-const SURFACE_COUNT := 23
+const SURFACE_COUNT := 25
 ## Surfaces per role (section 9 "Surface role"); the rest of SURFACE_COUNT is ground.
 const CLIFF_SURFACE_COUNT := 3
-const BUILT_SURFACE_COUNT := 5
+const BUILT_SURFACE_COUNT := 7
 const WIND_CATEGORIES := ["tree", "grass"]
 ## Committed surface-map sidecar settings per map (section 9 "Import path"), all
 ## mipmapped: albedo BC7 (VRAM, high quality), normal BC5 (VRAM, normal-map flag), ORM
@@ -123,6 +123,44 @@ func test_every_biome_resolves_its_cliff_and_scree_surfaces() -> void:
 			assert_eq(surfaces[biome.scree_surface].role, "ground", biome.id)
 		if surfaces.has(biome.ground_surface):
 			assert_eq(surfaces[biome.ground_surface].role, "ground", biome.id)
+
+
+## The raw palette.json biome entry for an id, to compare against what the loader kept.
+func _raw_biome(biome_id: String) -> Dictionary:
+	var path := PaletteLibrary.DEFAULT_ROOT.path_join("palette.json")
+	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	for entry in raw["biomes"]:
+		if entry["id"] == biome_id:
+			return entry
+	return {}
+
+
+## Palette v5 gives every biome path surfaces and ground accents (section 9). The loader
+## drops a wrong-role or missing name with a warning GUT fails on; comparing against the
+## raw lists also catches a silently ignored duplicate.
+func test_every_biome_resolves_its_path_surfaces_and_ground_accents() -> void:
+	var surfaces := PaletteLibrary.surfaces()
+	for biome in PaletteLibrary.biomes():
+		var raw := _raw_biome(biome.id)
+		var paths := PaletteLibrary.path_surfaces(biome.id)
+		assert_gt(paths.size(), 0, "%s path_surfaces" % biome.id)
+		assert_eq(paths.size(), raw.get("path_surfaces", []).size(), "%s paths kept" % biome.id)
+		for surface_name in paths:
+			assert_true(surfaces.has(surface_name), "%s path %s" % [biome.id, surface_name])
+			if surfaces.has(surface_name):
+				assert_eq(surfaces[surface_name].role, "built", "%s %s" % [biome.id, surface_name])
+		var accents := PaletteLibrary.ground_accents(biome.id)
+		assert_gt(accents.size(), 0, "%s ground_accents" % biome.id)
+		assert_eq(accents.size(), raw.get("ground_accents", []).size(), "%s kept" % biome.id)
+		for accent in accents:
+			var surface_name: String = accent.surface
+			var label := "%s accent %s" % [biome.id, surface_name]
+			assert_true(surfaces.has(surface_name), label)
+			if surfaces.has(surface_name):
+				assert_eq(surfaces[surface_name].role, "ground", label)
+			assert_ne(surface_name, biome.ground_surface, label)
+			assert_gt(accent.coverage, 0.0, label)
+			assert_gt(accent.scale_m, 0.0, label)
 
 
 func test_every_surface_map_is_an_imported_texture_with_the_committed_settings() -> void:

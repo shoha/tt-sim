@@ -353,7 +353,13 @@ func test_skirt_is_decoration_outside_the_map_bounds() -> void:
 	assert_eq(skirt.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	var material := skirt.mesh.surface_get_material(0) as ShaderMaterial
 	assert_eq(material.shader, AuthoredTerrain.SKIRT_SHADER)
-	assert_eq(material.get_shader_parameter("layer_count"), 0, "no layers")
+	# The grass base's palette biome carries ground accents (palette v5), which the skirt
+	# continues: its layers are exactly the terrain's, bound for those accents.
+	assert_eq(
+		material.get_shader_parameter("layer_count"),
+		terrain.ground_layers().size(),
+		"the base accents' layers"
+	)
 	assert_eq(
 		material.get_shader_parameter("albedo_tex"),
 		terrain.get_material().get_shader_parameter("albedo_tex"),

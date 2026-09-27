@@ -384,14 +384,16 @@ func test_the_shader_mirrors_the_accent_constants() -> void:
 # --- the terrain --------------------------------------------------------------------------
 
 
-## The real palette with accents injected into the temperate forest and a path list, the way
-## palette v5 will carry them (the cache is cleared after each test).
-func _inject_forest_accents(accents: Array) -> void:
+## The real palette with the temperate forest's accents replaced by `accents` (the cache is
+## cleared after each test). `others` replaces every other biome's accents when given.
+func _inject_forest_accents(accents: Array, others: Variant = null) -> void:
 	PaletteLibrary.clear_cache()
 	var palette: Dictionary = PaletteLibrary.get_palette().duplicate(true)
 	for biome in palette.biomes:
 		if biome.id == FOREST:
 			biome["ground_accents"] = accents
+		elif others is Array:
+			biome["ground_accents"] = others
 	PaletteLibrary._palettes[PaletteLibrary.DEFAULT_ROOT] = palette
 
 
@@ -450,9 +452,10 @@ func test_a_new_biome_takes_an_accent_slot_without_moving_the_weights() -> void:
 
 
 func test_without_accents_the_terrain_binds_none() -> void:
-	PaletteLibrary.clear_cache()
+	_inject_forest_accents([], [])
 	var terrain := AuthoredTerrain.create(_forest_doc())
 	add_child_autofree(terrain)
 	assert_eq(terrain.get_material().get_shader_parameter("accent_components"), 0)
 	var skirt := terrain.get_skirt().mesh.surface_get_material(0) as ShaderMaterial
 	assert_eq(skirt.get_shader_parameter("layer_count"), 0)
+	PaletteLibrary.clear_cache()

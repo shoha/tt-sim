@@ -268,7 +268,7 @@ func _built_order(panel: AuthoringPanel) -> Array[String]:
 	return order
 
 
-## The built-in palette with path_surfaces injected, as palette v5 will carry them.
+## The built-in palette with the path_surfaces of the biomes in `paths` replaced.
 func _inject_paths(paths: Dictionary) -> void:
 	PaletteLibrary.clear_cache()
 	var palette: Dictionary = PaletteLibrary.get_palette().duplicate(true)
@@ -279,13 +279,17 @@ func _inject_paths(paths: Dictionary) -> void:
 
 
 func test_built_tiles_keep_the_palette_order_when_no_biome_lists_paths() -> void:
-	PaletteLibrary.clear_cache()
+	var none := {}
+	for biome in PaletteLibrary.biomes():
+		none[biome.id] = []
+	_inject_paths(none)
 	var panel := AuthoringPanel.new()
 	add_child_autofree(panel)
 	panel.ensure_paint_tiles()
 	assert_false(panel.order_paint_tiles(PackedStringArray([FOREST])), "the default stays")
 	assert_eq(_built_order(panel), PaletteLibrary.surfaces_with_role("built"))
 	assert_eq(panel.get_paint_surface(), AuthoringPanel.DEFAULT_PAINT_SURFACE)
+	PaletteLibrary.clear_cache()
 
 
 func test_built_tiles_show_the_maps_biome_paths_first() -> void:
