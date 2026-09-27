@@ -9,17 +9,29 @@ extends SceneTree
 ##   "out_dir"          output folder; relative paths resolve under user://
 ##                      (default user://render_jobs/<job name>); --out overrides it
 ##   "timeout_s"        hard stop (default 300)
+##   "hang_s"           kill the process when no frame completes for this long (default 60)
 ##   "remove_override"  delete res://override.cfg once the engine has read it
+##
+## The timeout above runs on the main thread, so a main thread that blocks (a hung load, a
+## GPU wait) would never reach it, and stopping the shell task that launched Godot does not
+## stop Godot itself on Windows. A watchdog thread therefore kills the process when frames
+## stop for hang_s, or when the run outlives timeout_s by WATCHDOG_GRACE_S, after logging
+## "RJ| HANG". The last "RJ| step" line before it is the step that hung.
 
 const JOBS_DIR := "res://tools/render_jobs/jobs"
 const DEFAULT_OUT_ROOT := "user://render_jobs"
 const OVERRIDE := "res://override.cfg"
+const DEFAULT_HANG_S := 60.0
+const WATCHDOG_GRACE_S := 30.0
+const WATCHDOG_POLL_MS := 250
 
 var _job: Dictionary = {}
 var _out_dir: String = ""
 var _frames: int = 0
 var _started: bool = false
 var _start_ms: int = 0
+var _watchdog: Thread = null
+var _watchdog_quit: bool = false
 
 
 func _initialize() -> void:
@@ -39,7 +51,56 @@ func _initialize() -> void:
 		DirAccess.remove_absolute(override_abs)
 		print("RJ| override.cfg removed after startup")
 	print("RJ| job %s -> %s" % [path, _out_dir])
+	_watchdog = Thread.new()
+	_watchdog.start(
+		_watch.bind(
+			float(_job.get("hang_s", DEFAULT_HANG_S)),
+			float(_job.get("timeout_s", 300.0)) + WATCHDOG_GRACE_S,
+			_out_dir.path_join("log.txt")
+		)
+	)
 	change_scene_to_file(String(ProjectSettings.get_setting("application/run/main_scene")))
+
+
+func _finalize() -> void:
+	_watchdog_quit = true
+	if _watchdog != null and _watchdog.is_started():
+		_watchdog.wait_to_finish()
+
+
+## Watchdog thread: kills the process when no frame completes for `hang_s`, or when the run
+## passes `limit_s` in all, after printing and logging why. Touches no scene state.
+func _watch(hang_s: float, limit_s: float, log_path: String) -> void:
+	var last_frame := Engine.get_process_frames()
+	var last_change := Time.get_ticks_msec()
+	while not _watchdog_quit:
+		OS.delay_msec(WATCHDOG_POLL_MS)
+		var now := Time.get_ticks_msec()
+		var frame := Engine.get_process_frames()
+		if frame != last_frame:
+			last_frame = frame
+			last_change = now
+		var reason := ""
+		if (now - last_change) / 1000.0 > hang_s:
+			reason = "no frame for %.0f s (frame %d)" % [(now - last_change) / 1000.0, frame]
+		elif (now - _start_ms) / 1000.0 > limit_s:
+			reason = "run passed %.0f s without quitting" % limit_s
+		if reason != "":
+			_kill(reason, log_path)
+			return
+
+
+static func _kill(reason: String, log_path: String) -> void:
+	var line := "HANG: %s; killing the process" % reason
+	printerr("RJ| " + line)
+	var f := FileAccess.open(log_path, FileAccess.READ_WRITE)
+	if f == null:
+		f = FileAccess.open(log_path, FileAccess.WRITE)
+	if f != null:
+		f.seek_end()
+		f.store_line(line)
+		f.close()
+	OS.kill(OS.get_process_id())
 
 
 func _process(_delta: float) -> bool:
