@@ -98,6 +98,9 @@ const RAISE_TINT := Color(1.0, 0.86, 0.62)
 const LOWER_TINT := Color(0.66, 0.78, 1.0)
 const SMOOTH_TINT := Color(0.86, 0.96, 0.9)
 const PLACE_MARKER_M := 0.6
+## The Place marker turns CLEAR_TINT where the prop's base footprint straddles a drop of
+## more than this (AuthoringEditor.footing_drop, metres): it would be sunk that far to stand.
+const PLACE_DROP_WARN_M := 0.25
 ## The Tier / Flatten readout under the ring (MapOverlayUtils.create_label_panel's look,
 ## smaller: it accompanies the cursor rather than reporting a measurement).
 const READOUT_FONT_SIZE := 13
@@ -789,7 +792,10 @@ func _draw_place_cursor() -> void:
 	if not _placing.is_empty():
 		_draw_flat_ring(editor.prop_position(_placing), PLACE_MARKER_M, PLACE_TINT, 2.0)
 		return
-	_draw_flat_ring(_hit, PLACE_MARKER_M, Color(PLACE_TINT, 0.8), 1.5)
+	var tint := PLACE_TINT
+	if not place_rule.is_empty() and editor.footing_drop(place_rule, _hit) > PLACE_DROP_WARN_M:
+		tint = CLEAR_TINT
+	_draw_flat_ring(_hit, PLACE_MARKER_M, Color(tint, 0.8), 1.5)
 
 
 ## Re-conforms the ring's world points to the ground when the brush moved or resized; while

@@ -1305,6 +1305,19 @@ triangles, see below) and `generate_for_document()` wires both together.
   `smoothstep(0.02, 0.2)`: about a metre clear, thinning out by 1.5 m), so meadow tall grass
   rooted on a path's shoulder no longer lies over a narrow path from the game camera; short
   grass, flowers and trees stay. A built-paint stroke regenerates 1.5 m further out for it.
+- **Footing (P3-7):** a row stands at the ground height under its one origin, so a tree or a
+  boulder whose origin lay on a tier's rim hung over the drop. `GroundSnap.footing_radius(rule)`
+  gives a base radius (trees 8 % of the widest asset, 0.3..0.6 m; shrubs 15 %, up to 0.5 m;
+  rocks and deadwood at least 0.5 m wide 30 %, up to 0.9 m; ground cover and small plants 0,
+  they follow the slope; `ScatterPlan` entry `footing_m`, from the rule's `width_m`, which
+  `PaletteLibrary.species()` adds). `GroundSnap.footing_sag()` samples the origin and four
+  diameters: the convex sag `h(p) - (h(p + r d) + h(p - r d)) / 2` and a one-sided drop beyond
+  a 50 degree fall; the generator rejects a candidate whose sag passes `FOOTING_SAG_M` (0.06 m),
+  so nothing grows on a rim, while an even hill flank (sag 0) keeps its trees. Props bed at the
+  lowest ground under their footprint (`GroundSnap.lowest_under`): `AuthoringEditor.place_prop`
+  sinks the press point by `footing_drop()`, `GroundSnap.rebed_props` uses the footprint's
+  lowest ground (scaled by the prop's scale) after a sculpt stroke, and the Place cursor turns
+  red where the drop passes 0.25 m.
 - **Triangle-matched ground (P3-3a):** `triangle_height()` interpolates over the triangle of
   the quad a point is in, each quad split on the same diagonal as the chunk meshes and
   Jolt's `HeightMapShape3D`, (a, a+1, a+cols) and (a+1, a+cols+1, a+cols), so a generated

@@ -226,7 +226,9 @@ func _process(delta: float) -> void:
 				log_line("no species %s in %s; not placed" % [step.species, step.biome])
 			else:
 				var at: Array = step.at
-				var p := Vector3(float(at[0]), 0.0, float(at[1]))
+				# Bedded on the terrain as the Place brush beds a press (P3-7: at Y = 0 a
+				# prop placed in a sunken hollow hung its trunk in the air).
+				var p: Vector3 = c.brush.call("_bedded", Vector3(float(at[0]), 0.0, float(at[1])))
 				c.editor.place_prop(rule, p, Vector3.UP)
 				c.editor.commit_prop_edit()
 		"capture":

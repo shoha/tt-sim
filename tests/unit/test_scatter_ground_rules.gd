@@ -96,6 +96,88 @@ func test_rocks_gather_on_the_scree() -> void:
 	assert_almost_eq(far, base, 1e-6, "no boost away from cliffs")
 
 
+func _tree_rule() -> Dictionary:
+	return {
+		"key": "tree",
+		"kind": "tree",
+		"size_class": "large",
+		"density_per_m2": 0.6,
+		"min_spacing_m": 0.6,
+		"assets": ["test/Tree"],
+		"width_m": 5.0,
+	}
+
+
+func test_footing_sag_is_large_on_a_rim_and_zero_back_from_it_and_on_slopes() -> void:
+	var doc := _doc()
+	var fields := ScatterGenerator.document_fields(doc, FOREST)
+	var r := GroundSnap.footing_radius(_tree_rule())
+	var top_edge := _face_x(doc) + 0.25
+	var sag_rim := GroundSnap.footing_sag(fields.height_at, Vector2(top_edge, 0.0), r)
+	assert_gt(sag_rim, GroundSnap.FOOTING_SAG_M, "a trunk on the rim hangs over the drop")
+	var back := GroundSnap.footing_sag(fields.height_at, Vector2(top_edge + 1.0, 0.0), r)
+	assert_almost_eq(back, 0.0, 1e-5, "a metre back it stands on flat ground")
+	var slope := func(p: Vector2) -> float: return p.x * 0.7
+	assert_almost_eq(GroundSnap.footing_sag(slope, Vector2(1, 2), r), 0.0, 1e-5, "even slope")
+	assert_eq(GroundSnap.footing_radius({"size_class": "ground", "width_m": 1.5}), 0.0)
+	assert_eq(
+		GroundSnap.footing_radius({"kind": "rock", "size_class": "small", "width_m": 0.2}), 0.0
+	)
+	assert_gt(
+		GroundSnap.footing_radius({"kind": "rock", "size_class": "medium", "width_m": 1.7}), 0.4
+	)
+
+
+func test_no_generated_tree_stands_on_a_rim_and_trees_a_metre_back_remain() -> void:
+	var doc := _doc()
+	var fields := ScatterGenerator.document_fields(doc, FOREST)
+	var species: Array[Dictionary] = [_tree_rule()]
+	var bounds := Rect2(-10, -10, 20, 20)
+	var one := func(_p: Vector2) -> float: return 1.0
+	var rows := ScatterGenerator.generate(
+		"test",
+		species,
+		one,
+		fields.height_at,
+		fields.normal_at,
+		5,
+		ScatterGenerator.cells_in_bounds(bounds),
+		bounds
+	)
+	var flat: PackedFloat32Array = rows.get("test/Tree", PackedFloat32Array())
+	var r := GroundSnap.footing_radius(_tree_rule())
+	var face_x := _face_x(doc)
+	var near_rim := 0
+	var back := 0
+	for i in range(0, flat.size(), MapDocument.ROW_STRIDE):
+		var p := Vector2(flat[i], flat[i + 2])
+		assert_lt(GroundSnap.footing_sag(fields.height_at, p, r), GroundSnap.FOOTING_SAG_M)
+		if p.x > face_x and p.x < face_x + r * 0.8:
+			near_rim += 1
+		if p.x > face_x + 1.0 and p.x < face_x + 2.0:
+			back += 1
+	assert_eq(near_rim, 0, "no tree with its trunk over the rim")
+	assert_gt(back, 3, "trees a metre back from the rim remain")
+
+
+func test_a_prop_at_a_rim_beds_on_the_lowest_ground_under_its_base() -> void:
+	var doc := _doc()
+	var grid := GroundSnap.grid_of(doc)
+	var r := GroundSnap.footing_radius(_tree_rule())
+	var rim := Vector2(_face_x(doc) + 0.25, 0.0)
+	assert_almost_eq(GroundSnap.lowest_under(doc.heights, grid, rim, r), 0.0, 1e-5, "base low")
+	assert_almost_eq(GroundSnap.lowest_under(doc.heights, grid, rim, 0.0), 1.524, 1e-5)
+	# Re-bedding after a sculpt stroke: a prop on flat ground that is now a rim sinks.
+	var flat := PackedFloat32Array()
+	flat.resize(doc.sample_count())
+	var row := PropRows.make_row(Vector3(rim.x, 0.0, rim.y), Vector3.UP, false, 0.3, 1.0)
+	var window := Rect2(-20, -20, 40, 40)
+	var sunk := GroundSnap.rebed_props(row, row, flat, doc.heights, grid, false, window, r)
+	assert_almost_eq(sunk.rows[1], 0.0, 1e-5, "its base touches the low ground")
+	var origin := GroundSnap.rebed_props(row, row, flat, doc.heights, grid, false, window)
+	assert_almost_eq(origin.rows[1], 1.524, 1e-5, "without a footprint: the origin's height")
+
+
 func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> void:
 	# P3-7: tall grass on a path's shoulder hid a narrow path from the game camera.
 	var doc := _doc()
