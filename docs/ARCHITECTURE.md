@@ -477,6 +477,34 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   cursor conforms to the document's heights every frame while sculpting, a still pointer
   keeps its ground point during a stroke, canopies over the ring fade (as for Thin / Clear),
   and Tier / Flatten show their target under the ring (`BrushTool.tier_readout`).
+- **Surface strokes (the Paint tool, P3-6):** `BrushTool.Mode.PAINT` with `paint_surface`
+  (the panel's tile); a press calls `AuthoringEditor.begin_surface_stroke(surface, erase)`
+  (`erase` = Ctrl at the press), which is false on a dressed GLB (`can_paint()`, the same
+  rule as `can_sculpt()`), with nothing to erase, or when every slot holds paint (the brush
+  then emits `paint_refused` and the controller toasts `surface_refusal()`'s reason).
+  `SurfaceStroke` (`utils/surface_stroke.gd`) mirrors `MaskStroke` on the eight weight
+  channels: `MaskBrush`'s falloff and exposure at `SURFACE_GAIN` (1.5x the biome rate, so a
+  pass at a natural speed covers about 0.75 under the centre); paint moves the slot's coverage
+  toward 1 and the other slots keep their stroke-start weights while they fit in 255 minus
+  it, then scale down together (the newest paint wins, as `set_surface_weight()` says;
+  computed from the start bytes every dab, so a long dwell does not erode them by rounding);
+  erase multiplies every slot at a sample by one remaining fraction (`ERASE_GAIN` 2x). Slots:
+  `begin()` claims the surface's slot with `MapDocument.ensure_surface()` (its slot, a new
+  one, or a fully erased one renamed; the list and a first weights array are replaced by
+  new arrays, never resized in place) and `finish()` drops trailing slots left without paint
+  (`trim_unused_surfaces()`), so erasing a surface completely frees its slot; the slot list
+  before and after and whether the weights existed are part of the diff. History: per 40 x
+  40 block, both planes' bytes before and after, ZSTD-compressed; `apply_diff()` and
+  `revert()` as for masks. Per frame `flush()` only calls
+  `AuthoredTerrain.update_ground_region()` for the changed samples (a partial blit; the
+  layer table re-plans only when a surface enters or leaves the list). Scatter follows at
+  stroke end, undo and redo, and only when a built or cliff-role surface is in the diff's
+  slot lists (`SurfaceStroke.changes_plants()`): `AuthoredScatter.request_region()` over the
+  stroke's area grown by a step and the painted edge warp, so covered plants shrink out and
+  uncovered ones grow back. Ground-role paint changes no plants (it yields to the rock on
+  faces and is ground elsewhere), so it regenerates nothing. `slot_refusal()` walks each
+  slot's weights only when all eight are taken (`MapDocument.surface_slot_unused`, a strided
+  loop, about 3 ms per empty slot on a 200 ft map).
 - **Bounds on relief:** the camera's near plane stays above the terrain's top
   (`CameraController.set_ground_top`, set by `MapSourceLoader.install` for any map with an
   `AuthoredTerrain`, play time included, and every frame in authoring; the camera moves back
@@ -1095,8 +1123,17 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   grid (`layer_weights_a` slots 0-3, `_b` 4-7), filtered, so 0.25 m samples give smooth
   ramps; `layer_painted_mask` / `layer_ground_mask` say which slots are which. Weights,
   not slot ids, because an id cannot be filtered. Composition per pixel: painted weight
-  first (it always wins); biome ground and base share `1 - painted`; the automatic rules
-  take their share of that. **Which rock:** each ground component (every GROUND slot and
+  first; biome ground and base share `1 - painted`; the automatic rules take their share of
+  that. **Cliff faces (P3-6, the user's 2026-09-27 decision):** painted ground and built
+  surfaces cover walkable ground only. Each such painted channel is multiplied by
+  `1 - PAINT_CLIFF_YIELD * cliff` (the cliff rule's weight at the pixel, `PAINT_CLIFF_YIELD`
+  1.0) and what it gives up goes to the automatic rock, so a road painted across a ledge
+  stops at the edge and resumes on top (the lip rule keeps a tier's rounded shoulder ground,
+  so the road runs right up to it). Scree applies to the unpainted ground only. Painted
+  cliff-role surfaces (`layer_cliff_paint_mask`, from `GroundLayerTable.painted_role_mask`)
+  never yield: painting Basalt restyles a face, or bares rock on flat ground. The formula is
+  written once more on the CPU (`TerrainRules.compose_paint`, used by `ScatterGround`), and
+  `test_terrain_rules.gd` checks the shader's lines and the constant. **Which rock:** each ground component (every GROUND slot and
   the base) carries a rule pair (`rule_cliff_layer` / `rule_scree_layer`, from `cliff_of`
   / `scree_of`): the cliff and scree of the most covered painted biome on that surface (the
   base: of the biomes on the base surface, else the palette's first biome on it,
@@ -1124,7 +1161,8 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   surfaces in the band), which keeps register pressure near the old 4-layer shader's.
   The dry/lush tints fade out on unsaturated albedo so snow is not stained.
 - **Automatic dressing (P3-4):** always on, no toggle; the user's decisions are tier edges
-  as rock cliffs and hand paint winning. Formulas and defaults live once in
+  as rock cliffs and hand paint winning, except that ground and built paint yield to the
+  rock on faces (P3-6, above). Formulas and defaults live once in
   `TerrainRules` (`utils/terrain_rules.gd`, pure) and are mirrored as shader constants
   (`tests/unit/test_terrain_rules.gd` fails when they drift): terrain-paint's mask tails
   (`clamp((v - start) / (end - start))`), edge noise, shaping ramp (0.2..0.8, EASE), and
@@ -1155,13 +1193,18 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   mosaic (it would rotate a cliff's level beds), and the projections height-blended
   (taller detail wins) instead of cross-faded, which double-exposed two rock patterns into
   a smear. Above 0.72 the side code is branched over. Every surface present uses the
-  projections, so a painted path over a face paves it (reads as a stone-faced wall).
+  projections; since P3-6 a painted ground or built surface yields to the rock on a face
+  (above), so only painted rock (or the mid-slope band where the cliff rule is partial) draws
+  a painted surface on the side planes.
 - **Two-scale edge (T7):** that frayed edge is decimetres wide and alone read like a decal
   beside a Blender map's layers, which fade over metres. A second, broad scale:
   `GroundLayerTable.broad_image()` box-filters each weight mirror by `BROAD_FACTOR` (14
   samples, 3.5 m per texel at 0.25 m; natively, via `Image.resize` trilinear), bound as
-  `layer_broad_a` / `_b` and read with a cubic B-spline for GROUND slots only (a painted
-  path gets no halo), so each painted biome's mean colour (last
+  `layer_broad_a` / `_b` and read with a cubic B-spline for GROUND slots and, since P3-6,
+  painted built slots at a lower strength (`layer_trample_mask`, `paint_broad_strength`
+  0.35: a faint trodden fringe that seats a path in the grass, judged by an in-run A/B in
+  `jobs/paint_look.json`; other painted surfaces get no halo), so each painted biome's mean
+  colour (last
   albedo mip) recolours the ground around it in a gradient about 7 m wide
   (`biome_broad_strength` 0.8, full at broad weight `biome_broad_full` 0.4), fading out where
   the fine edge already shows the layer. The recolour is luminance-based (layer mean x the
@@ -1219,15 +1262,20 @@ triangles, see below) and `generate_for_document()` wires both together.
 
 - **Ground coupling (P3-4):** `document_fields(doc, biome, window, built_surfaces)`
   multiplies density by what the ground shader draws there (`ScatterGround`,
-  `utils/scatter_ground.gd`, through `TerrainRules`, the shader's CPU twin): times
-  (1 - cliff share) on automatic rock, times (1 - built weight) under a painted surface with
-  role `built` (a road clears its plants), times (1 - 0.5 scree share) on scree; rock
-  species (rule kind `rock`) read `rock_density_at` instead, times (1 + 0.8 scree share),
-  capped at full, so boulders gather at cliff feet (the generator's optional
-  `rock_density_at` argument). Shares are those of the unpainted ground, so a hand-painted
-  ground surface overrides the rock for plants too. The rule fields are decoded for the
-  window's samples on the worker (`ScatterRegen` passes the palette's built surfaces and
-  the snapshot carries the painted weights); a height edit regenerates 1.5 m further out.
+  `utils/scatter_ground.gd`, through `TerrainRules`, the shader's CPU twin): the open share
+  is 1 minus the automatic rock (from `TerrainRules.compose_paint`: painted ground and built
+  surfaces yield to the rock on a face, painted cliff-role rock holds) minus a steep
+  response to paving, `smoothstep(0.05, 0.4, built share + painted rock)`
+  (`ScatterGround.PAVED_CLEAR_*`: the shader height-blends a quick pass's 0.75 road as road,
+  and a linear response left tall grass standing in it and on its shoulders), so a road
+  clears its plants on flat ground, its faintest fringe keeps some, and nothing grows on a
+  face even where a path was painted across it; times (1 - 0.5 scree
+  share) on scree; rock species (rule kind `rock`) read `rock_density_at` instead, times
+  (1 + 0.8 scree share), capped at full, so boulders gather at cliff feet (the generator's
+  optional `rock_density_at` argument). Painted ground surfaces (grass, moss) change no
+  plants. The rule fields are decoded for the window's samples on the worker
+  (`ScatterRegen` passes the palette's built and cliff surfaces and the snapshot carries the
+  painted weights); a height edit regenerates 1.5 m further out.
 - **Triangle-matched ground (P3-3a):** `triangle_height()` interpolates over the triangle of
   the quad a point is in, each quad split on the same diagonal as the chunk meshes and
   Jolt's `HeightMapShape3D`, (a, a+1, a+cols) and (a+1, a+cols+1, a+cols), so a generated

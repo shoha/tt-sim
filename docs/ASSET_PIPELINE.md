@@ -390,6 +390,11 @@ Field notes:
     why the rutted, verged `dirt_road` is not in the palette. Walls, roofs and interior
     floors are never palette surfaces.
 
+  tt-sim's Paint tool (P3-6) groups its tiles by role and reads it as behaviour: painted
+  `ground` and `built` surfaces cover walkable ground only and yield to the automatic rock
+  on steep faces (a path stops at a ledge); painted `cliff` surfaces apply anywhere
+  (restyling a face); `built` and painted `cliff` clear the plants under them.
+
   `kind` is the treecube surface kind the preset belongs to (`cliff` for
   `cliff_basalt`), for grouping in the UI; tt-sim never branches on it.
 - `cliff_surface` is the surface the automatic dressing puts on a biome's steep faces
@@ -403,8 +408,8 @@ Field notes:
   | alpine_meadow, boreal_taiga | `cliff_basalt` | `gravel` |
   | savanna, rocky_badlands | `cliff_sandstone` | `gravel_sandstone` |
 
-  A painted surface always wins over these (phase 3 decision); the biome only supplies
-  the default.
+  A painted `cliff` surface always wins over these (phase 3 decision); the biome only
+  supplies the default. Painted ground and built surfaces do not cover a face (above).
 - `geoscatter_pattern` holds Geoscatter's `s_pattern1_*` settings verbatim with the
   prefix stripped (texture dict, sample method, influences, revert flags), minus the
   datablock plumbing (`allow`, `texture_ptr`, `texture_is_unique`). tt-sim's
