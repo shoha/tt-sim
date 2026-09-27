@@ -337,6 +337,26 @@ leftover autosave (`AuthoringAutosave`), then loads:
   empty document (`has_base_map`) reaching the GLB's farthest geometry, written on the first
   save.
 
+**Dressing ground.** A dressed map's document heights are not a terrain anyone sees (a
+dressed map has no AuthoredTerrain: `MapSourceLoader` builds one only without a GLB) but the
+ground the scatter generator stands plants on: Y, the normal that tilts normal-aligned
+species, and the slope that thins steep ground. Every time a `has_base_map` document opens,
+`AuthoringController._fit_dressing_to_ground()` waits one physics frame (so the GLB's
+collision is in the space), then `DressingGround` casts one layer-1 downward ray per
+document sample (`DragPlaceController.raycast_terrain_down`, from 100 m above the map's
+mesh bounds) in `MapSourceLoader.FRAME_BUDGET_USEC` slices under the loading screen, in the
+map root's frame (level scale and offset). A missed sample (the document's whole cells can
+overhang the terrain) takes the nearest hit's height, or 0 when nothing hit. Measured on
+Deciduous clusters (43,264 samples, 3,264 misses): 160-165 ms of rays, 239 ms wall. Before
+this, dressed heights stayed flat 0 and every painted plant was generated at Y = 0 (up to
+1.18 m above the dip on Deciduous clusters). A document saved that way is repaired on open:
+`DressingGround.settle()` moves its generated rows onto the sampled ground (Y, and the arc
+from the old to the new normal for normal-aligned assets, keeping yaw and lean), rebuilds
+the changed cells in place, and the session starts unsaved with a toast, so the author saves
+the fix; it is not an undoable history entry. Props are left alone: the Place brush beds
+each on the collision under it. A document already on its ground settles nothing and opens
+clean. Play-time loads use the saved rows unchanged.
+
 The loader runs with `separate_props = true` (scatter in `AuthoredScatter`, props in
 `AuthoredProps`, both always present) and `MapSourceLoader.install()` puts the root into
 `MapContainer` exactly as a play-time load does. Then the scatter node gets

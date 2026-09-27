@@ -17,7 +17,9 @@ extends Node
 ## Three ways in (Root builds the request): a new map (NewMapDialog's spec, NewMap), a level
 ## with a map.ttmap, and a level with only a map.glb, which opens as a dressing layer: the
 ## GLB is the base and an empty document covering it is made in memory, written on the
-## first save. A leftover autosave is offered first (AuthoringAutosave).
+## first save. A leftover autosave is offered first (AuthoringAutosave). Every dressed map
+## (has_base_map) has its document heights sampled from the GLB's collision as it opens
+## (_fit_dressing_to_ground), so painted plants stand on the GLB ground.
 ##
 ## Saving writes map.ttmap atomically (MapDocumentIO), then level.json with map_document
 ## set (LevelManager), then a thumbnail of the current view. Unsaved edits are counted by
@@ -62,6 +64,9 @@ var panel: AuthoringPanel = null
 var selected_biome: String = ""
 var brush: BrushTool = null
 var editor: AuthoringEditor = null
+## The last dressing ground fit (_fit_dressing_to_ground), for measurement: {"samples",
+## "ray_ms", "missed", "settled_rows", "wall_ms"}; {} for a map that is not a dressing.
+var ground_fit: Dictionary = {}
 
 var _game_map: GameMap = null
 var _environment := LevelEnvironmentManager.new()
@@ -183,6 +188,7 @@ func _open_async(
 	_generation += 1
 	var generation := _generation
 	_is_open = false
+	ground_fit = {}
 	level = opened
 	_game_map.map_loading = true
 	loading_started.emit()
@@ -214,15 +220,21 @@ func _open_async(
 		return
 	loading_progress.emit(0.8, "Placing the map...")
 	_install(root, loader.document)
+	var settled_rows := 0
+	if document.has_base_map:
+		loading_progress.emit(0.85, "Fitting to the ground...")
+		settled_rows = await _fit_dressing_to_ground(generation)
+		if _superseded(generation):
+			return
 	loading_progress.emit(0.9, "Preparing the palette...")
 	for biome in PaletteLibrary.biomes(scatter.palette_root):
 		scatter.prepare_biome(String(biome.get("id", "")))
 	await _await_palette_warm(generation)
 	if _superseded(generation):
 		return
-	session = (
-		AuthoringSession.unsaved() if not spec.is_empty() or recovered else AuthoringSession.new()
-	)
+	# Rows settled onto the ground are an edit the author saves (see _fit_dressing_to_ground).
+	var unsaved := not spec.is_empty() or recovered or settled_rows > 0
+	session = AuthoringSession.unsaved() if unsaved else AuthoringSession.new()
 	session.dirty_changed.connect(_on_dirty_changed)
 	history.clear()
 	if not spec.is_empty() and not document.biome_ids.is_empty():
@@ -241,6 +253,12 @@ func _open_async(
 	_is_open = true
 	_autosave_timer.start()
 	set_process(true)
+	if settled_rows > 0:
+		UIManager.show_toast(
+			"Plants painted before were set down onto the ground. Save to keep the fix.",
+			UIManager.TOAST_INFO,
+			6.0
+		)
 
 
 func _superseded(generation: int) -> bool:
@@ -286,6 +304,44 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	editor.edited.connect(mark_edited)
 	brush.deactivate()
 	brush.editor = editor
+
+
+## Samples a dressed GLB's ground into the document's heights (DressingGround), a slice per
+## frame under the loading screen, so the Biome brush generates plants on the GLB ground
+## instead of at Y = 0. Waits one physics frame first so the map's collision is in the
+## physics space. A document saved before this existed has its generated rows at Y = 0;
+## they are set down onto the ground here (DressingGround.settle) and the session starts
+## unsaved so the author saves the fix. It is not an undoable history entry: undoing it
+## would only put the plants back in the air. Returns how many rows moved (0 when the
+## document already matched its ground, which a save after this fix guarantees unless the
+## GLB was re-exported).
+func _fit_dressing_to_ground(generation: int) -> int:
+	var started := Time.get_ticks_usec()
+	await get_tree().physics_frame
+	if _superseded(generation):
+		return 0
+	var top := (
+		LevelEnvironmentManager.compute_map_bounds(map_root).end.y
+		+ DragPlaceController.TERRAIN_DOWNCAST_HEIGHT
+	)
+	var sampler := DressingGround.begin(
+		document, map_root.get_world_3d(), map_root.global_transform, top
+	)
+	while not sampler.step(MapSourceLoader.FRAME_BUDGET_USEC):
+		await get_tree().process_frame
+		if _superseded(generation):
+			return 0
+	var moved := DressingGround.settle(
+		document, sampler.heights, scatter, DressingGround.aligned_assets(document.biome_ids)
+	)
+	ground_fit = {
+		"samples": sampler.heights.size(),
+		"ray_ms": sampler.usec / 1000.0,
+		"missed": sampler.miss_count(),
+		"settled_rows": moved,
+		"wall_ms": (Time.get_ticks_usec() - started) / 1000.0,
+	}
+	return moved
 
 
 ## Zoom-out reaches a view of the whole map (never less than the play camera's), and panning
