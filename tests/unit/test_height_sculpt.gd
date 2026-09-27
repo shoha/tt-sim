@@ -344,6 +344,55 @@ func test_collision_follows_a_sculpt_update() -> void:
 		)
 
 
+func test_the_cpu_ray_march_agrees_with_the_collision() -> void:
+	var doc := _rolling()
+	var terrain := AuthoredTerrain.create(doc)
+	add_child_autofree(terrain)
+	await wait_physics_frames(2)
+	var space := terrain.get_world_3d().direct_space_state
+	var span := terrain.height_range()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var worst := 0.0
+	var normal_worst := 0.0
+	var disagreements := 0
+	for _i in 200:
+		var target := Vector3(rng.randf_range(-14, 14), 0.0, rng.randf_range(-14, 14))
+		# Camera-like rays: steep to shallow, from every side.
+		var direction := Vector3(
+			rng.randf_range(-1, 1), -rng.randf_range(0.3, 1.5), rng.randf_range(-1, 1)
+		)
+		var origin := target - direction.normalized() * 60.0
+		var marched := TerrainMeshBuilder.raycast(doc, origin, direction, 200.0, span)
+		var query := PhysicsRayQueryParameters3D.create(
+			origin, origin + direction.normalized() * 200.0, 1
+		)
+		var hit := space.intersect_ray(query)
+		if hit.is_empty() != marched.is_empty():
+			disagreements += 1
+			continue
+		if hit.is_empty():
+			continue
+		worst = maxf(worst, (hit.position - (marched.position as Vector3)).length())
+		normal_worst = maxf(normal_worst, (hit.normal as Vector3).angle_to(marched.normal))
+	assert_eq(disagreements, 0, "hit and miss agree")
+	assert_lt(worst, 0.005, "same point as the physics ray")
+	assert_lt(normal_worst, 0.01, "same facet normal")
+	assert_true(
+		TerrainMeshBuilder.raycast(doc, Vector3(0, 50, 0), Vector3.UP, 100.0, span).is_empty(),
+		"a ray pointing away misses"
+	)
+	var vertical := TerrainMeshBuilder.raycast(doc, Vector3(2, 50, 3), Vector3.DOWN, 100.0, span)
+	assert_almost_eq(
+		(vertical.position as Vector3).y,
+		ScatterGenerator.triangle_height(
+			doc.heights, doc.samples_x(), doc.samples_z(), doc.world_to_sample(Vector2(2, 3))
+		),
+		1e-4,
+		"straight down"
+	)
+
+
 # --- Flat-ground assumptions ---------------------------------------------------------
 
 
