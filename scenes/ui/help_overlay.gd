@@ -110,8 +110,8 @@ func _get_shortcut_data() -> Array:
 			"header": "Map building",
 			"entries":
 			[
-				["Left Drag", "Paint, thin, place or sculpt (hold still to build)"],
-				["Ctrl + Left Drag", "Clear (Thin / Clear), lower (Raise), cut a tier down (Tier)"],
+				["Left Drag", "Paint, thin, place, sculpt or lay a surface (hold still to build)"],
+				["Ctrl + Left Drag", "Clear, lower (Raise), cut a tier down (Tier), erase paint"],
 				["Shift + Left Drag", "Smooth the ground (Sculpt, any tile)"],
 				["Shift + Wheel / [ ]", "Brush size (Place: resize the prop under the cursor)"],
 				["Right Click / Esc", "Cancel the stroke in progress"],

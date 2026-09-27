@@ -100,6 +100,8 @@ func setup(game_map: GameMap) -> void:
 	brush = game_map.setup_brush_tool()
 	_build_ui()
 	brush.toggled.connect(_on_brush_toggled)
+	brush.paint_refused.connect(_on_paint_refused)
+	brush.paint_surface = panel.get_paint_surface()
 	brush.radius_changed.connect(
 		func(_radius: float) -> void: panel.set_brush_values(brush.get_radius(), brush.get_flow())
 	)
@@ -129,6 +131,7 @@ func _build_ui() -> void:
 	panel.tool_selected.connect(_on_tool_selected)
 	panel.place_selected.connect(_on_place_selected)
 	panel.sculpt_selected.connect(_on_sculpt_selected)
+	panel.paint_selected.connect(_on_paint_selected)
 	panel.brush_size_changed.connect(func(radius: float) -> void: brush.set_radius(radius))
 	panel.brush_strength_changed.connect(func(flow: float) -> void: brush.set_flow(flow))
 
@@ -234,6 +237,8 @@ func _open_async(
 	loading_progress.emit(0.9, "Preparing the palette...")
 	for biome in PaletteLibrary.biomes(scatter.palette_root):
 		scatter.prepare_biome(String(biome.get("id", "")))
+	# The Paint swatches decode each surface's albedo once; better here than on first click.
+	panel.ensure_paint_tiles()
 	await _await_palette_warm(generation)
 	if _superseded(generation):
 		return
@@ -308,13 +313,17 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	editor = AuthoringEditor.create(document, root, history)
 	editor.edited.connect(mark_edited)
 	editor.edited.connect(func() -> void: _bounds_stale = true)
+	editor.edited.connect(_refresh_paint_limits)
 	brush.deactivate()
 	brush.editor = editor
 	brush.unit_cell_m = level.grid_cell_size
 	brush.unit_per_cell = level.display_unit_per_cell
 	brush.unit_label = level.display_unit
-	# Sculpting edits the document's own ground; a dressed Blender map's is the GLB's.
+	# Sculpting and painting edit the document's own ground; a dressed Blender map's is the
+	# GLB's.
 	panel.set_sculpt_available(editor.can_sculpt())
+	panel.set_paint_available(editor.can_paint())
+	_refresh_paint_limits()
 
 
 ## Samples a dressed GLB's ground into the document's heights (DressingGround), a slice per
@@ -474,6 +483,7 @@ func undo() -> void:
 	if history.undo() != "":
 		mark_edited()
 		_bounds_stale = true
+		_refresh_paint_limits()
 
 
 func redo() -> void:
@@ -481,6 +491,7 @@ func redo() -> void:
 	if history.redo() != "":
 		mark_edited()
 		_bounds_stale = true
+		_refresh_paint_limits()
 
 
 ## A stroke or prop gesture in progress becomes its own history entry before undo or redo
@@ -548,8 +559,51 @@ func _on_sculpt_selected(tile: int) -> void:
 	_select_tool(AuthoringPanel.TOOL_SCULPT)
 
 
+## A picked Paint tile becomes the Paint brush's surface (its textures start loading so the
+## first dab binds them from the cache) and switches to that brush. A surface that cannot
+## take a slot says why at once rather than on the first press.
+func _on_paint_selected(surface: String) -> void:
+	_use_surface(surface)
+	if editor != null:
+		var reason := editor.surface_refusal(surface)
+		if reason != "":
+			UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
+	_select_tool(AuthoringPanel.TOOL_PAINT)
+
+
+func _use_surface(surface: String) -> void:
+	if brush == null:
+		return
+	brush.paint_surface = surface
+	brush.paint_tint = surface_tint(surface)
+	var terrain := _terrain()
+	if terrain:
+		terrain.warm_surface(surface)
+	panel.select_paint_surface(surface)
+
+
+## A Paint press was refused (every slot holds paint): say why.
+func _on_paint_refused(surface: String) -> void:
+	var reason := editor.surface_refusal(surface) if editor else ""
+	if reason != "":
+		UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
+
+
+## Disables the Paint tiles that cannot take a slot (all eight hold paint) with the reason
+## in their tooltips; enables them all otherwise. The slot walk only runs when all eight
+## are taken (AuthoringEditor.surface_refusal).
+func _refresh_paint_limits() -> void:
+	if editor == null or panel == null:
+		return
+	var reason := ""
+	if document.surface_ids.size() >= MapDocument.MAX_SURFACES:
+		reason = editor.surface_refusal("")
+	panel.set_paint_limits(reason, document.surface_ids)
+
+
 ## Switches the brush to `tool_id` and activates it. The Biome brush waits for a biome to be
-## picked (there is nothing to paint with before); Sculpt needs a map it can sculpt.
+## picked (there is nothing to paint with before); Sculpt and Paint need a map whose ground
+## is the document's.
 func _select_tool(tool_id: StringName) -> void:
 	if brush == null or not _is_open:
 		return
@@ -567,6 +621,14 @@ func _select_tool(tool_id: StringName) -> void:
 			if editor == null or not editor.can_sculpt():
 				return
 			brush.set_mode(BrushTool.Mode.SCULPT)
+		AuthoringPanel.TOOL_PAINT:
+			if editor == null or not editor.can_paint():
+				return
+			brush.set_mode(BrushTool.Mode.PAINT)
+			if brush.paint_surface == "":
+				brush.deactivate()
+				return
+			_use_surface(brush.paint_surface)
 		_:
 			return
 	brush.activate()
@@ -582,6 +644,7 @@ func _on_brush_toggled(active: bool) -> void:
 		BrushTool.Mode.THIN: AuthoringPanel.TOOL_THIN,
 		BrushTool.Mode.PLACE: AuthoringPanel.TOOL_PLACE,
 		BrushTool.Mode.SCULPT: AuthoringPanel.TOOL_SCULPT,
+		BrushTool.Mode.PAINT: AuthoringPanel.TOOL_PAINT,
 	}
 	panel.set_active_tool(ids[brush.mode])
 
@@ -596,6 +659,23 @@ static func biome_tint(biome_id: String, root: String = PaletteLibrary.DEFAULT_R
 	var image := texture.get_image()
 	if image == null or image.is_empty():
 		return Color(0.7, 0.9, 0.6)
+	image.resize(1, 1, Image.INTERPOLATE_BILINEAR)
+	var mean := image.get_pixel(0, 0)
+	mean.a = 1.0
+	return mean.lerp(Color.WHITE, 0.4)
+
+
+## The cursor tint of a palette surface: its swatch's mean colour, lifted toward white like
+## biome_tint so the ring reads on dark ground.
+static func surface_tint(surface: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> Color:
+	var albedo: Variant = PaletteLibrary.surfaces(root).get(surface, {}).get("albedo", "")
+	var texture := SwatchTextures.palette_thumbnail(
+		String(albedo), AuthoringPanel.PAINT_THUMB_PX, root
+	)
+	var image := texture.get_image() if texture else null
+	if image == null or image.is_empty():
+		return Color(0.9, 0.82, 0.66)
+	image = image.duplicate() as Image
 	image.resize(1, 1, Image.INTERPOLATE_BILINEAR)
 	var mean := image.get_pixel(0, 0)
 	mean.a = 1.0

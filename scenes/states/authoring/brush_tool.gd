@@ -34,6 +34,10 @@ extends Node
 ##                      Shift at the press smooths whichever tile is picked. Flatten holds
 ##                      the ground height under the press; Tier builds toward the tier
 ##                      AuthoringEditor.tier_target() picks at the press.
+##   Paint: LMB drag    paint the picked surface (soft falloff, dwell builds it up to full
+##                      cover); Ctrl at the press erases every painted surface back to the
+##                      automatic ground. A press the editor refuses (every paint slot
+##                      holds paint) emits paint_refused so the controller can say why.
 ##
 ## Sculpting moves the ground under a still pointer, so while a sculpt stroke is held and
 ## the pointer has not moved the brush keeps its ground point (only its height follows the
@@ -55,8 +59,10 @@ extends Node
 signal toggled(active: bool)
 ## The brush radius changed (world metres), by gesture or set_radius().
 signal radius_changed(radius: float)
+## A Paint press could not start a stroke with `surface` (AuthoringEditor.surface_refusal).
+signal paint_refused(surface: String)
 
-enum Mode { BIOME, THIN, PLACE, SCULPT }
+enum Mode { BIOME, THIN, PLACE, SCULPT, PAINT }
 enum Action { NONE, POINTER, BEGIN, END, CANCEL, DESELECT, GROW, SHRINK, REMOVE, SWALLOW }
 
 const MIN_RADIUS := 1.0
@@ -116,6 +122,9 @@ var biome_tint: Color = Color(0.7, 0.9, 0.6)
 ## The Sculpt tile picked: HeightBrush.RAISE, SMOOTH, FLATTEN or TIER (sculpt_op() applies
 ## the modifiers).
 var sculpt_tile: int = HeightBrush.RAISE
+## The palette surface the Paint tool paints, and its ring tint.
+var paint_surface: String = ""
+var paint_tint: Color = Color(0.9, 0.82, 0.66)
 ## The level's units for the readout (ScaleUtils): metres per grid cell, display units per
 ## cell, and their label. AuthoringController sets them from the level.
 var unit_cell_m: float = LevelData.DEFAULT_GRID_CELL_SIZE
@@ -507,6 +516,11 @@ func _start_gesture(click_seconds: float) -> void:
 	if mode == Mode.SCULPT:
 		if not _begin_sculpt():
 			return
+	elif mode == Mode.PAINT:
+		if not editor.begin_surface_stroke(paint_surface, _press_ctrl):
+			if not _press_ctrl:
+				paint_refused.emit(paint_surface)
+			return
 	else:
 		var stroke_mode := MaskBrush.PAINT
 		if mode == Mode.THIN:
@@ -614,13 +628,14 @@ func _resolve_hit() -> void:
 	_hit_normal = result.normal
 
 
-## Thin / Clear and Sculpt: the ring is the occlusion fade's focus, so the canopy over it
-## opens up (the ground being thinned or shaped stays in view under a forest). Any other
-## tool, or no ground under the pointer, clears it.
+## Thin / Clear, Sculpt and Paint: the ring is the occlusion fade's focus, so the canopy over
+## it opens up (the ground being thinned, shaped or painted stays in view under a forest).
+## Any other tool, or no ground under the pointer, clears it.
 func _update_fade() -> void:
 	if occlusion_fade == null:
 		return
-	if _active and (mode == Mode.THIN or mode == Mode.SCULPT) and _hit != Vector3.INF:
+	var fades := mode == Mode.THIN or mode == Mode.SCULPT or mode == Mode.PAINT
+	if _active and fades and _hit != Vector3.INF:
 		occlusion_fade.set_focus(_hit, session_radius * fade_radius_factor)
 	else:
 		occlusion_fade.clear_focus()
@@ -651,6 +666,9 @@ func _tint() -> Color:
 		Mode.THIN:
 			var clearing := _press_ctrl if _stroking else _ctrl
 			return CLEAR_TINT if clearing else THIN_TINT
+		Mode.PAINT:
+			var erasing := _press_ctrl if _stroking else _ctrl
+			return CLEAR_TINT if erasing else paint_tint
 		Mode.SCULPT:
 			match _cursor_op():
 				HeightBrush.RAISE, HeightBrush.TIER:

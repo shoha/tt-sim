@@ -19,8 +19,15 @@ extends DrawerContainer
 ## click. Each pane says its gestures in its header caption and holds nothing else in the
 ## main flow: size and strength are gestures (Shift+wheel, dwell), and an Advanced foldout
 ## per brush pane has the exact size and strength rows, values hidden like the Visuals
-## drawer's. The active tool's rail item stays tinted while the drawer is closed. Sculpt is
-## disabled, with a tooltip saying why, on a dressed Blender map (set_sculpt_available).
+## drawer's. The active tool's rail item stays tinted while the drawer is closed. Sculpt and
+## Paint are disabled, with a tooltip saying why, on a dressed Blender map
+## (set_sculpt_available, set_paint_available).
+##
+## Paint (P3-6): one TileField per surface role (Built, Ground, Rock; built first because
+## paths and yards are what the tool is mostly for) of palette surface swatches, one
+## selection across the groups. The swatches cost a texture decode each (the whole albedo
+## tile, cropped and scaled), so they are built once, by ensure_paint_tiles(), which the
+## controller calls under the loading screen and the pane calls on first show.
 
 signal save_pressed
 signal leave_pressed
@@ -33,6 +40,8 @@ signal tool_selected(tool_id: StringName)
 signal place_selected(biome_id: String, species_key: String)
 ## A Sculpt tile was picked: HeightBrush.RAISE, SMOOTH, FLATTEN or TIER.
 signal sculpt_selected(tile: int)
+## A Paint tile was picked: palette surface `surface`.
+signal paint_selected(surface: String)
 ## An Advanced row moved: brush radius (metres) or strength (flow multiplier).
 signal brush_size_changed(radius: float)
 signal brush_strength_changed(flow: float)
@@ -53,6 +62,7 @@ const TOOL_BIOME := &"biome"
 const TOOL_THIN := &"thin_clear"
 const TOOL_PLACE := &"place"
 const TOOL_SCULPT := &"sculpt"
+const TOOL_PAINT := &"paint"
 const ACTION_UNDO := &"undo"
 const ACTION_REDO := &"redo"
 const ACTION_SAVE := &"save_map"
@@ -60,12 +70,55 @@ const ACTION_LEAVE := &"leave_authoring"
 
 const SCULPT_TOOLTIP := "Sculpt"
 const SCULPT_UNAVAILABLE_TOOLTIP := "Sculpt: not on a Blender map, whose ground is the map file's"
+const PAINT_TOOLTIP := "Paint"
+const PAINT_UNAVAILABLE_TOOLTIP := "Paint: not on a Blender map, whose ground is the map file's"
 const RAIL_ITEMS: Array[Dictionary] = [
 	{"id": TOOL_BIOME, "icon": "trees", "tooltip": "Biome"},
 	{"id": TOOL_THIN, "icon": "eraser", "tooltip": "Thin / Clear"},
 	{"id": TOOL_PLACE, "icon": "tree", "tooltip": "Place"},
 	{"id": TOOL_SCULPT, "icon": "mountain", "tooltip": SCULPT_TOOLTIP},
+	{"id": TOOL_PAINT, "icon": "brush", "tooltip": PAINT_TOOLTIP},
 ]
+## Paint groups in pane order: palette surface role and caption.
+const PAINT_GROUPS: Array[Dictionary] = [
+	{"role": "built", "caption": "Built"},
+	{"role": "ground", "caption": "Ground"},
+	{"role": "cliff", "caption": "Rock"},
+]
+const PAINT_TILE_SIZE := Vector2(64, 84)
+const PAINT_THUMB_PX := 52
+const PAINT_COLUMNS := 3
+## Paint tile ids (and node names) are this prefix plus the palette surface name.
+const PAINT_TILE_PREFIX := "paint_"
+## The surface the Paint tool starts with: a path is what a new map most often wants.
+const DEFAULT_PAINT_SURFACE := "dirt_road_packed"
+## Readable names for the built-in palette's surfaces (surface_label(); the rest are
+## prettified ids).
+const SURFACE_LABELS := {
+	"cliff": "Rock",
+	"cliff_basalt": "Basalt",
+	"cliff_sandstone": "Sandstone",
+	"cobblestone": "Cobblestone",
+	"dirt": "Dirt",
+	"dirt_peat": "Peat",
+	"dirt_road_packed": "Dirt track",
+	"flagstone": "Flagstone",
+	"forest_floor": "Forest floor",
+	"grass": "Grass",
+	"grass_alpine": "Alpine grass",
+	"grass_savanna": "Dry grass",
+	"gravel": "Gravel",
+	"gravel_sandstone": "Red gravel",
+	"moss": "Moss",
+	"mud": "Mud",
+	"pine_duff": "Pine needles",
+	"planks": "Planks",
+	"riverbed": "Riverbed",
+	"sand": "Sand",
+	"sand_red": "Red sand",
+	"snow": "Snow",
+	"stone_tiles": "Stone tiles",
+}
 ## Sculpt tiles: id (the HeightBrush operation), label, icon, tooltip.
 const SCULPT_TILES: Array[Dictionary] = [
 	{
@@ -111,12 +164,18 @@ var biome_field: TileField
 var sculpt_field: TileField
 ## Place tiles, one TileRow per biome group; ids are "<biome id>|<species key>".
 var place_rows: Dictionary = {}
+## Paint tiles: role -> TileField (built by ensure_paint_tiles()).
+var paint_fields: Dictionary = {}
 
 var _stack: PaneStack
 ## Every Advanced size / strength row, kept in step with the brush.
 var _size_rows: Array[PropertyRow] = []
 var _strength_rows: Array[PropertyRow] = []
 var _place_foldouts: Dictionary = {}
+## Paint tile buttons by surface, and the tooltip each has when it can be picked.
+var _paint_tiles: Dictionary = {}
+var _paint_tooltips: Dictionary = {}
+var _paint_surface: String = DEFAULT_PAINT_SURFACE
 var _active_tool: StringName = &""
 ## True while the controller's leave prompt is on screen, so Escape does not stack another.
 var _leave_pending: bool = false
@@ -147,6 +206,7 @@ func _on_ready() -> void:
 	_stack.add_pane(TOOL_THIN, _build_thin_pane())
 	_stack.add_pane(TOOL_PLACE, _build_place_pane())
 	_stack.add_pane(TOOL_SCULPT, _build_sculpt_pane())
+	_stack.add_pane(TOOL_PAINT, _build_paint_pane())
 	_stack.show_pane(TOOL_BIOME, false)
 
 	pane_requested.connect(_on_pane_requested)
@@ -333,6 +393,137 @@ func _build_sculpt_pane() -> Control:
 	return pane
 
 
+## Paint: the header, the gestures, and the surface groups (filled by ensure_paint_tiles()),
+## ending in the Advanced foldout.
+func _build_paint_pane() -> Control:
+	var pane := VBoxContainer.new()
+	pane.name = "PaintPane"
+	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pane.add_theme_constant_override("separation", 8)
+	var header := MenuHeader.new()
+	header.name = "PaintHeader"
+	header.setup("Paint", "Lay paths, yards and rock.")
+	pane.add_child(header)
+	pane.add_child(
+		_hint(
+			"PaintHint",
+			(
+				"Pick a surface, then drag on the map; linger to cover it fully. Hold Ctrl as you"
+				+ " press to erase paint back to the natural ground. Paths stop at rock faces:"
+				+ " climb them with a ramp. Built surfaces clear the plants under them."
+			)
+		)
+	)
+	for group in PAINT_GROUPS:
+		var field := TileField.new()
+		field.name = "Paint" + String(group.caption) + "Field"
+		field.caption = String(group.caption)
+		field.tiles.photo_icons = true
+		field.tiles.tile_min_size = PAINT_TILE_SIZE
+		field.tiles.columns = PAINT_COLUMNS
+		field.tiles.selection_changed.connect(_on_paint_tile.bind(field.tiles))
+		pane.add_child(field)
+		paint_fields[group.role] = field
+	pane.add_child(_build_advanced("Paint"))
+	return pane
+
+
+## Builds the Paint tiles once (palette surfaces by role, swatches from each surface's
+## albedo; see the header). Safe to call again.
+func ensure_paint_tiles() -> void:
+	if not _paint_tiles.is_empty():
+		return
+	var surfaces := PaletteLibrary.surfaces(palette_root)
+	for group in PAINT_GROUPS:
+		var field: TileField = paint_fields[group.role]
+		for surface in PaletteLibrary.surfaces_with_role(String(group.role), palette_root):
+			var tooltip := paint_tooltip(surface, String(group.role))
+			var tile := field.tiles.add_tile(
+				paint_tile_id(surface),
+				surface_label(surface),
+				"",
+				tooltip,
+				SwatchTextures.palette_thumbnail(
+					surfaces.get(surface, {}).get("albedo", ""), PAINT_THUMB_PX, palette_root
+				)
+			)
+			_paint_tiles[surface] = tile
+			_paint_tooltips[surface] = tooltip
+	select_paint_surface(_paint_surface)
+
+
+## A palette surface's readable name ("dirt_road_packed" -> "Dirt track"): the Paint tiles'
+## labels and the history labels of Paint strokes.
+static func surface_label(surface: String) -> String:
+	var named: String = SURFACE_LABELS.get(surface, "")
+	if named != "":
+		return named
+	return species_label(surface)
+
+
+## A Paint tile's tooltip: the surface's name and what painting it does.
+static func paint_tooltip(surface: String, role: String) -> String:
+	var label := surface_label(surface)
+	match role:
+		"built":
+			return "%s: a walkable built surface; clears the plants under it" % label
+		"cliff":
+			return "%s: rock; restyles a cliff face, or bares rock anywhere" % label
+	return "%s: ground; covers walkable ground, rock faces stay rock" % label
+
+
+## The tile id (and node name) of a Paint tile.
+static func paint_tile_id(surface: String) -> StringName:
+	return StringName(PAINT_TILE_PREFIX + surface)
+
+
+## The surface of a Paint tile id, or "".
+static func paint_tile_surface(id: StringName) -> String:
+	var text := String(id)
+	return text.trim_prefix(PAINT_TILE_PREFIX) if text.begins_with(PAINT_TILE_PREFIX) else ""
+
+
+func _on_paint_tile(id: StringName, source: TileRow) -> void:
+	# One selection across the groups: picking in one clears the others.
+	for field: TileField in paint_fields.values():
+		if field.tiles != source:
+			field.tiles.select(&"")
+	var surface := paint_tile_surface(id)
+	if surface != "":
+		_paint_surface = surface
+		paint_selected.emit(surface)
+
+
+## Selects a Paint tile without emitting paint_selected.
+func select_paint_surface(surface: String) -> void:
+	_paint_surface = surface
+	for field: TileField in paint_fields.values():
+		var id := paint_tile_id(surface)
+		field.tiles.select(id if field.tiles.has_tile(id) else &"")
+
+
+## The surface picked in the Paint pane.
+func get_paint_surface() -> String:
+	return _paint_surface
+
+
+## Shows which Paint tiles can be picked: with every paint slot taken (`full_reason` not
+## ""), the surfaces not in `in_use` are disabled and their tooltip says why; else all are
+## enabled with their own tooltips.
+func set_paint_limits(full_reason: String, in_use: PackedStringArray) -> void:
+	for surface in _paint_tiles:
+		var tile: Button = _paint_tiles[surface]
+		var blocked: bool = full_reason != "" and not surface in in_use
+		tile.disabled = blocked
+		tile.tooltip_text = full_reason if blocked else String(_paint_tooltips[surface])
+
+
+## Enables Paint, or disables it with a tooltip saying why (a dressed Blender map).
+func set_paint_available(available: bool) -> void:
+	set_rail_item_enabled(TOOL_PAINT, available)
+	set_rail_item_tooltip(TOOL_PAINT, PAINT_TOOLTIP if available else PAINT_UNAVAILABLE_TOOLTIP)
+
+
 ## The tile id of a Sculpt tile's operation ("sculpt_raise", ...; also its node name), or
 ## &"" for an operation without a tile.
 static func sculpt_tile_id(op: int) -> StringName:
@@ -440,12 +631,16 @@ static func short_name(full_name: String) -> String:
 
 
 func _on_pane_requested(id: StringName) -> void:
+	if id == TOOL_PAINT:
+		ensure_paint_tiles()
 	_stack.show_pane(id)
 	tool_selected.emit(id)
 
 
 ## Shows a tool's pane (the controller follows a tool chosen by other means).
 func show_tool_pane(id: StringName) -> void:
+	if id == TOOL_PAINT:
+		ensure_paint_tiles()
 	_stack.show_pane(id)
 
 
