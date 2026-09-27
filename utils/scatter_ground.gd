@@ -24,16 +24,33 @@ extends RefCounted
 ## but a trunk a metre from the lip spreads its crown over the whole step). The measure is
 ## face proximity: the steepness nearby (TerrainRules' 1.5 m box mean of the slope tail)
 ## box-averaged again over FACE_NEAR_RADIUS_M, so it fades out smoothly about 3.5 m from a
-## face and grows where faces gather (a corner, a stack of tiers). Callers pass the species'
-## role (role_of) with each point. Pure statics.
+## face and grows where faces gather (a corner, a stack of tiers). Paths under tall cover:
+## tall ground cover (ROLE_TALL_COVER: at least TALL_COVER_M high, meadow tall grass) and
+## shrubs thin out in a fringe beside built paint (the built weight box-averaged over
+## FRINGE_RADIUS_M), so grass rooted on a path's shoulder no longer lies over a narrow path
+## from the game camera; short grass and flowers stay, so the edge stays soft. Callers pass
+## the species' role (role_of) with each point. Pure statics.
 
 ## Species rule kind that gathers at cliff feet.
 const ROCK_KIND := "rock"
-## What a species is to the ground rules (role_of): ground cover, a rock, a tree or a shrub.
+## What a species is to the ground rules (role_of): ground cover, a rock, a tree, a shrub or
+## tall ground cover.
 const ROLE_COVER := 0
 const ROLE_ROCK := 1
 const ROLE_TREE := 2
 const ROLE_SHRUB := 3
+const ROLE_TALL_COVER := 4
+## Ground cover whose tallest asset stands at least this high (metres, the rule's height_m,
+## PaletteLibrary.species) is tall cover: meadow tall grass (1.0 to 1.2 m), not short grass
+## or flowers (0.4 to 0.6 m).
+const TALL_COVER_M := 0.75
+## Path fringe: half-width (metres) of the box mean of the built weight, and the smoothstep
+## over which it clears tall cover and shrubs: beside a road about a metre is clear and the
+## rest thins out by 1.5 m (tall grass leans a metre over the ground it stands on as the
+## camera sees it). Judged at the game camera on a grassland meadow (P3-7 renders).
+const FRINGE_RADIUS_M := 1.5
+const FRINGE_START := 0.02
+const FRINGE_FULL := 0.2
 ## Face proximity: half-width (metres) of the second box mean over the steepness nearby, and
 ## the smoothstep over which it clears trees and shrubs. Along a straight tier face the
 ## proximity is about 0.14 at the face, 0.08 two metres out and 0 by 3.7 m: trees are gone
@@ -60,7 +77,7 @@ const PAVED_CLEAR_FULL := 0.4
 
 
 ## The role (ROLE_*) of a species rule for the ground rules: rock kind, then by size class
-## (large: tree, medium: shrub), else ground cover.
+## (large: tree, medium: shrub), else tall cover or ground cover by its height_m.
 static func role_of(rule: Dictionary) -> int:
 	if rule.get("kind", "") == ROCK_KIND:
 		return ROLE_ROCK
@@ -69,6 +86,8 @@ static func role_of(rule: Dictionary) -> int:
 			return ROLE_TREE
 		"medium":
 			return ROLE_SHRUB
+	if float(rule.get("height_m", 0.0)) >= TALL_COVER_M:
+		return ROLE_TALL_COVER
 	return ROLE_COVER
 
 
@@ -107,6 +126,7 @@ static func sampler(
 	var built: PackedFloat32Array = painted.built
 	var rock: PackedFloat32Array = painted.rock
 	var paints := not painted_total.is_empty()
+	var fringe := _built_fringe(doc, rect, built_surfaces) if paints else PackedFloat32Array()
 	return func(p: Vector2, role: int) -> Vector3:
 		var s := (p + half) / step
 		var n := ScatterGenerator.triangle_normal(heights, columns, rows, s, step)
@@ -134,7 +154,36 @@ static func sampler(
 				open *= 1.0 - smoothstep(TREE_FACE_START, TREE_FACE_FULL, face)
 			else:
 				open *= 1.0 - smoothstep(SHRUB_FACE_START, SHRUB_FACE_FULL, face)
+		if (role == ROLE_TALL_COVER or role == ROLE_SHRUB) and not fringe.is_empty():
+			var beside := ScatterGenerator.bilinear(fringe, columns, rows, s)
+			open *= 1.0 - smoothstep(FRINGE_START, FRINGE_FULL, beside)
 		return Vector3(maxf(open, 0.0), shares.y, shares.z)
+
+
+## The path fringe for the samples of `rect` as a whole-grid array (see the header): the
+## built weight box-averaged over FRINGE_RADIUS_M, or an empty array when nothing built is
+## painted.
+static func _built_fringe(
+	doc: MapDocument, rect: Rect2i, built_surfaces: PackedStringArray
+) -> PackedFloat32Array:
+	var columns := doc.samples_x()
+	var rows := doc.samples_z()
+	var step := doc.sample_step()
+	var k := maxi(1, roundi(FRINGE_RADIUS_M / maxf(minf(step.x, step.y), 1e-4)))
+	var grown := rect.grow(k).intersection(Rect2i(0, 0, columns, rows))
+	var built: PackedFloat32Array = (
+		_painted_fields(doc, grown, built_surfaces, PackedStringArray()).built
+	)
+	if built.is_empty():
+		return built
+	var out := PackedFloat32Array()
+	out.resize(columns * rows)
+	var means := HeightBrush.box_mean(built, columns, rows, rect, k)
+	for z in rect.size.y:
+		var row := (rect.position.y + z) * columns + rect.position.x
+		for x in rect.size.x:
+			out[row + x] = means[z * rect.size.x + x]
+	return out
 
 
 ## Face proximity for the samples of `rect` (grid coordinates) as a whole-grid array (zero

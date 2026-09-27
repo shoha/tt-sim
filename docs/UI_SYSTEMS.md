@@ -851,7 +851,9 @@ over a ledge stops at the edge and resumes on top; paths climb by sculpted ramps
 passes across a face). Painting a Rock tile (Rock, Basalt, Sandstone) applies anywhere, so a
 face can be restyled deliberately, or bare rock laid on flat ground. Built surfaces and painted
 rock clear the plants under them when the stroke is released (they shrink away); a tree just
-beside a road keeps standing unless the paint covers its trunk. The paint's edge is frayed by a
+beside a road keeps standing unless the paint covers its trunk, while tall grass and shrubs
+thin out in a metre-wide fringe beside built paint (short grass and flowers stay) so a narrow
+path still reads from the game camera. The paint's edge is frayed by a
 small warp and noise, so a path reads as worn into the ground rather than laid on it. A quick
 pass lays partial cover (a worn trail); lingering fills it in. Eight surfaces can be on a map at
 once (see the Paint pane above); erasing one completely frees its slot.
