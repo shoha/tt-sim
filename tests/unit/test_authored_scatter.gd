@@ -113,13 +113,13 @@ func test_instance_order_is_a_permutation_and_depends_on_the_seed() -> void:
 	var rows := _cell_rows(Vector2i.ZERO, 40)
 	var keys := AuthoredScatter.row_keys(rows.to_byte_array().to_int32_array())
 	var all := PackedInt32Array(range(40))
-	var order := AuthoredScatter.instance_order(keys, all, "a_c0_0")
+	var order := ScatterRows.instance_order(keys, all, "a_c0_0")
 	var sorted := order.duplicate()
 	sorted.sort()
 	assert_eq(sorted, all)
 	assert_ne(order, all, "a hash order is not the row order")
-	assert_ne(order, AuthoredScatter.instance_order(keys, all, "a_c1_0"))
-	assert_eq(order, AuthoredScatter.instance_order(keys, all, "a_c0_0"), "deterministic")
+	assert_ne(order, ScatterRows.instance_order(keys, all, "a_c1_0"))
+	assert_eq(order, ScatterRows.instance_order(keys, all, "a_c0_0"), "deterministic")
 
 
 func test_instance_order_of_a_subset_keeps_the_relative_order() -> void:
@@ -127,7 +127,7 @@ func test_instance_order_of_a_subset_keeps_the_relative_order() -> void:
 	# visible prefix would swap unchanged instances in and out on every rebuild.
 	var rows := _cell_rows(Vector2i.ZERO, 60)
 	var keys := AuthoredScatter.row_keys(rows.to_byte_array().to_int32_array())
-	var full := AuthoredScatter.instance_order(keys, PackedInt32Array(range(60)), "s")
+	var full := ScatterRows.instance_order(keys, PackedInt32Array(range(60)), "s")
 	var subset := PackedInt32Array()
 	for i in range(0, 60, 3):
 		subset.append(i)
@@ -135,7 +135,7 @@ func test_instance_order_of_a_subset_keeps_the_relative_order() -> void:
 	for index in full:
 		if index % 3 == 0:
 			expected.append(index)
-	assert_eq(AuthoredScatter.instance_order(keys, subset, "s"), expected)
+	assert_eq(ScatterRows.instance_order(keys, subset, "s"), expected)
 
 
 func test_row_keys_identify_rows_by_content() -> void:
@@ -150,12 +150,64 @@ func test_row_keys_identify_rows_by_content() -> void:
 		_rows([Vector2(1, 2)], 1.5).to_byte_array().to_int32_array()
 	)
 	assert_ne(scaled[0], ka[0], "a rescaled instance is a different instance")
+	# A height edit moves Y and tilts the rotation; the instance stays the same one.
+	var moved := a.duplicate()
+	moved[1] = 2.5
+	moved[3] = 0.1
+	moved[6] = 0.99
+	var km := AuthoredScatter.row_keys(moved.to_byte_array().to_int32_array())
+	assert_eq(km[0], ka[0], "Y and rotation are not part of the identity")
+	assert_ne(
+		ka[0], AuthoredScatter.row_keys(_rows([Vector2(2, 1)]).to_byte_array().to_int32_array())[0]
+	)
+	assert_ne(
+		ka[0],
+		AuthoredScatter.row_keys(_rows([Vector2(1, 2.01)]).to_byte_array().to_int32_array())[0]
+	)
+
+
+func test_a_rebuild_that_only_moves_y_grows_nothing() -> void:
+	var scatter := _scatter()
+	var rows := _cell_rows(Vector2i.ZERO, 30)
+	scatter.set_cells({Vector2i.ZERO: {GRASS: rows}}, false)
+	var lifted := rows.duplicate()
+	for b in range(0, lifted.size(), MapDocument.ROW_STRIDE):
+		lifted[b + 1] = 1.25
+	scatter.set_cells({Vector2i.ZERO: {GRASS: lifted}}, true)
+	assert_false(scatter.is_growing(), "no instance grew back in")
+	assert_eq(scatter.get_growing_nodes(Vector2i.ZERO, GRASS).size(), 0)
+	var shrinking := scatter.get_children().filter(
+		func(child: Node) -> bool: return String(child.name).contains(ScatterShrink.INFIX)
+	)
+	assert_eq(shrinking.size(), 0, "and none shrank out")
+
+
+func test_move_rows_rewrites_instances_in_place() -> void:
+	var scatter := _scatter()
+	var rows := _cell_rows(Vector2i.ZERO, 12)
+	scatter.set_cells({Vector2i.ZERO: {GRASS: rows}}, false)
+	var node := scatter.get_cell_node(Vector2i.ZERO, GRASS)
+	var multimesh := node.multimesh
+	var moved := rows.duplicate()
+	moved[1 + 3 * MapDocument.ROW_STRIDE] = 0.75
+	assert_true(scatter.move_rows(Vector2i.ZERO, GRASS, moved, PackedInt32Array([3])))
+	assert_eq(scatter.cell_rows(Vector2i.ZERO)[GRASS], moved, "the cell holds the new rows")
+	assert_eq(scatter.get_cell_node(Vector2i.ZERO, GRASS), node, "same node")
+	assert_eq(node.multimesh, multimesh, "same MultiMesh, transforms rewritten")
+	assert_eq(multimesh.instance_count, 12)
+	assert_false(
+		scatter.move_rows(Vector2i.ZERO, GRASS, moved.slice(10), PackedInt32Array([0])),
+		"different rows are refused"
+	)
+	assert_false(scatter.move_rows(Vector2i(5, 5), GRASS, moved, PackedInt32Array([0])))
+	var expected: Transform3D = ScatterGlbUtils._row_to_transform(Array(moved.slice(30, 40)))
+	assert_true(ScatterRows.row_transform(moved, 3).is_equal_approx(expected))
 
 
 func test_transforms_from_rows_match_the_glb_row_conversion() -> void:
 	var rows := PackedFloat32Array([1.5, 0.25, -2.0, 0.0, 0.3826834, 0.0, 0.9238795, 1.2, 0.8, 1.1])
 	rows.append_array([4.0, 0.0, 5.0, 0.0, 0.0, 0.0, 2.0, 1.0, 1.0, 1.0])
-	var got := AuthoredScatter.transforms_from_rows(rows, PackedInt32Array([1, 0]))
+	var got := ScatterRows.transforms_from_rows(rows, PackedInt32Array([1, 0]))
 	assert_eq(got.size(), 2)
 	var expected_first: Transform3D = ScatterGlbUtils._row_to_transform(Array(rows.slice(10, 20)))
 	var expected_second: Transform3D = ScatterGlbUtils._row_to_transform(Array(rows.slice(0, 10)))
