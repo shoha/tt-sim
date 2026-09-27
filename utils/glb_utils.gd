@@ -17,7 +17,8 @@ extends RefCounted
 ##
 ## The async loader performs file I/O, GLB parsing (append_from_buffer), and scene
 ## generation (generate_scene) entirely on a WorkerThreadPool thread, so the main
-## thread is never blocked. Godot 4's RenderingServer command buffer makes this safe.
+## thread is never blocked. Godot 4's RenderingServer command buffer makes this safe, except
+## under the headless dummy renderer (see threaded_loads_safe), where it loads in place.
 
 ## Scene-meta key holding the glTF scene extras dictionary parsed out of a loaded GLB.
 ## Public because ScatterGlbUtils reads the same key -- it is a wire-format key shared
@@ -98,6 +99,20 @@ static func load_glb(path: String) -> Node3D:
 	return scene
 
 
+## False under the headless dummy renderer (`--headless`: GUT, CI, CLI tools), true under
+## every real one. Godot 4.7.1's dummy RenderingServer keeps its textures and materials in RID
+## owners that are not thread-safe (dummy texture_storage.h: `RID_PtrOwner<DummyTexture>`
+## without the thread-safe flag; made thread-safe on Godot master since), so resources
+## created on worker threads race each other and the main thread: "Parameter "t" is null"
+## in texture_2d_initialize, "Parameter "material" is null" in material_set_shader, and one
+## segfault in a stress probe (180 palette GLBs, threaded vs main-thread loads; zero errors
+## with main-thread loads only, and with the Vulkan renderer). That race made GUT runs flaky
+## (docs/CONVENTIONS.md Threading Gotchas). Every background load of textures or meshes
+## (palette assets and surfaces, map GLBs) checks this and loads in place when it is false.
+static func threaded_loads_safe() -> bool:
+	return DisplayServer.get_name() != "headless"
+
+
 ## Load a GLB file asynchronously using WorkerThreadPool
 ## The entire heavy lifting (file I/O, GLB parsing, scene generation) runs on
 ## a background thread. Only the finished Node3D scene is passed back to the
@@ -120,14 +135,18 @@ static func load_glb_async(path: String) -> AsyncLoadResult:
 	# file I/O + append_from_buffer + generate_scene
 	var thread_result: Dictionary = {"scene": null, "error": ""}
 
-	var task_id = WorkerThreadPool.add_task(func(): _load_glb_thread_work(path, thread_result))
+	if threaded_loads_safe():
+		var task_id = WorkerThreadPool.add_task(func(): _load_glb_thread_work(path, thread_result))
 
-	# Wait for thread to complete without blocking the main thread
-	while not WorkerThreadPool.is_task_completed(task_id):
+		# Wait for thread to complete without blocking the main thread
+		while not WorkerThreadPool.is_task_completed(task_id):
+			await scene_tree.process_frame
+
+		# Ensure task is fully cleaned up
+		WorkerThreadPool.wait_for_task_completion(task_id)
+	else:
+		_load_glb_thread_work(path, thread_result)
 		await scene_tree.process_frame
-
-	# Ensure task is fully cleaned up
-	WorkerThreadPool.wait_for_task_completion(task_id)
 
 	# Check for errors from thread
 	if thread_result.error != "":
@@ -574,16 +593,23 @@ static func load_map_async(
 			push_error("GlbUtils: " + result.error)
 			return result
 
-		# Use threaded resource loading for res:// paths
-		var load_status = ResourceLoader.load_threaded_request(path)
+		# Use threaded resource loading for res:// paths (in place under the dummy renderer)
+		var threaded := threaded_loads_safe()
+		var load_status = ResourceLoader.load_threaded_request(path) if threaded else OK
 		if load_status == OK:
 			while (
-				ResourceLoader.load_threaded_get_status(path)
-				== ResourceLoader.THREAD_LOAD_IN_PROGRESS
+				threaded
+				and (
+					ResourceLoader.load_threaded_get_status(path)
+					== ResourceLoader.THREAD_LOAD_IN_PROGRESS
+				)
 			):
 				await scene_tree.process_frame
 
-			var packed = ResourceLoader.load_threaded_get(path) as PackedScene
+			var packed: PackedScene = (
+				(ResourceLoader.load_threaded_get(path) if threaded else ResourceLoader.load(path))
+				as PackedScene
+			)
 			if packed:
 				var scene = packed.instantiate() as Node3D
 				if scene:

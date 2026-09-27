@@ -574,6 +574,8 @@ func _load_icons_worker():
 
 5. **Packed arrays are shared, not copied**: in Godot 4.7 GDScript, `var b := a` for a `PackedByteArray` (or any packed array), passing one to a function, or reading one out of a Dictionary or a property, gives a reference to the same buffer; a write through any of them shows in all (measured 2026-09-26). Anything handed to a worker thread, or kept as a "before" copy for undo, must be `.duplicate()`d, and an array a worker may be reading must be replaced (a new array assigned) rather than resized or appended in place. `AuthoredScatter._snapshot()` and `MaskStroke` do this; the older comment that called them copy-on-write was wrong.
 
+6. **No background resource loads under `--headless`**: Godot 4.7.1's dummy renderer (what `--headless` runs: GUT, CI, CLI tools) keeps textures and materials in RID owners that are not thread-safe, so a texture or material created on a worker thread races every other one being created (on another worker or the main thread): "Parameter "t" is null" in `texture_2d_initialize`, "Parameter "material" is null" in `material_set_shader`, and a segfault in a stress probe (2026-09-27; the real renderers were clean). It made GUT runs flaky ("Unexpected Errors" in whichever test was loading). Any threaded load of a GLB, scene or texture (`ResourceLoader.load_threaded_request`, GLTF generation on `WorkerThreadPool`) checks `GlbUtils.threaded_loads_safe()` and loads in place when it is false. Pure data work (scatter generation, rock keeping, document parsing) stays on workers everywhere.
+
 ---
 
 ## Input Actions

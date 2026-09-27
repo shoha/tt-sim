@@ -506,8 +506,8 @@ func _request_asset(asset_id: String) -> void:
 	if entry.is_empty():
 		return
 	var path := palette_root.path_join(entry.file)
-	# Only imported scenes load on a thread; a raw GLB (a user:// palette) resolves in place.
-	if not ResourceLoader.exists(path, "PackedScene"):
+	# Only imported scenes load on a thread (never headless); a raw GLB resolves in place.
+	if not GlbUtils.threaded_loads_safe() or not ResourceLoader.exists(path, "PackedScene"):
 		return
 	if ResourceLoader.load_threaded_request(path, "PackedScene") == OK:
 		_loading[asset_id] = path
