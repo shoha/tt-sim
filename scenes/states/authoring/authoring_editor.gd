@@ -11,7 +11,7 @@ extends RefCounted
 ## offset on a dressed GLB), so every point is taken into that frame here, once.
 ##
 ## Per frame of a stroke, flush() takes the samples the frame's dabs changed and makes one
-## update of each consumer: AuthoredTerrain.update_biome_region (the painted ground; none on
+## update of each consumer: AuthoredTerrain.update_ground_region (the painted ground; none on
 ## a dressed GLB), AuthoredScatter.request_region (regeneration on workers, grown in), and
 ## BaseScatterEraser.refresh (a dressed GLB's own scatter under the erase mask, shrunk out).
 ##
@@ -30,8 +30,9 @@ extends RefCounted
 ## brush finds the ground it is shaping with raycast_ground(), a CPU ray march of the
 ## document's triangles. end_stroke() finishes that work, updates the collision, queues the
 ## settling rebuild of the edited chunks, and asks the scatter to regenerate the stroke's
-## area grown by one more
-## sample step than request_region() adds (normals read a sample either side), so slope
+## area grown by one more sample step than request_region() adds (normals read a sample
+## either side) plus TerrainRules.CURVATURE_RADIUS_M (the automatic cliff and scree, which
+## thin and gather plants, read the curvature that far out), so slope and cliff
 ## rules add and remove plants with the grow and shrink animation while every plant that
 ## stays keeps its place (AuthoredScatter.row_keys leaves Y out). One history entry per
 ## stroke holds the heights diff and the props rows it moved; generated rows are not
@@ -230,7 +231,7 @@ func _refresh(sample_rect: Rect2i) -> void:
 		return
 	var started := Time.get_ticks_usec()
 	if is_instance_valid(terrain):
-		terrain.update_biome_region(sample_rect.grow(1))
+		terrain.update_ground_region(sample_rect.grow(1))
 	var world := MaskBrush.sample_rect_to_world(document, sample_rect)
 	if is_instance_valid(scatter):
 		scatter.request_region(world)
@@ -556,9 +557,12 @@ func _regenerate(rect: Rect2i) -> void:
 	if not is_instance_valid(scatter) or not rect.has_area():
 		return
 	var step := document.sample_step()
-	# request_region() grows by each species' reach plus one step; normals need one more.
+	# request_region() grows by each species' reach plus one step; normals need one more, and
+	# the cliff and scree rules read curvature CURVATURE_RADIUS_M out.
 	scatter.request_region(
-		MaskBrush.sample_rect_to_world(document, rect).grow(maxf(step.x, step.y))
+		MaskBrush.sample_rect_to_world(document, rect).grow(
+			maxf(step.x, step.y) * 2.0 + TerrainRules.CURVATURE_RADIUS_M
+		)
 	)
 
 

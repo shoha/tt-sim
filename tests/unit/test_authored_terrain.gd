@@ -310,22 +310,25 @@ func test_skirt_rings_the_map_from_its_boundary_vertices() -> void:
 	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
 	var loop := TerrainMeshBuilder.boundary_samples(doc)
 	var last := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
+	var rings := TerrainMeshBuilder.SKIRT_RINGS
 	assert_eq(loop.size(), 2 * (last.x + last.y), "every boundary sample once")
-	assert_eq(vertices.size(), loop.size() * 2)
+	assert_eq(vertices.size(), loop.size() * (rings + 1))
 	var half := doc.extent_m() * 0.5
 	var misplaced := 0
 	for i in loop.size():
 		var inner := vertices[i]
 		var expected := TerrainMeshBuilder.sample_position(doc, loop[i].x, loop[i].y)
-		var outer := vertices[loop.size() + i]
+		var outer := vertices[rings * loop.size() + i]
 		var past := Vector2(absf(outer.x) - half.x, absf(outer.z) - half.y)
 		if (
 			not inner.is_equal_approx(expected)
 			or absf(maxf(past.x, past.y) - width) > 1e-3
-			or not is_equal_approx(outer.y, inner.y)
+			or not is_zero_approx(outer.y)
 		):
 			misplaced += 1
-	assert_eq(misplaced, 0, "inner edge = the chunks' boundary vertices, outer edge width out")
+	assert_eq(
+		misplaced, 0, "inner edge = the chunks' boundary vertices, outer edge width out at base"
+	)
 	var mismatched_uvs := 0
 	for i in vertices.size():
 		if not uvs[i].is_equal_approx(Vector2(vertices[i].x, vertices[i].z)):
@@ -350,7 +353,7 @@ func test_skirt_is_decoration_outside_the_map_bounds() -> void:
 	assert_eq(skirt.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	var material := skirt.mesh.surface_get_material(0) as ShaderMaterial
 	assert_eq(material.shader, AuthoredTerrain.SKIRT_SHADER)
-	assert_eq(material.get_shader_parameter("biome_layer_count"), 0, "no biome layers")
+	assert_eq(material.get_shader_parameter("layer_count"), 0, "no layers")
 	assert_eq(
 		material.get_shader_parameter("albedo_tex"),
 		terrain.get_material().get_shader_parameter("albedo_tex"),
@@ -381,6 +384,137 @@ func test_flat_chunks_cast_no_shadow_sculpted_ones_do() -> void:
 			GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
 			"sculpted chunk %s casts" % cell
 		)
+
+
+func test_skirt_falls_back_to_the_base_level() -> void:
+	assert_almost_eq(TerrainMeshBuilder.skirt_height(2.0, 0.0, 24.0), 2.0, EPSILON)
+	assert_almost_eq(TerrainMeshBuilder.skirt_height(2.0, 12.0, 24.0), 1.0, EPSILON, "halfway")
+	assert_almost_eq(TerrainMeshBuilder.skirt_height(2.0, 30.0, 24.0), 0.0, EPSILON)
+	assert_almost_eq(TerrainMeshBuilder.skirt_height(-1.0, 6.0, 24.0), -0.84375, EPSILON)
+	# A map raised along one edge and sunk along another: every ring heads back to 0.
+	var doc := _flat(20)
+	for z in doc.samples_z():
+		doc.heights[doc.sample_index(doc.samples_x() - 1, z)] = 2.0
+		doc.heights[doc.sample_index(0, z)] = -1.0
+	var fall := 24.0
+	var arrays := TerrainMeshBuilder.build_skirt_arrays(doc, 40.0, fall)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var count := TerrainMeshBuilder.boundary_samples(doc).size()
+	var rising := 0
+	var tilted_wrong := 0
+	for i in count:
+		for r in TerrainMeshBuilder.SKIRT_RINGS:
+			var here := vertices[r * count + i]
+			var next := vertices[(r + 1) * count + i]
+			if absf(next.y) > absf(here.y) + 1e-6 or signf(next.y) * signf(here.y) < 0.0:
+				rising += 1
+		var edge := vertices[i]
+		var outward := Vector2(vertices[count + i].x - edge.x, vertices[count + i].z - edge.z)
+		var mid := normals[2 * count + i]
+		# A raised edge falls outward, so its normal leans out; a sunken one leans in.
+		if absf(edge.y) > 0.5 and signf(Vector2(mid.x, mid.z).dot(outward)) != signf(edge.y):
+			tilted_wrong += 1
+	assert_eq(rising, 0, "heights only ever head back toward the base level")
+	assert_eq(tilted_wrong, 0, "normals follow the fall-off")
+	for i in count:
+		assert_eq(vertices[TerrainMeshBuilder.SKIRT_RINGS * count + i].y, 0.0, "outer ring at base")
+
+
+## A map with a sharp 1.524 m step across the middle, so the rule fields vary everywhere
+## near chunk borders.
+func _tiered(cells: int) -> MapDocument:
+	var doc := _sine(cells)
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var p := doc.sample_to_world(Vector2(x, z))
+			if p.x + 0.3 * p.y > 1.0:
+				doc.heights[doc.sample_index(x, z)] += 1.524
+	return doc
+
+
+func test_rule_fields_ride_in_uv2_and_match_across_chunk_borders() -> void:
+	var doc := _tiered(30)
+	var fields := TerrainMeshBuilder.grid_fields(doc)
+	var mismatched := 0
+	var local_mismatched := 0
+	for cell in TerrainMeshBuilder.chunk_cells(doc):
+		var right := cell + Vector2i(1, 0)
+		var rect := TerrainMeshBuilder.chunk_sample_rect(doc, cell)
+		var arrays := TerrainMeshBuilder.build_chunk_arrays(doc, cell, fields)
+		var uv2: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+		var local: PackedVector2Array = TerrainMeshBuilder.build_chunk_arrays(doc, cell)[
+			Mesh.ARRAY_TEX_UV2
+		]
+		for i in uv2.size():
+			if not uv2[i].is_equal_approx(local[i]):
+				local_mismatched += 1
+		var right_rect := TerrainMeshBuilder.chunk_sample_rect(doc, right)
+		if right_rect.size == Vector2i.ZERO:
+			continue
+		var right_uv2: PackedVector2Array = (
+			TerrainMeshBuilder.build_chunk_arrays(doc, right, fields)[Mesh.ARRAY_TEX_UV2]
+		)
+		var columns := rect.size.x + 1
+		var right_columns := right_rect.size.x + 1
+		for row in rect.size.y + 1:
+			if uv2[row * columns + columns - 1] != right_uv2[row * right_columns]:
+				mismatched += 1
+	assert_eq(mismatched, 0, "shared border vertices carry the same curvature and steepness")
+	assert_eq(local_mismatched, 0, "a chunk built alone computes the same fields")
+	var any_curved := false
+	for value in fields.curvature:
+		any_curved = any_curved or absf(value) > 0.1
+	assert_true(any_curved, "the step is curved")
+
+
+func test_attribute_mirror_matches_the_engine_layout() -> void:
+	var doc := _tiered(20)
+	var cell := Vector2i(0, -1)
+	var mesh := TerrainMeshBuilder.build_chunk_mesh(doc, cell, null)
+	var surface := RenderingServer.mesh_get_surface(mesh.get_rid(), 0)
+	var mirror := TerrainMeshBuilder.chunk_vertex_mirror(doc, cell)
+	var bytes := TerrainMeshBuilder.attribute_rows_bytes(mirror, 0, int(mirror.rows) - 1)
+	assert_eq(bytes.attribute_offset, 0)
+	assert_eq(
+		bytes.attributes, surface["attribute_data"], "UV then UV2, interleaved, 16 bytes a vertex"
+	)
+
+
+func test_in_place_updates_rewrite_the_rule_fields() -> void:
+	var doc := _sine(30)
+	var terrain := AuthoredTerrain.create(doc)
+	add_child_autofree(terrain)
+	# Touch every chunk once so each keeps a vertex mirror, then cut a tier into the middle.
+	terrain.queue_heights(Rect2i(0, 0, doc.samples_x(), doc.samples_z()))
+	terrain.process_heights(-1)
+	var edit := Rect2i(40, 40, 30, 20)
+	for z in range(edit.position.y, edit.end.y):
+		for x in range(edit.position.x, edit.end.x):
+			doc.heights[doc.sample_index(x, z)] += 1.524
+	terrain.queue_heights(edit)
+	terrain.process_heights(-1)
+	var fresh := TerrainMeshBuilder.grid_fields(doc)
+	var kept: Dictionary = terrain.get_rule_fields()
+	var worst := 0.0
+	for i in fresh.curvature.size():
+		worst = maxf(worst, absf(kept.curvature[i] - fresh.curvature[i]))
+		worst = maxf(worst, absf(kept.steep[i] - fresh.steep[i]))
+	assert_lt(worst, 1e-6, "the kept fields match a full recompute")
+	var mirrors: Dictionary = terrain.get("_mirrors")
+	var stale := 0
+	for cell in mirrors:
+		var rebuilt: PackedFloat32Array = (
+			TerrainMeshBuilder.chunk_vertex_mirror(doc, cell).attributes
+		)
+		var kept_attributes: PackedFloat32Array = (mirrors[cell] as Dictionary).attributes
+		for i in rebuilt.size():
+			# Sliding sums started elsewhere may round the last float32 bit differently.
+			if absf(rebuilt[i] - kept_attributes[i]) > 1e-6:
+				stale += 1
+				break
+	assert_gt(mirrors.size(), 0)
+	assert_eq(stale, 0, "every in-place chunk carries the fields a rebuild would")
 
 
 func test_zoom_out_recentres_only_near_the_whole_map_view() -> void:

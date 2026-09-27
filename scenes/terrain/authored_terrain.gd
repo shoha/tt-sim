@@ -27,16 +27,22 @@ extends Node3D
 ## heights into the collision shape (about 0.4 ms for a 200 ft map); refresh_skirt()
 ## follows an edit on the map edge.
 ##
-## Biome ground. Painted biomes also paint the ground: each biome's palette ground_surface
-## is one of up to four shader layers blended over the base surface by an RGBA8 weight map
-## on the sample grid (the representation, layer assignment and overflow rule are
-## BiomeGroundLayers'). The weight map is a DrawableTexture2D so a brush stroke uploads only
-## the samples it changed: the biome brush edits doc.biome_slots / biome_density in place,
-## then calls update_biome_region() with the changed sample rectangle, which recomputes
-## those texels and blits them in (a texel-exact copy, shaders/texel_copy_blit.gdshader). A
-## biome first painted mid-session takes a free layer by setting that layer's uniforms; the
-## material itself is never rebuilt. A CPU mirror of the texture (get_biome_weights()) is
-## kept for tests and for anything that must read the weights back.
+## Ground layers (phase 3, P3-4). One table of up to eight shader layers blends over the
+## base surface: hand-painted surfaces (doc.surface_ids / surface_weights), painted biomes'
+## ground surfaces, and the automatic dressing's cliff and scree surfaces (the table, its
+## allocation and overflow rule are GroundLayerTable's; the rules are TerrainRules' and the
+## shader's). Two RGBA8 weight maps on the sample grid (slots 0-3 and 4-7) are
+## DrawableTexture2Ds so a brush stroke uploads only the samples it changed: a brush edits
+## the document's masks in place, then calls update_ground_region() with the changed
+## sample rectangle, which recomputes those texels and blits them in (a texel-exact copy,
+## shaders/texel_copy_blit.gdshader). A biome or surface first painted mid-session takes a
+## free slot by setting uniforms; the material itself is never rebuilt. CPU mirrors of the
+## textures (get_ground_weights()) are kept for tests and anything that reads them back.
+##
+## Rule fields. The automatic dressing reads two per-vertex fields (curvature and
+## steepness nearby, TerrainRules.sample_fields) carried in the chunks' UV2. They are kept
+## for the whole grid (get_rule_fields()); a height edit recomputes them CURVATURE_RADIUS_M
+## around the edit and the in-place update rewrites the chunks' attribute rows as well.
 
 const CHUNK_NAME_PREFIX := "TerrainChunk"
 const COLLISION_NAME := "TerrainCollision"
@@ -51,8 +57,8 @@ const SKIRT_WOBBLE := 0.45
 ## (chunk_shadow_casting).
 const FLAT_CHUNK_M := 0.02
 const TEXEL_COPY_SHADER := preload("res://shaders/texel_copy_blit.gdshader")
-## Ground shader uniforms of the biome layers; each map is a sampler array of
-## BiomeGroundLayers.MAX_LAYERS.
+## Ground shader uniforms of the layer slots; each map is a sampler array of
+## GroundLayerTable.MAX_LAYERS.
 const LAYER_MAPS := {
 	"albedo": "layer_albedo", "normal": "layer_normal", "orm": "layer_orm", "height": "layer_height"
 }
@@ -85,23 +91,26 @@ var last_heights_usec: int = 0
 var last_heights_chunks: int = 0
 ## Microseconds of the last refresh_skirt(), for measurement.
 var last_skirt_usec: int = 0
+## Microseconds the last queue_heights() spent recomputing rule fields, for measurement.
+var last_fields_usec: int = 0
 
 var _material: ShaderMaterial = null
 var _chunks: Dictionary[Vector2i, MeshInstance3D] = {}
 var _body: StaticBody3D = null
 var _shape: HeightMapShape3D = null
-## Layer index -> palette surface (BiomeGroundLayers.plan()["layers"]).
-var _layers: PackedStringArray = PackedStringArray()
-## Biome slot -> layer index or BiomeGroundLayers.BASE.
-var _slot_layers: PackedInt32Array = PackedInt32Array([BiomeGroundLayers.BASE])
-## Biome ids the current plan covers; more in the document means a biome was added.
-var _planned_biomes: int = 0
+## The current GroundLayerTable.plan().
+var _plan: Dictionary = {}
+## Biome ids and painted surface ids the current plan covers; a change means a re-plan.
+var _planned_biomes: int = -1
+var _planned_surfaces: PackedStringArray = PackedStringArray()
 ## Overflowed surfaces already warned about (surface -> true).
 var _warned_fallbacks: Dictionary = {}
-var _weights: Image = null
-var _weight_texture: DrawableTexture2D = null
-## The broad scale of the two-scale edge (BiomeGroundLayers.broad_image of _weights).
-var _broad_texture: ImageTexture = null
+## The weight maps' CPU mirrors (slots 0-3, 4-7), their textures and their broad scales.
+var _weights: Array[Image] = []
+var _weight_textures: Array[DrawableTexture2D] = []
+var _broad_textures: Array[ImageTexture] = []
+## Whole-grid rule fields: {"curvature", "steep"} (TerrainMeshBuilder.grid_fields).
+var _fields: Dictionary = {}
 ## Ground texture paths loading on background threads (warm_biome_surface), and the loaded
 ## textures held so the cache keeps them.
 var _warming: Dictionary = {}
@@ -140,16 +149,21 @@ static func create(
 
 
 ## Resource paths of every palette texture build() binds for `doc`: the base surface's
-## maps and each painted biome's ground surface maps. A caller can load them on background
-## threads first, so build() finds them in the resource cache instead of loading on the
-## main thread (about 35 ms cold for one surface).
+## maps, each painted biome's ground, cliff and scree surface maps, the painted surfaces'
+## and the base's rule surfaces. A caller can load them on background threads first, so
+## build() finds them in the resource cache instead of loading on the main thread (about
+## 35 ms cold for one surface).
 static func texture_paths(
 	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> PackedStringArray:
 	var surfaces := PaletteLibrary.surfaces(root)
 	var names := [doc.base_surface]
+	names.append_array(Array(base_rule_surfaces(doc.base_surface, root)))
+	names.append_array(Array(doc.surface_ids))
 	for biome_id in doc.biome_ids:
-		names.append(PaletteLibrary.biome(biome_id, root).get("ground_surface", ""))
+		var biome := PaletteLibrary.biome(biome_id, root)
+		for key in ["ground_surface", "cliff_surface", "scree_surface"]:
+			names.append(biome.get(key, ""))
 	var paths := PackedStringArray()
 	for surface_name in names:
 		var surface: Dictionary = surfaces.get(surface_name, {})
@@ -160,6 +174,21 @@ static func texture_paths(
 				if not path in paths and ResourceLoader.exists(path):
 					paths.append(path)
 	return paths
+
+
+## The cliff and scree surfaces [cliff, scree] that dress base surface `base` where no
+## painted biome says otherwise: those of the palette's first biome on that ground, else
+## the palette's first cliff surface and no scree ("" = none).
+static func base_rule_surfaces(
+	base: String, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> PackedStringArray:
+	for biome in PaletteLibrary.biomes(root):
+		if biome.get("ground_surface", "") == base:
+			return PackedStringArray(
+				[biome.get("cliff_surface", ""), biome.get("scree_surface", "")]
+			)
+	var cliffs := PaletteLibrary.surfaces_with_role("cliff", root)
+	return PackedStringArray([cliffs[0] if not cliffs.is_empty() else "", ""])
 
 
 ## The ground material for palette surface `surface_name`: the authored ground shader
@@ -262,7 +291,8 @@ func build(
 	_chunk_heights.clear()
 	_skirt_dirty = false
 	_material = build_ground_material(doc.base_surface, doc.map_seed, root)
-	_build_biome_ground()
+	_build_ground_layers()
+	_fields = TerrainMeshBuilder.grid_fields(doc)
 	if with_chunks:
 		rebuild_chunks(TerrainMeshBuilder.chunk_cells(doc))
 	_build_collision()
@@ -294,17 +324,18 @@ func _build_skirt() -> void:
 	if old != null:
 		old.free()
 	# The base surface's textures and seed, so the texture continues across the edge; no
-	# biome layers (their weights clamp at the edge and would streak outward).
+	# layers (their weights clamp at the edge and would streak outward) and no rules (the
+	# skirt shader compiles them out).
 	_skirt_material = _material.duplicate() as ShaderMaterial
 	_skirt_material.shader = SKIRT_SHADER
-	_skirt_material.set_shader_parameter("biome_layer_count", 0)
+	_skirt_material.set_shader_parameter("layer_count", 0)
+	_skirt_material.set_shader_parameter("layer_painted_mask", 0)
+	_skirt_material.set_shader_parameter("layer_ground_mask", 0)
 	_skirt_material.set_shader_parameter("skirt_half_extent", document.extent_m() * 0.5)
 	_skirt_material.set_shader_parameter("skirt_fade_m", SKIRT_FADE_M)
 	_skirt_material.set_shader_parameter("skirt_wobble", SKIRT_WOBBLE)
 	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(
-		Mesh.PRIMITIVE_TRIANGLES, TerrainMeshBuilder.build_skirt_arrays(document, skirt_width_m())
-	)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _skirt_arrays())
 	mesh.surface_set_material(0, _skirt_material)
 	var skirt := MeshInstance3D.new()
 	skirt.name = SKIRT_NAME
@@ -326,55 +357,86 @@ func refresh_skirt() -> void:
 		return
 	var mesh := skirt.mesh as ArrayMesh
 	mesh.clear_surfaces()
-	mesh.add_surface_from_arrays(
-		Mesh.PRIMITIVE_TRIANGLES, TerrainMeshBuilder.build_skirt_arrays(document, skirt_width_m())
-	)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _skirt_arrays())
 	mesh.surface_set_material(0, _skirt_material)
 	last_skirt_usec = Time.get_ticks_usec() - started
 
 
-## The palette surface of each biome ground layer, in layer (weight channel) order.
+## The skirt's geometry: the ring out to skirt_width_m(), falling back to the map floor
+## over the fade distance, so it is at the base level wherever it is still visible.
+func _skirt_arrays() -> Array:
+	return TerrainMeshBuilder.build_skirt_arrays(document, skirt_width_m(), SKIRT_FADE_M)
+
+
+## The palette surface of each layer slot, in slot (weight channel) order.
 func ground_layers() -> PackedStringArray:
-	return _layers.duplicate()
+	var surfaces := PackedStringArray()
+	for layer in _plan.get("layers", []):
+		surfaces.append(layer.surface)
+	return surfaces
 
 
-## The CPU mirror of the biome weight texture (RGBA8, one texel per sample). Do not modify.
-func get_biome_weights() -> Image:
-	return _weights
+## The current layer plan (GroundLayerTable.plan()). Do not modify.
+func layer_plan() -> Dictionary:
+	return _plan
 
 
-## Recomputes the biome ground weights of the samples in `sample_rect` (sample
-## coordinates, position = first sample, size in samples; clipped to the grid) from the
-## document's biome masks and uploads just those texels. Call it after every mask edit
-## with a rectangle covering every sample changed since the last call. A biome id appended
-## to the document since the last call is given a layer first (a free one, the one its
-## surface already has, or its overflow fallback), which only sets uniforms.
-func update_biome_region(sample_rect: Rect2i) -> void:
+## The CPU mirror of weight image `plane` (0: slots 0-3, 1: slots 4-7; RGBA8, one texel per
+## sample). Do not modify.
+func get_ground_weights(plane: int = 0) -> Image:
+	return _weights[plane]
+
+
+## The whole-grid rule fields {"curvature", "steep"} the chunks carry in UV2
+## (TerrainRules.sample_fields). Do not modify.
+func get_rule_fields() -> Dictionary:
+	return _fields
+
+
+## Recomputes the layer weights of the samples in `sample_rect` (sample coordinates,
+## position = first sample, size in samples; clipped to the grid) from the document's
+## biome masks and painted surfaces and uploads just those texels. Call it after every
+## mask or paint edit with a rectangle covering every sample changed since the last call.
+## A biome or painted surface added to the document since the last call is given a slot
+## first (a free one, one already drawing it, or its overflow fallback), which only sets
+## uniforms; in the rare case a painted surface forces a re-plan (GroundLayerTable), every
+## texel is rewritten.
+func update_ground_region(sample_rect: Rect2i) -> void:
 	var start := Time.get_ticks_usec()
-	if document.biome_ids.size() != _planned_biomes:
-		_plan_layers()
 	var grid := Rect2i(0, 0, document.samples_x(), document.samples_z())
 	var rect := sample_rect.intersection(grid)
+	if document.biome_ids.size() != _planned_biomes or document.surface_ids != _planned_surfaces:
+		if _plan_layers():
+			rect = grid
 	if rect.has_area():
-		var region := Image.create_from_data(
-			rect.size.x, rect.size.y, false, Image.FORMAT_RGBA8, _weight_bytes(rect)
-		)
-		_weights.blit_rect(region, Rect2i(Vector2i.ZERO, rect.size), rect.position)
-		_upload(region, rect.position)
+		var planes := _weight_planes(rect)
+		for plane in GroundLayerTable.PLANES:
+			var region := Image.create_from_data(
+				rect.size.x, rect.size.y, false, Image.FORMAT_RGBA8, planes[plane]
+			)
+			_weights[plane].blit_rect(region, Rect2i(Vector2i.ZERO, rect.size), rect.position)
+			_upload(plane, region, rect.position)
 		_refresh_broad()
 	last_biome_update_usec = Time.get_ticks_usec() - start
 
 
-## Starts loading the ground surface textures of palette biome `biome_id` on background
-## threads, so the first dab that gives it a layer binds cached textures instead of loading
-## them on the main thread (21 to 25 ms for a new surface, measured in T3c). Harmless for a
-## biome whose surface is already bound or is the base.
+## Starts loading the surface textures of palette biome `biome_id` (ground, cliff, scree)
+## on background threads, so the first dab that gives one a slot binds cached textures
+## instead of loading them on the main thread (21 to 25 ms for a new surface, measured in
+## T3c). Harmless for surfaces already bound or the base.
 func warm_biome_surface(biome_id: String) -> void:
-	var surface_name: String = PaletteLibrary.biome(biome_id, palette_root).get(
-		"ground_surface", ""
-	)
-	if surface_name == "" or surface_name == document.base_surface or _layers.has(surface_name):
-		return
+	var biome := PaletteLibrary.biome(biome_id, palette_root)
+	var bound := ground_layers()
+	for surface_key in ["ground_surface", "cliff_surface", "scree_surface"]:
+		var surface_name: String = biome.get(surface_key, "")
+		if surface_name == "" or surface_name == document.base_surface or bound.has(surface_name):
+			continue
+		warm_surface(surface_name)
+
+
+## Starts loading the textures of palette surface `surface_name` on background threads
+## (see warm_biome_surface; the Paint tool warms a surface when its tile is picked).
+func warm_surface(surface_name: String) -> void:
 	var surface: Dictionary = PaletteLibrary.surfaces(palette_root).get(surface_name, {})
 	for key in LAYER_MAPS:
 		var relative: Variant = surface.get(key, "")
@@ -410,122 +472,182 @@ func _exit_tree() -> void:
 	_warm_held.clear()
 
 
-func _build_biome_ground() -> void:
-	_layers = PackedStringArray()
-	_slot_layers = PackedInt32Array([BiomeGroundLayers.BASE])
-	_planned_biomes = 0
+func _build_ground_layers() -> void:
+	_plan = {}
+	_planned_biomes = -1
+	_planned_surfaces = PackedStringArray()
 	_warned_fallbacks.clear()
 	_plan_layers()
 	var size := Vector2i(document.samples_x(), document.samples_z())
-	_weights = Image.create_from_data(
-		size.x, size.y, false, Image.FORMAT_RGBA8, _weight_bytes(Rect2i(Vector2i.ZERO, size))
-	)
-	_weight_texture = DrawableTexture2D.new()
-	_weight_texture.setup(
-		size.x, size.y, DrawableTexture2D.DRAWABLE_FORMAT_RGBA8, Color(0, 0, 0, 0), false
-	)
-	if not document.biome_slots.is_empty():
-		_upload(_weights, Vector2i.ZERO)
-	_broad_texture = ImageTexture.create_from_image(BiomeGroundLayers.broad_image(_weights))
-	_material.set_shader_parameter("biome_broad", _broad_texture)
-	_material.set_shader_parameter("biome_weights", _weight_texture)
-	_material.set_shader_parameter("biome_grid_origin", -document.extent_m() * 0.5)
-	_material.set_shader_parameter("biome_grid_step", document.sample_step())
-	_material.set_shader_parameter("biome_layer_count", _layers.size())
-
-
-## (Re)plans the ground layers for the document's current biome list, keeping every layer
-## already assigned, and binds the textures of any new layer.
-func _plan_layers() -> void:
-	var root := palette_root
-	var surfaces := BiomeGroundLayers.biome_surfaces(
-		document.biome_ids,
-		func(biome_id: String) -> String:
-			return PaletteLibrary.biome(biome_id, root).get("ground_surface", ""),
-		func(surface: String) -> bool: return surface_available(surface, root)
-	)
-	var base := document.base_surface
-	var coverage := {}
-	var fresh := 0
-	for surface in BiomeGroundLayers.distinct_layers(surfaces, base):
-		if not _layers.has(surface):
-			fresh += 1
-	if _layers.size() + fresh > BiomeGroundLayers.MAX_LAYERS:
-		coverage = BiomeGroundLayers.coverage(
-			document.biome_slots, document.biome_density, surfaces
+	var planes := _weight_planes(Rect2i(Vector2i.ZERO, size))
+	_weights.clear()
+	_weight_textures.clear()
+	_broad_textures.clear()
+	for plane in GroundLayerTable.PLANES:
+		var image := Image.create_from_data(
+			size.x, size.y, false, Image.FORMAT_RGBA8, planes[plane]
 		)
-	var result := BiomeGroundLayers.plan(
-		surfaces,
-		base,
-		coverage,
-		func(surface: String) -> Variant: return surface_mean_albedo(surface, root),
-		_layers
-	)
-	var fallbacks: Dictionary = result["fallbacks"]
+		_weights.append(image)
+		var texture := DrawableTexture2D.new()
+		texture.setup(
+			size.x, size.y, DrawableTexture2D.DRAWABLE_FORMAT_RGBA8, Color(0, 0, 0, 0), false
+		)
+		_weight_textures.append(texture)
+		if planes[plane].count(0) != planes[plane].size():
+			_upload(plane, image, Vector2i.ZERO)
+		_broad_textures.append(ImageTexture.create_from_image(GroundLayerTable.broad_image(image)))
+	_material.set_shader_parameter("layer_weights_a", _weight_textures[0])
+	_material.set_shader_parameter("layer_weights_b", _weight_textures[1])
+	_material.set_shader_parameter("layer_broad_a", _broad_textures[0])
+	_material.set_shader_parameter("layer_broad_b", _broad_textures[1])
+	_material.set_shader_parameter("layer_grid_origin", -document.extent_m() * 0.5)
+	_material.set_shader_parameter("layer_grid_step", document.sample_step())
+
+
+## (Re)plans the layer table for the document's current biomes and painted surfaces,
+## keeping every slot already assigned (unless a painted surface forces a re-plan), and
+## binds the textures of the slots. Returns true when slots moved, so every weight texel
+## must be rewritten.
+func _plan_layers() -> bool:
+	var root := palette_root
+	var available := func(surface: String) -> bool:
+		return surface != "" and surface_available(surface, root)
+	var grounds := PackedStringArray()
+	var cliffs := PackedStringArray()
+	var screes := PackedStringArray()
+	for biome_id in document.biome_ids:
+		var biome := PaletteLibrary.biome(biome_id, root)
+		var ground: String = biome.get("ground_surface", "")
+		var cliff: String = biome.get("cliff_surface", "")
+		var scree: String = biome.get("scree_surface", "")
+		grounds.append(ground if available.call(ground) else "")
+		cliffs.append(cliff if available.call(cliff) else "")
+		screes.append(scree if available.call(scree) else "")
+	var painted := PackedStringArray()
+	for surface in document.surface_ids:
+		painted.append(surface if available.call(surface) else "")
+	var base_rules := base_rule_surfaces(document.base_surface, root)
+	for i in base_rules.size():
+		if not available.call(base_rules[i]):
+			base_rules[i] = ""
+	var surfaces := PaletteLibrary.surfaces(root)
+	var inputs := {
+		"base": document.base_surface,
+		"biome_ground": grounds,
+		"biome_cliff": cliffs,
+		"biome_scree": screes,
+		"biome_coverage":
+		GroundLayerTable.biome_coverage(
+			document.biome_slots, document.biome_density, document.biome_ids.size()
+		),
+		"painted": painted,
+		"base_rules": base_rules,
+		"role_of":
+		func(surface: String) -> String: return surfaces.get(surface, {}).get("role", "ground"),
+		"color_of": func(surface: String) -> Variant: return surface_mean_albedo(surface, root),
+	}
+	var previous: Array = _plan.get("layers", [])
+	var result := GroundLayerTable.plan(inputs, previous)
+	var fallbacks: Dictionary = result.fallbacks
 	for surface in fallbacks:
 		if not _warned_fallbacks.has(surface):
 			_warned_fallbacks[surface] = true
 			var drawn: String = fallbacks[surface]
 			push_warning(
 				(
-					"AuthoredTerrain: more than %d biome ground surfaces; '%s' is drawn as '%s'"
-					% [BiomeGroundLayers.MAX_LAYERS, surface, drawn if drawn != "" else base]
+					"AuthoredTerrain: more than %d ground layer surfaces; '%s' is drawn as '%s'"
+					% [
+						GroundLayerTable.MAX_LAYERS,
+						surface,
+						drawn if drawn != "" else document.base_surface
+					]
 				)
 			)
-	var changed := (result["layers"] as PackedStringArray) != _layers
-	_layers = result["layers"]
-	_slot_layers = result["slot_layers"]
+	var moved: bool = result.replanned
+	_plan = result
 	_planned_biomes = document.biome_ids.size()
-	if changed:
-		_bind_layers()
+	_planned_surfaces = document.surface_ids.duplicate()
+	_bind_layers(previous)
+	return moved
 
 
-## Binds every layer's textures and tile size. Unused array entries (and a layer surface
-## missing a map) get small solid textures: they are never sampled where it matters (an
-## unused layer's weight is masked to 0), but every sampler stays valid.
-func _bind_layers() -> void:
-	var maps := {}
-	for key in LAYER_MAPS:
-		maps[key] = []
-	var tiles := Vector4.ONE * DEFAULT_LAYER_TILE_M
-	var surfaces := PaletteLibrary.surfaces(palette_root)
-	for index in BiomeGroundLayers.MAX_LAYERS:
-		var surface: Dictionary = surfaces.get(_layers[index], {}) if index < _layers.size() else {}
+## Binds every slot's textures and tile size, the slot masks and the rule routing. Only
+## slots whose surface changed are reloaded. Unused array entries (and a slot surface
+## missing a map) get small solid textures: they are never sampled (an unused slot's
+## weight is 0), but every sampler stays valid.
+func _bind_layers(previous: Array) -> void:
+	var layers: Array = _plan.layers
+	var same := previous.size() == layers.size()
+	for j in mini(previous.size(), layers.size()):
+		same = same and previous[j].surface == layers[j].surface
+	if not same or _material.get_shader_parameter("layer_albedo") == null:
+		var maps := {}
 		for key in LAYER_MAPS:
-			var texture := _load_texture(palette_root, surface.get(key, ""))
-			maps[key].append(texture if texture != null else _solid_texture(LAYER_DEFAULTS[key]))
-		tiles[index] = float(surface.get("tile_m", DEFAULT_LAYER_TILE_M))
-	for key in LAYER_MAPS:
-		_material.set_shader_parameter(LAYER_MAPS[key], maps[key])
-	_material.set_shader_parameter("layer_tile_m", tiles)
-	_material.set_shader_parameter("biome_layer_count", _layers.size())
-
-
-func _weight_bytes(rect: Rect2i) -> PackedByteArray:
-	return BiomeGroundLayers.weight_bytes(
-		document.biome_slots, document.biome_density, document.samples_x(), _slot_layers, rect
+			maps[key] = []
+		var tiles := PackedFloat32Array()
+		var surfaces := PaletteLibrary.surfaces(palette_root)
+		for index in GroundLayerTable.MAX_LAYERS:
+			var surface: Dictionary = (
+				surfaces.get(layers[index].surface, {}) if index < layers.size() else {}
+			)
+			for key in LAYER_MAPS:
+				var texture := _load_texture(palette_root, surface.get(key, ""))
+				maps[key].append(
+					texture if texture != null else _solid_texture(LAYER_DEFAULTS[key])
+				)
+			tiles.append(float(surface.get("tile_m", DEFAULT_LAYER_TILE_M)))
+		for key in LAYER_MAPS:
+			_material.set_shader_parameter(LAYER_MAPS[key], maps[key])
+		_material.set_shader_parameter("layer_tile_m", tiles)
+	_material.set_shader_parameter("layer_count", layers.size())
+	_material.set_shader_parameter(
+		"layer_painted_mask", GroundLayerTable.source_mask(_plan, GroundLayerTable.Source.PAINTED)
 	)
+	_material.set_shader_parameter(
+		"layer_ground_mask", GroundLayerTable.source_mask(_plan, GroundLayerTable.Source.GROUND)
+	)
+	_material.set_shader_parameter("rule_cliff_layer", shader_routing(_plan.cliff_of))
+	_material.set_shader_parameter("rule_scree_layer", shader_routing(_plan.scree_of))
 
 
-## Rebuilds the broad weight texture from the CPU mirror (whole map; native resize, a
-## fraction of a millisecond on a 200 ft map) and uploads it in place.
+## A plan's rule routing (cliff_of / scree_of) as the shader reads it: the slot, 8 for the
+## base, -1 for none.
+static func shader_routing(routing: PackedInt32Array) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for to in routing:
+		if to == GroundLayerTable.BASE:
+			out.append(GroundLayerTable.MAX_LAYERS)
+		elif to == GroundLayerTable.NONE:
+			out.append(-1)
+		else:
+			out.append(to)
+	return out
+
+
+func _weight_planes(rect: Rect2i) -> Array[PackedByteArray]:
+	return GroundLayerTable.weight_planes(document, _plan.biome_layers, _plan.painted_layers, rect)
+
+
+## Rebuilds the broad weight textures from the CPU mirrors (whole map; native resize, a
+## fraction of a millisecond each on a 200 ft map) and uploads them in place.
 func _refresh_broad() -> void:
 	var start := Time.get_ticks_usec()
-	_broad_texture.update(BiomeGroundLayers.broad_image(_weights))
+	for plane in GroundLayerTable.PLANES:
+		_broad_textures[plane].update(GroundLayerTable.broad_image(_weights[plane]))
 	last_broad_update_usec = Time.get_ticks_usec() - start
 
 
-## The broad weight texture (see BiomeGroundLayers.broad_image). Do not modify.
-func get_broad_texture() -> ImageTexture:
-	return _broad_texture
+## The broad weight texture of `plane` (see GroundLayerTable.broad_image). Do not modify.
+func get_broad_texture(plane: int = 0) -> ImageTexture:
+	return _broad_textures[plane]
 
 
-## Copies `region` into the weight texture at `at`, texel for texel.
-func _upload(region: Image, at: Vector2i) -> void:
+## Copies `region` into weight texture `plane` at `at`, texel for texel.
+func _upload(plane: int, region: Image, at: Vector2i) -> void:
 	if _texel_copy == null:
 		_texel_copy = ShaderMaterial.new()
 		_texel_copy.shader = TEXEL_COPY_SHADER
-	_weight_texture.blit_rect(
+	_weight_textures[plane].blit_rect(
 		Rect2i(at, region.get_size()),
 		ImageTexture.create_from_image(region),
 		Color.WHITE,
@@ -554,6 +676,8 @@ func get_collision_body() -> StaticBody3D:
 ## leaving every other chunk untouched. Cells outside the map are ignored. Normals read
 ## neighbouring samples across chunk borders, so after a height edit pass every cell whose
 ## samples are within one sample of the edit (a sculpt brush's dab rect grown by one step).
+## The rule fields (UV2) are the ones kept since build() or the last queue_heights(): a
+## height edit goes through queue_heights(), which refreshes them.
 func rebuild_chunks(cells: Array[Vector2i]) -> void:
 	for cell in cells:
 		# The chunk now matches the document; a vertex copy kept for in-place edits may not.
@@ -564,7 +688,7 @@ func rebuild_chunks(cells: Array[Vector2i]) -> void:
 
 
 func _rebuild_chunk(cell: Vector2i) -> void:
-	var mesh := TerrainMeshBuilder.build_chunk_mesh(document, cell, _material)
+	var mesh := TerrainMeshBuilder.build_chunk_mesh(document, cell, _material, _fields)
 	if mesh == null:
 		return
 	var chunk: MeshInstance3D = _chunks.get(cell, null)
@@ -580,14 +704,32 @@ func _rebuild_chunk(cell: Vector2i) -> void:
 
 
 ## Queues the chunks whose vertices the height samples of `sample_rect` (grid coordinates)
-## change: every sample in it, and the samples one step around it, whose normals read
-## them. process_heights() does the work.
+## change: every sample in it, the samples one step around it, whose normals read them,
+## and the samples whose rule fields (curvature, steepness nearby) read them, up to
+## TerrainRules.CURVATURE_RADIUS_M plus one step out. Those fields are recomputed here, at
+## once; process_heights() does the mesh work.
 func queue_heights(sample_rect: Rect2i) -> void:
 	var grid := Rect2i(0, 0, document.samples_x(), document.samples_z())
-	var grown := sample_rect.grow(1).intersection(grid)
+	var step := document.sample_step()
+	var reach := TerrainRules.radius_samples(minf(step.x, step.y)) + 1
+	var vertex_rect := sample_rect.grow(1).intersection(grid)
+	var grown := sample_rect.grow(reach).intersection(grid)
 	if not grown.has_area():
 		return
-	var step := document.sample_step()
+	var fields_started := Time.get_ticks_usec()
+	TerrainRules.store_fields(
+		TerrainRules.sample_fields(
+			TerrainMeshBuilder.collision_heights(document),
+			document.samples_x(),
+			document.samples_z(),
+			step,
+			grown
+		),
+		document.samples_x(),
+		_fields.curvature,
+		_fields.steep
+	)
+	last_fields_usec = Time.get_ticks_usec() - fields_started
 	var world := MaskBrush.sample_rect_to_world(document, grown).grow(maxf(step.x, step.y))
 	for cell in ScatterGenerator.cells_in_bounds(world):
 		var rect := TerrainMeshBuilder.chunk_sample_rect(document, cell)
@@ -600,10 +742,10 @@ func queue_heights(sample_rect: Rect2i) -> void:
 		_dirty_heights.erase(cell)
 		_dirty_heights[cell] = MaskBrush.merge_rect(queued, part)
 	if (
-		grown.position.x == 0
-		or grown.position.y == 0
-		or grown.end.x == grid.end.x
-		or grown.end.y == grid.end.y
+		vertex_rect.position.x == 0
+		or vertex_rect.position.y == 0
+		or vertex_rect.end.x == grid.end.x
+		or vertex_rect.end.y == grid.end.y
 	):
 		_skirt_dirty = true
 
@@ -694,8 +836,8 @@ func _update_chunk_in_place(cell: Vector2i, part: Rect2i) -> void:
 	var last_row := 0
 	var span := Vector2(INF, -INF)
 	if mirror.is_empty():
-		# First edit of this chunk: the whole stream from the current heights.
-		mirror = TerrainMeshBuilder.chunk_vertex_mirror(document, cell)
+		# First edit of this chunk: the whole stream from the current heights and fields.
+		mirror = TerrainMeshBuilder.chunk_vertex_mirror(document, cell, _fields)
 		if mirror.is_empty():
 			return
 		_mirrors[cell] = mirror
@@ -705,11 +847,14 @@ func _update_chunk_in_place(cell: Vector2i, part: Rect2i) -> void:
 	else:
 		rect = mirror.rect
 		span = TerrainMeshBuilder.write_vertex_region(document, mirror, part)
+		TerrainMeshBuilder.write_attribute_region(mirror, part, _fields, document.samples_x())
 		first_row = maxi(part.position.y - rect.position.y, 0)
 		last_row = mini(part.end.y - 1 - rect.position.y, int(mirror.rows) - 1)
 	var bytes := TerrainMeshBuilder.vertex_rows_bytes(mirror, first_row, last_row)
 	mesh.surface_update_vertex_region(0, bytes.position_offset, bytes.positions)
 	mesh.surface_update_vertex_region(0, bytes.normal_offset, bytes.normals)
+	var attributes := TerrainMeshBuilder.attribute_rows_bytes(mirror, first_row, last_row)
+	mesh.surface_update_attribute_region(0, attributes.attribute_offset, attributes.attributes)
 	_edited[cell] = true
 	# The mesh keeps its build-time AABB; culling reads the custom one, widened to the new
 	# heights (exact again after the settling rebuild).

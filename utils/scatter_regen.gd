@@ -32,6 +32,9 @@ var map_seed: int = 0
 var bounds: Rect2 = Rect2()
 ## The document's sample step (the larger axis); the bilinear lookup reaches this far.
 var sample_step: float = 0.25
+## Palette surfaces with role "built" (read on the main thread): painted ones clear the
+## plants under them (ScatterGenerator.document_fields).
+var built_surfaces: PackedStringArray = PackedStringArray()
 
 ## biome id -> {"species": Array[Dictionary], "reach": PackedFloat32Array,
 ## "assets": Array[PackedStringArray] per species, "groups": Array[PackedInt32Array]
@@ -151,6 +154,7 @@ func take_job(max_cells: int = DEFAULT_CELLS_PER_JOB) -> Dictionary:
 		var entry: Dictionary = work[biome_id]
 		entry.window = _cells_rect(cells).grow(entry.depth + 2.0 * sample_step)
 		entry.erase("depth")
+		entry.built = built_surfaces.duplicate()
 	return {"cells": cells, "generations": generations, "regenerated": regenerated, "work": work}
 
 
@@ -174,7 +178,9 @@ static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
 	var rows_by_cell := {}
 	for biome_id in work:
 		var entry: Dictionary = work[biome_id]
-		var fields := ScatterGenerator.document_fields(snapshot, biome_id, entry.window)
+		var fields := ScatterGenerator.document_fields(
+			snapshot, biome_id, entry.window, entry.get("built", PackedStringArray())
+		)
 		var species: Array[Dictionary] = []
 		species.assign(entry.species)
 		var rows := ScatterGenerator.generate_species_cells(
@@ -185,7 +191,8 @@ static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
 			fields.normal_at,
 			snapshot.map_seed,
 			entry.cells_by_species,
-			fields.bounds
+			fields.bounds,
+			fields.rock_density_at
 		)
 		for asset_id in rows:
 			var split := split_by_cell(rows[asset_id])

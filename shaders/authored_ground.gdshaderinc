@@ -3,23 +3,32 @@
  * ======================
  *
  * PURPOSE:
- * The ground of a map authored in tt-sim (AuthoredTerrain, scenes/terrain/). Tiles one
- * palette surface (albedo, tangent-space normal, packed ORM) across the terrain chunks at
- * the surface's tile_m, and hides that tiling at the game camera. A Blender-made map
- * brings its terrain as a baked, non-repeating texture; this shader has to reach a
- * comparable read live from a 2-3 m texture repeated across a 61 m map.
+ * The ground of a map authored in tt-sim (AuthoredTerrain, scenes/terrain/). Tiles palette
+ * surfaces (albedo, tangent-space normal, packed ORM, height) across the terrain chunks at
+ * each surface's tile_m, hides that tiling at the game camera, blends up to eight layer
+ * surfaces over the base (painted surfaces, painted biomes' ground, and the automatic
+ * cliff and scree), and dresses the terrain by itself: rock on steep faces, scree at their
+ * feet. A Blender-made map brings its terrain as a baked, non-repeating texture; this
+ * shader has to reach a comparable read live from 2-3 m textures repeated across a 61 m map.
  *
  * FILES: this include is the whole shader. authored_ground.gdshader (opaque, the map) and
  * authored_ground_skirt.gdshader (transparent, GROUND_SKIRT defined) only declare the
  * shader type and render mode and include it, so the skirt continues the ground's exact
  * texture, anti-tiling and drifts across the map edge.
  *
+ * FRAME: "map frame" below is the terrain node's local space, which is the MapDocument's
+ * frame (chunk vertices are written in it; UV = its XZ). The rules read the normal and
+ * position in this frame, so a scaled or offset level map dresses exactly as the CPU twin
+ * of the rules (TerrainRules) computes.
+ *
  * SKIRT (GROUND_SKIRT, added after T7 zoom-out renders): a ring of ground around the map
  * whose alpha falls from 1 at the map edge to 0 skirt_fade_m out, the fade distance
  * stretched by low-frequency noise so the outline is organic, not a rectangle. Alpha
  * rather than a colour fade, so it dissolves into whatever the background is (a flat
- * colour or, through the orthographic camera, a sky seen in one direction). The skirt
- * binds no biome layers: the weight map clamps at its edge, which would streak.
+ * colour or, through the orthographic camera, a sky seen in one direction). Its geometry
+ * rolls back down to the map floor (TerrainMeshBuilder.skirt_height), so a raised edge
+ * does not run out into the fog as a shelf. The skirt binds no layers and runs no rules:
+ * the weight maps clamp at their edge, which would streak.
  *
  * ANTI-TILING (the live port of terrain-paint's Mosaic tiling breakup):
  * terrain-paint breaks a repeating texture by cutting UV space into a grid of cells, giving
@@ -46,6 +55,19 @@
  * edge. Anisotropic filtering matters here: the camera looks 22 degrees down, so the
  * ground is foreshortened about 2.7x and isotropic mips blur it.
  *
+ * STEEP FACES (phase 3, P3-4): a top-down projection stretches a texture by 1 / n.y, so a
+ * 70 degree tier face would show its rock smeared into vertical streaks. Where n.y falls
+ * below SIDE_START_NY a side projection (the plane facing X or Z, whichever the face turns
+ * to) takes over, fully below SIDE_FULL_NY; near 45 degree corners both side planes blend
+ * (their weights sharpened by SIDE_SHARPNESS, and a plane under SIDE_MIN_WEIGHT dropped),
+ * so most steep pixels sample two projections, not three (biplanar cost, triplanar
+ * seams). Above SIDE_START_NY the side code is branched over entirely: flat ground costs
+ * what it did. Side planes use no mosaic breakup: cells rotate a texture, and a cliff's
+ * layered beds must stay level; they run horizontally around the map at fixed heights,
+ * image up = map up. Each plane has its own tangent frame (+u along the face, +v down,
+ * OpenGL green = up), orthogonalised against the geometric normal, so normal maps light
+ * correctly on every face.
+ *
  * VARIATION (added after game-camera renders beside a Blender-made map):
  * A baked terrain carries large, soft brightness and hue drifts (painted layers, AO, a
  * noise mask); one surface tiled perfectly evenly does not, and read as flat felt at the
@@ -58,19 +80,32 @@
  *
  * NORMALS:
  * The palette normal maps are OpenGL tangent space (ASSET_PIPELINE.md section 6), imported
- * BC5 (only R and G survive). UVs are planar world XZ, so the tangent frame is known
- * without mesh tangents: +u is world +X, +v is world +Z, and OpenGL green (+y, "up" in the
- * image) is -v. The sampled xy is rotated back out of each cell's rotation, blended, z is
- * rebuilt, and the result is written to NORMAL directly.
+ * BC5 (only R and G survive). The tangent frame of every projection is known without mesh
+ * tangents: top-down, +u is map +X, +v is map +Z, and OpenGL green (+y, "up" in the
+ * image) is -v; the sampled xy is rotated back out of each cell's rotation. Each surface's
+ * perturbed normal is built in the map frame, surfaces and projections are blended, and the
+ * result is written to NORMAL.
  *
- * BIOME LAYERS (painted ground; weights from BiomeGroundLayers, utils/):
- * Up to 4 layer surfaces (layer_*[i]) blend over the base. biome_weights holds one RGBA8
- * texel per document sample, channel i = the painted density of the biome whose ground is
- * layer i; the base is the remainder. It is bilinear-filtered, so a 0.25 m grid gives
- * smooth ramps rather than stair steps. The tile frame is computed once per pixel and
- * shared: each layer costs only its own 12 fetches, and a layer (or the base) whose weight
- * is zero at a pixel is not sampled at all.
- * The painted edge is then made to look like ground rather than a brush circle, the way
+ * LAYER TABLE (phase 3, P3-4; built by GroundLayerTable, utils/):
+ * Up to 8 layer surfaces (layer_*[i]) blend over the base. layer_weights_a holds slots 0-3
+ * and layer_weights_b slots 4-7, one RGBA8 texel per document sample, bilinear-filtered so
+ * a 0.25 m grid gives smooth ramps. A slot is one of three kinds (layer_painted_mask and
+ * layer_ground_mask say which; a slot in neither is a rule slot with an empty channel):
+ *   - painted: a hand-painted surface; its channel is its painted weight, read through a
+ *     small warp and edge noise (PAINT_*: a path keeps its line). Painted weight is drawn
+ *     first and always wins: everything else shares 1 - the painted total.
+ *   - ground: a painted biome's ground surface; its channel is the biome's painted density,
+ *     shaped as below. The base surface is the ground's remainder.
+ *   - rule: a biome's cliff or scree surface that nothing else draws.
+ * The automatic rules then take their share of the unpainted ground: rule_weights() (cliff
+ * from slope, scree at concave feet; TerrainRules is the CPU twin, constants below)
+ * multiplied by 1 - painted total. The cliff share is handed out per ground component (each
+ * ground slot and the base) in proportion to its weight, to that component's cliff surface
+ * (rule_cliff_layer[j], index 8 = the base, -1 = none: the share stays with the ground);
+ * scree likewise. So a sample's rock is its own biome's rock.
+ * The tile frame is computed once per pixel and shared: each surface costs only its own
+ * fetches, and a surface whose weight is zero at a pixel is not sampled at all.
+ * A painted biome's edge is made to look like ground rather than a brush circle, the way
  * terrain-paint's Edge Noise and Height Blend do it in a bake:
  *   - domain warp: the weight map is read at a noise-displaced position (up to
  *     biome_edge_warp_m), so a round dab's outline wanders; this frays even a hard edge;
@@ -80,27 +115,36 @@
  *   - height blend: each surface scores weight + (height - 0.5) * biome_height_contrast
  *     and only surfaces within biome_blend_width of the top score show, so at a boundary
  *     the taller texture detail (clumps, needles, stones) wins and the line follows the
- *     textures rather than a gradient.
+ *     textures rather than a gradient. Rule and painted weights go through the same score,
+ *     which is how terrain-paint's height blend factor enters: rock juts out of the grass
+ *     where the rock texture is high.
+ *
+ * AUTOMATIC RULES (rule_weights; formulas and defaults in utils/terrain_rules.gd, whose
+ * constants are mirrored below and checked by tests/unit/test_terrain_rules.gd):
+ *   - cliff: terrain-paint's slope tail on n.y (CLIFF_START_COS .. CLIFF_END_COS), edge
+ *     noise added before the clamp, a convex lip taking some rock back (the per-vertex
+ *     curvature in UV2.x), smoothstep;
+ *   - scree: concave curvature tail with edge noise, times the steepness nearby (UV2.y),
+ *     smoothstep, never under the cliff.
+ * The noise domain is sheared by height so it varies up a face.
  *
  * BROAD EDGE (the second scale of a two-scale edge, added after T7 renders beside the
  * river map): the frayed edge above is a few decimetres wide and on its own reads like a
  * decal laid on the lawn, where a hand-painted Blender layer fades over several metres.
- * biome_broad is the weight map box-filtered to BiomeGroundLayers.BROAD_FACTOR samples per
- * texel (3.5 m at the default 0.25 m step) and read with a cubic B-spline, so around each
- * painted area the layer's mean colour (the last mip of its albedo) recolours the ground in
- * a gradient about 7 m wide. It recolours by luminance (layer mean x the pixel's luminance
- * relative to the base mean), so the base texture keeps its detail and no hue is amplified;
- * a per-channel ratio turned green grass pink at the edge of a brown layer. The tint fades
- * out where the fine edge already shows the layer itself. Cost: 4 bilinear fetches of a
- * tiny texture plus one lowest-mip fetch per layer present.
- *
- * PHASE 3 (splatting): SurfaceSample.height is the blended height each surface needs for
- * height-blended transitions; raising MAX_LAYERS means a second weight texture.
+ * layer_broad_a/b are the weight maps box-filtered to GroundLayerTable.BROAD_FACTOR samples
+ * per texel (3.5 m at the default 0.25 m step) and read with a cubic B-spline, so around
+ * each painted biome the ground slot's mean colour (the last mip of its albedo) recolours
+ * the ground in a gradient about 7 m wide. Ground slots only: a painted path gets no halo.
+ * It recolours by luminance (layer mean x the pixel's luminance relative to the base
+ * mean), so the base texture keeps its detail and no hue is amplified. The tint fades out
+ * where the fine edge already shows the layer itself.
  *
  * COST: 12 fetches plus 26 small integer hashes per pixel for the base alone; measured
- * about 1.4x a StandardMaterial3D ground with the same textures. Biome layers add 3 value
- * noises and one weight fetch when any layer is bound, plus 12 fetches per surface present
- * at a pixel (docs/ARCHITECTURE.md "Authored terrain" has the measured ratios).
+ * about 1.4x a StandardMaterial3D ground with the same textures. The rules add one
+ * two-octave value noise wherever the slope is within reach of the cliff band (and one
+ * more near steep feet). Layers add their weight fetches, plus 12 fetches per surface
+ * present at a pixel top-down and 4 per side plane on steep pixels
+ * (docs/PERFORMANCE.md "Ground shader: 8 layers, rules, steep faces").
  *
  * LIGHTING matches the StandardMaterial3D terrain of a Blender-made map: burley diffuse,
  * schlick GGX specular at the default 0.5, AO from ORM.r affecting ambient only
@@ -137,18 +181,26 @@ uniform float variation_tint_amount : hint_range(0.0, 1.0) = 0.6;
 uniform vec3 variation_dry_tint : source_color = vec3(1.12, 1.02, 0.72);
 uniform vec3 variation_lush_tint : source_color = vec3(0.86, 0.95, 0.9);
 
-// Biome layers (see BIOME LAYERS above). Layers at index >= biome_layer_count are unbound.
-uniform int biome_layer_count : hint_range(0, 4) = 0;
-uniform sampler2D biome_weights : hint_default_black, filter_linear, repeat_disable;
+// Layer table (see LAYER TABLE above). Slots at index >= layer_count are unbound.
+uniform int layer_count : hint_range(0, 8) = 0;
+// Bit j set: slot j is a painted surface / a biome ground surface.
+uniform int layer_painted_mask = 0;
+uniform int layer_ground_mask = 0;
+uniform sampler2D layer_weights_a : hint_default_black, filter_linear, repeat_disable;
+uniform sampler2D layer_weights_b : hint_default_black, filter_linear, repeat_disable;
 // World XZ of document sample (0, 0) and the real sample step, in metres.
-uniform vec2 biome_grid_origin = vec2(0.0);
-uniform vec2 biome_grid_step = vec2(0.25);
-uniform sampler2D layer_albedo[4] : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform vec2 layer_grid_origin = vec2(0.0);
+uniform vec2 layer_grid_step = vec2(0.25);
+uniform sampler2D layer_albedo[8] : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 // Sampler arrays take no default or normal hints, so AuthoredTerrain binds every entry.
-uniform sampler2D layer_normal[4] : filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D layer_orm[4] : filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D layer_height[4] : filter_linear_mipmap_anisotropic, repeat_enable;
-uniform vec4 layer_tile_m = vec4(2.0);
+uniform sampler2D layer_normal[8] : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D layer_orm[8] : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D layer_height[8] : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform float layer_tile_m[8];
+// Per ground component (slots 0-7, then the base at 8): the slot drawing its cliff and
+// scree (8 = the base, -1 = none).
+uniform int rule_cliff_layer[9];
+uniform int rule_scree_layer[9];
 // Defaults chosen from game-camera renders (docs/ARCHITECTURE.md "Authored terrain"):
 // lower contrast or a wider blend reads as a soft stain, stronger edge noise turns
 // partial paint into hard-edged blobs.
@@ -159,9 +211,10 @@ uniform float biome_edge_scale_m : hint_range(0.5, 20.0) = 3.0;
 uniform float biome_edge_noise : hint_range(0.0, 1.0) = 0.3;
 uniform float biome_height_contrast : hint_range(0.0, 2.0) = 1.2;
 uniform float biome_blend_width : hint_range(0.01, 0.5) = 0.2;
-// Broad scale of the two-scale edge (see BROAD EDGE): the weight map box-filtered to a few
-// metres per texel (BiomeGroundLayers.broad_image), read with a B-spline so it is smooth.
-uniform sampler2D biome_broad : hint_default_black, filter_linear, repeat_disable;
+// Broad scale of the two-scale edge (see BROAD EDGE): the weight maps box-filtered to a few
+// metres per texel (GroundLayerTable.broad_image), read with a B-spline so they are smooth.
+uniform sampler2D layer_broad_a : hint_default_black, filter_linear, repeat_disable;
+uniform sampler2D layer_broad_b : hint_default_black, filter_linear, repeat_disable;
 // Most a layer's colour tints the ground around its painted area (0.5 was too faint to
 // read at the game camera; 0.8 reads as woodland floor fading into lawn).
 uniform float biome_broad_strength : hint_range(0.0, 1.0) = 0.8;
@@ -177,16 +230,62 @@ uniform float skirt_fade_m : hint_range(1.0, 100.0) = 24.0;
 uniform float skirt_wobble : hint_range(0.0, 1.0) = 0.45;
 #endif
 
-varying vec3 v_tangent_u;
-varying vec3 v_tangent_v;
+// Map-frame normal, position and the per-vertex rule fields (UV2: curvature, steepness).
+varying vec3 v_normal;
+varying vec3 v_position;
+varying vec2 v_fields;
 
 const float INV_UINT_MAX = 1.0 / 4294967295.0;
 // A weight at or below this is treated as absent (under half an 8-bit step).
 const float WEIGHT_EPSILON = 0.002;
-const int MAX_LAYERS = 4;
+const int MAX_LAYERS = 8;
+// Index of the base surface in the per-pixel weight arrays.
+const int BASE = 8;
 // Score of a surface not sampled at this pixel: far below any real score, so it never
 // comes within biome_blend_width of the top.
 const float ABSENT_SCORE = -1e6;
+
+// Steep faces (see STEEP FACES): side planes start below this n.y (about 44 degrees) and
+// take over fully below SIDE_FULL_NY (about 65 degrees). Projections meet by a height
+// blend (PROJECTION_CONTRAST, PROJECTION_BAND: the taller detail wins, as between
+// surfaces), not a cross-fade, which double-exposed two rock patterns into a smear.
+const float SIDE_START_NY = 0.72;
+const float SIDE_FULL_NY = 0.42;
+const float SIDE_SHARPNESS = 8.0;
+const float SIDE_MIN_WEIGHT = 0.04;
+const float PROJECTION_CONTRAST = 0.8;
+const float PROJECTION_BAND = 0.12;
+
+// Automatic rules: the twins of TerrainRules' constants (tests/unit/test_terrain_rules.gd
+// checks every value). CLIFF_*_COS are cos(CLIFF_START_DEG) and cos(CLIFF_END_DEG).
+const float CLIFF_START_COS = 0.788011;
+const float CLIFF_END_COS = 0.573576;
+const float CLIFF_EDGE_NOISE = 0.35;
+const float LIP_CURVATURE_START = 0.03;
+const float LIP_CURVATURE_END = 0.12;
+const float LIP_STRENGTH = 0.6;
+const float LIP_SHEER_TAIL = 2.0;
+const float RAMP_LOW = 0.2;
+const float RAMP_HIGH = 0.8;
+const float SCREE_CURVATURE_START = 0.02;
+const float SCREE_CURVATURE_END = 0.12;
+const float SCREE_NEAR_START = 0.03;
+const float SCREE_NEAR_END = 0.1;
+const float SCREE_EDGE_NOISE = 0.4;
+const float SCREE_BREAKUP_SCALE_M = 2.6;
+const float SCREE_BREAKUP_LOW = 0.22;
+const float SCREE_BREAKUP_HIGH = 0.56;
+const float RULE_NOISE_SCALE_M = 1.6;
+const float RULE_NOISE_SHEAR = 0.8;
+const vec2 CLIFF_NOISE_OFFSET = vec2(13.7, -41.3);
+const vec2 SCREE_NOISE_OFFSET = vec2(-27.9, 8.6);
+const vec2 SCREE_BREAKUP_OFFSET = vec2(61.3, 19.4);
+const float PAINT_EDGE_WARP_M = 0.3;
+const float PAINT_EDGE_SCALE_M = 1.4;
+const float PAINT_EDGE_NOISE = 0.35;
+const vec2 PAINT_WARP_OFFSET_A = vec2(-23.1, 57.7);
+const vec2 PAINT_WARP_OFFSET_B = vec2(91.3, -12.9);
+const vec2 PAINT_NOISE_OFFSET = vec2(7.9, 3.1);
 
 // Weights and per-cell transforms of the (up to) three cells blended at one point.
 struct TileFrame {
@@ -196,11 +295,40 @@ struct TileFrame {
 	vec2 offsets[3];    // offset in texture repeats
 };
 
-struct SurfaceSample {
+// One top-down sample (tangent normal xy in map-frame UV axes: +u = +X, +v = +Z).
+struct TopSample {
 	vec3 albedo;
-	vec2 normal_uv;  // tangent normal xy in world-UV axes (+u = +X, +v = +Z)
+	vec2 normal_uv;
 	vec3 orm;
 	float height;
+};
+
+// One surface at one pixel, every projection blended; normal is the perturbed map-frame
+// normal (not normalised).
+struct SurfaceSample {
+	vec3 albedo;
+	vec3 normal;
+	vec3 orm;
+	float height;
+};
+
+// The projections of one pixel: weights (x: the X-facing side plane, y: top-down, z: the
+// Z-facing side plane) and each plane's tangent frame and UVs.
+struct Projection {
+	vec3 weights;
+	vec3 n;
+	vec3 top_u;
+	vec3 top_v;
+	vec3 x_t;
+	vec3 x_b;
+	vec2 x_uv;
+	vec2 x_dx;
+	vec2 x_dy;
+	vec3 z_t;
+	vec3 z_b;
+	vec2 z_uv;
+	vec2 z_dx;
+	vec2 z_dy;
 };
 
 uvec2 pcg2d(uvec2 v) {
@@ -267,8 +395,8 @@ vec2 unrotate(vec2 v, vec2 cs) {
 	return vec2(cs.x * v.x + cs.y * v.y, -cs.y * v.x + cs.x * v.y);
 }
 
-// One surface through the tile frame: 3 cells x (albedo, normal, ORM, height).
-SurfaceSample sample_surface(
+// One surface top-down through the tile frame: 3 cells x (albedo, normal, ORM, height).
+TopSample sample_top(
 	sampler2D albedo_map, sampler2D normal_map, sampler2D orm_map, sampler2D height_map,
 	float tile, TileFrame f, vec2 world_xz, vec2 dx, vec2 dy
 ) {
@@ -291,12 +419,127 @@ SurfaceSample sample_surface(
 	vec3 w = pow(max(f.weights, vec3(0.0)), vec3(breakup_sharpness));
 	w *= mix(vec3(1.0), height + 0.05, breakup_contrast);
 	w /= max(w.x + w.y + w.z, 1e-5);
-	SurfaceSample result;
+	TopSample result;
 	result.albedo = albedo[0] * w.x + albedo[1] * w.y + albedo[2] * w.z;
 	result.normal_uv = normal_xy[0] * w.x + normal_xy[1] * w.y + normal_xy[2] * w.z;
 	result.orm = orm[0] * w.x + orm[1] * w.y + orm[2] * w.z;
 	result.height = dot(height, w);
 	return result;
+}
+
+// A tangent-space normal xy (scaled by normal_strength) on frame (t, b, n), map frame.
+vec3 perturb(vec2 xy, vec3 t, vec3 b, vec3 n) {
+	vec2 s = xy * normal_strength;
+	float z = sqrt(max(1.0 - dot(s, s), 0.0));
+	return n * z + t * s.x + b * s.y;
+}
+
+// One side-plane sample (plain tiling, no breakup).
+SurfaceSample side_sample(
+	sampler2D albedo_map, sampler2D normal_map, sampler2D orm_map, sampler2D height_map,
+	float tile, vec2 uv_m, vec2 gx_m, vec2 gy_m, vec3 t, vec3 b, vec3 n
+) {
+	vec2 uv = uv_m / tile;
+	vec2 gx = gx_m / tile;
+	vec2 gy = gy_m / tile;
+	SurfaceSample s;
+	s.albedo = textureGrad(albedo_map, uv, gx, gy).rgb;
+	vec2 nm = textureGrad(normal_map, uv, gx, gy).rg * 2.0 - 1.0;
+	s.normal = perturb(nm, t, b, n);
+	s.orm = textureGrad(orm_map, uv, gx, gy).rgb;
+	s.height = textureGrad(height_map, uv, gx, gy).r;
+	return s;
+}
+
+// One surface through every projection with weight at this pixel, the projections
+// height-blended (index 0: X plane, 1: top-down, 2: Z plane).
+SurfaceSample sample_surface(
+	sampler2D albedo_map, sampler2D normal_map, sampler2D orm_map, sampler2D height_map,
+	float tile, TileFrame f, vec2 world_xz, vec2 dx, vec2 dy, Projection pr
+) {
+	SurfaceSample s[3];
+	vec3 score = vec3(ABSENT_SCORE);
+	if (pr.weights.y > 0.0) {
+		TopSample top = sample_top(
+			albedo_map, normal_map, orm_map, height_map, tile, f, world_xz, dx, dy
+		);
+		s[1].albedo = top.albedo;
+		s[1].normal = perturb(top.normal_uv, pr.top_u, pr.top_v, pr.n);
+		s[1].orm = top.orm;
+		s[1].height = top.height;
+		if (pr.weights.y >= 1.0) {
+			return s[1];
+		}
+		score.y = pr.weights.y + (top.height - 0.5) * PROJECTION_CONTRAST;
+	}
+	if (pr.weights.x > 0.0) {
+		s[0] = side_sample(
+			albedo_map, normal_map, orm_map, height_map, tile, pr.x_uv, pr.x_dx, pr.x_dy,
+			pr.x_t, pr.x_b, pr.n
+		);
+		score.x = pr.weights.x + (s[0].height - 0.5) * PROJECTION_CONTRAST;
+	}
+	if (pr.weights.z > 0.0) {
+		s[2] = side_sample(
+			albedo_map, normal_map, orm_map, height_map, tile, pr.z_uv, pr.z_dx, pr.z_dy,
+			pr.z_t, pr.z_b, pr.n
+		);
+		score.z = pr.weights.z + (s[2].height - 0.5) * PROJECTION_CONTRAST;
+	}
+	float best = max(score.x, max(score.y, score.z));
+	vec3 w = max(score - (best - PROJECTION_BAND), vec3(0.0));
+	w /= max(w.x + w.y + w.z, 1e-5);
+	SurfaceSample acc;
+	acc.albedo = vec3(0.0);
+	acc.normal = vec3(0.0);
+	acc.orm = vec3(0.0);
+	acc.height = 0.0;
+	for (int i = 0; i < 3; i++) {
+		if (w[i] > 0.0) {
+			acc.albedo += s[i].albedo * w[i];
+			acc.normal += s[i].normal * w[i];
+			acc.orm += s[i].orm * w[i];
+			acc.height += s[i].height * w[i];
+		}
+	}
+	return acc;
+}
+
+// Gram-Schmidt: `v` made orthogonal to unit `n`, normalised.
+vec3 orthogonal(vec3 v, vec3 n) {
+	return normalize(v - n * dot(n, v));
+}
+
+// The projections of a pixel with map-frame normal `n` at map-frame position `p`.
+Projection projection(vec3 n, vec3 p, vec3 dpx, vec3 dpy) {
+	Projection pr;
+	pr.n = n;
+	pr.top_u = orthogonal(vec3(1.0, 0.0, 0.0), n);
+	pr.top_v = orthogonal(vec3(0.0, 0.0, 1.0), n);
+	float side = 1.0 - smoothstep(SIDE_FULL_NY, SIDE_START_NY, n.y);
+	pr.weights = vec3(0.0, 1.0, 0.0);
+	if (side > 0.0) {
+		vec2 planes = pow(abs(n.xz) + 1e-4, vec2(SIDE_SHARPNESS));
+		planes /= planes.x + planes.y;
+		planes = max(planes - SIDE_MIN_WEIGHT, vec2(0.0));
+		planes /= max(planes.x + planes.y, 1e-5);
+		pr.weights = vec3(planes.x * side, 1.0 - side, planes.y * side);
+		// The X-facing plane: +u to the viewer's right looking at the face, +v down.
+		float sx = n.x >= 0.0 ? 1.0 : -1.0;
+		pr.x_t = orthogonal(vec3(0.0, 0.0, -sx), n);
+		pr.x_b = orthogonal(vec3(0.0, 1.0, 0.0) - pr.x_t * pr.x_t.y, n);
+		pr.x_uv = vec2(-sx * p.z, -p.y);
+		pr.x_dx = vec2(-sx * dpx.z, -dpx.y);
+		pr.x_dy = vec2(-sx * dpy.z, -dpy.y);
+		float sz = n.z >= 0.0 ? 1.0 : -1.0;
+		pr.z_t = orthogonal(vec3(sz, 0.0, 0.0), n);
+		pr.z_b = orthogonal(vec3(0.0, 1.0, 0.0) - pr.z_t * pr.z_t.y, n);
+		// Offset so the two planes show different parts of the texture at a corner.
+		pr.z_uv = vec2(sz * p.x + 0.37, -p.y + 0.61);
+		pr.z_dx = vec2(sz * dpx.x, -dpx.y);
+		pr.z_dy = vec2(sz * dpy.x, -dpy.y);
+	}
+	return pr;
 }
 
 float value_noise(vec2 p) {
@@ -331,19 +574,34 @@ vec3 apply_variation(vec3 albedo, vec2 world_xz) {
 	return albedo * mix(vec3(1.0), variation_lush_tint, lush);
 }
 
-// Per-layer painted weights at a point, with the edge warp and edge noise applied.
-// Channels at or past biome_layer_count read 0.
-vec4 biome_layer_weights(vec2 world_xz) {
+// The weight-map texture coordinate of map-frame XZ `at`.
+vec2 weight_uv(vec2 at) {
+	vec2 grid = vec2(textureSize(layer_weights_a, 0));
+	return ((at - layer_grid_origin) / layer_grid_step + 0.5) / grid;
+}
+
+// The four bits of `mask` from bit `first` as 0/1 channels.
+vec4 mask_channels(int mask, int first) {
+	int m = mask >> first;
+	return vec4(float(m & 1), float((m >> 1) & 1), float((m >> 2) & 1), float((m >> 3) & 1));
+}
+
+// Painted density of the ground slots at a point (a: slots 0-3, b: 4-7), with the edge
+// warp, gain and edge noise applied.
+void ground_weights(vec2 world_xz, out vec4 a, out vec4 b) {
 	vec2 p = world_xz / biome_edge_scale_m;
 	vec2 warp = vec2(value_noise(p + vec2(-23.1, 57.7)), value_noise(p + vec2(91.3, -12.9)));
-	vec2 at = world_xz + (warp * 2.0 - 1.0) * biome_edge_warp_m;
-	vec2 grid = vec2(textureSize(biome_weights, 0));
-	vec2 st = ((at - biome_grid_origin) / biome_grid_step + 0.5) / grid;
-	vec4 w = texture(biome_weights, st);
-	w *= step(vec4(0.5, 1.5, 2.5, 3.5), vec4(float(biome_layer_count)));
-	float total = w.x + w.y + w.z + w.w;
+	vec2 st = weight_uv(world_xz + (warp * 2.0 - 1.0) * biome_edge_warp_m);
+	a = texture(layer_weights_a, st) * mask_channels(layer_ground_mask, 0);
+	b = vec4(0.0);
+	if ((layer_ground_mask >> 4) != 0) {
+		b = texture(layer_weights_b, st) * mask_channels(layer_ground_mask, 4);
+	}
+	float total = dot(a, vec4(1.0)) + dot(b, vec4(1.0));
 	if (total <= WEIGHT_EPSILON) {
-		return vec4(0.0);
+		a = vec4(0.0);
+		b = vec4(0.0);
+		return;
 	}
 	// Gain first, so the ground leads the scatter (which thins linearly with density) out
 	// to the sparse fringe instead of leaving its outer plants standing on the base.
@@ -352,7 +610,78 @@ vec4 biome_layer_weights(vec2 world_xz) {
 	float n = value_noise(p * 2.9 + vec2(7.9, 3.1));
 	float bump = 4.0 * gained * (1.0 - gained);
 	float shaped = clamp(gained + (n - 0.5) * 2.0 * biome_edge_noise * bump, 0.0, 1.0);
-	return w * (shaped / total);
+	a *= shaped / total;
+	b *= shaped / total;
+}
+
+// Painted weight of the painted slots at a point (TerrainRules.painted_lookup and
+// shape_painted are the CPU twins).
+void painted_weights(vec2 world_xz, out vec4 a, out vec4 b) {
+	vec2 p = world_xz / PAINT_EDGE_SCALE_M;
+	vec2 warp = vec2(value_noise(p + PAINT_WARP_OFFSET_A), value_noise(p + PAINT_WARP_OFFSET_B));
+	vec2 st = weight_uv(world_xz + (warp * 2.0 - 1.0) * PAINT_EDGE_WARP_M);
+	a = texture(layer_weights_a, st) * mask_channels(layer_painted_mask, 0);
+	b = vec4(0.0);
+	if ((layer_painted_mask >> 4) != 0) {
+		b = texture(layer_weights_b, st) * mask_channels(layer_painted_mask, 4);
+	}
+	float total = dot(a, vec4(1.0)) + dot(b, vec4(1.0));
+	if (total <= WEIGHT_EPSILON) {
+		a = vec4(0.0);
+		b = vec4(0.0);
+		return;
+	}
+	float n = value_noise(p * 2.9 + PAINT_NOISE_OFFSET);
+	float bump = 4.0 * total * (1.0 - total);
+	float shaped = clamp(total + (n - 0.5) * 2.0 * PAINT_EDGE_NOISE * bump, 0.0, 1.0);
+	a *= shaped / total;
+	b *= shaped / total;
+}
+
+// Two-octave rule noise at map-frame point (xz, y), sheared by height
+// (TerrainRules.rule_noise).
+float rule_noise(vec2 xz, float y, vec2 offset) {
+	vec2 p = (xz + vec2(y * RULE_NOISE_SHEAR, -y * RULE_NOISE_SHEAR)) / RULE_NOISE_SCALE_M;
+	p += offset;
+	return value_noise(p) * 0.65 + value_noise(p * 2.3 + vec2(5.2, -1.7)) * 0.35;
+}
+
+// The shaping ramp with EASE interpolation (TerrainRules.ease_ramp).
+float ease_ramp(float m) {
+	float t = clamp((m - RAMP_LOW) / (RAMP_HIGH - RAMP_LOW), 0.0, 1.0);
+	return t * t * (3.0 - 2.0 * t);
+}
+
+// (cliff, scree) weights of the automatic rules (TerrainRules.weights).
+vec2 rule_weights(float ny, vec2 fields, vec3 p) {
+	float cliff = 0.0;
+	float raw = (ny - CLIFF_START_COS) / (CLIFF_END_COS - CLIFF_START_COS);
+	if (raw > -CLIFF_EDGE_NOISE) {
+		float n = rule_noise(p.xz, p.y, CLIFF_NOISE_OFFSET);
+		float m = clamp(raw + mix(-CLIFF_EDGE_NOISE, CLIFF_EDGE_NOISE, n), 0.0, 1.0);
+		float lip = clamp(
+			(fields.x - LIP_CURVATURE_START) / (LIP_CURVATURE_END - LIP_CURVATURE_START),
+			0.0,
+			1.0
+		);
+		lip *= clamp(LIP_SHEER_TAIL - raw, 0.0, 1.0);
+		m *= 1.0 - LIP_STRENGTH * lip;
+		cliff = ease_ramp(m);
+	}
+	float scree = 0.0;
+	float concave = (-fields.x - SCREE_CURVATURE_START)
+		/ (SCREE_CURVATURE_END - SCREE_CURVATURE_START);
+	if (fields.y > SCREE_NEAR_START && concave > -SCREE_EDGE_NOISE) {
+		float near = clamp(
+			(fields.y - SCREE_NEAR_START) / (SCREE_NEAR_END - SCREE_NEAR_START), 0.0, 1.0
+		);
+		float n = rule_noise(p.xz, p.y, SCREE_NOISE_OFFSET);
+		float m = clamp(concave + mix(-SCREE_EDGE_NOISE, SCREE_EDGE_NOISE, n), 0.0, 1.0) * near;
+		float breakup = value_noise(p.xz / SCREE_BREAKUP_SCALE_M + SCREE_BREAKUP_OFFSET);
+		float gaps = smoothstep(SCREE_BREAKUP_LOW, SCREE_BREAKUP_HIGH, breakup);
+		scree = ease_ramp(m) * gaps * (1.0 - cliff);
+	}
+	return vec2(cliff, scree);
 }
 
 // Cubic B-spline sample from four bilinear taps (Sigg and Hadwiger), so a coarse texture
@@ -376,24 +705,32 @@ vec4 texture_bspline(sampler2D tex, vec2 uv) {
 		+ s1.y * (s0.x * texture(tex, vec2(uv0.x, uv1.y)) + s1.x * texture(tex, uv1));
 }
 
-// The broad scale of the two-scale edge: around each painted layer its ground colour (the
-// last mip of its albedo, i.e. its mean) tints the surface in a wide, soft gradient, fading
-// out where the fine, frayed edge (fine_w) already shows the layer itself.
-vec3 apply_broad_edge(vec3 albedo, vec2 world_xz, vec4 fine_w) {
-	vec2 grid = vec2(textureSize(biome_weights, 0));
-	vec2 st = ((world_xz - biome_grid_origin) / biome_grid_step + 0.5) / grid;
-	vec4 broad = texture_bspline(biome_broad, st);
+// The broad scale of the two-scale edge: around each ground slot's painted area its mean
+// colour tints the surface in a wide, soft gradient, fading out where the fine, frayed
+// edge (fine_a / fine_b) already shows the layer itself.
+vec3 apply_broad_edge(vec3 albedo, vec2 world_xz, vec4 fine_a, vec4 fine_b) {
+	vec2 st = weight_uv(world_xz);
+	vec4 broad[2];
+	broad[0] = texture_bspline(layer_broad_a, st) * mask_channels(layer_ground_mask, 0);
+	broad[1] = vec4(0.0);
+	if ((layer_ground_mask >> 4) != 0) {
+		broad[1] = texture_bspline(layer_broad_b, st) * mask_channels(layer_ground_mask, 4);
+	}
+	vec4 fine[2];
+	fine[0] = fine_a;
+	fine[1] = fine_b;
 	// Recolour rather than paint over: the layer's mean colour, carrying the ground's own
 	// luminance detail relative to the base surface's mean.
 	const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 	float base_luma = max(dot(textureLod(albedo_tex, vec2(0.5), 16.0).rgb, LUMA), 0.02);
 	float detail = dot(albedo, LUMA) / base_luma;
 	for (int i = 0; i < MAX_LAYERS; i++) {
-		if (i >= biome_layer_count || broad[i] <= WEIGHT_EPSILON) {
+		float w = broad[i / 4][i % 4];
+		if (i >= layer_count || w <= WEIGHT_EPSILON) {
 			continue;
 		}
-		float tint = biome_broad_strength * smoothstep(0.0, biome_broad_full, broad[i]);
-		tint *= 1.0 - smoothstep(0.2, 0.8, fine_w[i]);
+		float tint = biome_broad_strength * smoothstep(0.0, biome_broad_full, w);
+		tint *= 1.0 - smoothstep(0.2, 0.8, fine[i / 4][i % 4]);
 		if (tint > 0.001) {
 			vec3 mean = textureLod(layer_albedo[i], vec2(0.5), 16.0).rgb;
 			vec3 recoloured = clamp(mean * detail, vec3(0.0), vec3(1.0));
@@ -423,15 +760,17 @@ float skirt_alpha(vec2 world_xz) {
 #endif
 
 void vertex() {
-	// Tangent frame of the planar world UV, in view space, for NORMAL in fragment().
-	v_tangent_u = (MODELVIEW_MATRIX * vec4(1.0, 0.0, 0.0, 0.0)).xyz;
-	v_tangent_v = (MODELVIEW_MATRIX * vec4(0.0, 0.0, 1.0, 0.0)).xyz;
+	v_normal = NORMAL;
+	v_position = VERTEX;
+	v_fields = UV2;
 }
 
 void fragment() {
 	vec2 world_xz = UV;
 	vec2 dx = dFdx(world_xz);
 	vec2 dy = dFdy(world_xz);
+	vec3 dpx = dFdx(v_position);
+	vec3 dpy = dFdy(v_position);
 #ifdef GROUND_SKIRT
 	// More than half of the ring is past the fade. Discarding it before any texture work
 	// takes a quarter off the skirt's cost at full zoom-out with bit-identical output (every
@@ -441,49 +780,100 @@ void fragment() {
 		discard;
 	}
 #endif
+	vec3 n_geom = normalize(v_normal);
 	TileFrame frame = tile_frame(world_xz);
+	Projection pr = projection(n_geom, v_position, dpx, dpy);
 
-	// Index 0 is the base, 1..4 the biome layers. A surface is sampled only where it has
-	// weight; the rest keep score ABSENT_SCORE and are never read. Some surface always has
-	// weight: the base does whenever the layers sum to (almost) nothing.
-	vec4 layer_w = vec4(0.0);
-	if (biome_layer_count > 0) {
-		layer_w = biome_layer_weights(world_xz);
+	// Weights per slot (0-7) and the base (BASE). Painted first; the rest of the ground
+	// (biome ground and base) shares what the painting leaves, and the rules take their
+	// share of that.
+	float w[9];
+	for (int i = 0; i < 9; i++) {
+		w[i] = 0.0;
 	}
-	float base_w = clamp(1.0 - (layer_w.x + layer_w.y + layer_w.z + layer_w.w), 0.0, 1.0);
-	SurfaceSample samples[5];
-	float scores[5];
-	float top = ABSENT_SCORE;
-	scores[0] = ABSENT_SCORE;
-	if (base_w > WEIGHT_EPSILON) {
-		samples[0] = sample_surface(
-			albedo_tex, normal_tex, orm_tex, height_tex, tile_m, frame, world_xz, dx, dy
-		);
-		scores[0] = blend_score(base_w, samples[0].height);
-		top = scores[0];
-	}
-	for (int i = 0; i < MAX_LAYERS; i++) {
-		scores[i + 1] = ABSENT_SCORE;
-		if (layer_w[i] > WEIGHT_EPSILON) {
-			samples[i + 1] = sample_surface(
-				layer_albedo[i], layer_normal[i], layer_orm[i], layer_height[i],
-				layer_tile_m[i], frame, world_xz, dx, dy
-			);
-			scores[i + 1] = blend_score(layer_w[i], samples[i + 1].height);
-			top = max(top, scores[i + 1]);
+	vec4 ground_a = vec4(0.0);
+	vec4 ground_b = vec4(0.0);
+	vec4 painted_a = vec4(0.0);
+	vec4 painted_b = vec4(0.0);
+#ifndef GROUND_SKIRT
+	if (layer_count > 0) {
+		if (layer_ground_mask != 0) {
+			ground_weights(world_xz, ground_a, ground_b);
 		}
+		if (layer_painted_mask != 0) {
+			painted_weights(world_xz, painted_a, painted_b);
+		}
+	}
+#endif
+	float painted_total = dot(painted_a, vec4(1.0)) + dot(painted_b, vec4(1.0));
+	float unpainted = clamp(1.0 - painted_total, 0.0, 1.0);
+	float g[9];
+	for (int i = 0; i < 4; i++) {
+		g[i] = ground_a[i];
+		g[i + 4] = ground_b[i];
+		w[i] = painted_a[i];
+		w[i + 4] = painted_b[i];
+	}
+	g[BASE] = clamp(1.0 - dot(ground_a, vec4(1.0)) - dot(ground_b, vec4(1.0)), 0.0, 1.0);
+	vec2 rule = vec2(0.0);
+#ifndef GROUND_SKIRT
+	if (unpainted > WEIGHT_EPSILON) {
+		rule = rule_weights(n_geom.y, v_fields, v_position);
+	}
+#endif
+	float keep = unpainted * (1.0 - rule.x - rule.y);
+	float cliff = unpainted * rule.x;
+	float scree = unpainted * rule.y;
+	for (int j = 0; j < 9; j++) {
+		if (g[j] <= 0.0) {
+			continue;
+		}
+		w[j] += g[j] * keep;
+		if (cliff > 0.0) {
+			int to = rule_cliff_layer[j];
+			w[to >= 0 ? to : j] += g[j] * cliff;
+		}
+		if (scree > 0.0) {
+			int to = rule_scree_layer[j];
+			w[to >= 0 ? to : j] += g[j] * scree;
+		}
+	}
+
+	// A surface is sampled only where it has weight; the rest keep score ABSENT_SCORE and
+	// are never read. Some surface always has weight.
+	SurfaceSample samples[9];
+	float scores[9];
+	float top = ABSENT_SCORE;
+	for (int i = 0; i < MAX_LAYERS; i++) {
+		scores[i] = ABSENT_SCORE;
+		if (i < layer_count && w[i] > WEIGHT_EPSILON) {
+			samples[i] = sample_surface(
+				layer_albedo[i], layer_normal[i], layer_orm[i], layer_height[i],
+				layer_tile_m[i], frame, world_xz, dx, dy, pr
+			);
+			scores[i] = blend_score(w[i], samples[i].height);
+			top = max(top, scores[i]);
+		}
+	}
+	scores[BASE] = ABSENT_SCORE;
+	if (w[BASE] > WEIGHT_EPSILON || top == ABSENT_SCORE) {
+		samples[BASE] = sample_surface(
+			albedo_tex, normal_tex, orm_tex, height_tex, tile_m, frame, world_xz, dx, dy, pr
+		);
+		scores[BASE] = blend_score(max(w[BASE], WEIGHT_EPSILON), samples[BASE].height);
+		top = max(top, scores[BASE]);
 	}
 	SurfaceSample ground;
 	ground.albedo = vec3(0.0);
-	ground.normal_uv = vec2(0.0);
+	ground.normal = vec3(0.0);
 	ground.orm = vec3(0.0);
 	ground.height = 0.0;
 	float total = 0.0;
-	for (int i = 0; i < MAX_LAYERS + 1; i++) {
+	for (int i = 0; i < 9; i++) {
 		float b = scores[i] - (top - biome_blend_width);
 		if (b > 0.0) {
 			ground.albedo += samples[i].albedo * b;
-			ground.normal_uv += samples[i].normal_uv * b;
+			ground.normal += samples[i].normal * b;
 			ground.orm += samples[i].orm * b;
 			ground.height += samples[i].height * b;
 			total += b;
@@ -491,12 +881,13 @@ void fragment() {
 	}
 	float inv_total = 1.0 / max(total, 1e-5);
 	ground.albedo *= inv_total;
-	ground.normal_uv *= inv_total;
 	ground.orm *= inv_total;
 	ground.height *= inv_total;
-	if (biome_layer_count > 0) {
-		ground.albedo = apply_broad_edge(ground.albedo, world_xz, layer_w);
+#ifndef GROUND_SKIRT
+	if (layer_ground_mask != 0) {
+		ground.albedo = apply_broad_edge(ground.albedo, world_xz, ground_a, ground_b);
 	}
+#endif
 
 	// Cavity depth itself drifts at a few metres, so clumpy and smooth stretches alternate
 	// instead of an even mottle.
@@ -510,12 +901,8 @@ void fragment() {
 	ROUGHNESS = ground.orm.g;
 	METALLIC = ground.orm.b;
 
-	vec2 n_uv = ground.normal_uv * normal_strength;
-	float n_z = sqrt(max(1.0 - dot(n_uv, n_uv), 0.0));
-	vec3 n = normalize(NORMAL);
-	vec3 t_u = normalize(v_tangent_u - n * dot(n, v_tangent_u));
-	vec3 t_v = normalize(v_tangent_v - n * dot(n, v_tangent_v));
-	NORMAL = normalize(n * n_z + t_u * n_uv.x + t_v * n_uv.y);
+	vec3 n_map = normalize(ground.normal + n_geom * 1e-4);
+	NORMAL = normalize(mat3(VIEW_MATRIX) * (mat3(MODEL_MATRIX) * n_map));
 #ifdef GROUND_SKIRT
 	ALPHA = skirt_a;
 #endif

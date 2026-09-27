@@ -112,6 +112,9 @@ static func generate(
 ## ones in the halo around them (see species_reach), which is most of the saving: the
 ## halo species are the sparse ones. Rows of one asset come out in the order generate()
 ## gives; species with a shorter or missing list simply place nothing elsewhere.
+##
+## `rock_density_at`, when valid, is the density field rock species (rule kind "rock") read
+## instead of `density_at` (document_fields: boulders gather at cliff feet).
 static func generate_species_cells(
 	biome_id: String,
 	species: Array[Dictionary],
@@ -120,10 +123,13 @@ static func generate_species_cells(
 	normal_at: Callable,
 	map_seed: int,
 	cells_by_species: Array,
-	bounds: Rect2
+	bounds: Rect2,
+	rock_density_at: Callable = Callable()
 ) -> Dictionary[String, PackedFloat32Array]:
 	var the_plan := ScatterPlan.build(biome_id, species, map_seed)
 	var ctx := _context(the_plan, density_at, height_at, normal_at, bounds)
+	if rock_density_at.is_valid():
+		ctx["rock_density_at"] = rock_density_at
 	var result: Dictionary[String, PackedFloat32Array] = {}
 	for s in the_plan.species.size():
 		var cells: Array[Vector2i] = []
@@ -193,22 +199,35 @@ static func generate_for_document(
 	cells: Array[Vector2i],
 	palette_root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> Dictionary[String, PackedFloat32Array]:
-	var fields := document_fields(doc, biome_id)
-	return generate(
+	var fields := document_fields(
+		doc,
 		biome_id,
-		PaletteLibrary.species(biome_id, palette_root),
+		Rect2(),
+		PackedStringArray(PaletteLibrary.surfaces_with_role("built", palette_root))
+	)
+	var cells_by_species: Array = []
+	var species := PaletteLibrary.species(biome_id, palette_root)
+	cells_by_species.resize(species.size())
+	cells_by_species.fill(cells)
+	return generate_species_cells(
+		biome_id,
+		species,
 		fields.density_at,
 		fields.height_at,
 		fields.normal_at,
 		doc.map_seed,
-		cells,
-		fields.bounds
+		cells_by_species,
+		fields.bounds,
+		fields.rock_density_at
 	)
 
 
 ## The sampling fields generate() takes, built from a MapDocument for one biome:
-## {density_at, height_at, normal_at, bounds}. Density is the biome's painted density
-## (0 where another biome or none is painted), bilinear on the document's sample grid.
+## {density_at, rock_density_at, height_at, normal_at, bounds}. Density is the biome's
+## painted density (0 where another biome or none is painted), bilinear on the document's
+## sample grid, times what the ground lets grow there (ScatterGround: nothing on automatic
+## rock or under a painted built surface, `built_surfaces` naming the palette surfaces
+## with role "built"); rock_density_at, which rock species read, gathers on scree.
 ## Heights and normals follow the terrain's own triangles (triangle_height,
 ## triangle_normal): the rendered chunks and the collision heightfield split every quad
 ## on the same diagonal, and a bilinear height differs from that surface by up to
@@ -219,23 +238,31 @@ static func generate_for_document(
 ## inside it plus one sample of margin; density reads 0 elsewhere. Decoding the whole
 ## mask is a GDScript loop over every sample (about 6 ms on a 200 ft map), which a brush
 ## regenerating a few cells does not need. The caller must make the window cover every
-## point generation can look at: the cells plus the deepest species_reach.
+## point generation can look at: the cells plus the deepest species_reach. The rule fields
+## (curvature, steepness nearby) are computed over the same samples, reading heights up to
+## TerrainRules.CURVATURE_RADIUS_M beyond them.
 static func document_fields(
-	doc: MapDocument, biome_id: String, window: Rect2 = Rect2()
+	doc: MapDocument,
+	biome_id: String,
+	window: Rect2 = Rect2(),
+	built_surfaces: PackedStringArray = PackedStringArray()
 ) -> Dictionary:
 	var count := doc.sample_count()
 	var slot := doc.biome_ids.find(biome_id) + 1
 	var density := PackedFloat32Array()
 	density.resize(count)
-	if slot > 0 and doc.biome_slots.size() == count and doc.biome_density.size() == count:
-		var low := Vector2i.ZERO
-		var high := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
-		if window.has_area():
-			var first := doc.world_to_sample(window.position).floor()
-			var last := doc.world_to_sample(window.end).ceil()
-			low = Vector2i(first).clamp(low, high)
-			high = Vector2i(last).clamp(low, high)
-		var stride := doc.samples_x()
+	var low := Vector2i.ZERO
+	var high := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
+	if window.has_area():
+		var first := doc.world_to_sample(window.position).floor()
+		var last := doc.world_to_sample(window.end).ceil()
+		low = Vector2i(first).clamp(low, high)
+		high = Vector2i(last).clamp(low, high)
+	var stride := doc.samples_x()
+	var painted := (
+		slot > 0 and doc.biome_slots.size() == count and doc.biome_density.size() == count
+	)
+	if painted:
 		for z in range(low.y, high.y + 1):
 			for i in range(z * stride + low.x, z * stride + high.x + 1):
 				if doc.biome_slots[i] == slot:
@@ -248,17 +275,30 @@ static func document_fields(
 	var rows := doc.samples_z()
 	var step := doc.sample_step()
 	var half := doc.extent_m() * 0.5
-	var density_at := func(p: Vector2) -> float:
+	# Only a biome with paint places anything, so only then are the rule fields worth their
+	# decode (DressingGround reads heights alone through biome "").
+	var ground_at := Callable()
+	if painted:
+		var samples := Rect2i(low, high - low + Vector2i.ONE)
+		ground_at = ScatterGround.sampler(doc, heights, samples, built_surfaces)
+	var plain_at := func(p: Vector2) -> float:
 		var at := (p + half) / step
 		if at.x < 0.0 or at.y < 0.0 or at.x > columns - 1 or at.y > rows - 1:
 			return 0.0
-		return _bilinear(density, columns, rows, at)
+		return bilinear(density, columns, rows, at)
+	var density_at := func(p: Vector2) -> float:
+		var d: float = plain_at.call(p)
+		return ScatterGround.density(d, ground_at.call(p)) if d > 0.0 and painted else d
+	var rock_density_at := func(p: Vector2) -> float:
+		var d: float = plain_at.call(p)
+		return ScatterGround.rock_density(d, ground_at.call(p)) if d > 0.0 and painted else d
 	var height_at := func(p: Vector2) -> float:
 		return triangle_height(heights, columns, rows, (p + half) / step)
 	var normal_at := func(p: Vector2) -> Vector3:
 		return triangle_normal(heights, columns, rows, (p + half) / step, step)
 	return {
 		"density_at": density_at,
+		"rock_density_at": rock_density_at,
 		"height_at": height_at,
 		"normal_at": normal_at,
 		"bounds": Rect2(-half, doc.extent_m()),
@@ -320,6 +360,7 @@ static func _context(
 		"noise": noises,
 		"contrast": contrasts,
 		"density_at": density_at,
+		"rock_density_at": density_at,
 		"height_at": height_at,
 		"normal_at": normal_at,
 		"bounds": bounds,
@@ -498,7 +539,10 @@ static func _evaluate(
 		return false
 	var u := _unit(int(cands[c + 5]), _SALT_ACCEPT)
 	# Painted density through the size class's response (ScatterPlan.DENSITY_RESPONSE).
-	var keep := ScatterPlan.respond(ctx.density_at.call(p), entry.response_lead, entry.response_lag)
+	var field: Callable = (
+		ctx.rock_density_at if entry.rule.kind == ScatterGround.ROCK_KIND else ctx.density_at
+	)
+	var keep := ScatterPlan.respond(field.call(p), entry.response_lead, entry.response_lag)
 	if u >= keep:
 		return false
 	var s: int = entry.index
@@ -922,7 +966,7 @@ static func vertex_normal(
 
 
 ## Bilinear sample of a row-major grid at continuous sample coordinates, clamped.
-static func _bilinear(grid: PackedFloat32Array, columns: int, rows: int, at: Vector2) -> float:
+static func bilinear(grid: PackedFloat32Array, columns: int, rows: int, at: Vector2) -> float:
 	var fx := clampf(at.x, 0.0, columns - 1)
 	var fz := clampf(at.y, 0.0, rows - 1)
 	var x0 := mini(floori(fx), columns - 2)
