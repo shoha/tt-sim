@@ -1022,8 +1022,26 @@ rather than in `ASSET_PIPELINE.md`.
   rows, the `tt_scatter_instances` format), optional `erase.png` (L8, > 127 = erased),
   optional `authoring/biomes.png` (R = biome slot, 0 none / index + 1; G = density) with
   `authoring/biomes.json` (`{"biomes": [palette biome id, ...]}`), and optional painted
-  surfaces (below). Unknown entries are ignored, so later phases add entries such as
-  `splines.json` without a format bump.
+  surfaces (below), and optional water (below). Unknown entries are ignored, so later
+  phases add entries without a format bump.
+- **Water (phase 4):** `splines.json` (`{"version": 1, "bodies": [...], "flow": {...}}`):
+  each body has a stable `id` (1..255, unique), `kind` `river` or `pond`, `depth`
+  (`ankle`, `waist`, `deep`) and `level_m`; a river adds `speed` (0..2) and its control
+  line as `points` (`[[x, z], ...]` in map metres, upstream first, 2..512) with one
+  `half_widths` entry per point (0.2..10 m). `ponds.png` (L8 on the sample grid) holds the
+  id of the pond whose area covers each sample, 0 for none. `water_flow.png` is the baked
+  flow map (RG8 stored as an RGB PNG), described by `splines.json`'s `"flow": {"frame":
+  "map_xz", "size": [nx, nz]}` (up to 1024 per axis). Caps: 64 bodies, 32 rivers, byte
+  caps 2 MB (`splines.json`) and 4 MB (each PNG). A malformed body (bad id, kind, depth,
+  NaN / Inf, a point off the map, widths not one per point, over a cap, a repeated id)
+  is skipped with a warning; mask bytes naming no pond are cleared; a flow map whose
+  metadata is missing or does not match its PNG is dropped; the PNGs without
+  `splines.json` are ignored. The writer refuses any of these (`MapWaterIO.problem`).
+  An older build reads only its own `KNOWN_ENTRIES`, so it loads a map with water as a
+  map without it. In memory: `MapDocument.water_bodies` (`WaterBody`), `pond_mask`,
+  `water_flow` and `water_flow_size`; `MapWaterIO` (`utils/map_water_io.gd`) writes and
+  validates the entries for `MapDocumentIO`. The model is below ("Water model and flow
+  bake").
 - **Painted surfaces:** `surfaces.json` (`{"surfaces": [palette surface name, ...]}`, at
   most 8, distinct) names the slots; `surfaces.png` (RGBA8 on the sample grid) holds the
   weights of slots 0-3 in R, G, B, A, and `surfaces_b.png` slots 4-7, written only when
@@ -1067,13 +1085,62 @@ rather than in `ASSET_PIPELINE.md`.
   are kept; they resolve against the palette at load.
 - **ZIP bomb guard:** `ZIPReader` cannot report an entry's size, and `read_file()` sizes
   its buffer from the size the archive declares (measured: a 432-byte archive claiming
-  400 MB allocated 400 MB). `read()` therefore parses the ZIP central directory itself,
-  picking records the way minizip does and refusing Zip64, and reads only entries whose
-  declared size passes the caps.
+  400 MB allocated 400 MB). `read()` therefore parses the ZIP central directory itself
+  (`ZipEntrySizes`, `utils/zip_entry_sizes.gd`), picking records the way minizip does and
+  refusing Zip64, and reads only entries whose declared size passes the caps.
 - **Atomic write:** `write()` refuses a document the reader would reject or trim, packs
   into `map.ttmap.tmp` in the same folder, then renames it over the target. On Windows
   `DirAccess.rename_absolute` replaces an existing file; if the rename fails (for example
   another handle holds the target open) the old file is untouched and the temp removed.
+
+### Water model and flow bake
+
+Authored water (phase 4, P4-1 is data and algorithms only; the surface, carve and tool
+follow). Plan: `docs/superpowers/plans/2026-09-27-phase4-water.md` (local).
+
+- **Bodies** (`WaterBody`, `resources/water_body.gd`): a river is a control polyline in
+  map XZ (first point upstream, so it flows toward the last) with a half-width per point,
+  a flow speed and a depth class; a pond is an area painted on the sample grid
+  (`MapDocument.pond_mask`, byte = pond id, like the biome masks, so a brush paints,
+  erases and undoes it with the existing byte-mask machinery; a polygon would need its
+  own editing and boolean operations). Every body is flat: one `level_m`. Depth classes
+  map to metres of water below the level (`WaterBody.DEPTH_M`: ankle 0.3, waist 0.9,
+  deep 2.0); tokens stand on the bed in ankle and waist water and float in deep water.
+  Ids are stable (`MapDocument.next_water_id()` never renumbers).
+- **Areas and wet samples** (`WaterGeometry`, `utils/water_geometry.gd`): everything
+  derived from a river follows its course, the control line Chaikin-smoothed twice (as
+  terrain-paint does). A river's area is within its half-width (at the nearest point of
+  the course) plus `RIVER_BANK_M` (1 m) of it; a pond's is its mask samples. A sample is
+  wet when it is in a body's area and its ground is below that body's level; overlaps
+  take the highest level (`levels()`, `wet_mask()`, `body_area()`, `wet_samples()`).
+  `nearest_field()` is the shared per-segment rasteriser (distance, half-width and
+  tangent of the nearest segment on any regular grid) the carve will reuse.
+- **Level rules:** a river's level is the lowest ground along its centreline minus
+  `FREEBOARD_M` (0.15 m), so the surface stays below its banks all along. A stroke over
+  sloped ground is split into flat reaches (`reach_ranges()`: no reach spans more than
+  `REACH_DROP_M`, 0.5 m, of centreline ground; consecutive reaches share their boundary
+  point), each its own river body; the steps between reaches are where waterfalls can go
+  later. A pond's level is the lowest ground on the rim of its area minus the freeboard
+  (`pond_rim_level()`).
+- **Flow bake** (`WaterFlowBaker`, `utils/water_flow_baker.gd`): terrain-paint's
+  `flow_bake.py` field ported exactly (nearest-segment tangent per river, inverse-square
+  weights within half-width plus bank, speed per body, not renormalised, box mean over
+  0.75 m, |F| clamped to 1, then the bank fade: the wet mask box-blurred 3x3
+  `max(1, round(3N / 512))` times), with the wet mask read from document heights below
+  the per-sample level instead of ray casts. Ponds add no flow. One map-wide flow map per
+  map, because the water shader has one flow sampler per level. Resolution: about 4
+  texels per metre (`TEXEL_M` 0.25, the default sample spacing), 244 x 244 on a 200 ft
+  map; measured ~0.3 s there with three rivers of 40 points (128: 0.12 s, 256: 0.33 s,
+  512: 1.2 s), so a bake on stroke release stays interactive. Deterministic; it ships in
+  the document and peers never rebake.
+- **Frame (the contract with `water.gdshader` `water_flow()`):** the authored water mesh
+  sits at the map origin with an identity transform and map-normalised UVs,
+  u = (x + W/2) / W, v = (z + H/2) / H. Texel (i, j) is Image column i, row j (row 0 is
+  the Image's first row, which Godot samples at v near 0); its centre is at
+  u = (i + 0.5) / nx, v = (j + 0.5) / nz. R, G = (flow x, -flow z) * 0.5 + 0.5, because
+  the shader reads f = rg * 2 - 1 as Blender-style local (x, y) and rotates local
+  (f.x, 0, -f.y) through the model matrix. Border texels are still (128, 128).
+  `test_water_flow_baker.gd` decodes bakes through a mirror of `water_flow()`.
 
 ### Authored terrain
 
