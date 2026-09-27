@@ -880,8 +880,33 @@ rather than in `ASSET_PIPELINE.md`.
   and `props.json` (palette asset id -> `[lx, ly, lz, qx, qy, qz, qw, sx, sy, sz]` Y-up
   rows, the `tt_scatter_instances` format), optional `erase.png` (L8, > 127 = erased),
   optional `authoring/biomes.png` (R = biome slot, 0 none / index + 1; G = density) with
-  `authoring/biomes.json` (`{"biomes": [palette biome id, ...]}`). Unknown entries are
-  ignored, so later phases add `surfaces.png` and `splines.json` without a format bump.
+  `authoring/biomes.json` (`{"biomes": [palette biome id, ...]}`), and optional painted
+  surfaces (below). Unknown entries are ignored, so later phases add entries such as
+  `splines.json` without a format bump.
+- **Painted surfaces:** `surfaces.json` (`{"surfaces": [palette surface name, ...]}`, at
+  most 8, distinct) names the slots; `surfaces.png` (RGBA8 on the sample grid) holds the
+  weights of slots 0-3 in R, G, B, A, and `surfaces_b.png` slots 4-7, written only when
+  more than four surfaces are listed. A weight is that surface's coverage 0..255 at the
+  sample; the weights of all slots at a sample sum to at most 255, and the remainder is
+  automatic ground. The renderer (phase 3, P3-4) lets painted surfaces override the
+  automatic rules (cliff, scree, height) and the biome ground in proportion to their
+  weight; the automatic rules are code, not document data. These entries render on
+  every peer; they are not authoring-only. In memory,
+  `MapDocument.surface_ids` and `surface_weights` (`sample_count() * 8` bytes as two
+  planes, each exactly one weight texture's RGBA8 pixel data, so an upload or save is a
+  native slice rather than a per-sample split); `surface_offset()`,
+  `set_surface_weight()` (the newest paint wins: other slots scale down to keep the
+  sum), `ensure_surface()` (existing slot, else a new one, else a slot with no paint
+  renamed) and `trim_unused_surfaces()` (drops trailing empty slots). The writer
+  normalises on the way out (paint in unlisted slots zeroed, over-full samples scaled to
+  255); the reader does the same with a warning. Any other problem (more than 8 or
+  malformed or repeated ids, ids without `surfaces.png`, a PNG without `surfaces.json`,
+  a PNG not matching the grid, over its 4 MB cap) drops the surfaces with a warning; a
+  missing or bad `surfaces_b.png` keeps slots 0-3. Unknown surface names are kept; they
+  resolve against the palette at load. No format bump: an older build reads only its own
+  `KNOWN_ENTRIES` from the archive (`_extract_entries`, `_known_entries`), so it loads a
+  painted document as unpainted, base and biome ground only. Peers must run the same
+  version anyway. An older build that re-saves such a document drops the paint.
 - **Geometry:** the map is `w * cell_size_m` by `h * cell_size_m`, centred on the origin,
   floor at Y = 0. Heights and masks share one row-major grid (Z rows, X columns) of
   `round(extent / sample_spacing_m) + 1` samples per axis whose outermost samples sit on

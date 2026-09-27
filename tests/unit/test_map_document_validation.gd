@@ -24,7 +24,7 @@ func test_unknown_entries_are_ignored() -> void:
 		Fixtures
 		. minimal_entries(
 			{
-				"surfaces.png": Fixtures.mask_png(Vector2i(4, 4), Image.FORMAT_RGBA8),
+				"authoring/future.png": Fixtures.mask_png(Vector2i(4, 4), Image.FORMAT_RGBA8),
 				"splines.json": '{"rivers": []}'.to_utf8_buffer(),
 				"authoring/future.bin": PackedByteArray([1, 2, 3]),
 			}

@@ -86,6 +86,8 @@ func _assert_same_document(actual: MapDocument, expected: MapDocument) -> void:
 	assert_eq(actual.biome_ids, expected.biome_ids)
 	assert_true(actual.biome_slots == expected.biome_slots, "biome slots")
 	assert_true(actual.biome_density == expected.biome_density, "biome density")
+	assert_eq(actual.surface_ids, expected.surface_ids)
+	assert_true(actual.surface_weights == expected.surface_weights, "surface weights")
 
 
 # --- round trips ------------------------------------------------------------------
@@ -135,7 +137,7 @@ func test_unknown_entries_in_a_real_archive_are_ignored() -> void:
 	var path := DIR.path_join("unknown.ttmap")
 	var extra := {
 		"splines.json": "[]".to_utf8_buffer(),
-		"surfaces.png": Fixtures.mask_png(Vector2i(4, 4), Image.FORMAT_RGBA8),
+		"future.png": Fixtures.mask_png(Vector2i(4, 4), Image.FORMAT_RGBA8),
 	}
 	_write_zip(path, Fixtures.minimal_entries(extra))
 	var result := MapDocumentIO.read(path)
