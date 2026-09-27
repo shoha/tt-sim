@@ -56,6 +56,7 @@ const HEIGHT_LABELS := {
 	HeightBrush.SMOOTH: "Smooth",
 	HeightBrush.FLATTEN: "Flatten",
 	HeightBrush.TIER: "Tier",
+	HeightBrush.TIER_CUT: "Cut tier",
 }
 
 var document: MapDocument = null
@@ -332,6 +333,27 @@ func ground_height_at(point: Vector3) -> float:
 	return to_world(Vector3(local.x, y, local.z)).y
 
 
+## The tier a Tier stroke pressed at world point `point` with a brush of world radius
+## `radius` builds toward (HeightBrush.tier_target_level; `down` for a Ctrl stroke):
+## {"level": int, "y": world height of that tier, "press_level": the tier the press stands
+## on (the nearest)}.
+func tier_target(point: Vector3, radius: float, down: bool) -> Dictionary:
+	var tier_m := document.tier_height_m
+	var local := to_map(point)
+	var press := to_map(Vector3(point.x, ground_height_at(point), point.z)).y
+	var on_level := HeightBrush.tier_level(press, tier_m)
+	var near := HeightBrush.tier_neighbours(
+		document,
+		Vector2(local.x, local.z),
+		radius / map_scale(),
+		HeightBrush.tier_height(on_level, tier_m),
+		tier_m
+	)
+	var level := HeightBrush.tier_target_level(press, tier_m, down, near.x == 1, near.y == 1)
+	var y := to_world(Vector3(local.x, HeightBrush.tier_height(level, tier_m), local.z)).y
+	return {"level": level, "y": y, "press_level": on_level}
+
+
 ## True while terrain, collision or snapping work from a sculpt stroke (or its undo) is
 ## still being spread over frames.
 func has_height_work() -> bool:
@@ -468,6 +490,8 @@ func finish_height_work() -> void:
 func _end_height_stroke() -> bool:
 	var stroke := _height
 	_height = null
+	# A tier finishes rising onto its goal (a quick stroke leaves a whole tier).
+	stroke.complete()
 	# The last frame's changes, then everything left, the collision included (no stroke now).
 	_queue_heights(stroke.take_pending())
 	_work(true)

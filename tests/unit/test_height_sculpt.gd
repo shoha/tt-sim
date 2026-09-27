@@ -32,12 +32,11 @@ func _height_at(doc: MapDocument, p: Vector2) -> float:
 
 
 func test_raise_and_lower_are_linear_in_exposure_and_clamped() -> void:
-	assert_almost_eq(
-		HeightBrush.raise(1.0, 1.0, 2.0), 1.0 + 2.0 * HeightBrush.RAISE_M_PER_S, EPSILON
-	)
-	assert_almost_eq(
-		HeightBrush.raise(1.0, 0.5, 1.0, -1.0), 1.0 - 0.5 * HeightBrush.RAISE_M_PER_S, EPSILON
-	)
+	assert_almost_eq(HeightBrush.raise(1.0, 1.0, 2.0, 1.0, 0.6), 1.0 + 2.0 * 0.6, EPSILON)
+	assert_almost_eq(HeightBrush.raise(1.0, 0.5, 1.0, -1.0, 0.6), 1.0 - 0.5 * 0.6, EPSILON)
+	# The speed follows the brush, so a hill keeps its proportions at any size.
+	assert_almost_eq(HeightBrush.raise_speed(5.0), 5.0 * HeightBrush.RAISE_PER_RADIUS, EPSILON)
+	assert_eq(HeightBrush.raise_speed(0.5), HeightBrush.RAISE_MIN_M_PER_S, "small brushes")
 	var top := MapDocument.MAX_ABS_HEIGHT_M
 	assert_eq(HeightBrush.raise(top - 0.1, 1.0, 10.0), top, "never past the document limit")
 	assert_eq(HeightBrush.raise(-top + 0.1, 1.0, 10.0, -1.0), -top)
@@ -53,18 +52,12 @@ func test_approach_operations_never_overshoot_their_goal() -> void:
 	assert_eq(HeightBrush.apply(HeightBrush.FLATTEN, 2.0, 0.0, 1.0, 0.0), 2.0, "zero weight")
 
 
-func test_tier_profile_is_steep_and_flat_topped() -> void:
-	assert_eq(HeightBrush.tier_weight(0.0), 1.0)
-	assert_eq(HeightBrush.tier_weight(HeightBrush.TIER_CORE), 1.0, "full weight over the core")
-	assert_eq(HeightBrush.tier_weight(1.0), 0.0)
-	var last := 1.0
-	for i in 21:
-		var w := HeightBrush.tier_weight(i / 20.0)
-		assert_true(w <= last + EPSILON, "monotonic")
-		last = w
-	# Steeper than the soft falloff over the rim.
-	var t := (HeightBrush.TIER_CORE + 1.0) * 0.5
-	assert_gt(HeightBrush.tier_weight(t), MaskBrush.falloff(t))
+func test_tiers_take_full_weight_inside_the_ring() -> void:
+	# A tier's shape is HeightBrush.tier_goal()'s (test_sculpt_tool.gd), not a falloff's.
+	for op in [HeightBrush.TIER, HeightBrush.TIER_CUT]:
+		assert_eq(HeightBrush.weight(op, 0.0), 1.0)
+		assert_eq(HeightBrush.weight(op, 0.99), 1.0)
+		assert_eq(HeightBrush.weight(op, 1.0), 0.0)
 	assert_eq(HeightBrush.weight(HeightBrush.RAISE, 0.5), MaskBrush.falloff(0.5))
 
 
@@ -96,7 +89,7 @@ func test_box_mean_matches_a_brute_force_mean_with_clamped_edges() -> void:
 
 func test_smooth_kernel_scales_with_the_brush() -> void:
 	assert_eq(HeightBrush.smooth_kernel(0.5, 0.25), 1, "at least one sample")
-	assert_eq(HeightBrush.smooth_kernel(10.0, 0.25), 6)
+	assert_eq(HeightBrush.smooth_kernel(10.0, 0.25), 14)
 	assert_gt(HeightBrush.smooth_kernel(12.0, 0.25), HeightBrush.smooth_kernel(4.0, 0.25))
 
 
@@ -114,7 +107,7 @@ func test_raise_dab_builds_a_soft_hill_and_reports_its_rectangle() -> void:
 	var stroke := HeightStroke.begin(doc, HeightBrush.RAISE)
 	assert_true(stroke.dab(Vector2.ZERO, Vector2.ZERO, 3.0, 1.0))
 	var centre := _height_at(doc, Vector2.ZERO)
-	assert_almost_eq(centre, HeightBrush.RAISE_M_PER_S, 0.01, "full weight at the centre")
+	assert_almost_eq(centre, HeightBrush.raise_speed(3.0), 0.01, "full weight at the centre")
 	assert_almost_eq(_height_at(doc, Vector2(3.2, 0.0)), 0.0, EPSILON, "nothing past the rim")
 	var half := _height_at(doc, Vector2(1.5, 0.0))
 	assert_between(half, 0.4 * centre, 0.7 * centre, "falloff halfway")
@@ -271,7 +264,7 @@ func test_terrain_updates_in_place_then_settles() -> void:
 	var mesh := chunk.mesh
 	assert_eq(chunk.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "flat")
 	var stroke := HeightStroke.begin(doc, HeightBrush.RAISE)
-	stroke.dab(Vector2(5, 5), Vector2(5, 5), 3.0, 1.0)
+	stroke.dab(Vector2(5, 5), Vector2(5, 5), 3.0, 5.0)
 	terrain.queue_heights(stroke.take_pending())
 	assert_true(terrain.has_height_work())
 	assert_true(terrain.process_heights(-1), "all done without a budget")

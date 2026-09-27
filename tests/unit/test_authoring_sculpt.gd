@@ -46,7 +46,9 @@ func _rows(points: Array) -> PackedFloat32Array:
 	return rows
 
 
-func _raise(editor: AuthoringEditor, at: Vector3, seconds: float = 1.0) -> void:
+## A raise of a 4 m brush: 0.4 m per second at the centre (HeightBrush.raise_speed), so the
+## default six seconds make a hill about 2.4 m high.
+func _raise(editor: AuthoringEditor, at: Vector3, seconds: float = 6.0) -> void:
 	assert_true(editor.begin_height_stroke(HeightBrush.RAISE))
 	editor.stroke_dab(at, at + Vector3(1, 0, 0), 4.0, seconds)
 	editor.flush()
@@ -136,7 +138,7 @@ func test_sculpting_is_refused_on_a_dressed_map() -> void:
 
 func test_flatten_holds_the_height_under_the_press() -> void:
 	var editor := _editor()
-	_raise(editor, Vector3.ZERO, 2.0)
+	_raise(editor, Vector3.ZERO, 6.0)
 	editor.end_stroke()
 	var target := editor.ground_height_at(Vector3(0.5, 0, 0.0))
 	assert_gt(target, 1.0)

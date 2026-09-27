@@ -16,6 +16,14 @@ extends RefCounted
 ## changed; the owner takes it once per frame (take_pending()) to update the terrain,
 ## collision and plants, so all dabs of a frame make one update.
 ##
+## Tiers (TIER, TIER_CUT). Every dab raises each sample's inset (how far inside the ring
+## the stroke has reached it, metres; `_reach`, the largest over the stroke) and moves the
+## sample toward HeightBrush.tier_goal() of its start height, the target and that inset
+## (inlined in dab() for speed; test_tier_stroke_matches_tier_goal holds them together).
+## TIER only raises samples that began below the target and TIER_CUT only cuts samples that
+## began above it. complete() puts every reached sample exactly on its goal; the owner calls
+## it when the stroke ends, so a quick stroke still leaves a finished tier.
+##
 ## Diffs. finish() pairs the start and final floats of every touched block and compresses
 ## both (ZSTD over the float bytes; sculpted ground is smooth and compresses well), so
 ## history holds only the touched blocks. apply_diff() writes either side back.
@@ -43,6 +51,10 @@ var written_span: Vector2 = Vector2(INF, -INF)
 ## Per block: 1 once the stroke has written a sample in it.
 var _touched := PackedByteArray()
 var _blocks_x: int = 0
+## Tier strokes: per sample, the inset the stroke has reached (0: not reached), and the
+## rectangle of samples reached.
+var _reach := PackedFloat32Array()
+var _reach_rect: Rect2i = Rect2i()
 
 
 ## Starts a stroke of HeightBrush operation `operation` on `document`; `goal` is the target
@@ -57,6 +69,9 @@ static func begin(document: MapDocument, operation: int, goal: float = 0.0) -> H
 	stroke.start_heights = document.heights.duplicate()
 	stroke._blocks_x = ceili(float(document.samples_x()) / BLOCK)
 	stroke._touched.resize(stroke._blocks_x * ceili(float(document.samples_z()) / BLOCK))
+	if HeightBrush.is_tier(operation):
+		stroke._reach.resize(document.sample_count())
+		stroke._reach.fill(0.0)
 	return stroke
 
 
@@ -70,6 +85,8 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 	var rect := MaskBrush.capsule_rect(doc, from, to, radius)
 	if not rect.has_area():
 		return false
+	if HeightBrush.is_tier(op):
+		return _tier_dab(rect, from, to, radius, seconds)
 	var width := doc.samples_x()
 	var step := doc.sample_step()
 	var means := PackedFloat32Array()
@@ -80,8 +97,9 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 		means = HeightBrush.box_mean(doc.heights, width, doc.samples_z(), rect, k)
 	var steps := _amount_table(seconds)
 	var linear := op == HeightBrush.RAISE or op == HeightBrush.LOWER
-	var metres := HeightBrush.RAISE_M_PER_S * seconds * (-1.0 if op == HeightBrush.LOWER else 1.0)
-	var tier := op == HeightBrush.TIER
+	var metres := (
+		HeightBrush.raise_speed(radius) * seconds * (-1.0 if op == HeightBrush.LOWER else 1.0)
+	)
 	var goal := target
 	var limit := MapDocument.MAX_ABS_HEIGHT_M
 	var origin := -doc.extent_m() * 0.5
@@ -111,11 +129,7 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 			var t_sq := (dx * dx + dz * dz) / radius_sq
 			if t_sq >= 1.0:
 				continue
-			var w := 0.0
-			if tier:
-				w = HeightBrush.tier_weight(sqrt(t_sq))
-			else:
-				w = (1.0 - t_sq) * (1.0 - t_sq)
+			var w := (1.0 - t_sq) * (1.0 - t_sq)
 			if w <= 0.0:
 				continue
 			var i := row + x
@@ -143,6 +157,133 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 	pending = MaskBrush.merge_rect(pending, dirty)
 	changed = MaskBrush.merge_rect(changed, dirty)
 	return true
+
+
+## A tier dab over `rect`: raises each sample's inset and moves it toward its goal (see the
+## header). HeightBrush.tier_goal() inlined, with the per-rise face width cached per dab.
+@warning_ignore("integer_division")
+func _tier_dab(rect: Rect2i, from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
+	var width := doc.samples_x()
+	var step := doc.sample_step()
+	var origin := -doc.extent_m() * 0.5
+	var segment := to - from
+	var length_sq := segment.length_squared()
+	var radius_sq := radius * radius
+	var heights := doc.heights
+	var starts := start_heights
+	var reach := _reach
+	var touched := _touched
+	var blocks_x := _blocks_x
+	var goal := target
+	var up := op == HeightBrush.TIER
+	var a := MaskBrush.amount(1.0, seconds, HeightBrush.TIER_RATE)
+	var snap := HeightBrush.TIER_SNAP_M
+	var lip_width := HeightBrush.TIER_LIP_WIDTH_M
+	var slope := tan(deg_to_rad(HeightBrush.TIER_FACE_DEG))
+	var min_face := HeightBrush.TIER_MIN_FACE_M
+	var low := Vector2i(rect.end)
+	var high := Vector2i(-1, -1)
+	var lowest := INF
+	var highest := -INF
+	var reached := false
+	for z in range(rect.position.y, rect.end.y):
+		var pz := origin.y + z * step.y - from.y
+		var row := z * width
+		for x in range(rect.position.x, rect.end.x):
+			var px := origin.x + x * step.x - from.x
+			var along := 0.0
+			if length_sq > 0.0:
+				along = clampf((px * segment.x + pz * segment.y) / length_sq, 0.0, 1.0)
+			var dx := px - segment.x * along
+			var dz := pz - segment.y * along
+			var d_sq := dx * dx + dz * dz
+			if d_sq >= radius_sq:
+				continue
+			var i := row + x
+			var start := starts[i]
+			if (up and start >= goal) or (not up and start <= goal):
+				continue
+			var now := radius - sqrt(d_sq)
+			if now > reach[i]:
+				reach[i] = now
+				reached = true
+			# Read back as stored (float32), so complete() computes the same goal.
+			var inset := reach[i]
+			# HeightBrush.tier_goal(start, goal, inset), inlined.
+			var rise := absf(goal - start)
+			var lip := minf(HeightBrush.TIER_LIP_M, rise * HeightBrush.TIER_LIP_SHARE)
+			var face := maxf(min_face, (rise - lip) / slope)
+			var aim := goal
+			if up:
+				if inset < face:
+					aim = start + (rise - lip) * inset / face
+				elif inset < face + lip_width:
+					var u := 1.0 - (inset - face) / lip_width
+					aim = start + (rise - lip * u * u)
+			else:
+				if inset < lip_width:
+					var u := inset / lip_width
+					aim = start - lip * u * u
+				elif inset < lip_width + face:
+					aim = start - (lip + (rise - lip) * (inset - lip_width) / face)
+			var old := heights[i]
+			var value := old + (aim - old) * a
+			if absf(aim - value) <= snap:
+				value = aim
+			if value == old:
+				continue
+			touched[(z / BLOCK) * blocks_x + x / BLOCK] = 1
+			heights[i] = value
+			low = low.min(Vector2i(x, z))
+			high = high.max(Vector2i(x, z))
+			lowest = minf(lowest, value)
+			highest = maxf(highest, value)
+	if reached:
+		_reach_rect = MaskBrush.merge_rect(_reach_rect, rect)
+	if high.x < 0:
+		return false
+	written_span = Vector2(minf(written_span.x, lowest), maxf(written_span.y, highest))
+	var dirty := Rect2i(low, high - low + Vector2i.ONE)
+	pending = MaskBrush.merge_rect(pending, dirty)
+	changed = MaskBrush.merge_rect(changed, dirty)
+	return true
+
+
+## Tier strokes: puts every sample the stroke reached exactly on its goal (a no-op for the
+## other operations, and for samples already there). Grows `pending` like a dab.
+@warning_ignore("integer_division")
+func complete() -> void:
+	if not HeightBrush.is_tier(op) or not _reach_rect.has_area():
+		return
+	var width := doc.samples_x()
+	var up := op == HeightBrush.TIER
+	var low := Vector2i(_reach_rect.end)
+	var high := Vector2i(-1, -1)
+	var lowest := INF
+	var highest := -INF
+	for z in range(_reach_rect.position.y, _reach_rect.end.y):
+		for x in range(_reach_rect.position.x, _reach_rect.end.x):
+			var i := z * width + x
+			if _reach[i] <= 0.0:
+				continue
+			var start := start_heights[i]
+			if (up and start >= target) or (not up and start <= target):
+				continue
+			var aim := HeightBrush.tier_goal(start, target, _reach[i])
+			if doc.heights[i] == aim:
+				continue
+			doc.heights[i] = aim
+			_touched[(z / BLOCK) * _blocks_x + x / BLOCK] = 1
+			low = low.min(Vector2i(x, z))
+			high = high.max(Vector2i(x, z))
+			lowest = minf(lowest, aim)
+			highest = maxf(highest, aim)
+	if high.x < 0:
+		return
+	written_span = Vector2(minf(written_span.x, lowest), maxf(written_span.y, highest))
+	var dirty := Rect2i(low, high - low + Vector2i.ONE)
+	pending = MaskBrush.merge_rect(pending, dirty)
+	changed = MaskBrush.merge_rect(changed, dirty)
 
 
 ## MaskBrush.amount() of this operation's rate for `seconds` at AMOUNT_STEPS evenly spaced
