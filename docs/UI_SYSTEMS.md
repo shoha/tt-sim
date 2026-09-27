@@ -767,15 +767,16 @@ emit nothing. It registers its backdrop as an overlay like `LevelPickerDialog`.
 ### Tool drawer
 
 `AuthoringPanel` extends `DrawerContainer` (LEFT, rail mode, 320 px). Rail items: Biome
-(`trees`), Thin / Clear (`eraser`), Place (`tree`), Sculpt (`mountain`). Footer items: Undo
+(`trees`), Thin / Clear (`eraser`), Place (`tree`), Sculpt (`mountain`), Paint (`brush`).
+Footer items: Undo
 (`arrow-back-up`) and Redo (`arrow-forward-up`), disabled while `AuthoringHistory` has
 nothing to offer; Save (`device-floppy`, badged while there are unsaved changes); Leave
 (`door-exit`). Item ids double as node names for `game_click_control`: `biome`,
-`thin_clear`, `place`, `sculpt`, `undo`, `redo`, `save_map`, `leave_authoring`. On a dressed
-Blender map Sculpt is disabled and its tooltip says why ("Sculpt: not on a Blender map,
-whose ground is the map file's"; `set_sculpt_available`,
-`DrawerContainer.set_rail_item_tooltip`), since the ground there is the GLB's own
-(`AuthoringEditor.can_sculpt()`). P3-6's Paint item follows the same rule. The drawer content is a Map name `LineEdit`
+`thin_clear`, `place`, `sculpt`, `paint`, `undo`, `redo`, `save_map`, `leave_authoring`. On a
+dressed Blender map Sculpt and Paint are disabled and their tooltips say why ("Sculpt: not on
+a Blender map, whose ground is the map file's"; `set_sculpt_available`,
+`set_paint_available`, `DrawerContainer.set_rail_item_tooltip`), since the ground there is
+the GLB's own (`AuthoringEditor.can_sculpt()` / `can_paint()`). The drawer content is a Map name `LineEdit`
 (`MapNameEdit`, the one text field; placeholder "Untitled map") above a `PaneStack` with one
 pane per tool. Each pane is a `MenuHeader` with a short caption, a wrapped caption line
 saying the tool's gestures (`BiomeHint`, `ThinHint`, `PlaceHint`; MenuHeader captions do not
@@ -799,7 +800,26 @@ and nothing numeric in the main flow:
   `sculpt_smooth`, `sculpt_flatten`, `sculpt_tier`. Raise is preselected. Picking a tile emits
   `sculpt_selected(op)` (a `HeightBrush` operation) and activates the Sculpt brush. The hint
   line (`SculptHint`) says the modifiers. No numbers in the main flow.
-- Biome, Thin / Clear and Sculpt end in an `Advanced` foldout with Size (1 to 12 m, "Small" /
+- **Paint** (P3-6): three `TileField`s of palette surface swatches, grouped by the surface's
+  role: Built (`PaintBuiltField`: Cobblestone, Dirt track, Flagstone, Planks, Stone tiles),
+  Ground (`PaintGroundField`: Grass, Moss, Sand, Mud and the other ground surfaces) and Rock
+  (`PaintRockField`: Rock, Basalt, Sandstone). Built comes first because paths and yards are
+  what the tool is mostly for. Three columns, `photo_icons`, the swatch a 52 px crop of the
+  surface's albedo (`SwatchTextures.palette_thumbnail`), readable labels
+  (`AuthoringPanel.surface_label`: "dirt_road_packed" reads "Dirt track"), and a tooltip
+  saying what painting it does (a built surface clears the plants under it; ground covers
+  walkable ground; rock restyles a face). Tile ids and node names are `paint_<surface>`. One
+  selection across the groups; Dirt track is preselected, so the tool paints at once.
+  Picking a tile emits `paint_selected(surface)`, which warms the surface's textures
+  (`AuthoredTerrain.warm_surface`) and activates the Paint brush. The swatches cost one
+  texture decode each, so `ensure_paint_tiles()` builds them once, under the loading screen
+  (the controller calls it) or on the pane's first show. When all eight paint slots hold
+  paint, the tiles of surfaces not on the map are disabled and their tooltip says why
+  ("All 8 paint slots hold paint. Erase one surface completely (Ctrl+drag) to free a slot.";
+  `set_paint_limits`), and a refused press shows the same line as a warning toast. The hint
+  line (`PaintHint`) says the gestures, that paths stop at rock faces (climb with a ramp) and
+  that built surfaces clear plants.
+- Biome, Thin / Clear, Sculpt and Paint end in an `Advanced` foldout with Size (1 to 12 m, "Small" /
   "Large") and Strength (0.25 to 2x, "Gentle" / "Strong") `PropertyRow`s, values hidden like
   the Visuals drawer's; all follow the gestures (`set_brush_values`).
 
@@ -810,20 +830,31 @@ full screen. Save keeps the drawer open and shows a success toast.
 
 ### Brushes and gestures
 
-`BrushTool` (`scenes/states/authoring/brush_tool.gd`) is the one brush, in four modes; its
+`BrushTool` (`scenes/states/authoring/brush_tool.gd`) is the one brush, in five modes; its
 input table is the pure `BrushTool.decide()`, and the Sculpt operation of a press is the pure
 `BrushTool.sculpt_op(tile, ctrl, shift)`:
 
-| Gesture | Biome | Thin / Clear | Place | Sculpt |
-|---------|-------|--------------|-------|--------|
-| Left drag | paint the biome | thin; with Ctrl at the press, clear | click places a prop (random asset of the species, random yaw), drag while pressed turns it to face the pointer | the tile's operation: Raise a soft mound (Ctrl at the press: lower), Smooth toward the local mean, Flatten to the ground height under the press, Tier (below) |
-| Shift at the press | - | - | - | Smooth, whichever tile is picked |
-| Hold still while pressed | builds strength (up to 4x after 2 s) | same | - | same (Raise keeps building; Tier is already whole) |
-| Plain wheel | camera zoom | camera zoom | camera zoom | camera zoom |
-| Shift+wheel, `[` `]` | brush size, 1 to 12 m (remembered for the app session) | same | over a placed prop: its scale within the species' range (at least +-25 %) | brush size |
-| Right click, Escape | cancel the stroke in progress (reverted); idle: right click puts the brush down, Escape goes to the drawer | same | over a placed prop: remove it; during a placement: cancel it | same as Biome |
-| Delete / Backspace | - | - | remove the prop under the pointer | - |
-| Ctrl+Z / Ctrl+Y | undo / redo one stroke | same | one placement (place and turn), removal, or scale gesture | one stroke |
+| Gesture | Biome | Thin / Clear | Place | Sculpt | Paint |
+|---------|-------|--------------|-------|--------|-------|
+| Left drag | paint the biome | thin; with Ctrl at the press, clear | click places a prop (random asset of the species, random yaw), drag while pressed turns it to face the pointer | the tile's operation: Raise a soft mound (Ctrl at the press: lower), Smooth toward the local mean, Flatten to the ground height under the press, Tier (below) | paint the picked surface with the soft falloff; with Ctrl at the press, erase every painted surface back to the automatic ground and the biome ground |
+| Shift at the press | - | - | - | Smooth, whichever tile is picked | - |
+| Hold still while pressed | builds strength (up to 4x after 2 s) | same | - | same (Raise keeps building; Tier is already whole) | same (toward full cover) |
+| Plain wheel | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom |
+| Shift+wheel, `[` `]` | brush size, 1 to 12 m (remembered for the app session) | same | over a placed prop: its scale within the species' range (at least +-25 %) | brush size | brush size |
+| Right click, Escape | cancel the stroke in progress (reverted); idle: right click puts the brush down, Escape goes to the drawer | same | over a placed prop: remove it; during a placement: cancel it | same as Biome | same as Biome |
+| Delete / Backspace | - | - | remove the prop under the pointer | - | - |
+| Ctrl+Z / Ctrl+Y | undo / redo one stroke | same | one placement (place and turn), removal, or scale gesture | one stroke | one stroke |
+
+Paint. A surface covers walkable ground only (the user's cliff-face decision): ground and built
+surfaces painted across a tier's face give way to the automatic rock there, so a road painted
+over a ledge stops at the edge and resumes on top; paths climb by sculpted ramps (a few Shift
+passes across a face). Painting a Rock tile (Rock, Basalt, Sandstone) applies anywhere, so a
+face can be restyled deliberately, or bare rock laid on flat ground. Built surfaces and painted
+rock clear the plants under them when the stroke is released (they shrink away); a tree just
+beside a road keeps standing unless the paint covers its trunk. The paint's edge is frayed by a
+small warp and noise, so a path reads as worn into the ground rather than laid on it. A quick
+pass lays partial cover (a worn trail); lingering fills it in. Eight surfaces can be on a map at
+once (see the Paint pane above); erasing one completely frees its slot.
 
 Tier. The press reads the ground height under the pointer and picks a whole tier
 (`HeightBrush.tier_target_level`, through `AuthoringEditor.tier_target`): from flat ground or
@@ -851,13 +882,14 @@ with a dark under-stroke and a light over-stroke so it reads on any ground and i
 theme. Tint: the biome's thumbnail colour, warm white to thin, red to clear (Ctrl), the accent
 for Place (a small marker where a prop will go, a ring around a hovered prop); for Sculpt,
 sand to raise or build a tier, blue-grey to lower or cut, the accent to flatten, pale green to
-smooth. A faint fill shows the reach (a fan from the centre drawn with explicit indices: a
+smooth; for Paint, the surface's swatch colour lifted toward white
+(`AuthoringController.surface_tint`), red to erase (Ctrl). A faint fill shows the reach (a fan from the centre drawn with explicit indices: a
 triangulated outline failed with "Invalid polygon data, triangulation failed" whenever the
 conformed ring projected to a self-intersecting outline, over raised ground or a Blender map's
 collision), and while a stroke is held an inner ring at half strength brightens as dwell
 builds. Tier and Flatten add a small readout under the ring in the level's units
 (`BrushTool.tier_readout`: "Tier 1  +5 ft", "Tier -1  -5 ft", "Ground  0 ft"; "Flatten  +3
-ft"), shown while hovering too, so the author sees what a press will build before pressing. The ring hides over the drawer. While Thin / Clear is the tool, tree canopies between
+ft"), shown while hovering too, so the author sees what a press will build before pressing. The ring hides over the drawer. While Thin / Clear (or Sculpt, or Paint) is the tool, tree canopies between
 the camera and the ring dither away like geometry over a token (the ring is
 `OcclusionFadeManager.set_focus()`, radius 1.35x the brush), so the ground being thinned stays
 visible under a forest. It rides on the occlusion fade and so follows the player's Occlusion

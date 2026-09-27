@@ -307,6 +307,10 @@ func _stroke(step: Dictionary) -> bool:
 			c.call("_on_sculpt_selected", int(tiles.get(String(step.get("tile", "raise")), 0)))
 			_state.ctrl = bool(step.get("ctrl", false))
 			_state.shift = bool(step.get("shift", false))
+		elif mode == "surface":
+			# The Paint tool through its tile (P3-6); Ctrl at the press erases paint.
+			c.call("_on_paint_selected", String(step.get("surface", "")))
+			_state.ctrl = bool(step.get("ctrl", false))
 		else:
 			c.call("_select_tool", AuthoringPanel.TOOL_THIN)
 		_state.phase = 1
