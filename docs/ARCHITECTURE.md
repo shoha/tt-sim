@@ -544,6 +544,9 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   faces and is ground elsewhere), so it regenerates nothing. `slot_refusal()` walks each
   slot's weights only when all eight are taken (`MapDocument.surface_slot_unused`, a strided
   loop, about 3 ms per empty slot on a 200 ft map).
+- **Water (P4-3):** `water.carve_river()`, pond strokes and water erases (`WaterEditor`),
+  one history entry each, with the ground, water surface, wet dressing and plants
+  following; see "Carving water".
 - **Bounds on relief:** the camera's near plane stays above the terrain's top
   (`CameraController.set_ground_top`, set by `MapSourceLoader.install` for any map with an
   `AuthoredTerrain`, play time included, and every frame in authoring; the camera moves back
@@ -1114,7 +1117,11 @@ follow). Plan: `docs/superpowers/plans/2026-09-27-phase4-water.md` (local).
   wet when it is in a body's area and its ground is below that body's level; overlaps
   take the highest level (`levels()`, `wet_mask()`, `body_area()`, `wet_samples()`).
   `nearest_field()` is the shared per-segment rasteriser (distance, half-width and
-  tangent of the nearest segment on any regular grid) the carve will reuse.
+  tangent of the nearest segment on any regular grid). Since P4-3 a river's area stops
+  flush at an end another river continues from (the next reach of one stroke: its first
+  point is this one's last, `flush_ends()`): the half-plane beyond the shared point is cut
+  off, so a reach's flat water ends at the crest the carve leaves there instead of hanging
+  round it over the riffle below.
 - **Level rules:** a river's level is the lowest ground along its centreline minus
   `FREEBOARD_M` (0.15 m), so the surface stays below its banks all along. A stroke over
   sloped ground is split into flat reaches (`reach_ranges()`: no reach spans more than
@@ -1226,9 +1233,121 @@ maps. Tests: `tests/unit/test_authored_water.gd`; render probe
   continuous across a river. The measure tool, the drop indicator and the drag cursor ray
   use `WALKABLE_MASK`; the drag ruler measures surface to surface
   (`WaterSurface.surface_below`).
-- **Not yet (P4-3 onward):** the steps between river reaches are bare (the upper reach's
-  water ends at the carve's lip); water on a dressed map is only drawn and floated, the
-  authoring grid of a dressed map is sampled once at open; the carve, beds and banks.
+- **Cascades (P4-3):** the steps between reaches and free river ends over a channel carved
+  lower carry a sheet of water too (`WaterMeshBuilder.cascades()`, see "Carving water").
+- **Not yet:** water on a dressed map is only drawn and floated, and the authoring grid of
+  a dressed map is sampled once at open.
+
+### Carving water
+
+Phase 4, P4-3: what a river or pond does to the ground, the plants and the rocks, as an
+editor API the Water tool (P4-4) calls. Tests: `tests/unit/test_water_carve.gd`,
+`test_water_scatter.gd`; look pass `tools/render_jobs/jobs/water_look.json` (probe
+`probes/water.gd` `carve`, `pond`, `erase`, `check`, `profile`).
+
+- **API** (`AuthoringEditor.water`, a `WaterEditor`, `scenes/states/authoring/
+  water_editor.gd`, part of the editor that shares its ground machinery; world frame):
+  `carve_river(points: PackedVector2Array of
+  world XZ, upstream first; half_widths (one per point, or one for all); depth_class;
+  speed) -> id of the first reach or -1`; `paint_pond_begin(depth_class, press point) ->
+  bool`, `paint_pond_dab(from, to, radius)`, `paint_pond_end() -> bool` (a press inside a
+  pond extends it); `erase_water_begin() -> bool`, `erase_water_dab(from, to, radius)`,
+  `erase_water_end() -> bool`; `cancel_stroke()`. Pond and erase strokes also answer the
+  editor's generic `stroke_dab()` / `end_stroke()` / `cancel_stroke()`. `can_carve()` is
+  `can_sculpt()` (no carving on a dressed GLB); erasing works on any map with water. Each
+  operation is one history entry: the heights diff (`HeightStroke.lower_to`, a one-shot
+  carve recorded like a dab), the water model before and after (`WaterEdit.model_of`: body
+  copies and the ZSTD pond mask), the props cells it changed and the rocks it kept
+  (`WaterEditor.commit`); undo and redo put both sides back exactly. After each, the wet
+  dressing, the ground's texture of it and the water surface are rebuilt
+  (`WaterEditor.refresh`: `WaterDressing.refresh` on the main thread, so the scatter jobs that
+  follow read it; `AuthoredTerrain.refresh_water_dressing`; `AuthoredWater.refresh_map` on a
+  worker) and the scatter regrows over the area grown by the shore band. A sculpt stroke
+  (and its undo) on a map with water refreshes the same way. Measured on a 200 ft map
+  (render job, main thread): a 60 m waist river in three reaches 0.3 s, a 25 m deep river
+  0.45-0.65 s, a 4.5 m pond 0.26-0.41 s, an erase 0.6-0.7 s; the surface and flow bake then
+  take 0.3-0.45 s on a worker.
+- **Rivers** (`WaterEdit.plan_river`): the line is resampled every 2 m (`RESAMPLE_M`), each
+  half-width clamped to at least `WaterCarve.min_half_width()` of its depth class (ankle
+  0.44 m, waist 1.33 m, deep 2.96 m: a narrower channel cannot reach its depth without a
+  rock-steep shore), split into flat reaches by the ground under the line (P4-1's
+  `reach_ranges`, levels by `reach_level`), each a river body with its own id.
+- **Cross-section** (`WaterCarve`): every sample within `BANK_REACH_M` (6 m) of the
+  waterline gets a goal from its edge offset e (distance to the course minus the
+  half-width; a pond: its signed distance to the edge of its painted area): the waterline
+  at e = 0 on the level, into the water the shore slope of the depth class (ankle 1:4,
+  waist 0.4, deep 0.65; steepened for a narrow channel up to `MAX_SHORE_SLOPE` 0.9, 42
+  degrees, so at least `BED_SHARE` of the width is flat bed) down to the bed at level -
+  depth, away from it the bank slope (0.33 / 0.45 / 0.6) until it meets the ground. The
+  toe is a smooth maximum (0.25 m); the top of the bank eases the cut in over
+  `TOP_SOFT_M` (0.3 m: lowered by d^2 (2 - d / k) / k for a wanted cut d, never more than
+  asked), so a crest or waterline is never dug below its goal; the last 2 m of the reach fade
+  back to the ground. The carve only lowers (`min(start, goal)`). The steepest bank (31
+  degrees) and shore (42) stay below the cliff rule's 44, so a channel is never a rock
+  trench unless the ground was rock.
+- **Reach steps:** the stroke's reaches are carved as one course (their courses joined,
+  exactly the lines their areas come from) with a bed line along its arc length
+  (`bed_line`): each reach flat at level - depth; toward a shared point the bed rises over a
+  pool tail to a crest (`step_shape`: just under the upper level for a full step,
+  `CREST_RISE_PER_DROP` x the drop over the bed for a small one, so a 10 cm step in a deep
+  river is a low bar, not a weir), and below it a riffle falls at `RIFFLE_SLOPE` 0.3 to the
+  lower bed while the bank level follows. The upper reach's area stops flush at the shared
+  point, so its pool runs shallow to that line; the riffle carries a cascade sheet
+  (`WaterMeshBuilder.cascades()`: 6 cm over the riffle's ground, clamped between the two
+  levels, never below a surface falling at 0.3 from the upper level to the lower, over the
+  channel from 1 m above the shared point to the riffle's foot). So shallow, the water
+  shader draws it as white water, and the flow bake counts it as wet, so it runs
+  downstream: a small rapid, not a rock lip. River ends inside the map taper their depth
+  from zero over a few metres (a spring, a sink).
+- **Erase** (`WaterEdit.hit_rivers`, `erased_bodies`): a river loses the control points
+  under the eraser and falls apart into the runs of at least two points left (the first
+  keeps its id); a pond loses the mask samples and is dropped when it has none. The ground
+  stays carved, so a free end can sit over a channel lower than its level: the surface falls
+  down the channel at `RUN_OUT_SLOPE` (1.2) and trickles on over its bed as a 6 cm film for
+  1.5 m (`WaterMeshBuilder._run_out`) instead of ending in the air, and the dry channel
+  beyond keeps its bed surface (not the wet line). Judged: it reads as water draining into
+  a dry bed, acceptable but not beautiful; the Water tool may prefer erasing whole reaches.
+- **Ponds:** a pond stroke marks mask samples of no other pond with the pond's id; at the
+  end its level is the lowest rim ground less the freeboard (P4-1), the basin carve takes
+  the signed distance to the painted area (`DistanceField`, an exact Euclidean transform)
+  box-smoothed over 0.5 m twice (the shoreline follows the outline, not the samples'
+  staircase), deepens toward the middle by up to 25 % of the depth, and never lowers ground
+  outside the painted area below the level (water there would not be the pond's).
+- **Wet dressing** (`WaterDressing`, a rule layer like cliff and scree, no paint slot,
+  following the water wherever it is carved, painted or erased): per sample RGBA8 (`MapDocument
+  .water_dressing`, a derived cache the document never saves; the ground shader's
+  `water_weights`, bilinear, so the CPU reads exactly what the shader draws): R the bed weight
+  (a smoothstep of the depth from 4 cm above the waterline to 10 cm under it, the edge moved
+  by noise; 1 on a cascade's riffle); G the shore weight (a core band along the waterline,
+  gone by 0.8 m, and noise-driven drifts reaching 2.4 m, both fading with the height over
+  the water between 0.3 and 0.8 m, so a high cut bank keeps its ground); B the depth in cm
+  (for the plants); A the wet line (1 under the water, falling to 0 over 0.8 m above it and
+  with height), which the shader darkens (35 %) and glosses whatever the surface. Distances
+  and the level of the nearest water come from `DistanceField` over the water's bounding box
+  grown by the shore band. The shader and `TerrainRules.compose_water` (the CPU twin,
+  `test_terrain_rules.gd` checks the lines) compose after the cliff: the bed takes its share of
+  everything but painted rock, painted ground and built surfaces included
+  (`PAINT_WATER_YIELD` 1: a path stops at the water as at a rock face, and the bed shows under
+  it), then the shore takes its share of the kept ground (paint on a bank stays paint). Each
+  ground component hands the bed and shore shares to its dominant biome's
+  `water_bed_surface` / `shore_surface` (`GroundLayerTable` `bed_of` / `shore_of`, slots only
+  on a map with water; `PaletteLibrary` defaults per biome, contract section 9).
+- **Plants** (`ScatterGround.wet_factor`, the plan's `ground_role` carrying water bits from
+  `ScatterGround.plan_role`): nothing roots in the water (the bed weight clears everything,
+  rocks included), except emergent species (reeds, rushes: key rule, `EMERGENT_KEYS`), which
+  stand in water up to 0.2-0.4 m and gather at the waterline; on the shore, bank species
+  (willow, poplar, ferns: `BANK_KEYS`) gather (x 1 + 1.5 shore, density capped at 1), trees
+  keep off the waterline, shrubs keep 30 %, tall cover thins to short cover, flowers thin by
+  half, cacti keep out of the whole band, and grass, ground cover and rocks stay. A key rule,
+  not a contract field: the palette has one emergent species and a few riparian trees, and a
+  producer field would need a treecube rebuild for no visible gain yet.
+- **Rocks** (`WaterCarve.keeps_rock`): a rock breaking the surface stays (the water's edge
+  foam wraps it, which reads well); one whose top is under the surface goes, and so does one
+  wider than half the channel (it would dam it); one out of the water stays (rocks survive
+  terrain changes). Generated rocks the carve's regeneration would remove are kept as props
+  as after a sculpt stroke (`RockKeeper.start(..., dressing_before, keep)`, the rule deciding
+  which), and placed rock props in the area are re-bedded by the snap and then dropped by the
+  same rule (`WaterEditor._drop_wet_rocks`); undo brings them all back.
 
 ### Authored terrain
 
@@ -1293,7 +1412,8 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   the map edge, 0.9 ms at full authoring zoom-out (1.24 ms before the discard).
 - **Ground material:** `shaders/authored_ground.gdshader` (a two-line wrapper; the shader and
   its documentation are `authored_ground.gdshaderinc`, shared with the skirt), built by
-  `build_ground_material(surface, seed)` from the palette surface (albedo, normal, ORM,
+  `GroundPalette.build_ground_material(surface, seed)` (`utils/ground_palette.gd`, with
+  the other palette helpers: texture paths, base rule surfaces) from the palette surface (albedo, normal, ORM,
   height at `tile_m`); a missing surface warns and falls back to a flat earth colour.
   Anti-tiling is a triangle-grid tile-and-blend (terrain-paint's mosaic idea done live:
   3 cells per pixel with hashed rotation and offset, sharpened height-weighted blend),
@@ -1310,8 +1430,9 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   is PAINTED (a `MapDocument.surface_ids` surface; its channel is the painted weight),
   GROUND (a painted biome's `ground_surface`; its channel is that biome's density, biomes
   sharing a surface share it, the base is the remainder) or RULE (a biome's
-  `cliff_surface` / `scree_surface` nothing else draws; empty channel, it only receives rule
-  weight) or ACCENT (a ground accent's surface, below; empty channel too). Painted and ground stay in separate slots even for one surface, because the
+  `cliff_surface` / `scree_surface`, and on a map with water its `water_bed_surface` /
+  `shore_surface` (P4-3, "Carving water"), nothing else draws; empty channel, it only
+  receives rule weight) or ACCENT (a ground accent's surface, below; empty channel too). Painted and ground stay in separate slots even for one surface, because the
   shader must tell "painted, overrides the rules" from "biome ground, dressed by the rules";
   a rule surface reuses any slot drawing it, or the base. Two RGBA8 weight maps on the sample
   grid (`layer_weights_a` slots 0-3, `_b` 4-7), filtered, so 0.25 m samples give smooth
@@ -1331,7 +1452,7 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   the base) carries a rule pair (`rule_cliff_layer` / `rule_scree_layer`, from `cliff_of`
   / `scree_of`): the cliff and scree of the most covered painted biome on that surface (the
   base: of the biomes on the base surface, else the palette's first biome on it,
-  `AuthoredTerrain.base_rule_surfaces`). The shader splits the cliff share over the ground
+  `GroundPalette.base_rule_surfaces`). The shader splits the cliff share over the ground
   components by their weights at the pixel, so a sample's rock is its own biome's rock and a
   border between biomes blends their rocks, with no extra texture. Limitation: two biomes
   on one ground surface share the dominant one's pair (never happens in the built-in
@@ -1500,7 +1621,9 @@ triangles, see below) and `generate_for_document()` wires both together.
   face even where a path was painted across it; times (1 - 0.5 scree
   share) on scree; rock species (rule kind `rock`) read `rock_density_at` instead, times
   (1 + 0.8 scree share), capped at full, so boulders gather at cliff feet. Painted ground
-  surfaces (grass, moss) change no plants. The rule fields are decoded for the window's
+  surfaces (grass, moss) change no plants. Water (P4-3): the wet dressing thins by role on
+  top (nothing in the water but reeds, bank species gathering on the shore; "Carving
+  water"). The rule fields are decoded for the window's
   samples on the worker (`ScatterRegen` passes the palette's built and cliff surfaces and
   the snapshot carries the painted weights); a height edit regenerates 1.5 m plus 2 m
   further out.
