@@ -91,7 +91,8 @@ Every step has an `op`. Steps that finish immediately advance on the same frame;
 | `wait` | `s` (default 1.0) | Wait that many seconds. |
 | `no_autosave` | none | Stop and disconnect the authoring autosave timer. |
 | `hide_ui` | `hide` (default true) | Hide (or with `false`, show) the authoring panel. |
-| `expand_biomes` | `template` (array of steps) | Insert `template` once per biome in the installed palette (`PaletteLibrary.biomes()`), with `{biome}` replaced by the biome id and `{name}` by its display name, anywhere in the template's strings. |
+| `expand_ab` | `configs` (array of ground shader versions), `label`, `s` (default 3.0) | An in-run ground shader A/B: per config, swap the terrain's shader (`probes/ground_perf.gd` `shader`; `"std"` draws the chunks with `perf.gd`'s StandardMaterial3D instead), wait 0.5 s and sample GPU time for `s` seconds (`perf.gd` `start` / `stop`). Run `vsync_off` first. |
+| `expand_biomes` | `template` (array of steps), `biomes` (optional array of biome ids) | Insert `template` once per biome in the installed palette (`PaletteLibrary.biomes()`, palette order; only the ids in `biomes` when given), with `{biome}` replaced by the biome id and `{name}` by its display name, anywhere in the template's strings. |
 
 ### Camera
 
@@ -148,6 +149,9 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 | `sculpt.gd` | `action` plus its fields (see the script header) | The sculpt pipeline (P3-3a), driven through `AuthoringEditor` since there is no Sculpt tool yet. `stroke` runs a height stroke over real frames (`sculpt`: raise / lower / smooth / flatten / tier; the step's own `op` is `call`) and logs frame times, the worst frame and its breakdown (ray, dab, terrain, collision, snap, rows moved, chunks), `end_stroke`'s cost, then the regeneration tail with the plants grown and shrunk against the instances really added and removed; `compare` times whole-chunk rebuilds against in-place updates; `collision` times the collision rebuild and the CPU ray march; `snap_dense` times snapping the densest cell; `check` tests rays, rows, in-place chunks, AABBs and the near plane; `view_shift` measures how far the view moves when the terrain top rises; `look_bottom` puts a point at the bottom edge. A capture during a stroke lands in its worst frame (about 1 s for the PNG), so measure strokes without one. |
 | `perf.gd` | `action` plus its fields (see the script header) | Performance passes: `start` / `stop` sample every frame's CPU frame time and world-viewport GPU time and log n / median / p95 / worst (run `vsync_off` first); `info` logs visible and shadow draw calls and primitives plus scatter instance counts; `mem` logs engine memory monitors (`ws: true` adds the process working set via one powershell call); `play` / `author` / `dress` time a load, the loading screen and the palette resolve; `scatter`, `ground_std`, `broad`, `layers`, `skirt` toggle ground and scatter configurations for in-run A/Bs. Used for `PERFORMANCE.md` "In-game authoring: pinned performance pass". |
 
+| `terrain_shapes.gd` | `action` plus its fields (see the script header) | The automatic dressing (P3-4) without Sculpt or Paint tools: `plateau` (stacked 1.524 m tiers with one-sample faces and an optional rounded lip), `hill`, `hollow` write the document heights and refresh terrain, collision, plants and ground like an undo; `path` / `area` paint a surface into the document; `stats` counts samples by rule weight (TerrainRules). |
+| `ground_perf.gd` | `action` plus its fields (see the script header) | Ground shader A/Bs: `shader` swaps the terrain material to the current include or one read from `user://p34_<version>_ground.zip` (made with `git archive`); `variant` builds a text-replaced copy of the current include; `paint` writes eight painted surfaces as strips or a half-weight checker; `terraces` fills the view with tiers; `fraction` reports the share of steep ground pixels. |
+
 `sample_pixels.gd` (this folder) is a standalone reader for captures, not a probe:
 
 ```
@@ -172,6 +176,21 @@ numerically (for example where a fade or a tint band starts).
   comparison; continuous 4 m and 12 m strokes for frame times; `check` after the edits; the
   hill at the bottom edge of the screen at zoom 13.85 and 8 (near plane); 10 captures and
   `INDEX.md`. Numbers for `docs/PERFORMANCE.md` "Sculpting".
+
+- `jobs/dressing_look.json`: the automatic dressing judgment set (P3-4, about 75 s): new 200 ft
+  maps in temperate forest, alpine meadow and rocky badlands (the three cliff surfaces) with a
+  two-tier plateau, a 6 m hill and a sunken hollow, at home and zoom 7 on each, then a painted
+  cobblestone path and flagstone courtyard across the plateau; 18 captures and `INDEX.md`.
+- `jobs/perf_ground_layers.json`: the pinned ground shader cost (P3-4): StandardMaterial3D,
+  the pre-P3-4 shader and the current one, interleaved, on a bare map, 4 biome layers, 8
+  painted strips, the 8-surface half-weight checker and screen-filling terraces. Needs
+  `user://p34_old_ground.zip` (see `ground_perf.gd`) and a temporary pinned `override.cfg`
+  (`remove_override` deletes it). `jobs/perf_ground_ab.json` is the shorter A/B used to
+  pick the loop form.
+- `jobs/dressing_smoke.json`: the fastest dressing check (about 15 s, two captures of one
+  temperate forest map with the three shapes), for iterating on the shader.
+- `jobs/mobile_check.json`: a bare 100 ft map shaped and painted under
+  `--rendering-method mobile`, to check the ground shader in the Mobile renderer.
 
 ## Caveats
 
