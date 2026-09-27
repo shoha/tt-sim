@@ -340,6 +340,8 @@ and cacti carry no COLOR_0.
       "ground_surface": "<surface>",
       "cliff_surface": "<surface with role cliff>",
       "scree_surface": "<surface with role ground>",
+      "water_bed_surface": "<surface with role ground>",
+      "shore_surface": "<surface with role ground>",
       "ground_accents": [{"surface": "<surface with role ground>", "coverage": <0..1>,
                           "scale_m": <patch size, metres>}, ...],
       "path_surfaces": ["<surface with role built>", ...],
@@ -414,6 +416,29 @@ Field notes:
 
   A painted `cliff` surface always wins over these (phase 3 decision); the biome only
   supplies the default. Painted ground and built surfaces do not cover a face (above).
+- `water_bed_surface` and `shore_surface` (added 2026-09-27, phase 4 water; optional) are
+  the surfaces the consumer's automatic wet dressing puts under a river or pond's water
+  (the bed; painted ground and built surfaces yield to it, so a path stops at the water)
+  and on the wet band of bank just above it (the shore: a line along the waterline with
+  drifts reaching a couple of metres out, fading into the biome ground). Both are `ground`
+  surfaces; the shore should differ from the biome's `ground_surface` to show (the same
+  surface draws nothing extra, and the consumer still darkens the wet line). A palette
+  without them works: the consumer has its own per-biome defaults, which a producer's
+  values replace when present:
+
+  | Biome | `water_bed_surface` | `shore_surface` |
+  |-------|---------------------|-----------------|
+  | temperate_forest, birch_woodland, boreal_taiga, grassland_meadow, wetland_riparian | `riverbed` | `mud` |
+  | alpine_meadow | `riverbed` | `gravel` |
+  | savanna | `riverbed` | `sand` |
+  | rocky_badlands | `gravel_sandstone` | `gravel_sandstone` |
+  | any other biome key | `riverbed` | `mud` |
+
+  (tt-sim's first judged values, `PaletteLibrary.WATER_SURFACE_DEFAULTS`; a default the
+  palette lacks as a ground surface is dropped.) Species carry no water field yet: the
+  consumer treats a few species keys as water-edge plants (reeds and rushes stand in the
+  shallows, willow, poplar and ferns gather on the bank) and keeps cacti off it; a
+  producer field for that is future work.
 - `ground_accents` (added 2026-09-27, phase 3; optional) are broad patches of other
   ground surfaces the consumer mixes into the biome ground in the shader, so a biome
   floor is not one field of one tile (a temperate forest read as one flat brown in game,
@@ -482,7 +507,10 @@ Rules both sides rely on:
   absent or non-cliff surface warns and falls back, to the first `cliff` surface in file
   order (`cliff` in treecube's sorted output) or `""` when there is none; a missing
   `scree_surface` is `""` (the foot keeps the biome ground), and one that names an absent
-  or non-ground surface warns and becomes `""`.
+  or non-ground surface warns and becomes `""`. A missing `water_bed_surface` or
+  `shore_surface` takes the consumer's default for the biome key silently (`""` when the
+  palette lacks it as a ground surface); one that names an absent or non-ground surface
+  warns and takes that default.
 - **Accents and path surfaces degrade, never fail.** The producer rejects a
   `ground_accents` entry whose surface is missing, has a role other than `ground` or
   is the biome's own `ground_surface`, whose `coverage` is outside 0..1 or whose
