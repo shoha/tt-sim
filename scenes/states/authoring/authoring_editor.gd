@@ -38,6 +38,15 @@ extends RefCounted
 ## stroke holds the heights diff and the props rows it moved; generated rows are not
 ## stored: undo and redo snap them back at once and regenerate the area, and generation is
 ## a pure function of the document.
+##
+## Surface strokes (the Paint tool; SurfaceStroke) paint a palette surface into the
+## document's painted surfaces, or erase all of them, on a map with an AuthoredTerrain. Per
+## frame, flush() blits the changed texels of the ground's weight maps
+## (AuthoredTerrain.update_ground_region; the layer table is re-planned only when a surface
+## enters or leaves the slot list). Scatter follows at stroke end (and on undo and redo),
+## when a built or cliff-role surface is involved: those clear plants (ScatterGround), and
+## the regenerated cells shrink the covered plants out. Ground-role paint changes no plants
+## (it yields to the rock on faces and is ground elsewhere), so it regenerates nothing.
 
 ## Emitted after every change to the map (strokes, props, undo, redo), for dirty tracking.
 signal edited
@@ -79,6 +88,7 @@ var last_snap_rows: int = 0
 var _stroke: MaskStroke = null
 var _stroke_label: String = ""
 var _height: HeightStroke = null
+var _surface: SurfaceStroke = null
 ## Heights the snap start rows stood on (the stroke's start heights; kept after the stroke
 ## until its snap work is done).
 var _snap_before: PackedFloat32Array = PackedFloat32Array()
@@ -153,15 +163,20 @@ func begin_stroke(mode: int, biome_id: String = "") -> bool:
 
 
 func is_stroking() -> bool:
-	return _stroke != null or _height != null
+	return _stroke != null or _height != null or _surface != null
 
 
 ## Exposes the capsule from `from` to `to` (world space) of world radius `radius` for
-## `seconds`, for whichever stroke is in progress (mask or height). Call flush() once after
-## the frame's dabs.
+## `seconds`, for whichever stroke is in progress (mask, height or surface). Call flush()
+## once after the frame's dabs.
 func stroke_dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> void:
 	if _height != null:
 		height_dab(from, to, radius, seconds)
+		return
+	if _surface != null:
+		var began := Time.get_ticks_usec()
+		_surface.dab(to_map_xz(from), to_map_xz(to), radius / map_scale(), seconds)
+		last_dab_usec = Time.get_ticks_usec() - began
 		return
 	if _stroke == null:
 		return
@@ -179,6 +194,9 @@ func flush() -> void:
 		_work()
 		last_flush_usec = Time.get_ticks_usec() - started
 		return
+	if _surface != null:
+		_refresh_ground(_surface.take_pending())
+		return
 	if _stroke == null:
 		return
 	_refresh(_stroke.take_pending())
@@ -188,6 +206,8 @@ func flush() -> void:
 func end_stroke() -> bool:
 	if _height != null:
 		return _end_height_stroke()
+	if _surface != null:
+		return _end_surface_stroke()
 	if _stroke == null:
 		return false
 	flush()
@@ -215,6 +235,11 @@ func cancel_stroke() -> void:
 	if _height != null:
 		_cancel_height_stroke()
 		return
+	if _surface != null:
+		var reverted := _surface.revert()
+		_surface = null
+		_refresh_ground(reverted)
+		return
 	if _stroke == null:
 		return
 	var rect := _stroke.revert()
@@ -239,6 +264,102 @@ func _refresh(sample_rect: Rect2i) -> void:
 	if eraser != null:
 		eraser.refresh(document, world.grow(document.sample_step().x))
 	last_flush_usec = Time.get_ticks_usec() - started
+
+
+# ============================================================================
+# Surface strokes (the Paint tool)
+# ============================================================================
+
+
+## True when surfaces can be painted: the map's ground is an AuthoredTerrain (a dressed
+## GLB's ground is the GLB's own, drawn by its own materials).
+func can_paint() -> bool:
+	return can_sculpt()
+
+
+## "" when palette surface `surface` can be painted now, else why not (the Paint tile's
+## tooltip and the toast a refused press shows): the map cannot be painted, or every slot
+## holds paint (SurfaceStroke.slot_refusal).
+func surface_refusal(surface: String) -> String:
+	if not can_paint():
+		return AuthoringPanel.PAINT_UNAVAILABLE_TOOLTIP
+	return SurfaceStroke.slot_refusal(document, surface)
+
+
+## Starts a Paint stroke: painting palette surface `surface`, or with `erase` fading every
+## painted surface back to the automatic ground. False when the map cannot be painted, there
+## is no paint to erase, or every slot holds paint (surface_refusal() says which).
+func begin_surface_stroke(surface: String, erase: bool) -> bool:
+	commit_prop_edit()
+	if is_stroking():
+		end_stroke()
+	if not can_paint():
+		return false
+	finish_height_work()
+	_surface = SurfaceStroke.begin(document, surface, erase)
+	if _surface == null:
+		return false
+	var label := AuthoringPanel.surface_label(surface).to_lower()
+	_stroke_label = "Erase paint" if erase else "Paint " + label
+	return true
+
+
+func _end_surface_stroke() -> bool:
+	var stroke := _surface
+	_surface = null
+	_refresh_ground(stroke.take_pending())
+	var diff := stroke.finish()
+	if diff.is_empty():
+		# Nothing painted; a slot the stroke claimed is given back (the list changed).
+		_refresh_ground(Rect2i(0, 0, 1, 1))
+		return false
+	# A trimmed slot list re-plans the layer table on this update.
+	_refresh_ground(diff.rect)
+	_regenerate_paint(diff)
+	(
+		history
+		. record(
+			{
+				"label": _stroke_label,
+				"undo": _apply_surface_diff.bind(diff, false),
+				"redo": _apply_surface_diff.bind(diff, true),
+				"bytes": int(diff.bytes),
+			}
+		)
+	)
+	edited.emit()
+	return true
+
+
+func _apply_surface_diff(diff: Dictionary, redo: bool) -> void:
+	_refresh_ground(SurfaceStroke.apply_diff(document, diff, redo))
+	_regenerate_paint(diff)
+
+
+## The ground's weight maps for the samples of `sample_rect` (no scatter: see the header).
+func _refresh_ground(sample_rect: Rect2i) -> void:
+	if not sample_rect.has_area() or not is_instance_valid(terrain):
+		return
+	var started := Time.get_ticks_usec()
+	terrain.update_ground_region(sample_rect.grow(1))
+	last_flush_usec = Time.get_ticks_usec() - started
+
+
+## Regenerates the scatter over a paint diff's area, grown by the painted edge warp (the
+## shader and ScatterGround read the weights that far off), when the diff involves a
+## surface whose paint changes what grows (SurfaceStroke.changes_plants).
+func _regenerate_paint(diff: Dictionary) -> void:
+	var rect: Rect2i = diff.get("rect", Rect2i())
+	if not is_instance_valid(scatter) or not rect.has_area():
+		return
+	if not SurfaceStroke.changes_plants(diff, PaletteLibrary.surfaces(palette_root)):
+		return
+	var step := document.sample_step()
+	scatter.request_region(
+		MaskBrush.sample_rect_to_world(document, rect).grow(
+			maxf(step.x, step.y) + TerrainRules.PAINT_EDGE_WARP_M
+		)
+	)
 
 
 # ============================================================================
