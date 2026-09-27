@@ -326,6 +326,9 @@ static func install(
 	var terrain := map.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain
 	if terrain:
 		game_map.set_ground_top(terrain.world_height_range().y)
+	# The grid draws on authored ground and token drags re-resolve their height on it; a
+	# Blender map (null) keeps the fixed grid band and the cursor-hit drag height.
+	game_map.set_ground_terrain(terrain)
 	if level:
 		var tool := game_map.get_measure_tool()
 		if tool:

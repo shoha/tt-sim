@@ -1036,7 +1036,7 @@ The grid uses a **cell tint** approach rather than traditional grid lines for re
 - The fill is **inset** by 10% from cell edges, creating visible gaps between adjacent cells that serve as implicit grid lines.
 - During token drags, the hovered cell and the starting cell are highlighted with a brighter blue fill (with edge glow), replacing the neutral tint on those cells.
 - Grid lines (`line_color`) are available as an additional layer rendered on top of everything, but currently disabled (0% opacity) since the cell tint inset provides sufficient delineation.
-- A height filter prevents the grid from projecting onto board tokens — only surfaces near the floor level show the grid.
+- A height filter prevents the grid from projecting onto board tokens — only surfaces near the floor level show the grid. On a Blender map that is a fixed band around Y = 0. On a map with authored terrain it is the ground itself: the grid lies on every tier top, slope and the low ground (within 0.2 m of the terrain under each pixel), while cliff faces, tokens and plants stay clean (see ARCHITECTURE.md "Grid Overlay", "Authored terrain").
 - Visibility transitions are **animated** with a 0.2s fade in/out when the grid is toggled.
 
 ### Activation
@@ -1055,7 +1055,9 @@ The grid uses a **cell tint** approach rather than traditional grid lines for re
 
 ### Configuration
 
-Grid appearance and behavior are configured via `LevelData` properties in the **Grid** export group. `GameMap.configure_grid()` applies these settings to the overlay and drag system when a level loads or the GM changes settings. Floor level for the height filter is computed automatically (defaults to Y=0).
+Grid appearance and behavior are configured via `LevelData` properties in the **Grid** export group. `GameMap.configure_grid()` applies these settings to the overlay and drag system when a level loads or the GM changes settings. Floor level for the height filter is computed automatically (defaults to Y=0); a map with authored terrain follows its ground instead (`GameMap.set_ground_terrain()`, refreshed at load and, in authoring, when a sculpt stroke, undo or redo settles).
+
+A token dragged across a tier edge with grid snap lands on the tier its snapped cell is on, not the one under the pointer (the drag re-resolves the height at the cell centre on authored terrain; ARCHITECTURE.md "Grid-Snapped Movement").
 
 ---
 
@@ -1069,6 +1071,7 @@ The drag ruler displays a distance line from a token's starting position to its 
 - Endpoint circles at both ends.
 - Distance label at the midpoint (dark backdrop, same style as MeasureTool).
 - When grid snap is active, shows cell count alongside distance (e.g. "6 cells / 30 ft").
+- When the ground at the target is more than 0.15 m above or below the ground where the drag started, adds the elevation and direct distance like the measure tool (e.g. "2 cells / 11 ft  |  +5 ft elev  |  12 ft direct"). The token's own lift while dragged and scroll height do not count.
 
 ### Rendering
 

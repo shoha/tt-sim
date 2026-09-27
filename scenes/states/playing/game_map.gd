@@ -30,6 +30,9 @@ extends Node3D
 ## Toggle via set_lofi_enabled(bool) or Settings menu. The effect is applied
 ## by setting a ShaderMaterial on viewport_container. See lofi_canvas.gdshader.
 
+## A dragged token's ground downcast starts this far above the terrain's highest ground.
+const DRAG_GROUND_CAST_CLEARANCE_M := 1.0
+
 ## True in authoring mode (Root.State.AUTHORING, see setup_authoring()): the GameplayMenu is
 ## hidden and never set up, and tokens cannot be dragged.
 var authoring_mode: bool = false
@@ -53,6 +56,8 @@ var _camera_controller: CameraController = null
 var _perf_overlay: PerformanceOverlay = null
 var _debug_render_toggles: DebugRenderToggles = null
 var _perf_overlay_container: VBoxContainer = null
+## The map's authored terrain, or null (set_ground_terrain).
+var _ground_terrain: AuthoredTerrain = null
 
 @onready var viewport_container: SubViewportContainer = $WorldViewportLayer/SubViewportContainer
 @onready var world_viewport: SubViewport = $WorldViewportLayer/SubViewportContainer/SubViewport
@@ -551,6 +556,8 @@ func setup_grid_overlay() -> void:
 		return
 	_grid_overlay = GridOverlay.create(camera_node)
 	_visual_effects.load_grid_visual_settings()
+	if is_instance_valid(_ground_terrain):
+		_grid_overlay.set_ground(_ground_terrain)
 
 
 ## Return the GridOverlay instance (may be null before setup).
@@ -657,6 +664,31 @@ func configure_grid(level_data: LevelData) -> void:
 ## Reset grid state when a level is cleared.
 func reset_grid_state() -> void:
 	_grid_visibility.reset_grid_state()
+
+
+## The map's authored terrain (MapSourceLoader.install passes it, or null for a Blender map
+## without one): the grid overlay draws on its ground instead of the fixed Y = 0 band, and a
+## dragged token's height is re-resolved on it at the snapped cell (DragAndDrop3D
+## .ground_resolver) so a drag across a tier edge lands on the right tier. With null both
+## keep their Blender-map behaviour.
+func set_ground_terrain(terrain: AuthoredTerrain) -> void:
+	_ground_terrain = terrain
+	if _grid_overlay:
+		_grid_overlay.set_ground(terrain)
+	if drag_and_drop_node:
+		drag_and_drop_node.ground_resolver = (
+			_resolve_drag_ground if terrain != null else Callable()
+		)
+
+
+## The terrain under `point` (straight down on the terrain collision layer, as a browser drop
+## re-resolves after its grid snap), or Vector3.INF with no terrain or no hit.
+func _resolve_drag_ground(point: Vector3) -> Vector3:
+	if not is_instance_valid(_ground_terrain) or not world_viewport:
+		return Vector3.INF
+	var space := world_viewport.find_world_3d().direct_space_state
+	var top := _ground_terrain.world_height_range().y + DRAG_GROUND_CAST_CLEARANCE_M
+	return DragPlaceController.raycast_terrain_down(space, point, top)
 
 
 ## Enable or disable the lo-fi visual filter

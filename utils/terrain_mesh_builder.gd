@@ -706,3 +706,29 @@ static func collision_heights(doc: MapDocument) -> PackedFloat32Array:
 static func collision_transform(doc: MapDocument) -> Transform3D:
 	var step := doc.sample_step()
 	return Transform3D(Basis.from_scale(Vector3(step.x, 1.0, step.y)), Vector3.ZERO)
+
+
+## The document's heights as a one-channel 32-bit float image, texel (x, z) = sample (x, z)
+## (AuthoredTerrain.get_height_texture, which the grid overlay reads).
+static func height_image(doc: MapDocument) -> Image:
+	return Image.create_from_data(
+		doc.samples_x(),
+		doc.samples_z(),
+		false,
+		Image.FORMAT_RF,
+		collision_heights(doc).to_byte_array()
+	)
+
+
+## The ground height (world Y) at world XZ `world_xz` of a terrain for `doc` placed by
+## `to_world` (the level's map scale and offset), on the triangles the mesh and the collision
+## share (ScatterGenerator.triangle_height). Past the map edge it continues the edge heights.
+static func world_ground_height(
+	doc: MapDocument, to_world: Transform3D, world_xz: Vector2
+) -> float:
+	var local := to_world.affine_inverse() * Vector3(world_xz.x, 0.0, world_xz.y)
+	var at := doc.world_to_sample(Vector2(local.x, local.z))
+	var h := ScatterGenerator.triangle_height(
+		collision_heights(doc), doc.samples_x(), doc.samples_z(), at
+	)
+	return (to_world * Vector3(local.x, h, local.z)).y

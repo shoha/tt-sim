@@ -415,7 +415,11 @@ func _on_settle_complete() -> void:
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 
 
-## Find where the token should land by raycasting down from its bottom.
+## Find where the token should land by raycasting down from its top, so a token whose
+## bottom ended up just below the ground (a drag that snapped it onto a higher tier before
+## it finished rising, a scroll-lowered drag) still lands on that ground instead of
+## staying where it is. Starting at the top rather than above the whole map keeps an
+## overhang above the token (a bridge, a roof on a Blender map) out of the cast.
 ## Returns Vector3 or null if no surface is found.
 func _find_landing_position() -> Variant:
 	if not rigid_body or not collision_shape or not collision_shape.shape:
@@ -423,12 +427,11 @@ func _find_landing_position() -> Variant:
 
 	var aabb = collision_shape.shape.get_debug_mesh().get_aabb()
 	var scaled_bottom_y = (collision_shape.position.y + aabb.position.y) * rigid_body.scale.y
-	var bottom_world = rigid_body.global_position + Vector3(0, scaled_bottom_y, 0)
+	var scaled_top_y = (collision_shape.position.y + aabb.end.y) * rigid_body.scale.y
+	var top_world = rigid_body.global_position + Vector3(0, scaled_top_y, 0)
 
 	var space_state = get_world_3d().direct_space_state
-	var query = PhysicsRayQueryParameters3D.create(
-		bottom_world, bottom_world + Vector3.DOWN * 100.0
-	)
+	var query = PhysicsRayQueryParameters3D.create(top_world, top_world + Vector3.DOWN * 100.0)
 	query.collision_mask = TERRAIN_COLLISION_LAYER  # Only hit terrain, not other tokens
 	query.exclude = [rigid_body.get_rid()]
 	var hit = space_state.intersect_ray(query)

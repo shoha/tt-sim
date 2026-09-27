@@ -14,6 +14,9 @@ const LINE_WIDTH_PX: float = 2.5
 const ENDPOINT_RADIUS_PX: float = 5.0
 const LINE_COLOR := Color(0.6, 0.8, 1.0, 0.9)
 const ENDPOINT_COLOR := Color(0.6, 0.8, 1.0, 1.0)
+## The ground under the token at drag start is found by a downcast from this far above the
+## token's origin (a token's origin may sit on its base, right at the ground).
+const START_CAST_CLEARANCE_M: float = 0.5
 
 ## References — set once via setup()
 var _camera: Camera3D
@@ -29,6 +32,9 @@ var _grid_snap_enabled: bool = false
 ## State
 var _active: bool = false
 var _start_pos: Vector3 = Vector3.ZERO
+## Ground height (world Y) under the token where the drag began, or NAN when no ground was
+## found there (the label then shows no elevation).
+var _start_ground_y: float = NAN
 
 ## Overlay nodes
 var _canvas_layer: CanvasLayer
@@ -101,6 +107,7 @@ func _on_dragging_started(dragging_object: DraggingObject3D) -> void:
 	if not dragging_object or not dragging_object.objectBody:
 		return
 	_start_pos = dragging_object.objectBody.global_position
+	_start_ground_y = _ground_below(_start_pos)
 	_active = true
 	set_process(true)
 	_needs_redraw = true
@@ -142,19 +149,22 @@ func _do_redraw() -> void:
 		_clear_visuals()
 		return
 
-	# Calculate 2D distance on the XZ plane
+	# Distance on the XZ plane; elevation from the ground under the start to the ground at
+	# the target (not the token's own lift or scroll height, which the settle undoes).
 	var dist_2d := Vector2(_start_pos.x, _start_pos.z).distance_to(Vector2(end_pos.x, end_pos.z))
-
-	# Format the label
-	var text := ScaleUtils.format_distance(
-		dist_2d, _grid_cell_size, _display_unit_per_cell, _display_unit
-	)
-	if _grid_snap_enabled and _grid_cell_size > 0.0:
-		var cells := roundi(dist_2d / _grid_cell_size)
-		text = "%d cells / %s" % [cells, text]
+	var elevation := 0.0
+	if not is_nan(_start_ground_y):
+		elevation = _drag_and_drop.get_target_ground_position().y - _start_ground_y
 
 	if _distance_label:
-		_distance_label.text = text
+		_distance_label.text = ruler_text(
+			dist_2d,
+			elevation,
+			_grid_cell_size,
+			_display_unit_per_cell,
+			_display_unit,
+			_grid_snap_enabled
+		)
 
 	# Project to screen
 	var screen_start := _camera.unproject_position(_start_pos)
@@ -172,6 +182,45 @@ func _do_redraw() -> void:
 
 	if _draw_control:
 		_draw_control.queue_redraw()
+
+
+## The ruler label: the horizontal distance ("30 ft", or "6 cells / 30 ft" with grid snap),
+## followed like the measure tool's by the signed elevation change and the direct distance
+## when the elevation passes MeasureTool.ELEVATION_THRESHOLD
+## (ScaleUtils.format_distance_with_elevation). Pure.
+static func ruler_text(
+	horizontal: float,
+	elevation: float,
+	grid_cell_size: float,
+	display_unit_per_cell: float,
+	display_unit: String,
+	snap: bool,
+) -> String:
+	var text := (
+		ScaleUtils
+		. format_distance_with_elevation(
+			horizontal,
+			elevation,
+			Vector2(horizontal, elevation).length(),
+			grid_cell_size,
+			display_unit_per_cell,
+			display_unit,
+			MeasureTool.ELEVATION_THRESHOLD,
+		)
+	)
+	if snap and grid_cell_size > 0.0:
+		text = "%d cells / %s" % [roundi(horizontal / grid_cell_size), text]
+	return text
+
+
+## The ground (world Y) straight below `point` on the terrain collision layer, or NAN.
+func _ground_below(point: Vector3) -> float:
+	if not _world_viewport:
+		return NAN
+	var hit := DragPlaceController.raycast_terrain_down(
+		_world_viewport.find_world_3d().direct_space_state, point, point.y + START_CAST_CLEARANCE_M
+	)
+	return hit.y if hit != Vector3.INF else NAN
 
 
 func _on_draw_control_draw() -> void:

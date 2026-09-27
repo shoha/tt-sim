@@ -74,6 +74,40 @@ func test_stop_drag_places_body_on_target_xz() -> void:
 	)
 
 
+func test_stop_drag_with_ground_resolver_lifts_a_lagging_body_to_the_target() -> void:
+	# Authored terrain: a drag snapped onto a higher tier must not settle from inside its
+	# cliff because the lerp had not finished rising.
+	var drag_and_drop := DragAndDrop3D.new()
+	add_child_autofree(drag_and_drop)
+	drag_and_drop.ground_resolver = func(point: Vector3) -> Vector3: return point
+	var object := _make_dragging_object()
+	add_child_autofree(object)
+	_activate_drag(drag_and_drop, object)
+
+	var body := object.objectBody
+	body.global_position = Vector3(1000, 1000, 1000)
+	drag_and_drop._target_drag_position = Vector3(1003.0, 1001.8, 997.0)
+	drag_and_drop._has_target_position = true
+	drag_and_drop.stop_drag()
+	assert_almost_eq(body.global_position.y, 1001.8, 0.0001, "lifted to the target height")
+
+
+func test_stop_drag_with_ground_resolver_leaves_a_body_above_the_target() -> void:
+	var drag_and_drop := DragAndDrop3D.new()
+	add_child_autofree(drag_and_drop)
+	drag_and_drop.ground_resolver = func(point: Vector3) -> Vector3: return point
+	var object := _make_dragging_object()
+	add_child_autofree(object)
+	_activate_drag(drag_and_drop, object)
+
+	var body := object.objectBody
+	body.global_position = Vector3(1000, 1002, 1000)
+	drag_and_drop._target_drag_position = Vector3(1003.0, 1000.25, 997.0)
+	drag_and_drop._has_target_position = true
+	drag_and_drop.stop_drag()
+	assert_almost_eq(body.global_position.y, 1002.0, 0.0001, "the settle owns the descent")
+
+
 func test_stop_drag_without_target_leaves_body_alone() -> void:
 	var drag_and_drop := DragAndDrop3D.new()
 	add_child_autofree(drag_and_drop)
