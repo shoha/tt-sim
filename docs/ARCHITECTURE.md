@@ -1142,6 +1142,94 @@ follow). Plan: `docs/superpowers/plans/2026-09-27-phase4-water.md` (local).
   (f.x, 0, -f.y) through the model matrix. Border texels are still (128, 128).
   `test_water_flow_baker.gd` decodes bakes through a mirror of `water_flow()`.
 
+### Authored water at runtime
+
+Phase 4, P4-2: the document's water as a surface in play and in authoring, and water as
+ground for tokens, the grid, the measure tool and the drag ruler, on authored and Blender
+maps. Tests: `tests/unit/test_authored_water.gd`; render probe
+`tools/render_jobs/probes/water.gd`.
+
+- **One merged mesh** (`WaterMeshBuilder`, `utils/water_mesh_builder.gd`, pure): every body
+  in one `MeshInstance3D` named `AuthoredWater-water`, because the water shader has one flow
+  sampler per level. Identity transform at the map origin, map-normalised UVs (the flow
+  map's frame, above). Coverage is on the document's sample grid: each sample belongs to
+  the highest body whose area holds it (`sample_owners()`, WaterGeometry's rule), a cell
+  (the quad between four samples) is water when any corner is wet, flat at the level of its
+  highest wet corner's body, and one more ring of cells is added where all four corners
+  stand at or above that level (`MARGIN_CELLS`, tucked under the banks: the edge stays
+  buried when the shader's vertex bob lifts it or a bank meets the surface exactly at a
+  sample; a cell with a corner below the level outside the body's area is never added, it
+  would show an edge in the air). The shader's depth-based shallows and foam draw the
+  waterline where ground meets the surface. The sample grid is the resolution because
+  coverage is decided per sample. No shadow; `Constants.BOUNDS_EXEMPT_META` like the skirt,
+  so camera bounds and the reflection probe measure the ground. A 200 ft map with a three-
+  reach river and two ponds: 10,026 vertices, 18,784 triangles.
+- **Node** (`AuthoredWater`, `scenes/terrain/authored_water.gd`, under the map root): the
+  mesh, whose surface material is a `StandardMaterial3D` carrying the document's flow map
+  (`MapDocument.water_flow`) as its emission texture, exactly where
+  `WaterGlbUtils.process_water_meshes()` looks for a Blender plane's; per body a surface
+  body and a WaterZone (below); `levels` / `wet` per sample and a `version` for the grid.
+  `MapSourceLoader.add_authored_water()` builds it in `_build_async` for any document with
+  water (authored root or a dressed GLB's root), always in authoring (so the tools and the
+  grid have it from the start), then runs `process_water_meshes(root)`.
+- **Refresh (authoring):** `AuthoredWater.refresh_map(map_root, doc)` is the entry the carve
+  and the Water tool (P4-3, P4-4) call after an edit: the geometry and the flow bake run on
+  a `WorkerThreadPool` task from a snapshot of the document (`WaterMeshBuilder.snapshot`),
+  the result is swapped in on a later frame (`refreshed`), and the bake is written into the
+  document, which ships it. A request while one runs queues; only the newest queued runs.
+  Measured on that map: worker build 84 ms, bake 183 ms, main-thread swap 26 ms (mesh,
+  concave shapes, zones, material pass).
+- **Dressed maps (GLB plus a document with water):** both kinds of mesh share the one water
+  material. The flow map comes from the authored mesh whenever it carries one (the document
+  has a river), whatever its size; the GLB's planes then render still water. The author drew
+  those rivers on top of the Blender map, the newer and explicit intent, and a GLB plane
+  covers the whole map, so the old largest-footprint rule would always silence them. A
+  document with only ponds carries no flow map and the GLB's river keeps flowing
+  (`WaterGlbUtils._flow_map_plane`). `process_water_meshes()` is safe to run twice over one
+  tree (`PROCESSED_META`), as a dressed map does (the GLB's load, then the authored water).
+- **WaterZone per body:** `WaterZone.create_for_footprint(name, level, tiles)`: the zone's
+  origin on the body's surface (so splashes spawn at it) and one slab box per 5 m tile of
+  the body's water (`WaterMeshBuilder.ZONE_TILE_M`, the tile's bounds of the body's wet
+  cells), hanging below the surface as a Blender plane's zone does. Bodies at different
+  levels (river reaches) each detect tokens under their own surface. Splashes, wakes and
+  the visual sink are unchanged. A rebuild releases the tokens a replaced zone held
+  (`WaterZone.release_bodies`: a freed Area3D does not report its bodies leaving).
+- **Water as ground** (`WaterSurface`, `utils/water_surface.gd`): water stays off the terrain
+  layer, so brushes, sculpt and paint rays and a wading token's landing see the bed. Its
+  surface is collision on its own layer (`WaterSurface.LAYER`, physics layer 3, bit 4): a
+  `StaticBody3D` per authored body (its triangles; `FLOATS_META` says whether it floats
+  tokens) and one per Blender `-water` plane (`_attach_surface_body`, no float flag). A
+  downward ray on `WALKABLE_MASK` (terrain and water) finds max(ground, water surface). A
+  ray exactly through a vertex the surface triangles share can slip between them (seen at
+  the map origin); `water_below()` retries a millimetre aside and grid sampling is nudged.
+- **Float rule** (`WaterSurface.landing_y` / `landing_below`): a token stands on the bed in
+  wadeable water and floats in deep water, its base `DRAFT_M` (0.2 m) below the surface,
+  never below the bed (walking out onto a bank is continuous). Authored bodies float when
+  their depth class is deep (`WaterBody.is_wadeable`); a Blender plane has no class, so it
+  floats a token where the water is at least `FLOAT_DEPTH_M` (1.4 m, between waist and deep)
+  deep. River (0.59 m) is wadeable. Used by `DraggableToken._find_landing_position` (the
+  water cast starts `CAST_CLEARANCE_M` above the token's top, which can be under deep water)
+  and `GameMap._resolve_drag_ground` (authored terrain; on a Blender map it answers only
+  over water and keeps the cursor-hit height elsewhere). A floating token bobs its visuals
+  (`BOB_M` 0.03 m over 2.6 s, a looping tween), decided locally after a landing or a synced
+  move (`WaterSurface.floats_at`), so every peer bobs its own copy; the synced position is
+  untouched. Network sync is unchanged (the dragging peer is authoritative).
+- **Grid, measure, ruler, cursor:** the ground field is max(ground, water level) on wet
+  samples. Authored: `GroundHeightField.from_terrain()` finds the terrain's sibling
+  `AuthoredWater` and composes `raise_to_water(heights, levels)` into an RGF texture (R the
+  height, G the water flag), recomposed in place when `AuthoredTerrain.height_version` or
+  `AuthoredWater.version` changes; without water the terrain's own R32F texture as before.
+  GLB: the grid sampling rays hit the surface bodies (Ground field, above). The grid shader
+  lifts a pixel it sees under a flagged surface (the bed, a wading token's legs) onto the
+  surface along its view ray (`ground_water_at`, a few fixed-point steps; the facet test is
+  skipped there) and draws after the water (`GridOverlay.RENDER_PRIORITY`), so squares stay
+  continuous across a river. The measure tool, the drop indicator and the drag cursor ray
+  use `WALKABLE_MASK`; the drag ruler measures surface to surface
+  (`WaterSurface.surface_below`).
+- **Not yet (P4-3 onward):** the steps between river reaches are bare (the upper reach's
+  water ends at the carve's lip); water on a dressed map is only drawn and floated, the
+  authoring grid of a dressed map is sampled once at open; the carve, beds and banks.
+
 ### Authored terrain
 
 `AuthoredTerrain` (`scenes/terrain/authored_terrain.gd`, Node3D, `create(doc)`) is the
@@ -1675,10 +1763,11 @@ The fixed band (`grid_y_level` / `grid_y_tolerance`) prevents the grid from proj
 - **Blender (GLB) maps (P3-3c):** before this, a GLB whose walkable ground is not near Y = 0 got no grid (G, measure and drag auto-show all blank): `deciduous_clusters`' clearing and `river`'s riverbed sit at about Y = -1.18. Now `MapSourceLoader.fit_grid_ground_async()` runs after `install()` on a play-time load (awaited by `LevelPlayLoader._finalize_map_loading` under the loading screen; the client download path calls it without awaiting, so there the band shows for those few frames): it waits one physics frame, then samples the map's layer-1 collision with `DressingGround.begin_grid()` (the dressing ground sampler, generalised to any regular grid; one downward ray per sample from 100 m above the mesh bounds) over the map's mesh bounds, `FRAME_BUDGET_USEC` per frame. Spacing `GroundHeightField.SPACING_M` 0.25 m, widened only past `MAX_SAMPLES` (65,536). Measured against the collision at 4,000 random points with the grid shader's triangle interpolation: worst error 0.025 m on Deciduous clusters and 0.029 m on River at 0.25 m (0.046 / 0.094 m at 0.5 m, 0.08 / 0.24 m at 1 m), so the 0.2 m tolerance is left almost whole. Load cost: Deciduous clusters (50 m, 40,401 samples) 106 ms of rays, 286 ms wall; River (20 m, 6,724 samples) 16 ms, 28 ms wall; Oak's lab 8 ms, 17 ms wall. In authoring, a GLB base is always a dressing, whose ground `_fit_dressing_to_ground()` samples anyway; that grid (`GroundHeightField.for_glb` over the document's samples) is reused at no extra cost.
   - **Misses** (holes in the collision, samples past its edge) take the height of the nearest hit (`DressingGround.fill_misses`, breadth-first in grid steps), so the grid is continuous; past the sampled bounds the shader clamps to the edge samples.
   - **No collision at all, or ground already at Y = 0:** `GroundHeightField.keeps_fixed_band()` returns true when nothing was hit, or when at least `FLAT_SHARE` (80 %) of the hits lie within `FLAT_BAND_M` (0.5 m, the band's smallest tolerance) of world Y = 0. Such a map gets no field and keeps the fixed band exactly as before. Oak's lab is the case this protects: its one collision trimesh includes walls and furniture (87 % of hits within 0.5 m of Y = 0), which the band keeps the grid off and the field would put it on (desk tops). Deciduous clusters is at 63 %, River at 61 %.
-  - **What counts as ground:** only layer-1 collision, the surface tokens land on (`DragPlaceController.raycast_terrain_down`). terrain-paint exports each terrain's evaluated mesh as `-colonly` collision, so the sampled surface is the rendered one. Water planes and Geoscatter scatter (trees, rocks, grass) are not collision (checked: the only layer-1 bodies on Deciduous clusters and River are `Terrain_collision` and `Plane_collision`), so the grid stays off plants and rocks, and on River it lies on the riverbed seen through the water, where the tokens stand. A hand-authored `-col` object (a building, a bridge) is ground where it is the topmost collision, like it is for a dropped token.
-  - Token drags on a GLB map keep the cursor-hit height (no `ground_resolver`); only the grid changed.
+  - **What counts as ground:** only layer-1 collision, the surface tokens land on (`DragPlaceController.raycast_terrain_down`). terrain-paint exports each terrain's evaluated mesh as `-colonly` collision, so the sampled surface is the rendered one. Water planes and Geoscatter scatter (trees, rocks, grass) are not collision (checked: the only layer-1 bodies on Deciduous clusters and River are `Terrain_collision` and `Plane_collision`), so the grid stays off plants and rocks. A hand-authored `-col` object (a building, a bridge) is ground where it is the topmost collision, like it is for a dropped token.
+  - **Water (phase 4, P4-2):** the sampling rays also hit the water surface bodies (`WaterSurface.WALKABLE_MASK`; every `-water` plane gets one on its own layer), so where the water stands above the bed the field is its surface and the sample is flagged as water (`DressingGround.water`, the texture's second channel). River's grid, which lay on the riverbed seen through the water until P4-2, now lies on the water surface (2,481 of its 6,724 samples). The rays are nudged 1 mm off the planes' vertices, which a ray can slip through. See "Authored water at runtime".
+  - Token drags on a GLB map keep the cursor-hit height except over water, where the float rule applies (`GameMap._resolve_drag_ground`; "Authored water at runtime").
 
-**Authored terrain (phase 3, P3-3b):** a map with an `AuthoredTerrain` (sculpted relief, tiers) replaces the fixed band. `MapSourceLoader.install` hands the terrain to `GameMap.set_ground_terrain()`, which calls `GameMap.set_grid_ground(GroundHeightField.from_terrain(terrain))` (null for a Blender map, which then gets its sampled field or keeps the band). The shader then reads `AuthoredTerrain.get_height_texture()`: the document heights as one R32F texel per sample (`TerrainMeshBuilder.height_image`; sample (0, 0) at map XZ `-extent / 2`, `sample_step()` apart, the same origin and step as the ground shader's layer weight maps). It maps each pixel into the map frame (`ground_world_to_map`, the terrain's inverse global transform, so a level's `map_scale` / `map_offset` are honoured), reads the four surrounding samples with `texelFetch` (no float filtering needed, so the Mobile renderer is fine) and interpolates on the terrain's own triangles (the split `ScatterGenerator.triangle_height` uses), so the ground height it compares against is the rendered surface exactly. A pixel is kept when `abs(world_y - ground_y) <= GridOverlay.GROUND_TOLERANCE_M` (0.2 m). Every tier top and slope gets the grid; the normal filter keeps cliff faces clean; tokens, grass blades and flowers above 0.2 m do not catch it (0.1 / 0.2 / 0.35 m compared at zoom 5 on a meadow plateau: 0.35 m starts tinting grass bases, 0.1 m gains nothing visible). Past the map edge the heights clamp to the edge samples. The texture is one object per terrain: built with the terrain (play-time load, authoring open) and updated in place by `AuthoredTerrain.settle_heights()`, which runs at every sculpt stroke end, cancel, undo and redo, so a mid-stroke frame still shows the grid at the last settled heights. `GridOverlay._process` re-pushes the terrain's transform and texture when either changes; a freed terrain (level clear) turns the ground test off.
+**Authored terrain (phase 3, P3-3b):** a map with an `AuthoredTerrain` (sculpted relief, tiers) replaces the fixed band. `MapSourceLoader.install` hands the terrain to `GameMap.set_ground_terrain()`, which calls `GameMap.set_grid_ground(GroundHeightField.from_terrain(terrain))` (null for a Blender map, which then gets its sampled field or keeps the band). The shader then reads `AuthoredTerrain.get_height_texture()`: the document heights as one R32F texel per sample (`TerrainMeshBuilder.height_image`; sample (0, 0) at map XZ `-extent / 2`, `sample_step()` apart, the same origin and step as the ground shader's layer weight maps). It maps each pixel into the map frame (`ground_world_to_map`, the terrain's inverse global transform, so a level's `map_scale` / `map_offset` are honoured), reads the four surrounding samples with `texelFetch` (no float filtering needed, so the Mobile renderer is fine) and interpolates on the terrain's own triangles (the split `ScatterGenerator.triangle_height` uses), so the ground height it compares against is the rendered surface exactly. A pixel is kept when `abs(world_y - ground_y) <= GridOverlay.GROUND_TOLERANCE_M` (0.2 m). Every tier top and slope gets the grid; the normal filter keeps cliff faces clean; tokens, grass blades and flowers above 0.2 m do not catch it (0.1 / 0.2 / 0.35 m compared at zoom 5 on a meadow plateau: 0.35 m starts tinting grass bases, 0.1 m gains nothing visible). Past the map edge the heights clamp to the edge samples. The texture is one object per terrain: built with the terrain (play-time load, authoring open) and updated in place by `AuthoredTerrain.settle_heights()`, which runs at every sculpt stroke end, cancel, undo and redo, so a mid-stroke frame still shows the grid at the last settled heights. `GridOverlay._process` re-pushes the terrain's transform and texture when either changes; a freed terrain (level clear) turns the ground test off. A map with authored water gets a composed texture instead (heights raised to the water level on wet samples, RGF with the water flag; "Authored water at runtime"), recomposed in place when either the terrain's heights settle or the water is rebuilt.
 
 **Configuration:**
 
@@ -1693,7 +1782,7 @@ On release, `DragAndDrop3D.stop_drag()` writes the last snapped target's X and Z
 - **Shift modifier**: Hold Shift during drag to bypass grid snap (free move). Shift always means "free move" regardless of settings.
 - **Configuration**: `GameMap.configure_grid()` sets `DragAndDrop3D.grid_snap_enabled`, `grid_cell_size`, and `grid_origin` from `LevelData`.
 
-**On relief (P3-3b).** The snap keeps the height the cursor ray hit, which at a tier edge is the wrong tier: the pointer on the low ground at a cliff foot can snap to a cell centre on the plateau. On a map with authored terrain, `GameMap.set_ground_terrain()` sets `DragAndDrop3D.ground_resolver` (`GameMap._resolve_drag_ground`: `DragPlaceController.raycast_terrain_down` at the snapped XZ from 1 m above the terrain's highest ground, the same re-resolve a browser drop does). `DragAndDrop3D.resolve_target_ground()` (pure, tested in `test_relief_gameplay.gd`) snaps, then takes the resolver's ground height; a miss keeps the hit height. `_target_ground_position` keeps that ground point (before the token's height offsets) for the drag ruler. With a resolver, `stop_drag()` also lifts a body still rising toward a higher tier to the target height (`max(body.y, target.y)`), so it never settles from inside the cliff. `DraggableToken._find_landing_position()` casts from the token's top rather than its bottom, so a token whose bottom ended just below the ground (a scroll-lowered drag, a quick drop) still lands on it; starting at the top, not above the whole map, keeps an overhang above the token (a bridge, a roof on a Blender map) out of the cast. Blender maps have no resolver: their drag target and drop are as before (checked on `deciduous_clusters` in play). Network sync is unchanged: the dragging peer is authoritative, sends throttled transforms while dragging and the settled transform at the end; peers never re-resolve.
+**On relief (P3-3b).** The snap keeps the height the cursor ray hit, which at a tier edge is the wrong tier: the pointer on the low ground at a cliff foot can snap to a cell centre on the plateau. On a map with authored terrain, `GameMap.set_ground_terrain()` sets `DragAndDrop3D.ground_resolver` (`GameMap._resolve_drag_ground`: `DragPlaceController.raycast_terrain_down` at the snapped XZ from 1 m above the terrain's highest ground, the same re-resolve a browser drop does). `DragAndDrop3D.resolve_target_ground()` (pure, tested in `test_relief_gameplay.gd`) snaps, then takes the resolver's ground height; a miss keeps the hit height. `_target_ground_position` keeps that ground point (before the token's height offsets) for the drag ruler. With a resolver, `stop_drag()` also lifts a body still rising toward a higher tier to the target height (`max(body.y, target.y)`), so it never settles from inside the cliff. `DraggableToken._find_landing_position()` casts from the token's top rather than its bottom, so a token whose bottom ended just below the ground (a scroll-lowered drag, a quick drop) still lands on it; starting at the top, not above the whole map, keeps an overhang above the token (a bridge, a roof on a Blender map) out of the cast. Blender maps have no resolver unless they have water: their drag target and drop are as before (checked on `deciduous_clusters` in play). With water (phase 4) the resolver and the landing apply the float rule and the cursor ray also hits water surfaces ("Authored water at runtime"). Network sync is unchanged: the dragging peer is authoritative, sends throttled transforms while dragging and the settled transform at the end; peers never re-resolve.
 
 ### Drag Ruler
 
@@ -1702,7 +1791,7 @@ On release, `DragAndDrop3D.stop_drag()` writes the last snapped target's X and Z
 - Renders on `CanvasLayer` at `Constants.LAYER_DRAG_RULER` (layer 7, below the measure overlay).
 - Uses `MapOverlayUtils` for overlay and label creation.
 - Shows formatted distance (e.g. "30 ft") and cell count when grid snap is active (e.g. "6 cells / 30 ft").
-- Shows the elevation change like the measure tool when it passes `MeasureTool.ELEVATION_THRESHOLD` (0.15 m): "2 cells / 11 ft  |  +5 ft elev  |  12 ft direct" (`DragRuler.ruler_text`, through `ScaleUtils.format_distance_with_elevation`). The change is ground to ground: from the ground under the token at drag start (one `raycast_terrain_down` from 0.5 m above the token's origin) to `DragAndDrop3D.get_target_ground_position()`, so the token's pickup lift and scroll height, which the settle undoes, never count.
+- Shows the elevation change like the measure tool when it passes `MeasureTool.ELEVATION_THRESHOLD` (0.15 m): "2 cells / 11 ft  |  +5 ft elev  |  12 ft direct" (`DragRuler.ruler_text`, through `ScaleUtils.format_distance_with_elevation`). The change is ground to ground: from the walkable surface under the token at drag start to the one under `DragAndDrop3D.get_target_ground_position()` (`WaterSurface.surface_below`: the terrain from 0.5 m above the point, or a water surface above it, so across a river the ruler measures along the surface the grid lies on, not down to a wading token's bed), so the token's pickup lift and scroll height, which the settle undoes, never count.
 - Reads `DragAndDrop3D._target_drag_position` (the snapped target) for the endpoint, not the lerping visual position.
 
 ### Shared Overlay Infrastructure (MapOverlayUtils)
