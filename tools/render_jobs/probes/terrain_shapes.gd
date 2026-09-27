@@ -2,8 +2,10 @@ extends RefCounted
 
 ## Render-job probe (`call` op) for the ground shader's automatic dressing (phase 3, P3-4):
 ## writes terrain shapes straight into the document heights and paints surfaces straight
-## into its surface weights (there is no Sculpt or Paint tool yet, and HeightBrush's TIER is
-## a stub), then refreshes the terrain, collision, plants and ground the way an edit does.
+## into its surface weights (exact, repeatable shapes for judging the dressing; the Sculpt
+## tool's own tiers are HeightBrush.tier_goal, see jobs/sculpt_look.json, and there is no
+## Paint tool yet), then refreshes the terrain, collision, plants and ground the way an edit
+## does.
 ## step.action picks what it does (positions are map XZ metres):
 ##   plateau {at, size, tiers, tier_m, inset, corner, lip, lip_width}  stacked flat tiers
 ##                         with sharp faces (a one-sample step): tier k is the rectangle
@@ -11,7 +13,7 @@ extends RefCounted
 ##                         corners rounded by `corner`, at height k * tier_m (default 1.524,
 ##                         the 5 ft tier); its top edge rounds down by `lip` metres over
 ##                         `lip_width` (default 0: a square edge), the user's "slightly
-##                         rounded top lip" until P3-5's tier profile exists.
+##                         rounded top lip" (the Sculpt tool's tiers have their own).
 ##   hill {at, height, radius}   a round cosine hill added to the heights.
 ##   hollow {at, radius, depth}  a round pit with a sharp wall, `depth` below the ground.
 ##   path {surface, points, width, soft}  paints `surface` along the polyline, full weight

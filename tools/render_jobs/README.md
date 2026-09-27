@@ -114,7 +114,9 @@ Every step has an `op`. Steps that finish immediately advance on the same frame;
 
 | Op | Fields | What it does |
 |---|---|---|
-| `stroke` | `points` ([[x, z], ...] world metres), `mode` (`paint` default, `thin`, `clear`), `biome` (for `paint`), `radius` (default 4.0), `flow` (default 1.0), `speed` (m/s along the path, default 6.0), `hold` (s to hold at the end, default 0), `keep_active` (default false) | Paint a brush stroke through the real brush tool, moving the pointer along the polyline at `speed`. `paint` uses the biome tool with `biome`; `thin` uses the thin tool; `clear` is the thin tool with Ctrl held. `keep_active` releases the press and finishes the gesture without deactivating the brush. |
+| `stroke` | `points` ([[x, z], ...] world metres), `mode` (`paint` default, `thin`, `clear`, `sculpt`), `biome` (for `paint`), `tile` (for `sculpt`: `raise` default, `smooth`, `flatten`, `tier`), `ctrl` / `shift` (for `sculpt`: held at the press), `radius` (default 4.0), `flow` (default 1.0), `speed` (m/s along the path, default 6.0), `hold` (s to hold at the end, default 0), `keep_active` (default false), `release` (default true) | Paint a brush stroke through the real brush tool, moving the pointer along the polyline at `speed`. `paint` uses the biome tool with `biome`; `thin` uses the thin tool; `clear` is the thin tool with Ctrl held; `sculpt` picks the Sculpt tile as the panel does. On sculptable ground the pointer aims at the ground's current height. `keep_active` releases the press and finishes the gesture without deactivating the brush; `release: false` leaves the stroke held at the end point (it keeps dabbing there) for a capture mid-stroke, until a `release` step. |
+| `release` | none | Ends a stroke left held by `release: false`, keeping the brush active. |
+| `hover` | `at` ([x, z]), `tile` (default `tier`), `radius`, `ctrl` | The Sculpt tool with `tile` over `at`, not pressed, Ctrl as given: the cursor and its Tier / Flatten readout as an author sees them before pressing. |
 | `place` | `biome`, `species`, `at` ([x, z]) | Place one prop of that biome's species at the point and commit it. If the biome or species is not in the palette, logs `no species <s> in <b>; not placed` and carries on. |
 
 ### Capture and output
@@ -159,6 +161,7 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 | `perf.gd` | `action` plus its fields (see the script header) | Performance passes: `start` / `stop` sample every frame's CPU frame time and world-viewport GPU time and log n / median / p95 / worst (run `vsync_off` first); `info` logs visible and shadow draw calls and primitives plus scatter instance counts; `mem` logs engine memory monitors (`ws: true` adds the process working set via one powershell call); `play` / `author` / `dress` time a load, the loading screen and the palette resolve; `scatter`, `ground_std`, `broad`, `layers`, `skirt` toggle ground and scatter configurations for in-run A/Bs. Used for `PERFORMANCE.md` "In-game authoring: pinned performance pass". |
 
 | `terrain_shapes.gd` | `action` plus its fields (see the script header) | The automatic dressing (P3-4) without Sculpt or Paint tools: `plateau` (stacked 1.524 m tiers with one-sample faces and an optional rounded lip), `hill`, `hollow` write the document heights and refresh terrain, collision, plants and ground like an undo; `path` / `area` paint a surface into the document; `stats` counts samples by rule weight (TerrainRules). |
+| `height_profile.gd` | `from`, `to` ([x, z]), `n` (default 21) | The authoring map's ground height at `n` points along a line (`AuthoringEditor.ground_height_at`) and the steepest slope between them, for checking a sculpt stroke numerically (tier tops on whole tiers, a face's width, a ramp's slope, a pit's floor). |
 | `ground_perf.gd` | `action` plus its fields (see the script header) | Ground shader A/Bs: `shader` swaps the terrain material to the current include or one read from `user://p34_<version>_ground.zip` (made with `git archive`); `variant` builds a text-replaced copy of the current include; `paint` writes eight painted surfaces as strips or a half-weight checker; `terraces` fills the view with tiers; `fraction` reports the share of steep ground pixels. |
 
 `sample_pixels.gd` (this folder) is a standalone reader for captures, not a probe:
@@ -186,6 +189,13 @@ numerically (for example where a fade or a tint band starts).
   hill at the bottom edge of the screen at zoom 13.85 and 8 (near plane); 10 captures and
   `INDEX.md`. Numbers for `docs/PERFORMANCE.md` "Sculpting".
 
+- `jobs/sculpt_look.json`: the Sculpt tool look pass (P3-5, about 2.5 minutes): human-speed
+  strokes through the real tool on a new 150 ft temperate forest map (a raised hill, a tier
+  from the ground, a second tier from its top, the first tier extended from its edge, a
+  sunken tier with Ctrl, a Shift-smoothed ramp, a flatten), with hover captures of the Tier
+  readout, a capture mid-stroke, height profiles, a cancelled stroke and undo / redo checked
+  by profile; then the same strokes on a rocky badlands map with the grid on (G). Frame
+  times per stroke (`record`). 19 captures and `INDEX.md`.
 - `jobs/dressing_look.json`: the automatic dressing judgment set (P3-4, about 75 s): new 200 ft
   maps in temperate forest, alpine meadow and rocky badlands (the three cliff surfaces) with a
   two-tier plateau, a 6 m hill and a sunken hollow, at home and zoom 7 on each, then a painted
