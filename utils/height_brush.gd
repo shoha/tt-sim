@@ -13,13 +13,29 @@ extends RefCounted
 ## remembers how far inside the brush the stroke has reached it (its inset, metres from the
 ## ring's edge, the largest over all dabs), and its goal is tier_goal() of its height when
 ## the stroke began, the stroke's target (a whole tier, k * tier_height_m) and that inset:
-## the cliff profile the user chose, a near-vertical face at the ring's edge (TIER_FACE_DEG,
-## steeper than TerrainRules' full-rock slope, so the automatic cliff rule turns it into the
-## biome's rock), a rounded lip of TIER_LIP_M over TIER_LIP_WIDTH_M at its top (a convex
-## shoulder the lip rule keeps grassy), then the flat top exactly at the target. The foot is
-## left sharp and concave for the scree rule. A tier only ever raises (TIER) or only ever
-## cuts (TIER_CUT), so strokes over an existing tier leave it and higher ground alone.
-## The goal is geometry, not exposure: a held brush does not climb past the tier.
+## the cliff profile the user chose, a steep face at the ring's edge (TIER_FACE_DEG, steeper
+## than TerrainRules' full-rock slope, so the automatic cliff rule turns it into the biome's
+## rock), a rounded lip of TIER_LIP_M over TIER_LIP_WIDTH_M at its top (a convex shoulder the
+## lip rule keeps grassy), then the flat top exactly at the target. The foot stays concave
+## for the scree rule. A tier only ever raises (TIER) or only ever cuts (TIER_CUT), so
+## strokes over an existing tier leave it and higher ground alone. The goal is geometry, not
+## exposure: a held brush does not climb past the tier.
+##
+## Soft profile (P3-7). That sharp profile (face, lip, top: TIER_FACE_DEG's 0.37 m face is
+## narrower than two samples) is averaged over a tent TIER_SOFTEN_M wide on either side before
+## it is sampled, i.e. band-limited to what the 0.25 m grid and its fixed quad diagonal can
+## draw. Sampled sharp, a face running at any angle but the two grid axes and the drawn
+## diagonal broke into a sawtooth of teeth up to 0.25 m deep along its length (the triangles
+## straddling the foot and the lip kinks tilt along the face), which read as stair-stepped
+## rock and a zigzag grid tint on every curved or diagonal tier. The tent keeps the teeth under
+## 0.075 m at every angle (test_diagonal_tier_faces_do_not_saw) for a face of
+## 66 degrees at its steepest (63 read by the shading normals, still past full rock); an
+## adaptive quad diagonal was measured too and only fixes the exact 45 degree faces. The
+## profile is exact (closed form, second antiderivatives) and ends exactly on the target, so
+## tops stay exact. HeightStroke measures the inset from TIER_SOFTEN_M outside the ring, so
+## the face stands where the sharp one did (centred half a face inside the ring), its toe
+## eases out up to TIER_SOFTEN_M past the ring, and the flat top starts TIER_SOFTEN_M further
+## in than the sharp profile's.
 ##
 ## Exposure. Like the mask brushes, a dab carries `seconds` of exposure (the frame's time
 ## times flow times BrushTool's dwell gain). Raise and lower are linear in it
@@ -55,18 +71,24 @@ const TIER_RATE := 10.0
 ## 0.35: a few passes of a 2.5 m brush across a tier face lay it back into a walkable ramp
 ## (at 0.15 the window was one or two samples and a face barely softened).
 const SMOOTH_KERNEL_FRACTION := 0.35
-## The tier face's angle from horizontal. The shading normals are central differences over
-## two sample steps, so a face this steep reads well past TerrainRules.CLIFF_END_DEG (full
-## rock) at the 0.25 m spacing (test_tier_face_is_rock_at_the_default_spacing).
+## The sharp profile's face angle from horizontal. After the soft profile's tent the face is
+## 66 degrees at its steepest, and the shading normals (central differences over two sample
+## steps) read 63 at the 0.25 m spacing, past TerrainRules.CLIFF_END_DEG (full rock)
+## (test_tier_face_is_rock_at_the_default_spacing).
 const TIER_FACE_DEG := 74.0
-## The face is never narrower than this (metres): about 1.2 samples at the default spacing,
-## so the face is interpolated across the grid rather than stair-stepping along it.
+## The sharp face is never narrower than this (metres), for small rises.
 const TIER_MIN_FACE_M := 0.3
 ## The rounded lip: how far below the top the face ends, and over what width the shoulder
 ## rounds up to the top (an ease-out, flat at the top). At most TIER_LIP_SHARE of the rise.
+## 0.5 m since the soft profile rounds the shoulder too (0.8 before it made the flat top of a
+## small tier 0.3 m narrower for the same look).
 const TIER_LIP_M := 0.25
-const TIER_LIP_WIDTH_M := 0.8
+const TIER_LIP_WIDTH_M := 0.5
 const TIER_LIP_SHARE := 0.3
+## Half-width (metres) of the tent the sharp profile is averaged over (see the header): two
+## sample steps at the default spacing. Wider lowers the teeth further (0.6: 0.057 m) at the
+## cost of the face's steepness (63 degrees) and 0.2 m of top.
+const TIER_SOFTEN_M := 0.5
 ## A height within this of a whole tier stands on that tier (a tier top; a lip does not).
 const TIER_ON_TOLERANCE_M := 0.05
 ## A tier sample this close to its goal takes the goal exactly, so tops end at k * tier_m.
@@ -92,37 +114,79 @@ static func tier_face_width(rise: float) -> float:
 	return maxf(TIER_MIN_FACE_M, absf(rise) / tan(deg_to_rad(TIER_FACE_DEG)))
 
 
+## How far from the profile's start (TIER_SOFTEN_M outside the ring, see HeightStroke) a
+## tier of `rise` metres reaches its flat top: the sharp profile's face and lip plus the
+## soft profile's tent on both sides.
+static func tier_span(rise: float) -> float:
+	var lip := minf(TIER_LIP_M, absf(rise) * TIER_LIP_SHARE)
+	return tier_face_width(absf(rise) - lip) + TIER_LIP_WIDTH_M + 2.0 * TIER_SOFTEN_M
+
+
 ## The height a tier stroke gives a sample that stood at `start` when the stroke began, for
-## a stroke toward `target`, the stroke having reached `inset` metres inside the ring's edge
-## (<= 0: not reached). Raising (target above start): the face rises from the ring's edge to
+## a stroke toward `target`, the stroke having reached `inset` metres inside the profile's
+## start (<= 0: not reached; HeightStroke starts it TIER_SOFTEN_M outside the ring). Raising
+## (target above start): the face rises from the start to
 ## TIER_LIP_M below the target, the lip rounds up to the target, then the top is flat.
 ## Cutting (target below start): mirrored, so the rounded lip is the rim of the cut, on the
 ## ground the cut goes into: the rim rounds down, the face drops, then the floor is flat.
-## Returns exactly `target` on the flat part.
+## Both are the soft profile (see the header). Returns exactly `start` at and outside the
+## profile's start and exactly `target` from tier_span() in.
 static func tier_goal(start: float, target: float, inset: float) -> float:
 	if inset <= 0.0 or start == target:
 		return start
 	var rise := absf(target - start)
 	var lip := minf(TIER_LIP_M, rise * TIER_LIP_SHARE)
 	var face := tier_face_width(rise - lip)
-	var offset := rise
-	if target > start:
-		if inset < face:
-			offset = (rise - lip) * inset / face
-		elif inset < face + TIER_LIP_WIDTH_M:
-			var u := 1.0 - (inset - face) / TIER_LIP_WIDTH_M
-			offset = rise - lip * u * u
-		else:
-			return target
-		return start + offset
-	if inset < TIER_LIP_WIDTH_M:
-		var u := inset / TIER_LIP_WIDTH_M
-		offset = lip * u * u
-	elif inset < TIER_LIP_WIDTH_M + face:
-		offset = lip + (rise - lip) * (inset - TIER_LIP_WIDTH_M) / face
-	else:
+	var span := face + TIER_LIP_WIDTH_M + 2.0 * TIER_SOFTEN_M
+	if inset >= span:
 		return target
-	return start - offset
+	if target > start:
+		return start + soft_tier_offset(inset - TIER_SOFTEN_M, rise, lip, face)
+	return start - (rise - soft_tier_offset(span - TIER_SOFTEN_M - inset, rise, lip, face))
+
+
+## The sharp raising profile (0 up to the foot at x = 0, a linear face of width `face` up
+## to rise - lip, the lip's ease-out over TIER_LIP_WIDTH_M, then `rise`) averaged over the
+## tent of half-width TIER_SOFTEN_M centred on `x`: the second difference of its second
+## antiderivative (_tier_g2) over the tent's half-width. 0 left of -TIER_SOFTEN_M, exactly
+## `rise` right of the sharp top plus TIER_SOFTEN_M, monotonic and C1 between.
+static func soft_tier_offset(x: float, rise: float, lip: float, face: float) -> float:
+	var b := TIER_SOFTEN_M
+	if x + b <= 0.0:
+		return 0.0
+	if x - b >= face + TIER_LIP_WIDTH_M:
+		return rise
+	var g := (
+		_tier_g2(x + b, rise, lip, face)
+		- 2.0 * _tier_g2(x, rise, lip, face)
+		+ _tier_g2(x - b, rise, lip, face)
+	)
+	return clampf(g / (b * b), 0.0, rise)
+
+
+## Second antiderivative (from 0) of the sharp raising profile soft_tier_offset() describes.
+static func _tier_g2(x: float, rise: float, lip: float, face: float) -> float:
+	if x <= 0.0:
+		return 0.0
+	var slope := (rise - lip) / face
+	if x < face:
+		return slope * x * x * x / 6.0
+	var w := TIER_LIP_WIDTH_M
+	var g1_face := slope * face * face * 0.5
+	var g2_face := slope * face * face * face / 6.0
+	if x < face + w:
+		var d := x - face
+		var q := 1.0 - d / w
+		return (
+			g2_face
+			+ g1_face * d
+			+ rise * d * d * 0.5
+			- lip * w / 3.0 * (d - w * (1.0 - q * q * q * q) * 0.25)
+		)
+	var e := x - face - w
+	var g1_top := g1_face + rise * w - lip * w / 3.0
+	var g2_top := g2_face + g1_face * w + rise * w * w * 0.5 - lip * w * w * 0.25
+	return g2_top + g1_top * e + rise * e * e * 0.5
 
 
 ## True when `height` stands on a whole tier (within TIER_ON_TOLERANCE_M).

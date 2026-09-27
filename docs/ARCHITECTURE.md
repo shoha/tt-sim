@@ -463,11 +463,19 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   decision): every sample remembers its inset (how far inside the ring the stroke reached
   it, the largest over the stroke), and `HeightBrush.tier_goal(start, target, inset)` gives
   its height: a face at the ring's edge at `TIER_FACE_DEG` (74 degrees, never narrower than
-  `TIER_MIN_FACE_M` 0.3 m, about 1.2 samples, so it is interpolated rather than
-  stair-stepped), ending `TIER_LIP_M` (0.25 m, at most 30 % of the rise) below the target,
-  a convex lip rounding up over `TIER_LIP_WIDTH_M` (0.8 m), then the flat top exactly at
-  `k * tier_height_m`; a cut mirrors it with the lip as the rim. The shading normals read
-  about 70 degrees on the face at the 0.25 m spacing, past `TerrainRules`' full-rock 55, so
+  `TIER_MIN_FACE_M` 0.3 m), ending `TIER_LIP_M` (0.25 m, at most 30 % of the rise) below the
+  target, a convex lip rounding up over `TIER_LIP_WIDTH_M` (0.5 m), then the flat top
+  exactly at `k * tier_height_m`; a cut mirrors it with the lip as the rim. That sharp
+  profile is averaged over a tent `TIER_SOFTEN_M` (0.5 m) wide on either side before it is
+  sampled (P3-7, `HeightBrush.soft_tier_offset`, closed form): sampled sharp, a 0.37 m face on
+  the 0.25 m grid broke into a sawtooth up to 0.25 m deep along any face that did not run
+  along a grid axis or the drawn quad diagonal (an adaptive diagonal was measured and only
+  fixes exact 45 degree faces); soft, the teeth stay under 0.075 m at every angle
+  (`test_diagonal_tier_faces_do_not_saw`) and the face is 66 degrees at its steepest.
+  `HeightStroke` measures the inset from `TIER_SOFTEN_M` outside the ring, so the face
+  stands where the sharp one did and its toe eases out up to half a metre past the ring.
+  The shading normals read about 63 degrees on the face at the 0.25 m spacing, past
+  `TerrainRules`' full-rock slope, so
   the automatic dressing makes the face the biome's cliff rock, keeps the lip's shoulder
   ground (the lip rule) and gathers scree at the concave foot. TIER only raises samples that
   began below the target and TIER_CUT only cuts, so strokes over existing tiers never climb
@@ -1463,7 +1471,7 @@ The grid shader (`shaders/grid_overlay.gdshader`) follows a multi-stage pipeline
 1. **Depth reconstruction** — reads `hint_depth_texture` (reversed-Z) to reconstruct the world-space position of each visible pixel. A full-screen quad (2×2 `QuadMesh`, `flip_faces = true`) is forced to fill the screen via `POSITION = vec4(VERTEX.xy, 1.0, 1.0)` in the vertex shader.
 2. **Edge rejection** — discards sky/void pixels (`raw_depth < 0.0001`) and geometry silhouette edges. Samples all 4 depth neighbors with a 2-texel kernel; discards if any neighbor is void. Also rejects pixels with large linear depth discontinuities between neighbors (`depth_threshold = max(0.1 * linear_c, 0.2)`).
 3. **Height filter** — keeps only pixels near the ground, so the grid does not project onto board tokens (which extend above the floor) and ceilings. With a ground field (`GroundHeightField`: authored terrain, or a Blender map's ground sampled from its collision) a pixel is kept within 0.2 m of the ground under it (see "Ground field" below). Without one (a Blender map with no layer-1 collision, or whose ground is at Y = 0 already) the fixed band `[grid_y_level ± grid_y_tolerance]` is used: floor Y 0.0 (glTF convention), tolerance `max(cell_size * 0.4, 0.5)`.
-4. **Normal filter** — reconstructs surface normals via cross product of depth-buffer neighbors. Discards steep/vertical surfaces where `abs(dot(normal, UP)) < normal_threshold` (default 0.7). Only mostly-horizontal playable surfaces show the grid.
+4. **Normal filter** — reconstructs surface normals via cross product of depth-buffer neighbors. Discards steep/vertical surfaces where `abs(dot(normal, UP)) < normal_threshold` (default 0.7). Only mostly-horizontal playable surfaces show the grid. With a ground field (P3-7) the slope test reads the field's smooth normal instead (`ground_normal_at`: the vertex normals of the ground's triangle, interpolated, as the terrain is lit and its rock rule reads them) and fades the grid out over `ground_slope_fade` (0.12 of n.y) below the threshold; the facet normal then only rejects near-vertical surfaces standing within the height band (token sides, walls, trunks; `ground_facet_threshold` 0.3). The facet normal flickered triangle by triangle across the threshold on a tier lip, and a hard cut on the interpolated normal traced a fine comb, so the grid's edge sawed along every diagonal or curved tier.
 5. **Grid math** — computes grid UVs from world XZ coordinates, applies `fwidth()` anti-aliasing with configurable `line_thickness`.
 6. **Distance fade** — `smoothstep` fade based on XZ distance from `grid_center`: the camera look-at point projected onto the `grid_y_level` plane, and with a ground field then onto the ground (`GridOverlay.look_center`, a few fixed-point steps down the view ray).
 7. **Three-layer compositing** (bottom to top):

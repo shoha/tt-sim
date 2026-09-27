@@ -17,9 +17,11 @@ extends RefCounted
 ## collision and plants, so all dabs of a frame make one update.
 ##
 ## Tiers (TIER, TIER_CUT). Every dab raises each sample's inset (how far inside the ring
-## the stroke has reached it, metres; `_reach`, the largest over the stroke) and moves the
+## grown by HeightBrush.TIER_SOFTEN_M the stroke has reached it, metres: the soft profile's
+## toe starts that far outside the ring; `_reach`, the largest over the stroke) and moves the
 ## sample toward HeightBrush.tier_goal() of its start height, the target and that inset
-## (inlined in dab() for speed; test_tier_stroke_matches_tier_goal holds them together).
+## (computed only when the inset grows and kept in `_aim`, since the soft profile costs a
+## few function calls; test_tier_stroke_matches_tier_goal holds them together).
 ## TIER only raises samples that began below the target and TIER_CUT only cuts samples that
 ## began above it. complete() puts every reached sample exactly on its goal; the owner calls
 ## it when the stroke ends, so a quick stroke still leaves a finished tier.
@@ -55,6 +57,8 @@ var _blocks_x: int = 0
 ## rectangle of samples reached.
 var _reach := PackedFloat32Array()
 var _reach_rect: Rect2i = Rect2i()
+## Tier strokes: per reached sample, HeightBrush.tier_goal() of its start and `_reach`.
+var _aim := PackedFloat32Array()
 
 
 ## Starts a stroke of HeightBrush operation `operation` on `document`; `goal` is the target
@@ -72,6 +76,7 @@ static func begin(document: MapDocument, operation: int, goal: float = 0.0) -> H
 	if HeightBrush.is_tier(operation):
 		stroke._reach.resize(document.sample_count())
 		stroke._reach.fill(0.0)
+		stroke._aim.resize(document.sample_count())
 	return stroke
 
 
@@ -82,11 +87,17 @@ static func begin(document: MapDocument, operation: int, goal: float = 0.0) -> H
 func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 	if radius <= 0.0 or seconds <= 0.0:
 		return false
+	if HeightBrush.is_tier(op):
+		# The soft profile's toe starts TIER_SOFTEN_M outside the ring, so the face stands
+		# where the sharp one did: centred a face's half-width inside the ring's edge.
+		var outer := radius + HeightBrush.TIER_SOFTEN_M
+		var tier_rect := MaskBrush.capsule_rect(doc, from, to, outer)
+		if not tier_rect.has_area():
+			return false
+		return _tier_dab(tier_rect, from, to, outer, seconds)
 	var rect := MaskBrush.capsule_rect(doc, from, to, radius)
 	if not rect.has_area():
 		return false
-	if HeightBrush.is_tier(op):
-		return _tier_dab(rect, from, to, radius, seconds)
 	var width := doc.samples_x()
 	var step := doc.sample_step()
 	var means := PackedFloat32Array()
@@ -160,7 +171,7 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 
 
 ## A tier dab over `rect`: raises each sample's inset and moves it toward its goal (see the
-## header). HeightBrush.tier_goal() inlined, with the per-rise face width cached per dab.
+## header), recomputing the goal only where the inset grew.
 @warning_ignore("integer_division")
 func _tier_dab(rect: Rect2i, from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 	var width := doc.samples_x()
@@ -172,15 +183,13 @@ func _tier_dab(rect: Rect2i, from: Vector2, to: Vector2, radius: float, seconds:
 	var heights := doc.heights
 	var starts := start_heights
 	var reach := _reach
+	var aims := _aim
 	var touched := _touched
 	var blocks_x := _blocks_x
 	var goal := target
 	var up := op == HeightBrush.TIER
 	var a := MaskBrush.amount(1.0, seconds, HeightBrush.TIER_RATE)
 	var snap := HeightBrush.TIER_SNAP_M
-	var lip_width := HeightBrush.TIER_LIP_WIDTH_M
-	var slope := tan(deg_to_rad(HeightBrush.TIER_FACE_DEG))
-	var min_face := HeightBrush.TIER_MIN_FACE_M
 	var low := Vector2i(rect.end)
 	var high := Vector2i(-1, -1)
 	var lowest := INF
@@ -207,25 +216,9 @@ func _tier_dab(rect: Rect2i, from: Vector2, to: Vector2, radius: float, seconds:
 			if now > reach[i]:
 				reach[i] = now
 				reached = true
-			# Read back as stored (float32), so complete() computes the same goal.
-			var inset := reach[i]
-			# HeightBrush.tier_goal(start, goal, inset), inlined.
-			var rise := absf(goal - start)
-			var lip := minf(HeightBrush.TIER_LIP_M, rise * HeightBrush.TIER_LIP_SHARE)
-			var face := maxf(min_face, (rise - lip) / slope)
-			var aim := goal
-			if up:
-				if inset < face:
-					aim = start + (rise - lip) * inset / face
-				elif inset < face + lip_width:
-					var u := 1.0 - (inset - face) / lip_width
-					aim = start + (rise - lip * u * u)
-			else:
-				if inset < lip_width:
-					var u := inset / lip_width
-					aim = start - lip * u * u
-				elif inset < lip_width + face:
-					aim = start - (lip + (rise - lip) * (inset - lip_width) / face)
+				# The inset read back as stored (float32), so complete() computes the same goal.
+				aims[i] = HeightBrush.tier_goal(start, goal, reach[i])
+			var aim := aims[i]
 			var old := heights[i]
 			var value := old + (aim - old) * a
 			if absf(aim - value) <= snap:
