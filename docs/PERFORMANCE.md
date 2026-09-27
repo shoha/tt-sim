@@ -1431,3 +1431,35 @@ across tiers, High's +0.091 ms, it is still well inside the threshold, so the
 not applied. Low reads slightly higher again despite skipping the most code, another
 noise-level difference between sampling sessions -- all three deltas are under a tenth
 of a millisecond, an order of magnitude under the gate.
+
+## Authored water surface (2026-09-27, P4-2)
+
+The merged authored water mesh (`AuthoredWater`, ARCHITECTURE.md "Authored water at
+runtime") over a sculpted authored map in play: its whole GPU cost, water shown against
+water hidden in one run.
+
+**How.** RTX 3080 idle before the job (`nvidia-smi`: 1 %, P8, 39 C, 210 MHz). Render-job
+harness, 1920x1080 window and viewport, `override.cfg` pinning the viewport (removed by the
+job at startup), vsync off (`vsync_off`), debug build, the user's graphics settings
+(Water Quality default). Test level `_p42_water` (deleted afterwards): a 200 ft grassland
+meadow (10,285 scatter instances) on a slope, a river of three flat reaches (ankle, waist,
+deep; 3.6-5.6 m wide), a deep pond (12 m across) and a waist-deep basin, built by
+`probes/water.gd build` (10,026 vertices, 18,784 triangles, one flow map of 244 x 244).
+`probes/water.gd water` hides and shows every water mesh; `perf.gd start / stop` 4 s windows,
+on / off / on / off at each view. GPU ms, median (p95):
+
+| View | Water on #1 | off #1 | on #2 | off #2 | Delta |
+| --- | --- | --- | --- | --- | --- |
+| Home (zoom 13.85; river and pond in a corner) | 2.90 (3.31) | 2.77 (3.22) | 3.08 (3.53) | 2.81 (3.27) | +0.13 / +0.27 |
+| Zoom 9 over the river (water across the screen) | 3.17 (3.88) | 2.80 (3.26) | 3.19 (3.66) | 2.80 (3.27) | +0.38 / +0.39 |
+| Zoom 20 (whole map) | 3.70 (4.19) | 3.44 (3.93) | 3.71 (4.55) | 3.45 (3.94) | +0.26 / +0.26 |
+
+**Verdict: kept.** The water costs what its screen coverage costs, as the Blender plane
+does: every water pixel pays the shader's depth and screen prepass reads, 0.13-0.27 ms at
+home where a corner of the view is water, 0.26 ms for the whole map at zoom 20 and 0.38 ms
+with a river across the screen at zoom 9 (the 0.3 ms flow-map gate was for the flow
+advection alone, measured above; this is the whole surface). The tucked margin under the
+banks costs nothing visible: those fragments fail the depth test before shading. The
+per-body collision and zones add no frame cost (static bodies, one Area3D per body). Main
+thread outside the frame: the authoring refresh's swap (mesh, concave shapes, zones) took
+26 ms; the build (84 ms) and the flow bake (183 ms) run on a worker.
