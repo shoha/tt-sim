@@ -1281,11 +1281,22 @@ triangles, see below) and `generate_for_document()` wires both together.
   clears its plants on flat ground, its faintest fringe keeps some, and nothing grows on a
   face even where a path was painted across it; times (1 - 0.5 scree
   share) on scree; rock species (rule kind `rock`) read `rock_density_at` instead, times
-  (1 + 0.8 scree share), capped at full, so boulders gather at cliff feet (the generator's
-  optional `rock_density_at` argument). Painted ground surfaces (grass, moss) change no
-  plants. The rule fields are decoded for the window's samples on the worker
-  (`ScatterRegen` passes the palette's built and cliff surfaces and the snapshot carries the
-  painted weights); a height edit regenerates 1.5 m further out.
+  (1 + 0.8 scree share), capped at full, so boulders gather at cliff feet. Painted ground
+  surfaces (grass, moss) change no plants. The rule fields are decoded for the window's
+  samples on the worker (`ScatterRegen` passes the palette's built and cliff surfaces and
+  the snapshot carries the painted weights); a height edit regenerates 1.5 m plus 2 m
+  further out.
+- **Terraces stay legible under forest (P3-7):** every species has a ground role
+  (`ScatterGround.role_of`: rock, tree for size class large, shrub for medium, ground cover;
+  `ScatterPlan` entry `ground_role`) and the generator reads
+  `document_fields().species_density_at(p, role)` (its optional `species_density_at`
+  argument; `density_at` and `rock_density_at` are its cover and rock roles). Trees keep
+  back from tier faces and lips and shrubs a little: the face proximity (the steepness
+  nearby box-averaged again over `FACE_NEAR_RADIUS_M` 2 m, `ScatterGround.face_proximity`,
+  about 0.14 at a straight face, 0.08 two metres out, 0 by 3.7 m) clears trees over
+  `smoothstep(0.02, 0.08)` and shrubs over `smoothstep(0.08, 0.13)`, so the rock step and the
+  edge of each top show from the game camera instead of an unbroken canopy (a trunk a metre
+  from a lip spread its crown over the whole face). Ground cover still grows to the rock.
 - **Triangle-matched ground (P3-3a):** `triangle_height()` interpolates over the triangle of
   the quad a point is in, each quad split on the same diagonal as the chunk meshes and
   Jolt's `HeightMapShape3D`, (a, a+1, a+cols) and (a+1, a+cols+1, a+cols), so a generated

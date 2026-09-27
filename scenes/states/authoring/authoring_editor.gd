@@ -31,8 +31,8 @@ extends RefCounted
 ## document's triangles. end_stroke() finishes that work, updates the collision, queues the
 ## settling rebuild of the edited chunks, and asks the scatter to regenerate the stroke's
 ## area grown by one more sample step than request_region() adds (normals read a sample
-## either side) plus TerrainRules.CURVATURE_RADIUS_M (the automatic cliff and scree, which
-## thin and gather plants, read the curvature that far out), so slope and cliff
+## either side) plus TerrainRules.CURVATURE_RADIUS_M and ScatterGround.FACE_NEAR_RADIUS_M
+## (the cliff and scree rules and the trees' face clearance read that far), so slope and cliff
 ## rules add and remove plants with the grow and shrink animation while every plant that
 ## stays keeps its place (AuthoredScatter.row_keys leaves Y out). One history entry per
 ## stroke holds the heights diff and the props rows it moved; generated rows are not
@@ -702,12 +702,11 @@ func _regenerate(rect: Rect2i) -> void:
 	if not is_instance_valid(scatter) or not rect.has_area():
 		return
 	var step := document.sample_step()
-	# request_region() grows by each species' reach plus one step; normals need one more, and
-	# the cliff and scree rules read curvature CURVATURE_RADIUS_M out.
+	# request_region() grows by each species' reach plus one step; normals need one more, the
+	# rules read curvature CURVATURE_RADIUS_M out and face proximity FACE_NEAR_RADIUS_M more.
+	var reach := TerrainRules.CURVATURE_RADIUS_M + ScatterGround.FACE_NEAR_RADIUS_M
 	scatter.request_region(
-		MaskBrush.sample_rect_to_world(document, rect).grow(
-			maxf(step.x, step.y) * 2.0 + TerrainRules.CURVATURE_RADIUS_M
-		)
+		MaskBrush.sample_rect_to_world(document, rect).grow(maxf(step.x, step.y) * 2.0 + reach)
 	)
 
 

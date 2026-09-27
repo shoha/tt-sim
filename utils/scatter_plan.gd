@@ -300,6 +300,7 @@ static func _plan_species(species: Array[Dictionary], i: int, index_of: Dictiona
 		"influence": pattern.influence if pattern is Dictionary else 0.0,
 		"scale_influence": pattern.scale_influence if pattern is Dictionary else 0.0,
 		"align_normal": rule.align == "normal",
+		"ground_role": ScatterGround.role_of(rule),
 		"yaw_range": deg_to_rad(rule.yaw_random_deg),
 		"scale_spread": float(rule.scale_spread),
 		"scale_floor": float(scale_floor) if scale_floor != null else -1.0,

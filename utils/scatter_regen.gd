@@ -199,7 +199,7 @@ static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
 			snapshot.map_seed,
 			entry.cells_by_species,
 			fields.bounds,
-			fields.rock_density_at
+			fields.species_density_at
 		)
 		for asset_id in rows:
 			var split := split_by_cell(rows[asset_id])
