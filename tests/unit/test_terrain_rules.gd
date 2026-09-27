@@ -22,6 +22,7 @@ const MIRRORED := [
 	"SCREE_NEAR_END",
 	"SCREE_EDGE_NOISE",
 	"SCREE_BREAKUP_SCALE_M",
+	"SCREE_FAN",
 	"SCREE_BREAKUP_LOW",
 	"SCREE_BREAKUP_HIGH",
 	"RULE_NOISE_SCALE_M",
@@ -73,11 +74,15 @@ func test_scree_rule_matches_hand_values() -> void:
 	assert_almost_eq(
 		TerrainRules.scree_from(-0.12, 0.1, 0.25, 0.5, 1.0), 0.75, EPS, "not under rock"
 	)
-	# Breakup 0.39 sits halfway up its smoothstep (0.22 .. 0.56).
-	assert_almost_eq(TerrainRules.scree_from(-0.12, 0.1, 0.0, 0.5, 0.39), 0.5, EPS)
+	# Breakup 0.39: the fan pulls the tail in by 0.11 * 1.6 (still saturated) and the gap
+	# smoothstep (0.15 .. 0.45) is at 0.8, so 0.896.
+	assert_almost_eq(TerrainRules.scree_from(-0.12, 0.1, 0.0, 0.5, 0.39), 0.896, EPS)
 	# Steepness 0.065 is half its tail: m = 0.5, ramp (0.5 - 0.2) / 0.6 = 0.5 -> 0.5.
 	assert_almost_eq(TerrainRules.scree_from(-0.12, 0.065, 0.0, 0.5, 1.0), 0.5, EPS)
-	assert_eq(TerrainRules.scree_from(-0.01, 0.1, 0.0, 0.5, 1.0), 0.0, "barely concave")
+	# Barely concave (tail -0.1): nothing at a neutral breakup; where the breakup is high the
+	# fan reaches it (tail -0.1 + 0.8 = 0.7, ramp 0.833 -> 0.926).
+	assert_eq(TerrainRules.scree_from(-0.01, 0.1, 0.0, 0.5, 0.5), 0.0, "barely concave")
+	assert_almost_eq(TerrainRules.scree_from(-0.01, 0.1, 0.0, 0.5, 1.0), 0.925926, EPS, "a fan")
 	assert_eq(TerrainRules.scree_from(-0.3, 0.0, 0.0, 1.0, 1.0), 0.0, "no steep ground near")
 	assert_eq(TerrainRules.scree_from(0.2, 0.2, 0.0, 1.0, 1.0), 0.0, "convex")
 

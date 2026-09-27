@@ -420,7 +420,6 @@ static func _skirt_slope(edge_y: float, distance_m: float, fall_m: float) -> flo
 static func build_skirt_arrays(doc: MapDocument, width_m: float, fall_m: float = -1.0) -> Array:
 	var loop := boundary_samples(doc)
 	var count := loop.size()
-	var fall := fall_m if fall_m > 0.0 else width_m
 	var rings := SKIRT_RINGS + 1
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -428,25 +427,13 @@ static func build_skirt_arrays(doc: MapDocument, width_m: float, fall_m: float =
 	vertices.resize(count * rings)
 	normals.resize(count * rings)
 	uvs.resize(count * rings)
-	var last := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
 	for i in count:
-		var sample := loop[i]
-		var inner := sample_position(doc, sample.x, sample.y)
-		var out := Vector3(
-			-1.0 if sample.x == 0 else (1.0 if sample.x == last.x else 0.0),
-			0.0,
-			-1.0 if sample.y == 0 else (1.0 if sample.y == last.y else 0.0)
-		)
-		var along := out.normalized()
 		for r in rings:
-			var distance := width_m * pow(float(r) / SKIRT_RINGS, SKIRT_RING_SPACING_POWER)
-			var point := inner + out * distance
-			point.y = skirt_height(inner.y, distance, fall)
-			var slope := _skirt_slope(inner.y, distance, fall)
+			var v := skirt_vertex(doc, loop[i], r, width_m, fall_m)
 			var k := r * count + i
-			vertices[k] = point
-			normals[k] = Vector3(-along.x * slope, 1.0, -along.z * slope).normalized()
-			uvs[k] = Vector2(point.x, point.z)
+			vertices[k] = v[0]
+			normals[k] = v[1]
+			uvs[k] = Vector2(v[0].x, v[0].z)
 	var indices := PackedInt32Array()
 	indices.resize(count * SKIRT_RINGS * 6)
 	for r in SKIRT_RINGS:
@@ -466,6 +453,95 @@ static func build_skirt_arrays(doc: MapDocument, width_m: float, fall_m: float =
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 	return arrays
+
+
+## Ring `ring` of the skirt for boundary sample `sample`: [position, normal] (see
+## build_skirt_arrays; `fall_m` <= 0 means `width_m`). Its XZ never depends on heights, so
+## the skirt's triangles and UVs stay fixed while an edit moves the edge.
+static func skirt_vertex(
+	doc: MapDocument, sample: Vector2i, ring: int, width_m: float, fall_m: float
+) -> Array:
+	var last := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
+	var fall := fall_m if fall_m > 0.0 else width_m
+	var inner := sample_position(doc, sample.x, sample.y)
+	var out := Vector3(
+		-1.0 if sample.x == 0 else (1.0 if sample.x == last.x else 0.0),
+		0.0,
+		-1.0 if sample.y == 0 else (1.0 if sample.y == last.y else 0.0)
+	)
+	var along := out.normalized()
+	var distance := width_m * pow(float(ring) / SKIRT_RINGS, SKIRT_RING_SPACING_POWER)
+	var point := inner + out * distance
+	point.y = skirt_height(inner.y, distance, fall)
+	var slope := _skirt_slope(inner.y, distance, fall)
+	return [point, Vector3(-along.x * slope, 1.0, -along.z * slope).normalized()]
+
+
+## Ranges [start, end) of boundary loop indices (boundary_samples order) whose samples lie
+## in `rect` (grid coordinates).
+static func skirt_ranges(doc: MapDocument, rect: Rect2i) -> Array[Vector2i]:
+	var last := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
+	var ranges: Array[Vector2i] = []
+	var lo := rect.position
+	var hi := rect.end - Vector2i.ONE
+	if lo.y <= 0 and hi.y >= 0:
+		var a := maxi(lo.x, 0)
+		var b := mini(hi.x, last.x - 1)
+		if a <= b:
+			ranges.append(Vector2i(a, b + 1))
+	if lo.x <= last.x and hi.x >= last.x:
+		var a := maxi(lo.y, 0)
+		var b := mini(hi.y, last.y - 1)
+		if a <= b:
+			ranges.append(Vector2i(last.x + a, last.x + b + 1))
+	if lo.y <= last.y and hi.y >= last.y:
+		var a := maxi(lo.x, 1)
+		var b := mini(hi.x, last.x)
+		if a <= b:
+			var base := last.x + last.y
+			ranges.append(Vector2i(base + last.x - b, base + last.x - a + 1))
+	if lo.x <= 0 and hi.x >= 0:
+		var a := maxi(lo.y, 1)
+		var b := mini(hi.y, last.y)
+		if a <= b:
+			var base := 2 * last.x + last.y
+			ranges.append(Vector2i(base + last.y - b, base + last.y - a + 1))
+	return ranges
+
+
+## A CPU copy of the skirt's vertex stream (positions, then octahedral normal and tangent
+## pairs: the layout chunk_vertex_mirror documents) for in-place edge updates:
+## {"count": boundary samples, "positions", "normals"}.
+static func skirt_vertex_mirror(doc: MapDocument, width_m: float, fall_m: float) -> Dictionary:
+	var count := boundary_samples(doc).size()
+	var positions := PackedFloat32Array()
+	var normals := PackedInt32Array()
+	positions.resize(count * (SKIRT_RINGS + 1) * 3)
+	normals.resize(count * (SKIRT_RINGS + 1) * 2)
+	var mirror := {"count": count, "positions": positions, "normals": normals}
+	write_skirt_region(doc, mirror, Vector2i(0, count), width_m, fall_m)
+	return mirror
+
+
+## Rewrites loop indices [range.x, range.y) of every ring in a skirt_vertex_mirror() from the
+## document's current boundary heights.
+static func write_skirt_region(
+	doc: MapDocument, mirror: Dictionary, indices: Vector2i, width_m: float, fall_m: float
+) -> void:
+	var loop := boundary_samples(doc)
+	var count: int = mirror.count
+	var positions: PackedFloat32Array = mirror.positions
+	var normals: PackedInt32Array = mirror.normals
+	for i in range(indices.x, indices.y):
+		for r in SKIRT_RINGS + 1:
+			var v := skirt_vertex(doc, loop[i], r, width_m, fall_m)
+			var k := r * count + i
+			var p: Vector3 = v[0]
+			positions[k * 3] = p.x
+			positions[k * 3 + 1] = p.y
+			positions[k * 3 + 2] = p.z
+			normals[k * 2] = encode_normal(v[1])
+			normals[k * 2 + 1] = encode_tangent(v[1])
 
 
 ## The samples on the map's boundary as one closed loop, each once: along z = 0, up x = last,

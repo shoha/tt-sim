@@ -41,8 +41,9 @@ extends Node3D
 ##
 ## Rule fields. The automatic dressing reads two per-vertex fields (curvature and
 ## steepness nearby, TerrainRules.sample_fields) carried in the chunks' UV2. They are kept
-## for the whole grid (get_rule_fields()); a height edit recomputes them CURVATURE_RADIUS_M
-## around the edit and the in-place update rewrites the chunks' attribute rows as well.
+## for the whole grid (get_rule_fields()); settle_heights() recomputes them
+## CURVATURE_RADIUS_M around everything edited since the last settle, and the settling
+## rebuild carries them into the chunks (mid-stroke only the vertices move).
 
 const CHUNK_NAME_PREFIX := "TerrainChunk"
 const COLLISION_NAME := "TerrainCollision"
@@ -53,6 +54,8 @@ const SKIRT_SHADER := preload("res://shaders/authored_ground_skirt.gdshader")
 ## by up to +-SKIRT_WOBBLE with noise; the ring is wide enough for the longest stretch.
 const SKIRT_FADE_M := 24.0
 const SKIRT_WOBBLE := 0.45
+## Half height of the skirt's culling box (in-place edge edits move it without rebuilding).
+const SKIRT_AABB_HALF_HEIGHT_M := 200.0
 ## A chunk whose heights span no more than this is flat and casts no shadow
 ## (chunk_shadow_casting).
 const FLAT_CHUNK_M := 0.02
@@ -82,16 +85,16 @@ static var _texel_copy: ShaderMaterial = null
 
 var document: MapDocument = null
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
-## Microseconds of the last update_biome_region() call, for measurement.
+## Microseconds of the last update_ground_region() call, for measurement.
 var last_biome_update_usec: int = 0
-## Microseconds of the last broad refresh (part of update_biome_region()), for measurement.
+## Microseconds of the last broad refresh (part of update_ground_region()), for measurement.
 var last_broad_update_usec: int = 0
 ## Microseconds of the last process_heights() call and chunks it updated, for measurement.
 var last_heights_usec: int = 0
 var last_heights_chunks: int = 0
 ## Microseconds of the last refresh_skirt(), for measurement.
 var last_skirt_usec: int = 0
-## Microseconds the last queue_heights() spent recomputing rule fields, for measurement.
+## Microseconds the last settle_heights() spent recomputing rule fields, for measurement.
 var last_fields_usec: int = 0
 
 var _material: ShaderMaterial = null
@@ -111,6 +114,8 @@ var _weight_textures: Array[DrawableTexture2D] = []
 var _broad_textures: Array[ImageTexture] = []
 ## Whole-grid rule fields: {"curvature", "steep"} (TerrainMeshBuilder.grid_fields).
 var _fields: Dictionary = {}
+## Samples whose rule fields height edits have made stale, recomputed by settle_heights().
+var _fields_dirty: Rect2i = Rect2i()
 ## Ground texture paths loading on background threads (warm_biome_surface), and the loaded
 ## textures held so the cache keeps them.
 var _warming: Dictionary = {}
@@ -126,6 +131,10 @@ var _settling: Dictionary = {}
 var _skirt_dirty: bool = false
 ## The skirt's material, made once per build() so a sculpt refresh reuses it.
 var _skirt_material: ShaderMaterial = null
+## TerrainMeshBuilder.skirt_vertex_mirror() once the edge is first edited, and the samples
+## waiting for refresh_skirt().
+var _skirt_mirror: Dictionary = {}
+var _skirt_rect: Rect2i = Rect2i()
 ## cell -> Vector2(lowest, highest) height of the chunk (grown only by in-place updates,
 ## exact after a rebuild).
 var _chunk_heights: Dictionary = {}
@@ -228,7 +237,7 @@ static func build_ground_material(
 
 
 ## Mean albedo of a palette surface (the last mip of its albedo, a box-filtered mean), or
-## null when the surface or its albedo is missing. BiomeGroundLayers ranks overflow
+## null when the surface or its albedo is missing. GroundLayerTable ranks overflow
 ## fallbacks by it; about 10 ms per surface (BPTC decompression), paid only on overflow.
 static func surface_mean_albedo(
 	surface_name: String, root: String = PaletteLibrary.DEFAULT_ROOT
@@ -290,6 +299,7 @@ func build(
 	_settling.clear()
 	_chunk_heights.clear()
 	_skirt_dirty = false
+	_fields_dirty = Rect2i()
 	_material = build_ground_material(doc.base_surface, doc.map_seed, root)
 	_build_ground_layers()
 	_fields = TerrainMeshBuilder.grid_fields(doc)
@@ -337,6 +347,15 @@ func _build_skirt() -> void:
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _skirt_arrays())
 	mesh.surface_set_material(0, _skirt_material)
+	# In-place edge edits move vertices the build-time AABB does not know about; the skirt is
+	# decoration outside every bounds walk, so a generous box costs nothing.
+	var box := mesh.get_aabb()
+	mesh.custom_aabb = AABB(
+		Vector3(box.position.x, -SKIRT_AABB_HALF_HEIGHT_M, box.position.z),
+		Vector3(box.size.x, 2.0 * SKIRT_AABB_HALF_HEIGHT_M, box.size.z)
+	)
+	_skirt_mirror = {}
+	_skirt_rect = Rect2i()
 	var skirt := MeshInstance3D.new()
 	skirt.name = SKIRT_NAME
 	skirt.mesh = mesh
@@ -345,9 +364,13 @@ func _build_skirt() -> void:
 	add_child(skirt)
 
 
-## Rebuilds the skirt's geometry from the current boundary heights (a sculpt edit on the map
+## Brings the skirt's geometry up to the current boundary heights (a sculpt edit on the map
 ## edge), keeping its node and its material: no material is duplicated, so the ground's
-## uniforms and the shader's compiled pipelines stay as they are.
+## uniforms and the shader's compiled pipelines stay as they are. Only the boundary samples
+## queue_heights() marked are rewritten, in place (surface_update_vertex_region over a
+## CPU copy of the vertex stream, TerrainMeshBuilder.skirt_vertex_mirror): with its rings
+## the whole skirt took about 11 ms to rebuild, every frame of a stroke on the edge. The
+## triangles and UVs never change (they depend on XZ only).
 func refresh_skirt() -> void:
 	var started := Time.get_ticks_usec()
 	_skirt_dirty = false
@@ -356,9 +379,25 @@ func refresh_skirt() -> void:
 		_build_skirt()
 		return
 	var mesh := skirt.mesh as ArrayMesh
-	mesh.clear_surfaces()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _skirt_arrays())
-	mesh.surface_set_material(0, _skirt_material)
+	var width := skirt_width_m()
+	if _skirt_mirror.is_empty():
+		_skirt_mirror = TerrainMeshBuilder.skirt_vertex_mirror(document, width, SKIRT_FADE_M)
+	var count: int = _skirt_mirror.count
+	var total := count * (TerrainMeshBuilder.SKIRT_RINGS + 1)
+	var positions: PackedFloat32Array = _skirt_mirror.positions
+	var normals: PackedInt32Array = _skirt_mirror.normals
+	for indices in TerrainMeshBuilder.skirt_ranges(document, _skirt_rect):
+		TerrainMeshBuilder.write_skirt_region(document, _skirt_mirror, indices, width, SKIRT_FADE_M)
+		for r in TerrainMeshBuilder.SKIRT_RINGS + 1:
+			var first := r * count + indices.x
+			var end := r * count + indices.y
+			mesh.surface_update_vertex_region(
+				0, first * 12, positions.slice(first * 3, end * 3).to_byte_array()
+			)
+			mesh.surface_update_vertex_region(
+				0, total * 12 + first * 8, normals.slice(first * 2, end * 2).to_byte_array()
+			)
+	_skirt_rect = Rect2i()
 	last_skirt_usec = Time.get_ticks_usec() - started
 
 
@@ -704,32 +743,22 @@ func _rebuild_chunk(cell: Vector2i) -> void:
 
 
 ## Queues the chunks whose vertices the height samples of `sample_rect` (grid coordinates)
-## change: every sample in it, the samples one step around it, whose normals read them,
-## and the samples whose rule fields (curvature, steepness nearby) read them, up to
-## TerrainRules.CURVATURE_RADIUS_M plus one step out. Those fields are recomputed here, at
-## once; process_heights() does the mesh work.
+## change: every sample in it, and the samples one step around it, whose normals read
+## them. process_heights() does the work. The rule fields (curvature, steepness nearby)
+## that read these samples, up to TerrainRules.CURVATURE_RADIUS_M plus a step out, are only
+## marked: settle_heights() recomputes them once for the whole edit (per dab they cost 5 to
+## 10 ms of a stroke frame). Mid-stroke the cliff follows the live normals; scree and lip
+## catch up when the stroke settles, with the plants.
 func queue_heights(sample_rect: Rect2i) -> void:
 	var grid := Rect2i(0, 0, document.samples_x(), document.samples_z())
 	var step := document.sample_step()
 	var reach := TerrainRules.radius_samples(minf(step.x, step.y)) + 1
-	var vertex_rect := sample_rect.grow(1).intersection(grid)
-	var grown := sample_rect.grow(reach).intersection(grid)
+	var fields_rect := sample_rect.grow(reach).intersection(grid)
+	if fields_rect.has_area():
+		_fields_dirty = MaskBrush.merge_rect(_fields_dirty, fields_rect)
+	var grown := sample_rect.grow(1).intersection(grid)
 	if not grown.has_area():
 		return
-	var fields_started := Time.get_ticks_usec()
-	TerrainRules.store_fields(
-		TerrainRules.sample_fields(
-			TerrainMeshBuilder.collision_heights(document),
-			document.samples_x(),
-			document.samples_z(),
-			step,
-			grown
-		),
-		document.samples_x(),
-		_fields.curvature,
-		_fields.steep
-	)
-	last_fields_usec = Time.get_ticks_usec() - fields_started
 	var world := MaskBrush.sample_rect_to_world(document, grown).grow(maxf(step.x, step.y))
 	for cell in ScatterGenerator.cells_in_bounds(world):
 		var rect := TerrainMeshBuilder.chunk_sample_rect(document, cell)
@@ -742,12 +771,13 @@ func queue_heights(sample_rect: Rect2i) -> void:
 		_dirty_heights.erase(cell)
 		_dirty_heights[cell] = MaskBrush.merge_rect(queued, part)
 	if (
-		vertex_rect.position.x == 0
-		or vertex_rect.position.y == 0
-		or vertex_rect.end.x == grid.end.x
-		or vertex_rect.end.y == grid.end.y
+		grown.position.x == 0
+		or grown.position.y == 0
+		or grown.end.x == grid.end.x
+		or grown.end.y == grid.end.y
 	):
 		_skirt_dirty = true
+		_skirt_rect = MaskBrush.merge_rect(_skirt_rect, grown)
 
 
 ## Updates queued chunks until `budget_usec` of main-thread time is spent (at least one
@@ -788,14 +818,46 @@ func has_height_work() -> bool:
 ## True while chunks edited in place still differ from a rebuild (their meshes report the
 ## AABB they had before the edit); settle_heights() queues their rebuild.
 func has_unsettled_chunks() -> bool:
-	return not _edited.is_empty() or not _settling.is_empty()
+	return not _edited.is_empty() or not _settling.is_empty() or _fields_dirty.has_area()
 
 
 ## Queues a rebuild of every chunk edited in place since the last call (the end of a sculpt
 ## stroke, an undo), which process_heights() runs after the in-place work. The rebuilt
 ## chunk is the same geometry; what changes is the mesh's AABB, exact again for the bounds
 ## walks, and the chunk's shadow casting, which a flattened chunk turns off.
+##
+## It also brings the rule fields up to date for everything queued since the last call (one
+## TerrainRules.sample_fields pass over the edit grown by CURVATURE_RADIUS_M) and queues the
+## rebuild of every chunk they changed, which carries them in UV2; vertex copies kept for
+## in-place edits get the new fields too.
 func settle_heights() -> void:
+	if _fields_dirty.has_area():
+		var started := Time.get_ticks_usec()
+		var columns := document.samples_x()
+		TerrainRules.store_fields(
+			TerrainRules.sample_fields(
+				TerrainMeshBuilder.collision_heights(document),
+				columns,
+				document.samples_z(),
+				document.sample_step(),
+				_fields_dirty
+			),
+			columns,
+			_fields.curvature,
+			_fields.steep
+		)
+		for cell in _mirrors:
+			TerrainMeshBuilder.write_attribute_region(
+				_mirrors[cell], _fields_dirty, _fields, columns
+			)
+		var world := MaskBrush.sample_rect_to_world(document, _fields_dirty)
+		for cell in ScatterGenerator.cells_in_bounds(
+			world.grow(maxf(document.sample_step().x, 0.01))
+		):
+			if _chunks.has(cell):
+				_settling[cell] = true
+		_fields_dirty = Rect2i()
+		last_fields_usec = Time.get_ticks_usec() - started
 	for cell in _edited:
 		_settling[cell] = true
 	_edited.clear()
@@ -847,14 +909,11 @@ func _update_chunk_in_place(cell: Vector2i, part: Rect2i) -> void:
 	else:
 		rect = mirror.rect
 		span = TerrainMeshBuilder.write_vertex_region(document, mirror, part)
-		TerrainMeshBuilder.write_attribute_region(mirror, part, _fields, document.samples_x())
 		first_row = maxi(part.position.y - rect.position.y, 0)
 		last_row = mini(part.end.y - 1 - rect.position.y, int(mirror.rows) - 1)
 	var bytes := TerrainMeshBuilder.vertex_rows_bytes(mirror, first_row, last_row)
 	mesh.surface_update_vertex_region(0, bytes.position_offset, bytes.positions)
 	mesh.surface_update_vertex_region(0, bytes.normal_offset, bytes.normals)
-	var attributes := TerrainMeshBuilder.attribute_rows_bytes(mirror, first_row, last_row)
-	mesh.surface_update_attribute_region(0, attributes.attribute_offset, attributes.attributes)
 	_edited[cell] = true
 	# The mesh keeps its build-time AABB; culling reads the custom one, widened to the new
 	# heights (exact again after the settling rebuild).

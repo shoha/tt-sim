@@ -69,11 +69,14 @@ const SCREE_CURVATURE_END := 0.12
 const SCREE_NEAR_START := 0.03
 const SCREE_NEAR_END := 0.1
 const SCREE_EDGE_NOISE := 0.4
-## A coarser noise breaks the scree apron into fans and gaps (the band times
-## smoothstep(LOW, HIGH, noise)), so a foot does not read as a gravel path around the face.
+## A coarser noise breaks the scree apron into fans and gaps, so a foot does not read as a
+## gravel path around the face: it moves the concave tail by (noise - 0.5) * SCREE_FAN (the
+## band reaches further out in some places than others) and multiplies the band by
+## smoothstep(LOW, HIGH, noise) (a few clean gaps).
 const SCREE_BREAKUP_SCALE_M := 2.6
-const SCREE_BREAKUP_LOW := 0.22
-const SCREE_BREAKUP_HIGH := 0.56
+const SCREE_FAN := 1.6
+const SCREE_BREAKUP_LOW := 0.15
+const SCREE_BREAKUP_HIGH := 0.45
 ## Feature size of the rule noise, metres. The noise domain is sheared by height
 ## (RULE_NOISE_SHEAR) so it also varies up a vertical face.
 const RULE_NOISE_SCALE_M := 1.6
@@ -209,7 +212,8 @@ static func scree_from(
 	if near <= 0.0:
 		return 0.0
 	var concave := raw_tail(-curvature, SCREE_CURVATURE_START, SCREE_CURVATURE_END)
-	concave = clampf(concave + lerpf(-SCREE_EDGE_NOISE, SCREE_EDGE_NOISE, noise), 0.0, 1.0)
+	concave += lerpf(-SCREE_EDGE_NOISE, SCREE_EDGE_NOISE, noise) + (breakup - 0.5) * SCREE_FAN
+	concave = clampf(concave, 0.0, 1.0)
 	var gaps := smoothstep(SCREE_BREAKUP_LOW, SCREE_BREAKUP_HIGH, breakup)
 	return ease_ramp(concave * near) * gaps * (1.0 - cliff)
 
@@ -231,7 +235,7 @@ static func weights(
 	var scree := 0.0
 	# Likewise: no scree away from steep ground, or where even the noise leaves none.
 	var concave := raw_tail(-fields.x, SCREE_CURVATURE_START, SCREE_CURVATURE_END)
-	if fields.y > SCREE_NEAR_START and concave > -SCREE_EDGE_NOISE:
+	if fields.y > SCREE_NEAR_START and concave > -SCREE_EDGE_NOISE - 0.5 * SCREE_FAN:
 		scree = scree_from(
 			fields.x,
 			fields.y,
