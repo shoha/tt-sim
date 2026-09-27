@@ -129,6 +129,33 @@ static func lowest_under(
 	return lowest
 
 
+## The height a row standing on up axis `up` is bedded at so no part of its base floats: the
+## base is the plane through the ground at map-frame `p` square to `up`, sunk until it lies
+## nowhere above the ground at the origin and FOOTING_DIRECTIONS * 2 points at `radius`.
+## With `up` +Y this is lowest_under(); a rock tilted with an even slope does not sink at
+## all, and one tilted less than a face (RockKeep's cap) or lying over a rim sinks by what
+## its base would otherwise overhang.
+static func bed_under(
+	heights: PackedFloat32Array, grid: Dictionary, p: Vector2, radius: float, up: Vector3
+) -> float:
+	var half: Vector2 = grid.half
+	var step: Vector2 = grid.step
+	var h := ScatterGenerator.triangle_height(heights, grid.columns, grid.rows, (p + half) / step)
+	if radius <= 0.0:
+		return h
+	var n := up.normalized() if up.y > 0.01 else Vector3.UP
+	var sink := 0.0
+	for k in FOOTING_DIRECTIONS * 2:
+		var d := Vector2.from_angle(PI * k / FOOTING_DIRECTIONS) * radius
+		var q := p + d
+		var ground := ScatterGenerator.triangle_height(
+			heights, grid.columns, grid.rows, (q + half) / step
+		)
+		var plane := h - (n.x * d.x + n.z * d.y) / n.y
+		sink = maxf(sink, plane - ground)
+	return h - sink
+
+
 ## The grid description the snap functions take for `doc`: {"columns", "rows", "step",
 ## "half"} (see MapDocument).
 static func grid_of(doc: MapDocument) -> Dictionary:
@@ -208,8 +235,9 @@ static func snap_rows(
 ## `align` (its species stands on the ground normal), the new normal with its own yaw. With
 ## `radius` > 0 (footing_radius of its species) the heights compared and taken are the lowest
 ## under that footprint (lowest_under, scaled by the row's scale), so a prop left on a new
-## rim sinks to the ground instead of hanging over the drop. An aligned prop stands at most
-## `max_tilt` radians off vertical (rock props pass RockKeep.MAX_TILT_RAD).
+## rim sinks to the ground instead of hanging over the drop. An aligned prop given a
+## `max_tilt` (rock props: RockKeep.MAX_TILT_RAD) stands at most that far off vertical and
+## beds on its tilted base (bed_under).
 @warning_ignore("integer_division")
 static func rebed_props(
 	start: PackedFloat32Array,
@@ -245,6 +273,9 @@ static func rebed_props(
 		if absf(now - was) > TOLERANCE_M or (align and from.angle_to(to) > TILT_TOLERANCE_RAD):
 			var position := Vector3(row[0], now, row[2])
 			var up := RockKeep.capped_up(to, max_tilt) if max_tilt < PI else to
+			if align and max_tilt < PI:
+				# A tilted rock beds on its own tilted base (bed_under), not the lowest ground.
+				position.y = bed_under(after, grid, p, footprint, up)
 			row = PropRows.make_row(position, up, align, PropRows.row_yaw(row), row[7])
 			# Keep a non-uniform scale as it was.
 			row[8] = start[b + 8]
