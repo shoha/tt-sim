@@ -1,0 +1,19 @@
+{
+  "out_dir": "render_jobs/mobile_check",
+  "timeout_s": 240,
+  "steps": [
+    {"op": "new_map", "biome": "", "size": 100, "seed": 1234},
+    {"op": "wait", "s": 8.0},
+    {"op": "capture", "name": "01_bare", "desc": "Bare 100 ft map"},
+    {"op": "no_autosave"},
+    {"op": "hide_ui"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/terrain_shapes.gd", "action": "plateau", "at": [-4, -2], "size": [8, 6], "tiers": 2, "inset": 2.0, "lip": 0.25, "lip_width": 0.9},
+    {"op": "call", "script": "res://tools/render_jobs/probes/terrain_shapes.gd", "action": "path", "surface": "cobblestone", "points": [[-12, 6], [-4, 0], [6, -6]], "width": 2.0, "soft": 0.6},
+    {"op": "wait", "s": 3.0},
+    {"op": "home"},
+    {"op": "wait", "s": 1.5},
+    {"op": "capture", "name": "02_dressed", "desc": "Plateau with automatic rock and scree, a painted path"},
+    {"op": "index", "title": "Mobile renderer check", "intro": "The ground shader under --rendering-method mobile"},
+    {"op": "title"}
+  ]
+}

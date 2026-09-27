@@ -1,0 +1,24 @@
+{
+  "out_dir": "render_jobs/dressing_smoke",
+  "timeout_s": 300,
+  "steps": [
+    {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 200, "seed": 1234},
+    {"op": "wait_ready", "settle": 1.0},
+    {"op": "no_autosave"},
+    {"op": "hide_ui"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/terrain_shapes.gd", "action": "plateau", "at": [-6, -3], "size": [10, 8], "tiers": 2, "inset": 2.2},
+    {"op": "call", "script": "res://tools/render_jobs/probes/terrain_shapes.gd", "action": "hill", "at": [7, -2], "height": 6.0, "radius": 8.0},
+    {"op": "call", "script": "res://tools/render_jobs/probes/terrain_shapes.gd", "action": "hollow", "at": [0, 9], "radius": 3.5, "depth": 1.524},
+    {"op": "wait_ready", "settle": 1.0},
+    {"op": "call", "script": "res://tools/render_jobs/probes/terrain_shapes.gd", "action": "stats", "area": [-12, -8, 16, 13]},
+    {"op": "home"},
+    {"op": "wait", "s": 1.5},
+    {"op": "capture", "name": "01_home", "desc": "Temperate forest: two-tier plateau (west), 6 m hill (east), sunken hollow (south), no painting"},
+    {"op": "look_at", "at": [-6, -3]},
+    {"op": "zoom", "size": 7.0},
+    {"op": "wait", "s": 1.5},
+    {"op": "capture", "name": "02_plateau", "desc": "The plateau, zoom 7"},
+    {"op": "index", "title": "Dressing smoke", "intro": "P3-4 smoke run"},
+    {"op": "title"}
+  ]
+}

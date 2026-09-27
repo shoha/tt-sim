@@ -119,14 +119,46 @@ func _process(delta: float) -> void:
 		"index":
 			_write_index(step)
 		"expand_biomes":
-			# Inserts step.template once per palette biome, "{biome}" and "{name}" filled in,
-			# so the job follows whatever palette is installed.
+			# Inserts step.template once per palette biome (or per id in step.biomes),
+			# "{biome}" and "{name}" filled in, so the job follows whatever palette is
+			# installed.
 			var added: Array = []
+			var chosen: Array = step.get("biomes", [])
 			for biome: Dictionary in PaletteLibrary.biomes():
+				if not chosen.is_empty() and not chosen.has(biome.get("id", "")):
+					continue
 				var text := JSON.stringify(step.template)
 				text = text.replace("{biome}", String(biome.get("id", "")))
 				text = text.replace("{name}", String(biome.get("name", "")))
 				added.append_array(JSON.parse_string(text))
+			for k in added.size():
+				steps.insert(_i + 1 + k, added[k])
+			log_line("expanded into %d steps" % added.size())
+		"expand_ab":
+			# An in-run shader A/B: per entry of step.configs, swap the ground shader to that
+			# version (probes/ground_perf.gd; "std" draws the chunks with perf.gd's
+			# StandardMaterial3D instead) and sample step.s seconds (probes/perf.gd).
+			var added: Array = []
+			var perf := "res://tools/render_jobs/probes/perf.gd"
+			var configs: Array = step.get("configs", [])
+			for k in configs.size():
+				var version := String(configs[k])
+				var label := "%s %s #%d" % [step.get("label", ""), version, k]
+				var std := version == "std"
+				added.append({"op": "call", "script": perf, "action": "ground_std", "on": std})
+				if not std:
+					added.append(
+						{
+							"op": "call",
+							"script": "res://tools/render_jobs/probes/ground_perf.gd",
+							"action": "shader",
+							"version": version
+						}
+					)
+				added.append({"op": "wait", "s": 0.5})
+				added.append({"op": "call", "script": perf, "action": "start", "name": label})
+				added.append({"op": "wait", "s": float(step.get("s", 3.0))})
+				added.append({"op": "call", "script": perf, "action": "stop"})
 			for k in added.size():
 				steps.insert(_i + 1 + k, added[k])
 			log_line("expanded into %d steps" % added.size())
