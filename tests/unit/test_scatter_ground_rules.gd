@@ -200,7 +200,8 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 		roles[rule.key] = ScatterPlan.build("g", [rule], 1).species[0].ground_role
 	assert_eq(roles.get("tall_grass"), ScatterGround.ROLE_TALL_COVER)
 	assert_eq(roles.get("grass"), ScatterGround.ROLE_COVER)
-	assert_eq(roles.get("daisy"), ScatterGround.ROLE_COVER)
+	# Flowers carry the water rules' flower bit (P4-3) on top of their ground role.
+	assert_eq(roles.get("daisy"), ScatterGround.ROLE_COVER | ScatterGround.FLOWER_BIT)
 	assert_eq(roles.get("bush"), ScatterGround.ROLE_SHRUB)
 
 

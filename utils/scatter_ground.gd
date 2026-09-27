@@ -18,6 +18,17 @@ extends RefCounted
 ## keeps its weight anywhere. What grows is 1 minus the rock's share minus the paved
 ## response, at least 0.
 ##
+## Water (P4-3). The wet dressing (WaterDressing, the same field the ground shader draws the
+## bed and shore from) thins plants by role, on top of the rules above (wet_factor()):
+## nothing roots in the water (the bed weight clears it, rocks included; kept and placed
+## rocks are the carve's business), except emergent edge species (reeds), which stand in
+## water up to EMERGENT_DEPTH_* and gather at the waterline; in the bank band (the shore
+## weight) bank species (willow, poplar, ferns) gather, trees keep off the waterline, shrubs
+## and tall cover thin to short cover, flowers thin, cacti keep out of it altogether, and
+## grass, ground cover and rocks stay.
+## Which species are edge species is a key rule (EMERGENT_KEYS, BANK_KEYS; plan_role() puts
+## it in the plan's ground_role as bits): the palette has no field for it yet.
+##
 ## Legibility (P3-7). Terraces under forest: trees (ROLE_TREE) keep back from tier faces and
 ## lips, and shrubs (ROLE_SHRUB) a little, so a GM sees the rock step and the edge of each
 ## top instead of an unbroken canopy (the rock rule already keeps plants off the face itself,
@@ -74,6 +85,62 @@ const SCREE_THIN := 0.5
 ## path's edge stays soft.
 const PAVED_CLEAR_START := 0.05
 const PAVED_CLEAR_FULL := 0.4
+## Water (P4-3, see the header). Role bits a species' ScatterPlan ground_role carries on top
+## of its ROLE_* (plan_role): EDGE_BANK favours the wet bank (willow, poplar, ferns),
+## EDGE_EMERGENT may also stand in shallow water (reeds, rushes). ROLE_BITS masks them off.
+const ROLE_BITS := 7
+const EDGE_BANK := 8
+const EDGE_EMERGENT := 16
+## Species keys of the water's edge (no palette field says so yet; contract section 9 may
+## take one later): the palette's wetland reeds and riparian trees, and ferns.
+const EMERGENT_KEYS := ["reeds", "rushes", "cattail", "sedge"]
+const BANK_KEYS := ["willow", "poplar", "alder", "fern", "fern_small"]
+## Nothing roots in the water: plants clear over this ramp of the bed weight (WaterDressing R,
+## about 1 cm under the waterline to 5 cm deep); emergent species over this depth instead.
+const WET_CLEAR_START := 0.15
+const WET_CLEAR_FULL := 0.5
+const EMERGENT_DEPTH_START_M := 0.2
+const EMERGENT_DEPTH_FULL_M := 0.4
+## The bank band (the shore weight, WaterDressing G): edge species gather (density times
+## 1 + EDGE_BOOST * shore, capped at full); trees keep off the waterline, shrubs and tall
+## cover thin to short cover, flowers thin by FLOWER_SHORE_THIN; ground cover and rocks stay.
+const EDGE_BOOST := 1.5
+const TREE_SHORE_START := 0.3
+const TREE_SHORE_FULL := 0.8
+const SHRUB_SHORE_START := 0.4
+const SHRUB_SHORE_FULL := 0.9
+const SHRUB_SHORE_KEEP := 0.3
+const TALL_SHORE_START := 0.2
+const TALL_SHORE_FULL := 0.7
+const FLOWER_SHORE_THIN := 0.5
+## Species kind the flower thinning applies to, and the role bit it sets.
+const FLOWER_KIND := "flower"
+const FLOWER_BIT := 32
+## Dry-country species (cacti) keep out of the whole bank band: a saguaro at the waterline
+## reads wrong. Kinds, their role bit, and the shore weight over which they clear.
+const ARID_KINDS := ["cactus"]
+const ARID_BIT := 64
+const ARID_SHORE_START := 0.05
+const ARID_SHORE_FULL := 0.35
+
+
+## The role a ScatterPlan entry carries (ground_role): role_of() plus the water bits
+## (EDGE_EMERGENT or EDGE_BANK by species key, FLOWER_BIT for flowers). Rocks carry none, so
+## a rock's ground_role is exactly ROLE_ROCK.
+static func plan_role(rule: Dictionary) -> int:
+	var role := role_of(rule)
+	if role == ROLE_ROCK:
+		return role
+	var key := String(rule.get("key", ""))
+	if key in EMERGENT_KEYS:
+		role |= EDGE_EMERGENT
+	elif key in BANK_KEYS:
+		role |= EDGE_BANK
+	if rule.get("kind", "") == FLOWER_KIND:
+		role |= FLOWER_BIT
+	if rule.get("kind", "") in ARID_KINDS:
+		role |= ARID_BIT
+	return role
 
 
 ## The role (ROLE_*) of a species rule for the ground rules: rock kind, then by size class
@@ -127,7 +194,10 @@ static func sampler(
 	var rock: PackedFloat32Array = painted.rock
 	var paints := not painted_total.is_empty()
 	var fringe := _built_fringe(doc, rect, built_surfaces) if paints else PackedFloat32Array()
+	var wet := doc.water_dressing
+	var wet_on := wet.size() == count * WaterDressing.CHANNELS
 	return func(p: Vector2, role: int) -> Vector3:
+		var base := role & ROLE_BITS
 		var s := (p + half) / step
 		var n := ScatterGenerator.triangle_normal(heights, columns, rows, s, step)
 		var fields := TerrainRules.field_at(curvature, steep, columns, rows, s)
@@ -145,19 +215,51 @@ static func sampler(
 				built_weight = ScatterGenerator.bilinear(built, columns, rows, lookup) * scale
 				held = ScatterGenerator.bilinear(rock, columns, rows, lookup) * scale
 				yielding = maxf(shaped - held, 0.0)
-		var shares := TerrainRules.compose_paint(yielding, held, rule)
-		var paved := built_weight * shares.w + held
-		var open := 1.0 - shares.y - smoothstep(PAVED_CLEAR_START, PAVED_CLEAR_FULL, paved)
-		if role == ROLE_TREE or role == ROLE_SHRUB:
+		var water := WaterDressing.sample(wet, columns, rows, s) if wet_on else Vector3.ZERO
+		var shares := TerrainRules.compose_water(yielding, held, rule, Vector2(water.x, water.y))
+		var paved := built_weight * shares[3] + held
+		var open := 1.0 - shares[1] - smoothstep(PAVED_CLEAR_START, PAVED_CLEAR_FULL, paved)
+		if base == ROLE_TREE or base == ROLE_SHRUB:
 			var face := ScatterGenerator.bilinear(near_face, columns, rows, s)
-			if role == ROLE_TREE:
+			if base == ROLE_TREE:
 				open *= 1.0 - smoothstep(TREE_FACE_START, TREE_FACE_FULL, face)
 			else:
 				open *= 1.0 - smoothstep(SHRUB_FACE_START, SHRUB_FACE_FULL, face)
-		if (role == ROLE_TALL_COVER or role == ROLE_SHRUB) and not fringe.is_empty():
+		if (base == ROLE_TALL_COVER or base == ROLE_SHRUB) and not fringe.is_empty():
 			var beside := ScatterGenerator.bilinear(fringe, columns, rows, s)
 			open *= 1.0 - smoothstep(FRINGE_START, FRINGE_FULL, beside)
-		return Vector3(maxf(open, 0.0), shares.y, shares.z)
+		if water != Vector3.ZERO:
+			open *= wet_factor(role, water)
+		return Vector3(maxf(open, 0.0), shares[1], shares[2])
+
+
+## What the water leaves of a species of plan role `role` (plan_role(): ROLE_* plus the
+## water bits) at a point with wet dressing `water` (WaterDressing.sample(): bed weight,
+## shore weight, depth metres); see the header. Above 1 where an edge species gathers.
+static func wet_factor(role: int, water: Vector3) -> float:
+	var bed := water.x
+	var shore := water.y
+	if (role & EDGE_EMERGENT) != 0:
+		var f := 1.0 - smoothstep(EMERGENT_DEPTH_START_M, EMERGENT_DEPTH_FULL_M, water.z)
+		# Not on a dry channel bed (a riffle between reaches, under its white water).
+		f *= 1.0 - smoothstep(0.5, 0.9, bed) * (1.0 - smoothstep(0.0, 0.05, water.z))
+		return f * (1.0 + EDGE_BOOST * maxf(shore, bed))
+	var dry := 1.0 - smoothstep(WET_CLEAR_START, WET_CLEAR_FULL, bed)
+	if (role & EDGE_BANK) != 0:
+		return dry * (1.0 + EDGE_BOOST * shore)
+	if (role & ARID_BIT) != 0:
+		return dry * (1.0 - smoothstep(ARID_SHORE_START, ARID_SHORE_FULL, shore))
+	match role & ROLE_BITS:
+		ROLE_TREE:
+			return dry * (1.0 - smoothstep(TREE_SHORE_START, TREE_SHORE_FULL, shore))
+		ROLE_SHRUB:
+			var thin := smoothstep(SHRUB_SHORE_START, SHRUB_SHORE_FULL, shore)
+			return dry * (1.0 - (1.0 - SHRUB_SHORE_KEEP) * thin)
+		ROLE_TALL_COVER:
+			return dry * (1.0 - smoothstep(TALL_SHORE_START, TALL_SHORE_FULL, shore))
+	if (role & FLOWER_BIT) != 0:
+		return dry * (1.0 - FLOWER_SHORE_THIN * shore)
+	return dry
 
 
 ## The path fringe for the samples of `rect` as a whole-grid array (see the header): the
@@ -270,9 +372,10 @@ static func species_density(value: float, g: Vector3, role: int) -> float:
 	return rock_density(value, g) if role == ROLE_ROCK else density(value, g)
 
 
-## Painted density `density` as every species but rock reads it, given a sampler value `g`.
+## Painted density `density` as every species but rock reads it, given a sampler value `g`
+## (at most 1: an edge species gathering on a bank reaches full density, no more).
 static func density(value: float, g: Vector3) -> float:
-	return value * g.x * (1.0 - SCREE_THIN * g.z)
+	return minf(value * g.x * (1.0 - SCREE_THIN * g.z), 1.0)
 
 
 ## Painted density as rock species read it, given a sampler value `g`.

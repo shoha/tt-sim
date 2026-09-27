@@ -37,6 +37,7 @@ const MIRRORED := [
 	"PAINT_WARP_OFFSET_B",
 	"PAINT_NOISE_OFFSET",
 	"PAINT_CLIFF_YIELD",
+	"PAINT_WATER_YIELD",
 ]
 const STEP := Vector2(0.25, 0.25)
 const EPS := 1e-4
@@ -271,16 +272,29 @@ func test_shader_constants_mirror_the_rules() -> void:
 	assert_almost_eq(shader.get("CLIFF_END_COS", 0.0), TerrainRules.cliff_end_cos(), 1e-6)
 
 
-## The cliff-face rule is written the same way in the shader as in compose_paint(): painted
-## ground and built weight scaled by 1 - PAINT_CLIFF_YIELD * rule.x, painted rock held, the
-## yielded part added to the rock, scree over the unpainted ground only.
-func test_shader_composes_paint_like_compose_paint() -> void:
+## The cliff-face and water rules are written the same way in the shader as in
+## compose_water(): painted ground and built weight scaled by 1 - PAINT_CLIFF_YIELD * rule.x
+## and 1 - PAINT_WATER_YIELD * bed (paths yield at faces and at the water), painted rock
+## held, the yielded parts added to the rock and the bed, scree and shore over the unpainted
+## ground only. Each line below is compose_water()'s, word for word.
+func test_shader_composes_paint_like_compose_water() -> void:
 	var text := FileAccess.get_file_as_string(SHADER_PATH).replace(" ", "")
+	var cpu := (
+		FileAccess
+		. get_file_as_string("res://utils/terrain_rules.gd")
+		. replace(" ", "")
+		. replace(":=", "=")
+	)
 	for line in [
-		"floatpaint_scale=1.0-PAINT_CLIFF_YIELD*rule.x;",
-		"w[i]=held_a[i]+(painted_a[i]-held_a[i])*paint_scale;",
-		"floatcliff=unpainted*rule.x+yielding*(1.0-paint_scale);",
-		"floatscree=unpainted*rule.y;",
-		"floatkeep=unpainted*(1.0-rule.x-rule.y);",
+		"cliff_scale=1.0-PAINT_CLIFF_YIELD*rule.x",
+		"paint_scale=cliff_scale*(1.0-PAINT_WATER_YIELD*water.x)",
+		"cliff=unpainted*rule.x+yielding*(1.0-cliff_scale)",
+		"dry=1.0-water.x",
+		"bed=water.x*(unpainted*(1.0-rule.x)+yielding*cliff_scale*PAINT_WATER_YIELD)",
+		"scree=unpainted*rule.y*dry",
+		"shore=unpainted*(1.0-rule.x-rule.y)*dry*water.y",
+		"keep=unpainted*(1.0-rule.x-rule.y)*dry*(1.0-water.y)",
 	]:
-		assert_true(text.contains(line), "the shader has: %s" % line)
+		assert_true(text.contains("float" + line + ";"), "the shader has: %s" % line)
+		assert_true(cpu.contains(line), "compose_water has: %s" % line)
+	assert_true(text.contains("w[i]=held_a[i]+(painted_a[i]-held_a[i])*paint_scale;"))

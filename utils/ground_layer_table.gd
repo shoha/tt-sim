@@ -16,9 +16,10 @@ extends RefCounted
 ##     density of the biomes on that surface (one channel for all of them, so a surface is
 ##     sampled once however many biomes use it); the base surface is the remainder of the
 ##     ground, as before.
-##   - RULE: a biome's cliff_surface or scree_surface that is not already a slot or the
-##     base. Its channel is empty: it only ever receives the rule weights the shader
-##     computes from slope and curvature (TerrainRules).
+##   - RULE: a biome's cliff_surface or scree_surface (and, on a map with water, its
+##     water_bed_surface and shore_surface) that is not already a slot or the base. Its
+##     channel is empty: it only ever receives the rule weights the shader computes from
+##     slope and curvature (TerrainRules) or the wet dressing (WaterDressing).
 ## Painted and ground weights sit in separate slots even for the same surface, because
 ## the shader must tell "painted, overrides the rules" from "biome ground, dressed by the
 ## rules" per channel. A rule surface reuses any slot already drawing it (or the base).
@@ -90,8 +91,10 @@ const BROAD_FACTOR := 14
 ##   biome_coverage: PackedInt64Array, per document biome its painted coverage (sum of
 ##     density; biome_coverage());
 ##   painted: PackedStringArray, the document's surface_ids ("" for one not drawable);
-##   base_rules: PackedStringArray [cliff, scree], the base's rule pair when no painted
-##     biome is on the base surface;
+##   base_rules: PackedStringArray [cliff, scree, water bed, shore] (the last two may be
+##     left out), the base's rule surfaces when no painted biome is on the base surface;
+##   water: bool, the map has water: only then do the biomes' water bed and shore surfaces
+##     (biome_bed / biome_shore, per document biome like biome_cliff) take slots;
 ##   role_of: Callable(surface) -> String ("ground" / "cliff" / "built");
 ##   color_of: Callable(surface) -> Color or null (mean albedo; only called on overflow);
 ##   biome_accents: Array, per document biome its ground accents ({surface, coverage,
@@ -106,9 +109,9 @@ const BROAD_FACTOR := 14
 ##   "dropped_accents": PackedStringArray, accent surfaces not drawn for want of a slot;
 ##   "biome_layers": PackedInt32Array, biome slot (0 = none) -> GROUND slot or BASE;
 ##   "painted_layers": PackedInt32Array, painted slot -> PAINTED slot or NONE;
-##   "cliff_of", "scree_of": PackedInt32Array of MAX_LAYERS + 1, per ground component (the
-##     slots, then the base at index MAX_LAYERS) -> slot, BASE or NONE; NONE for a slot
-##     that is not GROUND;
+##   "cliff_of", "scree_of", "bed_of", "shore_of": PackedInt32Array of MAX_LAYERS + 1, per
+##     ground component (the slots, then the base at index MAX_LAYERS) -> slot, BASE or NONE;
+##     NONE for a slot that is not GROUND (and for bed and shore on a map without water);
 ##   "fallbacks": Dictionary, overflowed surface -> the surface it is drawn as ("" = base);
 ##   "replanned": bool, true when `fixed` had to be dropped for a painted surface.
 static func plan(inputs: Dictionary, fixed: Array = []) -> Dictionary:
@@ -127,7 +130,13 @@ static func _plan(inputs: Dictionary, fixed: Array) -> Dictionary:
 	var screes: PackedStringArray = inputs.get("biome_scree", PackedStringArray())
 	var coverage: PackedInt64Array = inputs.get("biome_coverage", PackedInt64Array())
 	var painted: PackedStringArray = inputs.get("painted", PackedStringArray())
+	var water: bool = inputs.get("water", false)
+	var beds: PackedStringArray = _padded(inputs.get("biome_bed", PackedStringArray()), grounds)
+	var shores: PackedStringArray = _padded(inputs.get("biome_shore", PackedStringArray()), grounds)
 	var base_rules: PackedStringArray = inputs.get("base_rules", PackedStringArray(["", ""]))
+	base_rules = base_rules.duplicate()
+	while base_rules.size() < 4:
+		base_rules.append("")
 	var role_of: Callable = inputs.get("role_of", func(_s: String) -> String: return "ground")
 	var color_of: Callable = inputs.get("color_of", func(_s: String) -> Variant: return null)
 	var layers: Array = []
@@ -178,10 +187,10 @@ static func _plan(inputs: Dictionary, fixed: Array) -> Dictionary:
 	var base_pair := base_rules
 	if rule_biome.has(base):
 		var bb: int = rule_biome[base].x
-		base_pair = PackedStringArray([cliffs[bb], screes[bb]])
-	# 2. The base's rule surfaces.
-	for surface in base_pair:
-		_want_rule(layers, surface, base, role_of, color_of, fallbacks)
+		base_pair = PackedStringArray([cliffs[bb], screes[bb], beds[bb], shores[bb]])
+	# 2. The base's rule surfaces (its water bed and shore only on a map with water).
+	for r in base_pair.size() if water else 2:
+		_want_rule(layers, base_pair[r], base, role_of, color_of, fallbacks)
 	# 3. Ground surfaces.
 	for surface in ranked:
 		if _find(layers, surface, Source.GROUND) >= 0:
@@ -197,6 +206,9 @@ static func _plan(inputs: Dictionary, fixed: Array) -> Dictionary:
 		var b: int = rule_biome[surface].x
 		_want_rule(layers, cliffs[b], base, role_of, color_of, fallbacks)
 		_want_rule(layers, screes[b], base, role_of, color_of, fallbacks)
+		if water:
+			_want_rule(layers, beds[b], base, role_of, color_of, fallbacks)
+			_want_rule(layers, shores[b], base, role_of, color_of, fallbacks)
 	# Routing.
 	var biome_layers := PackedInt32Array([BASE])
 	for b in grounds.size():
@@ -223,6 +235,8 @@ static func _plan(inputs: Dictionary, fixed: Array) -> Dictionary:
 	scree_of.resize(MAX_LAYERS + 1)
 	cliff_of.fill(NONE)
 	scree_of.fill(NONE)
+	var bed_of := cliff_of.duplicate()
+	var shore_of := cliff_of.duplicate()
 	for j in layers.size():
 		var layer: Dictionary = layers[j]
 		if layer.source != Source.GROUND or not slot_biome.has(layer.surface):
@@ -230,8 +244,14 @@ static func _plan(inputs: Dictionary, fixed: Array) -> Dictionary:
 		var b: int = slot_biome[layer.surface].x
 		cliff_of[j] = _route(layers, cliffs[b], base, fallbacks)
 		scree_of[j] = _route(layers, screes[b], base, fallbacks)
+		if water:
+			bed_of[j] = _route(layers, beds[b], base, fallbacks)
+			shore_of[j] = _route(layers, shores[b], base, fallbacks)
 	cliff_of[MAX_LAYERS] = _route(layers, base_pair[0], base, fallbacks)
 	scree_of[MAX_LAYERS] = _route(layers, base_pair[1], base, fallbacks)
+	if water:
+		bed_of[MAX_LAYERS] = _route(layers, base_pair[2], base, fallbacks)
+		shore_of[MAX_LAYERS] = _route(layers, base_pair[3], base, fallbacks)
 	# 5. Accents of each ground component: its dominant biome's (the base: as its rules).
 	var biome_accents: Array = inputs.get("biome_accents", [])
 	var component_accents: Array = []
@@ -256,6 +276,8 @@ static func _plan(inputs: Dictionary, fixed: Array) -> Dictionary:
 		"painted_layers": painted_layers,
 		"cliff_of": cliff_of,
 		"scree_of": scree_of,
+		"bed_of": bed_of,
+		"shore_of": shore_of,
 		"accents": placed.accents,
 		"dropped_accents": placed.dropped,
 		"fallbacks": fallbacks,
@@ -372,6 +394,14 @@ static func _accent_slot(
 		return NONE
 	layers.append(slot)
 	return layers.size() - 1
+
+
+## `names` padded with "" to the length of `like`.
+static func _padded(names: PackedStringArray, like: PackedStringArray) -> PackedStringArray:
+	var out := names.duplicate()
+	while out.size() < like.size():
+		out.append("")
+	return out
 
 
 ## A slot no surface holds (an accent's, freed for the plan).

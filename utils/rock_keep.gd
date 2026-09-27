@@ -192,8 +192,12 @@ static func removed_keys(
 
 ## A copy of what generation reads of `doc`, with `heights` (copied too) in place of its
 ## own, for removed_keys() on a worker thread: packed arrays are shared by reference in
-## GDScript, so the brush must not be able to write into what the worker reads.
-static func snapshot(doc: MapDocument, heights: PackedFloat32Array) -> MapDocument:
+## GDScript, so the brush must not be able to write into what the worker reads. `dressing`
+## is the wet dressing (MapDocument.water_dressing) that goes with those heights; null keeps
+## the document's.
+static func snapshot(
+	doc: MapDocument, heights: PackedFloat32Array, dressing: Variant = null
+) -> MapDocument:
 	var copy := MapDocument.new()
 	copy.map_seed = doc.map_seed
 	copy.size_cells = doc.size_cells
@@ -205,6 +209,8 @@ static func snapshot(doc: MapDocument, heights: PackedFloat32Array) -> MapDocume
 	copy.biome_density = doc.biome_density.duplicate()
 	copy.surface_ids = doc.surface_ids.duplicate()
 	copy.surface_weights = doc.surface_weights.duplicate()
+	var wet: PackedByteArray = dressing if dressing is PackedByteArray else doc.water_dressing
+	copy.water_dressing = wet.duplicate()
 	return copy
 
 
