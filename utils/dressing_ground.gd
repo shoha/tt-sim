@@ -30,6 +30,9 @@ const ROW_TOLERANCE_M := 0.002
 var heights: PackedFloat32Array = PackedFloat32Array()
 ## One byte per sample: 1 where the ray hit, 0 where it missed (before fill_misses()).
 var hits: PackedByteArray = PackedByteArray()
+## One byte per sample: 1 where the ray hit a water surface (only with a mask that
+## includes WaterSurface.LAYER, begin_grid()).
+var water: PackedByteArray = PackedByteArray()
 ## Microseconds spent casting rays so far.
 var usec: int = 0
 
@@ -43,6 +46,7 @@ var _origin: Vector2 = Vector2.ZERO
 var _step: Vector2 = Vector2.ONE
 var _columns: int = 0
 var _rows: int = 0
+var _mask: int = WaterSurface.TERRAIN_LAYER
 
 
 ## A sampler for `doc`, whose frame is the map root's (`map_transform`, its global
@@ -64,7 +68,8 @@ static func begin(
 
 ## A sampler for a regular grid of `columns` x `rows` samples in the frame placed by
 ## `map_transform`: sample (x, z) at map-frame XZ `origin + Vector2(x, z) * step`, row-major.
-## Casts as begin() does.
+## Casts as begin() does, on the collision layers `mask`: the grid's ground passes
+## WaterSurface.WALKABLE_MASK so a water surface counts as ground (and `water` marks it).
 static func begin_grid(
 	world: World3D,
 	map_transform: Transform3D,
@@ -72,9 +77,12 @@ static func begin_grid(
 	origin: Vector2,
 	step: Vector2,
 	columns: int,
-	rows: int
+	rows: int,
+	mask: int = WaterSurface.TERRAIN_LAYER
 ) -> DressingGround:
 	var sampler := DressingGround.new()
+	sampler._mask = mask
+	sampler.water.resize(columns * rows)
 	sampler._world = world
 	sampler._transform = map_transform
 	sampler._inverse = map_transform.affine_inverse()
@@ -102,13 +110,21 @@ func step(budget_usec: int) -> bool:
 		for x in columns:
 			var local := _origin + Vector2(x, z) * _step
 			var world := _transform * Vector3(local.x, 0.0, local.y)
-			var hit := DragPlaceController.raycast_terrain_down(space, world, _top)
+			if _mask & WaterSurface.LAYER:
+				# Off the water planes' vertices, which a ray can slip through
+				# (WaterSurface.water_below()); a millimetre is far inside the field's error.
+				world += WaterSurface.VERTEX_NUDGE
+			var hit := WaterSurface.cast_down(space, world, _top, _mask)
 			var index := _next + x
-			if hit != Vector3.INF:
+			if not hit.is_empty():
 				heights[index] = clampf(
-					(_inverse * hit).y, -MapDocument.MAX_ABS_HEIGHT_M, MapDocument.MAX_ABS_HEIGHT_M
+					(_inverse * (hit.position as Vector3)).y,
+					-MapDocument.MAX_ABS_HEIGHT_M,
+					MapDocument.MAX_ABS_HEIGHT_M
 				)
 				hits[index] = 1
+				if WaterSurface.is_water_hit(hit):
+					water[index] = 1
 		_next += columns
 		if Time.get_ticks_usec() - started >= budget_usec:
 			break
