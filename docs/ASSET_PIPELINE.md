@@ -468,11 +468,18 @@ at normal quality (BC1; low-frequency lighting data, half the size of BC7), heig
 lossless (the 16-bit PNG loads as 8-bit greyscale, kept exact for any height-based blend
 at the same 1 byte per texel BC7 would cost) with `detect_3d/compress_to=0` so an editor
 session cannot switch it to VRAM compression. Thumbnails keep the default (lossless, no
-mipmaps). No tt-sim code samples the surface maps yet.
+mipmaps). The authored ground shader (`shaders/authored_ground.gdshaderinc`) samples the
+surface maps; see `docs/MAP_AUTHORING.md`.
 
 **Refreshing the palette:** copy treecube's output over `assets/palette/`, keep the
 existing sidecars, write the three sidecar settings above into a `.glb.import` for every
 new GLB before the first import (otherwise Godot extracts its textures), then
-`godot --headless --import --path .`. Changing a setting in an existing sidecar does not
+`godot --headless --import --path .`. treecube's `build_palette.py --install` replaces the
+`assets/`, `surfaces/` and `thumbnails/` directories wholesale and so deletes every
+committed sidecar: restore them straight after with
+`git checkout -- ":(glob)assets/palette/**/*.import"` and check `git status` shows only
+binaries and `palette.json` changed (palette v2, 2026-09-26, was installed this way).
+Before committing, `git lfs status` must list every GLB/PNG/JPG as LFS and only
+`palette.json` as Git. Changing a setting in an existing sidecar does not
 trigger a reimport on its own; delete the matching `.godot/imported/*.md5` first.
 `tests/unit/test_palette_builtin.gd` checks the sidecars and fails on a missed one.
