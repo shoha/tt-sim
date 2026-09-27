@@ -99,8 +99,8 @@ var _snap_start: Dictionary = {}
 var _prop_start: Dictionary = {}
 ## Scatter asset ids placed normal-aligned (DressingGround.aligned_assets), per stroke.
 var _aligned: Dictionary = {}
-## Props asset id -> true when its species stands on the ground normal (cached).
-var _prop_aligned: Dictionary = {}
+## Props asset id -> _prop_bedding() (cached).
+var _prop_rules: Dictionary = {}
 ## True when heights changed since the collision was last updated (it is updated once no
 ## sculpt stroke is in progress; see raycast_ground).
 var _collision_dirty: bool = false
@@ -573,8 +573,9 @@ func _snap_cell(cell: Vector2i, window: Rect2) -> int:
 			var from: PackedFloat32Array = start_props.get(asset_id, PackedFloat32Array())
 			if from.size() != rows.size():
 				continue
+			var bed := _prop_bedding(asset_id)
 			var snapped := GroundSnap.rebed_props(
-				from, rows, _snap_before, after, grid, _prop_aligns(asset_id), window
+				from, rows, _snap_before, after, grid, bed.x > 0.0, window, bed.y
 			)
 			moved += _apply_moved(props, cell, asset_id, snapped)
 	return moved
@@ -593,11 +594,13 @@ func _apply_moved(
 	return moved.size()
 
 
-## True when prop asset `asset_id` stands on the ground normal (its species' "align").
-func _prop_aligns(asset_id: String) -> bool:
-	if not _prop_aligned.has(asset_id):
-		_prop_aligned[asset_id] = rule_for_asset(asset_id).get("align", "upright") == "normal"
-	return _prop_aligned[asset_id]
+## Prop asset `asset_id`'s species: x 1 when it stands on the ground normal, y its footing.
+func _prop_bedding(asset_id: String) -> Vector2:
+	if not _prop_rules.has(asset_id):
+		var rule := rule_for_asset(asset_id)
+		var align := 1.0 if rule.get("align", "") == "normal" else 0.0
+		_prop_rules[asset_id] = Vector2(align, GroundSnap.footing_radius(rule))
+	return _prop_rules[asset_id]
 
 
 ## Does every piece of height work still waiting (terrain, collision, snapping, settling
@@ -782,12 +785,9 @@ func place_prop(rule: Dictionary, hit: Vector3, normal: Vector3) -> Dictionary:
 		return {}
 	var asset_id := String(assets[_rng.randi_range(0, assets.size() - 1)])
 	var local_normal := (map_root.global_transform.basis.inverse() * normal).normalized()
+	var bed := to_map(hit) - Vector3(0.0, footing_drop(rule, hit), 0.0)
 	var row := PropRows.make_row(
-		to_map(hit),
-		local_normal,
-		rule.get("align", "upright") == "normal",
-		_rng.randf_range(-PI, PI),
-		1.0
+		bed, local_normal, rule.get("align", "upright") == "normal", _rng.randf_range(-PI, PI), 1.0
 	)
 	var cell := cell_of(row)
 	_begin_prop_edit(cell, "Place")
@@ -866,6 +866,11 @@ func footprint_radius(asset_id: String) -> float:
 	if dimensions is Array and (dimensions as Array).size() >= 3:
 		return maxf(float(dimensions[0]), float(dimensions[2])) * FOOTPRINT_FRACTION
 	return 0.5
+
+
+## GroundSnap.footing_drop of species `rule`'s base at world `point` (map metres).
+func footing_drop(rule: Dictionary, point: Vector3) -> float:
+	return GroundSnap.footing_drop(document, to_map_xz(point), GroundSnap.footing_radius(rule))
 
 
 ## World position of a prop handle.

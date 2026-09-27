@@ -885,7 +885,9 @@ The cursor is a ring on the ground at the pointer with the brush radius, re-conf
 ground by downward rays when it moves, drawn on `LAYER_MEASURE_OVERLAY` above the lo-fi pass
 with a dark under-stroke and a light over-stroke so it reads on any ground and in either lo-fi
 theme. Tint: the biome's thumbnail colour, warm white to thin, red to clear (Ctrl), the accent
-for Place (a small marker where a prop will go, a ring around a hovered prop); for Sculpt,
+for Place (a small marker where a prop will go, red where the prop's base would straddle a
+drop of more than 0.25 m, such as a tier's rim, since it is sunk to the lowest ground under
+its base so it never floats; a ring around a hovered prop); for Sculpt,
 sand to raise or build a tier, blue-grey to lower or cut, the accent to flatten, pale green to
 smooth; for Paint, the surface's swatch colour lifted toward white
 (`AuthoringController.surface_tint`), red to erase (Ctrl). A faint fill shows the reach (a fan from the centre drawn with explicit indices: a

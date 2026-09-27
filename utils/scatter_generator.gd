@@ -560,6 +560,8 @@ static func _evaluate(
 			keep *= clampf(1.0 - (angle - entry.slope_max) / SLOPE_FALLOFF_DEG, 0.0, 1.0)
 			if u >= keep:
 				return false
+	if GroundSnap.unfooted(ctx.height_at, p, entry.footing_m):  # a trunk over a rim
+		return false
 	if entry.clumped:
 		var membership := _membership(ctx, s, x, z)
 		ctx.edge = membership.y

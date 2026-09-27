@@ -95,19 +95,23 @@ static func biome(biome_id: String, root: String = DEFAULT_ROOT) -> Dictionary:
 
 ## The species rules of one biome, in file order (large classes first, the order
 ## treecube writes and a generator should honour), or [] for an unknown biome. Each rule
-## also carries `height_m`, the tallest of its assets (manifest dimensions_m y; 0 when none
-## is known), which ScatterGround.role_of reads.
+## also carries `height_m` and `width_m`, the tallest and widest of its assets (manifest
+## dimensions_m y, and the larger of x and z; 0 when none is known), which
+## ScatterGround.role_of and GroundSnap.footing_radius read.
 static func species(biome_id: String, root: String = DEFAULT_ROOT) -> Array[Dictionary]:
 	var rules: Array[Dictionary] = []
 	var entry := biome(biome_id, root)
 	var assets: Dictionary = get_palette(root)["assets"]
 	for rule in entry.get("species", []):
 		var tallest := 0.0
+		var widest := 0.0
 		for asset_id in rule.get("assets", []):
 			var size: Variant = (assets.get(asset_id, {}) as Dictionary).get("dimensions_m")
 			if size is Vector3:
 				tallest = maxf(tallest, size.y)
+				widest = maxf(widest, maxf(size.x, size.z))
 		rule["height_m"] = tallest
+		rule["width_m"] = widest
 		rules.append(rule)
 	return rules
 

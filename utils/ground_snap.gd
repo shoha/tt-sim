@@ -18,11 +18,115 @@ extends RefCounted
 ## lean (the same rule as DressingGround.snap_rows). Props (rebed_props): Y likewise; a
 ## normal-aligned prop stands on the new normal with its own yaw (PropRows), the rule the
 ## Place brush beds it by.
+##
+## Footing (P3-7). A row stands at the ground height under its one origin point, so a tree
+## or a boulder whose origin lies just on a tier's rim hung its trunk or its underside over
+## the drop. footing_radius() gives a species' base radius (0 for ground cover, which keeps
+## following the slope); footing_sag() measures how far the ground under that footprint falls
+## away below the plane through the origin (the largest of h(p) - (h(p + r d) + h(p - r d)) / 2
+## over FOOTING_DIRECTIONS directions: zero on flat ground and on an even slope, large on a
+## convex rim; and a one-sided drop steeper than FOOTING_SLOPE_TAN); ScatterGenerator
+## rejects a candidate whose sag passes FOOTING_SAG_M, and props
+## (placed and re-bedded after a sculpt stroke) bed at lowest_under(), the lowest ground under
+## their footprint, so nothing floats.
 
 ## A row whose ground moved less than this (and did not tilt) keeps its row.
 const TOLERANCE_M := 0.0005
+## Footprint sampling: the origin plus this many directions (each both ways) at the radius.
+const FOOTING_DIRECTIONS := 4
+## A generated tree, shrub or rock is not placed where its footprint sags more than this.
+const FOOTING_SAG_M := 0.06
+## A one-sided drop under the footprint counts as sag beyond the fall of a 50 degree slope
+## (tan 50), so an origin in the middle of a steep face (where the ground is planar and the
+## convex term is zero) is caught too, while an even hill flank is not.
+const FOOTING_SLOPE_TAN := 1.19
+## Base radius per species (footing_radius): a fraction of the widest asset, clamped.
+const TREE_BASE_FRACTION := 0.08
+const TREE_BASE_MIN_M := 0.3
+const TREE_BASE_MAX_M := 0.6
+const SHRUB_BASE_FRACTION := 0.15
+const SHRUB_BASE_MAX_M := 0.5
+## Palette species kind of fallen logs, which rest on the ground like rocks.
+const DEADWOOD_KIND := "deadwood"
+## Rocks and deadwood (logs) at least this wide keep a footing of this share of
+## their width; smaller stones follow the slope.
+const BULK_MIN_WIDTH_M := 0.5
+const BULK_BASE_FRACTION := 0.3
+const BULK_BASE_MAX_M := 0.9
 ## Normal changes below this angle (radians) do not turn a row.
 const TILT_TOLERANCE_RAD := 0.0005
+
+
+## The base radius (metres, at scale 1) of a species rule for footing: trees a trunk, shrubs
+## a stem cluster, rocks and deadwood (logs) a share of their width, ground cover and small
+## plants 0. Reads the rule's `width_m` (PaletteLibrary.species).
+static func footing_radius(rule: Dictionary) -> float:
+	var width := float(rule.get("width_m", 0.0))
+	var size_class := String(rule.get("size_class", ""))
+	if size_class == "large":
+		return clampf(width * TREE_BASE_FRACTION, TREE_BASE_MIN_M, TREE_BASE_MAX_M)
+	var kind := String(rule.get("kind", ""))
+	if kind == ScatterGround.ROCK_KIND or kind == DEADWOOD_KIND:
+		if width < BULK_MIN_WIDTH_M:
+			return 0.0
+		return minf(width * BULK_BASE_FRACTION, BULK_BASE_MAX_M)
+	if size_class == "medium":
+		return clampf(width * SHRUB_BASE_FRACTION, TREE_BASE_MIN_M, SHRUB_BASE_MAX_M)
+	return 0.0
+
+
+## How far the ground under a footprint of `radius` around `p` sags below the plane through
+## its origin (see the header). `height_at` is Callable(Vector2) -> float in the same frame.
+static func footing_sag(height_at: Callable, p: Vector2, radius: float) -> float:
+	if radius <= 0.0:
+		return 0.0
+	var h: float = height_at.call(p)
+	var sag := 0.0
+	var allowance := radius * FOOTING_SLOPE_TAN
+	for k in FOOTING_DIRECTIONS:
+		var d := Vector2.from_angle(PI * k / FOOTING_DIRECTIONS) * radius
+		var a: float = height_at.call(p + d)
+		var b: float = height_at.call(p - d)
+		sag = maxf(sag, maxf(h - (a + b) * 0.5, h - minf(a, b) - allowance))
+	return sag
+
+
+## How far (metres, >= 0) the lowest ground under a footprint of `radius` around map-frame
+## `p` lies below the ground at `p`, on `doc`'s heights (0 without them): what a placed prop is
+## sunk by (AuthoringEditor.place_prop) and the Place cursor's warning.
+static func footing_drop(doc: MapDocument, p: Vector2, radius: float) -> float:
+	if doc == null or doc.heights.size() != doc.sample_count() or radius <= 0.0:
+		return 0.0
+	var grid := grid_of(doc)
+	var here := lowest_under(doc.heights, grid, p, 0.0)
+	return maxf(here - lowest_under(doc.heights, grid, p, radius), 0.0)
+
+
+## True when a footprint of `radius` > 0 at `p` sags past FOOTING_SAG_M (footing_sag): a
+## generated tree, shrub or rock is not placed there.
+static func unfooted(height_at: Callable, p: Vector2, radius: float) -> bool:
+	return radius > 0.0 and footing_sag(height_at, p, radius) > FOOTING_SAG_M
+
+
+## The lowest ground height under a footprint of `radius` around map-frame XZ `p` of the
+## height grid `heights` (grid_of layout): the origin and FOOTING_DIRECTIONS * 2 points on
+## the circle, on the terrain's triangles.
+static func lowest_under(
+	heights: PackedFloat32Array, grid: Dictionary, p: Vector2, radius: float
+) -> float:
+	var half: Vector2 = grid.half
+	var step: Vector2 = grid.step
+	var at := (p + half) / step
+	var lowest := ScatterGenerator.triangle_height(heights, grid.columns, grid.rows, at)
+	if radius <= 0.0:
+		return lowest
+	for k in FOOTING_DIRECTIONS * 2:
+		var q := p + Vector2.from_angle(PI * k / FOOTING_DIRECTIONS) * radius
+		lowest = minf(
+			lowest,
+			ScatterGenerator.triangle_height(heights, grid.columns, grid.rows, (q + half) / step)
+		)
+	return lowest
 
 
 ## The grid description the snap functions take for `doc`: {"columns", "rows", "step",
@@ -97,7 +201,10 @@ static func snap_rows(
 ## change (height within TOLERANCE_M and normal within TILT_TOLERANCE_RAD of `before`)
 ## keeps its start row, so a prop placed on the collision is not nudged by the smoothing of
 ## a normal it never stood on; one whose ground changed takes Y from `after` and, when
-## `align` (its species stands on the ground normal), the new normal with its own yaw.
+## `align` (its species stands on the ground normal), the new normal with its own yaw. With
+## `radius` > 0 (footing_radius of its species) the heights compared and taken are the lowest
+## under that footprint (lowest_under, scaled by the row's scale), so a prop left on a new
+## rim sinks to the ground instead of hanging over the drop.
 @warning_ignore("integer_division")
 static func rebed_props(
 	start: PackedFloat32Array,
@@ -106,7 +213,8 @@ static func rebed_props(
 	after: PackedFloat32Array,
 	grid: Dictionary,
 	align: bool,
-	window: Rect2
+	window: Rect2,
+	radius: float = 0.0
 ) -> Dictionary:
 	var stride := MapDocument.ROW_STRIDE
 	var columns: int = grid.columns
@@ -122,8 +230,9 @@ static func rebed_props(
 		if not window.has_point(p):
 			continue
 		var at := (p + half) / step
-		var was := ScatterGenerator.triangle_height(before, columns, rows_count, at)
-		var now := ScatterGenerator.triangle_height(after, columns, rows_count, at)
+		var footprint := radius * absf(start[b + 7])
+		var was := lowest_under(before, grid, p, footprint)
+		var now := lowest_under(after, grid, p, footprint)
 		var from := ScatterGenerator.triangle_normal(before, columns, rows_count, at, step)
 		var to := ScatterGenerator.triangle_normal(after, columns, rows_count, at, step)
 		var row := PropRows.row_at(start, r)
