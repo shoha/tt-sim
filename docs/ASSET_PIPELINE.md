@@ -327,7 +327,9 @@ and cacti carry no COLOR_0.
   "surfaces": {
     "<surface>": {"albedo": "surfaces/<surface>/<surface>_albedo.png", "normal": ...,
                   "orm": ..., "height": ...,
-                  "tile_m": <world size of one texture repeat, metres>}
+                  "tile_m": <world size of one texture repeat, metres>,
+                  "kind": "<treecube surface kind: grass, cliff, gravel, dirt_road, ...>",
+                  "role": "ground" | "cliff" | "built"}
   },
   "biomes": [
     {
@@ -336,6 +338,8 @@ and cacti carry no COLOR_0.
       "name": "<plain biome display name, no season>", "climate": "<cold|temperate|warm|dry>",
       "thumbnail": "thumbnails/<package id>.jpg",
       "ground_surface": "<surface>",
+      "cliff_surface": "<surface with role cliff>",
+      "scree_surface": "<surface with role ground>",
       "species": [
         {
           "key": "<species key>", "kind": "<tree|grass|flower|rock|deadwood|...>",
@@ -373,6 +377,34 @@ Field notes:
   distance never applies to clumped layers) and the class limit distance for a random
   species.
 - `name` is the plain biome display name; the season is its own field.
+- Surface `role` says what the surface is for (added 2026-09-26, phase 3; same format 1,
+  since every field is optional to the consumer):
+  - `ground`: soft ground under a scatter and at cliff feet (treecube's Ground catalog:
+    grass, dirt, sand, gravel, snow, moss, ... and their biome variants), sampled top-down.
+  - `cliff`: rock for steep faces (treecube's Rock catalog: `cliff`, `cliff_basalt`,
+    `cliff_sandstone`), sampled sideways (biplanar or triplanar, v up the face). Tiles
+    keep their beds near-horizontal so a bed line carries across a projection seam.
+  - `built`: walkable paving an author paints as paths and courtyards (`cobblestone`,
+    `flagstone`, `dirt_road_packed`, `stone_tiles`, `planks`), sampled top-down. They
+    carry no direction (a painted path runs any way through world-space UVs), which is
+    why the rutted, verged `dirt_road` is not in the palette. Walls, roofs and interior
+    floors are never palette surfaces.
+
+  `kind` is the treecube surface kind the preset belongs to (`cliff` for
+  `cliff_basalt`), for grouping in the UI; tt-sim never branches on it.
+- `cliff_surface` is the surface the automatic dressing puts on a biome's steep faces
+  (tier edges); `scree_surface` the loose ground it puts at their feet. The producer's
+  per-biome defaults, judged at game scale on 75 degree tier faces (treecube
+  `docs/surfaces.md` "Cliffs, scree and paths in tt-sim"):
+
+  | Biome | `cliff_surface` | `scree_surface` |
+  |-------|-----------------|-----------------|
+  | temperate_forest, birch_woodland, grassland_meadow, wetland_riparian | `cliff` | `gravel` |
+  | alpine_meadow, boreal_taiga | `cliff_basalt` | `gravel` |
+  | savanna, rocky_badlands | `cliff_sandstone` | `gravel_sandstone` |
+
+  A painted surface always wins over these (phase 3 decision); the biome only supplies
+  the default.
 - `geoscatter_pattern` holds Geoscatter's `s_pattern1_*` settings verbatim with the
   prefix stripped (texture dict, sample method, influences, revert flags), minus the
   datablock plumbing (`allow`, `texture_ptr`, `texture_is_unique`). tt-sim's
@@ -401,6 +433,16 @@ Rules both sides rely on:
   exists for diagnostics and for saved levels, not for negotiation.
 - Everything read from `palette.json` is validated like network input (it ships with
   the game, but the same loader reads authored map documents that arrive from peers).
+- **Surface roles degrade, never fail.** The producer rejects a palette whose surface
+  lacks a `kind` or a known `role`, or whose biome names a ground, cliff or scree surface
+  that is missing or has the wrong role (`palette_problems()`). The consumer
+  (`PaletteLibrary`) is lenient, so an older palette still loads: a missing `role` is
+  `ground` silently and an unknown one warns and is treated as `ground`; a missing
+  `kind` is `""`; a missing `cliff_surface` falls back silently, and one that names an
+  absent or non-cliff surface warns and falls back, to the first `cliff` surface in file
+  order (`cliff` in treecube's sorted output) or `""` when there is none; a missing
+  `scree_surface` is `""` (the foot keeps the biome ground), and one that names an absent
+  or non-ground surface warns and becomes `""`.
 - Budgets: palette assets obey section 7's triangle targets; the foliage budget applies
   unchanged, since palette scatter builds the same chunked MultiMeshes.
 
