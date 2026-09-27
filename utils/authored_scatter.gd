@@ -28,8 +28,10 @@ extends Node3D
 ## `<asset stem>_MultiMesh_c<x>_<z>` (always suffixed, unlike the GLB path's single-cell
 ## species), so FoliageDensityController groups them by species and a rebuild never
 ## renames a neighbour. Instances are ordered by a hash of the instance itself seeded by
-## that name (instance_order), not by their index, so the prefix the density budget draws
-## keeps the same instances when others are added or removed.
+## that name (ScatterRows.instance_order), not by their index, so the prefix the density
+## budget draws keeps the same instances when others are added or removed. A row's identity
+## is its X, Z and scale (ScatterRows.row_keys), so a height edit that moves Y keeps it the
+## same instance; move_rows() rewrites moved instances in place.
 ##
 ## Grow-in. set_cells() with animation splits each rebuilt cell: rows that were already
 ## there stay in the cell's node untouched, and rows that are new go to a temporary
@@ -75,9 +77,6 @@ const GROUP := &"authored_scatter"
 
 const _GROW_SHADER := 0
 const _GROW_RISE := 1
-const _MASK32 := 0xFFFFFFFF
-const _INDEX_BITS := 24
-const _INDEX_MASK := (1 << _INDEX_BITS) - 1
 
 ## Palette root species are resolved from.
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
@@ -107,6 +106,10 @@ var _cells: Dictionary = {}
 var _nodes: Dictionary = {}
 ## cell -> {asset id -> Array of {"node", "keys", "tween"}}: instances still growing in.
 var _growing: Dictionary = {}
+## cell -> {asset id -> PackedInt32Array}: for each instance of the settled node, in
+## instance order, the index of its row in _cells, so move_rows() can rewrite single
+## instances in place.
+var _orders: Dictionary = {}
 var _grow_serial: int = 0
 var _document: MapDocument = null
 var _regen: ScatterRegen = null
@@ -148,64 +151,10 @@ static func node_name_for(asset_id: String, cell: Vector2i) -> String:
 	return asset_id.validate_node_name() + NODE_INFIX + ScatterChunker.cell_suffix(cell)
 
 
-## A stable 62-bit identity per row (from its position and scale bits), so two rebuilds
-## of a cell can tell which instances they share. `bits` is rows.to_byte_array()
-## .to_int32_array(), passed in so a caller that also orders the rows converts once.
-@warning_ignore("integer_division")
+## A stable identity per row from its X, Z and scale, never its Y or rotation, so a height
+## edit keeps every instance the same one (ScatterRows.row_keys).
 static func row_keys(bits: PackedInt32Array) -> PackedInt64Array:
-	var stride := MapDocument.ROW_STRIDE
-	var count := bits.size() / stride
-	var keys := PackedInt64Array()
-	keys.resize(count)
-	for r in count:
-		var base := r * stride
-		var high := _mix(bits[base] ^ _mix(bits[base + 2]))
-		var low := _mix(bits[base + 1] ^ _mix(bits[base + 7] ^ 0x5BD1E995))
-		keys[r] = ((high & 0x3FFFFFFF) << 32) | low
-	return keys
-
-
-## The order a cell's instances are written in: `indices` (rows of the cell) sorted by a
-## hash of each row's key seeded by `seed_source`. A prefix of it is a spatially even
-## sample (what visible_instance_count draws), and the relative order of two rows depends
-## on those two rows alone, so adding or removing rows never reorders the others. This is
-## the authored path's counterpart to FoliageBudget.shuffled_order, which orders by index
-## and so reshuffles a whole cell whenever its count changes.
-static func instance_order(
-	keys: PackedInt64Array, indices: PackedInt32Array, seed_source: String
-) -> PackedInt32Array:
-	var seed_value := seed_source.md5_buffer().decode_u32(0)
-	var packed := PackedInt64Array()
-	packed.resize(indices.size())
-	for i in indices.size():
-		var index := indices[i]
-		var rank := _mix((keys[index] & _MASK32) ^ seed_value ^ (keys[index] >> 32))
-		packed[i] = (rank << _INDEX_BITS) | index
-	packed.sort()
-	var order := PackedInt32Array()
-	order.resize(packed.size())
-	for i in packed.size():
-		order[i] = packed[i] & _INDEX_MASK
-	return order
-
-
-## Transforms of the rows at `indices` of flat [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz]
-## rows, in that order; the same conversion as ScatterGlbUtils._row_to_transform (a zero
-## quaternion becomes no rotation). Pure, so the math is testable headless, where
-## MultiMesh reads every transform back as identity.
-static func transforms_from_rows(
-	rows: PackedFloat32Array, indices: PackedInt32Array
-) -> Array[Transform3D]:
-	var stride := MapDocument.ROW_STRIDE
-	var transforms: Array[Transform3D] = []
-	transforms.resize(indices.size())
-	for i in indices.size():
-		var b := indices[i] * stride
-		var rotation := Quaternion(rows[b + 3], rows[b + 4], rows[b + 5], rows[b + 6])
-		rotation = rotation.normalized() if rotation.length_squared() > 0.0 else Quaternion()
-		var basis := Basis(rotation).scaled(Vector3(rows[b + 7], rows[b + 8], rows[b + 9]))
-		transforms[i] = Transform3D(basis, Vector3(rows[b], rows[b + 1], rows[b + 2]))
-	return transforms
+	return ScatterRows.row_keys(bits)
 
 
 ## Rows per asset regrouped by 10 m cell: cell -> {asset id -> PackedFloat32Array}.
@@ -298,6 +247,54 @@ func set_cells(rows_by_cell: Dictionary, animate: bool = true) -> void:
 	cells_applied.emit(cells)
 
 
+## Moves instances of `asset_id` in `cell` in place: `rows` replaces the cell's rows of that
+## asset and must hold the same rows in the same order (only their Y and rotation may
+## differ, as after a height edit), and `moved` lists the indices of the rows that changed.
+## Only those instances' transforms are rewritten, in every node that draws them; nothing is
+## rebuilt, nothing grows or shrinks, and the density budget's visible counts stay as they
+## are. Returns false (and changes nothing) when the rows do not match the cell's, so the
+## caller can fall back to set_cells().
+@warning_ignore("integer_division")
+func move_rows(
+	cell: Vector2i, asset_id: String, rows: PackedFloat32Array, moved: PackedInt32Array
+) -> bool:
+	var cell_rows: Dictionary = _cells.get(cell, {})
+	var current: PackedFloat32Array = cell_rows.get(asset_id, PackedFloat32Array())
+	if current.is_empty() or current.size() != rows.size():
+		return false
+	cell_rows[asset_id] = rows
+	if moved.is_empty():
+		return true
+	var flags := PackedByteArray()
+	flags.resize(rows.size() / MapDocument.ROW_STRIDE)
+	for r in moved:
+		flags[r] = 1
+	var node: MultiMeshInstance3D = _nodes.get(cell, {}).get(asset_id)
+	var order: PackedInt32Array = _orders.get(cell, {}).get(asset_id, PackedInt32Array())
+	if node != null and node.multimesh != null and order.size() == node.multimesh.instance_count:
+		var multimesh := node.multimesh
+		for i in order.size():
+			var r := order[i]
+			if flags[r] != 0:
+				multimesh.set_instance_transform(i, ScatterRows.row_transform(rows, r))
+	var entries: Array = _growing.get(cell, {}).get(asset_id, [])
+	if not entries.is_empty():
+		var keys := row_keys(rows.to_byte_array().to_int32_array())
+		for entry in entries:
+			var indices := PackedInt32Array()
+			for i in keys.size():
+				if (entry.keys as Dictionary).has(keys[i]):
+					indices.append(i)
+			var growing_node: MultiMeshInstance3D = entry.node
+			var visible := growing_node.multimesh.visible_instance_count
+			growing_node.multimesh = ScatterGlbUtils.build_multimesh(
+				growing_node.multimesh.mesh,
+				_ordered_transforms(asset_id, cell, rows, keys, indices)
+			)
+			growing_node.multimesh.visible_instance_count = visible
+	return true
+
+
 ## Frees every node and forgets every row (resolved species are kept).
 func clear() -> void:
 	for cell in _growing.keys():
@@ -309,6 +306,7 @@ func clear() -> void:
 		for node in (_nodes[cell] as Dictionary).values():
 			_free_node(node)
 	_nodes.clear()
+	_orders.clear()
 	_cells.clear()
 	_known_total = -1
 
@@ -726,8 +724,13 @@ func _set_settled(
 			_nodes[cell].erase(asset_id)
 			if (_nodes[cell] as Dictionary).is_empty():
 				_nodes.erase(cell)
+			_orders.get(cell, {}).erase(asset_id)
 		return
-	var transforms := _ordered_transforms(asset_id, cell, rows, keys, indices)
+	var order := ScatterRows.instance_order(keys, indices, node_name_for(asset_id, cell))
+	var transforms := ScatterRows.transforms_from_rows(rows, order)
+	if not _orders.has(cell):
+		_orders[cell] = {}
+	_orders[cell][asset_id] = order
 	if node == null:
 		node = _new_chunk_node(asset_id, cell, "", transforms)
 		if not _nodes.has(cell):
@@ -790,7 +793,7 @@ func _shrink_out(
 ) -> void:
 	if indices.is_empty():
 		return
-	var transforms := transforms_from_rows(old_rows, indices)
+	var transforms := ScatterRows.transforms_from_rows(old_rows, indices)
 	ScatterShrink.start(
 		self,
 		species.mesh,
@@ -865,8 +868,8 @@ func _ordered_transforms(
 	keys: PackedInt64Array,
 	indices: PackedInt32Array
 ) -> Array[Transform3D]:
-	var order := instance_order(keys, indices, node_name_for(asset_id, cell))
-	return transforms_from_rows(rows, order)
+	var order := ScatterRows.instance_order(keys, indices, node_name_for(asset_id, cell))
+	return ScatterRows.transforms_from_rows(rows, order)
 
 
 func _free_growing(entry: Dictionary) -> void:
@@ -983,14 +986,3 @@ func _primitive_delta(old: Dictionary, fresh: Dictionary) -> int:
 		var after: int = (fresh.get(asset_id, PackedFloat32Array()) as PackedFloat32Array).size()
 		delta += (after / stride - before / stride) * int(species.primitives)
 	return delta
-
-
-## 32-bit integer hash (the same xorshift-multiply ScatterGenerator uses).
-static func _mix(value: int) -> int:
-	var h := value & _MASK32
-	h ^= h >> 16
-	h = (h * 0x7FEB352D) & _MASK32
-	h ^= h >> 15
-	h = (h * 0x1B873593) & _MASK32
-	h ^= h >> 16
-	return h

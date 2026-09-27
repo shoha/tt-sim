@@ -4,7 +4,7 @@ extends GutTest
 
 
 func _row_transform(row: PackedFloat32Array) -> Transform3D:
-	return AuthoredScatter.transforms_from_rows(row, PackedInt32Array([0]))[0]
+	return ScatterRows.row_transform(row, 0)
 
 
 func test_upright_row_stands_on_y_at_the_point() -> void:

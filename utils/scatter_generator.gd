@@ -208,9 +208,12 @@ static func generate_for_document(
 
 ## The sampling fields generate() takes, built from a MapDocument for one biome:
 ## {density_at, height_at, normal_at, bounds}. Density is the biome's painted density
-## (0 where another biome or none is painted), heights and density are bilinear on the
-## document's sample grid, and the normal comes from central height differences one
-## sample step apart. Outside the map the density is 0 and heights clamp to the edge.
+## (0 where another biome or none is painted), bilinear on the document's sample grid.
+## Heights and normals follow the terrain's own triangles (triangle_height,
+## triangle_normal): the rendered chunks and the collision heightfield split every quad
+## on the same diagonal, and a bilinear height differs from that surface by up to
+## |h00 + h11 - h10 - h01| / 4 (0.38 m on a tier step), which floated or buried plants on
+## sculpted ground. Outside the map the density is 0 and heights clamp to the edge.
 ##
 ## `window` (world XZ), when it has an area, limits the density decode to the samples
 ## inside it plus one sample of margin; density reads 0 elsewhere. Decoding the whole
@@ -251,18 +254,9 @@ static func document_fields(
 			return 0.0
 		return _bilinear(density, columns, rows, at)
 	var height_at := func(p: Vector2) -> float:
-		return _bilinear(heights, columns, rows, (p + half) / step)
+		return triangle_height(heights, columns, rows, (p + half) / step)
 	var normal_at := func(p: Vector2) -> Vector3:
-		var at := (p + half) / step
-		var dx := (
-			_bilinear(heights, columns, rows, at + Vector2(1.0, 0.0))
-			- _bilinear(heights, columns, rows, at - Vector2(1.0, 0.0))
-		)
-		var dz := (
-			_bilinear(heights, columns, rows, at + Vector2(0.0, 1.0))
-			- _bilinear(heights, columns, rows, at - Vector2(0.0, 1.0))
-		)
-		return Vector3(-dx / (2.0 * step.x), 1.0, -dz / (2.0 * step.y)).normalized()
+		return triangle_normal(heights, columns, rows, (p + half) / step, step)
 	return {
 		"density_at": density_at,
 		"height_at": height_at,
@@ -861,6 +855,70 @@ static func _tilted(normal: Vector3, angle: float, azimuth: float) -> Vector3:
 	var bitangent := normal.cross(tangent)
 	var axis := tangent * cos(azimuth) + bitangent * sin(azimuth)
 	return normal.rotated(axis, angle).normalized()
+
+
+## The terrain surface's height at continuous sample coordinates `at` (clamped to the
+## grid) of the row-major `grid`, `columns` x `rows`: linear over the triangle of the quad
+## the point is in, with each quad split on its (1, 0)-(0, 1) diagonal, the triangles
+## (a, a+1, a+cols) and (a+1, a+cols+1, a+cols) TerrainMeshBuilder draws and Jolt's
+## HeightMapShape3D collides with. So a row stands exactly on the ground the player sees
+## and a token lands on.
+static func triangle_height(
+	grid: PackedFloat32Array, columns: int, rows: int, at: Vector2
+) -> float:
+	var fx := clampf(at.x, 0.0, columns - 1)
+	var fz := clampf(at.y, 0.0, rows - 1)
+	var x0 := mini(floori(fx), columns - 2)
+	var z0 := mini(floori(fz), rows - 2)
+	var tx := fx - x0
+	var tz := fz - z0
+	var i := z0 * columns + x0
+	if tx + tz <= 1.0:
+		return grid[i] + (grid[i + 1] - grid[i]) * tx + (grid[i + columns] - grid[i]) * tz
+	var h11 := grid[i + columns + 1]
+	return h11 + (grid[i + columns] - h11) * (1.0 - tx) + (grid[i + 1] - h11) * (1.0 - tz)
+
+
+## The terrain's shading normal at continuous sample coordinates `at`: the vertex normals
+## of the triangle triangle_height() uses (central differences on the whole grid, as
+## TerrainMeshBuilder computes them), interpolated barycentrically, which is the normal
+## the rendered ground is lit with. `step` is the real sample step (MapDocument
+## .sample_step()). Smooth across triangles, unlike the facet normal, so slope rules and
+## normal-aligned species do not flicker triangle by triangle.
+static func triangle_normal(
+	grid: PackedFloat32Array, columns: int, rows: int, at: Vector2, step: Vector2
+) -> Vector3:
+	var fx := clampf(at.x, 0.0, columns - 1)
+	var fz := clampf(at.y, 0.0, rows - 1)
+	var x0 := mini(floori(fx), columns - 2)
+	var z0 := mini(floori(fz), rows - 2)
+	var tx := fx - x0
+	var tz := fz - z0
+	var n10 := vertex_normal(grid, columns, rows, x0 + 1, z0, step)
+	var n01 := vertex_normal(grid, columns, rows, x0, z0 + 1, step)
+	var n := Vector3.ZERO
+	if tx + tz <= 1.0:
+		var n00 := vertex_normal(grid, columns, rows, x0, z0, step)
+		n = n00 * (1.0 - tx - tz) + n10 * tx + n01 * tz
+	else:
+		var n11 := vertex_normal(grid, columns, rows, x0 + 1, z0 + 1, step)
+		n = n11 * (tx + tz - 1.0) + n01 * (1.0 - tx) + n10 * (1.0 - tz)
+	return n.normalized()
+
+
+## The normal of sample (x, z): central differences on the whole grid, one-sided at the
+## edge; the same arithmetic as TerrainMeshBuilder.sample_normal.
+static func vertex_normal(
+	grid: PackedFloat32Array, columns: int, rows: int, x: int, z: int, step: Vector2
+) -> Vector3:
+	var x0 := maxi(x - 1, 0)
+	var x1 := mini(x + 1, columns - 1)
+	var z0 := maxi(z - 1, 0)
+	var z1 := mini(z + 1, rows - 1)
+	var row := z * columns
+	var slope_x := (grid[row + x1] - grid[row + x0]) / ((x1 - x0) * step.x)
+	var slope_z := (grid[z1 * columns + x] - grid[z0 * columns + x]) / ((z1 - z0) * step.y)
+	return Vector3(-slope_x, 1.0, -slope_z).normalized()
 
 
 ## Bilinear sample of a row-major grid at continuous sample coordinates, clamped.
