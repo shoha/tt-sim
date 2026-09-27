@@ -12,6 +12,7 @@
 | [docs/UI_SYSTEMS.md](docs/UI_SYSTEMS.md) | UIManager, dialogs, toasts, overlays |
 | [docs/ASSET_MANAGEMENT.md](docs/ASSET_MANAGEMENT.md) | Asset packs, model loading, caching |
 | [docs/ASSET_PIPELINE.md](docs/ASSET_PIPELINE.md) | Contract with the Blender producers (terrain-paint, treecube): GLB names, extras, attributes, materials, budgets, round-trip checks |
+| [docs/MAP_AUTHORING.md](docs/MAP_AUTHORING.md) | In-game map authoring hub: decisions, where each system is documented, verification status, open work, roadmap |
 | [docs/SOUND_EFFECTS.md](docs/SOUND_EFFECTS.md) | Audio files, wiring, normalization, adding new sounds |
 | [docs/NETWORKING.md](docs/NETWORKING.md) | Multiplayer, Steam networking, state sync |
 | [docs/lighting-and-environment.md](docs/lighting-and-environment.md) | Environment presets, map defaults, sky, in-game editing |
@@ -361,6 +362,7 @@ The bridge only activates when Godot is launched with `-- --validation-bridge`. 
 - **Releases** – Tagged pushes (`v*`) create GitHub releases with build artifacts. `UpdateManager` checks for new releases and prompts in-app updates.
 - **Versioning rule** – `project.godot config/version` is the single source of truth. It always holds the version being worked *toward*, not the one last shipped. CI reads it for every build; for tagged builds it validates the tag matches and fails the build if not.
 - **Cutting a release** – Ensure `project.godot config/version` is set to the intended release version (e.g. `0.1.2`). Tag: `git tag v0.1.2 && git push origin v0.1.2`. CI validates tag == project.godot version. **Immediately after**: bump `project.godot` to the next version (e.g. `0.1.3`) and push — this ensures subsequent builds are correctly versioned as pre-releases of `0.1.3`.
+- **Every push to `main` publishes too** – not only tags. A `main` push runs the full pipeline and creates a GitHub **prerelease** `v<version>-build.<sha>` with all three platform zips, and deploys the build to the Steam app's **`testing`** branch (`releaseBranch: testing` in `.github/workflows/build.yml`). The default Steam branch only changes on a release you set live. Treat a `main` push as shipping to testers.
 - **Hotfixes** – Branch from the release tag, apply the fix, tag a patch release (e.g. `v0.1.2.1`), then merge the fix back to main if applicable.
 
 ## File Layout
@@ -368,8 +370,10 @@ The bridge only activates when Godot is launched with `-- --validation-bridge`. 
 ```
 autoloads/                  # Singletons, static class_name scripts, and facade sub-components
 resources/                  # Custom Resource classes (LevelData, TokenState, TokenPlacement, TokenConfig, AssetPack)
-scenes/                     # States, board_token, effects, level_editor, level_loader, ui
-utils/                      # GlbUtils, SerializationUtils, EnvironmentPresets, TabUtils
+scenes/                     # States (incl. states/authoring), board_token, effects, level_editor, level_loader, terrain, ui
+utils/                      # GlbUtils, SerializationUtils, EnvironmentPresets, TabUtils; map document, palette, scatter generator
+assets/palette/             # Built-in treecube palette (Git LFS; installed by treecube's build_palette.py, see docs/MAP_AUTHORING.md)
+tools/render_jobs/          # 1920x1080 scripted render jobs for look judgments (README inside)
 shaders/                    # GLSL shaders (lo-fi, occlusion fade, selection glow)
 themes/                     # dark_theme.gd → generated/dark_theme.tres
 tests/                      # GUT unit tests + runnable test scenes (F6 in editor)
