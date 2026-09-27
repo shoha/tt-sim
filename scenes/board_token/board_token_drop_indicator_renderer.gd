@@ -21,7 +21,9 @@ const CIRCLE_RADIUS: float = 0.3  # Default/max circle radius
 const MAX_CIRCLE_RADIUS: float = 0.4  # Cap to keep the indicator compact on large tokens
 const CIRCLE_SEGMENTS: int = 32
 const RAYCAST_LENGTH: float = 100.0
-const TERRAIN_COLLISION_LAYER: int = 1  # Only raycast against terrain, not other tokens
+## Terrain and water surfaces, not other tokens: over a river the circle lies on the water
+## where the player sees it, not on the bed under it.
+const TERRAIN_COLLISION_LAYER: int = WaterSurface.WALKABLE_MASK
 
 ## Pulsing animation settings
 const PULSE_SPEED: float = 3.0

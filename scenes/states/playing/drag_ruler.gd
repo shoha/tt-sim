@@ -154,7 +154,9 @@ func _do_redraw() -> void:
 	var dist_2d := Vector2(_start_pos.x, _start_pos.z).distance_to(Vector2(end_pos.x, end_pos.z))
 	var elevation := 0.0
 	if not is_nan(_start_ground_y):
-		elevation = _drag_and_drop.get_target_ground_position().y - _start_ground_y
+		var end_ground := _ground_below(_drag_and_drop.get_target_ground_position())
+		if not is_nan(end_ground):
+			elevation = end_ground - _start_ground_y
 
 	if _distance_label:
 		_distance_label.text = ruler_text(
@@ -213,11 +215,13 @@ static func ruler_text(
 	return text
 
 
-## The ground (world Y) straight below `point` on the terrain collision layer, or NAN.
+## The walkable surface (world Y) straight below `point`: the ground, or a water surface
+## above it (WaterSurface.surface_below), so a ruler across a river measures along the
+## surface the grid lies on, not down to the bed a wading token stands on. NAN with neither.
 func _ground_below(point: Vector3) -> float:
 	if not _world_viewport:
 		return NAN
-	var hit := DragPlaceController.raycast_terrain_down(
+	var hit := WaterSurface.surface_below(
 		_world_viewport.find_world_3d().direct_space_state, point, point.y + START_CAST_CLEARANCE_M
 	)
 	return hit.y if hit != Vector3.INF else NAN

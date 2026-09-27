@@ -58,6 +58,8 @@ var _debug_render_toggles: DebugRenderToggles = null
 var _perf_overlay_container: VBoxContainer = null
 ## The map's authored terrain, or null (set_ground_terrain).
 var _ground_terrain: AuthoredTerrain = null
+## True when the map has water surfaces (set_ground_terrain).
+var _has_water: bool = false
 ## The ground the grid overlay draws on, or null for the fixed band (set_grid_ground).
 var _grid_ground: GroundHeightField = null
 
@@ -674,12 +676,19 @@ func reset_grid_state() -> void:
 ## (DragAndDrop3D.ground_resolver) so a drag across a tier edge lands on the right tier. With
 ## null both keep their Blender-map behaviour (the grid's ground may be set later from the
 ## map's collision, set_grid_ground).
-func set_ground_terrain(terrain: AuthoredTerrain) -> void:
+##
+## Water (`has_water`: the map has water surfaces, WaterSurface): the drag cursor also hits
+## water surfaces (the pointer over a river is on its surface), and the resolver applies
+## the float rule (WaterSurface.landing_below). On a Blender map with water the resolver
+## only answers over water and leaves the cursor-hit height everywhere else, as before.
+func set_ground_terrain(terrain: AuthoredTerrain, has_water: bool = false) -> void:
 	_ground_terrain = terrain
+	_has_water = has_water
 	set_grid_ground(GroundHeightField.from_terrain(terrain))
 	if drag_and_drop_node:
+		drag_and_drop_node.collisionMask = WaterSurface.WALKABLE_MASK
 		drag_and_drop_node.ground_resolver = (
-			_resolve_drag_ground if terrain != null else Callable()
+			_resolve_drag_ground if terrain != null or has_water else Callable()
 		)
 
 
@@ -698,14 +707,29 @@ func get_grid_ground() -> GroundHeightField:
 	return _grid_ground
 
 
-## The terrain under `point` (straight down on the terrain collision layer, as a browser drop
-## re-resolves after its grid snap), or Vector3.INF with no terrain or no hit.
+## Where a token dragged to `point` rests: the terrain under it (straight down on the terrain
+## collision layer, as a browser drop re-resolves after its grid snap), or in water the bed
+## or the float height (WaterSurface.landing_below). Vector3.INF with no terrain or no hit.
+## A Blender map (no authored terrain) answers only over water below the bank's height, so
+## the cursor-hit height stays everywhere else (an overhang can be anywhere above it).
 func _resolve_drag_ground(point: Vector3) -> Vector3:
-	if not is_instance_valid(_ground_terrain) or not world_viewport:
+	if not world_viewport:
 		return Vector3.INF
 	var space := world_viewport.find_world_3d().direct_space_state
-	var top := _ground_terrain.world_height_range().y + DRAG_GROUND_CAST_CLEARANCE_M
-	return DragPlaceController.raycast_terrain_down(space, point, top)
+	if is_instance_valid(_ground_terrain):
+		var top := _ground_terrain.world_height_range().y + DRAG_GROUND_CAST_CLEARANCE_M
+		return WaterSurface.landing_below(space, point, top)
+	if not _has_water:
+		return Vector3.INF
+	var water := WaterSurface.water_below(space, point, point.y + WaterSurface.CAST_CLEARANCE_M)
+	if water.is_empty():
+		return Vector3.INF
+	var ground := WaterSurface.landing_below(
+		space, point, maxf(point.y, water.y) + DRAG_GROUND_CAST_CLEARANCE_M
+	)
+	if ground == Vector3.INF or ground.y >= water.y:
+		return Vector3.INF
+	return ground
 
 
 ## Enable or disable the lo-fi visual filter

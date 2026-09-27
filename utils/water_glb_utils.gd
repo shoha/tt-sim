@@ -10,6 +10,12 @@ const _WATER_SUFFIX := "-water"
 const FLOW_MAP_PARAM := "water_flow_map"
 ## Per-instance flag on the one plane the flow map was baked for.
 const FLOW_PRESENT_PARAM := &"water_flow_present"
+## On the authored water's merged mesh (AuthoredWater): it brings its own WaterZones and
+## surface bodies (one per body, each at its level), and its flow map wins (_flow_map_plane).
+const AUTHORED_META := &"tt_authored_water"
+## On a mesh whose WaterZone and surface body are attached, so a second pass over the same
+## tree (a dressed map: the GLB's load, then the authored water's) adds no duplicates.
+const PROCESSED_META := &"tt_water_processed"
 
 static var _water_material: ShaderMaterial = null
 
@@ -45,6 +51,11 @@ static func _get_water_material() -> ShaderMaterial:
 ## flow map the moment the first token model loaded. The sampler only matters to a
 ## plane that is flagged, and flagged planes die with their level, so a stale texture
 ## left behind by a level without water is inert.
+##
+## Each plane also gets a surface body on WaterSurface.LAYER (_attach_surface_body), the
+## surface the grid, the measure tool and the float rule find. The authored water mesh
+## (AUTHORED_META) brings its own zones and bodies. Safe to run twice over one tree
+## (PROCESSED_META): a dressed map runs it for its GLB and again with the authored water.
 static func process_water_meshes(node: Node) -> void:
 	var water_nodes: Array[MeshInstance3D] = []
 	_find_water_mesh_nodes(node, water_nodes)
@@ -57,7 +68,11 @@ static func process_water_meshes(node: Node) -> void:
 	for mesh_node in water_nodes:
 		mesh_node.material_override = material
 		mesh_node.set_instance_shader_parameter(FLOW_PRESENT_PARAM, mesh_node == flow_plane)
+		if mesh_node.has_meta(AUTHORED_META) or mesh_node.has_meta(PROCESSED_META):
+			continue
+		mesh_node.set_meta(PROCESSED_META, true)
 		_attach_water_zone(mesh_node)
+		_attach_surface_body(mesh_node)
 
 
 ## The imported material's emission texture, which terrain-paint uses to carry the
@@ -97,7 +112,17 @@ static func _footprint_area(mesh_node: MeshInstance3D, root: Node) -> float:
 ## every terrain-paint water plane, so it cannot tell a river from a pond. terrain-paint
 ## bakes for its largest "-water" plane but shares one preview material across all of
 ## them, so every plane arrives carrying the same texture.
+##
+## Dressed maps (a Blender map.glb plus a document with water): the authored water's mesh
+## wins whenever it carries a flow map (the document has a river), whatever its size; the
+## GLB's planes then render still water, sharing the same material. The author drew those
+## rivers on top of the Blender map, the newer and explicit intent, and a GLB plane covers
+## the whole map, so a largest-footprint rule would always silence them. A document with
+## only ponds carries no flow map, so the GLB's river keeps flowing.
 static func _flow_map_plane(water_nodes: Array[MeshInstance3D], root: Node) -> MeshInstance3D:
+	for mesh_node in water_nodes:
+		if mesh_node.has_meta(AUTHORED_META) and _extract_flow_map(mesh_node) != null:
+			return mesh_node
 	var best: MeshInstance3D = null
 	var best_area := 0.0
 	for mesh_node in water_nodes:
@@ -125,6 +150,22 @@ static func _attach_water_zone(mesh_node: MeshInstance3D) -> void:
 	parent.add_child(zone)
 
 
+## Attach a surface body (WaterSurface.make_body: layer WaterSurface.LAYER, the plane's own
+## triangles) as a sibling of mesh_node with its transform. A Blender plane has no depth
+## class, so the body carries no float flag and the float rule reads the depth
+## (WaterSurface.FLOAT_DEPTH_M).
+static func _attach_surface_body(mesh_node: MeshInstance3D) -> void:
+	var parent := mesh_node.get_parent()
+	if not parent or not mesh_node.mesh:
+		return
+	var faces := mesh_node.mesh.get_faces()
+	if faces.is_empty():
+		return
+	var body := WaterSurface.make_body(mesh_node.name + "_surface", faces, null)
+	body.transform = mesh_node.transform
+	parent.add_child(body)
+
+
 ## Push the latest submerged-token disturbance points onto the shared water material's
 ## water_disturbance_points uniform (see water.gdshader). Called every frame by every
 ## live WaterZone (see WaterZone._process()) -- redundant if multiple zones exist, but
@@ -132,6 +173,13 @@ static func _attach_water_zone(mesh_node: MeshInstance3D) -> void:
 ## material each time.
 static func push_disturbance_points(points: Array) -> void:
 	_get_water_material().set_shader_parameter("water_disturbance_points", points)
+
+
+## True when `node`'s tree holds a water mesh (a `-water` plane or the authored water).
+static func has_water(node: Node) -> bool:
+	var water_nodes: Array[MeshInstance3D] = []
+	_find_water_mesh_nodes(node, water_nodes)
+	return not water_nodes.is_empty()
 
 
 static func _find_water_mesh_nodes(node: Node, result: Array[MeshInstance3D]) -> void:
