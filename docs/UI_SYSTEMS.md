@@ -767,11 +767,15 @@ emit nothing. It registers its backdrop as an overlay like `LevelPickerDialog`.
 ### Tool drawer
 
 `AuthoringPanel` extends `DrawerContainer` (LEFT, rail mode, 320 px). Rail items: Biome
-(`trees`), Thin / Clear (`eraser`), Place (`tree`). Footer items: Undo (`arrow-back-up`) and
-Redo (`arrow-forward-up`), disabled while `AuthoringHistory` has nothing to offer; Save
-(`device-floppy`, badged while there are unsaved changes); Leave (`door-exit`). Item ids
-double as node names for `game_click_control`: `biome`, `thin_clear`, `place`, `undo`,
-`redo`, `save_map`, `leave_authoring`. The drawer content is a Map name `LineEdit`
+(`trees`), Thin / Clear (`eraser`), Place (`tree`), Sculpt (`mountain`). Footer items: Undo
+(`arrow-back-up`) and Redo (`arrow-forward-up`), disabled while `AuthoringHistory` has
+nothing to offer; Save (`device-floppy`, badged while there are unsaved changes); Leave
+(`door-exit`). Item ids double as node names for `game_click_control`: `biome`,
+`thin_clear`, `place`, `sculpt`, `undo`, `redo`, `save_map`, `leave_authoring`. On a dressed
+Blender map Sculpt is disabled and its tooltip says why ("Sculpt: not on a Blender map,
+whose ground is the map file's"; `set_sculpt_available`,
+`DrawerContainer.set_rail_item_tooltip`), since the ground there is the GLB's own
+(`AuthoringEditor.can_sculpt()`). P3-6's Paint item follows the same rule. The drawer content is a Map name `LineEdit`
 (`MapNameEdit`, the one text field; placeholder "Untitled map") above a `PaneStack` with one
 pane per tool. Each pane is a `MenuHeader` with a short caption, a wrapped caption line
 saying the tool's gestures (`BiomeHint`, `ThinHint`, `PlaceHint`; MenuHeader captions do not
@@ -790,9 +794,14 @@ and nothing numeric in the main flow:
   `grain` glyphs by kind. One selection across all groups; picking emits `place_selected`.
   Per-asset thumbnails would read better than glyphs; they could be rendered once at startup
   from the palette GLBs (not built).
-- Biome and Thin / Clear end in an `Advanced` foldout with Size (1 to 12 m, "Small" /
+- **Sculpt**: `SculptField`, four tiles in one row: Raise (`arrow-bar-up`), Smooth
+  (`wave-sine`), Flatten (`fold`), Tier (`stairs-up`); ids and node names `sculpt_raise`,
+  `sculpt_smooth`, `sculpt_flatten`, `sculpt_tier`. Raise is preselected. Picking a tile emits
+  `sculpt_selected(op)` (a `HeightBrush` operation) and activates the Sculpt brush. The hint
+  line (`SculptHint`) says the modifiers. No numbers in the main flow.
+- Biome, Thin / Clear and Sculpt end in an `Advanced` foldout with Size (1 to 12 m, "Small" /
   "Large") and Strength (0.25 to 2x, "Gentle" / "Strong") `PropertyRow`s, values hidden like
-  the Visuals drawer's; both follow the gestures (`set_brush_values`).
+  the Visuals drawer's; all follow the gestures (`set_brush_values`).
 
 Picking a rail item selects and activates that brush (`tool_selected`); the Biome brush waits
 for a biome. The active tool's rail item stays tinted (`set_active_tool`,
@@ -801,26 +810,54 @@ full screen. Save keeps the drawer open and shows a success toast.
 
 ### Brushes and gestures
 
-`BrushTool` (`scenes/states/authoring/brush_tool.gd`) is the one brush, in three modes; its
-input table is the pure `BrushTool.decide()`:
+`BrushTool` (`scenes/states/authoring/brush_tool.gd`) is the one brush, in four modes; its
+input table is the pure `BrushTool.decide()`, and the Sculpt operation of a press is the pure
+`BrushTool.sculpt_op(tile, ctrl, shift)`:
 
-| Gesture | Biome | Thin / Clear | Place |
-|---------|-------|--------------|-------|
-| Left drag | paint the biome | thin; with Ctrl at the press, clear | click places a prop (random asset of the species, random yaw), drag while pressed turns it to face the pointer |
-| Hold still while pressed | builds strength (up to 4x after 2 s) | same | - |
-| Plain wheel | camera zoom | camera zoom | camera zoom |
-| Shift+wheel, `[` `]` | brush size, 1 to 12 m (remembered for the app session) | same | over a placed prop: its scale within the species' range (at least +-25 %) |
-| Right click | cancel the stroke in progress (reverted); idle: put the brush down | same | over a placed prop: remove it; during a placement: cancel it |
-| Delete / Backspace | - | - | remove the prop under the pointer |
-| Ctrl+Z / Ctrl+Y | undo / redo one stroke | same | one placement (place and turn), removal, or scale gesture |
+| Gesture | Biome | Thin / Clear | Place | Sculpt |
+|---------|-------|--------------|-------|--------|
+| Left drag | paint the biome | thin; with Ctrl at the press, clear | click places a prop (random asset of the species, random yaw), drag while pressed turns it to face the pointer | the tile's operation: Raise a soft mound (Ctrl at the press: lower), Smooth toward the local mean, Flatten to the ground height under the press, Tier (below) |
+| Shift at the press | - | - | - | Smooth, whichever tile is picked |
+| Hold still while pressed | builds strength (up to 4x after 2 s) | same | - | same (Raise keeps building; Tier is already whole) |
+| Plain wheel | camera zoom | camera zoom | camera zoom | camera zoom |
+| Shift+wheel, `[` `]` | brush size, 1 to 12 m (remembered for the app session) | same | over a placed prop: its scale within the species' range (at least +-25 %) | brush size |
+| Right click, Escape | cancel the stroke in progress (reverted); idle: right click puts the brush down, Escape goes to the drawer | same | over a placed prop: remove it; during a placement: cancel it | same as Biome |
+| Delete / Backspace | - | - | remove the prop under the pointer | - |
+| Ctrl+Z / Ctrl+Y | undo / redo one stroke | same | one placement (place and turn), removal, or scale gesture | one stroke |
+
+Tier. The press reads the ground height under the pointer and picks a whole tier
+(`HeightBrush.tier_target_level`, through `AuthoringEditor.tier_target`): from flat ground or
+between tiers, the next tier up (Ctrl: the tier below); from a tier top, that same tier when
+the brush reaches lower ground (a stroke from its edge extends it) and the tier above when
+the brush is all on the top (a stroke inside it steps up); with Ctrl from a top, the tier
+below, or the press tier itself when higher ground is in reach (cutting it down to here). The
+target stays that tier for the whole stroke, so passing over existing tiers never climbs.
+Every stroke ends exactly on `k * tier_height_m` (5 ft by default) with a rock face at the
+ring's edge, a rounded lip and scree at the foot (ARCHITECTURE.md "Sculpting").
+
+Smooth softens whatever it touches, a tier's edge included: that is how a face becomes a
+ramp (a few passes of a 2.5 m brush across a face lay it back to about 22 degrees). The
+middle of a flat top stays flat, since its local mean is itself; to keep an edge crisp, keep
+the ring off it.
+
+Sculpting ignores trees: canopies between the camera and the ring dither away (the same
+occlusion fade Thin / Clear uses), and the ring re-conforms to the moving ground every frame
+while a stroke is held. A still pointer keeps its ground point during a stroke (the ray would
+otherwise walk a rising hill toward the camera).
 
 The cursor is a ring on the ground at the pointer with the brush radius, re-conformed to the
 ground by downward rays when it moves, drawn on `LAYER_MEASURE_OVERLAY` above the lo-fi pass
 with a dark under-stroke and a light over-stroke so it reads on any ground and in either lo-fi
 theme. Tint: the biome's thumbnail colour, warm white to thin, red to clear (Ctrl), the accent
-for Place (a small marker where a prop will go, a ring around a hovered prop). A faint fill
-shows the reach, and while a stroke is held an inner ring at half strength brightens as dwell
-builds. The ring hides over the drawer. While Thin / Clear is the tool, tree canopies between
+for Place (a small marker where a prop will go, a ring around a hovered prop); for Sculpt,
+sand to raise or build a tier, blue-grey to lower or cut, the accent to flatten, pale green to
+smooth. A faint fill shows the reach (a fan from the centre drawn with explicit indices: a
+triangulated outline failed with "Invalid polygon data, triangulation failed" whenever the
+conformed ring projected to a self-intersecting outline, over raised ground or a Blender map's
+collision), and while a stroke is held an inner ring at half strength brightens as dwell
+builds. Tier and Flatten add a small readout under the ring in the level's units
+(`BrushTool.tier_readout`: "Tier 1  +5 ft", "Tier -1  -5 ft", "Ground  0 ft"; "Flatten  +3
+ft"), shown while hovering too, so the author sees what a press will build before pressing. The ring hides over the drawer. While Thin / Clear is the tool, tree canopies between
 the camera and the ring dither away like geometry over a token (the ring is
 `OcclusionFadeManager.set_focus()`, radius 1.35x the brush), so the ground being thinned stays
 visible under a forest. It rides on the occlusion fade and so follows the player's Occlusion

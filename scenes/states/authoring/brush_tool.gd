@@ -1,9 +1,9 @@
 class_name BrushTool
 extends Node
 
-## Authoring mode's brush: the gestures of the Biome, Thin / Clear and Place tools and the
-## cursor that shows them. What a gesture does to the map is AuthoringEditor's; this node
-## turns input into calls on it.
+## Authoring mode's brush: the gestures of the Biome, Thin / Clear, Place and Sculpt tools
+## and the cursor that shows them. What a gesture does to the map is AuthoringEditor's; this
+## node turns input into calls on it.
 ##
 ## Modal tool contract (MeasureTool, SunGizmoTool): `toggled`, is_active(), idempotent
 ## activate() / deactivate(), toggle(), handle_input() -> bool, is_dragging(), setup().
@@ -25,22 +25,38 @@ extends Node
 ##   plain wheel        camera zoom (not consumed)
 ##   Shift+wheel, [ ]   brush size (MIN_RADIUS..MAX_RADIUS, remembered for the app session)
 ##   RMB press          cancel the stroke in progress (reverting it); when idle, deselect
+##   Escape             while a stroke is held, cancel it as RMB does (idle: not taken)
 ##   Place: click       place a prop, bedded and turned at random; drag while pressed to
 ##                      turn it toward the pointer; Shift+wheel over a prop scales it;
 ##                      RMB or Delete over a prop removes it
+##   Sculpt: LMB drag   the picked tile's operation (sculpt_op(): Raise, Smooth, Flatten,
+##                      Tier); Ctrl at the press lowers (Raise) or cuts a tier down (Tier);
+##                      Shift at the press smooths whichever tile is picked. Flatten holds
+##                      the ground height under the press; Tier builds toward the tier
+##                      AuthoringEditor.tier_target() picks at the press.
+##
+## Sculpting moves the ground under a still pointer, so while a sculpt stroke is held and
+## the pointer has not moved the brush keeps its ground point (only its height follows the
+## ground) instead of re-casting the ray, which would walk a growing hill toward the camera.
 ##
 ## Cursor. A ring on the ground at the hit point with the brush radius, conforming to the
-## ground (one downward ray per ring point, cached until the brush moves), drawn on the
-## measure overlay layer so it stays crisp above the lo-fi pass: a dark under-stroke and a
-## light over-stroke read on any ground in either lo-fi theme. The tint hints the tool (the
-## biome's own colour, warm white to thin, red to clear), a faint fill shows the reach, and
-## an inner ring brightens as dwell builds strength.
+## ground (one downward ray per ring point, cached until the brush moves; while sculpting,
+## the document's own heights every frame, since the ground under a still ring moves), drawn
+## on the measure overlay layer so it stays crisp above the lo-fi pass: a dark under-stroke
+## and a light over-stroke read on any ground in either lo-fi theme. The tint hints the tool
+## (the biome's own colour, warm white to thin, red to clear, sand to raise, blue-grey to
+## lower), a faint fill shows the reach (a fan from the centre, never a triangulated
+## outline: a ring conformed over steep ground projects to a self-intersecting outline,
+## which the canvas cannot triangulate and reports "Invalid polygon data, triangulation
+## failed"), and an inner ring brightens as dwell builds strength. Tier and Flatten show a
+## small readout under the ring: the tier the stroke builds and its elevation in the
+## level's units ("Tier 1  +5 ft"), or the height Flatten holds.
 
 signal toggled(active: bool)
 ## The brush radius changed (world metres), by gesture or set_radius().
 signal radius_changed(radius: float)
 
-enum Mode { BIOME, THIN, PLACE }
+enum Mode { BIOME, THIN, PLACE, SCULPT }
 enum Action { NONE, POINTER, BEGIN, END, CANCEL, DESELECT, GROW, SHRINK, REMOVE, SWALLOW }
 
 const MIN_RADIUS := 1.0
@@ -72,7 +88,15 @@ const SHADOW_COLOR := Color(0.05, 0.04, 0.05, 0.55)
 const THIN_TINT := Color(0.98, 0.93, 0.82)
 const CLEAR_TINT := Color(1.0, 0.52, 0.42)
 const PLACE_TINT := ThemeColors.ACCENT
+const RAISE_TINT := Color(1.0, 0.86, 0.62)
+const LOWER_TINT := Color(0.66, 0.78, 1.0)
+const SMOOTH_TINT := Color(0.86, 0.96, 0.9)
 const PLACE_MARKER_M := 0.6
+## The Tier / Flatten readout under the ring (MapOverlayUtils.create_label_panel's look,
+## smaller: it accompanies the cursor rather than reporting a measurement).
+const READOUT_FONT_SIZE := 13
+const READOUT_COLOR := Color(1.0, 0.95, 0.6)
+const READOUT_GAP_PX := 14.0
 ## Thin / Clear canopy fade radius as a multiple of the brush radius (view-plane metres).
 ## The fade falls off from the centre to this radius, so it has to reach past the ring for
 ## the canopy over the ring's edge to open up.
@@ -89,6 +113,14 @@ var biome_id: String = ""
 var place_rule: Dictionary = {}
 ## Ring tint of the Biome tool (the biome's colour).
 var biome_tint: Color = Color(0.7, 0.9, 0.6)
+## The Sculpt tile picked: HeightBrush.RAISE, SMOOTH, FLATTEN or TIER (sculpt_op() applies
+## the modifiers).
+var sculpt_tile: int = HeightBrush.RAISE
+## The level's units for the readout (ScaleUtils): metres per grid cell, display units per
+## cell, and their label. AuthoringController sets them from the level.
+var unit_cell_m: float = LevelData.DEFAULT_GRID_CELL_SIZE
+var unit_per_cell: float = LevelData.DEFAULT_DISPLAY_UNIT_PER_CELL
+var unit_label: String = LevelData.DEFAULT_DISPLAY_UNIT
 var editor: AuthoringEditor = null
 ## While Thin / Clear is the tool, the ring is this manager's focus (set_focus), so canopies
 ## between the camera and the ground being thinned fade like geometry over a token. Set by
@@ -109,10 +141,23 @@ var _pressed: bool = false
 var _press_pending: bool = false
 var _press_position: Vector2 = Vector2.ZERO
 var _press_ctrl: bool = false
+var _press_shift: bool = false
 var _stroking: bool = false
+## The sculpt stroke in progress: its HeightBrush operation and target (world Y; tier level
+## for Tier), for the tint and the readout.
+var _stroke_op: int = -1
+var _stroke_target_y: float = 0.0
+var _stroke_level: int = 0
+## The pointer the last sculpt hit was cast from (a still pointer keeps its ground point).
+var _hit_pointer: Vector2 = Vector2.INF
+## Tier readout while hovering, recomputed when the sample under the brush, the radius or
+## Ctrl change: {"key": Array, "level": int}.
+var _tier_hover: Dictionary = {}
+var _readout_box: StyleBoxFlat = null
 var _pointer: Vector2 = Vector2.ZERO
 var _has_pointer: bool = false
 var _ctrl: bool = false
+var _shift: bool = false
 var _hit: Vector3 = Vector3.INF
 var _hit_normal: Vector3 = Vector3.UP
 var _last_dab: Vector3 = Vector3.INF
@@ -169,7 +214,58 @@ static func decide(event: InputEvent, tool_mode: int, pressed: bool, over_prop: 
 			KEY_DELETE, KEY_BACKSPACE:
 				if tool_mode == Mode.PLACE and over_prop and not pressed:
 					return Action.REMOVE
+			KEY_ESCAPE:
+				# While a stroke or placement is held, Escape cancels it like RMB; otherwise
+				# it goes on to the drawer (close, then leave).
+				if pressed:
+					return Action.CANCEL
 	return Action.NONE
+
+
+## The HeightBrush operation a Sculpt press makes with tile `tile` picked and Ctrl / Shift
+## held at the press: Shift smooths from any tile; Ctrl lowers with Raise and cuts with
+## Tier (Smooth and Flatten have no Ctrl variant). Pure.
+static func sculpt_op(tile: int, ctrl: bool, shift: bool) -> int:
+	if shift:
+		return HeightBrush.SMOOTH
+	match tile:
+		HeightBrush.RAISE, HeightBrush.LOWER:
+			return HeightBrush.LOWER if ctrl else HeightBrush.RAISE
+		HeightBrush.TIER, HeightBrush.TIER_CUT:
+			return HeightBrush.TIER_CUT if ctrl else HeightBrush.TIER
+		HeightBrush.FLATTEN:
+			return HeightBrush.FLATTEN
+	return HeightBrush.SMOOTH
+
+
+## A height (metres above the map's base ground) in the level's display units, signed:
+## "+5 ft", "0 ft", "-10 ft". Pure.
+static func format_elevation(
+	height_m: float, cell_m: float, per_cell: float, label: String
+) -> String:
+	var value := roundi(ScaleUtils.world_to_display(height_m, cell_m, per_cell))
+	if value == 0:
+		return "0 %s" % label
+	return "%+d %s" % [value, label]
+
+
+## The readout under the ring for a Tier stroke toward tier `level` of height `height_m`
+## ("Tier 1  +5 ft"; level 0 reads "Ground"), in the given units. Pure.
+static func tier_readout(
+	level: int, height_m: float, cell_m: float, per_cell: float, label: String
+) -> String:
+	var title := "Ground" if level == 0 else "Tier %d" % level
+	return "%s  %s" % [title, format_elevation(height_m, cell_m, per_cell, label)]
+
+
+## Triangle-fan indices filling a closed outline of `outline_count` points (the last one
+## repeating the first, as the ring's do) around a centre vertex at index `outline_count`:
+## drawn with explicit indices, so it never needs triangulating. Pure.
+static func fan_indices(outline_count: int) -> PackedInt32Array:
+	var indices := PackedInt32Array()
+	for i in outline_count - 1:
+		indices.append_array([outline_count, i, i + 1])
+	return indices
 
 
 ## The exposure multiplier after `dwell` seconds of holding still.
@@ -283,6 +379,7 @@ func finish_gesture() -> void:
 			editor.end_stroke()
 		editor.commit_prop_edit()
 	_stroking = false
+	_stroke_op = -1
 	_placing = {}
 	_turning = false
 
@@ -294,8 +391,12 @@ func handle_input(event: InputEvent) -> bool:
 		var ctrl := (event as InputEventWithModifiers).ctrl_pressed
 		if event is InputEventKey and (event as InputEventKey).keycode == KEY_CTRL:
 			ctrl = (event as InputEventKey).pressed
-		if ctrl != _ctrl:
+		var shift := (event as InputEventWithModifiers).shift_pressed
+		if event is InputEventKey and (event as InputEventKey).keycode == KEY_SHIFT:
+			shift = (event as InputEventKey).pressed
+		if ctrl != _ctrl or shift != _shift:
 			_ctrl = ctrl
+			_shift = shift
 			_redraw()
 	var action := decide(event, mode, _pressed, not _hover.is_empty())
 	match action:
@@ -310,6 +411,7 @@ func handle_input(event: InputEvent) -> bool:
 			_press_pending = true
 			_press_position = _pointer
 			_press_ctrl = (event as InputEventMouseButton).ctrl_pressed
+			_press_shift = (event as InputEventMouseButton).shift_pressed
 			return true
 		Action.END:
 			if _press_pending:
@@ -351,6 +453,7 @@ func _cancel_gesture() -> void:
 	_pressed = false
 	_press_pending = false
 	_stroking = false
+	_stroke_op = -1
 	_placing = {}
 	_turning = false
 	_redraw()
@@ -401,11 +504,15 @@ func _start_gesture(click_seconds: float) -> void:
 		if _hover.is_empty() and not place_rule.is_empty():
 			_placing = editor.place_prop(place_rule, _bedded(_hit), _hit_normal)
 		return
-	var stroke_mode := MaskBrush.PAINT
-	if mode == Mode.THIN:
-		stroke_mode = MaskBrush.CLEAR if _press_ctrl else MaskBrush.THIN
-	if not editor.begin_stroke(stroke_mode, biome_id):
-		return
+	if mode == Mode.SCULPT:
+		if not _begin_sculpt():
+			return
+	else:
+		var stroke_mode := MaskBrush.PAINT
+		if mode == Mode.THIN:
+			stroke_mode = MaskBrush.CLEAR if _press_ctrl else MaskBrush.THIN
+		if not editor.begin_stroke(stroke_mode, biome_id):
+			return
 	_stroking = true
 	_last_dab = _hit
 	_dwell = 0.0
@@ -413,6 +520,26 @@ func _start_gesture(click_seconds: float) -> void:
 	if click_seconds > 0.0:
 		editor.stroke_dab(_hit, _hit, session_radius, click_seconds * session_flow)
 		editor.flush()
+
+
+## Starts the sculpt stroke of the picked tile and the press's modifiers, with its target:
+## the ground height under the press for Flatten, the tier tier_target() picks for Tier.
+func _begin_sculpt() -> bool:
+	var op := sculpt_op(sculpt_tile, _press_ctrl, _press_shift)
+	var target_y := 0.0
+	_stroke_level = 0
+	if op == HeightBrush.FLATTEN:
+		target_y = editor.ground_height_at(_hit)
+	elif HeightBrush.is_tier(op):
+		var tier := editor.tier_target(_hit, session_radius, op == HeightBrush.TIER_CUT)
+		target_y = tier.y
+		_stroke_level = tier.level
+	if not editor.begin_height_stroke(op, target_y):
+		return false
+	_stroke_op = op
+	_stroke_target_y = target_y
+	_hit_pointer = _pointer
+	return true
 
 
 func _paint(seconds: float) -> void:
@@ -453,6 +580,7 @@ func _update_hover() -> void:
 
 ## Where the pointer meets the ground this frame (layer 1), or Vector3.INF.
 func _resolve_hit() -> void:
+	var previous := _hit
 	_hit = Vector3.INF
 	if not _has_pointer or _camera == null or _world_viewport == null:
 		return
@@ -460,6 +588,11 @@ func _resolve_hit() -> void:
 		return
 	var origin := _camera.project_ray_origin(_pointer)
 	if editor != null and editor.is_sculpting():
+		if _pointer == _hit_pointer and previous != Vector3.INF:
+			# A still pointer keeps its ground point; only its height follows the ground.
+			_hit = Vector3(previous.x, editor.ground_height_at(previous), previous.z)
+			return
+		_hit_pointer = _pointer
 		# The collision is brought up to date when the stroke ends; until then the ground
 		# the brush is shaping is only in the document, so the ray marches its heights.
 		var ground := editor.raycast_ground(origin, _camera.project_ray_normal(_pointer))
@@ -481,12 +614,13 @@ func _resolve_hit() -> void:
 	_hit_normal = result.normal
 
 
-## Thin / Clear: the ring is the occlusion fade's focus, so the canopy over it opens up.
-## Any other tool, or no ground under the pointer, clears it.
+## Thin / Clear and Sculpt: the ring is the occlusion fade's focus, so the canopy over it
+## opens up (the ground being thinned or shaped stays in view under a forest). Any other
+## tool, or no ground under the pointer, clears it.
 func _update_fade() -> void:
 	if occlusion_fade == null:
 		return
-	if _active and mode == Mode.THIN and _hit != Vector3.INF:
+	if _active and (mode == Mode.THIN or mode == Mode.SCULPT) and _hit != Vector3.INF:
 		occlusion_fade.set_focus(_hit, session_radius * fade_radius_factor)
 	else:
 		occlusion_fade.clear_focus()
@@ -517,7 +651,24 @@ func _tint() -> Color:
 		Mode.THIN:
 			var clearing := _press_ctrl if _stroking else _ctrl
 			return CLEAR_TINT if clearing else THIN_TINT
+		Mode.SCULPT:
+			match _cursor_op():
+				HeightBrush.RAISE, HeightBrush.TIER:
+					return RAISE_TINT
+				HeightBrush.LOWER, HeightBrush.TIER_CUT:
+					return LOWER_TINT
+				HeightBrush.FLATTEN:
+					return PLACE_TINT
+			return SMOOTH_TINT
 	return PLACE_TINT
+
+
+## The sculpt operation the cursor stands for: the stroke's while one is held, else what a
+## press would make now (the modifiers held at this moment).
+func _cursor_op() -> int:
+	if _stroke_op >= 0:
+		return _stroke_op
+	return sculpt_op(sculpt_tile, _ctrl, _shift)
 
 
 func _on_draw() -> void:
@@ -529,8 +680,7 @@ func _on_draw() -> void:
 	_conform_ring(_hit, session_radius)
 	var tint := _tint()
 	var outline := _project(_ring_world, Vector3.ZERO, 1.0)
-	var fill := Color(tint, 0.10)
-	_draw_control.draw_colored_polygon(outline, fill)
+	_fill_fan(outline, _camera.unproject_position(_hit), Color(tint, 0.10))
 	_stroke_ring(outline, tint, 2.0)
 	if _stroking:
 		# The half-strength contour, brightening as dwell builds strength.
@@ -540,6 +690,77 @@ func _on_draw() -> void:
 	var centre := _camera.unproject_position(_hit)
 	_draw_control.draw_circle(centre, 2.5, SHADOW_COLOR)
 	_draw_control.draw_circle(centre, 1.5, tint)
+	if mode == Mode.SCULPT:
+		var text := _readout_text()
+		if text != "":
+			_draw_readout(text, outline)
+
+
+## The ring's reach, filled as a fan from `centre` (see the header: an outline conformed
+## over steep ground can cross itself, which a triangulated polygon cannot draw).
+func _fill_fan(outline: PackedVector2Array, centre: Vector2, color: Color) -> void:
+	var points := outline.duplicate()
+	points.append(centre)
+	var colors := PackedColorArray()
+	colors.resize(points.size())
+	colors.fill(color)
+	RenderingServer.canvas_item_add_triangle_array(
+		_draw_control.get_canvas_item(), fan_indices(outline.size()), points, colors
+	)
+
+
+## The Tier or Flatten readout for the cursor now, or "" (other operations show none).
+func _readout_text() -> String:
+	var op := _cursor_op()
+	if HeightBrush.is_tier(op):
+		var level := _stroke_level if _stroke_op >= 0 else _hover_tier_level(op)
+		var tier_m := editor.document.tier_height_m if editor != null else unit_cell_m
+		return tier_readout(
+			level, HeightBrush.tier_height(level, tier_m), unit_cell_m, unit_per_cell, unit_label
+		)
+	if op == HeightBrush.FLATTEN:
+		var y := _stroke_target_y if _stroke_op >= 0 else _hit.y
+		return "Flatten  " + format_elevation(y, unit_cell_m, unit_per_cell, unit_label)
+	return ""
+
+
+## The tier a press here would build (cached per brush sample, radius and Ctrl).
+func _hover_tier_level(op: int) -> int:
+	if editor == null:
+		return 0
+	var at := editor.document.world_to_sample(editor.to_map_xz(_hit)).round()
+	var key := [at, session_radius, op]
+	if _tier_hover.get("key") != key:
+		var tier := editor.tier_target(_hit, session_radius, op == HeightBrush.TIER_CUT)
+		_tier_hover = {"key": key, "level": tier.level}
+	return int(_tier_hover.level)
+
+
+## Draws `text` in a small dark pill just below the ring's lowest point on screen.
+func _draw_readout(text: String, outline: PackedVector2Array) -> void:
+	var font := _draw_control.get_theme_default_font()
+	if font == null:
+		return
+	var bottom := -INF
+	var centre_x := 0.0
+	for point in outline:
+		bottom = maxf(bottom, point.y)
+		centre_x += point.x
+	centre_x /= maxf(1.0, float(outline.size()))
+	var size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, READOUT_FONT_SIZE)
+	var pad := Vector2(7.0, 3.0)
+	var box := Rect2(
+		Vector2(centre_x - size.x * 0.5, bottom + READOUT_GAP_PX) - pad, size + pad * 2.0
+	)
+	if _readout_box == null:
+		_readout_box = StyleBoxFlat.new()
+		_readout_box.bg_color = Color(0.0, 0.0, 0.0, 0.6)
+		_readout_box.set_corner_radius_all(4)
+	_draw_control.draw_style_box(_readout_box, box)
+	var baseline := box.position + pad + Vector2(0.0, font.get_ascent(READOUT_FONT_SIZE))
+	_draw_control.draw_string(
+		font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, READOUT_FONT_SIZE, READOUT_COLOR
+	)
 
 
 func _draw_place_cursor() -> void:
@@ -553,8 +774,20 @@ func _draw_place_cursor() -> void:
 	_draw_flat_ring(_hit, PLACE_MARKER_M, Color(PLACE_TINT, 0.8), 1.5)
 
 
-## Re-conforms the ring's world points to the ground when the brush moved or resized.
+## Re-conforms the ring's world points to the ground when the brush moved or resized; while
+## sculpting, every frame from the document's heights (the ground moves under a still ring,
+## and the collision only catches up when the stroke ends).
 func _conform_ring(centre: Vector3, radius: float) -> void:
+	if mode == Mode.SCULPT and editor != null and editor.can_sculpt():
+		_ring_world.resize(RING_SEGMENTS + 1)
+		for i in RING_SEGMENTS + 1:
+			var angle := TAU * float(i % RING_SEGMENTS) / float(RING_SEGMENTS)
+			var point := centre + Vector3(cos(angle), 0.0, sin(angle)) * radius
+			point.y = editor.ground_height_at(point) + 0.05
+			_ring_world[i] = point
+		# Forces the cached path to re-conform when the tool changes.
+		_ring_radius = -1.0
+		return
 	if (
 		_ring_world.size() == RING_SEGMENTS + 1
 		and is_equal_approx(radius, _ring_radius)

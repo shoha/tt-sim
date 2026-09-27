@@ -293,6 +293,12 @@ func set_rail_item_enabled(id: StringName, on: bool) -> void:
 		_rail.set_enabled(id, on)
 
 
+## Rail mode: update a pane item's tooltip (e.g. saying why it is disabled).
+func set_rail_item_tooltip(id: StringName, text: String) -> void:
+	if _rail:
+		_rail.set_item_tooltip(id, text)
+
+
 ## Tooltip shown when hovering the tab handle (single-tab mode only; rail
 ## items carry their own tooltips).
 func set_tab_tooltip(text: String) -> void:

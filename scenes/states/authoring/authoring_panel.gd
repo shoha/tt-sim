@@ -2,7 +2,7 @@ class_name AuthoringPanel
 extends DrawerContainer
 
 ## Authoring mode's tool drawer on the left edge, in rail mode: one rail item per tool
-## (Biome, Thin / Clear, Place) above a footer of session actions (Undo, Redo, Save,
+## (Biome, Thin / Clear, Place, Sculpt) above a footer of session actions (Undo, Redo, Save,
 ## Leave). The drawer content is the map's name, the one text field in authoring, over one
 ## pane per tool. Built in code; every interactive Control is named so the validation
 ## bridge can click it.
@@ -19,7 +19,8 @@ extends DrawerContainer
 ## click. Each pane says its gestures in its header caption and holds nothing else in the
 ## main flow: size and strength are gestures (Shift+wheel, dwell), and an Advanced foldout
 ## per brush pane has the exact size and strength rows, values hidden like the Visuals
-## drawer's. The active tool's rail item stays tinted while the drawer is closed.
+## drawer's. The active tool's rail item stays tinted while the drawer is closed. Sculpt is
+## disabled, with a tooltip saying why, on a dressed Blender map (set_sculpt_available).
 
 signal save_pressed
 signal leave_pressed
@@ -30,6 +31,8 @@ signal biome_selected(biome_id: String)
 signal tool_selected(tool_id: StringName)
 ## A Place tile was picked: species `species_key` of palette biome `biome_id`.
 signal place_selected(biome_id: String, species_key: String)
+## A Sculpt tile was picked: HeightBrush.RAISE, SMOOTH, FLATTEN or TIER.
+signal sculpt_selected(tile: int)
 ## An Advanced row moved: brush radius (metres) or strength (flow multiplier).
 signal brush_size_changed(radius: float)
 signal brush_strength_changed(flow: float)
@@ -49,16 +52,48 @@ const PLACE_DEFAULT_ICON := "grain"
 const TOOL_BIOME := &"biome"
 const TOOL_THIN := &"thin_clear"
 const TOOL_PLACE := &"place"
+const TOOL_SCULPT := &"sculpt"
 const ACTION_UNDO := &"undo"
 const ACTION_REDO := &"redo"
 const ACTION_SAVE := &"save_map"
 const ACTION_LEAVE := &"leave_authoring"
 
+const SCULPT_TOOLTIP := "Sculpt"
+const SCULPT_UNAVAILABLE_TOOLTIP := "Sculpt: not on a Blender map, whose ground is the map file's"
 const RAIL_ITEMS: Array[Dictionary] = [
 	{"id": TOOL_BIOME, "icon": "trees", "tooltip": "Biome"},
 	{"id": TOOL_THIN, "icon": "eraser", "tooltip": "Thin / Clear"},
 	{"id": TOOL_PLACE, "icon": "tree", "tooltip": "Place"},
+	{"id": TOOL_SCULPT, "icon": "mountain", "tooltip": SCULPT_TOOLTIP},
 ]
+## Sculpt tiles: id (the HeightBrush operation), label, icon, tooltip.
+const SCULPT_TILES: Array[Dictionary] = [
+	{
+		"op": HeightBrush.RAISE,
+		"label": "Raise",
+		"icon": "arrow-bar-up",
+		"tooltip": "Raise a mound; hold Ctrl as you press to lower",
+	},
+	{
+		"op": HeightBrush.SMOOTH,
+		"label": "Smooth",
+		"icon": "wave-sine",
+		"tooltip": "Soften slopes, edges and faces (Shift with any tile)",
+	},
+	{
+		"op": HeightBrush.FLATTEN,
+		"label": "Flatten",
+		"icon": "fold",
+		"tooltip": "Level the ground to the height where you press",
+	},
+	{
+		"op": HeightBrush.TIER,
+		"label": "Tier",
+		"icon": "stairs-up",
+		"tooltip": "Build a rock-faced level one tier up; hold Ctrl as you press to cut one down",
+	},
+]
+const SCULPT_TILE_SIZE := Vector2(64, 56)
 const RAIL_FOOTER_ITEMS: Array[Dictionary] = [
 	{"id": ACTION_UNDO, "icon": "arrow-back-up", "tooltip": "Undo (Ctrl+Z)"},
 	{"id": ACTION_REDO, "icon": "arrow-forward-up", "tooltip": "Redo (Ctrl+Y)"},
@@ -73,6 +108,7 @@ var palette_root: String = PaletteLibrary.DEFAULT_ROOT
 
 var name_edit: LineEdit
 var biome_field: TileField
+var sculpt_field: TileField
 ## Place tiles, one TileRow per biome group; ids are "<biome id>|<species key>".
 var place_rows: Dictionary = {}
 
@@ -110,6 +146,7 @@ func _on_ready() -> void:
 	_stack.add_pane(TOOL_BIOME, _build_biome_pane())
 	_stack.add_pane(TOOL_THIN, _build_thin_pane())
 	_stack.add_pane(TOOL_PLACE, _build_place_pane())
+	_stack.add_pane(TOOL_SCULPT, _build_sculpt_pane())
 	_stack.show_pane(TOOL_BIOME, false)
 
 	pane_requested.connect(_on_pane_requested)
@@ -251,6 +288,75 @@ func _build_place_pane() -> Control:
 	return pane
 
 
+## Sculpt: four tiles (Raise, Smooth, Flatten, Tier), Raise preselected; the gestures and
+## modifiers in the hint line.
+func _build_sculpt_pane() -> Control:
+	var pane := VBoxContainer.new()
+	pane.name = "SculptPane"
+	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pane.add_theme_constant_override("separation", 8)
+	var header := MenuHeader.new()
+	header.name = "SculptHeader"
+	header.setup("Sculpt", "Shape the ground.")
+	pane.add_child(header)
+	pane.add_child(
+		_hint(
+			"SculptHint",
+			(
+				"Pick a brush, then drag on the map; linger to build. Hold Ctrl as you press"
+				+ " to lower or cut down, Shift to smooth. Tier steps up a level from where you"
+				+ " press, or extends the level whose edge you start on."
+			)
+		)
+	)
+	sculpt_field = TileField.new()
+	sculpt_field.name = "SculptField"
+	sculpt_field.caption = "Brush"
+	sculpt_field.tiles.tile_min_size = SCULPT_TILE_SIZE
+	sculpt_field.tiles.columns = SCULPT_TILES.size()
+	for tile in SCULPT_TILES:
+		sculpt_field.tiles.add_tile(
+			sculpt_tile_id(int(tile.op)),
+			String(tile.label),
+			String(tile.icon),
+			String(tile.tooltip)
+		)
+	sculpt_field.tiles.select(sculpt_tile_id(HeightBrush.RAISE))
+	sculpt_field.tiles.selection_changed.connect(
+		func(id: StringName) -> void:
+			var op := sculpt_tile_op(id)
+			if op >= 0:
+				sculpt_selected.emit(op)
+	)
+	pane.add_child(sculpt_field)
+	pane.add_child(_build_advanced("Sculpt"))
+	return pane
+
+
+## The tile id of a Sculpt tile's operation ("sculpt_raise", ...; also its node name), or
+## &"" for an operation without a tile.
+static func sculpt_tile_id(op: int) -> StringName:
+	for tile in SCULPT_TILES:
+		if int(tile.op) == op:
+			return StringName("sculpt_" + String(tile.label).to_lower())
+	return &""
+
+
+## The Sculpt operation of a tile id, or -1.
+static func sculpt_tile_op(id: StringName) -> int:
+	for tile in SCULPT_TILES:
+		if sculpt_tile_id(int(tile.op)) == id:
+			return int(tile.op)
+	return -1
+
+
+## Enables Sculpt, or disables it with a tooltip saying why (a dressed Blender map, whose
+## ground is the GLB's own).
+func set_sculpt_available(available: bool) -> void:
+	set_rail_item_enabled(TOOL_SCULPT, available)
+	set_rail_item_tooltip(TOOL_SCULPT, SCULPT_TOOLTIP if available else SCULPT_UNAVAILABLE_TOOLTIP)
+
+
 ## The species of a biome the Place picker offers (PLACE_SIZE_CLASSES), in palette order.
 static func place_species(biome_id: String, root: String) -> Array[Dictionary]:
 	var picked: Array[Dictionary] = []
@@ -389,6 +495,11 @@ func select_biome(biome_id: String) -> void:
 	for group_id in _place_foldouts:
 		if group_id == biome_id:
 			(_place_foldouts[group_id] as Foldout).expanded = true
+
+
+## Selects a Sculpt tile without emitting sculpt_selected.
+func select_sculpt_tile(op: int) -> void:
+	sculpt_field.tiles.select(sculpt_tile_id(op))
 
 
 ## Selects a Place tile without emitting place_selected ("" clears every group).

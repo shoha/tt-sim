@@ -128,6 +128,7 @@ func _build_ui() -> void:
 	panel.biome_selected.connect(_on_biome_selected)
 	panel.tool_selected.connect(_on_tool_selected)
 	panel.place_selected.connect(_on_place_selected)
+	panel.sculpt_selected.connect(_on_sculpt_selected)
 	panel.brush_size_changed.connect(func(radius: float) -> void: brush.set_radius(radius))
 	panel.brush_strength_changed.connect(func(flow: float) -> void: brush.set_flow(flow))
 
@@ -309,6 +310,11 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	editor.edited.connect(func() -> void: _bounds_stale = true)
 	brush.deactivate()
 	brush.editor = editor
+	brush.unit_cell_m = level.grid_cell_size
+	brush.unit_per_cell = level.display_unit_per_cell
+	brush.unit_label = level.display_unit
+	# Sculpting edits the document's own ground; a dressed Blender map's is the GLB's.
+	panel.set_sculpt_available(editor.can_sculpt())
 
 
 ## Samples a dressed GLB's ground into the document's heights (DressingGround), a slice per
@@ -535,8 +541,15 @@ func _on_place_selected(biome_id: String, species_key: String) -> void:
 	_select_tool(AuthoringPanel.TOOL_PLACE)
 
 
+## A picked Sculpt tile becomes the Sculpt brush's operation and switches to that brush.
+func _on_sculpt_selected(tile: int) -> void:
+	if brush:
+		brush.sculpt_tile = tile
+	_select_tool(AuthoringPanel.TOOL_SCULPT)
+
+
 ## Switches the brush to `tool_id` and activates it. The Biome brush waits for a biome to be
-## picked (there is nothing to paint with before).
+## picked (there is nothing to paint with before); Sculpt needs a map it can sculpt.
 func _select_tool(tool_id: StringName) -> void:
 	if brush == null or not _is_open:
 		return
@@ -550,6 +563,10 @@ func _select_tool(tool_id: StringName) -> void:
 			brush.set_mode(BrushTool.Mode.THIN)
 		AuthoringPanel.TOOL_PLACE:
 			brush.set_mode(BrushTool.Mode.PLACE)
+		AuthoringPanel.TOOL_SCULPT:
+			if editor == null or not editor.can_sculpt():
+				return
+			brush.set_mode(BrushTool.Mode.SCULPT)
 		_:
 			return
 	brush.activate()
@@ -564,6 +581,7 @@ func _on_brush_toggled(active: bool) -> void:
 		BrushTool.Mode.BIOME: AuthoringPanel.TOOL_BIOME,
 		BrushTool.Mode.THIN: AuthoringPanel.TOOL_THIN,
 		BrushTool.Mode.PLACE: AuthoringPanel.TOOL_PLACE,
+		BrushTool.Mode.SCULPT: AuthoringPanel.TOOL_SCULPT,
 	}
 	panel.set_active_tool(ids[brush.mode])
 
