@@ -1,104 +1,213 @@
 {
  "format": 1,
- "palette_version": "db9b826",
+ "palette_version": "df5d1c8",
  "surfaces": {
+  "cliff": {
+   "albedo": "surfaces/cliff/cliff_albedo.png",
+   "normal": "surfaces/cliff/cliff_normal.png",
+   "orm": "surfaces/cliff/cliff_orm.png",
+   "height": "surfaces/cliff/cliff_height.png",
+   "tile_m": 3.0,
+   "kind": "cliff",
+   "role": "cliff"
+  },
+  "cliff_basalt": {
+   "albedo": "surfaces/cliff_basalt/cliff_basalt_albedo.png",
+   "normal": "surfaces/cliff_basalt/cliff_basalt_normal.png",
+   "orm": "surfaces/cliff_basalt/cliff_basalt_orm.png",
+   "height": "surfaces/cliff_basalt/cliff_basalt_height.png",
+   "tile_m": 3.0,
+   "kind": "cliff",
+   "role": "cliff"
+  },
+  "cliff_sandstone": {
+   "albedo": "surfaces/cliff_sandstone/cliff_sandstone_albedo.png",
+   "normal": "surfaces/cliff_sandstone/cliff_sandstone_normal.png",
+   "orm": "surfaces/cliff_sandstone/cliff_sandstone_orm.png",
+   "height": "surfaces/cliff_sandstone/cliff_sandstone_height.png",
+   "tile_m": 3.0,
+   "kind": "cliff",
+   "role": "cliff"
+  },
+  "cobblestone": {
+   "albedo": "surfaces/cobblestone/cobblestone_albedo.png",
+   "normal": "surfaces/cobblestone/cobblestone_normal.png",
+   "orm": "surfaces/cobblestone/cobblestone_orm.png",
+   "height": "surfaces/cobblestone/cobblestone_height.png",
+   "tile_m": 2.0,
+   "kind": "cobblestone",
+   "role": "built"
+  },
   "dirt": {
    "albedo": "surfaces/dirt/dirt_albedo.png",
    "normal": "surfaces/dirt/dirt_normal.png",
    "orm": "surfaces/dirt/dirt_orm.png",
    "height": "surfaces/dirt/dirt_height.png",
-   "tile_m": 3.0
+   "tile_m": 3.0,
+   "kind": "dirt",
+   "role": "ground"
   },
   "dirt_peat": {
    "albedo": "surfaces/dirt_peat/dirt_peat_albedo.png",
    "normal": "surfaces/dirt_peat/dirt_peat_normal.png",
    "orm": "surfaces/dirt_peat/dirt_peat_orm.png",
    "height": "surfaces/dirt_peat/dirt_peat_height.png",
-   "tile_m": 3.0
+   "tile_m": 3.0,
+   "kind": "dirt",
+   "role": "ground"
+  },
+  "dirt_road_packed": {
+   "albedo": "surfaces/dirt_road_packed/dirt_road_packed_albedo.png",
+   "normal": "surfaces/dirt_road_packed/dirt_road_packed_normal.png",
+   "orm": "surfaces/dirt_road_packed/dirt_road_packed_orm.png",
+   "height": "surfaces/dirt_road_packed/dirt_road_packed_height.png",
+   "tile_m": 4.0,
+   "kind": "dirt_road",
+   "role": "built"
+  },
+  "flagstone": {
+   "albedo": "surfaces/flagstone/flagstone_albedo.png",
+   "normal": "surfaces/flagstone/flagstone_normal.png",
+   "orm": "surfaces/flagstone/flagstone_orm.png",
+   "height": "surfaces/flagstone/flagstone_height.png",
+   "tile_m": 3.0,
+   "kind": "flagstone",
+   "role": "built"
   },
   "forest_floor": {
    "albedo": "surfaces/forest_floor/forest_floor_albedo.png",
    "normal": "surfaces/forest_floor/forest_floor_normal.png",
    "orm": "surfaces/forest_floor/forest_floor_orm.png",
    "height": "surfaces/forest_floor/forest_floor_height.png",
-   "tile_m": 3.0
+   "tile_m": 3.0,
+   "kind": "forest_floor",
+   "role": "ground"
   },
   "grass": {
    "albedo": "surfaces/grass/grass_albedo.png",
    "normal": "surfaces/grass/grass_normal.png",
    "orm": "surfaces/grass/grass_orm.png",
    "height": "surfaces/grass/grass_height.png",
-   "tile_m": 2.0
+   "tile_m": 2.0,
+   "kind": "grass",
+   "role": "ground"
   },
   "grass_alpine": {
    "albedo": "surfaces/grass_alpine/grass_alpine_albedo.png",
    "normal": "surfaces/grass_alpine/grass_alpine_normal.png",
    "orm": "surfaces/grass_alpine/grass_alpine_orm.png",
    "height": "surfaces/grass_alpine/grass_alpine_height.png",
-   "tile_m": 2.0
+   "tile_m": 2.0,
+   "kind": "grass",
+   "role": "ground"
   },
   "grass_savanna": {
    "albedo": "surfaces/grass_savanna/grass_savanna_albedo.png",
    "normal": "surfaces/grass_savanna/grass_savanna_normal.png",
    "orm": "surfaces/grass_savanna/grass_savanna_orm.png",
    "height": "surfaces/grass_savanna/grass_savanna_height.png",
-   "tile_m": 2.0
+   "tile_m": 2.0,
+   "kind": "grass",
+   "role": "ground"
   },
   "gravel": {
    "albedo": "surfaces/gravel/gravel_albedo.png",
    "normal": "surfaces/gravel/gravel_normal.png",
    "orm": "surfaces/gravel/gravel_orm.png",
    "height": "surfaces/gravel/gravel_height.png",
-   "tile_m": 2.0
+   "tile_m": 2.0,
+   "kind": "gravel",
+   "role": "ground"
+  },
+  "gravel_sandstone": {
+   "albedo": "surfaces/gravel_sandstone/gravel_sandstone_albedo.png",
+   "normal": "surfaces/gravel_sandstone/gravel_sandstone_normal.png",
+   "orm": "surfaces/gravel_sandstone/gravel_sandstone_orm.png",
+   "height": "surfaces/gravel_sandstone/gravel_sandstone_height.png",
+   "tile_m": 2.0,
+   "kind": "gravel",
+   "role": "ground"
   },
   "moss": {
    "albedo": "surfaces/moss/moss_albedo.png",
    "normal": "surfaces/moss/moss_normal.png",
    "orm": "surfaces/moss/moss_orm.png",
    "height": "surfaces/moss/moss_height.png",
-   "tile_m": 3.0
+   "tile_m": 3.0,
+   "kind": "moss",
+   "role": "ground"
   },
   "mud": {
    "albedo": "surfaces/mud/mud_albedo.png",
    "normal": "surfaces/mud/mud_normal.png",
    "orm": "surfaces/mud/mud_orm.png",
    "height": "surfaces/mud/mud_height.png",
-   "tile_m": 4.0
+   "tile_m": 4.0,
+   "kind": "mud",
+   "role": "ground"
   },
   "pine_duff": {
    "albedo": "surfaces/pine_duff/pine_duff_albedo.png",
    "normal": "surfaces/pine_duff/pine_duff_normal.png",
    "orm": "surfaces/pine_duff/pine_duff_orm.png",
    "height": "surfaces/pine_duff/pine_duff_height.png",
-   "tile_m": 3.0
+   "tile_m": 3.0,
+   "kind": "pine_duff",
+   "role": "ground"
+  },
+  "planks": {
+   "albedo": "surfaces/planks/planks_albedo.png",
+   "normal": "surfaces/planks/planks_normal.png",
+   "orm": "surfaces/planks/planks_orm.png",
+   "height": "surfaces/planks/planks_height.png",
+   "tile_m": 2.0,
+   "kind": "planks",
+   "role": "built"
   },
   "riverbed": {
    "albedo": "surfaces/riverbed/riverbed_albedo.png",
    "normal": "surfaces/riverbed/riverbed_normal.png",
    "orm": "surfaces/riverbed/riverbed_orm.png",
    "height": "surfaces/riverbed/riverbed_height.png",
-   "tile_m": 3.0
+   "tile_m": 3.0,
+   "kind": "riverbed",
+   "role": "ground"
   },
   "sand": {
    "albedo": "surfaces/sand/sand_albedo.png",
    "normal": "surfaces/sand/sand_normal.png",
    "orm": "surfaces/sand/sand_orm.png",
    "height": "surfaces/sand/sand_height.png",
-   "tile_m": 3.0
+   "tile_m": 3.0,
+   "kind": "sand",
+   "role": "ground"
   },
   "sand_red": {
    "albedo": "surfaces/sand_red/sand_red_albedo.png",
    "normal": "surfaces/sand_red/sand_red_normal.png",
    "orm": "surfaces/sand_red/sand_red_orm.png",
    "height": "surfaces/sand_red/sand_red_height.png",
-   "tile_m": 3.0
+   "tile_m": 3.0,
+   "kind": "sand",
+   "role": "ground"
   },
   "snow": {
    "albedo": "surfaces/snow/snow_albedo.png",
    "normal": "surfaces/snow/snow_normal.png",
    "orm": "surfaces/snow/snow_orm.png",
    "height": "surfaces/snow/snow_height.png",
-   "tile_m": 4.0
+   "tile_m": 4.0,
+   "kind": "snow",
+   "role": "ground"
+  },
+  "stone_tiles": {
+   "albedo": "surfaces/stone_tiles/stone_tiles_albedo.png",
+   "normal": "surfaces/stone_tiles/stone_tiles_normal.png",
+   "orm": "surfaces/stone_tiles/stone_tiles_orm.png",
+   "height": "surfaces/stone_tiles/stone_tiles_height.png",
+   "tile_m": 1.5,
+   "kind": "stone_tiles",
+   "role": "built"
   }
  },
  "biomes": [
@@ -111,6 +220,8 @@
    "climate": "cold",
    "thumbnail": "thumbnails/alpine_meadow_summer_s1.jpg",
    "ground_surface": "grass_alpine",
+   "cliff_surface": "cliff_basalt",
+   "scree_surface": "gravel",
    "species": [
     {
      "key": "dwarf_pine",
@@ -680,6 +791,8 @@
    "climate": "temperate",
    "thumbnail": "thumbnails/birch_woodland_summer_s1.jpg",
    "ground_surface": "grass",
+   "cliff_surface": "cliff",
+   "scree_surface": "gravel",
    "species": [
     {
      "key": "oak",
@@ -1245,6 +1358,8 @@
    "climate": "cold",
    "thumbnail": "thumbnails/boreal_taiga_summer_s1.jpg",
    "ground_surface": "pine_duff",
+   "cliff_surface": "cliff_basalt",
+   "scree_surface": "gravel",
    "species": [
     {
      "key": "birch",
@@ -1693,6 +1808,8 @@
    "climate": "temperate",
    "thumbnail": "thumbnails/grassland_meadow_summer_s1.jpg",
    "ground_surface": "grass",
+   "cliff_surface": "cliff",
+   "scree_surface": "gravel",
    "species": [
     {
      "key": "oak",
@@ -2253,6 +2370,8 @@
    "climate": "dry",
    "thumbnail": "thumbnails/rocky_badlands_summer_s1.jpg",
    "ground_surface": "sand_red",
+   "cliff_surface": "cliff_sandstone",
+   "scree_surface": "gravel_sandstone",
    "species": [
     {
      "key": "acacia",
@@ -2710,6 +2829,8 @@
    "climate": "dry",
    "thumbnail": "thumbnails/savanna_summer_s1.jpg",
    "ground_surface": "grass_savanna",
+   "cliff_surface": "cliff_sandstone",
+   "scree_surface": "gravel_sandstone",
    "species": [
     {
      "key": "palm",
@@ -3210,6 +3331,8 @@
    "climate": "temperate",
    "thumbnail": "thumbnails/temperate_forest_summer_s1.jpg",
    "ground_surface": "forest_floor",
+   "cliff_surface": "cliff",
+   "scree_surface": "gravel",
    "species": [
     {
      "key": "pine",
@@ -3993,6 +4116,8 @@
    "climate": "temperate",
    "thumbnail": "thumbnails/wetland_riparian_summer_s1.jpg",
    "ground_surface": "grass",
+   "cliff_surface": "cliff",
+   "scree_surface": "gravel",
    "species": [
     {
      "key": "poplar",
