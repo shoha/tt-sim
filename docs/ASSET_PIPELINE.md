@@ -340,6 +340,9 @@ and cacti carry no COLOR_0.
       "ground_surface": "<surface>",
       "cliff_surface": "<surface with role cliff>",
       "scree_surface": "<surface with role ground>",
+      "ground_accents": [{"surface": "<surface with role ground>", "coverage": <0..1>,
+                          "scale_m": <patch size, metres>}, ...],
+      "path_surfaces": ["<surface with role built>", ...],
       "species": [
         {
           "key": "<species key>", "kind": "<tree|grass|flower|rock|deadwood|...>",
@@ -385,7 +388,8 @@ Field notes:
     `cliff_sandstone`), sampled sideways (biplanar or triplanar, v up the face). Tiles
     keep their beds near-horizontal so a bed line carries across a projection seam.
   - `built`: walkable paving an author paints as paths and courtyards (`cobblestone`,
-    `flagstone`, `dirt_road_packed`, `stone_tiles`, `planks`), sampled top-down. They
+    `flagstone`, `dirt_road_packed`, `stone_tiles`, `planks`, and biome path variants
+    such as a caliche track or sandstone flags), sampled top-down. They
     carry no direction (a painted path runs any way through world-space UVs), which is
     why the rutted, verged `dirt_road` is not in the palette. Walls, roofs and interior
     floors are never palette surfaces.
@@ -410,6 +414,33 @@ Field notes:
 
   A painted `cliff` surface always wins over these (phase 3 decision); the biome only
   supplies the default. Painted ground and built surfaces do not cover a face (above).
+- `ground_accents` (added 2026-09-27, phase 3; optional) are broad patches of other
+  ground surfaces the consumer mixes into the biome ground in the shader, so a biome
+  floor is not one field of one tile (a temperate forest read as one flat brown in game,
+  where the Blender maps it came from carry moss, grass and bare patches). Each entry:
+  `surface`, a surface with role `ground` other than the biome's `ground_surface`;
+  `coverage`, the share of the biome ground the patches cover (0..1; the entries of one
+  biome sum to at most 0.6, so the biome ground stays the ground); `scale_m`, the
+  typical patch size across, metres (a noise feature size, 2 to 20 m). Patches are
+  soft-edged and irregular; how the mask is made (noise type, edge width, a height
+  blend at the edge) is the consumer's choice, as long as the covered share is about
+  `coverage` over a large area and a patch is about `scale_m` across. Entries are in
+  priority order: a consumer with a layer budget draws the first ones and drops the
+  rest. Accents belong to the ground: they appear only where the biome ground would
+  show, so the automatic cliff and scree and every painted surface cover them, and
+  the plant scatter does not read them. Empty (`[]`) where a biome's ground wants no
+  accents; a season whose `ground_surface` differs from the all-year one (winter
+  snow) gets no accents unless the producer lists some for it.
+- `path_surfaces` (added 2026-09-27, phase 3; optional) is an ordered list of `built`
+  surfaces the Paint tool shows first on this biome: the biome-specific path variants
+  (a pale caliche track and sandstone flags on red sand, where the generic dirt track
+  vanishes and grey flagstone looks pasted on) and the generic ones that suit the
+  biome. It orders, it does not filter: every built surface stays paintable on every
+  biome, in file order after the listed ones.
+
+  The producer's per-biome values, judged at game scale (treecube `docs/surfaces.md`
+  "Ground accents and path variants in tt-sim"), are listed there; the contract
+  holds only the rules.
 - `geoscatter_pattern` holds Geoscatter's `s_pattern1_*` settings verbatim with the
   prefix stripped (texture dict, sample method, influences, revert flags), minus the
   datablock plumbing (`allow`, `texture_ptr`, `texture_is_unique`). tt-sim's
@@ -452,6 +483,16 @@ Rules both sides rely on:
   order (`cliff` in treecube's sorted output) or `""` when there is none; a missing
   `scree_surface` is `""` (the foot keeps the biome ground), and one that names an absent
   or non-ground surface warns and becomes `""`.
+- **Accents and path surfaces degrade, never fail.** The producer rejects a
+  `ground_accents` entry whose surface is missing, has a role other than `ground` or
+  is the biome's own `ground_surface`, whose `coverage` is outside 0..1 or whose
+  `scale_m` is not positive, and a biome whose coverages sum over 0.6; and a
+  `path_surfaces` name that is missing, listed twice, or has a role other than
+  `built` (`palette_problems()`). The consumer is lenient: a missing field is `[]`
+  silently; an accent entry that is malformed or names an absent or non-ground
+  surface warns and is dropped, coverage is clamped to 0..1 and a missing or
+  non-positive `scale_m` becomes 6; a `path_surfaces` name that is absent or not
+  `built` warns and is dropped, and a duplicate is ignored.
 - Budgets: palette assets obey section 7's triangle targets; the foliage budget applies
   unchanged, since palette scatter builds the same chunked MultiMeshes.
 
