@@ -10,7 +10,7 @@ extends RefCounted
 ##                               (default ["ankle", "waist", "deep"]). Logs bodies, levels,
 ##                               mesh size and the refresh's worker and swap times.
 ##   save {folder}               writes the open document and level as user://levels/<folder>
-##                               (a test level; the caller deletes it).
+##                               (a _p42_ or _p43_ test level; the caller deletes it).
 ##   tokens {points}             in play: spawns one token per point (the first locally cached
 ##                               asset), each dropped onto the ground as a browser drop does.
 ##   drag {token, to}            in play: drags token i through DragAndDrop3D to world XZ `to`
@@ -29,6 +29,18 @@ extends RefCounted
 ##                               as "found:deep", "found:shallow", "found:dry", "found:across_a"
 ##                               and "found:across_b" (any point field takes them).
 ##   look {at}                   pans the camera so the screen centre looks at `at`.
+## P4-3, through the AuthoringEditor water API (the carve, dressing and plants as an edit
+## makes them):
+##   tilt {slope, axis}          tilts the open map's ground (a one-shot height edit).
+##   carve {points, half_width, depth, speed}
+##                               AuthoringEditor.carve_river; logs the reaches and timings and
+##                               names each step "c<carve>_joint<k>" for `look` / `found:`.
+##   pond {points, radius, depth} a pond stroke along `points`.
+##   erase {points, radius}      a water erase stroke along `points`.
+##   check                       bodies, dressing coverage, scatter rows in the water by
+##                               asset, rock props under the water, the ground layers.
+##   profile {every}             ground and depth along every river's course.
+##   cleanup                     deletes every user://levels/_p43_* folder (test levels only).
 
 ## The `build` map: the river's control line, its reaches' half-widths, the bank width of
 ## the carve, and the two ponds.
@@ -49,8 +61,10 @@ const BANK_M := 1.6
 const POND := {"id": 20, "at": [13, -17], "r": 6.0, "depth": "deep"}
 const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}
 
-## Points `scan` found, by name.
+## Points `scan` found (and the reach steps `carve` made), by name.
 static var _found: Dictionary = {}
+## Rivers `carve` has made this run.
+static var _carves: int = 0
 
 
 static func run(base: Node, step: Dictionary) -> String:
@@ -67,6 +81,22 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "look at %s" % str(at)
 		"build":
 			return _build(base, step)
+		"tilt":
+			return _tilt(
+				base, float(step.get("slope", 0.03)), _vec(step.get("axis"), Vector2(1, 0))
+			)
+		"carve":
+			return _carve(base, step)
+		"pond":
+			return _pond(base, step)
+		"erase":
+			return _erase(base, step)
+		"check":
+			return _check(base)
+		"profile":
+			return _profile(base, float(step.get("every", 1.0)))
+		"cleanup":
+			return _cleanup()
 		"save":
 			return _save(base, String(step.get("folder", "_p42_water")))
 		"tokens":
@@ -347,13 +377,327 @@ static func _paint_beds(doc: MapDocument, owners: PackedInt32Array, _courses: Di
 	return ",".join(out)
 
 
+# --- carve (P4-3) ------------------------------------------------------------------------------
+
+
+static func _points_of(value: Variant) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if value is Array:
+		for p in value:
+			out.append(_vec(p, Vector2.ZERO))
+	return out
+
+
+## Tilts the open document's ground by `slope` metres per metre along `axis` (map XZ), as a
+## one-shot edit refreshed like an undo (terrain, collision, plants), so a river drawn across
+## it splits into reaches.
+static func _tilt(base: Node, slope: float, axis: Vector2) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	var editor := ctrl.editor
+	var doc := ctrl.document
+	editor.finish_height_work()
+	var before := doc.heights.duplicate()
+	var heights := doc.heights.duplicate()
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var p := doc.sample_to_world(Vector2(x, z))
+			heights[doc.sample_index(x, z)] -= slope * p.dot(axis.normalized())
+	doc.heights = heights
+	var changed := Rect2i(0, 0, doc.samples_x(), doc.samples_z())
+	editor.set("_snap_before", before)
+	editor.set("_aligned", DressingGround.aligned_assets(doc.biome_ids, editor.palette_root))
+	(editor.get("_snap_start") as Dictionary).clear()
+	(editor.get("_prop_start") as Dictionary).clear()
+	editor.call("_queue_heights", changed)
+	editor.finish_height_work()
+	editor.terrain.settle_heights()
+	editor.finish_height_work()
+	editor.call("_regenerate", changed)
+	return "tilted %.3f m/m along %s" % [slope, str(axis)]
+
+
+static func _carve(base: Node, step: Dictionary) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	var points := _points_of(step.get("points", []))
+	var widths := PackedFloat32Array()
+	var half: Variant = step.get("half_width", 1.5)
+	if half is Array:
+		for w in half:
+			widths.append(float(w))
+	else:
+		widths.append(float(half))
+	var depth := _depth(String(step.get("depth", "waist")))
+	var started := Time.get_ticks_usec()
+	var before := ctrl.document.water_bodies.size()
+	var id := ctrl.editor.water.carve_river(points, widths, depth, float(step.get("speed", 1.0)))
+	var usec := Time.get_ticks_usec() - started
+	var water := _water_node(ctrl)
+	if water != null:
+		water.finish_refresh()
+	var lines := PackedStringArray()
+	if id > 0:
+		_carves += 1
+	for b in range(before, ctrl.document.water_bodies.size()):
+		var body := ctrl.document.water_bodies[b]
+		# The shared points between this stroke's reaches, for later steps: "found:c1_joint1"
+		# is the first step of the first carve.
+		if b > before:
+			_found["c%d_joint%d" % [_carves, b - before]] = body.points[0]
+		lines.append(
+			(
+				"%d: %d pts level %.2f hw %.2f"
+				% [body.id, body.points.size(), body.level_m, body.half_widths[0]]
+			)
+		)
+	return (
+		(
+			"carve %s -> id %d in %.0f ms (main thread) | reaches %s"
+			+ " | water build %.0f ms bake %.0f ms swap %.0f ms"
+		)
+		% [
+			WaterBody.DEPTH_NAMES[depth],
+			id,
+			usec / 1000.0,
+			"; ".join(lines),
+			water.last_build_usec / 1000.0 if water else 0.0,
+			water.last_bake_usec / 1000.0 if water else 0.0,
+			water.last_swap_usec / 1000.0 if water else 0.0,
+		]
+	)
+
+
+static func _water_node(ctrl: AuthoringController) -> AuthoredWater:
+	var root := ctrl.editor.map_root
+	return root.get_node_or_null(AuthoredWater.NODE_NAME) as AuthoredWater if root else null
+
+
+static func _pond(base: Node, step: Dictionary) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	var editor := ctrl.editor.water
+	var points := _points_of(step.get("points", []))
+	var radius := float(step.get("radius", 3.0))
+	var depth := _depth(String(step.get("depth", "waist")))
+	if points.is_empty():
+		return "no points"
+	var started := Time.get_ticks_usec()
+	if not editor.paint_pond_begin(depth, Vector3(points[0].x, 0, points[0].y)):
+		return "pond refused"
+	for i in points.size():
+		var a := points[maxi(i - 1, 0)]
+		var b := points[i]
+		editor.paint_pond_dab(Vector3(a.x, 0, a.y), Vector3(b.x, 0, b.y), radius)
+	var ok := editor.paint_pond_end()
+	var usec := Time.get_ticks_usec() - started
+	var water := _water_node(ctrl)
+	if water != null:
+		water.finish_refresh()
+	var last := (
+		ctrl.document.water_bodies[-1] if not ctrl.document.water_bodies.is_empty() else null
+	)
+	return (
+		"pond %s: %s in %.0f ms | level %.2f, %d samples"
+		% [
+			WaterBody.DEPTH_NAMES[depth],
+			str(ok),
+			usec / 1000.0,
+			last.level_m if last else NAN,
+			ctrl.document.pond_mask.count(last.id) if last else 0,
+		]
+	)
+
+
+static func _erase(base: Node, step: Dictionary) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	var editor := ctrl.editor.water
+	var points := _points_of(step.get("points", []))
+	var radius := float(step.get("radius", 2.0))
+	var before := ctrl.document.water_bodies.size()
+	var started := Time.get_ticks_usec()
+	if not editor.erase_water_begin():
+		return "nothing to erase"
+	for i in points.size():
+		var a := points[maxi(i - 1, 0)]
+		var b := points[i]
+		editor.erase_water_dab(Vector3(a.x, 0, a.y), Vector3(b.x, 0, b.y), radius)
+	var ok := editor.erase_water_end()
+	var water := _water_node(ctrl)
+	if water != null:
+		water.finish_refresh()
+	return (
+		"erase: %s in %.0f ms, bodies %d -> %d"
+		% [
+			str(ok),
+			(Time.get_ticks_usec() - started) / 1000.0,
+			before,
+			ctrl.document.water_bodies.size()
+		]
+	)
+
+
+## What the water did to the map: bodies, the dressing's coverage, plants standing in the
+## water (by asset: only emergent edge species should), rock props in the water, and painted
+## surfaces under the bed (a path crossing: they yield).
+static func _check(base: Node) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	ctrl.editor.finish_height_work()
+	var doc := ctrl.document
+	var field := doc.water_dressing
+	var columns := doc.samples_x()
+	var rows := doc.samples_z()
+	var bed := 0
+	var shore := 0
+	var painted_wet := 0
+	var count := doc.sample_count()
+	var paints := doc.surface_weights.size() == count * MapDocument.MAX_SURFACES
+	for i in count:
+		if field.size() != count * WaterDressing.CHANNELS:
+			break
+		if field[i * 4] > 128:
+			bed += 1
+			if paints:
+				for s in doc.surface_ids.size():
+					if doc.surface_weights[MapDocument.surface_offset(i, s, count)] > 64:
+						painted_wet += 1
+						break
+		elif field[i * 4 + 1] > 128:
+			shore += 1
+	var wet_rows := {}
+	var total_rows := 0
+	var scatter: Dictionary = ctrl.editor.scatter.rows_by_asset()
+	for asset_id in scatter:
+		var flat: PackedFloat32Array = scatter[asset_id]
+		for r in flat.size() / MapDocument.ROW_STRIDE:
+			total_rows += 1
+			var s := doc.world_to_sample(Vector2(flat[r * 10], flat[r * 10 + 2]))
+			var w := WaterDressing.sample(field, columns, rows, s)
+			if w.x > 0.5:
+				var key := String(asset_id).get_slice("/", 1)
+				wet_rows[key] = int(wet_rows.get(key, 0)) + 1
+	var rocks := 0
+	var props: Dictionary = ctrl.editor.props.rows_by_asset()
+	var levels := WaterGeometry.levels(doc)
+	for asset_id in props:
+		var flat: PackedFloat32Array = props[asset_id]
+		for r in flat.size() / MapDocument.ROW_STRIDE:
+			var s := doc.world_to_sample(Vector2(flat[r * 10], flat[r * 10 + 2])).round()
+			var i := doc.sample_index(
+				clampi(int(s.x), 0, columns - 1), clampi(int(s.y), 0, rows - 1)
+			)
+			if levels[i] != WaterGeometry.DRY and flat[r * 10 + 1] < levels[i]:
+				rocks += 1
+	var bodies := PackedStringArray()
+	for body in doc.water_bodies:
+		bodies.append(
+			(
+				"%s %d %s %.2f"
+				% [
+					WaterBody.KIND_NAMES[body.kind],
+					body.id,
+					WaterBody.DEPTH_NAMES[body.depth],
+					body.level_m
+				]
+			)
+		)
+	return (
+		(
+			"bodies [%s] | bed samples %d, shore %d, painted under water %d"
+			+ " | scatter rows %d, in water %s | props based under water %d | layers %s"
+		)
+		% [
+			", ".join(bodies),
+			bed,
+			shore,
+			painted_wet,
+			total_rows,
+			str(wet_rows),
+			rocks,
+			str(ctrl.editor.terrain.ground_layers()) if ctrl.editor.terrain else "-",
+		]
+	)
+
+
+## Along every river's course, every `every` metres: the ground, the water level there (the
+## per-sample levels the surface is built from) and the depth; one line per body.
+static func _profile(base: Node, every: float) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	var doc := ctrl.document
+	var levels := WaterGeometry.levels(doc)
+	var out := PackedStringArray()
+	for body in doc.water_bodies:
+		if not body.is_river():
+			continue
+		var course: PackedVector2Array = WaterGeometry.river_course(body)[0]
+		var parts := PackedStringArray()
+		var walked := 0.0
+		var next := 0.0
+		for i in course.size() - 1:
+			var length := course[i].distance_to(course[i + 1])
+			while next <= walked + length:
+				var p := course[i].lerp(course[i + 1], (next - walked) / maxf(length, 1e-6))
+				var s := doc.world_to_sample(p).round()
+				var at := doc.sample_index(
+					clampi(int(s.x), 0, doc.samples_x() - 1),
+					clampi(int(s.y), 0, doc.samples_z() - 1)
+				)
+				var g := WaterGeometry.ground_at(doc, p)
+				var level := levels[at]
+				parts.append(
+					(
+						"%.0f:%.2f/%s"
+						% [next, g, ("%.2f" % (level - g)) if level != WaterGeometry.DRY else "dry"]
+					)
+				)
+				next += every
+			walked += length
+		out.append("river %d level %.2f: %s" % [body.id, body.level_m, " ".join(parts)])
+	return " || ".join(out)
+
+
+## Deletes the test levels this probe saved (user://levels/_p43_* only).
+static func _cleanup() -> String:
+	var dir := DirAccess.open(LevelManager.levels_dir)
+	if dir == null:
+		return "no levels folder"
+	var removed := PackedStringArray()
+	for folder in dir.get_directories():
+		if not folder.begins_with("_p43_"):
+			continue
+		var path := LevelManager.folder_path(folder)
+		_remove_tree(path)
+		removed.append(folder)
+	return "removed %s" % str(removed)
+
+
+static func _remove_tree(path: String) -> void:
+	var dir := DirAccess.open(path)
+	if dir == null:
+		return
+	for file in dir.get_files():
+		dir.remove(file)
+	for sub in dir.get_directories():
+		_remove_tree(path.path_join(sub))
+	DirAccess.remove_absolute(path)
+
+
 # --- save --------------------------------------------------------------------------------------
 
 
 static func _save(base: Node, folder: String) -> String:
 	var ctrl: AuthoringController = base.get("_authoring_controller")
-	if ctrl == null or not folder.begins_with("_p42_"):
-		return "no authoring controller, or not a _p42_ folder"
+	if ctrl == null or not (folder.begins_with("_p42_") or folder.begins_with("_p43_")):
+		return "no authoring controller, or not a _p42_ / _p43_ folder"
 	var existing := DirAccess.dir_exists_absolute(LevelManager.folder_path(folder))
 	if existing:
 		return "folder %s exists; not touching it" % folder
