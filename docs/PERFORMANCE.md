@@ -1027,6 +1027,200 @@ grass 0.14 at 5 m; palette v5 was not installed yet), toggled with `accent_compo
   or slightly slower (+0.60 / +0.60), so the early-outs stay. Dynamic indexing of the
   per-component weights was checked too (a constant-index variant: same cost).
 
+## In-game authoring phase 3: pinned performance pass (2026-09-27)
+
+The phase 3 pass: authored maps with relief in play, the ground shader with the whole phase 3
+feature set on screen, Sculpt and Paint strokes and their stroke-end work, and loading and
+memory for a relief map against a flat one.
+
+**How.** RTX 3080 checked idle before every job (`nvidia-smi`: 17 %, P8, 39-43 C, desktop
+processes only). Render-job harness (`tools/render_jobs/run.gd`, a real 1920x1080 window,
+viewport 1920x1080 in every sample) with `override.cfg` pinning the viewport (removed by each
+job at startup), vsync off at runtime (`vsync_off`) for frame-time windows and on for load
+times, the user's graphics settings unchanged (shadow quality 2, SSAO on, 8M foliage budget),
+debug build. `perf.gd` samples every frame (CPU wall clock, world-viewport GPU time) and
+reports median / p95 / worst (n). Test levels built with the real Sculpt and Paint tools at
+human speed exactly as `jobs/phase3_judgment_set.json` builds them (150 ft, seed 1234: a
+raised hill, a two-tier plateau with a Shift-smoothed ramp, a sunken hollow cut with Ctrl, a
+track up the ramp in the biome's first path surface, a stone path across a tier edge and a
+courtyard on the top tier, three props) and saved: `_p39_forest` (temperate forest, 4,503
+instances in 515 nodes) and `_p39_badlands` (rocky badlands, 1,363 in 381); and flat twins,
+`_p39_forest_flat` (4,689 in 527) and `_p39_badlands_flat` (1,418 in 386): the same new map,
+paint and props with no sculpting. All four deleted afterwards. Jobs in the session
+scratchpad (`p39/*.json`); `probes/sculpt.gd` now also reports end_stroke and the stroke's
+tail by part.
+
+### Play-time frame time
+
+Each level played in one process in the order forest, forest flat, badlands, badlands flat,
+deciduous, then in reverse; 8 s windows at the camera home (zoom 13.85) and at max play zoom
+(20). GPU ms, median / p95 / worst (n), both rounds; CPU frame median:
+
+| Level | Home: draws, prims (shadow) | Home GPU r1 / r2 | CPU | Zoom 20: draws, prims (shadow) | Zoom 20 GPU r1 / r2 | CPU |
+| --- | --- | --- | --- | --- | --- | --- |
+| `_p39_forest` (relief) | 491, 426K (217, 262K) | 3.17 / 3.76 / 4.14 (2088); 3.57 / 3.83 / 4.22 (1961) | 3.80 / 4.15 | 675, 574K (269, 299K) | 3.90 / 4.28 / 4.57 (1841); 3.93 / 4.31 / 4.63 (1817) | 4.39 / 4.45 |
+| `_p39_forest_flat` | 512, 477K (219, 257K) | 3.81 / 4.21 / 4.49 (1875); 3.84 / 4.25 / 4.54 (1869) | 4.32 / 4.34 | 700, 632K (274, 294K) | 4.04 / 4.44 / 4.70 (1770); 4.08 / 4.48 / 4.76 (1755) | 4.57 / 4.62 |
+| `_p39_badlands` (relief) | 233, 264K (129, 290K) | 2.83 / 3.41 / 3.77 (2234); 2.85 / 3.43 / 3.89 (2222) | 3.52 / 3.54 | 336, 348K (171, 360K) | 2.78 / 3.33 / 3.73 (2269); 2.80 / 3.36 / 3.71 (2251) | 3.46 / 3.50 |
+| `_p39_badlands_flat` | 236, 270K (119, 253K) | 2.60 / 3.26 / 3.54 (2390); 2.63 / 3.27 / 3.55 (2373) | 3.22 / 3.25 | 342, 365K (162, 330K) | 2.50 / 3.04 / 3.41 (2465); 2.53 / 3.10 / 3.51 (2445) | 3.11 / 3.14 |
+| `deciduous_clusters` (Blender, 11,267 instances) | 384, 805K (170, 486K) | 2.17 / 2.69 / 3.13 (2768); 2.19 / 2.72 / 3.13 (2755) | 2.72 / 2.74 | 559, 1.21M (227, 593K) | 4.06 / 4.47 / 4.75 (1755); 4.15 / 4.53 / 4.82 (1731) | 4.61 / 4.67 |
+
+Drift between rounds is +0.02 to +0.09 ms everywhere except the relief forest at home (+0.40
+ms, identical draws and primitives), the same pattern as the phase 2 pass's forest at home;
+read its two rounds as its range.
+
+**Verdict: relief costs little, and cost still follows content.** The badlands relief map is
++0.23 ms at home and +0.28 ms at zoom 20 over its flat twin while drawing 4 % fewer
+instances: that is the ground shader's rock faces, scree and lips (below). The forest relief
+map is cheaper than its flat twin (-0.27 to -0.64 ms at home, -0.14 at zoom 20): the face
+and footing rules keep large trees off the tier faces and rims (186 fewer instances, 51K
+fewer primitives at home), so the canopy fill that dominates a forest frame goes down. The
+heaviest authored case here is 4.1 ms GPU median at zoom 20 (245 fps). Against phase 2: these 150 ft
+judgment maps carry 4.5K and 1.4K instances where phase 2's fully painted 200 ft maps
+carried 31K to 43K (6.4-6.7 ms at zoom 20 in that session), so absolute times are not
+comparable; `deciduous_clusters` is the cross-session anchor and ran 5-19 % faster in this
+session (2.17-2.19 against 2.68-2.71 ms at home, 4.06-4.15 against 4.36-4.42 at zoom 20).
+Per instance an authored map costs more than the Blender map at home (the relief forest at
+3.2-3.6 ms for 4.5K instances against deciduous at 2.2 ms for 11.3K): most of that is the
+ground shader, which on these lightly scattered maps is the largest single cost.
+
+### Ground shader
+
+The relief maps opened in authoring, all configurations interleaved in one run, two
+repetitions, 4 s windows. Views: the plateau (home zoom looking at the two tiers, courtyard,
+track and ramp: 14.7 % of the ground rays steeper than the side-projection threshold), the
+flat view (home zoom on the map's south-east corner: accents, biome ground, a tier face at
+the top edge and the skirt; 11.0 % steep) and the whole map at zoom 20 (10.1 %). `std` is the
+StandardMaterial3D ground with the base surface's textures (`perf.gd ground_std`), `old` the
+ground include from before P3-4 (`user://p34_old_ground.zip`: phase 2's shader, which reads
+none of the phase 3 uniforms and draws the base surface alone), `new` the current shader;
+`bare` hides the scatter. GPU ms, median of each window, rep 1 / rep 2 (n about 2,300-2,600
+std, 1,700-1,800 old, 1,000-1,300 new):
+
+| Map, view | bare std | bare old | bare new | new - old | full frame old / new | new - old |
+| --- | --- | --- | --- | --- | --- | --- |
+| Forest, plateau | 0.98 / 1.05 | 1.64 / 1.66 | 3.12 / 3.44 | +1.48 / +1.78 | 2.15 / 3.74; 2.16 / 3.78 | +1.59 / +1.62 |
+| Forest, flat view | 1.16 / 1.17 | 1.61 / 1.60 | 2.58 / 2.59 | +0.98 / +0.99 | 2.05 / 2.81; 2.05 / 2.81 | +0.76 |
+| Forest, zoom 20 | 1.11 / 1.13 | 1.59 / 1.60 | 2.97 / 2.97 | +1.39 / +1.37 | 2.60 / 3.86; 2.60 / 3.87 | +1.26 / +1.27 |
+| Badlands, plateau | 1.03 / 1.05 | 1.66 / 1.68 | 2.97 / 2.97 | +1.30 / +1.30 | 1.67 / 2.91; 1.68 / 2.91 | +1.24 / +1.23 |
+| Badlands, flat view | 1.12 / 1.14 | 1.57 / 1.57 | 2.54 / 2.41 | +0.97 / +0.84 | 1.57 / 2.36; 1.59 / 2.38 | +0.79 |
+| Badlands, zoom 20 | 1.11 / 1.12 | 1.57 / 1.58 | 2.83 / 2.84 | +1.26 / +1.26 | 1.69 / 2.86; 1.69 / 2.85 | +1.17 / +1.16 |
+
+Where the phase 3 part goes, plateau view, scatter hidden, a second run (`ground_perf.gd
+variant`: accents off = the accent loop compiled out, sides off = the side projections'
+weight forced to 0; both change the look, they only attribute the cost):
+
+| Map | new | accents off | sides off | both off | old |
+| --- | --- | --- | --- | --- | --- |
+| Forest | 2.96 / 3.14 | 2.55 / 2.65 | 2.77 / 2.82 | 2.44 / 2.48 | 1.66 / 1.66 |
+| Badlands | 2.95 / 2.97 | 2.59 / 2.60 | 2.65 / 2.67 | 2.44 / 2.42 | 1.66 / 1.66 |
+
+Against phase 2's numbers: its pinned pass measured the base-only shader at std +0.56 ms at
+home and a painted biome layer at +0.45-0.52 ms more; here the base-only shader is std
++0.43-0.66 ms (the same) and the full phase 3 ground is old +0.84-0.99 ms on a mostly flat
+view and +1.26-1.78 ms on relief, so phase 3 adds roughly +0.3-0.5 ms over a phase 2 painted
+map where the ground is flat and +0.8-1.3 ms where tiers fill the view. On the plateau that
+extra splits into the ground accents 0.36-0.50 ms (the two-surface blend along patch edges,
+see "Ground accents"), the side projections on faces 0.19-0.32 ms (15 % of the pixels), and
+about 0.8 ms for the 8-slot table with its biome grounds, the cliff and scree rules, the
+painted paths and the broad edge. **Verdict: kept, no fix.** The ground's phase 3 part alone
+is 27-43 % of the frame on these lightly scattered maps, but the whole frame stays under 4 ms
+at 1080p; no part of it has a
+look-neutral saving left (the accent and layer passes were already tuned in P3-4 and the
+accents pass). If a lower quality tier is ever needed, accents and side projections are the
+two separable costs.
+
+### Authoring: strokes and stroke-end work
+
+The real tools at human speed while building the test levels (150 ft, zoom 20, vsync off;
+`record`), CPU frame ms median / worst (n); the stroke's worst frame is its release frame
+(end_stroke) unless noted:
+
+| Stroke | Frames | Its tail (regeneration, rocks) |
+| --- | --- | --- |
+| Forest idle | 3.9 / 4.8 (771) | |
+| Forest, Raise hill, 5 m | 4.6 / 10.3 (1011) | 4.4 / 6.2 (162) |
+| Forest, Tier, 3.5 m, 36 m path | 4.5 / 22.8 (2838) | 4.4 / 13.0 (204) |
+| Forest, Tier on top, 2.2 m | 4.4 / 11.9 (1014) | 4.4 / 6.9 (153) |
+| Forest, Shift ramp, 2.5 m | 4.4 / 9.1 (3143) | 4.3 / 6.8 (215) |
+| Forest, Ctrl cut tier, 3.5 m | 4.4 / 17.8 (763) | 4.3 / 6.9 (168) |
+| Forest, Paint track, 1.3 m | 4.4 / 14.6 (2910), worst at the first dab | 4.3 / 7.4 (225) |
+| Forest, Paint path and courtyard, 1.1 / 1.6 m | 4.4 / 12.2 (1445); 4.4 / 7.2 (1547) | 4.4 / 5.7; 4.4 / 6.1 |
+| Badlands, Raise hill, 5 m | 3.5 / 9.4 (1317) | 2.8 / 11.2 (324) |
+| Badlands, Tier, 3.5 m | 3.1 / 20.7 (4061) | 3.0 / 12.2 (326) |
+| Badlands, Paint track, 1.3 m | 3.4 / 13.2 (3575), first dab | 3.3 / 5.4 (185) |
+
+Continuous strokes through `AuthoringEditor` on a new 200 ft temperate forest map (seed 1234,
+its starting cover: 8,563 rows) at home zoom (`probes/sculpt.gd`, the same strokes as
+"Sculpting" and P3-4). Frames median / p95 / worst (n); end_stroke and its parts (the rest of
+end_stroke is the rock keeping's start: two height snapshots and the species lists); the
+tail's rock keeping on the main thread:
+
+| Stroke | Frames | end_stroke | Tail |
+| --- | --- | --- | --- |
+| Raise, 4 m at 6 m/s, 156 m serpentine | 4.06 / 4.55 / 8.05 (2113); flush 1.89 | 19.5 ms: fields 15.2, collision 2.5 | median 4.05 (195); cells applied 39.5 ms in all |
+| Raise, 12 m at 4 m/s, 44 m (first stroke reaching the edge) | 11.59 / 12.72 / 65.77 (912); 11.58 / 12.77 / 67.29 (916) | 35.2-55.0 ms: fields 25.1-25.7, terrain 0-21.0 (the last dab's chunks), snap 3.6-5.0, collision 2.4-2.6 | median 3.4-3.6; cells applied 50-53 ms in all |
+| Same after the fix below | 11.59 / 12.79 / 20.91 (917) | 56.3 ms (same parts) | median 3.34 |
+| Tier, 3.5 m along a 40 m path | 4.17 / 4.65 / 8.92 (3238) | 24.4 ms: fields 7.8, terrain 3.2, snap 2.8, collision 2.4, rock start about 8 | 4 rocks kept (worker 339 ms, main 12.2 ms); 165 instances removed, 2 added |
+| Tier stub, 5 m | 4.72 / 5.78 / 10.75 (631) | 12.1 ms: fields 3.4, collision 2.4, snap 1.6, terrain 1.2 | 2 rocks kept (worker 195 ms, main 4.8 ms) |
+| Raise hill, 8 m | 6.28 / 6.80 / 7.77 (755) | 10.5 ms: fields 6.4, collision 2.5 | |
+| Paint (real tool), 4 m, road / moss | 4.4 / 14.5 (2046); 4.4 / 11.8 (2058) | | 4.4 / 7.0; 4.4 / 5.0 |
+| Paint (real tool), 12 m, cobblestone | 10.3 / 22.6 (1039), first dab 18.9 | | 4.0 / 7.1 (356) |
+
+The tail's own worst frame in the `sculpt.gd` rows is the release frame inflated by the
+probe (it snapshots every row's key in that frame, 17-20 ms for 8.5K rows); the release
+frames measured with the real tool are the ones above: 10-23 ms. Continuous strokes match the
+earlier passes (4 m 3.6-4.1 ms, 12 m 11.6-11.9 ms median). **Where stroke-end time goes:**
+the rule-field recompute over the stroke's bounding rectangle (3-8 ms for local strokes,
+15 ms for a 156 m serpentine, 25 ms for a 12 m brush over half the map), the collision
+rebuild (2.4-2.6 ms, every stroke), the last frame's leftover chunks and snapping, and the
+rock keeping's start (up to about 8 ms for a long tier through rocks); the rock keeping's
+finish (5-12 ms) and the regenerated cells (40-53 ms spread over the tail, no tail frame over
+13 ms with the real tool) land over the following frames. The one stroke-end frame over
+33 ms is the 12 m brush's (40-60 ms); spreading the field pass over frames would fix it
+but is not a small change, so it stays (P3-4 recorded the same, 44 ms).
+
+**Fix: the skirt's vertex copy at open.** The first stroke frame that reached the map edge on
+a map built the skirt's CPU vertex copy (`TerrainMeshBuilder.skirt_vertex_mirror`), measured
+directly at 45.3-46.6 ms on a 200 ft map (976 boundary samples, 10 rings), and it made the 12
+m stroke's worst frame 65.8-67.3 ms (terrain part 58-59 ms). `AuthoringController._install`
+now builds it (`AuthoredTerrain.refresh_skirt()` with nothing queued) under the loading screen
+for any sculptable map. Same run order, before / after: the first edge stroke's worst frame
+67.29 -> 20.91 ms (terrain part 58.94 -> 12.41 ms), medians unchanged (11.58 / 11.59), the
+skirt's geometry untouched (the copy is built from the same heights the mesh was); the
+loading screen takes the 45 ms instead.
+
+### Load time and memory
+
+From the title, vsync on (as a player loads). One process: the relief forest first (cold),
+then three interleaved warm rounds; plus the first load of a fresh process for each level in
+its own process (the memory runs):
+
+| Level | Cold, own process | Warm (3) | Worst frame, warm |
+| --- | --- | --- | --- |
+| `_p39_forest` (relief) | 1,591 ms (1,532 first in the load run) | 1,108 / 1,111 / 1,135 ms | 228-247 ms |
+| `_p39_forest_flat` | 1,589 ms | 1,091 / 1,115 / 1,127 ms | 185-271 ms |
+| `_p39_badlands` (relief) | 1,471 ms | 952 / 996 / 1,008 ms | 183-245 ms |
+| `_p39_badlands_flat` | | 964 / 983 / 997 ms | 233-259 ms |
+| `deciduous_clusters` | 1,332 ms | 937 / 967 / 969 ms | 229-258 ms |
+
+Memory after the load settled, one process per level (static is Godot's allocator, video is
+`RENDER_VIDEO_MEM_USED`, working set and private bytes from the OS):
+
+| State | Static (peak) | Video (textures) | Working set (peak) | Private |
+| --- | --- | --- | --- | --- |
+| Title, fresh process | 224 MB (250) | 150 MB (94) | 730 MB (736) | 1,091 MB |
+| Playing `_p39_forest` | 255 MB (563) | 1,523 MB (1,403) | 987 MB (1,085) | 2,853 MB |
+| Playing `_p39_forest_flat` | 256 MB (535) | 1,523 MB (1,403) | 984 MB (1,058) | 2,911 MB |
+| Playing `_p39_badlands` | 252 MB (541) | 1,500 MB (1,380) | 976 MB (1,061) | 2,911 MB |
+| Playing `deciduous_clusters` | 258 MB (530) | 1,502 MB (1,420) | 873 MB (1,052) | 2,783 MB |
+
+**Verdict: relief adds nothing measurable to loading or memory** (relief against flat twin:
+warm loads within 2 %, video memory identical, static and working set within 3 MB; the
+heights were in the document either way). An authored 150 ft map loads in 0.95-1.14 s warm,
+0-21 % over the Blender deciduous map in this session (whose warm load took 937-969 ms here
+against 733-739 ms in the phase 2 session: cross-session, not a regression finding). The
+first load in a process still has one 590-660 ms frame, Blender maps too.
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one

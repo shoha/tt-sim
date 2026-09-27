@@ -324,6 +324,11 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	panel.set_sculpt_available(editor.can_sculpt())
 	panel.set_paint_available(editor.can_paint())
 	_refresh_paint_limits()
+	if editor.can_sculpt() and is_instance_valid(editor.terrain):
+		# Builds the skirt's CPU vertex copy (45 ms on a 200 ft map) here, under the loading
+		# screen, instead of in the first stroke frame that reaches the map edge
+		# (docs/PERFORMANCE.md "In-game authoring phase 3: pinned performance pass").
+		editor.terrain.refresh_skirt()
 
 
 ## Samples a dressed GLB's ground into the document's heights (DressingGround), a slice per
