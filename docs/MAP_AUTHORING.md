@@ -85,15 +85,22 @@ fix (was 1.24 ms). Brush strokes: CPU frame median 3.8 ms on a bare map and 6.9-
 a fully painted forest, worst stroke frame 12.3 ms, worst regeneration-tail frame 18.3 ms. Opening a map: 1.15-1.37 s loading screen, then all 180 palette
 species resolve in 2.9 s with no frame over 30 ms, for about 100 MB more video memory than
 playing an authored map. Loads from the title: 1.27 s warm / 1.78 s cold for the painted
-forest, between deciduous clusters (0.74 s) and river (1.9 s).
+forest, between deciduous clusters (0.74 s) and river (1.9 s). Phase 3 pass (`PERFORMANCE.md`
+"In-game authoring phase 3: pinned performance pass", 2026-09-27, 150 ft forest and badlands
+maps built like the judgment set, each against a flat twin): relief costs little in play
+(badlands +0.23-0.28 ms GPU; the forest relief map is cheaper than its twin because trees
+keep off the tier faces) and adds nothing to loading or memory; every map stays under 4.1 ms
+GPU at max play zoom. The ground shader with the whole phase 3 set costs +0.84-0.99 ms over
+phase 2's base-only shader on flat ground and +1.26-1.78 ms where tiers fill the view (accents
+0.36-0.49, side projections 0.19-0.32, the 8-slot table and rules about 0.8). Sculpt and Paint
+strokes run at 4.4 ms median CPU (11.6 ms with a 12 m brush); release frames are 10-23 ms,
+40-60 ms after a 12 m stroke (the rule-field pass); the skirt's 45 ms vertex copy, which hit
+the first stroke to reach the map edge, is now built under the loading screen.
 
 ## Open work
 
-Before merging `in-game-authoring` into `main`:
-- The two-account Steam test above.
-- Merging `main` will conflict in `map_download_coordinator.gd` and `download_queue.gd`:
-  `main` has the minimal download-signal hotfix, this branch rewrote the same handlers;
-  keep this branch's versions (they already take the fifth argument).
+Phases 1-3 were merged to `main` and released as v0.1.28 (2026-09-27) so the two-account
+Steam test (above) can run on the release while phase 4 is built. That test remains open.
 
 Follow-ups:
 - A quick brush pass still gives few trees in sparse biomes (temperate forest targets 0.02
@@ -120,15 +127,45 @@ Follow-ups:
 
 ## Roadmap
 
-- **Phase 3:** sculpt (raise, lower, smooth, flatten) and tier brushes snapping to whole
-  tiers (default one cell, 5 ft); surface painting with the palette ground kinds and
-  terrain-paint's slope / height / curvature rules ported to the ground shader (it already
-  takes up to 4 layers; phase 3 extends to 8). Known constraints: the grid overlay
-  filters to a floor band at Y = 0 and needs a height-aware mode for tiers; planar UVs
-  stretch on steep slopes (needs triplanar or slope-aware mapping there).
-  `AuthoredTerrain.rebuild_chunks()` / `update_collision()` and the document's height
-  field are already in place.
-- **Phase 4:** river, road and shore splines that carve, paint, clear scatter and bake a
-  flow map in terrain-paint's format (`splines.json` is reserved in the document).
+- **Phase 3 (done, 2026-09-27):** Sculpt (Raise, Smooth, Flatten, Tier with rock-cliff
+  edges snapping to 5 ft tiers), Paint (ground, rock and built surfaces; paint yields to
+  rock on faces; biome path variants listed first), an 8-slot ground shader with automatic
+  cliff / scree / lip rules, biplanar faces and biome ground accents, a height-aware grid
+  on authored and Blender maps, tokens landing on the right tier, plants and props with a
+  footing rule, and rocks that survive sculpting as tilted props. Decisions: tier edges are
+  rock cliffs; the terrain dresses itself automatically and painting overrides it except on
+  cliff faces; rocks are kept, never added, when sculpting changes the ground under them.
+- **Phase 4: water.** Carve rivers, streams, ponds and shores with a gesture: the stroke
+  lowers a channel, paints its bed and banks, clears scatter, places the water surface and
+  bakes a flow map in terrain-paint's format (`splines.json` is reserved in the document).
+  The water shader, flow maps, token wakes and ripples already exist, so this is mostly
+  tooling (user note, 2026-09-27). Paths already stop at rock faces; a river crossing a
+  painted path should do the same. Decisions (2026-09-27): a Water tool with River (draw a
+  line: carves a channel, lays bed and banks, fills it with water flowing along the line)
+  and Pond / lake (paint an area: a basin with still water at a level), Ctrl erases water;
+  depth chosen per stroke (tokens stand on the bed in wadeable water and float at the
+  surface in deep water); the grid lies on the water surface so squares stay continuous
+  across rivers (on Blender maps too).
+- **Phase 4b: spanning water.** Bridges and other crossings (plank bridges, stepping
+  stones, stone arches, fords) that snap between two banks, span the gap with walkable
+  collision for tokens, and match the palette's painted style; likely generated or
+  assembled from treecube-style parts so a bridge fits any width (user note, 2026-09-27).
 - **Phase 5:** more starting points. `NewMap` already gives each biome a starting cover
   (groves at the edges, an open glade for the fight).
+
+## Future ideas (user notes, 2026-09-27)
+
+Broader than map authoring; recorded here so they are not lost.
+
+- **Tree clipping when zooming in.** At close zoom the camera can cut into tree canopies.
+  Candidate: extend the occlusion-fade (obstruction) shader, which already dissolves
+  canopies over tokens and under the brush ring, to also fade canopy fragments close to the
+  camera's near plane or within a distance of the view ray, so zooming in reveals the
+  ground instead of slicing a tree. Start by confirming whether the cut is the near plane
+  (orthographic camera offset) or canopies simply filling the view.
+- **Player avatar tokens in the house style.** Let users create avatar models for their own
+  player tokens that match the painted style: light on detail, heavy on customisability
+  (body plan, proportions, palette, clothing and gear pieces, a few expressive features),
+  under the same guiding principle of beautiful and expressive. Likely a treecube-style
+  parametric generator (Blender side for authoring, or an in-game builder in the spirit of
+  this authoring mode), exporting through the asset-pack token path.
