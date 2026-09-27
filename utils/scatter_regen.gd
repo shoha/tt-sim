@@ -174,8 +174,9 @@ func accept(job: Dictionary) -> Array[Vector2i]:
 
 ## Runs a job's work on a snapshot of the document. Pure and thread-safe: it reads only
 ## its arguments (the snapshot must not be mutated while it runs; AuthoredScatter hands
-## over a copy). Returns {"rows_by_cell": {cell: {asset id: PackedFloat32Array}},
-## "usec": int}.
+## over a copy). A work entry's optional "blockers" (RockKeep.blockers) are the footprints
+## of kept rocks no generated rock, tree or shrub grows inside. Returns {"rows_by_cell":
+## {cell: {asset id: PackedFloat32Array}}, "usec": int}.
 static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
 	var started := Time.get_ticks_usec()
 	var rows_by_cell := {}
@@ -199,7 +200,8 @@ static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
 			snapshot.map_seed,
 			entry.cells_by_species,
 			fields.bounds,
-			fields.species_density_at
+			fields.species_density_at,
+			entry.get("blockers", PackedFloat32Array())
 		)
 		for asset_id in rows:
 			var split := split_by_cell(rows[asset_id])

@@ -137,6 +137,55 @@ static func removed(rows: PackedFloat32Array, index: int) -> PackedFloat32Array:
 	return out
 
 
+## The 10 m cell a row's origin falls in.
+static func cell_of(row: PackedFloat32Array) -> Vector2i:
+	var size := ScatterChunker.CHUNK_SIZE_WORLD_UNITS
+	return Vector2i(floori(row[0] / size), floori(row[2] / size))
+
+
+## The index of `handle`'s row ({"asset_id", "row"}) among `rows` (asset id -> flat rows) of
+## its asset, or -1.
+static func index_of(rows: Dictionary, handle: Dictionary) -> int:
+	var flat: PackedFloat32Array = rows.get(handle.asset_id, PackedFloat32Array())
+	var row: PackedFloat32Array = handle.row
+	@warning_ignore("integer_division")
+	for r in flat.size() / STRIDE:
+		if row_at(flat, r) == row:
+			return r
+	return -1
+
+
+## True when two cells' rows (asset id -> flat rows) hold the same rows, an asset missing on
+## one side counting as none.
+static func same_rows(a: Dictionary, b: Dictionary) -> bool:
+	var keys := {}
+	keys.merge(a)
+	keys.merge(b)
+	for asset_id in keys:
+		var left: PackedFloat32Array = a.get(asset_id, PackedFloat32Array())
+		var right: PackedFloat32Array = b.get(asset_id, PackedFloat32Array())
+		if left != right:
+			return false
+	return true
+
+
+## Bytes of float data in a cell's rows (asset id -> flat rows), for history accounting.
+static func rows_bytes(rows: Dictionary) -> int:
+	var total := 0
+	for asset_id in rows:
+		total += (rows[asset_id] as PackedFloat32Array).size() * 4
+	return total
+
+
+## Every row index of flat `rows`.
+static func all_rows(rows: PackedFloat32Array) -> PackedInt32Array:
+	var all := PackedInt32Array()
+	@warning_ignore("integer_division")
+	for r in rows.size() / STRIDE:
+		all.append(r)
+	return all
+
+
 static func _rotation(row: PackedFloat32Array) -> Quaternion:
 	var q := Quaternion(row[3], row[4], row[5], row[6])
 	return q.normalized() if q.length_squared() > 0.0 else Quaternion()

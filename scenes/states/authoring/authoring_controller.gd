@@ -720,6 +720,9 @@ func save_async() -> bool:
 	if not _is_open or _saving:
 		return false
 	_saving = true
+	if editor:
+		# A sculpt stroke's kept rocks and its regeneration request come with its height work.
+		editor.finish_height_work()
 	while is_instance_valid(scatter) and scatter.is_regenerating():
 		await get_tree().process_frame
 	if not is_inside_tree():
@@ -777,7 +780,10 @@ func capture_thumbnail() -> Image:
 func _on_autosave_timeout() -> void:
 	if not _is_open or _saving or not session.needs_autosave():
 		return
-	if is_instance_valid(scatter) and scatter.is_regenerating():
+	if (
+		(is_instance_valid(scatter) and scatter.is_regenerating())
+		or (editor and editor.has_height_work())
+	):
 		return  # Next tick: half-regenerated rows are not worth recovering.
 	_sync_document()
 	if AuthoringAutosave.write(document, level) == OK:
@@ -840,6 +846,8 @@ func teardown() -> void:
 	if brush:
 		brush.deactivate()
 		brush.editor = null
+	if editor:
+		editor.rock_keeper.release()
 	if _autosave_timer:
 		_autosave_timer.stop()
 	if panel:

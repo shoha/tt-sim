@@ -112,10 +112,9 @@ static func generate(
 ## ones in the halo around them (see species_reach), which is most of the saving: the
 ## halo species are the sparse ones. Rows of one asset come out in the order generate()
 ## gives; species with a shorter or missing list simply place nothing elsewhere.
-##
 ## `species_density_at`, when valid, replaces `density_at`: Callable(p, ScatterGround role)
-## -> float, called with each species' ScatterPlan ground_role (document_fields: boulders
-## gather at cliff feet, trees keep back from tier faces).
+## -> float, per species' ground_role (boulders gather at cliff feet, trees keep back from
+## tier faces). No rock, tree or shrub row lands in `blockers` (RockKeep.blockers_for).
 static func generate_species_cells(
 	biome_id: String,
 	species: Array[Dictionary],
@@ -125,12 +124,14 @@ static func generate_species_cells(
 	map_seed: int,
 	cells_by_species: Array,
 	bounds: Rect2,
-	species_density_at: Callable = Callable()
+	species_density_at: Callable = Callable(),
+	blockers: PackedFloat32Array = PackedFloat32Array()
 ) -> Dictionary[String, PackedFloat32Array]:
 	var the_plan := ScatterPlan.build(biome_id, species, map_seed)
 	var ctx := _context(the_plan, density_at, height_at, normal_at, bounds)
 	if species_density_at.is_valid():
 		ctx["species_density_at"] = species_density_at
+	ctx["blockers"] = blockers
 	var result: Dictionary[String, PackedFloat32Array] = {}
 	for s in the_plan.species.size():
 		var cells: Array[Vector2i] = []
@@ -429,6 +430,7 @@ static func _generate_species(
 	var edge_needed: bool = entry.clump_scale
 	var single_owner: bool = field.owners.size() == 1
 	var bounds: Rect2 = ctx.bounds
+	var blockers := RockKeep.blockers_for(ctx.get("blockers", PackedFloat32Array()), entry)
 	var chunk := ScatterChunker.CHUNK_SIZE_WORLD_UNITS
 	var size: float = field.bucket
 	var rows := PackedFloat32Array()
@@ -452,7 +454,7 @@ static func _generate_species(
 					var placed := (
 						_final(ctx, s, cands, c) if referenced else _evaluate(ctx, entry, cands, c)
 					)
-					if not placed:
+					if not placed or RockKeep.blocked(blockers, Vector2(x, z)):
 						continue
 					var edge: float = ctx.edge
 					if edge_needed and referenced:
