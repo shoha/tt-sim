@@ -59,6 +59,15 @@ on a bare 200 ft map, dressing Blender maps (River, Deciduous clusters: live era
 their scatter matches what a player's load builds), play-time loading of GLB-only,
 ttmap-only and dressed levels with exact instance counts.
 
+Dressed-map ground (phase 3 P3-0, render jobs on Deciduous clusters, 2026-09-26): before
+the fix a Biome stroke over its dip generated every row at Y = 0 while the GLB ground lay
+up to 1.18 m lower (1,343 rows, mean |dY| 0.98 m). Dressed documents now sample the GLB
+collision into their heights on open (`ARCHITECTURE.md` "Dressing ground"); the same stroke
+gives mean |dY| 0.001 m, worst 0.018 m (bilinear heights against the collision triangles),
+and normal-aligned rows sit 3.8 deg from the ground normal (their random lean) instead of
+7.2. A flat-0 document saved before the fix reopened with 1,607 rows settled onto the
+ground and the session unsaved. Unit-tested against a synthetic ramp and step.
+
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
 download-signal fix (pushed to `main` as a08b639). Needs a two-account test, e.g. on the
