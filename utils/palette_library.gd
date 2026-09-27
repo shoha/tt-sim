@@ -23,6 +23,9 @@ const FORMAT := 1
 const WIND_CATEGORIES := ["tree", "grass", ""]
 const ALIGN_MODES := ["upright", "normal"]
 const SURFACE_MAPS := ["albedo", "normal", "orm", "height"]
+## What a surface is for (contract section 9): soft ground sampled top-down, rock for steep
+## faces sampled sideways, walkable paving painted as paths. A missing role is ground.
+const SURFACE_ROLES := ["ground", "cliff", "built"]
 
 ## Hard caps, checked before anything is kept. Sized an order of magnitude above what
 ## treecube builds today (8 biomes, about 25 assets and species each, a dozen surfaces),
@@ -72,7 +75,9 @@ static func palette_version(root: String = DEFAULT_ROOT) -> String:
 
 
 ## Every valid biome, in file order. Each is {id, biome, season, seed, name, climate,
-## thumbnail, ground_surface, species}; paths are relative to the palette root.
+## thumbnail, ground_surface, cliff_surface, scree_surface, species}; paths are relative
+## to the palette root. cliff_surface names a role-cliff surface or is "" when the palette
+## has none; scree_surface names a role-ground surface or is "" (keep the ground).
 static func biomes(root: String = DEFAULT_ROOT) -> Array[Dictionary]:
 	var copies: Array[Dictionary] = []
 	for biome in get_palette(root)["biomes"]:
@@ -98,11 +103,17 @@ static func species(biome_id: String, root: String = DEFAULT_ROOT) -> Array[Dict
 	return rules
 
 
-## Ground surface preset name (treecube's, e.g. "grass_alpine", not the kind "grass") ->
-## {albedo, normal, orm, height, tile_m}; map paths are relative to the palette root and
-## a map the palette does not ship is "".
+## Surface preset name (treecube's, e.g. "grass_alpine", not the kind "grass") ->
+## {albedo, normal, orm, height, tile_m, kind, role}; map paths are relative to the palette
+## root and a map the palette does not ship is "". role is one of SURFACE_ROLES; kind is
+## the treecube surface kind ("grass" for "grass_alpine"), "" when the palette omits it.
 static func surfaces(root: String = DEFAULT_ROOT) -> Dictionary:
 	return (get_palette(root)["surfaces"] as Dictionary).duplicate(true)
+
+
+## The names of the surfaces with `role` ("ground", "cliff" or "built"), in file order.
+static func surfaces_with_role(role: String, root: String = DEFAULT_ROOT) -> Array[String]:
+	return _names_with_role(get_palette(root)["surfaces"], role)
 
 
 ## The manifest entry of one asset ({file, node, wind_category, size_class,
@@ -306,11 +317,68 @@ static func _validate_surfaces(raw: Variant, warnings: Array[String]) -> Diction
 		if tile == null or albedo == "":
 			warnings.append("surface '%s' skipped: needs albedo and tile_m" % name)
 			continue
-		var surface := {"tile_m": tile}
+		var role: Variant = entry.get("role")
+		if role == null:
+			role = "ground"  # a palette from before roles: every surface was ground
+		elif not role is String or not role in SURFACE_ROLES:
+			warnings.append(
+				"surface '%s': unknown role '%s', treated as ground" % [name, _label(role)]
+			)
+			role = "ground"
+		var surface := {
+			"tile_m": tile, "kind": _text_or(entry.get("kind"), MAX_TEXT_LENGTH, ""), "role": role
+		}
 		for map_name in SURFACE_MAPS:
 			surface[map_name] = _path_or(entry.get(map_name), "")
 		result[name] = surface
 	return result
+
+
+static func _names_with_role(surfaces: Dictionary, role: String) -> Array[String]:
+	var names: Array[String] = []
+	for name in surfaces:
+		if surfaces[name]["role"] == role:
+			names.append(name)
+	return names
+
+
+## A biome's cliff_surface: the named surface when it is a cliff; else (with a warning
+## when a name was given) the first cliff surface in file order, or "" when there is none.
+static func _cliff_surface_of(
+	entry: Dictionary, id: String, surfaces: Dictionary, warnings: Array[String]
+) -> String:
+	var fallback := ""
+	var cliffs := _names_with_role(surfaces, "cliff")
+	if not cliffs.is_empty():
+		fallback = cliffs[0]
+	var raw: Variant = entry.get("cliff_surface")
+	if raw == null:
+		return fallback
+	var cliff := _text_or(raw, MAX_TEXT_LENGTH, "")
+	if surfaces.has(cliff) and surfaces[cliff]["role"] == "cliff":
+		return cliff
+	warnings.append(
+		(
+			"biome '%s': cliff surface '%s' is not a cliff surface, using '%s'"
+			% [id, _label(raw), fallback]
+		)
+	)
+	return fallback
+
+
+## A biome's scree_surface: the named surface when it is ground, else "" (the foot keeps
+## the biome ground), with a warning when a name was given.
+static func _scree_surface_of(
+	entry: Dictionary, id: String, surfaces: Dictionary, warnings: Array[String]
+) -> String:
+	var raw: Variant = entry.get("scree_surface")
+	if raw == null:
+		return ""
+	var scree := _text_or(raw, MAX_TEXT_LENGTH, "")
+	if surfaces.has(scree) and surfaces[scree]["role"] == "ground":
+		return scree
+	warnings.append("biome '%s': scree surface '%s' is not a ground surface" % [id, _label(raw)])
+	return ""
 
 
 static func _validate_assets(raw: Variant, warnings: Array[String]) -> Dictionary:
@@ -378,6 +446,8 @@ static func _validate_biomes(
 					"climate": _text_or(entry.get("climate"), MAX_TEXT_LENGTH, ""),
 					"thumbnail": _path_or(entry.get("thumbnail"), ""),
 					"ground_surface": ground,
+					"cliff_surface": _cliff_surface_of(entry, id, surfaces, warnings),
+					"scree_surface": _scree_surface_of(entry, id, surfaces, warnings),
 					"species": species_rules,
 				}
 			)

@@ -116,6 +116,19 @@ func _species(key: String, kind: String, assets: Array) -> Dictionary:
 	}
 
 
+func _surface(surface_name: String, kind: String, role: String, tile_m: float) -> Dictionary:
+	var stem := "surfaces/%s/%s" % [surface_name, surface_name]
+	return {
+		"albedo": stem + "_albedo.png",
+		"normal": stem + "_normal.png",
+		"orm": stem + "_orm.png",
+		"height": stem + "_height.png",
+		"tile_m": tile_m,
+		"kind": kind,
+		"role": role,
+	}
+
+
 func _valid_document() -> Dictionary:
 	var grass := _species("grass_tuft", "grass", [GRASS_ID])
 	grass["align"] = "normal"
@@ -143,7 +156,13 @@ func _valid_document() -> Dictionary:
 				"orm": "surfaces/grass_alpine/grass_alpine_orm.png",
 				"height": "surfaces/grass_alpine/grass_alpine_height.png",
 				"tile_m": 2.0,
-			}
+				"kind": "grass",
+				"role": "ground",
+			},
+			"cliff": _surface("cliff", "cliff", "cliff", 3.0),
+			"cliff_basalt": _surface("cliff_basalt", "cliff", "cliff", 3.0),
+			"gravel": _surface("gravel", "gravel", "ground", 2.0),
+			"cobblestone": _surface("cobblestone", "cobblestone", "built", 2.0),
 		},
 		"biomes":
 		[
@@ -156,6 +175,8 @@ func _valid_document() -> Dictionary:
 				"climate": "temperate",
 				"thumbnail": "thumbnails/%s.jpg" % PACKAGE,
 				"ground_surface": "grass_alpine",
+				"cliff_surface": "cliff_basalt",
+				"scree_surface": "gravel",
 				"species":
 				[
 					_species("tree_small", "tree", [TREE_ID]),
@@ -323,6 +344,78 @@ func test_surface_paths_cannot_escape_the_palette_root() -> void:
 	assert_eq(surface.normal, "")
 	assert_eq(surface.height, "")
 	assert_false(result.palette.surfaces.has("sand_red"), "an escaping albedo drops the surface")
+
+
+func test_surface_kind_and_role_and_biome_cliff_and_scree_are_exposed() -> void:
+	var result := PaletteLibrary.validate_palette(_valid_document())
+	assert_eq(result.warnings.size(), 0, str(result.warnings))
+	var surfaces: Dictionary = result.palette.surfaces
+	assert_eq(surfaces["grass_alpine"].kind, "grass")
+	assert_eq(surfaces["grass_alpine"].role, "ground")
+	assert_eq(surfaces["cliff_basalt"].kind, "cliff")
+	assert_eq(surfaces["cliff_basalt"].role, "cliff")
+	assert_eq(surfaces["cobblestone"].role, "built")
+	var biome: Dictionary = result.palette.biomes[0]
+	assert_eq(biome.cliff_surface, "cliff_basalt")
+	assert_eq(biome.scree_surface, "gravel")
+
+
+func test_an_unknown_role_warns_and_is_ground() -> void:
+	var document := _valid_document()
+	document.surfaces["cobblestone"]["role"] = "wall"
+	document.surfaces["gravel"]["role"] = 3
+	var result := PaletteLibrary.validate_palette(document)
+	assert_eq(result.palette.surfaces["cobblestone"].role, "ground")
+	assert_eq(result.palette.surfaces["gravel"].role, "ground")
+	assert_eq(result.warnings.size(), 2, str(result.warnings))
+
+
+func test_a_palette_from_before_roles_loads_silently_as_ground() -> void:
+	var document := _valid_document()
+	for surface_name in document.surfaces:
+		document.surfaces[surface_name].erase("role")
+		document.surfaces[surface_name].erase("kind")
+	document.biomes[0].erase("cliff_surface")
+	document.biomes[0].erase("scree_surface")
+	var result := PaletteLibrary.validate_palette(document)
+	assert_eq(result.warnings.size(), 0, str(result.warnings))
+	assert_eq(result.palette.surfaces["cliff"].role, "ground")
+	assert_eq(result.palette.surfaces["cliff"].kind, "")
+	assert_eq(result.palette.biomes[0].cliff_surface, "", "no cliff surface at all: none")
+	assert_eq(result.palette.biomes[0].scree_surface, "", "no scree: the foot keeps the ground")
+
+
+func test_a_missing_cliff_surface_falls_back_to_the_first_cliff_silently() -> void:
+	var document := _valid_document()
+	document.biomes[0].erase("cliff_surface")
+	var result := PaletteLibrary.validate_palette(document)
+	assert_eq(result.warnings.size(), 0, str(result.warnings))
+	assert_eq(
+		result.palette.biomes[0].cliff_surface, "cliff", "first role-cliff surface in file order"
+	)
+
+
+func test_cliff_and_scree_surfaces_with_the_wrong_role_or_absent_warn_and_fall_back() -> void:
+	var document := _valid_document()
+	document.biomes[0]["cliff_surface"] = "gravel"
+	document.biomes[0]["scree_surface"] = "cliff"
+	var result := PaletteLibrary.validate_palette(document)
+	assert_eq(result.palette.biomes[0].cliff_surface, "cliff")
+	assert_eq(result.palette.biomes[0].scree_surface, "")
+	assert_eq(result.warnings.size(), 2, str(result.warnings))
+	document.biomes[0]["cliff_surface"] = "lava"
+	document.biomes[0]["scree_surface"] = ["not", "text"]
+	result = PaletteLibrary.validate_palette(document)
+	assert_eq(result.palette.biomes[0].cliff_surface, "cliff")
+	assert_eq(result.palette.biomes[0].scree_surface, "")
+	assert_eq(result.warnings.size(), 2, str(result.warnings))
+
+
+func test_surfaces_with_role_from_disk() -> void:
+	assert_eq(PaletteLibrary.surfaces_with_role("cliff", ROOT), ["cliff", "cliff_basalt"])
+	assert_eq(PaletteLibrary.surfaces_with_role("built", ROOT), ["cobblestone"])
+	assert_eq(PaletteLibrary.surfaces_with_role("ground", ROOT), ["grass_alpine", "gravel"])
+	assert_eq(PaletteLibrary.biome(PACKAGE, ROOT).cliff_surface, "cliff_basalt")
 
 
 func test_the_geoscatter_pattern_is_kept_verbatim_but_bounded() -> void:
