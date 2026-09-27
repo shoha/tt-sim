@@ -398,7 +398,7 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   0.85). About 1 ms per frame for a 4 m brush and 7 ms for a 12 m one on a dressed 200 ft map
   (headless, worst case writing both biome and erase masks).
 - **Per frame** `flush()` takes the rectangle of samples whose bytes changed and makes one
-  update each: `AuthoredTerrain.update_biome_region()`, `AuthoredScatter.request_region()`,
+  update each: `AuthoredTerrain.update_ground_region()`, `AuthoredScatter.request_region()`,
   and `BaseScatterEraser.refresh()`, which re-filters a dressed GLB's own scatter chunks in
   the touched cells from the unfiltered rows still in the root's scene extras, with the
   loader's rule (`MapDocument.erase_filter`) and order, keeping each chunk's visible
@@ -1007,7 +1007,8 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   stay valid through it. `height_range()` / `world_height_range()` give the ground's
   lowest and highest point from the chunks (never narrower than the truth mid-stroke).
   An edit touching the map edge refreshes the skirt's geometry (`refresh_skirt()`, same
-  node and material, no duplicate per call). The collision is one `HeightMapShape3D` as
+  node and material, no duplicate per call; in place for the boundary samples touched,
+  over a CPU copy of its vertex stream, `TerrainMeshBuilder.skirt_vertex_mirror`). The collision is one `HeightMapShape3D` as
   before and is not touched mid-stroke: `update_collision()` rebuilds the whole
   heightfield (2.3 ms on a 200 ft map in the running game), which the editor does once
   the stroke ends; mid-stroke the brush finds the ground it is shaping with
@@ -1020,10 +1021,13 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   flat ground about 10 % in steps along the cascade splits (a horizontal line across a
   zoomed-out map). Sculpted chunks cast.
 - **Ground skirt:** `TerrainSkirt`, a ring `skirt_width_m()` wide around the map
-  (`TerrainMeshBuilder.build_skirt_arrays`: the chunks' boundary vertices pushed straight
-  out, world-XZ UVs) with `shaders/authored_ground_skirt.gdshader`, which is the ground
+  (`TerrainMeshBuilder.build_skirt_arrays`: the chunks' boundary vertices stepped out over
+  `SKIRT_RINGS` rings, world-XZ UVs; the height rolls back to the map floor over
+  `SKIRT_FADE_M`, `skirt_height()`, smoothstep, so a raised or sunken edge settles instead of
+  running out into the fog as a shelf; normals follow the fall-off; P3-4) with
+  `shaders/authored_ground_skirt.gdshader`, which is the ground
   shader (`authored_ground.gdshaderinc`) with `GROUND_SKIRT`: transparent, base surface
-  only, alpha 1 at the edge falling to 0 over `SKIRT_FADE_M` (24 m) with the distance
+  only, no rules, alpha 1 at the edge falling to 0 over `SKIRT_FADE_M` (24 m) with the distance
   stretched +-45 % by noise. It continues the ground's exact texture across the edge and
   dissolves into the backdrop, whatever colour that is. Decoration only: no collision, no
   shadow, and `Constants.BOUNDS_EXEMPT_META` keeps it out of the pan bounds and
@@ -1046,52 +1050,120 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   StandardMaterial3D ground with the same textures (+0.43-0.56 ms at the home view,
   1920x1080, in-run interleaved on an idle GPU; `PERFORMANCE.md` "In-game authoring: pinned
   performance pass").
-- **Biome ground:** each painted biome's palette `ground_surface` blends over the base.
-  The CPU turns `biome_slots` / `biome_density` into one RGBA8 texel per sample
-  (`BiomeGroundLayers`, `utils/biome_ground_layers.gd`, pure): channel i holds the painted
-  density of the biome whose surface is layer i, the base is the remainder. Weights rather
-  than slots because a slot cannot be filtered (bilinear weights give smooth ramps at
-  0.25 m in one fetch), biomes sharing a surface share a channel, and a biome on the base
-  surface (or on a surface the palette lacks) writes nothing and costs nothing. Up to 4
-  layers (`layer_*[4]` sampler arrays; arrays take no default hints, so every entry is
-  bound). Layers are assigned by first appearance and kept for the session; past 4
-  surfaces the least covered fall back to the nearest layer or base by mean albedo (last
-  mip of the albedo), with one warning per surface. In the built-in palette that only
-  happens with five distinct non-grass biomes on a grass map, and savanna grass then draws
-  as forest floor (nearest mean colour), which is a poor match: raise the layer count in
-  phase 3 rather than tune the fallback.
-  The shader reads the weights through a noise domain warp (`biome_edge_warp_m`), adds
+- **Ground layers (P3-4):** one table of up to 8 slots blends over the base surface
+  (`GroundLayerTable`, `utils/ground_layer_table.gd`, pure; bound by AuthoredTerrain). A slot
+  is PAINTED (a `MapDocument.surface_ids` surface; its channel is the painted weight),
+  GROUND (a painted biome's `ground_surface`; its channel is that biome's density, biomes
+  sharing a surface share it, the base is the remainder) or RULE (a biome's
+  `cliff_surface` / `scree_surface` nothing else draws; empty channel, it only receives rule
+  weight). Painted and ground stay in separate slots even for one surface, because the
+  shader must tell "painted, overrides the rules" from "biome ground, dressed by the rules";
+  a rule surface reuses any slot drawing it, or the base. Two RGBA8 weight maps on the sample
+  grid (`layer_weights_a` slots 0-3, `_b` 4-7), filtered, so 0.25 m samples give smooth
+  ramps; `layer_painted_mask` / `layer_ground_mask` say which slots are which. Weights,
+  not slot ids, because an id cannot be filtered. Composition per pixel: painted weight
+  first (it always wins); biome ground and base share `1 - painted`; the automatic rules
+  take their share of that. **Which rock:** each ground component (every GROUND slot and
+  the base) carries a rule pair (`rule_cliff_layer` / `rule_scree_layer`, from `cliff_of`
+  / `scree_of`): the cliff and scree of the most covered painted biome on that surface (the
+  base: of the biomes on the base surface, else the palette's first biome on it,
+  `AuthoredTerrain.base_rule_surfaces`). The shader splits the cliff share over the ground
+  components by their weights at the pixel, so a sample's rock is its own biome's rock and a
+  border between biomes blends their rocks, with no extra texture. Limitation: two biomes
+  on one ground surface share the dominant one's pair (never happens in the built-in
+  palette, where each ground surface implies one cliff). **Allocation:** existing slots keep
+  their index; new ones in priority order: painted (slot order), the base's rule surfaces,
+  biome grounds by coverage, the other rule surfaces. Overflow past 8 is deterministic: a
+  ground surface falls back to the nearest GROUND slot or the base by mean albedo, a cliff
+  to the nearest cliff-role slot, a scree to the nearest ground-role slot or the base; one
+  warning per surface. A painted surface never falls back: it re-plans the table from
+  scratch, painted first (at most 8 are painted). Sampler arrays `layer_*[8]` (no default
+  hints on arrays, so every entry is bound; solid 1x1 stand-ins for unused slots).
+  The shader reads the biome weights through a noise domain warp (`biome_edge_warp_m`), adds
   finer noise to partial totals only (`biome_edge_noise`), multiplies density by
   `biome_weight_gain` so the ground reaches the sparse fringe of the scatter, and
   height-blends (`weight + (height - 0.5) * biome_height_contrast`, surfaces within
   `biome_blend_width` of the top score show), so an edge frays along texture detail
-  instead of following the brush. Surfaces with zero weight at a pixel are not sampled.
+  instead of following the brush. Painted weights get a smaller warp (`PAINT_EDGE_WARP_M`
+  0.3 m, a path keeps its line) and the same partial-paint edge noise, no gain. Surfaces
+  with zero weight at a pixel are not sampled; one surface is drawn directly, several are
+  height-blended in two passes (heights first for the top score, then full samples of the
+  surfaces in the band), which keeps register pressure near the old 4-layer shader's.
   The dry/lush tints fade out on unsaturated albedo so snow is not stained.
+- **Automatic dressing (P3-4):** always on, no toggle; the user's decisions are tier edges
+  as rock cliffs and hand paint winning. Formulas and defaults live once in
+  `TerrainRules` (`utils/terrain_rules.gd`, pure) and are mirrored as shader constants
+  (`tests/unit/test_terrain_rules.gd` fails when they drift): terrain-paint's mask tails
+  (`clamp((v - start) / (end - start))`), edge noise, shaping ramp (0.2..0.8, EASE), and
+  the shader's score blend as the height blend. Cliff: slope tail on the shading normal's
+  y from 38 to 55 degrees (a tier face, shading normal about 70 degrees, is fully rock at
+  any noise; a 30 degree slope never is), edge noise +-0.35 added to the tail before the
+  clamp (terrain-paint adds it after, which scatters rock patches on flat ground), and a
+  convex-lip rule taking up to 60 % of the rock back on rounded shoulders, fading out on
+  sheer faces (tail 1..2) so the face stays rock under a grassy lip. Scree: concave
+  curvature tail (0.02..0.12 m) times steepness nearby (0.03..0.1), edge noise, a coarse
+  breakup noise that moves the band's reach (+-0.8) and opens gaps, never under the cliff.
+  Inputs, identical on CPU and GPU: the interpolated shading normal, the position (noise
+  domain sheared by height so it varies up a face) and two **per-vertex fields in UV2**
+  (`TerrainRules.sample_fields`): curvature `(h - mean_R(h)) * n.y` and steepness nearby
+  (mean of the slope tail), box means of radius `CURVATURE_RADIUS_M` 1.5 m on the sample
+  grid, edges replicated. AuthoredTerrain keeps them for the whole grid
+  (`get_rule_fields()`); `queue_heights()` only marks them, and `settle_heights()` (stroke
+  end, undo, cancel) recomputes them 1.5 m plus a step around everything edited, updates
+  the vertex copies' attribute streams (UV then UV2, 16 bytes a vertex, checked against
+  `RenderingServer.mesh_get_surface`) and queues the rebuild of every chunk they changed.
+  Recomputing per dab cost 5-10 ms of every stroke frame; mid-stroke the cliff follows the
+  live normals and scree and lip catch up at the settle, with the plants. Plants respect it:
+  see "Scatter generator".
+- **Steep faces (P3-4):** below n.y 0.72 (44 degrees) side planes take over from the
+  top-down mosaic, fully below 0.42: the X- or Z-facing plane (sharpened by n^8, a plane
+  under 4 % dropped, so most pixels sample two projections), each with its own tangent
+  frame (+u along the face, image up = map up, orthogonalised against the normal), no
+  mosaic (it would rotate a cliff's level beds), and the projections height-blended
+  (taller detail wins) instead of cross-faded, which double-exposed two rock patterns into
+  a smear. Above 0.72 the side code is branched over. Every surface present uses the
+  projections, so a painted path over a face paves it (reads as a stone-faced wall).
 - **Two-scale edge (T7):** that frayed edge is decimetres wide and alone read like a decal
   beside a Blender map's layers, which fade over metres. A second, broad scale:
-  `BiomeGroundLayers.broad_image()` box-filters the weight mirror by `BROAD_FACTOR` (14
+  `GroundLayerTable.broad_image()` box-filters each weight mirror by `BROAD_FACTOR` (14
   samples, 3.5 m per texel at 0.25 m; natively, via `Image.resize` trilinear), bound as
-  `biome_broad` and read with a cubic B-spline, so each painted layer's mean colour (last
+  `layer_broad_a` / `_b` and read with a cubic B-spline for GROUND slots only (a painted
+  path gets no halo), so each painted biome's mean colour (last
   albedo mip) recolours the ground around it in a gradient about 7 m wide
   (`biome_broad_strength` 0.8, full at broad weight `biome_broad_full` 0.4), fading out where
   the fine edge already shows the layer. The recolour is luminance-based (layer mean x the
   pixel's luminance over the base mean): a per-channel ratio turned green grass pink at the
-  edge of a brown layer. `update_biome_region()` refreshes the broad texture from the whole
+  edge of a brown layer. `update_ground_region()` refreshes the broad textures from the whole
   mirror (`ImageTexture.update`) after each blit; 25 us measured on a 200 ft map. A forest
   painted on grass now reads as woodland floor fading into lawn; the duff patches under the
   undergrowth keep their crisp fine edge inside that halo. GPU cost (2026-09-26, idle GPU,
   in-run with and without the call): 0.04-0.11 ms on four painted layers, 0.19 ms on a
   synthetic every-metre checker of four layers; 4 bilinear fetches of a small texture per
   pixel with any layer bound, plus one lowest-mip fetch per layer present.
-- **Biome ground updates:** the brush edits the masks, then calls
-  `update_biome_region(sample_rect)`; that recomputes those texels into a CPU mirror
-  (`get_biome_weights()`) and blits just that rectangle into the `DrawableTexture2D` the
-  material samples (`shaders/texel_copy_blit.gdshader`: nearest, blending disabled; the
+- **Ground layer updates:** a brush edits the masks or painted weights, then calls
+  `update_ground_region(sample_rect)` (was `update_biome_region`); that recomputes those
+  texels of both planes into CPU mirrors (`get_ground_weights(plane)`) and blits just that
+  rectangle into the `DrawableTexture2D`s the material samples
+  (`shaders/texel_copy_blit.gdshader`: nearest, blending disabled; the
   default blit mixes by source alpha, which corrupts the fourth weight). Godot 4.7 has no
   sub-rectangle upload for an ImageTexture (`ImageTexture.update`,
   `texture_2d_update` and `RenderingDevice.texture_update` are whole-texture);
-  `DrawableTexture2D.blit_rect` is the partial path. A biome appended to `biome_ids` gets
-  its layer on the next update by setting uniforms; the material is never rebuilt.
+  `DrawableTexture2D.blit_rect` is the partial path. A biome appended to `biome_ids` or a
+  surface to `surface_ids` gets its slot on the next update by setting uniforms (a
+  painted-surface re-plan rewrites every texel); the material is never rebuilt.
+- **P3-4 cost:** see `PERFORMANCE.md` "Ground shader: 8 layers, rules, steep faces".
+- **Texture bindings and the Mobile renderer (macOS: `rendering_method.macos="mobile"`):**
+  the ground material binds 40 textures in the fragment stage (4 base maps, 2 weight maps,
+  2 broad maps, 8 slots x 4 maps as sampler arrays), plus Godot's scene textures (shadow
+  atlases, decal atlas, reflection atlas, radiance, lightmap array, screen and depth
+  buffers, roughly 15-25). Verified: the shader compiles and draws under
+  `--rendering-method mobile` (Vulkan, `jobs/mobile_check.json`). Inferred, not verified on
+  a Mac: Metal allows 128 texture argument-table entries per stage on Mac GPU families
+  (Apple Silicon also runs Godot's Metal driver through argument buffers, with far higher
+  limits); the 31-entry limit the survey worried about is the old iOS A7-A10 one, so about
+  60 fits and the Texture2DArray-per-map-type fallback was not needed. If a Mac ever
+  reports "too many textures", that fallback (all palette surfaces are 1024^2) replaces the
+  32 slot textures with 4 arrays at 8 x 1024^2 each per map type.
 - **Biome ground cost (measured 2026-09-26, GPU held at 99% by another application, so
   ratios only):** 3 m dab update 0.05 ms median (15 x 14 samples, CPU + blit submit);
   whole-map update 4 ms; the first dab of a biome with a new surface 21-25 ms (texture
@@ -1112,6 +1184,17 @@ tests pass analytic ones; `document_fields(doc, biome_id)` builds them from a `M
 (bilinear density for that biome's slot; heights and normals on the terrain's own
 triangles, see below) and `generate_for_document()` wires both together.
 
+- **Ground coupling (P3-4):** `document_fields(doc, biome, window, built_surfaces)`
+  multiplies density by what the ground shader draws there (`ScatterGround`,
+  `utils/scatter_ground.gd`, through `TerrainRules`, the shader's CPU twin): times
+  (1 - cliff share) on automatic rock, times (1 - built weight) under a painted surface with
+  role `built` (a road clears its plants), times (1 - 0.5 scree share) on scree; rock
+  species (rule kind `rock`) read `rock_density_at` instead, times (1 + 0.8 scree share),
+  capped at full, so boulders gather at cliff feet (the generator's optional
+  `rock_density_at` argument). Shares are those of the unpainted ground, so a hand-painted
+  ground surface overrides the rock for plants too. The rule fields are decoded for the
+  window's samples on the worker (`ScatterRegen` passes the palette's built surfaces and
+  the snapshot carries the painted weights); a height edit regenerates 1.5 m further out.
 - **Triangle-matched ground (P3-3a):** `triangle_height()` interpolates over the triangle of
   the quad a point is in, each quad split on the same diagonal as the chunk meshes and
   Jolt's `HeightMapShape3D`, (a, a+1, a+cols) and (a+1, a+cols+1, a+cols), so a generated

@@ -913,6 +913,63 @@ the 12 m one (its 16 regenerated cells landing: the existing per-cell apply cost
 (69 px at zoom 26) because the near-plane guard scaled the camera's base offset, which is
 not its view axis; it now moves back along the view axis: 0 px.
 
+## Ground shader: 8 layers, rules, steep faces (2026-09-26, P3-4)
+
+The layer table (8 slots), the automatic cliff and scree rules and the side projections on
+steep faces (`docs/ARCHITECTURE.md` "Authored terrain"). **How:** render-job harness,
+`jobs/perf_ground_layers.json` with the probes `ground_perf.gd` and `perf.gd`: 1920x1080
+window, viewport pinned by a temporary `override.cfg` (removed by the job), vsync off, home
+view (zoom 13.85), a new bare 200 ft map (no scatter), every configuration interleaved in
+one run, 4 s windows, two repetitions. `std` is the StandardMaterial3D ground with the
+base surface's textures (the reference: 0.84-0.95 ms in every window of the run, so no
+drift), `old` the ground shader before P3-4 hot-swapped in (it reads none of the new
+uniforms and draws the base alone), `new` the current shader. RTX 3080; the GPU was not
+checked for other load beyond the stable reference. GPU ms, median of each window:
+
+| Scene | std | old | new | new - old |
+| --- | --- | --- | --- | --- |
+| Flat bare map (0 layers on screen) | 0.84 / 0.92 | 1.40 / 1.44 | 1.67 / 1.69 | +0.26 ms |
+| 4 biome grounds in quadrants (4 layers) | 0.91 / 0.94 | (1.40, base only) | 2.40 / 2.43 | +0.73 over flat |
+| 8 painted surfaces in 3 m strips (8 layers) | 0.91 / 0.93 | | 2.13 / 2.14 | +0.46 over flat |
+| 8 painted, 1 m checker at half weight over 4 biomes (worst) | 0.93 / 0.94 | | 3.24 / 3.25 | +1.57 over flat |
+| 6 concentric tiers, 48 % of ground rays steeper than the side threshold | 0.93 / 0.95 | 1.53 / 1.55 | 2.25 / 2.26 | +0.72 ms |
+
+**The trade.** The fixed cost of the machinery (rule check, per-vertex fields, the 8-slot
+blend) is +0.26 ms at 1080p on flat, unpainted ground, the ground shader going from 1.6x to
+1.9x the StandardMaterial3D. Real paint costs what the old shader's layers cost (a layer
+present at a pixel costs its own fetches; the old 4-layer shader measured +0.45-0.52 ms for
+1-4 layers in the pinned pass above). Cliff faces cost +0.72 ms when they fill half the
+screen, which no real map does at the game camera; a typical tier or hill is a few percent
+of the pixels. What that buys: rock faces with level beds instead of 4x stretched streaks,
+scree, lips, and paint over all of it, with no toggle. Kept.
+
+**What was measured on the way.** The first version stored all nine surface samples per
+pixel (plus three per-projection samples each, and a large projection struct), as the
+4-layer shader stored five: flat 2.26-2.31 ms (+0.85 over old), 4 layers 3.0, the checker
+4.3-4.4, terraces 2.54. Register pressure, not fetches, since flat ground samples one
+surface either way. The fix: a single-surface fast path, two passes for blends (heights
+only to find the top score, then full samples of the surfaces in the band accumulated
+directly), side-plane frames built lazily, and constant-index rule routing (a dynamically
+indexed local array spills). Flat 1.76, 4 layers 2.46, checker 3.32, terraces 2.33. Then the
+slot loops bounded by the `layer_count` uniform instead of unrolled to 8
+(`SLOT_LOOP_END`; the sampler array index stays dynamically uniform): flat -0.02 to -0.07
+ms, terraces -0.1, the rest equal (`jobs/perf_ground_ab.json`, `ground_perf.gd variant`).
+
+**Sculpting with the rule fields and the sloped skirt** (`jobs/sculpt_pipeline.json`, same
+procedure as "Sculpting" below; CPU frame time median, strokes as there). Recomputing the
+curvature and steepness fields on every dab (a box mean 1.5 m around each dab rect) put 5-10
+ms into each stroke frame (8 m hill 13.2 ms, 12 m 21.8), and the skirt, now 9 rings, cost
+about 11 ms to rebuild per frame of an edge stroke (edge 5 m 19.7 ms). Now the fields are
+recomputed once in `settle_heights()` (stroke end, undo, cancel) and the skirt is updated in
+place for the boundary samples touched: 8 m hill 6.46 ms, 5 m hollow 3.98, 6 m smooth
+4.94, 3 m flatten 4.04, 5 m tier stub 4.74, 5 m on the map edge 6.45 (terrain part 2.63),
+continuous 4 m 3.63 (P3-3a: 3.3), continuous 12 m 11.89 (worst 32.9: the first edit of
+the edge builds the skirt's vertex copy, about 20 ms, once per map). `end_stroke` now
+carries the field pass: 6-20 ms for 3-8 m strokes, 44 ms after a 43 m long 12 m stroke; the
+settling rebuild of the chunks it changed then spreads over the following frames within the
+4 ms budget. Mid-stroke the cliff follows the live normals; scree and lip appear at the
+settle, with the regenerated plants.
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one
