@@ -414,6 +414,15 @@ static func extract_lighting_config(root: Node) -> Dictionary:
 		var e: Variant = extras["tt_ambient_light_energy"]
 		if e is float or e is int:
 			config["ambient_light_energy"] = float(e)
+	if extras.has("tt_background_color"):
+		var b: Variant = extras["tt_background_color"]
+		if (
+			b is Array
+			and b.size() >= 3
+			and b.slice(0, 3).all(func(v: Variant) -> bool: return v is float or v is int)
+		):
+			config["background_mode"] = Environment.BG_COLOR
+			config["background_color"] = Color(b[0], b[1], b[2])
 	return config
 
 

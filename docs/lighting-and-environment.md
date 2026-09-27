@@ -279,6 +279,15 @@ was tried and made the grass flatter and more khaki. Most of the remaining diffe
 from the river is the palette grass albedo itself, not lighting. A map with a GLB keeps
 the GLB's own extras (or none).
 
+The same extras set the backdrop (`tt_background_color`, read by
+`GlbUtils.extract_lighting_config()` into `background_color` with `background_mode` =
+colour): a soft blue-grey haze `(0.56, 0.61, 0.67)` instead of the default 0.3 grey. The
+orthographic camera sees any backdrop as one flat colour, and AuthoredTerrain's ground skirt
+fades the map into it by alpha, so a zoomed-out map reads as a diorama in mist rather than a
+cut rectangle on grey (chosen by eye in T7 against paper, slate and moss candidates). A
+preset or override that sets its own background still wins, and the skirt fades into
+whatever that is.
+
 As with `light_intensity_scale`, the Blender-side value is a starting point, not a
 precise conversion -- tune further with the in-game edit panel if it looks off.
 

@@ -342,7 +342,11 @@ The loader runs with `separate_props = true` (scatter in `AuthoredScatter`, prop
 `MapContainer` exactly as a play-time load does. Then the scatter node gets
 `attach_document(document)`, the camera zoom-out limit becomes
 `max(20, GameMap.fit_zoom_for_extent(extent, 12 m) * 1.08)` (52.4 for a 200 ft map at
-16:9), pan bounds come from the document extent (`GameMap.set_map_bounds`), and every frame
+16:9), pan bounds come from the document extent (`GameMap.set_map_bounds`; zoomed out past
+`CameraController.RECENTRE_START` (0.6) of the size at which those bounds fit, the pan range
+narrows onto the map centre, reaching it at the fit size, so a full zoom-out frames the whole
+map wherever zoom-toward-cursor was heading; `recentre_weight()`; this applies to any map
+whose fit size the play zoom range reaches), and every frame
 `LevelEnvironmentManager.fit_shadow_distance_to_view()` keeps the sun's shadows reaching the
 map's far corner (above the fixed 100 m only when zoomed out past the play range).
 
@@ -903,8 +907,26 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   sample step on X and Z so every sample lands on its document position (the shape is
   centred like the document). Jolt triangulates each quad on the same diagonal as the mesh.
 - **Sculpting (phase 3):** edit `doc.heights`, then `rebuild_chunks(cells)` (cells within
-  one sample of the edit, for normals) and `update_collision()`.
-- **Ground material:** `shaders/authored_ground.gdshader`, built by
+  one sample of the edit, for normals) and `update_collision()`; an edit on the map edge
+  should also rebuild the skirt (`build()` does, or `_build_skirt()`).
+- **Shadows:** a flat chunk (height span <= `FLAT_CHUNK_M`) casts no shadow
+  (`chunk_shadow_casting()`); it could only shadow itself, and that self-shadowing darkened
+  flat ground about 10 % in steps along the cascade splits (a horizontal line across a
+  zoomed-out map). Sculpted chunks cast.
+- **Ground skirt:** `TerrainSkirt`, a ring `skirt_width_m()` wide around the map
+  (`TerrainMeshBuilder.build_skirt_arrays`: the chunks' boundary vertices pushed straight
+  out, world-XZ UVs) with `shaders/authored_ground_skirt.gdshader`, which is the ground
+  shader (`authored_ground.gdshaderinc`) with `GROUND_SKIRT`: transparent, base surface
+  only, alpha 1 at the edge falling to 0 over `SKIRT_FADE_M` (24 m) with the distance
+  stretched +-45 % by noise. It continues the ground's exact texture across the edge and
+  dissolves into the backdrop, whatever colour that is. Decoration only: no collision, no
+  shadow, and `Constants.BOUNDS_EXEMPT_META` keeps it out of the pan bounds and
+  `LevelEnvironmentManager.compute_map_bounds` (reflection probe, dressing extent). Present
+  in play as well as authoring. Its GPU cost at full zoom-out was not measured (the session
+  had the GPU held by another application); it is the ground shader without biome layers
+  over the ring's screen area.
+- **Ground material:** `shaders/authored_ground.gdshader` (a two-line wrapper; the shader and
+  its documentation are `authored_ground.gdshaderinc`, shared with the skirt), built by
   `build_ground_material(surface, seed)` from the palette surface (albedo, normal, ORM,
   height at `tile_m`); a missing surface warns and falls back to a flat earth colour.
   Anti-tiling is a triangle-grid tile-and-blend (terrain-paint's mosaic idea done live:

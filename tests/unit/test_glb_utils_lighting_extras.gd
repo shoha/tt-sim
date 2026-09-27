@@ -116,6 +116,21 @@ func test_extract_lighting_config_maps_known_keys() -> void:
 	root.free()
 
 
+func test_extract_lighting_config_maps_the_backdrop_colour() -> void:
+	var root := Node3D.new()
+	root.set_meta("tt_gltf_scene_extras", {"tt_background_color": [0.5, 0.6, 0.7]})
+
+	var config := GlbUtils.extract_lighting_config(root)
+
+	assert_eq(config.get("background_color"), Color(0.5, 0.6, 0.7))
+	assert_eq(config.get("background_mode"), Environment.BG_COLOR)
+
+	root.set_meta("tt_gltf_scene_extras", {"tt_background_color": [0.5, "x", 0.7]})
+	assert_false(GlbUtils.extract_lighting_config(root).has("background_color"), "malformed")
+
+	root.free()
+
+
 func test_extract_lighting_config_returns_empty_dict_with_no_extras() -> void:
 	var root := Node3D.new()
 

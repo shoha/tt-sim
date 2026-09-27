@@ -110,6 +110,7 @@ raised.
 |-----|-------|--------|--------|
 | `tt_ambient_light_color` | RGB from the World's `Background` node | terrain-paint Export glTF, "Ambient Light" option | `GlbUtils.extract_lighting_config()` into the map-defaults layer |
 | `tt_ambient_light_energy` | Background strength | same | same |
+| `tt_background_color` | RGB, the flat backdrop the orthographic camera sees past the map (optional) | no producer yet; tt-sim writes it for its own authored maps (`MapSourceLoader.AUTHORED_MAP_LIGHTING`) | same (`background_color`, with `background_mode` = colour) |
 | `tt_scatter_instances` | Dictionary: exact Blender object name of the instance-source asset -> array of Y-up transforms | terrain-paint "Scatter Instances" (`engine/scatter_instancing.py`) | `ScatterGlbUtils.process_scatter_instances()` |
 
 Scatter instances contract in full:

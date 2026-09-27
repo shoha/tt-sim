@@ -33,7 +33,16 @@ extends Node3D
 
 const CHUNK_NAME_PREFIX := "TerrainChunk"
 const COLLISION_NAME := "TerrainCollision"
+const SKIRT_NAME := "TerrainSkirt"
 const GROUND_SHADER := preload("res://shaders/authored_ground.gdshader")
+const SKIRT_SHADER := preload("res://shaders/authored_ground_skirt.gdshader")
+## The skirt fades out this far past the map edge (skirt_fade_m), the distance stretched
+## by up to +-SKIRT_WOBBLE with noise; the ring is wide enough for the longest stretch.
+const SKIRT_FADE_M := 24.0
+const SKIRT_WOBBLE := 0.45
+## A chunk whose heights span no more than this is flat and casts no shadow
+## (chunk_shadow_casting).
+const FLAT_CHUNK_M := 0.02
 const TEXEL_COPY_SHADER := preload("res://shaders/texel_copy_blit.gdshader")
 ## Ground shader uniforms of the biome layers; each map is a sampler array of
 ## BiomeGroundLayers.MAX_LAYERS.
@@ -225,11 +234,52 @@ func build(
 	if with_chunks:
 		rebuild_chunks(TerrainMeshBuilder.chunk_cells(doc))
 	_build_collision()
+	_build_skirt()
 
 
 ## The shared ground material.
 func get_material() -> ShaderMaterial:
 	return _material
+
+
+## The ground skirt: the base surface continued past the map edge, fading to transparent
+## (see SKIRT in shaders/authored_ground.gdshaderinc), so a zoomed-out view shows the map
+## dissolving into the background instead of a cut rectangle. Decoration only: no
+## collision, no shadow casting, and Constants.BOUNDS_EXEMPT_META keeps it out of the pan
+## bounds and the reflection probe. Rebuilt by build(); a phase 3 height edit on the map
+## edge should rebuild it too (its inner edge copies the boundary heights).
+func get_skirt() -> MeshInstance3D:
+	return get_node_or_null(SKIRT_NAME) as MeshInstance3D
+
+
+## Ring width for the skirt: the longest noise-stretched fade plus a margin.
+static func skirt_width_m() -> float:
+	return SKIRT_FADE_M / (1.0 - SKIRT_WOBBLE) + 2.0
+
+
+func _build_skirt() -> void:
+	var old := get_skirt()
+	if old != null:
+		old.free()
+	# The base surface's textures and seed, so the texture continues across the edge; no
+	# biome layers (their weights clamp at the edge and would streak outward).
+	var material := _material.duplicate() as ShaderMaterial
+	material.shader = SKIRT_SHADER
+	material.set_shader_parameter("biome_layer_count", 0)
+	material.set_shader_parameter("skirt_half_extent", document.extent_m() * 0.5)
+	material.set_shader_parameter("skirt_fade_m", SKIRT_FADE_M)
+	material.set_shader_parameter("skirt_wobble", SKIRT_WOBBLE)
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(
+		Mesh.PRIMITIVE_TRIANGLES, TerrainMeshBuilder.build_skirt_arrays(document, skirt_width_m())
+	)
+	mesh.surface_set_material(0, material)
+	var skirt := MeshInstance3D.new()
+	skirt.name = SKIRT_NAME
+	skirt.mesh = mesh
+	skirt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	skirt.set_meta(Constants.BOUNDS_EXEMPT_META, true)
+	add_child(skirt)
 
 
 ## The palette surface of each biome ground layer, in layer (weight channel) order.
@@ -465,6 +515,18 @@ func rebuild_chunks(cells: Array[Vector2i]) -> void:
 			add_child(chunk)
 			_chunks[cell] = chunk
 		chunk.mesh = mesh
+		chunk.cast_shadow = chunk_shadow_casting(mesh)
+
+
+## Shadow casting for a chunk mesh: off when the chunk is flat. A flat chunk can only
+## shadow itself, and the directional shadow's self-shadowing darkened flat ground about
+## 10 % in steps that follow the cascade splits (a horizontal line across a zoomed-out map,
+## and a seam against the ground skirt, which casts nothing; T7 renders). A sculpted chunk
+## (phase 3) casts as before.
+static func chunk_shadow_casting(mesh: Mesh) -> GeometryInstance3D.ShadowCastingSetting:
+	if mesh.get_aabb().size.y <= FLAT_CHUNK_M:
+		return GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 
 ## Pushes the document's current heights into the collision shape.

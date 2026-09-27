@@ -114,6 +114,8 @@ func test_document_only_map_gets_terrain_and_authored_lighting() -> void:
 	var lighting := GlbUtils.extract_lighting_config(root)
 	assert_true(lighting.has("ambient_light_color"))
 	assert_true(lighting.has("ambient_light_energy"))
+	assert_eq(lighting.get("background_mode"), Environment.BG_COLOR, "a flat haze backdrop")
+	assert_true(lighting.has("background_color"))
 	assert_not_null(_controller.loaded_map_document)
 	root.free()
 

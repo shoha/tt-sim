@@ -175,6 +175,79 @@ static func build_chunk_mesh(doc: MapDocument, cell: Vector2i, material: Materia
 	return mesh
 
 
+## Mesh arrays (vertex, normal, UV, index) for the ground skirt: a ring around the map
+## `width_m` wide, one quad per boundary sample step. Its inner edge is the map's boundary
+## vertices exactly (same positions and heights as the chunks'), its outer edge those
+## pushed straight out (diagonally at the corners, so the ring is a square annulus) at the
+## same height. UVs are world XZ like the chunks', so the ground shader continues across
+## the edge without a seam. Normals point up; every triangle faces +Y.
+static func build_skirt_arrays(doc: MapDocument, width_m: float) -> Array:
+	var loop := boundary_samples(doc)
+	var count := loop.size()
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	vertices.resize(count * 2)
+	normals.resize(count * 2)
+	uvs.resize(count * 2)
+	var last := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
+	for i in count:
+		var sample := loop[i]
+		var inner := sample_position(doc, sample.x, sample.y)
+		var out := Vector3(
+			-1.0 if sample.x == 0 else (1.0 if sample.x == last.x else 0.0),
+			0.0,
+			-1.0 if sample.y == 0 else (1.0 if sample.y == last.y else 0.0)
+		)
+		var outer := inner + out * width_m
+		vertices[i] = inner
+		vertices[count + i] = outer
+		normals[i] = Vector3.UP
+		normals[count + i] = Vector3.UP
+		uvs[i] = Vector2(inner.x, inner.z)
+		uvs[count + i] = Vector2(outer.x, outer.z)
+	var indices := PackedInt32Array()
+	indices.resize(count * 6)
+	for i in count:
+		var j := (i + 1) % count
+		_add_up_triangle(indices, i * 6, vertices, i, j, count + j)
+		_add_up_triangle(indices, i * 6 + 3, vertices, i, count + j, count + i)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	return arrays
+
+
+## The samples on the map's boundary as one closed loop, each once: along z = 0, up x = last,
+## back along z = last, down x = 0.
+static func boundary_samples(doc: MapDocument) -> Array[Vector2i]:
+	var last := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
+	var loop: Array[Vector2i] = []
+	for x in range(0, last.x):
+		loop.append(Vector2i(x, 0))
+	for z in range(0, last.y):
+		loop.append(Vector2i(last.x, z))
+	for x in range(last.x, 0, -1):
+		loop.append(Vector2i(x, last.y))
+	for z in range(last.y, 0, -1):
+		loop.append(Vector2i(0, z))
+	return loop
+
+
+## Writes triangle (a, b, c) at `at`, reordered if needed so it faces +Y (Godot's front
+## face is clockwise seen from the front, the chunks' convention).
+static func _add_up_triangle(
+	indices: PackedInt32Array, at: int, vertices: PackedVector3Array, a: int, b: int, c: int
+) -> void:
+	var facing := (vertices[b] - vertices[a]).cross(vertices[c] - vertices[a]).y
+	indices[at] = a
+	indices[at + 1] = b if facing < 0.0 else c
+	indices[at + 2] = c if facing < 0.0 else b
+
+
 ## Heights for a HeightMapShape3D over the whole grid: the document heights when they
 ## match the grid, else a flat field of the right size.
 static func collision_heights(doc: MapDocument) -> PackedFloat32Array:
