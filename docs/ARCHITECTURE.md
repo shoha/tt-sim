@@ -419,15 +419,15 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   Placed props are bedded with `DragPlaceController.raycast_terrain_down`, oriented like
   generated ones (upright or on the ground normal, then yaw), and scaled within the species'
   spread widened to at least +-25 %.
-- **Height strokes (sculpting, P3-3a; the Sculpt tool is P3-5):** `begin_height_stroke(op,
-  target_y)` with a `HeightBrush` operation (raise, lower, smooth, flatten, tier),
+- **Height strokes (sculpting, P3-3a; the Sculpt tool P3-5, below):** `begin_height_stroke(op,
+  target_y)` with a `HeightBrush` operation (raise, lower, smooth, flatten, tier, tier cut),
   `stroke_dab()` (or `height_dab()`), `flush()` once per frame, `end_stroke()` /
   `cancel_stroke()`; `can_sculpt()` is false on a dressed GLB (its ground is the GLB's).
-  `HeightBrush` holds the pure rules: raise / lower add `RAISE_M_PER_S` x falloff x
-  exposure; smooth, flatten and tier approach their goal by `MaskBrush.amount()` (smooth
-  toward a box mean over a window 15 % of the radius, `box_mean`; tier toward a target
-  height with a flat-topped steep profile, `tier_weight`, a stub P3-5 turns into the cliff
-  profile); results clamp to +-`MapDocument.MAX_ABS_HEIGHT_M`. `HeightStroke` mirrors
+  `HeightBrush` holds the pure rules: raise / lower add `raise_speed(radius)` (0.1 m/s per
+  metre of radius, so a hill keeps its proportions at any brush size) x falloff x exposure;
+  smooth and flatten approach their goal by `MaskBrush.amount()` (smooth toward a box mean
+  over a window 35 % of the radius, `box_mean`); tiers build a shape (`tier_goal`, below);
+  results clamp to +-`MapDocument.MAX_ABS_HEIGHT_M`. `HeightStroke` mirrors
   `MaskStroke`: a copy of the heights at the start (`start_heights`), per-frame
   `take_pending()` rectangles, 40 x 40 blocks diffed as ZSTD float bytes by `finish()`,
   `revert()`, `apply_diff()`. Per frame the editor sends the changed samples to
@@ -449,7 +449,34 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   with the grow / shrink animation, and records one history entry: the heights diff plus
   the props rows the stroke moved. Generated rows are not stored: undo and redo snap them
   to the restored ground at once and regenerate the area, and generation is a pure
-  function of the document. `ground_height_at(point)` gives the Flatten / Tier target.
+  function of the document. `ground_height_at(point)` gives the Flatten target and the
+  height a Tier press reads.
+- **Sculpt tool (P3-5):** `BrushTool.Mode.SCULPT` with `sculpt_tile` (the panel's Raise,
+  Smooth, Flatten or Tier tile); the press's operation is the pure
+  `BrushTool.sculpt_op(tile, ctrl, shift)` (Ctrl: lower / cut; Shift: smooth from any tile),
+  started by `_begin_sculpt()` with its target: Flatten the ground height under the press,
+  Tier `AuthoringEditor.tier_target(point, radius, down)`, which reads the press height and
+  picks a whole tier with `HeightBrush.tier_target_level` (from flat ground or between tiers
+  the next tier up, Ctrl the one below; from a tier top that tier when
+  `HeightBrush.tier_neighbours` finds lower ground in the ring, so a stroke from a top's edge
+  extends it, else the tier above; Ctrl mirrored). The tier profile (the user's rock-cliff
+  decision): every sample remembers its inset (how far inside the ring the stroke reached
+  it, the largest over the stroke), and `HeightBrush.tier_goal(start, target, inset)` gives
+  its height: a face at the ring's edge at `TIER_FACE_DEG` (74 degrees, never narrower than
+  `TIER_MIN_FACE_M` 0.3 m, about 1.2 samples, so it is interpolated rather than
+  stair-stepped), ending `TIER_LIP_M` (0.25 m, at most 30 % of the rise) below the target,
+  a convex lip rounding up over `TIER_LIP_WIDTH_M` (0.8 m), then the flat top exactly at
+  `k * tier_height_m`; a cut mirrors it with the lip as the rim. The shading normals read
+  about 70 degrees on the face at the 0.25 m spacing, past `TerrainRules`' full-rock 55, so
+  the automatic dressing makes the face the biome's cliff rock, keeps the lip's shoulder
+  ground (the lip rule) and gathers scree at the concave foot. TIER only raises samples that
+  began below the target and TIER_CUT only cuts, so strokes over existing tiers never climb
+  or dig past the press tier. The dab moves samples toward their goal at `TIER_RATE` at full
+  weight (the tier rises in a fraction of a second under the brush) and snaps within 2 mm;
+  `HeightStroke.complete()` puts every reached sample on its goal when the stroke ends. The
+  cursor conforms to the document's heights every frame while sculpting, a still pointer
+  keeps its ground point during a stroke, canopies over the ring fade (as for Thin / Clear),
+  and Tier / Flatten show their target under the ring (`BrushTool.tier_readout`).
 - **Bounds on relief:** the camera's near plane stays above the terrain's top
   (`CameraController.set_ground_top`, set by `MapSourceLoader.install` for any map with an
   `AuthoredTerrain`, play time included, and every frame in authoring; the camera moves back
@@ -460,7 +487,7 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   controller refits them and resizes the reflection probe when the range changed. A map
   loaded with relief needs nothing extra: its chunks are built before the probe and camera
   bounds are measured.
-- **Canopy fade:** while Thin / Clear is the tool, `BrushTool` makes its ring the
+- **Canopy fade:** while Thin / Clear or Sculpt is the tool, `BrushTool` makes its ring the
   `OcclusionFadeManager` focus (`set_focus(centre, 1.35 x radius)`, first entry in the token
   texture, cleared for other tools and on deactivate), so tree canopies between the camera and
   the ring dither away as they do over a token. Tree foliage materials are registered with
@@ -998,8 +1025,8 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   GLB map bodies) with a `HeightMapShape3D` of the full grid, the body scaled by the real
   sample step on X and Z so every sample lands on its document position (the shape is
   centred like the document). Jolt triangulates each quad on the same diagonal as the mesh.
-- **Sculpting (phase 3, P3-3a):** edit `doc.heights` in place (a `HeightStroke`, see
-  "Authoring Flow"), then `queue_heights(sample_rect)` and `process_heights(budget_usec)`
+- **Sculpting (phase 3, P3-3a; the Sculpt tool and tier profile P3-5):** edit `doc.heights`
+  in place (a `HeightStroke`, see "Authoring Flow" Brushes), then `queue_heights(sample_rect)` and `process_heights(budget_usec)`
   each frame. Live, a chunk is updated in place: `TerrainMeshBuilder.chunk_vertex_mirror()`
   keeps a CPU copy of its vertex stream (positions, then octahedral normal and tangent
   pairs: the uncompressed Godot 4.7 layout, bit-identical to the engine's own encoding, a
