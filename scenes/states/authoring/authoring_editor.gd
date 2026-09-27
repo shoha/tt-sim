@@ -18,6 +18,23 @@ extends RefCounted
 ## History. A stroke records MaskStroke's per-block compressed diff; a prop gesture records
 ## the rows of the one 10 m cell it changed, before and after. Undo and redo re-apply the
 ## stored side and refresh exactly the area it covers.
+##
+## Height strokes (sculpting; HeightStroke, rules in HeightBrush) edit doc.heights on a map
+## with an AuthoredTerrain (not on a dressed GLB, whose ground is the GLB's). Per frame,
+## flush() hands the changed samples to the terrain (in-place chunk updates within
+## TERRAIN_BUDGET_USEC, AuthoredTerrain.process_heights), pushes the heights into the
+## collision shape once (so the brush's own raycast hits the surface it is shaping on the
+## next frame), and snaps the plants and props standing on the changed ground (GroundSnap,
+## applied with AuthoredScatter.move_rows: transforms rewritten in place, no regrowth)
+## within SNAP_BUDGET_USEC; work a frame's budget leaves is carried to the next frames
+## through tick(). end_stroke() finishes that work, queues the settling rebuild of the
+## edited chunks, and asks the scatter to regenerate the stroke's area grown by one more
+## sample step than request_region() adds (normals read a sample either side), so slope
+## rules add and remove plants with the grow and shrink animation while every plant that
+## stays keeps its place (AuthoredScatter.row_keys leaves Y out). One history entry per
+## stroke holds the heights diff and the props rows it moved; generated rows are not
+## stored: undo and redo snap them back at once and regenerate the area, and generation is
+## a pure function of the document.
 
 ## Emitted after every change to the map (strokes, props, undo, redo), for dirty tracking.
 signal edited
@@ -26,6 +43,17 @@ signal edited
 const SCALE_COMMIT_SECONDS := 0.6
 ## A prop's footprint for picking and its hover ring: this fraction of its widest dimension.
 const FOOTPRINT_FRACTION := 0.45
+## Per-frame main-thread budgets of a sculpt stroke: terrain chunk updates, and snapping
+## plants and props to the new ground (docs/PERFORMANCE.md "Sculpting").
+const TERRAIN_BUDGET_USEC := 4000
+const SNAP_BUDGET_USEC := 2500
+const HEIGHT_LABELS := {
+	HeightBrush.RAISE: "Raise",
+	HeightBrush.LOWER: "Lower",
+	HeightBrush.SMOOTH: "Smooth",
+	HeightBrush.FLATTEN: "Flatten",
+	HeightBrush.TIER: "Tier",
+}
 
 var document: MapDocument = null
 var map_root: Node3D = null
@@ -38,9 +66,31 @@ var palette_root: String = PaletteLibrary.DEFAULT_ROOT
 ## Microseconds of the last flush() and of the last dab, for measurement.
 var last_flush_usec: int = 0
 var last_dab_usec: int = 0
+## Microseconds of the last frame of height work, by part, and rows moved, for measurement.
+var last_terrain_usec: int = 0
+var last_collision_usec: int = 0
+var last_snap_usec: int = 0
+var last_snap_rows: int = 0
 
 var _stroke: MaskStroke = null
 var _stroke_label: String = ""
+var _height: HeightStroke = null
+## Heights the snap start rows stood on (the stroke's start heights; kept after the stroke
+## until its snap work is done).
+var _snap_before: PackedFloat32Array = PackedFloat32Array()
+## cell -> Rect2 (map XZ) of ground changed since that cell's plants were last snapped.
+var _snap_windows: Dictionary = {}
+## cell -> {asset id -> rows} of scatter and of props as they were when the stroke began.
+var _snap_start: Dictionary = {}
+var _prop_start: Dictionary = {}
+## Scatter asset ids placed normal-aligned (DressingGround.aligned_assets), per stroke.
+var _aligned: Dictionary = {}
+## Props asset id -> true when its species stands on the ground normal (cached).
+var _prop_aligned: Dictionary = {}
+var _collision_dirty: bool = false
+## False while an undo sets props from history instead of snapping them.
+var _snap_props: bool = true
+var _worked_frame: int = -1
 ## An in-progress prop gesture: {"cell", "before": cell rows, "label", "handle"}.
 var _prop_edit: Dictionary = {}
 var _prop_edit_age: float = 0.0
@@ -84,7 +134,7 @@ func prepare_biome(biome_id: String) -> void:
 ## nothing it could change.
 func begin_stroke(mode: int, biome_id: String = "") -> bool:
 	commit_prop_edit()
-	if _stroke != null:
+	if is_stroking():
 		end_stroke()
 	_stroke = MaskStroke.begin(document, mode, biome_id)
 	if _stroke == null or not _stroke.writes_anything():
@@ -97,12 +147,16 @@ func begin_stroke(mode: int, biome_id: String = "") -> bool:
 
 
 func is_stroking() -> bool:
-	return _stroke != null
+	return _stroke != null or _height != null
 
 
 ## Exposes the capsule from `from` to `to` (world space) of world radius `radius` for
-## `seconds`. Call flush() once after the frame's dabs.
+## `seconds`, for whichever stroke is in progress (mask or height). Call flush() once after
+## the frame's dabs.
 func stroke_dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> void:
+	if _height != null:
+		height_dab(from, to, radius, seconds)
+		return
 	if _stroke == null:
 		return
 	var started := Time.get_ticks_usec()
@@ -110,8 +164,15 @@ func stroke_dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> vo
 	last_dab_usec = Time.get_ticks_usec() - started
 
 
-## Pushes this frame's mask changes to the ground, the scatter and the Blender scatter.
+## Pushes this frame's changes to their consumers: mask changes to the ground, the scatter
+## and the Blender scatter; height changes to the terrain, collision, plants and props.
 func flush() -> void:
+	if _height != null:
+		var started := Time.get_ticks_usec()
+		_queue_heights(_height.take_pending())
+		_work()
+		last_flush_usec = Time.get_ticks_usec() - started
+		return
 	if _stroke == null:
 		return
 	_refresh(_stroke.take_pending())
@@ -119,6 +180,8 @@ func flush() -> void:
 
 ## Ends the stroke and records it for undo. True when it changed anything.
 func end_stroke() -> bool:
+	if _height != null:
+		return _end_height_stroke()
 	if _stroke == null:
 		return false
 	flush()
@@ -143,6 +206,9 @@ func end_stroke() -> bool:
 
 ## Abandons the stroke in progress, putting every sample back.
 func cancel_stroke() -> void:
+	if _height != null:
+		_cancel_height_stroke()
+		return
 	if _stroke == null:
 		return
 	var rect := _stroke.revert()
@@ -167,6 +233,300 @@ func _refresh(sample_rect: Rect2i) -> void:
 	if eraser != null:
 		eraser.refresh(document, world.grow(document.sample_step().x))
 	last_flush_usec = Time.get_ticks_usec() - started
+
+
+# ============================================================================
+# Height strokes
+# ============================================================================
+
+
+## True when the map's ground can be sculpted: it is an AuthoredTerrain (a dressed GLB's
+## ground is the GLB's own).
+func can_sculpt() -> bool:
+	return (
+		is_instance_valid(terrain)
+		and not document.has_base_map
+		and document.heights.size() == document.sample_count()
+	)
+
+
+## Starts a sculpt stroke of HeightBrush operation `op`. `target_y` (world height) is the
+## goal of FLATTEN and TIER (the height under the press, or a tier height; see
+## ground_height_at and HeightBrush.tier_height). False when the map cannot be sculpted.
+func begin_height_stroke(op: int, target_y: float = 0.0) -> bool:
+	commit_prop_edit()
+	if is_stroking():
+		end_stroke()
+	if not can_sculpt():
+		return false
+	finish_height_work()
+	_height = HeightStroke.begin(document, op, to_map(Vector3(0.0, target_y, 0.0)).y)
+	if _height == null:
+		return false
+	_stroke_label = HEIGHT_LABELS.get(op, "Sculpt")
+	_snap_before = _height.start_heights
+	_snap_windows.clear()
+	_snap_start.clear()
+	_prop_start.clear()
+	_aligned = DressingGround.aligned_assets(document.biome_ids, palette_root)
+	return true
+
+
+## One frame's exposure of the sculpt stroke (as stroke_dab(), which forwards here while a
+## height stroke is in progress). Call flush() once after the frame's dabs.
+func height_dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> void:
+	if _height == null:
+		return
+	var started := Time.get_ticks_usec()
+	_height.dab(to_map_xz(from), to_map_xz(to), radius / map_scale(), seconds)
+	last_dab_usec = Time.get_ticks_usec() - started
+
+
+## The ground height (world Y) under world point `point`, on the terrain's own triangles:
+## the height Flatten holds and the one a Tier steps from.
+func ground_height_at(point: Vector3) -> float:
+	var local := to_map(point)
+	var at := document.world_to_sample(Vector2(local.x, local.z))
+	var heights := TerrainMeshBuilder.collision_heights(document)
+	var y := ScatterGenerator.triangle_height(
+		heights, document.samples_x(), document.samples_z(), at
+	)
+	return to_world(Vector3(local.x, y, local.z)).y
+
+
+## True while terrain, collision or snapping work from a sculpt stroke (or its undo) is
+## still being spread over frames.
+func has_height_work() -> bool:
+	return (
+		not _snap_windows.is_empty()
+		or _collision_dirty
+		or (is_instance_valid(terrain) and terrain.has_height_work())
+	)
+
+
+## One frame's share of the height work still waiting, at most once per frame whoever calls
+## (tick(), and AuthoringController every frame, so the work drains after the brush is put
+## away too).
+func step_height_work() -> void:
+	if Engine.get_process_frames() != _worked_frame and has_height_work():
+		_work()
+
+
+func _queue_heights(sample_rect: Rect2i) -> void:
+	if not sample_rect.has_area():
+		return
+	if is_instance_valid(terrain):
+		terrain.queue_heights(sample_rect)
+	_collision_dirty = true
+	var grid := Rect2i(0, 0, document.samples_x(), document.samples_z())
+	# A row's height reads its triangle's corners and its normal their neighbours: two samples.
+	var reach := sample_rect.grow(2).intersection(grid)
+	var window := MaskBrush.sample_rect_to_world(document, reach)
+	for cell in ScatterGenerator.cells_in_bounds(window):
+		var queued: Rect2 = _snap_windows.get(cell, Rect2())
+		_snap_windows[cell] = window if queued.size == Vector2.ZERO else queued.merge(window)
+
+
+## One frame of height work within the budgets (at most once per frame; tick() calls it on
+## frames without a dab so the work drains). `everything` ignores the budgets.
+func _work(everything: bool = false) -> void:
+	_worked_frame = Engine.get_process_frames()
+	var started := Time.get_ticks_usec()
+	if is_instance_valid(terrain):
+		terrain.process_heights(-1 if everything else TERRAIN_BUDGET_USEC)
+	last_terrain_usec = Time.get_ticks_usec() - started
+	started = Time.get_ticks_usec()
+	if _collision_dirty and is_instance_valid(terrain):
+		terrain.update_collision()
+	_collision_dirty = false
+	last_collision_usec = Time.get_ticks_usec() - started
+	_snap(-1 if everything else SNAP_BUDGET_USEC)
+
+
+## Snaps plants and props in the queued cells until `budget_usec` is spent (at least one
+## cell; negative: all).
+func _snap(budget_usec: int) -> void:
+	var started := Time.get_ticks_usec()
+	var rows := 0
+	var cells := 0
+	for cell in _snap_windows.keys():
+		if cells > 0 and budget_usec >= 0 and Time.get_ticks_usec() - started >= budget_usec:
+			break
+		var window: Rect2 = _snap_windows[cell]
+		_snap_windows.erase(cell)
+		rows += _snap_cell(cell, window)
+		cells += 1
+	last_snap_usec = Time.get_ticks_usec() - started
+	last_snap_rows = rows
+
+
+## Moves the scatter rows and props of `cell` whose XZ lies in `window` onto the current
+## ground. Returns how many rows moved.
+func _snap_cell(cell: Vector2i, window: Rect2) -> int:
+	var grid := GroundSnap.grid_of(document)
+	var after := document.heights
+	var moved := 0
+	if is_instance_valid(scatter):
+		var current: Dictionary = scatter.cell_rows(cell)
+		if not _snap_start.has(cell):
+			_snap_start[cell] = current.duplicate(true)
+		var start: Dictionary = _snap_start[cell]
+		for asset_id in current.keys():
+			var rows: PackedFloat32Array = current[asset_id]
+			var from: PackedFloat32Array = start.get(asset_id, PackedFloat32Array())
+			if from.size() != rows.size():
+				# Regenerated since the stroke began: start from what is drawn.
+				from = rows.duplicate()
+				start[asset_id] = from
+			var tilt := _aligned.has(asset_id)
+			var snapped := GroundSnap.snap_rows(from, rows, _snap_before, after, grid, tilt, window)
+			moved += _apply_moved(scatter, cell, asset_id, snapped)
+	if _snap_props and is_instance_valid(props):
+		var placed: Dictionary = props.cell_rows(cell)
+		if not placed.is_empty() and not _prop_start.has(cell):
+			_prop_start[cell] = placed.duplicate(true)
+		var start_props: Dictionary = _prop_start.get(cell, {})
+		for asset_id in placed.keys():
+			var rows: PackedFloat32Array = placed[asset_id]
+			var from: PackedFloat32Array = start_props.get(asset_id, PackedFloat32Array())
+			if from.size() != rows.size():
+				continue
+			var snapped := GroundSnap.rebed_props(
+				from, rows, _snap_before, after, grid, _prop_aligns(asset_id), window
+			)
+			moved += _apply_moved(props, cell, asset_id, snapped)
+	return moved
+
+
+func _apply_moved(
+	node: AuthoredScatter, cell: Vector2i, asset_id: String, snapped: Dictionary
+) -> int:
+	var moved: PackedInt32Array = snapped.moved
+	if moved.is_empty():
+		return 0
+	if not node.move_rows(cell, asset_id, snapped.rows, moved):
+		var rows: Dictionary = node.cell_rows(cell).duplicate()
+		rows[asset_id] = snapped.rows
+		node.set_cells({cell: rows}, false)
+	return moved.size()
+
+
+## True when prop asset `asset_id` stands on the ground normal (its species' "align").
+func _prop_aligns(asset_id: String) -> bool:
+	if not _prop_aligned.has(asset_id):
+		_prop_aligned[asset_id] = rule_for_asset(asset_id).get("align", "upright") == "normal"
+	return _prop_aligned[asset_id]
+
+
+## Does every piece of height work still waiting (terrain, collision, snapping, settling
+## rebuilds), at once.
+func finish_height_work() -> void:
+	if has_height_work():
+		_work(true)
+
+
+func _end_height_stroke() -> bool:
+	flush()
+	_work(true)
+	var stroke := _height
+	_height = null
+	var diff := stroke.finish()
+	if is_instance_valid(terrain):
+		terrain.settle_heights()
+	if diff.is_empty():
+		return false
+	var props_before := {}
+	var props_after := {}
+	for cell in _prop_start:
+		props_before[cell] = (_prop_start[cell] as Dictionary).duplicate(true)
+		props_after[cell] = props.cell_rows(cell).duplicate(true)
+	_regenerate(stroke.changed)
+	var props_bytes := 0
+	for cell in props_before:
+		props_bytes += _rows_bytes(props_before[cell]) + _rows_bytes(props_after[cell])
+	(
+		history
+		. record(
+			{
+				"label": _stroke_label,
+				"undo": _apply_height_diff.bind(diff, false, props_before),
+				"redo": _apply_height_diff.bind(diff, true, props_after),
+				"bytes": int(diff.bytes) + props_bytes,
+			}
+		)
+	)
+	edited.emit()
+	return true
+
+
+func _cancel_height_stroke() -> void:
+	var stroke := _height
+	_height = null
+	_snap_windows.clear()
+	var rect := stroke.revert()
+	# Every row goes back to exactly where it stood.
+	for cell in _snap_start:
+		var start: Dictionary = _snap_start[cell]
+		var current: Dictionary = scatter.cell_rows(cell) if is_instance_valid(scatter) else {}
+		for asset_id in start:
+			var rows: PackedFloat32Array = current.get(asset_id, PackedFloat32Array())
+			if rows.size() == (start[asset_id] as PackedFloat32Array).size():
+				scatter.move_rows(cell, asset_id, start[asset_id], _all_rows(rows))
+	for cell in _prop_start:
+		_set_prop_cell(cell, _prop_start[cell])
+	_snap_start.clear()
+	_prop_start.clear()
+	if rect.has_area():
+		if is_instance_valid(terrain):
+			terrain.queue_heights(rect)
+			terrain.settle_heights()
+		_collision_dirty = true
+		_work(true)
+
+
+## Undo (`redo` false) or redo of a sculpt stroke: the heights side, the terrain and
+## collision at once, generated plants snapped to the restored ground and their area
+## regenerated, props set to the rows recorded for that side.
+func _apply_height_diff(diff: Dictionary, redo: bool, prop_rows: Dictionary) -> void:
+	finish_height_work()
+	var before := document.heights.duplicate()
+	var rect := HeightStroke.apply_diff(document, diff, redo)
+	if not rect.has_area():
+		return
+	_snap_before = before
+	_snap_start.clear()
+	_prop_start.clear()
+	_aligned = DressingGround.aligned_assets(document.biome_ids, palette_root)
+	_queue_heights(rect)
+	# Props take their recorded rows, not a snap.
+	_snap_props = false
+	_work(true)
+	_snap_props = true
+	_snap_start.clear()
+	for cell in prop_rows:
+		_set_prop_cell(cell, prop_rows[cell])
+	if is_instance_valid(terrain):
+		terrain.settle_heights()
+	_regenerate(rect)
+
+
+## Regenerates the scatter over the sample rectangle `rect` of a height edit.
+func _regenerate(rect: Rect2i) -> void:
+	if not is_instance_valid(scatter) or not rect.has_area():
+		return
+	var step := document.sample_step()
+	# request_region() grows by each species' reach plus one step; normals need one more.
+	scatter.request_region(
+		MaskBrush.sample_rect_to_world(document, rect).grow(maxf(step.x, step.y))
+	)
+
+
+static func _all_rows(rows: PackedFloat32Array) -> PackedInt32Array:
+	var all := PackedInt32Array()
+	@warning_ignore("integer_division")
+	for r in rows.size() / MapDocument.ROW_STRIDE:
+		all.append(r)
+	return all
 
 
 # ============================================================================
@@ -362,8 +722,11 @@ func cancel_prop_edit() -> void:
 	_set_prop_cell(cell, before)
 
 
-## Advances the idle timer of a scale gesture; commits it after SCALE_COMMIT_SECONDS.
+## Once per frame (BrushTool calls it): carries height work a frame's budget left over
+## (terrain, collision, snapping, the settling rebuilds after a stroke) and advances the idle
+## timer of a scale gesture, committing it after SCALE_COMMIT_SECONDS.
 func tick(delta: float) -> void:
+	step_height_work()
 	if _prop_edit.get("label", "") != "Scale":
 		return
 	_prop_edit_age += delta

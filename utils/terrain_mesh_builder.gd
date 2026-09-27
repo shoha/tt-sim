@@ -163,6 +163,122 @@ static func build_chunk_arrays(doc: MapDocument, cell: Vector2i) -> Array:
 	return arrays
 
 
+## The vertex stream of a chunk as ArrayMesh stores it, kept on the CPU so a height edit can
+## rewrite only the rows it touched with ArrayMesh.surface_update_vertex_region() instead
+## of rebuilding the chunk. Layout (Godot 4.7, uncompressed vertex + normal + UV + index
+## surface, verified against RenderingServer.mesh_get_surface() in test_height_sculpt.gd):
+## the vertex buffer holds every position as three floats (12 bytes per vertex), then every
+## normal and tangent as two octahedral 16-bit pairs (8 bytes per vertex); UVs live in the
+## separate attribute buffer and never change. Returns {"rect": chunk_sample_rect(),
+## "columns", "rows", "positions": PackedFloat32Array (x, y, z per vertex), "normals":
+## PackedInt32Array (normal, tangent per vertex)}, or {} when the cell is not on the map.
+static func chunk_vertex_mirror(doc: MapDocument, cell: Vector2i) -> Dictionary:
+	var rect := chunk_sample_rect(doc, cell)
+	if rect.size == Vector2i.ZERO:
+		return {}
+	var columns := rect.size.x + 1
+	var rows := rect.size.y + 1
+	var positions := PackedFloat32Array()
+	positions.resize(columns * rows * 3)
+	var half := doc.extent_m() * 0.5
+	var step := doc.sample_step()
+	for row in rows:
+		var z_m := (rect.position.y + row) * step.y - half.y
+		for column in columns:
+			var i := (row * columns + column) * 3
+			positions[i] = (rect.position.x + column) * step.x - half.x
+			positions[i + 2] = z_m
+	var normals := PackedInt32Array()
+	normals.resize(columns * rows * 2)
+	var mirror := {
+		"rect": rect, "columns": columns, "rows": rows, "positions": positions, "normals": normals
+	}
+	write_vertex_region(doc, mirror, Rect2i(rect.position, Vector2i(columns, rows)))
+	return mirror
+
+
+## Rewrites the heights and normals of the samples of `part` (grid coordinates, clipped to
+## the chunk) in a chunk_vertex_mirror() from the document's current heights. Normals use
+## the same whole-grid central differences as build_chunk_arrays(), so an updated chunk is
+## bit-identical to a rebuilt one. Returns Vector2(lowest, highest) height written, or
+## Vector2(INF, -INF) when `part` misses the chunk.
+static func write_vertex_region(doc: MapDocument, mirror: Dictionary, part: Rect2i) -> Vector2:
+	var rect: Rect2i = mirror.rect
+	var columns: int = mirror.columns
+	var owned := Rect2i(rect.position, Vector2i(columns, mirror.rows))
+	var region := part.intersection(owned)
+	var span := Vector2(INF, -INF)
+	if not region.has_area():
+		return span
+	var positions: PackedFloat32Array = mirror.positions
+	var normals: PackedInt32Array = mirror.normals
+	var heights := collision_heights(doc)
+	var width := doc.samples_x()
+	var depth := doc.samples_z()
+	var step := doc.sample_step()
+	# Inlined like build_chunk_arrays(): per-vertex helper calls dominate otherwise.
+	for sz in range(region.position.y, region.end.y):
+		var z0 := maxi(sz - 1, 0)
+		var z1 := mini(sz + 1, depth - 1)
+		var inv_dz := 1.0 / ((z1 - z0) * step.y)
+		var here := sz * width
+		var base := (sz - rect.position.y) * columns - rect.position.x
+		for sx in range(region.position.x, region.end.x):
+			var x0 := maxi(sx - 1, 0)
+			var x1 := mini(sx + 1, width - 1)
+			var h := heights[here + sx]
+			var slope_x := (heights[here + x1] - heights[here + x0]) / ((x1 - x0) * step.x)
+			var slope_z := (heights[z1 * width + sx] - heights[z0 * width + sx]) * inv_dz
+			var n := Vector3(-slope_x, 1.0, -slope_z).normalized()
+			var i := base + sx
+			positions[i * 3 + 1] = h
+			# Vector2 arithmetic is single precision, like the engine's encoder; doubles
+			# round differently on about one vertex in four hundred.
+			var e := n.octahedron_encode() * 65535.0
+			normals[i * 2] = int(e.x) | (int(e.y) << 16)
+			# The tangent Godot generates for a surface without one (see encode_tangent).
+			var t := Vector3(n.z, -n.x, n.y).cross(n).normalized().octahedron_encode()
+			t = (t * Vector2(1.0, 0.5) + Vector2(0.0, 0.5)) * 65535.0
+			normals[i * 2 + 1] = int(t.x) | (int(t.y) << 16)
+			span.x = minf(span.x, h)
+			span.y = maxf(span.y, h)
+	return span
+
+
+## A unit normal as the vertex buffer stores it: octahedral, two 16-bit unorm halves
+## (x low, y high).
+static func encode_normal(n: Vector3) -> int:
+	var e := n.octahedron_encode() * 65535.0
+	return int(e.x) | (int(e.y) << 16)
+
+
+## The tangent Godot writes for a surface given normals but no tangents: the normal's
+## (z, -x, y) crossed with the normal, octahedral with the bitangent sign folded into y
+## (positive).
+static func encode_tangent(n: Vector3) -> int:
+	var t := Vector3(n.z, -n.x, n.y).cross(n).normalized().octahedron_encode()
+	t = (t * Vector2(1.0, 0.5) + Vector2(0.0, 0.5)) * 65535.0
+	return int(t.x) | (int(t.y) << 16)
+
+
+## The bytes of mirror rows `first_row`..`last_row` (chunk-local, inclusive) for
+## surface_update_vertex_region(): {"positions": bytes at "position_offset", "normals":
+## bytes at "normal_offset"}. Whole rows, so one call per stream covers any edited part.
+static func vertex_rows_bytes(mirror: Dictionary, first_row: int, last_row: int) -> Dictionary:
+	var columns: int = mirror.columns
+	var count: int = columns * int(mirror.rows)
+	var positions: PackedFloat32Array = mirror.positions
+	var normals: PackedInt32Array = mirror.normals
+	return {
+		"positions":
+		positions.slice(first_row * columns * 3, (last_row + 1) * columns * 3).to_byte_array(),
+		"position_offset": first_row * columns * 12,
+		"normals":
+		normals.slice(first_row * columns * 2, (last_row + 1) * columns * 2).to_byte_array(),
+		"normal_offset": count * 12 + first_row * columns * 8,
+	}
+
+
 ## One chunk as an ArrayMesh with `material` on its surface, or null when the cell is not
 ## part of the map.
 static func build_chunk_mesh(doc: MapDocument, cell: Vector2i, material: Material) -> ArrayMesh:

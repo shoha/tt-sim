@@ -73,6 +73,9 @@ var _environment := LevelEnvironmentManager.new()
 var _ui_layer: CanvasLayer = null
 ## The document's extent in world space (plus canopy height), for the shadow distance.
 var _map_bounds: AABB = AABB()
+## The ground range _fit_camera() last used, and whether an edit may have changed it.
+var _fitted_ground: Vector2 = Vector2.ZERO
+var _bounds_stale: bool = false
 var _autosave_timer: Timer = null
 ## Bumped by every open and by teardown, so a load still awaiting drops its result.
 var _generation: int = 0
@@ -302,6 +305,7 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	_fit_camera()
 	editor = AuthoringEditor.create(document, root, history)
 	editor.edited.connect(mark_edited)
+	editor.edited.connect(func() -> void: _bounds_stale = true)
 	brush.deactivate()
 	brush.editor = editor
 
@@ -345,18 +349,60 @@ func _fit_dressing_to_ground(generation: int) -> int:
 
 
 ## Zoom-out reaches a view of the whole map (never less than the play camera's), and panning
-## is bounded by the map's extent even where nothing has been painted yet.
+## is bounded by the map's extent even where nothing has been painted yet. Heights follow the
+## terrain's real range (sculpted ground can rise above or sink below Y = 0; a dressed GLB
+## map keeps 0): the zoom fit, the pan bounds and the shadow bounds all span the lowest
+## ground to the highest plus CONTENT_HEIGHT_M of canopy.
 func _fit_camera() -> void:
 	var extent := document.extent_m()
 	var scaled := extent * Vector2(map_root.scale.x, map_root.scale.z)
-	var fit := _game_map.fit_zoom_for_extent(scaled, CONTENT_HEIGHT_M) * ZOOM_FIT_MARGIN
+	var ground := _ground_range()
+	_fitted_ground = ground
+	var fit := (
+		_game_map.fit_zoom_for_extent(scaled, ground.y + CONTENT_HEIGHT_M, ground.x)
+		* ZOOM_FIT_MARGIN
+	)
 	_game_map.set_zoom_limits(MIN_ZOOM, maxf(PLAY_MAX_ZOOM, fit))
 	var local := AABB(Vector3(-extent.x, 0.0, -extent.y) * 0.5, Vector3(extent.x, 0.0, extent.y))
 	_map_bounds = map_root.global_transform * local
+	_map_bounds.position.y = ground.x
+	_map_bounds.size.y = ground.y - ground.x
 	if not document.has_base_map:
 		_game_map.set_map_bounds(_map_bounds)
 	# Shadows reach the map's far side, with room for the canopy.
-	_map_bounds = _map_bounds.expand(_map_bounds.position + Vector3.UP * CONTENT_HEIGHT_M)
+	_map_bounds = _map_bounds.expand(
+		Vector3(_map_bounds.position.x, ground.y + CONTENT_HEIGHT_M, _map_bounds.position.z)
+	)
+
+
+## The authored terrain of the open map, or null (a dressed GLB map has none).
+func _terrain() -> AuthoredTerrain:
+	if not is_instance_valid(map_root):
+		return null
+	return map_root.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain
+
+
+## The ground's world height range (lowest, highest): the terrain's, or 0..0 without one.
+func _ground_range() -> Vector2:
+	var terrain := _terrain()
+	return terrain.world_height_range() if terrain else Vector2.ZERO
+
+
+## After a sculpt stroke, undo or redo has settled (its chunks rebuilt, so their AABBs are
+## exact again): refits the camera and shadow bounds and resizes the reflection probe to
+## the new ground, when its range changed.
+func _refresh_bounds_after_edit() -> void:
+	var terrain := _terrain()
+	if terrain == null:
+		_bounds_stale = false
+		return
+	if (editor and editor.has_height_work()) or terrain.has_unsettled_chunks():
+		return
+	_bounds_stale = false
+	if terrain.world_height_range().is_equal_approx(_fitted_ground):
+		return
+	_fit_camera()
+	_environment.apply_reflection_probe(_game_map.world_viewport)
 
 
 func _fail_open() -> void:
@@ -369,9 +415,17 @@ func _fail_open() -> void:
 func _process(_delta: float) -> void:
 	if not _is_open or not is_instance_valid(_game_map):
 		return
+	if editor:
+		# Sculpt work a stroke's frames left over drains even with the brush put away.
+		editor.step_height_work()
+	var ground := _ground_range()
+	# The near plane follows raised ground at once (the range only widens mid-stroke).
+	_game_map.set_ground_top(ground.y)
 	_environment.fit_shadow_distance_to_view(
-		_game_map.camera_node, Vector2(_game_map.world_viewport.size), _map_bounds
+		_game_map.camera_node, Vector2(_game_map.world_viewport.size), _map_bounds, ground.x
 	)
+	if _bounds_stale:
+		_refresh_bounds_after_edit()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -399,12 +453,14 @@ func undo() -> void:
 	_finish_brush_gesture()
 	if history.undo() != "":
 		mark_edited()
+		_bounds_stale = true
 
 
 func redo() -> void:
 	_finish_brush_gesture()
 	if history.redo() != "":
 		mark_edited()
+		_bounds_stale = true
 
 
 ## A stroke or prop gesture in progress becomes its own history entry before undo or redo

@@ -321,6 +321,11 @@ static func install(
 		game_map.apply_weather_overrides(level.weather.to_dict())
 	# Occlusion fade cache, foliage AA, camera bounds, debug toggles.
 	game_map.notify_map_loaded()
+	# An authored map's ground may rise above Y = 0 (sculpted): keep the camera's near plane
+	# above it. A Blender map leaves the camera as it always was.
+	var terrain := map.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain
+	if terrain:
+		game_map.set_ground_top(terrain.world_height_range().y)
 	if level:
 		var tool := game_map.get_measure_tool()
 		if tool:

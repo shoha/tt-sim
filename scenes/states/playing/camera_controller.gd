@@ -34,7 +34,8 @@ const RMB_PAN_MOVE_THRESHOLD_PX: float = 5.0  # Min movement to count as drag
 
 # Camera soft bounds / near-plane safety margin
 const MAP_BOUNDS_MARGIN_FACTOR := 0.15  # Extra margin as fraction of map size on each side
-const NEAR_PLANE_GROUND_MARGIN := 0.5  # Keep bottom-corner ray origins at least this far above Y=0
+## Keep bottom-corner ray origins at least this far above the highest ground (ground_top_y).
+const NEAR_PLANE_GROUND_MARGIN := 0.5
 ## Zoomed out past this fraction of the size at which the whole map fits, the pan range
 ## narrows toward the map centre, reaching it at that size (recentre_weight()), so a full
 ## zoom-out frames the map instead of wherever zoom-toward-cursor left the view.
@@ -55,6 +56,10 @@ const REFERENCE_ASPECT := 16.0 / 9.0  # Reference window aspect ratio for frustu
 @export var pan_gesture_zoom_factor: float = 0.05
 @export var min_zoom: float = 2.0
 @export var max_zoom: float = 20.0
+
+## World height of the highest ground the near plane must stay above: 0 for Blender maps
+## (unchanged behaviour), the terrain's top for an authored map (set_ground_top).
+var ground_top_y: float = 0.0
 
 var _game_map: GameMap = null
 var _measure_tool: MeasureTool = null
@@ -234,10 +239,23 @@ func _corrected_size(height: float) -> float:
 	return compute_aspect_corrected_size(height, _game_map.world_viewport.size, REFERENCE_ASPECT)
 
 
+## The highest ground on the map (world Y), so the near plane stays above raised terrain at
+## the bottom of the screen (see _update_camera_offset). Blender maps never call this and
+## keep 0; an authored map passes its terrain's top, and authoring keeps it current while
+## the ground is sculpted. Re-applies the offset at once when it changed.
+func set_ground_top(y: float) -> void:
+	if is_equal_approx(y, ground_top_y):
+		return
+	ground_top_y = y
+	if is_instance_valid(_game_map) and is_instance_valid(_game_map.camera_node):
+		_update_camera_offset()
+
+
 ## Scale the Camera3D local position so that all screen-corner ray origins
-## stay above Y=0. For an orthographic camera, translating along the view
-## direction has zero visual effect but keeps the near plane ahead of all
-## visible ground geometry, preventing culling at any zoom or aspect ratio.
+## stay above the highest ground (ground_top_y, 0 unless set). For an orthographic camera,
+## translating along the view direction has zero visual effect but keeps the near plane
+## ahead of all visible ground geometry, preventing culling at any zoom or aspect ratio:
+## every visible ground point lies on a downward ray from an origin above it.
 func _update_camera_offset() -> void:
 	var camera_node := _game_map.camera_node
 	# Baseline: proportional scaling preserves the original camera geometry
@@ -253,8 +271,9 @@ func _update_camera_offset() -> void:
 		var bl := camera_node.project_ray_origin(Vector2(0, vp_size.y))
 		var br := camera_node.project_ray_origin(Vector2(vp_size.x, vp_size.y))
 		var min_y := minf(bl.y, br.y)
-		if min_y < NEAR_PLANE_GROUND_MARGIN:
-			var deficit := NEAR_PLANE_GROUND_MARGIN - min_y
+		var floor_y := ground_top_y + NEAR_PLANE_GROUND_MARGIN
+		if min_y < floor_y:
+			var deficit := floor_y - min_y
 			offset_scale += deficit / _base_camera_offset.y
 			camera_node.position = _base_camera_offset * offset_scale
 
@@ -387,12 +406,17 @@ func set_zoom_limits(low: float, high: float) -> void:
 
 
 ## The orthographic size (the 16:9 reference height, as _target_zoom) at which a map of
-## `extent_m` (X by Z metres, centred on the origin, floor at Y = 0) with content up to
-## `height_m` tall fits a camera with rotation `basis`: the larger of the view height the
-## content spans and the view width it spans divided by `aspect`. Pure. For a 200 ft map
-## at this camera's 45 degree yaw the width decides: the square's diagonal is sqrt(2) x 61 m.
+## `extent_m` (X by Z metres, centred on the origin) whose content spans heights
+## `floor_m` (the lowest ground, 0 unless sculpted below it) to `height_m` fits a camera
+## with rotation `basis`: the larger of the view height the content spans and the view
+## width it spans divided by `aspect`. Pure. For a 200 ft map at this camera's 45 degree
+## yaw the width decides: the square's diagonal is sqrt(2) x 61 m.
 static func fit_size_for_extent(
-	basis: Basis, extent_m: Vector2, height_m: float, aspect: float = REFERENCE_ASPECT
+	basis: Basis,
+	extent_m: Vector2,
+	height_m: float,
+	aspect: float = REFERENCE_ASPECT,
+	floor_m: float = 0.0
 ) -> float:
 	var right := basis.x.normalized()
 	var up := basis.y.normalized()
@@ -401,7 +425,7 @@ static func fit_size_for_extent(
 	var high := Vector2(-INF, -INF)
 	for x in [-half.x, half.x]:
 		for z in [-half.y, half.y]:
-			for y in [0.0, height_m]:
+			for y in [minf(floor_m, 0.0), height_m]:
 				var corner := Vector3(x, y, z)
 				var screen := Vector2(corner.dot(right), corner.dot(up))
 				low = low.min(screen)
@@ -613,6 +637,7 @@ func _fit_size_for_bounds(bounds: AABB) -> float:
 func notify_map_clearing() -> void:
 	_has_map_bounds = false
 	_fit_size = INF
+	ground_top_y = 0.0
 	if _shake_tween and _shake_tween.is_valid():
 		_shake_tween.kill()
 	if _shake_offset != Vector3.ZERO:
