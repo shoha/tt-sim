@@ -47,6 +47,13 @@ extends RefCounted
 ## painted surface overrides it in proportion to its weight. set_surface_weight() keeps
 ## the sum; the writer and reader normalise any sample that breaks it.
 ##
+## Water. water_bodies holds the rivers and ponds (WaterBody, flat water per body, stable
+## ids); pond_mask is one byte per sample naming the pond whose area holds it (0 = none);
+## water_flow is the baked map-wide flow map (WaterFlowBaker), RG8 pixel data of
+## water_flow_size texels, empty when there is none. One flow map per map because the
+## water shader has one flow sampler per level. WaterGeometry derives the wet samples and
+## per-sample levels. Summary: docs/ARCHITECTURE.md "Water model and flow bake".
+##
 ## The fields are plain vars because authoring mutates one document for a whole session;
 ## every helper here is pure except the surface_* mutators, which edit the fields.
 
@@ -74,6 +81,13 @@ const MAX_BIOMES := 255
 ## Painted surface slots: two RGBA8 weight images of SURFACE_CHANNELS slots each.
 const MAX_SURFACES := 8
 const SURFACE_CHANNELS := 4
+## Water bodies per document, rivers among them, and control points per river. The flow
+## bake's cost grows with the rivers and their length.
+const MAX_WATER_BODIES := 64
+const MAX_RIVERS := 32
+const MAX_RIVER_POINTS := 512
+## Largest flow map the reader accepts, per axis (the baker writes about 4 per metre).
+const MAX_FLOW_TEXELS := 1024
 
 var palette_version: String = ""
 var map_seed: int = 0
@@ -106,6 +120,15 @@ var surface_ids: PackedStringArray = PackedStringArray()
 ## sample_count() * 8 bytes in two RGBA8 planes (see the header). Empty exactly when
 ## surface_ids is.
 var surface_weights: PackedByteArray = PackedByteArray()
+## Rivers and ponds, at most MAX_WATER_BODIES (see the header).
+var water_bodies: Array[WaterBody] = []
+## One byte per sample: 0 = no pond, else the id of the pond whose area holds the sample.
+## Empty = no pond areas.
+var pond_mask: PackedByteArray = PackedByteArray()
+## Baked flow map: water_flow_size.x * water_flow_size.y texels of RG8, row-major, row j
+## at v = (j + 0.5) / water_flow_size.y (WaterFlowBaker documents the frame). Empty = none.
+var water_flow: PackedByteArray = PackedByteArray()
+var water_flow_size: Vector2i = Vector2i.ZERO
 
 
 ## A flat, empty document with the default cell size (5 ft), sample spacing and tier
@@ -363,6 +386,33 @@ static func normalized_surface_weights(
 		stray += 1 if stray_here else 0
 		over += 1 if sum > 255 else 0
 	return {"weights": out, "stray": stray, "over": over}
+
+
+## The water body with id `body_id`, or null.
+func water_body(body_id: int) -> WaterBody:
+	for body in water_bodies:
+		if body.id == body_id:
+			return body
+	return null
+
+
+## The id a new water body gets: one past the highest in use, else the lowest free id
+## (so ids stay stable: an existing body's id never changes); -1 when the document already
+## holds MAX_WATER_BODIES bodies.
+func next_water_id() -> int:
+	if water_bodies.size() >= MAX_WATER_BODIES:
+		return -1
+	var used := {}
+	var highest := 0
+	for body in water_bodies:
+		used[body.id] = true
+		highest = maxi(highest, body.id)
+	if highest < WaterBody.MAX_ID:
+		return highest + 1
+	for candidate in range(1, WaterBody.MAX_ID + 1):
+		if not used.has(candidate):
+			return candidate
+	return -1
 
 
 ## Whole rows across every asset of `rows_by_asset` (scatter or props).
