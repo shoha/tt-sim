@@ -320,15 +320,19 @@ func test_slope_limit_with_falloff_on_an_analytic_ramp() -> void:
 	var gentle := 0
 	var falloff := 0
 	var steep := 0
+	# The palette's limit plus the in-game allowance (ScatterPlan.SLOPE_ALLOWANCE_DEG).
+	var limit := 30.0 + ScatterPlan.SLOPE_ALLOWANCE_DEG
 	for point in _positions(rows, shrub.assets):
 		var angle := point.x + 45.0
-		if angle < 25.0:
+		if angle < limit - 5.0:
 			gentle += 1
-		elif angle >= 30.0 and angle < 40.0:
+		elif angle >= limit and angle < limit + 10.0:
 			falloff += 1
-		elif angle >= 40.0 + EPSILON:
+		elif angle >= limit + 10.0 + EPSILON:
 			steep += 1
-	assert_almost_eq(gentle / (25.0 * 20.0 * 2.0), 1.0, 0.1, "full density well below the limit")
+	assert_almost_eq(
+		gentle / ((limit - 5.0) * 20.0 * 2.0), 1.0, 0.1, "full density well below the limit"
+	)
 	assert_eq(steep, 0, "nothing past the limit plus the 10 degree falloff")
 	assert_almost_eq(falloff / (10.0 * 20.0 * 2.0), 0.5, 0.12, "linear falloff in between")
 

@@ -43,29 +43,34 @@ const EPS := 1e-4
 
 
 func test_cliff_rule_matches_hand_values() -> void:
-	# 45 degrees: tail (0.70711 - 0.78801) / (0.57358 - 0.78801) = 0.37729, no noise
-	# (0.5 is the neutral value), ramp (0.37729 - 0.2) / 0.6 = 0.29549, smoothstep 0.21034.
-	assert_almost_eq(TerrainRules.cliff_from(cos(deg_to_rad(45.0)), 0.0, 0.5), 0.210335, EPS)
-	# 50 degrees: tail 0.67724 -> ramp 0.79539 -> 0.89154; a full convex lip keeps 0.4 of
-	# the tail (0.27089) -> ramp 0.11816 -> 0.03858.
+	# 50 degrees: tail (0.64279 - 0.71934) / (0.52992 - 0.71934) = 0.40414, no noise
+	# (0.5 is the neutral value), ramp (0.40414 - 0.2) / 0.6 = 0.34023, smoothstep 0.26850.
 	var fifty := cos(deg_to_rad(50.0))
-	assert_almost_eq(TerrainRules.cliff_from(fifty, 0.0, 0.5), 0.891539, EPS)
-	assert_almost_eq(TerrainRules.cliff_from(fifty, 0.2, 0.5), 0.038584, EPS)
-	# Edge noise moves the tail by up to CLIFF_EDGE_NOISE: at 45 degrees the tail 0.37729
-	# becomes 0.72729 at noise 1 (ramp 0.87882 -> 0.95950).
-	assert_almost_eq(TerrainRules.cliff_from(cos(deg_to_rad(45.0)), 0.0, 1.0), 0.959505, EPS)
+	assert_almost_eq(TerrainRules.cliff_from(fifty, 0.0, 0.5), 0.268504, EPS)
+	# 55 degrees: tail 0.76952 -> ramp 0.94921 -> 0.99252; a full convex lip keeps 0.4 of
+	# the tail (0.30781) -> ramp 0.17968 -> 0.08526.
+	var fifty_five := cos(deg_to_rad(55.0))
+	assert_almost_eq(TerrainRules.cliff_from(fifty_five, 0.0, 0.5), 0.992520, EPS)
+	assert_almost_eq(TerrainRules.cliff_from(fifty_five, 0.2, 0.5), 0.085256, EPS)
+	# Edge noise moves the tail by up to CLIFF_EDGE_NOISE: at 50 degrees the tail 0.40414
+	# becomes 0.75414 at noise 1 (ramp 0.92356 -> 0.98337).
+	assert_almost_eq(TerrainRules.cliff_from(fifty, 0.0, 1.0), 0.983368, EPS)
 
 
-func test_tier_faces_are_rock_and_30_degree_hills_are_ground() -> void:
-	# A tier face's shading normal is about 70 degrees: fully rock whatever the noise, and
-	# the lip rule does not reach it (tail 2.08, past LIP_SHEER_TAIL).
-	var face := cos(deg_to_rad(70.0))
-	var hill := cos(deg_to_rad(30.0))
+func test_tier_faces_are_rock_and_raised_hills_are_ground() -> void:
+	# A tier face's shading normal is about 63 degrees (HeightBrush's soft profile): fully
+	# rock whatever the noise. A sheer 70 degree face is at the end of the lip rule's reach
+	# (tail 1.99, LIP_SHEER_TAIL 2), so a convex lip above it takes no rock back from it.
+	var face := cos(deg_to_rad(63.0))
+	var sheer := cos(deg_to_rad(70.0))
+	# A hill raised with the Raise brush has 35 to 47 degree flanks: 40 degrees is ground
+	# whatever the noise (P3-7: the rule started at 38 and left bare mounds in a forest).
+	var hill := cos(deg_to_rad(40.0))
 	for k in 11:
 		var noise := k / 10.0
 		assert_eq(TerrainRules.cliff_from(face, 0.0, noise), 1.0, "tier face at noise %s" % noise)
-		assert_eq(TerrainRules.cliff_from(face, 0.3, noise), 1.0, "tier face under a lip")
-		assert_eq(TerrainRules.cliff_from(hill, 0.0, noise), 0.0, "30 degree hill at %s" % noise)
+		assert_eq(TerrainRules.cliff_from(sheer, 0.3, noise), 1.0, "sheer face under a lip")
+		assert_eq(TerrainRules.cliff_from(hill, 0.0, noise), 0.0, "40 degree hill at %s" % noise)
 	assert_eq(TerrainRules.cliff_from(1.0, 0.0, 1.0), 0.0, "flat ground")
 
 
