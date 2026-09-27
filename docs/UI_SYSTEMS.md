@@ -819,6 +819,17 @@ and nothing numeric in the main flow:
   `set_paint_limits`), and a refused press shows the same line as a warning toast. The hint
   line (`PaintHint`) says the gestures, that paths stop at rock faces (climb with a ramp) and
   that built surfaces clear plants.
+  **Built order per map (2026-09-27):** the Built tiles show the path surfaces of the biomes
+  on the map first: the palette's `path_surfaces` (ASSET_PIPELINE section 9) of each biome in
+  `MapDocument.biome_ids` order, then of the base surface's biome (the palette's first biome
+  on it), unioned and deduplicated, then every other built surface in palette order
+  (`AuthoringPanel.paint_order`; it orders, never filters). With no biome listing paths the
+  order is the palette's. The controller re-orders on every edit, undo and redo
+  (`AuthoringController._refresh_paint_order` -> `AuthoringPanel.order_paint_tiles`, a no-op
+  while the biome list is unchanged; tiles are moved, not rebuilt). Until the author picks a
+  Paint tile in the session, the preselected surface follows the order (the first listed
+  path, else Dirt track), so a badlands map starts on its own track rather than one that
+  vanishes on red sand; once picked, re-ordering never changes the selection.
 - Biome, Thin / Clear, Sculpt and Paint end in an `Advanced` foldout with Size (1 to 12 m, "Small" /
   "Large") and Strength (0.25 to 2x, "Gentle" / "Strong") `PropertyRow`s, values hidden like
   the Visuals drawer's; all follow the gestures (`set_brush_values`).

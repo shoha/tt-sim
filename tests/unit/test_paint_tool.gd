@@ -259,6 +259,62 @@ func test_paint_tiles_are_grouped_by_role_with_readable_names() -> void:
 	assert_false(flag.disabled)
 
 
+## The Built tiles' surfaces in the order the pane shows them.
+func _built_order(panel: AuthoringPanel) -> Array[String]:
+	var order: Array[String] = []
+	var built: TileField = panel.paint_fields["built"]
+	for child in built.tiles.get_children():
+		order.append(AuthoringPanel.paint_tile_surface(StringName(child.name)))
+	return order
+
+
+## The built-in palette with path_surfaces injected, as palette v5 will carry them.
+func _inject_paths(paths: Dictionary) -> void:
+	PaletteLibrary.clear_cache()
+	var palette: Dictionary = PaletteLibrary.get_palette().duplicate(true)
+	for biome in palette.biomes:
+		if paths.has(biome.id):
+			biome["path_surfaces"] = paths[biome.id]
+	PaletteLibrary._palettes[PaletteLibrary.DEFAULT_ROOT] = palette
+
+
+func test_built_tiles_keep_the_palette_order_when_no_biome_lists_paths() -> void:
+	PaletteLibrary.clear_cache()
+	var panel := AuthoringPanel.new()
+	add_child_autofree(panel)
+	panel.ensure_paint_tiles()
+	assert_false(panel.order_paint_tiles(PackedStringArray([FOREST])), "the default stays")
+	assert_eq(_built_order(panel), PaletteLibrary.surfaces_with_role("built"))
+	assert_eq(panel.get_paint_surface(), AuthoringPanel.DEFAULT_PAINT_SURFACE)
+
+
+func test_built_tiles_show_the_maps_biome_paths_first() -> void:
+	var badlands := "rocky_badlands_summer_s1"
+	_inject_paths({FOREST: ["flagstone", "cobblestone"], badlands: ["stone_tiles", "flagstone"]})
+	var built := PaletteLibrary.surfaces_with_role("built")
+	var expected: Array[String] = ["flagstone", "cobblestone", "stone_tiles"]
+	for surface in built:
+		if not surface in expected:
+			expected.append(surface)
+	var biomes := PackedStringArray([FOREST, badlands])
+	assert_eq(AuthoringPanel.paint_order(built, biomes, PaletteLibrary.DEFAULT_ROOT), expected)
+	var panel := AuthoringPanel.new()
+	add_child_autofree(panel)
+	panel.ensure_paint_tiles()
+	assert_true(panel.order_paint_tiles(biomes), "the unpicked default follows the paths")
+	assert_eq(_built_order(panel), expected)
+	assert_eq(panel.get_paint_surface(), "flagstone")
+	assert_false(panel.order_paint_tiles(biomes), "unchanged biomes: nothing to do")
+	# Once the author picks, reordering never moves the selection.
+	var tiles: TileRow = (panel.paint_fields["built"] as TileField).tiles
+	tiles.get_node("paint_planks").emit_signal("toggled", true)
+	assert_eq(panel.get_paint_surface(), "planks")
+	assert_false(panel.order_paint_tiles(PackedStringArray([badlands])))
+	assert_eq(_built_order(panel)[0], "stone_tiles")
+	assert_eq(panel.get_paint_surface(), "planks")
+	PaletteLibrary.clear_cache()
+
+
 func test_paint_presses_are_brush_strokes() -> void:
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
