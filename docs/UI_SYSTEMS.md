@@ -887,6 +887,13 @@ ramp (a few passes of a 2.5 m brush across a face lay it back to about 22 degree
 middle of a flat top stays flat, since its local mean is itself; to keep an edge crisp, keep
 the ring off it.
 
+Rocks survive sculpting: boulders and stones the ground moves under tilt with it while the
+stroke is held and stay where they are when it ends, even on a new face or a hill's flank
+(never leaning more than 55 degrees, bedded so they never float), breaking up the edge of the
+height jump. They become placed props, so the author can turn, scale or remove them with
+Place like any other; one undo puts them back as they were. Trees, shrubs, logs and plants
+still follow the slope rules.
+
 Sculpting ignores trees: canopies between the camera and the ring dither away (the same
 occlusion fade Thin / Clear uses), and the ring re-conforms to the moving ground every frame
 while a stroke is held. A still pointer keeps its ground point during a stroke (the ray would

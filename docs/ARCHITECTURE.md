@@ -451,6 +451,37 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   to the restored ground at once and regenerate the area, and generation is a pure
   function of the document. `ground_height_at(point)` gives the Flatten target and the
   height a Tier press reads.
+- **Rocks survive terrain changes (P3-7, the user's decision of 2026-09-27):** a sculpt
+  stroke never removes the rocks under it; rocks tilted by the moving ground break up the
+  edges of height jumps and the flanks of hills. At the stroke's end `RockKeeper`
+  (`scenes/states/authoring/rock_keeper.gd`, rules in the pure `RockKeep`,
+  `utils/rock_keep.gd`) works out on a worker which drawn rock-role instances
+  (`ScatterGround.ROLE_ROCK`: boulders, rocks, stones; not logs, which are deadwood and
+  would bridge a drop) the stroke's regeneration would remove, whatever the rule (slope,
+  cliff, scree, footing, relations): `RockKeep.removed_keys` generates the rock species of
+  the affected cells on the start and the end heights and keeps the keys the end lacks (about
+  0.15 to 0.35 s of worker time for a tier through a boulder field). The stroke's
+  regeneration is requested only once that lands, so no rock shrinks meanwhile; the survivors
+  then leave the scatter and join the props, both unanimated (10 ms headless, 25 to 40 ms in
+  the running game, once per stroke). Props are the store because generation is a pure
+  function of the document and a kept rock must persist: props already save, load, undo,
+  redo and reach peers. A kept rock stands as the per-frame snap tilted it (the snap and
+  rock props' re-bedding cap every rock at `RockKeep.MAX_TILT_RAD`, 55 degrees off vertical,
+  keeping yaw and lean, so none points straight out of a 63 to 66 degree tier face) and is
+  bedded on its own tilted base (`GroundSnap.bed_under`: the base plane is sunk until it lies
+  nowhere above the ground under the footprint; lowest_under for an upright row, no sink on
+  an even slope, and the lowest ground would bury a small rock lying on a face). Nothing is
+  added: instances the new ground allows follow the normal rules. The stroke's history record
+  (`{props_before, props_after, kept}`) is filled when the worker lands, before anything can
+  read it (`finish_height_work()`, which undo, the next stroke of any kind, prop gestures and
+  save all call first; autosave and the render harness's `wait_ready` wait); undo puts the
+  kept rows back into the scatter as they stood at the stroke's start and redo takes them out
+  again, in place. No twins: `AuthoredScatter.blocker_source` is the props node, and every
+  regeneration job carries the footprints of its rock props (`RockKeep.blockers`, 0.45 of
+  the asset's widest dimension times its scale); `ScatterGenerator` drops the row of any
+  rock, tree or shrub (a rock role or a footing) whose origin lies inside one, while the
+  instance still counts for relations and clearance. A hand-placed rock blocks the same way,
+  so a regeneration no longer leaves a generated boulder inside a placed one.
 - **Sculpt tool (P3-5):** `BrushTool.Mode.SCULPT` with `sculpt_tile` (the panel's Raise,
   Smooth, Flatten or Tier tile); the press's operation is the pure
   `BrushTool.sculpt_op(tile, ctrl, shift)` (Ctrl: lower / cut; Shift: smooth from any tile),
@@ -1479,7 +1510,9 @@ brush scheduler, so both build identical nodes.
   snapshot of the document, decoding only the mask window the job can read. The snapshot
   duplicates the masks, heights and biome list (one copy per dispatch, about 0.1 ms):
   GDScript packed arrays are shared by reference, not copy-on-write, so without it a worker
-  read masks the brush was writing.
+  read masks the brush was writing. Each job also carries the footprints of the rock props
+  reaching into its window (`blocker_source`, `RockKeep.blockers`), inside which no rock,
+  tree or shrub row is generated ("Rocks survive terrain changes" under Authoring Flow).
   Latest wins per cell: every request bumps the cells' generations and a finished job is
   applied only where nobody has requested since; a dropped job's species stay dirty for the
   next one. `rows_by_asset()` returns the current rows for saving.
