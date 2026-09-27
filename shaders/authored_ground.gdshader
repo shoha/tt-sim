@@ -70,6 +70,18 @@
  *     the taller texture detail (clumps, needles, stones) wins and the line follows the
  *     textures rather than a gradient.
  *
+ * BROAD EDGE (the second scale of a two-scale edge, added after T7 renders beside the
+ * river map): the frayed edge above is a few decimetres wide and on its own reads like a
+ * decal laid on the lawn, where a hand-painted Blender layer fades over several metres.
+ * biome_broad is the weight map box-filtered to BiomeGroundLayers.BROAD_FACTOR samples per
+ * texel (3.5 m at the default 0.25 m step) and read with a cubic B-spline, so around each
+ * painted area the layer's mean colour (the last mip of its albedo) recolours the ground in
+ * a gradient about 7 m wide. It recolours by luminance (layer mean x the pixel's luminance
+ * relative to the base mean), so the base texture keeps its detail and no hue is amplified;
+ * a per-channel ratio turned green grass pink at the edge of a brown layer. The tint fades
+ * out where the fine edge already shows the layer itself. Cost: 4 bilinear fetches of a
+ * tiny texture plus one lowest-mip fetch per layer present.
+ *
  * PHASE 3 (splatting): SurfaceSample.height is the blended height each surface needs for
  * height-blended transitions; raising MAX_LAYERS means a second weight texture.
  *
@@ -138,6 +150,14 @@ uniform float biome_edge_scale_m : hint_range(0.5, 20.0) = 3.0;
 uniform float biome_edge_noise : hint_range(0.0, 1.0) = 0.3;
 uniform float biome_height_contrast : hint_range(0.0, 2.0) = 1.2;
 uniform float biome_blend_width : hint_range(0.01, 0.5) = 0.2;
+// Broad scale of the two-scale edge (see BROAD EDGE): the weight map box-filtered to a few
+// metres per texel (BiomeGroundLayers.broad_image), read with a B-spline so it is smooth.
+uniform sampler2D biome_broad : hint_default_black, filter_linear, repeat_disable;
+// Most a layer's colour tints the ground around its painted area (0.5 was too faint to
+// read at the game camera; 0.8 reads as woodland floor fading into lawn).
+uniform float biome_broad_strength : hint_range(0.0, 1.0) = 0.8;
+// Broad weight at which the tint reaches full strength.
+uniform float biome_broad_full : hint_range(0.05, 1.0) = 0.4;
 
 varying vec3 v_tangent_u;
 varying vec3 v_tangent_v;
@@ -317,6 +337,54 @@ vec4 biome_layer_weights(vec2 world_xz) {
 	return w * (shaped / total);
 }
 
+// Cubic B-spline sample from four bilinear taps (Sigg and Hadwiger), so a coarse texture
+// reads as a smooth field instead of bilinear diamonds.
+vec4 texture_bspline(sampler2D tex, vec2 uv) {
+	vec2 size = vec2(textureSize(tex, 0));
+	vec2 p = uv * size - 0.5;
+	vec2 i = floor(p);
+	vec2 f = p - i;
+	vec2 f2 = f * f;
+	vec2 f3 = f2 * f;
+	vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+	vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+	vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
+	vec2 w3 = f3 / 6.0;
+	vec2 s0 = w0 + w1;
+	vec2 s1 = w2 + w3;
+	vec2 uv0 = (i - 0.5 + w1 / s0) / size;
+	vec2 uv1 = (i + 1.5 + w3 / s1) / size;
+	return s0.y * (s0.x * texture(tex, uv0) + s1.x * texture(tex, vec2(uv1.x, uv0.y)))
+		+ s1.y * (s0.x * texture(tex, vec2(uv0.x, uv1.y)) + s1.x * texture(tex, uv1));
+}
+
+// The broad scale of the two-scale edge: around each painted layer its ground colour (the
+// last mip of its albedo, i.e. its mean) tints the surface in a wide, soft gradient, fading
+// out where the fine, frayed edge (fine_w) already shows the layer itself.
+vec3 apply_broad_edge(vec3 albedo, vec2 world_xz, vec4 fine_w) {
+	vec2 grid = vec2(textureSize(biome_weights, 0));
+	vec2 st = ((world_xz - biome_grid_origin) / biome_grid_step + 0.5) / grid;
+	vec4 broad = texture_bspline(biome_broad, st);
+	// Recolour rather than paint over: the layer's mean colour, carrying the ground's own
+	// luminance detail relative to the base surface's mean.
+	const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+	float base_luma = max(dot(textureLod(albedo_tex, vec2(0.5), 16.0).rgb, LUMA), 0.02);
+	float detail = dot(albedo, LUMA) / base_luma;
+	for (int i = 0; i < MAX_LAYERS; i++) {
+		if (i >= biome_layer_count || broad[i] <= WEIGHT_EPSILON) {
+			continue;
+		}
+		float tint = biome_broad_strength * smoothstep(0.0, biome_broad_full, broad[i]);
+		tint *= 1.0 - smoothstep(0.2, 0.8, fine_w[i]);
+		if (tint > 0.001) {
+			vec3 mean = textureLod(layer_albedo[i], vec2(0.5), 16.0).rgb;
+			vec3 recoloured = clamp(mean * detail, vec3(0.0), vec3(1.0));
+			albedo = mix(albedo, recoloured, tint);
+		}
+	}
+	return albedo;
+}
+
 float blend_score(float weight, float height) {
 	return weight + (height - 0.5) * biome_height_contrast;
 }
@@ -384,6 +452,9 @@ void fragment() {
 	ground.normal_uv *= inv_total;
 	ground.orm *= inv_total;
 	ground.height *= inv_total;
+	if (biome_layer_count > 0) {
+		ground.albedo = apply_broad_edge(ground.albedo, world_xz, layer_w);
+	}
 
 	// Cavity depth itself drifts at a few metres, so clumpy and smooth stretches alternate
 	// instead of an even mottle.

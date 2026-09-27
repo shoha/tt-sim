@@ -62,6 +62,8 @@ var document: MapDocument = null
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
 ## Microseconds of the last update_biome_region() call, for measurement.
 var last_biome_update_usec: int = 0
+## Microseconds of the last broad refresh (part of update_biome_region()), for measurement.
+var last_broad_update_usec: int = 0
 
 var _material: ShaderMaterial = null
 var _chunks: Dictionary[Vector2i, MeshInstance3D] = {}
@@ -77,6 +79,8 @@ var _planned_biomes: int = 0
 var _warned_fallbacks: Dictionary = {}
 var _weights: Image = null
 var _weight_texture: DrawableTexture2D = null
+## The broad scale of the two-scale edge (BiomeGroundLayers.broad_image of _weights).
+var _broad_texture: ImageTexture = null
 ## Ground texture paths loading on background threads (warm_biome_surface), and the loaded
 ## textures held so the cache keeps them.
 var _warming: Dictionary = {}
@@ -256,6 +260,7 @@ func update_biome_region(sample_rect: Rect2i) -> void:
 		)
 		_weights.blit_rect(region, Rect2i(Vector2i.ZERO, rect.size), rect.position)
 		_upload(region, rect.position)
+		_refresh_broad()
 	last_biome_update_usec = Time.get_ticks_usec() - start
 
 
@@ -320,6 +325,8 @@ func _build_biome_ground() -> void:
 	)
 	if not document.biome_slots.is_empty():
 		_upload(_weights, Vector2i.ZERO)
+	_broad_texture = ImageTexture.create_from_image(BiomeGroundLayers.broad_image(_weights))
+	_material.set_shader_parameter("biome_broad", _broad_texture)
 	_material.set_shader_parameter("biome_weights", _weight_texture)
 	_material.set_shader_parameter("biome_grid_origin", -document.extent_m() * 0.5)
 	_material.set_shader_parameter("biome_grid_step", document.sample_step())
@@ -397,6 +404,19 @@ func _weight_bytes(rect: Rect2i) -> PackedByteArray:
 	return BiomeGroundLayers.weight_bytes(
 		document.biome_slots, document.biome_density, document.samples_x(), _slot_layers, rect
 	)
+
+
+## Rebuilds the broad weight texture from the CPU mirror (whole map; native resize, a
+## fraction of a millisecond on a 200 ft map) and uploads it in place.
+func _refresh_broad() -> void:
+	var start := Time.get_ticks_usec()
+	_broad_texture.update(BiomeGroundLayers.broad_image(_weights))
+	last_broad_update_usec = Time.get_ticks_usec() - start
+
+
+## The broad weight texture (see BiomeGroundLayers.broad_image). Do not modify.
+func get_broad_texture() -> ImageTexture:
+	return _broad_texture
 
 
 ## Copies `region` into the weight texture at `at`, texel for texel.

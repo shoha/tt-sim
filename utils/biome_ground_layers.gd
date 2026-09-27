@@ -39,6 +39,9 @@ const CHANNELS := 4
 const NO_SLOT := 0
 ## Layer index meaning "the base surface" (contributes nothing to the weight map).
 const BASE := -1
+## Samples per broad texel on each axis (broad_image()): 3.5 m at the default 0.25 m step.
+## Chosen from game-camera renders; 8 (2 m) left the gradient too narrow to read.
+const BROAD_FACTOR := 14
 
 
 ## The ground surface of each biome in `biome_ids`, in order: the biome's ground_surface
@@ -157,6 +160,28 @@ static func nearest_surface(
 
 static func _color_distance(a: Color, b: Color) -> float:
 	return Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
+
+
+## The broad scale of the ground shader's two-scale edge: the RGBA8 weight map (one texel
+## per sample) box-filtered down by BROAD_FACTOR, so one texel spans 3.5 m at the
+## default 0.25 m sample step. The shader reads it with a B-spline filter, which spreads a
+## painted area's colour a few metres past its frayed edge in a soft gradient, the way a
+## Blender map's hand-painted layers fade. Downsampled from the whole map in native code
+## (Image.resize with trilinear filtering averages the mip chain), so a stroke can refresh
+## it every frame. Never empty: at least 1 x 1.
+static func broad_image(weights: Image) -> Image:
+	var broad := weights.duplicate() as Image
+	var size := broad_size(weights.get_size())
+	broad.resize(size.x, size.y, Image.INTERPOLATE_TRILINEAR)
+	return broad
+
+
+## Size of broad_image() for a weight map of `samples` texels.
+static func broad_size(samples: Vector2i) -> Vector2i:
+	return Vector2i(
+		maxi(1, ceili(float(samples.x) / BROAD_FACTOR)),
+		maxi(1, ceili(float(samples.y) / BROAD_FACTOR))
+	)
 
 
 ## RGBA8 weight bytes for the samples in `rect` (sample coordinates, clipped to the grid
