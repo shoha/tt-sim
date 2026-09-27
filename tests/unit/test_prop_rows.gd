@@ -59,6 +59,39 @@ func test_pick_finds_the_nearest_prop_whose_footprint_holds_the_point() -> void:
 	assert_true(PropRows.pick({"a": rows}, Vector2(0, 1.5), radius_of).is_empty())
 
 
+func test_a_small_prop_is_picked_within_the_minimum_radius() -> void:
+	var rows := PropRows.make_row(Vector3.ZERO, Vector3.UP, false, 0.0, 0.8)
+	var pebble := func(_asset: String) -> float: return 0.1
+	assert_almost_eq(PropRows.pick_extent(0.1, 0.8), PropRows.PICK_MIN_M, 1e-6)
+	assert_almost_eq(PropRows.pick_extent(1.0, 1.5), 1.5, 1e-6, "large props keep their own")
+	var near := PropRows.pick({"a": rows}, Vector2(PropRows.PICK_MIN_M - 0.02, 0), pebble)
+	assert_eq(near.get("index"), 0, "a click beside a pebble takes it")
+	assert_true(
+		PropRows.pick({"a": rows}, Vector2(PropRows.PICK_MIN_M + 0.02, 0), pebble).is_empty()
+	)
+
+
+## The palette's own sizes (dimensions_m reads as a Vector3): rocks and shrubs by their
+## footprint, trees by their trunk, never the old 0.5 m fallback for everything.
+func test_pick_radius_reads_the_palette_sizes() -> void:
+	var root := PaletteLibrary.DEFAULT_ROOT
+	var seen := {"large": 0, "rock": 0}
+	for biome in PaletteLibrary.biomes(root):
+		for rule in PaletteLibrary.species(String(biome.get("id", "")), root):
+			for asset_id: String in rule.get("assets", []):
+				var size: Vector3 = PaletteLibrary.asset(asset_id, root).get("dimensions_m")
+				var radius := PropRows.pick_radius(asset_id, root)
+				if String(rule.get("size_class", "")) == "large":
+					seen.large += 1
+					assert_between(radius, 0.3, 0.6, "%s: picked by its trunk" % asset_id)
+				elif RockKeep.is_rock(rule):
+					seen.rock += 1
+					var footprint := maxf(size.x, size.z) * RockKeep.FOOTPRINT_FRACTION
+					assert_almost_eq(radius, footprint, 1e-5, "%s: its footprint" % asset_id)
+	assert_gt(seen.large, 10, "the palette has trees")
+	assert_gt(seen.rock, 10, "and rocks")
+
+
 func test_replaced_and_removed_leave_other_rows_alone() -> void:
 	var rows := PackedFloat32Array()
 	for i in 3:

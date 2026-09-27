@@ -114,6 +114,13 @@ func test_placing_turning_and_removing_a_prop_round_trips() -> void:
 	assert_almost_eq(Vector3(row[0], row[1], row[2]), Vector3(3, 0, 4), Vector3.ONE * 1e-5)
 	var found := editor.prop_at(Vector3(3.2, 0, 4.1))
 	assert_eq(found.get("row"), row, "picked under the pointer")
+	assert_almost_eq(
+		float(found.get("radius", 0.0)),
+		PropRows.pick_extent(GroundSnap.footing_radius(rule), row[7]),
+		1e-5,
+		"an oak is picked by its trunk"
+	)
+	assert_true(editor.prop_at(Vector3(4.0, 0, 4)).is_empty(), "not a metre from its trunk")
 	editor.remove_prop(found)
 	assert_eq(MapDocument.row_count(editor.props.rows_by_asset()), 0)
 	_history.undo()
@@ -129,6 +136,13 @@ func test_scaling_stays_in_the_species_range_and_records_once() -> void:
 	var rule := editor.species_rule(BIOME, "boulder")
 	var handle := editor.place_prop(rule, Vector3(-5, 0, -5), Vector3.UP)
 	editor.commit_prop_edit()
+	var footprint := (
+		RockKeep.footprint_radius(handle.asset_id, PaletteLibrary.DEFAULT_ROOT)
+		* (handle.row as PackedFloat32Array)[7]
+	)
+	assert_gt(footprint, 0.6, "a boulder's footprint, not the 0.5 m fallback")
+	var hovered := editor.prop_at(Vector3(-5 + footprint * 0.9, 0, -5))
+	assert_almost_eq(float(hovered.get("radius", 0.0)), footprint, 1e-5, "picked by it")
 	for i in 20:
 		handle = editor.scale_prop(handle, 1.0, rule)
 	var limits := PropRows.scale_range(rule)

@@ -478,11 +478,10 @@ func _scale_hovered(steps: int) -> void:
 	var asset_rule := editor.rule_for_asset(String(_hover.asset_id))
 	if not asset_rule.is_empty():
 		rule = asset_rule
-	var radius: float = _hover.get("radius", 0.0)
-	var old_scale: float = (_hover.row as PackedFloat32Array)[7]
 	_hover = editor.scale_prop(_hover, steps, rule)
 	var new_scale: float = (_hover.row as PackedFloat32Array)[7]
-	_hover["radius"] = radius * new_scale / maxf(old_scale, 0.0001)
+	var radius := editor.pick_radius(String(_hover.asset_id))
+	_hover["radius"] = PropRows.pick_extent(radius, new_scale) * editor.map_scale()
 	_redraw()
 
 

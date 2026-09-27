@@ -19,6 +19,10 @@ const STRIDE := MapDocument.ROW_STRIDE
 const HERO_MIN_SPREAD := 0.25
 ## Scale change per wheel notch.
 const SCALE_STEP := 0.05
+## The smallest pick (and hover ring) radius of a prop, map metres after its scale: a 0.3 m
+## stone's footprint is 0.14 m, a few pixels at the game camera, so small props reach this
+## far. A third of a 5 ft cell, so a stone beside a tree is still picked on its own side.
+const PICK_MIN_M := 0.35
 
 
 ## A row for a prop at `position` (map frame) on ground whose normal is `normal`, turned by
@@ -94,9 +98,10 @@ static func stepped_scale(scale: float, notches: float, limits: Vector2) -> floa
 	return clampf(scale + notches * SCALE_STEP, limits.x, limits.y)
 
 
-## The prop nearest `point` (map-frame XZ) whose footprint contains it: {"asset_id": String,
-## "index": int (row index within that asset's rows), "distance": float}, or {} when none
-## does. `radius_of` maps an asset id to its footprint radius at scale 1 (metres).
+## The prop nearest `point` (map-frame XZ) whose pick circle (pick_extent) contains it:
+## {"asset_id": String, "index": int (row index within that asset's rows), "distance":
+## float}, or {} when none does. `radius_of` maps an asset id to its pick radius at scale 1
+## (metres; pick_radius).
 static func pick(
 	rows_by_asset: Dictionary, point: Vector2, radius_of: Callable, reach: float = 0.0
 ) -> Dictionary:
@@ -109,10 +114,30 @@ static func pick(
 		for r in rows.size() / STRIDE:
 			var b := r * STRIDE
 			var distance := Vector2(rows[b], rows[b + 2]).distance_to(point)
-			if distance <= radius * rows[b + 7] + reach and distance < best_distance:
+			if distance <= pick_extent(radius, rows[b + 7]) + reach and distance < best_distance:
 				best_distance = distance
 				best = {"asset_id": asset_id, "index": r, "distance": distance}
 	return best
+
+
+## The pick (and hover ring) radius of a prop whose pick radius at scale 1 is `radius`,
+## scaled by `scale`: never under PICK_MIN_M.
+static func pick_extent(radius: float, scale: float) -> float:
+	return maxf(radius * scale, PICK_MIN_M)
+
+
+## Pick radius (map metres at scale 1) of palette asset `asset_id`: where on the ground a
+## click takes it. The footprint (RockKeep.footprint_radius, 0.45 of the widest dimension)
+## for rocks, logs, shrubs and small plants, whose bulk sits on that ground. A tree (size
+## class "large") by its trunk instead (GroundSnap.footing_radius: 0.3 to 0.6 m): its widest
+## dimension is the canopy (4-5 m on a pine, a 2 m footprint), which at the game camera
+## hangs over ground well away from the trunk, so a click a metre from the trunk would
+## otherwise take the tree rather than the stone or the ground it was aimed at.
+static func pick_radius(asset_id: String, root: String) -> float:
+	var rule := RockKeep.rule_for_asset(asset_id, root)
+	if String(rule.get("size_class", "")) == "large":
+		return GroundSnap.footing_radius(rule)
+	return RockKeep.footprint_radius(asset_id, root)
 
 
 ## One row (STRIDE floats) of flat `rows`.

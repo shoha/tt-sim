@@ -54,8 +54,6 @@ signal edited
 
 ## Seconds after the last Shift+wheel notch on a prop before the scale edit is recorded.
 const SCALE_COMMIT_SECONDS := 0.6
-## A prop's footprint for picking and its hover ring: this fraction of its widest dimension.
-const FOOTPRINT_FRACTION := 0.45
 ## Per-frame main-thread budgets of a sculpt stroke: terrain chunk updates, and snapping
 ## plants and props to the new ground (docs/PERFORMANCE.md "Sculpting").
 const TERRAIN_BUDGET_USEC := 4000
@@ -885,23 +883,20 @@ func prop_at(point: Vector3) -> Dictionary:
 				var joined: PackedFloat32Array = rows_by_asset.get(asset_id, PackedFloat32Array())
 				joined.append_array(rows[asset_id])
 				rows_by_asset[asset_id] = joined
-	var hit := PropRows.pick(rows_by_asset, local, footprint_radius)
+	var hit := PropRows.pick(rows_by_asset, local, pick_radius)
 	if hit.is_empty():
 		return {}
 	var row := PropRows.row_at(rows_by_asset[hit.asset_id], hit.index)
 	return {
 		"asset_id": hit.asset_id,
 		"row": row,
-		"radius": footprint_radius(hit.asset_id) * row[7] * map_scale(),
+		"radius": PropRows.pick_extent(pick_radius(hit.asset_id), row[7]) * map_scale(),
 	}
 
 
-## Footprint radius of a palette asset at scale 1 (document metres).
-func footprint_radius(asset_id: String) -> float:
-	var dimensions: Variant = PaletteLibrary.asset(asset_id, palette_root).get("dimensions_m")
-	if dimensions is Array and (dimensions as Array).size() >= 3:
-		return maxf(float(dimensions[0]), float(dimensions[2])) * FOOTPRINT_FRACTION
-	return 0.5
+## Pick radius of a palette asset at scale 1 (document metres; PropRows.pick_radius).
+func pick_radius(asset_id: String) -> float:
+	return PropRows.pick_radius(asset_id, palette_root)
 
 
 ## GroundSnap.footing_drop of species `rule`'s base at world `point` (map metres).
