@@ -64,20 +64,24 @@ rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and
 download-signal fix (pushed to `main` as a08b639). Needs a two-account test, e.g. on the
 Steam `testing` branch that every `main` push deploys to.
 
-Performance: every frame time taken during development was on a GPU contended by another
-game, so treat them as indicative. CPU-side numbers that hold: a 200 ft map loads in about
-0.5 s warm / 1.1 s cold (headless), longest load frame 70-84 ms; a brush dab's main-thread
-work is at most ~6 ms; four-cell regeneration shows its first cell in ~20 ms and finishes in
-~155 ms on worker threads; the first stroke's pipeline hitch moved under the loading screen
-(115 ms -> 23-26 ms). A pinned-procedure pass (`PERFORMANCE.md`) is still owed.
+Performance: the pinned-procedure pass is done (`PERFORMANCE.md` "In-game authoring: pinned
+performance pass", 2026-09-26, idle RTX 3080, 1920x1080, vsync off, default settings). A
+fully painted 200 ft map plays at 5.1-5.5 ms GPU at home and 6.4-6.7 ms at max play zoom
+(temperate forest 31,305 instances; grassland, the densest biome, 43,433), about 2x the
+Blender deciduous map, which carries a third of the instances: no authored-specific
+overhead. The ground shader is 1.31-1.38x a StandardMaterial3D ground (+0.4-0.6 ms), a
+painted layer adds about 0.5 ms, the broad edge 0.04-0.11 ms; the skirt costs 0.6-0.7 ms at
+max play zoom at the map edge and 0.9 ms at full authoring zoom-out after a no-look-change
+fix (was 1.24 ms). Brush strokes: CPU frame median 3.8 ms on a bare map and 6.9-7.5 ms over
+a fully painted forest, worst stroke frame 12.3 ms, worst regeneration-tail frame 18.3 ms. Opening a map: 1.15-1.37 s loading screen, then all 180 palette
+species resolve in 2.9 s with no frame over 30 ms, for about 100 MB more video memory than
+playing an authored map. Loads from the title: 1.27 s warm / 1.78 s cold for the painted
+forest, between deciduous clusters (0.74 s) and river (1.9 s).
 
 ## Open work
 
 Before merging `in-game-authoring` into `main`:
 - The two-account Steam test above.
-- A pinned-procedure performance pass, including the ground shader (about 1.4x a
-  StandardMaterial3D ground), the broad edge and the skirt, and memory for resolving all
-  180 palette species when authoring opens.
 - Merging `main` will conflict in `map_download_coordinator.gd` and `download_queue.gd`:
   `main` has the minimal download-signal hotfix, this branch rewrote the same handlers;
   keep this branch's versions (they already take the fifth argument).
@@ -99,6 +103,11 @@ Follow-ups:
   home or zoom state can leak between maps. Not yet investigated.
 - `tools/` (including `tools/render_jobs/`) is not excluded by the export presets, so dev
   scripts ship in builds.
+- Performance leftovers from the pinned pass (`PERFORMANCE.md`), none blocking: an authored
+  map's load from the title is mostly frames waited at 60 Hz (66 against a Blender map's 29;
+  a larger per-frame build budget under the loading screen could save 0.3-0.5 s); the first
+  load in a process has one 580-630 ms frame (Blender maps too); 750-870 MB of video memory
+  stays allocated back at the title after any map.
 
 ## Roadmap
 

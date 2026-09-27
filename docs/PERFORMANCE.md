@@ -656,6 +656,178 @@ touching the user's system), so a first-ever run on a clean machine is slower th
 "caches disabled" row; the earlier ~550 ms report was not reproduced. The alpine stroke's
 remaining 36-44 ms frames are species resolution and cell rebuilds, not pipelines.
 
+## In-game authoring: pinned performance pass (2026-09-26)
+
+The pass owed before merging `in-game-authoring`: play-time cost of authored maps against
+Blender maps, the ground shader and its parts, brush strokes and regeneration, the
+authoring loading screen and palette memory, and load times.
+
+**How.** RTX 3080 idle before the session (4 %, P8, 44 C, only desktop processes). Every
+number comes from the render-job harness (`tools/render_jobs/run.gd`, a real 1920x1080
+window, viewport 1920x1080 confirmed in every sample) with `override.cfg` pinning the
+viewport (`aspect="keep"`, removed by the job at startup), vsync off at runtime
+(`vsync_off`) for frame-time windows, default graphics settings (`shadow_quality` at its
+default Soft Ultra for the session; the user's own settings file restored afterwards) and
+the default 8M foliage budget. The new probe `tools/render_jobs/probes/perf.gd` samples
+every frame between `start` and `stop`: wall-clock CPU frame time and the world
+viewport's GPU time, reported as n / median / p95 / worst; `info` reads the world
+viewport's render info and counts scatter MultiMesh instances; `mem` reads the engine
+monitors plus the process working set; `play`, `author` and `dress` time a load. Debug
+build. Test levels: `_perf_forest` (temperate forest painted at full density over a
+whole 200 ft map, seed 1234, 31,305 rows) and `_perf_densest` (grassland meadow the same
+way, 43,433 rows; the densest biome by rows: wetland 39,896, birch 31,894, alpine 30,992,
+temperate 31,305, savanna 21,856, boreal 19,413, badlands 8,873); both deleted afterwards.
+
+### Play-time frame time
+
+Each level loaded in one process in the order forest, densest, deciduous, river, then
+again in reverse; 8 s windows at the camera home (zoom 13.85) and at max play zoom (20).
+GPU ms, median / p95 / worst (n), both rounds:
+
+| Level | Instances (nodes) | Home: draws, prims | Home GPU r1 / r2 | Zoom 20: draws, prims | Zoom 20 GPU r1 / r2 |
+| --- | --- | --- | --- | --- | --- |
+| `_perf_forest` (authored) | 31,305 (1,015) | 717, 1.79M (shadow 438, 0.58M) | 5.12 / 5.66 / 6.27 (1398); 5.47 / 5.99 / 6.58 (1294) | 1,111, 2.66M (shadow 594, 0.75M) | 6.36 / 6.85 / 7.42 (1134); 6.50 / 7.04 / 7.63 (1104) |
+| `_perf_densest` (authored) | 43,433 (1,002) | 595, 3.29M (shadow 146, 0.16M) | 5.32 / 5.82 / 6.44 (1329); 5.34 / 5.92 / 6.49 (1318) | 930, 4.77M (shadow 191, 0.20M) | 6.65 / 7.15 / 7.67 (1082); 6.67 / 7.16 / 7.70 (1075) |
+| `deciduous_clusters` (Blender) | 11,267 (469) | 384, 0.81M (shadow 170, 0.49M) | 2.68 / 3.16 / 3.51 (2424); 2.71 / 3.19 / 3.58 (2407) | 559, 1.21M (shadow 227, 0.59M) | 4.36 / 4.85 / 5.46 (1591); 4.42 / 4.90 / 5.53 (1572) |
+| `river` (Blender) | no scatter MultiMesh | 22, 46K | 1.24 / 1.67 / 1.86 (4493); 1.25 / 1.68 / 2.02 (4476) | 22, 46K | 0.93 / 0.94 / 0.95 (5517); 0.93 / 0.94 / 0.94 (5484) |
+
+CPU frame time tracks GPU plus about 0.55 ms (forest home 5.67 / 6.21 / 9.03 ms, zoom 20
+6.92 / 7.40 / 8.03 ms). Drift between rounds is 0.01-0.06 ms on every level but the forest
+at home (+0.36 ms, same geometry), so read the forest's two rounds as its range. Both
+authored maps sit under the 8M budget, so every instance is drawn (3.15M and 5.94M
+instance primitives).
+
+**Verdict: no authored-map overhead; cost follows content.** A fully painted 200 ft map
+carries 2.8x (forest) to 3.9x (grassland) the instances of the Blender deciduous map and
+costs about 2x its GPU time at home and 1.5x at zoom 20, i.e. somewhat less per instance.
+The heaviest authored case is 6.7 ms GPU at max play zoom, 150 fps with vsync off. The
+river level has no MultiMesh scatter, so it is a ground-and-water reference, not like
+content.
+
+### Ground shader
+
+A new bare 200 ft map in authoring (grass base, no scatter), all toggles in-run and
+interleaved (two repetitions), 5 s windows. The StandardMaterial3D is built from the ground
+material's own albedo, normal and ORM textures at the same tile size and set as
+`material_override` on the 64 chunks. Biome layers are painted straight into the document
+masks and pushed with `update_biome_region`: 1 = the whole map one forest layer, 4 = four
+surfaces (forest floor, pine duff, red sand, alpine grass) in quadrants meeting at the view
+centre, mix = the four in a 1 m checker at half density (the synthetic worst case), 0 = the
+layer count forced to 0 (the bare-map path). Broad edge off = the shader hot-swapped
+without its `apply_broad_edge()` call. Two runs of the same job (the StandardMaterial3D and
+0-layer rows from the first, the layer and broad-edge rows from the second, whose 0-layer
+reading, 2.00 ms home and 2.48 ms zoomed out, matches the first's within 0.02 ms). GPU ms,
+median / p95 / worst (n), second repetition of each run (the first repetition ran up to
+0.15 ms lower across its rows while clocks settled):
+
+| Configuration | Home (zoom 13.85) | vs L0 | Full authoring zoom-out (52.4) | vs L0 |
+| --- | --- | --- | --- | --- |
+| StandardMaterial3D ground | 1.46 / 1.95 / 2.13 (2478) | -0.56 ms | 2.18 / 2.67 / 2.84 (1821) | -0.31 ms |
+| Ground shader, 0 layers | 2.02 / 2.50 / 2.68 (1921) | -- | 2.49 / 2.98 / 3.46 (1631) | -- |
+| 1 layer, whole view | 2.52 / 3.03 / 3.47 (1602) | +0.52 ms | 2.52 / 3.02 / 3.51 (1606) | +0.04 ms |
+| 4 layers, quadrants | 2.45 / 2.96 / 3.43 (1637) | +0.45 ms | 2.54 / 3.03 / 3.54 (1599) | +0.05 ms |
+| 4 layers, 1 m checker at half density | 3.74 / 4.28 / 4.90 (1140) | +1.74 ms | 3.25 / 3.75 / 4.23 (1294) | +0.77 ms |
+| 4 layers quadrants, broad edge off / on | 2.36 / 2.47 (n 1698 / 1634) | broad +0.11 ms | 2.50 / 2.54 (n 1621 / 1593) | broad +0.04 ms |
+| checker, broad edge off / on | 3.52 / 3.71 (n 1204 / 1147) | broad +0.19 ms | 3.13 / 3.23 (n 1330 / 1296) | broad +0.10 ms |
+
+The ground shader is **1.38x** a StandardMaterial3D with the same textures at home, +0.56
+ms (first repetition 1.31x, +0.43 ms), which confirms T3's ~1.4x on an idle GPU. A painted
+layer adds about 0.5 ms at home whether one or four are bound; the checker worst case is
+1.9x. The broad edge costs 0.04-0.11 ms on real paint (0.19 ms on the checker): cheap for
+what it does to the look, keep. At full zoom-out the whole map is a small part of the
+screen, so layers barely register there.
+
+### Ground skirt, and a fix
+
+At home the skirt is off screen (on/off identical within 0.02 ms). At full authoring
+zoom-out it covered most of the frame and cost more than the whole map: GPU 2.48 ms with it,
+1.24 ms without (three interleaved repetitions each, n about 1,620 and 2,830 per window).
+More than half of the ring lies past the noise-stretched fade (alpha exactly 0) and still
+ran every texture fetch. **Fix:** under `GROUND_SKIRT` the fragment computes the skirt alpha
+first and discards pixels at 0 before any texture work; every fetch after it uses the
+explicit gradients taken above it, so no helper lanes are needed. Measured in-run by
+hot-swapping the shader, three interleaved repetitions of original / discard / off:
+
+| Skirt at zoom 52.4 | GPU median / p95 / worst (n) |
+| --- | --- |
+| Original | 2.487 / 2.970 / 3.467 (1622); 2.484 / 2.970 / 3.477 (1622); 2.483 / 2.968 / 3.445 (1630) |
+| Discard past the fade | 2.153 / 2.612 / 3.065 (1838); 2.169 / 2.628 / 3.092 (1820); 2.170 / 2.628 / 3.078 (1826) |
+| Skirt hidden | 1.232 / 1.664 / 1.741 (2842); 1.247 / 1.677 / 1.752 (2836); 1.242 / 1.666 / 1.771 (2828) |
+
+-0.32 ms, a quarter of the skirt's cost, and the two captures are bit-identical (every
+pixel of the raw SubViewport equal). In play (fixed shader, painted forest, zoom 20) the
+skirt costs nothing with the camera centred and 0.63 ms (edge, 4.14 vs 3.50 ms) to 0.70 ms
+(corner, 3.31 vs 2.61 ms) panned to the map's edge. What remains is the full ground shader
+over the faded part of the ring; cheaper shading there would change the look, so it stays.
+
+### Authoring: strokes, regeneration, opening
+
+Zoom 26, vsync off, 4 m brush at 6 m/s along a 156 m serpentine (26 s), each followed by its
+regeneration tail (until nothing regenerates or grows). CPU frame time, median / p95 /
+worst (n):
+
+| What | CPU frame ms | GPU ms median |
+| --- | --- | --- |
+| Idle, bare map | 2.84 / 3.34 / 3.89 (1373) | 2.37 |
+| Biome stroke (temperate forest) on the bare map | 3.76 / 4.46 / 6.09 (6895) | 3.22 |
+| Its regeneration tail | 4.34 / 4.89 / 5.41 (105) | 3.82 |
+| Idle, `_perf_forest` opened in authoring | 7.80 / 8.29 / 8.90 (508) | 7.10 |
+| Thin stroke over the full forest | 7.51 / 8.18 / 12.32 (3453) | 6.95 |
+| Its regeneration tail | 6.87 / 7.52 / 9.67 (62) | 6.29 |
+| Biome stroke (grassland) over the full forest | 6.88 / 7.60 / 10.56 (3712) | 6.29 |
+| Its regeneration tail | 7.03 / 8.00 / 18.33 (62) | 6.41 |
+
+No stroke frame over 12.3 ms and no tail frame over 18.3 ms: strokes and their
+regeneration stay smooth. Whole-map regeneration (a new temperate forest map growing its
+starting cover while the palette resolves, vsync on): done 1.05 s after the loading screen
+drops, frames 14.7 / 22.1 / 30.3 ms (176).
+
+Opening a new 200 ft map (vsync on): loading screen 1.15-1.37 s over five opens, one frame
+of 770-955 ms under it (the first frame of the new GameMap and the palette's shared
+pipelines), then all 180 palette species resolve in 2.93-2.94 s at one per frame with no
+frame over 30 ms. Opening `_perf_forest` for dressing (vsync off): loading screen 0.73 s,
+palette resolved 1.24 s later.
+
+### Memory
+
+Separate processes, readings after the load settled. Static is Godot's allocator, video is
+`RENDER_VIDEO_MEM_USED` (textures include render targets and the shadow atlas), working set
+and private bytes from the OS:
+
+| State | Static (peak) | Video (textures) | Working set (peak) | Private |
+| --- | --- | --- | --- | --- |
+| Title, fresh process | 173 MB (185) | 152 MB (92) | 628 MB (632) | 1,306 MB |
+| Authoring open, all 180 species resolved | 218 MB (361) | 1,604 MB (1,474) | 897 MB (904) | 2,804 MB |
+| Playing `_perf_forest` | 217 MB (481) | 1,481 MB (1,374) | 885 MB (949) | 2,793 MB |
+| Playing `deciduous_clusters` | 208 MB (488) | 1,504 MB (1,419) | 778 MB (956) | 2,687 MB |
+
+Resolving the whole palette costs about 100 MB of video memory over playing an authored map
+with 25 species, and the same working set: not a concern. The authored map loads with a
+lower static peak than the Blender map. Back at the title after any map (authored or
+Blender alike) 750-870 MB of video memory stays allocated; not specific to authoring and
+not investigated here.
+
+### Load times
+
+From the title, vsync on (as a player loads), first load in a fresh process, then four
+warm loads in the same process, interleaved across the four levels:
+
+| Level | Cold | Warm (4) | Worst frame, cold / warm |
+| --- | --- | --- | --- |
+| `_perf_forest` | 1,780 ms (1,676-1,783 over five fresh processes) | 1,260 / 1,264 / 1,279 / 1,281 ms | 611 / 167-173 ms |
+| `_perf_densest` | 1,320 ms (first in process) | 1,307 / 1,318 / 1,320 / 1,346 ms | 250 / 243-248 ms |
+| `deciduous_clusters` | 748 ms | 733 / 733 / 736 / 739 ms | 170 / 167-187 ms |
+| `river` | 1,971 ms | 1,862 / 1,886 / 1,920 / 1,925 ms | 443 / 246-259 ms |
+
+The one 580-630 ms frame on the first load of a process happens for Blender maps too
+(627 ms on deciduous in its own process). Reloading while playing with vsync off takes
+447 ms for the forest (356-368 ms deciduous, 1.5 s river), so most of the authored map's
+1.27 s from the title is frames waited at 60 Hz: the loader polls threaded loads once per
+frame and builds within `MapSourceLoader.FRAME_BUDGET_USEC` (8 ms) per frame, about 66
+frames against deciduous's 29. **Verdict:** between the two Blender maps; acceptable. If it
+matters later, a larger per-frame budget while the loading screen is up would cut roughly
+0.3-0.5 s (not tried: it trades loading-screen smoothness and needs an A/B across runs).
+
 ## Known dead ends -- do not revisit without new evidence
 
 - **Uploading scatter MultiMesh transforms through `MultiMesh.buffer`** instead of one

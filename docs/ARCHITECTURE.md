@@ -922,9 +922,10 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   dissolves into the backdrop, whatever colour that is. Decoration only: no collision, no
   shadow, and `Constants.BOUNDS_EXEMPT_META` keeps it out of the pan bounds and
   `LevelEnvironmentManager.compute_map_bounds` (reflection probe, dressing extent). Present
-  in play as well as authoring. Its GPU cost at full zoom-out was not measured (the session
-  had the GPU held by another application); it is the ground shader without biome layers
-  over the ring's screen area.
+  in play as well as authoring. Pixels past the fade (alpha 0, more than half the ring) are
+  discarded before any texture work. Cost (2026-09-26, `PERFORMANCE.md` "In-game authoring:
+  pinned performance pass"): nothing at the home view, 0.6-0.7 ms at max play zoom panned to
+  the map edge, 0.9 ms at full authoring zoom-out (1.24 ms before the discard).
 - **Ground material:** `shaders/authored_ground.gdshader` (a two-line wrapper; the shader and
   its documentation are `authored_ground.gdshaderinc`, shared with the skirt), built by
   `build_ground_material(surface, seed)` from the palette surface (albedo, normal, ORM,
@@ -935,10 +936,10 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   drifts. Normals are written from the planar UV frame, no mesh tangents. The tile frame is
   computed once per pixel so phase 3 splatting adds only per-surface fetches.
 - **Cost (measured 2026-09-26):** a 200 ft map (64 chunks) builds in about 35 ms warm,
-  80-100 ms on first load with the textures. The ground pass costs about 1.4x a
-  StandardMaterial3D ground with the same textures (in-run interleaved A/B at 1920x1080,
-  +0.5 ms; measured while another application held the GPU, so the ratio, not the
-  absolute time, is the number to trust).
+  80-100 ms on first load with the textures. The ground pass costs 1.31-1.38x a
+  StandardMaterial3D ground with the same textures (+0.43-0.56 ms at the home view,
+  1920x1080, in-run interleaved on an idle GPU; `PERFORMANCE.md` "In-game authoring: pinned
+  performance pass").
 - **Biome ground:** each painted biome's palette `ground_surface` blends over the base.
   The CPU turns `biome_slots` / `biome_density` into one RGBA8 texel per sample
   (`BiomeGroundLayers`, `utils/biome_ground_layers.gd`, pure): channel i holds the painted
@@ -972,10 +973,10 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   edge of a brown layer. `update_biome_region()` refreshes the broad texture from the whole
   mirror (`ImageTexture.update`) after each blit; 25 us measured on a 200 ft map. A forest
   painted on grass now reads as woodland floor fading into lawn; the duff patches under the
-  undergrowth keep their crisp fine edge inside that halo. GPU cost not measured: the only session
-  had the GPU held by another application (frame GPU times 70-240 ms, no usable A/B); the
-  shader adds 4 bilinear fetches of a small texture per pixel with any layer bound, plus one
-  lowest-mip fetch per layer present.
+  undergrowth keep their crisp fine edge inside that halo. GPU cost (2026-09-26, idle GPU,
+  in-run with and without the call): 0.04-0.11 ms on four painted layers, 0.19 ms on a
+  synthetic every-metre checker of four layers; 4 bilinear fetches of a small texture per
+  pixel with any layer bound, plus one lowest-mip fetch per layer present.
 - **Biome ground updates:** the brush edits the masks, then calls
   `update_biome_region(sample_rect)`; that recomputes those texels into a CPU mirror
   (`get_biome_weights()`) and blits just that rectangle into the `DrawableTexture2D` the
