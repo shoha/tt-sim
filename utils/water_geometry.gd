@@ -9,7 +9,11 @@ extends RefCounted
 ## Areas. A river's area is every point within its half-width plus RIVER_BANK_M of its
 ## course (the Chaikin-smoothed control line, river_course()), the half-width taken at
 ## the nearest point of the course; the bank margin lets carved soft banks stay wet where
-## they dip below the level. A pond's area is the samples of MapDocument.pond_mask holding
+## they dip below the level. At an end where another river continues (the next reach of the
+## same stroke: its first point is this one's last, flush_ends()) the area stops flush at
+## the shared point instead of reaching round it, so a reach's flat water ends at the crest
+## the carve leaves there (WaterCarve) and never hangs over the lower reach's riffle. A
+## pond's area is the samples of MapDocument.pond_mask holding
 ## its id. A sample is wet when it lies in a body's area and its ground is below that
 ## body's level; where areas overlap, the highest level wins.
 ##
@@ -31,6 +35,8 @@ const FREEBOARD_M := 0.15
 const REACH_DROP_M := 0.5
 ## The level of a sample no water covers.
 const DRY := -INF
+## Two river ends closer than this (squared metres) are one shared point (flush_ends()).
+const JOIN_EPSILON_SQ := 1e-6
 
 
 ## Chaikin corner cutting, terrain-paint's chaikin_smooth(): each pass replaces every
@@ -116,13 +122,18 @@ static func bounds(points: PackedVector2Array, pad: float) -> Rect2:
 ## segment's unit direction (downstream)}. A cell is in the river's reach when
 ## distance <= half_width + bank (in_reach()). Ties go to the earlier segment, as in
 ## terrain-paint's nearest_segment(). Looped per segment over its padded bounding box.
+## `flush` (x: the start, y: the end; 1 = flush) cuts the course's area square at that end:
+## a cell near the end (within twice the reach) on the far side of the line through it
+## square to the course is not reached at all, so a reach that continues into the next one
+## stops at their shared point instead of reaching round it (P4-3).
 static func nearest_field(
 	course: PackedVector2Array,
 	widths: PackedFloat32Array,
 	origin: Vector2,
 	step: Vector2,
 	size: Vector2i,
-	bank: float
+	bank: float,
+	flush: Vector2i = Vector2i.ZERO
 ) -> Dictionary:
 	var widest := 0.0
 	for w in widths:
@@ -139,6 +150,14 @@ static func nearest_field(
 	half_width.resize(count)
 	tangent_x.resize(count)
 	tangent_z.resize(count)
+	# Flush ends: the half-plane beyond the end (near it) is cut off for every segment.
+	var cut_start := flush.x != 0 and course.size() >= 2
+	var cut_end := flush.y != 0 and course.size() >= 2
+	var start_at := course[0] if cut_start else Vector2.ZERO
+	var end_at := course[-1] if cut_end else Vector2.ZERO
+	var start_dir := end_direction(course, false) if cut_start else Vector2.ZERO
+	var end_dir := end_direction(course, true) if cut_end else Vector2.ZERO
+	var cut_sq := 4.0 * reach * reach
 	for s in course.size() - 1:
 		var a := course[s]
 		var segment := course[s + 1] - a
@@ -155,6 +174,18 @@ static func nearest_field(
 			var row := (j - rect.position.y) * rect.size.x - rect.position.x
 			for i in range(cells.position.x, cells.end.x):
 				var p := Vector2(origin.x + i * step.x, z)
+				if (
+					cut_end
+					and (p - end_at).dot(end_dir) > 0.0
+					and p.distance_squared_to(end_at) < cut_sq
+				):
+					continue
+				if (
+					cut_start
+					and (p - start_at).dot(start_dir) < 0.0
+					and p.distance_squared_to(start_at) < cut_sq
+				):
+					continue
 				var t := clampf((p - a).dot(segment) / length_sq, 0.0, 1.0)
 				var d := p.distance_to(a + segment * t)
 				var k := row + i
@@ -170,6 +201,18 @@ static func nearest_field(
 		"tangent_x": tangent_x,
 		"tangent_z": tangent_z,
 	}
+
+
+## The unit direction of `course` at its end (`at_end`) or start, downstream, from its last
+## (first) segment of non-zero length; Vector2.ZERO when there is none.
+static func end_direction(course: PackedVector2Array, at_end: bool) -> Vector2:
+	var n := course.size()
+	for k in n - 1:
+		var i := n - 2 - k if at_end else k
+		var segment := course[i + 1] - course[i]
+		if segment.length_squared() > 1e-12:
+			return segment.normalized()
+	return Vector2.ZERO
 
 
 ## True when cell `k` of a nearest_field() is within the river's half-width plus `bank`.
@@ -356,13 +399,37 @@ static func pond_rim_level(doc: MapDocument, body_id: int) -> float:
 	return NAN if is_inf(low) else low - FREEBOARD_M
 
 
-## nearest_field() of a river body's course over `doc`'s sample grid.
+## nearest_field() of a river body's course over `doc`'s sample grid, flush at an end
+## another river continues from (flush_ends()).
 static func _sample_field(doc: MapDocument, body: WaterBody) -> Dictionary:
 	var course := river_course(body)
 	var grid := Vector2i(doc.samples_x(), doc.samples_z())
 	return nearest_field(
-		course[0], course[1], -doc.extent_m() * 0.5, doc.sample_step(), grid, RIVER_BANK_M
+		course[0],
+		course[1],
+		-doc.extent_m() * 0.5,
+		doc.sample_step(),
+		grid,
+		RIVER_BANK_M,
+		flush_ends(doc.water_bodies, body)
 	)
+
+
+## Which ends of river `body` join another river of `bodies` (x: its first point is another
+## river's last, the reach above; y: its last point is another's first, the reach below):
+## the ends where its area stops flush at the shared point (see the header).
+static func flush_ends(bodies: Array[WaterBody], body: WaterBody) -> Vector2i:
+	var out := Vector2i.ZERO
+	if body.points.size() < 2:
+		return out
+	for other in bodies:
+		if other == body or not other.is_river() or other.points.size() < 2:
+			continue
+		if other.points[-1].distance_squared_to(body.points[0]) < JOIN_EPSILON_SQ:
+			out.x = 1
+		if other.points[0].distance_squared_to(body.points[-1]) < JOIN_EPSILON_SQ:
+			out.y = 1
+	return out
 
 
 ## The grid cells (see nearest_field()) whose positions fall inside `box`, clamped to the

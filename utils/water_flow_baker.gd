@@ -27,7 +27,9 @@ extends RefCounted
 ## toward still water at a confluence); F box-averaged over SMOOTHING_M; |F| clamped to 1;
 ## then F *= bank fade, the wet mask box-blurred 3x3 bank_fade_passes() times. A texel is
 ## wet when its bilinear ground is below the water level of its nearest sample
-## (WaterGeometry.levels()), so ponds are wet but add no flow: still water.
+## (WaterGeometry.levels()), so ponds are wet but add no flow: still water. The cascade
+## sheets over the steps between reaches and at run-out ends are wet too
+## (WaterMeshBuilder.cascades(), P4-3), so a rapid runs downstream.
 
 ## Nominal texel size: about the default sample spacing (a 200 ft map bakes 244 x 244).
 const TEXEL_M := 0.25
@@ -94,12 +96,17 @@ static func _wet(
 	if not any:
 		return wet
 	var width := doc.samples_x()
+	# The sheets over reach steps flow too (WaterMeshBuilder.cascades).
+	var sheets := WaterMeshBuilder.cascades(doc)
 	for j in texels.y:
 		for i in texels.x:
 			var xz := origin + Vector2(i, j) * step
 			var sample := doc.world_to_sample(xz).round()
-			var level := at_level[int(sample.y) * width + int(sample.x)]
+			var at := int(sample.y) * width + int(sample.x)
+			var level := at_level[at]
 			if level != WaterGeometry.DRY and WaterGeometry.ground_at(doc, xz) < level:
+				wet[j * texels.x + i] = 1.0
+			elif sheets.has(at):
 				wet[j * texels.x + i] = 1.0
 	return wet
 

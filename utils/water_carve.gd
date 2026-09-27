@@ -1,0 +1,440 @@
+class_name WaterCarve
+extends RefCounted
+
+## The ground a river or pond carves (phase 4, P4-3), pure: per-sample goal heights the
+## editor lowers the document toward (HeightStroke.lower_to: min(start, goal), so a carve
+## never raises ground), plus the rule for which rocks a carve keeps. Summary:
+## docs/ARCHITECTURE.md "Carving water".
+##
+## Cross-section. Every carved sample has an edge offset e: its distance to the river's
+## course minus the half-width there (a pond: its signed distance to the edge of the painted
+## area), negative in the water. The waterline is at e = 0: ground there is cut to the
+## level. Into the water the ground falls at the depth class's shore slope (soft for wading
+## water, steeper for deep) to the flat bed, level - depth; away from it the bank rises at
+## the bank slope until it meets the ground as it was. Both creases are rounded (a smooth
+## maximum at the toe, TOE_SOFT_M, and an eased cut at the top of the bank, TOP_SOFT_M,
+## blend_with_ground), so the banks read as worn earth, never a trench; the steepest bank
+## (deep, 31 degrees) is below the cliff rule's 44, so no bank turns to rock unless the
+## ground was rock already. A narrow channel steepens its shore slope, up to
+## MAX_SHORE_SLOPE (42 degrees), so at least the middle BED_SHARE of its width is flat bed,
+## and no channel is narrower than min_half_width() (WaterEdit.plan_river widens it): a
+## V-shaped gully never reached its depth class. Beyond BANK_REACH_M the goal
+## fades back to the ground over the last BANK_FADE_M, so a river through a high bank cuts
+## a slope, not a wall at the reach.
+##
+## Along the river. A stroke is carved as one course (its reaches' courses joined, exactly
+## the lines WaterGeometry derives their areas from) with a level and a bed line along its
+## arc length s (bed_line()): each flat reach at its own level, the bed at level - depth.
+## Toward the next reach the bed rises over a pool tail (pool_tail()) to a crest just under
+## the upper level (CREST_M), exactly at the shared point; below it, a riffle falls at
+## RIFFLE_SLOPE (smoothstep, so about 1.5 times that at its steepest) to the lower reach's
+## bed, and the bank level follows. The upper reach's area ends flush at the shared point
+## (WaterGeometry), so its flat water runs shallow over the crest to that line; the riffle
+## below is the channel's bed (WaterDressing) under a thin sheet of water that follows it
+## down to the lower reach (WaterMeshBuilder.cascades(): shallow enough that the shader
+## draws it as white water, and in the flow bake): a small rapid, not a rock lip. A river end
+## inside the map tapers its depth from zero over a pool tail (a spring or a sink), so the
+## water does not stop in a round hole.
+##
+## Ponds. A basin in the painted area (pond_goals()): the same cross-section on the signed
+## distance to the edge of the area (DistanceField), with the bed a little deeper toward the
+## middle (POND_CENTRE_EXTRA), so it reads as a bowl.
+
+## One cross-section per WaterBody.Depth: shore slope under the water, bank slope above it
+## (rise over run). Ankle water wades in over a 1:4 shore; deep water shelves at 1:1.5.
+const SHORE_SLOPE: Array[float] = [0.25, 0.4, 0.65]
+const BANK_SLOPE: Array[float] = [0.33, 0.45, 0.6]
+## Rounding of the crease at the toe of the shore (metres of height over which the two sides
+## blend) and the cut over which the top of the bank eases in (blend_with_ground).
+const TOE_SOFT_M := 0.25
+const TOP_SOFT_M := 0.3
+## The middle share of a channel's width that is flat bed at the least, and the steepest a
+## narrow channel's shore gets to keep it (42 degrees, under the cliff rule's 44: a narrow
+## channel is never a rock trench). Channels are at least min_half_width() wide.
+const BED_SHARE := 0.25
+const MAX_SHORE_SLOPE := 0.9
+## How far past the waterline a bank may be cut, and the fade back to the ground before it.
+const BANK_REACH_M := 6.0
+const BANK_FADE_M := 2.0
+## Reach steps: the crest's height over the upper level (just under it: the upper pool runs
+## to the shared point, where its area stops flush and the cascade sheet takes over), and
+## the riffle's mean slope.
+const CREST_M := -0.05
+const RIFFLE_SLOPE := 0.3
+## How high a small step's crest rises over the bed per metre of drop (step_shape()), the
+## pool tail's mean slope up to the crest, and the taper at a river's ends per metre of depth;
+## lengths clamped.
+const CREST_RISE_PER_DROP := 3.0
+const POOL_TAIL_SLOPE := 0.25
+const POOL_TAIL_PER_DEPTH := 3.0
+const POOL_TAIL_MIN_M := 1.5
+const POOL_TAIL_MAX_M := 5.0
+## A river end within this of the map edge runs off the map untapered.
+const EDGE_MARGIN_M := 1.0
+## A pond's bed deepens by this share of its depth toward the middle, over 4 m past the
+## shore's toe.
+const POND_CENTRE_EXTRA := 0.25
+const POND_CENTRE_RUN_M := 4.0
+## The half-width of the box mean (two passes) that rounds a pond's shoreline, and how far
+## above the level the ground outside the painted area stays at the least.
+const POND_EDGE_SMOOTH_M := 0.5
+const POND_RIM_M := 0.02
+## Rocks: a rock whose top stands less than this above the water is submerged; one wider
+## than this share of the channel's width blocks it.
+const SUBMERGED_MARGIN_M := 0.05
+const BLOCKING_SHARE := 0.5
+
+
+## Soft minimum of a and b over a blend of k (polynomial; never above min(a, b)).
+static func smooth_min(a: float, b: float, k: float) -> float:
+	if k <= 0.0:
+		return minf(a, b)
+	var h := maxf(k - absf(a - b), 0.0) / k
+	return minf(a, b) - h * h * k * 0.25
+
+
+## Soft maximum of a and b over a blend of k (never below max(a, b)).
+static func smooth_max(a: float, b: float, k: float) -> float:
+	return -smooth_min(-a, -b, k)
+
+
+## The end taper length for `depth` metres of water.
+static func pool_tail(depth: float) -> float:
+	return clampf(depth * POOL_TAIL_PER_DEPTH, POOL_TAIL_MIN_M, POOL_TAIL_MAX_M)
+
+
+## The shape of a reach step from level `upper` to `lower` at `depth` (see the header):
+## Vector3(crest height, pool tail length above it, riffle length below it). The crest
+## rises as far as the step needs: to just under the upper level (CREST_M) for a full step,
+## but only CREST_RISE_PER_DROP times the drop over the bed for a small one, so a 10 cm step
+## in a deep river is a low bar, not a weir across it.
+static func step_shape(upper: float, lower: float, depth: float) -> Vector3:
+	var below := maxf(-CREST_M, depth - CREST_RISE_PER_DROP * maxf(upper - lower, 0.0))
+	var crest := upper - below
+	var tail := clampf(
+		(crest - (upper - depth)) / POOL_TAIL_SLOPE, POOL_TAIL_MIN_M, POOL_TAIL_MAX_M
+	)
+	var riffle := maxf((crest - (lower - depth)) / RIFFLE_SLOPE, 1.0)
+	return Vector3(crest, tail, riffle)
+
+
+## The riffle length below a reach step from level `upper` to `lower` at `depth`.
+static func riffle_length(upper: float, lower: float, depth: float) -> float:
+	return step_shape(upper, lower, depth).z
+
+
+## The cross-section's goal at edge offset `e` (see the header) for water at `level` over a
+## bed at `bed`, `depth` class Depth, half-width `half_width` (0 for a pond: no narrowing).
+static func section(e: float, level: float, bed: float, depth: int, half_width: float) -> float:
+	var shore := SHORE_SLOPE[depth]
+	var full := level - bed
+	if half_width > 0.0 and full > 0.0:
+		shore = clampf(full / (half_width * (1.0 - BED_SHARE)), shore, MAX_SHORE_SLOPE)
+	var line := level + e * (shore if e < 0.0 else BANK_SLOPE[depth])
+	return smooth_max(bed, line, TOE_SOFT_M)
+
+
+## The final goal of a sample whose ground is `start`: the cross-section goal `goal` met
+## with the ground, faded back to the ground past the bank reach at edge offset `e`. Where
+## the goal is within TOP_SOFT_M below the ground the cut eases in (lowered by
+## d^2 (2 - d / k) / k for a wanted cut d, k = TOP_SOFT_M: no cut at 0, the full cut from k,
+## smooth at both), so the top of a bank is rounded and the carve meets the untouched ground
+## without a crease. The easing only ever cuts less than asked, never more, so a crest or a
+## waterline is never dug below its goal. Never above `start`.
+static func blend_with_ground(goal: float, start: float, e: float) -> float:
+	var cut := start - goal
+	if cut <= 0.0:
+		return start
+	if cut < TOP_SOFT_M:
+		cut = cut * cut * (2.0 - cut / TOP_SOFT_M) / TOP_SOFT_M
+	var fade := smoothstep(BANK_REACH_M - BANK_FADE_M, BANK_REACH_M, e)
+	return start - cut * (1.0 - fade)
+
+
+## The narrowest half-width a channel of `depth` class keeps: at MAX_SHORE_SLOPE, its bed is
+## still flat over BED_SHARE of the width (a deep river is at least about 6 m wide).
+static func min_half_width(depth: int) -> float:
+	return WaterBody.depth_for(depth) / (MAX_SHORE_SLOPE * (1.0 - BED_SHARE))
+
+
+## Vector2(bank level, bed height) at arc length `s` of a carved course (see the header):
+## `bounds` holds the arc lengths of the n - 1 shared points between its n reaches, `levels`
+## the reaches' levels, `total` the course length; `taper` Vector2i(start, end) says which
+## ends taper (inside the map).
+static func bed_line(
+	s: float,
+	bounds: PackedFloat32Array,
+	levels: PackedFloat32Array,
+	depth: float,
+	total: float,
+	taper: Vector2i
+) -> Vector2:
+	var n := levels.size()
+	var k := 0
+	while k < n - 1 and s > bounds[k]:
+		k += 1
+	var level := levels[k]
+	var bed := level - depth
+	var bank := level
+	var tail := pool_tail(depth)
+	if k < n - 1:
+		var next := step_shape(level, levels[k + 1], depth)
+		bed = lerpf(bed, next.x, smoothstep(bounds[k] - next.y, bounds[k], s))
+	if k > 0:
+		var upper := levels[k - 1]
+		var step := step_shape(upper, level, depth)
+		var t := smoothstep(bounds[k - 1], bounds[k - 1] + step.z, s)
+		bed = maxf(bed, lerpf(step.x, level - depth, t))
+		bank = lerpf(upper, level, t)
+	if taper.x != 0:
+		bed = maxf(bed, level - depth * smoothstep(0.0, tail, s))
+	if taper.y != 0:
+		bed = maxf(bed, level - depth * smoothstep(0.0, tail, total - s))
+	return Vector2(bank, bed)
+
+
+## The joined course of one stroke's reaches `bodies` (rivers, in order, each starting where
+## the previous ends): {"points", "widths" (per point), "arc" (arc length per point),
+## "bounds" (arc length of each shared point), "levels" (per reach)}, the lines
+## WaterGeometry.river_course() derives each reach's area from.
+static func joined_course(bodies: Array[WaterBody]) -> Dictionary:
+	var points := PackedVector2Array()
+	var widths := PackedFloat32Array()
+	var arc := PackedFloat32Array()
+	var bounds := PackedFloat32Array()
+	var levels := PackedFloat32Array()
+	for b in bodies.size():
+		var course := WaterGeometry.river_course(bodies[b])
+		var line: PackedVector2Array = course[0]
+		var sizes: PackedFloat32Array = course[1]
+		levels.append(bodies[b].level_m)
+		for i in line.size():
+			if b > 0 and i == 0:
+				continue
+			var at := 0.0 if points.is_empty() else arc[-1] + points[-1].distance_to(line[i])
+			points.append(line[i])
+			widths.append(sizes[i])
+			arc.append(at)
+		if b < bodies.size() - 1:
+			bounds.append(arc[-1])
+	return {"points": points, "widths": widths, "arc": arc, "bounds": bounds, "levels": levels}
+
+
+## Goal heights of a river stroke's carve over `doc`'s sample grid, from ground `start`
+## (the heights before the carve): {"rect": Rect2i of the samples reached, "goals":
+## PackedFloat32Array over the rect, row-major, INF where the carve leaves the ground}.
+## `bodies` are the stroke's reaches (joined_course()), all of one depth class.
+static func river_goals(
+	doc: MapDocument, bodies: Array[WaterBody], start: PackedFloat32Array
+) -> Dictionary:
+	if bodies.is_empty():
+		return {"rect": Rect2i(), "goals": PackedFloat32Array()}
+	var joined := joined_course(bodies)
+	var points: PackedVector2Array = joined.points
+	var widths: PackedFloat32Array = joined.widths
+	var arc: PackedFloat32Array = joined.arc
+	var depth_class := int(bodies[0].depth)
+	var depth := WaterBody.depth_for(depth_class)
+	var total: float = arc[-1] if not arc.is_empty() else 0.0
+	var half := doc.extent_m() * 0.5
+	var inside := func(p: Vector2) -> int:
+		var margin := half - Vector2(EDGE_MARGIN_M, EDGE_MARGIN_M)
+		return 1 if absf(p.x) < margin.x and absf(p.y) < margin.y else 0
+	var taper := Vector2i(inside.call(points[0]), inside.call(points[-1]))
+	var widest := 0.0
+	for w in widths:
+		widest = maxf(widest, w)
+	var reach := widest + BANK_REACH_M
+	var origin := -half
+	var step := doc.sample_step()
+	var grid := Vector2i(doc.samples_x(), doc.samples_z())
+	var rect := _cells_in(WaterGeometry.bounds(points, reach), origin, step, grid)
+	var count := rect.size.x * rect.size.y
+	var distance := PackedFloat32Array()
+	var along := PackedFloat32Array()
+	var half_width := PackedFloat32Array()
+	distance.resize(count)
+	distance.fill(INF)
+	along.resize(count)
+	half_width.resize(count)
+	for s in points.size() - 1:
+		var a := points[s]
+		var segment := points[s + 1] - a
+		var length_sq := segment.length_squared()
+		if length_sq <= 1e-12:
+			continue
+		var length := sqrt(length_sq)
+		var box := Rect2(a, Vector2.ZERO).expand(points[s + 1]).grow(reach)
+		var cells := _cells_in(box, origin, step, grid).intersection(rect)
+		for j in range(cells.position.y, cells.end.y):
+			var z := origin.y + j * step.y
+			var row := (j - rect.position.y) * rect.size.x - rect.position.x
+			for i in range(cells.position.x, cells.end.x):
+				var p := Vector2(origin.x + i * step.x, z)
+				var t := clampf((p - a).dot(segment) / length_sq, 0.0, 1.0)
+				var d := p.distance_to(a + segment * t)
+				var k := row + i
+				if d < distance[k]:
+					distance[k] = d
+					along[k] = arc[s] + t * length
+					half_width[k] = lerpf(widths[s], widths[s + 1], t)
+	var goals := PackedFloat32Array()
+	goals.resize(count)
+	goals.fill(INF)
+	var columns := doc.samples_x()
+	var bounds: PackedFloat32Array = joined.bounds
+	var levels: PackedFloat32Array = joined.levels
+	for j in rect.size.y:
+		for i in rect.size.x:
+			var k := j * rect.size.x + i
+			var hw := half_width[k]
+			var e := distance[k] - hw
+			if e >= BANK_REACH_M:
+				continue
+			var line := bed_line(along[k], bounds, levels, depth, total, taper)
+			var ground := start[(rect.position.y + j) * columns + rect.position.x + i]
+			var goal := section(e, line.x, line.y, depth_class, hw)
+			goal = blend_with_ground(goal, ground, e)
+			if goal < ground:
+				goals[k] = goal
+	return {"rect": rect, "goals": goals}
+
+
+## Goal heights of the basin of pond `body` over `doc`'s sample grid (its area is the
+## pond_mask samples holding its id), from ground `start`; as river_goals(). Empty when the
+## pond has no area.
+static func pond_goals(doc: MapDocument, body: WaterBody, start: PackedFloat32Array) -> Dictionary:
+	var columns := doc.samples_x()
+	var rows := doc.samples_z()
+	var mask := doc.pond_mask
+	var empty := {"rect": Rect2i(), "goals": PackedFloat32Array()}
+	if mask.size() != doc.sample_count():
+		return empty
+	var area := Rect2i()
+	for z in rows:
+		for x in columns:
+			if mask[z * columns + x] == body.id:
+				area = MaskBrush.merge_rect(area, Rect2i(x, z, 1, 1))
+	if not area.has_area():
+		return empty
+	var step := doc.sample_step()
+	var pad := ceili(BANK_REACH_M / minf(step.x, step.y)) + 1
+	var rect := area.grow(pad).intersection(Rect2i(0, 0, columns, rows))
+	var count := rect.size.x * rect.size.y
+	var in_pond := PackedByteArray()
+	var out_pond := PackedByteArray()
+	in_pond.resize(count)
+	out_pond.resize(count)
+	for j in rect.size.y:
+		for i in rect.size.x:
+			var k := j * rect.size.x + i
+			var mine := mask[(rect.position.y + j) * columns + rect.position.x + i] == body.id
+			in_pond[k] = 1 if mine else 0
+			out_pond[k] = 0 if mine else 1
+	# Inside: distance to the nearest sample outside; outside: to the nearest sample inside.
+	# The edge lies half a step from each.
+	var to_outside: PackedFloat32Array = (
+		DistanceField.transform(out_pond, rect.size.x, rect.size.y, step).distance_sq
+	)
+	var to_inside: PackedFloat32Array = (
+		DistanceField.transform(in_pond, rect.size.x, rect.size.y, step).distance_sq
+	)
+	var half_step := 0.5 * minf(step.x, step.y)
+	var depth := body.depth_m()
+	var level := body.level_m
+	var shore := SHORE_SLOPE[body.depth]
+	var toe := depth / shore
+	# The signed distance to the edge, smoothed so the shoreline follows the painted area's
+	# outline, not the staircase of its samples.
+	var edge := PackedFloat32Array()
+	edge.resize(count)
+	for k in count:
+		var d := sqrt(to_outside[k] if in_pond[k] == 1 else to_inside[k]) - half_step
+		edge[k] = -d if in_pond[k] == 1 else d
+	var radius := maxi(1, roundi(POND_EDGE_SMOOTH_M / minf(step.x, step.y)))
+	for _pass in 2:
+		edge = _box_blur(edge, rect.size, radius)
+	var goals := PackedFloat32Array()
+	goals.resize(count)
+	goals.fill(INF)
+	for j in rect.size.y:
+		for i in rect.size.x:
+			var k := j * rect.size.x + i
+			var e := edge[k]
+			if e >= BANK_REACH_M:
+				continue
+			var centre := smoothstep(toe, toe + POND_CENTRE_RUN_M, -e)
+			var bed := level - depth * (1.0 + POND_CENTRE_EXTRA * centre)
+			var ground := start[(rect.position.y + j) * columns + rect.position.x + i]
+			var goal := blend_with_ground(section(e, level, bed, body.depth, 0.0), ground, e)
+			# Outside the painted area nothing sinks under the level: water there would end in
+			# the air (it is not the pond's).
+			if in_pond[k] == 0:
+				goal = maxf(goal, minf(ground, level + POND_RIM_M))
+			if goal < ground:
+				goals[k] = goal
+	return {"rect": rect, "goals": goals}
+
+
+## The rock policy of a carve (see docs/ARCHITECTURE.md "Carving water"): true when a rock
+## row (ScatterRows layout) of an asset `height_m` tall and `footprint_m` in footprint radius
+## (both at scale 1) stays after the carve. `level` is the water level at the rock (DRY
+## where it is out of the water) and `channel_m` the width of the channel there (0 in a
+## pond). A rock out of the water stays (rocks survive terrain changes); one whose top is
+## under the surface is gone; one wider than BLOCKING_SHARE of the channel is gone; a rock
+## breaking the surface stays (the water's edge foam wraps it).
+static func keeps_rock(
+	row: PackedFloat32Array, height_m: float, footprint_m: float, level: float, channel_m: float
+) -> bool:
+	if is_inf(level) or level == WaterGeometry.DRY:
+		return true
+	var scale := absf(row[7])
+	var base := row[1]
+	if base >= level:
+		return true
+	if base + height_m * scale <= level + SUBMERGED_MARGIN_M:
+		return false
+	if channel_m > 0.0 and 2.0 * footprint_m * scale > BLOCKING_SHARE * channel_m:
+		return false
+	return true
+
+
+## A box mean of `values` (row-major, `size` cells) over (2 radius + 1)^2 cells, edges
+## replicated, as a horizontal then a vertical running sum.
+static func _box_blur(
+	values: PackedFloat32Array, size: Vector2i, radius: int
+) -> PackedFloat32Array:
+	var rows := PackedFloat32Array()
+	rows.resize(values.size())
+	var window := float(2 * radius + 1)
+	for j in size.y:
+		var base := j * size.x
+		var sum := 0.0
+		for d in range(-radius, radius + 1):
+			sum += values[base + clampi(d, 0, size.x - 1)]
+		for i in size.x:
+			rows[base + i] = sum / window
+			sum += values[base + mini(i + radius + 1, size.x - 1)]
+			sum -= values[base + maxi(i - radius, 0)]
+	var out := PackedFloat32Array()
+	out.resize(values.size())
+	for i in size.x:
+		var sum := 0.0
+		for d in range(-radius, radius + 1):
+			sum += rows[clampi(d, 0, size.y - 1) * size.x + i]
+		for j in size.y:
+			out[j * size.x + i] = sum / window
+			sum += rows[mini(j + radius + 1, size.y - 1) * size.x + i]
+			sum -= rows[maxi(j - radius, 0) * size.x + i]
+	return out
+
+
+## The grid cells whose positions fall inside `box` (WaterGeometry's rule).
+static func _cells_in(box: Rect2, origin: Vector2, step: Vector2, size: Vector2i) -> Rect2i:
+	var low := ((box.position - origin) / step).ceil()
+	var high := ((box.end - origin) / step).floor()
+	var first := Vector2i(maxi(0, int(low.x)), maxi(0, int(low.y)))
+	var last := Vector2i(mini(size.x - 1, int(high.x)), mini(size.y - 1, int(high.y)))
+	if last.x < first.x or last.y < first.y:
+		return Rect2i(first, Vector2i.ZERO)
+	return Rect2i(first, last - first + Vector2i.ONE)

@@ -279,6 +279,53 @@ func complete() -> void:
 	changed = MaskBrush.merge_rect(changed, dirty)
 
 
+## Lowers every sample of `rect` (grid coordinates) to its goal in `goals` (row-major over
+## the rect; INF leaves a sample alone) where the goal is below the sample's height, all at
+## once: a one-shot carve (WaterCarve's channel and basin goals) recorded like a dab, so
+## finish(), revert() and apply_diff() work unchanged. Never raises ground. Returns true
+## when any height changed.
+@warning_ignore("integer_division")
+func lower_to(rect: Rect2i, goals: PackedFloat32Array) -> bool:
+	var grid := Rect2i(0, 0, doc.samples_x(), doc.samples_z())
+	if not rect.has_area() or goals.size() != rect.size.x * rect.size.y:
+		return false
+	var width := doc.samples_x()
+	var heights := doc.heights
+	var limit := MapDocument.MAX_ABS_HEIGHT_M
+	var low := Vector2i(grid.end)
+	var high := Vector2i(-1, -1)
+	var lowest := INF
+	var highest := -INF
+	for j in rect.size.y:
+		var z := rect.position.y + j
+		if z < 0 or z >= grid.size.y:
+			continue
+		for i in rect.size.x:
+			var x := rect.position.x + i
+			if x < 0 or x >= grid.size.x:
+				continue
+			var goal := goals[j * rect.size.x + i]
+			var at := z * width + x
+			if is_inf(goal) or goal >= heights[at]:
+				continue
+			var value := maxf(goal, -limit)
+			if value >= heights[at]:
+				continue
+			heights[at] = value
+			_touched[(z / BLOCK) * _blocks_x + x / BLOCK] = 1
+			low = low.min(Vector2i(x, z))
+			high = high.max(Vector2i(x, z))
+			lowest = minf(lowest, value)
+			highest = maxf(highest, value)
+	if high.x < 0:
+		return false
+	written_span = Vector2(minf(written_span.x, lowest), maxf(written_span.y, highest))
+	var dirty := Rect2i(low, high - low + Vector2i.ONE)
+	pending = MaskBrush.merge_rect(pending, dirty)
+	changed = MaskBrush.merge_rect(changed, dirty)
+	return true
+
+
 ## MaskBrush.amount() of this operation's rate for `seconds` at AMOUNT_STEPS evenly spaced
 ## weights, index 0 = weight 0 (empty for raise and lower, which are linear).
 func _amount_table(seconds: float) -> PackedFloat32Array:
