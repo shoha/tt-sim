@@ -316,10 +316,13 @@ func test_skirt_follows_an_edge_edit_without_a_new_material() -> void:
 	terrain.process_heights(-1)
 	assert_eq(terrain.get_skirt(), skirt, "same node")
 	assert_eq(skirt.mesh.surface_get_material(0), material, "same material, not a duplicate")
-	var vertices: PackedVector3Array = skirt.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	# The skirt is updated in place; headless mesh reads do not see in-place updates, so read
+	# its vertex copy (test_authored_terrain checks the copy against a rebuild and the
+	# engine's layout).
+	var positions: PackedFloat32Array = (terrain.get("_skirt_mirror") as Dictionary).positions
 	var top := 0.0
-	for v in vertices:
-		top = maxf(top, v.y)
+	for i in range(1, positions.size(), 3):
+		top = maxf(top, positions[i])
 	assert_almost_eq(top, _height_at(doc, Vector2(edge, 0)), 0.01, "the ring rises with the edge")
 
 

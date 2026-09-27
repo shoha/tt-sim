@@ -421,6 +421,42 @@ func test_skirt_falls_back_to_the_base_level() -> void:
 		assert_eq(vertices[TerrainMeshBuilder.SKIRT_RINGS * count + i].y, 0.0, "outer ring at base")
 
 
+func test_skirt_updates_in_place_like_a_rebuild() -> void:
+	var doc := _sine(20)
+	var width := AuthoredTerrain.skirt_width_m()
+	var fall := AuthoredTerrain.SKIRT_FADE_M
+	# The copy's layout is the engine's (positions, then normal and tangent pairs).
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(
+		Mesh.PRIMITIVE_TRIANGLES, TerrainMeshBuilder.build_skirt_arrays(doc, width, fall)
+	)
+	var engine: PackedByteArray = RenderingServer.mesh_get_surface(mesh.get_rid(), 0)["vertex_data"]
+	var mirror := TerrainMeshBuilder.skirt_vertex_mirror(doc, width, fall)
+	var expected: PackedByteArray = (
+		mirror.positions.to_byte_array() + mirror.normals.to_byte_array()
+	)
+	assert_eq(expected.size(), engine.size())
+	assert_eq(
+		expected.slice(0, mirror.positions.size() * 4), engine.slice(0, mirror.positions.size() * 4)
+	)
+	# An edit on two edges, one of them at the loop's start corner.
+	var terrain := AuthoredTerrain.create(doc)
+	add_child_autofree(terrain)
+	var last := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
+	var edits := [Rect2i(0, 0, 12, 9), Rect2i(last.x - 5, 30, 6, 10)]
+	for rect: Rect2i in edits:
+		for z in range(rect.position.y, rect.end.y):
+			for x in range(rect.position.x, rect.end.x):
+				doc.heights[doc.sample_index(x, z)] += 1.5
+		terrain.queue_heights(rect)
+		terrain.process_heights(-1)
+	var kept: Dictionary = terrain.get("_skirt_mirror")
+	var fresh := TerrainMeshBuilder.skirt_vertex_mirror(doc, width, fall)
+	assert_false(kept.is_empty(), "the edge edit made a vertex copy")
+	assert_eq(kept.positions, fresh.positions, "every rewritten vertex matches a rebuild")
+	assert_eq(kept.normals, fresh.normals)
+
+
 ## A map with a sharp 1.524 m step across the middle, so the rule fields vary everywhere
 ## near chunk borders.
 func _tiered(cells: int) -> MapDocument:
@@ -494,6 +530,10 @@ func test_in_place_updates_rewrite_the_rule_fields() -> void:
 			doc.heights[doc.sample_index(x, z)] += 1.524
 	terrain.queue_heights(edit)
 	terrain.process_heights(-1)
+	assert_true(terrain.has_unsettled_chunks(), "the fields wait for the settle")
+	terrain.settle_heights()
+	terrain.process_heights(-1)
+	assert_false(terrain.has_unsettled_chunks())
 	var fresh := TerrainMeshBuilder.grid_fields(doc)
 	var kept: Dictionary = terrain.get_rule_fields()
 	var worst := 0.0

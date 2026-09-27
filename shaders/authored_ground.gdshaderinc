@@ -241,6 +241,11 @@ const float WEIGHT_EPSILON = 0.002;
 const int MAX_LAYERS = 8;
 // Index of the base surface in the per-pixel weight arrays.
 const int BASE = 8;
+// Upper bound of the per-slot sampling loops: layer_count (a uniform, so they stay loops
+// indexed by a dynamically uniform counter) measured equal or up to 0.1 ms faster than
+// MAX_LAYERS (a constant, so they unroll eight copies of the sampling code); PERFORMANCE.md
+// "Ground shader: 8 layers, rules, steep faces".
+#define SLOT_LOOP_END layer_count
 // Score of a surface not sampled at this pixel: far below any real score, so it never
 // comes within biome_blend_width of the top.
 const float ABSENT_SCORE = -1e6;
@@ -273,8 +278,9 @@ const float SCREE_NEAR_START = 0.03;
 const float SCREE_NEAR_END = 0.1;
 const float SCREE_EDGE_NOISE = 0.4;
 const float SCREE_BREAKUP_SCALE_M = 2.6;
-const float SCREE_BREAKUP_LOW = 0.22;
-const float SCREE_BREAKUP_HIGH = 0.56;
+const float SCREE_FAN = 1.6;
+const float SCREE_BREAKUP_LOW = 0.15;
+const float SCREE_BREAKUP_HIGH = 0.45;
 const float RULE_NOISE_SCALE_M = 1.6;
 const float RULE_NOISE_SHEAR = 0.8;
 const vec2 CLIFF_NOISE_OFFSET = vec2(13.7, -41.3);
@@ -303,8 +309,8 @@ struct TopSample {
 	float height;
 };
 
-// One surface at one pixel, every projection blended; normal is the perturbed map-frame
-// normal (not normalised).
+// Weighted sums of surfaces at one pixel; normal is the perturbed map-frame normal (not
+// normalised).
 struct SurfaceSample {
 	vec3 albedo;
 	vec3 normal;
@@ -312,23 +318,14 @@ struct SurfaceSample {
 	float height;
 };
 
-// The projections of one pixel: weights (x: the X-facing side plane, y: top-down, z: the
-// Z-facing side plane) and each plane's tangent frame and UVs.
-struct Projection {
-	vec3 weights;
-	vec3 n;
-	vec3 top_u;
-	vec3 top_v;
-	vec3 x_t;
-	vec3 x_b;
-	vec2 x_uv;
-	vec2 x_dx;
-	vec2 x_dy;
-	vec3 z_t;
-	vec3 z_b;
-	vec2 z_uv;
-	vec2 z_dx;
-	vec2 z_dy;
+// One side plane of a pixel: UV and its screen gradients in metres, and the plane's tangent
+// frame in the map frame (t: +u, b: image up, both orthogonal to the geometric normal).
+struct SidePlane {
+	vec2 uv;
+	vec2 gx;
+	vec2 gy;
+	vec3 t;
+	vec3 b;
 };
 
 uvec2 pcg2d(uvec2 v) {
@@ -434,112 +431,132 @@ vec3 perturb(vec2 xy, vec3 t, vec3 b, vec3 n) {
 	return n * z + t * s.x + b * s.y;
 }
 
-// One side-plane sample (plain tiling, no breakup).
-SurfaceSample side_sample(
-	sampler2D albedo_map, sampler2D normal_map, sampler2D orm_map, sampler2D height_map,
-	float tile, vec2 uv_m, vec2 gx_m, vec2 gy_m, vec3 t, vec3 b, vec3 n
-) {
-	vec2 uv = uv_m / tile;
-	vec2 gx = gx_m / tile;
-	vec2 gy = gy_m / tile;
-	SurfaceSample s;
-	s.albedo = textureGrad(albedo_map, uv, gx, gy).rgb;
-	vec2 nm = textureGrad(normal_map, uv, gx, gy).rg * 2.0 - 1.0;
-	s.normal = perturb(nm, t, b, n);
-	s.orm = textureGrad(orm_map, uv, gx, gy).rgb;
-	s.height = textureGrad(height_map, uv, gx, gy).r;
-	return s;
-}
-
-// One surface through every projection with weight at this pixel, the projections
-// height-blended (index 0: X plane, 1: top-down, 2: Z plane).
-SurfaceSample sample_surface(
-	sampler2D albedo_map, sampler2D normal_map, sampler2D orm_map, sampler2D height_map,
-	float tile, TileFrame f, vec2 world_xz, vec2 dx, vec2 dy, Projection pr
-) {
-	SurfaceSample s[3];
-	vec3 score = vec3(ABSENT_SCORE);
-	if (pr.weights.y > 0.0) {
-		TopSample top = sample_top(
-			albedo_map, normal_map, orm_map, height_map, tile, f, world_xz, dx, dy
-		);
-		s[1].albedo = top.albedo;
-		s[1].normal = perturb(top.normal_uv, pr.top_u, pr.top_v, pr.n);
-		s[1].orm = top.orm;
-		s[1].height = top.height;
-		if (pr.weights.y >= 1.0) {
-			return s[1];
-		}
-		score.y = pr.weights.y + (top.height - 0.5) * PROJECTION_CONTRAST;
-	}
-	if (pr.weights.x > 0.0) {
-		s[0] = side_sample(
-			albedo_map, normal_map, orm_map, height_map, tile, pr.x_uv, pr.x_dx, pr.x_dy,
-			pr.x_t, pr.x_b, pr.n
-		);
-		score.x = pr.weights.x + (s[0].height - 0.5) * PROJECTION_CONTRAST;
-	}
-	if (pr.weights.z > 0.0) {
-		s[2] = side_sample(
-			albedo_map, normal_map, orm_map, height_map, tile, pr.z_uv, pr.z_dx, pr.z_dy,
-			pr.z_t, pr.z_b, pr.n
-		);
-		score.z = pr.weights.z + (s[2].height - 0.5) * PROJECTION_CONTRAST;
-	}
-	float best = max(score.x, max(score.y, score.z));
-	vec3 w = max(score - (best - PROJECTION_BAND), vec3(0.0));
-	w /= max(w.x + w.y + w.z, 1e-5);
-	SurfaceSample acc;
-	acc.albedo = vec3(0.0);
-	acc.normal = vec3(0.0);
-	acc.orm = vec3(0.0);
-	acc.height = 0.0;
-	for (int i = 0; i < 3; i++) {
-		if (w[i] > 0.0) {
-			acc.albedo += s[i].albedo * w[i];
-			acc.normal += s[i].normal * w[i];
-			acc.orm += s[i].orm * w[i];
-			acc.height += s[i].height * w[i];
-		}
-	}
-	return acc;
-}
-
 // Gram-Schmidt: `v` made orthogonal to unit `n`, normalised.
 vec3 orthogonal(vec3 v, vec3 n) {
 	return normalize(v - n * dot(n, v));
 }
 
-// The projections of a pixel with map-frame normal `n` at map-frame position `p`.
-Projection projection(vec3 n, vec3 p, vec3 dpx, vec3 dpy) {
-	Projection pr;
-	pr.n = n;
-	pr.top_u = orthogonal(vec3(1.0, 0.0, 0.0), n);
-	pr.top_v = orthogonal(vec3(0.0, 0.0, 1.0), n);
-	float side = 1.0 - smoothstep(SIDE_FULL_NY, SIDE_START_NY, n.y);
-	pr.weights = vec3(0.0, 1.0, 0.0);
-	if (side > 0.0) {
-		vec2 planes = pow(abs(n.xz) + 1e-4, vec2(SIDE_SHARPNESS));
-		planes /= planes.x + planes.y;
-		planes = max(planes - SIDE_MIN_WEIGHT, vec2(0.0));
-		planes /= max(planes.x + planes.y, 1e-5);
-		pr.weights = vec3(planes.x * side, 1.0 - side, planes.y * side);
-		// The X-facing plane: +u to the viewer's right looking at the face, +v down.
+// Side plane `plane` (0: facing X, 1: facing Z) of a pixel with map-frame normal `n` at
+// map-frame position `p` (screen derivatives dpx, dpy): +u to the viewer's right looking
+// at the face, +v down the image, image up = map up, so layered beds stay level.
+SidePlane side_plane(int plane, vec3 n, vec3 p, vec3 dpx, vec3 dpy) {
+	SidePlane s;
+	if (plane == 0) {
 		float sx = n.x >= 0.0 ? 1.0 : -1.0;
-		pr.x_t = orthogonal(vec3(0.0, 0.0, -sx), n);
-		pr.x_b = orthogonal(vec3(0.0, 1.0, 0.0) - pr.x_t * pr.x_t.y, n);
-		pr.x_uv = vec2(-sx * p.z, -p.y);
-		pr.x_dx = vec2(-sx * dpx.z, -dpx.y);
-		pr.x_dy = vec2(-sx * dpy.z, -dpy.y);
+		s.t = orthogonal(vec3(0.0, 0.0, -sx), n);
+		s.uv = vec2(-sx * p.z, -p.y);
+		s.gx = vec2(-sx * dpx.z, -dpx.y);
+		s.gy = vec2(-sx * dpy.z, -dpy.y);
+	} else {
 		float sz = n.z >= 0.0 ? 1.0 : -1.0;
-		pr.z_t = orthogonal(vec3(sz, 0.0, 0.0), n);
-		pr.z_b = orthogonal(vec3(0.0, 1.0, 0.0) - pr.z_t * pr.z_t.y, n);
+		s.t = orthogonal(vec3(sz, 0.0, 0.0), n);
 		// Offset so the two planes show different parts of the texture at a corner.
-		pr.z_uv = vec2(sz * p.x + 0.37, -p.y + 0.61);
-		pr.z_dx = vec2(sz * dpx.x, -dpx.y);
-		pr.z_dy = vec2(sz * dpy.x, -dpy.y);
+		s.uv = vec2(sz * p.x + 0.37, -p.y + 0.61);
+		s.gx = vec2(sz * dpx.x, -dpx.y);
+		s.gy = vec2(sz * dpy.x, -dpy.y);
 	}
-	return pr;
+	s.b = orthogonal(vec3(0.0, 1.0, 0.0) - s.t * s.t.y, n);
+	return s;
+}
+
+// The projection weights of a pixel with map-frame normal `n` before any height blend (x:
+// the X-facing plane, y: top-down, z: the Z-facing plane); exactly (0, 1, 0) above
+// SIDE_START_NY, which is what lets flat ground skip the side code.
+vec3 projection_weights(vec3 n) {
+	float side = 1.0 - smoothstep(SIDE_FULL_NY, SIDE_START_NY, n.y);
+	if (side <= 0.0) {
+		return vec3(0.0, 1.0, 0.0);
+	}
+	vec2 planes = pow(abs(n.xz) + 1e-4, vec2(SIDE_SHARPNESS));
+	planes /= planes.x + planes.y;
+	planes = max(planes - SIDE_MIN_WEIGHT, vec2(0.0));
+	planes /= max(planes.x + planes.y, 1e-5);
+	return vec3(planes.x * side, 1.0 - side, planes.y * side);
+}
+
+// One surface's top-down height through the tile frame (sample_top's blend, height only).
+float top_height(sampler2D height_map, float tile, TileFrame f, vec2 world_xz, vec2 dx, vec2 dy) {
+	vec3 height;
+	for (int i = 0; i < 3; i++) {
+		vec2 cs = f.rotations[i];
+		vec2 uv = rotate(world_xz - f.centers[i], cs) / tile + f.offsets[i];
+		height[i] = textureGrad(height_map, uv, rotate(dx, cs) / tile, rotate(dy, cs) / tile).r;
+	}
+	vec3 w = pow(max(f.weights, vec3(0.0)), vec3(breakup_sharpness));
+	w *= mix(vec3(1.0), height + 0.05, breakup_contrast);
+	return dot(height, w / max(w.x + w.y + w.z, 1e-5));
+}
+
+// One surface's projection weights at a pixel after the projections' height blend (the
+// taller detail wins, PROJECTION_CONTRAST / PROJECTION_BAND), and in `height` its blended
+// height (only computed on flat ground when `need_height`). Heights only: the full
+// samples are taken by accumulate(), so nothing large stays live between surfaces.
+vec3 surface_projections(
+	sampler2D height_map, float tile, TileFrame f, vec2 world_xz, vec2 dx, vec2 dy, vec3 n,
+	vec3 p, vec3 dpx, vec3 dpy, vec3 proj, bool need_height, out float height
+) {
+	height = 0.5;
+	if (proj.y >= 1.0) {
+		if (need_height) {
+			height = top_height(height_map, tile, f, world_xz, dx, dy);
+		}
+		return proj;
+	}
+	vec3 h = vec3(0.5);
+	vec3 score = vec3(ABSENT_SCORE);
+	if (proj.y > 0.0) {
+		h.y = top_height(height_map, tile, f, world_xz, dx, dy);
+		score.y = proj.y + (h.y - 0.5) * PROJECTION_CONTRAST;
+	}
+	if (proj.x > 0.0) {
+		SidePlane s = side_plane(0, n, p, dpx, dpy);
+		h.x = textureGrad(height_map, s.uv / tile, s.gx / tile, s.gy / tile).r;
+		score.x = proj.x + (h.x - 0.5) * PROJECTION_CONTRAST;
+	}
+	if (proj.z > 0.0) {
+		SidePlane s = side_plane(1, n, p, dpx, dpy);
+		h.z = textureGrad(height_map, s.uv / tile, s.gx / tile, s.gy / tile).r;
+		score.z = proj.z + (h.z - 0.5) * PROJECTION_CONTRAST;
+	}
+	float best = max(score.x, max(score.y, score.z));
+	vec3 w = max(score - (best - PROJECTION_BAND), vec3(0.0));
+	w /= max(w.x + w.y + w.z, 1e-5);
+	height = dot(h, w);
+	return w;
+}
+
+// Adds `weight` times one surface, through the projections weighted by `pw`, to `acc`.
+void accumulate(
+	sampler2D albedo_map, sampler2D normal_map, sampler2D orm_map, sampler2D height_map,
+	float tile, TileFrame f, vec2 world_xz, vec2 dx, vec2 dy, vec3 n, vec3 p, vec3 dpx,
+	vec3 dpy, vec3 pw, float weight, inout SurfaceSample acc
+) {
+	if (pw.y > 0.0) {
+		TopSample top = sample_top(
+			albedo_map, normal_map, orm_map, height_map, tile, f, world_xz, dx, dy
+		);
+		float k = pw.y * weight;
+		vec3 top_u = orthogonal(vec3(1.0, 0.0, 0.0), n);
+		vec3 top_v = orthogonal(vec3(0.0, 0.0, 1.0), n);
+		acc.albedo += top.albedo * k;
+		acc.normal += perturb(top.normal_uv, top_u, top_v, n) * k;
+		acc.orm += top.orm * k;
+		acc.height += top.height * k;
+	}
+	for (int plane = 0; plane < 2; plane++) {
+		float k = (plane == 0 ? pw.x : pw.z) * weight;
+		if (k > 0.0) {
+			SidePlane s = side_plane(plane, n, p, dpx, dpy);
+			vec2 uv = s.uv / tile;
+			vec2 gx = s.gx / tile;
+			vec2 gy = s.gy / tile;
+			acc.albedo += textureGrad(albedo_map, uv, gx, gy).rgb * k;
+			vec2 nm = textureGrad(normal_map, uv, gx, gy).rg * 2.0 - 1.0;
+			acc.normal += perturb(nm, s.t, s.b, n) * k;
+			acc.orm += textureGrad(orm_map, uv, gx, gy).rgb * k;
+			acc.height += textureGrad(height_map, uv, gx, gy).r * k;
+		}
+	}
 }
 
 float value_noise(vec2 p) {
@@ -671,13 +688,14 @@ vec2 rule_weights(float ny, vec2 fields, vec3 p) {
 	float scree = 0.0;
 	float concave = (-fields.x - SCREE_CURVATURE_START)
 		/ (SCREE_CURVATURE_END - SCREE_CURVATURE_START);
-	if (fields.y > SCREE_NEAR_START && concave > -SCREE_EDGE_NOISE) {
+	if (fields.y > SCREE_NEAR_START && concave > -SCREE_EDGE_NOISE - 0.5 * SCREE_FAN) {
 		float near = clamp(
 			(fields.y - SCREE_NEAR_START) / (SCREE_NEAR_END - SCREE_NEAR_START), 0.0, 1.0
 		);
 		float n = rule_noise(p.xz, p.y, SCREE_NOISE_OFFSET);
-		float m = clamp(concave + mix(-SCREE_EDGE_NOISE, SCREE_EDGE_NOISE, n), 0.0, 1.0) * near;
 		float breakup = value_noise(p.xz / SCREE_BREAKUP_SCALE_M + SCREE_BREAKUP_OFFSET);
+		concave += mix(-SCREE_EDGE_NOISE, SCREE_EDGE_NOISE, n) + (breakup - 0.5) * SCREE_FAN;
+		float m = clamp(concave, 0.0, 1.0) * near;
 		float gaps = smoothstep(SCREE_BREAKUP_LOW, SCREE_BREAKUP_HIGH, breakup);
 		scree = ease_ramp(m) * gaps * (1.0 - cliff);
 	}
@@ -782,7 +800,7 @@ void fragment() {
 #endif
 	vec3 n_geom = normalize(v_normal);
 	TileFrame frame = tile_frame(world_xz);
-	Projection pr = projection(n_geom, v_position, dpx, dpy);
+	vec3 proj = projection_weights(n_geom);
 
 	// Weights per slot (0-7) and the base (BASE). Painted first; the rest of the ground
 	// (biome ground and base) shares what the painting leaves, and the rules take their
@@ -825,43 +843,59 @@ void fragment() {
 	float cliff = unpainted * rule.x;
 	float scree = unpainted * rule.y;
 	for (int j = 0; j < 9; j++) {
-		if (g[j] <= 0.0) {
-			continue;
-		}
 		w[j] += g[j] * keep;
-		if (cliff > 0.0) {
-			int to = rule_cliff_layer[j];
-			w[to >= 0 ? to : j] += g[j] * cliff;
-		}
-		if (scree > 0.0) {
-			int to = rule_scree_layer[j];
-			w[to >= 0 ? to : j] += g[j] * scree;
+	}
+	if (cliff > 0.0 || scree > 0.0) {
+		// Each ground component hands its share to its rule slots (-1: it keeps it). Constant
+		// indices only, so w[] stays in registers.
+		for (int k = 0; k < 9; k++) {
+			float add = 0.0;
+			for (int j = 0; j < 9; j++) {
+				int to_cliff = rule_cliff_layer[j] >= 0 ? rule_cliff_layer[j] : j;
+				int to_scree = rule_scree_layer[j] >= 0 ? rule_scree_layer[j] : j;
+				add += g[j] * (cliff * float(to_cliff == k) + scree * float(to_scree == k));
+			}
+			w[k] += add;
 		}
 	}
 
-	// A surface is sampled only where it has weight; the rest keep score ABSENT_SCORE and
-	// are never read. Some surface always has weight.
-	SurfaceSample samples[9];
+	// A surface is sampled only where it has weight. One surface (most of the ground) is
+	// drawn directly; several are height-blended in two passes, heights first to find the
+	// top score, then full samples of the surfaces within the blend band, so no surface's
+	// sample has to stay live while the others are fetched.
+	int count = 0;
+	for (int i = 0; i < MAX_LAYERS; i++) {
+		count += (i < layer_count && w[i] > WEIGHT_EPSILON) ? 1 : 0;
+	}
+	bool base_in = w[BASE] > WEIGHT_EPSILON || count == 0;
+	count += base_in ? 1 : 0;
 	float scores[9];
 	float top = ABSENT_SCORE;
-	for (int i = 0; i < MAX_LAYERS; i++) {
-		scores[i] = ABSENT_SCORE;
-		if (i < layer_count && w[i] > WEIGHT_EPSILON) {
-			samples[i] = sample_surface(
-				layer_albedo[i], layer_normal[i], layer_orm[i], layer_height[i],
-				layer_tile_m[i], frame, world_xz, dx, dy, pr
-			);
-			scores[i] = blend_score(w[i], samples[i].height);
-			top = max(top, scores[i]);
+	if (count > 1) {
+		for (int i = 0; i < MAX_LAYERS; i++) {
+			scores[i] = ABSENT_SCORE;
 		}
-	}
-	scores[BASE] = ABSENT_SCORE;
-	if (w[BASE] > WEIGHT_EPSILON || top == ABSENT_SCORE) {
-		samples[BASE] = sample_surface(
-			albedo_tex, normal_tex, orm_tex, height_tex, tile_m, frame, world_xz, dx, dy, pr
-		);
-		scores[BASE] = blend_score(max(w[BASE], WEIGHT_EPSILON), samples[BASE].height);
-		top = max(top, scores[BASE]);
+		for (int i = 0; i < SLOT_LOOP_END; i++) {
+			if (i < layer_count && w[i] > WEIGHT_EPSILON) {
+				float h;
+				surface_projections(
+					layer_height[i], layer_tile_m[i], frame, world_xz, dx, dy, n_geom,
+					v_position, dpx, dpy, proj, true, h
+				);
+				scores[i] = blend_score(w[i], h);
+				top = max(top, scores[i]);
+			}
+		}
+		scores[BASE] = ABSENT_SCORE;
+		if (base_in) {
+			float h;
+			surface_projections(
+				height_tex, tile_m, frame, world_xz, dx, dy, n_geom, v_position, dpx, dpy,
+				proj, true, h
+			);
+			scores[BASE] = blend_score(w[BASE], h);
+			top = max(top, scores[BASE]);
+		}
 	}
 	SurfaceSample ground;
 	ground.albedo = vec3(0.0);
@@ -869,13 +903,36 @@ void fragment() {
 	ground.orm = vec3(0.0);
 	ground.height = 0.0;
 	float total = 0.0;
-	for (int i = 0; i < 9; i++) {
-		float b = scores[i] - (top - biome_blend_width);
+	for (int i = 0; i < SLOT_LOOP_END; i++) {
+		if (i < layer_count && w[i] > WEIGHT_EPSILON) {
+			float b = count > 1 ? scores[i] - (top - biome_blend_width) : 1.0;
+			if (b > 0.0) {
+				float h;
+				vec3 pw = surface_projections(
+					layer_height[i], layer_tile_m[i], frame, world_xz, dx, dy, n_geom,
+					v_position, dpx, dpy, proj, false, h
+				);
+				accumulate(
+					layer_albedo[i], layer_normal[i], layer_orm[i], layer_height[i],
+					layer_tile_m[i], frame, world_xz, dx, dy, n_geom, v_position, dpx, dpy, pw,
+					b, ground
+				);
+				total += b;
+			}
+		}
+	}
+	if (base_in) {
+		float b = count > 1 ? scores[BASE] - (top - biome_blend_width) : 1.0;
 		if (b > 0.0) {
-			ground.albedo += samples[i].albedo * b;
-			ground.normal += samples[i].normal * b;
-			ground.orm += samples[i].orm * b;
-			ground.height += samples[i].height * b;
+			float h;
+			vec3 pw = surface_projections(
+				height_tex, tile_m, frame, world_xz, dx, dy, n_geom, v_position, dpx, dpy,
+				proj, false, h
+			);
+			accumulate(
+				albedo_tex, normal_tex, orm_tex, height_tex, tile_m, frame, world_xz, dx, dy,
+				n_geom, v_position, dpx, dpy, pw, b, ground
+			);
 			total += b;
 		}
 	}
