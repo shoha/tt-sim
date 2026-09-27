@@ -233,7 +233,8 @@ func _tune_wind_materials(materials: Array, category: String, overrides: Diction
 
 
 ## Union of every MeshInstance3D's world-space AABB under `root`, or a zero-size AABB
-## when the subtree holds no geometry.
+## when the subtree holds no geometry. Decoration beyond the map
+## (Constants.BOUNDS_EXEMPT_META, the authored ground skirt) does not count.
 ##
 ## Scattered foliage (MultiMeshInstance3D) is deliberately NOT included. Headless stores
 ## no MultiMesh instance data at all -- verified 2026-09-21: `buffer` is empty and
@@ -254,7 +255,11 @@ static func compute_map_bounds(root: Node) -> AABB:
 
 
 static func _mesh_instances(node: Node, out: Array[MeshInstance3D] = []) -> Array[MeshInstance3D]:
-	if node is MeshInstance3D and (node as MeshInstance3D).mesh:
+	if (
+		node is MeshInstance3D
+		and (node as MeshInstance3D).mesh
+		and not node.has_meta(Constants.BOUNDS_EXEMPT_META)
+	):
 		out.append(node)
 	for child in node.get_children():
 		_mesh_instances(child, out)

@@ -126,6 +126,16 @@ const ASSET_PRIORITY_DEFAULT: int = 100
 const ASSET_PRIORITY_HIGH: int = 50
 
 # =============================================================================
+# MAP GEOMETRY
+# =============================================================================
+
+## Meta on a map MeshInstance3D that is decoration beyond the map (AuthoredTerrain's ground
+## skirt): the mesh walks that measure the map (CameraController pan bounds,
+## LevelEnvironmentManager.compute_map_bounds for the reflection probe and dressing extent)
+## skip it.
+const BOUNDS_EXEMPT_META := &"tt_bounds_exempt"
+
+# =============================================================================
 # NETWORK
 # =============================================================================
 

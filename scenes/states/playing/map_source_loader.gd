@@ -25,10 +25,14 @@ const FRAME_BUDGET_USEC: int = 8000
 ## darker and more olive than a Blender-made map. A sky-tinted fill, a little stronger than
 ## the default, lifts shadows toward blue and freshens the palette greens; a brighter
 ## neutral fill was tried and made the ground flatter and more khaki. Judged at the game
-## camera beside the river level (2026-09-26).
+## camera beside the river level (2026-09-26). The backdrop past the map (where the ground
+## skirt fades out) is a soft blue-grey haze in the same family as that fill: chosen over the
+## default 0.3 grey, a warm paper, a dark slate and a moss green from zoomed-out renders
+## (T7); it reads as mist around a diorama instead of a void.
 const AUTHORED_MAP_LIGHTING := {
 	"tt_ambient_light_color": [0.5, 0.58, 0.72],
 	"tt_ambient_light_energy": 0.75,
+	"tt_background_color": [0.56, 0.61, 0.67],
 }
 ## The AuthoredScatter holding the document's generated scatter (and, when props are not
 ## kept apart, its props too).

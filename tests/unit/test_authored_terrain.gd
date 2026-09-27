@@ -299,3 +299,94 @@ func test_missing_surface_falls_back_to_a_plain_ground() -> void:
 		terrain.chunk_cells().size(), TerrainMeshBuilder.chunk_cells(doc).size(), "still built"
 	)
 	assert_not_null(terrain.get_collision_body(), "still collidable")
+
+
+func test_skirt_rings_the_map_from_its_boundary_vertices() -> void:
+	var doc := _sine(30)
+	var width := 12.0
+	var arrays := TerrainMeshBuilder.build_skirt_arrays(doc, width)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var loop := TerrainMeshBuilder.boundary_samples(doc)
+	var last := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
+	assert_eq(loop.size(), 2 * (last.x + last.y), "every boundary sample once")
+	assert_eq(vertices.size(), loop.size() * 2)
+	var half := doc.extent_m() * 0.5
+	var misplaced := 0
+	for i in loop.size():
+		var inner := vertices[i]
+		var expected := TerrainMeshBuilder.sample_position(doc, loop[i].x, loop[i].y)
+		var outer := vertices[loop.size() + i]
+		var past := Vector2(absf(outer.x) - half.x, absf(outer.z) - half.y)
+		if (
+			not inner.is_equal_approx(expected)
+			or absf(maxf(past.x, past.y) - width) > 1e-3
+			or not is_equal_approx(outer.y, inner.y)
+		):
+			misplaced += 1
+	assert_eq(misplaced, 0, "inner edge = the chunks' boundary vertices, outer edge width out")
+	var mismatched_uvs := 0
+	for i in vertices.size():
+		if not uvs[i].is_equal_approx(Vector2(vertices[i].x, vertices[i].z)):
+			mismatched_uvs += 1
+	assert_eq(mismatched_uvs, 0, "UVs are world XZ like the chunks'")
+	var downward := 0
+	for t in range(0, indices.size(), 3):
+		var a := vertices[indices[t]]
+		var facing := (vertices[indices[t + 1]] - a).cross(vertices[indices[t + 2]] - a).y
+		if facing >= 0.0:
+			downward += 1
+	assert_eq(downward, 0, "every triangle faces up (clockwise from above)")
+
+
+func test_skirt_is_decoration_outside_the_map_bounds() -> void:
+	var doc := _flat(20)
+	var terrain := AuthoredTerrain.create(doc)
+	add_child_autofree(terrain)
+	var skirt := terrain.get_skirt()
+	assert_not_null(skirt)
+	assert_true(skirt.has_meta(Constants.BOUNDS_EXEMPT_META))
+	assert_eq(skirt.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	var material := skirt.mesh.surface_get_material(0) as ShaderMaterial
+	assert_eq(material.shader, AuthoredTerrain.SKIRT_SHADER)
+	assert_eq(material.get_shader_parameter("biome_layer_count"), 0, "no biome layers")
+	assert_eq(
+		material.get_shader_parameter("albedo_tex"),
+		terrain.get_material().get_shader_parameter("albedo_tex"),
+		"the base surface continues"
+	)
+	var bounds := LevelEnvironmentManager.compute_map_bounds(terrain)
+	assert_almost_eq(bounds.size.x, doc.extent_m().x, 0.01, "the skirt does not widen the map")
+	terrain.build(doc)
+	var skirts := terrain.get_children().filter(
+		func(child: Node) -> bool: return String(child.name).begins_with(AuthoredTerrain.SKIRT_NAME)
+	)
+	assert_eq(skirts.size(), 1, "a rebuild replaces the skirt")
+
+
+func test_flat_chunks_cast_no_shadow_sculpted_ones_do() -> void:
+	var flat := AuthoredTerrain.create(_flat(20))
+	add_child_autofree(flat)
+	var off := 0
+	for cell in flat.chunk_cells():
+		if flat.get_chunk(cell).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+			off += 1
+	assert_eq(off, flat.chunk_cells().size(), "flat ground only shadows itself")
+	var hills := AuthoredTerrain.create(_sine(20))
+	add_child_autofree(hills)
+	for cell in hills.chunk_cells():
+		assert_eq(
+			hills.get_chunk(cell).cast_shadow,
+			GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
+			"sculpted chunk %s casts" % cell
+		)
+
+
+func test_zoom_out_recentres_only_near_the_whole_map_view() -> void:
+	var fit := 50.0
+	assert_eq(CameraController.recentre_weight(20.0, fit), 0.0, "play zoom pans freely")
+	assert_eq(CameraController.recentre_weight(fit, fit), 1.0, "whole map: centred")
+	var partial := CameraController.recentre_weight(fit * 0.8, fit)
+	assert_between(partial, 0.01, 0.99)
+	assert_eq(CameraController.recentre_weight(fit, INF), 0.0, "unknown fit")

@@ -35,6 +35,10 @@ const RMB_PAN_MOVE_THRESHOLD_PX: float = 5.0  # Min movement to count as drag
 # Camera soft bounds / near-plane safety margin
 const MAP_BOUNDS_MARGIN_FACTOR := 0.15  # Extra margin as fraction of map size on each side
 const NEAR_PLANE_GROUND_MARGIN := 0.5  # Keep bottom-corner ray origins at least this far above Y=0
+## Zoomed out past this fraction of the size at which the whole map fits, the pan range
+## narrows toward the map centre, reaching it at that size (recentre_weight()), so a full
+## zoom-out frames the map instead of wherever zoom-toward-cursor left the view.
+const RECENTRE_START := 0.6
 
 # Camera shake
 const SHAKE_MAX_INTENSITY := 0.05  # Max shake offset in world units
@@ -83,6 +87,8 @@ var _base_camera_size: float  # Camera3D orthographic size at base zoom (from sc
 # Camera soft bounds (computed from map geometry)
 var _map_bounds: AABB = AABB()
 var _has_map_bounds: bool = false
+# Reference (16:9) size at which _map_bounds fits the view; INF when unknown.
+var _fit_size: float = INF
 
 # Camera shake state
 var _shake_tween: Tween = null
@@ -580,13 +586,33 @@ func notify_map_loaded() -> void:
 func set_map_bounds(bounds: AABB) -> void:
 	_map_bounds = bounds
 	_has_map_bounds = true
+	_fit_size = _fit_size_for_bounds(bounds)
 	_clamp_camera_to_bounds()
+
+
+## How far the pan range has narrowed toward the map centre, 0 (full range) to 1 (the view
+## centre is the map centre), at camera size `size` for a map that fits at `fit_size`.
+## Pure. Zero when the fit is unknown or not positive.
+static func recentre_weight(size: float, fit_size: float) -> float:
+	if fit_size <= 0.0 or is_inf(fit_size):
+		return 0.0
+	return smoothstep(fit_size * RECENTRE_START, fit_size, size)
+
+
+func _fit_size_for_bounds(bounds: AABB) -> float:
+	var camera_node := _game_map.camera_node
+	if not is_instance_valid(camera_node):
+		return INF
+	return fit_size_for_extent(
+		camera_node.global_transform.basis, Vector2(bounds.size.x, bounds.size.z), bounds.size.y
+	)
 
 
 ## Reset soft-bounds and shake state. Call before loading a new map so stale
 ## state from the previous level doesn't leak into the next one.
 func notify_map_clearing() -> void:
 	_has_map_bounds = false
+	_fit_size = INF
 	if _shake_tween and _shake_tween.is_valid():
 		_shake_tween.kill()
 	if _shake_offset != Vector3.ZERO:
@@ -647,11 +673,13 @@ func _compute_map_bounds() -> void:
 
 	_map_bounds = bounds
 	_has_map_bounds = true
+	_fit_size = _fit_size_for_bounds(bounds)
 
 
-## Recursively collect world-space AABBs from all MeshInstance3D children.
+## Recursively collect world-space AABBs from all MeshInstance3D children, except
+## decoration beyond the map (Constants.BOUNDS_EXEMPT_META).
 func _collect_mesh_aabbs(node: Node, out: Array[AABB]) -> void:
-	if node is MeshInstance3D and node.mesh:
+	if node is MeshInstance3D and node.mesh and not node.has_meta(Constants.BOUNDS_EXEMPT_META):
 		out.append(node.global_transform * node.mesh.get_aabb())
 	for child in node.get_children():
 		_collect_mesh_aabbs(child, out)
@@ -698,6 +726,15 @@ func _clamp_position_to_bounds(pos: Vector3) -> Vector3:
 	var map_max_x := _map_bounds.position.x + _map_bounds.size.x + margin_x
 	var map_min_z := _map_bounds.position.z - margin_z
 	var map_max_z := _map_bounds.position.z + _map_bounds.size.z + margin_z
+
+	# Zooming out toward the whole-map view, the range narrows onto the map centre.
+	var recentre := recentre_weight(_game_map.camera_node.size, _corrected_size(_fit_size))
+	if recentre > 0.0:
+		var centre := _map_bounds.get_center()
+		map_min_x = lerpf(map_min_x, centre.x, recentre)
+		map_max_x = lerpf(map_max_x, centre.x, recentre)
+		map_min_z = lerpf(map_min_z, centre.z, recentre)
+		map_max_z = lerpf(map_max_z, centre.z, recentre)
 
 	var vc_x := pos.x + view_off.x
 	var vc_z := pos.z + view_off.y
