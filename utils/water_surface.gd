@@ -17,6 +17,7 @@ extends RefCounted
 ## the waist class, 0.9 m, and the deep class, 2.0 m). Where a floating body's bed rises
 ## above the float height (its shallow edge), the token stands on the bed: the landing is
 ## the higher of the two, so walking out of deep water onto a bank is continuous.
+## A token the water hides (is_submerged()) shows a SubmergedMarker at the surface above it.
 ## Summary: docs/ARCHITECTURE.md "Authored water at runtime".
 
 ## Collision layer bit of water surfaces (physics layer 3).
@@ -43,6 +44,12 @@ const VERTEX_NUDGE := Vector3(0.0007, 0.0, 0.0011)
 ## Gentle bob of a floating token's visuals: amplitude (m) and period (s).
 const BOB_M := 0.03
 const BOB_PERIOD_S := 2.6
+## A token counts as submerged (its SubmergedMarker shows) while less than this much of it
+## stands above the surface, or less than SUBMERGED_SHARE of its height, whichever is more:
+## a sliver among the ripples reads as gone at play zoom (a 0.71 m token in 0.9 m water
+## shows nothing; with 12 cm of it out, only a speck of its crest among the foam).
+const SUBMERGED_FREEBOARD_M := 0.1
+const SUBMERGED_SHARE := 0.2
 
 
 ## Where a token's base rests over bed height `bed_y` under a water surface at `surface_y`
@@ -61,6 +68,31 @@ static func floats_for(body_floats: Variant, depth: float) -> bool:
 	if body_floats is bool:
 		return body_floats
 	return depth >= FLOAT_DEPTH_M
+
+
+## Whether a token standing from `base_y` to `top_y` (world Y) is hidden by a water surface at
+## `surface_y` (NAN for none): its base under the surface and less than
+## max(SUBMERGED_FREEBOARD_M, SUBMERGED_SHARE of its height) of it above. A small token
+## wading waist-deep water is; a floating token rides at the surface and is not, unless it
+## is tiny. Pure.
+static func is_submerged(base_y: float, top_y: float, surface_y: float) -> bool:
+	if is_nan(surface_y) or base_y >= surface_y:
+		return false
+	var showing := maxf(SUBMERGED_FREEBOARD_M, SUBMERGED_SHARE * (top_y - base_y))
+	return top_y < surface_y + showing
+
+
+## The world Y of the water surface hiding a token whose base is at world `base` and which
+## stands `height` metres tall (is_submerged()), or NAN when no water hides it. One or two
+## rays on LAYER, cast from above the token's top.
+static func submerged_surface(
+	space: PhysicsDirectSpaceState3D, base: Vector3, height: float
+) -> float:
+	var water := water_below(space, base, base.y + height + CAST_CLEARANCE_M)
+	if water.is_empty():
+		return NAN
+	var y: float = water.y
+	return y if is_submerged(base.y, base.y + height, y) else NAN
 
 
 ## The first water surface straight below world (xz.x, from_y, xz.z): {"y": world Y,

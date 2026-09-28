@@ -1238,7 +1238,10 @@ maps. Tests: `tests/unit/test_authored_water.gd`; render probe
   over water and keeps the cursor-hit height elsewhere). A floating token bobs its visuals
   (`BOB_M` 0.03 m over 2.6 s, a looping tween), decided locally after a landing or a synced
   move (`WaterSurface.floats_at`), so every peer bobs its own copy; the synced position is
-  untouched. Network sync is unchanged (the dragging peer is authoritative).
+  untouched. Network sync is unchanged (the dragging peer is authoritative). A token the
+  water hides (`WaterSurface.is_submerged`: base under the surface, less than 10 cm or a
+  fifth of its height above it) shows a `SubmergedMarker` ring on the surface over it, also
+  decided locally (P4b-0; UI_SYSTEMS.md "Submerged Token Marker").
 - **Grid, measure, ruler, cursor:** the ground field is max(ground, water level) on wet
   samples. Authored: `GroundHeightField.from_terrain()` finds the terrain's sibling
   `AuthoredWater` and composes `raise_to_water(heights, levels)` into an RGF texture (R the
