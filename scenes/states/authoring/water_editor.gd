@@ -150,6 +150,12 @@ func paint_pond_begin(depth_class: WaterBody.Depth, at: Vector3) -> bool:
 		mask.resize(doc.sample_count())
 		doc.pond_mask = mask
 	_pond = {"id": id, "depth": depth_class, "before": before, "rect": Rect2i()}
+	# Extending a pond: its basin is carved again as one shape at no lower a level than
+	# before (compute()), so the stroke needs the area and level it had.
+	var existing := doc.water_body(id)
+	if existing != null:
+		_pond["old_area"] = doc.pond_mask.duplicate()
+		_pond["old_level"] = existing.level_m
 	return true
 
 
@@ -188,16 +194,17 @@ func paint_pond_end() -> bool:
 	if not painted.has_area():
 		WaterEdit.apply_model(doc, pond.before)
 		return false
-	_start(
-		{
-			"kind": "pond",
-			"label": "Paint pond",
-			"id": int(pond.id),
-			"depth": pond.depth,
-			"rect": painted,
-		},
-		pond.before
-	)
+	var spec := {
+		"kind": "pond",
+		"label": "Paint pond",
+		"id": int(pond.id),
+		"depth": pond.depth,
+		"rect": painted,
+	}
+	if pond.has("old_area"):
+		spec["old_area"] = pond.old_area
+		spec["old_level"] = pond.old_level
+	_start(spec, pond.before)
 	return true
 
 
@@ -296,15 +303,49 @@ func cancel_stroke() -> void:
 		WaterEdit.apply_model(_editor().document, stroke.before)
 
 
-## The wet dressing and the water surface from the document as it is now, on this thread
-## (a sculpt stroke on a map with water; its undo and redo).
-func refresh() -> void:
+## The wet dressing and the water surface from the document as it is now (a sculpt stroke on
+## a map with water; its undo and redo), then `then` (optional): the stroke's rock keeping and
+## regeneration, which read the new dressing. With use_worker (P4-5) the dressing is computed
+## on a worker from a snapshot, like an edit's, and lands on a later frame (step(), or at once
+## from finish_work()); it cost the main thread 110-175 ms on a 150 ft map with water. A map
+## without water has nothing to refresh: `then` runs at once.
+func refresh(then: Callable = Callable()) -> void:
+	finish_work()
+	var doc := _editor().document
+	if doc.water_bodies.is_empty():
+		if then.is_valid():
+			then.call()
+		return
+	timings = {}
+	var snapshot := snapshot_of(doc)
+	var result := {}
+	var spec := {"kind": "dressing", "then": then}
+	var job := {"task": -1, "spec": spec, "result": result, "before": {}, "dressing_before": {}}
+	if use_worker:
+		job.task = WorkerThreadPool.add_task(
+			func() -> void: compute(snapshot, spec, result), false, "Wet dressing"
+		)
+		_job = job
+		return
+	compute(snapshot, spec, result)
+	_job = job
+	finish_work()
+
+
+## Landing a dressing refresh (refresh()): the field, the ground's texture, the surface, then
+## the caller's follow-up.
+func _land_dressing(spec: Dictionary, result: Dictionary) -> void:
 	var e := _editor()
-	WaterDressing.refresh(e.document)
+	var t0 := Time.get_ticks_usec()
+	e.document.water_dressing = result.dressing
 	if is_instance_valid(e.terrain):
 		e.terrain.refresh_water_dressing()
 	if is_instance_valid(e.map_root):
 		AuthoredWater.refresh_map(e.map_root, e.document)
+	timings["dressing_upload"] = Time.get_ticks_usec() - t0
+	var then: Callable = spec.then
+	if then.is_valid():
+		then.call()
 
 
 ## Once per frame (AuthoringEditor.step_height_work): lands a finished worker edit, or runs
@@ -380,6 +421,8 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 		"pond":
 			var id: int = spec.id
 			var level := WaterGeometry.pond_rim_level(snapshot, id)
+			if spec.has("old_area"):
+				level = extended_pond_level(snapshot, id, spec.old_area, float(spec.old_level))
 			var body := WaterBody.pond(id, spec.depth, level)
 			snapshot.water_bodies = _with_pond(snapshot, body)
 			var goals := WaterCarve.pond_goals(snapshot, body, snapshot.heights)
@@ -391,7 +434,8 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 			out["bodies"] = bodies
 			snapshot.water_bodies = bodies
 	out["dressing"] = WaterDressing.refresh(snapshot)
-	out["owners"] = WaterMeshBuilder.sample_owners(snapshot)
+	if String(spec.kind) != "dressing":
+		out["owners"] = WaterMeshBuilder.sample_owners(snapshot)
 	out["usec"] = Time.get_ticks_usec() - started
 
 
@@ -419,6 +463,36 @@ static func lower(doc: MapDocument, goals: Dictionary) -> void:
 				continue
 			heights[at] = minf(heights[at], maxf(goal, -limit))
 	doc.heights = heights
+
+
+## The level of pond `id` of `doc` after a stroke extended it from `old_area` (the pond mask
+## before the stroke) at `old_level` (P4-5): the lowest rim ground less the freeboard, as a
+## new pond's, except that ground its own basin carved (within WaterCarve.BANK_REACH_M of the
+## old area) counts as at least the old level plus the freeboard, and never above the old
+## level. Read from that carved ground, every extension sank the pond by the freeboard, and
+## the old basin, carved again only as far as its eased top allowed, stood as a ledge under
+## the new water.
+static func extended_pond_level(
+	doc: MapDocument, id: int, old_area: PackedByteArray, old_level: float
+) -> float:
+	var count := doc.sample_count()
+	var feature := PackedByteArray()
+	feature.resize(count)
+	for i in mini(old_area.size(), count):
+		if old_area[i] == id:
+			feature[i] = 1
+	var field := DistanceField.transform(
+		feature, doc.samples_x(), doc.samples_z(), doc.sample_step()
+	)
+	var distance_sq: PackedFloat32Array = field.distance_sq
+	var near := PackedByteArray()
+	near.resize(count)
+	var reach_sq := WaterCarve.BANK_REACH_M * WaterCarve.BANK_REACH_M
+	for i in count:
+		if distance_sq[i] <= reach_sq:
+			near[i] = 1
+	var level := WaterGeometry.pond_rim_level(doc, id, near, old_level + WaterGeometry.FREEBOARD_M)
+	return minf(level, old_level)
 
 
 ## `doc`'s bodies with pond `body` in place of any body with its id.
@@ -474,6 +548,9 @@ func _land() -> void:
 	var spec: Dictionary = job.spec
 	var result: Dictionary = job.result
 	timings["compute"] = int(result.get("usec", 0))
+	if String(spec.kind) == "dressing":
+		_land_dressing(spec, result)
+		return
 	var t0 := Time.get_ticks_usec()
 	var stroke: HeightStroke = null
 	var region := Rect2i()

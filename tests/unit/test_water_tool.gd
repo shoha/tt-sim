@@ -244,6 +244,43 @@ func test_a_second_stroke_from_inside_a_pond_extends_it() -> void:
 	assert_eq(history.undo_count(), 2, "one entry per stroke")
 
 
+func test_an_extended_pond_keeps_its_level_and_is_one_basin() -> void:
+	# Two strokes against one stroke painting the same area on flat ground (P4-5): the second
+	# stroke read its rim from the first basin's carve and sank the pond by the freeboard, and
+	# the old basin, carved again only as far as the eased bank top allowed, stood as a ledge
+	# under the new water.
+	var first := [Vector2(-5, -1), Vector2(-2, -1)]
+	var second := [Vector2(-3, -1), Vector2(0, 2), Vector2(3, 4)]
+	var two := _new_doc()
+	var editor := _editor(two)
+	assert_true(_pond(editor, WaterBody.Depth.WAIST, first, 2.6))
+	_settle(editor)
+	var level := two.water_bodies[0].level_m
+	assert_true(_pond(editor, WaterBody.Depth.WAIST, second, 2.6))
+	_settle(editor)
+	assert_eq(two.water_bodies.size(), 1)
+	assert_almost_eq(two.water_bodies[0].level_m, level, 1e-5, "the level stays")
+	var one := _new_doc()
+	var single := _editor(one)
+	assert_true(single.water.paint_pond_begin(WaterBody.Depth.WAIST, Vector3(-5, 0, -1)))
+	for stroke in [first, second]:
+		var last: Vector2 = stroke[0]
+		for p: Vector2 in stroke:
+			single.stroke_dab(Vector3(last.x, 0, last.y), Vector3(p.x, 0, p.y), 2.6, 0.1)
+			last = p
+	assert_true(single.end_stroke())
+	_settle(single)
+	assert_eq(one.pond_mask, two.pond_mask, "the same area")
+	assert_almost_eq(one.water_bodies[0].level_m, level, 1e-5, "at the same level")
+	# Under the water the two basins agree (the shore may differ by the easing near it).
+	var worst := 0.0
+	var id := one.water_bodies[0].id
+	for i in one.sample_count():
+		if one.pond_mask[i] == id and one.heights[i] < level - 0.2:
+			worst = maxf(worst, absf(one.heights[i] - two.heights[i]))
+	assert_lt(worst, 0.03, "one basin, no ledge (worst %.3f m)" % worst)
+
+
 func test_a_pond_meets_its_shore_softly() -> void:
 	var doc := _new_doc()
 	var editor := _editor(doc)
@@ -419,6 +456,41 @@ func test_the_worker_carve_lands_exactly_what_the_synchronous_one_does() -> void
 	assert_eq(results[1][0], results[0][0], "the same ground")
 	assert_eq(results[1][1], results[0][1], "the same dressing")
 	assert_eq(results[1][2], results[0][2], "the same water")
+
+
+func test_a_sculpt_stroke_by_water_refreshes_its_dressing_on_a_worker() -> void:
+	# P4-5: the dressing after a sculpt stroke on a map with water is computed on a worker and
+	# lands later, with the stroke's regeneration after it; the result is the synchronous one.
+	var results := []
+	for worker in [false, true]:
+		var doc := _new_doc()
+		var history := AuthoringHistory.new()
+		var editor := _editor(doc, history)
+		editor.water.use_worker = worker
+		editor.water.carve_river(_line([[-12, 0], [12, 0]]), _w(1.5), WaterBody.Depth.WAIST)
+		_settle(editor)
+		var before := doc.water_dressing.duplicate()
+		assert_true(editor.begin_height_stroke(HeightBrush.RAISE))
+		for k in 10:
+			editor.stroke_dab(
+				Vector3(-2 + k * 0.3, 0, 1.0), Vector3(-2 + k * 0.3, 0, 2.0), 2.0, 0.1
+			)
+			editor.flush()
+		assert_true(editor.end_stroke())
+		if worker:
+			assert_true(editor.water.is_working(), "the dressing computes on a worker")
+			assert_true(editor.has_height_work(), "so saves wait for it")
+			assert_eq(doc.water_dressing, before, "the document keeps its dressing until it lands")
+		_settle(editor)
+		assert_false(editor.water.is_working())
+		assert_ne(doc.water_dressing, before, "the raised bank changed the dressing")
+		assert_eq(history.undo_count(), 2, "the stroke is one entry")
+		results.append([doc.heights, doc.water_dressing])
+		history.undo()
+		_settle(editor)
+		assert_eq(doc.water_dressing, before, "undo lands the dressing before the stroke")
+	assert_eq(results[1][0], results[0][0], "the same ground")
+	assert_eq(results[1][1], results[0][1], "the same dressing")
 
 
 # --- rounded ends -------------------------------------------------------------------------------

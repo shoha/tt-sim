@@ -641,13 +641,9 @@ func _end_height_stroke() -> bool:
 		terrain.settle_heights()
 	if diff.is_empty():
 		return false
-	# The water follows the ground under it: dressing, surface, flow (P4-3).
 	var wet := document.water_dressing
-	if not document.water_bodies.is_empty():
-		water.refresh()
-	# The props side for history; the rocks the stroke keeps (RockKeeper) join it when their
-	# worker lands, before anything can read it (finish_height_work), and the regeneration
-	# waits for them.
+	# The props side for history; kept rocks (RockKeeper) join it when their worker lands,
+	# before anything can read it (finish_height_work); the regeneration waits for them.
 	var record := {"props_before": {}, "props_after": {}, "kept": {}}
 	var props_bytes := 0
 	for cell in _prop_start:
@@ -655,8 +651,14 @@ func _end_height_stroke() -> bool:
 		record.props_after[cell] = props.cell_rows(cell).duplicate(true)
 		props_bytes += PropRows.rows_bytes(_prop_start[cell]) * 2
 	var area := _regenerated_area(stroke.changed)
-	if not rock_keeper.start(stroke.start_heights, stroke.changed, area, record, _rocks, wet):
-		_regenerate(stroke.changed)
+	# The water follows the ground (P4-3); rocks and plants wait for its dressing's worker.
+	water.refresh(
+		func() -> void:
+			if not rock_keeper.start(
+				stroke.start_heights, stroke.changed, area, record, _rocks, wet
+			):
+				_regenerate(stroke.changed)
+	)
 	(
 		history
 		. record(
@@ -734,9 +736,7 @@ func _apply_height_diff(diff: Dictionary, redo: bool, record: Dictionary) -> voi
 	rock_keeper.swap(record.kept, redo)
 	if is_instance_valid(terrain):
 		terrain.settle_heights()
-	if not document.water_bodies.is_empty():
-		water.refresh()
-	_regenerate(rect)
+	water.refresh(_regenerate.bind(rect))
 
 
 ## Regenerates the scatter over the sample rectangle `rect` of a height edit.

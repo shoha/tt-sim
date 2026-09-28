@@ -93,6 +93,11 @@ const POND_CENTRE_RUN_M := 4.0
 ## above the level the ground outside the painted area stays at the least.
 const POND_EDGE_SMOOTH_M := 0.5
 const POND_RIM_M := 0.02
+## Under a pond's water the top-of-bank easing (blend_with_ground) fades out over this far
+## from the waterline (P4-5): a small cut there is a basin being carved again (a stroke
+## extending the pond), not the top of a bank, and eased it left the old basin's shore as a
+## ledge under the new water.
+const POND_UNDER_EASE_M := 1.2
 ## Rocks: a rock whose top stands less than this above the water is submerged; one wider
 ## than this share of the channel's width blocks it.
 const SUBMERGED_MARGIN_M := 0.05
@@ -435,7 +440,11 @@ static func pond_goals(doc: MapDocument, body: WaterBody, start: PackedFloat32Ar
 			var centre := smoothstep(toe, toe + POND_CENTRE_RUN_M, -e)
 			var bed := level - depth * (1.0 + POND_CENTRE_EXTRA * centre)
 			var ground := start[(rect.position.y + j) * columns + rect.position.x + i]
-			var goal := blend_with_ground(pond_section(e, level, bed, body.depth), ground, e)
+			var section := pond_section(e, level, bed, body.depth)
+			var goal := blend_with_ground(section, ground, e)
+			if e < 0.0:
+				var eased := smoothstep(-POND_UNDER_EASE_M, 0.0, e)
+				goal = lerpf(minf(section, ground), goal, eased)
 			# Outside the painted area nothing sinks under the level: water there would end in
 			# the air (it is not the pond's).
 			if in_pond[k] == 0:
