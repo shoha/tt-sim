@@ -11,14 +11,22 @@ extends RefCounted
 ## per frame; the reaches, the erase and the flow bake cost per point, and the course is
 ## Chaikin-smoothed anyway), then split into flat reaches by the ground along it
 ## (WaterGeometry.reach_ranges: no reach spans more than REACH_DROP_M), each a river body at
-## its reach's level, consecutive reaches sharing their boundary point.
+## its reach's level, consecutive reaches sharing their boundary point. A line that starts
+## or ends in existing water joins it (join_line(): a confluence).
 ##
-## Erasing. A river loses the control points under the eraser and falls apart into the runs
-## of at least two points that remain (the first keeps its id); a pond loses the samples
-## under it and is dropped once it has none.
+## Erasing (P4-4). A river the eraser touches goes whole: every reach of its stroke (the
+## reaches joined end to end, river_chain()), never a piece of one. A hole cut mid-reach left
+## two ends draining into a dry channel (P4-3), and so did one reach of a stroke erased on its
+## own (the reach above spilled over its crest into the dry riffle); so do the streams that
+## flow into it (their end in its water), which would spill into its dry channel. A pond loses
+## the samples under the eraser, is dropped once it has none, and otherwise settles to the
+## lowest ground on its new rim (erased_bodies()), so its water never stands against the
+## erased part of its basin.
 
 ## Spacing of a river's control points (metres).
 const RESAMPLE_M := 2.0
+## A river joining other water ends this far past that water's edge (join_line()).
+const JOIN_INSET_M := 0.6
 const COMPRESSION := FileAccess.COMPRESSION_ZSTD
 
 
@@ -108,7 +116,8 @@ static func plan_river(
 	var bodies: Array[WaterBody] = []
 	if doc.heights.size() != doc.sample_count():
 		return bodies
-	var line: Array = resample(points, half_widths)
+	var joined := join_line(doc, points, half_widths)
+	var line: Array = resample(joined[0], joined[1])
 	var course: PackedVector2Array = line[0]
 	var widths: PackedFloat32Array = line[1]
 	if course.size() < 2:
@@ -117,6 +126,13 @@ static func plan_river(
 	for i in widths.size():
 		widths[i] = clampf(widths[i], narrowest, WaterBody.MAX_HALF_WIDTH_M)
 	var ground := WaterGeometry.ground_along(doc, course)
+	# Confluences: under existing water the line reads that water's level (plus the freeboard)
+	# as its ground, so the reach that meets it is at its level or below, never down on its
+	# bed (see join_line()).
+	for i in course.size():
+		var level := WaterGeometry.level_at(doc, course[i])
+		if level != WaterGeometry.DRY and ground[i] < level:
+			ground[i] = level + WaterGeometry.FREEBOARD_M
 	var ranges := WaterGeometry.reach_ranges(ground)
 	var rivers := 0
 	for body in doc.water_bodies:
@@ -149,6 +165,66 @@ static func plan_river(
 	return bodies
 
 
+## A river line (map XZ, upstream first, with one half-width per point, or one for all) cut
+## where it runs into existing water of `doc` (WaterGeometry.is_wet_at): a line that starts
+## inside a river or pond keeps only its last point in the water before it leaves it (an
+## outflow), and one that ends inside water keeps only its first point in it (an inflow, a
+## confluence). That point, just past the other water's edge, is where the new channel meets
+## it: the carve leaves that end open (no taper, WaterCarve.river_goals) and plan_river reads
+## the other water's level there, so the two meet without a dry lip or a gap. Points in the
+## water between two dry stretches (a line crossing a river) stay. [PackedVector2Array,
+## PackedFloat32Array]; fewer than two points when the whole line lies in water.
+static func join_line(
+	doc: MapDocument, points: PackedVector2Array, half_widths: PackedFloat32Array
+) -> Array:
+	var widths := half_widths
+	if widths.size() != points.size():
+		widths = PackedFloat32Array()
+		widths.resize(points.size())
+		widths.fill(half_widths[0] if not half_widths.is_empty() else WaterBody.MIN_HALF_WIDTH_M)
+	if doc.water_bodies.is_empty() or points.size() < 2:
+		return [points, widths]
+	var wet := PackedByteArray()
+	wet.resize(points.size())
+	var dry_first := -1
+	var dry_last := -1
+	for i in points.size():
+		if WaterGeometry.is_wet_at(doc, points[i]):
+			wet[i] = 1
+		elif dry_first < 0:
+			dry_first = i
+		if wet[i] == 0:
+			dry_last = i
+	if dry_first < 0:
+		return [PackedVector2Array(), PackedFloat32Array()]
+	var first := maxi(dry_first - 1, 0)
+	var last := mini(dry_last + 1, points.size() - 1)
+	var line := points.slice(first, last + 1)
+	# The joining point just past the other water's edge, however far apart the drawn points.
+	if wet[first] == 1:
+		line[0] = _junction(doc, points[first], points[first + 1])
+	if wet[last] == 1 and last > first:
+		line[-1] = _junction(doc, points[last], points[last - 1])
+	return [line, widths.slice(first, last + 1)]
+
+
+## Where the segment from `wet` (a point in water) to `dry` enters the water, found by
+## bisection, moved JOIN_INSET_M into it (never past `wet`).
+static func _junction(doc: MapDocument, wet: Vector2, dry: Vector2) -> Vector2:
+	var inside := wet
+	var outside := dry
+	for _step in 12:
+		var middle := (inside + outside) * 0.5
+		if WaterGeometry.is_wet_at(doc, middle):
+			inside = middle
+		else:
+			outside = middle
+	var inward := wet - inside
+	if inward.length() <= JOIN_INSET_M:
+		return wet
+	return inside + inward.normalized() * JOIN_INSET_M
+
+
 ## `doc`'s bodies with `added` appended, as a new array.
 static func with_bodies(doc: MapDocument, added: Array[WaterBody]) -> Array[WaterBody]:
 	var bodies: Array[WaterBody] = []
@@ -171,8 +247,9 @@ static func pond_id_at(doc: MapDocument, at: Vector2) -> int:
 
 
 ## Writes `value` into `mask` (a pond mask of `doc`'s grid) for every sample within `radius`
-## of the segment `from`-`to` (map XZ) whose byte is in `over` (bytes that may be replaced).
-## Returns the rectangle of samples changed.
+## of the segment `from`-`to` (map XZ) whose byte is in `over` (bytes that may be replaced),
+## marking each byte it replaced in `replaced` (byte -> true). Returns the rectangle of
+## samples changed.
 static func stamp(
 	doc: MapDocument,
 	mask: PackedByteArray,
@@ -180,7 +257,8 @@ static func stamp(
 	to: Vector2,
 	radius: float,
 	value: int,
-	over: PackedByteArray
+	over: PackedByteArray,
+	replaced: Dictionary = {}
 ) -> Rect2i:
 	var rect := MaskBrush.capsule_rect(doc, from, to, radius)
 	var changed := Rect2i()
@@ -204,81 +282,157 @@ static func stamp(
 			var i := z * width + x
 			if mask[i] == value or not replace.has(mask[i]):
 				continue
+			replaced[mask[i]] = true
 			mask[i] = value
 			changed = MaskBrush.merge_rect(changed, Rect2i(x, z, 1, 1))
 	return changed
 
 
-## Per river of `doc` (body id -> PackedByteArray, one byte per control point), 1 for the
-## control points within `radius` of the segment `from`-`to`, merged into `hits`. Returns
-## true when any point was newly hit.
-static func hit_rivers(
-	doc: MapDocument, hits: Dictionary, from: Vector2, to: Vector2, radius: float
+## Marks in `touched` (body id -> true) every river reach of `doc` whose water the eraser
+## capsule from `from` to `to` (map XZ) of `radius` reaches (its course, river_course(), comes
+## within `radius` plus the half-width there), with the whole river it belongs to
+## (river_chain()) and the rivers ending in it (_touch_tributaries()). Returns true when a
+## reach was newly marked.
+static func touch_rivers(
+	doc: MapDocument, touched: Dictionary, from: Vector2, to: Vector2, radius: float
 ) -> bool:
 	var any := false
-	var segment := to - from
-	var length_sq := segment.length_squared()
 	for body in doc.water_bodies:
-		if not body.is_river():
+		if not body.is_river() or touched.has(body.id):
 			continue
-		var marks: PackedByteArray = hits.get(body.id, PackedByteArray())
-		if marks.size() != body.points.size():
-			marks.resize(body.points.size())
-		for i in body.points.size():
-			if marks[i] != 0:
-				continue
-			var p := body.points[i] - from
-			var t := clampf(p.dot(segment) / length_sq, 0.0, 1.0) if length_sq > 0.0 else 0.0
-			if (p - segment * t).length() < radius:
-				marks[i] = 1
+		var course := WaterGeometry.river_course(body)
+		var line: PackedVector2Array = course[0]
+		var widths: PackedFloat32Array = course[1]
+		for s in line.size() - 1:
+			var hit := segment_distance(from, to, line[s], line[s + 1])
+			if hit.x <= radius + lerpf(widths[s], widths[s + 1], hit.y):
+				for id in river_chain(doc.water_bodies, body.id):
+					touched[id] = true
 				any = true
-		hits[body.id] = marks
+				break
+	if any:
+		_touch_tributaries(doc, touched)
 	return any
 
 
-## `doc`'s bodies after an erase: rivers without the control points `hits` marks (split into
-## the remaining runs, see the header; new ids after `doc`'s), and ponds that still hold a
-## sample of `doc.pond_mask`. A new array.
-static func erased_bodies(doc: MapDocument, hits: Dictionary) -> Array[WaterBody]:
+## Adds to `touched` every river (whole, river_chain()) with an end in the water of a
+## touched one: a stream that flowed into an erased river would end spilling into its dry
+## channel.
+static func _touch_tributaries(doc: MapDocument, touched: Dictionary) -> void:
+	var grew := true
+	while grew:
+		grew = false
+		for body in doc.water_bodies:
+			if not body.is_river() or touched.has(body.id) or body.points.size() < 2:
+				continue
+			for end in [body.points[0], body.points[-1]]:
+				if _in_touched(doc, touched, end):
+					for id in river_chain(doc.water_bodies, body.id):
+						touched[id] = true
+					grew = true
+					break
+
+
+## True when map point `p` lies in the area of a river in `touched` (its half-width plus the
+## bank of its course).
+static func _in_touched(doc: MapDocument, touched: Dictionary, p: Vector2) -> bool:
+	for body in doc.water_bodies:
+		if not touched.has(body.id):
+			continue
+		var course := WaterGeometry.river_course(body)
+		var near := WaterGeometry.nearest_on_polyline(course[0], p)
+		if near.y < 0:
+			continue
+		var half := WaterGeometry.width_at(course[1], int(near.y), near.z)
+		if near.x <= half + WaterGeometry.RIVER_BANK_M:
+			return true
+	return false
+
+
+## The ids of the river `id` and every reach joined to it end to end (the reaches of one
+## stroke share their boundary points, WaterGeometry.flush_ends), upstream and downstream.
+static func river_chain(bodies: Array[WaterBody], id: int) -> PackedInt32Array:
+	var chain := PackedInt32Array([id])
+	var grew := true
+	while grew:
+		grew = false
+		for body in bodies:
+			if not body.is_river() or body.points.size() < 2 or chain.has(body.id):
+				continue
+			for other in bodies:
+				if not chain.has(other.id) or not other.is_river() or other.points.size() < 2:
+					continue
+				var joined := (
+					(
+						other.points[-1].distance_squared_to(body.points[0])
+						< WaterGeometry.JOIN_EPSILON_SQ
+					)
+					or (
+						other.points[0].distance_squared_to(body.points[-1])
+						< WaterGeometry.JOIN_EPSILON_SQ
+					)
+				)
+				if joined:
+					chain.append(body.id)
+					grew = true
+					break
+	return chain
+
+
+## The shortest distance between segments a0-a1 and b0-b1 and where it falls on b0-b1:
+## Vector2(distance, t along b 0..1).
+static func segment_distance(a0: Vector2, a1: Vector2, b0: Vector2, b1: Vector2) -> Vector2:
+	var best := Vector2(INF, 0.0)
+	# Each end against the other segment; crossing segments meet at distance 0.
+	for k in 4:
+		var p: Vector2 = [a0, a1, b0, b1][k]
+		var on_b := k < 2
+		var s0 := b0 if on_b else a0
+		var s1 := b1 if on_b else a1
+		var d := s1 - s0
+		var t := (
+			clampf((p - s0).dot(d) / d.length_squared(), 0.0, 1.0) if d != Vector2.ZERO else 0.0
+		)
+		var dist := p.distance_to(s0 + d * t)
+		if dist < best.x:
+			# On b: where a's end projects; b's own ends are at 0 and 1.
+			best = Vector2(dist, t if on_b else float(k - 2))
+	var hit: Variant = Geometry2D.segment_intersects_segment(a0, a1, b0, b1)
+	if hit is Vector2:
+		var db := b1 - b0
+		var along := clampf(((hit as Vector2) - b0).dot(db) / db.length_squared(), 0.0, 1.0)
+		best = Vector2(0.0, along if db != Vector2.ZERO else 0.0)
+	return best
+
+
+## `doc`'s bodies after an erase (see the header): without the river reaches in `touched`
+## (body id -> true), and with the ponds that still hold a sample of `doc.pond_mask`; a
+## pond in `shrunk` (id -> true: the eraser took some of its samples) settles to the level of
+## its new rim (WaterGeometry.pond_rim_level on `doc`'s heights, a copy of the body). A new
+## array.
+static func erased_bodies(
+	doc: MapDocument, touched: Dictionary, shrunk: Dictionary = {}
+) -> Array[WaterBody]:
 	var out: Array[WaterBody] = []
-	var present := {}
+	var present := PackedInt32Array()
+	present.resize(WaterBody.MAX_ID + 1)
 	for id in doc.pond_mask:
-		present[id] = true
-	var used := {}
+		present[id] += 1
 	for body in doc.water_bodies:
-		used[body.id] = true
-	var next := 1
-	for body in doc.water_bodies:
-		if not body.is_river():
-			if present.has(body.id):
+		if body.is_river():
+			if not touched.has(body.id):
 				out.append(body)
 			continue
-		var marks: PackedByteArray = hits.get(body.id, PackedByteArray())
-		if marks.count(1) == 0:
-			out.append(body)
+		if present[body.id] == 0:
 			continue
-		var first := true
-		var start := -1
-		for i in body.points.size() + 1:
-			var kept := i < body.points.size() and marks[i] == 0
-			if kept and start < 0:
-				start = i
-			if kept or start < 0:
+		if shrunk.has(body.id):
+			var level := WaterGeometry.pond_rim_level(doc, body.id)
+			if not is_nan(level):
+				var settled := body.copy()
+				settled.level_m = minf(level, body.level_m)
+				out.append(settled)
 				continue
-			if i - start >= 2:
-				var piece := body.copy()
-				piece.points = body.points.slice(start, i)
-				piece.half_widths = body.half_widths.slice(start, i)
-				if not first:
-					while used.has(next) and next <= WaterBody.MAX_ID:
-						next += 1
-					if next > WaterBody.MAX_ID or out.size() >= MapDocument.MAX_WATER_BODIES:
-						break
-					piece.id = next
-					used[next] = true
-				first = false
-				out.append(piece)
-			start = -1
+		out.append(body)
 	return out
 
 

@@ -362,9 +362,10 @@ func test_pond_stroke_carves_a_basin_and_undoes_exactly() -> void:
 	assert_false(pond.is_river())
 	assert_eq(pond.depth, WaterBody.Depth.DEEP)
 	assert_gt(_doc.pond_mask.count(pond.id), 100)
-	# A small deep pond is a bowl whose shores meet before the full depth.
+	# A small deep pond is a bowl whose shores meet before the full depth (its soft beach,
+	# P4-4, takes a little more of it; still deeper than waist-deep water).
 	var middle := _height(_doc, Vector2.ZERO)
-	assert_lt(middle, pond.level_m - 0.85 * pond.depth_m(), "a deep basin")
+	assert_lt(middle, pond.level_m - 0.7 * pond.depth_m(), "a deep basin")
 	var carved := _doc.heights.duplicate()
 	var carved_model := _model(_doc)
 	_history.undo()
@@ -385,29 +386,37 @@ func test_pond_stroke_carves_a_basin_and_undoes_exactly() -> void:
 
 func test_erase_water_leaves_the_ground_carved() -> void:
 	var editor := _editor()
+	# Ground falling along the river: several flat reaches.
+	_shape(_doc, func(p: Vector2) -> float: return -0.12 * p.x)
+	editor.terrain.queue_heights(Rect2i(0, 0, _doc.samples_x(), _doc.samples_z()))
+	editor.finish_height_work()
 	editor.water.carve_river(
-		PackedVector2Array([Vector2(-12, 0), Vector2(12, 0)]),
+		PackedVector2Array([Vector2(-11, 0), Vector2(13, 0)]),
 		PackedFloat32Array([1.5]),
 		WaterBody.Depth.ANKLE
 	)
 	_settle(editor)
+	var reaches := _doc.water_bodies.size()
+	assert_gt(reaches, 2, "a stroke over sloped ground makes several reaches")
+	# A second river, its own stroke, across the slope.
+	editor.water.carve_river(
+		PackedVector2Array([Vector2(-11, 9), Vector2(-11, 13)]),
+		PackedFloat32Array([1.0]),
+		WaterBody.Depth.ANKLE
+	)
+	_settle(editor)
+	var other: WaterBody = _doc.water_bodies[-1]
 	var carved := _doc.heights.duplicate()
 	var carved_model := _model(_doc)
-	var rivers := _doc.water_bodies.size()
+	# A small dab on one reach in the middle of the first river.
 	assert_true(editor.water.erase_water_begin())
-	editor.stroke_dab(Vector3(0, 0, -3), Vector3(0, 0, 3), 2.5, 0.1)
+	editor.stroke_dab(Vector3(-1, 0, -3), Vector3(-1, 0, 3), 0.3, 0.1)
 	assert_true(editor.end_stroke())
 	_settle(editor)
 	assert_eq(_doc.heights, carved, "the channel stays")
-	assert_eq(_doc.water_bodies.size(), rivers + 1, "the river is cut in two")
-	for body in _doc.water_bodies:
-		for p in body.points:
-			assert_gt(absf(p.x), 2.0, "no water left under the eraser")
-	# The cut ends run out down the dry channel instead of ending in the air.
-	var run_out := WaterMeshBuilder.cascades(_doc)
-	assert_false(run_out.is_empty(), "run-out sheets at the cut ends")
-	for i: int in run_out:
-		assert_gt(float(run_out[i]), _doc.heights[i], "above the channel's ground")
+	assert_eq(_doc.water_bodies.size(), 1, "the touched river goes, every reach of it")
+	assert_eq(_doc.water_bodies[0].id, other.id, "the other river stays")
+	assert_eq(_doc.water_bodies[0].points, other.points, "untouched")
 	var erased_model := _model(_doc)
 	_history.undo()
 	_settle(editor)
@@ -418,7 +427,7 @@ func test_erase_water_leaves_the_ground_carved() -> void:
 	assert_eq(_model(_doc), erased_model)
 	# Erasing everything leaves no water and no dressing.
 	assert_true(editor.water.erase_water_begin())
-	editor.stroke_dab(Vector3(-14, 0, 0), Vector3(14, 0, 0), 4.0, 0.1)
+	editor.stroke_dab(Vector3(-14, 0, 11), Vector3(-8, 0, 11), 1.0, 0.1)
 	assert_true(editor.end_stroke())
 	_settle(editor)
 	assert_true(_doc.water_bodies.is_empty())

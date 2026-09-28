@@ -255,6 +255,44 @@ static func levels(doc: MapDocument) -> PackedFloat32Array:
 	return out
 
 
+## The water level at map point `p` (the highest level among the bodies of `doc` whose area
+## holds it, as levels() decides per sample but without the flush cut at shared reach ends:
+## a river within its half-width plus RIVER_BANK_M of its course, a pond on the mask sample
+## nearest `p`), or DRY. `exclude_id` skips one body.
+## Cheap: no grid pass, so the Water tool can ask it per point of a stroke.
+static func level_at(doc: MapDocument, p: Vector2, exclude_id: int = -1) -> float:
+	var best := DRY
+	var pond := 0
+	if doc.pond_mask.size() == doc.sample_count() and doc.sample_count() > 0:
+		var s := doc.world_to_sample(p).round()
+		var x := clampi(int(s.x), 0, doc.samples_x() - 1)
+		var z := clampi(int(s.y), 0, doc.samples_z() - 1)
+		pond = doc.pond_mask[doc.sample_index(x, z)]
+	for body in doc.water_bodies:
+		if body.id == exclude_id or body.level_m <= best:
+			continue
+		if not body.is_river():
+			if pond == body.id:
+				best = body.level_m
+			continue
+		var course := river_course(body)
+		var near := nearest_on_polyline(course[0], p)
+		if near.y < 0:
+			continue
+		if near.x <= width_at(course[1], int(near.y), near.z) + RIVER_BANK_M:
+			best = body.level_m
+	return best
+
+
+## True when map point `p` is under existing water of `doc` (its ground, ground_at(), below
+## level_at()); `exclude_id` skips one body.
+static func is_wet_at(doc: MapDocument, p: Vector2, exclude_id: int = -1) -> bool:
+	if doc.heights.size() != doc.sample_count():
+		return false
+	var level := level_at(doc, p, exclude_id)
+	return level != DRY and ground_at(doc, p) < level
+
+
 ## One byte per sample: 1 where the ground is below the water level (levels()), else 0.
 ## `water_levels` defaults to levels(doc).
 static func wet_mask(

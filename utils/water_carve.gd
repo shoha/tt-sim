@@ -33,12 +33,15 @@ extends RefCounted
 ## below is the channel's bed (WaterDressing) under a thin sheet of water that follows it
 ## down to the lower reach (WaterMeshBuilder.cascades(): shallow enough that the shader
 ## draws it as white water, and in the flow bake): a small rapid, not a rock lip. A river end
-## inside the map tapers its depth from zero over a pool tail (a spring or a sink), so the
-## water does not stop in a round hole.
+## inside the map tapers its depth from zero over a pool tail (a spring or a sink) and its
+## width to a rounded head (head_width(), P4-4), so the water neither stops in a round hole
+## nor in a straight shallow line across the channel. An end that runs into existing water
+## (a confluence, WaterEdit.join_line) is left open: full depth and width into that water.
 ##
-## Ponds. A basin in the painted area (pond_goals()): the same cross-section on the signed
-## distance to the edge of the area (DistanceField), with the bed a little deeper toward the
-## middle (POND_CENTRE_EXTRA), so it reads as a bowl.
+## Ponds. A basin in the painted area (pond_goals()): the cross-section on the signed
+## distance to the edge of the area (DistanceField), with a gently shelving beach at the
+## waterline (pond_section(), P4-4) and the bed a little deeper toward the middle
+## (POND_CENTRE_EXTRA), so it reads as a bowl with a soft shore.
 
 ## One cross-section per WaterBody.Depth: shore slope under the water, bank slope above it
 ## (rise over run). Ankle water wades in over a 1:4 shore; deep water shelves at 1:1.5.
@@ -71,6 +74,17 @@ const POOL_TAIL_MIN_M := 1.5
 const POOL_TAIL_MAX_M := 5.0
 ## A river end within this of the map edge runs off the map untapered.
 const EDGE_MARGIN_M := 1.0
+## A tapered river end's rounded head is at least this many half-widths long (head_width()),
+## and holds at least this much water toward its tip (_end_depth()).
+const HEAD_PER_WIDTH := 2.2
+const HEAD_DEPTH_M := 0.14
+## A pond's beach (pond_section()): the ground's slope at the waterline, how far it runs
+## above and below it before the bank and shore slopes take over, and the rounding of the
+## underwater brink (metres of height, smooth_min()).
+const BEACH_SLOPE := 0.12
+const BEACH_UP_M := 1.0
+const BEACH_DOWN_M := 0.6
+const BEACH_BRINK_M := 0.12
 ## A pond's bed deepens by this share of its depth toward the middle, over 4 m past the
 ## shore's toe.
 const POND_CENTRE_EXTRA := 0.25
@@ -101,6 +115,42 @@ static func smooth_max(a: float, b: float, k: float) -> float:
 ## The end taper length for `depth` metres of water.
 static func pool_tail(depth: float) -> float:
 	return clampf(depth * POOL_TAIL_PER_DEPTH, POOL_TAIL_MIN_M, POOL_TAIL_MAX_M)
+
+
+## The share of its half-width `half_width` a channel keeps `s` metres from a tapered end
+## (P4-4, a rounded head): a quarter ellipse, sqrt(t (2 - t)) for t = s / length, so the
+## waterline closes round the end instead of stopping in a straight line across the channel
+## where the bed taper (pool_tail()) brings the bed up to the level. The head is as long as
+## the depth taper or HEAD_PER_WIDTH half-widths, whichever is longer; past the end (s <= 0)
+## the channel has no width left, so the water's edge there is the end point itself.
+static func head_width(s: float, half_width: float, depth: float) -> float:
+	return head_shape(s, maxf(pool_tail(depth), half_width * HEAD_PER_WIDTH))
+
+
+## The quarter ellipse sqrt(t (2 - t)), t = s / length clamped to 0..1: 0 at a river's end,
+## 1 from `length` on.
+static func head_shape(s: float, length: float) -> float:
+	var t := clampf(s / maxf(length, 1e-4), 0.0, 1.0)
+	return sqrt(t * (2.0 - t))
+
+
+## The cross-section of a pond basin at edge offset `e` (a soft beach, P4-4): like section()
+## with no narrowing, except that within BEACH_UP_M above the waterline and BEACH_DOWN_M
+## below it the ground runs at BEACH_SLOPE, so the water meets its shore over a metre or so
+## of gently shelving ground (the shader's shallows and foam draw a soft line there) instead
+## of at a crisp bank the freeboard left standing over the water. Past the underwater beach
+## the class's shore slope takes over through a rounded brink (BEACH_BRINK_M): a kink there,
+## or a steeper shore, faces away from the camera on the far side of the pond, where the
+## water shader's depth-slope foam drew it as a white line across the water.
+static func pond_section(e: float, level: float, bed: float, depth: int) -> float:
+	var line := level
+	if e >= 0.0:
+		line += BEACH_SLOPE * minf(e, BEACH_UP_M) + BANK_SLOPE[depth] * maxf(e - BEACH_UP_M, 0.0)
+	else:
+		var beach := level + BEACH_SLOPE * e
+		var shore := level - BEACH_SLOPE * BEACH_DOWN_M + SHORE_SLOPE[depth] * (e + BEACH_DOWN_M)
+		line = smooth_min(beach, shore, BEACH_BRINK_M)
+	return smooth_max(bed, line, TOE_SOFT_M)
 
 
 ## The shape of a reach step from level `upper` to `lower` at `depth` (see the header):
@@ -187,10 +237,19 @@ static func bed_line(
 		bed = maxf(bed, lerpf(step.x, level - depth, t))
 		bank = lerpf(upper, level, t)
 	if taper.x != 0:
-		bed = maxf(bed, level - depth * smoothstep(0.0, tail, s))
+		bed = maxf(bed, level - _end_depth(depth, tail, s))
 	if taper.y != 0:
-		bed = maxf(bed, level - depth * smoothstep(0.0, tail, total - s))
+		bed = maxf(bed, level - _end_depth(depth, tail, total - s))
 	return Vector2(bank, bed)
+
+
+## The depth left `s` metres from a tapered end: the depth tapered from zero over the pool
+## tail, but never shallower than a HEAD_DEPTH_M film shaped like the rounded head
+## (head_shape()), so the water reaches round the head instead of stopping where the taper
+## runs out.
+static func _end_depth(depth: float, tail: float, s: float) -> float:
+	var film := minf(HEAD_DEPTH_M, depth) * head_shape(s, tail)
+	return maxf(depth * smoothstep(0.0, tail, s), film)
 
 
 ## The joined course of one stroke's reaches `bodies` (rivers, in order, each starting where
@@ -240,7 +299,12 @@ static func river_goals(
 	var inside := func(p: Vector2) -> int:
 		var margin := half - Vector2(EDGE_MARGIN_M, EDGE_MARGIN_M)
 		return 1 if absf(p.x) < margin.x and absf(p.y) < margin.y else 0
-	var taper := Vector2i(inside.call(points[0]), inside.call(points[-1]))
+	# An end that runs into existing water (a confluence, WaterEdit.join_line) stays open.
+	var open_end := func(p: Vector2) -> int: return 0 if WaterGeometry.is_wet_at(doc, p) else 1
+	var taper := Vector2i(
+		inside.call(points[0]) * open_end.call(points[0]),
+		inside.call(points[-1]) * open_end.call(points[-1])
+	)
 	var widest := 0.0
 	for w in widths:
 		widest = maxf(widest, w)
@@ -288,6 +352,11 @@ static func river_goals(
 		for i in rect.size.x:
 			var k := j * rect.size.x + i
 			var hw := half_width[k]
+			# A tapered end narrows to a rounded head (head_width()).
+			if taper.x != 0:
+				hw *= head_width(along[k], hw, depth)
+			if taper.y != 0:
+				hw *= head_width(total - along[k], hw, depth)
 			var e := distance[k] - hw
 			if e >= BANK_REACH_M:
 				continue
@@ -366,7 +435,7 @@ static func pond_goals(doc: MapDocument, body: WaterBody, start: PackedFloat32Ar
 			var centre := smoothstep(toe, toe + POND_CENTRE_RUN_M, -e)
 			var bed := level - depth * (1.0 + POND_CENTRE_EXTRA * centre)
 			var ground := start[(rect.position.y + j) * columns + rect.position.x + i]
-			var goal := blend_with_ground(section(e, level, bed, body.depth, 0.0), ground, e)
+			var goal := blend_with_ground(pond_section(e, level, bed, body.depth), ground, e)
 			# Outside the painted area nothing sinks under the level: water there would end in
 			# the air (it is not the pond's).
 			if in_pond[k] == 0:

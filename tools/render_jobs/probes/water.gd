@@ -40,7 +40,8 @@ extends RefCounted
 ##   check                       bodies, dressing coverage, scatter rows in the water by
 ##                               asset, rock props under the water, the ground layers.
 ##   profile {every}             ground and depth along every river's course.
-##   cleanup                     deletes every user://levels/_p43_* folder (test levels only).
+##   cleanup                     deletes every user://levels/_p43_* and _p44_* folder (test
+##                               levels only).
 
 ## The `build` map: the river's control line, its reaches' half-widths, the bank width of
 ## the carve, and the two ponds.
@@ -59,6 +60,8 @@ const RIVER := [
 const HALF_WIDTHS := [1.8, 2.2, 2.8]
 const BANK_M := 1.6
 const POND := {"id": 20, "at": [13, -17], "r": 6.0, "depth": "deep"}
+## Level folders `save` may write (test levels; `cleanup` deletes the _p43_ and _p44_ ones).
+const TEST_PREFIXES: Array[String] = ["_p42_", "_p43_", "_p44_"]
 const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}
 
 ## Points `scan` found (and the reach steps `carve` made), by name.
@@ -434,6 +437,8 @@ static func _carve(base: Node, step: Dictionary) -> String:
 	var started := Time.get_ticks_usec()
 	var before := ctrl.document.water_bodies.size()
 	var id := ctrl.editor.water.carve_river(points, widths, depth, float(step.get("speed", 1.0)))
+	# The editor computes on a worker in authoring (P4-4); this probe lands it at once.
+	ctrl.editor.water.finish_work()
 	var usec := Time.get_ticks_usec() - started
 	var water := _water_node(ctrl)
 	if water != null:
@@ -455,19 +460,29 @@ static func _carve(base: Node, step: Dictionary) -> String:
 		)
 	return (
 		(
-			"carve %s -> id %d in %.0f ms (main thread) | reaches %s"
+			"carve %s -> id %d in %.0f ms (main thread) | %s | reaches %s"
 			+ " | water build %.0f ms bake %.0f ms swap %.0f ms"
 		)
 		% [
 			WaterBody.DEPTH_NAMES[depth],
 			id,
 			usec / 1000.0,
+			_parts(ctrl),
 			"; ".join(lines),
 			water.last_build_usec / 1000.0 if water else 0.0,
 			water.last_bake_usec / 1000.0 if water else 0.0,
 			water.last_swap_usec / 1000.0 if water else 0.0,
 		]
 	)
+
+
+## The last water edit's main-thread parts (WaterEditor.timings) in milliseconds.
+static func _parts(ctrl: AuthoringController) -> String:
+	var parts := PackedStringArray()
+	var timings: Dictionary = ctrl.editor.water.timings
+	for key: String in timings:
+		parts.append("%s %.1f" % [key, float(timings[key]) / 1000.0])
+	return "parts ms: " + ", ".join(parts)
 
 
 static func _water_node(ctrl: AuthoringController) -> AuthoredWater:
@@ -493,6 +508,7 @@ static func _pond(base: Node, step: Dictionary) -> String:
 		var b := points[i]
 		editor.paint_pond_dab(Vector3(a.x, 0, a.y), Vector3(b.x, 0, b.y), radius)
 	var ok := editor.paint_pond_end()
+	editor.finish_work()
 	var usec := Time.get_ticks_usec() - started
 	var water := _water_node(ctrl)
 	if water != null:
@@ -501,11 +517,12 @@ static func _pond(base: Node, step: Dictionary) -> String:
 		ctrl.document.water_bodies[-1] if not ctrl.document.water_bodies.is_empty() else null
 	)
 	return (
-		"pond %s: %s in %.0f ms | level %.2f, %d samples"
+		"pond %s: %s in %.0f ms | %s | level %.2f, %d samples"
 		% [
 			WaterBody.DEPTH_NAMES[depth],
 			str(ok),
 			usec / 1000.0,
+			_parts(ctrl),
 			last.level_m if last else NAN,
 			ctrl.document.pond_mask.count(last.id) if last else 0,
 		]
@@ -528,14 +545,16 @@ static func _erase(base: Node, step: Dictionary) -> String:
 		var b := points[i]
 		editor.erase_water_dab(Vector3(a.x, 0, a.y), Vector3(b.x, 0, b.y), radius)
 	var ok := editor.erase_water_end()
+	editor.finish_work()
 	var water := _water_node(ctrl)
 	if water != null:
 		water.finish_refresh()
 	return (
-		"erase: %s in %.0f ms, bodies %d -> %d"
+		"erase: %s in %.0f ms | %s | bodies %d -> %d"
 		% [
 			str(ok),
 			(Time.get_ticks_usec() - started) / 1000.0,
+			_parts(ctrl),
 			before,
 			ctrl.document.water_bodies.size()
 		]
@@ -665,14 +684,14 @@ static func _profile(base: Node, every: float) -> String:
 	return " || ".join(out)
 
 
-## Deletes the test levels this probe saved (user://levels/_p43_* only).
+## Deletes the test levels this probe saved (user://levels/_p43_* and _p44_* only).
 static func _cleanup() -> String:
 	var dir := DirAccess.open(LevelManager.levels_dir)
 	if dir == null:
 		return "no levels folder"
 	var removed := PackedStringArray()
 	for folder in dir.get_directories():
-		if not folder.begins_with("_p43_"):
+		if not (folder.begins_with("_p43_") or folder.begins_with("_p44_")):
 			continue
 		var path := LevelManager.folder_path(folder)
 		_remove_tree(path)
@@ -696,8 +715,11 @@ static func _remove_tree(path: String) -> void:
 
 static func _save(base: Node, folder: String) -> String:
 	var ctrl: AuthoringController = base.get("_authoring_controller")
-	if ctrl == null or not (folder.begins_with("_p42_") or folder.begins_with("_p43_")):
-		return "no authoring controller, or not a _p42_ / _p43_ folder"
+	var test_level := false
+	for prefix in TEST_PREFIXES:
+		test_level = test_level or folder.begins_with(prefix)
+	if ctrl == null or not test_level:
+		return "no authoring controller, or not a %s folder" % " / ".join(TEST_PREFIXES)
 	var existing := DirAccess.dir_exists_absolute(LevelManager.folder_path(folder))
 	if existing:
 		return "folder %s exists; not touching it" % folder

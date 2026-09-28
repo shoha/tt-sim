@@ -54,6 +54,10 @@ uniform vec4 shore_color : source_color = vec4(0.35, 0.75, 0.70, 0.6);
 // View-space depth over which the shore tint gives way to water_color, and the width
 // reference for the shoreline foam band (foam covers roughly the first fifth of it).
 uniform float shore_depth_range : hint_range(0.05, 3.0) = 0.6;
+// View-space depth over which the surface fades in from the very waterline (P4-4): where
+// water meets gently shelving ground the plane ends in a soft line instead of a crisp,
+// slightly opaque edge standing on the shore (which the vertex bob also lifts through it).
+uniform float shore_fade_depth : hint_range(0.0, 0.3) = 0.04;
 // Per-unit-depth extinction of the refracted bed color (red channel; green and blue are
 // absorbed more slowly, see ABSORB_TINT). Higher = murkier, bed disappears sooner.
 uniform float depth_absorption : hint_range(0.0, 8.0) = 1.4;
@@ -499,7 +503,8 @@ void fragment() {
 	surface = mix(surface, foam_color.rgb, foam * foam_color.a);
 
 	ALBEDO = surface;
-	ALPHA = clamp(alpha + foam * 0.3, 0.0, 1.0);
+	float shoreline = shore_fade_depth > 0.0 ? smoothstep(0.0, shore_fade_depth, bed_depth) : 1.0;
+	ALPHA = clamp(alpha + foam * 0.3, 0.0, 1.0) * shoreline;
 	SPECULAR = specular_value;
 	// Foam is matte; wave crests are slightly glossier than the troughs so the glint sits
 	// where a real surface would catch it.
