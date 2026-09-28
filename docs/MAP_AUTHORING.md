@@ -53,6 +53,8 @@ other committed home.
 | Water tool (River and Pond tiles, depth tiles, ribbon preview, Ctrl erase) | `scenes/states/authoring/water_brush.gd`, `water_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Water) and "Brushes and gestures" |
 | Crossings (plank bridges, stepping stones: model, snapping to banks, geometry, collision, grid on the deck, editor API, following later edits) | `resources/crossing.gd`, `utils/crossing_placement.gd`, `utils/crossing_geometry.gd`, `utils/map_crossing_io.gd`, `scenes/terrain/authored_crossings.gd`, `scenes/states/authoring/crossing_editor.gd` | `ARCHITECTURE.md` "Crossings", "Map document (map.ttmap)" |
 | Bridge tool (Planks and Stones tiles, live preview, refusal hint, Ctrl erase) | `scenes/states/authoring/bridge_brush.gd`, `bridge_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Bridge) and "Brushes and gestures" |
+| Submerged token marker (the ring on the water over a hidden token, drag preview) | `scenes/board_token/submerged_marker.gd`, `shaders/submerged_marker.gdshader`, `utils/water_surface.gd` | `UI_SYSTEMS.md` "Submerged Token Marker" |
+| Authored map load on workers (dressing, water geometry, rule fields, chunk and skirt arrays, crossings) | `utils/authored_load_prep.gd`, `MapSourceLoader` | `ARCHITECTURE.md` Map Loading Flow, `PERFORMANCE.md` "P4b-0: authored map load on workers" |
 | First-use pipeline warm-up | `utils/pipeline_warmer.gd` | `PERFORMANCE.md` |
 | Same-version join gate | `utils/version_gate.gd` | `NETWORKING.md` "Same-version gate" |
 | Render-job harness (1920x1080 judgment renders) | `tools/render_jobs/` | `tools/render_jobs/README.md` |
@@ -199,10 +201,12 @@ edit rebuilds every crossing at about 2.4 ms each (open work).
 
 ## Open work
 
-Phases 1-3 were merged to `main` and released as v0.1.28 (2026-09-27) so the two-account
-Steam test (above) can run on the release while phase 4 is built. That test remains open,
-and phase 4's water (a map document with `splines.json`, `ponds.png` and a baked
-`water_flow.png`) has not been sent to a peer over Steam either.
+Phases 1-3 were released as v0.1.28 (2026-09-27); phases 4 and 4b (water, crossings, the
+submerged-token ring, worker-thread loading) as v0.1.29 (2026-09-28). Releases stay patch
+bumps until the whole map maker is finished, then the minor version goes up (user,
+2026-09-27). The two-account Steam test (above) is still open and is best run on v0.1.29:
+it now also covers a document with `splines.json`, `ponds.png`, a baked `water_flow.png`
+and `crossings.json` reaching a peer, tokens on a deck, and the submerged ring on a client.
 
 Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
@@ -316,6 +320,11 @@ Follow-ups:
   crossings over a Blender map's own water are later work (Open work above).
 - **Phase 5:** more starting points. `NewMap` already gives each biome a starting cover
   (groves at the edges, an open glade for the fight).
+- **Before the minor version bump ("map maker finished"):** not yet scoped with the user.
+  Candidates already on record: the stone arch, fords and waterfalls (Open work, water and
+  crossing follow-ups), crossings over a Blender map's own water, phase 5 starting points,
+  and the Steam two-account test passing on an authored map with water and crossings.
+  Confirm the list with the user before planning it.
 
 ## Future ideas (user notes, 2026-09-27)
 
