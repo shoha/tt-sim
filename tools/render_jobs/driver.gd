@@ -128,8 +128,11 @@ func _process(delta: float) -> void:
 				if not chosen.is_empty() and not chosen.has(biome.get("id", "")):
 					continue
 				var text := JSON.stringify(step.template)
+				var paths: Array = biome.get("path_surfaces", [])
 				text = text.replace("{biome}", String(biome.get("id", "")))
 				text = text.replace("{name}", String(biome.get("name", "")))
+				# The biome's first path surface (P4b-3: a path meeting a bridge per biome).
+				text = text.replace("{path}", String(paths[0]) if not paths.is_empty() else "dirt")
 				added.append_array(JSON.parse_string(text))
 			for k in added.size():
 				steps.insert(_i + 1 + k, added[k])
