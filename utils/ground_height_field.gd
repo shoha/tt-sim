@@ -28,6 +28,16 @@ extends RefCounted
 ## (WaterSurface.WALKABLE_MASK), whose hits come with their flags. Without water the texture
 ## is the plain one-channel field as before.
 ##
+## Crossings (phase 4b). The grid runs across a bridge deck: authored terrain's field carries
+## the decks of the map's AuthoredCrossings (its deck_heights, recomposed when its version
+## changes) as a second texture (get_deck_texture), not in the height texture: the grid shader
+## puts a pixel within its tolerance of a deck on the deck, and everything else sees the ground
+## and water as before. Raising the heights to the deck instead lost the grid on the water
+## along the deck's near side, whose bed, seen through the water, lies under the deck. The
+## heights world_height_at() reports include the decks (raise_to_decks). Stepping stones stand
+## within the grid's tolerance of the water surface and need nothing. A GLB map's rays hit a
+## deck as they hit its ground (it is layer 1), so its sampled field includes it.
+##
 ## Sample spacing for GLB maps: SPACING_M, widened only when a map would need more than
 ## MAX_SAMPLES rays. Measured against the collision at 4000 random points (P3-3c, the
 ## tools/render_jobs/probes/grid_ground.gd survey): at 0.25 m the interpolated surface is
@@ -47,6 +57,9 @@ const MAX_SAMPLES := 65536
 ## about 1.2 m lower.
 const FLAT_BAND_M := 0.5
 const FLAT_SHARE := 0.8
+## The deck texture's value where there is no deck (deck_image; the grid shader tests below
+## half of it).
+const NO_DECK := -1.0e6
 
 ## Map-frame XZ of sample (0, 0) and the step between samples.
 var origin: Vector2 = Vector2.ZERO
@@ -62,16 +75,19 @@ var water_flags: PackedByteArray = PackedByteArray()
 var _frame: Node3D = null
 var _terrain: AuthoredTerrain = null
 var _texture: ImageTexture = null
-## Authored terrain with water: the map's AuthoredWater, and the composition cached for
-## (terrain height_version, water version).
+## Authored terrain with water or decks: the map's AuthoredWater and AuthoredCrossings, and the
+## composition cached for (terrain height_version, water version, crossings version).
 var _water: AuthoredWater = null
+var _crossings: AuthoredCrossings = null
 var _composed: PackedFloat32Array = PackedFloat32Array()
-var _composed_key: Vector2i = Vector2i(-1, -1)
+var _composed_key: Vector3i = Vector3i(-1, -1, -1)
 var _composed_texture: ImageTexture = null
+## The decks' walking surface per sample (deck_image), null with no deck.
+var _deck_texture: ImageTexture = null
 
 
 ## The field of authored terrain `terrain` (null for null), raised to the surface of the
-## map's AuthoredWater (the terrain's sibling), if any.
+## map's AuthoredWater and the decks of its AuthoredCrossings (the terrain's siblings), if any.
 static func from_terrain(terrain: AuthoredTerrain) -> GroundHeightField:
 	if terrain == null or terrain.document == null:
 		return null
@@ -82,6 +98,9 @@ static func from_terrain(terrain: AuthoredTerrain) -> GroundHeightField:
 	var parent := terrain.get_parent()
 	if parent != null:
 		field._water = parent.get_node_or_null(AuthoredWater.NODE_NAME) as AuthoredWater
+		field._crossings = (
+			parent.get_node_or_null(AuthoredCrossings.NODE_NAME) as AuthoredCrossings
+		)
 	field.origin = -doc.extent_m() * 0.5
 	field.step = doc.sample_step()
 	field.columns = doc.samples_x()
@@ -129,6 +148,31 @@ static func raise_to_water(ground: PackedFloat32Array, levels: PackedFloat32Arra
 	return [out, flags]
 
 
+## `heights` raised to the decks `decks` (per sample, CrossingGeometry.deck_field; -INF where
+## none): the higher of the two per sample, what world_height_at() reports. Pure.
+static func raise_to_decks(
+	heights: PackedFloat32Array, decks: PackedFloat32Array
+) -> PackedFloat32Array:
+	var out := heights.duplicate()
+	if decks.size() != heights.size():
+		return out
+	for i in out.size():
+		out[i] = maxf(out[i], decks[i])
+	return out
+
+
+## The deck texture of deck field `decks` (see the header): R32F, NO_DECK where there is none.
+## Pure.
+static func deck_image(decks: PackedFloat32Array, image_columns: int, image_rows: int) -> Image:
+	var values := decks.duplicate()
+	for i in values.size():
+		if values[i] < NO_DECK:
+			values[i] = NO_DECK
+	return Image.create_from_data(
+		image_columns, image_rows, false, Image.FORMAT_RF, values.to_byte_array()
+	)
+
+
 ## The R32F (no water) or RGF (heights, water flag) image of a field. Pure.
 static func field_image(
 	values: PackedFloat32Array, flags: PackedByteArray, image_columns: int, image_rows: int
@@ -154,17 +198,51 @@ func has_water() -> bool:
 	return water_flags.has(1)
 
 
+## True when authored terrain's field has a bridge deck (see the header). The map's
+## AuthoredCrossings is looked up again while missing (authoring adds it with the map).
+func has_decks() -> bool:
+	if _terrain == null:
+		return false
+	if not is_instance_valid(_crossings):
+		_crossings = null
+		var parent := _terrain.get_parent() if is_instance_valid(_terrain) else null
+		if parent != null:
+			_crossings = parent.get_node_or_null(AuthoredCrossings.NODE_NAME) as AuthoredCrossings
+	return _crossings != null and _crossings.has_decks()
+
+
+## True when authored terrain's field is a composition (water or decks), not its own heights.
+func _composes() -> bool:
+	return has_water() or has_decks()
+
+
 ## Brings the authored composition up to date (see the header).
 func _compose() -> void:
-	var key := Vector2i(_terrain.height_version, _water.version)
+	var water := is_instance_valid(_water)
+	var decks := has_decks()
+	var key := Vector3i(
+		_terrain.height_version,
+		_water.version if water else -1,
+		_crossings.version if decks else -1
+	)
 	if key == _composed_key and _composed_texture != null:
 		return
 	_composed_key = key
 	var raised := raise_to_water(
-		TerrainMeshBuilder.collision_heights(_terrain.document), _water.levels
+		TerrainMeshBuilder.collision_heights(_terrain.document),
+		_water.levels if water else PackedFloat32Array()
 	)
+	var image := field_image(raised[0], raised[1], columns, rows)
 	_composed = raised[0]
-	var image := field_image(_composed, raised[1], columns, rows)
+	if decks:
+		_composed = raise_to_decks(raised[0], _crossings.deck_heights)
+		var decks_image := deck_image(_crossings.deck_heights, columns, rows)
+		if _deck_texture == null or Vector2i(_deck_texture.get_size()) != decks_image.get_size():
+			_deck_texture = ImageTexture.create_from_image(decks_image)
+		else:
+			_deck_texture.update(decks_image)
+	else:
+		_deck_texture = null
 	if _composed_texture == null or Vector2i(_composed_texture.get_size()) != image.get_size():
 		_composed_texture = ImageTexture.create_from_image(image)
 	else:
@@ -258,13 +336,22 @@ func is_valid() -> bool:
 ## is built once.
 func get_texture() -> Texture2D:
 	if _terrain != null:
-		if not has_water():
+		if not _composes():
 			return _terrain.get_height_texture()
 		_compose()
 		return _composed_texture
 	if _texture == null:
 		_texture = ImageTexture.create_from_image(field_image(heights, water_flags, columns, rows))
 	return _texture
+
+
+## The decks the grid also lies on (see the header): one R32F texel per sample of the same
+## grid, NO_DECK where there is none; null when the field has no deck.
+func get_deck_texture() -> Texture2D:
+	if not has_decks():
+		return null
+	_compose()
+	return _deck_texture
 
 
 ## Map frame to world: the frame node's global transform (its local one outside the tree).
@@ -280,7 +367,7 @@ func world_height_at(world_xz: Vector2) -> float:
 	var to_world := get_transform()
 	var values := heights
 	if _terrain != null:
-		if not has_water():
+		if not _composes():
 			return TerrainMeshBuilder.world_ground_height(_terrain.document, to_world, world_xz)
 		_compose()
 		values = _composed

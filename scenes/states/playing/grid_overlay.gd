@@ -18,7 +18,8 @@ extends MeshInstance3D
 ## tier top and slope gets the grid while tokens and plants standing on it do not; the
 ## existing steep-face normal filter keeps cliff faces clean. The fade centre follows the
 ## ground too (look_center()). Where the field is a water surface (GroundHeightField, phase 4)
-## the grid lies on the water, not on the bed under it.
+## the grid lies on the water, not on the bed under it; on a bridge deck (the field's deck
+## texture, phase 4b) it lies on the planks.
 
 const FADE_DURATION := 0.2
 ## Height above or below the ground (metres, world) a pixel may be and still get the grid.
@@ -43,6 +44,8 @@ var _ground: GroundHeightField = null
 ## What was last pushed to the shader for _ground: its transform and height texture.
 var _ground_transform: Transform3D = Transform3D()
 var _ground_texture: Texture2D = null
+## The field's bridge decks last pushed (GroundHeightField.get_deck_texture), or null.
+var _deck_texture: Texture2D = null
 
 
 ## Factory — creates a GridOverlay and parents it to the given camera.
@@ -102,6 +105,7 @@ func set_floor_level(y_level: float, tolerance: float = 0.5) -> void:
 func set_ground(field: GroundHeightField) -> void:
 	_ground = field
 	_ground_texture = null
+	_deck_texture = null
 	_sync_ground()
 
 
@@ -118,15 +122,21 @@ func _sync_ground() -> void:
 	if not follows_ground():
 		_ground = null
 		_ground_texture = null
+		_deck_texture = null
 		_material.set_shader_parameter("ground_heights_enabled", false)
+		_material.set_shader_parameter("ground_decks_enabled", false)
 		return
 	var texture := _ground.get_texture()
+	var decks := _ground.get_deck_texture()
 	var xform := _ground.get_transform()
-	if texture == _ground_texture and xform == _ground_transform:
+	if texture == _ground_texture and decks == _deck_texture and xform == _ground_transform:
 		return
 	_ground_texture = texture
+	_deck_texture = decks
 	_ground_transform = xform
 	_material.set_shader_parameter("ground_heights", texture)
+	_material.set_shader_parameter("ground_decks", decks)
+	_material.set_shader_parameter("ground_decks_enabled", decks != null)
 	_material.set_shader_parameter("ground_world_to_map", xform.affine_inverse())
 	_material.set_shader_parameter("ground_map_to_world", xform)
 	_material.set_shader_parameter("ground_grid_origin", _ground.origin)

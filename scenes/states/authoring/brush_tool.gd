@@ -680,6 +680,8 @@ func _resolve_hit() -> void:
 		origin, origin + _camera.project_ray_normal(_pointer) * RAY_LENGTH
 	)
 	query.collision_mask = TERRAIN_LAYER
+	# Every brush edits the ground under a bridge or its stones, never their tops.
+	query.exclude = _crossing_bodies()
 	var result := space.intersect_ray(query)
 	if result.is_empty():
 		return
@@ -706,8 +708,17 @@ func _update_fade() -> void:
 ## so a placed prop stands on the ground rather than on whatever the camera ray met.
 func _bedded(point: Vector3) -> Vector3:
 	var space := _world_viewport.find_world_3d().direct_space_state
-	var ground := DragPlaceController.raycast_terrain_down(space, point, point.y + DOWNCAST_HEIGHT)
-	return ground if ground != Vector3.INF else point
+	var hit := WaterSurface.cast_down(
+		space, point, point.y + DOWNCAST_HEIGHT, TERRAIN_LAYER, _crossing_bodies()
+	)
+	return hit.position if not hit.is_empty() else point
+
+
+## The map's crossing bodies (AuthoredCrossings.exclude_of), which the brush rays skip.
+func _crossing_bodies() -> Array[RID]:
+	if editor == null:
+		return []
+	return AuthoredCrossings.exclude_of(editor.map_root)
 
 
 func _redraw() -> void:

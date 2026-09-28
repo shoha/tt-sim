@@ -137,6 +137,10 @@ func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
 		return null
 	add_authored_water(root, document, separate_props, _prepared_water)
 	_prepared_water = {}
+	# The authored root has its crossings already (_create_authored_root_async); a dressed
+	# GLB's root gets them here.
+	if root.get_node_or_null(NodePath(AuthoredCrossings.NODE_NAME)) == null:
+		add_authored_crossings(root, document, separate_props)
 
 	var groups: Array = [[SCATTER_NODE, cells.get(SCATTER_NODE, {})]]
 	if separate_props:
@@ -184,6 +188,21 @@ static func add_authored_water(
 	return water
 
 
+## Adds the document's crossings (AuthoredCrossings: plank bridges, stepping stones) to a map
+## root, authored or a dressed GLB's. `always` (authoring) adds the node even with no crossing
+## yet, so the grid's ground and the crossing tools have it from the start. Nothing without a
+## document. `built` is the geometry a worker built (AuthoredCrossings.create). Returns the
+## node or null.
+static func add_authored_crossings(
+	root: Node3D, doc: MapDocument, always: bool, built: Dictionary = {}
+) -> AuthoredCrossings:
+	if doc == null or (doc.crossings.is_empty() and not always):
+		return null
+	var crossings := AuthoredCrossings.create(doc, built)
+	root.add_child(crossings)
+	return crossings
+
+
 static func authored_root_shell() -> Node3D:
 	var root := Node3D.new()
 	root.name = "LevelMap"
@@ -191,9 +210,10 @@ static func authored_root_shell() -> Node3D:
 	return root
 
 
-## create_authored_root() spread over frames: the ground textures load on background
-## threads while workers compute the pure data (AuthoredLoadPrep: the wet dressing, the
-## water geometry, the rule fields, the skirt and every chunk's arrays), then the material,
+## create_authored_root() spread over frames: the ground and crossing textures load on
+## background threads while workers compute the pure data (AuthoredLoadPrep: the wet dressing,
+## the water and crossing geometry, the rule fields, the skirt and every chunk's arrays), then
+## the material,
 ## biome weights, collision and skirt are built in one frame and the chunk meshes within the
 ## per-frame budget. Returns null when superseded.
 func _create_authored_root_async(doc: MapDocument) -> Node3D:
@@ -202,8 +222,12 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	# Under the headless dummy renderer the material loads them in place instead
 	# (GlbUtils.threaded_loads_safe).
 	var threaded := GlbUtils.threaded_loads_safe()
-	for path in AuthoredTerrain.texture_paths(doc) if threaded else PackedStringArray():
-		if not ResourceLoader.has_cached(path) and ResourceLoader.load_threaded_request(path) == OK:
+	var paths := AuthoredTerrain.texture_paths(doc)
+	paths.append_array(AuthoredCrossings.texture_paths(doc))
+	for path in paths if threaded else PackedStringArray():
+		if pending.has(path) or ResourceLoader.has_cached(path):
+			continue
+		if ResourceLoader.load_threaded_request(path) == OK:
 			pending.append(path)
 	var loading := true
 	while loading:
@@ -229,7 +253,6 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	var terrain := AuthoredTerrain.create(doc, PaletteLibrary.DEFAULT_ROOT, false, prepared)
 	_prepared_water = prepared.get(AuthoredLoadPrep.WATER, {})
 	root.add_child(terrain)
-	held.clear()
 	var chunk_cells := TerrainMeshBuilder.chunk_cells(doc)
 	var next := 0
 	while next < chunk_cells.size():
@@ -243,6 +266,14 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 			batch.assign([chunk_cells[next]])
 			terrain.rebuild_chunks(batch)
 			next += 1
+	# The crossings in a frame of their own, while their textures are still held.
+	if not doc.crossings.is_empty():
+		await tree.process_frame
+		if is_superseded.call():
+			root.free()
+			return null
+		add_authored_crossings(root, doc, false, prepared.get(AuthoredLoadPrep.CROSSINGS, {}))
+	held.clear()
 	return root
 
 

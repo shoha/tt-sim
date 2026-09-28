@@ -29,6 +29,10 @@ extends RefCounted
 ## Which species are edge species is a key rule (EMERGENT_KEYS, BANK_KEYS; plan_role() puts
 ## it in the plan's ground_role as bits): the palette has no field for it yet.
 ##
+## Crossings (phase 4b): nothing grows under a bridge deck or its stones, nor on the bank
+## landings past its anchors (CrossingGeometry.clearance, rocks included), so no plant stands
+## through the planks.
+##
 ## Legibility (P3-7). Terraces under forest: trees (ROLE_TREE) keep back from tier faces and
 ## lips, and shrubs (ROLE_SHRUB) a little, so a GM sees the rock step and the edge of each
 ## top instead of an unbroken canopy (the rock rule already keeps plants off the face itself,
@@ -196,6 +200,7 @@ static func sampler(
 	var fringe := _built_fringe(doc, rect, built_surfaces) if paints else PackedFloat32Array()
 	var wet := doc.water_dressing
 	var wet_on := wet.size() == count * WaterDressing.CHANNELS
+	var crossings: Array[Crossing] = doc.crossings.duplicate()
 	return func(p: Vector2, role: int) -> Vector3:
 		var base := role & ROLE_BITS
 		var s := (p + half) / step
@@ -232,6 +237,8 @@ static func sampler(
 			open *= 1.0 - smoothstep(FRINGE_START, FRINGE_FULL, beside)
 		if water != Vector3.ZERO:
 			open *= wet_factor(role, water)
+		if not crossings.is_empty():
+			open *= CrossingGeometry.clearance(crossings, p)
 		return Vector3(maxf(open, 0.0), shares[1], shares[2])
 
 

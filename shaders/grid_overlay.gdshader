@@ -20,6 +20,8 @@
  *    the field's triangles, so every tier top and slope gets the grid. Where the field is a
  *    water surface (its second channel), a pixel seen under the surface is lifted onto it
  *    along its view ray, so the grid lies on the water (GridOverlay draws after the water).
+ *    A bridge deck (ground_decks, phase 4b) is a surface of its own: a pixel within the
+ *    tolerance of a deck's walking surface gets the grid there.
  * 4. Reconstructs the surface normal from depth-buffer neighbors (cross product
  *    of partial derivatives) and discards steep/vertical surfaces. With a ground field
  *    the slope test reads the field's smooth normal instead (ground_normal_at), and the
@@ -61,6 +63,10 @@ uniform mat4 ground_map_to_world = mat4(1.0);
 uniform vec2 ground_grid_origin = vec2(0.0);
 uniform vec2 ground_grid_step = vec2(0.25);
 uniform float ground_tolerance = 0.2;
+// Bridge decks over the ground field (GroundHeightField.get_deck_texture): the walking surface
+// per sample of the same grid, GroundHeightField.NO_DECK where there is none.
+uniform bool ground_decks_enabled = false;
+uniform sampler2D ground_decks : filter_nearest, repeat_disable;
 // With a ground field, a pixel whose depth-buffer facet is steeper than this (n.y; about 72
 // degrees) is not ground whatever the field says: a token's side, a wall or a trunk within the
 // band. Looser than normal_threshold so a tier face's facets never flicker across it.
@@ -128,6 +134,27 @@ float ground_water_at(vec2 at) {
 		texelFetch(ground_heights, i0 + ivec2(0, 1), 0).g);
 	ivec2 last = (t.x + t.y <= 1.0) ? i0 : i0 + ivec2(1, 1);
 	return max(w, texelFetch(ground_heights, last, 0).g);
+}
+
+// The bridge deck's walking surface (map frame) at continuous sample coordinates `at`, on the
+// same triangles as ground_height_at(), or below -1e5 where any corner has no deck
+// (GroundHeightField.NO_DECK).
+float deck_height_at(vec2 at) {
+	ivec2 size = textureSize(ground_decks, 0);
+	vec2 f = clamp(at, vec2(0.0), vec2(size - ivec2(1)));
+	ivec2 i0 = min(ivec2(floor(f)), max(size - ivec2(2), ivec2(0)));
+	vec2 t = f - vec2(i0);
+	float h10 = texelFetch(ground_decks, i0 + ivec2(1, 0), 0).r;
+	float h01 = texelFetch(ground_decks, i0 + ivec2(0, 1), 0).r;
+	if (t.x + t.y <= 1.0) {
+		float h00 = texelFetch(ground_decks, i0, 0).r;
+		return min(min(h00, h10), h01) < -1e5 ? -1e6 : h00 + (h10 - h00) * t.x + (h01 - h00) * t.y;
+	}
+	float h11 = texelFetch(ground_decks, i0 + ivec2(1, 1), 0).r;
+	if (min(min(h11, h10), h01) < -1e5) {
+		return -1e6;
+	}
+	return h11 + (h01 - h11) * (1.0 - t.x) + (h10 - h11) * (1.0 - t.y);
 }
 
 // The ground's shading normal (map frame) at sample `s`: central differences, one-sided at
@@ -211,18 +238,31 @@ void fragment() {
 	// otherwise the fixed band around grid_y_level.
 	vec2 ground_at = vec2(0.0);
 	bool on_water = false;
+	bool on_deck = false;
 	if (ground_heights_enabled) {
 		vec3 map_pos = (ground_world_to_map * vec4(world_pos, 1.0)).xyz;
 		ground_at = (map_pos.xz - ground_grid_origin) / ground_grid_step;
 		float h = ground_height_at(ground_at);
 		float ground_y = (ground_map_to_world * vec4(map_pos.x, h, map_pos.z, 1.0)).y;
+		// On a bridge deck (its own texture, so the water and bed around it keep their field):
+		// a pixel within the tolerance of the deck's walking surface is on the planks.
+		if (ground_decks_enabled) {
+			float deck = deck_height_at(ground_at);
+			if (deck > -1e5) {
+				float deck_y = (ground_map_to_world * vec4(map_pos.x, deck, map_pos.z, 1.0)).y;
+				if (abs(world_pos.y - deck_y) <= ground_tolerance) {
+					ground_y = deck_y;
+					on_deck = true;
+				}
+			}
+		}
 		// Seen under a water surface (the bed, or a wading token's legs, through the water):
 		// the grid lies on the surface, where this pixel's view ray crosses it, so squares stay
 		// continuous across a river. The depth buffer holds only opaque geometry, so the pixel
 		// is the bed; the ray (from the near plane, perspective or orthographic alike) is
 		// stepped onto the field under each crossing: a flat surface settles at once, a bank's
 		// slope within the few steps.
-		if (world_pos.y < ground_y && ground_water_at(ground_at) > 0.5) {
+		if (!on_deck && world_pos.y < ground_y && ground_water_at(ground_at) > 0.5) {
 			vec4 near_view = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, 1.0, 1.0);
 			vec3 near_pos = (INV_VIEW_MATRIX * vec4(near_view.xyz / near_view.w, 1.0)).xyz;
 			vec3 ray = near_pos - world_pos;
@@ -259,9 +299,11 @@ void fragment() {
 	// traced that as a fine comb. The facet normal only rejects near-vertical surfaces
 	// standing within the band (token sides, walls, trunks). On water the facet is the bed's
 	// (or a wading token's side), not the surface the grid lies on, so it is not tested.
+	// On a deck the planks' own facets are the surface (the ground field under a deck's end can
+	// be a steep bank).
 	float slope_fade = 1.0;
 	if (ground_heights_enabled) {
-		float ground_up = abs(ground_normal_at(ground_at).y);
+		float ground_up = on_deck ? facet_up : abs(ground_normal_at(ground_at).y);
 		bool facet_steep = facet_up < ground_facet_threshold && !on_water;
 		if (facet_steep || ground_up < normal_threshold - ground_slope_fade) {
 			discard;

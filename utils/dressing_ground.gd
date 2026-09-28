@@ -47,15 +47,21 @@ var _step: Vector2 = Vector2.ONE
 var _columns: int = 0
 var _rows: int = 0
 var _mask: int = WaterSurface.TERRAIN_LAYER
+var _exclude: Array[RID] = []
 
 
 ## A sampler for `doc`, whose frame is the map root's (`map_transform`, its global
 ## transform), casting in `world` from world height `top_y`, which must be above every
-## collision surface.
+## collision surface. The bodies of `exclude` are not ground (the map's crossings,
+## AuthoredCrossings.exclude_of: the document's heights are the ground under a bridge).
 static func begin(
-	doc: MapDocument, world: World3D, map_transform: Transform3D, top_y: float
+	doc: MapDocument,
+	world: World3D,
+	map_transform: Transform3D,
+	top_y: float,
+	exclude: Array[RID] = []
 ) -> DressingGround:
-	return begin_grid(
+	var sampler := begin_grid(
 		world,
 		map_transform,
 		top_y,
@@ -64,6 +70,8 @@ static func begin(
 		doc.samples_x(),
 		doc.samples_z()
 	)
+	sampler._exclude = exclude
+	return sampler
 
 
 ## A sampler for a regular grid of `columns` x `rows` samples in the frame placed by
@@ -114,7 +122,7 @@ func step(budget_usec: int) -> bool:
 				# Off the water planes' vertices, which a ray can slip through
 				# (WaterSurface.water_below()); a millimetre is far inside the field's error.
 				world += WaterSurface.VERTEX_NUDGE
-			var hit := WaterSurface.cast_down(space, world, _top, _mask)
+			var hit := WaterSurface.cast_down(space, world, _top, _mask, _exclude)
 			var index := _next + x
 			if not hit.is_empty():
 				heights[index] = clampf(
