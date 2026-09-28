@@ -769,12 +769,12 @@ emit nothing. It registers its backdrop as an overlay like `LevelPickerDialog`.
 
 `AuthoringPanel` extends `DrawerContainer` (LEFT, rail mode, 320 px). Rail items: Biome
 (`trees`), Thin / Clear (`eraser`), Place (`tree`), Sculpt (`mountain`), Paint (`brush`),
-Water (`droplet`).
+Water (`droplet`), Bridge (`building-bridge`).
 Footer items: Undo
 (`arrow-back-up`) and Redo (`arrow-forward-up`), disabled while `AuthoringHistory` has
 nothing to offer; Save (`device-floppy`, badged while there are unsaved changes); Leave
 (`door-exit`). Item ids double as node names for `game_click_control`: `biome`,
-`thin_clear`, `place`, `sculpt`, `paint`, `water`, `undo`, `redo`, `save_map`,
+`thin_clear`, `place`, `sculpt`, `paint`, `water`, `bridge`, `undo`, `redo`, `save_map`,
 `leave_authoring`. On a
 dressed Blender map Sculpt and Paint are disabled and their tooltips say why ("Sculpt: not on
 a Blender map, whose ground is the map file's"; `set_sculpt_available`,
@@ -782,7 +782,10 @@ a Blender map, whose ground is the map file's"; `set_sculpt_available`,
 the GLB's own (`AuthoringEditor.can_sculpt()` / `can_paint()`). Water there is disabled the
 same way unless the document already has water painted over the GLB, which it can still
 erase: then the rail item stays enabled with a tooltip saying so, and the River, Pond and
-depth tiles are disabled (`set_water_available(carves, has_water)`). The drawer content is a Map name `LineEdit`
+depth tiles are disabled (`set_water_available(carves, has_water)`). Bridge there is disabled
+the same way unless the document has water ("Bridge: crosses water made with the Water tool;
+a Blender map's own water is part of the map file"; `set_bridge_available`): crossings snap
+to document water, and a GLB's water plane is not in the document. The drawer content is a Map name `LineEdit`
 (`MapNameEdit`, the one text field; placeholder "Untitled map") above a `PaneStack` with one
 pane per tool. Each pane is a `MenuHeader` with a short caption, a wrapped caption line
 saying the tool's gestures (`BiomeHint`, `ThinHint`, `PlaceHint`; MenuHeader captions do not
@@ -848,6 +851,20 @@ and nothing numeric in the main flow:
   in the main flow: its `Advanced` foldout (`WaterAdvanced`) holds Width (the full channel,
   twice the brush radius, "Stream" / "River") and Flow (the river's flow speed 0 to 2,
   "Still" / "Rushing"), values hidden.
+- **Bridge** (P4b-2, `BridgeToolPane`, `bridge_tool_pane.gd`): a Crossing `TileField`
+  (`BridgeKindField`, three columns so a stone arch can join) with Planks (`bridge-plank`, "A
+  plank footbridge: arched boards on posts, bank to bank") and Stones (`stepping-stones`,
+  "Stepping stones: flat rocks one stride apart, just above the water"); ids and node names
+  `bridge_plank`, `bridge_stones`; Planks preselected. Picking a tile emits
+  `bridge_kind_selected(kind)` and activates the Bridge tool. The hint line (`BridgeHint`) says
+  the gesture, the width keys, Ctrl-click to remove, and that a crossing follows later edits
+  and goes with its water; while the map has no water a second line (`BridgeWaterHint`) says
+  to make a river or pond first. No numbers and no Advanced foldout: a crossing sizes itself
+  to the water, and its width is Shift+wheel. **Why its own rail item, not a tile in Water:**
+  a crossing is an object laid over water with its own gesture (a line placed whole on
+  release) and its own Ctrl (remove a crossing, not erase water); as a third Shape tile beside
+  River and Pond, the Depth tiles and Width row would sit over it meaning nothing, and a
+  newcomer scanning the rail for "bridge" would not find it under a droplet.
 - Biome, Thin / Clear, Sculpt and Paint end in an `Advanced` foldout with Size (1 to 12 m, "Small" /
   "Large") and Strength (0.25 to 2x, "Gentle" / "Strong") `PropertyRow`s, values hidden like
   the Visuals drawer's; all follow the gestures (`set_brush_values`).
@@ -859,20 +876,41 @@ full screen. Save keeps the drawer open and shows a success toast.
 
 ### Brushes and gestures
 
-`BrushTool` (`scenes/states/authoring/brush_tool.gd`) is the one brush, in six modes; its
+`BrushTool` (`scenes/states/authoring/brush_tool.gd`) is the one brush, in seven modes; its
 input table is the pure `BrushTool.decide()`, and the Sculpt operation of a press is the pure
-`BrushTool.sculpt_op(tile, ctrl, shift)`; the Water mode's work is `WaterBrush`'s:
+`BrushTool.sculpt_op(tile, ctrl, shift)`; the Water mode's work is `WaterBrush`'s and the
+Bridge mode's `BridgeBrush`'s:
 
-| Gesture | Biome | Thin / Clear | Place | Sculpt | Paint | Water |
-|---------|-------|--------------|-------|--------|-------|-------|
-| Left drag | paint the biome | thin; with Ctrl at the press, clear | click places a prop (random asset of the species, random yaw), drag while pressed turns it to face the pointer | the tile's operation: Raise a soft mound (Ctrl at the press: lower), Smooth toward the local mean, Flatten to the ground height under the press, Tier (below) | paint the picked surface with the soft falloff; with Ctrl at the press, erase every painted surface back to the automatic ground and the biome ground | River: draw the line from where the water comes to where it goes (a ribbon previews it; the release carves it); Pond: paint its area (a press inside a pond extends it); with Ctrl at the press, either tile: erase water (a river whole, pond area) |
-| Shift at the press | - | - | - | Smooth, whichever tile is picked | - | - |
-| Hold still while pressed | builds strength (up to 4x after 2 s) | same | - | same (Raise keeps building; Tier is already whole) | same (toward full cover) | Pond: the dab spreads (up to 1.35x) |
-| Plain wheel | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom |
-| Shift+wheel, `[` `]` | brush size, 1 to 12 m (remembered for the app session) | same | over a placed prop: its scale within the species' range (at least +-25 %) | brush size | brush size | the river's width or pond brush (never below the depth's narrowest channel: ankle 0.44, waist 1.33, deep 2.96 m half-width) |
-| Right click, Escape | cancel the stroke in progress (reverted); idle: right click puts the brush down, Escape goes to the drawer | same | over a placed prop: remove it; during a placement: cancel it | same as Biome | same as Biome | same (a river being drawn is dropped) |
-| Delete / Backspace | - | - | remove the prop under the pointer | - | - | - |
-| Ctrl+Z / Ctrl+Y | undo / redo one stroke | same | one placement (place and turn), removal, or scale gesture | one stroke | one stroke | one river, pond stroke or erase |
+| Gesture | Biome | Thin / Clear | Place | Sculpt | Paint | Water | Bridge |
+|---------|-------|--------------|-------|--------|-------|-------|--------|
+| Left drag | paint the biome | thin; with Ctrl at the press, clear | click places a prop (random asset of the species, random yaw), drag while pressed turns it to face the pointer | the tile's operation: Raise a soft mound (Ctrl at the press: lower), Smooth toward the local mean, Flatten to the ground height under the press, Tier (below) | paint the picked surface with the soft falloff; with Ctrl at the press, erase every painted surface back to the automatic ground and the biome ground | River: draw the line from where the water comes to where it goes (a ribbon previews it; the release carves it); Pond: paint its area (a press inside a pond extends it); with Ctrl at the press, either tile: erase water (a river whole, pond area) | draw a line across water: the snapped crossing previews live, the release places it; a line that makes none shows why beside the cursor, and a release there says it in a toast |
+| Ctrl | - | - | - | - | - | - | held while hovering: the crossing under the pointer is outlined red ("Remove plank bridge"); Ctrl+click removes it |
+| Shift at the press | - | - | - | Smooth, whichever tile is picked | - | - | - |
+| Hold still while pressed | builds strength (up to 4x after 2 s) | same | - | same (Raise keeps building; Tier is already whole) | same (toward full cover) | Pond: the dab spreads (up to 1.35x) | - |
+| Plain wheel | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom |
+| Shift+wheel, `[` `]` | brush size, 1 to 12 m (remembered for the app session) | same | over a placed prop: its scale within the species' range (at least +-25 %) | brush size | brush size | the river's width or pond brush (never below the depth's narrowest channel: ankle 0.44, waist 1.33, deep 2.96 m half-width) | the crossing's width (per kind: deck 0.8 to 3 m, stones 0.4 to 1.2 m; 12 % a notch) |
+| Right click, Escape | cancel the stroke in progress (reverted); idle: right click puts the brush down, Escape goes to the drawer | same | over a placed prop: remove it; during a placement: cancel it | same as Biome | same as Biome | same (a river being drawn is dropped) | same (a line being drawn is dropped) |
+| Delete / Backspace | - | - | remove the prop under the pointer | - | - | - | - |
+| Ctrl+Z / Ctrl+Y | undo / redo one stroke | same | one placement (place and turn), removal, or scale gesture | one stroke | one stroke | one river, pond stroke or erase | one placement or removal |
+
+Bridge (P4b-2). The drawn line is dashed from the press to the pointer; once it makes a
+crossing (a short line near the water already does: the snap reaches 8 m past its ends) the
+ghost shows exactly what the release places, snapped to the first dry bank each side: a plank
+deck's outline along its arch with plank ticks, or each stepping stone's outline at its top,
+and a dot on each bank anchor, in warm wood or pale stone. The readout beside the cursor says
+the kind and the span in the level's units ("Plank bridge  16 ft"), or idle its width
+("Stepping stones  4 ft wide", to the half unit). A line that makes nothing turns red and the
+readout gives the reason in plain words (`BridgeBrush.refusal_text`): "No water to cross here.
+Drag from bank to bank over a river or pond.", "No dry bank to land on at one end. Try a
+narrower spot.", "Too wide to cross (at most 79 ft). Try a narrower spot.", or, for a click,
+"Drag a line from one bank across the water to the other."; releasing there shows the same as
+a warning toast. The tool's pointer ray sees crossings (the other brushes skip them), so Ctrl
+hovering a deck or a stone picks it where it is drawn. Crossings follow later edits (Sculpt,
+Water; ARCHITECTURE.md "Crossings"): re-anchored in place, or removed with their water, with
+an info toast ("A crossing lost its water and was removed. Undo brings both back.") and one
+undo for both. The tool starts loading the crossing textures when it opens and makes their
+materials 0.4 s later, so the first placement costs about 7-9 ms of main thread (plan 2 ms,
+geometry and nodes 3 ms), not 25-30.
 
 Water (P4-4). The river flows the way it was drawn (its first point is upstream). A river
 drawn over sloped ground is split into flat reaches joined by small rapids; its ends inside

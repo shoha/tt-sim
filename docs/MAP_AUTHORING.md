@@ -51,7 +51,8 @@ other committed home.
 | Water at runtime (merged surface, zones, water as ground, float rule, grid on the water, the water shader) | `utils/water_mesh_builder.gd`, `scenes/terrain/authored_water.gd`, `utils/water_surface.gd`, `scenes/effects/water_zone.gd`, `utils/water_glb_utils.gd`, `shaders/water.gdshader` | `ARCHITECTURE.md` "Authored water at runtime" |
 | Carving and wet dressing (channel and basin profiles, reach steps and riffles, confluences, erase, bed and shore surfaces, plants, rocks, the worker) | `utils/water_carve.gd`, `utils/water_edit.gd`, `utils/water_dressing.gd`, `scenes/states/authoring/water_editor.gd` | `ARCHITECTURE.md` "Carving water" |
 | Water tool (River and Pond tiles, depth tiles, ribbon preview, Ctrl erase) | `scenes/states/authoring/water_brush.gd`, `water_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Water) and "Brushes and gestures" |
-| Crossings (plank bridges, stepping stones: model, snapping to banks, geometry, collision, grid on the deck, editor API) | `resources/crossing.gd`, `utils/crossing_placement.gd`, `utils/crossing_geometry.gd`, `utils/map_crossing_io.gd`, `scenes/terrain/authored_crossings.gd`, `scenes/states/authoring/crossing_editor.gd` | `ARCHITECTURE.md` "Crossings", "Map document (map.ttmap)" |
+| Crossings (plank bridges, stepping stones: model, snapping to banks, geometry, collision, grid on the deck, editor API, following later edits) | `resources/crossing.gd`, `utils/crossing_placement.gd`, `utils/crossing_geometry.gd`, `utils/map_crossing_io.gd`, `scenes/terrain/authored_crossings.gd`, `scenes/states/authoring/crossing_editor.gd` | `ARCHITECTURE.md` "Crossings", "Map document (map.ttmap)" |
+| Bridge tool (Planks and Stones tiles, live preview, refusal hint, Ctrl erase) | `scenes/states/authoring/bridge_brush.gd`, `bridge_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Bridge) and "Brushes and gestures" |
 | First-use pipeline warm-up | `utils/pipeline_warmer.gd` | `PERFORMANCE.md` |
 | Same-version join gate | `utils/version_gate.gd` | `NETWORKING.md` "Same-version gate" |
 | Render-job harness (1920x1080 judgment renders) | `tools/render_jobs/` | `tools/render_jobs/README.md` |
@@ -117,6 +118,24 @@ part and the editor's undo / redo. Not rendered yet: a crossing on a dressed Ble
 water plane is not a crossing target; only document water is), a long bridge with pile bents,
 and the other six biomes' styles.
 
+Bridge tool (P4b-2, 2026-09-27, render job `bridge_tool`, captures in
+`user://render_jobs/bridge_tool`): driven through real input events (mouse motion, press,
+release, Ctrl key) on a 150 ft temperate forest map with a waist-deep river: the pane; a
+plank line previewed from the bank (the ghost appears as the line nears the water) and on
+the far bank, then placed; a line on dry ground drawn red with "No water to cross here..."
+beside the cursor and the same toast on release; stepping stones previewed and placed; Ctrl
+hover outlining the bridge red ("Remove plank bridge"), Ctrl+click removing it and undo
+bringing it back; a Raise stroke on the far bank re-anchoring the bridge (same id; end 0.2 ->
+0.5 m, span 4.85 -> 4.74 m); a Tier stroke filling the river under the stones removing them
+with the toast, and one undo bringing ground, water and stones back. Unit-tested
+(`test_bridge_tool.gd`): the gesture and its refusals, BrushTool's Bridge mode, the follow
+rule (unchanged, re-anchored, removed by an erase and by a sculpt, untouched by a far edit;
+undo / redo in the causing entry), the courses cut near a walk answering the same, the
+warm-up surfaces, the moss tint. Placement cost (render job `bridge_first_use`, not pinned): a
+plan (the preview per pointer move) 9.2 -> 1.8-2.3 ms; a first placement 28 -> 6.6-9 ms
+(the first-use material and shader, 17 ms, now warmed when the tool opens); later
+placements 7-9 ms, release frames under 12 ms.
+
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
 download-signal fix (pushed to `main` as a08b639). Needs a two-account test, e.g. on the
@@ -168,15 +187,17 @@ Water follow-ups (phase 4 judgment pass, 2026-09-27):
   the boulder-line fix, P4b-0; not re-rendered in the wetland.)
 - Waterfalls between reaches (a riffle is the only step), and fords (phase 4b).
 
-Crossing follow-ups (P4b-1, 2026-09-27):
-- The Bridge tool (P4b-2) wires `AuthoringEditor.crossings` (plan / place / remove /
-  crossing_at) to a gesture, and decides how a crossing follows later sculpt and water edits
-  (`replace()` keeps its id for re-anchoring).
+Crossing follow-ups (P4b-1 and P4b-2, 2026-09-27):
 - A dressed Blender map's own water plane is not a crossing target (the snapping reads
-  document water), and its Blender scatter is not cleared under a crossing.
-- The first crossing of a style placed in a session loads its material's textures on the
-  main thread (15-20 ms of the placement); a play load requests them on background threads.
-- A stone arch (the third kind the model leaves room for).
+  document water; the Bridge tool is disabled there with a tooltip unless the document has
+  water), and its Blender scatter is not cleared under a crossing.
+- A stone arch (the third kind the model leaves room for; the Bridge pane has a free column).
+- The grid on the brown deck is low contrast (review note; left as is: it matches the ground).
+- Only temperate and cold biomes give stones moss; not judged in the cold biomes yet.
+- The re-anchor rule re-snaps from the anchors: a river widened past a bank anchor (a pond
+  extended under one end) makes the snap find the new bank, but a bank sculpted into a gentle
+  slope under the water can shift an anchor more than an author expects; watch in the P4b-3
+  judgment set.
 
 Follow-ups:
 - A quick brush pass still gives few trees in sparse biomes (temperate forest targets 0.02
@@ -253,7 +274,9 @@ Follow-ups:
   tokens stand on decks and stones, the grid runs across the deck, tokens cannot pass under
   a bridge. P4b-1 (done): the model (`crossings.json`), the snapping rule, procedural
   geometry from the palette's planks and each biome's rock, layer-1 collision, the grid on
-  the deck, scatter clearing and the editor API; P4b-2 is the Bridge tool.
+  the deck, scatter clearing and the editor API. P4b-2 (done): the Bridge tool (its own rail
+  item; drag a line, live preview, refusals in plain words, Ctrl erase, width on Shift+wheel)
+  and crossings following sculpt and water edits in the same undo entry.
 - **Phase 5:** more starting points. `NewMap` already gives each biome a starting cover
   (groves at the edges, an open glade for the fight).
 
