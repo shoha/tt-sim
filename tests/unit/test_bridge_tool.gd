@@ -1,0 +1,349 @@
+extends GutTest
+
+## The Bridge tool (P4b-2): BridgeBrush's gesture (a line planned live, placed on release,
+## refused with a reason in plain words, Ctrl erase), BrushTool's Bridge mode, and the rule
+## crossings follow when a later edit changes their banks or water (CrossingEditor.follow):
+## re-anchored keeping the id, or removed when their water is gone, inside the history entry
+## of the edit that caused it.
+
+const RIVER_LEVEL := -0.2
+const BED := -1.0
+const A := BrushTool.Action
+
+var _map: Node3D = null
+var _history: AuthoringHistory = null
+var _doc: MapDocument = null
+
+
+func before_each() -> void:
+	_map = Node3D.new()
+	_map.name = "LevelMap"
+	add_child_autofree(_map)
+	_history = AuthoringHistory.new()
+	_doc = MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
+	var heights := _doc.heights.duplicate()
+	for z in _doc.samples_z():
+		for x in _doc.samples_x():
+			var p := _doc.sample_to_world(Vector2(x, z))
+			if absf(p.x) <= 10.0 and absf(p.y) <= 1.5:
+				heights[_doc.sample_index(x, z)] = BED
+	_doc.heights = heights
+	var line := PackedVector2Array([Vector2(-10, 0), Vector2(10, 0)])
+	var widths := PackedFloat32Array([1.5, 1.5])
+	_doc.water_bodies.append(WaterBody.river(1, line, widths, WaterBody.Depth.WAIST, RIVER_LEVEL))
+
+
+func _editor() -> AuthoringEditor:
+	_map.add_child(AuthoredTerrain.create(_doc))
+	var node := AuthoredScatter.create()
+	node.name = MapSourceLoader.SCATTER_NODE
+	node.budget = 1_000_000_000
+	node.grow_seconds = 0.0
+	_map.add_child(node)
+	MapSourceLoader.add_authored_crossings(_map, _doc, true)
+	var editor := AuthoringEditor.create(_doc, _map, _history)
+	editor.scatter.attach_document(_doc)
+	return editor
+
+
+func _bridge(editor: AuthoringEditor) -> int:
+	return editor.crossings.place(Crossing.Kind.PLANK, Vector3(0, 0, -1), Vector3(0, 0, 1))
+
+
+# --- BridgeBrush, pure -----------------------------------------------------------------
+
+
+func test_every_refusal_has_plain_words() -> void:
+	for reason in [
+		CrossingPlacement.REFUSED_SHORT,
+		CrossingPlacement.REFUSED_NO_WATER,
+		CrossingPlacement.REFUSED_NO_BANK,
+		CrossingPlacement.REFUSED_LONG,
+		CrossingEditor.REFUSED_FULL,
+		CrossingEditor.REFUSED_INVALID,
+	]:
+		assert_ne(BridgeBrush.refusal_text(reason, 1.524, 5.0, "ft"), "", String(reason))
+	var long := BridgeBrush.refusal_text(CrossingPlacement.REFUSED_LONG, 1.524, 5.0, "ft")
+	assert_string_contains(long, "79 ft", "the span limit in the level's units")
+	assert_eq(BridgeBrush.refusal_text(&"", 1.524, 5.0, "ft"), "")
+
+
+func test_width_steps_within_the_kind_s_range() -> void:
+	var plank := Crossing.Kind.PLANK
+	var stones := Crossing.Kind.STONES
+	assert_gt(BridgeBrush.stepped_width(1.5, 1, plank), 1.5)
+	assert_lt(BridgeBrush.stepped_width(1.5, -1, plank), 1.5)
+	assert_eq(BridgeBrush.stepped_width(1.5, 40, plank), Crossing.MAX_WIDTH_M[plank])
+	assert_eq(BridgeBrush.stepped_width(1.0, -40, stones), Crossing.MIN_WIDTH_M[stones])
+	var brush := BridgeBrush.new()
+	brush.kind = stones
+	brush.step_width(3)
+	assert_gt(brush.width(), Crossing.DEFAULT_WIDTH_M[stones], "stones wider")
+	assert_eq(brush.widths[plank], Crossing.DEFAULT_WIDTH_M[plank], "planks untouched")
+
+
+func test_readout_names_the_kind_and_its_span_or_width() -> void:
+	assert_eq(
+		BridgeBrush.readout(Crossing.Kind.PLANK, 6.1, 1.5, 1.524, 5.0, "ft"), "Plank bridge  20 ft"
+	)
+	assert_eq(
+		BridgeBrush.readout(Crossing.Kind.STONES, 0.0, 1.524, 1.524, 5.0, "ft"),
+		"Stepping stones  5 ft wide"
+	)
+
+
+func test_bridge_mode_input() -> void:
+	var mode := BrushTool.Mode.BRIDGE
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	assert_eq(BrushTool.decide(press, mode, false, false), A.BEGIN)
+	var right := InputEventMouseButton.new()
+	right.button_index = MOUSE_BUTTON_RIGHT
+	right.pressed = true
+	assert_eq(BrushTool.decide(right, mode, true, false), A.CANCEL, "RMB drops a line")
+	assert_eq(BrushTool.decide(right, mode, false, false), A.DESELECT)
+	var wheel := InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed = true
+	wheel.shift_pressed = true
+	assert_eq(BrushTool.decide(wheel, mode, false, false), A.GROW, "Shift+wheel: width")
+	var escape := InputEventKey.new()
+	escape.keycode = KEY_ESCAPE
+	escape.pressed = true
+	assert_eq(BrushTool.decide(escape, mode, true, false), A.CANCEL)
+
+
+# --- the gesture -----------------------------------------------------------------------
+
+
+func test_a_line_across_water_previews_then_places_one_entry() -> void:
+	var editor := _editor()
+	var brush := BridgeBrush.new()
+	brush.begin(Vector3(0, 0, -6))
+	brush.track(editor, Vector3(0, 0, -5.5), false)
+	assert_null(brush.preview, "still on the bank, away from the water")
+	assert_eq(brush.refusal, CrossingPlacement.REFUSED_NO_WATER)
+	brush.track(editor, Vector3(0, 0, -2.5), false)
+	assert_not_null(brush.preview, "near the water: the crossing already shows")
+	brush.track(editor, Vector3(0, 0, 3), false)
+	assert_not_null(brush.preview, "bank to bank")
+	assert_true(_doc.crossings.is_empty(), "the preview changes nothing")
+	assert_false(_history.can_undo())
+	var id := brush.finish(editor, 1.524, 5.0, "ft")
+	assert_eq(id, 1)
+	assert_false(brush.drawing)
+	assert_eq(_doc.crossings.size(), 1)
+	assert_eq(_history.undo_count(), 1, "one history entry")
+	assert_eq(_history.undo(), "Place bridge")
+	assert_true(_doc.crossings.is_empty())
+
+
+func test_a_refused_release_says_why() -> void:
+	var editor := _editor()
+	var brush := BridgeBrush.new()
+	brush.begin(Vector3(0, 0, 5))
+	brush.track(editor, Vector3(3, 0, 6), false)
+	assert_eq(brush.finish(editor, 1.524, 5.0, "ft"), -1)
+	assert_eq(brush.message(), BridgeBrush.NO_WATER)
+	brush.begin(Vector3(0, 0, 5))
+	assert_eq(brush.finish(editor, 1.524, 5.0, "ft"), -1, "a click")
+	assert_eq(brush.message(), BridgeBrush.SHORT)
+	assert_false(_history.can_undo())
+
+
+func test_stones_take_the_picked_kind_and_width() -> void:
+	var editor := _editor()
+	var brush := BridgeBrush.new()
+	brush.kind = Crossing.Kind.STONES
+	brush.step_width(-2)
+	brush.begin(Vector3(2, 0, -3))
+	brush.track(editor, Vector3(2, 0, 3), false)
+	var id := brush.finish(editor, 1.524, 5.0, "ft")
+	var placed := _doc.crossing(id)
+	assert_eq(placed.kind, Crossing.Kind.STONES)
+	assert_almost_eq(placed.width_m, brush.width(), 1e-4)
+
+
+func test_ctrl_hover_and_erase() -> void:
+	var editor := _editor()
+	var id := _bridge(editor)
+	var brush := BridgeBrush.new()
+	brush.track(editor, Vector3(0.2, 0, 0), true)
+	assert_eq(brush.hover_id, id, "Ctrl held over the deck")
+	brush.track(editor, Vector3(0.2, 0, 0), false)
+	assert_eq(brush.hover_id, -1, "no hover without Ctrl")
+	assert_false(brush.erase_at(editor, Vector3(6, 0, 6)))
+	assert_eq(brush.message(), BridgeBrush.NOTHING)
+	assert_true(brush.erase_at(editor, Vector3(0.2, 0, 0)))
+	assert_true(_doc.crossings.is_empty())
+	assert_eq(_history.undo(), "Remove bridge")
+	assert_eq(_doc.crossings.size(), 1)
+
+
+func test_brush_tool_places_on_release_and_reports_a_refusal() -> void:
+	var editor := _editor()
+	var tool := BrushTool.new()
+	add_child_autofree(tool)
+	tool.editor = editor
+	tool.set_mode(BrushTool.Mode.BRIDGE)
+	watch_signals(tool)
+	tool.bridge.begin(Vector3(0, 0, -3))
+	tool.bridge.track(editor, Vector3(0, 0, 3), false)
+	tool.finish_gesture()
+	assert_eq(_doc.crossings.size(), 1)
+	assert_signal_not_emitted(tool, "bridge_refused")
+	tool.bridge.begin(Vector3(0, 0, 6))
+	tool.bridge.track(editor, Vector3(1, 0, 7), false)
+	tool.finish_gesture()
+	assert_signal_emitted_with_parameters(tool, "bridge_refused", [BridgeBrush.NO_WATER])
+	tool.bridge.begin(Vector3(3, 0, -3))
+	tool.bridge.track(editor, Vector3(3, 0, 3), false)
+	tool.call("_cancel_gesture")
+	assert_false(tool.bridge.drawing)
+	assert_eq(_doc.crossings.size(), 1, "a cancelled line places nothing")
+
+
+# --- following edits -------------------------------------------------------------------
+
+
+func test_follow_keeps_a_crossing_nothing_changed_under() -> void:
+	var editor := _editor()
+	_bridge(editor)
+	var before := _doc.crossings[0]
+	var result := CrossingEditor.followed_list(_doc, Rect2())
+	assert_eq([result.moved, result.removed], [0, 0])
+	assert_same(result.crossings[0], before, "the same object: no nudge")
+	assert_eq(editor.crossings.follow(Rect2()), {}, "nothing to record")
+
+
+func test_follow_re_anchors_when_a_bank_moves_keeping_the_id() -> void:
+	var editor := _editor()
+	var id := _bridge(editor)
+	var before := _doc.crossing(id).copy()
+	var heights := _doc.heights.duplicate()
+	for z in _doc.samples_z():
+		for x in _doc.samples_x():
+			var p := _doc.sample_to_world(Vector2(x, z))
+			if absf(p.x) <= 4.0 and p.y > 1.5 and p.y < 5.0:
+				heights[_doc.sample_index(x, z)] = 0.5
+	_doc.heights = heights
+	watch_signals(editor.crossings)
+	var record := editor.crossings.follow(Rect2(-3, 1, 6, 3))
+	assert_false(record.is_empty())
+	assert_signal_emitted_with_parameters(editor.crossings, "followed", [1, 0])
+	var moved := _doc.crossing(id)
+	assert_not_null(moved, "the same id")
+	assert_gt(moved.levels.z, before.levels.z + 0.3, "its end stands on the raised bank")
+	assert_almost_eq(moved.levels.x, before.levels.x, 0.02, "the other end stays")
+	editor.crossings.restore(record, false)
+	assert_true(_doc.crossing(id).same_as(before))
+	editor.crossings.restore(record, true)
+	assert_true(_doc.crossing(id).same_as(moved))
+
+
+func test_a_crossing_goes_with_its_water_in_the_erase_s_entry() -> void:
+	var editor := _editor()
+	var id := _bridge(editor)
+	var before := _doc.crossing(id).copy()
+	var entries := _history.undo_count()
+	watch_signals(editor.crossings)
+	assert_true(editor.water.erase_water_begin())
+	editor.water.erase_water_dab(Vector3(0, 0, 0), Vector3(0.5, 0, 0), 1.0)
+	assert_true(editor.water.erase_water_end())
+	editor.finish_height_work()
+	assert_true(_doc.water_bodies.is_empty())
+	assert_null(_doc.crossing(id), "no water, no crossing")
+	assert_signal_emitted_with_parameters(editor.crossings, "followed", [0, 1])
+	assert_eq(_history.undo_count(), entries + 1, "one entry: the erase")
+	assert_eq(_history.undo(), "Erase water")
+	assert_eq(_doc.water_bodies.size(), 1)
+	assert_true(_doc.crossing(id).same_as(before), "both come back")
+	_history.redo()
+	assert_null(_doc.crossing(id))
+
+
+func test_a_sculpt_that_fills_the_river_removes_the_crossing_in_its_entry() -> void:
+	var editor := _editor()
+	var id := _bridge(editor)
+	var before := _doc.crossing(id).copy()
+	var entries := _history.undo_count()
+	var tier_y := HeightBrush.tier_height(1, _doc.tier_height_m)
+	assert_true(editor.begin_height_stroke(HeightBrush.TIER, tier_y))
+	editor.stroke_dab(Vector3(-2, 0, 0), Vector3(2, 0, 0), 3.5, 1.0)
+	editor.flush()
+	assert_true(editor.end_stroke())
+	editor.finish_height_work()
+	assert_null(_doc.crossing(id), "the channel under it is filled")
+	assert_eq(_history.undo_count(), entries + 1, "one entry: the stroke")
+	_history.undo()
+	assert_true(_doc.crossing(id).same_as(before), "undo puts it back with the ground")
+	assert_not_null(
+		(_map.get_node(AuthoredCrossings.NODE_NAME) as AuthoredCrossings).get_crossing_node(id)
+	)
+
+
+func test_an_edit_away_from_a_crossing_leaves_it_alone() -> void:
+	var editor := _editor()
+	var id := _bridge(editor)
+	var before := _doc.crossing(id)
+	watch_signals(editor.crossings)
+	var tier_y := HeightBrush.tier_height(1, _doc.tier_height_m)
+	assert_true(editor.begin_height_stroke(HeightBrush.TIER, tier_y))
+	editor.stroke_dab(Vector3(7, 0, 7), Vector3(8, 0, 7), 1.0, 1.0)
+	editor.flush()
+	assert_true(editor.end_stroke())
+	editor.finish_height_work()
+	assert_same(_doc.crossing(id), before, "untouched")
+	assert_signal_not_emitted(editor.crossings, "followed")
+
+
+# --- planning cost ---------------------------------------------------------------------
+
+
+func test_courses_cut_near_a_walk_answer_the_same() -> void:
+	var line := PackedVector2Array()
+	var widths := PackedFloat32Array()
+	for k in 30:
+		line.append(Vector2(-9.0 + k * 0.6, 4.0 + sin(k * 0.5) * 2.0))
+		widths.append(1.0)
+	_doc.water_bodies.append(WaterBody.river(2, line, widths, WaterBody.Depth.ANKLE, 0.3))
+	var near := Rect2(-1.5, -6.0, 3.0, 12.0)
+	var cut := WaterGeometry.river_courses(_doc, near)
+	var whole := WaterGeometry.river_courses(_doc)
+	assert_lt((cut[2][0] as PackedVector2Array).size(), (whole[2][0] as PackedVector2Array).size())
+	var far := WaterGeometry.river_courses(_doc, Rect2(-9.0, -9.5, 1.0, 1.0))
+	assert_eq(far[1], [], "a river that never comes near is skipped")
+	for z in range(-12, 13):
+		for x in range(-3, 4):
+			var p := near.position + Vector2(x + 3, z + 12) * Vector2(0.5, 0.5)
+			assert_eq(
+				WaterGeometry.level_at(_doc, p, -1, cut), WaterGeometry.level_at(_doc, p), str(p)
+			)
+
+
+# --- warming and look -------------------------------------------------------------------
+
+
+func test_warm_surfaces_cover_planks_and_each_biome_s_rock() -> void:
+	var surfaces := AuthoredCrossings.surfaces_for_styles(
+		PackedStringArray(["rocky_badlands_summer_s1", "temperate_forest_summer_s1"])
+	)
+	assert_has(surfaces, AuthoredCrossings.WOOD_SURFACE)
+	assert_has(surfaces, AuthoredCrossings.stone_surface("rocky_badlands_summer_s1"))
+	assert_has(surfaces, AuthoredCrossings.stone_surface("temperate_forest_summer_s1"))
+	assert_has(AuthoredCrossings.surfaces_for_styles(PackedStringArray()), "cliff")
+
+
+func test_moss_greens_stone_tops_only() -> void:
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3.ZERO, Vector3(0.3, 0, 0.2)])
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.UP, Vector3.RIGHT])
+	arrays[Mesh.ARRAY_COLOR] = PackedColorArray([Color.WHITE, Color.WHITE])
+	var moss := Color(0.6, 0.8, 0.4)
+	var out := AuthoredCrossings.mossed(arrays, moss)
+	var colors: PackedColorArray = out[Mesh.ARRAY_COLOR]
+	assert_lt(colors[0].b, colors[0].g, "the top greens")
+	assert_eq(colors[1], Color.WHITE, "a side stays bare")
+	assert_eq((arrays[Mesh.ARRAY_COLOR] as PackedColorArray)[0], Color.WHITE, "input untouched")

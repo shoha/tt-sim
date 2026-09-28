@@ -44,6 +44,14 @@ extends Node
 ##                      water. The brush size is the width, never below the depth's
 ##                      narrowest channel. WaterBrush (`water`) does this mode's work; a
 ##                      refused press or release emits water_refused with the reason.
+##   Bridge: LMB drag   draw a line across water: the crossing it makes is previewed live
+##                      (snapped to the banks) and placed on release; a line that makes none
+##                      shows why beside the cursor, and a refused release emits
+##                      bridge_refused. Ctrl at the press: erase the crossing under the
+##                      pointer (Ctrl held while hovering outlines it). Shift+wheel, [ ]: the
+##                      crossing's width. BridgeBrush (`bridge`) does this mode's work; its
+##                      rays see crossings (the others skip them), so a deck or a stone is
+##                      picked where it is drawn.
 ##
 ## Sculpting moves the ground under a still pointer, so while a sculpt stroke is held and
 ## the pointer has not moved the brush keeps its ground point (only its height follows the
@@ -69,8 +77,10 @@ signal radius_changed(radius: float)
 signal paint_refused(surface: String)
 ## A Water press or release was refused; `reason` says why, for a toast.
 signal water_refused(reason: String)
+## A Bridge release or Ctrl press made nothing; `reason` says why, for a toast.
+signal bridge_refused(reason: String)
 
-enum Mode { BIOME, THIN, PLACE, SCULPT, PAINT, WATER }
+enum Mode { BIOME, THIN, PLACE, SCULPT, PAINT, WATER, BRIDGE }
 enum Action { NONE, POINTER, BEGIN, END, CANCEL, DESELECT, GROW, SHRINK, REMOVE, SWALLOW }
 
 const MIN_RADIUS := 1.0
@@ -118,6 +128,8 @@ const READOUT_GAP_PX := 14.0
 ## The fade falls off from the centre to this radius, so it has to reach past the ring for
 ## the canopy over the ring's edge to open up.
 const FADE_RADIUS_FACTOR := 1.35
+## The Bridge tool's canopy fade radius around its cursor (metres, before the factor).
+const BRIDGE_FADE_M := 2.5
 
 ## Remembered for the whole app session, like the Visuals drawer's last pane.
 static var session_radius: float = DEFAULT_RADIUS
@@ -138,6 +150,8 @@ var paint_surface: String = ""
 var paint_tint: Color = Color(0.9, 0.82, 0.66)
 ## The Water tool's half (its tile, depth and flow, the line being drawn, the previews).
 var water := WaterBrush.new()
+## The Bridge tool's half (its tile and widths, the line being drawn, the preview).
+var bridge := BridgeBrush.new()
 ## The level's units for the readout (ScaleUtils): metres per grid cell, display units per
 ## cell, and their label. AuthoringController sets them from the level.
 var unit_cell_m: float = LevelData.DEFAULT_GRID_CELL_SIZE
@@ -425,10 +439,13 @@ func finish_gesture() -> void:
 	if editor != null:
 		if water.drawing and not water.carve(editor, water_radius()):
 			water_refused.emit(water.refusal())
+		if bridge.drawing and bridge.finish(editor, unit_cell_m, unit_per_cell, unit_label) < 0:
+			bridge_refused.emit(bridge.message())
 		if _stroking:
 			editor.end_stroke()
 		editor.commit_prop_edit()
 	water.reset()
+	bridge.reset()
 	_stroking = false
 	_stroke_op = -1
 	_placing = {}
@@ -481,6 +498,9 @@ func handle_input(event: InputEvent) -> bool:
 			var steps := 1 if action == Action.GROW else -1
 			if mode == Mode.PLACE:
 				_scale_hovered(steps)
+			elif mode == Mode.BRIDGE:
+				bridge.step_width(steps)
+				_redraw()
 			elif mode == Mode.WATER and not _ctrl:
 				# From the size the ring shows, so a notch always changes it visibly.
 				set_radius(water.radius(water_radius() * pow(RADIUS_STEP, steps)))
@@ -508,6 +528,7 @@ func _cancel_gesture() -> void:
 	_press_pending = false
 	_stroking = false
 	water.reset()
+	bridge.reset()
 	_stroke_op = -1
 	_placing = {}
 	_turning = false
@@ -535,6 +556,8 @@ func _process(delta: float) -> void:
 	if _press_pending and _hit != Vector3.INF:
 		_start_gesture(0.0)
 	water.track(editor, _hit, water_radius())
+	if mode == Mode.BRIDGE:
+		bridge.track(editor, _hit, _ctrl and not _pressed)
 	if _stroking and _hit != Vector3.INF:
 		_paint(seconds)
 	elif not _placing.is_empty():
@@ -558,6 +581,12 @@ func _start_gesture(click_seconds: float) -> void:
 		_update_hover()
 		if _hover.is_empty() and not place_rule.is_empty():
 			_placing = editor.place_prop(place_rule, _bedded(_hit), _hit_normal)
+		return
+	if mode == Mode.BRIDGE:
+		if not _press_ctrl:
+			bridge.begin(_hit)
+		elif not bridge.erase_at(editor, _hit):
+			bridge_refused.emit(bridge.message())
 		return
 	if mode == Mode.SCULPT:
 		if not _begin_sculpt():
@@ -680,8 +709,10 @@ func _resolve_hit() -> void:
 		origin, origin + _camera.project_ray_normal(_pointer) * RAY_LENGTH
 	)
 	query.collision_mask = TERRAIN_LAYER
-	# Every brush edits the ground under a bridge or its stones, never their tops.
-	query.exclude = _crossing_bodies()
+	# Every brush edits the ground under a bridge or its stones, never their tops; the Bridge
+	# tool picks a crossing where it is drawn (a deck stands well above the bed under it).
+	if mode != Mode.BRIDGE:
+		query.exclude = _crossing_bodies()
 	var result := space.intersect_ray(query)
 	if result.is_empty():
 		return
@@ -698,7 +729,12 @@ func _update_fade() -> void:
 	var fades := (
 		mode == Mode.THIN or mode == Mode.SCULPT or mode == Mode.PAINT or mode == Mode.WATER
 	)
-	if _active and fades and _hit != Vector3.INF:
+	if _active and mode == Mode.BRIDGE and _hit != Vector3.INF:
+		# The line being drawn stays in view under a canopy: focus on its middle.
+		var centre := (bridge.from + _hit) * 0.5 if bridge.drawing else _hit
+		var reach := maxf(BRIDGE_FADE_M, centre.distance_to(_hit) + 1.0)
+		occlusion_fade.set_focus(centre, reach * fade_radius_factor)
+	elif _active and fades and _hit != Vector3.INF:
 		occlusion_fade.set_focus(_hit, _stroke_radius() * fade_radius_factor)
 	else:
 		occlusion_fade.clear_focus()
@@ -768,6 +804,11 @@ func _on_draw() -> void:
 		return
 	if mode == Mode.PLACE:
 		_draw_place_cursor()
+		return
+	if mode == Mode.BRIDGE:
+		if editor != null:
+			var units := [unit_cell_m, unit_per_cell, unit_label]
+			bridge.draw(_draw_control, _camera, editor, _hit, _ctrl and not _pressed, units)
 		return
 	if mode == Mode.WATER and editor != null:
 		var erasing := _water_erasing()

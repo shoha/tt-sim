@@ -30,7 +30,8 @@ const MAX_ID := 255
 ## Deck width (plank) or stone size (stones) range, metres.
 const MIN_WIDTH_M: Array[float] = [0.8, 0.4]
 const MAX_WIDTH_M: Array[float] = [3.0, 1.2]
-const DEFAULT_WIDTH_M: Array[float] = [1.5, 1.05]
+## Stones default near their largest: at 1.05 m they read small at the home zoom (P4b-2).
+const DEFAULT_WIDTH_M: Array[float] = [1.5, 1.15]
 ## Anchor to anchor, metres. Shorter is not a crossing; longer needs piers nobody drew.
 const MIN_SPAN_M := 0.5
 const MAX_SPAN_M := 24.0

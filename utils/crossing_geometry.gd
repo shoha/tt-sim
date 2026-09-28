@@ -686,8 +686,8 @@ static func stone_layout(doc: MapDocument, crossing: Crossing) -> Array[Dictiona
 			. append(
 				{
 					"at": at,
-					"radius": crossing.width_m * 0.5 * rng.randf_range(0.88, 1.08),
-					"aspect": rng.randf_range(1.0, 1.3),
+					"radius": crossing.width_m * 0.5 * rng.randf_range(0.84, 1.14),
+					"aspect": rng.randf_range(1.0, 1.35),
 					"yaw": atan2(d.y, d.x) + rng.randf_range(-0.6, 0.6),
 					"top": top,
 					"bed": bed,
