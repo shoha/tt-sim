@@ -1490,7 +1490,9 @@ built from it, walkable collision, and an editor API; P4b-2: the Bridge tool and
 following later edits. Plan: `docs/superpowers/plans/2026-09-27-phase4b-bridges.md` (local).
 Tests: `tests/unit/test_crossings.gd`, `test_crossing_editor.gd`,
 `test_map_document_crossings.gd`, `test_bridge_tool.gd`; look passes
-`tools/render_jobs/jobs/crossing_look.json` and `bridge_tool.json` (probe `probes/crossing.gd`).
+`tools/render_jobs/jobs/crossing_look.json` and `bridge_tool.json` (probe `probes/crossing.gd`);
+P4b-3's judgment set over every biome `phase4b_judgment_set.json`, performance in
+`PERFORMANCE.md` "Phase 4b (crossings): pinned performance pass".
 
 - **Model** (`Crossing`, `resources/crossing.gd`; `MapDocument.crossings`, at most 64): a
   stable `id` (1..255), a `kind` (`PLANK` or `STONES`; a stone arch can be a third kind with
@@ -1537,10 +1539,17 @@ Tests: `tests/unit/test_crossings.gd`, `test_crossing_editor.gd`,
   `CROSSING_META` = id). Materials per style: an `ORMMaterial3D` of `planks` tinted by the
   biome's climate (`WOOD_TINTS`: dry country sun-bleached, cold silvered), and of the biome's
   `cliff_surface` triplanar for stones (at 1.4x its tile, so a stone's top shows one stratum
-  rather than stripes), vertex colours shading both; in a temperate or cold biome the stones'
-  upward facets are tinted green in patches (`MOSS_TINTS`, `mossed()`), matching the palette's
-  mossy boulders. `deck_heights`, `version` and `top_y` feed
-  the grid and the drag. `MapSourceLoader.add_authored_crossings()` builds it for any
+  rather than stripes; the cold biomes' near-black `cliff_basalt` lifted to the boulders' light
+  grey by `STONE_SURFACE_TINTS`, P4b-3), vertex colours shading both. In a temperate or cold
+  biome a stone's upward facets take the palette's `moss` surface (a second surface of the
+  stone mesh, one shared triplanar material), decided per facet in patches by a fixed field
+  of the facet's position (`is_moss`, `moss_split`, `MOSS_AMOUNTS` by climate; facets steeper
+  than `MOSS_MIN_UP` never), the way treecube's rocks give each face rock or moss, so the
+  stones match the palette's mossy boulders. The stone top is a fan to an inner ring plus a
+  zigzag band (`STONE_INNER_INSET`), small enough facets for patches rather than pie slices.
+  (P4b-2 tinted the rock's vertex colours instead; 8-bit colours can only darken, so the tops
+  read dull olive beside the boulders' bright moss: P4b-3 judgment set.) `deck_heights`,
+  `version` and `top_y` feed the grid and the drag. `MapSourceLoader.add_authored_crossings()` builds it for any
   document with crossings (in a frame of its own after an authored root's chunks, from the
   worker's `AuthoredLoadPrep.CROSSINGS` part, with its textures requested on background
   threads alongside the ground's; on a dressed GLB's root in `_build_async`), always in
@@ -1548,8 +1557,12 @@ Tests: `tests/unit/test_crossings.gd`, `test_crossing_editor.gd`,
   (kind, style) cost 15-31 ms, which P4b-2 split (probe `crossing.gd first_use`): 3 ms making
   the material (texture loads) and 14-16 ms building its shader, which a BaseMaterial3D does
   when its RID is first asked for. The Bridge tool warms both as it opens
-  (`warm_materials(styles)` 0.4 s after the textures start loading on workers), so a
-  placement's swap is 0.2-0.7 ms.
+  (`warm_materials(styles)` 0.4 s after the textures start loading on workers, the moss too
+  where a style grows it), so a placement's swap is 0.2-1.9 ms. An edit rebuilds every
+  crossing's geometry on the main thread, about 2.4 ms each (P4b-3: 3 ms with one crossing,
+  13 ms with five); a per-crossing cache would need the ground under each crossing in its key.
+  In play the crossings cost nothing measurable and add about 50 ms to a load with four
+  (`PERFORMANCE.md` "Phase 4b (crossings): pinned performance pass").
 - **Walkable:** tokens land on a deck or a stone like the ground (layer-1 rays); the drag's
   ground cast starts above `AuthoredCrossings.world_top()` as well as the terrain top
   (`GameMap._resolve_drag_ground`), so a drop onto an arch lands on it; tokens cannot pass
@@ -1569,8 +1582,11 @@ Tests: `tests/unit/test_crossings.gd`, `test_crossing_editor.gd`,
   ground under a bridge.
 - **Scatter:** nothing grows under a deck or its stones nor on the bank landings 0.9 m past
   each anchor, rocks included (`ScatterGround.sampler` times `CrossingGeometry.clearance`,
-  fading back over 0.5 m; the scatter snapshots copy `crossings`). A dressed map's own
-  Blender scatter is not cleared under a crossing.
+  fading back over 0.5 m; the scatter snapshots copy `crossings`). Trees keep a further
+  1.2 m back (`CLEAR_TREE_M`) and shrubs and rocks 0.6 m (`CLEAR_SHRUB_M`), so no trunk, bush
+  or boulder stands on a landing (P4b-3; a tall canopy further in front can still cover a
+  bridge from the camera, which the occlusion fade handles only over tokens). A dressed map's
+  own Blender scatter is not cleared under a crossing.
 - **API** (`AuthoringEditor.crossings`, a `CrossingEditor`,
   `scenes/states/authoring/crossing_editor.gd`; world frame): `plan(kind, from, to, width)
   -> Crossing or null` (the live preview, changes nothing; `last_refusal` says why),

@@ -114,9 +114,9 @@ sandstone stones, the forest warm planks and grey rock. Unit-tested: the documen
 (round trip, caps, refusals, malformed input), the snapping rule and its refusals, the
 geometry (arch, stride, winding, collision, determinism), tokens landing and brush rays
 seeing the bed in physics, the grid's deck texture, the scatter clearance, the load's worker
-part and the editor's undo / redo. Not rendered yet: a crossing on a dressed Blender map (its
-water plane is not a crossing target; only document water is), a long bridge with pile bents,
-and the other six biomes' styles.
+part and the editor's undo / redo. Not rendered: a crossing on a dressed Blender map (its
+water plane is not a crossing target; only document water is). The long bridge with pile
+bents and the other six biomes' styles were rendered in P4b-3 (below).
 
 Bridge tool (P4b-2, 2026-09-27, render job `bridge_tool`, captures in
 `user://render_jobs/bridge_tool`): driven through real input events (mouse motion, press,
@@ -135,6 +135,24 @@ warm-up surfaces, the moss tint. Placement cost (render job `bridge_first_use`, 
 plan (the preview per pointer move) 9.2 -> 1.8-2.3 ms; a first placement 28 -> 6.6-9 ms
 (the first-use material and shader, 17 ms, now warmed when the tool opens); later
 placements 7-9 ms, release frames under 12 ms.
+
+Phase 4b judgment (P4b-3, 2026-09-27, render job `phase4b_judgment_set`, captures and
+`VERDICT.md` in `user://render_jobs/phase4b_judgment_set`, the run before the fixes in
+`phase4b_judgment_set_before`): in every one of the eight palette biomes a plank bridge placed
+with the real Bridge tool where a path in the biome's first path surface meets a waist-deep
+river, stepping stones downstream and a 7.2 m bridge over a deep pond (pile bents), in
+authoring and in play with tokens on both decks and on the stones, a wading token with its
+submerged ring beside the bridge, grid on. Every biome's crossings snap to both banks, carry
+tokens and the grid, and take their biome's wood tint and rock. Fixed from the verdict: the
+stones' moss is now the palette's moss surface on up-facing facets in patches (was a
+vertex-colour tint that read dull olive beside the palette's mossy boulders); the cold biomes'
+basalt stones are lifted to the boulders' light grey (they read as black holes in the water);
+trees keep 1.2 m and shrubs and rocks 0.6 m further back from a crossing, so no trunk or bush
+stands on a landing (this does not stop a tall canopy well in front of a bridge from covering
+it from the fixed camera: open work below); the Bridge tool's drawn line has a solid keyline
+and a heavier refused line. The phase 4 wetland rebuilt and re-rendered: no foam
+outlines on the reeds standing in the river (P4b-0's rock-foam change holds). Re-anchoring on a
+gentle underwater bank: render job `p4b3_reanchor` (findings in `VERDICT.md`).
 
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
@@ -172,7 +190,12 @@ worst frames of 21-29 ms, and water adds 0.23-0.26 s to a warm load and 1-15 MB 
 P4b-0 moved the load's pure data work (wet dressing, water geometry, rule fields, chunk and
 skirt arrays) onto workers: water's main-thread load work 214 -> 14 ms, its share of a warm
 load 0.21-0.24 -> 0.09-0.10 s, dry authored maps 30-50 ms faster (`PERFORMANCE.md` "P4b-0:
-authored map load on workers").
+authored map load on workers"). Phase 4b pass (`PERFORMANCE.md` "Phase 4b (crossings): pinned
+performance pass", 2026-09-27, a 150 ft forest map with four crossings against its twin
+without): crossings cost nothing measurable in play (shown against hidden in one run, -0.08 to
++0.01 ms GPU: a deck covers dearer water pixels), add 45-69 ms to a warm load, and the Bridge
+tool keeps frame medians at idle (4.2-4.8 ms) with release frames of 12.7-19 ms; a crossing
+edit rebuilds every crossing at about 2.4 ms each (open work).
 
 ## Open work
 
@@ -184,20 +207,29 @@ and phase 4's water (a map document with `splines.json`, `ponds.png` and a baked
 Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
   than water from the home view. (The foam outlines along submerged reed blades went with
-  the boulder-line fix, P4b-0; not re-rendered in the wetland.)
-- Waterfalls between reaches (a riffle is the only step), and fords (phase 4b).
+  the boulder-line fix, P4b-0; confirmed in the wetland re-render of the P4b-3 judgment set.)
+- Waterfalls between reaches (a riffle is the only step). Fords: see the crossing follow-ups.
 
-Crossing follow-ups (P4b-1 and P4b-2, 2026-09-27):
-- A dressed Blender map's own water plane is not a crossing target (the snapping reads
-  document water; the Bridge tool is disabled there with a tooltip unless the document has
-  water), and its Blender scatter is not cleared under a crossing.
+Crossing follow-ups (after P4b-3, 2026-09-27; later work, none blocking):
 - A stone arch (the third kind the model leaves room for; the Bridge pane has a free column).
+- Crossings on a dressed Blender map's own water: its water plane is not a crossing target
+  (the snapping reads document water; the Bridge tool is disabled there with a tooltip unless
+  the document has water), and its Blender scatter is not cleared under a crossing.
+- Fords (a crossing kind of its own, or a path painted through shallows, which P4b-0 already
+  lets run into the water).
+- Forest canopies in front of a crossing can hide it from the fixed camera (a 6 m canopy
+  covers ground up to about 15 m behind it at the 21.6 degree view): in play the occlusion
+  fade opens a hole over the tokens on it, not over the deck. Candidate: count a crossing's
+  deck as a fade focus in play, or let the author Thin in front of it (works today).
+- A crossing edit rebuilds every crossing on the main thread, about 2.4 ms each (P4b-3: a
+  placement's refresh 3 ms with one crossing, 13 ms with five), so a map near the 64 cap would
+  hitch about 150 ms per placement. A per-crossing cache needs the ground under a crossing in
+  its key (a sculpt can move a bridge's piles or a stone's root without changing its fields).
+- Savanna's stepping stones share badlands' sandstone and read a notch more orange than the
+  savanna's grey-brown boulders (a per-biome stone tint, like the basalt lift, would settle it).
 - The grid on the brown deck is low contrast (review note; left as is: it matches the ground).
-- Only temperate and cold biomes give stones moss; not judged in the cold biomes yet.
-- The re-anchor rule re-snaps from the anchors: a river widened past a bank anchor (a pond
-  extended under one end) makes the snap find the new bank, but a bank sculpted into a gentle
-  slope under the water can shift an anchor more than an author expects; watch in the P4b-3
-  judgment set.
+- Palette boulders can stand in the water beside a bridge deck (their centres keep 0.95 m
+  from the footprint, a large boulder's body can still touch the rail); judged acceptable.
 
 Follow-ups:
 - A quick brush pass still gives few trees in sparse biomes (temperate forest targets 0.02
@@ -265,7 +297,7 @@ Follow-ups:
   "bright blobs" on the water in earlier renders were its emissive light globe). Judgment
   set: `tools/render_jobs/jobs/phase4_judgment_set.json`; pinned pass: `PERFORMANCE.md` "In-game
   authoring phase 4 (water): pinned performance pass".
-- **Phase 4b: spanning water.** Bridges and other crossings (plank bridges, stepping
+- **Phase 4b: spanning water (done, 2026-09-27).** Bridges and other crossings (plank bridges, stepping
   stones, stone arches, fords) that snap between two banks, span the gap with walkable
   collision for tokens, and match the palette's painted style; likely generated or
   assembled from treecube-style parts so a bridge fits any width (user note, 2026-09-27).
@@ -276,7 +308,12 @@ Follow-ups:
   geometry from the palette's planks and each biome's rock, layer-1 collision, the grid on
   the deck, scatter clearing and the editor API. P4b-2 (done): the Bridge tool (its own rail
   item; drag a line, live preview, refusals in plain words, Ctrl erase, width on Shift+wheel)
-  and crossings following sculpt and water edits in the same undo entry.
+  and crossings following sculpt and water edits in the same undo entry. P4b-3 (done): the
+  judgment set in all eight biomes (the stones' moss as the palette's moss surface, basalt
+  stones lifted to the boulders' grey, trees and shrubs kept back from landings, a readable
+  drawn line), the pinned performance pass (`PERFORMANCE.md` "Phase 4b (crossings): pinned
+  performance pass") and these docs. Phase 4b is done (2026-09-27); the stone arch, fords and
+  crossings over a Blender map's own water are later work (Open work above).
 - **Phase 5:** more starting points. `NewMap` already gives each biome a starting cover
   (groves at the edges, an open glade for the fight).
 

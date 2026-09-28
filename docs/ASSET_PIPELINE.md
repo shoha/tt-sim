@@ -473,6 +473,9 @@ Field notes:
   different board layout needs those rectangles re-measured) and each biome's
   `cliff_surface` for the stones, tinted by the biome's `climate`. A palette without
   `planks` draws untextured wood; one without the biome's cliff falls back to `cliff`.
+  Since P4b-3 stepping stones in a `temperate` or `cold` climate also sample the ground
+  surface named `moss` on their upward facets (a palette without it gives bare stones).
+  Still no new field.
 - `geoscatter_pattern` holds Geoscatter's `s_pattern1_*` settings verbatim with the
   prefix stripped (texture dict, sample method, influences, revert flags), minus the
   datablock plumbing (`allow`, `texture_ptr`, `texture_is_unique`). tt-sim's
