@@ -22,9 +22,11 @@ extends RefCounted
 ##   splines.json           water bodies and flow map metadata         (MapWaterIO)
 ##   ponds.png              8-bit pond ids on the sample grid           (MapWaterIO)
 ##   water_flow.png         the baked flow map, RG8 as RGB              (MapWaterIO)
+##   crossings.json         plank bridges and stepping stones           (MapCrossingIO)
 ## Unknown entries are ignored (_known_entries and _extract_entries only look at
-## KNOWN_ENTRIES), so the surfaces and water entries needed no format bump: an older build
-## reads a painted document as if unpainted, and one with water as if it had none.
+## KNOWN_ENTRIES), so the surfaces, water and crossings entries needed no format bump: an
+## older build reads a painted document as if unpainted, one with water as if it had none,
+## and one with crossings as if it had none.
 ##
 ## Documents arrive from a host peer, so everything read is untrusted input, validated in
 ## the style of PaletteLibrary.validate_palette(): caps are checked before anything is
@@ -69,6 +71,7 @@ const KNOWN_ENTRIES: Array[String] = [
 	MapWaterIO.SPLINES_ENTRY,
 	MapWaterIO.PONDS_ENTRY,
 	MapWaterIO.FLOW_ENTRY,
+	MapCrossingIO.ENTRY,
 ]
 const TEMP_SUFFIX := ".tmp"
 
@@ -77,7 +80,8 @@ const TEMP_SUFFIX := ".tmp"
 ## bound JSON.parse, which builds its whole Variant tree before any row cap can apply, so
 ## their byte caps are the real bound on parse memory; at about 90 bytes per written row,
 ## 32 MB is ~350,000 scatter rows. splines.json at its caps (32 rivers of 512 points) is
-## about 0.8 MB of JSON; a 1024 x 1024 flow map is 3 MB even incompressible.
+## about 0.8 MB of JSON; a 1024 x 1024 flow map is 3 MB even incompressible. crossings.json at
+## its cap (64 crossings) is about 16 KB.
 const ENTRY_CAPS := {
 	MANIFEST_ENTRY: 64 * 1024,
 	HEIGHT_ENTRY: MapDocument.MAX_SAMPLES_PER_AXIS * MapDocument.MAX_SAMPLES_PER_AXIS * 4,
@@ -92,6 +96,7 @@ const ENTRY_CAPS := {
 	MapWaterIO.SPLINES_ENTRY: 2 * 1024 * 1024,
 	MapWaterIO.PONDS_ENTRY: 4 * 1024 * 1024,
 	MapWaterIO.FLOW_ENTRY: 4 * 1024 * 1024,
+	MapCrossingIO.ENTRY: 256 * 1024,
 }
 const MAX_TOTAL_BYTES := 64 * 1024 * 1024
 ## The archive file itself, checked before it is opened.
@@ -198,6 +203,7 @@ static func serialize(doc: MapDocument) -> Dictionary:
 	if not doc.surface_ids.is_empty():
 		_serialize_surfaces(doc, entries)
 	MapWaterIO.serialize(doc, entries)
+	MapCrossingIO.serialize(doc, entries)
 	var total := 0
 	for entry_name in entries:
 		var size := entries[entry_name].size()
@@ -332,6 +338,9 @@ static func _writable_problem(doc: MapDocument) -> String:
 	var water := MapWaterIO.problem(doc)
 	if water != "":
 		return water
+	var crossings := MapCrossingIO.problem(doc)
+	if crossings != "":
+		return crossings
 	var total_rows := 0
 	for rows_by_asset in [doc.props, doc.scatter]:
 		var rows_problem := _rows_problem(rows_by_asset)
@@ -497,6 +506,7 @@ static func _parse_document(entries: Dictionary, log: _WarningLog) -> MapDocumen
 	_parse_biomes(blobs, doc, log)
 	_parse_surfaces(blobs, doc, log)
 	MapWaterIO.parse(blobs, doc, log)
+	MapCrossingIO.parse(blobs, doc, log)
 	return doc
 
 

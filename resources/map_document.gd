@@ -54,6 +54,10 @@ extends RefCounted
 ## water shader has one flow sampler per level. WaterGeometry derives the wet samples and
 ## per-sample levels. Summary: docs/ARCHITECTURE.md "Water model and flow bake".
 ##
+## Crossings. crossings holds the plank bridges and stepping stones (Crossing, stable ids),
+## built from their fields alone (CrossingGeometry). Summary: docs/ARCHITECTURE.md
+## "Crossings".
+##
 ## The fields are plain vars because authoring mutates one document for a whole session;
 ## every helper here is pure except the surface_* mutators, which edit the fields.
 
@@ -88,6 +92,8 @@ const MAX_RIVERS := 32
 const MAX_RIVER_POINTS := 512
 ## Largest flow map the reader accepts, per axis (the baker writes about 4 per metre).
 const MAX_FLOW_TEXELS := 1024
+## Crossings (bridges, stepping stones) per document.
+const MAX_CROSSINGS := 64
 
 var palette_version: String = ""
 var map_seed: int = 0
@@ -129,6 +135,8 @@ var pond_mask: PackedByteArray = PackedByteArray()
 ## at v = (j + 0.5) / water_flow_size.y (WaterFlowBaker documents the frame). Empty = none.
 var water_flow: PackedByteArray = PackedByteArray()
 var water_flow_size: Vector2i = Vector2i.ZERO
+## Plank bridges and stepping stones over the water (Crossing), at most MAX_CROSSINGS.
+var crossings: Array[Crossing] = []
 ## Derived, never saved: the wet dressing field (WaterDressing.compute(), RGBA8 per sample:
 ## bed, shore, depth) of the current heights and water, kept here so scatter jobs and the
 ## ground read one copy. Empty when there is no wet sample. Whoever changes the water or the
@@ -415,6 +423,32 @@ func next_water_id() -> int:
 	if highest < WaterBody.MAX_ID:
 		return highest + 1
 	for candidate in range(1, WaterBody.MAX_ID + 1):
+		if not used.has(candidate):
+			return candidate
+	return -1
+
+
+## The crossing with id `crossing_id`, or null.
+func crossing(crossing_id: int) -> Crossing:
+	for entry in crossings:
+		if entry.id == crossing_id:
+			return entry
+	return null
+
+
+## The id a new crossing gets: one past the highest in use, else the lowest free id; -1 when
+## the document already holds MAX_CROSSINGS crossings.
+func next_crossing_id() -> int:
+	if crossings.size() >= MAX_CROSSINGS:
+		return -1
+	var used := {}
+	var highest := 0
+	for entry in crossings:
+		used[entry.id] = true
+		highest = maxi(highest, entry.id)
+	if highest < Crossing.MAX_ID:
+		return highest + 1
+	for candidate in range(1, Crossing.MAX_ID + 1):
 		if not used.has(candidate):
 			return candidate
 	return -1

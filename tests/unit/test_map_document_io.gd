@@ -99,6 +99,9 @@ func _assert_same_document(actual: MapDocument, expected: MapDocument) -> void:
 	assert_true(actual.pond_mask == expected.pond_mask, "pond mask")
 	assert_eq(actual.water_flow_size, expected.water_flow_size)
 	assert_true(actual.water_flow == expected.water_flow, "flow map")
+	assert_eq(actual.crossings.size(), expected.crossings.size(), "crossings")
+	for i in mini(actual.crossings.size(), expected.crossings.size()):
+		assert_true(actual.crossings[i].same_as(expected.crossings[i]), "crossing %d exact" % i)
 
 
 # --- round trips ------------------------------------------------------------------
