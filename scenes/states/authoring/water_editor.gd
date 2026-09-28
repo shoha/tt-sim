@@ -11,8 +11,9 @@ extends RefCounted
 ##
 ## Each operation is one history entry: the heights diff (HeightStroke.lower_to, a one-shot
 ## carve recorded like a dab), the water model before and after (WaterEdit.model_of), the wet
-## dressing before and after, the props cells it changed and the rocks it kept; undo and redo
-## put either side back exactly (_apply()).
+## dressing before and after, the props cells it changed, the rocks it kept and the crossings
+## that followed it (CrossingEditor.follow, P4b-2); undo and redo put either side back
+## exactly (_apply()).
 ##
 ## The heavy, pure half of an edit (P4-4) runs in compute() on a snapshot of the document:
 ## the carve's goal heights (WaterCarve), the wet dressing of the result (WaterDressing) and
@@ -642,6 +643,8 @@ func _finish(
 		"dressing_before": _pack(dressing_before),
 		"dressing_after": _pack(doc.water_dressing),
 		"region": region,
+		# Crossings follow their water and banks, in this edit's entry (P4b-2).
+		"crossings": e.crossings.follow(MaskBrush.sample_rect_to_world(doc, region)),
 	}
 	for cell in e._prop_start:
 		record.props_before[cell] = (e._prop_start[cell] as Dictionary).duplicate(true)
@@ -717,6 +720,7 @@ func _apply(diff: Dictionary, redo: bool, record: Dictionary) -> void:
 		e._work(true)
 		e._snap_props = true
 		e._snap_start.clear()
+	e.crossings.restore(record.get("crossings", {}), redo)
 	for cell in prop_rows:
 		e._set_prop_cell(cell, prop_rows[cell], false)
 	e.rock_keeper.swap(record.kept, redo)
