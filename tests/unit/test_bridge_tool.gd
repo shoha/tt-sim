@@ -335,15 +335,38 @@ func test_warm_surfaces_cover_planks_and_each_biome_s_rock() -> void:
 	assert_has(AuthoredCrossings.surfaces_for_styles(PackedStringArray()), "cliff")
 
 
-func test_moss_greens_stone_tops_only() -> void:
-	var arrays: Array = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3.ZERO, Vector3(0.3, 0, 0.2)])
-	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.UP, Vector3.RIGHT])
-	arrays[Mesh.ARRAY_COLOR] = PackedColorArray([Color.WHITE, Color.WHITE])
-	var moss := Color(0.6, 0.8, 0.4)
-	var out := AuthoredCrossings.mossed(arrays, moss)
-	var colors: PackedColorArray = out[Mesh.ARRAY_COLOR]
-	assert_lt(colors[0].b, colors[0].g, "the top greens")
-	assert_eq(colors[1], Color.WHITE, "a side stays bare")
-	assert_eq((arrays[Mesh.ARRAY_COLOR] as PackedColorArray)[0], Color.WHITE, "input untouched")
+func test_moss_grows_on_stone_tops_in_patches_by_climate() -> void:
+	var crossing := Crossing.make(
+		1, Crossing.Kind.STONES, Vector2(0, -3), Vector2(0, 3), Vector3(0.0, -0.1, 0.0), 1.15
+	)
+	_doc.crossings.append(crossing)
+	var arrays: Array = CrossingGeometry.build_one(_doc, crossing).stone
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var split := AuthoredCrossings.moss_split(arrays, 0.6)
+	var rock: PackedInt32Array = split[0][Mesh.ARRAY_INDEX]
+	var moss: PackedInt32Array = split[1][Mesh.ARRAY_INDEX]
+	assert_eq(rock.size() + moss.size(), indices.size(), "every facet is rock or moss")
+	var tops := 0
+	for t in range(0, indices.size(), 3):
+		if normals[indices[t]].y > 0.9:
+			tops += 1
+	var mossy_tops := moss.size() / 3
+	assert_gt(mossy_tops, tops / 4, "a good share of the tops")
+	assert_lt(mossy_tops, tops, "in patches, not every top facet")
+	for t in range(0, moss.size(), 3):
+		assert_gt(normals[moss[t]].y, 0.5, "moss only on facets facing up")
+	assert_eq(arrays[Mesh.ARRAY_INDEX] as PackedInt32Array, indices, "input untouched")
+	var none := AuthoredCrossings.moss_split(arrays, 0.0)
+	assert_eq(none[1], [], "no moss at amount 0")
+	assert_gt(AuthoredCrossings.moss_amount("temperate_forest_summer_s1"), 0.0)
+	assert_gt(AuthoredCrossings.moss_amount("alpine_meadow_summer_s1"), 0.0)
+	assert_eq(AuthoredCrossings.moss_amount("rocky_badlands_summer_s1"), 0.0, "dry: bare")
+	assert_has(
+		AuthoredCrossings.surfaces_for_styles(PackedStringArray(["temperate_forest_summer_s1"])),
+		AuthoredCrossings.MOSS_SURFACE
+	)
+	assert_does_not_have(
+		AuthoredCrossings.surfaces_for_styles(PackedStringArray(["rocky_badlands_summer_s1"])),
+		AuthoredCrossings.MOSS_SURFACE
+	)
