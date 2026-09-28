@@ -22,10 +22,10 @@ extends Node3D
 ## (WOOD_TINTS), stones the biome's cliff rock (its cliff_surface, triplanar) with the
 ## palette's moss on their upward facets in damp climates (moss_split), all shaded further by
 ## the geometry's vertex colours. One material per (kind, style) is shared by
-## every crossing that uses it. Building is cheap (well under a millisecond per crossing), so
-## an edit rebuilds on the main thread (refresh()); a load builds the arrays on a worker
-## (AuthoredLoadPrep) and create() only makes the nodes. Summary: docs/ARCHITECTURE.md
-## "Crossings".
+## every crossing that uses it. An edit rebuilds every crossing on the main thread (refresh();
+## about 2.4 ms per crossing, PERFORMANCE.md "Phase 4b (crossings)"); a load builds the arrays
+## on a worker (AuthoredLoadPrep) and create() only makes the nodes. Summary:
+## docs/ARCHITECTURE.md "Crossings".
 
 const NODE_NAME := "AuthoredCrossings"
 ## Set on every crossing's collision body: the crossing's id.

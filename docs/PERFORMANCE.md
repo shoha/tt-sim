@@ -1669,3 +1669,85 @@ that remains is in every load, dry and Blender maps included (PERFORMANCE phase 
 `river` 169-177 ms), so it is not water's; not investigated here. Numbers from one session;
 treat the wall times as indicative, the main-thread parts as solid (7-run medians, spread
 under 2 %).
+
+## Phase 4b (crossings): pinned performance pass (2026-09-27)
+
+What crossings cost in play (GPU with them shown and hidden in one run), on loading, and in
+authoring (the Bridge tool's preview per pointer move, a placement's release, a sculpt that
+makes a bridge follow).
+
+**How.** Render jobs `jobs/p4b3_perf_build.json` and `jobs/p4b3_perf_play.json`. The build job
+makes a 150 ft temperate forest map (seed 1234) with a waist river, a deep pond and a packed
+dirt path, saves it as `_p4b3_perf_water`, then places four crossings through the real Bridge
+tool (input events: a plank bridge where the path meets the river, stepping stones, a 7.2 m
+bridge over the pond with pile bents, a second plank bridge) and saves `_p4b3_perf_cross`. The
+play job ran with a temporary pinned `override.cfg` (viewport 1920x1080 in every sample,
+`aspect="keep"`, removed by the job at startup), vsync off at runtime for frame windows and on
+for loads, the user's graphics settings, a debug build. RTX 3080. `perf.gd gpu_state` logs
+`nvidia-smi` from inside the run: 15-16 % at the title with vsync on (the game's own title
+screen; no other heavy GPU load), 58-85 % once vsync was off (the game itself). The in-run A/B
+is drift-immune; absolute milliseconds from this session are indicative only. Both levels
+deleted by the job.
+
+### Play: crossings shown and hidden in one run
+
+`_p4b3_perf_cross` in play with seven tokens (on both decks, the stones, the long bridge,
+wading), every crossing's meshes hidden and shown (`crossing.gd visible`, collision kept), on /
+off / on / off, 6 s windows each. GPU median ms:
+
+| View | On #1 | Off #1 | On #2 | Off #2 | Crossings |
+| --- | --- | --- | --- | --- | --- |
+| Home (zoom 13.85, all four in view; 512 draws, 448K prims) | 4.591 | 4.666 | 4.627 | 4.679 | -0.05 to -0.08 ms |
+| Zoom 20 (whole map) | 4.937 | 4.924 | 4.917 | 4.954 | +0.01 / -0.04 ms (noise) |
+| Zoom 8 on the path bridge | 4.294 | 4.375 | 4.296 | 4.374 | -0.08 ms |
+
+CPU medians moved the same way (4.63-5.43 ms). **Verdict: crossings cost nothing measurable
+in play; showing them is slightly cheaper**, because a deck covers water, whose shader costs
+more per pixel than the planks' `ORMMaterial3D`. Four crossings add four draw calls and a few
+thousand triangles (1,320-2,160 vertices per plank bridge, 729 for three stones).
+
+The two levels played one after the other, same camera, 8 s windows, GPU median ms: home 4.692
+without crossings, 4.604 with; zoom 20 4.992 without, 4.888 with (the crossing level has 35
+fewer scatter instances, cleared at the landings; same draw count).
+
+### Load time
+
+From the title, vsync on, one process: `_p4b3_perf_cross` first (cold in the process: 1,053
+ms, worst frame 319 ms), then three interleaved warm rounds:
+
+| Level | Warm (3) | Worst frame, warm |
+| --- | --- | --- |
+| `_p4b3_perf_water` | 742 / 717 / 716 ms | 166-175 ms |
+| `_p4b3_perf_cross` | 785 / 760 / 785 ms | 173-181 ms |
+
+**Four crossings add 45-69 ms to a warm load** (mean 52 ms): their geometry is built on the
+load's worker (`AuthoredLoadPrep`), their three textures (planks, cliff rock, moss) are
+requested with the ground's, and their nodes are made in a frame of their own; the worst frame
+is the same 165-180 ms frame every authored and Blender load has (P4b-0). Memory in play with
+crossings: static 298 MB, video 1,559 MB, working set 1,214 MB, in line with the phase 4 wet
+maps.
+
+### Authoring: the Bridge tool
+
+The build job's `record` windows at zoom 10-14, vsync off, CPU frame ms median / worst (n):
+
+| Gesture | Frames |
+| --- | --- |
+| Idle | 5.0 / 6.8 (776) |
+| Drawing a plank line across the river (preview re-planned every 8 cm) | 4.8 / 8.7 (524) |
+| Its release (placed) | 4.8 / 12.7 (308) |
+| Drawing stepping stones / release | 4.7 / 6.5 (483); 4.6 / 13.8 (317) |
+| Drawing the 12 m line over the pond / release (3rd crossing) | 4.7 / 7.1 (616); 4.7 / 17.0 (311) |
+| A 4th crossing, drawn and released | 4.2 / 19.0 (896) |
+| A Raise stroke on a bridge's bank (the bridge follows) | 4.6 / 23.6 (754) |
+
+A plan (the preview per pointer move) costs 3.0-3.7 ms on this map (river, pond and path;
+`bench`: plank 3.08 median, stones 3.52 over 20 runs), so drawing a line never shows in the
+frame times. **A placement's cost grows with the crossings already on the map:** every crossing
+edit rebuilds all of them on the main thread (`AuthoredCrossings.refresh`), about 2.4 ms per
+crossing: the refresh took 3.05 ms with one crossing, 4.3 with two, 8.6 with three, 10.9 with
+four and 12.8-13.3 with five (a whole `place` 17-18 ms, its undo 11 ms). Fine at a handful;
+a map near the 64-crossing cap would hitch about 150 ms per placement. Rebuilding only the
+changed crossing needs a key that includes the ground under it (a sculpt can change a bridge's
+piles and a stone's root without changing its fields), so it is left as open work
+(MAP_AUTHORING.md).

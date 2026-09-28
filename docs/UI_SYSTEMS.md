@@ -893,13 +893,16 @@ Bridge mode's `BridgeBrush`'s:
 | Delete / Backspace | - | - | remove the prop under the pointer | - | - | - | - |
 | Ctrl+Z / Ctrl+Y | undo / redo one stroke | same | one placement (place and turn), removal, or scale gesture | one stroke | one stroke | one river, pond stroke or erase | one placement or removal |
 
-Bridge (P4b-2). The drawn line is dashed from the press to the pointer; once it makes a
+Bridge (P4b-2). The drawn line is dashed from the press to the pointer, over a solid dark
+keyline in screen pixels so it reads on dark foliage and pale sand alike (P4b-3: the first
+1.75 px dash was lost over a forest floor); once it makes a
 crossing (a short line near the water already does: the snap reaches 8 m past its ends) the
 ghost shows exactly what the release places, snapped to the first dry bank each side: a plank
 deck's outline along its arch with plank ticks, or each stepping stone's outline at its top,
 and a dot on each bank anchor, in warm wood or pale stone. The readout beside the cursor says
 the kind and the span in the level's units ("Plank bridge  16 ft"), or idle its width
-("Stepping stones  4 ft wide", to the half unit). A line that makes nothing turns red and the
+("Stepping stones  4 ft wide", to the half unit). A line that makes nothing turns red, heavier
+and with a dot at both ends, and the
 readout gives the reason in plain words (`BridgeBrush.refusal_text`): "No water to cross here.
 Drag from bank to bank over a river or pond.", "No dry bank to land on at one end. Try a
 narrower spot.", "Too wide to cross (at most 79 ft). Try a narrower spot.", or, for a click,
