@@ -58,6 +58,13 @@ uniform float shore_depth_range : hint_range(0.05, 3.0) = 0.6;
 // water meets gently shelving ground the plane ends in a soft line instead of a crisp,
 // slightly opaque edge standing on the shore (which the vertex bob also lifts through it).
 uniform float shore_fade_depth : hint_range(0.0, 0.3) = 0.04;
+// The shoreline cues (shore foam, the waterline fade) are for ground meeting the water: a
+// surface under the water whose normal (from the depth buffer) is within about 50-70
+// degrees of up (P4-5). Reed blades and other near-vertical geometry standing in the water
+// also bring the bed depth to zero where they pass under the surface, and drew pale foam and
+// see-through shards around every reed. The rock wrap is the depth-slope foam, not these.
+// 0 turns the gate off.
+uniform float shore_ground_gate : hint_range(0.0, 1.0) = 1.0;
 // Per-unit-depth extinction of the refracted bed color (red channel; green and blue are
 // absorbed more slowly, see ABSORB_TINT). Higher = murkier, bed disappears sooner.
 uniform float depth_absorption : hint_range(0.0, 8.0) = 1.4;
@@ -270,11 +277,17 @@ float water_caustic(vec2 p, float t) {
 
 // View-space linear depth of the opaque scene at a screen UV -- the standard Godot
 // screen-space depth reconstruction (see Godot's official water-shader demos).
-float water_scene_depth(vec2 uv, mat4 inv_projection) {
+// View-space position of the opaque scene behind the water at screen `uv`.
+vec3 water_scene_view(vec2 uv, mat4 inv_projection) {
 	float depth_raw = texture(depth_tex, uv).r;
 	vec3 ndc = vec3(uv * 2.0 - 1.0, depth_raw);
 	vec4 view = inv_projection * vec4(ndc, 1.0);
-	return -view.z / view.w;
+	return view.xyz / view.w;
+}
+
+
+float water_scene_depth(vec2 uv, mat4 inv_projection) {
+	return -water_scene_view(uv, inv_projection).z;
 }
 
 
@@ -430,7 +443,17 @@ void fragment() {
 
 	// ---- Depth of the bed below this fragment ---------------------------------------
 	float water_surface_depth = -VERTEX.z;
-	float bed_depth = max(water_scene_depth(SCREEN_UV, INV_PROJECTION_MATRIX) - water_surface_depth, 0.0);
+	vec3 scene_view = water_scene_view(SCREEN_UV, INV_PROJECTION_MATRIX);
+	float bed_depth = max(-scene_view.z - water_surface_depth, 0.0);
+	// How much the surface under the water is ground (see shore_ground_gate): its normal from
+	// the depth buffer's screen derivatives against world up.
+	float ground_like = 1.0;
+	if (shore_ground_gate > 0.0) {
+		vec3 scene_normal = cross(dFdx(scene_view), dFdy(scene_view));
+		vec3 up_view = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+		float upness = abs(dot(normalize(scene_normal + vec3(1e-6)), up_view));
+		ground_like = mix(1.0, smoothstep(0.35, 0.65, upness), shore_ground_gate);
+	}
 	// 0 right at the shoreline, saturating toward 1 over shore_depth_range.
 	float depth01 = 1.0 - exp(-bed_depth / shore_depth_range);
 	vec3 tint = mix(shore_color.rgb, water_color.rgb, depth01);
@@ -483,7 +506,7 @@ void fragment() {
 	// channel), pulsing slowly so it reads as lapping rather than a static stripe. The
 	// pulse spans under one cycle across the band so it never forms iso-depth stripes.
 	float foam_band_width = shore_depth_range * 0.2;
-	float shore_foam = 1.0 - smoothstep(0.0, foam_band_width, bed_depth);
+	float shore_foam = (1.0 - smoothstep(0.0, foam_band_width, bed_depth)) * ground_like;
 	float lap = 0.75 + 0.25 * sin(bed_depth * (4.0 / foam_band_width) - t * 2.0);
 	shore_foam *= lap;
 	// Depth-slope detector for rocks and near-vertical banks breaking the surface,
@@ -510,6 +533,7 @@ void fragment() {
 
 	ALBEDO = surface;
 	float shoreline = shore_fade_depth > 0.0 ? smoothstep(0.0, shore_fade_depth, bed_depth) : 1.0;
+	shoreline = mix(1.0, shoreline, ground_like);
 	ALPHA = clamp(alpha + foam * 0.3, 0.0, 1.0) * shoreline;
 	SPECULAR = specular_value;
 	// Foam is matte; wave crests are slightly glossier than the troughs so the glint sits
