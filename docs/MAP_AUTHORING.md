@@ -92,7 +92,13 @@ within a few centimetres of the surface, `EDGE_FOAM_REACH`); a painted path now 
 shallows and fades under the water (`PAINT_FORD_*`) instead of yielding a few centimetres
 above the waterline, which on the badlands gravel bank read as a gap. The near bank of a
 crossing still ends at the bank's lip on screen: the camera cannot see that bank's
-underwater slope, so the Paint brush (and the author) cannot paint it either.
+underwater slope, so the Paint brush (and the author) cannot paint it either. Small tokens
+the water hides (standing on the bed, less than 10 cm or a fifth of their height out) now show
+a ring on the surface above them (`SubmergedMarker`, UI_SYSTEMS.md "Submerged Token Marker"):
+render job `p4b_cue` (captures in `user://render_jobs/p4b_cue`) shows it on wading tokens at
+home, zoom 10 and max play zoom, none on floating or ankle-deep tokens, following a held drag
+to its landing, gone when the token is carried onto the bank, and on the Blender `river` level;
+the rule and the marker are unit-tested (`test_submerged_cue.gd`).
 
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
@@ -136,10 +142,6 @@ and phase 4's water (a map document with `splines.json`, `ponds.png` and a baked
 `water_flow.png`) has not been sent to a peer over Steam either.
 
 Water follow-ups (phase 4 judgment pass, 2026-09-27):
-- Small tokens vanish in waist-deep water: they stand on the bed as decided, and a
-  0.9 m column hides anything shorter (the test token, a small creature, disappears except
-  for its wake). A token-height rule (float when the water is deeper than, say, 70 % of the
-  token) or a visible marker is the candidate; it changes a user decision, so it waits.
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
   than water from the home view. (The foam outlines along submerged reed blades went with
   the boulder-line fix, P4b-0; not re-rendered in the wetland.)

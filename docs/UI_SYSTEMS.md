@@ -19,6 +19,7 @@ This guide documents the UI infrastructure and reusable components available in 
 - [Overlay & Modal System](#overlay--modal-system)
 - [LevelEditPanel (In-Game Edit Mode)](#leveleditpanel-in-game-edit-mode)
 - [Measure Tool](#measure-tool)
+- [Submerged Token Marker](#submerged-token-marker)
 - [Token Context Menu](#token-context-menu)
 - [Asset Browser](#asset-browser)
 
@@ -1212,6 +1213,47 @@ Uses `MapOverlayUtils` for overlay and label creation. Renders on `Constants.LAY
 - Created by `GameMap.setup_drag_ruler()` during level setup.
 - Connects to `DragAndDrop3D` signals: `dragging_started`, `dragging_stopped`, `dragging_cancelled`.
 - Deactivated automatically on level clear via `GameMap.reset_grid_state()`.
+
+---
+
+## Submerged Token Marker
+
+A token the water hides gets a cue on the water surface above it (P4b-0, user ask
+2026-09-27: small tokens wading waist-deep water disappeared except for their wake). Code:
+`SubmergedMarker` (`scenes/board_token/submerged_marker.gd`), `shaders/submerged_marker.gdshader`,
+`WaterSurface.is_submerged` / `submerged_surface`, `DraggableToken._update_submerged_cue`.
+
+### When it shows
+
+- The token's base is under a water surface and less than 10 cm of it, or a fifth of its
+  height if more, stands above (`WaterSurface.SUBMERGED_FREEBOARD_M`, `SUBMERGED_SHARE`): a
+  0.71 m creature wading 0.9 m of water, or with only its crest out. Tokens floating in deep
+  water ride at the surface and show none; nor do tokens in ankle water or on a bank.
+- Authored and Blender water alike: the surface is found with a ray on the water surfaces'
+  own layer (`WaterSurface.LAYER`), the bodies both kinds of map carry.
+- Checked when a landing, a synced move or a transform settles, when the token enters or
+  leaves a water zone, and when its size or shape changes. While a token is dragged (or a
+  peer's move is interpolating) it is checked at the predicted landing each time the token
+  has moved 3 cm, so the cue follows a token carried along a river and shows before the drop
+  that it will go under. Nothing runs per frame for a token at rest.
+
+### Visuals
+
+A flat quad on the water, 3 cm above the surface: a soft dark disc (something is down
+there), a bright pale-aqua ring at the token's footprint (1.15 x half its widest collision
+extent, 0.3-1.4 m) with a thin dark keyline so it reads on pale shallows and dark depths, and
+a slow ripple spreading from the ring every 2.6 s. Line widths have a floor in screen pixels,
+so the ring stays crisp at max play zoom. Unshaded, alpha-blended, no depth write, drawn after
+the water (`render_priority` 2). Fades in and out over 0.18 s.
+
+### Structure
+
+The marker is a child of the token's `RigidBody3D`, so it hides with the token (a token
+hidden from players hides its cue too), but `top_level` (it stands in world space) and left
+out of `DraggableToken`'s visual children, so the water sink, the float bob, the drag lean
+and the pickup scale never move it. Its size uses the token's logical scale
+(`BoardToken.get_logical_scale`), not the near-zero scale of a spawn animation. Purely
+visual and local: every peer decides for its own copy. Render check: `jobs/p4b_cue.json`.
 
 ---
 
