@@ -47,6 +47,10 @@ other committed home.
 | Loading and networking (glb / ttmap / both, erase filter, map hashes) | `scenes/states/playing/level_loader.gd`, `MapSourceLoader`, `utils/map_file_hash.gd` | `ARCHITECTURE.md` Map Loading Flow, `NETWORKING.md` |
 | Authoring state (controller, session, save, autosave, new map) | `scenes/states/authoring/`, `utils/new_map.gd` | `ARCHITECTURE.md` "Authoring Flow", `UI_SYSTEMS.md` authoring drawer |
 | Brushes, gestures, undo | `scenes/states/authoring/brush_tool.gd`, `authoring_editor.gd`, `authoring_history.gd`, `utils/mask_brush.gd`, `utils/mask_stroke.gd`, `utils/base_scatter_eraser.gd` | `UI_SYSTEMS.md` "Brushes and gestures", `ARCHITECTURE.md` "Authoring Flow" (Brushes) |
+| Water model and flow bake (bodies, levels, wet samples, pond mask, the flow map) | `resources/water_body.gd`, `utils/water_geometry.gd`, `utils/water_flow_baker.gd`, `utils/map_water_io.gd` | `ARCHITECTURE.md` "Water model and flow bake", "Map document (map.ttmap)" |
+| Water at runtime (merged surface, zones, water as ground, float rule, grid on the water, the water shader) | `utils/water_mesh_builder.gd`, `scenes/terrain/authored_water.gd`, `utils/water_surface.gd`, `scenes/effects/water_zone.gd`, `utils/water_glb_utils.gd`, `shaders/water.gdshader` | `ARCHITECTURE.md` "Authored water at runtime" |
+| Carving and wet dressing (channel and basin profiles, reach steps and riffles, confluences, erase, bed and shore surfaces, plants, rocks, the worker) | `utils/water_carve.gd`, `utils/water_edit.gd`, `utils/water_dressing.gd`, `scenes/states/authoring/water_editor.gd` | `ARCHITECTURE.md` "Carving water" |
+| Water tool (River and Pond tiles, depth tiles, ribbon preview, Ctrl erase) | `scenes/states/authoring/water_brush.gd`, `water_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Water) and "Brushes and gestures" |
 | First-use pipeline warm-up | `utils/pipeline_warmer.gd` | `PERFORMANCE.md` |
 | Same-version join gate | `utils/version_gate.gd` | `NETWORKING.md` "Same-version gate" |
 | Render-job harness (1920x1080 judgment renders) | `tools/render_jobs/` | `tools/render_jobs/README.md` |
@@ -67,6 +71,18 @@ gives mean |dY| 0.001 m, worst 0.018 m (bilinear heights against the collision t
 and normal-aligned rows sit 3.8 deg from the ground normal (their random lean) instead of
 7.2. A flat-0 document saved before the fix reopened with 1,607 rows settled onto the
 ground and the session unsaved. Unit-tested against a synthetic ramp and step.
+
+Water (phase 4) verified in the running game (render jobs `water_look`, `water_tool`,
+`phase4_judgment_set`, 2026-09-27): rivers drawn at human speed with the Water tool carve,
+split into reaches with riffles, join each other at confluences and flow the drawn way;
+ponds paint, extend and settle; Ctrl erases whole rivers and pond area with undo / redo;
+wet dressing (beds, shores, moss on forest banks, reeds in the wetland) and plants yield to
+the water; paths stop at the bank and resume across; the grid lies on the water surface on
+authored and Blender maps; saved levels play with tokens wading on the bed (ankle, waist)
+and floating in deep water, in four biomes and on the Blender `river` level. Unit-tested
+only: the flow bake's frame against the shader's decode, `splines.json` / `ponds.png` /
+`water_flow.png` round trips and caps, the worker carve's equality with the synchronous one,
+and water on a dressed map beyond erasing (the render jobs never dress a map with water).
 
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
@@ -95,12 +111,36 @@ phase 2's base-only shader on flat ground and +1.26-1.78 ms where tiers fill the
 0.36-0.49, side projections 0.19-0.32, the 8-slot table and rules about 0.8). Sculpt and Paint
 strokes run at 4.4 ms median CPU (11.6 ms with a 12 m brush); release frames are 10-23 ms,
 40-60 ms after a 12 m stroke (the rule-field pass); the skirt's 45 ms vertex copy, which hit
-the first stroke to reach the map edge, is now built under the loading screen.
+the first stroke to reach the map edge, is now built under the loading screen. Phase 4 pass
+(`PERFORMANCE.md` "In-game authoring phase 4 (water): pinned performance pass", 2026-09-27,
+150 ft forest and wetland maps against their twins before water): water costs about its
+pixels in play (the merged mesh 0.2-0.3 ms GPU in view; every map under 4.9 ms at max play
+zoom), every water gesture and a sculpt by the water keep medians within 0.5 ms of idle with
+worst frames of 21-29 ms, and water adds 0.23-0.26 s to a warm load and 1-15 MB of memory.
 
 ## Open work
 
 Phases 1-3 were merged to `main` and released as v0.1.28 (2026-09-27) so the two-account
-Steam test (above) can run on the release while phase 4 is built. That test remains open.
+Steam test (above) can run on the release while phase 4 is built. That test remains open,
+and phase 4's water (a map document with `splines.json`, `ponds.png` and a baked
+`water_flow.png`) has not been sent to a peer over Steam either.
+
+Water follow-ups (phase 4 judgment pass, 2026-09-27):
+- Small tokens vanish in waist-deep water: they stand on the bed as decided, and a
+  0.9 m column hides anything shorter (the test token, a small creature, disappears except
+  for its wake). A token-height rule (float when the water is deeper than, say, 70 % of the
+  token) or a visible marker is the candidate; it changes a user decision, so it waits.
+- Reeds standing in the water still get thin foam outlines along their submerged blades (the
+  depth-slope foam that wraps rocks); the shards are gone (`shore_ground_gate`). In the
+  wetland the ankle stream is so thick with reeds it can read as a reed bed rather than
+  water from the home view.
+- A boulder left in a pond can draw a short straight light line on the water beside it
+  (seen in the deep pool on forest and badlands at home zoom); not diagnosed.
+- Water adds 0.23-0.26 s to a load: the wet dressing and the water mesh are built on the
+  main thread under the loading screen (`PERFORMANCE.md` phase 4 pass).
+- Paths stop a little short of the water with a band of bank between (paths yield at the
+  bed and shore); it reads as a ford landing on meadow and forest, as a gap on badlands sand.
+- Waterfalls between reaches (a riffle is the only step), and bridges and fords (phase 4b).
 
 Follow-ups:
 - A quick brush pass still gives few trees in sparse biomes (temperate forest targets 0.02
@@ -135,7 +175,7 @@ Follow-ups:
   footing rule, and rocks that survive sculpting as tilted props. Decisions: tier edges are
   rock cliffs; the terrain dresses itself automatically and painting overrides it except on
   cliff faces; rocks are kept, never added, when sculpting changes the ground under them.
-- **Phase 4: water.** Carve rivers, streams, ponds and shores with a gesture: the stroke
+- **Phase 4: water (done, 2026-09-27).** Carve rivers, streams, ponds and shores with a gesture: the stroke
   lowers a channel, paints its bed and banks, clears scatter, places the water surface and
   bakes a flow map in terrain-paint's format (`splines.json` is reserved in the document).
   The water shader, flow maps, token wakes and ripples already exist, so this is mostly
@@ -152,7 +192,16 @@ Follow-ups:
   (every reach of its stroke), soft pond beaches, mossy forest banks, and the carve on a worker so a release
   never freezes the view). Decided in P4-4: a dressed Blender map can only erase water
   painted over it (carving needs the document's ground); erased water leaves its channel
-  carved, and Sculpt's Smooth is the way to fill it.
+  carved, and Sculpt's Smooth is the way to fill it. P4-5 (judgment, performance, docs):
+  riffle sheets meet their banks on a smooth line instead of the sample grid's sawtooth; a
+  pond extended by a second stroke keeps its level and is carved as one basin (no ledge);
+  the water shader's refraction fades in from the waterline (no glassy band on steep stream
+  banks) and its shore foam and waterline fade apply only where ground meets the water (no
+  pale shards around reeds); a sculpt stroke by the water computes the wet dressing on a
+  worker (worst frame 118 -> 28 ms); the harness's test token is an ordinary one (the
+  "bright blobs" on the water in earlier renders were its emissive light globe). Judgment
+  set: `tools/render_jobs/jobs/phase4_judgment_set.json`; pinned pass: `PERFORMANCE.md` "In-game
+  authoring phase 4 (water): pinned performance pass".
 - **Phase 4b: spanning water.** Bridges and other crossings (plank bridges, stepping
   stones, stone arches, fords) that snap between two banks, span the gap with walkable
   collision for tokens, and match the palette's painted style; likely generated or
