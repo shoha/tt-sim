@@ -58,6 +58,12 @@ const CASCADE_SLOPE := 0.3
 const RUN_OUT_SLOPE := 1.2
 const RUN_OUT_FILM_M := 1.5
 const CASCADE_TUCK_M := 0.05
+## Across its banks (P4-5) a sheet thins by this much per metre toward the carve's waterline,
+## where it meets the ground, and sinks under the bank past it, down to CASCADE_TUCK_M
+## below. The thinning spans more than a sample each side (0.3 m in, 0.25 m out), so the
+## triangles, which are the ground's own, put the waterline on a smooth curve: cutting the
+## sheet off at the channel's half-width drew it as a sawtooth of the sample grid.
+const CASCADE_EDGE_SLOPE := 0.2
 const CASCADE_KEY := 255
 const TUCKED_KEY := 254
 ## Side of the square tiles a body's WaterZone footprint is split into (metres).
@@ -90,14 +96,19 @@ static func build(doc: MapDocument) -> Dictionary:
 	var out := {"arrays": [], "levels": levels, "wet": wet, "bodies": []}
 	if cells.is_empty():
 		return out
-	out["arrays"] = _arrays(doc, cells, cascades(doc), owner, wet)
+	var buried := {}
+	var sheets := cascades(doc, buried)
+	out["arrays"] = _arrays(doc, cells, sheets, owner, wet, buried)
 	out["bodies"] = _bodies(doc, cells, wet, owner)
 	return out
 
 
 ## The cascade sheets over reach steps (see the header): sample index -> the sheet's height
-## there, for every riffle sample between two joined reaches of `doc`'s rivers.
-static func cascades(doc: MapDocument) -> Dictionary:
+## there, for every riffle sample between two joined reaches of `doc`'s rivers where the
+## sheet stands over the ground. `buried`, when given, receives the sheet's height where it
+## has sunk under the bank past the waterline (CASCADE_EDGE_SLOPE): the mesh's corners there,
+## so the sheet's edge is where the ground cuts it, not the edge of its samples.
+static func cascades(doc: MapDocument, buried: Dictionary = {}) -> Dictionary:
 	var out := {}
 	if doc.heights.size() != doc.sample_count():
 		return out
@@ -108,13 +119,37 @@ static func cascades(doc: MapDocument) -> Dictionary:
 			if b == a or not b.is_river() or b.points.size() < 2 or b.level_m >= a.level_m:
 				continue
 			if a.points[-1].distance_squared_to(b.points[0]) < WaterGeometry.JOIN_EPSILON_SQ:
-				_cascade(doc, a, b, out)
+				_cascade(doc, a, b, out, buried)
 		var joined := WaterGeometry.flush_ends(doc.water_bodies, a)
 		if joined.x == 0:
-			_run_out(doc, a, false, out)
+			_run_out(doc, a, false, out, buried)
 		if joined.y == 0:
-			_run_out(doc, a, true, out)
+			_run_out(doc, a, true, out, buried)
+	for i: int in out:
+		buried.erase(i)
 	return out
+
+
+## The film a sheet keeps over its ground at edge offset `e` (metres past the carve's
+## waterline, negative in the channel): CASCADE_FILM_M in the channel, thinning to nothing at
+## the waterline and sinking to CASCADE_TUCK_M under the bank past it.
+static func _edge_film(e: float) -> float:
+	return clampf(-e * CASCADE_EDGE_SLOPE, -CASCADE_TUCK_M, CASCADE_FILM_M)
+
+
+## How far past the waterline a sheet's samples reach: past the thinning, plus a sample.
+static func _edge_reach(doc: MapDocument) -> float:
+	var step := doc.sample_step()
+	return CASCADE_TUCK_M / CASCADE_EDGE_SLOPE + maxf(step.x, step.y)
+
+
+## Merges a sheet height at sample `i` over ground `ground` into `out` (over the ground) or
+## `buried` (at or under it), the higher sheet winning.
+static func _put_sheet(
+	i: int, sheet: float, ground: float, out: Dictionary, buried: Dictionary
+) -> void:
+	var into := out if sheet > ground else buried
+	into[i] = maxf(float(into.get(i, -INF)), sheet)
 
 
 ## A free river end (`at_end`: the last point, else the first) whose channel carries on
@@ -122,7 +157,9 @@ static func cascades(doc: MapDocument) -> Dictionary:
 ## falls down the channel at RUN_OUT_SLOPE and trickles on over its bed as a film for
 ## RUN_OUT_FILM_M, instead of ending in the air. Nothing where the ground past the end stands
 ## above the level (a carved end tapers up to it).
-static func _run_out(doc: MapDocument, body: WaterBody, at_end: bool, out: Dictionary) -> void:
+static func _run_out(
+	doc: MapDocument, body: WaterBody, at_end: bool, out: Dictionary, buried: Dictionary
+) -> void:
 	var course: PackedVector2Array = WaterGeometry.river_course(body)[0]
 	var end := course[-1] if at_end else course[0]
 	# An end in other water is a confluence (WaterEdit.join_line): the water carries on there.
@@ -134,10 +171,12 @@ static func _run_out(doc: MapDocument, body: WaterBody, at_end: bool, out: Dicti
 	var half := body.half_widths[-1] if at_end else body.half_widths[0]
 	var level := body.level_m
 	var reach := body.depth_m() / RUN_OUT_SLOPE + RUN_OUT_FILM_M
-	var near := _near(course, end, reach + half)
+	var edge_reach := _edge_reach(doc)
+	var near := _near(course, end, reach + half + edge_reach)
 	var last := Vector2(doc.samples_x() - 1, doc.samples_z() - 1)
-	var first := doc.world_to_sample(end - Vector2(reach, reach)).floor().clamp(Vector2.ZERO, last)
-	var stop := doc.world_to_sample(end + Vector2(reach, reach)).ceil().clamp(Vector2.ZERO, last)
+	var box := Vector2.ONE * (reach + half + edge_reach)
+	var first := doc.world_to_sample(end - box).floor().clamp(Vector2.ZERO, last)
+	var stop := doc.world_to_sample(end + box).ceil().clamp(Vector2.ZERO, last)
 	var heights := doc.heights
 	for z in range(int(first.y), int(stop.y) + 1):
 		for x in range(int(first.x), int(stop.x) + 1):
@@ -147,26 +186,32 @@ static func _run_out(doc: MapDocument, body: WaterBody, at_end: bool, out: Dicti
 				continue
 			# Lateral: from the line through the end along the course.
 			var lateral := absf((p - end).cross(outward))
-			if lateral > half or WaterGeometry.nearest_on_polyline(near, p).x < along - 0.01:
+			if (
+				lateral > half + edge_reach
+				or WaterGeometry.nearest_on_polyline(near, p).x < along - 0.01
+			):
 				continue
 			var i := doc.sample_index(x, z)
 			var ground := heights[i]
-			if ground >= level:
-				continue
-			# Falling from the level, then a thin film trickling on down the channel's bed.
-			var sheet := minf(maxf(level - along * RUN_OUT_SLOPE, ground + CASCADE_FILM_M), level)
-			out[i] = maxf(float(out.get(i, -INF)), sheet)
+			# Falling from the level, then a thin film trickling on down the channel's bed,
+			# thinning to the waterline across the banks.
+			var film := ground + _edge_film(lateral - half)
+			var sheet := minf(maxf(level - along * RUN_OUT_SLOPE, film), level)
+			_put_sheet(i, sheet, ground, out, buried)
 
 
 ## The sheet of the step from reach `upper` into reach `lower`, merged into `out`.
-static func _cascade(doc: MapDocument, upper: WaterBody, lower: WaterBody, out: Dictionary) -> void:
+static func _cascade(
+	doc: MapDocument, upper: WaterBody, lower: WaterBody, out: Dictionary, buried: Dictionary
+) -> void:
 	var joint := upper.points[-1]
 	var below: PackedVector2Array = WaterGeometry.river_course(lower)[0]
 	var above: PackedVector2Array = WaterGeometry.river_course(upper)[0]
 	var direction := WaterGeometry.end_direction(below, false)
 	var half := lower.half_widths[0]
+	var edge_reach := _edge_reach(doc)
 	var length := WaterCarve.riffle_length(upper.level_m, lower.level_m, lower.depth_m())
-	var reach := length + half + CASCADE_BACK_M + 1.0
+	var reach := length + half + edge_reach + CASCADE_BACK_M + 1.0
 	# Only the course near the step can be nearest to its samples.
 	var near_above := _near(above, joint, reach + half)
 	var near_below := _near(below, joint, reach + half)
@@ -188,20 +233,21 @@ static func _cascade(doc: MapDocument, upper: WaterBody, lower: WaterBody, out: 
 				WaterGeometry.nearest_on_polyline(near_above, p).x,
 				WaterGeometry.nearest_on_polyline(near_below, p).x
 			)
-			if lateral > half:
+			if lateral > half + edge_reach:
 				continue
 			var i := doc.sample_index(x, z)
 			var ground := heights[i]
 			if along < 0.0 and ground < upper.level_m:
 				continue
-			# The film over the riffle, or at least the surface falling from the upper level to
-			# the lower over `run` (a small step over deep water).
+			# The film over the riffle, thinning to the waterline across the banks, or at least
+			# the surface falling from the upper level to the lower over `run` (a small step
+			# over deep water; it meets the banks as a flat surface does).
 			var ramp := lerpf(upper.level_m, lower.level_m, clampf(along / run, 0.0, 1.0))
-			var film := clampf(ground + CASCADE_FILM_M, lower.level_m, upper.level_m)
+			var film := clampf(ground + _edge_film(lateral - half), lower.level_m, upper.level_m)
 			var sheet := maxf(film if ground >= lower.level_m else lower.level_m, ramp)
 			if sheet <= lower.level_m + 0.005:
 				continue
-			out[i] = maxf(float(out.get(i, -INF)), sheet)
+			_put_sheet(i, sheet, ground, out, buried)
 
 
 ## The run of `course`'s points within `radius` of `at` (with one more point on each side),
@@ -302,13 +348,14 @@ static func _tucked(
 ## face, as TerrainMeshBuilder's chunks). Then the cascade sheets (`cascade`, cascades()):
 ## every cell with a sheet corner, in place of any flat cell there, its corners at the
 ## sheet's height, the owning body's level where the ground is under water, else tucked
-## under the ground.
+## under the ground (at the sheet's own height where it has sunk under a bank, `buried`).
 static func _arrays(
 	doc: MapDocument,
 	cells: Dictionary,
 	cascade: Dictionary = {},
 	owner: PackedInt32Array = PackedInt32Array(),
-	wet: PackedByteArray = PackedByteArray()
+	wet: PackedByteArray = PackedByteArray(),
+	buried: Dictionary = {}
 ) -> Array:
 	var columns := doc.samples_x()
 	var rows := doc.samples_z()
@@ -365,6 +412,8 @@ static func _arrays(
 			elif at < wet.size() and wet[at] == 1 and owner[at] >= 0:
 				y = doc.water_bodies[owner[at]].level_m
 				slot = owner[at]
+			elif buried.has(at):
+				y = buried[at]
 			var key := at * 256 + slot
 			var v: int = vertex_of.get(key, -1)
 			if v < 0:

@@ -199,6 +199,79 @@ func test_reach_steps_are_a_crest_and_a_riffle() -> void:
 	assert_lt(level, bodies[0].level_m - 0.01, "the upper water does not reach past its crest")
 
 
+func test_a_riffle_sheet_meets_its_banks_on_a_smooth_line() -> void:
+	# A river at 29 degrees to the sample grid over ground falling along it. Where the riffle's
+	# sheet meets a bank (the mesh's triangles are the ground's, so the waterline is where the
+	# two interpolated heights cross) it must follow the carve's waterline, not the grid's
+	# staircase: cut off at the half-width, it drew 0.25 m teeth (P4-5).
+	var dir := Vector2(11, 6).normalized()
+	_shape(_doc, func(p: Vector2) -> float: return -0.12 * p.dot(dir))
+	var start := _doc.heights.duplicate()
+	var half := 1.6
+	var bodies := WaterEdit.plan_river(
+		_doc,
+		PackedVector2Array([Vector2(-11, -6), Vector2(11, 6)]),
+		PackedFloat32Array([half, half]),
+		WaterBody.Depth.WAIST
+	)
+	assert_gt(bodies.size(), 1, "reaches")
+	_carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
+	_doc.water_bodies = bodies
+	var buried := {}
+	var sheets := WaterMeshBuilder.cascades(_doc, buried)
+	assert_false(buried.is_empty(), "the sheet sinks under the banks past the waterline")
+	# The surface's height per sample as the mesh draws a sheet cell.
+	var columns := _doc.samples_x()
+	var rows := _doc.samples_z()
+	var water := PackedFloat32Array()
+	water.resize(_doc.sample_count())
+	for i in water.size():
+		water[i] = _doc.heights[i] - WaterMeshBuilder.CASCADE_TUCK_M
+	for i: int in buried:
+		water[i] = buried[i]
+	var built := WaterMeshBuilder.build(_doc)
+	for i in water.size():
+		if built.wet[i] == 1:
+			water[i] = built.levels[i]
+	for i: int in sheets:
+		water[i] = sheets[i]
+	var joint: Vector2 = bodies[0].points[-1]
+	var length := WaterCarve.riffle_length(
+		bodies[0].level_m, bodies[1].level_m, bodies[1].depth_m()
+	)
+	var across := dir.orthogonal()
+	# The edge's distance from the course every 5 cm down the riffle (past the crest, where
+	# the edge curves out from the upper pool's), each side: a smooth line moves by a few
+	# millimetres between neighbours, a staircase jumps by a good part of a sample (9.5 cm
+	# with the sheet cut off at the waterline).
+	var worst := 0.0
+	var worst_at := Vector2.ZERO
+	var found := 0
+	for side in [1.0, -1.0]:
+		var previous := NAN
+		var along := 0.8
+		while along < length * 0.7:
+			var s := half - 1.2
+			var edge := NAN
+			while s < half + 0.6:
+				var p: Vector2 = joint + dir * along + across * s * side
+				var at := _doc.world_to_sample(p)
+				var w := ScatterGenerator.triangle_height(water, columns, rows, at)
+				var g := ScatterGenerator.triangle_height(_doc.heights, columns, rows, at)
+				if w <= g:
+					edge = s
+					found += 1
+					break
+				s += 0.005
+			if not is_nan(edge) and not is_nan(previous) and absf(edge - previous) > worst:
+				worst = absf(edge - previous)
+				worst_at = Vector2(along, side)
+			previous = edge
+			along += 0.05
+	assert_gt(found, 60, "the sheet's edge found along the riffle")
+	assert_lt(worst, 0.03, "a smooth edge (worst step %.3f m at %s)" % [worst, worst_at])
+
+
 func test_flush_ends_only_where_a_reach_continues() -> void:
 	var widths := PackedFloat32Array([1.0, 1.0])
 	var ankle := WaterBody.Depth.ANKLE
