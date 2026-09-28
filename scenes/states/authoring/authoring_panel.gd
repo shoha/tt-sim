@@ -28,6 +28,11 @@ extends DrawerContainer
 ## On a dressed Blender map the tool only erases water painted over it
 ## (set_water_available).
 ##
+## Bridge (P4b-2): its own rail item after Water (a crossing is an object laid over water,
+## with its own gesture and its own Ctrl, not a kind of water), a pane with Plank bridge and
+## Stepping stones tiles and the gesture hint. Disabled on a dressed Blender map without
+## document water (set_bridge_available).
+##
 ## Paint (P3-6): one TileField per surface role (Built, Ground, Rock; built first because
 ## paths and yards are what the tool is mostly for) of palette surface swatches, one
 ## selection across the groups. The swatches cost a texture decode each (the whole albedo
@@ -59,6 +64,8 @@ signal water_shape_selected(shape: int)
 signal water_depth_selected(depth: int)
 ## The Water Advanced flow row moved (WaterBody speed).
 signal water_speed_changed(speed: float)
+## A Bridge tile was picked: the crossing kind (Crossing.Kind).
+signal bridge_kind_selected(kind: int)
 
 const DRAWER_WIDTH := 320.0
 const BIOME_TILE_SIZE := Vector2(64, 84)
@@ -78,6 +85,7 @@ const TOOL_PLACE := &"place"
 const TOOL_SCULPT := &"sculpt"
 const TOOL_PAINT := &"paint"
 const TOOL_WATER := &"water"
+const TOOL_BRIDGE := &"bridge"
 const ACTION_UNDO := &"undo"
 const ACTION_REDO := &"redo"
 const ACTION_SAVE := &"save_map"
@@ -90,6 +98,11 @@ const PAINT_UNAVAILABLE_TOOLTIP := "Paint: not on a Blender map, whose ground is
 const WATER_TOOLTIP := "Water"
 const WATER_UNAVAILABLE_TOOLTIP := "Water: not on a Blender map, whose ground is the map file's"
 const WATER_ERASE_ONLY_TOOLTIP := WaterToolPane.ERASE_ONLY_HINT
+const BRIDGE_TOOLTIP := "Bridge"
+const BRIDGE_UNAVAILABLE_TOOLTIP := (
+	"Bridge: crosses water made with the Water tool; a Blender map's own water is part of the"
+	+ " map file"
+)
 const RAIL_ITEMS: Array[Dictionary] = [
 	{"id": TOOL_BIOME, "icon": "trees", "tooltip": "Biome"},
 	{"id": TOOL_THIN, "icon": "eraser", "tooltip": "Thin / Clear"},
@@ -97,6 +110,7 @@ const RAIL_ITEMS: Array[Dictionary] = [
 	{"id": TOOL_SCULPT, "icon": "mountain", "tooltip": SCULPT_TOOLTIP},
 	{"id": TOOL_PAINT, "icon": "brush", "tooltip": PAINT_TOOLTIP},
 	{"id": TOOL_WATER, "icon": "droplet", "tooltip": WATER_TOOLTIP},
+	{"id": TOOL_BRIDGE, "icon": "building-bridge", "tooltip": BRIDGE_TOOLTIP},
 ]
 ## Paint groups in pane order: palette surface role and caption.
 const PAINT_GROUPS: Array[Dictionary] = [
@@ -187,6 +201,8 @@ var place_rows: Dictionary = {}
 var paint_fields: Dictionary = {}
 ## The Water tool's pane (its tiles and Advanced rows).
 var water_pane: WaterToolPane
+## The Bridge tool's pane (its kind tiles).
+var bridge_pane: BridgeToolPane
 
 var _stack: PaneStack
 ## Every Advanced size / strength row, kept in step with the brush.
@@ -233,6 +249,9 @@ func _on_ready() -> void:
 	_stack.add_pane(TOOL_SCULPT, _build_sculpt_pane())
 	_stack.add_pane(TOOL_PAINT, _build_paint_pane())
 	_stack.add_pane(TOOL_WATER, _build_water_pane())
+	bridge_pane = BridgeToolPane.new()
+	bridge_pane.kind_selected.connect(func(kind: int) -> void: bridge_kind_selected.emit(kind))
+	_stack.add_pane(TOOL_BRIDGE, bridge_pane)
 	_stack.show_pane(TOOL_BIOME, false)
 
 	pane_requested.connect(_on_pane_requested)
@@ -481,6 +500,15 @@ func set_water_available(carves: bool, has_water: bool) -> void:
 		tooltip = WATER_UNAVAILABLE_TOOLTIP if not has_water else WATER_ERASE_ONLY_TOOLTIP
 	set_rail_item_tooltip(TOOL_WATER, tooltip)
 	water_pane.set_carves(carves)
+
+
+## Enables the Bridge tool, or disables it with a tooltip saying why (a dressed Blender map
+## with no water painted over it: crossings snap to the document's water). `has_water`: the
+## pane's line saying to make water first shows while it is false.
+func set_bridge_available(available: bool, has_water: bool) -> void:
+	set_rail_item_enabled(TOOL_BRIDGE, available)
+	set_rail_item_tooltip(TOOL_BRIDGE, BRIDGE_TOOLTIP if available else BRIDGE_UNAVAILABLE_TOOLTIP)
+	bridge_pane.set_has_water(has_water)
 
 
 ## Builds the Paint tiles once (palette surfaces by role, swatches from each surface's

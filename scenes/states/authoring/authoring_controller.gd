@@ -84,6 +84,8 @@ var _is_open: bool = false
 var _saving: bool = false
 var _leave_prompt: Node = null
 var _recovery_prompt: Node = null
+## True once the open map's crossing textures were warmed (_warm_crossings).
+var _crossings_warmed: bool = false
 
 
 func _ready() -> void:
@@ -102,6 +104,9 @@ func setup(game_map: GameMap) -> void:
 	brush.toggled.connect(_on_brush_toggled)
 	brush.paint_refused.connect(_on_paint_refused)
 	brush.water_refused.connect(
+		func(reason: String) -> void: UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
+	)
+	brush.bridge_refused.connect(
 		func(reason: String) -> void: UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
 	)
 	brush.paint_surface = panel.get_paint_surface()
@@ -136,6 +141,7 @@ func _build_ui() -> void:
 	panel.water_shape_selected.connect(_on_water_shape_selected)
 	panel.water_depth_selected.connect(_on_water_depth_selected)
 	panel.water_speed_changed.connect(func(speed: float) -> void: brush.water.speed = speed)
+	panel.bridge_kind_selected.connect(_on_bridge_kind_selected)
 	panel.brush_size_changed.connect(func(radius: float) -> void: brush.set_radius(radius))
 	panel.brush_strength_changed.connect(func(flow: float) -> void: brush.set_flow(flow))
 
@@ -330,6 +336,13 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	# The Water tool's carve computes on a worker (WaterEditor), so a stroke never freezes.
 	editor.water.use_worker = true
 	editor.edited.connect(_refresh_water_available)
+	# A crossing removed with its water is said (it vanished away from the pointer).
+	editor.crossings.followed.connect(
+		func(_moved: int, removed: int) -> void:
+			if removed > 0:
+				UIManager.show_toast(BridgeBrush.followed_text(removed), UIManager.TOAST_INFO, 5.0)
+	)
+	_crossings_warmed = false
 	_refresh_water_available()
 	_refresh_paint_limits()
 	if editor.can_sculpt() and is_instance_valid(editor.terrain):
@@ -646,10 +659,46 @@ func _show_brush_values() -> void:
 
 ## The Water tool on the rail: carving where the ground is the document's, erasing only on
 ## a dressed Blender map that has water painted over it (AuthoringPanel.set_water_available).
+## The Bridge tool with it: wherever water can be made or the document has some.
 func _refresh_water_available() -> void:
 	if editor == null or panel == null:
 		return
-	panel.set_water_available(editor.water.can_carve(), not document.water_bodies.is_empty())
+	var has_water := not document.water_bodies.is_empty()
+	panel.set_water_available(editor.water.can_carve(), has_water)
+	panel.set_bridge_available(bridge_available(), has_water)
+
+
+## True when the Bridge tool can work: crossings snap to the document's water, which the
+## map can be given (its ground is the document's) or already has.
+func bridge_available() -> bool:
+	return editor != null and (editor.water.can_carve() or not document.water_bodies.is_empty())
+
+
+## A picked Bridge tile becomes the kind the Bridge tool lays and switches to it.
+func _on_bridge_kind_selected(kind: int) -> void:
+	if brush:
+		brush.bridge.kind = kind
+	_select_tool(AuthoringPanel.TOOL_BRIDGE)
+
+
+## Once per map, when the Bridge tool opens: starts loading the textures a crossing on this
+## map would bind (the palette planks and each map biome's cliff rock) on background threads,
+## then 0.4 s later makes the crossing materials of the map's biomes (their shaders build), so
+## the first placement pays for neither (17 ms of first use on the main thread, P4b-2).
+func _warm_crossings() -> void:
+	if _crossings_warmed or not is_instance_valid(map_root):
+		return
+	_crossings_warmed = true
+	var terrain := _terrain()
+	if terrain != null:
+		for surface in AuthoredCrossings.surfaces_for_styles(document.biome_ids):
+			terrain.warm_surface(surface)
+	var generation := _generation
+	get_tree().create_timer(0.4).timeout.connect(
+		func() -> void:
+			if not _superseded(generation) and is_instance_valid(map_root):
+				AuthoredCrossings.of_map(map_root).warm_materials(document.biome_ids)
+	)
 
 
 ## A Paint press was refused (every slot holds paint): say why.
@@ -720,6 +769,11 @@ func _select_tool(tool_id: StringName) -> void:
 			if not editor.water.can_carve() and document.water_bodies.is_empty():
 				return
 			brush.set_mode(BrushTool.Mode.WATER)
+		AuthoringPanel.TOOL_BRIDGE:
+			if not bridge_available():
+				return
+			_warm_crossings()
+			brush.set_mode(BrushTool.Mode.BRIDGE)
 		_:
 			return
 	brush.activate()
@@ -737,6 +791,7 @@ func _on_brush_toggled(active: bool) -> void:
 		BrushTool.Mode.SCULPT: AuthoringPanel.TOOL_SCULPT,
 		BrushTool.Mode.PAINT: AuthoringPanel.TOOL_PAINT,
 		BrushTool.Mode.WATER: AuthoringPanel.TOOL_WATER,
+		BrushTool.Mode.BRIDGE: AuthoringPanel.TOOL_BRIDGE,
 	}
 	panel.set_active_tool(ids[brush.mode])
 

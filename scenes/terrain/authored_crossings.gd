@@ -50,6 +50,15 @@ const STONE_TILE_SCALE := 1.4
 ## Wood roughness is the texture's ORM; this scales its normal map (a board's grain, gentle).
 const WOOD_NORMAL_SCALE := 0.6
 const STONE_NORMAL_SCALE := 0.8
+## Stepping stones in a damp climate grow moss on their tops, like the palette's boulders
+## there (P4b-2 review: plain grey stones read foreign beside mossy forest boulders): the
+## vertex colour of upward facets is multiplied toward this tint, in patches. Vertex colours
+## are stored as 8-bit (clamped to 1), so the tint can only take red and blue away: a mild
+## one read as khaki on the rock, so it is a strong green. Dry country's stones stay bare.
+const MOSS_TINTS := {
+	"temperate": Color(0.42, 0.72, 0.18),
+	"cold": Color(0.62, 0.74, 0.45),
+}
 
 ## Per document sample, the deck's walking surface (CrossingGeometry.NONE elsewhere).
 var deck_heights: PackedFloat32Array = PackedFloat32Array()
@@ -81,13 +90,33 @@ static func create(
 ## The AuthoredCrossings under map root `root`, created there if missing, rebuilt from
 ## `doc` (the authoring edits' entry, CrossingEditor). Returns the node.
 static func refresh_map(root: Node3D, doc: MapDocument) -> AuthoredCrossings:
+	var crossings := of_map(root)
+	crossings.refresh(doc)
+	return crossings
+
+
+## The AuthoredCrossings under map root `root`, created there (empty) if missing.
+static func of_map(root: Node3D) -> AuthoredCrossings:
 	var crossings := root.get_node_or_null(NODE_NAME) as AuthoredCrossings
 	if crossings == null:
 		crossings = AuthoredCrossings.new()
 		crossings.name = NODE_NAME
 		root.add_child(crossings)
-	crossings.refresh(doc)
 	return crossings
+
+
+## Makes the wood and stone materials of every style in `styles` (biome ids; none: the
+## defaults) now, their textures bound and their shaders built, so the first crossing of a
+## style costs its geometry alone (the Bridge tool warms them as it opens, P4b-2).
+func warm_materials(styles: PackedStringArray) -> void:
+	var all := styles.duplicate()
+	if all.is_empty():
+		all.append("")
+	for style in all:
+		for material: BaseMaterial3D in [_wood_material(style), _stone_material(style)]:
+			# A BaseMaterial3D builds its shader when its RID is first asked for: now, rather
+			# than when the first crossing's mesh takes it.
+			material.get_rid()
 
 
 ## The collision bodies' RIDs of the crossings under map root `root` (none: []), for a ray
@@ -164,11 +193,34 @@ func _crossing_node(parts: Dictionary) -> Node3D:
 		node.add_child(_mesh_instance("Wood", wood, _wood_material(style)))
 	var stone: Array = parts.get("stone", [])
 	if not stone.is_empty():
+		var moss: Variant = MOSS_TINTS.get(String(_biome(style).get("climate", "")))
+		if moss is Color:
+			stone = mossed(stone, moss)
 		node.add_child(_mesh_instance("Stones", stone, _stone_material(style)))
 	var faces: PackedVector3Array = parts.get("collision", PackedVector3Array())
 	if not faces.is_empty():
 		node.add_child(_body(faces, int(parts.id)))
 	return node
+
+
+## Stone mesh `arrays` (CrossingGeometry's) with moss on their upward facets: each vertex's
+## colour multiplied toward `moss` by how much its facet faces up, in patches (a fixed pattern
+## of the vertex's position, so every peer draws the same). Pure; the input is not changed.
+static func mossed(arrays: Array, moss: Color) -> Array:
+	var out := arrays.duplicate()
+	var colors := (arrays[Mesh.ARRAY_COLOR] as PackedColorArray).duplicate()
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	for i in colors.size():
+		var up := smoothstep(0.55, 0.95, normals[i].y)
+		if up <= 0.0:
+			continue
+		var v := vertices[i]
+		var patch := 0.5 + 0.5 * sin(v.x * 7.3 + v.z * 5.1) * cos(v.z * 6.7 - v.x * 3.9)
+		var tint := Color.WHITE.lerp(moss, up * lerpf(0.7, 1.0, patch))
+		colors[i] = Color(colors[i].r * tint.r, colors[i].g * tint.g, colors[i].b * tint.b)
+	out[Mesh.ARRAY_COLOR] = colors
+	return out
 
 
 static func _mesh_instance(node_name: String, arrays: Array, material: Material) -> MeshInstance3D:
@@ -218,9 +270,7 @@ func _stone_material(style: String) -> Material:
 	var key := "stone:" + style
 	if _materials.has(key):
 		return _materials[key]
-	var surface := String(_biome(style).get("cliff_surface", ""))
-	if surface == "" or not PaletteLibrary.surfaces(_palette_root).has(surface):
-		surface = DEFAULT_STONE_SURFACE
+	var surface := stone_surface(style, _palette_root)
 	var material := _surface_material(surface, STONE_TINT, STONE_NORMAL_SCALE)
 	var tile := float(PaletteLibrary.surfaces(_palette_root).get(surface, {}).get("tile_m", 3.0))
 	material.uv1_triplanar = true
@@ -242,9 +292,7 @@ static func texture_paths(
 		if crossing.is_plank():
 			names[WOOD_SURFACE] = true
 			continue
-		var biome := PaletteLibrary.biome(crossing.style, root) if crossing.style != "" else {}
-		var surface := String(biome.get("cliff_surface", ""))
-		names[surface if surfaces.has(surface) else DEFAULT_STONE_SURFACE] = true
+		names[stone_surface(crossing.style, root)] = true
 	for surface_name in names:
 		var surface: Dictionary = surfaces.get(surface_name, {})
 		for key in ["albedo", "normal", "orm"]:
@@ -252,6 +300,29 @@ static func texture_paths(
 			if relative is String and relative != "":
 				paths.append(root.path_join(relative))
 	return paths
+
+
+## The palette rock surface stepping stones of style `style` (a biome id, or "") take: the
+## biome's cliff_surface, else DEFAULT_STONE_SURFACE.
+static func stone_surface(style: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> String:
+	var biome := PaletteLibrary.biome(style, root) if style != "" else {}
+	var surface := String(biome.get("cliff_surface", ""))
+	return surface if PaletteLibrary.surfaces(root).has(surface) else DEFAULT_STONE_SURFACE
+
+
+## The palette surfaces a crossing of any kind in any of the styles `styles` (biome ids) binds
+## (the planks and each style's stone rock), for warming them before a first placement.
+static func surfaces_for_styles(
+	styles: PackedStringArray, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> PackedStringArray:
+	var out := PackedStringArray([WOOD_SURFACE])
+	for style in styles:
+		var surface := stone_surface(style, root)
+		if not out.has(surface):
+			out.append(surface)
+	if styles.is_empty():
+		out.append(DEFAULT_STONE_SURFACE)
+	return out
 
 
 ## An ORM material of palette surface `surface_name` (albedo, normal, ORM maps) with vertex
