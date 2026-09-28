@@ -45,11 +45,14 @@ var _pending: MapDocument = null
 var _pending_bake: bool = true
 
 
-## The water of `doc` built now, on the calling thread, with the document's own flow map.
-static func create(doc: MapDocument) -> AuthoredWater:
+## The water of `doc` with the document's own flow map: the nodes now, from `built`
+## (WaterMeshBuilder.build(doc), which a loader's worker ran: AuthoredLoadPrep) or, when that
+## is empty, from a build on the calling thread.
+static func create(doc: MapDocument, built: Dictionary = {}) -> AuthoredWater:
 	var water := AuthoredWater.new()
 	water.name = NODE_NAME
-	water.apply(WaterMeshBuilder.build(doc), doc.water_flow, doc.water_flow_size)
+	var geometry := built if not built.is_empty() else WaterMeshBuilder.build(doc)
+	water.apply(geometry, doc.water_flow, doc.water_flow_size)
 	return water
 
 

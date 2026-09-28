@@ -175,18 +175,24 @@ static func shore_weight(d: float, p: Vector2, seed_value: int) -> float:
 
 
 ## compute() for `doc`'s own water (WaterGeometry.levels, and the riffles under the cascade
-## sheets, WaterMeshBuilder.cascades, as channel), stored in doc.water_dressing (a derived
-## cache the document never saves). Returns the new field.
+## sheets, WaterMeshBuilder.cascades, as channel; field_of()), stored in doc.water_dressing (a
+## derived cache the document never saves). Returns the new field.
 static func refresh(doc: MapDocument) -> PackedByteArray:
-	var field := PackedByteArray()
-	if not doc.water_bodies.is_empty():
-		var channel := PackedByteArray()
-		channel.resize(doc.sample_count())
-		for i: int in WaterMeshBuilder.cascades(doc):
-			channel[i] = 1
-		field = compute(doc, WaterGeometry.levels(doc), channel)
+	var field := field_of(doc)
 	doc.water_dressing = field
 	return field
+
+
+## refresh()'s field without storing it: reads `doc` only, so a loader's worker can compute
+## it while other workers read the same document (MapSourceLoader.prepare_authored_work).
+static func field_of(doc: MapDocument) -> PackedByteArray:
+	if doc.water_bodies.is_empty():
+		return PackedByteArray()
+	var channel := PackedByteArray()
+	channel.resize(doc.sample_count())
+	for i: int in WaterMeshBuilder.cascades(doc):
+		channel[i] = 1
+	return compute(doc, WaterGeometry.levels(doc), channel)
 
 
 ## The field bilinearly at continuous sample coordinates `s` (the ground shader's filter):

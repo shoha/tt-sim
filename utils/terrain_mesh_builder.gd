@@ -383,7 +383,12 @@ static func vertex_rows_bytes(mirror: Dictionary, first_row: int, last_row: int)
 static func build_chunk_mesh(
 	doc: MapDocument, cell: Vector2i, material: Material, fields: Dictionary = {}
 ) -> ArrayMesh:
-	var arrays := build_chunk_arrays(doc, cell, fields)
+	return mesh_of(build_chunk_arrays(doc, cell, fields), material)
+
+
+## The chunk mesh of build_chunk_arrays() output `arrays` (null when empty) with `material`:
+## the main-thread half, when a worker built the arrays (AuthoredLoadPrep).
+static func mesh_of(arrays: Array, material: Material) -> ArrayMesh:
 	if arrays.is_empty():
 		return null
 	var mesh := ArrayMesh.new()

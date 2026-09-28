@@ -1614,4 +1614,58 @@ dressing (`WaterDressing.refresh`, a derived cache the document never saves; 110
 measured in authoring) and `AuthoredWater.create` building the merged mesh, collision and
 zones synchronously. Not split further here; moving both onto the loader's worker (the
 dressing could also ship in the document) is the follow-up if loads matter. An authored
-150 ft map with water still loads faster than the Blender `river` level.
+150 ft map with water still loads faster than the Blender `river` level. (Done in P4b-0,
+next section.)
+
+## P4b-0: authored map load on workers (2026-09-27)
+
+Profile first, then move. `jobs/p4b_load.json` builds a 150 ft rocky badlands map (seed
+1234, tilted 2 %) with the real tools, saves it before any water (`_p4b_dry`) and after a
+waist river, an ankle stream, a deep pool and a two-stroke pond (`_p4b_wet`: 5 bodies, 6,677
+surface vertices), then from the title runs `probes/p4b.gd load_profile` (each part of the
+load's main-thread work on that document, 7 runs, median) and plays wet first (warm-up),
+then wet / dry interleaved three times (`perf.gd play`: title to loading screen gone, vsync
+on). RTX 3080, 1920x1080 window, debug build, the user's settings; the GPU may have been
+shared, but these are CPU-side numbers. Both levels deleted by the job.
+
+**Where the time went (before).** Main thread, one frame each unless noted:
+
+| Part | ms |
+| --- | --- |
+| `AuthoredTerrain.create` (no chunks), wet map | 224 |
+| of it: the wet dressing (`WaterDressing.refresh`) | 114 |
+| `AuthoredTerrain.create`, same map without water | 107 |
+| of it: skirt arrays 33, rule fields 24, layer plan and weights 8, collision 0.2 | |
+| `AuthoredWater.create` | 100 |
+| of it: the merged mesh and bodies (`WaterMeshBuilder.build`) | 85 |
+| of it: the nodes (surface mesh, collision faces, zones) | 15 |
+| flow texture; `process_water_meshes`; the grid's ground field | 0.0; 0.3; 2.6 |
+| chunk meshes (arrays and `ArrayMesh`), spread over frames within the 8 ms budget | about 16 |
+
+So water's share was the dressing and the water mesh build, 199 ms of pure data work, plus
+15 ms of nodes; the dry terrain spent 57 ms on pure arrays too.
+
+**Change.** `AuthoredLoadPrep` runs the pure parts on worker threads while the ground
+textures load (ARCHITECTURE.md Map Loading Flow): the dressing, the water geometry, the rule
+fields with every chunk's arrays, and the skirt arrays, one task each; the main thread keeps
+node and resource creation (no texture is made on a worker: safe headless too).
+
+**After.** `load_profile`: the workers take 119-121 ms wall (the dressing is the longest
+task); the main thread's terrain build is 48 ms (224 before) and the chunks from prepared
+arrays add 3 ms for the whole map (16 before); the water's nodes are 14 ms (100 before).
+
+| Warm load from the title | Before (two runs) | After |
+| --- | --- | --- |
+| `_p4b_wet` | 862 / 855 / 855, 857 / 856 / 859 ms | 692 / 703 / 685 ms |
+| `_p4b_dry` | 623 / 656 / 620, 663 / 672 / 648 ms | 588 / 615 / 605 ms |
+| Water's share | +210-235 ms | +85-100 ms |
+| Load frames p95, wet | 102-114 ms | 21-25 ms |
+| Worst load frame, wet / dry | 190-196 / 167-181 ms | 166-174 / 167-169 ms (first wet 214) |
+
+**Verdict: kept.** Water's main-thread load work is down from about 214 ms to 14 ms and its
+wall-clock cost from 0.21-0.24 s to 0.09-0.10 s (the rest is the loading screen waiting for
+the dressing worker); dry authored maps load 30-50 ms faster too. The 165-175 ms worst frame
+that remains is in every load, dry and Blender maps included (PERFORMANCE phase 4 pass:
+`river` 169-177 ms), so it is not water's; not investigated here. Numbers from one session;
+treat the wall times as indicative, the main-thread parts as solid (7-run medians, spread
+under 2 %).
