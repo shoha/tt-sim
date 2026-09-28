@@ -1497,6 +1497,121 @@ dressing texture, rocks, regeneration request and history. The 41.6 ms is the fi
 the map: the ground re-plans its layers and refreshes every chunk's weights for the new bed
 and shore surfaces, once per map; later edits' last frame is under 25 ms. The water surface's
 own swap (26 ms, P4-2) lands a few frames later. Undo and redo no longer recompute the
-dressing (it is stored compressed in the entry). A sculpt stroke on a map with water still
-recomputes the dressing on the main thread at its release (about 110-175 ms on a 200 ft map,
-`WaterEditor.refresh`); moving it onto the same worker is the next step if it is felt.
+dressing (it is stored compressed in the entry). A sculpt stroke on a map with water
+recomputed the dressing on the main thread at its release (about 110-175 ms on a 200 ft map,
+`WaterEditor.refresh`); since P4-5 it runs on the same worker (below).
+
+## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
+
+The phase 4 pass: authored maps with water in play against the same maps without it, the
+water shader's cost with the merged authored mesh, frame times of every water gesture and of
+a sculpt stroke by the water, loading and memory.
+
+**How.** RTX 3080 checked idle before each measuring job (`nvidia-smi`: 0-2 %, 48-51 C).
+Render-job harness (a real 1920x1080 window, viewport 1920x1080 in every sample),
+`override.cfg` pinning the viewport for the play pass (removed by the job at startup), vsync
+off at runtime for frame-time windows (`vsync_off`) and on for load times, the user's graphics
+settings, debug build. Test levels built with the real tools at human speed as
+`jobs/phase4_judgment_set.json` builds them (150 ft, seed 1234, tilted 2 %: a two-step tier, a
+winding waist river of 2 reaches, an ankle stream joining it, a deep pool, a pond in two
+strokes, a path across the river, three props), each saved twice: before any water
+(`_p45_forest_dry`, `_p45_wetland_dry`) and after (`_p45_forest_wet`, `_p45_wetland_wet`:
+5 bodies; the wetland's reeds stand in the water). All four deleted afterwards. Jobs in the
+session scratchpad (`p45/perf_*.json`, using the harness's new `expand` op over level
+folders).
+
+### Play-time frame time
+
+Each level played in one process in the order forest wet, forest dry, wetland wet, wetland
+dry, `river` (Blender, read-only), then in reverse; 8 s windows at the camera home (zoom
+13.85) and at max play zoom (20). GPU ms, median / p95 (n) round 1; round 2 median:
+
+| Level | Instances (home prims) | Home GPU r1 | r2 | Zoom 20 GPU r1 | r2 |
+| --- | --- | --- | --- | --- | --- |
+| `_p45_forest_wet` | 4,194 (383K) | 4.56 / 5.67 (1579) | 4.52 | 4.62 / 5.62 (1560) | 4.52 |
+| `_p45_forest_dry` | 4,689 (470K) | 3.71 / 5.19 (1703) | 4.25 | 4.37 / 5.45 (1641) | 4.44 |
+| `_p45_wetland_wet` | 6,122 (396K) | 3.98 / 5.38 (1614) | 4.48 | 4.82 / 5.76 (1478) | 4.85 |
+| `_p45_wetland_dry` | 6,007 (470K) | 4.35 / 4.75 (1661) | 4.33 | 4.78 / 5.76 (1497) | 4.75 |
+| `river` (Blender) | 0 scatter (46K) | 0.93 / 1.80 (4782) | | 0.75 / 1.17 (5667) | |
+
+CPU frame medians 4.7-5.6 ms on the authored maps. The GPU series in this session are
+bimodal (medians of the same configuration move by up to 0.5 ms between rounds while p95
+barely moves), so read each pair of rounds as a range. **Verdict: water costs about what its
+pixels cost, and nothing else.** The wet maps draw fewer instances and primitives than their
+dry twins (the channels clear plants) and still run 0.1-0.3 ms slower where the rounds agree
+(forest zoom 20 +0.08-0.25 ms, wetland zoom 20 +0.04-0.10 ms); every map stays under 4.9 ms
+GPU median at max play zoom.
+
+### Water shader with the merged authored mesh
+
+The wet levels in play, every water mesh shown and hidden in one run (`probes/water.gd
+water`), on / off / on / off, 4 s windows. GPU median ms:
+
+| Level, view | On #1 | Off #1 | On #2 | Off #2 | Delta |
+| --- | --- | --- | --- | --- | --- |
+| Forest, home (river, stream, pool, pond in view) | 4.61 | 4.45 | 4.73 | 4.46 | +0.16 / +0.27 |
+| Forest, zoom 9 over the river | 4.45 | 4.17 | 4.43 | 4.18 | +0.27 / +0.25 |
+| Forest, zoom 20 (whole map) | 4.65 | 4.45 | 4.65 | 4.44 | +0.20 / +0.21 |
+| Wetland, zoom 9 over the river | 3.65 | 3.43 | 3.63 | 3.43 | +0.22 / +0.20 |
+| Wetland, home | 3.99 | 4.22 | 4.02 | 3.77 | bimodal (means +0.15 / +0.24) |
+| Wetland, zoom 20 | 4.35 | 4.74 | 4.42 | 4.70 | bimodal (means +0.09 / +0.08) |
+
+**Verdict: kept.** The whole authored water, flow advection, refraction, the P4-5 refraction
+fade and shoreline gate included, is 0.2-0.3 ms at 1080p wherever it is in view, the same as
+P4-2 measured before the tool existed (0.13-0.39 ms). The shader's P4-5 additions are a
+screen-derivative normal and two smoothsteps per water pixel, with no extra texture reads.
+
+### Authoring: water gestures and sculpt by the water
+
+The real tools at human speed while building the test levels (150 ft, zoom 20, vsync off;
+`record` from the press to the landed edit and its regeneration), CPU frame ms median / worst
+(n). The worst frame is the landing (P4-4's three-frame land) or the water surface's swap:
+
+| Gesture | Forest | Wetland |
+| --- | --- | --- |
+| Idle | 5.1 / 9.1 (588) | 5.3 / 6.7 (568) |
+| Waist river, 45 m, 2 reaches (the map's first water) | 5.1 / 27.3 (2688) | 5.4 / 29.3 (2575) |
+| Ankle stream joining it | 5.2 / 21.4 (1588) | 5.4 / 28.0 (1501) |
+| Deep pool | 5.3 / 23.7 (555) | 5.4 / 28.6 (496) |
+| Pond in two strokes | 5.3 / 25.5 (1269) | 5.4 / 27.3 (1198) |
+| Erase (Ctrl, the stream) | 5.3 / 28.8 (327) | 5.6 / 24.6 (309) |
+| Raise stroke on the river's bank (dressing on the worker) | 5.6 / 27.6 (638) | 5.4 / 24.1 (551) |
+
+Sculpt by the water, before / after the P4-5 move (grassland, 150 ft, the same editor with
+`use_worker` off and on alternately, Raise and Smooth strokes by the river): worst frame
+118.6 / 119.1 ms synchronous, 28.0 / 30.3 ms on the worker, medians 8.0-8.2 ms either way
+(vsync on). **No water gesture's frame now exceeds 30 ms**; the medians sit within 0.5 ms of
+idle.
+
+### Load time and memory
+
+From the title, vsync on, one process: forest wet first (cold in the process), then three
+interleaved warm rounds:
+
+| Level | First in process | Warm (3) | Worst frame, warm |
+| --- | --- | --- | --- |
+| `_p45_forest_wet` | 1,295 ms | 987 / 964 / 966 ms | 193-194 ms |
+| `_p45_forest_dry` | | 707 / 706 / 713 ms | 170-173 ms |
+| `_p45_wetland_wet` | | 956 / 962 / 931 ms | 193-196 ms |
+| `_p45_wetland_dry` | | 729 / 737 / 723 ms | 168-174 ms |
+| `river` (Blender) | | 1,868 / 1,831 / 1,847 ms | 169-177 ms |
+
+Memory after the load settled, one fresh process per level:
+
+| State | Static (peak) | Video (textures) | Working set (peak) | Private |
+| --- | --- | --- | --- | --- |
+| Title, fresh process | 238 MB (266) | 141 MB (92) | 749 MB (757) | 1,111 MB |
+| Playing `_p45_forest_wet` | 271 MB (335) | 1,525 MB (1,403) | 1,027 MB (1,039) | 2,889 MB |
+| Playing `_p45_forest_dry` | 269 MB (337) | 1,519 MB (1,398) | 1,012 MB (1,022) | 2,872 MB |
+| Playing `_p45_wetland_wet` | 271 MB (343) | 1,511 MB (1,398) | 1,025 MB (1,040) | 2,894 MB |
+| Playing `_p45_wetland_dry` | 270 MB (341) | 1,505 MB (1,393) | 1,014 MB (1,028) | 2,883 MB |
+
+**Verdict: water adds about 0.23-0.26 s to a warm load and nothing that matters to memory**
+(+1-2 MB static, +5-6 MB video, +11-15 MB working set). The load delta is main-thread work
+under the loading screen, two frames of about 100 and 190 ms in the wet loads' tail
+(p95 104 ms against 34 ms dry): by the code path, `AuthoredTerrain` computing the wet
+dressing (`WaterDressing.refresh`, a derived cache the document never saves; 110-175 ms
+measured in authoring) and `AuthoredWater.create` building the merged mesh, collision and
+zones synchronously. Not split further here; moving both onto the loader's worker (the
+dressing could also ship in the document) is the follow-up if loads matter. An authored
+150 ft map with water still loads faster than the Blender `river` level.
