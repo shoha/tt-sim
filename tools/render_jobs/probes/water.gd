@@ -11,8 +11,9 @@ extends RefCounted
 ##                               mesh size and the refresh's worker and swap times.
 ##   save {folder}               writes the open document and level as user://levels/<folder>
 ##                               (a _p42_ or _p43_ test level; the caller deletes it).
-##   tokens {points}             in play: spawns one token per point (the first locally cached
-##                               asset), each dropped onto the ground as a browser drop does.
+##   tokens {points, assets}     in play: spawns one token per point (`assets` [[pack, id]],
+##                               cycled, or the first locally cached asset that is not a
+##                               light), each dropped onto the ground as a browser drop does.
 ##   drag {token, to}            in play: drags token i through DragAndDrop3D to world XZ `to`
 ##                               (begin, one pointer update at the point's screen position,
 ##                               stop), then waits for the settle; see `report`.
@@ -40,8 +41,9 @@ extends RefCounted
 ##   check                       bodies, dressing coverage, scatter rows in the water by
 ##                               asset, rock props under the water, the ground layers.
 ##   profile {every}             ground and depth along every river's course.
-##   cleanup                     deletes every user://levels/_p43_* and _p44_* folder (test
-##                               levels only).
+##   joints                      the reach steps of every river, named "joint<k>" (P4-5).
+##   cleanup                     deletes every user://levels/_p43_*, _p44_* and _p45_* folder
+##                               (test levels only).
 
 ## The `build` map: the river's control line, its reaches' half-widths, the bank width of
 ## the carve, and the two ponds.
@@ -61,7 +63,7 @@ const HALF_WIDTHS := [1.8, 2.2, 2.8]
 const BANK_M := 1.6
 const POND := {"id": 20, "at": [13, -17], "r": 6.0, "depth": "deep"}
 ## Level folders `save` may write (test levels; `cleanup` deletes the _p43_ and _p44_ ones).
-const TEST_PREFIXES: Array[String] = ["_p42_", "_p43_", "_p44_"]
+const TEST_PREFIXES: Array[String] = ["_p42_", "_p43_", "_p44_", "_p45_"]
 const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}
 
 ## Points `scan` found (and the reach steps `carve` made), by name.
@@ -98,6 +100,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _check(base)
 		"profile":
 			return _profile(base, float(step.get("every", 1.0)))
+		"joints":
+			return _joints(base)
 		"cleanup":
 			return _cleanup()
 		"save":
@@ -684,14 +688,34 @@ static func _profile(base: Node, every: float) -> String:
 	return " || ".join(out)
 
 
-## Deletes the test levels this probe saved (user://levels/_p43_* and _p44_* only).
+## The reach steps of every river drawn so far (each reach whose first point is another
+## reach's last), named "joint<k>" for `look` and any point field ("found:joint1").
+static func _joints(base: Node) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	ctrl.editor.finish_height_work()
+	var out := PackedStringArray()
+	for a in ctrl.document.water_bodies:
+		for b in ctrl.document.water_bodies:
+			var river := a != b and a.is_river() and b.is_river()
+			if river and a.points[-1].distance_squared_to(b.points[0]) < 1e-6:
+				_found["joint%d" % (out.size() + 1)] = b.points[0]
+				out.append("%s: %d -> %d" % [str(b.points[0]), a.id, b.id])
+	return "joints: %s" % "; ".join(out)
+
+
+## Deletes the test levels this probe saved (user://levels/_p43_*, _p44_*, _p45_* only).
 static func _cleanup() -> String:
 	var dir := DirAccess.open(LevelManager.levels_dir)
 	if dir == null:
 		return "no levels folder"
 	var removed := PackedStringArray()
 	for folder in dir.get_directories():
-		if not (folder.begins_with("_p43_") or folder.begins_with("_p44_")):
+		var test_level := false
+		for prefix in TEST_PREFIXES.slice(1):
+			test_level = test_level or folder.begins_with(prefix)
+		if not test_level:
 			continue
 		var path := LevelManager.folder_path(folder)
 		_remove_tree(path)
@@ -735,16 +759,26 @@ static func _save(base: Node, folder: String) -> String:
 # --- play ----------------------------------------------------------------------------------
 
 
+## The first locally cached token asset that is an ordinary token: not a light (P4-5: the
+## first one found was misc/lightglobe, an emissive globe carrying its own light, whose glow
+## under the water read as blown-out bright blobs in every water capture with tokens). A
+## light is taken only when nothing else is cached.
 static func _asset() -> Array:
+	var fallback: Array = []
 	for pack in AssetManager.get_packs():
 		var ids: Array = (pack as AssetPack).assets.keys()
 		ids.sort()
 		for id in ids:
 			var path := AssetManager.get_model_path(pack.pack_id, id)
 			var local := path != "" and FileAccess.file_exists(path)
-			if local or AssetManager.get("cache").has_cached(pack.pack_id, id, "default"):
-				return [pack.pack_id, id]
-	return []
+			if not (local or AssetManager.get("cache").has_cached(pack.pack_id, id, "default")):
+				continue
+			if String(id).to_lower().contains("light"):
+				if fallback.is_empty():
+					fallback = [pack.pack_id, id]
+				continue
+			return [pack.pack_id, id]
+	return fallback
 
 
 ## One token per point, the assets `assets` ([[pack, id], ...], cycled) or else the first
