@@ -52,16 +52,18 @@ const DEFAULT_ACCENT_SCALE_M := 6.0
 const MAX_ACCENT_SCALE_M := 200.0
 ## A biome's water surfaces when the palette names none (contract section 9, optional
 ## water_bed_surface and shore_surface, P4-3), by biome key: [bed, shore]. Judged at the game
-## camera on carved rivers; unknown biomes take DEFAULT_WATER_SURFACES. A default the
+## camera on carved rivers (P4-4: forest banks are moss, which the ferns gathering there
+## grow on; bare mud under a canopy read as a scar); unknown biomes take
+## DEFAULT_WATER_SURFACES. A default the
 ## palette lacks as a ground surface is dropped ("": the ground stays).
 const WATER_SURFACE_DEFAULTS := {
 	"alpine_meadow": ["riverbed", "gravel"],
-	"birch_woodland": ["riverbed", "mud"],
-	"boreal_taiga": ["riverbed", "mud"],
+	"birch_woodland": ["riverbed", "moss"],
+	"boreal_taiga": ["riverbed", "moss"],
 	"grassland_meadow": ["riverbed", "mud"],
 	"rocky_badlands": ["gravel_sandstone", "gravel_sandstone"],
 	"savanna": ["riverbed", "sand"],
-	"temperate_forest": ["riverbed", "mud"],
+	"temperate_forest": ["riverbed", "moss"],
 	"wetland_riparian": ["riverbed", "mud"],
 }
 const DEFAULT_WATER_SURFACES := ["riverbed", "mud"]

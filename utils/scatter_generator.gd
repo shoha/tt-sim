@@ -567,7 +567,7 @@ static func _evaluate(
 	if entry.clumped:
 		var membership := _membership(ctx, s, x, z)
 		ctx.edge = membership.y
-		keep *= membership.x
+		keep *= maxf(membership.x, clampf(painted - 1.0, 0.0, 1.0))  # bank species, P4-4
 		if u >= keep:
 			return false
 	if entry.spacing > 0.0 and not _spaced_survives(ctx.fields[entry.field], cands, c):

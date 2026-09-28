@@ -121,7 +121,7 @@ func test_wet_biome_surfaces_default_by_biome() -> void:
 		pending("no palette")
 		return
 	assert_eq(forest.get("water_bed_surface"), "riverbed")
-	assert_eq(forest.get("shore_surface"), "mud")
+	assert_eq(forest.get("shore_surface"), "moss", "mossy forest banks (P4-4)")
 	var badlands := PaletteLibrary.biome("rocky_badlands_summer_s1")
 	assert_eq(badlands.get("shore_surface"), "gravel_sandstone")
 	var validated := (
