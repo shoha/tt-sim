@@ -29,6 +29,12 @@ const WIDTH_STEP := 1.12
 ## Deck outline resolution along the span, and the plank ticks' spacing on the ghost.
 const OUTLINE_STEP_M := 0.4
 const TICK_M := 0.8
+## The drawn line (screen pixels): dash width (heavier when refused), dash length, and the
+## dark keyline's margin each side.
+const LINE_PX := 2.5
+const LINE_REFUSED_PX := 3.5
+const LINE_DASH_PX := 10.0
+const LINE_KEY_PX := 1.5
 ## Hover reach of the Ctrl erase around a crossing's footprint (world metres).
 const PICK_MARGIN_M := 0.35
 const READOUT_FONT_SIZE := 13
@@ -245,7 +251,7 @@ func draw(
 		var ok := preview != null
 		if ok:
 			draw_crossing(canvas, camera, editor, preview, _kind_tint(preview.kind), 1.0)
-		_draw_line(canvas, camera, from, to, TINT if ok else ERASE_TINT)
+		_draw_line(canvas, camera, from, to, TINT if ok else ERASE_TINT, not ok)
 		var text := (
 			readout(kind, preview.span_m() * editor.map_scale(), 0.0, cell_m, per_cell, label)
 			if ok
@@ -379,16 +385,24 @@ static func _fill_band(
 	)
 
 
-## The drawn line from `a` to `b` (world, on the ground where pressed and pointed), dashed.
+## The drawn line from `a` to `b` (world, on the ground where pressed and pointed): dashes
+## over a solid dark keyline, in screen pixels, so it reads over dark foliage and bright sand
+## alike at any zoom (P4b-3: a 1.75 px dash alone was lost over a forest floor). A refused
+## line (`refused`) is drawn heavier still: it is the one thing on screen that says why
+## nothing will be placed.
 static func _draw_line(
-	canvas: Control, camera: Camera3D, a: Vector3, b: Vector3, tint: Color
+	canvas: Control, camera: Camera3D, a: Vector3, b: Vector3, tint: Color, refused: bool
 ) -> void:
 	var sa := camera.unproject_position(a)
 	var sb := camera.unproject_position(b)
-	canvas.draw_dashed_line(sa, sb, Color(SHADOW, 0.5), 3.5, 7.0, true, true)
-	canvas.draw_dashed_line(sa, sb, Color(tint, 0.85), 1.75, 7.0, true, true)
-	canvas.draw_circle(sa, 3.5, Color(SHADOW, 0.6))
-	canvas.draw_circle(sa, 2.25, tint)
+	var width := LINE_REFUSED_PX if refused else LINE_PX
+	canvas.draw_line(sa, sb, Color(SHADOW, 0.7), width + 2.5 * LINE_KEY_PX, true)
+	canvas.draw_dashed_line(sa, sb, Color(tint, 0.95), width, LINE_DASH_PX, true, true)
+	canvas.draw_circle(sa, width + LINE_KEY_PX + 1.5, Color(SHADOW, 0.7))
+	canvas.draw_circle(sa, width + 1.0, tint)
+	if refused:
+		canvas.draw_circle(sb, width + LINE_KEY_PX + 1.5, Color(SHADOW, 0.7))
+		canvas.draw_circle(sb, width + 1.0, tint)
 
 
 ## A small ring on the ground at `at` (the idle cursor).
