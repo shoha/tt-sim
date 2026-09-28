@@ -1399,7 +1399,12 @@ editor API the Water tool (P4-4) calls. Tests: `tests/unit/test_water_carve.gd`,
   waterline over `refraction_depth_fade` (0.3 m of view depth): at full strength in
   millimetres of water it smeared the lit bed dressing of a steep bank facing the camera (an
   ankle stream's far bank) into a pale glassy band. Deeper water refracts as before, on
-  Blender water too.
+  Blender water too. The shore foam and the waterline fade apply only where the surface under
+  the water is ground (`shore_ground_gate`: its normal from the depth buffer's screen
+  derivatives within about 50-70 degrees of up): reeds standing in the water brought the bed
+  depth to zero wherever a blade passed under the surface and drew pale foam and see-through
+  shards around every clump (wetland renders). The depth-slope foam that wraps rocks and
+  tokens is unchanged, and still outlines submerged reed blades faintly.
 - **Wet dressing** (`WaterDressing`, a rule layer like cliff and scree, no paint slot,
   following the water wherever it is carved, painted or erased): per sample RGBA8 (`MapDocument
   .water_dressing`, a derived cache the document never saves; the ground shader's
