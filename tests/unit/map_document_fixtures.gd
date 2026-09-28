@@ -47,7 +47,33 @@ static func full_doc() -> MapDocument:
 	doc.biome_slots = slots
 	doc.biome_density = density
 	add_water(doc)
+	add_crossings(doc)
 	return doc
+
+
+## A plank bridge and a line of stepping stones over the river of add_water().
+static func add_crossings(doc: MapDocument) -> void:
+	doc.crossings.append(
+		Crossing.make(
+			2,
+			Crossing.Kind.PLANK,
+			Vector2(-3.25, -2.5),
+			Vector2(-1.5, 3.75),
+			Vector3(0.125, 0.5, 0.25),
+			1.5,
+			BIOME_A
+		)
+	)
+	doc.crossings.append(
+		Crossing.make(
+			5,
+			Crossing.Kind.STONES,
+			Vector2(4.5, -1.0),
+			Vector2(3.0, 5.5),
+			Vector3(0, -0.6, 0),
+			0.75
+		)
+	)
 
 
 ## A river (upstream at -X), a pond over a box of samples, and the baked flow map.
