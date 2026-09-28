@@ -216,7 +216,9 @@ static func sampler(
 				held = ScatterGenerator.bilinear(rock, columns, rows, lookup) * scale
 				yielding = maxf(shaped - held, 0.0)
 		var water := WaterDressing.sample(wet, columns, rows, s) if wet_on else Vector3.ZERO
-		var shares := TerrainRules.compose_water(yielding, held, rule, Vector2(water.x, water.y))
+		var shares := TerrainRules.compose_water(
+			yielding, held, rule, Vector2(water.x, water.y), water.z
+		)
 		var paved := built_weight * shares[3] + held
 		var open := 1.0 - shares[1] - smoothstep(PAVED_CLEAR_START, PAVED_CLEAR_FULL, paved)
 		if base == ROLE_TREE or base == ROLE_SHRUB:

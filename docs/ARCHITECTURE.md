@@ -1404,7 +1404,14 @@ editor API the Water tool (P4-4) calls. Tests: `tests/unit/test_water_carve.gd`,
   derivatives within about 50-70 degrees of up): reeds standing in the water brought the bed
   depth to zero wherever a blade passed under the surface and drew pale foam and see-through
   shards around every clump (wetland renders). The depth-slope foam that wraps rocks and
-  tokens is unchanged, and still outlines submerged reed blades faintly.
+  tokens (`fwidth` of the bed depth) fires only where the near side of the depth jump comes
+  within `EDGE_FOAM_REACH` (0.3 view units, fading from half of it) of the surface (P4b-0):
+  it used to trace every underwater silhouette against the bed behind it, so a boulder
+  standing in a deep pool drew a thin straight light line down the water from its waterline
+  to the bed (the side of its submerged flank, seen on the forest and badlands pools), and
+  submerged reed blades and a wading token's legs were outlined the same way. The near side
+  is the shallowest of the pixel and its neighbours across the derivative pair (by
+  `FRAGCOORD` parity), so both pixels of a silhouette agree.
 - **Wet dressing** (`WaterDressing`, a rule layer like cliff and scree, no paint slot,
   following the water wherever it is carved, painted or erased): per sample RGBA8 (`MapDocument
   .water_dressing`, a derived cache the document never saves; the ground shader's
@@ -1413,14 +1420,17 @@ editor API the Water tool (P4-4) calls. Tests: `tests/unit/test_water_carve.gd`,
   by noise; 1 on a cascade's riffle); G the shore weight (a core band along the waterline,
   gone by 0.8 m, and noise-driven drifts reaching 2.4 m, both fading with the height over
   the water between 0.3 and 0.8 m, so a high cut bank keeps its ground); B the depth in cm
-  (for the plants); A the wet line (1 under the water, falling to 0 over 0.8 m above it and
+  (for the plants and a path's ford); A the wet line (1 under the water, falling to 0 over 0.8 m above it and
   with height), which the shader darkens (35 %) and glosses whatever the surface. Distances
   and the level of the nearest water come from `DistanceField` over the water's bounding box
   grown by the shore band. The shader and `TerrainRules.compose_water` (the CPU twin,
   `test_terrain_rules.gd` checks the lines) compose after the cliff: the bed takes its share of
-  everything but painted rock, painted ground and built surfaces included
-  (`PAINT_WATER_YIELD` 1: a path stops at the water as at a rock face, and the bed shows under
-  it), then the shore takes its share of the kept ground (paint on a bank stays paint). Each
+  everything but painted rock, painted ground and built surfaces included as the water
+  deepens (`PAINT_WATER_YIELD` 1 times a smoothstep of the depth, B, from `PAINT_FORD_START_M`
+  0.05 to `PAINT_FORD_END_M` 0.35: a path runs on into the shallows like a ford and the bed
+  shows under it further out; P4-3 yielded at the bed's own edge, a few centimetres above the
+  waterline, and on a badlands gravel bank the path read as stopping short of the water),
+  then the shore takes its share of the kept ground (paint on a bank stays paint). Each
   ground component hands the bed and shore shares to its dominant biome's
   `water_bed_surface` / `shore_surface` (`GroundLayerTable` `bed_of` / `shore_of`, slots only
   on a map with water; `PaletteLibrary` defaults per biome, contract section 9).

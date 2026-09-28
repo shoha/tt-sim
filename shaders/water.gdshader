@@ -188,6 +188,13 @@ const float WAKE_DRIFT = 0.5;
 // lobe; strength is the weight against the shore and rock foam. Tuned on the River level.
 const float WAKE_FOAM_STRENGTH = 1.2;
 const float WAKE_FOAM_ONSET = 0.3;
+// Rock foam (the depth-slope detector) only where the near side of the depth jump comes
+// within this much of the surface (view-space units, like bed_depth; fading from half of
+// it): a rock breaking the surface foams at its waterline, but the silhouette of its
+// submerged flank against the bed further down does not. Without it every underwater
+// outline (a boulder's side in a deep pool, reed blades, a wading token's legs) drew a thin
+// straight foam line across the water (P4b-0, the badlands and forest pools).
+const float EDGE_FOAM_REACH = 0.3;
 
 varying vec3 world_pos;
 
@@ -514,8 +521,19 @@ void fragment() {
 	// slope is depth change per world unit of travel, so 1.0 is a 45 degree bank; the
 	// preset sensitivities sit well above that, otherwise every gently sloping riverbed
 	// under the shallows foams over.
-	float depth_slope = fwidth(bed_depth) / world_units_per_pixel;
+	float depth_jump = fwidth(bed_depth);
+	float depth_slope = depth_jump / world_units_per_pixel;
 	float edge_foam = smoothstep(foam_edge_sensitivity, foam_edge_sensitivity * 3.0, depth_slope);
+	// The jump's near side must reach the surface: the shallowest of this pixel and its
+	// neighbours across the derivative pair (dFdx is right minus left of the pair, so the
+	// neighbour of an even column is to the right, of an odd one to the left; rows likewise).
+	float side_x = mod(floor(FRAGCOORD.x), 2.0) < 0.5 ? 1.0 : -1.0;
+	float side_y = mod(floor(FRAGCOORD.y), 2.0) < 0.5 ? 1.0 : -1.0;
+	float near_side = min(
+		bed_depth,
+		min(bed_depth + side_x * dFdx(bed_depth), bed_depth + side_y * dFdy(bed_depth))
+	);
+	edge_foam *= 1.0 - smoothstep(EDGE_FOAM_REACH * 0.5, EDGE_FOAM_REACH, max(near_side, 0.0));
 	// Animated breakup so both foam sources form patches instead of a flat fill.
 	// Streaks: the breakup noise is advected two-phase like the ripples and stretched
 	// along the flow, so shore foam and rock foam both trail downstream.

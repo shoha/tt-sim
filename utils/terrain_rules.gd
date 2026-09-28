@@ -102,9 +102,15 @@ const PAINT_EDGE_NOISE := 0.35
 ## top. Painted cliff-role surfaces never yield (restyling a face is deliberate).
 const PAINT_CLIFF_YIELD := 1.0
 ## Likewise under water (P4-3): painted ground and built surfaces yield this fraction of the
-## water bed's weight (WaterDressing) to the bed, so a path runs to the water's edge and a
-## river crossing it shows its bed; painted cliff-role surfaces hold.
+## water bed's weight (WaterDressing) to the bed, so a river crossing a path shows its bed;
+## painted cliff-role surfaces hold.
 const PAINT_WATER_YIELD := 1.0
+## ... but not at the waterline (P4b-0): the yield fades in with the water's depth between
+## these, so a path runs on into the shallows like a ford and fades under the water instead
+## of stopping at the bed's edge, where on a sand or gravel bank it read as a gap before the
+## water (badlands, phase 4 judgment set).
+const PAINT_FORD_START_M := 0.05
+const PAINT_FORD_END_M := 0.35
 
 const INV_UINT_MAX := 1.0 / 4294967295.0
 const _MASK32 := 0xFFFFFFFF
@@ -302,21 +308,25 @@ static func compose_paint(yielding: float, held: float, rule: Vector2) -> Vector
 	return Vector4(shares[0], shares[1], shares[2], shares[3])
 
 
-## compose_paint() with the wet dressing (P4-3; `water` = Vector2(bed, shore) weights,
-## WaterDressing): [keep, cliff, scree, paint_scale, bed, shore]. After the cliff, the water
-## bed takes its weight's share of everything left but held paint (the unpainted ground and
-## the yielding paint, PAINT_WATER_YIELD: a path under water shows the bed), then the shore
-## takes its share of the kept ground (paint on a bank stays paint; scree under water turns
-## to bed). The shares add up to 1 with the held paint. The shader writes the same lines.
+## compose_paint() with the wet dressing (P4-3; `water` = Vector2(bed, shore) weights and
+## `water_depth` the water's depth in metres, WaterDressing): [keep, cliff, scree,
+## paint_scale, bed, shore]. After the cliff, the water bed takes its weight's share of the
+## unpainted ground and, as the water deepens (ford: PAINT_WATER_YIELD, PAINT_FORD_*), of the
+## yielding paint, so a path runs into the shallows and the bed shows under it further out;
+## then the shore takes its share of the kept ground (paint on a bank stays paint; scree
+## under water turns to bed). The shares add up to 1 with the held paint. The shader writes
+## the same lines.
 static func compose_water(
-	yielding: float, held: float, rule: Vector2, water: Vector2
+	yielding: float, held: float, rule: Vector2, water: Vector2, water_depth: float = 0.0
 ) -> PackedFloat32Array:
 	var unpainted := clampf(1.0 - yielding - held, 0.0, 1.0)
 	var cliff_scale := 1.0 - PAINT_CLIFF_YIELD * rule.x
-	var paint_scale := cliff_scale * (1.0 - PAINT_WATER_YIELD * water.x)
+	var fording := smoothstep(PAINT_FORD_START_M, PAINT_FORD_END_M, water_depth)
+	var ford := PAINT_WATER_YIELD * water.x * fording
+	var paint_scale := cliff_scale * (1.0 - ford)
 	var cliff := unpainted * rule.x + yielding * (1.0 - cliff_scale)
 	var dry := 1.0 - water.x
-	var bed := water.x * (unpainted * (1.0 - rule.x) + yielding * cliff_scale * PAINT_WATER_YIELD)
+	var bed := water.x * unpainted * (1.0 - rule.x) + yielding * cliff_scale * ford
 	var scree := unpainted * rule.y * dry
 	var shore := unpainted * (1.0 - rule.x - rule.y) * dry * water.y
 	var keep := unpainted * (1.0 - rule.x - rule.y) * dry * (1.0 - water.y)

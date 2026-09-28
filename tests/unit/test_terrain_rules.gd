@@ -38,6 +38,8 @@ const MIRRORED := [
 	"PAINT_NOISE_OFFSET",
 	"PAINT_CLIFF_YIELD",
 	"PAINT_WATER_YIELD",
+	"PAINT_FORD_START_M",
+	"PAINT_FORD_END_M",
 ]
 const STEP := Vector2(0.25, 0.25)
 const EPS := 1e-4
@@ -270,13 +272,15 @@ func test_shader_constants_mirror_the_rules() -> void:
 			assert_almost_eq(float(shader[name]), float(cpu), 1e-6, name)
 	assert_almost_eq(shader.get("CLIFF_START_COS", 0.0), TerrainRules.cliff_start_cos(), 1e-6)
 	assert_almost_eq(shader.get("CLIFF_END_COS", 0.0), TerrainRules.cliff_end_cos(), 1e-6)
+	assert_almost_eq(shader.get("WATER_DEPTH_SCALE", 0.0), WaterDressing.DEPTH_SCALE, 1e-6)
 
 
 ## The cliff-face and water rules are written the same way in the shader as in
 ## compose_water(): painted ground and built weight scaled by 1 - PAINT_CLIFF_YIELD * rule.x
-## and 1 - PAINT_WATER_YIELD * bed (paths yield at faces and at the water), painted rock
-## held, the yielded parts added to the rock and the bed, scree and shore over the unpainted
-## ground only. Each line below is compose_water()'s, word for word.
+## and 1 - the ford (PAINT_WATER_YIELD * bed, faded in with the depth: paths yield at faces
+## and in deeper water), painted rock held, the yielded parts added to the rock and the bed,
+## scree and shore over the unpainted ground only. Each line below is compose_water()'s,
+## word for word.
 func test_shader_composes_paint_like_compose_water() -> void:
 	var text := FileAccess.get_file_as_string(SHADER_PATH).replace(" ", "")
 	var cpu := (
@@ -287,10 +291,12 @@ func test_shader_composes_paint_like_compose_water() -> void:
 	)
 	for line in [
 		"cliff_scale=1.0-PAINT_CLIFF_YIELD*rule.x",
-		"paint_scale=cliff_scale*(1.0-PAINT_WATER_YIELD*water.x)",
+		"fording=smoothstep(PAINT_FORD_START_M,PAINT_FORD_END_M,water_depth)",
+		"ford=PAINT_WATER_YIELD*water.x*fording",
+		"paint_scale=cliff_scale*(1.0-ford)",
 		"cliff=unpainted*rule.x+yielding*(1.0-cliff_scale)",
 		"dry=1.0-water.x",
-		"bed=water.x*(unpainted*(1.0-rule.x)+yielding*cliff_scale*PAINT_WATER_YIELD)",
+		"bed=water.x*unpainted*(1.0-rule.x)+yielding*cliff_scale*ford",
 		"scree=unpainted*rule.y*dry",
 		"shore=unpainted*(1.0-rule.x-rule.y)*dry*water.y",
 		"keep=unpainted*(1.0-rule.x-rule.y)*dry*(1.0-water.y)",
