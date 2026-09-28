@@ -312,6 +312,14 @@ func test_clearance_clears_the_footprint_and_bank_landings() -> void:
 	var partial := CrossingGeometry.clearance(doc.crossings, beside)
 	assert_true(partial > 0.0 and partial < 1.0, "a soft edge")
 	assert_true(CrossingGeometry.clear_bounds(crossing).has_point(landing))
+	var tree_extra := CrossingGeometry.CLEAR_TREE_M
+	assert_eq(
+		CrossingGeometry.clearance(doc.crossings, beside, tree_extra), 0.0, "trees keep back more"
+	)
+	var past_landing := crossing.end + crossing.direction() * 1.8
+	assert_eq(CrossingGeometry.clearance(doc.crossings, past_landing), 1.0)
+	assert_eq(CrossingGeometry.clearance(doc.crossings, past_landing, tree_extra), 0.0)
+	assert_true(CrossingGeometry.clear_bounds(crossing).has_point(past_landing))
 
 
 func test_scatter_ground_keeps_plants_off_a_crossing() -> void:

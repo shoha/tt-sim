@@ -19,8 +19,9 @@ extends Node3D
 ##
 ## Materials come from the palette per crossing style (the biome id a crossing carries,
 ## Crossing.style): wood samples the `planks` surface tinted by the biome's climate
-## (WOOD_TINTS), stones the biome's cliff rock (its cliff_surface, triplanar), both shaded
-## further by the geometry's vertex colours. One material per (kind, style) is shared by
+## (WOOD_TINTS), stones the biome's cliff rock (its cliff_surface, triplanar) with the
+## palette's moss on their upward facets in damp climates (moss_split), all shaded further by
+## the geometry's vertex colours. One material per (kind, style) is shared by
 ## every crossing that uses it. Building is cheap (well under a millisecond per crossing), so
 ## an edit rebuilds on the main thread (refresh()); a load builds the arrays on a worker
 ## (AuthoredLoadPrep) and create() only makes the nodes. Summary: docs/ARCHITECTURE.md
@@ -44,6 +45,10 @@ const WOOD_TINTS := {
 const DEFAULT_WOOD_TINT := Color(1.0, 0.97, 0.92)
 ## Stone albedo tint (a touch warm).
 const STONE_TINT := Color(1.0, 0.99, 0.96)
+## Per rock surface, a tint that brings a stepping stone near the palette boulders beside it:
+## the cold biomes' basalt cliff is near black, their boulders light grey, and dark slabs read
+## as holes in the water (P4b-3 judgment set, alpine and boreal).
+const STONE_SURFACE_TINTS := {"cliff_basalt": Color(1.6, 1.58, 1.5)}
 ## Stones sample their rock this many times its tile size: the cliff textures are strata, and
 ## at their own scale a stone's top showed three or four stripes and read as a cut log.
 const STONE_TILE_SCALE := 1.4
@@ -51,14 +56,20 @@ const STONE_TILE_SCALE := 1.4
 const WOOD_NORMAL_SCALE := 0.6
 const STONE_NORMAL_SCALE := 0.8
 ## Stepping stones in a damp climate grow moss on their tops, like the palette's boulders
-## there (P4b-2 review: plain grey stones read foreign beside mossy forest boulders): the
-## vertex colour of upward facets is multiplied toward this tint, in patches. Vertex colours
-## are stored as 8-bit (clamped to 1), so the tint can only take red and blue away: a mild
-## one read as khaki on the rock, so it is a strong green. Dry country's stones stay bare.
-const MOSS_TINTS := {
-	"temperate": Color(0.42, 0.72, 0.18),
-	"cold": Color(0.62, 0.74, 0.45),
-}
+## there: facets that face up take the palette's `moss` surface, decided per facet in patches
+## (moss_split), the way treecube's rocks give each face rock or moss. How much moss by the
+## style biome's climate; dry country's stones stay bare. (P4b-2 tinted the rock's vertex
+## colours instead; 8-bit colours can only darken, so the tops read dull olive beside the
+## boulders' bright moss, P4b-3.)
+const MOSS_SURFACE := "moss"
+const MOSS_AMOUNTS := {"temperate": 0.6, "cold": 0.45}
+const MOSS_TINT := Color(1.0, 1.0, 1.0)
+const MOSS_NORMAL_SCALE := 0.7
+## Moss patches: the field's scale (radians per metre) and how far it moves the facing test.
+const MOSS_FIELD_FREQ := Vector4(5.3, 3.1, 4.7, 2.3)
+const MOSS_FIELD_REACH := 1.1
+## Steeper facets (the shoulder at the waterline, the wet root) never take moss.
+const MOSS_MIN_UP := 0.6
 
 ## Per document sample, the deck's walking surface (CrossingGeometry.NONE elsewhere).
 var deck_heights: PackedFloat32Array = PackedFloat32Array()
@@ -113,7 +124,10 @@ func warm_materials(styles: PackedStringArray) -> void:
 	if all.is_empty():
 		all.append("")
 	for style in all:
-		for material: BaseMaterial3D in [_wood_material(style), _stone_material(style)]:
+		var materials: Array[Material] = [_wood_material(style), _stone_material(style)]
+		if moss_amount(style, _palette_root) > 0.0:
+			materials.append(_moss_material())
+		for material in materials:
 			# A BaseMaterial3D builds its shader when its RID is first asked for: now, rather
 			# than when the first crossing's mesh takes it.
 			material.get_rid()
@@ -193,33 +207,68 @@ func _crossing_node(parts: Dictionary) -> Node3D:
 		node.add_child(_mesh_instance("Wood", wood, _wood_material(style)))
 	var stone: Array = parts.get("stone", [])
 	if not stone.is_empty():
-		var moss: Variant = MOSS_TINTS.get(String(_biome(style).get("climate", "")))
-		if moss is Color:
-			stone = mossed(stone, moss)
-		node.add_child(_mesh_instance("Stones", stone, _stone_material(style)))
+		var amount := moss_amount(style, _palette_root)
+		var split := moss_split(stone, amount) if amount > 0.0 else [stone, []]
+		var mesh := ArrayMesh.new()
+		for k in 2:
+			var part: Array = split[k]
+			if part.is_empty():
+				continue
+			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, part)
+			mesh.surface_set_material(
+				mesh.get_surface_count() - 1, _stone_material(style) if k == 0 else _moss_material()
+			)
+		var instance := MeshInstance3D.new()
+		instance.name = "Stones"
+		instance.mesh = mesh
+		node.add_child(instance)
 	var faces: PackedVector3Array = parts.get("collision", PackedVector3Array())
 	if not faces.is_empty():
 		node.add_child(_body(faces, int(parts.id)))
 	return node
 
 
-## Stone mesh `arrays` (CrossingGeometry's) with moss on their upward facets: each vertex's
-## colour multiplied toward `moss` by how much its facet faces up, in patches (a fixed pattern
-## of the vertex's position, so every peer draws the same). Pure; the input is not changed.
-static func mossed(arrays: Array, moss: Color) -> Array:
-	var out := arrays.duplicate()
-	var colors := (arrays[Mesh.ARRAY_COLOR] as PackedColorArray).duplicate()
-	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+## How much moss stepping stones of style `style` grow (MOSS_AMOUNTS by the biome's climate;
+## 0: bare, also when the palette has no `moss` surface).
+static func moss_amount(style: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> float:
+	var biome := PaletteLibrary.biome(style, root) if style != "" else {}
+	if biome.is_empty() or not PaletteLibrary.surfaces(root).has(MOSS_SURFACE):
+		return 0.0
+	return float(MOSS_AMOUNTS.get(String(biome.get("climate", "")), 0.0))
+
+
+## True when a stone facet facing `up` (its normal's Y) with its centre at `centre` (map frame)
+## is moss for `amount` (0..1): the more a facet faces up and the higher a fixed field of its
+## position there, the likelier; so patches, the same on every peer. Pure.
+static func is_moss(up: float, centre: Vector3, amount: float) -> bool:
+	if amount <= 0.0 or up < MOSS_MIN_UP:
+		return false
+	var f := MOSS_FIELD_FREQ
+	var field := sin(centre.x * f.x + centre.z * f.y) * cos(centre.z * f.z - centre.x * f.w)
+	return up + field * 0.5 * MOSS_FIELD_REACH > 1.45 - amount
+
+
+## Stone mesh `arrays` (CrossingGeometry's, indexed flat-shaded triangles) split by facet into
+## [rock, moss] mesh arrays sharing the vertex arrays ([] for a part with no facet), each
+## facet by is_moss(). Pure; the input is not changed.
+static func moss_split(arrays: Array, amount: float) -> Array:
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	for i in colors.size():
-		var up := smoothstep(0.55, 0.95, normals[i].y)
-		if up <= 0.0:
-			continue
-		var v := vertices[i]
-		var patch := 0.5 + 0.5 * sin(v.x * 7.3 + v.z * 5.1) * cos(v.z * 6.7 - v.x * 3.9)
-		var tint := Color.WHITE.lerp(moss, up * lerpf(0.7, 1.0, patch))
-		colors[i] = Color(colors[i].r * tint.r, colors[i].g * tint.g, colors[i].b * tint.b)
-	out[Mesh.ARRAY_COLOR] = colors
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var rock := PackedInt32Array()
+	var moss := PackedInt32Array()
+	for t in range(0, indices.size(), 3):
+		var a := indices[t]
+		var centre := (vertices[a] + vertices[indices[t + 1]] + vertices[indices[t + 2]]) / 3.0
+		var target := moss if is_moss(normals[a].y, centre, amount) else rock
+		target.append_array(PackedInt32Array([a, indices[t + 1], indices[t + 2]]))
+	var out: Array = []
+	for part in [rock, moss]:
+		var part_arrays: Array = []
+		if not part.is_empty():
+			part_arrays = arrays.duplicate()
+			part_arrays[Mesh.ARRAY_INDEX] = part
+		out.append(part_arrays)
 	return out
 
 
@@ -271,11 +320,29 @@ func _stone_material(style: String) -> Material:
 	if _materials.has(key):
 		return _materials[key]
 	var surface := stone_surface(style, _palette_root)
-	var material := _surface_material(surface, STONE_TINT, STONE_NORMAL_SCALE)
+	var tint: Color = STONE_SURFACE_TINTS.get(surface, STONE_TINT)
+	var material := _surface_material(surface, tint, STONE_NORMAL_SCALE)
 	var tile := float(PaletteLibrary.surfaces(_palette_root).get(surface, {}).get("tile_m", 3.0))
 	material.uv1_triplanar = true
 	material.uv1_triplanar_sharpness = 4.0
 	material.uv1_scale = Vector3.ONE / maxf(tile * STONE_TILE_SCALE, 0.1)
+	_materials[key] = material
+	return material
+
+
+## The moss on stone tops (the palette's `moss` surface, triplanar at its own tile size), one
+## for every style.
+func _moss_material() -> Material:
+	var key := "moss"
+	if _materials.has(key):
+		return _materials[key]
+	var material := _surface_material(MOSS_SURFACE, MOSS_TINT, MOSS_NORMAL_SCALE)
+	var tile := float(
+		PaletteLibrary.surfaces(_palette_root).get(MOSS_SURFACE, {}).get("tile_m", 3.0)
+	)
+	material.uv1_triplanar = true
+	material.uv1_triplanar_sharpness = 4.0
+	material.uv1_scale = Vector3.ONE / maxf(tile, 0.1)
 	_materials[key] = material
 	return material
 
@@ -293,6 +360,8 @@ static func texture_paths(
 			names[WOOD_SURFACE] = true
 			continue
 		names[stone_surface(crossing.style, root)] = true
+		if moss_amount(crossing.style, root) > 0.0:
+			names[MOSS_SURFACE] = true
 	for surface_name in names:
 		var surface: Dictionary = surfaces.get(surface_name, {})
 		for key in ["albedo", "normal", "orm"]:
@@ -311,7 +380,8 @@ static func stone_surface(style: String, root: String = PaletteLibrary.DEFAULT_R
 
 
 ## The palette surfaces a crossing of any kind in any of the styles `styles` (biome ids) binds
-## (the planks and each style's stone rock), for warming them before a first placement.
+## (the planks, each style's stone rock, and the moss where its stones grow it), for warming
+## them before a first placement.
 static func surfaces_for_styles(
 	styles: PackedStringArray, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> PackedStringArray:
@@ -320,6 +390,8 @@ static func surfaces_for_styles(
 		var surface := stone_surface(style, root)
 		if not out.has(surface):
 			out.append(surface)
+		if moss_amount(style, root) > 0.0 and not out.has(MOSS_SURFACE):
+			out.append(MOSS_SURFACE)
 	if styles.is_empty():
 		out.append(DEFAULT_STONE_SURFACE)
 	return out

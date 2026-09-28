@@ -31,7 +31,8 @@ extends RefCounted
 ##
 ## Crossings (phase 4b): nothing grows under a bridge deck or its stones, nor on the bank
 ## landings past its anchors (CrossingGeometry.clearance, rocks included), so no plant stands
-## through the planks.
+## through the planks; trees keep further back (CLEAR_TREE_M), shrubs and rocks a little
+## (CLEAR_SHRUB_M; P4b-3).
 ##
 ## Legibility (P3-7). Terraces under forest: trees (ROLE_TREE) keep back from tier faces and
 ## lips, and shrubs (ROLE_SHRUB) a little, so a GM sees the rock step and the edge of each
@@ -238,7 +239,12 @@ static func sampler(
 		if water != Vector3.ZERO:
 			open *= wet_factor(role, water)
 		if not crossings.is_empty():
-			open *= CrossingGeometry.clearance(crossings, p)
+			var extra := 0.0
+			if base == ROLE_TREE:
+				extra = CrossingGeometry.CLEAR_TREE_M
+			elif base == ROLE_SHRUB or base == ROLE_ROCK:
+				extra = CrossingGeometry.CLEAR_SHRUB_M
+			open *= CrossingGeometry.clearance(crossings, p, extra)
 		return Vector3(maxf(open, 0.0), shares[1], shares[2])
 
 

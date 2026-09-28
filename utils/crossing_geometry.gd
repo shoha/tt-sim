@@ -99,6 +99,10 @@ const STONE_SIDES := 9
 ## out to STONE_CHAMFER_INSET, STONE_CHAMFER_M lower, then the rounded shoulder at the full
 ## radius STONE_SHOULDER_M below the top (about the waterline), then the flared root.
 const STONE_TOP_INSET := 0.7
+## The top is a fan to an inner ring at this share of the radius, then a band out to the top
+## ring: facets small enough that a stone's moss (AuthoredCrossings.moss_split, decided per
+## facet like the palette rocks') forms patches instead of pie slices (P4b-3).
+const STONE_INNER_INSET := 0.36
 const STONE_CHAMFER_INSET := 0.93
 const STONE_CHAMFER_M := 0.045
 const STONE_SHOULDER_M := 0.14
@@ -120,6 +124,12 @@ const NONE := -INF
 const CLEAR_MARGIN_M := 0.35
 const CLEAR_ANCHOR_M := 0.9
 const CLEAR_SOFT_M := 0.5
+## Trees (and shrubs and rocks, less) keep this much further back, so a trunk never crowds a landing
+## and a canopy does not hide the deck (P4b-3 judgment set: a pine 1.5 m off a forest
+## bridge's landing hid its end and the token on it in play; bushes grew over a landing).
+## Canopies still frame a crossing.
+const CLEAR_TREE_M := 1.2
+const CLEAR_SHRUB_M := 0.6
 
 
 ## Mesh arrays built one quad at a time. Tangents (4 floats per vertex) point along +U with
@@ -328,15 +338,17 @@ static func deck_field(doc: MapDocument, crossings: Array[Crossing]) -> PackedFl
 ## crossing's footprint (its deck, posts or stones, and CLEAR_ANCHOR_M of bank past each
 ## anchor), 1 from CLEAR_SOFT_M beyond it, smooth between. Pure; cheap per point (a few
 ## multiplies per crossing).
-static func clearance(crossings: Array[Crossing], p: Vector2) -> float:
+## `extra` widens the whole footprint (trees CLEAR_TREE_M, shrubs CLEAR_SHRUB_M).
+static func clearance(crossings: Array[Crossing], p: Vector2, extra: float = 0.0) -> float:
 	var keep := 1.0
+	var anchor := CLEAR_ANCHOR_M + extra
 	for crossing in crossings:
 		var span := crossing.span_m()
 		if span <= 0.0:
 			continue
 		var uv := local_of(crossing, p)
-		var half := crossing.width_m * 0.5 + CLEAR_MARGIN_M
-		var du := maxf(maxf(-CLEAR_ANCHOR_M - uv.x, uv.x - span - CLEAR_ANCHOR_M), 0.0)
+		var half := crossing.width_m * 0.5 + CLEAR_MARGIN_M + extra
+		var du := maxf(maxf(-anchor - uv.x, uv.x - span - anchor), 0.0)
 		var dv := maxf(absf(uv.y) - half, 0.0)
 		keep = minf(keep, smoothstep(0.0, CLEAR_SOFT_M, Vector2(du, dv).length()))
 	return keep
@@ -344,7 +356,9 @@ static func clearance(crossings: Array[Crossing], p: Vector2) -> float:
 
 ## The map rectangle clearance() reads for `crossing` (its footprint and fade).
 static func clear_bounds(crossing: Crossing) -> Rect2:
-	var reach := crossing.width_m * 0.5 + CLEAR_MARGIN_M + CLEAR_SOFT_M + CLEAR_ANCHOR_M
+	var reach := (
+		crossing.width_m * 0.5 + CLEAR_MARGIN_M + CLEAR_SOFT_M + CLEAR_ANCHOR_M + CLEAR_TREE_M
+	)
 	return Rect2(crossing.start, Vector2.ZERO).expand(crossing.end).grow(reach)
 
 
@@ -711,10 +725,11 @@ static func _stone(spec: Dictionary, mesh: _Mesh) -> void:
 	var top: float = spec.top
 	var shoulder := top - STONE_SHOULDER_M * rng.randf_range(0.85, 1.15)
 	var bottom: float = minf(float(spec.bed) - STONE_BURY_M, shoulder - 0.05)
-	# Rings from the top down: top, chamfer, shoulder, root.
+	# Rings from the top down: top, chamfer, shoulder, root; and the top's inner ring.
 	var rings: Array[PackedVector3Array] = [
 		PackedVector3Array(), PackedVector3Array(), PackedVector3Array(), PackedVector3Array()
 	]
+	var inner := PackedVector3Array()
 	var phase := rng.randf_range(0.0, TAU)
 	for k in STONE_SIDES:
 		var angle := phase + TAU * k / STONE_SIDES + rng.randf_range(-0.18, 0.18)
@@ -724,6 +739,15 @@ static func _stone(spec: Dictionary, mesh: _Mesh) -> void:
 		var lift := rng.randf_range(-0.01, 0.01)
 		var chamfer := top - STONE_CHAMFER_M * rng.randf_range(0.7, 1.3)
 		var flare := STONE_ROOT_FLARE * rng.randf_range(0.95, 1.05)
+		# Between the top ring's corners, turned half a side, so the band is a zigzag.
+		var half_turn := local.rotated(PI / STONE_SIDES).rotated(yaw) * STONE_INNER_INSET
+		inner.append(
+			Vector3(
+				at.x + half_turn.x,
+				top + STONE_DOME_M * 0.6 + rng.randf_range(-0.006, 0.006),
+				at.y + half_turn.y
+			)
+		)
 		rings[0].append(
 			Vector3(at.x + o.x * STONE_TOP_INSET, top + lift, at.y + o.y * STONE_TOP_INSET)
 		)
@@ -743,7 +767,10 @@ static func _stone(spec: Dictionary, mesh: _Mesh) -> void:
 	var middle := Vector3(at.x, (top + bottom) * 0.5, at.y)
 	for k in STONE_SIDES:
 		var n := (k + 1) % STONE_SIDES
-		mesh.triangle(centre, rings[0][k], rings[0][n], colors[0], Vector3.UP)
+		# inner[k] sits between top corners k and k + 1.
+		mesh.triangle(centre, inner[k], inner[n], colors[0], Vector3.UP)
+		mesh.triangle(inner[k], rings[0][k], rings[0][n], colors[0], Vector3.UP)
+		mesh.triangle(inner[k], rings[0][n], inner[n], colors[0], Vector3.UP)
 		for band in 3:
 			var a := rings[band]
 			var b := rings[band + 1]
