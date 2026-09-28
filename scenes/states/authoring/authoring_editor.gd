@@ -31,7 +31,7 @@ extends RefCounted
 ## blits the weight texels; scatter follows at the end only for surfaces that clear plants.
 ##
 ## Water (P4-3, P4-4): `water` (WaterEditor) carves, paints and erases water (stroke_dab etc.);
-## crossings (P4b-1): `crossings` (CrossingEditor) places and removes bridges and stones.
+## crossings (P4b-1): `crossings` (CrossingEditor), following sculpt and water edits (P4b-2).
 
 ## Emitted after every change to the map (strokes, props, undo, redo), for dirty tracking.
 signal edited
@@ -608,8 +608,7 @@ func _apply_moved(
 	return moved.size()
 
 
-## Prop asset `asset_id`'s species: x 1 when it stands on the ground normal, y its footing,
-## z 1 for a rock (its tilt is capped at RockKeep.MAX_TILT_RAD).
+## Prop `asset_id`'s bedding: x 1 when normal-aligned, y its footing, z 1 for a (tilt-capped) rock.
 func _prop_bedding(asset_id: String) -> Vector3:
 	if not _prop_rules.has(asset_id):
 		var rule := rule_for_asset(asset_id)
@@ -651,6 +650,7 @@ func _end_height_stroke() -> bool:
 		record.props_after[cell] = props.cell_rows(cell).duplicate(true)
 		props_bytes += PropRows.rows_bytes(_prop_start[cell]) * 2
 	var area := _regenerated_area(stroke.changed)
+	record["crossings"] = crossings.follow(MaskBrush.sample_rect_to_world(document, stroke.changed))
 	# The water follows the ground (P4-3); rocks and plants wait for its dressing's worker.
 	water.refresh(
 		func() -> void:
@@ -717,6 +717,7 @@ func _apply_height_diff(diff: Dictionary, redo: bool, record: Dictionary) -> voi
 	var prop_rows: Dictionary = record.props_after if redo else record.props_before
 	var before := document.heights.duplicate()
 	var rect := HeightStroke.apply_diff(document, diff, redo)
+	crossings.restore(record.get("crossings", {}), redo)
 	if not rect.has_area():
 		return
 	_snap_before = before
@@ -994,7 +995,6 @@ func _set_prop_cell(cell: Vector2i, rows: Dictionary, animate: bool = true) -> v
 		props.set_cells({cell: rows.duplicate(true)}, animate)
 
 
-## A deep copy of a props cell's rows (asset id -> flat rows). Deep, because packed arrays
-## are shared by reference in GDScript and history must not alias the live rows.
+## A deep copy of a props cell's rows (asset id -> rows): history must not alias live arrays.
 func _cell_rows(cell: Vector2i) -> Dictionary:
 	return props.cell_rows(cell).duplicate(true) if is_instance_valid(props) else {}

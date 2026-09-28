@@ -258,9 +258,12 @@ static func levels(doc: MapDocument) -> PackedFloat32Array:
 ## The water level at map point `p` (the highest level among the bodies of `doc` whose area
 ## holds it, as levels() decides per sample but without the flush cut at shared reach ends:
 ## a river within its half-width plus RIVER_BANK_M of its course, a pond on the mask sample
-## nearest `p`), or DRY. `exclude_id` skips one body.
+## nearest `p`), or DRY. `exclude_id` skips one body. `courses` (river_courses()) saves the
+## smoothing of every river per call, for callers asking many points of one document.
 ## Cheap: no grid pass, so the Water tool can ask it per point of a stroke.
-static func level_at(doc: MapDocument, p: Vector2, exclude_id: int = -1) -> float:
+static func level_at(
+	doc: MapDocument, p: Vector2, exclude_id: int = -1, courses: Dictionary = {}
+) -> float:
 	var best := DRY
 	var pond := 0
 	if doc.pond_mask.size() == doc.sample_count() and doc.sample_count() > 0:
@@ -275,7 +278,9 @@ static func level_at(doc: MapDocument, p: Vector2, exclude_id: int = -1) -> floa
 			if pond == body.id:
 				best = body.level_m
 			continue
-		var course := river_course(body)
+		var course: Array = courses[body.id] if courses.has(body.id) else river_course(body)
+		if course.is_empty():
+			continue
 		var near := nearest_on_polyline(course[0], p)
 		if near.y < 0:
 			continue
@@ -284,12 +289,54 @@ static func level_at(doc: MapDocument, p: Vector2, exclude_id: int = -1) -> floa
 	return best
 
 
+## Every river of `doc` smoothed once (body id -> river_course()), for level_at() and
+## is_wet_at() asked many points of the same document. With `near` (a map rectangle every
+## point asked will lie in), each course keeps only its run of segments from the first to the
+## last that comes within the river's area of `near` (a point there is nearer one of them than
+## any segment left out, or in no river's area at all, so level_at() answers the same), and a
+## river that never comes near maps to [], which level_at() skips. A long river's course has
+## hundreds of segments; the Bridge tool plans a crossing every pointer move.
+static func river_courses(doc: MapDocument, near: Rect2 = Rect2()) -> Dictionary:
+	var out := {}
+	for body in doc.water_bodies:
+		if not body.is_river():
+			continue
+		var course := river_course(body)
+		if near.has_area():
+			course = _course_near(course, near)
+		out[body.id] = course
+	return out
+
+
+## `course` (river_course()) cut to its segments from the first to the last whose box grown by
+## the widest half-width plus RIVER_BANK_M meets `near`, or [] when none does.
+static func _course_near(course: Array, near: Rect2) -> Array:
+	var points: PackedVector2Array = course[0]
+	var widths: PackedFloat32Array = course[1]
+	var widest := 0.0
+	for w in widths:
+		widest = maxf(widest, w)
+	var reach := near.grow(widest + RIVER_BANK_M + 0.01)
+	var first := -1
+	var last := -1
+	for s in points.size() - 1:
+		if Rect2(points[s], Vector2.ZERO).expand(points[s + 1]).intersects(reach, true):
+			if first < 0:
+				first = s
+			last = s
+	if first < 0:
+		return []
+	return [points.slice(first, last + 2), widths.slice(first, last + 2)]
+
+
 ## True when map point `p` is under existing water of `doc` (its ground, ground_at(), below
-## level_at()); `exclude_id` skips one body.
-static func is_wet_at(doc: MapDocument, p: Vector2, exclude_id: int = -1) -> bool:
+## level_at()); `exclude_id` skips one body; `courses` as level_at().
+static func is_wet_at(
+	doc: MapDocument, p: Vector2, exclude_id: int = -1, courses: Dictionary = {}
+) -> bool:
 	if doc.heights.size() != doc.sample_count():
 		return false
-	var level := level_at(doc, p, exclude_id)
+	var level := level_at(doc, p, exclude_id, courses)
 	return level != DRY and ground_at(doc, p) < level
 
 

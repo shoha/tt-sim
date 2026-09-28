@@ -70,6 +70,9 @@ static func place(
 	var origin := from - d * SEARCH_M
 	var count := ceili((drawn.length() + 2.0 * SEARCH_M) / STEP_M) + 1
 	var half := doc.extent_m() * 0.5
+	# The rivers smoothed once, not per point (the Bridge tool plans every pointer move).
+	var walk := Rect2(origin, Vector2.ZERO).expand(origin + d * ((count - 1) * STEP_M))
+	var courses := WaterGeometry.river_courses(doc, walk.grow(STEP_M))
 	# 1 wet, 0 dry, -1 off the map.
 	var state := PackedInt32Array()
 	state.resize(count)
@@ -78,7 +81,7 @@ static func place(
 		if absf(p.x) > half.x or absf(p.y) > half.y:
 			state[i] = -1
 		else:
-			state[i] = 1 if WaterGeometry.is_wet_at(doc, p) else 0
+			state[i] = 1 if WaterGeometry.is_wet_at(doc, p, -1, courses) else 0
 	var runs := _wet_runs(state)
 	if runs.is_empty():
 		return _refused(REFUSED_NO_WATER)
@@ -91,8 +94,8 @@ static func place(
 	if run.x <= 0 or run.y >= count - 1 or state[run.x - 1] != 0 or state[run.y + 1] != 0:
 		return _refused(REFUSED_NO_BANK)
 	var inset: float = BANK_INSET_M[kind]
-	var shore_a := _waterline(doc, origin + d * ((run.x - 1) * STEP_M), d)
-	var shore_b := _waterline(doc, origin + d * ((run.y + 1) * STEP_M), -d)
+	var shore_a := _waterline(doc, origin + d * ((run.x - 1) * STEP_M), d, courses)
+	var shore_b := _waterline(doc, origin + d * ((run.y + 1) * STEP_M), -d, courses)
 	var anchor_a := shore_a - d * inset
 	var anchor_b := shore_b + d * inset
 	for anchor in [anchor_a, anchor_b]:
@@ -103,7 +106,7 @@ static func place(
 	var level := -INF
 	for i in range(run.x, run.y + 1):
 		var p := origin + d * (i * STEP_M)
-		level = maxf(level, WaterGeometry.level_at(doc, p))
+		level = maxf(level, WaterGeometry.level_at(doc, p, -1, courses))
 	var crossing := Crossing.new()
 	crossing.kind = kind
 	crossing.start = anchor_a
@@ -216,13 +219,15 @@ static func _chosen_run(runs: Array[Vector2i], first: float, last: float) -> Vec
 
 
 ## The waterline between dry map point `dry` and the wet point STEP_M on along `toward`,
-## by bisection.
-static func _waterline(doc: MapDocument, dry: Vector2, toward: Vector2) -> Vector2:
+## by bisection (`courses`: WaterGeometry.river_courses of `doc`).
+static func _waterline(
+	doc: MapDocument, dry: Vector2, toward: Vector2, courses: Dictionary
+) -> Vector2:
 	var low := dry
 	var high := dry + toward * STEP_M
 	for _k in REFINE_STEPS:
 		var mid := (low + high) * 0.5
-		if WaterGeometry.is_wet_at(doc, mid):
+		if WaterGeometry.is_wet_at(doc, mid, -1, courses):
 			high = mid
 		else:
 			low = mid

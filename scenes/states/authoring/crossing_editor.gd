@@ -13,11 +13,35 @@ extends RefCounted
 ##
 ## A dressed Blender map keeps its own Blender scatter under a crossing (the erase mask is the
 ## author's; only the authored scatter clears).
+##
+## Following edits (P4b-2). A crossing is data anchored to the ground and water it was snapped
+## to, so an edit that changes either under it (a sculpt stroke, a tier, a river carved, a pond
+## painted or extended, water erased) makes it follow: follow() snaps every crossing near the
+## edit again from its own two anchors, as if the author had drawn that line again
+## (CrossingPlacement.place, same kind, width and style). When the snap still makes a crossing
+## it replaces the old one keeping its id (a bank moved, the river widened, the arch rises
+## with the ground); when it makes none (the water under it is gone, a bank sank under water,
+## the span grew too long) the crossing is removed. It is never left standing on nothing. The
+## change joins the history entry of the edit that caused it (the caller stores
+## record_follow()'s lists and calls restore() from its undo and redo), so one undo puts the
+## ground, the water and the crossing back together. `followed` says what happened, for a
+## toast when something vanished.
+
+## Crossings followed an edit: `moved` re-anchored, `removed` removed.
+signal followed(moved: int, removed: int)
 
 ## Why the last plan() or place() made nothing (last_refusal): CrossingPlacement's reasons,
 ## or one of these.
 const REFUSED_FULL := &"full"
 const REFUSED_INVALID := &"invalid"
+## follow() keeps a crossing as it is when a new snap moves no anchor more than this and no
+## level more than FOLLOW_LEVEL_M (metres, map frame): the snap is only as exact as its
+## waterline search, and an edit beside a crossing should not nudge it.
+const FOLLOW_MOVE_M := 0.03
+const FOLLOW_LEVEL_M := 0.02
+## An edit reaches crossings whose footprint (CrossingGeometry.clear_bounds) comes within this
+## of its area (map metres): a bank a little past the landing still changes the snap.
+const FOLLOW_REACH_M := 1.0
 
 ## Why the last plan(), place() or add() made nothing, or &"".
 var last_refusal: StringName = &""
@@ -154,6 +178,78 @@ func crossing_at(point: Vector3, margin: float = 0.3) -> int:
 			best = crossing.id
 			best_distance = distance
 	return best
+
+
+## The crossings of `doc` after an edit changed its ground or water over `area` (map XZ; an
+## empty rectangle: everywhere), by the rule in the header: {"crossings": the whole list
+## after (untouched and unmoved crossings are the same objects), "moved": how many were
+## re-anchored, "removed": how many went}. Pure.
+static func followed_list(doc: MapDocument, area: Rect2) -> Dictionary:
+	var out: Array[Crossing] = []
+	var moved := 0
+	var removed := 0
+	for crossing in doc.crossings:
+		var bounds := CrossingGeometry.clear_bounds(crossing).grow(FOLLOW_REACH_M)
+		if area.has_area() and not bounds.intersects(area):
+			out.append(crossing)
+			continue
+		var snapped := CrossingPlacement.anchor(
+			doc, crossing.start, crossing.end, crossing.kind, crossing.width_m, crossing.style
+		)
+		if snapped != null:
+			snapped.id = crossing.id
+		if snapped == null or MapCrossingIO.crossing_problem(snapped, doc.extent_m()) != "":
+			removed += 1
+		elif _near(snapped, crossing):
+			out.append(crossing)
+		else:
+			out.append(snapped)
+			moved += 1
+	return {"crossings": out, "moved": moved, "removed": removed}
+
+
+## True when `a` and `b` stand within FOLLOW_MOVE_M and FOLLOW_LEVEL_M of each other.
+static func _near(a: Crossing, b: Crossing) -> bool:
+	var levels := (a.levels - b.levels).abs()
+	return (
+		a.start.distance_to(b.start) <= FOLLOW_MOVE_M
+		and a.end.distance_to(b.end) <= FOLLOW_MOVE_M
+		and maxf(levels.x, maxf(levels.y, levels.z)) <= FOLLOW_LEVEL_M
+	)
+
+
+## Makes the document's crossings follow an edit of its ground or water over `area` (map XZ;
+## see the header), refreshing their nodes and the scatter at once, without a history entry of
+## its own. Returns what the edit's entry needs to put them back ({"before", "after", "area"},
+## for restore()), or {} when nothing changed. Emits followed.
+func follow(area: Rect2) -> Dictionary:
+	var doc := _editor().document
+	if doc.crossings.is_empty():
+		return {}
+	var result := followed_list(doc, area)
+	if int(result.moved) == 0 and int(result.removed) == 0:
+		return {}
+	var before := _current()
+	var after: Array[Crossing] = result.crossings
+	var changed: Array[Crossing] = []
+	for old in before:
+		if not after.has(old):
+			changed.append(old)
+	for new in after:
+		if not before.has(new):
+			changed.append(new)
+	var bounds := _area_of(changed)
+	_apply(after, bounds)
+	followed.emit(int(result.moved), int(result.removed))
+	return {"before": before, "after": after, "area": bounds}
+
+
+## Puts back the crossings of a follow() record (`redo`: its after side, else its before
+## side), from the undo and redo of the edit that caused it. {} does nothing.
+func restore(record: Dictionary, redo: bool) -> void:
+	if record.is_empty():
+		return
+	_apply(record.after if redo else record.before, record.area)
 
 
 ## The document's crossings as a new list of the same objects.
