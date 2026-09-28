@@ -1279,8 +1279,12 @@ editor API the Water tool (P4-4) calls. Tests: `tests/unit/test_water_carve.gd`,
   after (`WaterEdit.model_of`: body copies and the ZSTD pond mask), the wet dressing before and
   after (ZSTD; undo sets it back instead of recomputing it), the props cells it changed and
   the rocks it kept; undo and redo put both sides back exactly. The scatter then regrows over
-  the area grown by the shore band. A sculpt stroke (and its undo) on a map with water
-  recomputes the dressing on the main thread (`WaterEditor.refresh`).
+  the area grown by the shore band. A sculpt stroke (and its undo or redo) on a map with water
+  recomputes the dressing (`WaterEditor.refresh(then)`, P4-5): with `use_worker` on a worker
+  from a snapshot, like an edit's compute, landing on a later frame (the field, the ground's
+  texture, the surface's refresh), and the stroke's rock keeping and regeneration, which read
+  the dressing, run as `then` once it lands; `finish_height_work()` lands it at once. In the
+  running game a sculpt release by a river went from 118-119 ms to 28-30 ms worst frame.
 - **Worker carve (P4-4):** the heavy, pure half of an edit, `WaterEditor.compute(snapshot,
   spec, out)`, runs on a snapshot of the document (`snapshot_of`: grid, heights, seed, bodies,
   pond mask): the carve goals (`WaterCarve`), the heights lowered to them (`lower()`, exactly
@@ -1341,7 +1345,14 @@ editor API the Water tool (P4-4) calls. Tests: `tests/unit/test_water_carve.gd`,
   levels, never below a surface falling at 0.3 from the upper level to the lower, over the
   channel from 1 m above the shared point to the riffle's foot). So shallow, the water
   shader draws it as white water, and the flow bake counts it as wet, so it runs
-  downstream: a small rapid, not a rock lip. River ends inside the map taper their depth
+  downstream: a small rapid, not a rock lip. Across its banks (P4-5) the sheet thins to
+  nothing at the carve's waterline and sinks under the bank past it
+  (`WaterMeshBuilder.CASCADE_EDGE_SLOPE`, over about a sample each side); since the sheet's
+  triangles are the ground's own, its visible edge is where the two interpolated surfaces
+  cross, a smooth curve whatever the grid. Cut off at the half-width sample by sample, it drew
+  the grid's staircase as 0.25 m teeth on any river not along a grid axis. The buried corners
+  (`cascades(doc, buried)`) are for the mesh only; the dressing and the flow see the sheet
+  where it stands over the ground. River ends inside the map taper their depth
   from zero over a few metres (a spring, a sink), and (P4-4) their width to a rounded head
   (`WaterCarve.head_width`: a quarter ellipse over the longer of the depth taper and 2.2
   half-widths, with at least a 14 cm film of water toward the tip, `_end_depth`), so the
@@ -1376,8 +1387,19 @@ editor API the Water tool (P4-4) calls. Tests: `tests/unit/test_water_carve.gd`,
   shader's depth-slope foam draws a slope facing away from the camera as a white line across
   the water. With it the water shader fades the surface in over the first 4 cm of depth
   (`shore_fade_depth`), so the plane never ends in a crisp, slightly opaque edge (the vertex
-  bob lifted it through the shore). A pond extended by a second stroke re-levels to its new
-  rim and is carved again over its whole area.
+  bob lifted it through the shore). A pond extended by a second stroke is carved again over
+  its whole area as one basin (P4-5): its level is the new rim's, except that rim ground its
+  own basin carved (within `BANK_REACH_M` of the old area) counts as at least the old level
+  plus the freeboard, and it never rises (`WaterEditor.extended_pond_level`; read from that
+  carved ground, every extension sank the pond by the freeboard); and under the water the
+  top-of-bank easing fades out over `POND_UNDER_EASE_M` (1.2 m) from the waterline, so the
+  old basin's shore is cut away rather than left as a ledge under the new water. Extending a
+  pond downhill still lowers it to the new rim.
+- **Shallows in the shader (P4-5):** the refraction offset grows from nothing at the
+  waterline over `refraction_depth_fade` (0.3 m of view depth): at full strength in
+  millimetres of water it smeared the lit bed dressing of a steep bank facing the camera (an
+  ankle stream's far bank) into a pale glassy band. Deeper water refracts as before, on
+  Blender water too.
 - **Wet dressing** (`WaterDressing`, a rule layer like cliff and scree, no paint slot,
   following the water wherever it is carved, painted or erased): per sample RGBA8 (`MapDocument
   .water_dressing`, a derived cache the document never saves; the ground shader's
