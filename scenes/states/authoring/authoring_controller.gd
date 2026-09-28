@@ -358,7 +358,11 @@ func _fit_dressing_to_ground(generation: int) -> int:
 		+ DragPlaceController.TERRAIN_DOWNCAST_HEIGHT
 	)
 	var sampler := DressingGround.begin(
-		document, map_root.get_world_3d(), map_root.global_transform, top
+		document,
+		map_root.get_world_3d(),
+		map_root.global_transform,
+		top,
+		AuthoredCrossings.exclude_of(map_root)
 	)
 	while not sampler.step(MapSourceLoader.FRAME_BUDGET_USEC):
 		await get_tree().process_frame

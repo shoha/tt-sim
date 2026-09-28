@@ -574,8 +574,7 @@ func _collect_finished_jobs() -> void:
 		_finished.append(entry)
 
 
-## Applies every finished job whose species are all resolved, in one set_cells() call.
-## Cells a newer request has touched since are dropped by ScatterRegen.accept().
+## Applies finished jobs whose species resolved, in one set_cells() (ScatterRegen.accept filters).
 func _apply_ready_jobs() -> void:
 	var rows_by_cell := {}
 	for entry in _finished.duplicate():
@@ -598,10 +597,10 @@ func _apply_ready_jobs() -> void:
 		set_cells(rows_by_cell)
 
 
-## A copy of what generation reads of `doc` (wet dressing too), for a worker, duplicated:
-## GDScript packed arrays are shared by reference (measured in 4.7), so without the copy a
-## worker would read masks while the brush writes them, and an append that reallocates would
-## pull the buffer out from under it. About 0.1 ms for a 200 ft map.
+## A copy of what generation reads of `doc` (wet dressing and crossings too), for a worker:
+## packed arrays are shared by reference (4.7), so without the copy a worker would read masks
+## while the brush writes them or lose a buffer an append reallocates (crossings are replaced
+## whole, never edited in place). About 0.1 ms for a 200 ft map.
 static func _snapshot(doc: MapDocument) -> MapDocument:
 	var copy := MapDocument.new()
 	copy.map_seed = doc.map_seed
@@ -615,6 +614,7 @@ static func _snapshot(doc: MapDocument) -> MapDocument:
 	copy.surface_ids = doc.surface_ids.duplicate()
 	copy.surface_weights = doc.surface_weights.duplicate()
 	copy.water_dressing = doc.water_dressing.duplicate()
+	copy.crossings = doc.crossings.duplicate()
 	return copy
 
 

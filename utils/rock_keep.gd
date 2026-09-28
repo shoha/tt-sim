@@ -211,6 +211,7 @@ static func snapshot(
 	copy.surface_weights = doc.surface_weights.duplicate()
 	var wet: PackedByteArray = dressing if dressing is PackedByteArray else doc.water_dressing
 	copy.water_dressing = wet.duplicate()
+	copy.crossings = doc.crossings.duplicate()
 	return copy
 
 

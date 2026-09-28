@@ -709,7 +709,8 @@ func get_grid_ground() -> GroundHeightField:
 
 ## Where a token dragged to `point` rests: the terrain under it (straight down on the terrain
 ## collision layer, as a browser drop re-resolves after its grid snap), or in water the bed
-## or the float height (WaterSurface.landing_below). Vector3.INF with no terrain or no hit.
+## or the float height (WaterSurface.landing_below); a bridge deck or a stepping stone is on
+## that layer too (AuthoredCrossings). Vector3.INF with no terrain or no hit.
 ## A Blender map (no authored terrain) answers only over water below the bank's height, so
 ## the cursor-hit height stays everywhere else (an overhang can be anywhere above it).
 func _resolve_drag_ground(point: Vector3) -> Vector3:
@@ -717,8 +718,15 @@ func _resolve_drag_ground(point: Vector3) -> Vector3:
 		return Vector3.INF
 	var space := world_viewport.find_world_3d().direct_space_state
 	if is_instance_valid(_ground_terrain):
-		var top := _ground_terrain.world_height_range().y + DRAG_GROUND_CAST_CLEARANCE_M
-		return WaterSurface.landing_below(space, point, top)
+		# From above the highest ground and the highest crossing (a bridge's arch can stand
+		# over the banks), so a drop onto a deck lands on it.
+		var top := _ground_terrain.world_height_range().y
+		var crossings := _ground_terrain.get_parent()
+		if crossings != null:
+			crossings = crossings.get_node_or_null(NodePath(AuthoredCrossings.NODE_NAME))
+		if crossings is AuthoredCrossings:
+			top = maxf(top, (crossings as AuthoredCrossings).world_top())
+		return WaterSurface.landing_below(space, point, top + DRAG_GROUND_CAST_CLEARANCE_M)
 	if not _has_water:
 		return Vector3.INF
 	var water := WaterSurface.water_below(space, point, point.y + WaterSurface.CAST_CLEARANCE_M)

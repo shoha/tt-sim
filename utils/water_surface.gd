@@ -112,16 +112,22 @@ static func water_below(space: PhysicsDirectSpaceState3D, xz: Vector3, from_y: f
 	return {"y": (hit.position as Vector3).y, "floats": floats, "collider": collider}
 
 
-## A ray straight down from world (xz.x, from_y, xz.z) on `mask`: the intersect_ray()
-## result, {} on a miss or without a space.
+## A ray straight down from world (xz.x, from_y, xz.z) on `mask`, skipping the bodies of
+## `exclude` (RIDs): the intersect_ray() result, {} on a miss or without a space.
 static func cast_down(
-	space: PhysicsDirectSpaceState3D, xz: Vector3, from_y: float, mask: int
+	space: PhysicsDirectSpaceState3D,
+	xz: Vector3,
+	from_y: float,
+	mask: int,
+	exclude: Array[RID] = []
 ) -> Dictionary:
 	if space == null:
 		return {}
 	var origin := Vector3(xz.x, from_y, xz.z)
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + Vector3.DOWN * RAY_LENGTH)
 	query.collision_mask = mask
+	if not exclude.is_empty():
+		query.exclude = exclude
 	return space.intersect_ray(query)
 
 
