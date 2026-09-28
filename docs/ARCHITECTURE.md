@@ -1076,6 +1076,16 @@ rather than in `ASSET_PIPELINE.md`.
   `water_flow` and `water_flow_size`; `MapWaterIO` (`utils/map_water_io.gd`) writes and
   validates the entries for `MapDocumentIO`. The model is below ("Water model and flow
   bake").
+- **Crossings (phase 4b):** `crossings.json` (`{"version": 1, "crossings": [...]}`): each
+  crossing has a stable `id` (1..255, unique), `kind` `plank` or `stones`, `start` and `end`
+  (`[x, z]` bank anchors in map metres, 0.5..24 m apart), `levels` (`[start, middle, end]`
+  walking-surface heights; the middle within 4 m of the ends' mean), `width_m` (plank
+  0.8..3 m, stones 0.4..1.2 m) and `style` (a palette biome id or ""). Cap 64 crossings,
+  256 KB. A malformed crossing (bad id or kind, NaN / Inf, an anchor off the map, a span,
+  level or width out of range, a repeated id, over the cap) is skipped with a warning; a
+  wrong version or no list drops them all. The writer refuses any of these
+  (`MapCrossingIO.problem`, `utils/map_crossing_io.gd`). An older build loads a map with
+  crossings as a map without them. The model is below ("Crossings").
 - **Painted surfaces:** `surfaces.json` (`{"surfaces": [palette surface name, ...]}`, at
   most 8, distinct) names the slots; `surfaces.png` (RGBA8 on the sample grid) holds the
   weights of slots 0-3 in R, G, B, A, and `surfaces_b.png` slots 4-7, written only when
@@ -1472,6 +1482,95 @@ editor API the Water tool (P4-4) calls. Tests: `tests/unit/test_water_carve.gd`,
   as after a sculpt stroke (`RockKeeper.start(..., dressing_before, keep)`, the rule deciding
   which), and placed rock props in the area are re-bedded by the snap and then dropped by the
   same rule (`WaterEditor._drop_wet_rocks`); undo brings them all back.
+
+### Crossings
+
+Phase 4b, P4b-1: plank footbridges and stepping stones over water, as document data, geometry
+built from it, walkable collision, and an editor API the Bridge tool (P4b-2) calls. Plan:
+`docs/superpowers/plans/2026-09-27-phase4b-bridges.md` (local). Tests:
+`tests/unit/test_crossings.gd`, `test_crossing_editor.gd`, `test_map_document_crossings.gd`;
+look pass `tools/render_jobs/jobs/crossing_look.json` (probe `probes/crossing.gd`).
+
+- **Model** (`Crossing`, `resources/crossing.gd`; `MapDocument.crossings`, at most 64): a
+  stable `id` (1..255), a `kind` (`PLANK` or `STONES`; a stone arch can be a third kind with
+  the same fields), the two bank anchors `start` / `end` in map XZ, `levels` (the walking
+  surface's height at the start, the middle and the end), `width_m` (deck width 0.8..3 m, or
+  a stone's size 0.4..1.2 m) and `style` (the palette biome whose materials it takes, or "").
+  Everything else is derived, so a crossing ships as a few numbers and every peer builds the
+  same one (seeded by the map seed and the id). Entry: `crossings.json` (above).
+- **Placement** (`CrossingPlacement`, `utils/crossing_placement.gd`, pure): `place(doc, from,
+  to, kind, width, style) -> {crossing, refusal}` snaps a drawn line to the banks. It walks the
+  line every 0.1 m, reaching 8 m past both ends, marks wet samples (ground below the water
+  level, `WaterGeometry.is_wet_at`), joins wet runs over dry gaps under 0.8 m (a bar mid-
+  stream), takes the run the line overlaps most (or the nearest within 1 m), refines each
+  end to the waterline by bisection and puts the anchor 0.55 m (plank) or 0.35 m (stones)
+  onto the dry bank. Levels: a deck's ends stand `DECK_ABOVE_BANK_M` (0.2 m: sill, stringer,
+  plank) over the bank ground and its middle arches 6 % of the span (0.12..0.8 m), never
+  under 0.45 m over the highest water crossed; stone tops stand 0.15 m over it, clear of the
+  `WaterZone` slab (level + 0.05) so a token on a stone is dry. Refusals: `short`,
+  `no_water`, `no_bank` (no dry ground in reach, or off the map), `long` (over 24 m).
+  `style_at(doc, p)` is the biome painted under a point. It reads document water only; a
+  Blender map's own water plane is not a crossing target yet.
+- **Geometry** (`CrossingGeometry`, `utils/crossing_geometry.gd`, pure, worker-safe):
+  `build(doc) -> {crossings: [{id, kind, style, wood, stone, collision, top}], deck}`. A plank
+  bridge is boxes: planks across the span on the quadratic arch (`deck_y`), one 0.27 m pitch
+  apart with jitter in length, offset, yaw, drop and shade; two stringers along the arch
+  onto a sill beam bedded in each bank; posts along both edges (2.2 m apart at most) under
+  one top rail; pile bents to the bed on a span over 5.5 m where the ground is well below.
+  Each wood box maps into one clean board of the palette's `planks` albedo (`WOOD_SWATCHES`),
+  grain along its length, so a modelled plank never shows a painted seam. Stepping stones:
+  one stride apart (the document's cell, one 5 ft square per step), centred on the span, each
+  a flat-topped nine-sided stone (top, chamfer, rounded shoulder near the waterline, a flared
+  root under the bed) in flat-shaded facets, the root darkened as wet. Winding is clockwise
+  from the front. Collision: a deck's walking surface as a smooth strip (the planks' jitter
+  stays visual), a stone's own triangles. `deck_field(doc, crossings)` rasterises the decks'
+  walking surface on the sample grid (0.3 m past the edges), `clearance(crossings, p)` is what
+  plants keep beside a crossing.
+- **Node** (`AuthoredCrossings`, `scenes/terrain/authored_crossings.gd`, under the map root at
+  the identity): per crossing `Crossing_<id>` with its `Wood` / `Stones` meshes and one
+  `Collision` StaticBody3D on the terrain layer (layer 1, mask 0, not ray-pickable,
+  `CROSSING_META` = id). Materials per style: an `ORMMaterial3D` of `planks` tinted by the
+  biome's climate (`WOOD_TINTS`: dry country sun-bleached, cold silvered), and of the biome's
+  `cliff_surface` triplanar for stones (at 1.4x its tile, so a stone's top shows one stratum
+  rather than stripes), vertex colours shading both. `deck_heights`, `version` and `top_y` feed
+  the grid and the drag. `MapSourceLoader.add_authored_crossings()` builds it for any
+  document with crossings (in a frame of its own after an authored root's chunks, from the
+  worker's `AuthoredLoadPrep.CROSSINGS` part, with its textures requested on background
+  threads alongside the ground's; on a dressed GLB's root in `_build_async`), always in
+  authoring. Measured: build 3-5 ms for a bridge and three stones, main-thread node swap
+  15-31 ms, most of it the first material's texture loads.
+- **Walkable:** tokens land on a deck or a stone like the ground (layer-1 rays); the drag's
+  ground cast starts above `AuthoredCrossings.world_top()` as well as the terrain top
+  (`GameMap._resolve_drag_ground`), so a drop onto an arch lands on it; tokens cannot pass
+  under a bridge. The measure tool, drop indicator and drag ruler hit decks as ground.
+- **Grid:** `GroundHeightField` gives the grid shader the decks as a second texture
+  (`get_deck_texture()`: the deck field, `NO_DECK` elsewhere), not in the height field: a
+  pixel within the tolerance of a deck's surface is on the deck (its own facet is the slope
+  test there), everything else sees ground and water as before. Raising the height field to
+  the deck lost the grid on the water along the deck's near side, whose bed, seen through the
+  water, lies under the deck in XZ. `world_height_at()` includes the decks. Stepping stones
+  stand within the grid's tolerance of the water surface and need nothing. A Blender map's
+  sampled field includes decks (they are layer 1).
+- **Tools see through crossings:** the brush's pointer ray and a placed prop's bedding
+  exclude the crossing bodies (`AuthoredCrossings.exclude_of`), as does a dressed map's
+  ground sampling into document heights (`DressingGround.begin(..., exclude)`); a sculpt
+  stroke marches the document's heights and never sees them. Sculpt, Paint and Water edit the
+  ground under a bridge.
+- **Scatter:** nothing grows under a deck or its stones nor on the bank landings 0.9 m past
+  each anchor, rocks included (`ScatterGround.sampler` times `CrossingGeometry.clearance`,
+  fading back over 0.5 m; the scatter snapshots copy `crossings`). A dressed map's own
+  Blender scatter is not cleared under a crossing.
+- **API** (`AuthoringEditor.crossings`, a `CrossingEditor`,
+  `scenes/states/authoring/crossing_editor.gd`; world frame): `plan(kind, from, to, width)
+  -> Crossing or null` (the live preview, changes nothing; `last_refusal` says why),
+  `place(...) -> id or -1`, `add(crossing) -> id`, `replace(id, crossing) -> bool` (keeps the
+  id: re-anchoring), `remove(id) -> bool`, `crossing_at(point, margin) -> id or -1` (a Ctrl
+  erase), `list()`, `get_crossing(id)`. Each change is one history entry (the crossing list
+  before and after; crossings are replaced whole, never edited in place) and refreshes the
+  node and the scatter over the crossing's footprint. Following later sculpt and water edits
+  is P4b-2's.
+- **Networking:** nothing new: the crossings travel in `map.ttmap`, which is sent whole and
+  hashed; every peer builds them from the entry.
 
 ### Authored terrain
 
