@@ -409,8 +409,15 @@ static func reach_level(ground: PackedFloat32Array, reach: Vector2i) -> float:
 
 ## The level for the pond `body_id` of `doc`: the lowest ground on the rim of its area
 ## (area samples with a 4-neighbour outside it or on the map edge) minus FREEBOARD_M.
-## NAN when the pond has no area.
-static func pond_rim_level(doc: MapDocument, body_id: int) -> float:
+## NAN when the pond has no area. Rim samples flagged in `floor_mask` (per sample, nonzero)
+## count as at least `floor_m`: ground a stroke extending the pond finds already carved by
+## its own basin (WaterEditor), which must not sink the pond by a freeboard per stroke.
+static func pond_rim_level(
+	doc: MapDocument,
+	body_id: int,
+	floor_mask: PackedByteArray = PackedByteArray(),
+	floor_m: float = -INF
+) -> float:
 	var mask := doc.pond_mask
 	if mask.size() != doc.sample_count():
 		return NAN
@@ -433,7 +440,10 @@ static func pond_rim_level(doc: MapDocument, body_id: int) -> float:
 				or mask[i + width] != body_id
 			)
 			if rim:
-				low = minf(low, doc.heights[i])
+				var h := doc.heights[i]
+				if i < floor_mask.size() and floor_mask[i] != 0:
+					h = maxf(h, floor_m)
+				low = minf(low, h)
 	return NAN if is_inf(low) else low - FREEBOARD_M
 
 
