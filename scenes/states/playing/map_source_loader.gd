@@ -56,6 +56,9 @@ var is_superseded: Callable = func() -> bool: return false
 ## The document load_async() read (or build_async() was given), or null when there is none
 ## or it could not be read.
 var document: MapDocument = null
+## The water geometry the authored root's worker built (AuthoredLoadPrep.WATER), for
+## add_authored_water(); {} otherwise.
+var _prepared_water: Dictionary = {}
 
 
 func _init(scene_tree: SceneTree = null) -> void:
@@ -132,7 +135,8 @@ func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
 	else:
 		push_error("MapSourceLoader: a map needs a GLB or a document")
 		return null
-	add_authored_water(root, document, separate_props)
+	add_authored_water(root, document, separate_props, _prepared_water)
+	_prepared_water = {}
 
 	var groups: Array = [[SCATTER_NODE, cells.get(SCATTER_NODE, {})]]
 	if separate_props:
@@ -167,11 +171,14 @@ static func create_authored_root(doc: MapDocument) -> Node3D:
 ## were processed by its load; the pass is safe to repeat, and the authored flow map wins,
 ## WaterGlbUtils._flow_map_plane). `always` (authoring) adds the node even with no water
 ## yet, so the water tools and the grid's ground have it from the start. Nothing without a
-## document. Returns the node or null.
-static func add_authored_water(root: Node3D, doc: MapDocument, always: bool) -> AuthoredWater:
+## document. `built` is the water geometry a worker built (AuthoredWater.create). Returns
+## the node or null.
+static func add_authored_water(
+	root: Node3D, doc: MapDocument, always: bool, built: Dictionary = {}
+) -> AuthoredWater:
 	if doc == null or (doc.water_bodies.is_empty() and not always):
 		return null
-	var water := AuthoredWater.create(doc)
+	var water := AuthoredWater.create(doc, built)
 	root.add_child(water)
 	WaterGlbUtils.process_water_meshes(root)
 	return water
@@ -185,10 +192,12 @@ static func authored_root_shell() -> Node3D:
 
 
 ## create_authored_root() spread over frames: the ground textures load on background
-## threads first (about 35 ms per surface cold on the main thread), then the material,
-## biome weights and collision are built in one frame (about 25 ms) and the chunk meshes
-## within the per-frame budget. Returns null when superseded.
+## threads while workers compute the pure data (AuthoredLoadPrep: the wet dressing, the
+## water geometry, the rule fields, the skirt and every chunk's arrays), then the material,
+## biome weights, collision and skirt are built in one frame and the chunk meshes within the
+## per-frame budget. Returns null when superseded.
 func _create_authored_root_async(doc: MapDocument) -> Node3D:
+	var prep := AuthoredLoadPrep.start(doc)
 	var pending: Array[String] = []
 	# Under the headless dummy renderer the material loads them in place instead
 	# (GlbUtils.threaded_loads_safe).
@@ -198,7 +207,7 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 			pending.append(path)
 	var loading := true
 	while loading:
-		loading = false
+		loading = not prep.is_done()
 		for path in pending:
 			if (
 				ResourceLoader.load_threaded_get_status(path)
@@ -213,10 +222,12 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	var held: Array[Resource] = []
 	for path in pending:
 		held.append(ResourceLoader.load_threaded_get(path))
+	var prepared := prep.finish()
 	if is_superseded.call():
 		return null
 	var root := authored_root_shell()
-	var terrain := AuthoredTerrain.create(doc, PaletteLibrary.DEFAULT_ROOT, false)
+	var terrain := AuthoredTerrain.create(doc, PaletteLibrary.DEFAULT_ROOT, false, prepared)
+	_prepared_water = prepared.get(AuthoredLoadPrep.WATER, {})
 	root.add_child(terrain)
 	held.clear()
 	var chunk_cells := TerrainMeshBuilder.chunk_cells(doc)

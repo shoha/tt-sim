@@ -133,6 +133,10 @@ the first stroke to reach the map edge, is now built under the loading screen. P
 pixels in play (the merged mesh 0.2-0.3 ms GPU in view; every map under 4.9 ms at max play
 zoom), every water gesture and a sculpt by the water keep medians within 0.5 ms of idle with
 worst frames of 21-29 ms, and water adds 0.23-0.26 s to a warm load and 1-15 MB of memory.
+P4b-0 moved the load's pure data work (wet dressing, water geometry, rule fields, chunk and
+skirt arrays) onto workers: water's main-thread load work 214 -> 14 ms, its share of a warm
+load 0.21-0.24 -> 0.09-0.10 s, dry authored maps 30-50 ms faster (`PERFORMANCE.md` "P4b-0:
+authored map load on workers").
 
 ## Open work
 
@@ -145,8 +149,6 @@ Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
   than water from the home view. (The foam outlines along submerged reed blades went with
   the boulder-line fix, P4b-0; not re-rendered in the wetland.)
-- Water adds 0.23-0.26 s to a load: the wet dressing and the water mesh are built on the
-  main thread under the loading screen (`PERFORMANCE.md` phase 4 pass).
 - Waterfalls between reaches (a riffle is the only step), and bridges and fords (phase 4b).
 
 Follow-ups:
@@ -170,7 +172,13 @@ Follow-ups:
   map's load from the title is mostly frames waited at 60 Hz (66 against a Blender map's 29;
   a larger per-frame build budget under the loading screen could save 0.3-0.5 s); the first
   load in a process has one 580-630 ms frame (Blender maps too); 750-870 MB of video memory
-  stays allocated back at the title after any map.
+  stays allocated back at the title after any map. Every warm load, authored or Blender, dry
+  or wet, still has one 165-175 ms frame (not water's; P4b-0 did not look into it), and the
+  wet dressing worker (about 115 ms on a 150 ft map) is now what a water map's loading
+  screen waits on.
+- Each token leaves one orphan Node3D at exit (`--verbose`: "Leaked instance: Node3D", one
+  per token played, with or without the submerged cue; seen while checking P4b-0). Not
+  diagnosed.
 
 ## Roadmap
 

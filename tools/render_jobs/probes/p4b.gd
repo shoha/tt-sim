@@ -137,16 +137,62 @@ static func _load_profile(folder: String, runs: int) -> String:
 	)
 	doc.water_bodies.assign(bodies)
 	WaterDressing.refresh(doc)
+	# P4b-0: the workers' share, and the main thread's with their output.
+	var prepared := {}
+	out.append(
+		(
+			"workers (AuthoredLoadPrep, wall) %s"
+			% _timed(
+				func() -> void: prepared.merge(AuthoredLoadPrep.start(doc).finish(), true), runs
+			)
+		)
+	)
+	out.append(
+		(
+			"terrain from prep %s"
+			% _timed(
+				func() -> void: AuthoredTerrain.create(doc, root_path, false, prepared).free(), runs
+			)
+		)
+	)
+	out.append(
+		(
+			"terrain from prep + chunks %s"
+			% _timed(
+				func() -> void: AuthoredTerrain.create(doc, root_path, true, prepared).free(), runs
+			)
+		)
+	)
+	out.append(
+		(
+			"terrain + chunks, no prep %s"
+			% _timed(func() -> void: AuthoredTerrain.create(doc, root_path, true).free(), runs)
+		)
+	)
+	var water_built: Dictionary = prepared.get(AuthoredLoadPrep.WATER, {})
+	out.append(
+		(
+			"water from prep %s"
+			% _timed(func() -> void: AuthoredWater.create(doc, water_built).free(), runs)
+		)
+	)
 	var built := {}
 	out.append(
-		"mesh build %s" % _timed(func() -> void: built.merge(WaterMeshBuilder.build(doc), true), runs)
+		(
+			"mesh build %s"
+			% _timed(func() -> void: built.merge(WaterMeshBuilder.build(doc), true), runs)
+		)
 	)
 	var arrays: Array = built.get("arrays", [])
 	out.append(
 		(
 			"mesh arrays %d vertices, %d bodies"
 			% [
-				(arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() if not arrays.is_empty() else 0,
+				(
+					(arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+					if not arrays.is_empty()
+					else 0
+				),
 				(built.get("bodies", []) as Array).size()
 			]
 		)
@@ -167,9 +213,10 @@ static func _load_profile(folder: String, runs: int) -> String:
 		(
 			"flow texture %s"
 			% _timed(
-				func() -> void: ImageTexture.create_from_image(
-					WaterFlowBaker.to_image(doc.water_flow, doc.water_flow_size)
-				),
+				func() -> void:
+					ImageTexture.create_from_image(
+						WaterFlowBaker.to_image(doc.water_flow, doc.water_flow_size)
+					),
 				runs
 			)
 		)
@@ -195,11 +242,194 @@ static func _load_profile(folder: String, runs: int) -> String:
 	out.append(
 		(
 			"height field %s"
-			% _timed(
-				func() -> void: GroundHeightField.from_terrain(terrain).get_texture(), runs
-			)
+			% _timed(func() -> void: GroundHeightField.from_terrain(terrain).get_texture(), runs)
 		)
 	)
+	# The dry terrain's own parts (AuthoredTerrain.build), pure ones first.
+	var whole := Rect2i(0, 0, doc.samples_x(), doc.samples_z())
+	var parts := {
+		"weight planes": func() -> void: terrain.call("_weight_planes", whole),
+		"grid fields": func() -> void: TerrainMeshBuilder.grid_fields(doc),
+		"collision heights": func() -> void: TerrainMeshBuilder.collision_heights(doc),
+		"skirt arrays":
+		## Render-job probe (`call` op) for the phase 4b follow-ups (P4b-0). step.action:
+		##   line {from, to, n, surface}  on the open authoring map, `n` points (default 21) from
+		##                                `from` to `to` (map XZ): ground, water level, depth, the wet
+		##                                dressing's bed / shore / wet line, and the painted weight of
+		##                                `surface` at the nearest sample. For the path-meets-water fix.
+		##   cues                         in play: every token's height, base, the water surface over
+		##                                it and whether its submerged cue (SubmergedMarker) shows.
+		##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+		##                                over map XZ `to` (the drag stays active, the token eases
+		##                                there over the next frames), for a capture mid-drag.
+		##   drop                         ends a held drag as a release does.
+		##   load_profile {folder, n}     the main-thread parts of loading the level's map.ttmap
+		##                                with water, each run `n` times (default 5) on the calling
+		##                                frame and logged as median / min ms: the terrain (with and
+		##                                without its water), the wet dressing, the water mesh build,
+		##                                the water nodes, the flow texture, process_water_meshes and
+		##                                the grid's ground field. Call it from the title.
+		# Edge pan reads the real OS cursor, which may sit outside the window: off until `drop`.
+		## Median and minimum of `runs` calls of `part` (usec -> "median / min ms").
+		# The dry terrain's own parts (AuthoredTerrain.build), pure ones first.
+		func() -> void:
+## Render-job probe (`call` op) for the phase 4b follow-ups (P4b-0). step.action:
+##   line {from, to, n, surface}  on the open authoring map, `n` points (default 21) from
+##                                `from` to `to` (map XZ): ground, water level, depth, the wet
+##                                dressing's bed / shore / wet line, and the painted weight of
+##                                `surface` at the nearest sample. For the path-meets-water fix.
+##   cues                         in play: every token's height, base, the water surface over
+##                                it and whether its submerged cue (SubmergedMarker) shows.
+##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+##                                over map XZ `to` (the drag stays active, the token eases
+##                                there over the next frames), for a capture mid-drag.
+##   drop                         ends a held drag as a release does.
+##   load_profile {folder, n}     the main-thread parts of loading the level's map.ttmap
+##                                with water, each run `n` times (default 5) on the calling
+##                                frame and logged as median / min ms: the terrain (with and
+##                                without its water), the wet dressing, the water mesh build,
+##                                the water nodes, the flow texture, process_water_meshes and
+##                                the grid's ground field. Call it from the title.
+
+			# Edge pan reads the real OS cursor, which may sit outside the window: off until `drop`.
+
+## Median and minimum of `runs` calls of `part` (usec -> "median / min ms").
+
+			# P4b-0: the workers' share, and the main thread's with their output.
+
+			# The dry terrain's own parts (AuthoredTerrain.build), pure ones first.
+
+## Render-job probe (`call` op) for the phase 4b follow-ups (P4b-0). step.action:
+##   line {from, to, n, surface}  on the open authoring map, `n` points (default 21) from
+##                                `from` to `to` (map XZ): ground, water level, depth, the wet
+##                                dressing's bed / shore / wet line, and the painted weight of
+##                                `surface` at the nearest sample. For the path-meets-water fix.
+##   cues                         in play: every token's height, base, the water surface over
+##                                it and whether its submerged cue (SubmergedMarker) shows.
+##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+##                                over map XZ `to` (the drag stays active, the token eases
+##                                there over the next frames), for a capture mid-drag.
+##   drop                         ends a held drag as a release does.
+##   load_profile {folder, n}     the main-thread parts of loading the level's map.ttmap
+##                                with water, each run `n` times (default 5) on the calling
+##                                frame and logged as median / min ms: the terrain (with and
+##                                without its water), the wet dressing, the water mesh build,
+##                                the water nodes, the flow texture, process_water_meshes and
+##                                the grid's ground field. Call it from the title.
+
+			# Edge pan reads the real OS cursor, which may sit outside the window: off until `drop`.
+
+## Median and minimum of `runs` calls of `part` (usec -> "median / min ms").
+
+			# The dry terrain's own parts (AuthoredTerrain.build), pure ones first.
+
+			TerrainMeshBuilder.build_skirt_arrays(
+				doc, AuthoredTerrain.skirt_width_m(), AuthoredTerrain.SKIRT_FADE_M
+			),
+		"height image": func() -> void: TerrainMeshBuilder.height_image(doc),
+		"material":
+		## Render-job probe (`call` op) for the phase 4b follow-ups (P4b-0). step.action:
+		##   line {from, to, n, surface}  on the open authoring map, `n` points (default 21) from
+		##                                `from` to `to` (map XZ): ground, water level, depth, the wet
+		##                                dressing's bed / shore / wet line, and the painted weight of
+		##                                `surface` at the nearest sample. For the path-meets-water fix.
+		##   cues                         in play: every token's height, base, the water surface over
+		##                                it and whether its submerged cue (SubmergedMarker) shows.
+		##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+		##                                over map XZ `to` (the drag stays active, the token eases
+		##                                there over the next frames), for a capture mid-drag.
+		##   drop                         ends a held drag as a release does.
+		##   load_profile {folder, n}     the main-thread parts of loading the level's map.ttmap
+		##                                with water, each run `n` times (default 5) on the calling
+		##                                frame and logged as median / min ms: the terrain (with and
+		##                                without its water), the wet dressing, the water mesh build,
+		##                                the water nodes, the flow texture, process_water_meshes and
+		##                                the grid's ground field. Call it from the title.
+		# Edge pan reads the real OS cursor, which may sit outside the window: off until `drop`.
+		## Median and minimum of `runs` calls of `part` (usec -> "median / min ms").
+		# The dry terrain's own parts (AuthoredTerrain.build), pure ones first.
+		func() -> void:
+## Render-job probe (`call` op) for the phase 4b follow-ups (P4b-0). step.action:
+##   line {from, to, n, surface}  on the open authoring map, `n` points (default 21) from
+##                                `from` to `to` (map XZ): ground, water level, depth, the wet
+##                                dressing's bed / shore / wet line, and the painted weight of
+##                                `surface` at the nearest sample. For the path-meets-water fix.
+##   cues                         in play: every token's height, base, the water surface over
+##                                it and whether its submerged cue (SubmergedMarker) shows.
+##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+##                                over map XZ `to` (the drag stays active, the token eases
+##                                there over the next frames), for a capture mid-drag.
+##   drop                         ends a held drag as a release does.
+##   load_profile {folder, n}     the main-thread parts of loading the level's map.ttmap
+##                                with water, each run `n` times (default 5) on the calling
+##                                frame and logged as median / min ms: the terrain (with and
+##                                without its water), the wet dressing, the water mesh build,
+##                                the water nodes, the flow texture, process_water_meshes and
+##                                the grid's ground field. Call it from the title.
+
+			# Edge pan reads the real OS cursor, which may sit outside the window: off until `drop`.
+
+## Median and minimum of `runs` calls of `part` (usec -> "median / min ms").
+
+			# P4b-0: the workers' share, and the main thread's with their output.
+
+			# The dry terrain's own parts (AuthoredTerrain.build), pure ones first.
+
+## Render-job probe (`call` op) for the phase 4b follow-ups (P4b-0). step.action:
+##   line {from, to, n, surface}  on the open authoring map, `n` points (default 21) from
+##                                `from` to `to` (map XZ): ground, water level, depth, the wet
+##                                dressing's bed / shore / wet line, and the painted weight of
+##                                `surface` at the nearest sample. For the path-meets-water fix.
+##   cues                         in play: every token's height, base, the water surface over
+##                                it and whether its submerged cue (SubmergedMarker) shows.
+##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+##                                over map XZ `to` (the drag stays active, the token eases
+##                                there over the next frames), for a capture mid-drag.
+##   drop                         ends a held drag as a release does.
+##   load_profile {folder, n}     the main-thread parts of loading the level's map.ttmap
+##                                with water, each run `n` times (default 5) on the calling
+##                                frame and logged as median / min ms: the terrain (with and
+##                                without its water), the wet dressing, the water mesh build,
+##                                the water nodes, the flow texture, process_water_meshes and
+##                                the grid's ground field. Call it from the title.
+
+			# Edge pan reads the real OS cursor, which may sit outside the window: off until `drop`.
+
+## Median and minimum of `runs` calls of `part` (usec -> "median / min ms").
+
+			# The dry terrain's own parts (AuthoredTerrain.build), pure ones first.
+
+## Render-job probe (`call` op) for the phase 4b follow-ups (P4b-0). step.action:
+##   line {from, to, n, surface}  on the open authoring map, `n` points (default 21) from
+##                                `from` to `to` (map XZ): ground, water level, depth, the wet
+##                                dressing's bed / shore / wet line, and the painted weight of
+##                                `surface` at the nearest sample. For the path-meets-water fix.
+##   cues                         in play: every token's height, base, the water surface over
+##                                it and whether its submerged cue (SubmergedMarker) shows.
+##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+##                                over map XZ `to` (the drag stays active, the token eases
+##                                there over the next frames), for a capture mid-drag.
+##   drop                         ends a held drag as a release does.
+##   load_profile {folder, n}     the main-thread parts of loading the level's map.ttmap
+##                                with water, each run `n` times (default 5) on the calling
+##                                frame and logged as median / min ms: the terrain (with and
+##                                without its water), the wet dressing, the water mesh build,
+##                                the water nodes, the flow texture, process_water_meshes and
+##                                the grid's ground field. Call it from the title.
+
+			# Edge pan reads the real OS cursor, which may sit outside the window: off until `drop`.
+
+## Median and minimum of `runs` calls of `part` (usec -> "median / min ms").
+
+			# The dry terrain's own parts (AuthoredTerrain.build), pure ones first.
+
+			GroundPalette.build_ground_material(doc.base_surface, doc.map_seed, root_path),
+		"layers (plan, planes, textures)": func() -> void: terrain.call("_build_ground_layers"),
+		"collision": func() -> void: terrain.call("update_collision"),
+		"skirt": func() -> void: terrain.call("_build_skirt"),
+	}
+	for part_name: String in parts:
+		out.append("  %s %s" % [part_name, _timed(parts[part_name], runs)])
 	root.free()
 	return "\n".join(out)
 

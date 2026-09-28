@@ -122,6 +122,8 @@ var _weight_textures: Array[DrawableTexture2D] = []
 var _broad_textures: Array[ImageTexture] = []
 ## Whole-grid rule fields: {"curvature", "steep"} (TerrainMeshBuilder.grid_fields).
 var _fields: Dictionary = {}
+## cell -> chunk mesh arrays a loader's worker built (AuthoredLoadPrep), used once each.
+var _prepared_chunks: Dictionary = {}
 ## Samples whose rule fields height edits have made stale, recomputed by settle_heights().
 var _fields_dirty: Rect2i = Rect2i()
 ## Ground texture paths loading on background threads (warm_biome_surface), and the loaded
@@ -158,13 +160,17 @@ func _ready() -> void:
 ## A terrain for `doc`, fully built: every chunk, the collision body and the material.
 ## With `with_chunks` false the chunk meshes are left for the caller to build with
 ## rebuild_chunks() (the play-time load spreads them over frames: about 0.8 ms each, 49 on
-## a 200 ft map).
+## a 200 ft map). `prepared` is AuthoredLoadPrep's worker output (the wet dressing, rule
+## fields, skirt and chunk arrays); whatever it lacks is computed here.
 static func create(
-	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT, with_chunks: bool = true
+	doc: MapDocument,
+	root: String = PaletteLibrary.DEFAULT_ROOT,
+	with_chunks: bool = true,
+	prepared: Dictionary = {}
 ) -> AuthoredTerrain:
 	var terrain := AuthoredTerrain.new()
 	terrain.name = "AuthoredTerrain"
-	terrain.build(doc, root, with_chunks)
+	terrain.build(doc, root, with_chunks, prepared)
 	return terrain
 
 
@@ -177,9 +183,12 @@ static func texture_paths(
 
 
 ## Builds (or rebuilds from scratch) everything for `doc`; the chunk meshes only with
-## `with_chunks` (see create()).
+## `with_chunks` (see create(), and `prepared` there).
 func build(
-	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT, with_chunks: bool = true
+	doc: MapDocument,
+	root: String = PaletteLibrary.DEFAULT_ROOT,
+	with_chunks: bool = true,
+	prepared: Dictionary = {}
 ) -> void:
 	document = doc
 	palette_root = root
@@ -195,14 +204,20 @@ func build(
 	_fields_dirty = Rect2i()
 	_material = GroundPalette.build_ground_material(doc.base_surface, doc.map_seed, root)
 	# The wet dressing first: whether the map has water decides the layer plan.
-	WaterDressing.refresh(doc)
+	if prepared.has(AuthoredLoadPrep.DRESSING):
+		doc.water_dressing = prepared[AuthoredLoadPrep.DRESSING]
+	else:
+		WaterDressing.refresh(doc)
 	_build_ground_layers()
 	_bind_water_dressing()
-	_fields = TerrainMeshBuilder.grid_fields(doc)
+	_fields = prepared.get(AuthoredLoadPrep.FIELDS, {})
+	if _fields.is_empty():
+		_fields = TerrainMeshBuilder.grid_fields(doc)
+	_prepared_chunks = prepared.get(AuthoredLoadPrep.CHUNKS, {}).duplicate()
 	if with_chunks:
 		rebuild_chunks(TerrainMeshBuilder.chunk_cells(doc))
 	_build_collision()
-	_build_skirt()
+	_build_skirt(prepared.get(AuthoredLoadPrep.SKIRT, []))
 	_refresh_height_texture()
 
 
@@ -226,7 +241,7 @@ static func skirt_width_m() -> float:
 	return SKIRT_FADE_M / (1.0 - SKIRT_WOBBLE) + 2.0
 
 
-func _build_skirt() -> void:
+func _build_skirt(arrays: Array = []) -> void:
 	var old := get_skirt()
 	if old != null:
 		old.free()
@@ -242,7 +257,9 @@ func _build_skirt() -> void:
 	_skirt_material.set_shader_parameter("skirt_fade_m", SKIRT_FADE_M)
 	_skirt_material.set_shader_parameter("skirt_wobble", SKIRT_WOBBLE)
 	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _skirt_arrays())
+	mesh.add_surface_from_arrays(
+		Mesh.PRIMITIVE_TRIANGLES, arrays if not arrays.is_empty() else _skirt_arrays()
+	)
 	mesh.surface_set_material(0, _skirt_material)
 	# In-place edge edits move vertices the build-time AABB does not know about; the skirt is
 	# decoration outside every bounds walk, so a generous box costs nothing.
@@ -684,7 +701,12 @@ func rebuild_chunks(cells: Array[Vector2i]) -> void:
 
 
 func _rebuild_chunk(cell: Vector2i) -> void:
-	var mesh := TerrainMeshBuilder.build_chunk_mesh(document, cell, _material, _fields)
+	var mesh: ArrayMesh = null
+	if _prepared_chunks.has(cell):
+		mesh = TerrainMeshBuilder.mesh_of(_prepared_chunks[cell], _material)
+		_prepared_chunks.erase(cell)
+	else:
+		mesh = TerrainMeshBuilder.build_chunk_mesh(document, cell, _material, _fields)
 	if mesh == null:
 		return
 	var chunk: MeshInstance3D = _chunks.get(cell, null)
@@ -709,6 +731,7 @@ func _rebuild_chunk(cell: Vector2i) -> void:
 func queue_heights(sample_rect: Rect2i) -> void:
 	var grid := Rect2i(0, 0, document.samples_x(), document.samples_z())
 	_height_texture_stale = true
+	_prepared_chunks.clear()  # Built from the heights before this edit.
 	var step := document.sample_step()
 	var reach := TerrainRules.radius_samples(minf(step.x, step.y)) + 1
 	var fields_rect := sample_rect.grow(reach).intersection(grid)

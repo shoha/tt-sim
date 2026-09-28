@@ -739,7 +739,18 @@ change. A species the filter empties is still resolved so its template is freed.
    reads and validates the document and splits its scatter + props rows into
    10 m cells on a worker thread; loads the GLB with the erase filter, or builds a bare
    `LevelMap` root holding an `AuthoredTerrain` (ground textures preloaded on threads,
-   chunk meshes built per frame) that carries `AUTHORED_MAP_LIGHTING` as scene extras;
+   chunk meshes built per frame) that carries `AUTHORED_MAP_LIGHTING` as scene extras.
+   For that root the pure data runs on worker threads while the textures load
+   (`AuthoredLoadPrep`, P4b-0, one task per part, each reading the document only and
+   writing its own Dictionary): the wet dressing (`WaterDressing.field_of`), the water
+   geometry (`WaterMeshBuilder.build`), the rule fields with every chunk's mesh arrays, and
+   the skirt arrays. The main thread then only makes nodes and resources from them
+   (`AuthoredTerrain.create(..., prepared)`, `AuthoredWater.create(doc, built)`,
+   `TerrainMeshBuilder.mesh_of`): no textures or other renderer resources are made on a
+   worker, so it is also safe under the headless dummy renderer
+   (`GlbUtils.threaded_loads_safe`). A height edit drops any prepared chunk arrays not yet
+   used. New maps (`build_async`) take the same path; a dressed GLB builds its (rare)
+   authored water on the main thread as before;
    then, when the document has rows, one `AuthoredScatter` under the root: species load
    on threads (`prepare_assets`) and resolve within an 8 ms frame budget
    (`resolve_prepared`), and cells build within the same budget (`begin_build` /
@@ -759,7 +770,9 @@ Measured (headless, main thread only, fully painted 200 ft temperate forest: 30,
 frames, species 56 ms (about 0.3-0.6 s with a real renderer), cells 110-125 ms spread,
 budget 7 ms, finalize about 60-70 ms in one frame. Longest load frame 70-84 ms (the last
 cell batch + budget + finalize); warm load 0.53 s, cold 1.1 s headless, about 2 s cold
-with rendering.
+with rendering. With the workers (P4b-0, 150 ft badlands with five water bodies, real
+renderer): the main thread's terrain build 224 -> 48 ms and the water 100 -> 14 ms, a warm
+load 855-876 -> 685-703 ms; `PERFORMANCE.md` "P4b-0: authored map load on workers".
 
 Scatter building is split in two. `ScatterGlbUtils.build_scatter(parent, groups,
 resolve, foliage_overrides, chunk_size)` takes rows (species key -> Y-up transform rows)
