@@ -367,9 +367,16 @@ static func _painted_fields(
 
 
 ## Painted density `value` as a species of ground role `role` reads it, given the sampler's
-## value `g` for that role: rock_density for ROLE_ROCK, density otherwise.
+## value `g` for that role: rock_density for ROLE_ROCK, density otherwise. A bank species
+## (EDGE_BANK) keeps its gathering on the wet shore above 1 (P4-4): the generator reads the
+## excess to let a clumped one (ferns) fill the bank beyond its clumps
+## (ScatterGenerator._evaluate), and the size-class response clamps the rest to 1 as before.
 static func species_density(value: float, g: Vector3, role: int) -> float:
-	return rock_density(value, g) if role == ROLE_ROCK else density(value, g)
+	if role == ROLE_ROCK:
+		return rock_density(value, g)
+	if (role & EDGE_BANK) != 0:
+		return maxf(value * g.x * (1.0 - SCREE_THIN * g.z), 0.0)
+	return density(value, g)
 
 
 ## Painted density `density` as every species but rock reads it, given a sampler value `g`
