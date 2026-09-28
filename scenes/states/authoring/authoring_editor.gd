@@ -6,18 +6,16 @@ extends RefCounted
 ## frame of a stroke, hand-placed props in the AuthoredProps node, and one AuthoringHistory
 ## entry per stroke or prop gesture. AuthoringController creates one per opened map.
 ##
-## Frames. BrushTool hands over world-space points; the document, the scatter rows and the
-## props are all in the map root's frame (LevelMap, which carries the level's map scale and
-## offset on a dressed GLB), so every point is taken into that frame here, once.
+## Frames. BrushTool hands over world points; the document, scatter rows and props are in the
+## map root's frame (LevelMap: the level's map scale and offset), taken into it here, once.
 ##
 ## Per frame of a stroke, flush() takes the samples the frame's dabs changed and makes one
 ## update of each consumer: AuthoredTerrain.update_ground_region (the painted ground; none on
 ## a dressed GLB), AuthoredScatter.request_region (regeneration on workers, grown in), and
 ## BaseScatterEraser.refresh (a dressed GLB's own scatter under the erase mask, shrunk out).
 ##
-## History. A stroke records MaskStroke's per-block compressed diff; a prop gesture records
-## the rows of the one 10 m cell it changed, before and after. Undo and redo re-apply the
-## stored side and refresh exactly the area it covers.
+## History. A stroke records MaskStroke's per-block compressed diff, a prop gesture its 10 m
+## cell's rows before and after; undo and redo re-apply a side and refresh exactly its area.
 ##
 ## Height strokes (HeightStroke, rules in HeightBrush) edit doc.heights on a map with an
 ## AuthoredTerrain. Per frame, flush() updates the terrain's chunks in place within
@@ -29,11 +27,11 @@ extends RefCounted
 ## (_regenerated_area); one history entry holds the heights diff and the props rows moved,
 ## and the rocks the regeneration would remove become props in it (RockKeeper).
 ##
-## Surface strokes (the Paint tool; SurfaceStroke) paint or erase palette surfaces on a map
-## with an AuthoredTerrain; flush() blits the changed weight texels, and scatter follows at
-## the end (and on undo and redo) only for built or cliff-role surfaces, which clear plants.
+## Surface strokes (Paint; SurfaceStroke) paint or erase surfaces on an AuthoredTerrain; flush()
+## blits the weight texels; scatter follows at the end only for surfaces that clear plants.
 ##
-## Water (P4-3, P4-4): `water` (WaterEditor) carves, paints and erases water (stroke_dab etc.).
+## Water (P4-3, P4-4): `water` (WaterEditor) carves, paints and erases water (stroke_dab etc.);
+## crossings (P4b-1): `crossings` (CrossingEditor) places and removes bridges and stones.
 
 ## Emitted after every change to the map (strokes, props, undo, redo), for dirty tracking.
 signal edited
@@ -71,8 +69,9 @@ var last_snap_usec: int = 0
 var last_snap_rows: int = 0
 ## Rocks survive terrain changes: the rocks a sculpt stroke keeps (made by create()).
 var rock_keeper: RockKeeper = null
-## The water edits (P4-3; made by create()).
+## The water (P4-3) and crossing (P4b-1) edits, made by create().
 var water: WaterEditor = null
+var crossings: CrossingEditor = null
 
 var _stroke: MaskStroke = null
 var _stroke_label: String = ""
@@ -124,6 +123,7 @@ static func create(
 			editor.scatter.blocker_source = editor.props
 	editor.rock_keeper = RockKeeper.create(doc, editor.scatter, editor.props, editor.palette_root)
 	editor.water = WaterEditor.create(editor)
+	editor.crossings = CrossingEditor.create(editor)
 	editor._rng.randomize()
 	return editor
 
