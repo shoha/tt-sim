@@ -100,6 +100,7 @@ Every step has an `op`. Steps that finish immediately advance on the same frame;
 | `no_autosave` | none | Stop and disconnect the authoring autosave timer. |
 | `hide_ui` | `hide` (default true) | Hide (or with `false`, show) the authoring panel. |
 | `expand_ab` | `configs` (array of ground shader versions), `label`, `s` (default 3.0) | An in-run ground shader A/B: per config, swap the terrain's shader (`probes/ground_perf.gd` `shader`; `"std"` draws the chunks with `perf.gd`'s StandardMaterial3D instead), wait 0.5 s and sample GPU time for `s` seconds (`perf.gd` `start` / `stop`). Run `vsync_off` first. |
+| `expand` | `template` (array of steps), `values` (array) | Insert `template` once per entry of `values`, in order, with `{value}` replaced by it anywhere in the template's strings (level folders, for example, where `expand_biomes` only takes palette biomes). |
 | `expand_biomes` | `template` (array of steps), `biomes` (optional array of biome ids) | Insert `template` once per biome in the installed palette (`PaletteLibrary.biomes()`, palette order; only the ids in `biomes` when given), with `{biome}` replaced by the biome id and `{name}` by its display name, anywhere in the template's strings. |
 
 ### Camera
@@ -259,6 +260,16 @@ numerically (for example where a fade or a tint band starts).
   grid, an erase with Ctrl (held, done, undone), then the level saved as `_p44_<biome>` and
   played with tokens wading and floating; frame times around each release (`record`). The
   test levels are deleted at the end. 42 captures and `INDEX.md`.
+- `jobs/phase4_judgment_set.json`: the phase 4 (water) judgment set (P4-5, about 12
+  minutes): for temperate forest, grassland meadow, rocky badlands and riverside wetland, a new
+  150 ft map (seed 1234) tilted 2 % and built with the real tools at human speed: a tier north
+  of the middle, a winding waist-deep river passing below its face, an ankle stream joining
+  it, a deep pool, a pond painted in two strokes, a path in the biome's first path surface
+  crossing the river, three placed props; captured at home zoom, zoom 26 and full zoom-out
+  with the grid off and on and at zoom 9 on the crossing, then saved as a `_p45_` test level
+  and played with tokens wading, floating and standing in the stream; then the Blender
+  `river` level in play (read-only). The test levels are deleted at the end. 42 captures and
+  `INDEX.md`.
 - `jobs/grid_ground.json`: the grid on Blender maps' ground (P3-3c, about 50 s):
   `deciduous_clusters`, `river` and the built-in Oak's lab in play with G, the measure
   tool and a token drag's auto-show, the load's grid ground fit and a sampling survey
