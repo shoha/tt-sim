@@ -134,6 +134,16 @@ func _process(delta: float) -> void:
 			for k in added.size():
 				steps.insert(_i + 1 + k, added[k])
 			log_line("expanded into %d steps" % added.size())
+		"expand":
+			# Inserts step.template once per entry of step.values, in order, "{value}" filled
+			# in (level folders, say, where expand_biomes takes palette biomes).
+			var added: Array = []
+			for value in step.get("values", []):
+				var text := JSON.stringify(step.template).replace("{value}", str(value))
+				added.append_array(JSON.parse_string(text))
+			for k in added.size():
+				steps.insert(_i + 1 + k, added[k])
+			log_line("expanded into %d steps" % added.size())
 		"expand_ab":
 			# An in-run shader A/B: per entry of step.configs, swap the ground shader to that
 			# version (probes/ground_perf.gd; "std" draws the chunks with perf.gd's
