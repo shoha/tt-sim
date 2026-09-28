@@ -114,8 +114,9 @@ Every step has an `op`. Steps that finish immediately advance on the same frame;
 
 | Op | Fields | What it does |
 |---|---|---|
-| `stroke` | `points` ([[x, z], ...] world metres), `mode` (`paint` default, `thin`, `clear`, `sculpt`, `surface`), `biome` (for `paint`), `tile` (for `sculpt`: `raise` default, `smooth`, `flatten`, `tier`), `surface` (for `surface`: a palette surface, picked as its Paint tile is), `ctrl` / `shift` (for `sculpt`, and `ctrl` for `surface`, which erases paint: held at the press), `radius` (default 4.0), `flow` (default 1.0), `speed` (m/s along the path, default 6.0), `hold` (s to hold at the end, default 0), `keep_active` (default false), `release` (default true) | Paint a brush stroke through the real brush tool, moving the pointer along the polyline at `speed`. `paint` uses the biome tool with `biome`; `thin` uses the thin tool; `clear` is the thin tool with Ctrl held; `sculpt` picks the Sculpt tile as the panel does. On sculptable ground the pointer aims at the ground's current height. `keep_active` releases the press and finishes the gesture without deactivating the brush; `release: false` leaves the stroke held at the end point (it keeps dabbing there) for a capture mid-stroke, until a `release` step. |
+| `stroke` | `points` ([[x, z], ...] world metres), `curve` (default false: a Catmull-Rom curve through the points, as a hand draws, instead of straight runs), `mode` (`paint` default, `thin`, `clear`, `sculpt`, `surface`, `water`: `shape` `river` or `pond`, `depth` `ankle` / `waist` / `deep`, `flow_speed`, `ctrl` erases), `biome` (for `paint`), `tile` (for `sculpt`: `raise` default, `smooth`, `flatten`, `tier`), `surface` (for `surface`: a palette surface, picked as its Paint tile is), `ctrl` / `shift` (for `sculpt`, and `ctrl` for `surface`, which erases paint: held at the press), `radius` (default 4.0), `flow` (default 1.0), `speed` (m/s along the path, default 6.0), `hold` (s to hold at the end, default 0), `keep_active` (default false), `release` (default true) | Paint a brush stroke through the real brush tool, moving the pointer along the polyline at `speed`. `paint` uses the biome tool with `biome`; `thin` uses the thin tool; `clear` is the thin tool with Ctrl held; `sculpt` picks the Sculpt tile as the panel does. On sculptable ground the pointer aims at the ground's current height. `keep_active` releases the press and finishes the gesture without deactivating the brush; `release: false` leaves the stroke held at the end point (it keeps dabbing there) for a capture mid-stroke, until a `release` step. |
 | `release` | none | Ends a stroke left held by `release: false`, keeping the brush active. |
+| `cancel` | none | Cancels a stroke left held by `release: false`, as a right click does (a river being drawn is dropped). |
 | `hover` | `at` ([x, z]), `tile` (default `tier`), `radius`, `ctrl` | The Sculpt tool with `tile` over `at`, not pressed, Ctrl as given: the cursor and its Tier / Flatten readout as an author sees them before pressing. |
 | `place` | `biome`, `species`, `at` ([x, z]) | Place one prop of that biome's species at the point and commit it. If the biome or species is not in the palette, logs `no species <s> in <b>; not placed` and carries on. |
 
@@ -249,6 +250,14 @@ numerically (for example where a fade or a tint band starts).
   reach step, the pond and the deep river, and zoom 34; on badlands the grid, an erase at
   the crossing and its undo, then the level saved as `_p43_badlands` and played with tokens
   wading and floating; the test level is deleted at the end. 26 captures and `INDEX.md`.
+- `jobs/water_tool.json`: the Water tool look pass (P4-4, about 4.5 minutes): for grassland
+  meadow, rocky badlands and temperate forest, a new 150 ft map tilted 2 %, then human-speed
+  Water strokes through the real tool: a winding waist-deep river (captured still pressed:
+  the ribbon), a cancelled stroke, an ankle stream joining it, a deep pool, a pond in two
+  strokes; home view, zoom 9 on the confluence, the river's head, the pool and the pond, the
+  grid, an erase with Ctrl (held, done, undone), then the level saved as `_p44_<biome>` and
+  played with tokens wading and floating; frame times around each release (`record`). The
+  test levels are deleted at the end. 42 captures and `INDEX.md`.
 - `jobs/grid_ground.json`: the grid on Blender maps' ground (P3-3c, about 50 s):
   `deciduous_clusters`, `river` and the built-in Oak's lab in play with G, the measure
   tool and a token drag's auto-show, the load's grid ground fit and a sampling survey

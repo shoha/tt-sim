@@ -1463,3 +1463,40 @@ banks costs nothing visible: those fragments fail the depth test before shading.
 per-body collision and zones add no frame cost (static bodies, one Area3D per body). Main
 thread outside the frame: the authoring refresh's swap (mesh, concave shapes, zones) took
 26 ms; the build (84 ms) and the flow bake (183 ms) run on a worker.
+
+## Water tool: carve on a worker (2026-09-27, P4-4)
+
+Main-thread cost of a water edit, before and after moving its heavy, pure half onto a worker
+(`WaterEditor.compute()`; ARCHITECTURE.md "Carving water", "Worker carve"). Indicative
+render-job numbers (1920x1080 window, vsync on, debug build, not the pinned procedure): the
+question is how long the view freezes, not a GPU delta.
+
+**Before (P4-3, synchronous, 200 ft temperate forest map tilted 2.5 %, `WaterEditor.timings`
+per part, `probes/water.gd`):**
+
+| Edit | Main thread | Largest parts |
+| --- | --- | --- |
+| 60 m waist river, 3 reaches | 308 ms | goals 106, dressing 112, terrain work 30, dressing upload 34, settle 20 |
+| 25 m deep river, 2 reaches | 274 ms | dressing 165, goals 50, rock rule (sample owners) 34 |
+| 4.5 m waist pond | 259 ms | dressing 175, rock rule 41, goals 27 |
+| erase across a river | 662 ms | dressing 172, rock rule 37, the rest in the erase's own dabs and cuts |
+
+**After (the Water tool at human speed through the harness, `jobs/water_tool.json`, 150 ft
+maps tilted 2 %; `record` around each release; worst frame, median 7.6-8.4 ms):**
+
+| Edit | Grassland | Badlands | Forest |
+| --- | --- | --- | --- |
+| 45 m waist river (release to landed) | 41.6 ms | 21.0 ms | 27.2 ms |
+| ankle stream joining it (drawing and landing) | 23.4 ms | 17.1 ms | 12.2 ms |
+| deep pool and a two-stroke pond | 30.3 ms | 17.2 ms | 16.9 ms |
+| erase one river | 22.0 ms | 9.8 ms | 9.4 ms |
+
+The river lands over three frames (grassland: 24.7, 22.0 and 41.6 ms): the document and
+ground (lower_to, terrain chunks, collision, snap), the terrain settle (rule fields), then the
+dressing texture, rocks, regeneration request and history. The 41.6 ms is the first water on
+the map: the ground re-plans its layers and refreshes every chunk's weights for the new bed
+and shore surfaces, once per map; later edits' last frame is under 25 ms. The water surface's
+own swap (26 ms, P4-2) lands a few frames later. Undo and redo no longer recompute the
+dressing (it is stored compressed in the entry). A sculpt stroke on a map with water still
+recomputes the dressing on the main thread at its release (about 110-175 ms on a 200 ft map,
+`WaterEditor.refresh`); moving it onto the same worker is the next step if it is felt.

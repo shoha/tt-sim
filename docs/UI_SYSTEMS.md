@@ -767,16 +767,21 @@ emit nothing. It registers its backdrop as an overlay like `LevelPickerDialog`.
 ### Tool drawer
 
 `AuthoringPanel` extends `DrawerContainer` (LEFT, rail mode, 320 px). Rail items: Biome
-(`trees`), Thin / Clear (`eraser`), Place (`tree`), Sculpt (`mountain`), Paint (`brush`).
+(`trees`), Thin / Clear (`eraser`), Place (`tree`), Sculpt (`mountain`), Paint (`brush`),
+Water (`droplet`).
 Footer items: Undo
 (`arrow-back-up`) and Redo (`arrow-forward-up`), disabled while `AuthoringHistory` has
 nothing to offer; Save (`device-floppy`, badged while there are unsaved changes); Leave
 (`door-exit`). Item ids double as node names for `game_click_control`: `biome`,
-`thin_clear`, `place`, `sculpt`, `paint`, `undo`, `redo`, `save_map`, `leave_authoring`. On a
+`thin_clear`, `place`, `sculpt`, `paint`, `water`, `undo`, `redo`, `save_map`,
+`leave_authoring`. On a
 dressed Blender map Sculpt and Paint are disabled and their tooltips say why ("Sculpt: not on
 a Blender map, whose ground is the map file's"; `set_sculpt_available`,
 `set_paint_available`, `DrawerContainer.set_rail_item_tooltip`), since the ground there is
-the GLB's own (`AuthoringEditor.can_sculpt()` / `can_paint()`). The drawer content is a Map name `LineEdit`
+the GLB's own (`AuthoringEditor.can_sculpt()` / `can_paint()`). Water there is disabled the
+same way unless the document already has water painted over the GLB, which it can still
+erase: then the rail item stays enabled with a tooltip saying so, and the River, Pond and
+depth tiles are disabled (`set_water_available(carves, has_water)`). The drawer content is a Map name `LineEdit`
 (`MapNameEdit`, the one text field; placeholder "Untitled map") above a `PaneStack` with one
 pane per tool. Each pane is a `MenuHeader` with a short caption, a wrapped caption line
 saying the tool's gestures (`BiomeHint`, `ThinHint`, `PlaceHint`; MenuHeader captions do not
@@ -830,6 +835,18 @@ and nothing numeric in the main flow:
   Paint tile in the session, the preselected surface follows the order (the first listed
   path, else Dirt track), so a badlands map starts on its own track rather than one that
   vanishes on red sand; once picked, re-ordering never changes the selection.
+- **Water** (P4-4, `WaterToolPane`, `water_tool_pane.gd`): a Shape `TileField` with River
+  (`ripple`, "Draw a river: it flows the way you draw it") and Pond (`circle-dashed`), a Depth
+  `TileField` with Ankle (`shoe`), Waist (`walk`) and Deep (`swimming`), and under it a one-line
+  hint of what the depth means for tokens ("Ankle deep: a stream tokens wade across.", "Waist
+  deep: tokens wade, slowly.", "Deep: tokens swim, floating at the surface."). Tile ids and
+  node names `water_river`, `water_pond`, `water_ankle`, `water_waist`, `water_deep`; River and
+  Waist are preselected. Picking a tile emits `water_shape_selected` / `water_depth_selected`
+  and activates the Water brush. The hint line (`WaterHint`) says the gestures and that the
+  ground stays carved when water is erased (Sculpt's Smooth fills a dry channel). No numbers
+  in the main flow: its `Advanced` foldout (`WaterAdvanced`) holds Width (the full channel,
+  twice the brush radius, "Stream" / "River") and Flow (the river's flow speed 0 to 2,
+  "Still" / "Rushing"), values hidden.
 - Biome, Thin / Clear, Sculpt and Paint end in an `Advanced` foldout with Size (1 to 12 m, "Small" /
   "Large") and Strength (0.25 to 2x, "Gentle" / "Strong") `PropertyRow`s, values hidden like
   the Visuals drawer's; all follow the gestures (`set_brush_values`).
@@ -841,20 +858,35 @@ full screen. Save keeps the drawer open and shows a success toast.
 
 ### Brushes and gestures
 
-`BrushTool` (`scenes/states/authoring/brush_tool.gd`) is the one brush, in five modes; its
+`BrushTool` (`scenes/states/authoring/brush_tool.gd`) is the one brush, in six modes; its
 input table is the pure `BrushTool.decide()`, and the Sculpt operation of a press is the pure
-`BrushTool.sculpt_op(tile, ctrl, shift)`:
+`BrushTool.sculpt_op(tile, ctrl, shift)`; the Water mode's work is `WaterBrush`'s:
 
-| Gesture | Biome | Thin / Clear | Place | Sculpt | Paint |
-|---------|-------|--------------|-------|--------|-------|
-| Left drag | paint the biome | thin; with Ctrl at the press, clear | click places a prop (random asset of the species, random yaw), drag while pressed turns it to face the pointer | the tile's operation: Raise a soft mound (Ctrl at the press: lower), Smooth toward the local mean, Flatten to the ground height under the press, Tier (below) | paint the picked surface with the soft falloff; with Ctrl at the press, erase every painted surface back to the automatic ground and the biome ground |
-| Shift at the press | - | - | - | Smooth, whichever tile is picked | - |
-| Hold still while pressed | builds strength (up to 4x after 2 s) | same | - | same (Raise keeps building; Tier is already whole) | same (toward full cover) |
-| Plain wheel | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom |
-| Shift+wheel, `[` `]` | brush size, 1 to 12 m (remembered for the app session) | same | over a placed prop: its scale within the species' range (at least +-25 %) | brush size | brush size |
-| Right click, Escape | cancel the stroke in progress (reverted); idle: right click puts the brush down, Escape goes to the drawer | same | over a placed prop: remove it; during a placement: cancel it | same as Biome | same as Biome |
-| Delete / Backspace | - | - | remove the prop under the pointer | - | - |
-| Ctrl+Z / Ctrl+Y | undo / redo one stroke | same | one placement (place and turn), removal, or scale gesture | one stroke | one stroke |
+| Gesture | Biome | Thin / Clear | Place | Sculpt | Paint | Water |
+|---------|-------|--------------|-------|--------|-------|-------|
+| Left drag | paint the biome | thin; with Ctrl at the press, clear | click places a prop (random asset of the species, random yaw), drag while pressed turns it to face the pointer | the tile's operation: Raise a soft mound (Ctrl at the press: lower), Smooth toward the local mean, Flatten to the ground height under the press, Tier (below) | paint the picked surface with the soft falloff; with Ctrl at the press, erase every painted surface back to the automatic ground and the biome ground | River: draw the line from where the water comes to where it goes (a ribbon previews it; the release carves it); Pond: paint its area (a press inside a pond extends it); with Ctrl at the press, either tile: erase water (a river whole, pond area) |
+| Shift at the press | - | - | - | Smooth, whichever tile is picked | - | - |
+| Hold still while pressed | builds strength (up to 4x after 2 s) | same | - | same (Raise keeps building; Tier is already whole) | same (toward full cover) | Pond: the dab spreads (up to 1.35x) |
+| Plain wheel | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom |
+| Shift+wheel, `[` `]` | brush size, 1 to 12 m (remembered for the app session) | same | over a placed prop: its scale within the species' range (at least +-25 %) | brush size | brush size | the river's width or pond brush (never below the depth's narrowest channel: ankle 0.44, waist 1.33, deep 2.96 m half-width) |
+| Right click, Escape | cancel the stroke in progress (reverted); idle: right click puts the brush down, Escape goes to the drawer | same | over a placed prop: remove it; during a placement: cancel it | same as Biome | same as Biome | same (a river being drawn is dropped) |
+| Delete / Backspace | - | - | remove the prop under the pointer | - | - | - |
+| Ctrl+Z / Ctrl+Y | undo / redo one stroke | same | one placement (place and turn), removal, or scale gesture | one stroke | one stroke | one river, pond stroke or erase |
+
+Water (P4-4). The river flows the way it was drawn (its first point is upstream). A river
+drawn over sloped ground is split into flat reaches joined by small rapids; its ends inside
+the map close in rounded heads. A river that starts or ends in another river or pond joins it
+there (a confluence: it is cut at that water's edge and meets it at its level, or below for
+an outflow), and a line lying all in water is refused with a toast. The ribbon preview shows
+the width, a gradient and chevrons downstream, and the readout "River  Waist  40 ft" (the
+line's length in the level's units); Pond shows "Pond  Deep" and its painted dabs. The carve
+computes on a worker and lands over three frames, so a release never holds the view
+(`docs/PERFORMANCE.md` "Water tool"); the ribbon stays faintly
+until it lands. Ctrl erases a river whole, every reach of the stroke it touches (drawn red
+while held) and the streams that flow into it, rather than cutting a hole mid-channel (to
+shorten one, erase it and draw it again), and pond area under the brush (a shrunk pond settles to its new rim). The
+ground stays as carved: Sculpt's Smooth fills a dry channel. On a dressed Blender map only
+erasing is available (see the rail above).
 
 Paint. A surface covers walkable ground only (the user's cliff-face decision): ground and built
 surfaces painted across a tier's face give way to the automatic rock there, so a road painted
@@ -910,13 +942,14 @@ the footprint for rocks, logs and shrubs, the trunk for trees, never under 0.35 
 stone is easy to hit, `PropRows.pick_radius`); for Sculpt,
 sand to raise or build a tier, blue-grey to lower or cut, the accent to flatten, pale green to
 smooth; for Paint, the surface's swatch colour lifted toward white
-(`AuthoringController.surface_tint`), red to erase (Ctrl). A faint fill shows the reach (a fan from the centre drawn with explicit indices: a
+(`AuthoringController.surface_tint`), red to erase (Ctrl); for Water, a light blue, red to
+erase (Ctrl). A faint fill shows the reach (a fan from the centre drawn with explicit indices: a
 triangulated outline failed with "Invalid polygon data, triangulation failed" whenever the
 conformed ring projected to a self-intersecting outline, over raised ground or a Blender map's
 collision), and while a stroke is held an inner ring at half strength brightens as dwell
 builds. Tier and Flatten add a small readout under the ring in the level's units
 (`BrushTool.tier_readout`: "Tier 1  +5 ft", "Tier -1  -5 ft", "Ground  0 ft"; "Flatten  +3
-ft"), shown while hovering too, so the author sees what a press will build before pressing. The ring hides over the drawer. While Thin / Clear (or Sculpt, or Paint) is the tool, tree canopies between
+ft"), shown while hovering too, so the author sees what a press will build before pressing. The ring hides over the drawer. While Thin / Clear (or Sculpt, Paint or Water) is the tool, tree canopies between
 the camera and the ring dither away like geometry over a token (the ring is
 `OcclusionFadeManager.set_focus()`, radius 1.35x the brush), so the ground being thinned stays
 visible under a forest. It rides on the occlusion fade and so follows the player's Occlusion

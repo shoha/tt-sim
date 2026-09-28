@@ -145,7 +145,14 @@ Follow-ups:
   and Pond / lake (paint an area: a basin with still water at a level), Ctrl erases water;
   depth chosen per stroke (tokens stand on the bed in wadeable water and float at the
   surface in deep water); the grid lies on the water surface so squares stay continuous
-  across rivers (on Blender maps too).
+  across rivers (on Blender maps too). Built on `authoring-phase4`: the water model and flow
+  bake (P4-1), the surface in play and authoring (P4-2), carving and dressing (P4-3), and the
+  Water tool (P4-4: River and Pond tiles with Ankle / Waist / Deep, a ribbon preview, rounded
+  river heads, confluences that join existing water at its level, Ctrl erasing a river whole
+  (every reach of its stroke), soft pond beaches, mossy forest banks, and the carve on a worker so a release
+  never freezes the view). Decided in P4-4: a dressed Blender map can only erase water
+  painted over it (carving needs the document's ground); erased water leaves its channel
+  carved, and Sculpt's Smooth is the way to fill it.
 - **Phase 4b: spanning water.** Bridges and other crossings (plank bridges, stepping
   stones, stone arches, fords) that snap between two banks, span the gap with walkable
   collision for tokens, and match the palette's painted style; likely generated or

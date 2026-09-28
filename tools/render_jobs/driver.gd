@@ -203,6 +203,9 @@ func _process(delta: float) -> void:
 			var brush := ctrl().brush
 			brush.set("_pressed", false)
 			brush.call("finish_gesture")
+		"cancel":
+			# Right-click during a held stroke (release: false): drops it (P4-4).
+			ctrl().brush.call("_cancel_gesture")
 		"hover":
 			# The Sculpt tool with `tile` over map point `at`, not pressed, `ctrl` held: the
 			# cursor and its readout as an author sees them before pressing.
@@ -292,6 +295,11 @@ func _stroke(step: Dictionary) -> bool:
 	var c := ctrl()
 	var brush := c.brush
 	var points: Array = step.points
+	if bool(step.get("curve", false)):
+		# A hand's curve through the points (Catmull-Rom), not straight runs between them.
+		if not _state.has("curve"):
+			_state.curve = _catmull_rom(points)
+		points = _state.curve
 	if _state.phase == 0:
 		var mode := String(step.get("mode", "paint"))
 		brush.set_radius(float(step.get("radius", 4.0)))
@@ -315,6 +323,21 @@ func _stroke(step: Dictionary) -> bool:
 		elif mode == "surface":
 			# The Paint tool through its tile (P3-6); Ctrl at the press erases paint.
 			c.call("_on_paint_selected", String(step.get("surface", "")))
+			_state.ctrl = bool(step.get("ctrl", false))
+		elif mode == "water":
+			# The Water tool through its tiles (P4-4): a river is drawn along the points and
+			# carved on release, a pond painted; Ctrl at the press erases water.
+			var depth := WaterBody.DEPTH_NAMES.find(String(step.get("depth", "waist")))
+			c.call("_on_water_depth_selected", maxi(depth, 0))
+			var pond := String(step.get("shape", "river")) == "pond"
+			c.call(
+				"_on_water_shape_selected",
+				WaterBrush.Shape.POND if pond else WaterBrush.Shape.RIVER
+			)
+			if step.has("flow_speed"):
+				brush.water.speed = float(step.flow_speed)
+			# Again in the Water mode, whose brush may be narrower than the others'.
+			brush.set_radius(float(step.get("radius", 4.0)))
 			_state.ctrl = bool(step.get("ctrl", false))
 		else:
 			c.call("_select_tool", AuthoringPanel.TOOL_THIN)
@@ -363,6 +386,31 @@ func _set_pointer(brush: BrushTool, world: Vector3) -> void:
 	var screen := gm().camera_node.unproject_position(world)
 	brush.set("_pointer", screen)
 	brush.set("_has_pointer", true)
+
+
+## `points` ([[x, z], ...]) as a Catmull-Rom curve through them, ten pieces per span.
+func _catmull_rom(points: Array) -> Array:
+	var out: Array = []
+	var n := points.size()
+	for k in range(n - 1):
+		var p0 := Vector2(points[maxi(k - 1, 0)][0], points[maxi(k - 1, 0)][1])
+		var p1 := Vector2(points[k][0], points[k][1])
+		var p2 := Vector2(points[k + 1][0], points[k + 1][1])
+		var p3 := Vector2(points[mini(k + 2, n - 1)][0], points[mini(k + 2, n - 1)][1])
+		for s in 10:
+			var t := s / 10.0
+			var p := (
+				0.5
+				* (
+					2.0 * p1
+					+ (p2 - p0) * t
+					+ (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
+					+ (3.0 * p1 - p0 - 3.0 * p2 + p3) * t * t * t
+				)
+			)
+			out.append([p.x, p.y])
+	out.append(points[n - 1])
+	return out
 
 
 func _length(points: Array) -> float:
