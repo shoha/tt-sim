@@ -11,21 +11,27 @@ extends RefCounted
 ##                                  "found:c<id>_stone<k>" for `look` / `tokens`.
 ##   report                         every crossing and its node.
 ##   list                           every crossing of the document (id, kind, anchors, levels,
-##                                  width), naming its found: points as `place` does (P4b-2).
+##                                  width), naming its found: points as `place` does (P4b-2;
+##                                  its stones too, P4b-3).
 ##   timing                         the Bridge tool's last plan (the preview per pointer move)
 ##                                  and the last crossing edit's refresh, build and node swap.
 ##   bench {from, to, kind, runs}   plan() `runs` times for that line (median / min), then one
 ##                                  place and its undo, each timed, with the refresh's parts.
+##   visible {visible}              shows or hides every crossing's meshes, authoring or play
+##                                  (a GPU A/B; the collision stays; P4b-3). A bool, or a
+##                                  label from an `expand` template: "off ..." hides.
 ##   undo                           AuthoringController.undo() (logs the label).
 ##   save {folder}                  writes the open document and level as user://levels/<folder>
-##                                  (a _p4b1_ test level only).
-##   cleanup                        deletes every user://levels/_p4b1_* folder (test levels).
+##                                  (a _p4b1_ or _p4b3_ test level only).
+##   cleanup                        deletes every user://levels/_p4b1_* and _p4b3_* folder.
 ##   look {at}                      pans so the screen centre looks at `at` ([x, z] or found:).
 ##   tokens {points, assets}        in play: water.gd's `tokens` with found: points resolved.
 ##   points {points}                in play: water.gd's `points` (bed, surface, landing, grid
 ##                                  field, drag resolver) with found: points resolved.
 
-const TEST_PREFIX := "_p4b1_"
+## Test level prefixes `save` writes and `cleanup` deletes (P4b-1's look pass, P4b-3's
+## judgment set and performance pass).
+const TEST_PREFIXES: Array[String] = ["_p4b1_", "_p4b3_"]
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
 
 static var _found: Dictionary = {}
@@ -46,6 +52,10 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _bench(base, step)
 		"first_use":
 			return _first_use(base, step)
+		"visible":
+			# A bool, or a label from an `expand` template ("off ..." hides).
+			var shown: Variant = step.get("visible", true)
+			return _visible(base, shown if shown is bool else not String(shown).begins_with("off"))
 		"undo":
 			var ctrl: AuthoringController = base.get("_authoring_controller")
 			return "undo: %s" % str(ctrl.call("undo")) if ctrl else "no authoring controller"
@@ -185,6 +195,27 @@ static func _name_points(editor: AuthoringEditor, crossing: Crossing) -> void:
 	_found["c%d_a" % id] = Vector2(a.x, a.z)
 	_found["c%d_b" % id] = Vector2(b.x, b.z)
 	_found["c%d_mid" % id] = Vector2(a.x + b.x, a.z + b.z) * 0.5
+	if not crossing.is_plank():
+		var stones := CrossingGeometry.stone_layout(editor.document, crossing)
+		for k in stones.size():
+			var at: Vector2 = stones[k].at
+			var world := editor.to_world(Vector3(at.x, 0, at.y))
+			_found["c%d_stone%d" % [id, k]] = Vector2(world.x, world.z)
+
+
+## Shows or hides every crossing's meshes (authoring or play; the collision stays), for an
+## in-run GPU A/B (P4b-3).
+static func _visible(base: Node, visible: bool) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	var gm := base.get("_game_map") as GameMap
+	var root: Node = ctrl.map_root if ctrl and ctrl.map_root else null
+	if root == null and gm != null and gm.map_container.get_child_count() > 0:
+		root = gm.map_container.get_child(0)
+	var node := root.get_node_or_null(AuthoredCrossings.NODE_NAME) as Node3D if root else null
+	if node == null:
+		return "no AuthoredCrossings"
+	node.visible = visible
+	return "crossings visible %s (%d)" % [str(visible), node.get_child_count()]
 
 
 static func _list(base: Node) -> String:
@@ -320,8 +351,8 @@ static func _first_use(base: Node, step: Dictionary) -> String:
 
 
 static func _save(base: Node, folder: String) -> String:
-	if not folder.begins_with(TEST_PREFIX):
-		return "not a %s folder" % TEST_PREFIX
+	if not _is_test_folder(folder):
+		return "not a test folder (%s)" % ", ".join(TEST_PREFIXES)
 	var ctrl: AuthoringController = base.get("_authoring_controller")
 	if ctrl == null:
 		return "no authoring controller"
@@ -342,11 +373,18 @@ static func _cleanup() -> String:
 		return "no levels folder"
 	var removed := PackedStringArray()
 	for folder in dir.get_directories():
-		if not folder.begins_with(TEST_PREFIX):
+		if not _is_test_folder(folder):
 			continue
 		_remove_tree(LevelManager.folder_path(folder))
 		removed.append(folder)
 	return "removed %s" % str(removed)
+
+
+static func _is_test_folder(folder: String) -> bool:
+	for prefix in TEST_PREFIXES:
+		if folder.begins_with(prefix):
+			return true
+	return false
 
 
 static func _remove_tree(path: String) -> void:

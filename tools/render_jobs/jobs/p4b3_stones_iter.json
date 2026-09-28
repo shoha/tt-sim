@@ -1,0 +1,35 @@
+{
+ "out_dir": "render_jobs/p4b3_stones_iter",
+ "timeout_s": 600,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "expand_biomes", "biomes": ["alpine_meadow_summer_s1", "temperate_forest_summer_s1", "grassland_meadow_summer_s1"], "template": [
+   {"op": "new_map", "biome": "{biome}", "size": 100, "seed": 1234},
+   {"op": "wait_ready", "settle": 0.5},
+   {"op": "no_autosave"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "look_at", "at": [0, 0]},
+   {"op": "zoom", "size": 14.0},
+   {"op": "wait", "s": 1.0},
+   {"op": "stroke", "mode": "water", "shape": "river", "depth": "waist", "radius": 1.8, "speed": 5.0, "curve": true, "points": [[-12, 2], [-4, 1], [4, 0], [12, 1]]},
+   {"op": "wait_ready", "settle": 0.5},
+   {"op": "eval", "expr": "_game_map.get_brush_tool().deactivate()"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "place", "kind": "stones", "from": [2, -1], "to": [2, 2]},
+   {"op": "wait_ready", "settle": 0.5},
+   {"op": "hide_ui"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "look", "at": "found:c1_mid"},
+   {"op": "zoom", "size": 5.0},
+   {"op": "wait", "s": 1.5},
+   {"op": "capture", "name": "{biome}_stones_z5", "desc": "{name}: stepping stones, zoom 5"},
+   {"op": "home"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "look", "at": "found:c1_mid"},
+   {"op": "wait", "s": 0.5},
+   {"op": "capture", "name": "{biome}_stones_home", "desc": "{name}: stepping stones, home zoom"},
+   {"op": "title"},
+   {"op": "wait", "s": 1.0}
+  ]},
+  {"op": "index", "title": "P4b-3 stones iteration", "intro": "Stepping stones over a waist river in three biomes, zoom 5 and home."}
+ ]
+}

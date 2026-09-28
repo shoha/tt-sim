@@ -8,6 +8,8 @@ extends RefCounted
 ##                         draw calls), scatter MultiMesh counts, viewport and camera size
 ##   mem {ws}              engine memory monitors; ws = true adds the process working set,
 ##                         peak working set and private bytes (one powershell call, ~0.5 s)
+##   gpu_state {name}      one nvidia-smi query: GPU utilisation, temperature, P-state, clock
+##                         (the pinned procedure's idle check, logged in the run; P4b-3)
 ##   play {folder}         play a level and time its load (logged when it lands)
 ##   author {biome, size, seed}  open a new map in authoring and time the loading screen, the
 ##                         whole palette resolve and the starting-cover regeneration
@@ -252,6 +254,20 @@ static func run(base: Node, step: Dictionary) -> String:
 		"mem":
 			return (
 				"mem %s | %s" % [step.get("name", ""), Probe.mem_text(bool(step.get("ws", false)))]
+			)
+		"gpu_state":
+			# The pinned procedure's idle check (PERFORMANCE.md), from inside the run: one
+			# nvidia-smi query (utilisation, temperature, P-state, graphics clock).
+			var res: Array = []
+			var query := "--query-gpu=utilization.gpu,temperature.gpu,pstate,clocks.gr"
+			var code := OS.execute("nvidia-smi", [query, "--format=csv,noheader"], res, true)
+			return (
+				"gpu_state %s | %s (exit %d)"
+				% [
+					step.get("name", ""),
+					String(res[0] if not res.is_empty() else "").strip_edges(),
+					code
+				]
 			)
 		"play":
 			var level := LevelManager.load_level_folder(String(step.folder), false)
