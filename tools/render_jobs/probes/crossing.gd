@@ -1,15 +1,21 @@
 extends RefCounted
 
-## Render-job probe (`call` op) for crossings (phase 4b, P4b-1). There is no Bridge tool yet
-## (P4b-2), so crossings are placed through the AuthoringEditor crossing API
-## (CrossingEditor.place: a line drawn across water, snapped to the banks). Positions are world
-## XZ metres. step.action:
+## Render-job probe (`call` op) for crossings (phase 4b, P4b-1), placed through the
+## AuthoringEditor crossing API (CrossingEditor.place: a line drawn across water, snapped to the
+## banks); the Bridge tool (P4b-2) is driven with the driver's `gesture` and `input` ops and
+## read back here with `list` and `timing`. Positions are world XZ metres. step.action:
 ##   place {kind, from, to, width}  kind "plank" or "stones"; logs the id or the refusal, the
 ##                                  anchors, span, levels, style and the refresh time, and
 ##                                  names the crossing's middle, ends and first stone
 ##                                  "found:c<id>_mid", "found:c<id>_a", "found:c<id>_b",
 ##                                  "found:c<id>_stone<k>" for `look` / `tokens`.
 ##   report                         every crossing and its node.
+##   list                           every crossing of the document (id, kind, anchors, levels,
+##                                  width), naming its found: points as `place` does (P4b-2).
+##   timing                         the Bridge tool's last plan (the preview per pointer move)
+##                                  and the last crossing edit's refresh, build and node swap.
+##   bench {from, to, kind, runs}   plan() `runs` times for that line (median / min), then one
+##                                  place and its undo, each timed, with the refresh's parts.
 ##   undo                           AuthoringController.undo() (logs the label).
 ##   save {folder}                  writes the open document and level as user://levels/<folder>
 ##                                  (a _p4b1_ test level only).
@@ -32,6 +38,14 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _place(base, step)
 		"report":
 			return _report(base)
+		"list":
+			return _list(base)
+		"timing":
+			return _timing(base)
+		"bench":
+			return _bench(base, step)
+		"first_use":
+			return _first_use(base, step)
 		"undo":
 			var ctrl: AuthoringController = base.get("_authoring_controller")
 			return "undo: %s" % str(ctrl.call("undo")) if ctrl else "no authoring controller"
@@ -162,6 +176,147 @@ static func _report(base: Node) -> String:
 			node.last_swap_usec / 1000.0,
 		]
 	)
+
+
+static func _name_points(editor: AuthoringEditor, crossing: Crossing) -> void:
+	var id := crossing.id
+	var a := editor.to_world(Vector3(crossing.start.x, 0, crossing.start.y))
+	var b := editor.to_world(Vector3(crossing.end.x, 0, crossing.end.y))
+	_found["c%d_a" % id] = Vector2(a.x, a.z)
+	_found["c%d_b" % id] = Vector2(b.x, b.z)
+	_found["c%d_mid" % id] = Vector2(a.x + b.x, a.z + b.z) * 0.5
+
+
+static func _list(base: Node) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	var out := PackedStringArray()
+	for crossing in ctrl.editor.crossings.list():
+		_name_points(ctrl.editor, crossing)
+		(
+			out
+			. append(
+				(
+					"%d %s %s -> %s span %.2f levels %s width %.2f"
+					% [
+						crossing.id,
+						Crossing.KIND_NAMES[crossing.kind],
+						str(crossing.start.snapped(Vector2.ONE * 0.01)),
+						str(crossing.end.snapped(Vector2.ONE * 0.01)),
+						crossing.span_m(),
+						str(crossing.levels.snapped(Vector3.ONE * 0.01)),
+						crossing.width_m,
+					]
+				)
+			)
+		)
+	return "crossings (%d): %s" % [out.size(), "; ".join(out)]
+
+
+static func _timing(base: Node) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	var node := ctrl.map_root.get_node_or_null(AuthoredCrossings.NODE_NAME) as AuthoredCrossings
+	return (
+		"last plan %.2f ms; last refresh %.2f ms (build %.2f, swap %.2f)"
+		% [
+			ctrl.brush.bridge.last_plan_usec / 1000.0,
+			ctrl.editor.crossings.last_refresh_usec / 1000.0,
+			node.last_build_usec / 1000.0 if node else -1.0,
+			node.last_swap_usec / 1000.0 if node else -1.0,
+		]
+	)
+
+
+static func _bench(base: Node, step: Dictionary) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	var editor := ctrl.editor
+	var kind := (
+		Crossing.Kind.STONES if step.get("kind", "plank") == "stones" else Crossing.Kind.PLANK
+	)
+	var from := _vec(step.get("from"))
+	var to := _vec(step.get("to"))
+	var a := Vector3(from.x, 0, from.y)
+	var b := Vector3(to.x, 0, to.y)
+	var runs := int(step.get("runs", 20))
+	var times := PackedFloat64Array()
+	for _i in runs:
+		var started := Time.get_ticks_usec()
+		editor.crossings.plan(kind, a, b)
+		times.append((Time.get_ticks_usec() - started) / 1000.0)
+	times.sort()
+	var started := Time.get_ticks_usec()
+	var id := editor.crossings.place(kind, a, b)
+	var place_ms := (Time.get_ticks_usec() - started) / 1000.0
+	var node := ctrl.map_root.get_node_or_null(AuthoredCrossings.NODE_NAME) as AuthoredCrossings
+	var parts := (
+		"refresh %.2f (build %.2f swap %.2f)"
+		% [
+			editor.crossings.last_refresh_usec / 1000.0,
+			node.last_build_usec / 1000.0,
+			node.last_swap_usec / 1000.0,
+		]
+	)
+	started = Time.get_ticks_usec()
+	var label := ctrl.history.undo()
+	var undo_ms := (Time.get_ticks_usec() - started) / 1000.0
+	return (
+		"plan x%d median %.2f min %.2f max %.2f ms; place id %d %.2f ms, %s; undo '%s' %.2f ms"
+		% [runs, times[int(runs * 0.5)], times[0], times[-1], id, place_ms, parts, label, undo_ms]
+	)
+
+
+## The first-use cost of a crossing node's parts for style `style` (default: rocky badlands,
+## which a forest map has not used): its material made, its RID asked for (the shader
+## built), the mesh, the collision body and the nodes entering the tree, each timed.
+static func _first_use(base: Node, step: Dictionary) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	var editor := ctrl.editor
+	var style := String(step.get("style", "rocky_badlands_summer_s1"))
+	var from := _vec(step.get("from"))
+	var to := _vec(step.get("to"))
+	var kind := (
+		Crossing.Kind.STONES if step.get("kind", "plank") == "stones" else Crossing.Kind.PLANK
+	)
+	var crossing := editor.crossings.plan(kind, Vector3(from.x, 0, from.y), Vector3(to.x, 0, to.y))
+	if crossing == null:
+		return "refused: %s" % editor.crossings.last_refusal
+	crossing.style = style
+	var parts := CrossingGeometry.build_one(editor.document, crossing)
+	var node := AuthoredCrossings.of_map(ctrl.map_root)
+	var times := PackedStringArray()
+	var t := Time.get_ticks_usec()
+	var material: BaseMaterial3D = node.call(
+		"_stone_material" if kind == Crossing.Kind.STONES else "_wood_material", style
+	)
+	times.append("material %.2f" % ((Time.get_ticks_usec() - t) / 1000.0))
+	t = Time.get_ticks_usec()
+	material.get_rid()
+	times.append("rid %.2f" % ((Time.get_ticks_usec() - t) / 1000.0))
+	t = Time.get_ticks_usec()
+	var arrays: Array = parts.stone if kind == Crossing.Kind.STONES else parts.wood
+	# The script as a value: its private static helpers are only callable that way.
+	var script: Script = load("res://scenes/terrain/authored_crossings.gd")
+	var mesh := script.call("_mesh_instance", "Probe", arrays, material) as Node3D
+	times.append("mesh %.2f" % ((Time.get_ticks_usec() - t) / 1000.0))
+	t = Time.get_ticks_usec()
+	var body := script.call("_body", parts.collision, 999) as Node3D
+	times.append("body %.2f" % ((Time.get_ticks_usec() - t) / 1000.0))
+	var holder := Node3D.new()
+	holder.name = "FirstUseProbe"
+	t = Time.get_ticks_usec()
+	holder.add_child(mesh)
+	holder.add_child(body)
+	ctrl.map_root.add_child(holder)
+	times.append("enter tree %.2f" % ((Time.get_ticks_usec() - t) / 1000.0))
+	holder.queue_free()
+	return "first use of %s %s: %s ms" % [Crossing.KIND_NAMES[kind], style, ", ".join(times)]
 
 
 static func _save(base: Node, folder: String) -> String:

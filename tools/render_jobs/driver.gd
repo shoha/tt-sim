@@ -244,6 +244,16 @@ func _process(delta: float) -> void:
 				var p: Vector3 = c.brush.call("_bedded", Vector3(float(at[0]), 0.0, float(at[1])))
 				c.editor.place_prop(rule, p, Vector3.UP)
 				c.editor.commit_prop_edit()
+		"bridge_kind":
+			# The Bridge tool through its tile (P4b-2): `kind` "plank" or "stones".
+			var stones := String(step.get("kind", "plank")) == "stones"
+			ctrl().call(
+				"_on_bridge_kind_selected", Crossing.Kind.STONES if stones else Crossing.Kind.PLANK
+			)
+		"gesture":
+			done = _gesture(step)
+		"input":
+			done = _input_events(step)
 		"capture":
 			done = _capture(step)
 		"vsync_off":
@@ -396,6 +406,124 @@ func _set_pointer(brush: BrushTool, world: Vector3) -> void:
 	var screen := gm().camera_node.unproject_position(world)
 	brush.set("_pointer", screen)
 	brush.set("_has_pointer", true)
+
+
+## The screen point of map point `at` ([x, z]) on the top walkable surface there (a downward
+## ray on layer 1: the ground, a bridge deck or a stone; the document's ground when the ray
+## misses): where a real pointer over what is drawn at that point would be.
+func _screen_of(at: Array) -> Vector2:
+	var world := Vector3(float(at[0]), 0.0, float(at[1]))
+	var space := gm().world_viewport.find_world_3d().direct_space_state
+	var top := DragPlaceController.raycast_terrain_down(space, world, 200.0)
+	if top != Vector3.INF:
+		world = top
+	else:
+		var c := ctrl()
+		if c != null and c.editor != null and c.editor.can_sculpt():
+			world.y = c.editor.ground_height_at(world)
+	return gm().camera_node.unproject_position(world)
+
+
+## A real input event pushed through Input (window pixels, which the world viewport shares at
+## the forced 1920x1080), as a mouse or keyboard would send it.
+func _send(event: InputEvent) -> void:
+	Input.parse_input_event(event)
+	Input.flush_buffered_events()
+
+
+func _mouse_move(at: Array, ctrl_held: bool) -> void:
+	var motion := InputEventMouseMotion.new()
+	motion.position = _screen_of(at)
+	motion.global_position = motion.position
+	motion.ctrl_pressed = ctrl_held
+	_send(motion)
+
+
+func _mouse_button(at: Array, button: MouseButton, pressed: bool, ctrl_held: bool) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = button
+	event.pressed = pressed
+	event.position = _screen_of(at)
+	event.global_position = event.position
+	event.ctrl_pressed = ctrl_held
+	_send(event)
+
+
+func _key(keycode: Key, pressed: bool) -> void:
+	var event := InputEventKey.new()
+	event.keycode = keycode
+	event.physical_keycode = keycode
+	event.pressed = pressed
+	event.ctrl_pressed = pressed and keycode == KEY_CTRL
+	_send(event)
+
+
+## `gesture` (P4b-2): a left-button drag along `points` through real input events (motion,
+## press, motion at `speed` m/s, release), Ctrl held for the whole gesture with `ctrl`.
+## `release: false` stops at the end point still pressed (a capture mid-gesture); an `input`
+## step releases it, or a `gesture` with `press: false` carries the drag on from there.
+func _gesture(step: Dictionary) -> bool:
+	var points: Array = step.points
+	var held := bool(step.get("ctrl", false))
+	match int(_state.phase):
+		0:
+			if held:
+				_key(KEY_CTRL, true)
+			_mouse_move(points[0], held)
+			_state.phase = 1
+			return false
+		1:
+			if bool(step.get("press", true)):
+				_mouse_button(points[0], MOUSE_BUTTON_LEFT, true, held)
+			_state.phase = 2
+			_state.dist = 0.0
+			return false
+	var total := _length(points)
+	_state.dist += float(step.get("speed", 4.0)) * get_process_delta_time()
+	var d := minf(float(_state.dist), total)
+	var p := _point_at(points, d)
+	_mouse_move([p.x, p.z], held)
+	if d < total:
+		return false
+	_state.held = float(_state.get("held", 0.0)) + get_process_delta_time()
+	if _state.held < float(step.get("hold", 0.0)):
+		return false
+	if not bool(step.get("release", true)):
+		return true
+	_mouse_button([p.x, p.z], MOUSE_BUTTON_LEFT, false, held)
+	if held:
+		_key(KEY_CTRL, false)
+	return true
+
+
+## `input` (P4b-2): `events`, one per frame, as real input: {"type": "move", "at"}, {"type":
+## "press" / "release", "at", "button" ("left" default, "right")}, {"type": "key", "key"
+## ("ctrl", "escape"), "pressed" (default true)}; mouse events take `ctrl` (held).
+func _input_events(step: Dictionary) -> bool:
+	var events: Array = step.get("events", [])
+	var k := int(_state.phase)
+	if k >= events.size():
+		return true
+	var event: Dictionary = events[k]
+	var held := bool(event.get("ctrl", false))
+	match String(event.get("type", "move")):
+		"move":
+			_mouse_move(event.at, held)
+		"press", "release":
+			var button := (
+				MOUSE_BUTTON_RIGHT
+				if String(event.get("button", "left")) == "right"
+				else MOUSE_BUTTON_LEFT
+			)
+			_mouse_button(event.at, button, String(event.type) == "press", held)
+		"key":
+			var keys := {"ctrl": KEY_CTRL, "escape": KEY_ESCAPE}
+			_key(
+				keys.get(String(event.get("key", "ctrl")), KEY_CTRL),
+				bool(event.get("pressed", true))
+			)
+	_state.phase = k + 1
+	return false
 
 
 ## `points` ([[x, z], ...]) as a Catmull-Rom curve through them, ten pieces per span.
