@@ -87,6 +87,11 @@ uniform float sky_blend_strength : hint_range(0.0, 1.0) = 0.15;
 // bed distorts in sync with the visible ripple. Capped low because at tabletop zoom even
 // a small UV offset reads as a large shift of the terrain underneath.
 uniform float refraction_strength : hint_range(0.0, 0.2) = 0.03;
+// View-space depth over which the refraction grows from nothing at the waterline (P4-5).
+// Thin water bends light hardly at all; at full strength there the offset smeared the lit
+// bank just under the surface along a steep shore into a pale glassy band (an ankle stream's
+// far bank). 0 turns the fade off.
+uniform float refraction_depth_fade : hint_range(0.0, 1.0) = 0.3;
 // Caustic brightening of the refracted bed in shallow water. Scale is in cycles per world
 // unit; strength is the peak brightness multiplier added at zero depth.
 uniform float caustic_scale : hint_range(0.1, 10.0) = 1.3;
@@ -434,7 +439,8 @@ void fragment() {
 	vec3 surface = tint;
 	float alpha = mix(shore_color.a, water_color.a, depth01) + fresnel * fresnel_strength;
 	if (!water_quality_skip_refraction) {
-		vec2 refract_uv = clamp(SCREEN_UV + grad * refraction_strength, vec2(0.001), vec2(0.999));
+		float refract_fade = refraction_depth_fade > 0.0 ? smoothstep(0.0, refraction_depth_fade, bed_depth) : 1.0;
+		vec2 refract_uv = clamp(SCREEN_UV + grad * refraction_strength * refract_fade, vec2(0.001), vec2(0.999));
 		// Classic shoreline-bleed guard: if the offset sample lands on geometry that is in
 		// front of the water surface (a bank, a token), it is not "under" this water, so
 		// fall back to the unrefracted sample rather than smearing the bank into the river.
