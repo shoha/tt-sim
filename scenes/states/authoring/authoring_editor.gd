@@ -33,8 +33,7 @@ extends RefCounted
 ## with an AuthoredTerrain; flush() blits the changed weight texels, and scatter follows at
 ## the end (and on undo and redo) only for built or cliff-role surfaces, which clear plants.
 ##
-## Water (P4-3): `water` (WaterEditor) carves rivers, paints ponds and erases water; its pond
-## and erase strokes answer stroke_dab / end_stroke / cancel_stroke too.
+## Water (P4-3, P4-4): `water` (WaterEditor) carves, paints and erases water (stroke_dab etc.).
 
 ## Emitted after every change to the map (strokes, props, undo, redo), for dirty tracking.
 signal edited
@@ -490,13 +489,14 @@ func has_height_work() -> bool:
 		or (_collision_dirty and _height == null)
 		or (is_instance_valid(terrain) and terrain.has_height_work())
 		or rock_keeper.is_running()
+		or water.is_working()
 	)
 
 
-## One frame's share of the height work still waiting, at most once per frame whoever calls
-## (tick(), and AuthoringController every frame, so the work drains after the brush is put
-## away too).
+## One frame's share of the height work (a landing water edit's first, WaterEditor.step()), at
+## most once per frame whoever calls (tick(), and AuthoringController every frame).
 func step_height_work() -> void:
+	water.step()
 	if Engine.get_process_frames() != _worked_frame and has_height_work():
 		_work()
 		_finish_keep(false)
@@ -619,9 +619,10 @@ func _prop_bedding(asset_id: String) -> Vector3:
 	return _prop_rules[asset_id]
 
 
-## Does every piece of height work still waiting (terrain, collision, snapping, settling
-## rebuilds, a stroke's rock keeping), at once.
+## Does every piece of height work still waiting (a water edit still computing or landing,
+## terrain, collision, snapping, settling rebuilds, a stroke's rock keeping), at once.
 func finish_height_work() -> void:
+	water.finish_work()
 	if has_height_work():
 		_work(true)
 	_finish_keep(true)

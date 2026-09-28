@@ -38,7 +38,8 @@ extends RefCounted
 ## ground. No collision or zone: tokens stand on the riffle's ground. A free river end over a
 ## channel carved lower than its level (a river cut in two by an erase; the terrain stays
 ## carved) gets the same kind of sheet: the surface falls down the channel at RUN_OUT_SLOPE
-## and trickles on over its bed as a film (_run_out), instead of ending in the air.
+## and trickles on over its bed as a film (_run_out), instead of ending in the air; an end
+## that lies in other water (a confluence) needs none.
 
 const MESH_NAME := "AuthoredWater-water"
 ## Rings of tucked cells added past the covered cells (see the header).
@@ -124,6 +125,9 @@ static func cascades(doc: MapDocument) -> Dictionary:
 static func _run_out(doc: MapDocument, body: WaterBody, at_end: bool, out: Dictionary) -> void:
 	var course: PackedVector2Array = WaterGeometry.river_course(body)[0]
 	var end := course[-1] if at_end else course[0]
+	# An end in other water is a confluence (WaterEdit.join_line): the water carries on there.
+	if WaterGeometry.is_wet_at(doc, end, body.id):
+		return
 	var outward := WaterGeometry.end_direction(course, at_end)
 	if not at_end:
 		outward = -outward
