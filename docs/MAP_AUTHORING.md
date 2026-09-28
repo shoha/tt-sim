@@ -84,6 +84,16 @@ only: the flow bake's frame against the shader's decode, `splines.json` / `ponds
 `water_flow.png` round trips and caps, the worker carve's equality with the synchronous one,
 and water on a dressed map beyond erasing (the render jobs never dress a map with water).
 
+Phase 4 follow-ups (P4b-0, 2026-09-27, render job `p4b_badlands`, before and after in
+`user://render_jobs/p4b_badlands_before` / `_after`): the faint straight line by a boulder in
+a deep pool was the water shader's rock foam tracing the boulder's submerged flank against
+the bed (gone with edge foam off in the same frame; now limited to where the rock comes
+within a few centimetres of the surface, `EDGE_FOAM_REACH`); a painted path now runs into the
+shallows and fades under the water (`PAINT_FORD_*`) instead of yielding a few centimetres
+above the waterline, which on the badlands gravel bank read as a gap. The near bank of a
+crossing still ends at the bank's lip on screen: the camera cannot see that bank's
+underwater slope, so the Paint brush (and the author) cannot paint it either.
+
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
 download-signal fix (pushed to `main` as a08b639). Needs a two-account test, e.g. on the
@@ -130,16 +140,11 @@ Water follow-ups (phase 4 judgment pass, 2026-09-27):
   0.9 m column hides anything shorter (the test token, a small creature, disappears except
   for its wake). A token-height rule (float when the water is deeper than, say, 70 % of the
   token) or a visible marker is the candidate; it changes a user decision, so it waits.
-- Reeds standing in the water still get thin foam outlines along their submerged blades (the
-  depth-slope foam that wraps rocks); the shards are gone (`shore_ground_gate`). In the
-  wetland the ankle stream is so thick with reeds it can read as a reed bed rather than
-  water from the home view.
-- A boulder left in a pond can draw a short straight light line on the water beside it
-  (seen in the deep pool on forest and badlands at home zoom); not diagnosed.
+- In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
+  than water from the home view. (The foam outlines along submerged reed blades went with
+  the boulder-line fix, P4b-0; not re-rendered in the wetland.)
 - Water adds 0.23-0.26 s to a load: the wet dressing and the water mesh are built on the
   main thread under the loading screen (`PERFORMANCE.md` phase 4 pass).
-- Paths stop a little short of the water with a band of bank between (paths yield at the
-  bed and shore); it reads as a ford landing on meadow and forest, as a gap on badlands sand.
 - Waterfalls between reaches (a riffle is the only step), and bridges and fords (phase 4b).
 
 Follow-ups:

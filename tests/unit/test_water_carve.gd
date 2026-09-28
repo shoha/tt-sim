@@ -349,12 +349,20 @@ func test_compose_water_shares_and_paths_yield_to_the_bed() -> void:
 				continue
 			for rule in [Vector2.ZERO, Vector2(0.5, 0.1)]:
 				for water in [Vector2.ZERO, Vector2(0.6, 0.5), Vector2(1.0, 1.0)]:
-					var s := TerrainRules.compose_water(yielding, held, rule, water)
-					var total: float = s[0] + s[1] + s[2] + s[4] + s[5] + yielding * s[3] + held
-					assert_almost_eq(total, 1.0, 1e-5, "shares add up")
-	var under := TerrainRules.compose_water(1.0, 0.0, Vector2.ZERO, Vector2(1.0, 0.0))
-	assert_almost_eq(under[3], 0.0, 1e-6, "a path under water keeps nothing")
+					for depth in [0.0, 0.2, 1.0]:
+						var s := TerrainRules.compose_water(yielding, held, rule, water, depth)
+						var total: float = s[0] + s[1] + s[2] + s[4] + s[5] + yielding * s[3] + held
+						assert_almost_eq(total, 1.0, 1e-5, "shares add up")
+	var under := TerrainRules.compose_water(1.0, 0.0, Vector2.ZERO, Vector2(1.0, 0.0), 0.5)
+	assert_almost_eq(under[3], 0.0, 1e-6, "a path under deeper water keeps nothing")
 	assert_almost_eq(under[4], 1.0, 1e-6, "the bed shows")
+	# P4b-0: at the waterline the path holds (a ford), fading to the bed with the depth.
+	var edge := TerrainRules.compose_water(1.0, 0.0, Vector2.ZERO, Vector2(1.0, 0.0), 0.02)
+	assert_almost_eq(edge[3], 1.0, 1e-6, "a path at the waterline stays a path")
+	assert_almost_eq(edge[4], 0.0, 1e-6, "no bed over it yet")
+	var mid := TerrainRules.compose_water(1.0, 0.0, Vector2.ZERO, Vector2(1.0, 0.0), 0.2)
+	assert_almost_eq(mid[3], 0.5, 1e-6, "half way through the ford")
+	assert_almost_eq(mid[3] + mid[4], 1.0, 1e-6, "path and bed share it")
 	var rock := TerrainRules.compose_water(0.0, 1.0, Vector2.ZERO, Vector2(1.0, 0.0))
 	assert_almost_eq(rock[4], 0.0, 1e-6, "painted rock holds under water")
 	var dry := TerrainRules.compose_water(0.5, 0.0, Vector2(0.3, 0.1), Vector2.ZERO)

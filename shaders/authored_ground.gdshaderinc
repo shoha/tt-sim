@@ -152,8 +152,9 @@
  * sample the water bed weight (R: under the water) and the wet shore weight (G: a band just
  * above it, a couple of metres wide and fading with the height over the water). After the
  * cliff, the bed takes its share of everything but painted rock, painted ground and built
- * slots included (PAINT_WATER_YIELD: a path stops at the water and the bed shows under it,
- * as at a rock face), and the shore takes its share of the ground the rules kept. Both are
+ * slots included as the water deepens (PAINT_WATER_YIELD, PAINT_FORD_*: a path runs into the
+ * shallows like a ford and the bed shows under it further out; B is the depth), and the
+ * shore takes its share of the ground the rules kept. Both are
  * handed out per ground component to that component's biome's water bed and shore surfaces
  * (rule_bed_layer / rule_shore_layer), as cliff and scree are. The field's A is the wet
  * line (under the water and a strip just above it): the final albedo darkens and the
@@ -354,9 +355,14 @@ const vec2 PAINT_NOISE_OFFSET = vec2(7.9, 3.1);
 // Painted ground and built slots yield this fraction of the cliff rule to the automatic rock
 // (TerrainRules.PAINT_CLIFF_YIELD and compose_paint): paths cover walkable ground only.
 const float PAINT_CLIFF_YIELD = 1.0;
-// And of the water bed (TerrainRules.PAINT_WATER_YIELD and compose_water): paths yield at
-// the water like at rock faces, and the bed shows through.
+// And of the water bed (TerrainRules.PAINT_WATER_YIELD and compose_water), fading in with the
+// water's depth (PAINT_FORD_*): a path runs into the shallows like a ford, and the bed shows
+// through further out.
 const float PAINT_WATER_YIELD = 1.0;
+const float PAINT_FORD_START_M = 0.05;
+const float PAINT_FORD_END_M = 0.35;
+// water_weights.b is the depth in centimetres as a byte (WaterDressing.DEPTH_SCALE).
+const float WATER_DEPTH_SCALE = 100.0;
 // The wet line (water_weights.a): albedo darkened by up to WET_DARKEN, roughness pulled
 // toward WET_ROUGHNESS by up to WET_GLOSS. Judged at the game camera (P4-3 look pass).
 const float WET_DARKEN = 0.35;
@@ -953,6 +959,7 @@ void fragment() {
 	float unpainted = clamp(1.0 - painted_total, 0.0, 1.0);
 	vec2 rule = vec2(0.0);
 	vec2 water = vec2(0.0);
+	float water_depth = 0.0;
 	float wet_line = 0.0;
 #ifndef GROUND_SKIRT
 	if (unpainted + yielding > WEIGHT_EPSILON) {
@@ -961,12 +968,15 @@ void fragment() {
 	if (water_present != 0) {
 		vec4 wet_field = texture(water_weights, weight_uv(world_xz));
 		water = wet_field.rg;
+		water_depth = wet_field.b * (255.0 / WATER_DEPTH_SCALE);
 		wet_line = wet_field.a;
 	}
 #endif
 	// TerrainRules.compose_water is the CPU twin of these lines.
 	float cliff_scale = 1.0 - PAINT_CLIFF_YIELD * rule.x;
-	float paint_scale = cliff_scale * (1.0 - PAINT_WATER_YIELD * water.x);
+	float fording = smoothstep(PAINT_FORD_START_M, PAINT_FORD_END_M, water_depth);
+	float ford = PAINT_WATER_YIELD * water.x * fording;
+	float paint_scale = cliff_scale * (1.0 - ford);
 	float g[9];
 	for (int i = 0; i < 4; i++) {
 		g[i] = ground_a[i];
@@ -977,7 +987,7 @@ void fragment() {
 	g[BASE] = clamp(1.0 - dot(ground_a, vec4(1.0)) - dot(ground_b, vec4(1.0)), 0.0, 1.0);
 	float cliff = unpainted * rule.x + yielding * (1.0 - cliff_scale);
 	float dry = 1.0 - water.x;
-	float bed = water.x * (unpainted * (1.0 - rule.x) + yielding * cliff_scale * PAINT_WATER_YIELD);
+	float bed = water.x * unpainted * (1.0 - rule.x) + yielding * cliff_scale * ford;
 	float scree = unpainted * rule.y * dry;
 	float shore = unpainted * (1.0 - rule.x - rule.y) * dry * water.y;
 	float keep = unpainted * (1.0 - rule.x - rule.y) * dry * (1.0 - water.y);
