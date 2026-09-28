@@ -51,6 +51,7 @@ other committed home.
 | Water at runtime (merged surface, zones, water as ground, float rule, grid on the water, the water shader) | `utils/water_mesh_builder.gd`, `scenes/terrain/authored_water.gd`, `utils/water_surface.gd`, `scenes/effects/water_zone.gd`, `utils/water_glb_utils.gd`, `shaders/water.gdshader` | `ARCHITECTURE.md` "Authored water at runtime" |
 | Carving and wet dressing (channel and basin profiles, reach steps and riffles, confluences, erase, bed and shore surfaces, plants, rocks, the worker) | `utils/water_carve.gd`, `utils/water_edit.gd`, `utils/water_dressing.gd`, `scenes/states/authoring/water_editor.gd` | `ARCHITECTURE.md` "Carving water" |
 | Water tool (River and Pond tiles, depth tiles, ribbon preview, Ctrl erase) | `scenes/states/authoring/water_brush.gd`, `water_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Water) and "Brushes and gestures" |
+| Crossings (plank bridges, stepping stones: model, snapping to banks, geometry, collision, grid on the deck, editor API) | `resources/crossing.gd`, `utils/crossing_placement.gd`, `utils/crossing_geometry.gd`, `utils/map_crossing_io.gd`, `scenes/terrain/authored_crossings.gd`, `scenes/states/authoring/crossing_editor.gd` | `ARCHITECTURE.md` "Crossings", "Map document (map.ttmap)" |
 | First-use pipeline warm-up | `utils/pipeline_warmer.gd` | `PERFORMANCE.md` |
 | Same-version join gate | `utils/version_gate.gd` | `NETWORKING.md` "Same-version gate" |
 | Render-job harness (1920x1080 judgment renders) | `tools/render_jobs/` | `tools/render_jobs/README.md` |
@@ -99,6 +100,22 @@ render job `p4b_cue` (captures in `user://render_jobs/p4b_cue`) shows it on wadi
 home, zoom 10 and max play zoom, none on floating or ankle-deep tokens, following a held drag
 to its landing, gone when the token is carried onto the bank, and on the Blender `river` level;
 the rule and the marker are unit-tested (`test_submerged_cue.gd`).
+
+Crossings (P4b-1, 2026-09-27, render job `crossing_look`, captures in
+`user://render_jobs/crossing_look`): a plank bridge and a line of stepping stones placed
+through the crossing API (no Bridge tool yet, P4b-2) over a waist-deep river in temperate
+forest and rocky badlands, each snapped from a short line on the water to both banks; in
+authoring and after a save and play load, tokens stand on the deck (at its arch, 0.49 m, and
+at its bank end) and on the stones (dry, no submerged cue), a token wades beside the bridge,
+the drag resolver lands on the deck, and the grid runs across the deck and the stones and
+stays continuous on the water up to the deck's edge. Badlands takes sun-bleached planks and
+sandstone stones, the forest warm planks and grey rock. Unit-tested: the document entry
+(round trip, caps, refusals, malformed input), the snapping rule and its refusals, the
+geometry (arch, stride, winding, collision, determinism), tokens landing and brush rays
+seeing the bed in physics, the grid's deck texture, the scatter clearance, the load's worker
+part and the editor's undo / redo. Not rendered yet: a crossing on a dressed Blender map (its
+water plane is not a crossing target; only document water is), a long bridge with pile bents,
+and the other six biomes' styles.
 
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
@@ -149,7 +166,17 @@ Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
   than water from the home view. (The foam outlines along submerged reed blades went with
   the boulder-line fix, P4b-0; not re-rendered in the wetland.)
-- Waterfalls between reaches (a riffle is the only step), and bridges and fords (phase 4b).
+- Waterfalls between reaches (a riffle is the only step), and fords (phase 4b).
+
+Crossing follow-ups (P4b-1, 2026-09-27):
+- The Bridge tool (P4b-2) wires `AuthoringEditor.crossings` (plan / place / remove /
+  crossing_at) to a gesture, and decides how a crossing follows later sculpt and water edits
+  (`replace()` keeps its id for re-anchoring).
+- A dressed Blender map's own water plane is not a crossing target (the snapping reads
+  document water), and its Blender scatter is not cleared under a crossing.
+- The first crossing of a style placed in a session loads its material's textures on the
+  main thread (15-20 ms of the placement); a play load requests them on background threads.
+- A stone arch (the third kind the model leaves room for).
 
 Follow-ups:
 - A quick brush pass still gives few trees in sparse biomes (temperate forest targets 0.02
@@ -221,6 +248,12 @@ Follow-ups:
   stones, stone arches, fords) that snap between two banks, span the gap with walkable
   collision for tokens, and match the palette's painted style; likely generated or
   assembled from treecube-style parts so a bridge fits any width (user note, 2026-09-27).
+  Decisions (2026-09-27): plank footbridge and stepping stones first, stone arch later;
+  drag a line across water and the crossing snaps its ends to the banks and sizes itself;
+  tokens stand on decks and stones, the grid runs across the deck, tokens cannot pass under
+  a bridge. P4b-1 (done): the model (`crossings.json`), the snapping rule, procedural
+  geometry from the palette's planks and each biome's rock, layer-1 collision, the grid on
+  the deck, scatter clearing and the editor API; P4b-2 is the Bridge tool.
 - **Phase 5:** more starting points. `NewMap` already gives each biome a starting cover
   (groves at the edges, an open glade for the fight).
 

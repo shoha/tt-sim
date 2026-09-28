@@ -466,6 +466,13 @@ Field notes:
   The producer's per-biome values, judged at game scale (treecube `docs/surfaces.md`
   "Ground accents and path variants in tt-sim"), are listed there; the contract
   holds only the rules.
+- Crossings (tt-sim phase 4b, 2026-09-27; no new field): the consumer builds plank bridges
+  and stepping stones procedurally from existing surfaces. It samples the `built` surface
+  named `planks` for the wood (its albedo's board layout is read as clean runs between the
+  painted joints, `CrossingGeometry.WOOD_SWATCHES`, so a rebuilt `planks` texture with a
+  different board layout needs those rectangles re-measured) and each biome's
+  `cliff_surface` for the stones, tinted by the biome's `climate`. A palette without
+  `planks` draws untextured wood; one without the biome's cliff falls back to `cliff`.
 - `geoscatter_pattern` holds Geoscatter's `s_pattern1_*` settings verbatim with the
   prefix stripped (texture dict, sample method, influences, revert flags), minus the
   datablock plumbing (`allow`, `texture_ptr`, `texture_is_unique`). tt-sim's
