@@ -23,6 +23,11 @@ extends DrawerContainer
 ## Paint are disabled, with a tooltip saying why, on a dressed Blender map
 ## (set_sculpt_available, set_paint_available).
 ##
+## Water (P4-4): River and Pond tiles, Ankle / Waist / Deep tiles with a hint line saying
+## what the depth means for tokens, and an Advanced foldout with the exact width and flow.
+## On a dressed Blender map the tool only erases water painted over it
+## (set_water_available).
+##
 ## Paint (P3-6): one TileField per surface role (Built, Ground, Rock; built first because
 ## paths and yards are what the tool is mostly for) of palette surface swatches, one
 ## selection across the groups. The swatches cost a texture decode each (the whole albedo
@@ -49,6 +54,11 @@ signal paint_selected(surface: String)
 ## An Advanced row moved: brush radius (metres) or strength (flow multiplier).
 signal brush_size_changed(radius: float)
 signal brush_strength_changed(flow: float)
+## A Water tile was picked: the shape (WaterBrush.Shape) or the depth (WaterBody.Depth).
+signal water_shape_selected(shape: int)
+signal water_depth_selected(depth: int)
+## The Water Advanced flow row moved (WaterBody speed).
+signal water_speed_changed(speed: float)
 
 const DRAWER_WIDTH := 320.0
 const BIOME_TILE_SIZE := Vector2(64, 84)
@@ -67,6 +77,7 @@ const TOOL_THIN := &"thin_clear"
 const TOOL_PLACE := &"place"
 const TOOL_SCULPT := &"sculpt"
 const TOOL_PAINT := &"paint"
+const TOOL_WATER := &"water"
 const ACTION_UNDO := &"undo"
 const ACTION_REDO := &"redo"
 const ACTION_SAVE := &"save_map"
@@ -76,12 +87,16 @@ const SCULPT_TOOLTIP := "Sculpt"
 const SCULPT_UNAVAILABLE_TOOLTIP := "Sculpt: not on a Blender map, whose ground is the map file's"
 const PAINT_TOOLTIP := "Paint"
 const PAINT_UNAVAILABLE_TOOLTIP := "Paint: not on a Blender map, whose ground is the map file's"
+const WATER_TOOLTIP := "Water"
+const WATER_UNAVAILABLE_TOOLTIP := "Water: not on a Blender map, whose ground is the map file's"
+const WATER_ERASE_ONLY_TOOLTIP := WaterToolPane.ERASE_ONLY_HINT
 const RAIL_ITEMS: Array[Dictionary] = [
 	{"id": TOOL_BIOME, "icon": "trees", "tooltip": "Biome"},
 	{"id": TOOL_THIN, "icon": "eraser", "tooltip": "Thin / Clear"},
 	{"id": TOOL_PLACE, "icon": "tree", "tooltip": "Place"},
 	{"id": TOOL_SCULPT, "icon": "mountain", "tooltip": SCULPT_TOOLTIP},
 	{"id": TOOL_PAINT, "icon": "brush", "tooltip": PAINT_TOOLTIP},
+	{"id": TOOL_WATER, "icon": "droplet", "tooltip": WATER_TOOLTIP},
 ]
 ## Paint groups in pane order: palette surface role and caption.
 const PAINT_GROUPS: Array[Dictionary] = [
@@ -170,6 +185,8 @@ var sculpt_field: TileField
 var place_rows: Dictionary = {}
 ## Paint tiles: role -> TileField (built by ensure_paint_tiles()).
 var paint_fields: Dictionary = {}
+## The Water tool's pane (its tiles and Advanced rows).
+var water_pane: WaterToolPane
 
 var _stack: PaneStack
 ## Every Advanced size / strength row, kept in step with the brush.
@@ -215,6 +232,7 @@ func _on_ready() -> void:
 	_stack.add_pane(TOOL_PLACE, _build_place_pane())
 	_stack.add_pane(TOOL_SCULPT, _build_sculpt_pane())
 	_stack.add_pane(TOOL_PAINT, _build_paint_pane())
+	_stack.add_pane(TOOL_WATER, _build_water_pane())
 	_stack.show_pane(TOOL_BIOME, false)
 
 	pane_requested.connect(_on_pane_requested)
@@ -434,6 +452,35 @@ func _build_paint_pane() -> Control:
 		paint_fields[group.role] = field
 	pane.add_child(_build_advanced("Paint"))
 	return pane
+
+
+## Water (P4-4): WaterToolPane, its signals relayed (the width row sets the brush radius).
+func _build_water_pane() -> Control:
+	water_pane = WaterToolPane.new()
+	water_pane.shape_selected.connect(func(shape: int) -> void: water_shape_selected.emit(shape))
+	water_pane.depth_selected.connect(func(depth: int) -> void: water_depth_selected.emit(depth))
+	water_pane.speed_changed.connect(func(speed: float) -> void: water_speed_changed.emit(speed))
+	water_pane.width_changed.connect(
+		func(width: float) -> void: brush_size_changed.emit(width * 0.5)
+	)
+	return water_pane
+
+
+## Shows the Water tool's exact width (metres, the full channel) and flow, without signals.
+func set_water_values(width: float, speed: float) -> void:
+	water_pane.set_values(width, speed)
+
+
+## Enables the Water tool: fully where water can be carved; where it cannot (a dressed
+## Blender map) only when the map already has water to erase, with the River and Pond tiles
+## disabled and the tooltips and hint saying why; otherwise disabled with a tooltip.
+func set_water_available(carves: bool, has_water: bool) -> void:
+	set_rail_item_enabled(TOOL_WATER, carves or has_water)
+	var tooltip := WATER_TOOLTIP
+	if not carves:
+		tooltip = WATER_UNAVAILABLE_TOOLTIP if not has_water else WATER_ERASE_ONLY_TOOLTIP
+	set_rail_item_tooltip(TOOL_WATER, tooltip)
+	water_pane.set_carves(carves)
 
 
 ## Builds the Paint tiles once (palette surfaces by role, swatches from each surface's

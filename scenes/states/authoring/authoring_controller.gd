@@ -101,11 +101,12 @@ func setup(game_map: GameMap) -> void:
 	_build_ui()
 	brush.toggled.connect(_on_brush_toggled)
 	brush.paint_refused.connect(_on_paint_refused)
-	brush.paint_surface = panel.get_paint_surface()
-	brush.radius_changed.connect(
-		func(_radius: float) -> void: panel.set_brush_values(brush.get_radius(), brush.get_flow())
+	brush.water_refused.connect(
+		func(reason: String) -> void: UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
 	)
-	panel.set_brush_values(brush.get_radius(), brush.get_flow())
+	brush.paint_surface = panel.get_paint_surface()
+	brush.radius_changed.connect(func(_radius: float) -> void: _show_brush_values())
+	_show_brush_values()
 	_autosave_timer = Timer.new()
 	_autosave_timer.name = "AutosaveTimer"
 	_autosave_timer.wait_time = AUTOSAVE_INTERVAL
@@ -132,6 +133,9 @@ func _build_ui() -> void:
 	panel.place_selected.connect(_on_place_selected)
 	panel.sculpt_selected.connect(_on_sculpt_selected)
 	panel.paint_selected.connect(_on_paint_selected)
+	panel.water_shape_selected.connect(_on_water_shape_selected)
+	panel.water_depth_selected.connect(_on_water_depth_selected)
+	panel.water_speed_changed.connect(func(speed: float) -> void: brush.water.speed = speed)
 	panel.brush_size_changed.connect(func(radius: float) -> void: brush.set_radius(radius))
 	panel.brush_strength_changed.connect(func(flow: float) -> void: brush.set_flow(flow))
 
@@ -323,6 +327,10 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	# GLB's.
 	panel.set_sculpt_available(editor.can_sculpt())
 	panel.set_paint_available(editor.can_paint())
+	# The Water tool's carve computes on a worker (WaterEditor), so a stroke never freezes.
+	editor.water.use_worker = true
+	editor.edited.connect(_refresh_water_available)
+	_refresh_water_available()
 	_refresh_paint_limits()
 	if editor.can_sculpt() and is_instance_valid(editor.terrain):
 		# Builds the skirt's CPU vertex copy (45 ms on a 200 ft map) here, under the loading
@@ -507,6 +515,7 @@ func undo() -> void:
 		mark_edited()
 		_bounds_stale = true
 		_refresh_paint_limits()
+		_refresh_water_available()
 
 
 func redo() -> void:
@@ -515,6 +524,7 @@ func redo() -> void:
 		mark_edited()
 		_bounds_stale = true
 		_refresh_paint_limits()
+		_refresh_water_available()
 
 
 ## A stroke or prop gesture in progress becomes its own history entry before undo or redo
@@ -524,6 +534,9 @@ func _finish_brush_gesture() -> void:
 		brush.finish_gesture()
 	elif editor:
 		editor.commit_prop_edit()
+	if editor:
+		# A water edit still computing lands first, so undo takes it back (not the one before).
+		editor.water.finish_work()
 
 
 func _on_history_changed() -> void:
@@ -605,6 +618,36 @@ func _use_surface(surface: String) -> void:
 	panel.select_paint_surface(surface)
 
 
+## A picked Water tile (River or Pond) becomes the Water brush's shape and switches to it.
+func _on_water_shape_selected(shape: int) -> void:
+	if brush:
+		brush.water.shape = shape
+	_select_tool(AuthoringPanel.TOOL_WATER)
+
+
+## A picked depth tile becomes the depth the Water brush's next stroke makes.
+func _on_water_depth_selected(depth: int) -> void:
+	if brush:
+		brush.water.depth = depth
+		_show_brush_values()
+	_select_tool(AuthoringPanel.TOOL_WATER)
+
+
+## Shows the brush's size and strength in the Advanced rows, and the Water tool's width (its
+## radius clamped to the depth's narrowest channel, as a full width) and flow.
+func _show_brush_values() -> void:
+	panel.set_brush_values(brush.get_radius(), brush.get_flow())
+	panel.set_water_values(2.0 * brush.water_radius(), brush.water.speed)
+
+
+## The Water tool on the rail: carving where the ground is the document's, erasing only on
+## a dressed Blender map that has water painted over it (AuthoringPanel.set_water_available).
+func _refresh_water_available() -> void:
+	if editor == null or panel == null:
+		return
+	panel.set_water_available(editor.water.can_carve(), not document.water_bodies.is_empty())
+
+
 ## A Paint press was refused (every slot holds paint): say why.
 func _on_paint_refused(surface: String) -> void:
 	var reason := editor.surface_refusal(surface) if editor else ""
@@ -667,6 +710,12 @@ func _select_tool(tool_id: StringName) -> void:
 				brush.deactivate()
 				return
 			_use_surface(brush.paint_surface)
+		AuthoringPanel.TOOL_WATER:
+			if editor == null:
+				return
+			if not editor.water.can_carve() and document.water_bodies.is_empty():
+				return
+			brush.set_mode(BrushTool.Mode.WATER)
 		_:
 			return
 	brush.activate()
@@ -683,6 +732,7 @@ func _on_brush_toggled(active: bool) -> void:
 		BrushTool.Mode.PLACE: AuthoringPanel.TOOL_PLACE,
 		BrushTool.Mode.SCULPT: AuthoringPanel.TOOL_SCULPT,
 		BrushTool.Mode.PAINT: AuthoringPanel.TOOL_PAINT,
+		BrushTool.Mode.WATER: AuthoringPanel.TOOL_WATER,
 	}
 	panel.set_active_tool(ids[brush.mode])
 
@@ -870,6 +920,7 @@ func teardown() -> void:
 		brush.deactivate()
 		brush.editor = null
 	if editor:
+		editor.water.release()
 		editor.rock_keeper.release()
 	if _autosave_timer:
 		_autosave_timer.stop()

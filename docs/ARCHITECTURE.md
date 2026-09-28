@@ -547,6 +547,24 @@ alike), and turns gestures into calls on an `AuthoringEditor`
 - **Water (P4-3):** `water.carve_river()`, pond strokes and water erases (`WaterEditor`),
   one history entry each, with the ground, water surface, wet dressing and plants
   following; see "Carving water".
+- **Water tool (P4-4):** `BrushTool.Mode.WATER`, its work done by a `WaterBrush`
+  (`scenes/states/authoring/water_brush.gd`, `BrushTool.water`: shape, depth and flow the
+  panel's `WaterToolPane` sets). River: the press starts a line recorded as the pointer moves
+  (`WaterBrush.decimate`: a point every 0.6 m, or 0.6 half-widths for a wide river;
+  `smooth_line`: two Chaikin passes keeping both ends), previewed as a ribbon on the ground at
+  the river's width, a gradient and chevrons pointing downstream (`draw_ribbon`, explicit
+  indices, the inside of a tight bend clamped so quads never twist) with the readout "River
+  Waist  40 ft" in the level's units; the release carves it (`carve_river`, the drawn
+  direction is the flow), and the ribbon stays faint until the carve (on a worker) lands; RMB
+  or Escape before the release drops it. Pond: a pond stroke dabbed like the Biome brush, the
+  dab growing with dwell (up to 1.35x), its dabs previewed as faint discs; a press in a pond
+  extends it. Ctrl at the press (either tile): an erase stroke, the reaches it will remove
+  drawn red. The width is the brush size (`BrushTool.water_radius()`,
+  `WaterBrush.radius_for`: never below the depth class's `WaterCarve.min_half_width`, at most
+  `WaterBody.MAX_HALF_WIDTH_M`; the Water mode's brush may go down to 0.2 m, the others keep
+  1 m). A refused press or release emits `water_refused` (the controller toasts it). The
+  controller sets `use_worker`, and the rail item is enabled where water can be carved or,
+  on a dressed GLB, only when the document has water to erase (`set_water_available`).
 - **Bounds on relief:** the camera's near plane stays above the terrain's top
   (`CameraController.set_ground_top`, set by `MapSourceLoader.install` for any map with an
   `AuthoredTerrain`, play time included, and every frame in authoring; the camera moves back
@@ -557,7 +575,7 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   controller refits them and resizes the reflection probe when the range changed. A map
   loaded with relief needs nothing extra: its chunks are built before the probe and camera
   bounds are measured.
-- **Canopy fade:** while Thin / Clear or Sculpt is the tool, `BrushTool` makes its ring the
+- **Canopy fade:** while Thin / Clear, Sculpt, Paint or Water is the tool, `BrushTool` makes its ring the
   `OcclusionFadeManager` focus (`set_focus(centre, 1.35 x radius)`, first entry in the token
   texture, cleared for other tools and on deactivate), so tree canopies between the camera and
   the ring dither away as they do over a token. Tree foliage materials are registered with
@@ -1254,24 +1272,50 @@ editor API the Water tool (P4-4) calls. Tests: `tests/unit/test_water_carve.gd`,
   pond extends it); `erase_water_begin() -> bool`, `erase_water_dab(from, to, radius)`,
   `erase_water_end() -> bool`; `cancel_stroke()`. Pond and erase strokes also answer the
   editor's generic `stroke_dab()` / `end_stroke()` / `cancel_stroke()`. `can_carve()` is
-  `can_sculpt()` (no carving on a dressed GLB); erasing works on any map with water. Each
-  operation is one history entry: the heights diff (`HeightStroke.lower_to`, a one-shot
-  carve recorded like a dab), the water model before and after (`WaterEdit.model_of`: body
-  copies and the ZSTD pond mask), the props cells it changed and the rocks it kept
-  (`WaterEditor.commit`); undo and redo put both sides back exactly. After each, the wet
-  dressing, the ground's texture of it and the water surface are rebuilt
-  (`WaterEditor.refresh`: `WaterDressing.refresh` on the main thread, so the scatter jobs that
-  follow read it; `AuthoredTerrain.refresh_water_dressing`; `AuthoredWater.refresh_map` on a
-  worker) and the scatter regrows over the area grown by the shore band. A sculpt stroke
-  (and its undo) on a map with water refreshes the same way. Measured on a 200 ft map
-  (render job, main thread): a 60 m waist river in three reaches 0.3 s, a 25 m deep river
-  0.45-0.65 s, a 4.5 m pond 0.26-0.41 s, an erase 0.6-0.7 s; the surface and flow bake then
-  take 0.3-0.45 s on a worker.
+  `can_sculpt()` (no carving on a dressed GLB); erasing works on any map with water. A
+  refused carve or pond press says why in `last_refusal` (`REFUSED_NO_CARVE`, `_SHORT`,
+  `_FULL`, `_IN_WATER`). Each operation is one history entry: the heights diff
+  (`HeightStroke.lower_to`, a one-shot carve recorded like a dab), the water model before and
+  after (`WaterEdit.model_of`: body copies and the ZSTD pond mask), the wet dressing before and
+  after (ZSTD; undo sets it back instead of recomputing it), the props cells it changed and
+  the rocks it kept; undo and redo put both sides back exactly. The scatter then regrows over
+  the area grown by the shore band. A sculpt stroke (and its undo) on a map with water
+  recomputes the dressing on the main thread (`WaterEditor.refresh`).
+- **Worker carve (P4-4):** the heavy, pure half of an edit, `WaterEditor.compute(snapshot,
+  spec, out)`, runs on a snapshot of the document (`snapshot_of`: grid, heights, seed, bodies,
+  pond mask): the carve goals (`WaterCarve`), the heights lowered to them (`lower()`, exactly
+  `lower_to`'s rule), the dressing of the result (`WaterDressing.refresh`) and the owner of
+  each sample (`WaterMeshBuilder.sample_owners`, for the rock rule). With `use_worker` (set by
+  `AuthoringController` for the Water tool) it is a `WorkerThreadPool` task and the document
+  is untouched until it lands; without (tests, probes) it runs at once. `_land()` applies it
+  over three frames: the water model, `lower_to` with the computed goals, the terrain's
+  chunks, collision and plant snap, and the water surface's rebuild (on its own worker); then
+  the terrain settle (`_settle()`: its rule fields over the carve); then (`_finish()`) the
+  dressing texture (the first water on a map re-plans the ground's layers and refreshes the
+  whole ground), rocks, the regeneration request and the history entry. While an edit computes or lands `is_working()` is true, which
+  `AuthoringEditor.has_height_work()` includes (a save or an autosave waits);
+  `AuthoringEditor.finish_height_work()` (called before any other edit, undo and save) lands
+  it at once via `finish_work()`. The same function computes both paths, so the worker result
+  is identical to the synchronous one (`test_water_tool.gd`). Measured on a 150 ft map in the
+  render job (frames recorded around the release): worst frame 21-42 ms landing a 45 m waist
+  river (42 ms only for a map's first water), 12-23 ms for a stream, 17-30 ms for ponds,
+  9-22 ms for an erase, against 0.26-0.66 s
+  of main thread per edit before (P4-3, 200 ft; `docs/PERFORMANCE.md` "Water tool").
 - **Rivers** (`WaterEdit.plan_river`): the line is resampled every 2 m (`RESAMPLE_M`), each
   half-width clamped to at least `WaterCarve.min_half_width()` of its depth class (ankle
   0.44 m, waist 1.33 m, deep 2.96 m: a narrower channel cannot reach its depth without a
   rock-steep shore), split into flat reaches by the ground under the line (P4-1's
   `reach_ranges`, levels by `reach_level`), each a river body with its own id.
+- **Confluences (P4-4, `WaterEdit.join_line`):** a line that starts or ends in existing
+  water (`WaterGeometry.is_wet_at`: ground under `level_at()`, the highest level of the
+  bodies whose area holds the point) is cut at that water's edge, found by bisection, and
+  ends `JOIN_INSET_M` (0.6 m) into it; points in water between dry stretches stay. Under
+  existing water `plan_river` reads that water's level plus the freeboard as the ground, so
+  the reach that meets it is at its level (an inflow joins flush) or below it (an outflow
+  never stands above the pond it leaves), never down on its bed. The carve leaves such an end
+  open (no taper, full width into the other water) and the mesh gives it no run-out sheet
+  (`WaterMeshBuilder._run_out` skips an end in other water). A line lying all in water makes
+  nothing (`REFUSED_IN_WATER`).
 - **Cross-section** (`WaterCarve`): every sample within `BANK_REACH_M` (6 m) of the
   waterline gets a goal from its edge offset e (distance to the course minus the
   half-width; a pond: its signed distance to the edge of its painted area): the waterline
@@ -1298,21 +1342,42 @@ editor API the Water tool (P4-4) calls. Tests: `tests/unit/test_water_carve.gd`,
   channel from 1 m above the shared point to the riffle's foot). So shallow, the water
   shader draws it as white water, and the flow bake counts it as wet, so it runs
   downstream: a small rapid, not a rock lip. River ends inside the map taper their depth
-  from zero over a few metres (a spring, a sink).
-- **Erase** (`WaterEdit.hit_rivers`, `erased_bodies`): a river loses the control points
-  under the eraser and falls apart into the runs of at least two points left (the first
-  keeps its id); a pond loses the mask samples and is dropped when it has none. The ground
-  stays carved, so a free end can sit over a channel lower than its level: the surface falls
-  down the channel at `RUN_OUT_SLOPE` (1.2) and trickles on over its bed as a 6 cm film for
-  1.5 m (`WaterMeshBuilder._run_out`) instead of ending in the air, and the dry channel
-  beyond keeps its bed surface (not the wet line). Judged: it reads as water draining into
-  a dry bed, acceptable but not beautiful; the Water tool may prefer erasing whole reaches.
+  from zero over a few metres (a spring, a sink), and (P4-4) their width to a rounded head
+  (`WaterCarve.head_width`: a quarter ellipse over the longer of the depth taper and 2.2
+  half-widths, with at least a 14 cm film of water toward the tip, `_end_depth`), so the
+  water closes round the end instead of stopping in a straight shallow line across the
+  channel.
+- **Erase** (P4-4, `WaterEdit.touch_rivers`, `erased_bodies`): a river whose water the
+  eraser touches (its course within the eraser's radius plus the half-width) goes whole: every
+  reach of its stroke (`river_chain`: the reaches joined end to end). A reach is never cut
+  mid-channel, which left two ends draining into a dry channel (P4-3), and one reach is never
+  erased alone: tried first, the reach above then spilled over its crest into the dry riffle
+  as a jagged run-out sheet (render `rocky_badlands_summer_s1_k_erased`, first pass). To
+  shorten a river, erase it and draw it again. A stream that flows into an erased river (an
+  end in its water, `_touch_tributaries`) goes with it: kept, it spilled from its junction
+  into the dry channel as a jagged run-out sheet (same render, second pass). A pond loses the mask samples under the eraser (`stamp` reports which
+  ponds shrank), is dropped when it has none, and otherwise settles to the lowest ground on
+  its new rim (`pond_rim_level`, never higher than before), so its water never stands against
+  the erased, still-carved part of its basin. The ground stays carved: Sculpt's Smooth is the
+  way to fill a dry channel (the Water pane's hint and the F1 help say so). An end left free
+  over a carve lower than its level runs out as before (`_run_out`: the surface falls down
+  the channel at `RUN_OUT_SLOPE` 1.2 and trickles on as a 6 cm film for 1.5 m).
 - **Ponds:** a pond stroke marks mask samples of no other pond with the pond's id; at the
   end its level is the lowest rim ground less the freeboard (P4-1), the basin carve takes
   the signed distance to the painted area (`DistanceField`, an exact Euclidean transform)
   box-smoothed over 0.5 m twice (the shoreline follows the outline, not the samples'
   staircase), deepens toward the middle by up to 25 % of the depth, and never lowers ground
-  outside the painted area below the level (water there would not be the pond's).
+  outside the painted area below the level (water there would not be the pond's). P4-4: the
+  shore is a beach (`WaterCarve.pond_section`): the ground runs at `BEACH_SLOPE` (0.12) for
+  a metre above the waterline and 0.6 m below it, then the class's shore slope through a
+  rounded brink (`smooth_min` over 0.12 m). P4-3's shore met the water at a 15 cm cut bank
+  (the freeboard) and read, on badlands sand, as a crisp elliptical edge standing on the
+  ground; a steeper underwater drop after the beach was tried and dropped, because the water
+  shader's depth-slope foam draws a slope facing away from the camera as a white line across
+  the water. With it the water shader fades the surface in over the first 4 cm of depth
+  (`shore_fade_depth`), so the plane never ends in a crisp, slightly opaque edge (the vertex
+  bob lifted it through the shore). A pond extended by a second stroke re-levels to its new
+  rim and is carved again over its whole area.
 - **Wet dressing** (`WaterDressing`, a rule layer like cliff and scree, no paint slot,
   following the water wherever it is carved, painted or erased): per sample RGBA8 (`MapDocument
   .water_dressing`, a derived cache the document never saves; the ground shader's
@@ -1340,7 +1405,13 @@ editor API the Water tool (P4-4) calls. Tests: `tests/unit/test_water_carve.gd`,
   keep off the waterline, shrubs keep 30 %, tall cover thins to short cover, flowers thin by
   half, cacti keep out of the whole band, and grass, ground cover and rocks stay. A key rule,
   not a contract field: the palette has one emergent species and a few riparian trees, and a
-  producer field would need a treecube rebuild for no visible gain yet.
+  producer field would need a treecube rebuild for no visible gain yet. P4-4: a bank
+  species' boost above 1 on the shore reaches the generator (`ScatterGround.species_density`
+  leaves it uncapped for `EDGE_BANK`), which lets a clumped one (the forest's ferns) grow along
+  the water beyond its clumps (`ScatterGenerator._evaluate`: the clump keep becomes at least
+  the excess); forest biomes' shore surface is moss (`PaletteLibrary.WATER_SURFACE_DEFAULTS`:
+  temperate forest, birch woodland, boreal taiga), since bare mud under a canopy read as a
+  scar.
 - **Rocks** (`WaterCarve.keeps_rock`): a rock breaking the surface stays (the water's edge
   foam wraps it, which reads well); one whose top is under the surface goes, and so does one
   wider than half the channel (it would dam it); one out of the water stays (rocks survive

@@ -111,7 +111,12 @@ func _get_shortcut_data() -> Array:
 			"entries":
 			[
 				["Left Drag", "Paint, thin, place, sculpt or lay a surface (hold still to build)"],
-				["Ctrl + Left Drag", "Clear, lower (Raise), cut a tier down (Tier), erase paint"],
+				["Left Drag (Water)", "River: draw it the way it flows. Pond: paint its area"],
+				[
+					"Ctrl + Left Drag",
+					"Clear, lower (Raise), cut a tier down (Tier), erase paint or water",
+				],
+				["Dry channel", "Erased water leaves its channel: Sculpt's Smooth fills it"],
 				["Shift + Left Drag", "Smooth the ground (Sculpt, any tile)"],
 				["Shift + Wheel / [ ]", "Brush size (Place: resize the prop under the cursor)"],
 				["Right Click / Esc", "Cancel the stroke in progress"],

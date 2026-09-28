@@ -38,6 +38,12 @@ extends Node
 ##                      cover); Ctrl at the press erases every painted surface back to the
 ##                      automatic ground. A press the editor refuses (every paint slot
 ##                      holds paint) emits paint_refused so the controller can say why.
+##   Water: LMB drag    River: draw its line, upstream first (ribbon preview, carved on
+##                      release; RMB or Escape first drops it). Pond: paint its area (dwell
+##                      spreads it; a press in a pond extends it). Ctrl at the press: erase
+##                      water. The brush size is the width, never below the depth's
+##                      narrowest channel. WaterBrush (`water`) does this mode's work; a
+##                      refused press or release emits water_refused with the reason.
 ##
 ## Sculpting moves the ground under a still pointer, so while a sculpt stroke is held and
 ## the pointer has not moved the brush keeps its ground point (only its height follows the
@@ -61,8 +67,10 @@ signal toggled(active: bool)
 signal radius_changed(radius: float)
 ## A Paint press could not start a stroke with `surface` (AuthoringEditor.surface_refusal).
 signal paint_refused(surface: String)
+## A Water press or release was refused; `reason` says why, for a toast.
+signal water_refused(reason: String)
 
-enum Mode { BIOME, THIN, PLACE, SCULPT, PAINT }
+enum Mode { BIOME, THIN, PLACE, SCULPT, PAINT, WATER }
 enum Action { NONE, POINTER, BEGIN, END, CANCEL, DESELECT, GROW, SHRINK, REMOVE, SWALLOW }
 
 const MIN_RADIUS := 1.0
@@ -128,6 +136,8 @@ var sculpt_tile: int = HeightBrush.RAISE
 ## The palette surface the Paint tool paints, and its ring tint.
 var paint_surface: String = ""
 var paint_tint: Color = Color(0.9, 0.82, 0.66)
+## The Water tool's half (its tile, depth and flow, the line being drawn, the previews).
+var water := WaterBrush.new()
 ## The level's units for the readout (ScaleUtils): metres per grid cell, display units per
 ## cell, and their label. AuthoringController sets them from the level.
 var unit_cell_m: float = LevelData.DEFAULT_GRID_CELL_SIZE
@@ -357,6 +367,8 @@ func set_mode(new_mode: Mode) -> void:
 	finish_gesture()
 	mode = new_mode
 	_hover = {}
+	# A water brush may be narrower than the other brushes (a brook); they start from MIN_RADIUS.
+	set_radius(session_radius)
 	_redraw()
 
 
@@ -364,8 +376,11 @@ func get_radius() -> float:
 	return session_radius
 
 
+## Sets the brush size, clamped to MIN_RADIUS..MAX_RADIUS (the Water tool: from
+## WaterBody.MIN_HALF_WIDTH_M, so an ankle-deep brook can be narrow).
 func set_radius(radius: float) -> void:
-	var clamped := clampf(radius, MIN_RADIUS, MAX_RADIUS)
+	var low := WaterBody.MIN_HALF_WIDTH_M if mode == Mode.WATER else MIN_RADIUS
+	var clamped := clampf(radius, low, MAX_RADIUS)
 	if is_equal_approx(clamped, session_radius):
 		return
 	session_radius = clamped
@@ -381,15 +396,39 @@ func set_flow(flow: float) -> void:
 	session_flow = clampf(flow, MIN_FLOW, MAX_FLOW)
 
 
+## The Water tool's river half-width or pond brush radius now (WaterBrush.radius_for()).
+func water_radius() -> float:
+	return water.radius(session_radius)
+
+
+## True in the Water tool while Ctrl erases: held at the press during a gesture, else now.
+func _water_erasing() -> bool:
+	return _press_ctrl if (_stroking or _pressed) else _ctrl
+
+
+## The radius the ring shows and a dab paints with: the brush size, or in the Water tool the
+## water radius (a Ctrl erase keeps the plain brush size), a pond's growing with dwell.
+func _stroke_radius() -> float:
+	if mode != Mode.WATER or _water_erasing():
+		return session_radius
+	var radius := water_radius()
+	if _stroking and water.shape == WaterBrush.Shape.POND:
+		radius *= 1.0 + WaterBrush.POND_DWELL_GROW * clampf(_dwell / DWELL_MAX, 0.0, 1.0)
+	return radius
+
+
 ## Ends whatever gesture is in progress, keeping its result (before an undo, a tool switch,
-## or deactivation).
+## or deactivation): a river being drawn is carved.
 func finish_gesture() -> void:
 	_pressed = false
 	_press_pending = false
 	if editor != null:
+		if water.drawing and not water.carve(editor, water_radius()):
+			water_refused.emit(water.refusal())
 		if _stroking:
 			editor.end_stroke()
 		editor.commit_prop_edit()
+	water.reset()
 	_stroking = false
 	_stroke_op = -1
 	_placing = {}
@@ -442,6 +481,9 @@ func handle_input(event: InputEvent) -> bool:
 			var steps := 1 if action == Action.GROW else -1
 			if mode == Mode.PLACE:
 				_scale_hovered(steps)
+			elif mode == Mode.WATER and not _ctrl:
+				# From the size the ring shows, so a notch always changes it visibly.
+				set_radius(water.radius(water_radius() * pow(RADIUS_STEP, steps)))
 			else:
 				set_radius(stepped_radius(session_radius, steps))
 			return true
@@ -465,6 +507,7 @@ func _cancel_gesture() -> void:
 	_pressed = false
 	_press_pending = false
 	_stroking = false
+	water.reset()
 	_stroke_op = -1
 	_placing = {}
 	_turning = false
@@ -491,6 +534,7 @@ func _process(delta: float) -> void:
 	_update_fade()
 	if _press_pending and _hit != Vector3.INF:
 		_start_gesture(0.0)
+	water.track(editor, _hit, water_radius())
 	if _stroking and _hit != Vector3.INF:
 		_paint(seconds)
 	elif not _placing.is_empty():
@@ -523,6 +567,11 @@ func _start_gesture(click_seconds: float) -> void:
 			if not _press_ctrl:
 				paint_refused.emit(paint_surface)
 			return
+	elif mode == Mode.WATER:
+		if not water.begin(editor, _press_ctrl, _hit):
+			if water.refusal() != "":
+				water_refused.emit(water.refusal())
+			return
 	else:
 		var stroke_mode := MaskBrush.PAINT
 		if mode == Mode.THIN:
@@ -534,8 +583,15 @@ func _start_gesture(click_seconds: float) -> void:
 	_dwell = 0.0
 	_dwell_anchor = _hit
 	if click_seconds > 0.0:
-		editor.stroke_dab(_hit, _hit, session_radius, click_seconds * session_flow)
+		editor.stroke_dab(_hit, _hit, _stroke_radius(), click_seconds * session_flow)
 		editor.flush()
+		_record_pond_dab()
+
+
+## Keeps a pond stroke's dab for its preview (WaterBrush.record_dab).
+func _record_pond_dab() -> void:
+	if mode == Mode.WATER and not _press_ctrl and water.shape == WaterBrush.Shape.POND:
+		water.record_dab(_hit, _stroke_radius())
 
 
 ## Starts the sculpt stroke of the picked tile and the press's modifiers, with its target:
@@ -565,9 +621,10 @@ func _paint(seconds: float) -> void:
 		_dwell = 0.0
 		_dwell_anchor = _hit
 	var exposure := seconds * session_flow * dwell_gain(_dwell)
-	editor.stroke_dab(_last_dab, _hit, session_radius, exposure)
+	editor.stroke_dab(_last_dab, _hit, _stroke_radius(), exposure)
 	editor.flush()
 	_last_dab = _hit
+	_record_pond_dab()
 
 
 ## Place drag: once the pointer has moved TURN_START_PX, the prop turns to face it.
@@ -636,9 +693,11 @@ func _resolve_hit() -> void:
 func _update_fade() -> void:
 	if occlusion_fade == null:
 		return
-	var fades := mode == Mode.THIN or mode == Mode.SCULPT or mode == Mode.PAINT
+	var fades := (
+		mode == Mode.THIN or mode == Mode.SCULPT or mode == Mode.PAINT or mode == Mode.WATER
+	)
 	if _active and fades and _hit != Vector3.INF:
-		occlusion_fade.set_focus(_hit, session_radius * fade_radius_factor)
+		occlusion_fade.set_focus(_hit, _stroke_radius() * fade_radius_factor)
 	else:
 		occlusion_fade.clear_focus()
 
@@ -671,6 +730,8 @@ func _tint() -> Color:
 		Mode.PAINT:
 			var erasing := _press_ctrl if _stroking else _ctrl
 			return CLEAR_TINT if erasing else paint_tint
+		Mode.WATER:
+			return CLEAR_TINT if _water_erasing() else WaterBrush.TINT
 		Mode.SCULPT:
 			match _cursor_op():
 				HeightBrush.RAISE, HeightBrush.TIER:
@@ -697,7 +758,10 @@ func _on_draw() -> void:
 	if mode == Mode.PLACE:
 		_draw_place_cursor()
 		return
-	_conform_ring(_hit, session_radius)
+	if mode == Mode.WATER and editor != null:
+		var erasing := _water_erasing()
+		water.draw(_draw_control, _camera, editor, _hit, water_radius(), _stroking, erasing)
+	_conform_ring(_hit, _stroke_radius())
 	var tint := _tint()
 	var outline := _project(_ring_world, Vector3.ZERO, 1.0)
 	_fill_fan(outline, _camera.unproject_position(_hit), Color(tint, 0.10))
@@ -714,6 +778,9 @@ func _on_draw() -> void:
 		var text := _readout_text()
 		if text != "":
 			_draw_readout(text, outline)
+	elif mode == Mode.WATER:
+		var text := water.readout_text(_water_erasing(), unit_cell_m, unit_per_cell, unit_label)
+		_draw_readout(text, outline)
 
 
 ## The ring's reach, filled as a fan from `centre` (see the header: an outline conformed
