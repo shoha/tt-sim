@@ -16,6 +16,7 @@ enum State {
 	PLAYING,
 	PAUSED,
 	AUTHORING,  ## Building or dressing a map in the game view (offline only)
+	WARMING_UP,  ## First-launch graphics warm-up before the title screen (GraphicsWarmup)
 }
 
 const TITLE_SCREEN_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
@@ -28,6 +29,7 @@ const UPDATE_DIALOG_SCENE := preload("res://scenes/ui/update_dialog.tscn")
 const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
 const DISCONNECT_INDICATOR_SCENE := preload("res://scenes/ui/disconnect_indicator.tscn")
 const NEW_MAP_DIALOG_SCENE := preload("res://scenes/states/authoring/new_map_dialog.tscn")
+const GRAPHICS_WARMUP_SCENE := preload("res://scenes/states/warmup/graphics_warmup_screen.tscn")
 ## Where leaving authoring returns to.
 const RETURN_TO_TITLE := &"title"
 const RETURN_TO_EDITOR := &"editor"
@@ -49,6 +51,11 @@ var _authoring_controller: AuthoringController = null
 ## "return_to": RETURN_TO_*}. See request_authoring().
 var _authoring_request: Dictionary = {}
 var _new_map_dialog: NewMapDialog = null
+var _warmup_screen: GraphicsWarmupScreen = null
+var _warmup_entered: bool = false
+## Whether the first entry into TITLE_SCREEN starts the startup update check (not for Steam,
+## which updates the game itself). Consumed by _take_startup_update_check().
+var _update_check_on_title: bool = false
 
 
 func _ready() -> void:
@@ -79,13 +86,12 @@ func _ready() -> void:
 	EventBus.resume_requested.connect(func(): pop_state())
 	EventBus.open_editor_requested.connect(_on_open_editor_requested)
 
-	# Enter initial state
-	push_state(State.TITLE_SCREEN)
+	# Skip in-app updates for Steam users — Steam handles updates. The check starts on the
+	# first title screen, so its dialog cannot open over the graphics warm-up.
+	_update_check_on_title = OS.get_environment("SteamAppId").is_empty()
 
-	# Check for updates after a short delay to let the UI settle
-	# Skip in-app updates for Steam users — Steam handles updates
-	if OS.get_environment("SteamAppId").is_empty():
-		_check_for_updates_on_startup()
+	# Enter initial state
+	push_state(boot_state(GraphicsWarmup.should_run()))
 
 
 func _setup_download_notifications() -> void:
@@ -222,6 +228,19 @@ func change_state(new_state: State) -> void:
 	EventBus.state_changed.emit(old_state, new_state)
 
 
+## The first state: the graphics warm-up when `warm` (GraphicsWarmup.should_run()), else the
+## title screen.
+static func boot_state(warm: bool) -> State:
+	return State.WARMING_UP if warm else State.TITLE_SCREEN
+
+
+## True once, on the first call, when the startup update check is wanted.
+func _take_startup_update_check() -> bool:
+	var take := _update_check_on_title
+	_update_check_on_title = false
+	return take
+
+
 func _enter_state(state: State) -> void:
 	match state:
 		State.TITLE_SCREEN:
@@ -243,6 +262,8 @@ func _enter_state(state: State) -> void:
 			var title_app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
 			if title_app_ctrl:
 				title_app_ctrl.hide_editor_button()
+			if _take_startup_update_check():
+				_check_for_updates_on_startup()
 		State.LOBBY_HOST:
 			_enter_lobby_host_state()
 		State.LOBBY_CLIENT:
@@ -253,6 +274,8 @@ func _enter_state(state: State) -> void:
 			_enter_paused_state()
 		State.AUTHORING:
 			_enter_authoring_state()
+		State.WARMING_UP:
+			_enter_warming_up_state()
 
 
 func _enter_playing_state() -> void:
@@ -316,6 +339,26 @@ func _exit_state(state: State) -> void:
 			_exit_paused_state()
 		State.AUTHORING:
 			_exit_authoring_state()
+		State.WARMING_UP:
+			_exit_warming_up_state()
+
+
+func _enter_warming_up_state() -> void:
+	assert(not _warmup_entered, "Root: the graphics warm-up runs at most once per process")
+	_warmup_entered = true
+	if _app_menu:
+		_app_menu.hide()
+	_warmup_screen = GRAPHICS_WARMUP_SCENE.instantiate()
+	_warmup_screen.finished.connect(change_state.bind(State.TITLE_SCREEN), CONNECT_ONE_SHOT)
+	add_child(_warmup_screen)
+
+
+func _exit_warming_up_state() -> void:
+	if _warmup_screen:
+		_warmup_screen.queue_free()
+		_warmup_screen = null
+	if _app_menu:
+		_app_menu.show()
 
 
 func _exit_playing_state() -> void:

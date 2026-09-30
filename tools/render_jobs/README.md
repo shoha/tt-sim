@@ -22,6 +22,9 @@ Arguments after `--`:
 - `<job>`: a path to a JSON job file, or the name of one under
   `res://tools/render_jobs/jobs/` (the `.json` is optional).
 - `--out <dir>` (or `--out=<dir>`), optional: overrides the job's `out_dir`.
+- `--warm-graphics`, optional: force the first-launch graphics warm-up
+  (`GraphicsWarmup.FORCE_ARG`). The editor binary skips it otherwise, so a job run from
+  it never sees the warm-up unless it passes this. Start such a job with `wait_title`.
 
 Do not pass `--headless`: captures need real pixels. The run takes as long as the job's
 steps (the judgment set is about 6 minutes) and quits by itself when the last step is done
@@ -92,6 +95,7 @@ Every step has an `op`. Steps that finish immediately advance on the same frame;
 | Op | Fields | What it does |
 |---|---|---|
 | `title` | none | Switch to the title state (`change_state(0)`), without the leave prompt and without saving. |
+| `wait_title` | none | Wait until the title state is current: the first-launch graphics warm-up (`Root.State.WARMING_UP`) has handed over. Put it first in any job that may boot into the warm-up. |
 | `new_map` | `biome` (palette biome id, `""` for bare ground), `size` (ft, default 200), `seed` (default 1234) | Open a new map in authoring, as the New map dialog does. |
 | `dress` | `folder` (level folder under `user://levels/`) | Open an existing level in authoring; a GLB-only level opens as a dressing layer. Nothing is written unless something saves. |
 | `play` | `folder` | Load that level folder and play it (`_on_play_level_requested`). |
