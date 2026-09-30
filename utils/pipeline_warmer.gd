@@ -6,6 +6,8 @@ extends Node3D
 ## in the frame they first appear on screen. AuthoredScatter warms each species as it
 ## resolves, one per frame, which took the wind shader's draw-time compilations off the first
 ## stroke of a biome (docs/PERFORMANCE.md "First-use pipeline compilation in authoring").
+## The first-launch graphics warm-up (GraphicsWarmupScreen) uses it too, for every sample,
+## with warm_mesh() for the ones the game draws through a MeshInstance3D.
 ##
 ## A warm-up node is a real scatter chunk node (ScatterGlbUtils.build_chunk, so the same
 ## shadow and cull settings as the nodes it stands in for) holding one instance a thousandth
@@ -49,20 +51,41 @@ func _ready() -> void:
 	set_process(false)
 
 
-## Draws `mesh` (its surface materials as they are now) for FRAMES frames, invisibly.
+## Draws `mesh` (its surface materials as they are now) as a one-instance MultiMesh for FRAMES
+## frames, invisibly. For meshes the game draws through MultiMeshes (the scatter).
 func warm(mesh: Mesh, stem: String, wind_category: String) -> void:
 	if not available(self):
 		return
+	var transforms: Array[Transform3D] = [_warm_transform()]
+	var node := ScatterGlbUtils.build_chunk(self, mesh, stem, transforms, wind_category)
+	node.name = stem + NAME_SUFFIX
+	node.remove_meta("wind_foliage_category")
+	_track(node)
+
+
+## Draws `mesh` through a plain MeshInstance3D for FRAMES frames, invisibly. For meshes the
+## game draws that way (terrain, water).
+func warm_mesh(mesh: Mesh, stem: String) -> void:
+	if not available(self):
+		return
+	var node := MeshInstance3D.new()
+	node.name = stem + NAME_SUFFIX
+	node.mesh = mesh
+	node.transform = _warm_transform()
+	add_child(node)
+	_track(node)
+
+
+## The tiny, sunk placement at the view centre every warm-up instance uses.
+func _warm_transform() -> Transform3D:
 	var viewport := get_viewport()
 	var at := view_ground_point(
 		viewport.get_camera_3d(), viewport.get_visible_rect().size, global_position.y
 	)
-	var transforms: Array[Transform3D] = [
-		Transform3D(Basis.from_scale(Vector3.ONE * SCALE), to_local(at) + Vector3.DOWN * SINK_M)
-	]
-	var node := ScatterGlbUtils.build_chunk(self, mesh, stem, transforms, wind_category)
-	node.name = stem + NAME_SUFFIX
-	node.remove_meta("wind_foliage_category")
+	return Transform3D(Basis.from_scale(Vector3.ONE * SCALE), to_local(at) + Vector3.DOWN * SINK_M)
+
+
+func _track(node: Node) -> void:
 	_pending.append({"node": node, "frames": FRAMES})
 	set_process(true)
 

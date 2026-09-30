@@ -29,3 +29,11 @@ func test_a_headless_run_never_warms() -> void:
 	add_child_autofree(scatter)
 	await wait_process_frames(2)
 	assert_null(scatter.get_node_or_null("PipelineWarmer"), "no warm-up child in tests")
+
+
+func test_a_headless_run_never_warms_a_plain_mesh() -> void:
+	var warmer := PipelineWarmer.new()
+	add_child_autofree(warmer)
+	warmer.warm_mesh(BoxMesh.new(), "box")
+	assert_eq(warmer.pending_count(), 0, "nothing to draw headless")
+	assert_eq(warmer.get_child_count(), 0, "no warm-up child")
