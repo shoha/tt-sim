@@ -194,14 +194,18 @@ func setup_occlusion_fade() -> void:
 		_sync_lofi_pixelation()
 
 
-## Load the foliage antialiasing setting from config.
 func _load_foliage_antialiasing_setting() -> void:
-	var config = ConfigFile.new()
-	var err = config.load(Paths.SETTINGS_PATH)
-	var level = Viewport.MSAA_DISABLED
-	if err == OK:
-		level = config.get_value("graphics", "antialiasing", Viewport.MSAA_DISABLED)
-	_foliage_antialiasing_level = level
+	_foliage_antialiasing_level = saved_antialiasing_level()
+
+
+## The saved Antialiasing setting (a Viewport.MSAA value), MSAA_DISABLED when unset or
+## unreadable. Static so the graphics warm-up can match its viewport to it before any
+## controller exists.
+static func saved_antialiasing_level(path: String = Paths.SETTINGS_PATH) -> int:
+	var config := ConfigFile.new()
+	if config.load(path) != OK:
+		return Viewport.MSAA_DISABLED
+	return int(config.get_value("graphics", "antialiasing", Viewport.MSAA_DISABLED))
 
 
 ## Set the foliage antialiasing level (a Viewport.MSAA enum value) and apply it
