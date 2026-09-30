@@ -329,32 +329,39 @@ static func surface_has_vertex_colors(mesh: Mesh, index: int) -> bool:
 
 
 ## The palette assets the graphics warm-up builds its foliage samples from: the first wind
-## asset in palette order, then the first wind asset named "Flower_*" (when it is a different
-## asset). The flowers carry one surface Godot imports without vertex compression, a layout no
-## tree or grass has, and a pipeline is keyed by the layout; see docs/ASSET_PIPELINE.md
-## section 5. Reads manifests only (no mesh load), so check_layout() can call it from inside a
-## resolve.
+## asset in palette order, then the first wind asset named "Flower_*" (unless the first is
+## itself a flower). The flowers carry one surface Godot imports without vertex compression, a
+## layout no tree or grass has, and a pipeline is keyed by the layout; see
+## docs/ASSET_PIPELINE.md section 5. Reads manifests only (no mesh load), so check_layout() can
+## call it from inside a resolve. Returns a copy of the cached list.
 static func representative_assets() -> Array[String]:
-	if not _representative_ids.is_empty():
-		return _representative_ids
-	var found: Array[String] = []
-	for biome in PaletteLibrary.biomes():
-		for rule in PaletteLibrary.species(String(biome.id)):
-			for asset_id in rule.get("assets", []):
-				var id := String(asset_id)
-				if found.has(id):
-					continue
-				var entry := PaletteLibrary.asset(id)
-				if not PRESETS.has(String(entry.get("wind_category", ""))):
-					continue
-				if found.is_empty():
-					found.append(id)
-				elif id.get_file().begins_with("Flower_"):
-					found.append(id)
-					_representative_ids = found
-					return found
-	_representative_ids = found
-	return found
+	if _representative_ids.is_empty():
+		var wind_ids: Array[String] = []
+		for biome in PaletteLibrary.biomes():
+			for rule in PaletteLibrary.species(String(biome.id)):
+				for asset_id in rule.get("assets", []):
+					var id := String(asset_id)
+					var entry := PaletteLibrary.asset(id)
+					if PRESETS.has(String(entry.get("wind_category", ""))) and not wind_ids.has(id):
+						wind_ids.append(id)
+		_representative_ids = pick_representatives(wind_ids)
+	return _representative_ids.duplicate()
+
+
+## The representatives among `wind_ids` (wind assets in palette order): the first, plus the
+## first "Flower_*" unless the first is one already. Pure.
+static func pick_representatives(wind_ids: Array[String]) -> Array[String]:
+	var picked: Array[String] = []
+	if wind_ids.is_empty():
+		return picked
+	picked.append(wind_ids[0])
+	if wind_ids[0].get_file().begins_with("Flower_"):
+		return picked
+	for id in wind_ids:
+		if id.get_file().begins_with("Flower_"):
+			picked.append(id)
+			break
+	return picked
 
 
 ## GraphicsWarmup samples: for each of the antialiased wind shader and the no-AA variant (the
