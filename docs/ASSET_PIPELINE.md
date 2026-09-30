@@ -174,6 +174,23 @@ Scatter instances contract in full:
   (bark, rock, stems) are unaffected.
 - Only TEXCOORD_0 is used.
 
+### Vertex compression (open question)
+
+- On Godot 4.7, 23 flower assets in palette v2 each have one surface imported without
+  vertex compression (surface format flag `ARRAY_FLAG_COMPRESS_ATTRIBUTES`, bit 29, clear).
+  Their other surface, and every tree and grass surface, is compressed. Example:
+  `alpine_meadow_summer_s1/Flower_Poppy_Alpine_summer_12` has 135 vertices on the
+  uncompressed surface 0 and 160 on the compressed surface 1.
+- The `.glb.import` settings are identical to the trees' (`meshes/force_disable_compression=false`),
+  so the difference comes from the meshes themselves. The cause is not yet understood; a
+  suspect is something in how treecube exports flowers against trees and grass.
+- It matters because a different vertex layout keys a different pipeline. The graphics
+  warm-up therefore warms a flower as a second representative
+  (`WindFoliage.representative_assets()`), and `WindFoliage.check_layout()` warns in debug
+  builds when a palette asset brings a layout neither representative has.
+- Resolving the divergence at the source would let the warm-up drop back to one
+  representative.
+
 ## 6. Materials and textures
 
 - **Only baked, flat PBR materials cross the seam.** terrain-paint's live Mix-Shader
