@@ -68,6 +68,17 @@ func test_the_representatives_are_wind_assets() -> void:
 	assert_true(asset_ids[1].get_file().begins_with("Flower_"), "the second is a flower")
 
 
+func test_pick_representatives_takes_one_flower_unless_the_first_is_one() -> void:
+	var flower_first: Array[String] = ["a/Flower_A", "b/Flower_B", "c/Tree_C"]
+	assert_eq(WindFoliage.pick_representatives(flower_first), ["a/Flower_A"] as Array[String])
+	var no_flower: Array[String] = ["a/Tree_A", "b/Grass_B"]
+	assert_eq(WindFoliage.pick_representatives(no_flower), ["a/Tree_A"] as Array[String])
+	var normal: Array[String] = ["a/Tree_A", "b/Grass_B", "c/Flower_C", "d/Flower_D"]
+	assert_eq(WindFoliage.pick_representatives(normal), ["a/Tree_A", "c/Flower_C"] as Array[String])
+	var none: Array[String] = []
+	assert_eq(WindFoliage.pick_representatives(none), [] as Array[String])
+
+
 func test_foliage_samples_cover_both_wind_shaders_with_the_real_layouts() -> void:
 	var samples := WindFoliage.warmup_samples()
 	_assert_well_formed(samples)
