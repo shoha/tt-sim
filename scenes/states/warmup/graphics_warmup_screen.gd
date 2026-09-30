@@ -1,0 +1,234 @@
+class_name GraphicsWarmupScreen
+extends Node
+
+## The first-launch "Preparing graphics" screen (Root.State.WARMING_UP; GraphicsWarmup has
+## the why). Each phase keeps the main thread's frames short, so the window stays responsive:
+##   COMPILE  one covered shader per frame: load, hold, get_rid(), which starts its compile on
+##            the WorkerThreadPool (starting all of them in one frame cost a 510 ms frame).
+##   BUILD    one Thread collects the samples (asset loads and material builds included) and
+##            creates a RenderingServer mesh for each; mesh_create_from_surfaces waits for the
+##            mesh's pipelines on the calling thread, so the compile waits happen there.
+##   DRAW     each built sample drawn invisibly in %WarmupViewport through PipelineWarmer (the
+##            draw-time variants), until none is pending. Nothing draws headless.
+## Then it writes the marker, frees the meshes and emits `finished`. %WarmupViewport is set up
+## like the game world (camera, light, environment, MSAA, debanding) because a pipeline is
+## keyed by the framebuffer format as well as the shader and vertex layout.
+
+signal finished
+
+enum Phase { COMPILE, BUILD, DRAW, DONE }
+
+const TITLE := "Preparing graphics"
+const STATUS := "First launch only. This takes a few seconds."
+## Progress share of COMPILE, BUILD and DRAW.
+const PHASE_WEIGHTS: Array[float] = [0.2, 0.7, 0.1]
+const LONG_FRAME_MS := 100.0
+
+## Returns the samples (GraphicsWarmup.collect_samples()'s shape). Called on the worker thread.
+var sample_source: Callable = GraphicsWarmup.collect_samples
+var marker_path: String = Paths.GRAPHICS_WARMUP_PATH
+var shader_paths: Array = GraphicsWarmup.COVERED_SHADERS
+var phase: Phase = Phase.COMPILE
+
+var _environment := LevelEnvironmentManager.new()
+var _next_shader := 0
+var _thread: Thread = null
+var _mutex := Mutex.new()
+## Shared with the worker; read and written under _mutex.
+var _built := 0
+var _total := 0
+var _cancel := false
+## Written by the worker only; read on the main thread only after wait_to_finish().
+var _results: Array[Dictionary] = []
+var _skipped := PackedStringArray()
+var _rids: Array[RID] = []
+var _warmer: PipelineWarmer = null
+var _start_msec := 0
+var _phase_start_msec := -1
+var _phase_worst_ms := 0.0
+var _long_frames := 0
+var _last_usec := 0
+
+@onready var _viewport: SubViewport = %WarmupViewport
+@onready var _overlay: LoadingOverlay = %LoadingOverlay
+
+
+## Where the overall progress is at `done` of `total` steps into phase `at`. Pure.
+static func progress_for(at: Phase, done: int, total: int) -> float:
+	if at == Phase.DONE:
+		return 1.0
+	var before := 0.0
+	for i in int(at):
+		before += PHASE_WEIGHTS[i]
+	var share := float(done) / total if total > 0 else 0.0
+	return clampf(before + PHASE_WEIGHTS[at] * share, 0.0, 1.0)
+
+
+func _ready() -> void:
+	_viewport.msaa_3d = VisualEffectsController.saved_antialiasing_level() as Viewport.MSAA
+	_environment.apply_level_environment(LevelData.new(), _viewport)
+	_overlay.show_loading(TITLE)
+	_overlay.set_progress(0.0, STATUS)
+	_start_msec = Time.get_ticks_msec()
+	_enter_phase(Phase.COMPILE)
+
+
+func _exit_tree() -> void:
+	if _thread != null:
+		_mutex.lock()
+		_cancel = true
+		_mutex.unlock()
+		_thread.wait_to_finish()
+		_thread = null
+	_free_meshes()
+
+
+func progress() -> float:
+	match phase:
+		Phase.COMPILE:
+			return progress_for(phase, _next_shader, shader_paths.size())
+		Phase.BUILD:
+			_mutex.lock()
+			var done := _built
+			var total := _total
+			_mutex.unlock()
+			return progress_for(phase, done, total)
+	return progress_for(phase, 0, 1)
+
+
+## The names of the samples the worker built, in order. Valid once BUILD is over.
+func built_names() -> PackedStringArray:
+	var names := PackedStringArray()
+	for sample in _results:
+		names.append(String(sample.name))
+	return names
+
+
+func _process(_delta: float) -> void:
+	_track_frame()
+	match phase:
+		Phase.COMPILE:
+			if _next_shader < shader_paths.size():
+				var shader := load(shader_paths[_next_shader]) as Shader
+				assert(
+					shader != null,
+					"GraphicsWarmupScreen: no shader at %s" % shader_paths[_next_shader]
+				)
+				GraphicsWarmup.hold(shader)
+				shader.get_rid()
+				_next_shader += 1
+			else:
+				_start_build()
+		Phase.BUILD:
+			if not _thread.is_alive():
+				_thread.wait_to_finish()
+				_thread = null
+				_start_draw()
+		Phase.DRAW:
+			if _warmer.pending_count() == 0:
+				_finish()
+	_overlay.set_progress(progress())
+
+
+func _start_build() -> void:
+	_enter_phase(Phase.BUILD)
+	# Lazily created statics the worker's material builds read: create them here so the
+	# worker never races a main-thread first use.
+	WindFoliage.get_shader()
+	WindFoliage.get_shader_no_aa()
+	_thread = Thread.new()
+	var err := _thread.start(_build)
+	assert(err == OK, "GraphicsWarmupScreen: could not start the worker: %s" % error_string(err))
+
+
+## Worker thread.
+func _build() -> void:
+	var samples: Array = sample_source.call()
+	_mutex.lock()
+	_total = samples.size()
+	_mutex.unlock()
+	for sample: Dictionary in samples:
+		_mutex.lock()
+		var cancelled := _cancel
+		_mutex.unlock()
+		if cancelled:
+			return
+		assert(
+			GraphicsWarmup.valid_sample(sample), "GraphicsWarmup: malformed sample %s" % [sample]
+		)
+		if (sample.arrays as Array).is_empty():
+			_skipped.append(String(sample.name))
+		else:
+			var data := GraphicsWarmup.surface_data(sample)
+			_rids.append(RenderingServer.mesh_create_from_surfaces([data]))
+			_results.append(sample)
+		_mutex.lock()
+		_built += 1
+		_mutex.unlock()
+
+
+func _start_draw() -> void:
+	_enter_phase(Phase.DRAW)
+	for sample_name in _skipped:
+		push_warning("GraphicsWarmup: sample %s has no geometry; skipped" % sample_name)
+	_warmer = PipelineWarmer.new()
+	_viewport.add_child(_warmer)
+	for sample in _results:
+		var mesh := GraphicsWarmup.sample_mesh(sample)
+		if sample.multimesh:
+			# No wind category: build_chunk then keeps shadow casting on for every sample, so
+			# the shadow-pass variants trees need are warmed too.
+			_warmer.warm(mesh, String(sample.name), "")
+		else:
+			_warmer.warm_mesh(mesh, String(sample.name))
+
+
+func _finish() -> void:
+	_enter_phase(Phase.DONE)
+	# This frame's _process still sets the bar to 1.0 after we return; nothing after that.
+	set_process(false)
+	GraphicsWarmup.write_marker(GraphicsWarmup.cache_key(), marker_path)
+	_free_meshes()
+	print(
+		(
+			"GraphicsWarmup: done in %d ms, %d samples built, %d skipped, %d frames over %.0f ms"
+			% [
+				Time.get_ticks_msec() - _start_msec,
+				_results.size(),
+				_skipped.size(),
+				_long_frames,
+				LONG_FRAME_MS
+			]
+		)
+	)
+	finished.emit()
+
+
+func _free_meshes() -> void:
+	for rid in _rids:
+		RenderingServer.free_rid(rid)
+	_rids.clear()
+
+
+func _enter_phase(next: Phase) -> void:
+	if _phase_start_msec >= 0:
+		print(
+			(
+				"GraphicsWarmup: %s took %d ms, worst frame %.0f ms"
+				% [Phase.keys()[phase], Time.get_ticks_msec() - _phase_start_msec, _phase_worst_ms]
+			)
+		)
+	phase = next
+	_phase_start_msec = Time.get_ticks_msec()
+	_phase_worst_ms = 0.0
+
+
+func _track_frame() -> void:
+	var now := Time.get_ticks_usec()
+	if _last_usec > 0:
+		var ms := (now - _last_usec) / 1000.0
+		_phase_worst_ms = maxf(_phase_worst_ms, ms)
+		if ms > LONG_FRAME_MS:
+			_long_frames += 1
+			print("GraphicsWarmup: %.0f ms frame in %s" % [ms, Phase.keys()[phase]])
+	_last_usec = now
