@@ -460,6 +460,36 @@ static func build_skirt_arrays(doc: MapDocument, width_m: float, fall_m: float =
 	return arrays
 
 
+## The small flat map the graphics warm-up builds its terrain samples from.
+static func warmup_document() -> MapDocument:
+	return MapDocument.create_flat(Vector2i(20, 20), "", "", 0)
+
+
+## GraphicsWarmup samples: one ground chunk and one skirt, built by the same functions as a
+## real AuthoredTerrain (so a layout change here carries into the warm-up), on bare
+## ShaderMaterials of the real shaders.
+static func warmup_samples() -> Array[Dictionary]:
+	var doc := warmup_document()
+	var chunk := build_chunk_arrays(doc, chunk_cells(doc)[0], grid_fields(doc))
+	var skirt := build_skirt_arrays(
+		doc, AuthoredTerrain.skirt_width_m(), AuthoredTerrain.SKIRT_FADE_M
+	)
+	var samples: Array[Dictionary] = []
+	for entry in [
+		["terrain_chunk", chunk, AuthoredTerrain.GROUND_SHADER],
+		["terrain_skirt", skirt, AuthoredTerrain.SKIRT_SHADER],
+	]:
+		var sample := {
+			"name": entry[0],
+			"primitive": Mesh.PRIMITIVE_TRIANGLES,
+			"arrays": entry[1],
+			"material": GraphicsWarmup.material_for(entry[2]),
+			"multimesh": false,
+		}
+		samples.append(sample)
+	return samples
+
+
 ## Ring `ring` of the skirt for boundary sample `sample`: [position, normal] (see
 ## build_skirt_arrays; `fall_m` <= 0 means `width_m`). Its XZ never depends on heights, so
 ## the skirt's triangles and UVs stay fixed while an edit moves the edge.
