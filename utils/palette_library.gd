@@ -305,6 +305,8 @@ static func _source_mesh(root: String, asset_id: String, entry: Dictionary) -> M
 				"PaletteLibrary: asset '%s' could not be loaded from %s" % [asset_id, path]
 			)
 		_source_meshes[cache_key] = mesh
+		# After caching, so the guard's own resolve of the representative cannot recurse here.
+		WindFoliage.check_layout(root, asset_id, mesh, String(entry.get("wind_category", "")))
 	return _source_meshes[cache_key]
 
 

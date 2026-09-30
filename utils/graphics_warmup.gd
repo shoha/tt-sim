@@ -225,3 +225,12 @@ static func material_for(shader: Shader) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = shader
 	return material
+
+
+## Every owner's warm-up samples. Runs on the warm-up's worker thread.
+static func collect_samples() -> Array[Dictionary]:
+	var samples: Array[Dictionary] = []
+	samples.append_array(TerrainMeshBuilder.warmup_samples())
+	samples.append_array(AuthoredWater.warmup_samples())
+	samples.append_array(WindFoliage.warmup_samples())
+	return samples

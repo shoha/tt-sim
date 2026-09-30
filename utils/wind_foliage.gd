@@ -85,6 +85,11 @@ static var _shader_no_aa: Shader = null
 static var _shader_debug_trivial: Shader = null
 static var _shader_debug_unshaded: Shader = null
 static var _shader_debug_cheap_lighting: Shader = null
+## representative_assets(), cached once found.
+static var _representative_ids: Array[String] = []
+## Representative asset id -> its surface formats, for check_layout(); each filled when that
+## asset is resolved.
+static var _representative_formats: Dictionary = {}
 
 
 ## Merge a level's foliage_overrides onto a category's base preset. Only
@@ -321,3 +326,138 @@ static func apply_material(mesh: Mesh, category: String, overrides: Dictionary =
 static func surface_has_vertex_colors(mesh: Mesh, index: int) -> bool:
 	var arrays := mesh.surface_get_arrays(index)
 	return arrays.size() > Mesh.ARRAY_COLOR and arrays[Mesh.ARRAY_COLOR] != null
+
+
+## The palette assets the graphics warm-up builds its foliage samples from: the first wind
+## asset in palette order, then the first wind asset named "Flower_*" (when it is a different
+## asset). The flowers carry one surface Godot imports without vertex compression, a layout no
+## tree or grass has, and a pipeline is keyed by the layout; see docs/ASSET_PIPELINE.md
+## section 5. Reads manifests only (no mesh load), so check_layout() can call it from inside a
+## resolve.
+static func representative_assets() -> Array[String]:
+	if not _representative_ids.is_empty():
+		return _representative_ids
+	var found: Array[String] = []
+	for biome in PaletteLibrary.biomes():
+		for rule in PaletteLibrary.species(String(biome.id)):
+			for asset_id in rule.get("assets", []):
+				var id := String(asset_id)
+				if found.has(id):
+					continue
+				var entry := PaletteLibrary.asset(id)
+				if not PRESETS.has(String(entry.get("wind_category", ""))):
+					continue
+				if found.is_empty():
+					found.append(id)
+				elif id.get_file().begins_with("Flower_"):
+					found.append(id)
+					_representative_ids = found
+					return found
+	_representative_ids = found
+	return found
+
+
+## GraphicsWarmup samples: for each of the antialiased wind shader and the no-AA variant (the
+## swap VisualEffectsController.apply_foliage_antialiasing() makes), the wind-material surfaces
+## of the representative assets, with each surface's own layout flags. The first representative
+## gives all its wind surfaces, a later one only surfaces with a layout none of the earlier ones
+## has. Names are "foliage<representative>_<surface>_<shader>". Runs on the warm-up's worker
+## thread: the resolves and material builds are part of the work it takes off the main thread.
+## A palette without wind foliage gives one empty sample, which the warm-up skips with a
+## warning.
+static func warmup_samples() -> Array[Dictionary]:
+	var samples: Array[Dictionary] = []
+	# Each entry: {"index": representative number, "mesh": ArrayMesh, "surfaces": Array[int]}.
+	var sources: Array[Dictionary] = []
+	var seen_formats: Array[int] = []
+	var representatives := representative_assets()
+	for r in representatives.size():
+		var template := PaletteLibrary.resolve(representatives[r])
+		var mesh := template.get("mesh") as ArrayMesh
+		var category := String(template.get("wind_category", ""))
+		if mesh == null or not PRESETS.has(category):
+			continue
+		apply_material(mesh, category)
+		var surfaces: Array[int] = []
+		var wind_formats: Array[int] = []
+		for i in mesh.get_surface_count():
+			if not mesh.surface_get_material(i) is ShaderMaterial:
+				continue
+			var format := mesh.surface_get_format(i)
+			wind_formats.append(format)
+			if not seen_formats.has(format):
+				surfaces.append(i)
+		seen_formats.append_array(wind_formats)
+		sources.append({"index": r, "mesh": mesh, "surfaces": surfaces})
+	if seen_formats.is_empty():
+		var empty_sample := {
+			"name": "foliage",
+			"primitive": Mesh.PRIMITIVE_TRIANGLES,
+			"arrays": [],
+			"material": GraphicsWarmup.material_for(get_shader()),
+			"multimesh": true,
+		}
+		samples.append(empty_sample)
+		return samples
+	for shader: Shader in [get_shader(), get_shader_no_aa()]:
+		for source in sources:
+			var mesh: ArrayMesh = source.mesh
+			for i in source.surfaces:
+				var variant := (
+					(mesh.surface_get_material(i) as ShaderMaterial).duplicate() as ShaderMaterial
+				)
+				variant.shader = shader
+				var shader_name := shader.resource_path.get_file().get_basename()
+				var sample := {
+					"name": "foliage%d_%d_%s" % [source.index, i, shader_name],
+					"primitive": mesh.surface_get_primitive_type(i),
+					"arrays": mesh.surface_get_arrays(i),
+					"material": variant,
+					"multimesh": true,
+					"flags": GraphicsWarmup.format_flags(mesh.surface_get_format(i)),
+				}
+				samples.append(sample)
+	return samples
+
+
+## The surface formats of `mesh` that are not in `warmed`, each once. Pure.
+static func unwarmed_formats(mesh: ArrayMesh, warmed: Array[int]) -> Array[int]:
+	var out: Array[int] = []
+	for i in mesh.get_surface_count():
+		var format := mesh.surface_get_format(i)
+		if not warmed.has(format) and not out.has(format):
+			out.append(format)
+	return out
+
+
+## Debug builds: warns when a default-palette wind asset draws with a vertex layout the
+## graphics warm-up's representatives do not have, since that asset's first draw would then
+## compile pipelines on the main thread. Called once per asset, from
+## PaletteLibrary._source_mesh(); may run on the warm-up's worker thread.
+static func check_layout(root: String, asset_id: String, mesh: Mesh, category: String) -> void:
+	if not OS.is_debug_build() or root != PaletteLibrary.DEFAULT_ROOT:
+		return
+	if not PRESETS.has(category) or not mesh is ArrayMesh:
+		return
+	var representatives := representative_assets()
+	if representatives.has(asset_id):
+		_representative_formats[asset_id] = unwarmed_formats(mesh, [])
+		return
+	var warmed: Array[int] = []
+	for representative in representatives:
+		if not _representative_formats.has(representative):
+			PaletteLibrary.resolve(representative)
+		warmed.append_array(_representative_formats.get(representative, [] as Array[int]))
+	if warmed.is_empty():
+		return
+	var missing := unwarmed_formats(mesh, warmed)
+	if not missing.is_empty():
+		push_warning(
+			(
+				(
+					"WindFoliage: %s uses vertex formats %s that the graphics warm-up's %s do not;"
+					+ " its first draw will compile on the main thread"
+				)
+				% [asset_id, missing, representatives]
+			)
+		)
