@@ -6,6 +6,8 @@ class_name Paths
 # User data directories
 const LEVELS_DIR: String = "user://levels/"
 const SETTINGS_PATH: String = "user://settings.cfg"
+## GraphicsWarmup's marker: the cache key of the last completed warm-up.
+const GRAPHICS_WARMUP_PATH: String = "user://graphics_warmup.cfg"
 const PERF_LOG_DIR: String = "user://perf_logs/"
 
 # Special pack ID for map streaming (used by AssetStreamer)
