@@ -94,6 +94,8 @@ func _process(delta: float) -> void:
 	match String(step.op):
 		"title":
 			root_node.call("change_state", 0)
+		"wait_title":
+			done = int(root_node.call("get_current_state")) == 0
 		"new_map":
 			root_node.call(
 				"_begin_authoring",

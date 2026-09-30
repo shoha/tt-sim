@@ -231,7 +231,7 @@ func _get_app_state() -> String:
 		return "UNKNOWN"
 	var state_value: int = root_scene.get_current_state()
 	var state_names := [
-		"TITLE_SCREEN", "LOBBY_HOST", "LOBBY_CLIENT", "PLAYING", "PAUSED", "AUTHORING"
+		"TITLE_SCREEN", "LOBBY_HOST", "LOBBY_CLIENT", "PLAYING", "PAUSED", "AUTHORING", "WARMING_UP"
 	]
 	if state_value >= 0 and state_value < state_names.size():
 		return state_names[state_value]
