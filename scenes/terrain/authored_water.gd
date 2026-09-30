@@ -27,6 +27,7 @@ extends Node3D
 signal refreshed
 
 const NODE_NAME := "AuthoredWater"
+const WATER_SHADER := preload("res://shaders/water.gdshader")
 
 ## Water level per document sample (WaterGeometry.DRY where no water), and 1 where wet.
 var levels: PackedFloat32Array = PackedFloat32Array()
@@ -54,6 +55,38 @@ static func create(doc: MapDocument, built: Dictionary = {}) -> AuthoredWater:
 	var geometry := built if not built.is_empty() else WaterMeshBuilder.build(doc)
 	water.apply(geometry, doc.water_flow, doc.water_flow_size)
 	return water
+
+
+## The graphics warm-up's water map: 20 x 20 cells, flat, with a straight channel carved to
+## -1 m along X (|x| <= 10 m, |z| <= 1.5 m) and a waist-deep river in it.
+static func warmup_document() -> MapDocument:
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "", "", 0)
+	var heights := doc.heights.duplicate()
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var p := doc.sample_to_world(Vector2(x, z))
+			if absf(p.x) <= 10.0 and absf(p.y) <= 1.5:
+				heights[doc.sample_index(x, z)] = -1.0
+	doc.heights = heights
+	var line := PackedVector2Array([Vector2(-10, 0), Vector2(0, 0), Vector2(10, 0)])
+	var widths := PackedFloat32Array([1.5, 1.5, 1.5])
+	doc.water_bodies.append(WaterBody.river(1, line, widths, WaterBody.Depth.WAIST, -0.2))
+	return doc
+
+
+## GraphicsWarmup samples: the merged water surface of warmup_document(), built by
+## WaterMeshBuilder as a real map's is, on a bare ShaderMaterial of the shared water shader.
+static func warmup_samples() -> Array[Dictionary]:
+	var samples: Array[Dictionary] = [
+		{
+			"name": "water",
+			"primitive": Mesh.PRIMITIVE_TRIANGLES,
+			"arrays": WaterMeshBuilder.build(warmup_document())["arrays"],
+			"material": GraphicsWarmup.material_for(WATER_SHADER),
+			"multimesh": false,
+		}
+	]
+	return samples
 
 
 func _ready() -> void:
