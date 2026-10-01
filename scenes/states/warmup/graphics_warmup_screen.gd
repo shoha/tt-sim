@@ -5,8 +5,9 @@ extends Node
 ## the why). Each phase keeps the main thread's frames short, so the window stays responsive:
 ##   COMPILE  one covered shader per frame: load, hold, get_rid(), which starts its compile on
 ##            the WorkerThreadPool (starting all of them in one frame cost a 510 ms frame).
-##            Shaders that compile on the calling thread instead (GraphicsWarmup.
-##            compiles_on_worker) are only loaded here and left to BUILD's worker.
+##            Shaders that compile on the calling thread instead
+##            (GraphicsWarmup.compiles_on_worker) are only loaded here and left to BUILD's
+##            worker.
 ##   BUILD    one Thread compiles those, collects the samples (asset loads and material builds
 ##            included) and creates a RenderingServer mesh for each; mesh_create_from_surfaces
 ##            waits for the mesh's pipelines on the calling thread, so the compile waits happen
@@ -166,15 +167,14 @@ func _start_build() -> void:
 func _build() -> void:
 	for shader in _worker_shaders:
 		shader.get_rid()
+	if _cancelled():
+		return
 	var samples: Array = sample_source.call()
 	_mutex.lock()
 	_total = samples.size()
 	_mutex.unlock()
 	for sample: Dictionary in samples:
-		_mutex.lock()
-		var cancelled := _cancel
-		_mutex.unlock()
-		if cancelled:
+		if _cancelled():
 			return
 		assert(
 			GraphicsWarmup.valid_sample(sample), "GraphicsWarmup: malformed sample %s" % [sample]
@@ -188,6 +188,13 @@ func _build() -> void:
 		_mutex.lock()
 		_built += 1
 		_mutex.unlock()
+
+
+func _cancelled() -> bool:
+	_mutex.lock()
+	var cancelled := _cancel
+	_mutex.unlock()
+	return cancelled
 
 
 func _start_draw() -> void:
