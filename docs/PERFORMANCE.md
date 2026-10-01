@@ -729,12 +729,14 @@ map load.
 | BUILD, plain launch (no harness) | 9, 16, 10, 11, 28 | idle |
 | DRAW, harness, before | 22, 22; instrumented 24, 24 | unrecorded |
 | DRAW, harness | 21-27 (n=18) | in use and idle |
+| DRAW, harness, weather warmed (reverted) | 905, 815, 699 | unrecorded |
 | load_bare after the warm-up, before | 560.4; instrumented 839.0, 577.2 | unrecorded |
 | load_bare after the warm-up | 706.8, 693.2, 739.3, 690.9, 784.8, 677.1 | in use |
 | load_bare after the warm-up | 708.5, 706.8, 674.7 | idle |
 | load_forest after the warm-up, before | 724.4 | unrecorded |
 | load_forest after the warm-up | 768.5, 892.7, 505.0, 898.8, 725.1, 904.5, 800.6 | idle |
 | load_forest after the warm-up, weather disabled | 566.6, 681.8, 683.7, 769.8 | idle |
+| load_forest after the warm-up, weather warmed (reverted) | 1069.8, 647.2, 646.4 | unrecorded |
 | load_forest, no warm-up (cold) | 4635.1, 4574.1 | idle |
 | load_bare, warm caches | 422.0 | unrecorded |
 | load_bare, warm caches | 418.6, 422.1, 419.8 | idle |
@@ -793,10 +795,19 @@ What the rows mean:
   entries appear even without weather. They are not identified yet (the cache files are
   binary). The rest is spread over the load's first frames: frame 2 is 682 ms cold against
   228 ms warm with only +1 canvas and +2 surface pipelines, so on Metal some of the cost is
-  not counted by the pipeline monitors. The screen script alone could have warmed the weather:
-  instance a `WeatherRenderer` in `%WarmupViewport` and drive it with `setup()` and
-  `apply_weather()` so it emits during DRAW. That was not tried, because weather alone does not
-  bring the load under budget. Closing the gap is the user's call.
+  not counted by the pipeline monitors.
+- **Warming the weather in DRAW was tried and reverted.** The screen instanced a
+  `WeatherRenderer` in `%WarmupViewport`, called `setup()` and `apply_weather()` with rain,
+  snow and wind at 1.0, and held DRAW for 8 drawn frames. It did move the weather out of the
+  load: the load then added 0 draw compiles, against 2 before. But DRAW gained two main-thread
+  frames of 452-905 ms in every run (worst 905, 815, 699 ms; DRAW 1375-1416 ms in total, against
+  a 21-27 ms worst before). The load's worst frame did not improve (1069.8, 647.2, 646.4 ms).
+  Its time in frames over 100 ms fell from 1583-2037 ms (the idle runs before) to 1151-1368 ms,
+  saving 0.4-0.7 s, while DRAW's two stalls cost 1.3-1.4 s. That is a net loss, and it freezes
+  a screen that has to stay responsive. The stalls are most likely the particle process shaders
+  compiling on the main thread (not confirmed). Building the weather on BUILD's worker was not
+  tried. It may not help, because the worker's RenderingServer calls only run when the main
+  thread flushes them. The machine state for these 3 runs was not recorded.
 - **load_bare before and after the fixes are not an A/B.** The before values (560.4, 577.2,
   plus 839.0 instrumented) and the after values (675-785) come from different sessions with
   different instrumentation and machine load. The ranges overlap, and no in-run A/B was done,
