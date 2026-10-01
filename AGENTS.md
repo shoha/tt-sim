@@ -98,7 +98,10 @@
   `EXCLUDED_SHADERS` with a reason; `test_graphics_warmup.gd` fails until you do. A covered
   shader that draws new geometry also needs a sample from its owner's `warmup_samples()`
   (a new owner goes in `GraphicsWarmup.sample_sources()`). Editing a covered shader or anything it
-  `#include`s re-runs the first-launch warm-up for players, by design.
+  `#include`s re-runs the first-launch warm-up for players, by design. Shaders built in code
+  (`Shader.new()` with `code` set, as in `pause_overlay.gd` and `transition_overlay.gd`) are
+  invisible to that test, so the choice is yours to make: move one to a `.gdshader` file to
+  list it, or leave it out on purpose.
 - **New autoload**: See `.cursor/rules/autoloads-and-globals.mdc` for the decision flowchart. Only create an autoload for a true service with runtime state. Pure constants/utilities should be `class_name` static classes. Implementation details of existing systems should be facade sub-components
 - **New UI panel (in-scene)**: Extend `AnimatedVisibilityContainer`, register with `UIManager.register_overlay()` for ESC handling. Compose `scenes/ui/primitives/` (IconButton, IconRail, TileRow, Foldout, PropertyRow) rather than raw Buttons; see `docs/THEME_GUIDE.md` UI Primitives
 - **New UI overlay (full-screen dialog)**: Extend `AnimatedCanvasLayerPanel`, override `_on_panel_ready()` for setup
