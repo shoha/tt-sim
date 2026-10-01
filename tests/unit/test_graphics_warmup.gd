@@ -158,11 +158,23 @@ func test_an_unwritable_marker_path_warns_and_returns_false() -> void:
 	assert_engine_error(1, "our push_warning")
 
 
-func test_every_project_shader_is_covered_or_excluded() -> void:
-	var on_disk: Array[String] = []
-	for file in DirAccess.get_files_at("res://shaders/"):
+## Every .gdshader under `dir`, subfolders included.
+func _shaders_under(dir: String) -> Array[String]:
+	var found: Array[String] = []
+	for file in DirAccess.get_files_at(dir):
 		if file.ends_with(".gdshader"):
-			on_disk.append("res://shaders/" + file)
+			found.append(dir.path_join(file))
+	for sub in DirAccess.get_directories_at(dir):
+		found.append_array(_shaders_under(dir.path_join(sub)))
+	return found
+
+
+func test_the_shader_walk_finds_top_level_shaders() -> void:
+	assert_has(_shaders_under("res://shaders"), "res://shaders/water.gdshader", "same path form")
+
+
+func test_every_project_shader_is_covered_or_excluded() -> void:
+	var on_disk := _shaders_under("res://shaders")
 	for path in on_disk:
 		var covered := GraphicsWarmup.COVERED_SHADERS.has(path)
 		var excluded := GraphicsWarmup.EXCLUDED_SHADERS.has(path)
