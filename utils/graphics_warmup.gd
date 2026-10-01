@@ -247,10 +247,19 @@ static func material_for(shader: Shader) -> ShaderMaterial:
 	return material
 
 
-## Every owner's warm-up samples. Runs on the warm-up's worker thread.
+## Each owner's warmup_samples(), one Callable per owner, so the screen can show progress
+## between them. Called on the warm-up's worker thread.
+static func sample_sources() -> Array[Callable]:
+	return [
+		TerrainMeshBuilder.warmup_samples,
+		AuthoredWater.warmup_samples,
+		WindFoliage.warmup_samples,
+	]
+
+
+## Every owner's warm-up samples.
 static func collect_samples() -> Array[Dictionary]:
 	var samples: Array[Dictionary] = []
-	samples.append_array(TerrainMeshBuilder.warmup_samples())
-	samples.append_array(AuthoredWater.warmup_samples())
-	samples.append_array(WindFoliage.warmup_samples())
+	for source in sample_sources():
+		samples.append_array(source.call())
 	return samples

@@ -26,10 +26,15 @@ const TITLE := "Preparing graphics"
 const STATUS := "First launch only. This takes a few seconds."
 ## Progress share of COMPILE, BUILD and DRAW.
 const PHASE_WEIGHTS: Array[float] = [0.2, 0.7, 0.1]
+## The part of BUILD's share given to collecting the samples (one step per source); the rest
+## is building them. A fixed split, so the bar never steps back when the sample count becomes
+## known. Even because the real split is unmeasured.
+const COLLECT_SHARE := 0.5
 const LONG_FRAME_MS := 100.0
 
-## Returns the samples (GraphicsWarmup.collect_samples()'s shape). Called on the worker thread.
-var sample_source: Callable = GraphicsWarmup.collect_samples
+## Each returns some samples (GraphicsWarmup.collect_samples()'s shape). Called in order on the
+## worker thread.
+var sample_sources: Array[Callable] = GraphicsWarmup.sample_sources()
 var marker_path: String = Paths.GRAPHICS_WARMUP_PATH
 var shader_paths: Array = GraphicsWarmup.COVERED_SHADERS
 var phase: Phase = Phase.COMPILE
@@ -40,7 +45,9 @@ var _next_shader := 0
 var _worker_shaders: Array[Shader] = []
 var _thread: Thread = null
 var _mutex := Mutex.new()
-## Shared with the worker; read and written under _mutex.
+## Shared with the worker; read and written under _mutex. _collected counts sample_sources
+## called, _built and _total the samples.
+var _collected := 0
 var _built := 0
 var _total := 0
 var _cancel := false
@@ -61,13 +68,29 @@ var _last_usec := 0
 
 ## Where the overall progress is at `done` of `total` steps into phase `at`. Pure.
 static func progress_for(at: Phase, done: int, total: int) -> float:
+	return _progress_at(at, _ratio(done, total))
+
+
+## The overall progress in BUILD, `collected` of `sources` sample sources called and `built`
+## of `total` samples built. Pure.
+static func build_progress(collected: int, sources: int, built: int, total: int) -> float:
+	return _progress_at(
+		Phase.BUILD,
+		COLLECT_SHARE * _ratio(collected, sources) + (1.0 - COLLECT_SHARE) * _ratio(built, total)
+	)
+
+
+static func _progress_at(at: Phase, fraction: float) -> float:
 	if at == Phase.DONE:
 		return 1.0
 	var before := 0.0
 	for i in int(at):
 		before += PHASE_WEIGHTS[i]
-	var share := float(done) / total if total > 0 else 0.0
-	return clampf(before + PHASE_WEIGHTS[at] * share, 0.0, 1.0)
+	return clampf(before + PHASE_WEIGHTS[at] * fraction, 0.0, 1.0)
+
+
+static func _ratio(done: int, total: int) -> float:
+	return float(done) / total if total > 0 else 0.0
 
 
 func _ready() -> void:
@@ -100,10 +123,11 @@ func progress() -> float:
 			return progress_for(phase, _next_shader, shader_paths.size())
 		Phase.BUILD:
 			_mutex.lock()
-			var done := _built
+			var collected := _collected
+			var built := _built
 			var total := _total
 			_mutex.unlock()
-			return progress_for(phase, done, total)
+			return build_progress(collected, sample_sources.size(), built, total)
 	return progress_for(phase, 0, 1)
 
 
@@ -167,9 +191,14 @@ func _start_build() -> void:
 func _build() -> void:
 	for shader in _worker_shaders:
 		shader.get_rid()
-	if _cancelled():
-		return
-	var samples: Array = sample_source.call()
+	var samples: Array = []
+	for source in sample_sources:
+		if _cancelled():
+			return
+		samples.append_array(source.call())
+		_mutex.lock()
+		_collected += 1
+		_mutex.unlock()
 	_mutex.lock()
 	_total = samples.size()
 	_mutex.unlock()

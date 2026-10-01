@@ -97,7 +97,7 @@
   (`utils/graphics_warmup.gd`) if a map load or the title screen uses it, or in
   `EXCLUDED_SHADERS` with a reason; `test_graphics_warmup.gd` fails until you do. A covered
   shader that draws new geometry also needs a sample from its owner's `warmup_samples()`
-  (see `GraphicsWarmup.collect_samples()`). Editing a covered shader or anything it
+  (a new owner goes in `GraphicsWarmup.sample_sources()`). Editing a covered shader or anything it
   `#include`s re-runs the first-launch warm-up for players, by design.
 - **New autoload**: See `.cursor/rules/autoloads-and-globals.mdc` for the decision flowchart. Only create an autoload for a true service with runtime state. Pure constants/utilities should be `class_name` static classes. Implementation details of existing systems should be facade sub-components
 - **New UI panel (in-scene)**: Extend `AnimatedVisibilityContainer`, register with `UIManager.register_overlay()` for ESC handling. Compose `scenes/ui/primitives/` (IconButton, IconRail, TileRow, Foldout, PropertyRow) rather than raw Buttons; see `docs/THEME_GUIDE.md` UI Primitives
