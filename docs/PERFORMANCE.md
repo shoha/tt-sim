@@ -686,8 +686,12 @@ compile work once, in three phases, each arranged so the main thread never waits
 **Skip rules** (`GraphicsWarmup.should_run_for`): `--warm-graphics` after `--` forces it.
 Otherwise it never runs headless, in the editor binary, or on the Compatibility renderer, and
 it runs when the key in `user://graphics_warmup.cfg` differs from `GraphicsWarmup.cache_key()`.
-The key hashes the engine version, the rendering method, the GPU and its driver, and the
-source of every covered shader and every file it includes. A new shader must be listed as
+The key hashes the engine version, the rendering method, the OS version, the GPU and (on
+Windows and Linux) its driver, and the source of every covered shader and every file it
+includes. On macOS Godot reports no driver information; the Metal compiler and its caches
+belong to the OS, so the OS version stands in for the driver there, and a macOS update re-runs
+the warm-up. On Windows and Linux an OS update also re-runs it, one extra warm-up that costs
+time only. A new shader must be listed as
 covered or excluded (AGENTS.md "Adding Features", **New shader**; a test enforces it).
 
 ### Measured (Apple M1 Max, macOS 26, Godot 4.7.2, Metal 4.0, Forward Mobile)

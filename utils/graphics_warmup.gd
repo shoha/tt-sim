@@ -9,8 +9,10 @@ extends RefCounted
 ## enough for macOS to mark the app "Not Responding". The warm-up does that work once, before
 ## the title screen, without blocking the main thread (see the screen's phases), and records
 ## a key so it runs again only when something that invalidates the caches changes: the engine
-## version, the rendering method, the GPU or its driver, or the code of a covered shader or
-## any file it includes. docs/PERFORMANCE.md "First-launch graphics warm-up" has the numbers.
+## version, the rendering method, the OS version, the GPU or (on Windows and Linux) its driver,
+## or the code of a covered shader or any file it includes. On macOS the Metal compiler belongs
+## to the OS and Godot reports no driver, so the OS version stands in for it.
+## docs/PERFORMANCE.md "First-launch graphics warm-up" has the numbers.
 ##
 ## Every .gdshader under shaders/ is in exactly one of COVERED_SHADERS and EXCLUDED_SHADERS
 ## (a test checks). A new shader goes in one of them; see AGENTS.md "Adding Features".
@@ -107,7 +109,9 @@ static func key_inputs() -> Dictionary:
 		"adapter": RenderingServer.get_video_adapter_name(),
 		"vendor": RenderingServer.get_video_adapter_vendor(),
 		"api": RenderingServer.get_video_adapter_api_version(),
+		# Empty on macOS, where the OS version stands in for the Metal compiler's.
 		"driver": ",".join(OS.get_video_adapter_driver_info()),
+		"os": OS.get_name() + " " + OS.get_version(),
 		"shaders": "\n".join(shader_sources()),
 	}
 
