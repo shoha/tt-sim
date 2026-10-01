@@ -13,6 +13,7 @@ const BASE_INPUTS := {
 	"vendor": "Apple",
 	"api": "1.2",
 	"driver": "",
+	"os": "macOS 26.0.0",
 	"shaders": "res://a.gdshader\ncode",
 }
 
@@ -43,6 +44,23 @@ func test_the_cache_key_is_stable_and_every_input_changes_it() -> void:
 		var changed := BASE_INPUTS.duplicate()
 		changed[name] = str(changed[name]) + "x"
 		assert_ne(GraphicsWarmup.cache_key_for(changed), key, "%s is in the key" % name)
+
+
+## The driver info is empty on macOS, where the Metal compiler and its caches belong to the
+## OS, so an OS update has to change the key on its own.
+func test_the_real_key_inputs_include_the_os_version() -> void:
+	var inputs := GraphicsWarmup.key_inputs()
+	assert_eq(inputs.keys().size(), BASE_INPUTS.keys().size(), "BASE_INPUTS mirrors key_inputs()")
+	for name in BASE_INPUTS:
+		assert_true(inputs.has(name), "key_inputs() has %s" % name)
+	assert_eq(inputs.get("os"), OS.get_name() + " " + OS.get_version())
+	var updated := BASE_INPUTS.duplicate()
+	updated["os"] = "macOS 26.1.0"
+	assert_ne(
+		GraphicsWarmup.cache_key_for(updated),
+		GraphicsWarmup.cache_key_for(BASE_INPUTS),
+		"an OS update re-warms"
+	)
 
 
 func test_the_key_does_not_depend_on_input_order() -> void:
