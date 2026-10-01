@@ -23,7 +23,7 @@ signal finished
 enum Phase { COMPILE, BUILD, DRAW, DONE }
 
 const TITLE := "Preparing graphics"
-const STATUS := "First launch only. This takes a few seconds."
+const STATUS := "Preparing graphics for this version. This can take a few seconds."
 ## Progress share of COMPILE, BUILD and DRAW.
 const PHASE_WEIGHTS: Array[float] = [0.2, 0.7, 0.1]
 ## The part of BUILD's share given to collecting the samples (one step per source); the rest
