@@ -31,6 +31,21 @@ func test_a_headless_run_never_warms() -> void:
 	assert_null(scatter.get_node_or_null("PipelineWarmer"), "no warm-up child in tests")
 
 
+## A minimized window processes frames but draws none, like a headless run: a tracked node
+## stays until FRAMES frames are drawn, so the warm-up cannot finish without drawing.
+func test_a_node_waits_for_drawn_frames_not_processed_ones() -> void:
+	var warmer := PipelineWarmer.new()
+	add_child_autofree(warmer)
+	var node := Node3D.new()
+	warmer.add_child(node)
+	var drawn := Engine.get_frames_drawn()
+	warmer.call("_track", node)
+	await wait_process_frames(PipelineWarmer.FRAMES + 2)
+	assert_eq(Engine.get_frames_drawn(), drawn, "headless draws nothing")
+	assert_eq(warmer.pending_count(), 1, "still pending")
+	assert_true(is_instance_valid(node), "not freed")
+
+
 func test_a_headless_run_never_warms_a_plain_mesh() -> void:
 	var warmer := PipelineWarmer.new()
 	add_child_autofree(warmer)
