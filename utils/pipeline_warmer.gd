@@ -12,7 +12,7 @@ extends Node3D
 ## A warm-up node is a real scatter chunk node (ScatterGlbUtils.build_chunk, so the same
 ## shadow and cull settings as the nodes it stands in for) holding one instance a thousandth
 ## of its size just under the ground at the view centre: inside the frustum and the shadow
-## cascades, so every pass draws it, but covering no pixel. It lives FRAMES frames. It
+## cascades, so every pass draws it, but covering no pixel. It lives FRAMES drawn frames. It
 ## carries no wind_foliage_category meta, so the density budget and the occlusion fade never
 ## see it.
 
@@ -22,7 +22,8 @@ const SCALE := 0.001
 const SINK_M := 0.05
 const NAME_SUFFIX := "_PipelineWarm"
 
-## {"node": MultiMeshInstance3D, "frames": int} for each warm-up node still being drawn.
+## {"node": MultiMeshInstance3D or MeshInstance3D, "until": int} for each warm-up node still
+## being drawn; it goes once Engine.get_frames_drawn() reaches "until".
 var _pending: Array[Dictionary] = []
 
 
@@ -85,8 +86,10 @@ func _warm_transform() -> Transform3D:
 	return Transform3D(Basis.from_scale(Vector3.ONE * SCALE), to_local(at) + Vector3.DOWN * SINK_M)
 
 
+## Counts frames the engine drew, not frames processed: with no window able to draw
+## (minimized) the engine processes but skips drawing, and a node freed then warmed nothing.
 func _track(node: Node) -> void:
-	_pending.append({"node": node, "frames": FRAMES})
+	_pending.append({"node": node, "until": Engine.get_frames_drawn() + FRAMES})
 	set_process(true)
 
 
@@ -96,10 +99,10 @@ func pending_count() -> int:
 
 
 func _process(_delta: float) -> void:
+	var drawn := Engine.get_frames_drawn()
 	for i in range(_pending.size() - 1, -1, -1):
 		var entry: Dictionary = _pending[i]
-		entry.frames -= 1
-		if entry.frames <= 0:
+		if drawn >= entry.until:
 			var node: Node = entry.node
 			if is_instance_valid(node):
 				node.free()
