@@ -83,6 +83,11 @@ func _exit_tree() -> void:
 		_mutex.lock()
 		_cancel = true
 		_mutex.unlock()
+		# The worker's RenderingServer calls wait for the main thread to flush them, so a bare
+		# wait_to_finish() deadlocked a quit during BUILD. Keep flushing until it returns.
+		while _thread.is_alive():
+			RenderingServer.force_sync()
+			OS.delay_msec(1)
 		_thread.wait_to_finish()
 		_thread = null
 	_free_meshes()
