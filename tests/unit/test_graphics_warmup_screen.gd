@@ -15,7 +15,7 @@ func after_each() -> void:
 
 func _screen(source: Callable) -> GraphicsWarmupScreen:
 	var screen: GraphicsWarmupScreen = SCENE.instantiate()
-	screen.sample_source = source
+	screen.sample_sources = [source]
 	screen.marker_path = MARKER
 	screen.shader_paths = ["res://shaders/water.gdshader"]
 	return screen
@@ -104,3 +104,40 @@ func test_progress_is_weighted_by_phase() -> void:
 	)
 	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.DRAW, 0, 1), 0.9, 1e-6)
 	assert_eq(GraphicsWarmupScreen.progress_for(PHASE.DONE, 0, 0), 1.0)
+
+
+func test_build_progress_moves_during_collection_and_never_steps_back() -> void:
+	const PHASE := GraphicsWarmupScreen.Phase
+	# [collected, sources, built, total], in the order the worker reaches them.
+	var steps := [[0, 3, 0, 0], [1, 3, 0, 0], [2, 3, 0, 0], [3, 3, 0, 0], [3, 3, 0, 4]]
+	steps.append_array([[3, 3, 1, 4], [3, 3, 4, 4]])
+	var last := GraphicsWarmupScreen.progress_for(PHASE.COMPILE, 1, 1)
+	for step in steps:
+		var now := GraphicsWarmupScreen.build_progress(step[0], step[1], step[2], step[3])
+		assert_true(now >= last, "%s does not step back (%f after %f)" % [step, now, last])
+		last = now
+	assert_gt(
+		GraphicsWarmupScreen.build_progress(1, 3, 0, 0),
+		GraphicsWarmupScreen.build_progress(0, 3, 0, 0),
+		"a collected source moves the bar"
+	)
+	assert_almost_eq(last, GraphicsWarmupScreen.progress_for(PHASE.DRAW, 0, 1), 1e-6, "meets DRAW")
+
+
+func test_the_bar_moves_while_a_later_source_is_still_collecting() -> void:
+	var gate := Semaphore.new()
+	# Bounded, so a failing test cannot leave the worker blocked.
+	var held := func() -> Array:
+		var deadline := Time.get_ticks_msec() + 5000
+		while not gate.try_wait() and Time.get_ticks_msec() < deadline:
+			OS.delay_msec(5)
+		return []
+	var screen := _screen(func() -> Array: return [])
+	screen.sample_sources.append(held)
+	add_child_autofree(screen)
+	var start := GraphicsWarmupScreen.build_progress(0, 2, 0, 0)
+	await wait_until(func() -> bool: return screen.progress() > start, 5.0, "moves")
+	assert_eq(screen.phase, GraphicsWarmupScreen.Phase.BUILD, "still collecting")
+	assert_almost_eq(screen.progress(), GraphicsWarmupScreen.build_progress(1, 2, 0, 0), 1e-6)
+	gate.post()
+	await wait_until(_done(screen), 10.0, "reaches DONE")
