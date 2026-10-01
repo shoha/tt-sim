@@ -130,15 +130,20 @@ static func cache_key() -> String:
 	return cache_key_for(key_inputs())
 
 
-## Whether to warm, from {"display", "editor", "method", "forced", "marker_key", "key"}.
-## Headless runs draw nothing, the editor binary is a developer's machine, and the
-## compatibility renderer has no pipeline caches to warm. Pure.
+## Whether to warm, from {"display", "editor", "method", "forced", "marker_key", "key"};
+## "marker_key" and "key" are read only when neither forced nor skipped_for(). Pure.
 static func should_run_for(inputs: Dictionary) -> bool:
 	if inputs.forced:
 		return true
-	if inputs.display == "headless" or inputs.editor or inputs.method == "gl_compatibility":
+	if skipped_for(inputs):
 		return false
 	return inputs.marker_key != inputs.key
+
+
+## Headless runs draw nothing, the editor binary is a developer's machine, and the
+## compatibility renderer has no pipeline caches to warm. Pure.
+static func skipped_for(inputs: Dictionary) -> bool:
+	return inputs.display == "headless" or inputs.editor or inputs.method == "gl_compatibility"
 
 
 static func should_run() -> bool:
@@ -147,9 +152,12 @@ static func should_run() -> bool:
 		"editor": OS.has_feature("editor"),
 		"method": RenderingServer.get_current_rendering_method(),
 		"forced": OS.get_cmdline_user_args().has(FORCE_ARG),
-		"marker_key": read_marker(),
-		"key": cache_key(),
 	}
+	# The key loads and hashes every covered shader and include: only pay for it when the
+	# marker decides.
+	if not inputs.forced and not skipped_for(inputs):
+		inputs["marker_key"] = read_marker()
+		inputs["key"] = cache_key()
 	return should_run_for(inputs)
 
 
