@@ -55,6 +55,14 @@ static func hold(shader: Shader) -> void:
 		_held.append(shader)
 
 
+## Whether `shader`'s get_rid() belongs on the warm-up's worker rather than the main thread.
+## A texture_blit shader compiles synchronously on the thread that asks (spatial and
+## canvas_item ones start on the WorkerThreadPool): texel_copy_blit cost a 480-490 ms main
+## frame cold on an M1 Max, and 700-750 ms on the worker with no main frame over 30 ms.
+static func compiles_on_worker(shader: Shader) -> bool:
+	return shader.get_mode() == Shader.MODE_TEXTURE_BLIT
+
+
 ## "path\ncode" for each of `paths` and every file they include, transitively, each once,
 ## sorted. `read` maps a res path to its source text. Pure given `read`.
 static func shader_sources_for(paths: Array, read: Callable) -> PackedStringArray:

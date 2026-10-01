@@ -158,6 +158,12 @@ func test_every_project_shader_is_covered_or_excluded() -> void:
 		)
 
 
+func test_only_texture_blit_shaders_compile_on_the_worker() -> void:
+	assert_true(GraphicsWarmup.compiles_on_worker(load("res://shaders/texel_copy_blit.gdshader")))
+	assert_false(GraphicsWarmup.compiles_on_worker(load("res://shaders/water.gdshader")))
+	assert_false(GraphicsWarmup.compiles_on_worker(load("res://shaders/lofi_canvas.gdshader")))
+
+
 func test_format_flags_keep_only_the_flag_bits() -> void:
 	var format := (
 		Mesh.ARRAY_FORMAT_VERTEX

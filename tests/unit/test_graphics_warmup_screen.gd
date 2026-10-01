@@ -68,6 +68,15 @@ func test_a_sample_without_geometry_is_skipped_with_a_warning() -> void:
 	assert_eq(GraphicsWarmup.read_marker(MARKER), GraphicsWarmup.cache_key(), "still marked")
 
 
+func test_texture_blit_shaders_are_compiled_by_the_worker() -> void:
+	var blit := "res://shaders/texel_copy_blit.gdshader"
+	var screen := _screen(func() -> Array: return [])
+	screen.shader_paths = ["res://shaders/water.gdshader", blit]
+	add_child_autofree(screen)
+	await wait_until(_done(screen), 10.0, "reaches DONE")
+	assert_eq(screen.worker_shader_paths(), PackedStringArray([blit]))
+
+
 func test_freed_mid_build_joins_and_writes_no_marker() -> void:
 	var slow := func() -> Array:
 		OS.delay_msec(500)
