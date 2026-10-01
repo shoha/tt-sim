@@ -133,6 +133,7 @@ func progress() -> float:
 
 ## The names of the samples the worker built, in order. Valid once BUILD is over.
 func built_names() -> PackedStringArray:
+	assert(phase >= Phase.DRAW, "GraphicsWarmupScreen: built_names() before BUILD is over")
 	var names := PackedStringArray()
 	for sample in _results:
 		names.append(String(sample.name))
