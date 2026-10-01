@@ -656,6 +656,113 @@ touching the user's system), so a first-ever run on a clean machine is slower th
 "caches disabled" row; the earlier ~550 ms report was not reproduced. The alpine stroke's
 remaining 36-44 ms frames are species resolution and cell rebuilds, not pipelines.
 
+## First-launch graphics warm-up (2026-09-29)
+
+On a cold shader and pipeline cache (first launch, a new engine, a GPU driver update), a
+map's first load compiled the wind, ground and water shaders and their pipelines on the main
+thread: single frames of 3.45 s and 4.3 s on Metal, long enough for macOS to mark the window
+"Not Responding". Remeasured here (no warm-up, all caches cleared, forest map): 4635.1 and
+4574.1 ms worst frame.
+
+The fix is a "Preparing graphics" screen before the title screen (`GraphicsWarmupScreen`,
+`Root.State.WARMING_UP`; policy and helpers in `utils/graphics_warmup.gd`). It does the
+compile work once, in three phases, each arranged so the main thread never waits on it:
+
+- **COMPILE**: one covered shader per frame, `load()` plus `get_rid()`. Spatial and
+  canvas_item shaders start their compile on the WorkerThreadPool; starting all of them in
+  one frame cost a 510 ms frame, so it is one per frame. A `texture_blit` shader
+  (`texel_copy_blit`) compiles synchronously on whichever thread asks: 475-490 ms of main
+  thread in every run, so COMPILE only loads it and the BUILD worker compiles it
+  (`GraphicsWarmup.compiles_on_worker`).
+- **BUILD**: one `Thread` collects the samples (terrain, water and foliage representatives,
+  from the real builders: asset loads and material builds included) and creates a
+  RenderingServer mesh for each. `mesh_create_from_surfaces` waits for the mesh's pipelines on
+  the calling thread, so those waits happen on the worker.
+- **DRAW**: each built sample drawn for a frame, invisibly, in a SubViewport set up like the
+  game world (camera, light, environment, MSAA, debanding), through `PipelineWarmer`, which
+  covers the draw-time variants. A pipeline is keyed by the framebuffer format as well as the
+  shader and vertex layout, hence the matching setup.
+
+**Skip rules** (`GraphicsWarmup.should_run_for`): `--warm-graphics` after `--` forces it.
+Otherwise it never runs headless, in the editor binary, or on the Compatibility renderer, and
+it runs when the key in `user://graphics_warmup.cfg` differs from `GraphicsWarmup.cache_key()`.
+The key hashes the engine version, the rendering method, the GPU and its driver, and the
+source of every covered shader and every file it includes. A new shader must be listed as
+covered or excluded (AGENTS.md "Adding Features", **New shader**; a test enforces it).
+
+### Measured (Apple M1 Max, macOS 26, Godot 4.7.2, Metal 4.0, Forward Mobile)
+
+Windowed at 1280x720, vsync on, all caches cleared before each cold run: `user://shader_cache`
+plus `com.apple.metal`, `com.apple.metalfe` and `com.apple.gpuarchiver` under
+`$(getconf DARWIN_USER_CACHE_DIR)org.godotengine.godot`. The map loads ran through the
+render-job harness (`tools/render_jobs/run.gd`) with `--warm-graphics`. The user was using the
+machine (video playback) for the runs labelled "in use". The runs labelled "idle" were taken
+in one window with the machine left alone. Every number is a worst frame (ms) per run. The
+budgets were 250 ms per warm-up phase and 600 ms per map load.
+
+| What | Before the fixes | After | Machine |
+| --- | --- | --- | --- |
+| COMPILE, harness | 487, 480, 489, 479 | 18, 19, 27, 24, 23, 28 | in use |
+| COMPILE, harness | | 15, 25, 14, 15, 33, 19, 14, 15, 22 | idle |
+| BUILD, harness | 214, 305, 565, 400 | 492, 308, 94 | in use |
+| BUILD, harness | | 160, 456, 412, 342, 212, 45 | idle |
+| BUILD, harness with its window resize disabled | | 39, 41, 41 / 40, 39, 40 | in use / idle |
+| BUILD, plain launch (no harness) | | 18, 18, 19 / 9, 16, 10 | in use / idle |
+| DRAW, harness | 22, 22, 24, 24 | 21-27 (n=18) | both |
+| load_bare after the warm-up | 560.4, 839.0, 577.2 | 706.8, 693.2, 739.3, 690.9, 784.8, 677.1 | in use |
+| load_bare after the warm-up | | 708.5, 706.8, 674.7 | idle |
+| load_forest after the warm-up | 724.4 | 768.5, 892.7, 505.0, 898.8, 725.1, 904.5, 800.6 | idle |
+| load_forest, no warm-up (cold) | | 4635.1, 4574.1 | idle |
+| load_bare, warm caches | 422.0 | 418.6, 422.1, 419.8 | idle |
+| load_forest, warm caches | | 419.4, 419.3, 416.4 | idle |
+
+The whole warm-up takes 9.7-10.9 s through the harness (n=18; BUILD is almost all of it) and
+9.2-12.1 s in a plain launch (n=8).
+
+What the rows mean:
+
+- **COMPILE** met its budget once `texel_copy_blit` moved to the worker. The worker then spent
+  700-750 ms on that shader with no main frame over 30 ms.
+- **BUILD**'s spike was the harness, not the warm-up. It came right after `RJ| started`, every
+  time, which is when `run.gd` resizes the window to 1920x1080 and repositions it, and BUILD
+  happens to be running at that moment. With those three lines disabled, BUILD is 39-41 ms; with
+  no harness, 9-19 ms. Nothing was changed for it.
+- **Quitting during BUILD hung for good** (found while measuring: still alive 60 s after
+  `--quit-after`, with the main thread in `pthread_join` and the worker waiting on the
+  RenderingServer). The worker's RenderingServer calls wait for the main thread to flush them,
+  so `_exit_tree` now calls `RenderingServer.force_sync()` until the thread is done. Such a
+  quit now exits, but it still waits for the sample collection in progress (17 s wall clock
+  for the whole run in the one measured case).
+- **DRAW** never came near its budget, so the planned mitigation for it was not needed.
+- **A plain launch's first window frame** is 666-1588 ms in use and 888-1317 ms idle, and it
+  lands in COMPILE. The pipeline monitors show 2 canvas and 2 mesh compilations in that frame.
+  With the warm-up's 3D viewport disabled it is still 716 and 757 ms (in use). So this is the
+  cost of the first frame on a cold Metal cache (driver blit and program compiles), not
+  warm-up work, and it would land in the first frame without the warm-up too. The harness
+  hides it because the frame comes before tracking starts. It is over the 250 ms budget, and
+  nothing in the warm-up can move it.
+- **Map loads after the warm-up miss the 600 ms budget**: 675-785 ms bare and 505-905 ms
+  forest, against 4.6 s without the warm-up and a ~420 ms floor with warm caches (that floor is
+  the load itself, not compiles). Two parts of the 250-480 ms gap are attributed. First, the
+  weather: `WeatherRenderer` builds rain, snow and wind `GPUParticles3D` on every map load,
+  and none of their shaders is warmed. With weather disabled, cold-after-warm-up load_forest is
+  566.6, 681.8, 683.7, 769.8 ms (warm 408.8, 410.6), and the load adds 3
+  `ParticlesShaderRD` entries to `user://shader_cache`. Second, two `SceneForwardMobileShaderRD`
+  entries appear even without weather. They are not identified yet (the cache files are
+  binary). The rest is spread over the load's first frames: frame 2 is 682 ms cold against
+  228 ms warm with only +1 canvas and +2 surface pipelines, so on Metal some of the cost is
+  not counted by the pipeline monitors. Covering the weather would take samples from
+  `WeatherRenderer` and particle draws in DRAW. Not done.
+- **"7 RIDs of type Texture were leaked"** at exit comes from the harness's map-load runs, on
+  `main` as well as on this branch, with the warm-up or without it. It is not from the
+  warm-up.
+
+Not measured: an exported build (no export templates installed locally; the skip rules differ
+there, since the editor rule no longer applies), Windows and Linux. The relaunch check
+(`load_bare` 422.0 ms with the caches kept, no `GraphicsWarmup:` lines) proves the editor-binary
+skip only. The marker skip is covered by `test_graphics_warmup.gd` and has not been seen in a
+real launch.
+
 ## Mobile renderer hang (2026-09-26): one occurrence, not reproduced
 
 macOS runs the Mobile renderer (`rendering_method.macos="mobile"`), so a load that hangs
