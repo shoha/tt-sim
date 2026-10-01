@@ -5,9 +5,12 @@ extends Node
 ## the why). Each phase keeps the main thread's frames short, so the window stays responsive:
 ##   COMPILE  one covered shader per frame: load, hold, get_rid(), which starts its compile on
 ##            the WorkerThreadPool (starting all of them in one frame cost a 510 ms frame).
-##   BUILD    one Thread collects the samples (asset loads and material builds included) and
-##            creates a RenderingServer mesh for each; mesh_create_from_surfaces waits for the
-##            mesh's pipelines on the calling thread, so the compile waits happen there.
+##            Shaders that compile on the calling thread instead (GraphicsWarmup.
+##            compiles_on_worker) are only loaded here and left to BUILD's worker.
+##   BUILD    one Thread compiles those, collects the samples (asset loads and material builds
+##            included) and creates a RenderingServer mesh for each; mesh_create_from_surfaces
+##            waits for the mesh's pipelines on the calling thread, so the compile waits happen
+##            there.
 ##   DRAW     each built sample drawn invisibly in %WarmupViewport through PipelineWarmer (the
 ##            draw-time variants), until none is pending. Nothing draws headless.
 ## Then it writes the marker, frees the meshes and emits `finished`. %WarmupViewport is set up
@@ -32,6 +35,8 @@ var phase: Phase = Phase.COMPILE
 
 var _environment := LevelEnvironmentManager.new()
 var _next_shader := 0
+## Filled by COMPILE before the worker starts; the worker only reads it.
+var _worker_shaders: Array[Shader] = []
 var _thread: Thread = null
 var _mutex := Mutex.new()
 ## Shared with the worker; read and written under _mutex.
@@ -104,6 +109,14 @@ func built_names() -> PackedStringArray:
 	return names
 
 
+## The paths of the shaders COMPILE left to the worker.
+func worker_shader_paths() -> PackedStringArray:
+	var paths := PackedStringArray()
+	for shader in _worker_shaders:
+		paths.append(shader.resource_path)
+	return paths
+
+
 func _process(_delta: float) -> void:
 	_track_frame()
 	match phase:
@@ -115,7 +128,10 @@ func _process(_delta: float) -> void:
 					"GraphicsWarmupScreen: no shader at %s" % shader_paths[_next_shader]
 				)
 				GraphicsWarmup.hold(shader)
-				shader.get_rid()
+				if GraphicsWarmup.compiles_on_worker(shader):
+					_worker_shaders.append(shader)
+				else:
+					shader.get_rid()
 				_next_shader += 1
 			else:
 				_start_build()
@@ -143,6 +159,8 @@ func _start_build() -> void:
 
 ## Worker thread.
 func _build() -> void:
+	for shader in _worker_shaders:
+		shader.get_rid()
 	var samples: Array = sample_source.call()
 	_mutex.lock()
 	_total = samples.size()
