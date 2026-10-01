@@ -68,7 +68,7 @@ func test_a_sample_without_geometry_is_skipped_with_a_warning() -> void:
 	assert_eq(GraphicsWarmup.read_marker(MARKER), GraphicsWarmup.cache_key(), "still marked")
 
 
-func test_texture_blit_shaders_are_compiled_by_the_worker() -> void:
+func test_texture_blit_shaders_are_queued_for_the_worker() -> void:
 	var blit := "res://shaders/texel_copy_blit.gdshader"
 	var screen := _screen(func() -> Array: return [])
 	screen.shader_paths = ["res://shaders/water.gdshader", blit]
