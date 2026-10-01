@@ -692,37 +692,68 @@ covered or excluded (AGENTS.md "Adding Features", **New shader**; a test enforce
 
 ### Measured (Apple M1 Max, macOS 26, Godot 4.7.2, Metal 4.0, Forward Mobile)
 
-Windowed at 1280x720, vsync on, all caches cleared before each cold run: `user://shader_cache`
-plus `com.apple.metal`, `com.apple.metalfe` and `com.apple.gpuarchiver` under
-`$(getconf DARWIN_USER_CACHE_DIR)org.godotengine.godot`. The map loads ran through the
-render-job harness (`tools/render_jobs/run.gd`) with `--warm-graphics`. The user was using the
-machine (video playback) for the runs labelled "in use". The runs labelled "idle" were taken
-in one window with the machine left alone. Every number is a worst frame (ms) per run. The
-budgets were 250 ms per warm-up phase and 600 ms per map load.
+Vsync on, all caches cleared before each cold run: `user://shader_cache` plus
+`com.apple.metal`, `com.apple.metalfe` and `com.apple.gpuarchiver` under
+`$(getconf DARWIN_USER_CACHE_DIR)org.godotengine.godot`. Every launch opened a 1280x720 window.
+Plain launches stay at that size. The render-job harness (`tools/render_jobs/run.gd`, run with
+`--warm-graphics`) resizes the window to 1920x1080 at `RJ| started`, during BUILD. So in harness
+runs, COMPILE ran at 1280x720, and DRAW and every map load ran at 1920x1080.
 
-| What | Before the fixes | After | Machine |
-| --- | --- | --- | --- |
-| COMPILE, harness | 487, 480, 489, 479 | 18, 19, 27, 24, 23, 28 | in use |
-| COMPILE, harness | | 15, 25, 14, 15, 33, 19, 14, 15, 22 | idle |
-| BUILD, harness | 214, 305, 565, 400 | 492, 308, 94 | in use |
-| BUILD, harness | | 160, 456, 412, 342, 212, 45 | idle |
-| BUILD, harness with its window resize disabled | | 39, 41, 41 / 40, 39, 40 | in use / idle |
-| BUILD, plain launch (no harness) | | 18, 18, 19 / 9, 16, 10 | in use / idle |
-| DRAW, harness | 22, 22, 24, 24 | 21-27 (n=18) | both |
-| load_bare after the warm-up | 560.4, 839.0, 577.2 | 706.8, 693.2, 739.3, 690.9, 784.8, 677.1 | in use |
-| load_bare after the warm-up | | 708.5, 706.8, 674.7 | idle |
-| load_forest after the warm-up | 724.4 | 768.5, 892.7, 505.0, 898.8, 725.1, 904.5, 800.6 | idle |
-| load_forest, no warm-up (cold) | | 4635.1, 4574.1 | idle |
-| load_bare, warm caches | 422.0 | 418.6, 422.1, 419.8 | idle |
-| load_forest, warm caches | | 419.4, 419.3, 416.4 | idle |
+Machine state, all on 2026-09-30 EDT. "In use" means the user was using the machine (video
+playback); those runs were taken before 20:30. "Idle" means it was left alone: 20:30-20:46 and
+21:10-21:11. "Unrecorded" marks the first runs (19:53-19:57), whose state was not noted and
+which are treated as in use. "Instrumented" marks runs with temporary per-frame prints and
+timers in the screen (since reverted); they are diagnostics, not budget measurements. Every
+number is a worst frame (ms) per run. The budgets were 250 ms per warm-up phase and 600 ms per
+map load.
+
+| What | Worst frames (ms) | Machine |
+| --- | --- | --- |
+| COMPILE, harness, before the fix | 487, 480; instrumented 489, 479 | unrecorded |
+| COMPILE, harness | 18, 19, 27, 24, 23, 28 | in use |
+| COMPILE, harness | 15, 25, 14, 15, 33, 19, 14, 15, 22, 18, 13, 13 (last 3 with weather disabled) | idle |
+| COMPILE, plain launch (no harness) | 1588, 666, 1257 | in use |
+| COMPILE, plain launch (no harness) | 888, 942, 1317, 748, 937 | idle |
+| First frame, plain launch, warm-up skipped (not forced, editor binary) | 828.4, 808.8 | idle |
+| First frame, same timer, warm-up forced | 785.1 | idle |
+| BUILD, harness, before | 214, 305; instrumented 565, 400 | unrecorded |
+| BUILD, harness | 492, 308, 94 | in use |
+| BUILD, harness | 160, 456, 412, 342, 212, 45 | idle |
+| BUILD, harness, window resize disabled | 39, 41, 41 | in use |
+| BUILD, harness, window resize disabled | 40, 39, 40 | idle |
+| BUILD, plain launch (no harness) | 18, 18, 19 | in use |
+| BUILD, plain launch (no harness) | 9, 16, 10, 11, 28 | idle |
+| DRAW, harness, before | 22, 22; instrumented 24, 24 | unrecorded |
+| DRAW, harness | 21-27 (n=18) | in use and idle |
+| load_bare after the warm-up, before | 560.4; instrumented 839.0, 577.2 | unrecorded |
+| load_bare after the warm-up | 706.8, 693.2, 739.3, 690.9, 784.8, 677.1 | in use |
+| load_bare after the warm-up | 708.5, 706.8, 674.7 | idle |
+| load_forest after the warm-up, before | 724.4 | unrecorded |
+| load_forest after the warm-up | 768.5, 892.7, 505.0, 898.8, 725.1, 904.5, 800.6 | idle |
+| load_forest after the warm-up, weather disabled | 566.6, 681.8, 683.7, 769.8 | idle |
+| load_forest, no warm-up (cold) | 4635.1, 4574.1 | idle |
+| load_bare, warm caches | 422.0 | unrecorded |
+| load_bare, warm caches | 418.6, 422.1, 419.8 | idle |
+| load_forest, warm caches | 419.4, 419.3, 416.4 | idle |
+| load_forest, warm caches, weather disabled | 408.8, 410.6 | idle |
+
+The "first frame" rows come from a scratch SceneTree script, not committed. It loads the main
+scene and times every main-loop frame from the first, so the title screen is up when the
+warm-up is skipped. Two load_forest runs (800.6, and weather-disabled 769.8) ran their warm-up
+in a separate plain launch before the harness load. All the others warmed in the same process.
+The 769.8 run's log does not record the weather flag. Its pipeline totals do: 21 surface and 0
+draw compiles, the same as both warm runs with weather disabled. Every run with weather on had
+2 draw compiles.
 
 The whole warm-up takes 9.7-10.9 s through the harness (n=18; BUILD is almost all of it) and
 9.2-12.1 s in a plain launch (n=8).
 
 What the rows mean:
 
-- **COMPILE** met its budget once `texel_copy_blit` moved to the worker. The worker then spent
-  700-750 ms on that shader with no main frame over 30 ms.
+- **COMPILE** met its budget **under the harness only**, once `texel_copy_blit` moved to the
+  worker. The worker then spent 700-750 ms on that shader with no main frame over 30 ms. Every
+  plain launch, which is what a player gets, misses 250 ms in COMPILE (666-1588 ms in use,
+  748-1317 ms idle). The cause is the cold first window frame (below), not shader work.
 - **BUILD**'s spike was the harness, not the warm-up. It came right after `RJ| started`, every
   time, which is when `run.gd` resizes the window to 1920x1080 and repositions it, and BUILD
   happens to be running at that moment. With those three lines disabled, BUILD is 39-41 ms; with
@@ -731,28 +762,41 @@ What the rows mean:
   `--quit-after`, with the main thread in `pthread_join` and the worker waiting on the
   RenderingServer). The worker's RenderingServer calls wait for the main thread to flush them,
   so `_exit_tree` now calls `RenderingServer.force_sync()` until the thread is done. Such a
-  quit now exits, but it still waits for the sample collection in progress (17 s wall clock
-  for the whole run in the one measured case).
+  quit now exits. The worker checks for the cancel after the texture_blit compile and between
+  samples, but not inside the sample collection itself. A quit in the middle of collecting
+  still waits for it to finish: 17 s wall clock for the whole run in the one measured case,
+  which was before the post-compile check was added.
 - **DRAW** never came near its budget, so the planned mitigation for it was not needed.
-- **A plain launch's first window frame** is 666-1588 ms in use and 888-1317 ms idle, and it
-  lands in COMPILE. The pipeline monitors show 2 canvas and 2 mesh compilations in that frame.
-  With the warm-up's 3D viewport disabled it is still 716 and 757 ms (in use). So this is the
-  cost of the first frame on a cold Metal cache (driver blit and program compiles), not
-  warm-up work, and it would land in the first frame without the warm-up too. The harness
-  hides it because the frame comes before tracking starts. It is over the 250 ms budget, and
-  nothing in the warm-up can move it.
+- **A plain launch's first window frame costs about 0.8 s on a cold cache, with or without the
+  warm-up.** With the warm-up skipped (editor binary, not forced) and every cache cleared,
+  frame 1 is 828.4 and 808.8 ms, while the title screen comes up. That frame compiles 1 canvas,
+  2 surface and 1 specialization pipeline. The same timer with the warm-up forced gives
+  785.1 ms (2 canvas). In a normal launch the warm-up screen's own tracker counts that frame as
+  COMPILE's worst (666-1588 ms in use, 748-1317 ms idle; 2 canvas and 2 mesh compiles). With
+  the warm-up's 3D viewport disabled it is still 716 and 757 ms (in use; the screen's 2D overlay
+  still drew). So the warm-up does not cause it. It is the first draw on a cold Metal cache,
+  and it is over 250 ms either way. It hides from the screen's tracker when a SceneTree
+  script drives the launch, as the harness and the scratch timer both do. In the forced
+  scratch run, the timer saw 785.1 ms in frame 1, but the tracker reported a COMPILE worst of
+  33 ms.
 - **Map loads after the warm-up miss the 600 ms budget**: 675-785 ms bare and 505-905 ms
   forest, against 4.6 s without the warm-up and a ~420 ms floor with warm caches (that floor is
-  the load itself, not compiles). Two parts of the 250-480 ms gap are attributed. First, the
+  the load itself, not compiles). Part of the gap above the floor is attributed. First, the
   weather: `WeatherRenderer` builds rain, snow and wind `GPUParticles3D` on every map load,
   and none of their shaders is warmed. With weather disabled, cold-after-warm-up load_forest is
-  566.6, 681.8, 683.7, 769.8 ms (warm 408.8, 410.6), and the load adds 3
+  566.6-769.8 ms, still over 600 in 3 of 4 runs (warm 408.8, 410.6), and the load adds 3
   `ParticlesShaderRD` entries to `user://shader_cache`. Second, two `SceneForwardMobileShaderRD`
   entries appear even without weather. They are not identified yet (the cache files are
   binary). The rest is spread over the load's first frames: frame 2 is 682 ms cold against
   228 ms warm with only +1 canvas and +2 surface pipelines, so on Metal some of the cost is
-  not counted by the pipeline monitors. Covering the weather would take samples from
-  `WeatherRenderer` and particle draws in DRAW. Not done.
+  not counted by the pipeline monitors. The screen script alone could have warmed the weather:
+  instance a `WeatherRenderer` in `%WarmupViewport` and drive it with `setup()` and
+  `apply_weather()` so it emits during DRAW. That was not tried, because weather alone does not
+  bring the load under budget. Closing the gap is the user's call.
+- **load_bare before and after the fixes are not an A/B.** The before values (560.4, 577.2,
+  plus 839.0 instrumented) and the after values (675-785) come from different sessions with
+  different instrumentation and machine load. The ranges overlap, and no in-run A/B was done,
+  so they show neither a regression nor an improvement.
 - **"7 RIDs of type Texture were leaked"** at exit comes from the harness's map-load runs, on
   `main` as well as on this branch, with the warm-up or without it. It is not from the
   warm-up.
