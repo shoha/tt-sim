@@ -14,6 +14,7 @@ This folder contains technical documentation for the project.
 | [SOUND_EFFECTS.md](SOUND_EFFECTS.md)                           | Audio files, wiring, normalization, adding sounds  |
 | [lighting-and-environment.md](lighting-and-environment.md)     | Environment presets, map defaults, sky, in-game editing |
 | [CONVENTIONS.md](CONVENTIONS.md)                               | RPC patterns, signal cleanup, token hierarchy, camera, settings |
+| [systems/](systems/README.md)                                  | One doc per system (water, waterfalls, crossings): map, model, runtime, authoring, verification |
 
 ## Quick Start
 

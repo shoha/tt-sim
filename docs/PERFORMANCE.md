@@ -1633,7 +1633,7 @@ thread outside the frame: the authoring refresh's swap (mesh, concave shapes, zo
 ## Water tool: carve on a worker (2026-09-27, P4-4)
 
 Main-thread cost of a water edit, before and after moving its heavy, pure half onto a worker
-(`WaterEditor.compute()`; ARCHITECTURE.md "Carving water", "Worker carve"). Indicative
+(`WaterEditor.compute()`; `systems/water.md` Authoring, "Worker carve"). Indicative
 render-job numbers (1920x1080 window, vsync on, debug build, not the pinned procedure): the
 question is how long the view freezes, not a GPU delta.
 
