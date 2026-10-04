@@ -164,6 +164,79 @@ func test_curtain_covers_the_wetted_crest() -> void:
 	)
 
 
+func test_curtain_never_runs_out_along_a_shaved_bank() -> void:
+	# P4c-6: another river's ordinary bank cut (BANK_SLOPE over BANK_REACH_M) can shave the
+	# ground beside a fall's channel to a hair under the upper level; the curtain still stops
+	# at the channel's waterline instead of lying along that bank as a white sheet.
+	var doc := _tier_doc()
+	var fall: Dictionary = WaterFalls.falls(doc)[0]
+	var lip: Vector2 = fall.lip
+	var dir: Vector2 = fall.dir
+	var across := dir.orthogonal()
+	var hw: float = fall.half_width
+	var top: float = fall.top
+	var heights := doc.heights.duplicate()
+	var shaved := 0
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var p := doc.sample_to_world(Vector2(x, z))
+			var w := -(p - lip).dot(across)
+			var along := absf((p - lip).dot(dir))
+			if w > hw and w < hw + WaterGeometry.RIVER_BANK_M + 0.5 and along < 1.0:
+				var i := doc.sample_index(x, z)
+				if heights[i] >= top:
+					heights[i] = top - 0.01
+					shaved += 1
+	assert_gt(shaved, 0, "the left bank is shaved")
+	doc.heights = heights
+	var widths := WaterFallMesh.crest_widths(doc, lip, dir, hw, top)
+	assert_true(widths.x <= hw + 1e-6, "the left width stops at the waterline (%.2f)" % widths.x)
+	assert_true(widths.y <= hw + 1e-6, "the right width too (%.2f)" % widths.y)
+	var arrays: Array = _falls_of(doc).arrays
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	for i in _of_kind(arrays, WaterFallMesh.KIND_CURTAIN):
+		var p := vertices[i]
+		var w := absf((Vector2(p.x, p.z) - lip).dot(across))
+		assert_true(w <= hw + 1e-3, "no curtain vertex past the waterline (%.2f)" % w)
+
+
+func test_unreached_rows_stop_just_past_the_carved_foot() -> void:
+	# P4c-6: where the ground past the face never descends to the pool level (the lower course
+	# bends away from the lip's direction right after the fall), the rows the trace never
+	# reaches sit at most END_PAST_FOOT_M past the carved foot, not along the bank to the end
+	# of the plunge pool.
+	var doc := _tier_doc()
+	var fall: Dictionary = WaterFalls.falls(doc)[0]
+	var lip: Vector2 = fall.lip
+	var dir: Vector2 = fall.dir
+	var lower: WaterBody = doc.water_bodies[fall.lower_index]
+	var foot := WaterCarve.fall_foot(float(fall.top) - float(fall.bottom), lower.depth_m())
+	var heights := doc.heights.duplicate()
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var p := doc.sample_to_world(Vector2(x, z))
+			var along := (p - lip).dot(dir)
+			if (
+				along > foot * 0.5
+				and along < foot + 6.0
+				and absf((p - lip).dot(dir.orthogonal())) < 4.0
+			):
+				var i := doc.sample_index(x, z)
+				heights[i] = maxf(heights[i], float(fall.bottom) + 0.3)
+	doc.heights = heights
+	assert_eq(WaterFalls.falls(doc).size(), 1, "still a fall")
+	var arrays: Array = _falls_of(doc).arrays
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var furthest := 0.0
+	for i in _of_kind(arrays, WaterFallMesh.KIND_CURTAIN):
+		var p := vertices[i]
+		furthest = maxf(furthest, (Vector2(p.x, p.z) - lip).dot(dir))
+	assert_true(
+		furthest <= foot + WaterFallMesh.END_PAST_FOOT_M + 1e-3,
+		"the curtain stops at the foot (%.2f of %.2f m)" % [furthest, foot]
+	)
+
+
 func test_normals_face_outward_and_triangles_wind_clockwise_from_the_front() -> void:
 	var doc := _ramp_doc()
 	var falls := WaterFalls.falls(doc)
@@ -291,7 +364,11 @@ func test_mist_is_three_to_five_packed_billboards_inside_the_grown_bounds() -> v
 			var first := mist[q * 4]
 			var centre := vertices[first]
 			var half := absf(uv2s[first].x)
-			assert_between(half, WaterFallMesh.MIST_HALF_MIN_M, WaterFallMesh.MIST_HALF_MAX_M)
+			# Each puff is 0.75..1 of mist_half_size() (its own variation), so the floor is 0.75
+			# of the minimum.
+			assert_between(
+				half, WaterFallMesh.MIST_HALF_MIN_M * 0.75 - 1e-6, WaterFallMesh.MIST_HALF_MAX_M
+			)
 			largest = maxf(largest, half)
 			var seed_value := colors[first].b
 			for k in 4:
@@ -366,6 +443,42 @@ func test_mist_stands_at_the_pool_with_one_high_puff_at_the_lip() -> void:
 			assert_gt(along, foot * 0.25, "past the face's middle")
 	assert_eq(high, 1, "exactly one high puff")
 	assert_gt(low, 1, "the rest at the pool")
+
+
+func test_mist_puffs_are_never_wider_than_the_fall() -> void:
+	# P4c-6: on a narrow ankle stream the drop term made puffs wider than the stream, grey
+	# discs on the grass beside the notch; the half-size is capped by the wetted width.
+	assert_almost_eq(
+		WaterFallMesh.mist_half_size(3.5, 1.1), 0.55, 1e-6, "a 3.5 m ankle fall: half the width"
+	)
+	assert_almost_eq(
+		WaterFallMesh.mist_half_size(3.0, 3.0),
+		WaterFallMesh.MIST_HALF_BASE_M + WaterFallMesh.MIST_HALF_PER_WIDTH * 1.5 + 0.24,
+		1e-6,
+		"a waist fall is under its cap and unchanged"
+	)
+	assert_almost_eq(
+		WaterFallMesh.mist_half_size(4.0, 0.3),
+		WaterFallMesh.MIST_HALF_MIN_M,
+		1e-6,
+		"never under the minimum"
+	)
+	var doc := _ramp_doc()
+	var falls := WaterFalls.falls(doc)
+	var arrays: Array = _falls_of(doc).arrays
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var uv2s: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+	var mist := _of_kind(arrays, WaterFallMesh.KIND_MIST)
+	for q in mist.size() / 4:
+		var first := mist[q * 4]
+		var centre := vertices[first]
+		var half := absf(uv2s[first].x)
+		var nearest_hw := INF
+		for fall in falls:
+			var d := Vector2(centre.x, centre.z).distance_to(fall.lip)
+			if d < nearest_hw + 100.0 and d < 6.0:
+				nearest_hw = minf(nearest_hw, float(fall.half_width))
+		assert_true(half <= nearest_hw + 1e-3, "a puff no wider than its stream (%.2f)" % half)
 
 
 func test_no_fall_builds_nothing() -> void:

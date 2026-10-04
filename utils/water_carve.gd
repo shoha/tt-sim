@@ -427,9 +427,15 @@ static func joined_course(bodies: Array[WaterBody]) -> Dictionary:
 ## Goal heights of a river stroke's carve over `doc`'s sample grid, from ground `start`
 ## (the heights before the carve): {"rect": Rect2i of the samples reached, "goals":
 ## PackedFloat32Array over the rect, row-major, INF where the carve leaves the ground}.
-## `bodies` are the stroke's reaches (joined_course()), all of one depth class.
+## `bodies` are the stroke's reaches (joined_course()), all of one depth class. `flags` are
+## the steps' fall flags (bed_line()'s `falls`); empty, they are derived from the bodies
+## (WaterFalls.fall_flags), as every edit does. Explicit zero flags carve every step as a
+## riffle: the v0.1.29 carve, for fixtures of documents that build made.
 static func river_goals(
-	doc: MapDocument, bodies: Array[WaterBody], start: PackedFloat32Array
+	doc: MapDocument,
+	bodies: Array[WaterBody],
+	start: PackedFloat32Array,
+	flags: PackedByteArray = PackedByteArray()
 ) -> Dictionary:
 	if bodies.is_empty():
 		return {"rect": Rect2i(), "goals": PackedFloat32Array()}
@@ -493,7 +499,7 @@ static func river_goals(
 	var columns := doc.samples_x()
 	var bounds: PackedFloat32Array = joined.bounds
 	var levels: PackedFloat32Array = joined.levels
-	var falls := WaterFalls.fall_flags(bodies)
+	var falls := WaterFalls.fall_flags(bodies) if flags.is_empty() else flags
 	for j in rect.size.y:
 		for i in rect.size.x:
 			var k := j * rect.size.x + i

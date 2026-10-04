@@ -63,8 +63,9 @@ uniform float flow_strength : hint_range(0.0, 2.0) = 1.0;
 uniform float foam_strength : hint_range(0.0, 2.0) = 1.0;
 
 // ---- The falls' own -----------------------------------------------------------------------
-// Alpha of the glassy water between the streaks (the rock shows through it).
-uniform float glass_alpha : hint_range(0.0, 1.0) = 0.6;
+// Alpha of the glassy water between the streaks (the rock shows through it). 0.6 read as
+// an opaque sheet at zoom 8 with BASE_AIR 0.25 (the P4c-6 judgment set); 0.5 with 0.12.
+uniform float glass_alpha : hint_range(0.0, 1.0) = 0.5;
 // How much the streaks whiten the glass.
 uniform float streak_strength : hint_range(0.0, 1.0) = 0.8;
 // Peak alpha of a mist puff.
@@ -78,17 +79,19 @@ global uniform bool water_quality_skip_fine_detail;
 
 const float GRAVITY = 9.81;
 // The white roll over the brink: full at the lip, gone this far down (WaterFallMesh.LIP_ROLL_M
-// is where the geometry stops running level; the foam bleeds a little past it).
-const float LIP_ROLL_M = 0.6;
+// is where the geometry stops running level; the foam bleeds a little past it). 0.6 read as
+// a solid white cap a fifth of a tier fall high in every biome of the P4c-6 judgment set.
+const float LIP_ROLL_M = 0.4;
 // The lowest share of the drop whitens toward the pool.
-const float BOTTOM_WHITE_SHARE = 0.35;
+const float BOTTOM_WHITE_SHARE = 0.3;
 // The curtain's alpha fades to 0 over this much above the pool level.
 const float BOTTOM_FADE_M = 0.1;
 // A falling sheet is white water more than glass: the aeration everywhere, plus the air
-// entrained on the way down, growing over this many metres of fall.
-const float BASE_AIR = 0.25;
+// entrained on the way down, growing over this many metres of fall. (0.25 and 0.3 left no
+// glass at all at tabletop zoom, P4c-6.)
+const float BASE_AIR = 0.12;
 const float ENTRAIN_M = 2.5;
-const float ENTRAIN_MAX = 0.3;
+const float ENTRAIN_MAX = 0.22;
 // The glass between the streaks: the shore and water tints lifted this far toward the foam.
 const float GLASS_LIFT = 0.3;
 // Streak noise frequencies: across the curtain (per metre) and along the fall (per second

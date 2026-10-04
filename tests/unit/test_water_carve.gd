@@ -607,6 +607,45 @@ func test_a_tier_crossing_changes_the_face_only_in_the_notch() -> void:
 		)
 
 
+func test_explicit_zero_flags_carve_the_v0_1_29_riffle_over_a_tier() -> void:
+	# river_goals with explicit zero flags is the v0.1.29 carve (every step a riffle), used to
+	# build fixtures of documents that build made: over a tier the riffle's goal sits above
+	# the face, so the face is left standing and no notch or plunge pool is cut, where the
+	# derived flags cut the notch (test_a_tier_crossing_changes_the_face_only_in_the_notch).
+	Fixtures.tier_band(_doc)
+	var before := _doc.heights.duplicate()
+	var bodies := WaterEdit.plan_river(
+		_doc,
+		PackedVector2Array([Vector2(0, -12), Vector2(0, 12)]),
+		PackedFloat32Array([1.0, 1.0]),
+		WaterBody.Depth.WAIST
+	)
+	var zeros := PackedByteArray()
+	zeros.resize(bodies.size() - 1)
+	Fixtures.carve(_doc, WaterCarve.river_goals(_doc, bodies, before, zeros))
+	# The face: samples standing between the two levels (0.2 m in from each) before the carve.
+	var upper := bodies[0].level_m - 0.2
+	var lower := bodies[1].level_m + 0.2
+	var face_cut_old := 0.0
+	for i in _doc.sample_count():
+		if before[i] < upper and before[i] > lower:
+			face_cut_old = maxf(face_cut_old, before[i] - _doc.heights[i])
+	assert_lt(face_cut_old, 0.05, "the face stands under the riffle carve (%.3f m)" % face_cut_old)
+	var lip: Vector2 = bodies[1].points[0]
+	var foot_x := WaterCarve.fall_foot(bodies[0].level_m - bodies[1].level_m, 0.9)
+	var plunge := _height(_doc, lip + Vector2(0, foot_x + 0.5))
+	assert_true(plunge >= bodies[1].level_m - 0.9 - 0.06, "no plunge pool (%.2f)" % plunge)
+	_doc.heights = before.duplicate()
+	Fixtures.carve(_doc, WaterCarve.river_goals(_doc, bodies, before))
+	var face_cut_new := 0.0
+	for i in _doc.sample_count():
+		if before[i] < upper and before[i] > lower:
+			face_cut_new = maxf(face_cut_new, before[i] - _doc.heights[i])
+	# The fall profile lies along the tier's own face, so the notch cuts the face itself by
+	# decimetres (the plunge bed below the lower level is where it cuts a metre).
+	assert_gt(face_cut_new, 0.2, "the derived flags cut the notch (%.2f m)" % face_cut_new)
+
+
 func test_diagonal_fall_faces_do_not_saw() -> void:
 	# The sample grid draws each quad as two triangles on a fixed diagonal; a fall carved across
 	# it at any angle must come out straight across its channel (the tier's rule,

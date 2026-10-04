@@ -66,6 +66,13 @@ const ROLL_ROW_FALL_M := 0.03
 const LIP_ROLL_M := 0.3
 ## The curtain ends this far under the lower level.
 const END_BELOW_M := 0.03
+## How far past the carved face's foot (WaterCarve.fall_foot) a column is traced: the pool
+## level is crossed before the foot on every carved fall, so a row still unreached there is
+## one the ground never gives (the lower course bends away from the lip's direction right
+## after the fall, or an old document's stub was never carved below the level) and it sits
+## at the trace's end. Tracing on to the plunge pool's end laid those rows along the bank
+## as a white strip up to 3 m long (P4c-6).
+const END_PAST_FOOT_M := 0.5
 ## The curtain stands at least this far in front of the rock under it.
 const FALL_CLEARANCE_M := 0.08
 ## The horizontal speed the water leaves the lip with: base plus per unit of river speed.
@@ -103,6 +110,10 @@ const MIST_HALF_PER_WIDTH := 0.35
 const MIST_HALF_PER_DROP := 0.08
 const MIST_HALF_MIN_M := 0.35
 const MIST_HALF_MAX_M := 1.2
+## A puff is never wider than the fall itself: its half-size is capped at this share of the
+## wetted width (P4c-6: on a 1.1 m ankle stream the drop term alone made 1.5 m puffs that
+## read as grey discs on the grass beside the notch), never under MIST_HALF_MIN_M.
+const MIST_HALF_PER_FALL_WIDTH := 0.5
 const MIST_LOW_SHARE := 0.33
 const MIST_RISE_MAX_M := 1.5
 const MIST_BACK_MIN := 0.55
@@ -155,14 +166,17 @@ static func mist_bounds_margin(half: float) -> float:
 ## The wetted half-widths at the crest of a fall whose lip is `lip` and whose course runs
 ## along `dir` there, Vector2(left, right) (left is -dir.orthogonal()): from the lip outward
 ## along the lip line every WIDTH_SCAN_M until the ground stands at `top` (the upper level),
-## the crossing interpolated; never past `half_width` plus the bank. A dry middle (the crest
-## not carved) gives DRY_CREST_SHARE of the half-width both sides.
+## the crossing interpolated; never past `half_width`, the channel's waterline (the carve's
+## own bank stands at or above the level past it; where another river's bank cut has shaved
+## that ground to a hair under the level, P4c-6, the curtain must not run out along it as a
+## sheet lying on the bank). A dry middle (the crest not carved) gives DRY_CREST_SHARE of
+## the half-width both sides.
 static func crest_widths(
 	doc: MapDocument, lip: Vector2, dir: Vector2, half_width: float, top: float
 ) -> Vector2:
 	var across := dir.orthogonal()
 	var out := Vector2.ZERO
-	var reach := half_width + WaterGeometry.RIVER_BANK_M
+	var reach := half_width
 	for side in 2:
 		var sign_value := -1.0 if side == 0 else 1.0
 		var previous_w := 0.0
@@ -246,7 +260,7 @@ static func curtain_height(
 ## `top`), Vector3(map x, height, map z), the path traced from `origin` along `dir` every
 ## MARCH_M and each row placed where the path first reaches it (bisected within the step, so
 ## the vertex is on the path, not on a chord under the floor); a row the path never reaches
-## within `x_max` sits at the path's end.
+## within `x_max` (the carved foot plus END_PAST_FOOT_M) sits at the path's end.
 static func trajectory(
 	doc: MapDocument,
 	origin: Vector2,
@@ -294,10 +308,11 @@ static func trajectory(
 
 ## The puff half-size for a fall `drop` metres high and `width` metres wide at the crest.
 static func mist_half_size(drop: float, width: float) -> float:
+	var cap := maxf(width * MIST_HALF_PER_FALL_WIDTH, MIST_HALF_MIN_M)
 	return clampf(
 		MIST_HALF_BASE_M + MIST_HALF_PER_WIDTH * width * 0.5 + MIST_HALF_PER_DROP * drop,
 		MIST_HALF_MIN_M,
-		MIST_HALF_MAX_M
+		minf(MIST_HALF_MAX_M, cap)
 	)
 
 
@@ -335,7 +350,7 @@ static func _fall(doc: MapDocument, fall: Dictionary, buffers: _Buffers) -> floa
 	var v0 := V0_BASE + V0_PER_SPEED * upper.speed
 	var rows := row_falls(drop)
 	var offsets := column_offsets(widths)
-	var x_max := WaterCarve.fall_foot(drop, depth) + WaterFalls.plunge_length(drop)
+	var x_max := WaterCarve.fall_foot(drop, depth) + END_PAST_FOOT_M
 	var outward := Vector3(dir.x, 0.0, dir.y)
 	var columns: Array[PackedVector3Array] = []
 	for w in offsets:
