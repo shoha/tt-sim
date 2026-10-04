@@ -12,7 +12,12 @@ extends RefCounted
 ## Chaikin-smoothed anyway), then split into flat reaches by the ground along it
 ## (WaterGeometry.reach_ranges: no reach spans more than REACH_DROP_M), each a river body at
 ## its reach's level, consecutive reaches sharing their boundary point. A line that starts
-## or ends in existing water joins it (join_line(): a confluence).
+## or ends in existing water joins it (join_line(): a confluence). Waterfalls (P4c,
+## WaterFalls): a line drawn uphill is reversed so the water runs downhill; where the ground
+## along it drops steeply the plan inserts a lip per fall (a forced reach boundary) and a
+## widened plunge-pool point below it, and splits any other segment dropping more than
+## REACH_DROP_M so no step that is not a fall reaches WaterFalls.FALL_MIN_DROP_M. A stroke
+## with no drop run and no such segment plans exactly as before.
 ##
 ## Erasing (P4-4). A river the eraser touches goes whole: every reach of its stroke (the
 ## reaches joined end to end, river_chain()), never a piece of one. A hole cut mid-reach left
@@ -125,15 +130,30 @@ static func plan_river(
 	var narrowest := maxf(WaterBody.MIN_HALF_WIDTH_M, WaterCarve.min_half_width(depth))
 	for i in widths.size():
 		widths[i] = clampf(widths[i], narrowest, WaterBody.MAX_HALF_WIDTH_M)
-	var ground := WaterGeometry.ground_along(doc, course)
-	# Confluences: under existing water the line reads that water's level (plus the freeboard)
-	# as its ground, so the reach that meets it is at its level or below, never down on its
-	# bed (see join_line()).
-	for i in course.size():
-		var level := WaterGeometry.level_at(doc, course[i])
-		if level != WaterGeometry.DRY and ground[i] < level:
-			ground[i] = level + WaterGeometry.FREEBOARD_M
-	var ranges := WaterGeometry.reach_ranges(ground)
+	var courses := WaterGeometry.river_courses(doc, WaterGeometry.bounds(course, 0.01))
+	var ground := water_ground(doc, course, courses)
+	# Water runs downhill: a line drawn uphill is reversed, so its falls face downstream.
+	var oriented := WaterFalls.orient(course, widths, ground)
+	course = oriented[0]
+	widths = oriented[1]
+	ground = oriented[2]
+	# The fall plan (WaterFalls): lips, plunge points and the subdivision of other steep
+	# segments, on the ground sampled every sample step along the line.
+	var ground_of := func(p: Vector2) -> float: return water_ground_at(doc, p, courses)
+	var step := minf(doc.sample_step().x, doc.sample_step().y)
+	var profile := WaterFalls.fine_profile(course, step, ground_of)
+	var free_ends := Vector2i(
+		0 if WaterGeometry.is_wet_at(doc, course[0]) else 1,
+		0 if WaterGeometry.is_wet_at(doc, course[-1]) else 1
+	)
+	var plan := WaterFalls.plan_lips(doc, course, widths, profile, free_ends)
+	var shaped := WaterFalls.shape_line(course, widths, ground, plan, ground_of)
+	course = shaped.points
+	widths = shaped.widths
+	ground = shaped.ground
+	var ranges := WaterGeometry.reach_ranges(
+		ground, WaterGeometry.REACH_DROP_M, shaped.forced, shaped.free
+	)
 	var rivers := 0
 	for body in doc.water_bodies:
 		rivers += 1 if body.is_river() else 0
@@ -163,6 +183,30 @@ static func plan_river(
 		)
 		bodies.append(river)
 	return bodies
+
+
+## The ground a river plan reads along `points` of `doc`: WaterGeometry.ground_along(), except
+## that under existing water the line reads that water's level plus the freeboard (a
+## confluence: the reach that meets it is at its level or below, never down on its bed, see
+## join_line()). `courses` (WaterGeometry.river_courses()) saves the smoothing per call.
+static func water_ground(
+	doc: MapDocument, points: PackedVector2Array, courses: Dictionary = {}
+) -> PackedFloat32Array:
+	var ground := WaterGeometry.ground_along(doc, points)
+	for i in points.size():
+		var level := WaterGeometry.level_at(doc, points[i], -1, courses)
+		if level != WaterGeometry.DRY and ground[i] < level:
+			ground[i] = level + WaterGeometry.FREEBOARD_M
+	return ground
+
+
+## water_ground() at one map point `p`.
+static func water_ground_at(doc: MapDocument, p: Vector2, courses: Dictionary = {}) -> float:
+	var ground := WaterGeometry.ground_at(doc, p)
+	var level := WaterGeometry.level_at(doc, p, -1, courses)
+	if level != WaterGeometry.DRY and ground < level:
+		return level + WaterGeometry.FREEBOARD_M
+	return ground
 
 
 ## A river line (map XZ, upstream first, with one half-width per point, or one for all) cut
