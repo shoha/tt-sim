@@ -60,9 +60,15 @@ static func run(base: Node, step: Dictionary) -> String:
 		"old_river":
 			return _old_river(base, step)
 		"falls_visible":
-			return _falls_visible(base, bool(step.get("visible", true)))
+			# A bool, or a label from an `expand` template ("off ..." hides), as crossing.gd.
+			var shown: Variant = step.get("visible", true)
+			return _falls_visible(
+				base, shown if shown is bool else not String(shown).begins_with("off")
+			)
 		"quality":
-			return _quality(bool(step.get("low", false)))
+			# A bool, or an `expand` label ("low ..." is Low).
+			var low: Variant = step.get("low", false)
+			return _quality(low if low is bool else String(low).begins_with("low"))
 		"clock":
 			Engine.time_scale = float(step.get("scale", 1.0))
 			return "time scale %.3f" % Engine.time_scale

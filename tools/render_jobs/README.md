@@ -393,6 +393,19 @@ numerically (for example where a fade or a tint band starts).
   levels interleaved, samples GPU time with the crossings shown and hidden in one run at home,
   zoom 20 and zoom 8 on a bridge, then each level at home and zoom 20 with tokens, and deletes
   both levels. `perf.gd gpu_state` logs `nvidia-smi` at the start and end of each.
+- `jobs/p4c_perf_build.json` and `jobs/p4c_perf_play.json`: the phase 4c pinned performance
+  pass (`PERFORMANCE.md` "Phase 4c (waterfalls): pinned performance pass"). The build job makes
+  the judgment set's forest map (two-tier step, 13 m hill) with six falls (a waist river over
+  the step, an ankle tributary, two ankle streams down the hill flank with `record` windows
+  around the strokes and an erase, a deep river off the far edge through `water.gd carve`) and
+  saves `_p4c_perf_falls`, then the same sculpt with the five waters on the flat ground, saved
+  as `_p4c_perf_riffles`. The play job (run with the pinned `override.cfg`, which it deletes)
+  opens the falls level once in authoring for `falls.gd`'s `found:` names, times warm loads of
+  both levels interleaved, samples GPU time with the falls mesh shown and hidden
+  (`falls_visible`) at home, zoom 8 on the hill and on the tier fall and zoom 20, Water
+  Quality Low against High (`quality`; both take `expand` labels, "off ..." and "low ..."),
+  then each level at home and zoom 20. The levels are kept (`cleanup_levels.json` deletes
+  them).
 - `jobs/falls_look.json`: the waterfall carve and curtains (P4c-2, P4c-3, about 100 s): a new
   150 ft temperate forest map with a two-tier Tier step and a 14 m Raise hill (real Sculpt
   strokes; the hill's flank runs steep for about 9 m, so the stream down it gets two falls), a
