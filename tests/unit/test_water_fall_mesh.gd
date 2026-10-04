@@ -258,7 +258,8 @@ func test_foam_ring_sits_on_the_pool() -> void:
 		assert_almost_eq(uv2s[i].y, bottom, 1e-5)
 	var widths := WaterFallMesh.crest_widths(doc, lip, dir, fall.half_width, fall.top)
 	var radius := WaterFallMesh.RING_WIDTH_FACTOR * (widths.x + widths.y) * 0.5
-	assert_almost_eq(farthest, radius, 1e-3, "1.4 x the fall's width across")
+	assert_almost_eq(farthest, radius, 1e-3, "RING_WIDTH_FACTOR x the fall's width across")
+	assert_lt(radius, fall.half_width * 1.2, "inside the widened plunge pool")
 	assert_almost_eq(uv2s[ring[0]].x, radius, 1e-5, "UV2.x carries the radius")
 	var along := (centre - lip).dot(dir)
 	assert_gt(along, 0.5, "downstream of the lip")
@@ -317,11 +318,54 @@ func test_mist_is_three_to_five_packed_billboards_inside_the_grown_bounds() -> v
 			)
 			assert_gt(centre.y, float(nearest.bottom), "over the pool")
 			assert_true(centre.y <= float(nearest.top) + half, "no higher than the lip")
+		var margin := WaterFallMesh.mist_bounds_margin(largest)
+		assert_gt(margin, largest, "grown for the shader's rise and growth too")
 		var grown: AABB = built.aabb
-		assert_almost_eq(
-			grown.position, bounds.position - Vector3.ONE * largest, Vector3.ONE * 1e-4
-		)
-		assert_almost_eq(grown.end, bounds.end + Vector3.ONE * largest, Vector3.ONE * 1e-4)
+		assert_almost_eq(grown.position, bounds.position - Vector3.ONE * margin, Vector3.ONE * 1e-4)
+		assert_almost_eq(grown.end, bounds.end + Vector3.ONE * margin, Vector3.ONE * 1e-4)
+
+
+## P4c-4: the spray rises from the pool and the lowest third of the face, and a fall at least
+## MIST_HIGH_MIN_DROP_M high gets exactly one puff near the lip whose top clears the brink.
+func test_mist_stands_at_the_pool_with_one_high_puff_at_the_lip() -> void:
+	var doc := _tier_doc()
+	var fall: Dictionary = WaterFalls.falls(doc)[0]
+	var lip: Vector2 = fall.lip
+	var dir: Vector2 = fall.dir
+	var top: float = fall.top
+	var bottom: float = fall.bottom
+	var drop := top - bottom
+	assert_gt(drop, WaterFallMesh.MIST_HIGH_MIN_DROP_M, "a tier fall is high enough")
+	var arrays: Array = _falls_of(doc).arrays
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var uv2s: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+	var mist := _of_kind(arrays, WaterFallMesh.KIND_MIST)
+	var foot := WaterCarve.fall_foot(drop, 0.9)
+	var high := 0
+	var low := 0
+	for q in mist.size() / 4:
+		var first := mist[q * 4]
+		var centre := vertices[first]
+		var half := absf(uv2s[first].x)
+		var along := (Vector2(centre.x, centre.z) - lip).dot(dir)
+		if centre.y + half > top:
+			high += 1
+			assert_lt(along, foot * 0.5, "the high puff stands near the lip")
+			assert_almost_eq(
+				(Vector2(centre.x, centre.z) - lip).dot(dir.orthogonal()), 0.0, 1e-3, "centred"
+			)
+		else:
+			low += 1
+			assert_true(
+				centre.y - half * 0.5 <= bottom + drop * WaterFallMesh.MIST_LOW_SHARE + 1e-3,
+				(
+					"a low puff rises from the lowest third of the face (%.2f over the pool)"
+					% (centre.y - bottom)
+				)
+			)
+			assert_gt(along, foot * 0.25, "past the face's middle")
+	assert_eq(high, 1, "exactly one high puff")
+	assert_gt(low, 1, "the rest at the pool")
 
 
 func test_no_fall_builds_nothing() -> void:

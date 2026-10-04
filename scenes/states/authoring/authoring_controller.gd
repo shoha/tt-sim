@@ -768,6 +768,9 @@ func _select_tool(tool_id: StringName) -> void:
 				return
 			if not editor.water.can_carve() and document.water_bodies.is_empty():
 				return
+			# The falls material now, so the first waterfall drawn pays no shader build
+			# (P4c-4; the Bridge tool warms its crossing materials the same way).
+			AuthoredWater.warm_fall_material()
 			brush.set_mode(BrushTool.Mode.WATER)
 		AuthoringPanel.TOOL_BRIDGE:
 			if not bridge_available():

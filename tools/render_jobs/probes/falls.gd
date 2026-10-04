@@ -10,6 +10,17 @@ extends RefCounted
 ##                         "found:fall<k>_foot" (the face's foot) and "found:fall<k>_plunge"
 ##                         (the middle of the plunge pool) for `look` and any point field.
 ##   look {at}             pans so the screen centre looks at `at` ([x, z] or found:).
+## P4c-4 (the falls shader):
+##   falls_visible {visible} shows or hides every AuthoredWater-falls mesh alone (the water
+##                         stays), for an in-run GPU A/B of the falls.
+##   quality {low}         sets the Water Quality globals (water_quality_skip_fine_detail and
+##                         water_quality_skip_refraction) to `low`, as Settings > Graphics Low
+##                         does; the shader drops its second octave and the mist.
+##   clock {scale}         Engine.time_scale: 0 freezes the shader clock (TIME) for a capture
+##                         whose PNG save would otherwise advance it; 1 resumes. The driver's
+##                         `wait` runs on scaled time, so set 1 before any wait.
+##   palette {name}        applies a WaterPresets palette (lagoon, lake, river, swamp, ocean,
+##                         glacial) to the water and the falls, as the Water pane's tile does.
 
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
 
@@ -22,7 +33,51 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _falls(base)
 		"look":
 			return WATER.run(base, {"action": "look", "at": _resolve(step.get("at"))})
+		"falls_visible":
+			return _falls_visible(base, bool(step.get("visible", true)))
+		"quality":
+			return _quality(bool(step.get("low", false)))
+		"clock":
+			Engine.time_scale = float(step.get("scale", 1.0))
+			return "time scale %.3f" % Engine.time_scale
+		"palette":
+			return _palette(String(step.get("name", "lagoon")))
 	return "unknown action %s" % step.get("action", "")
+
+
+static func _falls_visible(base: Node, on: bool) -> String:
+	var gm := base.get("_game_map") as GameMap
+	if gm == null or gm.map_container == null:
+		return "no map"
+	var root := gm.map_container.get_node_or_null(^"LevelMap") as Node3D
+	if root == null:
+		return "no map"
+	var count := 0
+	for node in root.find_children(WaterFallMesh.MESH_NAME, "MeshInstance3D", true, false):
+		(node as MeshInstance3D).visible = on
+		count += 1
+	return "%d falls meshes visible %s" % [count, str(on)]
+
+
+static func _quality(low: bool) -> String:
+	RenderingServer.global_shader_parameter_set("water_quality_skip_fine_detail", low)
+	RenderingServer.global_shader_parameter_set("water_quality_skip_refraction", low)
+	return "water quality low %s" % str(low)
+
+
+static func _palette(name: String) -> String:
+	if not WaterPresets.PALETTES.has(name):
+		return "no palette %s" % name
+	WaterGlbUtils.apply_water_settings(WaterPresets.PALETTES[name])
+	var material := AuthoredWater.fall_material()
+	return (
+		"palette %s: falls foam %s water %s"
+		% [
+			name,
+			str(material.get_shader_parameter("foam_color")),
+			str(material.get_shader_parameter("water_color")),
+		]
+	)
 
 
 static func _resolve(value: Variant) -> Variant:

@@ -38,7 +38,7 @@ func test_terrain_samples_match_the_real_ground_and_skirt() -> void:
 func test_the_water_sample_matches_the_real_water_surface() -> void:
 	var samples := AuthoredWater.warmup_samples()
 	_assert_well_formed(samples)
-	assert_eq(samples.size(), 1)
+	assert_eq(samples.size(), 2)
 	assert_eq(samples[0].name, "water")
 	var water := AuthoredWater.create(AuthoredWater.warmup_document())
 	add_child_autofree(water)
@@ -46,6 +46,24 @@ func test_the_water_sample_matches_the_real_water_surface() -> void:
 	assert_not_null(instance, "the warm-up document has water")
 	assert_eq(_format_of(samples[0]), instance.mesh.surface_get_format(0), "water layout")
 	assert_eq((samples[0].material as ShaderMaterial).shader, AuthoredWater.WATER_SHADER)
+
+
+## The falls sample (P4c-4) draws the real falls mesh's layout on the waterfall shader, from
+## a warm-up document whose river falls over a tier.
+func test_the_falls_sample_matches_the_real_falls_mesh() -> void:
+	var samples := AuthoredWater.warmup_samples()
+	assert_eq(samples[1].name, "falls")
+	var doc := AuthoredWater.warmup_falls_document()
+	var falls := WaterFalls.falls(doc)
+	assert_eq(falls.size(), 1, "one fall at the tier's brink")
+	assert_gt(float(falls[0].top) - float(falls[0].bottom), WaterFalls.FALL_MIN_DROP_M)
+	var water := AuthoredWater.create(doc)
+	add_child_autofree(water)
+	var instance := water.get_falls_instance()
+	assert_not_null(instance, "the warm-up falls document has a curtain")
+	assert_eq(_format_of(samples[1]), instance.mesh.surface_get_format(0), "falls layout")
+	assert_eq((samples[1].material as ShaderMaterial).shader, AuthoredWater.FALLS_SHADER)
+	assert_eq(AuthoredWater.fall_material().shader, AuthoredWater.FALLS_SHADER)
 
 
 func _triangle(with_colors: bool) -> ArrayMesh:
@@ -155,6 +173,7 @@ func test_collect_samples_has_every_owner_once() -> void:
 		"res://shaders/authored_ground.gdshader",
 		"res://shaders/authored_ground_skirt.gdshader",
 		"res://shaders/water.gdshader",
+		"res://shaders/waterfall.gdshader",
 		"res://shaders/wind_foliage.gdshader",
 		"res://shaders/wind_foliage_no_aa.gdshader",
 	]:
