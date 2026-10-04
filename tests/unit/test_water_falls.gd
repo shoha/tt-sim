@@ -5,49 +5,13 @@ extends GutTest
 ## ground built with the project's own tier profile and ramps.
 
 const GRASS := "grass"
+## Ground shapes (the tier band, the ramp) and the carve, shared with the carve tests.
+const Fixtures := preload("res://tests/unit/water_fixtures.gd")
 
 
 ## A 150 ft map at the default 0.25 m spacing (183 samples a side, tier 1.524 m).
 func _doc(cells: int = 30) -> MapDocument:
 	return MapDocument.create_flat(Vector2i(cells, cells), GRASS, "test", 5)
-
-
-## Heights set by `shape` (Callable(Vector2 map XZ) -> float) at every sample.
-func _shape(doc: MapDocument, shape: Callable) -> void:
-	var heights := PackedFloat32Array()
-	heights.resize(doc.sample_count())
-	for z in doc.samples_z():
-		for x in doc.samples_x():
-			heights[doc.sample_index(x, z)] = shape.call(doc.sample_to_world(Vector2(x, z)))
-	doc.heights = heights
-
-
-## A Tier stroke to `target` along the capsule `from`-`to` of `radius`, run to rest: the
-## real tier profile (HeightBrush.tier_goal through HeightStroke), face, rounded lip and all.
-func _tier(doc: MapDocument, from: Vector2, to: Vector2, radius: float, target: float) -> void:
-	var stroke := HeightStroke.begin(doc, HeightBrush.TIER, target)
-	for _frame in 4:
-		stroke.dab(from, to, radius, 0.05)
-	stroke.complete()
-
-
-## A straight tier whose top covers z < 0 (the face stands around z = -1.4..0.5).
-func _tier_band(doc: MapDocument) -> void:
-	_tier(doc, Vector2(-30, -10), Vector2(30, -10), 10.0, doc.tier_height_m)
-
-
-## Applies WaterCarve goals to `doc` (min with the ground), as the editor does.
-func _carve(doc: MapDocument, goals: Dictionary) -> void:
-	var rect: Rect2i = goals.rect
-	var values: PackedFloat32Array = goals.goals
-	var heights := doc.heights.duplicate()
-	for j in rect.size.y:
-		for i in rect.size.x:
-			var goal := values[j * rect.size.x + i]
-			var at := (rect.position.y + j) * doc.samples_x() + rect.position.x + i
-			if not is_inf(goal):
-				heights[at] = minf(heights[at], goal)
-	doc.heights = heights
 
 
 func _ground(doc: MapDocument, p: Vector2) -> float:
@@ -172,7 +136,7 @@ func test_gentle_slope_plans_as_in_v0_1_29_with_no_fall() -> void:
 	# segment, so nothing of the fall plan triggers and the bodies must match the old plan
 	# byte for byte. A gentle bend, so the resampling and smoothing are exercised too.
 	var doc := _doc()
-	_shape(doc, func(p: Vector2) -> float: return -0.2 * p.x + 0.02 * p.y)
+	Fixtures.shape(doc, func(p: Vector2) -> float: return -0.2 * p.x + 0.02 * p.y)
 	var points := PackedVector2Array(
 		[Vector2(-18, -3), Vector2(-4, 1), Vector2(8, -2), Vector2(18, 2)]
 	)
@@ -193,7 +157,7 @@ func test_a_small_steep_bump_stays_a_riffle() -> void:
 	# A 0.6 m step built with the tier profile: steep, but under FALL_MIN_DROP_M. No fall,
 	# and the step is split so no riffle step reaches 0.75 m either.
 	var doc := _doc()
-	_tier(doc, Vector2(-30, -10), Vector2(30, -10), 10.0, 0.6)
+	Fixtures.tier(doc, Vector2(-30, -10), Vector2(30, -10), 10.0, 0.6)
 	var bodies := _plan(doc, Vector2(0, -12), Vector2(0, 12), 1.0)
 	assert_gt(bodies.size(), 1, "the bump splits the stroke")
 	assert_eq(WaterFalls.drops(bodies).size(), 0, "a 0.6 m drop is no fall")
@@ -269,7 +233,7 @@ func test_drop_runs_find_steep_losses_only() -> void:
 @warning_ignore("integer_division")
 func test_tier_stroke_falls_once_at_the_brink() -> void:
 	var doc := _doc()
-	_tier_band(doc)
+	Fixtures.tier_band(doc)
 	var top := doc.tier_height_m
 	var half := 1.0
 	var bodies := _plan(doc, Vector2(0, -12), Vector2(0, 12), half)
@@ -323,7 +287,7 @@ func test_tier_stroke_falls_once_at_the_brink() -> void:
 func test_hill_gives_spaced_falls_of_a_tier_each() -> void:
 	# A 35 degree ramp (slope 0.7) losing 7 m over 10 m, flat above and below.
 	var doc := _doc()
-	_shape(doc, func(p: Vector2) -> float: return clampf(7.0 - 0.7 * (p.x + 5.0), 0.0, 7.0))
+	Fixtures.ramp(doc)
 	var bodies := _plan(doc, Vector2(-14, 0), Vector2(14, 0), 1.0)
 	var drops := WaterFalls.drops(bodies)
 	var spacing := WaterFalls.fall_spacing(WaterCarve.min_half_width(WaterBody.Depth.WAIST))
@@ -349,7 +313,7 @@ func test_hill_gives_spaced_falls_of_a_tier_each() -> void:
 
 func test_uphill_is_reversed_flat_keeps_its_direction() -> void:
 	var doc := _doc()
-	_shape(doc, func(p: Vector2) -> float: return 0.3 * p.x + 5.0)
+	Fixtures.shape(doc, func(p: Vector2) -> float: return 0.3 * p.x + 5.0)
 	var uphill := _plan(doc, Vector2(-10, 0), Vector2(10, 0), 1.0)
 	assert_false(uphill.is_empty())
 	assert_almost_eq(uphill[0].points[0].x, 10.0, 1e-4, "the drawn end is the source")
@@ -360,7 +324,7 @@ func test_uphill_is_reversed_flat_keeps_its_direction() -> void:
 	var level := _plan(flat, Vector2(-10, 0), Vector2(10, 0), 1.0)
 	assert_eq(level.size(), 1)
 	assert_almost_eq(level[0].points[0].x, -10.0, 1e-4, "flat: the drawn direction")
-	_shape(flat, func(p: Vector2) -> float: return 0.03 * p.x)
+	Fixtures.shape(flat, func(p: Vector2) -> float: return 0.03 * p.x)
 	var gentle := _plan(flat, Vector2(-10, 0), Vector2(10, 0), 1.0)
 	assert_almost_eq(gentle[0].points[0].x, -10.0, 1e-4, "a rise under the fall drop keeps it too")
 
@@ -368,7 +332,7 @@ func test_uphill_is_reversed_flat_keeps_its_direction() -> void:
 func test_down_then_up_has_no_upward_fall() -> void:
 	# A V valley: a 35 degree descent to x = 0 and the same ascent, flat beyond.
 	var doc := _doc()
-	_shape(doc, func(p: Vector2) -> float: return minf(0.7 * absf(p.x), 4.0))
+	Fixtures.shape(doc, func(p: Vector2) -> float: return minf(0.7 * absf(p.x), 4.0))
 	var bodies := _plan(doc, Vector2(-10, 0), Vector2(10, 0), 1.0)
 	assert_almost_eq(bodies[0].points[0].x, -10.0, 1e-4, "ends level: not reversed")
 	var drops := WaterFalls.drops(bodies)
@@ -385,11 +349,11 @@ func test_down_then_up_has_no_upward_fall() -> void:
 
 func test_tributary_off_a_tier_falls_into_the_river() -> void:
 	var doc := _doc()
-	_tier_band(doc)
+	Fixtures.tier_band(doc)
 	var start := doc.heights.duplicate()
 	var main := _plan(doc, Vector2(-15, 6), Vector2(15, 6), 1.5)
 	assert_eq(main.size(), 1)
-	_carve(doc, WaterCarve.river_goals(doc, main, start))
+	Fixtures.carve(doc, WaterCarve.river_goals(doc, main, start))
 	doc.water_bodies = main
 	assert_true(WaterGeometry.is_wet_at(doc, Vector2(0, 6)), "the river holds water")
 	var tributary := WaterEdit.plan_river(
@@ -417,7 +381,7 @@ func test_tributary_off_a_tier_falls_into_the_river() -> void:
 func test_diagonal_tier_crossing_keeps_the_upper_water_on_the_top() -> void:
 	# A tier whose edge runs at 45 degrees to the stroke (the top is z > x - 1.3 or so).
 	var doc := _doc()
-	_tier(doc, Vector2(-45, -20), Vector2(25, 50), 20.0, doc.tier_height_m)
+	Fixtures.tier(doc, Vector2(-45, -20), Vector2(25, 50), 20.0, doc.tier_height_m)
 	var top := doc.tier_height_m
 	var bodies := _plan(doc, Vector2(-12, 0), Vector2(12, 0), 1.0)
 	assert_eq(bodies.size(), 2, "one fall")
@@ -443,7 +407,7 @@ func test_old_documents_fall_only_where_the_ground_is_steep() -> void:
 	# cliff-steep: a fall. Over a 0.8 slope (39 degrees, under the cliff rule's 44) the same
 	# sized step keeps its draped riffle sheet.
 	var tiered := _doc()
-	_tier_band(tiered)
+	Fixtures.tier_band(tiered)
 	var line := PackedVector2Array([Vector2(0, -12), Vector2(0, 12)])
 	var widths := PackedFloat32Array([1.0, 1.0])
 	var old := _plan_river_v0_1_29(tiered, line, widths, WaterBody.Depth.WAIST)
@@ -457,7 +421,7 @@ func test_old_documents_fall_only_where_the_ground_is_steep() -> void:
 	tiered.water_bodies = old
 	assert_gt(WaterFalls.falls(tiered).size(), 0, "the tier face makes it a fall")
 	var ramp := _doc()
-	_shape(ramp, func(p: Vector2) -> float: return clampf(0.4 - 0.8 * p.x, 0.0, 0.8))
+	Fixtures.shape(ramp, func(p: Vector2) -> float: return clampf(0.4 - 0.8 * p.x, 0.0, 0.8))
 	var old_ramp := _plan_river_v0_1_29(
 		ramp, PackedVector2Array([Vector2(-9, 0), Vector2(9, 0)]), widths, WaterBody.Depth.WAIST
 	)
@@ -470,7 +434,7 @@ func test_old_documents_fall_only_where_the_ground_is_steep() -> void:
 func test_a_long_hillside_stays_under_the_caps() -> void:
 	# A 61 m map (40 cells) with a 35 degree hillside most of the way across.
 	var doc := _doc(40)
-	_shape(doc, func(p: Vector2) -> float: return 0.7 * (28.0 - clampf(p.x, -28.0, 28.0)))
+	Fixtures.shape(doc, func(p: Vector2) -> float: return 0.7 * (28.0 - clampf(p.x, -28.0, 28.0)))
 	var bodies := _plan(doc, Vector2(-29.5, 0), Vector2(29.5, 0), 1.0)
 	assert_false(bodies.is_empty(), "the stroke is planned, not refused")
 	assert_lt(bodies.size(), MapDocument.MAX_RIVERS, "%d reaches" % bodies.size())
