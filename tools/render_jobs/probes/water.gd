@@ -23,7 +23,7 @@ extends RefCounted
 ##   measure {from, to}          camera rays through the two points' screen positions on the
 ##                               measure tool's mask and on the terrain layer alone, and the
 ##                               drag ruler's text between them.
-##   water {visible}             shows or hides every water mesh (GPU A/B).
+##   water {visible}             shows or hides every water mesh, the waterfalls too (GPU A/B).
 ##   state                       the water nodes and the grid field.
 ##   scan {spacing}              over the map's bounds: where a water surface stands over the
 ##                               bed, its extent, depths, and the points later steps can name
@@ -931,6 +931,10 @@ static func _set_visible(gm: GameMap, on: bool) -> String:
 		return "no map"
 	var count := 0
 	for node in root.find_children("*-water", "MeshInstance3D", true, false):
+		(node as MeshInstance3D).visible = on
+		count += 1
+	# The waterfalls (P4c-3) are the water too, under a name the water pass does not match.
+	for node in root.find_children(WaterFallMesh.MESH_NAME, "MeshInstance3D", true, false):
 		(node as MeshInstance3D).visible = on
 		count += 1
 	return "%d water meshes visible %s" % [count, str(on)]

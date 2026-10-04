@@ -40,6 +40,13 @@ extends RefCounted
 ## carved) gets the same kind of sheet: the surface falls down the channel at RUN_OUT_SLOPE
 ## and trickles on over its bed as a film (_run_out), instead of ending in the air; an end
 ## that lies in other water (a confluence) needs none.
+##
+## Falls (phase 4c, P4c-3). A step that is a waterfall (WaterFalls.is_fall) gets no sheet: a
+## height field cannot stand forward of a face, so cascades() skips the pair and the curtain
+## is separate geometry (WaterFallMesh, the "falls" key of build(), its own node). The flat
+## cells straddling the lip line would still stick one sample out over the face at the upper
+## level; fall_cells() turns them into sheet cells whose downstream corners are tucked under
+## the face (the lip roll of the curtain hides the tucked quad). Run-out ends are unchanged.
 
 const MESH_NAME := "AuthoredWater-water"
 ## Rings of tucked cells added past the covered cells (see the header).
@@ -66,6 +73,10 @@ const CASCADE_TUCK_M := 0.05
 const CASCADE_EDGE_SLOPE := 0.2
 const CASCADE_KEY := 255
 const TUCKED_KEY := 254
+## How many samples past a fall's lip line the flat cells are tucked under the face
+## (fall_cells(): a cell straddling a diagonal lip line has a corner up to sqrt(2) samples
+## past it).
+const LIP_TUCK_SAMPLES := 1.5
 ## Side of the square tiles a body's WaterZone footprint is split into (metres).
 const ZONE_TILE_M := 5.0
 
@@ -74,7 +85,9 @@ const ZONE_TILE_M := 5.0
 ## no body's area holds the sample), "wet": PackedByteArray per sample (1 where the ground is
 ## below its level), "bodies": Array of {"id", "level", "floats" (bool), "faces"
 ## (PackedVector3Array, the body's triangles for its surface collision), "tiles" (Array of
-## Rect2, map XZ, the WaterZone footprint)}, one per body with covered cells}.
+## Rect2, map XZ, the WaterZone footprint)}, one per body with covered cells, "falls": Mesh
+## arrays of the waterfalls (WaterFallMesh.build; [] with none), "falls_aabb": their bounds
+## grown by the largest mist puff (ArrayMesh.custom_aabb)}.
 @warning_ignore("integer_division")
 static func build(doc: MapDocument) -> Dictionary:
 	var columns := doc.samples_x()
@@ -93,13 +106,23 @@ static func build(doc: MapDocument) -> Dictionary:
 			if heights[i] < levels[i]:
 				wet[i] = 1
 	var cells := cell_owners(doc, owner, levels, wet)
-	var out := {"arrays": [], "levels": levels, "wet": wet, "bodies": []}
+	var out := {
+		"arrays": [], "levels": levels, "wet": wet, "bodies": [], "falls": [], "falls_aabb": AABB()
+	}
 	if cells.is_empty():
 		return out
 	var buried := {}
 	var sheets := cascades(doc, buried)
+	var falls := WaterFalls.falls(doc)
+	var tucked := fall_cells(doc, falls, wet)
+	for i: int in tucked:
+		if not sheets.has(i):
+			sheets[i] = tucked[i]
 	out["arrays"] = _arrays(doc, cells, sheets, owner, wet, buried)
 	out["bodies"] = _bodies(doc, cells, wet, owner)
+	var fall_mesh := WaterFallMesh.build(doc, falls)
+	out["falls"] = fall_mesh.arrays
+	out["falls_aabb"] = fall_mesh.aabb
 	return out
 
 
@@ -107,7 +130,8 @@ static func build(doc: MapDocument) -> Dictionary:
 ## there, for every riffle sample between two joined reaches of `doc`'s rivers where the
 ## sheet stands over the ground. `buried`, when given, receives the sheet's height where it
 ## has sunk under the bank past the waterline (CASCADE_EDGE_SLOPE): the mesh's corners there,
-## so the sheet's edge is where the ground cuts it, not the edge of its samples.
+## so the sheet's edge is where the ground cuts it, not the edge of its samples. A step that
+## is a waterfall (WaterFalls.is_fall) gets no sheet (P4c-3: the curtain is WaterFallMesh's).
 static func cascades(doc: MapDocument, buried: Dictionary = {}) -> Dictionary:
 	var out := {}
 	if doc.heights.size() != doc.sample_count():
@@ -119,6 +143,8 @@ static func cascades(doc: MapDocument, buried: Dictionary = {}) -> Dictionary:
 			if b == a or not b.is_river() or b.points.size() < 2 or b.level_m >= a.level_m:
 				continue
 			if a.points[-1].distance_squared_to(b.points[0]) < WaterGeometry.JOIN_EPSILON_SQ:
+				if WaterFalls.is_fall(doc, a, b):
+					continue
 				_cascade(doc, a, b, out, buried)
 		var joined := WaterGeometry.flush_ends(doc.water_bodies, a)
 		if joined.x == 0:
@@ -127,6 +153,43 @@ static func cascades(doc: MapDocument, buried: Dictionary = {}) -> Dictionary:
 			_run_out(doc, a, true, out, buried)
 	for i: int in out:
 		buried.erase(i)
+	return out
+
+
+## The lip cells of `falls` (WaterFalls.falls(doc); see the header): sample index -> height
+## for the samples just downstream of each lip line (within LIP_TUCK_SAMPLES samples of it,
+## within the channel and its banks across) that are not under water (`wet`), at
+## CASCADE_TUCK_M under their ground. Merged into the sheets _arrays() draws, every flat cell
+## straddling a lip line becomes a sheet cell: its upstream corners stay at the upper level
+## (wet, the owner's level) and its downstream corners sink under the face.
+static func fall_cells(
+	doc: MapDocument, falls: Array[Dictionary], wet: PackedByteArray = PackedByteArray()
+) -> Dictionary:
+	var out := {}
+	if doc.heights.size() != doc.sample_count():
+		return out
+	var step := doc.sample_step()
+	var reach := maxf(step.x, step.y) * LIP_TUCK_SAMPLES
+	var last := Vector2(doc.samples_x() - 1, doc.samples_z() - 1)
+	for fall in falls:
+		var lip: Vector2 = fall.lip
+		var direction: Vector2 = fall.dir
+		if direction == Vector2.ZERO:
+			continue
+		var half := float(fall.half_width) + WaterGeometry.RIVER_BANK_M
+		var box := Vector2.ONE * (half + reach)
+		var first := doc.world_to_sample(lip - box).floor().clamp(Vector2.ZERO, last)
+		var stop := doc.world_to_sample(lip + box).ceil().clamp(Vector2.ZERO, last)
+		for z in range(int(first.y), int(stop.y) + 1):
+			for x in range(int(first.x), int(stop.x) + 1):
+				var p := doc.sample_to_world(Vector2(x, z))
+				var along := (p - lip).dot(direction)
+				if along <= 0.0 or along > reach or absf((p - lip).cross(direction)) > half:
+					continue
+				var i := doc.sample_index(x, z)
+				if i < wet.size() and wet[i] != 0:
+					continue
+				out[i] = doc.heights[i] - CASCADE_TUCK_M
 	return out
 
 

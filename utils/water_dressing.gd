@@ -175,8 +175,9 @@ static func shore_weight(d: float, p: Vector2, seed_value: int) -> float:
 
 
 ## compute() for `doc`'s own water (WaterGeometry.levels, and the riffles under the cascade
-## sheets, WaterMeshBuilder.cascades, as channel; field_of()), stored in doc.water_dressing (a
-## derived cache the document never saves). Returns the new field.
+## sheets, WaterMeshBuilder.cascades, and the faces of its waterfalls, WaterFalls.footprint,
+## as channel; field_of()), stored in doc.water_dressing (a derived cache the document never
+## saves). Returns the new field.
 static func refresh(doc: MapDocument) -> PackedByteArray:
 	var field := field_of(doc)
 	doc.water_dressing = field
@@ -191,6 +192,10 @@ static func field_of(doc: MapDocument) -> PackedByteArray:
 	var channel := PackedByteArray()
 	channel.resize(doc.sample_count())
 	for i: int in WaterMeshBuilder.cascades(doc):
+		channel[i] = 1
+	# A fall's face (P4c-3): bed under the curtain (the cliff rule wins on the face itself,
+	# TerrainRules.compose_water) and wet, so the rock reads wet from the lip to the pool.
+	for i in WaterFalls.footprint(doc):
 		channel[i] = 1
 	return compute(doc, WaterGeometry.levels(doc), channel)
 

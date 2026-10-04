@@ -29,7 +29,9 @@ extends RefCounted
 ## wet when its bilinear ground is below the water level of its nearest sample
 ## (WaterGeometry.levels()), so ponds are wet but add no flow: still water. The cascade
 ## sheets over the steps between reaches and at run-out ends are wet too
-## (WaterMeshBuilder.cascades(), P4-3), so a rapid runs downstream.
+## (WaterMeshBuilder.cascades(), P4-3), so a rapid runs downstream, and so are the faces of
+## the waterfalls (WaterFalls.footprint(), P4c-3), so the bank fade does not cut the flow at
+## a lip: the pool above runs into the pool below. The curtain itself never reads the map.
 
 ## Nominal texel size: about the default sample spacing (a 200 ft map bakes 244 x 244).
 const TEXEL_M := 0.25
@@ -96,8 +98,11 @@ static func _wet(
 	if not any:
 		return wet
 	var width := doc.samples_x()
-	# The sheets over reach steps flow too (WaterMeshBuilder.cascades).
+	# The sheets over reach steps flow too (WaterMeshBuilder.cascades), and the faces of the
+	# falls (WaterFalls.footprint).
 	var sheets := WaterMeshBuilder.cascades(doc)
+	for at in WaterFalls.footprint(doc):
+		sheets[at] = true
 	for j in texels.y:
 		for i in texels.x:
 			var xz := origin + Vector2(i, j) * step
