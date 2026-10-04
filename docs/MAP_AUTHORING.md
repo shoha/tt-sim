@@ -33,6 +33,10 @@ other committed home.
   heightfield rebuilds a 10 m chunk in under 1 ms in GDScript.
 - **Plants ship baked:** a saved map stores placed instances, not rules, so every peer
   loads exactly what the author saw. The painted masks are kept only for re-editing.
+- **Visual reference (2026-10-04):** painterly, Studio Ghibli; bright, lively and
+  beautiful. Effects (water, falls, spray, weather) are a few bold soft-edged shapes in
+  luminous colour, never fine grey noise. Given during the waterfall look pass; applies to
+  everything after it. The suite `CLAUDE.md` carries the same rule.
 
 ## Where each system is documented
 
@@ -50,6 +54,7 @@ other committed home.
 | Water model and flow bake (bodies, levels, wet samples, pond mask, the flow map) | `resources/water_body.gd`, `utils/water_geometry.gd`, `utils/water_flow_baker.gd`, `utils/map_water_io.gd` | `ARCHITECTURE.md` "Water model and flow bake", "Map document (map.ttmap)" |
 | Water at runtime (merged surface, zones, water as ground, float rule, grid on the water, the water shader) | `utils/water_mesh_builder.gd`, `scenes/terrain/authored_water.gd`, `utils/water_surface.gd`, `scenes/effects/water_zone.gd`, `utils/water_glb_utils.gd`, `shaders/water.gdshader` | `ARCHITECTURE.md` "Authored water at runtime" |
 | Carving and wet dressing (channel and basin profiles, reach steps and riffles, confluences, erase, bed and shore surfaces, plants, rocks, the worker) | `utils/water_carve.gd`, `utils/water_edit.gd`, `utils/water_dressing.gd`, `scenes/states/authoring/water_editor.gd` | `ARCHITECTURE.md` "Carving water" |
+| Waterfalls (the fall-or-riffle rule, lips and plunge points in the plan, the fall profile and gorge walls in the carve, the curtain / foam ring / mist mesh and shader, the shared fall material, the crossing refusal) | `utils/water_falls.gd`, `utils/water_fall_mesh.gd`, `shaders/waterfall.gdshader`, and the fall parts of `water_edit.gd`, `water_geometry.gd`, `water_carve.gd`, `water_mesh_builder.gd`, `authored_water.gd`, `water_glb_utils.gd`, `crossing_placement.gd` | `ARCHITECTURE.md` "Water model and flow bake" (Waterfalls), "Carving water" (Falls), "Authored water at runtime" (Waterfalls), "Crossings" (Falls) |
 | Water tool (River and Pond tiles, depth tiles, ribbon preview, Ctrl erase) | `scenes/states/authoring/water_brush.gd`, `water_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Water) and "Brushes and gestures" |
 | Crossings (plank bridges, stepping stones: model, snapping to banks, geometry, collision, grid on the deck, editor API, following later edits) | `resources/crossing.gd`, `utils/crossing_placement.gd`, `utils/crossing_geometry.gd`, `utils/map_crossing_io.gd`, `scenes/terrain/authored_crossings.gd`, `scenes/states/authoring/crossing_editor.gd` | `ARCHITECTURE.md` "Crossings", "Map document (map.ttmap)" |
 | Bridge tool (Planks and Stones tiles, live preview, refusal hint, Ctrl erase) | `scenes/states/authoring/bridge_brush.gd`, `bridge_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Bridge) and "Brushes and gestures" |
@@ -156,6 +161,81 @@ and a heavier refused line. The phase 4 wetland rebuilt and re-rendered: no foam
 outlines on the reeds standing in the river (P4b-0's rock-foam change holds). Re-anchoring on a
 gentle underwater bank: render job `p4b3_reanchor` (findings in `VERDICT.md`).
 
+Waterfalls (phase 4c, P4c-1 to P4c-5, 2026-10-04, render jobs `falls_look` and `falls_tools`,
+captures in `user://render_jobs/falls_look` / `falls_tools`): on a 150 ft temperate forest map
+a waist river over a two-tier step facing the camera, an ankle stream down a Raise hill's flank
+(two hillside falls) and a second waist river off the step's far edge, facing away.
+`falls_look` (15 captures, about 94 s) shows the carved ground with the water hidden (rock to
+the brink, a concave chute into a small rock bowl, a gravel bed, no saw, no upper water
+hanging past the brink; on the hill flank two tight notches, no dome) and with it shown (the
+curtain from the brink to the pool without cutting rock, no draped sheet, no lip quad; a
+white roll at the lip, darker streak bands, the bottom melting into the churn; the foam ring
+densest at the foot and inside the river; faint mist at the foot and one puff over the
+brink; the away-facing fall's white roll over its brink, with normal lighting on the
+curtain's back), two frames about 0.25 s apart with the shader clock frozen (the streaks move
+down, further near the pool than near the lip), Water Quality Low (no mist, one noise
+octave) and the Swamp palette recolouring the falls with the pool, plus an indicative GPU
+A/B of the falls node shown against hidden at zoom 8 (deltas 0.05-0.2 ms, inside drift).
+`falls_tools` (8 captures, 63 s) drives the Bridge and Water tools through real input events:
+a line across the plunge pool drawn red with "Too close to the waterfall. Bridges cross calm
+water." beside the cursor and the same toast on release; a plank bridge previewed and placed
+about 2.5 m upstream of the lip; a river stroke drawn uphill whose ribbon chevrons point
+downhill; and in play a token wading in the plunge pool with its submerged ring and another
+in the upper pool under the bridge. Unit-tested (`test_water_falls.gd`, `test_water_carve.gd`,
+`test_water_fall_mesh.gd`, `test_authored_water.gd`, `test_water_tool.gd`,
+`test_crossings.gd`, `test_bridge_tool.gd`, `test_glb_utils_water.gd`): the rule and the plan
+(a tier stroke falls once at the brink, a hill gives spaced falls of a tier each, a gentle
+slope plans as in v0.1.29, the pool widens below the face and not the face, uphill is
+reversed and flat keeps its direction, down-then-up has no upward fall, a tributary off a
+tier falls into the river, old documents fall only where the ground is steep); the carve (the
+profile is the tier face with a harder lip, the walls steepen down the face and relax past
+the pool, a hillside face is rock across the channel and cuts a notch not a quarry, the
+plunge pool sits the plunge depth below the bed, a tier crossing changes the face only in the
+notch, diagonal faces do not saw); the mesh (the curtain clears the rock and never rises over
+the upper level, covers the wetted crest, normals face outward and triangles wind clockwise,
+the mist stands at the pool with one high puff at the lip, no fall builds nothing, the flow
+runs through the lip and down the face, no cascade sheet drapes a face, lip cells are tucked,
+the falls node is built and left alone by the water pass, the Water tool warm makes the fall
+material once, a refresh rebuilds the falls on the worker and drops them with the water); the
+settings (every forwarded fall key is a waterfall shader uniform, a palette change reaches
+the fall material); the tools (a fall stroke lands the same from the worker and undoes
+exactly, a tributary drawn into a fall's face ends in its pool, erasing a river with falls
+keeps the notch and undo brings them back, tokens land in the plunge pool and on the lip,
+smoothing a fall's face turns it back into a draped sheet, an uphill stroke previews its flow
+downhill, a crossing keeps clear of a waterfall, a river falling under a bridge removes it in
+the carve's entry). Measured in the job (P4c-3, not pinned): the second river's water build
+158 ms, bake 157 ms, swap 18 ms (150 ft map, 9 bodies, 4 falls). Not rendered before the
+judgment set: the other six biomes' palettes and the v0.1.29 fixture before and after.
+
+Phase 4c judgment (P4c-6, render job `phase4c_judgment_set`, captures and `VERDICT.md` in
+`user://render_jobs/phase4c_judgment_set`, the pre-fix run in `_before`, the post-fix-3
+re-render in `phase4c_iter3`; verdict 2026-10-04): in every
+one of the eight palette biomes a 150 ft map (seed 1234) with a two-tier Tier step and a
+waist river over it facing the camera, a Raise hill with an ankle stream down its flank
+(hillside steps), a tributary falling into the main river and a deep river falling away from
+the camera, captured in authoring and in play at home and at zoom 8 on each fall, with tokens
+in a plunge pool and on the lip and the grid on, plus a v0.1.29 fixture document rendered
+before and after. Questions the earlier renders left for it: the lip roll reads as a crisp
+white rectangle at the brink and may be too strong; the glass between the streaks is subtle
+at tabletop zoom; whether the brink beside the curtain reads grassy (the convex-lip rule
+hands back 60 % of the rock on the shoulders; the fallback is a fall-lip term in the
+dressing); thresholds, plunge size and mist density; whether grid cells show on the white
+roll (the fix would be a grid-shader test, not an ordering change). Verdict: ready. The
+carve and the rule are biome-independent (the same five falls to the centimetre in all
+eight); rock to the brink everywhere with no grassy hand-back, so no fall-lip dressing
+term; the ring at 1.1 x the crest width is right; the grid never draws on the curtain; the
+off-axis crease is not visible on screen; the v0.1.29 fixture gets a curtain over its
+tier cliff and keeps the riffle sheet on its ramp, before and after a save and load. Three
+geometry faults fixed in P4c-6 (`c99d1ad`): the curtain ran out along a bank another
+river's cut had shaved to a hair under the level (`crest_widths` now stops at the
+waterline); unreached rows lay along the bank where the lower course bends right after
+the fall (the trace stops 0.5 m past the carved foot); the curtain was an opaque white
+sheet with a solid cap and the mist discs were wider than their streams (shader constants
+lowered, puffs capped at half the fall's width). Left after P4c-6 and taken up in P4c-6b:
+the lip row a straight bright line, the side edges dead straight, the mist radial ovals.
+Known and not the falls': forest canopies cover falls from the fixed camera; savanna's
+sandstone a notch too orange.
+
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
 download-signal fix (pushed to `main` as a08b639). Needs a two-account test, e.g. on the
@@ -212,8 +292,28 @@ Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
   than water from the home view. (The foam outlines along submerged reed blades went with
   the boulder-line fix, P4b-0; confirmed in the wetland re-render of the P4b-3 judgment set.)
-- Waterfalls between reaches (a riffle is the only step): phase 4c (Roadmap). Fords: see the
-  crossing follow-ups.
+
+Waterfall follow-ups (phase 4c, P4c-1 to P4c-5, 2026-10-04; none blocking):
+- `WaterGeometry.level_at` has no flush cut at a reach's end, so within the half-width plus
+  the bank of a lip the fall's face reads the upper pool's level and `is_wet_at` is true on
+  the rock. Worked around twice (P4c-5): `CrossingPlacement` refuses a line across the face as
+  `fall`, and `WaterEdit.join_line` treats face points as dry (`WaterFalls.on_face`). If another
+  tool starts reading the face as wet, a flush cut in `level_at` is the real fix.
+- The carve's crease where a face emerges from a natural slope is grid-sampled and zigzags
+  0.10-0.14 m at 10-60 degrees off the axes (P4c-2; not seen on screen at the rendered angles).
+- Noisy ground within 0.5 m of a cliff can leave the level step just under 0.75 m, so the
+  runtime rule sees a riffle where the plan placed a fall (P4c-1; for the judgment set).
+- Narrow channels do not reach the full plunge depth: `section()`'s `MAX_SHORE_SLOPE` caps how
+  much of it the centreline reaches (ankle, half-width 0.55: about 0.5 m of the planned
+  0.9 m). Left as is (P4c-2).
+- Smoothing a fall's face alone may leave its curtain until the pool edge is smoothed too
+  (`WaterFalls.face_search` catches the brush's own shoulder; P4c-5).
+- The fall refusal zone for crossings is generous downstream: about 4 m below a waist river's
+  lip (the footprint plus the foam ring disc plus 1 m; P4c-5).
+- Pond spills over an edge (an automatic outflow) are later work; today a river drawn out of
+  a pond over the edge falls by the same rule as any other (decided 2026-10-04).
+- A bridge over the lip (a deck spanning a fall) is not in scope; any crossing within 1 m of
+  a fall is refused. It can be added later if wanted (decided 2026-10-04).
 
 Crossing follow-ups (after P4b-3, 2026-09-27; later work, none blocking):
 - A stone arch (the third kind the model leaves room for; the Bridge pane has a free column).
@@ -320,14 +420,40 @@ Follow-ups:
   drawn line), the pinned performance pass (`PERFORMANCE.md` "Phase 4b (crossings): pinned
   performance pass") and these docs. Phase 4b is done (2026-09-27); the stone arch, fords and
   crossings over a Blender map's own water are later work (Open work above).
-- **Phase 4c: waterfalls, then the remaining crossings (next, decided 2026-10-04).**
-  Waterfalls first: a river drawn across any steep drop falls there by itself, with no new
-  control (small drops stay riffles). Over a Tier cliff the water uses the existing rock
-  face; on a steep natural slope the carve cuts a rock lip with a plunge pool below, so a
-  river down a hillside steps in falls. Ponds spilling over an edge are later work (a pond
-  outflow is a river drawn from the pond over the edge, which confluences already
-  support). After waterfalls: the stone arch, then fords. Crossings over a dressed Blender
-  map's own water are deferred to a separate terrain-paint integration sprint.
+- **Phase 4c: waterfalls (done, 2026-10-04), then the remaining crossings.** Waterfalls: a
+  river drawn across any steep drop falls there by itself, with no new control (small drops
+  stay riffles). Over a Tier cliff the water uses the existing rock face; on a steep natural
+  slope the carve cuts a rock lip with a plunge pool below, so a river down a hillside steps
+  in falls. Decisions (2026-10-04): falls are automatic and form over Tier cliffs and steep
+  natural slopes alike; a stroke drawn uphill is flipped so water always runs downhill and
+  falls face downstream, and the ribbon's chevrons show the real direction; any crossing
+  within 1 m of a fall is refused in plain words, a deck over the lip is not in scope; ponds
+  spilling over an edge are later work (a pond outflow is a river drawn from the pond over
+  the edge, which confluences already support and which falls by the same rule). Plan:
+  `docs/plans/2026-10-04-phase4c-waterfalls.md` (local; its "done" sections record what was
+  built). P4c-0 (done): throwaway Godot probes settled the render ordering (at an equal
+  priority the water erases the curtain, so the fall material sits strictly above the
+  water's), the screen texture (it never holds a transparent curtain), billboards and the
+  depth copy's cost, two-sided lighting (no normal flip) and Jolt landing on carved faces.
+  P4c-1 (done): the rule and the plan (`WaterFalls`: the fine profile along the stroke, drop
+  runs of 0.75 m or more at a slope a riffle cannot follow, lips at least a spacing apart as
+  forced reach boundaries with the face free of the reach rule, uphill strokes reversed, the
+  diagonal lip set-back, the widened plunge-pool point, gentle strokes byte-identical to
+  v0.1.29). P4c-2 and 2b (done): the carve (the tier profile upside down with a harder lip,
+  a plunge pool deepest at the face's foot, and gorge side walls at 54 degrees so a hillside
+  fall cuts a tight rock notch where the first render cut an 8 m rock wall for a 1 m stream).
+  P4c-3 (done): the curtain, foam ring and mist mesh (`WaterFallMesh`), the
+  `AuthoredWater-falls` node, no cascade sheet over a face, the face in the wet dressing and
+  the flow bake. P4c-4 (done): the falls shader (a white roll at the lip, streaks that
+  accelerate in fall-time space, a churn ring on the pool, depth-faded mist, a Low quality
+  tier), the one shared fall material restyled by the Water pane's palette and motion tiles
+  with no new field, the warm-up. P4c-5 (done): the fall refusal for crossings, a tributary
+  ending on a face joins the plunge pool, the ribbon follows the real direction, the Water
+  and Bridge hints and the F1 "Waterfall" row. P4c-6: the judgment set in all eight biomes
+  (`tools/render_jobs/jobs/phase4c_judgment_set.json`; Verification status above). P4c-7:
+  the pinned performance pass (`PERFORMANCE.md`). P4c-8: these docs. After waterfalls: the
+  stone arch, then fords. Crossings over a dressed Blender map's own water are deferred to a
+  separate terrain-paint integration sprint.
 - **Phase 5:** more starting points. `NewMap` already gives each biome a starting cover
   (groves at the edges, an open glade for the fight); new maps still start flat. The likely
   next step is starting landforms (a river valley, a hilltop, terraced tiers, a lakeshore)

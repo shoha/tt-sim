@@ -840,26 +840,37 @@ and nothing numeric in the main flow:
   path, else Dirt track), so a badlands map starts on its own track rather than one that
   vanishes on red sand; once picked, re-ordering never changes the selection.
 - **Water** (P4-4, `WaterToolPane`, `water_tool_pane.gd`): a Shape `TileField` with River
-  (`ripple`, "Draw a river: it flows the way you draw it") and Pond (`circle-dashed`), a Depth
-  `TileField` with Ankle (`shoe`), Waist (`walk`) and Deep (`swimming`), and under it a one-line
-  hint of what the depth means for tokens ("Ankle deep: a stream tokens wade across.", "Waist
-  deep: tokens wade, slowly.", "Deep: tokens swim, floating at the surface."). Tile ids and
-  node names `water_river`, `water_pond`, `water_ankle`, `water_waist`, `water_deep`; River and
-  Waist are preselected. Picking a tile emits `water_shape_selected` / `water_depth_selected`
-  and activates the Water brush. The hint line (`WaterHint`) says the gestures and that the
-  ground stays carved when water is erased (Sculpt's Smooth fills a dry channel). No numbers
-  in the main flow: its `Advanced` foldout (`WaterAdvanced`) holds Width (the full channel,
-  twice the brush radius, "Stream" / "River") and Flow (the river's flow speed 0 to 2,
-  "Still" / "Rushing"), values hidden.
+  (`ripple`, "Draw a river: it flows the way you draw it, always downhill; a steep drop makes
+  a waterfall", P4c-5) and Pond (`circle-dashed`, "Paint a pond or a lake: still water in a
+  basin"), a Depth `TileField` with Ankle (`shoe`), Waist (`walk`) and Deep (`swimming`), and
+  under it a one-line hint of what the depth means for tokens ("Ankle deep: a stream tokens
+  wade across.", "Waist deep: tokens wade, slowly.", "Deep: tokens swim, floating at the
+  surface."). Tile ids and node names `water_river`, `water_pond`, `water_ankle`,
+  `water_waist`, `water_deep`; River and Waist are preselected. Picking a tile emits
+  `water_shape_selected` / `water_depth_selected` and activates the Water brush. The hint line
+  (`WaterHint`) says the gestures, that a river falls by itself over a steep drop, that the
+  ground stays carved when water is erased, and that sculpting never makes or moves a fall
+  (P4c-5 wording: "River: draw its line from where the water comes to where it goes; over a
+  steep drop it falls by itself. Pond: paint an area; start inside a pond to grow it.
+  Shift+wheel or [ and ] set the width. Hold Ctrl as you press to erase water; the ground
+  stays carved (Sculpt's Smooth fills a dry channel). Sculpting never makes or moves a
+  waterfall: erase the river and draw it again."). No numbers in the main flow: its
+  `Advanced` foldout (`WaterAdvanced`) holds Width (the full channel, twice the brush radius,
+  "Stream" / "River") and Flow (the river's flow speed 0 to 2, "Still" / "Rushing"), values
+  hidden.
 - **Bridge** (P4b-2, `BridgeToolPane`, `bridge_tool_pane.gd`): a Crossing `TileField`
   (`BridgeKindField`, three columns so a stone arch can join) with Planks (`bridge-plank`, "A
   plank footbridge: arched boards on posts, bank to bank") and Stones (`stepping-stones`,
   "Stepping stones: flat rocks one stride apart, just above the water"); ids and node names
   `bridge_plank`, `bridge_stones`; Planks preselected. Picking a tile emits
   `bridge_kind_selected(kind)` and activates the Bridge tool. The hint line (`BridgeHint`) says
-  the gesture, the width keys, Ctrl-click to remove, and that a crossing follows later edits
-  and goes with its water; while the map has no water a second line (`BridgeWaterHint`) says
-  to make a river or pond first. No numbers and no Advanced foldout: a crossing sizes itself
+  the gesture, that bridges cross calm water and not a waterfall (P4c-5), the width keys,
+  Ctrl-click to remove, and that a crossing follows later edits and goes with its water
+  (wording: "Drag a line across a river or pond, from one bank to the other: the crossing
+  finds the banks and sizes itself. Bridges cross calm water, not a waterfall. Shift+wheel or
+  [ and ] set its width. Hold Ctrl and click a crossing to remove it. A crossing follows later
+  edits to its banks and goes when its water does."); while the map has no water a second
+  line (`BridgeWaterHint`) says to make a river or pond first. No numbers and no Advanced foldout: a crossing sizes itself
   to the water, and its width is Shift+wheel. **Why its own rail item, not a tile in Water:**
   a crossing is an object laid over water with its own gesture (a line placed whole on
   release) and its own Ctrl (remove a crossing, not erase water); as a third Shape tile beside
@@ -905,9 +916,10 @@ the kind and the span in the level's units ("Plank bridge  16 ft"), or idle its 
 and with a dot at both ends, and the
 readout gives the reason in plain words (`BridgeBrush.refusal_text`): "No water to cross here.
 Drag from bank to bank over a river or pond.", "No dry bank to land on at one end. Try a
-narrower spot.", "Too wide to cross (at most 79 ft). Try a narrower spot.", or, for a click,
-"Drag a line from one bank across the water to the other."; releasing there shows the same as
-a warning toast. The tool's pointer ray sees crossings (the other brushes skip them), so Ctrl
+narrower spot.", "Too wide to cross (at most 79 ft). Try a narrower spot.", "Too close to the
+waterfall. Bridges cross calm water." (P4c-5: within 1 m of a fall's face or its foam ring,
+ARCHITECTURE.md "Crossings"), or, for a click, "Drag a line from one bank across the water to
+the other."; releasing there shows the same as a warning toast. The tool's pointer ray sees crossings (the other brushes skip them), so Ctrl
 hovering a deck or a stone picks it where it is drawn. Crossings follow later edits (Sculpt,
 Water; ARCHITECTURE.md "Crossings"): re-anchored in place, or removed with their water, with
 an info toast ("A crossing lost its water and was removed. Undo brings both back.") and one
@@ -915,13 +927,22 @@ undo for both. The tool starts loading the crossing textures when it opens and m
 materials 0.4 s later, so the first placement costs about 7-9 ms of main thread (plan 2 ms,
 geometry and nodes 3 ms), not 25-30.
 
-Water (P4-4). The river flows the way it was drawn (its first point is upstream). A river
-drawn over sloped ground is split into flat reaches joined by small rapids; its ends inside
-the map close in rounded heads. A river that starts or ends in another river or pond joins it
-there (a confluence: it is cut at that water's edge and meets it at its level, or below for
-an outflow), and a line lying all in water is refused with a toast. The ribbon preview shows
-the width, a gradient and chevrons downstream, and the readout "River  Waist  40 ft" (the
-line's length in the level's units); Pond shows "Pond  Deep" and its painted dabs. The carve
+Water (P4-4). The river flows the way it was drawn (its first point is upstream), except that
+a stroke drawn uphill (its end standing 0.75 m or more above its start) is reversed, so water
+always runs downhill (P4c-5; `WaterBrush.flow_line`, two ground reads per frame, so the ribbon
+and the carve agree). A river drawn over sloped ground is split into flat reaches joined by
+small rapids, and over a steep drop it falls by itself with no control (phase 4c:
+ARCHITECTURE.md "Water model and flow bake"); its ends inside the map close in rounded heads.
+A river that starts or ends in another river or pond joins it there (a confluence: it is cut
+at that water's edge and meets it at its level, or below for an outflow; an end on a
+waterfall's face moves into the plunge pool below it), and a line lying all in water is
+refused with a toast. The ribbon preview shows the width, a gradient and chevrons the way the
+water will really run (downhill, whichever way the line was drawn), and the readout "River
+Waist  40 ft" (the line's length in the level's units); Pond shows "Pond  Deep" and its
+painted dabs. The F1 help's "Map building" group has a "Waterfall" row (P4c-5): "A river
+over a steep drop falls there by itself. Sculpting never makes or moves a fall: erase the
+river and draw it again"; its Bridge row reads "Drag across calm water, bank to bank: planks
+or stones". The carve
 computes on a worker and lands over three frames, so a release never holds the view
 (`docs/PERFORMANCE.md` "Water tool"); the ribbon stays faintly
 until it lands. Ctrl erases a river whole, every reach of the stroke it touches (drawn red
