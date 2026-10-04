@@ -9,7 +9,7 @@ extends RefCounted
 ## refreshes the same consumers: the map's AuthoredCrossings (meshes, collision, the deck the
 ## grid lies on) and the scatter over the crossing's footprint (plants clear under a deck and
 ## at its bank landings, and grow back when it goes: ScatterGround). Frames: world in, document
-## inside, as the editor. Summary: docs/ARCHITECTURE.md "Crossings".
+## inside, as the editor. Summary: docs/systems/crossings.md.
 ##
 ## A dressed Blender map keeps its own Blender scatter under a crossing (the erase mask is the
 ## author's; only the authored scatter clears).

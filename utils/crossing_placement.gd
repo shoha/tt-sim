@@ -5,7 +5,7 @@ extends RefCounted
 ## dragged line): the pure snapping rule from a drawn segment to an anchored Crossing, read
 ## from the document's ground and water alone (MapDocument.heights and water_bodies through
 ## WaterGeometry's point queries), so the tool only wires input. Summary:
-## docs/ARCHITECTURE.md "Crossings".
+## docs/systems/crossings.md.
 ##
 ## The rule. The drawn segment is walked every STEP_M, reaching SEARCH_M past both drawn ends
 ## (a short line dropped on the water still finds its banks). A sample is wet where its ground

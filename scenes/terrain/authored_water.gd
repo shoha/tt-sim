@@ -35,7 +35,7 @@ extends Node3D
 ## geometry and the flow bake (about 0.3 s on a 200 ft map) run on a worker thread from a
 ## snapshot of the document, and the result is swapped in on the main thread (the baked flow
 ## is written into the document, which ships it). A request while one runs is queued; only
-## the newest queued one runs. Summary: docs/ARCHITECTURE.md "Authored water at runtime".
+## the newest queued one runs. Summary: docs/systems/water.md (Authored water at runtime).
 
 signal refreshed
 

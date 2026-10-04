@@ -1,8 +1,8 @@
 extends GutTest
 
 ## Waterfalls (phase 4c, P4c-1): the fall-or-riffle rule (WaterFalls) and the river plan it
-## shapes (WaterEdit.plan_river: orient, fine profile, lips, plunge point, subdivision), on
-## ground built with the project's own tier profile and ramps.
+## shapes (WaterFallPlan, through WaterEdit.plan_river: orient, fine profile, lips, plunge
+## point, subdivision), on ground built with the project's own tier profile and ramps.
 
 const GRASS := "grass"
 ## Ground shapes (the tier band, the ramp) and the carve, shared with the carve tests.
@@ -242,17 +242,21 @@ func test_drop_runs_find_steep_losses_only() -> void:
 			g -= minf(s - 10.5, 0.6)
 		ground.append(g)
 		s += 0.25
-	var runs := WaterFalls.drop_runs(arc, ground)
+	var runs := WaterFallPlan.drop_runs(arc, ground)
 	assert_eq(runs.size(), 1, "the 0.4 slope and the 0.6 m step are no drops: %s" % str(runs))
 	if runs.size() == 1:
 		assert_almost_eq(arc[runs[0].x], 2.0, 1e-5, "from the brink")
 		assert_almost_eq(arc[runs[0].y], 5.0, 1e-5, "to the foot")
-	assert_eq(WaterFalls.drop_runs(PackedFloat32Array([0.0]), PackedFloat32Array([1.0])).size(), 0)
+	assert_eq(
+		WaterFallPlan.drop_runs(PackedFloat32Array([0.0]), PackedFloat32Array([1.0])).size(), 0
+	)
 	assert_almost_eq(
 		WaterFalls.FALL_FACE_SLOPE, tan(deg_to_rad(44.0)), 1e-6, "the cliff rule's start"
 	)
-	assert_true(WaterFalls.is_uphill(PackedFloat32Array([0.0, 0.5, 0.8])))
-	assert_false(WaterFalls.is_uphill(PackedFloat32Array([0.0, 0.9, 0.7])), "a hump is not uphill")
+	assert_true(WaterFallPlan.is_uphill(PackedFloat32Array([0.0, 0.5, 0.8])))
+	assert_false(
+		WaterFallPlan.is_uphill(PackedFloat32Array([0.0, 0.9, 0.7])), "a hump is not uphill"
+	)
 
 
 @warning_ignore("integer_division")
@@ -290,9 +294,9 @@ func test_tier_stroke_falls_once_at_the_brink() -> void:
 	var stroke_width := WaterCarve.min_half_width(WaterBody.Depth.WAIST)
 	var foot := WaterCarve.fall_foot(float(fall.top) - float(fall.bottom), lower.depth_m())
 	var widest := _widest(lower)
-	assert_almost_eq(widest.y, stroke_width * WaterFalls.PLUNGE_WIDEN, 1e-4, "the plunge point")
+	assert_almost_eq(widest.y, stroke_width * WaterFallPlan.PLUNGE_WIDEN, 1e-4, "the plunge point")
 	var plunge: float = fall.plunge
-	assert_almost_eq(widest.x, foot + plunge * 0.5, WaterFalls.MERGE_M + 1e-3, "past the foot")
+	assert_almost_eq(widest.x, foot + plunge * 0.5, WaterFallPlan.MERGE_M + 1e-3, "past the foot")
 	assert_almost_eq(_width_along(lower, foot), stroke_width, 0.05 * stroke_width, "at the foot")
 	assert_almost_eq(_width_along(lower, foot * 0.5), stroke_width, 1e-4, "down the face")
 	# The footprint: the face samples under the channel between the lip and the foot.
@@ -359,7 +363,7 @@ func test_the_pool_widens_below_the_face_not_the_face() -> void:
 		var foot := WaterCarve.fall_foot(drop, lower.depth_m())
 		var plunge := WaterFalls.plunge_length(drop)
 		var s := 0.0
-		while s <= foot - WaterFalls.MERGE_M:
+		while s <= foot - WaterFallPlan.MERGE_M:
 			assert_almost_eq(
 				_width_along(lower, s), stroke_width, 1e-4, "fall %d: the face at %.2f m" % [k, s]
 			)
@@ -370,19 +374,19 @@ func test_the_pool_widens_below_the_face_not_the_face() -> void:
 		var length := 0.0
 		for i in range(1, lower.points.size()):
 			length += lower.points[i - 1].distance_to(lower.points[i])
-		var limit := length - (2.0 if k + 1 < flags.size() else 1.0) * WaterFalls.MERGE_M
+		var limit := length - (2.0 if k + 1 < flags.size() else 1.0) * WaterFallPlan.MERGE_M
 		var widest := _widest(lower)
 		if foot + plunge * 0.5 > limit:
 			assert_almost_eq(widest.y, stroke_width, 1e-4, "fall %d: no room, not widened" % k)
 			continue
 		widened += 1
-		assert_almost_eq(widest.y, stroke_width * WaterFalls.PLUNGE_WIDEN, 1e-4, "fall %d" % k)
+		assert_almost_eq(widest.y, stroke_width * WaterFallPlan.PLUNGE_WIDEN, 1e-4, "fall %d" % k)
 		assert_almost_eq(
-			widest.x, foot + plunge * 0.5, WaterFalls.MERGE_M + 1e-3, "fall %d: in the pool" % k
+			widest.x, foot + plunge * 0.5, WaterFallPlan.MERGE_M + 1e-3, "fall %d: in the pool" % k
 		)
 		assert_almost_eq(
 			_width_along(lower, foot + plunge * 0.5),
-			stroke_width * WaterFalls.PLUNGE_WIDEN,
+			stroke_width * WaterFallPlan.PLUNGE_WIDEN,
 			0.05 * stroke_width,
 			"fall %d: widest half a plunge length past the foot" % k
 		)

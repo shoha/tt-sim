@@ -52,7 +52,7 @@ extends RefCounted
 ## water_flow is the baked map-wide flow map (WaterFlowBaker), RG8 pixel data of
 ## water_flow_size texels, empty when there is none. One flow map per map because the
 ## water shader has one flow sampler per level. WaterGeometry derives the wet samples and
-## per-sample levels. Summary: docs/ARCHITECTURE.md "Water model and flow bake".
+## per-sample levels. Summary: docs/systems/water.md (Water model and flow bake).
 ##
 ## Crossings. crossings holds the plank bridges and stepping stones (Crossing, stable ids),
 ## built from their fields alone (CrossingGeometry). Summary: docs/ARCHITECTURE.md

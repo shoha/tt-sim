@@ -4,7 +4,7 @@ extends RefCounted
 ## Pure geometry of the authored water model (MapDocument.water_bodies, WaterBody): river
 ## courses, distance to a polyline, the area and wet samples of each body, per-sample
 ## water levels, and the level rules. Shared by the flow bake (WaterFlowBaker), the
-## carve and the water surface. Summary: docs/ARCHITECTURE.md "Water model and flow bake".
+## carve and the water surface. Summary: docs/systems/water.md (Water model and flow bake).
 ##
 ## Areas. A river's area is every point within its half-width plus RIVER_BANK_M of its
 ## course (the Chaikin-smoothed control line, river_course()), the half-width taken at
