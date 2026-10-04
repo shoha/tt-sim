@@ -1917,3 +1917,104 @@ a map near the 64-crossing cap would hitch about 150 ms per placement. Rebuildin
 changed crossing needs a key that includes the ground under it (a sculpt can change a bridge's
 piles and a stone's root without changing its fields), so it is left as open work
 (MAP_AUTHORING.md).
+
+## Phase 4c (waterfalls): pinned performance pass (2026-10-04)
+
+What falls cost in play (the falls mesh shown and hidden in one run, Water Quality Low against
+High), on loading (a map with falls against a twin without), and in authoring (the stream
+strokes that make falls, an erase).
+
+**How.** Render jobs `jobs/p4c_perf_build.json` and `jobs/p4c_perf_play.json`. The build job
+makes a 150 ft temperate forest map (seed 1234) with the judgment set's two-tier step and 13 m
+Raise hill, then a waist river over the step facing the camera, an ankle tributary off the
+step's west shelf, two ankle streams down the hill's near flank (real Water tool strokes at
+human speed, `record` windows around the hill strokes and an erase) and a deep river off the
+step's far edge (`water.gd carve`, the synchronous editor API): six falls (`falls.gd`: the
+tier fall 3.05 m of drop, the tributary 1.52 m, three on the hill of 3.5, 3.4 and 6.5 m, the
+away-facing one 3.0 m; faces 64-74 degrees), saved as `_p4c_perf_falls` (11 bodies). Then the
+same sculpt with the same five waters drawn on the flat ground south of the step, saved as
+`_p4c_perf_riffles` (5 bodies, no falls). The play job ran with the pinned `override.cfg`
+(viewport 1920x1080 in every sample, removed by the job at startup), vsync off at runtime for
+frame windows and on for loads, the user's graphics settings (Water Quality High), a debug
+build. RTX 3080, idle before the build (`nvidia-smi`: 0 %, 41 C, P8). Both levels are kept
+for `--saved` reruns; `jobs/cleanup_levels.json` deletes them.
+
+### Play: the falls mesh shown and hidden in one run
+
+`_p4c_perf_falls` in play with four tokens (in the tier fall's plunge pool, on its lip, in a
+hill stream, in the away-facing river), the one `AuthoredWater-falls` mesh hidden and shown
+(`falls.gd falls_visible`; the water stays), on / off / on / off, 6 s windows. GPU median ms:
+
+| View | On #1 | Off #1 | On #2 | Off #2 | Falls mesh |
+| --- | --- | --- | --- | --- | --- |
+| Home (zoom 13.85, all six in view; 464 draws, 380K prims) | 3.858 | 3.930 | 3.973 | 3.981 | -0.07 / -0.01 (noise: the CPU median drifted 4.40 to 4.63 over the four windows) |
+| Zoom 8 on the hill (three falls; 177 draws, 162K prims) | 2.438 | 2.414 | 2.439 | 2.413 | +0.024 / +0.026 |
+| Zoom 8 on the tier fall (247 draws, 237K prims) | 3.430 | 3.378 | 3.434 | 3.384 | +0.052 / +0.050 |
+| Zoom 20 (whole map; 623 draws, 493K prims) | 3.893 | 3.884 | 3.900 | 3.883 | +0.009 / +0.017 |
+
+**Verdict: the curtains, foam rings and mist cost 0.05 ms at most, at zoom 8 on the widest
+fall, and nothing measurable at home or at zoom 20**, against the plan's targets of 0.1 ms
+per fall in view at zoom 8 and 0.3 ms at home. The whole falls mesh is one draw call.
+
+Water Quality Low (the shader's second octave, the mist and the pool's refraction off;
+`falls.gd quality`) against High, high / low / high / low in the same run, GPU median ms:
+
+| View | High #1 | Low #1 | High #2 | Low #2 | Low saves |
+| --- | --- | --- | --- | --- | --- |
+| Home | 4.047 | 4.020 | 4.057 | 4.014 | 0.03-0.04 ms |
+| Zoom 8 on the tier fall | 3.437 | 3.423 | 3.436 | 3.430 | 0.01 ms |
+
+Low is a visual tier here, not a performance one, as it was for the water shader in phase 4:
+the cost is the pixels, and there are few of them.
+
+The two levels played one after the other (8 s windows, no tokens), GPU median ms:
+`_p4c_perf_riffles` home 3.661 (484 draws, 411K prims), zoom 20 3.698; `_p4c_perf_falls` home
+3.987 (451 draws, 368K prims), zoom 20 3.925. The falls level reads 0.23-0.33 ms slower with
+fewer primitives. The in-run A/B puts at most 0.05 ms of that on the falls mesh; the rest is
+the water itself (eleven bodies against five, 2,869 bed samples against 2,164, so more water
+surface in view, and the water shader is the dearest pixel on the map) plus drift (the falls
+level was measured last, the GPU at 72 C, P0, 83 % utilisation at the end). Not separated
+further.
+
+### Load time and memory
+
+From the title, vsync on, one process: `_p4c_perf_falls` opened in authoring first
+(`perf.gd dress`, for `falls.gd`'s `found:` names: loading screen 2,826 ms, worst frame
+857 ms, the process's first open with the palette resolve), then three interleaved warm play
+rounds:
+
+| Level | Warm (3) | Worst frame, warm |
+| --- | --- | --- |
+| `_p4c_perf_riffles` (5 bodies, no falls) | 1,137 / 1,108 / 1,113 ms | 165-170 ms |
+| `_p4c_perf_falls` (11 bodies, 6 falls) | 1,281 / 1,287 / 1,286 ms | 164-166 ms |
+
+**Six falls and six more reaches add about 170 ms to a warm load** (mean 1,285 against
+1,119 ms); the worst frame is the same 165-175 ms frame every authored load has (P4b-0). The
+falls' own share is not separated from the extra bodies' here: the curtain mesh is built on
+the load's worker (`AuthoredLoadPrep`'s WATER part) with the water surface, and
+`WaterFalls.falls()` is O(bodies^2) with about 20 height reads per pair, so the main-thread
+share should be small. A twin with the same eleven bodies on gentle ground would settle it,
+if loads come to matter. Memory in play: static 300.9 MB, video 1,649 MB, working set
+1,249 MB (peak 1,370) with the falls; 300.3 / 1,649 / 1,295 MB without. Nothing to see.
+
+### Authoring: strokes that make falls, and an erase
+
+The build job's `record` windows at zoom 20, vsync off, CPU frame ms median / worst (n):
+
+| Gesture | Falls map (hill flank) | Twin (flat ground) |
+| --- | --- | --- |
+| Idle | 4.0 / 6.9 (994) | |
+| An ankle stream 13 m down the flank (two falls) / the same length on the flat | 4.4 / 22.6 (1266) | 4.3 / 20.2 (1370) |
+| Its erase (Ctrl at the press) | 4.4 / 22.1 (1172) | 4.4 / 18.0 (1285) |
+| A second ankle stream down the flank (one 6.5 m fall) | 4.4 / 22.2 (1320) | |
+| A deep 13 m river through `water.gd carve` (synchronous editor API, not the tool) | 4.4 / 628 (328) | 4.3 / 356 (358) |
+
+**A stroke that makes falls lands in the same frame budget as one that does not** (worst
+22-23 ms against 18-20 ms, inside phase 4's 21-29 ms): the fall plan (the fine profile, the
+lips, the set-back) runs in `plan_river` on the main thread at release, the carve on the
+worker, as before. The probe carve is the synchronous path (the whole plan, carve, refresh
+and regeneration in one frame), so its 356 and 628 ms are not what the tool costs; the 270 ms
+between them is the fall profile, plunge pool and gorge walls over 13 m of deep river against
+a flat channel, an upper bound on the worker's extra work. The map's first falls (the tier
+river and the tributary) were drawn before the record windows, so the first use of the fall
+material (warmed when the Water tool opens, P4c-4) is not in these numbers.

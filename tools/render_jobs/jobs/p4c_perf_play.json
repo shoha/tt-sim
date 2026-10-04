@@ -1,0 +1,132 @@
+{
+ "out_dir": "render_jobs/p4c_perf",
+ "timeout_s": 1200,
+ "hang_s": 90,
+ "remove_override": true,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "play start"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "dress", "folder": "_p4c_perf_falls"},
+  {"op": "wait", "s": 2.0},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "falls"},
+  {"op": "title"},
+  {"op": "wait", "s": 1.5},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "play", "folder": "_p4c_perf_falls"},
+  {"op": "wait", "s": 2.0},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "title"},
+  {"op": "wait", "s": 1.5},
+  {"op": "expand", "values": ["_p4c_perf_riffles", "_p4c_perf_falls", "_p4c_perf_riffles", "_p4c_perf_falls", "_p4c_perf_riffles", "_p4c_perf_falls"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "play", "folder": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5}
+  ]},
+
+  {"op": "play", "folder": "_p4c_perf_falls"},
+  {"op": "wait", "s": 2.0},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "tokens", "points": ["found:fall1_plunge", "found:fall1_lip", [20.5, 9.0], [3.0, -15.0]]},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "report"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "falls", "ws": true},
+  {"op": "vsync_off"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "before frames"},
+  {"op": "home"},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "falls home"},
+  {"op": "expand", "values": ["on #1", "off #1", "on #2", "off #2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "falls_visible", "visible": "{value}"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "falls home falls {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "zoom", "size": 8.0},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "look", "at": [20.0, 8.0]},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "falls z8 hill"},
+  {"op": "expand", "values": ["on #1", "off #1", "on #2", "off #2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "falls_visible", "visible": "{value}"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "falls z8 hill falls {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "look", "at": "found:fall1_foot"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "falls z8 tier"},
+  {"op": "expand", "values": ["on #1", "off #1", "on #2", "off #2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "falls_visible", "visible": "{value}"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "falls z8 tier falls {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "zoom", "size": 20.0},
+  {"op": "wait", "s": 2.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "falls z20"},
+  {"op": "expand", "values": ["on #1", "off #1", "on #2", "off #2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "falls_visible", "visible": "{value}"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "falls z20 falls {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "falls_visible", "visible": true},
+
+  {"op": "home"},
+  {"op": "wait", "s": 2.0},
+  {"op": "expand", "values": ["high #1", "low #1", "high #2", "low #2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "quality", "low": "{value}"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "falls home quality {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "zoom", "size": 8.0},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "look", "at": "found:fall1_foot"},
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": ["high #1", "low #1", "high #2", "low #2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "quality", "low": "{value}"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "falls z8 tier quality {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "quality", "low": false},
+  {"op": "title"},
+  {"op": "wait", "s": 1.5},
+
+  {"op": "expand", "values": ["_p4c_perf_riffles", "_p4c_perf_falls"], "template": [
+   {"op": "play", "folder": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "vsync_off"},
+   {"op": "home"},
+   {"op": "wait", "s": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "{value} home"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "{value} home"},
+   {"op": "wait", "s": 8.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"},
+   {"op": "zoom", "size": 20.0},
+   {"op": "wait", "s": 2.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "{value} z20"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "{value} z20"},
+   {"op": "wait", "s": 8.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "{value}", "ws": true},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "play end"}
+ ]
+}
