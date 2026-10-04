@@ -356,6 +356,61 @@ func test_fall_profile_is_the_tier_face_with_a_harder_lip() -> void:
 	assert_lt(small.x, -0.5, "a small step in deep water is a low bar")
 
 
+func test_fall_walls_steepen_down_the_face_and_relax_past_the_pool() -> void:
+	# The side-wall rule (P4c-2b, bed_line's gorge share): 0 along a flat reach, rising over the
+	# pool tail to 1 at the lip, 1 down the face to the carved foot, back to 0 over the plunge
+	# length; a riffle step never has it. At 1 the bank rises at FALL_BANK_SLOPE and the cut
+	# reaches FALL_BANK_REACH_M; at 0 section() and blend_with_ground() are exactly the
+	# ordinary ones (the riffle carve is byte-identical).
+	var depth := WaterBody.depth_for(WaterBody.Depth.ANKLE)
+	var drop := 3.0
+	var bounds := PackedFloat32Array([10.0])
+	var levels := PackedFloat32Array([drop, 0.0])
+	var taper := Vector2i.ZERO
+	var fall := PackedByteArray([1])
+	var riffle := PackedByteArray([0])
+	var tail := WaterCarve.step_shape(drop, 0.0, depth, true).y
+	var foot := WaterCarve.fall_foot(drop, depth)
+	var length := WaterFalls.plunge_length(drop)
+	var at := func(s: float, flags: PackedByteArray) -> float:
+		return WaterCarve.bed_line(s, bounds, levels, depth, 20.0, taper, flags).z
+	assert_eq(at.call(10.0 - tail - 0.5, fall), 0.0, "the flat reach above the pool tail")
+	assert_between(at.call(10.0 - tail * 0.5, fall), 0.3, 0.7, "rising over the pool tail")
+	assert_almost_eq(at.call(10.0, fall), 1.0, 1e-6, "at the lip")
+	assert_almost_eq(at.call(10.0 + foot * 0.5, fall), 1.0, 1e-6, "down the face")
+	assert_almost_eq(at.call(10.0 + foot, fall), 1.0, 1e-6, "at the foot")
+	assert_between(at.call(10.0 + foot + length * 0.5, fall), 0.3, 0.7, "fading over the pool")
+	assert_eq(at.call(10.0 + foot + length + 0.1, fall), 0.0, "the pool's ordinary banks")
+	assert_almost_eq(WaterCarve.fall_gorge(foot + length * 0.5, drop, depth), 0.5, 1e-6)
+	for s in [2.0, 10.0 - tail * 0.5, 10.0, 11.0, 14.0]:
+		assert_eq(at.call(s, riffle), 0.0, "a riffle at %.1f m" % s)
+	var level := 0.0
+	var bed := level - depth
+	var ankle := WaterBody.Depth.ANKLE
+	assert_eq(
+		WaterCarve.section(1.0, level, bed, ankle, 0.55, 0.0),
+		WaterCarve.section(1.0, level, bed, ankle, 0.55),
+		"no gorge: the ordinary section"
+	)
+	var steep := WaterCarve.section(2.0, level, bed, ankle, 0.55, 1.0)
+	var ordinary := WaterCarve.section(2.0, level, bed, ankle, 0.55)
+	assert_almost_eq(steep - WaterCarve.section(1.0, level, bed, ankle, 0.55, 1.0), 1.4, 1e-6)
+	assert_almost_eq(steep, level + 2.0 * WaterCarve.FALL_BANK_SLOPE, 1e-6, "the gorge wall")
+	assert_almost_eq(ordinary, level + 2.0 * WaterCarve.BANK_SLOPE[ankle], 1e-6, "the bank")
+	assert_eq(
+		WaterCarve.blend_with_ground(-1.0, 0.0, 5.0, 0.0),
+		WaterCarve.blend_with_ground(-1.0, 0.0, 5.0),
+		"no gorge: the ordinary reach"
+	)
+	assert_lt(WaterCarve.blend_with_ground(-1.0, 0.0, 5.0), 0.0, "cut at 5 m from the bank")
+	assert_eq(WaterCarve.blend_with_ground(-1.0, 0.0, 5.0, 1.0), 0.0, "not from a gorge")
+	assert_lt(
+		WaterCarve.blend_with_ground(-1.0, 0.0, WaterCarve.FALL_BANK_REACH_M - 0.5, 1.0),
+		0.0,
+		"the gorge's cut fades out at its own reach"
+	)
+
+
 func test_hillside_fall_face_is_rock_across_the_channel() -> void:
 	# A 35 degree ramp (no rock by the cliff rule) with a waist river down it: two falls
 	# (test_water_falls). Before the carve the ground has no cliff-steep face, so the runtime
@@ -393,6 +448,74 @@ func test_hillside_fall_face_is_rock_across_the_channel() -> void:
 				"full rock below lip %s, %.1f m across" % [str(lip), across]
 			)
 			across += 0.1
+
+
+func test_hillside_fall_cuts_a_notch_not_a_quarry() -> void:
+	# An ankle stream (half-width 0.55) down the 35 degree ramp: two falls of about 3.5 m. From
+	# each lip to the foot of its face the carved ground outside the water reaches no further
+	# than two channel widths from the waterline either side (P4c-2b: at the ordinary bank slope
+	# the face swept sideways cut a rock wall 8 m wide for this 1.1 m stream), the wall at the
+	# foot rises at FALL_BANK_SLOPE, and at the lip itself the shoulders are barely touched.
+	Fixtures.ramp(_doc)
+	var start := _doc.heights.duplicate()
+	var bodies := WaterEdit.plan_river(
+		_doc,
+		PackedVector2Array([Vector2(-14, 0), Vector2(14, 0)]),
+		PackedFloat32Array([0.55, 0.55]),
+		WaterBody.Depth.ANKLE
+	)
+	var steps := _fall_steps(bodies)
+	assert_eq(steps.size(), 2, "two falls")
+	Fixtures.carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
+	var hw := bodies[0].half_widths[0]
+	assert_almost_eq(hw, 0.55, 1e-4, "the stroke's width")
+	var channel := 2.0 * hw
+	var columns := _doc.samples_x()
+	var rows := _doc.samples_z()
+	var cut_beyond := func(p: Vector2, side: float) -> float:
+		# How far past the waterline on `side` the ground at `p` along the course is carved.
+		var farthest := 0.0
+		var e := hw
+		while e < hw + WaterCarve.BANK_REACH_M:
+			var q := _doc.world_to_sample(p + Vector2(0, e * side))
+			var was := ScatterGenerator.triangle_height(start, columns, rows, q)
+			var now := ScatterGenerator.triangle_height(_doc.heights, columns, rows, q)
+			if was - now > 0.02:
+				farthest = e - hw
+			e += 0.05
+		return farthest
+	for k in steps:
+		var upper := bodies[k]
+		var lower := bodies[k + 1]
+		var lip: Vector2 = lower.points[0]
+		var drop := upper.level_m - lower.level_m
+		assert_gt(drop, 3.0, "fall %d: about half the hill" % k)
+		var foot := WaterCarve.fall_foot(drop, lower.depth_m())
+		var widest := 0.0
+		var x := 0.0
+		while x <= foot + 1e-6:
+			for side in [1.0, -1.0]:
+				widest = maxf(widest, cut_beyond.call(lip + Vector2(x, 0), side))
+			x += 0.25
+		assert_lt(
+			widest,
+			2.0 * channel,
+			(
+				"fall %d: the rock outside the water reaches %.2f m (channel %.2f m)"
+				% [k, widest, channel]
+			)
+		)
+		assert_gt(widest, 0.5 * channel, "fall %d: a notch is cut (%.2f m)" % [k, widest])
+		var shoulder := maxf(cut_beyond.call(lip, 1.0), cut_beyond.call(lip, -1.0))
+		assert_lt(shoulder, 0.5, "fall %d: the shoulders at the lip stand (%.2f m)" % [k, shoulder])
+		var wall := (
+			(
+				_height(_doc, lip + Vector2(foot, hw + 0.7))
+				- _height(_doc, lip + Vector2(foot, hw + 0.3))
+			)
+			/ 0.4
+		)
+		assert_almost_eq(wall, WaterCarve.FALL_BANK_SLOPE, 0.2, "fall %d: the wall at the foot" % k)
 
 
 func test_plunge_pool_sits_plunge_depth_below_the_bed() -> void:

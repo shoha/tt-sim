@@ -147,7 +147,9 @@ static func plan_river(
 		0 if WaterGeometry.is_wet_at(doc, course[-1]) else 1
 	)
 	var plan := WaterFalls.plan_lips(doc, course, widths, profile, free_ends)
-	var shaped := WaterFalls.shape_line(course, widths, ground, plan, ground_of)
+	var shaped := WaterFalls.shape_line(
+		course, widths, ground, plan, WaterBody.depth_for(depth), ground_of
+	)
 	course = shaped.points
 	widths = shaped.widths
 	ground = shaped.ground
