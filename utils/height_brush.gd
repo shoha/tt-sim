@@ -146,32 +146,35 @@ static func tier_goal(start: float, target: float, inset: float) -> float:
 
 
 ## The sharp raising profile (0 up to the foot at x = 0, a linear face of width `face` up
-## to rise - lip, the lip's ease-out over TIER_LIP_WIDTH_M, then `rise`) averaged over the
-## tent of half-width TIER_SOFTEN_M centred on `x`: the second difference of its second
-## antiderivative (_tier_g2) over the tent's half-width. 0 left of -TIER_SOFTEN_M, exactly
-## `rise` right of the sharp top plus TIER_SOFTEN_M, monotonic and C1 between.
-static func soft_tier_offset(x: float, rise: float, lip: float, face: float) -> float:
+## to rise - lip, the lip's ease-out over `lip_width` (a tier's TIER_LIP_WIDTH_M; a
+## waterfall's harder lip, WaterCarve.fall_profile, passes its own), then `rise`) averaged
+## over the tent of half-width TIER_SOFTEN_M centred on `x`: the second difference of its
+## second antiderivative (_tier_g2) over the tent's half-width. 0 left of -TIER_SOFTEN_M,
+## exactly `rise` right of the sharp top plus TIER_SOFTEN_M, monotonic and C1 between.
+static func soft_tier_offset(
+	x: float, rise: float, lip: float, face: float, lip_width: float = TIER_LIP_WIDTH_M
+) -> float:
 	var b := TIER_SOFTEN_M
 	if x + b <= 0.0:
 		return 0.0
-	if x - b >= face + TIER_LIP_WIDTH_M:
+	if x - b >= face + lip_width:
 		return rise
 	var g := (
-		_tier_g2(x + b, rise, lip, face)
-		- 2.0 * _tier_g2(x, rise, lip, face)
-		+ _tier_g2(x - b, rise, lip, face)
+		_tier_g2(x + b, rise, lip, face, lip_width)
+		- 2.0 * _tier_g2(x, rise, lip, face, lip_width)
+		+ _tier_g2(x - b, rise, lip, face, lip_width)
 	)
 	return clampf(g / (b * b), 0.0, rise)
 
 
-## Second antiderivative (from 0) of the sharp raising profile soft_tier_offset() describes.
-static func _tier_g2(x: float, rise: float, lip: float, face: float) -> float:
+## Second antiderivative (from 0) of the sharp raising profile soft_tier_offset() describes,
+## its lip easing out over `w`.
+static func _tier_g2(x: float, rise: float, lip: float, face: float, w: float) -> float:
 	if x <= 0.0:
 		return 0.0
 	var slope := (rise - lip) / face
 	if x < face:
 		return slope * x * x * x / 6.0
-	var w := TIER_LIP_WIDTH_M
 	var g1_face := slope * face * face * 0.5
 	var g2_face := slope * face * face * face / 6.0
 	if x < face + w:

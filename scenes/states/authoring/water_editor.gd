@@ -415,6 +415,8 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 	match String(spec.kind):
 		"river":
 			var bodies: Array[WaterBody] = spec.bodies
+			# The reaches' fall flags (WaterFalls.fall_flags, P4c-2) come from the bodies inside
+			# river_goals, so the worker and the synchronous carve read the same ones.
 			var goals := WaterCarve.river_goals(snapshot, bodies, snapshot.heights)
 			out["goals"] = goals
 			lower(snapshot, goals)

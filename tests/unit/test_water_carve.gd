@@ -5,8 +5,13 @@ extends GutTest
 ## shaped as a crest and a riffle with the upper reach's water stopping at the crest, the
 ## pond basin, the wet dressing field, the rock policy, and the editor's carve, pond and
 ## erase: one history entry each, undo and redo exact, an erase leaving the ground carved.
+## Waterfalls (phase 4c, P4c-2): the fall profile, a hillside face that reads as rock across
+## the channel, the plunge pool, a tier crossing that leaves the tier's face outside the
+## notch, and diagonal faces that do not saw.
 
 const BIOME := "temperate_forest_summer_s1"
+## Ground shapes (the tier band, the ramp) and the carve, shared with the falls tests.
+const Fixtures := preload("res://tests/unit/water_fixtures.gd")
 
 var _map: Node3D = null
 var _history: AuthoringHistory = null
@@ -42,16 +47,6 @@ func _settle(editor: AuthoringEditor) -> void:
 		water.finish_refresh()
 
 
-## Heights set by `shape` (Callable(Vector2 map XZ) -> float) at every sample.
-func _shape(doc: MapDocument, shape: Callable) -> void:
-	var heights := PackedFloat32Array()
-	heights.resize(doc.sample_count())
-	for z in doc.samples_z():
-		for x in doc.samples_x():
-			heights[doc.sample_index(x, z)] = shape.call(doc.sample_to_world(Vector2(x, z)))
-	doc.heights = heights
-
-
 ## A straight river along X at z = 0 with half-width `half`.
 func _straight(doc: MapDocument, depth: WaterBody.Depth, half: float = 2.0) -> Array[WaterBody]:
 	return WaterEdit.plan_river(
@@ -60,20 +55,6 @@ func _straight(doc: MapDocument, depth: WaterBody.Depth, half: float = 2.0) -> A
 		PackedFloat32Array([half, half]),
 		depth
 	)
-
-
-## Applies WaterCarve goals to `doc` (min with the ground).
-func _carve(doc: MapDocument, goals: Dictionary) -> void:
-	var rect: Rect2i = goals.rect
-	var values: PackedFloat32Array = goals.goals
-	var heights := doc.heights.duplicate()
-	for j in rect.size.y:
-		for i in rect.size.x:
-			var goal := values[j * rect.size.x + i]
-			var at := (rect.position.y + j) * doc.samples_x() + rect.position.x + i
-			if not is_inf(goal):
-				heights[at] = minf(heights[at], goal)
-	doc.heights = heights
 
 
 func _height(doc: MapDocument, p: Vector2) -> float:
@@ -87,13 +68,13 @@ func test_cross_section_per_depth_class() -> void:
 	for depth in [WaterBody.Depth.ANKLE, WaterBody.Depth.WAIST, WaterBody.Depth.DEEP]:
 		var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
 		# A valley rising 1:1 to 3 m on either side, so the banks are cut to their slope.
-		_shape(doc, func(p: Vector2) -> float: return minf(absf(p.y), 3.0))
+		Fixtures.shape(doc, func(p: Vector2) -> float: return minf(absf(p.y), 3.0))
 		var start := doc.heights.duplicate()
 		var bodies := _straight(doc, depth)
 		assert_eq(bodies.size(), 1, "flat along its line: one reach")
 		var level := bodies[0].level_m
 		assert_almost_eq(level, -WaterGeometry.FREEBOARD_M, 1e-4)
-		_carve(doc, WaterCarve.river_goals(doc, bodies, start))
+		Fixtures.carve(doc, WaterCarve.river_goals(doc, bodies, start))
 		var d := WaterBody.depth_for(depth)
 		var name := WaterBody.DEPTH_NAMES[depth]
 		var hw := bodies[0].half_widths[0]
@@ -129,7 +110,7 @@ func test_narrow_channels_widen_to_reach_their_depth() -> void:
 	var bodies := _straight(_doc, WaterBody.Depth.DEEP, 0.8)
 	var narrowest := WaterCarve.min_half_width(WaterBody.Depth.DEEP)
 	assert_almost_eq(bodies[0].half_widths[0], narrowest, 1e-4, "widened")
-	_carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
+	Fixtures.carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
 	var bed := bodies[0].level_m - WaterBody.depth_for(WaterBody.Depth.DEEP)
 	assert_almost_eq(_height(_doc, Vector2(0, 0)), bed, 0.06, "a deep river is deep")
 	var shore := _height(_doc, Vector2(0, narrowest - 0.2)) - _height(_doc, Vector2(0, 1.0))
@@ -138,19 +119,35 @@ func test_narrow_channels_widen_to_reach_their_depth() -> void:
 
 
 func test_carve_never_raises_uneven_ground() -> void:
-	_shape(_doc, func(p: Vector2) -> float: return sin(p.x * 0.7) * 0.4 + cos(p.y * 1.3) * 0.3)
-	var start := _doc.heights.duplicate()
-	var bodies := _straight(_doc, WaterBody.Depth.WAIST)
-	var goals := WaterCarve.river_goals(_doc, bodies, start)
-	var rect: Rect2i = goals.rect
-	var raised := 0
-	for j in rect.size.y:
-		for i in rect.size.x:
-			var goal: float = goals.goals[j * rect.size.x + i]
-			var at := (rect.position.y + j) * _doc.samples_x() + rect.position.x + i
-			if not is_inf(goal) and goal > start[at]:
-				raised += 1
-	assert_eq(raised, 0)
+	# Noisy ground under a flat stroke, and the same noise over a 35 degree ramp under a
+	# stroke that falls twice (P4c-2: the fall profile and the plunge pool are cuts too).
+	for falling in [false, true]:
+		var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
+		var shape_of := func(p: Vector2) -> float:
+			var h := sin(p.x * 0.7) * 0.4 + cos(p.y * 1.3) * 0.3
+			if falling:
+				h += clampf(7.0 - 0.7 * (p.x + 5.0), 0.0, 7.0)
+			return h
+		Fixtures.shape(doc, shape_of)
+		var start := doc.heights.duplicate()
+		var bodies := _straight(doc, WaterBody.Depth.WAIST)
+		if falling:
+			assert_gt(WaterFalls.fall_flags(bodies).count(1), 0, "a stroke with falls")
+		var goals := WaterCarve.river_goals(doc, bodies, start)
+		var rect: Rect2i = goals.rect
+		var raised := 0
+		for j in rect.size.y:
+			for i in rect.size.x:
+				var goal: float = goals.goals[j * rect.size.x + i]
+				var at := (rect.position.y + j) * doc.samples_x() + rect.position.x + i
+				if not is_inf(goal) and goal > start[at]:
+					raised += 1
+		assert_eq(raised, 0, "falling %s: no goal above the ground" % str(falling))
+		Fixtures.carve(doc, goals)
+		for i in doc.sample_count():
+			if doc.heights[i] > start[i] + 1e-6:
+				fail_test("falling %s: sample %d raised" % [str(falling), i])
+				break
 
 
 # --- reach steps ---------------------------------------------------------------------------
@@ -158,11 +155,11 @@ func test_carve_never_raises_uneven_ground() -> void:
 
 func test_reach_steps_are_a_crest_and_a_riffle() -> void:
 	# Ground falling 0.12 m per metre along the river: several flat reaches.
-	_shape(_doc, func(p: Vector2) -> float: return -0.12 * p.x)
+	Fixtures.shape(_doc, func(p: Vector2) -> float: return -0.12 * p.x)
 	var start := _doc.heights.duplicate()
 	var bodies := _straight(_doc, WaterBody.Depth.WAIST)
 	assert_gt(bodies.size(), 2, "the drop splits the stroke into reaches")
-	_carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
+	Fixtures.carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
 	_doc.water_bodies = bodies
 	# At each shared point the ground stands just under the upper level: its pool runs
 	# shallow over the crest to the line where its area stops.
@@ -205,7 +202,7 @@ func test_a_riffle_sheet_meets_its_banks_on_a_smooth_line() -> void:
 	# two interpolated heights cross) it must follow the carve's waterline, not the grid's
 	# staircase: cut off at the half-width, it drew 0.25 m teeth (P4-5).
 	var dir := Vector2(11, 6).normalized()
-	_shape(_doc, func(p: Vector2) -> float: return -0.12 * p.dot(dir))
+	Fixtures.shape(_doc, func(p: Vector2) -> float: return -0.12 * p.dot(dir))
 	var start := _doc.heights.duplicate()
 	var half := 1.6
 	var bodies := WaterEdit.plan_river(
@@ -215,7 +212,7 @@ func test_a_riffle_sheet_meets_its_banks_on_a_smooth_line() -> void:
 		WaterBody.Depth.WAIST
 	)
 	assert_gt(bodies.size(), 1, "reaches")
-	_carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
+	Fixtures.carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
 	_doc.water_bodies = bodies
 	var buried := {}
 	var sheets := WaterMeshBuilder.cascades(_doc, buried)
@@ -288,6 +285,270 @@ func test_flush_ends_only_where_a_reach_continues() -> void:
 	assert_eq(WaterGeometry.flush_ends(alone, a), Vector2i.ZERO)
 
 
+# --- falls (phase 4c, P4c-2) -----------------------------------------------------------------
+
+
+## The falls of one stroke's reaches `bodies`: the index k of every step (bodies[k] into
+## bodies[k + 1]) that WaterFalls.fall_flags marks as a fall, in order.
+func _fall_steps(bodies: Array[WaterBody]) -> Array[int]:
+	var out: Array[int] = []
+	var flags := WaterFalls.fall_flags(bodies)
+	for k in flags.size():
+		if flags[k] != 0:
+			out.append(k)
+	return out
+
+
+## The lips of those falls: the shared point below each.
+func _fall_lips(bodies: Array[WaterBody]) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	for k in _fall_steps(bodies):
+		out.append(bodies[k + 1].points[0])
+	return out
+
+
+## How far past its lip the face of the fall from `upper` into `lower` runs before the bank
+## level has reached the lower level (WaterCarve.fall_shape): the part of the cut that is
+## face across its whole width, above the plunge pool.
+func _face_length(upper: WaterBody, lower: WaterBody) -> float:
+	var x := 0.0
+	while x < 10.0:
+		var shaped := WaterCarve.fall_shape(x, upper.level_m, lower.level_m, lower.depth_m())
+		if shaped.x <= lower.level_m + 1e-4:
+			return x
+		x += 0.01
+	return x
+
+
+func test_fall_profile_is_the_tier_face_with_a_harder_lip() -> void:
+	var drop := 1.524
+	var run := WaterCarve.fall_run(drop)
+	assert_eq(WaterCarve.fall_profile(0.0, drop), 0.0, "nothing lost at the lip")
+	assert_eq(WaterCarve.fall_profile(-1.0, drop), 0.0, "nor above it")
+	assert_almost_eq(WaterCarve.fall_profile(run, drop), drop, 1e-6, "the whole drop at the foot")
+	assert_almost_eq(WaterCarve.fall_profile(run + 2.0, drop), drop, 1e-6, "and beyond it")
+	assert_lt(run, HeightBrush.tier_span(drop), "a harder lip: the face stands nearer the lip")
+	assert_lt(
+		WaterCarve.fall_profile(HeightBrush.TIER_SOFTEN_M, drop),
+		WaterCarve.FALL_LIP_M,
+		"the brink holds up to where the sharp lip begins"
+	)
+	# Monotonic and smooth (no kink between neighbouring 1 cm slopes), the face at the tier
+	# angle after the tent (test_tier_goal_raises_a_face_a_rounded_lip_then_a_flat_top).
+	var last := 0.0
+	var last_slope := 0.0
+	var steepest := 0.0
+	var step := 0.01
+	for i in range(1, int(run / step) + 10):
+		var x := i * step
+		var d := WaterCarve.fall_profile(x, drop)
+		assert_true(d >= last - 1e-9, "never rises again at %.2f m" % x)
+		var slope := (d - last) / step
+		assert_lt(absf(slope - last_slope), 0.2, "no kink at %.2f m" % x)
+		steepest = maxf(steepest, slope)
+		last = d
+		last_slope = slope
+	assert_between(rad_to_deg(atan(steepest)), 62.0, 70.0, "a steep face")
+	# The step shape of a fall is the full crest whatever the depth; a small step keeps its bar.
+	var full := WaterCarve.step_shape(0.0, -0.8, 2.0, true)
+	assert_almost_eq(full.x, WaterCarve.CREST_M, 1e-6, "a fall's crest is the full one")
+	var small := WaterCarve.step_shape(0.0, -0.1, 2.0)
+	assert_lt(small.x, -0.5, "a small step in deep water is a low bar")
+
+
+func test_hillside_fall_face_is_rock_across_the_channel() -> void:
+	# A 35 degree ramp (no rock by the cliff rule) with a waist river down it: two falls
+	# (test_water_falls). Before the carve the ground has no cliff-steep face, so the runtime
+	# rule sees none; after it every fall's face is full rock across the channel by the shading
+	# normals, as test_tier_face_is_rock_at_the_default_spacing reads a tier's, and
+	# WaterFalls.falls() sees both.
+	Fixtures.ramp(_doc)
+	var start := _doc.heights.duplicate()
+	var bodies := WaterEdit.plan_river(
+		_doc,
+		PackedVector2Array([Vector2(-14, 0), Vector2(14, 0)]),
+		PackedFloat32Array([1.5, 1.5]),
+		WaterBody.Depth.WAIST
+	)
+	var lips := _fall_lips(bodies)
+	assert_eq(lips.size(), 2, "two falls planned")
+	_doc.water_bodies = bodies
+	assert_eq(WaterFalls.falls(_doc).size(), 0, "no cliff-steep face before the carve")
+	Fixtures.carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
+	assert_eq(WaterFalls.falls(_doc).size(), lips.size(), "the carve made the faces")
+	var hw := bodies[0].half_widths[0]
+	for lip in lips:
+		var across := -(hw - 0.4)
+		while across <= hw - 0.4 + 1e-6:
+			var lowest_ny := 1.0
+			var x := 0.5
+			while x < 3.0:
+				var s := _doc.world_to_sample(Vector2(lip.x + x, across)).round()
+				var normal := TerrainMeshBuilder.sample_normal(_doc, int(s.x), int(s.y))
+				lowest_ny = minf(lowest_ny, normal.y)
+				x += 0.05
+			assert_gt(
+				TerrainRules.cliff_from(lowest_ny, 0.0, 0.0),
+				0.999,
+				"full rock below lip %s, %.1f m across" % [str(lip), across]
+			)
+			across += 0.1
+
+
+func test_plunge_pool_sits_plunge_depth_below_the_bed() -> void:
+	# A waist river straight over a tier, 2.5 m wide to the side (wide enough that the narrow
+	# channel's steepened shore does not lift the middle of the bed): the crest at the lip, the
+	# face down from it, the deepest bed at its foot WaterFalls.plunge_depth() under the lower
+	# bed, and the bed back at its depth past the plunge pool.
+	Fixtures.tier_band(_doc)
+	var start := _doc.heights.duplicate()
+	var bodies := WaterEdit.plan_river(
+		_doc,
+		PackedVector2Array([Vector2(0, -12), Vector2(0, 12)]),
+		PackedFloat32Array([2.5, 2.5]),
+		WaterBody.Depth.WAIST
+	)
+	assert_eq(bodies.size(), 2, "the pool on the top and the pool below")
+	assert_eq(WaterFalls.fall_flags(bodies), PackedByteArray([1]))
+	Fixtures.carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
+	var upper := bodies[0]
+	var lower := bodies[1]
+	var lip: Vector2 = lower.points[0]
+	var depth := lower.depth_m()
+	var drop := upper.level_m - lower.level_m
+	var plunge := WaterFalls.plunge_depth(drop)
+	var crest := upper.level_m + WaterCarve.CREST_M
+	assert_almost_eq(_height(_doc, lip), crest, 0.05, "the crest at the lip")
+	var deepest := INF
+	var deepest_at := 0.0
+	var s := 0.0
+	while s < 6.0:
+		var h := _height(_doc, lip + Vector2(0, s))
+		if h < deepest:
+			deepest = h
+			deepest_at = s
+		s += 0.05
+	var plunge_bed := lower.level_m - depth - plunge
+	assert_almost_eq(deepest, plunge_bed, 0.06, "the plunge bed")
+	var foot := WaterCarve.fall_run(crest - plunge_bed)
+	assert_almost_eq(deepest_at, foot, 0.4, "deepest at the foot of the face")
+	var past := foot + WaterFalls.plunge_length(drop) + 1.0
+	assert_almost_eq(_height(_doc, lip + Vector2(0, past)), lower.level_m - depth, 0.06, "the bed")
+	var mid := _height(_doc, lip + Vector2(0, foot * 0.5))
+	assert_true(mid < crest - 0.2 and mid > plunge_bed + 0.2, "the face between (%.2f)" % mid)
+
+
+func test_a_tier_crossing_changes_the_face_only_in_the_notch() -> void:
+	# Over a Tier cliff the lip is at the brink and the fall profile lies along the tier's own
+	# face, so the carve cuts the notch (the channel and its banks) and leaves the face either
+	# side as it was.
+	Fixtures.tier_band(_doc)
+	var before := _doc.heights.duplicate()
+	var bodies := WaterEdit.plan_river(
+		_doc,
+		PackedVector2Array([Vector2(0, -12), Vector2(0, 12)]),
+		PackedFloat32Array([1.0, 1.0]),
+		WaterBody.Depth.WAIST
+	)
+	assert_eq(WaterFalls.fall_flags(bodies), PackedByteArray([1]))
+	Fixtures.carve(_doc, WaterCarve.river_goals(_doc, bodies, before))
+	var widest := 0.0
+	for w in bodies[1].half_widths:
+		widest = maxf(widest, w)
+	var notch := widest + WaterGeometry.RIVER_BANK_M
+	var worst := 0.0
+	var worst_at := Vector2.ZERO
+	var cut := 0
+	for z in _doc.samples_z():
+		for x in _doc.samples_x():
+			var i := _doc.sample_index(x, z)
+			var p := _doc.sample_to_world(Vector2(x, z))
+			var change := absf(_doc.heights[i] - before[i])
+			if absf(p.x) > notch:
+				if change > worst:
+					worst = change
+					worst_at = p
+			elif change > 0.05:
+				cut += 1
+	assert_lt(
+		worst, 0.05, "the face outside the notch stands (worst %.3f m at %s)" % [worst, worst_at]
+	)
+	assert_gt(cut, 20, "the notch is cut")
+	var lip: Vector2 = bodies[1].points[0]
+	for across in [-0.8, 0.0, 0.8]:
+		assert_almost_eq(
+			_height(_doc, lip + Vector2(across, 0)),
+			bodies[0].level_m + WaterCarve.CREST_M,
+			0.05,
+			"the notch's crest across the channel at %.1f" % across
+		)
+
+
+func test_diagonal_fall_faces_do_not_saw() -> void:
+	# The sample grid draws each quad as two triangles on a fixed diagonal; a fall carved across
+	# it at any angle must come out straight across its channel (the tier's rule,
+	# test_diagonal_tier_faces_do_not_saw). A waist river straight down a 35 degree ramp at each
+	# angle: along every line across the channel's flat bed (TOE_SOFT_M in from the waterline's
+	# shelf, whose rounding curls the bed up a few centimetres) over the carved face (from
+	# where the cut is a full TOP_SOFT_M deep to where the bank level reaches the lower pool;
+	# below it the channel's shore shelves to the plunge bed) the drawn height varies by a few
+	# centimetres at most. Above that line the face emerges from the hillside in a crease,
+	# min(ground, goal), which blend_with_ground rounds over 0.3 m of cut, about a tenth of a
+	# metre of run against a 35 degree slope: narrower than a grid cell, so its line is
+	# grid-sampled and zigzags by up to 0.14 m off the grid axes (measured; a judgment-set
+	# item, not the face's teeth, which this test guards).
+	for degrees in [0.0, 10.0, 22.5, 30.0, 45.0, 60.0, -15.0, -30.0, -45.0, -60.0]:
+		var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
+		var along := Vector2.from_angle(deg_to_rad(degrees))
+		var across := along.orthogonal()
+		Fixtures.ramp(doc, along)
+		var start := doc.heights.duplicate()
+		var half := 1.5
+		var bodies := WaterEdit.plan_river(
+			doc,
+			PackedVector2Array([-along * 13.0, along * 13.0]),
+			PackedFloat32Array([half, half]),
+			WaterBody.Depth.WAIST
+		)
+		var steps := _fall_steps(bodies)
+		assert_gt(steps.size(), 0, "falls at %s deg" % degrees)
+		Fixtures.carve(doc, WaterCarve.river_goals(doc, bodies, start))
+		var worst := 0.0
+		var columns := doc.samples_x()
+		var rows := doc.samples_z()
+		var measured := 0.0
+		for k in steps:
+			var lip: Vector2 = bodies[k + 1].points[0]
+			var face := _face_length(bodies[k], bodies[k + 1])
+			assert_gt(face, 1.0, "a face to check at %s deg" % degrees)
+			var offset := 0.0
+			var full_cut := INF
+			while offset < face:
+				var centre := doc.world_to_sample(lip + along * offset)
+				var was := ScatterGenerator.triangle_height(start, columns, rows, centre)
+				var now := ScatterGenerator.triangle_height(doc.heights, columns, rows, centre)
+				if was - now >= WaterCarve.TOP_SOFT_M + 0.05:
+					full_cut = minf(full_cut, offset)
+				if offset >= full_cut:
+					var low := INF
+					var high := -INF
+					var inset := half - 3.0 * WaterCarve.TOE_SOFT_M
+					var t := -inset
+					while t <= inset + 1e-6:
+						var p := lip + along * offset + across * t
+						var h := ScatterGenerator.triangle_height(
+							doc.heights, columns, rows, doc.world_to_sample(p)
+						)
+						low = minf(low, h)
+						high = maxf(high, h)
+						t += 0.05
+					worst = maxf(worst, high - low)
+					measured += 0.05
+				offset += 0.05
+		assert_gt(measured, 1.5, "face measured at %s deg: %.2f m in all" % [degrees, measured])
+		assert_lt(worst, 0.08, "fall at %s deg: teeth %.3f m" % [degrees, worst])
+
+
 # --- ponds -----------------------------------------------------------------------------------
 
 
@@ -302,7 +563,7 @@ func test_pond_basin_is_a_bowl_with_a_soft_shore() -> void:
 	var level := WaterGeometry.pond_rim_level(_doc, 3)
 	var body := WaterBody.pond(3, WaterBody.Depth.WAIST, level)
 	var start := _doc.heights.duplicate()
-	_carve(_doc, WaterCarve.pond_goals(_doc, body, start))
+	Fixtures.carve(_doc, WaterCarve.pond_goals(_doc, body, start))
 	var d := body.depth_m()
 	var centre := _height(_doc, Vector2.ZERO)
 	assert_lt(centre, level - d, "deeper than the depth class in the middle")
@@ -319,7 +580,7 @@ func test_dressing_beds_the_water_and_fades_the_shore() -> void:
 	assert_true(WaterDressing.refresh(_doc).is_empty(), "no water, no dressing")
 	var start := _doc.heights.duplicate()
 	var bodies := _straight(_doc, WaterBody.Depth.WAIST)
-	_carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
+	Fixtures.carve(_doc, WaterCarve.river_goals(_doc, bodies, start))
 	_doc.water_bodies = bodies
 	var field := WaterDressing.refresh(_doc)
 	assert_eq(field.size(), _doc.sample_count() * WaterDressing.CHANNELS)
@@ -468,7 +729,7 @@ func test_pond_stroke_carves_a_basin_and_undoes_exactly() -> void:
 func test_erase_water_leaves_the_ground_carved() -> void:
 	var editor := _editor()
 	# Ground falling along the river: several flat reaches.
-	_shape(_doc, func(p: Vector2) -> float: return -0.12 * p.x)
+	Fixtures.shape(_doc, func(p: Vector2) -> float: return -0.12 * p.x)
 	editor.terrain.queue_heights(Rect2i(0, 0, _doc.samples_x(), _doc.samples_z()))
 	editor.finish_height_work()
 	editor.water.carve_river(

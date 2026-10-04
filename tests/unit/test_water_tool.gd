@@ -3,11 +3,14 @@ extends GutTest
 ## The Water tool (phase 4, P4-4): the drawn line's capture and smoothing, width clamps per
 ## depth class, the confluence rule, pond extension, erasing whole reaches, the tool on a
 ## dressed map, one history entry per gesture, the worker carve landing exactly what the
-## synchronous one does, the soft pond shore and the rounded river ends.
+## synchronous one does (a flat stroke and, P4c-2, one with falls), the soft pond shore and
+## the rounded river ends.
 
 const DEPTHS: Array[WaterBody.Depth] = [
 	WaterBody.Depth.ANKLE, WaterBody.Depth.WAIST, WaterBody.Depth.DEEP
 ]
+## Ground shapes shared with the carve tests.
+const Fixtures := preload("res://tests/unit/water_fixtures.gd")
 
 var _maps: Array[Node3D] = []
 
@@ -453,6 +456,46 @@ func test_the_worker_carve_lands_exactly_what_the_synchronous_one_does() -> void
 		editor.end_stroke()
 		_settle(editor)
 		results.append([doc.heights, doc.water_dressing, _model(doc)])
+	assert_eq(results[1][0], results[0][0], "the same ground")
+	assert_eq(results[1][1], results[0][1], "the same dressing")
+	assert_eq(results[1][2], results[0][2], "the same water")
+
+
+func test_a_fall_stroke_lands_the_same_from_the_worker_and_undoes_exactly() -> void:
+	# P4c-2: a waist river down a 35 degree ramp (two falls) carved on a worker and on this
+	# thread: the same ground, dressing and water; one history entry; undo exact; and the falls
+	# exist only once the carve has steepened the faces (WaterFalls.is_fall).
+	var results := []
+	for worker in [false, true]:
+		var doc := _new_doc()
+		Fixtures.ramp(doc)
+		var history := AuthoringHistory.new()
+		var editor := _editor(doc, history)
+		editor.water.use_worker = worker
+		var start := doc.heights.duplicate()
+		var start_model := _model(doc)
+		var id := editor.water.carve_river(
+			_line([[-13, 0], [13, 0]]), _w(1.5), WaterBody.Depth.WAIST
+		)
+		if worker:
+			assert_true(editor.water.is_working(), "computing on a worker")
+		_settle(editor)
+		assert_gt(id, 0, "carved")
+		assert_eq(history.undo_count(), 1, "one entry")
+		assert_eq(WaterFalls.drops(doc.water_bodies).size(), 2, "two drops by the levels")
+		assert_eq(WaterFalls.falls(doc).size(), 2, "the carved faces make them falls")
+		var carved := doc.heights.duplicate()
+		var carved_model := _model(doc)
+		results.append([carved, doc.water_dressing.duplicate(), carved_model])
+		history.undo()
+		_settle(editor)
+		assert_eq(doc.heights, start, "undo restores the ground")
+		assert_eq(_model(doc), start_model, "and the water")
+		assert_true(WaterFalls.falls(doc).is_empty(), "no water, no falls")
+		history.redo()
+		_settle(editor)
+		assert_eq(doc.heights, carved, "redo")
+		assert_eq(_model(doc), carved_model)
 	assert_eq(results[1][0], results[0][0], "the same ground")
 	assert_eq(results[1][1], results[0][1], "the same dressing")
 	assert_eq(results[1][2], results[0][2], "the same water")
