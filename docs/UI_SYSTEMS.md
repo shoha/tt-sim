@@ -918,10 +918,10 @@ readout gives the reason in plain words (`BridgeBrush.refusal_text`): "No water 
 Drag from bank to bank over a river or pond.", "No dry bank to land on at one end. Try a
 narrower spot.", "Too wide to cross (at most 79 ft). Try a narrower spot.", "Too close to the
 waterfall. Bridges cross calm water." (P4c-5: within 1 m of a fall's face or its foam ring,
-ARCHITECTURE.md "Crossings"), or, for a click, "Drag a line from one bank across the water to
+`systems/crossings.md`), or, for a click, "Drag a line from one bank across the water to
 the other."; releasing there shows the same as a warning toast. The tool's pointer ray sees crossings (the other brushes skip them), so Ctrl
 hovering a deck or a stone picks it where it is drawn. Crossings follow later edits (Sculpt,
-Water; ARCHITECTURE.md "Crossings"): re-anchored in place, or removed with their water, with
+Water; `systems/crossings.md` "Following edits"): re-anchored in place, or removed with their water, with
 an info toast ("A crossing lost its water and was removed. Undo brings both back.") and one
 undo for both. The tool starts loading the crossing textures when it opens and makes their
 materials 0.4 s later, so the first placement costs about 7-9 ms of main thread (plan 2 ms,
@@ -932,7 +932,7 @@ a stroke drawn uphill (its end standing 0.75 m or more above its start) is rever
 always runs downhill (P4c-5; `WaterBrush.flow_line`, two ground reads per frame, so the ribbon
 and the carve agree). A river drawn over sloped ground is split into flat reaches joined by
 small rapids, and over a steep drop it falls by itself with no control (phase 4c:
-ARCHITECTURE.md "Water model and flow bake"); its ends inside the map close in rounded heads.
+`systems/waterfalls.md`); its ends inside the map close in rounded heads.
 A river that starts or ends in another river or pond joins it there (a confluence: it is cut
 at that water's edge and meets it at its level, or below for an outflow; an end on a
 waterfall's face moves into the plunge pool below it), and a line lying all in water is
@@ -1250,7 +1250,7 @@ The grid uses a **cell tint** approach rather than traditional grid lines for re
 
 Grid appearance and behavior are configured via `LevelData` properties in the **Grid** export group. `GameMap.configure_grid()` applies these settings to the overlay and drag system when a level loads or the GM changes settings. Floor level for the height filter is computed automatically (defaults to Y=0); a map with a ground field follows its ground instead (`GameMap.set_grid_ground()`: authored terrain through `set_ground_terrain()`, refreshed at load and, in authoring, when a sculpt stroke, undo or redo settles; a Blender map's sampled collision through `MapSourceLoader.fit_grid_ground_async()` at load, or the dressing ground in authoring).
 
-A token dragged across a tier edge with grid snap lands on the tier its snapped cell is on, not the one under the pointer (the drag re-resolves the height at the cell centre on authored terrain; ARCHITECTURE.md "Grid-Snapped Movement"). Dragged into water it stands on the bed in wadeable water and floats at the surface in deep water (the float rule, ARCHITECTURE.md "Authored water at runtime"); the drop indicator lies on the water surface.
+A token dragged across a tier edge with grid snap lands on the tier its snapped cell is on, not the one under the pointer (the drag re-resolves the height at the cell centre on authored terrain; ARCHITECTURE.md "Grid-Snapped Movement"). Dragged into water it stands on the bed in wadeable water and floats at the surface in deep water (the float rule, `systems/water.md` Runtime); the drop indicator lies on the water surface.
 
 ---
 
