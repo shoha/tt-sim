@@ -16,7 +16,8 @@ render_mode blend_mix, depth_draw_opaque, cull_disabled, diffuse_burley, specula
  * The three kinds are told apart by COLOR.g (0 curtain, 0.5 ring, 1 mist; vertex colours are
  * 8-bit, so the tests are against 0.25 and 0.75). The vertex layout is WaterFallMesh's header:
  *   curtain  UV (metres across, metres fallen), UV2 (fall height, pool level), COLOR.r the
- *            side edge fade; NORMAL the surface normal facing downstream.
+ *            side edge fade, COLOR.a the fall's crest width over WIDTH_DECODE_M
+ *            (WaterFallMesh.WIDTH_ENCODE_M); NORMAL the surface normal facing downstream.
  *   ring     UV (metres across, metres downstream) from its centre, UV2 (radius, pool level),
  *            COLOR.r 1 at the centre to 0 at the rim.
  *   mist     all four vertices at the puff's centre, UV the corner (0..1), UV2 the corner's
@@ -33,13 +34,21 @@ render_mode blend_mix, depth_draw_opaque, cull_disabled, diffuse_burley, specula
  * brink breaks into bold scallops (LIP_SCALLOP_*): along the water's run from the lip
  * (lip_run(), metres, from the mesh's level strip and the nominal launch speed) the white
  * starts where a slow noise across the lip says, glass before it, so the brink is never a
- * straight line; its lower edge wavers the same way. Broad noise bites the side edges
- * through COLOR.r (EDGE_BITE, deeper over the lowest BOTTOM_TAPER_SHARE so the sheet
- * tapers), and the bottom tears up to BOTTOM_TEAR_M above the pool level (UV2.y against
- * the world height), where the foam ring takes over. The tongues tilt the normal, roughness
- * sits about 0.5 on the glass. No FRONT_FACING flip: Godot already flips the back face's
- * normal of a cull_disabled material (probe d), so an away-facing fall is lit from the
- * viewer's side as a facing one is.
+ * straight line; its lower edge wavers the same way. The far LIP_FLOOR_M of the level
+ * strip is white whatever the scallops do (P4c-6c): an away-facing fall shows only that
+ * strip, and the cue must read as water pouring over the brink, not a pale band. Broad
+ * noise bites the side edges through COLOR.r (EDGE_BITE, deeper over the lowest
+ * BOTTOM_TAPER_SHARE so the sheet tapers), and the bottom tears up to BOTTOM_TEAR_M above
+ * the pool level (UV2.y against the world height), where the foam ring takes over. The
+ * tongues tilt the normal, roughness sits about 0.5 on the glass. No FRONT_FACING flip:
+ * Godot already flips the back face's normal of a cull_disabled material (probe d), so an
+ * away-facing fall is lit from the viewer's side as a facing one is.
+ *
+ * Width (P4c-6c): the aeration and the edge bite were tuned on a 1.3 m curtain, and a 0.5 m
+ * ankle fall came out mostly glass with its sides bitten to nothing. The fall's crest width
+ * (COLOR.a) now blends the two regimes: a fall NARROW_WIDTH_M or narrower is a bright white
+ * ribbon (NARROW_* air high, the bite shallow, the tongues gentle brightness bands); a fall
+ * WIDE_WIDTH_M or wider keeps the glass between bold tongues; between them, a mix.
  *
  * Ring: bold white arcs spreading outward from the curtain's foot (RING_FOOT radii upstream
  * of the centre, WaterFallMesh.RING_FORWARD), RING_ARCS per radius at RING_ARC_SPEED, broken
@@ -51,9 +60,12 @@ render_mode blend_mix, depth_draw_opaque, cull_disabled, diffuse_burley, specula
  * Mist: vertex billboards (the P4c-0 probe c form), each puff rising MIST_RISE_M and growing
  * over a MIST_CYCLE_S cycle at its own phase (COLOR.b). A puff is three overlapping round
  * lobes (MIST_LOBE_*, laid out by the seed and spreading over the cycle) with a light domain
- * warp, so it reads as a cheerful scalloped cloud, bright in the core and soft at the rim,
- * faded where the scene is within MIST_SOFT_M behind it (hint_depth_texture), so it never
- * cuts the rock or the pool. WaterFallMesh grows the mesh's custom AABB for the rise and
+ * warp, summed into one rounded cloud whose rim softens over the outer MIST_LOBE_SOFT of
+ * each lobe's radius (P4c-6c: a hard clip to the quad and a re-sharpened body made the
+ * lobes white blobs), bright white in the core and sky blue at the rim, faded where the
+ * scene is within MIST_SOFT_M behind it (hint_depth_texture), so it never cuts the rock or
+ * the pool. The lobes stay inside the quad by construction (spread + radius + warp under
+ * 1), so nothing is clipped. WaterFallMesh grows the mesh's custom AABB for the rise and
  * growth (MIST_SHADER_RISE_M, MIST_SHADER_GROW mirror the constants here).
  *
  * Water Quality (Settings > Graphics): water_quality_skip_fine_detail drops the second noise
@@ -118,6 +130,15 @@ const float LIP_GLASS_ALPHA = 0.55;
 const float ROLL_FIRST_ROW_M = 0.03;
 const float LIP_STRIP_RUN_M = 0.3;
 const float LIP_V0 = 1.4;
+// The white floor over the far end of the level strip: from this far before LIP_STRIP_RUN_M
+// of run the roll is foam white at alpha 1 whatever the scallops say (the away-facing bar).
+const float LIP_FLOOR_M = 0.1;
+// The fall's crest width, COLOR.a x this (WaterFallMesh.WIDTH_ENCODE_M); a fall
+// NARROW_WIDTH_M or narrower is a white ribbon, WIDE_WIDTH_M or wider the glass-and-tongues
+// curtain, between them a blend.
+const float WIDTH_DECODE_M = 8.0;
+const float NARROW_WIDTH_M = 1.2;
+const float WIDE_WIDTH_M = 3.0;
 // The lowest share of the drop whitens toward the pool.
 const float BOTTOM_WHITE_SHARE = 0.3;
 // The curtain's alpha fades to 0 over this much above the bottom tear, which stands up to
@@ -130,6 +151,14 @@ const float BOTTOM_TEAR_M = 0.3;
 const float BASE_AIR = 0.06;
 const float ENTRAIN_M = 2.5;
 const float ENTRAIN_MAX = 0.15;
+// The narrow ribbon's regime: its aeration everywhere and entrained on the way down, the
+// gentle brightness bands its tongues become (their weight), its alpha floor, and how far
+// the ropes toward the pool still break it (a share of the wide curtain's).
+const float NARROW_BASE_AIR = 0.55;
+const float NARROW_ENTRAIN_MAX = 0.3;
+const float NARROW_BAND = 0.4;
+const float NARROW_ALPHA = 0.85;
+const float NARROW_ROPES = 0.25;
 // The glass between the tongues: the water and shore tints lifted this far toward the foam.
 const float GLASS_LIFT = 0.22;
 // Tongue noise frequencies: across the curtain (per metre) and along the fall (per second
@@ -156,6 +185,11 @@ const float EDGE_RAG_ALONG = 5.0;
 const float BOTTOM_TAPER = 0.2;
 const float BOTTOM_TAPER_SHARE = 0.45;
 const float EDGE_SOFT = 0.12;
+// The narrow ribbon's bite and taper: a 0.5 m fall's edge fade covers its whole width
+// (COLOR.r peaks at 0.7), so the wide curtain's bite ate it to nothing; 0.15 left the
+// sides dead straight at zoom 8.
+const float NARROW_EDGE_BITE = 0.3;
+const float NARROW_BOTTOM_TAPER = 0.08;
 // The ring's churn: the foot's position in radii upstream of the centre
 // (WaterFallMesh.RING_FORWARD), how far from it the foam has thinned to nothing (radii),
 // the downstream stretch of the churn, the noise scale (per metre), the arcs per radius
@@ -173,21 +207,24 @@ const float RING_CHURN_RATE = 0.3;
 const float RING_TRAVEL = 1.0;
 // Mist: the rise per cycle (metres), the cycle (seconds), the growth over it, the soft fade
 // against the scene (metres); the three lobes of a puff in the quad's -1..1 space (their
-// spread from the centre, growing MIST_LOBE_SPREAD_GROW over the cycle; their radii) and the
-// domain warp that softens their rims.
-const float MIST_RISE_M = 0.9;
+// spread from the centre, growing MIST_LOBE_SPREAD_GROW over the cycle; their radii; the
+// share of each radius its rim softens over) and the domain warp that wobbles their rims.
+// Spread + growth + the largest radius + the warp stays under 1, so no lobe leaves the quad.
+const float MIST_RISE_M = 0.5;
 const float MIST_CYCLE_S = 4.0;
 const float MIST_GROW = 1.3;
 const float MIST_SOFT_M = 0.25;
-const float MIST_LOBE_SPREAD = 0.3;
-const float MIST_LOBE_SPREAD_GROW = 0.12;
-const vec3 MIST_LOBE_RADII = vec3(0.62, 0.52, 0.44);
-const float MIST_WARP = 0.14;
+const float MIST_LOBE_SPREAD = 0.22;
+const float MIST_LOBE_SPREAD_GROW = 0.08;
+const vec3 MIST_LOBE_RADII = vec3(0.55, 0.48, 0.42);
+const float MIST_LOBE_SOFT = 0.5;
+const float MIST_WARP = 0.1;
 
 varying vec3 world_pos;
 varying float kind;
 varying float edge;
 varying float seed;
+varying float fall_width;
 varying vec2 uv;
 varying vec2 uv2;
 varying float mist_phase;
@@ -263,6 +300,7 @@ void vertex() {
 	kind = COLOR.g;
 	edge = COLOR.r;
 	seed = COLOR.b;
+	fall_width = COLOR.a * WIDTH_DECODE_M;
 	uv = UV;
 	uv2 = UV2;
 	mist_phase = 0.0;
@@ -300,26 +338,27 @@ void fragment() {
 		float spread = MIST_LOBE_SPREAD + MIST_LOBE_SPREAD_GROW * mist_phase;
 		vec2 wp = q * 1.7 + seed * 9.0 + vec2(TIME * 0.1, -TIME * 0.2);
 		vec2 w = q + MIST_WARP * vec2(fall_gnoise(wp), fall_gnoise(wp + vec2(5.2, 1.3)));
-		vec2 c0 = axis * spread + vec2(0.0, -0.1);
+		vec2 c0 = axis * spread + vec2(0.0, -0.05);
 		vec2 c1 = -axis * spread * 0.9 + vec2(0.0, 0.05);
-		vec2 c2 = vec2(axis.y, -axis.x) * spread * 0.5 + vec2(0.0, 0.3);
-		float l0 = 1.0 - smoothstep(MIST_LOBE_RADII.x * 0.5, MIST_LOBE_RADII.x, length(w - c0));
-		float l1 = 1.0 - smoothstep(MIST_LOBE_RADII.y * 0.5, MIST_LOBE_RADII.y, length(w - c1));
-		float l2 = 1.0 - smoothstep(MIST_LOBE_RADII.z * 0.5, MIST_LOBE_RADII.z, length(w - c2));
-		float cloud = max(l0, max(l1, l2));
-		// Inside the quad only, whatever the warp did.
-		cloud *= 1.0 - smoothstep(0.85, 1.0, length(q));
-		float body = smoothstep(0.35, 0.55, cloud);
-		float core = smoothstep(0.6, 1.0, cloud);
+		vec2 c2 = vec2(axis.y, -axis.x) * spread * 0.5 + vec2(0.0, 0.25);
+		vec3 inner = MIST_LOBE_RADII * (1.0 - MIST_LOBE_SOFT);
+		float l0 = 1.0 - smoothstep(inner.x, MIST_LOBE_RADII.x, length(w - c0));
+		float l1 = 1.0 - smoothstep(inner.y, MIST_LOBE_RADII.y, length(w - c1));
+		float l2 = 1.0 - smoothstep(inner.z, MIST_LOBE_RADII.z, length(w - c2));
+		// The lobes add up into one rounded cloud: where two overlap the body is solid,
+		// each rim stays as soft as its own falloff.
+		float cloud = min(l0 + l1 + l2, 1.0);
+		float body = smoothstep(0.0, 0.7, cloud);
+		float core = smoothstep(0.55, 1.0, cloud);
 		// Born faint, gone faint: no puff pops in or out.
 		float life = sin(mist_phase * PI);
 		float soft = smoothstep(
 			0.0, MIST_SOFT_M, fall_scene_depth(SCREEN_UV, INV_PROJECTION_MATRIX) + VERTEX.z
 		);
-		// Bright in the core, a touch of sky blue toward the lower rim.
-		ALBEDO = mix(foam_color.rgb * FOAM_SHADOW_TINT, foam_color.rgb, core * 0.5 + 0.5);
+		// Bright white in the core, sky blue at the rim.
+		ALBEDO = mix(foam_color.rgb * FOAM_SHADOW_TINT, foam_color.rgb, core);
 		EMISSION = foam_glow_color() * (0.6 + 0.4 * core);
-		ALPHA = mix(body * 0.6, 1.0, core) * life * soft * mist_alpha;
+		ALPHA = body * mix(0.75, 1.0, core) * life * soft * mist_alpha;
 		NORMAL = vec3(0.0, 0.0, 1.0);
 		ROUGHNESS = 1.0;
 		SPECULAR = 0.0;
@@ -390,18 +429,26 @@ void fragment() {
 		float start = LIP_SCALLOP_REACH_M * scallop_n;
 		float scallop = smoothstep(start, start + LIP_SCALLOP_SOFT_M, run);
 		float waver = LIP_WAVER_M * (0.5 - scallop_n);
-		float lip = scallop * (1.0 - smoothstep(0.1 + waver, LIP_ROLL_M + waver, v));
+		float roll_fade = 1.0 - smoothstep(0.1 + waver, LIP_ROLL_M + waver, v);
+		// The white floor over the far end of the level strip, whatever the scallops say.
+		float floor_start = LIP_STRIP_RUN_M - LIP_FLOOR_M;
+		float lip_floor = smoothstep(floor_start - LIP_SCALLOP_SOFT_M, floor_start, run) * roll_fade;
+		float lip = max(scallop * roll_fade, lip_floor);
 		// Over the brink before the white starts: the river surface going over the edge.
 		float lip_glass = 1.0 - smoothstep(ROLL_FIRST_ROW_M, 0.2, v);
+		// The width regime: 1 on a narrow ribbon, 0 on a wide curtain.
+		float narrow = 1.0 - smoothstep(NARROW_WIDTH_M, WIDE_WIDTH_M, fall_width);
 		// Aeration: the white roll at the lip, the churn toward the pool, air entrained on the
-		// way and the white tongues.
+		// way and the white tongues (gentle brightness bands on a ribbon).
 		float bottom = smoothstep(height * (1.0 - BOTTOM_WHITE_SHARE), height, v);
-		float entrained = BASE_AIR + smoothstep(0.0, ENTRAIN_M, v) * ENTRAIN_MAX;
+		float entrained = mix(BASE_AIR, NARROW_BASE_AIR, narrow)
+			+ smoothstep(0.0, ENTRAIN_M, v) * mix(ENTRAIN_MAX, NARROW_ENTRAIN_MAX, narrow);
 		float tongue = smoothstep(0.5, 0.64, streak);
-		float streak_foam = tongue * streak_strength * foam_gain;
+		float band = smoothstep(0.3, 0.8, streak) * NARROW_BAND;
+		float streak_foam = mix(tongue * streak_strength, band, narrow) * foam_gain;
 		float aeration = clamp(max(lip, bottom) + entrained + streak_foam, 0.0, 1.0);
 		// Over the brink before a scallop: the water itself, not foam.
-		float brink_glass = lip_glass * (1.0 - scallop);
+		float brink_glass = lip_glass * (1.0 - scallop) * (1.0 - lip_floor);
 		aeration *= 1.0 - brink_glass * 0.9;
 		vec3 glass = mix(mix(water_color.rgb, shore_color.rgb, 0.5), foam_color.rgb, GLASS_LIFT);
 		glass = mix(
@@ -411,8 +458,9 @@ void fragment() {
 		// The roll over the brink is solid white; between the tongues the rock shows through;
 		// the white toward the pool is broken into ropes by the same tongues.
 		float alpha = max(mix(glass_alpha * (0.3 + 0.6 * streak), foam_color.a, aeration), lip);
+		alpha = max(alpha, narrow * NARROW_ALPHA);
 		alpha = mix(alpha, LIP_GLASS_ALPHA, brink_glass);
-		alpha *= mix(1.0, 0.35 + 0.65 * tongue, bottom * 0.8);
+		alpha *= mix(1.0, 0.35 + 0.65 * tongue, bottom * 0.8 * mix(1.0, NARROW_ROPES, narrow));
 		// Torn side edges: broad noise along the fall bites into the edge fade, deeper toward
 		// the pool so the sheet tapers.
 		float rag = fall_gnoise(vec2(u * EDGE_RAG_ACROSS + 7.3, (t_fall - t_now) * EDGE_RAG_ALONG));
@@ -424,8 +472,10 @@ void fragment() {
 		// Pushed to its extremes, so the edge alternates between deep bites and full width
 		// (bold scallops) rather than wandering gently.
 		rag = smoothstep(0.3, 0.7, rag * 0.5 + 0.5);
-		float taper = BOTTOM_TAPER * smoothstep(height * (1.0 - BOTTOM_TAPER_SHARE), height, v);
-		float edge_mask = smoothstep(0.0, EDGE_SOFT, edge - EDGE_BITE * rag - taper);
+		float bite = mix(EDGE_BITE, NARROW_EDGE_BITE, narrow);
+		float taper = mix(BOTTOM_TAPER, NARROW_BOTTOM_TAPER, narrow)
+			* smoothstep(height * (1.0 - BOTTOM_TAPER_SHARE), height, v);
+		float edge_mask = smoothstep(0.0, EDGE_SOFT, edge - bite * rag - taper);
 		// Tears into the pool: the bottom edge stands up to BOTTOM_TEAR_M over the pool level
 		// by a slow noise across the fall; nothing below it, where the foam ring is.
 		float tear = fall_gnoise(vec2(u * EDGE_RAG_ACROSS + 2.0, TIME * 0.15)) * 0.5 + 0.5;
