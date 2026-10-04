@@ -48,8 +48,7 @@ static func _falls(base: Node) -> String:
 		var drop := float(fall.top) - float(fall.bottom)
 		var lower: WaterBody = doc.water_bodies[fall.lower_index]
 		var plunge := WaterFalls.plunge_depth(drop)
-		var crest := float(fall.top) + WaterCarve.CREST_M
-		var foot := WaterCarve.fall_run(crest - (float(fall.bottom) - lower.depth_m() - plunge))
+		var foot := WaterCarve.fall_foot(drop, lower.depth_m())
 		var basin := WaterFalls.plunge_length(drop)
 		_found["fall%d_lip" % k] = lip
 		_found["fall%d_foot" % k] = lip + direction * foot

@@ -46,6 +46,31 @@ func _steps(bodies: Array[WaterBody]) -> PackedFloat32Array:
 	return out
 
 
+## The half-width of `body` `s` metres along its own points (linear between them, held at
+## the ends).
+func _width_along(body: WaterBody, s: float) -> float:
+	var walked := 0.0
+	for i in range(1, body.points.size()):
+		var segment := body.points[i - 1].distance_to(body.points[i])
+		if walked + segment >= s or i == body.points.size() - 1:
+			var t := clampf((s - walked) / maxf(segment, 1e-9), 0.0, 1.0)
+			return lerpf(body.half_widths[i - 1], body.half_widths[i], t)
+		walked += segment
+	return body.half_widths[0]
+
+
+## The widest point of `body`: Vector2(its arc along the points, its half-width).
+func _widest(body: WaterBody) -> Vector2:
+	var widest := Vector2(0.0, 0.0)
+	var walked := 0.0
+	for i in body.points.size():
+		if i > 0:
+			walked += body.points[i - 1].distance_to(body.points[i])
+		if body.half_widths[i] > widest.y:
+			widest = Vector2(walked, body.half_widths[i])
+	return widest
+
+
 ## Every field of every body, for byte-for-byte comparisons.
 func _model(bodies: Array[WaterBody]) -> Array:
 	var out := []
@@ -258,19 +283,18 @@ func test_tier_stroke_falls_once_at_the_brink() -> void:
 	assert_true(Vector2(fall.dir).is_equal_approx(Vector2(0, 1)), "facing downstream")
 	assert_almost_eq(float(fall.half_width), WaterCarve.min_half_width(WaterBody.Depth.WAIST), 1e-4)
 	assert_eq(WaterFalls.fall_flags(bodies), PackedByteArray([1]), "the carve's flag")
-	# The plunge point sits about half the plunge length below the lip, PLUNGE_WIDEN wider.
+	# The channel keeps the stroke's width down the face to the carved foot; the plunge point
+	# sits half the plunge length past the foot, PLUNGE_WIDEN wider (P4c-2b: the pool widens,
+	# not the face).
 	var lower := bodies[1]
-	var widest := 0.0
-	var widest_at := Vector2.ZERO
-	for i in lower.points.size():
-		if lower.half_widths[i] > widest:
-			widest = lower.half_widths[i]
-			widest_at = lower.points[i]
-	var expected_width := WaterCarve.min_half_width(WaterBody.Depth.WAIST) * WaterFalls.PLUNGE_WIDEN
-	assert_almost_eq(widest, expected_width, 1e-4, "the plunge point is widened")
+	var stroke_width := WaterCarve.min_half_width(WaterBody.Depth.WAIST)
+	var foot := WaterCarve.fall_foot(float(fall.top) - float(fall.bottom), lower.depth_m())
+	var widest := _widest(lower)
+	assert_almost_eq(widest.y, stroke_width * WaterFalls.PLUNGE_WIDEN, 1e-4, "the plunge point")
 	var plunge: float = fall.plunge
-	assert_almost_eq(widest_at.y - lip.y, plunge * 0.5, 0.25, "about half the plunge length below")
-	assert_true(widest_at.y > lip.y, "below the lip")
+	assert_almost_eq(widest.x, foot + plunge * 0.5, WaterFalls.MERGE_M + 1e-3, "past the foot")
+	assert_almost_eq(_width_along(lower, foot), stroke_width, 0.05 * stroke_width, "at the foot")
+	assert_almost_eq(_width_along(lower, foot * 0.5), stroke_width, 1e-4, "down the face")
 	# The footprint: the face samples under the channel between the lip and the foot.
 	var footprint := WaterFalls.footprint(doc)
 	assert_gt(footprint.size(), 10, "the face has samples")
@@ -309,6 +333,60 @@ func test_hill_gives_spaced_falls_of_a_tier_each() -> void:
 	doc.water_bodies = bodies
 	assert_eq(WaterFalls.falls(doc).size(), 0, "the face comes from the carve (P4c-2)")
 	assert_eq(WaterFalls.fall_flags(bodies), PackedByteArray([1, 1]))
+
+
+func test_the_pool_widens_below_the_face_not_the_face() -> void:
+	# On the hill's two falls (above) the lower reach of each keeps the stroke's width from
+	# the lip down the face to the carved foot (WaterCarve.fall_foot), and its widest point,
+	# PLUNGE_WIDEN wider, sits half the plunge length past the foot (P4c-2b; it used to sit
+	# half the plunge length below the lip, on the face, and the carve's notch followed it).
+	# A point that would run into the next lip or the end is skipped and that pool keeps the
+	# stroke's width throughout (the rule; here both fit, the lips 5 m apart with the foot
+	# 2.7 m down and the plunge point 2 m past it).
+	var doc := _doc()
+	Fixtures.ramp(doc)
+	var bodies := _plan(doc, Vector2(-14, 0), Vector2(14, 0), 1.0)
+	var flags := WaterFalls.fall_flags(bodies)
+	assert_eq(flags.count(1), 2, "two falls")
+	var stroke_width := WaterCarve.min_half_width(WaterBody.Depth.WAIST)
+	var widened := 0
+	for k in flags.size():
+		if flags[k] == 0:
+			continue
+		var upper := bodies[k]
+		var lower := bodies[k + 1]
+		var drop := upper.level_m - lower.level_m
+		var foot := WaterCarve.fall_foot(drop, lower.depth_m())
+		var plunge := WaterFalls.plunge_length(drop)
+		var s := 0.0
+		while s <= foot - WaterFalls.MERGE_M:
+			assert_almost_eq(
+				_width_along(lower, s), stroke_width, 1e-4, "fall %d: the face at %.2f m" % [k, s]
+			)
+			s += 0.1
+		assert_almost_eq(
+			_width_along(lower, foot), stroke_width, 0.05 * stroke_width, "fall %d: the foot" % k
+		)
+		var length := 0.0
+		for i in range(1, lower.points.size()):
+			length += lower.points[i - 1].distance_to(lower.points[i])
+		var limit := length - (2.0 if k + 1 < flags.size() else 1.0) * WaterFalls.MERGE_M
+		var widest := _widest(lower)
+		if foot + plunge * 0.5 > limit:
+			assert_almost_eq(widest.y, stroke_width, 1e-4, "fall %d: no room, not widened" % k)
+			continue
+		widened += 1
+		assert_almost_eq(widest.y, stroke_width * WaterFalls.PLUNGE_WIDEN, 1e-4, "fall %d" % k)
+		assert_almost_eq(
+			widest.x, foot + plunge * 0.5, WaterFalls.MERGE_M + 1e-3, "fall %d: in the pool" % k
+		)
+		assert_almost_eq(
+			_width_along(lower, foot + plunge * 0.5),
+			stroke_width * WaterFalls.PLUNGE_WIDEN,
+			0.05 * stroke_width,
+			"fall %d: widest half a plunge length past the foot" % k
+		)
+	assert_eq(widened, 2, "both pools have the room and are widened")
 
 
 func test_uphill_is_reversed_flat_keeps_its_direction() -> void:

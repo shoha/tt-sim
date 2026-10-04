@@ -18,8 +18,10 @@ extends RefCounted
 ## or above the upper level, so the notch is cut square to the flow and no upper water hangs
 ## past the brink (the set-back; a cross-line that can never stand clear, as on a hill flank,
 ## leaves the lip where it was). shape_line() then inserts the lips as control points and
-## forced reach boundaries, a plunge-pool point PLUNGE_WIDEN wider about half the plunge
-## length below each lip, and splits every segment outside a drop that falls more than
+## forced reach boundaries, below each lip a point of the channel's own width at the carved
+## face's foot (WaterCarve.fall_foot) and a plunge-pool point PLUNGE_WIDEN wider half the
+## plunge length past the foot (so the face keeps the stroke's width and only the pool below
+## it widens, P4c-2b), and splits every segment outside a drop that falls more than
 ## WaterGeometry.REACH_DROP_M, so no step that is not a fall reaches FALL_MIN_DROP_M; the
 ## points of a drop are "free" of the reach rule (WaterGeometry.reach_ranges), so the reach
 ## below a lip takes in the whole face and the pool below it and its level is that pool's. A
@@ -225,20 +227,22 @@ static func plan_lips(
 
 
 ## The control line `points` (half-widths `widths`, ground per point `ground`) with the plan's
-## lips and plunge points inserted and its over-steep non-fall segments subdivided (see the
-## header): {"points", "widths", "ground" (per point; `ground_of`(point) for the new ones),
-## "forced": PackedInt32Array of the lip indices (reach boundaries), "free": PackedByteArray
-## per point, 1 inside a plan zone}. Without lips or over-steep segments the line comes back
-## as it is (copies), so a gentle stroke plans as it always did.
+## lips, foot and plunge points inserted (`depth_m`, the stroke's water depth in metres,
+## places the carved foot) and its over-steep non-fall segments subdivided (see the header):
+## {"points", "widths", "ground" (per point; `ground_of`(point) for the new ones), "forced":
+## PackedInt32Array of the lip indices (reach boundaries), "free": PackedByteArray per point,
+## 1 inside a plan zone}. Without lips or over-steep segments the line comes back as it is
+## (copies), so a gentle stroke plans as it always did.
 static func shape_line(
 	points: PackedVector2Array,
 	widths: PackedFloat32Array,
 	ground: PackedFloat32Array,
 	plan: Dictionary,
+	depth_m: float,
 	ground_of: Callable
 ) -> Dictionary:
 	var arcs := _arcs(points)
-	var marks := _marks(plan, arcs[-1] if not arcs.is_empty() else 0.0)
+	var marks := _marks(plan, arcs[-1] if not arcs.is_empty() else 0.0, depth_m)
 	var out_points := PackedVector2Array()
 	var out_widths := PackedFloat32Array()
 	var out_ground := PackedFloat32Array()
@@ -562,10 +566,12 @@ static func _on_map(p: Vector2, half_extent: Vector2) -> bool:
 	return absf(p.x) < half_extent.x and absf(p.y) < half_extent.y
 
 
-## The insertion marks of a plan over a line `total` long, in arc order: each lip
-## ({"arc", "lip": true, "widen": 1}) and its plunge point (half the plunge length below
-## it, PLUNGE_WIDEN wide, unless that runs into the next lip or the end).
-static func _marks(plan: Dictionary, total: float) -> Array[Dictionary]:
+## The insertion marks of a plan over a line `total` long for water `depth_m` deep, in arc
+## order: each lip ({"arc", "lip": true, "widen": 1}), then the carved face's foot
+## (WaterCarve.fall_foot() below the lip, the channel's own width: the face is never widened)
+## and the plunge point (half the plunge length past the foot, PLUNGE_WIDEN wide), both only
+## when the plunge point does not run into the next lip or the end.
+static func _marks(plan: Dictionary, total: float, depth_m: float) -> Array[Dictionary]:
 	var marks: Array[Dictionary] = []
 	var lips: Array = plan.get("lips", [])
 	for lip: Dictionary in lips:
@@ -575,8 +581,11 @@ static func _marks(plan: Dictionary, total: float) -> Array[Dictionary]:
 		for other: Dictionary in lips:
 			if float(other.arc) > s:
 				limit = minf(limit, float(other.arc) - 2.0 * MERGE_M)
-		var plunge := s + plunge_length(float(lip.drop)) * 0.5
+		var drop := float(lip.drop)
+		var foot := s + WaterCarve.fall_foot(drop, depth_m)
+		var plunge := foot + plunge_length(drop) * 0.5
 		if plunge <= limit:
+			marks.append({"arc": foot, "lip": false, "widen": 1.0})
 			marks.append({"arc": plunge, "lip": false, "widen": PLUNGE_WIDEN})
 	marks.sort_custom(
 		func(a: Dictionary, b: Dictionary) -> bool: return float(a.arc) < float(b.arc)

@@ -48,9 +48,16 @@ extends RefCounted
 ## plunge bed, WaterFalls.plunge_depth() under the lower reach's bed, then back up to that
 ## bed over WaterFalls.plunge_length(): a plunge pool. The bank level steps from the upper
 ## level to the lower over the same profile, a crest's height above the bed, so the face
-## runs straight across the whole cut and the basin's side walls are the face raised by the
-## bank slope, rock where they pass the cliff rule. Over a Tier cliff the lip stands at the
-## brink (WaterFalls), the profile lies along the tier's own face and the carve cuts a notch
+## runs straight across the whole cut. Its side walls are a tight rock notch, not the face
+## swept out at the bank slope (P4c-2b: on a hillside that cut a rock wall 8 m wide for a
+## 1 m stream): across the face stretch the bank rises at FALL_BANK_SLOPE (rock by the cliff
+## rule) and is cut no further out than FALL_BANK_REACH_M, the rule fading in over the pool
+## tail above the lip and out over the plunge pool below the foot (fall_gorge(), the `gorge`
+## share section() and blend_with_ground() take; 0 everywhere else, so a riffle's banks are
+## exactly as before). The plunge pool widens only below the foot (WaterFalls.shape_line pins
+## the channel's width at fall_foot() and widens the point half a plunge length past it), so
+## the face is as wide as the stroke. Over a Tier cliff the lip stands at the brink
+## (WaterFalls), the profile lies along the tier's own face and the carve cuts a notch
 ## CREST_M under the upper pool across the channel, the face itself a hand's breadth deeper,
 ## then the plunge pool at its foot; outside the channel and its banks the face is left as it
 ## was. The riffle sheet the mesh still drapes over a fall's face is replaced by a curtain in
@@ -86,6 +93,13 @@ const RIFFLE_SLOPE := 0.3
 ## width the brink rounds, harder than a tier's (HeightBrush.TIER_LIP_M 0.25 over 0.5).
 const FALL_LIP_M := 0.1
 const FALL_LIP_WIDTH_M := 0.25
+## A fall's side walls (fall_gorge(), P4c-2b): the bank slope across the face and the rock
+## bowl at its foot (rise over run; 54 degrees, past the cliff rule's start, where the
+## ordinary banks are 18 to 31) and how far out the cut may reach there (the fade before it
+## is still BANK_FADE_M). An ankle stream falling 3.5 m down a 35 degree hill then cuts
+## about a channel width and a half of rock either side at the foot, none at the lip.
+const FALL_BANK_SLOPE := 1.4
+const FALL_BANK_REACH_M := 4.0
 ## How high a small step's crest rises over the bed per metre of drop (step_shape()), the
 ## pool tail's mean slope up to the crest, and the taper at a river's ends per metre of depth;
 ## lengths clamped.
@@ -227,22 +241,41 @@ static func fall_profile(x: float, drop: float) -> float:
 	return drop - HeightBrush.soft_tier_offset(top - x, drop, lip, face, FALL_LIP_WIDTH_M)
 
 
+## How far past its lip the carved face of a fall of `drop` metres into water `depth` deep
+## runs before the plunge bed (fall_shape()): fall_run() of the rise from the crest (CREST_M
+## over the upper level) to the plunge bed (WaterFalls.plunge_depth() under the lower bed).
+## The plunge pool's widening (WaterFalls.shape_line) and the side-wall rule (fall_gorge())
+## start here.
+static func fall_foot(drop: float, depth: float) -> float:
+	return fall_run(drop + CREST_M + depth + WaterFalls.plunge_depth(drop))
+
+
+## How much of a fall's side-wall rule (FALL_BANK_SLOPE, FALL_BANK_REACH_M; see the header)
+## applies `x` metres past the lip of a fall of `drop` metres into water `depth` deep: 1 down
+## the face to its foot (fall_foot()), then fading to 0 over WaterFalls.plunge_length() with
+## the plunge pool's basin, so the rock bowl at the foot opens into the pool's ordinary banks.
+## The fade in over the pool tail above the lip is bed_line()'s.
+static func fall_gorge(x: float, drop: float, depth: float) -> float:
+	var foot := fall_foot(drop, depth)
+	return 1.0 - smoothstep(foot, foot + WaterFalls.plunge_length(drop), x)
+
+
 ## Vector2(bank level, bed height) `x` metres past the lip of a fall from level `upper` into
 ## level `lower` at `depth` (see the header). The bed follows fall_profile() from the crest
 ## (upper + CREST_M) down to the plunge bed (the lower bed less WaterFalls.plunge_depth()) at
-## the profile's foot, then rises back to the lower bed over WaterFalls.plunge_length(): the
-## plunge pool is deepest at the foot of the face. The bank level follows the same profile a
-## crest's height above the bed, from the upper level down to the lower, where it stays: so
-## the face runs straight across the whole cut (section() shelves only the crest's height at
-## the waterline; a bank following a shorter profile of the drop alone left a V down the
-## face), its side walls are the face raised by the bank slope (rock, a small amphitheatre),
-## and under the lower level the face runs on down to the plunge bed through the channel's
-## steepened shore.
+## the profile's foot (fall_foot()), then rises back to the lower bed over
+## WaterFalls.plunge_length(): the plunge pool is deepest at the foot of the face. The bank
+## level follows the same profile a crest's height above the bed, from the upper level down
+## to the lower, where it stays: so the face runs straight across the whole cut (section()
+## shelves only the crest's height at the waterline; a bank following a shorter profile of
+## the drop alone left a V down the face), its side walls are the face raised by the gorge's
+## bank slope (fall_gorge(): rock, a tight notch), and under the lower level the face runs
+## on down to the plunge bed through the channel's steepened shore.
 static func fall_shape(x: float, upper: float, lower: float, depth: float) -> Vector2:
 	var drop := upper - lower
 	var crest := upper + CREST_M
 	var plunge := WaterFalls.plunge_depth(drop)
-	var rise := crest - (lower - depth - plunge)
+	var rise := drop + CREST_M + depth + plunge
 	var foot := fall_run(rise)
 	var face := crest - fall_profile(x, rise)
 	var basin := plunge * (1.0 - smoothstep(foot, foot + WaterFalls.plunge_length(drop), x))
@@ -253,29 +286,36 @@ static func fall_shape(x: float, upper: float, lower: float, depth: float) -> Ve
 
 ## The cross-section's goal at edge offset `e` (see the header) for water at `level` over a
 ## bed at `bed`, `depth` class Depth, half-width `half_width` (0 for a pond: no narrowing).
-static func section(e: float, level: float, bed: float, depth: int, half_width: float) -> float:
+## `gorge` (0..1, fall_gorge()) moves the bank slope from the class's to FALL_BANK_SLOPE
+## across a fall's face; at 0 the section is exactly the ordinary one.
+static func section(
+	e: float, level: float, bed: float, depth: int, half_width: float, gorge: float = 0.0
+) -> float:
 	var shore := SHORE_SLOPE[depth]
 	var full := level - bed
 	if half_width > 0.0 and full > 0.0:
 		shore = clampf(full / (half_width * (1.0 - BED_SHARE)), shore, MAX_SHORE_SLOPE)
-	var line := level + e * (shore if e < 0.0 else BANK_SLOPE[depth])
+	var bank := lerpf(BANK_SLOPE[depth], FALL_BANK_SLOPE, gorge)
+	var line := level + e * (shore if e < 0.0 else bank)
 	return smooth_max(bed, line, TOE_SOFT_M)
 
 
 ## The final goal of a sample whose ground is `start`: the cross-section goal `goal` met
-## with the ground, faded back to the ground past the bank reach at edge offset `e`. Where
-## the goal is within TOP_SOFT_M below the ground the cut eases in (lowered by
-## d^2 (2 - d / k) / k for a wanted cut d, k = TOP_SOFT_M: no cut at 0, the full cut from k,
-## smooth at both), so the top of a bank is rounded and the carve meets the untouched ground
-## without a crease. The easing only ever cuts less than asked, never more, so a crest or a
-## waterline is never dug below its goal. Never above `start`.
-static func blend_with_ground(goal: float, start: float, e: float) -> float:
+## with the ground, faded back to the ground past the bank reach at edge offset `e` (the
+## reach moving from BANK_REACH_M to FALL_BANK_REACH_M with `gorge`, fall_gorge(); the fade
+## before it stays BANK_FADE_M). Where the goal is within TOP_SOFT_M below the ground the cut
+## eases in (lowered by d^2 (2 - d / k) / k for a wanted cut d, k = TOP_SOFT_M: no cut at 0,
+## the full cut from k, smooth at both), so the top of a bank is rounded and the carve meets
+## the untouched ground without a crease. The easing only ever cuts less than asked, never
+## more, so a crest or a waterline is never dug below its goal. Never above `start`.
+static func blend_with_ground(goal: float, start: float, e: float, gorge: float = 0.0) -> float:
 	var cut := start - goal
 	if cut <= 0.0:
 		return start
 	if cut < TOP_SOFT_M:
 		cut = cut * cut * (2.0 - cut / TOP_SOFT_M) / TOP_SOFT_M
-	var fade := smoothstep(BANK_REACH_M - BANK_FADE_M, BANK_REACH_M, e)
+	var reach := lerpf(BANK_REACH_M, FALL_BANK_REACH_M, gorge)
+	var fade := smoothstep(reach - BANK_FADE_M, reach, e)
 	return start - cut * (1.0 - fade)
 
 
@@ -285,11 +325,13 @@ static func min_half_width(depth: int) -> float:
 	return WaterBody.depth_for(depth) / (MAX_SHORE_SLOPE * (1.0 - BED_SHARE))
 
 
-## Vector2(bank level, bed height) at arc length `s` of a carved course (see the header):
-## `bounds` holds the arc lengths of the n - 1 shared points between its n reaches, `levels`
-## the reaches' levels, `total` the course length; `taper` Vector2i(start, end) says which
-## ends taper (inside the map); `falls` (WaterFalls.fall_flags, one byte per shared point)
-## marks the steps that are waterfalls (fall_shape()) rather than riffles.
+## Vector3(bank level, bed height, gorge share) at arc length `s` of a carved course (see the
+## header): `bounds` holds the arc lengths of the n - 1 shared points between its n reaches,
+## `levels` the reaches' levels, `total` the course length; `taper` Vector2i(start, end) says
+## which ends taper (inside the map); `falls` (WaterFalls.fall_flags, one byte per shared
+## point) marks the steps that are waterfalls (fall_shape()) rather than riffles. The gorge
+## share (section() and blend_with_ground()) is fall_gorge() below a fall's lip, rises over
+## the pool tail above one (with the bed, to 1 at the lip) and is 0 everywhere else.
 static func bed_line(
 	s: float,
 	bounds: PackedFloat32Array,
@@ -298,7 +340,7 @@ static func bed_line(
 	total: float,
 	taper: Vector2i,
 	falls: PackedByteArray
-) -> Vector2:
+) -> Vector3:
 	var n := levels.size()
 	var k := 0
 	while k < n - 1 and s > bounds[k]:
@@ -306,6 +348,7 @@ static func bed_line(
 	var level := levels[k]
 	var bed := level - depth
 	var bank := level
+	var gorge := 0.0
 	var tail := pool_tail(depth)
 	var fall_above := k > 0 and k - 1 < falls.size() and falls[k - 1] != 0
 	if fall_above:
@@ -314,10 +357,14 @@ static func bed_line(
 		var shaped := fall_shape(s - bounds[k - 1], levels[k - 1], level, depth)
 		bank = shaped.x
 		bed = shaped.y
+		gorge = fall_gorge(s - bounds[k - 1], levels[k - 1] - level, depth)
 	if k < n - 1:
 		var full := k < falls.size() and falls[k] != 0
 		var next := step_shape(level, levels[k + 1], depth, full)
-		bed = lerpf(bed, next.x, smoothstep(bounds[k] - next.y, bounds[k], s))
+		var rising := smoothstep(bounds[k] - next.y, bounds[k], s)
+		bed = lerpf(bed, next.x, rising)
+		if full:
+			gorge = maxf(gorge, rising)
 	if k > 0 and not fall_above:
 		var upper := levels[k - 1]
 		var step := step_shape(upper, level, depth)
@@ -338,7 +385,7 @@ static func bed_line(
 		var left := _end_depth(depth, tail, total - s)
 		bed = maxf(bed, level - left)
 		plunge *= left / depth
-	return Vector2(bank, bed - plunge)
+	return Vector3(bank, bed - plunge, gorge)
 
 
 ## The depth left `s` metres from a tapered end: the depth tapered from zero over the pool
@@ -461,8 +508,8 @@ static func river_goals(
 				continue
 			var line := bed_line(along[k], bounds, levels, depth, total, taper, falls)
 			var ground := start[(rect.position.y + j) * columns + rect.position.x + i]
-			var goal := section(e, line.x, line.y, depth_class, hw)
-			goal = blend_with_ground(goal, ground, e)
+			var goal := section(e, line.x, line.y, depth_class, hw, line.z)
+			goal = blend_with_ground(goal, ground, e, line.z)
 			if goal < ground:
 				goals[k] = goal
 	return {"rect": rect, "goals": goals}
