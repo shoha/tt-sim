@@ -9,6 +9,8 @@ extends GutTest
 const RIVER_LEVEL := -0.2
 const BED := -1.0
 const A := BrushTool.Action
+## Ground shapes shared with the water tests (the tier band, P4c-5).
+const Fixtures := preload("res://tests/unit/water_fixtures.gd")
 
 var _map: Node3D = null
 var _history: AuthoringHistory = null
@@ -58,6 +60,7 @@ func test_every_refusal_has_plain_words() -> void:
 		CrossingPlacement.REFUSED_SHORT,
 		CrossingPlacement.REFUSED_NO_WATER,
 		CrossingPlacement.REFUSED_NO_BANK,
+		CrossingPlacement.REFUSED_FALL,
 		CrossingPlacement.REFUSED_LONG,
 		CrossingEditor.REFUSED_FULL,
 		CrossingEditor.REFUSED_INVALID,
@@ -278,6 +281,51 @@ func test_a_sculpt_that_fills_the_river_removes_the_crossing_in_its_entry() -> v
 	assert_eq(_history.undo_count(), entries + 1, "one entry: the stroke")
 	_history.undo()
 	assert_true(_doc.crossing(id).same_as(before), "undo puts it back with the ground")
+	assert_not_null(
+		(_map.get_node(AuthoredCrossings.NODE_NAME) as AuthoredCrossings).get_crossing_node(id)
+	)
+
+
+func test_a_river_falling_under_a_bridge_removes_it_in_the_carve_s_entry() -> void:
+	# P4c-5: a tier north of a calm river, a bridge across the river just east of where a
+	# tributary will come down. The tributary drawn off the tier into the river falls there,
+	# and the bridge, snapped again from its own anchors, now stands too close to the fall: it
+	# goes in the carve's entry (the follow rule, with the fall refusal) and undo brings the
+	# ground, the water and the bridge back together.
+	_doc = MapDocument.create_flat(Vector2i(30, 30), "grass", "v", 9)
+	Fixtures.tier_band(_doc)
+	var editor := _editor()
+	editor.water.carve_river(
+		PackedVector2Array([Vector2(-14, 3), Vector2(14, 3)]),
+		PackedFloat32Array([1.5]),
+		WaterBody.Depth.WAIST
+	)
+	editor.finish_height_work()
+	assert_true(WaterFalls.falls(_doc).is_empty(), "a calm river")
+	var id := editor.crossings.place(Crossing.Kind.PLANK, Vector3(2.2, 0, 1), Vector3(2.2, 0, 5))
+	assert_gt(id, 0, "a bridge over it")
+	var before := _doc.crossing(id).copy()
+	var entries := _history.undo_count()
+	watch_signals(editor.crossings)
+	var carved := editor.water.carve_river(
+		PackedVector2Array([Vector2(0, -9), Vector2(0, 3)]),
+		PackedFloat32Array([1.0]),
+		WaterBody.Depth.WAIST
+	)
+	editor.finish_height_work()
+	assert_gt(carved, 0, "the tributary is carved")
+	assert_eq(WaterFalls.falls(_doc).size(), 1, "and falls off the tier into the river")
+	assert_null(_doc.crossing(id), "the bridge is too close to the fall")
+	assert_signal_emitted_with_parameters(editor.crossings, "followed", [0, 1])
+	var again := CrossingPlacement.place(
+		_doc, before.start, before.end, before.kind, before.width_m, before.style
+	)
+	assert_eq(again.refusal, CrossingPlacement.REFUSED_FALL, "for that reason")
+	assert_eq(_history.undo_count(), entries + 1, "one entry: the carve")
+	assert_eq(_history.undo(), "Carve river")
+	editor.finish_height_work()
+	assert_true(WaterFalls.falls(_doc).is_empty(), "undo takes the tributary and its fall")
+	assert_true(_doc.crossing(id).same_as(before), "and brings the bridge back")
 	assert_not_null(
 		(_map.get_node(AuthoredCrossings.NODE_NAME) as AuthoredCrossings).get_crossing_node(id)
 	)

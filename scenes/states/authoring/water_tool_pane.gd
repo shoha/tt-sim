@@ -22,7 +22,8 @@ const SHAPE_TILES: Array[Dictionary] = [
 		"id": &"water_river",
 		"label": "River",
 		"icon": "ripple",
-		"tooltip": "Draw a river: it flows the way you draw it",
+		"tooltip":
+		"Draw a river: it flows the way you draw it, always downhill; a steep drop makes a waterfall",
 	},
 	{
 		"shape": WaterBrush.Shape.POND,
@@ -56,10 +57,11 @@ const DEPTH_TILES: Array[Dictionary] = [
 	},
 ]
 const HINT := (
-	"River: draw its line from where the water comes to where it goes. Pond: paint an area;"
-	+ " start inside a pond to grow it. Shift+wheel or [ and ] set the width. Hold Ctrl as"
-	+ " you press to erase water; the ground stays carved (Sculpt's Smooth fills a dry"
-	+ " channel)."
+	"River: draw its line from where the water comes to where it goes; over a steep drop it"
+	+ " falls by itself. Pond: paint an area; start inside a pond to grow it. Shift+wheel or"
+	+ " [ and ] set the width. Hold Ctrl as you press to erase water; the ground stays carved"
+	+ " (Sculpt's Smooth fills a dry channel). Sculpting never makes or moves a waterfall:"
+	+ " erase the river and draw it again."
 )
 const ERASE_ONLY_HINT := (
 	"Rivers and ponds carve the map's own ground, which a Blender map's is not."

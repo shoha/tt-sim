@@ -354,6 +354,16 @@ numerically (for example where a fade or a tint band starts).
   palette (`palette`), and an indicative GPU A/B of the falls shown and hidden at zoom 8
   (`vsync_off`, `gpu`, `falls_visible`; about 15 s). 15 captures and `INDEX.md`. Saves
   nothing.
+- `jobs/falls_tools.json`: waterfalls, the tools and play (P4c-5, about 80 s): a new 150 ft
+  temperate forest map with a Tier plateau and a waist river drawn over its south edge toward
+  the camera (one fall, `falls.gd falls` names its lip, foot and plunge); through real input
+  events the Bridge tool refuses a line across the plunge pool just below the fall (red line,
+  the fall's message beside the cursor, then as a toast) and places a plank bridge across the
+  upper pool 2.5 m upstream of the lip; the Water tool holds a river stroke drawn uphill onto
+  the plateau mid-stroke (the ribbon's chevrons point downhill) and cancels it; then the
+  level is saved as `_p4c_tools` and played with a token wading in the plunge pool (its
+  submerged ring) and one in the upper pool. 8 captures and `INDEX.md`; the test level is
+  deleted at the end (`water.gd cleanup` covers `_p4c_*`).
 - `jobs/grid_ground.json`: the grid on Blender maps' ground (P3-3c, about 50 s):
   `deciduous_clusters`, `river` and the built-in Oak's lab in play with G, the measure
   tool and a token drag's auto-show, the load's grid ground fit and a sampling survey

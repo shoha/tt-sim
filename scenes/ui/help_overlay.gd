@@ -112,7 +112,14 @@ func _get_shortcut_data() -> Array:
 			[
 				["Left Drag", "Paint, thin, place, sculpt or lay a surface (hold still to build)"],
 				["Left Drag (Water)", "River: draw it the way it flows. Pond: paint its area"],
-				["Left Drag (Bridge)", "Drag across water, bank to bank: planks or stones"],
+				[
+					"Waterfall",
+					(
+						"A river over a steep drop falls there by itself. Sculpting never makes or"
+						+ " moves a fall: erase the river and draw it again"
+					),
+				],
+				["Left Drag (Bridge)", "Drag across calm water, bank to bank: planks or stones"],
 				[
 					"Ctrl + Left Drag",
 					"Clear, lower (Raise), cut a tier down (Tier), erase paint or water",

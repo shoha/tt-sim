@@ -218,7 +218,10 @@ static func water_ground_at(doc: MapDocument, p: Vector2, courses: Dictionary = 
 ## confluence). That point, just past the other water's edge, is where the new channel meets
 ## it: the carve leaves that end open (no taper, WaterCarve.river_goals) and plan_river reads
 ## the other water's level there, so the two meet without a dry lip or a gap. Points in the
-## water between two dry stretches (a line crossing a river) stay. [PackedVector2Array,
+## water between two dry stretches (a line crossing a river) stay. A dry end on a
+## waterfall's face (the rock between the lip and the plunge pool, WaterFalls.on_face; P4c-5)
+## moves into the pool below it, just past the carved face's foot (WaterFalls.pool_point), so
+## a tributary drawn into a fall ends in its pool, not on the rock. [PackedVector2Array,
 ## PackedFloat32Array]; fewer than two points when the whole line lies in water.
 static func join_line(
 	doc: MapDocument, points: PackedVector2Array, half_widths: PackedFloat32Array
@@ -230,12 +233,16 @@ static func join_line(
 		widths.fill(half_widths[0] if not half_widths.is_empty() else WaterBody.MIN_HALF_WIDTH_M)
 	if doc.water_bodies.is_empty() or points.size() < 2:
 		return [points, widths]
+	# A fall's face counts as dry rock whatever is_wet_at says: level_at has no flush cut at a
+	# reach's end, so within the half-width plus the bank of the lip the face reads the upper
+	# pool's level, and an end there would join that pool over the rock.
+	var falls := WaterFalls.falls(doc)
 	var wet := PackedByteArray()
 	wet.resize(points.size())
 	var dry_first := -1
 	var dry_last := -1
 	for i in points.size():
-		if WaterGeometry.is_wet_at(doc, points[i]):
+		if WaterGeometry.is_wet_at(doc, points[i]) and _face_of(doc, falls, points[i]) < 0:
 			wet[i] = 1
 		elif dry_first < 0:
 			dry_first = i
@@ -246,12 +253,37 @@ static func join_line(
 	var first := maxi(dry_first - 1, 0)
 	var last := mini(dry_last + 1, points.size() - 1)
 	var line := points.slice(first, last + 1)
-	# The joining point just past the other water's edge, however far apart the drawn points.
+	# The joining point just past the other water's edge, however far apart the drawn points;
+	# a dry end (the first or last drawn point) on a fall's face joins the pool below it.
 	if wet[first] == 1:
 		line[0] = _junction(doc, points[first], points[first + 1])
-	if wet[last] == 1 and last > first:
-		line[-1] = _junction(doc, points[last], points[last - 1])
+	else:
+		line[0] = _face_junction(doc, falls, points[first])
+	if last > first:
+		if wet[last] == 1:
+			line[-1] = _junction(doc, points[last], points[last - 1])
+		else:
+			line[-1] = _face_junction(doc, falls, points[last])
 	return [line, widths.slice(first, last + 1)]
+
+
+## `p` (a dry stroke end) moved into the plunge pool of the fall of `falls` (WaterFalls.falls)
+## whose face it lies on (_face_of()): the pool point JOIN_INSET_M past the carved face's
+## foot; `p` itself when it lies on no face.
+static func _face_junction(doc: MapDocument, falls: Array[Dictionary], p: Vector2) -> Vector2:
+	var k := _face_of(doc, falls, p)
+	if k < 0:
+		return p
+	return WaterFalls.pool_point(doc, falls[k], JOIN_INSET_M)
+
+
+## The index in `falls` (WaterFalls.falls) of the fall whose face holds map point `p`
+## (WaterFalls.on_face), or -1.
+static func _face_of(doc: MapDocument, falls: Array[Dictionary], p: Vector2) -> int:
+	for k in falls.size():
+		if WaterFalls.on_face(doc, falls[k], p):
+			return k
+	return -1
 
 
 ## Where the segment from `wet` (a point in water) to `dry` enters the water, found by

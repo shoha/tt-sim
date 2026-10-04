@@ -44,6 +44,7 @@ const REFUSED_COLOR := Color(1.0, 0.72, 0.62)
 const SHORT := "Drag a line from one bank across the water to the other."
 const NO_WATER := "No water to cross here. Drag from bank to bank over a river or pond."
 const NO_BANK := "No dry bank to land on at one end. Try a narrower spot."
+const FALL := "Too close to the waterfall. Bridges cross calm water."
 const LONG := "Too wide to cross (at most %s). Try a narrower spot."
 const FULL := "The map holds as many crossings as it can. Remove one to make room."
 const INVALID := "A crossing cannot stand there."
@@ -85,6 +86,8 @@ static func refusal_text(
 			return NO_WATER
 		CrossingPlacement.REFUSED_NO_BANK:
 			return NO_BANK
+		CrossingPlacement.REFUSED_FALL:
+			return FALL
 		CrossingPlacement.REFUSED_LONG:
 			var limit := roundi(ScaleUtils.world_to_display(Crossing.MAX_SPAN_M, cell_m, per_cell))
 			return LONG % ("%d %s" % [limit, label])
