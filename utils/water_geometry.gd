@@ -413,9 +413,17 @@ static func ground_along(doc: MapDocument, points: PackedVector2Array) -> Packed
 ## index ranges Vector2i(first, last), each of at least two points, consecutive ranges
 ## sharing their boundary point, none spanning more than `max_drop` of ground unless a
 ## single step does (a cliff between two points becomes its own two-point reach).
-## Empty for fewer than two points.
+## Empty for fewer than two points. Waterfalls (P4c, WaterFalls): every index in `forced`
+## (a fall's lip) ends a reach and starts the next, whatever the span; a point flagged in
+## `free` (one byte per point, nonzero: on a fall's face) does not count toward its reach's
+## span, which restarts at the first point past the face, so the reach below a lip takes in
+## the whole face and the pool under it (its level, reach_level(), is still its lowest
+## ground). Without `forced` and `free` the split is as it always was.
 static func reach_ranges(
-	ground: PackedFloat32Array, max_drop: float = REACH_DROP_M
+	ground: PackedFloat32Array,
+	max_drop: float = REACH_DROP_M,
+	forced: PackedInt32Array = PackedInt32Array(),
+	free: PackedByteArray = PackedByteArray()
 ) -> Array[Vector2i]:
 	var ranges: Array[Vector2i] = []
 	var n := ground.size()
@@ -426,16 +434,26 @@ static func reach_ranges(
 	var high := ground[0]
 	for i in range(1, n):
 		var g := ground[i]
-		if maxf(high, g) - minf(low, g) <= max_drop:
+		var on_face := (
+			(i < free.size() and free[i] != 0) or (i - 1 < free.size() and free[i - 1] != 0)
+		)
+		if on_face:
+			low = g
+			high = g
+		elif maxf(high, g) - minf(low, g) <= max_drop:
 			low = minf(low, g)
 			high = maxf(high, g)
-			continue
-		if i - 1 > start:
+		elif i - 1 > start:
 			ranges.append(Vector2i(start, i - 1))
 			start = i - 1
 			low = minf(ground[start], g)
 			high = maxf(ground[start], g)
 		else:
+			ranges.append(Vector2i(start, i))
+			start = i
+			low = g
+			high = g
+		if i > start and forced.has(i):
 			ranges.append(Vector2i(start, i))
 			start = i
 			low = g
