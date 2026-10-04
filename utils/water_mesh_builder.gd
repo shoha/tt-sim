@@ -4,8 +4,7 @@ extends RefCounted
 ## The geometry of a map document's authored water (MapDocument.water_bodies), pure: one
 ## merged surface mesh for every body, the surface collision and WaterZone footprint of each
 ## body, and the per-sample water levels the ground height field raises the grid to.
-## AuthoredWater turns it into nodes. Summary: docs/ARCHITECTURE.md "Authored water at
-## runtime".
+## AuthoredWater turns it into nodes. Summary: docs/systems/water.md (Runtime).
 ##
 ## One mesh for all bodies, because the water shader has one flow sampler per level
 ## (WaterGlbUtils, one map-wide flow map, WaterFlowBaker): it sits at the map origin with an

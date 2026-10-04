@@ -55,8 +55,7 @@ extends RefCounted
 ## per-sample levels. Summary: docs/systems/water.md (Water model and flow bake).
 ##
 ## Crossings. crossings holds the plank bridges and stepping stones (Crossing, stable ids),
-## built from their fields alone (CrossingGeometry). Summary: docs/ARCHITECTURE.md
-## "Crossings".
+## built from their fields alone (CrossingGeometry). Summary: docs/systems/crossings.md.
 ##
 ## The fields are plain vars because authoring mutates one document for a whole session;
 ## every helper here is pure except the surface_* mutators, which edit the fields.
