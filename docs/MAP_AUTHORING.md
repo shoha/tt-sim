@@ -212,11 +212,13 @@ Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
   than water from the home view. (The foam outlines along submerged reed blades went with
   the boulder-line fix, P4b-0; confirmed in the wetland re-render of the P4b-3 judgment set.)
-- Waterfalls between reaches (a riffle is the only step). Fords: see the crossing follow-ups.
+- Waterfalls between reaches (a riffle is the only step): phase 4c (Roadmap). Fords: see the
+  crossing follow-ups.
 
 Crossing follow-ups (after P4b-3, 2026-09-27; later work, none blocking):
 - A stone arch (the third kind the model leaves room for; the Bridge pane has a free column).
-- Crossings on a dressed Blender map's own water: its water plane is not a crossing target
+- Crossings on a dressed Blender map's own water (deferred to a terrain-paint integration
+  sprint, 2026-10-04): its water plane is not a crossing target
   (the snapping reads document water; the Bridge tool is disabled there with a tooltip unless
   the document has water), and its Blender scatter is not cleared under a crossing.
 - Fords (a crossing kind of its own, or a path painted through shallows, which P4b-0 already
@@ -318,13 +320,23 @@ Follow-ups:
   drawn line), the pinned performance pass (`PERFORMANCE.md` "Phase 4b (crossings): pinned
   performance pass") and these docs. Phase 4b is done (2026-09-27); the stone arch, fords and
   crossings over a Blender map's own water are later work (Open work above).
+- **Phase 4c: waterfalls, then the remaining crossings (next, decided 2026-10-04).**
+  Waterfalls first: a river drawn across any steep drop falls there by itself, with no new
+  control (small drops stay riffles). Over a Tier cliff the water uses the existing rock
+  face; on a steep natural slope the carve cuts a rock lip with a plunge pool below, so a
+  river down a hillside steps in falls. Ponds spilling over an edge are later work (a pond
+  outflow is a river drawn from the pond over the edge, which confluences already
+  support). After waterfalls: the stone arch, then fords. Crossings over a dressed Blender
+  map's own water are deferred to a separate terrain-paint integration sprint.
 - **Phase 5:** more starting points. `NewMap` already gives each biome a starting cover
-  (groves at the edges, an open glade for the fight).
-- **Before the minor version bump ("map maker finished"):** not yet scoped with the user.
-  Candidates already on record: the stone arch, fords and waterfalls (Open work, water and
-  crossing follow-ups), crossings over a Blender map's own water, phase 5 starting points,
-  and the Steam two-account test passing on an authored map with water and crossings.
-  Confirm the list with the user before planning it.
+  (groves at the edges, an open glade for the fight); new maps still start flat. The likely
+  next step is starting landforms (a river valley, a hilltop, terraced tiers, a lakeshore)
+  built from the same sculpt, tier and water operations, so everything stays editable. Not
+  yet scoped with the user.
+- **Before the minor version bump ("map maker finished"):** not yet fully scoped with the
+  user. Candidates on record: phase 4c, phase 5 starting points, and the Steam two-account
+  test passing on an authored map with water and crossings. Confirm the list with the user
+  before planning it.
 
 ## Future ideas (user notes, 2026-09-27)
 
