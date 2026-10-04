@@ -11,6 +11,11 @@ extends SceneTree
 ##   "timeout_s"        hard stop (default 300)
 ##   "hang_s"           kill the process when no frame completes for this long (default 60)
 ##   "remove_override"  delete res://override.cfg once the engine has read it
+##   "saved"            {folder, load}: the saved level --saved loads in place of the job's
+##                      build steps (README "Build once, look many")
+## Look-mode flags (README "Running a job"): --saved skips the steps tagged "phase": "build"
+## and loads the saved level instead; --only <a,b*> takes only the captures whose names match
+## (and skips the look steps tagged "for" them); --half writes every capture at half size.
 ##
 ## The timeout above runs on the main thread, so a main thread that blocks (a hung load, a
 ## GPU wait) would never reach it, and stopping the shell task that launched Godot does not
@@ -133,6 +138,12 @@ func _start() -> void:
 	driver.set("steps", _job.steps)
 	driver.set("out_dir", _out_dir)
 	driver.set("root_node", current_scene)
+	var args := OS.get_cmdline_user_args()
+	var only := _option(args, "--only")
+	driver.set("saved", _job.get("saved", {}))
+	driver.set("saved_mode", args.has("--saved"))
+	driver.set("only", only.split(",", false) if only != "" else PackedStringArray())
+	driver.set("half", args.has("--half"))
 	DirAccess.make_dir_recursive_absolute(_out_dir)
 	root.add_child(driver)
 	print("RJ| started %d steps" % _job.steps.size())
