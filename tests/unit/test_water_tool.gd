@@ -3,8 +3,11 @@ extends GutTest
 ## The Water tool (phase 4, P4-4): the drawn line's capture and smoothing, width clamps per
 ## depth class, the confluence rule, pond extension, erasing whole reaches, the tool on a
 ## dressed map, one history entry per gesture, the worker carve landing exactly what the
-## synchronous one does (a flat stroke and, P4c-2, one with falls), the soft pond shore and
-## the rounded river ends.
+## synchronous one does (a flat stroke and, P4c-2, one with falls), the soft pond shore, the
+## rounded river ends, and the falls at the tools (P4c-5): a tributary drawn into a fall's
+## face ends in its pool, an erase keeps the carved notch, tokens land on the lip and in the
+## plunge pool, smoothing a face turns the fall back into a draped sheet, and the ribbon
+## preview of an uphill stroke points downhill.
 
 const DEPTHS: Array[WaterBody.Depth] = [
 	WaterBody.Depth.ANKLE, WaterBody.Depth.WAIST, WaterBody.Depth.DEEP
@@ -562,3 +565,198 @@ func test_a_river_ends_in_a_rounded_head() -> void:
 	assert_gt(head, tip, "a rounded head, widening away from the tip")
 	assert_lt(head, 0.95 * full, "not a straight line across the channel")
 	assert_gt(wet_half_width.call(9.7), 0.05, "the downstream end is rounded too")
+
+
+# --- waterfalls (P4c-5) ------------------------------------------------------------------------
+
+
+## A 150 ft document with the tier band (its top covers z < 0) and, through `editor`'s water
+## edits, a waist river over it along Z (one fall at the brink): [doc, editor, the fall].
+func _tier_fall_edited(history: AuthoringHistory = null) -> Array:
+	var doc := MapDocument.create_flat(Vector2i(30, 30), "grass", "v", 9)
+	Fixtures.tier_band(doc)
+	var editor := _editor(doc, history)
+	var id := editor.water.carve_river(_line([[0, -12], [0, 12]]), _w(1.0), WaterBody.Depth.WAIST)
+	_settle(editor)
+	assert_gt(id, 0, "the river over the tier is carved")
+	var falls := WaterFalls.falls(doc)
+	assert_eq(falls.size(), 1, "one fall at the brink")
+	return [doc, editor, falls[0] if not falls.is_empty() else {}]
+
+
+## The cascade (draped sheet) samples of `doc` within `reach` metres of `at`.
+func _sheets_near(doc: MapDocument, at: Vector2, reach: float) -> int:
+	var count := 0
+	var columns := doc.samples_x()
+	for i: int in WaterMeshBuilder.cascades(doc):
+		var p := doc.sample_to_world(Vector2(i % columns, floori(float(i) / columns)))
+		if p.distance_to(at) <= reach:
+			count += 1
+	return count
+
+
+func test_a_tributary_drawn_into_a_fall_s_face_ends_in_its_pool() -> void:
+	var made := _tier_fall_edited()
+	var doc: MapDocument = made[0]
+	var editor: AuthoringEditor = made[1]
+	var fall: Dictionary = made[2]
+	var lower: WaterBody = doc.water_bodies[fall.lower_index]
+	var lip: Vector2 = fall.lip
+	var dir: Vector2 = fall.dir
+	var drop := float(fall.top) - float(fall.bottom)
+	# The stroke's end on the face, 0.6 m below the lip: rock standing above the pool.
+	var on_face := lip + dir * 0.6 + Vector2(0.3, 0)
+	var rock := WaterGeometry.ground_at(doc, on_face)
+	assert_true(rock > lower.level_m and rock < float(fall.top), "on the face: %.2f" % rock)
+	assert_true(WaterFalls.on_face(doc, fall, on_face))
+	var id := editor.water.carve_river(
+		_line([[8, 4], [on_face.x, on_face.y]]), _w(0.6), WaterBody.Depth.ANKLE
+	)
+	_settle(editor)
+	assert_gt(id, 0, "carved")
+	var last := doc.water_bodies[-1]
+	var end: Vector2 = last.points[-1]
+	var foot := WaterCarve.fall_foot(drop, lower.depth_m())
+	var along := (end - lip).dot(dir)
+	assert_gt(along, foot, "ends past the face's foot, in the plunge pool: %s" % end)
+	assert_lt(along, foot + WaterFalls.plunge_length(drop), "where the pool is deepest")
+	assert_almost_eq(end.x, lip.x, 0.05, "on the pool's own course")
+	assert_eq(WaterGeometry.level_at(doc, end, last.id), lower.level_m, "in the pool's water")
+	assert_almost_eq(last.level_m, lower.level_m, 1e-4, "its last reach at the pool's level")
+	assert_eq(WaterFalls.falls(doc).size(), 1, "the main fall is the only one")
+
+
+func test_erasing_a_river_with_falls_keeps_the_notch_and_undo_brings_them_back() -> void:
+	var history := AuthoringHistory.new()
+	var doc := MapDocument.create_flat(Vector2i(30, 30), "grass", "v", 9)
+	Fixtures.tier_band(doc)
+	var editor := _editor(doc, history)
+	var before := doc.heights.duplicate()
+	editor.water.carve_river(_line([[0, -12], [0, 12]]), _w(1.0), WaterBody.Depth.WAIST)
+	_settle(editor)
+	assert_eq(WaterFalls.falls(doc).size(), 1)
+	var carved := doc.heights.duplicate()
+	assert_ne(carved, before, "the carve cut the notch and the plunge basin")
+	assert_false((WaterMeshBuilder.build(doc).falls as Array).is_empty(), "a curtain")
+	assert_true(editor.water.erase_water_begin())
+	editor.stroke_dab(Vector3(0, 0, 6), Vector3(0, 0, 6), 0.5, 0.1)
+	assert_true(editor.end_stroke())
+	_settle(editor)
+	assert_true(doc.water_bodies.is_empty(), "the river goes whole, every reach")
+	assert_true(WaterFalls.falls(doc).is_empty(), "and its fall with it")
+	assert_true((WaterMeshBuilder.build(doc).falls as Array).is_empty(), "no curtain")
+	assert_eq(doc.heights, carved, "the ground keeps the notch, face and plunge basin")
+	history.undo()
+	_settle(editor)
+	assert_eq(WaterFalls.falls(doc).size(), 1, "undo brings the river and its fall back")
+	assert_eq(doc.heights, carved)
+	assert_false((WaterMeshBuilder.build(doc).falls as Array).is_empty(), "the curtain too")
+
+
+func test_tokens_land_in_the_plunge_pool_and_on_the_lip() -> void:
+	# Tokens land by a downward ray (WaterSurface.landing_below, P4c-0 probe e), so a drop
+	# over a fall lands on the lip, on the face or in the plunge pool exactly where it is
+	# dropped; nothing slides. The pool is the lower body's water: a wading token stands on its
+	# deeper plunge bed.
+	var doc := MapDocument.create_flat(Vector2i(30, 30), "grass", "v", 9)
+	Fixtures.tier_fall(doc)
+	var falls := WaterFalls.falls(doc)
+	assert_eq(falls.size(), 1)
+	var fall: Dictionary = falls[0]
+	var lower: WaterBody = doc.water_bodies[fall.lower_index]
+	var root := Node3D.new()
+	root.add_child(AuthoredTerrain.create(doc))
+	add_child_autofree(root)
+	MapSourceLoader.add_authored_water(root, doc, false)
+	await get_tree().physics_frame
+	var space := root.get_world_3d().direct_space_state
+	var lip: Vector2 = fall.lip
+	var dir: Vector2 = fall.dir
+	var drop := float(fall.top) - float(fall.bottom)
+	var ground_of := func(p: Vector2) -> float:
+		return ScatterGenerator.triangle_height(
+			doc.heights, doc.samples_x(), doc.samples_z(), doc.world_to_sample(p)
+		)
+	var pool := lip + dir * (WaterCarve.fall_foot(drop, lower.depth_m()) + 0.3)
+	var bed: float = ground_of.call(pool)
+	assert_lt(bed, lower.level_m - lower.depth_m(), "the plunge bed is deeper than the channel")
+	var in_pool := WaterSurface.landing_below(space, Vector3(pool.x, 0, pool.y), 5.0)
+	assert_ne(in_pool, Vector3.INF, "a landing in the pool")
+	assert_almost_eq(in_pool.y, bed, 0.02, "a wading token stands on the plunge bed")
+	var surface := WaterSurface.water_below(space, Vector3(pool.x, 0, pool.y), 5.0)
+	assert_false(surface.is_empty(), "under the pool's surface")
+	assert_almost_eq(float(surface.y), lower.level_m, 0.05, "the lower body's water")
+	var on_lip := WaterSurface.landing_below(space, Vector3(lip.x, 0, lip.y), 5.0)
+	assert_almost_eq(on_lip.y, ground_of.call(lip), 0.02, "a token on the lip stands on its rock")
+	assert_lt(on_lip.y, float(fall.top), "under the upper water's level")
+	var face := lip + dir * 0.7
+	var on_face := WaterSurface.landing_below(space, Vector3(face.x, 0, face.y), 5.0)
+	assert_almost_eq(on_face.y, ground_of.call(face), 0.02, "on the face where it is dropped")
+	assert_gt(on_face.y, lower.level_m, "above the pool")
+	assert_lt(on_face.y, on_lip.y, "below the lip")
+
+
+func test_smoothing_a_fall_s_face_turns_it_back_into_a_draped_sheet() -> void:
+	var made := _tier_fall_edited()
+	var doc: MapDocument = made[0]
+	var editor: AuthoringEditor = made[1]
+	var fall: Dictionary = made[2]
+	var lip: Vector2 = fall.lip
+	var dir: Vector2 = fall.dir
+	var lower: WaterBody = doc.water_bodies[fall.lower_index]
+	var course: PackedVector2Array = WaterGeometry.river_course(lower)[0]
+	var search := WaterFalls.face_search(float(fall.top) - float(fall.bottom), fall.half_width)
+	assert_gte(WaterFalls.steepest_within(doc, course, search), WaterFalls.FALL_FACE_SLOPE)
+	var step := lip + dir * 1.0
+	assert_eq(_sheets_near(doc, step, 1.5), 0, "a fall drapes no sheet over its face")
+	# Smooth the face and the pool below it (Sculpt's Smooth along the course, as the author
+	# would: a stroke across the face alone leaves its own shoulder at the brush's edge, over
+	# the plunge bed) until the step lies below the cliff rule; the bodies do not change, so
+	# the step is still a drop by the levels.
+	assert_true(editor.begin_height_stroke(HeightBrush.SMOOTH))
+	var from := lip - dir * 2.0
+	var to := lip + dir * (search + 2.0)
+	for _pass in 30:
+		editor.stroke_dab(Vector3(from.x, 0, from.y), Vector3(to.x, 0, to.y), 3.5, 0.25)
+		editor.flush()
+	assert_true(editor.end_stroke())
+	_settle(editor)
+	assert_lt(
+		WaterFalls.steepest_within(doc, course, search),
+		WaterFalls.FALL_FACE_SLOPE,
+		"the face lies below the cliff rule"
+	)
+	assert_eq(WaterFalls.drops(doc.water_bodies).size(), 1, "still a drop by the levels")
+	assert_true(WaterFalls.falls(doc).is_empty(), "but no fall on this ground")
+	assert_gt(_sheets_near(doc, step, 1.5), 0, "the step drapes a cascade sheet again")
+	assert_true((WaterMeshBuilder.build(doc).falls as Array).is_empty(), "no curtain")
+	var water := editor.map_root.get_node(AuthoredWater.NODE_NAME) as AuthoredWater
+	assert_null(water.get_falls_instance(), "the refreshed surface has no falls node")
+
+
+func test_an_uphill_stroke_previews_its_flow_downhill() -> void:
+	var rising := func(p: Vector2) -> float: return p.x * 0.5
+	var drawn := _line([[0, 0], [2, 0], [4, 0]])
+	var flow := WaterBrush.flow_line(drawn, rising)
+	assert_eq(flow[0], Vector2(4, 0), "reversed: the water starts at the high end")
+	assert_eq(flow[-1], Vector2(0, 0))
+	var tangent := (flow[1] - flow[0]).normalized()
+	var arrow := WaterBrush.chevron(flow[1], tangent, 1.0)
+	assert_lt(arrow[1].x, arrow[0].x, "the chevron's tip points downhill")
+	assert_lt(arrow[1].x, arrow[2].x)
+	assert_almost_eq(arrow[0].y, -arrow[2].y, 1e-6, "barbs either side")
+	assert_eq(WaterBrush.flow_line(drawn, func(_p: Vector2) -> float: return 0.0), drawn, "flat")
+	var gentle := func(p: Vector2) -> float: return p.x * 0.1
+	assert_eq(WaterBrush.flow_line(drawn, gentle), drawn, "a gentle rise keeps its direction")
+	assert_eq(WaterBrush.flow_line(_line([[1, 1]]), rising), _line([[1, 1]]), "a point")
+	# The editor's reader is the plan's: under existing water it reads that water's level.
+	var made := _tier_fall_edited()
+	var doc: MapDocument = made[0]
+	var editor: AuthoringEditor = made[1]
+	var reader := WaterBrush.ground_reader(editor)
+	assert_almost_eq(float(reader.call(Vector2(6, -8))), doc.tier_height_m, 0.01, "the tier top")
+	var pool: WaterBody = doc.water_bodies[-1]
+	var expected := pool.level_m + WaterGeometry.FREEBOARD_M
+	assert_almost_eq(float(reader.call(Vector2(0, 8))), expected, 1e-4, "the water's level")
+	var uphill := WaterBrush.flow_line(_line([[6, 6], [6, -8]]), reader)
+	assert_eq(uphill[0], Vector2(6, -8), "a stroke up the tier runs down it")

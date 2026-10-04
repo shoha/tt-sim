@@ -42,8 +42,8 @@ extends RefCounted
 ##                               asset, rock props under the water, the ground layers.
 ##   profile {every}             ground and depth along every river's course.
 ##   joints                      the reach steps of every river, named "joint<k>" (P4-5).
-##   cleanup                     deletes every user://levels/_p43_*, _p44_*, _p45_* and _p4b_*
-##                               folder (test levels only).
+##   cleanup                     deletes every user://levels/_p43_*, _p44_*, _p45_*, _p4b_* and
+##                               _p4c_* folder (test levels only).
 
 ## The `build` map: the river's control line, its reaches' half-widths, the bank width of
 ## the carve, and the two ponds.
@@ -62,8 +62,8 @@ const RIVER := [
 const HALF_WIDTHS := [1.8, 2.2, 2.8]
 const BANK_M := 1.6
 const POND := {"id": 20, "at": [13, -17], "r": 6.0, "depth": "deep"}
-## Level folders `save` may write (test levels; `cleanup` deletes the _p43_ and _p44_ ones).
-const TEST_PREFIXES: Array[String] = ["_p42_", "_p43_", "_p44_", "_p45_", "_p4b_"]
+## Level folders `save` may write (test levels; `cleanup` deletes all but the _p42_ ones).
+const TEST_PREFIXES: Array[String] = ["_p42_", "_p43_", "_p44_", "_p45_", "_p4b_", "_p4c_"]
 const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}
 
 ## Points `scan` found (and the reach steps `carve` made), by name.
@@ -705,8 +705,8 @@ static func _joints(base: Node) -> String:
 	return "joints: %s" % "; ".join(out)
 
 
-## Deletes the test levels this probe saved (user://levels/_p43_*, _p44_*, _p45_*, _p4b_*
-## only).
+## Deletes the test levels this probe saved (user://levels/_p43_*, _p44_*, _p45_*, _p4b_*,
+## _p4c_* only).
 static func _cleanup() -> String:
 	var dir := DirAccess.open(LevelManager.levels_dir)
 	if dir == null:

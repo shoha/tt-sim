@@ -356,49 +356,93 @@ static func fall_flags(bodies: Array[WaterBody]) -> PackedByteArray:
 	return out
 
 
-## The face samples of every fall of `doc`: the samples within the channel's half-width of
-## the lower course, from the lip to the face's foot (where the centreline ground first
-## reaches the lower level, or the search length), ascending and unique. For the dressing
-## and the flow bake.
+## The face samples of every fall of `doc` (footprint_of() of each, merged), ascending and
+## unique. For the dressing and the flow bake.
 static func footprint(doc: MapDocument) -> PackedInt32Array:
 	var found := {}
-	var step := minf(doc.sample_step().x, doc.sample_step().y)
-	var last := Vector2(doc.samples_x() - 1, doc.samples_z() - 1)
-	var ground_of := func(p: Vector2) -> float: return WaterGeometry.ground_at(doc, p)
 	for fall in falls(doc):
-		var lower: WaterBody = doc.water_bodies[fall.lower_index]
-		var course: PackedVector2Array = WaterGeometry.river_course(lower)[0]
-		var arcs := _arcs(course)
-		var half: float = fall.half_width
-		var search := face_search(fall.top - fall.bottom, half)
-		var profile := fine_profile(_truncated(course, search), step, ground_of)
-		var foot := search
-		for k in profile.arc.size():
-			if profile.ground[k] <= fall.bottom:
-				foot = profile.arc[k]
-				break
-		var lip: Vector2 = fall.lip
-		var direction: Vector2 = fall.dir
-		var box := Vector2.ONE * (foot + half)
-		var first := doc.world_to_sample(lip - box).floor().clamp(Vector2.ZERO, last)
-		var stop := doc.world_to_sample(lip + box).ceil().clamp(Vector2.ZERO, last)
-		for z in range(int(first.y), int(stop.y) + 1):
-			for x in range(int(first.x), int(stop.x) + 1):
-				var p := doc.sample_to_world(Vector2(x, z))
-				if (p - lip).dot(direction) < 0.0:
-					continue
-				var near := WaterGeometry.nearest_on_polyline(course, p)
-				if near.y < 0 or near.x > half:
-					continue
-				var s := int(near.y)
-				var along := lerpf(arcs[s], arcs[s + 1], near.z)
-				if along <= foot:
-					found[doc.sample_index(x, z)] = true
+		for i in footprint_of(doc, fall):
+			found[i] = true
 	var out := PackedInt32Array()
 	for i: int in found:
 		out.append(i)
 	out.sort()
 	return out
+
+
+## The face samples of one fall of `doc` (a falls() entry): the samples within the channel's
+## half-width of the lower course, from the lip to the face's foot (face_foot()), ascending
+## and unique.
+static func footprint_of(doc: MapDocument, fall: Dictionary) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var last := Vector2(doc.samples_x() - 1, doc.samples_z() - 1)
+	var lower: WaterBody = doc.water_bodies[fall.lower_index]
+	var course: PackedVector2Array = WaterGeometry.river_course(lower)[0]
+	var arcs := _arcs(course)
+	var half: float = fall.half_width
+	var foot := face_foot(doc, fall)
+	var lip: Vector2 = fall.lip
+	var direction: Vector2 = fall.dir
+	var box := Vector2.ONE * (foot + half)
+	var first := doc.world_to_sample(lip - box).floor().clamp(Vector2.ZERO, last)
+	var stop := doc.world_to_sample(lip + box).ceil().clamp(Vector2.ZERO, last)
+	for z in range(int(first.y), int(stop.y) + 1):
+		for x in range(int(first.x), int(stop.x) + 1):
+			var p := doc.sample_to_world(Vector2(x, z))
+			if (p - lip).dot(direction) < 0.0:
+				continue
+			var near := WaterGeometry.nearest_on_polyline(course, p)
+			if near.y < 0 or near.x > half:
+				continue
+			var s := int(near.y)
+			var along := lerpf(arcs[s], arcs[s + 1], near.z)
+			if along <= foot:
+				out.append(doc.sample_index(x, z))
+	return out
+
+
+## How far down the lower course from the lip the face of `fall` (a falls() entry of `doc`)
+## reaches on the ground as it is: where the centreline ground first reaches the lower level,
+## or face_search() when it never does. The footprint's and the foam ring's foot (the
+## carved foot, WaterCarve.fall_foot, lies a little further: the pool is deepest there).
+static func face_foot(doc: MapDocument, fall: Dictionary) -> float:
+	var step := minf(doc.sample_step().x, doc.sample_step().y)
+	var ground_of := func(p: Vector2) -> float: return WaterGeometry.ground_at(doc, p)
+	var lower: WaterBody = doc.water_bodies[fall.lower_index]
+	var course: PackedVector2Array = WaterGeometry.river_course(lower)[0]
+	var search := face_search(fall.top - fall.bottom, fall.half_width)
+	var profile := fine_profile(_truncated(course, search), step, ground_of)
+	for k in profile.arc.size():
+		if profile.ground[k] <= fall.bottom:
+			return profile.arc[k]
+	return search
+
+
+## True when map point `p` lies on the face of `fall` (a falls() entry of `doc`): within the
+## channel's half-width of the lower course, from the lip down to the carved face's foot
+## (WaterCarve.fall_foot). The rock a stroke's end can land on without being wet.
+static func on_face(doc: MapDocument, fall: Dictionary, p: Vector2) -> bool:
+	var lower: WaterBody = doc.water_bodies[fall.lower_index]
+	var course: PackedVector2Array = WaterGeometry.river_course(lower)[0]
+	var near := WaterGeometry.nearest_on_polyline(course, p)
+	if near.y < 0 or near.x > float(fall.half_width):
+		return false
+	var arcs := _arcs(course)
+	var along := lerpf(arcs[int(near.y)], arcs[int(near.y) + 1], near.z)
+	var foot := WaterCarve.fall_foot(float(fall.top) - float(fall.bottom), lower.depth_m())
+	return along >= 0.0 and along <= foot
+
+
+## The point of the plunge pool of `fall` (a falls() entry of `doc`) a stroke ending on its
+## face joins: the lower course `past` metres beyond the carved face's foot
+## (WaterCarve.fall_foot), where the pool is deepest; the course's last point when it is
+## shorter.
+static func pool_point(doc: MapDocument, fall: Dictionary, past: float) -> Vector2:
+	var lower: WaterBody = doc.water_bodies[fall.lower_index]
+	var course: PackedVector2Array = WaterGeometry.river_course(lower)[0]
+	var arcs := _arcs(course)
+	var foot := WaterCarve.fall_foot(float(fall.top) - float(fall.bottom), lower.depth_m())
+	return _point_at(course, arcs, minf(foot + past, arcs[-1]))
 
 
 ## falls() entry for the step from `bodies[a]` into `bodies[b]`.

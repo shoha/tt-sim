@@ -9,6 +9,8 @@ extends GutTest
 const RIVER_LEVEL := -0.2
 const BED := -1.0
 const EPSILON := 0.0001
+## Ground shapes shared with the water tests (the tier fall, P4c-5).
+const Fixtures := preload("res://tests/unit/water_fixtures.gd")
 
 var _root: Node3D = null
 
@@ -153,6 +155,54 @@ func test_a_narrow_bar_mid_stream_is_part_of_the_water() -> void:
 		doc, Vector2(0, -1), Vector2(0, -0.5), Crossing.Kind.PLANK
 	)
 	assert_gt(crossing.end.y, 1.5, "spans the bar to the far bank")
+
+
+func test_a_crossing_keeps_clear_of_a_waterfall() -> void:
+	# P4c-5: a waist river over a tier (one fall at the brink, flowing +Z). A line beside the
+	# fall, over its plunge pool, is refused with the fall's own message; one across the face
+	# is refused too (level_at has no flush cut at the lip, so the face reads the upper pool's
+	# level and is "wet": the fall message says more than "no water" would); a line 2 m
+	# upstream of the lip and one 2 m downstream of the foam ring cross calm water.
+	var doc := MapDocument.create_flat(Vector2i(30, 30), "grass", "test", 5)
+	Fixtures.tier_fall(doc)
+	var falls := WaterFalls.falls(doc)
+	assert_eq(falls.size(), 1, "the tier makes one fall")
+	var fall: Dictionary = falls[0]
+	var lip: Vector2 = fall.lip
+	var dir: Vector2 = fall.dir
+	assert_almost_eq(dir.y, 1.0, 0.05, "falls toward +Z")
+	var kind := Crossing.Kind.PLANK
+	var foot := lip + dir * WaterFalls.face_foot(doc, fall)
+	var beside := CrossingPlacement.place(
+		doc, foot + Vector2(-0.5, 0.5), foot + Vector2(0.5, 0.5), kind
+	)
+	assert_eq(beside.refusal, CrossingPlacement.REFUSED_FALL, "over the plunge pool")
+	assert_eq(
+		BridgeBrush.refusal_text(beside.refusal, 1.524, 5.0, "ft"),
+		"Too close to the waterfall. Bridges cross calm water."
+	)
+	var mid := lip + dir * 0.6
+	var face := CrossingPlacement.place(doc, mid + Vector2(-3, 0), mid + Vector2(3, 0), kind)
+	assert_eq(face.refusal, CrossingPlacement.REFUSED_FALL, "across the face")
+	var up := lip - dir * 2.0
+	var upstream := CrossingPlacement.place(doc, up + Vector2(-0.5, 0), up + Vector2(0.5, 0), kind)
+	assert_eq(upstream.refusal, &"", "2 m upstream of the lip: calm water")
+	var radius := WaterFallMesh.ring_radius(2.0 * float(fall.half_width))
+	var centre := WaterFallMesh.ring_centre(lip, dir, WaterFalls.face_foot(doc, fall), radius)
+	var down := centre + dir * (radius + 2.0)
+	var downstream := CrossingPlacement.place(
+		doc, down + Vector2(-0.5, 0), down + Vector2(0.5, 0), kind
+	)
+	assert_eq(downstream.refusal, &"", "2 m downstream of the ring: calm water")
+	var crossing: Crossing = downstream.crossing
+	assert_false(
+		CrossingPlacement.fall_near(doc, crossing.start, crossing.end, crossing.width_m),
+		"the placed deck is clear of the fall"
+	)
+	assert_true(
+		CrossingPlacement.fall_near(doc, foot + Vector2(-3, 0.5), foot + Vector2(3, 0.5), 1.5),
+		"a strip over the pool is not"
+	)
 
 
 func test_style_at_reads_the_biome_mask() -> void:

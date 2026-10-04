@@ -11,7 +11,9 @@ extends RefCounted
 ## it lies RIVER_DECIMATE_M from the last (decimate()); the line is Chaikin-smoothed
 ## (smooth_line()) for the preview and the carve; the release carves it
 ## (WaterEditor.carve_river, first point upstream), and the ribbon stays, faint, until the
-## carve (on a worker) lands. Pond: the press starts a pond stroke (a press inside a pond
+## carve (on a worker) lands. The ribbon's gradient and chevrons show the way the water will
+## really run (flow_line(): a line drawn uphill is reversed, as the plan reverses it,
+## WaterFalls.orient, P4c-5). Pond: the press starts a pond stroke (a press inside a pond
 ## extends it) whose dabs BrushTool paints like the Biome brush's, the dab growing with
 ## dwell (POND_DWELL_GROW); the painted dabs preview its area. Ctrl at the press (either
 ## tile): an erase stroke, whose touched river reaches are previewed in red (they go whole).
@@ -87,6 +89,39 @@ static func smooth_line(points: PackedVector2Array) -> PackedVector2Array:
 	var widths := PackedFloat32Array()
 	widths.resize(points.size())
 	return WaterGeometry.chaikin(points, widths, 2)[0]
+
+
+## The line the ribbon previews for a river drawn along `line` (world XZ): reversed when the
+## stroke runs uphill (WaterFalls.is_uphill on the ground `ground_of` reads at its two ends,
+## the plan's own reader, ground_reader()), since the water will run the other way; a flat or
+## gently rising stroke keeps its drawn direction, as the plan keeps it. Pure.
+static func flow_line(line: PackedVector2Array, ground_of: Callable) -> PackedVector2Array:
+	if line.size() < 2:
+		return line.duplicate()
+	var ends := PackedFloat32Array([ground_of.call(line[0]), ground_of.call(line[-1])])
+	return WaterFalls.orient(line, PackedFloat32Array(), ends)[0]
+
+
+## The ground the preview orients by, at a world XZ point: the plan's reader
+## (WaterEdit.water_ground_at: under existing water, that water's level plus the freeboard),
+## so the ribbon and the carve agree on which way a stroke runs.
+static func ground_reader(editor: AuthoringEditor) -> Callable:
+	return func(xz: Vector2) -> float:
+		var at := editor.to_map_xz(Vector3(xz.x, 0.0, xz.y))
+		return WaterEdit.water_ground_at(editor.document, at)
+
+
+## The three world points of a chevron at `at` pointing along `tangent` (unit), `size` metres
+## across: a barb either side behind, the tip ahead. Pure.
+static func chevron(at: Vector2, tangent: Vector2, size: float) -> PackedVector2Array:
+	var normal := Vector2(-tangent.y, tangent.x)
+	return PackedVector2Array(
+		[
+			at - tangent * size * 0.2 + normal * size * 0.45,
+			at + tangent * size * 0.3,
+			at - tangent * size * 0.2 - normal * size * 0.45,
+		]
+	)
 
 
 ## The length of a polyline (metres). Pure.
@@ -177,7 +212,7 @@ func carve(editor: AuthoringEditor, half_width: float) -> bool:
 		}
 		_refusal = reasons.get(editor.water.last_refusal, "")
 		return _refusal == ""
-	held = line
+	held = flow_line(line, ground_reader(editor))
 	held_radius = half_width
 	return true
 
@@ -231,7 +266,8 @@ func draw(
 		var tip := Vector2(hit.x, hit.z)
 		if live[-1].distance_to(tip) > 0.05:
 			live.append(tip)
-		draw_ribbon(canvas, ground, smooth_line(live), half_width, TINT, 1.0, true)
+		var flow := flow_line(smooth_line(live), ground_reader(editor))
+		draw_ribbon(canvas, ground, flow, half_width, TINT, 1.0, true)
 	elif not held.is_empty():
 		draw_ribbon(canvas, ground, held, held_radius, TINT, 0.5, true)
 	if not stroking:
@@ -313,19 +349,14 @@ static func draw_ribbon(
 	for i in n - 1:
 		var length := line[i].distance_to(line[i + 1])
 		var tangent := (line[i + 1] - line[i]) / maxf(length, 0.0001)
-		var normal := Vector2(-tangent.y, tangent.x)
 		var size := minf(radius, 1.5)
 		while next <= walked + length:
 			var at := line[i] + tangent * (next - walked)
-			var chevron := PackedVector2Array(
-				[
-					ground.call(at - tangent * size * 0.2 + normal * size * 0.45),
-					ground.call(at + tangent * size * 0.3),
-					ground.call(at - tangent * size * 0.2 - normal * size * 0.45),
-				]
-			)
-			canvas.draw_polyline(chevron, Color(SHADOW, 0.3 * strength), 3.5, true)
-			canvas.draw_polyline(chevron, Color(1.0, 1.0, 1.0, 0.7 * strength), 2.0, true)
+			var arrow := PackedVector2Array()
+			for p in chevron(at, tangent, size):
+				arrow.append(ground.call(p))
+			canvas.draw_polyline(arrow, Color(SHADOW, 0.3 * strength), 3.5, true)
+			canvas.draw_polyline(arrow, Color(1.0, 1.0, 1.0, 0.7 * strength), 2.0, true)
 			next += RIBBON_ARROW_M
 		walked += length
 

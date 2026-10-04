@@ -23,11 +23,15 @@ extends RefCounted
 ## highest water it crosses. Stepping stones put their tops STONE_FREEBOARD_M over that water.
 ##
 ## Refusals (the tool's message): the line is too short, crosses no water, has no dry bank
-## within reach on a side (or runs off the map), or the span exceeds Crossing.MAX_SPAN_M.
+## within reach on a side (or runs off the map), comes within FALL_CLEAR_M of a waterfall
+## (its face or its foam ring, fall_near(); bridges cross calm water, P4c-5), or the span
+## exceeds Crossing.MAX_SPAN_M. A line across a fall's face alone crosses no water: the face
+## is dry rock between the lip and the plunge pool.
 
 const REFUSED_SHORT := &"short"
 const REFUSED_NO_WATER := &"no_water"
 const REFUSED_NO_BANK := &"no_bank"
+const REFUSED_FALL := &"fall"
 const REFUSED_LONG := &"long"
 
 ## A drawn line shorter than this is a click, not a crossing.
@@ -49,6 +53,8 @@ const MAX_RISE_M := 0.8
 const DECK_CLEAR_M := 0.45
 ## Over WaterZone's slab (level + 0.05) with the stones' jitter, so a token on a stone is dry.
 const STONE_FREEBOARD_M := 0.15
+## A crossing keeps at least this far from a waterfall's face and foam ring (fall_near()).
+const FALL_CLEAR_M := 1.0
 
 
 ## The crossing of kind `kind` a line drawn from `from` to `to` (map XZ) makes over `doc`'s
@@ -101,6 +107,13 @@ static func place(
 	for anchor in [anchor_a, anchor_b]:
 		if absf(anchor.x) > half.x or absf(anchor.y) > half.y:
 			return _refused(REFUSED_NO_BANK)
+	var low: float = Crossing.MIN_WIDTH_M[kind]
+	var high: float = Crossing.MAX_WIDTH_M[kind]
+	var crossing_width: float = (
+		Crossing.DEFAULT_WIDTH_M[kind] if width <= 0.0 else clampf(width, low, high)
+	)
+	if fall_near(doc, anchor_a, anchor_b, crossing_width):
+		return _refused(REFUSED_FALL)
 	if anchor_a.distance_to(anchor_b) > Crossing.MAX_SPAN_M:
 		return _refused(REFUSED_LONG)
 	var level := -INF
@@ -112,9 +125,7 @@ static func place(
 	crossing.start = anchor_a
 	crossing.end = anchor_b
 	crossing.style = style
-	var low: float = Crossing.MIN_WIDTH_M[kind]
-	var high: float = Crossing.MAX_WIDTH_M[kind]
-	crossing.width_m = Crossing.DEFAULT_WIDTH_M[kind] if width <= 0.0 else clampf(width, low, high)
+	crossing.width_m = crossing_width
 	crossing.levels = levels_for(
 		kind,
 		WaterGeometry.ground_at(doc, anchor_a),
@@ -155,6 +166,52 @@ static func levels_for(
 	var mean := (a + b) * 0.5
 	middle = clampf(middle, mean - Crossing.MAX_RISE_M, mean + Crossing.MAX_RISE_M)
 	return Vector3(a, middle, b)
+
+
+## True when the strip from `a` to `b` (map XZ) `width` wide (a deck, or the stones' path)
+## comes within FALL_CLEAR_M of a waterfall of `doc` (WaterFalls.falls): of its footprint
+## (WaterFalls.footprint_of, the face from the lip to its foot across the channel) or of its
+## foam ring (WaterFallMesh.ring_radius of the channel's full width, centred ring_centre()
+## past the face's foot, WaterFalls.face_foot). A fall whose lip stands further from the
+## strip than any of that reaches is not measured, so a line over calm water costs the
+## falls() scan alone. Pure.
+static func fall_near(doc: MapDocument, a: Vector2, b: Vector2, width: float) -> bool:
+	var falls := WaterFalls.falls(doc)
+	if falls.is_empty():
+		return false
+	var half := width * 0.5
+	var columns := doc.samples_x()
+	for fall in falls:
+		var lip: Vector2 = fall.lip
+		var channel: float = fall.half_width
+		var drop := float(fall.top) - float(fall.bottom)
+		var radius := WaterFallMesh.ring_radius(2.0 * channel)
+		var reach := WaterFalls.face_search(drop, channel) + channel + 2.0 * radius + FALL_CLEAR_M
+		if _strip_distance(a, b, half, lip) > reach:
+			continue
+		var foot := WaterFalls.face_foot(doc, fall)
+		var centre := WaterFallMesh.ring_centre(lip, fall.dir, foot, radius)
+		if _strip_distance(a, b, half, centre) <= radius + FALL_CLEAR_M:
+			return true
+		for i in WaterFalls.footprint_of(doc, fall):
+			var p := doc.sample_to_world(Vector2(i % columns, floori(float(i) / columns)))
+			if _strip_distance(a, b, half, p) <= FALL_CLEAR_M:
+				return true
+	return false
+
+
+## The distance from map point `p` to the strip from `a` to `b` `half` wide either side (0
+## inside it).
+static func _strip_distance(a: Vector2, b: Vector2, half: float, p: Vector2) -> float:
+	var d := b - a
+	var span := d.length()
+	if span < 1e-9:
+		return maxf(p.distance_to(a) - half, 0.0)
+	d /= span
+	var local := p - a
+	var u := local.dot(d)
+	var v := local.dot(d.orthogonal())
+	return Vector2(maxf(maxf(-u, u - span), 0.0), maxf(absf(v) - half, 0.0)).length()
 
 
 ## The palette biome painted under map point `p` (the document's biome mask, nearest sample),

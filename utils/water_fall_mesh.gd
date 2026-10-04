@@ -306,6 +306,18 @@ static func mist_count(drop: float, width: float) -> int:
 	return clampi(2 + roundi(width * 0.4 + drop * 0.4), MIST_MIN, MIST_MAX)
 
 
+## The foam ring's radius for a fall `crest_width` metres wide at the crest (the wetted
+## width; CrossingPlacement reads it with the channel's full width, a hair wider). Pure.
+static func ring_radius(crest_width: float) -> float:
+	return RING_WIDTH_FACTOR * crest_width * 0.5
+
+
+## The foam ring's centre: `pool_x` metres down the lower course from `lip` (where the
+## curtain meets the pool) plus RING_FORWARD of the ring's `radius`, along `dir`. Pure.
+static func ring_centre(lip: Vector2, dir: Vector2, pool_x: float, radius: float) -> Vector2:
+	return lip + dir * (pool_x + RING_FORWARD * radius)
+
+
 ## Builds one fall into `buffers`; returns its largest puff's half-size (for the bounds).
 static func _fall(doc: MapDocument, fall: Dictionary, buffers: _Buffers) -> float:
 	var upper: WaterBody = doc.water_bodies[fall.upper_index]
@@ -395,8 +407,8 @@ static func _ring(
 	width: float,
 	bottom: float
 ) -> void:
-	var radius := RING_WIDTH_FACTOR * width * 0.5
-	var centre := lip + dir * (pool_x + RING_FORWARD * radius)
+	var radius := ring_radius(width)
+	var centre := ring_centre(lip, dir, pool_x, radius)
 	var y := bottom + RING_LIFT_M
 	var first := buffers.vertices.size()
 	buffers.add(
