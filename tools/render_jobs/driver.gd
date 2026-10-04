@@ -8,6 +8,12 @@ var steps: Array = []
 var out_dir: String = ""
 var root_node: Node = null
 var frames: PackedFloat64Array = []
+## Build / look split (README "Build once, look many"). `saved` is the job's top-level "saved"
+## ({folder, load}), replaced by a `saved` step; the flags come from run.gd's arguments.
+var saved: Dictionary = {}
+var saved_mode: bool = false
+var only: PackedStringArray = []
+var half: bool = false
 var _i: int = -1
 var _state: Dictionary = {}
 var _log: PackedStringArray = []
@@ -16,6 +22,7 @@ var _recording: bool = false
 var _rec_name: String = ""
 var _rec_extra: Array = []
 var _captures: Array[Dictionary] = []
+var _saved_loaded: bool = false
 
 
 func _ready() -> void:
@@ -23,6 +30,8 @@ func _ready() -> void:
 	process_priority = -100
 	_last_usec = Time.get_ticks_usec()
 	get_tree().root.set_meta("render_job_done", "")
+	if saved_mode or half or not only.is_empty():
+		log_line("flags: saved %s, only %s, half %s" % [saved_mode, ",".join(only), half])
 	_next()
 
 
@@ -49,6 +58,14 @@ func ctrl() -> AuthoringController:
 func _next() -> void:
 	_i += 1
 	_state = {"t": 0.0, "phase": 0}
+	while _i < steps.size():
+		var reason := _skip_reason(steps[_i])
+		if reason == "":
+			break
+		log_line("skip %s (%s)" % [String(steps[_i].op), reason])
+		if reason == "build":
+			_insert_saved_load()
+		_i += 1
 	if _i >= steps.size():
 		get_tree().root.set_meta(
 			"render_job_done", "\n".join(_log) if not _log.is_empty() else "ok"
@@ -120,6 +137,12 @@ func _process(delta: float) -> void:
 			root_node.call("_begin_authoring", {"level": dressed, "return_to": &"title"})
 		"index":
 			_write_index(step)
+		"saved":
+			# Declares the saved level `--saved` loads in place of the build steps that follow
+			# (`folder`, `load` "dress" or "play"); a top-level "saved" key does the same for a
+			# whole job. Inside an expanded template it names one level per expansion.
+			saved = step
+			_saved_loaded = false
 		"expand_biomes":
 			# Inserts step.template once per palette biome (or per id in step.biomes),
 			# "{biome}" and "{name}" filled in, so the job follows whatever palette is
@@ -615,11 +638,20 @@ func _capture(step: Dictionary) -> bool:
 
 
 func _grab(name: String) -> void:
-	var sub := gm().world_viewport.get_texture().get_image()
-	sub.save_png(out_dir.path_join(name + "_sub.png"))
-	var win := get_viewport().get_texture().get_image()
-	win.save_png(out_dir.path_join(name + ".png"))
 	var step: Dictionary = steps[_i]
+	# `--half` (or the step's own `scale`) shrinks both images before saving, for inner loops.
+	var scale := float(step.get("scale", 0.5 if half else 1.0))
+	var sub := gm().world_viewport.get_texture().get_image()
+	var win := get_viewport().get_texture().get_image()
+	if scale != 1.0:
+		for img: Image in [sub, win]:
+			img.resize(
+				int(img.get_width() * scale),
+				int(img.get_height() * scale),
+				Image.INTERPOLATE_LANCZOS
+			)
+	sub.save_png(out_dir.path_join(name + "_sub.png"))
+	win.save_png(out_dir.path_join(name + ".png"))
 	_captures.append(
 		{"name": name, "desc": String(step.get("desc", "")), "zoom": gm().camera_node.size}
 	)
@@ -630,6 +662,72 @@ func _grab(name: String) -> void:
 		)
 	)
 	_state.phase = 2
+
+
+## Why `step` is skipped under the run's flags, or "" to run it. `--saved` skips every step
+## tagged `"phase": "build"`; `--only` skips a `capture` whose `name` matches none of its
+## patterns and a step tagged `"phase": "look"` whose `for` serves no capture that runs. An
+## untagged step always runs.
+func _skip_reason(step: Dictionary) -> String:
+	var phase := String(step.get("phase", ""))
+	if saved_mode and phase == "build":
+		return "build"
+	if only.is_empty():
+		return ""
+	if String(step.op) == "capture" and not _wanted(String(step.get("name", ""))):
+		return "not in --only"
+	if phase == "look" and step.has("for") and not _serves_wanted(String(step["for"])):
+		return "for " + String(step["for"])
+	return ""
+
+
+## Whether `name` matches one of the `--only` patterns (`*` and `?` wildcards).
+func _wanted(name: String) -> bool:
+	for pattern in only:
+		if name.match(pattern):
+			return true
+	return false
+
+
+## Whether a step's `for` (comma-separated capture names, wildcards allowed) serves a capture
+## that runs: a capture step anywhere in the job whose name it matches and `--only` wants, or
+## an entry `--only` matches directly (a name that is not a capture, say a GPU A/B's).
+func _serves_wanted(for_text: String) -> bool:
+	for entry in for_text.split(",", false):
+		if _wanted(entry):
+			return true
+		for other: Dictionary in steps:
+			if String(other.get("op", "")) != "capture":
+				continue
+			var name := String(other.get("name", ""))
+			if name.match(entry) and _wanted(name):
+				return true
+	return false
+
+
+## `--saved`: in place of the first build step skipped since the last `saved` declaration,
+## loads the declared saved level (`dress` by default, or `play`) and waits for it. A missing
+## level stops the job: it has to be built once without `--saved`.
+func _insert_saved_load() -> void:
+	if _saved_loaded:
+		return
+	_saved_loaded = true
+	var folder := String(saved.get("folder", ""))
+	if folder == "":
+		log_line("--saved with no saved level declared; nothing loaded")
+		return
+	if not DirAccess.dir_exists_absolute(LevelManager.folder_path(folder)):
+		log_line("saved level %s missing (build it without --saved); stopping the job" % folder)
+		_i = steps.size()
+		return
+	var load_op := String(saved.get("load", "dress"))
+	var added: Array = [{"op": load_op, "folder": folder}]
+	if load_op == "play":
+		added.append({"op": "wait", "s": 3.0})
+	added.append({"op": "wait_ready", "settle": float(saved.get("settle", 2.0))})
+	for k in added.size():
+		steps.insert(_i + 1 + k, added[k])
+	log_line("loading saved level %s with %s" % [folder, load_op])
 
 
 ## Writes out_dir/INDEX.md: step.title, step.intro, then one row per capture so far (the

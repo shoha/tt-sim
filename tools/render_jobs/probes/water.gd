@@ -9,8 +9,8 @@ extends RefCounted
 ##   build {slope, depths}       the test map above; depths = the three reaches' classes
 ##                               (default ["ankle", "waist", "deep"]). Logs bodies, levels,
 ##                               mesh size and the refresh's worker and swap times.
-##   save {folder}               writes the open document and level as user://levels/<folder>
-##                               (a _p42_ or _p43_ test level; the caller deletes it).
+##   save {folder, replace}      writes the open document and level as user://levels/<folder>
+##                               (a test level; the caller deletes it; `replace` overwrites).
 ##   tokens {points, assets}     in play: spawns one token per point (`assets` [[pack, id]],
 ##                               cycled, or the first locally cached asset that is not a
 ##                               light), each dropped onto the ground as a browser drop does.
@@ -105,7 +105,7 @@ static func run(base: Node, step: Dictionary) -> String:
 		"cleanup":
 			return _cleanup()
 		"save":
-			return _save(base, String(step.get("folder", "_p42_water")))
+			return _save(base, step)
 		"tokens":
 			return _spawn(base, step.get("points", []), step.get("assets", []))
 		"drag":
@@ -738,17 +738,17 @@ static func _remove_tree(path: String) -> void:
 # --- save --------------------------------------------------------------------------------------
 
 
-static func _save(base: Node, folder: String) -> String:
+static func _save(base: Node, step: Dictionary) -> String:
 	var ctrl: AuthoringController = base.get("_authoring_controller")
-	var test_level := false
-	for prefix in TEST_PREFIXES:
-		test_level = test_level or folder.begins_with(prefix)
+	var folder := String(step.get("folder", "_p42_water"))
+	var test_level := TEST_PREFIXES.any(func(p: String) -> bool: return folder.begins_with(p))
 	if ctrl == null or not test_level:
 		return "no authoring controller, or not a %s folder" % " / ".join(TEST_PREFIXES)
-	var existing := DirAccess.dir_exists_absolute(LevelManager.folder_path(folder))
-	if existing:
-		return "folder %s exists; not touching it" % folder
-	DirAccess.make_dir_recursive_absolute(LevelManager.folder_path(folder))
+	var path := LevelManager.folder_path(folder)
+	if DirAccess.dir_exists_absolute(path) and not bool(step.get("replace", false)):
+		return "folder %s exists; not touching it (replace: true overwrites)" % folder
+	_remove_tree(path)
+	DirAccess.make_dir_recursive_absolute(path)
 	var saved := ctrl.level.duplicate(true) as LevelData
 	saved.level_name = folder
 	saved.level_folder = folder

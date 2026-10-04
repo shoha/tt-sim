@@ -25,6 +25,16 @@ Arguments after `--`:
 - `--warm-graphics`, optional: force the first-launch graphics warm-up
   (`GraphicsWarmup.FORCE_ARG`). The editor binary skips it otherwise, so a job run from
   it never sees the warm-up unless it passes this. Start such a job with `wait_title`.
+- `--saved`, optional: skip every step tagged `"phase": "build"` and, where the first of
+  them was, load the job's saved level instead (the `saved` key or op, below). The level
+  must have been built by a run without the flag; a missing one stops the job.
+- `--only <names>` (or `--only=<names>`), optional: comma-separated capture names, `*` and
+  `?` wildcards allowed (quote them in a shell: `--only "*_2_tier_z8"`). Only the matching
+  `capture` steps run; a step tagged `"phase": "look"` with a `for` runs only when a
+  capture it serves runs. Untagged steps always run.
+- `--half`, optional: every capture, window and `_sub`, saved at half size (960x540).
+
+See "Build once, look many" for the loop these three serve.
 
 Do not pass `--headless`: captures need real pixels. The run takes as long as the job's
 steps (the judgment set is about 6 minutes) and quits by itself when the last step is done
@@ -53,10 +63,43 @@ composited window, including the lo-fi pass) and `<name>_sub.png` (the raw 3D Su
 `log.txt` gets one line per step and per result; it is appended to, not replaced, so delete
 it between runs into the same folder if you want a clean log.
 
-The harness never saves a level. The `title` op switches state directly, bypassing the
-leave prompt, and `no_autosave` stops the authoring autosave timer, so
+The harness itself never saves a level. The `title` op switches state directly, bypassing
+the leave prompt, and `no_autosave` stops the authoring autosave timer, so
 `user://levels/_autosave` and existing level folders are only ever read. Use `no_autosave`
-after every `new_map` or `dress` in a job that paints.
+after every `new_map` or `dress` in a job that paints. The only writes under
+`user://levels/` are the explicit `water.gd save` (and `crossing.gd save`) steps a job
+carries, into `_p4..._` test folders, and the only deletes are their `cleanup` actions.
+
+## Build once, look many
+
+A job that builds a map (new map, strokes, carves, bakes) before its captures pays that
+build on every run: 60-95 s for one map, 13-17 minutes for the eight-biome judgment sets.
+Shader and mesh-constant iteration does not need the rebuild, so a job can split its steps
+into two phases and run in look mode:
+
+1. **Build run** (no flags): the job runs as written. Its build steps end with a
+   `water.gd save` into a `_<task>_` test level (`_p4c_falls_look`, `_p4c_{biome}`), with
+   `"replace": true` so a rebuild overwrites the last one. The saved levels are kept on
+   purpose.
+2. **Look runs**: `--saved --only <captures> --half`. The build steps are skipped, the
+   saved level is loaded in their place (`dress` by default, so the look steps find the
+   authoring controller they expect), only the named captures and the look steps serving
+   them run, and the PNGs come out at 960x540. `falls_look` drops from 93 s to 15 s for
+   two captures; the judgment set from about 100 s per biome to about 9 s.
+3. A carve, plan or terrain change (anything the saved document bakes in) needs a new
+   build run; a shader, material or mesh-constant change does not. Full-size captures
+   (no `--half`) are for the final verdict.
+4. `jobs/cleanup_levels.json` (`water.gd cleanup`) deletes every `_p43_` to `_p4c_` test
+   level when the task is done.
+
+Tagging a job: `"phase": "build"` on every step that shapes the document (and the
+`look_at` / `zoom` / `wait` that set up the strokes' view), `"phase": "look", "for":
+"<capture>"` on a camera move, probe toggle or wait that serves one capture (a comma
+list or a wildcard when it serves several: `"for": "{biome}_*_play_*"` on a play section),
+nothing on steps that must run either way (`no_autosave`, `env.gd`, `falls.gd falls` for
+its `found:` names, `hide_ui`, a toggle that restores state, `title`). A `saved` op (or
+the top-level `saved` key) names the level to load; inside an `expand_biomes` template it
+is one level per biome.
 
 ## Why 1920x1080 is forced
 
@@ -85,10 +128,19 @@ Top-level keys:
 | `timeout_s` | 300 | Hard stop in seconds from launch; the run quits even if steps remain. |
 | `hang_s` | 60 | Watchdog: when no frame completes for this many seconds, log a `HANG:` line (stderr and `log.txt`) and kill the process. The same watchdog kills a run still alive 30 s past `timeout_s`. The last `step` line before the `HANG` line is the step that hung. |
 | `remove_override` | false | Delete `res://override.cfg` right after startup (the engine has already read it). Use it when you drop in a temporary `override.cfg` for one run (for example to pin a setting), so the file never outlives the run. The harness never creates one itself. |
+| `saved` | none | `{"folder": "<level folder>", "load": "dress" or "play" (default `dress`), "settle": 2.0}`: the saved level `--saved` loads in place of the job's build steps ("Build once, look many"). The `saved` op declares the same from inside the steps (per expansion). |
 
 Every step has an `op`. Steps that finish immediately advance on the same frame; `wait`,
 `wait_ready`, `stroke`, `capture` and `gpu` take several frames. An unknown op logs
-`unknown op` and is skipped.
+`unknown op` and is skipped. Any step may also carry:
+
+| Field | Meaning |
+|---|---|
+| `phase` | `"build"`: skipped by `--saved` (the saved level is loaded where the first skipped build step was). `"look"`: skipped by `--only` when its `for` serves no capture that runs. Absent: the step always runs. |
+| `for` | On a `"phase": "look"` step: the capture names it serves, comma-separated, `*` and `?` wildcards allowed. The step runs when any capture in the job matching an entry is taken by `--only`, or when an `--only` pattern matches an entry directly (a name that is no capture, say `falls_gpu` on a GPU A/B). |
+| `scale` | On a `capture`: the image scale (0.5 for half size); `--half` is `scale` 0.5 on every capture. |
+
+A skipped step logs `skip <op> (<reason>)`.
 
 ### State and maps
 
@@ -106,6 +158,7 @@ Every step has an `op`. Steps that finish immediately advance on the same frame;
 | `expand_ab` | `configs` (array of ground shader versions), `label`, `s` (default 3.0) | An in-run ground shader A/B: per config, swap the terrain's shader (`probes/ground_perf.gd` `shader`; `"std"` draws the chunks with `perf.gd`'s StandardMaterial3D instead), wait 0.5 s and sample GPU time for `s` seconds (`perf.gd` `start` / `stop`). Run `vsync_off` first. |
 | `expand` | `template` (array of steps), `values` (array) | Insert `template` once per entry of `values`, in order, with `{value}` replaced by it anywhere in the template's strings (level folders, for example, where `expand_biomes` only takes palette biomes). |
 | `expand_biomes` | `template` (array of steps), `biomes` (optional array of biome ids) | Insert `template` once per biome in the installed palette (`PaletteLibrary.biomes()`, palette order; only the ids in `biomes` when given), with `{biome}` replaced by the biome id, `{name}` by its display name and `{path}` by its first path surface (`dirt` when it lists none), anywhere in the template's strings. |
+| `saved` | `folder`, `load` (`dress` default, `play`), `settle` (default 2.0) | Declare the saved level that `--saved` loads (with `wait_ready` after it) in place of the build steps that follow, until the next `saved`. Does nothing without `--saved`. Put it first in an `expand_biomes` template (`"folder": "_p4c_{biome}"`) so each biome loads its own level. |
 
 ### Camera
 
@@ -132,7 +185,7 @@ Every step has an `op`. Steps that finish immediately advance on the same frame;
 
 | Op | Fields | What it does |
 |---|---|---|
-| `capture` | `name`, `desc` (caption for the index) | After the next frame is drawn, save `<name>_sub.png` (raw SubViewport) and `<name>.png` (window) and log both sizes and the camera size. |
+| `capture` | `name`, `desc` (caption for the index), `scale` (default 1.0; `--half` makes it 0.5) | After the next frame is drawn, save `<name>_sub.png` (raw SubViewport) and `<name>.png` (window), resized by `scale` (Lanczos) when it is not 1, and log both sizes and the camera size. `--only` skips captures whose `name` matches none of its patterns. |
 | `index` | `title`, `intro` | Write `INDEX.md` in the output folder: title, intro, then a table row per capture so far (window image, raw image, camera size, caption). |
 
 ### Measurement
@@ -352,8 +405,13 @@ numerically (for example where a fade or a tint band starts).
   lip); then (P4c-4, the falls shader) the tier fall at zoom 6 and 10, two zoom-10 frames
   about 0.25 s of shader time apart (`clock`), Water Quality Low (`quality`), the Swamp
   palette (`palette`), and an indicative GPU A/B of the falls shown and hidden at zoom 8
-  (`vsync_off`, `gpu`, `falls_visible`; about 15 s). 15 captures and `INDEX.md`. Saves
-  nothing.
+  (`vsync_off`, `gpu`, `falls_visible`; about 15 s). 15 captures and `INDEX.md`. The
+  worked example of the build / look split: the build ends by saving `_p4c_falls_look`
+  (kept on purpose; `cleanup_levels` removes it), every camera move is tagged `for` its
+  capture and the GPU A/B is `for: "falls_gpu"`. A look run,
+  `falls_look --saved --only tier_fall_z8_water,hill_fall1_z8_water --half`, loads the
+  level and takes those two captures at 960x540 in about 15 s (93 s for the full build run);
+  `--only falls_gpu` runs the A/B alone.
 - `jobs/falls_tools.json`: waterfalls, the tools and play (P4c-5, about 80 s): a new 150 ft
   temperate forest map with a Tier plateau and a waist river drawn over its south edge toward
   the camera (one fall, `falls.gd falls` names its lip, foot and plunge); through real input
@@ -381,8 +439,19 @@ numerically (for example where a fade or a tint band starts).
   played with tokens in the tier fall's plunge pool, on its lip, in the tributary's pool and in
   the away-facing pool, grid on (home and zoom 8). Last, a v0.1.29-style document (`falls.gd
   ramp` and `old_river`: a river over a Tier cliff and one down a 39 degree ramp) captured as
-  built and after a save and load in play. Test levels are deleted at the end. 78 captures and
-  `INDEX.md`; the verdict is written beside them as `VERDICT.md`.
+  built and after a save and load in play. 78 captures and `INDEX.md`; the verdict is
+  written beside them as `VERDICT.md`. Split into build and look: each biome's template
+  starts with `saved` `_p4c_{biome}` (the old document's section with `_p4c_old`), the
+  build steps save that level (`replace: true`) and the play section is `for:
+  "{biome}_*_play_*"`. The levels are kept after the run for look mode, for example
+  `phase4c_judgment_set --saved --only "*_2_tier_z8" --half` (every biome's tier fall at
+  zoom 8, half size, no play; about 9 s per saved level against 100 s to build one: the
+  one-biome trial took 170 s to build and 21 s to look), and
+  `cleanup_levels` removes them when the task is done. Limit a trial to one biome with the
+  template's `biomes` field in a scratch copy of the job.
+- `jobs/cleanup_levels.json`: `water.gd cleanup` alone (a few seconds): deletes every
+  `_p43_`, `_p44_`, `_p45_`, `_p4b_` and `_p4c_` level under `user://levels/`, the saved
+  levels of the build / look jobs included. Run it when a task's look iterations are done.
 - `jobs/grid_ground.json`: the grid on Blender maps' ground (P3-3c, about 50 s):
   `deciduous_clusters`, `river` and the built-in Oak's lab in play with G, the measure
   tool and a token drag's auto-show, the load's grid ground fit and a sampling survey
