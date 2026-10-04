@@ -25,8 +25,10 @@ extends RefCounted
 ## Refusals (the tool's message): the line is too short, crosses no water, has no dry bank
 ## within reach on a side (or runs off the map), comes within FALL_CLEAR_M of a waterfall
 ## (its face or its foam ring, fall_near(); bridges cross calm water, P4c-5), or the span
-## exceeds Crossing.MAX_SPAN_M. A line across a fall's face alone crosses no water: the face
-## is dry rock between the lip and the plunge pool.
+## exceeds Crossing.MAX_SPAN_M. A line across a fall's face alone is refused as a fall, not
+## as no water: WaterGeometry.level_at has no cut at a reach's end, so within the half-width
+## and bank of the lip the dry face still reads the upper pool's level (fall_near() is what
+## catches it).
 
 const REFUSED_SHORT := &"short"
 const REFUSED_NO_WATER := &"no_water"
