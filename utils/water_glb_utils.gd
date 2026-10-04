@@ -16,6 +16,19 @@ const AUTHORED_META := &"tt_authored_water"
 ## On a mesh whose WaterZone and surface body are attached, so a second pass over the same
 ## tree (a dressed map: the GLB's load, then the authored water's) adds no duplicates.
 const PROCESSED_META := &"tt_water_processed"
+## The WaterSettings keys shaders/waterfall.gdshader declares under the same names as
+## water.gdshader (the palette and the motion), forwarded onto the shared fall material by
+## apply_water_settings() so the Water pane restyles waterfalls live and over the network with
+## no field of its own (test_glb_utils_water.gd checks each is a uniform there).
+const FALL_SETTINGS_KEYS: Array[String] = [
+	"water_color",
+	"shore_color",
+	"foam_color",
+	"wave_speed",
+	"bob_height",
+	"flow_strength",
+	"foam_strength",
+]
 
 static var _water_material: ShaderMaterial = null
 
@@ -29,6 +42,13 @@ static func _get_water_material() -> ShaderMaterial:
 		_water_material = ShaderMaterial.new()
 		_water_material.shader = load("res://shaders/water.gdshader")
 	return _water_material
+
+
+## The shared waterfall ShaderMaterial (AuthoredWater.fall_material(), made on first use):
+## every authored map's falls draw with it, and apply_water_settings() keeps its shared keys
+## in step with the water material's.
+static func _get_fall_material() -> ShaderMaterial:
+	return AuthoredWater.fall_material()
 
 
 ## Apply the shared water shader to any mesh named with a "-water" suffix (case-
@@ -204,9 +224,11 @@ static func apply_water_style(style: String) -> void:
 ## _get_water_material()), so this is the one seam every path goes through.
 ## Colors arrive as Color from in-process callers and as hex strings from JSON
 ## and the network; both are accepted. Keys the shader does not declare are
-## skipped so a payload from a newer build cannot error here.
+## skipped so a payload from a newer build cannot error here. The keys the
+## waterfall shader shares (FALL_SETTINGS_KEYS) go onto the fall material too.
 static func apply_water_settings(settings: Dictionary) -> void:
 	var material := _get_water_material()
+	var fall_material := _get_fall_material()
 	for key: String in settings:
 		if key not in WaterSettings.KEYS:
 			continue
@@ -214,6 +236,11 @@ static func apply_water_settings(settings: Dictionary) -> void:
 		if key in WaterSettings.COLOR_KEYS:
 			var current: Variant = material.get_shader_parameter(key)
 			var fallback: Color = current if current is Color else Color.WHITE
-			material.set_shader_parameter(key, WaterSettings.color_from_value(value, fallback))
+			var color := WaterSettings.color_from_value(value, fallback)
+			material.set_shader_parameter(key, color)
+			if key in FALL_SETTINGS_KEYS:
+				fall_material.set_shader_parameter(key, color)
 		else:
 			material.set_shader_parameter(key, float(value))
+			if key in FALL_SETTINGS_KEYS:
+				fall_material.set_shader_parameter(key, float(value))

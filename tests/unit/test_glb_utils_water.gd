@@ -140,6 +140,50 @@ func test_apply_water_settings_sets_floats_colors_and_hex_strings() -> void:
 	assert_null(material.get_shader_parameter("not_a_uniform"))
 
 
+## The keys forwarded onto the fall material (P4c-4) are WaterSettings keys that
+## shaders/waterfall.gdshader declares under the water shader's names.
+func test_every_forwarded_fall_key_is_a_waterfall_shader_uniform() -> void:
+	var text := FileAccess.get_file_as_string("res://shaders/waterfall.gdshader")
+	var regex := RegEx.new()
+	regex.compile("\\buniform\\s+\\w+\\s+(\\w+)")
+	var uniforms := {}
+	for found in regex.search_all(text):
+		uniforms[found.get_string(1)] = true
+	assert_false(WaterGlbUtils.FALL_SETTINGS_KEYS.is_empty())
+	for key in WaterGlbUtils.FALL_SETTINGS_KEYS:
+		assert_true(uniforms.has(key), "%s is a waterfall.gdshader uniform" % key)
+		assert_true(WaterSettings.KEYS.has(key), "%s is a WaterSettings key" % key)
+	for key in ["water_color", "shore_color", "foam_color", "wave_speed", "bob_height"]:
+		assert_true(WaterGlbUtils.FALL_SETTINGS_KEYS.has(key), "%s is forwarded" % key)
+
+
+func test_a_palette_change_reaches_the_fall_material() -> void:
+	WaterGlbUtils.apply_water_settings(WaterPresets.PALETTES["swamp"])
+	WaterGlbUtils.apply_water_settings({"wave_speed": 1.4, "caustic_strength": 0.25})
+	var fall_material := WaterGlbUtils._get_fall_material()
+	assert_eq(fall_material, AuthoredWater.fall_material(), "the shared fall material")
+	assert_true(
+		WaterSettings.colors_match(
+			fall_material.get_shader_parameter("foam_color"),
+			WaterPresets.PALETTES["swamp"]["foam_color"]
+		)
+	)
+	assert_true(
+		WaterSettings.colors_match(
+			fall_material.get_shader_parameter("water_color"),
+			WaterPresets.PALETTES["swamp"]["water_color"]
+		)
+	)
+	assert_almost_eq(fall_material.get_shader_parameter("wave_speed"), 1.4, 0.001)
+	assert_null(
+		fall_material.get_shader_parameter("caustic_strength"), "a water-only key stays off it"
+	)
+	# And the water material still gets everything.
+	var material := WaterGlbUtils._get_water_material()
+	assert_almost_eq(material.get_shader_parameter("caustic_strength"), 0.25, 0.001)
+	assert_almost_eq(material.get_shader_parameter("wave_speed"), 1.4, 0.001)
+
+
 func test_apply_water_settings_from_resource_round_trips_through_the_material() -> void:
 	var settings := WaterSettings.from_style("realistic")
 	WaterGlbUtils.apply_water_settings(settings.to_dict())

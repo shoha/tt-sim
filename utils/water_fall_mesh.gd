@@ -47,9 +47,13 @@ extends RefCounted
 ## bob), centred where the middle column meets the pool, RING_FORWARD of its radius
 ## downstream (the churn spreads downstream; the part behind the face is under the rock).
 ## Mist: MIST_MIN to MIST_MAX puffs per fall, sized by the fall's width and drop (capped at
-## MIST_HALF_MAX_M against overdraw), set back toward the lip and staggered from the pool up
-## the face, so on an away-facing fall they show over the brink. Everything is a function
-## of the document alone (the puff placement uses a golden-ratio sequence, no RNG), so every
+## MIST_HALF_MAX_M against overdraw), standing between the face's foot and the pool and
+## staggered from the pool up the lowest MIST_LOW_SHARE of the face (spray rises from where
+## the water lands, P4c-4), plus, on a fall at least MIST_HIGH_MIN_DROP_M high, one puff set
+## back near the lip with its top over the brink, the cue an away-facing fall keeps. The
+## shader rises and grows every puff over its cycle (MIST_SHADER_RISE_M, MIST_SHADER_GROW
+## mirror waterfall.gdshader), so the bounds grow by that too. Everything is a function of
+## the document alone (the puff placement uses a golden-ratio sequence, no RNG), so every
 ## peer and every rebuild gets the same mesh.
 
 const MESH_NAME := "AuthoredWater-falls"
@@ -79,15 +83,19 @@ const WIDTH_SCAN_M := 0.05
 const DRY_CREST_SHARE := 0.5
 ## COLOR.r on the curtain: 0 at a side edge, 1 this far in.
 const EDGE_FADE_M := 0.35
-## The foam ring: rim vertices, its width over the fall's, its lift over the level, and
-## how far downstream of the plunge its centre sits, in radii.
+## The foam ring: rim vertices, its width over the fall's (1.1: the shader thins the churn to
+## nothing by RING_REACH of the radius, so the foam stays inside the fall's width, well within
+## the widened plunge pool; at 1.4 the disc stood over the banks of a waist river, P4c-4),
+## its lift over the level, and how far downstream of the plunge its centre sits, in radii.
 const RING_SEGMENTS := 64
-const RING_WIDTH_FACTOR := 1.4
+const RING_WIDTH_FACTOR := 1.1
 const RING_LIFT_M := 0.01
 const RING_FORWARD := 0.3
 ## Mist puffs per fall and their half-size (metres): base plus per metre of wetted
-## half-width and of drop, clamped; how far up the face they stagger, and where between the
-## lip and the plunge they stand.
+## half-width and of drop, clamped; the share of the face the low puffs stagger up (capped),
+## where between the lip and the plunge they stand (shares of the plunge distance) and how
+## far across they spread; the high puff's shortest fall and its set-back; the shader's rise
+## and growth, for the bounds.
 const MIST_MIN := 3
 const MIST_MAX := 5
 const MIST_HALF_BASE_M := 0.3
@@ -95,11 +103,16 @@ const MIST_HALF_PER_WIDTH := 0.35
 const MIST_HALF_PER_DROP := 0.08
 const MIST_HALF_MIN_M := 0.35
 const MIST_HALF_MAX_M := 1.2
-const MIST_RISE_PER_DROP := 0.6
-const MIST_RISE_MAX_M := 2.5
-const MIST_BACK_MIN := 0.2
-const MIST_BACK_MAX := 0.7
+const MIST_LOW_SHARE := 0.33
+const MIST_RISE_MAX_M := 1.5
+const MIST_BACK_MIN := 0.55
+const MIST_BACK_MAX := 1.0
 const MIST_SPREAD := 0.6
+const MIST_HIGH_MIN_DROP_M := 1.2
+const MIST_HIGH_BACK := 0.15
+const MIST_HIGH_OVER := 0.3
+const MIST_SHADER_RISE_M := 0.9
+const MIST_SHADER_GROW := 1.3
 ## The kind flag in COLOR.g.
 const KIND_CURTAIN := 0.0
 const KIND_RING := 0.5
@@ -110,7 +123,8 @@ const GOLDEN := 0.6180339887
 
 ## The falls mesh of `doc` for its `falls` (WaterFalls.falls(doc)): {"arrays": Mesh arrays
 ## (vertex, normal, UV, UV2, colour, index; [] with no fall), "aabb": the bounds grown by the
-## largest mist puff (for ArrayMesh.custom_aabb), "count": the falls built}.
+## largest mist puff at the shader's full growth plus its rise (for ArrayMesh.custom_aabb),
+## "count": the falls built}.
 static func build(doc: MapDocument, falls: Array[Dictionary]) -> Dictionary:
 	var buffers := _Buffers.new()
 	var largest_puff := 0.0
@@ -125,7 +139,17 @@ static func build(doc: MapDocument, falls: Array[Dictionary]) -> Dictionary:
 	var bounds := AABB(buffers.vertices[0], Vector3.ZERO)
 	for v in buffers.vertices:
 		bounds = bounds.expand(v)
-	return {"arrays": buffers.arrays(), "aabb": bounds.grow(largest_puff), "count": falls.size()}
+	return {
+		"arrays": buffers.arrays(),
+		"aabb": bounds.grow(mist_bounds_margin(largest_puff)),
+		"count": falls.size(),
+	}
+
+
+## How far the bounds grow for a puff of half-size `half`: its size at the shader's full
+## growth plus the rise.
+static func mist_bounds_margin(half: float) -> float:
+	return half * MIST_SHADER_GROW + MIST_SHADER_RISE_M
 
 
 ## The wetted half-widths at the crest of a fall whose lip is `lip` and whose course runs
@@ -410,7 +434,7 @@ static func _mist(
 ) -> float:
 	var half := mist_half_size(drop, width)
 	var count := mist_count(drop, width)
-	var rise := minf(drop * MIST_RISE_PER_DROP, MIST_RISE_MAX_M)
+	var rise := minf(drop * MIST_LOW_SHARE, MIST_RISE_MAX_M)
 	var base := int(fall.lower_index) * MIST_MAX
 	var largest := 0.0
 	for j in count:
@@ -422,6 +446,11 @@ static func _mist(
 		var w := (h0 * 2.0 - 1.0) * MIST_SPREAD * width * 0.5
 		var x := pool_x * lerpf(MIST_BACK_MIN, MIST_BACK_MAX, h1)
 		var y := minf(bottom + size * 0.5 + h2 * rise, top - size * 0.5)
+		if j == count - 1 and drop >= MIST_HIGH_MIN_DROP_M:
+			# The high puff: near the lip, its top over the brink (the shader lifts it further).
+			w = 0.0
+			x = pool_x * MIST_HIGH_BACK
+			y = top - size * MIST_HIGH_OVER
 		var centre := _point(lip + dir * x + across * w, maxf(y, bottom + size * 0.5))
 		var first := buffers.vertices.size()
 		var corners: Array[Vector2] = [

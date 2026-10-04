@@ -19,12 +19,14 @@ extends Node3D
 ##   process_water_meshes() leaves it alone), holding every fall's curtain, foam ring and
 ##   mist (WaterFallMesh, built with the surface by WaterMeshBuilder.build). No shadow, no
 ##   collision (tokens land on the face or in the pool as on a Tier face), bounds-exempt, its
-##   custom_aabb grown for the packed mist quads. Its material is a placeholder until the
-##   falls shader of P4c-4 (fall_material(): a bare transparent ShaderMaterial, pale
-##   blue-white at alpha 0.7, culling off, with the mist's vertex billboard so the puffs can
-##   be seen) at FALLS_RENDER_PRIORITY: strictly above the water material's and below
-##   GridOverlay.RENDER_PRIORITY, because at an equal priority the water (alpha 1) paints
-##   over the curtain entirely (P4c-0 probe a).
+##   custom_aabb grown for the packed mist quads. Its material is the one shared
+##   fall_material() on shaders/waterfall.gdshader (P4c-4) at FALLS_RENDER_PRIORITY:
+##   strictly above the water material's and below GridOverlay.RENDER_PRIORITY, because at
+##   an equal priority the water (alpha 1) paints over the curtain entirely (P4c-0 probe a).
+##   WaterGlbUtils.apply_water_settings() forwards the palette and motion keys the falls
+##   shader shares with the water's onto it, so the Water pane restyles falls live; the Water
+##   tool warms it as it opens (warm_fall_material(), as the Bridge tool warms the crossing
+##   materials) and the first-launch graphics warm-up draws a falls sample (warmup_samples()).
 ##
 ## `levels` and `wet` (per document sample) are what the grid's ground field raises to
 ## (GroundHeightField); `version` changes with every rebuild.
@@ -39,35 +41,15 @@ signal refreshed
 
 const NODE_NAME := "AuthoredWater"
 const WATER_SHADER := preload("res://shaders/water.gdshader")
+const FALLS_SHADER := preload("res://shaders/waterfall.gdshader")
 ## The falls material's render priority: above the shared water material (0) so the water
 ## never paints over the curtain, below the grid (GridOverlay.RENDER_PRIORITY) and the
 ## submerged-token marker (SubmergedMarker.RENDER_PRIORITY), which draw over it.
 const FALLS_RENDER_PRIORITY := 1
-## The placeholder falls shader (P4c-3; P4c-4 brings shaders/waterfall.gdshader): a flat
-## tint, and the packed mist quads spread to the camera's right and up by their UV2 offsets.
-const FALLS_PLACEHOLDER_SHADER := """
-shader_type spatial;
-render_mode blend_mix, cull_disabled, specular_disabled;
-
-varying float kind;
-
-void vertex() {
-	kind = COLOR.g;
-	if (COLOR.g > 0.75) {
-		VERTEX += INV_VIEW_MATRIX[0].xyz * UV2.x + INV_VIEW_MATRIX[1].xyz * UV2.y;
-	}
-}
-
-void fragment() {
-	ALBEDO = vec3(0.85, 0.93, 1.0);
-	ROUGHNESS = 0.5;
-	float alpha = 0.7;
-	if (kind > 0.75) {
-		alpha = 0.5 * (1.0 - smoothstep(0.3, 1.0, length(UV * 2.0 - 1.0)));
-	}
-	ALPHA = alpha;
-}
-"""
+## The warm-up's falls map (warmup_falls_document): a tier one tier high across the map, its
+## face from WARMUP_TIER_FACE_FROM_Z to WARMUP_TIER_FACE_TO_Z, and a waist river down it.
+const WARMUP_TIER_FACE_FROM_Z := -0.7
+const WARMUP_TIER_FACE_TO_Z := 0.7
 
 static var _fall_material: ShaderMaterial = null
 
@@ -116,8 +98,46 @@ static func warmup_document() -> MapDocument:
 	return doc
 
 
-## GraphicsWarmup samples: the merged water surface of warmup_document(), built by
-## WaterMeshBuilder as a real map's is, on a bare ShaderMaterial of the shared water shader.
+## The graphics warm-up's falls map: 20 x 20 cells, a tier one tier high over the far half
+## (z below WARMUP_TIER_FACE_FROM_Z; the face runs to WARMUP_TIER_FACE_TO_Z, steeper than
+## WaterFalls.FALL_FACE_SLOPE), and a waist river planned and carved down it along Z as the
+## Water tool carves one (WaterEdit.plan_river, WaterCarve.river_goals): one fall at the brink,
+## so WaterMeshBuilder.build() makes a curtain, a ring and mist with the real vertex layout.
+static func warmup_falls_document() -> MapDocument:
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "", "", 0)
+	var heights := doc.heights.duplicate()
+	var run := WARMUP_TIER_FACE_TO_Z - WARMUP_TIER_FACE_FROM_Z
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var p := doc.sample_to_world(Vector2(x, z))
+			var down := clampf((p.y - WARMUP_TIER_FACE_FROM_Z) / run, 0.0, 1.0)
+			heights[doc.sample_index(x, z)] = doc.tier_height_m * (1.0 - down)
+	doc.heights = heights
+	var start := doc.heights.duplicate()
+	var bodies := WaterEdit.plan_river(
+		doc,
+		PackedVector2Array([Vector2(0, -10), Vector2(0, 10)]),
+		PackedFloat32Array([1.0, 1.0]),
+		WaterBody.Depth.WAIST
+	)
+	var goals := WaterCarve.river_goals(doc, bodies, start)
+	var rect: Rect2i = goals.rect
+	var values: PackedFloat32Array = goals.goals
+	var carved := doc.heights.duplicate()
+	for j in rect.size.y:
+		for i in rect.size.x:
+			var goal := values[j * rect.size.x + i]
+			var at := (rect.position.y + j) * doc.samples_x() + rect.position.x + i
+			if not is_inf(goal):
+				carved[at] = minf(carved[at], goal)
+	doc.heights = carved
+	doc.water_bodies = WaterEdit.with_bodies(doc, bodies)
+	return doc
+
+
+## GraphicsWarmup samples: the merged water surface of warmup_document() and the falls of
+## warmup_falls_document(), built by WaterMeshBuilder as a real map's are, each on a bare
+## ShaderMaterial of its shader.
 static func warmup_samples() -> Array[Dictionary]:
 	var samples: Array[Dictionary] = [
 		{
@@ -126,7 +146,14 @@ static func warmup_samples() -> Array[Dictionary]:
 			"arrays": WaterMeshBuilder.build(warmup_document())["arrays"],
 			"material": GraphicsWarmup.material_for(WATER_SHADER),
 			"multimesh": false,
-		}
+		},
+		{
+			"name": "falls",
+			"primitive": Mesh.PRIMITIVE_TRIANGLES,
+			"arrays": WaterMeshBuilder.build(warmup_falls_document())["falls"],
+			"material": GraphicsWarmup.material_for(FALLS_SHADER),
+			"multimesh": false,
+		},
 	]
 	return samples
 
@@ -220,15 +247,22 @@ static func _falls_mesh(arrays: Array, aabb: AABB) -> MeshInstance3D:
 	return instance
 
 
-## The one placeholder material every falls mesh shares (see the header), made on first use.
+## The one falls material every falls mesh shares (see the header), made on first use.
 static func fall_material() -> ShaderMaterial:
 	if _fall_material == null:
-		var shader := Shader.new()
-		shader.code = FALLS_PLACEHOLDER_SHADER
 		_fall_material = ShaderMaterial.new()
-		_fall_material.shader = shader
+		_fall_material.shader = FALLS_SHADER
 		_fall_material.render_priority = FALLS_RENDER_PRIORITY
 	return _fall_material
+
+
+## Makes the falls material now, its shader built, so the first fall drawn costs its
+## geometry alone (the Water tool calls it as it opens, as the Bridge tool warms the crossing
+## materials). Idempotent: the same material every time.
+static func warm_fall_material() -> ShaderMaterial:
+	var material := fall_material()
+	material.get_rid()
+	return material
 
 
 ## The refresh entry for authoring tools after an edit to the document's water or to the

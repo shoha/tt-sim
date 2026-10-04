@@ -29,6 +29,7 @@ const COVERED_SHADERS := [
 	"res://shaders/submerged_marker.gdshader",
 	"res://shaders/texel_copy_blit.gdshader",
 	"res://shaders/water.gdshader",
+	"res://shaders/waterfall.gdshader",
 	"res://shaders/wind_foliage.gdshader",
 	"res://shaders/wind_foliage_no_aa.gdshader",
 ]

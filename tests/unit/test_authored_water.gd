@@ -542,6 +542,19 @@ func test_the_falls_node_is_built_and_left_alone_by_the_water_pass() -> void:
 	other.free()
 
 
+## The Water tool warms the fall material as it opens (P4c-4): one shared material on the
+## waterfall shader, made once, the same every time.
+func test_the_water_tool_warm_makes_the_fall_material_once() -> void:
+	var warmed := AuthoredWater.warm_fall_material()
+	assert_not_null(warmed)
+	assert_eq(warmed, AuthoredWater.fall_material(), "the shared material")
+	assert_eq(warmed, AuthoredWater.warm_fall_material(), "and the same one again")
+	assert_eq(warmed.shader, AuthoredWater.FALLS_SHADER)
+	assert_eq(warmed.shader.resource_path, "res://shaders/waterfall.gdshader")
+	assert_eq(warmed.render_priority, AuthoredWater.FALLS_RENDER_PRIORITY)
+	assert_true(warmed.get_rid().is_valid())
+
+
 func test_refresh_rebuilds_the_falls_on_the_worker_and_drops_them_with_the_water() -> void:
 	var doc := _fall_doc()
 	_root = Node3D.new()
