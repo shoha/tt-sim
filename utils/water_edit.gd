@@ -4,8 +4,7 @@ extends RefCounted
 ## Edits of a MapDocument's water model (water_bodies, pond_mask) for the carve and the
 ## Water tool, pure: a river stroke split into flat reaches, pond areas painted and erased on
 ## the sample grid, rivers cut where water is erased, and whole-model snapshots for history.
-## The ground the water carves is WaterCarve's. Summary: docs/ARCHITECTURE.md "Carving
-## water".
+## The ground the water carves is WaterCarve's. Summary: docs/systems/water.md (Carving).
 ##
 ## Rivers. A stroke's line is resampled every RESAMPLE_M (a drawn line arrives with a point
 ## per frame; the reaches, the erase and the flow bake cost per point, and the course is

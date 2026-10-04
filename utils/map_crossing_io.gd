@@ -3,7 +3,8 @@ extends RefCounted
 
 ## The crossings entry of `map.ttmap` (phase 4b), written and read for MapDocumentIO (which
 ## owns the archive, the byte caps and the warning log; this class owns the entry's shape and
-## validation). Summary: docs/ARCHITECTURE.md "Map document (map.ttmap)" and "Crossings".
+## validation). Summary: docs/ARCHITECTURE.md "Map document (map.ttmap)" and
+## docs/systems/crossings.md.
 ##
 ##   crossings.json   {"version": 1, "crossings": [crossing, ...]}
 ##                    crossing: {"id", "kind": "plank" | "stones", "start": [x, z],

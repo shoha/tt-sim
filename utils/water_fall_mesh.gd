@@ -5,8 +5,7 @@ extends RefCounted
 ## (WaterFalls.falls) a falling curtain, a foam ring on the plunge pool and a few mist puffs,
 ## all in one mesh at the map origin with an identity transform, built by
 ## WaterMeshBuilder.build() (the "falls" key) on the water refresh worker and turned into the
-## `AuthoredWater-falls` node by AuthoredWater. Summary: docs/ARCHITECTURE.md "Authored
-## water at runtime".
+## `AuthoredWater-falls` node by AuthoredWater. Summary: docs/systems/waterfalls.md (Runtime).
 ##
 ## Curtain. One ribbon per fall across the wetted width at the crest (crest_widths(): the
 ## ground along the lip line read outward from the course until it stands at the upper
