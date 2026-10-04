@@ -40,6 +40,42 @@ static func ramp(doc: MapDocument, along: Vector2 = Vector2.RIGHT) -> void:
 	shape(doc, func(p: Vector2) -> float: return clampf(7.0 - 0.7 * (p.dot(along) + 5.0), 0.0, 7.0))
 
 
+## A straight river from `from` to `to` (one half-width `half`, depth class `depth`) planned
+## and carved into `doc` as the editor does, and set as its water: the stroke's reaches.
+static func river(
+	doc: MapDocument,
+	from: Vector2,
+	to: Vector2,
+	half: float,
+	depth: WaterBody.Depth = WaterBody.Depth.WAIST
+) -> Array[WaterBody]:
+	var start := doc.heights.duplicate()
+	var bodies := WaterEdit.plan_river(
+		doc, PackedVector2Array([from, to]), PackedFloat32Array([half, half]), depth
+	)
+	carve(doc, WaterCarve.river_goals(doc, bodies, start))
+	doc.water_bodies = WaterEdit.with_bodies(doc, bodies)
+	return bodies
+
+
+## tier_band() with a river over it along Z (one fall at the brink, P4c): river() from
+## (0, -12) to (0, 12).
+static func tier_fall(
+	doc: MapDocument, half: float = 1.0, depth: WaterBody.Depth = WaterBody.Depth.WAIST
+) -> Array[WaterBody]:
+	tier_band(doc)
+	return river(doc, Vector2(0, -12), Vector2(0, 12), half, depth)
+
+
+## ramp() with a river down it along X (two falls once carved, P4c): river() from (-14, 0)
+## to (14, 0).
+static func ramp_falls(
+	doc: MapDocument, half: float = 0.55, depth: WaterBody.Depth = WaterBody.Depth.ANKLE
+) -> Array[WaterBody]:
+	ramp(doc)
+	return river(doc, Vector2(-14, 0), Vector2(14, 0), half, depth)
+
+
 ## Applies WaterCarve goals to `doc` (min with the ground), as the editor does.
 static func carve(doc: MapDocument, goals: Dictionary) -> void:
 	var rect: Rect2i = goals.rect

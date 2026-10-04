@@ -13,7 +13,8 @@ extends RefCounted
 ## thread-safe: GlbUtils.threaded_loads_safe). Each task writes its own Dictionary; finish()
 ## merges them on the main thread:
 ##   DRESSING         WaterDressing.field_of (AuthoredTerrain stores it in the document)
-##   WATER            WaterMeshBuilder.build (AuthoredWater's geometry), only with water
+##   WATER            WaterMeshBuilder.build (AuthoredWater's geometry, the waterfalls'
+##                    included), only with water
 ##   FIELDS, CHUNKS   TerrainMeshBuilder.grid_fields, then every chunk's mesh arrays with them
 ##   SKIRT            TerrainMeshBuilder.build_skirt_arrays
 ##   CROSSINGS        CrossingGeometry.build (AuthoredCrossings' geometry), only with crossings

@@ -13,7 +13,18 @@ extends Node3D
 ## - per body a surface StaticBody3D on WaterSurface.LAYER (grid, measure, drag ruler and the
 ##   float rule find the surface there; the terrain layer still sees the bed) and a
 ##   WaterZone with the body's level and footprint (WaterZone.create_for_footprint), so
-##   bodies at different levels detect tokens under their own surface.
+##   bodies at different levels detect tokens under their own surface;
+## - the waterfalls (phase 4c, P4c-3): one MeshInstance3D, WaterFallMesh.MESH_NAME
+##   (`AuthoredWater-falls`, a name that deliberately does not end in `-water`, so
+##   process_water_meshes() leaves it alone), holding every fall's curtain, foam ring and
+##   mist (WaterFallMesh, built with the surface by WaterMeshBuilder.build). No shadow, no
+##   collision (tokens land on the face or in the pool as on a Tier face), bounds-exempt, its
+##   custom_aabb grown for the packed mist quads. Its material is a placeholder until the
+##   falls shader of P4c-4 (fall_material(): a bare transparent ShaderMaterial, pale
+##   blue-white at alpha 0.7, culling off, with the mist's vertex billboard so the puffs can
+##   be seen) at FALLS_RENDER_PRIORITY: strictly above the water material's and below
+##   GridOverlay.RENDER_PRIORITY, because at an equal priority the water (alpha 1) paints
+##   over the curtain entirely (P4c-0 probe a).
 ##
 ## `levels` and `wet` (per document sample) are what the grid's ground field raises to
 ## (GroundHeightField); `version` changes with every rebuild.
@@ -28,6 +39,37 @@ signal refreshed
 
 const NODE_NAME := "AuthoredWater"
 const WATER_SHADER := preload("res://shaders/water.gdshader")
+## The falls material's render priority: above the shared water material (0) so the water
+## never paints over the curtain, below the grid (GridOverlay.RENDER_PRIORITY) and the
+## submerged-token marker (SubmergedMarker.RENDER_PRIORITY), which draw over it.
+const FALLS_RENDER_PRIORITY := 1
+## The placeholder falls shader (P4c-3; P4c-4 brings shaders/waterfall.gdshader): a flat
+## tint, and the packed mist quads spread to the camera's right and up by their UV2 offsets.
+const FALLS_PLACEHOLDER_SHADER := """
+shader_type spatial;
+render_mode blend_mix, cull_disabled, specular_disabled;
+
+varying float kind;
+
+void vertex() {
+	kind = COLOR.g;
+	if (COLOR.g > 0.75) {
+		VERTEX += INV_VIEW_MATRIX[0].xyz * UV2.x + INV_VIEW_MATRIX[1].xyz * UV2.y;
+	}
+}
+
+void fragment() {
+	ALBEDO = vec3(0.85, 0.93, 1.0);
+	ROUGHNESS = 0.5;
+	float alpha = 0.7;
+	if (kind > 0.75) {
+		alpha = 0.5 * (1.0 - smoothstep(0.3, 1.0, length(UV * 2.0 - 1.0)));
+	}
+	ALPHA = alpha;
+}
+"""
+
+static var _fall_material: ShaderMaterial = null
 
 ## Water level per document sample (WaterGeometry.DRY where no water), and 1 where wet.
 var levels: PackedFloat32Array = PackedFloat32Array()
@@ -110,6 +152,11 @@ func get_mesh_instance() -> MeshInstance3D:
 	return get_node_or_null(NodePath(WaterMeshBuilder.MESH_NAME)) as MeshInstance3D
 
 
+## The waterfalls mesh (curtains, foam rings, mist), or null with no fall.
+func get_falls_instance() -> MeshInstance3D:
+	return get_node_or_null(NodePath(WaterFallMesh.MESH_NAME)) as MeshInstance3D
+
+
 ## Replaces every child with the water `built` (WaterMeshBuilder.build()) and flow map
 ## `flow` (RG8, `flow_size` texels; empty for none). Tokens a replaced zone held are released
 ## quietly; the new zone picks them up again.
@@ -125,6 +172,9 @@ func apply(built: Dictionary, flow: PackedByteArray, flow_size: Vector2i) -> voi
 	var arrays: Array = built.get("arrays", [])
 	if not arrays.is_empty():
 		add_child(_surface_mesh(arrays, flow, flow_size))
+	var falls: Array = built.get("falls", [])
+	if not falls.is_empty():
+		add_child(_falls_mesh(falls, built.get("falls_aabb", AABB())))
 	for body: Dictionary in built.get("bodies", []):
 		add_child(WaterSurface.make_body("Surface_%d" % body.id, body.faces, body.floats))
 		var zone := WaterZone.create_for_footprint("Zone_%d" % body.id, body.level, body.tiles)
@@ -152,6 +202,33 @@ static func _surface_mesh(
 	instance.set_meta(Constants.BOUNDS_EXEMPT_META, true)
 	instance.set_meta(WaterGlbUtils.AUTHORED_META, true)
 	return instance
+
+
+## The waterfalls node (see the header): `arrays` from WaterFallMesh.build with its bounds
+## `aabb` (grown for the packed mist) as the mesh's custom AABB.
+static func _falls_mesh(arrays: Array, aabb: AABB) -> MeshInstance3D:
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	if aabb.has_volume() or aabb.has_surface():
+		mesh.custom_aabb = aabb
+	mesh.surface_set_material(0, fall_material())
+	var instance := MeshInstance3D.new()
+	instance.name = WaterFallMesh.MESH_NAME
+	instance.mesh = mesh
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.set_meta(Constants.BOUNDS_EXEMPT_META, true)
+	return instance
+
+
+## The one placeholder material every falls mesh shares (see the header), made on first use.
+static func fall_material() -> ShaderMaterial:
+	if _fall_material == null:
+		var shader := Shader.new()
+		shader.code = FALLS_PLACEHOLDER_SHADER
+		_fall_material = ShaderMaterial.new()
+		_fall_material.shader = shader
+		_fall_material.render_priority = FALLS_RENDER_PRIORITY
+	return _fall_material
 
 
 ## The refresh entry for authoring tools after an edit to the document's water or to the

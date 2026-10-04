@@ -4,12 +4,16 @@ extends GutTest
 ## AuthoredWater node (flow map, surface bodies, zones per body, the worker refresh), the
 ## dressed-map flow rule and the repeat-safe processing in WaterGlbUtils, the float rule
 ## (WaterSurface) and the ground height field raised to the water (authored and GLB).
+## Waterfalls (phase 4c, P4c-3): no cascade sheet over a fall's face, the lip cells tucked
+## under it, and the `AuthoredWater-falls` node the water pass leaves alone.
 
 const RIVER_LEVEL := -0.2
 const POND_LEVEL := -0.6
 const BED := -1.0
 const POND_BED := -2.5
 const EPSILON := 0.0001
+## Ground shapes and the carve, shared with the water tests.
+const Fixtures := preload("res://tests/unit/water_fixtures.gd")
 
 var _root: Node3D = null
 
@@ -413,6 +417,143 @@ func test_a_dropped_token_lands_afloat_or_on_the_bed() -> void:
 	assert_almost_eq(afloat.y - 0.5, POND_LEVEL - WaterSurface.DRAFT_M, 0.01)
 	get_tree().current_scene = original_scene
 	scene_root.free()
+	remove_child(_root)
+
+
+# --- Waterfalls (phase 4c, P4c-3) ---------------------------------------------------------
+
+
+## A 20 x 20 cell map with a tier band and a waist river carved over it: one fall.
+func _fall_doc() -> MapDocument:
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "test", 5)
+	Fixtures.tier_fall(doc)
+	return doc
+
+
+## Vector2(along the fall's course from its lip, across it) of map point `p`.
+func _fall_frame(fall: Dictionary, p: Vector2) -> Vector2:
+	var offset: Vector2 = p - fall.lip
+	var dir: Vector2 = fall.dir
+	return Vector2(offset.dot(dir), absf(offset.dot(dir.orthogonal())))
+
+
+@warning_ignore("integer_division")
+func test_no_cascade_sheet_drapes_a_fall_face() -> void:
+	var doc := _fall_doc()
+	var falls := WaterFalls.falls(doc)
+	assert_eq(falls.size(), 1)
+	assert_eq(WaterFalls.drops(doc.water_bodies).size(), 1, "the pair a sheet would drape")
+	var fall: Dictionary = falls[0]
+	var foot := WaterCarve.fall_foot(float(fall.top) - float(fall.bottom), 0.9)
+	var columns := doc.samples_x()
+	var on_face := 0
+	for i: int in WaterMeshBuilder.cascades(doc):
+		var at := _fall_frame(fall, doc.sample_to_world(Vector2(i % columns, i / columns)))
+		if at.x >= 0.0 and at.x <= foot and at.y <= float(fall.half_width):
+			on_face += 1
+	assert_eq(on_face, 0, "no cascade sample on the fall's face")
+
+
+@warning_ignore("integer_division")
+func test_lip_cells_are_tucked_under_the_face() -> void:
+	var doc := _fall_doc()
+	var fall: Dictionary = WaterFalls.falls(doc)[0]
+	var top: float = fall.top
+	var bottom: float = fall.bottom
+	var hw: float = fall.half_width
+	var foot := WaterCarve.fall_foot(top - bottom, 0.9)
+	var step := doc.sample_step().x
+	var built := WaterMeshBuilder.build(doc)
+	var downstream := 0
+	var at_lip := false
+	for v in built.arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array:
+		var at := _fall_frame(fall, Vector2(v.x, v.z))
+		if at.y > hw:
+			continue
+		if at.x > 0.0 and at.x <= foot:
+			downstream += 1
+			var ground := WaterGeometry.ground_at(doc, Vector2(v.x, v.z))
+			assert_true(
+				v.y <= maxf(ground, bottom) + EPSILON,
+				(
+					"a surface vertex %.2f m past the lip stands %.3f over the face"
+					% [at.x, v.y - ground]
+				)
+			)
+		elif at.x > -step - EPSILON and at.x <= 0.0 and absf(v.y - top) < EPSILON:
+			at_lip = true
+	assert_gt(downstream, 4, "the lip cells reach past the lip line")
+	assert_true(at_lip, "the upper pool still reaches the lip line at its level")
+	var tucked := WaterMeshBuilder.fall_cells(doc, WaterFalls.falls(doc), built.wet)
+	assert_gt(tucked.size(), 4)
+	var columns := doc.samples_x()
+	for i: int in tucked:
+		assert_almost_eq(
+			float(tucked[i]),
+			doc.heights[i] - WaterMeshBuilder.CASCADE_TUCK_M,
+			EPSILON,
+			"under the ground"
+		)
+		var at := _fall_frame(fall, doc.sample_to_world(Vector2(i % columns, i / columns)))
+		assert_true(at.x > 0.0 and at.x <= step * WaterMeshBuilder.LIP_TUCK_SAMPLES + EPSILON)
+		assert_eq(built.wet[i], 0, "never a wet sample")
+
+
+func test_the_falls_node_is_built_and_left_alone_by_the_water_pass() -> void:
+	var doc := _flowing(_fall_doc())
+	var water := AuthoredWater.create(doc)
+	_root = Node3D.new()
+	_root.add_child(water)
+	var falls := water.get_falls_instance()
+	assert_not_null(falls)
+	assert_eq(String(falls.name), WaterFallMesh.MESH_NAME)
+	assert_false(String(falls.name).to_lower().ends_with("-water"))
+	assert_eq(falls.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	assert_true(falls.get_meta(Constants.BOUNDS_EXEMPT_META, false))
+	assert_eq(falls.transform, Transform3D.IDENTITY)
+	var mesh := falls.mesh as ArrayMesh
+	assert_true(mesh.custom_aabb.has_volume(), "the bounds grown for the packed mist")
+	assert_true(mesh.custom_aabb.encloses(mesh.get_aabb()))
+	var found: Array[MeshInstance3D] = []
+	WaterGlbUtils._find_water_mesh_nodes(_root, found)
+	assert_eq(found.size(), 1, "only the surface is a water mesh")
+	assert_eq(found[0], water.get_mesh_instance())
+	WaterGlbUtils.process_water_meshes(_root)
+	assert_null(falls.material_override, "the water material never reaches the falls")
+	var material := mesh.surface_get_material(0)
+	assert_eq(material, AuthoredWater.fall_material())
+	assert_eq(material.render_priority, AuthoredWater.FALLS_RENDER_PRIORITY)
+	assert_gt(material.render_priority, WaterGlbUtils._get_water_material().render_priority)
+	assert_lt(material.render_priority, GridOverlay.RENDER_PRIORITY)
+	for child in water.get_children():
+		if child is StaticBody3D or child is WaterZone:
+			assert_false(String(child.name).contains("falls"), "no collision or zone for the falls")
+	assert_null(_root.get_node_or_null(WaterFallMesh.MESH_NAME + "_surface"))
+	assert_null(_root.get_node_or_null(WaterFallMesh.MESH_NAME + "_zone"))
+	var bounds := LevelEnvironmentManager.compute_map_bounds(_root)
+	assert_eq(bounds.size, Vector3.ZERO, "the falls are not in the map bounds")
+	# The loader's worker carries the falls with the water geometry.
+	var prepared := AuthoredLoadPrep.compute(doc)
+	var built: Dictionary = prepared[AuthoredLoadPrep.WATER]
+	assert_false((built.falls as Array).is_empty())
+	var other := Node3D.new()
+	var loaded := MapSourceLoader.add_authored_water(other, doc, false, built)
+	assert_not_null(loaded.get_falls_instance())
+	other.free()
+
+
+func test_refresh_rebuilds_the_falls_on_the_worker_and_drops_them_with_the_water() -> void:
+	var doc := _fall_doc()
+	_root = Node3D.new()
+	add_child(_root)
+	var water := AuthoredWater.refresh_map(_root, doc)
+	water.finish_refresh()
+	assert_not_null(water.get_falls_instance())
+	doc.water_bodies = []
+	AuthoredWater.refresh_map(_root, doc)
+	water.finish_refresh()
+	assert_null(water.get_falls_instance())
+	assert_false(water.has_water())
 	remove_child(_root)
 
 

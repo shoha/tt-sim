@@ -340,14 +340,16 @@ numerically (for example where a fade or a tint band starts).
   levels interleaved, samples GPU time with the crossings shown and hidden in one run at home,
   zoom 20 and zoom 8 on a bridge, then each level at home and zoom 20 with tokens, and deletes
   both levels. `perf.gd gpu_state` logs `nvidia-smi` at the start and end of each.
-- `jobs/falls_look.json`: the waterfall carve (P4c-2, about 90 s): a new 150 ft temperate
-  forest map with a two-tier Tier step and a 14 m Raise hill (real Sculpt strokes; the hill's
-  flank runs steep for about 9 m, so the stream down it gets two falls), a straight waist
-  river drawn from the step's top toward the camera and an ankle stream from the hill's top
-  down its flank toward the camera; `falls.gd falls` logs each fall's lip, foot and the carved
-  profile, then the ground is captured with the water hidden at home and at zoom 8 on each
-  fall's foot, and the tier fall and the first hill fall once each with the water shown (the
-  draped riffle sheet is expected until P4c-3). 7 captures and `INDEX.md`. Saves nothing.
+- `jobs/falls_look.json`: the waterfall carve and curtains (P4c-2, P4c-3, about 100 s): a new
+  150 ft temperate forest map with a two-tier Tier step and a 14 m Raise hill (real Sculpt
+  strokes; the hill's flank runs steep for about 9 m, so the stream down it gets two falls), a
+  straight waist river drawn from the step's top toward the camera, an ankle stream from the
+  hill's top down its flank toward the camera, and a second waist river carved through the
+  editor API (`water.gd carve`) off the step's far edge, away from the camera; `falls.gd
+  falls` logs each fall's lip, foot and the carved profile, then the ground is captured with
+  the water hidden at home and at zoom 8 on each facing fall's foot, and the water shown at
+  home and at zoom 8 on every fall (the tier fall, both hill falls, the away-facing fall's
+  lip). 9 captures and `INDEX.md`. Saves nothing.
 - `jobs/grid_ground.json`: the grid on Blender maps' ground (P3-3c, about 50 s):
   `deciduous_clusters`, `river` and the built-in Oak's lab in play with G, the measure
   tool and a token drag's auto-show, the load's grid ground fit and a sampling survey
