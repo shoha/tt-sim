@@ -7,7 +7,7 @@ extends RefCounted
 ## strokes (the height queue, the per-frame snap of plants and props, rock keeping, the
 ## scatter regeneration, history), reaching into the editor for it: it is part of the editor,
 ## split out only to keep one class a readable size. Frames: world in, document inside, as
-## the editor. Summary and the rules: docs/ARCHITECTURE.md "Carving water".
+## the editor. Summary and the rules: docs/systems/water.md (Carving).
 ##
 ## Each operation is one history entry: the heights diff (HeightStroke.lower_to, a one-shot
 ## carve recorded like a dab), the water model before and after (WaterEdit.model_of), the wet

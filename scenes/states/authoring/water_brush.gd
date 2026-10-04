@@ -13,7 +13,7 @@ extends RefCounted
 ## (WaterEditor.carve_river, first point upstream), and the ribbon stays, faint, until the
 ## carve (on a worker) lands. The ribbon's gradient and chevrons show the way the water will
 ## really run (flow_line(): a line drawn uphill is reversed, as the plan reverses it,
-## WaterFalls.orient, P4c-5). Pond: the press starts a pond stroke (a press inside a pond
+## WaterFallPlan.orient, P4c-5). Pond: the press starts a pond stroke (a press inside a pond
 ## extends it) whose dabs BrushTool paints like the Biome brush's, the dab growing with
 ## dwell (POND_DWELL_GROW); the painted dabs preview its area. Ctrl at the press (either
 ## tile): an erase stroke, whose touched river reaches are previewed in red (they go whole).
@@ -92,14 +92,14 @@ static func smooth_line(points: PackedVector2Array) -> PackedVector2Array:
 
 
 ## The line the ribbon previews for a river drawn along `line` (world XZ): reversed when the
-## stroke runs uphill (WaterFalls.is_uphill on the ground `ground_of` reads at its two ends,
+## stroke runs uphill (WaterFallPlan.is_uphill on the ground `ground_of` reads at its two ends,
 ## the plan's own reader, ground_reader()), since the water will run the other way; a flat or
 ## gently rising stroke keeps its drawn direction, as the plan keeps it. Pure.
 static func flow_line(line: PackedVector2Array, ground_of: Callable) -> PackedVector2Array:
 	if line.size() < 2:
 		return line.duplicate()
 	var ends := PackedFloat32Array([ground_of.call(line[0]), ground_of.call(line[-1])])
-	return WaterFalls.orient(line, PackedFloat32Array(), ends)[0]
+	return WaterFallPlan.orient(line, PackedFloat32Array(), ends)[0]
 
 
 ## The ground the preview orients by, at a world XZ point: the plan's reader

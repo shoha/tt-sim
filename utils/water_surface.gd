@@ -18,7 +18,7 @@ extends RefCounted
 ## above the float height (its shallow edge), the token stands on the bed: the landing is
 ## the higher of the two, so walking out of deep water onto a bank is continuous.
 ## A token the water hides (is_submerged()) shows a SubmergedMarker at the surface above it.
-## Summary: docs/ARCHITECTURE.md "Authored water at runtime".
+## Summary: docs/systems/water.md (Authored water at runtime).
 
 ## Collision layer bit of water surfaces (physics layer 3).
 const LAYER := 4

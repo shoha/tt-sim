@@ -4,7 +4,7 @@ extends RefCounted
 ## One authored way over water in a MapDocument (`MapDocument.crossings`, phase 4b): a plank
 ## footbridge or a line of stepping stones laid between two bank anchors. The geometry is
 ## built from these fields alone (CrossingGeometry), so a crossing ships as data in the
-## document and every peer builds the same one. Summary: docs/ARCHITECTURE.md "Crossings".
+## document and every peer builds the same one. Summary: docs/systems/crossings.md.
 ##
 ## `start` and `end` are the bank anchors in map XZ (Vector2(x, z), metres, the frame of
 ## MapDocument.world_to_sample()): where the crossing meets dry ground on each side

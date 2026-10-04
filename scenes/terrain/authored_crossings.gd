@@ -25,7 +25,7 @@ extends Node3D
 ## every crossing that uses it. An edit rebuilds every crossing on the main thread (refresh();
 ## about 2.4 ms per crossing, PERFORMANCE.md "Phase 4b (crossings)"); a load builds the arrays
 ## on a worker (AuthoredLoadPrep) and create() only makes the nodes. Summary:
-## docs/ARCHITECTURE.md "Crossings".
+## docs/systems/crossings.md.
 
 const NODE_NAME := "AuthoredCrossings"
 ## Set on every crossing's collision body: the crossing's id.

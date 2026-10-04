@@ -4,8 +4,8 @@ extends RefCounted
 ## One authored body of water in a MapDocument (`MapDocument.water_bodies`): a river drawn
 ## as a line or a pond painted as an area. Every body is flat: its surface is one level in
 ## metres, and the water covers the samples of its area whose ground is below that level
-## (WaterGeometry.levels()). Summary and the level rules: docs/ARCHITECTURE.md "Water model
-## and flow bake".
+## (WaterGeometry.levels()). Summary and the level rules: docs/systems/water.md (Water model
+## and flow bake).
 ##
 ## River: `points` is the control polyline in map XZ (Vector2(x, z), metres, the frame of
 ## MapDocument.world_to_sample()), first point upstream, so the water flows from the first

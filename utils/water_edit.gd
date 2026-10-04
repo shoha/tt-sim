@@ -13,7 +13,7 @@ extends RefCounted
 ## (WaterGeometry.reach_ranges: no reach spans more than REACH_DROP_M), each a river body at
 ## its reach's level, consecutive reaches sharing their boundary point. A line that starts
 ## or ends in existing water joins it (join_line(): a confluence). Waterfalls (P4c,
-## WaterFalls): a line drawn uphill is reversed so the water runs downhill; where the ground
+## WaterFallPlan): a line drawn uphill is reversed so the water runs downhill; where the ground
 ## along it drops steeply the plan inserts a lip per fall (a forced reach boundary) and a
 ## widened plunge-pool point below it, and splits any other segment dropping more than
 ## REACH_DROP_M so no step that is not a fall reaches WaterFalls.FALL_MIN_DROP_M. A stroke
@@ -133,21 +133,21 @@ static func plan_river(
 	var courses := WaterGeometry.river_courses(doc, WaterGeometry.bounds(course, 0.01))
 	var ground := water_ground(doc, course, courses)
 	# Water runs downhill: a line drawn uphill is reversed, so its falls face downstream.
-	var oriented := WaterFalls.orient(course, widths, ground)
+	var oriented := WaterFallPlan.orient(course, widths, ground)
 	course = oriented[0]
 	widths = oriented[1]
 	ground = oriented[2]
-	# The fall plan (WaterFalls): lips, plunge points and the subdivision of other steep
+	# The fall plan (WaterFallPlan): lips, plunge points and the subdivision of other steep
 	# segments, on the ground sampled every sample step along the line.
 	var ground_of := func(p: Vector2) -> float: return water_ground_at(doc, p, courses)
 	var step := minf(doc.sample_step().x, doc.sample_step().y)
-	var profile := WaterFalls.fine_profile(course, step, ground_of)
+	var profile := WaterFallPlan.fine_profile(course, step, ground_of)
 	var free_ends := Vector2i(
 		0 if WaterGeometry.is_wet_at(doc, course[0]) else 1,
 		0 if WaterGeometry.is_wet_at(doc, course[-1]) else 1
 	)
-	var plan := WaterFalls.plan_lips(doc, course, widths, profile, free_ends)
-	var shaped := WaterFalls.shape_line(
+	var plan := WaterFallPlan.plan_lips(doc, course, widths, profile, free_ends)
+	var shaped := WaterFallPlan.shape_line(
 		course, widths, ground, plan, WaterBody.depth_for(depth), ground_of
 	)
 	course = shaped.points

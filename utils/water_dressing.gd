@@ -6,7 +6,7 @@ extends RefCounted
 ## above it, fading into the biome ground), and the water's depth, from the document's
 ## heights and water levels. A rule layer like the cliff and scree (TerrainRules), not paint:
 ## it takes no paint slot and follows the water wherever it is carved, painted or erased.
-## Summary: docs/ARCHITECTURE.md "Carving water" (dressing).
+## Summary: docs/systems/water.md (Carving, dressing).
 ##
 ## Field (compute()): RGBA8 on the sample grid, the layout of the ground shader's
 ## water_weights texture, so the shader and the CPU (ScatterGround, TerrainRules

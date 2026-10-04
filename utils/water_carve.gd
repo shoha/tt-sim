@@ -4,7 +4,7 @@ extends RefCounted
 ## The ground a river or pond carves (phase 4, P4-3), pure: per-sample goal heights the
 ## editor lowers the document toward (HeightStroke.lower_to: min(start, goal), so a carve
 ## never raises ground), plus the rule for which rocks a carve keeps. Summary:
-## docs/ARCHITECTURE.md "Carving water".
+## docs/systems/water.md (Carving).
 ##
 ## Cross-section. Every carved sample has an edge offset e: its distance to the river's
 ## course minus the half-width there (a pond: its signed distance to the edge of the painted
@@ -54,10 +54,10 @@ extends RefCounted
 ## rule) and is cut no further out than FALL_BANK_REACH_M, the rule fading in over the pool
 ## tail above the lip and out over the plunge pool below the foot (fall_gorge(), the `gorge`
 ## share section() and blend_with_ground() take; 0 everywhere else, so a riffle's banks are
-## exactly as before). The plunge pool widens only below the foot (WaterFalls.shape_line pins
-## the channel's width at fall_foot() and widens the point half a plunge length past it), so
-## the face is as wide as the stroke. Over a Tier cliff the lip stands at the brink
-## (WaterFalls), the profile lies along the tier's own face and the carve cuts a notch
+## exactly as before). The plunge pool widens only below the foot (WaterFallPlan.shape_line
+## pins the channel's width at fall_foot() and widens the point half a plunge length past it),
+## so the face is as wide as the stroke. Over a Tier cliff the lip stands at the brink
+## (WaterFallPlan), the profile lies along the tier's own face and the carve cuts a notch
 ## CREST_M under the upper pool across the channel, the face itself a hand's breadth deeper,
 ## then the plunge pool at its foot; outside the channel and its banks the face is left as it
 ## was. The riffle sheet the mesh still drapes over a fall's face is replaced by a curtain in
@@ -244,7 +244,7 @@ static func fall_profile(x: float, drop: float) -> float:
 ## How far past its lip the carved face of a fall of `drop` metres into water `depth` deep
 ## runs before the plunge bed (fall_shape()): fall_run() of the rise from the crest (CREST_M
 ## over the upper level) to the plunge bed (WaterFalls.plunge_depth() under the lower bed).
-## The plunge pool's widening (WaterFalls.shape_line) and the side-wall rule (fall_gorge())
+## The plunge pool's widening (WaterFallPlan.shape_line) and the side-wall rule (fall_gorge())
 ## start here.
 static func fall_foot(drop: float, depth: float) -> float:
 	return fall_run(drop + CREST_M + depth + WaterFalls.plunge_depth(drop))
@@ -601,7 +601,7 @@ static func pond_goals(doc: MapDocument, body: WaterBody, start: PackedFloat32Ar
 	return {"rect": rect, "goals": goals}
 
 
-## The rock policy of a carve (see docs/ARCHITECTURE.md "Carving water"): true when a rock
+## The rock policy of a carve (see docs/systems/water.md (Carving)): true when a rock
 ## row (ScatterRows layout) of an asset `height_m` tall and `footprint_m` in footprint radius
 ## (both at scale 1) stays after the carve. `level` is the water level at the rock (DRY
 ## where it is out of the water) and `channel_m` the width of the channel there (0 in a

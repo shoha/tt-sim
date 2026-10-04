@@ -6,7 +6,7 @@ extends RefCounted
 ## fields and the document's ground alone, so every peer builds the same crossing. Safe on any
 ## thread (no Node, no resource the renderer owns): AuthoredLoadPrep runs build() on a worker
 ## during a load, AuthoredCrossings makes the nodes from its output. Summary:
-## docs/ARCHITECTURE.md "Crossings".
+## docs/systems/crossings.md.
 ##
 ## Frame. Everything is in the map frame (the document's), under a node at the map origin with
 ## an identity transform, like AuthoredWater. Along a crossing, u runs from its start anchor

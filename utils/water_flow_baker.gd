@@ -5,7 +5,7 @@ extends RefCounted
 ## engine/flow_bake.py field (the formulas are in its module and in the phase 4 survey),
 ## with the wet mask read from the document's heights instead of ray casts. Pure and
 ## deterministic; the result ships in the document (MapDocument.water_flow), peers never
-## rebake. Summary: docs/ARCHITECTURE.md "Water model and flow bake".
+## rebake. Summary: docs/systems/water.md (Water model and flow bake).
 ##
 ## Frame (the contract with water.gdshader's water_flow() for the merged authored water
 ## mesh, which sits at the map origin with an identity transform and map-normalised UVs
