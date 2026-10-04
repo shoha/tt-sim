@@ -164,6 +164,46 @@ func test_curtain_covers_the_wetted_crest() -> void:
 	)
 
 
+## P4c-6c: COLOR.a carries the fall's wetted crest width (over WIDTH_ENCODE_M) on every
+## curtain vertex, so the shader can scale its aeration and bite by it; the ring and the mist
+## keep alpha 1.
+func test_curtain_alpha_encodes_the_crest_width() -> void:
+	assert_almost_eq(WaterFallMesh.width_code(2.0), 0.25, 1e-6, "2 m is a quarter of 8")
+	assert_almost_eq(WaterFallMesh.width_code(12.0), 1.0, 1e-6, "clamped at WIDTH_ENCODE_M")
+	assert_almost_eq(WaterFallMesh.width_code(0.0), 0.0, 1e-6)
+	var doc := _ramp_doc()
+	var falls := WaterFalls.falls(doc)
+	assert_eq(falls.size(), 2, "two hillside falls")
+	var arrays: Array = _falls_of(doc).arrays
+	var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	var uv2s: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+	var checked := 0
+	for i in _of_kind(arrays, WaterFallMesh.KIND_CURTAIN):
+		var fall := _fall_at(falls, uv2s[i].y)
+		assert_false(fall.is_empty())
+		var lip: Vector2 = fall.lip
+		var dir: Vector2 = fall.dir
+		var hw: float = fall.half_width
+		var top: float = fall.top
+		var widths := WaterFallMesh.crest_widths(doc, lip, dir, hw, top)
+		var width := widths.x + widths.y
+		assert_gt(width, 0.1, "a wetted crest")
+		assert_true(width < WaterFallMesh.WIDTH_ENCODE_M, "an ankle fall is under the cap")
+		# Vertex colours are 8-bit once uploaded; the arrays themselves are exact.
+		assert_almost_eq(
+			colors[i].a * WaterFallMesh.WIDTH_ENCODE_M,
+			width,
+			1e-4,
+			"COLOR.a decodes to the crest width on curtain vertex %d" % i
+		)
+		checked += 1
+	assert_gt(checked, 50)
+	for i in _of_kind(arrays, WaterFallMesh.KIND_RING):
+		assert_almost_eq(colors[i].a, 1.0, 1e-6, "ring alpha 1")
+	for i in _of_kind(arrays, WaterFallMesh.KIND_MIST):
+		assert_almost_eq(colors[i].a, 1.0, 1e-6, "mist alpha 1")
+
+
 func test_curtain_never_runs_out_along_a_shaved_bank() -> void:
 	# P4c-6: another river's ordinary bank cut (BANK_SLOPE over BANK_REACH_M) can shave the
 	# ground beside a fall's channel to a hair under the upper level; the curtain still stops
@@ -395,6 +435,18 @@ func test_mist_is_three_to_five_packed_billboards_inside_the_grown_bounds() -> v
 			)
 			assert_gt(centre.y, float(nearest.bottom), "over the pool")
 			assert_true(centre.y <= float(nearest.top) + half, "no higher than the lip")
+			if centre.y + half <= float(nearest.top):
+				# A low puff: never over the mist height cap (P4c-6c, the clouds hug the pool).
+				assert_true(
+					(
+						centre.y - half * 0.5
+						<= float(nearest.bottom) + WaterFallMesh.MIST_RISE_MAX_M + 1e-3
+					),
+					(
+						"a low puff under the height cap (%.2f over the pool)"
+						% (centre.y - nearest.bottom)
+					)
+				)
 		var margin := WaterFallMesh.mist_bounds_margin(largest)
 		assert_gt(margin, largest, "grown for the shader's rise and growth too")
 		var grown: AABB = built.aabb
@@ -402,7 +454,8 @@ func test_mist_is_three_to_five_packed_billboards_inside_the_grown_bounds() -> v
 		assert_almost_eq(grown.end, bounds.end + Vector3.ONE * margin, Vector3.ONE * 1e-4)
 
 
-## P4c-4: the spray rises from the pool and the lowest third of the face, and a fall at least
+## P4c-4: the spray rises from the pool and the lowest third of the face, never higher than
+## MIST_RISE_MAX_M over the pool (P4c-6c: the clouds hug the pool), and a fall at least
 ## MIST_HIGH_MIN_DROP_M high gets exactly one puff near the lip whose top clears the brink.
 func test_mist_stands_at_the_pool_with_one_high_puff_at_the_lip() -> void:
 	var doc := _tier_doc()
@@ -439,6 +492,10 @@ func test_mist_stands_at_the_pool_with_one_high_puff_at_the_lip() -> void:
 					"a low puff rises from the lowest third of the face (%.2f over the pool)"
 					% (centre.y - bottom)
 				)
+			)
+			assert_true(
+				centre.y - half * 0.5 <= bottom + WaterFallMesh.MIST_RISE_MAX_M + 1e-3,
+				"and never over the mist height cap (%.2f over the pool)" % (centre.y - bottom)
 			)
 			assert_gt(along, foot * 0.25, "past the face's middle")
 	assert_eq(high, 1, "exactly one high puff")

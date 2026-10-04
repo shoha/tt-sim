@@ -36,7 +36,11 @@ extends RefCounted
 ##   COLOR   r: the edge fade (curtain: 0 at a side edge, 1 from EDGE_FADE_M in; ring: 1 at
 ##           the centre, 0 at the rim; mist: 1); g: the kind flag, KIND_CURTAIN 0, KIND_RING
 ##           0.5, KIND_MIST 1 (vertex colours are 8-bit, so the shader tests g against 0.25
-##           and 0.75); b: a per-puff seed for the mist, 0 otherwise; a: 1.
+##           and 0.75); b: a per-puff seed for the mist, 0 otherwise; a: curtain: the fall's
+##           wetted crest width over WIDTH_ENCODE_M, clamped (P4c-6c: the shader scales its
+##           aeration and edge bite by the width, so a narrow fall is a white ribbon and a
+##           wide one glass between bold tongues; 8-bit, so 3 cm steps up to 8 m); ring and
+##           mist: 1.
 ## Triangles wind clockwise seen from the front (Godot's front face), the front being the
 ## downstream side for the curtain and above for the ring. The mist quads are packed (all
 ## four vertices at the puff's centre), so the mesh's own bounds miss them: build() returns
@@ -48,9 +52,11 @@ extends RefCounted
 ## downstream (the churn spreads downstream; the part behind the face is under the rock).
 ## Mist: MIST_MIN to MIST_MAX puffs per fall, sized by the fall's width and drop (capped at
 ## MIST_HALF_MAX_M against overdraw), standing between the face's foot and the pool and
-## staggered from the pool up the lowest MIST_LOW_SHARE of the face (spray rises from where
-## the water lands, P4c-4), plus, on a fall at least MIST_HIGH_MIN_DROP_M high, one puff set
-## back near the lip with its top over the brink, the cue an away-facing fall keeps. The
+## staggered from the pool up the lowest MIST_LOW_SHARE of the face, never higher than
+## MIST_RISE_MAX_M over the pool (spray rises from where the water lands, P4c-4; at 1.5 m
+## plus the shader's rise the clouds sat at 70% of a tier fall's height, P4c-6c), plus, on a
+## fall at least MIST_HIGH_MIN_DROP_M high, one puff set back near the lip with its top over
+## the brink, the cue an away-facing fall keeps. The
 ## shader rises and grows every puff over its cycle (MIST_SHADER_RISE_M, MIST_SHADER_GROW
 ## mirror waterfall.gdshader), so the bounds grow by that too. Everything is a function of
 ## the document alone (the puff placement uses a golden-ratio sequence, no RNG), so every
@@ -90,6 +96,9 @@ const WIDTH_SCAN_M := 0.05
 const DRY_CREST_SHARE := 0.5
 ## COLOR.r on the curtain: 0 at a side edge, 1 this far in.
 const EDGE_FADE_M := 0.35
+## COLOR.a on the curtain: the wetted crest width over this (waterfall.gdshader decodes it
+## with the same constant).
+const WIDTH_ENCODE_M := 8.0
 ## The foam ring: rim vertices, its width over the fall's (1.1: the shader thins the churn to
 ## nothing by RING_REACH of the radius, so the foam stays inside the fall's width, well within
 ## the widened plunge pool; at 1.4 the disc stood over the banks of a waist river, P4c-4),
@@ -115,14 +124,14 @@ const MIST_HALF_MAX_M := 1.2
 ## read as grey discs on the grass beside the notch), never under MIST_HALF_MIN_M.
 const MIST_HALF_PER_FALL_WIDTH := 0.5
 const MIST_LOW_SHARE := 0.33
-const MIST_RISE_MAX_M := 1.5
+const MIST_RISE_MAX_M := 0.6
 const MIST_BACK_MIN := 0.55
 const MIST_BACK_MAX := 1.0
 const MIST_SPREAD := 0.6
 const MIST_HIGH_MIN_DROP_M := 1.2
 const MIST_HIGH_BACK := 0.15
 const MIST_HIGH_OVER := 0.3
-const MIST_SHADER_RISE_M := 0.9
+const MIST_SHADER_RISE_M := 0.5
 const MIST_SHADER_GROW := 1.3
 ## The kind flag in COLOR.g.
 const KIND_CURTAIN := 0.0
@@ -370,6 +379,11 @@ static func _fall(doc: MapDocument, fall: Dictionary, buffers: _Buffers) -> floa
 	return _mist(buffers, fall, lip, dir, across, pool_x, width, drop, top, bottom)
 
 
+## COLOR.a of a curtain `width` metres wide at the crest (see the header).
+static func width_code(width: float) -> float:
+	return clampf(width / WIDTH_ENCODE_M, 0.0, 1.0)
+
+
 ## The curtain's grid: `columns` (one trajectory each, at offsets `offsets` across).
 static func _curtain(
 	buffers: _Buffers,
@@ -383,6 +397,7 @@ static func _curtain(
 ) -> void:
 	var first := buffers.vertices.size()
 	var count := offsets.size()
+	var code := width_code(widths.x + widths.y)
 	for i in count:
 		var w := offsets[i]
 		var fade := clampf(minf(w + widths.x, widths.y - w) / EDGE_FADE_M, 0.0, 1.0)
@@ -402,7 +417,7 @@ static func _curtain(
 				normal.normalized(),
 				Vector2(w + widths.x, rows[k]),
 				Vector2(drop, bottom),
-				Color(fade, KIND_CURTAIN, 0.0, 1.0)
+				Color(fade, KIND_CURTAIN, 0.0, code)
 			)
 	for i in count - 1:
 		for k in rows.size() - 1:
@@ -431,14 +446,18 @@ static func _ring(
 		Vector3.UP,
 		Vector2.ZERO,
 		Vector2(radius, bottom),
-		Color(1.0, KIND_RING, 0.0)
+		Color(1.0, KIND_RING, 0.0, 1.0)
 	)
 	for s in RING_SEGMENTS:
 		var angle := TAU * float(s) / float(RING_SEGMENTS)
 		var local := Vector2(cos(angle), sin(angle)) * radius
 		var p := centre + across * local.x + dir * local.y
 		buffers.add(
-			_point(p, y), Vector3.UP, local, Vector2(radius, bottom), Color(0.0, KIND_RING, 0.0)
+			_point(p, y),
+			Vector3.UP,
+			local,
+			Vector2(radius, bottom),
+			Color(0.0, KIND_RING, 0.0, 1.0)
 		)
 	for s in RING_SEGMENTS:
 		var rim := first + 1 + s
