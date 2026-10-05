@@ -104,13 +104,18 @@ func test_the_lake_is_never_in_the_cameras_corner() -> void:
 
 
 func test_the_far_corner_is_drawn_most_and_a_side_lake_sits_inside_the_frame() -> void:
-	# P5-7: the far corner (opposite NEAR) fills the view; a side corner's lake is pulled toward
-	# the centre on the axis that points at the camera's side.
+	# P5-7: the far corner (opposite NEAR) fills the view; a side corner's smaller lake sits
+	# inside the home frame (about 12.3 m of ground either side of its centre): its centre at
+	# most LAKE_SIDE_SCREEN_M across the view, on the corner's side, up the view, and the whole
+	# lake on the map. Every size, since the frame is in metres and the map is not.
 	var near := StartingLandform.NEAR
 	var far := Vector2i(-roundi(signf(near.x)), -roundi(signf(near.y)))
-	var half := 22.86
+	var across := LandformLakeshore.ACROSS
 	var counts := {}
-	for seed_value in range(1, SEEDS + 1):
+	for n in 3 * SEEDS:
+		var seed_value := n % SEEDS + 1
+		var sizes: Array[float] = [1.0, 2.0 / 3.0, 4.0 / 3.0]
+		var half := StartingLandform.REFERENCE_EXTENT_M * 0.5 * sizes[floori(float(n) / SEEDS)]
 		var frame := LandformLakeshore.lakeshore_frame(
 			half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
 		)
@@ -124,19 +129,22 @@ func test_the_far_corner_is_drawn_most_and_a_side_lake_sits_inside_the_frame() -
 				% [seed_value, centre.x, centre.y]
 			)
 		)
+		var radius: float = frame.radius
+		var label := "seed %d at half %.1f" % [seed_value, half]
+		assert_lte(
+			maxf(absf(centre.x), absf(centre.y)) + radius, half, "%s the lake is on the map" % label
+		)
 		if corner == far:
 			assert_almost_eq(
 				centre.length(), half * LandformLakeshore.LAKE_CENTRE_SHARE * sqrt(2.0), 0.01
 			)
 			continue
-		var on_camera_axis := absf(centre.x) if centre.x * near.x > 0.0 else absf(centre.y)
-		assert_almost_eq(
-			on_camera_axis,
-			half * LandformLakeshore.LAKE_SIDE_CENTRE_SHARE,
-			0.01,
-			"seed %d side lake pulled in on the camera's axis" % seed_value
-		)
-	gut.p("lakeshore corner counts over %d seeds: %s" % [SEEDS, counts])
+		var lateral := centre.dot(across)
+		assert_lte(absf(lateral), LandformLakeshore.LAKE_SIDE_SCREEN_M + 0.01, label)
+		assert_gt(lateral * Vector2(corner).dot(across), 0.0, "%s on the corner's side" % label)
+		assert_gt(centre.dot(StartingLandform.VIEW), 0.0, "%s up the view" % label)
+		assert_lt(radius, half * LandformLakeshore.LAKE_RADIUS_SHARE, "%s a smaller lake" % label)
+	gut.p("lakeshore corner counts over %d seeds at three sizes: %s" % [SEEDS, counts])
 	var far_count := int(counts.get(far, 0))
 	for corner in counts:
 		if corner != far:
