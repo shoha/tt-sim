@@ -294,23 +294,26 @@ func test_plank_bridge_parts() -> void:
 
 func test_every_triangle_faces_its_normal_clockwise() -> void:
 	var doc := _doc()
-	for kind in [Crossing.Kind.PLANK, Crossing.Kind.STONES]:
+	for kind in [Crossing.Kind.PLANK, Crossing.Kind.STONES, Crossing.Kind.ARCH]:
 		var crossing := CrossingPlacement.anchor(doc, Vector2(0, -1), Vector2(0, 1), kind)
 		crossing.id = 3
 		var parts := CrossingGeometry.build_one(doc, crossing)
-		var arrays: Array = parts.wood if kind == Crossing.Kind.PLANK else parts.stone
-		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
-		var wrong := 0
-		for t in range(0, indices.size(), 3):
-			var a := vertices[indices[t]]
-			var cross := (vertices[indices[t + 1]] - a).cross(vertices[indices[t + 2]] - a)
-			if cross.length() > 1e-9 and cross.dot(normals[indices[t]]) >= 0.0:
-				wrong += 1
-		assert_eq(wrong, 0, "kind %d: clockwise from the front" % kind)
-		for n in normals:
-			assert_almost_eq(n.length(), 1.0, 1e-3)
+		var surfaces: Array = [parts.wood] if kind == Crossing.Kind.PLANK else [parts.stone]
+		if kind == Crossing.Kind.ARCH:
+			surfaces.append(parts.paving)
+		for arrays: Array in surfaces:
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+			var wrong := 0
+			for t in range(0, indices.size(), 3):
+				var a := vertices[indices[t]]
+				var cross := (vertices[indices[t + 1]] - a).cross(vertices[indices[t + 2]] - a)
+				if cross.length() > 1e-9 and cross.dot(normals[indices[t]]) >= 0.0:
+					wrong += 1
+			assert_eq(wrong, 0, "kind %d: clockwise from the front" % kind)
+			for n in normals:
+				assert_almost_eq(n.length(), 1.0, 1e-3)
 
 
 func test_stones_one_stride_apart_above_the_water_and_rooted() -> void:
@@ -348,6 +351,145 @@ func test_build_is_deterministic() -> void:
 	b.map_seed = 8
 	var reseeded: Array = CrossingGeometry.build(b).crossings[0].wood
 	assert_false(wa[Mesh.ARRAY_VERTEX] == reseeded[Mesh.ARRAY_VERTEX], "the seed varies it")
+
+
+# --- stone arch (P4d-1) ---------------------------------------------------------------------
+
+
+## _doc()'s map with a channel 5.5 m either side of Z = 0: a span over the pier threshold.
+func _wide_doc() -> MapDocument:
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "test", 7)
+	var heights := doc.heights.duplicate()
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var p := doc.sample_to_world(Vector2(x, z))
+			if absf(p.x) <= 10.0 and absf(p.y) <= 5.5:
+				heights[doc.sample_index(x, z)] = BED
+	doc.heights = heights
+	var line := PackedVector2Array([Vector2(-10, 0), Vector2(0, 0), Vector2(10, 0)])
+	var widths := PackedFloat32Array([5.5, 5.5, 5.5])
+	doc.water_bodies.append(WaterBody.river(1, line, widths, WaterBody.Depth.WAIST, RIVER_LEVEL))
+	return doc
+
+
+func test_arch_levels_stand_over_the_banks_and_clear_the_water() -> void:
+	var doc := _doc()
+	var arch := _placed(doc, Crossing.Kind.ARCH)
+	var ends := 0.0 + CrossingPlacement.ARCH_DECK_ABOVE_BANK_M
+	assert_almost_eq(arch.levels.x, ends, EPSILON, "abutment cap plus deck over the bank")
+	assert_almost_eq(arch.levels.z, ends, EPSILON)
+	var clear := CrossingPlacement.ARCH_CLEAR_M + CrossingArch.BARREL_THICK_M
+	assert_gte(arch.levels.y, RIVER_LEVEL + clear - EPSILON, "the intrados clears the water")
+	assert_gte(arch.levels.y, ends + CrossingPlacement.ARCH_MIN_RISE_M - EPSILON, "a rise")
+	assert_almost_eq(arch.width_m, Crossing.DEFAULT_WIDTH_M[Crossing.Kind.ARCH], EPSILON)
+	var plank := CrossingPlacement.anchor(doc, Vector2(0.3, -1), Vector2(0, 1), Crossing.Kind.PLANK)
+	assert_gt(arch.span_m(), plank.span_m(), "abutments bed further into the banks")
+	assert_almost_eq(arch.span_m() - plank.span_m(), 2.0 * (0.8 - 0.55), 0.05)
+	# Pure levels: a 6 m span rises 0.6 m; high water lifts the middle to water + 0.85.
+	var six := CrossingPlacement.levels_for(Crossing.Kind.ARCH, 0.0, 0.0, -1.0, 6.0)
+	assert_almost_eq(six.y, 0.35 + 0.6, EPSILON)
+	var high := CrossingPlacement.levels_for(Crossing.Kind.ARCH, 0.0, 0.0, 0.5, 6.0)
+	assert_almost_eq(high.y, 0.5 + 0.85, EPSILON)
+	var long := CrossingPlacement.levels_for(Crossing.Kind.ARCH, 0.0, 0.0, -1.0, 20.0)
+	assert_almost_eq(long.y, 0.35 + CrossingPlacement.ARCH_MAX_RISE_M, EPSILON, "rise capped")
+	# Refused where a plank bridge is.
+	assert_eq(
+		CrossingPlacement.place(doc, Vector2(0, 5), Vector2(0, 7), Crossing.Kind.ARCH).refusal,
+		&"no_water"
+	)
+
+
+func test_arch_parts_three_surfaces_on_one_deck() -> void:
+	var doc := _doc()
+	var arch := _placed(doc, Crossing.Kind.ARCH)
+	var span := arch.span_m()
+	var parts := CrossingGeometry.build_one(doc, arch)
+	assert_true((parts.wood as Array).is_empty())
+	assert_false((parts.stone as Array).is_empty(), "masonry")
+	assert_false((parts.paving as Array).is_empty(), "the paved deck")
+	assert_almost_eq(float(parts.top), CrossingGeometry.deck_top(arch), EPSILON)
+	var faces: PackedVector3Array = parts.collision
+	assert_eq(faces.size() % 3, 0)
+	assert_false(faces.is_empty())
+	for v in faces:
+		var uv := CrossingGeometry.local_of(arch, Vector2(v.x, v.z))
+		var expected := CrossingGeometry.deck_y(arch.levels, uv.x / span)
+		assert_almost_eq(v.y, expected, 0.001, "the collision is the walking surface")
+	var half := arch.width_m * 0.5
+	var inner := half - CrossingArch.PARAPET_INSET_M - CrossingArch.PARAPET_W_M
+	var paving: PackedVector3Array = parts.paving[Mesh.ARRAY_VERTEX]
+	for v in paving:
+		var uv := CrossingGeometry.local_of(arch, Vector2(v.x, v.z))
+		assert_lte(absf(uv.y), inner + 0.001, "paving between the parapets")
+		assert_lte(v.y, CrossingGeometry.deck_y(arch.levels, clampf(uv.x / span, 0, 1)) + 0.001)
+	var stone: PackedVector3Array = parts.stone[Mesh.ARRAY_VERTEX]
+	var lowest := INF
+	var highest := -INF
+	for v in stone:
+		lowest = minf(lowest, v.y)
+		highest = maxf(highest, v.y)
+		var uv := CrossingGeometry.local_of(arch, Vector2(v.x, v.z))
+		if absf(uv.y) < inner - 0.04 and uv.x > 0.01 and uv.x < span - 0.01:
+			var deck := CrossingGeometry.deck_y(arch.levels, uv.x / span)
+			assert_lte(v.y, deck + 0.001, "nothing stands on the walking strip")
+	assert_lt(lowest, -0.3, "the abutments are bedded below the bank")
+	assert_almost_eq(highest, CrossingGeometry.deck_top(arch) + CrossingArch.PARAPET_H_M, 0.01)
+	var lay := CrossingArch.layout(arch)
+	assert_false(lay.pier)
+	assert_eq((lay.arches as Array).size(), 1)
+	var crown := CrossingArch.intrados_at(lay, span * 0.5)
+	assert_almost_eq(crown, arch.levels.y - CrossingArch.BARREL_THICK_M, EPSILON)
+	assert_gt(crown, RIVER_LEVEL + CrossingPlacement.ARCH_CLEAR_M - EPSILON)
+	assert_true(is_nan(CrossingArch.intrados_at(lay, 0.1)), "an abutment, not the barrel")
+	# A deck for the grid and the scatter, like a plank bridge.
+	var field := CrossingGeometry.deck_field(doc, doc.crossings)
+	var middle := doc.world_to_sample((arch.start + arch.end) * 0.5).round()
+	assert_almost_eq(field[doc.sample_index(int(middle.x), int(middle.y))], arch.levels.y, 0.02)
+	assert_eq(CrossingGeometry.clearance(doc.crossings, (arch.start + arch.end) * 0.5), 0.0)
+	assert_eq(CrossingGeometry.clearance(doc.crossings, arch.end + arch.direction() * 0.5), 0.0)
+	# Copings and caps take moss, by facet, in a damp climate.
+	var split := AuthoredCrossings.moss_split(parts.stone, 0.6)
+	assert_false((split[1] as Array).is_empty(), "moss on the copings and caps")
+	var normals: PackedVector3Array = parts.stone[Mesh.ARRAY_NORMAL]
+	for t in range(0, (split[1][Mesh.ARRAY_INDEX] as PackedInt32Array).size(), 3):
+		assert_gt(normals[split[1][Mesh.ARRAY_INDEX][t]].y, 0.5, "only facing up")
+
+
+func test_a_long_arch_gets_a_pier_and_keeps_one_deck_curve() -> void:
+	var doc := _wide_doc()
+	var arch := _placed(doc, Crossing.Kind.ARCH, Vector2(0, -1), Vector2(0, 1))
+	var span := arch.span_m()
+	assert_gt(span, CrossingArch.PIER_MIN_SPAN_M)
+	assert_true(CrossingArch.has_pier(arch))
+	var lay := CrossingArch.layout(arch, RIVER_LEVEL)
+	assert_eq((lay.arches as Array).size(), 2)
+	assert_true(is_nan(CrossingArch.intrados_at(lay, span * 0.5)), "the pier at mid-span")
+	assert_gte(float(lay.pier_cap), RIVER_LEVEL + CrossingArch.PIER_FREEBOARD_M - EPSILON)
+	assert_gte(
+		float(CrossingArch.layout(arch).pier_cap),
+		float(lay.cap_a) - CrossingArch.SPRING_DROP_M - EPSILON,
+		"without a water level, the mean springing"
+	)
+	for part: Dictionary in lay.arches:
+		var centre := (float(part.u0) + float(part.u1)) * 0.5
+		var crown := CrossingArch.intrados_at(lay, centre)
+		var deck := CrossingGeometry.deck_y(arch.levels, centre / span)
+		assert_almost_eq(crown, deck - CrossingArch.BARREL_THICK_M, EPSILON)
+		assert_gt(
+			crown, RIVER_LEVEL + CrossingPlacement.ARCH_CLEAR_M, "each crown clears the water"
+		)
+		assert_gt(crown, float(lay.pier_cap), "rising from the pier cap")
+	var parts := CrossingGeometry.build_one(doc, arch)
+	for v: Vector3 in parts.collision:
+		var uv := CrossingGeometry.local_of(arch, Vector2(v.x, v.z))
+		assert_almost_eq(v.y, CrossingGeometry.deck_y(arch.levels, uv.x / span), 0.001, "one curve")
+	# The pier reaches under the bed at mid-span.
+	var lowest_mid := INF
+	for v: Vector3 in parts.stone[Mesh.ARRAY_VERTEX]:
+		var uv := CrossingGeometry.local_of(arch, Vector2(v.x, v.z))
+		if absf(uv.x - span * 0.5) < CrossingArch.PIER_W_M * 0.5 + 0.01:
+			lowest_mid = minf(lowest_mid, v.y)
+	assert_lt(lowest_mid, BED, "the pier is bedded")
 
 
 func test_clearance_clears_the_footprint_and_bank_landings() -> void:
@@ -417,6 +559,35 @@ func test_nodes_bodies_and_exclusion() -> void:
 	assert_eq(AuthoredCrossings.exclude_of(_root).size(), 2)
 	assert_true(node.has_decks())
 	assert_almost_eq(node.top_y, CrossingGeometry.deck_top(doc.crossings[0]), EPSILON)
+	remove_child(_root)
+
+
+func test_an_arch_node_carries_stone_moss_and_paving() -> void:
+	var doc := _doc()
+	var arch := CrossingPlacement.anchor(
+		doc, Vector2(4, -1), Vector2(4, 1), Crossing.Kind.ARCH, -1.0, "temperate_forest_summer_s1"
+	)
+	arch.id = 1
+	doc.crossings.append(arch)
+	var node := _authored_in_tree(doc)
+	var instance := node.get_crossing_node(1).get_node("Arch") as MeshInstance3D
+	assert_not_null(instance)
+	assert_eq(instance.mesh.get_surface_count(), 3, "stone, moss, paving")
+	assert_true(node.has_decks())
+	assert_almost_eq(node.top_y, CrossingGeometry.deck_top(arch), EPSILON)
+	assert_eq(AuthoredCrossings.paving_surface("temperate_forest_summer_s1"), "flagstone")
+	assert_eq(AuthoredCrossings.paving_surface("rocky_badlands_summer_s1"), "flagstone_sandstone")
+	assert_eq(AuthoredCrossings.paving_surface(""), AuthoredCrossings.DEFAULT_PAVING_SURFACE)
+	var paving: ORMMaterial3D = instance.mesh.surface_get_material(2)
+	assert_almost_eq(paving.uv1_scale.x, 1.0 / 3.0, EPSILON, "world metres at the tile")
+	assert_has(
+		AuthoredCrossings.texture_paths(doc),
+		"res://assets/palette/surfaces/flagstone/flagstone_albedo.png"
+	)
+	assert_has(
+		AuthoredCrossings.surfaces_for_styles(PackedStringArray(["rocky_badlands_summer_s1"])),
+		"flagstone_sandstone"
+	)
 	remove_child(_root)
 
 

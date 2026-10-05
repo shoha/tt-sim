@@ -4,8 +4,9 @@ extends RefCounted
 ## AuthoringEditor crossing API (CrossingEditor.place: a line drawn across water, snapped to the
 ## banks); the Bridge tool (P4b-2) is driven with the driver's `gesture` and `input` ops and
 ## read back here with `list` and `timing`. Positions are world XZ metres. step.action:
-##   place {kind, from, to, width}  kind "plank" or "stones"; logs the id or the refusal, the
-##                                  anchors, span, levels, style and the refresh time, and
+##   place {kind, from, to, width}  kind "plank", "stones" or "arch" (P4d-1); logs the id or
+##                                  the refusal, the anchors, span, levels, style and the
+##                                  refresh time, and
 ##                                  names the crossing's middle, ends and first stone
 ##                                  "found:c<id>_mid", "found:c<id>_a", "found:c<id>_b",
 ##                                  "found:c<id>_stone<k>" for `look` / `tokens`.
@@ -104,13 +105,17 @@ static func _vec(value: Variant) -> Vector2:
 	return Vector2.ZERO
 
 
+## The step's kind (Crossing.KIND_NAMES; plank when missing or unknown).
+static func _kind(step: Dictionary) -> Crossing.Kind:
+	var found := Crossing.KIND_NAMES.find(String(step.get("kind", "plank")))
+	return (found if found >= 0 else Crossing.Kind.PLANK) as Crossing.Kind
+
+
 static func _place(base: Node, step: Dictionary) -> String:
 	var ctrl: AuthoringController = base.get("_authoring_controller")
 	if ctrl == null or ctrl.editor == null:
 		return "no authoring editor"
-	var kind := (
-		Crossing.Kind.STONES if step.get("kind", "plank") == "stones" else Crossing.Kind.PLANK
-	)
+	var kind := _kind(step)
 	var from := _vec(step.get("from"))
 	var to := _vec(step.get("to"))
 	var editor := ctrl.editor
@@ -128,7 +133,7 @@ static func _place(base: Node, step: Dictionary) -> String:
 	_found["c%d_b" % id] = Vector2(b.x, b.z)
 	_found["c%d_mid" % id] = Vector2(a.x + b.x, a.z + b.z) * 0.5
 	var stones := CrossingGeometry.stone_layout(editor.document, crossing)
-	if not crossing.is_plank():
+	if crossing.kind == Crossing.Kind.STONES:
 		for k in stones.size():
 			var at: Vector2 = stones[k].at
 			var world := editor.to_world(Vector3(at.x, 0, at.y))
@@ -147,7 +152,7 @@ static func _place(base: Node, step: Dictionary) -> String:
 			str(crossing.levels.snapped(Vector3.ONE * 0.01)),
 			crossing.width_m,
 			crossing.style,
-			stones.size() if not crossing.is_plank() else 0,
+			stones.size() if crossing.kind == Crossing.Kind.STONES else 0,
 			usec / 1000.0,
 			editor.crossings.last_refresh_usec / 1000.0,
 		]
@@ -195,7 +200,7 @@ static func _name_points(editor: AuthoringEditor, crossing: Crossing) -> void:
 	_found["c%d_a" % id] = Vector2(a.x, a.z)
 	_found["c%d_b" % id] = Vector2(b.x, b.z)
 	_found["c%d_mid" % id] = Vector2(a.x + b.x, a.z + b.z) * 0.5
-	if not crossing.is_plank():
+	if crossing.kind == Crossing.Kind.STONES:
 		var stones := CrossingGeometry.stone_layout(editor.document, crossing)
 		for k in stones.size():
 			var at: Vector2 = stones[k].at
@@ -266,9 +271,7 @@ static func _bench(base: Node, step: Dictionary) -> String:
 	if ctrl == null or ctrl.editor == null:
 		return "no authoring editor"
 	var editor := ctrl.editor
-	var kind := (
-		Crossing.Kind.STONES if step.get("kind", "plank") == "stones" else Crossing.Kind.PLANK
-	)
+	var kind := _kind(step)
 	var from := _vec(step.get("from"))
 	var to := _vec(step.get("to"))
 	var a := Vector3(from.x, 0, from.y)
@@ -312,9 +315,7 @@ static func _first_use(base: Node, step: Dictionary) -> String:
 	var style := String(step.get("style", "rocky_badlands_summer_s1"))
 	var from := _vec(step.get("from"))
 	var to := _vec(step.get("to"))
-	var kind := (
-		Crossing.Kind.STONES if step.get("kind", "plank") == "stones" else Crossing.Kind.PLANK
-	)
+	var kind := _kind(step)
 	var crossing := editor.crossings.plan(kind, Vector3(from.x, 0, from.y), Vector3(to.x, 0, to.y))
 	if crossing == null:
 		return "refused: %s" % editor.crossings.last_refusal
@@ -324,14 +325,14 @@ static func _first_use(base: Node, step: Dictionary) -> String:
 	var times := PackedStringArray()
 	var t := Time.get_ticks_usec()
 	var material: BaseMaterial3D = node.call(
-		"_stone_material" if kind == Crossing.Kind.STONES else "_wood_material", style
+		"_wood_material" if kind == Crossing.Kind.PLANK else "_stone_material", style
 	)
 	times.append("material %.2f" % ((Time.get_ticks_usec() - t) / 1000.0))
 	t = Time.get_ticks_usec()
 	material.get_rid()
 	times.append("rid %.2f" % ((Time.get_ticks_usec() - t) / 1000.0))
 	t = Time.get_ticks_usec()
-	var arrays: Array = parts.stone if kind == Crossing.Kind.STONES else parts.wood
+	var arrays: Array = parts.wood if kind == Crossing.Kind.PLANK else parts.stone
 	# The script as a value: its private static helpers are only callable that way.
 	var script: Script = load("res://scenes/terrain/authored_crossings.gd")
 	var mesh := script.call("_mesh_instance", "Probe", arrays, material) as Node3D

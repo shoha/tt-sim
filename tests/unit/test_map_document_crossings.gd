@@ -152,7 +152,9 @@ func test_cap_is_reachable_and_ids_run_out_cleanly() -> void:
 func test_malformed_crossings_are_skipped() -> void:
 	var cases := {
 		"not an object": 5,
-		"unknown kind": _crossing_json({"kind": "arch"}),
+		"unknown kind": _crossing_json({"kind": "rope"}),
+		"narrow arch": _crossing_json({"kind": "arch", "width_m": 1.0}),
+		"wide arch": _crossing_json({"kind": "arch", "width_m": 3.2}),
 		"id": _crossing_json({"id": 256}),
 		"fractional id": _crossing_json({"id": 1.5}),
 		"no start": _crossing_json({"start": null}),
@@ -181,6 +183,33 @@ func test_duplicate_ids_keep_the_first() -> void:
 	assert_eq(result["document"].crossings.size(), 1)
 	assert_eq(result["document"].crossings[0].width_m, 1.5)
 	assert_true(Fixtures.has_warning(result, "used twice"))
+
+
+## P4d-1: the stone arch is a kind of the entry, read and written as "arch" with its own
+## width range (1.2..3.0 m).
+func test_an_arch_round_trips_with_its_width_range() -> void:
+	var doc := _doc()
+	var arch := Crossing.make(
+		7, Crossing.Kind.ARCH, Vector2(-2, 0), Vector2(4, 0), Vector3(0.35, 1.0, 0.35), 2.4
+	)
+	doc.crossings.append(arch)
+	var entries := _entries(doc)
+	var data: Dictionary = JSON.parse_string(entries["crossings.json"].get_string_from_utf8())
+	assert_eq(data["crossings"][2]["kind"], "arch")
+	var read: MapDocument = MapDocumentIO.parse(entries)["document"]
+	assert_eq(read.crossings.size(), 3)
+	assert_true(read.crossing(7).same_as(arch), "bit-exact")
+	assert_true(read.crossing(7).is_arch())
+	assert_true(read.crossing(7).is_deck())
+	assert_eq(Crossing.MIN_WIDTH_M[Crossing.Kind.ARCH], 1.2)
+	assert_eq(Crossing.MAX_WIDTH_M[Crossing.Kind.ARCH], 3.0)
+	for width in [1.0, 3.2]:
+		var result := _parse_crossings([_crossing_json({"kind": "arch", "width_m": width})])
+		assert_eq(result["document"].crossings.size(), 0, "width %s refused" % width)
+		assert_true(Fixtures.has_warning(result, "width outside 1.2..3"), str(result["warnings"]))
+	var good := _parse_crossings([_crossing_json({"kind": "arch", "width_m": 2.0})])
+	assert_eq(good["document"].crossings.size(), 1)
+	assert_eq(good["document"].crossings[0].kind, Crossing.Kind.ARCH)
 
 
 func test_cap_on_read() -> void:

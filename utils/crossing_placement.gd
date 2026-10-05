@@ -19,8 +19,13 @@ extends RefCounted
 ##
 ## Levels. A plank bridge's ends stand CrossingGeometry.DECK_ABOVE_BANK_M over the bank
 ## ground at its anchors (its sills bedded there), and its middle rises in a gentle arch
-## (ARCH_RISE_PER_M of span, MIN_RISE_M..MAX_RISE_M) and never lower than DECK_CLEAR_M over the
+## (DECK_RISE_PER_M of span, MIN_RISE_M..MAX_RISE_M) and never lower than DECK_CLEAR_M over the
 ## highest water it crosses. Stepping stones put their tops STONE_FREEBOARD_M over that water.
+## A stone arch's ends stand ARCH_DECK_ABOVE_BANK_M over the bank ground (abutment cap plus
+## deck slab), its middle rises ARCH_RISE_PER_M of the span (ARCH_MIN_RISE_M..ARCH_MAX_RISE_M:
+## segmental, never a semicircle, which would hide its own water from the camera), and the
+## barrel's underside at mid-span (CrossingArch.BARREL_THICK_M below the deck) keeps
+## ARCH_CLEAR_M over the highest water crossed.
 ##
 ## Refusals (the tool's message): the line is too short, crosses no water, has no dry bank
 ## within reach on a side (or runs off the map), comes within FALL_CLEAR_M of a waterfall
@@ -47,12 +52,20 @@ const STEP_M := 0.1
 const REFINE_STEPS := 6
 const MIN_ISLAND_M := 0.8
 ## Anchor distance past the waterline onto the bank, per Crossing.Kind: a bridge's sill needs
-## firm ground under it; a stone path steps off near the edge.
-const BANK_INSET_M: Array[float] = [0.55, 0.35]
-const ARCH_RISE_PER_M := 0.06
+## firm ground under it; a stone path steps off near the edge; an arch's abutment is bedded
+## well back in the bank.
+const BANK_INSET_M: Array[float] = [0.55, 0.35, 0.8]
+## A plank deck's rise: a share of the span, clamped.
+const DECK_RISE_PER_M := 0.06
 const MIN_RISE_M := 0.12
 const MAX_RISE_M := 0.8
 const DECK_CLEAR_M := 0.45
+## A stone arch's levels (P4d-1, see the header).
+const ARCH_DECK_ABOVE_BANK_M := 0.35
+const ARCH_RISE_PER_M := 0.10
+const ARCH_MIN_RISE_M := 0.3
+const ARCH_MAX_RISE_M := 1.5
+const ARCH_CLEAR_M := 0.5
 ## Over WaterZone's slab (level + 0.05) with the stones' jitter, so a token on a stone is dry.
 const STONE_FREEBOARD_M := 0.15
 ## A crossing keeps at least this far from a waterfall's face and foam ring (fall_near()).
@@ -163,8 +176,13 @@ static func levels_for(
 	if kind == Crossing.Kind.PLANK:
 		a += CrossingGeometry.DECK_ABOVE_BANK_M
 		b += CrossingGeometry.DECK_ABOVE_BANK_M
-		var rise := clampf(span * ARCH_RISE_PER_M, MIN_RISE_M, MAX_RISE_M)
+		var rise := clampf(span * DECK_RISE_PER_M, MIN_RISE_M, MAX_RISE_M)
 		middle = maxf((a + b) * 0.5 + rise, water + DECK_CLEAR_M)
+	elif kind == Crossing.Kind.ARCH:
+		a += ARCH_DECK_ABOVE_BANK_M
+		b += ARCH_DECK_ABOVE_BANK_M
+		var rise := clampf(span * ARCH_RISE_PER_M, ARCH_MIN_RISE_M, ARCH_MAX_RISE_M)
+		middle = maxf((a + b) * 0.5 + rise, water + ARCH_CLEAR_M + CrossingArch.BARREL_THICK_M)
 	var mean := (a + b) * 0.5
 	middle = clampf(middle, mean - Crossing.MAX_RISE_M, mean + Crossing.MAX_RISE_M)
 	return Vector3(a, middle, b)
