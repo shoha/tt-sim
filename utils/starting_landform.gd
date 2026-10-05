@@ -473,6 +473,21 @@ static func straightest(course: PackedVector2Array, candidates: PackedInt32Array
 	return best
 
 
+## straightest() among the `candidates` of `course` that lie under water in `doc`
+## (WaterGeometry.is_wet_at, the test CrossingPlacement walks a crossing's line with), so a
+## crossing is never drawn where the carve left the course dry (P5-7: the lake's stones
+## refused `no_water` on seed 14). -1 when no candidate is wet.
+static func straightest_wet(
+	doc: MapDocument, course: PackedVector2Array, candidates: PackedInt32Array
+) -> int:
+	var courses := WaterGeometry.river_courses(doc)
+	var wet := PackedInt32Array()
+	for i in candidates:
+		if WaterGeometry.is_wet_at(doc, course[i], -1, courses):
+			wet.append(i)
+	return straightest(course, wet)
+
+
 ## Paints `surface` into `doc`'s surface weights along polyline `points`: full weight within
 ## `width` / 2 of the line, falling to nothing over `soft` metres (the probe's path paint).
 ## Returns the samples painted; 0 when the document has no slot for the surface.

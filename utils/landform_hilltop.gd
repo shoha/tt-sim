@@ -327,8 +327,12 @@ static func _stones(
 	var best_r := INF
 	var fallback := -1
 	var fallback_r := -INF
+	var courses := WaterGeometry.river_courses(doc)
 	for i in range(1, course.size() - 1):
 		if not StartingLandform.inside(doc, course[i], STONES_EDGE_M):
+			continue
+		# Over water only (P5-7, as StartingLandform.straightest_wet for the other recipes).
+		if not WaterGeometry.is_wet_at(doc, course[i], -1, courses):
 			continue
 		var r := course[i].distance_to(centre)
 		if r >= radius + STONES_PAST_FOOT_M and r < best_r:

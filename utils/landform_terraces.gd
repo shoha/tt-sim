@@ -201,7 +201,8 @@ static func terraces_stage(
 	return stage
 
 
-## A plank bridge where the river runs straightest on the top terrace (`top`), BRIDGE_BACK_M
+## A plank bridge where the river runs straightest over water (StartingLandform.straightest_wet)
+## on the top terrace (`top`), BRIDGE_BACK_M
 ## uphill of its edge and BRIDGE_EDGE_M inside the map. The report line, naming a refusal.
 static func _bridge(
 	doc: MapDocument, river: Array[WaterBody], top: Dictionary, dir: Vector2, biome_id: String
@@ -212,9 +213,11 @@ static func _bridge(
 	for i in range(2, course.size() - 2):
 		if course[i].dot(dir) <= limit and StartingLandform.inside(doc, course[i], BRIDGE_EDGE_M):
 			candidates.append(i)
-	var at := StartingLandform.straightest(course, candidates)
-	if at < 0:
+	if candidates.is_empty():
 		return "bridge: no room on the top terrace"
+	var at := StartingLandform.straightest_wet(doc, course, candidates)
+	if at < 0:
+		return "bridge: no water on the top terrace"
 	var along := (course[at + 1] - course[at - 1]).normalized()
 	var placed := StartingLandform.place_crossing(
 		doc, course[at], along, Crossing.Kind.PLANK, biome_id

@@ -116,6 +116,8 @@ func test_forty_seeds_draw_rivers_often_and_never_break_the_map() -> void:
 		var shaped := _valley(100, seed_value)
 		var doc: MapDocument = shaped.doc
 		var label := "seed %d" % seed_value
+		# P5-7: a crossing is drawn only where the river left water (straightest_wet).
+		assert_false(String(shaped.report).contains("no_water"), "%s: %s" % [label, shaped.report])
 		var out_of_range := 0
 		for h in doc.heights:
 			out_of_range += 1 if absf(h) > MapDocument.MAX_ABS_HEIGHT_M else 0

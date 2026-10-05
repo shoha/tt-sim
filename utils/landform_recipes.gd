@@ -331,7 +331,8 @@ static func _valley_tributary(
 	return "tributary: %d reaches from (%.1f, %.1f)" % [bodies.size(), start.x, start.y]
 
 
-## A crossing of `kind` where the river runs straightest near the stage (see the header).
+## A crossing of `kind` where the river runs straightest over water near the stage (see the
+## header; StartingLandform.straightest_wet).
 ## The report line, naming a refusal.
 static func _valley_crossing(
 	doc: MapDocument,
@@ -350,10 +351,15 @@ static func _valley_crossing(
 		anywhere.append(i)
 		if course[i].distance_to(stage) <= half * CROSSING_NEAR_SHARE:
 			near.append(i)
-	var at := StartingLandform.straightest(course, near if not near.is_empty() else anywhere)
 	var name: String = Crossing.KIND_NAMES[kind]
-	if at < 0:
+	if anywhere.is_empty():
 		return "%s: no room on the river" % name
+	# Over water only (straightest_wet), near the stage when any wet point is.
+	var at := StartingLandform.straightest_wet(doc, course, near)
+	if at < 0:
+		at = StartingLandform.straightest_wet(doc, course, anywhere)
+	if at < 0:
+		return "%s: no water on the river" % name
 	var dir := (course[at + 1] - course[at - 1]).normalized()
 	var placed := StartingLandform.place_crossing(doc, course[at], dir, kind, biome_id)
 	if placed.crossing == null:
