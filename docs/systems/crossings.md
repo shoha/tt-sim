@@ -393,4 +393,5 @@ and crossings over a Blender map's own water are there).
 - P4d-5 (2a93d03): the pinned performance pass (`jobs/p4d_perf_build.json` /
   `p4d_perf_play.json`) and the cache decision.
 - P4d-5b (68564cd): the per-crossing rebuild cache (`CrossingCache`).
-- P4d-5c: `follow` refreshes the crossings whose ground changed when no anchor moved.
+- P4d-5c (fc0db95): `follow` refreshes the crossings whose ground changed when no anchor
+  moved.
