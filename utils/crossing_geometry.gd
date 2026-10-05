@@ -34,6 +34,10 @@ extends RefCounted
 ## colour darkens the root below the top, where the water wets it. Collision is the stones'
 ## own triangles.
 ##
+## Stone arch (phase 4d): CrossingArch builds it (abutments, barrel, spandrels, pier,
+## parapets in `stone`; the paved deck slab in `paving`) on the same deck_y curve, so its
+## collision, deck field and clearance are a deck's (Crossing.is_deck()).
+##
 ## Winding: clockwise seen from the front (Godot's front face, as the terrain and water).
 
 ## Plank deck (metres).
@@ -215,8 +219,9 @@ class _Mesh:
 
 ## Everything AuthoredCrossings needs for `doc`: {"crossings": [one Dictionary per crossing:
 ## "id", "kind", "style", "wood" (mesh arrays, [] for none), "stone" (mesh arrays, [] for
+## none; a stone arch's masonry too), "paving" (mesh arrays, an arch's deck slab, [] for
 ## none), "collision" (PackedVector3Array triangles), "top" (highest walking surface, map
-## Y)], "deck": the deck field (deck_field(), empty without a plank crossing)}. Pure.
+## Y)], "deck": the deck field (deck_field(), empty without a deck crossing)}. Pure.
 static func build(doc: MapDocument) -> Dictionary:
 	var out: Array = []
 	for crossing in doc.crossings:
@@ -232,6 +237,7 @@ static func build_one(doc: MapDocument, crossing: Crossing) -> Dictionary:
 		"style": crossing.style,
 		"wood": [],
 		"stone": [],
+		"paving": [],
 		"collision": PackedVector3Array(),
 		"top": NONE,
 	}
@@ -241,6 +247,14 @@ static func build_one(doc: MapDocument, crossing: Crossing) -> Dictionary:
 		var wood := _Mesh.new()
 		_plank_bridge(doc, crossing, wood)
 		parts.wood = wood.to_arrays()
+		parts.collision = deck_collision(crossing)
+		parts.top = deck_top(crossing)
+	elif crossing.is_arch():
+		var stone := _Mesh.new()
+		var paving := _Mesh.new()
+		CrossingArch.build(doc, crossing, stone, paving)
+		parts.stone = stone.to_arrays()
+		parts.paving = paving.to_arrays()
 		parts.collision = deck_collision(crossing)
 		parts.top = deck_top(crossing)
 	else:
@@ -277,7 +291,7 @@ static func deck_slope(levels: Vector3, t: float) -> float:
 	return 2.0 * (1.0 - t) * (control - levels.x) + 2.0 * t * (levels.z - control)
 
 
-## The highest point of a plank crossing's walking surface.
+## The highest point of a deck crossing's walking surface.
 static func deck_top(crossing: Crossing) -> float:
 	var top := maxf(crossing.levels.x, crossing.levels.z)
 	var control := 2.0 * crossing.levels.y - 0.5 * (crossing.levels.x + crossing.levels.z)
@@ -304,17 +318,18 @@ static func local_of(crossing: Crossing, p: Vector2) -> Vector2:
 	return Vector2(rel.dot(d), rel.dot(Vector2(-d.y, d.x)))
 
 
-## The deck field of `crossings` over `doc`'s sample grid: per sample the highest plank deck
-## walking surface over it (its nearest point along the span), within DECK_FIELD_PAD_M past
-## the deck's edges and ends, NONE elsewhere; empty when no crossing is a plank bridge. The
-## grid's ground field raises to it (GroundHeightField.raise_to_decks). Pure.
+## The deck field of `crossings` over `doc`'s sample grid: per sample the highest deck
+## walking surface (plank or arch, Crossing.is_deck()) over it (its nearest point along the
+## span), within DECK_FIELD_PAD_M past the deck's edges and ends, NONE elsewhere; empty when
+## no crossing has a deck. The grid's ground field raises to it
+## (GroundHeightField.raise_to_decks). Pure.
 static func deck_field(doc: MapDocument, crossings: Array[Crossing]) -> PackedFloat32Array:
 	var field := PackedFloat32Array()
 	var columns := doc.samples_x()
 	var rows := doc.samples_z()
 	for crossing in crossings:
 		var span := crossing.span_m()
-		if not crossing.is_plank() or span <= 0.0:
+		if not crossing.is_deck() or span <= 0.0:
 			continue
 		if field.is_empty():
 			field.resize(columns * rows)
@@ -362,8 +377,8 @@ static func clear_bounds(crossing: Crossing) -> Rect2:
 	return Rect2(crossing.start, Vector2.ZERO).expand(crossing.end).grow(reach)
 
 
-## The walking surface of a plank crossing as collision triangles: a strip across the deck's
-## width, SEGMENT_M long pieces along the arch.
+## The walking surface of a deck crossing (plank or arch) as collision triangles: a strip
+## across the deck's width, SEGMENT_M long pieces along the arch.
 static func deck_collision(crossing: Crossing) -> PackedVector3Array:
 	var faces := PackedVector3Array()
 	var span := crossing.span_m()

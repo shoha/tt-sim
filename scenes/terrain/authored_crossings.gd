@@ -1,27 +1,30 @@
 class_name AuthoredCrossings
 extends Node3D
 
-## The crossings of a map (MapDocument.crossings: plank bridges and stepping stones) as
-## nodes, at the map origin with an identity transform (the map frame, like AuthoredWater).
-## Per crossing, a Node3D `Crossing_<id>` holds its meshes (wood and stone, from
-## CrossingGeometry) and one StaticBody3D on the terrain layer (layer 1, mask 0, not ray
-## pickable, CROSSING_META = its id): tokens land on a deck or a stone as on the ground, the
-## drop indicator, measure tool and drag ruler hit it, and a Blender map's grid sampling finds
-## it. The tools that edit the ground under a crossing skip these bodies (exclude_of(): the
-## brush rays, prop bedding, a dressed map's ground sampling); a sculpt stroke marches the
-## document's heights and never sees them.
+## The crossings of a map (MapDocument.crossings: plank bridges, stepping stones and stone
+## arches) as nodes, at the map origin with an identity transform (the map frame, like
+## AuthoredWater). Per crossing, a Node3D `Crossing_<id>` holds its meshes (`Wood`, `Stones`
+## or `Arch`, from CrossingGeometry) and one StaticBody3D on the terrain layer (layer 1, mask
+## 0, not ray pickable, CROSSING_META = its id): tokens land on a deck or a stone as on the
+## ground, the drop indicator, measure tool and drag ruler hit it, and a Blender map's grid
+## sampling finds it. The tools that edit the ground under a crossing skip these bodies
+## (exclude_of(): the brush rays, prop bedding, a dressed map's ground sampling); a sculpt
+## stroke marches the document's heights and never sees them.
 ##
-## `deck_heights` (per document sample, CrossingGeometry.deck_field; empty without a plank
-## bridge) is what the grid's ground field raises to (GroundHeightField), and `version` changes
-## with every rebuild so a cached composition knows it is stale. `top_y` is the highest
-## walking surface (map Y, -INF with none), which the drag's ground cast starts above
+## `deck_heights` (per document sample, CrossingGeometry.deck_field; empty without a deck
+## crossing) is what the grid's ground field raises to (GroundHeightField), and `version`
+## changes with every rebuild so a cached composition knows it is stale. `top_y` is the
+## highest walking surface (map Y, -INF with none), which the drag's ground cast starts above
 ## (GameMap._resolve_drag_ground).
 ##
 ## Materials come from the palette per crossing style (the biome id a crossing carries,
 ## Crossing.style): wood samples the `planks` surface tinted by the biome's climate
-## (WOOD_TINTS), stones the biome's cliff rock (its cliff_surface, triplanar) with the
-## palette's moss on their upward facets in damp climates (moss_split), all shaded further by
-## the geometry's vertex colours. One material per (kind, style) is shared by
+## (WOOD_TINTS), stones and an arch's masonry the biome's cliff rock (its cliff_surface,
+## triplanar) with the palette's moss on their upward facets in damp climates (moss_split: a
+## stone's top, an arch's copings, lip and abutment caps), an arch's deck slab the biome's
+## first paved path surface (paving_surface(), UV-mapped in world metres along the deck at the
+## surface's tile), all shaded further by the geometry's vertex colours. An arch mesh carries
+## three surfaces: stone, moss, paving. One material per (kind, style) is shared by
 ## every crossing that uses it. An edit rebuilds every crossing on the main thread (refresh();
 ## about 2.4 ms per crossing, PERFORMANCE.md "Phase 4b (crossings)"); a load builds the arrays
 ## on a worker (AuthoredLoadPrep) and create() only makes the nodes. Summary:
@@ -70,6 +73,15 @@ const MOSS_FIELD_FREQ := Vector4(5.3, 3.1, 4.7, 2.3)
 const MOSS_FIELD_REACH := 1.1
 ## Steeper facets (the shoulder at the waterline, the wet root) never take moss.
 const MOSS_MIN_UP := 0.6
+## A stone arch's deck slab (P4d-1): the first of these among the style biome's path_surfaces,
+## in the biome's own order (every shipped biome has one); a style without one, or no style,
+## takes DEFAULT_PAVING_SURFACE when the palette has it, else the stone material.
+const PAVING_SURFACES: Array[String] = [
+	"flagstone", "flagstone_sandstone", "cobblestone", "stone_tiles"
+]
+const DEFAULT_PAVING_SURFACE := "flagstone"
+const PAVING_TINT := Color(1.0, 1.0, 1.0)
+const PAVING_NORMAL_SCALE := 0.7
 
 ## Per document sample, the deck's walking surface (CrossingGeometry.NONE elsewhere).
 var deck_heights: PackedFloat32Array = PackedFloat32Array()
@@ -116,15 +128,17 @@ static func of_map(root: Node3D) -> AuthoredCrossings:
 	return crossings
 
 
-## Makes the wood and stone materials of every style in `styles` (biome ids; none: the
-## defaults) now, their textures bound and their shaders built, so the first crossing of a
-## style costs its geometry alone (the Bridge tool warms them as it opens, P4b-2).
+## Makes the wood, stone and paving materials of every style in `styles` (biome ids; none:
+## the defaults) now, their textures bound and their shaders built, so the first crossing of
+## a style costs its geometry alone (the Bridge tool warms them as it opens, P4b-2).
 func warm_materials(styles: PackedStringArray) -> void:
 	var all := styles.duplicate()
 	if all.is_empty():
 		all.append("")
 	for style in all:
-		var materials: Array[Material] = [_wood_material(style), _stone_material(style)]
+		var materials: Array[Material] = [
+			_wood_material(style), _stone_material(style), _paving_material(style)
+		]
 		if moss_amount(style, _palette_root) > 0.0:
 			materials.append(_moss_material())
 		for material in materials:
@@ -206,20 +220,26 @@ func _crossing_node(parts: Dictionary) -> Node3D:
 	if not wood.is_empty():
 		node.add_child(_mesh_instance("Wood", wood, _wood_material(style)))
 	var stone: Array = parts.get("stone", [])
+	var paving: Array = parts.get("paving", [])
 	if not stone.is_empty():
+		# Stepping stones or an arch's masonry: rock and moss by facet, and an arch's paving.
 		var amount := moss_amount(style, _palette_root)
 		var split := moss_split(stone, amount) if amount > 0.0 else [stone, []]
 		var mesh := ArrayMesh.new()
-		for k in 2:
-			var part: Array = split[k]
+		var surfaces: Array = [split[0], split[1], paving]
+		for k in surfaces.size():
+			var part: Array = surfaces[k]
 			if part.is_empty():
 				continue
 			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, part)
-			mesh.surface_set_material(
-				mesh.get_surface_count() - 1, _stone_material(style) if k == 0 else _moss_material()
-			)
+			var material: Material = _stone_material(style)
+			if k == 1:
+				material = _moss_material()
+			elif k == 2:
+				material = _paving_material(style)
+			mesh.surface_set_material(mesh.get_surface_count() - 1, material)
 		var instance := MeshInstance3D.new()
-		instance.name = "Stones"
+		instance.name = "Stones" if paving.is_empty() else "Arch"
 		instance.mesh = mesh
 		node.add_child(instance)
 	var faces: PackedVector3Array = parts.get("collision", PackedVector3Array())
@@ -347,6 +367,23 @@ func _moss_material() -> Material:
 	return material
 
 
+## A stone arch's deck slab: the paving surface of its style (paving_surface()) mapped in
+## world metres (the geometry's UVs) at the surface's tile; the stone material when the
+## palette offers none.
+func _paving_material(style: String) -> Material:
+	var surface := paving_surface(style, _palette_root)
+	if surface == "":
+		return _stone_material(style)
+	var key := "paving:" + style
+	if _materials.has(key):
+		return _materials[key]
+	var material := _surface_material(surface, PAVING_TINT, PAVING_NORMAL_SCALE)
+	var tile := float(PaletteLibrary.surfaces(_palette_root).get(surface, {}).get("tile_m", 3.0))
+	material.uv1_scale = Vector3.ONE / maxf(tile, 0.1)
+	_materials[key] = material
+	return material
+
+
 ## Resource paths of every palette texture the crossings of `doc` bind (the loader requests
 ## them on background threads with the ground's, so the nodes' materials find them cached).
 static func texture_paths(
@@ -362,6 +399,10 @@ static func texture_paths(
 		names[stone_surface(crossing.style, root)] = true
 		if moss_amount(crossing.style, root) > 0.0:
 			names[MOSS_SURFACE] = true
+		if crossing.is_arch():
+			var paving := paving_surface(crossing.style, root)
+			if paving != "":
+				names[paving] = true
 	for surface_name in names:
 		var surface: Dictionary = surfaces.get(surface_name, {})
 		for key in ["albedo", "normal", "orm"]:
@@ -379,21 +420,34 @@ static func stone_surface(style: String, root: String = PaletteLibrary.DEFAULT_R
 	return surface if PaletteLibrary.surfaces(root).has(surface) else DEFAULT_STONE_SURFACE
 
 
+## The palette rock surface a stone arch's deck of style `style` (a biome id, or "") is paved
+## with: the first of PAVING_SURFACES among the biome's path_surfaces in the biome's order,
+## else DEFAULT_PAVING_SURFACE when the palette has it, else "" (the stone material).
+static func paving_surface(style: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> String:
+	var surfaces := PaletteLibrary.surfaces(root)
+	if style != "":
+		for surface_name in PaletteLibrary.path_surfaces(style, root):
+			if PAVING_SURFACES.has(surface_name) and surfaces.has(surface_name):
+				return surface_name
+	return DEFAULT_PAVING_SURFACE if surfaces.has(DEFAULT_PAVING_SURFACE) else ""
+
+
 ## The palette surfaces a crossing of any kind in any of the styles `styles` (biome ids) binds
-## (the planks, each style's stone rock, and the moss where its stones grow it), for warming
-## them before a first placement.
+## (the planks, each style's stone rock and paving, and the moss where its stones grow it),
+## for warming them before a first placement.
 static func surfaces_for_styles(
 	styles: PackedStringArray, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> PackedStringArray:
 	var out := PackedStringArray([WOOD_SURFACE])
-	for style in styles:
-		var surface := stone_surface(style, root)
-		if not out.has(surface):
-			out.append(surface)
+	var all := styles.duplicate()
+	if all.is_empty():
+		all.append("")
+	for style in all:
+		for surface in [stone_surface(style, root), paving_surface(style, root)]:
+			if surface != "" and not out.has(surface):
+				out.append(surface)
 		if moss_amount(style, root) > 0.0 and not out.has(MOSS_SURFACE):
 			out.append(MOSS_SURFACE)
-	if styles.is_empty():
-		out.append(DEFAULT_STONE_SURFACE)
 	return out
 
 

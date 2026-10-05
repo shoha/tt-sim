@@ -287,7 +287,7 @@ func draw(
 
 
 static func _kind_tint(crossing_kind: int) -> Color:
-	return TINT if crossing_kind == Crossing.Kind.PLANK else STONE_TINT
+	return STONE_TINT if crossing_kind == Crossing.Kind.STONES else TINT
 
 
 ## A crossing's ghost (map frame) on `canvas`: a plank deck's outline along its arch, filled
@@ -306,7 +306,7 @@ static func draw_crossing(
 		return
 	var screen := func(local: Vector3) -> Vector2:
 		return camera.unproject_position(editor.to_world(local))
-	if crossing.is_plank():
+	if crossing.is_deck():
 		var half := crossing.width_m * 0.5
 		var pieces := maxi(2, ceili(span / OUTLINE_STEP_M))
 		var left := PackedVector2Array()

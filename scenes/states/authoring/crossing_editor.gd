@@ -308,4 +308,9 @@ static func _area_of(touched: Array[Crossing]) -> Rect2:
 
 
 static func _label(crossing: Crossing) -> String:
-	return "bridge" if crossing.is_plank() else "stepping stones"
+	match crossing.kind:
+		Crossing.Kind.STONES:
+			return "stepping stones"
+		Crossing.Kind.ARCH:
+			return "stone arch"
+	return "bridge"
