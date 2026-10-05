@@ -159,6 +159,78 @@ func test_a_line_drawn_past_the_edge_is_split_and_kept_on_the_river() -> void:
 	)
 
 
+## The P6-2 perf build's ankle stream (run 1), released 0.36 m inside the right edge of a
+## 150 ft map: the render driver's Catmull-Rom through its points, ten pieces per span.
+func _perf_ankle_curve() -> PackedVector2Array:
+	var points := [Vector2(-8, -14), Vector2(4, -11), Vector2(14, -9), Vector2(22.5, -6)]
+	var out := PackedVector2Array()
+	var n := points.size()
+	for k in n - 1:
+		var p0: Vector2 = points[maxi(k - 1, 0)]
+		var p1: Vector2 = points[k]
+		var p2: Vector2 = points[k + 1]
+		var p3: Vector2 = points[mini(k + 2, n - 1)]
+		for s in 10:
+			var t := s / 10.0
+			out.append(
+				(
+					0.5
+					* (
+						2.0 * p1
+						+ (p2 - p0) * t
+						+ (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
+						+ (3.0 * p1 - p0 - 3.0 * p2 + p3) * t * t * t
+					)
+				)
+			)
+	out.append(points[-1])
+	return out
+
+
+func _along(line: PackedVector2Array, d: float) -> Vector2:
+	var left := d
+	for k in range(1, line.size()):
+		var seg := line[k - 1].distance_to(line[k])
+		if left <= seg or k == line.size() - 1:
+			return line[k - 1].lerp(line[k], clampf(left / maxf(seg, 1e-9), 0.0, 1.0))
+		left -= seg
+	return line[-1]
+
+
+func test_a_stroke_released_near_the_edge_ends_there_and_exits() -> void:
+	var curve := _perf_ankle_curve()
+	var total := WaterBrush.line_length(curve)
+	var short_before := 0
+	# The stroke at 6 m/s and 60 Hz (0.1 m a frame), at every phase of the frames against its
+	# start; the release frame sets the pointer on the end point but tracks none (the driver).
+	for phase in 34:
+		var doc := MapDocument.create_flat(Vector2i(30, 30), "grass", "test", 1234)
+		var half := _half(doc)
+		assert_almost_eq(half.x - 22.5, 0.36, 1e-3, "released 0.36 m inside the edge")
+		var brush := WaterBrush.new()
+		brush.depth = WaterBody.Depth.ANKLE
+		brush.drawing = true
+		var d := phase * 0.003
+		brush.track(null, Vector3(curve[0].x, 0.0, curve[0].y), 0.6)
+		while d < total:
+			var p := _along(curve, d)
+			brush.track(null, Vector3(p.x, 0.0, p.y), 0.6)
+			d += 0.1
+		var old := WaterBrush.smooth_line(brush.river)
+		if RiverExits.edge_distance(old[-1], half) > WaterCarve.EDGE_MARGIN_M:
+			short_before += 1
+		var line := brush.carve_line()
+		assert_lt(RiverExits.edge_distance(line[-1], half), 0.47, "the line ends at the release")
+		var split := RiverExits.split_line(
+			line, PackedFloat32Array([0.6]), half, AuthoredTerrain.skirt_width_m()
+		)
+		var bodies := WaterEdit.plan_river(doc, split.inside, split.widths, WaterBody.Depth.ANKLE)
+		RiverExits.attach(bodies, split)
+		doc.water_bodies = WaterEdit.with_bodies(doc, bodies)
+		assert_eq(RiverExits.exits(doc).size(), 1, "an exit at phase %d" % phase)
+	assert_gt(short_before, 0, "decimation alone dropped the end over the margin at some phase")
+
+
 func test_a_drawn_course_round_trips_through_the_document() -> void:
 	var doc := _edge_doc()
 	var half := _half(doc)

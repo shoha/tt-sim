@@ -8,7 +8,8 @@ extends RefCounted
 ## it gives. What the water does to the map is WaterEditor's.
 ##
 ## River: the press starts the line; every frame the pointer's ground point is recorded once
-## it lies RIVER_DECIMATE_M from the last (decimate()); the line is Chaikin-smoothed
+## it lies RIVER_DECIMATE_M from the last (decimate()), and the line ends where the pointer
+## was let go (with_tip()); the line is Chaikin-smoothed
 ## (smooth_line()) for the preview and the carve; the release carves it
 ## (WaterEditor.carve_river, first point upstream), and the ribbon stays, faint, until the
 ## carve (on a worker) lands. The ribbon's gradient and chevrons show the way the water will
@@ -67,6 +68,9 @@ var pond_dabs := PackedVector3Array()
 var _refusal: String = ""
 ## The height of the last point a river line recorded (world).
 var _line_y: float = 0.0
+## The pointer's last ground point while a river is drawn (world XZ; Vector2.INF: none): the
+## release point, which the line ends at whether or not decimation recorded it.
+var _tip: Vector2 = Vector2.INF
 
 
 ## The river half-width or pond brush radius for brush size `radius` and depth class
@@ -94,6 +98,31 @@ static func smooth_line(points: PackedVector2Array) -> PackedVector2Array:
 	var widths := PackedFloat32Array()
 	widths.resize(points.size())
 	return WaterGeometry.chaikin(points, widths, 2)[0]
+
+
+## The recorded line `points` ended at the pointer's last point `tip` (Vector2.INF: none), as
+## the preview draws it: decimation records a point only `spacing` from the last, so the
+## release point itself was usually dropped, up to `spacing` plus a frame's travel short of
+## where the author let go (P6-3: an ankle stream released 0.36 m inside the map edge ended
+## over 1 m inside it and got no exit). A tip closer than half the spacing replaces the last
+## point instead of crowding it. Pure.
+static func with_tip(
+	points: PackedVector2Array, tip: Vector2, spacing: float
+) -> PackedVector2Array:
+	var out := points.duplicate()
+	if tip == Vector2.INF or out.is_empty() or out[-1].distance_to(tip) < 1e-4:
+		return out
+	if out.size() >= 2 and out[-1].distance_to(tip) < spacing * 0.5:
+		out[-1] = tip
+	else:
+		out.append(tip)
+	return out
+
+
+## The line a release carves now: the recorded points ended at the pointer (with_tip()),
+## smoothed (smooth_line()).
+func carve_line() -> PackedVector2Array:
+	return smooth_line(with_tip(river, _tip, RIVER_DECIMATE_M))
 
 
 ## The line the ribbon previews for a river drawn along `line` (world XZ): reversed when the
@@ -176,6 +205,7 @@ func begin(editor: AuthoringEditor, erase: bool, hit: Vector3) -> bool:
 		return true
 	drawing = true
 	river = decimate(PackedVector2Array(), Vector2(hit.x, hit.z), RIVER_DECIMATE_M)
+	_tip = Vector2(hit.x, hit.z)
 	held = PackedVector2Array()
 	return false
 
@@ -193,6 +223,7 @@ func track(editor: AuthoringEditor, hit: Vector3, half_width: float) -> void:
 	if drawing and hit != Vector3.INF:
 		var spacing := maxf(RIVER_DECIMATE_M, half_width * WIDTH_DECIMATE)
 		river = decimate(river, Vector2(hit.x, hit.z), spacing)
+		_tip = Vector2(hit.x, hit.z)
 		_line_y = hit.y
 	if not held.is_empty() and (editor == null or not editor.water.is_working()):
 		held = PackedVector2Array()
@@ -213,8 +244,9 @@ func hit_past_edge(origin: Vector3, direction: Vector3) -> Vector3:
 func carve(editor: AuthoringEditor, half_width: float) -> bool:
 	_refusal = ""
 	drawing = false
-	var line := smooth_line(river)
+	var line := carve_line()
 	river = PackedVector2Array()
+	_tip = Vector2.INF
 	if line_length(line) < RIVER_MIN_LENGTH_M:
 		return true
 	var id := editor.water.carve_river(
@@ -249,6 +281,7 @@ func record_dab(hit: Vector3, dab_radius: float) -> void:
 func reset() -> void:
 	drawing = false
 	river = PackedVector2Array()
+	_tip = Vector2.INF
 	pond_dabs = PackedVector3Array()
 
 
