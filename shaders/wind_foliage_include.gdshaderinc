@@ -109,6 +109,30 @@ varying float local_vertex_y;
 // through map geometry. See occlusion_fade_include.gdshaderinc.
 #include "res://shaders/occlusion_fade_include.gdshaderinc"
 
+// Close-zoom canopy fade (CanopyFade, scenes/states/playing/canopy_fade.gd). Below the
+// home zoom, the crowns standing in front of the ground at the view centre dissolve over a
+// soft round clearing around the centre of the screen, so zooming in reveals the ground
+// and the tokens under a forest while the trees at the frame's edges stay whole and frame
+// it. In the clearing a tree keeps its trunk: leaf cards drop out card by card and limbs
+// limb by limb. Off at the home zoom and above.
+// canopy_part: 0 takes no part (grass, any non-tree), 1 bark (its limbs fade, the trunk,
+// whose authored flutter weight is 0, never does), 2 leaf cards. Set by WindFoliage.
+uniform int canopy_part = 0;
+// xyz: the ground point at the view centre (world); w: strength, 0 (off) to 1.
+global uniform vec4 canopy_fade_centre;
+// xyz: the camera's back axis (world, unit); w: the camera's orthographic size.
+global uniform vec4 canopy_fade_view;
+// Metres in front of the view-centre ground (along the view axis) where the fade starts,
+// and the band over which it grows, per unit of orthographic size.
+const float CANOPY_FADE_START = 0.5;
+const float CANOPY_FADE_BAND = 0.35;
+// The clearing's radius on screen, per unit of orthographic size (the frame is one size
+// tall): fully clear inside the inner radius, untouched past the outer one.
+const float CANOPY_FADE_INNER = 0.3;
+const float CANOPY_FADE_OUTER = 0.75;
+// Bark flutter weight above which a fragment belongs to a limb rather than the trunk.
+const float CANOPY_LIMB_FLUTTER = 0.04;
+
 
 // Gust envelope in 0..1 at a world XZ position: two sines travelling along the wind
 // direction, softly thresholded so gusts arrive as bursts with calm between them
@@ -183,11 +207,57 @@ vec3 two_sided_foliage_normal(vec3 normal, bool front_facing) {
 }
 
 
+// The close-zoom canopy fade (see canopy_part above): discards this fragment when its
+// dissolve key falls under the fade there. The fade is the strength times two soft
+// ramps: depth, growing across a band in front of the view-centre ground (measured along
+// the camera's view axis in world space), and the clearing, falling off with the
+// fragment's distance from the centre ray on screen. A pass whose view axis is not the
+// camera's (the shadow pass, whose VIEW_MATRIX is the light's) is left alone, so a
+// dissolving crown keeps its dappled shadow on the ground and the light does not change
+// as one zooms (a sun exactly behind the camera would match and lose those shadows; the
+// game's suns never sit there).
+// The key is the authored phase (COLOR.b: constant across a leaf card, shared along a
+// limb), so whole cards and whole limbs drop out one by one, bold shapes rather than a
+// stipple; an asset without authored weights falls back to the occlusion fade's Bayer
+// dither on its cards and keeps its bark. `wind` is the fragment's COLOR.gb.
+void apply_canopy_fade(
+	vec3 vertex_view, mat4 inv_view_matrix, vec2 wind, vec2 frag_coord
+) {
+	if (canopy_part == 0 || canopy_fade_centre.w <= 0.0) {
+		return;
+	}
+	// The trunk (authored flutter 0) always stays, on either surface: a Blender map's baked
+	// scatter counts its bark as cards too. Bark without authored weights stays whole.
+	if (use_vertex_wind ? wind.x < CANOPY_LIMB_FLUTTER : canopy_part == 1) {
+		return;
+	}
+	vec3 back = canopy_fade_view.xyz;
+	if (dot(inv_view_matrix[2].xyz, back) < 0.999) {
+		return;
+	}
+	float size = canopy_fade_view.w;
+	vec3 offset = (inv_view_matrix * vec4(vertex_view, 1.0)).xyz - canopy_fade_centre.xyz;
+	float ahead = dot(offset, back);
+	float across = length(offset - back * ahead);
+	float fade = canopy_fade_centre.w
+		* smoothstep(CANOPY_FADE_START, CANOPY_FADE_START + CANOPY_FADE_BAND * size, ahead)
+		* (1.0 - smoothstep(CANOPY_FADE_INNER * size, CANOPY_FADE_OUTER * size, across));
+	if (fade <= 0.0) {
+		return;
+	}
+	float key = use_vertex_wind ? fract(wind.y * 13.37 + 0.31) : bayer16(frag_coord);
+	if (key < fade) {
+		discard;
+	}
+}
+
+
 // Computes PBR and occlusion-fade fragment values. Uses out-parameters to pass
 // results back to the caller (which then assigns them to built-ins) -- a workaround
 // for Godot's limitation that output built-ins can only be assigned directly inside
 // fragment(), not from a called function. Samples textures, unpacks ORM, applies
-// normal mapping, and calls apply_occlusion_fade() to determine final alpha values.
+// normal mapping, and calls apply_canopy_fade() (wind: the fragment's COLOR.gb) and
+// apply_occlusion_fade() to determine final alpha values.
 // Caller is responsible for assigning the out-parameters to their corresponding
 // built-ins and setting variant-specific ALPHA_SCISSOR_THRESHOLD/antialiasing values.
 void apply_wind_foliage_pbr(
@@ -199,6 +269,7 @@ void apply_wind_foliage_pbr(
 	vec2 frag_coord,
 	vec2 viewport_size,
 	float vertex_local_y,
+	vec2 wind,
 	out vec3 out_albedo,
 	out float out_alpha,
 	out float out_ao,
@@ -206,6 +277,7 @@ void apply_wind_foliage_pbr(
 	out float out_metallic,
 	out vec3 out_normal_map
 ) {
+	apply_canopy_fade(vertex_view, inv_view_matrix, wind, frag_coord);
 	vec4 albedo_sample = texture(albedo_texture, uv);
 	out_albedo = albedo_sample.rgb;
 	out_alpha = albedo_sample.a;

@@ -187,6 +187,42 @@ func test_apply_material_sets_mesh_height_for_every_category() -> void:
 	assert_almost_eq(material.get_shader_parameter("mesh_height"), 2.0, 0.0001)
 
 
+func test_canopy_part_tells_leaf_cards_from_bark_by_transparency() -> void:
+	var bark := _make_orm_material(Color.BROWN)
+	var leaves := _make_orm_material(Color.GREEN)
+	leaves.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	assert_eq(WindFoliage.canopy_part(bark), WindFoliage.CANOPY_BARK)
+	assert_eq(WindFoliage.canopy_part(leaves), WindFoliage.CANOPY_CARD)
+	var blended := _make_orm_material(Color.GREEN)
+	blended.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	assert_eq(WindFoliage.canopy_part(blended), WindFoliage.CANOPY_CARD)
+
+
+func test_apply_material_sets_the_canopy_part_on_trees_only() -> void:
+	# A treecube tree: opaque bark on surface 0, cutout leaf cards on surface 1.
+	var leaves := _make_orm_material(Color.GREEN)
+	leaves.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	var tree := _make_two_surface_mesh(_make_orm_material(Color.BROWN), leaves)
+	WindFoliage.apply_material(tree, "tree")
+	var bark_part: Variant = (tree.surface_get_material(0) as ShaderMaterial).get_shader_parameter(
+		"canopy_part"
+	)
+	var card_part: Variant = (tree.surface_get_material(1) as ShaderMaterial).get_shader_parameter(
+		"canopy_part"
+	)
+	assert_eq(bark_part, WindFoliage.CANOPY_BARK)
+	assert_eq(card_part, WindFoliage.CANOPY_CARD)
+
+	var grass_leaves := _make_orm_material(Color.GREEN)
+	grass_leaves.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	var grass := _make_two_surface_mesh(_make_orm_material(Color.GREEN), grass_leaves)
+	WindFoliage.apply_material(grass, "grass")
+	var grass_part: Variant = (
+		(grass.surface_get_material(1) as ShaderMaterial).get_shader_parameter("canopy_part")
+	)
+	assert_true(grass_part == null or int(grass_part) == 0, "grass never takes part")
+
+
 func test_surface_has_vertex_colors_reads_the_surface_format() -> void:
 	var colored := _make_colored_surface_mesh(_make_orm_material(Color.GREEN))
 	assert_true(WindFoliage.surface_has_vertex_colors(colored, 0))

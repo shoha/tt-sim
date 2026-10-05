@@ -150,6 +150,14 @@ occlusion_token_count={
 "type": "int",
 "value": 0
 }
+canopy_fade_centre={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+canopy_fade_view={
+"type": "vec4",
+"value": Vector4(0, 0, 1, 1)
+}
 
 [steam]
 

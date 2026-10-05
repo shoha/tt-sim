@@ -394,6 +394,20 @@ ms to a warm load, all on a worker (about 280 ms of exit geometry each, the wors
 unchanged), 3 MB of memory, and about 2 ms of main-thread work to a water edit's swap;
 `SkirtBackdrop` is 3.6 microseconds a frame.
 
+Trees at close zoom (Polish, 2026-10-05; the user's "Future ideas" note "the camera can cut
+into tree canopies", done): render job `pol_trees` (temperate forest and boreal taiga, zoom 20
+down to 2, play with tokens, the Blender map Deciduous clusters). The cause was both: the
+camera's near plane, brought in with the zoom, sliced the canopies at the bottom of the frame
+flat, and with the slice removed the canopies in front of the view centre filled the frame.
+Below the home zoom the camera now holds the home zoom's near-plane distance (same frame), and
+the canopies in front of the view-centre ground dissolve over a soft round clearing in the
+middle of the screen, leaf card by leaf card and limb by limb, keeping every trunk and the
+dappled shadows; trees at the frame's edges stay whole. The home zoom and above are unchanged,
+including the hard slice of the tallest trees at the bottom edge of the home frame (left as
+is, see `PERFORMANCE.md` "Close-zoom canopy fade"). Water, the grid, the token fade and the
+Thin brush's ring fade read the same at close zoom. About +0.05 to +0.1 ms GPU at zoom 6 in a
+grove, nothing at home.
+
 ## Open work
 
 Phases 1-3 were released as v0.1.28 (2026-09-27); phases 4 and 4b (water, crossings, the
@@ -696,12 +710,8 @@ Follow-ups:
 
 Broader than map authoring; recorded here so they are not lost.
 
-- **Tree clipping when zooming in.** At close zoom the camera can cut into tree canopies.
-  Candidate: extend the occlusion-fade (obstruction) shader, which already dissolves
-  canopies over tokens and under the brush ring, to also fade canopy fragments close to the
-  camera's near plane or within a distance of the view ray, so zooming in reveals the
-  ground instead of slicing a tree. Start by confirming whether the cut is the near plane
-  (orthographic camera offset) or canopies simply filling the view.
+- **Tree clipping when zooming in.** Done (Polish, 2026-10-05): see Verification status,
+  "Trees at close zoom".
 - **Player avatar tokens in the house style.** Let users create avatar models for their own
   player tokens that match the painted style: light on detail, heavy on customisability
   (body plan, proportions, palette, clothing and gear pieces, a few expressive features),
