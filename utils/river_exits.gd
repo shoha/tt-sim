@@ -22,11 +22,14 @@ enum End { UP, DOWN }
 ## resampled no closer than BEYOND_SPACING_M.
 const BEYOND_SPACING_M := 2.0
 ## The derived continuation: this long, a point every AUTO_STEP_M, turning by up to
-## AUTO_BEND_RAD (at least AUTO_MIN_BEND_RAD) over its length.
+## AUTO_BEND_RAD (at least AUTO_MIN_BEND_RAD) over its first half, then back the other way by
+## AUTO_SECOND_BEND (a share, picked between its two values, of the first bend) over the
+## second, as a hand-drawn river meanders instead of running on as a straight canal.
 const AUTO_LENGTH_M := 36.0
 const AUTO_STEP_M := 3.0
 const AUTO_BEND_RAD := 0.6
 const AUTO_MIN_BEND_RAD := 0.2
+const AUTO_SECOND_BEND := Vector2(0.45, 0.8)
 ## A course past the edge always heads out of the map at least this much (the cosine of its
 ## angle to the edge's outward normal).
 const MIN_OUTWARD := 0.45
@@ -129,28 +132,42 @@ static func heading(body: WaterBody, end: End) -> Vector2:
 
 ## The derived course past the edge of river `body` at `end` (the points after its end point,
 ## see the header): AUTO_LENGTH_M along its heading, turned out of the map to at least
-## MIN_OUTWARD, bending smoothly by an angle the map seed and the body pick. Deterministic.
+## MIN_OUTWARD, bending smoothly one way over its first half by an angle the map seed and the
+## body pick, then back the other way, more gently, over its second (a meander).
+## Deterministic.
 static func continuation(doc: MapDocument, body: WaterBody, end: End) -> PackedVector2Array:
 	var half := doc.extent_m() * 0.5
 	var start: Vector2 = body.points[0] if end == End.UP else body.points[-1]
 	var normal := edge_normal(start, half)
 	var dir := outward(heading(body, end), normal)
-	var pick := (
-		float(TerrainRules.pcg2d_x(doc.map_seed & 0xFFFFFFFF, body.id * 2 + int(end)))
-		/ 4294967295.0
-	)
+	var seed_value := doc.map_seed & 0xFFFFFFFF
+	var pick := _pick(seed_value, body.id * 2 + int(end))
 	var side := -1.0 if pick < 0.5 else 1.0
 	var bend := side * lerpf(AUTO_MIN_BEND_RAD, AUTO_BEND_RAD, absf(pick - 0.5) * 2.0)
+	var share := _pick(seed_value, body.id * 2 + int(end) + 4096)
+	var back := -bend * lerpf(AUTO_SECOND_BEND.x, AUTO_SECOND_BEND.y, share)
 	var out := PackedVector2Array()
 	var at := start
 	var steps := roundi(AUTO_LENGTH_M / AUTO_STEP_M)
 	for i in range(1, steps + 1):
 		var s := (i - 0.5) * AUTO_STEP_M
-		var t := clampf(s / AUTO_LENGTH_M, 0.0, 1.0)
-		var step_dir := outward(dir.rotated(bend * t * t * (3.0 - 2.0 * t)), normal)
+		var first := _ease(s / (AUTO_LENGTH_M * 0.5))
+		var second := _ease((s - AUTO_LENGTH_M * 0.5) / (AUTO_LENGTH_M * 0.5))
+		var step_dir := outward(dir.rotated(bend * first + back * second), normal)
 		at += step_dir * AUTO_STEP_M
 		out.append(at)
 	return out
+
+
+## A value in [0, 1] hashed from the map seed and `key`.
+static func _pick(seed_value: int, key: int) -> float:
+	return float(TerrainRules.pcg2d_x(seed_value, key)) / 4294967295.0
+
+
+## Smoothstep of `t` clamped to [0, 1].
+static func _ease(t: float) -> float:
+	var c := clampf(t, 0.0, 1.0)
+	return c * c * (3.0 - 2.0 * c)
 
 
 ## `course` (from a river's end outward) carried on along its last heading, out of the map by

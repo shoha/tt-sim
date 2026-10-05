@@ -99,10 +99,14 @@ func test_the_continuation_is_deterministic_from_the_seed() -> void:
 	var bends := {}
 	for seed_value in [1, 2, 3, 4, 5, 6]:
 		var course := RiverExits.exits(_edge_doc(seed_value))[0].course as PackedVector2Array
-		var turn := (course[1] - course[0]).angle_to(course[-1] - course[-2])
+		# Segment 7 is past the first bend; segment 12 ends the continuation.
+		var turn := (course[1] - course[0]).angle_to(course[7] - course[6])
+		var back := (course[7] - course[6]).angle_to(course[12] - course[11])
 		assert_between(
-			absf(turn), RiverExits.AUTO_MIN_BEND_RAD - 0.05, RiverExits.AUTO_BEND_RAD + 0.05
+			absf(turn), RiverExits.AUTO_MIN_BEND_RAD - 0.1, RiverExits.AUTO_BEND_RAD + 0.05
 		)
+		assert_lt(turn * back, 0.0, "a second bend back the other way (a meander)")
+		assert_lt(absf(back), absf(turn) * (RiverExits.AUTO_SECOND_BEND.y + 0.05), "and gentler")
 		bends[signf(turn)] = true
 	assert_eq(bends.size(), 2, "the seed picks the side of the bend")
 

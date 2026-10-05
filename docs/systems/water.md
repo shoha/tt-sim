@@ -433,8 +433,10 @@ tokens past the edge. The probe that chose the rendering is P6-0
   `splines.json` (`MapWaterIO`; optional, older builds ignore them). An end with none gets a
   derived continuation (`RiverExits.continuation`): 36 m along the heading of the river's
   smoothed course at its end (turned out of the map to at least 0.45 of the edge's normal
-  when it met the edge at a glancing angle) with one smooth bend of 0.2 to 0.6 rad whose side
-  and size come from the map seed and the body id. Every course, drawn or derived, is then
+  when it met the edge at a glancing angle) with one smooth bend of 0.2 to 0.6 rad over its
+  first half and a gentler one back the other way (0.45 to 0.8 of the first) over its second,
+  a meander like a hand-drawn river's (a single bend read as a straight canal on the Valley),
+  their sides and sizes from the map seed and the body id. Every course, drawn or derived, is then
   carried on along its last heading until it is 43.7 m past the map, where the skirt has
   faded however far its noise stretches the fade (`carried_on`): a drawn course that stopped
   short ended in the open while the skirt still showed. Derived, never saved.
