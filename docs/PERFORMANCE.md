@@ -2512,3 +2512,31 @@ lands about 0.6 s sooner, inside the stroke's other end-of-stroke work rather th
 which is the likely reason; not profiled. The exit geometry after P6-3's look fixes: patch
 27,625 and ribbon 1,179 vertices for the two exits (P6-2: 28,000 and 1,098; the ribbon runs
 on to a fade of 0). A load still builds every exit (the cache helps refreshes only).
+
+### Ponds past the edge (P6-4, 2026-10-05)
+
+`jobs/p6_perf_build.json` now ends with a third map, `_p6_perf_ponds`: `_p6_perf_exits`'s two
+rivers and a wide deep pond painted against the near edge (radius 4 m, a 14.5 m wet span; its
+lobe, by the seed, an open lake: 50.9 m). `jobs/p6_perf_ponds_play.json` (new, about 2.5
+minutes, the pinned `override.cfg`, which it deletes) loads `_p6_perf_exits` and
+`_p6_perf_ponds` in turn and measures both at zoom 20 panned to the pond's edge (look_at
+-13.5, 27). `gpu_state` 38-39 % P8 255 MHz at each start, 85-96 % P0 1665-1950 MHz at the ends.
+Measured before the lobe's end got its own rounding (P6-4's last look fix, which changes only
+the half-width table; not re-run).
+
+- **Build (worker):** `skirt_parts` 866-872 ms against 611 ms for the two rivers alone, so
+  **about 260 ms per pond exit**, a river exit's cost (the patch is the cost: 12,625 more patch
+  vertices, 986 more water vertices). Cached with nothing changed: 57.9 ms (51.4 without the
+  pond), 0 pieces built; `cache_check` 0 of 5 across threads. `apply_river_exits` 3.2 ms
+  (2.2). Painting the pond to the edge: worst frame 25.4 ms over 1,389 (the rivers' strokes
+  24-30 ms in the same run), its refresh's worker build 709 ms (the new exit built), the swap
+  22.9 ms.
+- **Load:** warm, three interleaved rounds, 1,665 / 1,681 / 1,687 ms without the pond and
+  1,901 / 1,883 / 1,955 ms with it: **about +235 ms, on the worker; the worst frame does not
+  move** (198-208 against 203-206 ms). Static memory +2.7 MB, vertex buffers +0.7 MB.
+- **Draw at the edge:** zoom 20 on the pond's edge, GPU median, two loads of each map in turn:
+  2.738 / 2.846 ms without the pond, 3.016 / 3.035 ms with it (the view's own draw count fell,
+  299 to 258, where the pond replaced plants): **about +0.23 ms**. The pond's water shown /
+  hidden / shown / hidden: 3.038 / 2.907 / 3.068 / 2.910 ms, so the water past the edge (the
+  one ribbon surface, the rivers' water in it) is about 0.14 ms of it; the whole skirt hidden
+  1.556 ms.

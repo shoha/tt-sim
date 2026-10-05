@@ -505,10 +505,49 @@ tokens past the edge. The probe that chose the rendering is P6-0
   away as a run-out sheet, which drew a step against the ribbon. Its flow UVs are the flow map's texels
   just inside the edge at the mouth (the border texels are still water), across the channel by
   the offset, so the edge's flow carries on; in a bend the ripples keep the edge's direction.
+- **Ponds and lakes** (P6-4, `PondExits`): a pond painted against the edge was cut off there,
+  the look rivers had. An exit is a run of at least two boundary samples on one side of the
+  map that are in a pond's mask and wet (under its level): the wet span on the edge. Its basin
+  continues as a lobe, derived, never saved. Across, it starts as the edge's own waterline
+  offsets either side of the span's middle (the cross-section read on the edge as a river's
+  is, `RiverExitMesh.section`); each side runs on along the shoreline's direction at the edge
+  (the pond mask's run 2 m inside against its run on the edge, clamped to -0.6..0.8 per metre,
+  followed for about 4 m and saturating at 40 % narrower or 60 % wider: a converging shore
+  carried on straight met its other side in a point, which the narrow pond's first capture
+  showed as a teardrop) and then closes into a rounded end over its last 0.7 half-spans (the
+  width times sqrt(1 - t^2) there; an ellipse over the whole length drew the narrow cove's end
+  as a point). The length runs from the half-span toward the skirt's fade
+  (24 m) by (half-span / 8 m) squared times a seeded factor of 0.5 to 1.5 (map seed, pond id,
+  side, run): a narrow touch makes a small cove, a wide one a long bay, and when the share
+  reaches 1 an open lake running on past the fade (43.7 m plus the half-span). The first rule,
+  1 to 2.5 half-spans, ended the look map's 15 m-wide lake as a 10.7 m cove that never reached
+  the haze. The shore
+  wobbles by up to 15 % with the seeded value noise (TerrainRules.value_noise) every 7 m, none
+  on the edge. Each side stays in its own side's sector of the skirt (the diagonal from the
+  corner), so a pond across a corner gets two lobes that meet at the diagonal. In the lobe the
+  ground is the edge's cross-section scaled to the lobe's width there, its depth under the
+  level shallowing toward the end (times sqrt(1 - (s / length)^2)); past the shore, the edge's banks by the
+  distance to the shore (the half-width table searched within the bank's reach), eased to the
+  skirt over the outer 1.2 m; lowered with the skirt and eased out with its fade as a river's
+  channel is, never above the skirt. It draws in the rivers' patch (the windows, rings, wet
+  dressing and normals are theirs; a window may hold a pond and a river). The water is a grid
+  over the lobe at the pond's level (lowered with the skirt), its rows every 0.5 m across the
+  lobe's width plus the ribbon's 0.6 m margin, a vertex about every metre across (9 to 65), the
+  first row on the edge at the level exactly (the in-map pond's water is flat at its level out
+  to the boundary samples, so the two meet bit for bit), the last the first past which the
+  fade is 0 everywhere or past the lobe's end; it is part of the ribbon surface, with the same
+  material, fade and fog. **A pond and a river leaving together:** the river's water is cut
+  back where the pond's covers it (`PondExits.clip`: each ribbon triangle clipped against the
+  pond water's outline, heights and flow UVs interpolated), so no two water surfaces overlap.
+  **Cache:** a pond's water is a piece keyed on the lobe (its id and level through the span,
+  the mouth, the cross-section, the half-width tables) and the fade; the window key adds the
+  lobe's wet span, length and tables to the boundary heights it already hashes; a river's
+  water adds the outlines of the ponds that cut it. An edit away rebuilds nothing.
 - **Where it is built:** with the skirt, on AuthoredLoadPrep's worker at load
   (`RiverExitMesh.skirt_parts`) and on AuthoredWater's refresh worker after any water edit,
   which hands the skirt to `AuthoredTerrain.apply_river_exits()` (a rebuild of the skirt mesh
-  keeping its material; nothing when no exit was or is there). The skirt's vertex mirror for
+  keeping its material; nothing when no exit was or is there; `RiverExitMesh.has_exits` counts
+  a pond on the edge). The skirt's vertex mirror for
   in-place edge updates comes with the parts (`TerrainMeshBuilder.skirt_mirror_of`, read off
   the built arrays on the worker): made from the document on the first edge edit after every
   rebuild, it cost a stroke carved to the edge 34 ms of its ground step (P6-3). **The cache**

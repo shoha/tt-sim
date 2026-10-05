@@ -48,7 +48,9 @@ other committed home.
   on past it into the haze: its channel is carved into the ground skirt along its continued
   course (the one the author drew past the edge, else a derived meander) with the real water
   flowing in it, both fading into the backdrop with the skirt. Scenery only: no collision,
-  grid or tokens past the edge. Ponds and lakes touching the edge do not continue.
+  grid or tokens past the edge. A pond or lake painted against the edge continues too (P6-4):
+  its basin runs on as a rounded lobe with the water at its level in it, a cove at a narrow
+  touch, a bay or an open lake into the haze at a wide one.
 
 ## Where each system is documented
 
@@ -488,10 +490,14 @@ skirt's own law); every derived course visibly meanders (bends of 0.4 to 0.7 rad
 frame of a stroke carved to the edge (the skirt's vertex mirror, now built on the worker:
 26-31 ms); the exits rebuilt on every water edit (cached per window and per mouth: 98-105 ms
 of worker time for an edit away from them, was 669-704); and a sculpt at an exit, whose
-stroke-end water refresh now rebuilds that exit alone. Still open:
-- Ponds and lakes touching the edge do not continue (rivers only).
-- A warm load with exits still builds every exit (about 280 ms of worker time each, the load
-  screen waits for it; no frame); the cache only helps refreshes.
+stroke-end water refresh now rebuilds that exit alone. P6-4 (2026-10-05) closed ponds and lakes
+touching the edge: they continue past it as a basin lobe with their water (`systems/water.md`
+"Past the map edge", Ponds). Still open:
+- A warm load with exits still builds every exit (about 280 ms of worker time per river exit,
+  260 per pond exit, the load screen waits for it; no frame); the cache only helps refreshes.
+- A pond across a map corner gets a lobe on each side, each kept to its own side's sector of
+  the skirt; where both lobes' water reaches the corner's diagonal they meet there without
+  being merged (not seen in a capture; no test).
 - During a sculpt stroke on the edge the patch's outer columns stay at the stroke's start
   heights beside the in-place skirt until the stroke's water refresh lands.
 
@@ -678,8 +684,9 @@ Follow-ups:
   pinned performance pass (`PERFORMANCE.md` "Phase 6 (rivers past the map edge)": the opaque
   skirt +0.31-0.36 ms at an edge, kept; two exits +550 ms of worker time on a load) and these
   docs. P6-3 (done, 94b18c7, 874cd34, 31ae238, a449acb, a16c02c, 6cc5cb2, ca40325): the edge
-  follow-ups (Open work, "Edge follow-ups"). System doc: `docs/systems/water.md` "Past the
-  map edge".
+  follow-ups (Open work, "Edge follow-ups"). P6-4 (done): ponds and lakes touching the edge
+  continue past it (`PondExits`; `p6_look` ponds section; `PERFORMANCE.md` "Ponds past the
+  edge (P6-4)"). System doc: `docs/systems/water.md` "Past the map edge".
 - **Before the minor version bump ("map maker finished"):** not yet fully scoped with the
   user. Candidates on record: phases 4c, 4d and 5 (all done), and the Steam two-account test
   passing on an authored map with water and crossings (still open). Confirm the list with the
