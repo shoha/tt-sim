@@ -483,6 +483,31 @@ numerically (for example where a fade or a tint band starts).
   logs the rays at each; captured at home with the grid, zoom 8 on the waist bar (plain,
   grid, water hidden), zoom 8 on the ankle bar, and the waist bar rebuilt 0.35 m deep. 6
   captures and `INDEX.md`; the verdict is written beside them as `VERDICT.md`.
+- `jobs/arch_look.json`: the stone arch (P4d-1): a new 150 ft temperate forest map with a
+  waist river and a deep pond, saved as `_p4d_arch`; through `crossing.gd place` an arch over
+  the river at z = 2 with a plank bridge below it for scale and a long arch with a mid-stream
+  pier along the pond; captured at home with the grid, zoom 8 on the river arch (plain, grid,
+  water hidden), zoom 6 on it (facets, paving scale, coping stones) and zoom 8 on the pier
+  arch. 6 captures and `INDEX.md`; the level is kept for look runs.
+- `jobs/ford_look.json`: the ford (P4d-2): a new 150 ft temperate forest map with a waist
+  river, an ankle stream and a deep river, saved as `_p4d_ford` and played (`saved` loads it
+  in play: tokens spawn only there); a ford across the river and one across the stream through
+  `crossing.gd place` (the deep river takes none: refused), tokens standing on each and one
+  wading downstream; captured at home with the grid, zoom 8 on the waist ford (plain, grid,
+  water hidden), zoom 8 on the ankle ford and zoom 6 on the waist ford. 6 captures and
+  `INDEX.md`; the level is kept for look runs.
+- `jobs/phase4d_judgment_set.json`: the phase 4d (arch and ford) judgment set (P4d-4): for
+  every palette biome (`expand_biomes`), a new 150 ft map (seed 1234) with a straight waist
+  river at x = -7, a straight ankle stream at x = 8 and a deep pond west of the river (its
+  stroke 4 m from the river's waterline, since a pond's water reaches about 3 m past its
+  stroke), then through the crossing API an arch, a ford and a plank bridge across the river,
+  a ford across the stream and a pier arch along the pond, drawn from x = -10 so no line
+  starts in another body's water; captured in authoring at home and at zoom 8 on the arch,
+  the ford, the ankle ford and the pier arch, saved as `_p4d_{biome}` and played with tokens
+  on the arch's deck, in both fords and on the plank deck, grid on (home, zoom 8 on the arch
+  and the ford). 64 captures (eight biomes) and `INDEX.md`; the verdict is written beside them
+  as `VERDICT.md`. Split into build and look like the 4c set (`saved` `_p4d_{biome}`, the play
+  section `for: "{biome}_*_play_*"`); the levels are kept (`cleanup_levels` removes them).
 - `jobs/arch_ford_tools.json`: the Arch and Ford tiles through the real Bridge tool (P4d-3,
   about 60 s to build, 30 s to look): a new 150 ft temperate forest map (seed 1234) with a
   straight waist river at x = -7 and a deep river carved at x = 8 (`water.gd carve`), saved

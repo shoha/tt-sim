@@ -56,8 +56,8 @@ other committed home.
 | Carving and wet dressing (channel and basin profiles, reach steps and riffles, confluences, erase, bed and shore surfaces, plants, rocks, the worker) | `utils/water_carve.gd`, `utils/water_edit.gd`, `utils/water_dressing.gd`, `scenes/states/authoring/water_editor.gd` | `systems/water.md` (Authoring) |
 | Waterfalls (the fall-or-riffle rule, lips and plunge points in the plan, the fall profile and gorge walls in the carve, the curtain / foam ring / mist mesh and shader, the shared fall material, the crossing refusal) | `utils/water_falls.gd`, `utils/water_fall_plan.gd`, `utils/water_fall_mesh.gd`, `shaders/waterfall.gdshader`, and the fall parts of `water_edit.gd`, `water_geometry.gd`, `water_carve.gd`, `water_mesh_builder.gd`, `authored_water.gd`, `water_glb_utils.gd`, `crossing_placement.gd` | `systems/waterfalls.md` |
 | Water tool (River and Pond tiles, depth tiles, ribbon preview, Ctrl erase) | `scenes/states/authoring/water_brush.gd`, `water_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Water) and "Brushes and gestures" |
-| Crossings (plank bridges, stepping stones: model, snapping to banks, geometry, collision, grid on the deck, editor API, following later edits) | `resources/crossing.gd`, `utils/crossing_placement.gd`, `utils/crossing_geometry.gd`, `utils/map_crossing_io.gd`, `scenes/terrain/authored_crossings.gd`, `scenes/states/authoring/crossing_editor.gd` | `systems/crossings.md`, `ARCHITECTURE.md` "Map document (map.ttmap)" |
-| Bridge tool (Planks and Stones tiles, live preview, refusal hint, Ctrl erase) | `scenes/states/authoring/bridge_brush.gd`, `bridge_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Bridge) and "Brushes and gestures" |
+| Crossings (plank bridges, stepping stones, stone arches, fords: model, snapping to banks, geometry, collision, grid on the deck, editor API, following later edits, the per-crossing rebuild cache) | `resources/crossing.gd`, `utils/crossing_placement.gd`, `utils/crossing_geometry.gd`, `utils/crossing_arch.gd`, `utils/crossing_ford.gd`, `utils/crossing_cache.gd`, `utils/map_crossing_io.gd`, `scenes/terrain/authored_crossings.gd`, `scenes/states/authoring/crossing_editor.gd` | `systems/crossings.md`, `ARCHITECTURE.md` "Map document (map.ttmap)" |
+| Bridge tool (Planks, Stones, Arch and Ford tiles, live preview, refusal hint, Ctrl erase) | `scenes/states/authoring/bridge_brush.gd`, `bridge_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Bridge) and "Brushes and gestures" |
 | Submerged token marker (the ring on the water over a hidden token, drag preview) | `scenes/board_token/submerged_marker.gd`, `shaders/submerged_marker.gdshader`, `utils/water_surface.gd` | `UI_SYSTEMS.md` "Submerged Token Marker" |
 | Authored map load on workers (dressing, water geometry, rule fields, chunk and skirt arrays, crossings) | `utils/authored_load_prep.gd`, `MapSourceLoader` | `ARCHITECTURE.md` Map Loading Flow, `PERFORMANCE.md` "P4b-0: authored map load on workers" |
 | First-use pipeline warm-up | `utils/pipeline_warmer.gd` | `PERFORMANCE.md` |
@@ -236,6 +236,38 @@ the lip row a straight bright line, the side edges dead straight, the mist radia
 Known and not the falls': forest canopies cover falls from the fixed camera; savanna's
 sandstone a notch too orange.
 
+Phase 4d judgment (P4d-4, render job `phase4d_judgment_set`, captures and `VERDICT.md` in
+`user://render_jobs/phase4d_judgment_set`, the pre-fix run in `_before`, the fixes judged at
+half size in `phase4d_iter1` and `phase4d_iter2`; verdict 2026-10-04): in every one of the
+eight palette biomes a 150 ft map (seed 1234) with a straight waist river, a straight ankle
+stream and a deep pond, and through the crossing API a 2 m arch across the river (span 4.59,
+levels 0.35 / 0.81 / 0.35), a 2.5 m ford across it (crest 0.30 under a 0.15 level), a 2 m
+ford across the ankle stream, a 1.5 m plank bridge for scale and a 2.4 m arch along the pond
+(span 11.33, a mid-stream pier), the same five to the centimetre in all eight biomes;
+captured in authoring at home and at zoom 8 on each crossing and in play with tokens on the
+arch's deck, wading both fords and on the plank deck, grid on (64 captures). Verdict: ready.
+The arch reads from home as a stone bridge in the biome's own rock with its own paving and,
+in the damp climates, moss in patches along the copings, and at zoom 8 as a few bold parts;
+the ford reads at home as its marker stones with a bright foam line beside them and two worn
+pads on the banks, and a token wades it ankle to shin deep and is never hidden; the pond arch
+on its pier is the set's best single object in every biome. Fixed from the verdict: the
+coping is a course of stones each keyed for moss as one (the moss was a continuous green
+stripe), the ford's crest holds downstream and dips upstream so the shader's depth foam draws
+a line along the downstream lip, the landings are rounded wandering tongues (were hard-edged
+rectangles), marker stones 0.62-0.78 m with two on a narrow stream (were small and crowded),
+voussoirs, graded spandrels, damp masonry and warm and cool casts on the arch (its grey read
+flat), cutwater noses and a cap course on the pier (a single-colour block), and a darker
+tint for the sandstone gravel (the landings vanished on the badlands sand and were a
+red-orange splat on the savanna). Open, none blocking: the gravel never shows through the
+water (the ford's underwater read is foam alone: shader work), an ankle-stream ford is
+dominated by its two 2 m landings, the savanna's red pads are the loudest of the set, the
+coping's moss is random per stone rather than a coarse field, and canopies hide the pond arch
+in the forest biomes (camera, known). Earlier phase 4d renders: `p4d_probe` (P4d-0, the bare
+bar's verdict in `user://render_jobs/p4d_probe/VERDICT.md`), `arch_look` and `ford_look`
+(P4d-1, P4d-2), `arch_ford_tools` (P4d-3: the four tiles, the ford refused on deep water with
+"Too deep to ford. Fords cross wadeable water." beside the cursor and as a toast, Ctrl hover
+"Remove stone arch"), each in its `user://render_jobs/` folder.
+
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
 download-signal fix (pushed to `main` as a08b639). Needs a two-account test, e.g. on the
@@ -319,23 +351,35 @@ Waterfall follow-ups (phase 4c, P4c-1 to P4c-5, 2026-10-04; none blocking):
 - A bridge over the lip (a deck spanning a fall) is not in scope; any crossing within 1 m of
   a fall is refused. It can be added later if wanted (decided 2026-10-04).
 
-Crossing follow-ups (after P4b-3, 2026-09-27; later work, none blocking):
-- A stone arch (the third kind the model leaves room for; the Bridge pane has a free column).
+Crossing follow-ups (after P4b-3, 2026-09-27, and phase 4d, 2026-10-04; later work, none
+blocking):
 - Crossings on a dressed Blender map's own water (deferred to a terrain-paint integration
   sprint, 2026-10-04): its water plane is not a crossing target
   (the snapping reads document water; the Bridge tool is disabled there with a tooltip unless
   the document has water), and its Blender scatter is not cleared under a crossing.
-- Fords (a crossing kind of its own, or a path painted through shallows, which P4b-0 already
-  lets run into the water).
+- The ford's gravel never shows through the water: its underwater read is the shader's foam
+  alone (the water hides anything 0.25 m down; the crest profile turns the wash into a
+  gradient with an edge, as far as the mesh can take it). A foam band keyed to the ford, or
+  more transmission in the shallows, is `water.gdshader` work (P4d-4).
+- A ford on an ankle stream is dominated by its two 2 m landings around a 1.1 m stripe; a
+  landing narrower than the bar on a narrow stream would help (P4d-4).
+- The savanna's ford pads are red earth on yellow grass, the loudest of the set, in the tone
+  of the biome's own bank strips; a plain `gravel` surface there would be quieter but less its
+  own. Left as the biome's red earth (P4d-4).
+- The arch coping's moss decision is random per stone (a thrown key), so the pattern does not
+  relate to position the way the stepping stones' field does; it reads right, but a field at a
+  coarser scale along the parapet would be the principled version (P4d-4).
+- A single arch or ford node's swap is 4.4-6.3 ms (`moss_split` walks every facet in
+  GDScript, then the mesh and concave-shape upload), and a ford's build is 5 ms for 200
+  vertices, unprofiled; both are the next targets if a placement needs to go under a frame
+  (P4d-5, P4d-5b). The per-crossing cache itself is done (P4d-5b): a placement costs its own
+  crossing whatever the map's count (6-13 ms by kind, 3-4 ms for planks and stones).
+- A painted path through the shallows stays what it is (P4b-0 lets it run into the water): it
+  gives the look on ankle water but no passage over waist water, which the ford kind does.
 - Forest canopies in front of a crossing can hide it from the fixed camera (a 6 m canopy
   covers ground up to about 15 m behind it at the 21.6 degree view): in play the occlusion
   fade opens a hole over the tokens on it, not over the deck. Candidate: count a crossing's
   deck as a fade focus in play, or let the author Thin in front of it (works today).
-- Done (P4d-5b): a crossing edit rebuilds only the crossings whose key changed
-  (`CrossingCache`: fields, seed, the ground under the footprint, the water that reaches it),
-  so a placement costs its own crossing whatever the map's count (6-13 ms by kind, 3-4 ms for
-  planks and stones). Still open: a single arch or ford node's swap is 4-6 ms (`moss_split`
-  per facet in GDScript, the mesh and shape upload) and a ford's build 5 ms for 200 vertices.
 - Savanna's stepping stones share badlands' sandstone and read a notch more orange than the
   savanna's grey-brown boulders (a per-biome stone tint, like the basalt lift, would settle it).
 - The grid on the brown deck is low contrast (review note; left as is: it matches the ground).
@@ -423,9 +467,10 @@ Follow-ups:
   judgment set in all eight biomes (the stones' moss as the palette's moss surface, basalt
   stones lifted to the boulders' grey, trees and shrubs kept back from landings, a readable
   drawn line), the pinned performance pass (`PERFORMANCE.md` "Phase 4b (crossings): pinned
-  performance pass") and these docs. Phase 4b is done (2026-09-27); the stone arch, fords and
-  crossings over a Blender map's own water are later work (Open work above).
-- **Phase 4c: waterfalls (done, 2026-10-04), then the remaining crossings.** Waterfalls: a
+  performance pass") and these docs. Phase 4b is done (2026-09-27); the stone arch and fords
+  followed in phase 4d (below); crossings over a Blender map's own water are later work (Open
+  work above).
+- **Phase 4c: waterfalls (done, 2026-10-04).** Waterfalls: a
   river drawn across any steep drop falls there by itself, with no new control (small drops
   stay riffles). Over a Tier cliff the water uses the existing rock face; on a steep natural
   slope the carve cuts a rock lip with a plunge pool below, so a river down a hillside steps
@@ -456,9 +501,34 @@ Follow-ups:
   ending on a face joins the plunge pool, the ribbon follows the real direction, the Water
   and Bridge hints and the F1 "Waterfall" row. P4c-6: the judgment set in all eight biomes
   (`tools/render_jobs/jobs/phase4c_judgment_set.json`; Verification status above). P4c-7:
-  the pinned performance pass (`PERFORMANCE.md`). P4c-8: these docs. After waterfalls: the
-  stone arch, then fords. Crossings over a dressed Blender map's own water are deferred to a
-  separate terrain-paint integration sprint.
+  the pinned performance pass (`PERFORMANCE.md`). P4c-8: these docs. Crossings over a dressed
+  Blender map's own water are deferred to a separate terrain-paint integration sprint.
+- **Phase 4d: the stone arch and fords (done, 2026-10-04).** The remaining crossings: a
+  masonry arch bridge and a gravel ford, drawn with the same one line and following later
+  edits like the planks and stones. Decisions (2026-10-04, "your recommendations make sense,
+  continue"): a segmental arch, not a semicircle (a semicircle over a 6 m span stands 3 m
+  tall and hides its own water from the camera); the ford as a derived crossing kind, not a
+  painted path (a path gives the look on ankle water but no passage over waist water, and the
+  crossing model is what makes a ford follow later edits); a ford over waist water raises its
+  crest to ankle depth (0.15 m under the surface) so a token wades it and is never hidden;
+  the `building-bridge.svg` glyph for the arch and a new `ford.svg`; not in scope: a deck over
+  a waterfall's lip, crossings on a Blender map's own water, a ford that moves the bed, rails
+  or lanterns, water animated through the arch. Plan:
+  `docs/plans/2026-10-04-phase4d-arch-and-ford.md` (local; a "done" paragraph per task).
+  P4d-0 (done): the ford bar probe (`FORD_DEPTH_M` 0.15; a bare submerged bar reads as one
+  pale wash, so the ford needs its own cues). P4d-1 (done): the arch kind (`CrossingArch`:
+  abutments, a parabolic barrel, spandrels, a pier over 9 m, parapets, a paved deck in the
+  biome's first paved path surface). P4d-2 (done): the ford kind (`CrossingFord`: the bar,
+  landings and marker stones, the biome's gravel, the `deep` refusal). P4d-3 (done): the Arch
+  and Ford tiles, hints and F1 rows. P4d-4 (done): the judgment set in all eight biomes
+  (coping stones keyed for moss, the ford's crest profile and rounded landings, larger marker
+  stones, voussoirs and graded spandrels, a cutwater pier, a darker sandstone gravel;
+  Verification status above). P4d-5 (done): the pinned performance pass (`PERFORMANCE.md`
+  "Phase 4d (arch and ford): pinned performance pass": the kinds cost nothing in play; a
+  placement rebuilt every crossing at 5.6 ms each, 33.8 ms with six), which brought the
+  per-crossing rebuild cache forward: P4d-5b (done, `CrossingCache`: 9.8 ms for the same
+  placement) and P4d-5c (`follow` refreshes the crossings whose ground changed when no anchor
+  moved). P4d-6: these docs.
 - **Phase 5:** more starting points. `NewMap` already gives each biome a starting cover
   (groves at the edges, an open glade for the fight); new maps still start flat. The likely
   next step is starting landforms (a river valley, a hilltop, terraced tiers, a lakeshore)

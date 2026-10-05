@@ -1177,14 +1177,19 @@ dressing the ground shader draws and the scatter reads. See
 
 ### Crossings
 
-Phase 4b: plank footbridges and stepping stones over water, as document data (`Crossing`,
-`resources/crossing.gd`; `MapDocument.crossings`, the `crossings.json` entry above), geometry
-built from it on every peer (`CrossingGeometry`, `utils/crossing_geometry.gd`), walkable
-collision and the grid on the deck (`AuthoredCrossings`, `scenes/terrain/authored_crossings.gd`),
-and an editor API (`CrossingEditor`, `scenes/states/authoring/crossing_editor.gd`) whose
-`CrossingPlacement` (`utils/crossing_placement.gd`) snaps a drawn line to the banks and refuses
-one near a waterfall; crossings follow later sculpt and water edits, and the Bridge tool
-(`BridgeBrush`) drives it all. See [docs/systems/crossings.md](systems/crossings.md).
+Phases 4b and 4d: four kinds of crossing over water, plank footbridges, stepping stones, stone
+arches and fords, as document data (`Crossing`, `resources/crossing.gd`;
+`MapDocument.crossings`, the `crossings.json` entry above), geometry built from it on every
+peer (`CrossingGeometry`, `utils/crossing_geometry.gd`, which hands the arch's masonry to
+`CrossingArch`, `utils/crossing_arch.gd`, and the ford's gravel bar to `CrossingFord`,
+`utils/crossing_ford.gd`), walkable collision and the grid on the deck (`AuthoredCrossings`,
+`scenes/terrain/authored_crossings.gd`, which rebuilds only the crossings whose fields, ground
+or water changed, keyed by `CrossingCache`, `utils/crossing_cache.gd`), and an editor API
+(`CrossingEditor`, `scenes/states/authoring/crossing_editor.gd`) whose `CrossingPlacement`
+(`utils/crossing_placement.gd`) snaps a drawn line to the banks and refuses one near a
+waterfall or a ford over deep water; crossings follow later sculpt and water edits, and the
+Bridge tool (`BridgeBrush`) drives it all. See
+[docs/systems/crossings.md](systems/crossings.md).
 
 ### Authored terrain
 
