@@ -194,13 +194,22 @@ class _Mesh:
 			normal = -normal
 		normal = -normal
 		var base := vertices.size()
-		for v in [a, b, c]:
-			vertices.append(v)
+		# Unrolled (no per-vertex arrays): the stones' and an arch's facets are thousands of these.
+		vertices.append(a)
+		vertices.append(b)
+		vertices.append(c)
+		for _k in 3:
 			normals.append(normal)
 			uvs.append(Vector2.ZERO)
 			colors.append(color)
-			tangents.append_array(PackedFloat32Array([1.0, 0.0, 0.0, 1.0]))
-		indices.append_array(PackedInt32Array([base, base + 1, base + 2]))
+			# +X, positive bitangent sign.
+			tangents.append(1.0)
+			tangents.append(0.0)
+			tangents.append(0.0)
+			tangents.append(1.0)
+		indices.append(base)
+		indices.append(base + 1)
+		indices.append(base + 2)
 
 	func is_empty() -> bool:
 		return vertices.is_empty()
@@ -287,16 +296,20 @@ static func build_one(doc: MapDocument, crossing: Crossing) -> Dictionary:
 
 ## `mesh`'s triangles as collision faces (every three vertices one face, in index order).
 static func faces_of(mesh: _Mesh) -> PackedVector3Array:
+	var vertices := mesh.vertices
+	var indices := mesh.indices
 	var faces := PackedVector3Array()
-	for i in mesh.indices:
-		faces.append(mesh.vertices[i])
+	faces.resize(indices.size())
+	for k in indices.size():
+		faces[k] = vertices[indices[k]]
 	return faces
 
 
 ## The highest vertex of `mesh` (map Y), NONE when it is empty.
 static func highest(mesh: _Mesh) -> float:
 	var top := NONE
-	for v in mesh.vertices:
+	var vertices := mesh.vertices
+	for v in vertices:
 		top = maxf(top, v.y)
 	return top
 
