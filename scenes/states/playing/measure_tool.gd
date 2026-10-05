@@ -33,7 +33,9 @@ enum Mode { LINE, SPHERE, CYLINDER }
 ## surface, where the grid is, not on the bed under it.
 const TERRAIN_COLLISION_LAYER: int = WaterSurface.WALKABLE_MASK
 const TOKEN_COLLISION_LAYER: int = 2
-const RAYCAST_LENGTH: float = 200.0
+## Long enough from a ray origin on the camera's near plane, which stands behind the camera
+## (CameraController._hold_near_plane_over_canopies), to the far edge of a zoomed-out view.
+const RAYCAST_LENGTH: float = 1000.0
 
 ## Color used to highlight tokens inside the active volume
 const AOE_HIGHLIGHT_COLOR := Color(1.0, 0.45, 0.1, 1.0)
