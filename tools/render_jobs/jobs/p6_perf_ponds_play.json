@@ -1,0 +1,77 @@
+{
+ "out_dir": "render_jobs/p6_perf",
+ "timeout_s": 900,
+ "hang_s": 90,
+ "remove_override": true,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "ponds play start"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "play", "folder": "_p6_perf_ponds"},
+  {"op": "wait", "s": 2.0},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "title"},
+  {"op": "wait", "s": 1.5},
+  {"op": "expand", "values": ["_p6_perf_exits", "_p6_perf_ponds", "_p6_perf_exits", "_p6_perf_ponds", "_p6_perf_exits", "_p6_perf_ponds"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "play", "folder": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "{value} play", "ws": true},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5}
+  ]},
+
+  {"op": "expand", "values": ["_p6_perf_exits", "_p6_perf_ponds", "_p6_perf_exits", "_p6_perf_ponds"], "template": [
+   {"op": "play", "folder": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "vsync_off"},
+   {"op": "zoom", "size": 20.0},
+   {"op": "wait", "s": 2.5},
+   {"op": "look_at", "at": [-13.5, 27.0]},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "z20 pond edge {value}"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "z20 pond edge {value}"},
+   {"op": "wait", "s": 5.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5}
+  ]},
+
+  {"op": "play", "folder": "_p6_perf_ponds"},
+  {"op": "wait", "s": 2.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/p6_perf.gd", "action": "exits_build", "runs": 3},
+  {"op": "call", "script": "res://tools/render_jobs/probes/p6.gd", "action": "info"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "vsync_off"},
+  {"op": "zoom", "size": 20.0},
+  {"op": "wait", "s": 2.5},
+  {"op": "look_at", "at": [-13.5, 27.0]},
+  {"op": "wait", "s": 1.5},
+  {"op": "capture", "name": "play_z20_pond", "scale": 0.5, "desc": "_p6_perf_ponds in play, zoom 20 panned to the pond's exit"},
+  {"op": "expand", "values": ["1", "2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/p6.gd", "action": "show", "part": "ribbon", "visible": true},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "z20 pond, water shown #{value}"},
+   {"op": "wait", "s": 5.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/p6.gd", "action": "show", "part": "ribbon", "visible": false},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "z20 pond, water hidden #{value}"},
+   {"op": "wait", "s": 5.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/p6.gd", "action": "show", "part": "ribbon", "visible": true},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "skirt", "visible": false},
+  {"op": "wait", "s": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "z20 pond skirt hidden"},
+  {"op": "wait", "s": 5.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "skirt", "visible": true},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "ponds play end"},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}
