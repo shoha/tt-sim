@@ -286,7 +286,10 @@ static func moss_amount(style: String, root: String = PaletteLibrary.DEFAULT_ROO
 
 ## True when a stone facet facing `up` (its normal's Y) with its centre at `centre` (map frame)
 ## is moss for `amount` (0..1): the more a facet faces up and the higher a fixed field of its
-## position there, the likelier; so patches, the same on every peer. Pure.
+## position there, the likelier; so patches, the same on every peer. Pure. (A facet that
+## carries a moss key in its UVs, CrossingArch's coping stones and caps, is read at the key
+## instead of its centre, moss_split: the field varies slowly along a level line, so the
+## copings' facets were decided alike and the moss came as a stripe, P4d-4.)
 static func is_moss(up: float, centre: Vector3, amount: float) -> bool:
 	if amount <= 0.0 or up < MOSS_MIN_UP:
 		return false
@@ -297,16 +300,22 @@ static func is_moss(up: float, centre: Vector3, amount: float) -> bool:
 
 ## Stone mesh `arrays` (CrossingGeometry's, indexed flat-shaded triangles) split by facet into
 ## [rock, moss] mesh arrays sharing the vertex arrays ([] for a part with no facet), each
-## facet by is_moss(). Pure; the input is not changed.
+## facet by is_moss() at its centre, or at the moss key its UVs carry (a non-zero UV; the
+## stone materials are triplanar and never read them). Pure; the input is not changed.
 static func moss_split(arrays: Array, amount: float) -> Array:
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var uvs: PackedVector2Array = PackedVector2Array()
+	if arrays[Mesh.ARRAY_TEX_UV] != null:
+		uvs = arrays[Mesh.ARRAY_TEX_UV]
 	var rock := PackedInt32Array()
 	var moss := PackedInt32Array()
 	for t in range(0, indices.size(), 3):
 		var a := indices[t]
 		var centre := (vertices[a] + vertices[indices[t + 1]] + vertices[indices[t + 2]]) / 3.0
+		if a < uvs.size() and uvs[a] != Vector2.ZERO:
+			centre = Vector3(uvs[a].x, centre.y, uvs[a].y)
 		var target := moss if is_moss(normals[a].y, centre, amount) else rock
 		target.append_array(PackedInt32Array([a, indices[t + 1], indices[t + 2]]))
 	var out: Array = []
