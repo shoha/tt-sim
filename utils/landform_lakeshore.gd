@@ -5,7 +5,7 @@ extends RefCounted
 ## frame every recipe shares). A deep lake over one corner third of the map: a disc of
 ## LAKE_RADIUS_SHARE of the half extent centred LAKE_CENTRE_SHARE of it toward a seeded
 ## corner (never the camera's own: allowed_corners(); the far one most often, a side one
-## pulled toward the centre: lakeshore_frame()), its shore warped by low-frequency
+## smaller and inside the home frame: lakeshore_frame()), its shore warped by low-frequency
 ## noise up to LAKE_WARP of the radius, carved as a pond through the Water tool's pure path
 ## (StartingLandform.carve_pond: the level is the lowest rim ground less the freeboard).
 ## The ground rises away from the shore by LAKE_RISE_M over LAKE_RISE_RUN_SHARE of the half
@@ -21,10 +21,17 @@ extends RefCounted
 const LAKE_RADIUS_SHARE := 0.45
 ## 0.5 since P5-4 (0.55 sat the lake at the home view's edge): more water in the home view.
 const LAKE_CENTRE_SHARE := 0.5
-## A side corner's lake (one of the two beside the camera's own) is pulled toward the map's
-## centre along the axis that points at the camera's side, so it sits inside the home frame
-## instead of at its edge (P5-7).
-const LAKE_SIDE_CENTRE_SHARE := 0.38
+## A side corner's lake (one of the two beside the camera's own) sits inside the home frame
+## (P5-7): its centre at most LAKE_SIDE_SCREEN_M across the view from the frame's centre (the
+## home camera shows about 24.6 m of ground across, so 12.3 m either side; a share-based pull
+## of 0.38 still left the centre 14.2 m out), LAKE_SIDE_DEPTH_SHARE of the half extent up the
+## view (StartingLandform.VIEW), and a smaller lake, LAKE_SIDE_RADIUS_SHARE of the half extent,
+## beside the stage.
+const LAKE_SIDE_SCREEN_M := 6.0
+const LAKE_SIDE_DEPTH_SHARE := 0.4
+const LAKE_SIDE_RADIUS_SHARE := 0.3
+## The direction across the home view, screen right (StartingLandform.VIEW turned a quarter).
+const ACROSS := Vector2(-StartingLandform.VIEW.y, StartingLandform.VIEW.x)
 ## The corner draw's weights (P5-7): the far corner (opposite StartingLandform.NEAR), whose
 ## lake fills the view, most often; each side corner the rest between them.
 const FAR_CORNER_WEIGHT := 0.6
@@ -68,7 +75,7 @@ static func lakeshore(doc: MapDocument, seed_value: int, biome_id: String) -> Di
 		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
 	)
 	var centre: Vector2 = frame.centre
-	var radius := half * LAKE_RADIUS_SHARE
+	var radius: float = frame.radius
 	var toward: Vector2 = frame.toward
 	var draws := StartingLandform.stream(seed_value, StartingLandform.STREAM_FEATURES)
 	var wants_islet := draws.randf() < ISLET_CHANCE
@@ -86,7 +93,8 @@ static func lakeshore(doc: MapDocument, seed_value: int, biome_id: String) -> Di
 	var shore_noise := StartingLandform.warp_noise(draws, radius)
 	var rise := LAKE_RISE_M * scale
 	var run := half * LAKE_RISE_RUN_SHARE
-	var islet_radius := ISLET_RADIUS_M * scale
+	# A side corner's smaller lake carries a proportionally smaller islet.
+	var islet_radius := ISLET_RADIUS_M * scale * radius / (half * LAKE_RADIUS_SHARE)
 	var islet_centre := centre + islet_azimuth * maxf(radius - islet_radius - ISLET_GAP_M, 0.0)
 	# The rim is the flat shore at the base height, so the level is the freeboard below it;
 	# the islet's top stands ISLET_TOP_OVER_M over that.
@@ -167,9 +175,11 @@ static func lakeshore(doc: MapDocument, seed_value: int, biome_id: String) -> Di
 ## axis +1 or -1; one of the three that are not the camera's own, the corner
 ## StartingLandform.NEAR points to, where the lake would lie at the bottom of the view cut by
 ## the foreground; P5-4b), drawn by corner_weights() (the far corner most often, P5-7); the
-## lake's centre LAKE_CENTRE_SHARE of `half` toward it on each axis, LAKE_SIDE_CENTRE_SHARE on
-## an axis whose sign is the camera's (a side corner's, pulled into the frame); and the unit
-## direction from the centre toward the map's middle (the stage's line).
+## lake's centre and radius: for the far corner LAKE_CENTRE_SHARE of `half` toward it on each
+## axis and LAKE_RADIUS_SHARE, for a side corner inside the home frame (LAKE_SIDE_SCREEN_M
+## across the view toward the corner's side, LAKE_SIDE_DEPTH_SHARE up it,
+## LAKE_SIDE_RADIUS_SHARE); and the unit direction from the centre toward the map's middle
+## (the stage's line).
 static func lakeshore_frame(half: float, rng: RandomNumberGenerator) -> Dictionary:
 	var corners := allowed_corners()
 	var weights := corner_weights(corners)
@@ -185,11 +195,22 @@ static func lakeshore_frame(half: float, rng: RandomNumberGenerator) -> Dictiona
 			index = n
 			break
 	var corner := corners[index]
-	var centre := Vector2(
-		corner.x * half * _centre_share(corner.x, StartingLandform.NEAR.x),
-		corner.y * half * _centre_share(corner.y, StartingLandform.NEAR.y)
-	)
-	return {"corner": corner, "centre": centre, "toward": (-centre).normalized()}
+	var centre := Vector2(corner) * half * LAKE_CENTRE_SHARE
+	var radius := half * LAKE_RADIUS_SHARE
+	if not _is_far(corner):
+		# Across the view toward the corner's side, capped; up the view.
+		var lateral := centre.dot(ACROSS)
+		centre = (
+			ACROSS * signf(lateral) * minf(absf(lateral), LAKE_SIDE_SCREEN_M)
+			+ StartingLandform.VIEW * half * LAKE_SIDE_DEPTH_SHARE
+		)
+		radius = half * LAKE_SIDE_RADIUS_SHARE
+	return {
+		"corner": corner,
+		"centre": centre,
+		"radius": radius,
+		"toward": (-centre).normalized(),
+	}
 
 
 ## The draw weight of each of `corners` (allowed_corners()): FAR_CORNER_WEIGHT for the corner
@@ -197,18 +218,16 @@ static func lakeshore_frame(half: float, rng: RandomNumberGenerator) -> Dictiona
 static func corner_weights(corners: Array[Vector2i]) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	for corner in corners:
-		var far := (
-			signf(corner.x) == -signf(StartingLandform.NEAR.x)
-			and signf(corner.y) == -signf(StartingLandform.NEAR.y)
-		)
-		out.append(FAR_CORNER_WEIGHT if far else SIDE_CORNER_WEIGHT)
+		out.append(FAR_CORNER_WEIGHT if _is_far(corner) else SIDE_CORNER_WEIGHT)
 	return out
 
 
-## The lake centre's share of the half extent on one axis: LAKE_SIDE_CENTRE_SHARE when the
-## corner's sign on it (`sign_value`) is the camera's (`near`), else LAKE_CENTRE_SHARE.
-static func _centre_share(sign_value: int, near: float) -> float:
-	return LAKE_SIDE_CENTRE_SHARE if signf(sign_value) == signf(near) else LAKE_CENTRE_SHARE
+## True for the corner opposite StartingLandform.NEAR.
+static func _is_far(corner: Vector2i) -> bool:
+	return (
+		signf(corner.x) == -signf(StartingLandform.NEAR.x)
+		and signf(corner.y) == -signf(StartingLandform.NEAR.y)
+	)
 
 
 ## The corners a lake may take: the four (+-1, +-1) less the camera's own (the signs of
