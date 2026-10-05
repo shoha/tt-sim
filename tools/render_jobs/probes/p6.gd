@@ -203,6 +203,13 @@ static func _info(base: Node) -> String:
 				% [i, str(m.mouth), str(m.dir), str(m.wet), m.ground, m.reach]
 			)
 		)
+		if m.has(PondExits.WIDTHS):
+			parts.append(
+				(
+					"  pond %d level %.3f lobe %.1f m flare %s"
+					% [m.id, m.level, m.length, str(m.flare)]
+				)
+			)
 	var skirt := terrain.get_skirt()
 	if skirt != null:
 		parts.append("skirt %d vertices" % skirt.mesh.surface_get_array_len(0))

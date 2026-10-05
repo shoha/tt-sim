@@ -557,8 +557,11 @@ numerically (for example where a fade or a tint band starts).
   Each map zoomed out (`*_overview`, with and without fog), then per exit home zoom panned
   to it, zoom 20 and zoom 8 on the mouth, each with fog off and on; diagnostics with the
   ribbon, the channel patch or the rest of the skirt hidden (`forest_e0_z8_no*`); the valley
-  under two sky presets (`valley_outdoor_*`). `probes/p6.gd` (`info`, `look` at an exit,
-  `preset`, `show`) does the exits' parts.
+  under two sky presets (`valley_outdoor_*`). `_p6_look_ponds` (P6-4): a new 150 ft forest
+  map (seed 4321) with a wide deep pond painted against the near edge and a narrow waist pond
+  touching the right edge (`look` exits 0, the narrow one, and 1), the same views as the
+  rivers' plus `ponds_e*_z8_noribbon` and `ponds_sunset_*` (outdoor_sunset). `probes/p6.gd`
+  (`info`, `look` at an exit, `preset`, `show`) does the exits' parts.
 - `jobs/p6_perf_build.json`, `jobs/p6_perf_play.json` and `jobs/p6_perf_band.json`: the phase
   6 pinned performance pass (`PERFORMANCE.md` "Phase 6 (rivers past the map edge): pinned
   performance pass"), with `probes/p6_perf.gd`. Build (about 85 s): a 150 ft forest map with a
@@ -574,7 +577,12 @@ numerically (for example where a fade or a tint band starts).
   the plain left edge, the patch and ribbon shown and hidden, `SkirtBackdrop` on and off, and
   the skirt A/B at full authoring zoom-out. Band (about 2 minutes, pinned too): the probe's band
   variant (the patch opaque, the rest of the ring transparent) against the opaque skirt at the
-  same views. The levels are kept (`cleanup_levels.json` deletes them).
+  same views. The levels are kept (`cleanup_levels.json` deletes them). P6-4: the build job
+  (now about 125 s) also saves `_p6_perf_ponds` (`_p6_perf_exits`'s rivers and a wide pond
+  painted to the near edge, its stroke in a `record` window); `jobs/p6_perf_ponds_play.json`
+  (about 2.5 minutes, the pinned `override.cfg`, which it deletes) times warm loads of it
+  against `_p6_perf_exits` and GPU windows at zoom 20 on the pond's edge on both maps, then the
+  pond's water shown and hidden and the skirt hidden.
 - `jobs/cleanup_levels.json`: `water.gd cleanup` alone (a few seconds): deletes every
   `_p43_`, `_p44_`, `_p45_`, `_p4b_`, `_p4c_`, `_p4d_`, `_p5_`, `_p5j_` and `_p6_` level under
   `user://levels/`, the
