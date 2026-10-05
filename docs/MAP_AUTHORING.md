@@ -282,11 +282,13 @@ edit rebuilds every crossing at about 2.4 ms each (open work).
 ## Open work
 
 Phases 1-3 were released as v0.1.28 (2026-09-27); phases 4 and 4b (water, crossings, the
-submerged-token ring, worker-thread loading) as v0.1.29 (2026-09-28). Releases stay patch
-bumps until the whole map maker is finished, then the minor version goes up (user,
-2026-09-27). The two-account Steam test (above) is still open and is best run on v0.1.29:
-it now also covers a document with `splines.json`, `ponds.png`, a baked `water_flow.png`
-and `crossings.json` reaching a peer, tokens on a deck, and the submerged ring on a client.
+submerged-token ring, worker-thread loading) as v0.1.29 (2026-09-28); phase 4c (waterfalls,
+the system docs pilot) as v0.1.30 (2026-10-04). Releases stay patch bumps until the whole
+map maker is finished, then the minor version goes up (user, 2026-09-27). The two-account
+Steam test (above) is still open and is best run on v0.1.30: it now also covers a document
+with `splines.json`, `ponds.png`, a baked `water_flow.png` and `crossings.json` reaching a
+peer, tokens on a deck, the submerged ring on a client, and a waterfall's curtain built
+on both peers from the same reaches.
 
 Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
