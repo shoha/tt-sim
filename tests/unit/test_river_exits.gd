@@ -382,6 +382,42 @@ func test_the_bed_past_the_edge_is_as_deep_as_the_river_in_the_map() -> void:
 	assert_eq(RiverExits.edge_distance(body.points[-1], half) > 0.4, true, "its end is inside")
 
 
+func test_the_ribbon_ends_fully_faded_and_the_channel_settles_before() -> void:
+	for doc: MapDocument in [_edge_doc(), _edge_doc(3), _ankle_doc()]:
+		var half := _half(doc)
+		var seed_value := doc.map_seed & 0x7FFFFFFF
+		var fade := func(xz: Vector2) -> float:
+			return RiverExits.skirt_alpha(
+				xz, half, AuthoredTerrain.SKIRT_FADE_M, AuthoredTerrain.SKIRT_WOBBLE, seed_value
+			)
+		var parts := _parts(doc)
+		var ribbon: PackedVector3Array = parts.ribbon[Mesh.ARRAY_VERTEX]
+		var last := ribbon.slice(ribbon.size() - RiverExitMesh.RIBBON_ACROSS)
+		for v in last:
+			assert_eq(fade.call(Vector2(v.x, v.z)), 0.0, "the water's last row is fully faded")
+		var before := ribbon.slice(
+			ribbon.size() - 2 * RiverExitMesh.RIBBON_ACROSS,
+			ribbon.size() - RiverExitMesh.RIBBON_ACROSS
+		)
+		var faint := 0.0
+		for v in before:
+			faint = maxf(faint, fade.call(Vector2(v.x, v.z)))
+		assert_gt(faint, 0.0, "and the row before it is the last with any fade left")
+		var patch: Array = parts.channel
+		var vertices: PackedVector3Array = patch[Mesh.ARRAY_VERTEX]
+		var wets: PackedVector2Array = patch[Mesh.ARRAY_TEX_UV2]
+		var settled := 0
+		for k in vertices.size():
+			var xz := Vector2(vertices[k].x, vertices[k].z)
+			if (
+				fade.call(xz) <= RiverExitMesh.FADE_SETTLED_ALPHA
+				and RiverExits.outside_distance(xz, half) > 1.0
+			):
+				assert_eq(wets[k], Vector2.ZERO, "no channel where the fade is nearly gone")
+				settled += 1
+		assert_gt(settled, 0)
+
+
 func test_the_patch_replaces_the_skirt_columns_it_covers_without_a_crack() -> void:
 	var doc := _edge_doc()
 	var width := AuthoredTerrain.skirt_width_m()
