@@ -13,9 +13,10 @@
  * colour, or a panorama sky in the view direction), fogged as Godot fogs the background;
  * skirt_fog_at(): Godot's fog at a point. SkirtBackdrop (scenes/terrain/) keeps the uniforms
  * in step with the environment, on the skirt's material and the river ribbon's. The skirt
- * fades toward the backdrop in colour; the water past the edge fades by the share of lit
- * ground left in that blend (skirt_lit_share), so under a bright sky it dissolves as fast
- * as the ground beside it does.
+ * fades toward the backdrop in colour, and the water past the edge by the same law (lit * a +
+ * backdrop * (1 - a), water.gdshader), so it dissolves exactly as the ground beside it does.
+ * skirt_lit_share() (the share of lit ground left in that blend) faded the water's alpha in
+ * P6-1 and is kept for diagnostics.
  */
 
 // Half the map's extent in map metres: the skirt fades out from this rectangle.

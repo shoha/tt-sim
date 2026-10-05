@@ -44,11 +44,10 @@ const LATERAL_BLEND_M := 1.2
 ## offset across the channel.
 const LEAD_IN_M := 2.0
 ## The channel eases back to the skirt as the skirt's fade falls from FADE_ALPHA to
-## FADE_SETTLED_ALPHA: late, since over a dark backdrop the ground still shows at a low fade
-## (skirt_lit_share), but settled before the fade ends, so no trench outlives the water (the
-## ribbon runs on under the settled skirt to where the fade is 0).
-const FADE_ALPHA := 0.04
-const FADE_SETTLED_ALPHA := 0.01
+## FADE_SETTLED_ALPHA: late, so the river keeps its width into the haze, but settled before
+## the fade ends (P6-3), and the ribbon runs on under the settled skirt to where the fade is 0.
+const FADE_ALPHA := 0.1
+const FADE_SETTLED_ALPHA := 0.02
 ## Past the edge the skirt beside a mouth eases from the carve's height at the edge to the
 ## bank's over this distance (_unghosted).
 const GHOST_M := 2.0
@@ -581,15 +580,18 @@ static func _ribbon_arrays(doc: MapDocument, mouths: Array[Dictionary], fade: Di
 	return arrays
 
 
-## The skirt's greatest fade over ribbon row `row` ([point, direction], _rows()) from the
-## waterline `wet` widened by RIBBON_MARGIN_M either side, at its ends and middle.
+## The skirt's greatest fade over the vertices of ribbon row `row` ([point, direction],
+## _rows()) across the waterline `wet` widened by RIBBON_MARGIN_M either side.
 static func _row_alpha(row: Array, wet: Vector2, half: Vector2, fade: Dictionary) -> float:
 	var p: Vector2 = row[0]
 	var tangent: Vector2 = row[1]
 	var across := Vector2(-tangent.y, tangent.x)
 	var most := 0.0
-	for u in [wet.x - RIBBON_MARGIN_M, 0.0, wet.y + RIBBON_MARGIN_M]:
-		var at: Vector2 = p + across * float(u)
+	for j in RIBBON_ACROSS:
+		var u := lerpf(
+			wet.x - RIBBON_MARGIN_M, wet.y + RIBBON_MARGIN_M, float(j) / (RIBBON_ACROSS - 1)
+		)
+		var at := p + across * u
 		most = maxf(most, RiverExits.skirt_alpha(at, half, fade.fall, fade.wobble, fade.seed))
 	return most
 
