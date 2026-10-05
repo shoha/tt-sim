@@ -44,12 +44,18 @@ static func cells_for_feet(feet: int) -> int:
 	return roundi(float(feet) / FEET_PER_CELL)
 
 
-## A new flat map `size_ft` feet square. With a starting biome (a palette biome id), the base
+## A new map `size_ft` feet square. With a starting biome (a palette biome id), the base
 ## surface is that biome's ground surface and the starting cover is painted into its masks;
-## with BARE_BIOME (or a biome the palette lacks) it is BARE_SURFACE and unpainted. The
+## with BARE_BIOME (or a biome the palette lacks) it is BARE_SURFACE and unpainted. With a
+## `landform` other than StartingLandform.FLAT the recipe shapes the document first (heights,
+## carved water, a crossing, from the seed) and the glade is centred on its stage. The
 ## scatter rows are left empty: they are generated from the masks once the map is shown.
 static func create(
-	size_ft: int, biome_id: String, seed_value: int, root: String = PaletteLibrary.DEFAULT_ROOT
+	size_ft: int,
+	biome_id: String,
+	seed_value: int,
+	root: String = PaletteLibrary.DEFAULT_ROOT,
+	landform: String = StartingLandform.FLAT
 ) -> MapDocument:
 	var cells := cells_for_feet(size_ft)
 	var biome := PaletteLibrary.biome(biome_id, root) if biome_id != BARE_BIOME else {}
@@ -59,14 +65,35 @@ static func create(
 	var doc := MapDocument.create_flat(
 		Vector2i(cells, cells), surface, PaletteLibrary.palette_version(root), seed_value
 	)
+	var stage := Vector2.ZERO
+	if landform != StartingLandform.FLAT:
+		var shaped := StartingLandform.apply(doc, landform, seed_value, biome_id, root)
+		stage = shaped.stage
 	if not biome.is_empty():
-		paint_starting_cover(doc, biome_id)
+		paint_starting_cover(doc, biome_id, stage)
 	return doc
 
 
+## create() from the new-map spec NewMapDialog emits and AuthoringController opens:
+## {"size_ft", "biome_id", "seed", "landform"}, each optional (DEFAULT_SIZE_FT, BARE_BIOME,
+## a fresh random_seed(), StartingLandform.FLAT).
+static func from_spec(spec: Dictionary, root: String = PaletteLibrary.DEFAULT_ROOT) -> MapDocument:
+	return create(
+		int(spec.get("size_ft", DEFAULT_SIZE_FT)),
+		String(spec.get("biome_id", BARE_BIOME)),
+		int(spec.get("seed", random_seed())),
+		root,
+		String(spec.get("landform", StartingLandform.FLAT))
+	)
+
+
 ## Paints `biome_id` over the whole document with the starting cover (see the header),
-## replacing any biome masks it had.
-static func paint_starting_cover(doc: MapDocument, biome_id: String) -> void:
+## replacing any biome masks it had. The glade is centred on `centre` (map XZ metres; a
+## landform's stage): the groves still grow toward the map's edges, so a stage near one
+## side simply shifts the glade there.
+static func paint_starting_cover(
+	doc: MapDocument, biome_id: String, centre: Vector2 = Vector2.ZERO
+) -> void:
 	var count := doc.sample_count()
 	var slots := PackedByteArray()
 	var density := PackedByteArray()
@@ -77,7 +104,9 @@ static func paint_starting_cover(doc: MapDocument, biome_id: String) -> void:
 	for z in doc.samples_z():
 		for x in doc.samples_x():
 			var world := doc.sample_to_world(Vector2(x, z))
-			var value := starting_density(world, half, noise.get_noise_2d(world.x, world.y))
+			var value := starting_density(
+				world - centre, half, noise.get_noise_2d(world.x, world.y)
+			)
 			var byte := roundi(value * 255.0)
 			var index := doc.sample_index(x, z)
 			density[index] = byte
