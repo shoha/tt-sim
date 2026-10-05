@@ -10,14 +10,20 @@ extends RefCounted
 ## rock-lipped stage; the crown stands on the tier nearest HILL_HEIGHT_M and the hill beneath
 ## it is scaled so the crown's face is a full tier at its outline (without a crown the summit
 ## is HILL_HEIGHT_M itself). A second smaller hill (SECOND_HILL_CHANCE) of half the height on
-## the far side. A spring stream (STREAM_CHANCE): an ankle stream rising at the foot of the
-## crown's face (a spring on the crown itself could never fall: WaterFallPlan starts a spring
-## in its first pool, two metres before any lip, and the flat top is narrower than that) and
-## running down the flank facing the camera (+z, turned STREAM_AZIMUTH_DEG off it so it
-## never crosses the shoulder stage), off the map; the flank is steeper than the falls rule's
-## drop slope at every map size, so it steps down in falls; stepping stones over it below the
-## foot (STONES_CHANCE). The stage is on the crown, else on the hill's shoulder toward the
-## camera, within half the half extent of the centre.
+## the far side. A spring stream (STREAM_CHANCE): with a crown, a pool on the crown (the
+## line starts POOL_INSIDE_M inside the crown's outline, so its first reach is the pool:
+## WaterFallPlan lets a spring's first lip stand two metres from the start) spilling over
+## the crown's face in a fall (the phase 4c tier fall) and running on down the flank; without
+## one, an ankle stream rising STREAM_SUMMIT_SHARE of the radius from the summit. It runs
+## STREAM_AZIMUTH_DEG off +z, to the hill's side: the fall shows in profile to the camera (a
+## face more than 90 degrees off +z is back-facing to it) and the stream never crosses the
+## shoulder stage; off the map; the flank is steeper than the falls rule's drop slope at
+## every map size, so it steps down in falls; stepping stones over it below the foot
+## (STONES_CHANCE). A hill without a crown always draws at least one more feature: when the
+## seed drew neither the second hill nor the stream, it gets the second hill (never a bare
+## mound; P5-4). The stage is on the hill's shoulder toward the camera (+z):
+## STAGE_SHOULDER_SHARE of the radius out, or past the crown's toe when there is a crown
+## (STAGE_CROWN_TOE_M), within half the half extent of the centre.
 
 const HILL_HEIGHT_M := 4.5
 const HILL_RADIUS_SHARE := 0.45
@@ -39,24 +45,26 @@ const CROWN_CHANCE := 0.7
 const SECOND_HILL_CHANCE := 0.3
 const STREAM_CHANCE := 0.5
 const STONES_CHANCE := 0.4
-## The stream: ankle half-width, control points, wobble, how far off +z it runs (so it never
-## crosses the shoulder stage) and how far below the crown's outline it rises (past the soft
-## toe, on the natural flank); without a crown it rises this share of the radius from the
-## summit.
+## The stream: ankle half-width, control points, wobble, how far off +z it runs (to the
+## hill's side: past 90 the fall would face away from the camera, under 60 it would cross
+## the shoulder stage), how far inside the crown's outline the pool starts (at least the two
+## metres WaterFallPlan keeps before a spring's first lip, plus the lip's own width); without
+## a crown it rises this share of the radius from the summit.
 const STREAM_HALF_WIDTH_M := 0.55
 const STREAM_SPACING_M := 3.0
 const STREAM_WOBBLE_M := 0.6
-const STREAM_AZIMUTH_DEG := Vector2(40.0, 70.0)
-const STREAM_FOOT_M := 1.2
+const STREAM_AZIMUTH_DEG := Vector2(60.0, 90.0)
+const POOL_INSIDE_M := 3.0
 const STREAM_SUMMIT_SHARE := 0.25
 ## The stones: below the foot, this far past the hill's radius at the nearest, and this far
 ## inside the map edge.
 const STONES_PAST_FOOT_M := 1.0
 const STONES_EDGE_M := 4.0
-## The stage: this share of the radius out on the shoulder, or this far from the crown's
-## centre away from the stream; within STAGE_REACH_SHARE of the half extent of the centre.
+## The stage: this share of the radius out on the shoulder, and with a crown at least this
+## far past the crown's face and soft toe (flat ground, off the rock); within
+## STAGE_REACH_SHARE of the half extent of the centre.
 const STAGE_SHOULDER_SHARE := 0.55
-const STAGE_CROWN_OFF_M := 1.0
+const STAGE_CROWN_TOE_M := 1.0
 const STAGE_REACH_SHARE := 0.5
 ## A stream's end stops this far inside the map edge (within WaterCarve.EDGE_MARGIN_M, so it
 ## runs off the map instead of tapering to a head).
@@ -78,6 +86,9 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 	var wants_second := draws.randf() < SECOND_HILL_CHANCE
 	var wants_stream := draws.randf() < STREAM_CHANCE
 	var wants_stones := draws.randf() < STONES_CHANCE
+	if not wants_crown and not wants_second and not wants_stream:
+		# Never a bare mound: a hill without a crown carries at least one more feature.
+		wants_second = true
 	var azimuth_sign := 1.0 if draws.randf() < 0.5 else -1.0
 	var azimuth := Vector2(0.0, 1.0).rotated(
 		azimuth_sign * deg_to_rad(draws.randf_range(STREAM_AZIMUTH_DEG.x, STREAM_AZIMUTH_DEG.y))
@@ -107,11 +118,13 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 			)
 			return h + HeightBrush.tier_goal(natural, target, StartingLandform.tier_inset(distance))
 	)
-	var stage := (
-		centre - azimuth * STAGE_CROWN_OFF_M
-		if wants_crown
-		else shoulder_stage(centre, radius, half)
-	)
+	var shoulder_out := radius * STAGE_SHOULDER_SHARE
+	if wants_crown:
+		shoulder_out = maxf(
+			shoulder_out,
+			crown_radius * (1.0 + CROWN_WARP) + HeightBrush.tier_span(tier) + STAGE_CROWN_TOE_M
+		)
+	var stage := shoulder_stage(centre, shoulder_out, half)
 	var report := PackedStringArray(
 		[
 			(
@@ -130,13 +143,22 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 			"second hill %.2f m at (%.1f, %.1f)" % [second_height, second_centre.x, second_centre.y]
 		)
 	if wants_stream:
+		# With a crown the line starts on the crown, POOL_INSIDE_M inside its warped outline
+		# along the azimuth (never past the centre), so the first reach is a pool on the top.
 		var start_r := (
-			(
-				StartingLandform.disc_distance(
-					centre + azimuth * crown_radius, centre, crown_radius, crown_noise, CROWN_WARP
-				)
-				+ crown_radius
-				+ STREAM_FOOT_M
+			maxf(
+				(
+					StartingLandform.disc_distance(
+						centre + azimuth * crown_radius,
+						centre,
+						crown_radius,
+						crown_noise,
+						CROWN_WARP
+					)
+					+ crown_radius
+					- POOL_INSIDE_M
+				),
+				0.0
 			)
 			if wants_crown
 			else radius * STREAM_SUMMIT_SHARE
@@ -161,7 +183,14 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 			report.append("stream: nothing could be planned")
 		else:
 			report.append(
-				"stream: %d reaches, %d falls" % [stream.size(), WaterFalls.falls(doc).size()]
+				(
+					"%sstream: %d reaches, %d falls"
+					% [
+						"crown pool, " if wants_crown else "",
+						stream.size(),
+						WaterFalls.falls(doc).size()
+					]
+				)
 			)
 			if wants_stones:
 				report.append(_stones(doc, stream, centre, radius, biome_id))
@@ -213,12 +242,11 @@ static func crown_of(summit: float, tier: float, share: float) -> Dictionary:
 	}
 
 
-## The shoulder stage: STAGE_SHOULDER_SHARE of `radius` from `centre` toward the camera
-## (+z), turned step by step toward the map centre until it lies within STAGE_REACH_SHARE
-## of `half` of the centre (the azimuth toward the centre always does).
-static func shoulder_stage(centre: Vector2, radius: float, half: float) -> Vector2:
+## The shoulder stage: `out` metres from `centre` toward the camera (+z), turned step by
+## step toward the map centre until it lies within STAGE_REACH_SHARE of `half` of the centre
+## (the azimuth toward the centre always does: `out` never exceeds the hill's radius).
+static func shoulder_stage(centre: Vector2, out: float, half: float) -> Vector2:
 	var reach := half * STAGE_REACH_SHARE
-	var out := radius * STAGE_SHOULDER_SHARE
 	var toward := (-centre).normalized() if centre.length() > 1e-3 else Vector2(0.0, 1.0)
 	var start := Vector2(0.0, 1.0)
 	var turn := start.angle_to(toward)

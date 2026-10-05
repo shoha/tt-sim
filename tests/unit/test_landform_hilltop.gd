@@ -154,6 +154,57 @@ func test_forty_seeds_draw_streams_near_their_chances_and_never_break_the_map() 
 	)
 
 
+func test_no_crown_is_never_a_bare_mound() -> void:
+	# P5-4: a hill without a crown carries the second hill or the stream.
+	var bare := 0
+	for seed_value in range(1, SEEDS + 1):
+		var report: String = _hilltop(100, seed_value).report
+		if not report.contains("no crown"):
+			continue
+		bare += 1
+		assert_true(
+			report.contains("second hill") or report.contains("stream:"),
+			"seed %d: %s" % [seed_value, report]
+		)
+	assert_gt(bare, 0, "some seed drew no crown")
+
+
+func test_crown_pool_spills_over_the_face_in_a_fall() -> void:
+	# P5-4: with a crown the spring is a pool on the crown's top that falls off its face.
+	var found := 0
+	for seed_value in range(1, SEEDS + 1):
+		var shaped := _hilltop(150, seed_value)
+		var report: String = shaped.report
+		if not report.contains("crown pool"):
+			continue
+		found += 1
+		var doc: MapDocument = shaped.doc
+		var label := "seed %d" % seed_value
+		var target := float(report.split("crown at ")[1].split(" m")[0])
+		var frame := LandformHilltop.hilltop_frame(
+			StartingLandform.half_extent(doc),
+			StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+		)
+		var radius := StartingLandform.half_extent(doc) * LandformHilltop.HILL_RADIUS_SHARE
+		var crown_radius := LandformHilltop.crown_radius_of(radius, doc.tier_height_m)
+		var head: Vector2 = doc.water_bodies[0].points[0]
+		assert_lt(
+			head.distance_to(frame.centre),
+			crown_radius * (1.0 + LandformHilltop.CROWN_WARP),
+			"%s the pool's head is on the crown" % label
+		)
+		assert_gt(
+			WaterGeometry.level_at(doc, head),
+			target - doc.tier_height_m,
+			"%s the pool stands on the crown's tier" % label
+		)
+		assert_gt(WaterFalls.falls(doc).size(), 0, "%s the pool spills in a fall" % label)
+		assert_false(WaterGeometry.is_wet_at(doc, shaped.stage), "%s stage is dry" % label)
+		if found == 3:
+			break
+	assert_gt(found, 0, "some seed drew a crown and a stream")
+
+
 func test_cost_at_150_ft() -> void:
 	var started := Time.get_ticks_usec()
 	for seed_value in [3, 7]:
