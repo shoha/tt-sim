@@ -258,16 +258,22 @@ func test_dry_draw_paints_a_wash_of_the_scree_surface() -> void:
 
 
 func test_new_map_centres_the_glade_on_the_stage() -> void:
+	# The round glade, which every recipe but the Valley keeps (P5-7: the Valley's glade is its
+	# floor; the next test). Was run on the Valley before P5-7.
 	if PaletteLibrary.biome(BIOME).is_empty():
 		pass_test("palette without %s" % BIOME)
 		return
 	var seed_value := 3
 	var doc := NewMap.create(
-		150, BIOME, seed_value, PaletteLibrary.DEFAULT_ROOT, StartingLandform.VALLEY
+		150, BIOME, seed_value, PaletteLibrary.DEFAULT_ROOT, StartingLandform.HILLTOP
 	)
-	var stage: Vector2 = _valley(150, seed_value).stage
+	var flat := MapDocument.create_flat(
+		Vector2i(NewMap.cells_for_feet(150), NewMap.cells_for_feet(150)), "grass", "", seed_value
+	)
+	var stage: Vector2 = (
+		StartingLandform.apply(flat, StartingLandform.HILLTOP, seed_value, BIOME).stage
+	)
 	assert_gt(stage.length(), 5.0, "a stage off the centre makes the test mean something")
-	assert_false(doc.water_bodies.is_empty(), "seed 3 draws a river")
 	assert_eq(doc.biome_slots.size(), doc.sample_count())
 	var half := doc.extent_m() * 0.5
 	var glade := 0.0
@@ -293,3 +299,48 @@ func test_new_map_centres_the_glade_on_the_stage() -> void:
 	assert_lt(glade / glade_n, 0.5 * edge / edge_n, "open at the stage, dense toward the edges")
 	assert_lt(glade / glade_n, opposite / opposite_n, "the glade moved with the stage")
 	assert_eq(MapDocumentIO.serialize(doc).error, "")
+
+
+func test_a_valley_glade_opens_the_floor_and_keeps_the_rim_dense() -> void:
+	# P5-7: the Valley returns a line glade along its floor; the floor's centreline stays below
+	# the glade threshold (halfway between the glade's density and the groves') for most of its
+	# length and the rim stays dense.
+	if PaletteLibrary.biome(BIOME).is_empty():
+		pass_test("palette without %s" % BIOME)
+		return
+	var threshold := (NewMap.COVER_CENTRE_DENSITY + NewMap.COVER_EDGE_DENSITY) * 0.5 * 255.0
+	for seed_value in [3, 9, 21]:
+		var label := "seed %d" % seed_value
+		var shaped := _valley(150, seed_value)
+		var glade: Dictionary = shaped.get("glade", {})
+		assert_true(glade.has("line"), "%s the valley returns a line glade" % label)
+		var doc := NewMap.create(
+			150, BIOME, seed_value, PaletteLibrary.DEFAULT_ROOT, StartingLandform.VALLEY
+		)
+		var line: PackedVector2Array = glade.line
+		var floor_half: float = glade.half_width
+		var rim := floor_half + float(glade.rise)
+		var open := 0
+		var on_line := 0
+		var rim_sum := 0.0
+		var rim_n := 0
+		for z in doc.samples_z():
+			for x in doc.samples_x():
+				var world := doc.sample_to_world(Vector2(x, z))
+				var distance := StartingLandform.nearest_on(line, world).x
+				var density := float(doc.biome_density[doc.sample_index(x, z)])
+				if distance < doc.sample_step().x * 0.5:
+					on_line += 1
+					open += 1 if density < threshold else 0
+				elif absf(distance - rim) < 1.0:
+					rim_sum += density
+					rim_n += 1
+		gut.p(
+			(
+				"%s: %d of %d centreline samples open, rim mean %.0f / 255"
+				% [label, open, on_line, rim_sum / maxf(rim_n, 1.0)]
+			)
+		)
+		assert_gt(on_line, 20, "%s samples on the centreline" % label)
+		assert_gt(float(open) / on_line, 0.8, "%s the floor's centreline is open" % label)
+		assert_gt(rim_sum / rim_n, threshold, "%s the rim stays dense" % label)
