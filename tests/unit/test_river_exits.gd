@@ -533,6 +533,92 @@ func test_a_terrain_draws_the_exit_and_drops_it_when_the_river_goes() -> void:
 	terrain.free()
 
 
+func _built(doc: MapDocument, previous: Dictionary = {}) -> Dictionary:
+	return RiverExitMesh.build(
+		doc,
+		AuthoredTerrain.skirt_width_m(),
+		AuthoredTerrain.SKIRT_FADE_M,
+		AuthoredTerrain.SKIRT_WOBBLE,
+		previous
+	)
+
+
+func _same_geometry(a: Dictionary, b: Dictionary, why: String) -> void:
+	for part in ["channel", "ribbon"]:
+		var x: Array = a[part]
+		var y: Array = b[part]
+		for slot in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_INDEX]:
+			assert_eq(x[slot], y[slot], "%s: %s %d" % [why, part, slot])
+
+
+func test_an_edit_away_from_an_exit_rebuilds_none_and_one_at_it_rebuilds_it() -> void:
+	var doc := _ankle_doc()
+	var first := _built(doc)
+	var pieces := (first.windows as Array).size() + (first.mouths as Array).size()
+	assert_eq(first.built, pieces, "everything built the first time")
+	var again := _built(doc, first)
+	assert_eq(again.built, 0, "nothing changed, nothing rebuilt")
+	_same_geometry(again, first, "reused")
+	# Ground far from the exit (the map's far corner) and a pond there: no exit rebuilt.
+	var far := doc.sample_index(2, 2)
+	doc.heights[far] -= 0.4
+	var mask := PackedByteArray()
+	mask.resize(doc.sample_count())
+	mask[far] = 9
+	doc.pond_mask = mask
+	var away := _built(doc, again)
+	assert_eq(away.built, 0, "an edit away from the exit rebuilds none")
+	# Ground on the edge under the exit's window: that window rebuilds, as a fresh build would.
+	var mouth: Vector2 = (first.mouths[0] as Dictionary).mouth
+	var s := doc.world_to_sample(mouth + Vector2(-0.2, 1.5)).round()
+	var at := doc.sample_index(int(s.x), int(s.y))
+	doc.heights[at] += 0.3
+	var near := _built(doc, away)
+	assert_between(near.built, 1, pieces, "the exit under the edit rebuilds")
+	_same_geometry(near, _built(doc), "a partial rebuild is a full one")
+
+
+func test_a_sculpt_at_an_exit_refreshes_it() -> void:
+	var doc := _ankle_doc()
+	var map := Node3D.new()
+	map.name = "LevelMap"
+	add_child_autofree(map)
+	var terrain := AuthoredTerrain.create(doc)
+	map.add_child(terrain)
+	for node_name in [MapSourceLoader.SCATTER_NODE, MapSourceLoader.PROPS_NODE]:
+		var node := AuthoredScatter.create()
+		node.name = node_name
+		map.add_child(node)
+	var editor := AuthoringEditor.create(doc, map, AuthoringHistory.new())
+	editor.scatter.attach_document(doc)
+	var before := terrain.river_exits()
+	var mouth: Vector2 = (before.mouths[0] as Dictionary).mouth
+	var at := Vector3(mouth.x - 0.4, 0.0, mouth.y + 2.0)
+	assert_true(editor.begin_height_stroke(HeightBrush.RAISE))
+	editor.stroke_dab(at, at + Vector3(0, 0, 0.5), 1.0, 0.5)
+	assert_true(editor.end_stroke())
+	editor.finish_height_work()
+	var water := map.get_node_or_null(NodePath(AuthoredWater.NODE_NAME)) as AuthoredWater
+	assert_not_null(water, "the sculpt refreshed the water")
+	water.finish_refresh()
+	var after := terrain.river_exits()
+	assert_ne(after, before, "the exit was refreshed")
+	assert_between(int(after.built), 1, 2, "only the touched exit's pieces rebuilt")
+	# The patch's boundary vertices are the map's new heights.
+	var half := _half(doc)
+	var vertices: PackedVector3Array = after.channel[Mesh.ARRAY_VERTEX]
+	var raised := 0
+	for v in vertices:
+		var xz := Vector2(v.x, v.z)
+		if RiverExits.outside_distance(xz, half) > 1e-6:
+			continue
+		var s := doc.world_to_sample(xz).round()
+		var height := doc.heights[doc.sample_index(int(s.x), int(s.y))]
+		assert_eq(v.y, height, "boundary vertex at the new height")
+		raised += 1 if height > 0.01 else 0
+	assert_gt(raised, 0, "the sculpt reached the patch's edge")
+
+
 func test_the_skirt_parts_carry_its_vertex_mirror() -> void:
 	var doc := _edge_doc()
 	var width := AuthoredTerrain.skirt_width_m()
