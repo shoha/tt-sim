@@ -674,10 +674,14 @@ func bridge_available() -> bool:
 	return editor != null and (editor.water.can_carve() or not document.water_bodies.is_empty())
 
 
-## A picked Bridge tile becomes the kind the Bridge tool lays and switches to it.
+## A picked Bridge tile becomes the kind the Bridge tool lays and switches to it. The pane's
+## tile follows (without a signal), so a kind picked another way (a render job's
+## `bridge_kind`) shows in the pane as the tile would.
 func _on_bridge_kind_selected(kind: int) -> void:
 	if brush:
 		brush.bridge.kind = kind
+	if panel != null and panel.bridge_pane != null:
+		panel.bridge_pane.select_kind(kind)
 	_select_tool(AuthoringPanel.TOOL_BRIDGE)
 
 

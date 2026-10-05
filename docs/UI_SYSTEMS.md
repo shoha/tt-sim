@@ -858,16 +858,21 @@ and nothing numeric in the main flow:
   `Advanced` foldout (`WaterAdvanced`) holds Width (the full channel, twice the brush radius,
   "Stream" / "River") and Flow (the river's flow speed 0 to 2, "Still" / "Rushing"), values
   hidden.
-- **Bridge** (P4b-2, `BridgeToolPane`, `bridge_tool_pane.gd`): a Crossing `TileField`
-  (`BridgeKindField`, three columns so a stone arch can join) with Planks (`bridge-plank`, "A
-  plank footbridge: arched boards on posts, bank to bank") and Stones (`stepping-stones`,
-  "Stepping stones: flat rocks one stride apart, just above the water"); ids and node names
-  `bridge_plank`, `bridge_stones`; Planks preselected. Picking a tile emits
+- **Bridge** (P4b-2, P4d-3, `BridgeToolPane`, `bridge_tool_pane.gd`): a Crossing `TileField`
+  (`BridgeKindField`, four columns, one row of 64 px tiles in the 320 px drawer) with Planks
+  (`bridge-plank`, "A plank footbridge: arched boards on posts, bank to bank"), Stones
+  (`stepping-stones`, "Stepping stones: flat rocks one stride apart, just above the water"),
+  Arch (`building-bridge`, "A stone arch: a barrel of the biome's rock with a paved deck and
+  parapets, bank to bank") and Ford (`ford`, "A ford: a gravel bar just under the surface with
+  marker stones, for wading across"); ids and node names `bridge_plank`, `bridge_stones`,
+  `bridge_arch`, `bridge_ford`; Planks preselected. Picking a tile emits
   `bridge_kind_selected(kind)` and activates the Bridge tool. The hint line (`BridgeHint`) says
-  the gesture, that bridges cross calm water and not a waterfall (P4c-5), the width keys,
+  the gesture, that bridges cross calm water and not a waterfall (P4c-5), what an arch and a
+  ford need (P4d-3), the width keys,
   Ctrl-click to remove, and that a crossing follows later edits and goes with its water
   (wording: "Drag a line across a river or pond, from one bank to the other: the crossing
-  finds the banks and sizes itself. Bridges cross calm water, not a waterfall. Shift+wheel or
+  finds the banks and sizes itself. Bridges cross calm water, not a waterfall. Arches cross
+  like planks; a ford needs wadeable water (its width runs along the river). Shift+wheel or
   [ and ] set its width. Hold Ctrl and click a crossing to remove it. A crossing follows later
   edits to its banks and goes when its water does."); while the map has no water a second
   line (`BridgeWaterHint`) says to make a river or pond first. No numbers and no Advanced foldout: a crossing sizes itself
@@ -899,7 +904,7 @@ Bridge mode's `BridgeBrush`'s:
 | Shift at the press | - | - | - | Smooth, whichever tile is picked | - | - | - |
 | Hold still while pressed | builds strength (up to 4x after 2 s) | same | - | same (Raise keeps building; Tier is already whole) | same (toward full cover) | Pond: the dab spreads (up to 1.35x) | - |
 | Plain wheel | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom | camera zoom |
-| Shift+wheel, `[` `]` | brush size, 1 to 12 m (remembered for the app session) | same | over a placed prop: its scale within the species' range (at least +-25 %) | brush size | brush size | the river's width or pond brush (never below the depth's narrowest channel: ankle 0.44, waist 1.33, deep 2.96 m half-width) | the crossing's width (per kind: deck 0.8 to 3 m, stones 0.4 to 1.2 m; 12 % a notch) |
+| Shift+wheel, `[` `]` | brush size, 1 to 12 m (remembered for the app session) | same | over a placed prop: its scale within the species' range (at least +-25 %) | brush size | brush size | the river's width or pond brush (never below the depth's narrowest channel: ankle 0.44, waist 1.33, deep 2.96 m half-width) | the crossing's width (per kind: plank deck 0.8 to 3 m, stones 0.4 to 1.2 m, arch deck 1.2 to 3 m, ford bar 1.5 to 4 m along the river; 12 % a notch) |
 | Right click, Escape | cancel the stroke in progress (reverted); idle: right click puts the brush down, Escape goes to the drawer | same | over a placed prop: remove it; during a placement: cancel it | same as Biome | same as Biome | same (a river being drawn is dropped) | same (a line being drawn is dropped) |
 | Delete / Backspace | - | - | remove the prop under the pointer | - | - | - | - |
 | Ctrl+Z / Ctrl+Y | undo / redo one stroke | same | one placement (place and turn), removal, or scale gesture | one stroke | one stroke | one river, pond stroke or erase | one placement or removal |
@@ -908,17 +913,20 @@ Bridge (P4b-2). The drawn line is dashed from the press to the pointer, over a s
 keyline in screen pixels so it reads on dark foliage and pale sand alike (P4b-3: the first
 1.75 px dash was lost over a forest floor); once it makes a
 crossing (a short line near the water already does: the snap reaches 8 m past its ends) the
-ghost shows exactly what the release places, snapped to the first dry bank each side: a plank
-deck's outline along its arch with plank ticks, or each stepping stone's outline at its top,
-and a dot on each bank anchor, in warm wood or pale stone. The readout beside the cursor says
-the kind and the span in the level's units ("Plank bridge  16 ft"), or idle its width
-("Stepping stones  4 ft wide", to the half unit). A line that makes nothing turns red, heavier
+ghost shows exactly what the release places, snapped to the first dry bank each side: a
+deck's outline along its arch with plank ticks (planks in warm wood, a stone arch in pale
+stone), each stepping stone's outline at its top, or a ford's bar as a gravel band at its
+crest (P4d-3), and a dot on each bank anchor. The readout beside the cursor says
+the kind and the span in the level's units ("Plank bridge  16 ft", "Stone arch  20 ft"), or
+idle its width ("Stepping stones  4 ft wide", "Ford  8 ft wide", to the half unit; a ford's
+width runs along the river). A line that makes nothing turns red, heavier
 and with a dot at both ends, and the
 readout gives the reason in plain words (`BridgeBrush.refusal_text`): "No water to cross here.
 Drag from bank to bank over a river or pond.", "No dry bank to land on at one end. Try a
 narrower spot.", "Too wide to cross (at most 79 ft). Try a narrower spot.", "Too close to the
 waterfall. Bridges cross calm water." (P4c-5: within 1 m of a fall's face or its foam ring,
-`systems/crossings.md`), or, for a click, "Drag a line from one bank across the water to
+`systems/crossings.md`), "Too deep to ford. Fords cross wadeable water." (P4d-2: a ford's
+line over deep water), or, for a click, "Drag a line from one bank across the water to
 the other."; releasing there shows the same as a warning toast. The tool's pointer ray sees crossings (the other brushes skip them), so Ctrl
 hovering a deck or a stone picks it where it is drawn. Crossings follow later edits (Sculpt,
 Water; `systems/crossings.md` "Following edits"): re-anchored in place, or removed with their water, with
@@ -941,8 +949,10 @@ water will really run (downhill, whichever way the line was drawn), and the read
 Waist  40 ft" (the line's length in the level's units); Pond shows "Pond  Deep" and its
 painted dabs. The F1 help's "Map building" group has a "Waterfall" row (P4c-5): "A river
 over a steep drop falls there by itself. Sculpting never makes or moves a fall: erase the
-river and draw it again"; its Bridge row reads "Drag across calm water, bank to bank: planks
-or stones". The carve
+river and draw it again"; its Bridge row reads "Drag across calm water, bank to bank: planks,
+stones, an arch or a ford", with an "Arch (Bridge)" row ("A stone arch crosses like planks:
+the biome's rock, a paved deck") and a "Ford (Bridge)" row ("A gravel bar for wading: needs
+wadeable water; its width runs along the river") after it (P4d-3). The carve
 computes on a worker and lands over three frames, so a release never holds the view
 (`docs/PERFORMANCE.md` "Water tool"); the ribbon stays faintly
 until it lands. Ctrl erases a river whole, every reach of the stroke it touches (drawn red

@@ -61,6 +61,7 @@ func test_every_refusal_has_plain_words() -> void:
 		CrossingPlacement.REFUSED_NO_WATER,
 		CrossingPlacement.REFUSED_NO_BANK,
 		CrossingPlacement.REFUSED_FALL,
+		CrossingPlacement.REFUSED_DEEP,
 		CrossingPlacement.REFUSED_LONG,
 		CrossingEditor.REFUSED_FULL,
 		CrossingEditor.REFUSED_INVALID,
@@ -93,6 +94,49 @@ func test_readout_names_the_kind_and_its_span_or_width() -> void:
 		BridgeBrush.readout(Crossing.Kind.STONES, 0.0, 1.524, 1.524, 5.0, "ft"),
 		"Stepping stones  5 ft wide"
 	)
+
+
+func test_labels_and_widths_cover_every_kind() -> void:
+	# P4d-3: a Ctrl hover over an arch or a ford indexes the labels by the crossing's kind.
+	assert_eq(BridgeBrush.KIND_LABELS.size(), Crossing.Kind.size())
+	var brush := BridgeBrush.new()
+	assert_eq(brush.widths.size(), Crossing.Kind.size())
+	for kind in Crossing.Kind.values():
+		assert_ne(BridgeBrush.kind_label(kind), "", Crossing.KIND_NAMES[kind])
+		assert_eq(brush.widths[kind], Crossing.DEFAULT_WIDTH_M[kind], Crossing.KIND_NAMES[kind])
+	assert_eq(BridgeBrush.kind_label(Crossing.Kind.ARCH), "Stone arch")
+	assert_eq(BridgeBrush.kind_label(Crossing.Kind.FORD), "Ford")
+	assert_eq(
+		BridgeBrush.readout(Crossing.Kind.FORD, 0.0, 2.5, 1.524, 5.0, "ft"), "Ford  8 ft wide"
+	)
+	brush.kind = Crossing.Kind.FORD
+	brush.step_width(40)
+	assert_eq(
+		brush.width(), Crossing.MAX_WIDTH_M[Crossing.Kind.FORD], "clamped by the ford's range"
+	)
+	brush.kind = Crossing.Kind.ARCH
+	brush.step_width(-40)
+	assert_eq(brush.width(), Crossing.MIN_WIDTH_M[Crossing.Kind.ARCH], "and the arch's")
+
+
+func test_pane_has_a_tile_per_kind_and_emits_the_picked_one() -> void:
+	var pane := BridgeToolPane.new()
+	add_child_autofree(pane)
+	assert_eq(BridgeToolPane.KIND_TILES.size(), Crossing.Kind.size())
+	assert_eq(pane.kind_field.tiles.columns, Crossing.Kind.size(), "one row")
+	for tile in BridgeToolPane.KIND_TILES:
+		assert_not_null(IconButton.load_icon(String(tile.icon)), String(tile.icon))
+	assert_eq(pane.kind_field.tiles.selected, &"bridge_plank", "Planks preselected")
+	watch_signals(pane)
+	pane.kind_field.tiles.selection_changed.emit(&"bridge_arch")
+	assert_signal_emitted_with_parameters(pane, "kind_selected", [Crossing.Kind.ARCH])
+	pane.kind_field.tiles.selection_changed.emit(&"bridge_ford")
+	assert_signal_emitted_with_parameters(pane, "kind_selected", [Crossing.Kind.FORD])
+	assert_signal_emit_count(pane, "kind_selected", 2)
+	pane.select_kind(Crossing.Kind.ARCH)
+	assert_eq(pane.kind_field.tiles.selected, &"bridge_arch")
+	assert_signal_emit_count(pane, "kind_selected", 2, "select_kind is silent")
+	assert_string_contains(BridgeToolPane.HINT, "a ford needs wadeable water")
 
 
 func test_bridge_mode_input() -> void:
@@ -166,6 +210,45 @@ func test_stones_take_the_picked_kind_and_width() -> void:
 	var placed := _doc.crossing(id)
 	assert_eq(placed.kind, Crossing.Kind.STONES)
 	assert_almost_eq(placed.width_m, brush.width(), 1e-4)
+
+
+func test_an_arch_and_a_ford_take_the_picked_kind() -> void:
+	# P4d-3: the two new tiles place through the same line as planks.
+	var editor := _editor()
+	var brush := BridgeBrush.new()
+	brush.kind = Crossing.Kind.ARCH
+	brush.begin(Vector3(0, 0, -3))
+	brush.track(editor, Vector3(0, 0, 3), false)
+	assert_not_null(brush.preview, "the arch previews")
+	var arch_id := brush.finish(editor, 1.524, 5.0, "ft")
+	assert_gt(arch_id, 0)
+	assert_eq(_doc.crossing(arch_id).kind, Crossing.Kind.ARCH)
+	assert_almost_eq(
+		_doc.crossing(arch_id).width_m, Crossing.DEFAULT_WIDTH_M[Crossing.Kind.ARCH], 1e-4
+	)
+	brush.kind = Crossing.Kind.FORD
+	brush.begin(Vector3(4, 0, -3))
+	brush.track(editor, Vector3(4, 0, 3), false)
+	assert_not_null(brush.preview, "the ford previews over waist water")
+	var ford_id := brush.finish(editor, 1.524, 5.0, "ft")
+	assert_gt(ford_id, 0)
+	assert_eq(_doc.crossing(ford_id).kind, Crossing.Kind.FORD)
+	assert_eq(_doc.crossings.size(), 2)
+	assert_eq(_history.undo(), "Place ford")
+	assert_eq(_history.undo(), "Place stone arch")
+	assert_true(_doc.crossings.is_empty())
+
+
+func test_ctrl_hover_over_a_ford_names_it() -> void:
+	# P4d-3: before the labels covered every kind this hover indexed past the end.
+	var editor := _editor()
+	var id := editor.crossings.place(Crossing.Kind.FORD, Vector3(0, 0, -1), Vector3(0, 0, 1))
+	assert_gt(id, 0)
+	var brush := BridgeBrush.new()
+	brush.track(editor, Vector3(0.2, 0, 0), true)
+	assert_eq(brush.hover_id, id, "Ctrl held over the bar")
+	var hovered := editor.document.crossing(brush.hover_id)
+	assert_eq("Remove " + BridgeBrush.kind_label(hovered.kind).to_lower(), "Remove ford")
 
 
 func test_ctrl_hover_and_erase() -> void:

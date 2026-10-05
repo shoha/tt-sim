@@ -10,8 +10,9 @@ extends RefCounted
 ##
 ## Gesture. A press on the map starts a line; every frame the pointer moves at least
 ## REPLAN_M the crossing it would make is planned again (CrossingEditor.plan, which changes
-## nothing) and drawn as a ghost: the deck's outline along its arch with plank ticks, or the
-## stones' outlines, and a dot at each bank anchor. A line that makes no crossing is drawn red
+## nothing) and drawn as a ghost: a deck's outline along its arch with plank ticks (planks
+## and a stone arch alike), the stones' outlines, or a ford's bar as a band at its crest, and
+## a dot at each bank anchor. A line that makes no crossing is drawn red
 ## with the reason in plain words beside the cursor (refusal_text()). The release places the
 ## last plan as one history entry; a refused release says why in a toast. Ctrl at the press
 ## erases the crossing under the pointer (hovering with Ctrl held outlines it in red first).
@@ -19,9 +20,12 @@ extends RefCounted
 
 const TINT := Color(0.98, 0.84, 0.58)
 const STONE_TINT := Color(0.88, 0.9, 0.86)
+const GRAVEL_TINT := Color(0.86, 0.8, 0.64)
 const ERASE_TINT := Color(1.0, 0.52, 0.42)
 const SHADOW := Color(0.05, 0.04, 0.05, 0.55)
-const KIND_LABELS: Array[String] = ["Plank bridge", "Stepping stones"]
+## The readout's name per Crossing.Kind (P4d-3: one per kind, so a hover never indexes past
+## the end).
+const KIND_LABELS: Array[String] = ["Plank bridge", "Stepping stones", "Stone arch", "Ford"]
 ## The pointer's ground point moves this far (metres) before the preview is planned again.
 const REPLAN_M := 0.08
 ## Width change per Shift+wheel notch or bracket key (multiplicative, like the brush size).
@@ -55,8 +59,14 @@ static var _pill_box: StyleBoxFlat = null
 
 ## The tile picked (Crossing.Kind).
 var kind: int = Crossing.Kind.PLANK
-## The width per kind (metres): the deck's width, or a stone's typical size.
-var widths: Array[float] = [Crossing.DEFAULT_WIDTH_M[0], Crossing.DEFAULT_WIDTH_M[1]]
+## The width per kind (metres): a deck's width, a stone's typical size, or a ford's bar width
+## along the channel.
+var widths: Array[float] = [
+	Crossing.DEFAULT_WIDTH_M[Crossing.Kind.PLANK],
+	Crossing.DEFAULT_WIDTH_M[Crossing.Kind.STONES],
+	Crossing.DEFAULT_WIDTH_M[Crossing.Kind.ARCH],
+	Crossing.DEFAULT_WIDTH_M[Crossing.Kind.FORD],
+]
 ## A line being drawn: its press point (world) and the pointer's last ground point.
 var drawing: bool = false
 var from: Vector3 = Vector3.INF
@@ -120,12 +130,17 @@ static func stepped_width(width: float, steps: int, crossing_kind: int) -> float
 	)
 
 
+## The readout's name for `crossing_kind` ("Plank bridge", "Ford"). Pure.
+static func kind_label(crossing_kind: int) -> String:
+	return KIND_LABELS[clampi(crossing_kind, 0, KIND_LABELS.size() - 1)]
+
+
 ## The readout beside the cursor: the kind, and the span of the planned crossing while a line
 ## is drawn ("Plank bridge  20 ft"), else its width ("Plank bridge  5 ft wide"). Pure.
 static func readout(
 	crossing_kind: int, span_m: float, width_m: float, cell_m: float, per_cell: float, label: String
 ) -> String:
-	var title := KIND_LABELS[clampi(crossing_kind, 0, KIND_LABELS.size() - 1)]
+	var title := kind_label(crossing_kind)
 	if span_m > 0.0:
 		var span := roundi(ScaleUtils.world_to_display(span_m, cell_m, per_cell))
 		return "%s  %d %s" % [title, span, label]
@@ -274,7 +289,7 @@ func draw(
 			draw_pill(
 				canvas,
 				camera.unproject_position(hit),
-				"Remove " + KIND_LABELS[hovered.kind].to_lower(),
+				"Remove " + kind_label(hovered.kind).to_lower(),
 				REFUSED_COLOR
 			)
 			return
@@ -289,13 +304,20 @@ func draw(
 	)
 
 
+## Warm wood for planks, pale stone for stepping stones and an arch, gravel for a ford.
 static func _kind_tint(crossing_kind: int) -> Color:
-	return STONE_TINT if crossing_kind == Crossing.Kind.STONES else TINT
+	match crossing_kind:
+		Crossing.Kind.STONES, Crossing.Kind.ARCH:
+			return STONE_TINT
+		Crossing.Kind.FORD:
+			return GRAVEL_TINT
+	return TINT
 
 
-## A crossing's ghost (map frame) on `canvas`: a plank deck's outline along its arch, filled
-## faintly, with ticks every TICK_M; stepping stones' outlines at their tops; a dot at each
-## bank anchor. Drawn with explicit indices, never triangulated.
+## A crossing's ghost (map frame) on `canvas`: a deck's outline along its arch (planks or a
+## stone arch), filled faintly, with ticks every TICK_M; a ford's bar as the same band at its
+## crest without the ticks; stepping stones' outlines at their tops; a dot at each bank
+## anchor. Drawn with explicit indices, never triangulated.
 static func draw_crossing(
 	canvas: Control,
 	camera: Camera3D,
@@ -309,7 +331,7 @@ static func draw_crossing(
 		return
 	var screen := func(local: Vector3) -> Vector2:
 		return camera.unproject_position(editor.to_world(local))
-	if crossing.is_deck():
+	if crossing.is_deck() or crossing.is_ford():
 		var half := crossing.width_m * 0.5
 		var pieces := maxi(2, ceili(span / OUTLINE_STEP_M))
 		var left := PackedVector2Array()
@@ -320,7 +342,7 @@ static func draw_crossing(
 			left.append(screen.call(CrossingGeometry.point(crossing, u, half, y)))
 			right.append(screen.call(CrossingGeometry.point(crossing, u, -half, y)))
 		_fill_band(canvas, left, right, Color(tint, 0.22 * strength))
-		var ticks := floori(span / TICK_M)
+		var ticks := floori(span / TICK_M) if crossing.is_deck() else 0
 		for k in range(1, ticks + 1):
 			var u := span * k / (ticks + 1)
 			var y := CrossingGeometry.deck_y(crossing.levels, u / span)
