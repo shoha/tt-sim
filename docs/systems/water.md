@@ -212,6 +212,19 @@ maps.
   submerged reed blades and a wading token's legs were outlined the same way. The near side
   is the shallowest of the pixel and its neighbours across the derivative pair (by
   `FRAGCOORD` parity), so both pixels of a silhouette agree.
+- **Clear shallows (2026-10-05, the ford follow-up):** where the vertical water column over
+  ground (the bed's world position from the depth buffer against the surface's) is under
+  `CLEAR_END` 0.3 m, full from `CLEAR_FULL` 0.12 m, the bed shows through as a clear
+  shallow: the absorption keeps `CLEAR_PATH` 0.15 of its path, the tint stays the shallows
+  colour, the bed is saturated as wet stone (`CLEAR_SATURATE`), the caustics keep the bed's
+  hue (no white lift), shimmer and sky blend keep `CLEAR_GLOSS` 0.45 and the specular
+  `CLEAR_SPECULAR` 0.35 (the sky's reflection outshone a dark bed). `CLEAR_EMIT` 0.85 of the
+  colour goes out as emission instead of albedo: the bed is the screen prepass, already lit,
+  and lit a second time a sunlit bar took the sky's blue and read as teal-grey water. A ford's
+  crest (0.15 m) now reads as a paler, warmer band of gravel across the channel with the
+  stones' foam on its downstream lip, and every shore shows its bed along a thin margin. Water
+  deeper than 0.3 m renders exactly as before (the deep pond and the waist river's body are
+  unchanged in the phase 4d judgment set); the foam terms are untouched.
 - **Not yet:** water on a dressed map is only drawn and floated, and the authoring grid of
   a dressed map is sampled once at open.
 
