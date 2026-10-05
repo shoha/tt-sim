@@ -549,6 +549,15 @@ numerically (for example where a fade or a tint band starts).
   transparent, depth-writing or opaque) each at home zoom panned to the edge, with fog, at
   zoom 20 and at zoom 8 on the mouth, and a GPU A/B (`--only edge_gpu`). 53 captures and
   `INDEX.md`; the verdict is written beside them as `VERDICT.md`.
+- `jobs/p6_look.json`: rivers past the map edge (P6-1, build and look). `_p6_look_forest`: a
+  new 150 ft temperate forest map with a waist river drawn on past the near edge with a bend
+  and an ankle stream drawn to stop at the right edge (a derived continuation);
+  `_p6_look_valley`: a Valley landform map (seed 2) whose recipe river ends at both edges.
+  Each map zoomed out (`*_overview`, with and without fog), then per exit home zoom panned
+  to it, zoom 20 and zoom 8 on the mouth, each with fog off and on; diagnostics with the
+  ribbon, the channel patch or the rest of the skirt hidden (`forest_e0_z8_no*`); the valley
+  under two sky presets (`valley_outdoor_*`). `probes/p6.gd` (`info`, `look` at an exit,
+  `preset`, `show`) does the exits' parts.
 - `jobs/cleanup_levels.json`: `water.gd cleanup` alone (a few seconds): deletes every
   `_p43_`, `_p44_`, `_p45_`, `_p4b_`, `_p4c_`, `_p4d_`, `_p5_`, `_p5j_` and `_p6_` level under
   `user://levels/`, the

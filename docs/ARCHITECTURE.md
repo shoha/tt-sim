@@ -1077,8 +1077,12 @@ rather than in `ASSET_PIPELINE.md`.
   each body has a stable `id` (1..255, unique), `kind` `river` or `pond`, `depth`
   (`ankle`, `waist`, `deep`) and `level_m`; a river adds `speed` (0..2) and its control
   line as `points` (`[[x, z], ...]` in map metres, upstream first, 2..512) with one
-  `half_widths` entry per point (0.2..10 m). `ponds.png` (L8 on the sample grid) holds the
-  id of the pond whose area covers each sample, 0 for none. `water_flow.png` is the baked
+  `half_widths` entry per point (0.2..10 m), and optionally (phase 6, P6-1) the course the
+  author drew on past the map edge as `beyond` (after the last point) and `beyond_up`
+  (before the first), each `[[x, z], ...]` ordered outward, 1..16 points within 50 m of the
+  map; a malformed one is dropped with a warning and the river kept, and a build before
+  phase 6 ignores both keys (it reads only the body keys it knows). `ponds.png` (L8 on the
+  sample grid) holds the id of the pond whose area covers each sample, 0 for none. `water_flow.png` is the baked
   flow map (RG8 stored as an RGB PNG), described by `splines.json`'s `"flow": {"frame":
   "map_xz", "size": [nx, nz]}` (up to 1024 per axis). Caps: 64 bodies, 32 rivers, byte
   caps 2 MB (`splines.json`) and 4 MB (each PNG). A malformed body (bad id, kind, depth,
@@ -1257,16 +1261,28 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   `SKIRT_FADE_M`, `skirt_height()`, smoothstep, so a raised or sunken edge settles instead of
   running out into the fog as a shelf; normals follow the fall-off; P3-4) with
   `shaders/authored_ground_skirt.gdshader`, which is the ground
-  shader (`authored_ground.gdshaderinc`) with `GROUND_SKIRT`: transparent, base surface
-  only, no rules, alpha 1 at the edge falling to 0 over `SKIRT_FADE_M` (24 m) with the distance
-  stretched +-45 % by noise. It continues the ground's exact texture across the edge and
-  dissolves into the backdrop, whatever colour that is. Decoration only: no collision, no
+  shader (`authored_ground.gdshaderinc`) with `GROUND_SKIRT`: base surface only, no rules,
+  fading from the ground at the edge to the backdrop over `SKIRT_FADE_M` (24 m) with the
+  distance stretched +-45 % by noise (`shaders/skirt_fade.gdshaderinc`). It continues the
+  ground's exact texture across the edge. Since phase 6 (P6-1) it is opaque, so it is in the
+  depth and screen textures and water running on past the edge reads it; the fade is done in
+  colour (lit ground times the fade plus the backdrop as emission times one minus it), the
+  backdrop being what the camera shows (the environment's flat colour, a panorama sky's
+  colour in the view direction, a procedural sky's gradient there; a per-pixel dither for any
+  other sky material), fogged as Godot fogs the background, and the skirt writes Godot's fog
+  times the fade itself so the edge fogs like the map. `SkirtBackdrop` (a child) keeps those
+  uniforms in step with the environment every frame. Rivers that leave the map run on in it
+  (`RiverExits`, `RiverExitMesh`, `SkirtExits`; `docs/systems/water.md` "Past the map
+  edge"): a finer patch of the skirt around each exit is carved along the river's continued
+  course and the water flows in it. Decoration only: no collision, no
   shadow, and `Constants.BOUNDS_EXEMPT_META` keeps it out of the pan bounds and
   `LevelEnvironmentManager.compute_map_bounds` (reflection probe, dressing extent). Present
-  in play as well as authoring. Pixels past the fade (alpha 0, more than half the ring) are
+  in play as well as authoring. Pixels past the fade (more than half the ring) are
   discarded before any texture work. Cost (2026-09-26, `PERFORMANCE.md` "In-game authoring:
-  pinned performance pass"): nothing at the home view, 0.6-0.7 ms at max play zoom panned to
-  the map edge, 0.9 ms at full authoring zoom-out (1.24 ms before the discard).
+  pinned performance pass", the transparent skirt): nothing at the home view, 0.6-0.7 ms at
+  max play zoom panned to the map edge, 0.9 ms at full authoring zoom-out (1.24 ms before the
+  discard). The opaque skirt measured +0.3 to 0.45 ms over the transparent one at zoom 20 on
+  the edge in the P6-0 probe (indicative, not pinned); a pinned pass is open.
 - **Ground material:** `shaders/authored_ground.gdshader` (a two-line wrapper; the shader and
   its documentation are `authored_ground.gdshaderinc`, shared with the skirt), built by
   `GroundPalette.build_ground_material(surface, seed)` (`utils/ground_palette.gd`, with
