@@ -4,18 +4,18 @@ extends RefCounted
 ## The Lakeshore starting landform (P5-2; see StartingLandform and LandformRecipes for the
 ## frame every recipe shares). A deep lake over one corner third of the map: a disc of
 ## LAKE_RADIUS_SHARE of the half extent centred LAKE_CENTRE_SHARE of it toward a seeded
-## corner, its shore warped by low-frequency noise up to LAKE_WARP of the radius, carved as a
-## pond through the Water tool's pure path (StartingLandform.carve_pond: the level is the
-## lowest rim ground less the freeboard). The ground rises away from the shore by
-## LAKE_RISE_M over LAKE_RISE_RUN_SHARE of the half extent, so the lake sits in the map's low
-## corner and a stream runs down to it. The seed draws: an islet (ISLET_CHANCE), a small
-## hill shaped before the pond is stamped so the mask leaves it dry, its top ISLET_TOP_OVER_M
-## above the water, on the far side of the stage's line from the stream; a feeding ankle
-## stream (STREAM_CHANCE) from the far side of the map, approaching off the stage's line by
-## STREAM_AZIMUTH_DEG, ending just inside the shore (plan_river joins it at the waterline);
-## stepping stones over the stream (STONES_CHANCE). The stage is on the shore
-## nearest the map's centre, STAGE_SHORE_M back from the waterline. The lake is the water:
-## a dry draw has it too.
+## corner (never the camera's own: allowed_corners()), its shore warped by low-frequency
+## noise up to LAKE_WARP of the radius, carved as a pond through the Water tool's pure path
+## (StartingLandform.carve_pond: the level is the lowest rim ground less the freeboard).
+## The ground rises away from the shore by LAKE_RISE_M over LAKE_RISE_RUN_SHARE of the half
+## extent, so the lake sits in the map's low corner and a stream runs down to it.
+## The seed draws: an islet (ISLET_CHANCE), a small hill shaped before the pond is stamped
+## so the mask leaves it dry, its top ISLET_TOP_OVER_M above the water, on the far side of
+## the stage's line from the stream; a feeding ankle stream (STREAM_CHANCE) from the far side
+## of the map, approaching off the stage's line by STREAM_AZIMUTH_DEG, ending just inside the
+## shore (plan_river joins it at the waterline); stepping stones over the stream
+## (STONES_CHANCE). The stage is on the shore nearest the map's centre, STAGE_SHORE_M back
+## from the waterline. The lake is the water: a dry draw has it too.
 
 const LAKE_RADIUS_SHARE := 0.45
 ## 0.5 since P5-4 (0.55 sat the lake at the home view's edge): more water in the home view.
@@ -155,15 +155,32 @@ static func lakeshore(doc: MapDocument, seed_value: int, biome_id: String) -> Di
 
 
 ## The Lakeshore's frame from the seed, for a map of half extent `half`: the corner (each
-## axis +1 or -1), the lake's centre LAKE_CENTRE_SHARE of `half` toward it on both axes, and
-## the unit direction from the centre toward the map's middle (the stage's line).
+## axis +1 or -1; one of the three that are not the camera's own, the corner
+## StartingLandform.NEAR points to, where the lake would lie at the bottom of the view cut by
+## the foreground; P5-4b), the lake's centre LAKE_CENTRE_SHARE of `half` toward it on both
+## axes, and the unit direction from the centre toward the map's middle (the stage's line).
 static func lakeshore_frame(half: float, rng: RandomNumberGenerator) -> Dictionary:
-	var corner := Vector2i(
-		1 if rng.randf() < 0.5 else -1,
-		1 if rng.randf() < 0.5 else -1,
-	)
+	var corners := allowed_corners()
+	# Two draws as before (the frame stream's count stays): the corner index from the first,
+	# the second drawn and left unused.
+	var index := mini(floori(rng.randf() * corners.size()), corners.size() - 1)
+	rng.randf()
+	var corner := corners[index]
 	var centre := Vector2(corner) * half * LAKE_CENTRE_SHARE
 	return {"corner": corner, "centre": centre, "toward": (-centre).normalized()}
+
+
+## The corners a lake may take: the four (+-1, +-1) less the camera's own (the signs of
+## StartingLandform.NEAR), in a fixed order.
+static func allowed_corners() -> Array[Vector2i]:
+	var near := Vector2i(
+		roundi(signf(StartingLandform.NEAR.x)), roundi(signf(StartingLandform.NEAR.y))
+	)
+	var out: Array[Vector2i] = []
+	for corner in [Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(1, 1)]:
+		if corner != near:
+			out.append(corner)
+	return out
 
 
 ## Stepping stones where `stream` runs straightest at least STONES_SHORE_M back from the

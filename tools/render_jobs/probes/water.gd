@@ -42,7 +42,7 @@ extends RefCounted
 ##                               asset, rock props under the water, the ground layers.
 ##   profile {every}             ground and depth along every river's course.
 ##   joints                      the reach steps of every river, named "joint<k>" (P4-5).
-##   cleanup                     deletes the _p43_ to _p4d_ and _p5_ level folders (test levels).
+##   cleanup                     deletes the _p43_ to _p4d_, _p5_ and _p5j_ level folders (test levels).
 
 ## The `build` map: the river's control line, its reaches' half-widths, the bank width of
 ## the carve, and the two ponds.
