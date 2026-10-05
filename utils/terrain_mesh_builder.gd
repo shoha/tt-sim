@@ -421,7 +421,9 @@ static func _skirt_slope(edge_y: float, distance_m: float, fall_m: float) -> flo
 ## `width_m`), so a raised or sunken edge rolls off into the base level. UVs are world XZ
 ## like the chunks', so the ground shader continues across the edge without a seam. Normals
 ## follow the fall-off; every triangle faces +Y. Vertex r * count + i is ring r's copy of
-## boundary sample i (ring 0 is the inner edge).
+## boundary sample i (ring 0 is the inner edge). UV2 is the wet dressing a river's channel
+## past the edge carries (RiverExitMesh; zero here), so the skirt and its channel patch share
+## one vertex layout.
 static func build_skirt_arrays(doc: MapDocument, width_m: float, fall_m: float = -1.0) -> Array:
 	var loop := boundary_samples(doc)
 	var count := loop.size()
@@ -456,6 +458,10 @@ static func build_skirt_arrays(doc: MapDocument, width_m: float, fall_m: float =
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	var wet := PackedVector2Array()
+	wet.resize(count * rings)
+	wet.fill(Vector2.ZERO)
+	arrays[Mesh.ARRAY_TEX_UV2] = wet
 	arrays[Mesh.ARRAY_INDEX] = indices
 	return arrays
 

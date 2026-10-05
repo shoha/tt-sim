@@ -16,7 +16,8 @@ extends RefCounted
 ##   WATER            WaterMeshBuilder.build (AuthoredWater's geometry, the waterfalls'
 ##                    included), only with water
 ##   FIELDS, CHUNKS   TerrainMeshBuilder.grid_fields, then every chunk's mesh arrays with them
-##   SKIRT            TerrainMeshBuilder.build_skirt_arrays
+##   SKIRT            RiverExitMesh.skirt_parts: the skirt's arrays, and the channel and
+##                    water of the rivers that leave the map (P6-1)
 ##   CROSSINGS        CrossingGeometry.build (AuthoredCrossings' geometry), only with crossings
 ## Summary: docs/ARCHITECTURE.md Map Loading Flow.
 
@@ -99,6 +100,9 @@ static func work(doc: MapDocument, part: String, out: Dictionary) -> void:
 			out[FIELDS] = fields
 			out[CHUNKS] = chunks
 		SKIRT:
-			out[SKIRT] = TerrainMeshBuilder.build_skirt_arrays(
-				doc, AuthoredTerrain.skirt_width_m(), AuthoredTerrain.SKIRT_FADE_M
+			out[SKIRT] = RiverExitMesh.skirt_parts(
+				doc,
+				AuthoredTerrain.skirt_width_m(),
+				AuthoredTerrain.SKIRT_FADE_M,
+				AuthoredTerrain.SKIRT_WOBBLE
 			)

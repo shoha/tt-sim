@@ -49,6 +49,8 @@ extends Node3D
 ## for the whole grid (get_rule_fields()); settle_heights() recomputes them
 ## CURVATURE_RADIUS_M around everything edited since the last settle, and the settling
 ## rebuild carries them into the chunks (mid-stroke only the vertices move).
+## River exits (P6-1): rivers leaving the map run on into the skirt (RiverExitMesh, SkirtExits;
+## apply_river_exits()). The opaque skirt's fade follows the environment (SkirtBackdrop).
 
 const CHUNK_NAME_PREFIX := "TerrainChunk"
 const COLLISION_NAME := "TerrainCollision"
@@ -145,6 +147,8 @@ var _skirt_material: ShaderMaterial = null
 ## waiting for refresh_skirt().
 var _skirt_mirror: Dictionary = {}
 var _skirt_rect: Rect2i = Rect2i()
+## RiverExitMesh.build() of the skirt now ({} when no river leaves the map).
+var _exits: Dictionary = {}
 ## cell -> Vector2(lowest, highest) height of the chunk (grown only by in-place updates,
 ## exact after a rebuild).
 var _chunk_heights: Dictionary = {}
@@ -202,6 +206,7 @@ func build(
 	_chunk_heights.clear()
 	_skirt_dirty = false
 	_fields_dirty = Rect2i()
+	_skirt_material = null
 	_material = GroundPalette.build_ground_material(doc.base_surface, doc.map_seed, root)
 	# The wet dressing first: whether the map has water decides the layer plan.
 	if prepared.has(AuthoredLoadPrep.DRESSING):
@@ -217,7 +222,7 @@ func build(
 	if with_chunks:
 		rebuild_chunks(TerrainMeshBuilder.chunk_cells(doc))
 	_build_collision()
-	_build_skirt(prepared.get(AuthoredLoadPrep.SKIRT, []))
+	_build_skirt(prepared.get(AuthoredLoadPrep.SKIRT, {}))
 	_refresh_height_texture()
 
 
@@ -226,9 +231,10 @@ func get_material() -> ShaderMaterial:
 	return _material
 
 
-## The ground skirt: the base surface continued past the map edge, fading to transparent
+## The ground skirt: the base surface continued past the map edge, fading into the backdrop
 ## (see SKIRT in shaders/authored_ground.gdshaderinc), so a zoomed-out view shows the map
-## dissolving into the background instead of a cut rectangle. Decoration only: no
+## dissolving into the background instead of a cut rectangle; the rivers that leave the map
+## run on in it (SkirtExits children; see the header). Decoration only: no
 ## collision, no shadow casting, and Constants.BOUNDS_EXEMPT_META keeps it out of the pan
 ## bounds and the reflection probe. Rebuilt by build(); a height edit on the map edge
 ## refreshes its geometry (refresh_skirt(); its inner edge copies the boundary heights).
@@ -241,25 +247,29 @@ static func skirt_width_m() -> float:
 	return SKIRT_FADE_M / (1.0 - SKIRT_WOBBLE) + 2.0
 
 
-func _build_skirt(arrays: Array = []) -> void:
+## Builds the skirt node from `parts` (RiverExitMesh.skirt_parts(): the skirt's arrays and
+## the river exits; computed here when empty), its material made once per build().
+func _build_skirt(parts: Dictionary = {}) -> void:
 	var old := get_skirt()
 	if old != null:
 		old.free()
-	# The base surface's textures and seed, so the texture continues across the edge; no
-	# layer weights (they clamp at the edge and would streak outward) and no rules (the
-	# skirt shader compiles them out), only the base's accent patches (GroundAccents).
-	_skirt_material = _material.duplicate() as ShaderMaterial
-	_skirt_material.shader = SKIRT_SHADER
-	_skirt_material.set_shader_parameter("layer_painted_mask", 0)
-	_skirt_material.set_shader_parameter("layer_ground_mask", 0)
-	GroundAccents.sync_skirt(_skirt_material, _material, _plan.get("layers", []).size())
-	_skirt_material.set_shader_parameter("skirt_half_extent", document.extent_m() * 0.5)
-	_skirt_material.set_shader_parameter("skirt_fade_m", SKIRT_FADE_M)
-	_skirt_material.set_shader_parameter("skirt_wobble", SKIRT_WOBBLE)
+	if _skirt_material == null:
+		# The base surface's textures and seed, so the texture continues across the edge; no
+		# layer weights (they clamp at the edge and would streak outward) and no rules (the
+		# skirt shader compiles them out), only the base's accent patches (GroundAccents).
+		_skirt_material = _material.duplicate() as ShaderMaterial
+		_skirt_material.shader = SKIRT_SHADER
+		_skirt_material.set_shader_parameter("layer_painted_mask", 0)
+		_skirt_material.set_shader_parameter("layer_ground_mask", 0)
+		GroundAccents.sync_skirt(_skirt_material, _material, _plan.get("layers", []).size())
+		_skirt_material.set_shader_parameter("skirt_half_extent", document.extent_m() * 0.5)
+		_skirt_material.set_shader_parameter("skirt_fade_m", SKIRT_FADE_M)
+		_skirt_material.set_shader_parameter("skirt_wobble", SKIRT_WOBBLE)
+	if parts.is_empty():
+		parts = RiverExitMesh.skirt_parts(document, skirt_width_m(), SKIRT_FADE_M, SKIRT_WOBBLE)
+	_exits = parts.get("exits", {})
 	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(
-		Mesh.PRIMITIVE_TRIANGLES, arrays if not arrays.is_empty() else _skirt_arrays()
-	)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, parts.skirt)
 	mesh.surface_set_material(0, _skirt_material)
 	# In-place edge edits move vertices the build-time AABB does not know about; the skirt is
 	# decoration outside every bounds walk, so a generous box costs nothing.
@@ -270,12 +280,30 @@ func _build_skirt(arrays: Array = []) -> void:
 	)
 	_skirt_mirror = {}
 	_skirt_rect = Rect2i()
-	var skirt := MeshInstance3D.new()
-	skirt.name = SKIRT_NAME
-	skirt.mesh = mesh
-	skirt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	skirt.set_meta(Constants.BOUNDS_EXEMPT_META, true)
+	var skirt := SkirtExits.decoration(SKIRT_NAME, mesh)
+	SkirtExits.decorate(skirt, _exits, _skirt_material, document, SKIRT_FADE_M, SKIRT_WOBBLE)
+	_sync_skirt_water()
 	add_child(skirt)
+
+
+## Rebuilds the skirt, keeping its material, with `parts` (RiverExitMesh.skirt_parts() from
+## AuthoredWater's refresh worker; {} when no river leaves the map) when either has an exit.
+func apply_river_exits(parts: Dictionary) -> void:
+	if _exits.is_empty() and (parts.get("exits", {}) as Dictionary).is_empty():
+		return
+	_build_skirt(parts)
+
+
+## The current river exits' geometry (RiverExitMesh.build(); {} when none). Do not modify.
+func river_exits() -> Dictionary:
+	return _exits
+
+
+func _sync_skirt_water() -> void:
+	if _skirt_material != null:
+		var channel := not _exits.is_empty() and _has_water()
+		var layers: int = _plan.get("layers", []).size()
+		SkirtExits.sync_water(_skirt_material, _material, layers, channel)
 
 
 ## Brings the skirt's geometry up to the current boundary heights (a sculpt edit on the map
@@ -313,12 +341,6 @@ func refresh_skirt() -> void:
 			)
 	_skirt_rect = Rect2i()
 	last_skirt_usec = Time.get_ticks_usec() - started
-
-
-## The skirt's geometry: the ring out to skirt_width_m(), falling back to the map floor
-## over the fade distance, so it is at the base level wherever it is still visible.
-func _skirt_arrays() -> Array:
-	return TerrainMeshBuilder.build_skirt_arrays(document, skirt_width_m(), SKIRT_FADE_M)
 
 
 ## The palette surface of each layer slot, in slot (weight channel) order.
@@ -386,6 +408,7 @@ func refresh_water_dressing() -> void:
 		if _plan_layers():
 			update_ground_region(Rect2i(0, 0, document.samples_x(), document.samples_z()))
 	_bind_water_dressing()
+	_sync_skirt_water()
 
 
 ## The wet dressing texture (WaterDressing layout), or null with no water. Do not modify.
@@ -635,6 +658,7 @@ func _bind_layers(previous: Array) -> void:
 	GroundAccents.bind(_material, _plan, document.map_seed)
 	if _skirt_material != null:
 		GroundAccents.sync_skirt(_skirt_material, _material, layers.size())
+		_sync_skirt_water()
 
 
 func _weight_planes(rect: Rect2i) -> Array[PackedByteArray]:
