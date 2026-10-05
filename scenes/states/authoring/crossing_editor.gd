@@ -313,4 +313,6 @@ static func _label(crossing: Crossing) -> String:
 			return "stepping stones"
 		Crossing.Kind.ARCH:
 			return "stone arch"
+		Crossing.Kind.FORD:
+			return "ford"
 	return "bridge"

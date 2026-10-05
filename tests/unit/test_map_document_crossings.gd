@@ -212,6 +212,33 @@ func test_an_arch_round_trips_with_its_width_range() -> void:
 	assert_eq(good["document"].crossings[0].kind, Crossing.Kind.ARCH)
 
 
+## P4d-2: the ford is a kind of the entry, read and written as "ford" with its own width
+## range (1.5..4.0 m); its middle level lies below its ends (the crest under the water).
+func test_a_ford_round_trips_with_its_width_range() -> void:
+	var doc := _doc()
+	var ford := Crossing.make(
+		8, Crossing.Kind.FORD, Vector2(-2, 0), Vector2(4, 0), Vector3(0.0, -0.35, 0.0), 2.5
+	)
+	doc.crossings.append(ford)
+	var entries := _entries(doc)
+	var data: Dictionary = JSON.parse_string(entries["crossings.json"].get_string_from_utf8())
+	assert_eq(data["crossings"][2]["kind"], "ford")
+	var read: MapDocument = MapDocumentIO.parse(entries)["document"]
+	assert_eq(read.crossings.size(), 3)
+	assert_true(read.crossing(8).same_as(ford), "bit-exact")
+	assert_true(read.crossing(8).is_ford())
+	assert_false(read.crossing(8).is_deck())
+	assert_eq(Crossing.MIN_WIDTH_M[Crossing.Kind.FORD], 1.5)
+	assert_eq(Crossing.MAX_WIDTH_M[Crossing.Kind.FORD], 4.0)
+	for width in [1.2, 4.3]:
+		var result := _parse_crossings([_crossing_json({"kind": "ford", "width_m": width})])
+		assert_eq(result["document"].crossings.size(), 0, "width %s refused" % width)
+		assert_true(Fixtures.has_warning(result, "width outside 1.5..4"), str(result["warnings"]))
+	var good := _parse_crossings([_crossing_json({"kind": "ford", "width_m": 2.5})])
+	assert_eq(good["document"].crossings.size(), 1)
+	assert_eq(good["document"].crossings[0].kind, Crossing.Kind.FORD)
+
+
 func test_cap_on_read() -> void:
 	var list: Array = []
 	for k in MapDocument.MAX_CROSSINGS + 3:

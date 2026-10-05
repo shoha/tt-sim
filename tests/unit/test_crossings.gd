@@ -9,6 +9,9 @@ extends GutTest
 const RIVER_LEVEL := -0.2
 const BED := -1.0
 const EPSILON := 0.0001
+## A ford's line across _doc()'s river (the stones' default line; P4d-2).
+const FORD_FROM := Vector2(0.3, -1)
+const FORD_TO := Vector2(0, 1)
 ## Ground shapes shared with the water tests (the tier fall, P4c-5).
 const Fixtures := preload("res://tests/unit/water_fixtures.gd")
 
@@ -22,8 +25,9 @@ func after_each() -> void:
 
 
 ## A flat 20 x 20 cell map (30.48 m) with a straight channel carved to BED along X over
-## -10..10 m, 1.5 m either side of Z = 0, holding a waist-deep river at RIVER_LEVEL.
-func _doc() -> MapDocument:
+## -10..10 m, 1.5 m either side of Z = 0, holding a river of class `depth` (waist-deep by
+## default) at RIVER_LEVEL, flowing toward +X.
+func _doc(depth: WaterBody.Depth = WaterBody.Depth.WAIST) -> MapDocument:
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "test", 7)
 	var heights := doc.heights.duplicate()
 	for z in doc.samples_z():
@@ -34,7 +38,7 @@ func _doc() -> MapDocument:
 	doc.heights = heights
 	var line := PackedVector2Array([Vector2(-10, 0), Vector2(0, 0), Vector2(10, 0)])
 	var widths := PackedFloat32Array([1.5, 1.5, 1.5])
-	doc.water_bodies.append(WaterBody.river(1, line, widths, WaterBody.Depth.WAIST, RIVER_LEVEL))
+	doc.water_bodies.append(WaterBody.river(1, line, widths, depth, RIVER_LEVEL))
 	return doc
 
 
@@ -294,13 +298,15 @@ func test_plank_bridge_parts() -> void:
 
 func test_every_triangle_faces_its_normal_clockwise() -> void:
 	var doc := _doc()
-	for kind in [Crossing.Kind.PLANK, Crossing.Kind.STONES, Crossing.Kind.ARCH]:
+	for kind in [Crossing.Kind.PLANK, Crossing.Kind.STONES, Crossing.Kind.ARCH, Crossing.Kind.FORD]:
 		var crossing := CrossingPlacement.anchor(doc, Vector2(0, -1), Vector2(0, 1), kind)
 		crossing.id = 3
 		var parts := CrossingGeometry.build_one(doc, crossing)
 		var surfaces: Array = [parts.wood] if kind == Crossing.Kind.PLANK else [parts.stone]
 		if kind == Crossing.Kind.ARCH:
 			surfaces.append(parts.paving)
+		if kind == Crossing.Kind.FORD:
+			surfaces.append(parts.gravel)
 		for arrays: Array in surfaces:
 			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 			var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
@@ -490,6 +496,187 @@ func test_a_long_arch_gets_a_pier_and_keeps_one_deck_curve() -> void:
 		if absf(uv.x - span * 0.5) < CrossingArch.PIER_W_M * 0.5 + 0.01:
 			lowest_mid = minf(lowest_mid, v.y)
 	assert_lt(lowest_mid, BED, "the pier is bedded")
+
+
+# --- ford (P4d-2) ---------------------------------------------------------------------------
+
+
+func test_ford_levels_sit_under_the_water_and_its_ends_on_the_banks() -> void:
+	for depth in [WaterBody.Depth.ANKLE, WaterBody.Depth.WAIST]:
+		var doc := _doc(depth)
+		var ford := _placed(doc, Crossing.Kind.FORD, FORD_FROM, FORD_TO)
+		assert_true(ford.is_ford())
+		assert_false(ford.is_deck(), "no deck: the grid lies on the water over a ford")
+		var label := WaterBody.DEPTH_NAMES[depth]
+		assert_almost_eq(ford.levels.x, 0.0, EPSILON, "%s: the start on the bank ground" % label)
+		assert_almost_eq(ford.levels.z, 0.0, EPSILON, "%s: the end on the bank ground" % label)
+		assert_almost_eq(
+			ford.levels.y,
+			RIVER_LEVEL - CrossingPlacement.FORD_DEPTH_M,
+			EPSILON,
+			"%s: the crest just under the water" % label
+		)
+		assert_almost_eq(ford.width_m, Crossing.DEFAULT_WIDTH_M[Crossing.Kind.FORD], EPSILON)
+		var stones := CrossingPlacement.anchor(doc, FORD_FROM, FORD_TO, Crossing.Kind.STONES)
+		assert_almost_eq(ford.span_m(), stones.span_m(), EPSILON, "steps off near the edge")
+		assert_true(CrossingGeometry.deck_field(doc, doc.crossings).is_empty())
+	var wide := CrossingPlacement.anchor(_doc(), FORD_FROM, FORD_TO, Crossing.Kind.FORD, 9.0)
+	assert_almost_eq(wide.width_m, Crossing.MAX_WIDTH_M[Crossing.Kind.FORD], EPSILON)
+
+
+func test_a_ford_is_refused_on_deep_water() -> void:
+	var doc := _doc(WaterBody.Depth.DEEP)
+	var placed := CrossingPlacement.place(doc, FORD_FROM, FORD_TO, Crossing.Kind.FORD)
+	assert_eq(placed.refusal, CrossingPlacement.REFUSED_DEEP)
+	assert_null(placed.crossing)
+	assert_eq(
+		CrossingPlacement.place(doc, FORD_FROM, FORD_TO, Crossing.Kind.STONES).refusal,
+		&"",
+		"stones still cross deep water"
+	)
+	assert_true(CrossingPlacement.deep_at(doc, Vector2.ZERO))
+	assert_false(CrossingPlacement.deep_at(doc, Vector2(0, 5)), "dry ground")
+	assert_false(CrossingPlacement.deep_at(_doc(), Vector2.ZERO), "waist water is wadeable")
+	# A deep pond is refused too; a deep channel under a shallow river's surface as well.
+	var pond := _doc()
+	pond.water_bodies.clear()
+	var mask := PackedByteArray()
+	mask.resize(pond.sample_count())
+	for z in pond.samples_z():
+		for x in pond.samples_x():
+			var p := pond.sample_to_world(Vector2(x, z))
+			if absf(p.x) <= 10.0 and absf(p.y) <= 1.5:
+				mask[pond.sample_index(x, z)] = 2
+	pond.pond_mask = mask
+	pond.water_bodies.append(WaterBody.pond(2, WaterBody.Depth.DEEP, RIVER_LEVEL))
+	assert_eq(
+		CrossingPlacement.place(pond, FORD_FROM, FORD_TO, Crossing.Kind.FORD).refusal, &"deep"
+	)
+	var layered := _doc()
+	var line := PackedVector2Array([Vector2(-10, 0), Vector2(10, 0)])
+	layered.water_bodies.append(
+		WaterBody.river(2, line, PackedFloat32Array([1.5, 1.5]), WaterBody.Depth.DEEP, BED + 0.1)
+	)
+	assert_eq(
+		CrossingPlacement.place(layered, FORD_FROM, FORD_TO, Crossing.Kind.FORD).refusal,
+		&"deep",
+		"the deep body under the surface counts"
+	)
+
+
+func test_ford_parts_a_gravel_bar_under_the_surface_with_landings_and_marker_stones() -> void:
+	var doc := _doc()
+	var ford := _placed(doc, Crossing.Kind.FORD, FORD_FROM, FORD_TO)
+	var parts := CrossingGeometry.build_one(doc, ford)
+	assert_true((parts.wood as Array).is_empty(), "no wood")
+	assert_true((parts.paving as Array).is_empty(), "no paving")
+	assert_false((parts.gravel as Array).is_empty(), "the bar")
+	assert_false((parts.stone as Array).is_empty(), "the marker stones")
+	var vertices: PackedVector3Array = parts.gravel[Mesh.ARRAY_VERTEX]
+	var colors: PackedColorArray = parts.gravel[Mesh.ARRAY_COLOR]
+	var crest := RIVER_LEVEL - CrossingPlacement.FORD_DEPTH_M
+	var high := 0
+	var on_crest := 0
+	var pale_crest := 0
+	var under_bed := 0
+	var nearest := Vector3.INF
+	var nearest_m := INF
+	for k in vertices.size():
+		var v := vertices[k]
+		var xz := Vector2(v.x, v.z)
+		var ground := WaterGeometry.ground_at(doc, xz)
+		if v.y < ground - CrossingFord.RIM_SINK_M - EPSILON:
+			under_bed += 1
+		if WaterGeometry.is_wet_at(doc, xz):
+			if v.y > maxf(ground, RIVER_LEVEL - CrossingFord.SURFACE_CLEAR_M) + EPSILON:
+				high += 1
+			if absf(v.y - crest) <= CrossingFord.NOISE_M + EPSILON:
+				on_crest += 1
+				if colors[k].r > 0.7:
+					pale_crest += 1
+		elif xz.distance_to(ford.start) < nearest_m:
+			nearest_m = xz.distance_to(ford.start)
+			nearest = v
+	assert_eq(high, 0, "no gravel above the water minus SURFACE_CLEAR_M over the wet run")
+	assert_gt(on_crest, 4, "the crest stands FORD_DEPTH_M under the water")
+	assert_eq(pale_crest, 0, "the crest is shaded wet")
+	assert_eq(under_bed, 0, "nothing sunk under the ground but the rim")
+	var pad := WaterGeometry.ground_at(doc, Vector2(nearest.x, nearest.z)) + CrossingFord.PAD_M
+	assert_almost_eq(nearest.y, pad, EPSILON, "the landing pad PAD_M over the ground at the anchor")
+	# Three to five marker stones along the downstream (+X) edge, tops STONE_ABOVE_M over the water.
+	var stones := CrossingFord.stone_layout(doc, ford)
+	assert_between(stones.size(), 3, 5)
+	assert_eq(stones.size(), 3, "one per 0.8 m of a 2.5 m bar")
+	var middle := (ford.start + ford.end) * 0.5
+	for stone in stones:
+		assert_almost_eq(float(stone.top), RIVER_LEVEL + CrossingFord.STONE_ABOVE_M, 0.011)
+		assert_gt((stone.at as Vector2).x, middle.x + 0.5, "on the downstream edge")
+		assert_between(float(stone.radius) * 2.0, CrossingFord.STONE_M.x, CrossingFord.STONE_M.y)
+	var wide := CrossingPlacement.anchor(doc, FORD_FROM, FORD_TO, Crossing.Kind.FORD, 4.0)
+	wide.id = 2
+	assert_eq(CrossingFord.stone_layout(doc, wide).size(), 5)
+	# The highest point (the drag's cast starts above it) is the landing pad on the bank.
+	assert_almost_eq(float(parts.top), CrossingFord.PAD_M, 0.02, "the landing pad is highest")
+	# Collision: the crest and the stones.
+	var faces: PackedVector3Array = parts.collision
+	var crest_faces := 0
+	var stone_faces := 0
+	for v in faces:
+		if absf(v.y - crest) <= CrossingFord.NOISE_M + EPSILON:
+			crest_faces += 1
+		if v.y > RIVER_LEVEL + 0.1:
+			stone_faces += 1
+	assert_gt(crest_faces, 4, "a token lands on the crest")
+	assert_gt(stone_faces, 4, "and on a marker stone")
+	assert_eq(
+		faces.size(),
+		(
+			(parts.gravel[Mesh.ARRAY_INDEX] as PackedInt32Array).size()
+			+ (parts.stone[Mesh.ARRAY_INDEX] as PackedInt32Array).size()
+		)
+	)
+	# Clearance as the stones': the footprint and the landings, soft beyond.
+	assert_eq(CrossingGeometry.clearance(doc.crossings, middle), 0.0, "on the bar")
+	var landing := ford.end + ford.direction() * 0.5
+	assert_eq(CrossingGeometry.clearance(doc.crossings, landing), 0.0, "on the landing")
+	assert_eq(CrossingGeometry.clearance(doc.crossings, Vector2(6, 6)), 1.0, "far away")
+	# Determinism: the same document builds the same ford.
+	var again := CrossingGeometry.build_one(_doc(), ford)
+	assert_true(vertices == again.gravel[Mesh.ARRAY_VERTEX], "every peer builds the same bar")
+	assert_true(
+		parts.stone[Mesh.ARRAY_VERTEX] == again.stone[Mesh.ARRAY_VERTEX], "and the same stones"
+	)
+
+
+func test_a_ford_node_carries_gravel_stone_and_moss() -> void:
+	var doc := _doc()
+	var ford := CrossingPlacement.anchor(
+		doc, Vector2(4, -1), Vector2(4, 1), Crossing.Kind.FORD, -1.0, "temperate_forest_summer_s1"
+	)
+	ford.id = 1
+	doc.crossings.append(ford)
+	var node := _authored_in_tree(doc)
+	var instance := node.get_crossing_node(1).get_node("Ford") as MeshInstance3D
+	assert_not_null(instance)
+	assert_eq(instance.mesh.get_surface_count(), 3, "gravel, stone, moss")
+	assert_false(node.has_decks(), "the grid stays on the water")
+	assert_almost_eq(node.top_y, CrossingFord.PAD_M, 0.02, "the landing pad on the bank")
+	var gravel: ORMMaterial3D = instance.mesh.surface_get_material(0)
+	assert_true(gravel.uv1_triplanar, "triplanar like the stones")
+	assert_eq(gravel.albedo_color, AuthoredCrossings.GRAVEL_TINT)
+	assert_eq(AuthoredCrossings.gravel_surface("temperate_forest_summer_s1"), "gravel")
+	assert_eq(AuthoredCrossings.gravel_surface("rocky_badlands_summer_s1"), "gravel_sandstone")
+	assert_eq(AuthoredCrossings.gravel_surface(""), AuthoredCrossings.DEFAULT_GRAVEL_SURFACE)
+	assert_has(
+		AuthoredCrossings.texture_paths(doc),
+		"res://assets/palette/surfaces/gravel/gravel_albedo.png"
+	)
+	assert_has(
+		AuthoredCrossings.surfaces_for_styles(PackedStringArray(["rocky_badlands_summer_s1"])),
+		"gravel_sandstone"
+	)
+	assert_not_null(node.get_crossing_node(1).get_node_or_null("Collision"))
+	remove_child(_root)
 
 
 func test_clearance_clears_the_footprint_and_bank_landings() -> void:
