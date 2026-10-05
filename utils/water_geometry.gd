@@ -308,6 +308,64 @@ static func river_courses(doc: MapDocument, near: Rect2 = Rect2()) -> Dictionary
 	return out
 
 
+## level_at() at every point of `points` (`courses` as level_at(), which must hold every river
+## of `doc`: river_courses()), the same values for many points at a fraction of the cost: the
+## points are taken in runs of `chunk`, and each run asks its rivers cut to the segments near
+## its own bounding box (_course_near(), so level_at() answers the same), with the pond mask
+## and the document's grid read once. A caller passes its points in an order where
+## neighbours are near (a grid row by row), so each run's box is small. 64-bit, as level_at()
+## returns.
+static func levels_along(
+	doc: MapDocument, points: PackedVector2Array, courses: Dictionary, chunk: int = 28
+) -> PackedFloat64Array:
+	var out := PackedFloat64Array()
+	out.resize(points.size())
+	var has_ponds := doc.pond_mask.size() == doc.sample_count() and doc.sample_count() > 0
+	var half_extent := doc.extent_m() * 0.5
+	var step := doc.sample_step()
+	var columns := doc.samples_x()
+	var last := Vector2i(columns - 1, doc.samples_z() - 1)
+	var pond_mask := doc.pond_mask
+	var bodies := doc.water_bodies
+	var first := 0
+	while first < points.size():
+		var end := mini(first + maxi(chunk, 1), points.size())
+		var box := Rect2(points[first], Vector2.ZERO)
+		for i in range(first + 1, end):
+			box = box.expand(points[i])
+		var near := {}
+		for id in courses:
+			var course: Array = courses[id]
+			near[id] = _course_near(course, box) if not course.is_empty() else []
+		for i in range(first, end):
+			var p := points[i]
+			var best := DRY
+			var pond := 0
+			if has_ponds:
+				var s := ((p + half_extent) / step).round()
+				pond = pond_mask[
+					clampi(int(s.y), 0, last.y) * columns + clampi(int(s.x), 0, last.x)
+				]
+			for body in bodies:
+				if body.level_m <= best:
+					continue
+				if not body.is_river():
+					if pond == body.id:
+						best = body.level_m
+					continue
+				var course: Array = near[body.id] if near.has(body.id) else river_course(body)
+				if course.is_empty():
+					continue
+				var hit := nearest_on_polyline(course[0], p)
+				if hit.y < 0:
+					continue
+				if hit.x <= width_at(course[1], int(hit.y), hit.z) + RIVER_BANK_M:
+					best = body.level_m
+			out[i] = best
+		first = end
+	return out
+
+
 ## `course` (river_course()) cut to its segments from the first to the last whose box grown by
 ## the widest half-width plus RIVER_BANK_M meets `near`, or [] when none does.
 static func _course_near(course: Array, near: Rect2) -> Array:
@@ -406,6 +464,28 @@ static func ground_along(doc: MapDocument, points: PackedVector2Array) -> Packed
 	out.resize(points.size())
 	for i in points.size():
 		out[i] = ground_at(doc, points[i])
+	return out
+
+
+## ground_at() at every point of `points`, exactly (the same arithmetic, 64-bit as ground_at()
+## returns), with the document's grid read once: a few times cheaper than a call per point.
+static func grounds_at(doc: MapDocument, points: PackedVector2Array) -> PackedFloat64Array:
+	var out := PackedFloat64Array()
+	out.resize(points.size())
+	var half_extent := doc.extent_m() * 0.5
+	var step := doc.sample_step()
+	var width := doc.samples_x()
+	var last := Vector2(width - 1, doc.samples_z() - 1)
+	var h := doc.heights
+	for i in points.size():
+		var sample := ((points[i] + half_extent) / step).clamp(Vector2.ZERO, last)
+		var x0 := mini(int(sample.x), int(last.x) - 1)
+		var z0 := mini(int(sample.y), int(last.y) - 1)
+		var fx := sample.x - x0
+		var fz := sample.y - z0
+		var top := lerpf(h[z0 * width + x0], h[z0 * width + x0 + 1], fx)
+		var bottom := lerpf(h[(z0 + 1) * width + x0], h[(z0 + 1) * width + x0 + 1], fx)
+		out[i] = lerpf(top, bottom, fz)
 	return out
 
 

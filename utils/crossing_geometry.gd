@@ -352,29 +352,46 @@ static func local_of(crossing: Crossing, p: Vector2) -> Vector2:
 ## no crossing has a deck. The grid's ground field raises to it
 ## (GroundHeightField.raise_to_decks). Pure.
 static func deck_field(doc: MapDocument, crossings: Array[Crossing]) -> PackedFloat32Array:
-	var field := PackedFloat32Array()
+	return deck_field_add(doc, PackedFloat32Array(), crossings)
+
+
+## `field` (a deck field of `doc`, or empty for none) with the decks of `crossings` added:
+## deck_field() of every deck in `field` and in `crossings`, the same values, since a sample
+## keeps the highest deck over it. AuthoredCrossings adds a placed deck this way instead of
+## re-rasterising every deck on the map. Pure; `field` is not changed.
+static func deck_field_add(
+	doc: MapDocument, field: PackedFloat32Array, crossings: Array[Crossing]
+) -> PackedFloat32Array:
+	var out := field.duplicate()
 	var columns := doc.samples_x()
 	var rows := doc.samples_z()
+	# local_of(crossing, doc.sample_to_world(Vector2(x, z))) inline, the grid read once.
+	var step := doc.sample_step()
+	var half_extent := doc.extent_m() * 0.5
 	for crossing in crossings:
 		var span := crossing.span_m()
 		if not crossing.is_deck() or span <= 0.0:
 			continue
-		if field.is_empty():
-			field.resize(columns * rows)
-			field.fill(NONE)
+		if out.is_empty():
+			out.resize(columns * rows)
+			out.fill(NONE)
 		var half := crossing.width_m * 0.5 + DECK_FIELD_PAD_M
 		var box := Rect2(crossing.start, Vector2.ZERO).expand(crossing.end).grow(half)
 		var first := Vector2i(doc.world_to_sample(box.position).floor())
 		var last := Vector2i(doc.world_to_sample(box.end).ceil())
+		var d := crossing.direction()
+		var left := Vector2(-d.y, d.x)
+		var start := crossing.start
 		for z in range(maxi(first.y, 0), mini(last.y + 1, rows)):
 			for x in range(maxi(first.x, 0), mini(last.x + 1, columns)):
-				var uv := local_of(crossing, doc.sample_to_world(Vector2(x, z)))
+				var rel := Vector2(x, z) * step - half_extent - start
+				var uv := Vector2(rel.dot(d), rel.dot(left))
 				if absf(uv.y) > half or uv.x < -DECK_FIELD_PAD_M or uv.x > span + DECK_FIELD_PAD_M:
 					continue
 				var y := deck_y(crossing.levels, clampf(uv.x / span, 0.0, 1.0))
 				var at := z * columns + x
-				field[at] = maxf(field[at], y)
-	return field
+				out[at] = maxf(out[at], y)
+	return out
 
 
 ## What plants may keep at map point `p` beside `crossings` (ScatterGround): 0 on a
