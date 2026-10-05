@@ -25,7 +25,10 @@ extends RefCounted
 ## change joins the history entry of the edit that caused it (the caller stores
 ## record_follow()'s lists and calls restore() from its undo and redo), so one undo puts the
 ## ground, the water and the crossing back together. `followed` says what happened, for a
-## toast when something vanished.
+## toast when something vanished. An edit that reaches a crossing without moving an anchor
+## (the bed under a bridge's piles, a stone's root, an arch's abutment feet or a ford's bar)
+## still refreshes it: AuthoredCrossings rebuilds only the crossings whose ground or water
+## changed (CrossingCache, P4d-5b), and the record puts the refresh in the undo too (P4d-5c).
 
 ## Crossings followed an edit: `moved` re-anchored, `removed` removed.
 signal followed(moved: int, removed: int)
@@ -183,16 +186,19 @@ func crossing_at(point: Vector3, margin: float = 0.3) -> int:
 ## The crossings of `doc` after an edit changed its ground or water over `area` (map XZ; an
 ## empty rectangle: everywhere), by the rule in the header: {"crossings": the whole list
 ## after (untouched and unmoved crossings are the same objects), "moved": how many were
-## re-anchored, "removed": how many went}. Pure.
+## re-anchored, "removed": how many went, "reached": how many the edit came within
+## FOLLOW_REACH_M of, moved or not}. Pure.
 static func followed_list(doc: MapDocument, area: Rect2) -> Dictionary:
 	var out: Array[Crossing] = []
 	var moved := 0
 	var removed := 0
+	var reached := 0
 	for crossing in doc.crossings:
 		var bounds := CrossingGeometry.clear_bounds(crossing).grow(FOLLOW_REACH_M)
 		if area.has_area() and not bounds.intersects(area):
 			out.append(crossing)
 			continue
+		reached += 1
 		var snapped := CrossingPlacement.anchor(
 			doc, crossing.start, crossing.end, crossing.kind, crossing.width_m, crossing.style
 		)
@@ -205,7 +211,7 @@ static func followed_list(doc: MapDocument, area: Rect2) -> Dictionary:
 		else:
 			out.append(snapped)
 			moved += 1
-	return {"crossings": out, "moved": moved, "removed": removed}
+	return {"crossings": out, "moved": moved, "removed": removed, "reached": reached}
 
 
 ## True when `a` and `b` stand within FOLLOW_MOVE_M and FOLLOW_LEVEL_M of each other.
@@ -221,15 +227,22 @@ static func _near(a: Crossing, b: Crossing) -> bool:
 ## Makes the document's crossings follow an edit of its ground or water over `area` (map XZ;
 ## see the header), refreshing their nodes and the scatter at once, without a history entry of
 ## its own. Returns what the edit's entry needs to put them back ({"before", "after", "area"},
-## for restore()), or {} when nothing changed. Emits followed.
+## for restore()), or {} when the edit reached no crossing. When it reached some but moved
+## none, the list is kept and the nodes are refreshed (the cache rebuilds the crossings whose
+## ground or water changed under them); the record then holds the same list on both sides
+## with an empty area, so restore() refreshes them again over the undone ground. Emits
+## followed when a crossing moved or went.
 func follow(area: Rect2) -> Dictionary:
 	var doc := _editor().document
 	if doc.crossings.is_empty():
 		return {}
 	var result := followed_list(doc, area)
-	if int(result.moved) == 0 and int(result.removed) == 0:
+	if int(result.reached) == 0:
 		return {}
 	var before := _current()
+	if int(result.moved) == 0 and int(result.removed) == 0:
+		_apply(before, Rect2())
+		return {"before": before, "after": before, "area": Rect2()}
 	var after: Array[Crossing] = result.crossings
 	var changed: Array[Crossing] = []
 	for old in before:
@@ -245,7 +258,9 @@ func follow(area: Rect2) -> Dictionary:
 
 
 ## Puts back the crossings of a follow() record (`redo`: its after side, else its before
-## side), from the undo and redo of the edit that caused it. {} does nothing.
+## side), from the undo and redo of the edit that caused it, after the edit's ground and
+## water are back: the nodes refresh over them, so a record that moved nothing still rebuilds
+## the crossings the edit changed the bed under. {} does nothing.
 func restore(record: Dictionary, redo: bool) -> void:
 	if record.is_empty():
 		return

@@ -298,9 +298,20 @@ func test_follow_keeps_a_crossing_nothing_changed_under() -> void:
 	_bridge(editor)
 	var before := _doc.crossings[0]
 	var result := CrossingEditor.followed_list(_doc, Rect2())
-	assert_eq([result.moved, result.removed], [0, 0])
+	assert_eq([result.moved, result.removed, result.reached], [0, 0, 1])
 	assert_same(result.crossings[0], before, "the same object: no nudge")
-	assert_eq(editor.crossings.follow(Rect2()), {}, "nothing to record")
+	var node := _map.get_node(AuthoredCrossings.NODE_NAME) as AuthoredCrossings
+	var builds := node.builds
+	watch_signals(editor.crossings)
+	# The edit reached it, so the record keeps the same list on both sides (P4d-5c: restore
+	# refreshes it over undone ground); nothing changed under it, so nothing rebuilds now.
+	var record := editor.crossings.follow(Rect2())
+	assert_same(record.before, record.after, "the same list on both sides")
+	assert_same(record.before[0], before)
+	assert_false((record.area as Rect2).has_area(), "no scatter to regrow")
+	assert_eq(node.builds, builds, "nothing rebuilt")
+	assert_signal_not_emitted(editor.crossings, "followed")
+	assert_eq(editor.crossings.follow(Rect2(20, 20, 1, 1)), {}, "out of reach: nothing to record")
 
 
 func test_follow_re_anchors_when_a_bank_moves_keeping_the_id() -> void:
