@@ -354,6 +354,68 @@ static func skirt_distance(width: float, ring: int) -> float:
 	)
 
 
+## Moves one patch column (`rings` vertices from `first` in `vertices` and `normals`, built
+## over boundary sample `sample` as _window_piece lays them out) to the sample's current height
+## in `doc`, during a sculpt stroke on the edge, so the patch keeps to the skirt's in-place edge
+## update (TerrainSkirt.update_in_place) until the stroke's water refresh rebuilds it. Ring 0
+## takes the map's boundary vertex (the skirt's normal on an `outer` column, the map's
+## otherwise); an outer column's rings lie on the skirt's own edges again, exactly as built;
+## an inner column's rings move by the skirt's own change at their distance where they are
+## skirt, and keep a carved height (never above the new skirt), which the rebuild then carves
+## exactly (within 1 m of the edge the moved patch is within 0.1 m of a rebuild for a 0.6 m
+## raise by a mouth; further out, where the rebuild carries the new bank along the course, up
+## to 0.35 m off until the stroke ends). `width`, `fall`: the skirt's (the build's). Normals of
+## inner rings past 0 stay.
+static func move_column(
+	doc: MapDocument,
+	sample: Vector2i,
+	vertices: PackedVector3Array,
+	normals: PackedVector3Array,
+	first: int,
+	rings: int,
+	outer: bool,
+	width: float,
+	fall: float
+) -> void:
+	var inner := TerrainMeshBuilder.sample_position(doc, sample.x, sample.y)
+	var old_y := vertices[first].y
+	var out := _out(doc, sample)
+	var out_sq := maxf(out.length_squared(), 1e-6)
+	for k in rings:
+		var at := first + k
+		var p := vertices[at]
+		# The vertex's distance past the edge, from its XZ (inner + out * distance).
+		var d := maxf(Vector3(p.x - inner.x, 0.0, p.z - inner.z).dot(out) / out_sq, 0.0)
+		if k == 0:
+			var edge := _skirt_point(doc, sample, 0.0, fall)
+			vertices[at] = edge[0]
+			normals[at] = (
+				edge[1] as Vector3
+				if outer
+				else TerrainMeshBuilder.sample_normal(doc, sample.x, sample.y)
+			)
+		elif outer:
+			var r := 0
+			while r < TerrainMeshBuilder.SKIRT_RINGS - 1 and skirt_distance(width, r + 1) <= d:
+				r += 1
+			var near := skirt_distance(width, r)
+			var far := skirt_distance(width, r + 1)
+			var t := clampf((d - near) / maxf(far - near, 1e-6), 0.0, 1.0)
+			var a := _skirt_point(doc, sample, near, fall)
+			var b := _skirt_point(doc, sample, far, fall)
+			vertices[at] = (a[0] as Vector3).lerp(b[0], t)
+			normals[at] = (a[1] as Vector3).lerp(b[1], t).normalized()
+		else:
+			var was := TerrainMeshBuilder.skirt_height(old_y, d, fall)
+			var now := TerrainMeshBuilder.skirt_height(inner.y, d, fall)
+			# Ground as the skirt (or over it, where it eases to a mouth's bank) moves with it; a
+			# carved vertex keeps its depth, never above the new skirt: the carve runs along the
+			# course, not straight out from this column, and shifted with the column it raised a
+			# ridge across the channel that hid the water (the follow-up's first probe).
+			var y := p.y + (now - was) if p.y >= was - 1e-4 else minf(p.y, now)
+			vertices[at] = Vector3(p.x, y, p.z)
+
+
 ## Whether `doc` has water that leaves the map: a river exit (RiverExits) or a pond reaching
 ## the edge (PondExits).
 static func has_exits(doc: MapDocument) -> bool:

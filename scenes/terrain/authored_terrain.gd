@@ -147,6 +147,8 @@ var _skirt_material: ShaderMaterial = null
 ## waiting for refresh_skirt().
 var _skirt_mirror: Dictionary = {}
 var _skirt_rect: Rect2i = Rect2i()
+## SkirtExits.channel_mirror() of the exits' patch once the edge is first edited ({} before).
+var _channel_mirror: Dictionary = {}
 ## RiverExitMesh.build() of the skirt now ({} when no river leaves the map).
 var _exits: Dictionary = {}
 ## cell -> Vector2(lowest, highest) height of the chunk (grown only by in-place updates,
@@ -263,6 +265,7 @@ func _build_skirt(parts: Dictionary = {}) -> void:
 	_exits = parts.get("exits", {})
 	var mesh := TerrainSkirt.mesh(parts.skirt, _skirt_material)
 	_skirt_mirror = parts.get("mirror", {})  # Built with the parts; refresh_skirt() needs it.
+	_channel_mirror = {}
 	_skirt_rect = Rect2i()
 	var skirt := SkirtExits.decoration(SKIRT_NAME, mesh)
 	SkirtExits.decorate(skirt, _exits, _skirt_material, document, SKIRT_FADE_M, SKIRT_WOBBLE)
@@ -310,6 +313,20 @@ func refresh_skirt() -> void:
 	TerrainSkirt.update_in_place(
 		skirt.mesh as ArrayMesh, _skirt_mirror, document, _skirt_rect, width, SKIRT_FADE_M
 	)
+	# The exits' patch follows over the same samples (its touched columns only).
+	var channel := skirt.get_node_or_null(NodePath(SkirtExits.CHANNEL_NAME)) as MeshInstance3D
+	if channel != null:
+		if _channel_mirror.is_empty():
+			_channel_mirror = SkirtExits.channel_mirror(_exits, document)
+		SkirtExits.update_channel_in_place(
+			channel.mesh as ArrayMesh,
+			_channel_mirror,
+			_exits,
+			document,
+			_skirt_rect,
+			width,
+			SKIRT_FADE_M
+		)
 	_skirt_rect = Rect2i()
 	last_skirt_usec = Time.get_ticks_usec() - started
 

@@ -570,7 +570,20 @@ tokens past the edge. The probe that chose the rendering is P6-0
   skirt's current exits to its refresh worker, so a water edit rebuilds only the pieces it
   touched (`RiverExitMesh.build`, `p6_perf.gd cache_check`). A sculpt on the edge updates the
   skirt in place during the stroke; its stroke-end water refresh (`WaterEditor.refresh`)
-  rebuilds the touched exit alone.
+  rebuilds the touched exit alone. During the stroke the patch follows too (2026-10-05, the
+  edge follow-up; before, its columns kept the stroke's start heights and a raise beside a
+  mouth opened a hole onto the backdrop between it and the in-place skirt):
+  `AuthoredTerrain.refresh_skirt` moves the patch's columns over the same boundary samples
+  (`SkirtExits.update_channel_in_place`, `RiverExitMesh.move_column`, a CPU copy of the
+  patch's positions and normals made on the first edge edit after each rebuild): ring 0 to
+  the map's boundary vertex, an outer column back onto the skirt's own edges exactly, an
+  inner column's rings by the skirt's change at their distance where they are skirt, a carved
+  vertex keeping its depth (never above the new skirt; shifted straight out with its column,
+  the carve raised a ridge across the channel that hid the water). Within 1 m of the edge the
+  moved patch is within 0.1 m of a rebuild for a 0.6 m raise by a mouth; further out, where the
+  rebuild carries the new bank along the course, up to 0.35 m until the stroke ends. 1.8 ms
+  for 18 touched columns (headless). Probe: `jobs/pol_edge_sculpt.json` (a Raise held on the
+  bank beside `_p6_perf_exits`'s mouth, captured mid-stroke and after).
 - **The skirt is opaque** (`authored_ground.gdshaderinc` SKIRT): the probe found any
   transparent skirt out of the depth and screen textures, so water over it read the backdrop.
   The fade is in colour; the backdrop and the fog are matched to the environment by

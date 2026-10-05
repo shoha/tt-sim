@@ -1,0 +1,26 @@
+{
+ "out_dir": "render_jobs/pol_edge_sculpt",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "saved": {"folder": "_p6_perf_exits", "load": "dress"},
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 150, "seed": 1234, "phase": "build"},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "look_at", "at": [4.5, 22.0]},
+  {"op": "zoom", "size": 8.0},
+  {"op": "wait", "s": 1.5},
+  {"op": "capture", "name": "edge_before", "desc": "_p6_perf_exits at zoom 8 on the bank beside the waist river's exit at the near edge, before the stroke"},
+  {"op": "stroke", "mode": "sculpt", "tile": "raise", "radius": 2.0, "flow": 1.0, "speed": 2.0, "points": [[3.5, 22.2], [5.5, 22.4]], "hold": 3.0, "release": false},
+  {"op": "wait", "s": 0.3},
+  {"op": "capture", "name": "edge_mid_stroke", "desc": "A Raise stroke held on the bank beside the exit's mouth, at the edge: mid-stroke, before its water refresh. The patch past the edge should follow the raised boundary (no step or crack between the map and the skirt's channel patch)"},
+  {"op": "release"},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "capture", "name": "edge_after", "desc": "The same after the stroke's release and its water refresh (the exit rebuilt)"},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}

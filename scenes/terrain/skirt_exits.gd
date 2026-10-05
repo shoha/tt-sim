@@ -36,6 +36,13 @@ static func decorate(
 		var patch := ArrayMesh.new()
 		patch.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, channel)
 		patch.surface_set_material(0, material)
+		# As the skirt's: an edge edit moves its vertices in place (update_channel_in_place).
+		var box := patch.get_aabb()
+		var half := AuthoredTerrain.SKIRT_AABB_HALF_HEIGHT_M
+		patch.custom_aabb = AABB(
+			Vector3(box.position.x, -half, box.position.z),
+			Vector3(box.size.x, 2.0 * half, box.size.z)
+		)
 		skirt.add_child(decoration(CHANNEL_NAME, patch))
 	var backdrop := SkirtBackdrop.new()
 	backdrop.name = SkirtBackdrop.NODE_NAME
@@ -51,6 +58,87 @@ static func decorate(
 		skirt.add_child(node)
 		backdrop.materials.append(node.material_override as ShaderMaterial)
 	skirt.add_child(backdrop)
+
+
+## A CPU copy of the channel patch's positions and normals (exits' "channel" arrays) for
+## update_channel_in_place(): {"vertices", "normals", "loop": the boundary samples}; {} when
+## there is no patch.
+static func channel_mirror(exits: Dictionary, doc: MapDocument) -> Dictionary:
+	var channel: Array = exits.get("channel", [])
+	if channel.is_empty():
+		return {}
+	return {
+		"vertices": (channel[Mesh.ARRAY_VERTEX] as PackedVector3Array).duplicate(),
+		"normals": (channel[Mesh.ARRAY_NORMAL] as PackedVector3Array).duplicate(),
+		"loop": TerrainMeshBuilder.boundary_samples(doc),
+	}
+
+
+## Moves the channel patch's columns over the boundary samples in `rect` (grid coordinates) to
+## their current heights in `doc` (RiverExitMesh.move_column) and uploads just those columns
+## (surface_update_vertex_region on `channel`, the patch's mesh), so during a sculpt stroke on
+## the edge the patch follows the skirt's in-place update (P6-3 follow-up: it kept the stroke's
+## start heights until the stroke's water refresh). `mirror` from channel_mirror(), updated.
+## `width`, `fall`: the skirt's. Returns how many columns moved.
+static func update_channel_in_place(
+	channel: ArrayMesh,
+	mirror: Dictionary,
+	exits: Dictionary,
+	doc: MapDocument,
+	rect: Rect2i,
+	width: float,
+	fall: float
+) -> int:
+	if mirror.is_empty():
+		return 0
+	var loop: Array[Vector2i] = mirror.loop
+	var count := loop.size()
+	var touched := PackedByteArray()
+	touched.resize(count)
+	var any := false
+	for span in TerrainMeshBuilder.skirt_ranges(doc, rect):
+		for i in range(span.x, span.y):
+			touched[i] = 1
+			any = true
+	if not any:
+		return 0
+	var windows: Array = exits.get("windows", [])
+	var columns_total := 0
+	for window: Vector2i in windows:
+		columns_total += window.y + 1
+	var vertices: PackedVector3Array = mirror.vertices
+	var normals: PackedVector3Array = mirror.normals
+	var total := vertices.size()
+	var rings := total / maxi(columns_total, 1)
+	var base := 0
+	var moved := 0
+	for window: Vector2i in windows:
+		var columns := window.y + 1
+		for c in columns:
+			var index := (window.x + c) % count
+			if touched[index] == 0:
+				continue
+			var first := base + c * rings
+			var outer := c == 0 or c == columns - 1
+			RiverExitMesh.move_column(
+				doc, loop[index], vertices, normals, first, rings, outer, width, fall
+			)
+			# An inner column's normals change at ring 0 alone (move_column).
+			var changed := rings if outer else 1
+			var encoded := PackedInt32Array()
+			encoded.resize(changed * 2)
+			for k in changed:
+				encoded[k * 2] = TerrainMeshBuilder.encode_normal(normals[first + k])
+				encoded[k * 2 + 1] = TerrainMeshBuilder.encode_tangent(normals[first + k])
+			channel.surface_update_vertex_region(
+				0, first * 12, vertices.slice(first, first + rings).to_byte_array()
+			)
+			channel.surface_update_vertex_region(0, total * 12 + first * 8, encoded.to_byte_array())
+			moved += 1
+		base += columns * rings
+	mirror.vertices = vertices
+	mirror.normals = normals
+	return moved
 
 
 ## A decoration mesh node (the skirt and its children): no shadow, outside the bounds walks.
