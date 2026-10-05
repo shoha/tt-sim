@@ -54,10 +54,16 @@ func test_seeds_turn_the_heading() -> void:
 		headings[frame.heading_deg] = true
 		assert_lte(absf(float(frame.offset)), half * LandformGorge.OFFSET_SHARE + 0.01)
 		assert_eq((frame.axis as PackedVector2Array).size(), 4 if seed_value % 2 == 0 else 3)
-		# P5-4: the ravine crosses the view, never runs along it.
+		# P5-4: the ravine crosses the view, never runs along the camera's diagonal.
 		assert_true(
 			LandformGorge.HEADINGS.has(int(frame.heading_deg) / 45),
-			"seed %d heading %d within 45 degrees of the x axis" % [seed_value, frame.heading_deg]
+			"seed %d heading %d off the camera's diagonal" % [seed_value, frame.heading_deg]
+		)
+		var dir := Vector2(cos(deg_to_rad(frame.heading_deg)), sin(deg_to_rad(frame.heading_deg)))
+		assert_lt(
+			absf(dir.dot(StartingLandform.VIEW)),
+			0.9,
+			"seed %d heading across the view" % seed_value
 		)
 	assert_gt(headings.size(), 2, "several of the six headings over twelve seeds")
 	assert_ne(

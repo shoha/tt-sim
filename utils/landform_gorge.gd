@@ -4,10 +4,10 @@ extends RefCounted
 ## The Gorge starting landform (P5-2; see StartingLandform and LandformRecipes for the frame
 ## every recipe shares). A ravine one or two tiers deep (TWO_TIERS_CHANCE; two only on a map
 ## TWO_TIERS_MIN_EXTENT_M wide, 150 ft and up) winding across the map: its axis is one of the
-## six headings within 45 degrees of the x axis (HEADINGS: the ravine crosses the view, so
-## its far wall and its floor face the camera, which looks along -z pitched 21.6 degrees
-## down and sees only the near rim of a ravine running along the view) through a point off
-## the centre, bent once by BEND_DEG and, half the time, bent back further on
+## six headings off the camera's diagonal (HEADINGS: the ravine crosses the view, so its
+## far wall and its floor face the camera, which looks along StartingLandform.VIEW pitched
+## 21.6 degrees down and sees only the near rim of a ravine running along the view) through
+## a point off the centre, bent once by BEND_DEG and, half the time, bent back further on
 ## (SECOND_BEND_CHANCE), and the ground follows the polyline's distance field cut downward
 ## with HeightBrush.tier_goal from the rim at the base height (the Sculpt tool's own tier
 ## cut: the rim rounds down with the lip rule's grass on top, a 66 degree rock face drops,
@@ -20,16 +20,18 @@ extends RefCounted
 ## biome's scree surface along it; given a stream, a stone arch over the ravine near its
 ## middle (ARCH_CHANCE), standing on the rims ARCH_FOOT_M back from the lip
 ## (StartingLandform.span_crossing: the Bridge tool's waterline anchors would stand on the
-## floor beside the stream). The stage is on the rim on the camera-facing side (+z) by the
-## arch, or by the middle of the ravine.
+## floor beside the stream). The stage is on the rim on the camera's side
+## (StartingLandform.NEAR) by the arch, or by the middle of the ravine.
 
 const TWO_TIERS_CHANCE := 0.5
 ## Two tiers only on a map at least this wide (150 ft; P5-4): on a 100 ft map a two-tier
 ## ravine's walls and floor took half the ground.
 const TWO_TIERS_MIN_EXTENT_M := 45.0
-## The heading indices (45 degree steps from +x) the frame draws from: within 45 degrees of
-## the x axis (P5-4; see the header).
-const HEADINGS: Array[int] = [0, 1, 3, 4, 5, 7]
+## The heading indices (45 degree steps from +x) the frame draws from: every heading but
+## the two along the camera's diagonal, 45 and 225 degrees (StartingLandform.VIEW; P5-4, see
+## the header). The axis heads 0 / 90 / 180 / 270 cross the view at 45 degrees, 135 / 315
+## square on.
+const HEADINGS: Array[int] = [0, 2, 3, 4, 6, 7]
 const SECOND_BEND_CHANCE := 0.5
 const STREAM_CHANCE := 0.7
 const ARCH_CHANCE := 0.4
@@ -51,10 +53,11 @@ const SECOND_BEND_SHARE := Vector2(0.3, 0.5)
 const STREAM_HALF_WIDTH_M := 0.55
 const STREAM_SPACING_M := 3.0
 const STREAM_WOBBLE_SHARE := 0.2
-## The stream runs this share of the floor's half-width toward the far wall (-z) where the
-## ravine runs across the view, so the near rim does not hide it (see above); along the
-## view it stays in the middle. 0.7 since P5-4 (0.45 left it under the near rim's shadow
-## in a two-tier ravine); the wobble share keeps it off the wall's toe.
+## The stream runs this share of the floor's half-width toward the far wall (the wall on the
+## StartingLandform.VIEW side of the axis) where the ravine runs across the view, so the
+## near rim does not hide it (see above); along the view it stays in the middle. 0.7 since
+## P5-4 (0.45 left it under the near rim's shadow in a two-tier ravine); the wobble share
+## keeps it off the wall's toe.
 const STREAM_FAR_SHARE := 0.7
 ## The walls are put back (StartingLandform.restore_outside) beyond the stream's half-width,
 ## its bank and this much more.
@@ -215,11 +218,12 @@ static func gorge_frame(half: float, two_bends: bool, rng: RandomNumberGenerator
 	}
 
 
-## The stage: STAGE_RIM_M back from the rim (`rim_half` from the axis) on the +z side of
-## `course` at `at`; when that lies outside STAGE_REACH_SHARE of `half` from the centre, the
-## other side, then the nearest point along the course (either side) that fits, else the
-## nearest to the centre of all of them (the axis passes within OFFSET_SHARE of the centre,
-## so one always fits on a 100 ft map or larger).
+## The stage: STAGE_RIM_M back from the rim (`rim_half` from the axis) on the camera's side
+## (StartingLandform.NEAR; the side toward the map centre when the course runs along the
+## view) of `course` at `at`; when that lies outside STAGE_REACH_SHARE of `half` from the
+## centre, the other side, then the nearest point along the course (either side) that fits,
+## else the nearest to the centre of all of them (the axis passes within OFFSET_SHARE of the
+## centre, so one always fits on a 100 ft map or larger).
 static func gorge_stage(
 	course: PackedVector2Array, at: Vector2, rim_half: float, half: float
 ) -> Vector2:
@@ -234,7 +238,8 @@ static func gorge_stage(
 			var here := StartingLandform.along(course, start + sign * 0.5 * n)
 			var dir: Vector2 = here.dir
 			var side := Vector2(-dir.y, dir.x)
-			if side.y < 0.0 or (absf(side.y) < 1e-3 and side.dot(-at) < 0.0):
+			var near := side.dot(StartingLandform.NEAR)
+			if near < -1e-3 or (absf(near) <= 1e-3 and side.dot(-at) < 0.0):
 				side = -side
 			for facing in [1.0, -1.0]:
 				var candidate: Vector2 = here.point + side * facing * out
@@ -254,9 +259,9 @@ static func _middle(course: PackedVector2Array, frame: Dictionary) -> Vector2:
 
 
 ## The stream's line: `points` (the ravine's axis on the map) pushed STREAM_FAR_SHARE of
-## `floor_half` toward the far wall (-z) in proportion to how squarely the ravine crosses the
-## view there (the normal's -z share), so a stream across the view runs where the camera sees
-## it and one along the view stays in the middle.
+## `floor_half` toward the far wall (the StartingLandform.VIEW side) in proportion to how
+## squarely the ravine crosses the view there (the normal's share along VIEW), so a stream
+## across the view runs where the camera sees it and one along the view stays in the middle.
 static func _far_side(points: PackedVector2Array, floor_half: float) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	for i in points.size():
@@ -264,9 +269,11 @@ static func _far_side(points: PackedVector2Array, floor_half: float) -> PackedVe
 		var next := points[mini(i + 1, points.size() - 1)]
 		var dir := (next - prev).normalized()
 		var normal := Vector2(-dir.y, dir.x)
-		if normal.y > 0.0:
+		var far := normal.dot(StartingLandform.VIEW)
+		if far < 0.0:
 			normal = -normal
-		out.append(points[i] + normal * (STREAM_FAR_SHARE * floor_half * -normal.y))
+			far = -far
+		out.append(points[i] + normal * (STREAM_FAR_SHARE * floor_half * far))
 	return out
 
 

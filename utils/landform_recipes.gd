@@ -16,11 +16,14 @@ extends RefCounted
 ## river, an ankle tributary off the outer slope (VALLEY_TRIBUTARY_CHANCE) and a crossing
 ## where the river runs straightest (VALLEY_CROSSING_CHANCE; a ford, or stepping stones at
 ## VALLEY_STONES_CHANCE); without one, a dry wash of the biome's scree surface along the
-## floor (VALLEY_WASH_CHANCE); and a bluff (VALLEY_BLUFF_CHANCE, P5-4): the outer bank (the
-## side away from the stage) stands one tier over the slope behind a rock face cut with
-## HeightBrush.tier_goal along the rim line, wobbled by the seed (BLUFF_WOBBLE_M), its toe
-## on the rim so the slope below keeps its width; the inner bank keeps the cosine slope, so
-## the valley reads as a place without becoming a gorge. The stage is on the inner bank of
+## floor (VALLEY_WASH_CHANCE); and a bluff (VALLEY_BLUFF_CHANCE, P5-4): one bank stands one
+## tier over the slope behind a rock face cut with HeightBrush.tier_goal along the rim line,
+## wobbled by the seed (BLUFF_WOBBLE_M), its toe on the rim so the slope below keeps its
+## width; the other bank keeps the cosine slope, so the valley reads as a place without
+## becoming a gorge. The bluff stands where its face shows to the camera: on the far bank
+## (the StartingLandform.VIEW side) when the valley crosses the view, on the outer bank
+## (away from the stage) when it runs along the view (bluff_side_of). The stage is on the
+## inner bank of
 ## the bend, within a quarter of the map of the centre, the bend's own bank when that fits
 ## and otherwise as near the bend as fits.
 
@@ -49,6 +52,10 @@ const VALLEY_BLUFF_CHANCE := 0.5
 ## BLUFF_WOBBLE_WAVE_M (read over the map, as the terraces' edges are).
 const BLUFF_WOBBLE_M := 2.0
 const BLUFF_WOBBLE_WAVE_M := 12.0
+## A valley whose heading lies within this of the camera's diagonal (StartingLandform.VIEW)
+## runs along the view; any other crosses it and puts its bluff on the far bank
+## (bluff_side_of).
+const BLUFF_ALONG_DEG := 30.0
 ## The river: control points every RIVER_SPACING_M, a wobble up to RIVER_WOBBLE_SHARE of the
 ## floor's width, the waist half-width; the tributary's ankle half-width, where it rises on
 ## the side slope (a share of the slope's width above the floor) and how far upstream of its
@@ -108,6 +115,7 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 	# The bluff's outline stands a cut's span outside the rim, so its toe lands on the rim
 	# and the cosine slope below it keeps its full width for the depth that remains.
 	var bluff_rim := rim + HeightBrush.tier_span(tier) - HeightBrush.TIER_SOFTEN_M
+	var bluff_side := bluff_side_of(frame)
 	StartingLandform.write_heights(
 		doc,
 		func(p: Vector2, h: float) -> float:
@@ -115,7 +123,7 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 			var along := clampf((near.y - s0) / maxf(s1 - s0, 1e-3), 0.0, 1.0)
 			var drop := depth + fall * along
 			var slope := StartingLandform.trough_shape(near.x, floor_half, rim)
-			if wants_bluff and _outer_bank(axis, near, p, turn):
+			if wants_bluff and _on_bank(axis, near, p, turn * bluff_side):
 				var wobble := BLUFF_WOBBLE_M * bluff_noise.get_noise_2d(p.x, p.y)
 				var inset := StartingLandform.tier_inset(bluff_rim + wobble - near.x)
 				return HeightBrush.tier_goal(h, h - tier, inset) - (drop - tier) * slope
@@ -131,7 +139,15 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 					frame.offset,
 					frame.bend_deg,
 					frame.bend_downstream,
-					", bluff on the outer bank" if wants_bluff else ""
+					(
+						(
+							", bluff on the far bank"
+							if bluff_side > 0.0
+							else ", bluff on the outer bank"
+						)
+						if wants_bluff
+						else ""
+					)
 				]
 			)
 		]
@@ -252,13 +268,29 @@ static func _bank_point(axis: PackedVector2Array, s: float, turn: float, bank: f
 	return at.point + dir.rotated(turn * PI / 2.0) * bank
 
 
-## True when `p` lies on the outer bank of `axis` (the side away from the turn's inner bank,
-## where the stage is); `near` is StartingLandform.nearest_on(axis, p).
-static func _outer_bank(axis: PackedVector2Array, near: Vector3, p: Vector2, turn: float) -> bool:
+## Which bank the bluff stands on, as a sign on the turn's inner side: +1 the inner bank (the
+## stage's), -1 the outer. A valley crossing the view (its heading more than BLUFF_ALONG_DEG
+## off the camera's diagonal, StartingLandform.VIEW) puts the bluff on the far bank,
+## whichever that is, so its face looks at the camera (a face on the near bank is
+## back-facing to it and shows only as a lip line, P5-4 look); a valley running along the
+## view puts it on the outer bank, away from the stage, where both faces show in profile.
+static func bluff_side_of(frame: Dictionary) -> float:
+	var dir: Vector2 = frame.dir
+	var turn: float = frame.turn
+	if absf(dir.dot(StartingLandform.VIEW)) > cos(deg_to_rad(BLUFF_ALONG_DEG)):
+		return -1.0
+	var inner := dir.rotated(turn * PI / 2.0)
+	return 1.0 if inner.dot(StartingLandform.VIEW) > 0.0 else -1.0
+
+
+## True when `p` lies on the bank of `axis` on the side `dir.rotated(side * PI / 2)` of its
+## nearest segment (`near` is StartingLandform.nearest_on(axis, p)): +turn the inner bank,
+## -turn the outer. Decided per segment with one sign, so the bend keeps the bank whole.
+static func _on_bank(axis: PackedVector2Array, near: Vector3, p: Vector2, side: float) -> bool:
 	var k := int(near.z)
 	var dir := (axis[k + 1] - axis[k]).normalized()
 	var q := Geometry2D.get_closest_point_to_segment(p, axis[k], axis[k + 1])
-	return (p - q).dot(dir.rotated(turn * PI / 2.0)) < 0.0
+	return (p - q).dot(dir.rotated(side * PI / 2.0)) > 0.0
 
 
 ## An ankle tributary off the outer slope: it rises TRIBUTARY_SLOPE_SHARE of the way up the

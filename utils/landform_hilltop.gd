@@ -15,15 +15,16 @@ extends RefCounted
 ## WaterFallPlan lets a spring's first lip stand two metres from the start) spilling over
 ## the crown's face in a fall (the phase 4c tier fall) and running on down the flank; without
 ## one, an ankle stream rising STREAM_SUMMIT_SHARE of the radius from the summit. It runs
-## STREAM_AZIMUTH_DEG off +z, to the hill's side: the fall shows in profile to the camera (a
-## face more than 90 degrees off +z is back-facing to it) and the stream never crosses the
-## shoulder stage; off the map; the flank is steeper than the falls rule's drop slope at
-## every map size, so it steps down in falls; stepping stones over it below the foot
-## (STONES_CHANCE). A hill without a crown always draws at least one more feature: when the
-## seed drew neither the second hill nor the stream, it gets the second hill (never a bare
-## mound; P5-4). The stage is on the hill's shoulder toward the camera (+z):
-## STAGE_SHOULDER_SHARE of the radius out, or past the crown's toe when there is a crown
-## (STAGE_CROWN_TOE_M), within half the half extent of the centre.
+## STREAM_AZIMUTH_DEG off the camera's direction (StartingLandform.NEAR), to the hill's
+## side: the fall shows in profile to the camera (a face more than 90 degrees off NEAR is
+## back-facing to it) and the stream never crosses the shoulder stage; off the map; the
+## flank is steeper than the falls rule's drop slope at every map size, so it steps down in
+## falls; stepping stones over it below the foot (STONES_CHANCE). A hill without a crown
+## always draws at least one more feature: when the seed drew neither the second hill nor
+## the stream, it gets the second hill (never a bare mound; P5-4). The stage is on the
+## hill's shoulder toward the camera (NEAR): STAGE_SHOULDER_SHARE of the radius out, or
+## past the crown's toe when there is a crown (STAGE_CROWN_TOE_M), within half the half
+## extent of the centre.
 
 const HILL_HEIGHT_M := 4.5
 const HILL_RADIUS_SHARE := 0.45
@@ -45,11 +46,11 @@ const CROWN_CHANCE := 0.7
 const SECOND_HILL_CHANCE := 0.3
 const STREAM_CHANCE := 0.5
 const STONES_CHANCE := 0.4
-## The stream: ankle half-width, control points, wobble, how far off +z it runs (to the
-## hill's side: past 90 the fall would face away from the camera, under 60 it would cross
-## the shoulder stage), how far inside the crown's outline the pool starts (at least the two
-## metres WaterFallPlan keeps before a spring's first lip, plus the lip's own width); without
-## a crown it rises this share of the radius from the summit.
+## The stream: ankle half-width, control points, wobble, how far off the camera's direction
+## it runs (to the hill's side: past 90 the fall would face away from the camera, under 60
+## it would cross the shoulder stage), how far inside the crown's outline the pool starts
+## (at least the two metres WaterFallPlan keeps before a spring's first lip, plus the lip's
+## own width); without a crown it rises this share of the radius from the summit.
 const STREAM_HALF_WIDTH_M := 0.55
 const STREAM_SPACING_M := 3.0
 const STREAM_WOBBLE_M := 0.6
@@ -90,7 +91,7 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 		# Never a bare mound: a hill without a crown carries at least one more feature.
 		wants_second = true
 	var azimuth_sign := 1.0 if draws.randf() < 0.5 else -1.0
-	var azimuth := Vector2(0.0, 1.0).rotated(
+	var azimuth := StartingLandform.NEAR.rotated(
 		azimuth_sign * deg_to_rad(draws.randf_range(STREAM_AZIMUTH_DEG.x, STREAM_AZIMUTH_DEG.y))
 	)
 	var summit := HILL_HEIGHT_M * scale
@@ -242,13 +243,14 @@ static func crown_of(summit: float, tier: float, share: float) -> Dictionary:
 	}
 
 
-## The shoulder stage: `out` metres from `centre` toward the camera (+z), turned step by
-## step toward the map centre until it lies within STAGE_REACH_SHARE of `half` of the centre
-## (the azimuth toward the centre always does: `out` never exceeds the hill's radius).
+## The shoulder stage: `out` metres from `centre` toward the camera (StartingLandform.NEAR),
+## turned step by step toward the map centre until it lies within STAGE_REACH_SHARE of
+## `half` of the centre (the azimuth toward the centre always does: `out` never exceeds the
+## hill's radius).
 static func shoulder_stage(centre: Vector2, out: float, half: float) -> Vector2:
 	var reach := half * STAGE_REACH_SHARE
-	var toward := (-centre).normalized() if centre.length() > 1e-3 else Vector2(0.0, 1.0)
-	var start := Vector2(0.0, 1.0)
+	var toward := (-centre).normalized() if centre.length() > 1e-3 else StartingLandform.NEAR
+	var start := StartingLandform.NEAR
 	var turn := start.angle_to(toward)
 	for n in 10:
 		var candidate := centre + start.rotated(turn * n / 9.0) * out
