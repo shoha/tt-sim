@@ -206,6 +206,23 @@ const float WAKE_FOAM_ONSET = 0.3;
 // outline (a boulder's side in a deep pool, reed blades, a wading token's legs) drew a thin
 // straight foam line across the water (P4b-0, the badlands and forest pools).
 const float EDGE_FOAM_REACH = 0.3;
+// Clear shallows (P4d-4 follow-up): where the water column over ground is thinner than about
+// a hand (vertical world metres, from CLEAR_FULL fading out by CLEAR_END), the bed shows
+// through like a Ghibli shallow rather than through the depth tint: a ford's crest (0.15 m)
+// shows its gravel bar and wet shading, and the thin margin along every shore shows its bed.
+// Anything deeper than CLEAR_END renders exactly as before. At full clearness: CLEAR_PATH is
+// the share of the light path the absorption keeps, CLEAR_GLOSS the share of the shimmer and
+// sky blend kept, CLEAR_SPECULAR the share of the specular (the sky's reflection outshone a
+// dark bed), CLEAR_SATURATE the saturation added to the bed as wet stone (a ford's bar is
+// already shaded wet in its vertex colours, so no darkening), CLEAR_EMIT the share of the
+// colour sent out as emission rather than lit a second time (see ALBEDO in fragment()).
+const float CLEAR_FULL = 0.12;
+const float CLEAR_END = 0.3;
+const float CLEAR_PATH = 0.15;
+const float CLEAR_GLOSS = 0.45;
+const float CLEAR_SPECULAR = 0.35;
+const float CLEAR_SATURATE = 0.3;
+const float CLEAR_EMIT = 0.85;
 
 varying vec3 world_pos;
 
@@ -472,12 +489,19 @@ void fragment() {
 		float upness = abs(dot(normalize(scene_normal + vec3(1e-6)), up_view));
 		ground_like = mix(1.0, smoothstep(0.35, 0.65, upness), shore_ground_gate);
 	}
+	// Clear shallows: the vertical water column over the bed here (the view-space bed_depth
+	// is the slanted path, about 2.7 times longer at the default pitch), 1 where it is thin.
+	vec3 bed_world = (INV_VIEW_MATRIX * vec4(scene_view, 1.0)).xyz;
+	float column = max(world_pos.y - bed_world.y, 0.0);
+	float clear = (1.0 - smoothstep(CLEAR_FULL, CLEAR_END, column)) * ground_like;
 	// 0 right at the shoreline, saturating toward 1 over shore_depth_range.
 	float depth01 = 1.0 - exp(-bed_depth / shore_depth_range);
-	vec3 tint = mix(shore_color.rgb, water_color.rgb, depth01);
+	vec3 tint = mix(shore_color.rgb, water_color.rgb, depth01 * (1.0 - clear));
 
 	// ---- Bed color: refracted screen prepass, absorbed and caustic-lit --------------
 	vec3 surface = tint;
+	// The share of the colour sent out as emission in the clear shallows (see ALBEDO below).
+	float clear_emit = 0.0;
 	float alpha = mix(shore_color.a, water_color.a, depth01) + fresnel * fresnel_strength;
 	// Past the map edge (water_skirt_fade): the skirt's fade here, 1 on the map.
 	float skirt_a = water_skirt_fade ? skirt_alpha_seeded(world_pos.xz, skirt_seed) : 1.0;
@@ -512,21 +536,35 @@ void fragment() {
 			// Multiplicative so the pattern keeps the bed's own hue, plus a small additive
 			// lift toward white so it reads as focused light rather than a saturated stain.
 			float caustic_lift = caustic * caustic_strength * (1.0 - depth01);
-			bed += caustic_lift * (bed + vec3(0.25));
+			// In the clear shallows the lift keeps the bed's hue (the white part washed a ford's
+			// gravel out to pale water).
+			bed += caustic_lift * (bed + vec3(0.25 * (1.0 - clear)));
 		}
-		// Beer-Lambert transmittance of the bed color through the water column.
-		vec3 transmittance = exp(-max(refracted_bed_depth, 0.0) * depth_absorption * ABSORB_TINT);
+		if (clear > 0.0) {
+			// Wet stone: more saturated than the same bed in the air.
+			float luma = dot(bed, vec3(0.299, 0.587, 0.114));
+			bed = max(mix(vec3(luma), bed, 1.0 + CLEAR_SATURATE * clear), vec3(0.0));
+		}
+		// Beer-Lambert transmittance of the bed color through the water column; the clear
+		// shallows keep only CLEAR_PATH of the path.
+		float absorb_path = max(refracted_bed_depth, 0.0) * mix(1.0, CLEAR_PATH, clear);
+		vec3 transmittance = exp(-absorb_path * depth_absorption * ABSORB_TINT);
 		surface = mix(tint, bed, transmittance);
 		alpha = 1.0;
+		clear_emit = clear * CLEAR_EMIT;
 	}
 
 	// ---- Crest shimmer and sky blend --------------------------------------------------
 	float shimmer = clamp(
 		smoothstep(0.65, 1.0, crest) * shimmer_strength + disturbance_boost * 0.3, 0.0, 1.0
 	);
-	surface = mix(surface, shimmer_color, shimmer * 0.35);
+	// Clear shallows keep part of the gloss, so the bed reads under it.
+	float gloss = mix(1.0, CLEAR_GLOSS, clear);
+	surface = mix(surface, shimmer_color, shimmer * 0.35 * gloss);
 	surface = mix(
-		surface, water_ambient_reflection_color, sky_blend_strength * mix(0.3, 1.0, fresnel)
+		surface,
+		water_ambient_reflection_color,
+		sky_blend_strength * mix(0.3, 1.0, fresnel) * gloss
 	);
 
 	// ---- Foam -------------------------------------------------------------------------
@@ -571,11 +609,17 @@ void fragment() {
 	float foam = clamp(foam_sources * foam_pattern * foam_strength, 0.0, 1.0);
 	surface = mix(surface, foam_color.rgb, foam * foam_color.a);
 
-	ALBEDO = surface;
+	// Clear shallows: the bed seen through them is the screen prepass, already lit, so its
+	// share goes out as emission instead of being lit a second time as albedo (relit, a sunlit
+	// bar picked up the sky's blue and read as teal-grey water rather than its own warm
+	// gravel). Foam stays lit. Zero everywhere deeper than CLEAR_END.
+	float emit_share = clear_emit * (1.0 - foam);
+	ALBEDO = surface * (1.0 - emit_share);
+	EMISSION = surface * emit_share;
 	float shoreline = shore_fade_depth > 0.0 ? smoothstep(0.0, shore_fade_depth, bed_depth) : 1.0;
 	shoreline = mix(1.0, shoreline, ground_like);
 	ALPHA = clamp(alpha + foam * 0.3, 0.0, 1.0) * shoreline;
-	SPECULAR = specular_value;
+	SPECULAR = specular_value * mix(1.0, CLEAR_SPECULAR, clear);
 	if (water_skirt_fade) {
 		if (skirt_backdrop_mode == 2) {
 			ALPHA *= skirt_a;
@@ -590,7 +634,7 @@ void fragment() {
 			ALBEDO *= keep;
 			SPECULAR *= keep;
 			vec3 backdrop = skirt_backdrop_color(INV_VIEW_MATRIX);
-			EMISSION = max(
+			EMISSION = EMISSION * keep + max(
 				(1.0 - skirt_a) * (backdrop * (1.0 - f * skirt_a) - fog.rgb * f) / (1.0 - f),
 				vec3(0.0)
 			);
