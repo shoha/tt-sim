@@ -37,6 +37,12 @@ other committed home.
   beautiful. Effects (water, falls, spray, weather) are a few bold soft-edged shapes in
   luminous colour, never fine grey noise. Given during the waterfall look pass; applies to
   everything after it. The suite `CLAUDE.md` carries the same rule.
+- **No sameness (2026-10-04, phase 5):** having everything appear in every map is
+  distracting; each space should feel unique and beautiful. Not everywhere has a river,
+  not every river has a crossing. A starting landform is a shape plus a small palette of
+  features the seed draws from, and every draw must stand on its own (judged with the
+  water off as well as on). The suite `CLAUDE.md` carries the same rule for every
+  generator.
 
 ## Where each system is documented
 
