@@ -123,11 +123,21 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
   the material (texture loads) and 14-16 ms building its shader, which a BaseMaterial3D does
   when its RID is first asked for. The Bridge tool warms both as it opens
   (`warm_materials(styles)` 0.4 s after the textures start loading on workers, the moss too
-  where a style grows it), so a placement's swap is 0.2-1.9 ms. An edit rebuilds every
-  crossing's geometry on the main thread, about 2.4 ms each (P4b-3: 3 ms with one crossing,
-  13 ms with five); a per-crossing cache would need the ground under each crossing in its key.
-  In play the crossings cost nothing measurable and add about 50 ms to a load with four
-  (`PERFORMANCE.md` "Phase 4b (crossings): pinned performance pass").
+  where a style grows it), so a placement's swap is 0.2-1.9 ms. An edit rebuilds, on the main
+  thread, only the crossings whose geometry inputs changed (P4d-5b, `CrossingCache`,
+  `utils/crossing_cache.gd`): per crossing a key hashing its fields, the document's seed and
+  grid, the heights over `clear_bounds` plus one sample, and the water that can reach the
+  bounds (rivers near them by id, level, points and half-widths; the pond mask over them and
+  the ponds marked in it). `refresh(doc)` keeps the node whose key matches, builds the rest
+  (`build_one`), frees the nodes of crossings that left, and recomputes the deck field,
+  `top_y` and `version` only when some node changed; `create()` seeds the keys from the
+  document the load's worker built from. A placement thus builds one crossing (a ford 5-7 ms,
+  the pier arch 13, planks or stones 3-4; 33.8 ms for a sixth placement before), a sculpt
+  rebuilds the crossings whose ground rectangle it touched, a water edit the crossings its
+  bodies reach (`PERFORMANCE.md` "Per-crossing rebuild cache (P4d-5b)"; `builds`,
+  `last_rebuilt` and `keys()` on the node are for tests and the probe). In play the crossings
+  cost nothing measurable and add about 50 ms to a load with four (`PERFORMANCE.md` "Phase 4b
+  (crossings): pinned performance pass").
 - **Walkable:** tokens land on a deck or a stone like the ground (layer-1 rays); the drag's
   ground cast starts above `AuthoredCrossings.world_top()` as well as the terrain top
   (`GameMap._resolve_drag_ground`), so a drop onto an arch lands on it; tokens cannot pass

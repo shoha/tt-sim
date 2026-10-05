@@ -277,7 +277,9 @@ performance pass", 2026-09-27, a 150 ft forest map with four crossings against i
 without): crossings cost nothing measurable in play (shown against hidden in one run, -0.08 to
 +0.01 ms GPU: a deck covers dearer water pixels), add 45-69 ms to a warm load, and the Bridge
 tool keeps frame medians at idle (4.2-4.8 ms) with release frames of 12.7-19 ms; a crossing
-edit rebuilds every crossing at about 2.4 ms each (open work).
+edit rebuilds only the crossings whose fields, ground or water changed (P4d-5b, `PERFORMANCE.md`
+"Per-crossing rebuild cache": a placement with six crossings on the map 9.8 ms of refresh
+against 33.8 before).
 
 ## Open work
 
@@ -329,10 +331,11 @@ Crossing follow-ups (after P4b-3, 2026-09-27; later work, none blocking):
   covers ground up to about 15 m behind it at the 21.6 degree view): in play the occlusion
   fade opens a hole over the tokens on it, not over the deck. Candidate: count a crossing's
   deck as a fade focus in play, or let the author Thin in front of it (works today).
-- A crossing edit rebuilds every crossing on the main thread, about 2.4 ms each (P4b-3: a
-  placement's refresh 3 ms with one crossing, 13 ms with five), so a map near the 64 cap would
-  hitch about 150 ms per placement. A per-crossing cache needs the ground under a crossing in
-  its key (a sculpt can move a bridge's piles or a stone's root without changing its fields).
+- Done (P4d-5b): a crossing edit rebuilds only the crossings whose key changed
+  (`CrossingCache`: fields, seed, the ground under the footprint, the water that reaches it),
+  so a placement costs its own crossing whatever the map's count (6-13 ms by kind, 3-4 ms for
+  planks and stones). Still open: a single arch or ford node's swap is 4-6 ms (`moss_split`
+  per facet in GDScript, the mesh and shape upload) and a ford's build 5 ms for 200 vertices.
 - Savanna's stepping stones share badlands' sandstone and read a notch more orange than the
   savanna's grey-brown boulders (a per-biome stone tint, like the basalt lift, would settle it).
 - The grid on the brown deck is low contrast (review note; left as is: it matches the ground).
