@@ -24,11 +24,13 @@ extends RefCounted
 ## half-width and the rim's distance from the axis as shares of the half extent (a floor a
 ## third of the map wide); how far the axis may sit from the centre (an eighth of the map,
 ## which keeps the stage within a quarter of it); the bend's range and how far downstream
-## of the centre's foot it may lie.
-const VALLEY_DEPTH_M := 2.5
+## of the centre's foot it may lie. P5-2 deepened the trough from 2.5 m to 3.5 m and moved
+## the rim in from 0.72 to 0.6 (a 6 m slope in place of 8.8 m): the P5-1 look found the
+## shallower trough read only as a sunken channel from the home camera.
+const VALLEY_DEPTH_M := 3.5
 const VALLEY_FALL_M := 1.0
 const VALLEY_FLOOR_SHARE := 1.0 / 3.0
-const VALLEY_RIM_SHARE := 0.72
+const VALLEY_RIM_SHARE := 0.6
 const VALLEY_OFFSET_SHARE := 0.25
 const VALLEY_BEND_DEG := Vector2(8.0, 25.0)
 const VALLEY_BEND_REACH_SHARE := 1.0 / 3.0
