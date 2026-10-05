@@ -1,0 +1,106 @@
+{
+ "out_dir": "render_jobs/p4d_perf",
+ "timeout_s": 1200,
+ "hang_s": 90,
+ "remove_override": true,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "play start"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "play", "folder": "_p4d_perf_cross"},
+  {"op": "wait", "s": 2.0},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "title"},
+  {"op": "wait", "s": 1.5},
+  {"op": "expand", "values": ["_p4d_perf_water", "_p4d_perf_cross", "_p4d_perf_water", "_p4d_perf_cross", "_p4d_perf_water", "_p4d_perf_cross"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "play", "folder": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5}
+  ]},
+
+  {"op": "play", "folder": "_p4d_perf_cross"},
+  {"op": "wait", "s": 2.0},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "tokens", "points": [[-6.95, 3.95], [14.1, 1.0], [-14, 6.0], [7.18, -1.42]]},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "report"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "report"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "cross", "ws": true},
+  {"op": "vsync_off"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "before frames"},
+  {"op": "home"},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "cross home"},
+  {"op": "expand", "values": ["on #1", "off #1", "on #2", "off #2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "visible", "visible": "{value}"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "cross home crossings {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "zoom", "size": 8.0},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "look", "at": [-6.95, 3.95]},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "cross z8 arch"},
+  {"op": "expand", "values": ["on #1", "off #1", "on #2", "off #2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "visible", "visible": "{value}"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "cross z8 arch crossings {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "look", "at": [14.1, 1.0]},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "cross z8 ford"},
+  {"op": "expand", "values": ["on #1", "off #1", "on #2", "off #2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "visible", "visible": "{value}"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "cross z8 ford crossings {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "zoom", "size": 20.0},
+  {"op": "wait", "s": 2.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "cross z20"},
+  {"op": "expand", "values": ["on #1", "off #1", "on #2", "off #2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "visible", "visible": "{value}"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "cross z20 crossings {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "visible", "visible": true},
+  {"op": "title"},
+  {"op": "wait", "s": 1.5},
+
+  {"op": "expand", "values": ["_p4d_perf_water", "_p4d_perf_cross"], "template": [
+   {"op": "play", "folder": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "tokens", "points": [[-6.95, 3.95], [14.1, 1.0], [-14, 6.0], [7.18, -1.42]]},
+   {"op": "wait", "s": 3.0},
+   {"op": "vsync_off"},
+   {"op": "home"},
+   {"op": "wait", "s": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "{value} home"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "{value} home"},
+   {"op": "wait", "s": 8.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"},
+   {"op": "zoom", "size": 20.0},
+   {"op": "wait", "s": 2.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "{value} z20"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "{value} z20"},
+   {"op": "wait", "s": 8.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "{value}", "ws": true},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "play end"}
+ ]
+}
