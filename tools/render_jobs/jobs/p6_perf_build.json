@@ -25,6 +25,7 @@
   {"op": "wait_ready", "settle": 1.0},
   {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_p6_perf_exits", "replace": true},
   {"op": "call", "script": "res://tools/render_jobs/probes/p6.gd", "action": "info"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/p6_perf.gd", "action": "cache_check"},
   {"op": "call", "script": "res://tools/render_jobs/probes/p6_perf.gd", "action": "exits_build", "runs": 5},
   {"op": "call", "script": "res://tools/render_jobs/probes/p6_perf.gd", "action": "apply_bench", "runs": 5},
   {"op": "call", "script": "res://tools/render_jobs/probes/p6_perf.gd", "action": "mirror_bench", "runs": 5},

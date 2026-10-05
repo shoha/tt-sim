@@ -313,16 +313,28 @@ func _process(_delta: float) -> void:
 func _start(snapshot: MapDocument, bake: bool) -> void:
 	var work := {}
 	_work = work
+	# The exits the skirt has now: the worker reuses every piece of them an edit left alone
+	# (RiverExitMesh.build's cache). Read-only on the worker; the swap replaces, never edits it.
+	var terrain := _terrain()
+	var previous := terrain.river_exits() if terrain != null else {}
 	_task = WorkerThreadPool.add_task(
-		func() -> void: refresh_work(snapshot, bake, work), false, "AuthoredWater refresh"
+		func() -> void: refresh_work(snapshot, bake, work, previous), false, "AuthoredWater refresh"
 	)
 	set_process(true)
 
 
+func _terrain() -> AuthoredTerrain:
+	var parent := get_parent()
+	return parent.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain if parent else null
+
+
 ## Worker half of a refresh: WaterMeshBuilder.build(), the ground skirt with the rivers that
-## leave the map (RiverExitMesh.skirt_parts, P6-1; {} when none does) and, with `bake`, the
-## flow map (none when there is no river). Touches no Node; results go into `out`.
-static func refresh_work(snapshot: MapDocument, bake: bool, out: Dictionary) -> void:
+## leave the map (RiverExitMesh.skirt_parts, P6-1, reusing the pieces of `previous`, the
+## skirt's exits before the edit; {} when no river leaves the map) and, with `bake`, the flow
+## map (none when there is no river). Touches no Node; results go into `out`.
+static func refresh_work(
+	snapshot: MapDocument, bake: bool, out: Dictionary, previous: Dictionary = {}
+) -> void:
 	var started := Time.get_ticks_usec()
 	out["built"] = WaterMeshBuilder.build(snapshot)
 	out["exits"] = (
@@ -330,7 +342,8 @@ static func refresh_work(snapshot: MapDocument, bake: bool, out: Dictionary) -> 
 			snapshot,
 			AuthoredTerrain.skirt_width_m(),
 			AuthoredTerrain.SKIRT_FADE_M,
-			AuthoredTerrain.SKIRT_WOBBLE
+			AuthoredTerrain.SKIRT_WOBBLE,
+			previous
 		)
 		if not RiverExits.exits(snapshot).is_empty()
 		else {}
@@ -370,9 +383,7 @@ func _finish_task() -> void:
 	var parent := get_parent()
 	WaterGlbUtils.process_water_meshes(parent if parent != null else self)
 	# The ground skirt follows the rivers that leave the map (P6-1).
-	var terrain := (
-		parent.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain if parent else null
-	)
+	var terrain := _terrain()
 	if terrain != null:
 		terrain.apply_river_exits(work.get("exits", {}))
 	last_swap_usec = Time.get_ticks_usec() - started

@@ -83,11 +83,13 @@ const BANK_DRY_M := 0.8
 ## with the exits' windows cut out, "exits": build() ({} without exits), "mirror": the skirt's
 ## vertex mirror for in-place edge updates (TerrainMeshBuilder.skirt_mirror_of)}. `width`,
 ## `fall`, `wobble`: the skirt's (AuthoredTerrain.skirt_width_m(), SKIRT_FADE_M, SKIRT_WOBBLE).
-static func skirt_parts(doc: MapDocument, width: float, fall: float, wobble: float) -> Dictionary:
+static func skirt_parts(
+	doc: MapDocument, width: float, fall: float, wobble: float, previous: Dictionary = {}
+) -> Dictionary:
 	var arrays := TerrainMeshBuilder.build_skirt_arrays(doc, width, fall)
 	var count := TerrainMeshBuilder.boundary_samples(doc).size()
 	var mirror := TerrainMeshBuilder.skirt_mirror_of(arrays, count)
-	var exits := build(doc, width, fall, wobble)
+	var exits := build(doc, width, fall, wobble, previous)
 	if not exits.is_empty():
 		arrays[Mesh.ARRAY_INDEX] = skip_columns(arrays[Mesh.ARRAY_INDEX], count, exits.windows)
 	return {"skirt": arrays, "exits": exits, "mirror": mirror}
@@ -96,9 +98,20 @@ static func skirt_parts(doc: MapDocument, width: float, fall: float, wobble: flo
 ## The exits' geometry (see the header): {"windows": Array[Vector2i] (first boundary column,
 ## quads), "channel": the patch's mesh arrays (vertex, normal, UV, UV2, index), "ribbon": the
 ## water's (vertex, normal, UV, index; [] when none), "mouths": Array[Dictionary] (each exit
-## where its course meets the edge: "mouth", "dir", "level", "wet" span, "profile")}, or {}
-## when no river leaves the map.
-static func build(doc: MapDocument, width: float, fall: float, wobble: float) -> Dictionary:
+## where its course meets the edge: "mouth", "dir", "level", "wet" span, "profile"),
+## "pieces": the per-window patches and per-mouth ribbons by key, "built": how many of them
+## were built rather than reused}, or {} when no river leaves the map.
+##
+## The cache (P6-3: about 280 ms of worker time per exit, rebuilt on every water edit while any
+## exit existed). Each window's patch and each mouth's ribbon is a pure function of what its
+## key hashes (_channel_key, _ribbon_key: the mouths reaching the window, their course near
+## the edge, level and cross-section, the boundary heights over the window, the ring distances
+## and the fade); `previous`, an earlier build() of this map (AuthoredTerrain.river_exits()),
+## lends every piece whose key is unchanged, so a water edit away from the exits rebuilds none.
+## A key is a 32-bit hash, as CrossingCache's.
+static func build(
+	doc: MapDocument, width: float, fall: float, wobble: float, previous: Dictionary = {}
+) -> Dictionary:
 	var half := doc.extent_m() * 0.5
 	var mouths: Array[Dictionary] = []
 	for found in RiverExits.exits(doc):
@@ -115,12 +128,154 @@ static func build(doc: MapDocument, width: float, fall: float, wobble: float) ->
 		reach = maxf(reach, mouth.reach)
 	var dists := ring_distances(width, minf(reach, minf(width, RiverExits.FADE_REACH_M)))
 	var fade := {"half": half, "fall": fall, "wobble": wobble, "seed": seed_value}
+	var old: Dictionary = previous.get("pieces", {})
+	var pieces := {}
+	var built := 0
+	var patches: Array = []
+	for window in windows:
+		var near := _mouths_near(doc, loop, window, mouths, width)
+		var key := _channel_key(doc, loop, window, near, dists, fade)
+		var piece: Dictionary = old.get(key, {})
+		if piece.is_empty():
+			piece = _window_piece(doc, loop, window, near, dists, fade)
+			built += 1
+		pieces[key] = piece
+		patches.append(piece)
+	var ribbons: Array = []
+	for mouth in mouths:
+		var key := _ribbon_key(doc, mouth, fade)
+		var piece: Dictionary = old.get(key, {})
+		if piece.is_empty():
+			piece = _ribbon_piece(doc, mouth, fade)
+			built += 1
+		pieces[key] = piece
+		ribbons.append(piece)
 	return {
 		"windows": windows,
-		"channel": _channel_arrays(doc, loop, windows, mouths, dists, fade),
-		"ribbon": _ribbon_arrays(doc, mouths, fade),
+		"channel": _merged(patches),
+		"ribbon": _merged(ribbons),
 		"mouths": mouths,
+		"pieces": pieces,
+		"built": built,
 	}
+
+
+## The mouths whose footprint (`box`) reaches window `window`'s patch (its columns' radial
+## lines out to `width`): the only ones its vertices read.
+static func _mouths_near(
+	doc: MapDocument,
+	loop: Array[Vector2i],
+	window: Vector2i,
+	mouths: Array[Dictionary],
+	width: float
+) -> Array[Dictionary]:
+	var area := Rect2()
+	for c in window.y + 1:
+		var sample := loop[(window.x + c) % loop.size()]
+		var inner3 := TerrainMeshBuilder.sample_position(doc, sample.x, sample.y)
+		var out3 := _out(doc, sample)
+		var inner := Vector2(inner3.x, inner3.z)
+		var tip := inner + Vector2(out3.x, out3.z) * width
+		var span := Rect2(inner, Vector2.ZERO).expand(tip)
+		area = span if c == 0 else area.merge(span)
+	var near: Array[Dictionary] = []
+	for mouth in mouths:
+		if (mouth.box as Rect2).intersects(area, true):
+			near.append(mouth)
+	return near
+
+
+## The key of window `window`'s patch (see build()): the grid, the window, the heights of the
+## samples around each of its columns (its boundary vertices and their normals read them),
+## the ring distances, the fade and the near mouths' course, cross-section, level and bank.
+static func _channel_key(
+	doc: MapDocument,
+	loop: Array[Vector2i],
+	window: Vector2i,
+	near: Array[Dictionary],
+	dists: PackedFloat64Array,
+	fade: Dictionary
+) -> int:
+	var heights := PackedFloat32Array()
+	var last := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
+	for c in window.y + 1:
+		var sample := loop[(window.x + c) % loop.size()]
+		for dz in range(-1, 2):
+			for dx in range(-1, 2):
+				var s := (sample + Vector2i(dx, dz)).clamp(Vector2i.ZERO, last)
+				heights.append(doc.heights[doc.sample_index(s.x, s.y)])
+	# The ring distances by the micrometre: as doubles, distances equal to nine decimals hashed
+	# differently on the refresh worker and on the main thread (p6_perf.gd cache_check), and
+	# every window missed the cache.
+	var rings := PackedInt32Array()
+	for d in dists:
+		rings.append(roundi(d * 1e6))
+	var parts: Array = [
+		"channel", doc.samples_x(), doc.samples_z(), doc.extent_m(), window, heights, rings
+	]
+	parts.append([fade.half, fade.fall, fade.wobble, fade.seed])
+	for mouth in near:
+		parts.append(
+			[mouth.course, mouth.half, mouth.profile, mouth.level, mouth.ground, mouth.box]
+		)
+	return hash(parts)
+
+
+## The key of `mouth`'s ribbon (see build()): everything _ribbon_piece() reads.
+static func _ribbon_key(doc: MapDocument, mouth: Dictionary, fade: Dictionary) -> int:
+	return hash(
+		[
+			"ribbon",
+			doc.extent_m(),
+			[fade.half, fade.fall, fade.wobble, fade.seed],
+			mouth.course,
+			mouth.mouth,
+			mouth.dir,
+			mouth.across,
+			mouth.wet,
+			mouth.level,
+			mouth.ground,
+		]
+	)
+
+
+## Pieces (_window_piece(), _ribbon_piece()) joined into one surface's mesh arrays, their
+## indices offset; [] when they hold no triangles. A piece without "normals" gets up.
+static func _merged(pieces: Array) -> Array:
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var wets := PackedVector2Array()
+	var indices := PackedInt32Array()
+	var has_wets := false
+	for piece: Dictionary in pieces:
+		var base := vertices.size()
+		var verts: PackedVector3Array = piece.vertices
+		vertices.append_array(verts)
+		if piece.has("normals"):
+			normals.append_array(piece.normals)
+		else:
+			var up := PackedVector3Array()
+			up.resize(verts.size())
+			up.fill(Vector3.UP)
+			normals.append_array(up)
+		uvs.append_array(piece.uvs)
+		if piece.has("wets"):
+			has_wets = true
+			wets.append_array(piece.wets)
+		for i: int in piece.indices:
+			indices.append(base + i)
+	if indices.is_empty():
+		return []
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	if has_wets:
+		arrays[Mesh.ARRAY_TEX_UV2] = wets
+	arrays[Mesh.ARRAY_INDEX] = indices
+	return arrays
 
 
 ## The skirt's index array `indices` (build_skirt_arrays, `count` boundary samples) without the
@@ -326,14 +481,16 @@ static func _skirt_point(doc: MapDocument, sample: Vector2i, distance: float, fa
 	return [point, Vector3(-along.x * slope, 1.0, -along.z * slope).normalized()]
 
 
-static func _channel_arrays(
+## Window `window`'s patch (see the header) with the mouths `near` it: {"vertices",
+## "normals", "uvs", "wets", "indices"}, indices from 0.
+static func _window_piece(
 	doc: MapDocument,
 	loop: Array[Vector2i],
-	windows: Array[Vector2i],
-	mouths: Array[Dictionary],
+	window: Vector2i,
+	near: Array[Dictionary],
 	dists: PackedFloat64Array,
 	fade: Dictionary
-) -> Array:
+) -> Dictionary:
 	var count := loop.size()
 	var rings := dists.size()
 	var own := PackedInt32Array()  # Per patch ring: the skirt ring it is, or -1.
@@ -350,47 +507,33 @@ static func _channel_arrays(
 	var wets := PackedVector2Array()
 	var fixed := PackedByteArray()
 	var indices := PackedInt32Array()
-	for window in windows:
-		var base := vertices.size()
-		var columns := window.y + 1
-		for c in columns:
-			var sample := loop[(window.x + c) % count]
-			var outer := c == 0 or c == columns - 1
-			for k in rings:
-				var v := _patch_vertex(doc, sample, dists, own, k, outer, mouths, fade)
-				vertices.append(v[0])
-				normals.append(v[1])
-				uvs.append(Vector2(v[0].x, v[0].z))
-				wets.append(v[2])
-				# 2: the skirt's or the map's normal stays; 1: undipped; 0: carved.
-				fixed.append(2 if outer or k == 0 else (0 if v[3] else 1))
-		for c in columns - 1:
-			for k in rings - 1:
-				var a := base + c * rings + k
-				var b := base + (c + 1) * rings + k
-				# Split each quad along the diagonal whose ends are closer in height, so the
-				# banks' contours (and the waterline on them) follow the channel instead of
-				# zigzagging across the grid where the river runs at an angle to it.
-				if (
-					absf(vertices[a].y - vertices[b + 1].y)
-					<= absf(vertices[b].y - vertices[a + 1].y)
-				):
-					_add_up(indices, vertices, a, b, b + 1)
-					_add_up(indices, vertices, a, b + 1, a + 1)
-				else:
-					_add_up(indices, vertices, a, b, a + 1)
-					_add_up(indices, vertices, b, b + 1, a + 1)
+	var columns := window.y + 1
+	for c in columns:
+		var sample := loop[(window.x + c) % count]
+		var outer := c == 0 or c == columns - 1
+		for k in rings:
+			var v := _patch_vertex(doc, sample, dists, own, k, outer, near, fade)
+			vertices.append(v[0])
+			normals.append(v[1])
+			uvs.append(Vector2(v[0].x, v[0].z))
+			wets.append(v[2])
+			# 2: the skirt's or the map's normal stays; 1: undipped; 0: carved.
+			fixed.append(2 if outer or k == 0 else (0 if v[3] else 1))
+	for c in columns - 1:
+		for k in rings - 1:
+			var a := c * rings + k
+			var b := (c + 1) * rings + k
+			# Split each quad along the diagonal whose ends are closer in height, so the
+			# banks' contours (and the waterline on them) follow the channel instead of
+			# zigzagging across the grid where the river runs at an angle to it.
+			if absf(vertices[a].y - vertices[b + 1].y) <= absf(vertices[b].y - vertices[a + 1].y):
+				_add_up(indices, vertices, a, b, b + 1)
+				_add_up(indices, vertices, a, b + 1, a + 1)
+			else:
+				_add_up(indices, vertices, a, b, a + 1)
+				_add_up(indices, vertices, b, b + 1, a + 1)
 	_smooth_normals(vertices, normals, fixed, indices)
-	if vertices.is_empty():
-		return []
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_NORMAL] = normals
-	arrays[Mesh.ARRAY_TEX_UV] = uvs
-	arrays[Mesh.ARRAY_TEX_UV2] = wets
-	arrays[Mesh.ARRAY_INDEX] = indices
-	return arrays
+	return {"vertices": vertices, "normals": normals, "uvs": uvs, "wets": wets, "indices": indices}
 
 
 ## One patch vertex: [position, normal, Vector2(bed, shore), dipped]. An outer column's extra
@@ -514,8 +657,8 @@ static func profile_at(mouth: Dictionary, u: float) -> float:
 	return lerpf(profile[i], profile[i + 1], f - i)
 
 
-## The ribbon of every mouth (see the header).
-static func _ribbon_arrays(doc: MapDocument, mouths: Array[Dictionary], fade: Dictionary) -> Array:
+## The ribbon of `mouth` (see the header): {"vertices", "uvs", "indices"}, indices from 0.
+static func _ribbon_piece(doc: MapDocument, mouth: Dictionary, fade: Dictionary) -> Dictionary:
 	var half: Vector2 = fade.half
 	var extent := doc.extent_m()
 	var texels := WaterFlowBaker.resolution_for(extent)
@@ -523,62 +666,48 @@ static func _ribbon_arrays(doc: MapDocument, mouths: Array[Dictionary], fade: Di
 	var vertices := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
-	for mouth in mouths:
-		var course: PackedVector2Array = (mouth.course as PackedVector2Array).slice(1)
-		var wet: Vector2 = mouth.wet
-		var dir: Vector2 = mouth.dir
-		var base := vertices.size()
-		var made := 0
-		var rows := _rows(course, RIBBON_ROW_M)
-		# The ribbon runs on until the skirt's fade is 0 at every vertex of a row, and that row
-		# is its last: the fade's noise is not monotonic along the course, so stopping at the
-		# first faint row (P6-1) could end the water where the fade came back up beyond it,
-		# a faint darker stub of dry channel at full zoom-out.
-		var count := mini(rows.size(), 2)
-		for r in range(rows.size() - 1, 1, -1):
-			if _row_alpha(rows[r], wet, half, fade) > 0.0:
-				count = mini(r + 2, rows.size())
-				break
-		for row in rows.slice(0, count):
-			var p: Vector2 = row[0]
-			var tangent: Vector2 = row[1]
-			var across := Vector2(-tangent.y, tangent.x)
-			for j in RIBBON_ACROSS:
-				var u := lerpf(
-					wet.x - RIBBON_MARGIN_M, wet.y + RIBBON_MARGIN_M, float(j) / (RIBBON_ACROSS - 1)
-				)
-				var q := p + across * u
-				var drop := 0.0
-				if made == 0:
-					# The first row lies on the edge, where the map's water ends, at its level
-					# exactly (the in-map mesh's last row is flat at the level out to the edge,
-					# WaterMeshBuilder._run_out), across the course as the channel's profile is.
-					q = edge_point(mouth.mouth, mouth.across, u, half)
-				else:
-					if RiverExits.edge_distance(q, half) > 0.0:
-						q = _onto_edge(q, dir, half)
-					drop = drop_at(mouth, RiverExits.outside_distance(q, half), fade.fall)
-				vertices.append(Vector3(q.x, float(mouth.level) + drop, q.y))
-				var flow_at: Vector2 = mouth.mouth - dir * 0.4 + (mouth.across as Vector2) * u
-				uvs.append(((flow_at + half) / extent).clamp(low, Vector2.ONE - low))
-			made += 1
-		for i in made - 1:
-			for j in RIBBON_ACROSS - 1:
-				var a := base + i * RIBBON_ACROSS + j
-				var c := a + RIBBON_ACROSS
-				indices.append_array([a, c, a + 1, a + 1, c, c + 1])
-	if indices.is_empty():
-		return []
-	var normals := PackedVector3Array()
-	normals.resize(vertices.size())
-	normals.fill(Vector3.UP)
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_NORMAL] = normals
-	arrays[Mesh.ARRAY_TEX_UV] = uvs
-	arrays[Mesh.ARRAY_INDEX] = indices
-	return arrays
+	var course: PackedVector2Array = (mouth.course as PackedVector2Array).slice(1)
+	var wet: Vector2 = mouth.wet
+	var dir: Vector2 = mouth.dir
+	var made := 0
+	var rows := _rows(course, RIBBON_ROW_M)
+	# The ribbon runs on until the skirt's fade is 0 at every vertex of a row, and that row is
+	# its last (the fade's noise is not monotonic along the course, so a faint row is not the
+	# end of it).
+	var count := mini(rows.size(), 2)
+	for r in range(rows.size() - 1, 1, -1):
+		if _row_alpha(rows[r], wet, half, fade) > 0.0:
+			count = mini(r + 2, rows.size())
+			break
+	for row in rows.slice(0, count):
+		var p: Vector2 = row[0]
+		var tangent: Vector2 = row[1]
+		var across := Vector2(-tangent.y, tangent.x)
+		for j in RIBBON_ACROSS:
+			var u := lerpf(
+				wet.x - RIBBON_MARGIN_M, wet.y + RIBBON_MARGIN_M, float(j) / (RIBBON_ACROSS - 1)
+			)
+			var q := p + across * u
+			var drop := 0.0
+			if made == 0:
+				# The first row lies on the edge, where the map's water ends, at its level
+				# exactly (the in-map mesh's last row is flat at the level out to the edge,
+				# WaterMeshBuilder._run_out), across the course as the channel's profile is.
+				q = edge_point(mouth.mouth, mouth.across, u, half)
+			else:
+				if RiverExits.edge_distance(q, half) > 0.0:
+					q = _onto_edge(q, dir, half)
+				drop = drop_at(mouth, RiverExits.outside_distance(q, half), fade.fall)
+			vertices.append(Vector3(q.x, float(mouth.level) + drop, q.y))
+			var flow_at: Vector2 = mouth.mouth - dir * 0.4 + (mouth.across as Vector2) * u
+			uvs.append(((flow_at + half) / extent).clamp(low, Vector2.ONE - low))
+		made += 1
+	for i in made - 1:
+		for j in RIBBON_ACROSS - 1:
+			var a := i * RIBBON_ACROSS + j
+			var c := a + RIBBON_ACROSS
+			indices.append_array([a, c, a + 1, a + 1, c, c + 1])
+	return {"vertices": vertices, "uvs": uvs, "indices": indices}
 
 
 ## The skirt's greatest fade over the vertices of ribbon row `row` ([point, direction],

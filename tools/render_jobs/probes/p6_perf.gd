@@ -15,13 +15,18 @@ extends RefCounted
 ##                           cleared, so every uniform is set); microseconds per call.
 ##   exits_build {runs}      times RiverExitMesh.skirt_parts on the open map's document (the
 ##                           load and refresh workers' skirt job, run here on the main thread)
-##                           `runs` times; logs the median, the range, the exits and the vertex
-##                           counts of the skirt, the patch and the ribbon.
+##                           `runs` times; logs the median, the range, the same with the
+##                           skirt's current exits lent to the cache (P6-3: a refresh whose edit
+##                           touched no exit) and how many pieces that built, the exits and the
+##                           vertex counts of the skirt, the patch and the ribbon.
 ##   apply_bench {runs}      times AuthoredTerrain.apply_river_exits (the main thread's part of a
 ##                           water refresh for the skirt) with the map's own parts, `runs` times.
 ##   water_timing            the last water refresh: build (worker), bake, swap (main thread,
 ##                           apply_river_exits included), the editor's main-thread parts and
 ##                           the terrain's last in-place skirt refresh.
+##   cache_check             how many exit pieces a build on the main thread, lent the skirt's
+##                           current exits (built on the refresh worker), builds again: 0 when
+##                           the cache keys agree across threads.
 ##   mirror_bench {runs}     times the skirt's vertex mirror made from the document
 ##                           (TerrainMeshBuilder.skirt_vertex_mirror, the main thread's first
 ##                           in-place edge update after a rebuild before P6-3) against read off
@@ -52,6 +57,20 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _water_timing(base)
 		"mirror_bench":
 			return _mirror_bench(base, int(step.get("runs", 5)))
+		"cache_check":
+			var terrain := _terrain(base)
+			var old := terrain.river_exits()
+			var now := RiverExitMesh.build(
+				terrain.document,
+				AuthoredTerrain.skirt_width_m(),
+				AuthoredTerrain.SKIRT_FADE_M,
+				AuthoredTerrain.SKIRT_WOBBLE,
+				old
+			)
+			return (
+				"cache check: %d of %d pieces built again from the skirt's exits"
+				% [int(now.get("built", -1)), (now.get("pieces", {}) as Dictionary).size()]
+			)
 	return "unknown action %s" % step.get("action", "")
 
 
@@ -153,12 +172,29 @@ static func _exits_build(base: Node, runs: int) -> String:
 			AuthoredTerrain.SKIRT_WOBBLE
 		)
 		times.append((Time.get_ticks_usec() - t0) / 1000.0)
+	# With the skirt's own exits lent (RiverExitMesh.build's cache): a refresh after an edit
+	# that touched no exit.
+	var cached := PackedFloat64Array()
+	var reused := 0
+	for i in runs:
+		var t0 := Time.get_ticks_usec()
+		var again := RiverExitMesh.skirt_parts(
+			doc,
+			AuthoredTerrain.skirt_width_m(),
+			AuthoredTerrain.SKIRT_FADE_M,
+			AuthoredTerrain.SKIRT_WOBBLE,
+			terrain.river_exits()
+		)
+		cached.append((Time.get_ticks_usec() - t0) / 1000.0)
+		reused = int((again.get("exits", {}) as Dictionary).get("built", -1))
 	var exits: Dictionary = parts.get("exits", {})
 	var skirt: Array = parts.get("skirt", [])
 	return (
-		"skirt_parts %s | exits %d | skirt %d vertices, patch %d, ribbon %d"
+		"skirt_parts %s, cached %s (%d pieces built) | exits %d | skirt %d vertices, patch %d, ribbon %d"
 		% [
 			_stats(times),
+			_stats(cached),
+			reused,
 			RiverExits.exits(doc).size(),
 			_vertices(skirt),
 			_vertices(exits.get("channel", [])),
