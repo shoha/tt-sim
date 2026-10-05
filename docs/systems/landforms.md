@@ -166,11 +166,14 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   sits in the map's low corner. The corner is drawn from `allowed_corners()`, the three that
   are not the camera's own (the `NEAR` corner, (1, 1), where the lake lay at the bottom of the
   view cut by the foreground; P5-4b), weighted by `corner_weights` (P5-7): the far corner
-  (-1, -1) `FAR_CORNER_WEIGHT` 0.6, each side corner `SIDE_CORNER_WEIGHT` 0.2; a side corner's
-  centre is `LAKE_SIDE_CENTRE_SHARE` 0.38 of the half extent along the axis that points at the
-  camera's side (0.5 on the other). The home camera shows about 24.6 m of ground across at
-  1920x1080 against a 45.7 m map, so a side lake's centre still lies past the frame's edge and
-  about 40% of its width shows (P5-7 render). The lake is the water, so a dry draw has it too. Draws:
+  (-1, -1) `FAR_CORNER_WEIGHT` 0.6, each side corner `SIDE_CORNER_WEIGHT` 0.2. The home camera
+  shows about 24.6 m of ground across at 1920x1080 against a 45.7 m map, so a side lake is
+  placed from `VIEW` rather than by a share: its centre at most `LAKE_SIDE_SCREEN_M` 6 m across
+  the view (`ACROSS`, toward the corner's side) and `LAKE_SIDE_DEPTH_SHARE` 0.4 of the half
+  extent up it, a smaller lake of `LAKE_SIDE_RADIUS_SHARE` 0.3 (6.9 m at 150 ft) beside the
+  stage, its islet scaled with it. (A 0.38 share pull, the first P5-7 try, still left the
+  centre 14.2 m across against the frame's 12.3 m half-width.) The P5-7 render: seeds 14 and
+  29 show the whole lake in the home frame. The lake is the water, so a dry draw has it too. Draws:
   an islet (`ISLET_CHANCE` 0.3), a small hill `ISLET_RADIUS_M` 5 m shaped before the pond is
   stamped so the mask leaves it dry, its top `ISLET_TOP_OVER_M` 0.5 m over the water; a
   feeding ankle stream from the far side (`STREAM_CHANCE` 0.5) approaching
@@ -202,10 +205,15 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   instead (`"glade": {"line", "half_width", "rise"}`, P5-7): `paint_starting_cover` then paints
   the glade's density within `half_width` of the line and brings the groves back over the next
   `rise` metres (`NewMap.line_density`). The Valley returns its axis, the floor's half-width and
-  the slope's width to the rim, so the floor and river stay open and the slopes keep their
-  groves; the other recipes keep the round glade. From home the near slope's groves still hide
-  much of a forest valley's floor (the P5-7 render: seed 2 a little more open, seeds 3 and 1234
-  much as before). The water clears its own plants and the cliff, lip and scree rules dress the
+  the slope's width to the rim, so the floor and river stay open and the far slope keeps its
+  groves. The bank facing the camera (`NewMap.glade_density`: `near`, counted whole from a dot
+  of `GLADE_NEAR_FULL_DOT` 0.65 with it) stays thin, since a 10 m tree hides about 25 m of
+  ground behind it from the 21.6 degree home camera: the glade reaches
+  `GLADE_NEAR_OPEN_SHARE` 2.5 slope widths out (about 9 m past the rim at 150 ft), that band
+  is capped at `GLADE_NEAR_CAP` 0.1 whatever the cover noise (at the glade's own density the
+  noise still raised copses of tall trees there), and the groves beyond come back to
+  `GLADE_NEAR_EDGE` 0.15 of theirs. The other recipes keep the round glade. The P5-7 render:
+  the floor and river of forest seeds 3, 2 and 1234 read from home. The water clears its own plants and the cliff, lip and scree rules dress the
   tiers, as they do for a tool's stroke.
 - **Draws as measured** (24 surveyed seeds at 150 ft, the P5-4 verdict): valley rivers 19,
   bluffs 16; hill crowns 19, streams 9, stones 4; terraces rivers 19, bridges 8; lake streams
@@ -314,9 +322,10 @@ this doc does not repeat it.
 - P5-4b (8092d17): a flank ledge on crownless hills (crown chance 0.85), the lake away from
   the camera's corner, `cleanup_levels` covers `_p5_` and `_p5j_`.
 - P5-6: these docs.
-- P5-7 (b22df32, ce1877c, e85f7a2, fd717d5): the lake's far corner weighted 0.6 and side
-  lakes pulled in; `straightest_wet` for every crossing; the ledge arc 90-130 with
-  `stream_azimuth_window`; the Valley's line glade. Unit tests: the far corner most common and
+- P5-7 (b22df32, ce1877c, e85f7a2, fd717d5, f88781e, ad7e803): the lake's far corner
+  weighted 0.6 and a side lake placed inside the home frame; `straightest_wet` for every
+  crossing; the ledge arc 90-130 with `stream_azimuth_window`; the Valley's line glade with a
+  thin camera-side bank. Unit tests: the far corner most common and
   no centre in the camera's quadrant, no stones refused over the drawn lake seeds at 100 and
   150 ft, no `no_water` over 40 valley seeds, the stream never crosses the bench over 40
   crownless seeds, the valley floor's centreline open and its rim dense.
