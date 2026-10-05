@@ -1,0 +1,223 @@
+extends GutTest
+
+## StartingLandform and the Valley recipe (P5-1): the same seed draws the same map, seeds
+## differ, the trough has its depth with the rim at the base height, every draw is a
+## writable document, rivers run downhill in reaches, crossings stand on the water, the
+## stage is dry and near the centre, and NewMap centres the glade on it.
+
+const BIOME := "temperate_forest_summer_s1"
+const SEEDS := 40
+
+
+func _valley(size_ft: int, seed_value: int, biome: String = BIOME) -> Dictionary:
+	var doc := MapDocument.create_flat(
+		Vector2i(NewMap.cells_for_feet(size_ft), NewMap.cells_for_feet(size_ft)),
+		"grass",
+		"",
+		seed_value
+	)
+	var shaped := StartingLandform.apply(doc, StartingLandform.VALLEY, seed_value, biome)
+	shaped["doc"] = doc
+	return shaped
+
+
+func _river_chains(doc: MapDocument) -> Array:
+	var chains: Array = []
+	var seen := {}
+	for body in doc.water_bodies:
+		if not body.is_river() or seen.has(body.id):
+			continue
+		var chain: Array[WaterBody] = []
+		for id in WaterEdit.river_chain(doc.water_bodies, body.id):
+			seen[id] = true
+			chain.append(doc.water_body(id))
+		chains.append(chain)
+	return chains
+
+
+func test_kinds_have_names_and_captions() -> void:
+	for kind in StartingLandform.KINDS:
+		assert_true(StartingLandform.NAMES.has(kind), kind)
+		assert_true(StartingLandform.CAPTIONS.has(kind), kind)
+	assert_true(StartingLandform.KINDS.has(StartingLandform.DEFAULT))
+
+
+func test_flat_changes_nothing() -> void:
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "", 5)
+	var shaped := StartingLandform.apply(doc, StartingLandform.FLAT, 5)
+	assert_eq(shaped.stage, Vector2.ZERO)
+	var raised := 0
+	for h in doc.heights:
+		raised += 1 if h != 0.0 else 0
+	assert_eq(raised, 0, "flat stays flat")
+	assert_true(doc.water_bodies.is_empty())
+
+
+func test_same_seed_same_map() -> void:
+	var a := _valley(150, 3)
+	var b := _valley(150, 3)
+	assert_eq(a.stage, b.stage)
+	assert_eq(a.report, b.report)
+	assert_eq((a.doc as MapDocument).heights, (b.doc as MapDocument).heights, "heights")
+	var entries_a: Dictionary = MapDocumentIO.serialize(a.doc).entries
+	var entries_b: Dictionary = MapDocumentIO.serialize(b.doc).entries
+	assert_eq(entries_a.keys(), entries_b.keys())
+	for name in entries_a:
+		assert_eq(entries_a[name], entries_b.get(name), name)
+
+
+func test_different_seeds_turn_the_axis() -> void:
+	var half := 22.86
+	var headings := {}
+	for seed_value in range(1, 13):
+		var frame := LandformRecipes.valley_frame(
+			half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+		)
+		headings[frame.heading_deg] = true
+		assert_between(absf(float(frame.bend_deg)), 8.0, 25.0, "bend %d" % seed_value)
+		assert_lte(absf(float(frame.offset)), half * LandformRecipes.VALLEY_OFFSET_SHARE + 0.01)
+	assert_gt(headings.size(), 2, "several of the eight headings over twelve seeds")
+	var a := _valley(100, 2)
+	var b := _valley(100, 3)
+	assert_ne((a.doc as MapDocument).heights, (b.doc as MapDocument).heights)
+
+
+func test_trough_depth_scales_with_size_and_the_rim_stays_at_the_base() -> void:
+	# Seeds 9, 12 and 14 draw no water at 150 ft (the frame and the feature draws do not
+	# depend on the size), so the floor is the trough alone.
+	for size_ft in NewMap.SIZES_FT:
+		var doc: MapDocument = _valley(size_ft, 9).doc
+		var scale := StartingLandform.size_scale(doc)
+		var depth := LandformRecipes.VALLEY_DEPTH_M * scale
+		var fall := LandformRecipes.VALLEY_FALL_M * scale
+		var lowest := INF
+		var highest := -INF
+		var at_base := 0
+		for h in doc.heights:
+			lowest = minf(lowest, h)
+			highest = maxf(highest, h)
+			at_base += 1 if absf(h) < 0.001 else 0
+		assert_almost_eq(
+			lowest, -(depth + fall), 0.05, "%d ft floor at the downstream end" % size_ft
+		)
+		assert_almost_eq(highest, 0.0, 0.001, "%d ft nothing above the base" % size_ft)
+		assert_gt(
+			float(at_base) / doc.sample_count(), 0.1, "%d ft a rim shelf at the base" % size_ft
+		)
+	assert_almost_eq(StartingLandform.size_scale(_valley(100, 9).doc), 0.8, 0.01)
+	assert_almost_eq(StartingLandform.size_scale(_valley(200, 9).doc), 1.2, 0.01)
+
+
+func test_forty_seeds_draw_rivers_often_and_never_break_the_map() -> void:
+	var rivers := 0
+	var crossings := 0
+	var half := 15.24
+	for seed_value in range(1, SEEDS + 1):
+		var shaped := _valley(100, seed_value)
+		var doc: MapDocument = shaped.doc
+		var label := "seed %d" % seed_value
+		var out_of_range := 0
+		for h in doc.heights:
+			out_of_range += 1 if absf(h) > MapDocument.MAX_ABS_HEIGHT_M else 0
+		assert_eq(out_of_range, 0, "%s heights within the limit" % label)
+		var packed := MapDocumentIO.serialize(doc)
+		assert_eq(packed.error, "", label)
+		var parsed := MapDocumentIO.parse(packed.entries)
+		assert_not_null(parsed.document, label)
+		if parsed.document != null:
+			assert_eq((parsed.document as MapDocument).crossings.size(), doc.crossings.size())
+		var stage: Vector2 = shaped.stage
+		assert_lte(
+			stage.length(), half * 0.5 + 0.01, "%s stage within a quarter of the map" % label
+		)
+		assert_false(WaterGeometry.is_wet_at(doc, stage), "%s stage is dry" % label)
+		var chains := _river_chains(doc)
+		if chains.is_empty():
+			assert_true(doc.crossings.is_empty(), "%s no crossing without water" % label)
+			continue
+		rivers += 1
+		var main: Array[WaterBody] = chains[0]
+		assert_gte(main.size(), 2, "%s river in reaches" % label)
+		for k in main.size() - 1:
+			assert_gte(main[k].level_m, main[k + 1].level_m, "%s reaches step down" % label)
+		var course: PackedVector2Array = WaterCarve.joined_course(main).points
+		assert_false(
+			WaterFallPlan.is_uphill(WaterGeometry.ground_along(doc, course)),
+			"%s river runs downhill" % label
+		)
+		for crossing in doc.crossings:
+			crossings += 1
+			assert_true(
+				crossing.kind == Crossing.Kind.FORD or crossing.kind == Crossing.Kind.STONES,
+				"%s crossing kind" % label
+			)
+			var middle := (crossing.start + crossing.end) * 0.5
+			assert_true(WaterGeometry.is_wet_at(doc, middle), "%s crossing over water" % label)
+			assert_false(WaterGeometry.is_wet_at(doc, crossing.start), "%s bank a" % label)
+			assert_false(WaterGeometry.is_wet_at(doc, crossing.end), "%s bank b" % label)
+	var share := float(rivers) / SEEDS
+	assert_between(share, 0.6, 0.85, "rivers in %d of %d seeds" % [rivers, SEEDS])
+	assert_gt(crossings, 0, "some seed drew a crossing")
+
+
+func test_tributary_joins_the_river() -> void:
+	# Seed 4 draws a river and a tributary at every size.
+	var doc: MapDocument = _valley(150, 4).doc
+	var chains := _river_chains(doc)
+	assert_eq(chains.size(), 2, "the river and its tributary")
+	if chains.size() < 2:
+		return
+	var tributary: Array[WaterBody] = chains[1]
+	var mouth: Vector2 = tributary[-1].points[-1]
+	assert_eq(tributary[0].depth, WaterBody.Depth.ANKLE)
+	assert_true(WaterGeometry.is_wet_at(doc, mouth, tributary[-1].id), "its mouth is in the river")
+
+
+func test_dry_draw_paints_a_wash_of_the_scree_surface() -> void:
+	var biome := PaletteLibrary.biome(BIOME)
+	if biome.is_empty():
+		pass_test("palette without %s" % BIOME)
+		return
+	var shaped := _valley(150, 1234)
+	var doc: MapDocument = shaped.doc
+	assert_true(doc.water_bodies.is_empty(), "seed 1234 is dry")
+	assert_true(doc.surface_ids.has(biome["scree_surface"]), shaped.report)
+	assert_eq(MapDocumentIO.serialize(doc).error, "")
+
+
+func test_new_map_centres_the_glade_on_the_stage() -> void:
+	if PaletteLibrary.biome(BIOME).is_empty():
+		pass_test("palette without %s" % BIOME)
+		return
+	var seed_value := 3
+	var doc := NewMap.create(
+		150, BIOME, seed_value, PaletteLibrary.DEFAULT_ROOT, StartingLandform.VALLEY
+	)
+	var stage: Vector2 = _valley(150, seed_value).stage
+	assert_gt(stage.length(), 5.0, "a stage off the centre makes the test mean something")
+	assert_false(doc.water_bodies.is_empty(), "seed 3 draws a river")
+	assert_eq(doc.biome_slots.size(), doc.sample_count())
+	var half := doc.extent_m() * 0.5
+	var glade := 0.0
+	var glade_n := 0
+	var edge := 0.0
+	var edge_n := 0
+	var opposite := 0.0
+	var opposite_n := 0
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var world := doc.sample_to_world(Vector2(x, z))
+			var density := float(doc.biome_density[doc.sample_index(x, z)])
+			var reach := (world - stage).length() / half.x
+			if reach < 0.3:
+				glade += density
+				glade_n += 1
+			elif reach > 0.8:
+				edge += density
+				edge_n += 1
+			if (world + stage).length() / half.x < 0.3:
+				opposite += density
+				opposite_n += 1
+	assert_lt(glade / glade_n, 0.5 * edge / edge_n, "open at the stage, dense toward the edges")
+	assert_lt(glade / glade_n, opposite / opposite_n, "the glade moved with the stage")
+	assert_eq(MapDocumentIO.serialize(doc).error, "")

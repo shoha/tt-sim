@@ -42,8 +42,7 @@ extends RefCounted
 ##                               asset, rock props under the water, the ground layers.
 ##   profile {every}             ground and depth along every river's course.
 ##   joints                      the reach steps of every river, named "joint<k>" (P4-5).
-##   cleanup                     deletes every user://levels/_p43_*, _p44_*, _p45_*, _p4b_*,
-##                               _p4c_* and _p4d_* folder (test levels only).
+##   cleanup                     deletes the _p43_ to _p4d_ and _p5_ level folders (test levels).
 
 ## The `build` map: the river's control line, its reaches' half-widths, the bank width of
 ## the carve, and the two ponds.
@@ -63,7 +62,9 @@ const HALF_WIDTHS := [1.8, 2.2, 2.8]
 const BANK_M := 1.6
 const POND := {"id": 20, "at": [13, -17], "r": 6.0, "depth": "deep"}
 ## Level folders `save` may write (test levels; `cleanup` deletes all but the _p42_ ones).
-const TEST_PREFIXES: Array[String] = ["_p42_", "_p43_", "_p44_", "_p45_", "_p4b_", "_p4c_", "_p4d_"]
+const TEST_PREFIXES: Array[String] = [
+	"_p42_", "_p43_", "_p44_", "_p45_", "_p4b_", "_p4c_", "_p4d_", "_p5_"
+]
 const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}
 
 ## Points `scan` found (and the reach steps `carve` made), by name.
@@ -713,10 +714,8 @@ static func _cleanup() -> String:
 		return "no levels folder"
 	var removed := PackedStringArray()
 	for folder in dir.get_directories():
-		var test_level := false
-		for prefix in TEST_PREFIXES.slice(1):
-			test_level = test_level or folder.begins_with(prefix)
-		if not test_level:
+		var is_test := func(prefix: String) -> bool: return folder.begins_with(prefix)
+		if not TEST_PREFIXES.slice(1).any(is_test):
 			continue
 		var path := LevelManager.folder_path(folder)
 		_remove_tree(path)

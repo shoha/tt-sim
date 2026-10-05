@@ -219,12 +219,7 @@ func _open_async(
 	var glb := opened.get_absolute_map_path() if opened.map_path != "" else ""
 	var root: Node3D = null
 	if not spec.is_empty():
-		var created := NewMap.create(
-			int(spec.get("size_ft", NewMap.DEFAULT_SIZE_FT)),
-			String(spec.get("biome_id", NewMap.BARE_BIOME)),
-			int(spec.get("seed", NewMap.random_seed()))
-		)
-		root = await loader.build_async("", created)
+		root = await loader.build_async("", NewMap.from_spec(spec))
 	elif document_path != "":
 		root = await loader.load_async(glb, document_path)
 	elif glb != "":
