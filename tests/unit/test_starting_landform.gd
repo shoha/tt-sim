@@ -160,6 +160,63 @@ func test_forty_seeds_draw_rivers_often_and_never_break_the_map() -> void:
 	assert_gt(crossings, 0, "some seed drew a crossing")
 
 
+func test_bluff_is_one_tier_on_the_outer_bank_only() -> void:
+	# P5-4: about half the seeds raise the outer bank behind a one-tier rock face; the inner
+	# bank keeps the cosine slope and the floor its depth, so it is a valley, not a gorge.
+	var bluffs := 0
+	var checked := 0
+	for seed_value in range(1, SEEDS + 1):
+		var shaped := _valley(150, seed_value)
+		var report: String = shaped.report
+		if not report.contains("bluff"):
+			continue
+		bluffs += 1
+		if not report.contains("dry") or checked >= 4:
+			continue
+		checked += 1
+		var doc: MapDocument = shaped.doc
+		var label := "seed %d" % seed_value
+		var half := StartingLandform.half_extent(doc)
+		var scale := StartingLandform.size_scale(doc)
+		var tier := doc.tier_height_m
+		var frame := LandformRecipes.valley_frame(
+			half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+		)
+		var foot := StartingLandform.along(frame.axis, float(frame.foot_arc))
+		var inner: Vector2 = (foot.dir as Vector2).rotated(float(frame.turn) * PI / 2.0)
+		var rim := half * LandformRecipes.VALLEY_RIM_SHARE
+		var probe := rim - 1.0
+		var inner_h := WaterGeometry.ground_at(doc, foot.point + inner * probe)
+		var outer_h := WaterGeometry.ground_at(doc, foot.point - inner * probe)
+		var cosine := (
+			-(LandformRecipes.VALLEY_DEPTH_M * scale + LandformRecipes.VALLEY_FALL_M * scale * 0.5)
+			* StartingLandform.trough_shape(probe, half * LandformRecipes.VALLEY_FLOOR_SHARE, rim)
+		)
+		assert_almost_eq(inner_h, cosine, 0.35, "%s the inner bank keeps the cosine slope" % label)
+		assert_lt(outer_h, inner_h - 0.1, "%s the outer bank is cut below the inner" % label)
+		assert_gt(
+			outer_h, cosine - tier - 0.35, "%s the outer bank is cut one tier at most" % label
+		)
+		var beyond := rim + HeightBrush.tier_span(tier) + LandformRecipes.BLUFF_WOBBLE_M + 1.0
+		assert_almost_eq(
+			WaterGeometry.ground_at(doc, foot.point - inner * beyond),
+			0.0,
+			0.01,
+			"%s the base beyond the bluff" % label
+		)
+		var lowest := INF
+		for h in doc.heights:
+			lowest = minf(lowest, h)
+		assert_almost_eq(
+			lowest,
+			-(LandformRecipes.VALLEY_DEPTH_M + LandformRecipes.VALLEY_FALL_M) * scale,
+			0.05,
+			"%s the floor keeps its depth" % label
+		)
+	assert_between(float(bluffs) / SEEDS, 0.3, 0.7, "bluffs in %d of %d seeds" % [bluffs, SEEDS])
+	assert_gt(checked, 0, "some dry seed drew a bluff")
+
+
 func test_tributary_joins_the_river() -> void:
 	# Seed 4 draws a river and a tributary at every size.
 	var doc: MapDocument = _valley(150, 4).doc
