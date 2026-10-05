@@ -223,6 +223,75 @@ func test_no_crown_has_a_flank_ledge_toward_the_camera() -> void:
 	assert_gt(found, 0, "some seed drew no crown")
 
 
+func test_a_stream_never_crosses_the_flank_ledge() -> void:
+	# P5-7: the ledge's arc is 90-130 degrees; a stream on a ledged hill draws its azimuth from
+	# stream_azimuth_window, clear of the bench. Over 40 crownless seeds with a stream (found by
+	# peeking at the feature stream, sizes in turn), no point of the stream's channel lies
+	# where the bench raises the ground.
+	var near := StartingLandform.NEAR
+	var found := 0
+	var seed_value := 0
+	var arcs := PackedInt32Array()
+	while found < SEEDS and seed_value < 2000:
+		seed_value += 1
+		var draws := StartingLandform.stream(seed_value, StartingLandform.STREAM_FEATURES)
+		var wants_crown := draws.randf() < LandformHilltop.CROWN_CHANCE
+		draws.randf()
+		var wants_stream := draws.randf() < LandformHilltop.STREAM_CHANCE
+		if wants_crown or not wants_stream:
+			continue
+		var size_ft: int = NewMap.SIZES_FT[found % NewMap.SIZES_FT.size()]
+		found += 1
+		var shaped := _hilltop(size_ft, seed_value)
+		var report: String = shaped.report
+		var label := "seed %d at %d ft" % [seed_value, size_ft]
+		if not report.contains("flank ledge") or not report.contains("stream:"):
+			continue
+		var doc: MapDocument = shaped.doc
+		var half := StartingLandform.half_extent(doc)
+		var radius := half * LandformHilltop.HILL_RADIUS_SHARE
+		var height := LandformHilltop.HILL_HEIGHT_M * StartingLandform.size_scale(doc)
+		var centre: Vector2 = (
+			LandformHilltop
+			. hilltop_frame(
+				half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+			)
+			. centre
+		)
+		var ledge := LandformHilltop.ledge_of(height, doc.tier_height_m, radius)
+		var line_r: float = ledge.line_r
+		var target: float = ledge.target
+		var arc_deg := int(report.split("over a ")[1].split(" deg arc")[0])
+		arcs.append(arc_deg)
+		assert_between(
+			arc_deg,
+			int(LandformHilltop.LEDGE_ARC_DEG.x),
+			int(LandformHilltop.LEDGE_ARC_DEG.y),
+			"%s arc" % label
+		)
+		var half_arc := deg_to_rad(arc_deg * 0.5 + 0.5)
+		var crossings := 0
+		for body in doc.water_bodies:
+			for p in body.points:
+				var offset: Vector2 = p - centre
+				var r := offset.length()
+				if r > line_r + HeightBrush.TIER_SOFTEN_M or r < 1e-3:
+					continue
+				if height * StartingLandform.bump(r / radius) >= target:
+					continue
+				# The bench's footprint test of the recipe, with the channel's half-width.
+				var inside := (
+					(half_arc - absf(near.angle_to(offset))) * line_r
+					+ HeightBrush.TIER_SOFTEN_M
+					+ LandformHilltop.STREAM_HALF_WIDTH_M * line_r / r
+				)
+				if inside > 0.0:
+					crossings += 1
+		assert_eq(crossings, 0, "%s the stream keeps off the bench: %s" % [label, report])
+	assert_eq(found, SEEDS, "found %d crownless seeds with a stream" % SEEDS)
+	gut.p("ledge arcs drawn: %s" % arcs)
+
+
 func test_crown_pool_spills_over_the_face_in_a_fall() -> void:
 	# P5-4: with a crown the spring is a pool on the crown's top that falls off its face.
 	var found := 0
