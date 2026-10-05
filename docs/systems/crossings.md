@@ -198,7 +198,9 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
   and verdicts are indexed in [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Verification
   status".
 - **Performance** ([../PERFORMANCE.md](../PERFORMANCE.md)): "Phase 4b (crossings): pinned
-  performance pass (2026-09-27)", with "Play: crossings shown and hidden in one run".
+  performance pass (2026-09-27)", with "Play: crossings shown and hidden in one run", and
+  "Phase 4d (arch and ford): pinned performance pass (2026-10-04)" (the rebuild cost by
+  crossing count and the cache decision).
 
 ## Open work
 

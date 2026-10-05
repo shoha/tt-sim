@@ -407,6 +407,18 @@ numerically (for example where a fade or a tint band starts).
   Quality Low against High (`quality`; both take `expand` labels, "off ..." and "low ..."),
   then each level at home and zoom 20. The levels are kept (`cleanup_levels.json` deletes
   them).
+- `jobs/p4d_perf_build.json` and `jobs/p4d_perf_play.json`: the phase 4d pinned performance
+  pass (`PERFORMANCE.md` "Phase 4d (arch and ford): pinned performance pass"). The build job
+  makes the P4b-3 map (a curved waist river, a deep pond, a path; saved as `_p4d_perf_water`),
+  draws an arch and a ford through the real tool with `record` windows around each drag and
+  release, places a plank bridge, stepping stones, a 14.8 m pier arch along the pond and a
+  second ford through `crossing.gd place` with `timing` after each (the rebuild cost by
+  crossing count), benches plank and arch plans, times a Raise by the arch and saves
+  `_p4d_perf_cross` (six crossings). The play job (run with the pinned `override.cfg`, which
+  it deletes) times warm loads of both levels interleaved, samples GPU time with the crossings
+  shown and hidden at home, zoom 8 on the arch and on the ford and zoom 20, then each level at
+  home and zoom 20 with tokens and `mem`. The levels are kept (`cleanup_levels.json` deletes
+  them).
 - `jobs/falls_look.json`: the waterfall carve and curtains (P4c-2, P4c-3, about 100 s): a new
   150 ft temperate forest map with a two-tier Tier step and a 14 m Raise hill (real Sculpt
   strokes; the hill's flank runs steep for about 9 m, so the stream down it gets two falls), a

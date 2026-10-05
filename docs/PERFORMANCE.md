@@ -2018,3 +2018,119 @@ between them is the fall profile, plunge pool and gorge walls over 13 m of deep 
 a flat channel, an upper bound on the worker's extra work. The map's first falls (the tier
 river and the tributary) were drawn before the record windows, so the first use of the fall
 material (warmed when the Water tool opens, P4c-4) is not in these numbers.
+
+## Phase 4d (arch and ford): pinned performance pass (2026-10-04)
+
+What the two new crossing kinds cost in play (GPU with every crossing shown and hidden in one
+run), on loading (a level with six crossings against the same level without), and in
+authoring (an arch and a ford drawn through the Bridge tool, the per-placement rebuild with
+one to seven crossings on the map, a sculpt that makes them all follow).
+
+**How.** Render jobs `jobs/p4d_perf_build.json` and `jobs/p4d_perf_play.json`. The build job
+makes the P4b-3 map (150 ft temperate forest, seed 1234: a curved waist river at radius 1.8,
+a deep pond, a packed dirt path), saves it as `_p4d_perf_water`, then with the UI hidden and
+vsync off draws an arch through the real Bridge tool where the path meets the river
+(`bridge_kind arch`, a held gesture, a recorded release; 5.4 m span) and a ford across the
+river 21 m downstream (4.3 m), and places through `crossing.gd place` a plank bridge (4.6 m),
+stepping stones (three), an arch along the pond's long axis (14.8 m, so a pier) and a second
+ford, `crossing.gd timing` after each; `bench` for plank and arch plans; a Raise stroke on
+the arch's bank; saved as `_p4d_perf_cross` (six crossings). The play job ran with the pinned
+`override.cfg` (viewport 1920x1080 in every sample, removed by the job at startup), vsync off
+at runtime for frame windows and on for loads, the user's graphics settings, a debug build.
+RTX 3080. `perf.gd gpu_state` at each run's start read 34 % (build) and 29 % (play) at the
+title with vsync on, more than the earlier passes' 15-26 %, but at idle clocks (P5 495 MHz,
+P8 420 MHz; 41-46 C), so the percentage is the game's own title frame at a low clock rather
+than another load; 82 %, 70 C, P0 at the play run's end (the game itself). The in-run A/B is
+drift-immune; absolute milliseconds are indicative. Both levels are kept for `--saved` reruns
+(`cleanup_levels.json` deletes them).
+
+### Play: crossings shown and hidden in one run
+
+`_p4d_perf_cross` in play with four tokens (on the arch's deck, wading in the ford, on the
+plank deck, on a stone), every crossing's meshes hidden and shown (`crossing.gd visible`,
+collision kept), on / off / on / off, 6 s windows. GPU median ms:
+
+| View | On #1 | Off #1 | On #2 | Off #2 | Crossings |
+| --- | --- | --- | --- | --- | --- |
+| Home (zoom 13.85, all six in view; 498 draws, 430K prims) | 3.374 | 3.643 | 3.531 | 3.665 | -0.13 to -0.27 ms (the CPU median drifted 4.02 to 4.46 over the four windows, so the smaller figure is the honest one) |
+| Zoom 8 on the arch (279 draws, 273K prims) | 3.314 | 3.417 | 3.324 | 3.420 | -0.10 / -0.10 ms |
+| Zoom 8 on the ford (225 draws, 219K prims) | 3.153 | 3.195 | 3.153 | 3.211 | -0.04 / -0.06 ms |
+| Zoom 20 (whole map; 565 draws, 454K prims) | 3.177 | 3.231 | 3.168 | 3.250 | -0.05 / -0.08 ms |
+
+**Verdict: the arch and the ford cost nothing measurable in play; showing the crossings is
+0.05-0.13 ms cheaper than hiding them**, as in phase 4b, because a deck or an arch covers
+water pixels, and the water shader is the dearest pixel on the map. The ford shows the
+smallest delta because its bar lies under the surface and hides no water. Six crossings are
+six draw calls; surface 0 of each (`crossing.gd report`): the 5.4 m arch 1,696 vertices of
+stone, the pier arch 3,604, a ford 196-203 of gravel, the plank bridge 1,320, the stones 729.
+
+The two levels played one after the other, same camera and tokens, 8 s windows, GPU median
+ms: home 3.766 without crossings (493 draws, 431K prims), 3.626 with (498 draws, 430K); zoom
+20 3.959 without (694 draws, 591K), 3.866 with (698 draws, 590K). The crossing level reads
+0.09-0.14 ms cheaper with 60 fewer scatter instances (cleared at the landings); it was
+measured second, the GPU at P0 and 70 C by the end.
+
+### Load time and memory
+
+From the title, vsync on, one process: `_p4d_perf_cross` first (cold in the process: 1,629
+ms, worst frame 561 ms), then three interleaved warm rounds:
+
+| Level | Warm (3) | Worst frame, warm |
+| --- | --- | --- |
+| `_p4d_perf_water` | 1,142 / 1,154 / 1,147 ms | 175-191 ms |
+| `_p4d_perf_cross` (two arches, two fords, planks, stones) | 1,185 / 1,174 / 1,144 ms | 176-186 ms |
+
+**Six crossings, two of them arches, add about 20 ms to a warm load** (mean 1,168 against
+1,148 ms; per round -3 to +43 ms, so inside the round-to-round spread), less than the 52 ms
+four plank-and-stone crossings cost in phase 4b against a 720 ms base. Their geometry is
+built on the load's worker (`AuthoredLoadPrep`); in play `crossing.gd report` shows build
+0 ms and a 32.4 ms swap, the six nodes entering the tree in one frame, inside the same
+165-190 ms worst frame every authored load has (P4b-0). Memory in play with the crossings:
+static 307.3 MB, video 1,580.5 MB, working set 1,245 MB (peak 1,394); at the end of the run
+static 307.6 / video 1,573.2 / working set 1,288 MB without, 308.8 / 1,580.7 / 1,306 MB with.
+The arch's and ford's textures are about 7 MB of video memory.
+
+### Authoring: the Bridge tool with four kinds
+
+The build job's `record` windows at zoom 10, vsync off, CPU frame ms median / worst (n):
+
+| Gesture | Frames |
+| --- | --- |
+| Idle | 4.2 / 7.1 (934) |
+| Drawing an arch across the river (preview re-planned per move) | 4.3 / 5.9 (590) |
+| Its release (placed; the map's first crossing) | 4.2 / 12.5 (356) |
+| Drawing a ford across the river / release (second crossing) | 4.0 / 5.8 (587); 3.6 / 20.2 (397) |
+| A Raise stroke on the arch's bank (six crossings follow) | 4.0 / 53.5 (859) |
+
+A plan costs the same for every kind (`bench`, 20 runs: plank 3.11 ms median, 3.04-3.54;
+arch 3.46, 3.04-4.66; phase 4b: plank 3.08, stones 3.52), so drawing an arch or a ford never
+shows in the frame times. **The placement is where the new kinds cost: every crossing edit
+rebuilds all of them on the main thread (`AuthoredCrossings.refresh`), and an arch or a ford
+costs two to four times a plank bridge.** The refresh (build + swap) by crossing count, each
+row adding the named crossing:
+
+| Crossings on the map | Refresh ms | Build | Swap | Whole `place` |
+| --- | --- | --- | --- | --- |
+| 1: the 5.4 m arch | 6.0 | 4.8 | 1.2 | (tool release, worst frame 12.5) |
+| 2: + a ford | 12.4 | 10.3 | 2.1 | (tool release, worst frame 20.2) |
+| 3: + a plank bridge | 14.9 | 12.6 | 2.3 | 20.8 |
+| 4: + stepping stones | 15.9 | 13.1 | 2.8 | 21.4 |
+| 5: + the 14.8 m pier arch | 26.2 | 21.8 | 4.3 | 31.9 |
+| 6: + a second ford | 33.8 | 28.6 | 5.2 | 40.7 |
+| 7: + a bench plank / arch (then undone) | 37.0 / 38.9 | 31.2 / 32.4 | 5.8 / 6.4 | 42.2 / 43.0; undo 37.0 / 33.5 |
+
+Build increments per kind: the short arch 4.8 ms, the pier arch 8.7, a ford 5.5-6.7, a plank
+bridge 2.3, three stones 0.5; the swap grows about 0.9 ms per crossing. A ford's build costs
+more than a plank bridge's for a tenth of the vertices; where that goes was not profiled here.
+The Raise stroke by the arch's bank refreshed all six in 32.3 ms (build 26.9) on top of the
+sculpt's own regeneration, the 53.5 ms frame above (phase 4b: 23.6 ms with four plank-and-stone
+crossings).
+
+**Cache decision: the per-crossing geometry cache (open since P4b-3) is due now.** The line
+set for this pass was 25 ms of main-thread work for a placement with six crossings on the
+map; the sixth placement's refresh took 33.8 ms (40.7 ms for the whole place), a seventh 37-39
+ms, an undo 34-37 ms, and a sculpt beside one crossing 53.5 ms in a frame. The mean is now
+5.6 ms per crossing against phase 4b's 2.4, so the 64-crossing cap would hitch about 360 ms
+per placement. The cache is keyed on each crossing's fields and the ground under it (a sculpt
+moves piles, abutments, stones and a ford's bar without changing the fields), rebuilds only
+the crossings whose key changed, and is not built in this pass (MAP_AUTHORING.md "Open work").
