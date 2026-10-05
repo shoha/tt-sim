@@ -82,7 +82,8 @@ const CROSSING_DRAW_M := 3.5
 
 ## Runs the recipe for `kind` on `doc` (a flat document of the map's size) with `seed_value`.
 ## Returns {"stage": Vector2 (map XZ metres, where the glade goes), "report": String (what
-## was drawn, with any refusal in plain words)}. FLAT and an unknown kind change nothing.
+## was drawn, with any refusal in plain words)}, and optionally "glade" (a line glade for
+## NewMap.paint_starting_cover; the Valley's floor). FLAT and an unknown kind change nothing.
 ## `biome_id` is the starting biome (the crossing's style and the dry wash's surface).
 static func apply(
 	doc: MapDocument,

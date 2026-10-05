@@ -66,11 +66,13 @@ static func create(
 		Vector2i(cells, cells), surface, PaletteLibrary.palette_version(root), seed_value
 	)
 	var stage := Vector2.ZERO
+	var glade := {}
 	if landform != StartingLandform.FLAT:
 		var shaped := StartingLandform.apply(doc, landform, seed_value, biome_id, root)
 		stage = shaped.stage
+		glade = shaped.get("glade", {})
 	if not biome.is_empty():
-		paint_starting_cover(doc, biome_id, stage)
+		paint_starting_cover(doc, biome_id, stage, glade)
 	return doc
 
 
@@ -100,9 +102,12 @@ static func opening_status(spec: Dictionary) -> String:
 ## Paints `biome_id` over the whole document with the starting cover (see the header),
 ## replacing any biome masks it had. The glade is centred on `centre` (map XZ metres; a
 ## landform's stage): the groves still grow toward the map's edges, so a stage near one
-## side simply shifts the glade there.
+## side simply shifts the glade there. A landform may shape the glade instead (`glade`, the
+## recipe's {"line": PackedVector2Array, "half_width", "rise"}; P5-7, the Valley's floor):
+## the glade is then the ground within `half_width` of the line, and the groves come back
+## over the next `rise` metres (line_density).
 static func paint_starting_cover(
-	doc: MapDocument, biome_id: String, centre: Vector2 = Vector2.ZERO
+	doc: MapDocument, biome_id: String, centre: Vector2 = Vector2.ZERO, glade: Dictionary = {}
 ) -> void:
 	var count := doc.sample_count()
 	var slots := PackedByteArray()
@@ -111,11 +116,19 @@ static func paint_starting_cover(
 	density.resize(count)
 	var noise := _cover_noise(doc.map_seed)
 	var half := doc.extent_m() * 0.5
+	var line: PackedVector2Array = glade.get("line", PackedVector2Array())
+	var glade_half := float(glade.get("half_width", 0.0))
+	var rise := float(glade.get("rise", 0.0))
 	for z in doc.samples_z():
 		for x in doc.samples_x():
 			var world := doc.sample_to_world(Vector2(x, z))
-			var value := starting_density(
-				world - centre, half, noise.get_noise_2d(world.x, world.y)
+			var noise_value := noise.get_noise_2d(world.x, world.y)
+			var value := (
+				line_density(
+					StartingLandform.nearest_on(line, world).x, glade_half, rise, noise_value
+				)
+				if line.size() >= 2
+				else starting_density(world - centre, half, noise_value)
 			)
 			var byte := roundi(value * 255.0)
 			var index := doc.sample_index(x, z)
@@ -133,7 +146,21 @@ static func starting_density(world: Vector2, half: Vector2, noise_value: float) 
 	var v := absf(world.y) / maxf(half.y, 0.001)
 	# Rounded-square distance from the centre: 0 at the centre, 1 at an edge midpoint.
 	var reach := pow(pow(u, 4.0) + pow(v, 4.0), 0.25)
-	var edge := smoothstep(COVER_GLADE_RADIUS, COVER_EDGE_RADIUS, reach)
+	return _cover_value(smoothstep(COVER_GLADE_RADIUS, COVER_EDGE_RADIUS, reach), noise_value)
+
+
+## The starting cover density (0..1) of a line glade (P5-7) at `distance` metres from its
+## line: the glade's density within `half_width`, rising to the groves' over the next `rise`
+## metres, plus the cover noise (-1..1). Pure.
+static func line_density(
+	distance: float, half_width: float, rise: float, noise_value: float
+) -> float:
+	var edge := smoothstep(half_width, half_width + maxf(rise, 0.001), distance)
+	return _cover_value(edge, noise_value)
+
+
+## The cover density for `edge` (0 the glade, 1 the groves) and the noise there.
+static func _cover_value(edge: float, noise_value: float) -> float:
 	var value := lerpf(COVER_CENTRE_DENSITY, COVER_EDGE_DENSITY, edge)
 	value += noise_value * COVER_NOISE_AMPLITUDE
 	value = clampf(value, 0.0, 1.0)

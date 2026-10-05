@@ -83,7 +83,9 @@ const WASH_SOFT_M := 1.5
 const EDGE_MARGIN_M := 0.5
 
 
-## The Valley on `doc` with `seed_value` (see the header). {"stage", "report"}.
+## The Valley on `doc` with `seed_value` (see the header). {"stage", "report", "glade"}: the
+## glade NewMap.paint_starting_cover opens along the floor (the axis, the floor's half-width,
+## the slope's width to the rim).
 static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: String) -> Dictionary:
 	var half := StartingLandform.half_extent(doc)
 	var scale := StartingLandform.size_scale(doc)
@@ -195,7 +197,13 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 	else:
 		report.append("dry")
 	report.append("stage (%.1f, %.1f)" % [stage.x, stage.y])
-	return {"stage": stage, "report": "; ".join(report)}
+	# The glade is the floor (P5-7): under a forest's canopy a round glade on the stage left
+	# the valley a dark dip; the floor and its river stay open, the slopes keep their groves.
+	return {
+		"stage": stage,
+		"report": "; ".join(report),
+		"glade": {"line": axis, "half_width": floor_half, "rise": rim - floor_half},
+	}
 
 
 ## The Valley's frame from the seed, for a map of half extent `half`: the axis polyline
