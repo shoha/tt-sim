@@ -1,0 +1,55 @@
+{
+ "out_dir": "render_jobs/p5_perf",
+ "timeout_s": 1200,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "open start"},
+
+  {"op": "expand", "values": ["flat", "valley", "hilltop", "terraces", "lakeshore", "gorge"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "author", "biome": "temperate_forest_summer_s1", "size": 150, "seed": 7, "landform": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 1.0},
+   {"op": "no_autosave"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "round 1 {value} 150", "ws": true},
+   {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "report", "landform": "{value}"},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "recipe", "biome": "temperate_forest_summer_s1", "size": 150, "seed": 7, "landform": "{value}", "runs": 3},
+   {"op": "wait", "s": 1.0}
+  ]},
+  {"op": "expand", "values": ["flat", "valley", "hilltop", "terraces", "lakeshore", "gorge", "flat", "valley", "hilltop", "terraces", "lakeshore", "gorge"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "author", "biome": "temperate_forest_summer_s1", "size": 150, "seed": 7, "landform": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 1.0},
+   {"op": "no_autosave"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "{value} 150"},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5}
+  ]},
+
+  {"op": "expand", "values": ["flat", "valley", "gorge"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "author", "biome": "temperate_forest_summer_s1", "size": 100, "seed": 7, "landform": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 1.0},
+   {"op": "no_autosave"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "{value} 100"},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "recipe", "biome": "temperate_forest_summer_s1", "size": 100, "seed": 7, "landform": "{value}", "runs": 3},
+   {"op": "wait", "s": 1.0}
+  ]},
+  {"op": "expand", "values": ["flat", "valley", "gorge"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "author", "biome": "temperate_forest_summer_s1", "size": 200, "seed": 7, "landform": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 1.0},
+   {"op": "no_autosave"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "{value} 200"},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "recipe", "biome": "temperate_forest_summer_s1", "size": 200, "seed": 7, "landform": "{value}", "runs": 3},
+   {"op": "wait", "s": 1.0}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "open end"}
+ ]
+}
