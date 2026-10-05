@@ -456,6 +456,14 @@ static func river_goals(
 		inside.call(points[0]) * open_end.call(points[0]),
 		inside.call(points[-1]) * open_end.call(points[-1])
 	)
+	# An end at the map edge (P6-3) carries the channel's own cross-section straight on past
+	# its end point out to the edge: the round cap past the end left the bed on the edge up to
+	# 0.1 m shallower than the river's, and the exit past the edge carries the edge's
+	# (RiverExitMesh), so the stream read deeper past the edge than in the map.
+	var run_off := Vector2i(
+		(1 - inside.call(points[0])) * open_end.call(points[0]),
+		(1 - inside.call(points[-1])) * open_end.call(points[-1])
+	)
 	var widest := 0.0
 	for w in widths:
 		widest = maxf(widest, w)
@@ -481,18 +489,20 @@ static func river_goals(
 		var length := sqrt(length_sq)
 		var box := Rect2(a, Vector2.ZERO).expand(points[s + 1]).grow(reach)
 		var cells := _cells_in(box, origin, step, grid).intersection(rect)
+		var lo := -INF if s == 0 and run_off.x != 0 else 0.0
+		var hi := INF if s == points.size() - 2 and run_off.y != 0 else 1.0
 		for j in range(cells.position.y, cells.end.y):
 			var z := origin.y + j * step.y
 			var row := (j - rect.position.y) * rect.size.x - rect.position.x
 			for i in range(cells.position.x, cells.end.x):
 				var p := Vector2(origin.x + i * step.x, z)
-				var t := clampf((p - a).dot(segment) / length_sq, 0.0, 1.0)
+				var t := clampf((p - a).dot(segment) / length_sq, lo, hi)
 				var d := p.distance_to(a + segment * t)
 				var k := row + i
 				if d < distance[k]:
 					distance[k] = d
-					along[k] = arc[s] + t * length
-					half_width[k] = lerpf(widths[s], widths[s + 1], t)
+					along[k] = clampf(arc[s] + t * length, 0.0, total)
+					half_width[k] = lerpf(widths[s], widths[s + 1], clampf(t, 0.0, 1.0))
 	var goals := PackedFloat32Array()
 	goals.resize(count)
 	goals.fill(INF)
