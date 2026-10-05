@@ -476,8 +476,12 @@ void fragment() {
 	// ---- Bed color: refracted screen prepass, absorbed and caustic-lit --------------
 	vec3 surface = tint;
 	float alpha = mix(shore_color.a, water_color.a, depth01) + fresnel * fresnel_strength;
+	// Past the map edge (water_skirt_fade): the skirt's fade here, 1 on the map.
+	float skirt_a = water_skirt_fade ? skirt_alpha_seeded(world_pos.xz, skirt_seed) : 1.0;
 	if (!water_quality_skip_refraction) {
 		float refract_fade = refraction_depth_fade > 0.0 ? smoothstep(0.0, refraction_depth_fade, bed_depth) : 1.0;
+		// The bed past the edge refracts less as it fades, so it does not streak.
+		refract_fade *= skirt_a;
 		vec2 refract_uv = clamp(SCREEN_UV + grad * refraction_strength * refract_fade, vec2(0.001), vec2(0.999));
 		// Classic shoreline-bleed guard: if the offset sample lands on geometry that is in
 		// front of the water surface (a bank, a token), it is not "under" this water, so
@@ -488,6 +492,13 @@ void fragment() {
 			refracted_bed_depth = bed_depth;
 		}
 		vec3 bed = textureLod(screen_tex, refract_uv, 0.0).rgb;
+		if (skirt_a < 1.0 && skirt_backdrop_mode != 2) {
+			// The skirt under the water is lit ground * a + backdrop * (1 - a) (its colour fade):
+			// take the backdrop back out, so the water shows its bed as the in-map water does,
+			// keeping the river's colour and luminosity, and dissolves by its own alpha alone.
+			float a = max(skirt_a, 0.2);
+			bed = max((bed - skirt_backdrop_color(INV_VIEW_MATRIX) * (1.0 - a)) / a, vec3(0.0));
+		}
 		if (!water_quality_skip_fine_detail) {
 			float caustic_cycles_per_pixel = caustic_scale * 1.7 * world_units_per_pixel;
 			float aa_caustic = 1.0 - smoothstep(0.12, 0.3, caustic_cycles_per_pixel);
@@ -562,7 +573,7 @@ void fragment() {
 	shoreline = mix(1.0, shoreline, ground_like);
 	ALPHA = clamp(alpha + foam * 0.3, 0.0, 1.0) * shoreline;
 	if (water_skirt_fade) {
-		ALPHA *= skirt_lit_share(skirt_alpha_seeded(world_pos.xz, skirt_seed), INV_VIEW_MATRIX);
+		ALPHA *= skirt_lit_share(skirt_a, INV_VIEW_MATRIX);
 	}
 	SPECULAR = specular_value;
 	// Foam is matte; wave crests are slightly glossier than the troughs so the glint sits
