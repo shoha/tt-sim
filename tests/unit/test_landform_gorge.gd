@@ -54,7 +54,12 @@ func test_seeds_turn_the_heading() -> void:
 		headings[frame.heading_deg] = true
 		assert_lte(absf(float(frame.offset)), half * LandformGorge.OFFSET_SHARE + 0.01)
 		assert_eq((frame.axis as PackedVector2Array).size(), 4 if seed_value % 2 == 0 else 3)
-	assert_gt(headings.size(), 2, "several of the eight headings over twelve seeds")
+		# P5-4: the ravine crosses the view, never runs along it.
+		assert_true(
+			LandformGorge.HEADINGS.has(int(frame.heading_deg) / 45),
+			"seed %d heading %d within 45 degrees of the x axis" % [seed_value, frame.heading_deg]
+		)
+	assert_gt(headings.size(), 2, "several of the six headings over twelve seeds")
 	assert_ne(
 		(_gorge(100, 2).doc as MapDocument).heights, (_gorge(100, 3).doc as MapDocument).heights
 	)
@@ -125,6 +130,9 @@ func test_forty_seeds_draw_streams_near_their_chance_and_never_break_the_map() -
 		assert_lte(stage.length(), half * 0.5 + 0.01, "%s stage within reach" % label)
 		assert_false(WaterGeometry.is_wet_at(doc, stage), "%s stage is dry" % label)
 		assert_gte(WaterGeometry.ground_at(doc, stage), -0.05, "%s stage on the rim" % label)
+		# P5-4: a 100 ft map is always one tier deep.
+		var depth := float(shaped.report.split(" m deep")[0].split(", ")[-1])
+		assert_almost_eq(depth, doc.tier_height_m, 0.01, "%s one tier on a 100 ft map" % label)
 		if doc.water_bodies.is_empty():
 			assert_true(doc.crossings.is_empty(), "%s no crossing without water" % label)
 			continue

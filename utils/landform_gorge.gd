@@ -2,25 +2,34 @@ class_name LandformGorge
 extends RefCounted
 
 ## The Gorge starting landform (P5-2; see StartingLandform and LandformRecipes for the frame
-## every recipe shares). A ravine one or two tiers deep (TWO_TIERS_CHANCE) winding across the
-## map: its axis is one of eight headings through a point off the centre, bent once by
-## BEND_DEG and, half the time, bent back further on (SECOND_BEND_CHANCE), and the ground
-## follows the polyline's distance field cut downward with HeightBrush.tier_goal from the rim
-## at the base height (the Sculpt tool's own tier cut: the rim rounds down with the lip
-## rule's grass on top, a 66 degree rock face drops, the floor is flat). The flat floor is
-## FLOOR_M wide by the seed, TWO_TIER_FLOOR_EXTRA_M wider when two tiers deep (the rims stand
-## a face further out); the floor tilts FALL_M along its length so a stream down it steps in
-## riffles. The seed draws: an ankle stream along the floor (STREAM_CHANCE; toward the far
-## wall where the ravine crosses the view, STREAM_FAR_SHARE, so the near rim does not hide it;
-## the walls are put back where its bank reach would have slumped them,
-## StartingLandform.restore_outside), else a dry wash of the biome's scree surface along it;
-## given a stream, a stone arch over the ravine
-## near its middle (ARCH_CHANCE), standing on the rims ARCH_FOOT_M back from the lip
+## every recipe shares). A ravine one or two tiers deep (TWO_TIERS_CHANCE; two only on a map
+## TWO_TIERS_MIN_EXTENT_M wide, 150 ft and up) winding across the map: its axis is one of the
+## six headings within 45 degrees of the x axis (HEADINGS: the ravine crosses the view, so
+## its far wall and its floor face the camera, which looks along -z pitched 21.6 degrees
+## down and sees only the near rim of a ravine running along the view) through a point off
+## the centre, bent once by BEND_DEG and, half the time, bent back further on
+## (SECOND_BEND_CHANCE), and the ground follows the polyline's distance field cut downward
+## with HeightBrush.tier_goal from the rim at the base height (the Sculpt tool's own tier
+## cut: the rim rounds down with the lip rule's grass on top, a 66 degree rock face drops,
+## the floor is flat). The flat floor is FLOOR_M wide by the seed, TWO_TIER_FLOOR_EXTRA_M
+## wider when two tiers deep (the rims stand a face further out); the floor tilts FALL_M
+## along its length so a stream down it steps in riffles. The seed draws: an ankle stream
+## along the floor (STREAM_CHANCE; hugging the far wall where the ravine crosses the view,
+## STREAM_FAR_SHARE, so the near rim does not hide it; the walls are put back where its bank
+## reach would have slumped them, StartingLandform.restore_outside), else a dry wash of the
+## biome's scree surface along it; given a stream, a stone arch over the ravine near its
+## middle (ARCH_CHANCE), standing on the rims ARCH_FOOT_M back from the lip
 ## (StartingLandform.span_crossing: the Bridge tool's waterline anchors would stand on the
 ## floor beside the stream). The stage is on the rim on the camera-facing side (+z) by the
 ## arch, or by the middle of the ravine.
 
 const TWO_TIERS_CHANCE := 0.5
+## Two tiers only on a map at least this wide (150 ft; P5-4): on a 100 ft map a two-tier
+## ravine's walls and floor took half the ground.
+const TWO_TIERS_MIN_EXTENT_M := 45.0
+## The heading indices (45 degree steps from +x) the frame draws from: within 45 degrees of
+## the x axis (P5-4; see the header).
+const HEADINGS: Array[int] = [0, 1, 3, 4, 5, 7]
 const SECOND_BEND_CHANCE := 0.5
 const STREAM_CHANCE := 0.7
 const ARCH_CHANCE := 0.4
@@ -44,8 +53,9 @@ const STREAM_SPACING_M := 3.0
 const STREAM_WOBBLE_SHARE := 0.2
 ## The stream runs this share of the floor's half-width toward the far wall (-z) where the
 ## ravine runs across the view, so the near rim does not hide it (see above); along the
-## view it stays in the middle.
-const STREAM_FAR_SHARE := 0.45
+## view it stays in the middle. 0.7 since P5-4 (0.45 left it under the near rim's shadow
+## in a two-tier ravine); the wobble share keeps it off the wall's toe.
+const STREAM_FAR_SHARE := 0.7
 ## The walls are put back (StartingLandform.restore_outside) beyond the stream's half-width,
 ## its bank and this much more.
 const WALL_KEEP_M := 0.5
@@ -69,7 +79,7 @@ static func gorge(doc: MapDocument, seed_value: int, biome_id: String, root: Str
 	var scale := StartingLandform.size_scale(doc)
 	var tier := doc.tier_height_m
 	var draws := StartingLandform.stream(seed_value, StartingLandform.STREAM_FEATURES)
-	var wants_two := draws.randf() < TWO_TIERS_CHANCE
+	var wants_two := draws.randf() < TWO_TIERS_CHANCE and doc.extent_m().x >= TWO_TIERS_MIN_EXTENT_M
 	var wants_second_bend := draws.randf() < SECOND_BEND_CHANCE
 	var wants_stream := draws.randf() < STREAM_CHANCE
 	var wants_arch := draws.randf() < ARCH_CHANCE
@@ -172,9 +182,10 @@ static func gorge(doc: MapDocument, seed_value: int, biome_id: String, root: Str
 ## The Gorge's frame from the seed, for a map of half extent `half`: the axis polyline (the
 ## upstream end, one or two bends, the downstream end, each run long enough to leave the
 ## map), the arc position of the centre's foot along it, and the numbers the report quotes.
-## `two_bends` adds the second bend, turning back the other way.
+## `two_bends` adds the second bend, turning back the other way. The heading is one of
+## HEADINGS (one draw, so the later draws stand whatever the list holds).
 static func gorge_frame(half: float, two_bends: bool, rng: RandomNumberGenerator) -> Dictionary:
-	var heading_index := rng.randi_range(0, 7)
+	var heading_index: int = HEADINGS[rng.randi_range(0, HEADINGS.size() - 1)]
 	var dir := Vector2(cos(heading_index * PI / 4.0), sin(heading_index * PI / 4.0))
 	var normal := Vector2(-dir.y, dir.x)
 	var offset := rng.randf_range(-1.0, 1.0) * half * OFFSET_SHARE
