@@ -38,6 +38,9 @@ const COVER_MIN_DENSITY := 0.05
 ## centre to the edge (a rounded-square distance, so corners are not favoured).
 const COVER_GLADE_RADIUS := 0.35
 const COVER_EDGE_RADIUS := 0.95
+## A line glade's near bank (glade_density) counts whole once its direction from the line has
+## this dot with the camera's direction (cos 45 degrees, less a margin).
+const GLADE_NEAR_FULL_DOT := 0.65
 
 
 static func cells_for_feet(feet: int) -> int:
@@ -103,9 +106,10 @@ static func opening_status(spec: Dictionary) -> String:
 ## replacing any biome masks it had. The glade is centred on `centre` (map XZ metres; a
 ## landform's stage): the groves still grow toward the map's edges, so a stage near one
 ## side simply shifts the glade there. A landform may shape the glade instead (`glade`, the
-## recipe's {"line": PackedVector2Array, "half_width", "rise"}; P5-7, the Valley's floor):
-## the glade is then the ground within `half_width` of the line, and the groves come back
-## over the next `rise` metres (line_density).
+## recipe's {"line": PackedVector2Array, "half_width", "rise", and optionally "near",
+## "near_open", "near_edge"}; P5-7, the Valley's floor): the glade is then the ground within
+## `half_width` of the line, the groves come back over the next `rise` metres, and the bank
+## facing the camera stays thinner (glade_density).
 static func paint_starting_cover(
 	doc: MapDocument, biome_id: String, centre: Vector2 = Vector2.ZERO, glade: Dictionary = {}
 ) -> void:
@@ -117,16 +121,12 @@ static func paint_starting_cover(
 	var noise := _cover_noise(doc.map_seed)
 	var half := doc.extent_m() * 0.5
 	var line: PackedVector2Array = glade.get("line", PackedVector2Array())
-	var glade_half := float(glade.get("half_width", 0.0))
-	var rise := float(glade.get("rise", 0.0))
 	for z in doc.samples_z():
 		for x in doc.samples_x():
 			var world := doc.sample_to_world(Vector2(x, z))
 			var noise_value := noise.get_noise_2d(world.x, world.y)
 			var value := (
-				line_density(
-					StartingLandform.nearest_on(line, world).x, glade_half, rise, noise_value
-				)
+				glade_density(world, glade, noise_value)
 				if line.size() >= 2
 				else starting_density(world - centre, half, noise_value)
 			)
@@ -150,13 +150,48 @@ static func starting_density(world: Vector2, half: Vector2, noise_value: float) 
 
 
 ## The starting cover density (0..1) of a line glade (P5-7) at `distance` metres from its
-## line: the glade's density within `half_width`, rising to the groves' over the next `rise`
-## metres, plus the cover noise (-1..1). Pure.
+## line: the glade's density within `half_width`, rising over the next `rise` metres to
+## `edge_max` of the way to the groves' density (1: the groves'), plus the cover noise
+## (-1..1). Pure.
 static func line_density(
-	distance: float, half_width: float, rise: float, noise_value: float
+	distance: float, half_width: float, rise: float, noise_value: float, edge_max: float = 1.0
 ) -> float:
 	var edge := smoothstep(half_width, half_width + maxf(rise, 0.001), distance)
-	return _cover_value(edge, noise_value)
+	return _cover_value(edge * edge_max, noise_value)
+
+
+## The starting cover density (0..1) at map point `world` under a line glade `glade` (the
+## recipe's {"line", "half_width", "rise"}, optionally "near", "near_open", "near_cap" and
+## "near_edge"), given the cover noise there. On the bank facing `near` (the direction toward
+## the camera, StartingLandform.NEAR) the glade reaches `near_open` metres further, that band
+## held at most at `near_cap` whatever the noise, and the groves beyond come back only to
+## `near_edge` of their density, each in proportion to how squarely the bank
+## faces `near` (fully from GLADE_NEAR_FULL_DOT on, so a bank 45 degrees off the camera
+## counts whole), so trees on the camera-side slope do not stand between the camera and the
+## glade (P5-7, the Valley's near bank). Pure.
+static func glade_density(world: Vector2, glade: Dictionary, noise_value: float) -> float:
+	var line: PackedVector2Array = glade.line
+	var near_at := StartingLandform.nearest_on(line, world)
+	var facing := 0.0
+	var near: Vector2 = glade.get("near", Vector2.ZERO)
+	if near != Vector2.ZERO and near_at.x > 1e-3:
+		var k := int(near_at.z)
+		var q := Geometry2D.get_closest_point_to_segment(world, line[k], line[k + 1])
+		facing = smoothstep(0.0, GLADE_NEAR_FULL_DOT, (world - q).normalized().dot(near))
+	var half_width := float(glade.half_width)
+	var open := half_width + float(glade.get("near_open", 0.0)) * facing
+	var value := line_density(
+		near_at.x,
+		open,
+		float(glade.rise),
+		noise_value,
+		lerpf(1.0, float(glade.get("near_edge", 1.0)), facing)
+	)
+	if near_at.x > half_width and near_at.x <= open:
+		# The near band: the cover noise would otherwise raise copses of tall trees in it.
+		value = minf(value, lerpf(1.0, float(glade.get("near_cap", 1.0)), facing))
+		value = value if value >= COVER_MIN_DENSITY else 0.0
+	return value
 
 
 ## The cover density for `edge` (0 the glade, 1 the groves) and the noise there.
