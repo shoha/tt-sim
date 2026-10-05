@@ -612,9 +612,15 @@ func test_ford_parts_a_gravel_bar_under_the_surface_with_landings_and_marker_sto
 		assert_almost_eq(float(stone.top), RIVER_LEVEL + CrossingFord.STONE_ABOVE_M, 0.011)
 		assert_gt((stone.at as Vector2).x, middle.x + 0.5, "on the downstream edge")
 		assert_between(float(stone.radius) * 2.0, CrossingFord.STONE_M.x, CrossingFord.STONE_M.y)
+	# A 4 m bar wants five, but the 3 m river's wet run has room for four STONE_MIN_PITCH_M
+	# apart (P4d-4); over the wide river it gets its five.
 	var wide := CrossingPlacement.anchor(doc, FORD_FROM, FORD_TO, Crossing.Kind.FORD, 4.0)
 	wide.id = 2
-	assert_eq(CrossingFord.stone_layout(doc, wide).size(), 5)
+	assert_eq(CrossingFord.stone_layout(doc, wide).size(), 4, "four fit the 3 m run")
+	var wide_doc := _wide_doc()
+	var wider := CrossingPlacement.anchor(wide_doc, FORD_FROM, FORD_TO, Crossing.Kind.FORD, 4.0)
+	wider.id = 2
+	assert_eq(CrossingFord.stone_layout(wide_doc, wider).size(), 5)
 	# The highest point (the drag's cast starts above it) is the landing pad on the bank.
 	assert_almost_eq(float(parts.top), CrossingFord.PAD_M, 0.02, "the landing pad is highest")
 	# Collision: the crest and the stones.
