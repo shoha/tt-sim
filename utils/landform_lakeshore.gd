@@ -18,7 +18,8 @@ extends RefCounted
 ## a dry draw has it too.
 
 const LAKE_RADIUS_SHARE := 0.45
-const LAKE_CENTRE_SHARE := 0.55
+## 0.5 since P5-4 (0.55 sat the lake at the home view's edge): more water in the home view.
+const LAKE_CENTRE_SHARE := 0.5
 const LAKE_WARP := 0.15
 const LAKE_RISE_M := 1.5
 const LAKE_RISE_RUN_SHARE := 0.9
