@@ -64,6 +64,7 @@ other committed home.
 | Water tool (River and Pond tiles, depth tiles, ribbon preview, Ctrl erase) | `scenes/states/authoring/water_brush.gd`, `water_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Water) and "Brushes and gestures" |
 | Crossings (plank bridges, stepping stones, stone arches, fords: model, snapping to banks, geometry, collision, grid on the deck, editor API, following later edits, the per-crossing rebuild cache) | `resources/crossing.gd`, `utils/crossing_placement.gd`, `utils/crossing_geometry.gd`, `utils/crossing_arch.gd`, `utils/crossing_ford.gd`, `utils/crossing_cache.gd`, `utils/map_crossing_io.gd`, `scenes/terrain/authored_crossings.gd`, `scenes/states/authoring/crossing_editor.gd` | `systems/crossings.md`, `ARCHITECTURE.md` "Map document (map.ttmap)" |
 | Bridge tool (Planks, Stones, Arch and Ford tiles, live preview, refusal hint, Ctrl erase) | `scenes/states/authoring/bridge_brush.gd`, `bridge_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Bridge) and "Brushes and gestures" |
+| Starting landforms (Valley, Hilltop, Terraces, Lakeshore, Gorge: the seeded frame, the shared steps, each recipe's shape and feature chances, the stage, the open path, the dialog's Landform row) | `utils/starting_landform.gd`, `utils/landform_recipes.gd`, `utils/landform_hilltop.gd`, `utils/landform_terraces.gd`, `utils/landform_lakeshore.gd`, `utils/landform_gorge.gd`, `utils/new_map.gd`, `scenes/states/authoring/new_map_dialog.gd` | `systems/landforms.md`, `UI_SYSTEMS.md` "New map dialog" |
 | Submerged token marker (the ring on the water over a hidden token, drag preview) | `scenes/board_token/submerged_marker.gd`, `shaders/submerged_marker.gdshader`, `utils/water_surface.gd` | `UI_SYSTEMS.md` "Submerged Token Marker" |
 | Authored map load on workers (dressing, water geometry, rule fields, chunk and skirt arrays, crossings) | `utils/authored_load_prep.gd`, `MapSourceLoader` | `ARCHITECTURE.md` Map Loading Flow, `PERFORMANCE.md` "P4b-0: authored map load on workers" |
 | First-use pipeline warm-up | `utils/pipeline_warmer.gd` | `PERFORMANCE.md` |
@@ -274,6 +275,37 @@ bar's verdict in `user://render_jobs/p4d_probe/VERDICT.md`), `arch_look` and `fo
 "Too deep to ford. Fords cross wadeable water." beside the cursor and as a toast, Ctrl hover
 "Remove stone arch"), each in its `user://render_jobs/` folder.
 
+Phase 5 judgment (P5-4, render job `phase5_judgment_set`, the union of `phase5_valley`,
+`phase5_hilltop`, `phase5_terraces`, `phase5_lakeshore` and `phase5_gorge`; captures and
+`VERDICT.md` in `user://render_jobs/phase5_judgment_set`, the half-size iterations per recipe
+in `phase5_<kind>`; verdict 2026-10-04): every landform as a new 150 ft map through the
+driver's `new_map` with the `landform` key, three or four temperate forest seeds per recipe (a
+wet draw with a crossing, a wet draw without, a dry draw) and one in another biome (alpine
+meadow, boreal taiga, riverside wetland, rocky badlands, grassland meadow), saved as
+`_p5j_<kind>_<biome>_<seed>` (20 levels); captured at home with the grid, at home with the
+water hidden, at zoom 8 on the stage and on the crossing, the water or the floor, and one wet
+level per recipe in play with a token on the stage and one at the water (103 captures).
+Verdict: ready. The hill with its crown pool spilling in a fall, the terraces with their
+stepped falls and plank bridge, and the gorge with its arch rim to rim and its stream along
+the far wall each read as a place from the home camera, the lake reads with its wavy shore
+and islet, and every draw stands on its own with the water hidden; the valley is the quiet
+one, a valley with a river, a ford and a rock bluff in open grass but a dark dip under forest
+canopy. No draw broken, no refusal in the set. The fault the captures found: the recipes
+assumed the camera looks along -z, where it looks along (-1, -1) at a 45 degree yaw, so the
+hill's stage sat on its side, a gorge ran along the view and the valley's bluff stood on the
+back-facing bank; fixed with `StartingLandform.VIEW` / `NEAR` as the one rule for anything
+facing the camera (0bcda1d). Fixed from the verdict as well: gorge headings across the view,
+two tiers only from 150 ft and the stream at the far wall (4bf7ea9); the hill's spring a pool
+on the crown that falls off the face, the stage on the camera-facing shoulder, never a bare
+mound (2c11229); the lake centre at 0.5 of the half extent (43fbcab); the valley's one-tier
+bluff on the far bank (a46b3e4); then in P5-4b (8092d17) a flank ledge on every crownless hill
+with the crown chance at 0.85 (seed 12's two plain mounds were the set's weakest draw), and
+the lake's corner drawn from the three that are not the camera's own. Open, none blocking:
+the valley under forest canopy, a lake in a side corner at the frame's edge, lake stones
+refusing `no_water` on some seeds (Open work, "Landform follow-ups"). Earlier phase 5 renders:
+`landform_look` (P5-1, P5-2: the `_p5_` levels) and `landform_dialog` (P5-3: the six tiles and
+the caption), each in its `user://render_jobs/` folder.
+
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
 download-signal fix (pushed to `main` as a08b639). Needs a two-account test, e.g. on the
@@ -393,6 +425,22 @@ blocking):
 - The grid on the brown deck is low contrast (review note; left as is: it matches the ground).
 - Palette boulders can stand in the water beside a bridge deck (their centres keep 0.95 m
   from the footprint, a large boulder's body can still touch the rail); judged acceptable.
+
+Landform follow-ups (phase 5, P5-4 to P5-5, 2026-10-04; none blocking; `systems/landforms.md`):
+- The valley under forest canopy reads weakly from home: the canopies hide most of its floor
+  and it reads as a dark dip with a river in it. The canopy read is a `NewMap` glade matter
+  (a thinner canopy over the stage's reach, or a wider glade), not the recipe's.
+- A crownless hill's flank ledge (P5-4b) reads weakly when the seed draws a narrow arc
+  (`LEDGE_ARC_DEG` 60-100 degrees); the crown chance went to 0.85 so the draw is rarer.
+- A lake in a side corner (the two corners beside the camera's own) sits at the frame's edge;
+  the far corner reads best. Favouring the far corner, or pulling side lakes toward the
+  centre, is the next step.
+- On some lake seeds (surveyed seed 14) the stepping stones refuse `no_water`: the stream's
+  straightest point lies where the carve left no water. A wet-water check on the candidates
+  before choosing would avoid it (the draw is skipped, the map stays whole).
+- A 200 ft gorge opens in 1.5 s with one 1.2 s frame, because the recipe runs on the main
+  thread in the frame that starts the open (`PERFORMANCE.md` "Phase 5 (starting landforms)").
+  The recipe writes only the document, so it could move onto the loader's worker.
 
 Follow-ups:
 - A quick brush pass still gives few trees in sparse biomes (temperate forest targets 0.02
@@ -537,15 +585,35 @@ Follow-ups:
   per-crossing rebuild cache forward: P4d-5b (done, `CrossingCache`: 9.8 ms for the same
   placement) and P4d-5c (`follow` refreshes the crossings whose ground changed when no anchor
   moved). P4d-6: these docs.
-- **Phase 5:** more starting points. `NewMap` already gives each biome a starting cover
-  (groves at the edges, an open glade for the fight); new maps still start flat. The likely
-  next step is starting landforms (a river valley, a hilltop, terraced tiers, a lakeshore)
-  built from the same sculpt, tier and water operations, so everything stays editable. Not
-  yet scoped with the user.
+- **Phase 5: starting landforms (done, 2026-10-04).** A new map opens with a landform picked
+  in the dialog beside the size and the biome: Flat, Valley, Hilltop, Terraces, Lakeshore or
+  Gorge, each a pure recipe run on the document before the map opens, writing heights, carved
+  water, a crossing and the stage (where the glade goes) as the ordinary data the tools edit.
+  Decisions (2026-10-04, "the choices make sense"): six landforms as tiles under the biome
+  row, Valley the default (Flat on Bare ground), a crossing only where the seed draws one; and
+  the user's rule for every recipe, no sameness: a landform is a shape plus a small palette of
+  features with chances, not every valley has a river nor every river a crossing, every draw
+  (judged with the water hidden too) is a complete map on its own, and the shape varies with
+  the seed (heading, offset, bend, the hill's side, the lake's corner) within bounds that keep
+  it recognisable; the caption describes the landform, never the draw; no history entry; not
+  in scope: a landform on a dressed Blender map, landform parameters, several rivers per
+  landform. Plan: `docs/plans/2026-10-04-phase5-starting-landforms.md` (local; a "done"
+  paragraph per task); system doc `docs/systems/landforms.md`. P5-0 (done): the open path
+  timed through the pure functions (the recipe's water stays before the open). P5-1 (done,
+  aaa3231): `StartingLandform`, the seeded frame and shared steps, the Valley, `NewMap` taking a
+  landform and centring the glade on the stage. P5-3 (done, b226cfb): the dialog's Landform row,
+  glyphs and caption, the loading line, the F1 row. P5-2 (done, 469c0d2): Hilltop, Terraces,
+  Lakeshore and Gorge, the Valley deepened to 3.5 m. P5-4 (done, 4bf7ea9, 2c11229, 43fbcab,
+  a46b3e4, 0bcda1d, 353a6ae): the judgment set and its fixes, among them the camera fix
+  (`VIEW` / `NEAR`), the hill's crown pool fall and the Valley's bluff (Verification status
+  above). P5-5 (done, 1ff484e): the pinned performance pass (`PERFORMANCE.md` "Phase 5
+  (starting landforms)": a landform adds 85-325 ms to a 150 ft open; a shaped map strokes like
+  a flat one). P5-4b (done, 8092d17): a flank ledge on crownless hills, the lake away from the
+  camera's corner. P5-6: these docs.
 - **Before the minor version bump ("map maker finished"):** not yet fully scoped with the
-  user. Candidates on record: phase 4c, phase 5 starting points, and the Steam two-account
-  test passing on an authored map with water and crossings. Confirm the list with the user
-  before planning it.
+  user. Candidates on record: phases 4c, 4d and 5 (all done), and the Steam two-account test
+  passing on an authored map with water and crossings (still open). Confirm the list with the
+  user before planning it.
 
 ## Future ideas (user notes, 2026-09-27)
 

@@ -13,7 +13,7 @@
 | [docs/ASSET_MANAGEMENT.md](docs/ASSET_MANAGEMENT.md) | Asset packs, model loading, caching |
 | [docs/ASSET_PIPELINE.md](docs/ASSET_PIPELINE.md) | Contract with the Blender producers (terrain-paint, treecube): GLB names, extras, attributes, materials, budgets, round-trip checks |
 | [docs/MAP_AUTHORING.md](docs/MAP_AUTHORING.md) | In-game map authoring hub: decisions, where each system is documented, verification status, open work, roadmap |
-| [docs/systems/](docs/systems/README.md) | One doc per system (water, waterfalls, crossings): the single home for a system's map and model, runtime, authoring, verification, history |
+| [docs/systems/](docs/systems/README.md) | One doc per system (water, waterfalls, crossings, starting landforms): the single home for a system's map and model, runtime, authoring, verification, history |
 | [docs/SOUND_EFFECTS.md](docs/SOUND_EFFECTS.md) | Audio files, wiring, normalization, adding new sounds |
 | [docs/NETWORKING.md](docs/NETWORKING.md) | Multiplayer, Steam networking, state sync |
 | [docs/lighting-and-environment.md](docs/lighting-and-environment.md) | Environment presets, map defaults, sky, in-game editing |

@@ -328,14 +328,29 @@ whose `setup(game_map)` calls `GameMap.setup_authoring()`, `setup_measure_tool()
 `setup_grid_overlay()` and builds the `AuthoringPanel`. `start(request)` first offers a
 leftover autosave (`AuthoringAutosave`), then loads:
 
-- a new map: `NewMap.create(size_ft, biome_id, seed)` (the biome's `ground_surface` is the
-  base surface and its masks carry the starting cover), built with
+- a new map: `NewMap.from_spec(spec)`, that is `NewMap.create(size_ft, biome_id, seed, root,
+  landform)` (the landform's recipe shapes the document first; the biome's `ground_surface`
+  is the base surface and its masks carry the starting cover), built with
   `MapSourceLoader.build_async("", doc)`; after install the whole map is passed to
   `AuthoredScatter.request_region()` so the cover grows in on worker threads;
 - a level with `map.ttmap`: `MapSourceLoader.load_async(glb, document_path)`;
 - a GLB-only level: `build_async(glb, null)`, then `NewMap.create_dressing()` makes an
   empty document (`has_base_map`) reaching the GLB's farthest geometry, written on the first
   save.
+
+**Starting landforms.** Phase 5: a new map opens with the landform picked in
+`NewMapDialog`'s Landform row (the spec's `landform`): Flat, or one of five pure recipes,
+Valley (the default with a biome), Hilltop, Terraces, Lakeshore and Gorge
+(`StartingLandform`, `utils/starting_landform.gd`, which holds the kinds, the seeded frame
+and the shared steps; the recipes in `LandformRecipes`, `LandformHilltop`,
+`LandformTerraces`, `LandformLakeshore` and `LandformGorge`). Each writes heights, carved
+water, a crossing where the seed draws one and the stage the glade is centred on, through
+the same pure functions the Sculpt, Water and Bridge tools use, and the seed draws each
+feature from a small palette so no two maps carry the same set. `NewMap.from_spec` applies
+the recipe before the cover is painted and before the controller opens the map (under the
+loading line `NewMap.opening_status`, "Shaping the valley..."), so the document reaches
+`MapSourceLoader` as ordinary data and nothing at runtime knows a landform made it. See
+[docs/systems/landforms.md](systems/landforms.md).
 
 **Dressing ground.** A dressed map's document heights are not a terrain anyone sees (a
 dressed map has no AuthoredTerrain: `MapSourceLoader` builds one only without a GLB) but the
