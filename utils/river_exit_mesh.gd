@@ -16,8 +16,10 @@ extends RefCounted
 ## everywhere else. The patch's two outer columns carry no channel; their extra vertices lie
 ## on the skirt's own edges (heights and normals interpolated), so the patch meets the skirt
 ## without a crack. Ring 0 is the map's boundary vertices, as in the skirt. Past the edge the
-## ground along the course is the river's own cross-section just inside the edge (the carve's
-## bed and banks, PROFILE_BANK_M past the half-width either side) carried along the course,
+## ground along the course is the river's own cross-section on the edge (the map's boundary
+## heights across the carve's bed and banks, PROFILE_BANK_M past the half-width either side,
+## edge_point(); read 0.3 m inside, it was up to 0.12 m deeper than the edge and drew a step
+## in the waterline at the seam and a deeper, greener stream past it) carried along the course,
 ## lowered with the skirt where the skirt falls back to the map floor, and eased back to the
 ## skirt at its sides and where the skirt's fade (RiverExits.skirt_alpha, the shader's twin)
 ## runs out. It never raises the skirt. UV2 carries the wet dressing (x the bed weight, y the
@@ -38,8 +40,6 @@ extends RefCounted
 const PROFILE_BANK_M := 3.5
 const PROFILE_STEP_M := 0.1
 const LATERAL_BLEND_M := 1.2
-## The cross-section is read this far back inside the map from where the course meets the edge.
-const PROFILE_INSET_M := 0.3
 ## The course is led in this far from the mouth, so the skirt beside the mouth reads its
 ## offset across the channel.
 const LEAD_IN_M := 2.0
@@ -202,12 +202,13 @@ static func _mouth(doc: MapDocument, river_exit: Dictionary, half: Vector2) -> D
 	var across := Vector2(-dir.y, dir.x)
 	var half_width := float(river_exit.half_width)
 	var extent_half := half_width + PROFILE_BANK_M
-	var at := mouth - dir * PROFILE_INSET_M
 	var profile := PackedFloat32Array()
 	var samples := roundi(2.0 * extent_half / PROFILE_STEP_M) + 1
 	for i in samples:
 		profile.append(
-			WaterGeometry.ground_at(doc, at + across * (i * PROFILE_STEP_M - extent_half))
+			WaterGeometry.ground_at(
+				doc, edge_point(mouth, across, i * PROFILE_STEP_M - extent_half, half)
+			)
 		)
 	var level: float = river_exit.level
 	var wet := Vector2(INF, -INF)
@@ -235,6 +236,22 @@ static func _mouth(doc: MapDocument, river_exit: Dictionary, half: Vector2) -> D
 		"reach": reach + extent_half,
 		"box": WaterGeometry.bounds(led, extent_half + 0.5),
 	}
+
+
+## The point on the map edge through `mouth` that lies `u` metres across the course (`across`,
+## the unit vector left of it) from the mouth: where the river's cross-section at offset `u`
+## meets the edge. On the map's boundary line, so the ground there is the map's own boundary
+## heights (linear between its samples, as its triangles draw it). At a corner (both edges
+## within reach) the offset is taken straight across.
+static func edge_point(mouth: Vector2, across: Vector2, u: float, half: Vector2) -> Vector2:
+	var normal := RiverExits.edge_normal(mouth, half)
+	if absf(normal.x) > 1e-6 and absf(normal.y) > 1e-6:
+		return (mouth + across * u).clamp(-half, half)
+	var tangent := Vector2(-normal.y, normal.x)
+	var facing := tangent.dot(across)
+	if absf(facing) < 1e-4:
+		return mouth
+	return (mouth + tangent * (u / facing)).clamp(-half, half)
 
 
 ## Windows of skirt columns (Vector2i(first column, quads), wrapping round the loop) whose
@@ -523,15 +540,16 @@ static func _ribbon_arrays(doc: MapDocument, mouths: Array[Dictionary], fade: Di
 					wet.x - RIBBON_MARGIN_M, wet.y + RIBBON_MARGIN_M, float(j) / (RIBBON_ACROSS - 1)
 				)
 				var q := p + across * u
+				var drop := 0.0
 				if made == 0:
-					# The first row lies on the edge, where the map's water ends.
-					var normal := RiverExits.edge_normal(mouth.mouth, half)
-					var facing := dir.dot(normal)
-					if facing > 1e-4:
-						q += dir * ((mouth.mouth as Vector2) - q).dot(normal) / facing
-				elif RiverExits.edge_distance(q, half) > 0.0:
-					q = _onto_edge(q, dir, half)
-				var drop := drop_at(mouth, RiverExits.outside_distance(q, half), fade.fall)
+					# The first row lies on the edge, where the map's water ends, at its level
+					# exactly (the in-map mesh's last row is flat at the level out to the edge,
+					# WaterMeshBuilder._run_out), across the course as the channel's profile is.
+					q = edge_point(mouth.mouth, mouth.across, u, half)
+				else:
+					if RiverExits.edge_distance(q, half) > 0.0:
+						q = _onto_edge(q, dir, half)
+					drop = drop_at(mouth, RiverExits.outside_distance(q, half), fade.fall)
 				vertices.append(Vector3(q.x, float(mouth.level) + drop, q.y))
 				var flow_at: Vector2 = mouth.mouth - dir * 0.4 + (mouth.across as Vector2) * u
 				uvs.append(((flow_at + half) / extent).clamp(low, Vector2.ONE - low))

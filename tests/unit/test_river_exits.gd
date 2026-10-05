@@ -11,14 +11,17 @@ const WIDTH := 1.5
 
 ## A flat 20 x 20 cell map (30.48 m) with a waist river planned and carved as the Water tool
 ## carves one, from `from` to `to` (map XZ).
-func _river_doc(from: Vector2, to: Vector2, seed_value: int = 7) -> MapDocument:
+func _river_doc(
+	from: Vector2,
+	to: Vector2,
+	seed_value: int = 7,
+	depth: WaterBody.Depth = WaterBody.Depth.WAIST,
+	width: float = WIDTH
+) -> MapDocument:
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "test", seed_value)
 	var start := doc.heights.duplicate()
 	var bodies := WaterEdit.plan_river(
-		doc,
-		PackedVector2Array([from, (from + to) * 0.5, to]),
-		PackedFloat32Array([WIDTH]),
-		WaterBody.Depth.WAIST
+		doc, PackedVector2Array([from, (from + to) * 0.5, to]), PackedFloat32Array([width]), depth
 	)
 	var goals := WaterCarve.river_goals(doc, bodies, start)
 	var rect: Rect2i = goals.rect
@@ -296,6 +299,87 @@ func test_the_channel_meets_the_map_without_a_step() -> void:
 	assert_gt(near_edge, 5)
 	var bed := WaterGeometry.ground_at(doc, mouth.mouth - Vector2(0, 0.3))
 	assert_lt(bed, LEVEL - 0.5, "the channel is carved below the water")
+
+
+## An ankle stream leaving the right edge at an angle, its end half a metre inside the edge
+## (the forest look map's).
+func _ankle_doc() -> MapDocument:
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "test", 7)
+	var half := _half(doc)
+	return _river_doc(
+		Vector2(-6.0, -3.0), Vector2(half.x - 0.5, 1.0), 7, WaterBody.Depth.ANKLE, 0.6
+	)
+
+
+func test_the_seam_rows_match_the_map_bit_for_bit() -> void:
+	for doc: MapDocument in [_edge_doc(), _ankle_doc()]:
+		var half := _half(doc)
+		var parts := _parts(doc)
+		var mouth: Dictionary = parts.mouths[0]
+		var ribbon: PackedVector3Array = parts.ribbon[Mesh.ARRAY_VERTEX]
+		# The ribbon's first row: on the edge, at the in-map water's height exactly.
+		var row := ribbon.slice(0, RiverExitMesh.RIBBON_ACROSS)
+		var span := Vector2(INF, -INF)
+		for v in row:
+			assert_almost_eq(RiverExits.edge_distance(Vector2(v.x, v.z), half), 0.0, 1e-5)
+			var u: float = (Vector2(v.x, v.z) - mouth.mouth).dot(mouth.across)
+			span = Vector2(minf(span.x, u), maxf(span.y, u))
+		var water: PackedVector3Array = WaterMeshBuilder.build(doc).arrays[Mesh.ARRAY_VERTEX]
+		var matched := 0
+		for w in water:
+			var xz := Vector2(w.x, w.z)
+			var u: float = (xz - mouth.mouth).dot(mouth.across)
+			if RiverExits.edge_distance(xz, half) > 1e-4 or u < span.x or u > span.y:
+				continue
+			matched += 1
+			for v in row:
+				assert_eq(v.y, w.y, "the ribbon's first row at the map water's height")
+		assert_gt(matched, 3, "the map's water reaches the edge under the ribbon's first row")
+		# The patch's first column: the map's own boundary vertices, and the channel's ground
+		# just past them carries the boundary's heights on (no step to a deeper section).
+		var patch: PackedVector3Array = parts.channel[Mesh.ARRAY_VERTEX]
+		var on_edge := 0
+		for v in patch:
+			var xz := Vector2(v.x, v.z)
+			if RiverExits.outside_distance(xz, half) > 1e-6:
+				continue
+			on_edge += 1
+			var s := doc.world_to_sample(xz).round()
+			assert_eq(v.y, doc.heights[doc.sample_index(int(s.x), int(s.y))], "boundary vertex")
+		assert_gt(on_edge, 10)
+		for i in 41:
+			var u := (i - 20) * 0.1
+			var at := RiverExitMesh.edge_point(mouth.mouth, mouth.across, u, half)
+			assert_almost_eq(
+				RiverExitMesh.profile_at(mouth, u),
+				WaterGeometry.ground_at(doc, at),
+				0.01,
+				"the section past the edge is the edge's at %.1f" % u
+			)
+
+
+func test_the_bed_past_the_edge_is_as_deep_as_the_river_in_the_map() -> void:
+	var doc := _ankle_doc()
+	var half := _half(doc)
+	var body := doc.water_bodies[-1]
+	var mouth: Dictionary = _parts(doc).mouths[0]
+	var dir: Vector2 = mouth.dir
+	var across: Vector2 = mouth.across
+	var deepest_in := INF
+	for k in 41:
+		var p: Vector2 = mouth.mouth - dir * 3.0 + across * ((k - 20) * 0.05)
+		deepest_in = minf(deepest_in, WaterGeometry.ground_at(doc, p))
+	var deepest_edge := INF
+	for k in 41:
+		deepest_edge = minf(deepest_edge, RiverExitMesh.profile_at(mouth, (k - 20) * 0.05))
+	assert_lt(deepest_in, body.level_m - 0.1, "the stream is carved")
+	assert_almost_eq(
+		body.level_m - deepest_edge,
+		body.level_m - deepest_in,
+		0.03,
+		"the water past the edge is as deep as the stream's in the map"
+	)
+	assert_eq(RiverExits.edge_distance(body.points[-1], half) > 0.4, true, "its end is inside")
 
 
 func test_the_patch_replaces_the_skirt_columns_it_covers_without_a_crack() -> void:
