@@ -130,10 +130,13 @@ uniform float foam_strength : hint_range(0.0, 2.0) = 1.0;
 uniform sampler2D water_flow_map : hint_default_black, filter_linear, repeat_disable;
 instance uniform bool water_flow_present = false;
 // A river running on past the map edge into the ground skirt (phase 6, P6-1; RiverExitMesh's
-// ribbon, drawn by AuthoredTerrain): its alpha is multiplied by the skirt's own fade, the same
-// function, noise and seed, weighed by the backdrop as the skirt's colour fade is
-// (skirt_fade.gdshaderinc skirt_lit_share; the skirt_* uniforms and skirt_seed are set from the
-// map's skirt and SkirtBackdrop), so the water dissolves into the backdrop with the ground.
+// ribbon, drawn by AuthoredTerrain): it fades into the backdrop by the skirt's own fade `a`, the
+// same function, noise and seed (skirt_fade.gdshaderinc; the skirt_* uniforms and skirt_seed
+// are set from the map's skirt and SkirtBackdrop), and by the skirt's own law: lit water * a +
+// backdrop * (1 - a), its fog times a, so its contrast against the backdrop falls exactly as
+// the ground's beside it does. (P6-1 faded its alpha by the share of lit ground instead; the
+// river's dark colour then outlasted the pale ground's and its tail read as a darker stub at
+// full zoom-out, P6-3.) Under the dither backdrop the alpha takes the fade.
 instance uniform bool water_skirt_fade = false;
 uniform int skirt_seed = 0;
 #include "res://shaders/skirt_fade.gdshaderinc"
@@ -572,10 +575,27 @@ void fragment() {
 	float shoreline = shore_fade_depth > 0.0 ? smoothstep(0.0, shore_fade_depth, bed_depth) : 1.0;
 	shoreline = mix(1.0, shoreline, ground_like);
 	ALPHA = clamp(alpha + foam * 0.3, 0.0, 1.0) * shoreline;
-	if (water_skirt_fade) {
-		ALPHA *= skirt_lit_share(skirt_a, INV_VIEW_MATRIX);
-	}
 	SPECULAR = specular_value;
+	if (water_skirt_fade) {
+		if (skirt_backdrop_mode == 2) {
+			ALPHA *= skirt_a;
+		} else {
+			// The skirt's fog is Godot's times a (its backdrop is fogged already). Writing FOG
+			// here would take Godot's fog off every water surface, so the colour is set so that
+			// Godot's fog `f` over it gives the skirt's: mix(src, fog, f) = mix(lit * a +
+			// backdrop * (1 - a), fog, f * a).
+			vec4 fog = skirt_fog_at(VERTEX, INV_VIEW_MATRIX);
+			float f = min(fog.a, 0.95);
+			float keep = skirt_a * (1.0 - f * skirt_a) / (1.0 - f);
+			ALBEDO *= keep;
+			SPECULAR *= keep;
+			vec3 backdrop = skirt_backdrop_color(INV_VIEW_MATRIX);
+			EMISSION = max(
+				(1.0 - skirt_a) * (backdrop * (1.0 - f * skirt_a) - fog.rgb * f) / (1.0 - f),
+				vec3(0.0)
+			);
+		}
+	}
 	// Foam is matte; wave crests are slightly glossier than the troughs so the glint sits
 	// where a real surface would catch it.
 	ROUGHNESS = clamp(mix(roughness_value - shimmer * 0.05, 0.9, foam), 0.0, 1.0);
