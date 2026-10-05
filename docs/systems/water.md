@@ -441,8 +441,11 @@ tokens past the edge. The probe that chose the rendering is P6-0
 - **The channel** (`RiverExitMesh`): the skirt's 8 rings are too coarse to carry a channel that
   bends, so the skirt columns whose radial lines pass within the channel's footprint (padded
   three columns) are cut out of the skirt (`skip_columns`) and redrawn as a patch with a ring
-  every 0.25 m out to 8 m (the sample step, so the cells are square), every 0.5 m to 16 m and
-  every metre beyond, out to the course's reach, the skirt's own 8 rings included. That keeps the
+  every 0.25 m out to 24 m (the sample step, so the cells are square), every 0.5 m to 32 m and
+  every metre beyond, out to the course's reach, the skirt's own 8 rings included. Coarser
+  rings past 8 m (the first build) drew the waterline as sawtooth teeth with a pale band along
+  the banks: the banks shaded smooth (smooth normals) but the water's depth-read shoreline
+  traced the long triangles' true contour. That keeps the
   skirt's cost what it was everywhere else (more rings everywhere would multiply the vertices
   of the whole ring for a few metres of river). The patch's outer columns carry no channel and
   their extra vertices lie on the skirt's own edges, so there is no crack. Ring 0 is the map's
