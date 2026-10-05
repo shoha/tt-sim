@@ -88,6 +88,11 @@ static func _vertices(instance: MeshInstance3D) -> PackedVector3Array:
 	return instance.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 
 
+## The vertices of the stone mesh of stepping stones `crossing_id`'s node.
+func _stone_mesh(crossing_id: int) -> PackedVector3Array:
+	return _vertices(_node().get_crossing_node(crossing_id).get_node("Stones") as MeshInstance3D)
+
+
 ## Asserts that every node holds the geometry a full CrossingGeometry.build(doc) gives now.
 func _assert_matches_full_build() -> void:
 	var node := _node()
@@ -254,6 +259,7 @@ func test_a_sculpt_far_from_every_crossing_rebuilds_none() -> void:
 	_stones(editor)
 	var version := node.version
 	_raise(editor, Vector3(-9, 0, -9), 1.5, 0.5)
+	assert_eq(node.builds, 2, "the stroke reached no crossing: nothing rebuilt")
 	node.refresh(_doc)
 	assert_eq(node.builds, 2, "nothing rebuilt")
 	assert_eq(node.version, version, "nothing changed for the grid")
@@ -271,6 +277,42 @@ func test_a_sculpt_under_one_crossing_rebuilds_that_one() -> void:
 	assert_eq(node.builds, 3, "the plank once, whether or not it re-anchored")
 	assert_same(node.get_crossing_node(stones), stones_node, "the stones' node is kept")
 	assert_ne(node.get_crossing_node(plank), plank_node, "the plank has a new node")
+	_assert_matches_full_build()
+
+
+func test_a_raise_under_the_stones_refreshes_them_without_moving_an_anchor() -> void:
+	# P4d-5c: the bed rises under the stones' roots and no anchor moves, so the follow
+	# re-anchors nothing; the stroke still refreshes the stones (the cache finds their ground
+	# changed) and its undo refreshes them again over the restored bed. The plank, out of the
+	# stroke's reach, keeps its node. (A plank's deck is independent of the bed, so the stones
+	# are the subject whose geometry shows the rebuild.)
+	var editor := _editor()
+	var node := _node()
+	var plank := _plank(editor, 0.0)
+	var stones := _stones(editor)
+	var plank_node := node.get_crossing_node(plank)
+	var before := _doc.crossing(stones).copy()
+	var mesh := _stone_mesh(stones)
+	var entries := _history.undo_count()
+	_raise(editor, Vector3(7, 0, 0), 0.8, 0.5)
+	assert_true(_doc.crossing(stones).same_as(before), "no anchor moved")
+	assert_eq(_history.undo_count(), entries + 1, "one entry: the stroke")
+	assert_eq(node.builds, 3, "the stones rebuilt once by the stroke")
+	assert_eq(node.last_rebuilt, 1)
+	assert_same(node.get_crossing_node(plank), plank_node, "the plank's node is kept")
+	assert_ne(_stone_mesh(stones), mesh, "the stones stand on the raised bed")
+	_assert_matches_full_build()
+	node.refresh(_doc)
+	assert_eq(node.builds, 3, "nothing left stale")
+	assert_ne(_history.undo(), "", "undo the stroke")
+	editor.finish_height_work()
+	assert_eq(node.builds, 4, "undo rebuilds the stones once, over the restored bed")
+	assert_eq(_stone_mesh(stones), mesh, "as they stood")
+	assert_same(node.get_crossing_node(plank), plank_node, "the plank never rebuilt")
+	_assert_matches_full_build()
+	assert_ne(_history.redo(), "", "redo the stroke")
+	editor.finish_height_work()
+	assert_eq(node.builds, 5, "redo rebuilds them once")
 	_assert_matches_full_build()
 
 
