@@ -2,6 +2,8 @@ extends RefCounted
 
 ## Render-job probe (`call` op) for rivers past the map edge (phase 6, P6-1). Works on the open
 ## authored map (authoring, or play). Positions are map XZ metres. step.action:
+##   bodies                  every river body's ends: id, depth class, level, each end's point
+##                           and its distance inside the map edge, the drawn course sizes.
 ##   info                    the river exits of the open map (the skirt's
 ##                           AuthoredTerrain.river_exits(): each mouth, direction, level and
 ##                           course, drawn or derived), the skirt's vertex counts and backdrop
@@ -27,6 +29,8 @@ static func run(base: Node, step: Dictionary) -> String:
 	match String(step.get("action", "")):
 		"info":
 			return _info(base)
+		"bodies":
+			return _bodies(base)
 		"look":
 			return _look(base, int(step.get("exit", 0)), float(step.get("out", 0.0)))
 		"preset":
@@ -123,6 +127,44 @@ static func _terrain(base: Node) -> AuthoredTerrain:
 static func _mouths(base: Node) -> Array:
 	var terrain := _terrain(base)
 	return terrain.river_exits().get("mouths", []) if terrain != null else []
+
+
+static func _bodies(base: Node) -> String:
+	var terrain := _terrain(base)
+	if terrain == null:
+		return "no authored terrain"
+	var doc := terrain.document
+	var half := doc.extent_m() * 0.5
+	var parts := PackedStringArray(["half %s" % str(half)])
+	for body in doc.water_bodies:
+		if not body.is_river():
+			continue
+		var head := body.points[0]
+		var tail := body.points[-1]
+		(
+			parts
+			. append(
+				(
+					(
+						"body %d depth %d level %.3f %d points, up %s (%.3f in) "
+						+ "down %s (%.3f in), beyond_up %d beyond %d"
+					)
+					% [
+						body.id,
+						body.depth,
+						body.level_m,
+						body.points.size(),
+						str(head),
+						RiverExits.edge_distance(head, half),
+						str(tail),
+						RiverExits.edge_distance(tail, half),
+						body.beyond_up.size(),
+						body.beyond.size(),
+					]
+				)
+			)
+		)
+	return " | ".join(parts)
 
 
 static func _info(base: Node) -> String:
