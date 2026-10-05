@@ -715,6 +715,10 @@ func _resolve_hit() -> void:
 		query.exclude = _crossing_bodies()
 	var result := space.intersect_ray(query)
 	if result.is_empty():
+		# A river drawn on past the map edge (P6-1): the line goes on at its last height.
+		if mode == Mode.WATER:
+			_hit = water.hit_past_edge(origin, _camera.project_ray_normal(_pointer))
+			_hit_normal = Vector3.UP
 		return
 	_hit = result.position
 	_hit_normal = result.normal
