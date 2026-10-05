@@ -2,7 +2,8 @@ class_name SkirtExits
 extends RefCounted
 
 ## The nodes AuthoredTerrain hangs under its ground skirt (phase 6, P6-1): the channel patch
-## and the water of the rivers that leave the map (RiverExitMesh builds their geometry), and
+## and the water of the rivers and ponds that leave the map (RiverExitMesh builds their
+## geometry, PondExits the ponds' part), and
 ## the SkirtBackdrop that keeps the opaque skirt's fade colour and fog in step with the
 ## environment. Split out of AuthoredTerrain to keep that class a readable size.
 ##

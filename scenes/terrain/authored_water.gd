@@ -328,10 +328,10 @@ func _terrain() -> AuthoredTerrain:
 	return parent.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain if parent else null
 
 
-## Worker half of a refresh: WaterMeshBuilder.build(), the ground skirt with the rivers that
-## leave the map (RiverExitMesh.skirt_parts, P6-1, reusing the pieces of `previous`, the
-## skirt's exits before the edit; {} when no river leaves the map) and, with `bake`, the flow
-## map (none when there is no river). Touches no Node; results go into `out`.
+## Worker half of a refresh: WaterMeshBuilder.build(), the ground skirt with the rivers and
+## ponds that leave the map (RiverExitMesh.skirt_parts, P6-1, P6-4, reusing the pieces of
+## `previous`, the skirt's exits before the edit; {} when no water leaves the map) and, with
+## `bake`, the flow map (none when there is no river). Touches no Node; results go into `out`.
 static func refresh_work(
 	snapshot: MapDocument, bake: bool, out: Dictionary, previous: Dictionary = {}
 ) -> void:
@@ -345,7 +345,7 @@ static func refresh_work(
 			AuthoredTerrain.SKIRT_WOBBLE,
 			previous
 		)
-		if not RiverExits.exits(snapshot).is_empty()
+		if RiverExitMesh.has_exits(snapshot)
 		else {}
 	)
 	out["build_usec"] = Time.get_ticks_usec() - started

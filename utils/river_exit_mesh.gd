@@ -3,7 +3,10 @@ extends RefCounted
 
 ## The geometry of the rivers that run on past the map edge (phase 6, P6-1; RiverExits finds
 ## them and their courses): a channel carved into the ground skirt along each continued course,
-## and a ribbon of water in it. Pure: mesh arrays only, built on a worker (AuthoredLoadPrep
+## and a ribbon of water in it. The ponds that reach the edge (P6-4, PondExits: a basin lobe and
+## its water) are built with them, in the same windows and surfaces; where a pond's water and a
+## river's would overlap, the river's is cut back (PondExits.clip). Pure: mesh arrays only,
+## built on a worker (AuthoredLoadPrep
 ## at load, AuthoredWater's refresh after an edit) and handed to AuthoredTerrain, which owns
 ## the skirt.
 ##
@@ -118,6 +121,9 @@ static func build(
 		var mouth := _mouth(doc, found, half)
 		if not mouth.is_empty():
 			mouths.append(mouth)
+	var rivers := mouths.size()
+	for found in PondExits.exits(doc, fall):
+		mouths.append(PondExits.mouth(doc, found))
 	if mouths.is_empty():
 		return {}
 	var seed_value := doc.map_seed & 0x7FFFFFFF
@@ -141,12 +147,25 @@ static func build(
 			built += 1
 		pieces[key] = piece
 		patches.append(piece)
+	# The ponds' water first: a river's is cut back where a pond's covers it (PondExits.clip), so
+	# no two water surfaces overlap where a pond and a river leave the map together.
 	var ribbons: Array = []
-	for mouth in mouths:
-		var key := _ribbon_key(doc, mouth, fade)
+	var outlines: Array[PackedVector2Array] = []
+	for mouth in mouths.slice(rivers):
+		var key := hash(["pond", _ribbon_key(doc, mouth, fade), mouth[PondExits.WIDTHS]])
 		var piece: Dictionary = old.get(key, {})
 		if piece.is_empty():
-			piece = _ribbon_piece(doc, mouth, fade)
+			piece = PondExits.ribbon_piece(doc, mouth, fade)
+			built += 1
+		pieces[key] = piece
+		ribbons.append(piece)
+		outlines.append(piece.outline)
+	for mouth in mouths.slice(0, rivers):
+		var over := PondExits.covering(outlines, mouth.box)
+		var key := hash([_ribbon_key(doc, mouth, fade), over])
+		var piece: Dictionary = old.get(key, {})
+		if piece.is_empty():
+			piece = PondExits.clip(_ribbon_piece(doc, mouth, fade), over)
 			built += 1
 		pieces[key] = piece
 		ribbons.append(piece)
@@ -218,6 +237,8 @@ static func _channel_key(
 		parts.append(
 			[mouth.course, mouth.half, mouth.profile, mouth.level, mouth.ground, mouth.box]
 		)
+		if mouth.has(PondExits.WIDTHS):
+			parts.append([mouth.wet, mouth.length, mouth[PondExits.WIDTHS]])
 	return hash(parts)
 
 
@@ -333,6 +354,12 @@ static func skirt_distance(width: float, ring: int) -> float:
 	)
 
 
+## Whether `doc` has water that leaves the map: a river exit (RiverExits) or a pond reaching
+## the edge (PondExits).
+static func has_exits(doc: MapDocument) -> bool:
+	return not RiverExits.exits(doc).is_empty() or PondExits.reaches_edge(doc)
+
+
 ## Exit `river_exit` (RiverExits.exits) where its course meets the edge, with its cross-section:
 ## {"course" (led in LEAD_IN_M from the mouth), "mouth", "dir", "across", "half": the profile's
 ## half extent, "profile", "level", "wet": Vector2 (the waterline's offsets across), "ground":
@@ -359,22 +386,10 @@ static func _mouth(doc: MapDocument, river_exit: Dictionary, half: Vector2) -> D
 	var across := Vector2(-dir.y, dir.x)
 	var half_width := float(river_exit.half_width)
 	var extent_half := half_width + PROFILE_BANK_M
-	var profile := PackedFloat32Array()
-	var samples := roundi(2.0 * extent_half / PROFILE_STEP_M) + 1
-	for i in samples:
-		profile.append(
-			WaterGeometry.ground_at(
-				doc, edge_point(mouth, across, i * PROFILE_STEP_M - extent_half, half)
-			)
-		)
 	var level: float = river_exit.level
-	var wet := Vector2(INF, -INF)
-	for i in samples:
-		if profile[i] < level:
-			var u := i * PROFILE_STEP_M - extent_half
-			wet = Vector2(minf(wet.x, u), maxf(wet.y, u))
-	if wet.x > wet.y:
-		wet = Vector2(-half_width, half_width)
+	var cut := section(doc, mouth, across, half_width, level)
+	var profile: PackedFloat32Array = cut.profile
+	var wet: Vector2 = cut.wet
 	var reach := 0.0
 	for p in outward:
 		reach = maxf(reach, RiverExits.outside_distance(p, half))
@@ -393,6 +408,34 @@ static func _mouth(doc: MapDocument, river_exit: Dictionary, half: Vector2) -> D
 		"reach": reach + extent_half,
 		"box": WaterGeometry.bounds(led, extent_half + 0.5),
 	}
+
+
+## The cross-section on the map edge of water `half_width` wide at `level` whose course leaves
+## through `mouth` (`across` the unit vector left of it): {"profile": the map's boundary heights
+## every PROFILE_STEP_M across, PROFILE_BANK_M past the half-width either side (edge_point()),
+## "wet": Vector2, the offsets across of the outermost profile samples under the level (the
+## half-width either side when none is)}.
+static func section(
+	doc: MapDocument, mouth: Vector2, across: Vector2, half_width: float, level: float
+) -> Dictionary:
+	var half := doc.extent_m() * 0.5
+	var extent_half := half_width + PROFILE_BANK_M
+	var profile := PackedFloat32Array()
+	var samples := roundi(2.0 * extent_half / PROFILE_STEP_M) + 1
+	for i in samples:
+		profile.append(
+			WaterGeometry.ground_at(
+				doc, edge_point(mouth, across, i * PROFILE_STEP_M - extent_half, half)
+			)
+		)
+	var wet := Vector2(INF, -INF)
+	for i in samples:
+		if profile[i] < level:
+			var u := i * PROFILE_STEP_M - extent_half
+			wet = Vector2(minf(wet.x, u), maxf(wet.y, u))
+	if wet.x > wet.y:
+		wet = Vector2(-half_width, half_width)
+	return {"profile": profile, "wet": wet}
 
 
 ## The point on the map edge through `mouth` that lies `u` metres across the course (`across`,
@@ -583,7 +626,12 @@ static func _patch_vertex(
 			continue
 		if alpha < 0.0:
 			alpha = RiverExits.skirt_alpha(xz, half, fall, fade.wobble, fade.seed)
-		var dip := channel_at(mouth, xz, RiverExits.outside_distance(xz, half), base, fall, alpha)
+		var out := RiverExits.outside_distance(xz, half)
+		var dip := (
+			PondExits.basin_at(mouth, xz, out, base, fall, alpha)
+			if mouth.has(PondExits.WIDTHS)
+			else channel_at(mouth, xz, out, base, fall, alpha)
+		)
 		y = minf(y, dip.x)
 		wet = Vector2(maxf(wet.x, dip.y), maxf(wet.y, dip.z))
 	var dipped := absf(y - point.y) > 1e-4 or wet != Vector2.ZERO
@@ -633,7 +681,13 @@ static func channel_at(
 		* smoothstep(FADE_SETTLED_ALPHA, FADE_ALPHA, alpha)
 	)
 	var y := lerpf(skirt_y, minf(skirt_y, carved), weight)
-	var above := y - (float(mouth.level) + drop)
+	return dressed(y, float(mouth.level) + drop, weight)
+
+
+## Ground at height `y` under water at `surface` carved with weight `weight`: Vector3(y, bed
+## weight, shore weight) by its height over the water (see the constants).
+static func dressed(y: float, surface: float, weight: float) -> Vector3:
+	var above := y - surface
 	var bed := (1.0 - smoothstep(-BED_UNDER_M, BED_ABOVE_M, above)) * weight
 	var shore := (1.0 - smoothstep(BANK_WET_M, BANK_DRY_M, above)) * smoothstep(-0.1, 0.0, above)
 	return Vector3(y, bed, shore * weight)
@@ -652,7 +706,8 @@ static func drop_at(mouth: Dictionary, d: float, fall: float) -> float:
 ## The mouth's cross-section `u` metres across the course (left of it positive).
 static func profile_at(mouth: Dictionary, u: float) -> float:
 	var profile: PackedFloat32Array = mouth.profile
-	var f := clampf((u + float(mouth.half)) / PROFILE_STEP_M, 0.0, profile.size() - 1.0)
+	var extent_half: float = mouth.get("profile_half", mouth.half)
+	var f := clampf((u + extent_half) / PROFILE_STEP_M, 0.0, profile.size() - 1.0)
 	var i := mini(floori(f), profile.size() - 2)
 	return lerpf(profile[i], profile[i + 1], f - i)
 
