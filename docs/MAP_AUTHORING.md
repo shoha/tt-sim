@@ -331,8 +331,13 @@ The iterations on these captures drove the P6-1 fixes (square patch cells out to
 waterline past the edge is smooth, a second gentler bend so a derived course meanders, the
 water past the edge keeping the river's colour as the skirt fades, the reflection probe
 reaching over the skirt so that water no longer glitters under a low sun); what the final
-captures still show is in Open work, "Edge follow-ups". Performance:
-`PERFORMANCE.md` "Phase 6 (rivers past the map edge): pinned performance pass" (below).
+captures still show is in Open work, "Edge follow-ups". P6-3 (2026-10-05) re-ran the job
+(build) after the edge follow-ups: the Valley's right exit's far bank and the ankle stream's
+mouth meet the map with no kink, the ankle stream past the edge keeps its in-map tone, the
+waist river's tail dissolves into the haze with the ground (no dark stub at full zoom-out,
+fog on or off), and both Valley exits and the forest's derived stream visibly bend.
+Performance: `PERFORMANCE.md` "Phase 6 (rivers past the map edge): pinned performance pass"
+(below) and its "Edge follow-ups (P6-3)".
 
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
@@ -475,23 +480,20 @@ frame 1,183 -> 517 ms, every 150 ft landform's 500-700 -> 220-290 ms (`PERFORMAN
   and crossing install). Not landform work; the next target if opens must stay under 150 ms.
 
 Edge follow-ups (phase 6, rivers past the map edge, P6-1 and P6-2, 2026-10-05; none blocking;
-`systems/water.md` "Past the map edge"):
-- The Valley's upper-left exit reads fairly straight between long valley walls (a derived
-  course's bends are small against the walls' length).
-- Small kinks where the in-map waterline meets the first row past the edge (the Valley's right
-  exit, far bank; the ankle stream's mouth).
-- The ankle stream past the edge reads a little deeper and greener than in the map.
-- The waist river's tail shows as a faint darker stub at full zoom-out.
-- A sculpt on the edge near an exit updates the skirt in place but leaves the channel patch
-  stale until the next water refresh.
+`systems/water.md` "Past the map edge"). P6-3 (2026-10-05) closed: a stroke released just
+inside the edge always exits (the line ends at the release point); no kink at the mouths and
+the ankle stream's depth carried past the edge (the cross-section read on the edge, the carve
+run straight to it); the waist river's tail dissolves with the ground (the water fades by the
+skirt's own law); every derived course visibly meanders (bends of 0.4 to 0.7 rad); the 45 ms
+frame of a stroke carved to the edge (the skirt's vertex mirror, now built on the worker:
+26-31 ms); the exits rebuilt on every water edit (cached per window and per mouth: 98-105 ms
+of worker time for an edit away from them, was 669-704); and a sculpt at an exit, whose
+stroke-end water refresh now rebuilds that exit alone. Still open:
 - Ponds and lakes touching the edge do not continue (rivers only).
-- The exit geometry costs about 280 ms of worker time per exit (`RiverExitMesh.skirt_parts`,
-  14K vertices each), which lengthens a warm load by about 550 ms with two exits (the loading
-  screen waits for it; no frame) and is rebuilt on every water edit while any exit exists
-  (`PERFORMANCE.md` "Phase 6"). Profile it, or build each exit as its own task, if loads
-  matter. A stroke that carves to the edge has one 45 ms frame (the carve's ground step, 42-48
-  ms against 6-14 ms inside the map; most likely the skirt's in-place edge update, not
-  profiled).
+- A warm load with exits still builds every exit (about 280 ms of worker time each, the load
+  screen waits for it; no frame); the cache only helps refreshes.
+- During a sculpt stroke on the edge the patch's outer columns stay at the stroke's start
+  heights beside the in-place skirt until the stroke's water refresh lands.
 
 Follow-ups:
 - A quick brush pass still gives few trees in sparse biomes (temperate forest targets 0.02
@@ -675,7 +677,9 @@ Follow-ups:
   opaque skirt and `SkirtBackdrop`, the look pass (`p6_look`) and its fixes. P6-2 (done): the
   pinned performance pass (`PERFORMANCE.md` "Phase 6 (rivers past the map edge)": the opaque
   skirt +0.31-0.36 ms at an edge, kept; two exits +550 ms of worker time on a load) and these
-  docs. System doc: `docs/systems/water.md` "Past the map edge".
+  docs. P6-3 (done, 94b18c7, 874cd34, 31ae238, a449acb, a16c02c, 6cc5cb2, ca40325): the edge
+  follow-ups (Open work, "Edge follow-ups"). System doc: `docs/systems/water.md` "Past the
+  map edge".
 - **Before the minor version bump ("map maker finished"):** not yet fully scoped with the
   user. Candidates on record: phases 4c, 4d and 5 (all done), and the Steam two-account test
   passing on an authored map with water and crossings (still open). Confirm the list with the

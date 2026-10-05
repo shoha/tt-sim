@@ -10,8 +10,8 @@ extends Node
 ## changes live (the Sky pane, presets, weather fog tweening its density), so a child of the
 ## skirt reads it every frame and sets the uniforms only when something changed: a handful of
 ## property reads per frame. The water past the edge (the shared water material, when the map
-## has a river exit) gets the same uniforms: its fade weighs the backdrop as the skirt's does
-## (skirt_fade.gdshaderinc skirt_lit_share).
+## has a river exit) gets the same uniforms: it fades into the backdrop by the skirt's own law,
+## its fog matched to the skirt's (water.gdshader, water_skirt_fade; P6-3).
 ##
 ## Sky backdrops: a PanoramaSkyMaterial is sampled by the shader itself in the camera's view
 ## direction (MODE_SKY); a ProceduralSkyMaterial's colour there is computed here (its gradient,
