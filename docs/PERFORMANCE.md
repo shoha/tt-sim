@@ -2329,3 +2329,144 @@ worst frame (270-288 ms against 198 ms) were not broken down; the water and fall
 level's only extra content. Memory in play:
 static 293.5-294.5 / video 1,527.2 MB / working set 1,254-1,276 MB (flat), 295.2-296.0 /
 1,536.1 / 1,283-1,291 MB (terraces; 9 MB of textures more, the water and falls).
+
+## Phase 6 (rivers past the map edge): pinned performance pass (2026-10-05)
+
+What phase 6 costs: the ground skirt made opaque with a colour fade (it was transparent),
+the per-exit channel patch and water ribbon, `SkirtBackdrop` polling the environment every
+frame, the exit geometry built on the load and refresh workers, and the main thread's
+`apply_river_exits` after a water edit. See `docs/systems/water.md` "Past the map edge".
+
+**How.** Render jobs `jobs/p6_perf_build.json`, `jobs/p6_perf_play.json` and
+`jobs/p6_perf_band.json`, one process each, run in that order, with the new probe
+`probes/p6_perf.gd`. The build job makes two 150 ft temperate forest maps (seed 1234) with
+the same two rivers: on `_p6_perf_exits` a waist river drawn on past the near edge with a
+bend and an ankle stream drawn past the right edge (two drawn exits: patch 14,875 and
+13,125 vertices, ribbon 711 and 387; the skirt itself 6,588), on `_p6_perf_short` the same
+strokes stopping about 2.4 m short of the edges (no exit); then, on the first, `record`
+windows around a waist river drawn to the left edge and its erase against one stopping
+short. The play and band jobs ran with the pinned `override.cfg` (viewport 1920x1080 in every
+sample, removed by the job at startup), vsync on for loads and off for frame windows, the
+user's graphics settings, a debug build, RTX 3080. The skirt A/B hot-swaps the skirt
+material's shader in the run (`p6_perf.gd shader`): `opaque` is the game's, `transparent`
+the skirt before phase 6 (the wrapper and ground include of 7bde99a, read from a `git
+archive` zip, the include inlined); the material is shared with the channel patch, so the
+patch swaps with it. `perf.gd gpu_state` at each run's start, at the title with vsync on: 34
+% P8 300 MHz (build), 35 % P8 225 MHz (play), 37 % P8 255 MHz (band): idle clocks, the game's
+own title frame as in phases 4d and 5, not another load. At the ends 85-98 % P0 1605-1935 MHz,
+the game itself with vsync off. In-run comparisons hold; absolute milliseconds are indicative.
+Both levels are kept (`cleanup_levels.json` deletes them).
+
+### The skirt: opaque against transparent in one run
+
+`_p6_perf_exits` in play, 5 s windows, opaque / transparent / opaque / transparent, then
+the skirt hidden as the reference. GPU median ms (n 1,240-2,160 per window):
+
+| View | Opaque #1 | Transparent #1 | Opaque #2 | Transparent #2 | Skirt hidden | Opaque against transparent |
+| --- | --- | --- | --- | --- | --- | --- |
+| Home (zoom 13.85; 496 draws, 492K prims) | 3.339 | 3.405 | 3.386 | 3.399 | 3.405 | -0.01 to -0.07 ms (the skirt is off screen) |
+| Zoom 20 panned to the waist river's exit (385 draws, 368K) | 2.914 | 2.553 | 2.921 | 2.556 | 1.769 | +0.36 ms |
+| Zoom 20 panned to the left edge, no exit (363 draws, 374K) | 2.994 | 2.673 | 2.990 | 2.679 | 2.300 | +0.31 / +0.32 ms |
+| Full authoring zoom-out (zoom 39.28, the 150 ft map's; 841 draws, 709K) | 3.656 | 3.150 | 3.668 | 3.156 | 2.316 | +0.51 ms |
+
+**Verdict: the opaque skirt costs 0.31-0.36 ms of GPU at max play zoom panned to an edge,
+on frames of about 3 ms, and 0.51 ms at full authoring zoom-out; nothing at home.** It
+roughly doubles the skirt's own cost: at the plain edge the skirt is 0.37 ms transparent and
+0.69 ms opaque, at full zoom-out 0.83 against 1.35 ms. How the difference splits between the
+pass (the opaque ring goes through the depth prepass and the opaque pass, the transparent one
+drew once after them with no depth write) and the shader's own extra work (the backdrop, the
+fog, the channel dressing) was not measured. The P6-0 probe's indicative +0.3-0.45 ms panned
+to an edge holds.
+
+**The band variant (the probe's suggestion: opaque only around the exits).** Measured
+without a code change: `p6_perf.gd shader band` keeps the opaque material on the channel
+patch and draws the rest of the ring with the transparent shader through a surface
+override. Its own run, the same views, GPU median ms:
+
+| View | Opaque #1 / #2 | Band #1 / #2 | Transparent #1 / #2 |
+| --- | --- | --- | --- |
+| Zoom 20 on the exit | 2.732 / 2.927 | 2.827 / 2.857 | 2.559 / 2.557 |
+| Zoom 20 on the left edge, no exit | 2.972 / 2.977 | 2.647 / 2.644 | (2.673 / 2.679 in the play run) |
+| Full authoring zoom-out | 3.677 / 3.680 | 3.420 / 3.424 | (3.150 / 3.156 in the play run) |
+
+(The exit view's first opaque window, the first after `vsync_off`, read 0.2 ms below the
+second; the second is the comparable one.) The band gives back all of the opaque cost at a
+plain edge (0.33 ms), half at full zoom-out (0.26 ms) and 0.07 ms at an exit, where the
+patch is most of the visible ring. **Decision: keep the opaque skirt everywhere.** The
+threshold set for trying the band was about 0.3 ms at an edge without an exit, and the
+skirt is at it (0.31-0.33 ms in two runs), not clearly past it; the band would put two
+blend modes side by side around every exit, and the fade's match under depth fog, sky
+backdrops and the dither fallback was tuned for the opaque one alone (P6-1), so the seam
+risk is a look cost paid near every river, for a third of a millisecond on 3 ms frames.
+If a lower-end target needs the time back, the band is measured and its probe is in place.
+
+### The exits' own draw
+
+At zoom 20 on the waist river's exit, opaque skirt, the channel patch and the ribbon shown
+and hidden (`p6.gd show`), on / off / on / off: 2.921 / 2.006 / 2.928 / 2.015 ms GPU, and the
+ribbon alone hidden 2.873 ms. **The ribbon costs about 0.05 ms; the patch and ribbon 0.91
+ms**, but hiding the patch leaves its columns out of the skirt (they are cut from the ring
+and redrawn by the patch), so that figure is the whole cost of drawing that part of the
+ring, not the extra over a plain skirt. The upper bound on the extra: the whole skirt costs
+1.15 ms at the exit view (2.92 against 1.77 hidden) and 0.69 ms at the plain edge view, so
+an exit in view adds at most about 0.45 ms at max play zoom, less what the framing differs.
+Draw calls: the patch and the ribbon are one each per map, whatever the exit count.
+
+### SkirtBackdrop
+
+CPU frame median at zoom 20 on the exit with its per-frame sync on / off / on / off: 3.441 /
+3.441 / 3.440 / 3.440 ms (GPU 2.926-2.931). Timed directly (`p6_perf.gd backdrop_bench`, 5,000
+calls on the play map's node, two materials): **3.6 microseconds per frame** when nothing
+changed (the steady state: the uniforms dictionary built and compared), 7.0 when every
+uniform is set. Nothing to fix.
+
+### Load time and memory
+
+From the title, vsync on, one process: `_p6_perf_exits` first (cold in the process: 2,050
+ms, worst frame 643 ms), then three interleaved warm rounds:
+
+| Level | Warm (3) | Worst frame, warm |
+| --- | --- | --- |
+| `_p6_perf_short` (no exit) | 1,076 / 1,095 / 1,080 ms | 207 / 200 / 201 ms |
+| `_p6_perf_exits` (two exits) | 1,650 / 1,631 / 1,632 ms | 310 / 200 / 206 ms |
+
+**Two exits add about 550 ms to a warm load (1,638 against 1,084 ms mean), all of it on a
+worker: the worst frame does not move.** `RiverExitMesh.skirt_parts` (`p6_perf.gd
+exits_build`, run on the main thread to time it): 33.3 ms for the skirt alone on the short
+map, 335.8 ms with the waist exit alone, 593-599 ms with both, so about 280 ms per exit,
+and it is the load's longest worker task, so the loading screen waits for it. The exits do
+not reach a frame (P4b-0's worker load holds), but the time is high for 14K vertices per
+exit and is the first target if loads matter (MAP_AUTHORING.md "Open work", edge
+follow-ups). Memory in play: static 307.4-309.2 / video 1,522.4 MB (buffers 46.7) without
+exits, 310.4-312.2 / 1,523.7 MB (buffers 48.0) with them: about 3 MB of static memory and
+1.3 MB of vertex buffers; the working set (1,166-1,230 against 1,201-1,222 MB) is inside
+its drift.
+
+### Authoring: a river drawn to the edge, and its erase
+
+The build job's `record` windows on `_p6_perf_exits` at zoom 24, vsync off, CPU frame ms
+median / worst (n), two runs of the job (the first run's map had one exit, the ankle
+stream's stroke stopping short of the edge; the second, the table's, two):
+
+| Gesture | Run 2 | Run 1 |
+| --- | --- | --- |
+| Idle 4 s | 3.8 / 4.6 (1044) | 3.8 / 4.5 (1044) |
+| A waist river stopping 3.4 m short of the left edge | 4.0 / 23.9 (997) | 4.1 / 28.1 (985) |
+| Its erase | 4.3 / 22.1 (950) | 4.1 / 20.5 (948) |
+| The same river drawn past the left edge (a third exit) | 4.2 / 45.3 (1478) | 4.2 / 45.3 (1494) |
+| Its erase (the exit goes) | 4.2 / 21.7 (977) | 4.3 / 23.0 (960) |
+
+The refresh after each (`p6_perf.gd water_timing`): the worker's build (water mesh and skirt
+parts) 697 / 692 ms for the short stroke and its erase with two exits on the map, 913 ms after
+the stroke to the edge (three exits), 699 ms after its erase; 408 ms after the first stroke
+of the map (one exit); the main-thread swap 18.0-22.3 ms in every case. `apply_river_exits`
+timed alone (`apply_bench`, the skirt rebuilt with the map's parts): 1.5 ms with one exit,
+2.3 ms with two. **Verdict: the exits cost the main thread about 2 ms per refresh, inside a
+swap that did not change (18-22 ms); their worker time, about 280 ms per exit on the map,
+is rebuilt on every water edit while any exit exists, so a water edit on a map with exits
+lands 0.3-0.6 s later than on one without, under no frame.** The one dearer frame is the
+stroke that reaches the edge: 45.3 ms in both runs against 24-28 ms for the stroke that stops
+short. Its main-thread parts put it in the carve's ground step (`ground` 41.8 ms, 48.2 for
+the ankle stream to the right edge, against 5.6-14.3 ms for strokes inside the map), which
+also updates the skirt's edge in place when the carve reaches the boundary; that is the
+likely cause and was not profiled further.

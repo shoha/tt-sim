@@ -43,6 +43,12 @@ other committed home.
   features the seed draws from, and every draw must stand on its own (judged with the
   water off as well as on). The suite `CLAUDE.md` carries the same rule for every
   generator.
+- **Rivers run on past the edge (2026-10-05, phase 6):** a river constrained to the play
+  area looked unnatural, cut off at the map's edge. A river that reaches the edge now runs
+  on past it into the haze: its channel is carved into the ground skirt along its continued
+  course (the one the author drew past the edge, else a derived meander) with the real water
+  flowing in it, both fading into the backdrop with the skirt. Scenery only: no collision,
+  grid or tokens past the edge. Ponds and lakes touching the edge do not continue.
 
 ## Where each system is documented
 
@@ -309,6 +315,25 @@ closed in P5-8 (the document built on a worker; Open work, "Landform follow-ups"
 `landform_look` (P5-1, P5-2: the `_p5_` levels) and `landform_dialog` (P5-3: the six tiles and
 the caption), each in its `user://render_jobs/` folder.
 
+Phase 6 (rivers past the map edge, 2026-10-05). The probe that chose the rendering is
+`p6_probe` (P6-0, a waist river carved through the near edge of a 150 ft forest map, the level
+`_p6_probe`; captures and `VERDICT.md` in `user://render_jobs/p6_probe`): any transparent skirt
+is out of the depth and screen textures, so water over it read the backdrop as a flat slab;
+the skirt drawn opaque with its fade done in colour (the "tint") gave the river past the edge
+its shallows, shore foam and refraction of the channel bed with no seam and no stipple, and
+was built in P6-1. The look pass is `p6_look` (P6-1, build and look; captures and `INDEX.md`
+in `user://render_jobs/p6_look`): `_p6_look_forest`, a waist river drawn on past the near edge
+with a bend and an ankle stream drawn to stop at the right edge (a derived continuation), and
+`_p6_look_valley`, the Valley landform's recipe river leaving at both edges, each zoomed out,
+at home zoom, zoom 20 and zoom 8 on every exit with fog off and on, the valley under two sky
+presets, and diagnostics with the ribbon, the channel patch or the rest of the skirt hidden.
+The iterations on these captures drove the P6-1 fixes (square patch cells out to 24 m so the
+waterline past the edge is smooth, a second gentler bend so a derived course meanders, the
+water past the edge keeping the river's colour as the skirt fades, the reflection probe
+reaching over the skirt so that water no longer glitters under a low sun); what the final
+captures still show is in Open work, "Edge follow-ups". Performance:
+`PERFORMANCE.md` "Phase 6 (rivers past the map edge): pinned performance pass" (below).
+
 Unit-tested only (not yet over real Steam): the version gate's lobby-data and host
 rejection paths, client download of `map.ttmap`, the map-hash cache refresh, and the
 download-signal fix (pushed to `main` as a08b639). Needs a two-account test, e.g. on the
@@ -352,7 +377,15 @@ without): crossings cost nothing measurable in play (shown against hidden in one
 tool keeps frame medians at idle (4.2-4.8 ms) with release frames of 12.7-19 ms; a crossing
 edit rebuilds only the crossings whose fields, ground or water changed (P4d-5b, `PERFORMANCE.md`
 "Per-crossing rebuild cache": a placement with six crossings on the map 9.8 ms of refresh
-against 33.8 before).
+against 33.8 before). Phase 6 pass (`PERFORMANCE.md` "Phase 6 (rivers past the map edge):
+pinned performance pass", 2026-10-05, a 150 ft forest map with two river exits against its
+twin with the rivers stopping short): the opaque skirt costs 0.31-0.36 ms GPU over the old
+transparent one at max play zoom panned to an edge and 0.51 ms at full authoring zoom-out,
+nothing at home (kept everywhere; the measured band variant, opaque only around exits, would
+give back 0.33 ms at a plain edge for a seam risk around every river); two exits add about 550
+ms to a warm load, all on a worker (about 280 ms of exit geometry each, the worst frame
+unchanged), 3 MB of memory, and about 2 ms of main-thread work to a water edit's swap;
+`SkirtBackdrop` is 3.6 microseconds a frame.
 
 ## Open work
 
@@ -440,6 +473,25 @@ frame 1,183 -> 517 ms, every 150 ft landform's 500-700 -> 220-290 ms (`PERFORMAN
 - Every new-map open, Flat included, still has one 220-290 ms frame from the load's own
   main-thread work after the document, and a 200 ft gorge one of 517 ms (most likely its water
   and crossing install). Not landform work; the next target if opens must stay under 150 ms.
+
+Edge follow-ups (phase 6, rivers past the map edge, P6-1 and P6-2, 2026-10-05; none blocking;
+`systems/water.md` "Past the map edge"):
+- The Valley's upper-left exit reads fairly straight between long valley walls (a derived
+  course's bends are small against the walls' length).
+- Small kinks where the in-map waterline meets the first row past the edge (the Valley's right
+  exit, far bank; the ankle stream's mouth).
+- The ankle stream past the edge reads a little deeper and greener than in the map.
+- The waist river's tail shows as a faint darker stub at full zoom-out.
+- A sculpt on the edge near an exit updates the skirt in place but leaves the channel patch
+  stale until the next water refresh.
+- Ponds and lakes touching the edge do not continue (rivers only).
+- The exit geometry costs about 280 ms of worker time per exit (`RiverExitMesh.skirt_parts`,
+  14K vertices each), which lengthens a warm load by about 550 ms with two exits (the loading
+  screen waits for it; no frame) and is rebuilt on every water edit while any exit exists
+  (`PERFORMANCE.md` "Phase 6"). Profile it, or build each exit as its own task, if loads
+  matter. A stroke that carves to the edge has one 45 ms frame (the carve's ground step, 42-48
+  ms against 6-14 ms inside the map; most likely the skirt's in-place edge update, not
+  profiled).
 
 Follow-ups:
 - A quick brush pass still gives few trees in sparse biomes (temperate forest targets 0.02
@@ -609,6 +661,21 @@ Follow-ups:
   (starting landforms)": a landform adds 85-325 ms to a 150 ft open; a shaped map strokes like
   a flat one). P5-4b (done, 8092d17): a flank ledge on crownless hills, the lake away from the
   camera's corner. P5-6: these docs.
+- **Phase 6: rivers past the map edge (done, 2026-10-05).** A river that reaches the map edge
+  runs on past it into the haze (Decisions above): the Water tool keeps a stroke going past
+  the edge and the river keeps that course (`WaterBody.beyond`, saved in `splines.json`), or
+  derives a meandering one from the map seed; the ground skirt carries its channel in a patch
+  of square cells and the real water material flows in it, both fading with the skirt; the
+  skirt became opaque with its fade done in colour, matched to the environment's backdrop and
+  fog every frame by `SkirtBackdrop`; the reflection probe of an authored map reaches over the
+  skirt. Scenery only (no collision, grid or tokens past the edge). P6-0 (done, 23fdd4c): the
+  skirt water probe (`p6_probe`: any transparent skirt leaves the water reading the backdrop;
+  the opaque tint skirt chosen). P6-1 (done, 45890c8, e004371, a1dd6e8, 9e59c19, 6842b88,
+  79e5a8a, 56c6c04, a699094): the course past the edge, the channel patch and ribbon, the
+  opaque skirt and `SkirtBackdrop`, the look pass (`p6_look`) and its fixes. P6-2 (done): the
+  pinned performance pass (`PERFORMANCE.md` "Phase 6 (rivers past the map edge)": the opaque
+  skirt +0.31-0.36 ms at an edge, kept; two exits +550 ms of worker time on a load) and these
+  docs. System doc: `docs/systems/water.md` "Past the map edge".
 - **Before the minor version bump ("map maker finished"):** not yet fully scoped with the
   user. Candidates on record: phases 4c, 4d and 5 (all done), and the Steam two-account test
   passing on an authored map with water and crossings (still open). Confirm the list with the

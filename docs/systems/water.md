@@ -508,12 +508,18 @@ tokens past the edge. The probe that chose the rendering is P6-0
   ground builders in `water_fixtures.gd`.
 - **Render jobs** (`tools/render_jobs/jobs/`): `water_look.json` (probe `probes/water.gd`:
   `carve`, `pond`, `erase`, `check`, `profile`), `water_tool.json`, and the phase 4 judgment
-  set `phase4_judgment_set.json`; captures and verdicts are indexed in
+  set `phase4_judgment_set.json`; past the map edge (phase 6) `p6_probe.json` (P6-0, probe
+  `probes/skirt.gd`: water over the skirt, the skirt's blend modes) and `p6_look.json` (P6-1,
+  probe `probes/p6.gd`: every exit at home, zoom 20 and zoom 8, fog and sky backdrops, the
+  patch, ribbon and skirt hidden in turn); captures and verdicts are indexed in
   [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Verification status".
 - **Performance** ([../PERFORMANCE.md](../PERFORMANCE.md)): "Water flow map (2026-09-23)",
   "Authored water surface (2026-09-27, P4-2)", "Water tool: carve on a worker (2026-09-27,
-  P4-4)" and "In-game authoring phase 4 (water): pinned performance pass (2026-09-27)". The
-  numbers quoted above from render jobs are indicative; the pinned pass is the reference.
+  P4-4)", "In-game authoring phase 4 (water): pinned performance pass (2026-09-27)" and "Phase
+  6 (rivers past the map edge): pinned performance pass (2026-10-05)" (jobs `p6_perf_build`,
+  `p6_perf_play` and `p6_perf_band`, probe `probes/p6_perf.gd`: the opaque skirt against the
+  transparent one, the exits' draw, the load and the refresh). The numbers quoted above from
+  render jobs are indicative; the pinned passes are the reference.
 
 ## Open work
 
@@ -533,3 +539,4 @@ The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work"; this doc doe
   shallows in the shader.
 - P4b-0: the submerged token marker, the edge foam reach, the authored map load on workers.
 - Phase 4c (2026-10-04): waterfalls, in [waterfalls.md](waterfalls.md).
+- Phase 6 (2026-10-05): rivers past the map edge (P6-0 probe, P6-1 build, P6-2 pinned pass).
