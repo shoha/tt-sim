@@ -564,6 +564,27 @@ static func skirt_vertex_mirror(doc: MapDocument, width_m: float, fall_m: float)
 	return mirror
 
 
+## skirt_vertex_mirror() of a skirt already built (`arrays` from build_skirt_arrays(), `count`
+## boundary samples), read off its vertices and normals instead of recomputing them: built on
+## the worker with the skirt (RiverExitMesh.skirt_parts), so the first in-place edge update
+## after a rebuild does not spend about 30 ms making it on the main thread (P6-3).
+static func skirt_mirror_of(arrays: Array, count: int) -> Dictionary:
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals_in: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var positions := PackedFloat32Array()
+	var normals := PackedInt32Array()
+	positions.resize(vertices.size() * 3)
+	normals.resize(vertices.size() * 2)
+	for k in vertices.size():
+		var p := vertices[k]
+		positions[k * 3] = p.x
+		positions[k * 3 + 1] = p.y
+		positions[k * 3 + 2] = p.z
+		normals[k * 2] = encode_normal(normals_in[k])
+		normals[k * 2 + 1] = encode_tangent(normals_in[k])
+	return {"count": count, "positions": positions, "normals": normals}
+
+
 ## Rewrites loop indices [range.x, range.y) of every ring in a skirt_vertex_mirror() from the
 ## document's current boundary heights.
 static func write_skirt_region(

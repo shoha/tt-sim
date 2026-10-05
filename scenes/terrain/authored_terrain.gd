@@ -278,7 +278,7 @@ func _build_skirt(parts: Dictionary = {}) -> void:
 		Vector3(box.position.x, -SKIRT_AABB_HALF_HEIGHT_M, box.position.z),
 		Vector3(box.size.x, 2.0 * SKIRT_AABB_HALF_HEIGHT_M, box.size.z)
 	)
-	_skirt_mirror = {}
+	_skirt_mirror = parts.get("mirror", {})  # Built with the parts; refresh_skirt() needs it.
 	_skirt_rect = Rect2i()
 	var skirt := SkirtExits.decoration(SKIRT_NAME, mesh)
 	SkirtExits.decorate(skirt, _exits, _skirt_material, document, SKIRT_FADE_M, SKIRT_WOBBLE)

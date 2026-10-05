@@ -27,6 +27,7 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/p6.gd", "action": "info"},
   {"op": "call", "script": "res://tools/render_jobs/probes/p6_perf.gd", "action": "exits_build", "runs": 5},
   {"op": "call", "script": "res://tools/render_jobs/probes/p6_perf.gd", "action": "apply_bench", "runs": 5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/p6_perf.gd", "action": "mirror_bench", "runs": 5},
   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "exits authoring", "ws": true},
   {"op": "home"},
   {"op": "zoom", "size": 46.0},

@@ -20,7 +20,12 @@ extends RefCounted
 ##   apply_bench {runs}      times AuthoredTerrain.apply_river_exits (the main thread's part of a
 ##                           water refresh for the skirt) with the map's own parts, `runs` times.
 ##   water_timing            the last water refresh: build (worker), bake, swap (main thread,
-##                           apply_river_exits included) and the editor's main-thread parts.
+##                           apply_river_exits included), the editor's main-thread parts and
+##                           the terrain's last in-place skirt refresh.
+##   mirror_bench {runs}     times the skirt's vertex mirror made from the document
+##                           (TerrainMeshBuilder.skirt_vertex_mirror, the main thread's first
+##                           in-place edge update after a rebuild before P6-3) against read off
+##                           the built arrays (skirt_mirror_of, on the worker since P6-3).
 
 const BACKDROP := "SkirtBackdrop"
 const WRAPPER := "shaders/authored_ground_skirt.gdshader"
@@ -45,6 +50,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _apply_bench(base, int(step.get("runs", 5)))
 		"water_timing":
 			return _water_timing(base)
+		"mirror_bench":
+			return _mirror_bench(base, int(step.get("runs", 5)))
 	return "unknown action %s" % step.get("action", "")
 
 
@@ -189,6 +196,9 @@ static func _water_timing(base: Node) -> String:
 	var timings: Dictionary = ctrl.editor.water.timings
 	for key: String in timings:
 		parts.append("%s %.1f" % [key, float(timings[key]) / 1000.0])
+	var terrain := _terrain(base)
+	if terrain != null:
+		parts.append("last skirt refresh %.1f" % (terrain.last_skirt_usec / 1000.0))
 	if water == null:
 		return "no water | parts ms: " + ", ".join(parts)
 	return (
@@ -200,6 +210,26 @@ static func _water_timing(base: Node) -> String:
 			", ".join(parts),
 		]
 	)
+
+
+static func _mirror_bench(base: Node, runs: int) -> String:
+	var terrain := _terrain(base)
+	if terrain == null:
+		return "no authored terrain"
+	var doc := terrain.document
+	var width := AuthoredTerrain.skirt_width_m()
+	var full := PackedFloat64Array()
+	var read := PackedFloat64Array()
+	var arrays := TerrainMeshBuilder.build_skirt_arrays(doc, width, AuthoredTerrain.SKIRT_FADE_M)
+	var count := TerrainMeshBuilder.boundary_samples(doc).size()
+	for i in runs:
+		var t0 := Time.get_ticks_usec()
+		TerrainMeshBuilder.skirt_vertex_mirror(doc, width, AuthoredTerrain.SKIRT_FADE_M)
+		full.append((Time.get_ticks_usec() - t0) / 1000.0)
+		t0 = Time.get_ticks_usec()
+		TerrainMeshBuilder.skirt_mirror_of(arrays, count)
+		read.append((Time.get_ticks_usec() - t0) / 1000.0)
+	return "skirt_vertex_mirror %s | skirt_mirror_of %s" % [_stats(full), _stats(read)]
 
 
 static func _vertices(arrays: Array) -> int:
