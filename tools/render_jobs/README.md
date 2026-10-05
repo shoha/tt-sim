@@ -419,6 +419,15 @@ numerically (for example where a fade or a tint band starts).
   shown and hidden at home, zoom 8 on the arch and on the ford and zoom 20, then each level at
   home and zoom 20 with tokens and `mem`. The levels are kept (`cleanup_levels.json` deletes
   them).
+- `jobs/p5_perf_open.json`, `jobs/p5_perf_strokes.json` and `jobs/p5_perf_play.json`: the
+  phase 5 (starting landforms) pinned performance pass (`PERFORMANCE.md` "Phase 5 (starting
+  landforms): pinned performance pass"). Open: `perf.gd author` with each landform in the
+  forest at 150 ft (seed 7, three interleaved rounds, flat first) and flat, valley and gorge
+  at 100 and 200 ft, `mem` after each, `perf.gd recipe` (the recipe's own ms) at the title;
+  strokes: the forest Terraces and flat maps (seed 3) with `record` windows around idle, a
+  Raise on the stage, a Smooth across a step, a waist river and its erase, saved as
+  `_p5_perf_terraces` / `_p5_perf_flat`; play (deletes the pinned `override.cfg`): warm loads
+  of both interleaved, then GPU windows at home and zoom 20, `mem`.
 - `jobs/falls_look.json`: the waterfall carve and curtains (P4c-2, P4c-3, about 100 s): a new
   150 ft temperate forest map with a two-tier Tier step and a 14 m Raise hill (real Sculpt
   strokes; the hill's flank runs steep for about 9 m, so the stream down it gets two falls), a

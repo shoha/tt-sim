@@ -2175,3 +2175,126 @@ What remains is the one crossing's own build (the ford's 5 ms for 200 vertices i
 unprofiled) and the swap, which is now the larger share for stone meshes (4.4-6.3 ms for one
 arch or ford node: `moss_split` walks every facet in GDScript, then the mesh and concave shape
 upload); both are the next targets if a placement needs to go under a frame.
+
+## Phase 5 (starting landforms): pinned performance pass (2026-10-04)
+
+What a starting landform costs: the open time of a new map per landform against Flat (the
+recipe runs on the main thread before the map is built), the first strokes on a shaped map
+against a flat one, and a landform map in play.
+
+**How.** Render jobs `jobs/p5_perf_open.json`, `jobs/p5_perf_strokes.json` and
+`jobs/p5_perf_play.json`, one process each, run in that order with the pinned `override.cfg`
+(viewport 1920x1080 in every sample; the play job removed it at startup), the user's graphics
+settings, a debug build, RTX 3080. Opens and loads with vsync on (timed by the probe's
+`Watch`), stroke and GPU windows with vsync off. The open job uses `perf.gd author` (now
+taking `landform`) and the new `perf.gd recipe`, which times `NewMap.create` with the landform
+against Flat on the main thread three times each, from the title between opens so it never
+lands in a timed frame. `perf.gd gpu_state` at each run's start, at the title with vsync on:
+38 % P8 255 MHz (open), 33 % P8 240 MHz (strokes), 36 % P8 270 MHz (play); idle clocks, the
+same title-frame reading as phase 4d's 29-34 %, not another load. At the ends: 26 % P5 (open),
+82 % and 84 % P0 1935 MHz (strokes and play, the game itself with vsync off). In-run
+comparisons hold; absolute milliseconds are indicative.
+
+### Opening a new map
+
+Temperate forest, seed 7 (wet draws for the valley, hilltop and gorge, a dry terraces, a lake
+without a stream), from the title, three rounds of the six landforms interleaved (Flat first
+in each round). Loading screen is `perf.gd author`'s Create-to-drop time; the worst frame is
+the worst under the loading screen; the recipe is `perf.gd recipe`'s median difference
+(create with the landform minus create with Flat, both on the main thread):
+
+| 150 ft | Loading screen ms (rounds 1 / 2 / 3) | Worst frame ms | Recipe ms | Warm mean against Flat |
+| --- | --- | --- | --- | --- |
+| Flat | 2,005 (cold, first in process) / 771 / 658 | 905 / 448 / 335 | 0 (create 86) | 715 |
+| Valley | 1,093 / 961 / 939 | 618 / 596 / 588 | 298 | +235 |
+| Hilltop | 1,089 / 906 / 854 | 855 / 546 / 542 | 210 | +165 |
+| Terraces | 893 / 799 / 799 | 609 / 504 / 500 | 154 | +84 |
+| Lakeshore | 1,099 / 1,037 / 1,041 | 700 / 700 / 695 | 297 | +324 |
+| Gorge | 1,167 / 972 / 1,051 | 924 / 621 / 629 | 306 | +297 |
+
+Once each at the other sizes (warm, the same process, after the three rounds):
+
+| Size | Flat | Valley | Gorge |
+| --- | --- | --- | --- |
+| 100 ft: loading screen / worst frame / recipe | 584 / 285 / 0 (create 38) | 846 / 493 / 162 | 891 / 542 / 177 |
+| 200 ft: loading screen / worst frame / recipe | 787 / 526 / 0 (create 152) | 1,372 / 846 / 453 | 1,538 / 1,183 / 501 |
+
+**Verdict: a landform adds 85-325 ms to a 150 ft open of about 0.7 s, and the recipe accounts
+for all of it.** The open grows by roughly the recipe's own time (the terraces' dry draw is
+the cheapest at 154 ms; the valley, lake and gorge cost about 300 ms each, in line with P5-0's
+pure timings of 180-340 ms), and the worst frame under the
+loading screen grows with it (500-700 ms against Flat's 335-448 warm), because the recipe runs
+in the frame that starts the open. The recipe grows with the map's area a little slower than
+the area (150 to 200 ft is 1.78x the area; the valley 1.52x, the gorge 1.64x), so at 200 ft a
+gorge opens in 1.5 s with one 1.2 s frame. The loading screen is up and names the landform
+("Shaping the gorge..."), so it reads as a pause, not a hitch; if 200 ft opens matter, the
+recipe can move onto the loader's worker (it writes only the document). Flat's own
+`NewMap.create` (the starting cover paint) is 38 / 86 / 152 ms by size. Round 1's Flat was
+the process's first open (2.0 s, a 905 ms frame), so the warm comparison uses rounds 2 and 3;
+Flat's two warm opens differ by 113 ms, which bounds the noise in the table's last column.
+`perf.gd author`'s second line (palette resolved and regeneration done) did not log in this
+run: the job leaves for the title 1 s after `wait_ready` settles, before the whole palette has
+resolved, so the starting cover's regeneration was not timed separately here.
+
+Memory in authoring after each open (static / video): Flat 304-309 / 1,641-1,644 MB, the
+landforms 305-313 / 1,644-1,654 MB (the lake and gorge highest by 5-10 MB of buffers and
+textures); static creeps about 9 MB over the run's 24 opens whatever the landform. Working set
+on round 1: 1,098 MB after Flat (the first open) rising to 1,198 MB after the gorge, the
+process growing rather than a per-landform cost.
+
+### The first strokes on a shaped map
+
+Forest seed 3 at 150 ft: Terraces (three tiers stepping down along z, faces near z = -8 and
+z = +7, the stage at (-0.5, 0) on the middle tier, the recipe's river with two falls at
+x = -6) and the Flat map, the same strokes on both. UI hidden, zoom 20, vsync off: a Raise on
+the stage (radius 4, held 2 s), a Smooth across the north step at x = 1 (on Flat the same
+spot), a waist river from (6, -12) to (6, 8) (on the terraces it falls once, at (6.0, -8.27):
+`falls.gd falls` lists it after the recipe's two), then its erase. `record` windows, CPU frame
+ms median / worst (n), each including its `wait_ready` tail:
+
+| Stroke | Terraces | Flat |
+| --- | --- | --- |
+| Idle 4 s | 3.9 / 5.1 (1017) | 4.1 / 5.4 (947) |
+| Raise on the stage | 4.2 / 9.4 (705) | 4.2 / 8.3 (670) |
+| Smooth across a tier face | 4.3 / 15.1 (926) | 4.2 / 7.4 (919) |
+| Waist river across a step (one fall) | 4.3 / 12.3 (1505) | 4.2 / 21.4 (1425) |
+| Its erase | 4.4 / 10.9 (1410) | 4.4 / 8.9 (1352) |
+
+**Verdict: a shaped map strokes like a flat one.** Medians match within 0.1 ms; the worst
+frames are one-off stroke-end frames (regeneration and the carve's swap) of 9-21 ms on either
+map, the Smooth over a tier face the only one clearly dearer on the terraces (15.1 against
+7.4 ms; one sample each, and where the frame goes was not profiled), and
+the river's worst frame lower on the terraces (12.3 against 21.4), so stroke-end variance is
+larger than the landform's effect. Memory after the strokes: static 307.6 / video 1,654.2 MB /
+working set 1,198 MB (terraces), 307.3 / 1,650.0 / 1,200 MB (flat).
+
+### Play
+
+The two saved levels (`_p5_perf_terraces`, `_p5_perf_flat`, each with the stroke results and
+the river erased). Loads from the title with vsync on: terraces first (cold in the process,
+1,671 ms, worst frame 656 ms), then three warm rounds interleaved:
+
+| Level | Warm (3) | Worst frame, warm |
+| --- | --- | --- |
+| `_p5_perf_flat` | 1,058 / 1,062 / 1,054 ms | 407 / 198 / 199 ms |
+| `_p5_perf_terraces` | 1,155 / 1,133 / 1,136 ms | 270 / 285 / 288 ms |
+
+Then each level twice, interleaved (flat, terraces, flat, terraces), home and zoom 20, 8 s
+windows, vsync off. GPU median ms (CPU median):
+
+| View | Flat #1 | Terraces #1 | Flat #2 | Terraces #2 | Terraces against Flat |
+| --- | --- | --- | --- | --- | --- |
+| Home (flat 500 draws, 476K prims; terraces 437, 386K) | 3.204 (3.70) | 3.545 (4.08) | 3.356 (3.87) | 3.567 (4.09) | +0.21 to +0.34 ms |
+| Zoom 20 (flat 676 draws, 628K; terraces 648, 551K) | 3.637 (4.17) | 3.865 (4.41) | 3.708 (4.25) | 3.885 (4.51) | +0.18 to +0.23 ms |
+
+**Verdict: the terraces level costs about 0.2 ms of GPU in play and 80 ms on a warm load,
+small, and most likely the recipe's water rather than the shape.** It draws fewer objects and
+primitives than the flat level (the tiers' faces and the river's footprint carry 516 fewer
+scatter instances), so the extra GPU time is most likely pixels: the recipe's river and two
+falls, whose water shader is the dearest pixel on the map (phase 4b and 4d), against a flat
+map with no water. The flat level drifted up 0.07-0.15 ms between its two windows while the
+terraces held, so the smaller deltas are the honest ones. The warm load's +80 ms and its
+worst frame (270-288 ms against 198 ms) were not broken down; the water and falls are the
+level's only extra content. Memory in play:
+static 293.5-294.5 / video 1,527.2 MB / working set 1,254-1,276 MB (flat), 295.2-296.0 /
+1,536.1 / 1,283-1,291 MB (terraces; 9 MB of textures more, the water and falls).

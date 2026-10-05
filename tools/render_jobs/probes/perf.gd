@@ -11,8 +11,11 @@ extends RefCounted
 ##   gpu_state {name}      one nvidia-smi query: GPU utilisation, temperature, P-state, clock
 ##                         (the pinned procedure's idle check, logged in the run; P4b-3)
 ##   play {folder}         play a level and time its load (logged when it lands)
-##   author {biome, size, seed}  open a new map in authoring and time the loading screen, the
-##                         whole palette resolve and the starting-cover regeneration
+##   author {biome, size, seed, landform}  open a new map in authoring (landform: a
+##                         StartingLandform.KINDS id, default flat) and time the loading
+##                         screen, the whole palette resolve and the starting-cover regeneration
+##   recipe {biome, size, seed, landform, runs}  time NewMap.create with the landform against
+##                         Flat on the main thread, `runs` each (P5-5: the recipe's own cost)
 ##   dress {folder}        open an existing level in authoring, timed like author
 ##   scatter {visible}     show or hide every scatter MultiMesh under the map
 ##   ground_std {on}       draw every terrain chunk with a StandardMaterial3D made from the
@@ -275,21 +278,31 @@ static func run(base: Node, step: Dictionary) -> String:
 			base.call("_on_play_level_requested", level)
 			return "playing %s" % step.folder
 		"author":
-			_watch(base, "author", "new %s" % step.get("biome", ""))
-			base.call(
-				"_begin_authoring",
-				{
-					"level": null,
-					"new_map":
-					{
-						"size_ft": int(step.get("size", 200)),
-						"biome_id": String(step.get("biome", "")),
-						"seed": int(step.get("seed", 1234))
-					},
-					"return_to": &"title"
-				}
+			var landform := String(step.get("landform", StartingLandform.FLAT))
+			var label := (
+				"new %s %s %d ft" % [step.get("biome", ""), landform, int(step.get("size", 200))]
 			)
-			return "authoring new %s" % step.get("biome", "")
+			_watch(base, "author", label)
+			(
+				base
+				. call(
+					"_begin_authoring",
+					{
+						"level": null,
+						"new_map":
+						{
+							"size_ft": int(step.get("size", 200)),
+							"biome_id": String(step.get("biome", "")),
+							"seed": int(step.get("seed", 1234)),
+							"landform": landform,
+						},
+						"return_to": &"title"
+					}
+				)
+			)
+			return "authoring %s" % label
+		"recipe":
+			return _recipe(step)
 		"dress":
 			var dressed := LevelManager.load_level_folder(String(step.folder), false)
 			_watch(base, "author", String(step.folder))
@@ -316,6 +329,51 @@ static func run(base: Node, step: Dictionary) -> String:
 					n += 1
 			return "skirt visible %s on %d" % [str(step.get("visible", true)), n]
 	return "unknown action %s" % step.get("action", "")
+
+
+## The new map's document built on the main thread as AuthoringController's open builds it
+## (NewMap.create with the landform), against the same with Flat, `runs` times each
+## interleaved; logs the median and range of each and the median difference (the recipe's
+## own cost). Run from the title, between opens, so it never lands in a timed frame.
+static func _recipe(step: Dictionary) -> String:
+	var size := int(step.get("size", 150))
+	var biome := String(step.get("biome", FOREST))
+	var seed_value := int(step.get("seed", 1234))
+	var landform := String(step.get("landform", StartingLandform.VALLEY))
+	var shaped := PackedFloat64Array()
+	var flat := PackedFloat64Array()
+	for i in int(step.get("runs", 3)):
+		var t0 := Time.get_ticks_usec()
+		NewMap.create(size, biome, seed_value, PaletteLibrary.DEFAULT_ROOT, landform)
+		var t1 := Time.get_ticks_usec()
+		NewMap.create(size, biome, seed_value, PaletteLibrary.DEFAULT_ROOT, StartingLandform.FLAT)
+		var t2 := Time.get_ticks_usec()
+		shaped.append((t1 - t0) / 1000.0)
+		flat.append((t2 - t1) / 1000.0)
+	var s := Probe.stats(shaped)
+	var f := Probe.stats(flat)
+	return (
+		"recipe %s %d ft seed %d: create %.1f ms (%.1f-%.1f), flat %.1f ms (%.1f-%.1f), recipe %.1f ms"
+		% [
+			landform,
+			size,
+			seed_value,
+			s.median,
+			_min(shaped),
+			s.worst,
+			f.median,
+			_min(flat),
+			f.worst,
+			s.median - f.median
+		]
+	)
+
+
+static func _min(values: PackedFloat64Array) -> float:
+	var out := INF
+	for v in values:
+		out = minf(out, v)
+	return out
 
 
 static func _remove(base: Node, name: String) -> void:
