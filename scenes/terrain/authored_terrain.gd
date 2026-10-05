@@ -254,30 +254,14 @@ func _build_skirt(parts: Dictionary = {}) -> void:
 	if old != null:
 		old.free()
 	if _skirt_material == null:
-		# The base surface's textures and seed, so the texture continues across the edge; no
-		# layer weights (they clamp at the edge and would streak outward) and no rules (the
-		# skirt shader compiles them out), only the base's accent patches (GroundAccents).
-		_skirt_material = _material.duplicate() as ShaderMaterial
-		_skirt_material.shader = SKIRT_SHADER
-		_skirt_material.set_shader_parameter("layer_painted_mask", 0)
-		_skirt_material.set_shader_parameter("layer_ground_mask", 0)
-		GroundAccents.sync_skirt(_skirt_material, _material, _plan.get("layers", []).size())
-		_skirt_material.set_shader_parameter("skirt_half_extent", document.extent_m() * 0.5)
-		_skirt_material.set_shader_parameter("skirt_fade_m", SKIRT_FADE_M)
-		_skirt_material.set_shader_parameter("skirt_wobble", SKIRT_WOBBLE)
+		var layers: int = _plan.get("layers", []).size()
+		_skirt_material = TerrainSkirt.material(
+			_material, layers, document, SKIRT_FADE_M, SKIRT_WOBBLE
+		)
 	if parts.is_empty():
 		parts = RiverExitMesh.skirt_parts(document, skirt_width_m(), SKIRT_FADE_M, SKIRT_WOBBLE)
 	_exits = parts.get("exits", {})
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, parts.skirt)
-	mesh.surface_set_material(0, _skirt_material)
-	# In-place edge edits move vertices the build-time AABB does not know about; the skirt is
-	# decoration outside every bounds walk, so a generous box costs nothing.
-	var box := mesh.get_aabb()
-	mesh.custom_aabb = AABB(
-		Vector3(box.position.x, -SKIRT_AABB_HALF_HEIGHT_M, box.position.z),
-		Vector3(box.size.x, 2.0 * SKIRT_AABB_HALF_HEIGHT_M, box.size.z)
-	)
+	var mesh := TerrainSkirt.mesh(parts.skirt, _skirt_material)
 	_skirt_mirror = parts.get("mirror", {})  # Built with the parts; refresh_skirt() needs it.
 	_skirt_rect = Rect2i()
 	var skirt := SkirtExits.decoration(SKIRT_NAME, mesh)
@@ -320,25 +304,12 @@ func refresh_skirt() -> void:
 	if skirt == null or _skirt_material == null:
 		_build_skirt()
 		return
-	var mesh := skirt.mesh as ArrayMesh
 	var width := skirt_width_m()
 	if _skirt_mirror.is_empty():
 		_skirt_mirror = TerrainMeshBuilder.skirt_vertex_mirror(document, width, SKIRT_FADE_M)
-	var count: int = _skirt_mirror.count
-	var total := count * (TerrainMeshBuilder.SKIRT_RINGS + 1)
-	var positions: PackedFloat32Array = _skirt_mirror.positions
-	var normals: PackedInt32Array = _skirt_mirror.normals
-	for indices in TerrainMeshBuilder.skirt_ranges(document, _skirt_rect):
-		TerrainMeshBuilder.write_skirt_region(document, _skirt_mirror, indices, width, SKIRT_FADE_M)
-		for r in TerrainMeshBuilder.SKIRT_RINGS + 1:
-			var first := r * count + indices.x
-			var end := r * count + indices.y
-			mesh.surface_update_vertex_region(
-				0, first * 12, positions.slice(first * 3, end * 3).to_byte_array()
-			)
-			mesh.surface_update_vertex_region(
-				0, total * 12 + first * 8, normals.slice(first * 2, end * 2).to_byte_array()
-			)
+	TerrainSkirt.update_in_place(
+		skirt.mesh as ArrayMesh, _skirt_mirror, document, _skirt_rect, width, SKIRT_FADE_M
+	)
 	_skirt_rect = Rect2i()
 	last_skirt_usec = Time.get_ticks_usec() - started
 
