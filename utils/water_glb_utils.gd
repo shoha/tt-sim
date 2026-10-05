@@ -44,6 +44,12 @@ static func _get_water_material() -> ShaderMaterial:
 	return _water_material
 
 
+## The shared water ShaderMaterial (see _get_water_material), for water drawn outside a
+## "-water" mesh: a river's ribbon past the map edge (AuthoredTerrain, P6-1).
+static func water_material() -> ShaderMaterial:
+	return _get_water_material()
+
+
 ## The shared waterfall ShaderMaterial (AuthoredWater.fall_material(), made on first use):
 ## every authored map's falls draw with it, and apply_water_settings() keeps its shared keys
 ## in step with the water material's.

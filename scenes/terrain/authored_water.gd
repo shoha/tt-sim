@@ -319,11 +319,22 @@ func _start(snapshot: MapDocument, bake: bool) -> void:
 	set_process(true)
 
 
-## Worker half of a refresh: WaterMeshBuilder.build() and, with `bake`, the flow map
-## (none when there is no river). Touches no Node; results go into `out`.
+## Worker half of a refresh: WaterMeshBuilder.build(), the ground skirt with the rivers that
+## leave the map (RiverExitMesh.skirt_parts, P6-1; {} when none does) and, with `bake`, the
+## flow map (none when there is no river). Touches no Node; results go into `out`.
 static func refresh_work(snapshot: MapDocument, bake: bool, out: Dictionary) -> void:
 	var started := Time.get_ticks_usec()
 	out["built"] = WaterMeshBuilder.build(snapshot)
+	out["exits"] = (
+		RiverExitMesh.skirt_parts(
+			snapshot,
+			AuthoredTerrain.skirt_width_m(),
+			AuthoredTerrain.SKIRT_FADE_M,
+			AuthoredTerrain.SKIRT_WOBBLE
+		)
+		if not RiverExits.exits(snapshot).is_empty()
+		else {}
+	)
 	out["build_usec"] = Time.get_ticks_usec() - started
 	out["bake"] = bake
 	if not bake:
@@ -358,6 +369,12 @@ func _finish_task() -> void:
 	apply(work["built"], flow, flow_size)
 	var parent := get_parent()
 	WaterGlbUtils.process_water_meshes(parent if parent != null else self)
+	# The ground skirt follows the rivers that leave the map (P6-1).
+	var terrain := (
+		parent.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain if parent else null
+	)
+	if terrain != null:
+		terrain.apply_river_exits(work.get("exits", {}))
 	last_swap_usec = Time.get_ticks_usec() - started
 	refreshed.emit()
 	if _pending != null:

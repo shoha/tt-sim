@@ -218,7 +218,8 @@ static func _put_sheet(
 ## below its level (a river cut in two by an erase: the terrain stays carved): the surface
 ## falls down the channel at RUN_OUT_SLOPE and trickles on over its bed as a film for
 ## RUN_OUT_FILM_M, instead of ending in the air. Nothing where the ground past the end stands
-## above the level (a carved end tapers up to it).
+## above the level (a carved end tapers up to it). An end at the map edge stays at its level
+## out to the edge: the river runs on past it (RiverExits).
 static func _run_out(
 	doc: MapDocument, body: WaterBody, at_end: bool, out: Dictionary, buried: Dictionary
 ) -> void:
@@ -233,6 +234,13 @@ static func _run_out(
 	var half := body.half_widths[-1] if at_end else body.half_widths[0]
 	var level := body.level_m
 	var reach := body.depth_m() / RUN_OUT_SLOPE + RUN_OUT_FILM_M
+	var slope := RUN_OUT_SLOPE
+	var gap := RiverExits.edge_distance(end, doc.extent_m() * 0.5)
+	if gap <= WaterCarve.EDGE_MARGIN_M:
+		# A river leaving the map (P6-1, RiverExits): it runs on past the edge at its level
+		# (the skirt's ribbon), so the surface stays flat out to the edge instead of falling.
+		slope = 0.0
+		reach = gap + maxf(doc.sample_step().x, doc.sample_step().y) * 2.0
 	var edge_reach := _edge_reach(doc)
 	var near := _near(course, end, reach + half + edge_reach)
 	var last := Vector2(doc.samples_x() - 1, doc.samples_z() - 1)
@@ -258,7 +266,7 @@ static func _run_out(
 			# Falling from the level, then a thin film trickling on down the channel's bed,
 			# thinning to the waterline across the banks.
 			var film := ground + _edge_film(lateral - half)
-			var sheet := minf(maxf(level - along * RUN_OUT_SLOPE, film), level)
+			var sheet := minf(maxf(level - along * slope, film), level)
 			_put_sheet(i, sheet, ground, out, buried)
 
 
@@ -556,13 +564,15 @@ static func _bodies(
 	return out
 
 
-## A copy of the parts of `doc` build() and WaterFlowBaker.bake() read (grid, heights, water
-## bodies, pond mask), safe to hand to a worker thread while `doc` keeps being edited.
+## A copy of the parts of `doc` build(), WaterFlowBaker.bake() and RiverExitMesh read (grid,
+## seed, heights, water bodies, pond mask), safe to hand to a worker thread while `doc` keeps
+## being edited.
 static func snapshot(doc: MapDocument) -> MapDocument:
 	var copy := MapDocument.new()
 	copy.size_cells = doc.size_cells
 	copy.cell_size_m = doc.cell_size_m
 	copy.sample_spacing_m = doc.sample_spacing_m
+	copy.map_seed = doc.map_seed
 	copy.heights = doc.heights.duplicate()
 	copy.pond_mask = doc.pond_mask.duplicate()
 	var bodies: Array[WaterBody] = []

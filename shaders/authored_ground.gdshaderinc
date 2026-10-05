@@ -11,10 +11,10 @@
  * feet. A Blender-made map brings its terrain as a baked, non-repeating texture; this
  * shader has to reach a comparable read live from 2-3 m textures repeated across a 61 m map.
  *
- * FILES: this include is the whole shader. authored_ground.gdshader (opaque, the map) and
- * authored_ground_skirt.gdshader (transparent, GROUND_SKIRT defined) only declare the
- * shader type and render mode and include it, so the skirt continues the ground's exact
- * texture, anti-tiling and drifts across the map edge.
+ * FILES: this include is the whole shader. authored_ground.gdshader (the map) and
+ * authored_ground_skirt.gdshader (GROUND_SKIRT defined) only declare the shader type and
+ * render mode and include it, so the skirt continues the ground's exact texture, anti-tiling
+ * and drifts across the map edge. Both are opaque.
  *
  * FRAME: "map frame" below is the terrain node's local space, which is the MapDocument's
  * frame (chunk vertices are written in it; UV = its XZ). The rules read the normal and
@@ -22,13 +22,30 @@
  * of the rules (TerrainRules) computes.
  *
  * SKIRT (GROUND_SKIRT, added after T7 zoom-out renders): a ring of ground around the map
- * whose alpha falls from 1 at the map edge to 0 skirt_fade_m out, the fade distance
- * stretched by low-frequency noise so the outline is organic, not a rectangle. Alpha
- * rather than a colour fade, so it dissolves into whatever the background is (a flat
- * colour or, through the orthographic camera, a sky seen in one direction). Its geometry
- * rolls back down to the map floor (TerrainMeshBuilder.skirt_height), so a raised edge
- * does not run out into the fog as a shelf. The skirt binds no layers and runs no rules:
- * the weight maps clamp at their edge, which would streak.
+ * that fades from the ground at the map edge to the backdrop skirt_fade_m out
+ * (skirt_alpha(), skirt_fade.gdshaderinc), the fade distance stretched by low-frequency
+ * noise so the outline is organic, not a rectangle. Its geometry rolls back down to the map
+ * floor (TerrainMeshBuilder.skirt_height), so a raised edge does not run out into the fog as
+ * a shelf. The skirt binds no layers and runs no rules: the weight maps clamp at their edge,
+ * which would streak.
+ *   The skirt is opaque (phase 6, P6-1), so it is in the depth and screen textures like the
+ * map's ground and the water of a river running on past the edge reads it (shallows, foam,
+ * refraction of the channel bed; the P6-0 probe's verdict). The fade is done in colour
+ * instead of alpha (the probe's "tint"): the lit ground times the fade a, plus the backdrop
+ * as emission times 1 - a, which is what the alpha blend gave for diffuse light. The
+ * backdrop is the one the camera really shows: the environment's flat colour, or under a
+ * panorama sky that sky's colour in the camera's view direction (the sky is drawn at a 2
+ * degree FOV, LevelEnvironmentManager.SKY_ORTHO_FOV_DEG, so it is one tone), and under fog
+ * mixed toward the fog colour by fog_sky_affect, as Godot fogs the background. The skirt
+ * writes its own FOG (Godot's fog_process: exponential or depth fog, plus height fog) with
+ * its amount times a, so the ground near the map fogs exactly as the map does and the faded
+ * tail does not take fog twice. SkirtBackdrop (scenes/terrain/) keeps these uniforms in step
+ * with the environment every frame. A backdrop the shader cannot match (another sky
+ * material) falls back to a per-pixel dither of the fade (skirt_backdrop_mode 2).
+ *   A river's channel past the edge (RiverExitMesh) carries the wet dressing in UV2 (bed,
+ * shore), routed to the base's bed and shore surfaces like the map's; within
+ * SKIRT_EDGE_DRESSING_M of the edge the map's own dressing (water_weights, clamped at its
+ * edge texel) takes over, so the two meet without a seam.
  *
  * ANTI-TILING (the live port of terrain-paint's Mosaic tiling breakup):
  * terrain-paint breaks a repeating texture by cutting UV space into a grid of cells, giving
@@ -282,12 +299,25 @@ uniform vec4 accent_params[27];
 uniform sampler2D accent_noise : hint_default_black, filter_linear, repeat_enable;
 
 #ifdef GROUND_SKIRT
-// Half the map's extent in UV (document) metres: the skirt fades out from this rectangle.
-uniform vec2 skirt_half_extent = vec2(30.0);
-// Distance past the map edge at which the skirt is fully transparent.
-uniform float skirt_fade_m : hint_range(1.0, 100.0) = 24.0;
-// How much low-frequency noise stretches and shrinks the fade (0 = a clean rounded rect).
-uniform float skirt_wobble : hint_range(0.0, 1.0) = 0.45;
+#include "res://shaders/skirt_fade.gdshaderinc"
+// 1 when a river's channel runs into the skirt: its wet dressing (UV2) is drawn.
+uniform int skirt_channel = 0;
+// The backdrop the fade goes to (see SKIRT): 0 the flat colour skirt_backdrop (linear), 1 the
+// panorama sky skirt_sky_panorama in the camera's view direction (turned by skirt_sky_basis,
+// times skirt_sky_energy), 2 a per-pixel dither of the fade instead of a colour.
+uniform int skirt_backdrop_mode = 0;
+uniform vec3 skirt_backdrop = vec3(0.3);
+uniform sampler2D skirt_sky_panorama : source_color, filter_linear, repeat_enable, hint_default_black;
+uniform mat3 skirt_sky_basis = mat3(1.0);
+uniform float skirt_sky_energy = 1.0;
+// The environment's fog: rgb its colour times its energy (linear), a 1 when it is on;
+// (density, height, height density, sky affect); (depth mode 1 / exponential 0, depth begin,
+// depth end, depth curve).
+uniform vec4 skirt_fog = vec4(0.0);
+uniform vec4 skirt_fog_params = vec4(0.01, 0.0, 0.0, 1.0);
+uniform vec4 skirt_fog_depth = vec4(0.0, 10.0, 100.0, 1.0);
+// Within this of the map edge the map's own wet dressing takes over the channel's.
+const float SKIRT_EDGE_DRESSING_M = 2.0;
 #endif
 
 // Map-frame normal, position and the per-vertex rule fields (UV2: curvature, steepness).
@@ -889,17 +919,49 @@ float blend_score(float weight, float height) {
 }
 
 #ifdef GROUND_SKIRT
-// Skirt opacity at a point: 1 on the map edge, 0 from skirt_fade_m out. The distance is to
-// the map rectangle (rounded at the corners) and is scaled by noise, which leaves the edge
-// itself at exactly 1 so the skirt meets the map without a seam.
+// Skirt fade at a point: 1 on the map edge, 0 from skirt_fade_m out (skirt_fade.gdshaderinc;
+// the noise leaves the edge itself at exactly 1, so the skirt meets the map without a seam).
 float skirt_alpha(vec2 world_xz) {
-	float d = length(max(abs(world_xz) - skirt_half_extent, vec2(0.0)));
-	vec2 p = world_xz / 11.0;
-	float n = value_noise(p + vec2(3.7, -8.2)) * 0.7 + value_noise(p * 2.3 + vec2(-5.1, 2.9)) * 0.3;
-	d *= 1.0 + (n - 0.5) * 2.0 * skirt_wobble;
-	float t = clamp(d / skirt_fade_m, 0.0, 1.0);
-	// Holds near the map, then falls off softly, like haze rather than a linear ramp.
-	return 1.0 - t * t * (3.0 - 2.0 * t);
+	return skirt_alpha_seeded(world_xz, breakup_seed);
+}
+
+// What the camera shows behind the skirt at this pixel (see SKIRT), fogged as Godot fogs the
+// background.
+vec3 skirt_backdrop_color(mat4 inv_view) {
+	vec3 backdrop = skirt_backdrop;
+	if (skirt_backdrop_mode == 1) {
+		// Godot's panorama coordinates (sky.glsl) of the view direction in the sky's frame.
+		vec3 dir = normalize(skirt_sky_basis * -inv_view[2].xyz);
+		vec2 coords = vec2(atan(dir.x, -dir.z), acos(clamp(dir.y, -1.0, 1.0)));
+		coords.x += coords.x < 0.0 ? 6.28318530718 : 0.0;
+		coords /= vec2(6.28318530718, 3.14159265359);
+		backdrop = textureLod(skirt_sky_panorama, coords, 0.0).rgb * skirt_sky_energy;
+	}
+	if (skirt_fog.a > 0.0) {
+		backdrop = mix(backdrop, skirt_fog.rgb, skirt_fog_params.w);
+	}
+	return backdrop;
+}
+
+// Godot's fog at view-space point `vertex` (scene_forward_clustered.glsl fog_process, without
+// sun scatter and aerial perspective, which no preset uses): its colour and amount.
+vec4 skirt_fog_at(vec3 vertex, mat4 inv_view) {
+	if (skirt_fog.a <= 0.0) {
+		return vec4(0.0);
+	}
+	float amount;
+	if (skirt_fog_depth.x > 0.5) {
+		float fog_z = smoothstep(skirt_fog_depth.y, skirt_fog_depth.z, length(vertex));
+		amount = pow(fog_z, skirt_fog_depth.w) * skirt_fog_params.x;
+	} else {
+		amount = 1.0 - exp(min(0.0, -length(vertex) * skirt_fog_params.x));
+	}
+	if (abs(skirt_fog_params.z) >= 0.0001) {
+		float y = (inv_view * vec4(vertex, 1.0)).y;
+		float height_amount = 1.0 - exp(min(0.0, (y - skirt_fog_params.y) * skirt_fog_params.z));
+		amount = max(height_amount, amount);
+	}
+	return vec4(skirt_fog.rgb, amount);
 }
 #endif
 
@@ -922,6 +984,13 @@ void fragment() {
 	float skirt_a = skirt_alpha(world_xz);
 	if (skirt_a <= 0.0) {
 		discard;
+	}
+	if (skirt_backdrop_mode == 2) {
+		// No colour to fade to: the fade as an interleaved-gradient dither (see SKIRT).
+		if (skirt_a < fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))))) {
+			discard;
+		}
+		skirt_a = 1.0;
 	}
 #endif
 	vec3 n_geom = normalize(v_normal);
@@ -970,6 +1039,20 @@ void fragment() {
 		water = wet_field.rg;
 		water_depth = wet_field.b * (255.0 / WATER_DEPTH_SCALE);
 		wet_line = wet_field.a;
+	}
+#else
+	if (skirt_channel != 0) {
+		// A river's channel past the edge (see SKIRT): its dressing from UV2, the map's own
+		// near the edge.
+		water = v_fields;
+		wet_line = clamp(water.x + water.y * 0.7, 0.0, 1.0);
+		float edge = length(max(abs(world_xz) - skirt_half_extent, vec2(0.0)));
+		if (water_present != 0 && edge < SKIRT_EDGE_DRESSING_M) {
+			vec4 wet_field = texture(water_weights, weight_uv(world_xz));
+			float k = smoothstep(0.0, SKIRT_EDGE_DRESSING_M, edge);
+			water = mix(wet_field.rg, water, k);
+			wet_line = mix(wet_field.a, wet_line, k);
+		}
 	}
 #endif
 	// TerrainRules.compose_water is the CPU twin of these lines.
@@ -1150,6 +1233,11 @@ void fragment() {
 	vec3 n_map = normalize(ground.normal + n_geom * 1e-4);
 	NORMAL = normalize(mat3(VIEW_MATRIX) * (mat3(MODEL_MATRIX) * n_map));
 #ifdef GROUND_SKIRT
-	ALPHA = skirt_a;
+	// The fade in colour (see SKIRT): lit ground * a + backdrop * (1 - a), and the fog the map's
+	// ground gets, times a.
+	ALBEDO *= skirt_a;
+	SPECULAR = 0.5 * skirt_a;
+	EMISSION = skirt_backdrop_color(INV_VIEW_MATRIX) * (1.0 - skirt_a);
+	FOG = skirt_fog_at(VERTEX, INV_VIEW_MATRIX) * vec4(1.0, 1.0, 1.0, skirt_a);
 #endif
 }

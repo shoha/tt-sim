@@ -129,6 +129,13 @@ uniform float foam_strength : hint_range(0.0, 2.0) = 1.0;
 // docs/superpowers/specs/2026-09-23-water-flow-design.md.
 uniform sampler2D water_flow_map : hint_default_black, filter_linear, repeat_disable;
 instance uniform bool water_flow_present = false;
+// A river running on past the map edge into the ground skirt (phase 6, P6-1; RiverExitMesh's
+// ribbon, drawn by AuthoredTerrain): its alpha is multiplied by the skirt's own fade, the same
+// function, noise and seed (skirt_fade.gdshaderinc; the skirt_* uniforms and skirt_seed are
+// set from the map's skirt), so the water dissolves into the backdrop with the ground.
+instance uniform bool water_skirt_fade = false;
+uniform int skirt_seed = 0;
+#include "res://shaders/skirt_fade.gdshaderinc"
 // Per-level multiplier on the baked speed (WaterSettings.flow_strength, Motion group).
 uniform float flow_strength : hint_range(0.0, 2.0) = 1.0;
 
@@ -553,6 +560,9 @@ void fragment() {
 	float shoreline = shore_fade_depth > 0.0 ? smoothstep(0.0, shore_fade_depth, bed_depth) : 1.0;
 	shoreline = mix(1.0, shoreline, ground_like);
 	ALPHA = clamp(alpha + foam * 0.3, 0.0, 1.0) * shoreline;
+	if (water_skirt_fade) {
+		ALPHA *= skirt_alpha_seeded(world_pos.xz, skirt_seed);
+	}
 	SPECULAR = specular_value;
 	// Foam is matte; wave crests are slightly glossier than the troughs so the glint sits
 	// where a real surface would catch it.
