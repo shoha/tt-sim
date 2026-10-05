@@ -316,7 +316,9 @@ sculpt stroke by a fall re-evaluates `is_fall` on the new ground, and sculpting 
   [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Verification status" (Waterfalls).
 - **Performance** ([../PERFORMANCE.md](../PERFORMANCE.md)): the P4c-4 numbers above (build,
   bake, swap, the GPU delta of four falls) are indicative render-job readings; the pinned pass
-  is the phase 4c section there.
+  is "Phase 4c (waterfalls): pinned performance pass" there (`jobs/p4c_perf_build.json`,
+  `jobs/p4c_perf_play.json`: the falls mesh costs at most 0.05 ms GPU at zoom 8, Low saves
+  0.01-0.04 ms, six falls plus six extra reaches add about 170 ms to a warm load).
 
 ## Open work
 
