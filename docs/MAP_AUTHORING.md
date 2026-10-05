@@ -317,9 +317,11 @@ against 33.8 before).
 
 Phases 1-3 were released as v0.1.28 (2026-09-27); phases 4 and 4b (water, crossings, the
 submerged-token ring, worker-thread loading) as v0.1.29 (2026-09-28); phase 4c (waterfalls,
-the system docs pilot) as v0.1.30 (2026-10-04). Releases stay patch bumps until the whole
-map maker is finished, then the minor version goes up (user, 2026-09-27). The two-account
-Steam test (above) is still open and is best run on v0.1.30: it now also covers a document
+the system docs pilot) as v0.1.30 (2026-10-04); phase 4d (the stone arch, fords, the
+per-crossing rebuild cache) as v0.1.31 (2026-10-04). Releases stay patch bumps until the
+whole map maker is finished, then the minor version goes up (user, 2026-09-27). The
+two-account Steam test (above) is still open and is best run on v0.1.31: it now also covers
+an arch and a ford reaching a peer, a token wading the ford, and a document
 with `splines.json`, `ponds.png`, a baked `water_flow.png` and `crossings.json` reaching a
 peer, tokens on a deck, the submerged ring on a client, and a waterfall's curtain built
 on both peers from the same reaches.
