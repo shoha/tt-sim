@@ -9,7 +9,9 @@ extends Node
 ## the fog itself, which the skirt computes as Godot's fog_process does. The environment
 ## changes live (the Sky pane, presets, weather fog tweening its density), so a child of the
 ## skirt reads it every frame and sets the uniforms only when something changed: a handful of
-## property reads per frame.
+## property reads per frame. The water past the edge (the shared water material, when the map
+## has a river exit) gets the same uniforms: its fade weighs the backdrop as the skirt's does
+## (skirt_fade.gdshaderinc skirt_lit_share).
 ##
 ## Sky backdrops: a PanoramaSkyMaterial is sampled by the shader itself in the camera's view
 ## direction (MODE_SKY); a ProceduralSkyMaterial's colour there is computed here (its gradient,
@@ -21,8 +23,8 @@ const MODE_COLOR := 0
 const MODE_SKY := 1
 const MODE_DITHER := 2
 
-## The skirt's material.
-var material: ShaderMaterial = null
+## The materials kept in step: the skirt's, and the water's when a river runs past the edge.
+var materials: Array[ShaderMaterial] = []
 
 var _last: Dictionary = {}
 
@@ -35,10 +37,10 @@ func _process(_delta: float) -> void:
 	sync()
 
 
-## Sets the material's backdrop uniforms from the viewport's environment and camera now, when
+## Sets the materials' backdrop uniforms from the viewport's environment and camera now, when
 ## they changed.
 func sync() -> void:
-	if material == null or not is_inside_tree():
+	if materials.is_empty() or not is_inside_tree():
 		return
 	var viewport := get_viewport()
 	var world := viewport.find_world_3d() if viewport != null else null
@@ -48,8 +50,9 @@ func sync() -> void:
 	if wanted == _last:
 		return
 	_last = wanted
-	for key in wanted:
-		material.set_shader_parameter(key, wanted[key])
+	for material in materials:
+		for key in wanted:
+			material.set_shader_parameter(key, wanted[key])
 
 
 ## The skirt's backdrop and fog uniforms for environment `env` (null: the project's clear

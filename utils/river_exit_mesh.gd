@@ -43,8 +43,9 @@ const PROFILE_INSET_M := 0.3
 ## The course is led in this far from the mouth, so the skirt beside the mouth reads its
 ## offset across the channel.
 const LEAD_IN_M := 2.0
-## The channel eases back to the skirt as the skirt's fade falls from this to 0.
-const FADE_ALPHA := 0.15
+## The channel eases back to the skirt as the skirt's fade falls from this to 0: late, since
+## over a dark backdrop the ground still shows at a low fade (skirt_lit_share).
+const FADE_ALPHA := 0.03
 ## Past the edge the skirt beside a mouth eases from the carve's height at the edge to the
 ## bank's over this distance (_unghosted).
 const GHOST_M := 2.0

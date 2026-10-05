@@ -299,23 +299,10 @@ uniform vec4 accent_params[27];
 uniform sampler2D accent_noise : hint_default_black, filter_linear, repeat_enable;
 
 #ifdef GROUND_SKIRT
+// The fade, the backdrop and the fog (skirt_alpha_seeded, skirt_backdrop_color, skirt_fog_at).
 #include "res://shaders/skirt_fade.gdshaderinc"
 // 1 when a river's channel runs into the skirt: its wet dressing (UV2) is drawn.
 uniform int skirt_channel = 0;
-// The backdrop the fade goes to (see SKIRT): 0 the flat colour skirt_backdrop (linear), 1 the
-// panorama sky skirt_sky_panorama in the camera's view direction (turned by skirt_sky_basis,
-// times skirt_sky_energy), 2 a per-pixel dither of the fade instead of a colour.
-uniform int skirt_backdrop_mode = 0;
-uniform vec3 skirt_backdrop = vec3(0.3);
-uniform sampler2D skirt_sky_panorama : source_color, filter_linear, repeat_enable, hint_default_black;
-uniform mat3 skirt_sky_basis = mat3(1.0);
-uniform float skirt_sky_energy = 1.0;
-// The environment's fog: rgb its colour times its energy (linear), a 1 when it is on;
-// (density, height, height density, sky affect); (depth mode 1 / exponential 0, depth begin,
-// depth end, depth curve).
-uniform vec4 skirt_fog = vec4(0.0);
-uniform vec4 skirt_fog_params = vec4(0.01, 0.0, 0.0, 1.0);
-uniform vec4 skirt_fog_depth = vec4(0.0, 10.0, 100.0, 1.0);
 // Within this of the map edge the map's own wet dressing takes over the channel's.
 const float SKIRT_EDGE_DRESSING_M = 2.0;
 #endif
@@ -923,45 +910,6 @@ float blend_score(float weight, float height) {
 // the noise leaves the edge itself at exactly 1, so the skirt meets the map without a seam).
 float skirt_alpha(vec2 world_xz) {
 	return skirt_alpha_seeded(world_xz, breakup_seed);
-}
-
-// What the camera shows behind the skirt at this pixel (see SKIRT), fogged as Godot fogs the
-// background.
-vec3 skirt_backdrop_color(mat4 inv_view) {
-	vec3 backdrop = skirt_backdrop;
-	if (skirt_backdrop_mode == 1) {
-		// Godot's panorama coordinates (sky.glsl) of the view direction in the sky's frame.
-		vec3 dir = normalize(skirt_sky_basis * -inv_view[2].xyz);
-		vec2 coords = vec2(atan(dir.x, -dir.z), acos(clamp(dir.y, -1.0, 1.0)));
-		coords.x += coords.x < 0.0 ? 6.28318530718 : 0.0;
-		coords /= vec2(6.28318530718, 3.14159265359);
-		backdrop = textureLod(skirt_sky_panorama, coords, 0.0).rgb * skirt_sky_energy;
-	}
-	if (skirt_fog.a > 0.0) {
-		backdrop = mix(backdrop, skirt_fog.rgb, skirt_fog_params.w);
-	}
-	return backdrop;
-}
-
-// Godot's fog at view-space point `vertex` (scene_forward_clustered.glsl fog_process, without
-// sun scatter and aerial perspective, which no preset uses): its colour and amount.
-vec4 skirt_fog_at(vec3 vertex, mat4 inv_view) {
-	if (skirt_fog.a <= 0.0) {
-		return vec4(0.0);
-	}
-	float amount;
-	if (skirt_fog_depth.x > 0.5) {
-		float fog_z = smoothstep(skirt_fog_depth.y, skirt_fog_depth.z, length(vertex));
-		amount = pow(fog_z, skirt_fog_depth.w) * skirt_fog_params.x;
-	} else {
-		amount = 1.0 - exp(min(0.0, -length(vertex) * skirt_fog_params.x));
-	}
-	if (abs(skirt_fog_params.z) >= 0.0001) {
-		float y = (inv_view * vec4(vertex, 1.0)).y;
-		float height_amount = 1.0 - exp(min(0.0, (y - skirt_fog_params.y) * skirt_fog_params.z));
-		amount = max(height_amount, amount);
-	}
-	return vec4(skirt_fog.rgb, amount);
 }
 #endif
 
