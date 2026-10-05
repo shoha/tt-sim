@@ -231,8 +231,8 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
   when its RID is first asked for. The Bridge tool warms them all as it opens
   (`warm_materials(styles)` 0.4 s after the textures start loading on workers: wood, stone,
   paving, gravel, and the moss where a style grows it), so a placement's swap is 0.2-1.9 ms
-  for planks and stones (4.4-6.3 ms for an arch or ford node: `moss_split` walks every facet
-  in GDScript before the mesh and concave-shape upload). An edit rebuilds, on the main
+  for planks and stones (4.4-6.3 ms for an arch or ford node before the 2026-10-05 follow-up,
+  below). An edit rebuilds, on the main
   thread, only the crossings whose geometry inputs changed (P4d-5b, `CrossingCache`,
   `utils/crossing_cache.gd`): per crossing a key hashing its fields, the document's seed and
   grid, the heights over `clear_bounds` plus one sample, and the water that can reach the
@@ -244,7 +244,26 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
   the pier arch 13, planks or stones 3-4; 33.8 ms for a sixth placement before), a sculpt
   rebuilds the crossings whose ground rectangle it touched, a water edit the crossings its
   bodies reach (`PERFORMANCE.md` "Per-crossing rebuild cache (P4d-5b)"; `builds`,
-  `last_rebuilt` and `keys()` on the node are for tests and the probe). In play the crossings
+  `last_rebuilt` and `keys()` on the node are for tests and the probe).
+  The swap and the ford's build were profiled on 2026-10-05 (headless, the `_p4d_` forest
+  level): most of an arch or ford placement's swap was the deck field, re-rasterised over
+  every deck on the map whatever kind was placed (3.05 ms for five crossings; per sample a
+  `local_of` and a `sample_to_world` through the document's methods), then `moss_split`
+  (0.5 ms for the 5.4 m arch, 1.1 ms for the pier arch). Now the node keeps which crossings
+  are decks (`_decks`) and the field changes only with a deck: re-rasterised when a deck
+  left or was rebuilt, a placed deck added onto it (`CrossingGeometry.deck_field_add`, the
+  same values, since a sample keeps its highest deck), untouched for a ford or stones; the
+  rasteriser reads the grid once (3.05 -> 0.60 ms for the five, 0.35 ms to add the pier arch);
+  `moss_split` decides the facets inline with no centre for a facet too steep for moss
+  (0.52 -> 0.16 ms, 1.06 -> 0.34). The ford's build was its 280 samples' `level_at` (10 us
+  each against the river course) and `ground_at` (3 us, the grid through the document's
+  methods): `CrossingFord._bar` now lays out its samples first and reads them in two batches,
+  `WaterGeometry.grounds_at` and `levels_along` (each run of four rows asks the river cut to
+  the segments near its own box, `_course_near`, so the values are level_at's), and the
+  stones' wet-run walk does the same: a 2.5 m waist ford 4.46 -> 1.93 ms, the ankle ford 3.04
+  -> 1.26. The geometry is byte-identical (the parts' and moss split's digests before and
+  after; `test_crossing_cache.gd` compares the batches with the per-point calls and the
+  incremental deck field with a full build). In play the crossings
   cost nothing measurable and add about 50 ms to a load with four (`PERFORMANCE.md` "Phase 4b
   (crossings): pinned performance pass").
 - **Walkable:** tokens land on a deck, a stone or a ford's bar like the ground (layer-1 rays;

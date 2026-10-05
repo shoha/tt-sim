@@ -252,6 +252,81 @@ func test_placing_a_second_crossing_builds_only_the_new_one() -> void:
 	_assert_matches_full_build()
 
 
+func test_the_deck_field_changes_with_decks_alone_and_matches_a_full_build() -> void:
+	var editor := _editor()
+	var node := _node()
+	_plank(editor, 0.0)
+	var field := node.deck_heights
+	var ford := editor.crossings.place(Crossing.Kind.FORD, Vector3(-6, 0, -1), Vector3(-6, 0, 1))
+	assert_true(ford >= 0, "the ford is placed: %s" % editor.crossings.last_refusal)
+	assert_eq(node.deck_heights, field, "a ford leaves the deck field as it was")
+	_assert_matches_full_build()
+	var arch := editor.crossings.place(Crossing.Kind.ARCH, Vector3(5, 0, -1), Vector3(5, 0, 1))
+	assert_true(arch >= 0, "the arch is placed: %s" % editor.crossings.last_refusal)
+	assert_ne(node.deck_heights, field, "the arch's deck is added")
+	_assert_matches_full_build()
+	assert_true(editor.crossings.remove(arch))
+	assert_eq(node.deck_heights, field, "and taken out again with it")
+	_assert_matches_full_build()
+	assert_true(editor.crossings.remove(ford))
+	_assert_matches_full_build()
+
+
+func test_deck_field_add_is_the_full_field() -> void:
+	_editor()
+	var editor_doc := _doc
+	var a := Crossing.new()
+	a.id = 1
+	a.kind = Crossing.Kind.ARCH
+	a.start = Vector2(-1.5, -2.0)
+	a.end = Vector2(2.5, 2.2)
+	a.width_m = 2.0
+	a.levels = Vector3(0.1, 0.9, 0.2)
+	var b := a.copy()
+	b.id = 2
+	b.kind = Crossing.Kind.PLANK
+	b.start = Vector2(0.5, -3.0)
+	b.end = Vector2(-0.5, 3.0)
+	b.levels = Vector3(0.0, 1.2, 0.1)
+	var both: Array[Crossing] = [a, b]
+	var first: Array[Crossing] = [a]
+	var second: Array[Crossing] = [b]
+	var full := CrossingGeometry.deck_field(editor_doc, both)
+	var added := CrossingGeometry.deck_field_add(
+		editor_doc, CrossingGeometry.deck_field(editor_doc, first), second
+	)
+	assert_eq(added, full, "the crossed decks keep the higher one where they overlap")
+	assert_eq(
+		CrossingGeometry.deck_field_add(editor_doc, PackedFloat32Array(), both), full, "from none"
+	)
+
+
+func test_batched_ground_and_levels_are_the_per_point_values() -> void:
+	# A bent river too, so the chunks cut its course to different runs of segments.
+	var bend := PackedVector2Array(
+		[Vector2(-9, -8), Vector2(-3, -5), Vector2(0, -7), Vector2(6, -4)]
+	)
+	var widths := PackedFloat32Array([0.6, 1.2, 0.8, 1.0])
+	_doc.water_bodies.append(WaterBody.river(3, bend, widths, WaterBody.Depth.ANKLE, -0.4))
+	var points := PackedVector2Array()
+	for k in 300:
+		points.append(
+			Vector2(-9.0 + k * 0.06, -9.0 + 0.5 * k * 0.06) + Vector2(sin(k), cos(k * 1.7))
+		)
+	var near := Rect2(-12, -12, 24, 24)
+	var courses := WaterGeometry.river_courses(_doc, near)
+	var grounds := WaterGeometry.grounds_at(_doc, points)
+	var levels := WaterGeometry.levels_along(_doc, points, courses, 9)
+	var wet := 0
+	for k in points.size():
+		assert_eq(grounds[k], WaterGeometry.ground_at(_doc, points[k]), "ground %d" % k)
+		var level := WaterGeometry.level_at(_doc, points[k], -1, courses)
+		assert_eq(levels[k], level, "level %d" % k)
+		if level != WaterGeometry.DRY:
+			wet += 1
+	assert_gt(wet, 20, "the walk crosses the rivers")
+
+
 func test_a_sculpt_far_from_every_crossing_rebuilds_none() -> void:
 	var editor := _editor()
 	var node := _node()

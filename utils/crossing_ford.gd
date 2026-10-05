@@ -187,12 +187,23 @@ static func stone_layout(
 	# The wet run along the stones' line: they stand in the water, not on the landings.
 	var wet := Vector2(INF, -INF)
 	var walk := maxi(ceili(span / STONE_WALK_M), 1)
+	# WaterGeometry.is_wet_at per point of the walk, in two batches.
+	var line := PackedVector2Array()
+	line.resize(walk + 1)
 	for k in walk + 1:
-		var u := span * k / walk
-		var p := CrossingGeometry.point(crossing, u, v, 0.0)
-		if WaterGeometry.is_wet_at(doc, Vector2(p.x, p.z), -1, courses):
-			wet.x = minf(wet.x, u)
-			wet.y = maxf(wet.y, u)
+		var p := CrossingGeometry.point(crossing, span * k / walk, v, 0.0)
+		line[k] = Vector2(p.x, p.z)
+	if doc.heights.size() == doc.sample_count():
+		var all_courses := courses
+		if all_courses.is_empty():
+			all_courses = WaterGeometry.river_courses(doc)
+		var grounds := WaterGeometry.grounds_at(doc, line)
+		var levels := WaterGeometry.levels_along(doc, line, all_courses, 8)
+		for k in walk + 1:
+			if levels[k] != WaterGeometry.DRY and grounds[k] < levels[k]:
+				var u := span * k / walk
+				wet.x = minf(wet.x, u)
+				wet.y = maxf(wet.y, u)
 	if wet.x > wet.y:
 		wet = Vector2(0.0, span)
 	var count := clampi(roundi(crossing.width_m / STONE_PER_M), STONES_MIN, STONES_MAX)
@@ -249,6 +260,20 @@ static func _bar(
 	var base := gravel.vertices.size()
 	var downstream := downstream_side(doc, crossing, courses)
 	var phases := Vector2(rng.randf_range(0.0, TAU), rng.randf_range(0.0, TAU))
+	# The samples first (row by row), so the ground and the water under them are read in two
+	# batches (WaterGeometry.grounds_at, levels_along: the same values as ground_at and
+	# level_at per point, at a fraction of the cost; P4d follow-up, the ford's 5 ms build).
+	var count := rows * ACROSS
+	var points := PackedVector2Array()
+	points.resize(count)
+	# Per sample: shoulder, along, cross (64-bit, as the values themselves).
+	var shoulders := PackedFloat64Array()
+	shoulders.resize(count)
+	var alongs := PackedFloat64Array()
+	alongs.resize(count)
+	var crosses := PackedFloat64Array()
+	crosses.resize(count)
+	var left := Vector2(-d.y, d.x)
 	for i in rows:
 		var u := -LANDING_M + i * step
 		var along := _smooth(
@@ -265,18 +290,42 @@ static func _bar(
 			var edge := edges.x if v < 0.0 else edges.y
 			var shoulder := _smooth(clampf((edge - absf(v)) / SHOULDER_M, 0.0, 1.0))
 			var cross := clampf((1.0 - downstream * v / maxf(edge, 1e-3)) * 0.5, 0.0, 1.0)
-			var p := CrossingGeometry.point(crossing, u, v, 0.0)
-			var xz := Vector2(p.x, p.z)
-			var g := WaterGeometry.ground_at(doc, xz)
-			var w := WaterGeometry.level_at(doc, xz, -1, courses)
-			var noise := rng.randf_range(-NOISE_M, NOISE_M)
-			var sample := _top(g, w, shoulder, along, noise, cross)
-			var shade: float = sample.y
-			gravel.vertices.append(Vector3(p.x, sample.x, p.z))
-			gravel.normals.append(Vector3.UP)
-			gravel.uvs.append(Vector2.ZERO)
-			gravel.colors.append(Color(shade, shade, shade))
-			gravel.tangents.append_array(PackedFloat32Array([tangent.x, tangent.y, tangent.z, 1.0]))
+			# CrossingGeometry.point(crossing, u, v, 0.0), inline.
+			var k := i * ACROSS + j
+			points[k] = crossing.start + d * u + left * v
+			shoulders[k] = shoulder
+			alongs[k] = along
+			crosses[k] = cross
+	var grounds := WaterGeometry.grounds_at(doc, points)
+	var levels := WaterGeometry.levels_along(doc, points, courses, ACROSS * 4)
+	var vertices := PackedVector3Array()
+	vertices.resize(count)
+	var colors := PackedColorArray()
+	colors.resize(count)
+	var normals := PackedVector3Array()
+	normals.resize(count)
+	normals.fill(Vector3.UP)
+	var uvs := PackedVector2Array()
+	uvs.resize(count)
+	uvs.fill(Vector2.ZERO)
+	var tangents := PackedFloat32Array()
+	tangents.resize(count * 4)
+	for k in count:
+		var noise := rng.randf_range(-NOISE_M, NOISE_M)
+		var sample := _top(grounds[k], levels[k], shoulders[k], alongs[k], noise, crosses[k])
+		var shade: float = sample.y
+		var xz := points[k]
+		vertices[k] = Vector3(xz.x, sample.x, xz.y)
+		colors[k] = Color(shade, shade, shade)
+		tangents[k * 4] = tangent.x
+		tangents[k * 4 + 1] = tangent.y
+		tangents[k * 4 + 2] = tangent.z
+		tangents[k * 4 + 3] = 1.0
+	gravel.vertices.append_array(vertices)
+	gravel.normals.append_array(normals)
+	gravel.uvs.append_array(uvs)
+	gravel.colors.append_array(colors)
+	gravel.tangents.append_array(tangents)
 	# Quads wound as PlaneMesh winds: (here, next along, next across) is clockwise from above.
 	for i in rows - 1:
 		for j in ACROSS - 1:
@@ -329,21 +378,26 @@ static func _smooth(t: float) -> float:
 
 ## Replaces the normals of the vertices from `base` on with the sum of their faces' normals.
 static func _smooth_normals(mesh: CrossingGeometry._Mesh, base: int) -> void:
+	var vertices := mesh.vertices
 	var sums := PackedVector3Array()
-	sums.resize(mesh.vertices.size() - base)
+	sums.resize(vertices.size() - base)
 	sums.fill(Vector3.ZERO)
 	var indices := mesh.indices
 	var first := 0
 	while first < indices.size() and indices[first] < base:
 		first += 3
 	for t in range(first, indices.size(), 3):
-		var a := mesh.vertices[indices[t]]
-		var b := mesh.vertices[indices[t + 1]]
-		var c := mesh.vertices[indices[t + 2]]
+		var ia := indices[t]
+		var ib := indices[t + 1]
+		var ic := indices[t + 2]
+		var a := vertices[ia]
 		# The up-pointing normal of a clockwise face: cross(C - A, B - A).
-		var n := (c - a).cross(b - a)
-		for k in 3:
-			sums[indices[t + k] - base] += n
+		var n := (vertices[ic] - a).cross(vertices[ib] - a)
+		sums[ia - base] += n
+		sums[ib - base] += n
+		sums[ic - base] += n
+	var normals := mesh.normals.duplicate()
 	for k in sums.size():
 		var n := sums[k]
-		mesh.normals[base + k] = n.normalized() if n.length_squared() > 0.0 else Vector3.UP
+		normals[base + k] = n.normalized() if n.length_squared() > 0.0 else Vector3.UP
+	mesh.normals = normals

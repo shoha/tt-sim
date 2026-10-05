@@ -124,6 +124,9 @@ var _materials: Dictionary = {}
 var _keys: Dictionary = {}
 ## Per crossing id, its parts' highest walking surface (top_y is their maximum).
 var _tops: Dictionary = {}
+## The ids of the crossings whose node is a deck (plank or arch), so refresh() knows when the
+## deck field must change.
+var _decks: Dictionary = {}
 
 
 ## The crossings of `doc` as nodes, from `built` (CrossingGeometry.build(doc), which a loader's
@@ -216,11 +219,27 @@ func refresh(doc: MapDocument) -> void:
 	started = Time.get_ticks_usec()
 	var keys: Dictionary = plan.keys
 	var changed := false
+	# The deck field changes only with a deck: re-rasterised when a deck left or was rebuilt,
+	# a new deck added onto it, untouched when only fords and stones changed (it was about 3
+	# ms of a placement's swap on a map with five crossings).
+	var decks_redrawn := false
+	var decks_added: Array[Crossing] = []
 	for child in get_children():
 		var crossing_id := _id_of(child)
 		if not keys.has(crossing_id):
+			decks_redrawn = decks_redrawn or _decks.has(crossing_id)
+			_decks.erase(crossing_id)
 			_free_crossing_node(crossing_id)
 			changed = true
+	for crossing in rebuild:
+		if _decks.has(crossing.id):
+			decks_redrawn = true
+		elif crossing.is_deck():
+			decks_added.append(crossing)
+		if crossing.is_deck():
+			_decks[crossing.id] = true
+		else:
+			_decks.erase(crossing.id)
 	for parts in built:
 		var crossing_id := int(parts.id)
 		_free_crossing_node(crossing_id)
@@ -231,7 +250,10 @@ func refresh(doc: MapDocument) -> void:
 	builds += built.size()
 	last_rebuilt = built.size()
 	if changed:
-		deck_heights = CrossingGeometry.deck_field(doc, doc.crossings)
+		if decks_redrawn:
+			deck_heights = CrossingGeometry.deck_field(doc, doc.crossings)
+		elif not decks_added.is_empty():
+			deck_heights = CrossingGeometry.deck_field_add(doc, deck_heights, decks_added)
 		_recompute_top()
 		version += 1
 	last_swap_usec = Time.get_ticks_usec() - started
@@ -247,10 +269,14 @@ func apply(built: Dictionary) -> void:
 	deck_heights = built.get("deck", PackedFloat32Array())
 	_keys.clear()
 	_tops.clear()
+	_decks.clear()
 	version += 1
 	for parts: Dictionary in built.get("crossings", []):
 		add_child(_crossing_node(parts))
 		_tops[int(parts.id)] = float(parts.get("top", -INF))
+		var kind := int(parts.get("kind", -1))
+		if kind == Crossing.Kind.PLANK or kind == Crossing.Kind.ARCH:
+			_decks[int(parts.id)] = true
 	_recompute_top()
 	last_swap_usec = Time.get_ticks_usec() - started
 
@@ -402,13 +428,31 @@ static func moss_split(arrays: Array, amount: float) -> Array:
 		uvs = arrays[Mesh.ARRAY_TEX_UV]
 	var rock := PackedInt32Array()
 	var moss := PackedInt32Array()
+	# is_moss() inline (the same arithmetic), and no facet centre for a facet too steep for moss:
+	# this walk was most of an arch's node swap (P4d follow-up).
+	var uv_count := uvs.size()
+	var f := MOSS_FIELD_FREQ
+	var threshold := 1.45 - amount
 	for t in range(0, indices.size(), 3):
 		var a := indices[t]
-		var centre := (vertices[a] + vertices[indices[t + 1]] + vertices[indices[t + 2]]) / 3.0
-		if a < uvs.size() and uvs[a] != Vector2.ZERO:
-			centre = Vector3(uvs[a].x, centre.y, uvs[a].y)
-		var target := moss if is_moss(normals[a].y, centre, amount) else rock
-		target.append_array(PackedInt32Array([a, indices[t + 1], indices[t + 2]]))
+		var b := indices[t + 1]
+		var c := indices[t + 2]
+		var up := normals[a].y
+		var mossy := false
+		if amount > 0.0 and up >= MOSS_MIN_UP:
+			var centre := (vertices[a] + vertices[b] + vertices[c]) / 3.0
+			if a < uv_count and uvs[a] != Vector2.ZERO:
+				centre = Vector3(uvs[a].x, centre.y, uvs[a].y)
+			var field := sin(centre.x * f.x + centre.z * f.y) * cos(centre.z * f.z - centre.x * f.w)
+			mossy = up + field * 0.5 * MOSS_FIELD_REACH > threshold
+		if mossy:
+			moss.append(a)
+			moss.append(b)
+			moss.append(c)
+		else:
+			rock.append(a)
+			rock.append(b)
+			rock.append(c)
 	var out: Array = []
 	for part in [rock, moss]:
 		var part_arrays: Array = []
