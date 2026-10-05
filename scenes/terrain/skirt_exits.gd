@@ -36,6 +36,9 @@ static func decorate(
 		patch.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, channel)
 		patch.surface_set_material(0, material)
 		skirt.add_child(decoration(CHANNEL_NAME, patch))
+	var backdrop := SkirtBackdrop.new()
+	backdrop.name = SkirtBackdrop.NODE_NAME
+	backdrop.materials.append(material)
 	var ribbon: Array = exits.get("ribbon", [])
 	if not ribbon.is_empty():
 		var water := ArrayMesh.new()
@@ -45,9 +48,7 @@ static func decorate(
 		node.set_instance_shader_parameter(WaterGlbUtils.FLOW_PRESENT_PARAM, true)
 		node.set_instance_shader_parameter(WATER_SKIRT_FADE_PARAM, true)
 		skirt.add_child(node)
-	var backdrop := SkirtBackdrop.new()
-	backdrop.name = SkirtBackdrop.NODE_NAME
-	backdrop.material = material
+		backdrop.materials.append(node.material_override as ShaderMaterial)
 	skirt.add_child(backdrop)
 
 

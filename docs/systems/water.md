@@ -465,7 +465,12 @@ tokens past the edge. The probe that chose the rendering is P6-0
   the depth texture and the water shader's own shoreline fade and foam draw its edge. Its first
   row lies on the edge where the map's water ends. It draws with the shared water material,
   its alpha times the skirt's fade (`water.gdshader` `water_skirt_fade`, the same function and
-  seed as the skirt, `shaders/skirt_fade.gdshaderinc`). Its flow UVs are the flow map's texels
+  seed as the skirt, `shaders/skirt_fade.gdshaderinc`) weighed by the backdrop as the skirt's
+  colour fade is (`skirt_lit_share`: the share of lit ground left in the blend, so under a
+  bright sky backdrop the water dissolves as fast as the ground beside it; `SkirtBackdrop`
+  keeps the backdrop uniforms on the water material too). The in-map water of an end at the
+  edge stays at its level out to the edge (`WaterMeshBuilder._run_out`) instead of falling
+  away as a run-out sheet, which drew a step against the ribbon. Its flow UVs are the flow map's texels
   just inside the edge at the mouth (the border texels are still water), across the channel by
   the offset, so the edge's flow carries on; in a bend the ripples keep the edge's direction.
 - **Where it is built:** with the skirt, on AuthoredLoadPrep's worker at load

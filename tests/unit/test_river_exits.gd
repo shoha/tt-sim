@@ -311,7 +311,12 @@ func test_a_terrain_draws_the_exit_and_drops_it_when_the_river_goes() -> void:
 	assert_true(ribbon.get_instance_shader_parameter(SkirtExits.WATER_SKIRT_FADE_PARAM))
 	var material := skirt.mesh.surface_get_material(0) as ShaderMaterial
 	assert_eq(material.get_shader_parameter("skirt_channel"), 1, "the channel's dressing on")
-	assert_not_null(skirt.get_node_or_null(NodePath(SkirtBackdrop.NODE_NAME)))
+	var backdrop := skirt.get_node_or_null(NodePath(SkirtBackdrop.NODE_NAME)) as SkirtBackdrop
+	assert_not_null(backdrop)
+	assert_eq(
+		backdrop.materials.size(), 2, "the skirt's and the water's backdrops follow the environment"
+	)
+	assert_eq(backdrop.materials[1], WaterGlbUtils.water_material())
 	doc.water_bodies = [] as Array[WaterBody]
 	terrain.apply_river_exits({})
 	skirt = terrain.get_skirt()

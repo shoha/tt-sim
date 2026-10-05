@@ -131,8 +131,9 @@ uniform sampler2D water_flow_map : hint_default_black, filter_linear, repeat_dis
 instance uniform bool water_flow_present = false;
 // A river running on past the map edge into the ground skirt (phase 6, P6-1; RiverExitMesh's
 // ribbon, drawn by AuthoredTerrain): its alpha is multiplied by the skirt's own fade, the same
-// function, noise and seed (skirt_fade.gdshaderinc; the skirt_* uniforms and skirt_seed are
-// set from the map's skirt), so the water dissolves into the backdrop with the ground.
+// function, noise and seed, weighed by the backdrop as the skirt's colour fade is
+// (skirt_fade.gdshaderinc skirt_lit_share; the skirt_* uniforms and skirt_seed are set from the
+// map's skirt and SkirtBackdrop), so the water dissolves into the backdrop with the ground.
 instance uniform bool water_skirt_fade = false;
 uniform int skirt_seed = 0;
 #include "res://shaders/skirt_fade.gdshaderinc"
@@ -561,7 +562,7 @@ void fragment() {
 	shoreline = mix(1.0, shoreline, ground_like);
 	ALPHA = clamp(alpha + foam * 0.3, 0.0, 1.0) * shoreline;
 	if (water_skirt_fade) {
-		ALPHA *= skirt_alpha_seeded(world_pos.xz, skirt_seed);
+		ALPHA *= skirt_lit_share(skirt_alpha_seeded(world_pos.xz, skirt_seed), INV_VIEW_MATRIX);
 	}
 	SPECULAR = specular_value;
 	// Foam is matte; wave crests are slightly glossier than the troughs so the glint sits
