@@ -7,7 +7,11 @@ extends RefCounted
 ##
 ##   splines.json     {"version": 1, "bodies": [body, ...], "flow": flow}
 ##                    river: {"id", "kind": "river", "depth", "level_m", "speed",
-##                            "points": [[x, z], ...], "half_widths": [w, ...]}
+##                            "points": [[x, z], ...], "half_widths": [w, ...],
+##                            optional "beyond" / "beyond_up": [[x, z], ...], the course
+##                            drawn past the map edge after the last point / before the
+##                            first (phase 6, WaterBody; 1..MAX_BEYOND_POINTS points, each
+##                            within the ground skirt's reach of the map)
 ##                    pond:  {"id", "kind": "pond", "depth", "level_m"}
 ##                    depth is "ankle", "waist" or "deep"; flow (only with a flow map):
 ##                    {"frame": "map_xz", "size": [nx, nz]}
@@ -22,10 +26,14 @@ extends RefCounted
 ## a point outside the map, half-widths not one per point or outside the WaterBody range,
 ## speed outside 0..MAX_SPEED) is skipped with a warning, as are bodies past
 ## MAX_WATER_BODIES and rivers past MAX_RIVERS; mask bytes naming no pond are cleared; a
-## flow map whose metadata is missing or does not match its PNG is dropped. The writer
+## flow map whose metadata is missing or does not match its PNG is dropped. A river's
+## course past the edge that is malformed (not a list of [x, z] pairs, empty or longer than
+## MAX_BEYOND_POINTS, a point NaN, Inf or further than BEYOND_REACH_M past the map) is
+## dropped with a warning and the river kept (its course is then derived). The writer
 ## refuses a document breaking any of these rules (problem()), so nothing written is
 ## trimmed on read. Older builds read only their own KNOWN_ENTRIES, so they load a map
-## with water as a map without it.
+## with water as a map without it; a build before phase 6 reads only the body keys it knows
+## (_body_from), so it loads a river with "beyond" as the same river without it.
 
 const SPLINES_ENTRY := "splines.json"
 const PONDS_ENTRY := "ponds.png"
@@ -34,6 +42,10 @@ const VERSION := 1
 const FLOW_FRAME := "map_xz"
 ## A point may sit this far outside the map edge (float32 rounding of an edge point).
 const EXTENT_TOLERANCE_M := 1e-3
+## A river's course past the edge stays within this of the map (the ground skirt's width,
+## AuthoredTerrain.skirt_width_m(), with a margin).
+const BEYOND_REACH_M := 50.0
+const BEYOND_KEYS: Array[String] = ["beyond", "beyond_up"]
 
 
 ## Adds the water entries of `doc` to `entries` (nothing when it has no water). Assumes
@@ -128,6 +140,22 @@ static func body_problem(body: WaterBody, extent: Vector2) -> String:
 				"a half-width is outside %s..%s m"
 				% [WaterBody.MIN_HALF_WIDTH_M, WaterBody.MAX_HALF_WIDTH_M]
 			)
+	for course in [body.beyond, body.beyond_up]:
+		var course_problem := beyond_problem(course, extent)
+		if course_problem != "":
+			return course_problem
+	return ""
+
+
+## What is wrong with a river's course past the edge `course` (WaterBody.beyond, beyond_up;
+## empty is none) in a map of `extent` metres, or "".
+static func beyond_problem(course: PackedVector2Array, extent: Vector2) -> String:
+	if course.size() > WaterBody.MAX_BEYOND_POINTS:
+		return "a course past the edge has more than %d points" % WaterBody.MAX_BEYOND_POINTS
+	var reach := extent * 0.5 + Vector2.ONE * BEYOND_REACH_M
+	for p in course:
+		if not (_finite(p.x) and _finite(p.y)) or absf(p.x) > reach.x or absf(p.y) > reach.y:
+			return "a point past the edge is NaN, Inf or too far from the map"
 	return ""
 
 
@@ -174,6 +202,10 @@ static func _body_json(body: WaterBody) -> Dictionary:
 		out["speed"] = body.speed
 		out["points"] = points
 		out["half_widths"] = Array(body.half_widths)
+		for key in BEYOND_KEYS:
+			var course: PackedVector2Array = body.get(key)
+			if not course.is_empty():
+				out[key] = Array(course).map(func(p: Vector2) -> Array: return [p.x, p.y])
 	return out
 
 
@@ -200,6 +232,14 @@ static func _parse_bodies(
 	for index in mini(list.size(), MapDocument.MAX_WATER_BODIES):
 		var parsed: Variant = _body_from(list[index])
 		var body: WaterBody = parsed if parsed is WaterBody else null
+		if body != null:
+			for key in BEYOND_KEYS:
+				var course_problem := beyond_problem(body.get(key), extent)
+				if course_problem != "":
+					log.add(
+						"%s: body %d %s dropped: %s" % [SPLINES_ENTRY, index, key, course_problem]
+					)
+					body.set(key, PackedVector2Array())
 		var problem: String = parsed if parsed is String else body_problem(body, extent)
 		if problem == "" and seen.has(body.id):
 			problem = "id %d is used twice" % body.id
@@ -253,7 +293,27 @@ static func _body_from(value: Variant) -> Variant:
 		body.points.append(Vector2(_number_or_nan(p[0]), _number_or_nan(p[1])))
 	for w in widths:
 		body.half_widths.append(_number_or_nan(w))
+	for key in BEYOND_KEYS:
+		if value.has(key):
+			body.set(key, _course_from(value.get(key)))
 	return body
+
+
+## A course past the edge from JSON: its points, a NaN point standing in for anything that is
+## not an [x, z] pair (beyond_problem() then drops it), or MAX_BEYOND_POINTS + 1 NaN points
+## for a list too long or not a list.
+static func _course_from(value: Variant) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if not value is Array or (value as Array).size() > WaterBody.MAX_BEYOND_POINTS:
+		out.resize(WaterBody.MAX_BEYOND_POINTS + 1)
+		out.fill(Vector2(NAN, NAN))
+		return out
+	for p in value:
+		if p is Array and (p as Array).size() == 2:
+			out.append(Vector2(_number_or_nan(p[0]), _number_or_nan(p[1])))
+		else:
+			out.append(Vector2(NAN, NAN))
+	return out
 
 
 static func _parse_ponds(

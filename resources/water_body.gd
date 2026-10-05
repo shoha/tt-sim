@@ -21,6 +21,12 @@ extends RefCounted
 ## document): a pond's id is the byte its area carries in the mask, and undo and erase
 ## address bodies by it. `depth` is the per-stroke depth class the author picked; the
 ## carve reads the channel or basin depth below the level from depth_m().
+##
+## Past the map edge (phase 6, P6-1; RiverExits): a river end at the map edge carries on into
+## the ground skirt as scenery. Where the author drew it on past the edge, the course is kept
+## here, ordered outward from the river's end: `beyond` past its last point (downstream) and
+## `beyond_up` past its first (upstream), map XZ, at most MAX_BEYOND_POINTS each. Empty, the
+## course is derived from the map seed and never saved.
 
 enum Kind { RIVER, POND }
 ## Wading depth classes: a token stands on the bed in ANKLE and WAIST water and floats at
@@ -38,6 +44,7 @@ const MIN_HALF_WIDTH_M := 0.2
 const MAX_HALF_WIDTH_M := 10.0
 const MAX_SPEED := 2.0
 const DEFAULT_SPEED := 1.0
+const MAX_BEYOND_POINTS := 16
 
 var id: int = 0
 var kind: Kind = Kind.RIVER
@@ -50,6 +57,10 @@ var speed: float = 0.0
 var points: PackedVector2Array = PackedVector2Array()
 ## Rivers only: half-width in metres at each point of `points`.
 var half_widths: PackedFloat32Array = PackedFloat32Array()
+## Rivers only: the drawn course past the map edge after the last point and before the first
+## (see the header); empty when none was drawn.
+var beyond: PackedVector2Array = PackedVector2Array()
+var beyond_up: PackedVector2Array = PackedVector2Array()
 
 
 static func river(
@@ -108,4 +119,6 @@ func copy() -> WaterBody:
 	body.speed = speed
 	body.points = points.duplicate()
 	body.half_widths = half_widths.duplicate()
+	body.beyond = beyond.duplicate()
+	body.beyond_up = beyond_up.duplicate()
 	return body

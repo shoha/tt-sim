@@ -89,7 +89,9 @@ func is_working() -> bool:
 ## value for all points works too), of depth class `depth_class` and flow `speed`: the line
 ## is split into flat reaches (WaterEdit.plan_river; an end in existing water joins it), their
 ## channel is carved (WaterCarve), the water, its dressing and flow are refreshed and the
-## plants regrow around it; one history entry. Returns the id of the first (upstream) reach,
+## plants regrow around it; one history entry. Points past the map edge are not carved: the
+## river's ends there keep them as their course into the ground skirt (RiverExits.split_line,
+## attach; WaterBody.beyond). Returns the id of the first (upstream) reach,
 ## or -1 when nothing was made (the map cannot be carved, the line is too short or lies in
 ## water, or the document is full). With use_worker the carve lands on a later frame.
 func carve_river(
@@ -118,11 +120,22 @@ func carve_river(
 		var only := widths[0]
 		widths.resize(line.size())
 		widths.fill(only)
+	# A line drawn on past the map edge (P6-1): the water and the carve are the part on the map;
+	# the points past it become the river's course into the skirt (RiverExits).
+	var split := RiverExits.split_line(
+		line, widths, doc.extent_m() * 0.5, AuthoredTerrain.skirt_width_m()
+	)
+	line = split.inside
+	widths = split.widths
+	if line.size() < 2:
+		last_refusal = REFUSED_SHORT
+		return -1
 	var bodies := WaterEdit.plan_river(doc, line, widths, depth_class, speed)
 	if bodies.is_empty():
 		var joined: PackedVector2Array = WaterEdit.join_line(doc, line, widths)[0]
 		last_refusal = REFUSED_IN_WATER if joined.size() < 2 else REFUSED_FULL
 		return -1
+	RiverExits.attach(bodies, split)
 	_start({"kind": "river", "label": "Carve river", "bodies": bodies}, WaterEdit.model_of(doc))
 	return bodies[0].id
 

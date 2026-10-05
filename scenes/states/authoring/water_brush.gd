@@ -18,7 +18,10 @@ extends RefCounted
 ## dwell (POND_DWELL_GROW); the painted dabs preview its area. Ctrl at the press (either
 ## tile): an erase stroke, whose touched river reaches are previewed in red (they go whole).
 ## The width is the brush size, never below the depth class's narrowest channel
-## (radius_for()).
+## (radius_for()). A river may be drawn on past the map edge (P6-1): where the pointer leaves
+## the ground there (the skirt has no collision), it meets the level of the last ground the
+## line touched (hit_past_edge()), and the carve keeps those points as the river's course into
+## the skirt (WaterEditor.carve_river).
 
 enum Shape { RIVER, POND }
 
@@ -62,6 +65,8 @@ var held_radius: float = 0.0
 var pond_dabs := PackedVector3Array()
 
 var _refusal: String = ""
+## The height of the last point a river line recorded (world).
+var _line_y: float = 0.0
 
 
 ## The river half-width or pond brush radius for brush size `radius` and depth class
@@ -188,8 +193,19 @@ func track(editor: AuthoringEditor, hit: Vector3, half_width: float) -> void:
 	if drawing and hit != Vector3.INF:
 		var spacing := maxf(RIVER_DECIMATE_M, half_width * WIDTH_DECIMATE)
 		river = decimate(river, Vector2(hit.x, hit.z), spacing)
+		_line_y = hit.y
 	if not held.is_empty() and (editor == null or not editor.water.is_working()):
 		held = PackedVector2Array()
+
+
+## Where the pointer ray from `origin` along `direction` (world) meets the height of the last
+## point the river line recorded, while a river is being drawn: the line's ground past the
+## map edge, where the ray finds no ground (BrushTool asks only then). Vector3.INF otherwise.
+func hit_past_edge(origin: Vector3, direction: Vector3) -> Vector3:
+	if not drawing or shape != Shape.RIVER or river.is_empty() or absf(direction.y) < 1e-4:
+		return Vector3.INF
+	var t := (_line_y - origin.y) / direction.y
+	return origin + direction * t if t > 0.0 else Vector3.INF
 
 
 ## Carves the river drawn so far (the release) with half-width `half_width`. Returns false

@@ -62,7 +62,7 @@ static func apply_model(doc: MapDocument, model: Dictionary) -> void:
 static func model_bytes(model: Dictionary) -> int:
 	var total: int = (model.get("pond_mask", PackedByteArray()) as PackedByteArray).size()
 	for body: WaterBody in model.get("bodies", []):
-		total += 64 + body.points.size() * 12
+		total += 64 + body.points.size() * 12 + (body.beyond.size() + body.beyond_up.size()) * 8
 	return total
 
 
