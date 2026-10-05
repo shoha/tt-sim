@@ -2470,3 +2470,45 @@ short. Its main-thread parts put it in the carve's ground step (`ground` 41.8 ms
 the ankle stream to the right edge, against 5.6-14.3 ms for strokes inside the map), which
 also updates the skirt's edge in place when the carve reaches the boundary; that is the
 likely cause and was not profiled further.
+
+### Edge follow-ups (P6-3, 2026-10-05)
+
+Two fixes, measured with `jobs/p6_perf_build.json` (now also `cache_check` and
+`mirror_bench`; `water_timing` adds the terrain's last in-place skirt refresh), the same
+settings as above, one process per run, `gpu_state` 31-36 % P8 270-315 MHz at the start and
+84-85 % P0 1920-1935 MHz at the end. "Before" is a run of this job at the start of P6-3 (the
+look fixes in, neither of these): its numbers match P6-2's.
+
+**The 45 ms frame of a stroke carved to the edge** was the skirt's CPU vertex mirror:
+`refresh_skirt()` made it from the document (`TerrainMeshBuilder.skirt_vertex_mirror`, 34.0 ms
+on the main thread) on the first edge edit after every skirt rebuild, and a water refresh
+with exits rebuilds the skirt. The mirror now comes with the skirt parts, read off the built
+arrays on the worker (`skirt_mirror_of`, 3.4 ms); the in-place refresh itself is 1.7-2.1 ms.
+
+**The exits rebuilt on every water edit** are now cached per window and per mouth
+(`RiverExitMesh.build`; `systems/water.md` "Past the map edge"). Its first in-game run missed
+every piece: the ring distances, hashed as doubles, gave different keys on the worker and
+the main thread though equal to nine decimals (`cache_check`); they enter the key in whole
+micrometres now, and `cache_check` finds 0 of 4 pieces to rebuild.
+
+| `_p6_perf_exits`, zoom 24 | Before: CPU ms median / worst (n) | After | Worker build, before -> after |
+| --- | --- | --- | --- |
+| Idle 4 s | 3.8 / 4.9 (1029) | 3.8 / 4.7 (1037) | - |
+| Waist river stopping 3.4 m short of the left edge | 4.2 / 23.3 (968) | 4.1 / 23.6 (988) | 669 -> 105 ms |
+| Its erase | 4.3 / 22.0 (935) | 4.2 / 29.3 (944) | 704 -> 99 ms |
+| The same river drawn past the left edge (a third exit) | 4.2 / 46.3 (1470) | 4.2 / 30.9 (1465) | 885 -> 300 ms |
+| Its erase | 4.2 / 22.8 (968) | 4.2 / 29.5 (963) | 694 -> 106 ms |
+
+The carve's ground step for the stroke to the left edge: 42.5 -> 7.3 ms (8.1 in the run with
+the mirror fix alone, whose worst frame was 26.1 ms); for the ankle stream to the right edge
+48.5 -> 14.0-15.3 ms. The worker build is the water mesh plus the skirt parts; the bake
+(113-163 ms) and the main-thread swap (18-22 ms) did not change. `skirt_parts` on the
+two-exit map: 593-605 ms built from nothing (a load), 51.5 ms with the skirt's own exits lent
+and nothing changed (0 pieces built): the skirt ring and its mirror. **Verdict: an edit away
+from the exits lands its water 0.55-0.6 s sooner, one that adds an exit builds only that
+exit, and the stroke to the edge's worst frame is back with the others'.** The two erases'
+worst frames rose from 22-23 to 29-30 ms in the after run (one sample each); the refresh now
+lands about 0.6 s sooner, inside the stroke's other end-of-stroke work rather than after it,
+which is the likely reason; not profiled. The exit geometry after P6-3's look fixes: patch
+27,625 and ribbon 1,179 vertices for the two exits (P6-2: 28,000 and 1,098; the ribbon runs
+on to a fade of 0). A load still builds every exit (the cache helps refreshes only).

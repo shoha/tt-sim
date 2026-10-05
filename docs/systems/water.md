@@ -421,7 +421,12 @@ tokens past the edge. The probe that chose the rendering is P6-0
   of the edge (the end the carve already leaves open and untapered), not shared with another
   river's end (the next reach of one stroke). Both ends count: an upstream end at the edge
   comes from somewhere too. Landform recipes' rivers, which end at the edge, get them with no
-  change.
+  change. A drawn line ends where the pointer was let go (`WaterBrush.with_tip`, P6-3): the
+  decimation recorded a point only 0.6 m from the last, so the release point was usually
+  dropped, and a stroke released 0.36 m inside the edge ended over 1 m inside it with no exit.
+  An end at the edge is carved with the river's own cross-section straight on to the edge
+  (`WaterCarve.river_goals`): the round cap past the end left the bed on the edge up to 0.1 m
+  shallower than the river's.
 - **The course past the edge:** the author's when drawn, else derived. The Water tool keeps a
   river stroke going past the edge (`WaterBrush.hit_past_edge`: where the ray finds no ground,
   the pointer meets the height of the last point the line recorded), and
@@ -433,9 +438,12 @@ tokens past the edge. The probe that chose the rendering is P6-0
   `splines.json` (`MapWaterIO`; optional, older builds ignore them). An end with none gets a
   derived continuation (`RiverExits.continuation`): 36 m along the heading of the river's
   smoothed course at its end (turned out of the map to at least 0.45 of the edge's normal
-  when it met the edge at a glancing angle) with one smooth bend of 0.2 to 0.6 rad over its
+  when it met the edge at a glancing angle) with one smooth bend of 0.4 to 0.7 rad over its
   first half and a gentler one back the other way (0.45 to 0.8 of the first) over its second,
-  a meander like a hand-drawn river's (a single bend read as a straight canal on the Valley),
+  a meander like a hand-drawn river's (a single bend read as a straight canal on the Valley;
+  at 0.2 rad, P6-1's least bend, a seed near it swung the course under 2 m off its heading
+  and the Valley's upper-left exit read straight between its walls; now every course swings
+  more than 3 m),
   their sides and sizes from the map seed and the body id. Every course, drawn or derived, is then
   carried on along its last heading until it is 43.7 m past the map, where the skirt has
   faded however far its noise stretches the fade (`carried_on`): a drawn course that stopped
@@ -452,11 +460,15 @@ tokens past the edge. The probe that chose the rendering is P6-0
   of the whole ring for a few metres of river). The patch's outer columns carry no channel and
   their extra vertices lie on the skirt's own edges, so there is no crack. Ring 0 is the map's
   boundary vertices (with the map's normals), so the channel meets the carve at the edge with
-  no step. Past it the ground is the river's own cross-section 0.3 m inside the edge (bed and
-  banks, out to the half-width plus 3.5 m), carried along the course by the offset across it,
-  lowered with the skirt where the skirt falls back to the map floor, eased back to the skirt
-  over its outer 1.2 m and where the skirt's fade runs out (`RiverExits.skirt_alpha`, the
-  shader's CPU twin), never above the skirt. Beside the mouth the skirt itself eases from the
+  no step. Past it the ground is the river's own cross-section on the edge (the map's boundary
+  heights at each offset across the course, `RiverExitMesh.edge_point`; bed and banks, out to
+  the half-width plus 3.5 m), carried along the course by the offset across it, lowered with
+  the skirt where the skirt falls back to the map floor, eased back to the skirt over its outer
+  1.2 m and as the skirt's fade falls from 0.1 to 0.02 (`RiverExits.skirt_alpha`, the shader's
+  CPU twin; late, so the river keeps its width into the haze, and settled before the fade
+  ends), never above the skirt. P6-1 read the section 0.3 m inside the edge, up to 0.12 m
+  deeper than the edge itself: the waterline stepped at the seam (the Valley's right exit, far
+  bank) and the ankle stream read deeper and greener past the edge. Beside the mouth the skirt itself eases from the
   carve's height at the edge to the bank's over 2 m (`_unghosted`): a skirt column starting in
   the channel would otherwise roll back up from the bed straight out from the edge, a ghost
   trench beside a river that leaves at an angle. Quads split along the diagonal whose ends
@@ -468,12 +480,19 @@ tokens past the edge. The probe that chose the rendering is P6-0
 - **The water** (the ribbon): a strip along the course at the reach's level (lowered with the
   skirt like the channel), 0.6 m wider than the waterline either side so the banks cross it in
   the depth texture and the water shader's own shoreline fade and foam draw its edge. Its first
-  row lies on the edge where the map's water ends. It draws with the shared water material,
-  its alpha times the skirt's fade (`water.gdshader` `water_skirt_fade`, the same function and
-  seed as the skirt, `shaders/skirt_fade.gdshaderinc`) weighed by the backdrop as the skirt's
-  colour fade is (`skirt_lit_share`: the share of lit ground left in the blend, so under a
-  bright sky backdrop the water dissolves as fast as the ground beside it; `SkirtBackdrop`
-  keeps the backdrop uniforms on the water material too). The skirt under it is lit ground
+  row lies on the edge, across the course as the channel's section is, at the river's level
+  exactly: the in-map mesh's last row there is flat at the level (`_run_out`), so the two meet
+  bit for bit. It runs on until a row whose every vertex has a fade of 0 (the fade's noise is
+  not monotonic along the course). It draws with the shared water material and fades by the
+  skirt's own law (`water.gdshader` `water_skirt_fade`, the same function and seed as the
+  skirt, `shaders/skirt_fade.gdshaderinc`): lit water times the fade plus the backdrop times
+  the rest, its colour set so that Godot's fog over it gives the skirt's fog times the fade
+  (writing FOG would take fog off every water surface); `SkirtBackdrop` keeps the backdrop and
+  fog uniforms on the water material too. P6-1 faded its alpha by the share of lit ground left
+  in the skirt's blend instead (`skirt_lit_share`, kept in the include): the river's own dark
+  colour then outlasted the pale faded ground, and the waist river's tail read as a darker
+  stub ending in a point at full zoom-out (P6-3, captured with the ribbon and the channel
+  hidden in turn: the water, not the channel). The skirt under it is lit ground
   times the fade plus the backdrop, so the refracted bed went darker, greyer and streaky as
   the skirt faded: the water now takes the backdrop back out of what it refracts and refracts
   less as the fade falls, so it keeps the in-map river's colour and luminosity and dissolves
@@ -489,8 +508,17 @@ tokens past the edge. The probe that chose the rendering is P6-0
 - **Where it is built:** with the skirt, on AuthoredLoadPrep's worker at load
   (`RiverExitMesh.skirt_parts`) and on AuthoredWater's refresh worker after any water edit,
   which hands the skirt to `AuthoredTerrain.apply_river_exits()` (a rebuild of the skirt mesh
-  keeping its material; nothing when no exit was or is there). A sculpt on the edge updates the
-  skirt in place but not the patch until the next water refresh.
+  keeping its material; nothing when no exit was or is there). The skirt's vertex mirror for
+  in-place edge updates comes with the parts (`TerrainMeshBuilder.skirt_mirror_of`, read off
+  the built arrays on the worker): made from the document on the first edge edit after every
+  rebuild, it cost a stroke carved to the edge 34 ms of its ground step (P6-3). **The cache**
+  (P6-3): each window's patch and each mouth's ribbon is a piece keyed on what it reads (the
+  near mouths' course, section, level and bank, the boundary heights around the window's
+  columns, the ring distances in whole micrometres, the fade), and AuthoredWater lends the
+  skirt's current exits to its refresh worker, so a water edit rebuilds only the pieces it
+  touched (`RiverExitMesh.build`, `p6_perf.gd cache_check`). A sculpt on the edge updates the
+  skirt in place during the stroke; its stroke-end water refresh (`WaterEditor.refresh`)
+  rebuilds the touched exit alone.
 - **The skirt is opaque** (`authored_ground.gdshaderinc` SKIRT): the probe found any
   transparent skirt out of the depth and screen textures, so water over it read the backdrop.
   The fade is in colour; the backdrop and the fog are matched to the environment by
@@ -539,4 +567,6 @@ The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work"; this doc doe
   shallows in the shader.
 - P4b-0: the submerged token marker, the edge foam reach, the authored map load on workers.
 - Phase 4c (2026-10-04): waterfalls, in [waterfalls.md](waterfalls.md).
-- Phase 6 (2026-10-05): rivers past the map edge (P6-0 probe, P6-1 build, P6-2 pinned pass).
+- Phase 6 (2026-10-05): rivers past the map edge (P6-0 probe, P6-1 build, P6-2 pinned pass,
+  P6-3 edge follow-ups: the release point, the seam and depth at the mouth, the tail's fade,
+  the meander, the mirror on the worker and the exit cache).
