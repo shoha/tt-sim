@@ -24,11 +24,14 @@ const BEYOND_SPACING_M := 2.0
 ## The derived continuation: this long, a point every AUTO_STEP_M, turning by up to
 ## AUTO_BEND_RAD (at least AUTO_MIN_BEND_RAD) over its first half, then back the other way by
 ## AUTO_SECOND_BEND (a share, picked between its two values, of the first bend) over the
-## second, as a hand-drawn river meanders instead of running on as a straight canal.
+## second, as a hand-drawn river meanders instead of running on as a straight canal. The
+## least bend swings the course about 3.5 m off its heading: at 0.2 rad (P6-1) a seed near the
+## minimum drew under 2 m over 18 m, and the Valley's upper-left exit read straight between
+## its long walls (P6-3).
 const AUTO_LENGTH_M := 36.0
 const AUTO_STEP_M := 3.0
-const AUTO_BEND_RAD := 0.6
-const AUTO_MIN_BEND_RAD := 0.2
+const AUTO_BEND_RAD := 0.7
+const AUTO_MIN_BEND_RAD := 0.4
 const AUTO_SECOND_BEND := Vector2(0.45, 0.8)
 ## A course past the edge always heads out of the map at least this much (the cosine of its
 ## angle to the edge's outward normal).

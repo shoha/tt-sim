@@ -114,6 +114,17 @@ func test_the_continuation_is_deterministic_from_the_seed() -> void:
 	assert_eq(bends.size(), 2, "the seed picks the side of the bend")
 
 
+func test_every_derived_course_visibly_meanders() -> void:
+	for seed_value in range(1, 25):
+		var course := RiverExits.exits(_edge_doc(seed_value))[0].course as PackedVector2Array
+		var heading := (course[1] - course[0]).normalized()
+		var side := Vector2(-heading.y, heading.x)
+		var widest := 0.0
+		for k in range(1, 13):
+			widest = maxf(widest, absf((course[k] - course[0]).dot(side)))
+		assert_gt(widest, 3.0, "seed %d swings off its heading" % seed_value)
+
+
 func test_an_upstream_end_at_the_edge_comes_from_somewhere_too() -> void:
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "test", 3)
 	var half := _half(doc)
