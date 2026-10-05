@@ -619,6 +619,72 @@ func test_a_sculpt_at_an_exit_refreshes_it() -> void:
 	assert_gt(raised, 0, "the sculpt reached the patch's edge")
 
 
+func test_a_stroke_at_an_exit_moves_the_patch_with_the_skirt_before_it_ends() -> void:
+	var doc := _ankle_doc()
+	var map := Node3D.new()
+	map.name = "LevelMap"
+	add_child_autofree(map)
+	var terrain := AuthoredTerrain.create(doc)
+	map.add_child(terrain)
+	for node_name in [MapSourceLoader.SCATTER_NODE, MapSourceLoader.PROPS_NODE]:
+		var node := AuthoredScatter.create()
+		node.name = node_name
+		map.add_child(node)
+	var editor := AuthoringEditor.create(doc, map, AuthoringHistory.new())
+	editor.scatter.attach_document(doc)
+	var before := terrain.river_exits()
+	var mouth: Vector2 = (before.mouths[0] as Dictionary).mouth
+	var at := Vector3(mouth.x - 0.4, 0.0, mouth.y + 2.0)
+	assert_true(editor.begin_height_stroke(HeightBrush.RAISE))
+	editor.stroke_dab(at, at + Vector3(0, 0, 0.5), 1.0, 0.5)
+	editor.flush()
+	terrain.process_heights(-1)
+	assert_true(is_same(terrain.river_exits(), before), "no rebuild while the stroke runs")
+	var mirror: Dictionary = terrain.get("_channel_mirror")
+	assert_false(mirror.is_empty(), "the patch was moved in place")
+	var half := _half(doc)
+	var vertices: PackedVector3Array = mirror.vertices
+	var raised := 0
+	for v in vertices:
+		var xz := Vector2(v.x, v.z)
+		if RiverExits.outside_distance(xz, half) > 1e-6:
+			continue
+		var s := doc.world_to_sample(xz).round()
+		var height := doc.heights[doc.sample_index(int(s.x), int(s.y))]
+		assert_almost_eq(v.y, height, 1e-5, "boundary vertex at the stroke's height")
+		raised += 1 if height > 0.01 else 0
+	assert_gt(raised, 0, "the stroke reached the patch's edge")
+	# The patch's outer columns lie on the skirt's own vertices where their rings are the skirt's.
+	var skirt_mirror: Dictionary = terrain.get("_skirt_mirror")
+	var positions: PackedFloat32Array = skirt_mirror.positions
+	var on_skirt := {}
+	for k in positions.size() / 3:
+		var p := Vector3(positions[k * 3], positions[k * 3 + 1], positions[k * 3 + 2])
+		on_skirt[Vector2(p.x, p.z).snapped(Vector2.ONE * 1e-3)] = p.y
+	var windows: Array = before.windows
+	var columns_total := 0
+	for window: Vector2i in windows:
+		columns_total += window.y + 1
+	var rings := vertices.size() / columns_total
+	var matched := 0
+	var base := 0
+	for window: Vector2i in windows:
+		var columns := window.y + 1
+		for c in [0, columns - 1]:
+			for k in rings:
+				var v := vertices[base + c * rings + k]
+				var key := Vector2(v.x, v.z).snapped(Vector2.ONE * 1e-3)
+				if on_skirt.has(key):
+					assert_almost_eq(
+						v.y, float(on_skirt[key]), 1e-4, "on the skirt at %s" % str(key)
+					)
+					matched += 1
+		base += columns * rings
+	assert_gt(matched, 0, "the outer columns share the skirt's vertices")
+	assert_true(editor.end_stroke())
+	editor.finish_height_work()
+
+
 func test_the_skirt_parts_carry_its_vertex_mirror() -> void:
 	var doc := _edge_doc()
 	var width := AuthoredTerrain.skirt_width_m()
