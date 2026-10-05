@@ -508,6 +508,20 @@ numerically (for example where a fade or a tint band starts).
   and the ford). 64 captures (eight biomes) and `INDEX.md`; the verdict is written beside them
   as `VERDICT.md`. Split into build and look like the 4c set (`saved` `_p4d_{biome}`, the play
   section `for: "{biome}_*_play_*"`); the levels are kept (`cleanup_levels` removes them).
+- `jobs/phase5_{valley,hilltop,terraces,lakeshore,gorge}.json` and
+  `jobs/phase5_judgment_set.json`: the starting-landform judgment set (P5-4). One job per
+  recipe (about a minute per level to build): new 150 ft maps through `new_map` with the
+  `landform` key, three or four temperate forest seeds (a wet draw with a crossing, a wet
+  draw without, a dry draw; the hill adds the flank spring) and one seed in another biome
+  (alpine meadow, boreal taiga, riverside wetland, rocky badlands, grassland meadow), saved
+  as `_p5j_<kind>_<biome>_<seed>`; per level home with the grid, home with the water hidden,
+  zoom 8 on the stage (`landform.gd look stage`) and on the crossing, the water or the floor
+  (`look crossing`; the hill adds `look summit`); then one wet level played with a token on
+  the stage and one on or in the water feature (`for: "<level>_play_*"`). The judgment set
+  is the union of the five (the driver has no include op, so the blocks are repeated) for
+  the final full-size pass; a recipe change rebuilds that recipe's job alone. The verdict is
+  written beside the captures as `VERDICT.md`. `landform_look.json` is the P5-2 look (the
+  `_p5_` levels), `landform_dialog.json` the new-map dialog's Landform row (P5-3).
 - `jobs/arch_ford_tools.json`: the Arch and Ford tiles through the real Bridge tool (P4d-3,
   about 60 s to build, 30 s to look): a new 150 ft temperate forest map (seed 1234) with a
   straight waist river at x = -7 and a deep river carved at x = 8 (`water.gd carve`), saved
