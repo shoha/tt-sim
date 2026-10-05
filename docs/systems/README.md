@@ -31,3 +31,6 @@ Documents here:
   fall carve, the curtain / foam ring / mist mesh and shader, the fall material.
 - [crossings.md](crossings.md): plank bridges and stepping stones, including the refusal by a
   waterfall.
+- [landforms.md](landforms.md): the starting landforms a new map opens with (Valley, Hilltop,
+  Terraces, Lakeshore, Gorge): the seeded frame, the shared steps, each recipe, the stage and
+  the open path.

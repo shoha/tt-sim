@@ -1,0 +1,295 @@
+# Starting landforms
+
+The landform a new map opens with (phase 5, 2026-10-04): Flat, Valley, Hilltop, Terraces,
+Lakeshore or Gorge, picked in the new-map dialog beside the size and the biome. The bar: a
+newcomer picks a size, a biome and a landform, presses Create, and the map that opens is
+already a place, with ground that has a shape, often water that runs and a way across it, and
+an open stage for the fight, all in the biome's own materials and all made of the same tiers,
+rivers, ponds and crossings the tools make, so every part can be sculpted, carved, erased or
+moved on. One rule governs every recipe (user, 2026-10-04): **no sameness.** Having
+everything appear in every map is distracting; not everywhere has a river and not every river
+a crossing, and every draw, wet or dry, must be a complete and beautiful map on its own. The
+look is painterly: a few bold landforms, never a noise-field terrain. The same seed gives the
+same map; a different seed gives a sibling, not a stranger.
+
+Plan: `docs/plans/2026-10-04-phase5-starting-landforms.md` (local; a "done" paragraph per
+task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_goal`,
+[../ARCHITECTURE.md](../ARCHITECTURE.md) "Authoring Flow"); the water it carves is
+[water.md](water.md) and [waterfalls.md](waterfalls.md); the crossings it places are
+[crossings.md](crossings.md). The dialog's Landform row is in
+[../UI_SYSTEMS.md](../UI_SYSTEMS.md) "New map dialog".
+
+## Map
+
+| File | Class | Role |
+|------|-------|------|
+| `utils/starting_landform.gd` | `StartingLandform` | Pure static: `KINDS`, `NAMES`, `CAPTIONS`, `DEFAULT`, `apply(doc, kind, seed, biome_id, root)`, the seeded frame (`stream`, `size_scale`, `heading`, `VIEW` / `NEAR`) and the shared steps every recipe composes |
+| `utils/landform_recipes.gd` | `LandformRecipes` | The Valley (`valley`, `valley_frame`, `valley_stage`, `bluff_side_of`, `wash_surface`) |
+| `utils/landform_hilltop.gd` | `LandformHilltop` | The Hilltop (`hilltop`, `hilltop_frame`, `crown_of`, `ledge_of`, `shoulder_stage`) |
+| `utils/landform_terraces.gd` | `LandformTerraces` | The Terraces (`terraces`, `terraces_frame`, `plateaus_of`, `terraces_stage`) |
+| `utils/landform_lakeshore.gd` | `LandformLakeshore` | The Lakeshore (`lakeshore`, `lakeshore_frame`, `allowed_corners`) |
+| `utils/landform_gorge.gd` | `LandformGorge` | The Gorge (`gorge`, `gorge_frame`, `gorge_stage`) |
+| `utils/new_map.gd` | `NewMap` | `create(..., landform)` runs the recipe before the cover; `from_spec(spec)`; `opening_status(spec)`; `paint_starting_cover(doc, biome, centre)` centres the glade on the stage |
+| `scenes/states/authoring/new_map_dialog.gd` | `NewMapDialog` | The Landform tile row and its caption; the spec's `landform` |
+| `scenes/states/authoring/authoring_controller.gd` | `AuthoringController` | Opens a new map from `NewMap.from_spec(spec)` under the loading line `NewMap.opening_status(spec)` |
+| `scenes/ui/help_overlay.gd` | | The F1 "New map" row |
+| `assets/icons/ui/landform-<kind>.svg` | | Six glyphs in the house 24 px white-stroke style |
+| `tools/render_jobs/probes/landform.gd` | | Render-job probe: `new`, `report`, `look` (stage, water, floor, summit, steepest, fall, crossing) |
+| `tools/render_jobs/jobs/landform_*.json`, `phase5_*.json`, `p5_perf_*.json` | | The look, dialog, judgment-set and performance jobs (Verification) |
+
+## Model
+
+- **Apply** (`StartingLandform.apply`, pure): runs the recipe for a kind on a flat document
+  of the map's size and returns `{"stage": Vector2, "report": String}`: the stage is where the
+  glade goes (map XZ metres), the report says what the seed drew, naming any refusal in plain
+  words. Flat and an unknown kind change nothing. A recipe writes only ordinary document data
+  (heights, carved water bodies, crossings, painted surface weights) through the same pure
+  functions the tools use; no history entry, so a new map starts clean. `WaterDressing.refresh`
+  runs once per recipe, at the end.
+- **The seeded frame.** Every draw comes from a `RandomNumberGenerator` seeded from the map
+  seed xor one constant per feature (`stream(seed, feature)`: `STREAM_FRAME`,
+  `STREAM_FEATURES`, `STREAM_RIVER`, `STREAM_TRIBUTARY`, `STREAM_CROSSING`), as
+  `CrossingFord` does for its stones, so the frame, the feature draws, a river's wobble, the
+  tributary and the crossing each have their own stream and a change in one feature's draw
+  does not shuffle the others (a new feature draw is appended last to its stream, as the
+  Valley's bluff was in P5-4). Metres are written for a 150 ft map (`REFERENCE_EXTENT_M`
+  45.72) and depths and falls scale by `size_scale()`: 0.8 / 1.0 / 1.2 at 100 / 150 / 200 ft,
+  so a landform keeps its proportions without a small map becoming a pit; widths and
+  positions are shares of the half extent. `heading(rng)` is one of eight 45 degree headings.
+  The seed varies the shape too (heading, offset, bend, the hill's side, the lake's corner)
+  within bounds that keep the recipe recognisable.
+- **Facing the camera** (P5-4, commit 0bcda1d): the fixed camera (`game_map.tscn`'s Camera3D)
+  stands at +x, +z and looks along (-1, -1) in map XZ at a 45 degree yaw, pitched 21.6
+  degrees down. `VIEW` (-0.707, -0.707) is that look direction and `NEAR` (0.707, 0.707) the
+  direction from a feature toward the camera; anything a recipe wants "facing the camera"
+  (a stage side, a fall's face, a gorge's heading, a bluff's bank) composes with these and
+  never with an axis. The P5-2 recipes assumed the camera looked along -z, so the hill's stage
+  sat on its side, a gorge at heading 45 ran straight along the view and the valley's bluff
+  stood on the back-facing near bank (the P5-4 verdict).
+- **Shared steps** (`StartingLandform`): `nearest_on` and `along` give a polyline's distance
+  field and arc position, so a bent axis gives smooth ground; `trough_shape(distance,
+  floor_half, rim)` is 1 on the floor and a cosine fall to 0 at the rim; `bump(t)` a rounded
+  hill with no crease at the foot; `warp_noise` a low-frequency noise for warping an outline;
+  `disc_distance` (a warped disc, periodic so a shore has no seam) and `box_distance` (a
+  rounded rectangle) give signed distances to an outline; `tier_inset(distance)` turns one
+  into the `inset` `HeightBrush.tier_goal` wants (measured from `TIER_SOFTEN_M` outside its
+  ring), so a recipe's plateau is the Sculpt tool's own Tier terrace: a 66 degree rock face, a
+  rounded grassy lip, a flat top exactly on a 5 ft tier, a concave scree foot; `write_heights`
+  writes a height function over every sample, clamped to `MAX_ABS_HEIGHT_M`; `map_line` clips
+  a polyline to the map and resamples it; `wobbled` pushes a course across itself by a seeded
+  wobble (one wave per `WOBBLE_WAVE_M` 14 m); `carve_river` plans, carves and adds a river as
+  the Water tool does (`WaterEdit.plan_river`, `WaterCarve.river_goals`, `WaterEditor.lower`,
+  `with_bodies`), so falls form by the waterfall rule wherever a course crosses a tier or a
+  steep flank; `carve_pond` stamps a pond over a mask as the Water tool's pond stroke does
+  (the level is the lowest rim ground less the freeboard, so the heights around it must be
+  final first); `restore_outside` puts back ground a river's bank reach
+  (`WaterCarve.BANK_REACH_M`) slumped beyond the channel and its bank, only ever raising (a
+  slope cut through high ground is right for a stroke across a hillside, wrong for a stream
+  along a ravine wall); `place_crossing` draws a crossing `CROSSING_DRAW_M` 3.5 m either side
+  of the water's centreline through `CrossingPlacement.place` and gives it the id
+  `CrossingEditor.add` would; `span_crossing` stands a crossing on two chosen dry anchors (an
+  arch rim to rim, whose waterline anchors would stand on the ravine floor) with
+  `CrossingPlacement.levels_for` and the same refusals; `straightest` picks where a course
+  runs straightest among candidates (where a crossing goes); `paint_line` paints a surface
+  along a polyline with a soft edge (a dry wash). A refused crossing leaves the document as it
+  was and is named in the report: never a broken map.
+- **Valley** (`LandformRecipes.valley`; caption "A broad valley; often a river runs down it";
+  the default): a broad trough across the whole map along one of eight headings through a
+  point up to `VALLEY_OFFSET_SHARE` 0.25 of the half extent off the centre, bent once by
+  `VALLEY_BEND_DEG` 8-25 degrees within `VALLEY_BEND_REACH_SHARE` a third of the half extent
+  downstream of the centre's foot. `VALLEY_DEPTH_M` 3.5 m deep (2.5 m in P5-1 read only as a
+  sunken channel from the home camera), its floor `VALLEY_FLOOR_SHARE` a third of the half
+  extent either side of the axis (a third of the map wide), the cosine slope rising to the
+  rim at `VALLEY_RIM_SHARE` 0.6 (0.72 in P5-1), the floor tilting `VALLEY_FALL_M` 1.0 m along
+  the axis so a river down it has reaches and riffles. Draws: a waist river
+  (`VALLEY_RIVER_CHANCE` 0.7, half-width `RIVER_HALF_WIDTH_M` 1.5 m, wobbling within
+  `RIVER_WOBBLE_SHARE` a tenth of the floor's width); given the river an ankle tributary off
+  the outer slope (`VALLEY_TRIBUTARY_CHANCE` 0.4, rising `TRIBUTARY_SLOPE_SHARE` 0.6 up the
+  slope) and a crossing where the river runs straightest near the stage
+  (`VALLEY_CROSSING_CHANCE` 0.5; stepping stones at `VALLEY_STONES_CHANCE` 0.4, else a ford);
+  without a river a dry wash of the biome's scree surface along the floor
+  (`VALLEY_WASH_CHANCE` 0.5, `WASH_WIDTH_SHARE` 0.35 of the floor); and a bluff
+  (`VALLEY_BLUFF_CHANCE` 0.5, P5-4): one bank stands one tier over the slope behind a rock
+  face cut with `tier_goal` along the rim line, wobbled `BLUFF_WOBBLE_M` 2 m, its toe on the
+  rim, the other bank keeping the cosine slope, so the valley reads as a place without
+  becoming a gorge. `bluff_side_of` puts it on the far bank (the `VIEW` side) of a valley
+  crossing the view and on the outer bank (away from the stage) of one running within
+  `BLUFF_ALONG_DEG` 30 degrees of the view. Stage: on the inner bank of the bend,
+  `STAGE_BANK_SHARE` 0.7 of the floor's half-width off the axis, within
+  `STAGE_REACH_SHARE` 0.5 of the half extent of the centre.
+- **Hilltop** (`LandformHilltop.hilltop`; "A rounded hill, often with a rock-lipped crown"):
+  a cosine bump of `HILL_RADIUS_SHARE` 0.45 of the half extent, `HILL_HEIGHT_M` 4.5 m, its
+  centre up to `HILL_OFFSET_SHARE` 0.3 off the centre along one of eight headings. Draws: a
+  crown (`CROWN_CHANCE` 0.85 since P5-4b, was 0.7): a flat tier on the summit raised with
+  `tier_goal` over a warped disc of `CROWN_RADIUS_SHARE` 0.38 of the hill's radius
+  (`CROWN_WARP` 0.12, at least `CROWN_TOP_MIN_M` 4 m of flat top), on the tier nearest the
+  hill's height, the hill beneath scaled so the face is a full tier all round; a second hill
+  of half the height on the far side (`SECOND_HILL_CHANCE` 0.3); a spring stream
+  (`STREAM_CHANCE` 0.5, ankle): with a crown a pool on the crown (the line starts
+  `POOL_INSIDE_M` 3 m inside the outline, so the first reach is the pool) spilling over the
+  crown's face in the phase 4c tier fall and on down the flank, without one an ankle stream
+  rising `STREAM_SUMMIT_SHARE` 0.25 of the radius from the summit, either way running
+  `STREAM_AZIMUTH_DEG` 60-90 degrees off `NEAR` so the fall shows in profile and the stream
+  never crosses the stage; stepping stones over it below the foot (`STONES_CHANCE` 0.4). A
+  crownless hill is never a bare mound: it gets the second hill when it drew neither the
+  second hill nor the stream (P5-4), and always a flank ledge (P5-4b): the ground above a line
+  `LEDGE_HEIGHT_SHARE` 0.33 of the way up raised to the next tier with `tier_goal` over an arc
+  of `LEDGE_ARC_DEG` 60-100 degrees about `NEAR`, only ever raising. Stage: on the shoulder
+  toward the camera, `STAGE_SHOULDER_SHARE` 0.55 of the radius out, past the crown's toe
+  (`STAGE_CROWN_TOE_M` 1 m) or at the ledge's foot (`STAGE_LEDGE_TOE_M` 1.5 m), within half
+  the half extent of the centre.
+- **Terraces** (`LandformTerraces.terraces`; "Tiers stepping down across the map"): two or
+  three tiers (`THREE_CHANCE` 0.5) stepping down along one of eight headings, the lowest the
+  base ground and each higher one a rounded-corner plateau (corners `CORNER_M` 4-8 m, edge
+  wobbled `WOBBLE_M` 1.5 m) raised one 5 ft tier over the one below with `tier_goal`; the top
+  terrace's edge at `TOP_EDGE_SHARE` a third of the way across, the next `STEP_SHARE` two
+  thirds further; each plateau `WIDTH_STEP_M` 3 m narrower across than the one below
+  (`WIDTH_SHARE` 1.15 for the lowest raised one), so a corner or two shows. Draws: a waist
+  river crossing the steps square on (`RIVER_CHANCE` 0.6), falling at each step; given the
+  river, a plank bridge on the top terrace (`BRIDGE_CHANCE` 0.5) `BRIDGE_BACK_M` 5 m uphill of
+  its edge. Stage: on the middle terrace, or `STAGE_DOWN_SHARE` 0.3 of the half extent down
+  the lower one when there are two, `STAGE_RIVER_M` 6 m from the river toward the axis.
+- **Lakeshore** (`LandformLakeshore.lakeshore`; "A deep lake over one corner, its shore the
+  stage"): a deep pond over a disc of `LAKE_RADIUS_SHARE` 0.45 of the half extent centred
+  `LAKE_CENTRE_SHARE` 0.5 of it toward a corner (0.55 before P5-4), its shore warped
+  `LAKE_WARP` 0.15 of the radius, carved with `carve_pond`; the ground rises `LAKE_RISE_M`
+  1.5 m away from the shore over `LAKE_RISE_RUN_SHARE` 0.9 of the half extent, so the lake
+  sits in the map's low corner. The corner is drawn from `allowed_corners()`, the three that
+  are not the camera's own (the `NEAR` corner, (1, 1), where the lake lay at the bottom of the
+  view cut by the foreground; P5-4b). The lake is the water, so a dry draw has it too. Draws:
+  an islet (`ISLET_CHANCE` 0.3), a small hill `ISLET_RADIUS_M` 5 m shaped before the pond is
+  stamped so the mask leaves it dry, its top `ISLET_TOP_OVER_M` 0.5 m over the water; a
+  feeding ankle stream from the far side (`STREAM_CHANCE` 0.5) approaching
+  `STREAM_AZIMUTH_DEG` 35-70 degrees off the stage's line and ending `STREAM_IN_M` 1 m inside
+  the shore, where `plan_river` joins it at the waterline; stepping stones over it
+  (`STONES_CHANCE` 0.4) at least `STONES_SHORE_M` 5 m back from the shore. Stage: on the shore
+  nearest the map's centre, `STAGE_SHORE_M` 4 m back from the waterline.
+- **Gorge** (`LandformGorge.gorge`; "A ravine with rock walls winding across the map"): a
+  ravine one or two tiers deep (`TWO_TIERS_CHANCE` 0.5; two only on a map at least
+  `TWO_TIERS_MIN_EXTENT_M` 45 m wide, 150 ft and up) cut downward with `tier_goal` from the
+  rim at the base height: a rounded grassy rim, a 66 degree rock face, a flat floor
+  `FLOOR_M` 6-9 m wide (`TWO_TIER_FLOOR_EXTRA_M` 3 m wider when two tiers deep, since the
+  21.6 degree pitch hides 7.6 m of floor behind a 3 m near rim), tilting `FALL_M` 1.5 m along
+  its length. Its axis takes one of `HEADINGS` (six of eight: every heading but 45 and 225,
+  the camera's diagonal, so the far wall and the floor face the camera) through a point up to
+  `OFFSET_SHARE` 0.15 off the centre, bent by `BEND_DEG` 15-35 degrees and, half the time,
+  bent back further on (`SECOND_BEND_CHANCE` 0.5). Draws: an ankle stream along the floor
+  (`STREAM_CHANCE` 0.7) pushed `STREAM_FAR_SHARE` 0.7 of the floor's half-width toward the far
+  wall where the ravine crosses the view (0.45 before P5-4), the walls put back beyond it with
+  `restore_outside` (`WALL_KEEP_M` 0.5 m), else a dry wash of the biome's scree surface; given
+  the stream a stone arch rim to rim near the middle (`ARCH_CHANCE` 0.4) through
+  `span_crossing`, its feet `ARCH_FOOT_M` 1.5 m back from the lips. Stage: on the rim on the
+  camera's side (`NEAR`) by the arch or the ravine's middle, `STAGE_RIM_M` 1.5 m back from the
+  rim.
+- **Flat**: unchanged (caption "Level ground, yours to shape").
+- **The stage and the glade.** `NewMap.create` paints the starting cover with the glade
+  (`COVER_GLADE_RADIUS` 0.35 of the half extent) centred on the recipe's stage rather than the
+  map's middle; the groves still grow toward the map's edges. The water clears its own plants
+  and the cliff, lip and scree rules dress the tiers, as they do for a tool's stroke.
+- **Draws as measured** (24 surveyed seeds at 150 ft, the P5-4 verdict): valley rivers 19,
+  bluffs 16; hill crowns 19, streams 9, stones 4; terraces rivers 19, bridges 8; lake streams
+  16, stones 4; gorge streams 12, arches 7. The unit tests hold each chance within a window
+  over 40 seeds and check that no draw breaks the map.
+
+## Runtime
+
+- **The open path.** `AuthoringController` emits the loading line
+  `NewMap.opening_status(spec)` ("Shaping the valley..." for a landform other than Flat,
+  "Building the map..." otherwise), then builds `MapSourceLoader.build_async("",
+  NewMap.from_spec(spec))`. `from_spec` reads `{size_ft, biome_id, seed, landform}` (each
+  optional: 100 ft, bare ground, a fresh seed, Flat) and calls `create`, which makes the flat
+  document, applies the recipe and then paints the cover around its stage, all before the
+  controller opens the map. The document is ordinary data by then, so the load path
+  (`MapSourceLoader`, `AuthoredLoadPrep` on workers: water geometry, wet dressing, crossings)
+  opens it as it would a saved map with sculpted ground, water and crossings; nothing at
+  runtime knows a landform made it, and a saved landform map is an ordinary `map.ttmap`.
+- **Costs.** P5-0's pure timings at 150 ft: a heights pass 69 ms, `plan_river` 1.5 ms,
+  `river_goals` 56 ms, `lower` 1.5 ms, `WaterDressing.refresh` 96 ms, a crossing 3.3 ms; the
+  Valley 254 ms per apply (P5-2: 180-340 ms for every recipe). The P5-5 pinned pass: a landform adds 85-325 ms to a 150 ft
+  open of about 0.7 s and the recipe accounts for all of it, because it runs on the main
+  thread in the frame that starts the open (worst frame under the loading screen 500-700 ms
+  against Flat's 335-448 ms); a 200 ft gorge opens in 1.5 s with one 1.2 s frame (the recipe
+  could move onto the loader's worker: it writes only the document). Memory in authoring within
+  10 MB of Flat's. A shaped map strokes like a flat one (medians within 0.1 ms). In play the terraces
+  level costs about 0.2 ms of GPU and 80 ms on a warm load, most likely its river and falls.
+
+## Authoring
+
+- **The dialog** (`NewMapDialog`, P5-3; [../UI_SYSTEMS.md](../UI_SYSTEMS.md) "New map
+  dialog"): a Landform tile row under the biome grid, one glyph tile per `KINDS` entry in that
+  order (ids `landform_<kind>`, icons `landform-<kind>.svg`, labels `NAMES`), and a caption
+  under it that is the chosen kind's `CAPTIONS` entry. A caption describes the landform, never
+  the draw, so an author is not promised a ford this seed did not draw. The default is
+  `DEFAULT` (Valley) with a biome and Flat with Bare ground; picking a biome again brings back
+  the landform shown before, unless the author picked one in between. The spec gains
+  `landform`. F1's "New map" row: "Pick a size, a biome and a landform; the seed draws the
+  water and the way across".
+- **Everything is editable.** A recipe writes only what the tools write, with no history
+  entry: the tiers are Sculpt tiers (Raise, Smooth, Flatten, Tier work on them as on any
+  stroke), the rivers and ponds are Water tool bodies (Ctrl erases a river whole; a new river
+  joins them as a confluence), the crossings are Bridge tool crossings (Ctrl erases one; they
+  follow later sculpt and water edits), the wash is a painted surface. Not in scope (decided
+  2026-10-04): a landform on a dressed Blender map, landform parameters (the tools are for
+  that), a random-landform roll beyond the seed, several rivers per landform.
+- **Harness:** the render-job driver's `new_map` op takes a `landform` key (default `flat`, so
+  older jobs keep their ground); `probes/landform.gd` opens a landform map, logs the recipe's
+  report and points the camera at its parts.
+
+## Verification
+
+- **Unit tests** (`tests/unit/`): `test_starting_landform.gd` (the kinds' names and captions,
+  Flat changes nothing, the same seed gives a byte-identical map, seeds turn the axis, the
+  trough's depth scales with size and the rim stays at the base, 40 seeds draw rivers near
+  their chance and never break the map, the bluff is one tier on one bank only, the tributary
+  joins the river, a dry draw paints a wash of the scree surface, the glade centres on the
+  stage), `test_landform_hilltop.gd` (determinism, heading, the summit and a flat crown on a
+  tier, 40-seed chances, no crown is never a bare mound, a crownless hill's flank ledge
+  toward the camera, the crown pool spills over the face in a fall, cost),
+  `test_landform_terraces.gd` (determinism, heading, dry draws on flat tiers with rock faces
+  between, 40-seed chances, cost), `test_landform_lakeshore.gd` (determinism, the corner, never
+  the camera's corner, one deep lake below its rim with the stage and islet dry, 40-seed
+  chances, cost), `test_landform_gorge.gd` (determinism, heading, a dry floor tiers below the
+  rim behind rock walls, 40-seed chances, cost), `test_authoring_open.gd` (a landform tile per
+  kind, the default follows the biome, a pick sets the spec and caption, the icons load,
+  `opening_status` names the landform). Phase 5 took the suite from 1890 to 1929 tests.
+- **Render jobs** (`tools/render_jobs/jobs/`, described in
+  [../../tools/render_jobs/README.md](../../tools/render_jobs/README.md)): `landform_look.json`
+  (P5-1 and P5-2: each landform in two biomes at home and zoom 8, water hidden and shown, the
+  `_p5_` levels), `landform_dialog.json` (P5-3: the dialog with each tile and its caption),
+  `phase5_valley/hilltop/terraces/lakeshore/gorge.json` and their union
+  `phase5_judgment_set.json` (P5-4: 20 levels `_p5j_<kind>_<biome>_<seed>`, 103 captures; the
+  verdict `VERDICT.md` and the captures in `user://render_jobs/phase5_judgment_set/`, the
+  half-size iterations in `phase5_<kind>/`, the dialog in `landform_dialog/`), and the pinned
+  pass `p5_perf_open.json`, `p5_perf_strokes.json`, `p5_perf_play.json`.
+  `cleanup_levels.json` removes the `_p5_` and `_p5j_` levels. The verdict is summarised in
+  [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Verification status".
+- **Performance** ([../PERFORMANCE.md](../PERFORMANCE.md)): "Phase 5 (starting landforms):
+  pinned performance pass (2026-10-04)", with "Opening a new map", "The first strokes on a
+  shaped map" and "Play".
+
+## Open work
+
+The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work", "Landform follow-ups";
+this doc does not repeat it.
+
+## History
+
+- P5-0 (2026-10-04, no commit): the open path timed through the pure functions (a scratch
+  probe); the recipe's water stays before the open.
+- P5-1 (aaa3231): `StartingLandform`, the shared steps and the Valley; `NewMap.create`'s
+  `landform`, `paint_starting_cover`'s centre, `NewMap.from_spec`; `probes/landform.gd`,
+  `jobs/landform_look.json`.
+- P5-3 (b226cfb): the dialog's Landform row, the glyphs, the caption, the default,
+  `NewMap.opening_status`, the F1 row, the driver's `landform` key, `jobs/landform_dialog.json`.
+- P5-2 (469c0d2): Hilltop, Terraces, Lakeshore and Gorge; `disc_distance`, `box_distance`,
+  `tier_inset`, `carve_pond`, `restore_outside`, `span_crossing`; the Valley at 3.5 m with
+  the rim at 0.6.
+- P5-4 (4bf7ea9, 2c11229, 43fbcab, a46b3e4, 0bcda1d, 353a6ae): the judgment set and its
+  fixes: gorge headings across the view, two tiers from 150 ft, the stream at the far wall;
+  the hill's crown pool and fall with the stage on the camera's shoulder, no bare mound; the
+  lake centre at 0.5; the Valley's bluff; the camera fix (`VIEW` / `NEAR`); the `phase5_*`
+  jobs.
+- P5-5 (1ff484e): the pinned performance pass (`p5_perf_*` jobs, `PERFORMANCE.md`).
+- P5-4b (8092d17): a flank ledge on crownless hills (crown chance 0.85), the lake away from
+  the camera's corner, `cleanup_levels` covers `_p5_` and `_p5j_`.
+- P5-6: these docs.
