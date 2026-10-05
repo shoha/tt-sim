@@ -533,6 +533,21 @@ func test_a_terrain_draws_the_exit_and_drops_it_when_the_river_goes() -> void:
 	terrain.free()
 
 
+func test_the_skirt_parts_carry_its_vertex_mirror() -> void:
+	var doc := _edge_doc()
+	var width := AuthoredTerrain.skirt_width_m()
+	var parts := RiverExitMesh.skirt_parts(doc, width, AuthoredTerrain.SKIRT_FADE_M, 0.45)
+	var made := TerrainMeshBuilder.skirt_vertex_mirror(doc, width, AuthoredTerrain.SKIRT_FADE_M)
+	var mirror: Dictionary = parts.mirror
+	assert_eq(mirror.count, made.count)
+	assert_eq(mirror.positions, made.positions, "the same positions, bit for bit")
+	assert_eq(mirror.normals, made.normals, "the same encoded normals")
+	var terrain := AuthoredTerrain.create(doc)
+	var kept: Dictionary = terrain.get("_skirt_mirror")
+	assert_false(kept.is_empty(), "a built skirt has its mirror before the first edge edit")
+	terrain.free()
+
+
 func test_the_load_worker_builds_the_exits() -> void:
 	var doc := _edge_doc()
 	var prepared := AuthoredLoadPrep.compute(doc)

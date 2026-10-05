@@ -80,16 +80,17 @@ const BANK_DRY_M := 0.8
 
 
 ## The skirt for `doc` with its river exits: {"skirt": TerrainMeshBuilder.build_skirt_arrays
-## with the exits' windows cut out, "exits": build() ({} without exits)}. `width`, `fall`,
-## `wobble`: the skirt's (AuthoredTerrain.skirt_width_m(), SKIRT_FADE_M, SKIRT_WOBBLE).
+## with the exits' windows cut out, "exits": build() ({} without exits), "mirror": the skirt's
+## vertex mirror for in-place edge updates (TerrainMeshBuilder.skirt_mirror_of)}. `width`,
+## `fall`, `wobble`: the skirt's (AuthoredTerrain.skirt_width_m(), SKIRT_FADE_M, SKIRT_WOBBLE).
 static func skirt_parts(doc: MapDocument, width: float, fall: float, wobble: float) -> Dictionary:
 	var arrays := TerrainMeshBuilder.build_skirt_arrays(doc, width, fall)
+	var count := TerrainMeshBuilder.boundary_samples(doc).size()
+	var mirror := TerrainMeshBuilder.skirt_mirror_of(arrays, count)
 	var exits := build(doc, width, fall, wobble)
 	if not exits.is_empty():
-		arrays[Mesh.ARRAY_INDEX] = skip_columns(
-			arrays[Mesh.ARRAY_INDEX], TerrainMeshBuilder.boundary_samples(doc).size(), exits.windows
-		)
-	return {"skirt": arrays, "exits": exits}
+		arrays[Mesh.ARRAY_INDEX] = skip_columns(arrays[Mesh.ARRAY_INDEX], count, exits.windows)
+	return {"skirt": arrays, "exits": exits, "mirror": mirror}
 
 
 ## The exits' geometry (see the header): {"windows": Array[Vector2i] (first boundary column,
