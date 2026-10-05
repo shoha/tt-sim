@@ -54,9 +54,9 @@ const GHOST_M := 2.0
 ## nearly opaque, then one every RING_STEP_MID_M out to RING_MID_M and one every
 ## RING_STEP_FAR_M out to the channel's reach.
 const RING_STEP_M := 0.25
-const RING_FINE_M := 8.0
+const RING_FINE_M := 24.0
 const RING_STEP_MID_M := 0.5
-const RING_MID_M := 16.0
+const RING_MID_M := 32.0
 const RING_STEP_FAR_M := 1.0
 ## An extra ring this close to one of the skirt's own is dropped.
 const RING_MERGE_M := 0.15
