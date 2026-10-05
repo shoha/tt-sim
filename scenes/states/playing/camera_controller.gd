@@ -166,6 +166,9 @@ func _process(delta: float) -> void:
 	handle_movement(delta)
 	handle_zoom(delta)
 	_handle_edge_pan(delta)
+	CanopyFade.publish(
+		_game_map.camera_node, _base_camera_size, Vector2(_game_map.world_viewport.size)
+	)
 	PerformanceMonitor.stop_timer(&"perf/camera_update_ms")
 
 
@@ -283,6 +286,28 @@ func _update_camera_offset() -> void:
 			var back := camera_node.global_basis.z.normalized()
 			if min_y < floor_y and back.y > 0.001:
 				camera_node.global_position += back * ((floor_y - min_y) / back.y)
+	_hold_near_plane_below_home(camera_node)
+
+
+## Below the home zoom, back the camera off along its own view axis (the frame is unchanged)
+## so the near plane stays as far in front of the ground as the home zoom has it. Scaled in
+## with the zoom, the near plane used to slice the canopies nearest the camera flat; the
+## close-zoom canopy fade (CanopyFade) now reveals the ground softly instead. The home zoom
+## and above are untouched.
+func _hold_near_plane_below_home(camera_node: Camera3D) -> void:
+	var back := camera_node.global_basis.z.normalized()
+	var extra := near_plane_hold(camera_node.size, _base_camera_size, _base_camera_offset.y, back.y)
+	if extra > 0.0:
+		camera_node.global_position += back * extra
+
+
+## How far (metres along the view axis) to back the camera off at orthographic size `size`
+## for a home size `home` whose camera stands `home_height` above the ground at its centre,
+## with a back axis rising `back_y` per metre. 0 at the home zoom and above. Pure.
+static func near_plane_hold(size: float, home: float, home_height: float, back_y: float) -> float:
+	if home <= 0.0 or back_y <= 0.001 or size >= home:
+		return 0.0
+	return (1.0 - size / home) * home_height / back_y
 
 
 ## The lower of the two bottom screen corners' ray origins (world Y).

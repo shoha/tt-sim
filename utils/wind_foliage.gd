@@ -79,6 +79,10 @@ const _GRASS_BASE_DARKEN: float = 0.55
 ## channel: see the uniform's own comment for the measured black-silhouette bake it
 ## works around.
 const BAKED_AO_STRENGTH: float = 0.0
+## Values of the shader's canopy_part uniform (the close-zoom canopy fade): 0, the default,
+## takes no part; tree bark fades its limbs; tree leaf cards fade card by card.
+const CANOPY_BARK := 1
+const CANOPY_CARD := 2
 
 static var _shader: Shader = null
 static var _shader_no_aa: Shader = null
@@ -311,10 +315,24 @@ static func apply_material(mesh: Mesh, category: String, overrides: Dictionary =
 		# missing one, which the shader would read as "full sway everywhere".
 		wind_material.set_shader_parameter("use_vertex_wind", surface_has_vertex_colors(mesh, i))
 		wind_material.set_shader_parameter("mesh_height", mesh_height)
+		if category == "tree":
+			wind_material.set_shader_parameter("canopy_part", canopy_part(source_material))
 		if category == "grass":
 			wind_material.set_shader_parameter("blade_height", blade_height)
 			wind_material.set_shader_parameter("base_darken", _GRASS_BASE_DARKEN)
 		mesh.surface_set_material(i, wind_material)
+
+
+## The close-zoom canopy fade's part (the shader's canopy_part, CanopyFade) for a tree
+## surface: CANOPY_CARD when its source material is a leaf-card cutout (any transparency
+## mode), CANOPY_BARK when it is opaque (trunk and branches: the shader fades the limbs and
+## keeps the trunk). treecube trees carry two surfaces, opaque bark and alpha-scissor leaf
+## cards (measured on every temperate forest and boreal taiga tree, 2026-10-05). A Blender
+## map's baked scatter imports every surface as alpha blended, so all of them count as cards.
+static func canopy_part(source: BaseMaterial3D) -> int:
+	if source.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
+		return CANOPY_CARD
+	return CANOPY_BARK
 
 
 ## True when surface `index` of `mesh` carries a per-vertex colour array (glTF COLOR_0

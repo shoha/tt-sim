@@ -351,6 +351,43 @@ throttle (`VisualBroadcastThrottle`) were verified behaviourally at runtime rath
 frame-time measured, since the cost they remove was a one-off re-bake/RPC per edit tick,
 not a steady-state cost.
 
+### Close-zoom canopy fade (Polish, 2026-10-05)
+
+The cause of "the camera cuts into tree canopies at close zoom" was both candidates. The
+camera's offset scaled with the zoom (`_update_camera_offset`), so its near plane (0.001 in
+front of a camera 3.5 m above the ground at zoom 6, 1.4 m at zoom 2) sliced every canopy
+near the bottom of the frame flat: crowns cut off birch trunks, round bushes shown hollow.
+It already does this at the home zoom for the tallest trees at the bottom edge (a 15 m pine
+there is culled whole; `pol_trees` `f_a_z13` against `f_a_z13_back`). Moving the camera
+back along its view axis (`probes/close_zoom.gd back`, same frame) removes the cut and shows
+the second cause: below about zoom 10 the canopies between the camera and the view centre
+fill the frame with leaf cards (`f_a_z6_nofade`).
+
+The fix, which leaves the home zoom and above untouched:
+
+- `CameraController._hold_near_plane_below_home` backs the camera off along its view axis
+  below the home size so the near plane stays as far ahead of the ground as at home (about
+  21.7 m along the centre ray at every close zoom; was 9.4 m at zoom 6, 3.9 m at zoom 2).
+  Water, its depth reads, the grid and the token fade render the same (`f_river_z6*` against
+  `f_river_z6*_old`, the camera moved back to its old place).
+- The foliage shader dissolves the canopies in front of the view-centre ground over a soft
+  round clearing in the middle of the screen (`apply_canopy_fade` in
+  `wind_foliage_include.gdshaderinc`, globals from `CanopyFade`): strength 0 at the home zoom
+  rising to 1 at 0.55 of it, a depth band from 0.5 m in front of the centre ground over 0.35
+  x size, a clearing full inside 0.3 x size of the centre ray and gone past 0.75 x size.
+  Leaf cards drop out card by card and limbs limb by limb (key: the authored phase,
+  COLOR.b); the trunk (authored flutter 0) always stays, and the shadow pass is left alone,
+  so the forest floor keeps its dappled light. Trees at the frame's edges stay whole and
+  frame the clearing. `WindFoliage.canopy_part` tells bark from leaf cards by the source
+  material's transparency.
+
+Cost, indicative (user's RTX 3080, in-run A/B with `close_zoom.gd fade`, not the pinned
+procedure, GPU contended): zoom 6 in a temperate forest grove, fade on 2.16 / 2.26 ms GPU
+median against off 2.12 / 2.14 ms and the old camera without the fade 2.12 ms, so about
++0.05 to +0.1 ms where it is on; at the home zoom 3.40 against 3.39 ms (and 4.23 against
+4.19 in a noisier run), nothing. The CPU side is one layer-1 ray per frame below the home
+zoom and two global parameter writes only when a value changes.
+
 ## Per-frame idle and drag work removed (2026-09-15)
 
 What changed (branch `review/perf-medium`): the invisible tilt-shift quad under the camera

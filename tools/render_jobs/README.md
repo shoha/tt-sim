@@ -212,6 +212,7 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 | `env.gd` | `color` ([r, g, b]), `mouse` ([x, y]), `recentre` (bool), `skirt` (bool) | Flat background colour; the cursor position zoom-toward-cursor uses (the judgment set pins it to the screen centre so zoom-out is repeatable); camera clamp to fitted map bounds on or off; terrain skirt visibility. |
 | `ground_params.gd` | `params` ({uniform: value}), `broad_factor` (int) | Set ground shader uniforms for an in-run A/B; rebuild the broad weight texture at a different box-filter factor. |
 | `tree_fade.gd` | `params` ({uniform: value}), `factor` (float) | Set occlusion-fade uniforms on every registered tree material; set the brush's canopy fade radius factor (0 turns it off). |
+| `close_zoom.gd` | `action` (`camera` default, `back`, `fade`), `d`, `on` | Trees at close zoom (Polish): `camera` logs the camera's size, position, near and far, the ray origins' heights (where the near plane cuts) and the centre ray's distance to y = 0; `back` moves the camera `d` metres along its view axis (same orthographic frame; negative moves it nearer, `-12.32` at zoom 6 puts it back where it stood before the near-plane hold); `fade` turns the close-zoom canopy fade off (`canopy_part` 0 on every foliage material that takes part) and back on for exactly those. |
 | `reflection_probe.gd` | `visible` (default true) | Show or hide the level reflection probe; logs its box and the environment's SSIL/SDFGI/glow/fog/tonemap switches. |
 | `grid.gd` | `visible` | Log, and optionally set, the grid overlay's visibility directly (bypasses the grid policy; fine for a render session only). |
 | `scatter_warm.gd` | `warm` (bool), `use_biome`, `tool`, `select` | Toggle `AuthoredScatter.warm_pipelines`; choose the brush biome and/or the biome tool without painting. Logs pipeline compilation counts. |
@@ -501,6 +502,14 @@ numerically (for example where a fade or a tint band starts).
   pier along the pond; captured at home with the grid, zoom 8 on the river arch (plain, grid,
   water hidden), zoom 6 on it (facets, paving scale, coping stones) and zoom 8 on the pier
   arch. 6 captures and `INDEX.md`; the level is kept for look runs.
+- `jobs/pol_trees.json`: trees at close zoom (Polish, 2026-10-05; about 95 s to build, 90 s
+  to look): new 150 ft temperate forest (a waist river at x = -9) and boreal taiga maps saved
+  as `_pol_forest` and `_pol_taiga`, captured from zoom 20 down to 2, with the camera moved
+  back (`_back`), the fade off (`_nofade`) and the scatter hidden; an in-run GPU A/B of the
+  fade at zoom 6 in a grove and at home (`--only f_gpu`); the river and its grid at zoom 6
+  against the camera's old place (`_old`); the Thin brush's ring; the forest played with
+  tokens in a grove and in the river; Deciduous clusters played read-only (`b_*`). 30
+  captures and `INDEX.md`; the levels are kept.
 - `jobs/ford_look.json`: the ford (P4d-2): a new 150 ft temperate forest map with a waist
   river, an ankle stream and a deep river, saved as `_p4d_ford` and played (`saved` loads it
   in play: tokens spawn only there); a ford across the river and one across the stream through
