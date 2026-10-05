@@ -4,7 +4,7 @@
  "hang_s": 90,
  "steps": [
   {"op": "wait", "s": 1.0},
-  {"op": "expand", "values": ["7", "3", "14", "12"], "template": [
+  {"op": "expand", "values": ["7", "3", "40", "9"], "template": [
    {"op": "saved", "folder": "_p5j_hilltop_temperate_forest_summer_s1_{value}"},
    {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 150, "seed": "{value}", "landform": "hilltop", "phase": "build"},
    {"op": "wait_ready", "settle": 1.5, "phase": "build"},
@@ -17,7 +17,7 @@
    {"op": "wait", "s": 1.5, "phase": "look", "for": "hilltop_forest_{value}_home*"},
    {"op": "call", "script": "res://tools/render_jobs/probes/grid_ground.gd", "action": "key_g", "phase": "look", "for": "hilltop_forest_{value}_home"},
    {"op": "wait", "s": 0.8, "phase": "look", "for": "hilltop_forest_{value}_home"},
-   {"op": "capture", "name": "hilltop_forest_{value}_home", "desc": "Temperate forest, 150 ft, Hilltop, seed {value}, the home camera with the grid: does the hill read as a place (a rock-lipped crown with its pool spilling in a fall, or a second hill, or the flank spring) with the glade on its shoulder toward the camera"},
+   {"op": "capture", "name": "hilltop_forest_{value}_home", "desc": "Temperate forest, 150 ft, Hilltop, seed {value}, the home camera with the grid: does the hill read as a place (a rock-lipped crown with its pool spilling in a fall, or the flank ledge toward the camera with a second hill or the flank spring) with the glade on its shoulder toward the camera"},
    {"op": "call", "script": "res://tools/render_jobs/probes/grid_ground.gd", "action": "key_g", "phase": "look", "for": "hilltop_forest_{value}_home"},
    {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "water", "visible": false, "phase": "look", "for": "hilltop_forest_{value}_home_nowater"},
    {"op": "wait", "s": 0.5, "phase": "look", "for": "hilltop_forest_{value}_home_nowater"},
@@ -92,6 +92,6 @@
   {"op": "title", "phase": "look", "for": "hilltop_forest_7_play_*"},
   {"op": "wait", "s": 1.0, "phase": "look", "for": "hilltop_forest_7_play_*"},
 
-  {"op": "index", "title": "P5-4 judgment set: Hilltop", "intro": "Produced by tools/render_jobs/jobs/phase5_hilltop.json at 1920x1080. New 150 ft Hilltop maps through the driver's new_map op, saved as _p5j_hilltop_<biome>_<seed>: temperate forest seeds 7 (crown, crown pool with a fall, stones), 3 (crown, pool, no stones), 14 (no crown, the flank spring) and 12 (no crown, a second hill, dry), and alpine meadow seed 7. Per level: home with the grid, home with the water hidden, zoom 8 on the stage, the summit and the stones or stream; then seed 7 played with tokens. The recipe's report per level is in log.txt."}
+  {"op": "index", "title": "P5-4b judgment set: Hilltop", "intro": "Produced by tools/render_jobs/jobs/phase5_hilltop.json at 1920x1080. New 150 ft Hilltop maps through the driver's new_map op, saved as _p5j_hilltop_<biome>_<seed>: temperate forest seeds 7 (crown, crown pool with a fall, stones), 3 (crown, pool, no stones), 40 (no crown: the flank ledge toward the camera and the flank spring) and 9 (no crown: the flank ledge and a second hill, dry), and alpine meadow seed 7. Per level: home with the grid, home with the water hidden, zoom 8 on the stage, the summit and the stones or stream; then seed 7 played with tokens. The recipe's report per level is in log.txt."}
  ]
 }

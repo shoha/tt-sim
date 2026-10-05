@@ -21,10 +21,15 @@ extends RefCounted
 ## flank is steeper than the falls rule's drop slope at every map size, so it steps down in
 ## falls; stepping stones over it below the foot (STONES_CHANCE). A hill without a crown
 ## always draws at least one more feature: when the seed drew neither the second hill nor
-## the stream, it gets the second hill (never a bare mound; P5-4). The stage is on the
-## hill's shoulder toward the camera (NEAR): STAGE_SHOULDER_SHARE of the radius out, or
-## past the crown's toe when there is a crown (STAGE_CROWN_TOE_M), within half the half
-## extent of the centre.
+## the stream, it gets the second hill (never a bare mound; P5-4). A hill without a crown
+## carries a flank ledge (P5-4b): a step in the camera-facing flank, the ground above a line
+## LEDGE_HEIGHT_SHARE of the way up the hill raised to the next tier with
+## HeightBrush.tier_goal over an arc of LEDGE_ARC_DEG about NEAR, as the Sculpt tool's Tier
+## steps a slope; only ever raising, so the flank above the bench is the hill's own. The
+## stage is on the hill's shoulder toward the camera (NEAR): STAGE_SHOULDER_SHARE of the
+## radius out, past the crown's toe when there is a crown (STAGE_CROWN_TOE_M), at the foot of
+## the ledge's face when there is a ledge (STAGE_LEDGE_TOE_M), within half the half extent
+## of the centre.
 
 const HILL_HEIGHT_M := 4.5
 const HILL_RADIUS_SHARE := 0.45
@@ -41,8 +46,9 @@ const CROWN_WARP := 0.12
 const SECOND_HILL_RADIUS_SHARE := 0.3
 const SECOND_HILL_OFFSET_SHARE := 0.55
 const SECOND_HILL_HEIGHT_SHARE := 0.5
-## Feature chances (the no-sameness palette).
-const CROWN_CHANCE := 0.7
+## Feature chances (the no-sameness palette). The crown 0.85 since P5-4b: a crownless hill
+## read plainer than a crowned one even with its ledge.
+const CROWN_CHANCE := 0.85
 const SECOND_HILL_CHANCE := 0.3
 const STREAM_CHANCE := 0.5
 const STONES_CHANCE := 0.4
@@ -67,6 +73,13 @@ const STONES_EDGE_M := 4.0
 const STAGE_SHOULDER_SHARE := 0.55
 const STAGE_CROWN_TOE_M := 1.0
 const STAGE_REACH_SHARE := 0.5
+## The flank ledge of a crownless hill: its line stands on the tier nearest this share of the
+## hill's height (at least one), the bench a tier above; the arc's full span about NEAR (the
+## seed draws within it; under the stream's STREAM_AZIMUTH_DEG.x either side, so a stream
+## never crosses the bench); the stage this far out past the ledge's line.
+const LEDGE_HEIGHT_SHARE := 0.33
+const LEDGE_ARC_DEG := Vector2(60.0, 100.0)
+const STAGE_LEDGE_TOE_M := 1.5
 ## A stream's end stops this far inside the map edge (within WaterCarve.EDGE_MARGIN_M, so it
 ## runs off the map instead of tapering to a head).
 const EDGE_MARGIN_M := 0.5
@@ -99,6 +112,11 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 	var crown := crown_of(summit, tier, crown_radius / radius)
 	var height := summit if not wants_crown else float(crown.hill_height)
 	var crown_noise := StartingLandform.warp_noise(draws, crown_radius)
+	var ledge_arc := deg_to_rad(draws.randf_range(LEDGE_ARC_DEG.x, LEDGE_ARC_DEG.y))
+	var ledge := ledge_of(height, tier, radius)
+	var wants_ledge := not wants_crown and bool(ledge.fits)
+	var ledge_r: float = ledge.line_r
+	var ledge_target: float = ledge.target
 	var second_centre: Vector2 = centre - frame.dir * half * SECOND_HILL_OFFSET_SHARE
 	var second_radius := half * SECOND_HILL_RADIUS_SHARE
 	var second_height := height * SECOND_HILL_HEIGHT_SHARE if wants_second else 0.0
@@ -112,6 +130,19 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 					second_height
 					* StartingLandform.bump(p.distance_to(second_centre) / second_radius)
 				)
+			if wants_ledge:
+				# Inside the band: above the ledge's line and within the arc (metres along the
+				# line from the arc's nearer end). Only raising: uphill the hill stands above
+				# the bench and keeps its own slope.
+				var offset := p - centre
+				var inside := minf(
+					ledge_r - offset.length(),
+					(ledge_arc * 0.5 - absf(StartingLandform.NEAR.angle_to(offset))) * ledge_r
+				)
+				var goal := HeightBrush.tier_goal(
+					natural, ledge_target, StartingLandform.tier_inset(inside)
+				)
+				return h + maxf(natural, goal)
 			if not wants_crown:
 				return h + natural
 			var distance := StartingLandform.disc_distance(
@@ -125,6 +156,8 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 			shoulder_out,
 			crown_radius * (1.0 + CROWN_WARP) + HeightBrush.tier_span(tier) + STAGE_CROWN_TOE_M
 		)
+	if wants_ledge:
+		shoulder_out = maxf(shoulder_out, ledge_r + STAGE_LEDGE_TOE_M)
 	var stage := shoulder_stage(centre, shoulder_out, half)
 	var report := PackedStringArray(
 		[
@@ -139,6 +172,13 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 			),
 		]
 	)
+	if wants_ledge:
+		report.append(
+			(
+				"flank ledge at %.2f m (tier %d) from %.1f m out over a %d deg arc"
+				% [ledge_target, int(ledge.level), ledge_r, roundi(rad_to_deg(ledge_arc))]
+			)
+		)
 	if wants_second:
 		report.append(
 			"second hill %.2f m at (%.1f, %.1f)" % [second_height, second_centre.x, second_centre.y]
@@ -240,6 +280,23 @@ static func crown_of(summit: float, tier: float, share: float) -> Dictionary:
 		"level": level,
 		"target": target,
 		"hill_height": minf((target - tier) / at_outline, target),
+	}
+
+
+## The flank ledge of a crownless hill of `height` and `radius`: its line is where the hill's
+## profile crosses the tier nearest LEDGE_HEIGHT_SHARE of the height (at least one), so the
+## face is a full tier there; the bench stands on the next tier (`level`, `target`), and
+## `line_r` is the line's distance from the centre. `fits` is false when the bench would
+## reach the summit (a tier too tall for the hill), and the hill then has no ledge.
+static func ledge_of(height: float, tier: float, radius: float) -> Dictionary:
+	var below := maxi(1, roundi(height * LEDGE_HEIGHT_SHARE / tier))
+	var line_height := below * tier
+	var t := acos(clampf(2.0 * line_height / maxf(height, 1e-6) - 1.0, -1.0, 1.0)) / PI
+	return {
+		"level": below + 1,
+		"target": (below + 1) * tier,
+		"line_r": radius * t,
+		"fits": (below + 1) * tier < height,
 	}
 
 

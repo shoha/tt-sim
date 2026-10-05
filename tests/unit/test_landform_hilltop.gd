@@ -169,6 +169,60 @@ func test_no_crown_is_never_a_bare_mound() -> void:
 	assert_gt(bare, 0, "some seed drew no crown")
 
 
+func test_no_crown_has_a_flank_ledge_toward_the_camera() -> void:
+	# P5-4b: a crownless hill has a one-tier bench on its camera-facing flank, its face a cliff.
+	var near := StartingLandform.NEAR
+	var found := 0
+	for seed_value in range(1, 4 * SEEDS + 1):
+		var shaped := _hilltop(150, seed_value)
+		var report: String = shaped.report
+		if not report.contains("no crown"):
+			continue
+		found += 1
+		var label := "seed %d" % seed_value
+		gut.p("%s: %s" % [label, report])
+		assert_true(report.contains("flank ledge"), "%s: %s" % [label, report])
+		var doc: MapDocument = shaped.doc
+		var half := StartingLandform.half_extent(doc)
+		var radius := half * LandformHilltop.HILL_RADIUS_SHARE
+		var frame := LandformHilltop.hilltop_frame(
+			half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+		)
+		var centre: Vector2 = frame.centre
+		var ledge := LandformHilltop.ledge_of(
+			LandformHilltop.HILL_HEIGHT_M * StartingLandform.size_scale(doc),
+			doc.tier_height_m,
+			radius
+		)
+		var line_r: float = ledge.line_r
+		var target: float = ledge.target
+		var step := doc.sample_step().x
+		var on_bench := 0
+		var steepest_face := 0.0
+		for z in doc.samples_z() - 1:
+			for x in doc.samples_x() - 1:
+				var offset := doc.sample_to_world(Vector2(x, z)) - centre
+				if absf(near.angle_to(offset)) > deg_to_rad(20.0):
+					continue
+				var r := offset.length()
+				if r < line_r * 0.4 or r > line_r + 1.0:
+					continue
+				var i := doc.sample_index(x, z)
+				var h := doc.heights[i]
+				if r <= line_r and absf(h - target) <= 0.01:
+					on_bench += 1
+				var rise := maxf(
+					absf(doc.heights[i + 1] - h), absf(doc.heights[doc.sample_index(x, z + 1)] - h)
+				)
+				steepest_face = maxf(steepest_face, rise / step)
+		assert_gt(on_bench, 3, "%s a run of samples on the bench's tier" % label)
+		assert_true(HeightBrush.on_tier(target, doc.tier_height_m), "%s on a tier" % label)
+		assert_gte(steepest_face, CLIFF_SLOPE, "%s the ledge's face passes the cliff rule" % label)
+		if found == 3:
+			break
+	assert_gt(found, 0, "some seed drew no crown")
+
+
 func test_crown_pool_spills_over_the_face_in_a_fall() -> void:
 	# P5-4: with a crown the spring is a pool on the crown's top that falls off its face.
 	var found := 0

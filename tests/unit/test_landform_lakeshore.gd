@@ -78,6 +78,31 @@ func test_seeds_pick_the_corner() -> void:
 	)
 
 
+func test_the_lake_is_never_in_the_cameras_corner() -> void:
+	# P5-4b: a lake in the corner StartingLandform.NEAR points to lies at the bottom of the
+	# view, cut by the foreground.
+	var near := StartingLandform.NEAR
+	var corners := {}
+	for seed_value in range(1, SEEDS + 1):
+		var frame := LandformLakeshore.lakeshore_frame(
+			22.86, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+		)
+		var centre: Vector2 = frame.centre
+		var seeds: PackedInt32Array = corners.get(frame.corner, PackedInt32Array())
+		seeds.append(seed_value)
+		corners[frame.corner] = seeds
+		assert_false(
+			centre.x * near.x > 0.0 and centre.y * near.y > 0.0,
+			(
+				"seed %d lake centre (%.1f, %.1f) in the camera's corner"
+				% [seed_value, centre.x, centre.y]
+			)
+		)
+	assert_eq(corners.size(), 3, "all three other corners over %d seeds" % SEEDS)
+	for corner in corners:
+		gut.p("lakeshore corner %s: seeds %s" % [corner, corners[corner]])
+
+
 func test_one_deep_lake_below_its_rim_with_the_stage_and_the_islet_dry() -> void:
 	var islets := 0
 	for seed_value in range(1, 13):
