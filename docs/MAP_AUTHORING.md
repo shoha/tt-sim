@@ -304,8 +304,8 @@ the lake's corner drawn from the three that are not the camera's own; then in P5
 corner weighted 0.6 with a side lake placed inside the home frame, crossings only over wet
 points, the ledge arc at 90-130 and the Valley's floor as its glade with a thin camera-side
 bank (`phase5_lakeshore/hilltop/valley` re-run: the side lakes of seeds 14 and 29 sit in the
-frame, the forest valleys' floor and river read from home). Open, none blocking: the gorge's
-open frame (Open work, "Landform follow-ups"). Earlier phase 5 renders:
+frame, the forest valleys' floor and river read from home). The gorge's open frame was
+closed in P5-8 (the document built on a worker; Open work, "Landform follow-ups"). Earlier phase 5 renders:
 `landform_look` (P5-1, P5-2: the `_p5_` levels) and `landform_dialog` (P5-3: the six tiles and
 the caption), each in its `user://render_jobs/` folder.
 
@@ -433,10 +433,13 @@ Landform follow-ups (phase 5, P5-4 to P5-7, 2026-10-05; none blocking; `systems/
 P5-7 closed four: the ledge arc (90-130, the stream's window clears the bench), the lake
 stones' `no_water` (`straightest_wet`), the side-corner lake (placed inside the home frame,
 smaller) and the valley under forest canopy (the floor is the glade and the camera-side bank
-stays thin). What remains:
-- A 200 ft gorge opens in 1.5 s with one 1.2 s frame, because the recipe runs on the main
-  thread in the frame that starts the open (`PERFORMANCE.md` "Phase 5 (starting landforms)").
-  The recipe writes only the document, so it could move onto the loader's worker.
+stays thin). P5-8 closed the gorge's open frame: the new-map document (recipe and starting
+cover) is built on a worker under the loading screen (`NewMapBuild`); a 200 ft gorge's worst
+frame 1,183 -> 517 ms, every 150 ft landform's 500-700 -> 220-290 ms (`PERFORMANCE.md` "Phase 5
+(starting landforms)", "Opening a new map"). What remains:
+- Every new-map open, Flat included, still has one 220-290 ms frame from the load's own
+  main-thread work after the document, and a 200 ft gorge one of 517 ms (most likely its water
+  and crossing install). Not landform work; the next target if opens must stay under 150 ms.
 
 Follow-ups:
 - A quick brush pass still gives few trees in sparse biomes (temperate forest targets 0.02

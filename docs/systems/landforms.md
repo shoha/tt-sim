@@ -224,8 +224,12 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
 
 - **The open path.** `AuthoringController` emits the loading line
   `NewMap.opening_status(spec)` ("Shaping the valley..." for a landform other than Flat,
-  "Building the map..." otherwise), then builds `MapSourceLoader.build_async("",
-  NewMap.from_spec(spec))`. `from_spec` reads `{size_ft, biome_id, seed, landform}` (each
+  "Building the map..." otherwise), then builds the document with `NewMapBuild` (P5-8:
+  `NewMap.from_spec(spec)` on a `WorkerThreadPool` task, polled once a frame under the loading
+  screen; the seed is drawn and the palette cache filled on the main thread first, the only
+  shared state the recipe touches; on the calling thread under the headless dummy renderer,
+  `GlbUtils.threaded_loads_safe`) and hands it to `MapSourceLoader.build_async("", doc)`.
+  `from_spec` reads `{size_ft, biome_id, seed, landform}` (each
   optional: 100 ft, bare ground, a fresh seed, Flat) and calls `create`, which makes the flat
   document, applies the recipe and then paints the cover around its stage, all before the
   controller opens the map. The document is ordinary data by then, so the load path
@@ -235,10 +239,11 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
 - **Costs.** P5-0's pure timings at 150 ft: a heights pass 69 ms, `plan_river` 1.5 ms,
   `river_goals` 56 ms, `lower` 1.5 ms, `WaterDressing.refresh` 96 ms, a crossing 3.3 ms; the
   Valley 254 ms per apply (P5-2: 180-340 ms for every recipe). The P5-5 pinned pass: a landform adds 85-325 ms to a 150 ft
-  open of about 0.7 s and the recipe accounts for all of it, because it runs on the main
+  open of about 0.7 s and the recipe accounts for all of it, because it ran on the main
   thread in the frame that starts the open (worst frame under the loading screen 500-700 ms
-  against Flat's 335-448 ms); a 200 ft gorge opens in 1.5 s with one 1.2 s frame (the recipe
-  could move onto the loader's worker: it writes only the document). Memory in authoring within
+  against Flat's 335-448 ms); a 200 ft gorge opened in 1.5 s with one 1.2 s frame. Since P5-8
+  the recipe runs on a worker: worst frame 220-290 ms for every 150 ft landform and Flat alike
+  (the load's own main-thread work), 517 ms for a 200 ft gorge. Memory in authoring within
   10 MB of Flat's. A shaped map strokes like a flat one (medians within 0.1 ms). In play the terraces
   level costs about 0.2 ms of GPU and 80 ms on a warm load, most likely its river and falls.
 
@@ -329,3 +334,7 @@ this doc does not repeat it.
   no centre in the camera's quadrant, no stones refused over the drawn lake seeds at 100 and
   150 ft, no `no_water` over 40 valley seeds, the stream never crosses the bench over 40
   crownless seeds, the valley floor's centreline open and its rim dense.
+- P5-8: the new-map document built on a worker under the loading screen (`NewMapBuild`); the
+  thread-safety audit (only the palette cache and the global RNG were shared, both now touched
+  on the main thread first); `test_new_map_build.gd` (threaded and synchronous builds
+  byte-identical for a 200 ft gorge and a 150 ft valley); `p5_perf_open` re-run.

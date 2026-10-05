@@ -219,7 +219,10 @@ func _open_async(
 	var glb := opened.get_absolute_map_path() if opened.map_path != "" else ""
 	var root: Node3D = null
 	if not spec.is_empty():
-		root = await loader.build_async("", NewMap.from_spec(spec))
+		# The recipe runs on a worker under the loading screen (NewMapBuild, P5-8).
+		var made := await NewMapBuild.start(spec).wait(get_tree())
+		if not _superseded(generation):
+			root = await loader.build_async("", made)
 	elif document_path != "":
 		root = await loader.load_async(glb, document_path)
 	elif glb != "":

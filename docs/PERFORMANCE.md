@@ -2242,6 +2242,37 @@ textures); static creeps about 9 MB over the run's 24 opens whatever the landfor
 on round 1: 1,098 MB after Flat (the first open) rising to 1,198 MB after the gorge, the
 process growing rather than a per-landform cost.
 
+**P5-8 (2026-10-05): the document on a worker.** `NewMapBuild` now runs `NewMap.from_spec`
+(the recipe and the starting cover) on a `WorkerThreadPool` task once the loading screen is up,
+and the controller waits for it a frame at a time. The same job re-run, the same settings
+(no `override.cfg` this time; the window's 1920x1080 viewport); `gpu_state` 35 % P8 300 MHz at
+the start, 28 % P5 at the end. Worst frame under the loading screen, before (P5-5) and after:
+
+| 150 ft | Worst frame ms before (rounds 1 / 2 / 3) | After | Loading screen ms after |
+| --- | --- | --- | --- |
+| Flat | 905 / 448 / 335 | 900 (cold) / 521 / 225 | 2,064 / 796 / 677 |
+| Valley | 618 / 596 / 588 | 278 / 225 / 244 | 1,025 / 952 / 976 |
+| Hilltop | 855 / 546 / 542 | 277 / 223 / 227 | 812 / 779 / 751 |
+| Terraces | 609 / 504 / 500 | 288 / 226 / 230 | 731 / 674 / 689 |
+| Lakeshore | 700 / 700 / 695 | 285 / 277 / 226 | 831 / 808 / 803 |
+| Gorge | 924 / 621 / 629 | 289 / 226 / 225 | 988 / 918 / 869 |
+
+| Size: worst frame before -> after (loading screen after) | Flat | Valley | Gorge |
+| --- | --- | --- | --- |
+| 100 ft | 285 -> 237 (605) | 493 -> 282 (764) | 542 -> 281 (758) |
+| 200 ft | 526 -> 282 (740) | 846 -> 276 (1,292) | 1,183 -> 517 (1,229) |
+
+The recipe timings match P5-5's (`perf.gd recipe` still times `NewMap.create` on the main
+thread: 200 ft valley 536 ms, gorge 495 ms). **Verdict: the recipe no longer lands in a frame,
+but the open still has one 220-290 ms frame, and the 200 ft gorge one of 517 ms; the 150 ms
+target is not met by this change.** The 220-290 ms frame is the load's own main-thread work
+after the document (a warm Flat open has it too, at 225 ms, now that its starting-cover paint
+of 86-152 ms is off the main thread as well), so it is the next target, not the landform. The
+200 ft gorge's 517 ms is one sample; P5-5's gorge-minus-recipe frame (about 680 ms against
+Flat's 526) had the same excess, so it is most likely the gorge's larger water and crossing
+install on the main thread rather than noise. Opens are 100-300 ms shorter end to end, mostly
+from the overlap of the worker with the loading screen's own frames.
+
 ### The first strokes on a shaped map
 
 Forest seed 3 at 150 ft: Terraces (three tiers stepping down along z, faces near z = -8 and
