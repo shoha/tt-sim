@@ -94,6 +94,11 @@ const DEFAULT_GRAVEL_SURFACE := "gravel"
 const SANDSTONE_GRAVEL_SURFACE := "gravel_sandstone"
 const SANDSTONE_CLIFF_SURFACE := "cliff_sandstone"
 const GRAVEL_TINT := Color(0.9, 0.88, 0.84)
+## Per gravel surface, a tint over GRAVEL_TINT's place: the sandstone gravel at full tint is
+## the badlands sand's own orange (the landings vanish on it) and a red-orange splat on the
+## savanna's yellow grass (P4d-4 judgment set); darker and duller it reads as trodden ground
+## on both.
+const GRAVEL_SURFACE_TINTS := {"gravel_sandstone": Color(0.76, 0.7, 0.64)}
 const GRAVEL_TILE_SCALE := 1.0
 const GRAVEL_NORMAL_SCALE := 0.8
 
@@ -427,7 +432,8 @@ func _gravel_material(style: String) -> Material:
 	if _materials.has(key):
 		return _materials[key]
 	var surface := gravel_surface(style, _palette_root)
-	var material := _surface_material(surface, GRAVEL_TINT, GRAVEL_NORMAL_SCALE)
+	var tint: Color = GRAVEL_SURFACE_TINTS.get(surface, GRAVEL_TINT)
+	var material := _surface_material(surface, tint, GRAVEL_NORMAL_SCALE)
 	var tile := float(PaletteLibrary.surfaces(_palette_root).get(surface, {}).get("tile_m", 2.0))
 	material.uv1_triplanar = true
 	material.uv1_triplanar_sharpness = 4.0
