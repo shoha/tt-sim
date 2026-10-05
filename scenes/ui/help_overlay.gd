@@ -119,7 +119,18 @@ func _get_shortcut_data() -> Array:
 						+ " moves a fall: erase the river and draw it again"
 					),
 				],
-				["Left Drag (Bridge)", "Drag across calm water, bank to bank: planks or stones"],
+				[
+					"Left Drag (Bridge)",
+					"Drag across calm water, bank to bank: planks, stones, an arch or a ford",
+				],
+				[
+					"Arch (Bridge)",
+					"A stone arch crosses like planks: the biome's rock, a paved deck"
+				],
+				[
+					"Ford (Bridge)",
+					"A gravel bar for wading: needs wadeable water; its width runs along the river",
+				],
 				[
 					"Ctrl + Left Drag",
 					"Clear, lower (Raise), cut a tier down (Tier), erase paint or water",

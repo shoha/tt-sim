@@ -273,11 +273,12 @@ func _process(delta: float) -> void:
 				c.editor.place_prop(rule, p, Vector3.UP)
 				c.editor.commit_prop_edit()
 		"bridge_kind":
-			# The Bridge tool through its tile (P4b-2): `kind` "plank" or "stones".
-			var stones := String(step.get("kind", "plank")) == "stones"
-			ctrl().call(
-				"_on_bridge_kind_selected", Crossing.Kind.STONES if stones else Crossing.Kind.PLANK
-			)
+			# The Bridge tool through its tile (P4b-2): `kind` is any Crossing.KIND_NAMES entry
+			# ("plank", "stones", "arch", "ford"; P4d-3), an unknown one plank.
+			var found := Crossing.KIND_NAMES.find(String(step.get("kind", "plank")))
+			if found < 0:
+				log_line("unknown bridge kind %s; plank" % step.get("kind", ""))
+			ctrl().call("_on_bridge_kind_selected", maxi(found, 0))
 		"gesture":
 			done = _gesture(step)
 		"input":

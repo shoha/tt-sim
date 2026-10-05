@@ -177,7 +177,7 @@ A skipped step logs `skip <op> (<reason>)`.
 | `cancel` | none | Cancels a stroke left held by `release: false`, as a right click does (a river being drawn is dropped). |
 | `hover` | `at` ([x, z]), `tile` (default `tier`), `radius`, `ctrl` | The Sculpt tool with `tile` over `at`, not pressed, Ctrl as given: the cursor and its Tier / Flatten readout as an author sees them before pressing. |
 | `place` | `biome`, `species`, `at` ([x, z]) | Place one prop of that biome's species at the point and commit it. If the biome or species is not in the palette, logs `no species <s> in <b>; not placed` and carries on. |
-| `bridge_kind` | `kind` (`plank` default, `stones`) | Pick that Bridge tile (P4b-2): the Bridge tool becomes the active tool with that kind. |
+| `bridge_kind` | `kind` (`plank` default, `stones`, `arch`, `ford`: any `Crossing.KIND_NAMES` entry) | Pick that Bridge tile (P4b-2, P4d-3): the Bridge tool becomes the active tool with that kind. An unknown name logs and picks `plank`. |
 | `gesture` | `points` ([[x, z], ...]), `speed` (m/s, default 4.0), `ctrl` (held throughout), `press` (default true), `release` (default true), `hold` (s at the end) | A left-button drag through real input events (`Input.parse_input_event`: motion, press, motion along the points, release), so the whole path from GameMap's `_input` through `BrushTool.decide()` runs. Each point is aimed at the top walkable surface there (a downward layer-1 ray: ground, deck or stone), where a real pointer over what is drawn would be. `release: false` stops still pressed for a capture; a later `gesture` with `press: false` carries the drag on, or an `input` release ends it. |
 | `input` | `events` (one per frame): `{"type": "move", "at"}`, `{"type": "press" / "release", "at", "button" ("left", "right")}`, `{"type": "key", "key" ("ctrl", "escape"), "pressed"}`; mouse events take `ctrl` | Single real input events, as `gesture` sends them: hovers with Ctrl, clicks, key presses. |
 
@@ -471,6 +471,15 @@ numerically (for example where a fade or a tint band starts).
   logs the rays at each; captured at home with the grid, zoom 8 on the waist bar (plain,
   grid, water hidden), zoom 8 on the ankle bar, and the waist bar rebuilt 0.35 m deep. 6
   captures and `INDEX.md`; the verdict is written beside them as `VERDICT.md`.
+- `jobs/arch_ford_tools.json`: the Arch and Ford tiles through the real Bridge tool (P4d-3,
+  about 60 s to build, 30 s to look): a new 150 ft temperate forest map (seed 1234) with a
+  straight waist river at x = -7 and a deep river carved at x = 8 (`water.gd carve`), saved
+  as `_p4d_tools`; then in authoring (`bridge_kind` `arch` / `ford`, `gesture`, `input`) the
+  Bridge pane with its four tiles, an arch held across the waist river (the live ghost and
+  readout) and released, a ford held across the deep river (the red line and "Too deep to
+  ford. Fords cross wadeable water." beside the cursor) and released (the toast), a ford
+  placed across the waist river, and Ctrl held over the arch ("Remove stone arch"). 8
+  captures and `INDEX.md`. The level is kept for look runs (`cleanup_levels` removes it).
 - `jobs/cleanup_levels.json`: `water.gd cleanup` alone (a few seconds): deletes every
   `_p43_`, `_p44_`, `_p45_`, `_p4b_`, `_p4c_` and `_p4d_` level under `user://levels/`, the
   saved levels of the build / look jobs included. Run it when a task's look iterations are

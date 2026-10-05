@@ -1,10 +1,10 @@
 class_name BridgeToolPane
 extends VBoxContainer
 
-## The Bridge tool's pane in AuthoringPanel (phase 4b, P4b-2): Plank bridge and Stepping
-## stones tiles (room for a stone arch later) and a hint line saying the gesture. No numbers:
-## a crossing sizes itself to the water it spans, and its width is Shift+wheel. On a map
-## without water to cross the hint says to make some first (set_has_water). Built in code;
+## The Bridge tool's pane in AuthoringPanel (phase 4b, P4b-2; phase 4d, P4d-3): Planks,
+## Stones, Arch and Ford tiles, one per Crossing.Kind, and a hint line saying the gesture. No
+## numbers: a crossing sizes itself to the water it spans, and its width is Shift+wheel. On a
+## map without water to cross the hint says to make some first (set_has_water). Built in code;
 ## every interactive Control is named.
 
 ## A tile was picked: the crossing kind (Crossing.Kind).
@@ -26,10 +26,27 @@ const KIND_TILES: Array[Dictionary] = [
 		"icon": "stepping-stones",
 		"tooltip": "Stepping stones: flat rocks one stride apart, just above the water",
 	},
+	{
+		"kind": Crossing.Kind.ARCH,
+		"id": &"bridge_arch",
+		"label": "Arch",
+		"icon": "building-bridge",
+		"tooltip":
+		"A stone arch: a barrel of the biome's rock with a paved deck and parapets, bank to bank",
+	},
+	{
+		"kind": Crossing.Kind.FORD,
+		"id": &"bridge_ford",
+		"label": "Ford",
+		"icon": "ford",
+		"tooltip":
+		"A ford: a gravel bar just under the surface with marker stones, for wading across",
+	},
 ]
 const HINT := (
 	"Drag a line across a river or pond, from one bank to the other: the crossing finds the"
-	+ " banks and sizes itself. Bridges cross calm water, not a waterfall. Shift+wheel or"
+	+ " banks and sizes itself. Bridges cross calm water, not a waterfall. Arches cross like"
+	+ " planks; a ford needs wadeable water (its width runs along the river). Shift+wheel or"
 	+ " [ and ] set its width. Hold Ctrl and click a crossing to remove it. A crossing follows"
 	+ " later edits to its banks and goes when its water does."
 )
@@ -47,7 +64,7 @@ func _init() -> void:
 	add_theme_constant_override("separation", 8)
 	var header := MenuHeader.new()
 	header.name = "BridgeHeader"
-	header.setup("Bridge", "Cross water on planks or stones.")
+	header.setup("Bridge", "Cross water on planks, stones, an arch or a ford.")
 	add_child(header)
 	_hint = _caption("BridgeHint", HINT)
 	add_child(_hint)
@@ -55,7 +72,7 @@ func _init() -> void:
 	kind_field.name = "BridgeKindField"
 	kind_field.caption = "Crossing"
 	kind_field.tiles.tile_min_size = TILE_SIZE
-	kind_field.tiles.columns = 3
+	kind_field.tiles.columns = KIND_TILES.size()
 	for tile in KIND_TILES:
 		kind_field.tiles.add_tile(
 			tile.id, String(tile.label), String(tile.icon), String(tile.tooltip)
