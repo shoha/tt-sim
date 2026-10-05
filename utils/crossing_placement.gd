@@ -25,19 +25,23 @@ extends RefCounted
 ## deck slab), its middle rises ARCH_RISE_PER_M of the span (ARCH_MIN_RISE_M..ARCH_MAX_RISE_M:
 ## segmental, never a semicircle, which would hide its own water from the camera), and the
 ## barrel's underside at mid-span (CrossingArch.BARREL_THICK_M below the deck) keeps
-## ARCH_CLEAR_M over the highest water crossed.
+## ARCH_CLEAR_M over the highest water crossed. A ford (P4d-2) has no deck: its ends are the
+## bank ground itself and its middle is the lowest water level it crosses minus FORD_DEPTH_M,
+## the crest of the gravel bar a token wades over (CrossingFord).
 ##
 ## Refusals (the tool's message): the line is too short, crosses no water, has no dry bank
-## within reach on a side (or runs off the map), comes within FALL_CLEAR_M of a waterfall
-## (its face or its foam ring, fall_near(); bridges cross calm water, P4c-5), or the span
-## exceeds Crossing.MAX_SPAN_M. A line across a fall's face alone is refused as a fall, not
-## as no water: WaterGeometry.level_at has no cut at a reach's end, so within the half-width
-## and bank of the lip the dry face still reads the upper pool's level (fall_near() is what
-## catches it).
+## within reach on a side (or runs off the map), a ford crosses deep water (any body under
+## the wet run whose depth class is not wadeable, WaterBody.is_wadeable(); checked before
+## the fall), comes within FALL_CLEAR_M of a waterfall (its face or its foam ring,
+## fall_near(); bridges cross calm water, P4c-5), or the span exceeds Crossing.MAX_SPAN_M. A
+## line across a fall's face alone is refused as a fall, not as no water:
+## WaterGeometry.level_at has no cut at a reach's end, so within the half-width and bank of
+## the lip the dry face still reads the upper pool's level (fall_near() is what catches it).
 
 const REFUSED_SHORT := &"short"
 const REFUSED_NO_WATER := &"no_water"
 const REFUSED_NO_BANK := &"no_bank"
+const REFUSED_DEEP := &"deep"
 const REFUSED_FALL := &"fall"
 const REFUSED_LONG := &"long"
 
@@ -52,9 +56,9 @@ const STEP_M := 0.1
 const REFINE_STEPS := 6
 const MIN_ISLAND_M := 0.8
 ## Anchor distance past the waterline onto the bank, per Crossing.Kind: a bridge's sill needs
-## firm ground under it; a stone path steps off near the edge; an arch's abutment is bedded
-## well back in the bank.
-const BANK_INSET_M: Array[float] = [0.55, 0.35, 0.8]
+## firm ground under it; a stone path and a ford step off near the edge; an arch's abutment
+## is bedded well back in the bank.
+const BANK_INSET_M: Array[float] = [0.55, 0.35, 0.8, 0.35]
 ## A plank deck's rise: a share of the span, clamped.
 const DECK_RISE_PER_M := 0.06
 const MIN_RISE_M := 0.12
@@ -68,6 +72,10 @@ const ARCH_MAX_RISE_M := 1.5
 const ARCH_CLEAR_M := 0.5
 ## Over WaterZone's slab (level + 0.05) with the stones' jitter, so a token on a stone is dry.
 const STONE_FREEBOARD_M := 0.15
+## A ford's crest stands this far under the lowest water it crosses (P4d-2): ankle deep, the
+## token never hidden, and the bar still reads through the water (the P4d-0 probe: a bar
+## 0.35 m down vanishes).
+const FORD_DEPTH_M := 0.15
 ## A crossing keeps at least this far from a waterfall's face and foam ring (fall_near()).
 const FALL_CLEAR_M := 1.0
 
@@ -127,14 +135,21 @@ static func place(
 	var crossing_width: float = (
 		Crossing.DEFAULT_WIDTH_M[kind] if width <= 0.0 else clampf(width, low, high)
 	)
+	# The highest and the lowest water level along the wet run; a ford is refused where any
+	# of that water is deep.
+	var level := -INF
+	var lowest := INF
+	for i in range(run.x, run.y + 1):
+		var p := origin + d * (i * STEP_M)
+		var at := WaterGeometry.level_at(doc, p, -1, courses)
+		level = maxf(level, at)
+		lowest = minf(lowest, at)
+		if kind == Crossing.Kind.FORD and deep_at(doc, p, courses):
+			return _refused(REFUSED_DEEP)
 	if fall_near(doc, anchor_a, anchor_b, crossing_width):
 		return _refused(REFUSED_FALL)
 	if anchor_a.distance_to(anchor_b) > Crossing.MAX_SPAN_M:
 		return _refused(REFUSED_LONG)
-	var level := -INF
-	for i in range(run.x, run.y + 1):
-		var p := origin + d * (i * STEP_M)
-		level = maxf(level, WaterGeometry.level_at(doc, p, -1, courses))
 	var crossing := Crossing.new()
 	crossing.kind = kind
 	crossing.start = anchor_a
@@ -145,7 +160,7 @@ static func place(
 		kind,
 		WaterGeometry.ground_at(doc, anchor_a),
 		WaterGeometry.ground_at(doc, anchor_b),
-		level,
+		lowest if kind == Crossing.Kind.FORD else level,
 		anchor_a.distance_to(anchor_b)
 	)
 	return {"crossing": crossing, "refusal": &""}
@@ -164,16 +179,18 @@ static func anchor(
 
 
 ## The levels (start, middle, end) of a crossing of `kind` whose anchors stand on ground
-## `ground_a` and `ground_b` over water at `water` (the highest level it crosses), `span`
-## metres long (see the header). The middle stays within Crossing.MAX_RISE_M of the ends'
-## mean. Pure.
+## `ground_a` and `ground_b` over water at `water` (the highest level it crosses; for a ford
+## the lowest), `span` metres long (see the header). The middle stays within
+## Crossing.MAX_RISE_M of the ends' mean. Pure.
 static func levels_for(
 	kind: Crossing.Kind, ground_a: float, ground_b: float, water: float, span: float
 ) -> Vector3:
 	var a := ground_a
 	var b := ground_b
 	var middle := water + STONE_FREEBOARD_M
-	if kind == Crossing.Kind.PLANK:
+	if kind == Crossing.Kind.FORD:
+		middle = water - FORD_DEPTH_M
+	elif kind == Crossing.Kind.PLANK:
 		a += CrossingGeometry.DECK_ABOVE_BANK_M
 		b += CrossingGeometry.DECK_ABOVE_BANK_M
 		var rise := clampf(span * DECK_RISE_PER_M, MIN_RISE_M, MAX_RISE_M)
@@ -217,6 +234,40 @@ static func fall_near(doc: MapDocument, a: Vector2, b: Vector2, width: float) ->
 			var p := doc.sample_to_world(Vector2(i % columns, floori(float(i) / columns)))
 			if _strip_distance(a, b, half, p) <= FALL_CLEAR_M:
 				return true
+	return false
+
+
+## True when map point `p` lies under deep water of `doc`: in the area of some body whose
+## depth class is not wadeable (WaterBody.is_wadeable) with the ground below that body's
+## level. Every body holding the point counts, not only the one whose level shows: a deep
+## channel carved under a shallow river's surface is still deep. `courses` as
+## WaterGeometry.level_at. Pure.
+static func deep_at(doc: MapDocument, p: Vector2, courses: Dictionary = {}) -> bool:
+	var ground := WaterGeometry.ground_at(doc, p)
+	var pond := 0
+	if doc.pond_mask.size() == doc.sample_count() and doc.sample_count() > 0:
+		var s := doc.world_to_sample(p).round()
+		var x := clampi(int(s.x), 0, doc.samples_x() - 1)
+		var z := clampi(int(s.y), 0, doc.samples_z() - 1)
+		pond = doc.pond_mask[doc.sample_index(x, z)]
+	for body in doc.water_bodies:
+		if WaterBody.is_wadeable(body.depth) or ground >= body.level_m:
+			continue
+		if not body.is_river():
+			if pond == body.id:
+				return true
+			continue
+		var course: Array = (
+			courses[body.id] if courses.has(body.id) else WaterGeometry.river_course(body)
+		)
+		if course.is_empty():
+			continue
+		var near := WaterGeometry.nearest_on_polyline(course[0], p)
+		if near.y < 0:
+			continue
+		var reach := WaterGeometry.width_at(course[1], int(near.y), near.z)
+		if near.x <= reach + WaterGeometry.RIVER_BANK_M:
+			return true
 	return false
 
 

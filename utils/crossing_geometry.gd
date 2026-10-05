@@ -38,6 +38,11 @@ extends RefCounted
 ## parapets in `stone`; the paved deck slab in `paving`) on the same deck_y curve, so its
 ## collision, deck field and clearance are a deck's (Crossing.is_deck()).
 ##
+## Ford (phase 4d, P4d-2): CrossingFord builds it (the gravel bar and its bank landings in
+## `gravel`, its marker stones in `stone`, stone() for each); like the stones it has no deck
+## (no deck field: the grid lies on the water over it) and its collision is its own
+## triangles, bar and stones.
+##
 ## Winding: clockwise seen from the front (Godot's front face, as the terrain and water).
 
 ## Plank deck (metres).
@@ -219,7 +224,8 @@ class _Mesh:
 
 ## Everything AuthoredCrossings needs for `doc`: {"crossings": [one Dictionary per crossing:
 ## "id", "kind", "style", "wood" (mesh arrays, [] for none), "stone" (mesh arrays, [] for
-## none; a stone arch's masonry too), "paving" (mesh arrays, an arch's deck slab, [] for
+## none; a stone arch's masonry and a ford's marker stones too), "paving" (mesh arrays, an
+## arch's deck slab, [] for none), "gravel" (mesh arrays, a ford's bar and landings, [] for
 ## none), "collision" (PackedVector3Array triangles), "top" (highest walking surface, map
 ## Y)], "deck": the deck field (deck_field(), empty without a deck crossing)}. Pure.
 static func build(doc: MapDocument) -> Dictionary:
@@ -238,6 +244,7 @@ static func build_one(doc: MapDocument, crossing: Crossing) -> Dictionary:
 		"wood": [],
 		"stone": [],
 		"paving": [],
+		"gravel": [],
 		"collision": PackedVector3Array(),
 		"top": NONE,
 	}
@@ -250,27 +257,48 @@ static func build_one(doc: MapDocument, crossing: Crossing) -> Dictionary:
 		parts.collision = deck_collision(crossing)
 		parts.top = deck_top(crossing)
 	elif crossing.is_arch():
-		var stone := _Mesh.new()
+		var masonry := _Mesh.new()
 		var paving := _Mesh.new()
-		CrossingArch.build(doc, crossing, stone, paving)
-		parts.stone = stone.to_arrays()
+		CrossingArch.build(doc, crossing, masonry, paving)
+		parts.stone = masonry.to_arrays()
 		parts.paving = paving.to_arrays()
 		parts.collision = deck_collision(crossing)
 		parts.top = deck_top(crossing)
+	elif crossing.is_ford():
+		var gravel := _Mesh.new()
+		var markers := _Mesh.new()
+		CrossingFord.build(doc, crossing, gravel, markers)
+		parts.gravel = gravel.to_arrays()
+		parts.stone = markers.to_arrays()
+		# A token lands on the bar and on the marker stones alike.
+		parts.collision = faces_of(gravel) + faces_of(markers)
+		parts.top = maxf(highest(gravel), highest(markers))
 	else:
-		var stone := _Mesh.new()
+		var rocks := _Mesh.new()
 		var top := NONE
 		for spec in stone_layout(doc, crossing):
-			_stone(spec, stone)
+			stone(spec, rocks)
 			top = maxf(top, float(spec.top))
-		parts.stone = stone.to_arrays()
-		# Collision takes the triangles in index order.
-		var faces := PackedVector3Array()
-		for i in stone.indices:
-			faces.append(stone.vertices[i])
-		parts.collision = faces
+		parts.stone = rocks.to_arrays()
+		parts.collision = faces_of(rocks)
 		parts.top = top
 	return parts
+
+
+## `mesh`'s triangles as collision faces (every three vertices one face, in index order).
+static func faces_of(mesh: _Mesh) -> PackedVector3Array:
+	var faces := PackedVector3Array()
+	for i in mesh.indices:
+		faces.append(mesh.vertices[i])
+	return faces
+
+
+## The highest vertex of `mesh` (map Y), NONE when it is empty.
+static func highest(mesh: _Mesh) -> float:
+	var top := NONE
+	for v in mesh.vertices:
+		top = maxf(top, v.y)
+	return top
 
 
 # --- the deck ------------------------------------------------------------------------
@@ -727,10 +755,10 @@ static func stone_layout(doc: MapDocument, crossing: Crossing) -> Array[Dictiona
 	return stones
 
 
-## One stone of stone_layout() as flat-shaded facets: a nearly flat top fan, a chamfer, a
-## rounded shoulder about the waterline, and sides flaring to a root under the bed (see the
-## STONE_* profile constants).
-static func _stone(spec: Dictionary, mesh: _Mesh) -> void:
+## One stone of stone_layout() (or a ford's marker stone, CrossingFord, the same spec shape)
+## as flat-shaded facets: a nearly flat top fan, a chamfer, a rounded shoulder about the
+## waterline, and sides flaring to a root under the bed (see the STONE_* profile constants).
+static func stone(spec: Dictionary, mesh: _Mesh) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(spec.seed)
 	var at: Vector2 = spec.at

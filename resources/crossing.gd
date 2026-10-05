@@ -2,10 +2,10 @@ class_name Crossing
 extends RefCounted
 
 ## One authored way over water in a MapDocument (`MapDocument.crossings`, phase 4b): a plank
-## footbridge, a line of stepping stones or a stone arch bridge (phase 4d) laid between two
-## bank anchors. The geometry is built from these fields alone (CrossingGeometry), so a
-## crossing ships as data in the document and every peer builds the same one. Summary:
-## docs/systems/crossings.md.
+## footbridge, a line of stepping stones, a stone arch bridge or a ford (phase 4d) laid
+## between two bank anchors. The geometry is built from these fields alone
+## (CrossingGeometry), so a crossing ships as data in the document and every peer builds the
+## same one. Summary: docs/systems/crossings.md.
 ##
 ## `start` and `end` are the bank anchors in map XZ (Vector2(x, z), metres, the frame of
 ## MapDocument.world_to_sample()): where the crossing meets dry ground on each side
@@ -14,25 +14,27 @@ extends RefCounted
 ## MapDocument.heights): a deck (plank or arch) rises from the start level through the middle
 ## one to the end level on a quadratic arch (CrossingGeometry.deck_y); stepping stones put
 ## their tops at the middle level (just above the water) and rise to the bank levels only
-## where the ground itself rises under them.
+## where the ground itself rises under them; a ford's middle level is its gravel bar's crest,
+## just under the water, and its ends the bank ground (CrossingFord).
 ##
-## `width_m` is a deck's width, or a stepping stone's typical diameter. `style` is the
-## palette biome id whose materials the crossing takes (its cliff rock for stones and the
-## arch's masonry, its first paved path for the arch's deck, a tint of the planks for its
-## climate), or "" for the defaults; an id the palette lacks falls back the same way. `id` is
-## stable for the crossing's lifetime (1..MAX_ID, unique in the document) and seeds its
-## variation (plank jitter, stone shapes, facet shade) with the map seed.
+## `width_m` is a deck's width, a stepping stone's typical diameter, or a ford's bar width
+## along the channel. `style` is the palette biome id whose materials the crossing takes (its
+## cliff rock for stones and the arch's masonry, its first paved path for the arch's deck,
+## its gravel for a ford, a tint of the planks for its climate), or "" for the defaults; an
+## id the palette lacks falls back the same way. `id` is stable for the crossing's lifetime
+## (1..MAX_ID, unique in the document) and seeds its variation (plank jitter, stone shapes,
+## facet shade) with the map seed.
 
-enum Kind { PLANK, STONES, ARCH }
+enum Kind { PLANK, STONES, ARCH, FORD }
 
 ## The names Kind takes in crossings.json.
-const KIND_NAMES: Array[String] = ["plank", "stones", "arch"]
+const KIND_NAMES: Array[String] = ["plank", "stones", "arch", "ford"]
 const MAX_ID := 255
-## Deck width (plank, arch) or stone size (stones) range, metres, per Kind.
-const MIN_WIDTH_M: Array[float] = [0.8, 0.4, 1.2]
-const MAX_WIDTH_M: Array[float] = [3.0, 1.2, 3.0]
+## Deck width (plank, arch), stone size (stones) or bar width (ford) range, metres, per Kind.
+const MIN_WIDTH_M: Array[float] = [0.8, 0.4, 1.2, 1.5]
+const MAX_WIDTH_M: Array[float] = [3.0, 1.2, 3.0, 4.0]
 ## Stones default near their largest: at 1.05 m they read small at the home zoom (P4b-2).
-const DEFAULT_WIDTH_M: Array[float] = [1.5, 1.15, 2.0]
+const DEFAULT_WIDTH_M: Array[float] = [1.5, 1.15, 2.0, 2.5]
 ## Anchor to anchor, metres. Shorter is not a crossing; longer needs piers nobody drew.
 const MIN_SPAN_M := 0.5
 const MAX_SPAN_M := 24.0
@@ -92,8 +94,14 @@ func is_arch() -> bool:
 	return kind == Kind.ARCH
 
 
+## True for a ford (a gravel bar under the surface of wadeable water, CrossingFord).
+func is_ford() -> bool:
+	return kind == Kind.FORD
+
+
 ## True when the crossing has a walking deck on deck_y (plank or arch): the deck collision
-## strip, the grid's deck field, the deck level rule and the plank clearances apply.
+## strip, the grid's deck field, the deck level rule and the plank clearances apply. Stones
+## and a ford have none: the grid lies on the water surface over them.
 func is_deck() -> bool:
 	return kind == Kind.PLANK or kind == Kind.ARCH
 

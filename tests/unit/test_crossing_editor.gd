@@ -139,6 +139,40 @@ func test_add_refuses_what_the_writer_would() -> void:
 	assert_eq(editor.crossings.last_refusal, CrossingEditor.REFUSED_FULL)
 
 
+func test_a_river_deepened_under_a_ford_removes_it_and_undo_restores_it() -> void:
+	# P4d-2: a ford across the waist river, then a deep tributary carved into the river right
+	# there. The tributary takes the river's level where it joins and its channel is cut two
+	# metres under it, so the water under the ford's wet run is deep now: the ford, snapped
+	# again from its own anchors, is refused deep and goes in the carve's entry (the follow
+	# rule); undo brings the ground, the water and the ford back together.
+	var editor := _editor()
+	var id := editor.crossings.place(Crossing.Kind.FORD, Vector3(0.3, 0, -1), Vector3(0, 0, 1))
+	assert_gt(id, 0, "a ford over the waist river")
+	var before := _doc.crossing(id).copy()
+	assert_almost_eq(before.levels.y, RIVER_LEVEL - CrossingPlacement.FORD_DEPTH_M, 0.0001)
+	var entries := _history.undo_count()
+	watch_signals(editor.crossings)
+	var carved := editor.water.carve_river(
+		PackedVector2Array([Vector2(0, -9), Vector2(0, 0)]),
+		PackedFloat32Array([1.5]),
+		WaterBody.Depth.DEEP
+	)
+	editor.finish_height_work()
+	assert_gt(carved, 0, "the deep tributary is carved")
+	assert_null(_doc.crossing(id), "the water under the ford is deep")
+	assert_signal_emitted_with_parameters(editor.crossings, "followed", [0, 1])
+	var again := CrossingPlacement.place(
+		_doc, before.start, before.end, before.kind, before.width_m, before.style
+	)
+	assert_eq(again.refusal, CrossingPlacement.REFUSED_DEEP, "for that reason")
+	assert_eq(_history.undo_count(), entries + 1, "one entry: the carve")
+	assert_eq(_history.undo(), "Carve river")
+	editor.finish_height_work()
+	assert_true(_doc.crossing(id).same_as(before), "undo brings the ford back")
+	assert_not_null(_node().get_crossing_node(id))
+	assert_not_null(_node().get_crossing_node(id).get_node_or_null("Ford"))
+
+
 func test_the_document_saves_what_was_placed() -> void:
 	var editor := _editor()
 	editor.crossings.place(Crossing.Kind.STONES, Vector3(0, 0, -1), Vector3(0, 0, 1))
