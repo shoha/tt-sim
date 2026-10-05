@@ -256,12 +256,15 @@ static func _timing(base: Node) -> String:
 		return "no authoring editor"
 	var node := ctrl.map_root.get_node_or_null(AuthoredCrossings.NODE_NAME) as AuthoredCrossings
 	return (
-		"last plan %.2f ms; last refresh %.2f ms (build %.2f, swap %.2f)"
+		"last plan %.2f ms; last refresh %.2f ms (keys %.2f, build %.2f, swap %.2f; rebuilt %d of %d)"
 		% [
 			ctrl.brush.bridge.last_plan_usec / 1000.0,
 			ctrl.editor.crossings.last_refresh_usec / 1000.0,
+			node.last_key_usec / 1000.0 if node else -1.0,
 			node.last_build_usec / 1000.0 if node else -1.0,
 			node.last_swap_usec / 1000.0 if node else -1.0,
+			node.last_rebuilt if node else -1,
+			ctrl.editor.document.crossings.size(),
 		]
 	)
 

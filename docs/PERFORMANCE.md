@@ -2134,3 +2134,44 @@ ms, an undo 34-37 ms, and a sculpt beside one crossing 53.5 ms in a frame. The m
 per placement. The cache is keyed on each crossing's fields and the ground under it (a sculpt
 moves piles, abutments, stones and a ford's bar without changing the fields), rebuilds only
 the crossings whose key changed, and is not built in this pass (MAP_AUTHORING.md "Open work").
+
+### Per-crossing rebuild cache (P4d-5b)
+
+Built the same day (`CrossingCache`, `utils/crossing_cache.gd`; `AuthoredCrossings.refresh`).
+Per crossing a 32-bit key over its fields, the document's seed and grid, the heights over
+`CrossingGeometry.clear_bounds` plus one sample, and the water that can reach the bounds (the
+rivers near them by id, level, points and half-widths; the pond mask over the bounds and the
+ponds marked in it). A refresh builds only the crossings whose key differs from the one their
+node holds, frees the nodes of crossings that left, and recomputes the deck field and `top_y`
+only when some node changed. A load seeds the keys from the document its worker built from, so
+the first edit after a load rebuilds nothing it need not. The keys for six crossings cost
+0.07-0.30 ms per refresh on the 150 ft map (0.147 ms for six arches on the 100 ft test map,
+`test_crossing_cache.gd`). Same job (`jobs/p4d_perf_build.json`), same machine, one run; the
+refresh is keys + build + swap:
+
+| Crossings on the map | Refresh ms before | Refresh ms after (keys / build / swap) | Whole `place` before -> after |
+| --- | --- | --- | --- |
+| 1: the 5.4 m arch | 6.0 | 6.0 (0.07 / 3.8 / 2.1) | tool release, worst frame 12.5 -> 16.2 |
+| 2: + a ford | 12.4 | 6.9 (0.12 / 5.0 / 1.9) | tool release, worst frame 20.2 -> 14.2 |
+| 3: + a plank bridge | 14.9 | 3.8 (0.18 / 1.8 / 1.8) | 20.8 -> 9.2 |
+| 4: + stepping stones | 15.9 | 3.2 (0.25 / 0.7 / 2.3) | 21.4 -> 8.8 |
+| 5: + the 14.8 m pier arch | 26.2 | 13.3 (0.26 / 7.6 / 5.4) | 31.9 -> 19.3 |
+| 6: + a second ford | 33.8 | 9.8 (0.30 / 5.2 / 4.4) | 40.7 -> 15.4 |
+| 7: + a bench plank / arch (then undone) | 37.0 / 38.9 | 6.4 / 10.7 (build 1.8 / 4.0, swap 4.3 / 6.3) | 42.2 / 43.0 -> 11.5 / 15.0; undo 37.0 / 33.5 -> 4.4 / 4.5 |
+
+Every placement rebuilt one crossing of the map's count (`rebuilt 1 of N` in the probe's
+`timing` line); an undo of a placement rebuilt none (the freed node and the deck field only).
+The Raise stroke by the arch's bank rebuilt 3 of 6 (the arch, whose anchors followed, and the
+plank bridge and near ford, whose ground rectangles the stroke's changed samples reached):
+18.7 ms (keys 0.30, build 12.4, swap 6.0) against 32.3 before, and the window's worst frame
+40.4 ms against 53.5. Record windows, CPU frame ms median / worst (n): idle 4.1 / 7.8 (964),
+arch drag 4.1 / 5.5 (611), arch release 4.1 / 16.2 (365), ford drag 3.9 / 5.4 (602), ford
+release 3.6 / 14.2 (409), sculpt by the arch 4.0 / 40.4 (895).
+
+**Verdict: met.** A placement with six crossings on the map is 9.8 ms of refresh (15.4 ms for
+the whole place) against the 12 ms line and 33.8 before; a placement's cost no longer grows
+with the map's crossing count, only with the kind placed (a ford 5-7 ms, the pier arch 13).
+What remains is the one crossing's own build (the ford's 5 ms for 200 vertices is still
+unprofiled) and the swap, which is now the larger share for stone meshes (4.4-6.3 ms for one
+arch or ford node: `moss_split` walks every facet in GDScript, then the mesh and concave shape
+upload); both are the next targets if a placement needs to go under a frame.

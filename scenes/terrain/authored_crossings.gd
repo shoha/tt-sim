@@ -27,9 +27,11 @@ extends Node3D
 ## biome's gravel (gravel_surface(), triplanar, tinted wet: GRAVEL_TINT), its marker stones
 ## the stone and moss. An arch mesh carries three surfaces: stone, moss, paving; a ford's
 ## gravel, stone, moss. One material per (kind, style) is shared by every crossing that uses
-## it. An edit rebuilds every crossing on the main thread (refresh();
-## about 2.4 ms per crossing, PERFORMANCE.md "Phase 4b (crossings)"); a load builds the arrays
-## on a worker (AuthoredLoadPrep) and create() only makes the nodes. Summary:
+## it. An edit rebuilds, on the main thread, only the crossings whose geometry inputs changed
+## (refresh(): per crossing a key over its fields and the ground and water under it,
+## CrossingCache; about 5.6 ms per crossing rebuilt, PERFORMANCE.md "Phase 4d (arch and
+## ford)"); a load builds the arrays on a worker (AuthoredLoadPrep) and create() only makes
+## the nodes, seeding the keys so the first edit rebuilds nothing it need not. Summary:
 ## docs/systems/crossings.md.
 
 const NODE_NAME := "AuthoredCrossings"
@@ -106,12 +108,22 @@ const GRAVEL_NORMAL_SCALE := 0.8
 var deck_heights: PackedFloat32Array = PackedFloat32Array()
 var version: int = 0
 var top_y: float = -INF
-## Microseconds of the last refresh's geometry and its node swap.
+## Microseconds of the last refresh's keys, its geometry (the stale crossings only) and its
+## node swap, and how many crossings it rebuilt.
+var last_key_usec: int = 0
 var last_build_usec: int = 0
 var last_swap_usec: int = 0
+var last_rebuilt: int = 0
+## How many crossings this node has built since it was made (tests count what an edit rebuilt).
+var builds: int = 0
 
 var _palette_root: String = PaletteLibrary.DEFAULT_ROOT
 var _materials: Dictionary = {}
+## Per crossing id, the CrossingCache key its node's geometry was built from; refresh() keeps
+## a node whose key still matches.
+var _keys: Dictionary = {}
+## Per crossing id, its parts' highest walking surface (top_y is their maximum).
+var _tops: Dictionary = {}
 
 
 ## The crossings of `doc` as nodes, from `built` (CrossingGeometry.build(doc), which a loader's
@@ -126,6 +138,7 @@ static func create(
 	var geometry := built if not built.is_empty() else CrossingGeometry.build(doc)
 	crossings.last_build_usec = Time.get_ticks_usec() - started if built.is_empty() else 0
 	crossings.apply(geometry)
+	crossings.seed_keys(doc)
 	return crossings
 
 
@@ -182,27 +195,78 @@ static func exclude_of(root: Node) -> Array[RID]:
 	return rids
 
 
-## Rebuilds every crossing from `doc` on this thread.
+## Brings the nodes up to `doc` on this thread, rebuilding only the crossings whose key
+## (CrossingCache.key_of: fields, ground and water under them) differs from the one their node
+## was built with or that have no node yet, and freeing the nodes of crossings that left the
+## document. The deck field, `top_y` and `version` change only when some node did.
 func refresh(doc: MapDocument) -> void:
 	var started := Time.get_ticks_usec()
-	var built := CrossingGeometry.build(doc)
+	var plan := CrossingCache.plan(doc, _keys)
+	var stale: PackedInt32Array = plan.stale
+	var rebuild: Array[Crossing] = []
+	for crossing in doc.crossings:
+		if stale.has(crossing.id) or get_crossing_node(crossing.id) == null:
+			rebuild.append(crossing)
+	last_key_usec = Time.get_ticks_usec() - started
+	started = Time.get_ticks_usec()
+	var built: Array[Dictionary] = []
+	for crossing in rebuild:
+		built.append(CrossingGeometry.build_one(doc, crossing))
 	last_build_usec = Time.get_ticks_usec() - started
-	apply(built)
+	started = Time.get_ticks_usec()
+	var keys: Dictionary = plan.keys
+	var changed := false
+	for child in get_children():
+		var crossing_id := _id_of(child)
+		if not keys.has(crossing_id):
+			_free_crossing_node(crossing_id)
+			changed = true
+	for parts in built:
+		var crossing_id := int(parts.id)
+		_free_crossing_node(crossing_id)
+		add_child(_crossing_node(parts))
+		_tops[crossing_id] = float(parts.get("top", -INF))
+		changed = true
+	_keys = keys
+	builds += built.size()
+	last_rebuilt = built.size()
+	if changed:
+		deck_heights = CrossingGeometry.deck_field(doc, doc.crossings)
+		_recompute_top()
+		version += 1
+	last_swap_usec = Time.get_ticks_usec() - started
 
 
-## Replaces every child with the crossings `built` (CrossingGeometry.build()).
+## Replaces every child with the crossings `built` (CrossingGeometry.build()). The keys are
+## cleared: the next refresh() rebuilds every crossing unless seed_keys() runs first.
 func apply(built: Dictionary) -> void:
 	var started := Time.get_ticks_usec()
 	for child in get_children():
 		remove_child(child)
 		child.free()
 	deck_heights = built.get("deck", PackedFloat32Array())
-	top_y = -INF
+	_keys.clear()
+	_tops.clear()
 	version += 1
 	for parts: Dictionary in built.get("crossings", []):
 		add_child(_crossing_node(parts))
-		top_y = maxf(top_y, float(parts.get("top", -INF)))
+		_tops[int(parts.id)] = float(parts.get("top", -INF))
+	_recompute_top()
 	last_swap_usec = Time.get_ticks_usec() - started
+
+
+## Records that the nodes hold the geometry of `doc`'s crossings as they are now (a load's
+## worker built it from this document: create()), so the next refresh() rebuilds only what an
+## edit changes. About 0.05 ms per crossing.
+func seed_keys(doc: MapDocument) -> void:
+	var started := Time.get_ticks_usec()
+	_keys = CrossingCache.keys_of(doc)
+	last_key_usec = Time.get_ticks_usec() - started
+
+
+## The key each crossing's node was built with (id -> key; tests).
+func keys() -> Dictionary:
+	return _keys.duplicate()
 
 
 ## True when some crossing has a deck the grid lies on.
@@ -233,6 +297,28 @@ func body_rids() -> Array[RID]:
 ## The crossing node of crossing `crossing_id`, or null.
 func get_crossing_node(crossing_id: int) -> Node3D:
 	return get_node_or_null(NodePath("Crossing_%d" % crossing_id)) as Node3D
+
+
+## The crossing id a `Crossing_<id>` node carries (-1 for any other child).
+static func _id_of(node: Node) -> int:
+	var node_name := String(node.name)
+	if not node_name.begins_with("Crossing_"):
+		return -1
+	return int(node_name.trim_prefix("Crossing_"))
+
+
+func _free_crossing_node(crossing_id: int) -> void:
+	var node := get_crossing_node(crossing_id)
+	if node != null:
+		remove_child(node)
+		node.free()
+	_tops.erase(crossing_id)
+
+
+func _recompute_top() -> void:
+	top_y = -INF
+	for top in _tops.values():
+		top_y = maxf(top_y, float(top))
 
 
 func _crossing_node(parts: Dictionary) -> Node3D:
