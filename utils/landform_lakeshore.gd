@@ -224,9 +224,9 @@ static func allowed_corners() -> Array[Vector2i]:
 	return out
 
 
-## Stepping stones where `stream` runs straightest at least STONES_SHORE_M back from the
-## shore (`shore`: the lake's signed inside distance) and STONES_EDGE_M inside the map. The
-## report line, naming a refusal.
+## Stepping stones where `stream` runs straightest over water (StartingLandform.straightest_wet,
+## P5-7) at least STONES_SHORE_M back from the shore (`shore`: the lake's signed inside
+## distance) and STONES_EDGE_M inside the map. The report line, naming a refusal.
 static func _stones(
 	doc: MapDocument, stream: Array[WaterBody], shore: Callable, biome_id: String
 ) -> String:
@@ -238,9 +238,11 @@ static func _stones(
 			and StartingLandform.inside(doc, course[i], STONES_EDGE_M)
 		):
 			candidates.append(i)
-	var at := StartingLandform.straightest(course, candidates)
-	if at < 0:
+	if candidates.is_empty():
 		return "stones: no room on the stream"
+	var at := StartingLandform.straightest_wet(doc, course, candidates)
+	if at < 0:
+		return "stones: no water on the stream where they fit"
 	var dir := (course[at + 1] - course[at - 1]).normalized()
 	var placed := StartingLandform.place_crossing(
 		doc, course[at], dir, Crossing.Kind.STONES, biome_id

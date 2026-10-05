@@ -229,6 +229,29 @@ func test_forty_seeds_draw_streams_near_their_chance_and_never_break_the_map() -
 	gut.p("lakeshore: %d streams, %d stones over %d seeds" % [streams, stones, SEEDS])
 
 
+func test_stones_are_drawn_over_water_and_never_refused() -> void:
+	# P5-7: the stones pick the straightest point that the carve left wet (seed 14 once
+	# refused `no_water`). Only the seeds whose feature stream draws a stream and stones run.
+	var drawn := 0
+	for seed_value in range(1, SEEDS + 1):
+		var draws := StartingLandform.stream(seed_value, StartingLandform.STREAM_FEATURES)
+		draws.randf()
+		var wants_stream := draws.randf() < LandformLakeshore.STREAM_CHANCE
+		var wants_stones := draws.randf() < LandformLakeshore.STONES_CHANCE
+		if not wants_stream or not wants_stones:
+			continue
+		for size_ft in [100, 150]:
+			var report: String = _lakeshore(size_ft, seed_value).report
+			gut.p("seed %d at %d ft: %s" % [seed_value, size_ft, report])
+			if not report.contains("stream:"):
+				continue
+			drawn += 1
+			assert_false(
+				report.contains("refused"), "seed %d at %d ft: %s" % [seed_value, size_ft, report]
+			)
+	assert_gt(drawn, 0, "some seed drew stones")
+
+
 func test_cost_at_150_ft() -> void:
 	var started := Time.get_ticks_usec()
 	for seed_value in [3, 7]:
