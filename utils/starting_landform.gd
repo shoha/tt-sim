@@ -11,10 +11,14 @@ extends RefCounted
 ## and the seed draws from the palette: not every valley has a river, not every river a
 ## crossing, and a dry draw is a complete map on its own. The shape varies too (heading,
 ## offset, bend) within bounds that keep the recipe recognisable, so siblings read as the
-## same place drawn again. The recipe bodies are LandformRecipes; this class holds the
-## kinds, the seeded frame and the shared steps every recipe composes: a height pass, a
-## river carved through the water tools' pure path, a crossing placed and given an id, a
-## surface painted along a line.
+## same place drawn again. The recipe bodies are LandformRecipes (the Valley), LandformHilltop,
+## LandformTerraces, LandformLakeshore and LandformGorge; this class holds the kinds, the
+## seeded frame and the shared steps every recipe composes: a height pass, outline distance
+## fields (a warped disc, a rounded box) and the tier inset HeightBrush.tier_goal wants, so a
+## recipe's plateau is the Sculpt tool's own terrace, a river or a pond carved through the
+## water tools' pure path, the walls put back where a river's bank reach slumped them, a
+## crossing placed (or spanned between chosen anchors) and given an id, a surface painted
+## along a line.
 ##
 ## Seeds. Every draw comes from a RandomNumberGenerator seeded from the map seed xor one
 ## constant per feature (stream()), as CrossingFord does for its stones, so the frame, the
@@ -23,14 +27,29 @@ extends RefCounted
 
 const FLAT := "flat"
 const VALLEY := "valley"
-## Every kind, in tile order (more recipes come in P5-2).
-const KINDS: Array[String] = [FLAT, VALLEY]
+const HILLTOP := "hilltop"
+const TERRACES := "terraces"
+const LAKESHORE := "lakeshore"
+const GORGE := "gorge"
+## Every kind, in tile order.
+const KINDS: Array[String] = [FLAT, VALLEY, HILLTOP, TERRACES, LAKESHORE, GORGE]
 ## Tile names and the captions under them. A caption describes the landform, not the draw,
 ## so an author is not promised a ford this seed did not draw.
-const NAMES := {FLAT: "Flat", VALLEY: "Valley"}
+const NAMES := {
+	FLAT: "Flat",
+	VALLEY: "Valley",
+	HILLTOP: "Hilltop",
+	TERRACES: "Terraces",
+	LAKESHORE: "Lakeshore",
+	GORGE: "Gorge",
+}
 const CAPTIONS := {
 	FLAT: "Level ground, yours to shape",
 	VALLEY: "A broad valley; often a river runs down it",
+	HILLTOP: "A rounded hill, often with a rock-lipped crown",
+	TERRACES: "Tiers stepping down across the map",
+	LAKESHORE: "A deep lake over one corner, its shore the stage",
+	GORGE: "A ravine with rock walls winding across the map",
 }
 const DEFAULT := VALLEY
 
@@ -67,6 +86,14 @@ static func apply(
 	match kind:
 		VALLEY:
 			return LandformRecipes.valley(doc, seed_value, biome_id, root)
+		HILLTOP:
+			return LandformHilltop.hilltop(doc, seed_value, biome_id)
+		TERRACES:
+			return LandformTerraces.terraces(doc, seed_value, biome_id)
+		LAKESHORE:
+			return LandformLakeshore.lakeshore(doc, seed_value, biome_id)
+		GORGE:
+			return LandformGorge.gorge(doc, seed_value, biome_id, root)
 	return {"stage": Vector2.ZERO, "report": "flat"}
 
 
@@ -137,6 +164,61 @@ static func trough_shape(distance: float, floor_half: float, rim: float) -> floa
 	return 0.5 * (1.0 + cos(PI * (distance - floor_half) / maxf(rim - floor_half, 1e-6)))
 
 
+## A rounded hill's profile: 1 at the centre, a cosine fall to 0 at t = 1 (distance over
+## radius) and beyond, with no crease at the foot.
+static func bump(t: float) -> float:
+	if t >= 1.0:
+		return 0.0
+	return 0.5 * (1.0 + cos(PI * maxf(t, 0.0)))
+
+
+## A low-frequency smooth noise seeded from `rng` (one wave per `wave` metres) for warping
+## an outline: a shore, a crown, a terrace edge.
+static func warp_noise(rng: RandomNumberGenerator, wave: float) -> FastNoiseLite:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.seed = rng.randi() & 0x7fffffff
+	noise.frequency = 1.0 / wave
+	return noise
+
+
+## The signed distance of `p` inside a disc of `radius` about `centre` (positive inside)
+## whose outline is pushed in and out by up to `warp` of the radius by `noise` read around
+## the circle (periodic, so the shore has no seam). Null noise: a plain disc.
+static func disc_distance(
+	p: Vector2, centre: Vector2, radius: float, noise: FastNoiseLite, warp: float
+) -> float:
+	var offset := p - centre
+	var r := radius
+	if noise != null and warp > 0.0:
+		var angle := offset.angle()
+		# The noise read on a circle of the disc's size, so the warp has about two waves of
+		# detail per quarter turn whatever the radius.
+		var ring := radius * 0.5
+		r *= 1.0 + warp * noise.get_noise_2d(ring * cos(angle), ring * sin(angle))
+	return r - offset.length()
+
+
+## The signed distance of `p` inside a rounded rectangle (positive inside) whose centre is
+## `centre`, half size `half_size` (along `axis` and its normal) and corner radius `corner`.
+static func box_distance(
+	p: Vector2, centre: Vector2, half_size: Vector2, corner: float, axis: Vector2
+) -> float:
+	var offset := p - centre
+	var local := Vector2(offset.dot(axis), offset.dot(Vector2(-axis.y, axis.x))).abs()
+	var q := local - (half_size - Vector2(corner, corner))
+	var outside := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length()
+	var inner := minf(maxf(q.x, q.y), 0.0)
+	return -(outside + inner - corner)
+
+
+## The `inset` HeightBrush.tier_goal wants for a sample `distance` metres inside a
+## plateau's outline (negative outside): the Sculpt tool measures it from TIER_SOFTEN_M
+## outside its ring, so the face stands on the outline and its toe eases out past it.
+static func tier_inset(distance: float) -> float:
+	return distance + HeightBrush.TIER_SOFTEN_M
+
+
 ## Writes `height_of(p: Vector2, h: float) -> float` over every sample of `doc` (p the
 ## sample's map XZ, h its height now), clamped to MAX_ABS_HEIGHT_M.
 static func write_heights(doc: MapDocument, height_of: Callable) -> void:
@@ -147,6 +229,28 @@ static func write_heights(doc: MapDocument, height_of: Callable) -> void:
 			var i := doc.sample_index(x, z)
 			var h: float = height_of.call(doc.sample_to_world(Vector2(x, z)), heights[i])
 			heights[i] = clampf(h, -limit, limit)
+	doc.heights = heights
+
+
+## Puts back the ground of `shape` (heights per sample, the landform before its water was
+## carved) wherever the carve lowered it more than `keep` metres from polyline `line` (the
+## water's course): a river's bank reach (WaterCarve.BANK_REACH_M) cuts a slope through any
+## high ground beside it, which is right for a stroke across a hillside and wrong for a
+## stream along the foot of a ravine's wall. Only ever raises, never above `shape`, and
+## never within the channel and its bank, so the water model stands as planned.
+static func restore_outside(
+	doc: MapDocument, shape: PackedFloat32Array, line: PackedVector2Array, keep: float
+) -> void:
+	if shape.size() != doc.sample_count() or line.size() < 2:
+		return
+	var heights := doc.heights
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var i := doc.sample_index(x, z)
+			if heights[i] >= shape[i]:
+				continue
+			if nearest_on(line, doc.sample_to_world(Vector2(x, z))).x > keep:
+				heights[i] = shape[i]
 	doc.heights = heights
 
 
@@ -256,6 +360,92 @@ static func place_crossing(
 		return {"crossing": null, "refusal": StringName(problem)}
 	doc.crossings.append(crossing)
 	return placed
+
+
+## A pond of depth class `depth` over every sample where `inside.call(p: Vector2) -> bool`
+## (map XZ), carved into the heights and added to the document's bodies as the Water tool's
+## pond stroke does (the mask, WaterGeometry.pond_rim_level: the lowest rim ground less the
+## freeboard, WaterCarve.pond_goals, WaterEditor.lower). The heights must be final around the
+## pond first: the level is read from the rim as it is. Returns the body, or null when no
+## sample is inside or the document has no room for it.
+static func carve_pond(doc: MapDocument, inside: Callable, depth: WaterBody.Depth) -> WaterBody:
+	var id := doc.next_water_id()
+	if id < 1 or id > WaterBody.MAX_ID:
+		return null
+	var count := doc.sample_count()
+	var mask := doc.pond_mask
+	if mask.size() != count:
+		mask = PackedByteArray()
+		mask.resize(count)
+	var marked := 0
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var i := doc.sample_index(x, z)
+			if mask[i] == 0 and inside.call(doc.sample_to_world(Vector2(x, z))):
+				mask[i] = id
+				marked += 1
+	if marked == 0:
+		return null
+	doc.pond_mask = mask
+	var level := WaterGeometry.pond_rim_level(doc, id)
+	if is_nan(level):
+		return null
+	var body := WaterBody.pond(id, depth, level)
+	var bodies: Array[WaterBody] = []
+	bodies.assign(doc.water_bodies)
+	bodies.append(body)
+	doc.water_bodies = bodies
+	WaterEditor.lower(doc, WaterCarve.pond_goals(doc, body, doc.heights))
+	return body
+
+
+## A crossing of `kind` standing on two chosen anchors `a` and `b` (map XZ, dry ground)
+## over the water between them, for a span CrossingPlacement.place cannot find by itself: an
+## arch from rim to rim of a ravine, whose waterline anchors would stand on the floor beside
+## the stream. The levels are CrossingPlacement.levels_for's over the highest water level
+## along the span; refused as place() refuses (&"no_bank" when an anchor is wet or off the
+## map, &"no_water" without water between them, &"fall" near a fall, &"long" over
+## Crossing.MAX_SPAN_M) and appended to `doc.crossings` with the id CrossingEditor.add would
+## give it. {"crossing": Crossing or null, "refusal": StringName}.
+static func span_crossing(
+	doc: MapDocument, a: Vector2, b: Vector2, kind: Crossing.Kind, style: String
+) -> Dictionary:
+	if not inside(doc, a, 0.0) or not inside(doc, b, 0.0):
+		return {"crossing": null, "refusal": &"no_bank"}
+	if WaterGeometry.is_wet_at(doc, a) or WaterGeometry.is_wet_at(doc, b):
+		return {"crossing": null, "refusal": &"no_bank"}
+	var span := a.distance_to(b)
+	if span > Crossing.MAX_SPAN_M:
+		return {"crossing": null, "refusal": CrossingPlacement.REFUSED_LONG}
+	var water := -INF
+	var steps := maxi(2, ceili(span / 0.25))
+	for n in steps + 1:
+		var p := a.lerp(b, float(n) / steps)
+		if WaterGeometry.is_wet_at(doc, p):
+			water = maxf(water, WaterGeometry.level_at(doc, p))
+	if water == -INF:
+		return {"crossing": null, "refusal": CrossingPlacement.REFUSED_NO_WATER}
+	var width: float = Crossing.DEFAULT_WIDTH_M[kind]
+	if CrossingPlacement.fall_near(doc, a, b, width):
+		return {"crossing": null, "refusal": &"fall"}
+	var crossing := Crossing.new()
+	crossing.kind = kind
+	crossing.start = a
+	crossing.end = b
+	crossing.style = style
+	crossing.width_m = width
+	crossing.levels = CrossingPlacement.levels_for(
+		kind, WaterGeometry.ground_at(doc, a), WaterGeometry.ground_at(doc, b), water, span
+	)
+	var crossing_id := doc.next_crossing_id()
+	if crossing_id < 0:
+		return {"crossing": null, "refusal": &"full"}
+	crossing.id = crossing_id
+	var problem := MapCrossingIO.crossing_problem(crossing, doc.extent_m())
+	if problem != "":
+		return {"crossing": null, "refusal": StringName(problem)}
+	doc.crossings.append(crossing)
+	return {"crossing": crossing, "refusal": &""}
 
 
 ## The index of the point of `course` where it runs straightest among `candidates` (the
