@@ -43,9 +43,12 @@ const LATERAL_BLEND_M := 1.2
 ## The course is led in this far from the mouth, so the skirt beside the mouth reads its
 ## offset across the channel.
 const LEAD_IN_M := 2.0
-## The channel eases back to the skirt as the skirt's fade falls from this to 0: late, since
-## over a dark backdrop the ground still shows at a low fade (skirt_lit_share).
-const FADE_ALPHA := 0.03
+## The channel eases back to the skirt as the skirt's fade falls from FADE_ALPHA to
+## FADE_SETTLED_ALPHA: late, since over a dark backdrop the ground still shows at a low fade
+## (skirt_lit_share), but settled before the fade ends, so no trench outlives the water (the
+## ribbon runs on under the settled skirt to where the fade is 0).
+const FADE_ALPHA := 0.04
+const FADE_SETTLED_ALPHA := 0.01
 ## Past the edge the skirt beside a mouth eases from the carve's height at the edge to the
 ## bank's over this distance (_unghosted).
 const GHOST_M := 2.0
@@ -63,11 +66,10 @@ const RING_MERGE_M := 0.15
 ## Skirt columns kept in a window past the channel's footprint on either side.
 const WINDOW_PAD_COLUMNS := 2
 ## The ribbon: a row every RIBBON_ROW_M, RIBBON_ACROSS vertices across, RIBBON_MARGIN_M past
-## the waterline either side; it stops where the skirt's fade is under RIBBON_MIN_ALPHA.
+## the waterline either side; its last row is the first past which the skirt's fade is 0.
 const RIBBON_ROW_M := 0.5
 const RIBBON_ACROSS := 9
 const RIBBON_MARGIN_M := 0.6
-const RIBBON_MIN_ALPHA := 0.005
 ## The ribbon's flow UVs stay this many texels inside the flow map's edge.
 const FLOW_INSET_TEXELS := 1.5
 ## The wet dressing by height over the water: the bed from 4 cm above it to 10 cm under it
@@ -485,7 +487,7 @@ static func channel_at(
 	var carved := profile_at(mouth, near.x) + drop
 	var weight := (
 		(1.0 - smoothstep(extent_half - LATERAL_BLEND_M, extent_half, near.y))
-		* smoothstep(0.0, FADE_ALPHA, alpha)
+		* smoothstep(FADE_SETTLED_ALPHA, FADE_ALPHA, alpha)
 	)
 	var y := lerpf(skirt_y, minf(skirt_y, carved), weight)
 	var above := y - (float(mouth.level) + drop)
@@ -527,13 +529,19 @@ static func _ribbon_arrays(doc: MapDocument, mouths: Array[Dictionary], fade: Di
 		var dir: Vector2 = mouth.dir
 		var base := vertices.size()
 		var made := 0
-		for row in _rows(course, RIBBON_ROW_M):
+		var rows := _rows(course, RIBBON_ROW_M)
+		# The ribbon runs on until the skirt's fade is 0 at every vertex of a row, and that row
+		# is its last: the fade's noise is not monotonic along the course, so stopping at the
+		# first faint row (P6-1) could end the water where the fade came back up beyond it,
+		# a faint darker stub of dry channel at full zoom-out.
+		var count := mini(rows.size(), 2)
+		for r in range(rows.size() - 1, 1, -1):
+			if _row_alpha(rows[r], wet, half, fade) > 0.0:
+				count = mini(r + 2, rows.size())
+				break
+		for row in rows.slice(0, count):
 			var p: Vector2 = row[0]
 			var tangent: Vector2 = row[1]
-			if made > 1:
-				var alpha := RiverExits.skirt_alpha(p, half, fade.fall, fade.wobble, fade.seed)
-				if alpha <= RIBBON_MIN_ALPHA:
-					break
 			var across := Vector2(-tangent.y, tangent.x)
 			for j in RIBBON_ACROSS:
 				var u := lerpf(
@@ -571,6 +579,19 @@ static func _ribbon_arrays(doc: MapDocument, mouths: Array[Dictionary], fade: Di
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 	return arrays
+
+
+## The skirt's greatest fade over ribbon row `row` ([point, direction], _rows()) from the
+## waterline `wet` widened by RIBBON_MARGIN_M either side, at its ends and middle.
+static func _row_alpha(row: Array, wet: Vector2, half: Vector2, fade: Dictionary) -> float:
+	var p: Vector2 = row[0]
+	var tangent: Vector2 = row[1]
+	var across := Vector2(-tangent.y, tangent.x)
+	var most := 0.0
+	for u in [wet.x - RIBBON_MARGIN_M, 0.0, wet.y + RIBBON_MARGIN_M]:
+		var at: Vector2 = p + across * float(u)
+		most = maxf(most, RiverExits.skirt_alpha(at, half, fade.fall, fade.wobble, fade.seed))
+	return most
 
 
 ## Points every `step` metres along `course` with the course's direction there (a chord over
