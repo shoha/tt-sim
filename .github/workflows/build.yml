@@ -280,6 +280,14 @@ jobs:
             --issuer "$MACOS_NOTARIZATION_API_ISSUER" \
             --output-format json | jq -r '.id')
           echo "Submission ID: $SUBMISSION_ID"
+          if [ -z "$SUBMISSION_ID" ] || [ "$SUBMISSION_ID" = "null" ]; then
+            # The submit itself failed (its error is printed above: an expired Apple
+            # agreement, bad credentials, a rejected upload). Polling an empty id would
+            # only burn the 30-minute timeout.
+            echo "notarytool submit returned no submission id; failing fast."
+            rm "$API_KEY_PATH"
+            exit 1
+          fi
 
           TIMEOUT=1800
           ELAPSED=0
