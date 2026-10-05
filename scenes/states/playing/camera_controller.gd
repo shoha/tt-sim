@@ -36,6 +36,10 @@ const RMB_PAN_MOVE_THRESHOLD_PX: float = 5.0  # Min movement to count as drag
 const MAP_BOUNDS_MARGIN_FACTOR := 0.15  # Extra margin as fraction of map size on each side
 ## Keep bottom-corner ray origins at least this far above the highest ground (ground_top_y).
 const NEAR_PLANE_GROUND_MARGIN := 0.5
+## The near plane is pulled back until the bottom corners' ray origins stand this far above
+## the highest ground, over the tallest canopy (palette trees reach 16 m; margin for Blender
+## maps' taller ones): see _hold_near_plane_over_canopies.
+const CANOPY_CLEARANCE := 24.0
 ## Zoomed out past this fraction of the size at which the whole map fits, the pan range
 ## narrows toward the map centre, reaching it at that size (recentre_weight()), so a full
 ## zoom-out frames the map instead of wherever zoom-toward-cursor left the view.
@@ -88,6 +92,7 @@ var _reset_tween: Tween = null
 # Camera offset scaling (prevents near-plane culling at large zoom/narrow aspect)
 var _base_camera_offset: Vector3  # Camera3D local position at base zoom (from scene)
 var _base_camera_size: float  # Camera3D orthographic size at base zoom (from scene)
+var _base_camera_near: float = 0.001  # Camera3D near from the scene (the placement's reference)
 
 # Camera soft bounds (computed from map geometry)
 var _map_bounds: AABB = AABB()
@@ -111,6 +116,7 @@ func setup(game_map: GameMap) -> void:
 	# These are the reference values for proportional offset scaling.
 	_base_camera_offset = camera_node.position
 	_base_camera_size = camera_node.size
+	_base_camera_near = maxf(camera_node.near, 0.001)
 	# Isometric foreshortening: the camera's elevation angle compresses vertical
 	# screen movement by sin(elevation).  Compensate by 1/sin = hypotenuse/opposite.
 	_iso_vertical_comp = _base_camera_offset.length() / _base_camera_offset.y
@@ -261,6 +267,9 @@ func set_ground_top(y: float) -> void:
 ## every visible ground point lies on a downward ray from an origin above it.
 func _update_camera_offset() -> void:
 	var camera_node := _game_map.camera_node
+	# Ray origins lie on the near plane: measure the placement below with the scene's own
+	# near, then pull the near plane back over the canopies at the end.
+	camera_node.near = _base_camera_near
 	# Baseline: proportional scaling preserves the original camera geometry
 	var offset_scale := camera_node.size / _base_camera_size
 	camera_node.position = _base_camera_offset * offset_scale
@@ -286,28 +295,33 @@ func _update_camera_offset() -> void:
 			var back := camera_node.global_basis.z.normalized()
 			if min_y < floor_y and back.y > 0.001:
 				camera_node.global_position += back * ((floor_y - min_y) / back.y)
-	_hold_near_plane_below_home(camera_node)
+		_hold_near_plane_over_canopies(camera_node, Vector2(vp_size))
 
 
-## Below the home zoom, back the camera off along its own view axis (the frame is unchanged)
-## so the near plane stays as far in front of the ground as the home zoom has it. Scaled in
-## with the zoom, the near plane used to slice the canopies nearest the camera flat; the
-## close-zoom canopy fade (CanopyFade) now reveals the ground softly instead. The home zoom
-## and above are untouched.
-func _hold_near_plane_below_home(camera_node: Camera3D) -> void:
+## Pull the near plane back behind the camera (a negative near; the camera itself stays
+## put) until the bottom corners' ray origins, which lie on it, stand CANOPY_CLEARANCE above
+## the highest ground. Every canopy on screen then lies in front of it at every zoom, so none
+## is sliced or culled: the scene-near plane used to cut the trees at the bottom of the frame
+## flat (at the home zoom a 15 m pine there vanished whole) and, closer in, slice canopies
+## open. Unlike backing the camera off, this leaves everything that measures from the camera
+## as it was: exponential fog, the sun's shadow distance and cascades, measured unchanged at
+## the home zoom (Polish, 2026-10-05). Below the home zoom the canopy fade (CanopyFade)
+## reveals the ground instead.
+func _hold_near_plane_over_canopies(camera_node: Camera3D, vp_size: Vector2) -> void:
 	var back := camera_node.global_basis.z.normalized()
-	var extra := near_plane_hold(camera_node.size, _base_camera_size, _base_camera_offset.y, back.y)
-	if extra > 0.0:
-		camera_node.global_position += back * extra
+	var hold := near_plane_hold(
+		_bottom_ray_origin_y(vp_size), ground_top_y + CANOPY_CLEARANCE, back.y
+	)
+	camera_node.near = _base_camera_near - hold
 
 
-## How far (metres along the view axis) to back the camera off at orthographic size `size`
-## for a home size `home` whose camera stands `home_height` above the ground at its centre,
-## with a back axis rising `back_y` per metre. 0 at the home zoom and above. Pure.
-static func near_plane_hold(size: float, home: float, home_height: float, back_y: float) -> float:
-	if home <= 0.0 or back_y <= 0.001 or size >= home:
+## How far (metres along the view axis) to pull the near plane back so that a ray origin at
+## height `bottom_origin_y` on it rises to `floor_y`, for a back axis rising `back_y` per
+## metre. 0 when it is already there. Pure.
+static func near_plane_hold(bottom_origin_y: float, floor_y: float, back_y: float) -> float:
+	if back_y <= 0.001 or bottom_origin_y >= floor_y:
 		return 0.0
-	return (1.0 - size / home) * home_height / back_y
+	return (floor_y - bottom_origin_y) / back_y
 
 
 ## The lower of the two bottom screen corners' ray origins (world Y).
@@ -591,7 +605,9 @@ func is_mouse_over_token(screen_pos: Vector2) -> bool:
 	if not world:
 		return false
 	var from = camera_node.project_ray_origin(screen_pos)
-	var to = from + camera_node.project_ray_normal(screen_pos) * 100.0
+	# Rays start on the near plane, which stands well behind the camera (see
+	# _hold_near_plane_over_canopies), so this must reach past it to the far ground.
+	var to = from + camera_node.project_ray_normal(screen_pos) * 1000.0
 	var space_state = world.direct_space_state
 	if not space_state:
 		return false

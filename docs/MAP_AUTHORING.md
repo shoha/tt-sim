@@ -399,14 +399,17 @@ into tree canopies", done): render job `pol_trees` (temperate forest and boreal 
 down to 2, play with tokens, the Blender map Deciduous clusters). The cause was both: the
 camera's near plane, brought in with the zoom, sliced the canopies at the bottom of the frame
 flat, and with the slice removed the canopies in front of the view centre filled the frame.
-Below the home zoom the camera now holds the home zoom's near-plane distance (same frame), and
-the canopies in front of the view-centre ground dissolve over a soft round clearing in the
-middle of the screen, leaf card by leaf card and limb by limb, keeping every trunk and the
-dappled shadows; trees at the frame's edges stay whole. The home zoom and above are unchanged,
-including the hard slice of the tallest trees at the bottom edge of the home frame (left as
-is, see `PERFORMANCE.md` "Close-zoom canopy fade"). Water, the grid, the token fade and the
-Thin brush's ring fade read the same at close zoom. About +0.05 to +0.1 ms GPU at zoom 6 in a
-grove, nothing at home.
+At every zoom the near plane now sits behind the camera, clear of the tallest canopy (a
+negative `near`, the camera unmoved, so fog and shadows are untouched), so no tree is sliced or
+culled, the home zoom included: there the near plane used to cut away whole trees near the
+bottom edge, which read as a clearing in the middle of a forest; that forest's home frame is
+now as dense as the forest is. Below the home zoom the canopies in front of the view-centre
+ground dissolve over a soft round clearing in the middle of the screen, leaf card by leaf card
+and limb by limb, keeping every trunk and the dappled shadows; trees at the frame's edges stay
+whole. The fade is off at the home zoom and above (`PERFORMANCE.md` "Close-zoom canopy fade").
+Water, the grid, the skirt, the token fade, a token drag and the Thin brush's ring fade read
+the same. Cost (indicative): the trees no longer cut away are drawn, about +0.17 ms GPU at
+home in a forest; the fade adds +0.05 to +0.2 ms at zoom 6 in a grove and nothing at home.
 
 ## Open work
 

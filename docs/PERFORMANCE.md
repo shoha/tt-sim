@@ -363,13 +363,27 @@ back along its view axis (`probes/close_zoom.gd back`, same frame) removes the c
 the second cause: below about zoom 10 the canopies between the camera and the view centre
 fill the frame with leaf cards (`f_a_z6_nofade`).
 
-The fix, which leaves the home zoom and above untouched:
+The fix:
 
-- `CameraController._hold_near_plane_below_home` backs the camera off along its view axis
-  below the home size so the near plane stays as far ahead of the ground as at home (about
-  21.7 m along the centre ray at every close zoom; was 9.4 m at zoom 6, 3.9 m at zoom 2).
-  Water, its depth reads, the grid and the token fade render the same (`f_river_z6*` against
-  `f_river_z6*_old`, the camera moved back to its old place).
+- `CameraController._hold_near_plane_over_canopies` pulls the near plane back behind the
+  camera (a negative `near`; the camera stays where it was) until the bottom corners' ray
+  origins, which lie on it, stand `CANOPY_CLEARANCE` (24 m) above the highest ground, at
+  every zoom. Nothing is sliced or culled any more, including at the home zoom and above
+  (the 15 m pine is back in `f_a_z13`; in a dense forest the home frame now shows the trees
+  standing near its bottom edge, which the old cut had removed so that the frame read as a
+  clearing). A first version backed the camera itself off along
+  its view axis instead; that is not free here, because the sun's shadows (fixed 100 m max
+  distance in play, fade from 80 m, cascade splits measured from the camera) and the
+  presets' exponential fog are measured from the camera: frozen-clock captures at home
+  (scratch job, `falls.gd clock 0`) showed the top of the frame up to 11 levels brighter
+  with the camera 50 m back, and within 1-2 levels of the old frame with `near` at -50.
+  Rays from `project_ray_origin` now start on that plane, behind the camera:
+  `is_mouse_over_token`'s ray and the measure tool's grew to 1000 m (the play camera's top
+  edge at zoom 20 is now about 116 m from its ray origin; it was 57 m). Measured near values:
+  -61 m at home, -59 at zoom 20, -63 at zoom 6, -64 at zoom 2, -53 at a 150 ft map's full
+  authoring zoom-out (size 39.3), far 1000 throughout. A token drag through DragAndDrop3D
+  resolves to the same ground cell with the old and the new near, and `is_mouse_over_token`
+  finds the same token.
 - The foliage shader dissolves the canopies in front of the view-centre ground over a soft
   round clearing in the middle of the screen (`apply_canopy_fade` in
   `wind_foliage_include.gdshaderinc`, globals from `CanopyFade`): strength 0 at the home zoom
@@ -381,12 +395,15 @@ The fix, which leaves the home zoom and above untouched:
   frame the clearing. `WindFoliage.canopy_part` tells bark from leaf cards by the source
   material's transparency.
 
-Cost, indicative (user's RTX 3080, in-run A/B with `close_zoom.gd fade`, not the pinned
-procedure, GPU contended): zoom 6 in a temperate forest grove, fade on 2.16 / 2.26 ms GPU
-median against off 2.12 / 2.14 ms and the old camera without the fade 2.12 ms, so about
-+0.05 to +0.1 ms where it is on; at the home zoom 3.40 against 3.39 ms (and 4.23 against
-4.19 in a noisier run), nothing. The CPU side is one layer-1 ray per frame below the home
-zoom and two global parameter writes only when a value changes.
+Cost, indicative (user's RTX 3080, in-run A/B with `close_zoom.gd fade` / `near` / `hold`,
+`pol_trees --only f_gpu`, not the pinned procedure, GPU contended, p90 noisy): the trees the
+near plane used to cut away are now drawn, so the hold itself costs what they cost: at the
+home zoom 4.38 ms GPU median with the hold against 4.21 with the old near (+0.17 ms); at zoom
+6 in a temperate forest grove 2.08 ms with the old near and no fade, 2.40 / 2.43 with the
+hold and no fade, 2.58 / 2.62 with the hold and the fade. The fade itself is +0.05 to +0.2 ms
+where it is on (an earlier run: 2.16 / 2.26 against 2.12 / 2.14) and nothing at the home zoom
+(4.38 against 4.34). The CPU side is one layer-1 ray per frame below the home zoom and two
+global parameter writes only when a value changes.
 
 ## Per-frame idle and drag work removed (2026-09-15)
 

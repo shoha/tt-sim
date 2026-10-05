@@ -1,13 +1,11 @@
 extends GutTest
 
-## The close-zoom canopy fade's pure parts (CanopyFade) and the camera's near-plane hold
-## below the home zoom (CameraController.near_plane_hold). The shader side is judged in
-## renders: tools/render_jobs/jobs/pol_trees.json.
+## The close-zoom canopy fade's pure parts (CanopyFade) and the camera's near-plane hold over
+## the canopies (CameraController.near_plane_hold). The shader side is judged in renders:
+## tools/render_jobs/jobs/pol_trees.json.
 
 const HOME := 13.85
-## The scene camera stands 8 m above the ground at its centre; its back axis rises 0.368
-## per metre (21.6 degrees of pitch).
-const HOME_HEIGHT := 8.0
+## The scene camera's back axis rises 0.368 per metre (21.6 degrees of pitch).
 const BACK_Y := 0.36812454
 
 
@@ -45,20 +43,20 @@ func test_plane_hit_returns_the_origin_for_a_level_ray() -> void:
 	assert_eq(CanopyFade.plane_hit(origin, Vector3(1.0, 0.0, 0.0), 0.0), origin)
 
 
-func test_near_plane_hold_is_zero_at_the_home_zoom_and_above() -> void:
-	assert_eq(CameraController.near_plane_hold(HOME, HOME, HOME_HEIGHT, BACK_Y), 0.0)
-	assert_eq(CameraController.near_plane_hold(20.0, HOME, HOME_HEIGHT, BACK_Y), 0.0)
+func test_near_plane_hold_is_zero_when_the_origins_already_clear_the_floor() -> void:
+	assert_eq(CameraController.near_plane_hold(30.0, 24.0, BACK_Y), 0.0)
+	assert_eq(CameraController.near_plane_hold(24.0, 24.0, BACK_Y), 0.0)
 
 
-func test_near_plane_hold_keeps_the_home_distance_to_the_ground_below_it() -> void:
-	# The proportional offset puts the camera size / home x 8 m above the ground; the hold
-	# backs it off along the view axis until it stands at the home zoom's 8 m again.
-	for size: float in [12.0, 8.0, 6.0, 2.0]:
-		var hold := CameraController.near_plane_hold(size, HOME, HOME_HEIGHT, BACK_Y)
-		var height := HOME_HEIGHT * size / HOME + hold * BACK_Y
-		assert_almost_eq(height, HOME_HEIGHT, 0.0001, "size %.1f" % size)
+func test_near_plane_hold_lifts_the_bottom_origins_onto_the_canopy_floor() -> void:
+	# The home zoom's bottom corners stand 1.56 m up (8 m at the centre less 6.92 x 0.93);
+	# pulled back by the hold along the view axis they rise to the clearance.
+	var floor_y := CameraController.CANOPY_CLEARANCE
+	for bottom: float in [1.56, 0.68, 0.5, -3.0]:
+		var hold := CameraController.near_plane_hold(bottom, floor_y, BACK_Y)
+		assert_gt(hold, 0.0)
+		assert_almost_eq(bottom + hold * BACK_Y, floor_y, 0.0001, "bottom %.2f" % bottom)
 
 
-func test_near_plane_hold_ignores_a_level_or_missing_camera() -> void:
-	assert_eq(CameraController.near_plane_hold(6.0, 0.0, HOME_HEIGHT, BACK_Y), 0.0)
-	assert_eq(CameraController.near_plane_hold(6.0, HOME, HOME_HEIGHT, 0.0), 0.0)
+func test_near_plane_hold_ignores_a_level_camera() -> void:
+	assert_eq(CameraController.near_plane_hold(1.0, 24.0, 0.0), 0.0)
