@@ -15,9 +15,10 @@ extends RefCounted
 ## WaterFallPlan lets a spring's first lip stand two metres from the start) spilling over
 ## the crown's face in a fall (the phase 4c tier fall) and running on down the flank; without
 ## one, an ankle stream rising STREAM_SUMMIT_SHARE of the radius from the summit. It runs
-## STREAM_AZIMUTH_DEG off the camera's direction (StartingLandform.NEAR), to the hill's
-## side: the fall shows in profile to the camera (a face more than 90 degrees off NEAR is
-## back-facing to it) and the stream never crosses the shoulder stage; off the map; the
+## STREAM_AZIMUTH_DEG off the camera's direction (StartingLandform.NEAR; further out on a
+## ledged hill, clear of the bench: stream_azimuth_window), to the hill's side: the fall
+## shows in profile to the camera (a face more than 90 degrees off NEAR is back-facing to
+## it) and the stream never crosses the shoulder stage; off the map; the
 ## flank is steeper than the falls rule's drop slope at every map size, so it steps down in
 ## falls; stepping stones over it below the foot (STONES_CHANCE). A hill without a crown
 ## always draws at least one more feature: when the seed drew neither the second hill nor
@@ -75,11 +76,16 @@ const STAGE_CROWN_TOE_M := 1.0
 const STAGE_REACH_SHARE := 0.5
 ## The flank ledge of a crownless hill: its line stands on the tier nearest this share of the
 ## hill's height (at least one), the bench a tier above; the arc's full span about NEAR (the
-## seed draws within it; under the stream's STREAM_AZIMUTH_DEG.x either side, so a stream
-## never crosses the bench); the stage this far out past the ledge's line.
+## seed draws within it; 90-130 since P5-7, the 60-100 arc read weakly at its narrow end);
+## the stage this far out past the ledge's line. A stream on a ledged hill keeps clear of the
+## bench: its azimuth window starts LEDGE_STREAM_CLEAR_M (along the ledge's line) past the
+## arc's half-span when that is beyond STREAM_AZIMUTH_DEG.x, and keeps at least
+## LEDGE_STREAM_SPAN_DEG of width (stream_azimuth_window).
 const LEDGE_HEIGHT_SHARE := 0.33
-const LEDGE_ARC_DEG := Vector2(60.0, 100.0)
+const LEDGE_ARC_DEG := Vector2(90.0, 130.0)
 const STAGE_LEDGE_TOE_M := 1.5
+const LEDGE_STREAM_CLEAR_M := 2.0
+const LEDGE_STREAM_SPAN_DEG := 10.0
 ## A stream's end stops this far inside the map edge (within WaterCarve.EDGE_MARGIN_M, so it
 ## runs off the map instead of tapering to a head).
 const EDGE_MARGIN_M := 0.5
@@ -104,8 +110,11 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 		# Never a bare mound: a hill without a crown carries at least one more feature.
 		wants_second = true
 	var azimuth_sign := 1.0 if draws.randf() < 0.5 else -1.0
-	var azimuth := StartingLandform.NEAR.rotated(
-		azimuth_sign * deg_to_rad(draws.randf_range(STREAM_AZIMUTH_DEG.x, STREAM_AZIMUTH_DEG.y))
+	# The draw's place in the window (0..1), so a ledged hill can move the window (below)
+	# without changing the stream's draw count.
+	var azimuth_share := (
+		(draws.randf_range(STREAM_AZIMUTH_DEG.x, STREAM_AZIMUTH_DEG.y) - STREAM_AZIMUTH_DEG.x)
+		/ (STREAM_AZIMUTH_DEG.y - STREAM_AZIMUTH_DEG.x)
 	)
 	var summit := HILL_HEIGHT_M * scale
 	var crown_radius := crown_radius_of(radius, tier)
@@ -117,6 +126,10 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 	var wants_ledge := not wants_crown and bool(ledge.fits)
 	var ledge_r: float = ledge.line_r
 	var ledge_target: float = ledge.target
+	var window := stream_azimuth_window(ledge_arc, ledge_r) if wants_ledge else STREAM_AZIMUTH_DEG
+	var azimuth := StartingLandform.NEAR.rotated(
+		azimuth_sign * deg_to_rad(lerpf(window.x, window.y, azimuth_share))
+	)
 	var second_centre: Vector2 = centre - frame.dir * half * SECOND_HILL_OFFSET_SHARE
 	var second_radius := half * SECOND_HILL_RADIUS_SHARE
 	var second_height := height * SECOND_HILL_HEIGHT_SHARE if wants_second else 0.0
@@ -298,6 +311,16 @@ static func ledge_of(height: float, tier: float, radius: float) -> Dictionary:
 		"line_r": radius * t,
 		"fits": (below + 1) * tier < height,
 	}
+
+
+## The stream's azimuth window (degrees off NEAR, either side) on a hill whose flank ledge
+## spans `ledge_arc` radians about NEAR with its line `ledge_r` out: STREAM_AZIMUTH_DEG, its
+## start moved out to clear the bench by LEDGE_STREAM_CLEAR_M along the line (the bench's
+## soft edge, the stream's half-width and its wobble) and at least LEDGE_STREAM_SPAN_DEG wide.
+static func stream_azimuth_window(ledge_arc: float, ledge_r: float) -> Vector2:
+	var clear := rad_to_deg(ledge_arc * 0.5 + LEDGE_STREAM_CLEAR_M / maxf(ledge_r, 1e-3))
+	var start := maxf(STREAM_AZIMUTH_DEG.x, clear)
+	return Vector2(start, maxf(STREAM_AZIMUTH_DEG.y, start + LEDGE_STREAM_SPAN_DEG))
 
 
 ## The shoulder stage: `out` metres from `centre` toward the camera (StartingLandform.NEAR),
