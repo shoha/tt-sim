@@ -63,6 +63,14 @@ const STREAM_CROSSING := 0x5E2F9
 ## The extent the recipes' metres are written for (150 ft); size_scale() is 0.8 / 1.0 / 1.2
 ## at 100 / 150 / 200 ft.
 const REFERENCE_EXTENT_M := 45.72
+## The fixed camera's horizontal look direction in map XZ (game_map.tscn's Camera3D stands
+## at +x, +z and looks along (-1, -1) at a 45 degree yaw, pitched 21.6 degrees down), and the
+## direction from a feature toward the camera. A recipe that puts a stage "facing the
+## camera" or a wall "where the camera sees it" composes with these, never with +z alone
+## (P5-4: the P5-2 recipes assumed the camera looked along -z, so a hill's "camera" shoulder
+## sat half round its side and a gorge heading of 45 degrees ran straight along the view).
+const VIEW := Vector2(-0.70710678, -0.70710678)
+const NEAR := Vector2(0.70710678, 0.70710678)
 ## A clipped line is walked this finely to find where it meets the map edge.
 const CLIP_STEP_M := 0.25
 ## The wavelength of a river's wobble along its course.

@@ -160,9 +160,10 @@ func test_forty_seeds_draw_rivers_often_and_never_break_the_map() -> void:
 	assert_gt(crossings, 0, "some seed drew a crossing")
 
 
-func test_bluff_is_one_tier_on_the_outer_bank_only() -> void:
-	# P5-4: about half the seeds raise the outer bank behind a one-tier rock face; the inner
-	# bank keeps the cosine slope and the floor its depth, so it is a valley, not a gorge.
+func test_bluff_is_one_tier_on_one_bank_only() -> void:
+	# P5-4: about half the seeds raise one bank (bluff_side_of: the far bank of a valley
+	# crossing the view, else the outer) behind a one-tier rock face; the other bank keeps
+	# the cosine slope and the floor its depth, so it is a valley, not a gorge.
 	var bluffs := 0
 	var checked := 0
 	for seed_value in range(1, SEEDS + 1):
@@ -184,22 +185,34 @@ func test_bluff_is_one_tier_on_the_outer_bank_only() -> void:
 		)
 		var foot := StartingLandform.along(frame.axis, float(frame.foot_arc))
 		var inner: Vector2 = (foot.dir as Vector2).rotated(float(frame.turn) * PI / 2.0)
+		var bluff := inner * LandformRecipes.bluff_side_of(frame)
+		var along := absf((frame.dir as Vector2).dot(StartingLandform.VIEW))
+		if along <= cos(deg_to_rad(LandformRecipes.BLUFF_ALONG_DEG)):
+			assert_gt(
+				bluff.dot(StartingLandform.VIEW),
+				0.0,
+				"%s a valley across the view: the bluff on the far bank" % label
+			)
+		else:
+			assert_eq(
+				bluff, -inner, "%s a valley along the view: the bluff on the outer bank" % label
+			)
 		var rim := half * LandformRecipes.VALLEY_RIM_SHARE
 		var probe := rim - 1.0
-		var inner_h := WaterGeometry.ground_at(doc, foot.point + inner * probe)
-		var outer_h := WaterGeometry.ground_at(doc, foot.point - inner * probe)
+		var plain_h := WaterGeometry.ground_at(doc, foot.point - bluff * probe)
+		var bluff_h := WaterGeometry.ground_at(doc, foot.point + bluff * probe)
 		var cosine := (
 			-(LandformRecipes.VALLEY_DEPTH_M * scale + LandformRecipes.VALLEY_FALL_M * scale * 0.5)
 			* StartingLandform.trough_shape(probe, half * LandformRecipes.VALLEY_FLOOR_SHARE, rim)
 		)
-		assert_almost_eq(inner_h, cosine, 0.35, "%s the inner bank keeps the cosine slope" % label)
-		assert_lt(outer_h, inner_h - 0.1, "%s the outer bank is cut below the inner" % label)
+		assert_almost_eq(plain_h, cosine, 0.35, "%s the other bank keeps the cosine slope" % label)
+		assert_lt(bluff_h, plain_h - 0.1, "%s the bluff bank is cut below the other" % label)
 		assert_gt(
-			outer_h, cosine - tier - 0.35, "%s the outer bank is cut one tier at most" % label
+			bluff_h, cosine - tier - 0.35, "%s the bluff bank is cut one tier at most" % label
 		)
 		var beyond := rim + HeightBrush.tier_span(tier) + LandformRecipes.BLUFF_WOBBLE_M + 1.0
 		assert_almost_eq(
-			WaterGeometry.ground_at(doc, foot.point - inner * beyond),
+			WaterGeometry.ground_at(doc, foot.point + bluff * beyond),
 			0.0,
 			0.01,
 			"%s the base beyond the bluff" % label
