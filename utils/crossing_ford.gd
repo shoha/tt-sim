@@ -327,12 +327,21 @@ static func _bar(
 	gravel.colors.append_array(colors)
 	gravel.tangents.append_array(tangents)
 	# Quads wound as PlaneMesh winds: (here, next along, next across) is clockwise from above.
+	var quads := PackedInt32Array()
+	quads.resize((rows - 1) * (ACROSS - 1) * 6)
+	var at := 0
 	for i in rows - 1:
 		for j in ACROSS - 1:
 			var a := base + i * ACROSS + j
-			var b := a + 1
 			var c := a + ACROSS
-			gravel.indices.append_array(PackedInt32Array([a, c, b, b, c, c + 1]))
+			quads[at] = a
+			quads[at + 1] = c
+			quads[at + 2] = a + 1
+			quads[at + 3] = a + 1
+			quads[at + 4] = c
+			quads[at + 5] = c + 1
+			at += 6
+	gravel.indices.append_array(quads)
 	_smooth_normals(gravel, base)
 
 
