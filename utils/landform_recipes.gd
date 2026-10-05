@@ -78,6 +78,16 @@ const CROSSING_EDGE_M := 4.0
 ## The dry wash's width as a share of the floor's width and its soft edge.
 const WASH_WIDTH_SHARE := 0.35
 const WASH_SOFT_M := 1.5
+## The glade on the camera-side bank (P5-7, NewMap.glade_density): open this share of the
+## slope's width further than the floor (1: to the rim; 2.5 reaches about 9 m past it at
+## 150 ft, since a 10 m tree hides about 25 m of ground behind it from the 21.6 degree home
+## camera: at 1.5 seed 3's rim trees still covered its floor), and the groves beyond it come
+## back to only this share of their density.
+const GLADE_NEAR_OPEN_SHARE := 2.5
+const GLADE_NEAR_EDGE := 0.15
+## The near band's density cap: at the glade's own density the cover noise still raised copses
+## of tall trees on seed 3's near bank.
+const GLADE_NEAR_CAP := 0.1
 ## A river's ends stop this far inside the map edge: within WaterCarve.EDGE_MARGIN_M, so
 ## they stay open (the river runs off the map) instead of tapering to a head.
 const EDGE_MARGIN_M := 0.5
@@ -198,11 +208,22 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 		report.append("dry")
 	report.append("stage (%.1f, %.1f)" % [stage.x, stage.y])
 	# The glade is the floor (P5-7): under a forest's canopy a round glade on the stage left
-	# the valley a dark dip; the floor and its river stay open, the slopes keep their groves.
+	# the valley a dark dip; the floor and its river stay open, the far slope keeps its
+	# groves, and the slope toward the camera stays open to the rim and thin beyond it, so its
+	# trees do not stand between the home camera and the floor.
 	return {
 		"stage": stage,
 		"report": "; ".join(report),
-		"glade": {"line": axis, "half_width": floor_half, "rise": rim - floor_half},
+		"glade":
+		{
+			"line": axis,
+			"half_width": floor_half,
+			"rise": rim - floor_half,
+			"near": StartingLandform.NEAR,
+			"near_open": (rim - floor_half) * GLADE_NEAR_OPEN_SHARE,
+			"near_cap": GLADE_NEAR_CAP,
+			"near_edge": GLADE_NEAR_EDGE,
+		},
 	}
 
 

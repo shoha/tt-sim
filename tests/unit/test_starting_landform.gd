@@ -304,7 +304,7 @@ func test_new_map_centres_the_glade_on_the_stage() -> void:
 func test_a_valley_glade_opens_the_floor_and_keeps_the_rim_dense() -> void:
 	# P5-7: the Valley returns a line glade along its floor; the floor's centreline stays below
 	# the glade threshold (halfway between the glade's density and the groves') for most of its
-	# length and the rim stays dense.
+	# length, the far rim stays dense and the slope toward the camera stays thin.
 	if PaletteLibrary.biome(BIOME).is_empty():
 		pass_test("palette without %s" % BIOME)
 		return
@@ -324,23 +324,37 @@ func test_a_valley_glade_opens_the_floor_and_keeps_the_rim_dense() -> void:
 		var on_line := 0
 		var rim_sum := 0.0
 		var rim_n := 0
+		var near_sum := 0.0
+		var near_n := 0
 		for z in doc.samples_z():
 			for x in doc.samples_x():
 				var world := doc.sample_to_world(Vector2(x, z))
-				var distance := StartingLandform.nearest_on(line, world).x
+				var at := StartingLandform.nearest_on(line, world)
+				var distance := at.x
 				var density := float(doc.biome_density[doc.sample_index(x, z)])
 				if distance < doc.sample_step().x * 0.5:
 					on_line += 1
 					open += 1 if density < threshold else 0
-				elif absf(distance - rim) < 1.0:
+					continue
+				var k := int(at.z)
+				var q := Geometry2D.get_closest_point_to_segment(world, line[k], line[k + 1])
+				var facing := (world - q).normalized().dot(StartingLandform.NEAR)
+				# The far rim keeps its groves; the near slope (P5-7) stays thin.
+				if facing < -0.5 and absf(distance - rim) < 1.0:
 					rim_sum += density
 					rim_n += 1
+				elif facing > 0.5 and distance > floor_half and distance < rim:
+					near_sum += density
+					near_n += 1
 		gut.p(
 			(
-				"%s: %d of %d centreline samples open, rim mean %.0f / 255"
-				% [label, open, on_line, rim_sum / maxf(rim_n, 1.0)]
+				"%s: %d of %d centreline samples open, far rim mean %.0f, near slope mean %.0f"
+				% [label, open, on_line, rim_sum / maxf(rim_n, 1.0), near_sum / maxf(near_n, 1.0)]
 			)
 		)
 		assert_gt(on_line, 20, "%s samples on the centreline" % label)
 		assert_gt(float(open) / on_line, 0.8, "%s the floor's centreline is open" % label)
-		assert_gt(rim_sum / rim_n, threshold, "%s the rim stays dense" % label)
+		assert_gt(rim_n, 10, "%s samples on the far rim" % label)
+		assert_gt(rim_sum / rim_n, threshold, "%s the far rim stays dense" % label)
+		assert_gt(near_n, 10, "%s samples on the near slope" % label)
+		assert_lt(near_sum / near_n, threshold, "%s the near slope stays thin" % label)
