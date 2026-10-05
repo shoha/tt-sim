@@ -90,7 +90,10 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   `CrossingEditor.add` would; `span_crossing` stands a crossing on two chosen dry anchors (an
   arch rim to rim, whose waterline anchors would stand on the ravine floor) with
   `CrossingPlacement.levels_for` and the same refusals; `straightest` picks where a course
-  runs straightest among candidates (where a crossing goes); `paint_line` paints a surface
+  runs straightest among candidates (where a crossing goes), and `straightest_wet` (P5-7)
+  among those `WaterGeometry.is_wet_at` says lie under water, so a crossing is never drawn
+  where the carve left the course dry (the lake's, valley's and terraces' crossings use it;
+  the hill's stones skip dry points the same way); `paint_line` paints a surface
   along a polyline with a soft edge (a dry wash). A refused crossing leaves the document as it
   was and is named in the report: never a broken map.
 - **Valley** (`LandformRecipes.valley`; caption "A broad valley; often a river runs down it";
@@ -134,7 +137,13 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   crownless hill is never a bare mound: it gets the second hill when it drew neither the
   second hill nor the stream (P5-4), and always a flank ledge (P5-4b): the ground above a line
   `LEDGE_HEIGHT_SHARE` 0.33 of the way up raised to the next tier with `tier_goal` over an arc
-  of `LEDGE_ARC_DEG` 60-100 degrees about `NEAR`, only ever raising. Stage: on the shoulder
+  of `LEDGE_ARC_DEG` 90-130 degrees about `NEAR` (60-100 until P5-7, whose narrow end read
+  weakly), only ever raising. On a ledged hill the stream's window is
+  `stream_azimuth_window`: its start moves out to the arc's half-span plus
+  `LEDGE_STREAM_CLEAR_M` 2 m along the ledge's line (the bench's soft edge, the channel and its
+  wobble) when that is past 60 degrees, at least `LEDGE_STREAM_SPAN_DEG` 10 wide, so a stream
+  never crosses the bench (at 150 ft the widest arc gives 83-93 degrees; at 100 ft up to
+  95-105, a little past side-on). Stage: on the shoulder
   toward the camera, `STAGE_SHOULDER_SHARE` 0.55 of the radius out, past the crown's toe
   (`STAGE_CROWN_TOE_M` 1 m) or at the ledge's foot (`STAGE_LEDGE_TOE_M` 1.5 m), within half
   the half extent of the centre.
@@ -156,7 +165,12 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   1.5 m away from the shore over `LAKE_RISE_RUN_SHARE` 0.9 of the half extent, so the lake
   sits in the map's low corner. The corner is drawn from `allowed_corners()`, the three that
   are not the camera's own (the `NEAR` corner, (1, 1), where the lake lay at the bottom of the
-  view cut by the foreground; P5-4b). The lake is the water, so a dry draw has it too. Draws:
+  view cut by the foreground; P5-4b), weighted by `corner_weights` (P5-7): the far corner
+  (-1, -1) `FAR_CORNER_WEIGHT` 0.6, each side corner `SIDE_CORNER_WEIGHT` 0.2; a side corner's
+  centre is `LAKE_SIDE_CENTRE_SHARE` 0.38 of the half extent along the axis that points at the
+  camera's side (0.5 on the other). The home camera shows about 24.6 m of ground across at
+  1920x1080 against a 45.7 m map, so a side lake's centre still lies past the frame's edge and
+  about 40% of its width shows (P5-7 render). The lake is the water, so a dry draw has it too. Draws:
   an islet (`ISLET_CHANCE` 0.3), a small hill `ISLET_RADIUS_M` 5 m shaped before the pond is
   stamped so the mask leaves it dry, its top `ISLET_TOP_OVER_M` 0.5 m over the water; a
   feeding ankle stream from the far side (`STREAM_CHANCE` 0.5) approaching
@@ -184,8 +198,15 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
 - **Flat**: unchanged (caption "Level ground, yours to shape").
 - **The stage and the glade.** `NewMap.create` paints the starting cover with the glade
   (`COVER_GLADE_RADIUS` 0.35 of the half extent) centred on the recipe's stage rather than the
-  map's middle; the groves still grow toward the map's edges. The water clears its own plants
-  and the cliff, lip and scree rules dress the tiers, as they do for a tool's stroke.
+  map's middle; the groves still grow toward the map's edges. A recipe may return a line glade
+  instead (`"glade": {"line", "half_width", "rise"}`, P5-7): `paint_starting_cover` then paints
+  the glade's density within `half_width` of the line and brings the groves back over the next
+  `rise` metres (`NewMap.line_density`). The Valley returns its axis, the floor's half-width and
+  the slope's width to the rim, so the floor and river stay open and the slopes keep their
+  groves; the other recipes keep the round glade. From home the near slope's groves still hide
+  much of a forest valley's floor (the P5-7 render: seed 2 a little more open, seeds 3 and 1234
+  much as before). The water clears its own plants and the cliff, lip and scree rules dress the
+  tiers, as they do for a tool's stroke.
 - **Draws as measured** (24 surveyed seeds at 150 ft, the P5-4 verdict): valley rivers 19,
   bluffs 16; hill crowns 19, streams 9, stones 4; terraces rivers 19, bridges 8; lake streams
   16, stones 4; gorge streams 12, arches 7. The unit tests hold each chance within a window
@@ -293,3 +314,9 @@ this doc does not repeat it.
 - P5-4b (8092d17): a flank ledge on crownless hills (crown chance 0.85), the lake away from
   the camera's corner, `cleanup_levels` covers `_p5_` and `_p5j_`.
 - P5-6: these docs.
+- P5-7 (b22df32, ce1877c, e85f7a2, fd717d5): the lake's far corner weighted 0.6 and side
+  lakes pulled in; `straightest_wet` for every crossing; the ledge arc 90-130 with
+  `stream_azimuth_window`; the Valley's line glade. Unit tests: the far corner most common and
+  no centre in the camera's quadrant, no stones refused over the drawn lake seeds at 100 and
+  150 ft, no `no_water` over 40 valley seeds, the stream never crosses the bench over 40
+  crownless seeds, the valley floor's centreline open and its rim dense.

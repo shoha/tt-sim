@@ -300,9 +300,11 @@ on the crown that falls off the face, the stage on the camera-facing shoulder, n
 mound (2c11229); the lake centre at 0.5 of the half extent (43fbcab); the valley's one-tier
 bluff on the far bank (a46b3e4); then in P5-4b (8092d17) a flank ledge on every crownless hill
 with the crown chance at 0.85 (seed 12's two plain mounds were the set's weakest draw), and
-the lake's corner drawn from the three that are not the camera's own. Open, none blocking:
-the valley under forest canopy, a lake in a side corner at the frame's edge, lake stones
-refusing `no_water` on some seeds (Open work, "Landform follow-ups"). Earlier phase 5 renders:
+the lake's corner drawn from the three that are not the camera's own; then in P5-7 the far
+corner weighted 0.6 with side lakes pulled in, crossings only over wet points, the ledge arc at
+90-130 and the Valley's floor as its glade (`phase5_lakeshore/hilltop/valley` re-run). Open,
+none blocking: the valley under forest canopy, a side-corner lake still at the frame's edge
+(Open work, "Landform follow-ups"). Earlier phase 5 renders:
 `landform_look` (P5-1, P5-2: the `_p5_` levels) and `landform_dialog` (P5-3: the six tiles and
 the caption), each in its `user://render_jobs/` folder.
 
@@ -426,18 +428,17 @@ blocking):
 - Palette boulders can stand in the water beside a bridge deck (their centres keep 0.95 m
   from the footprint, a large boulder's body can still touch the rail); judged acceptable.
 
-Landform follow-ups (phase 5, P5-4 to P5-5, 2026-10-04; none blocking; `systems/landforms.md`):
-- The valley under forest canopy reads weakly from home: the canopies hide most of its floor
-  and it reads as a dark dip with a river in it. The canopy read is a `NewMap` glade matter
-  (a thinner canopy over the stage's reach, or a wider glade), not the recipe's.
-- A crownless hill's flank ledge (P5-4b) reads weakly when the seed draws a narrow arc
-  (`LEDGE_ARC_DEG` 60-100 degrees); the crown chance went to 0.85 so the draw is rarer.
-- A lake in a side corner (the two corners beside the camera's own) sits at the frame's edge;
-  the far corner reads best. Favouring the far corner, or pulling side lakes toward the
-  centre, is the next step.
-- On some lake seeds (surveyed seed 14) the stepping stones refuse `no_water`: the stream's
-  straightest point lies where the carve left no water. A wet-water check on the candidates
-  before choosing would avoid it (the draw is skipped, the map stays whole).
+Landform follow-ups (phase 5, P5-4 to P5-7, 2026-10-05; none blocking; `systems/landforms.md`).
+P5-7 closed the ledge arc (90-130, the stream's window clears the bench) and the lake stones'
+`no_water` (`straightest_wet`), and moved the other two; what remains:
+- The valley under forest canopy: since P5-7 the Valley's glade is its floor (a line glade),
+  but from home the near slope's groves still hide much of the floor (seed 2 reads a little
+  more open, seeds 3 and 1234 much as before). The next step is the near (camera-side) slope:
+  a longer `rise` on the bank toward `NEAR`, or a thinner canopy there.
+- A lake in a side corner: since P5-7 the far corner is drawn at 0.6 and a side lake is pulled
+  to 0.38 on the camera's axis, but at home (about 24.6 m across against a 45.7 m map) a side
+  lake's centre still lies past the frame's edge and about 40% of its width shows (seeds 14,
+  29). A stronger pull, or a lower side weight, is the next step.
 - A 200 ft gorge opens in 1.5 s with one 1.2 s frame, because the recipe runs on the main
   thread in the frame that starts the open (`PERFORMANCE.md` "Phase 5 (starting landforms)").
   The recipe writes only the document, so it could move onto the loader's worker.
