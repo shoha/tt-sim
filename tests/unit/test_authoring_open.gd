@@ -143,10 +143,7 @@ func test_card_edit_map_reaches_the_title() -> void:
 
 
 func test_new_map_dialog_spec_follows_the_tiles() -> void:
-	var dialog: NewMapDialog = (
-		load("res://scenes/states/authoring/new_map_dialog.tscn").instantiate()
-	)
-	add_child_autofree(dialog)
+	var dialog := _dialog()
 	assert_eq(dialog.current_spec()["size_ft"], NewMap.DEFAULT_SIZE_FT)
 	dialog._on_size_selected(&"size_200")
 	dialog._on_biome_selected(NewMapDialog.BARE_TILE)
@@ -157,3 +154,78 @@ func test_new_map_dialog_spec_follows_the_tiles() -> void:
 	watch_signals(dialog)
 	dialog._on_create_pressed()
 	assert_signal_emitted(dialog, "map_chosen")
+
+
+func _dialog() -> NewMapDialog:
+	var dialog: NewMapDialog = (
+		load("res://scenes/states/authoring/new_map_dialog.tscn").instantiate()
+	)
+	add_child_autofree(dialog)
+	return dialog
+
+
+func test_new_map_dialog_has_a_landform_tile_per_kind() -> void:
+	var dialog := _dialog()
+	var tiles := dialog.landform_field.tiles
+	assert_eq(tiles.get_child_count(), StartingLandform.KINDS.size())
+	assert_eq(tiles.columns, StartingLandform.KINDS.size())
+	for kind in StartingLandform.KINDS:
+		var tile := NewMapDialog.landform_tile(kind)
+		assert_true(tiles.has_tile(tile), kind)
+		var button: Button = tiles.get_node(String(tile))
+		assert_eq(button.text, StartingLandform.NAMES[kind])
+		assert_eq(button.tooltip_text, StartingLandform.CAPTIONS[kind])
+		assert_not_null(button.icon, "icon for %s" % kind)
+
+
+func test_new_map_dialog_landform_default_follows_the_biome() -> void:
+	var dialog := _dialog()
+	assert_ne(dialog.current_spec()["biome_id"], NewMap.BARE_BIOME)
+	assert_eq(dialog.current_spec()["landform"], StartingLandform.DEFAULT)
+	assert_eq(
+		dialog.landform_field.tiles.selected, NewMapDialog.landform_tile(StartingLandform.DEFAULT)
+	)
+	assert_eq(dialog.landform_caption.text, StartingLandform.CAPTIONS[StartingLandform.DEFAULT])
+	dialog._on_biome_selected(NewMapDialog.BARE_TILE)
+	assert_eq(dialog.current_spec()["landform"], StartingLandform.FLAT)
+	assert_eq(
+		dialog.landform_field.tiles.selected, NewMapDialog.landform_tile(StartingLandform.FLAT)
+	)
+	assert_eq(dialog.landform_caption.text, StartingLandform.CAPTIONS[StartingLandform.FLAT])
+	# Back to a biome: the landform shown before Bare ground returns.
+	var biomes := PaletteLibrary.biomes(dialog.palette_root)
+	if biomes.is_empty():
+		return
+	dialog._on_biome_selected(StringName(biomes[0]["id"]))
+	assert_eq(dialog.current_spec()["landform"], StartingLandform.DEFAULT)
+
+
+func test_new_map_dialog_landform_pick_sets_the_spec_and_caption() -> void:
+	var dialog := _dialog()
+	for kind in StartingLandform.KINDS:
+		var button: Button = dialog.landform_field.tiles.get_node(
+			String(NewMapDialog.landform_tile(kind))
+		)
+		button.button_pressed = true
+		assert_eq(dialog.current_spec()["landform"], kind)
+		assert_eq(dialog.landform_caption.text, StartingLandform.CAPTIONS[kind])
+	# An author's own pick on Bare ground survives going back to a biome.
+	dialog._on_biome_selected(NewMapDialog.BARE_TILE)
+	dialog._on_landform_selected(NewMapDialog.landform_tile(StartingLandform.FLAT))
+	var biomes := PaletteLibrary.biomes(dialog.palette_root)
+	if not biomes.is_empty():
+		dialog._on_biome_selected(StringName(biomes[0]["id"]))
+	assert_eq(dialog.current_spec()["landform"], StartingLandform.FLAT)
+
+
+func test_landform_icons_load() -> void:
+	for kind in StartingLandform.KINDS:
+		assert_not_null(IconButton.load_icon("landform-" + kind), kind)
+	for kind in ["flat", "valley", "hilltop", "terraces", "lakeshore", "gorge"]:
+		assert_true(ResourceLoader.exists("res://assets/icons/ui/landform-%s.svg" % kind), kind)
+
+
+func test_opening_status_names_the_landform() -> void:
+	assert_eq(NewMap.opening_status({}), "Building the map...")
+	assert_eq(NewMap.opening_status({"landform": StartingLandform.FLAT}), "Building the map...")
+	assert_eq(NewMap.opening_status({"landform": StartingLandform.VALLEY}), "Shaping the valley...")

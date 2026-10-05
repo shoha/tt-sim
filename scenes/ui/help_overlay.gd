@@ -110,6 +110,13 @@ func _get_shortcut_data() -> Array:
 			"header": "Map building",
 			"entries":
 			[
+				[
+					"New map",
+					(
+						"Pick a size, a biome and a landform; the seed draws the water and the way"
+						+ " across"
+					),
+				],
 				["Left Drag", "Paint, thin, place, sculpt or lay a surface (hold still to build)"],
 				["Left Drag (Water)", "River: draw it the way it flows. Pond: paint its area"],
 				[

@@ -87,6 +87,16 @@ static func from_spec(spec: Dictionary, root: String = PaletteLibrary.DEFAULT_RO
 	)
 
 
+## The loading line while a map opens from `spec` (empty for a map that is not new): a
+## landform other than Flat is named ("Shaping the valley..."); anything else is "Building
+## the map...".
+static func opening_status(spec: Dictionary) -> String:
+	var kind := String(spec.get("landform", StartingLandform.FLAT))
+	if kind == StartingLandform.FLAT or not StartingLandform.NAMES.has(kind):
+		return "Building the map..."
+	return "Shaping the %s..." % String(StartingLandform.NAMES[kind]).to_lower()
+
+
 ## Paints `biome_id` over the whole document with the starting cover (see the header),
 ## replacing any biome masks it had. The glade is centred on `centre` (map XZ metres; a
 ## landform's stage): the groves still grow toward the map's edges, so a stage near one

@@ -1,0 +1,23 @@
+{
+ "out_dir": "render_jobs/landform_dialog",
+ "timeout_s": 120,
+ "hang_s": 60,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "eval", "expr": "get_viewport().warp_mouse(Vector2(100, 1000))"},
+  {"op": "eval", "expr": "request_authoring(null, \"title\")"},
+  {"op": "wait", "s": 1.0},
+  {"op": "capture", "name": "dialog_default", "desc": "The new-map dialog as it opens: a biome chosen, Valley selected, its caption"},
+  {"op": "eval", "expr": "get(\"_new_map_dialog\").landform_field.tiles.get_node(\"landform_gorge\").set_pressed(true)"},
+  {"op": "wait", "s": 0.6},
+  {"op": "capture", "name": "dialog_gorge", "desc": "Gorge picked: the caption follows"},
+  {"op": "eval", "expr": "get(\"_new_map_dialog\").biome_field.tiles.get_node(\"bare_ground\").set_pressed(true)"},
+  {"op": "wait", "s": 0.6},
+  {"op": "capture", "name": "dialog_bare", "desc": "Bare ground picked: the row switches to Flat"},
+  {"op": "eval", "expr": "get(\"_new_map_dialog\")._on_cancel_pressed()"},
+  {"op": "wait", "s": 0.6},
+  {"op": "title"},
+  {"op": "index", "title": "Landform tiles in the new-map dialog (P5-3)", "intro": "The dialog opened from the title through Root.request_authoring, driven by eval steps; nothing is saved."}
+ ]
+}

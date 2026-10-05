@@ -122,6 +122,7 @@ func _process(delta: float) -> void:
 					{
 						"size_ft": int(step.get("size", 200)),
 						"biome_id": String(step.get("biome", "")),
+						"landform": String(step.get("landform", StartingLandform.FLAT)),
 						"seed": int(step.get("seed", 1234))
 					},
 					"return_to": &"title"
@@ -642,26 +643,26 @@ func _grab(name: String) -> void:
 	var step: Dictionary = steps[_i]
 	# `--half` (or the step's own `scale`) shrinks both images before saving, for inner loops.
 	var scale := float(step.get("scale", 0.5 if half else 1.0))
-	var sub := gm().world_viewport.get_texture().get_image()
-	var win := get_viewport().get_texture().get_image()
+	# Without a map (a title-screen dialog) there is no world viewport: the window alone.
+	var map := gm()
+	var images: Array[Image] = [get_viewport().get_texture().get_image()]
+	if map:
+		images.append(map.world_viewport.get_texture().get_image())
 	if scale != 1.0:
-		for img: Image in [sub, win]:
+		for img: Image in images:
 			img.resize(
 				int(img.get_width() * scale),
 				int(img.get_height() * scale),
 				Image.INTERPOLATE_LANCZOS
 			)
-	sub.save_png(out_dir.path_join(name + "_sub.png"))
-	win.save_png(out_dir.path_join(name + ".png"))
-	_captures.append(
-		{"name": name, "desc": String(step.get("desc", "")), "zoom": gm().camera_node.size}
-	)
-	log_line(
-		(
-			"captured %s sub %s win %s zoom %.2f"
-			% [name, sub.get_size(), win.get_size(), gm().camera_node.size]
-		)
-	)
+	images[0].save_png(out_dir.path_join(name + ".png"))
+	var zoom := map.camera_node.size if map else 0.0
+	var sub_size := Vector2i.ZERO
+	if map:
+		images[1].save_png(out_dir.path_join(name + "_sub.png"))
+		sub_size = images[1].get_size()
+	_captures.append({"name": name, "desc": String(step.get("desc", "")), "zoom": zoom})
+	log_line("captured %s sub %s win %s zoom %.2f" % [name, sub_size, images[0].get_size(), zoom])
 	_state.phase = 2
 
 
