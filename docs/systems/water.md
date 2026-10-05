@@ -40,6 +40,9 @@ drawer, Water; "Brushes and gestures").
 | `utils/scatter_ground.gd` | `ScatterGround` | `wet_factor`: what grows in and by the water |
 | `scenes/states/authoring/rock_keeper.gd` | `RockKeeper` | Rocks kept as props through a carve |
 | `scenes/states/authoring/water_brush.gd`, `water_tool_pane.gd` | `WaterBrush` | The Water tool (`UI_SYSTEMS.md`) |
+| `utils/river_exits.gd` | `RiverExits` | Pure: which river ends leave the map, their course past the edge (drawn or derived), the drawn line's split |
+| `utils/river_exit_mesh.gd` | `RiverExitMesh` | Pure: the skirt's channel patch and the water ribbon past the edge |
+| `scenes/terrain/skirt_exits.gd`, `skirt_backdrop.gd` | `SkirtExits`, `SkirtBackdrop` | The skirt's channel and ribbon nodes; the opaque skirt's backdrop and fog |
 
 ## Model
 
@@ -404,6 +407,76 @@ editor API the Water tool (P4-4) calls.
 - **The Water tool** (`WaterBrush`, `BrushTool` mode for River and Pond tiles, the depth
   tiles, the ribbon preview and Ctrl erase) is documented in `UI_SYSTEMS.md` (authoring
   drawer, Water; "Brushes and gestures").
+
+## Past the map edge
+
+Phase 6, P6-1 (user, 2026-10-05: a river constrained to the play area looks unnatural). A
+river that reaches the map edge carries on into the ground skirt as scenery: a channel carved
+into the skirt along its continued course with the real water flowing in it, both dissolving
+into the backdrop with the skirt. Decoration only, like the skirt: no collision, no grid, no
+tokens past the edge. The probe that chose the rendering is P6-0
+(`user://render_jobs/p6_probe/VERDICT.md`, `tools/render_jobs/probes/skirt.gd`).
+
+- **Exits** (`RiverExits.exits`): a river body's end within `WaterCarve.EDGE_MARGIN_M` (1 m)
+  of the edge (the end the carve already leaves open and untapered), not shared with another
+  river's end (the next reach of one stroke). Both ends count: an upstream end at the edge
+  comes from somewhere too. Landform recipes' rivers, which end at the edge, get them with no
+  change.
+- **The course past the edge:** the author's when drawn, else derived. The Water tool keeps a
+  river stroke going past the edge (`WaterBrush.hit_past_edge`: where the ray finds no ground,
+  the pointer meets the height of the last point the line recorded), and
+  `WaterEditor.carve_river` splits the line at the map rectangle (`RiverExits.split_line`):
+  the part on the map is planned and carved as before, and the points past it (cut at the
+  skirt's width and resampled to at most 16) go on the reach whose end met the edge
+  (`RiverExits.attach`, by position, whichever way `plan_river` oriented the water), as
+  `WaterBody.beyond` (after its last point) or `beyond_up` (before its first), saved in
+  `splines.json` (`MapWaterIO`; optional, older builds ignore them). An end with none gets a
+  derived continuation (`RiverExits.continuation`): 36 m along the heading of the river's
+  smoothed course at its end (turned out of the map to at least 0.45 of the edge's normal
+  when it met the edge at a glancing angle) with one smooth bend of 0.2 to 0.6 rad whose side
+  and size come from the map seed and the body id. Every course, drawn or derived, is then
+  carried on along its last heading until it is 43.7 m past the map, where the skirt has
+  faded however far its noise stretches the fade (`carried_on`): a drawn course that stopped
+  short ended in the open while the skirt still showed. Derived, never saved.
+- **The channel** (`RiverExitMesh`): the skirt's 8 rings are too coarse to carry a channel that
+  bends, so the skirt columns whose radial lines pass within the channel's footprint (padded
+  three columns) are cut out of the skirt (`skip_columns`) and redrawn as a patch with a ring
+  every 0.25 m out to 8 m (the sample step, so the cells are square), every 0.5 m to 16 m and
+  every metre beyond, out to the course's reach, the skirt's own 8 rings included. That keeps the
+  skirt's cost what it was everywhere else (more rings everywhere would multiply the vertices
+  of the whole ring for a few metres of river). The patch's outer columns carry no channel and
+  their extra vertices lie on the skirt's own edges, so there is no crack. Ring 0 is the map's
+  boundary vertices (with the map's normals), so the channel meets the carve at the edge with
+  no step. Past it the ground is the river's own cross-section 0.3 m inside the edge (bed and
+  banks, out to the half-width plus 3.5 m), carried along the course by the offset across it,
+  lowered with the skirt where the skirt falls back to the map floor, eased back to the skirt
+  over its outer 1.2 m and where the skirt's fade runs out (`RiverExits.skirt_alpha`, the
+  shader's CPU twin), never above the skirt. Beside the mouth the skirt itself eases from the
+  carve's height at the edge to the bank's over 2 m (`_unghosted`): a skirt column starting in
+  the channel would otherwise roll back up from the bed straight out from the edge, a ghost
+  trench beside a river that leaves at an angle. Quads split along the diagonal whose ends
+  are closer in height, so the banks follow the channel instead of zigzagging across the
+  grid (they drew 0.5 m teeth along the waterline before). Its UV2 carries the wet dressing by height over
+  the water (bed from 4 cm above to 10 cm under it, shore up to 0.8 m), routed to the base's
+  bed and shore surfaces; within 2 m of the edge the skirt reads the map's own dressing
+  texture instead, so the two meet without a seam.
+- **The water** (the ribbon): a strip along the course at the reach's level (lowered with the
+  skirt like the channel), 0.6 m wider than the waterline either side so the banks cross it in
+  the depth texture and the water shader's own shoreline fade and foam draw its edge. Its first
+  row lies on the edge where the map's water ends. It draws with the shared water material,
+  its alpha times the skirt's fade (`water.gdshader` `water_skirt_fade`, the same function and
+  seed as the skirt, `shaders/skirt_fade.gdshaderinc`). Its flow UVs are the flow map's texels
+  just inside the edge at the mouth (the border texels are still water), across the channel by
+  the offset, so the edge's flow carries on; in a bend the ripples keep the edge's direction.
+- **Where it is built:** with the skirt, on AuthoredLoadPrep's worker at load
+  (`RiverExitMesh.skirt_parts`) and on AuthoredWater's refresh worker after any water edit,
+  which hands the skirt to `AuthoredTerrain.apply_river_exits()` (a rebuild of the skirt mesh
+  keeping its material; nothing when no exit was or is there). A sculpt on the edge updates the
+  skirt in place but not the patch until the next water refresh.
+- **The skirt is opaque** (`authored_ground.gdshaderinc` SKIRT): the probe found any
+  transparent skirt out of the depth and screen textures, so water over it read the backdrop.
+  The fade is in colour; the backdrop and the fog are matched to the environment by
+  `SkirtBackdrop` (ARCHITECTURE.md "Ground skirt").
 
 ## Verification
 
