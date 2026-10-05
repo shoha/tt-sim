@@ -210,7 +210,7 @@ func _open_async(
 	level = opened
 	_game_map.map_loading = true
 	loading_started.emit()
-	loading_progress.emit(0.1, "Building the map...")
+	loading_progress.emit(0.1, NewMap.opening_status(spec))
 	var loader := MapSourceLoader.new(get_tree())
 	loader.separate_props = true
 	loader.light_intensity_scale = opened.light_intensity_scale

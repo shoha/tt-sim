@@ -760,9 +760,18 @@ view itself, with one piece of chrome: the `AuthoringPanel` rail on the left edg
 a Size `TileField` (100 / 150 / 200 ft, 20 / 30 / 40 squares in the tooltips), a Start from
 `TileField` of the palette biomes' thumbnails plus Bare ground (the bare surface's albedo),
 three columns, `photo_icons` so pictures draw untinted at their size, and a caption naming
-the ground the choice implies ("Ground: forest floor"). Nothing to type. The footer is
-Cancel (Secondary) and Create map (the one primary). Temperate forest is preselected.
-`map_chosen({size_ft, biome_id, seed})` with a fresh seed; Escape, Cancel and the close button
+the ground the choice implies ("Ground: forest floor"). Under it a Landform `TileField`
+(P5-3): one glyph tile per `StartingLandform.KINDS` entry, in that order and all on one row
+(`columns` = the kind count), tile ids `landform_<kind>`, labels from `StartingLandform.NAMES`,
+icons `assets/icons/ui/landform-<kind>.svg`, and a caption under the row that is the chosen
+kind's `CAPTIONS` entry (it describes the landform, never a feature this seed may not draw).
+The default is `StartingLandform.DEFAULT` (Valley) with a biome and Flat with Bare ground:
+picking Bare ground switches the row to Flat, and picking a biome again brings back the
+landform shown before, unless the author picked one in between. Nothing to type. The footer
+is Cancel (Secondary) and Create map (the one primary). Temperate forest is preselected.
+`map_chosen({size_ft, biome_id, landform, seed})` with a fresh seed; while a landform other
+than Flat opens, the loading line names it ("Shaping the valley...",
+`NewMap.opening_status`); Escape, Cancel and the close button
 emit nothing. It registers its backdrop as an overlay like `LevelPickerDialog`.
 
 ### Tool drawer

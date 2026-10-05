@@ -148,7 +148,7 @@ A skipped step logs `skip <op> (<reason>)`.
 |---|---|---|
 | `title` | none | Switch to the title state (`change_state(0)`), without the leave prompt and without saving. |
 | `wait_title` | none | Wait until the title state is current: the first-launch graphics warm-up (`Root.State.WARMING_UP`) has handed over. Put it first in any job that may boot into the warm-up. |
-| `new_map` | `biome` (palette biome id, `""` for bare ground), `size` (ft, default 200), `seed` (default 1234) | Open a new map in authoring, as the New map dialog does. |
+| `new_map` | `biome` (palette biome id, `""` for bare ground), `size` (ft, default 200), `seed` (default 1234), `landform` (a `StartingLandform.KINDS` id, default `flat`) | Open a new map in authoring, as the New map dialog does. The default `flat` keeps older jobs on the ground they were written for. |
 | `dress` | `folder` (level folder under `user://levels/`) | Open an existing level in authoring; a GLB-only level opens as a dressing layer. Nothing is written unless something saves. |
 | `play` | `folder` | Load that level folder and play it (`_on_play_level_requested`). |
 | `wait_ready` | `settle` (s, default 2.0) | Wait until the map has loaded, authoring is open, and the scatter is neither regenerating nor growing, then `settle` more seconds; the timer restarts whenever any of those is busy again. |
@@ -185,7 +185,7 @@ A skipped step logs `skip <op> (<reason>)`.
 
 | Op | Fields | What it does |
 |---|---|---|
-| `capture` | `name`, `desc` (caption for the index), `scale` (default 1.0; `--half` makes it 0.5) | After the next frame is drawn, save `<name>_sub.png` (raw SubViewport) and `<name>.png` (window), resized by `scale` (Lanczos) when it is not 1, and log both sizes and the camera size. `--only` skips captures whose `name` matches none of its patterns. |
+| `capture` | `name`, `desc` (caption for the index), `scale` (default 1.0; `--half` makes it 0.5) | After the next frame is drawn, save `<name>_sub.png` (raw SubViewport) and `<name>.png` (window), resized by `scale` (Lanczos) when it is not 1, and log both sizes and the camera size. With no map open (a dialog over the title) only `<name>.png` is written. `--only` skips captures whose `name` matches none of its patterns. |
 | `index` | `title`, `intro` | Write `INDEX.md` in the output folder: title, intro, then a table row per capture so far (window image, raw image, camera size, caption). |
 
 ### Measurement
