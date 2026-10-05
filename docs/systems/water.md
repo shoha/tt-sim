@@ -473,7 +473,15 @@ tokens past the edge. The probe that chose the rendering is P6-0
   seed as the skirt, `shaders/skirt_fade.gdshaderinc`) weighed by the backdrop as the skirt's
   colour fade is (`skirt_lit_share`: the share of lit ground left in the blend, so under a
   bright sky backdrop the water dissolves as fast as the ground beside it; `SkirtBackdrop`
-  keeps the backdrop uniforms on the water material too). The in-map water of an end at the
+  keeps the backdrop uniforms on the water material too). The skirt under it is lit ground
+  times the fade plus the backdrop, so the refracted bed went darker, greyer and streaky as
+  the skirt faded: the water now takes the backdrop back out of what it refracts and refracts
+  less as the fade falls, so it keeps the in-map river's colour and luminosity and dissolves
+  by its own alpha alone. Under a low sun the water past the edge glittered white beside an
+  in-map river in shade: the cause was the reflection probe, which covered the map plus 10 %,
+  so the water past it reflected the open sky's radiance; on an authored map the probe now
+  reaches over the skirt (`LevelEnvironmentManager.compute_probe_box`). Shadows were not it:
+  the skirt receives them like the map, and making it cast them changed nothing. The in-map water of an end at the
   edge stays at its level out to the edge (`WaterMeshBuilder._run_out`) instead of falling
   away as a run-out sheet, which drew a step against the ribbon. Its flow UVs are the flow map's texels
   just inside the edge at the mouth (the border texels are still water), across the channel by

@@ -14,6 +14,10 @@ extends RefCounted
 ##   show {part, visible}    shows or hides one part of the skirt (diagnostics): "ribbon",
 ##                           "channel" (the patch) or "main" (the skirt without the patch; drawn
 ##                           with an invisible override material while hidden).
+##   probe {grow, blend}     grows the level's reflection probe by `grow` metres either side
+##                           in X and Z and sets its blend distance (diagnostics).
+##   shadow {part, on}       whether "channel" (the patch) or "main" (the skirt) casts shadows
+##                           (diagnostics).
 ##   param {target, name, value}  sets a skirt material uniform (target "skirt"; an int
 ##                           uniform stays an int) or a ribbon instance uniform ("ribbon").
 ## Fog on and off is probes/skirt.gd `fog` (the skirt's SkirtBackdrop follows the environment).
@@ -31,7 +35,41 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _show(base, String(step.get("part", "")), bool(step.get("visible", true)))
 		"param":
 			return _param(base, step)
+		"probe":
+			return _probe(base, float(step.get("grow", 0.0)), float(step.get("blend", 1.0)))
+		"shadow":
+			return _shadow(base, String(step.get("part", "channel")), bool(step.get("on", true)))
 	return "unknown action %s" % step.get("action", "")
+
+
+static func _probe(base: Node, grow: float, blend: float) -> String:
+	var found := base.get_tree().root.find_children(
+		"LevelReflectionProbe", "ReflectionProbe", true, false
+	)
+	if found.is_empty():
+		return "no reflection probe"
+	var probe := found[0] as ReflectionProbe
+	probe.size += Vector3(grow, 0.0, grow) * 2.0
+	probe.blend_distance = blend
+	return "reflection probe size %s blend %.1f" % [str(probe.size), probe.blend_distance]
+
+
+static func _shadow(base: Node, part: String, on: bool) -> String:
+	var terrain := _terrain(base)
+	var skirt := terrain.get_skirt() if terrain != null else null
+	if skirt == null:
+		return "no skirt"
+	var node := (
+		skirt if part == "main" else skirt.get_node_or_null(NodePath(SkirtExits.CHANNEL_NAME))
+	)
+	if not node is GeometryInstance3D:
+		return "no %s" % part
+	(node as GeometryInstance3D).cast_shadow = (
+		GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		if on
+		else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	)
+	return "%s casts shadows %s" % [part, str(on)]
 
 
 static func _param(base: Node, step: Dictionary) -> String:

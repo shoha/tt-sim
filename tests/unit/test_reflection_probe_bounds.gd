@@ -37,6 +37,20 @@ func test_margin_expands_the_box_beyond_the_map_edges() -> void:
 	assert_almost_eq(box.size.z, 50.0 * (1.0 + MARGIN * 2.0), 0.001)
 
 
+## An authored map's rivers run on into its ground skirt (P6-1): the probe reaches over the
+## skirt in X and Z, so that water reflects what the map's does, not the sky's radiance.
+func test_a_skirt_widens_the_box_in_x_and_z_only() -> void:
+	var map := AABB(Vector3(-25.0, -1.0, -25.0), Vector3(50.0, 12.0, 50.0))
+	var plain := LevelEnvironmentManager.compute_probe_box(map)
+
+	var box := LevelEnvironmentManager.compute_probe_box(map, 40.0)
+
+	assert_almost_eq(box.size.x, plain.size.x + 80.0, 0.001)
+	assert_almost_eq(box.size.z, plain.size.z + 80.0, 0.001)
+	assert_almost_eq(box.size.y, plain.size.y, 0.001, "height unchanged")
+	assert_almost_eq(box.get_center().x, plain.get_center().x, 0.001)
+
+
 ## A perfectly flat map (an unsculpted plane with no props) has zero Y extent, and a
 ## probe with a zero-height box captures nothing at all.
 func test_a_flat_map_still_gets_a_usable_height() -> void:

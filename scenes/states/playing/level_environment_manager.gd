@@ -268,10 +268,13 @@ static func _mesh_instances(node: Node, out: Array[MeshInstance3D] = []) -> Arra
 
 ## The world-space box a reflection probe should cover for a map with these bounds:
 ## the map's own bounds plus a proportional margin, floored to PROBE_MIN_HEIGHT so a
-## flat map still encloses a volume. Kept separate from the node so it can be reasoned
-## about (and tested) without a scene.
-static func compute_probe_box(map_bounds: AABB) -> AABB:
-	var margin := map_bounds.size * PROBE_MARGIN_FACTOR
+## flat map still encloses a volume. `skirt_m` widens it in X and Z by that much more on
+## each side: an authored map's ground skirt, where its rivers run on past the edge (P6-1),
+## so their water reflects what the map's does, not the open sky's radiance (under a low sun
+## that glittered white past the edge beside the in-map river). Kept separate from the node
+## so it can be reasoned about (and tested) without a scene.
+static func compute_probe_box(map_bounds: AABB, skirt_m: float = 0.0) -> AABB:
+	var margin := map_bounds.size * PROBE_MARGIN_FACTOR + Vector3(skirt_m, 0.0, skirt_m)
 	var box := AABB(map_bounds.position - margin, map_bounds.size + margin * 2.0)
 	if box.size.y < PROBE_MIN_HEIGHT:
 		box.position.y -= (PROBE_MIN_HEIGHT - box.size.y) * 0.5
@@ -301,17 +304,22 @@ func apply_reflection_probe(world_viewport: Node) -> void:
 		_reflection_probe = ReflectionProbe.new()
 		_reflection_probe.name = "LevelReflectionProbe"
 		world_viewport.add_child(_reflection_probe)
-	configure_reflection_probe(_reflection_probe, bounds)
+	var authored := map_container.find_children("AuthoredTerrain", "Node3D", true, false)
+	var skirt_m := AuthoredTerrain.skirt_width_m() if not authored.is_empty() else 0.0
+	configure_reflection_probe(_reflection_probe, bounds, skirt_m)
 
 
-## Size and place a ReflectionProbe over a map with these bounds.
+## Size and place a ReflectionProbe over a map with these bounds (`skirt_m`:
+## compute_probe_box).
 ##
 ## UPDATE_ONCE, not UPDATE_ALWAYS: the map is static once loaded, so the cubemap is
 ## captured a single time at level load rather than re-rendered per frame -- that is
 ## what keeps this affordable. interior stays false so the sky still reaches the
 ## capture; it is the main ambient source in most outdoor presets.
-static func configure_reflection_probe(probe: ReflectionProbe, map_bounds: AABB) -> void:
-	var box := compute_probe_box(map_bounds)
+static func configure_reflection_probe(
+	probe: ReflectionProbe, map_bounds: AABB, skirt_m: float = 0.0
+) -> void:
+	var box := compute_probe_box(map_bounds, skirt_m)
 	probe.size = box.size
 	probe.position = box.get_center()
 	probe.update_mode = ReflectionProbe.UPDATE_ONCE
