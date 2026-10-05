@@ -63,7 +63,7 @@ const BANK_M := 1.6
 const POND := {"id": 20, "at": [13, -17], "r": 6.0, "depth": "deep"}
 ## Level folders `save` may write (test levels; `cleanup` deletes all but the _p42_ ones).
 const TEST_PREFIXES: Array[String] = [
-	"_p42_", "_p43_", "_p44_", "_p45_", "_p4b_", "_p4c_", "_p4d_", "_p5_", "_p5j_"
+	"_p42_", "_p43_", "_p44_", "_p45_", "_p4b_", "_p4c_", "_p4d_", "_p5_", "_p5j_", "_p6_"
 ]
 const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}
 
@@ -707,7 +707,7 @@ static func _joints(base: Node) -> String:
 
 
 ## Deletes the test levels this probe saved (user://levels/_p43_*, _p44_*, _p45_*, _p4b_*,
-## _p4c_*, _p4d_* only).
+## _p4c_*, _p4d_*, _p5_*, _p5j_*, _p6_* only).
 static func _cleanup() -> String:
 	var dir := DirAccess.open(LevelManager.levels_dir)
 	if dir == null:
