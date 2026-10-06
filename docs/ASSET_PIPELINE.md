@@ -669,15 +669,42 @@ figure has exactly one `body` and one `head` and at most one part in each other 
 
 ### Skeleton
 
-- One armature for the whole kit, bones named as Godot's `SkeletonProfileHumanoid` names
-  them (`Hips`, `Spine`, `Chest`, `UpperChest`, `Neck`, `Head`, `LeftShoulder`,
-  `LeftUpperArm`, `LeftLowerArm`, `LeftHand`, `LeftUpperLeg`, `LeftLowerLeg`, `LeftFoot`,
-  `LeftToes` and the `Right` mirrors; fingers are not used yet). Metres, +Z up in Blender
-  as everywhere in this doc; the rest pose is an A-pose (arms about 45 degrees down), the
-  figure standing on the origin facing -Y in Blender (+Z in glTF; with no token rotation
-  tt-sim's play camera sees its left side). `kit.json`'s `skeleton` block lists each
-  bone's parent, head and tail in glTF space, so the consumer has the bone axes without
-  parsing a GLB.
+- One armature for the whole kit (64 bones since the rig card, 2026-10-06). Body and
+  finger bones are named as Godot's `SkeletonProfileHumanoid` names them: `Hips`, `Spine`,
+  `Chest`, `UpperChest`, `Neck`, `Head`, `LeftShoulder`, `LeftUpperArm`, `LeftLowerArm`,
+  `LeftHand`, `LeftUpperLeg`, `LeftLowerLeg`, `LeftFoot`, `LeftToes`, and per hand a
+  two-bone thumb (`LeftThumbMetacarpal`, `LeftThumbProximal`), a two-bone index finger
+  (`LeftIndexProximal`, `LeftIndexIntermediate`) and a two-bone block that carries the
+  middle, ring and little fingers together under the middle finger's names
+  (`LeftMiddleProximal`, `LeftMiddleIntermediate`); the profile's distal, ring and little
+  bones are not used. The `Right` mirrors of all of them. Metres, +Z up in Blender as
+  everywhere in this doc; the rest pose is an A-pose (arms about 45 degrees down, palms
+  toward the thighs, thumbs forward), the figure standing on the origin facing -Y in
+  Blender (+Z in glTF; with no token rotation tt-sim's play camera sees its left side).
+  `kit.json`'s `skeleton` block lists each bone's parent, head, tail and `flex_axis` in
+  glTF space, so the consumer has the bone axes without parsing a GLB.
+- Joint frames (the bone roll). Every bone's rest orientation means the same thing: local
+  Y is the bone's own axis (head to tail) and rotation about it is twist; local X is the
+  flex axis, a positive rotation about it is flexion (spine, neck and head pitch forward,
+  the clavicle lifts, upper arm and thigh swing forward, elbow, knee and fingers bend,
+  wrist bends toward the palm, foot and toes point down, thumb folds across the palm);
+  local Z = X x Y is the swing (abduct / adduct) axis. Right bones mirror left bones with X
+  negated, so flexion is positive on both sides while Z and Y rotations change sign
+  (positive Z abducts a left limb, negative Z a right one; positive Y turns a left limb
+  inward). A local rotation is written Swing(flex, abduct) Twist(twist): twist about Y
+  first, then a swing whose rotation vector is (flex, 0, abduct). The reference is
+  `figurine/figurine/skeleton.py`.
+- Helper bones (30): per side `ArmpitHelper1`/`2`, `UpperArmTwist1`/`2`, `ElbowHelper1`/`2`,
+  `ForearmTwist1`/`2`, `WristHelper`, `GroinHelper1`/`2`/`3`, `KneeHelper1`/`2`/`3` (each
+  prefixed `Left` or `Right`). A helper sits on its driver's head with the driver's rest
+  frame, is a child of the driver's parent, and its local rotation is Swing(s x the
+  driver's swing) Twist(t x the driver's twist) with fixed fractions s and t (for example
+  `LeftElbowHelper2`: driver `LeftLowerArm`, s 0.5, t 0). The body is skinned to them so a
+  bend turns rings rigidly by a fraction instead of averaging two bones, which holds the
+  inside of a bend. `kit.json` marks each with `helper: true`, `driver`, `swing` and
+  `twist`. The producer bakes every helper's rotation into each stance clip
+  (`skeleton.drive_helpers`), so the consumer plays helpers like any other bone; the
+  fields let a consumer drive them at runtime later if it animates the body bones itself.
 - Every part GLB carries the full armature with identical rest and bind poses, so any set
   of parts binds to the one `Skeleton3D` the consumer builds from `skeleton.glb`. A part
   whose armature differs from the kit's is rejected at load, naming the part.
@@ -695,18 +722,34 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   "rest origin" is the global rest, converted to a parent-relative local rest with the
   orientation unchanged; the sole point is (ankle.x, 0, ankle.z) in glTF terms; skin
   binds are named (`use_named_skins`) and Godot's bone order differs from kit.json's, so
-  binds are matched by name.
+  binds are matched by name. A helper bone is listed in no control: it takes its driver's
+  length and girth factors (so its R is its driver's, and since it sits on its driver's
+  head under the same parent, its map M is exactly its driver's). Finger bones take the
+  hand's ranges in the `build` control (listed there explicitly).
 - Stances are one-frame glTF animation clips in `skeleton.glb` (`stance_ready`,
   `stance_relaxed`, `stance_heroic`, `stance_casting`, `stance_cheerful`, ...), holding each
-  bone's full local rotation (not a delta from rest), applied as pose rotations, plus one
-  translation: the `Hips` bone's local position (added 2026-10-06 for the look pass's
-  pushed poses). Rotations alone cannot lower a figure, so a bent knee or a lunge lifts the
-  planted foot off the ground; the Hips translation is the stance's drop (a few mm to a few
-  cm below rest, or a small lift). The consumer reads the position track as an offset from
-  the kit rest and applies it as the Hips pose position on top of the figure's own
-  (proportioned) rest origin; no other bone carries a translation. The producer verifies
-  every stance at every proportion corner (figurine `posecheck.py`: joint limits, edge-length
-  band, ground contact, interpenetration) so a kit never ships a clipping or floating pose.
+  bone's full local rotation (not a delta from rest), body, finger and helper bones alike,
+  applied as pose rotations, plus one translation: the `Hips` bone's local position.
+  Stances are authored as intents (figurine `pose.py`: line of action, contrapposto,
+  two-bone IK for feet and hands, hand shapes, look-at) and the Hips height is part of
+  that solve: rotations alone cannot lower a figure, so a bent knee or a lunge needs the
+  Hips dropped until the planted foot stands. The clip's Hips track holds the solve at the
+  kit's own proportions. A figure with other proportions has other leg lengths, so the
+  consumer stands each figure by the ground rule: `kit.json` `stance_info.<stance>.ground`
+  lists the stance's ground contacts, each a bone and a point in glTF rest space (the sole
+  under the ankle, or under the ball for a raised heel). The consumer poses the skeleton,
+  takes the clip's Hips offset from the kit rest for x and z, carries each contact point
+  through its bone (bone map M, then the bone's posed global transform relative to its
+  new rest) and sets the Hips height so the lowest-standing contact lands on y = 0 (the
+  highest required lift wins, so no contact sinks and the others sit on or just above the
+  ground). The reference is figurine `pose.ground_hips`. No other bone carries a
+  translation. `stance_info.<stance>.hand_shapes` names each hand's shape (`relaxed`,
+  `open`, `fist`, `point`, `grip`), informational. The producer verifies every stance, and a
+  set of acceptance poses that are not shipped (an elbow folded 120 degrees, an arm raised
+  about 170 degrees, a deep lunge, a knee at hip height, a fist beside the head, a
+  two-handed grip), at every proportion corner (figurine `posecheck.py`: joint limits in
+  the joint-frame terms above, edge-length band, ground contact, interpenetration) so a kit
+  never ships a clipping or floating pose.
   On Godot 4.7.1 a `Skeleton3D` posed before it enters the tree
   keeps its rest global pose, so `AvatarKit` poses again on `tree_entered` (a test guards
   it). Animation later adds multi-frame clips by the same path, which the token
@@ -830,8 +873,10 @@ CPU reference is `figurine/figurine/faces.py` `compose_face`.
 
 The example above is the shape; the producer's own `out/kit/kit.json` is the
 authoritative instance. The first kit (figurine e12e8bb) also writes: `palette` (slot
-order, size, stops, interpolation), `skeleton` (above), and per part `regions` (for the
-body), `detail` (whether it has an overlay) and `double_sided`. In `face_sheet`: `mask`,
+order, size, stops, interpolation), `skeleton` (above, with `flex_axis` and the helper
+fields since the rig card), `stance_info` (per stance `ground` and `hand_shapes`, above),
+and per part `regions` (for the body), `detail` (whether it has an overlay) and
+`double_sided`. In `face_sheet`: `mask`,
 `mask_channels`, `columns`, `row_order`, `names`. Proportions give `length` and `girth`
 ranges per bone, each centred on 1.0; factors from several controls multiply.
 
