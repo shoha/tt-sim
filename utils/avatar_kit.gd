@@ -48,6 +48,10 @@ var bone_parents := PackedInt32Array()
 var bone_rests: Array[Transform3D] = []
 ## stance name -> {bone name: Quaternion}
 var stances: Dictionary = {}
+## stance name -> {bone name: Vector3}: the bones a stance also translates, as offsets from
+## the kit rest (the contract allows only Hips, a drop for a lunge or a bent-knee stance so
+## the planted sole stays on the ground).
+var stance_offsets: Dictionary = {}
 var face_sheet: Texture2D = null
 var face_mask: Texture2D = null
 ## Every problem found while loading (missing files, rejected parts), also printed.
@@ -120,7 +124,9 @@ func _load_skeleton() -> bool:
 	var player := _find(scene, "AnimationPlayer") as AnimationPlayer
 	if player != null:
 		for clip in player.get_animation_list():
-			stances[String(clip)] = _stance_rotations(player.get_animation(clip))
+			var anim := player.get_animation(clip)
+			stances[String(clip)] = _stance_rotations(anim)
+			stance_offsets[String(clip)] = _stance_offsets(anim, sk)
 	scene.free()
 	return true
 
@@ -133,6 +139,25 @@ static func _stance_rotations(anim: Animation) -> Dictionary:
 			continue
 		var bone := String(anim.track_get_path(t).get_concatenated_subnames())
 		out[bone] = anim.track_get_key_value(t, 0) as Quaternion
+	return out
+
+
+## Each position track's first key as an offset from the bone's rest origin (a track that
+## sits on the rest, as the exporter writes for every unmoved bone, is left out).
+static func _stance_offsets(anim: Animation, sk: Skeleton3D) -> Dictionary:
+	var out := {}
+	for t in anim.get_track_count():
+		if anim.track_get_type(t) != Animation.TYPE_POSITION_3D or anim.track_get_key_count(t) == 0:
+			continue
+		var bone := String(anim.track_get_path(t).get_concatenated_subnames())
+		var b := sk.find_bone(bone)
+		if b < 0:
+			continue
+		var offset: Vector3 = (
+			(anim.track_get_key_value(t, 0) as Vector3) - sk.get_bone_rest(b).origin
+		)
+		if offset.length() > 1e-4:
+			out[bone] = offset
 	return out
 
 
@@ -319,12 +344,13 @@ func build_figure(recipe: Dictionary) -> Node3D:
 	AvatarProportions.apply_rests(sk, maps)
 	var new_rests := AvatarProportions.global_rests(sk)
 	var pose: Dictionary = stances.get(String(resolved.stance), {})
-	pose_skeleton(sk, pose)
+	var offsets: Dictionary = stance_offsets.get(String(resolved.stance), {})
+	pose_skeleton(sk, pose, offsets)
 	# A Skeleton3D posed outside the tree keeps a stale global pose (measured on 4.7.1:
 	# force_update_all_bone_transforms does not refresh it, and setting an unchanged value
 	# is ignored), so the figure would render in the rest A-pose: pose it again, through a
 	# real change, whenever the skeleton enters the tree.
-	sk.tree_entered.connect(pose_skeleton.bind(sk, pose))
+	sk.tree_entered.connect(pose_skeleton.bind(sk, pose, offsets))
 	var palette := AvatarPalette.build_texture(manifest.get("colour_sets", {}), resolved.colours)
 	var hidden := []
 	for slot in resolved.parts:
@@ -346,13 +372,19 @@ func build_figure(recipe: Dictionary) -> Node3D:
 	return figure
 
 
-## Sets a stance (bone name -> local rotation) as the skeleton's pose, from its rest.
-static func pose_skeleton(sk: Skeleton3D, pose: Dictionary) -> void:
+## Sets a stance (bone name -> local rotation, plus bone name -> translation offset from
+## rest, the Hips drop) as the skeleton's pose, from its rest. The offset is added to the
+## skeleton's own rest origin, which the proportions may have moved.
+static func pose_skeleton(sk: Skeleton3D, pose: Dictionary, offsets: Dictionary = {}) -> void:
 	sk.reset_bone_poses()
 	for bone in pose:
 		var b := sk.find_bone(String(bone))
 		if b >= 0:
 			sk.set_bone_pose_rotation(b, pose[bone])
+	for bone in offsets:
+		var b := sk.find_bone(String(bone))
+		if b >= 0:
+			sk.set_bone_pose_position(b, sk.get_bone_rest(b).origin + (offsets[bone] as Vector3))
 
 
 func _new_skeleton() -> Skeleton3D:

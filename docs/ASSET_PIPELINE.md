@@ -697,8 +697,17 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   binds are named (`use_named_skins`) and Godot's bone order differs from kit.json's, so
   binds are matched by name.
 - Stances are one-frame glTF animation clips in `skeleton.glb` (`stance_ready`,
-  `stance_relaxed`, ...), holding each bone's full local rotation (not a delta from rest),
-  applied as pose rotations. On Godot 4.7.1 a `Skeleton3D` posed before it enters the tree
+  `stance_relaxed`, `stance_heroic`, `stance_casting`, `stance_cheerful`, ...), holding each
+  bone's full local rotation (not a delta from rest), applied as pose rotations, plus one
+  translation: the `Hips` bone's local position (added 2026-10-06 for the look pass's
+  pushed poses). Rotations alone cannot lower a figure, so a bent knee or a lunge lifts the
+  planted foot off the ground; the Hips translation is the stance's drop (a few mm to a few
+  cm below rest, or a small lift). The consumer reads the position track as an offset from
+  the kit rest and applies it as the Hips pose position on top of the figure's own
+  (proportioned) rest origin; no other bone carries a translation. The producer verifies
+  every stance at every proportion corner (figurine `posecheck.py`: joint limits, edge-length
+  band, ground contact, interpenetration) so a kit never ships a clipping or floating pose.
+  On Godot 4.7.1 a `Skeleton3D` posed before it enters the tree
   keeps its rest global pose, so `AvatarKit` poses again on `tree_entered` (a test guards
   it). Animation later adds multi-frame clips by the same path, which the token
   `AnimationPlayer` route (`BoardTokenAnimationTree`) already plays.
