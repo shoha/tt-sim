@@ -26,11 +26,11 @@ Every system doc follows the same headings, in this order:
 Documents here:
 
 - [water.md](water.md): the water model and flow bake, authored water at runtime, carving and
-  wet dressing.
+  wet dressing, rivers and ponds past the map edge.
 - [waterfalls.md](waterfalls.md): the fall-or-riffle rule, the plan-time lips and set-back, the
   fall carve, the curtain / foam ring / mist mesh and shader, the fall material.
-- [crossings.md](crossings.md): plank bridges and stepping stones, including the refusal by a
-  waterfall.
+- [crossings.md](crossings.md): plank bridges, stepping stones, stone arches and fords,
+  including the refusal by a waterfall and the per-crossing rebuild cache.
 - [landforms.md](landforms.md): the starting landforms a new map opens with (Valley, Hilltop,
   Terraces, Lakeshore, Gorge): the seeded frame, the shared steps, each recipe, the stage and
   the open path.

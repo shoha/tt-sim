@@ -181,7 +181,9 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
   seam (a coplanar strip draws as a pale rectangle), each landing narrowing past its anchor as
   a rounded tongue to `END_WIDTH_SHARE` 0.3 of the width with edges wandering `EDGE_WOBBLE_M`
   0.09 m along a slow wave (`EDGE_WOBBLE_FREQ` 2.7), so the pad reads trodden. Vertex colour
-  runs from `DRY_SHADE` 1.0 on the landings to `WET_SHADE` 0.58 at the crest, with a damp
+  runs from `DRY_SHADE` 1.0 on the landings to `WET_SHADE` 0.78 at the crest (0.58 until the
+  clear-shallows water, 2026-10-05: the crest then sat near the deep water's own value and the
+  gravel never read through the 0.15 m over it), with a damp
   tide-line `DAMP_M` 0.12 m over the water (`DAMP_SHARE` 0.7), `END_SHADE` 0.85 at a landing's
   far end and `SIDE_SHADE` 0.8 at its rims. Marker stones along the downstream edge
   (`downstream_side`: the side the river flows to at mid-span by `flow_at`, the left over a
@@ -390,8 +392,8 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
 ## Open work
 
 The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work"; this doc does not repeat it
-(the generous downstream refusal zone, the ford bar's read through the clear shallows, the
-arch's main-thread build and crossings over a Blender map's own water are there).
+(the generous downstream refusal zone, the arch's main-thread build and crossings over a
+Blender map's own water are there).
 
 ## History
 
@@ -418,3 +420,7 @@ arch's main-thread build and crossings over a Blender map's own water are there)
 - P4d-5b (68564cd): the per-crossing rebuild cache (`CrossingCache`).
 - P4d-5c (fc0db95): `follow` refreshes the crossings whose ground changed when no anchor
   moved.
+- Follow-ups (2026-10-05; 0d05370, 4ed130e, 6d2807b, ed7aa6e): an arch or ford swap 0.35-1.5 ms
+  (the deck field changes only with a deck, `moss_split` inline, the ford's samples read in
+  batches, loops without per-item arrays); the ford's `WET_SHADE` 0.58 -> 0.78 so its gravel
+  reads through the clear shallows (water.md "Clear shallows", 8e8a496).

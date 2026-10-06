@@ -263,7 +263,11 @@ When a model isn't cached in memory, tokens start as placeholders (pulsing cubes
 
 ## Camera System
 
-Camera control lives in `game_map.gd`, not in a separate camera controller.
+Camera control lives in `CameraController` (`scenes/states/playing/camera_controller.gd`), a child the `game_map.gd` scene drives.
+
+### Orientation (Read Before Placing Anything "Toward the Camera")
+
+The camera stands at +x, +z of what it looks at and looks along (-1, -1) in map XZ: a 45 degree yaw, pitched down 21.6 degrees, orthographic. "Toward the camera" is therefore the +x+z diagonal, not +z. Anything placed to face the camera or to stay clear of it (a landform's stage, a bluff, a lake's corner) uses `StartingLandform.VIEW` / `NEAR`; the phase 5 recipes assumed -z and put a hill's stage on its side until the judgment set caught it (`docs/systems/landforms.md`, Model). At 21.6 degrees a 6 m canopy hides about 15 m of ground behind it.
 
 ### Controls
 
@@ -300,8 +304,10 @@ The Camera3D sits at a local offset from CameraHolder. At large `camera.size` va
 
 - `_base_camera_offset` and `_base_camera_size` are captured in `_ready()` before any modification.
 - In `handle_zoom()` the offset update must run **after** the zoom-toward-cursor correction, because `world_before` and `world_after` have to be computed from the same camera position.
-- `project_position(corner, 0)` returns near-plane coordinates (Y around 8), not ground level. For any ground-footprint calculation use `project_ray_origin` + `project_ray_normal` and intersect with Y = 0.
+- `project_position(corner, 0)` returns near-plane coordinates (on the held near plane, tens of metres up and behind the camera), not ground level. For any ground-footprint calculation use `project_ray_origin` + `project_ray_normal` and intersect with Y = 0.
 - Side effect worth knowing: because the camera distance scales with `camera.size`, anything centred on the camera (SDFGI cascades, for example) re-centres on zoom. See `docs/lighting-and-environment.md` "SDFGI banding under the orthographic camera".
+- **Moving the camera back is not free.** The picture is unchanged, but the sun's shadow distance and cascade splits and the presets' exponential fog are measured from the camera: 50 m back made the top of the home frame up to 11 levels brighter. To clear something in front of the camera, move the near plane, not the camera.
+- **The near plane is negative by design.** `_hold_near_plane_over_canopies` pulls `near` back behind the camera (about -61 m at home, -53 at a 150 ft map's full authoring zoom-out) until the bottom corners' ray origins stand `CANOPY_CLEARANCE` (24 m) above the highest ground, so no canopy is sliced or culled at any zoom (Polish, 2026-10-05; `PERFORMANCE.md` "Close-zoom canopy fade"). Consequence: `project_ray_origin` starts behind the camera, so a ray cast from it needs a long reach (the token-hover and measure rays use 1000 m), and the top of the frame at zoom 20 is about 116 m from its origin.
 
 ### Camera Bounds
 

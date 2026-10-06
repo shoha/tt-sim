@@ -340,3 +340,6 @@ decided against above).
 - P4c-6 (c99d1ad), P4c-6b (6f7f810), P4c-6c (3d7c80e): the judgment set and its fixes; the
   scalloped lip, torn edges and cloud mist; width-scaled aeration, soft pool mist, white brink
   bar.
+- P4c-7 (1c345ac): the pinned performance pass (`p4c_perf_*` jobs).
+- System docs pilot (4c68fb3, bbf842d): the plan-time half of `WaterFalls` split into
+  `WaterFallPlan`; this doc.

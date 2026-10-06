@@ -194,6 +194,11 @@ maps.
   continuous across a river. The measure tool, the drop indicator and the drag cursor ray
   use `WALKABLE_MASK`; the drag ruler measures surface to surface
   (`WaterSurface.surface_below`).
+- **Draw order:** the water material is at render priority 0 and draws with
+  `depth_draw_opaque`, so at an equal priority it erases any transparent mesh behind or under
+  it entirely, above the waterline too (P4c-0 probe a). A transparent mesh drawn with the water
+  sits at a priority above it: the falls 1, `SubmergedMarker` 2, `GridOverlay` 10
+  ([waterfalls.md](waterfalls.md), Runtime, "Ordering").
 - **Cascades (P4-3):** the steps between reaches and free river ends over a channel carved
   lower carry a sheet of water too (`WaterMeshBuilder.cascades()`, see "Reach steps" under
   Authoring).
@@ -591,7 +596,8 @@ tokens past the edge. The probe that chose the rendering is P6-0
   bank beside `_p6_perf_exits`'s mouth, captured mid-stroke and after).
 - **The skirt is opaque** (`authored_ground.gdshaderinc` SKIRT): the probe found any
   transparent skirt out of the depth and screen textures, so water over it read the backdrop.
-  The fade is in colour; the backdrop and the fog are matched to the environment by
+  The rule is general: water reads its bed from the depth and screen textures, which hold only
+  opaque surfaces, so anything water lies over must be opaque. The fade is in colour; the backdrop and the fog are matched to the environment by
   `SkirtBackdrop` (ARCHITECTURE.md "Ground skirt").
 
 ## Verification
@@ -640,3 +646,8 @@ The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work"; this doc doe
 - Phase 6 (2026-10-05): rivers past the map edge (P6-0 probe, P6-1 build, P6-2 pinned pass,
   P6-3 edge follow-ups: the release point, the seam and depth at the mouth, the tail's fade,
   the meander, the mirror on the worker and the exit cache).
+- P6-4 (3699972, 03d3157, c3e3aec, e48c32b): ponds and lakes touching the edge continue past
+  it (`PondExits`); the skirt's material, mesh and in-place updates moved to `TerrainSkirt`.
+- Follow-ups (2026-10-05): the clear shallows (8e8a496), the exits' patch following a sculpt
+  stroke on the edge (4d825e5), one flow carrier kept for the session so a swap no longer
+  rebuilds its shader (75ed5f5).
