@@ -603,6 +603,11 @@ func _push_water_ambient_reflection_uniform() -> void:
 	RenderingServer.global_shader_parameter_set(
 		"water_ambient_reflection_color", Vector3(ambient.r, ambient.g, ambient.b)
 	)
+	# The same ambient tints avatar figures (shaders/avatar_figure.gdshader), so a figure
+	# sits in a sunset or a dungeon even where it shows unlit paint.
+	RenderingServer.global_shader_parameter_set(
+		"figure_ambient", Vector3(ambient.r, ambient.g, ambient.b)
+	)
 
 
 func get_map_environment_config() -> Dictionary:
