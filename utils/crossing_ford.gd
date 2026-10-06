@@ -102,7 +102,9 @@ const STONE_WALK_M := 0.1
 ## over the water level shades DAMP_SHARE of the way to wet: the tide-line where the landing
 ## meets the water.
 const DRY_SHADE := 1.0
-const WET_SHADE := 0.58
+## 0.78 since the clear-shallows water (2026-10-05): at 0.58 the crest sat near the deep water's
+## own brightness and the gravel never read through the 0.15 m of water over it.
+const WET_SHADE := 0.78
 const END_SHADE := 0.85
 const SIDE_SHADE := 0.8
 const DAMP_M := 0.12
