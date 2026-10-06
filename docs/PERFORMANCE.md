@@ -385,10 +385,19 @@ The fix:
   resolves to the same ground cell with the old and the new near, and `is_mouse_over_token`
   finds the same token.
 - The foliage shader dissolves the canopies in front of the view-centre ground over a soft
-  round clearing in the middle of the screen (`apply_canopy_fade` in
-  `wind_foliage_include.gdshaderinc`, globals from `CanopyFade`): strength 0 at the home zoom
-  rising to 1 at 0.55 of it, a depth band from 0.5 m in front of the centre ground over 0.35
-  x size, a clearing full inside 0.3 x size of the centre ray and gone past 0.75 x size.
+  round window in the middle of the screen (`apply_canopy_fade` in
+  `wind_foliage_include.gdshaderinc`, globals from `CanopyFade`), at every play zoom (the
+  user approved the fade at home, 2026-10-05): a depth band from 0.5 m in front of the
+  centre ground over 0.35 x size; at play zooms (home to 20) strength 0.9 and a small window,
+  full inside 0.2 x size of the centre ray and gone past 0.55 x size; below home it ramps to
+  the close-zoom clearing (strength 1, 0.3 to 0.75 x size) by 0.55 of the home size; past
+  zoom 20 it fades away, gone by 30 (authoring's whole-map views show no fade). Chosen by
+  eye on the forest and taiga maps against strength 0.55 to 1 and windows from 0.1/0.42 to
+  0.25/0.65 x size (`close_zoom.gd play`): the smaller ones left the taiga's home a wall of
+  pines with a few gaps, 0.25/0.65 began to show a field of bare trunks. At the home zoom the
+  taiga now opens a soft window onto the ground and its boulder, a handful of trunks
+  standing in it, with whole pines framing it; the forest's home reads its floor and river;
+  a sparse grassland map looks as before.
   Leaf cards drop out card by card and limbs limb by limb (key: the authored phase,
   COLOR.b); the trunk (authored flutter 0) always stays, and the shadow pass is left alone,
   so the forest floor keeps its dappled light. Trees at the frame's edges stay whole and
@@ -402,8 +411,10 @@ home zoom 4.38 ms GPU median with the hold against 4.21 with the old near (+0.17
 6 in a temperate forest grove 2.08 ms with the old near and no fade, 2.40 / 2.43 with the
 hold and no fade, 2.58 / 2.62 with the hold and the fade. The fade itself is +0.05 to +0.2 ms
 where it is on (an earlier run: 2.16 / 2.26 against 2.12 / 2.14) and nothing at the home zoom
-(4.38 against 4.34). The CPU side is one layer-1 ray per frame below the home zoom and two
-global parameter writes only when a value changes.
+(4.38 against 4.34, before the play-zoom fade). With the play-zoom window, at home in the
+taiga the fade saves GPU time (on 4.26 / 4.41 ms against off 4.57 / 4.51: fewer leaf cards
+shaded). The CPU side is one layer-1 ray per frame up to zoom 30 and three global parameter
+writes only when a value changes.
 
 ## Per-frame idle and drag work removed (2026-09-15)
 

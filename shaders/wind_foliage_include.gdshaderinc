@@ -109,27 +109,25 @@ varying float local_vertex_y;
 // through map geometry. See occlusion_fade_include.gdshaderinc.
 #include "res://shaders/occlusion_fade_include.gdshaderinc"
 
-// Close-zoom canopy fade (CanopyFade, scenes/states/playing/canopy_fade.gd). Below the
-// home zoom, the crowns standing in front of the ground at the view centre dissolve over a
-// soft round clearing around the centre of the screen, so zooming in reveals the ground
-// and the tokens under a forest while the trees at the frame's edges stay whole and frame
-// it. In the clearing a tree keeps its trunk: leaf cards drop out card by card and limbs
-// limb by limb. Off at the home zoom and above.
+// Canopy fade (CanopyFade, scenes/states/playing/canopy_fade.gd). The crowns standing in
+// front of the ground at the view centre dissolve over a soft round window around the
+// centre of the screen, so the ground and the tokens under a forest read while the trees at
+// the frame's edges stay whole and frame it: gently at play zooms, fully when zoomed in. In
+// the window a tree keeps its trunk: leaf cards drop out card by card and limbs limb by
+// limb.
 // canopy_part: 0 takes no part (grass, any non-tree), 1 bark (its limbs fade, the trunk,
 // whose authored flutter weight is 0, never does), 2 leaf cards. Set by WindFoliage.
 uniform int canopy_part = 0;
 // xyz: the ground point at the view centre (world); w: strength, 0 (off) to 1.
 global uniform vec4 canopy_fade_centre;
-// xyz: the camera's back axis (world, unit); w: the camera's orthographic size.
+// xyz: the camera's back axis (world, unit); w: unused.
 global uniform vec4 canopy_fade_view;
-// Metres in front of the view-centre ground (along the view axis) where the fade starts,
-// and the band over which it grows, per unit of orthographic size.
+// The window in metres: x its inner radius on screen (full strength inside), y its outer
+// one (untouched past it), z the depth band over which the fade grows in front of the
+// view-centre ground. CanopyFade.shape() sets them by zoom.
+global uniform vec4 canopy_fade_shape;
+// Metres in front of the view-centre ground (along the view axis) where the fade starts.
 const float CANOPY_FADE_START = 0.5;
-const float CANOPY_FADE_BAND = 0.35;
-// The clearing's radius on screen, per unit of orthographic size (the frame is one size
-// tall): fully clear inside the inner radius, untouched past the outer one.
-const float CANOPY_FADE_INNER = 0.3;
-const float CANOPY_FADE_OUTER = 0.75;
 // Bark flutter weight above which a fragment belongs to a limb rather than the trunk.
 const float CANOPY_LIMB_FLUTTER = 0.04;
 
@@ -207,7 +205,7 @@ vec3 two_sided_foliage_normal(vec3 normal, bool front_facing) {
 }
 
 
-// The close-zoom canopy fade (see canopy_part above): discards this fragment when its
+// The canopy fade (see canopy_part above): discards this fragment when its
 // dissolve key falls under the fade there. The fade is the strength times two soft
 // ramps: depth, growing across a band in front of the view-centre ground (measured along
 // the camera's view axis in world space), and the clearing, falling off with the
@@ -235,13 +233,12 @@ void apply_canopy_fade(
 	if (dot(inv_view_matrix[2].xyz, back) < 0.999) {
 		return;
 	}
-	float size = canopy_fade_view.w;
 	vec3 offset = (inv_view_matrix * vec4(vertex_view, 1.0)).xyz - canopy_fade_centre.xyz;
 	float ahead = dot(offset, back);
 	float across = length(offset - back * ahead);
 	float fade = canopy_fade_centre.w
-		* smoothstep(CANOPY_FADE_START, CANOPY_FADE_START + CANOPY_FADE_BAND * size, ahead)
-		* (1.0 - smoothstep(CANOPY_FADE_INNER * size, CANOPY_FADE_OUTER * size, across));
+		* smoothstep(CANOPY_FADE_START, CANOPY_FADE_START + canopy_fade_shape.z, ahead)
+		* (1.0 - smoothstep(canopy_fade_shape.x, canopy_fade_shape.y, across));
 	if (fade <= 0.0) {
 		return;
 	}

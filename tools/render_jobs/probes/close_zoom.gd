@@ -10,6 +10,7 @@ extends RefCounted
 ##   A negative `d` moves it nearer.
 ## - `near` (`near`, default 0.001): sets the camera's near; 0.001 is the plane before the
 ##   canopy hold (CameraController._hold_near_plane_over_canopies), for an old/new A/B.
+## - `play` (`strength`, `inner`, `outer`): sets CanopyFade's play-zoom window in-run.
 ## - `hold`: re-runs the camera placement, restoring the hold after `near` or `back`.
 ## - `shadow` (`max`): logs the sun's shadow max distance, splits and mode; sets the distance.
 ## - `fade` (`on`, default true): turns the close-zoom canopy fade off by setting canopy_part
@@ -33,6 +34,17 @@ static func run(base: Node, step: Dictionary) -> String:
 		"near":
 			cam.near = float(step.get("near", 0.001))
 			return "near set; %s" % _describe(gm, cam)
+		"play":
+			if step.has("strength"):
+				CanopyFade.play_strength = float(step.strength)
+			if step.has("inner"):
+				CanopyFade.play_inner = float(step.inner)
+			if step.has("outer"):
+				CanopyFade.play_outer = float(step.outer)
+			return (
+				"play fade strength %.2f inner %.2f outer %.2f"
+				% [CanopyFade.play_strength, CanopyFade.play_inner, CanopyFade.play_outer]
+			)
 		"hold":
 			gm.get_camera_controller().call("_update_camera_offset")
 			return "hold restored; %s" % _describe(gm, cam)

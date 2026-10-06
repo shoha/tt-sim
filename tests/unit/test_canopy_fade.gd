@@ -1,6 +1,6 @@
 extends GutTest
 
-## The close-zoom canopy fade's pure parts (CanopyFade) and the camera's near-plane hold over
+## The canopy fade's pure parts (CanopyFade) and the camera's near-plane hold over
 ## the canopies (CameraController.near_plane_hold). The shader side is judged in renders:
 ## tools/render_jobs/jobs/pol_trees.json.
 
@@ -9,20 +9,40 @@ const HOME := 13.85
 const BACK_Y := 0.36812454
 
 
-func test_strength_is_off_at_the_home_zoom_and_above() -> void:
-	assert_eq(CanopyFade.strength(HOME, HOME), 0.0)
-	assert_eq(CanopyFade.strength(20.0, HOME), 0.0)
+func test_strength_is_the_play_strength_from_home_to_the_play_zoom_out() -> void:
+	var play := CanopyFade.play_strength
+	assert_almost_eq(CanopyFade.strength(HOME, HOME), play, 0.0001)
+	assert_almost_eq(CanopyFade.strength(17.0, HOME), play, 0.0001)
+	assert_almost_eq(CanopyFade.strength(CanopyFade.PLAY_MAX_SIZE, HOME), play, 0.0001)
+
+
+func test_strength_fades_out_past_the_play_zoom_out() -> void:
+	var s25 := CanopyFade.strength(25.0, HOME)
+	assert_gt(s25, 0.0)
+	assert_lt(s25, CanopyFade.play_strength)
+	assert_eq(CanopyFade.strength(CanopyFade.FADE_OUT_SIZE, HOME), 0.0)
 	assert_eq(CanopyFade.strength(60.0, HOME), 0.0)
 
 
-func test_strength_grows_as_the_camera_closes_in_and_is_full_by_the_full_fraction() -> void:
+func test_strength_ramps_to_full_as_the_camera_closes_in() -> void:
 	var s12 := CanopyFade.strength(12.0, HOME)
 	var s10 := CanopyFade.strength(10.0, HOME)
-	assert_gt(s12, 0.0)
+	assert_gt(s12, CanopyFade.play_strength)
 	assert_gt(s10, s12)
-	assert_lt(s10, 1.0)
 	assert_eq(CanopyFade.strength(HOME * CanopyFade.FULL_FRACTION, HOME), 1.0)
 	assert_eq(CanopyFade.strength(2.0, HOME), 1.0)
+
+
+func test_the_window_grows_from_the_play_window_to_the_close_one() -> void:
+	var home := CanopyFade.shape(HOME, HOME)
+	assert_almost_eq(home.x, CanopyFade.play_inner * HOME, 0.0001)
+	assert_almost_eq(home.y, CanopyFade.play_outer * HOME, 0.0001)
+	var close_size := HOME * CanopyFade.FULL_FRACTION
+	var close := CanopyFade.shape(close_size, HOME)
+	assert_almost_eq(close.x, CanopyFade.CLOSE_INNER * close_size, 0.0001)
+	assert_almost_eq(close.y, CanopyFade.CLOSE_OUTER * close_size, 0.0001)
+	assert_almost_eq(close.z, CanopyFade.BAND * close_size, 0.0001)
+	assert_lt(home.x, home.y)
 
 
 func test_strength_is_off_without_a_home_size() -> void:

@@ -510,8 +510,11 @@ numerically (for example where a fade or a tint band starts).
   (`_old`: home, zoom 20, zoom-out, the river and its grid at zoom 6); an in-run GPU A/B of
   the fade at zoom 6 in a grove and at home, and of the hold at home (`--only f_gpu`); the
   Thin brush's ring; the forest played with tokens in a grove and in the river and a token
-  dragged at home (`p_drag_z13`); Deciduous clusters played read-only (`b_*`). 37 captures
-  and `INDEX.md`; the levels are kept.
+  dragged at home (`p_drag_z13`); Deciduous clusters played read-only (`b_*`); the taiga's
+  play-zoom window at home with the fade off, its GPU A/B (`t_gpu`), the Thin ring at home,
+  zoom 20 and full zoom-out; a new grassland map at home and zoom 20 (`g_*`, not saved). 43
+  captures and `INDEX.md`; the levels are kept. `probes/close_zoom.gd play` tunes the
+  play-zoom window in-run.
 - `jobs/ford_look.json`: the ford (P4d-2): a new 150 ft temperate forest map with a waist
   river, an ankle stream and a deep river, saved as `_p4d_ford` and played (`saved` loads it
   in play: tokens spawn only there); a ford across the river and one across the stream through

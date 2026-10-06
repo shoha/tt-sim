@@ -402,14 +402,18 @@ flat, and with the slice removed the canopies in front of the view centre filled
 At every zoom the near plane now sits behind the camera, clear of the tallest canopy (a
 negative `near`, the camera unmoved, so fog and shadows are untouched), so no tree is sliced or
 culled, the home zoom included: there the near plane used to cut away whole trees near the
-bottom edge, which read as a clearing in the middle of a forest; that forest's home frame is
-now as dense as the forest is. Below the home zoom the canopies in front of the view-centre
-ground dissolve over a soft round clearing in the middle of the screen, leaf card by leaf card
-and limb by limb, keeping every trunk and the dappled shadows; trees at the frame's edges stay
-whole. The fade is off at the home zoom and above (`PERFORMANCE.md` "Close-zoom canopy fade").
+bottom edge, which read as a clearing in the middle of a forest. At every play zoom the
+canopies in front of the view-centre ground now dissolve over a soft round window in the
+middle of the screen, leaf card by leaf card and limb by limb, keeping every trunk and the
+dappled shadows; trees at the frame's edges stay whole. From home to zoom 20 the window is
+small (strength 0.9, 0.2 to 0.55 x size), so a dense taiga's home view opens onto its floor
+instead of a wall of pines; below home it grows to the close-zoom clearing; past zoom 20 it
+fades out, so authoring's whole-map views show none (`PERFORMANCE.md` "Close-zoom canopy
+fade").
 Water, the grid, the skirt, the token fade, a token drag and the Thin brush's ring fade read
 the same. Cost (indicative): the trees no longer cut away are drawn, about +0.17 ms GPU at
-home in a forest; the fade adds +0.05 to +0.2 ms at zoom 6 in a grove and nothing at home.
+home in a forest; the fade adds +0.05 to +0.2 ms at zoom 6 in a grove and saves about 0.2 ms
+at home in the taiga.
 
 ## Open work
 
