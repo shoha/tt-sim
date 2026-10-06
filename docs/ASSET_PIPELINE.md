@@ -639,7 +639,9 @@ painted, skinned parts that ships inside the game, and tt-sim builds a player's 
 token from it by a small recipe that every peer rebuilds from its own copy of the kit, the
 way a `.ttmap` is rebuilt. Design and style: `figurine/docs/design.md`. Status: contract
 drafted 2026-10-06 from the avatar probe (tt-sim `2d7aa3e`,
-`tools/render_jobs/probes/avatar*.gd`); humans only; nothing produced or consumed yet.
+`tools/render_jobs/probes/avatar*.gd`); humans only. Produced: the first kit slice
+(figurine e12e8bb, 2026-10-06: `body_a`, `head_round`, `hair_bun`, 21 face cells, two
+stances; a figure is 3,908 triangles). Not yet consumed.
 
 Producer: `figurine/scripts/build_kit.py` (to be written). Consumer: `utils/avatar_kit.gd`
 (`AvatarKit`, to be written), which assembles a figure under one `Skeleton3D`.
@@ -666,15 +668,24 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   `LeftUpperArm`, `LeftLowerArm`, `LeftHand`, `LeftUpperLeg`, `LeftLowerLeg`, `LeftFoot`,
   `LeftToes` and the `Right` mirrors; fingers are not used yet). Metres, +Z up in Blender
   as everywhere in this doc; the rest pose is an A-pose (arms about 45 degrees down), the
-  figure standing on the origin facing -Y in Blender.
+  figure standing on the origin facing -Y in Blender (+Z in glTF; with no token rotation
+  tt-sim's play camera sees its left side). `kit.json`'s `skeleton` block lists each
+  bone's parent, head and tail in glTF space, so the consumer has the bone axes without
+  parsing a GLB.
 - Every part GLB carries the full armature with identical rest and bind poses, so any set
   of parts binds to the one `Skeleton3D` the consumer builds from `skeleton.glb`. A part
   whose armature differs from the kit's is rejected at load, naming the part.
 - Up to 4 weights per vertex. Rigid gear (a sword, a satchel) is skinned wholly to its
   attach bone (`extras.figurine_attach`).
-- Proportions are bone lengths (rest translations) and girth scales on bones near chain
-  ends. The probe found that `Skeleton3D` has no inherit-scale switch, so a scaled parent
-  shears its children; a scale on a mid-chain bone such as `Chest` is never used.
+- Proportions are per-bone `length` and `girth` factors applied through the bind
+  matrices, never through pose scale (the probe found that `Skeleton3D` has no
+  inherit-scale switch, so a scaled pose shears children). For bone b with unit axis a,
+  length factor f and girth factor g: R_b = f a a^T + g (I - a a^T). New heads chain from
+  the root, H'_c = H'_p + R_p (H_c - H_p), then one vertical shift s keeps the soles on
+  the ground. The consumer sets each bone's rest origin to H'_b + s and its bind to
+  inverse(Rest'_b) M_b, where M_b(v) = H'_b + s + R_b (v - H_b), on a Skin duplicated per
+  avatar. Nothing shears down a chain, girth works on any bone, and stances stay valid.
+  The reference implementation is `figurine/figurine/proportions.py`.
 - Stances are one-frame glTF animation clips in `skeleton.glb` (`stance_ready`,
   `stance_relaxed`, ...). Animation later adds multi-frame clips by the same path, which
   the token `AnimationPlayer` route (`BoardTokenAnimationTree`) already plays.
@@ -719,7 +730,11 @@ shift along the way, never toward grey).
   painted rather than blocky.
 - The consumer builds the palette per figure from the recipe's colour picks (each pick a
   colour-set triple), 8 x 64 texels, with no filtering across columns. Recolouring an
-  avatar is regenerating this texture; no part carries a mask.
+  avatar is regenerating this texture; no part carries a mask. Each column interpolates
+  in sRGB, shadow to base over the lower half and base to highlight over the upper half,
+  each half eased by smoothstep (`kit.json` `palette.interpolation`
+  `srgb_smoothstep_halves`); v = 0 is the bottom row (the PNG's last row). The reference
+  implementation is `figurine/figurine/palette.py` `build_palette`.
 - Hard colour boundaries inside a part (a cuff, a stripe, a collar) are edges in the mesh,
   with the faces on either side mapped to different columns.
 
@@ -732,23 +747,35 @@ separations, trim edges, lash lines), ornaments, patterns, buttons and buckles, 
 hair's sheen as a band of notched, triangular highlights (Crashsune's signature). Detail
 is fixed colour and is not recoloured; a pattern that must follow the outfit colour is
 built from mesh faces in the palette instead. A part with no detail texture omits
-`TEXCOORD_1`.
+`TEXCOORD_1`. In the GLB the detail texture is the material's `baseColorTexture` with
+`texCoord: 1`, and figurine extras sit on the mesh node. Godot may switch on
+vertex-colour-as-albedo because `COLOR_0` is present; the consumer replaces the imported
+material with its figure shader, so this does not matter.
 
-Resolution: 256 x 256 per part, 512 x 512 for the head (the face shows at close zoom).
+Resolution: 512 x 512 for the body and head (at 256 the body's ink smeared into
+scratch-like marks at close zoom), 256 x 256 for hair and smaller parts.
 Import settings follow section 9 (editor import, embedded uncompressed) until the first
 card measures otherwise; figures are opaque, so mipmaps are allowed.
 
 ### Faces
 
-The head's `extras.figurine_face_rect` (`[u0, v0, u1, v1]` in its `TEXCOORD_1`) marks the
-face area; inside it, `TEXCOORD_1` remapped to the unit square is face space (0 to 1 left
-to right and chin to brow). `face_sheet.png` holds square cells in face space, one
-feature per cell, a row per kind: eyes, brows, mouths, marks (blush, freckles, a scar). A
-cell's RGB is the painted feature and its alpha the coverage. The iris and the brows are
-recoloured from the palette: how a cell marks them (a reserved key colour or a companion
-mask row) is settled by the first figurine card and recorded here. The figure shader
-composes the chosen cell of each kind over the head's skin; a recipe picks one cell per
-kind, so expression lives in the sheet, and a blink later is a cell swap.
+The head's `extras.figurine_face_rect` (`[u0, v0, u1, v1]`, in glTF / Godot UV terms with
+v down) marks the face area in its `TEXCOORD_1`. A face cell is sampled at
+`cell_origin + (uv1 - rect.xy) / (rect.zw - rect.xy) * cell_size` with no flip; cells are
+stored upright (brow at the top). The head is unlit and its unwrap continuous, so cells
+compose wherever face space falls inside 0 to 1.
+
+`face_sheet.png` holds square cells (`cell_px`), `columns` wide, one row per kind in
+`row_order` (eyes, brows, mouths, marks; top row first), named in `names`; marks cell 0 is
+"none". A cell's RGB is the painted feature and its alpha the coverage. `face_mask.png`
+has the same layout: R is the `eyes` weight and G the `hair` weight (`mask_channels`), B
+unused. Where a mask channel is above 0 the sheet's RGB is a grey value study, and that
+value (the stored 8-bit number over 255, not linearised) is the palette v: the shader
+mixes palette(slot, v = sheet.r) in by the mask weight. So irises take the eye colour and
+brows the hair colour, with their shading painted in; pupils, sclera, ink, highlights and
+blush are fixed colour. Composition order: marks, mouth, eyes, brows. A recipe picks one
+cell per kind, so expression lives in the sheet, and a blink later is a cell swap. The
+CPU reference is `figurine/figurine/faces.py` `compose_face`.
 
 ### `kit.json` (format 1)
 
@@ -774,12 +801,20 @@ kind, so expression lives in the sheet, and a blink later is a cell swap.
 }
 ```
 
+The example above is the shape; the producer's own `out/kit/kit.json` is the
+authoritative instance. The first kit (figurine e12e8bb) also writes: `palette` (slot
+order, size, stops, interpolation), `skeleton` (above), and per part `regions` (for the
+body), `detail` (whether it has an overlay) and `double_sided`. In `face_sheet`: `mask`,
+`mask_channels`, `columns`, `row_order`, `names`. Proportions give `length` and `girth`
+ranges per bone, each centred on 1.0; factors from several controls multiply.
+
 A colour is a triple (base, shadow, highlight), authored in sets so that every pick is
 harmonious; there is no free colour picker. `hides` names body regions a part covers: the
-body carries each region (`torso`, `upper_arms`, `forearms`, `thighs`, `shins`, `feet`)
-as its own surface, and the consumer turns covered regions off so nothing pokes through.
-Proportion controls are normalised 0 to 1 and map linearly onto each listed bone's range
-(a `Left` bone implies its `Right` mirror).
+body carries each region (`torso`, `neck`, `upper_arms`, `forearms`, `hands`, `thighs`,
+`shins`, `feet`) as its own surface whose material name is the region, and the consumer
+turns covered regions off so nothing pokes through. Proportion controls are normalised 0
+to 1 and map linearly onto each listed bone's range (a `Left` bone implies its `Right`
+mirror).
 
 ### Recipe (an avatar, format 1)
 
