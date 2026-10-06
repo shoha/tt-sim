@@ -1,0 +1,94 @@
+{
+ "body_a": {
+  "triangles": 2556,
+  "glb_triangles": 2556,
+  "reimported_triangles": 2556,
+  "joint_error_m": 2.7507430783169085e-07,
+  "reimport_bone_error_m": 1.7642974858844696e-07,
+  "light_ranges": {
+   "torso": [
+    0.4,
+    0.4
+   ],
+   "neck": [
+    0.4,
+    0.4
+   ],
+   "upper_arms": [
+    0.4,
+    0.4
+   ],
+   "forearms": [
+    0.4,
+    0.4
+   ],
+   "hands": [
+    0.4,
+    0.4
+   ],
+   "thighs": [
+    0.4,
+    0.4
+   ],
+   "shins": [
+    0.4,
+    0.4
+   ],
+   "feet": [
+    0.4,
+    0.4
+   ]
+  },
+  "node_extras": {},
+  "bytes": 153188
+ },
+ "head_round": {
+  "triangles": 950,
+  "glb_triangles": 950,
+  "reimported_triangles": 950,
+  "joint_error_m": 2.7507430783169085e-07,
+  "reimport_bone_error_m": 1.7642974858844696e-07,
+  "light_ranges": {
+   "head": [
+    0.0,
+    0.0
+   ]
+  },
+  "node_extras": {
+   "head_round": {
+    "figurine_face_rect": [
+     0.327778,
+     0.2,
+     0.672222,
+     1.0
+    ]
+   }
+  },
+  "bytes": 51504
+ },
+ "hair_bun": {
+  "triangles": 402,
+  "glb_triangles": 402,
+  "reimported_triangles": 402,
+  "joint_error_m": 2.7507430783169085e-07,
+  "reimport_bone_error_m": 1.7642974858844696e-07,
+  "light_ranges": {
+   "hair": [
+    0.25,
+    0.25
+   ]
+  },
+  "node_extras": {},
+  "bytes": 93824
+ },
+ "skeleton": {
+  "animations": [
+   "stance_ready",
+   "stance_relaxed"
+  ],
+  "joints": 22
+ },
+ "figure_triangles": 3908,
+ "problems": [],
+ "kit_json_errors": []
+}

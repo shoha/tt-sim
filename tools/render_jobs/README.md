@@ -237,6 +237,7 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 | `rocks.gd` | `action` (`check` default, `survey`), `near` ([x, z, r]), `within`, `top` | Rocks survive terrain changes (P3-7, `RockKeep`): `check` logs the rock props (kept or placed), any standing above its bed (`GroundSnap.bed_under`), their tilt, generated rocks inside a rock prop (twins), rock rows and props within `near`, and the last stroke's keeping (count, main-thread and worker time); `survey` lists the 10 m cells near the centre with most rock rows, to aim strokes at a boulder field. |
 | `height_profile.gd` | `from`, `to` ([x, z]), `n` (default 21) | The authoring map's ground height at `n` points along a line (`AuthoringEditor.ground_height_at`) and the steepest slope between them, for checking a sculpt stroke numerically (tier tops on whole tiers, a face's width, a ramp's slope, a pit's floor). |
 | `ground_perf.gd` | `action` plus its fields (see the script header) | Ground shader A/Bs: `shader` swaps the terrain material to the current include or one read from `user://p34_<version>_ground.zip` (made with `git archive`); `variant` builds a text-replaced copy of the current include; `paint` writes eight painted surfaces as strips or a half-weight checker; `terraces` fills the view with tiers; `fraction` reports the share of steep ground pixels. |
+| `avatar_kit.gd` | `action` plus its fields (see the script header) | Avatar figures from figurine's kit through AvatarKit: `place` stands figurine's three judging recipes in a row along the screen's right axis, `canopy` adds one at the first of `points` whose shade ray meets a canopy, `spawn` places `count` for frame times, `look` pans to a figure at a height, `shade` re-takes the shade rays and says what blocks each, `hidden` dithers one, `params` sets figure shader uniforms, `env` logs the environment's ambient and the sun, `sun` hides or shows the sun, `mipmaps` toggles AvatarKit's detail mipmaps; `save` / `cleanup` for `_avatarkit_` levels. |
 
 `sample_pixels.gd` (this folder) is a standalone reader for captures, not a probe:
 
@@ -606,6 +607,15 @@ numerically (for example where a fade or a tint band starts).
   `deciduous_clusters`, `river` and the built-in Oak's lab in play with G, the measure
   tool and a token drag's auto-show, the load's grid ground fit and a sampling survey
   logged for each; then `river` opened for dressing with G. 11 captures and `INDEX.md`.
+- `jobs/avatar_kit_look.json`: avatar figures from figurine's kit (AvatarKit, about 60 s to
+  build, 50 s to look plus 70 s of perf): a new 150 ft temperate forest map with a placed
+  oak, saved as `_avatarkit_forest` and played; `probes/avatar_kit.gd` stands figurine's
+  three judging recipes in a clearing and one figure under the oak (its shade ray meets the
+  crown). Captures at home, close (3.5 m) and closest (2 m), under the oak, hidden from
+  players (dither), the outdoor_sunset, outdoor_night and dungeon_dark presets (dungeon also
+  with the sun hidden), and an A/B of the detail textures without AvatarKit's mipmaps; then
+  GPU and CPU frame times with 0, 8 and 30 figures at home and zoom 20 (`for: "perf"`).
+  `avatar_kit.gd cleanup` deletes the `_avatarkit_` level.
 
 ## Caveats
 

@@ -162,6 +162,10 @@ canopy_fade_shape={
 "type": "vec4",
 "value": Vector4(1, 2, 1, 0)
 }
+figure_ambient={
+"type": "vec3",
+"value": Vector3(0.22, 0.22, 0.2475)
+}
 
 [steam]
 

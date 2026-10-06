@@ -1,0 +1,760 @@
+{
+ "format": 1,
+ "kit_version": "0.1.0+b4f9f4a",
+ "parts": [
+  {
+   "id": "body_a",
+   "slot": "body",
+   "glb": "parts/body/body_a.glb",
+   "slots_used": [
+    "skin",
+    "primary",
+    "secondary",
+    "accent"
+   ],
+   "triangles": 2556,
+   "hides": [],
+   "tags": [
+    "human"
+   ],
+   "detail": true,
+   "double_sided": false,
+   "regions": [
+    "torso",
+    "neck",
+    "upper_arms",
+    "forearms",
+    "hands",
+    "thighs",
+    "shins",
+    "feet"
+   ]
+  },
+  {
+   "id": "head_round",
+   "slot": "head",
+   "glb": "parts/head/head_round.glb",
+   "slots_used": [
+    "skin",
+    "hair"
+   ],
+   "triangles": 950,
+   "hides": [],
+   "tags": [
+    "human"
+   ],
+   "detail": true,
+   "double_sided": false,
+   "face_rect": [
+    0.327778,
+    0.2,
+    0.672222,
+    1.0
+   ]
+  },
+  {
+   "id": "hair_bun",
+   "slot": "hair",
+   "glb": "parts/hair/hair_bun.glb",
+   "slots_used": [
+    "hair",
+    "accent"
+   ],
+   "triangles": 402,
+   "hides": [],
+   "tags": [
+    "bun"
+   ],
+   "detail": true,
+   "double_sided": false
+  }
+ ],
+ "palette": {
+  "slots": [
+   "skin",
+   "hair",
+   "eyes",
+   "primary",
+   "secondary",
+   "accent",
+   "leather",
+   "metal"
+  ],
+  "width": 8,
+  "height": 64,
+  "stops": {
+   "shadow": 0.0,
+   "base": 0.5,
+   "highlight": 1.0
+  },
+  "interpolation": "srgb_smoothstep_halves"
+ },
+ "face_sheet": {
+  "png": "faces/face_sheet.png",
+  "mask": "faces/face_mask.png",
+  "mask_channels": [
+   "eyes",
+   "hair"
+  ],
+  "cell_px": 128,
+  "columns": 7,
+  "row_order": [
+   "eyes",
+   "brows",
+   "mouths",
+   "marks"
+  ],
+  "rows": {
+   "eyes": 7,
+   "brows": 4,
+   "mouths": 5,
+   "marks": 5
+  },
+  "names": {
+   "eyes": [
+    "bright",
+    "sharp",
+    "happy",
+    "heart",
+    "starry",
+    "sleepy",
+    "squeeze"
+   ],
+   "brows": [
+    "soft",
+    "determined",
+    "worried",
+    "raised"
+   ],
+   "mouths": [
+    "smile",
+    "grin",
+    "o",
+    "smirk",
+    "cat"
+   ],
+   "marks": [
+    "none",
+    "blush",
+    "freckles",
+    "blush_freckles",
+    "beauty_mark"
+   ]
+  }
+ },
+ "colour_sets": {
+  "skin": [
+   [
+    "#ffd9bf",
+    "#e89a92",
+    "#fff1e4"
+   ],
+   [
+    "#f7c39c",
+    "#d98375",
+    "#ffe6cc"
+   ],
+   [
+    "#e0a476",
+    "#b86558",
+    "#f7cba0"
+   ],
+   [
+    "#bf825a",
+    "#8c4a45",
+    "#e0a97c"
+   ],
+   [
+    "#8f5a3c",
+    "#5c2f33",
+    "#b8805a"
+   ],
+   [
+    "#cfe0ff",
+    "#94a3e0",
+    "#f0f6ff"
+   ]
+  ],
+  "hair": [
+   [
+    "#3f2b63",
+    "#1b0f36",
+    "#a26cbf"
+   ],
+   [
+    "#7a3b2a",
+    "#43100b",
+    "#c88063"
+   ],
+   [
+    "#f08a3c",
+    "#842607",
+    "#f9af69"
+   ],
+   [
+    "#33b8b0",
+    "#094a65",
+    "#64e2bb"
+   ],
+   [
+    "#e8455c",
+    "#800e21",
+    "#f67174"
+   ],
+   [
+    "#f5d27a",
+    "#87562f",
+    "#fbe19a"
+   ],
+   [
+    "#22305e",
+    "#0a0e34",
+    "#6096bd"
+   ],
+   [
+    "#efe6ff",
+    "#746d8c",
+    "#ffffff"
+   ],
+   [
+    "#f28ab8",
+    "#853a57",
+    "#faa7bf"
+   ]
+  ],
+  "eyes": [
+   [
+    "#d68a2a",
+    "#6b2900",
+    "#eeb25b"
+   ],
+   [
+    "#2fb3c4",
+    "#044162",
+    "#60e7d1"
+   ],
+   [
+    "#8a5ad6",
+    "#371b6b",
+    "#cc84ee"
+   ],
+   [
+    "#d9364f",
+    "#6c0618",
+    "#ef656a"
+   ],
+   [
+    "#4aa85a",
+    "#18543d",
+    "#7ddb7e"
+   ],
+   [
+    "#7a4a2e",
+    "#3d180d",
+    "#c89168"
+   ],
+   [
+    "#e05aa0",
+    "#701a42",
+    "#f283ab"
+   ]
+  ],
+  "cloth": [
+   [
+    "#f7f3ea",
+    "#867fa3",
+    "#fcfcfc"
+   ],
+   [
+    "#7fb6e8",
+    "#3e5f99",
+    "#a0e8f6"
+   ],
+   [
+    "#e8473f",
+    "#990c0f",
+    "#f6806c"
+   ],
+   [
+    "#f6c445",
+    "#a25a0f",
+    "#fbd670"
+   ],
+   [
+    "#2fae9f",
+    "#096173",
+    "#61deb0"
+   ],
+   [
+    "#2d3f80",
+    "#0f1754",
+    "#669fcb"
+   ],
+   [
+    "#f28fb0",
+    "#a04964",
+    "#faabba"
+   ],
+   [
+    "#4c8f45",
+    "#1f5e39",
+    "#90d17e"
+   ],
+   [
+    "#f08a3c",
+    "#9e3309",
+    "#f9af69"
+   ],
+   [
+    "#a58be0",
+    "#5e4994",
+    "#d7acf2"
+   ],
+   [
+    "#3a3346",
+    "#221d2e",
+    "#a68db3"
+   ],
+   [
+    "#e9d9b8",
+    "#9a816a",
+    "#f6eace"
+   ]
+  ],
+  "leather": [
+   [
+    "#8a5435",
+    "#5b2413",
+    "#cf966d"
+   ],
+   [
+    "#5a3a2c",
+    "#3b1b14",
+    "#bb8d72"
+   ],
+   [
+    "#c08a52",
+    "#7f4221",
+    "#e5b880"
+   ]
+  ],
+  "metal": [
+   [
+    "#c9d2de",
+    "#655f7a",
+    "#fafafa"
+   ],
+   [
+    "#e3b84a",
+    "#7d4812",
+    "#fbdc89"
+   ],
+   [
+    "#b07a52",
+    "#61311e",
+    "#f2c59c"
+   ]
+  ]
+ },
+ "skeleton": {
+  "Hips": {
+   "parent": null,
+   "head": [
+    0.0,
+    0.8,
+    -0.0
+   ],
+   "tail": [
+    0.0,
+    0.88,
+    -0.0
+   ]
+  },
+  "Spine": {
+   "parent": "Hips",
+   "head": [
+    0.0,
+    0.88,
+    -0.0
+   ],
+   "tail": [
+    0.0,
+    0.98,
+    -0.0
+   ]
+  },
+  "Chest": {
+   "parent": "Spine",
+   "head": [
+    0.0,
+    0.98,
+    -0.0
+   ],
+   "tail": [
+    0.0,
+    1.075,
+    -0.0
+   ]
+  },
+  "UpperChest": {
+   "parent": "Chest",
+   "head": [
+    0.0,
+    1.075,
+    -0.0
+   ],
+   "tail": [
+    0.0,
+    1.19,
+    -0.0
+   ]
+  },
+  "Neck": {
+   "parent": "UpperChest",
+   "head": [
+    0.0,
+    1.19,
+    -0.0
+   ],
+   "tail": [
+    0.0,
+    1.255,
+    -0.004
+   ]
+  },
+  "Head": {
+   "parent": "Neck",
+   "head": [
+    0.0,
+    1.255,
+    -0.004
+   ],
+   "tail": [
+    0.0,
+    1.552,
+    -0.004
+   ]
+  },
+  "LeftShoulder": {
+   "parent": "UpperChest",
+   "head": [
+    0.025,
+    1.165,
+    -0.0
+   ],
+   "tail": [
+    0.145,
+    1.17,
+    -0.0
+   ]
+  },
+  "LeftUpperArm": {
+   "parent": "LeftShoulder",
+   "head": [
+    0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    0.318241,
+    0.996759,
+    -0.0
+   ]
+  },
+  "LeftLowerArm": {
+   "parent": "LeftUpperArm",
+   "head": [
+    0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    0.470269,
+    0.844731,
+    -0.0
+   ]
+  },
+  "LeftHand": {
+   "parent": "LeftLowerArm",
+   "head": [
+    0.470269,
+    0.844731,
+    -0.0
+   ],
+   "tail": [
+    0.551586,
+    0.763414,
+    -0.0
+   ]
+  },
+  "LeftUpperLeg": {
+   "parent": "Hips",
+   "head": [
+    0.085,
+    0.78,
+    -0.0
+   ],
+   "tail": [
+    0.08,
+    0.445,
+    -0.0
+   ]
+  },
+  "LeftLowerLeg": {
+   "parent": "LeftUpperLeg",
+   "head": [
+    0.08,
+    0.445,
+    -0.0
+   ],
+   "tail": [
+    0.076,
+    0.105,
+    -0.012
+   ]
+  },
+  "LeftFoot": {
+   "parent": "LeftLowerLeg",
+   "head": [
+    0.076,
+    0.105,
+    -0.012
+   ],
+   "tail": [
+    0.076,
+    0.035,
+    0.085
+   ]
+  },
+  "LeftToes": {
+   "parent": "LeftFoot",
+   "head": [
+    0.076,
+    0.035,
+    0.085
+   ],
+   "tail": [
+    0.076,
+    0.035,
+    0.15
+   ]
+  },
+  "RightShoulder": {
+   "parent": "UpperChest",
+   "head": [
+    -0.025,
+    1.165,
+    -0.0
+   ],
+   "tail": [
+    -0.145,
+    1.17,
+    -0.0
+   ]
+  },
+  "RightUpperArm": {
+   "parent": "RightShoulder",
+   "head": [
+    -0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    -0.318241,
+    0.996759,
+    -0.0
+   ]
+  },
+  "RightLowerArm": {
+   "parent": "RightUpperArm",
+   "head": [
+    -0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    -0.470269,
+    0.844731,
+    -0.0
+   ]
+  },
+  "RightHand": {
+   "parent": "RightLowerArm",
+   "head": [
+    -0.470269,
+    0.844731,
+    -0.0
+   ],
+   "tail": [
+    -0.551586,
+    0.763414,
+    -0.0
+   ]
+  },
+  "RightUpperLeg": {
+   "parent": "Hips",
+   "head": [
+    -0.085,
+    0.78,
+    -0.0
+   ],
+   "tail": [
+    -0.08,
+    0.445,
+    -0.0
+   ]
+  },
+  "RightLowerLeg": {
+   "parent": "RightUpperLeg",
+   "head": [
+    -0.08,
+    0.445,
+    -0.0
+   ],
+   "tail": [
+    -0.076,
+    0.105,
+    -0.012
+   ]
+  },
+  "RightFoot": {
+   "parent": "RightLowerLeg",
+   "head": [
+    -0.076,
+    0.105,
+    -0.012
+   ],
+   "tail": [
+    -0.076,
+    0.035,
+    0.085
+   ]
+  },
+  "RightToes": {
+   "parent": "RightFoot",
+   "head": [
+    -0.076,
+    0.035,
+    0.085
+   ],
+   "tail": [
+    -0.076,
+    0.035,
+    0.15
+   ]
+  }
+ },
+ "proportions": {
+  "height": {
+   "length": {
+    "Spine": [
+     0.9,
+     1.1
+    ],
+    "Chest": [
+     0.92,
+     1.08
+    ],
+    "UpperChest": [
+     0.94,
+     1.06
+    ],
+    "Neck": [
+     0.85,
+     1.15
+    ],
+    "LeftUpperArm": [
+     0.9,
+     1.1
+    ],
+    "LeftLowerArm": [
+     0.9,
+     1.1
+    ],
+    "LeftUpperLeg": [
+     0.85,
+     1.15
+    ],
+    "LeftLowerLeg": [
+     0.85,
+     1.15
+    ]
+   },
+   "default": 0.5
+  },
+  "build": {
+   "girth": {
+    "Hips": [
+     0.84,
+     1.16
+    ],
+    "Spine": [
+     0.82,
+     1.18
+    ],
+    "Chest": [
+     0.84,
+     1.16
+    ],
+    "UpperChest": [
+     0.86,
+     1.14
+    ],
+    "Neck": [
+     0.88,
+     1.12
+    ],
+    "LeftUpperArm": [
+     0.78,
+     1.22
+    ],
+    "LeftLowerArm": [
+     0.82,
+     1.18
+    ],
+    "LeftUpperLeg": [
+     0.82,
+     1.18
+    ],
+    "LeftLowerLeg": [
+     0.86,
+     1.14
+    ],
+    "LeftHand": [
+     0.92,
+     1.08
+    ]
+   },
+   "length": {
+    "LeftShoulder": [
+     0.82,
+     1.18
+    ],
+    "LeftHand": [
+     0.94,
+     1.06
+    ]
+   },
+   "default": 0.5
+  },
+  "head": {
+   "length": {
+    "Head": [
+     0.86,
+     1.14
+    ]
+   },
+   "girth": {
+    "Head": [
+     0.86,
+     1.14
+    ]
+   },
+   "default": 0.5
+  }
+ },
+ "stances": [
+  "stance_ready",
+  "stance_relaxed"
+ ]
+}

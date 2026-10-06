@@ -40,6 +40,10 @@ const EXCLUDED_SHADERS := {
 	"res://shaders/pixelate.gdshader": "no references in the code",
 	"res://shaders/sharpen.gdshader": "no references in the code",
 	"res://shaders/selected_indicator.gdshader": "no references in the code",
+	"res://shaders/avatar_figure.gdshader":
+	"avatar figures are not in play yet; cover it with the avatar token card",
+	"res://shaders/avatar_figure_double_sided.gdshader":
+	"avatar figures are not in play yet; cover it with the avatar token card",
 }
 ## A user argument (after `--`) that forces the warm-up, whatever the skip rules say.
 const FORCE_ARG := "--warm-graphics"
