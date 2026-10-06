@@ -1,12 +1,12 @@
 class_name AvatarPresets
 extends RefCounted
 
-## The preset avatars the Add Token browser offers under "Player avatars" until the avatar
-## builder replaces them: recipes in the contract's form (docs/ASSET_PIPELINE.md section 10
-## "Recipe") over the kit's parts, colour sets, face cells and stances. The first three are
-## figurine's judging recipes (figurine/scripts/render_figures.py RECIPES); the rest use the
-## stances those leave out. Colour picks index the kit's colour_sets (primary, secondary and
-## accent index `cloth`).
+## The preset avatars: the recipes the avatar builder (AvatarBuilder) starts a new avatar
+## from, in the contract's form (docs/ASSET_PIPELINE.md section 10 "Recipe") over the kit's
+## parts, colour sets, face cells and stances. The first three are figurine's judging
+## recipes (figurine/scripts/render_figures.py RECIPES); the rest use the stances those
+## leave out. Colour picks index the kit's colour_sets (primary, secondary and accent index
+## `cloth`).
 
 const PARTS := {"body": "body_a", "head": "head_round", "hair": "hair_bun"}
 

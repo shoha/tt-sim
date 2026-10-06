@@ -1351,6 +1351,9 @@ a sub-component of `GameMap`.
 - **Rename** — a `LineEdit` (`%RenameInput`) pre-filled with the current name, plus a button;
   pressing Enter (the LineEdit's `text_submitted` signal) submits the same as clicking the button.
   GM-only.
+- **Edit Avatar** — on an avatar token only, for the GM and for a player holding CONTROL on it
+  (`TokenContextMenu.can_edit_avatar`). Closes the menu and opens the avatar builder on the token
+  (see Avatar Builder below).
 - **Duplicate** — GM-only button.
 - **Remove Token** — GM-only button, styled as the danger variant.
 
@@ -1395,6 +1398,44 @@ manages the overlay.
   without reopening it. Double-click placement (`asset_selected`) still closes it.
 - **Search filters persist** — filters are not cleared when the browser closes and reopens; they're
   only cleared when the player clears them explicitly.
+- **Avatar tab** — the first tab (`AvatarTab`) holds one primary action, "Make an avatar", which
+  closes the browser and opens the avatar builder for a new player figure.
+
+---
+
+## Avatar Builder
+
+`AvatarBuilder` (`scenes/states/playing/avatar_builder.tscn` / `.gd`, an `AnimatedCanvasLayerPanel`
+added under the window root) is where a player makes or edits their avatar token
+(ARCHITECTURE.md "Avatar tokens" has the data flow). The layout is a `MenuHeader`, a name field with
+"Surprise me" beside it, a body of three columns, and a Cancel / primary footer:
+
+- **Preview** (left, `AvatarBuilderPreview`): the figure in its own `SubViewport` through the game
+  camera's basis, on a slow turntable; dragging on it spins the figure and the turn resumes two
+  seconds after the drag. A dark floor disc grounds it.
+- **Rail** (`IconRail`, vertical, labelled) and **panes** (`PaneStack`), one at a time, each with
+  an `H3` title and a `sparkles` reroll button for its own section:
+  - *Pose* (`AvatarStanceTiles`): one tile per kit stance whose icon is the player's own figure in
+    that stance, rendered as a white silhouette in a 56x76 `SubViewport` (`UPDATE_ONCE`, redrawn
+    after a parts or shape change) so the `Tile` theme tints it like any icon.
+  - *Face*: `TileRow`s of the sheet's eye, brow, mouth and mark cells (`AvatarFaceIcons`: each cell
+    cropped to its mark and laid over a skin square, so a brow or a blush reads on the dark panel;
+    the marks row's first cell is the bare square, "none").
+  - *Colours*: an `AvatarSwatchRow` per palette slot (base fill, shadow edge, accent edge when
+    picked), labelled Skin, Hair, Eyes, Outfit, Trim, Accent; a slot's row shows only when a chosen
+    part paints it (`slots_used`), skin and eyes always, so Leather and Metal appear with the first
+    gear part.
+  - *Shape*: a `PropertyRow` slider per proportion control (Height, Build, Head) with word hints
+    at the ends; values are quantised to 0.05 and reach the figure once a frame.
+  - *Parts*: shown only when a slot has more than one part; a `TileRow` of thumbnails per such slot
+    (`assets/avatar_kit/thumbnails/<id>.png`).
+- **Surprise me** draws a whole recipe (`AvatarSurprise.recipe`) and, unless the player typed a
+  name, a new name from `AvatarSurprise.NAMES`; a new avatar starts from a random `AvatarPresets`
+  recipe, never a blank figure.
+- **Modes**: `open_for_new` emits `create_confirmed(recipe, name)`; `open_for_token` previews every
+  pick on the placed token, puts the original back on Cancel (or ESC, or the header's close) and
+  emits `edit_confirmed` for the context menu controller to commit as one undo entry. The panel
+  registers its backdrop with `UIManager` so ESC cancels.
 
 ---
 

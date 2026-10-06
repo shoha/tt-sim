@@ -29,6 +29,8 @@ const CLIENT_TRANSFORM_SEND_INTERVAL: float = 0.05  # 20 updates/sec max (same a
 
 var _token_spawner: TokenSpawner
 var _reconciliation_timer: Timer = null
+## The owning controller (set in setup()), for set_avatar_recipe on a player's edit.
+var _level_play_controller: Node = null
 
 # Token permission state
 var _client_transform_throttle: Dictionary = {}  # network_id -> last_send_time (client-side)
@@ -74,6 +76,15 @@ func setup(level_play_controller: Node) -> void:
 	):
 		NetworkManager.client_token_transform_received.connect(_on_client_transform_received)
 
+	# Host-side: a player's avatar edit from the builder
+	if not NetworkManager.permissions.avatar_recipe_requested.is_connected(
+		_on_client_avatar_recipe_received
+	):
+		NetworkManager.permissions.avatar_recipe_requested.connect(
+			_on_client_avatar_recipe_received
+		)
+	_level_play_controller = level_play_controller
+
 	# Host-side: handle client drag lock requests
 	if not NetworkManager.client_drag_lock_claimed.is_connected(_on_client_drag_lock_claimed):
 		NetworkManager.client_drag_lock_claimed.connect(_on_client_drag_lock_claimed)
@@ -98,6 +109,12 @@ func teardown() -> void:
 		GameState.permissions_changed.disconnect(_on_permissions_changed)
 	if NetworkManager.client_token_transform_received.is_connected(_on_client_transform_received):
 		NetworkManager.client_token_transform_received.disconnect(_on_client_transform_received)
+	if NetworkManager.permissions.avatar_recipe_requested.is_connected(
+		_on_client_avatar_recipe_received
+	):
+		NetworkManager.permissions.avatar_recipe_requested.disconnect(
+			_on_client_avatar_recipe_received
+		)
 	if NetworkManager.client_drag_lock_claimed.is_connected(_on_client_drag_lock_claimed):
 		NetworkManager.client_drag_lock_claimed.disconnect(_on_client_drag_lock_claimed)
 	if NetworkManager.client_drag_lock_released.is_connected(_on_client_drag_lock_released):
@@ -275,6 +292,26 @@ func _on_client_transform_received(
 
 	# Broadcast to all OTHER clients (not the sender)
 	NetworkStateSync.broadcast_client_token_transform(network_id, pos, rot, scl, sender_id)
+
+
+## Host-side: a player's avatar edit from the builder. Applied only for an avatar token
+## the sender holds CONTROL on, through LevelPlayController.set_avatar_recipe (which
+## syncs GameState and every client) and rename_token when a name came along.
+func _on_client_avatar_recipe_received(
+	network_id: String, sender_id: int, recipe: Dictionary, token_name: String
+) -> void:
+	if not NetworkManager.is_host() or _level_play_controller == null:
+		return
+	if not GameState.has_token_permission(
+		network_id, sender_id, TokenPermissions.Permission.CONTROL
+	):
+		return
+	var token = _token_spawner._find_token_by_network_id(network_id)
+	if not token or not token.is_avatar():
+		return
+	_level_play_controller.set_avatar_recipe(token, recipe)
+	if not token_name.strip_edges().is_empty():
+		_level_play_controller.rename_token(token, token_name)
 
 
 ## Host-side: handle a client drag lock claim.

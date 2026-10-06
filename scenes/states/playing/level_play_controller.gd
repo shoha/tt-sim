@@ -138,6 +138,7 @@ func setup(game_map: GameMap) -> void:
 		history.set_token_lookup(_token_spawner.find_token_by_network_id)
 		history.set_rename_callable(_token_spawner.rename_token)
 		history.set_remove_callable(_token_spawner.remove_token)
+		history.set_recipe_callable(set_avatar_recipe)
 
 
 func _exit_tree() -> void:

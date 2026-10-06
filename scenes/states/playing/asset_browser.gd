@@ -3,18 +3,18 @@ extends VBoxContainer
 
 ## A tabbed browser for all asset packs.
 ## Each tab contains assets from one pack with its own search filter. The first tab,
-## "Player avatars" (AvatarPresetsTab), offers the preset avatars, built from the kit every
-## client ships rather than from a pack.
+## "Avatar" (AvatarTab), opens the avatar builder for a player figure built from the kit
+## every client ships rather than from a pack.
 
 signal asset_selected(pack_id: String, asset_id: String, variant_id: String)
 signal asset_drag_started(pack_id: String, asset_id: String, variant_id: String, icon: Texture2D)
-signal avatar_selected(recipe: Dictionary, token_name: String)
+signal avatar_build_requested
 
 const AssetPackTabScene = preload("res://scenes/states/playing/asset_pack_tab.tscn")
-const AvatarPresetsTabScene = preload("res://scenes/states/playing/avatar_presets_tab.tscn")
+const AvatarTabScene = preload("res://scenes/states/playing/avatar_tab.tscn")
 
 var _tabs: Dictionary = {}  # pack_id -> AssetPackTab
-var _avatar_tab: AvatarPresetsTab = null
+var _avatar_tab: AvatarTab = null
 
 @onready var tab_container: TabContainer = $TabContainer
 
@@ -96,22 +96,22 @@ func _add_or_refresh_tab(pack_id: String) -> void:
 		tab_container.tab_changed.connect(_on_tab_changed)
 
 
-## The "Player avatars" tab, first and kept across pack tab rebuilds.
+## The "Avatar" tab, first and kept across pack tab rebuilds.
 func _add_avatar_tab() -> void:
-	_avatar_tab = AvatarPresetsTabScene.instantiate() as AvatarPresetsTab
-	_avatar_tab.name = AvatarPresetsTab.TAB_TITLE
+	_avatar_tab = AvatarTabScene.instantiate() as AvatarTab
+	_avatar_tab.name = AvatarTab.TAB_TITLE
 	tab_container.add_child(_avatar_tab)
 	tab_container.move_child(_avatar_tab, 0)
-	_avatar_tab.avatar_selected.connect(_on_avatar_selected)
+	_avatar_tab.build_requested.connect(_on_avatar_build_requested)
 
 
-## The "Player avatars" tab (the validation bridge activates presets through it).
-func get_avatar_tab() -> AvatarPresetsTab:
+## The "Avatar" tab.
+func get_avatar_tab() -> AvatarTab:
 	return _avatar_tab
 
 
-func _on_avatar_selected(recipe: Dictionary, token_name: String) -> void:
-	avatar_selected.emit(recipe, token_name)
+func _on_avatar_build_requested() -> void:
+	avatar_build_requested.emit()
 
 
 func _on_tab_changed(_tab_index: int) -> void:

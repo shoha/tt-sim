@@ -49,6 +49,7 @@ func _setup_context_menu() -> void:
 		_context_menu.remove_requested.connect(_on_context_menu_remove_requested)
 		_context_menu.duplicate_requested.connect(_on_context_menu_duplicate_requested)
 		_context_menu.rename_requested.connect(_on_context_menu_rename_requested)
+		_context_menu.edit_avatar_requested.connect(_on_context_menu_edit_avatar_requested)
 
 
 ## Open the context menu for a token at the given screen position.
@@ -305,6 +306,52 @@ func _on_context_menu_duplicate_requested(token: BoardToken) -> void:
 			_game_map._action_history.record_token_spawn(copy.network_id, copy.token_name)
 	if _context_menu:
 		_context_menu.close_menu()
+
+
+## "Edit Avatar": opens the builder on the token (it previews every pick on the token
+## itself and puts the original back on cancel); the confirmed edit is committed here.
+func _on_context_menu_edit_avatar_requested(token: BoardToken) -> void:
+	if not is_instance_valid(token) or not token.is_avatar():
+		return
+	# Closed first, as for Remove: the menu's click-outside handler would otherwise
+	# swallow the first click on the builder.
+	if _context_menu:
+		_context_menu.close_menu()
+	var builder := AvatarBuilder.open_for_token(get_tree().root, token)
+	builder.edit_confirmed.connect(_on_avatar_edit_confirmed)
+
+
+## Commits a builder edit: with authority, one undo entry (the recipe, and the name when
+## it changed) and the synced change (LevelPlayController.set_avatar_recipe); a client
+## sends the edit to the host, which checks CONTROL and applies it
+## (NetworkTokenSync._on_client_avatar_recipe_received).
+func _on_avatar_edit_confirmed(
+	token: BoardToken,
+	original: Dictionary,
+	recipe: Dictionary,
+	original_name: String,
+	token_name: String,
+) -> void:
+	if not is_instance_valid(token):
+		return
+	var renamed := not token_name.is_empty() and token_name != original_name
+	if not GameState.has_authority():
+		NetworkManager.permissions.send_avatar_recipe(
+			token.network_id, recipe, token_name if renamed else ""
+		)
+		return
+	var lpc := _game_map.get_level_play_controller()
+	if not lpc:
+		return
+	if _game_map._action_history and NetworkManager.has_gm_access():
+		var changes := AvatarBuilder.undo_changes(
+			token.network_id, original, recipe, original_name, token_name
+		)
+		if not changes.is_empty():
+			_game_map._action_history.record_compound_property_change(changes)
+	lpc.set_avatar_recipe(token, recipe)
+	if renamed:
+		lpc.rename_token(token, token_name)
 
 
 func _on_context_menu_rename_requested(token: BoardToken, new_name: String) -> void:
