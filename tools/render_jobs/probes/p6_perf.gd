@@ -237,12 +237,19 @@ static func _water_timing(base: Node) -> String:
 		parts.append("last skirt refresh %.1f" % (terrain.last_skirt_usec / 1000.0))
 	if water == null:
 		return "no water | parts ms: " + ", ".join(parts)
+	var swap := PackedStringArray()
+	for key: String in water.last_swap_parts:
+		var value: Variant = water.last_swap_parts[key]
+		swap.append(
+			"%s %s" % [key, value] if value is String else "%s %.1f" % [key, float(value) / 1000.0]
+		)
 	return (
-		"water refresh build %.1f ms (worker), bake %.1f ms, swap %.1f ms | parts ms: %s"
+		"water refresh build %.1f ms (worker), bake %.1f ms, swap %.1f ms (%s) | parts ms: %s"
 		% [
 			water.last_build_usec / 1000.0,
 			water.last_bake_usec / 1000.0,
 			water.last_swap_usec / 1000.0,
+			", ".join(swap),
 			", ".join(parts),
 		]
 	)

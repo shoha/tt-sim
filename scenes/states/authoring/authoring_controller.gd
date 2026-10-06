@@ -773,6 +773,8 @@ func _select_tool(tool_id: StringName) -> void:
 			# The falls material now, so the first waterfall drawn pays no shader build
 			# (P4c-4; the Bridge tool warms its crossing materials the same way).
 			AuthoredWater.warm_fall_material()
+			# And the flow carrier's, so the first river's swap pays none either.
+			AuthoredWater.warm_flow_carrier()
 			brush.set_mode(BrushTool.Mode.WATER)
 		AuthoringPanel.TOOL_BRIDGE:
 			if not bridge_available():

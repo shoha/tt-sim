@@ -52,6 +52,8 @@ const WARMUP_TIER_FACE_FROM_Z := -0.7
 const WARMUP_TIER_FACE_TO_Z := 0.7
 
 static var _fall_material: ShaderMaterial = null
+## _keep_carrier_shader()'s material.
+static var _carrier_keeper: StandardMaterial3D = null
 
 ## Water level per document sample (WaterGeometry.DRY where no water), and 1 where wet.
 var levels: PackedFloat32Array = PackedFloat32Array()
@@ -62,6 +64,9 @@ var version: int = 0
 var last_build_usec: int = 0
 var last_bake_usec: int = 0
 var last_swap_usec: int = 0
+## The last swap's parts in microseconds: "free", "mesh", "bodies" (the surfaces' concave
+## shapes), "zones", "materials" (process_water_meshes), "exits" (apply_river_exits).
+var last_swap_parts: Dictionary = {}
 
 var _document: MapDocument = null
 var _task: int = -1
@@ -188,6 +193,7 @@ func get_falls_instance() -> MeshInstance3D:
 ## `flow` (RG8, `flow_size` texels; empty for none). Tokens a replaced zone held are released
 ## quietly; the new zone picks them up again.
 func apply(built: Dictionary, flow: PackedByteArray, flow_size: Vector2i) -> void:
+	var t := Time.get_ticks_usec()
 	for child in get_children():
 		if child is WaterZone:
 			(child as WaterZone).release_bodies()
@@ -196,17 +202,28 @@ func apply(built: Dictionary, flow: PackedByteArray, flow_size: Vector2i) -> voi
 	levels = built.get("levels", PackedFloat32Array())
 	wet = built.get("wet", PackedByteArray())
 	version += 1
+	last_swap_parts["free"] = Time.get_ticks_usec() - t
+	t = Time.get_ticks_usec()
 	var arrays: Array = built.get("arrays", [])
 	if not arrays.is_empty():
 		add_child(_surface_mesh(arrays, flow, flow_size))
 	var falls: Array = built.get("falls", [])
 	if not falls.is_empty():
 		add_child(_falls_mesh(falls, built.get("falls_aabb", AABB())))
+	last_swap_parts["mesh"] = Time.get_ticks_usec() - t
+	var bodies_usec := 0
+	var zones_usec := 0
 	for body: Dictionary in built.get("bodies", []):
+		t = Time.get_ticks_usec()
 		add_child(WaterSurface.make_body("Surface_%d" % body.id, body.faces, body.floats))
+		bodies_usec += Time.get_ticks_usec() - t
+		t = Time.get_ticks_usec()
 		var zone := WaterZone.create_for_footprint("Zone_%d" % body.id, body.level, body.tiles)
 		if zone != null:
 			add_child(zone)
+		zones_usec += Time.get_ticks_usec() - t
+	last_swap_parts["bodies"] = bodies_usec
+	last_swap_parts["zones"] = zones_usec
 
 
 static func _surface_mesh(
@@ -221,6 +238,7 @@ static func _surface_mesh(
 		material.emission_texture = ImageTexture.create_from_image(
 			WaterFlowBaker.to_image(flow, flow_size)
 		)
+		_keep_carrier_shader(material.emission_texture)
 	mesh.surface_set_material(0, material)
 	var instance := MeshInstance3D.new()
 	instance.name = WaterMeshBuilder.MESH_NAME
@@ -229,6 +247,29 @@ static func _surface_mesh(
 	instance.set_meta(Constants.BOUNDS_EXEMPT_META, true)
 	instance.set_meta(WaterGlbUtils.AUTHORED_META, true)
 	return instance
+
+
+## Keeps one carrier material with a flow texture alive for the session, its shader built. A
+## BaseMaterial3D's generated shader is shared by every material with its feature set and
+## freed with the last of them, so each refresh freed the old carrier with its shader and the
+## new carrier built it again in surface_set_material: 14 ms of the swap's main-thread frame on
+## a new map, every refresh (the P6-3 erase's 29-30 ms frame; a level loaded from disk had a
+## carrier kept alive by its load and paid 0.3 ms).
+static func _keep_carrier_shader(texture: Texture2D) -> void:
+	if _carrier_keeper != null:
+		return
+	_carrier_keeper = StandardMaterial3D.new()
+	_carrier_keeper.emission_texture = texture
+	_carrier_keeper.get_rid()
+
+
+## Builds the flow carrier's shader now (_keep_carrier_shader with a one-texel texture), so
+## the first refresh with a river pays no shader build either (the Water tool calls it as it
+## opens, with warm_fall_material()). Idempotent.
+static func warm_flow_carrier() -> void:
+	if _carrier_keeper == null:
+		var texel := Image.create(1, 1, false, Image.FORMAT_RG8)
+		_keep_carrier_shader(ImageTexture.create_from_image(texel))
 
 
 ## The waterfalls node (see the header): `arrays` from WaterFallMesh.build with its bounds
@@ -380,12 +421,16 @@ func _finish_task() -> void:
 	var flow := _document.water_flow if _document != null else PackedByteArray()
 	var flow_size := _document.water_flow_size if _document != null else Vector2i.ZERO
 	apply(work["built"], flow, flow_size)
+	var t := Time.get_ticks_usec()
 	var parent := get_parent()
 	WaterGlbUtils.process_water_meshes(parent if parent != null else self)
+	last_swap_parts["materials"] = Time.get_ticks_usec() - t
+	t = Time.get_ticks_usec()
 	# The ground skirt follows the rivers that leave the map (P6-1).
 	var terrain := _terrain()
 	if terrain != null:
 		terrain.apply_river_exits(work.get("exits", {}))
+	last_swap_parts["exits"] = Time.get_ticks_usec() - t
 	last_swap_usec = Time.get_ticks_usec() - started
 	refreshed.emit()
 	if _pending != null:
