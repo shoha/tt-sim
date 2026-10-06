@@ -641,10 +641,16 @@ way a `.ttmap` is rebuilt. Design and style: `figurine/docs/design.md`. Status: 
 drafted 2026-10-06 from the avatar probe (tt-sim `2d7aa3e`,
 `tools/render_jobs/probes/avatar*.gd`); humans only. Produced: the first kit slice
 (figurine e12e8bb, 2026-10-06: `body_a`, `head_round`, `hair_bun`, 21 face cells, two
-stances; a figure is 3,908 triangles). Not yet consumed.
+stances; a figure is 3,908 triangles; its kit.json says `kit_version` `0.1.0+b4f9f4a`).
+Consumed: tt-sim `8c30bef` (2026-10-06) loads it, builds figures from recipes on a real
+map and from an exported pack; not yet a token (no `BoardTokenFactory` path, no network
+sync, no builder UI).
 
-Producer: `figurine/scripts/build_kit.py` (to be written). Consumer: `utils/avatar_kit.gd`
-(`AvatarKit`, to be written), which assembles a figure under one `Skeleton3D`.
+Producer: `figurine/scripts/build_kit.py`. Consumer: `utils/avatar_kit.gd` (`AvatarKit`,
+with `avatar_recipe.gd`, `avatar_palette.gd`, `avatar_proportions.gd`, `avatar_shade.gd`)
+and `shaders/avatar_figure.gdshader`, which assemble a figure under one `Skeleton3D`.
+Install: `tools/install_avatar_kit.gd` copies figurine's `out/kit/` into
+`assets/avatar_kit/` and writes the sidecars before the first import.
 
 ### Layout
 
@@ -685,10 +691,17 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   the ground. The consumer sets each bone's rest origin to H'_b + s and its bind to
   inverse(Rest'_b) M_b, where M_b(v) = H'_b + s + R_b (v - H_b), on a Skin duplicated per
   avatar. Nothing shears down a chain, girth works on any bone, and stances stay valid.
-  The reference implementation is `figurine/figurine/proportions.py`.
+  The reference implementation is `figurine/figurine/proportions.py`. Consumer notes:
+  "rest origin" is the global rest, converted to a parent-relative local rest with the
+  orientation unchanged; the sole point is (ankle.x, 0, ankle.z) in glTF terms; skin
+  binds are named (`use_named_skins`) and Godot's bone order differs from kit.json's, so
+  binds are matched by name.
 - Stances are one-frame glTF animation clips in `skeleton.glb` (`stance_ready`,
-  `stance_relaxed`, ...). Animation later adds multi-frame clips by the same path, which
-  the token `AnimationPlayer` route (`BoardTokenAnimationTree`) already plays.
+  `stance_relaxed`, ...), holding each bone's full local rotation (not a delta from rest),
+  applied as pose rotations. On Godot 4.7.1 a `Skeleton3D` posed before it enters the tree
+  keeps its rest global pose, so `AvatarKit` poses again on `tree_entered` (a test guards
+  it). Animation later adds multi-frame clips by the same path, which the token
+  `AnimationPlayer` route (`BoardTokenAnimationTree`) already plays.
 
 ### Mesh
 
@@ -754,8 +767,13 @@ material with its figure shader, so this does not matter.
 
 Resolution: 512 x 512 for the body and head (at 256 the body's ink smeared into
 scratch-like marks at close zoom), 256 x 256 for hair and smaller parts.
-Import settings follow section 9 (editor import, embedded uncompressed) until the first
-card measures otherwise; figures are opaque, so mipmaps are allowed.
+Import: embedded uncompressed as in section 9, with mipmaps built at load by `AvatarKit`
+and a -0.5 mip bias on the detail in the shader (measured 2026-10-06: without mipmaps
+the ink stipples and the eyes become sparkle pixels at home zoom; with them home reads
+soft and painterly, fine seams and shoe stripes fade, and the bias keeps close-zoom ink
+crisp). The face sheet and mask import lossless with mipmaps and `fix_alpha_border`.
+Basis compression was not tried. The face rect is also written to kit.json
+(`face_rect`), which is what the consumer reads.
 
 ### Faces
 
