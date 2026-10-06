@@ -9,7 +9,8 @@ extends RefCounted
 ## A recipe sets each control (`height`, `build`, `head`) between 0 and 1; the kit's
 ## `proportions` block lists, per control, bones with a [low, high] range for their `length`
 ## and/or `girth`, and a `default`. The value maps linearly onto each range, a `Left` bone
-## implies its `Right` mirror, and factors from several controls multiply.
+## implies its `Right` mirror, and factors from several controls multiply. A helper bone
+## (`helper: true` in the `skeleton` block) is in no control and takes its driver's factors.
 ##
 ## For bone b with rest head H_b, unit axis a_b (head to tail, from the kit's `skeleton`
 ## block), length factor f_b and girth factor g_b: R_b = f_b a a^T + g_b (I - a a^T). New
@@ -88,6 +89,12 @@ static func bone_maps(skeleton: Dictionary, controls: Dictionary, values: Dictio
 	var factors := bone_factors(controls, values, names)
 	var length: Dictionary = factors[0]
 	var girth: Dictionary = factors[1]
+	# A helper bone takes its driver's factors (so its map is exactly its driver's).
+	for name in names:
+		var entry: Dictionary = skeleton[name]
+		if bool(entry.get("helper", false)) and skeleton.has(String(entry.get("driver", ""))):
+			length[name] = length[String(entry.driver)]
+			girth[name] = girth[String(entry.driver)]
 	var heads := {}
 	var rmat := {}
 	for name in names:

@@ -1,6 +1,6 @@
 {
  "format": 1,
- "kit_version": "0.1.0+b53bc53",
+ "kit_version": "0.1.0+55de21a",
  "parts": [
   {
    "id": "body_a",
@@ -12,7 +12,7 @@
     "secondary",
     "accent"
    ],
-   "triangles": 2970,
+   "triangles": 3480,
    "hides": [],
    "tags": [
     "human"
@@ -368,6 +368,11 @@
     0.0,
     0.88,
     -0.0
+   ],
+   "flex_axis": [
+    1.0,
+    -0.0,
+    -0.0
    ]
   },
   "Spine": {
@@ -380,6 +385,11 @@
    "tail": [
     0.0,
     0.98,
+    -0.0
+   ],
+   "flex_axis": [
+    1.0,
+    -0.0,
     -0.0
    ]
   },
@@ -394,6 +404,11 @@
     0.0,
     1.075,
     -0.0
+   ],
+   "flex_axis": [
+    1.0,
+    -0.0,
+    -0.0
    ]
   },
   "UpperChest": {
@@ -406,6 +421,11 @@
    "tail": [
     0.0,
     1.19,
+    -0.0
+   ],
+   "flex_axis": [
+    1.0,
+    -0.0,
     -0.0
    ]
   },
@@ -420,6 +440,11 @@
     0.0,
     1.255,
     -0.004
+   ],
+   "flex_axis": [
+    1.0,
+    -0.0,
+    -0.0
    ]
   },
   "Head": {
@@ -433,6 +458,11 @@
     0.0,
     1.552,
     -0.004
+   ],
+   "flex_axis": [
+    1.0,
+    -0.0,
+    -0.0
    ]
   },
   "LeftShoulder": {
@@ -446,6 +476,11 @@
     0.145,
     1.17,
     -0.0
+   ],
+   "flex_axis": [
+    0.0,
+    0.0,
+    1.0
    ]
   },
   "LeftUpperArm": {
@@ -459,6 +494,11 @@
     0.318241,
     0.996759,
     -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
    ]
   },
   "LeftLowerArm": {
@@ -472,6 +512,11 @@
     0.470269,
     0.844731,
     -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
    ]
   },
   "LeftHand": {
@@ -482,9 +527,14 @@
     -0.0
    ],
    "tail": [
-    0.551586,
-    0.763414,
+    0.521181,
+    0.793819,
     -0.0
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    -1.0
    ]
   },
   "LeftUpperLeg": {
@@ -497,6 +547,11 @@
    "tail": [
     0.088,
     0.445,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.999982,
+    0.00597,
     -0.0
    ]
   },
@@ -511,6 +566,11 @@
     0.09,
     0.105,
     -0.012
+   ],
+   "flex_axis": [
+    0.999983,
+    0.005882,
+    0.0
    ]
   },
   "LeftFoot": {
@@ -524,6 +584,11 @@
     0.1035,
     0.035,
     0.084056
+   ],
+   "flex_axis": [
+    0.990268,
+    0.0,
+    -0.139173
    ]
   },
   "LeftToes": {
@@ -537,7 +602,450 @@
     0.112546,
     0.035,
     0.148423
+   ],
+   "flex_axis": [
+    0.990268,
+    0.0,
+    -0.139173
    ]
+  },
+  "LeftThumbMetacarpal": {
+   "parent": "LeftHand",
+   "head": [
+    0.484411,
+    0.82776,
+    0.03
+   ],
+   "tail": [
+    0.492524,
+    0.812012,
+    0.05902
+   ],
+   "flex_axis": [
+    0.611299,
+    -0.611299,
+    -0.50262
+   ]
+  },
+  "LeftThumbProximal": {
+   "parent": "LeftThumbMetacarpal",
+   "head": [
+    0.492524,
+    0.812012,
+    0.05902
+   ],
+   "tail": [
+    0.499205,
+    0.799043,
+    0.082919
+   ],
+   "flex_axis": [
+    0.611299,
+    -0.611299,
+    -0.50262
+   ]
+  },
+  "LeftIndexProximal": {
+   "parent": "LeftHand",
+   "head": [
+    0.521181,
+    0.793819,
+    0.03
+   ],
+   "tail": [
+    0.542394,
+    0.772606,
+    0.03
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  "LeftIndexIntermediate": {
+   "parent": "LeftIndexProximal",
+   "head": [
+    0.542394,
+    0.772606,
+    0.03
+   ],
+   "tail": [
+    0.560779,
+    0.754221,
+    0.03
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  "LeftMiddleProximal": {
+   "parent": "LeftHand",
+   "head": [
+    0.521181,
+    0.793819,
+    -0.012
+   ],
+   "tail": [
+    0.543808,
+    0.771192,
+    -0.012
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  "LeftMiddleIntermediate": {
+   "parent": "LeftMiddleProximal",
+   "head": [
+    0.543808,
+    0.771192,
+    -0.012
+   ],
+   "tail": [
+    0.562193,
+    0.752807,
+    -0.012
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  "LeftArmpitHelper1": {
+   "parent": "LeftShoulder",
+   "head": [
+    0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    0.180355,
+    1.134645,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftUpperArm",
+   "swing": 0.25,
+   "twist": 0.1
+  },
+  "LeftArmpitHelper2": {
+   "parent": "LeftShoulder",
+   "head": [
+    0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    0.180355,
+    1.134645,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftUpperArm",
+   "swing": 0.5,
+   "twist": 0.3
+  },
+  "LeftUpperArmTwist1": {
+   "parent": "LeftShoulder",
+   "head": [
+    0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    0.180355,
+    1.134645,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftUpperArm",
+   "swing": 0.7,
+   "twist": 0.55
+  },
+  "LeftUpperArmTwist2": {
+   "parent": "LeftShoulder",
+   "head": [
+    0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    0.180355,
+    1.134645,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftUpperArm",
+   "swing": 0.9,
+   "twist": 0.8
+  },
+  "LeftElbowHelper1": {
+   "parent": "LeftUpperArm",
+   "head": [
+    0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    0.353597,
+    0.961403,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftLowerArm",
+   "swing": 0.25,
+   "twist": 0.0
+  },
+  "LeftElbowHelper2": {
+   "parent": "LeftUpperArm",
+   "head": [
+    0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    0.353597,
+    0.961403,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftLowerArm",
+   "swing": 0.5,
+   "twist": 0.0
+  },
+  "LeftForearmTwist1": {
+   "parent": "LeftUpperArm",
+   "head": [
+    0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    0.353597,
+    0.961403,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftLowerArm",
+   "swing": 0.75,
+   "twist": 0.33
+  },
+  "LeftForearmTwist2": {
+   "parent": "LeftUpperArm",
+   "head": [
+    0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    0.353597,
+    0.961403,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftLowerArm",
+   "swing": 1.0,
+   "twist": 0.67
+  },
+  "LeftWristHelper": {
+   "parent": "LeftLowerArm",
+   "head": [
+    0.470269,
+    0.844731,
+    -0.0
+   ],
+   "tail": [
+    0.505624,
+    0.809376,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    -1.0
+   ],
+   "helper": true,
+   "driver": "LeftHand",
+   "swing": 0.5,
+   "twist": 0.5
+  },
+  "LeftGroinHelper1": {
+   "parent": "Hips",
+   "head": [
+    0.09,
+    0.78,
+    -0.0
+   ],
+   "tail": [
+    0.089701,
+    0.730001,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.999982,
+    0.00597,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "LeftUpperLeg",
+   "swing": 0.25,
+   "twist": 0.25
+  },
+  "LeftGroinHelper2": {
+   "parent": "Hips",
+   "head": [
+    0.09,
+    0.78,
+    -0.0
+   ],
+   "tail": [
+    0.089701,
+    0.730001,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.999982,
+    0.00597,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "LeftUpperLeg",
+   "swing": 0.5,
+   "twist": 0.5
+  },
+  "LeftGroinHelper3": {
+   "parent": "Hips",
+   "head": [
+    0.09,
+    0.78,
+    -0.0
+   ],
+   "tail": [
+    0.089701,
+    0.730001,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.999982,
+    0.00597,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "LeftUpperLeg",
+   "swing": 0.75,
+   "twist": 0.75
+  },
+  "LeftKneeHelper1": {
+   "parent": "LeftUpperLeg",
+   "head": [
+    0.088,
+    0.445,
+    -0.0
+   ],
+   "tail": [
+    0.088294,
+    0.395032,
+    -0.001764
+   ],
+   "flex_axis": [
+    0.999983,
+    0.005882,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftLowerLeg",
+   "swing": 0.25,
+   "twist": 0.25
+  },
+  "LeftKneeHelper2": {
+   "parent": "LeftUpperLeg",
+   "head": [
+    0.088,
+    0.445,
+    -0.0
+   ],
+   "tail": [
+    0.088294,
+    0.395032,
+    -0.001764
+   ],
+   "flex_axis": [
+    0.999983,
+    0.005882,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftLowerLeg",
+   "swing": 0.5,
+   "twist": 0.5
+  },
+  "LeftKneeHelper3": {
+   "parent": "LeftUpperLeg",
+   "head": [
+    0.088,
+    0.445,
+    -0.0
+   ],
+   "tail": [
+    0.088294,
+    0.395032,
+    -0.001764
+   ],
+   "flex_axis": [
+    0.999983,
+    0.005882,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftLowerLeg",
+   "swing": 0.75,
+   "twist": 0.75
   },
   "RightShoulder": {
    "parent": "UpperChest",
@@ -550,6 +1058,11 @@
     -0.145,
     1.17,
     -0.0
+   ],
+   "flex_axis": [
+    0.0,
+    0.0,
+    -1.0
    ]
   },
   "RightUpperArm": {
@@ -562,6 +1075,11 @@
    "tail": [
     -0.318241,
     0.996759,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
     -0.0
    ]
   },
@@ -576,6 +1094,11 @@
     -0.470269,
     0.844731,
     -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
+    -0.0
    ]
   },
   "RightHand": {
@@ -586,9 +1109,14 @@
     -0.0
    ],
    "tail": [
-    -0.551586,
-    0.763414,
+    -0.521181,
+    0.793819,
     -0.0
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    1.0
    ]
   },
   "RightUpperLeg": {
@@ -601,6 +1129,11 @@
    "tail": [
     -0.088,
     0.445,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.999982,
+    -0.00597,
     -0.0
    ]
   },
@@ -615,6 +1148,11 @@
     -0.09,
     0.105,
     -0.012
+   ],
+   "flex_axis": [
+    0.999983,
+    -0.005882,
+    -0.0
    ]
   },
   "RightFoot": {
@@ -628,6 +1166,11 @@
     -0.1035,
     0.035,
     0.084056
+   ],
+   "flex_axis": [
+    0.990268,
+    -0.0,
+    0.139173
    ]
   },
   "RightToes": {
@@ -641,7 +1184,450 @@
     -0.112546,
     0.035,
     0.148423
+   ],
+   "flex_axis": [
+    0.990268,
+    -0.0,
+    0.139173
    ]
+  },
+  "RightThumbMetacarpal": {
+   "parent": "RightHand",
+   "head": [
+    -0.484411,
+    0.82776,
+    0.03
+   ],
+   "tail": [
+    -0.492524,
+    0.812012,
+    0.05902
+   ],
+   "flex_axis": [
+    0.611299,
+    0.611299,
+    0.50262
+   ]
+  },
+  "RightThumbProximal": {
+   "parent": "RightThumbMetacarpal",
+   "head": [
+    -0.492524,
+    0.812012,
+    0.05902
+   ],
+   "tail": [
+    -0.499205,
+    0.799043,
+    0.082919
+   ],
+   "flex_axis": [
+    0.611299,
+    0.611299,
+    0.50262
+   ]
+  },
+  "RightIndexProximal": {
+   "parent": "RightHand",
+   "head": [
+    -0.521181,
+    0.793819,
+    0.03
+   ],
+   "tail": [
+    -0.542394,
+    0.772606,
+    0.03
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    1.0
+   ]
+  },
+  "RightIndexIntermediate": {
+   "parent": "RightIndexProximal",
+   "head": [
+    -0.542394,
+    0.772606,
+    0.03
+   ],
+   "tail": [
+    -0.560779,
+    0.754221,
+    0.03
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    1.0
+   ]
+  },
+  "RightMiddleProximal": {
+   "parent": "RightHand",
+   "head": [
+    -0.521181,
+    0.793819,
+    -0.012
+   ],
+   "tail": [
+    -0.543808,
+    0.771192,
+    -0.012
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    1.0
+   ]
+  },
+  "RightMiddleIntermediate": {
+   "parent": "RightMiddleProximal",
+   "head": [
+    -0.543808,
+    0.771192,
+    -0.012
+   ],
+   "tail": [
+    -0.562193,
+    0.752807,
+    -0.012
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    1.0
+   ]
+  },
+  "RightArmpitHelper1": {
+   "parent": "RightShoulder",
+   "head": [
+    -0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    -0.180355,
+    1.134645,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightUpperArm",
+   "swing": 0.25,
+   "twist": 0.1
+  },
+  "RightArmpitHelper2": {
+   "parent": "RightShoulder",
+   "head": [
+    -0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    -0.180355,
+    1.134645,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightUpperArm",
+   "swing": 0.5,
+   "twist": 0.3
+  },
+  "RightUpperArmTwist1": {
+   "parent": "RightShoulder",
+   "head": [
+    -0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    -0.180355,
+    1.134645,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightUpperArm",
+   "swing": 0.7,
+   "twist": 0.55
+  },
+  "RightUpperArmTwist2": {
+   "parent": "RightShoulder",
+   "head": [
+    -0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    -0.180355,
+    1.134645,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightUpperArm",
+   "swing": 0.9,
+   "twist": 0.8
+  },
+  "RightElbowHelper1": {
+   "parent": "RightUpperArm",
+   "head": [
+    -0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    -0.353597,
+    0.961403,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightLowerArm",
+   "swing": 0.25,
+   "twist": 0.0
+  },
+  "RightElbowHelper2": {
+   "parent": "RightUpperArm",
+   "head": [
+    -0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    -0.353597,
+    0.961403,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightLowerArm",
+   "swing": 0.5,
+   "twist": 0.0
+  },
+  "RightForearmTwist1": {
+   "parent": "RightUpperArm",
+   "head": [
+    -0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    -0.353597,
+    0.961403,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightLowerArm",
+   "swing": 0.75,
+   "twist": 0.33
+  },
+  "RightForearmTwist2": {
+   "parent": "RightUpperArm",
+   "head": [
+    -0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    -0.353597,
+    0.961403,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightLowerArm",
+   "swing": 1.0,
+   "twist": 0.67
+  },
+  "RightWristHelper": {
+   "parent": "RightLowerArm",
+   "head": [
+    -0.470269,
+    0.844731,
+    -0.0
+   ],
+   "tail": [
+    -0.505624,
+    0.809376,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    1.0
+   ],
+   "helper": true,
+   "driver": "RightHand",
+   "swing": 0.5,
+   "twist": 0.5
+  },
+  "RightGroinHelper1": {
+   "parent": "Hips",
+   "head": [
+    -0.09,
+    0.78,
+    -0.0
+   ],
+   "tail": [
+    -0.089701,
+    0.730001,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.999982,
+    -0.00597,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightUpperLeg",
+   "swing": 0.25,
+   "twist": 0.25
+  },
+  "RightGroinHelper2": {
+   "parent": "Hips",
+   "head": [
+    -0.09,
+    0.78,
+    -0.0
+   ],
+   "tail": [
+    -0.089701,
+    0.730001,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.999982,
+    -0.00597,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightUpperLeg",
+   "swing": 0.5,
+   "twist": 0.5
+  },
+  "RightGroinHelper3": {
+   "parent": "Hips",
+   "head": [
+    -0.09,
+    0.78,
+    -0.0
+   ],
+   "tail": [
+    -0.089701,
+    0.730001,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.999982,
+    -0.00597,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightUpperLeg",
+   "swing": 0.75,
+   "twist": 0.75
+  },
+  "RightKneeHelper1": {
+   "parent": "RightUpperLeg",
+   "head": [
+    -0.088,
+    0.445,
+    -0.0
+   ],
+   "tail": [
+    -0.088294,
+    0.395032,
+    -0.001764
+   ],
+   "flex_axis": [
+    0.999983,
+    -0.005882,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightLowerLeg",
+   "swing": 0.25,
+   "twist": 0.25
+  },
+  "RightKneeHelper2": {
+   "parent": "RightUpperLeg",
+   "head": [
+    -0.088,
+    0.445,
+    -0.0
+   ],
+   "tail": [
+    -0.088294,
+    0.395032,
+    -0.001764
+   ],
+   "flex_axis": [
+    0.999983,
+    -0.005882,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightLowerLeg",
+   "swing": 0.5,
+   "twist": 0.5
+  },
+  "RightKneeHelper3": {
+   "parent": "RightUpperLeg",
+   "head": [
+    -0.088,
+    0.445,
+    -0.0
+   ],
+   "tail": [
+    -0.088294,
+    0.395032,
+    -0.001764
+   ],
+   "flex_axis": [
+    0.999983,
+    -0.005882,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightLowerLeg",
+   "swing": 0.75,
+   "twist": 0.75
   }
  },
  "proportions": {
@@ -723,6 +1709,30 @@
     "LeftHand": [
      0.92,
      1.08
+    ],
+    "LeftThumbMetacarpal": [
+     0.92,
+     1.08
+    ],
+    "LeftThumbProximal": [
+     0.92,
+     1.08
+    ],
+    "LeftIndexProximal": [
+     0.92,
+     1.08
+    ],
+    "LeftIndexIntermediate": [
+     0.92,
+     1.08
+    ],
+    "LeftMiddleProximal": [
+     0.92,
+     1.08
+    ],
+    "LeftMiddleIntermediate": [
+     0.92,
+     1.08
     ]
    },
    "length": {
@@ -731,6 +1741,30 @@
      1.18
     ],
     "LeftHand": [
+     0.94,
+     1.06
+    ],
+    "LeftThumbMetacarpal": [
+     0.94,
+     1.06
+    ],
+    "LeftThumbProximal": [
+     0.94,
+     1.06
+    ],
+    "LeftIndexProximal": [
+     0.94,
+     1.06
+    ],
+    "LeftIndexIntermediate": [
+     0.94,
+     1.06
+    ],
+    "LeftMiddleProximal": [
+     0.94,
+     1.06
+    ],
+    "LeftMiddleIntermediate": [
      0.94,
      1.06
     ]
@@ -759,5 +1793,111 @@
   "stance_heroic",
   "stance_casting",
   "stance_cheerful"
- ]
+ ],
+ "stance_info": {
+  "stance_ready": {
+   "ground": [
+    {
+     "bone": "LeftFoot",
+     "point": [
+      0.09,
+      0.0,
+      -0.012
+     ]
+    },
+    {
+     "bone": "RightToes",
+     "point": [
+      -0.1035,
+      0.0,
+      0.084056
+     ]
+    }
+   ],
+   "hand_shapes": {
+    "Left": "open",
+    "Right": "fist"
+   }
+  },
+  "stance_relaxed": {
+   "ground": [
+    {
+     "bone": "LeftFoot",
+     "point": [
+      0.09,
+      0.0,
+      -0.012
+     ]
+    },
+    {
+     "bone": "RightFoot",
+     "point": [
+      -0.09,
+      0.0,
+      -0.012
+     ]
+    }
+   ],
+   "hand_shapes": {
+    "Left": "relaxed",
+    "Right": "relaxed"
+   }
+  },
+  "stance_heroic": {
+   "ground": [
+    {
+     "bone": "LeftFoot",
+     "point": [
+      0.09,
+      0.0,
+      -0.012
+     ]
+    },
+    {
+     "bone": "RightFoot",
+     "point": [
+      -0.09,
+      0.0,
+      -0.012
+     ]
+    }
+   ],
+   "hand_shapes": {
+    "Left": "grip",
+    "Right": "fist"
+   }
+  },
+  "stance_casting": {
+   "ground": [
+    {
+     "bone": "RightFoot",
+     "point": [
+      -0.09,
+      0.0,
+      -0.012
+     ]
+    }
+   ],
+   "hand_shapes": {
+    "Left": "relaxed",
+    "Right": "open"
+   }
+  },
+  "stance_cheerful": {
+   "ground": [
+    {
+     "bone": "RightFoot",
+     "point": [
+      -0.09,
+      0.0,
+      -0.012
+     ]
+    }
+   ],
+   "hand_shapes": {
+    "Left": "open",
+    "Right": "relaxed"
+   }
+  }
+ }
 }
