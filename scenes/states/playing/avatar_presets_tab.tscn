@@ -1,0 +1,36 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/states/playing/avatar_presets_tab.gd" id="1_tab"]
+
+[node name="AvatarPresetsTab" type="MarginContainer"]
+theme_type_variation = &"TabContentMargin"
+script = ExtResource("1_tab")
+
+[node name="Content" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="Header" type="HBoxContainer" parent="Content"]
+layout_mode = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="StanceLabel" type="Label" parent="Content/Header"]
+layout_mode = 2
+text = "Stance"
+
+[node name="StanceOption" type="OptionButton" parent="Content/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Stand the avatar in this stance, or in the preset's own"
+
+[node name="PresetList" type="ItemList" parent="Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(550, 300)
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 1
+allow_search = false
+max_columns = 3
+same_column_width = true
+fixed_column_width = 170

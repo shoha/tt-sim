@@ -929,7 +929,9 @@ because they constrain the producer:
   enabled, its pixel width needs `abs(PROJECTION_MATRIX[1][1])` (negative under Vulkan).
 - A hidden-from-players avatar needs a dither parameter on the figure material
   (`BoardToken._set_mesh_transparency` only changes StandardMaterial3D), and each avatar
-  token has its own collision capsule, which also sizes the selection glow.
+  token has its own collision capsule, which also sizes the selection glow. Both are in
+  (the avatar token card, docs/ARCHITECTURE.md "Avatar tokens"): a token carries the recipe
+  as written (not resolved) and every peer rebuilds the figure from it and its own kit.
 
 ### Round trip
 

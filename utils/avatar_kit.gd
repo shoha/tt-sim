@@ -528,10 +528,13 @@ static func set_hidden_fade(figure: Node3D, value: float) -> void:
 
 
 ## Takes the figure's shade ray (AvatarShade) toward `sun` against `world_root` and sets it.
-## Call at placement and after a move. No sun, or a hidden one, means no shade.
-static func update_shade(figure: Node3D, world_root: Node3D, sun: DirectionalLight3D) -> float:
+## Call at placement and after a move. No sun, or a hidden one, means no shade. `cache`
+## (AvatarShadeCache, the map's canopies) saves walking `world_root` for them.
+static func update_shade(
+	figure: Node3D, world_root: Node3D, sun: DirectionalLight3D, cache: AvatarShadeCache = null
+) -> float:
 	var value := 0.0
 	if sun != null and sun.is_visible_in_tree():
-		value = AvatarShade.shade_at(world_root, figure.global_position, sun.global_basis.z)
+		value = AvatarShade.shade_at(world_root, figure.global_position, sun.global_basis.z, cache)
 	set_shade(figure, value)
 	return value

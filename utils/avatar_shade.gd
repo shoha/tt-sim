@@ -14,6 +14,10 @@ extends RefCounted
 ## own space. Shade under canopy is the main case; a figure's own parts, anything short
 ## (grass, rocks, other figures) and anything much wider than tall (ground chunks, water,
 ## MAX_SPREAD) never count.
+##
+## Walking the map for canopies on every ray costs milliseconds on a scattered map (every
+## MultiMesh and instance transform), so a placed token passes an AvatarShadeCache, the
+## crowns collected once per map load; without one the walk below runs.
 
 const CANOPY_MIN_HEIGHT := 2.5
 const CROWN_SHARE := 0.6
@@ -27,13 +31,18 @@ const GROUND_MASK := 1
 ## 1.0 when the ray from `position` (the figure's feet) toward the sun meets ground or a
 ## canopy under `root`, else 0.0. `toward_sun` is the unit direction to the sun (a
 ## DirectionalLight3D's global basis z); a sun at or below the horizon gives 1.0.
-static func shade_at(root: Node3D, position: Vector3, toward_sun: Vector3) -> float:
-	return 0.0 if blocker(root, position, toward_sun).is_empty() else 1.0
+## `cache`, when given, answers the canopy test in place of walking `root`.
+static func shade_at(
+	root: Node3D, position: Vector3, toward_sun: Vector3, cache: AvatarShadeCache = null
+) -> float:
+	return 0.0 if blocker(root, position, toward_sun, cache).is_empty() else 1.0
 
 
 ## What puts `position` in shade: "" in sun, else "below horizon", "ground" or the canopy
-## node's name (with the MultiMesh instance index).
-static func blocker(root: Node3D, position: Vector3, toward_sun: Vector3) -> String:
+## node's name (with the MultiMesh instance index). `cache` as for shade_at.
+static func blocker(
+	root: Node3D, position: Vector3, toward_sun: Vector3, cache: AvatarShadeCache = null
+) -> String:
 	if toward_sun.y <= 0.0:
 		return "below horizon"
 	var from := position + Vector3.UP * RAY_ORIGIN_HEIGHT
@@ -43,6 +52,8 @@ static func blocker(root: Node3D, position: Vector3, toward_sun: Vector3) -> Str
 		var query := PhysicsRayQueryParameters3D.create(from, to, GROUND_MASK)
 		if not world.direct_space_state.intersect_ray(query).is_empty():
 			return "ground"
+	if cache != null:
+		return cache.canopy_hit(from, to)
 	return canopy_hit(root, from, to)
 
 
@@ -71,7 +82,10 @@ static func _multimesh_hit(mmi: MultiMeshInstance3D, from: Vector3, to: Vector3)
 	if box.size.y < CANOPY_MIN_HEIGHT * 0.5:
 		return -1
 	var xf := mmi.global_transform
-	if (xf * mm.get_aabb()).intersects_segment(from, to) == null:
+	# The whole MultiMesh's box rejects early. The rendering server computes it, so it is
+	# empty without one (headless): then every instance is tested.
+	var bounds := mm.get_aabb()
+	if bounds.has_volume() and (xf * bounds).intersects_segment(from, to) == null:
 		return -1
 	var count := mm.visible_instance_count if mm.visible_instance_count >= 0 else mm.instance_count
 	for i in count:
@@ -82,12 +96,24 @@ static func _multimesh_hit(mmi: MultiMeshInstance3D, from: Vector3, to: Vector3)
 
 ## The ray against the crown part of a mesh box placed by `xf` (tested in the mesh's space).
 static func _crown_hit(box: AABB, xf: Transform3D, from: Vector3, to: Vector3) -> bool:
-	var scale_y := xf.basis.get_scale().y
-	if box.size.y * scale_y < CANOPY_MIN_HEIGHT:
+	if not counts_as_canopy(box, xf):
 		return false
-	# Ground chunks, water and skirts are wide and low; a tree is about as tall as it is wide.
-	if maxf(box.size.x, box.size.z) > box.size.y * MAX_SPREAD:
+	var inv := xf.affine_inverse()
+	return crown_of(box).intersects_segment(inv * from, inv * to) != null
+
+
+## Whether a mesh box placed by `xf` is a canopy: at least CANOPY_MIN_HEIGHT tall once
+## placed, and not much wider than tall (ground chunks, water and skirts are wide and low; a
+## tree is about as tall as it is wide).
+static func counts_as_canopy(box: AABB, xf: Transform3D) -> bool:
+	if box.size.y * xf.basis.get_scale().y < CANOPY_MIN_HEIGHT:
 		return false
+	return maxf(box.size.x, box.size.z) <= box.size.y * MAX_SPREAD
+
+
+## The crown of a canopy's mesh box, in the mesh's space: its upper CROWN_SHARE, narrowed to
+## CROWN_WIDTH of its footprint.
+static func crown_of(box: AABB) -> AABB:
 	var crown := box
 	crown.position.y = box.position.y + box.size.y * (1.0 - CROWN_SHARE)
 	crown.size.y = box.size.y * CROWN_SHARE
@@ -96,5 +122,4 @@ static func _crown_hit(box: AABB, xf: Transform3D, from: Vector3, to: Vector3) -
 	crown.position.z += inset.z
 	crown.size.x -= inset.x * 2.0
 	crown.size.z -= inset.z * 2.0
-	var inv := xf.affine_inverse()
-	return crown.intersects_segment(inv * from, inv * to) != null
+	return crown

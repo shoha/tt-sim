@@ -453,6 +453,11 @@ func _collect_token_entries() -> Array[Vector4]:
 			var scaled_size := aabb.size * token_scale
 			var half_extent := maxf(scaled_size.x, scaled_size.z) * 0.5
 			token_radius = maxf(half_extent * fade_radius_multiplier, min_fade_radius)
+			# An avatar figure is about three times as tall as its footprint: a zone sized
+			# from the footprint left its head and face behind the leaves (the avatar token
+			# card's canopy capture), so it reaches the figure's top.
+			if token.is_avatar():
+				token_radius = maxf(token_radius, scaled_size.y * 0.5)
 		else:
 			# Fallback: use a flat height offset and default radius
 			center_pos += Vector3.UP * token_ray_height

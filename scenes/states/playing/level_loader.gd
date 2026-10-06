@@ -150,6 +150,8 @@ func _play_level_async(level_data: LevelData) -> void:
 		# Build asset list for preloading
 		var assets_to_preload: Array[Dictionary] = []
 		for placement in level_data.token_placements:
+			if placement.is_avatar():
+				continue  # built from the kit, nothing to preload
 			assets_to_preload.append(
 				{
 					"pack_id": placement.pack_id,

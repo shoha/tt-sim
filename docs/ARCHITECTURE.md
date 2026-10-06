@@ -1899,6 +1899,16 @@ See [CONVENTIONS.md](CONVENTIONS.md) for the full token transform hierarchy, pla
 
 TokenSpawner is the single place removal and rename touch storage, placement data, and `GameState` together — never `queue_free()` a token node directly outside TokenSpawner.
 
+### Avatar tokens
+
+An avatar token is a `BoardToken` whose model is a figure `AvatarKit` assembles from a recipe (docs/ASSET_PIPELINE.md section 10 "Recipe") and the kit every client ships, so nothing is downloaded. `AvatarTokenFactory` (`scenes/board_token/avatar_token_factory.gd`) builds it on the same rigid body, drag, controller and glow as a pack token (`BoardTokenFactory._assemble_token`), with:
+
+- **The recipe as identity.** `avatar_recipe` (a Dictionary) on `BoardToken`, `TokenPlacement` and `TokenState`; non-empty means avatar (`is_avatar()`), and the pack ids stay empty. It is stored as written, not resolved, so a client with a newer kit shows the parts this one fell back from, and normalized on read (`AvatarRecipe.normalized`: JSON reads every number back as a float). `to_dict()` writes the key only for an avatar, so pack tokens' level entries and network payloads are unchanged and old levels load as they did. Every path that carries a pack token's ids carries the recipe: `BoardTokenFactory.create_from_placement_async` (level load), `RootNetworkHandler.create_token_from_state` (host to client, and undo of a removal), `TokenPlacement.sync_from_board_token` (in-play save; it copies the recipe because, unlike the ids, it can change live), `TokenState.diff` (a changed recipe syncs as a property change) and `TokenState.apply_to_token` (a client rebuilds its figure when the recipe differs).
+- **An `AvatarTokenView`** under the rigid body holding the figure. `BoardToken._set_mesh_transparency` hands it the hidden state, and it sets the figure's `hidden_fade` dither (0.5 in the GM's view; a figure's ShaderMaterial has no alpha). It re-takes the figure's shade ray whenever the token has moved 0.2 m or the sun has turned, so drags, synced moves, undo and sun edits all re-shade without a hook in each path; the ray uses the map's `AvatarShadeCache` (canopy crowns collected once per map load; `GameMap.notify_map_loaded` / `notify_map_clearing` drop it).
+- **Its own collision capsule** round the figure's posed body core (`AvatarExtent`: spine, head and legs, not the arms; radius clamped to 0.15-0.3 m), a convex hull with its bottom on the token's origin like a pack token's shape, which sizes the selection glow, the drag height, the landing and the occlusion fade.
+
+Spawning: `LevelPlayController.spawn_avatar(recipe, name, position, settle)` (the Add Token browser's "Player avatars" tab, `AvatarPresetsTab`, with `AvatarPresets`). Changing a placed avatar: `LevelPlayController.set_avatar_recipe(token, recipe)` rebuilds the figure and capsule (`AvatarTokenFactory.set_recipe`), updates the placement and syncs `GameState` and clients. `duplicate_token` copies an avatar by its recipe.
+
 ### Drag-to-Place (Asset Browser)
 
 `DragPlaceController` (`scenes/states/playing/drag_place_controller.gd`), a child `Node` of `GameMap`, handles dragging an asset out of the asset browser and dropping it on the map to spawn a new token — distinct from `DragAndDrop3D`'s dragging of already-placed tokens on the board.

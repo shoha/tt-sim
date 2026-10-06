@@ -17,6 +17,12 @@ extends Resource
 @export var asset_id: String = ""
 @export var variant_id: String = "default"
 
+## An avatar token's recipe (docs/ASSET_PIPELINE.md section 10 "Recipe"), built from the
+## kit every client ships, so no asset ids are needed; empty for a pack token. A placement
+## is an avatar exactly when this is set (is_avatar). Kept as the author wrote it, not
+## resolved, so a client with a newer kit shows the parts this one fell back from.
+@export var avatar_recipe: Dictionary = {}
+
 ## Transform data
 @export var position: Vector3 = Vector3.ZERO
 @export var rotation_y: float = 0.0
@@ -62,10 +68,19 @@ static func from_board_token(
 	return placement
 
 
+## Whether this placement is an avatar token (it carries a recipe, not pack asset ids).
+func is_avatar() -> bool:
+	return not avatar_recipe.is_empty()
+
+
 ## Copy the live token's transform and stats into this placement. Leaves the
 ## asset ids and placement_id alone. This is the single place that knows which
 ## BoardToken fields a placement persists; the in-play save path uses it too.
+## An avatar token's recipe is copied too: unlike the asset ids it can change live
+## (AvatarTokenFactory.set_recipe).
 func sync_from_board_token(token: BoardToken) -> void:
+	if token.is_avatar():
+		avatar_recipe = token.avatar_recipe.duplicate(true)
 	# Read position from rigid_body since that's what gets moved during gameplay
 	var rigid_body := token.get_rigid_body()
 	if rigid_body:
@@ -113,7 +128,7 @@ func apply_to_token(token: BoardToken) -> void:
 
 
 ## Get display name for this placement.
-## Returns token_name if set, otherwise falls back to asset_id or "Unknown Token".
+## Returns token_name if set, otherwise falls back to asset_id, "Avatar" or "Unknown Token".
 ## For a human-readable asset name, callers with access to AssetManager
 ## should use AssetManager.get_asset_display_name(pack_id, asset_id) instead.
 func get_display_name() -> String:
@@ -121,12 +136,15 @@ func get_display_name() -> String:
 		return token_name
 	if asset_id != "":
 		return asset_id
+	if is_avatar():
+		return "Avatar"
 	return "Unknown Token"
 
 
-## Convert to dictionary for network transmission
+## Convert to dictionary for network transmission (and level.json). "avatar_recipe" is
+## written only for an avatar, so a pack token's entry is what it always was.
 func to_dict() -> Dictionary:
-	return {
+	var out := {
 		"placement_id": placement_id,
 		"pack_id": pack_id,
 		"asset_id": asset_id,
@@ -142,6 +160,9 @@ func to_dict() -> Dictionary:
 		"status_effects": status_effects.duplicate(),
 		"is_alive": is_alive,
 	}
+	if is_avatar():
+		out["avatar_recipe"] = avatar_recipe.duplicate(true)
+	return out
 
 
 ## Create from dictionary (for network reception)
@@ -152,6 +173,9 @@ static func from_dict(data: Dictionary) -> TokenPlacement:
 	placement.pack_id = data.get("pack_id", "")
 	placement.asset_id = data.get("asset_id", "")
 	placement.variant_id = data.get("variant_id", "default")
+	var recipe: Variant = data.get("avatar_recipe", {})
+	if recipe is Dictionary:
+		placement.avatar_recipe = AvatarRecipe.normalized(recipe)
 
 	placement.position = SerializationUtils.dict_to_vec3(data.get("position", {}))
 	placement.rotation_y = data.get("rotation_y", 0.0)

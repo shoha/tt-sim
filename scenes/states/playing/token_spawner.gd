@@ -240,6 +240,41 @@ func spawn_asset(
 	if result.is_placeholder:
 		print("TokenSpawner: Spawning placeholder for %s/%s (loading...)" % [pack_id, asset_id])
 
+	_place_new_token(token, pack_id, asset_id, variant_id, spawn_position, settle)
+	return token
+
+
+## Spawn an avatar token built from `recipe` (AvatarTokenFactory) and add it to the
+## current level, as spawn_asset does for a pack asset. `token_name` names it ("Avatar"
+## when empty). Returns the token, or null without a level or a kit.
+func spawn_avatar(
+	recipe: Dictionary,
+	token_name: String = "",
+	spawn_position: Vector3 = Vector3.ZERO,
+	settle: bool = false,
+) -> BoardToken:
+	var active_level_data: LevelData = _get_active_level_data_fn.call()
+	if not _game_map or not active_level_data:
+		push_warning("TokenSpawner: Cannot spawn avatar - no GameMap or active level")
+		return null
+	var token := AvatarTokenFactory.create(recipe, token_name)
+	if not token:
+		push_error("TokenSpawner: Failed to create an avatar token")
+		return null
+	_place_new_token(token, "", "", "default", spawn_position, settle)
+	return token
+
+
+## The shared tail of spawn_asset and spawn_avatar: adds the new token to the board at
+## `spawn_position`, tracks it in the level and plays its arrival.
+func _place_new_token(
+	token: BoardToken,
+	pack_id: String,
+	asset_id: String,
+	variant_id: String,
+	spawn_position: Vector3,
+	settle: bool,
+) -> void:
 	_game_map.drag_and_drop_node.add_child(token)
 
 	# Set spawn position before the token renders at origin
@@ -259,10 +294,10 @@ func spawn_asset(
 	# Immediate pop-in for single token placement
 	token.play_spawn_animation()
 	token_added.emit(token)
-	return token
 
 
-## Add a new token to the active level
+## Add a new token to the active level. An avatar token (BoardToken.is_avatar) keeps its
+## recipe and name in the placement; the asset ids are then empty.
 func add_token_to_level(
 	token: BoardToken, pack_id: String, asset_id: String, variant_id: String = "default"
 ) -> void:
@@ -278,7 +313,11 @@ func add_token_to_level(
 	placement.position = Vector3.ZERO  # Will be updated when saved
 
 	# Set default name from asset
-	placement.token_name = AssetManager.get_asset_display_name(pack_id, asset_id)
+	if token.is_avatar():
+		placement.avatar_recipe = token.avatar_recipe.duplicate(true)
+		placement.token_name = token.token_name
+	else:
+		placement.token_name = AssetManager.get_asset_display_name(pack_id, asset_id)
 
 	# Add to level data
 	active_level_data.add_token_placement(placement)

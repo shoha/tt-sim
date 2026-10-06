@@ -785,6 +785,8 @@ func set_foliage_antialiasing_level(level: int) -> void:
 ## Re-initializes and rebuilds the internal mesh cache so occlusion detection
 ## works with the new geometry. Also computes camera soft bounds from map AABB.
 func notify_map_loaded() -> void:
+	# Avatar tokens' shade rays collect the new map's canopies on their next ray.
+	AvatarShadeCache.clear()
 	_visual_effects.setup_occlusion_fade()
 	_visual_effects.apply_foliage_antialiasing()
 
@@ -802,6 +804,7 @@ func notify_map_loaded() -> void:
 ## Clear occlusion fade state. Call before loading a new map.
 ## The manager will be re-activated when notify_map_loaded() is called.
 func notify_map_clearing() -> void:
+	AvatarShadeCache.clear()
 	_visual_effects.clear_occlusion_fade()
 
 	# Clean up any in-progress shake so the offset doesn't persist into the next level

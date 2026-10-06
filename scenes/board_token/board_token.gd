@@ -75,6 +75,9 @@ const REMOVAL_ANIM_DURATION: float = 0.2
 var pack_id: String = ""
 var asset_id: String = ""
 var variant_id: String = "default"
+## An avatar token's recipe (AvatarTokenFactory builds the figure from it); empty for a pack
+## token. Set it through AvatarTokenFactory.set_recipe, which rebuilds the figure.
+var avatar_recipe: Dictionary = {}
 
 # Selection/highlight state
 var is_highlighted: bool = false
@@ -286,9 +289,19 @@ func set_highlight_color(color: Color) -> void:
 		_selection_glow.set_glow_color(color)
 
 
+## Whether this is an avatar token (it carries a recipe, not pack asset ids).
+func is_avatar() -> bool:
+	return not avatar_recipe.is_empty()
+
+
 func _set_mesh_transparency(node: Node, alpha: float) -> void:
 	# Recursively find all MeshInstance3D nodes and set their transparency
 	for child in node.get_children():
+		# An avatar figure's ShaderMaterial has no alpha to set: it dithers instead
+		# (AvatarKit.set_hidden_fade, through its view).
+		if child is AvatarTokenView:
+			(child as AvatarTokenView).set_hidden(alpha < 1.0)
+			continue
 		if child is MeshInstance3D:
 			var mesh_instance := child as MeshInstance3D
 			# Modify transparency on each surface material

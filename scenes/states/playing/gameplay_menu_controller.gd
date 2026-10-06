@@ -27,6 +27,7 @@ func _ready() -> void:
 	var asset_browser: AssetBrowser = $AssetBrowserContainer/PanelContainer/VBox/AssetBrowser
 	if asset_browser:
 		asset_browser.asset_selected.connect(_on_asset_selected)
+		asset_browser.avatar_selected.connect(_on_avatar_selected)
 
 	var asset_browser_container = $AssetBrowserContainer
 	if asset_browser_container and asset_browser_container.has_signal("asset_drag_started"):
@@ -190,6 +191,31 @@ func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -
 		UIManager.show_error("Cannot add token — no level is loaded")
 		return
 
+	var spawn_pos := _get_spawn_position()
+	var token = _level_play_controller.spawn_asset(pack_id, asset_id, variant_id, spawn_pos, true)
+	if not token:
+		UIManager.show_error("Failed to add token — asset may still be downloading")
+
+
+## A preset avatar chosen in the "Player avatars" tab: spawned as an avatar token where an
+## asset would be.
+func _on_avatar_selected(recipe: Dictionary, token_name: String) -> void:
+	if NetworkManager.is_restricted_client():
+		UIManager.show_error("Only the GM can add tokens")
+		return
+	if not _level_play_controller:
+		UIManager.show_error("Cannot add token — no level is loaded")
+		return
+	var token := _level_play_controller.spawn_avatar(
+		recipe, token_name, _get_spawn_position(), true
+	)
+	if not token:
+		UIManager.show_error("Failed to add the avatar")
+
+
+## Where a token added from the browser appears: the camera's ground point, with its height
+## re-resolved on the real surface.
+func _get_spawn_position() -> Vector3:
 	# Spawn at camera ground position instead of world origin. That position is
 	# a Y=0 plane intersection, so re-resolve the real surface height straight
 	# down at its X/Z (same snap-then-resolve order drag-place uses) and spawn
@@ -205,10 +231,7 @@ func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -
 		)
 		if resolved != Vector3.INF:
 			spawn_pos = resolved + Vector3(0, DragPlaceController.PLACE_CLEARANCE, 0)
-
-	var token = _level_play_controller.spawn_asset(pack_id, asset_id, variant_id, spawn_pos, true)
-	if not token:
-		UIManager.show_error("Failed to add token — asset may still be downloading")
+	return spawn_pos
 
 
 func _on_asset_drag_started(

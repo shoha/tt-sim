@@ -332,6 +332,11 @@ static func _generate_network_id() -> String:
 ## @param placement: The TokenPlacement containing spawn data
 ## @return: Dictionary with "token" and "is_placeholder" keys
 static func create_from_placement_async(placement: TokenPlacement) -> Dictionary:
+	# An avatar is built from its recipe and the built-in kit: nothing to load or download.
+	if placement.is_avatar():
+		return {
+			"token": AvatarTokenFactory.create_from_placement(placement), "is_placeholder": false
+		}
 	if placement.pack_id == "" or placement.asset_id == "":
 		push_error("BoardTokenFactory: TokenPlacement has no asset assigned")
 		return {"token": null, "is_placeholder": false}

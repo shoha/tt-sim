@@ -140,21 +140,26 @@ static func apply_game_state_to_tokens(controller: LevelPlayController, game_map
 static func create_token_from_state(
 	token_state: TokenState, controller: LevelPlayController = null
 ) -> BoardToken:
-	if token_state.pack_id == "" or token_state.asset_id == "":
-		push_warning("RootNetworkHandler: Cannot create token — missing pack_id or asset_id")
-		return null
+	var token: BoardToken = null
+	if not token_state.avatar_recipe.is_empty():
+		# An avatar: rebuilt here from the recipe and this client's own kit.
+		token = AvatarTokenFactory.create(token_state.avatar_recipe, token_state.token_name)
+	else:
+		if token_state.pack_id == "" or token_state.asset_id == "":
+			push_warning("RootNetworkHandler: Cannot create token — missing pack_id or asset_id")
+			return null
 
-	var priority = (
-		Constants.ASSET_PRIORITY_HIGH
-		if token_state.is_visible_to_players
-		else Constants.ASSET_PRIORITY_DEFAULT
-	)
+		var priority = (
+			Constants.ASSET_PRIORITY_HIGH
+			if token_state.is_visible_to_players
+			else Constants.ASSET_PRIORITY_DEFAULT
+		)
 
-	var result = BoardTokenFactory.create_from_asset_async(
-		token_state.pack_id, token_state.asset_id, token_state.variant_id, priority
-	)
+		var result = BoardTokenFactory.create_from_asset_async(
+			token_state.pack_id, token_state.asset_id, token_state.variant_id, priority
+		)
+		token = result.token
 
-	var token = result.token
 	if not token:
 		push_error("RootNetworkHandler: Failed to create token from state")
 		return null

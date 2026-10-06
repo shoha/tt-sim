@@ -98,5 +98,25 @@ static func resolve(
 	}
 
 
+## A deep copy of `recipe` with its numbers typed as the contract has them: `format` and
+## every colour and face pick an int, every proportion a float. A recipe read back from JSON
+## (a level file) carries floats everywhere, so two copies of one recipe compare equal only
+## after this. Keys the recipe has that this client does not know are kept as they are.
+static func normalized(recipe: Dictionary) -> Dictionary:
+	var out := recipe.duplicate(true)
+	if out.has("format"):
+		out["format"] = int(out["format"])
+	for key in ["colours", "face"]:
+		if out.get(key) is Dictionary:
+			var picks: Dictionary = out[key]
+			for slot in picks:
+				picks[slot] = int(picks[slot])
+	if out.get("proportions") is Dictionary:
+		var values: Dictionary = out["proportions"]
+		for control in values:
+			values[control] = float(values[control])
+	return out
+
+
 static func _repr(value: Variant) -> String:
 	return "None" if value == null else "'%s'" % value
