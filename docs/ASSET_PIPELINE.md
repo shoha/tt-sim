@@ -669,7 +669,7 @@ figure has exactly one `body` and one `head` and at most one part in each other 
 
 ### Skeleton
 
-- One armature for the whole kit (64 bones since the rig card, 2026-10-06). Body and
+- One armature for the whole kit (72 bones since the crisp-joints card, 2026-10-06). Body and
   finger bones are named as Godot's `SkeletonProfileHumanoid` names them: `Hips`, `Spine`,
   `Chest`, `UpperChest`, `Neck`, `Head`, `LeftShoulder`, `LeftUpperArm`, `LeftLowerArm`,
   `LeftHand`, `LeftUpperLeg`, `LeftLowerLeg`, `LeftFoot`, `LeftToes`, and per hand a
@@ -694,9 +694,11 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   inward). A local rotation is written Swing(flex, abduct) Twist(twist): twist about Y
   first, then a swing whose rotation vector is (flex, 0, abduct). The reference is
   `figurine/figurine/skeleton.py`.
-- Helper bones (30): per side `ArmpitHelper1`/`2`, `UpperArmTwist1`/`2`, `ElbowHelper1`/`2`,
-  `ForearmTwist1`/`2`, `WristHelper`, `GroinHelper1`/`2`/`3`, `KneeHelper1`/`2`/`3` (each
-  prefixed `Left` or `Right`). A helper sits on its driver's head with the driver's rest
+- Helper bones (38): per side `ArmpitHelper1`/`2`/`3`, `UpperArmTwist1`/`2`,
+  `ElbowHelper1`/`2`/`3`, `ForearmTwist1`/`2`, `WristHelper1`/`2`/`3`, `GroinHelper1`/`2`/`3`,
+  `KneeHelper1`/`2`/`3` (each prefixed `Left` or `Right`; the numbered joint helpers take a
+  quarter, a half and three quarters of their joint's swing, the twist bones all of the
+  swing and a third or two thirds of the twist). A helper sits on its driver's head with the driver's rest
   frame, is a child of the driver's parent, and its local rotation is Swing(s x the
   driver's swing) Twist(t x the driver's twist) with fixed fractions s and t (for example
   `LeftElbowHelper2`: driver `LeftLowerArm`, s 0.5, t 0). The body is skinned to them so a
@@ -748,8 +750,13 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   set of acceptance poses that are not shipped (an elbow folded 120 degrees, an arm raised
   about 170 degrees, a deep lunge, a knee at hip height, a fist beside the head, a
   two-handed grip), at every proportion corner (figurine `posecheck.py`: joint limits in
-  the joint-frame terms above, edge-length band, ground contact, interpenetration) so a kit
-  never ships a clipping or floating pose.
+  the joint-frame terms above, ground contact, interpenetration, and since the
+  crisp-joints card the deformation checks a crisp joint can pass: no skin edge stretched
+  past 1.6x, or past 2.8x on the outside of a joint, every joint's cross-section at least
+  0.7 of rest across the bend and 0.85 along its axis, and no elbow, knee or wrist crease
+  passing through itself by more than 3 mm) so a kit never ships a clipping, pinched or
+  floating pose. Joints are skinned to fold crisply (a bent limb reads as two straight
+  segments meeting at a defined joint), which nothing on the consumer side depends on.
   On Godot 4.7.1 a `Skeleton3D` posed before it enters the tree
   keeps its rest global pose, so `AvatarKit` poses again on `tree_entered` (a test guards
   it). Animation later adds multi-frame clips by the same path, which the token
