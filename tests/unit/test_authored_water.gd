@@ -83,6 +83,16 @@ func _covered_cells(doc: MapDocument, arrays: Array) -> Dictionary:
 # --- WaterMeshBuilder ---------------------------------------------------------------------
 
 
+func test_the_flow_carrier_shader_is_kept_for_the_session() -> void:
+	AuthoredWater.warm_flow_carrier()
+	var keeper: StandardMaterial3D = AuthoredWater._carrier_keeper
+	assert_not_null(keeper, "a carrier with a flow texture is kept")
+	assert_not_null(keeper.emission_texture, "with the flow texture flag its carriers share")
+	assert_true(keeper.get_rid().is_valid())
+	AuthoredWater.warm_flow_carrier()
+	assert_same(AuthoredWater._carrier_keeper, keeper, "idempotent")
+
+
 func test_mesh_covers_every_wet_cell_and_a_tucked_margin_only() -> void:
 	var doc := _doc()
 	var built := WaterMeshBuilder.build(doc)
