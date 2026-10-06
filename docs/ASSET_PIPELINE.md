@@ -239,7 +239,7 @@ Scatter instances contract in full:
 - **Game scale.** tt-sim's play camera is orthographic, 13.85 m of view height on a
   1080 px viewport at the home zoom (about 78 px per metre), 22 degrees down, 45 degree
   azimuth, zoom range 2 to 20 m. A 0.95 m leaf card is 74 px tall. Judge textures and
-  silhouettes at that scale (`treecube/gamescale.py`, `scripts/generate.py
+  silhouettes at that scale (`paintkit/src/paintkit/gamescale.py`, `scripts/generate.py
   --render-game`, `tools/texture_sheet.py`), not in close-ups.
 - Dense card foliage costs alpha-tested fill more than primitives; see
   `docs/PERFORMANCE.md` before optimising either side.
