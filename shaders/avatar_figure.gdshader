@@ -30,13 +30,22 @@ render_mode blend_mix, depth_draw_opaque, cull_back, ambient_light_disabled, spe
  * are ignored for the sun: their filter stipple lands on the painted blocks (the avatar
  * probe), so shade comes instead from the per-figure `shade` instance value, one ray toward
  * the sun from the CPU at placement and on move (AvatarShade), which removes shadow_strength
- * of the sun's term and tints everything by shade_tint. Lamps keep their ATTENUATION, so a
- * torch's falloff and shadow still read. No specular and no environment ambient: the scene's
- * ambient enters through the global `figure_ambient` (LevelEnvironmentManager pushes
- * ambient_light_color x energy), as a tint on the whole figure: its hue at full strength, its
- * level against ambient_reference (the default environment's), clamped to ambient_floor so a
- * token stays readable at night or in a dungeon, mixed in by ambient_mix. So a figure sits in
- * a sunset or a dungeon even where it is unlit paint.
+ * of the sun's term and reads the paint from the palette's own shadow end (each slot sampled
+ * shade_drop further down its gradient; detail and face pixels darken by the same per-channel
+ * ratio), so shade keeps each colour's hue-shifted shadow instead of one cool tint (the look
+ * pass, 2026-10-06: the first pass's shade_tint turned skin lavender under the canopy). Lamps
+ * keep their ATTENUATION, so a torch's falloff and shadow still read. No specular and no
+ * environment ambient: the scene's ambient enters through the global `figure_ambient`
+ * (LevelEnvironmentManager pushes ambient_light_color x energy), as a tint on the whole
+ * figure: its hue mixed in by ambient_hue_mix (a hint, so a blue sky does not turn warm skin
+ * pale), its level against ambient_reference (the default environment's), clamped to
+ * ambient_floor so a token stays readable at night or in a dungeon, mixed in by ambient_mix.
+ * So a figure sits in a sunset or a dungeon even where it is unlit paint.
+ *
+ * Tonemapper. The scene's Filmic tonemapper lifts midtones and desaturates, and the world's
+ * painted colours were authored through it while the palette's were not, so the paint is
+ * darkened by paint_contrast (a gamma) and saturated by paint_saturation before the tonemapper
+ * sees it (the look pass: figures read pale and pinkish beside the foliage without this).
  *
  * Hidden from players: `hidden_fade` (instance, 0..1) discards that share of pixels in a 4 x 4
  * ordered dither, for the GM's view of a hidden token (BoardToken._set_mesh_transparency only

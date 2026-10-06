@@ -54,7 +54,7 @@ const RECIPES := [
 		"colours": {"skin": 3, "hair": 3, "eyes": 2, "primary": 10, "secondary": 6, "accent": 0},
 		"face": {"eyes": 4, "brows": 0, "mouths": 4, "marks": 2},
 		"proportions": {"height": 0.9, "build": 0.75, "head": 0.3},
-		"stance": "stance_ready",
+		"stance": "stance_heroic",
 	},
 ]
 

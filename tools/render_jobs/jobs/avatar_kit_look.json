@@ -23,7 +23,7 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar_kit.gd", "action": "info"},
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar_kit.gd", "action": "env"},
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar_kit.gd", "action": "place", "at": [-5.0, -0.5]},
-  {"op": "call", "script": "res://tools/render_jobs/probes/avatar_kit.gd", "action": "canopy", "recipe": 1, "points": [[3.9, -0.8], [4.3, -1.5], [3.6, -0.3], [4.4, -0.6], [3.0, -0.4], [2.2, -0.8]]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/avatar_kit.gd", "action": "canopy", "recipe": 1, "points": [[1.2, 0.4], [0.8, 0.8], [1.6, 0.0], [2.4, -0.8], [3.9, -0.8], [4.3, -1.5], [3.6, -0.3], [3.0, -0.4], [2.2, -0.8]]},
   {"op": "wait", "s": 1.0},
 
   {"op": "home", "phase": "look", "for": "home"},

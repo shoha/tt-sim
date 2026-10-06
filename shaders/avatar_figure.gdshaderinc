@@ -38,15 +38,31 @@ uniform float light_wrap : hint_range(0.0, 1.0) = 0.3;
 // Light the handed share keeps where no lamp or sun reaches it, so a side turned away
 // darkens to this fraction rather than to black.
 uniform float ambient_fill : hint_range(0.0, 2.0) = 0.4;
-// How far the scene's ambient tints the whole figure (0 none, 1 fully).
-uniform float ambient_mix : hint_range(0.0, 1.0) = 0.6;
+// How far the scene's ambient *level* darkens the whole figure (0 none, 1 fully), and how
+// far its *hue* tints it. The two are separate because a figure in sun takes only a hint of
+// the sky's colour (the first pass mixed the hue at 0.6 and the forest's blue sky turned
+// warm skin pale and pinkish), while the level should follow a dark scene closely.
+uniform float ambient_mix : hint_range(0.0, 1.0) = 0.8;
+uniform float ambient_hue_mix : hint_range(0.0, 1.0) = 0.35;
 // The ambient level that reads as neutral (sRGB luminance; the default environment's 0.22).
 uniform float ambient_reference = 0.22;
 // The darkest the ambient may take a figure (dungeon, night), so a token stays readable.
-uniform float ambient_floor : hint_range(0.0, 1.0) = 0.4;
-// In shade: the sun's share of the light term removed, and the tint on everything else.
+uniform float ambient_floor : hint_range(0.0, 1.0) = 0.2;
+// In shade: the sun's share of the light term removed, and the paint read from the palette's
+// own shadow end: each slot is sampled `shade_drop` further down its gradient (toward its
+// hue-shifted shadow colour, never grey), and the detail and face pixels over it darken by
+// the same per-channel ratio. (The first pass tinted everything by one cool colour, which
+// turned skin lavender under the canopy.)
 uniform float shadow_strength : hint_range(0.0, 1.0) = 0.85;
-uniform vec3 shade_tint : source_color = vec3(0.62, 0.64, 0.82);
+uniform float shade_drop : hint_range(0.0, 1.0) = 0.35;
+
+// Compensation for the scene's tonemapper (Filmic on every preset but one; with its white at
+// 1.0 it lifts an sRGB midtone of 0.5 to 0.62 and compresses the brightest channel most, so
+// paint reads lifted and desaturated): the world's painted colours were authored through it
+// and the palette's were not, so the paint is darkened by this gamma and its saturation
+// raised a little before the tonemapper sees it. 1.0 and 1.0 pass the palette through as is.
+uniform float paint_contrast : hint_range(0.5, 2.5) = 1.25;
+uniform float paint_saturation : hint_range(0.0, 2.0) = 1.1;
 
 // Per figure, set from the CPU (AvatarKit.set_shade, AvatarKit.set_hidden_fade).
 instance uniform float shade = 0.0;
@@ -69,7 +85,7 @@ vec3 ambient_tint() {
 	float lum = dot(a, vec3(0.2126, 0.7152, 0.0722));
 	vec3 hue = a / lum;
 	float level = clamp(lum / ambient_reference, ambient_floor, 1.0);
-	return mix(vec3(1.0), hue * level, ambient_mix);
+	return mix(vec3(1.0), hue, ambient_hue_mix) * mix(1.0, level, ambient_mix);
 }
 
 float bayer4(vec2 p) {
@@ -88,9 +104,12 @@ void fragment() {
 	if (hidden_fade > 0.0 && bayer4(FRAGCOORD.xy) < hidden_fade) {
 		discard;
 	}
-	// Palette: snap u to the column centre so no filtering crosses columns.
+	// Palette: snap u to the column centre so no filtering crosses columns. UV.y runs 0 at
+	// the highlight (top) row to 1 at the shadow row, so shade reads further down.
 	vec2 puv = vec2((floor(UV.x * 8.0) + 0.5) / 8.0, UV.y);
 	vec3 col = texture(palette, puv).rgb;
+	vec3 shaded = texture(palette, vec2(puv.x, min(puv.y + shade_drop, 1.0 - 0.5 / 64.0))).rgb;
+	vec3 shade_ratio = mix(vec3(1.0), clamp(shaded / max(col, vec3(1e-3)), 0.0, 1.5), v_shade);
 	if (has_detail) {
 		vec4 d = texture(detail, UV2, detail_mip_bias);
 		col = mix(col, d.rgb, d.a);
@@ -112,7 +131,12 @@ void fragment() {
 		}
 	}
 	float l = v_light * (1.0 - face);
-	vec3 tint = ambient_tint() * mix(vec3(1.0), shade_tint, v_shade);
+	// Shade from the palette, then the tonemapper compensation (gamma, then saturation).
+	col *= shade_ratio;
+	col = pow(max(col, vec3(0.0)), vec3(paint_contrast));
+	float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+	col = max(mix(vec3(lum), col, paint_saturation), vec3(0.0));
+	vec3 tint = ambient_tint();
 	// The painted share shows as is (tinted); the handed share is lit in light() on top of
 	// its ambient fill, so a fully lit side reads brighter than the paint and a turned-away
 	// side darker, about the painted colour on average.

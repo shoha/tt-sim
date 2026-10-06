@@ -43,6 +43,8 @@ func test_kit_loads_with_its_parts_skeleton_and_stances() -> void:
 	assert_eq(_kit.parts_by_slot.get("body"), ["body_a"])
 	assert_eq(_kit.bone_names.size(), 22)
 	assert_true(_kit.stances.has("stance_ready") and _kit.stances.has("stance_relaxed"))
+	for stance in ["stance_heroic", "stance_casting", "stance_cheerful"]:
+		assert_true(_kit.stances.has(stance), "%s in the kit (the look pass's stances)" % stance)
 	assert_not_null(_kit.face_sheet)
 	assert_not_null(_kit.face_mask)
 	for id in _kit.parts_by_id:
@@ -185,6 +187,19 @@ func test_stance_is_set_as_the_pose() -> void:
 		sk.get_bone_global_pose(hand).origin.distance_to(sk.get_bone_global_rest(hand).origin),
 		0.1,
 		"the hand hangs down in the stance, not out in the A-pose"
+	)
+	# The stance's Hips drop (its one translation) lowers the root below its rest, so the
+	# bent knees keep the planted sole on the ground.
+	var hips := sk.find_bone("Hips")
+	var drop: float = (
+		(_kit.stance_offsets.get("stance_ready", {}).get("Hips", Vector3.ZERO) as Vector3).y
+	)
+	assert_lt(drop, -0.01, "stance_ready drops the hips (%f)" % drop)
+	assert_almost_eq(
+		sk.get_bone_pose_position(hips).y,
+		sk.get_bone_rest(hips).origin.y + drop,
+		1e-5,
+		"the drop is applied"
 	)
 
 
