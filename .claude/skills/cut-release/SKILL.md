@@ -39,7 +39,8 @@ holds the version being worked *toward*, not the one last shipped.
 
 1. Run `scripts/cut-release.ps1` (no `-Push`) via the PowerShell tool. It stops
    after the local commits/tag -- nothing is pushed yet, so this step is safe
-   to run without asking first.
+   to run without asking first. Do not pipe its output through a filter that
+   ends the pipeline early (`Select-Object -First` once killed a run mid-test).
 2. Show the resulting commits/tag/version to the user.
 3. **Ask before pushing** (global CLAUDE.md: always confirm before pushing to
    remote) -- pushing the tag triggers real signing/notarization/Steam

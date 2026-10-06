@@ -73,6 +73,8 @@ other committed home.
 | Crossings (plank bridges, stepping stones, stone arches, fords: model, snapping to banks, geometry, collision, grid on the deck, editor API, following later edits, the per-crossing rebuild cache) | `resources/crossing.gd`, `utils/crossing_placement.gd`, `utils/crossing_geometry.gd`, `utils/crossing_arch.gd`, `utils/crossing_ford.gd`, `utils/crossing_cache.gd`, `utils/map_crossing_io.gd`, `scenes/terrain/authored_crossings.gd`, `scenes/states/authoring/crossing_editor.gd` | `systems/crossings.md`, `ARCHITECTURE.md` "Map document (map.ttmap)" |
 | Bridge tool (Planks, Stones, Arch and Ford tiles, live preview, refusal hint, Ctrl erase) | `scenes/states/authoring/bridge_brush.gd`, `bridge_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Bridge) and "Brushes and gestures" |
 | Starting landforms (Valley, Hilltop, Terraces, Lakeshore, Gorge: the seeded frame, the shared steps, each recipe's shape and feature chances, the stage, the open path, the dialog's Landform row) | `utils/starting_landform.gd`, `utils/landform_recipes.gd`, `utils/landform_hilltop.gd`, `utils/landform_terraces.gd`, `utils/landform_lakeshore.gd`, `utils/landform_gorge.gd`, `utils/new_map.gd`, `scenes/states/authoring/new_map_dialog.gd` | `systems/landforms.md`, `UI_SYSTEMS.md` "New map dialog" |
+| Water past the map edge (a river's course past the edge, pond lobes, the skirt's channel patch, the opaque skirt and `SkirtBackdrop`) | `scenes/terrain/skirt_exits.gd`, `scenes/terrain/terrain_skirt.gd`, `scenes/terrain/skirt_backdrop.gd`, `utils/river_exit_mesh.gd`, `utils/pond_exits.gd` | `systems/water.md` "Past the map edge", `ARCHITECTURE.md` "Ground skirt" |
+| Trees at close and home zoom (the near plane held behind the camera, the canopy fade's window) | `scenes/states/playing/camera_controller.gd`, `scenes/states/playing/canopy_fade.gd`, `shaders/wind_foliage_include.gdshaderinc` | `CONVENTIONS.md` "Camera System", `PERFORMANCE.md` "Close-zoom canopy fade" |
 | Submerged token marker (the ring on the water over a hidden token, drag preview) | `scenes/board_token/submerged_marker.gd`, `shaders/submerged_marker.gdshader`, `utils/water_surface.gd` | `UI_SYSTEMS.md` "Submerged Token Marker" |
 | Authored map load on workers (dressing, water geometry, rule fields, chunk and skirt arrays, crossings) | `utils/authored_load_prep.gd`, `MapSourceLoader` | `ARCHITECTURE.md` Map Loading Flow, `PERFORMANCE.md` "P4b-0: authored map load on workers" |
 | First-use pipeline warm-up | `utils/pipeline_warmer.gd` | `PERFORMANCE.md` |
@@ -422,14 +424,16 @@ submerged-token ring, worker-thread loading) as v0.1.29 (2026-09-28); phase 4c (
 the system docs pilot) as v0.1.30 (2026-10-04); phase 4d (the stone arch, fords, the
 per-crossing rebuild cache) as v0.1.31 (2026-10-04); phase 5 (starting landforms), the
 landform follow-ups and phase 6 (rivers past the map edge) as v0.1.32 (2026-10-05); the edge
-follow-ups and ponds and lakes past the edge as v0.1.33 (2026-10-05). Releases stay patch
-bumps until the whole map maker is finished, then the minor version goes up (user,
-2026-09-27). The
-two-account Steam test (above) is still open and is best run on v0.1.31: it now also covers
-an arch and a ford reaching a peer, a token wading the ford, and a document
-with `splines.json`, `ponds.png`, a baked `water_flow.png` and `crossings.json` reaching a
-peer, tokens on a deck, the submerged ring on a client, and a waterfall's curtain built
-on both peers from the same reaches.
+follow-ups and ponds and lakes past the edge as v0.1.33 (2026-10-05); the polish pass (trees
+at close zoom and the home-zoom canopy window, the ford's gravel showing through clear
+shallows, the crossing swap and water swap costs, the edge patch during a sculpt) as v0.1.34
+(2026-10-05). Releases stay patch bumps until the whole map maker is finished, then the minor
+version goes up (user, 2026-09-27). The two-account Steam test (above) is still open and is
+best run on the current release (v0.1.34 or later): it verifies that a peer builds the same
+waterfalls, crossings (an arch, a ford with a token wading it), starting landforms and water
+past the edge from the host's document, and that a document with `splines.json`,
+`ponds.png`, a baked `water_flow.png` and `crossings.json` reaches a peer, with tokens on a
+deck and the submerged ring on a client.
 
 Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
@@ -460,17 +464,14 @@ Waterfall follow-ups (phase 4c, P4c-1 to P4c-5, 2026-10-04; none blocking):
 
 Crossing follow-ups (after P4b-3, 2026-09-27, and phase 4d, 2026-10-04; later work, none
 blocking). Closed 2026-10-05: the ford's gravel through the water (clear shallows in
-`water.gdshader`: under 0.3 m the bed shows as itself, `systems/water.md` "Clear shallows"),
-and the arch and ford placement cost (a swap 0.35-1.5 ms, a ford's build 1.8 ms in game:
-`PERFORMANCE.md` "Swap and ford build (2026-10-05)"):
+`water.gdshader`: under 0.3 m the bed shows as itself, `systems/water.md` "Clear shallows";
+then the bar's crest shade lifted, `CrossingFord.WET_SHADE` 0.58 -> 0.78, so the gravel reads
+as gravel rather than a pale band), and the arch and ford placement cost (a swap 0.35-1.5 ms,
+a ford's build 1.8 ms in game: `PERFORMANCE.md` "Swap and ford build (2026-10-05)"):
 - Crossings on a dressed Blender map's own water (deferred to a terrain-paint integration
   sprint, 2026-10-04): its water plane is not a crossing target
   (the snapping reads document water; the Bridge tool is disabled there with a tooltip unless
   the document has water), and its Blender scatter is not cleared under a crossing.
-- The ford's bar reads through the clear shallows as a paler, warmer band rather than as
-  textured gravel: its crest is shaded dark wet (`CrossingFord.WET_SHADE` 0.58), close to the
-  deep water's own value. A lighter crest shade would make the bar read more strongly
-  (judgment-set call; 2026-10-05).
 - A ford on an ankle stream is dominated by its two 2 m landings around a 1.1 m stripe; a
   landing narrower than the bar on a narrow stream would help (P4d-4).
 - The savanna's ford pads are red earth on yellow grass, the loudest of the set, in the tone
@@ -486,7 +487,9 @@ and the arch and ford placement cost (a swap 0.35-1.5 ms, a ford's build 1.8 ms 
   gives the look on ankle water but no passage over waist water, which the ford kind does.
 - Forest canopies in front of a crossing can hide it from the fixed camera (a 6 m canopy
   covers ground up to about 15 m behind it at the 21.6 degree view): in play the occlusion
-  fade opens a hole over the tokens on it, not over the deck. Candidate: count a crossing's
+  fade opens a hole over the tokens on it, not over the deck. Since the polish pass the
+  play-zoom canopy window thins the crowns in front of the view centre, so a crossing panned
+  there shows; one away from the centre can still be hidden. Candidate: count a crossing's
   deck as a fade focus in play, or let the author Thin in front of it (works today).
 - Savanna's stepping stones share badlands' sandstone and read a notch more orange than the
   savanna's grey-brown boulders (a per-biome stone tint, like the basalt lift, would settle it).
@@ -529,6 +532,21 @@ worst frames: `PERFORMANCE.md` "Erase frame and the stroke's patch (2026-10-05)"
 - During a sculpt stroke beside a mouth the patch past the edge moves with the skirt, but
   1-4 m out its bank can sit up to 0.35 m off where the rebuild carries the new bank along the
   course; the stroke-end refresh settles it.
+- The opaque skirt costs 0.31-0.36 ms GPU at max play zoom panned to an edge, 0.3 ms of it at
+  a plain edge with no exit. The band variant (opaque only around exits) is measured and on
+  file (`PERFORMANCE.md` "Phase 6 (rivers past the map edge)", `p6_perf_band`): it gives back
+  0.33 ms at a plain edge for a seam risk around every river. Kept opaque everywhere (P6-2).
+
+Polish follow-ups (trees at close and home zoom, 2026-10-05; none blocking;
+`PERFORMANCE.md` "Close-zoom canopy fade"):
+- The taiga's home window is modest: strength 0.9 over 0.2 to 0.55 x size opens a soft window
+  onto the floor with whole pines framing it, chosen by eye against larger windows that began
+  to show a field of bare trunks. Tunable live through `probes/close_zoom.gd play` if a dense
+  forest's home still reads as a wall.
+- A sun exactly behind the camera would lose the shadows of dissolving crowns (the fade skips
+  the shadow pass by its view axis, which would then match the camera's). The presets' suns
+  never sit there; whether the sun gizmo can put one there is unchecked
+  (`wind_foliage_include.gdshaderinc`, `apply_canopy_fade`).
 
 Follow-ups:
 - A quick brush pass still gives few trees in sparse biomes (temperate forest targets 0.02
@@ -560,6 +578,17 @@ Follow-ups:
   diagnosed.
 
 ## Roadmap
+
+**Next** (agreed at the end of the 2026-10-04 to 05 session; one line each, no plan yet):
+
+- The Steam two-account test on the current release: the user runs it; it verifies a peer
+  builds the same falls, crossings, landforms and edge water as the host (Open work, first
+  paragraph).
+- Confirm the "map maker finished" list with the user for the 0.2 bump (the last bullet
+  below).
+- Future ideas: player avatar tokens in the house style (Future ideas, below).
+- Crossings over a dressed Blender map's own water, in the terrain-paint integration sprint
+  (Open work, "Crossing follow-ups").
 
 - **Phase 3 (done, 2026-09-27):** Sculpt (Raise, Smooth, Flatten, Tier with rock-cliff
   edges snapping to 5 ft tiers), Paint (ground, rock and built surfaces; paint yields to
@@ -716,10 +745,15 @@ Follow-ups:
   follow-ups (Open work, "Edge follow-ups"). P6-4 (done): ponds and lakes touching the edge
   continue past it (`PondExits`; `p6_look` ponds section; `PERFORMANCE.md` "Ponds past the
   edge (P6-4)"). System doc: `docs/systems/water.md` "Past the map edge".
-- **Before the minor version bump ("map maker finished"):** not yet fully scoped with the
-  user. Candidates on record: phases 4c, 4d and 5 (all done), and the Steam two-account test
-  passing on an authored map with water and crossings (still open). Confirm the list with the
-  user before planning it.
+- **Polish (done, 2026-10-05, v0.1.34):** trees at close zoom (the near plane held behind the
+  camera, the canopy fade's clearing below home and its small window at play zooms), the
+  ford's gravel through clear shallows, the arch and ford swap and the water swap made cheap,
+  the exits' patch following a sculpt on the edge (Verification status, "Trees at close
+  zoom"; Open work).
+- **Before the minor version bump ("map maker finished"):** the planned phases (3 to 6 and
+  the polish pass) are done. The open candidate is the Steam two-account test passing on the
+  current release (an authored map with water, falls, crossings, a landform and edge water).
+  Confirm the finish list with the user before planning anything more toward 0.2.
 
 ## Future ideas (user notes, 2026-09-27)
 
