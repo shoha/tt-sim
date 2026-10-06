@@ -1,6 +1,6 @@
 {
  "frame_error": 5.907190998299949e-07,
- "posed_error_m": 2.129713927434551e-07,
+ "posed_error_m": 2.72495459197053e-07,
  "body_a": {
   "triangles": 4008,
   "glb_triangles": 4008,
@@ -89,7 +89,8 @@
    "stance_cheerful",
    "stance_heroic",
    "stance_ready",
-   "stance_relaxed"
+   "stance_relaxed",
+   "stance_sneaky"
   ],
   "joints": 72
  },
@@ -101,6 +102,7 @@
    "stance_heroic",
    "stance_casting",
    "stance_cheerful",
+   "stance_sneaky",
    "accept_elbow_fold",
    "accept_overhead",
    "accept_fist_by_head",
@@ -119,9 +121,9 @@
    "height=1 build=1 head=1",
    "default"
   ],
-  "checked": 99,
+  "checked": 108,
   "problems": [],
-  "seconds": 10.0
+  "seconds": 9.8
  },
  "problems": [],
  "kit_json_errors": []

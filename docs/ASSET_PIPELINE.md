@@ -729,7 +729,8 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   head under the same parent, its map M is exactly its driver's). Finger bones take the
   hand's ranges in the `build` control (listed there explicitly).
 - Stances are one-frame glTF animation clips in `skeleton.glb` (`stance_ready`,
-  `stance_relaxed`, `stance_heroic`, `stance_casting`, `stance_cheerful`, ...), holding each
+  `stance_relaxed`, `stance_heroic`, `stance_casting`, `stance_cheerful`, `stance_sneaky`,
+  ...), holding each
   bone's full local rotation (not a delta from rest), body, finger and helper bones alike,
   applied as pose rotations, plus one translation: the `Hips` bone's local position.
   Stances are authored as intents (figurine `pose.py`: line of action, contrapposto,

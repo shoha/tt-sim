@@ -1968,7 +1968,8 @@
   "stance_relaxed",
   "stance_heroic",
   "stance_casting",
-  "stance_cheerful"
+  "stance_cheerful",
+  "stance_sneaky"
  ],
  "stance_info": {
   "stance_ready": {
@@ -2039,7 +2040,7 @@
     }
    ],
    "hand_shapes": {
-    "Left": "grip",
+    "Left": "fist",
     "Right": "fist"
    }
   },
@@ -2062,17 +2063,41 @@
   "stance_cheerful": {
    "ground": [
     {
-     "bone": "RightFoot",
+     "bone": "RightToes",
      "point": [
-      -0.09,
+      -0.1035,
       0.0,
-      -0.012
+      0.084056
      ]
     }
    ],
    "hand_shapes": {
     "Left": "open",
     "Right": "relaxed"
+   }
+  },
+  "stance_sneaky": {
+   "ground": [
+    {
+     "bone": "LeftToes",
+     "point": [
+      0.1035,
+      0.0,
+      0.084056
+     ]
+    },
+    {
+     "bone": "RightToes",
+     "point": [
+      -0.1035,
+      0.0,
+      0.084056
+     ]
+    }
+   ],
+   "hand_shapes": {
+    "Left": "open",
+    "Right": "grip"
    }
   }
  }
