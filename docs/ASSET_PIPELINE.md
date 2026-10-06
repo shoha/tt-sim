@@ -685,7 +685,12 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   where a form should read as a crisp plane (hair locks, collars and lapels, a cuff, a
   brim). The low-poly look comes from angular, tapered silhouettes, not from faceted
   shading on every surface.
-- A whole figure is 1,000 to 3,000 triangles; each part's count is in `kit.json`.
+- A whole figure is up to about 6,000 triangles (user, 2026-10-06: higher than PS1 is
+  fine; what to take from Crashsune is intentional proportions and simple geometry).
+  Triangles go to smooth, deliberate forms and the silhouette, never to surface detail,
+  which the textures carry. Each part's count is in `kit.json`. The avatar probe measured
+  30 figures of 1,362 triangles as free; a figure at the cap is re-measured by the
+  consumer card.
 - `COLOR_0.R` is the part's light response per vertex: 0 shows the painted texture alone
   (unlit), 1 takes the figure shader's full soft light. The face area is always 0 (anime
   faces stay flat; Crashsune's faces are unlit), hair and cloth sit low (about 0.2-0.4) so
@@ -693,26 +698,41 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   added later; the probe's per-vertex outline width if an outline is ever wanted).
 - `extras.figurine_double_sided: true` marks a part whose open cards must render both
   faces (hair locks built as planes); every other part is closed and back-face culled.
-- `TEXCOORD_0` maps the part's painted texture. The head also carries `TEXCOORD_1`, face
-  space: the unit square over the face area (0 to 1 left to right and chin to brow; the
-  rest of the head falls outside the square).
+- Two UV sets, because Godot reads two (`UV`, `UV2`): `TEXCOORD_0` is palette space and
+  `TEXCOORD_1` is detail space (below).
 
-### Textures and recolouring
+### Colour: the gradient palette (TEXCOORD_0)
 
-Each part GLB embeds two textures, both painted by figurine with paintkit's primitives:
+Colour and most of the shading come from one small palette texture per figure, the
+gradient-strip technique (reference: a low-poly character textured entirely from a 64 x 64
+sheet of vertical gradients, `figurine/docs/design.md` "Style"). The palette has one
+column per colour slot, in this fixed order: `skin`, `hair`, `eyes`, `primary`,
+`secondary`, `accent`, `leather`, `metal`. Each column is a vertical gradient from the
+slot's shadow colour at v = 0 through its base colour to its highlight at v = 1 (a hue
+shift along the way, never toward grey).
 
-- `albedo` (sRGB): the painted part, every recolourable region painted as a neutral value
-  study, fixed detail (laces, seams, stitching, a buckle) painted in its own colour. Line
-  work is painted here as ink: fold lines, hems, finger separations, the edges of trim,
-  in a dark ink that is not recoloured. Hair carries its sheen as a painted band of
-  notched, triangular highlights (Crashsune's signature), with a deeper tone underneath.
-- `mask` (linear RGBA): the weight of each of four recolour channels per texel. The part's
-  `extras.figurine_channels` names the colour slot each channel takes, from `skin`,
-  `hair`, `eyes`, `primary`, `secondary`, `accent`, `leather`, `metal` (a top might be
-  `["primary", "secondary", "accent", "skin"]`). Where the mask sums to 0 the albedo shows
-  as painted. Where a channel is 1 the texel takes that slot's colour, shaded by the
-  albedo's value: 0.5 is the slot colour itself, lower values move toward the slot's
-  shadow colour (a hue shift, never toward grey), higher toward its highlight.
+- A part's `TEXCOORD_0` u selects the slot (column centre `(slot + 0.5) / 8`) and v places
+  each vertex along that slot's gradient. The producer paints shading by v: lighter on
+  forms that face up and out, darker in folds, under the chin and toward the inside of a
+  limb; hair runs from a deep root to light tips along each lock. So the shading is
+  authored per vertex and interpolated, which is what makes a low mesh read soft and
+  painted rather than blocky.
+- The consumer builds the palette per figure from the recipe's colour picks (each pick a
+  colour-set triple), 8 x 64 texels, with no filtering across columns. Recolouring an
+  avatar is regenerating this texture; no part carries a mask.
+- Hard colour boundaries inside a part (a cuff, a stripe, a collar) are edges in the mesh,
+  with the faces on either side mapped to different columns.
+
+### Detail: the painted overlay (TEXCOORD_1)
+
+Each part may embed one `detail` texture (sRGB RGBA), painted by figurine with paintkit's
+primitives and mapped by `TEXCOORD_1`. It is composited over the palette colour by its
+alpha and carries what a gradient cannot: ink lines (fold lines, hems, finger
+separations, trim edges, lash lines), ornaments, patterns, buttons and buckles, and the
+hair's sheen as a band of notched, triangular highlights (Crashsune's signature). Detail
+is fixed colour and is not recoloured; a pattern that must follow the outfit colour is
+built from mesh faces in the palette instead. A part with no detail texture omits
+`TEXCOORD_1`.
 
 Resolution: 256 x 256 per part, 512 x 512 for the head (the face shows at close zoom).
 Import settings follow section 9 (editor import, embedded uncompressed) until the first
@@ -720,12 +740,14 @@ card measures otherwise; figures are opaque, so mipmaps are allowed.
 
 ### Faces
 
-`face_sheet.png` holds square cells in face space, one feature per cell, a row per kind:
-eyes, brows, mouths, marks (blush, freckles, a scar). A cell's RGB is the painted feature
-and its alpha the coverage; an eye cell marks its iris (blue channel of a companion mask
-row, or a reserved colour, settled by the first card) so the iris takes the `eyes`
-colour, and brows take `hair`. The figure shader composes the face over the head's skin
-by sampling the chosen cell of each kind at `TEXCOORD_1`. A recipe picks one cell per
+The head's `extras.figurine_face_rect` (`[u0, v0, u1, v1]` in its `TEXCOORD_1`) marks the
+face area; inside it, `TEXCOORD_1` remapped to the unit square is face space (0 to 1 left
+to right and chin to brow). `face_sheet.png` holds square cells in face space, one
+feature per cell, a row per kind: eyes, brows, mouths, marks (blush, freckles, a scar). A
+cell's RGB is the painted feature and its alpha the coverage. The iris and the brows are
+recoloured from the palette: how a cell marks them (a reserved key colour or a companion
+mask row) is settled by the first figurine card and recorded here. The figure shader
+composes the chosen cell of each kind over the head's skin; a recipe picks one cell per
 kind, so expression lives in the sheet, and a blink later is a cell swap.
 
 ### `kit.json` (format 1)
@@ -736,7 +758,7 @@ kind, so expression lives in the sheet, and a blink later is a cell swap.
   "kit_version": "<figurine version>+<git hash>",
   "parts": [
     {"id": "top_tunic_a", "slot": "top", "glb": "parts/top/top_tunic_a.glb",
-     "channels": ["primary", "secondary", "accent", "skin"], "triangles": 410,
+     "slots_used": ["primary", "secondary", "accent", "skin"], "triangles": 410,
      "hides": ["torso"], "tags": ["cloth"]}
   ],
   "face_sheet": {"png": "faces/face_sheet.png", "cell_px": 128,
