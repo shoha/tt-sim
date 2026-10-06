@@ -238,6 +238,7 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 | `height_profile.gd` | `from`, `to` ([x, z]), `n` (default 21) | The authoring map's ground height at `n` points along a line (`AuthoringEditor.ground_height_at`) and the steepest slope between them, for checking a sculpt stroke numerically (tier tops on whole tiers, a face's width, a ramp's slope, a pit's floor). |
 | `ground_perf.gd` | `action` plus its fields (see the script header) | Ground shader A/Bs: `shader` swaps the terrain material to the current include or one read from `user://p34_<version>_ground.zip` (made with `git archive`); `variant` builds a text-replaced copy of the current include; `paint` writes eight painted surfaces as strips or a half-weight checker; `terraces` fills the view with tiers; `fraction` reports the share of steep ground pixels. |
 | `avatar_kit.gd` | `action` plus its fields (see the script header) | Avatar figures from figurine's kit through AvatarKit: `place` stands figurine's three judging recipes in a row along the screen's right axis, `canopy` adds one at the first of `points` whose shade ray meets a canopy, `spawn` places `count` for frame times, `look` pans to a figure at a height, `shade` re-takes the shade rays and says what blocks each, `hidden` dithers one, `params` sets figure shader uniforms, `env` logs the environment's ambient and the sun, `sun` hides or shows the sun, `mipmaps` toggles AvatarKit's detail mipmaps; `save` / `cleanup` for `_avatarkit_` levels. |
+| `avatar_token.gd` | `action` plus its fields (see the script header) | Avatar tokens in play: `pair` spawns a preset under a canopy and a selected one in sun, `spawn_at` drops one onto whatever is under a point (water too), `look`, `hide` (hidden from players), `report` (capsule, shade, submerged cue, occlusion fade entries), `timing` (spawn and shade-ray medians, walked and cached); `save` / `cleanup` for `_avatartoken_` levels. |
 
 `sample_pixels.gd` (this folder) is a standalone reader for captures, not a probe:
 
@@ -616,6 +617,15 @@ numerically (for example where a fade or a tint band starts).
   with the sun hidden), and an A/B of the detail textures without AvatarKit's mipmaps; then
   GPU and CPU frame times with 0, 8 and 30 figures at home and zoom 20 (`for: "perf"`).
   `avatar_kit.gd cleanup` deletes the `_avatarkit_` level.
+- `jobs/avatar_token_look.json`: avatar tokens (the avatar token card, about 40 s to build,
+  20 s to look): a new 150 ft temperate forest map with a placed oak, a waist-deep and a
+  deep pond, saved as `_avatartoken_forest` and played; `probes/avatar_token.gd` spawns
+  preset avatars as real board tokens (`LevelPlayController.spawn_avatar`): one under the
+  oak's crown, one selected in sun and turned 30 degrees, one dropped into each pond.
+  Captures at home, close (4.5 m) on the pair, the pair with the sunny one hidden from
+  players, and zoom 5 on each pond; `report` logs capsules, shade, the submerged cue and
+  the occlusion fade's entries; `timing` (`for: "timing"`) logs spawn and shade-ray medians
+  with and without `AvatarShadeCache`. `avatar_token.gd cleanup` deletes the level.
 
 ## Caveats
 

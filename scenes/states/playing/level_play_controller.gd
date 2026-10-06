@@ -373,6 +373,35 @@ func spawn_asset(
 	return _token_spawner.spawn_asset(pack_id, asset_id, variant_id, spawn_position, settle)
 
 
+## Spawn an avatar token from a recipe (docs/ASSET_PIPELINE.md section 10) and add it to
+## the current level. Forwards to TokenSpawner.spawn_avatar.
+func spawn_avatar(
+	recipe: Dictionary,
+	token_name: String = "",
+	spawn_position: Vector3 = Vector3.ZERO,
+	settle: bool = false,
+) -> BoardToken:
+	return _token_spawner.spawn_avatar(recipe, token_name, spawn_position, settle)
+
+
+## Change a placed avatar token's recipe live: rebuilds its figure and capsule
+## (AvatarTokenFactory.set_recipe), updates its level placement, and syncs GameState and
+## the clients the way any property change does. Returns false without authority or for a
+## token that is not an avatar. The entry point for the avatar builder.
+func set_avatar_recipe(token: BoardToken, recipe: Dictionary) -> bool:
+	if not GameState.has_authority() or not token.is_avatar():
+		return false
+	if not AvatarTokenFactory.set_recipe(token, recipe):
+		return false
+	var placement_id: String = token.get_meta("placement_id", token.network_id)
+	if active_level_data:
+		var placement := active_level_data.get_token_placement(placement_id)
+		if placement:
+			placement.avatar_recipe = token.avatar_recipe.duplicate(true)
+	_token_spawner.notify_token_properties_changed(token)
+	return true
+
+
 ## Remove a token from the level. Forwards to TokenSpawner -- kept as a
 ## same-named method here for the context menu (game_map.gd) to call directly
 ## on this LevelPlayController instance. Does not record undo -- callers that
@@ -416,7 +445,11 @@ func duplicate_token(token: BoardToken) -> BoardToken:
 	var spawn_position: Vector3 = token.rigid_body.global_position + Vector3(offset, 0, 0)
 	var source_rotation: Vector3 = token.rigid_body.global_rotation
 	var source_scale: Vector3 = token.rigid_body.scale
-	var new_token := spawn_asset(token.pack_id, token.asset_id, token.variant_id, spawn_position)
+	var new_token: BoardToken = null
+	if token.is_avatar():
+		new_token = spawn_avatar(token.avatar_recipe, token.token_name, spawn_position)
+	else:
+		new_token = spawn_asset(token.pack_id, token.asset_id, token.variant_id, spawn_position)
 	if not new_token:
 		return null
 

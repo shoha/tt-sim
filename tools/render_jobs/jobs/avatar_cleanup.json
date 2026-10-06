@@ -4,6 +4,7 @@
  "steps": [
   {"op": "wait", "s": 1.0},
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar.gd", "action": "cleanup"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/avatar_token.gd", "action": "cleanup"},
   {"op": "wait", "s": 0.5}
  ]
 }

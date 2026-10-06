@@ -2,19 +2,25 @@ class_name AssetBrowser
 extends VBoxContainer
 
 ## A tabbed browser for all asset packs.
-## Each tab contains assets from one pack with its own search filter.
+## Each tab contains assets from one pack with its own search filter. The first tab,
+## "Player avatars" (AvatarPresetsTab), offers the preset avatars, built from the kit every
+## client ships rather than from a pack.
 
 signal asset_selected(pack_id: String, asset_id: String, variant_id: String)
 signal asset_drag_started(pack_id: String, asset_id: String, variant_id: String, icon: Texture2D)
+signal avatar_selected(recipe: Dictionary, token_name: String)
 
 const AssetPackTabScene = preload("res://scenes/states/playing/asset_pack_tab.tscn")
+const AvatarPresetsTabScene = preload("res://scenes/states/playing/avatar_presets_tab.tscn")
 
 var _tabs: Dictionary = {}  # pack_id -> AssetPackTab
+var _avatar_tab: AvatarPresetsTab = null
 
 @onready var tab_container: TabContainer = $TabContainer
 
 
 func _ready() -> void:
+	_add_avatar_tab()
 	# Wait for AssetManager to be ready
 	if AssetManager.get_packs().size() > 0:
 		_create_tabs()
@@ -35,6 +41,8 @@ func _create_tabs() -> void:
 	# issues where old and new tabs coexist in the TabContainer
 	var old_children = tab_container.get_children()
 	for child in old_children:
+		if child == _avatar_tab:
+			continue
 		tab_container.remove_child(child)
 		child.queue_free()
 	_tabs.clear()
@@ -86,6 +94,24 @@ func _add_or_refresh_tab(pack_id: String) -> void:
 	# before the initial catalog loaded), so make sure tab_changed is wired up.
 	if not tab_container.tab_changed.is_connected(_on_tab_changed):
 		tab_container.tab_changed.connect(_on_tab_changed)
+
+
+## The "Player avatars" tab, first and kept across pack tab rebuilds.
+func _add_avatar_tab() -> void:
+	_avatar_tab = AvatarPresetsTabScene.instantiate() as AvatarPresetsTab
+	_avatar_tab.name = AvatarPresetsTab.TAB_TITLE
+	tab_container.add_child(_avatar_tab)
+	tab_container.move_child(_avatar_tab, 0)
+	_avatar_tab.avatar_selected.connect(_on_avatar_selected)
+
+
+## The "Player avatars" tab (the validation bridge activates presets through it).
+func get_avatar_tab() -> AvatarPresetsTab:
+	return _avatar_tab
+
+
+func _on_avatar_selected(recipe: Dictionary, token_name: String) -> void:
+	avatar_selected.emit(recipe, token_name)
 
 
 func _on_tab_changed(_tab_index: int) -> void:

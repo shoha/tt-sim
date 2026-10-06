@@ -26,6 +26,7 @@ func _on_ready() -> void:
 	play_open_close_sounds = false
 
 	asset_browser.asset_selected.connect(_on_asset_selected)
+	asset_browser.avatar_selected.connect(_on_avatar_selected)
 	asset_browser.asset_drag_started.connect(_on_asset_drag_started)
 	if add_pack_button:
 		add_pack_button.pressed.connect(_on_add_pack_pressed)
@@ -43,6 +44,11 @@ func _on_pack_download_completed(pack_id: String) -> void:
 
 func _on_asset_selected(_pack_id: String, _asset_id: String, _variant_id: String) -> void:
 	# Close the overlay after an asset is selected
+	animate_out()
+
+
+func _on_avatar_selected(_recipe: Dictionary, _token_name: String) -> void:
+	# Close the overlay after an avatar is chosen, as for an asset
 	animate_out()
 
 

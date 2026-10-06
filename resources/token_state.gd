@@ -31,6 +31,9 @@ extends Resource
 @export var pack_id: String = ""
 @export var asset_id: String = ""
 @export var variant_id: String = "default"
+## An avatar token's recipe (TokenPlacement.avatar_recipe); empty for a pack token. A peer
+## rebuilds the figure from it and its own kit, so the recipe is all that crosses the wire.
+@export var avatar_recipe: Dictionary = {}
 
 ## Transform data
 @export_group("Transform")
@@ -69,6 +72,7 @@ static func from_board_token(token: BoardToken) -> TokenState:
 	state.pack_id = token.pack_id
 	state.asset_id = token.asset_id
 	state.variant_id = token.variant_id
+	state.avatar_recipe = token.avatar_recipe.duplicate(true)
 
 	# Transform from rigid body (what actually moves)
 	# Use global transforms because _sync_parent_position moves rotation to BoardToken
@@ -112,6 +116,7 @@ static func from_placement(placement: TokenPlacement) -> TokenState:
 	state.pack_id = placement.pack_id
 	state.asset_id = placement.asset_id
 	state.variant_id = placement.variant_id
+	state.avatar_recipe = placement.avatar_recipe.duplicate(true)
 
 	# Transform
 	state.position = placement.position
@@ -140,6 +145,10 @@ static func from_placement(placement: TokenPlacement) -> TokenState:
 ## On clients, uses interpolation for smooth motion
 ## On host or for initial placement, applies immediately
 func apply_to_token(token: BoardToken, use_interpolation: bool = true) -> void:
+	# A changed recipe rebuilds the figure (the builder edits a placed avatar live).
+	if not avatar_recipe.is_empty() and token.avatar_recipe != avatar_recipe:
+		AvatarTokenFactory.set_recipe(token, avatar_recipe)
+
 	# Transform - use interpolation on clients for smooth motion
 	if use_interpolation and NetworkManager.is_client():
 		token.set_interpolation_target(position, rotation, scale)
@@ -168,9 +177,10 @@ func apply_to_token(token: BoardToken, use_interpolation: bool = true) -> void:
 	token.status_effects = status_effects.duplicate()
 
 
-## Convert to a dictionary for network transmission
+## Convert to a dictionary for network transmission. "avatar_recipe" is sent only for an
+## avatar token, so a pack token's payload is unchanged.
 func to_dict() -> Dictionary:
-	return {
+	var out := {
 		"network_id": network_id,
 		"pack_id": pack_id,
 		"asset_id": asset_id,
@@ -188,6 +198,9 @@ func to_dict() -> Dictionary:
 		"is_hidden_from_gm": is_hidden_from_gm,
 		"status_effects": status_effects.duplicate(),
 	}
+	if not avatar_recipe.is_empty():
+		out["avatar_recipe"] = avatar_recipe.duplicate(true)
+	return out
 
 
 ## Create a TokenState from a dictionary (for network reception)
@@ -197,6 +210,9 @@ static func from_dict(data: Dictionary) -> TokenState:
 	state.pack_id = data.get("pack_id", "")
 	state.asset_id = data.get("asset_id", "")
 	state.variant_id = data.get("variant_id", "default")
+	var recipe: Variant = data.get("avatar_recipe", {})
+	if recipe is Dictionary:
+		state.avatar_recipe = AvatarRecipe.normalized(recipe)
 
 	state.position = SerializationUtils.dict_to_vec3(data.get("position", {}))
 	state.rotation = SerializationUtils.dict_to_vec3(data.get("rotation", {}))
@@ -234,6 +250,7 @@ func diff(other: TokenState) -> Dictionary:
 		"is_visible_to_players",
 		"is_hidden_from_gm",
 		"status_effects",
+		"avatar_recipe",
 	]:
 		if get(prop) != other.get(prop):
 			changes[prop] = other.get(prop)

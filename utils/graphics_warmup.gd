@@ -21,6 +21,8 @@ extends RefCounted
 ## and foliage); the rest are started only, which was enough in measurement.
 const COVERED_SHADERS := [
 	"res://shaders/authored_ground.gdshader",
+	"res://shaders/avatar_figure.gdshader",
+	"res://shaders/avatar_figure_double_sided.gdshader",
 	"res://shaders/authored_ground_skirt.gdshader",
 	"res://shaders/grid_overlay.gdshader",
 	"res://shaders/lofi_canvas.gdshader",
@@ -40,10 +42,6 @@ const EXCLUDED_SHADERS := {
 	"res://shaders/pixelate.gdshader": "no references in the code",
 	"res://shaders/sharpen.gdshader": "no references in the code",
 	"res://shaders/selected_indicator.gdshader": "no references in the code",
-	"res://shaders/avatar_figure.gdshader":
-	"avatar figures are not in play yet; cover it with the avatar token card",
-	"res://shaders/avatar_figure_double_sided.gdshader":
-	"avatar figures are not in play yet; cover it with the avatar token card",
 }
 ## A user argument (after `--`) that forces the warm-up, whatever the skip rules say.
 const FORCE_ARG := "--warm-graphics"

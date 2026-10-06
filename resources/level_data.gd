@@ -330,7 +330,7 @@ func validate() -> Array[String]:
 
 	for i in range(token_placements.size()):
 		var placement = token_placements[i]
-		if placement.pack_id == "" or placement.asset_id == "":
+		if not placement.is_avatar() and (placement.pack_id == "" or placement.asset_id == ""):
 			errors.append("Token %d has no asset assigned" % (i + 1))
 
 	return errors
