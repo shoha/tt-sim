@@ -138,7 +138,12 @@ maps.
   the result is swapped in on a later frame (`refreshed`), and the bake is written into the
   document, which ships it. A request while one runs queues; only the newest queued runs.
   Measured on that map: worker build 84 ms, bake 183 ms, main-thread swap 26 ms (mesh,
-  concave shapes, zones, material pass).
+  concave shapes, zones, material pass). Most of that swap, 14 ms, was the carrier material
+  (the StandardMaterial3D on the mesh that hands the flow texture to `process_water_meshes`):
+  freeing the old carrier freed the generated shader the carriers share, and the new one built
+  it again. One carrier is kept for the session and warmed as the Water tool opens
+  (`warm_flow_carrier`, 2026-10-05), and the swap is 5-10 ms on the `_p6_perf_` map
+  (`last_swap_parts` splits it; `PERFORMANCE.md` "Erase frame and the stroke's patch").
 - **Dressed maps (GLB plus a document with water):** both kinds of mesh share the one water
   material. The flow map comes from the authored mesh whenever it carries one (the document
   has a river), whatever its size; the GLB's planes then render still water. The author drew

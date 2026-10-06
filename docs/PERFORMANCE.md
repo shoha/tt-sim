@@ -2230,6 +2230,41 @@ unprofiled) and the swap, which is now the larger share for stone meshes (4.4-6.
 arch or ford node: `moss_split` walks every facet in GDScript, then the mesh and concave shape
 upload); both are the next targets if a placement needs to go under a frame.
 
+### Swap and ford build (2026-10-05)
+
+Profiled headless first (the `_p4d_` forest level's five crossings, medians of 15): the swap's
+largest share was not `moss_split` but the deck field, re-rasterised over every deck on the map
+for every placement whatever its kind (3.05 ms for five crossings, a `local_of` and a
+`sample_to_world` through the document's methods per sample); then `moss_split` (0.52 ms for
+the 5.4 m arch, 1.06 for the pier arch). The ford's build was its 280 bar samples' `level_at`
+(10 us each against the river course) and `ground_at` (3 us). Fixes, all byte-identical (the
+parts' and the moss split's digests before and after): the deck field changes only with a deck
+(a placed deck added onto it, `CrossingGeometry.deck_field_add`; re-rasterised when one left or
+was rebuilt; untouched for a ford or stones) and reads the grid once (3.05 -> 0.60 ms; adding
+the pier arch 0.35); `moss_split` inline (0.52 -> 0.16, 1.06 -> 0.34); the ford's samples read
+in two batches (`WaterGeometry.grounds_at`, `levels_along`: rivers cut per run of four rows) and
+the facet, face and quad loops without per-item arrays (a waist ford 4.46 -> 1.60 ms headless).
+
+`jobs/p4d_perf_build.json`, same settings as the P4d-5b table, one run (the second, after both
+commits); refresh = keys / build / swap:
+
+| Crossings on the map | P4d-5b | After |
+| --- | --- | --- |
+| 1: the 5.4 m arch | 6.0 (0.07 / 3.8 / 2.1) | 5.14 (0.08 / 3.90 / 1.15) |
+| 2: + a ford | 6.9 (0.12 / 5.0 / 1.9) | 2.80 (0.16 / 1.84 / 0.80) |
+| 3: + a plank bridge | 3.8 (0.18 / 1.8 / 1.8) | 2.68 (0.19 / 2.08 / 0.40) |
+| 4: + stepping stones | 3.2 (0.25 / 0.7 / 2.3) | 1.21 (0.23 / 0.29 / 0.68) |
+| 5: + the 14.8 m pier arch | 13.3 (0.26 / 7.6 / 5.4) | 9.95 (0.27 / 8.20 / 1.47) |
+| 6: + a second ford | 9.8 (0.30 / 5.2 / 4.4) | 3.00 (0.32 / 1.84 / 0.83) |
+| 7: bench plank / arch | 6.4 / 10.7 (swap 4.3 / 6.3) | 2.56 / 5.34 (swap 0.35 / 0.99); undo 4.4 / 4.5 -> 1.37 / 1.20 |
+
+The sculpt by the arch (3 of 6 rebuilt): 18.7 -> 10.2 ms (swap 6.0 -> 2.4), its window's worst
+frame 40.4 -> 28.6-30.2 ms (two runs). Release windows' worst frames: arch 16.2 -> 16.1 (32.1 in
+the first run, its first crossing), ford 14.2 -> 10.9-11.0. **Verdict: met.** Every placement's
+swap is 0.35-1.5 ms (target 2) and a ford's build 1.84 ms in game (target 2). An arch's own
+build (3.9 ms, the pier arch 7.5-8.2) is now most of a placement and the next target: the
+refresh's builds onto a worker, as the water refresh does.
+
 ## Phase 5 (starting landforms): pinned performance pass (2026-10-04)
 
 What a starting landform costs: the open time of a new map per landform against Flat (the
@@ -2594,3 +2629,37 @@ the half-width table; not re-run).
   hidden / shown / hidden: 3.038 / 2.907 / 3.068 / 2.910 ms, so the water past the edge (the
   one ribbon surface, the rivers' water in it) is about 0.14 ms of it; the whole skirt hidden
   1.556 ms.
+
+### Erase frame and the stroke's patch (2026-10-05)
+
+**The erase's 29-30 ms frame held.** `jobs/p6_perf_build.json`, two clean runs before the fix
+(one more, run while another session rendered, idle median 35 ms, discarded): the short river's
+erase 29.7 / 29.7 ms worst, the edge river's erase 24.9 / 30.4, the strokes 23.2-27.3 and
+32.1-33.7. `water_timing` now splits the main-thread swap (`AuthoredWater.last_swap_parts`):
+18-24 ms of it was `mesh`, 13.7-16.1 ms, all of it `surface_set_material` on the carrier
+material that hands the flow texture to `process_water_meshes`. A BaseMaterial3D's generated
+shader is shared by the materials with its feature set and freed with the last of them; each
+swap freed the old carrier and so the shader, and the new carrier built it again. The same
+level loaded from disk paid 0.3 ms (a carrier from the load kept it alive), which is why a
+dressed session (`jobs/pol_p6_erase.json`) never showed it and a new map
+(`jobs/pol_p6_newmap.json`) always did. One carrier is now kept for the session
+(`AuthoredWater._keep_carrier_shader`), warmed as the Water tool opens (`warm_flow_carrier`).
+
+| `_p6_perf_exits`, zoom 24, CPU worst ms | Before (two runs) | After (two runs) |
+| --- | --- | --- |
+| Waist river stopping 3.4 m short of the left edge | 23.2 / 27.3 | 11.6 / 10.5 |
+| Its erase | 29.7 / 29.7 | 9.0 / 11.7 |
+| The same river drawn past the left edge | 33.7 / 32.1 | 15.4 / 13.3 |
+| Its erase | 24.9 / 30.4 | 10.0 / 12.7 |
+| A deep pond painted to the near edge | 28.8 / 25.9 | 20.9 / 21.9 |
+
+The swap 18.3-25.7 -> 4.6-10.2 ms (`mesh` 0.3-0.6; what is left is the surfaces' concave
+shapes, 2-5 ms, and `apply_river_exits`, 1.6-3.2). Medians 4.8-5.3 ms in every window of both
+(idle 4.8-5.1, against 3.8 in the P6-3 runs; the close-zoom canopy work landed in between). The
+first stroke of a new map still has one 22-23 ms frame, the carve's own ground and dressing
+upload (`ground` 9-15, `dressing_upload` 18-20 ms), not the swap.
+
+**The stroke's patch.** During a sculpt stroke on the edge the exits' patch now moves with the
+in-place skirt (`SkirtExits.update_channel_in_place`, `systems/water.md` "Past the map edge"):
+1.8 ms headless for the 18 columns of a 4.5 m strip in one call (normals re-encoded only where
+they change: an inner column's ring 0), so a dab's own few columns cost well under that.

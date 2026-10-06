@@ -261,7 +261,11 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
   `WaterGeometry.grounds_at` and `levels_along` (each run of four rows asks the river cut to
   the segments near its own box, `_course_near`, so the values are level_at's), and the
   stones' wet-run walk does the same: a 2.5 m waist ford 4.46 -> 1.93 ms, the ankle ford 3.04
-  -> 1.26. The geometry is byte-identical (the parts' and moss split's digests before and
+  -> 1.26 (then 1.60 and 1.05 with the facet, face and quad loops written without per-item
+  arrays). In game (`jobs/p4d_perf_build.json`): every placement's swap 0.35-1.5 ms (was
+  1.8-6.3), a ford's build 1.84 ms, a ford placement's refresh 2.8-3.0 ms (was 6.9 and 9.8), an
+  undo 1.2-1.4 ms (was 4.4); `PERFORMANCE.md` "Swap and ford build (2026-10-05)". The geometry
+  is byte-identical (the parts' and moss split's digests before and
   after; `test_crossing_cache.gd` compares the batches with the per-point calls and the
   incremental deck field with a full build). In play the crossings
   cost nothing measurable and add about 50 ms to a load with four (`PERFORMANCE.md` "Phase 4b
@@ -386,8 +390,8 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
 ## Open work
 
 The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work"; this doc does not repeat it
-(the generous downstream refusal zone, the ford's underwater read, the single-node swap cost
-and crossings over a Blender map's own water are there).
+(the generous downstream refusal zone, the ford bar's read through the clear shallows, the
+arch's main-thread build and crossings over a Blender map's own water are there).
 
 ## History
 
