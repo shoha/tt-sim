@@ -32,6 +32,9 @@ const SET_FOR_SLOT := {
 const WIDTH := 8
 const HEIGHT := 64
 
+## "#base#shadow#highlight" -> its column Image (column()).
+static var _columns: Dictionary = {}
+
 
 ## The column of `slot` (its index in SLOTS), or -1.
 static func slot_index(slot: String) -> int:
@@ -62,9 +65,18 @@ static func _smooth(t: float) -> float:
 ## Colour (encoded sRGB floats) at palette position v for one triple: shadow -> base over
 ## [0, 0.5], base -> highlight over [0.5, 1], each half eased by smoothstep.
 static func gradient(triple: Array, v: float) -> PackedFloat64Array:
-	var base := hex_to_rgb(String(triple[0]))
-	var shadow := hex_to_rgb(String(triple[1]))
-	var high := hex_to_rgb(String(triple[2]))
+	return _gradient_rgb(
+		hex_to_rgb(String(triple[0])),
+		hex_to_rgb(String(triple[1])),
+		hex_to_rgb(String(triple[2])),
+		v
+	)
+
+
+## gradient() on a triple already parsed (base, shadow, highlight).
+static func _gradient_rgb(
+	base: PackedFloat64Array, shadow: PackedFloat64Array, high: PackedFloat64Array, v: float
+) -> PackedFloat64Array:
 	var t := clampf(v, 0.0, 1.0)
 	var out := PackedFloat64Array([0.0, 0.0, 0.0])
 	if t < 0.5:
@@ -95,16 +107,35 @@ static func resolve_triples(colour_sets: Dictionary, picks: Dictionary) -> Dicti
 ## The figure palette as an 8 x 64 RGB8 image, row 0 the highlight end (glTF v = 0).
 static func build_image(colour_sets: Dictionary, picks: Dictionary) -> Image:
 	var triples := resolve_triples(colour_sets, picks)
+	var image := Image.create_empty(WIDTH, HEIGHT, false, Image.FORMAT_RGB8)
+	for col in WIDTH:
+		image.blit_rect(column(triples[SLOTS[col]]), Rect2i(0, 0, 1, HEIGHT), Vector2i(col, 0))
+	return image
+
+
+## One palette column (1 x HEIGHT, RGB8, row 0 the highlight end) for a triple. Columns are
+## cached by triple: a figure's palette is eight of them side by side, and a colour change
+## in a builder computes only the column that changed.
+static func column(triple: Array) -> Image:
+	var key := "%s%s%s" % [triple[0], triple[1], triple[2]]
+	if _columns.has(key):
+		return _columns[key]
+	var base := hex_to_rgb(String(triple[0]))
+	var shadow := hex_to_rgb(String(triple[1]))
+	var high := hex_to_rgb(String(triple[2]))
 	var data := PackedByteArray()
-	data.resize(WIDTH * HEIGHT * 3)
+	data.resize(HEIGHT * 3)
 	for row in HEIGHT:
 		# Image row 0 is the top of the PNG, which is v = 1 in figurine's bottom-up array.
 		var v := (HEIGHT - 1 - row + 0.5) / HEIGHT
-		for col in WIDTH:
-			var rgb := gradient(triples[SLOTS[col]], v)
-			for c in 3:
-				data[(row * WIDTH + col) * 3 + c] = floori(clampf(rgb[c], 0.0, 1.0) * 255.0 + 0.5)
-	return Image.create_from_data(WIDTH, HEIGHT, false, Image.FORMAT_RGB8, data)
+		var rgb := _gradient_rgb(base, shadow, high, v)
+		for c in 3:
+			data[row * 3 + c] = floori(clampf(rgb[c], 0.0, 1.0) * 255.0 + 0.5)
+	var image := Image.create_from_data(1, HEIGHT, false, Image.FORMAT_RGB8, data)
+	if _columns.size() >= 256:
+		_columns.clear()
+	_columns[key] = image
+	return image
 
 
 ## The palette as a texture for the figure shader.

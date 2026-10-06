@@ -17,6 +17,9 @@ extends RefCounted
 ## the waist class, 0.9 m, and the deep class, 2.0 m). Where a floating body's bed rises
 ## above the float height (its shallow edge), the token stands on the bed: the landing is
 ## the higher of the two, so walking out of deep water onto a bank is continuous.
+## An avatar figure swims instead of floating (draft_for, SWIM_DEPTH_SHARE): in floating water
+## it sinks until the surface crosses its chest, and counts as submerged while swimming
+## (submerged_share_for).
 ## A token the water hides (is_submerged()) shows a SubmergedMarker at the surface above it.
 ## Summary: docs/systems/water.md (Authored water at runtime).
 
@@ -50,15 +53,39 @@ const BOB_PERIOD_S := 2.6
 ## shows nothing; with 12 cm of it out, only a speck of its crest among the foam).
 const SUBMERGED_FREEBOARD_M := 0.1
 const SUBMERGED_SHARE := 0.2
+## Swim rule (avatars, draft_for): in floating water a figure sinks until the surface is at
+## SWIM_DEPTH_SHARE of its posed height, about its chest (the kit's Chest bone sits at 0.63-0.7
+## of a figure's height and the shoulders at about 0.78), so head, shoulders and a raised arm
+## stay out while the hips and legs are under; standing on deep water read as walking on it.
+## Wading depth does not change: wadeable water still stands a figure on the bed.
+const SWIM_DEPTH_SHARE := 0.68
+## A swimmer counts as submerged (the cue shows) while less than this share of it is above
+## the surface: a figure swimming chest-deep (0.32 out) is, one wading thigh-deep is not.
+const SWIM_SUBMERGED_SHARE := 0.4
 
 
 ## Where a token's base rests over bed height `bed_y` under a water surface at `surface_y`
 ## (NAN for no water) that floats tokens when `floats`: the bed in wadeable water or none,
-## else the float height, never below the bed. Pure.
-static func landing_y(bed_y: float, surface_y: float, floats: bool) -> float:
+## else the float height, `draft` under the surface (draft_for), never below the bed. Pure.
+static func landing_y(
+	bed_y: float, surface_y: float, floats: bool, draft: float = DRAFT_M
+) -> float:
 	if is_nan(surface_y) or surface_y <= bed_y or not floats:
 		return bed_y
-	return maxf(bed_y, surface_y - DRAFT_M)
+	return maxf(bed_y, surface_y - draft)
+
+
+## How far below the surface a floating token `height` metres tall rides: DRAFT_M for a
+## token, which bobs at the surface like a game piece; SWIM_DEPTH_SHARE of its height for a
+## figure that `swims` (an avatar), so the surface crosses its chest. Pure.
+static func draft_for(height: float, swims: bool) -> float:
+	return SWIM_DEPTH_SHARE * height if swims else DRAFT_M
+
+
+## The share of a token's height that may stand above the surface while it still counts as
+## submerged (is_submerged): SUBMERGED_SHARE, or SWIM_SUBMERGED_SHARE for a swimmer. Pure.
+static func submerged_share_for(swims: bool) -> float:
+	return SWIM_SUBMERGED_SHARE if swims else SUBMERGED_SHARE
 
 
 ## Whether a surface floats tokens: an authored body's own answer (`body_floats` a bool), or
@@ -75,24 +102,27 @@ static func floats_for(body_floats: Variant, depth: float) -> bool:
 ## max(SUBMERGED_FREEBOARD_M, SUBMERGED_SHARE of its height) of it above. A small token
 ## wading waist-deep water is; a floating token rides at the surface and is not, unless it
 ## is tiny. Pure.
-static func is_submerged(base_y: float, top_y: float, surface_y: float) -> bool:
+## `share` replaces SUBMERGED_SHARE (submerged_share_for).
+static func is_submerged(
+	base_y: float, top_y: float, surface_y: float, share: float = SUBMERGED_SHARE
+) -> bool:
 	if is_nan(surface_y) or base_y >= surface_y:
 		return false
-	var showing := maxf(SUBMERGED_FREEBOARD_M, SUBMERGED_SHARE * (top_y - base_y))
+	var showing := maxf(SUBMERGED_FREEBOARD_M, share * (top_y - base_y))
 	return top_y < surface_y + showing
 
 
 ## The world Y of the water surface hiding a token whose base is at world `base` and which
-## stands `height` metres tall (is_submerged()), or NAN when no water hides it. One or two
-## rays on LAYER, cast from above the token's top.
+## stands `height` metres tall (is_submerged(), with `share`), or NAN when no water hides it.
+## One or two rays on LAYER, cast from above the token's top.
 static func submerged_surface(
-	space: PhysicsDirectSpaceState3D, base: Vector3, height: float
+	space: PhysicsDirectSpaceState3D, base: Vector3, height: float, share: float = SUBMERGED_SHARE
 ) -> float:
 	var water := water_below(space, base, base.y + height + CAST_CLEARANCE_M)
 	if water.is_empty():
 		return NAN
 	var y: float = water.y
-	return y if is_submerged(base.y, base.y + height, y) else NAN
+	return y if is_submerged(base.y, base.y + height, y, share) else NAN
 
 
 ## The first water surface straight below world (xz.x, from_y, xz.z): {"y": world Y,
@@ -140,8 +170,9 @@ static func is_water_hit(hit: Dictionary) -> bool:
 ## The ground a token lands on at world XZ `xz`: the bed found casting down on the terrain
 ## layer from `ground_top`, raised to the float height (landing_y()) under a surface found
 ## casting down on LAYER from `ground_top` + CAST_CLEARANCE_M. Vector3.INF with no bed.
+## `draft` is the token's (draft_for).
 static func landing_below(
-	space: PhysicsDirectSpaceState3D, xz: Vector3, ground_top: float
+	space: PhysicsDirectSpaceState3D, xz: Vector3, ground_top: float, draft: float = DRAFT_M
 ) -> Vector3:
 	var bed := cast_down(space, xz, ground_top, TERRAIN_LAYER)
 	if bed.is_empty():
@@ -151,7 +182,7 @@ static func landing_below(
 	if water.is_empty():
 		return at
 	var floats := floats_for(water.floats, water.y - at.y)
-	return Vector3(at.x, landing_y(at.y, water.y, floats), at.z)
+	return Vector3(at.x, landing_y(at.y, water.y, floats, draft), at.z)
 
 
 ## The walkable surface at world XZ `xz`: the higher of the ground (terrain layer, cast from
@@ -174,9 +205,12 @@ static func surface_below(
 
 ## True when a token whose base is at `base` floats: a floating surface is above it and the
 ## base sits at its float height (within `tolerance`). For the bob after a landing or a
-## synced move.
+## synced move. `draft` is the token's (draft_for).
 static func floats_at(
-	space: PhysicsDirectSpaceState3D, base: Vector3, tolerance: float = 0.05
+	space: PhysicsDirectSpaceState3D,
+	base: Vector3,
+	tolerance: float = 0.05,
+	draft: float = DRAFT_M,
 ) -> bool:
 	var water := water_below(space, base, base.y + CAST_CLEARANCE_M)
 	if water.is_empty() or water.y <= base.y:
@@ -185,7 +219,7 @@ static func floats_at(
 	var bed_y: float = (bed.position as Vector3).y if not bed.is_empty() else -INF
 	if not floats_for(water.floats, water.y - bed_y):
 		return false
-	return absf(base.y - (water.y - DRAFT_M)) <= tolerance
+	return absf(base.y - (water.y - draft)) <= tolerance
 
 
 ## A StaticBody3D on LAYER only (no mask, not ray-pickable) carrying BODY_META and, when

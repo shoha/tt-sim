@@ -34,6 +34,11 @@ const GIRTH_M := 0.1
 const MIN_RADIUS_M := 0.15
 ## The contract's 0.6 m footprint (docs/ASSET_PIPELINE.md section 10).
 const MAX_RADIUS_M := 0.3
+## Capsule shapes are shared by size rounded to this (capsule_shape).
+const SHAPE_STEP_M := 0.01
+
+## Vector2(radius, height) -> ConvexPolygonShape3D (capsule_shape).
+static var _shapes: Dictionary = {}
 
 
 ## {"radius", "height"} of the capsule round `figure`'s body core, with its soles on y = 0.
@@ -43,9 +48,7 @@ static func capsule(kit: AvatarKit, figure: Node3D) -> Dictionary:
 	if sk == null or skeleton.is_empty():
 		return {"radius": MAX_RADIUS_M, "height": 1.6}
 	var resolved: Dictionary = figure.get_meta("avatar_recipe", {})
-	var maps := AvatarProportions.bone_maps(
-		skeleton, kit.manifest.get("proportions", {}), resolved.get("proportions", {})
-	)
+	var maps: Dictionary = kit.cache.shape(resolved.get("proportions", {})).maps
 	var globals := {}
 	var top := 0.0
 	var reach := 0.0
@@ -67,21 +70,34 @@ static func capsule(kit: AvatarKit, figure: Node3D) -> Dictionary:
 
 
 ## A capsule shape round the body core, its bottom on the token's origin: a convex hull of
-## a CapsuleShape3D's points raised by half its height, because the selection glow, the
-## occlusion fade and the submerged cue read a token's collision box in the shape's own
-## space and expect a pack token's layout (feet at the origin, shape not offset).
+## capsule points (an octagon at the equator of each cap, a smaller one halfway up the cap,
+## and the two poles), because the selection glow, the occlusion fade and the submerged cue
+## read a token's collision box in the shape's own space and expect a pack token's layout
+## (feet at the origin, shape not offset). Computing a hull costs a millisecond or more, so
+## shapes are shared by size, rounded to SHAPE_STEP_M (Shape3D resources are shareable).
 static func capsule_shape(radius: float, height: float) -> ConvexPolygonShape3D:
-	var mesh := CapsuleMesh.new()
-	mesh.radius = radius
-	mesh.height = height
-	mesh.radial_segments = 12
-	mesh.rings = 4
-	var raw: PackedVector3Array = mesh.get_mesh_arrays()[Mesh.ARRAY_VERTEX]
-	var points := PackedVector3Array()
-	for v in raw:
-		points.append(v + Vector3(0.0, height * 0.5, 0.0))
+	var r := snappedf(radius, SHAPE_STEP_M)
+	var h := maxf(snappedf(height, SHAPE_STEP_M), r * 2.0)
+	var key := Vector2(r, h)
+	if _shapes.has(key):
+		return _shapes[key]
+	var points := PackedVector3Array([Vector3(0.0, 0.0, 0.0), Vector3(0.0, h, 0.0)])
+	# (ring radius, height): each cap's equator, and its 45-degree latitude.
+	var rings: Array[Vector2] = [
+		Vector2(r, r),
+		Vector2(r, h - r),
+		Vector2(r * 0.7071, r * 0.2929),
+		Vector2(r * 0.7071, h - r * 0.2929),
+	]
+	for ring in rings:
+		for k in 8:
+			var a := TAU * k / 8.0
+			points.append(Vector3(cos(a) * ring.x, ring.y, sin(a) * ring.x))
 	var shape := ConvexPolygonShape3D.new()
 	shape.points = points
+	if _shapes.size() >= 64:
+		_shapes.clear()
+	_shapes[key] = shape
 	return shape
 
 

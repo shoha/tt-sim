@@ -43,6 +43,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _report(gm)
 		"timing":
 			return _timing(gm, lpc, step)
+		"profile":
+			return _profile(int(step.get("count", 30)))
 		"save":
 			return _save(base, step)
 		"cleanup":
@@ -212,7 +214,7 @@ static func _report(gm: GameMap) -> String:
 						_describe(token),
 						_blocker(gm, token.rigid_body.global_position),
 						str(base_at.snapped(Vector3.ONE * 0.01)),
-						str(WaterSurface.floats_at(space, base_at)),
+						str(WaterSurface.floats_at(space, base_at, 0.05, drag.water_draft())),
 						str(drag.is_submerged_cue_shown()),
 					]
 				)
@@ -304,6 +306,200 @@ static func _timing(gm: GameMap, lpc: LevelPlayController, step: Dictionary) -> 
 			_median(tokens),
 		]
 	)
+
+
+## Medians over `count` runs, off the board (works from the title screen): a full build
+## (AvatarKit.build_figure), the capsule, AvatarTokenFactory.create, and set_recipe on a
+## placed token for each kind of change the builder makes (a colour, a face cell, the stance,
+## a proportion), each alternating between two values so every call changes something.
+static func _profile(count: int) -> String:
+	var kit := AvatarTokenFactory.kit()
+	var base := AvatarPresets.recipe(0)
+	var builds := []
+	var capsules := []
+	var creates := []
+	for k in count:
+		var recipe := AvatarPresets.recipe(k % AvatarPresets.PRESETS.size())
+		var t0 := Time.get_ticks_usec()
+		var figure := kit.build_figure(recipe)
+		var t1 := Time.get_ticks_usec()
+		AvatarExtent.capsule(kit, figure)
+		var t2 := Time.get_ticks_usec()
+		var token := AvatarTokenFactory.create(recipe)
+		var t3 := Time.get_ticks_usec()
+		builds.append((t1 - t0) / 1000.0)
+		capsules.append((t2 - t1) / 1000.0)
+		creates.append((t3 - t2) / 1000.0)
+		figure.free()
+		token.free()
+	var changes := {
+		"colour": func(r: Dictionary, k: int) -> void: r.colours.hair = k % 2 + 3,
+		"face": func(r: Dictionary, k: int) -> void: r.face.mouths = k % 2 + 1,
+		"stance":
+		func(r: Dictionary, k: int) -> void:
+## Render-job probe (`call` op) for avatar tokens (AvatarTokenFactory, the avatar token
+## card): spawns preset avatars (AvatarPresets) as real board tokens through
+## LevelPlayController.spawn_avatar in play, for jobs/avatar_token_look.json. Positions are
+## map XZ metres. `action`:
+## - `pair` (`points` [[x, z], ...], `open_points` [[x, z], ...], `presets` [canopy, open]):
+##   spawns one avatar at the first of `points` whose shade ray meets a canopy and a second,
+##   selected, at the first of `open_points` in sun (turned 30 degrees, to show the figure
+##   turns with the token); logs both tokens' capsule (radius, height), shade and blocker.
+## - `look` (`index`, -1 the last token; `height` default 0.8; `between` true: the midpoint
+##   of the first two): pans the screen centre onto that point.
+## - `hide` (`index`, `hidden` default true): set_visible_to_players; logs the figure's
+##   hidden_fade.
+## - `spawn_at` (`at`, `preset`): one avatar dropped onto whatever is under `at` (the
+##   browser's settle), for the submerged cue; `report` then says what it shows.
+## - `report`: every avatar token's base, capsule, shade, submerged cue and float state, and
+##   the occlusion fade's published entries (centre, radius) for them.
+## - `timing` (`count` default 15, `at`): times `count` avatar spawns (AvatarTokenFactory
+##   .create plus adding to the board) and, for each, the shade ray walking the map
+##   (AvatarShade without a cache, the old path) and through the map's AvatarShadeCache;
+##   logs the medians, the cache's build time and crown count, then removes those tokens.
+## - `save` (`folder`, `replace`): writes the open authoring map as an `_avatartoken_` level.
+## - `cleanup`: deletes every `_avatartoken_*` level folder.
+
+## Pans so the screen centre looks at a token (or the first two's midpoint) `height` above
+## its feet, as the driver's look_at does for a ground point.
+
+			# The token build's parts, apart: the figure alone, its capsule, and the BoardToken.
+
+## Medians over `count` runs, off the board (works from the title screen): a full build
+## (AvatarKit.build_figure), the capsule, AvatarTokenFactory.create, and set_recipe on a
+## placed token for each kind of change the builder makes (a colour, a face cell, the stance,
+## a proportion), each alternating between two values so every call changes something.
+
+			r.stance = "stance_heroic" if k % 2 == 0 else "stance_relaxed",
+		"proportion":
+		func(r: Dictionary, k: int) -> void: r.proportions.height = 0.3 + 0.4 * (k % 2),
+		"colour_new":
+		func(r: Dictionary, k: int) -> void:
+## Render-job probe (`call` op) for avatar tokens (AvatarTokenFactory, the avatar token
+## card): spawns preset avatars (AvatarPresets) as real board tokens through
+## LevelPlayController.spawn_avatar in play, for jobs/avatar_token_look.json. Positions are
+## map XZ metres. `action`:
+## - `pair` (`points` [[x, z], ...], `open_points` [[x, z], ...], `presets` [canopy, open]):
+##   spawns one avatar at the first of `points` whose shade ray meets a canopy and a second,
+##   selected, at the first of `open_points` in sun (turned 30 degrees, to show the figure
+##   turns with the token); logs both tokens' capsule (radius, height), shade and blocker.
+## - `look` (`index`, -1 the last token; `height` default 0.8; `between` true: the midpoint
+##   of the first two): pans the screen centre onto that point.
+## - `hide` (`index`, `hidden` default true): set_visible_to_players; logs the figure's
+##   hidden_fade.
+## - `spawn_at` (`at`, `preset`): one avatar dropped onto whatever is under `at` (the
+##   browser's settle), for the submerged cue; `report` then says what it shows.
+## - `report`: every avatar token's base, capsule, shade, submerged cue and float state, and
+##   the occlusion fade's published entries (centre, radius) for them.
+## - `timing` (`count` default 15, `at`): times `count` avatar spawns (AvatarTokenFactory
+##   .create plus adding to the board) and, for each, the shade ray walking the map
+##   (AvatarShade without a cache, the old path) and through the map's AvatarShadeCache;
+##   logs the medians, the cache's build time and crown count, then removes those tokens.
+## - `save` (`folder`, `replace`): writes the open authoring map as an `_avatartoken_` level.
+## - `cleanup`: deletes every `_avatartoken_*` level folder.
+
+## Pans so the screen centre looks at a token (or the first two's midpoint) `height` above
+## its feet, as the driver's look_at does for a ground point.
+
+			# The token build's parts, apart: the figure alone, its capsule, and the BoardToken.
+
+## Medians over `count` runs, off the board (works from the title screen): a full build
+## (AvatarKit.build_figure), the capsule, AvatarTokenFactory.create, and set_recipe on a
+## placed token for each kind of change the builder makes (a colour, a face cell, the stance,
+## a proportion), each alternating between two values so every call changes something.
+
+			# Values not seen before (cache misses): a slider dragged through new colours and
+			# new heights.
+
+			r.colours.primary = k % 12
+			r.colours.secondary = (k * 5 + 1) % 12
+			r.colours.hair = k % 9,
+		"face_new":
+		func(r: Dictionary, k: int) -> void:
+## Render-job probe (`call` op) for avatar tokens (AvatarTokenFactory, the avatar token
+## card): spawns preset avatars (AvatarPresets) as real board tokens through
+## LevelPlayController.spawn_avatar in play, for jobs/avatar_token_look.json. Positions are
+## map XZ metres. `action`:
+## - `pair` (`points` [[x, z], ...], `open_points` [[x, z], ...], `presets` [canopy, open]):
+##   spawns one avatar at the first of `points` whose shade ray meets a canopy and a second,
+##   selected, at the first of `open_points` in sun (turned 30 degrees, to show the figure
+##   turns with the token); logs both tokens' capsule (radius, height), shade and blocker.
+## - `look` (`index`, -1 the last token; `height` default 0.8; `between` true: the midpoint
+##   of the first two): pans the screen centre onto that point.
+## - `hide` (`index`, `hidden` default true): set_visible_to_players; logs the figure's
+##   hidden_fade.
+## - `spawn_at` (`at`, `preset`): one avatar dropped onto whatever is under `at` (the
+##   browser's settle), for the submerged cue; `report` then says what it shows.
+## - `report`: every avatar token's base, capsule, shade, submerged cue and float state, and
+##   the occlusion fade's published entries (centre, radius) for them.
+## - `timing` (`count` default 15, `at`): times `count` avatar spawns (AvatarTokenFactory
+##   .create plus adding to the board) and, for each, the shade ray walking the map
+##   (AvatarShade without a cache, the old path) and through the map's AvatarShadeCache;
+##   logs the medians, the cache's build time and crown count, then removes those tokens.
+## - `save` (`folder`, `replace`): writes the open authoring map as an `_avatartoken_` level.
+## - `cleanup`: deletes every `_avatartoken_*` level folder.
+
+## Pans so the screen centre looks at a token (or the first two's midpoint) `height` above
+## its feet, as the driver's look_at does for a ground point.
+
+			# The token build's parts, apart: the figure alone, its capsule, and the BoardToken.
+
+## Medians over `count` runs, off the board (works from the title screen): a full build
+## (AvatarKit.build_figure), the capsule, AvatarTokenFactory.create, and set_recipe on a
+## placed token for each kind of change the builder makes (a colour, a face cell, the stance,
+## a proportion), each alternating between two values so every call changes something.
+
+			# Values not seen before (cache misses): a slider dragged through new colours and
+			# new heights.
+
+			r.face.mouths = k % 5
+			r.face.eyes = k % 7,
+		"proportion_new":
+		func(r: Dictionary, k: int) -> void: r.proportions.height = 0.2 + 0.015 * k,
+	}
+	var colds := []
+	for k in count:
+		kit.cache.clear()
+		var t0 := Time.get_ticks_usec()
+		kit.build_figure(AvatarPresets.recipe(k % AvatarPresets.PRESETS.size())).free()
+		colds.append((Time.get_ticks_usec() - t0) / 1000.0)
+	var out := PackedStringArray()
+	out.append(
+		(
+			"build_figure %.3f ms (cold cache %.3f ms), capsule %.3f ms, create %.3f ms"
+			% [_median(builds), _median(colds), _median(capsules), _median(creates)]
+		)
+	)
+	# set_recipe's parts on a placed token, apart.
+	var probe_token := AvatarTokenFactory.create(base)
+	var view := AvatarTokenFactory.view_of(probe_token)
+	var parts := {"build": [], "set_figure": [], "capsule_shape": []}
+	for k in count:
+		var t0 := Time.get_ticks_usec()
+		var figure := kit.build_figure(AvatarPresets.recipe(k % 6))
+		var t1 := Time.get_ticks_usec()
+		view.set_figure(figure)
+		var t2 := Time.get_ticks_usec()
+		AvatarExtent.capsule_shape(0.3, 1.6)
+		var t3 := Time.get_ticks_usec()
+		parts.build.append((t1 - t0) / 1000.0)
+		parts.set_figure.append((t2 - t1) / 1000.0)
+		parts.capsule_shape.append((t3 - t2) / 1000.0)
+	probe_token.free()
+	for key in parts:
+		out.append("%s %.3f ms" % [key, _median(parts[key])])
+	for kind in changes:
+		var token := AvatarTokenFactory.create(base)
+		var times := []
+		for k in count:
+			var recipe := base.duplicate(true)
+			(changes[kind] as Callable).call(recipe, k)
+			var t0 := Time.get_ticks_usec()
+			AvatarTokenFactory.set_recipe(token, recipe)
+			times.append((Time.get_ticks_usec() - t0) / 1000.0)
+		token.free()
+		out.append("set_recipe %s %.3f ms" % [kind, _median(times)])
+	return "profile (%d runs, medians): %s" % [count, "; ".join(out)]
 
 
 static func _vec2(value: Variant) -> Vector2:

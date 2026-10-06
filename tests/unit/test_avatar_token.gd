@@ -247,6 +247,42 @@ func test_a_rebuilt_figure_keeps_the_hidden_fade() -> void:
 		)
 
 
+func test_set_recipe_rebuilds_only_what_changed() -> void:
+	var token := _token()
+	var view := AvatarTokenFactory.view_of(token)
+	var figure := view.figure
+	var colours := RECIPE.duplicate(true)
+	colours.colours.primary = 5
+	AvatarTokenFactory.set_recipe(token, colours)
+	assert_same(view.figure, figure, "a colour change keeps the figure")
+	assert_eq((figure.get_meta("avatar_recipe") as Dictionary).colours.primary, 5)
+	var stance := colours.duplicate(true)
+	stance.stance = "stance_sneaky"
+	var shape_before: Shape3D = token.get_dragging_object().collision_shape.shape
+	AvatarTokenFactory.set_recipe(token, stance)
+	assert_same(view.figure, figure, "a stance change keeps the figure")
+	assert_eq((figure.get_meta("avatar_recipe") as Dictionary).stance, "stance_sneaky")
+	assert_ne(
+		token.get_dragging_object().collision_shape.shape, shape_before, "a crouch, a new capsule"
+	)
+	var taller := stance.duplicate(true)
+	taller.proportions.height = 0.95
+	AvatarTokenFactory.set_recipe(token, taller)
+	assert_ne(view.figure, figure, "new proportions build a new figure")
+
+
+func test_figures_share_cached_skins_and_materials() -> void:
+	var kit := AvatarTokenFactory.kit()
+	var a := kit.build_figure(RECIPE)
+	var b := kit.build_figure(RECIPE)
+	var parts_a := AvatarKit.figure_parts(a)
+	var parts_b := AvatarKit.figure_parts(b)
+	assert_same(parts_a[0].skin, parts_b[0].skin)
+	assert_same(parts_a[0].material_override, parts_b[0].material_override)
+	a.free()
+	b.free()
+
+
 # --- shade cache ------------------------------------------------------------------------------
 
 

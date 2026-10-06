@@ -172,7 +172,11 @@ maps.
   never below the bed (walking out onto a bank is continuous). Authored bodies float when
   their depth class is deep (`WaterBody.is_wadeable`); a Blender plane has no class, so it
   floats a token where the water is at least `FLOAT_DEPTH_M` (1.4 m, between waist and deep)
-  deep. River (0.59 m) is wadeable. Used by `DraggableToken._find_landing_position` (the
+  deep. River (0.59 m) is wadeable. An avatar figure swims instead (`draft_for`, the swim
+  rule): its draft is `SWIM_DEPTH_SHARE` (0.68) of its height, so the surface crosses its
+  chest, and it counts as submerged (the cue shows) while less than `SWIM_SUBMERGED_SHARE`
+  (0.4) of it is out (`submerged_share_for`); in wadeable water it stands on the bed like any
+  token. Used by `DraggableToken._find_landing_position` (the
   water cast starts `CAST_CLEARANCE_M` above the token's top, which can be under deep water)
   and `GameMap._resolve_drag_ground` (authored terrain; on a Blender map it answers only
   over water and keeps the cursor-hit height elsewhere). A floating token bobs its visuals

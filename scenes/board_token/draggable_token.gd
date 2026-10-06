@@ -465,7 +465,7 @@ func _find_landing_position() -> Variant:
 
 	# Terrain and water only (layers 1 and WaterSurface.LAYER), never other tokens.
 	var ground := WaterSurface.landing_below(
-		get_world_3d().direct_space_state, top_world, top_world.y
+		get_world_3d().direct_space_state, top_world, top_world.y, water_draft()
 	)
 	if ground == Vector3.INF:
 		return null
@@ -491,7 +491,9 @@ func _base_position() -> Vector3:
 func _update_floating() -> void:
 	if not rigid_body or not rigid_body.is_inside_tree():
 		return
-	var floating := WaterSurface.floats_at(get_world_3d().direct_space_state, _base_position())
+	var floating := WaterSurface.floats_at(
+		get_world_3d().direct_space_state, _base_position(), 0.05, water_draft()
+	)
 	if floating == (_bob_tween != null):
 		return
 	_kill_bob_tween()
@@ -524,11 +526,25 @@ func _update_submerged_cue(moving: bool) -> void:
 	if at != null:
 		at = (at as Vector3) + Vector3(0, box.position.y, 0)
 		var space := get_world_3d().direct_space_state
-		surface = WaterSurface.submerged_surface(space, at, box.size.y)
+		surface = WaterSurface.submerged_surface(
+			space, at, box.size.y, WaterSurface.submerged_share_for(_swims())
+		)
 	if is_nan(surface):
 		_submerged_marker.hide_marker()
 	else:
 		_submerged_marker.show_at(Vector3(at.x, surface, at.z))
+
+
+## How far below the surface this token rides in floating water (WaterSurface.draft_for):
+## an avatar swims chest-deep, any other token floats at the surface.
+func water_draft() -> float:
+	return WaterSurface.draft_for(cue_box().size.y, _swims())
+
+
+## Whether the swim rule applies (an avatar figure).
+func _swims() -> bool:
+	var board_token := get_parent() as BoardToken
+	return board_token != null and board_token.is_avatar()
 
 
 ## Whether the submerged cue is showing (tests, render probes).
