@@ -681,11 +681,18 @@ figure has exactly one `body` and one `head` and at most one part in each other 
 
 ### Mesh
 
-- Smooth normals, with hard edges only where the producer marks them (a cuff, a hat brim):
-  the low-poly look comes from the silhouette, not from faceted shading.
+- Normals are the producer's choice per edge: smooth across skin and soft cloth, hard
+  where a form should read as a crisp plane (hair locks, collars and lapels, a cuff, a
+  brim). The low-poly look comes from angular, tapered silhouettes, not from faceted
+  shading on every surface.
 - A whole figure is 1,000 to 3,000 triangles; each part's count is in `kit.json`.
-- `COLOR_0` is not used (no wind on figures yet). If hair or cloth sway is added later it
-  uses section 5's channel meanings.
+- `COLOR_0.R` is the part's light response per vertex: 0 shows the painted texture alone
+  (unlit), 1 takes the figure shader's full soft light. The face area is always 0 (anime
+  faces stay flat; Crashsune's faces are unlit), hair and cloth sit low (about 0.2-0.4) so
+  the paint carries the shading. G, B and A are reserved (wind if hair or cloth sway is
+  added later; the probe's per-vertex outline width if an outline is ever wanted).
+- `extras.figurine_double_sided: true` marks a part whose open cards must render both
+  faces (hair locks built as planes); every other part is closed and back-face culled.
 - `TEXCOORD_0` maps the part's painted texture. The head also carries `TEXCOORD_1`, face
   space: the unit square over the face area (0 to 1 left to right and chin to brow; the
   rest of the head falls outside the square).
@@ -695,7 +702,10 @@ figure has exactly one `body` and one `head` and at most one part in each other 
 Each part GLB embeds two textures, both painted by figurine with paintkit's primitives:
 
 - `albedo` (sRGB): the painted part, every recolourable region painted as a neutral value
-  study, fixed detail (laces, seams, stitching, a buckle) painted in its own colour.
+  study, fixed detail (laces, seams, stitching, a buckle) painted in its own colour. Line
+  work is painted here as ink: fold lines, hems, finger separations, the edges of trim,
+  in a dark ink that is not recoloured. Hair carries its sheen as a painted band of
+  notched, triangular highlights (Crashsune's signature), with a deeper tone underneath.
 - `mask` (linear RGBA): the weight of each of four recolour channels per texel. The part's
   `extras.figurine_channels` names the colour slot each channel takes, from `skin`,
   `hair`, `eyes`, `primary`, `secondary`, `accent`, `leather`, `metal` (a top might be
@@ -772,11 +782,14 @@ because they constrain the producer:
 - Skinned, not baked: 30 figures cost nothing measurable in Forward+, and a skinned spawn
   is about 0.1 ms against 1.3-1.9 ms to bake. Mobile and Compatibility are unmeasured.
 - Godot skins VERTEX, NORMAL and TANGENT before `vertex()`.
-- Lighting is soft and low-contrast (the painted texture carries the shading); the
-  environment's ambient colour comes in through a global shader value, and shade under
-  trees through a per-figure value from one ray toward the sun.
-- No inverted-hull outline by default. If one is enabled, its pixel width needs
-  `abs(PROJECTION_MATRIX[1][1])` (negative under Vulkan).
+- Lighting is near-flat: the painted texture carries the shading, `COLOR_0.R` scales a
+  soft light term per vertex, and the face takes none. The environment's ambient colour
+  comes in through a global shader value (it tints even unlit paint, so a figure sits in a
+  sunset or a dungeon), and shade under trees through a per-figure value from one ray
+  toward the sun.
+- No geometric outline: ink is painted into the textures (the sticker borders around
+  Crashsune's showcase renders are 2D compositing, not geometry). If a hull is ever
+  enabled, its pixel width needs `abs(PROJECTION_MATRIX[1][1])` (negative under Vulkan).
 - A hidden-from-players avatar needs a dither parameter on the figure material
   (`BoardToken._set_mesh_transparency` only changes StandardMaterial3D), and each avatar
   token has its own collision capsule, which also sizes the selection glow.
