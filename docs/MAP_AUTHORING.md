@@ -416,8 +416,11 @@ home in a forest; the fade adds +0.05 to +0.2 ms at zoom 6 in a grove and nothin
 Phases 1-3 were released as v0.1.28 (2026-09-27); phases 4 and 4b (water, crossings, the
 submerged-token ring, worker-thread loading) as v0.1.29 (2026-09-28); phase 4c (waterfalls,
 the system docs pilot) as v0.1.30 (2026-10-04); phase 4d (the stone arch, fords, the
-per-crossing rebuild cache) as v0.1.31 (2026-10-04). Releases stay patch bumps until the
-whole map maker is finished, then the minor version goes up (user, 2026-09-27). The
+per-crossing rebuild cache) as v0.1.31 (2026-10-04); phase 5 (starting landforms), the
+landform follow-ups and phase 6 (rivers past the map edge) as v0.1.32 (2026-10-05); the edge
+follow-ups and ponds and lakes past the edge as v0.1.33 (2026-10-05). Releases stay patch
+bumps until the whole map maker is finished, then the minor version goes up (user,
+2026-09-27). The
 two-account Steam test (above) is still open and is best run on v0.1.31: it now also covers
 an arch and a ford reaching a peer, a token wading the ford, and a document
 with `splines.json`, `ponds.png`, a baked `water_flow.png` and `crossings.json` reaching a
@@ -452,15 +455,18 @@ Waterfall follow-ups (phase 4c, P4c-1 to P4c-5, 2026-10-04; none blocking):
   a fall is refused. It can be added later if wanted (decided 2026-10-04).
 
 Crossing follow-ups (after P4b-3, 2026-09-27, and phase 4d, 2026-10-04; later work, none
-blocking):
+blocking). Closed 2026-10-05: the ford's gravel through the water (clear shallows in
+`water.gdshader`: under 0.3 m the bed shows as itself, `systems/water.md` "Clear shallows"),
+and the arch and ford placement cost (a swap 0.35-1.5 ms, a ford's build 1.8 ms in game:
+`PERFORMANCE.md` "Swap and ford build (2026-10-05)"):
 - Crossings on a dressed Blender map's own water (deferred to a terrain-paint integration
   sprint, 2026-10-04): its water plane is not a crossing target
   (the snapping reads document water; the Bridge tool is disabled there with a tooltip unless
   the document has water), and its Blender scatter is not cleared under a crossing.
-- The ford's gravel never shows through the water: its underwater read is the shader's foam
-  alone (the water hides anything 0.25 m down; the crest profile turns the wash into a
-  gradient with an edge, as far as the mesh can take it). A foam band keyed to the ford, or
-  more transmission in the shallows, is `water.gdshader` work (P4d-4).
+- The ford's bar reads through the clear shallows as a paler, warmer band rather than as
+  textured gravel: its crest is shaded dark wet (`CrossingFord.WET_SHADE` 0.58), close to the
+  deep water's own value. A lighter crest shade would make the bar read more strongly
+  (judgment-set call; 2026-10-05).
 - A ford on an ankle stream is dominated by its two 2 m landings around a 1.1 m stripe; a
   landing narrower than the bar on a narrow stream would help (P4d-4).
 - The savanna's ford pads are red earth on yellow grass, the loudest of the set, in the tone
@@ -469,11 +475,9 @@ blocking):
 - The arch coping's moss decision is random per stone (a thrown key), so the pattern does not
   relate to position the way the stepping stones' field does; it reads right, but a field at a
   coarser scale along the parapet would be the principled version (P4d-4).
-- A single arch or ford node's swap is 4.4-6.3 ms (`moss_split` walks every facet in
-  GDScript, then the mesh and concave-shape upload), and a ford's build is 5 ms for 200
-  vertices, unprofiled; both are the next targets if a placement needs to go under a frame
-  (P4d-5, P4d-5b). The per-crossing cache itself is done (P4d-5b): a placement costs its own
-  crossing whatever the map's count (6-13 ms by kind, 3-4 ms for planks and stones).
+- An arch's build is still on the main thread: 3.9 ms for the 5.4 m arch, 7.5-8.2 ms for the
+  pier arch (most of a placement's 5-10 ms refresh now). Moving the refresh's builds onto a
+  worker, as the water refresh does, is the next step if a placement must go under a frame.
 - A painted path through the shallows stays what it is (P4b-0 lets it run into the water): it
   gives the look on ankle water but no passage over waist water, which the ford kind does.
 - Forest canopies in front of a crossing can hide it from the fixed camera (a 6 m canopy
@@ -509,14 +513,18 @@ frame of a stroke carved to the edge (the skirt's vertex mirror, now built on th
 of worker time for an edit away from them, was 669-704); and a sculpt at an exit, whose
 stroke-end water refresh now rebuilds that exit alone. P6-4 (2026-10-05) closed ponds and lakes
 touching the edge: they continue past it as a basin lobe with their water (`systems/water.md`
-"Past the map edge", Ponds). Still open:
+"Past the map edge", Ponds). Closed 2026-10-05: the exits' patch follows a sculpt stroke on
+the edge before the stroke ends (no hole onto the backdrop beside a raised mouth), and the
+erase's 29-30 ms frame (every water swap rebuilt the flow carrier's shader, 14 ms; now 9-13 ms
+worst frames: `PERFORMANCE.md` "Erase frame and the stroke's patch (2026-10-05)"). Still open:
 - A warm load with exits still builds every exit (about 280 ms of worker time per river exit,
   260 per pond exit, the load screen waits for it; no frame); the cache only helps refreshes.
 - A pond across a map corner gets a lobe on each side, each kept to its own side's sector of
   the skirt; where both lobes' water reaches the corner's diagonal they meet there without
   being merged (not seen in a capture; no test).
-- During a sculpt stroke on the edge the patch's outer columns stay at the stroke's start
-  heights beside the in-place skirt until the stroke's water refresh lands.
+- During a sculpt stroke beside a mouth the patch past the edge moves with the skirt, but
+  1-4 m out its bank can sit up to 0.35 m off where the rebuild carries the new bank along the
+  course; the stroke-end refresh settles it.
 
 Follow-ups:
 - A quick brush pass still gives few trees in sparse biomes (temperate forest targets 0.02
