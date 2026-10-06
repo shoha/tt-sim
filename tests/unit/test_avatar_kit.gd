@@ -41,7 +41,11 @@ func test_kit_loads_with_its_parts_skeleton_and_stances() -> void:
 	assert_not_null(_kit)
 	assert_eq(_kit.errors.size(), 0, "no load errors: %s" % str(_kit.errors))
 	assert_eq(_kit.parts_by_slot.get("body"), ["body_a"])
-	assert_eq(_kit.bone_names.size(), 22)
+	# 22 body bones, 12 finger bones, 30 helpers (the rig card).
+	assert_eq(_kit.bone_names.size(), 64)
+	for bone in ["LeftThumbMetacarpal", "RightMiddleIntermediate", "LeftElbowHelper2"]:
+		assert_true(_kit.bone_names.has(bone), "%s in the skeleton" % bone)
+	assert_true(bool(_kit.manifest.skeleton.LeftElbowHelper2.get("helper", false)))
 	assert_true(_kit.stances.has("stance_ready") and _kit.stances.has("stance_relaxed"))
 	for stance in ["stance_heroic", "stance_casting", "stance_cheerful"]:
 		assert_true(_kit.stances.has(stance), "%s in the kit (the look pass's stances)" % stance)
@@ -188,19 +192,41 @@ func test_stance_is_set_as_the_pose() -> void:
 		0.1,
 		"the hand hangs down in the stance, not out in the A-pose"
 	)
-	# The stance's Hips drop (its one translation) lowers the root below its rest, so the
-	# bent knees keep the planted sole on the ground.
+	# The clip's Hips drop (the solve at the kit's proportions) lowers the root below its
+	# rest, so the bent knees keep the planted sole on the ground.
 	var hips := sk.find_bone("Hips")
 	var drop: float = (
 		(_kit.stance_offsets.get("stance_ready", {}).get("Hips", Vector3.ZERO) as Vector3).y
 	)
-	assert_lt(drop, -0.01, "stance_ready drops the hips (%f)" % drop)
-	assert_almost_eq(
-		sk.get_bone_pose_position(hips).y,
-		sk.get_bone_rest(hips).origin.y + drop,
-		1e-5,
-		"the drop is applied"
+	assert_lt(drop, -0.005, "stance_ready drops the hips (%f)" % drop)
+	# At this figure's proportions the ground rule re-solves the height; the lowest contact
+	# lands on the ground.
+	var dropped := sk.get_bone_pose_position(hips).y - sk.get_bone_rest(hips).origin.y
+	assert_lt(dropped, -0.005, "the figure's own drop is applied (%f)" % dropped)
+	assert_almost_eq(dropped, drop, 0.01, "close to the kit's drop at near-default proportions")
+
+
+func test_stance_matches_figurine_with_helpers_and_fingers() -> void:
+	# figurine's stance_ready over fixture 2's proportions, stood by the ground rule
+	# (consumer_fixtures.py stance_2.json): every posed bone head, helpers and fingers too.
+	var fixture: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string("%s/stance_2.json" % FIXTURES)
 	)
+	var recipe := RECIPE.duplicate(true)
+	recipe.proportions = fixture.proportions
+	recipe.stance = fixture.stance
+	var figure := _free_later(_kit.build_figure(recipe)) as Node3D
+	var sk := figure.get_node("Skeleton3D") as Skeleton3D
+	assert_eq(fixture.heads.size(), sk.get_bone_count())
+	for bone in fixture.heads:
+		var got := sk.get_bone_global_pose(sk.find_bone(bone)).origin
+		assert_lt(got.distance_to(_vec(fixture.heads[bone])), 2e-4, "%s posed head" % bone)
+	# A helper really turns: the elbow helper takes half the elbow's fold.
+	var elbow := sk.get_bone_pose_rotation(sk.find_bone("RightLowerArm"))
+	var helper := sk.get_bone_pose_rotation(sk.find_bone("RightElbowHelper2"))
+	var rest := sk.get_bone_rest(sk.find_bone("RightLowerArm")).basis.get_rotation_quaternion()
+	assert_gt(rest.angle_to(elbow), 0.5, "the right elbow folds in stance_ready")
+	assert_almost_eq(rest.angle_to(helper), rest.angle_to(elbow) * 0.5, 0.05, "half the fold")
 
 
 func test_figure_uses_the_figure_shader_with_palette_and_face() -> void:

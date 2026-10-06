@@ -14,7 +14,10 @@ extends RefCounted
 ## armature, with a MeshInstance3D per part bound to it:
 ## - proportions move the skeleton's rest origins and reshape each part's binds on a Skin
 ##   duplicated for this figure (AvatarProportions), so stances stay valid;
-## - the stance is the clip's local rotations set as the pose;
+## - the stance is the clip's local rotations set as the pose (body, finger and helper bones;
+##   the producer bakes the helpers' rotations), standing on the ground by the contract's
+##   ground rule (ground_offsets: the Hips height comes from the stance's ground contacts at
+##   this figure's proportions);
 ## - hides: the body's surfaces are its regions, each named by its material, and every
 ##   region a chosen part `hides` is left out of the body's mesh (one cached mesh per set);
 ## - one ShaderMaterial per part (shaders/avatar_figure.gdshader, or its double-sided twin)
@@ -344,7 +347,13 @@ func build_figure(recipe: Dictionary) -> Node3D:
 	AvatarProportions.apply_rests(sk, maps)
 	var new_rests := AvatarProportions.global_rests(sk)
 	var pose: Dictionary = stances.get(String(resolved.stance), {})
-	var offsets: Dictionary = stance_offsets.get(String(resolved.stance), {})
+	var offsets := ground_offsets(
+		sk,
+		pose,
+		stance_offsets.get(String(resolved.stance), {}),
+		stance_ground(String(resolved.stance)),
+		maps
+	)
 	pose_skeleton(sk, pose, offsets)
 	# A Skeleton3D posed outside the tree keeps a stale global pose (measured on 4.7.1:
 	# force_update_all_bone_transforms does not refresh it, and setting an unchanged value
@@ -385,6 +394,64 @@ static func pose_skeleton(sk: Skeleton3D, pose: Dictionary, offsets: Dictionary 
 		var b := sk.find_bone(String(bone))
 		if b >= 0:
 			sk.set_bone_pose_position(b, sk.get_bone_rest(b).origin + (offsets[bone] as Vector3))
+
+
+## The stance's ground contacts from kit.json `stance_info` (each {"bone", "point"}, the
+## point in glTF rest space); empty for a kit without them.
+func stance_ground(stance: String) -> Array:
+	var info: Dictionary = manifest.get("stance_info", {})
+	return (info.get(stance, {}) as Dictionary).get("ground", [])
+
+
+## The ground rule (docs/ASSET_PIPELINE.md section 10 "Skeleton", figurine pose.ground_hips):
+## `offsets` with the Hips height replaced so the figure, posed in `pose` on a skeleton whose
+## rests `apply_rests` moved by `maps`, stands with its lowest-standing contact on y = 0 (the
+## highest lift any contact needs wins, so none sinks). The clip's horizontal Hips offset is
+## kept. Computed from the rests and the pose directly, not from the skeleton's cached
+## global pose, which is stale outside the tree.
+static func ground_offsets(
+	sk: Skeleton3D, pose: Dictionary, offsets: Dictionary, ground: Array, maps: Dictionary
+) -> Dictionary:
+	var out := offsets.duplicate()
+	if ground.is_empty() or sk.find_bone("Hips") < 0:
+		return out
+	var flat: Vector3 = out.get("Hips", Vector3.ZERO)
+	flat.y = 0.0
+	out["Hips"] = flat
+	var globals := {}
+	var lift := -INF
+	for contact in ground:
+		var bone := String(contact.get("bone", ""))
+		var b := sk.find_bone(bone)
+		if b < 0 or not maps.has(bone):
+			continue
+		var p: Array = contact.get("point", [0.0, 0.0, 0.0])
+		var point := Vector3(float(p[0]), float(p[1]), float(p[2]))
+		var mapped := AvatarProportions.bone_map_transform(maps[bone]) * point
+		var global_pose := posed_global(sk, b, pose, out, globals)
+		var posed := global_pose * sk.get_bone_global_rest(b).affine_inverse() * mapped
+		lift = maxf(lift, -posed.y)
+	if lift > -INF:
+		out["Hips"] = flat + Vector3(0.0, lift, 0.0)
+	return out
+
+
+## Bone `b`'s global transform in `pose` (bone name -> local rotation) with `offsets` (bone
+## name -> translation from the rest origin), chained from the rests. `cache` is filled as it
+## goes (bone index -> Transform3D).
+static func posed_global(
+	sk: Skeleton3D, b: int, pose: Dictionary, offsets: Dictionary, cache: Dictionary
+) -> Transform3D:
+	if cache.has(b):
+		return cache[b]
+	var rest := sk.get_bone_rest(b)
+	var bone := sk.get_bone_name(b)
+	var basis := Basis(pose[bone] as Quaternion) if pose.has(bone) else rest.basis
+	var local := Transform3D(basis, rest.origin + (offsets.get(bone, Vector3.ZERO) as Vector3))
+	var parent := sk.get_bone_parent(b)
+	var global := local if parent < 0 else posed_global(sk, parent, pose, offsets, cache) * local
+	cache[b] = global
+	return global
 
 
 func _new_skeleton() -> Skeleton3D:
