@@ -27,6 +27,12 @@ uniform float floor_threshold = 0.5; // World-space normal Y above this = floor 
 uniform float lofi_pixelation = 0.0; // Pixelation from the lo-fi shader (0 = disabled, aligns dither grid)
 uniform float lofi_dither_scale = 1.0; // Dither subdivisions per lo-fi pixel (1 = 1:1 with grid)
 
+// An avatar figure's zone (negative radius in occlusion_tokens): an upright ellipse
+// FIGURE_WIDTH as wide as tall, opacity FIGURE_MIN_ALPHA inside FIGURE_CORE of it.
+const float FIGURE_WIDTH = 0.6;
+const float FIGURE_CORE = 0.55;
+const float FIGURE_MIN_ALPHA = 0.0;
+
 // Number of valid entries in occlusion_tokens. Global so the manager sets it once per
 // tick for every material (see project.godot [shader_globals]).
 global uniform int occlusion_token_count;
@@ -80,12 +86,16 @@ void apply_occlusion_fade(
 		return;
 	}
 
-	float fade_intensity = 0.0;
+	// The lowest opacity any token asks of this fragment.
+	float target_alpha = 1.0;
 	for (int i = 0; i < 32; i++) {
 		if (i >= occlusion_token_count) break;
 
 		vec4 token_data = texelFetch(occlusion_tokens, ivec2(i, 0), 0);
-		float radius = token_data.w;
+		// A negative radius marks an avatar figure (OcclusionFadeManager): its zone is
+		// the figure's silhouette, see below.
+		bool figure = token_data.w < 0.0;
+		float radius = abs(token_data.w);
 		if (radius <= 0.0) continue;
 
 		// Transform token world position to view space
@@ -94,21 +104,31 @@ void apply_occlusion_fade(
 		// Skip if this fragment is behind (further from camera than) the token
 		if (vertex_view.z <= token_view.z) continue;
 
-		// Distance in the camera's XY plane (screen-space proximity)
-		float dist = distance(vertex_view.xy, token_view.xy);
-
-		if (dist < radius) {
-			// Smooth gradient: full fade at center, zero at edge
-			float fade = 1.0 - smoothstep(0.0, radius, dist);
-			fade_intensity = max(fade_intensity, fade);
+		vec2 offset = vertex_view.xy - token_view.xy;
+		if (figure) {
+			// An upright ellipse round the figure (half-height `radius`, half-width
+			// FIGURE_WIDTH of it), cleared almost fully over the figure's core and
+			// fading back to solid over the outer ring, so the figure reads cleanly
+			// and the canopy closes softly round it rather than showing a hard hole.
+			float d = length(offset / vec2(radius * FIGURE_WIDTH, radius));
+			if (d < 1.0) {
+				float fade = 1.0 - smoothstep(FIGURE_CORE, 1.0, d);
+				target_alpha = min(target_alpha, mix(1.0, FIGURE_MIN_ALPHA, fade));
+			}
+		} else {
+			// Distance in the camera's XY plane (screen-space proximity)
+			float dist = length(offset);
+			if (dist < radius) {
+				// Smooth gradient: full fade at center, zero at edge
+				float fade = 1.0 - smoothstep(0.0, radius, dist);
+				target_alpha = min(target_alpha, mix(1.0, min_alpha, fade));
+			}
 		}
 	}
 
-	if (fade_intensity <= 0.01) {
+	if (target_alpha >= 0.99) {
 		return;
 	}
-
-	float target_alpha = mix(1.0, min_alpha, fade_intensity);
 
 	vec2 dither_coord = frag_coord;
 	if (lofi_pixelation > 0.0) {

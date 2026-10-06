@@ -1,0 +1,11 @@
+{
+ "out_dir": "render_jobs/avatar_token_profile",
+ "timeout_s": 120,
+ "steps": [
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/avatar_token.gd", "action": "profile", "count": 40},
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/avatar_token.gd", "action": "profile", "count": 40},
+  {"op": "wait", "s": 0.5}
+ ]
+}

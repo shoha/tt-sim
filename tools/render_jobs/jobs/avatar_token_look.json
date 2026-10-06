@@ -11,7 +11,7 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
   {"op": "place", "biome": "temperate_forest_summer_s1", "species": "oak", "at": [3.0, -1.5], "phase": "build"},
   {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "pond", "points": [[-7.0, 6.0], [-6.5, 6.0]], "radius": 2.5, "depth": "waist", "phase": "build"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "pond", "points": [[-13.0, 6.0], [-12.5, 6.0]], "radius": 2.5, "depth": "deep", "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "pond", "points": [[-14.5, 6.0], [-13.5, 6.0]], "radius": 4.0, "depth": "deep", "phase": "build"},
   {"op": "wait_ready", "settle": 1.0, "phase": "build"},
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar_token.gd", "action": "save", "folder": "_avatartoken_forest", "replace": true, "phase": "build"},
   {"op": "title", "phase": "build"},
@@ -24,7 +24,7 @@
   {"op": "wait", "s": 1.0},
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar_token.gd", "action": "pair", "presets": [1, 0], "points": [[1.2, 0.4], [0.8, 0.8], [1.6, 0.0], [2.4, -0.8], [3.9, -0.8], [4.3, -1.5], [3.6, -0.3], [3.0, -0.4], [2.2, -0.8]], "open_points": [[2.2, -2.4], [2.6, -2.9], [3.6, -2.4], [4.0, -2.0], [4.6, -3.0]]},
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar_token.gd", "action": "spawn_at", "at": [-7.0, 6.0], "preset": 2},
-  {"op": "call", "script": "res://tools/render_jobs/probes/avatar_token.gd", "action": "spawn_at", "at": [-13.0, 6.0], "preset": 3},
+  {"op": "call", "script": "res://tools/render_jobs/probes/avatar_token.gd", "action": "spawn_at", "at": [-14.0, 6.0], "preset": 3},
   {"op": "wait", "s": 2.0},
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar_token.gd", "action": "report"},
 

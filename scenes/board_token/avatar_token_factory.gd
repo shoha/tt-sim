@@ -83,21 +83,39 @@ static func create_from_placement(placement: TokenPlacement) -> BoardToken:
 	return token
 
 
-## Rebuilds `token`'s figure from `recipe` and resizes its capsule, glow and drag height to
-## the new figure, keeping its transform, hidden fade and everything else. Returns false for
-## a token that is not an avatar or when there is no kit. Local only: callers that need the
-## change saved and synced use LevelPlayController.set_avatar_recipe.
+## Gives `token`'s figure `recipe`, rebuilding only what changed: new colours or face cells
+## swap the parts' materials (AvatarKit.apply_look), a new stance re-poses the skeleton
+## (apply_stance) and re-sizes the capsule, and new parts or proportions build a new figure.
+## A changed capsule resizes the glow and drag height; the transform, hidden fade and
+## everything else are kept. Returns false for a token that is not an avatar or when there
+## is no kit. Local only: callers that need the change saved and synced use
+## LevelPlayController.set_avatar_recipe.
 static func set_recipe(token: BoardToken, recipe: Dictionary) -> bool:
 	var view := view_of(token)
 	var avatar_kit := kit()
 	if view == null or avatar_kit == null:
 		return false
 	var normalized := AvatarRecipe.normalized(recipe)
-	view.set_figure(avatar_kit.build_figure(normalized))
+	var built: Dictionary = view.figure.get_meta("avatar_recipe", {}) if view.figure != null else {}
+	var fresh := avatar_kit.resolve(normalized)
 	token.avatar_recipe = normalized
+	var reshaped: bool = (
+		built.is_empty() or fresh.parts != built.parts or fresh.proportions != built.proportions
+	)
+	if reshaped:
+		view.set_figure(avatar_kit.build_figure(normalized))
+	else:
+		# Only what changed: colours and face are material swaps, a stance is a new pose
+		# (and a new capsule, below); neither touches the meshes or skins.
+		if fresh.colours != built.colours or fresh.face != built.face:
+			avatar_kit.apply_look(view.figure, normalized)
+		if fresh.stance == built.stance:
+			return true
+		avatar_kit.apply_stance(view.figure, normalized)
 	var collision := _collision_of(token)
-	if collision != null:
-		collision.shape = _capsule_for(avatar_kit, view.figure)
+	var capsule := _capsule_for(avatar_kit, view.figure)
+	if collision != null and collision.shape != capsule:
+		collision.shape = capsule
 		# Before it enters the tree the glow sizes itself from the same node (deferred).
 		if token.get_selection_glow() and token.is_inside_tree():
 			token.get_selection_glow().update_size_from_collision(collision)
@@ -120,6 +138,7 @@ static func _collision_of(token: BoardToken) -> CollisionShape3D:
 	return null
 
 
+## The figure's capsule, shared with every figure of the same size (AvatarExtent).
 static func _capsule_for(avatar_kit: AvatarKit, figure: Node3D) -> Shape3D:
 	var size := AvatarExtent.capsule(avatar_kit, figure)
 	return AvatarExtent.capsule_shape(size.radius, size.height)

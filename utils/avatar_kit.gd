@@ -59,9 +59,15 @@ var face_sheet: Texture2D = null
 var face_mask: Texture2D = null
 ## Every problem found while loading (missing files, rejected parts), also printed.
 var errors := PackedStringArray()
+## What figures share (AvatarFigureCache).
+var cache: AvatarFigureCache
 
 var _parts: Dictionary = {}  # id -> {"mesh", "skin", "detail", "error"}
 var _hidden_meshes: Dictionary = {}  # "id|region,region" -> ArrayMesh
+
+
+func _init() -> void:
+	cache = AvatarFigureCache.new(self)
 
 
 ## Loads the kit under `kit_root`; null when kit.json or the skeleton is missing or broken.
@@ -332,35 +338,23 @@ static func _surface_region(mesh: ArrayMesh, surface: int) -> String:
 
 
 ## A figure assembled from `recipe` (see AvatarRecipe for its form). Its metadata holds the
-## resolved recipe ("avatar_recipe").
+## resolved recipe ("avatar_recipe"). What figures share (proportion maps, rests and reshaped
+## skins, palettes, materials) comes from `cache` (AvatarFigureCache).
 func build_figure(recipe: Dictionary) -> Node3D:
 	var resolved := resolve(recipe)
 	var figure := Node3D.new()
 	figure.name = "AvatarFigure"
 	figure.set_meta("avatar_recipe", resolved)
-	var sk := _new_skeleton()
+	var shape := cache.shape(resolved.proportions)
+	var sk := new_skeleton(shape.rests)
 	figure.add_child(sk)
-	var old_rests := AvatarProportions.global_rests(sk)
-	var maps := AvatarProportions.bone_maps(
-		manifest.get("skeleton", {}), manifest.get("proportions", {}), resolved.proportions
-	)
-	AvatarProportions.apply_rests(sk, maps)
-	var new_rests := AvatarProportions.global_rests(sk)
-	var pose: Dictionary = stances.get(String(resolved.stance), {})
-	var offsets := ground_offsets(
-		sk,
-		pose,
-		stance_offsets.get(String(resolved.stance), {}),
-		stance_ground(String(resolved.stance)),
-		maps
-	)
-	pose_skeleton(sk, pose, offsets)
+	_set_stance(sk, String(resolved.stance), shape.maps)
 	# A Skeleton3D posed outside the tree keeps a stale global pose (measured on 4.7.1:
 	# force_update_all_bone_transforms does not refresh it, and setting an unchanged value
 	# is ignored), so the figure would render in the rest A-pose: pose it again, through a
-	# real change, whenever the skeleton enters the tree.
-	sk.tree_entered.connect(pose_skeleton.bind(sk, pose, offsets))
-	var palette := AvatarPalette.build_texture(manifest.get("colour_sets", {}), resolved.colours)
+	# real change, whenever the skeleton enters the tree (from its metadata, so a later
+	# apply_stance holds too).
+	sk.tree_entered.connect(_repose.bind(sk))
 	var hidden := []
 	for slot in resolved.parts:
 		hidden.append_array(parts_by_id[resolved.parts[slot]].get("hides", []))
@@ -374,11 +368,56 @@ func build_figure(recipe: Dictionary) -> Node3D:
 		var mi := MeshInstance3D.new()
 		mi.name = part_id
 		mi.mesh = mesh_without(part_id, hidden)
-		mi.skin = AvatarProportions.reshaped_skin(part.skin, maps, old_rests, new_rests)
+		mi.skin = cache.skin(shape, part_id, part.skin)
 		sk.add_child(mi)
 		mi.skeleton = NodePath("..")
-		mi.material_override = _material(parts_by_id[part_id], part, palette, resolved.face)
+		mi.material_override = cache.material(part_id, resolved.colours, resolved.face)
 	return figure
+
+
+## Gives a built figure the colours and face cells of `recipe` (resolved), swapping its parts'
+## materials (cached, so a repeat is a lookup). The parts, proportions and stance are left as
+## built; the caller rebuilds when those change. Updates the figure's "avatar_recipe".
+func apply_look(figure: Node3D, recipe: Dictionary) -> void:
+	var resolved := _restyle(figure, recipe)
+	for mi in figure_parts(figure):
+		mi.material_override = cache.material(String(mi.name), resolved.colours, resolved.face)
+
+
+## Stands a built figure in `recipe`'s stance (resolved), keeping its parts and proportions.
+## Updates the figure's "avatar_recipe".
+func apply_stance(figure: Node3D, recipe: Dictionary) -> void:
+	var resolved := _restyle(figure, recipe)
+	var sk := figure.get_node_or_null("Skeleton3D") as Skeleton3D
+	if sk != null:
+		_set_stance(sk, String(resolved.stance), cache.shape(resolved.proportions).maps)
+
+
+## The figure's resolved recipe with `recipe`'s colours, face and stance resolved in, stored.
+func _restyle(figure: Node3D, recipe: Dictionary) -> Dictionary:
+	var built: Dictionary = figure.get_meta("avatar_recipe", {})
+	var fresh := resolve(recipe)
+	var out := built.duplicate(true)
+	for key in ["colours", "face", "stance"]:
+		out[key] = fresh[key]
+	figure.set_meta("avatar_recipe", out)
+	return out
+
+
+## Poses `sk` in `stance` by the ground rule for its proportions' `maps`, and keeps the pose
+## on the skeleton for _repose.
+func _set_stance(sk: Skeleton3D, stance: String, maps: Dictionary) -> void:
+	var pose: Dictionary = stances.get(stance, {})
+	var offsets := ground_offsets(
+		sk, pose, stance_offsets.get(stance, {}), stance_ground(stance), maps
+	)
+	sk.set_meta("avatar_pose", pose)
+	sk.set_meta("avatar_offsets", offsets)
+	pose_skeleton(sk, pose, offsets)
+
+
+static func _repose(sk: Skeleton3D) -> void:
+	pose_skeleton(sk, sk.get_meta("avatar_pose", {}), sk.get_meta("avatar_offsets", {}))
 
 
 ## Sets a stance (bone name -> local rotation, plus bone name -> translation offset from
@@ -454,19 +493,23 @@ static func posed_global(
 	return global
 
 
-func _new_skeleton() -> Skeleton3D:
+## A Skeleton3D of the kit's bones with local `rests` (by bone index; the kit's rests when
+## empty), posed at rest.
+func new_skeleton(rests: Array[Transform3D] = []) -> Skeleton3D:
 	var sk := Skeleton3D.new()
 	sk.name = "Skeleton3D"
 	for b in bone_names.size():
 		sk.add_bone(bone_names[b])
 	for b in bone_names.size():
 		sk.set_bone_parent(b, bone_parents[b])
-		sk.set_bone_rest(b, bone_rests[b])
+		sk.set_bone_rest(b, rests[b] if b < rests.size() else bone_rests[b])
 	sk.reset_bone_poses()
 	return sk
 
 
-func _material(
+## A part's ShaderMaterial for a palette texture and face cells (AvatarFigureCache shares
+## them; build_figure takes them from there).
+func make_material(
 	entry: Dictionary, part: Dictionary, palette: Texture2D, face: Dictionary
 ) -> Material:
 	var mat := ShaderMaterial.new()
