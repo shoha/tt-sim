@@ -2,9 +2,9 @@
  "frame_error": 5.907190998299949e-07,
  "posed_error_m": 2.129713927434551e-07,
  "body_a": {
-  "triangles": 3480,
-  "glb_triangles": 3480,
-  "reimported_triangles": 3480,
+  "triangles": 4008,
+  "glb_triangles": 4008,
+  "reimported_triangles": 4008,
   "joint_error_m": 4.509533012564404e-07,
   "reimport_bone_error_m": 2.646508021619809e-07,
   "light_ranges": {
@@ -42,7 +42,7 @@
    ]
   },
   "node_extras": {},
-  "bytes": 205356
+  "bytes": 230552
  },
  "head_round": {
   "triangles": 1030,
@@ -66,7 +66,7 @@
     ]
    }
   },
-  "bytes": 67444
+  "bytes": 69816
  },
  "hair_bun": {
   "triangles": 360,
@@ -81,7 +81,7 @@
    ]
   },
   "node_extras": {},
-  "bytes": 97608
+  "bytes": 99980
  },
  "skeleton": {
   "animations": [
@@ -91,9 +91,9 @@
    "stance_ready",
    "stance_relaxed"
   ],
-  "joints": 64
+  "joints": 72
  },
- "figure_triangles": 4870,
+ "figure_triangles": 5398,
  "poses": {
   "poses": [
    "stance_ready",
@@ -121,7 +121,7 @@
   ],
   "checked": 99,
   "problems": [],
-  "seconds": 4.5
+  "seconds": 10.0
  },
  "problems": [],
  "kit_json_errors": []

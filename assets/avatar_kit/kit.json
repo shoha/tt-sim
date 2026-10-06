@@ -1,6 +1,6 @@
 {
  "format": 1,
- "kit_version": "0.1.0+55de21a",
+ "kit_version": "0.1.0+8424765",
  "parts": [
   {
    "id": "body_a",
@@ -12,7 +12,7 @@
     "secondary",
     "accent"
    ],
-   "triangles": 3480,
+   "triangles": 4008,
    "hides": [],
    "tags": [
     "human"
@@ -737,7 +737,7 @@
    "helper": true,
    "driver": "LeftUpperArm",
    "swing": 0.25,
-   "twist": 0.1
+   "twist": 0.0
   },
   "LeftArmpitHelper2": {
    "parent": "LeftShoulder",
@@ -759,7 +759,29 @@
    "helper": true,
    "driver": "LeftUpperArm",
    "swing": 0.5,
-   "twist": 0.3
+   "twist": 0.0
+  },
+  "LeftArmpitHelper3": {
+   "parent": "LeftShoulder",
+   "head": [
+    0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    0.180355,
+    1.134645,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftUpperArm",
+   "swing": 0.75,
+   "twist": 0.0
   },
   "LeftUpperArmTwist1": {
    "parent": "LeftShoulder",
@@ -780,8 +802,8 @@
    ],
    "helper": true,
    "driver": "LeftUpperArm",
-   "swing": 0.7,
-   "twist": 0.55
+   "swing": 1.0,
+   "twist": 0.33
   },
   "LeftUpperArmTwist2": {
    "parent": "LeftShoulder",
@@ -802,8 +824,8 @@
    ],
    "helper": true,
    "driver": "LeftUpperArm",
-   "swing": 0.9,
-   "twist": 0.8
+   "swing": 1.0,
+   "twist": 0.67
   },
   "LeftElbowHelper1": {
    "parent": "LeftUpperArm",
@@ -849,7 +871,7 @@
    "swing": 0.5,
    "twist": 0.0
   },
-  "LeftForearmTwist1": {
+  "LeftElbowHelper3": {
    "parent": "LeftUpperArm",
    "head": [
     0.318241,
@@ -869,6 +891,28 @@
    "helper": true,
    "driver": "LeftLowerArm",
    "swing": 0.75,
+   "twist": 0.0
+  },
+  "LeftForearmTwist1": {
+   "parent": "LeftUpperArm",
+   "head": [
+    0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    0.353597,
+    0.961403,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    -0.707107,
+    0.0
+   ],
+   "helper": true,
+   "driver": "LeftLowerArm",
+   "swing": 1.0,
    "twist": 0.33
   },
   "LeftForearmTwist2": {
@@ -893,7 +937,29 @@
    "swing": 1.0,
    "twist": 0.67
   },
-  "LeftWristHelper": {
+  "LeftWristHelper1": {
+   "parent": "LeftLowerArm",
+   "head": [
+    0.470269,
+    0.844731,
+    -0.0
+   ],
+   "tail": [
+    0.505624,
+    0.809376,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    -1.0
+   ],
+   "helper": true,
+   "driver": "LeftHand",
+   "swing": 0.25,
+   "twist": 0.25
+  },
+  "LeftWristHelper2": {
    "parent": "LeftLowerArm",
    "head": [
     0.470269,
@@ -914,6 +980,28 @@
    "driver": "LeftHand",
    "swing": 0.5,
    "twist": 0.5
+  },
+  "LeftWristHelper3": {
+   "parent": "LeftLowerArm",
+   "head": [
+    0.470269,
+    0.844731,
+    -0.0
+   ],
+   "tail": [
+    0.505624,
+    0.809376,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    -1.0
+   ],
+   "helper": true,
+   "driver": "LeftHand",
+   "swing": 0.75,
+   "twist": 0.75
   },
   "LeftGroinHelper1": {
    "parent": "Hips",
@@ -1319,7 +1407,7 @@
    "helper": true,
    "driver": "RightUpperArm",
    "swing": 0.25,
-   "twist": 0.1
+   "twist": 0.0
   },
   "RightArmpitHelper2": {
    "parent": "RightShoulder",
@@ -1341,7 +1429,29 @@
    "helper": true,
    "driver": "RightUpperArm",
    "swing": 0.5,
-   "twist": 0.3
+   "twist": 0.0
+  },
+  "RightArmpitHelper3": {
+   "parent": "RightShoulder",
+   "head": [
+    -0.145,
+    1.17,
+    -0.0
+   ],
+   "tail": [
+    -0.180355,
+    1.134645,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightUpperArm",
+   "swing": 0.75,
+   "twist": 0.0
   },
   "RightUpperArmTwist1": {
    "parent": "RightShoulder",
@@ -1362,8 +1472,8 @@
    ],
    "helper": true,
    "driver": "RightUpperArm",
-   "swing": 0.7,
-   "twist": 0.55
+   "swing": 1.0,
+   "twist": 0.33
   },
   "RightUpperArmTwist2": {
    "parent": "RightShoulder",
@@ -1384,8 +1494,8 @@
    ],
    "helper": true,
    "driver": "RightUpperArm",
-   "swing": 0.9,
-   "twist": 0.8
+   "swing": 1.0,
+   "twist": 0.67
   },
   "RightElbowHelper1": {
    "parent": "RightUpperArm",
@@ -1431,7 +1541,7 @@
    "swing": 0.5,
    "twist": 0.0
   },
-  "RightForearmTwist1": {
+  "RightElbowHelper3": {
    "parent": "RightUpperArm",
    "head": [
     -0.318241,
@@ -1451,6 +1561,28 @@
    "helper": true,
    "driver": "RightLowerArm",
    "swing": 0.75,
+   "twist": 0.0
+  },
+  "RightForearmTwist1": {
+   "parent": "RightUpperArm",
+   "head": [
+    -0.318241,
+    0.996759,
+    -0.0
+   ],
+   "tail": [
+    -0.353597,
+    0.961403,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.707107,
+    0.707107,
+    -0.0
+   ],
+   "helper": true,
+   "driver": "RightLowerArm",
+   "swing": 1.0,
    "twist": 0.33
   },
   "RightForearmTwist2": {
@@ -1475,7 +1607,29 @@
    "swing": 1.0,
    "twist": 0.67
   },
-  "RightWristHelper": {
+  "RightWristHelper1": {
+   "parent": "RightLowerArm",
+   "head": [
+    -0.470269,
+    0.844731,
+    -0.0
+   ],
+   "tail": [
+    -0.505624,
+    0.809376,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    1.0
+   ],
+   "helper": true,
+   "driver": "RightHand",
+   "swing": 0.25,
+   "twist": 0.25
+  },
+  "RightWristHelper2": {
    "parent": "RightLowerArm",
    "head": [
     -0.470269,
@@ -1496,6 +1650,28 @@
    "driver": "RightHand",
    "swing": 0.5,
    "twist": 0.5
+  },
+  "RightWristHelper3": {
+   "parent": "RightLowerArm",
+   "head": [
+    -0.470269,
+    0.844731,
+    -0.0
+   ],
+   "tail": [
+    -0.505624,
+    0.809376,
+    -0.0
+   ],
+   "flex_axis": [
+    -0.0,
+    0.0,
+    1.0
+   ],
+   "helper": true,
+   "driver": "RightHand",
+   "swing": 0.75,
+   "twist": 0.75
   },
   "RightGroinHelper1": {
    "parent": "Hips",

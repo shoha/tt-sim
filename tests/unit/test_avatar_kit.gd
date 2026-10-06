@@ -41,9 +41,9 @@ func test_kit_loads_with_its_parts_skeleton_and_stances() -> void:
 	assert_not_null(_kit)
 	assert_eq(_kit.errors.size(), 0, "no load errors: %s" % str(_kit.errors))
 	assert_eq(_kit.parts_by_slot.get("body"), ["body_a"])
-	# 22 body bones, 12 finger bones, 30 helpers (the rig card).
-	assert_eq(_kit.bone_names.size(), 64)
-	for bone in ["LeftThumbMetacarpal", "RightMiddleIntermediate", "LeftElbowHelper2"]:
+	# 22 body bones, 12 finger bones, 38 helpers (the crisp-joints card).
+	assert_eq(_kit.bone_names.size(), 72)
+	for bone in ["LeftThumbMetacarpal", "RightMiddleIntermediate", "LeftElbowHelper3"]:
 		assert_true(_kit.bone_names.has(bone), "%s in the skeleton" % bone)
 	assert_true(bool(_kit.manifest.skeleton.LeftElbowHelper2.get("helper", false)))
 	assert_true(_kit.stances.has("stance_ready") and _kit.stances.has("stance_relaxed"))
