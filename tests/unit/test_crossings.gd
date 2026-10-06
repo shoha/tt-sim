@@ -592,7 +592,7 @@ func test_ford_parts_a_gravel_bar_under_the_surface_with_landings_and_marker_sto
 				high += 1
 			if absf(v.y - crest) <= CrossingFord.NOISE_M + EPSILON:
 				on_crest += 1
-				if colors[k].r > 0.7:
+				if colors[k].r > CrossingFord.WET_SHADE + 0.05:
 					pale_crest += 1
 		elif xz.distance_to(ford.start) < nearest_m:
 			nearest_m = xz.distance_to(ford.start)
