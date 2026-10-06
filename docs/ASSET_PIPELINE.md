@@ -16,6 +16,7 @@ Detail that belongs to one side stays in that repo:
 | How terrain-paint reads Geoscatter and writes scatter instances | `terrain-paint/docs/scatter-integration.md` |
 | How treecube builds meshes, textures, wind weights and biome packages | `treecube/README.md`, `treecube/docs/tt-sim-wind-weights.md` |
 | How treecube paints the tileable terrain surfaces terrain-paint layers use (grass, dirt, cliff) | `treecube/docs/surfaces.md` |
+| How figurine builds the avatar parts kit (style, skeleton, painting) | `figurine/docs/design.md` |
 | How tt-sim loads a map and post-processes it | `docs/ARCHITECTURE.md` "Map Loading Flow", `utils/glb_utils.gd` and the `*_glb_utils.gd` siblings |
 | Lighting extras, foliage AO history, texture packing measurements | `docs/lighting-and-environment.md` |
 | Foliage budget, chunking, decimation measurements | `docs/PERFORMANCE.md` |
@@ -630,3 +631,159 @@ Before committing, `git lfs status` must list every GLB/PNG/JPG as LFS and only
 `palette.json` as Git. Changing a setting in an existing sidecar does not
 trigger a reimport on its own; delete the matching `.godot/imported/*.md5` first.
 `tests/unit/test_palette_builtin.gd` checks the sidecars and fails on a missed one.
+
+## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
+
+A third path: figurine (`D:/dev/figurine`, a Blender 5.2 extension) generates a kit of
+painted, skinned parts that ships inside the game, and tt-sim builds a player's avatar
+token from it by a small recipe that every peer rebuilds from its own copy of the kit, the
+way a `.ttmap` is rebuilt. Design and style: `figurine/docs/design.md`. Status: contract
+drafted 2026-10-06 from the avatar probe (tt-sim `2d7aa3e`,
+`tools/render_jobs/probes/avatar*.gd`); humans only; nothing produced or consumed yet.
+
+Producer: `figurine/scripts/build_kit.py` (to be written). Consumer: `utils/avatar_kit.gd`
+(`AvatarKit`, to be written), which assembles a figure under one `Skeleton3D`.
+
+### Layout
+
+```
+<kit root>/                     res://assets/avatar_kit/ in tt-sim (Git LFS)
+  kit.json
+  skeleton.glb                  the armature alone, plus the stance clips
+  parts/<slot>/<part id>.glb
+  faces/face_sheet.png          eye, brow, mouth and mark cells in face space
+  thumbnails/<part id>.png
+```
+
+Slots, first set: `body`, `head`, `hair`, `top`, `bottom`, `shoes`, `cloak`, `gear`. A
+figure has exactly one `body` and one `head` and at most one part in each other slot;
+`gear` may repeat with different attach bones.
+
+### Skeleton
+
+- One armature for the whole kit, bones named as Godot's `SkeletonProfileHumanoid` names
+  them (`Hips`, `Spine`, `Chest`, `UpperChest`, `Neck`, `Head`, `LeftShoulder`,
+  `LeftUpperArm`, `LeftLowerArm`, `LeftHand`, `LeftUpperLeg`, `LeftLowerLeg`, `LeftFoot`,
+  `LeftToes` and the `Right` mirrors; fingers are not used yet). Metres, +Z up in Blender
+  as everywhere in this doc; the rest pose is an A-pose (arms about 45 degrees down), the
+  figure standing on the origin facing -Y in Blender.
+- Every part GLB carries the full armature with identical rest and bind poses, so any set
+  of parts binds to the one `Skeleton3D` the consumer builds from `skeleton.glb`. A part
+  whose armature differs from the kit's is rejected at load, naming the part.
+- Up to 4 weights per vertex. Rigid gear (a sword, a satchel) is skinned wholly to its
+  attach bone (`extras.figurine_attach`).
+- Proportions are bone lengths (rest translations) and girth scales on bones near chain
+  ends. The probe found that `Skeleton3D` has no inherit-scale switch, so a scaled parent
+  shears its children; a scale on a mid-chain bone such as `Chest` is never used.
+- Stances are one-frame glTF animation clips in `skeleton.glb` (`stance_ready`,
+  `stance_relaxed`, ...). Animation later adds multi-frame clips by the same path, which
+  the token `AnimationPlayer` route (`BoardTokenAnimationTree`) already plays.
+
+### Mesh
+
+- Smooth normals, with hard edges only where the producer marks them (a cuff, a hat brim):
+  the low-poly look comes from the silhouette, not from faceted shading.
+- A whole figure is 1,000 to 3,000 triangles; each part's count is in `kit.json`.
+- `COLOR_0` is not used (no wind on figures yet). If hair or cloth sway is added later it
+  uses section 5's channel meanings.
+- `TEXCOORD_0` maps the part's painted texture. The head also carries `TEXCOORD_1`, face
+  space: the unit square over the face area (0 to 1 left to right and chin to brow; the
+  rest of the head falls outside the square).
+
+### Textures and recolouring
+
+Each part GLB embeds two textures, both painted by figurine with paintkit's primitives:
+
+- `albedo` (sRGB): the painted part, every recolourable region painted as a neutral value
+  study, fixed detail (laces, seams, stitching, a buckle) painted in its own colour.
+- `mask` (linear RGBA): the weight of each of four recolour channels per texel. The part's
+  `extras.figurine_channels` names the colour slot each channel takes, from `skin`,
+  `hair`, `eyes`, `primary`, `secondary`, `accent`, `leather`, `metal` (a top might be
+  `["primary", "secondary", "accent", "skin"]`). Where the mask sums to 0 the albedo shows
+  as painted. Where a channel is 1 the texel takes that slot's colour, shaded by the
+  albedo's value: 0.5 is the slot colour itself, lower values move toward the slot's
+  shadow colour (a hue shift, never toward grey), higher toward its highlight.
+
+Resolution: 256 x 256 per part, 512 x 512 for the head (the face shows at close zoom).
+Import settings follow section 9 (editor import, embedded uncompressed) until the first
+card measures otherwise; figures are opaque, so mipmaps are allowed.
+
+### Faces
+
+`face_sheet.png` holds square cells in face space, one feature per cell, a row per kind:
+eyes, brows, mouths, marks (blush, freckles, a scar). A cell's RGB is the painted feature
+and its alpha the coverage; an eye cell marks its iris (blue channel of a companion mask
+row, or a reserved colour, settled by the first card) so the iris takes the `eyes`
+colour, and brows take `hair`. The figure shader composes the face over the head's skin
+by sampling the chosen cell of each kind at `TEXCOORD_1`. A recipe picks one cell per
+kind, so expression lives in the sheet, and a blink later is a cell swap.
+
+### `kit.json` (format 1)
+
+```json
+{
+  "format": 1,
+  "kit_version": "<figurine version>+<git hash>",
+  "parts": [
+    {"id": "top_tunic_a", "slot": "top", "glb": "parts/top/top_tunic_a.glb",
+     "channels": ["primary", "secondary", "accent", "skin"], "triangles": 410,
+     "hides": ["torso"], "tags": ["cloth"]}
+  ],
+  "face_sheet": {"png": "faces/face_sheet.png", "cell_px": 128,
+                 "rows": {"eyes": 8, "brows": 6, "mouths": 8, "marks": 4}},
+  "colour_sets": {
+    "skin": [["#f2c9a0", "#d9907a", "#fff0dc"]],
+    "hair": [], "eyes": [], "cloth": [], "leather": [], "metal": []
+  },
+  "proportions": {
+    "height": {"bones": {"Spine": [0.9, 1.1], "LeftUpperLeg": [0.85, 1.15]}, "default": 0.5}
+  },
+  "stances": ["stance_ready", "stance_relaxed"]
+}
+```
+
+A colour is a triple (base, shadow, highlight), authored in sets so that every pick is
+harmonious; there is no free colour picker. `hides` names body regions a part covers: the
+body carries each region (`torso`, `upper_arms`, `forearms`, `thighs`, `shins`, `feet`)
+as its own surface, and the consumer turns covered regions off so nothing pokes through.
+Proportion controls are normalised 0 to 1 and map linearly onto each listed bone's range
+(a `Left` bone implies its `Right` mirror).
+
+### Recipe (an avatar, format 1)
+
+```json
+{"format": 1, "kit_version": "...",
+ "parts": {"body": "body_a", "head": "head_round", "hair": "hair_bun", "top": "top_tee"},
+ "colours": {"skin": 3, "hair": 7, "eyes": 2, "primary": 11, "secondary": 4, "accent": 0},
+ "face": {"eyes": 2, "brows": 1, "mouths": 0, "marks": 1},
+ "proportions": {"height": 0.6, "build": 0.4, "head": 0.5},
+ "stance": "stance_ready"}
+```
+
+Colours index into `colour_sets` (`primary`, `secondary` and `accent` index `cloth`). A
+recipe naming a part or cell the local kit does not have falls back to that slot's first
+entry and logs it, so an older client still shows a figure.
+
+### Rendering notes (consumer side, from the probe)
+
+The detail will live in tt-sim's figure shader and a `docs/systems/` page; recorded here
+because they constrain the producer:
+
+- Skinned, not baked: 30 figures cost nothing measurable in Forward+, and a skinned spawn
+  is about 0.1 ms against 1.3-1.9 ms to bake. Mobile and Compatibility are unmeasured.
+- Godot skins VERTEX, NORMAL and TANGENT before `vertex()`.
+- Lighting is soft and low-contrast (the painted texture carries the shading); the
+  environment's ambient colour comes in through a global shader value, and shade under
+  trees through a per-figure value from one ray toward the sun.
+- No inverted-hull outline by default. If one is enabled, its pixel width needs
+  `abs(PROJECTION_MATRIX[1][1])` (negative under Vulkan).
+- A hidden-from-players avatar needs a dither parameter on the figure material
+  (`BoardToken._set_mesh_transparency` only changes StandardMaterial3D), and each avatar
+  token has its own collision capsule, which also sizes the selection glow.
+
+### Round trip
+
+A kit is done when `build_kit.py`'s output, installed under `assets/avatar_kit/`, loads
+through `AvatarKit` from an exported pack (section 9's `--main-pack` check), every part
+binds to the kit skeleton, and a figure assembled from a recipe renders at home and close
+zoom.
