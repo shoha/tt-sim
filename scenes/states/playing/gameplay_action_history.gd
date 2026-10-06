@@ -37,6 +37,12 @@ var _rename_callable: Callable = Callable()
 ## unset in isolated unit tests, in which case a spawn undo is a no-op.
 var _remove_callable: Callable = Callable()
 
+## Optional Callable(token: BoardToken, recipe: Dictionary) -> bool used to replay an
+## "avatar_recipe" undo through LevelPlayController.set_avatar_recipe (which rebuilds
+## the figure, updates the placement and syncs). Set via set_recipe_callable(). Left
+## unset in isolated unit tests, in which case undo falls back to a direct assignment.
+var _recipe_callable: Callable = Callable()
+
 
 ## Provide a lookup Callable(network_id: String) -> BoardToken (or any object
 ## that responds to the relevant mutators) used to find live tokens for
@@ -55,6 +61,12 @@ func set_rename_callable(callable: Callable) -> void:
 ## real removal path (TokenSpawner.remove_token).
 func set_remove_callable(callable: Callable) -> void:
 	_remove_callable = callable
+
+
+## Provide a Callable(token: BoardToken, recipe: Dictionary) -> bool used to replay an
+## "avatar_recipe" undo through the real path (LevelPlayController.set_avatar_recipe).
+func set_recipe_callable(callable: Callable) -> void:
+	_recipe_callable = callable
 
 
 ## Record a single property change. Call BEFORE applying the mutation.
@@ -208,6 +220,11 @@ func _apply_property_to_live_token(network_id: String, property: String, value: 
 			var position2: Vector3 = rigid_body2.global_position if rigid_body2 else Vector3.ZERO
 			var rotation2: Vector3 = rigid_body2.global_rotation if rigid_body2 else Vector3.ZERO
 			token.set_transform_immediate(position2, rotation2, value)
+		"avatar_recipe":
+			if _recipe_callable.is_valid():
+				_recipe_callable.call(token, value)
+			else:
+				token.avatar_recipe = value
 		_:
 			pass  # No live-token mutator for this property; GameState write above still applies
 
@@ -243,5 +260,7 @@ func _describe_property_change(property: String, old_value: Variant, new_value: 
 			return "toggled alive state"
 		"token_name":
 			return 'renamed "%s" to "%s"' % [old_value, new_value]
+		"avatar_recipe":
+			return "edited avatar"
 		_:
 			return "%s changed" % property

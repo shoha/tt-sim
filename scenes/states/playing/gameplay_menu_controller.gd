@@ -27,7 +27,7 @@ func _ready() -> void:
 	var asset_browser: AssetBrowser = $AssetBrowserContainer/PanelContainer/VBox/AssetBrowser
 	if asset_browser:
 		asset_browser.asset_selected.connect(_on_asset_selected)
-		asset_browser.avatar_selected.connect(_on_avatar_selected)
+		asset_browser.avatar_build_requested.connect(_on_avatar_build_requested)
 
 	var asset_browser_container = $AssetBrowserContainer
 	if asset_browser_container and asset_browser_container.has_signal("asset_drag_started"):
@@ -197,20 +197,34 @@ func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -
 		UIManager.show_error("Failed to add token — asset may still be downloading")
 
 
-## A preset avatar chosen in the "Player avatars" tab: spawned as an avatar token where an
-## asset would be.
-func _on_avatar_selected(recipe: Dictionary, token_name: String) -> void:
+## "Make an avatar" in the browser's Avatar tab: opens the builder over the board; the
+## confirmed recipe spawns as an avatar token where an asset would (_on_avatar_created).
+func _on_avatar_build_requested() -> void:
 	if NetworkManager.is_restricted_client():
 		UIManager.show_error("Only the GM can add tokens")
 		return
 	if not _level_play_controller:
 		UIManager.show_error("Cannot add token — no level is loaded")
 		return
+	var builder := AvatarBuilder.open_for_new(get_tree().root)
+	builder.create_confirmed.connect(_on_avatar_created)
+
+
+## The builder's new avatar: spawned and recorded so Ctrl+Z removes it again, as a
+## duplicate is.
+func _on_avatar_created(recipe: Dictionary, token_name: String) -> void:
+	if not _level_play_controller:
+		return
 	var token := _level_play_controller.spawn_avatar(
 		recipe, token_name, _get_spawn_position(), true
 	)
 	if not token:
 		UIManager.show_error("Failed to add the avatar")
+		return
+	var game_map := _level_play_controller.get_game_map()
+	var history := game_map.get_action_history() if game_map else null
+	if history and NetworkManager.has_gm_access():
+		history.record_token_spawn(token.network_id, token.token_name)
 
 
 ## Where a token added from the browser appears: the camera's ground point, with its height

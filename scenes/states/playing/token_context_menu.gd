@@ -15,6 +15,8 @@ signal menu_closed
 signal remove_requested(token: BoardToken)
 signal duplicate_requested(token: BoardToken)
 signal rename_requested(token: BoardToken, new_name: String)
+## An avatar token's owner (CONTROL) or the GM asks to edit its recipe in the builder.
+signal edit_avatar_requested(token: BoardToken)
 
 var target_token: BoardToken = null
 
@@ -32,6 +34,7 @@ var heal_hurt_toggle: CheckButton = $MenuPanel/VBoxContainer/CustomDamageContain
 @onready var rename_input: LineEdit = %RenameInput
 @onready var duplicate_button: Button = %DuplicateButton
 @onready var remove_button: Button = %RemoveButton
+@onready var edit_avatar_button: Button = %EditAvatarButton
 
 
 func _ready() -> void:
@@ -140,6 +143,10 @@ func _update_menu_content() -> void:
 			)
 		reset_transform_button.visible = has_authority
 
+	# Edit Avatar: an avatar token's owner (CONTROL) and the GM
+	if edit_avatar_button:
+		edit_avatar_button.visible = can_edit_avatar(target_token, is_gm, is_networked, my_peer_id)
+
 	# Rename / Duplicate / Remove rows — GM only
 	var separator7 = get_node_or_null("MenuPanel/VBoxContainer/HSeparator7")
 	if separator7:
@@ -155,6 +162,20 @@ func _update_menu_content() -> void:
 
 	# Permission buttons
 	_update_permission_buttons(is_gm, is_networked, my_peer_id)
+
+
+## Whether `token` is an avatar this peer may edit in the builder: the GM (or anyone in a
+## single-player game) edits any avatar, a player only one they hold CONTROL on.
+static func can_edit_avatar(
+	token: BoardToken, is_gm: bool, is_networked: bool, my_peer_id: int
+) -> bool:
+	if token == null or not is_instance_valid(token) or not token.is_avatar():
+		return false
+	if is_gm or not is_networked:
+		return true
+	return GameState.has_token_permission(
+		token.network_id, my_peer_id, TokenPermissions.Permission.CONTROL
+	)
 
 
 ## Update visibility of Request Control / Revoke Control buttons.
@@ -307,6 +328,12 @@ func _on_reset_transform_pressed() -> void:
 		reset_transform_requested.emit()
 		AudioManager.play_tick()
 		close_menu()
+
+
+func _on_edit_avatar_button_pressed() -> void:
+	if target_token and is_instance_valid(target_token):
+		edit_avatar_requested.emit(target_token)
+		AudioManager.play_tick()
 
 
 func _on_duplicate_button_pressed() -> void:

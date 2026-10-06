@@ -96,6 +96,14 @@ layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "Reset Transform"
 
+[node name="EditAvatarButton" type="Button" parent="MenuPanel/VBoxContainer"]
+unique_name_in_owner = true
+script = ExtResource("animated_btn")
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "Edit Avatar"
+tooltip_text = "Change this avatar's pose, face, colours and shape"
+
 [node name="HSeparator7" type="HSeparator" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
 
@@ -164,6 +172,7 @@ text = "Close"
 [connection signal="pressed" from="MenuPanel/VBoxContainer/CustomDamageContainer/HPAdjustmentButton" to="." method="_on_hp_adjustment_requested"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/ToggleVisibilityButton" to="." method="_on_toggle_visibility_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/ResetTransformButton" to="." method="_on_reset_transform_pressed"]
+[connection signal="pressed" from="MenuPanel/VBoxContainer/EditAvatarButton" to="." method="_on_edit_avatar_button_pressed"]
 [connection signal="text_submitted" from="MenuPanel/VBoxContainer/RenameContainer/RenameInput" to="." method="_on_rename_button_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/RenameContainer/RenameButton" to="." method="_on_rename_button_pressed"]
 [connection signal="pressed" from="MenuPanel/VBoxContainer/DuplicateButton" to="." method="_on_duplicate_button_pressed"]
