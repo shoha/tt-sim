@@ -42,7 +42,7 @@
    ]
   },
   "node_extras": {},
-  "bytes": 271812
+  "bytes": 271928
  },
  "head_round": {
   "triangles": 1350,
@@ -129,7 +129,22 @@
   ],
   "checked": 108,
   "problems": [],
-  "seconds": 19.3
+  "thigh_contact_m": {
+   "rest": 0.000982331926934421,
+   "stance_ready": 0.0,
+   "stance_relaxed": 0.0064446511678397655,
+   "stance_heroic": 0.005837555043399334,
+   "stance_casting": 0.0,
+   "stance_cheerful": 0.0,
+   "stance_sneaky": 0.0,
+   "accept_elbow_fold": 0.0051078577525913715,
+   "accept_overhead": 0.00010358385043218732,
+   "accept_fist_by_head": 0.0,
+   "accept_lunge": 0.0,
+   "accept_knee_up": 0.002547949319705367,
+   "accept_grip": 0.0
+  },
+  "seconds": 18.2
  },
  "problems": [],
  "kit_json_errors": []

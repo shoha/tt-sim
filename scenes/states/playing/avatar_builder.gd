@@ -65,7 +65,7 @@ const FACE_LABELS := {"eyes": "Eyes", "brows": "Brows", "mouths": "Mouth", "mark
 ## Shape rows in display order: control, label, low hint, high hint.
 const SHAPE_ROWS := [
 	["height", "Height", "Short", "Tall"],
-	["build", "Build", "Slight", "Sturdy"],
+	["build", "Build", "Slight", "Fuller"],
 	["head", "Head", "Small", "Big"],
 ]
 ## The face tiles' least size and their largest side when the pane has room; the icon
