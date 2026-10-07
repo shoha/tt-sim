@@ -646,7 +646,9 @@ the per-slot triangle caps (tt-sim `2d7aa3e`,
 stances; a figure is 3,908 triangles; its kit.json says `kit_version` `0.1.0+b4f9f4a`);
 card B2a (2026-10-06) added the first garments, `top_longsleeve` (slot `top`, now
 optional) and `hat_witch` (slot `hat`, `hair_mode` `trimmed`), and the hair's back locks
-on the `HairBack` chain. The look's rules are in `figurine/docs/style_sheet.md`.
+on the `HairBack` chain; card B2b (2026-10-07) added `skirt_skater` (slot `bottom`, now
+optional) and `cloak_trailing` (slot `cloak`), the eight skirt chains (117 bones) and the
+drape of the acceptance poses. The look's rules are in `figurine/docs/style_sheet.md`.
 Consumed: tt-sim `8c30bef` (2026-10-06) loads it, builds figures from recipes on a real
 map and from an exported pack; not yet a token (no `BoardTokenFactory` path, no network
 sync, no builder UI).
@@ -679,7 +681,8 @@ Required and optional slots (card B1, 2026-10-06; kit.json `slots`, below):
 |------|----------|-------|
 | `body`, `head`, `hair` | never | always filled when the kit has a part for the slot |
 | `top` | yes (card B2a, 2026-10-06) | the body carries a complete base outfit (a tee, shorts, socks and sneakers), so a figure with no `top` part wears the body's own tee; a top part replaces it (hiding the body regions its sleeves cover) |
-| `bottom`, `shoes` | no, for now | required while the kit has no parts there, which leaves them to the body's own clothes; when parts ship, they will go optional the same way as `top` |
+| `bottom` | yes (card B2b, 2026-10-07) | without one the body wears its own shorts; the first part is `skirt_skater`, a mid-thigh bell on the eight skirt chains that hides nothing (the shorts stay inside it, the thighs show below its hem) |
+| `shoes` | no, for now | required while the kit has no parts there, which leaves them to the body's own sneakers; when parts ship, they will go optional the same way as `top` |
 | `hat`, `cloak`, `gear` | yes | a figure may leave them empty |
 
 A required slot is filled from the kit whenever the kit has a part for it: a recipe that
@@ -712,8 +715,9 @@ and the back locks that fall to the nape) and `bun` (the bun and its tie), and
 
 ### Skeleton
 
-- One armature for the whole kit (105 bones since the foundation card, 2026-10-06: 72 body,
-  finger and helper bones plus 33 secondary chain bones, below). Body and
+- One armature for the whole kit (117 bones since card B2b, 2026-10-07: 72 body,
+  finger and helper bones plus 45 secondary chain bones, below; 105 from the foundation
+  card to B2a). Body and
   finger bones are named as Godot's `SkeletonProfileHumanoid` names them: `Hips`, `Spine`,
   `Chest`, `UpperChest`, `Neck`, `Head`, `LeftShoulder`, `LeftUpperArm`, `LeftLowerArm`,
   `LeftHand`, `LeftUpperLeg`, `LeftLowerLeg`, `LeftFoot`, `LeftToes`, and per hand a
@@ -751,12 +755,18 @@ and the back locks that fall to the nape) and `bun` (the bun and its tie), and
   `twist`. The producer bakes every helper's rotation into each stance clip
   (`skeleton.drive_helpers`), so the consumer plays helpers like any other bone; the
   fields let a consumer drive them at runtime later if it animates the body bones itself.
-- Secondary chains (33 bones, the foundation card): cloth and hair bones for static posing.
+- Secondary chains (45 bones: 33 since the foundation card, 12 more with card B2b,
+  2026-10-07): cloth and hair bones for static posing.
   Nothing moves on the map; a stance sweeps a cloak, a skirt or a ponytail and keeps it clear
   of the body. Each chain is three bones, `<Chain>1` (child of the attach bone), `<Chain>2`,
   `<Chain>3`, hanging down: off `Head`, `HairBack`, `Ponytail`, `LeftTwinTail`,
-  `RightTwinTail`; off `Hips`, `SkirtFront`, `SkirtBack`, `LeftSkirt`, `RightSkirt` (just
-  outside the hips); off `UpperChest`, `CloakBack`, `LeftCloak`, `RightCloak`. Every part
+  `RightTwinTail`; off `Hips`, eight skirt chains every 45 degrees round the waist,
+  `SkirtFront`, `LeftFrontSkirt`, `LeftSkirt`, `LeftBackSkirt`, `SkirtBack` and the
+  `Right` mirrors of the three left ones (card B2b: four chains 90 degrees apart put the
+  cloth blended between two of them on their chord, inside a raised thigh; the roots sit
+  at z 0.92, just under a skirt's waistband, and the first bone runs to the knee so a
+  mid-thigh hem rides on one bone); off `UpperChest`, `CloakBack`, `LeftCloak`,
+  `RightCloak`. Every part
   carries them like the helpers; a part that does not use a chain leaves it inert (no
   weights on it). `kit.json` marks each with `chain` (its drape group: `hair_back`,
   `ponytail`, `twin_tails`, `skirt`, `cloak`) and `attach`. A chain bone takes its attach
@@ -766,8 +776,9 @@ and the back locks that fall to the nape) and `bun` (the bun and its tie), and
   chain bone's rotation per stance (figurine `drape.py`: each bone hangs under gravity in
   the world from its posed parent, a stance may sweep a group toward a direction or flare
   it, and each bone turns the least that keeps it and the cloth between neighbouring
-  chains clear of the body at the heavy proportion corners) and bakes it into the clips,
-  so the consumer plays chain bones like any other bone.
+  chains, at the cloth's own offset outside the chains, clear of the body at the heavy
+  proportion corners; since card B2b the acceptance poses are draped too) and bakes it
+  into the clips, so the consumer plays chain bones like any other bone.
 - Every part GLB carries the full armature with identical rest and bind poses, so any set
   of parts binds to the one `Skeleton3D` the consumer builds from `skeleton.glb`. A part
   whose armature differs from the kit's is rejected at load, naming the part.
