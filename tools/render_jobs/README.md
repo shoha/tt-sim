@@ -613,8 +613,9 @@ numerically (for example where a fade or a tint band starts).
 - `jobs/avatar_kit_look.json`: avatar figures from figurine's kit (AvatarKit, about 60 s to
   build, 50 s to look plus 70 s of perf): a new 150 ft temperate forest map with a placed
   oak, saved as `_avatarkit_forest` and played; `probes/avatar_kit.gd` stands figurine's
-  three judging recipes in a clearing and one figure under the oak (its shade ray meets the
-  crown). Captures at home, close (3.5 m) and closest (2 m), under the oak, hidden from
+  three judging recipes in a clearing (the second in the kit's long-sleeved top, the third
+  in its witch hat, since figurine card B2a) and one figure under the oak (its shade ray
+  meets the crown). Captures at home, close (3.5 m) and closest (2 m), under the oak, hidden from
   players (dither), the outdoor_sunset, outdoor_night and dungeon_dark presets (dungeon also
   with the sun hidden), and an A/B of the detail textures without AvatarKit's mipmaps; then
   GPU and CPU frame times with 0, 8 and 30 figures at home and zoom 20 (`for: "perf"`).
@@ -634,7 +635,7 @@ numerically (for example where a fade or a tint band starts).
 - `jobs/avatar_builder_look.json`: the avatar builder (the builder polish card, about 35 s
   to build, 30 s to look): a new 100 ft bare-ground map saved as `_avatartoken_builder` and
   played; `probes/avatar_builder.gd` resizes the window to 1438x1221, opens the builder on
-  a preset and captures the Pose, Face (the zoomed portrait) and Colours panes, `report`
+  a preset and captures the Pose, Face (the zoomed portrait), Colours and Parts panes, `report`
   logs the panel, preview and pane sizes, the preview's measured bounds and view and the
   stance tiles, `timing` (`for: "builder_timing"`) logs preview and face-tile repaint
   medians; then the builder at 1280x720, and the same recipe as a board token at close

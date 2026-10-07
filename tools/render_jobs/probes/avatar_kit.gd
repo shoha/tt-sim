@@ -43,9 +43,12 @@ const RECIPES := [
 		"proportions": {"height": 0.5, "build": 0.45, "head": 0.55},
 		"stance": "stance_ready",
 	},
+	# The second wears the kit's long-sleeved top and the third its witch hat
+	# (card B2a), so the captures show figures with and without them.
 	{
 		"format": 1,
-		"parts": {"body": "body_a", "head": "head_round", "hair": "hair_bun"},
+		"parts":
+		{"body": "body_a", "head": "head_round", "hair": "hair_bun", "top": "top_longsleeve"},
 		"colours": {"skin": 0, "hair": 2, "eyes": 1, "primary": 3, "secondary": 5, "accent": 4},
 		"face": {"eyes": 3, "brows": 2, "mouths": 1, "marks": 1},
 		"proportions": {"height": 0.15, "build": 0.3, "head": 0.85},
@@ -53,7 +56,7 @@ const RECIPES := [
 	},
 	{
 		"format": 1,
-		"parts": {"body": "body_a", "head": "head_round", "hair": "hair_bun"},
+		"parts": {"body": "body_a", "head": "head_round", "hair": "hair_bun", "hat": "hat_witch"},
 		"colours": {"skin": 3, "hair": 3, "eyes": 2, "primary": 10, "secondary": 6, "accent": 0},
 		"face": {"eyes": 4, "brows": 0, "mouths": 4, "marks": 2},
 		"proportions": {"height": 0.9, "build": 0.75, "head": 0.3},

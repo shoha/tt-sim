@@ -1,6 +1,6 @@
 {
  "format": 1,
- "kit_version": "0.1.0+77faaf0",
+ "kit_version": "0.1.0+ed0d2bb",
  "parts": [
   {
    "id": "body_a",
@@ -70,7 +70,7 @@
     "hair",
     "accent"
    ],
-   "triangles": 360,
+   "triangles": 500,
    "hides": [],
    "tags": [
     "bun"
@@ -89,6 +89,54 @@
    "hat_trim": [
     "bun"
    ]
+  },
+  {
+   "id": "top_longsleeve",
+   "slot": "top",
+   "glb": "parts/top/top_longsleeve.glb",
+   "slots_used": [
+    "accent",
+    "primary"
+   ],
+   "triangles": 1208,
+   "hides": [
+    "upper_arms"
+   ],
+   "tags": [
+    "cloth",
+    "sleeves"
+   ],
+   "detail": true,
+   "double_sided": false,
+   "stack": "body",
+   "layer": 1,
+   "shapes": [
+    "build_plus"
+   ]
+  },
+  {
+   "id": "hat_witch",
+   "slot": "hat",
+   "glb": "parts/hat/hat_witch.glb",
+   "slots_used": [
+    "secondary",
+    "accent",
+    "metal"
+   ],
+   "triangles": 316,
+   "hides": [],
+   "tags": [
+    "hat",
+    "witch"
+   ],
+   "detail": false,
+   "double_sided": false,
+   "stack": "head",
+   "layer": 2,
+   "shapes": [
+    "build_plus"
+   ],
+   "hair_mode": "trimmed"
   }
  ],
  "palette": {
@@ -392,7 +440,7 @@
    "optional": true
   },
   "top": {
-   "optional": false
+   "optional": true
   },
   "bottom": {
    "optional": false
