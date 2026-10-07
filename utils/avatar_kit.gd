@@ -20,6 +20,10 @@ extends RefCounted
 ##   this figure's proportions);
 ## - hides: the body's surfaces are its regions, each named by its material, and every
 ##   region a chosen part `hides` is left out of the body's mesh (one cached mesh per set);
+## - a hat's `hair_mode` applies to the hair the same way (hair_trim): its `hat_trim`
+##   regions are left out under a trimming hat, the whole hair under a hiding one;
+## - optional slots (hat, cloak, gear) may be empty; a figure is built from whatever the
+##   resolved recipe names;
 ## - one ShaderMaterial per part (shaders/avatar_figure.gdshader, or its double-sided twin)
 ##   carries the figure's palette (AvatarPalette), the part's detail texture and, on the head,
 ##   the face rect and the chosen cells.
@@ -187,6 +191,16 @@ func face_counts() -> Dictionary:
 	return (manifest.get("face_sheet", {}) as Dictionary).get("rows", {})
 
 
+## The slots a figure from this kit may leave empty (kit.json `slots`).
+func optional_slots() -> Array[String]:
+	return AvatarRecipe.optional_slots(manifest)
+
+
+## Whether `slot` may be left empty.
+func is_optional(slot: String) -> bool:
+	return optional_slots().has(slot)
+
+
 ## A recipe resolved against this kit (AvatarRecipe.resolve); fallbacks are printed.
 func resolve(recipe: Dictionary) -> Dictionary:
 	var resolved := (
@@ -198,6 +212,7 @@ func resolve(recipe: Dictionary) -> Dictionary:
 			face_counts(),
 			manifest.get("proportions", {}),
 			stance_names(),
+			optional_slots(),
 		)
 	)
 	for note in resolved.fallbacks:
@@ -367,6 +382,7 @@ func build_figure(recipe: Dictionary) -> Node3D:
 	var hidden := []
 	for slot in resolved.parts:
 		hidden.append_array(parts_by_id[resolved.parts[slot]].get("hides", []))
+	var hat: Dictionary = parts_by_id.get(String(resolved.parts.get("hat", "")), {})
 	var slots: Array = resolved.parts.keys()
 	slots.sort()
 	for slot in slots:
@@ -374,15 +390,38 @@ func build_figure(recipe: Dictionary) -> Node3D:
 		var part := load_part(part_id)
 		if not String(part.error).is_empty():
 			continue
+		var drop: Array = hidden
+		if slot == "hair":
+			var trim: Variant = hair_trim(hat, parts_by_id[part_id])
+			if trim == null:
+				continue
+			drop = hidden + (trim as Array)
 		var mi := MeshInstance3D.new()
 		mi.name = part_id
-		mi.mesh = mesh_without(part_id, hidden)
+		mi.mesh = mesh_without(part_id, drop)
 		mi.skin = cache.skin(shape, part_id, part.skin)
 		sk.add_child(mi)
 		mi.skeleton = NodePath("..")
 		mi.material_override = cache.material(part_id, resolved.colours, resolved.face)
 		apply_blend_shapes(mi, weights)
 	return figure
+
+
+## What a hat does to the hair under it (section 10 "Hats and hair"), from their kit.json
+## entries: the hair regions to leave out ([] keeps the whole hair), or null to show no hair.
+## `hat` empty (no hat) or `hair_mode` "full" keeps the hair; "hidden" hides it; "trimmed"
+## leaves out the hair's `hat_trim` regions. A hat without `hair_mode` counts as "hidden",
+## and a hair without `hat_trim` is hidden under a trimming hat, so a mismatch never clips.
+static func hair_trim(hat: Dictionary, hair: Dictionary) -> Variant:
+	if hat.is_empty():
+		return []
+	match String(hat.get("hair_mode", "hidden")):
+		"full":
+			return []
+		"trimmed":
+			var trim: Variant = hair.get("hat_trim")
+			return (trim as Array).duplicate() if trim is Array else null
+	return null
 
 
 ## Each blend shape's weight for resolved proportion `values` (kit.json `shapes`).

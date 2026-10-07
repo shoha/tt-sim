@@ -6,7 +6,8 @@ extends RefCounted
 ## index into that slot's colour set), one face cell per kind, the proportion controls and a
 ## stance. Resolving it against a kit gives concrete choices, falling back to the first entry
 ## wherever the kit lacks what the recipe names and noting each fallback, so a recipe from a
-## newer client still shows a figure here.
+## newer client still shows a figure here. Optional slots (hat, cloak, gear) fall back to none
+## instead, and a recipe may name null there.
 ##
 ## A recipe is the JSON dictionary of the contract:
 ##   {"format": 1, "kit_version": "...", "parts": {slot: part id}, "colours": {slot: index},
@@ -18,12 +19,35 @@ extends RefCounted
 
 const FORMAT := 1
 const FACE_KINDS: Array[String] = ["eyes", "brows", "mouths", "marks"]
+## Slots every figure has, whatever the recipe says.
 const REQUIRED_SLOTS: Array[String] = ["body", "head"]
+## Slots a figure may leave empty (section 10 "Slots"), for a kit whose kit.json has no
+## `slots` block; a kit's own block wins (optional_slots).
+const OPTIONAL_SLOTS: Array[String] = ["hat", "cloak", "gear"]
+
+
+## The optional slots of a kit manifest: those its `slots` block marks optional, or
+## OPTIONAL_SLOTS for a kit from before the block.
+static func optional_slots(manifest: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	if not manifest.get("slots") is Dictionary:
+		out.assign(OPTIONAL_SLOTS)
+		return out
+	var slots: Dictionary = manifest.slots
+	for slot in slots:
+		if slots[slot] is Dictionary and bool((slots[slot] as Dictionary).get("optional", false)):
+			out.append(String(slot))
+	out.sort()
+	return out
 
 
 ## Resolves `recipe` against a kit: `parts_by_slot` (slot -> part ids in kit order),
 ## `colour_sets` (kit.json's), `face_counts` (kind -> cells in the sheet), `controls` (kit.json's
-## `proportions`) and `stances` (stance names, first is the fallback).
+## `proportions`), `stances` (stance names, first is the fallback) and `optional` (the kit's
+## optional slots). A required slot the kit has parts for is always filled: a recipe that
+## omits it, names null or names a part the kit lacks gets the slot's first part (noted). An
+## optional slot holds a part only when the recipe names one the kit has: omitted or null
+## means none, and a part the kit lacks means none (noted).
 static func resolve(
 	recipe: Dictionary,
 	parts_by_slot: Dictionary,
@@ -31,6 +55,7 @@ static func resolve(
 	face_counts: Dictionary,
 	controls: Dictionary,
 	stances: Array,
+	optional: Array = OPTIONAL_SLOTS,
 ) -> Dictionary:
 	var notes := PackedStringArray()
 	if int(recipe.get("format", FORMAT)) != FORMAT:
@@ -45,6 +70,8 @@ static func resolve(
 		slots[String(slot)] = true
 	for slot in REQUIRED_SLOTS:
 		slots[slot] = true
+	for slot in parts_by_slot:
+		slots[String(slot)] = true
 	var slot_names := slots.keys()
 	slot_names.sort()
 	var chosen := {}
@@ -53,11 +80,13 @@ static func resolve(
 		var wanted: Variant = wanted_parts.get(slot)
 		if wanted != null and available.has(String(wanted)):
 			chosen[slot] = String(wanted)
+		elif optional.has(slot):
+			if wanted != null:
+				notes.append("part '%s' for %s not in kit; left empty" % [wanted, slot])
 		elif not available.is_empty():
-			if wanted != null or REQUIRED_SLOTS.has(slot):
-				notes.append(
-					"part %s for %s not in kit; using '%s'" % [_repr(wanted), slot, available[0]]
-				)
+			notes.append(
+				"part %s for %s not in kit; using '%s'" % [_repr(wanted), slot, available[0]]
+			)
 			chosen[slot] = String(available[0])
 		elif wanted != null:
 			notes.append("no %s parts in kit; '%s' dropped" % [slot, wanted])

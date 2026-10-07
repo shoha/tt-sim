@@ -39,6 +39,13 @@ const ACCENT_SATURATION := 0.45
 const NATURAL_SKIN_HUE_DEG := 50.0
 const FANTASY_SKIN_WEIGHT := 1.0 / 3.0
 const MARKS_NONE_WEIGHT := 3.0
+## How often a surprise figure wears something in each optional slot (kit.json `slots`). Hair
+## is a figure's signature and a hat trims or hides it, so most draws show their hair; a cloak
+## covers the outfit's colours and much of the silhouette from behind, so it is a sometimes
+## thing; gear is small and adds character, so it comes up half the time. Every draw stands
+## on its own either way (no sameness: not every figure wears a hat).
+const WEAR_CHANCE := {"hat": 0.3, "cloak": 0.35, "gear": 0.5}
+const DEFAULT_WEAR_CHANCE := 0.4
 
 const SECTIONS: Array[StringName] = [&"stance", &"face", &"colours", &"shape", &"parts"]
 
@@ -104,16 +111,26 @@ static func reroll(
 	return out
 
 
-## A random part for every slot the kit has, in slot order.
+## A random part for every slot the kit has, in slot order; an optional slot (kit.json
+## `slots`) is worn only WEAR_CHANCE of the time and otherwise left out of the recipe.
 static func parts(kit: AvatarKit, rng: RandomNumberGenerator) -> Dictionary:
 	var out := {}
+	var optional := kit.optional_slots()
 	var slots: Array = kit.parts_by_slot.keys()
 	slots.sort()
 	for slot in slots:
 		var ids: Array = kit.parts_by_slot[slot]
-		if not ids.is_empty():
-			out[slot] = String(ids[rng.randi_range(0, ids.size() - 1)])
+		if ids.is_empty():
+			continue
+		if optional.has(String(slot)) and rng.randf() >= wear_chance(String(slot)):
+			continue
+		out[slot] = String(ids[rng.randi_range(0, ids.size() - 1)])
 	return out
+
+
+## How often a surprise figure wears a part in optional `slot`.
+static func wear_chance(slot: String) -> float:
+	return float(WEAR_CHANCE.get(slot, DEFAULT_WEAR_CHANCE))
 
 
 ## Colour picks for every palette slot: a weighted skin, a free hair and eye colour, a
