@@ -437,9 +437,16 @@ func pick_colour(slot: String, index: int) -> void:
 	_apply(next)
 
 
+## Wears `part_id` in `slot`; an empty id (the "None" tile of an optional slot) leaves the
+## slot empty.
 func pick_part(slot: String, part_id: String) -> void:
 	var next := recipe.duplicate(true)
-	next["parts"][slot] = part_id
+	if not next.get("parts") is Dictionary:
+		next["parts"] = {}
+	if part_id.is_empty():
+		(next["parts"] as Dictionary).erase(slot)
+	else:
+		next["parts"][slot] = part_id
 	_apply(next)
 
 
@@ -555,7 +562,9 @@ func _sync_controls() -> void:
 		(_shape_rows[control] as PropertyRow).set_value_no_signal(float(values.get(control, 0.5)))
 	var parts: Dictionary = recipe.get("parts", {})
 	for slot in _part_rows:
-		(_part_rows[slot] as TileRow).select(StringName(String(parts.get(slot, ""))))
+		# An empty or null optional slot selects its "None" tile (id "").
+		var worn: Variant = parts.get(slot)
+		(_part_rows[slot] as TileRow).select(StringName(String(worn) if worn is String else ""))
 	_refresh_colour_fields()
 
 
@@ -564,6 +573,8 @@ func _used_slots() -> Dictionary:
 	var used := {"skin": true, "eyes": true}
 	var parts: Dictionary = recipe.get("parts", {})
 	for slot in parts:
+		if not parts[slot] is String:
+			continue
 		var entry: Dictionary = _kit.parts_by_id.get(String(parts[slot]), {})
 		for painted in entry.get("slots_used", []):
 			used[String(painted)] = true
@@ -599,10 +610,17 @@ func _paint_face_icons() -> void:
 # --- panes -------------------------------------------------------------------------------------
 
 
+## Whether `slot` offers a choice: two parts or more, or one in an optional slot (the part
+## or none).
+func _slot_has_choice(slot: String) -> bool:
+	var count := (_kit.parts_by_slot.get(slot, []) as Array).size()
+	return count > 1 or (count > 0 and _kit.is_optional(slot))
+
+
 func _build_panes() -> void:
 	var has_parts := false
 	for slot in _kit.parts_by_slot:
-		if (_kit.parts_by_slot[slot] as Array).size() > 1:
+		if _slot_has_choice(String(slot)):
 			has_parts = true
 	for entry in PANES:
 		var id: StringName = entry[0]
@@ -756,13 +774,17 @@ func _parts_pane() -> Control:
 	slots.sort()
 	for slot in slots:
 		var ids: Array = _kit.parts_by_slot[slot]
-		if ids.size() <= 1:
+		if not _slot_has_choice(String(slot)):
 			continue
 		pane.add_child(_caption(String(slot).capitalize()))
 		var tiles := TileRow.new()
 		tiles.name = String(slot).capitalize() + "Tiles"
 		tiles.tile_min_size = PART_TILE
 		tiles.photo_icons = true
+		if _kit.is_optional(String(slot)):
+			# An optional slot (a hat, a cloak, gear) starts with "None".
+			var none := tiles.add_tile(&"", "None", "circle-off", "No %s" % String(slot))
+			none.add_theme_constant_override("icon_max_width", PART_ICON_PX)
 		for part_id in ids:
 			var path := THUMBNAIL_DIR + String(part_id) + ".png"
 			var icon: Texture2D = load(path) if ResourceLoader.exists(path) else null

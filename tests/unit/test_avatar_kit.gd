@@ -365,7 +365,8 @@ func test_resolution_falls_back_and_notes_it() -> void:
 		notes, "part 'hair_from_the_future' for hair not in kit; using 'hair_bun'"
 	)
 	assert_string_contains(notes, "part None for body not in kit; using 'body_a'")
-	assert_string_contains(notes, "no cloak parts in kit; 'cloak_x' dropped")
+	# The cloak slot is optional (card B1): a cloak the kit lacks means none.
+	assert_string_contains(notes, "part 'cloak_x' for cloak not in kit; left empty")
 	assert_string_contains(notes, "colour skin=99 outside its set of 6; using 0")
 	assert_string_contains(notes, "face eyes=40 outside the sheet's 7; using 0")
 	assert_string_contains(notes, "stance 'stance_dab' not in kit; using 'stance_ready'")

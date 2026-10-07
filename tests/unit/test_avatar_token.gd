@@ -176,7 +176,9 @@ func test_a_recipe_with_an_unknown_part_still_builds_a_token() -> void:
 	var figure := AvatarTokenFactory.view_of(token).figure
 	var resolved: Dictionary = figure.get_meta("avatar_recipe")
 	assert_eq(resolved.parts.body, "body_a", "the body fell back to the kit's first")
-	assert_eq(AvatarKit.figure_parts(figure).size(), 2, "body and head; no hat in the kit")
+	# Hair is a required slot (card B1), so the kit's hair fills it; the hat is optional.
+	assert_eq(AvatarKit.figure_parts(figure).size(), 3, "body, head and hair; no hat in the kit")
+	assert_false(resolved.parts.has("hat"), "an unknown hat means none")
 
 
 func test_placement_spawns_an_avatar_through_the_factory() -> void:
