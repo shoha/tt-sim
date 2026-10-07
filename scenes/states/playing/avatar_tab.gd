@@ -3,12 +3,14 @@ extends MarginContainer
 
 ## The "Avatar" tab of the Add Token browser: the player's saved avatars (AvatarLibrary,
 ## made on the title screen or saved from a game) as cards with their figures, where one
-## click places the avatar, followed by one tall action that opens the avatar builder for
-## a new one. The browser relays both to GameplayMenuController, which spawns the avatar where
-## an asset would land.
+## click places the avatar and a drag carries it onto the map (as a pack asset drags),
+## followed by one tall action that opens the avatar builder for a new one. The browser
+## relays them to GameplayMenuController, which spawns the avatar where an asset would land.
 
 signal build_requested
 signal avatar_chosen(entry: Dictionary)
+## A card dragged past the drag threshold; `icon` is its picture.
+signal avatar_drag_started(entry: Dictionary, icon: Texture2D)
 
 const TAB_TITLE := "Avatar"
 const COLUMNS := 4
@@ -45,8 +47,10 @@ func _ready() -> void:
 	grid.name = "Grid"
 	grid.columns = COLUMNS
 	grid.make_card = false
+	grid.draggable = true
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	grid.avatar_pressed.connect(func(entry: Dictionary) -> void: avatar_chosen.emit(entry))
+	grid.avatar_drag_started.connect(avatar_drag_started.emit)
 	content.add_child(grid)
 	# The saved avatars lead; the builder's action follows them.
 	content.move_child(actions, -1)

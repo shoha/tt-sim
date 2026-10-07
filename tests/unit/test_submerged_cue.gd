@@ -84,6 +84,27 @@ func test_marker_sizes_its_quad_to_the_ring() -> void:
 	marker.free()
 
 
+## A swimmer's quiet cue stands further out than its footprint, clear of its shoulders, and
+## goes back to the bright ring for any other token.
+func test_a_swimmers_cue_rings_wider_and_quieter() -> void:
+	var marker := SubmergedMarker.new()
+	add_child(marker)
+	marker.set_radius(0.4)
+	var ring := marker.get_node("Ring") as MeshInstance3D
+	var material := ring.material_override as ShaderMaterial
+	marker.set_swimmer(true)
+	assert_true(marker.is_swimmer())
+	assert_almost_eq(marker.get_radius(), 0.4, 1e-6, "the footprint radius is kept")
+	var wide := 0.4 * SubmergedMarker.SWIM_RADIUS_SCALE
+	assert_almost_eq(ring.scale.x * SubmergedMarker.RING_R, wide, 1e-5, "drawn wider")
+	assert_almost_eq(float(material.get_shader_parameter("radius_m")), wide, 1e-5)
+	assert_eq(float(material.get_shader_parameter("swim")), 1.0, "the quiet form")
+	marker.set_swimmer(false)
+	assert_almost_eq(ring.scale.x * SubmergedMarker.RING_R, 0.4, 1e-5, "back to the footprint")
+	assert_eq(float(material.get_shader_parameter("swim")), 0.0)
+	marker.free()
+
+
 ## Ground on the terrain layer (a bed at BED under x < 0, a bank at BANK for x >= 0) and a
 ## water surface at SURFACE over the bed only, as authored and Blender maps both provide.
 func _world() -> void:

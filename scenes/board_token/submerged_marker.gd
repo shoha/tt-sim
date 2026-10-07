@@ -6,6 +6,11 @@ extends Node3D
 ## so a token is never lost under the surface. A soft shadow disc, a bright ring at the
 ## token's footprint with a dark keyline, and a slow ripple spreading from it
 ## (shaders/submerged_marker.gdshader); it fades in and out.
+## A swimmer (an avatar chest-deep, set_swimmer) gets the quiet form instead: its head and
+## shoulders already show where it is, and a bright ring at the waterline round its neck read
+## as a swim ring. So the ring stands SWIM_RADIUS_SCALE further out, soft-edged and faint in
+## the foam's pale tint, with no keyline or shadow, and two ripples spread from it: the water
+## stirring round someone in deep water.
 ##
 ## A child of the token's RigidBody3D, so it hides with the token (a token hidden from
 ## players hides its marker too), but top_level, so it stands on the water in world space
@@ -31,10 +36,14 @@ const FADE_S := 0.18
 const RENDER_PRIORITY := 2
 ## The ring's share of the quad's half size (the shader's RING_R; a test keeps them equal).
 const RING_R := 0.7
+## A swimmer's ring against its footprint radius: clear of the shoulders, so the stirred water
+## reads round the figure rather than as a ring about its neck.
+const SWIM_RADIUS_SCALE := 1.6
 
 var _mesh: MeshInstance3D
 var _material: ShaderMaterial
 var _radius: float = 0.5
+var _swimmer: bool = false
 var _fade: Tween = null
 var _shown: bool = false
 
@@ -81,14 +90,40 @@ static func token_box(shape: CollisionShape3D, token_scale: Vector3) -> AABB:
 	return AABB(box.position * token_scale, box.size * token_scale)
 
 
+## Sets the footprint radius (radius_for_box()); a swimmer's ring stands SWIM_RADIUS_SCALE of
+## it out (ring_radius()).
 func set_radius(radius: float) -> void:
 	_radius = radius
-	_mesh.scale = Vector3.ONE * (radius / RING_R)
-	_material.set_shader_parameter("radius_m", radius)
+	_apply_radius()
 
 
 func get_radius() -> float:
 	return _radius
+
+
+## The radius the ring is drawn at: the footprint radius, or SWIM_RADIUS_SCALE of it for a
+## swimmer.
+func ring_radius() -> float:
+	return _radius * (SWIM_RADIUS_SCALE if _swimmer else 1.0)
+
+
+## The quiet form for a swimmer (see the class header), or the bright ring with `on` false.
+func set_swimmer(on: bool) -> void:
+	if on == _swimmer:
+		return
+	_swimmer = on
+	_material.set_shader_parameter("swim", 1.0 if on else 0.0)
+	_apply_radius()
+
+
+func is_swimmer() -> bool:
+	return _swimmer
+
+
+func _apply_radius() -> void:
+	var ring := ring_radius()
+	_mesh.scale = Vector3.ONE * (ring / RING_R)
+	_material.set_shader_parameter("radius_m", ring)
 
 
 ## True while shown or fading in.
@@ -97,8 +132,9 @@ func is_shown() -> bool:
 
 
 ## Shows the marker on the water surface at world `at` (the surface's Y), fading in when it
-## was hidden.
-func show_at(at: Vector3) -> void:
+## was hidden; `swimmer` picks the quiet form (set_swimmer).
+func show_at(at: Vector3, swimmer: bool = false) -> void:
+	set_swimmer(swimmer)
 	if is_inside_tree():
 		global_position = at + Vector3.UP * LIFT_M
 	else:

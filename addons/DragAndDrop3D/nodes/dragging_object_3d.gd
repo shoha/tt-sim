@@ -113,6 +113,14 @@ func get_height_offset() -> float:
 	return heightOffset
 
 
+## The ground resolver this object drags on (DragAndDrop3D.ground_resolver, valid): the
+## shared one by default. An object that rests differently overrides this to bind its own
+## trailing arguments (DraggableToken binds its water draft, so a swimmer is dragged at swim
+## depth).
+func drag_resolver(resolver: Callable) -> Callable:
+	return resolver
+
+
 #Editor Settings
 func _check_editor_child() -> void:
 	if not Engine.is_editor_hint():

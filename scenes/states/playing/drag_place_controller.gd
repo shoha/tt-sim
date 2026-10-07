@@ -1,8 +1,8 @@
 class_name DragPlaceController
 extends Node
 
-## Handles drag-to-place: dragging an asset from the asset browser and
-## dropping it onto the map to spawn a new token, including the ghost icon
+## Handles drag-to-place: dragging an asset (or a saved avatar, begin_drag) from the
+## asset browser and dropping it onto the map to spawn a new token, including the ghost icon
 ## that follows the cursor and the ground-position/grid-snap math used to
 ## resolve the drop point. Distinct from DragAndDrop3D-based dragging of
 ## already-placed tokens on the board, which this controller does not touch.
@@ -31,7 +31,8 @@ var _game_map: GameMap = null
 var _spawn_asset_fn: Callable
 
 var _drag_placing: bool = false
-var _drag_place_info: Dictionary = {}
+## What a drop does: place(ground_position: Vector3) -> BoardToken (null on failure).
+var _place_fn: Callable
 var _drag_ghost: TextureRect = null
 var _drag_ghost_layer: CanvasLayer = null
 
@@ -87,12 +88,28 @@ func handle_input(event: InputEvent) -> bool:
 func _on_drag_place_started(
 	pack_id: String, asset_id: String, variant_id: String, icon: Texture2D
 ) -> void:
+	var place := func(ground_pos: Vector3) -> BoardToken:
+		if not _spawn_asset_fn.is_valid():
+			return null
+		var token: BoardToken = _spawn_asset_fn.call(
+			pack_id, asset_id, variant_id, ground_pos, true
+		)
+		if not token:
+			UIManager.show_error("Failed to place token")
+		return token
+	begin_drag(icon, place)
+
+
+## Starts a drag-place whose drop calls `place(ground_position)`: the ghost `icon` follows
+## the cursor until a release over the map places it there (GUI release, Escape or a right
+## click cancels). The position is resolved and snapped as for an asset, PLACE_CLEARANCE
+## above the surface, so the placer spawns with settle on. The Avatar tab's drags come here
+## through GameplayMenuController.avatar_drag_place_started.
+func begin_drag(icon: Texture2D, place: Callable) -> void:
+	if _drag_placing:
+		_cancel_drag_place()
 	_drag_placing = true
-	_drag_place_info = {
-		"pack_id": pack_id,
-		"asset_id": asset_id,
-		"variant_id": variant_id,
-	}
+	_place_fn = place
 	# Create ghost icon on a high canvas layer
 	_drag_ghost_layer = CanvasLayer.new()
 	_drag_ghost_layer.layer = Constants.LAYER_DIALOG
@@ -118,7 +135,7 @@ func _on_drag_place_started(
 
 func _cancel_drag_place() -> void:
 	_drag_placing = false
-	_drag_place_info.clear()
+	_place_fn = Callable()
 	if _drag_ghost_layer:
 		_drag_ghost_layer.queue_free()
 		_drag_ghost_layer = null
@@ -156,21 +173,10 @@ func _complete_drag_place(screen_pos: Vector2) -> void:
 		if resolved != Vector3.INF:
 			ground_pos = resolved + Vector3(0, PLACE_CLEARANCE, 0)
 
-	if _spawn_asset_fn.is_valid():
-		var token = (
-			_spawn_asset_fn
-			. call(
-				_drag_place_info.get("pack_id", ""),
-				_drag_place_info.get("asset_id", ""),
-				_drag_place_info.get("variant_id", "default"),
-				ground_pos,
-				true,
-			)
-		)
-		if not token:
-			UIManager.show_error("Failed to place token")
-
+	var place := _place_fn
 	_cancel_drag_place()
+	if place.is_valid():
+		place.call(ground_pos)
 
 
 ## Raycast from a screen position against the terrain collision layer only.

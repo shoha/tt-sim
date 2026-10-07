@@ -532,13 +532,17 @@ func _update_submerged_cue(moving: bool) -> void:
 	if is_nan(surface):
 		_submerged_marker.hide_marker()
 	else:
-		_submerged_marker.show_at(Vector3(at.x, surface, at.z))
+		_submerged_marker.show_at(Vector3(at.x, surface, at.z), _swims())
 
 
-## How far below the surface this token rides in floating water (WaterSurface.draft_for):
-## an avatar swims chest-deep, any other token floats at the surface.
+## How deep this token rides in floating water (WaterSurface.draft_for: avatars swim).
 func water_draft() -> float:
 	return WaterSurface.draft_for(cue_box().size.y, _swims())
+
+
+## The drag's ground resolver with this token's water_draft() bound: a swimmer drags at swim depth.
+func drag_resolver(resolver: Callable) -> Callable:
+	return resolver.bind(water_draft())
 
 
 ## Whether the swim rule applies (an avatar figure).
@@ -552,9 +556,8 @@ func is_submerged_cue_shown() -> bool:
 	return _submerged_marker != null and _submerged_marker.is_shown()
 
 
-## The token's collision box in the rigid body's frame, scaled by BoardToken's logical scale
-## (not the near-zero one a spawn animation starts from, which read every token placed or
-## loaded in water as submerged): position.y is the base's offset, size.y the height.
+## The token's collision box in the rigid body's frame at BoardToken's logical scale (not a
+## spawn animation's near-zero one): position.y is the base's offset, size.y the height.
 func cue_box() -> AABB:
 	var board_token := get_parent() as BoardToken
 	var token_scale := board_token.get_logical_scale() if board_token else rigid_body.scale

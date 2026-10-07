@@ -109,7 +109,8 @@ var grid_origin: Vector2 = Vector2.ZERO
 ## When set, the drag target's height is re-resolved on it after the grid snap (see
 ## resolve_target_ground), so a token snapped across a tier edge rides on the tier its cell
 ## is on, not on the height the cursor ray hit. GameMap sets it only for maps with authored
-## terrain; Blender maps leave it empty and keep the cursor-hit height.
+## terrain; Blender maps leave it empty and keep the cursor-hit height. The dragged object
+## may bind trailing arguments to it first (DraggingObject3D.drag_resolver).
 var ground_resolver: Callable = Callable()
 ## The drag target on the ground (after snap and ground_resolver, before the token's height
 ## offsets). The drag ruler reads it for the elevation change.
@@ -274,8 +275,11 @@ func _update_target_position(mouse_position: Vector2) -> void:
 	# Grid snap: snap XZ to cell centers unless Shift is held (free move override); then the
 	# ground height at the snapped cell, when the map resolves it.
 	var snap := grid_snap_enabled and not Input.is_key_pressed(KEY_SHIFT)
+	var resolver := ground_resolver
+	if resolver.is_valid():
+		resolver = _currentDraggingObject.drag_resolver(resolver)
 	mousePosition3D = resolve_target_ground(
-		mousePosition3D, snap, grid_cell_size, grid_origin, ground_resolver
+		mousePosition3D, snap, grid_cell_size, grid_origin, resolver
 	)
 	_target_ground_position = mousePosition3D
 
