@@ -1,6 +1,6 @@
 {
  "format": 1,
- "kit_version": "0.1.0+de7035a",
+ "kit_version": "0.1.0+77faaf0",
  "parts": [
   {
    "id": "body_a",
@@ -81,6 +81,13 @@
    "layer": 1,
    "shapes": [
     "build_plus"
+   ],
+   "regions": [
+    "hair",
+    "bun"
+   ],
+   "hat_trim": [
+    "bun"
    ]
   }
  ],
@@ -370,6 +377,35 @@
     "#f2c59c"
    ]
   ]
+ },
+ "slots": {
+  "body": {
+   "optional": false
+  },
+  "head": {
+   "optional": false
+  },
+  "hair": {
+   "optional": false
+  },
+  "hat": {
+   "optional": true
+  },
+  "top": {
+   "optional": false
+  },
+  "bottom": {
+   "optional": false
+  },
+  "shoes": {
+   "optional": false
+  },
+  "cloak": {
+   "optional": true
+  },
+  "gear": {
+   "optional": true
+  }
  },
  "skeleton": {
   "Hips": {
