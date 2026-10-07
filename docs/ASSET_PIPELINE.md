@@ -638,7 +638,9 @@ A third path: figurine (`D:/dev/figurine`, a Blender 5.2 extension) generates a 
 painted, skinned parts that ships inside the game, and tt-sim builds a player's avatar
 token from it by a small recipe that every peer rebuilds from its own copy of the kit, the
 way a `.ttmap` is rebuilt. Design and style: `figurine/docs/design.md`. Status: contract
-drafted 2026-10-06 from the avatar probe (tt-sim `2d7aa3e`,
+drafted 2026-10-06 from the avatar probe; the foundation card (2026-10-06) added the
+secondary chains, the `build_plus` blend shape with plus stance variants, part layers and
+the per-slot triangle caps (tt-sim `2d7aa3e`,
 `tools/render_jobs/probes/avatar*.gd`); humans only. Produced: the first kit slice
 (figurine e12e8bb, 2026-10-06: `body_a`, `head_round`, `hair_bun`, 21 face cells, two
 stances; a figure is 3,908 triangles; its kit.json says `kit_version` `0.1.0+b4f9f4a`).
@@ -669,7 +671,8 @@ figure has exactly one `body` and one `head` and at most one part in each other 
 
 ### Skeleton
 
-- One armature for the whole kit (72 bones since the crisp-joints card, 2026-10-06). Body and
+- One armature for the whole kit (105 bones since the foundation card, 2026-10-06: 72 body,
+  finger and helper bones plus 33 secondary chain bones, below). Body and
   finger bones are named as Godot's `SkeletonProfileHumanoid` names them: `Hips`, `Spine`,
   `Chest`, `UpperChest`, `Neck`, `Head`, `LeftShoulder`, `LeftUpperArm`, `LeftLowerArm`,
   `LeftHand`, `LeftUpperLeg`, `LeftLowerLeg`, `LeftFoot`, `LeftToes`, and per hand a
@@ -707,6 +710,23 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   `twist`. The producer bakes every helper's rotation into each stance clip
   (`skeleton.drive_helpers`), so the consumer plays helpers like any other bone; the
   fields let a consumer drive them at runtime later if it animates the body bones itself.
+- Secondary chains (33 bones, the foundation card): cloth and hair bones for static posing.
+  Nothing moves on the map; a stance sweeps a cloak, a skirt or a ponytail and keeps it clear
+  of the body. Each chain is three bones, `<Chain>1` (child of the attach bone), `<Chain>2`,
+  `<Chain>3`, hanging down: off `Head`, `HairBack`, `Ponytail`, `LeftTwinTail`,
+  `RightTwinTail`; off `Hips`, `SkirtFront`, `SkirtBack`, `LeftSkirt`, `RightSkirt` (just
+  outside the hips); off `UpperChest`, `CloakBack`, `LeftCloak`, `RightCloak`. Every part
+  carries them like the helpers; a part that does not use a chain leaves it inert (no
+  weights on it). `kit.json` marks each with `chain` (its drape group: `hair_back`,
+  `ponytail`, `twin_tails`, `skirt`, `cloak`) and `attach`. A chain bone takes its attach
+  bone's proportion map whole: its R is the attach bone's R (not a stretch along its own
+  axis), so cloth skinned to it scales with the body it hangs from. Their joint frames
+  follow the rule above with flexion swinging the tail forward. The producer solves every
+  chain bone's rotation per stance (figurine `drape.py`: each bone hangs under gravity in
+  the world from its posed parent, a stance may sweep a group toward a direction or flare
+  it, and each bone turns the least that keeps it and the cloth between neighbouring
+  chains clear of the body at the heavy proportion corners) and bakes it into the clips,
+  so the consumer plays chain bones like any other bone.
 - Every part GLB carries the full armature with identical rest and bind poses, so any set
   of parts binds to the one `Skeleton3D` the consumer builds from `skeleton.glb`. A part
   whose armature differs from the kit's is rejected at load, naming the part.
@@ -726,7 +746,9 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   binds are named (`use_named_skins`) and Godot's bone order differs from kit.json's, so
   binds are matched by name. A helper bone is listed in no control: it takes its driver's
   length and girth factors (so its R is its driver's, and since it sits on its driver's
-  head under the same parent, its map M is exactly its driver's). Finger bones take the
+  head under the same parent, its map M is exactly its driver's). A chain bone (`chain` set)
+  takes its `attach` bone's R whole; its head then chains from its parent as usual, so its
+  map is exactly the attach bone's. Finger bones take the
   hand's ranges in the `build` control (listed there explicitly).
 - Stances are one-frame glTF animation clips in `skeleton.glb` (`stance_ready`,
   `stance_relaxed`, `stance_heroic`, `stance_casting`, `stance_cheerful`, `stance_sneaky`,
@@ -747,7 +769,16 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   highest required lift wins, so no contact sinks and the others sit on or just above the
   ground). The reference is figurine `pose.ground_hips`. No other bone carries a
   translation. `stance_info.<stance>.hand_shapes` names each hand's shape (`relaxed`,
-  `open`, `fist`, `point`, `grip`), informational. The producer verifies every stance, and a
+  `open`, `fist`, `point`, `grip`), informational. Plus variants (the foundation card): a
+  hand resting on the hip of a plus-size body sits further out than on the default body, so
+  each stance has a second clip fitted to the heaviest body, `<stance>_plus` (hand targets
+  moved out by the body surface's own `build_plus` delta, chains draped again), named in
+  `stance_info.<stance>.plus` as `{"clip": "<stance>_plus", "shape": "build_plus"}`. A
+  figure blends from the stance toward it by that blend shape's weight w (below): each
+  bone's local rotation is `stance.slerp(plus, w)` (shortest path), the clip's Hips offset
+  lerps by w, and the ground rule then stands the figure on its contacts (the base clip's
+  `ground`). w = 0 for builds up to 0.5, so most figures play the base clip unchanged. The
+  `_plus` clips are not listed in `stances`. The producer verifies every stance, and a
   set of acceptance poses that are not shipped (an elbow folded 120 degrees, an arm raised
   about 170 degrees, a deep lunge, a knee at hip height, a fist beside the head, a
   two-handed grip), at every proportion corner (figurine `posecheck.py`: joint limits in
@@ -755,8 +786,9 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   crisp-joints card the deformation checks a crisp joint can pass: no skin edge stretched
   past 1.6x, or past 2.8x on the outside of a joint, every joint's cross-section at least
   0.7 of rest across the bend and 0.85 along its axis, and no elbow, knee or wrist crease
-  passing through itself by more than 3 mm) so a kit never ships a clipping, pinched or
-  floating pose. Joints are skinned to fold crisply (a bent limb reads as two straight
+  passing through itself by more than 3 mm, and the layer check below) so a kit never ships
+  a clipping, pinched or floating pose. A corner's pose is the stance blended toward its
+  plus variant by that corner's weight, as the consumer blends it. Joints are skinned to fold crisply (a bent limb reads as two straight
   segments meeting at a defined joint), which nothing on the consumer side depends on.
   On Godot 4.7.1 a `Skeleton3D` posed before it enters the tree
   keeps its rest global pose, so `AvatarKit` poses again on `tree_entered` (a test guards
@@ -780,6 +812,29 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   faces stay flat; Crashsune's faces are unlit), hair and cloth sit low (about 0.2-0.4) so
   the paint carries the shading. G, B and A are reserved (wind if hair or cloth sway is
   added later; the probe's per-vertex outline width if an outline is ever wanted).
+- Blend shapes (glTF morph targets, the foundation card). `build_plus` is the high end of
+  the `build` control: a real plus-size body rather than a wider one (a fuller belly that
+  sits forward and low, softer sides at the waist, wider hips and seat, fuller inner and
+  front thighs and upper arms, a fuller chest and upper back, a thicker neck and raised
+  trapezius line; on the head and hair, rounder cheeks and a softer jaw). A part carries it
+  as a position-only morph target named in the mesh's `extras.targetNames` (no morph
+  normals: the palette carries the shading), listed in its kit.json entry's `shapes`. The
+  delta is in rest (bind) space, so the bind matrices' proportion maps scale it like any
+  vertex, and it combines with the build control's girth factors. kit.json `shapes` maps
+  each blend shape to the control that drives it: `{"build_plus": {"control": "build",
+  "points": [[0.5, 0.0], [1.0, 1.0]]}}`, the weight a piecewise-linear function of the
+  control value, clamped at the ends. The consumer sets each part's blend shape of that name
+  to the weight; a part without it ignores it. A garment derived from the body carries the
+  same-named shape (figurine `garment.py` gives each vertex the delta of the body point it
+  was built from), so every part of a figure changes together.
+- Layers (the foundation card). Each part entry has `stack` and `layer`: in the `body` stack
+  the body is 0, fitted clothing 1, loose clothing 2, a cloak 3; in the `head` stack the head
+  is 0, hair 1, a hat 2. The producer guarantees, at every stance and proportion corner,
+  that a part's surface stays outside the parts beneath it in its stack where they overlap
+  (within 3 mm, 8 mm inside a joint's fold), not counting body regions a worn part hides
+  or geometry tucked into the body by design (figurine `posecheck.layer_problems`). So
+  the consumer may wear any one part per slot together without sorting or clipping logic.
+  Informational for the consumer today.
 - `extras.figurine_double_sided: true` marks a part whose open cards must render both
   faces (hair locks built as planes); every other part is closed and back-face culled.
 - Two UV sets, because Godot reads two (`UV`, `UV2`): `TEXCOORD_0` is palette space and
@@ -884,7 +939,9 @@ authoritative instance. The first kit (figurine e12e8bb) also writes: `palette` 
 order, size, stops, interpolation), `skeleton` (above, with `flex_axis` and the helper
 fields since the rig card), `stance_info` (per stance `ground` and `hand_shapes`, above),
 and per part `regions` (for the body), `detail` (whether it has an overlay) and
-`double_sided`. In `face_sheet`: `mask`,
+`double_sided`; since the foundation card also `stack`, `layer` and `shapes` per part,
+`chain` and `attach` on chain bones, the top-level `shapes` block and
+`stance_info.<stance>.plus`. In `face_sheet`: `mask`,
 `mask_channels`, `columns`, `row_order`, `names`. Proportions give `length` and `girth`
 ranges per bone, each centred on 1.0; factors from several controls multiply.
 
