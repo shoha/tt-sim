@@ -3,8 +3,9 @@ extends GutTest
 ## The avatar builder (AvatarBuilder, AvatarSurprise): a surprise recipe is always valid
 ## and drawn from the curated sets, a committed edit is one undo entry that syncs and
 ## undoes, a cancelled edit puts the token back exactly, only an avatar's owner or the GM
-## may open "Edit Avatar", proportion drags reach the figure once a frame, and a recipe
-## the builder made round-trips through a level file.
+## may open "Edit Avatar", proportion drags reach the figure once a frame, a recipe the
+## builder made round-trips through a level file, every stance is framed whole, the Face
+## pane zooms to the head, the panel fits the window, and the face tiles take the skin.
 
 const RECIPE := {
 	"format": 1,
@@ -267,3 +268,82 @@ func test_a_builder_recipe_round_trips_through_save_and_load() -> void:
 	assert_eq(restored.avatar_recipe, recipe)
 	assert_eq(AvatarTokenFactory.kit().resolve(restored.avatar_recipe).fallbacks.size(), 0)
 	builder.cancel()
+
+
+# --- layout and framing ------------------------------------------------------------------------
+
+
+func test_every_stance_is_measured_and_framed_whole_while_it_turns() -> void:
+	var kit := AvatarTokenFactory.kit()
+	var pitch := deg_to_rad(AvatarBuilderPreview.FULL_PITCH_DEG)
+	var aspect := 0.55
+	for stance in kit.stance_names():
+		var posed := RECIPE.duplicate(true)
+		posed["stance"] = stance
+		var figure := kit.build_figure(posed)
+		var b := AvatarBuilderFraming.measure(figure)
+		assert_almost_eq(float(b.bottom), 0.0, 0.05, "%s stands on the floor" % stance)
+		assert_between(float(b.top), 1.2, 2.2, "%s is figure-tall" % stance)
+		assert_between(float(b.reach), 0.1, 1.0, "%s reaches a plausible width" % stance)
+		var head: AABB = b.head
+		var crown: AABB = b.crown
+		assert_true(head.has_volume() and crown.has_volume(), "%s has a head box" % stance)
+		assert_true(crown.encloses(head), "the crown holds the head")
+		assert_between(head.get_center().y, 1.0, float(b.top), "%s head sits up top" % stance)
+		var view := AvatarBuilderFraming.fit(b, pitch, aspect)
+		var tall := (float(b.top) - float(b.bottom)) * cos(pitch)
+		assert_true(view.x > tall, "%s fits the view's height" % stance)
+		assert_true(view.x * aspect > 2.0 * float(b.reach), "%s fits its turning width" % stance)
+		assert_almost_eq(view.y, (float(b.top) + float(b.bottom)) * 0.5, 0.05)
+		figure.free()
+
+
+func test_the_face_pane_zooms_the_preview_to_the_head() -> void:
+	var builder := AvatarBuilder.open_for_new(_scene, RECIPE, "Plum")
+	var preview: AvatarBuilderPreview = builder._preview
+	await get_tree().process_frame
+	var whole := preview.view_at(0.0)
+	var face := preview.view_at(1.0)
+	assert_lt(float(face.size), float(whole.size) * 0.6, "the portrait is much closer")
+	assert_gt((face.focus as Vector3).y, (whole.focus as Vector3).y, "and higher, at the head")
+	assert_lt(float(face.pitch), float(whole.pitch), "and seen more level")
+	builder._rail.select(&"face")
+	assert_true(preview.face_view)
+	builder._rail.select(&"colours")
+	assert_false(preview.face_view)
+	builder.cancel()
+
+
+func test_the_panel_takes_a_share_of_the_window_within_limits() -> void:
+	var usual := AvatarBuilder.panel_size(Vector2(1920, 1080))
+	assert_almost_eq(usual.y, 1080.0 * AvatarBuilder.PANEL_SHARE.y, 1.0)
+	assert_true(usual.x <= AvatarBuilder.PANEL_MAX.x)
+	var small := AvatarBuilder.panel_size(Vector2(800, 500))
+	var margin := AvatarBuilder.WINDOW_MARGIN * 2.0
+	assert_true(small.x <= 800.0 - margin and small.y <= 500.0 - margin, "never past the window")
+	var huge := AvatarBuilder.panel_size(Vector2(5000, 4000))
+	assert_eq(huge, AvatarBuilder.PANEL_MAX)
+	var preview := AvatarBuilder.preview_size(usual)
+	assert_almost_eq(preview.x, usual.y * AvatarBuilder.PREVIEW_ASPECT, 1.0)
+
+
+func test_face_tiles_are_painted_on_the_picked_skin() -> void:
+	var kit := AvatarTokenFactory.kit()
+	var skins: Array = kit.manifest.colour_sets.skin
+	var dark := Color.html(String(skins[skins.size() - 1][0]))
+	var icons := AvatarFaceIcons.create(kit, AvatarFaceIcons.skin_colour(kit, RECIPE), RECIPE.face)
+	assert_eq(icons.textures.size(), AvatarRecipe.FACE_KINDS.size())
+	# The dummy renderer of a headless run hands back blank texture images, so the painted
+	# tile is read before it reaches the texture.
+	var corner := icons._paint("eyes", 0, false).get_pixel(0, 0)
+	var light := Color.html(String(skins[int(RECIPE.colours.skin)][0]))
+	assert_true(_near(corner, light), "the picked skin behind every mark")
+	icons.update(dark, RECIPE.face)
+	corner = icons._paint("brows", 0, true).get_pixel(0, 0)
+	assert_true(_near(corner, dark), "a skin pick paints the tiles on it")
+	var tile := icons._paint("brows", 1, true)
+	assert_eq(tile.get_size(), Vector2i(AvatarFaceIcons.ICON_PX, AvatarFaceIcons.ICON_PX))
+
+
+func _near(a: Color, b: Color) -> bool:
+	return absf(a.r - b.r) < 0.02 and absf(a.g - b.g) < 0.02 and absf(a.b - b.b) < 0.02

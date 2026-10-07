@@ -67,6 +67,9 @@ uniform float paint_saturation : hint_range(0.0, 2.0) = 1.1;
 // Per figure, set from the CPU (AvatarKit.set_shade, AvatarKit.set_hidden_fade).
 instance uniform float shade = 0.0;
 instance uniform float hidden_fade = 0.0;
+// The builder's preview (AvatarBuilderPreview) stands its figure in the default
+// environment's ambient, whatever level is open: rgb replaces figure_ambient when a > 0.5.
+instance uniform vec4 ambient_override = vec4(0.0);
 
 varying float v_light;
 varying float v_shade;
@@ -81,7 +84,7 @@ vec3 palette_at(float slot, float v) {
 }
 
 vec3 ambient_tint() {
-	vec3 a = max(figure_ambient, vec3(1e-4));
+	vec3 a = max(ambient_override.a > 0.5 ? ambient_override.rgb : figure_ambient, vec3(1e-4));
 	float lum = dot(a, vec3(0.2126, 0.7152, 0.0722));
 	vec3 hue = a / lum;
 	float level = clamp(lum / ambient_reference, ambient_floor, 1.0);

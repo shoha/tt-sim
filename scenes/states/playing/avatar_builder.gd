@@ -17,6 +17,11 @@ extends AnimatedCanvasLayerPanel
 ## and record as one undo entry. Proportion drags are quantised to AvatarSurprise.STEP and
 ## applied at most once a frame (a never-seen shape costs about 1.6 ms); the stance
 ## silhouettes follow a shape change after a short pause.
+##
+## The panel takes a large share of the window (panel_size) and gives most of its height to
+## the preview, which is about PREVIEW_ASPECT as wide as it is tall; the pose tiles grow to
+## the pane's height. The Face pane zooms the preview to the head, and its tiles are painted
+## on the avatar's skin (AvatarFaceIcons).
 
 signal create_confirmed(recipe: Dictionary, token_name: String)
 signal edit_confirmed(
@@ -54,10 +59,19 @@ const SHAPE_ROWS := [
 	["build", "Build", "Slight", "Sturdy"],
 	["head", "Head", "Small", "Big"],
 ]
-const FACE_TILE := Vector2(56, 56)
+const FACE_TILE := Vector2(88, 88)
 const PART_TILE := Vector2(84, 96)
 const PART_ICON_PX := 56
-const PREVIEW_SIZE := Vector2(300, 400)
+## The panel's share of the window, its size limits, and the window margin it keeps.
+const PANEL_SHARE := Vector2(0.86, 0.86)
+const PANEL_MIN := Vector2(860, 600)
+const PANEL_MAX := Vector2(1640, 1400)
+const WINDOW_MARGIN := 24.0
+## The preview's width as a share of the panel's height, and its least size.
+const PREVIEW_ASPECT := 0.5
+const PREVIEW_MIN := Vector2(280, 380)
+## The Pose pane's title row and the gap below it, which the stance tiles leave free.
+const POSE_TITLE_ROOM := 64.0
 const SILHOUETTE_REFRESH_S := 0.25
 const THUMBNAIL_DIR := "res://assets/avatar_kit/thumbnails/"
 
@@ -73,6 +87,7 @@ var _original_name := ""
 var _rng := RandomNumberGenerator.new()
 var _preview: AvatarBuilderPreview
 var _stance_tiles: AvatarStanceTiles
+var _face_icons: AvatarFaceIcons
 var _rail: IconRail
 var _stack: PaneStack
 var _face_rows: Dictionary = {}  # kind -> TileRow
@@ -86,6 +101,7 @@ var _silhouettes_in_s := -1.0
 var _name_edited := false
 var _closing := false
 
+@onready var panel: PanelContainer = %PanelContainer
 @onready var content: VBoxContainer = %Content
 @onready var header_slot: VBoxContainer = %HeaderSlot
 @onready var name_input: LineEdit = %NameInput
@@ -122,6 +138,20 @@ static func open_for_token(parent: Node, target: BoardToken) -> AvatarBuilder:
 static func _instantiate() -> AvatarBuilder:
 	var scene := load(SCENE_PATH) as PackedScene
 	return scene.instantiate() as AvatarBuilder
+
+
+## The panel's size in a `window` of that size: PANEL_SHARE of it within PANEL_MIN and
+## PANEL_MAX, and never closer than WINDOW_MARGIN to its edges.
+static func panel_size(window: Vector2) -> Vector2:
+	var wanted := (window * PANEL_SHARE).clamp(PANEL_MIN, PANEL_MAX)
+	return wanted.min(window - Vector2.ONE * WINDOW_MARGIN * 2.0).max(Vector2.ZERO)
+
+
+## The preview's least size in a panel of `panel_px`: PREVIEW_ASPECT of the panel's height
+## wide, at most two fifths of its width.
+static func preview_size(panel_px: Vector2) -> Vector2:
+	var width := minf(panel_px.y * PREVIEW_ASPECT, panel_px.x * 0.4)
+	return Vector2(maxf(width, PREVIEW_MIN.x), PREVIEW_MIN.y)
 
 
 ## The property changes a committed edit records as one undo entry
@@ -202,7 +232,6 @@ func _on_panel_ready() -> void:
 
 	_preview = AvatarBuilderPreview.new()
 	_preview.name = "Preview"
-	_preview.custom_minimum_size = PREVIEW_SIZE
 	_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	preview_slot.add_child(_preview)
 	var turn_hint := Label.new()
@@ -231,6 +260,28 @@ func _on_panel_ready() -> void:
 	if _kit != null:
 		_preview.set_recipe(recipe)
 		_sync_controls()
+	get_viewport().size_changed.connect(_fit_to_window)
+	pane_slot.resized.connect(_fit_pose_tiles)
+	_fit_to_window()
+
+
+## Sizes the panel and the preview to the window.
+func _fit_to_window() -> void:
+	var window := get_viewport().get_visible_rect().size
+	var panel_px := panel_size(window)
+	panel.custom_minimum_size = panel_px
+	_preview.custom_minimum_size = preview_size(panel_px)
+
+
+## Grows the stance tiles so their two rows fill the Pose pane's height.
+func _fit_pose_tiles() -> void:
+	if _stance_tiles == null:
+		return
+	var count := _kit.stance_names().size()
+	var rows := ceili(float(count) / float(maxi(_stance_tiles.columns, 1)))
+	var gap := float(_stance_tiles.get_theme_constant("v_separation"))
+	var room := pane_slot.size.y - POSE_TITLE_ROOM - gap * float(maxi(rows - 1, 0))
+	_stance_tiles.fit(room / float(maxi(rows, 1)))
 
 
 func _stagger_targets() -> Array[Control]:
@@ -368,6 +419,7 @@ func _sync_controls() -> void:
 	if _stance_tiles != null:
 		_stance_tiles.select(StringName(String(recipe.get("stance", ""))))
 	var face: Dictionary = recipe.get("face", {})
+	_paint_face_icons()
 	for kind in _face_rows:
 		(_face_rows[kind] as TileRow).select(StringName(str(int(face.get(kind, 0)))))
 	var colours: Dictionary = recipe.get("colours", {})
@@ -404,7 +456,17 @@ func _on_name_changed(_text: String) -> void:
 
 
 func _on_rail_selected(id: StringName) -> void:
+	_paint_face_icons()
 	_stack.show_pane(id)
+	_preview.focus_face(id == &"face")
+
+
+## Repaints the face tiles for the recipe's skin and face while the Face pane shows (a
+## repaint of every tile costs a few milliseconds, so a skin pick on the Colours pane leaves
+## it for the moment the Face pane opens).
+func _paint_face_icons() -> void:
+	if _face_icons != null and _rail != null and _rail.selected == &"face":
+		_face_icons.update(AvatarFaceIcons.skin_colour(_kit, recipe), recipe.get("face", {}))
 
 
 # --- panes -------------------------------------------------------------------------------------
@@ -478,7 +540,10 @@ func _face_pane() -> Control:
 	var pane := _pane("Face", &"face", "Another face")
 	var sheet: Dictionary = _kit.manifest.get("face_sheet", {})
 	var names: Dictionary = sheet.get("names", {})
-	var icons := AvatarFaceIcons.build(_kit)
+	_face_icons = AvatarFaceIcons.create(
+		_kit, AvatarFaceIcons.skin_colour(_kit, recipe), recipe.get("face", {})
+	)
+	var icons := _face_icons.textures
 	var counts := _kit.face_counts()
 	for kind in AvatarRecipe.FACE_KINDS:
 		var count := int(counts.get(kind, 0))
