@@ -312,12 +312,20 @@ func mesh_without(part_id: String, hidden: Array) -> ArrayMesh:
 	if _hidden_meshes.has(key):
 		return _hidden_meshes[key]
 	var out := ArrayMesh.new()
+	# Blend shapes (the plus-size body) must be declared before any surface is added.
+	out.blend_shape_mode = mesh.blend_shape_mode
+	for i in mesh.get_blend_shape_count():
+		out.add_blend_shape(mesh.get_blend_shape_name(i))
 	for s in mesh.get_surface_count():
 		if drop.has(_surface_region(mesh, s)):
 			continue
 		var flags := mesh.surface_get_format(s) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
 		out.add_surface_from_arrays(
-			mesh.surface_get_primitive_type(s), mesh.surface_get_arrays(s), [], {}, flags
+			mesh.surface_get_primitive_type(s),
+			mesh.surface_get_arrays(s),
+			mesh.surface_get_blend_shape_arrays(s),
+			{},
+			flags
 		)
 		var index := out.get_surface_count() - 1
 		out.surface_set_name(index, mesh.surface_get_name(s))
@@ -348,7 +356,8 @@ func build_figure(recipe: Dictionary) -> Node3D:
 	var shape := cache.shape(resolved.proportions)
 	var sk := new_skeleton(shape.rests)
 	figure.add_child(sk)
-	_set_stance(sk, String(resolved.stance), shape.maps)
+	var weights := shape_weights(resolved.proportions)
+	_set_stance(sk, String(resolved.stance), shape.maps, weights)
 	# A Skeleton3D posed outside the tree keeps a stale global pose (measured on 4.7.1:
 	# force_update_all_bone_transforms does not refresh it, and setting an unchanged value
 	# is ignored), so the figure would render in the rest A-pose: pose it again, through a
@@ -372,7 +381,25 @@ func build_figure(recipe: Dictionary) -> Node3D:
 		sk.add_child(mi)
 		mi.skeleton = NodePath("..")
 		mi.material_override = cache.material(part_id, resolved.colours, resolved.face)
+		apply_blend_shapes(mi, weights)
 	return figure
+
+
+## Each blend shape's weight for resolved proportion `values` (kit.json `shapes`).
+func shape_weights(values: Dictionary) -> Dictionary:
+	return AvatarProportions.shape_weights(
+		manifest.get("shapes", {}), manifest.get("proportions", {}), values
+	)
+
+
+## Sets every blend shape of `mi`'s mesh that `weights` names; others stay at 0.
+static func apply_blend_shapes(mi: MeshInstance3D, weights: Dictionary) -> void:
+	if mi.mesh == null:
+		return
+	for name in weights:
+		var index := mi.find_blend_shape_by_name(StringName(name))
+		if index >= 0:
+			mi.set_blend_shape_value(index, float(weights[name]))
 
 
 ## Gives a built figure the colours and face cells of `recipe` (resolved), swapping its parts'
@@ -390,7 +417,12 @@ func apply_stance(figure: Node3D, recipe: Dictionary) -> void:
 	var resolved := _restyle(figure, recipe)
 	var sk := figure.get_node_or_null("Skeleton3D") as Skeleton3D
 	if sk != null:
-		_set_stance(sk, String(resolved.stance), cache.shape(resolved.proportions).maps)
+		_set_stance(
+			sk,
+			String(resolved.stance),
+			cache.shape(resolved.proportions).maps,
+			shape_weights(resolved.proportions)
+		)
 
 
 ## The figure's resolved recipe with `recipe`'s colours, face and stance resolved in, stored.
@@ -405,15 +437,47 @@ func _restyle(figure: Node3D, recipe: Dictionary) -> Dictionary:
 
 
 ## Poses `sk` in `stance` by the ground rule for its proportions' `maps`, and keeps the pose
-## on the skeleton for _repose.
-func _set_stance(sk: Skeleton3D, stance: String, maps: Dictionary) -> void:
-	var pose: Dictionary = stances.get(stance, {})
-	var offsets := ground_offsets(
-		sk, pose, stance_offsets.get(stance, {}), stance_ground(stance), maps
-	)
+## on the skeleton for _repose. `weights` are the figure's blend-shape weights: a stance with a
+## plus variant blends toward it by its shape's weight (stance_pose).
+func _set_stance(
+	sk: Skeleton3D, stance: String, maps: Dictionary, weights: Dictionary = {}
+) -> void:
+	var blended := stance_pose(stance, weights)
+	var pose: Dictionary = blended[0]
+	var offsets := ground_offsets(sk, pose, blended[1], stance_ground(stance), maps)
 	sk.set_meta("avatar_pose", pose)
 	sk.set_meta("avatar_offsets", offsets)
 	pose_skeleton(sk, pose, offsets)
+
+
+## [pose, offsets] a figure with blend-shape `weights` stands in for `stance`: the clip's local
+## rotations and bone offsets, blended toward the stance's plus variant (kit.json
+## `stance_info.<stance>.plus`: {"clip", "shape"}) by that shape's weight w, each bone slerped
+## and each offset lerped (docs/ASSET_PIPELINE.md section 10 "Skeleton"). The ground rule
+## then sets the Hips height.
+func stance_pose(stance: String, weights: Dictionary) -> Array:
+	var pose: Dictionary = stances.get(stance, {})
+	var offsets: Dictionary = stance_offsets.get(stance, {})
+	var info: Dictionary = (manifest.get("stance_info", {}) as Dictionary).get(stance, {})
+	var plus: Dictionary = info.get("plus", {})
+	var w := clampf(float(weights.get(String(plus.get("shape", "")), 0.0)), 0.0, 1.0)
+	var clip := String(plus.get("clip", ""))
+	if w <= 0.0 or not stances.has(clip):
+		return [pose, offsets]
+	var other: Dictionary = stances[clip]
+	var other_offsets: Dictionary = stance_offsets.get(clip, {})
+	var blended := {}
+	for bone in pose:
+		var a: Quaternion = pose[bone]
+		blended[bone] = a.slerp(other[bone], w) if other.has(bone) else a
+	for bone in other:
+		if not blended.has(bone):
+			blended[bone] = other[bone]
+	var moved := {}
+	for bone in offsets.keys() + other_offsets.keys():
+		var a: Vector3 = offsets.get(bone, Vector3.ZERO)
+		moved[bone] = a.lerp(other_offsets.get(bone, Vector3.ZERO), w)
+	return [blended, moved]
 
 
 static func _repose(sk: Skeleton3D) -> void:

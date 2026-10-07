@@ -41,8 +41,9 @@ func test_kit_loads_with_its_parts_skeleton_and_stances() -> void:
 	assert_not_null(_kit)
 	assert_eq(_kit.errors.size(), 0, "no load errors: %s" % str(_kit.errors))
 	assert_eq(_kit.parts_by_slot.get("body"), ["body_a"])
-	# 22 body bones, 12 finger bones, 38 helpers (the crisp-joints card).
-	assert_eq(_kit.bone_names.size(), 72)
+	# 22 body bones, 12 finger bones, 38 helpers (the crisp-joints card), 33 secondary chain
+	# bones (the foundation card).
+	assert_eq(_kit.bone_names.size(), 105)
 	for bone in ["LeftThumbMetacarpal", "RightMiddleIntermediate", "LeftElbowHelper3"]:
 		assert_true(_kit.bone_names.has(bone), "%s in the skeleton" % bone)
 	assert_true(bool(_kit.manifest.skeleton.LeftElbowHelper2.get("helper", false)))
@@ -227,6 +228,97 @@ func test_stance_matches_figurine_with_helpers_and_fingers() -> void:
 	var rest := sk.get_bone_rest(sk.find_bone("RightLowerArm")).basis.get_rotation_quaternion()
 	assert_gt(rest.angle_to(elbow), 0.5, "the right elbow folds in stance_ready")
 	assert_almost_eq(rest.angle_to(helper), rest.angle_to(elbow) * 0.5, 0.05, "half the fold")
+
+
+func test_chain_bones_follow_figurine_in_the_blended_stance() -> void:
+	# stance_2.json: stance_ready blended halfway toward stance_ready_plus (build 0.75); a
+	# chain bone's own rotation shows only in its posed tail.
+	var fixture: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string("%s/stance_2.json" % FIXTURES)
+	)
+	assert_almost_eq(float(fixture.plus_weight), 0.5, 1e-6)
+	var recipe := RECIPE.duplicate(true)
+	recipe.proportions = fixture.proportions
+	recipe.stance = fixture.stance
+	var figure := _free_later(_kit.build_figure(recipe)) as Node3D
+	var sk := figure.get_node("Skeleton3D") as Skeleton3D
+	var maps: Dictionary = _kit.cache.shape(_kit.resolve(recipe).proportions).maps
+	var checked := 0
+	for bone in fixture.chain_tails:
+		var b := sk.find_bone(bone)
+		var spec: Dictionary = _kit.manifest.skeleton[bone]
+		var entry: Dictionary = maps[bone]
+		var tail_rest: Vector3 = AvatarProportions.bone_map_transform(entry) * _vec(spec.tail)
+		var pose := sk.get_bone_global_pose(b)
+		var got := pose * (sk.get_bone_global_rest(b).affine_inverse() * tail_rest)
+		assert_lt(got.distance_to(_vec(fixture.chain_tails[bone])), 3e-4, "%s posed tail" % bone)
+		checked += 1
+	assert_eq(checked, 33)
+	assert_eq(String(_kit.manifest.skeleton.SkirtFront1.attach), "Hips")
+
+
+func test_chain_bones_take_their_attach_bones_map() -> void:
+	var maps := AvatarProportions.bone_maps(
+		_kit.manifest.skeleton, _kit.manifest.proportions, {"height": 1.0, "build": 1.0}
+	)
+	for bone in ["Ponytail2", "SkirtBack3", "LeftCloak1"]:
+		var attach := String(_kit.manifest.skeleton[bone].attach)
+		var p := Vector3(0.1, 0.9, 0.05)
+		var a := AvatarProportions.bone_map_transform(maps[bone]) * p
+		var b := AvatarProportions.bone_map_transform(maps[attach]) * p
+		assert_lt(a.distance_to(b), 1e-5, "%s maps as %s" % [bone, attach])
+
+
+func test_build_drives_the_plus_blend_shape() -> void:
+	for n in [1, 2]:
+		var fixture := _fixture(n)
+		var weights := _kit.shape_weights(fixture.proportions)
+		for shape in fixture.shape_weights:
+			assert_almost_eq(
+				float(weights[shape]), float(fixture.shape_weights[shape]), 1e-6, "%s" % shape
+			)
+	assert_almost_eq(float(_kit.shape_weights({"build": 1.0}).build_plus), 1.0, 1e-6)
+	assert_almost_eq(float(_kit.shape_weights({"build": 0.3}).build_plus), 0.0, 1e-6)
+	var recipe := RECIPE.duplicate(true)
+	recipe.proportions = {"height": 0.5, "build": 1.0, "head": 0.5}
+	# Hidden regions keep the blend shape too (mesh_without rebuilds the mesh).
+	(_kit.parts_by_id.hair_bun as Dictionary).hides = ["thighs"]
+	var figure := _free_later(_kit.build_figure(recipe)) as Node3D
+	(_kit.parts_by_id.hair_bun as Dictionary).hides = []
+	for id in ["body_a", "head_round", "hair_bun"]:
+		var mi := figure.find_child(id, true, false) as MeshInstance3D
+		var index := mi.find_blend_shape_by_name(&"build_plus")
+		assert_gt(index, -1, "%s carries build_plus" % id)
+		assert_almost_eq(mi.get_blend_shape_value(index), 1.0, 1e-6, "%s at full weight" % id)
+
+
+func test_a_plus_build_stands_in_the_plus_variant() -> void:
+	assert_true(_kit.stances.has("stance_relaxed_plus"))
+	var weights := {"build_plus": 1.0}
+	var full: Array = _kit.stance_pose("stance_relaxed", weights)
+	var plus: Dictionary = _kit.stances.stance_relaxed_plus
+	var base: Dictionary = _kit.stances.stance_relaxed
+	var q: Quaternion = full[0].LeftUpperArm
+	assert_lt(q.angle_to(plus.LeftUpperArm), 1e-4, "full weight plays the plus clip")
+	var none: Array = _kit.stance_pose("stance_relaxed", {"build_plus": 0.0})
+	assert_lt((none[0].LeftUpperArm as Quaternion).angle_to(base.LeftUpperArm), 1e-6)
+	assert_gt(
+		(base.LeftUpperArm as Quaternion).angle_to(plus.LeftUpperArm), 0.01, "the hand moves out"
+	)
+
+
+func test_surprise_draws_builds_over_the_whole_range() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var low := 0
+	var high := 0
+	for i in 400:
+		var build := float(AvatarSurprise.shape(_kit, rng).build)
+		low += 1 if build <= 0.1 else 0
+		high += 1 if build >= 0.9 else 0
+	# Three of the 21 steps at each end (0, 0.05, 0.1 and 0.9, 0.95, 1): about 57 draws each.
+	assert_between(low, 30, 90)
+	assert_between(high, 30, 90)
 
 
 func test_figure_uses_the_figure_shader_with_palette_and_face() -> void:

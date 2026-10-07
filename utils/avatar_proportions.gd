@@ -10,7 +10,8 @@ extends RefCounted
 ## `proportions` block lists, per control, bones with a [low, high] range for their `length`
 ## and/or `girth`, and a `default`. The value maps linearly onto each range, a `Left` bone
 ## implies its `Right` mirror, and factors from several controls multiply. A helper bone
-## (`helper: true` in the `skeleton` block) is in no control and takes its driver's factors.
+## (`helper: true` in the `skeleton` block) is in no control and takes its driver's factors; a
+## secondary chain bone (`chain` set) takes its `attach` bone's R whole.
 ##
 ## For bone b with rest head H_b, unit axis a_b (head to tail, from the kit's `skeleton`
 ## block), length factor f_b and girth factor g_b: R_b = f_b a a^T + g_b (I - a a^T). New
@@ -66,6 +67,38 @@ static func bone_factors(controls: Dictionary, values: Dictionary, bones: Array)
 	return [length, girth]
 
 
+## Each blend shape's weight (kit.json `shapes`: name -> {"control", "points": [[value,
+## weight], ...]}) at control `values`: piecewise linear in the control's value, clamped at the
+## ends (docs/ASSET_PIPELINE.md section 10 "Mesh", figurine `shape.weights`).
+static func shape_weights(
+	shapes: Dictionary, controls: Dictionary, values: Dictionary
+) -> Dictionary:
+	var resolved := control_values(controls, values)
+	var out := {}
+	for name in shapes:
+		var spec: Dictionary = shapes[name]
+		var points: Array = spec.get("points", [])
+		var control := String(spec.get("control", ""))
+		var x := float(resolved.get(control, 0.5))
+		out[name] = piecewise(points, x)
+	return out
+
+
+## The piecewise-linear function through `points` ([[x, y], ...], x rising) at `x`, clamped.
+static func piecewise(points: Array, x: float) -> float:
+	if points.is_empty():
+		return 0.0
+	if x <= float(points[0][0]):
+		return float(points[0][1])
+	for i in range(1, points.size()):
+		var x0 := float(points[i - 1][0])
+		var x1 := float(points[i][0])
+		if x <= x1:
+			var t := 0.0 if x1 <= x0 else (x - x0) / (x1 - x0)
+			return lerpf(float(points[i - 1][1]), float(points[i][1]), t)
+	return float(points[points.size() - 1][1])
+
+
 static func _vec(value: Variant) -> Vector3:
 	return Vector3(float(value[0]), float(value[1]), float(value[2]))
 
@@ -103,6 +136,13 @@ static func bone_maps(skeleton: Dictionary, controls: Dictionary, values: Dictio
 		heads[name] = head
 		var axis := _vec(spec["tail"]) - head
 		rmat[name] = stretch(axis, float(length[name]), float(girth[name]))
+	# A secondary chain bone (`chain` set) takes its `attach` bone's R whole, so its map is
+	# exactly the attach bone's and cloth skinned to it scales with the body it hangs from.
+	for name in names:
+		var entry: Dictionary = skeleton[name]
+		var attach := String(entry.get("attach", ""))
+		if entry.has("chain") and rmat.has(attach):
+			rmat[name] = rmat[attach]
 	var new_heads := {}
 	for name in names:
 		_chain(name, skeleton, heads, rmat, new_heads)
