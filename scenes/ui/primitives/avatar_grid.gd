@@ -4,10 +4,13 @@ extends ScrollContainer
 ## The player's saved avatars (AvatarLibrary) as a grid of AvatarCards, newest first, with
 ## an optional "Make an avatar" card leading it. The title screen's roster uses it with the
 ## overflow menu on every card; the Add Token browser's Avatar tab without, where a press
-## places the avatar. Cards are an equal share of the width (`columns` per line). The grid
-## refreshes itself when the library changes (AvatarLibrary.events().changed).
+## places the avatar and, with `draggable`, a drag carries it onto the map. Cards are an
+## equal share of the width (`columns` per line). The grid refreshes itself when the library
+## changes (AvatarLibrary.events().changed).
 
 signal avatar_pressed(entry: Dictionary)
+## A card held and dragged (only with `draggable`); `icon` is its picture.
+signal avatar_drag_started(entry: Dictionary, icon: Texture2D)
 signal make_pressed
 signal action_requested(entry: Dictionary, action: StringName)
 ## The cards' layout changed size (content_height() may have changed).
@@ -21,6 +24,8 @@ const SCROLL_RESERVE := 14.0
 @export var with_menu := false
 ## A "Make an avatar" card leads the grid.
 @export var make_card := true
+## Avatar cards can be dragged out (AvatarCard.drag_started), to drag-place in game.
+@export var draggable := false
 ## The line under the make card's title.
 var make_caption := ""
 
@@ -67,6 +72,11 @@ func refresh() -> void:
 		card.name = "Avatar_" + String(info.id)
 		card.setup(info, with_menu)
 		card.pressed.connect(avatar_pressed.emit.bind(info))
+		if draggable:
+			card.draggable = true
+			card.drag_started.connect(
+				func() -> void: avatar_drag_started.emit(info, card.thumbnail())
+			)
 		card.action_requested.connect(action_requested.emit)
 		_flow.add_child(card)
 		_cards.append(card)

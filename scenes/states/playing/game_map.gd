@@ -151,6 +151,8 @@ func setup(level_play_controller: LevelPlayController) -> void:
 			menu_controller.setup(level_play_controller)
 			if menu_controller.has_signal("drag_place_started"):
 				menu_controller.drag_place_started.connect(_drag_place._on_drag_place_started)
+			if menu_controller.has_signal("avatar_drag_place_started"):
+				menu_controller.avatar_drag_place_started.connect(_drag_place.begin_drag)
 
 
 ## Authoring mode's counterpart of setup(): there is no LevelPlayController, so the
@@ -713,7 +715,8 @@ func get_grid_ground() -> GroundHeightField:
 ## that layer too (AuthoredCrossings). Vector3.INF with no terrain or no hit.
 ## A Blender map (no authored terrain) answers only over water below the bank's height, so
 ## the cursor-hit height stays everywhere else (an overhang can be anywhere above it).
-func _resolve_drag_ground(point: Vector3) -> Vector3:
+## `draft` is the dragged token's (DraggableToken.drag_resolver binds its water_draft()).
+func _resolve_drag_ground(point: Vector3, draft: float = WaterSurface.DRAFT_M) -> Vector3:
 	if not world_viewport:
 		return Vector3.INF
 	var space := world_viewport.find_world_3d().direct_space_state
@@ -726,14 +729,14 @@ func _resolve_drag_ground(point: Vector3) -> Vector3:
 			crossings = crossings.get_node_or_null(NodePath(AuthoredCrossings.NODE_NAME))
 		if crossings is AuthoredCrossings:
 			top = maxf(top, (crossings as AuthoredCrossings).world_top())
-		return WaterSurface.landing_below(space, point, top + DRAG_GROUND_CAST_CLEARANCE_M)
+		return WaterSurface.landing_below(space, point, top + DRAG_GROUND_CAST_CLEARANCE_M, draft)
 	if not _has_water:
 		return Vector3.INF
 	var water := WaterSurface.water_below(space, point, point.y + WaterSurface.CAST_CLEARANCE_M)
 	if water.is_empty():
 		return Vector3.INF
 	var ground := WaterSurface.landing_below(
-		space, point, maxf(point.y, water.y) + DRAG_GROUND_CAST_CLEARANCE_M
+		space, point, maxf(point.y, water.y) + DRAG_GROUND_CAST_CLEARANCE_M, draft
 	)
 	if ground == Vector3.INF or ground.y >= water.y:
 		return Vector3.INF

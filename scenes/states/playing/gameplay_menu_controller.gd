@@ -6,6 +6,9 @@ extends Control
 ## Adding tokens, saving positions, and editing level settings are only available to the GM.
 
 signal drag_place_started(pack_id: String, asset_id: String, variant_id: String, icon: Texture2D)
+## A saved avatar dragged out of the Avatar tab: DragPlaceController.begin_drag shows `icon`
+## under the cursor and calls `place(ground_position)` on the drop.
+signal avatar_drag_place_started(icon: Texture2D, place: Callable)
 
 var _level_play_controller: LevelPlayController = null
 
@@ -29,6 +32,7 @@ func _ready() -> void:
 		asset_browser.asset_selected.connect(_on_asset_selected)
 		asset_browser.avatar_build_requested.connect(_on_avatar_build_requested)
 		asset_browser.library_avatar_chosen.connect(place_library_avatar)
+		asset_browser.library_avatar_drag_started.connect(_on_library_avatar_drag_started)
 
 	var asset_browser_container = $AssetBrowserContainer
 	if asset_browser_container and asset_browser_container.has_signal("asset_drag_started"):
@@ -214,13 +218,35 @@ func _on_avatar_build_requested() -> void:
 ## A saved avatar picked in the Avatar tab (AvatarLibrary entry): placed in one click where
 ## an asset would land, remembering which library avatar it is. Returns the token.
 func place_library_avatar(entry: Dictionary) -> BoardToken:
+	if not _can_add_avatar():
+		return null
+	return place_library_avatar_at(_get_spawn_position(), entry)
+
+
+## Saved avatar `entry` placed at `spawn_pos` (already PLACE_CLEARANCE above the surface),
+## settling, recorded for undo and synced as a click places it. The drop of a drag-place.
+func place_library_avatar_at(spawn_pos: Vector3, entry: Dictionary) -> BoardToken:
+	if not _can_add_avatar():
+		return null
+	return _spawn_avatar(entry.get("recipe", {}), String(entry.get("name", "")), entry, spawn_pos)
+
+
+## A saved avatar dragged out of the Avatar tab: the drag-place ghost carries its card's
+## picture and the drop places it there (place_library_avatar_at).
+func _on_library_avatar_drag_started(entry: Dictionary, icon: Texture2D) -> void:
+	if NetworkManager.is_restricted_client() or not _level_play_controller:
+		return
+	avatar_drag_place_started.emit(icon, place_library_avatar_at.bind(entry))
+
+
+func _can_add_avatar() -> bool:
 	if NetworkManager.is_restricted_client():
 		UIManager.show_error("Only the GM can add tokens")
-		return null
+		return false
 	if not _level_play_controller:
 		UIManager.show_error("Cannot add token — no level is loaded")
-		return null
-	return _spawn_avatar(entry.get("recipe", {}), String(entry.get("name", "")), entry)
+		return false
+	return true
 
 
 ## The builder's new avatar: spawned and recorded so Ctrl+Z removes it again, as a
@@ -228,13 +254,18 @@ func place_library_avatar(entry: Dictionary) -> BoardToken:
 func _on_avatar_created(recipe: Dictionary, token_name: String, builder: AvatarBuilder) -> void:
 	if not _level_play_controller:
 		return
-	_spawn_avatar(recipe, token_name, builder.saved_entry if is_instance_valid(builder) else {})
-
-
-func _spawn_avatar(recipe: Dictionary, token_name: String, entry: Dictionary) -> BoardToken:
-	var token := _level_play_controller.spawn_avatar(
-		recipe, token_name, _get_spawn_position(), true
+	_spawn_avatar(
+		recipe,
+		token_name,
+		builder.saved_entry if is_instance_valid(builder) else {},
+		_get_spawn_position()
 	)
+
+
+func _spawn_avatar(
+	recipe: Dictionary, token_name: String, entry: Dictionary, spawn_pos: Vector3
+) -> BoardToken:
+	var token := _level_play_controller.spawn_avatar(recipe, token_name, spawn_pos, true)
 	if not token:
 		UIManager.show_error("Failed to add the avatar")
 		return null

@@ -12,6 +12,8 @@ signal asset_drag_started(pack_id: String, asset_id: String, variant_id: String,
 signal avatar_build_requested
 ## A saved avatar (AvatarLibrary entry) picked in the Avatar tab, to place.
 signal library_avatar_chosen(entry: Dictionary)
+## A saved avatar dragged out of the Avatar tab, to drag-place; `icon` is its card's picture.
+signal library_avatar_drag_started(entry: Dictionary, icon: Texture2D)
 
 const AssetPackTabScene = preload("res://scenes/states/playing/asset_pack_tab.tscn")
 const AvatarTabScene = preload("res://scenes/states/playing/avatar_tab.tscn")
@@ -107,6 +109,7 @@ func _add_avatar_tab() -> void:
 	tab_container.move_child(_avatar_tab, 0)
 	_avatar_tab.build_requested.connect(_on_avatar_build_requested)
 	_avatar_tab.avatar_chosen.connect(library_avatar_chosen.emit)
+	_avatar_tab.avatar_drag_started.connect(library_avatar_drag_started.emit)
 
 
 ## The "Avatar" tab.

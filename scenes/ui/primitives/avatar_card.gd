@@ -3,14 +3,21 @@ extends Button
 
 ## A saved avatar as a card (the title screen's roster, the Add Token browser's Avatar
 ## tab): its rendered figure (AvatarThumbnails) on the builder's warm backdrop, with its
-## name underneath. A press is the host's main action (edit on the roster, place in game);
+## name underneath. A press is the host's main action (edit on the roster, place in game),
+## and with `draggable` a held card dragged away starts the game's drag-place (drag_started);
 ## with `with_menu` the overflow button in the picture's corner offers Edit, Duplicate and
 ## Delete. setup_make() turns the card into the "Make an avatar" card: a plus and a line
 ## inviting a new figure, on the same backdrop.
 
 signal action_requested(entry: Dictionary, action: StringName)
+## With `draggable`, the card was held and moved DRAG_THRESHOLD_PX: the host starts a
+## drag-place, which takes the release, so the press never lands as a click.
+signal drag_started
 
 enum { ACTION_EDIT, ACTION_DUPLICATE, ACTION_DELETE }
+
+## How far a held card moves before it counts as a drag (the pack tabs' threshold).
+const DRAG_THRESHOLD_PX := 8.0
 
 ## The picture's height as a share of the card's width (the thumbnail is 3:4).
 const PICTURE_ASPECT := 4.0 / 3.0
@@ -20,7 +27,10 @@ const HOVER_SCALE := Vector2(1.04, 1.04)
 ## The library entry shown (AvatarLibrary), empty for the "Make an avatar" card.
 var entry: Dictionary = {}
 var with_menu := false
+## A held card dragged past DRAG_THRESHOLD_PX emits drag_started.
+var draggable := false
 
+var _press_pos := Vector2.INF
 var _column: VBoxContainer
 var _slot: Control
 var _thumb: TextureRect
@@ -95,6 +105,7 @@ func _init() -> void:
 
 	mouse_entered.connect(_on_hover.bind(true))
 	mouse_exited.connect(_on_hover.bind(false))
+	gui_input.connect(_on_gui_input)
 
 
 ## Shows saved avatar `info` (an AvatarLibrary entry); `menu` adds the overflow actions.
@@ -180,6 +191,21 @@ func _fit_height() -> void:
 	if _column == null:
 		return
 	custom_minimum_size.y = _column.get_combined_minimum_size().y + INSET * 2.0
+
+
+## Tracks a left press so a held card dragged far enough becomes drag_started.
+func _on_gui_input(event: InputEvent) -> void:
+	if not draggable:
+		return
+	var button := event as InputEventMouseButton
+	if button and button.button_index == MOUSE_BUTTON_LEFT:
+		_press_pos = button.position if button.pressed else Vector2.INF
+		return
+	var motion := event as InputEventMouseMotion
+	if motion and _press_pos != Vector2.INF:
+		if motion.position.distance_to(_press_pos) >= DRAG_THRESHOLD_PX:
+			_press_pos = Vector2.INF
+			drag_started.emit()
 
 
 func _on_hover(entered: bool) -> void:
