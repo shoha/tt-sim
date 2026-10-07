@@ -82,10 +82,16 @@ func _regions(mesh: Mesh) -> PackedStringArray:
 # --- the kit's slots ----------------------------------------------------------------------------
 
 
-func test_the_kit_marks_hat_cloak_and_gear_optional() -> void:
-	assert_eq(_kit.optional_slots(), ["cloak", "gear", "hat"] as Array[String])
+func test_the_kit_marks_top_hat_cloak_and_gear_optional() -> void:
+	# top went optional with the kit's first top (figurine card B2a): a figure without one
+	# wears the body's own tee.
+	assert_eq(_kit.optional_slots(), ["cloak", "gear", "hat", "top"] as Array[String])
 	assert_true(_kit.is_optional("hat"))
+	assert_true(_kit.is_optional("top"))
 	assert_false(_kit.is_optional("hair"))
+	assert_eq(_kit.parts_by_slot.get("top"), ["top_longsleeve"])
+	assert_eq(_kit.parts_by_slot.get("hat"), ["hat_witch"])
+	assert_eq(_kit.parts_by_id.hat_witch.get("hair_mode"), "trimmed")
 	var hair: Dictionary = _kit.parts_by_id.hair_bun
 	assert_eq(hair.get("regions"), ["hair", "bun"])
 	assert_eq(hair.get("hat_trim"), ["bun"])
@@ -193,12 +199,21 @@ func test_surprise_leaves_optional_slots_empty_part_of_the_time() -> void:
 	assert_gt(AvatarSurprise.wear_chance("gear"), AvatarSurprise.wear_chance("hat"))
 
 
-func test_surprise_without_optional_parts_draws_as_before() -> void:
-	# The shipped kit has no optional parts, so a seeded draw is unchanged by them.
+func test_surprise_draws_the_required_slots_and_only_the_kits_optional_parts() -> void:
+	# The shipped kit has a top and a hat in optional slots (figurine card B2a): a seeded
+	# draw always wears body, head and hair, and anything else is a kit part in an optional slot.
 	var a := RandomNumberGenerator.new()
 	a.seed = 5
 	var parts := AvatarSurprise.parts(_kit, a)
-	assert_eq(parts, {"body": "body_a", "hair": "hair_bun", "head": "head_round"})
+	for slot in ["body", "head", "hair"]:
+		assert_true(parts.has(slot), "wears a %s" % slot)
+	assert_eq(parts["body"], "body_a")
+	assert_eq(parts["hair"], "hair_bun")
+	for slot in parts:
+		if slot in ["body", "head", "hair"]:
+			continue
+		assert_true(_kit.is_optional(String(slot)), "%s is optional" % slot)
+		assert_true((_kit.parts_by_slot[slot] as Array).has(parts[slot]), "%s is the kit's" % slot)
 
 
 # --- the builder --------------------------------------------------------------------------------

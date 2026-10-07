@@ -42,9 +42,11 @@ const MARKS_NONE_WEIGHT := 3.0
 ## How often a surprise figure wears something in each optional slot (kit.json `slots`). Hair
 ## is a figure's signature and a hat trims or hides it, so most draws show their hair; a cloak
 ## covers the outfit's colours and much of the silhouette from behind, so it is a sometimes
-## thing; gear is small and adds character, so it comes up half the time. Every draw stands
-## on its own either way (no sameness: not every figure wears a hat).
-const WEAR_CHANCE := {"hat": 0.3, "cloak": 0.35, "gear": 0.5}
+## thing; gear is small and adds character, so it comes up half the time; a top changes the
+## outfit most and the body's own tee is a fine outfit too, so half the figures wear a kit top
+## (figurine card B2a made the slot optional). Every draw stands on its own either way (no
+## sameness: not every figure wears a hat).
+const WEAR_CHANCE := {"top": 0.5, "hat": 0.3, "cloak": 0.35, "gear": 0.5}
 const DEFAULT_WEAR_CHANCE := 0.4
 
 const SECTIONS: Array[StringName] = [&"stance", &"face", &"colours", &"shape", &"parts"]

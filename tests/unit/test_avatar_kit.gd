@@ -74,10 +74,17 @@ func test_kit_sidecars_keep_the_install_settings() -> void:
 
 
 func test_detail_textures_get_mipmaps() -> void:
+	var with_detail := 0
 	for id in _kit.parts_by_id:
 		var detail: Texture2D = _kit.load_part(id).detail
+		if not bool((_kit.parts_by_id[id] as Dictionary).get("detail", true)):
+			# A part may carry no detail overlay (the witch hat is palette faces alone).
+			assert_null(detail, "%s declares no detail texture" % id)
+			continue
+		with_detail += 1
 		assert_not_null(detail, "%s has a detail texture" % id)
 		assert_true(detail.get_image().has_mipmaps(), "%s detail is mipmapped" % id)
+	assert_gt(with_detail, 0, "the body, head and hair carry detail")
 
 
 func test_palette_matches_figurine_byte_for_byte() -> void:

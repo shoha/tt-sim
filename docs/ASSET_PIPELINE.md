@@ -643,7 +643,10 @@ secondary chains, the `build_plus` blend shape with plus stance variants, part l
 the per-slot triangle caps (tt-sim `2d7aa3e`,
 `tools/render_jobs/probes/avatar*.gd`); humans only. Produced: the first kit slice
 (figurine e12e8bb, 2026-10-06: `body_a`, `head_round`, `hair_bun`, 21 face cells, two
-stances; a figure is 3,908 triangles; its kit.json says `kit_version` `0.1.0+b4f9f4a`).
+stances; a figure is 3,908 triangles; its kit.json says `kit_version` `0.1.0+b4f9f4a`);
+card B2a (2026-10-06) added the first garments, `top_longsleeve` (slot `top`, now
+optional) and `hat_witch` (slot `hat`, `hair_mode` `trimmed`), and the hair's back locks
+on the `HairBack` chain. The look's rules are in `figurine/docs/style_sheet.md`.
 Consumed: tt-sim `8c30bef` (2026-10-06) loads it, builds figures from recipes on a real
 map and from an exported pack; not yet a token (no `BoardTokenFactory` path, no network
 sync, no builder UI).
@@ -675,7 +678,8 @@ Required and optional slots (card B1, 2026-10-06; kit.json `slots`, below):
 | Slot | Optional | Notes |
 |------|----------|-------|
 | `body`, `head`, `hair` | never | always filled when the kit has a part for the slot |
-| `top`, `bottom`, `shoes` | no, for now | required while the base outfit lives on the body: a kit with no part in the slot leaves it to the body's own clothes; once the kit ships parts there, a figure always wears one |
+| `top` | yes (card B2a, 2026-10-06) | the body carries a complete base outfit (a tee, shorts, socks and sneakers), so a figure with no `top` part wears the body's own tee; a top part replaces it (hiding the body regions its sleeves cover) |
+| `bottom`, `shoes` | no, for now | required while the kit has no parts there, which leaves them to the body's own clothes; when parts ship, they will go optional the same way as `top` |
 | `hat`, `cloak`, `gear` | yes | a figure may leave them empty |
 
 A required slot is filled from the kit whenever the kit has a part for it: a recipe that
@@ -697,9 +701,14 @@ are) and `hat_trim`, the regions a trimming hat leaves out (possibly empty: a sh
 that fits under any hat). The consumer drops those surfaces the way it drops the body
 regions a part `hides`. A hair part without `hat_trim` (a kit from before this rule) is
 hidden under a trimming hat, and a hat without `hair_mode` counts as `hidden`, so a
-mismatch never clips. The producer guarantees the layer rule (below) for every hat over
-every hair in the kit with the hat's mode applied. The first kit's `hair_bun` has the
-regions `hair` (cap and locks) and `bun` (the bun and its tie), and `hat_trim: ["bun"]`.
+mismatch never clips. The producer guarantees the layer rule (below), both ways, for
+every hat over every hair in the kit with the hat's mode applied (figurine's kit build
+assembles each hat over each hair through `part.worn` and checks every stance and
+acceptance pose at every proportion corner), and that a hat is a closed shell but for
+its mouth (at most one boundary loop once its surfaces are welded), so no hair shows
+through a missing face. The first kit's `hair_bun` has the regions `hair` (cap, locks
+and the back locks that fall to the nape) and `bun` (the bun and its tie), and
+`hat_trim: ["bun"]`; the first hat, `hat_witch` (card B2a), is `trimmed`.
 
 ### Skeleton
 
@@ -884,9 +893,15 @@ regions `hair` (cap and locks) and `bun` (the bun and its tie), and `hat_trim: [
   that a part's surface stays outside the parts beneath it in its stack where they overlap
   (within 3 mm, 8 mm inside a joint's fold), not counting body regions a worn part hides
   or geometry tucked into the body by design (figurine `posecheck.layer_problems`), with a
-  hat's `hair_mode` applied to the hair (figurine `part.worn`). So the consumer may wear
-  any one part per slot together without sorting or clipping logic. Informational for
-  the consumer today.
+  hat's `hair_mode` applied to the hair (figurine `part.worn`); and the reverse (card
+  B2a, 2026-10-06, after a stand-in hat with open crown faces passed the first rule while
+  hair showed through): where a part's surface claims to cover others (the mesh node's
+  `extras.figurine_covers`, per surface the surfaces beneath it), the covered parts'
+  visible vertices stay behind it, each tested along its own normal (the claiming surface
+  must not cross that line behind the vertex by more than the same tolerances; a line that
+  meets nothing is uncovered by design, a bang below a brim). So the consumer may wear any
+  one part per slot together without sorting or clipping logic. Informational for the
+  consumer today.
 - Garment skin weights (producer-side, card B1): a derived garment takes the body's
   weights only where it lies on the body (within its offset plus 12 mm, normals within
   35 degrees) and inpaints the rest smoothly (figurine `inpaint.py`, after Abdrashitov et
