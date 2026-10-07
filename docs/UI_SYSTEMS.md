@@ -362,9 +362,10 @@ the d20 sub-viewport as a dimmed backdrop behind both.
 
 Built by `_build_left_column()`. **Host Game** and **Join Game** are tall primary actions
 (`UiActions.primary()`: icon, bold label, caption underneath); below a separator, **Play Solo**,
-**Level Editor**, **Build Map**, **Settings**, and **Quit** are compact secondary actions
+**Level Editor**, **Build Map**, **Avatars**, **Settings**, and **Quit** are compact secondary actions
 (`UiActions.secondary()`). Build Map emits `build_map_requested`, which Root turns into the
-new-map dialog and then [authoring mode](#authoring-mode).
+new-map dialog and then [authoring mode](#authoring-mode). Avatars opens the
+[avatar roster](#avatar-library).
 Host Game and Play Solo are disabled until a card is selected; once one is, their captions name it
 ("with <name>" for Host, the level name for Play Solo).
 
@@ -389,6 +390,34 @@ reads "Make a level in the Level Editor first".
 A card's thumbnail is captured on every in-play save -- the "Save Level" button and the Visuals
 drawer's Save -- via `LevelManager.save_thumbnail()`; the Level Editor's own save does not write
 one, so a level only edited there (never played) falls back to the placeholder art.
+
+### Avatar Library
+
+Players make their avatars ahead of time and place them in any game (user decision,
+2026-10-06). The library is local to the machine (no Steam Cloud yet).
+
+- **`AvatarLibrary`** (`utils/avatar_library.gd`): one JSON file per avatar in
+  `user://avatars/<id>.json`: `{"format": 1, "id": "av_<ms>_<hex>", "name", "recipe",
+  "created", "updated"}` (unix seconds; `recipe` per `ASSET_PIPELINE.md` section 10,
+  normalised on load). `list()` (newest made first), `get_entry`, `save` (new, or update
+  by id), `duplicate_entry`, `rename`, `delete`. A broken, foreign or unknown-format file
+  is skipped with a warning and left on disk. Every call takes an optional directory, and
+  the static `directory` can be pointed elsewhere (tests, render jobs); `events().changed`
+  fires after every write.
+- **`AvatarRoster`** (`scenes/ui/avatar_roster.gd`/`.tscn`): the title screen's Avatars
+  panel. An `AvatarGrid` of `AvatarCard`s (rendered figure, name, overflow menu with Edit,
+  Duplicate, Delete; Delete confirms), led by a "Make an avatar" card; an empty library
+  shows an invitation. Its height follows the cards. A card opens the builder
+  (`AvatarBuilder.open_for_library`), which needs no token or level and saves into the
+  library on confirm.
+- **`AvatarThumbnails`** (`scenes/states/playing/avatar_thumbnails.gd`): one renderer under
+  the tree root draws a figure a frame on the builder preview's stage and framing, cached
+  per recipe for the session.
+- **In game**, the Add Token browser's Avatar tab (`AvatarTab`) lists the saved avatars
+  first (one click places, `GameplayMenuController.place_library_avatar`) above "Make an
+  avatar". Every builder confirm in a game offers "Save to my avatars", ticked
+  (`AvatarSaveChoice`); for an avatar placed from the library (the token's local
+  `avatar_library_id` meta) it offers "Update <name>" (default) or a new avatar.
 
 ### Level Cards
 

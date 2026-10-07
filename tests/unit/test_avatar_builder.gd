@@ -16,6 +16,8 @@ const RECIPE := {
 	"stance": "stance_ready",
 }
 const LEVEL_FILE := "user://_avatarbuilder_test_level.json"
+## The builder offers to save to the library on every confirm; tests keep it here.
+const LIBRARY_DIR := "user://_avatarbuilder_test_library/"
 const TOKEN_ID := "avatarbuilder_token"
 const PEER := 4242
 
@@ -32,9 +34,13 @@ func before_each() -> void:
 	get_tree().root.add_child(_scene)
 	get_tree().current_scene = _scene
 	NetworkManager._connection_state = NetworkManager.ConnectionState.OFFLINE
+	AvatarLibrary.directory = LIBRARY_DIR
 
 
 func after_each() -> void:
+	AvatarLibrary.directory = AvatarLibrary.DEFAULT_DIRECTORY
+	for entry in AvatarLibrary.list(LIBRARY_DIR):
+		AvatarLibrary.delete(String(entry.id), LIBRARY_DIR)
 	get_tree().current_scene = _old_scene
 	_scene.free()
 	GameState.remove_token_state(TOKEN_ID)
@@ -45,6 +51,7 @@ func after_each() -> void:
 func after_all() -> void:
 	if FileAccess.file_exists(LEVEL_FILE):
 		DirAccess.remove_absolute(LEVEL_FILE)
+	DirAccess.remove_absolute(LIBRARY_DIR)
 
 
 func _token(recipe: Dictionary = RECIPE) -> BoardToken:
@@ -325,6 +332,21 @@ func test_the_panel_takes_a_share_of_the_window_within_limits() -> void:
 	assert_eq(huge, AvatarBuilder.PANEL_MAX)
 	var preview := AvatarBuilder.preview_size(usual)
 	assert_almost_eq(preview.x, usual.y * AvatarBuilder.PREVIEW_ASPECT, 1.0)
+
+
+func test_face_tiles_grow_to_the_largest_size_that_fits_the_pane() -> void:
+	var counts: Array[int] = [7, 4, 5, 5]
+	var lines := func(side: float, width: float) -> int:
+		var per_line := floori((width + 6.0) / (side + 6.0))
+		var total := 0
+		for count in counts:
+			total += ceili(float(count) / float(per_line))
+		return total
+	var side := AvatarBuilder.face_tile_size(841.0, 1060.0, counts, 6.0, 88.0, 160.0)
+	assert_true(side > 88.0, "a tall pane grows the tiles")
+	assert_true(lines.call(side, 841.0) * (side + 6.0) - 6.0 <= 1060.0, "and they still fit")
+	var small := AvatarBuilder.face_tile_size(600.0, 300.0, counts, 6.0, 88.0, 160.0)
+	assert_eq(small, 88.0, "a short pane keeps the least size (the pane scrolls)")
 
 
 func test_face_tiles_are_painted_on_the_picked_skin() -> void:

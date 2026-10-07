@@ -10,13 +10,13 @@ extends TileRow
 ## lower part empty; the silhouettes are rendered at the largest size a tile shows them.
 
 ## The silhouette render size in pixels (the largest a tile shows it).
-const CELL := Vector2i(210, 286)
+const CELL := Vector2i(270, 368)
 const VIEW_HEIGHT_M := 2.1
 const FOCUS_HEIGHT_M := 0.95
 const CAMERA_DISTANCE_M := 12.0
 ## Tile heights fit() keeps to, and the room a tile keeps for its caption and padding.
 const MIN_TILE_HEIGHT := 112.0
-const MAX_TILE_HEIGHT := 420.0
+const MAX_TILE_HEIGHT := 640.0
 const CAPTION_ROOM := 44.0
 const SIDE_ROOM := 16.0
 

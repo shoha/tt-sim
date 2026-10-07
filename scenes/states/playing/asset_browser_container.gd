@@ -27,6 +27,7 @@ func _on_ready() -> void:
 
 	asset_browser.asset_selected.connect(_on_asset_selected)
 	asset_browser.avatar_build_requested.connect(_on_avatar_build_requested)
+	asset_browser.library_avatar_chosen.connect(func(_entry: Dictionary) -> void: animate_out())
 	asset_browser.asset_drag_started.connect(_on_asset_drag_started)
 	if add_pack_button:
 		add_pack_button.pressed.connect(_on_add_pack_pressed)

@@ -76,14 +76,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_MOVE
 	clip_contents = true
-	var backdrop := TextureRect.new()
-	backdrop.name = "Backdrop"
-	backdrop.texture = _backdrop_texture()
-	backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	backdrop.stretch_mode = TextureRect.STRETCH_SCALE
-	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(backdrop)
+	add_child(backdrop())
 
 	var container := SubViewportContainer.new()
 	container.name = "View"
@@ -98,26 +91,8 @@ func _ready() -> void:
 	_viewport.msaa_3d = Viewport.MSAA_4X
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	container.add_child(_viewport)
-
-	var environment := _environment()
-	var ambient := environment.ambient_light_color * environment.ambient_light_energy
-	_ambient = Vector4(ambient.r, ambient.g, ambient.b, 1.0)
-	_camera = Camera3D.new()
-	_camera.name = "Camera3D"
-	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	_camera.keep_aspect = Camera3D.KEEP_HEIGHT
-	_camera.near = 0.05
-	_camera.far = 50.0
-	_camera.environment = environment
-	_viewport.add_child(_camera)
-
-	var sun := DirectionalLight3D.new()
-	sun.name = "Sun"
-	DefaultSun.apply(sun, DefaultSun.settings_for_time(DefaultSun.DEFAULT_TIME_OF_DAY))
-	sun.shadow_enabled = false
-	_viewport.add_child(sun)
-	_viewport.add_child(_floor_disc("FloorGlow", FLOOR_GLOW_RADIUS_M, FLOOR_GLOW, -0.006))
-	_viewport.add_child(_floor_disc("FloorShadow", FLOOR_SHADOW_RADIUS_M, FLOOR_SHADOW, -0.004))
+	_camera = build_stage(_viewport)
+	_ambient = default_ambient()
 
 	_pivot = Node3D.new()
 	_pivot.name = "Turntable"
@@ -127,6 +102,54 @@ func _ready() -> void:
 	if not recipe.is_empty():
 		_rebuild()
 	_place_camera()
+
+
+## Sets up `viewport`'s own world as the preview's stage (also the avatar thumbnails'):
+## the default environment, the default sun, the floor glow and contact shadow, and an
+## orthographic camera, which it returns (unplaced).
+static func build_stage(viewport: SubViewport) -> Camera3D:
+	var camera := Camera3D.new()
+	camera.name = "Camera3D"
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.keep_aspect = Camera3D.KEEP_HEIGHT
+	camera.near = 0.05
+	camera.far = 50.0
+	camera.environment = _environment()
+	viewport.add_child(camera)
+	var sun := DirectionalLight3D.new()
+	sun.name = "Sun"
+	DefaultSun.apply(sun, DefaultSun.settings_for_time(DefaultSun.DEFAULT_TIME_OF_DAY))
+	sun.shadow_enabled = false
+	viewport.add_child(sun)
+	viewport.add_child(_floor_disc("FloorGlow", FLOOR_GLOW_RADIUS_M, FLOOR_GLOW, -0.006))
+	viewport.add_child(_floor_disc("FloorShadow", FLOOR_SHADOW_RADIUS_M, FLOOR_SHADOW, -0.004))
+	return camera
+
+
+## The default environment's ambient as the figure shader's ambient_override (a = 1).
+static func default_ambient() -> Vector4:
+	var environment := _environment()
+	var ambient := environment.ambient_light_color * environment.ambient_light_energy
+	return Vector4(ambient.r, ambient.g, ambient.b, 1.0)
+
+
+## Stands `figure` in the default ambient whatever level is open (ambient_override).
+static func light_figure(figure: Node3D) -> void:
+	var ambient := default_ambient()
+	for part in AvatarKit.figure_parts(figure):
+		part.set_instance_shader_parameter("ambient_override", ambient)
+
+
+## The warm backdrop behind the figure, as a full-rect TextureRect.
+static func backdrop() -> TextureRect:
+	var rect := TextureRect.new()
+	rect.name = "Backdrop"
+	rect.texture = _backdrop_texture()
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.stretch_mode = TextureRect.STRETCH_SCALE
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	return rect
 
 
 ## The default environment (EnvironmentPresets with no preset or overrides) for a
