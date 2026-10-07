@@ -17,7 +17,7 @@ extends RefCounted
 ## in-context ones.
 
 ## The icon's side in pixels (the tile draws it at this size).
-const ICON_PX := 76
+const ICON_PX := 128
 ## Air round the painted mark, as a share of its longer side.
 const AIR := 0.35
 ## The least crop, as a share of the cell, so a tiny mark is not blown up to a blur.

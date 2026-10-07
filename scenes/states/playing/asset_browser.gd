@@ -3,12 +3,15 @@ extends VBoxContainer
 
 ## A tabbed browser for all asset packs.
 ## Each tab contains assets from one pack with its own search filter. The first tab,
-## "Avatar" (AvatarTab), opens the avatar builder for a player figure built from the kit
-## every client ships rather than from a pack.
+## "Avatar" (AvatarTab), lists the player's saved avatars to place and opens the avatar
+## builder for a player figure built from the kit every client ships rather than from a
+## pack.
 
 signal asset_selected(pack_id: String, asset_id: String, variant_id: String)
 signal asset_drag_started(pack_id: String, asset_id: String, variant_id: String, icon: Texture2D)
 signal avatar_build_requested
+## A saved avatar (AvatarLibrary entry) picked in the Avatar tab, to place.
+signal library_avatar_chosen(entry: Dictionary)
 
 const AssetPackTabScene = preload("res://scenes/states/playing/asset_pack_tab.tscn")
 const AvatarTabScene = preload("res://scenes/states/playing/avatar_tab.tscn")
@@ -103,6 +106,7 @@ func _add_avatar_tab() -> void:
 	tab_container.add_child(_avatar_tab)
 	tab_container.move_child(_avatar_tab, 0)
 	_avatar_tab.build_requested.connect(_on_avatar_build_requested)
+	_avatar_tab.avatar_chosen.connect(library_avatar_chosen.emit)
 
 
 ## The "Avatar" tab.

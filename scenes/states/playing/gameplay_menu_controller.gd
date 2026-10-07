@@ -28,6 +28,7 @@ func _ready() -> void:
 	if asset_browser:
 		asset_browser.asset_selected.connect(_on_asset_selected)
 		asset_browser.avatar_build_requested.connect(_on_avatar_build_requested)
+		asset_browser.library_avatar_chosen.connect(place_library_avatar)
 
 	var asset_browser_container = $AssetBrowserContainer
 	if asset_browser_container and asset_browser_container.has_signal("asset_drag_started"):
@@ -207,24 +208,43 @@ func _on_avatar_build_requested() -> void:
 		UIManager.show_error("Cannot add token — no level is loaded")
 		return
 	var builder := AvatarBuilder.open_for_new(get_tree().root)
-	builder.create_confirmed.connect(_on_avatar_created)
+	builder.create_confirmed.connect(_on_avatar_created.bind(builder))
+
+
+## A saved avatar picked in the Avatar tab (AvatarLibrary entry): placed in one click where
+## an asset would land, remembering which library avatar it is. Returns the token.
+func place_library_avatar(entry: Dictionary) -> BoardToken:
+	if NetworkManager.is_restricted_client():
+		UIManager.show_error("Only the GM can add tokens")
+		return null
+	if not _level_play_controller:
+		UIManager.show_error("Cannot add token — no level is loaded")
+		return null
+	return _spawn_avatar(entry.get("recipe", {}), String(entry.get("name", "")), entry)
 
 
 ## The builder's new avatar: spawned and recorded so Ctrl+Z removes it again, as a
-## duplicate is.
-func _on_avatar_created(recipe: Dictionary, token_name: String) -> void:
+## duplicate is; tagged with the library entry the builder saved it as, if it did.
+func _on_avatar_created(recipe: Dictionary, token_name: String, builder: AvatarBuilder) -> void:
 	if not _level_play_controller:
 		return
+	_spawn_avatar(recipe, token_name, builder.saved_entry if is_instance_valid(builder) else {})
+
+
+func _spawn_avatar(recipe: Dictionary, token_name: String, entry: Dictionary) -> BoardToken:
 	var token := _level_play_controller.spawn_avatar(
 		recipe, token_name, _get_spawn_position(), true
 	)
 	if not token:
 		UIManager.show_error("Failed to add the avatar")
-		return
+		return null
+	if not entry.is_empty():
+		token.set_meta(AvatarBuilder.LIBRARY_META, String(entry.get("id", "")))
 	var game_map := _level_play_controller.get_game_map()
 	var history := game_map.get_action_history() if game_map else null
 	if history and NetworkManager.has_gm_access():
 		history.record_token_spawn(token.network_id, token.token_name)
+	return token
 
 
 ## Where a token added from the browser appears: the camera's ground point, with its height

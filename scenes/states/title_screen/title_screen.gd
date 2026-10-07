@@ -2,7 +2,8 @@ class_name TitleScreen
 extends CanvasLayer
 
 ## Title hub. Host and Join lead; the saved levels sit beside them as cards and
-## the selected card is the level a host starts with (or Play Solo opens).
+## the selected card is the level a host starts with (or Play Solo opens). Avatars opens
+## the player's saved avatars (AvatarRoster).
 ## The d20 sub-viewport stays as a dimmed backdrop.
 
 signal host_game_requested(level_info: Dictionary)
@@ -26,6 +27,7 @@ var join_button: Button
 var play_button: Button
 var editor_button: Button
 var build_map_button: Button
+var avatars_button: Button
 var settings_button: Button
 var quit_button: Button
 var host_subtitle: Label
@@ -87,6 +89,9 @@ func _build_left_column() -> void:
 	editor_button.pressed.connect(_on_editor_pressed)
 	build_map_button = UiActions.secondary("Build Map", "brush", _left)
 	build_map_button.pressed.connect(_on_build_map_pressed)
+	avatars_button = UiActions.secondary("Avatars", "mood-smile", _left)
+	avatars_button.tooltip_text = "Make your characters ahead of time; place them in any game"
+	avatars_button.pressed.connect(_on_avatars_pressed)
 	settings_button = UiActions.secondary("Settings", "settings", _left)
 	settings_button.pressed.connect(_on_settings_pressed)
 	quit_button = UiActions.secondary("Quit", "x", _left)
@@ -213,6 +218,12 @@ func _on_build_map_pressed() -> void:
 
 func _on_level_edit_requested(info: Dictionary) -> void:
 	EventBus.open_editor_requested.emit(String(info.get("path", "")))
+
+
+## Avatars: the player's saved avatars (AvatarRoster), made and edited here with no game
+## running.
+func _on_avatars_pressed() -> void:
+	AvatarRoster.open(get_tree().root)
 
 
 func _on_settings_pressed() -> void:

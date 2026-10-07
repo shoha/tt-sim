@@ -239,6 +239,7 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 | `ground_perf.gd` | `action` plus its fields (see the script header) | Ground shader A/Bs: `shader` swaps the terrain material to the current include or one read from `user://p34_<version>_ground.zip` (made with `git archive`); `variant` builds a text-replaced copy of the current include; `paint` writes eight painted surfaces as strips or a half-weight checker; `terraces` fills the view with tiers; `fraction` reports the share of steep ground pixels. |
 | `avatar_kit.gd` | `action` plus its fields (see the script header) | Avatar figures from figurine's kit through AvatarKit: `place` stands figurine's three judging recipes in a row along the screen's right axis, `canopy` adds one at the first of `points` whose shade ray meets a canopy, `spawn` places `count` for frame times, `look` pans to a figure at a height, `shade` re-takes the shade rays and says what blocks each, `hidden` dithers one, `params` sets figure shader uniforms, `env` logs the environment's ambient and the sun, `sun` hides or shows the sun, `mipmaps` toggles AvatarKit's detail mipmaps; `save` / `cleanup` for `_avatarkit_` levels. |
 | `avatar_token.gd` | `action` plus its fields (see the script header) | Avatar tokens in play: `pair` spawns a preset under a canopy and a selected one in sun, `spawn_at` drops one onto whatever is under a point (water too), `look`, `hide` (hidden from players), `report` (capsule, shade, submerged cue, occlusion fade entries), `timing` (spawn and shade-ray medians, walked and cached), `profile` (build and `set_recipe` medians per change type, off the board); `save` / `cleanup` for `_avatartoken_` levels. |
+| `avatar_library.gd` | `action` plus its fields (see the script header) | The avatar library: `use` points the running game's library at a `user://_avatarlib_<dir>/` test directory (and seeds it from presets), `roster` opens the title screen's roster, `edit` opens the builder from it, `close`, `browser` opens the Add Token browser, `place` presses a saved avatar's card in the Avatar tab, `report`, `cleanup` deletes every `_avatarlib_` directory and points the library back at `user://avatars/`. |
 | `avatar_builder.gd` | `action` plus its fields (see the script header) | The avatar builder in play: `window` resizes the game window, `open` opens the builder on a preset, `pane` selects a rail pane, `report` (panel, preview and pane sizes, measured bounds and view, stance tile sizes), `timing` (preview `set_recipe` and face-tile repaint medians), `close`, `spawn` (the preset as a token turned to the camera). |
 
 `sample_pixels.gd` (this folder) is a standalone reader for captures, not a probe:
@@ -639,6 +640,12 @@ numerically (for example where a fade or a tint band starts).
   medians; then the builder at 1280x720, and the same recipe as a board token at close
   zoom, turned to the camera, for the lighting comparison. `jobs/avatar_cleanup.json`
   deletes the level.
+- `jobs/avatar_library_look.json`: the avatar library (about 37 s): at 1438x1221, the
+  title screen with Avatars, the roster on an empty test library and on five seeded
+  presets, the builder opened from the roster (Pose and Face panes), then a bare 100 ft
+  map saved as `_avatartoken_library` and played with the Add Token browser's Avatar tab
+  and a saved avatar placed by its card. It deletes its test library and level at the end;
+  the player's `user://avatars/` is never read or written.
 
 ## Caveats
 

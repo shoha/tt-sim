@@ -7,10 +7,10 @@ theme_type_variation = &"TabContentMargin"
 script = ExtResource("1_tab")
 
 [node name="Content" type="VBoxContainer" parent="."]
-custom_minimum_size = Vector2(550, 300)
+unique_name_in_owner = true
+custom_minimum_size = Vector2(620, 480)
 layout_mode = 2
 theme_type_variation = &"BoxContainerSpaced"
-alignment = 1
 
 [node name="Actions" type="VBoxContainer" parent="Content"]
 unique_name_in_owner = true

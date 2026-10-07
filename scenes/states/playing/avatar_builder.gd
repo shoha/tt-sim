@@ -14,7 +14,12 @@ extends AnimatedCanvasLayerPanel
 ## preset recipes and emits create_confirmed; open_for_token (a placed avatar's context
 ## menu) previews every pick on the token itself (AvatarTokenFactory.set_recipe, local
 ## only), puts the original back on cancel and emits edit_confirmed for the owner to commit
-## and record as one undo entry. Proportion drags are quantised to AvatarSurprise.STEP and
+## and record as one undo entry. A third, open_for_library (the title screen's roster, no
+## game or map running), makes or edits an avatar in the player's library (AvatarLibrary).
+## Every confirm in a game also offers to keep the avatar in the library (AvatarSaveChoice,
+## on by default; for an avatar placed from the library, update it or save a new one); the
+## library's id rides on the token as the local `avatar_library_id` meta.
+## Proportion drags are quantised to AvatarSurprise.STEP and
 ## applied at most once a frame (a never-seen shape costs about 1.6 ms); the stance
 ## silhouettes follow a shape change after a short pause.
 ##
@@ -32,8 +37,12 @@ signal edit_confirmed(
 	token_name: String
 )
 signal cancelled
+## The avatar was written to the library (after a confirm that saved it).
+signal library_saved(entry: Dictionary)
 
 const SCENE_PATH := "res://scenes/states/playing/avatar_builder.tscn"
+## The token meta naming the library avatar a placed avatar came from (local only).
+const LIBRARY_META := &"avatar_library_id"
 ## Rail items: id, icon, label. "parts" shows only when a slot has a choice.
 const PANES := [
 	[&"pose", "walk", "Pose"],
@@ -59,7 +68,13 @@ const SHAPE_ROWS := [
 	["build", "Build", "Slight", "Sturdy"],
 	["head", "Head", "Small", "Big"],
 ]
+## The face tiles' least size and their largest side when the pane has room; the icon
+## keeps FACE_ICON_ROOM of the tile free for its padding.
 const FACE_TILE := Vector2(88, 88)
+const FACE_TILE_MAX := 160.0
+const FACE_ICON_ROOM := 14.0
+## Width and height the face fit leaves spare inside the pane's scroll container.
+const FACE_FIT_SPARE := Vector2(24.0, 16.0)
 const PART_TILE := Vector2(84, 96)
 const PART_ICON_PX := 56
 ## The panel's share of the window, its size limits, and the window margin it keeps.
@@ -80,6 +95,12 @@ var recipe: Dictionary = {}
 ## The placed token being edited, or null when making a new avatar.
 var token: BoardToken = null
 var token_name := ""
+## Making or editing a library avatar (open_for_library): always saved, no game around.
+var library_mode := false
+## The library entry this avatar came from (empty for a new one).
+var library_entry: Dictionary = {}
+## The entry the last confirm saved, or empty.
+var saved_entry: Dictionary = {}
 
 var _kit: AvatarKit = null
 var _original: Dictionary = {}
@@ -100,6 +121,8 @@ var _pending: Dictionary = {}
 var _silhouettes_in_s := -1.0
 var _name_edited := false
 var _closing := false
+var _save_choice: AvatarSaveChoice
+var _face_box: VBoxContainer
 
 @onready var panel: PanelContainer = %PanelContainer
 @onready var content: VBoxContainer = %Content
@@ -131,6 +154,20 @@ static func open_for_token(parent: Node, target: BoardToken) -> AvatarBuilder:
 	builder.token = target
 	builder.recipe = target.avatar_recipe.duplicate(true)
 	builder.token_name = target.token_name
+	builder.library_entry = AvatarLibrary.get_entry(String(target.get_meta(LIBRARY_META, "")))
+	parent.add_child(builder)
+	return builder
+
+
+## Opens the builder on the player's library: a new avatar when `entry` is empty (from a
+## preset), else that saved avatar. Confirm saves it (library_saved) and emits
+## create_confirmed; no token or level is needed.
+static func open_for_library(parent: Node, entry: Dictionary = {}) -> AvatarBuilder:
+	var builder := _instantiate()
+	builder.library_mode = true
+	builder.library_entry = entry.duplicate(true)
+	builder.recipe = (entry.get("recipe", {}) as Dictionary).duplicate(true)
+	builder.token_name = String(entry.get("name", ""))
 	parent.add_child(builder)
 	return builder
 
@@ -209,13 +246,14 @@ func _on_panel_ready() -> void:
 			recipe[key] = {}
 	_original = recipe.duplicate(true)
 	_original_name = token_name
-	_name_edited = token != null
+	var editing := token != null or (library_mode and not library_entry.is_empty())
+	_name_edited = editing
 
 	var header := MenuHeader.new()
 	header.name = "Header"
 	header_slot.add_child(header)
 	header.setup(
-		"Edit avatar" if token != null else "Make an avatar",
+		"Edit avatar" if editing else "Make an avatar",
 		"Click a pose, a face and colours; the figure follows every pick",
 		true
 	)
@@ -226,9 +264,16 @@ func _on_panel_ready() -> void:
 	surprise_button.icon = IconButton.load_icon("wand")
 	surprise_button.pressed.connect(surprise)
 	cancel_button.pressed.connect(cancel)
-	confirm_button.text = "Save" if token != null else "Add to board"
+	confirm_button.text = "Save" if token != null or library_mode else "Add to board"
 	confirm_button.pressed.connect(confirm)
 	confirm_button.disabled = _kit == null
+	if not library_mode:
+		_save_choice = AvatarSaveChoice.new()
+		_save_choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_save_choice.setup(library_entry)
+		var footer := cancel_button.get_parent()
+		footer.add_child(_save_choice)
+		footer.move_child(_save_choice, 0)
 
 	_preview = AvatarBuilderPreview.new()
 	_preview.name = "Preview"
@@ -262,6 +307,7 @@ func _on_panel_ready() -> void:
 		_sync_controls()
 	get_viewport().size_changed.connect(_fit_to_window)
 	pane_slot.resized.connect(_fit_pose_tiles)
+	pane_slot.resized.connect(_fit_face_tiles)
 	_fit_to_window()
 
 
@@ -282,6 +328,62 @@ func _fit_pose_tiles() -> void:
 	var gap := float(_stance_tiles.get_theme_constant("v_separation"))
 	var room := pane_slot.size.y - POSE_TITLE_ROOM - gap * float(maxi(rows - 1, 0))
 	_stance_tiles.fit(room / float(maxi(rows, 1)))
+
+
+## Grows the face tiles to the largest square at which every row, wrapped to the pane's
+## width, still fits the Face pane's height.
+func _fit_face_tiles() -> void:
+	if _face_box == null or _face_rows.is_empty() or pane_slot.size.x <= 0.0:
+		return
+	var counts: Array[int] = []
+	var rows_height := 0.0
+	var gap := 6.0
+	for kind in _face_rows:
+		var row: TileRow = _face_rows[kind]
+		counts.append(row.get_child_count())
+		rows_height += row.get_combined_minimum_size().y
+		gap = float(row.get_theme_constant("h_separation"))
+	# What the pane needs besides its tile rows: the title, the captions and the gaps.
+	var fixed := _face_box.get_combined_minimum_size().y - rows_height
+	# The pane sits in PaneStack's ScrollContainer: a fit that only just fills it can tip a
+	# line over, show the scroll bar, narrow the rows and wrap them again, which loops
+	# (a crash at 1438x1221). So the fit keeps the scroll bar's width and some height spare.
+	var side := face_tile_size(
+		pane_slot.size.x - FACE_FIT_SPARE.x,
+		pane_slot.size.y - fixed - FACE_FIT_SPARE.y,
+		counts,
+		gap,
+		FACE_TILE.x,
+		FACE_TILE_MAX
+	)
+	for kind in _face_rows:
+		var row: TileRow = _face_rows[kind]
+		if is_equal_approx(row.tile_min_size.x, side):
+			continue
+		row.tile_min_size = Vector2(side, side)
+		for tile in row.get_children():
+			(tile as Button).add_theme_constant_override(
+				"icon_max_width", int(side - FACE_ICON_ROOM)
+			)
+		row.columns = 0
+
+
+## The largest square tile side (from `largest` down to `smallest`, in whole steps of 4)
+## at which rows of `counts` tiles, wrapped to `width` with `gap` between tiles, fit in
+## `height`.
+static func face_tile_size(
+	width: float, height: float, counts: Array[int], gap: float, smallest: float, largest: float
+) -> float:
+	var side := largest
+	while side > smallest:
+		var per_line := maxi(1, floori((width + gap) / (side + gap)))
+		var lines := 0
+		for count in counts:
+			lines += ceili(float(count) / float(per_line))
+		if lines * (side + gap) - gap <= height:
+			return side
+		side -= 4.0
+	return smallest
 
 
 func _stagger_targets() -> Array[Control]:
@@ -373,11 +475,34 @@ func confirm() -> void:
 		final_name = (
 			_original_name if not _original_name.is_empty() else AvatarTokenFactory.DEFAULT_NAME
 		)
+	_save_to_library(final_name)
 	if token != null and is_instance_valid(token):
 		edit_confirmed.emit(token, _original, recipe.duplicate(true), _original_name, final_name)
 	elif token == null:
 		create_confirmed.emit(recipe.duplicate(true), final_name)
 	animate_out()
+
+
+## Writes the avatar to the library when the player asked (always in library mode): the
+## entry it came from updated, or a new one. An edited token remembers the entry.
+func _save_to_library(final_name: String) -> void:
+	var update_id := String(library_entry.get("id", ""))
+	if not library_mode:
+		if _save_choice == null or not _save_choice.wants_save():
+			return
+		update_id = _save_choice.update_id()
+	saved_entry = AvatarLibrary.save(final_name, recipe, update_id)
+	if saved_entry.is_empty():
+		UIManager.show_error("Could not save the avatar to your avatars")
+		return
+	if token != null and is_instance_valid(token):
+		token.set_meta(LIBRARY_META, saved_entry.id)
+	library_saved.emit(saved_entry)
+
+
+## The footer's library offer (null in library mode).
+func save_choice() -> AvatarSaveChoice:
+	return _save_choice
 
 
 func cancel() -> void:
@@ -459,6 +584,8 @@ func _on_rail_selected(id: StringName) -> void:
 	_paint_face_icons()
 	_stack.show_pane(id)
 	_preview.focus_face(id == &"face")
+	if id == &"face":
+		_fit_face_tiles.call_deferred()
 
 
 ## Repaints the face tiles for the recipe's skin and face while the Face pane shows (a
@@ -538,6 +665,7 @@ func _pose_pane() -> Control:
 
 func _face_pane() -> Control:
 	var pane := _pane("Face", &"face", "Another face")
+	_face_box = pane
 	var sheet: Dictionary = _kit.manifest.get("face_sheet", {})
 	var names: Dictionary = sheet.get("names", {})
 	_face_icons = AvatarFaceIcons.create(
@@ -559,7 +687,8 @@ func _face_pane() -> Control:
 		for i in count:
 			var cell_name := String(kind_names[i]) if i < kind_names.size() else str(i)
 			var icon: Texture2D = kind_icons[i] if i < kind_icons.size() else null
-			tiles.add_tile(StringName(str(i)), "", "", cell_name.capitalize(), icon)
+			var tile := tiles.add_tile(StringName(str(i)), "", "", cell_name.capitalize(), icon)
+			tile.add_theme_constant_override("icon_max_width", int(FACE_TILE.x - FACE_ICON_ROOM))
 		tiles.selection_changed.connect(
 			func(id: StringName) -> void: pick_face(kind, int(String(id)))
 		)
