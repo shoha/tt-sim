@@ -665,7 +665,8 @@ Install: `tools/install_avatar_kit.gd` copies figurine's `out/kit/` into
   thumbnails/<part id>.png
 ```
 
-Slots, first set: `body`, `head`, `hair`, `top`, `bottom`, `shoes`, `cloak`, `gear`. A
+Slots, first set: `body`, `head`, `hair`, `hat` (added by the foundation card; the head
+stack's outer layer), `top`, `bottom`, `shoes`, `cloak`, `gear`. A
 figure has exactly one `body` and one `head` and at most one part in each other slot;
 `gear` may repeat with different attach bones.
 
@@ -801,12 +802,22 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   where a form should read as a crisp plane (hair locks, collars and lapels, a cuff, a
   brim). The low-poly look comes from angular, tapered silhouettes, not from faceted
   shading on every surface.
-- A whole figure is up to about 6,000 triangles (user, 2026-10-06: higher than PS1 is
-  fine; what to take from Crashsune is intentional proportions and simple geometry).
-  Triangles go to smooth, deliberate forms and the silhouette, never to surface detail,
-  which the textures carry. Each part's count is in `kit.json`. The avatar probe measured
-  30 figures of 1,362 triangles as free; a figure at the cap is re-measured by the
-  consumer card.
+- A whole figure is up to 10,000 triangles (raised from about 6,000 by the foundation card;
+  user, 2026-10-06: higher than PS1 is fine; what to take from Crashsune is intentional
+  proportions and simple geometry). Triangles go to smooth, deliberate forms and the
+  silhouette, never to surface detail, which the textures carry. Caps per slot: `body`
+  4,500, `head` 1,500, `hair` 1,500, `top` 1,500, `bottom` 1,200, `cloak` 1,000, `hat` 700,
+  `shoes` 600 (a part that replaces the body's sneakers), `gear` 800 per item; the slots of
+  one figure together stay under the figure cap. Each part's count is in `kit.json`.
+  Measured 2026-10-06 (tt-sim `avatar_kit_look --saved --only budget`, Forward+, vsync off,
+  2.5 s windows, medians, indicative: the GPU may be shared): world-viewport GPU time at
+  home zoom 3.93 ms with no figures, 3.38 / 3.57 / 3.61 ms with 8 figures of 5.7k / 8.4k /
+  9.7k triangles and 3.65 / 3.66 / 3.69 ms with 30; at the closest zoom 1.88 ms empty,
+  1.93 / 1.90 / 1.93 ms with 8 and 1.89 / 1.87 / 2.10 ms with 30 (30 x 9.7k is 292k skinned
+  triangles). The differences are within run-to-run drift (the empty home sample is the
+  slowest), so 10,000 per figure is free at 30 figures; the cap is set by the look (rule 1:
+  simple geometry), not by cost. Blend shapes and the 105-bone skeleton were in place for
+  the measurement.
 - `COLOR_0.R` is the part's light response per vertex: 0 shows the painted texture alone
   (unlit), 1 takes the figure shader's full soft light. The face area is always 0 (anime
   faces stay flat; Crashsune's faces are unlit), hair and cloth sit low (about 0.2-0.4) so
