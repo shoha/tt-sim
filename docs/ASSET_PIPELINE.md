@@ -785,10 +785,16 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   two-handed grip), at every proportion corner (figurine `posecheck.py`: joint limits in
   the joint-frame terms above, ground contact, interpenetration, and since the
   crisp-joints card the deformation checks a crisp joint can pass: no skin edge stretched
-  past 1.6x, or past 2.8x on the outside of a joint, every joint's cross-section at least
+  past 1.6x, or past 2.8x on the outside of a joint (the limb within a joint's span of
+  its pivot along the bone's axis: 10 cm shoulder, 9 elbow, 5 wrist, 17 hip, 10 knee),
+  every joint's cross-section at least
   0.7 of rest across the bend and 0.85 along its axis, and no elbow, knee or wrist crease
   passing through itself by more than 3 mm, and the layer check below) so a kit never ships
-  a clipping, pinched or floating pose. A corner's pose is the stance blended toward its
+  a clipping, pinched or floating pose. One contact is allowed by rule (the plus card,
+  2026-10-06): a plus-size body's thighs meet, so the body's two thigh pieces may press
+  into each other by up to 10 mm (how deep one thigh's vertices sit inside the other), at
+  rest and in every pose; every other pair of pieces must not cross at all. A corner's
+  pose is the stance blended toward its
   plus variant by that corner's weight, as the consumer blends it. Joints are skinned to fold crisply (a bent limb reads as two straight
   segments meeting at a defined joint), which nothing on the consumer side depends on.
   On Godot 4.7.1 a `Skeleton3D` posed before it enters the tree
@@ -825,9 +831,12 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   added later; the probe's per-vertex outline width if an outline is ever wanted).
 - Blend shapes (glTF morph targets, the foundation card). `build_plus` is the high end of
   the `build` control: a real plus-size body rather than a wider one (a fuller belly that
-  sits forward and low, softer sides at the waist, wider hips and seat, fuller inner and
-  front thighs and upper arms, a fuller chest and upper back, a thicker neck and raised
-  trapezius line; on the head and hair, rounder cheeks and a softer jaw). A part carries it
+  sits forward and low, softer sides at the waist, wider hips and seat, thighs full all
+  round at the top that meet at the inner thigh, full upper arms through the shoulder
+  with fuller forearms, bony elbows, knees, wrists and ankles and unchanged hands and
+  feet, a fuller chest and upper back, a thicker neck and raised trapezius line; on the
+  head and hair, rounder cheeks and a softer jaw; the plus card, 2026-10-06, set the
+  amounts). A part carries it
   as a position-only morph target named in the mesh's `extras.targetNames` (no morph
   normals: the palette carries the shading), listed in its kit.json entry's `shapes`. The
   delta is in rest (bind) space, so the bind matrices' proportion maps scale it like any
