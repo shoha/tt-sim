@@ -86,7 +86,10 @@ func test_surprise_recipes_are_valid_and_within_the_curated_sets() -> void:
 			assert_between(int(recipe.face[kind]), 0, int(counts[kind]) - 1, "face %s" % kind)
 		for control in recipe.proportions:
 			var value: float = recipe.proportions[control]
-			assert_between(value, AvatarSurprise.SHAPE_MIN, AvatarSurprise.SHAPE_MAX)
+			if AvatarSurprise.FULL_RANGE_CONTROLS.has(String(control)):
+				assert_between(value, 0.0, 1.0)
+			else:
+				assert_between(value, AvatarSurprise.SHAPE_MIN, AvatarSurprise.SHAPE_MAX)
 			assert_almost_eq(value, AvatarSurprise.quantize(value), 1e-6, "on the step")
 		assert_true(kit.stance_names().has(recipe.stance))
 		assert_ne(recipe.colours.primary, recipe.colours.secondary, "trim differs from cloth")

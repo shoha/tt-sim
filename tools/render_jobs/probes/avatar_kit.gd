@@ -7,11 +7,14 @@ extends RefCounted
 ## - `place` (`at` [x, z], `spacing` default 0.95): clears the figures and stands figurine's
 ##   three judging recipes (RECIPES, from figurine/scripts/render_figures.py) in a row along
 ##   the screen's right axis centred on `at`, turned 8, -14 and 4 degrees from facing +Z as
-##   figurine's renders are (the camera sees them three-quarter), each with its shade ray.
+##   figurine's renders are (the camera sees them three-quarter), each with its shade ray;
+##   `builds` [b0, b1, b2] overrides each recipe's build (the plus-size range).
 ## - `canopy` (`points` [[x, z], ...], `recipe` index): adds one figure at the first point
 ##   whose shade ray meets a canopy (or the last point), and logs every point's shade.
 ## - `spawn` (`config` "<anything>_<count>", `at`, `spacing`): clears and places `count`
-##   figures in a staggered grid cycling the three recipes, for frame times; logs the time.
+##   figures in a staggered grid cycling the three recipes, for frame times; logs the time
+##   and the triangles per figure. `extra` [part id, ...] adds a copy of each named part's
+##   mesh to every figure, bound to its skeleton: the triangle-budget multiplier.
 ## - `shade`: re-takes every figure's shade ray and logs the values.
 ## - `look` (`index`, -1 the last figure; `height` default 0.78): pans so the screen centre
 ##   looks at that figure `height` metres above its feet.
@@ -65,14 +68,22 @@ static func run(base: Node, step: Dictionary) -> String:
 	var gm: GameMap = base.get("_game_map")
 	match String(step.get("action", "info")):
 		"place":
-			return _place(base, gm, _vec2(step.get("at", [0, 0])), float(step.get("spacing", 0.95)))
+			return _place(
+				base,
+				gm,
+				_vec2(step.get("at", [0, 0])),
+				float(step.get("spacing", 0.95)),
+				step.get("builds", [])
+			)
 		"canopy":
 			return _canopy(base, gm, step)
 		"spawn":
 			var parts := String(step.get("config", "x_8")).split("_")
 			var count := int(parts[parts.size() - 1])
 			var at := _vec2(step.get("at", [0, 0]))
-			return _spawn(base, gm, count, at, float(step.get("spacing", 1.5)))
+			return _spawn(
+				base, gm, count, at, float(step.get("spacing", 1.5)), step.get("extra", [])
+			)
 		"shade":
 			return _shade_all(base, gm)
 		"look":
@@ -161,9 +172,20 @@ static func _figures(gm: GameMap) -> Array[Node3D]:
 
 ## One figure of recipe `index` at a ground point, turned `yaw` radians, with its shade ray.
 static func _add(
-	base: Node, gm: GameMap, holder: Node3D, index: int, xz: Vector2, yaw: float
+	base: Node,
+	gm: GameMap,
+	holder: Node3D,
+	index: int,
+	xz: Vector2,
+	yaw: float,
+	build: float = -1.0,
+	extra: Array = []
 ) -> Node3D:
-	var fig := _ensure().build_figure(RECIPES[index % RECIPES.size()])
+	var recipe: Dictionary = (RECIPES[index % RECIPES.size()] as Dictionary).duplicate(true)
+	if build >= 0.0:
+		recipe.proportions.build = build
+	var fig := _ensure().build_figure(recipe)
+	_add_copies(fig, extra)
 	holder.add_child(fig)
 	fig.global_position = _ground(gm, xz)
 	fig.rotation.y = yaw
@@ -171,7 +193,22 @@ static func _add(
 	return fig
 
 
-static func _place(base: Node, gm: GameMap, at: Vector2, spacing: float) -> String:
+## The budget multiplier: extra copies of the named parts' meshes bound to the figure's own
+## skeleton and skin, so a figure costs what a figure of that many triangles would.
+static func _add_copies(fig: Node3D, extra: Array) -> void:
+	for id in extra:
+		var source := fig.find_child(String(id), true, false) as MeshInstance3D
+		if source == null:
+			continue
+		var copy := source.duplicate() as MeshInstance3D
+		copy.name = "%s_copy" % id
+		source.get_parent().add_child(copy)
+		copy.skeleton = NodePath("..")
+
+
+static func _place(
+	base: Node, gm: GameMap, at: Vector2, spacing: float, builds: Array = []
+) -> String:
 	var holder := _holder(gm, true)
 	var right := gm.camera_node.global_basis.x
 	var r := Vector2(right.x, right.z).normalized()
@@ -179,7 +216,8 @@ static func _place(base: Node, gm: GameMap, at: Vector2, spacing: float) -> Stri
 	var shades := PackedStringArray()
 	for i in RECIPES.size():
 		var xz := at + r * spacing * (i - 1)
-		var fig := _add(base, gm, holder, i, xz, deg_to_rad(YAWS_DEG[i]))
+		var build := float(builds[i]) if i < builds.size() else -1.0
+		var fig := _add(base, gm, holder, i, xz, deg_to_rad(YAWS_DEG[i]), build)
 		shades.append("%s %s" % [str(fig.global_position), _why(base, gm, fig.global_position)])
 	return (
 		"placed 3 figures in %.1f ms: %s"
@@ -224,20 +262,30 @@ static func _look(gm: GameMap, index: int, height: float) -> String:
 	return "look at %s (%s at %.2f m)" % [str(Vector2(g.x, g.z)), fig.name, height]
 
 
-static func _spawn(base: Node, gm: GameMap, count: int, at: Vector2, spacing: float) -> String:
+static func _spawn(
+	base: Node, gm: GameMap, count: int, at: Vector2, spacing: float, extra: Array = []
+) -> String:
 	var holder := _holder(gm, true)
 	if count <= 0:
 		return "spawn none"
 	var cols := ceili(sqrt(count * 1.4))
 	var rows := ceili(float(count) / cols)
 	var t0 := Time.get_ticks_usec()
+	var tris := 0
 	for k in count:
 		var row := k / cols
 		var x := at.x + (k % cols - (cols - 1) * 0.5 + (row % 2) * 0.5) * spacing
 		var z := at.y + (row - (rows - 1) * 0.5) * spacing
-		_add(base, gm, holder, k, Vector2(x, z), deg_to_rad(YAWS_DEG[k % 3]) + sin(k * 2.39) * 0.4)
+		var yaw := deg_to_rad(YAWS_DEG[k % 3]) + sin(k * 2.39) * 0.4
+		var fig := _add(base, gm, holder, k, Vector2(x, z), yaw, -1.0, extra)
+		for mi in AvatarKit.figure_parts(fig):
+			for s in mi.mesh.get_surface_count():
+				tris += (mi.mesh as ArrayMesh).surface_get_array_index_len(s) / 3
 	var ms := (Time.get_ticks_usec() - t0) / 1000.0
-	return "spawn %d figures in %.1f ms (%.2f ms each)" % [count, ms, ms / count]
+	return (
+		"spawn %d figures (%d triangles each) in %.1f ms (%.2f ms each)"
+		% [count, tris / count, ms, ms / count]
+	)
 
 
 static func _shade_all(base: Node, gm: GameMap) -> String:

@@ -15,7 +15,8 @@ extends RefCounted
 ## - a fantasy skin (a hue off the warm band) is drawn a third as often as a natural one;
 ## - "none" is the likeliest marks cell, so most faces are plain and a blush is a surprise;
 ## - proportions stay off the very ends of their ranges and on the builder's step, so a
-##   figure never starts at a corner the sliders would have to be dragged back from.
+##   figure never starts at a corner the sliders would have to be dragged back from; the
+##   build is the exception, drawn evenly over its whole range, plus-size end included.
 ## The rules read the sets, not fixed indices, so a kit with more colours or parts keeps
 ## working without a change here.
 
@@ -24,6 +25,8 @@ extends RefCounted
 const STEP := 0.05
 const SHAPE_MIN := 0.1
 const SHAPE_MAX := 0.9
+## Controls drawn over their whole 0..1 range (the build's high end is the plus-size body).
+const FULL_RANGE_CONTROLS: Array[String] = ["build"]
 ## A cloth colour below this saturation counts as a neutral (white, cream) and goes with
 ## anything.
 const NEUTRAL_SATURATION := 0.3
@@ -186,13 +189,20 @@ static func face(kit: AvatarKit, rng: RandomNumberGenerator) -> Dictionary:
 	return out
 
 
-## Every proportion control at a random value inside [SHAPE_MIN, SHAPE_MAX], on STEP.
+## Every proportion control at a random value inside [SHAPE_MIN, SHAPE_MAX], on STEP, except
+## `build`, drawn uniformly over its whole range: its high end is the plus-size body (kit.json
+## `shapes`), and every body in the range should come up as often as any other.
 static func shape(kit: AvatarKit, rng: RandomNumberGenerator) -> Dictionary:
 	var out := {}
 	var controls: Array = (kit.manifest.get("proportions", {}) as Dictionary).keys()
 	controls.sort()
 	for control in controls:
-		out[control] = quantize(rng.randf_range(SHAPE_MIN, SHAPE_MAX))
+		if FULL_RANGE_CONTROLS.has(String(control)):
+			# Every step of the range equally likely, the ends included.
+			var steps := maxi(1, roundi(1.0 / STEP))
+			out[control] = float(rng.randi_range(0, steps)) / float(steps)
+		else:
+			out[control] = quantize(rng.randf_range(SHAPE_MIN, SHAPE_MAX))
 	return out
 
 

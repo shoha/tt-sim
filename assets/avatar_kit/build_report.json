@@ -1,12 +1,12 @@
 {
- "frame_error": 5.907190998299949e-07,
- "posed_error_m": 2.2776474761787568e-07,
+ "frame_error": 5.259416353875501e-06,
+ "posed_error_m": 1.022746867987423e-06,
  "body_a": {
   "triangles": 4008,
   "glb_triangles": 4008,
   "reimported_triangles": 4008,
   "joint_error_m": 4.509533012564404e-07,
-  "reimport_bone_error_m": 2.646508021619809e-07,
+  "reimport_bone_error_m": 3.528594970658716e-07,
   "light_ranges": {
    "torso": [
     0.4,
@@ -42,14 +42,14 @@
    ]
   },
   "node_extras": {},
-  "bytes": 230552
+  "bytes": 271812
  },
  "head_round": {
   "triangles": 1350,
   "glb_triangles": 1350,
   "reimported_triangles": 1350,
   "joint_error_m": 4.509533012564404e-07,
-  "reimport_bone_error_m": 2.646508021619809e-07,
+  "reimport_bone_error_m": 3.528594970658716e-07,
   "light_ranges": {
    "head": [
     0.0,
@@ -66,14 +66,14 @@
     ]
    }
   },
-  "bytes": 83160
+  "bytes": 102660
  },
  "hair_bun": {
   "triangles": 360,
   "glb_triangles": 360,
   "reimported_triangles": 360,
   "joint_error_m": 4.509533012564404e-07,
-  "reimport_bone_error_m": 2.646508021619809e-07,
+  "reimport_bone_error_m": 3.528594970658716e-07,
   "light_ranges": {
    "hair": [
     0.25,
@@ -81,18 +81,24 @@
    ]
   },
   "node_extras": {},
-  "bytes": 99980
+  "bytes": 123480
  },
  "skeleton": {
   "animations": [
    "stance_casting",
+   "stance_casting_plus",
    "stance_cheerful",
+   "stance_cheerful_plus",
    "stance_heroic",
+   "stance_heroic_plus",
    "stance_ready",
+   "stance_ready_plus",
    "stance_relaxed",
-   "stance_sneaky"
+   "stance_relaxed_plus",
+   "stance_sneaky",
+   "stance_sneaky_plus"
   ],
-  "joints": 72
+  "joints": 105
  },
  "figure_triangles": 5718,
  "poses": {
@@ -123,7 +129,7 @@
   ],
   "checked": 108,
   "problems": [],
-  "seconds": 11.9
+  "seconds": 19.3
  },
  "problems": [],
  "kit_json_errors": []
