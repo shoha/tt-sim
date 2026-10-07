@@ -1,6 +1,6 @@
 {
  "format": 1,
- "kit_version": "0.1.0+8424765",
+ "kit_version": "0.1.0+56827d2",
  "parts": [
   {
    "id": "body_a",
@@ -38,7 +38,7 @@
     "skin",
     "hair"
    ],
-   "triangles": 1030,
+   "triangles": 1350,
    "hides": [],
    "tags": [
     "human"
@@ -1992,7 +1992,7 @@
     }
    ],
    "hand_shapes": {
-    "Left": "open",
+    "Left": "soft",
     "Right": "fist"
    }
   },
@@ -2016,7 +2016,7 @@
     }
    ],
    "hand_shapes": {
-    "Left": "relaxed",
+    "Left": "soft",
     "Right": "relaxed"
    }
   },
@@ -2056,7 +2056,7 @@
     }
    ],
    "hand_shapes": {
-    "Left": "relaxed",
+    "Left": "soft",
     "Right": "open"
    }
   },
@@ -2096,7 +2096,7 @@
     }
    ],
    "hand_shapes": {
-    "Left": "open",
+    "Left": "soft",
     "Right": "grip"
    }
   }
