@@ -239,6 +239,7 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 | `ground_perf.gd` | `action` plus its fields (see the script header) | Ground shader A/Bs: `shader` swaps the terrain material to the current include or one read from `user://p34_<version>_ground.zip` (made with `git archive`); `variant` builds a text-replaced copy of the current include; `paint` writes eight painted surfaces as strips or a half-weight checker; `terraces` fills the view with tiers; `fraction` reports the share of steep ground pixels. |
 | `avatar_kit.gd` | `action` plus its fields (see the script header) | Avatar figures from figurine's kit through AvatarKit: `place` stands figurine's three judging recipes in a row along the screen's right axis, `canopy` adds one at the first of `points` whose shade ray meets a canopy, `spawn` places `count` for frame times, `look` pans to a figure at a height, `shade` re-takes the shade rays and says what blocks each, `hidden` dithers one, `params` sets figure shader uniforms, `env` logs the environment's ambient and the sun, `sun` hides or shows the sun, `mipmaps` toggles AvatarKit's detail mipmaps; `save` / `cleanup` for `_avatarkit_` levels. |
 | `avatar_token.gd` | `action` plus its fields (see the script header) | Avatar tokens in play: `pair` spawns a preset under a canopy and a selected one in sun, `spawn_at` drops one onto whatever is under a point (water too), `look`, `hide` (hidden from players), `report` (capsule, shade, submerged cue, occlusion fade entries), `timing` (spawn and shade-ray medians, walked and cached), `profile` (build and `set_recipe` medians per change type, off the board); `save` / `cleanup` for `_avatartoken_` levels. |
+| `avatar_builder.gd` | `action` plus its fields (see the script header) | The avatar builder in play: `window` resizes the game window, `open` opens the builder on a preset, `pane` selects a rail pane, `report` (panel, preview and pane sizes, measured bounds and view, stance tile sizes), `timing` (preview `set_recipe` and face-tile repaint medians), `close`, `spawn` (the preset as a token turned to the camera). |
 
 `sample_pixels.gd` (this folder) is a standalone reader for captures, not a probe:
 
@@ -629,6 +630,15 @@ numerically (for example where a fade or a tint band starts).
   `jobs/avatar_token_profile.json` (about 7 s, from the title screen) runs `profile` twice:
   build, capsule and token creation medians and `set_recipe` per change type (repeated and
   never-seen values).
+- `jobs/avatar_builder_look.json`: the avatar builder (the builder polish card, about 35 s
+  to build, 30 s to look): a new 100 ft bare-ground map saved as `_avatartoken_builder` and
+  played; `probes/avatar_builder.gd` resizes the window to 1438x1221, opens the builder on
+  a preset and captures the Pose, Face (the zoomed portrait) and Colours panes, `report`
+  logs the panel, preview and pane sizes, the preview's measured bounds and view and the
+  stance tiles, `timing` (`for: "builder_timing"`) logs preview and face-tile repaint
+  medians; then the builder at 1280x720, and the same recipe as a board token at close
+  zoom, turned to the camera, for the lighting comparison. `jobs/avatar_cleanup.json`
+  deletes the level.
 
 ## Caveats
 

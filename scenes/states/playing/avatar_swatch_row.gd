@@ -8,8 +8,8 @@ extends HFlowContainer
 
 signal picked(index: int)
 
-const SIZE := Vector2(30, 30)
-const RADIUS := 7
+const SIZE := Vector2(40, 40)
+const RADIUS := 9
 const EDGE := 2
 const PICKED_EDGE := 3
 

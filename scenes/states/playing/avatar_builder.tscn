@@ -23,6 +23,7 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer"]
@@ -61,6 +62,7 @@ tooltip_text = "A new avatar drawn from the kit's colour sets and stances"
 
 [node name="Body" type="HBoxContainer" parent="CenterContainer/PanelContainer/Content"]
 layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 16
 
 [node name="PreviewPanel" type="PanelContainer" parent="CenterContainer/PanelContainer/Content/Body"]
@@ -77,7 +79,7 @@ layout_mode = 2
 
 [node name="PaneSlot" type="Control" parent="CenterContainer/PanelContainer/Content/Body"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(460, 420)
+custom_minimum_size = Vector2(420, 360)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
