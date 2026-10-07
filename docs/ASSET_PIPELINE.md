@@ -670,6 +670,37 @@ stack's outer layer), `top`, `bottom`, `shoes`, `cloak`, `gear`. A
 figure has exactly one `body` and one `head` and at most one part in each other slot;
 `gear` may repeat with different attach bones.
 
+Required and optional slots (card B1, 2026-10-06; kit.json `slots`, below):
+
+| Slot | Optional | Notes |
+|------|----------|-------|
+| `body`, `head`, `hair` | never | always filled when the kit has a part for the slot |
+| `top`, `bottom`, `shoes` | no, for now | required while the base outfit lives on the body: a kit with no part in the slot leaves it to the body's own clothes; once the kit ships parts there, a figure always wears one |
+| `hat`, `cloak`, `gear` | yes | a figure may leave them empty |
+
+A required slot is filled from the kit whenever the kit has a part for it: a recipe that
+omits it, names `null` or names a part the kit lacks gets the slot's first part, and the
+consumer notes the fallback. An optional slot holds a part only when the recipe names
+one the kit has: omitted or `null` means none, and a part the kit lacks also means none
+(noted), never a substitute.
+
+### Hats and hair
+
+A hat says what the hair under it does, by `hair_mode` on its kit.json entry:
+
+- `full`: the hair is worn whole (a hat built to sit over every hair, a circlet);
+- `trimmed`: the hair is worn without its `hat_trim` surfaces;
+- `hidden`: no hair is shown under the hat.
+
+Every hair part lists `regions` (its surfaces, each named by its material, as the body's
+are) and `hat_trim`, the regions a trimming hat leaves out (possibly empty: a short cut
+that fits under any hat). The consumer drops those surfaces the way it drops the body
+regions a part `hides`. A hair part without `hat_trim` (a kit from before this rule) is
+hidden under a trimming hat, and a hat without `hair_mode` counts as `hidden`, so a
+mismatch never clips. The producer guarantees the layer rule (below) for every hat over
+every hair in the kit with the hat's mode applied. The first kit's `hair_bun` has the
+regions `hair` (cap and locks) and `bun` (the bun and its tie), and `hat_trim: ["bun"]`.
+
 ### Skeleton
 
 - One armature for the whole kit (105 bones since the foundation card, 2026-10-06: 72 body,
@@ -852,9 +883,15 @@ figure has exactly one `body` and one `head` and at most one part in each other 
   is 0, hair 1, a hat 2. The producer guarantees, at every stance and proportion corner,
   that a part's surface stays outside the parts beneath it in its stack where they overlap
   (within 3 mm, 8 mm inside a joint's fold), not counting body regions a worn part hides
-  or geometry tucked into the body by design (figurine `posecheck.layer_problems`). So
-  the consumer may wear any one part per slot together without sorting or clipping logic.
-  Informational for the consumer today.
+  or geometry tucked into the body by design (figurine `posecheck.layer_problems`), with a
+  hat's `hair_mode` applied to the hair (figurine `part.worn`). So the consumer may wear
+  any one part per slot together without sorting or clipping logic. Informational for
+  the consumer today.
+- Garment skin weights (producer-side, card B1): a derived garment takes the body's
+  weights only where it lies on the body (within its offset plus 12 mm, normals within
+  35 degrees) and inpaints the rest smoothly (figurine `inpaint.py`, after Abdrashitov et
+  al. 2023); a chain-hung drop takes no body weight below its cut and moves onto its
+  chains as before. Nothing about the GLB changes for the consumer.
 - `extras.figurine_double_sided: true` marks a part whose open cards must render both
   faces (hair locks built as planes); every other part is closed and back-face culled.
 - Two UV sets, because Godot reads two (`UV`, `UV2`): `TEXCOORD_0` is palette space and
@@ -961,7 +998,10 @@ fields since the rig card), `stance_info` (per stance `ground` and `hand_shapes`
 and per part `regions` (for the body), `detail` (whether it has an overlay) and
 `double_sided`; since the foundation card also `stack`, `layer` and `shapes` per part,
 `chain` and `attach` on chain bones, the top-level `shapes` block and
-`stance_info.<stance>.plus`. In `face_sheet`: `mask`,
+`stance_info.<stance>.plus`; since card B1 the top-level `slots` block
+(`{"hat": {"optional": true}, "hair": {"optional": false}, ...}`, every slot named; a
+consumer reading an older kit without it applies the table in "Layout"), `hair_mode` on
+hat parts and `regions` and `hat_trim` on hair parts. In `face_sheet`: `mask`,
 `mask_channels`, `columns`, `row_order`, `names`. Proportions give `length` and `girth`
 ranges per bone, each centred on 1.0; factors from several controls multiply.
 
@@ -986,7 +1026,11 @@ mirror).
 
 Colours index into `colour_sets` (`primary`, `secondary` and `accent` index `cloth`). A
 recipe naming a part or cell the local kit does not have falls back to that slot's first
-entry and logs it, so an older client still shows a figure.
+entry and logs it, so an older client still shows a figure; an optional slot (`hat`,
+`cloak`, `gear`) is the exception and falls back to none. A recipe may omit an optional
+slot or name `null` there: `"parts": {"body": "body_a", "head": "head_round", "hair":
+"hair_bun", "hat": null}` wears no hat. Recipes from before card B1 resolve as they did
+(they always named every slot the kit had, and the kit had no optional parts).
 
 ### Rendering notes (consumer side, from the probe)
 
