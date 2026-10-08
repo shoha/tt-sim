@@ -6,9 +6,12 @@ extends RefCounted
 ## bind matrices, never through pose scale (Skeleton3D has no inherit-scale switch, so a
 ## scaled pose shears the children).
 ##
-## A recipe sets each control (`height`, `build`, `head`) between 0 and 1; the kit's
-## `proportions` block lists, per control, bones with a [low, high] range for their `length`
-## and/or `girth`, and a `default`. The value maps linearly onto each range, a `Left` bone
+## A recipe sets each control (`height`, `build`, `head` and the body attributes `frame`,
+## `shoulders`, `hips`, `chest`, `waist`) between 0 and 1; the kit's `proportions` block
+## lists, per control, bones with a [low, high] range for their `length` and/or `girth`, and
+## a `default` (a control the recipe omits takes it: 0.5, the modelled body). A control may
+## list no bones and drive a blend shape alone (shape_weights; the weights are signed, so
+## they are not clamped). The value maps linearly onto each range, a `Left` bone
 ## implies its `Right` mirror, and factors from several controls multiply. A helper bone
 ## (`helper: true` in the `skeleton` block) is in no control and takes its driver's factors; a
 ## secondary chain bone (`chain` set) takes its `attach` bone's R whole.
@@ -69,7 +72,8 @@ static func bone_factors(controls: Dictionary, values: Dictionary, bones: Array)
 
 ## Each blend shape's weight (kit.json `shapes`: name -> {"control", "points": [[value,
 ## weight], ...]}) at control `values`: piecewise linear in the control's value, clamped at the
-## ends (docs/ASSET_PIPELINE.md section 10 "Mesh", figurine `shape.weights`).
+## ends of the points, never in weight (the attribute keys run -1 to 1 about 0.5)
+## (docs/ASSET_PIPELINE.md section 10 "Mesh", figurine `shape.weights`).
 static func shape_weights(
 	shapes: Dictionary, controls: Dictionary, values: Dictionary
 ) -> Dictionary:

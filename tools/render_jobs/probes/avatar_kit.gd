@@ -8,7 +8,9 @@ extends RefCounted
 ##   three judging recipes (RECIPES, from figurine/scripts/render_figures.py) in a row along
 ##   the screen's right axis centred on `at`, turned 8, -14 and 4 degrees from facing +Z as
 ##   figurine's renders are (the camera sees them three-quarter), each with its shade ray;
-##   `builds` [b0, b1, b2] overrides each recipe's build (the plus-size range).
+##   `builds` [b0, b1, b2] overrides each recipe's build (the plus-size range); `shapes`
+##   [{control: value}, ...] merges proportion overrides into each recipe (the body
+##   attributes at their ends).
 ## - `canopy` (`points` [[x, z], ...], `recipe` index): adds one figure at the first point
 ##   whose shade ray meets a canopy (or the last point), and logs every point's shade.
 ## - `spawn` (`config` "<anything>_<count>", `at`, `spacing`): clears and places `count`
@@ -130,7 +132,8 @@ static func run(base: Node, step: Dictionary) -> String:
 				gm,
 				_vec2(step.get("at", [0, 0])),
 				float(step.get("spacing", 0.95)),
-				step.get("builds", [])
+				step.get("builds", []),
+				step.get("shapes", [])
 			)
 		"canopy":
 			return _canopy(base, gm, step)
@@ -255,11 +258,13 @@ static func _add(
 	xz: Vector2,
 	yaw: float,
 	build: float = -1.0,
-	extra: Array = []
+	extra: Array = [],
+	shape: Dictionary = {}
 ) -> Node3D:
 	var recipe: Dictionary = (RECIPES[index % RECIPES.size()] as Dictionary).duplicate(true)
 	if build >= 0.0:
 		recipe.proportions.build = build
+	recipe.proportions.merge(shape, true)
 	var fig := _ensure().build_figure(recipe)
 	_add_copies(fig, extra)
 	holder.add_child(fig)
@@ -283,7 +288,7 @@ static func _add_copies(fig: Node3D, extra: Array) -> void:
 
 
 static func _place(
-	base: Node, gm: GameMap, at: Vector2, spacing: float, builds: Array = []
+	base: Node, gm: GameMap, at: Vector2, spacing: float, builds: Array = [], shapes: Array = []
 ) -> String:
 	var holder := _holder(gm, true)
 	var right := gm.camera_node.global_basis.x
@@ -293,7 +298,8 @@ static func _place(
 	for i in RECIPES.size():
 		var xz := at + r * spacing * (i - 1)
 		var build := float(builds[i]) if i < builds.size() else -1.0
-		var fig := _add(base, gm, holder, i, xz, deg_to_rad(YAWS_DEG[i]), build)
+		var shape: Dictionary = shapes[i] if i < shapes.size() and shapes[i] is Dictionary else {}
+		var fig := _add(base, gm, holder, i, xz, deg_to_rad(YAWS_DEG[i]), build, [], shape)
 		shades.append("%s %s" % [str(fig.global_position), _why(base, gm, fig.global_position)])
 	return (
 		"placed 3 figures in %.1f ms: %s"

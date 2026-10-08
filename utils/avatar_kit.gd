@@ -19,7 +19,11 @@ extends RefCounted
 ##   ground rule (ground_offsets: the Hips height comes from the stance's ground contacts at
 ##   this figure's proportions);
 ## - hides: the body's surfaces are its regions, each named by its material, and every
-##   region a chosen part `hides` is left out of the body's mesh (one cached mesh per set);
+##   region a chosen part `hides` is left out of the body's mesh but for its one-ring buffer
+##   at a boundary where a neighbour still shows (mesh_without; one cached mesh per set);
+## - proportions also drive the parts' blend shapes (kit.json `shapes`): the plus-size body
+##   from `build` and the five body attributes (frame, shoulders, hips, chest, waist), whose
+##   weights are signed about the modelled body at 0.5;
 ## - a hat's `hair_mode` applies to the hair the same way (hair_trim): its `hat_trim`
 ##   regions are left out under a trimming hat, the whole hair under a hiding one;
 ## - optional slots (hat, cloak, gear) may be empty; a figure is built from whatever the
@@ -310,34 +314,46 @@ static func _rest_matches(a: Transform3D, b: Transform3D) -> bool:
 	return true
 
 
-## The part's mesh without the surfaces named in `hidden` (region names); the whole mesh when
-## nothing of it is hidden. Cached per part and region set.
+## The part's mesh with the regions named in `hidden` left out (a surface per region); the
+## whole mesh when nothing of it is hidden. A hidden region keeps its one-ring buffer (section
+## 10 "Regions and hiding"): of the runs its kit entry's `region_rings` lists, those `keep`
+## names at a boundary whose neighbour still shows (kept_runs), so a garment's opening never
+## shows a hollow edge; the surface's index buffer is filtered to those runs and a surface with
+## nothing kept is dropped. Surfaces that are not hidden stay whole. Cached per part and
+## region set.
 func mesh_without(part_id: String, hidden: Array) -> ArrayMesh:
 	var mesh: ArrayMesh = load_part(part_id).mesh
 	if mesh == null:
 		return null
+	var regions := PackedStringArray()
 	var drop := PackedStringArray()
 	for s in mesh.get_surface_count():
-		if hidden.has(_surface_region(mesh, s)):
-			drop.append(_surface_region(mesh, s))
+		regions.append(_surface_region(mesh, s))
+		if hidden.has(regions[s]):
+			drop.append(regions[s])
 	if drop.is_empty():
 		return mesh
 	drop.sort()
 	var key := part_id + "|" + ",".join(drop)
 	if _hidden_meshes.has(key):
 		return _hidden_meshes[key]
+	var rings: Dictionary = parts_by_id.get(part_id, {}).get("region_rings", {})
 	var out := ArrayMesh.new()
 	# Blend shapes (the plus-size body) must be declared before any surface is added.
 	out.blend_shape_mode = mesh.blend_shape_mode
 	for i in mesh.get_blend_shape_count():
 		out.add_blend_shape(mesh.get_blend_shape_name(i))
 	for s in mesh.get_surface_count():
-		if drop.has(_surface_region(mesh, s)):
-			continue
+		var arrays := mesh.surface_get_arrays(s)
+		if drop.has(regions[s]):
+			var kept := kept_runs(rings.get(regions[s], {}), drop)
+			if kept.is_empty():
+				continue
+			arrays[Mesh.ARRAY_INDEX] = filter_index(arrays[Mesh.ARRAY_INDEX], kept)
 		var flags := mesh.surface_get_format(s) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
 		out.add_surface_from_arrays(
 			mesh.surface_get_primitive_type(s),
-			mesh.surface_get_arrays(s),
+			arrays,
 			mesh.surface_get_blend_shape_arrays(s),
 			{},
 			flags
@@ -346,6 +362,35 @@ func mesh_without(part_id: String, hidden: Array) -> ArrayMesh:
 		out.surface_set_name(index, mesh.surface_get_name(s))
 		out.surface_set_material(index, mesh.surface_get_material(s))
 	_hidden_meshes[key] = out
+	return out
+
+
+## The runs ([start, count] triangle ranges) of a hidden region that stay visible: from its
+## `region_rings` entry (`runs` and `keep`, the latter [run, [neighbour regions]]), each kept
+## run whose neighbours include a region not in `hidden` (`head` is never hidden). A region
+## without an entry keeps nothing (a kit from before the buffer drops it whole).
+static func kept_runs(ring: Dictionary, hidden: PackedStringArray) -> Array:
+	var runs: Array = ring.get("runs", [])
+	var out := []
+	for entry in ring.get("keep", []):
+		var run := int(entry[0])
+		if run < 0 or run >= runs.size():
+			continue
+		for neighbour in entry[1]:
+			if not hidden.has(String(neighbour)):
+				out.append(runs[run])
+				break
+	return out
+
+
+## `index` (a triangle list) reduced to the triangles of `runs` ([start, count] in triangles,
+## in the buffer's order).
+static func filter_index(index: PackedInt32Array, runs: Array) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for run in runs:
+		var start := int(run[0]) * 3
+		var count := int(run[1]) * 3
+		out.append_array(index.slice(start, mini(start + count, index.size())))
 	return out
 
 

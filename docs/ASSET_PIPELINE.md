@@ -653,7 +653,10 @@ shipped kit (figurine `kit.EXPERIMENTAL_BUILDERS`, 2026-10-07) until the bottoms
 card redesigns it; the skirt chains stay in the skeleton. The readability card
 (2026-10-07) rebuilt the head from orthographic blueprints (wider, deeper, a wedge nose),
 enlarged the eyes, brows and mouths in the face sheet, cut the body's ink to edges and
-seams and raised the head to 0.33 m. The look's rules are in
+seams and raised the head to 0.33 m. The body-template card (2026-10-08) rebuilt the
+body as one connected fixed-topology mesh with per-side regions, a hide buffer, the
+five body-attribute shape keys and a shared neck ring with the head (the sections
+"Regions and hiding" and "Shape keys" below). The look's rules are in
 `figurine/docs/style_sheet.md`.
 Consumed: tt-sim `8c30bef` (2026-10-06) loads it, builds figures from recipes on a real
 map and from an exported pack; not yet a token (no `BoardTokenFactory` path, no network
@@ -738,6 +741,9 @@ and the back locks that fall to the nape) and `bun` (the bun and its tie), and
   everywhere in this doc; the rest pose is an A-pose (arms about 45 degrees down, palms
   toward the thighs, thumbs forward), the figure standing on the origin facing -Y in
   Blender (+Z in glTF; with no token rotation tt-sim's play camera sees its left side).
+  The body-template card (2026-10-08) moved the hip joints down 3 cm (hip 0.75 m, knee
+  0.43) for slightly shorter legs, the pelvis above them taller by the same, so every
+  other bone and chain root kept its height.
   `kit.json`'s `skeleton` block lists each bone's parent, head, tail and `flex_axis` in
   glTF space, so the consumer has the bone axes without parsing a GLB.
 - Joint frames (the bone roll). Every bone's rest orientation means the same thing: local
@@ -842,7 +848,9 @@ and the back locks that fall to the nape) and `bun` (the bun and its tie), and
   `_plus` clips are not listed in `stances`. The producer verifies every stance, and a
   set of acceptance poses that are not shipped (an elbow folded 120 degrees, an arm raised
   about 170 degrees, a deep lunge, a knee at hip height, a fist beside the head, a
-  two-handed grip), at every proportion corner (figurine `posecheck.py`: joint limits in
+  two-handed grip), at every proportion corner (the eight corners of height, build and
+  head, the default, and since the body-template card each attribute's two ends and six
+  combinations, 25 in all; figurine `posecheck.py`: joint limits in
   the joint-frame terms above, ground contact, interpenetration, and since the
   crisp-joints card the deformation checks a crisp joint can pass: no skin edge stretched
   past 1.6x, or past 2.8x on the outside of a joint (the limb within a joint's span of
@@ -868,6 +876,20 @@ and the back locks that fall to the nape) and `bun` (the bun and its tie), and
   where a form should read as a crisp plane (hair locks, collars and lapels, a cuff, a
   brim). The low-poly look comes from angular, tapered silhouettes, not from faceted
   shading on every surface.
+- The body is one connected mesh of fixed topology (the body-template card,
+  2026-10-08; figurine `bodymesh.py`): every vertex and face keeps its index in every
+  primitive across recipes, proportions and shape keys, so hide masks, region ids, paint
+  and (the next card) garment bindings all key off the same stable index. The arms leave
+  the torso through an armhole ring and the legs through a groin loop (no limb root is
+  buried inside the torso any more), the hands are continuous with the forearms (a palm,
+  a knuckle ring, an index finger, a three-finger block divided by ink, a thumb), the
+  shoes continue the shins, and the neck ends at a 20-vertex throat ring that the head
+  mesh shares vertex for vertex (same positions, same `Head` weights, the same normals
+  in both GLBs), so the two parts meet without a seam. Its primitives are the regions
+  below; its two UV sets are fixed per face (the palette slot and gradient v on
+  `TEXCOORD_0`, the detail island on `TEXCOORD_1`), so the layout is part of the
+  contract: a kit whose body changes topology bumps `kit_version` and regenerates every
+  part built on it.
 - A whole figure is up to 10,000 triangles (raised from about 6,000 by the foundation card;
   user, 2026-10-06: higher than PS1 is fine; what to take from Crashsune is intentional
   proportions and simple geometry). Triangles go to smooth, deliberate forms and the
@@ -892,7 +914,27 @@ and the back locks that fall to the nape) and `bun` (the bun and its tie), and
   `face_light` (0.5), so figures take the scene's light as the terrain does; the attribute
   is still read and matters again if the floor is lowered. G, B and A are reserved (wind if hair or cloth sway is
   added later; the probe's per-vertex outline width if an outline is ever wanted).
-- Blend shapes (glTF morph targets, the foundation card). `build_plus` is the high end of
+- Shape keys (glTF morph targets; the foundation card, extended by the body-template
+  card, 2026-10-08). The body carries six, each a real per-vertex delta on the fixed
+  mesh, and every garment derived from the body carries the same six (the delta of the
+  body point it was built from), so a figure's parts change together:
+
+  | Key | Control (recipe `proportions`) | Weight over the control (kit.json `shapes` points) | What it moves |
+  |---|---|---|---|
+  | `build_plus` | `build` | 0 up to 0.5, rising to 1 at 1 | the plus-size body (below) |
+  | `frame` | `frame` | -1 at 0, 0 at 0.5, +1 at 1 | slender to broad: the ribcage's breadth, a touch of limb thickness |
+  | `shoulders` | `shoulders` | -1 at 0, 0 at 0.5, +1 at 1 | narrow to broad: the shoulder line out at the acromion; the `shoulders` control also lengthens the clavicles (`proportions`), which carries the arms out |
+  | `hips` | `hips` | -1 at 0, 0 at 0.5, +1 at 1 | narrow to wide: the pelvis at the sides, a little on the seat and the tops of the thighs |
+  | `chest` | `chest` | -0.35 at 0, 0 at 0.5, +1 at 1 | flat to full: two soft mounds forward on the chest |
+  | `waist` | `waist` | -0.6 at 0, 0 at 0.5, +1 at 1 | straight to defined: the waist pulled in at the sides and the small of the back |
+
+  The attribute keys' weights are signed: the consumer sets the blend shape to the
+  piecewise-linear value as given, negative included (Godot's `set_blend_shape_value`
+  takes any float). The default of every control is 0.5, the modelled body; any
+  combination of the five attributes is valid and the producer checks every stance at
+  each attribute's two ends and a set of combinations. Names are the attributes, never a
+  gender (figurine `docs/design.md`). An old recipe without the attribute controls is the
+  default body. `build_plus` is the high end of
   the `build` control: a real plus-size body rather than a wider one (a fuller belly that
   sits forward and low, softer sides at the waist, wider hips and seat, thighs full all
   round at the top that meet at the inner thigh, full upper arms through the shoulder
@@ -1044,12 +1086,36 @@ hat parts and `regions` and `hat_trim` on hair parts. In `face_sheet`: `mask`,
 ranges per bone, each centred on 1.0; factors from several controls multiply.
 
 A colour is a triple (base, shadow, highlight), authored in sets so that every pick is
-harmonious; there is no free colour picker. `hides` names body regions a part covers: the
-body carries each region (`torso`, `neck`, `upper_arms`, `forearms`, `hands`, `thighs`,
-`shins`, `feet`) as its own surface whose material name is the region, and the consumer
-turns covered regions off so nothing pokes through. Proportion controls are normalised 0
-to 1 and map linearly onto each listed bone's range (a `Left` bone implies its `Right`
-mirror).
+harmonious; there is no free colour picker. `hides` names body regions a part covers
+(the next section). Proportion controls are normalised 0 to 1 and map linearly onto
+each listed bone's range (a `Left` bone implies its `Right` mirror); a control with no
+bones (`frame`, `hips`, `chest`, `waist`) drives a shape key alone.
+
+### Regions and hiding
+
+Every body face carries a named region (the body-template card, 2026-10-08): its
+primitive's material name, which is also the surface's name. The regions, in the GLB's
+primitive order:
+
+`hips` (the pelvis from the groin loop up to the waist, the shorts), `torso` (waist to
+the neckline, the tee), `neck` (never hidden), `upper_arm_l`, `forearm_l`, `hand_l`,
+`upper_arm_r`, `forearm_r`, `hand_r`, `thigh_l`, `shin_l`, `foot_l`, `thigh_r`,
+`shin_r`, `foot_r`. The body's kit.json entry lists them (`regions`), and a part's
+`hides` names the ones it covers completely; the consumer drops a hidden region's faces
+so nothing pokes through a garment.
+
+The one-ring buffer: a hidden region keeps a ring of faces at each boundary where a
+neighbouring region still shows, so a garment's opening never shows a hollow edge. The
+body's entry carries `region_rings`: per region, `runs`, its faces grouped by ring band
+as `[start, count]` pairs in the primitive's triangle order (consecutive from 0), and
+`keep`, a list of `[run, [neighbour regions]]`: that run stays visible while the region
+is hidden if any of the named neighbours is visible (`head` is always visible). For
+example `upper_arm_l` keeps its first run (the armhole band) while `torso` shows and its
+last run while `forearm_l` shows; `torso` also keeps its two armhole runs while either
+upper arm shows. The consumer builds the hidden mesh by filtering each primitive's
+index buffer to the kept runs (an all-hidden primitive is dropped). A consumer that
+ignores `region_rings` and drops whole primitives still shows a correct figure with the
+first kit's garments, which cover their regions' boundaries.
 
 ### Recipe (an avatar, format 1)
 
@@ -1058,9 +1124,18 @@ mirror).
  "parts": {"body": "body_a", "head": "head_round", "hair": "hair_bun", "top": "top_tee"},
  "colours": {"skin": 3, "hair": 7, "eyes": 2, "primary": 11, "secondary": 4, "accent": 0},
  "face": {"eyes": 2, "brows": 1, "mouths": 0, "marks": 1},
- "proportions": {"height": 0.6, "build": 0.4, "head": 0.5},
+ "proportions": {"height": 0.6, "build": 0.4, "head": 0.5,
+                 "frame": 0.5, "shoulders": 0.7, "hips": 0.3, "chest": 0.5, "waist": 0.6},
  "stance": "stance_ready"}
 ```
+
+The five body attributes (`frame`, `shoulders`, `hips`, `chest`, `waist`; the
+body-template card) are proportion controls like the others: 0 to 1, 0.5 the modelled
+body, each driving its shape key (and `shoulders` the clavicle length); a recipe that
+omits them (every recipe before the card) gets 0.5. The builder shows them as
+attribute-named sliders ("Frame: Slender to Broad", "Shoulders: Narrow to Broad",
+"Hips: Narrow to Wide", "Chest: Flat to Full", "Waist: Straight to Defined") and
+Surprise me draws each independently.
 
 Colours index into `colour_sets` (`primary`, `secondary` and `accent` index `cloth`). A
 recipe naming a part or cell the local kit does not have falls back to that slot's first

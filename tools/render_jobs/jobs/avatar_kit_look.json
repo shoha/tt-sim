@@ -124,6 +124,18 @@
   {"op": "wait", "s": 1.0, "phase": "look", "for": "plus_closest"},
   {"op": "capture", "name": "plus_closest", "desc": "Closest zoom on the build 1.0 figure (right) beside build 0.75"},
 
+  {"op": "call", "script": "res://tools/render_jobs/probes/avatar_kit.gd", "action": "place", "at": [-5.0, -0.5], "shapes": [{"frame": 0.0, "shoulders": 0.0, "hips": 0.0, "chest": 0.0, "waist": 0.0}, {"frame": 1.0, "shoulders": 1.0, "hips": 1.0, "chest": 1.0, "waist": 1.0}, {"frame": 0.0, "shoulders": 1.0, "hips": 1.0, "chest": 1.0, "waist": 0.0}], "phase": "look", "for": "attributes_*"},
+  {"op": "zoom", "size": 3.5, "phase": "look", "for": "attributes_close"},
+  {"op": "wait", "s": 1.5, "phase": "look", "for": "attributes_close"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/avatar_kit.gd", "action": "look", "index": 1, "height": 0.78, "phase": "look", "for": "attributes_close"},
+  {"op": "wait", "s": 1.0, "phase": "look", "for": "attributes_close"},
+  {"op": "capture", "name": "attributes_close", "desc": "The body attributes at their ends (the body-template card): left every attribute at 0 (slender, narrow, flat, straight), middle every one at 1 (broad, wide, full, defined) in the long-sleeved top, right a mix (slender frame, broad shoulders, wide hips, full chest, straight waist) in the top and hat"},
+  {"op": "zoom", "size": 2.0, "phase": "look", "for": "attributes_closest"},
+  {"op": "wait", "s": 1.5, "phase": "look", "for": "attributes_closest"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/avatar_kit.gd", "action": "look", "index": 1, "height": 1.0, "phase": "look", "for": "attributes_closest"},
+  {"op": "wait", "s": 1.0, "phase": "look", "for": "attributes_closest"},
+  {"op": "capture", "name": "attributes_closest", "desc": "Closest zoom on the middle figure (every attribute at 1) and its neighbours: the top's sleeves and hem over the reshaped body"},
+
   {"op": "vsync_off", "phase": "look", "for": "budget"},
   {"op": "home", "phase": "look", "for": "budget"},
   {"op": "wait", "s": 1.5, "phase": "look", "for": "budget"},
