@@ -41,9 +41,9 @@ func test_kit_loads_with_its_parts_skeleton_and_stances() -> void:
 	assert_not_null(_kit)
 	assert_eq(_kit.errors.size(), 0, "no load errors: %s" % str(_kit.errors))
 	assert_eq(_kit.parts_by_slot.get("body"), ["body_a"])
-	# 22 body bones, 12 finger bones, 38 helpers (the crisp-joints card), 33 secondary chain
-	# bones (the foundation card).
-	assert_eq(_kit.bone_names.size(), 105)
+	# 22 body bones, 12 finger bones, 38 helpers (the crisp-joints card), 45 secondary chain
+	# bones (the foundation card; eight skirt chains since figurine card B2b).
+	assert_eq(_kit.bone_names.size(), 117)
 	for bone in ["LeftThumbMetacarpal", "RightMiddleIntermediate", "LeftElbowHelper3"]:
 		assert_true(_kit.bone_names.has(bone), "%s in the skeleton" % bone)
 	assert_true(bool(_kit.manifest.skeleton.LeftElbowHelper2.get("helper", false)))
@@ -260,7 +260,7 @@ func test_chain_bones_follow_figurine_in_the_blended_stance() -> void:
 		var got := pose * (sk.get_bone_global_rest(b).affine_inverse() * tail_rest)
 		assert_lt(got.distance_to(_vec(fixture.chain_tails[bone])), 3e-4, "%s posed tail" % bone)
 		checked += 1
-	assert_eq(checked, 33)
+	assert_eq(checked, 45)
 	assert_eq(String(_kit.manifest.skeleton.SkirtFront1.attach), "Hips")
 
 

@@ -84,12 +84,17 @@ func _regions(mesh: Mesh) -> PackedStringArray:
 
 func test_the_kit_marks_top_hat_cloak_and_gear_optional() -> void:
 	# top went optional with the kit's first top (figurine card B2a): a figure without one
-	# wears the body's own tee.
-	assert_eq(_kit.optional_slots(), ["cloak", "gear", "hat", "top"] as Array[String])
+	# wears the body's own tee. bottom went optional with the skater skirt (figurine card B2b):
+	# a figure without one wears the body's own shorts.
+	assert_eq(
+		_kit.optional_slots(), ["bottom", "cloak", "gear", "hat", "top"] as Array[String]
+	)
 	assert_true(_kit.is_optional("hat"))
 	assert_true(_kit.is_optional("top"))
+	assert_true(_kit.is_optional("bottom"))
 	assert_false(_kit.is_optional("hair"))
 	assert_eq(_kit.parts_by_slot.get("top"), ["top_longsleeve"])
+	assert_eq(_kit.parts_by_slot.get("bottom"), ["skirt_skater"])
 	assert_eq(_kit.parts_by_slot.get("hat"), ["hat_witch"])
 	assert_eq(_kit.parts_by_id.hat_witch.get("hair_mode"), "trimmed")
 	var hair: Dictionary = _kit.parts_by_id.hair_bun
