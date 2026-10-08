@@ -1,12 +1,12 @@
 {
- "frame_error": 5.259416353875501e-06,
- "posed_error_m": 1.022746867987423e-06,
+ "frame_error": 3.054234914701137e-05,
+ "posed_error_m": 5.441935838068623e-06,
  "body_a": {
   "triangles": 4008,
   "glb_triangles": 4008,
   "reimported_triangles": 4008,
-  "joint_error_m": 4.509533012564404e-07,
-  "reimport_bone_error_m": 3.528594970658716e-07,
+  "joint_error_m": 1.1153091351023825e-06,
+  "reimport_bone_error_m": 1.570582389837094e-06,
   "light_ranges": {
    "torso": [
     0.4,
@@ -42,14 +42,14 @@
    ]
   },
   "node_extras": {},
-  "bytes": 271928
+  "bytes": 275744
  },
  "head_round": {
   "triangles": 1350,
   "glb_triangles": 1350,
   "reimported_triangles": 1350,
-  "joint_error_m": 4.509533012564404e-07,
-  "reimport_bone_error_m": 3.528594970658716e-07,
+  "joint_error_m": 1.1153091351023825e-06,
+  "reimport_bone_error_m": 1.570582389837094e-06,
   "light_ranges": {
    "head": [
     0.0,
@@ -66,14 +66,14 @@
     ]
    }
   },
-  "bytes": 102660
+  "bytes": 106476
  },
  "hair_bun": {
   "triangles": 500,
   "glb_triangles": 500,
   "reimported_triangles": 500,
-  "joint_error_m": 4.509533012564404e-07,
-  "reimport_bone_error_m": 3.528594970658716e-07,
+  "joint_error_m": 1.1153091351023825e-06,
+  "reimport_bone_error_m": 1.570582389837094e-06,
   "light_ranges": {
    "hair": [
     0.25,
@@ -85,14 +85,14 @@
    ]
   },
   "node_extras": {},
-  "bytes": 159776
+  "bytes": 163592
  },
  "top_longsleeve": {
   "triangles": 1208,
   "glb_triangles": 1208,
   "reimported_triangles": 1208,
-  "joint_error_m": 4.509533012564404e-07,
-  "reimport_bone_error_m": 3.528594970658716e-07,
+  "joint_error_m": 1.1153091351023825e-06,
+  "reimport_bone_error_m": 1.570582389837094e-06,
   "light_ranges": {
    "top": [
     0.3,
@@ -112,14 +112,14 @@
    ]
   },
   "node_extras": {},
-  "bytes": 155688
+  "bytes": 159504
  },
  "hat_witch": {
   "triangles": 316,
   "glb_triangles": 316,
   "reimported_triangles": 316,
-  "joint_error_m": 4.509533012564404e-07,
-  "reimport_bone_error_m": 3.528594970658716e-07,
+  "joint_error_m": 1.1153091351023825e-06,
+  "reimport_bone_error_m": 1.570582389837094e-06,
   "light_ranges": {
    "crown": [
     0.3,
@@ -135,7 +135,30 @@
    ]
   },
   "node_extras": {},
-  "bytes": 114124
+  "bytes": 117940
+ },
+ "skirt_skater": {
+  "triangles": 640,
+  "glb_triangles": 640,
+  "reimported_triangles": 640,
+  "joint_error_m": 1.1153091351023825e-06,
+  "reimport_bone_error_m": 1.570582389837094e-06,
+  "light_ranges": {
+   "skirt": [
+    0.3,
+    0.3
+   ],
+   "skirt_lining": [
+    0.3,
+    0.3
+   ],
+   "skirt_band": [
+    0.3,
+    0.3
+   ]
+  },
+  "node_extras": {},
+  "bytes": 102804
  },
  "skeleton": {
   "animations": [
@@ -152,9 +175,9 @@
    "stance_sneaky",
    "stance_sneaky_plus"
   ],
-  "joints": 105
+  "joints": 117
  },
- "figure_triangles": 7382,
+ "figure_triangles": 8022,
  "poses": {
   "figures": [
    {
@@ -259,6 +282,57 @@
     }
    },
    {
+    "name": "bottom=skirt_skater",
+    "parts": [
+     "body_a",
+     "head_round",
+     "hair_bun",
+     "skirt_skater"
+    ],
+    "poses": [
+     "stance_ready",
+     "stance_relaxed",
+     "stance_heroic",
+     "stance_casting",
+     "stance_cheerful",
+     "stance_sneaky",
+     "accept_elbow_fold",
+     "accept_overhead",
+     "accept_fist_by_head",
+     "accept_lunge",
+     "accept_knee_up",
+     "accept_grip"
+    ],
+    "corners": [
+     "height=0 build=0 head=0",
+     "height=0 build=0 head=1",
+     "height=0 build=1 head=0",
+     "height=0 build=1 head=1",
+     "height=1 build=0 head=0",
+     "height=1 build=0 head=1",
+     "height=1 build=1 head=0",
+     "height=1 build=1 head=1",
+     "default"
+    ],
+    "checked": 108,
+    "problems": [],
+    "thigh_contact_m": {
+     "rest": 0.000982331926934421,
+     "stance_ready": 0.0,
+     "stance_relaxed": 0.0064446511678397655,
+     "stance_heroic": 0.005837555043399334,
+     "stance_casting": 0.0,
+     "stance_cheerful": 0.0,
+     "stance_sneaky": 0.0,
+     "accept_elbow_fold": 0.0051078577525913715,
+     "accept_overhead": 0.00010358385043218732,
+     "accept_fist_by_head": 0.0,
+     "accept_lunge": 0.0,
+     "accept_knee_up": 0.002547949319705367,
+     "accept_grip": 0.0
+    }
+   },
+   {
     "name": "hat=hat_witch hair=hair_bun",
     "parts": [
      "body_a",
@@ -308,11 +382,64 @@
      "accept_knee_up": 0.002547949319705367,
      "accept_grip": 0.0
     }
+   },
+   {
+    "name": "outfit=top_longsleeve+skirt_skater+hat_witch",
+    "parts": [
+     "body_a",
+     "head_round",
+     "hair_bun",
+     "top_longsleeve",
+     "skirt_skater",
+     "hat_witch"
+    ],
+    "poses": [
+     "stance_ready",
+     "stance_relaxed",
+     "stance_heroic",
+     "stance_casting",
+     "stance_cheerful",
+     "stance_sneaky",
+     "accept_elbow_fold",
+     "accept_overhead",
+     "accept_fist_by_head",
+     "accept_lunge",
+     "accept_knee_up",
+     "accept_grip"
+    ],
+    "corners": [
+     "height=0 build=0 head=0",
+     "height=0 build=0 head=1",
+     "height=0 build=1 head=0",
+     "height=0 build=1 head=1",
+     "height=1 build=0 head=0",
+     "height=1 build=0 head=1",
+     "height=1 build=1 head=0",
+     "height=1 build=1 head=1",
+     "default"
+    ],
+    "checked": 108,
+    "problems": [],
+    "thigh_contact_m": {
+     "rest": 0.000982331926934421,
+     "stance_ready": 0.0,
+     "stance_relaxed": 0.0064446511678397655,
+     "stance_heroic": 0.005837555043399334,
+     "stance_casting": 0.0,
+     "stance_cheerful": 0.0,
+     "stance_sneaky": 0.0,
+     "accept_elbow_fold": 0.0051078577525913715,
+     "accept_overhead": 0.00010358385043218732,
+     "accept_fist_by_head": 0.0,
+     "accept_lunge": 0.0,
+     "accept_knee_up": 0.002547949319705367,
+     "accept_grip": 0.0
+    }
    }
   ],
-  "checked": 324,
+  "checked": 540,
   "problems": [],
-  "seconds": 156.4
+  "seconds": 336.7
  },
  "problems": [],
  "kit_json_errors": []

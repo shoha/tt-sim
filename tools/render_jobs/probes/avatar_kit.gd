@@ -34,17 +34,18 @@ extends RefCounted
 const HOLDER := "AvatarKitProbe"
 const PREFIX := "_avatarkit_"
 const YAWS_DEG := [8.0, -14.0, 4.0]
+## As figurine's wardrobe home render (card B2b): the first in the skater skirt, the second in
+## the long-sleeved top, the third in the whole outfit (top, skirt and witch hat).
 const RECIPES := [
 	{
 		"format": 1,
-		"parts": {"body": "body_a", "head": "head_round", "hair": "hair_bun"},
+		"parts":
+		{"body": "body_a", "head": "head_round", "hair": "hair_bun", "bottom": "skirt_skater"},
 		"colours": {"skin": 1, "hair": 0, "eyes": 0, "primary": 0, "secondary": 1, "accent": 2},
 		"face": {"eyes": 1, "brows": 1, "mouths": 0, "marks": 0},
 		"proportions": {"height": 0.5, "build": 0.45, "head": 0.55},
 		"stance": "stance_ready",
 	},
-	# The second wears the kit's long-sleeved top and the third its witch hat
-	# (card B2a), so the captures show figures with and without them.
 	{
 		"format": 1,
 		"parts":
@@ -56,7 +57,15 @@ const RECIPES := [
 	},
 	{
 		"format": 1,
-		"parts": {"body": "body_a", "head": "head_round", "hair": "hair_bun", "hat": "hat_witch"},
+		"parts":
+		{
+			"body": "body_a",
+			"head": "head_round",
+			"hair": "hair_bun",
+			"top": "top_longsleeve",
+			"bottom": "skirt_skater",
+			"hat": "hat_witch",
+		},
 		"colours": {"skin": 3, "hair": 3, "eyes": 2, "primary": 10, "secondary": 6, "accent": 0},
 		"face": {"eyes": 4, "brows": 0, "mouths": 4, "marks": 2},
 		"proportions": {"height": 0.9, "build": 0.75, "head": 0.3},

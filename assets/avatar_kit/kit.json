@@ -1,6 +1,6 @@
 {
  "format": 1,
- "kit_version": "0.1.0+ed0d2bb",
+ "kit_version": "0.1.0+1e82ada",
  "parts": [
   {
    "id": "body_a",
@@ -137,6 +137,28 @@
     "build_plus"
    ],
    "hair_mode": "trimmed"
+  },
+  {
+   "id": "skirt_skater",
+   "slot": "bottom",
+   "glb": "parts/bottom/skirt_skater.glb",
+   "slots_used": [
+    "accent",
+    "secondary"
+   ],
+   "triangles": 640,
+   "hides": [],
+   "tags": [
+    "cloth",
+    "skirt"
+   ],
+   "detail": true,
+   "double_sided": false,
+   "stack": "body",
+   "layer": 2,
+   "shapes": [
+    "build_plus"
+   ]
   }
  ],
  "palette": {
@@ -443,7 +465,7 @@
    "optional": true
   },
   "bottom": {
-   "optional": false
+   "optional": true
   },
   "shoes": {
    "optional": false
@@ -2148,13 +2170,13 @@
    "parent": "Hips",
    "head": [
     0.0,
-    0.87,
-    0.085
+    0.92,
+    0.09
    ],
    "tail": [
     0.0,
-    0.66,
-    0.11
+    0.45,
+    0.125
    ],
    "flex_axis": [
     -1.0,
@@ -2168,13 +2190,13 @@
    "parent": "SkirtFront1",
    "head": [
     0.0,
-    0.66,
-    0.11
+    0.45,
+    0.125
    ],
    "tail": [
     0.0,
-    0.45,
-    0.125
+    0.25,
+    0.135
    ],
    "flex_axis": [
     -1.0,
@@ -2188,13 +2210,13 @@
    "parent": "SkirtFront2",
    "head": [
     0.0,
-    0.45,
-    0.125
+    0.25,
+    0.135
    ],
    "tail": [
     0.0,
-    0.22,
-    0.135
+    0.05,
+    0.145
    ],
    "flex_axis": [
     -1.0,
@@ -2208,13 +2230,13 @@
    "parent": "Hips",
    "head": [
     0.0,
-    0.87,
-    -0.11
+    0.92,
+    -0.095
    ],
    "tail": [
     0.0,
-    0.66,
-    -0.135
+    0.45,
+    -0.145
    ],
    "flex_axis": [
     -1.0,
@@ -2228,13 +2250,13 @@
    "parent": "SkirtBack1",
    "head": [
     0.0,
-    0.66,
-    -0.135
+    0.45,
+    -0.145
    ],
    "tail": [
     0.0,
-    0.45,
-    -0.145
+    0.25,
+    -0.15
    ],
    "flex_axis": [
     -1.0,
@@ -2248,13 +2270,13 @@
    "parent": "SkirtBack2",
    "head": [
     0.0,
-    0.45,
-    -0.145
+    0.25,
+    -0.15
    ],
    "tail": [
     0.0,
-    0.22,
-    -0.15
+    0.05,
+    -0.155
    ],
    "flex_axis": [
     -1.0,
@@ -2267,18 +2289,18 @@
   "LeftSkirt1": {
    "parent": "Hips",
    "head": [
-    0.16,
-    0.87,
-    -0.012
+    0.14,
+    0.92,
+    -0.01
    ],
    "tail": [
-    0.205,
-    0.66,
+    0.225,
+    0.45,
     -0.012
    ],
    "flex_axis": [
-    -0.977802,
-    -0.209529,
+    -0.984037,
+    -0.177964,
     0.0
    ],
    "chain": "skirt",
@@ -2287,18 +2309,18 @@
   "LeftSkirt2": {
    "parent": "LeftSkirt1",
    "head": [
-    0.205,
-    0.66,
-    -0.012
-   ],
-   "tail": [
     0.225,
     0.45,
     -0.012
    ],
+   "tail": [
+    0.235,
+    0.25,
+    -0.012
+   ],
    "flex_axis": [
-    -0.995495,
-    -0.094809,
+    -0.998752,
+    -0.049938,
     0.0
    ],
    "chain": "skirt",
@@ -2307,18 +2329,18 @@
   "LeftSkirt3": {
    "parent": "LeftSkirt2",
    "head": [
-    0.225,
-    0.45,
+    0.235,
+    0.25,
     -0.012
    ],
    "tail": [
-    0.235,
-    0.22,
+    0.245,
+    0.05,
     -0.012
    ],
    "flex_axis": [
-    -0.999056,
-    -0.043437,
+    -0.998752,
+    -0.049938,
     0.0
    ],
    "chain": "skirt",
@@ -2327,18 +2349,18 @@
   "RightSkirt1": {
    "parent": "Hips",
    "head": [
-    -0.16,
-    0.87,
-    -0.012
+    -0.14,
+    0.92,
+    -0.01
    ],
    "tail": [
-    -0.205,
-    0.66,
+    -0.225,
+    0.45,
     -0.012
    ],
    "flex_axis": [
-    -0.977802,
-    0.209529,
+    -0.984037,
+    0.177964,
     -0.0
    ],
    "chain": "skirt",
@@ -2347,18 +2369,18 @@
   "RightSkirt2": {
    "parent": "RightSkirt1",
    "head": [
-    -0.205,
-    0.66,
-    -0.012
-   ],
-   "tail": [
     -0.225,
     0.45,
     -0.012
    ],
+   "tail": [
+    -0.235,
+    0.25,
+    -0.012
+   ],
    "flex_axis": [
-    -0.995495,
-    0.094809,
+    -0.998752,
+    0.049938,
     -0.0
    ],
    "chain": "skirt",
@@ -2367,18 +2389,258 @@
   "RightSkirt3": {
    "parent": "RightSkirt2",
    "head": [
-    -0.225,
-    0.45,
+    -0.235,
+    0.25,
     -0.012
    ],
    "tail": [
-    -0.235,
-    0.22,
+    -0.245,
+    0.05,
     -0.012
    ],
    "flex_axis": [
-    -0.999056,
-    0.043437,
+    -0.998752,
+    0.049938,
+    -0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "LeftFrontSkirt1": {
+   "parent": "Hips",
+   "head": [
+    0.11,
+    0.92,
+    0.065
+   ],
+   "tail": [
+    0.178,
+    0.45,
+    0.099
+   ],
+   "flex_axis": [
+    -0.989695,
+    -0.14319,
+    0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "LeftFrontSkirt2": {
+   "parent": "LeftFrontSkirt1",
+   "head": [
+    0.178,
+    0.45,
+    0.099
+   ],
+   "tail": [
+    0.186,
+    0.25,
+    0.107
+   ],
+   "flex_axis": [
+    -0.999201,
+    -0.039968,
+    0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "LeftFrontSkirt3": {
+   "parent": "LeftFrontSkirt2",
+   "head": [
+    0.186,
+    0.25,
+    0.107
+   ],
+   "tail": [
+    0.194,
+    0.05,
+    0.115
+   ],
+   "flex_axis": [
+    -0.999201,
+    -0.039968,
+    0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "RightFrontSkirt1": {
+   "parent": "Hips",
+   "head": [
+    -0.11,
+    0.92,
+    0.065
+   ],
+   "tail": [
+    -0.178,
+    0.45,
+    0.099
+   ],
+   "flex_axis": [
+    -0.989695,
+    0.14319,
+    -0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "RightFrontSkirt2": {
+   "parent": "RightFrontSkirt1",
+   "head": [
+    -0.178,
+    0.45,
+    0.099
+   ],
+   "tail": [
+    -0.186,
+    0.25,
+    0.107
+   ],
+   "flex_axis": [
+    -0.999201,
+    0.039968,
+    -0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "RightFrontSkirt3": {
+   "parent": "RightFrontSkirt2",
+   "head": [
+    -0.186,
+    0.25,
+    0.107
+   ],
+   "tail": [
+    -0.194,
+    0.05,
+    0.115
+   ],
+   "flex_axis": [
+    -0.999201,
+    0.039968,
+    -0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "LeftBackSkirt1": {
+   "parent": "Hips",
+   "head": [
+    0.11,
+    0.92,
+    -0.072
+   ],
+   "tail": [
+    0.178,
+    0.45,
+    -0.115
+   ],
+   "flex_axis": [
+    -0.989695,
+    -0.14319,
+    0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "LeftBackSkirt2": {
+   "parent": "LeftBackSkirt1",
+   "head": [
+    0.178,
+    0.45,
+    -0.115
+   ],
+   "tail": [
+    0.186,
+    0.25,
+    -0.119
+   ],
+   "flex_axis": [
+    -0.999201,
+    -0.039968,
+    0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "LeftBackSkirt3": {
+   "parent": "LeftBackSkirt2",
+   "head": [
+    0.186,
+    0.25,
+    -0.119
+   ],
+   "tail": [
+    0.194,
+    0.05,
+    -0.123
+   ],
+   "flex_axis": [
+    -0.999201,
+    -0.039968,
+    0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "RightBackSkirt1": {
+   "parent": "Hips",
+   "head": [
+    -0.11,
+    0.92,
+    -0.072
+   ],
+   "tail": [
+    -0.178,
+    0.45,
+    -0.115
+   ],
+   "flex_axis": [
+    -0.989695,
+    0.14319,
+    -0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "RightBackSkirt2": {
+   "parent": "RightBackSkirt1",
+   "head": [
+    -0.178,
+    0.45,
+    -0.115
+   ],
+   "tail": [
+    -0.186,
+    0.25,
+    -0.119
+   ],
+   "flex_axis": [
+    -0.999201,
+    0.039968,
+    -0.0
+   ],
+   "chain": "skirt",
+   "attach": "Hips"
+  },
+  "RightBackSkirt3": {
+   "parent": "RightBackSkirt2",
+   "head": [
+    -0.186,
+    0.25,
+    -0.119
+   ],
+   "tail": [
+    -0.194,
+    0.05,
+    -0.123
+   ],
+   "flex_axis": [
+    -0.999201,
+    0.039968,
     -0.0
    ],
    "chain": "skirt",
