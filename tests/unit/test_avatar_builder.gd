@@ -298,7 +298,10 @@ func test_every_stance_is_measured_and_framed_whole_while_it_turns() -> void:
 		var head: AABB = b.head
 		var crown: AABB = b.crown
 		assert_true(head.has_volume() and crown.has_volume(), "%s has a head box" % stance)
-		assert_true(crown.encloses(head), "the crown holds the head")
+		# The crown is the merge of the head and hair boxes; a tenth of a millimetre of
+		# growth covers the merge's float rounding where the head's own box sets the
+		# crown's extent (the readability card's wider head, 2026-10-07).
+		assert_true(crown.grow(0.0001).encloses(head), "the crown holds the head")
 		assert_between(head.get_center().y, 1.0, float(b.top), "%s head sits up top" % stance)
 		var view := AvatarBuilderFraming.fit(b, pitch, aspect)
 		var tall := (float(b.top) - float(b.bottom)) * cos(pitch)
