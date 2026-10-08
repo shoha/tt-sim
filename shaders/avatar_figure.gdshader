@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode blend_mix, depth_draw_opaque, cull_back, ambient_light_disabled, specular_disabled;
+render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled;
 
 /*
  * Avatar Figure Shader (avatar kit consumer, 2026-10-06)
@@ -23,29 +23,41 @@ render_mode blend_mix, depth_draw_opaque, cull_back, ambient_light_disabled, spe
  * palette colour is mixed in by the mask weight, so irises take the eye colour and brows the
  * hair colour with their shading painted in. Each cell lays over by its alpha.
  *
- * Light (figurine's Blender material, which judged the kit): COLOR_0.R = L is the vertex's
- * light response, and the face forces it to 0. The paint shows unlit at (1 - emission_drop L),
- * and the lit share (ALBEDO = colour x L) takes a soft wrapped light term from every scene
- * light (light_strength, light_wrap) plus an ambient fill (ambient_fill). Scene shadow maps
- * are ignored for the sun: their filter stipple lands on the painted blocks (the avatar
- * probe), so shade comes instead from the per-figure `shade` instance value, one ray toward
- * the sun from the CPU at placement and on move (AvatarShade), which removes shadow_strength
- * of the sun's term and reads the paint from the palette's own shadow end (each slot sampled
- * shade_drop further down its gradient; detail and face pixels darken by the same per-channel
- * ratio), so shade keeps each colour's hue-shifted shadow instead of one cool tint (the look
- * pass, 2026-10-06: the first pass's shade_tint turned skin lavender under the canopy). Lamps
- * keep their ATTENUATION, so a torch's falloff and shadow still read. No specular and no
- * environment ambient: the scene's ambient enters through the global `figure_ambient`
- * (LevelEnvironmentManager pushes ambient_light_color x energy), as a tint on the whole
- * figure: its hue mixed in by ambient_hue_mix (a hint, so a blue sky does not turn warm skin
- * pale), its level against ambient_reference (the default environment's), clamped to
- * ambient_floor so a token stays readable at night or in a dungeon, mixed in by ambient_mix.
- * So a figure sits in a sunset or a dungeon even where it is unlit paint.
+ * Light. L is the light response: max(COLOR_0.R, light_floor) off the face (the floor, 1.0,
+ * overrides figurine's per-vertex values) and face_light on it. The paint shows as painted at
+ * (1 - emission_drop L), and the handed share (ALBEDO = colour x L x emission_drop) is lit as
+ * the terrain is: the engine's ambient (sky or colour, SSAO included; scene_ambient, written
+ * as AO) plus a soft wrapped term from every scene light (light_strength, light_wrap). With
+ * the defaults a fifth of each colour is painted and four fifths are lit, the face half and
+ * half (the world-lighting pass, 2026-10-07: figurine's response left skin about 78 % and
+ * faces wholly self-lit, so a figure in the canopy's shade glowed as bright as one in sun and
+ * stayed cool in a sunset; the user called them stark against the terrain).
+ *
+ * Scene shadow maps are ignored for the sun. Sampling them (ATTENUATION) was tried twice, in
+ * the first probe and again in the world-lighting pass with the figures taking most of their
+ * light from the scene: the soft filter's noise, and the figure's own self-shadowing at the
+ * sun's grazing angles, put a fine dot pattern over the sunlit flat colour blocks, and
+ * snapping the filtered value (smoothstep) only hardened the dots. So shade comes from the
+ * per-figure `shade` instance value, one ray toward the sun from the CPU at placement and on
+ * move (AvatarShade), which removes shadow_strength of the sun's term and reads the paint from
+ * the palette's own shadow end (each slot sampled shade_drop further down its gradient; detail
+ * and face pixels darken by the same per-channel ratio), so shade keeps each colour's
+ * hue-shifted shadow instead of one cool tint (the look pass, 2026-10-06: the first pass's
+ * shade_tint turned skin lavender under the canopy). Lamps keep their ATTENUATION, so a
+ * torch's falloff and shadow still read. No specular and no reflections.
+ *
+ * The painted share takes the scene's ambient through the global `figure_ambient`
+ * (LevelEnvironmentManager pushes ambient_light_color x energy), as a tint: its hue mixed in
+ * by ambient_hue_mix (a hint, so a blue sky does not turn warm skin pale), its level against
+ * ambient_reference (the default environment's), clamped to ambient_floor so a token stays
+ * readable at night or in a dungeon, mixed in by ambient_mix.
  *
  * Tonemapper. The scene's Filmic tonemapper lifts midtones and desaturates, and the world's
  * painted colours were authored through it while the palette's were not, so the paint is
  * darkened by paint_contrast (a gamma) and saturated by paint_saturation before the tonemapper
- * sees it (the look pass: figures read pale and pinkish beside the foliage without this).
+ * sees it (the look pass: figures read pale and pinkish beside the foliage without this; the
+ * world-lighting pass trimmed the gamma from 1.25 to 1.15, since the lit share now darkens
+ * turned-away sides on its own).
  *
  * Hidden from players: `hidden_fade` (instance, 0..1) discards that share of pixels in a 4 x 4
  * ordered dither, for the GM's view of a hidden token (BoardToken._set_mesh_transparency only

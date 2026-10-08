@@ -237,7 +237,7 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 | `rocks.gd` | `action` (`check` default, `survey`), `near` ([x, z, r]), `within`, `top` | Rocks survive terrain changes (P3-7, `RockKeep`): `check` logs the rock props (kept or placed), any standing above its bed (`GroundSnap.bed_under`), their tilt, generated rocks inside a rock prop (twins), rock rows and props within `near`, and the last stroke's keeping (count, main-thread and worker time); `survey` lists the 10 m cells near the centre with most rock rows, to aim strokes at a boulder field. |
 | `height_profile.gd` | `from`, `to` ([x, z]), `n` (default 21) | The authoring map's ground height at `n` points along a line (`AuthoringEditor.ground_height_at`) and the steepest slope between them, for checking a sculpt stroke numerically (tier tops on whole tiers, a face's width, a ramp's slope, a pit's floor). |
 | `ground_perf.gd` | `action` plus its fields (see the script header) | Ground shader A/Bs: `shader` swaps the terrain material to the current include or one read from `user://p34_<version>_ground.zip` (made with `git archive`); `variant` builds a text-replaced copy of the current include; `paint` writes eight painted surfaces as strips or a half-weight checker; `terraces` fills the view with tiers; `fraction` reports the share of steep ground pixels. |
-| `avatar_kit.gd` | `action` plus its fields (see the script header) | Avatar figures from figurine's kit through AvatarKit: `place` stands figurine's three judging recipes in a row along the screen's right axis, `canopy` adds one at the first of `points` whose shade ray meets a canopy, `spawn` places `count` for frame times, `look` pans to a figure at a height, `shade` re-takes the shade rays and says what blocks each, `hidden` dithers one, `params` sets figure shader uniforms, `env` logs the environment's ambient and the sun, `sun` hides or shows the sun, `mipmaps` toggles AvatarKit's detail mipmaps; `save` / `cleanup` for `_avatarkit_` levels. |
+| `avatar_kit.gd` | `action` plus its fields (see the script header) | Avatar figures from figurine's kit through AvatarKit: `place` stands figurine's three judging recipes in a row along the screen's right axis, `canopy` adds one at the first of `points` whose shade ray meets a canopy, `spawn` places `count` for frame times, `look` pans to a figure at a height, `shade` re-takes the shade rays and says what blocks each, `hidden` dithers one, `params` sets figure shader uniforms, `variant` sets a named look set (`before` / `after` the world-lighting pass), `near` adds one at the first of `points` in sun, `add` one at a point, `env` logs the environment's ambient and the sun, `sun` hides or shows the sun, `mipmaps` toggles AvatarKit's detail mipmaps; `save` / `cleanup` (all, or one `folder`) for `_avatarkit_` levels. |
 | `avatar_token.gd` | `action` plus its fields (see the script header) | Avatar tokens in play: `pair` spawns a preset under a canopy and a selected one in sun (a ring search when the listed sunny points are shaded), `spawn_at` drops one onto whatever is under a point (water too), `look` (a token by name, index or the pair's midpoint), `hide` (hidden from players, by name or index), `report` (capsule, shade, submerged cue, occlusion fade entries), `timing` (spawn and shade-ray medians, walked and cached), `profile` (build and `set_recipe` medians per change type, off the board); `save` / `cleanup` for `_avatartoken_` levels. |
 | `avatar_library.gd` | `action` plus its fields (see the script header) | The avatar library: `use` points the running game's library at a `user://_avatarlib_<dir>/` test directory (and seeds it from presets), `roster` opens the title screen's roster, `edit` opens the builder from it, `close`, `browser` opens the Add Token browser, `place` presses a saved avatar's card in the Avatar tab, `report`, `cleanup` deletes every `_avatarlib_` directory and points the library back at `user://avatars/`. |
 | `avatar_builder.gd` | `action` plus its fields (see the script header) | The avatar builder in play: `window` resizes the game window, `open` opens the builder on a preset, `pane` selects a rail pane, `report` (panel, preview and pane sizes, measured bounds and view, stance tile sizes), `timing` (preview `set_recipe` and face-tile repaint medians), `close`, `spawn` (the preset as a token turned to the camera). |
@@ -620,6 +620,13 @@ numerically (for example where a fade or a tint band starts).
   with the sun hidden), and an A/B of the detail textures without AvatarKit's mipmaps; then
   GPU and CPU frame times with 0, 8 and 30 figures at home and zoom 20 (`for: "perf"`).
   `avatar_kit.gd cleanup` deletes the `_avatarkit_` level.
+- `jobs/avatar_lighting_look.json`: avatar figure lighting (the world-lighting card, about
+  60 s to build, 70 s to look): a new 150 ft temperate forest map with a placed oak, saved
+  as `_avatarkit_light` and played; three figures in the sunny clearing, one under the oak,
+  one in sun beside it and five across the oak's shade. For each look set (`variant`
+  `before` and `after`): home, close on the clearing, zoom 5 under the oak, zoom 6 across
+  the shade (`*_dapple`), sunset home and close, night home and dungeon (sun hidden) close.
+  `jobs/avatar_cleanup.json` deletes the level.
 - `jobs/avatar_token_look.json`: avatar tokens (the avatar token card, about 40 s to build,
   20 s to look): a new 150 ft temperate forest map with a placed oak, a waist-deep and a
   deep pond, saved as `_avatartoken_forest` and played; `probes/avatar_token.gd` spawns
@@ -644,7 +651,7 @@ numerically (for example where a fade or a tint band starts).
   stance tiles, `timing` (`for: "builder_timing"`) logs preview and face-tile repaint
   medians; then the builder at 1280x720, and the same recipe as a board token at close
   zoom, turned to the camera, for the lighting comparison. `jobs/avatar_cleanup.json`
-  deletes the level.
+  deletes the level (and `_avatarkit_light`).
 - `jobs/avatar_library_look.json`: the avatar library (about 37 s): at 1438x1221, the
   title screen with Avatars, the roster on an empty test library and on five seeded
   presets, the builder opened from the roster (Pose and Face panes), then a bare 100 ft
