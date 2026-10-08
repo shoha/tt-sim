@@ -646,7 +646,8 @@ numerically (for example where a fade or a tint band starts).
 - `jobs/avatar_builder_look.json`: the avatar builder (the builder polish card, about 35 s
   to build, 30 s to look): a new 100 ft bare-ground map saved as `_avatartoken_builder` and
   played; `probes/avatar_builder.gd` resizes the window to 1438x1221, opens the builder on
-  a preset and captures the Pose, Face (the zoomed portrait), Colours and Parts panes, `report`
+  a preset and captures the Pose, Face (the zoomed portrait), Colours, Parts and Shape (the
+  proportion sliders, the five body attributes among them) panes, `report`
   logs the panel, preview and pane sizes, the preview's measured bounds and view and the
   stance tiles, `timing` (`for: "builder_timing"`) logs preview and face-tile repaint
   medians; then the builder at 1280x720, and the same recipe as a board token at close

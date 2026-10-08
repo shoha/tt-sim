@@ -6,8 +6,9 @@ extends AnimatedCanvasLayerPanel
 ## of the figure stands on the left (AvatarBuilderPreview); a rail picks one calm pane at a
 ## time: Pose (the player's own figure as a silhouette in each stance, AvatarStanceTiles),
 ## Face (the sheet's actual eye, brow, mouth and mark cells), Colours (swatches from the
-## kit's curated sets, one row per palette slot the chosen parts use), Shape (three
-## sliders) and, once a slot has more than one part, Parts (thumbnails). "Surprise me" draws
+## kit's curated sets, one row per palette slot the chosen parts use), Shape (a slider per
+## proportion control: height, build, head and the five body attributes, SHAPE_ROWS) and,
+## once a slot has more than one part, Parts (thumbnails). "Surprise me" draws
 ## a whole harmonious recipe (AvatarSurprise) and each pane rerolls its own section.
 ##
 ## Two ways in: open_for_new (the Add Token browser's Avatar tab) starts from one of the
@@ -62,11 +63,19 @@ const COLOUR_LABELS := {
 	"metal": "Metal",
 }
 const FACE_LABELS := {"eyes": "Eyes", "brows": "Brows", "mouths": "Mouth", "marks": "Marks"}
-## Shape rows in display order: control, label, low hint, high hint.
+## Shape rows in display order: control, label, low hint, high hint. The five body
+## attributes (the body-template kit) are named for the attribute, never for a gender:
+## "Frame: Slender to Broad", "Shoulders: Narrow to Broad", "Hips: Narrow to Wide",
+## "Chest: Flat to Full", "Waist: Straight to Defined".
 const SHAPE_ROWS := [
 	["height", "Height", "Short", "Tall"],
 	["build", "Build", "Slight", "Fuller"],
 	["head", "Head", "Small", "Big"],
+	["frame", "Frame", "Slender", "Broad"],
+	["shoulders", "Shoulders", "Narrow", "Broad"],
+	["hips", "Hips", "Narrow", "Wide"],
+	["chest", "Chest", "Flat", "Full"],
+	["waist", "Waist", "Straight", "Defined"],
 ]
 ## The face tiles' least size and their largest side when the pane has room; the icon
 ## keeps FACE_ICON_ROOM of the tile free for its padding.

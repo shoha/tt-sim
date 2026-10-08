@@ -33,6 +33,9 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar_builder.gd", "action": "pane", "id": "parts", "phase": "look", "for": "builder_parts"},
   {"op": "wait", "s": 1.5, "phase": "look", "for": "builder_parts"},
   {"op": "capture", "name": "builder_parts", "desc": "The Parts pane (card B2a): the kit's thumbnails per slot with a choice, the optional top and hat slots starting with None"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/avatar_builder.gd", "action": "pane", "id": "shape", "phase": "look", "for": "builder_shape"},
+  {"op": "wait", "s": 1.5, "phase": "look", "for": "builder_shape"},
+  {"op": "capture", "name": "builder_shape", "desc": "The Shape pane: height, build and head sliders and the five body attribute sliders (the body-template kit)"},
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar_builder.gd", "action": "timing", "count": 30, "phase": "look", "for": "builder_timing"},
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar_builder.gd", "action": "close", "phase": "look", "for": "builder_*"},
   {"op": "wait", "s": 1.0, "phase": "look", "for": "builder_*"},
@@ -55,7 +58,7 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/avatar_token.gd", "action": "report", "phase": "look", "for": "ingame_close"},
   {"op": "capture", "name": "ingame_close", "desc": "The same recipe (Marigold) as a board token at close zoom, turned to the camera, for the lighting comparison"},
 
-  {"op": "index", "title": "Avatar builder polish", "intro": "Produced by tools/render_jobs/jobs/avatar_builder_look.json: the avatar builder (probes/avatar_builder.gd) over a played 100 ft bare-ground map (_avatartoken_builder), at 1438x1221 on the Pose, Face, Colours and Parts panes and at 1280x720, then the same recipe as a board token at close zoom. Sizes, bounds and timings are in log.txt."},
+  {"op": "index", "title": "Avatar builder polish", "intro": "Produced by tools/render_jobs/jobs/avatar_builder_look.json: the avatar builder (probes/avatar_builder.gd) over a played 100 ft bare-ground map (_avatartoken_builder), at 1438x1221 on the Pose, Face, Colours, Parts and Shape panes and at 1280x720, then the same recipe as a board token at close zoom. Sizes, bounds and timings are in log.txt."},
   {"op": "title"},
   {"op": "wait", "s": 1.0}
  ]

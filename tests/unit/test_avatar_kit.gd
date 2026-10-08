@@ -289,7 +289,7 @@ func test_build_drives_the_plus_blend_shape() -> void:
 	var recipe := RECIPE.duplicate(true)
 	recipe.proportions = {"height": 0.5, "build": 1.0, "head": 0.5}
 	# Hidden regions keep the blend shape too (mesh_without rebuilds the mesh).
-	(_kit.parts_by_id.hair_bun as Dictionary).hides = ["thighs"]
+	(_kit.parts_by_id.hair_bun as Dictionary).hides = ["thigh_l"]
 	var figure := _free_later(_kit.build_figure(recipe)) as Node3D
 	(_kit.parts_by_id.hair_bun as Dictionary).hides = []
 	for id in ["body_a", "head_round", "hair_bun"]:
@@ -392,21 +392,32 @@ func test_missing_part_and_cell_still_build_a_figure() -> void:
 
 
 func test_hides_turn_off_the_covered_body_regions() -> void:
+	# A hidden region keeps only its buffer runs at a boundary where a neighbour still shows
+	# (test_avatar_body_template.gd has the run-level checks); a region whose entry keeps
+	# nothing is dropped whole.
 	var entry: Dictionary = _kit.parts_by_id.hair_bun
-	entry.hides = ["torso", "upper_arms"]
+	var body_entry: Dictionary = _kit.parts_by_id.body_a
+	var rings: Dictionary = body_entry.region_rings
+	body_entry.region_rings = {"torso": rings.torso}
+	entry.hides = ["torso", "upper_arm_l"]
 	var figure := _free_later(_kit.build_figure(RECIPE)) as Node3D
 	var body := (figure.find_child("body_a", true, false) as MeshInstance3D).mesh
 	var regions := PackedStringArray()
 	for s in body.get_surface_count():
 		regions.append(body.surface_get_material(s).resource_name)
-	assert_eq(body.get_surface_count(), 6)
-	assert_false(regions.has("torso"))
-	assert_false(regions.has("upper_arms"))
-	assert_true(regions.has("hands"))
+	body_entry.region_rings = rings
 	entry.hides = []
+	assert_eq(body.get_surface_count(), 14)
+	assert_false(regions.has("upper_arm_l"), "no entry, so nothing kept: dropped")
+	assert_true(regions.has("torso"), "kept its buffer runs")
+	assert_true(regions.has("hand_l"))
+	var torso: PackedInt32Array = body.surface_get_arrays(regions.find("torso"))[Mesh.ARRAY_INDEX]
+	# Runs 0 (hips), 9 (neck) and the two armhole runs 5 and 6, each kept while either upper
+	# arm shows (the right one does): 40 + 40 + 24 + 24 triangles.
+	assert_eq(torso.size() / 3, 128)
 	var plain := _free_later(_kit.build_figure(RECIPE)) as Node3D
 	var whole := (plain.find_child("body_a", true, false) as MeshInstance3D).mesh
-	assert_eq(whole.get_surface_count(), 8)
+	assert_eq(whole.get_surface_count(), 15)
 
 
 func test_a_part_with_a_different_armature_is_rejected_by_name() -> void:

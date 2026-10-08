@@ -1,14 +1,18 @@
 {
  "frame_error": 3.054234914701137e-05,
- "posed_error_m": 5.441935838068623e-06,
+ "posed_error_m": 6.462840769660971e-06,
  "check": "full",
  "body_a": {
-  "triangles": 4008,
-  "glb_triangles": 4008,
-  "reimported_triangles": 4008,
+  "triangles": 3640,
+  "glb_triangles": 3640,
+  "reimported_triangles": 3640,
   "joint_error_m": 1.1153091351023825e-06,
   "reimport_bone_error_m": 1.570582389837094e-06,
   "light_ranges": {
+   "hips": [
+    0.4,
+    0.4
+   ],
    "torso": [
     0.4,
     0.4
@@ -17,38 +21,62 @@
     0.4,
     0.4
    ],
-   "upper_arms": [
+   "upper_arm_l": [
     0.4,
     0.4
    ],
-   "forearms": [
+   "forearm_l": [
     0.4,
     0.4
    ],
-   "hands": [
+   "hand_l": [
     0.4,
     0.4
    ],
-   "thighs": [
+   "upper_arm_r": [
     0.4,
     0.4
    ],
-   "shins": [
+   "forearm_r": [
     0.4,
     0.4
    ],
-   "feet": [
+   "hand_r": [
+    0.4,
+    0.4
+   ],
+   "thigh_l": [
+    0.4,
+    0.4
+   ],
+   "shin_l": [
+    0.4,
+    0.4
+   ],
+   "foot_l": [
+    0.4,
+    0.4
+   ],
+   "thigh_r": [
+    0.4,
+    0.4
+   ],
+   "shin_r": [
+    0.4,
+    0.4
+   ],
+   "foot_r": [
     0.4,
     0.4
    ]
   },
   "node_extras": {},
-  "bytes": 274268
+  "bytes": 437124
  },
  "head_round": {
-  "triangles": 1388,
-  "glb_triangles": 1388,
-  "reimported_triangles": 1388,
+  "triangles": 1408,
+  "glb_triangles": 1408,
+  "reimported_triangles": 1408,
   "joint_error_m": 1.1153091351023825e-06,
   "reimport_bone_error_m": 1.570582389837094e-06,
   "light_ranges": {
@@ -67,7 +95,7 @@
     ]
    }
   },
-  "bytes": 111000
+  "bytes": 112688
  },
  "hair_bun": {
   "triangles": 500,
@@ -86,12 +114,12 @@
    ]
   },
   "node_extras": {},
-  "bytes": 163376
+  "bytes": 163344
  },
  "top_longsleeve": {
-  "triangles": 1208,
-  "glb_triangles": 1208,
-  "reimported_triangles": 1208,
+  "triangles": 1264,
+  "glb_triangles": 1264,
+  "reimported_triangles": 1264,
   "joint_error_m": 1.1153091351023825e-06,
   "reimport_bone_error_m": 1.570582389837094e-06,
   "light_ranges": {
@@ -113,7 +141,7 @@
    ]
   },
   "node_extras": {},
-  "bytes": 157540
+  "bytes": 246600
  },
  "hat_witch": {
   "triangles": 316,
@@ -136,7 +164,7 @@
    ]
   },
   "node_extras": {},
-  "bytes": 117956
+  "bytes": 117924
  },
  "skeleton": {
   "animations": [
@@ -155,7 +183,7 @@
   ],
   "joints": 117
  },
- "figure_triangles": 7420,
+ "figure_triangles": 7128,
  "poses": {
   "figures": [
    {
@@ -188,23 +216,39 @@
      "height=1 build=0 head=1",
      "height=1 build=1 head=0",
      "height=1 build=1 head=1",
-     "default"
+     "default",
+     "frame=0",
+     "frame=1",
+     "shoulders=0",
+     "shoulders=1",
+     "hips=0",
+     "hips=1",
+     "chest=0",
+     "chest=1",
+     "waist=0",
+     "waist=1",
+     "frame=0 shoulders=0 hips=0 chest=0 waist=0",
+     "frame=1 shoulders=1 hips=1 chest=1 waist=1",
+     "frame=1 shoulders=1 hips=0 chest=0 waist=0",
+     "frame=0 shoulders=0 hips=1 chest=1 waist=1",
+     "height=0 build=1 head=0.5 hips=1 chest=1 waist=0",
+     "height=0 build=1 head=0.5 frame=1 shoulders=1 chest=1"
     ],
-    "checked": 108,
+    "checked": 300,
     "problems": [],
     "thigh_contact_m": {
-     "rest": 0.000982331926934421,
+     "rest": 0.0,
      "stance_ready": 0.0,
-     "stance_relaxed": 0.0064446511678397655,
-     "stance_heroic": 0.005837555043399334,
+     "stance_relaxed": 0.0,
+     "stance_heroic": 0.0,
      "stance_casting": 0.0,
      "stance_cheerful": 0.0,
      "stance_sneaky": 0.0,
-     "accept_elbow_fold": 0.0051078577525913715,
-     "accept_overhead": 0.00010358385043218732,
+     "accept_elbow_fold": 0.0,
+     "accept_overhead": 0.0,
      "accept_fist_by_head": 0.0,
      "accept_lunge": 0.0,
-     "accept_knee_up": 0.002547949319705367,
+     "accept_knee_up": 0.0,
      "accept_grip": 0.0
     }
    },
@@ -239,23 +283,39 @@
      "height=1 build=0 head=1",
      "height=1 build=1 head=0",
      "height=1 build=1 head=1",
-     "default"
+     "default",
+     "frame=0",
+     "frame=1",
+     "shoulders=0",
+     "shoulders=1",
+     "hips=0",
+     "hips=1",
+     "chest=0",
+     "chest=1",
+     "waist=0",
+     "waist=1",
+     "frame=0 shoulders=0 hips=0 chest=0 waist=0",
+     "frame=1 shoulders=1 hips=1 chest=1 waist=1",
+     "frame=1 shoulders=1 hips=0 chest=0 waist=0",
+     "frame=0 shoulders=0 hips=1 chest=1 waist=1",
+     "height=0 build=1 head=0.5 hips=1 chest=1 waist=0",
+     "height=0 build=1 head=0.5 frame=1 shoulders=1 chest=1"
     ],
-    "checked": 108,
+    "checked": 300,
     "problems": [],
     "thigh_contact_m": {
-     "rest": 0.000982331926934421,
+     "rest": 0.0,
      "stance_ready": 0.0,
-     "stance_relaxed": 0.0064446511678397655,
-     "stance_heroic": 0.005837555043399334,
+     "stance_relaxed": 0.0,
+     "stance_heroic": 0.0,
      "stance_casting": 0.0,
      "stance_cheerful": 0.0,
      "stance_sneaky": 0.0,
-     "accept_elbow_fold": 0.0051078577525913715,
-     "accept_overhead": 0.00010358385043218732,
+     "accept_elbow_fold": 0.0,
+     "accept_overhead": 0.0,
      "accept_fist_by_head": 0.0,
      "accept_lunge": 0.0,
-     "accept_knee_up": 0.002547949319705367,
+     "accept_knee_up": 0.0,
      "accept_grip": 0.0
     }
    },
@@ -290,23 +350,39 @@
      "height=1 build=0 head=1",
      "height=1 build=1 head=0",
      "height=1 build=1 head=1",
-     "default"
+     "default",
+     "frame=0",
+     "frame=1",
+     "shoulders=0",
+     "shoulders=1",
+     "hips=0",
+     "hips=1",
+     "chest=0",
+     "chest=1",
+     "waist=0",
+     "waist=1",
+     "frame=0 shoulders=0 hips=0 chest=0 waist=0",
+     "frame=1 shoulders=1 hips=1 chest=1 waist=1",
+     "frame=1 shoulders=1 hips=0 chest=0 waist=0",
+     "frame=0 shoulders=0 hips=1 chest=1 waist=1",
+     "height=0 build=1 head=0.5 hips=1 chest=1 waist=0",
+     "height=0 build=1 head=0.5 frame=1 shoulders=1 chest=1"
     ],
-    "checked": 108,
+    "checked": 300,
     "problems": [],
     "thigh_contact_m": {
-     "rest": 0.000982331926934421,
+     "rest": 0.0,
      "stance_ready": 0.0,
-     "stance_relaxed": 0.0064446511678397655,
-     "stance_heroic": 0.005837555043399334,
+     "stance_relaxed": 0.0,
+     "stance_heroic": 0.0,
      "stance_casting": 0.0,
      "stance_cheerful": 0.0,
      "stance_sneaky": 0.0,
-     "accept_elbow_fold": 0.0051078577525913715,
-     "accept_overhead": 0.00010358385043218732,
+     "accept_elbow_fold": 0.0,
+     "accept_overhead": 0.0,
      "accept_fist_by_head": 0.0,
      "accept_lunge": 0.0,
-     "accept_knee_up": 0.002547949319705367,
+     "accept_knee_up": 0.0,
      "accept_grip": 0.0
     }
    },
@@ -342,36 +418,52 @@
      "height=1 build=0 head=1",
      "height=1 build=1 head=0",
      "height=1 build=1 head=1",
-     "default"
+     "default",
+     "frame=0",
+     "frame=1",
+     "shoulders=0",
+     "shoulders=1",
+     "hips=0",
+     "hips=1",
+     "chest=0",
+     "chest=1",
+     "waist=0",
+     "waist=1",
+     "frame=0 shoulders=0 hips=0 chest=0 waist=0",
+     "frame=1 shoulders=1 hips=1 chest=1 waist=1",
+     "frame=1 shoulders=1 hips=0 chest=0 waist=0",
+     "frame=0 shoulders=0 hips=1 chest=1 waist=1",
+     "height=0 build=1 head=0.5 hips=1 chest=1 waist=0",
+     "height=0 build=1 head=0.5 frame=1 shoulders=1 chest=1"
     ],
-    "checked": 108,
+    "checked": 300,
     "problems": [],
     "thigh_contact_m": {
-     "rest": 0.000982331926934421,
+     "rest": 0.0,
      "stance_ready": 0.0,
-     "stance_relaxed": 0.0064446511678397655,
-     "stance_heroic": 0.005837555043399334,
+     "stance_relaxed": 0.0,
+     "stance_heroic": 0.0,
      "stance_casting": 0.0,
      "stance_cheerful": 0.0,
      "stance_sneaky": 0.0,
-     "accept_elbow_fold": 0.0051078577525913715,
-     "accept_overhead": 0.00010358385043218732,
+     "accept_elbow_fold": 0.0,
+     "accept_overhead": 0.0,
      "accept_fist_by_head": 0.0,
      "accept_lunge": 0.0,
-     "accept_knee_up": 0.002547949319705367,
+     "accept_knee_up": 0.0,
      "accept_grip": 0.0
     }
    }
   ],
-  "checked": 432,
+  "checked": 1200,
   "problems": [],
-  "seconds": 144.4
+  "seconds": 456.0
  },
  "problems": [],
  "kit_json_errors": [],
  "reuse": {
   "corners_reused": 0,
-  "corners_checked": 36,
+  "corners_checked": 100,
   "parts_reused": 0,
   "parts_exported": 5,
   "skeleton_reused": 0

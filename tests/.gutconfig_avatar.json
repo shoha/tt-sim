@@ -1,6 +1,7 @@
 {
 	"dirs": [],
 	"tests": [
+		"res://tests/unit/test_avatar_body_template.gd",
 		"res://tests/unit/test_avatar_builder.gd",
 		"res://tests/unit/test_avatar_drag_place.gd",
 		"res://tests/unit/test_avatar_kit.gd",
