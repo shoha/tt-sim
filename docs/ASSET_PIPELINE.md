@@ -648,7 +648,13 @@ card B2a (2026-10-06) added the first garments, `top_longsleeve` (slot `top`, no
 optional) and `hat_witch` (slot `hat`, `hair_mode` `trimmed`), and the hair's back locks
 on the `HairBack` chain; card B2b (2026-10-07) added `skirt_skater` (slot `bottom`, now
 optional) and `cloak_trailing` (slot `cloak`), the eight skirt chains (117 bones) and the
-drape of the acceptance poses. The look's rules are in `figurine/docs/style_sheet.md`.
+drape of the acceptance poses. The skater skirt failed review and is held out of the
+shipped kit (figurine `kit.EXPERIMENTAL_BUILDERS`, 2026-10-07) until the bottoms-family
+card redesigns it; the skirt chains stay in the skeleton. The readability card
+(2026-10-07) rebuilt the head from orthographic blueprints (wider, deeper, a wedge nose),
+enlarged the eyes, brows and mouths in the face sheet, cut the body's ink to edges and
+seams and raised the head to 0.33 m. The look's rules are in
+`figurine/docs/style_sheet.md`.
 Consumed: tt-sim `8c30bef` (2026-10-06) loads it, builds figures from recipes on a real
 map and from an exported pack; not yet a token (no `BoardTokenFactory` path, no network
 sync, no builder UI).
@@ -684,7 +690,7 @@ Required and optional slots (card B1, 2026-10-06; kit.json `slots`, below):
 |------|----------|-------|
 | `body`, `head`, `hair` | never | always filled when the kit has a part for the slot |
 | `top` | yes (card B2a, 2026-10-06) | the body carries a complete base outfit (a tee, shorts, socks and sneakers), so a figure with no `top` part wears the body's own tee; a top part replaces it (hiding the body regions its sleeves cover) |
-| `bottom` | yes (card B2b, 2026-10-07) | without one the body wears its own shorts; the first part is `skirt_skater`, a mid-thigh bell on the eight skirt chains that hides nothing (the shorts stay inside it, the thighs show below its hem) |
+| `bottom` | yes (card B2b, 2026-10-07) | without one the body wears its own shorts; the shipped kit currently has no part here (`skirt_skater`, a mid-thigh bell on the eight skirt chains, is held back for the bottoms-family card), so `parts_by_slot` has no `bottom` key and every figure wears the shorts |
 | `shoes` | no, for now | required while the kit has no parts there, which leaves them to the body's own sneakers; when parts ship, they will go optional the same way as `top` |
 | `hat`, `cloak`, `gear` | yes | a figure may leave them empty |
 

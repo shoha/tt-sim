@@ -39,13 +39,13 @@ extends RefCounted
 const HOLDER := "AvatarKitProbe"
 const PREFIX := "_avatarkit_"
 const YAWS_DEG := [8.0, -14.0, 4.0]
-## As figurine's wardrobe home render (card B2b): the first in the skater skirt, the second in
-## the long-sleeved top, the third in the whole outfit (top, skirt and witch hat).
+## As figurine's wardrobe home render: the first in the body's own outfit, the second in the
+## long-sleeved top, the third in the whole outfit (top and witch hat). The skater skirt is
+## held out of the kit since 2026-10-07 (the bottoms-family card redesigns it).
 const RECIPES := [
 	{
 		"format": 1,
-		"parts":
-		{"body": "body_a", "head": "head_round", "hair": "hair_bun", "bottom": "skirt_skater"},
+		"parts": {"body": "body_a", "head": "head_round", "hair": "hair_bun"},
 		"colours": {"skin": 1, "hair": 0, "eyes": 0, "primary": 0, "secondary": 1, "accent": 2},
 		"face": {"eyes": 1, "brows": 1, "mouths": 0, "marks": 0},
 		"proportions": {"height": 0.5, "build": 0.45, "head": 0.55},
@@ -68,7 +68,6 @@ const RECIPES := [
 			"head": "head_round",
 			"hair": "hair_bun",
 			"top": "top_longsleeve",
-			"bottom": "skirt_skater",
 			"hat": "hat_witch",
 		},
 		"colours": {"skin": 3, "hair": 3, "eyes": 2, "primary": 10, "secondary": 6, "accent": 0},
