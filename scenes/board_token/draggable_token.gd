@@ -29,12 +29,6 @@ const WHOOSH_PITCH_MIN: float = 0.85  # Pitch at threshold speed
 const WHOOSH_PITCH_MAX: float = 1.3  # Pitch at very high speed
 const WHOOSH_SPEED_MAX: float = 18.0  # Speed at which pitch reaches maximum
 
-# Water interaction (see WaterZone)
-const SUBMERGE_SINK_AMOUNT: float = 0.04  # How far visuals sink while standing in water
-const SUBMERGE_TWEEN_DURATION: float = 0.25
-## A moving token re-checks its submerged cue once it has moved this far (metres, XZ).
-const SUBMERGED_CUE_STEP: float = 0.03
-
 # Network interpolation tuning
 const NETWORK_INTERPOLATION_SPEED: float = 15.0
 const NETWORK_INTERPOLATION_TIMEOUT: float = 0.3  # Stop interpolating if no updates for this long
@@ -48,6 +42,9 @@ const NETWORK_SYNC_SCALE_THRESHOLD: float = 0.01  # Skip interpolation if scale 
 ## When false, left-click will not initiate a drag (hover & right-click still work).
 ## Set by BoardToken.set_interactive() to prevent unauthorized dragging.
 var dragging_allowed: bool = true
+
+## Landing, sink, bob, draft and the submerged cue (see TokenWater).
+var water: TokenWater = TokenWater.new(self)
 
 var _base_height_offset: float = 0.0
 var _last_drag_position: Vector3 = Vector3.ZERO
@@ -64,16 +61,6 @@ var _is_cancel_settle: bool = false  # True when settling back to start after ca
 
 var _whoosh_cooldown: float = 0.0
 var _whoosh_armed: bool = true  # Re-armed only after speed drops back below the threshold
-
-# Water interaction state (see WaterZone / set_submerged())
-var _is_submerged: bool = false
-var _submerge_tween: Tween = null
-## Loops while the token floats in deep water (_update_floating()).
-var _bob_tween: Tween = null
-## The cue at the water surface while the water hides this token (_update_submerged_cue()).
-var _submerged_marker: SubmergedMarker = null
-## Where a moving token last checked its cue (Vector3.INF: check on the next move).
-var _cue_checked_at: Vector3 = Vector3.INF
 
 # Tweens
 var _pickup_tween: Tween = null
@@ -110,7 +97,7 @@ func _ready() -> void:
 	if not Engine.is_editor_hint():
 		collect_visual_children()
 		_setup_drop_indicator()
-		_setup_submerged_marker()
+		water.setup_marker()
 
 		dragging_started.connect(_on_dragging_started)
 		dragging_stopped.connect(_on_dragging_stopped)
@@ -141,14 +128,6 @@ func _setup_drop_indicator() -> void:
 	add_child(_drop_indicator)
 
 
-## The marker lives under the rigid body so it hides with the token, but is top_level and
-## left out of the visual children (see SubmergedMarker).
-func _setup_submerged_marker() -> void:
-	_submerged_marker = SubmergedMarker.new()
-	_submerged_marker.set_radius(SubmergedMarker.radius_for_box(cue_box()))
-	rigid_body.add_child(_submerged_marker)
-
-
 func collect_visual_children() -> void:
 	_visual_children.clear()
 	for child in rigid_body.get_children():
@@ -176,11 +155,7 @@ func update_height_offset() -> void:
 	_base_height_offset = shape_top / 2
 	heightOffset = shape_top / 2
 
-	# A new size or shape moves the marker's ring and may lift the token out of the water.
-	if _submerged_marker:
-		_submerged_marker.set_radius(SubmergedMarker.radius_for_box(cue_box()))
-		if not is_being_dragged():
-			_update_submerged_cue(false)
+	water.refresh_marker()
 
 
 ## Get the visual children (non-collision nodes) of the rigid body
@@ -206,8 +181,7 @@ func is_network_interpolating() -> bool:
 
 
 func _exit_tree() -> void:
-	_kill_submerge_tween()
-	_kill_bob_tween()
+	water.stop()
 
 	# Clean up input hints if the token is freed mid-drag (e.g. level clear)
 	if _is_currently_dragging or _is_settling:
@@ -224,9 +198,7 @@ func _on_dragging_started() -> void:
 
 	_is_currently_dragging = true
 	set_process(true)
-	if _bob_tween != null:
-		_kill_bob_tween()
-		_apply_bob(0.0)
+	water.on_drag_started()
 
 	# Store start position for cancel
 	_drag_start_position = rigid_body.global_position
@@ -236,7 +208,6 @@ func _on_dragging_started() -> void:
 
 	_last_drag_position = rigid_body.global_position
 	_drag_velocity = Vector3.ZERO
-	_cue_checked_at = Vector3.INF
 	_whoosh_armed = true
 	_whoosh_cooldown = 0.0
 
@@ -363,7 +334,7 @@ func _on_dragging_cancelled() -> void:
 
 ## Settle the token to the ground below it (normal drop).
 func _settle_to_ground() -> void:
-	var landing_pos = _find_landing_position()
+	var landing_pos = water.landing_position()
 	if landing_pos == null:
 		# No surface below - just finalize in place
 		_on_settle_complete()
@@ -426,8 +397,8 @@ func _on_settle_complete() -> void:
 
 	# Sync hierarchy positions
 	_sync_parent_position()
-	_update_floating()
-	_update_submerged_cue(false)
+	water.update_floating()
+	water.update_cue(false)
 
 	# Only spawn effects and emit signals for real drops, not cancel-to-start
 	if not was_cancel:
@@ -445,99 +416,14 @@ func _on_settle_complete() -> void:
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 
 
-## Find where the token should land by raycasting down from its top, so a token whose
-## bottom ended up just below the ground (a drag that snapped it onto a higher tier before
-## it finished rising, a scroll-lowered drag) still lands on that ground instead of
-## staying where it is. Starting at the top rather than above the whole map keeps an
-## overhang above the token (a bridge, a roof on a Blender map) out of the cast.
-## In water the float rule applies (WaterSurface.landing_below): the bed in wadeable water,
-## the surface less a small draft in deep water; the water cast starts higher than the
-## token's top, which can be under the surface of deep water.
-## Returns Vector3 or null if no surface is found.
-func _find_landing_position() -> Variant:
-	if not rigid_body or not collision_shape or not collision_shape.shape:
-		return null
-
-	var aabb = collision_shape.shape.get_debug_mesh().get_aabb()
-	var scaled_bottom_y = (collision_shape.position.y + aabb.position.y) * rigid_body.scale.y
-	var scaled_top_y = (collision_shape.position.y + aabb.end.y) * rigid_body.scale.y
-	var top_world = rigid_body.global_position + Vector3(0, scaled_top_y, 0)
-
-	# Terrain and water only (layers 1 and WaterSurface.LAYER), never other tokens.
-	var ground := WaterSurface.landing_below(
-		get_world_3d().direct_space_state, top_world, top_world.y, water_draft()
-	)
-	if ground == Vector3.INF:
-		return null
-
-	# Place token so its bottom sits on the landing ground
-	var landing_y = ground.y - scaled_bottom_y
-	return Vector3(rigid_body.global_position.x, landing_y, rigid_body.global_position.z)
-
-
-## The world position of this token's base (the bottom of its collision shape).
-func _base_position() -> Vector3:
-	var bottom := 0.0
-	if collision_shape and collision_shape.shape:
-		var aabb := collision_shape.shape.get_debug_mesh().get_aabb()
-		bottom = (collision_shape.position.y + aabb.position.y) * rigid_body.scale.y
-	return rigid_body.global_position + Vector3(0, bottom, 0)
-
-
-## Starts or stops the floating bob (WaterSurface.BOB_M over BOB_PERIOD_S on the visual
-## children, on top of the submerge sink) by whether the token now rests at a floating
-## height (WaterSurface.floats_at). Called when a landing or a synced move settles, so every
-## peer bobs its own copy; purely visual, the synced position is untouched.
-func _update_floating() -> void:
-	if not rigid_body or not rigid_body.is_inside_tree():
-		return
-	var floating := WaterSurface.floats_at(
-		get_world_3d().direct_space_state, _base_position(), 0.05, water_draft()
-	)
-	if floating == (_bob_tween != null):
-		return
-	_kill_bob_tween()
-	if not floating:
-		_apply_bob(0.0)
-		return
-	_bob_tween = create_tween().set_loops()
-	_bob_tween.tween_method(_apply_bob, 0.0, TAU, WaterSurface.BOB_PERIOD_S)
-
-
-## Shows or hides the SubmergedMarker by whether the water hides the token
-## (WaterSurface.submerged_surface): where it rests, or with `moving` where it would land
-## (a drag or a synced move in flight), so the cue follows a token dragged along a river and
-## says before the drop that it will go under. A moving token checks again only once it has
-## moved SUBMERGED_CUE_STEP. Purely visual; every peer decides for its own copy.
-func _update_submerged_cue(moving: bool) -> void:
-	if _submerged_marker == null or not rigid_body or not rigid_body.is_inside_tree():
-		return
-	var box := cue_box()
-	var at: Variant = rigid_body.global_position
-	if moving:
-		var flat := Vector2(at.x - _cue_checked_at.x, at.z - _cue_checked_at.z)
-		if flat.length() < SUBMERGED_CUE_STEP:
-			return
-		_cue_checked_at = at
-		at = _find_landing_position()
-	else:
-		_cue_checked_at = Vector3.INF
-	var surface := NAN
-	if at != null:
-		at = (at as Vector3) + Vector3(0, box.position.y, 0)
-		var space := get_world_3d().direct_space_state
-		surface = WaterSurface.submerged_surface(
-			space, at, box.size.y, WaterSurface.submerged_share_for(_swims())
-		)
-	if is_nan(surface):
-		_submerged_marker.hide_marker()
-	else:
-		_submerged_marker.show_at(Vector3(at.x, surface, at.z), _swims())
+# -------------------------------------------------------------------------
+# Water (TokenWater does the work; these are the token's public face)
+# -------------------------------------------------------------------------
 
 
 ## How deep this token rides in floating water (WaterSurface.draft_for: avatars swim).
 func water_draft() -> float:
-	return WaterSurface.draft_for(cue_box().size.y, _swims())
+	return water.draft()
 
 
 ## The drag's ground resolver with this token's water_draft() bound: a swimmer drags at swim depth.
@@ -545,36 +431,23 @@ func drag_resolver(resolver: Callable) -> Callable:
 	return resolver.bind(water_draft())
 
 
-## Whether the swim rule applies (an avatar figure).
-func _swims() -> bool:
-	var board_token := get_parent() as BoardToken
-	return board_token != null and board_token.is_avatar()
-
-
 ## Whether the submerged cue is showing (tests, render probes).
 func is_submerged_cue_shown() -> bool:
-	return _submerged_marker != null and _submerged_marker.is_shown()
+	return water.is_cue_shown()
 
 
 ## The token's collision box in the rigid body's frame at BoardToken's logical scale (not a
 ## spawn animation's near-zero one): position.y is the base's offset, size.y the height.
 func cue_box() -> AABB:
-	var board_token := get_parent() as BoardToken
-	var token_scale := board_token.get_logical_scale() if board_token else rigid_body.scale
-	return SubmergedMarker.token_box(collision_shape, token_scale)
+	return water.cue_box()
 
 
-func _apply_bob(phase: float) -> void:
-	var sink := -SUBMERGE_SINK_AMOUNT if _is_submerged else 0.0
-	for child in _visual_children:
-		if is_instance_valid(child):
-			child.position.y = sink + sin(phase) * WaterSurface.BOB_M
-
-
-func _kill_bob_tween() -> void:
-	if _bob_tween and _bob_tween.is_valid():
-		_bob_tween.kill()
-	_bob_tween = null
+## Called by WaterZone when this token's RigidBody3D enters/exits a `-water` mesh's
+## detection zone: the visual children sink slightly to read as "standing in water"
+## (TokenWater.set_submerged). rigid_body.global_position is left alone, since the settle
+## tween and network interpolation own it.
+func set_submerged(submerged: bool) -> void:
+	water.set_submerged(submerged)
 
 
 # -------------------------------------------------------------------------
@@ -619,34 +492,6 @@ func _restore_visual_scale() -> void:
 				. set_trans(Tween.TRANS_CUBIC)
 				. set_ease(Tween.EASE_OUT)
 			)
-
-
-## Called by WaterZone when this token's RigidBody3D enters/exits a `-water` mesh's
-## detection zone. Tweens the visual children down slightly to read as "standing in
-## water" -- deliberately does not touch rigid_body.global_position, since that's
-## already owned by the settle tween and network interpolation (touching it here would
-## fight both). A token at rest also re-checks its submerged cue (a zone replaced under
-## it, water appearing or leaving).
-func set_submerged(submerged: bool) -> void:
-	if submerged == _is_submerged:
-		return
-	_is_submerged = submerged
-	if not is_being_dragged() and not _network_interpolating:
-		_update_submerged_cue(false)
-
-	_kill_submerge_tween()
-	_submerge_tween = create_tween()
-	_submerge_tween.set_parallel(true)
-	var target_y := -SUBMERGE_SINK_AMOUNT if submerged else 0.0
-	for child in _visual_children:
-		if is_instance_valid(child):
-			_submerge_tween.tween_property(child, "position:y", target_y, SUBMERGE_TWEEN_DURATION)
-
-
-func _kill_submerge_tween() -> void:
-	if _submerge_tween and _submerge_tween.is_valid():
-		_submerge_tween.kill()
-	_submerge_tween = null
 
 
 func _reset_lean() -> void:
@@ -718,7 +563,7 @@ func _process(delta: float) -> void:
 	if _is_currently_dragging:
 		_update_drop_indicator()
 		_update_inertia_lean(delta)
-		_update_submerged_cue(true)
+		water.update_cue(true)
 
 		# Emit throttled transform updates for network sync
 		_transform_update_timer += delta
@@ -825,7 +670,7 @@ func _update_network_interpolation(delta: float) -> void:
 
 	# Update drop indicator and the submerged cue (same as local dragging)
 	_update_drop_indicator()
-	_update_submerged_cue(true)
+	water.update_cue(true)
 
 	# Compute velocity from movement for lean effect
 	var position_delta = rigid_body.global_position - prev_position
@@ -929,8 +774,8 @@ func _stop_network_interpolation() -> void:
 	for child in _visual_children:
 		if is_instance_valid(child):
 			child.transform.basis = Basis.IDENTITY
-	_update_floating()
-	_update_submerged_cue(false)
+	water.update_floating()
+	water.update_cue(false)
 
 
 ## Directly set transform without interpolation (for initial placement)
@@ -957,8 +802,8 @@ func set_transform_immediate(p_position: Vector3, p_rotation: Vector3, p_scale: 
 	_network_target_position = p_position
 	_network_target_rotation = p_rotation
 	_network_target_scale = p_scale
-	_update_floating()
-	_update_submerged_cue(false)
+	water.update_floating()
+	water.update_cue(false)
 
 
 ## Cancel an in-progress drag because the host denied our lock claim.

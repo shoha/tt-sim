@@ -61,7 +61,7 @@ func test_body_entered_registers_token_and_marks_it_submerged() -> void:
 
 	zone._on_body_entered(token.rigid_body)
 
-	assert_true(token._is_submerged)
+	assert_true(token.water.submerged)
 	assert_eq(WaterRippleRegistry.build_disturbance_array()[0].w, 1.0)
 
 
@@ -74,7 +74,7 @@ func test_body_exited_unregisters_token_and_clears_submerged() -> void:
 	zone._on_body_entered(token.rigid_body)
 	zone._on_body_exited(token.rigid_body)
 
-	assert_false(token._is_submerged)
+	assert_false(token.water.submerged)
 	for point in WaterRippleRegistry.build_disturbance_array():
 		assert_eq(point.w, 0.0)
 
@@ -91,7 +91,7 @@ func test_second_zone_entry_does_not_resubmerge_or_double_splash() -> void:
 	zone_b._on_body_entered(token.rigid_body)
 	zone_a._on_body_exited(token.rigid_body)
 
-	assert_true(token._is_submerged)
+	assert_true(token.water.submerged)
 
 
 func test_creates_a_box_shape_matching_the_mesh_footprint() -> void:

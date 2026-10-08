@@ -177,8 +177,8 @@ func test_token_shows_the_cue_at_rest_and_hides_it_on_the_bank() -> void:
 	var small := _token(Vector3(-3, BED, 0.3), 0.5)
 	var tall := _token(Vector3(-5, BED, -1.0), 1.5)
 	await get_tree().physics_frame
-	small._update_submerged_cue(false)
-	tall._update_submerged_cue(false)
+	small.water.update_cue(false)
+	tall.water.update_cue(false)
 	assert_true(small.is_submerged_cue_shown(), "hidden by the water")
 	assert_false(tall.is_submerged_cue_shown(), "stands clear of the water")
 	var marker := small.rigid_body.get_node(SubmergedMarker.NODE_NAME) as SubmergedMarker
@@ -188,7 +188,7 @@ func test_token_shows_the_cue_at_rest_and_hides_it_on_the_bank() -> void:
 	assert_false(marker in small.get_visual_children(), "not moved by sink, bob or lean")
 	# Onto the bank: gone.
 	small.rigid_body.global_position = Vector3(3, BANK + 0.25, 0.3)
-	small._update_submerged_cue(false)
+	small.water.update_cue(false)
 	assert_false(small.is_submerged_cue_shown(), "dry ground")
 
 
@@ -197,9 +197,9 @@ func test_a_moving_token_shows_the_cue_where_it_will_land() -> void:
 	# Held high over the water: its landing is the bed, where the water hides it.
 	var token := _token(Vector3(-3, 2.0, 0.3), 0.5)
 	await get_tree().physics_frame
-	token._update_submerged_cue(true)
+	token.water.update_cue(true)
 	assert_true(token.is_submerged_cue_shown(), "the drop would put it under")
 	# Carried over the bank: the drop would leave it dry, so the cue goes.
 	token.rigid_body.global_position = Vector3(3, 2.25, 0.3)
-	token._update_submerged_cue(true)
+	token.water.update_cue(true)
 	assert_false(token.is_submerged_cue_shown(), "over the bank the drop keeps it dry")

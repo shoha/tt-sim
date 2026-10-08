@@ -15,8 +15,8 @@ extends Node3D
 ## A child of the token's RigidBody3D, so it hides with the token (a token hidden from
 ## players hides its marker too), but top_level, so it stands on the water in world space
 ## whatever the token's sink, bob, lean or drag scale do; DraggableToken leaves it out of
-## the visual children those move. DraggableToken decides when it shows
-## (_update_submerged_cue): after every landing and synced move, and while a drag moves (at
+## the visual children those move. The token's TokenWater decides when it shows
+## (update_cue): after every landing and synced move, and while a drag moves (at
 ## the predicted landing), so the cue follows a token dragged along a river.
 ## Summary: docs/UI_SYSTEMS.md "Submerged token marker".
 

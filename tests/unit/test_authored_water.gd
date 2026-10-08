@@ -417,13 +417,13 @@ func test_a_dropped_token_lands_afloat_or_on_the_bed() -> void:
 	var floater := _token_over(Vector3(pond_xz.x, 3.0, pond_xz.y))
 	var wader := _token_over(Vector3(0.2, 3.0, 0.3))
 	await get_tree().physics_frame
-	var afloat: Vector3 = floater._find_landing_position()
+	var afloat: Vector3 = floater.water.landing_position()
 	assert_almost_eq(afloat.y - 0.5, POND_LEVEL - WaterSurface.DRAFT_M, 0.01, "base at the draft")
-	var wading: Vector3 = wader._find_landing_position()
+	var wading: Vector3 = wader.water.landing_position()
 	assert_almost_eq(wading.y - 0.5, BED, 0.01, "base on the bed")
 	# Even from below the surface (a token left on a deep bed) the landing floats it.
 	floater.rigid_body.global_position = Vector3(pond_xz.x, POND_BED + 0.5, pond_xz.y)
-	afloat = floater._find_landing_position()
+	afloat = floater.water.landing_position()
 	assert_almost_eq(afloat.y - 0.5, POND_LEVEL - WaterSurface.DRAFT_M, 0.01)
 	get_tree().current_scene = original_scene
 	scene_root.free()
