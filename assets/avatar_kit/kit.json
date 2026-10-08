@@ -1,6 +1,6 @@
 {
  "format": 1,
- "kit_version": "0.1.0+1e82ada",
+ "kit_version": "0.1.0+6e6365e",
  "parts": [
   {
    "id": "body_a",
@@ -43,7 +43,7 @@
     "skin",
     "hair"
    ],
-   "triangles": 1350,
+   "triangles": 1162,
    "hides": [],
    "tags": [
     "human"
@@ -137,28 +137,6 @@
     "build_plus"
    ],
    "hair_mode": "trimmed"
-  },
-  {
-   "id": "skirt_skater",
-   "slot": "bottom",
-   "glb": "parts/bottom/skirt_skater.glb",
-   "slots_used": [
-    "accent",
-    "secondary"
-   ],
-   "triangles": 640,
-   "hides": [],
-   "tags": [
-    "cloth",
-    "skirt"
-   ],
-   "detail": true,
-   "double_sided": false,
-   "stack": "body",
-   "layer": 2,
-   "shapes": [
-    "build_plus"
-   ]
   }
  ],
  "palette": {
