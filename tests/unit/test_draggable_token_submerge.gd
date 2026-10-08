@@ -53,11 +53,11 @@ func test_set_submerged_true_then_false_toggles_state_and_is_idempotent() -> voi
 	add_child_autofree(token)
 
 	token.set_submerged(true)
-	assert_true(token._is_submerged)
+	assert_true(token.water.submerged)
 
-	var tween_after_first_call := token._submerge_tween
+	var tween_after_first_call := token.water.submerge_tween
 	token.set_submerged(true)  # no-op, same state
-	assert_eq(token._submerge_tween, tween_after_first_call)
+	assert_eq(token.water.submerge_tween, tween_after_first_call)
 
 	token.set_submerged(false)
-	assert_false(token._is_submerged)
+	assert_false(token.water.submerged)

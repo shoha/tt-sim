@@ -849,7 +849,7 @@ static func _report(gm: GameMap) -> String:
 	var space := gm.world_viewport.find_world_3d().direct_space_state
 	var out := PackedStringArray()
 	for token in _tokens(gm):
-		var base_at: Vector3 = token.call("_base_position")
+		var base_at: Vector3 = token.water.base_position()
 		var bed := DragPlaceController.raycast_terrain_down(space, base_at, base_at.y + 3.0)
 		var water := WaterSurface.water_below(space, base_at, base_at.y + 3.0)
 		(
@@ -863,8 +863,8 @@ static func _report(gm: GameMap) -> String:
 						bed.y if bed != Vector3.INF else NAN,
 						("%.2f" % water.y) if not water.is_empty() else "-",
 						str(WaterSurface.floats_at(space, base_at)),
-						str(token.get("_is_submerged")),
-						str(token.get("_bob_tween") != null),
+						str(token.water.submerged),
+						str(token.water.bob_tween != null),
 					]
 				)
 			)

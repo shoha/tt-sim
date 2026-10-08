@@ -54,7 +54,7 @@ static func _cues(gm: GameMap) -> String:
 	var space := gm.world_viewport.find_world_3d().direct_space_state
 	var out := PackedStringArray()
 	for token in _tokens(gm):
-		var base: Vector3 = token.call("_base_position")
+		var base: Vector3 = token.water.base_position()
 		var height: float = token.cue_box().size.y
 		var water := WaterSurface.water_below(space, base, base.y + height + 3.0)
 		(

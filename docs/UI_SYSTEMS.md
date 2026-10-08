@@ -1331,7 +1331,7 @@ Uses `MapOverlayUtils` for overlay and label creation. Renders on `Constants.LAY
 A token the water hides gets a cue on the water surface above it (P4b-0, user ask
 2026-09-27: small tokens wading waist-deep water disappeared except for their wake). Code:
 `SubmergedMarker` (`scenes/board_token/submerged_marker.gd`), `shaders/submerged_marker.gdshader`,
-`WaterSurface.is_submerged` / `submerged_surface`, `DraggableToken._update_submerged_cue`.
+`WaterSurface.is_submerged` / `submerged_surface`, `TokenWater.update_cue` (a DraggableToken's `water`).
 
 ### When it shows
 
