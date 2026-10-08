@@ -43,12 +43,12 @@
    ]
   },
   "node_extras": {},
-  "bytes": 274288
+  "bytes": 274268
  },
  "head_round": {
-  "triangles": 1162,
-  "glb_triangles": 1162,
-  "reimported_triangles": 1162,
+  "triangles": 1388,
+  "glb_triangles": 1388,
+  "reimported_triangles": 1388,
   "joint_error_m": 1.1153091351023825e-06,
   "reimport_bone_error_m": 1.570582389837094e-06,
   "light_ranges": {
@@ -67,7 +67,7 @@
     ]
    }
   },
-  "bytes": 98208
+  "bytes": 111000
  },
  "hair_bun": {
   "triangles": 500,
@@ -86,7 +86,7 @@
    ]
   },
   "node_extras": {},
-  "bytes": 163380
+  "bytes": 163376
  },
  "top_longsleeve": {
   "triangles": 1208,
@@ -155,7 +155,7 @@
   ],
   "joints": 117
  },
- "figure_triangles": 7194,
+ "figure_triangles": 7420,
  "poses": {
   "figures": [
    {
@@ -365,7 +365,7 @@
   ],
   "checked": 432,
   "problems": [],
-  "seconds": 141.1
+  "seconds": 144.4
  },
  "problems": [],
  "kit_json_errors": [],
