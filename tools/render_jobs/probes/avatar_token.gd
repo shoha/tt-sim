@@ -7,11 +7,14 @@ extends RefCounted
 ## - `pair` (`points` [[x, z], ...], `open_points` [[x, z], ...], `presets` [canopy, open]):
 ##   spawns one avatar at the first of `points` whose shade ray meets a canopy and a second,
 ##   selected, at the first of `open_points` in sun (turned 30 degrees, to show the figure
-##   turns with the token); logs both tokens' capsule (radius, height), shade and blocker.
-## - `look` (`index`, -1 the last token; `height` default 0.8; `between` true: the midpoint
-##   of the first two): pans the screen centre onto that point.
-## - `hide` (`index`, `hidden` default true): set_visible_to_players; logs the figure's
-##   hidden_fade.
+##   turns with the token), or when none is in sun (the scatter there changed) at the nearest
+##   dry sunny point on rings around the first; logs both tokens' capsule (radius, height),
+##   shade and blocker.
+## - `look` (`name` a token name, or `names` [a, b] for their midpoint, with `at` [x, z] framed
+##   when one is missing; else `index`, -1 the last token, or `between` true, the first two;
+##   `height` default 0.8): pans the screen centre onto that point.
+## - `hide` (`name`, else `index`; `hidden` default true): set_visible_to_players; logs the
+##   figure's hidden_fade.
 ## - `spawn_at` (`at`, `preset`): one avatar dropped onto whatever is under `at` (the
 ##   browser's settle), for the submerged cue; `report` then says what it shows.
 ## - `report`: every avatar token's base, capsule, shade, submerged cue and float state, and
@@ -25,6 +28,13 @@ extends RefCounted
 
 const PREFIX := "_avatartoken_"
 const SUN_NAME := "LevelSunLight"
+## `pair`'s fallback search for a sunny spot around the canopy token: ring radii (metres) and
+## directions (degrees either side of the screen's left and right).
+const SUN_RING_MIN_M := 1.5
+const SUN_RING_MAX_M := 8.0
+const SUN_RING_STEP_M := 0.5
+const SUN_RING_STEP_DEG := 15.0
+const SUN_RING_SPREAD_STEPS := 4  # so 60 degrees either side
 
 
 static func run(base: Node, step: Dictionary) -> String:
@@ -36,7 +46,7 @@ static func run(base: Node, step: Dictionary) -> String:
 		"look":
 			return _look(gm, step)
 		"hide":
-			return _hide(gm, int(step.get("index", 0)), bool(step.get("hidden", true)))
+			return _hide(gm, step, bool(step.get("hidden", true)))
 		"spawn_at":
 			return _spawn_at(gm, lpc, step)
 		"report":
@@ -137,6 +147,13 @@ static func _pair(gm: GameMap, lpc: LevelPlayController, step: Dictionary) -> St
 			open = _spawn(gm, lpc, int(presets[1]), at, 30.0)
 			break
 	if open == null:
+		# The scatter under the listed points changes with the palette (a bush or the oak's
+		# shadow over all of them), so search rings around the canopy token for sun instead.
+		var sunny := _sunny_near(gm, shaded)
+		tried.append("ring search %s" % (str(sunny) if sunny != Vector3.INF else "found none"))
+		if sunny != Vector3.INF:
+			open = _spawn(gm, lpc, int(presets[1]), sunny, 30.0)
+	if open == null:
 		return (
 			"canopy token only: %s (no sunny open point: %s)" % [_describe(under), ", ".join(tried)]
 		)
@@ -147,18 +164,74 @@ static func _pair(gm: GameMap, lpc: LevelPlayController, step: Dictionary) -> St
 	)
 
 
-## Pans so the screen centre looks at a token (or the first two's midpoint) `height` above
-## its feet, as the driver's look_at does for a ground point.
+## The nearest dry ground point in sun on rings (SUN_RING_STEP_M apart, out to
+## SUN_RING_MAX_M) around `centre`, or Vector3.INF. Only directions within 60 degrees of the
+## screen's left or right are tried, nearest to them first, so the two figures stand
+## side by side in the capture rather than one behind the other.
+static func _sunny_near(gm: GameMap, centre: Vector3) -> Vector3:
+	var space := gm.world_viewport.find_world_3d().direct_space_state
+	var right := gm.camera_node.global_basis.x
+	var right_angle := Vector2(right.x, right.z).angle()
+	var offsets: Array[float] = [0.0]
+	for k in range(1, SUN_RING_SPREAD_STEPS + 1):
+		offsets.append(deg_to_rad(k * SUN_RING_STEP_DEG))
+		offsets.append(-deg_to_rad(k * SUN_RING_STEP_DEG))
+	var radius := SUN_RING_MIN_M
+	while radius <= SUN_RING_MAX_M:
+		for offset in offsets:
+			for side in [0.0, PI]:
+				var angle: float = right_angle + side + offset
+				var xz := Vector2(centre.x, centre.z) + Vector2.from_angle(angle) * radius
+				var at := _ground(gm, xz)
+				if not WaterSurface.water_below(space, at, at.y + 3.0).is_empty():
+					continue
+				if _blocker(gm, at) == "sun":
+					return at
+		radius += SUN_RING_STEP_M
+	return Vector3.INF
+
+
+## The avatar token named `name`, or null.
+static func _named(gm: GameMap, name: String) -> BoardToken:
+	for token in _avatars(gm):
+		if token.token_name == name:
+			return token
+	return null
+
+
+## Pans so the screen centre looks at a token `height` above its feet, as the driver's
+## look_at does for a ground point. The token is the one named `name` (or the midpoint of the
+## two in `names`), else `index`; when a named token is missing, `at` (a map XZ ground point,
+## say the pond it was dropped into) is framed instead, so the capture still shows the place.
 static func _look(gm: GameMap, step: Dictionary) -> String:
 	var tokens := _avatars(gm)
-	if tokens.is_empty():
-		return "no avatar tokens"
 	var height := float(step.get("height", 0.8))
 	var q: Vector3
-	if bool(step.get("between", false)) and tokens.size() >= 2:
+	var names: Array = step.get("names", [])
+	if step.has("name") or not names.is_empty():
+		if names.is_empty():
+			names = [step["name"]]
+		var sum := Vector3.ZERO
+		var found := 0
+		for n in names:
+			var token := _named(gm, String(n))
+			if token != null:
+				sum += token.rigid_body.global_position
+				found += 1
+		if found == names.size():
+			q = sum / float(found)
+		elif step.has("at"):
+			q = _ground(gm, _vec2(step["at"]))
+		else:
+			return "no avatar named %s" % str(names)
+	elif tokens.is_empty():
+		return "no avatar tokens"
+	elif bool(step.get("between", false)) and tokens.size() >= 2:
 		q = (tokens[0].rigid_body.global_position + tokens[1].rigid_body.global_position) * 0.5
 	else:
 		var index := int(step.get("index", -1))
+		if index >= tokens.size():
+			return "no avatar %d" % index
 		q = tokens[index if index >= 0 else tokens.size() + index].rigid_body.global_position
 	q += Vector3.UP * height
 	var z := gm.camera_node.global_basis.z
@@ -169,11 +242,19 @@ static func _look(gm: GameMap, step: Dictionary) -> String:
 	return "look at %s" % str(Vector2(g.x, g.z))
 
 
-static func _hide(gm: GameMap, index: int, hidden: bool) -> String:
-	var tokens := _avatars(gm)
-	if index >= tokens.size():
-		return "no avatar %d" % index
-	var token := tokens[index]
+## Hides the token named `name` (else the one at `index`) from players, or shows it again.
+static func _hide(gm: GameMap, step: Dictionary, hidden: bool) -> String:
+	var token: BoardToken = null
+	if step.has("name"):
+		token = _named(gm, String(step["name"]))
+		if token == null:
+			return "no avatar named %s" % step["name"]
+	else:
+		var tokens := _avatars(gm)
+		var index := int(step.get("index", 0))
+		if index >= tokens.size():
+			return "no avatar %d" % index
+		token = tokens[index]
 	token.set_visible_to_players(not hidden)
 	var figure := AvatarTokenFactory.view_of(token).figure
 	var fades := PackedStringArray()
@@ -204,7 +285,7 @@ static func _report(gm: GameMap) -> String:
 	var out := PackedStringArray()
 	for token in _avatars(gm):
 		var drag := token.get_dragging_object()
-		var base_at: Vector3 = drag.call("_base_position")
+		var base_at: Vector3 = drag.water.base_position()
 		(
 			out
 			. append(
