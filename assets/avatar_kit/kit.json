@@ -1,6 +1,6 @@
 {
  "format": 1,
- "kit_version": "0.1.0+4546d16",
+ "kit_version": "0.1.0+ffbe184",
  "parts": [
   {
    "id": "body_a",
@@ -43,7 +43,7 @@
     "skin",
     "hair"
    ],
-   "triangles": 1162,
+   "triangles": 1388,
    "hides": [],
    "tags": [
     "human"
