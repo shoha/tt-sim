@@ -11,6 +11,9 @@ extends SceneTree
 ## written before Godot first imports it, so its settings never start from Godot's defaults:
 ## GLBs embed their textures (GLB_SIDECAR), the face sheet and mask keep their exact texels
 ## with mipmaps (FACE_SIDECAR).
+## Only a shippable kit installs: one whose build_report.json says `"check": "full"` (or has no
+## `check`, as builds before the field did). An iteration build (`fast`, `incremental`) is
+## refused before anything is copied (refusal()).
 ## Run `godot --headless --import --path D:/dev/tt-sim` afterwards.
 
 const DEFAULT_SOURCE := "D:/dev/figurine/out/kit"
@@ -50,9 +53,36 @@ func _init() -> void:
 		printerr("install_avatar_kit: no kit.json in %s" % source)
 		quit(1)
 		return
+	var report_path := source.path_join("build_report.json")
+	var report_text := ""
+	if FileAccess.file_exists(report_path):
+		report_text = FileAccess.get_file_as_string(report_path)
+	var refused := refusal(report_text)
+	if not refused.is_empty():
+		printerr("install_avatar_kit: %s; nothing copied from %s" % [refused, source])
+		quit(1)
+		return
 	var copied := _copy_tree(source, ProjectSettings.globalize_path(DEST))
 	print("install_avatar_kit: copied %d files from %s" % [copied, source])
 	quit(0)
+
+
+## Why a kit with this build_report.json text must not install, or "" when it may: a `check`
+## other than "full" is an iteration build; no report (empty text) or no `check` field is an
+## older full build. A report that is not a JSON object is refused, since its check is unknown.
+static func refusal(report_text: String) -> String:
+	if report_text.is_empty():
+		return ""
+	var json := JSON.new()
+	var report: Variant = json.data if json.parse(report_text) == OK else null
+	if not report is Dictionary:
+		return "build_report.json is not a JSON object"
+	if not (report as Dictionary).has("check"):
+		return ""
+	var check := str(report["check"])
+	if check == "full":
+		return ""
+	return 'build_report.json says "check": "%s" (an iteration build; ship only "full")' % check
 
 
 func _copy_tree(from: String, to: String) -> int:

@@ -657,7 +657,10 @@ Producer: `figurine/scripts/build_kit.py`. Consumer: `utils/avatar_kit.gd` (`Ava
 with `avatar_recipe.gd`, `avatar_palette.gd`, `avatar_proportions.gd`, `avatar_shade.gd`)
 and `shaders/avatar_figure.gdshader`, which assemble a figure under one `Skeleton3D`.
 Install: `tools/install_avatar_kit.gd` copies figurine's `out/kit/` into
-`assets/avatar_kit/` and writes the sidecars before the first import.
+`assets/avatar_kit/` and writes the sidecars before the first import. It refuses, copying
+nothing, a kit whose `build_report.json` has a `"check"` other than `"full"` (`"fast"`,
+`"incremental"` or `"fast+incremental"` mark iteration builds that must never ship); a report
+without the field (builds before it) still installs.
 
 ### Layout
 
