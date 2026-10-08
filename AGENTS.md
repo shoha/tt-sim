@@ -156,6 +156,17 @@ After editing files, run the appropriate formatter so output matches project sty
 godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
 ```
 
+**Avatar work's inner loop** runs only the avatar and token tests (`tests/.gutconfig_avatar.json`
+lists them by path: `test_avatar_*`, `test_board_token_*`, `test_draggable_token_*`,
+`test_token_placement_*`, `test_token_state_serialization`, `test_water_zone`; 16 scripts, about
+2.5 s of test time against the full run's minutes). Agents type it in this fixed form so it is
+approved once:
+```
+godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_avatar.json
+```
+It is for iterating only: the full run above is still required before a commit. Add a new
+avatar or token test script to the list when you create it.
+
 **After a fresh clone or when new `class_name` scripts are added**, run the import step first (required once):
 ```
 godot --headless --import --path .

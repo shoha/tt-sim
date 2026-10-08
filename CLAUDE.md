@@ -78,6 +78,9 @@ godot --headless --path . --quit-after 1
 # Run all unit tests
 godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
 
+# Avatar/token tests only: inner loop for avatar work (AGENTS.md); the full run is still required
+godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_avatar.json
+
 # After fresh clone or new class_name scripts
 godot --headless --import --path .
 ```

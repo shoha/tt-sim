@@ -1,0 +1,27 @@
+{
+	"dirs": [],
+	"tests": [
+		"res://tests/unit/test_avatar_builder.gd",
+		"res://tests/unit/test_avatar_drag_place.gd",
+		"res://tests/unit/test_avatar_kit.gd",
+		"res://tests/unit/test_avatar_kit_install.gd",
+		"res://tests/unit/test_avatar_library.gd",
+		"res://tests/unit/test_avatar_optional_slots.gd",
+		"res://tests/unit/test_avatar_swim.gd",
+		"res://tests/unit/test_avatar_token.gd",
+		"res://tests/unit/test_board_token_health.gd",
+		"res://tests/unit/test_board_token_spawn_scale.gd",
+		"res://tests/unit/test_board_token_visibility.gd",
+		"res://tests/unit/test_draggable_token_submerge.gd",
+		"res://tests/unit/test_token_placement_from_token.gd",
+		"res://tests/unit/test_token_placement_serialization.gd",
+		"res://tests/unit/test_token_state_serialization.gd",
+		"res://tests/unit/test_water_zone.gd"
+	],
+	"include_subdirs": false,
+	"prefix": "test_",
+	"suffix": ".gd",
+	"log_level": 1,
+	"should_exit": true,
+	"should_exit_on_success": false
+}
