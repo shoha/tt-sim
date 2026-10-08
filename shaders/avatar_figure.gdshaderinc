@@ -27,17 +27,28 @@ uniform vec2 face_cells[4];
 uniform sampler2D face_sheet : filter_linear_mipmap, repeat_disable;
 uniform sampler2D face_mask : filter_linear_mipmap, repeat_disable;
 
-// Look parameters (defaults: the first in-game pass; the look pass tunes them).
-// The share of the paint handed to the light at COLOR_0.R = 1 (figurine's Blender material:
-// 0.55); the rest shows as painted.
-uniform float emission_drop : hint_range(0.0, 1.0) = 0.55;
+// Look parameters (the world-lighting pass, 2026-10-07: figures take the scene's light as the
+// terrain and foliage do, keeping a fifth of the paint as painted so they still read).
+// The light response used: max(COLOR_0.R, light_floor) off the face, face_light on it.
+// figurine's per-vertex response (face 0, hair 0.25, cloth 0.3, skin 0.4) left skin about 78 %
+// and faces fully self-lit, which read as figures glowing in the canopy's shade; the floor of
+// 1.0 hands every pixel but the face the same share, and the face keeps half its paint as
+// painted so expressions read in any light.
+uniform float light_floor : hint_range(0.0, 1.0) = 1.0;
+uniform float face_light : hint_range(0.0, 1.0) = 0.5;
+// The share of the paint handed to the light at a response of 1 (figurine's Blender
+// material: 0.55); the rest shows as painted, tinted by the scene's ambient.
+uniform float emission_drop : hint_range(0.0, 1.0) = 0.8;
 // Gain of the soft light term (sun and lamps, per unit of light energy) on that share.
-uniform float light_strength : hint_range(0.0, 3.0) = 0.9;
+uniform float light_strength : hint_range(0.0, 3.0) = 1.0;
 // Wrap of the soft light: 0 is Lambert, 1 lights the far side at half.
-uniform float light_wrap : hint_range(0.0, 1.0) = 0.3;
-// Light the handed share keeps where no lamp or sun reaches it, so a side turned away
-// darkens to this fraction rather than to black.
-uniform float ambient_fill : hint_range(0.0, 2.0) = 0.4;
+uniform float light_wrap : hint_range(0.0, 1.0) = 0.25;
+// The engine's ambient (the environment's sky or colour, with SSAO) on the handed share, as
+// the terrain takes it (written as AO, which scales indirect light only).
+uniform float scene_ambient : hint_range(0.0, 1.0) = 1.0;
+// A flat ambient stand-in on the handed share (the first pass's, before scene_ambient); 0
+// leaves the engine's ambient alone.
+uniform float ambient_fill : hint_range(0.0, 2.0) = 0.0;
 // How far the scene's ambient *level* darkens the whole figure (0 none, 1 fully), and how
 // far its *hue* tints it. The two are separate because a figure in sun takes only a hint of
 // the sky's colour (the first pass mixed the hue at 0.6 and the forest's blue sky turned
@@ -53,7 +64,7 @@ uniform float ambient_floor : hint_range(0.0, 1.0) = 0.2;
 // hue-shifted shadow colour, never grey), and the detail and face pixels over it darken by
 // the same per-channel ratio. (The first pass tinted everything by one cool colour, which
 // turned skin lavender under the canopy.)
-uniform float shadow_strength : hint_range(0.0, 1.0) = 0.85;
+uniform float shadow_strength : hint_range(0.0, 1.0) = 1.0;
 uniform float shade_drop : hint_range(0.0, 1.0) = 0.35;
 
 // Compensation for the scene's tonemapper (Filmic on every preset but one; with its white at
@@ -61,7 +72,7 @@ uniform float shade_drop : hint_range(0.0, 1.0) = 0.35;
 // paint reads lifted and desaturated): the world's painted colours were authored through it
 // and the palette's were not, so the paint is darkened by this gamma and its saturation
 // raised a little before the tonemapper sees it. 1.0 and 1.0 pass the palette through as is.
-uniform float paint_contrast : hint_range(0.5, 2.5) = 1.25;
+uniform float paint_contrast : hint_range(0.5, 2.5) = 1.15;
 uniform float paint_saturation : hint_range(0.0, 2.0) = 1.1;
 
 // Per figure, set from the CPU (AvatarKit.set_shade, AvatarKit.set_hidden_fade).
@@ -133,18 +144,22 @@ void fragment() {
 			}
 		}
 	}
-	float l = v_light * (1.0 - face);
+	float l = mix(max(v_light, light_floor), face_light, face);
 	// Shade from the palette, then the tonemapper compensation (gamma, then saturation).
 	col *= shade_ratio;
 	col = pow(max(col, vec3(0.0)), vec3(paint_contrast));
 	float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
 	col = max(mix(vec3(lum), col, paint_saturation), vec3(0.0));
 	vec3 tint = ambient_tint();
-	// The painted share shows as is (tinted); the handed share is lit in light() on top of
-	// its ambient fill, so a fully lit side reads brighter than the paint and a turned-away
-	// side darker, about the painted colour on average.
+	// The painted share shows as is (tinted); the handed share takes the scene's ambient and
+	// the light() term like the terrain, so a lit side reads brighter than the paint and a
+	// side in shade or turned away takes the sky's or the room's colour.
 	ALBEDO = col * l * emission_drop;
 	EMISSION = (col * (1.0 - emission_drop * l) + ALBEDO * ambient_fill) * tint;
+	AO = scene_ambient;
+	// No reflections: the paint is matte (specular_disabled covers direct light only).
+	SPECULAR = 0.0;
+	ROUGHNESS = 1.0;
 }
 
 void light() {

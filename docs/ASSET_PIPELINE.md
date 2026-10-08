@@ -881,7 +881,10 @@ and the back locks that fall to the nape) and `bun` (the bun and its tie), and
 - `COLOR_0.R` is the part's light response per vertex: 0 shows the painted texture alone
   (unlit), 1 takes the figure shader's full soft light. The face area is always 0 (anime
   faces stay flat; Crashsune's faces are unlit), hair and cloth sit low (about 0.2-0.4) so
-  the paint carries the shading. G, B and A are reserved (wind if hair or cloth sway is
+  the paint carries the shading. Since the world-lighting pass (2026-10-07) the consumer
+  raises every value off the face to its `light_floor` (1.0) and lights the face at
+  `face_light` (0.5), so figures take the scene's light as the terrain does; the attribute
+  is still read and matters again if the floor is lowered. G, B and A are reserved (wind if hair or cloth sway is
   added later; the probe's per-vertex outline width if an outline is ever wanted).
 - Blend shapes (glTF morph targets, the foundation card). `build_plus` is the high end of
   the `build` control: a real plus-size body rather than a wider one (a fuller belly that
@@ -1069,11 +1072,12 @@ because they constrain the producer:
 - Skinned, not baked: 30 figures cost nothing measurable in Forward+, and a skinned spawn
   is about 0.1 ms against 1.3-1.9 ms to bake. Mobile and Compatibility are unmeasured.
 - Godot skins VERTEX, NORMAL and TANGENT before `vertex()`.
-- Lighting is near-flat: the painted texture carries the shading, `COLOR_0.R` scales a
-  soft light term per vertex, and the face takes none. The environment's ambient colour
-  comes in through a global shader value (it tints even unlit paint, so a figure sits in a
-  sunset or a dungeon), and shade under trees through a per-figure value from one ray
-  toward the sun.
+- Lighting follows the world (the world-lighting pass, 2026-10-07): four fifths of each
+  colour are lit like the terrain (the environment's ambient, sky or colour, plus a soft
+  wrapped sun and lamp term) and a fifth shows as painted, the face half and half. The
+  painted share is tinted by the environment's ambient through a global shader value, and
+  shade under trees comes from a per-figure value from one ray toward the sun (the sun's
+  shadow map stipples flat paint, so it is not sampled).
 - No geometric outline: ink is painted into the textures (the sticker borders around
   Crashsune's showcase renders are 2D compositing, not geometry). If a hull is ever
   enabled, its pixel width needs `abs(PROJECTION_MATRIX[1][1])` (negative under Vulkan).

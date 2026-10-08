@@ -21,6 +21,11 @@ extends RefCounted
 ## - `hidden` (`index`, `fade` default 0.5): the figure's hidden_fade (the GM's view).
 ## - `params` (`params` {uniform: value}): sets material uniforms on every figure part;
 ##   arrays of three become colours. Logs the old values.
+## - `variant` (`name`): sets one of the VARIANTS look sets (laid over the shipped values)
+##   on every figure part, for the figure lighting comparisons.
+## - `near` (`points`, `recipe`, `yaw`): adds one figure at the first point in sun (the
+##   figure in open sun beside foliage), and logs every point's shade.
+## - `add` (`at`, `recipe`, `yaw`): adds one figure there, keeping the others.
 ## - `info`: triangles per part and figure, and the kit's load errors.
 ## - `env` (`ambient` [r, g, b] optional, sets figure_ambient directly): the live
 ##   environment's ambient colour and energy (figure_ambient), tonemap and sun.
@@ -29,7 +34,7 @@ extends RefCounted
 ##   detail textures with and without the mipmaps AvatarKit builds).
 ## - `clear`: removes the figures.
 ## - `save` (`folder`, `replace`): writes the open authoring map as an `_avatarkit_` level.
-## - `cleanup`: deletes every `_avatarkit_*` level folder.
+## - `cleanup` (`folder` optional): deletes every `_avatarkit_*` level folder, or only that one.
 
 const HOLDER := "AvatarKitProbe"
 const PREFIX := "_avatarkit_"
@@ -73,6 +78,47 @@ const RECIPES := [
 	},
 ]
 
+## Figure lighting look sets (`variant`): "before" restores the shader's values before the
+## world-lighting pass (2026-10-07), "after" the shipped ones. That pass also probed the sun's
+## shadow map per pixel (its dot pattern on sunlit paint ruled it out; avatar_figure.gdshader).
+const NEUTRAL := "after"
+const VARIANTS := {
+	"after":
+	{
+		"emission_drop": 0.8,
+		"light_strength": 1.0,
+		"light_wrap": 0.25,
+		"ambient_fill": 0.0,
+		"ambient_mix": 0.8,
+		"ambient_hue_mix": 0.35,
+		"ambient_floor": 0.2,
+		"shadow_strength": 1.0,
+		"shade_drop": 0.35,
+		"paint_contrast": 1.15,
+		"paint_saturation": 1.1,
+		"light_floor": 1.0,
+		"face_light": 0.5,
+		"scene_ambient": 1.0,
+	},
+	"before":
+	{
+		"emission_drop": 0.55,
+		"light_strength": 0.9,
+		"light_wrap": 0.3,
+		"ambient_fill": 0.4,
+		"ambient_mix": 0.8,
+		"ambient_hue_mix": 0.35,
+		"ambient_floor": 0.2,
+		"shadow_strength": 0.85,
+		"shade_drop": 0.35,
+		"paint_contrast": 1.25,
+		"paint_saturation": 1.1,
+		"light_floor": 0.0,
+		"face_light": 0.0,
+		"scene_ambient": 0.0,
+	},
+}
+
 static var _kit: AvatarKit = null
 
 
@@ -104,6 +150,25 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _hidden(gm, int(step.get("index", 0)), float(step.get("fade", 0.5)))
 		"params":
 			return _params(gm, step.get("params", {}))
+		"variant":
+			var variant := String(step.get("name", NEUTRAL))
+			var values: Dictionary = (VARIANTS[NEUTRAL] as Dictionary).duplicate()
+			values.merge(VARIANTS.get(variant, {}), true)
+			return "%s: %s" % [variant, _params(gm, values)]
+		"near":
+			return _near(base, gm, step)
+		"add":
+			var fig := _add(
+				base,
+				gm,
+				_holder(gm, false),
+				int(step.get("recipe", 0)),
+				_vec2(step.get("at", [0, 0])),
+				deg_to_rad(float(step.get("yaw", 8.0)))
+			)
+			return (
+				"added at %s: %s" % [str(fig.global_position), _why(base, gm, fig.global_position)]
+			)
 		"info":
 			return _info()
 		"sun":
@@ -132,7 +197,7 @@ static func run(base: Node, step: Dictionary) -> String:
 		"save":
 			return _save(base, step)
 		"cleanup":
-			return _cleanup()
+			return _cleanup(step)
 	return "unknown action %s" % step.get("action", "")
 
 
@@ -256,6 +321,24 @@ static func _canopy(base: Node, gm: GameMap, step: Dictionary) -> String:
 		"canopy figure at %s shade %s (tried %s)"
 		% [str(fig.global_position), str(shade), ", ".join(tried)]
 	)
+
+
+## Adds one figure of `recipe` at the first of `points` whose shade ray is in sun (the
+## figure in open sun beside foliage), or the last point.
+static func _near(base: Node, gm: GameMap, step: Dictionary) -> String:
+	var holder := _holder(gm, false)
+	var points: Array = step.get("points", [[0, 0]])
+	var chosen := _vec2(points[points.size() - 1])
+	var tried := PackedStringArray()
+	for p in points:
+		var why := _why(base, gm, _ground(gm, _vec2(p)))
+		tried.append("%s: %s" % [str(_vec2(p)), why])
+		if why == "sun":
+			chosen = _vec2(p)
+			break
+	var yaw := deg_to_rad(float(step.get("yaw", 8.0)))
+	var fig := _add(base, gm, holder, int(step.get("recipe", 0)), chosen, yaw)
+	return "sun figure at %s (tried %s)" % [str(fig.global_position), ", ".join(tried)]
 
 
 ## Pans so the screen centre looks at figure `index` (-1: the last one) at `height` metres
@@ -427,13 +510,14 @@ static func _save(base: Node, step: Dictionary) -> String:
 	return "saved %s: %s" % [folder, str(ok)]
 
 
-static func _cleanup() -> String:
+static func _cleanup(step: Dictionary) -> String:
 	var dir := DirAccess.open(LevelManager.levels_dir)
 	if dir == null:
 		return "no levels folder"
 	var removed := PackedStringArray()
+	var only := String(step.get("folder", ""))
 	for folder in dir.get_directories():
-		if folder.begins_with(PREFIX):
+		if folder.begins_with(PREFIX) and (only.is_empty() or folder == only):
 			_remove_tree(LevelManager.folder_path(folder))
 			removed.append(folder)
 	return "removed %s" % str(removed)

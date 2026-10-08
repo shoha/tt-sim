@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode blend_mix, depth_draw_opaque, cull_disabled, ambient_light_disabled, specular_disabled;
+render_mode blend_mix, depth_draw_opaque, cull_disabled, specular_disabled;
 
 /*
  * Avatar figure shader, double-sided variant: for parts whose open cards render both faces
