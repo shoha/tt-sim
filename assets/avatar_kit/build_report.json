@@ -67,7 +67,7 @@
     ]
    }
   },
-  "bytes": 98204
+  "bytes": 98208
  },
  "hair_bun": {
   "triangles": 500,
@@ -86,7 +86,7 @@
    ]
   },
   "node_extras": {},
-  "bytes": 163584
+  "bytes": 163380
  },
  "top_longsleeve": {
   "triangles": 1208,
@@ -365,7 +365,7 @@
   ],
   "checked": 432,
   "problems": [],
-  "seconds": 249.4
+  "seconds": 140.8
  },
  "problems": [],
  "kit_json_errors": [],
