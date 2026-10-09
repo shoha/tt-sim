@@ -129,13 +129,13 @@ func _animate_toast_in(toast: Control, type: ToastType = ToastType.INFO) -> void
 	# Play a sound matching the toast type
 	match type:
 		ToastType.SUCCESS:
-			AudioManager.play_success()
+			AudioManager.play(&"success")
 		ToastType.ERROR:
-			AudioManager.play_error()
+			AudioManager.play(&"error")
 		ToastType.WARNING:
-			AudioManager.play_tick()
+			AudioManager.play(&"tick")
 		_:
-			AudioManager.play_tick()
+			AudioManager.play(&"tick")
 
 
 func _dismiss_toast(toast: Control, immediate: bool) -> void:

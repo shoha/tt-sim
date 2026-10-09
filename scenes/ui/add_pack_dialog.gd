@@ -62,7 +62,7 @@ func _on_download_pressed() -> void:
 		progress_label.text = "Please enter a manifest URL"
 		progress_label.visible = true
 		return
-	AudioManager.play_confirm()
+	AudioManager.play(&"confirm")
 	progress_label.text = "Fetching manifest..."
 	progress_label.visible = true
 	download_button.disabled = true
@@ -73,7 +73,7 @@ func _on_download_pressed() -> void:
 
 
 func _on_cancel_pressed() -> void:
-	AudioManager.play_cancel()
+	AudioManager.play(&"cancel")
 	animate_out()
 
 

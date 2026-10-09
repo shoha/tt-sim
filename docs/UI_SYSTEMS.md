@@ -609,18 +609,16 @@ Centralized audio management for UI and game sounds.
 | SFX    | Sound effects          |
 | UI     | UI interaction sounds  |
 
-### UI Sound Methods
+### Playing Sounds
 
 ```gdscript
-AudioManager.play_click()    # Button clicks
-AudioManager.play_hover()    # Button hover
-AudioManager.play_open()     # Menu/panel open
-AudioManager.play_close()    # Menu/panel close
-AudioManager.play_success()  # Success feedback
-AudioManager.play_error()    # Error feedback
-AudioManager.play_confirm()  # Confirmation
-AudioManager.play_cancel()   # Cancel/back
+AudioManager.play(&"confirm")   # any sound declared in tools/sfx_spec.py
 ```
+
+`play()` is the only entry point. Gain, pitch jitter, cooldown and priority come from the
+manifest (`assets/audio/sfx_manifest.json`, written from `tools/sfx_spec.py`), and one frame's
+requests coalesce to the highest-priority sound per bus, so a button that confirms and closes a
+dialog is heard once. Names, tiers and how to add a sound: `docs/SOUND_EFFECTS.md`.
 
 ### Volume Control
 
@@ -637,20 +635,10 @@ AudioManager.set_bus_mute("Music", true)
 var is_muted = AudioManager.is_bus_muted("Music")
 ```
 
-### Adding Sound Files
+### Adding a Sound
 
-Place audio files in `res://assets/audio/ui/` with these names:
-
-- `click.wav`
-- `hover.wav`
-- `open.wav`
-- `close.wav`
-- `success.wav`
-- `error.wav`
-- `confirm.wav`
-- `cancel.wav`
-
-AudioManager will automatically load them on startup.
+A spec entry in `tools/sfx_spec.py`, `tools/generate_sfx.py --install`, and a
+`play(&"name")` call; see "Adding a Sound" in `docs/SOUND_EFFECTS.md`.
 
 ---
 
@@ -1285,7 +1273,7 @@ When in Sphere or Cylinder mode, `VolumeOverlay` (`scenes/states/playing/volume_
 
 ### Click Sound
 
-Placing a waypoint plays `AudioManager.play_tick()` for tactile feedback.
+Placing a waypoint plays `AudioManager.play(&"tick")` for tactile feedback.
 
 ---
 

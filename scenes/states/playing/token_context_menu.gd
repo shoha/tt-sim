@@ -311,7 +311,7 @@ func _on_toggle_visibility_pressed() -> void:
 	if target_token:
 		visibility_toggled.emit()
 		_update_menu_content()
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 
 
 ## Quick color flash on the health label after an HP change
@@ -329,26 +329,26 @@ func _flash_health_label(is_heal: bool) -> void:
 func _on_reset_transform_pressed() -> void:
 	if target_token and is_instance_valid(target_token):
 		reset_transform_requested.emit()
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 		close_menu()
 
 
 func _on_edit_avatar_button_pressed() -> void:
 	if target_token and is_instance_valid(target_token):
 		edit_avatar_requested.emit(target_token)
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 
 
 func _on_duplicate_button_pressed() -> void:
 	if target_token and is_instance_valid(target_token):
 		duplicate_requested.emit(target_token)
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 
 
 func _on_remove_button_pressed() -> void:
 	if target_token and is_instance_valid(target_token):
 		remove_requested.emit(target_token)
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 
 
 ## Also connected to RenameInput's text_submitted signal (Enter key), which
@@ -357,7 +357,7 @@ func _on_remove_button_pressed() -> void:
 func _on_rename_button_pressed(_submitted_text: String = "") -> void:
 	if target_token and is_instance_valid(target_token):
 		rename_requested.emit(target_token, rename_input.text)
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 
 
 func _on_request_control_pressed() -> void:
@@ -368,21 +368,21 @@ func _on_request_control_pressed() -> void:
 			request_control_button.disabled = true
 			request_control_button.text = "Waiting..."
 		UIManager.show_info("Request sent, waiting for DM...")
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 		close_menu()
 
 
 func _on_revoke_control_pressed() -> void:
 	if target_token and is_instance_valid(target_token):
 		control_revoked.emit(target_token)
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 		close_menu()
 
 
 func _on_assign_control_pressed() -> void:
 	if target_token and is_instance_valid(target_token):
 		control_assign_requested.emit(target_token)
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 		close_menu()
 
 

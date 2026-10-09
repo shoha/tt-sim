@@ -392,14 +392,14 @@ func _set_status(message: String) -> void:
 		or message.begins_with("Cannot")
 	):
 		_flash_status(Color(1.0, 0.5, 0.4))
-		AudioManager.play_error()
+		AudioManager.play(&"error")
 	elif (
 		message.begins_with("Level saved")
 		or message.begins_with("Level exported")
 		or message.begins_with("Level imported")
 	):
 		_flash_status(Color(0.6, 0.9, 0.5))
-		AudioManager.play_success()
+		AudioManager.play(&"success")
 
 
 ## Brief color flash on the status label for visual feedback
@@ -499,7 +499,7 @@ func _on_pokemon_selector_activated(index: int) -> void:
 	var popup_content = pokemon_selector_popup.get_node("VBox")
 	_animate_popup_out(pokemon_selector_popup, popup_content)
 	_set_status("Added token: " + placement.token_name)
-	AudioManager.play_success()
+	AudioManager.play(&"success")
 
 
 func _on_pokemon_selector_search_changed(_text: String) -> void:
@@ -523,7 +523,7 @@ func _on_delete_placement_pressed() -> void:
 	right_panel.visible = false
 	selected_placement_index = -1
 	_set_status("Token deleted")
-	AudioManager.play_cancel()
+	AudioManager.play(&"cancel")
 
 
 func _on_apply_placement_pressed() -> void:
@@ -653,7 +653,7 @@ func _on_load_confirmed() -> void:
 
 
 func _on_load_dialog_close_requested() -> void:
-	AudioManager.play_close()
+	AudioManager.play(&"close")
 
 
 func _on_saved_level_selected(index: int) -> void:
@@ -690,7 +690,7 @@ func _on_delete_level_confirmed() -> void:
 
 
 func _on_delete_confirm_close_requested() -> void:
-	AudioManager.play_close()
+	AudioManager.play(&"close")
 
 
 func _load_level_from_path(path: String) -> void:
@@ -815,7 +815,7 @@ func _animate_popup_in(_popup: Window, content: Control) -> void:
 	_popup_tween.tween_property(content, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
 	_popup_tween.tween_property(content, "scale", Vector2.ONE, Constants.ANIM_FADE_IN_DURATION)
 
-	AudioManager.play_open()
+	AudioManager.play(&"open")
 
 
 ## Animate a window popup out and hide it
@@ -835,4 +835,4 @@ func _animate_popup_out(popup: Window, content: Control) -> void:
 	)
 	_popup_tween.finished.connect(popup.hide, CONNECT_ONE_SHOT)
 
-	AudioManager.play_close()
+	AudioManager.play(&"close")

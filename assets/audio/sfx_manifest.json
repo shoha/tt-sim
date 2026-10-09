@@ -1,0 +1,149 @@
+{
+  "generated_by": "tools/generate_sfx.py from tools/sfx_spec.py; edit the spec",
+  "sounds": {
+    "cancel": {
+      "bus": "UI",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/ui/cancel.wav",
+      "pitch_jitter": 0.5,
+      "priority": 40,
+      "volume_db": 0.0
+    },
+    "click": {
+      "bus": "UI",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/ui/click.wav",
+      "pitch_jitter": 0.5,
+      "priority": 20,
+      "volume_db": 0.0
+    },
+    "close": {
+      "bus": "UI",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/ui/close.wav",
+      "pitch_jitter": 0.5,
+      "priority": 30,
+      "volume_db": 0.0
+    },
+    "confirm": {
+      "bus": "UI",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/ui/confirm.wav",
+      "pitch_jitter": 0.5,
+      "priority": 40,
+      "volume_db": 0.0
+    },
+    "error": {
+      "bus": "UI",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/ui/error.wav",
+      "pitch_jitter": 0.5,
+      "priority": 50,
+      "volume_db": 0.0
+    },
+    "hover": {
+      "bus": "UI",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/ui/hover.wav",
+      "pitch_jitter": 0.5,
+      "priority": 10,
+      "volume_db": -6.0
+    },
+    "leave_game": {
+      "bus": "UI",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/ui/leave_game.wav",
+      "pitch_jitter": 0.0,
+      "priority": 40,
+      "volume_db": 0.0
+    },
+    "open": {
+      "bus": "UI",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/ui/open.wav",
+      "pitch_jitter": 0.5,
+      "priority": 30,
+      "volume_db": 0.0
+    },
+    "splash_enter": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/sfx/splash_enter.wav",
+      "pitch_jitter": 0.5,
+      "priority": 30,
+      "volume_db": 0.0
+    },
+    "splash_exit": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/sfx/splash_exit.wav",
+      "pitch_jitter": 0.5,
+      "priority": 30,
+      "volume_db": -3.0
+    },
+    "success": {
+      "bus": "UI",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/ui/success.wav",
+      "pitch_jitter": 0.5,
+      "priority": 40,
+      "volume_db": 0.0
+    },
+    "tick": {
+      "bus": "UI",
+      "cooldown_s": 0.08,
+      "path": "res://assets/audio/ui/tick.wav",
+      "pitch_jitter": 0.5,
+      "priority": 10,
+      "volume_db": -8.0
+    },
+    "token_drop": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/sfx/token_drop.wav",
+      "pitch_jitter": 0.7,
+      "priority": 20,
+      "volume_db": 0.0
+    },
+    "token_hover": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/sfx/token_hover.wav",
+      "pitch_jitter": 0.5,
+      "priority": 10,
+      "volume_db": -6.0
+    },
+    "token_pickup": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/sfx/token_pickup.wav",
+      "pitch_jitter": 0.5,
+      "priority": 20,
+      "volume_db": 0.0
+    },
+    "token_slide": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/sfx/token_slide.wav",
+      "pitch_jitter": 0.5,
+      "priority": 10,
+      "volume_db": -3.0
+    },
+    "token_whoosh": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/sfx/token_whoosh.wav",
+      "pitch_jitter": 1.3,
+      "priority": 10,
+      "volume_db": -3.0
+    },
+    "transition": {
+      "bus": "UI",
+      "cooldown_s": 0.0,
+      "path": "res://assets/audio/ui/transition.wav",
+      "pitch_jitter": 0.0,
+      "priority": 30,
+      "volume_db": -3.0
+    }
+  }
+}

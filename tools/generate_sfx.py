@@ -8,9 +8,11 @@ Usage:
     python tools/generate_sfx.py --sheet --as-bus         # audition through the game buses
     python tools/generate_sfx.py --verify                 # gate on measured softness
     python tools/generate_sfx.py --install                # write into assets/audio/
+    python tools/generate_sfx.py --manifest               # rewrite only the manifest
 """
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -33,6 +35,15 @@ from sfx_render import (
 from sfx_synth import ms_to_samples, render_wav
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# The playback table AudioManager loads (autoloads/audio_manager.gd). JSON
+# because this stdlib tool writes it byte-stable, both test suites read it in
+# one line, a diff of it reads as a diff of the spec, and Godot exports .json
+# files under the all_resources filter as it does assets/palette/palette.json.
+MANIFEST_RELPATH = ("assets", "audio", "sfx_manifest.json")
+
+# Spec bus (also the asset directory) to the Godot audio bus name.
+GODOT_BUS = {"ui": "UI", "sfx": "SFX"}
 
 SHEET_GAP_MS = 600.0
 
@@ -193,11 +204,49 @@ def verify_palette() -> list:
     return failures
 
 
-def install(assets_root: str, seed: int) -> tuple:
-    """Write variant 0 of every sound into assets/audio/ and drop stale .ogg files.
+def build_manifest() -> dict:
+    """The playback table for every sound in the spec, keyed by name.
 
-    _load_sounds() in autoloads/audio_manager.gd probes .wav before .ogg, so a
-    surviving .ogg for the same sound name would never be loaded again.
+    Each entry names the installed file, its Godot bus and the spec's playback
+    fields (volume_db, pitch_jitter in semitones, cooldown_s, priority).
+    """
+    return {
+        name: {
+            "bus": GODOT_BUS[spec.bus],
+            "path": "res://assets/audio/%s/%s.wav" % (spec.bus, name),
+            "volume_db": spec.volume_db,
+            "pitch_jitter": spec.pitch_jitter,
+            "cooldown_s": spec.cooldown_s,
+            "priority": spec.priority,
+        }
+        for name, spec in sorted(sfx_spec.SPECS.items())
+    }
+
+
+def manifest_path(assets_root: str) -> str:
+    """Where the manifest lives beneath a repository root."""
+    return os.path.join(assets_root, *MANIFEST_RELPATH)
+
+
+def write_manifest(assets_root: str) -> str:
+    """Write the manifest beneath assets_root with LF endings. Returns its path."""
+    path = manifest_path(assets_root)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    document = {
+        "generated_by": "tools/generate_sfx.py from tools/sfx_spec.py; edit the spec",
+        "sounds": build_manifest(),
+    }
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(document, indent=2, sort_keys=True) + "\n")
+    return path
+
+
+def install(assets_root: str, seed: int) -> tuple:
+    """Write variant 0 of every sound into assets/audio/, drop stale .ogg files,
+    and write the manifest AudioManager loads.
+
+    The manifest names each .wav path explicitly, so a surviving .ogg for the
+    same sound name would never be loaded again; it is removed here.
     """
     written = []
     removed = []
@@ -208,9 +257,7 @@ def install(assets_root: str, seed: int) -> tuple:
         wav_path = os.path.join(bus_dir, "%s.wav" % name)
         # Write to a temporary file beside the target and move it into place.
         # os.replace is atomic on the same filesystem, so an interrupted render
-        # can never leave a truncated .wav behind. That matters because
-        # _load_sounds() in audio_manager.gd probes .wav before .ogg, so a
-        # half-written file would shadow the working .ogg it is replacing.
+        # can never leave a truncated .wav behind where the manifest points.
         temp_path = wav_path + ".tmp"
         try:
             render_wav(temp_path, render_spec(spec, seed=seed))
@@ -226,6 +273,7 @@ def install(assets_root: str, seed: int) -> tuple:
             if os.path.exists(stale_path):
                 os.remove(stale_path)
                 removed.append(stale_path)
+    write_manifest(assets_root)
     return written, removed
 
 
@@ -258,12 +306,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--install",
         action="store_true",
-        help="write variant 0 into assets/audio/ (ignored if --verify is also given)",
+        help="write variant 0 and the manifest into assets/audio/ "
+        "(ignored if --verify is also given)",
+    )
+    parser.add_argument(
+        "--manifest",
+        action="store_true",
+        help="rewrite only assets/audio/sfx_manifest.json, for playback-only edits "
+        "(volume_db, pitch_jitter, cooldown_s, priority)",
     )
     parser.add_argument(
         "--assets-root",
         default=REPO_ROOT,
-        help="repository root that --install writes beneath",
+        help="repository root that --install and --manifest write beneath",
     )
     return parser
 
@@ -284,9 +339,14 @@ def main(argv: list = None) -> int:
     if args.install:
         written, removed = install(args.assets_root, args.seed)
         print("Installed %d file(s) into %s" % (len(written), args.assets_root))
+        print("Wrote %s" % manifest_path(args.assets_root))
         for path in removed:
             print("  removed superseded %s" % os.path.relpath(path, args.assets_root))
         print("Next: godot --headless --import --path .")
+        return 0
+
+    if args.manifest:
+        print("Wrote %s" % write_manifest(args.assets_root))
         return 0
 
     written = generate(args.out, args.only, args.variants, args.seed)

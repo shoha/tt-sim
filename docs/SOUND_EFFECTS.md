@@ -6,12 +6,66 @@ This document catalogs all sound effects used (or expected) across the game, org
 
 ## Audio File Locations
 
-| Category | Directory                    | Formats        |
-|----------|------------------------------|----------------|
-| UI       | `res://assets/audio/ui/`     | `.wav`, `.ogg`  |
-| SFX      | `res://assets/audio/sfx/`    | `.wav`, `.ogg`  |
+| Category | Directory                    | Format |
+|----------|------------------------------|--------|
+| UI       | `res://assets/audio/ui/`     | `.wav` |
+| SFX      | `res://assets/audio/sfx/`    | `.wav` |
 
-Files are auto-loaded by `AudioManager._load_ui_sounds()` and `_load_sfx_sounds()` on startup. Simply drop correctly-named files into the directories above and they will be picked up automatically.
+`tools/generate_sfx.py --install` renders every sound in `tools/sfx_spec.py` into these
+directories and writes `res://assets/audio/sfx_manifest.json`, the table `AudioManager` loads
+at startup: each sound's file, bus, gain, pitch jitter, cooldown and priority. A file that is
+not in the manifest is never played; a name that is not in the manifest warns once.
+
+---
+
+## Playing a Sound
+
+There is one entry point:
+
+```gdscript
+AudioManager.play(&"confirm")
+AudioManager.play(&"token_drop", drop_volume_db, drop_pitch)  # gain offset (dB), pitch scale
+```
+
+Everything about how a sound plays lives in its `SoundSpec` in `tools/sfx_spec.py`, never at
+the call site. The optional arguments are only for sounds that follow a quantity: the token drop
+adds a height-driven gain and base pitch, the (disabled) whoosh a speed-driven pitch. The
+playback fields are:
+
+| Field | Meaning |
+|---|---|
+| `volume_db` | Player gain on top of the rendered peak. |
+| `pitch_jitter` | Random pitch offset per play, in semitones either way (default 0.5). |
+| `cooldown_s` | Minimum seconds between two plays of the sound; a request inside it is dropped. |
+| `priority` | Coalescing tier, below. |
+
+**One sound per gesture.** `play()` queues the request, and `AudioManager` flushes the queue once
+a frame, after every other node's `_process`. On each bus (UI, SFX) only the highest-priority
+request of the frame plays; ties keep the first. So a click that confirms a dialog and closes it
+is heard as the confirm alone, a finished pack download and its success toast as one chime, and
+a dialog no longer needs to suppress its own close sound. The buses coalesce separately, so a
+splash on the board is never silenced by a click in a menu. The tiers (`PRIORITY_*` in
+`sfx_spec.py`):
+
+| Tier | Value | Sounds |
+|---|---|---|
+| Alert | 50 | `error` |
+| Outcome | 40 | `confirm`, `cancel`, `success`, `leave_game` |
+| Event | 30 | `open`, `close`, `transition`, `splash_enter`, `splash_exit` |
+| Tap | 20 | `click`, `token_pickup`, `token_drop` |
+| Faint | 10 | `tick`, `hover`, `token_hover`, `token_slide`, `token_whoosh` |
+
+A sound inside its cooldown is dropped when requested, before coalescing, so it never outranks a
+lower sound that would otherwise play. `tick` carries the only cooldown today (80 ms, formerly the
+Settings sliders' own throttle), so a fast slider drag or a held key ticks about twelve times a
+second at most.
+
+**Pause.** `AudioManager` runs with `PROCESS_MODE_ALWAYS`: the pause menu's own sounds play
+while the tree is paused, and a drop or splash already playing when the game pauses finishes
+instead of freezing and resurfacing on unpause.
+
+**Bus volumes.** The Settings sliders call `AudioManager.set_bus_volume(AudioManager.BUS_*, 0..1)`;
+`AudioManager` also applies the saved values at startup. There is no other bus-volume code.
 
 ---
 
@@ -23,8 +77,8 @@ Sound effects are wired up **automatically** wherever possible so that new UI el
 
 `AudioManager` listens to `SceneTree.node_added`. Every `BaseButton` that enters the scene tree automatically gets:
 
-- **`pressed`** → `play_click()` (click sound)
-- **`mouse_entered`** → `play_hover()` (hover sound, at -6 dB) -- currently **off**: the connection
+- **`pressed`** → `play(&"click")`
+- **`mouse_entered`** → `play(&"hover")` -- currently **off**: the connection
   is skipped unless `AudioManager.BUTTON_HOVER_SOUND_ENABLED` is flipped to `true`. Toggles
   (`CheckButton`/`CheckBox`) are excluded from it regardless, since they already tick.
 
@@ -44,9 +98,11 @@ There are **two** panel base classes that handle animation and sounds automatica
 
 For in-scene panels that show/hide within the UI tree.
 
-- **`animate_in()`** → `play_open()`
-- **`animate_out()`** → `play_close()`
-- **Opt out:** set `play_open_close_sounds = false` in inspector or script
+- **`animate_in()`** → `play(&"open")`
+- **`animate_out()`** → `play(&"close")`
+- **Opt out:** set `play_open_close_sounds = false` in inspector or script. A panel opened by a
+  button no longer needs to: the button's click and the panel's open land in the same frame and
+  the open wins.
 
 Panels using this: `TokenContextMenu`, `AssetBrowserContainer`, `LevelEditor`
 
@@ -54,8 +110,8 @@ Panels using this: `TokenContextMenu`, `AssetBrowserContainer`, `LevelEditor`
 
 For full-screen overlay panels with a backdrop (`ColorRect`) + centered content (`CenterContainer/PanelContainer`).
 
-- **`animate_in()`** → `play_open()`
-- **`animate_out()`** → `play_close()`
+- **`animate_in()`** → `play(&"open")`
+- **`animate_out()`** → `play(&"close")`
 - **Opt out:** set `play_sounds = false` in inspector or script
 - Provides lifecycle hooks: `_on_panel_ready()`, `_on_after_animate_in()`, `_on_before_animate_out()`, `_on_after_animate_out()`
 
@@ -73,76 +129,72 @@ Some buttons play specialized sounds instead of the generic click:
 
 | Button                             | Sound                | How                                      |
 |------------------------------------|----------------------|------------------------------------------|
-| Confirmation dialog "Confirm"      | `play_confirm()`     | Button has `ui_silent` meta; calls manually |
-| Confirmation dialog "Cancel"       | `play_cancel()`      | Button has `ui_silent` meta; calls manually |
+| Confirmation dialog "Confirm"      | `confirm` (or the dialog's `confirm_sound`, e.g. `leave_game` for Return to Title) | Button has `ui_silent` meta; calls `play()`; outranks the dialog's close |
+| Confirmation dialog "Cancel"       | `cancel`             | Button has `ui_silent` meta; calls `play()`; outranks the dialog's close |
 
 ---
 
 ## UI Sounds (Bus: UI)
 
-These are played via `AudioManager.play_<name>()` helper methods. Default pitch variation is
-±3% (`play_ui_sound`'s default `pitch_variation` argument). `tick` overrides it to ±12%;
-`transition` and `leave_game` override it to 0 (no variation).
+Played with `AudioManager.play(&"<name>")`. The volume, jitter (semitones either way), cooldown
+and priority columns mirror `tools/sfx_spec.py`, which is the source of truth. A toggle plays
+`tick` 2 dB louder when it turns on than when it turns off.
 
-| File                | AudioManager Method    | Volume  | Description                       | Wiring              |
-|---------------------|------------------------|---------|-----------------------------------|----------------------|
-| `click.wav`         | `play_click()`         | 0 dB    | Button press / tap                | **Auto** (all buttons) |
-| `hover.wav`         | `play_hover()`         | -6 dB   | Button hover / focus              | Disabled             |
-| `open.wav`          | `play_open()`          | 0 dB    | Menu or panel opening             | **Auto** (panels)    |
-| `close.wav`         | `play_close()`         | 0 dB    | Menu or panel closing             | **Auto** (panels)    |
-| `success.wav`       | `play_success()`       | 0 dB    | Success feedback (e.g. level win) | Manual               |
-| `error.wav`         | `play_error()`         | 0 dB    | Error feedback                    | Manual               |
-| `confirm.wav`       | `play_confirm()`       | 0 dB    | Confirmation dialog accept        | **Wired**            |
-| `cancel.wav`        | `play_cancel()`        | 0 dB    | Cancel / back action              | **Wired**            |
-| `tick.wav`          | `play_tick()`          | -8 dB   | Slider / toggle / checkbox tick   | **Auto** (toggles)   |
-| `transition.wav`    | `play_transition()`    | -3 dB   | Scene / state transition whoosh   | **Wired**            |
-| `leave_game.wav`    | `play_leave_game()`    | 0 dB    | Returning to title from a game    | **Wired**            |
+| Sound          | Volume | Jitter | Cooldown | Priority | Description                       | Wiring              |
+|----------------|--------|--------|----------|----------|-----------------------------------|----------------------|
+| `click`        | 0 dB   | 0.5    | -        | 20       | Button press / tap                | **Auto** (all buttons) |
+| `hover`        | -6 dB  | 0.5    | -        | 10       | Button hover / focus              | Disabled             |
+| `open`         | 0 dB   | 0.5    | -        | 30       | Menu or panel opening             | **Auto** (panels)    |
+| `close`        | 0 dB   | 0.5    | -        | 30       | Menu or panel closing             | **Auto** (panels)    |
+| `success`      | 0 dB   | 0.5    | -        | 40       | Success feedback (e.g. level win) | Manual               |
+| `error`        | 0 dB   | 0.5    | -        | 50       | Error feedback                    | Manual               |
+| `confirm`      | 0 dB   | 0.5    | -        | 40       | Confirmation dialog accept        | **Wired**            |
+| `cancel`       | 0 dB   | 0.5    | -        | 40       | Cancel / back action              | **Wired**            |
+| `tick`         | -8 dB  | 0.5    | 80 ms    | 10       | Slider / toggle / checkbox tick   | **Auto** (toggles)   |
+| `transition`   | -3 dB  | 0      | -        | 30       | Scene / state transition whoosh   | Called by `TransitionOverlay`; nothing calls `UIManager.fade_out`/`fade_in`/`transition` yet, so it never plays |
+| `leave_game`   | 0 dB   | 0      | -        | 40       | Returning to title from a game    | **Wired**            |
 
 ---
 
 ## SFX Sounds (Bus: SFX)
 
-These are played via `AudioManager.play_<name>()` helper methods. Default pitch variation is
-±3% (`play_sfx`'s default `pitch_variation` argument); `token_whoosh` bypasses that default and
-instead jitters by ±0.08 on top of a caller-supplied, velocity-scaled `pitch_scale` (see below).
+Played with `AudioManager.play(&"<name>")`; columns as for the UI table.
 
-| File                  | AudioManager Method      | Volume  | Description                          | Status        |
-|-----------------------|--------------------------|---------|--------------------------------------|---------------|
-| `token_pickup.wav`    | `play_token_pickup()`    | 0 dB    | Picking up / starting to drag a token| **Wired**     |
-| `token_drop.wav`      | `play_token_drop()`      | 0 dB    | Dropping / placing a token           | **Wired**     |
-| `token_slide.wav`     | `play_token_slide()`     | -3 dB   | Token sliding / movement on board    | Not wired     |
-| `token_hover.wav`     | `play_token_hover()`     | -6 dB   | Mouse hovering over a board token    | **Wired**     |
-| `token_whoosh.wav`    | `play_token_whoosh()`    | -3 dB   | Rapid drag swoosh (velocity-based)   | Disabled      |
-| `splash_enter.wav`    | `play_splash_enter()`    | 0 dB    | Token entering a water zone          | **Wired**     |
-| `splash_exit.wav`     | `play_splash_exit()`     | -3 dB   | Token leaving a water zone           | **Wired**     |
+| Sound           | Volume | Jitter | Cooldown | Priority | Description                          | Status        |
+|-----------------|--------|--------|----------|----------|--------------------------------------|---------------|
+| `token_pickup`  | 0 dB   | 0.5    | -        | 20       | Picking up / starting to drag a token| **Wired**     |
+| `token_drop`    | 0 dB   | 0.7    | -        | 20       | Dropping / placing a token           | **Wired**     |
+| `token_slide`   | -3 dB  | 0.5    | -        | 10       | Token sliding / movement on board    | Not wired     |
+| `token_hover`   | -6 dB  | 0.5    | -        | 10       | Mouse hovering over a board token    | **Wired**     |
+| `token_whoosh`  | -3 dB  | 1.3    | -        | 10       | Rapid drag swoosh (velocity-based)   | Disabled      |
+| `splash_enter`  | 0 dB   | 0.5    | -        | 30       | Token entering a water zone          | **Wired**     |
+| `splash_exit`   | -3 dB  | 0.5    | -        | 30       | Token leaving a water zone           | **Wired**     |
 
 ### Where SFX Sounds Are Used
 
 | Sound              | File                      | Trigger                          |
 |--------------------|---------------------------|----------------------------------|
-| `play_token_pickup()` | `draggable_token.gd`    | Drag start                      |
-| `play_token_drop()`   | `draggable_token.gd`    | Settle start (immediate on drop/cancel) |
-| `play_token_hover()`  | `board_token_controller.gd` | Mouse enters token rigid body |
-| `play_token_whoosh()` | `draggable_token.gd`    | Horizontal drag speed >= 10 units/sec (0.15s cooldown, velocity-scaled pitch) -- trigger still wired, but the sound is off via `AudioManager.TOKEN_WHOOSH_SOUND_ENABLED` |
-| `play_splash_enter()` | `scenes/effects/water_zone.gd` (`_on_body_entered`, line 88) | Token's collision shape enters a water zone |
-| `play_splash_exit()`  | `scenes/effects/water_zone.gd` (`_on_body_exited`, line 115) | Token's collision shape fully exits a water zone |
+| `token_pickup` | `draggable_token.gd`    | Drag start                      |
+| `token_drop`   | `draggable_token.gd`    | Settle start (immediate on drop); gain -3 to +2 dB and pitch 1.1 to 0.85 by drop height |
+| `token_hover`  | `board_token_controller.gd` | Mouse enters token rigid body |
+| `token_whoosh` | `draggable_token.gd`    | Horizontal drag speed >= 10 units/sec (0.15s cooldown, velocity-scaled pitch) -- trigger still wired, but the call is skipped while `AudioManager.TOKEN_WHOOSH_SOUND_ENABLED` is false |
+| `splash_enter` | `scenes/effects/water_zone.gd` (`_on_body_entered`) | Token's collision shape enters a water zone |
+| `splash_exit`  | `scenes/effects/water_zone.gd` (`_on_body_exited`) | Token's collision shape fully exits a water zone |
 
-`splash_enter` and `splash_exit` were wired into `AudioManager` (`_sfx_sounds` dictionary, and
-called from `water_zone.gd`) before this palette existed, but had no backing files, so they were
-silent no-ops. This palette is what first gives them sound.
+### Additional SFX Candidates (Not Yet in the Palette)
 
-### Additional SFX Candidates (Not Yet in AudioManager)
+Interactions that could benefit from a sound. Adding one is a spec entry, an install and a call
+(see "Adding a Sound" below); there is no file to source, since every sound in the palette is
+synthesized.
 
-These are interactions that could benefit from sound effects but don't have corresponding entries in `AudioManager` yet. Adding one now means adding a `SoundSpec` entry to `tools/sfx_spec.py` (see "Regenerating and Iterating" below) plus a new method in `audio_manager.gd` — there is no file to source, since every sound in the palette is synthesized.
-
-| Proposed File           | Proposed Method             | Description                                    | Where to Wire                          |
-|-------------------------|-----------------------------|------------------------------------------------|----------------------------------------|
-| `token_snap.wav`        | `play_token_snap()`         | Token snapping to grid position                | `drag_and_drop_3d.gd` snap logic       |
-| `token_rotate.wav`      | `play_token_rotate()`       | Token rotation snap                            | `board_token_controller.gd` rotation   |
-| `token_scale.wav`       | `play_token_scale()`        | Token scale change                             | `board_token_controller.gd` scaling    |
-| `token_cancel.wav`      | `play_token_cancel()`       | Drag cancelled / token returns to origin       | `draggable_token.gd` cancel handler    |
-| `level_start.wav`       | `play_level_start()`        | Level begins loading / transition starts       | `level_play_controller.gd`             |
-| `level_complete.wav`    | `play_level_complete()`     | Level finishes loading / ready to play         | `level_play_controller.gd` / `root.gd` |
+| Proposed Sound    | Description                                    | Where to Wire                          |
+|-------------------|------------------------------------------------|----------------------------------------|
+| `token_snap`      | Token snapping to grid position                | `drag_and_drop_3d.gd` snap logic       |
+| `token_rotate`    | Token rotation snap                            | `board_token_controller.gd` rotation   |
+| `token_scale`     | Token scale change                             | `board_token_controller.gd` scaling    |
+| `token_cancel`    | Drag cancelled / token returns to origin       | `draggable_token.gd` cancel handler    |
+| `level_start`     | Level begins loading / transition starts       | `level_play_controller.gd`             |
+| `level_complete`  | Level finishes loading / ready to play         | `level_play_controller.gd` / `root.gd` |
 
 ---
 
@@ -158,7 +210,8 @@ Master
     └── Effect: LowPassFilter  (cutoff 7kHz — warm, muffled-speaker feel)
 ```
 
-Each bus has independent volume (0–100%) and mute controls, adjustable from the Settings menu.
+Each bus has an independent volume (0–100%) on the Settings menu. `AudioManager.set_bus_mute`
+exists, but Settings has no mute toggle, and the Music slider has nothing to control yet.
 
 ### Lo-fi Bus Effects
 
@@ -180,7 +233,7 @@ The SFX and UI buses have effects applied to achieve a warm, lo-fi aesthetic. Th
 
 ## Sound Design Guidelines
 
-All 18 sounds are synthesized by a stdlib Python toolchain in `tools/` (`sfx_spec.py`,
+Every sound is synthesized by a stdlib Python toolchain in `tools/` (`sfx_spec.py`,
 `sfx_synth.py`, `sfx_render.py`, `sfx_measure.py`, driven by `generate_sfx.py`), not sourced as
 audio files. There is no format/sample-rate/channel checklist to follow when adding a sound — the
 renderer always writes 44100 Hz mono `.wav`. What matters is how each sound is specified. The
@@ -266,7 +319,8 @@ add a new one within the existing palette style.
 python tools/generate_sfx.py --verify                        # check the palette against its targets
 python tools/generate_sfx.py --variants 3 --sheet --as-bus    # audition set plus per-bus sheets
 python tools/generate_sfx.py --only click --variants 5        # work on one sound
-python tools/generate_sfx.py --install                        # write into assets/audio/
+python tools/generate_sfx.py --install                        # write into assets/audio/, with the manifest
+python tools/generate_sfx.py --manifest                       # playback-only edit: rewrite just the manifest
 godot --headless --import --path .                            # after installing
 godot --path . tests/test_soundboard.tscn                     # audition in-engine, on the real buses
 ```
@@ -282,10 +336,12 @@ godot --path . tests/test_soundboard.tscn                     # audition in-engi
   PATH.
 - `--variants N` renders N differently-seeded takes of each selected sound; variant 0 is always
   the plain, unsuffixed filename, since that's the one `--install` uses.
-- `--install` writes variant 0 of every sound into `assets/audio/<bus>/<name>.wav` and removes any
-  stale `.ogg` (and `.ogg.import`) file with the same name, since `_load_sounds()` in
-  `audio_manager.gd` probes `.wav` before `.ogg` and a leftover `.ogg` would otherwise shadow
-  nothing but also never get cleaned up on its own.
+- `--install` writes variant 0 of every sound into `assets/audio/<bus>/<name>.wav`, writes
+  `assets/audio/sfx_manifest.json`, and removes any stale `.ogg` (and `.ogg.import`) file with
+  the same name, which the manifest would never point at and nothing else would clean up.
+- `--manifest` rewrites only the manifest. Use it after changing a playback field
+  (`volume_db`, `pitch_jitter`, `cooldown_s`, `priority`); those never change a rendered file.
+  `tools/tests/test_sfx_spec.py` fails while the committed manifest disagrees with the spec.
 - `tests/test_soundboard.tscn` (backed by `tests/test_soundboard.gd`) is a standalone scene that
   loads candidate files with `AudioStreamWAV.load_from_file()` (bypassing Godot's resource cache)
   from a scratch directory — `%TEMP%/tt-sim-sfx` by default, the same directory
@@ -294,7 +350,7 @@ godot --path . tests/test_soundboard.tscn                     # audition in-engi
   in the still-open soundboard, hear the new take through the real UI/SFX buses, repeat.
 
 **Method note:** when feedback on a sound is about character ("too bright", "too soft") rather
-than a specific number, don't regenerate all 18 sounds and hope. Instead, build ONE sound several
+than a specific number, don't regenerate the whole palette and hope. Instead, build ONE sound several
 ways, varying a single property at a time (e.g. five `click` variants at different low-pass
 cutoffs, via `--only click --variants 5`), concatenate them into a short sheet, and ask which one
 is closest. That converts a vague judgement call into one short listen and a single answer, and
@@ -347,7 +403,7 @@ python tools/hooks/install.py
 
 ```bash
 # Windows
-winget install ffmpeg
+scoop install ffmpeg
 
 # macOS
 brew install ffmpeg
@@ -412,21 +468,27 @@ func _on_after_animate_out() -> void:
     queue_free()
 ```
 
-### New SFX
-1. Add a `SoundSpec` entry for it in `tools/sfx_spec.py` (see "Regenerating and Iterating"
-   above) — there is no file to source, since the palette is synthesized, not sampled.
-2. Render and audition it (`generate_sfx.py --only <name> --variants N --sheet`), then run
+### Adding a Sound
+A new sound is a spec, an install and a call; nothing in `audio_manager.gd` changes.
+
+1. **Spec.** Add a `SoundSpec` entry in `tools/sfx_spec.py` (see "Regenerating and Iterating"
+   above): its bus (`"ui"` or `"sfx"`), the synthesis fields, and the playback fields
+   (`volume_db`, `pitch_jitter`, `cooldown_s`, and a `priority` tier from "Playing a Sound").
+   There is no file to source, since the palette is synthesized, not sampled. Render and
+   audition it (`generate_sfx.py --only <name> --variants N --sheet`), then run
    `generate_sfx.py --verify` to confirm it passes the gate.
-3. Install it (`generate_sfx.py --install`) and re-import (`godot --headless --import --path .`).
-4. Add a key to `_sfx_sounds` dictionary in `audio_manager.gd`
-5. Add a public helper method (e.g. `play_token_snap()`)
-6. Call the method from the appropriate game code
+2. **Install.** `generate_sfx.py --install` writes the `.wav` and the manifest entry; then
+   re-import (`godot --headless --import --path .`) and commit both, with the `.wav.import`.
+3. **Call.** `AudioManager.play(&"<name>")` from the game code that owns the moment.
+
+`tools/tests/test_sfx_spec.py` checks that the spec, the installed files and the committed
+manifest name the same sounds, so a missed step fails the test rather than playing silence.
 
 ---
 
 ## Implementation Checklist
 
-### Phase 1: Audio Files (18 files)
+### Phase 1: Audio Files
 - [x] `assets/audio/ui/click.wav`
 - [x] `assets/audio/ui/hover.wav`
 - [x] `assets/audio/ui/open.wav`
@@ -446,7 +508,7 @@ func _on_after_animate_out() -> void:
 - [x] `assets/audio/sfx/splash_enter.wav`
 - [x] `assets/audio/sfx/splash_exit.wav`
 
-All 18 files are generated by `tools/generate_sfx.py --install` from the `SoundSpec` entries in
+All files are generated by `tools/generate_sfx.py --install` from the `SoundSpec` entries in
 `tools/sfx_spec.py` (see "Regenerating and Iterating" above) — there are no third-party CC0 packs
 to track or license anymore. Regeneration is deterministic: running `--install` from a clean
 checkout reproduces byte-identical files to the ones committed (verified — `--install`, `--seed`
@@ -465,10 +527,12 @@ palette's own peak target and normalization is a no-op.
 - [x] Token drop sound plays at settle start (immediate feedback on release)
 - [x] Token whoosh sound on rapid drag (velocity-based trigger with pitch scaling) -- since turned
   off via `AudioManager.TOKEN_WHOOSH_SOUND_ENABLED`; the trigger stays wired
-- [ ] Wire `AudioManager.play_token_slide()` to token movement
-- [ ] Wire `AudioManager.play_success()` / `play_error()` to relevant feedback points
+- [x] One entry point, `AudioManager.play(&"name")`, driven by the manifest; one sound per
+  gesture through per-frame coalescing; pause no longer freezes a playing sound
+- [ ] Wire `token_slide` to token movement
+- [ ] Wire `success` / `error` to relevant feedback points
 
 ### Phase 3: Expanded SFX (optional)
-- [ ] Add token snap, rotate, scale, cancel sounds to `AudioManager`
-- [ ] Add level transition sounds to `AudioManager`
-- [ ] Wire new SFX methods to game interactions
+- [ ] Add token snap, rotate, scale, cancel sounds to the palette
+- [ ] Add level transition sounds to the palette
+- [ ] Wire the new sounds to game interactions

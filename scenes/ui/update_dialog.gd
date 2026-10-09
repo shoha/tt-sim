@@ -264,7 +264,7 @@ func _on_download_complete(zip_path: String) -> void:
 	tw.tween_property(post_download_buttons, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
 
 	rebuild_focus_trap()
-	AudioManager.play_success()
+	AudioManager.play(&"success")
 	restart_button.grab_focus()
 
 
@@ -278,7 +278,7 @@ func _on_download_failed(error: String) -> void:
 	progress_container.visible = true
 	progress_bar.visible = false
 	rebuild_focus_trap()
-	AudioManager.play_error()
+	AudioManager.play(&"error")
 
 
 func _unhandled_input(event: InputEvent) -> void:

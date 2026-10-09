@@ -1,9 +1,23 @@
 extends Node
 
-## Centralized audio management for UI and game sounds.
+## The one place the game plays a sound: `AudioManager.play(&"name")`.
 ##
-## Provides easy access to play common UI sounds and manages audio buses.
-## Call AudioManager.play_ui_*() from anywhere to play sounds.
+## Every sound, its bus, gain, pitch jitter, cooldown and priority is declared once in
+## tools/sfx_spec.py. tools/generate_sfx.py --install renders the files and writes
+## assets/audio/sfx_manifest.json, which this autoload loads at startup; there is no
+## per-sound method or table here. play() hands the request to a SoundRequestQueue, and
+## _process() plays at most one sound per bus per frame, the highest-priority one, so a
+## gesture that clicks, confirms and closes a dialog is heard once as the confirm.
+##
+## Buttons get their click automatically (_on_node_added) and panels play open and close
+## from their base classes; a button that plays a sound of its own sets the `ui_silent`
+## meta. AudioManager runs with PROCESS_MODE_ALWAYS and the last process priority: the
+## pause menu's sounds play while the tree is paused, a sound already playing when the
+## game pauses finishes instead of freezing, and every request of a frame is in before
+## the flush. Bus volumes (the Settings sliders) are set here too, through set_bus_volume.
+
+## Emitted when a requested sound actually starts, after coalescing and cooldowns.
+signal sound_played(sound: StringName)
 
 # Audio bus names
 const BUS_MASTER := "Master"
@@ -17,61 +31,33 @@ const BUTTON_HOVER_SOUND_ENABLED := false
 ## Set to true to re-enable the whoosh sound on fast token drags.
 const TOKEN_WHOOSH_SOUND_ENABLED := false
 
-# Audio player pool sizes
-const UI_PLAYER_POOL_SIZE := 4
-const SFX_PLAYER_POOL_SIZE := 4
+## Voices per bus. When all are busy the first is stolen.
+const PLAYER_POOL_SIZE := 4
 
-# UI Sound effects (paths will be updated when actual audio files are added)
-var _ui_sounds := {
-	"click": null,  # "res://assets/audio/ui/click.wav"
-	"hover": null,  # "res://assets/audio/ui/hover.wav"
-	"open": null,  # "res://assets/audio/ui/open.wav"
-	"close": null,  # "res://assets/audio/ui/close.wav"
-	"success": null,  # "res://assets/audio/ui/success.wav"
-	"error": null,  # "res://assets/audio/ui/error.wav"
-	"confirm": null,  # "res://assets/audio/ui/confirm.wav"
-	"cancel": null,  # "res://assets/audio/ui/cancel.wav"
-	"tick": null,  # "res://assets/audio/ui/tick.wav" — slider/toggle feedback
-	"transition": null,  # "res://assets/audio/ui/transition.wav" — scene transitions
-	"leave_game": null,  # "res://assets/audio/ui/leave_game.wav" — leaving a game session
-}
+## Runs the flush after every other node's _process, so one frame's requests coalesce.
+const FLUSH_PROCESS_PRIORITY := 1000
 
-# SFX Sound effects for game interactions (token pickup, drop, slide, etc.)
-var _sfx_sounds := {
-	"token_pickup": null,  # "res://assets/audio/sfx/token_pickup.wav"
-	"token_drop": null,  # "res://assets/audio/sfx/token_drop.wav"
-	"token_slide": null,  # "res://assets/audio/sfx/token_slide.wav"
-	"token_hover": null,  # "res://assets/audio/sfx/token_hover.wav"
-	"token_whoosh": null,  # "res://assets/audio/sfx/token_whoosh.wav"
-	"splash_enter": null,  # "res://assets/audio/sfx/splash_enter.wav"
-	"splash_exit": null,  # "res://assets/audio/sfx/splash_exit.wav"
-}
-
-# Audio players pool for UI sounds
-var _ui_players: Array[AudioStreamPlayer] = []
-
-# Audio players pool for SFX sounds
-var _sfx_players: Array[AudioStreamPlayer] = []
+var _queue: SoundRequestQueue
+## name -> AudioStream, for every manifest entry whose file exists.
+var _streams: Dictionary = {}
+## Godot bus name -> Array of AudioStreamPlayer.
+var _players: Dictionary = {}
 
 
 func _ready() -> void:
-	# Create audio player pool for UI sounds
-	for i in range(UI_PLAYER_POOL_SIZE):
-		var player = AudioStreamPlayer.new()
-		player.bus = BUS_UI
-		add_child(player)
-		_ui_players.append(player)
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	process_priority = FLUSH_PROCESS_PRIORITY
 
-	# Create audio player pool for SFX sounds
-	for i in range(SFX_PLAYER_POOL_SIZE):
-		var player = AudioStreamPlayer.new()
-		player.bus = BUS_SFX
-		add_child(player)
-		_sfx_players.append(player)
-
-	# Load sounds if they exist
-	_load_ui_sounds()
-	_load_sfx_sounds()
+	_queue = SoundRequestQueue.new(SoundRequestQueue.load_manifest())
+	_load_streams()
+	for bus in [BUS_UI, BUS_SFX]:
+		var pool: Array[AudioStreamPlayer] = []
+		for i in range(PLAYER_POOL_SIZE):
+			var player := AudioStreamPlayer.new()
+			player.bus = bus
+			add_child(player)
+			pool.append(player)
+		_players[bus] = pool
 
 	# Apply saved audio settings (bus volumes) on startup
 	_load_audio_settings()
@@ -79,6 +65,41 @@ func _ready() -> void:
 	# Auto-connect button sounds so every button gets click/hover sounds
 	# automatically. To opt a button out, call button.set_meta("ui_silent", true).
 	get_tree().node_added.connect(_on_node_added)
+
+
+func _process(_delta: float) -> void:
+	if _queue.has_pending():
+		_play_requests(_queue.flush(_now_s()))
+
+
+## Plays the named sound as the manifest declares it. `volume_offset_db` adds to the
+## sound's own gain and `pitch_scale` multiplies its pitch, for sounds that follow a
+## quantity (a drop's height, a drag's speed). Requests made in one frame coalesce: on
+## each bus only the highest-priority one plays. A sound inside its cooldown is skipped,
+## and an unknown name warns once and plays nothing.
+func play(sound: StringName, volume_offset_db: float = 0.0, pitch_scale: float = 1.0) -> void:
+	_queue.request(sound, _now_s(), volume_offset_db, pitch_scale)
+
+
+## Every sound name the manifest declares, sorted; only those on `bus` when given.
+func sound_names(bus: String = "") -> Array[StringName]:
+	return _queue.names(bus)
+
+
+## True when the manifest declares the sound.
+func has_sound(sound: StringName) -> bool:
+	return _queue.has_sound(sound)
+
+
+## The manifest entry for a sound (bus, path, volume_db, pitch_jitter, cooldown_s,
+## priority), or an empty Dictionary when unknown.
+func sound_entry(sound: StringName) -> Dictionary:
+	return _queue.entry(sound)
+
+
+## Unknown names play() has warned about since startup.
+func warned_names() -> Array:
+	return _queue.warned_names()
 
 
 # ---------------------------------------------------------------------------
@@ -107,8 +128,8 @@ func _auto_connect_button(button: BaseButton) -> void:
 		if not button.toggled.is_connected(_on_toggle_sound):
 			button.toggled.connect(_on_toggle_sound)
 	else:
-		if not button.pressed.is_connected(play_click):
-			button.pressed.connect(play_click)
+		if not button.pressed.is_connected(_on_button_pressed):
+			button.pressed.connect(_on_button_pressed)
 
 	# Hover sounds for regular buttons only (toggles already have tick feedback)
 	if BUTTON_HOVER_SOUND_ENABLED and not (button is CheckButton or button is CheckBox):
@@ -119,33 +140,61 @@ func _auto_connect_button(button: BaseButton) -> void:
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 
+func _on_button_pressed() -> void:
+	play(&"click")
+
+
 func _on_button_hover() -> void:
-	play_hover()
+	play(&"hover")
 
 
-## Plays a higher-pitch tick on toggle-on and a lower-pitch tick on toggle-off
+## Plays the tick for a toggle, 2 dB louder when it turns on than when it turns off.
 func _on_toggle_sound(toggled_on: bool) -> void:
-	if toggled_on:
-		play_ui_sound("tick", -6.0, 0.0)
-	else:
-		play_ui_sound("tick", -8.0, 0.0)
+	play(&"tick", 2.0 if toggled_on else 0.0)
 
 
-func _load_sounds(sounds: Dictionary, directory: String) -> void:
-	for key in sounds.keys():
-		for ext in ["wav", "ogg"]:
-			var path = "res://assets/audio/%s/%s.%s" % [directory, key, ext]
-			if ResourceLoader.exists(path):
-				sounds[key] = load(path)
-				break
+# ---------------------------------------------------------------------------
+# Playback
+# ---------------------------------------------------------------------------
 
 
-func _load_ui_sounds() -> void:
-	_load_sounds(_ui_sounds, "ui")
+func _load_streams() -> void:
+	for sound in _queue.names():
+		var path := str(_queue.entry(sound).get("path", ""))
+		if ResourceLoader.exists(path):
+			_streams[sound] = load(path)
 
 
-func _load_sfx_sounds() -> void:
-	_load_sounds(_sfx_sounds, "sfx")
+func _play_requests(requests: Array[Dictionary]) -> void:
+	for req in requests:
+		var sound: StringName = req["name"]
+		var stream: AudioStream = _streams.get(sound)
+		var player := _get_available_player(str(req["bus"]))
+		if stream == null or player == null:
+			continue
+		player.stream = stream
+		player.volume_db = req["volume_db"]
+		player.pitch_scale = req["pitch_scale"]
+		player.play()
+		sound_played.emit(sound)
+
+
+func _get_available_player(bus: String) -> AudioStreamPlayer:
+	var pool: Array = _players.get(bus, [])
+	for player in pool:
+		if not player.playing:
+			return player
+	# If all are busy, return the first one (it will interrupt)
+	return pool[0] if pool.size() > 0 else null
+
+
+func _now_s() -> float:
+	return Time.get_ticks_msec() / 1000.0
+
+
+# ---------------------------------------------------------------------------
+# Bus volumes
+# ---------------------------------------------------------------------------
 
 
 ## Load saved audio bus volumes from settings.cfg and apply them.
@@ -165,158 +214,6 @@ func _load_audio_settings() -> void:
 
 	for bus_name in buses:
 		set_bus_volume(bus_name, buses[bus_name] / 100.0)
-
-
-## Play a UI sound by name
-## pitch_variation: random pitch offset range (e.g. 0.08 = +/- 8%). Set to 0.0 for exact pitch.
-func play_ui_sound(
-	sound_name: String, volume_db: float = 0.0, pitch_variation: float = 0.03
-) -> void:
-	if not _ui_sounds.has(sound_name) or _ui_sounds[sound_name] == null:
-		return
-
-	var player = _get_available_player()
-	if player:
-		player.stream = _ui_sounds[sound_name]
-		player.volume_db = volume_db
-		player.pitch_scale = 1.0 + randf_range(-pitch_variation, pitch_variation)
-		player.play()
-
-
-## Play button click sound
-func play_click() -> void:
-	play_ui_sound("click")
-
-
-## Play button hover sound
-func play_hover() -> void:
-	play_ui_sound("hover", -6.0)
-
-
-## Play menu/panel open sound
-func play_open() -> void:
-	play_ui_sound("open")
-
-
-## Play menu/panel close sound
-func play_close() -> void:
-	play_ui_sound("close")
-
-
-## Play success/confirm sound
-func play_success() -> void:
-	play_ui_sound("success")
-
-
-## Play error sound
-func play_error() -> void:
-	play_ui_sound("error")
-
-
-## Play confirmation dialog confirm sound
-func play_confirm() -> void:
-	play_ui_sound("confirm")
-
-
-## Play cancel/back sound
-func play_cancel() -> void:
-	play_ui_sound("cancel")
-
-
-## Play a subtle tick sound (slider / toggle / checkbox feedback)
-func play_tick() -> void:
-	play_ui_sound("tick", -8.0, 0.12)
-
-
-## Play transition whoosh (scene / state transitions)
-func play_transition() -> void:
-	play_ui_sound("transition", -3.0, 0.0)
-
-
-## Play leave-game sound (returning to title from a game session)
-func play_leave_game() -> void:
-	play_ui_sound("leave_game", 0.0, 0.0)
-
-
-## Play a SFX sound by name
-## pitch_variation: random pitch offset range (e.g. 0.08 = +/- 8%). Set to 0.0 for exact pitch.
-## base_pitch: base pitch scale before variation is applied (default 1.0).
-func play_sfx(
-	sound_name: String,
-	volume_db: float = 0.0,
-	pitch_variation: float = 0.03,
-	base_pitch: float = 1.0,
-) -> void:
-	if not _sfx_sounds.has(sound_name) or _sfx_sounds[sound_name] == null:
-		return
-
-	var player = _get_available_sfx_player()
-	if player:
-		player.stream = _sfx_sounds[sound_name]
-		player.volume_db = volume_db
-		player.pitch_scale = maxf(0.01, base_pitch + randf_range(-pitch_variation, pitch_variation))
-		player.play()
-
-
-## Play token pickup sound (short click/pop)
-func play_token_pickup() -> void:
-	play_sfx("token_pickup")
-
-
-## Play token drop/place sound (soft thud)
-func play_token_drop() -> void:
-	play_sfx("token_drop")
-
-
-## Play token slide sound (faint movement sound)
-func play_token_slide() -> void:
-	play_sfx("token_slide", -3.0)
-
-
-## Play token hover sound (subtle highlight cue)
-func play_token_hover() -> void:
-	play_sfx("token_hover", -6.0)
-
-
-## Play token whoosh sound (rapid drag movement)
-## pitch_scale allows velocity-based pitch scaling for a natural feel.
-## Disabled by default -- the cue added little over the pickup/drop sounds it sits
-## between. Flip TOKEN_WHOOSH_SOUND_ENABLED to bring it back; the rising-edge trigger in
-## draggable_token.gd stays wired either way.
-func play_token_whoosh(pitch_scale: float = 1.0) -> void:
-	if not TOKEN_WHOOSH_SOUND_ENABLED:
-		return
-	var player = _get_available_sfx_player()
-	if player and _sfx_sounds.has("token_whoosh") and _sfx_sounds["token_whoosh"] != null:
-		player.stream = _sfx_sounds["token_whoosh"]
-		player.volume_db = -3.0
-		player.pitch_scale = pitch_scale + randf_range(-0.08, 0.08)
-		player.play()
-
-
-## Play splash sound for a token entering water (bigger splash)
-func play_splash_enter() -> void:
-	play_sfx("splash_enter")
-
-
-## Play splash sound for a token exiting water (smaller splash)
-func play_splash_exit() -> void:
-	play_sfx("splash_exit", -3.0)
-
-
-func _get_available_sfx_player() -> AudioStreamPlayer:
-	for player in _sfx_players:
-		if not player.playing:
-			return player
-	return _sfx_players[0] if _sfx_players.size() > 0 else null
-
-
-func _get_available_player() -> AudioStreamPlayer:
-	for player in _ui_players:
-		if not player.playing:
-			return player
-	# If all are busy, return the first one (it will interrupt)
-	return _ui_players[0] if _ui_players.size() > 0 else null
 
 
 ## Set volume for a bus (0.0 to 1.0)

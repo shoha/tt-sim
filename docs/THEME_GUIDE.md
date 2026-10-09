@@ -442,7 +442,7 @@ Timing tokens live in `Constants`:
 | `DrawerContainer.slide_duration` | 0.25 s cubic-out | drawer sled |
 | `ANIM_ENTRANCE` / `ANIM_ENTRANCE_STAGGER` | 0.3 s cubic-out, 0.08 s apart | `UiMotion.stagger_in()`: title, pause menu, host lobby and join screen bodies fade and lift 12 px into place |
 
-Scale and position animations use `Control.offset_transform_scale` / `offset_transform_position` (Godot 4.7) via `UiMotion.scale_to()`, so containers never relayout during motion. Sounds reuse `AudioManager.play_tick()`, `play_open()`, `play_close()`.
+Scale and position animations use `Control.offset_transform_scale` / `offset_transform_position` (Godot 4.7) via `UiMotion.scale_to()`, so containers never relayout during motion. Sounds reuse `AudioManager.play(&"tick")`, `&"open"` and `&"close"`.
 
 ---
 
@@ -662,7 +662,7 @@ Or for buttons that need specialized sounds instead of the auto-connected click:
 func _on_panel_ready() -> void:
     confirm_button.set_meta("ui_silent", true)  # skip auto-click
     confirm_button.pressed.connect(func():
-        AudioManager.play_confirm()  # play specialized sound
+        AudioManager.play(&"confirm")  # outranks the panel's close in the same frame
         animate_out()
     )
 ```

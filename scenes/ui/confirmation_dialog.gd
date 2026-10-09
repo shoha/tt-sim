@@ -19,7 +19,7 @@ var title_label: Label
 
 var _confirm_callback: Callable
 var _cancel_callback: Callable
-var _confirm_sound_override: Callable
+var _confirm_sound: StringName = &"confirm"
 var _confirmed: bool = false
 var _closing: bool = false
 var _is_danger: bool = false
@@ -53,7 +53,7 @@ func setup(
 	confirm_callback: Callable = Callable(),
 	cancel_callback: Callable = Callable(),
 	confirm_style: String = "Success",
-	confirm_sound_override: Callable = Callable(),
+	confirm_sound: StringName = &"confirm",
 ) -> void:
 	title_label.text = title
 	message_label.text = message
@@ -62,7 +62,7 @@ func setup(
 	confirm_button.theme_type_variation = confirm_style
 	_confirm_callback = confirm_callback
 	_cancel_callback = cancel_callback
-	_confirm_sound_override = confirm_sound_override
+	_confirm_sound = confirm_sound
 	_is_danger = confirm_style == "Danger"
 
 
@@ -89,7 +89,7 @@ func _on_alternate_pressed(callback: Callable) -> void:
 	if _closing:
 		return
 	_closing = true
-	AudioManager.play_cancel()
+	AudioManager.play(&"cancel")
 	_confirmed = false
 	if callback.is_valid():
 		callback.call()
@@ -127,12 +127,8 @@ func _on_confirm_pressed() -> void:
 	if _closing:
 		return
 	_closing = true
-	if _confirm_sound_override.is_valid():
-		_confirm_sound_override.call()
-		# Suppress the base class close sound so only the override is heard
-		play_sounds = false
-	else:
-		AudioManager.play_confirm()
+	# The panel's close sound in the same frame is outranked, so only this one plays.
+	AudioManager.play(_confirm_sound)
 	_confirmed = true
 	if _confirm_callback.is_valid():
 		_confirm_callback.call()
@@ -143,7 +139,7 @@ func _on_cancel_pressed() -> void:
 	if _closing:
 		return
 	_closing = true
-	AudioManager.play_cancel()
+	AudioManager.play(&"cancel")
 	_confirmed = false
 	if _cancel_callback.is_valid():
 		_cancel_callback.call()

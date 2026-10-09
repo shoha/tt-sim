@@ -87,7 +87,7 @@ func animate_in() -> void:
 	_panel_tween.tween_property(panel, "scale", Vector2.ONE, Constants.ANIM_FADE_IN_DURATION)
 
 	if play_sounds:
-		AudioManager.play_open()
+		AudioManager.play(&"open")
 
 	await _panel_tween.finished
 	if not is_instance_valid(self):
@@ -118,7 +118,7 @@ func animate_out() -> void:
 	)
 
 	if play_sounds:
-		AudioManager.play_close()
+		AudioManager.play(&"close")
 
 	await _panel_tween.finished
 	if not is_instance_valid(self):

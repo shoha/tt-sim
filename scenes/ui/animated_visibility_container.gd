@@ -63,7 +63,7 @@ func animate_in() -> void:
 	tween.finished.connect(_on_animate_in_finished, CONNECT_ONE_SHOT)
 
 	if play_open_close_sounds:
-		AudioManager.play_open()
+		AudioManager.play(&"open")
 
 	_on_before_animate_in()
 
@@ -93,7 +93,7 @@ func animate_out() -> void:
 	tween.finished.connect(_on_animate_out_finished, CONNECT_ONE_SHOT)
 
 	if play_open_close_sounds:
-		AudioManager.play_close()
+		AudioManager.play(&"close")
 
 	_on_before_animate_out()
 

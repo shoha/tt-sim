@@ -235,7 +235,7 @@ func _on_dragging_started() -> void:
 	Input.set_default_cursor_shape(Input.CURSOR_DRAG)
 
 	# Sound
-	AudioManager.play_token_pickup()
+	AudioManager.play(&"token_pickup")
 
 	# Contextual input hints for dragging
 	UIManager.remove_hint(InputProfile.label(&"measure"))
@@ -367,7 +367,7 @@ func _settle_to_position(target_pos: Vector3) -> void:
 		var height_t := clampf(drop_height / 2.0, 0.0, 1.0)  # Normalize: 2 units = full effect
 		var drop_volume_db := lerpf(-3.0, 2.0, height_t)  # Quiet for tiny drops, louder for big
 		var drop_pitch := lerpf(1.1, 0.85, height_t)  # Higher pitch for small, lower for heavy
-		AudioManager.play_sfx("token_drop", drop_volume_db, 0.04, drop_pitch)
+		AudioManager.play(&"token_drop", drop_volume_db, drop_pitch)
 
 	_kill_settle_tween()
 	_settle_tween = create_tween()
@@ -542,13 +542,14 @@ func _update_inertia_lean(delta: float) -> void:
 				current_basis.slerp(_target_lean_rotation, LEAN_SMOOTHING * delta).orthonormalized()
 			)
 
-	# Whoosh sound when a drag accelerates past the threshold (see _should_play_whoosh)
-	if _should_play_whoosh(speed, delta):
+	# Whoosh sound when a drag accelerates past the threshold (see _should_play_whoosh).
+	# The trigger stays wired while the sound itself is off.
+	if _should_play_whoosh(speed, delta) and AudioManager.TOKEN_WHOOSH_SOUND_ENABLED:
 		var speed_t := clampf(
 			(speed - WHOOSH_SPEED_THRESHOLD) / (WHOOSH_SPEED_MAX - WHOOSH_SPEED_THRESHOLD), 0.0, 1.0
 		)
 		var pitch := lerpf(WHOOSH_PITCH_MIN, WHOOSH_PITCH_MAX, speed_t)
-		AudioManager.play_token_whoosh(pitch)
+		AudioManager.play(&"token_whoosh", 0.0, pitch)
 
 
 # -------------------------------------------------------------------------

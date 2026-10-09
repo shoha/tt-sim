@@ -106,14 +106,14 @@ func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
 	_update_player_list()
 	status_label.text = "%d player(s) connected" % NetworkManager.get_player_count()
 	_flash_player_list()
-	AudioManager.play_success()
+	AudioManager.play(&"success")
 
 
 func _on_player_left(_peer_id: int, _player_info: Dictionary) -> void:
 	_update_player_list()
 	status_label.text = "%d player(s) connected" % NetworkManager.get_player_count()
 	_flash_player_list()
-	AudioManager.play_tick()
+	AudioManager.play(&"tick")
 
 
 func _on_connection_failed(reason: String) -> void:

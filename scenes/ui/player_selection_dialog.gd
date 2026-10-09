@@ -52,7 +52,7 @@ func _on_player_selected(peer_id: int) -> void:
 	if _closing:
 		return
 	_closing = true
-	AudioManager.play_confirm()
+	AudioManager.play(&"confirm")
 	player_selected.emit(peer_id)
 	animate_out()
 
@@ -61,7 +61,7 @@ func _on_cancel_pressed() -> void:
 	if _closing:
 		return
 	_closing = true
-	AudioManager.play_cancel()
+	AudioManager.play(&"cancel")
 	animate_out()
 
 

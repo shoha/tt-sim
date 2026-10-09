@@ -151,7 +151,8 @@ func get_overlay_count() -> int:
 # --- Confirmation Dialog ---
 
 
-## Show a confirmation dialog and return it for await
+## Show a confirmation dialog and return it for await. `confirm_sound` names the sound
+## the confirm button plays (AudioManager.play), for example &"leave_game".
 func show_confirmation(
 	title: String,
 	message: String,
@@ -160,7 +161,7 @@ func show_confirmation(
 	confirm_callback: Callable = Callable(),
 	cancel_callback: Callable = Callable(),
 	confirm_style: String = "Success",
-	confirm_sound_override: Callable = Callable()
+	confirm_sound: StringName = &"confirm"
 ) -> Node:
 	var dialog = CONFIRMATION_DIALOG_SCENE.instantiate()
 	get_tree().root.add_child(dialog)
@@ -172,7 +173,7 @@ func show_confirmation(
 		confirm_callback,
 		cancel_callback,
 		confirm_style,
-		confirm_sound_override
+		confirm_sound
 	)
 	return dialog
 

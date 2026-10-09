@@ -146,7 +146,7 @@ func _on_body_entered(body: Node3D) -> void:
 		Vector3(body.global_position.x, global_position.y, body.global_position.z), true
 	)
 	body.get_viewport().add_child(splash)
-	AudioManager.play_splash_enter()
+	AudioManager.play(&"splash_enter")
 
 
 ## Handle a token's collision shape exiting the water zone -- mirrors
@@ -173,7 +173,7 @@ func _on_body_exited(body: Node3D) -> void:
 		Vector3(body.global_position.x, global_position.y, body.global_position.z), false
 	)
 	body.get_viewport().add_child(splash)
-	AudioManager.play_splash_exit()
+	AudioManager.play(&"splash_exit")
 
 
 ## Ask WaterRippleRegistry to push the latest submerged-token disturbance state onto

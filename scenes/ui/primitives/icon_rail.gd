@@ -128,7 +128,7 @@ func set_item_visible(id: StringName, item_visible: bool) -> void:
 func _on_item_pressed(id: StringName) -> void:
 	if auto_select and id != selected:
 		select(id)
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 	item_pressed.emit(id)
 
 

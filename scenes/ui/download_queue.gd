@@ -218,10 +218,10 @@ func _remove_item(pack_id: String, asset_id: String, variant_id: String, success
 	if success:
 		item.progress_bar.value = 100.0
 		item.progress_bar.modulate = Color(0.5, 0.8, 0.5)
-		AudioManager.play_success()
+		AudioManager.play(&"success")
 	else:
 		item.progress_bar.modulate = Color(0.8, 0.4, 0.4)
-		AudioManager.play_error()
+		AudioManager.play(&"error")
 
 	var tween = create_tween()
 	tween.tween_interval(0.5)
@@ -322,7 +322,7 @@ func _expand_panel() -> void:
 	_tween.tween_property(detail_panel, "modulate:a", 1.0, Constants.ANIM_FADE_OUT_DURATION)
 	_tween.tween_property(detail_panel, "scale", Vector2.ONE, Constants.ANIM_FADE_IN_DURATION)
 
-	AudioManager.play_open()
+	AudioManager.play(&"open")
 
 
 func _collapse_panel() -> void:
@@ -343,7 +343,7 @@ func _collapse_panel() -> void:
 			_is_panel_expanded = false
 	)
 
-	AudioManager.play_close()
+	AudioManager.play(&"close")
 
 
 func _on_icon_pressed() -> void:
@@ -481,13 +481,13 @@ func _remove_pack_item(pack_id: String, success: bool) -> void:
 	if success:
 		item.progress_bar.value = 100.0
 		item.progress_bar.modulate = Color(0.5, 0.8, 0.5)
-		AudioManager.play_success()
+		AudioManager.play(&"success")
 		var pack = AssetManager.get_pack(pack_id)
 		var display = pack.display_name if pack else pack_id
 		UIManager.show_success("%s downloaded and ready." % display)
 	else:
 		item.progress_bar.modulate = Color(0.8, 0.4, 0.4)
-		AudioManager.play_error()
+		AudioManager.play(&"error")
 		var pack = AssetManager.get_pack(pack_id)
 		var display = pack.display_name if pack else pack_id
 		UIManager.show_error("Failed to download %s." % display)
@@ -579,13 +579,13 @@ func _add_resume_item(info: Dictionary) -> void:
 
 
 func _on_resume_pressed(pack_id: String) -> void:
-	AudioManager.play_confirm()
+	AudioManager.play(&"confirm")
 	_remove_resume_item(pack_id)
 	AssetManager.resume_pack_download(pack_id)
 
 
 func _on_resume_remove_pressed(pack_id: String) -> void:
-	AudioManager.play_cancel()
+	AudioManager.play(&"cancel")
 	AssetManager.dismiss_pack_download(pack_id)
 	_remove_resume_item(pack_id)
 

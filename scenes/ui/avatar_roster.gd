@@ -90,7 +90,7 @@ func close() -> void:
 	if _closing:
 		return
 	_closing = true
-	AudioManager.play_cancel()
+	AudioManager.play(&"cancel")
 	animate_out()
 
 

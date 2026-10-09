@@ -127,7 +127,7 @@ func _on_main_menu_pressed() -> void:
 		func(): main_menu_requested.emit(),
 		Callable(),
 		"Danger",
-		AudioManager.play_leave_game,
+		&"leave_game",
 	)
 
 

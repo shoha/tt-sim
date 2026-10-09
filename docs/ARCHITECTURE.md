@@ -2057,7 +2057,7 @@ some_signal.emit(data)
 ```gdscript
 # Any script can call
 UIManager.show_success("Saved!")
-AudioManager.play_click()
+AudioManager.play(&"click")
 LevelManager.save_level(data)
 ```
 
