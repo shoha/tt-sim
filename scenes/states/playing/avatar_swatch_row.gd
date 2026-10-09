@@ -68,7 +68,7 @@ func _on_toggled(pressed: bool, index: int) -> void:
 	if not pressed or index == selected:
 		return
 	selected = index
-	AudioManager.play_tick()
+	AudioManager.play(&"tick")
 	picked.emit(index)
 
 

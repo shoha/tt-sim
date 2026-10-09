@@ -110,7 +110,7 @@ func _show_connected_state() -> void:
 	_suppressing_join_sounds = true
 	_update_player_list()
 	_cross_fade(waiting_container)
-	AudioManager.play_success()
+	AudioManager.play(&"success")
 	# Allow the initial player list sync from the host to complete before
 	# treating subsequent player_joined signals as new-player events.
 	get_tree().create_timer(1.0).timeout.connect(
@@ -156,14 +156,14 @@ func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
 		_update_player_list()
 		if not _suppressing_join_sounds:
 			_flash_player_list()
-			AudioManager.play_success()
+			AudioManager.play(&"success")
 
 
 func _on_player_left(_peer_id: int, _player_info: Dictionary) -> void:
 	if _is_connected:
 		_update_player_list()
 		_flash_player_list()
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 
 
 ## NetworkManager emits connection_failed before it goes OFFLINE, so the reason is
@@ -174,7 +174,7 @@ func _on_connection_failed(reason: String) -> void:
 	_is_connected = false
 	_show_input_state()
 	status_label.text = "Connection failed: " + reason
-	AudioManager.play_error()
+	AudioManager.play(&"error")
 
 
 func _on_connection_state_changed(

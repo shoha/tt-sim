@@ -80,7 +80,7 @@ func _choose(info: Dictionary) -> void:
 	if _closing:
 		return
 	_closing = true
-	AudioManager.play_confirm()
+	AudioManager.play(&"confirm")
 	level_chosen.emit(info)
 	animate_out()
 
@@ -89,7 +89,7 @@ func _on_cancel_pressed() -> void:
 	if _closing:
 		return
 	_closing = true
-	AudioManager.play_cancel()
+	AudioManager.play(&"cancel")
 	animate_out()
 
 

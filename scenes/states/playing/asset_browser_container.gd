@@ -22,8 +22,6 @@ func _on_ready() -> void:
 	fade_in_duration = 0.25
 	fade_out_duration = Constants.ANIM_FADE_OUT_DURATION
 	trans_in_type = Tween.TRANS_BACK
-	# Sounds are handled manually to avoid doubling with the toggle button's click.
-	play_open_close_sounds = false
 
 	asset_browser.asset_selected.connect(_on_asset_selected)
 	asset_browser.avatar_build_requested.connect(_on_avatar_build_requested)
@@ -76,10 +74,6 @@ func _on_before_animate_in() -> void:
 # when the player clears them explicitly), including across a drag-place.
 func _on_before_animate_out() -> void:
 	UIManager.unregister_overlay(self)
-	# If the button is still pressed, the close came from ESC or asset selection
-	# rather than the toggle button (which already plays its own click sound).
-	if toggle_button.button_pressed:
-		AudioManager.play_close()
 
 
 # Also untoggle the button when closed via ESC (without re-triggering toggled signal)

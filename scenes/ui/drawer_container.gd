@@ -590,9 +590,9 @@ func _animate_to_state() -> void:
 
 	if play_sounds:
 		if is_open:
-			AudioManager.play_open()
+			AudioManager.play(&"open")
 		elif is_revealed:
-			AudioManager.play_close()
+			AudioManager.play(&"close")
 
 
 func _on_slide_finished() -> void:
@@ -626,7 +626,7 @@ func _on_rail_item_pressed(id: StringName) -> void:
 			close()
 		return
 	_rail.select(id)
-	AudioManager.play_tick()
+	AudioManager.play(&"tick")
 	pane_requested.emit(id)
 
 

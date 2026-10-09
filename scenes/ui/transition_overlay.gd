@@ -62,7 +62,7 @@ func fade_out(duration: float = -1.0) -> void:
 		_:
 			_fade_out_fade(duration)
 
-	AudioManager.play_transition()
+	AudioManager.play(&"transition")
 	await _tween.finished
 	if not is_instance_valid(self):
 		return
@@ -85,7 +85,7 @@ func fade_in(duration: float = -1.0) -> void:
 		_:
 			_fade_in_fade(duration)
 
-	AudioManager.play_transition()
+	AudioManager.play(&"transition")
 	await _tween.finished
 	if not is_instance_valid(self):
 		return

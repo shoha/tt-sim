@@ -1,5 +1,6 @@
-"""Tests for --install."""
+"""Tests for --install and --manifest."""
 
+import json
 import os
 import sys
 import tempfile
@@ -78,8 +79,8 @@ class TestInstall(unittest.TestCase):
                 self.assertEqual(cli.verify_samples(name, samples), [], name)
 
     def test_a_failed_render_leaves_no_partial_wav(self):
-        # audio_manager.gd probes .wav before .ogg, so a truncated .wav would
-        # silently shadow a working .ogg. A failed install must leave nothing.
+        # The manifest points AudioManager at the .wav, so a truncated one would
+        # play as garbage or not at all. A failed install must leave nothing.
         def half_write(path, samples, sample_rate=44100):
             with open(path, "wb") as handle:
                 handle.write(b"RIFF truncated")
@@ -106,6 +107,49 @@ class TestInstall(unittest.TestCase):
             self.assertTrue(os.path.exists(ogg))
 
 
+class TestManifest(unittest.TestCase):
+    def _read(self, root):
+        with open(cli.manifest_path(root), "r", encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def test_install_writes_a_manifest_entry_for_every_sound(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cli.install(tmp, seed=0)
+            sounds = self._read(tmp)["sounds"]
+        self.assertEqual(set(sounds), set(sfx_spec.SPECS))
+        for name, spec in sfx_spec.SPECS.items():
+            entry = sounds[name]
+            self.assertEqual(entry["bus"], cli.GODOT_BUS[spec.bus], name)
+            self.assertEqual(
+                entry["path"], "res://assets/audio/%s/%s.wav" % (spec.bus, name)
+            )
+            self.assertEqual(entry["volume_db"], spec.volume_db, name)
+            self.assertEqual(entry["pitch_jitter"], spec.pitch_jitter, name)
+            self.assertEqual(entry["cooldown_s"], spec.cooldown_s, name)
+            self.assertEqual(entry["priority"], spec.priority, name)
+
+    def test_manifest_is_byte_stable_with_lf_endings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cli.write_manifest(tmp)
+            with open(cli.manifest_path(tmp), "rb") as handle:
+                first = handle.read()
+            cli.write_manifest(tmp)
+            with open(cli.manifest_path(tmp), "rb") as handle:
+                second = handle.read()
+        self.assertEqual(first, second)
+        self.assertNotIn(b"\r\n", first)
+
+    def test_manifest_flag_writes_no_audio(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code = cli.main(["--manifest", "--assets-root", tmp])
+            self.assertEqual(code, 0)
+            self.assertTrue(os.path.isfile(cli.manifest_path(tmp)))
+            for bus in cli.GODOT_BUS:
+                self.assertFalse(
+                    os.path.isdir(os.path.join(tmp, "assets", "audio", bus)), bus
+                )
+
+
 class TestInstallWiring(unittest.TestCase):
     def test_main_install_flag_writes_files(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -114,6 +158,7 @@ class TestInstallWiring(unittest.TestCase):
             self.assertTrue(
                 os.path.isfile(os.path.join(tmp, "assets", "audio", "ui", "click.wav"))
             )
+            self.assertTrue(os.path.isfile(cli.manifest_path(tmp)))
 
 
 if __name__ == "__main__":

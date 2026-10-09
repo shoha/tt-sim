@@ -61,7 +61,7 @@ func _ready() -> void:
 
 func toggle() -> void:
 	expanded = not expanded
-	AudioManager.play_tick()
+	AudioManager.play(&"tick")
 
 
 func _build_header() -> void:

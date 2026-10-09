@@ -13,8 +13,6 @@ signal closed
 ## project-specific feature, not an engine one.
 enum WaterQuality { LOW, MEDIUM, HIGH }
 
-const SLIDER_TICK_INTERVAL := 0.08  # Minimum seconds between slider tick sounds
-
 ## Maps the "Renderer" OptionButton's item ids to the string values Godot's
 ## rendering/renderer/rendering_method project setting and --rendering-method
 ## command-line argument both accept. Index 0 ("" / Default) means "don't
@@ -51,8 +49,6 @@ const SECTIONS := [
 
 var header: MenuHeader
 var close_button: Button
-
-var _last_slider_tick_time: float = 0.0
 
 # Audio controls
 @onready var master_slider: HSlider = %MasterVolumeSlider
@@ -282,10 +278,10 @@ func _on_panel_ready() -> void:
 
 	# Audio sliders (config-driven: [slider, label, bus_name])
 	for binding in [
-		[master_slider, master_label, "Master"],
-		[music_slider, music_label, "Music"],
-		[sfx_slider, sfx_label, "SFX"],
-		[ui_slider, ui_label, "UI"],
+		[master_slider, master_label, AudioManager.BUS_MASTER],
+		[music_slider, music_label, AudioManager.BUS_MUSIC],
+		[sfx_slider, sfx_label, AudioManager.BUS_SFX],
+		[ui_slider, ui_label, AudioManager.BUS_UI],
 	]:
 		binding[0].value_changed.connect(_on_volume_changed.bind(binding[1], binding[2]))
 
@@ -519,11 +515,11 @@ func _save_settings() -> void:
 
 
 func _apply_settings() -> void:
-	# Apply audio settings
-	_apply_audio_bus("Master", master_slider.value)
-	_apply_audio_bus("Music", music_slider.value)
-	_apply_audio_bus("SFX", sfx_slider.value)
-	_apply_audio_bus("UI", ui_slider.value)
+	# Apply audio settings (sliders are percent, buses take 0..1)
+	AudioManager.set_bus_volume(AudioManager.BUS_MASTER, master_slider.value / 100.0)
+	AudioManager.set_bus_volume(AudioManager.BUS_MUSIC, music_slider.value / 100.0)
+	AudioManager.set_bus_volume(AudioManager.BUS_SFX, sfx_slider.value / 100.0)
+	AudioManager.set_bus_volume(AudioManager.BUS_UI, ui_slider.value / 100.0)
 
 	# Defer fullscreen mode change — macOS native fullscreen (`toggleFullScreen:`)
 	# requires the window to be fully presented and the run-loop to be idle.
@@ -565,30 +561,16 @@ func _apply_network_settings() -> void:
 	AssetManager.streamer.set_enabled(p2p_enabled_check.button_pressed)
 
 
-func _apply_audio_bus(bus_name: String, volume_percent: float) -> void:
-	var bus_idx = AudioServer.get_bus_index(bus_name)
-	if bus_idx >= 0:
-		var db = linear_to_db(volume_percent / 100.0)
-		AudioServer.set_bus_volume_db(bus_idx, db)
-
-
 func _update_volume_label(label: Label, value: float) -> void:
 	label.text = "%d%%" % int(value)
 
 
-## Generic handler for all volume sliders.
+## Generic handler for all volume sliders. The tick's own cooldown (tools/sfx_spec.py)
+## keeps a fast drag from machine-gunning it.
 func _on_volume_changed(value: float, label: Label, bus_name: String) -> void:
 	_update_volume_label(label, value)
-	_apply_audio_bus(bus_name, value)
-	_try_play_slider_tick()
-
-
-## Throttled tick sound for slider movement feedback
-func _try_play_slider_tick() -> void:
-	var now := Time.get_ticks_msec() / 1000.0
-	if now - _last_slider_tick_time >= SLIDER_TICK_INTERVAL:
-		_last_slider_tick_time = now
-		AudioManager.play_tick()
+	AudioManager.set_bus_volume(bus_name, value / 100.0)
+	AudioManager.play(&"tick")
 
 
 ## Cross-fade animation when switching settings tabs
@@ -733,7 +715,7 @@ func _apply_grid_visual_settings() -> void:
 
 func _on_foliage_density_changed(value: float) -> void:
 	foliage_density_label.text = "%.1fM" % value
-	_try_play_slider_tick()
+	AudioManager.play(&"tick")
 
 
 func _apply_foliage_density() -> void:
@@ -744,17 +726,17 @@ func _apply_foliage_density() -> void:
 
 func _on_cell_tint_opacity_changed(value: float) -> void:
 	cell_tint_opacity_label.text = "%d%%" % int(value)
-	_try_play_slider_tick()
+	AudioManager.play(&"tick")
 
 
 func _on_line_thickness_changed(value: float) -> void:
 	line_thickness_label.text = "%.1f" % value
-	_try_play_slider_tick()
+	AudioManager.play(&"tick")
 
 
 func _on_fade_distance_changed(value: float) -> void:
 	fade_distance_label.text = "%d" % int(value)
-	_try_play_slider_tick()
+	AudioManager.play(&"tick")
 
 
 func _update_grid_labels() -> void:

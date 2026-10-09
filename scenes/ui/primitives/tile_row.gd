@@ -122,7 +122,7 @@ func set_tile_visible(id: StringName, tile_visible: bool) -> void:
 
 func _on_tile_toggled(pressed: bool, id: StringName) -> void:
 	if multi_select:
-		AudioManager.play_tick()
+		AudioManager.play(&"tick")
 		tile_toggled.emit(id, pressed)
 		return
 	# The group unpresses the previous tile with its own toggled(false); only
@@ -130,7 +130,7 @@ func _on_tile_toggled(pressed: bool, id: StringName) -> void:
 	if not pressed or id == selected:
 		return
 	selected = id
-	AudioManager.play_tick()
+	AudioManager.play(&"tick")
 	selection_changed.emit(id)
 
 

@@ -254,12 +254,12 @@ func _handle_left_click(ctrl_held: bool) -> bool:
 			_waypoints.append(hit)
 			_state = State.PLACING_WAYPOINT
 			_mark_dirty()
-			AudioManager.play_tick()
+			AudioManager.play(&"tick")
 			return true
 		State.PLACING_WAYPOINT:
 			_waypoints.append(hit)
 			_mark_dirty()
-			AudioManager.play_tick()
+			AudioManager.play(&"tick")
 			return true
 		State.PLACING_VOLUME_CENTER:
 			_volume_center = hit
@@ -267,7 +267,7 @@ func _handle_left_click(ctrl_held: bool) -> bool:
 			_state = State.PLACING_VOLUME_RADIUS
 			_update_hints()
 			_mark_dirty()
-			AudioManager.play_tick()
+			AudioManager.play(&"tick")
 			return true
 		State.PLACING_VOLUME_RADIUS:
 			if _has_preview:
@@ -279,7 +279,7 @@ func _handle_left_click(ctrl_held: bool) -> bool:
 				_update_hints()
 				_redraw_locked_volume()
 				_mark_dirty()
-				AudioManager.play_tick()
+				AudioManager.play(&"tick")
 			return true
 	return false
 

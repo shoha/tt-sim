@@ -56,16 +56,12 @@ func _build_ui() -> void:
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(tabs)
 
-	# The AudioManager autoload's own sound dictionaries are the game's single source
-	# of truth for which sounds exist and which bus each belongs to. Reading them
-	# directly (rather than hardcoding a parallel list here) means this soundboard
-	# can never drift out of sync with the real game. They are `_`-prefixed because
-	# AudioManager treats them as implementation detail for everyone except this dev
-	# tool, which the user has approved reaching in for exactly this reason.
-	var ui_names: Array = AudioManager._ui_sounds.keys()
-	ui_names.sort()
-	var sfx_names: Array = AudioManager._sfx_sounds.keys()
-	sfx_names.sort()
+	# AudioManager's manifest (written from tools/sfx_spec.py) is the game's single
+	# source of truth for which sounds exist and which bus each belongs to. Reading it
+	# (rather than hardcoding a parallel list here) means this soundboard can never
+	# drift out of sync with the real game.
+	var ui_names: Array = AudioManager.sound_names(AudioManager.BUS_UI)
+	var sfx_names: Array = AudioManager.sound_names(AudioManager.BUS_SFX)
 
 	var ui_tab := _build_bus_tab(ui_names, BUS_UI)
 	ui_tab.name = "UI"
