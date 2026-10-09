@@ -2,7 +2,7 @@ extends Node
 
 ## Render-job driver, added to the tree by run.gd. Runs a job (Array of step Dictionaries)
 ## over real frames and sets root meta "render_job_done" to a summary when finished. Logs
-## every step to out_dir/log.txt (appended). The ops are documented in README.md.
+## every step to out_dir/log.txt (appended). The ops are documented in REFERENCE.md.
 
 var steps: Array = []
 var out_dir: String = ""
@@ -10,10 +10,11 @@ var root_node: Node = null
 var frames: PackedFloat64Array = []
 ## Build / look split (README "Build once, look many"). `saved` is the job's top-level "saved"
 ## ({folder, load}), replaced by a `saved` step; the flags come from run.gd's arguments.
+## `full` (`--full`) keeps captures at the window's size; without it they are halved.
 var saved: Dictionary = {}
 var saved_mode: bool = false
 var only: PackedStringArray = []
-var half: bool = false
+var full: bool = false
 var _i: int = -1
 var _state: Dictionary = {}
 var _log: PackedStringArray = []
@@ -30,8 +31,8 @@ func _ready() -> void:
 	process_priority = -100
 	_last_usec = Time.get_ticks_usec()
 	get_tree().root.set_meta("render_job_done", "")
-	if saved_mode or half or not only.is_empty():
-		log_line("flags: saved %s, only %s, half %s" % [saved_mode, ",".join(only), half])
+	if saved_mode or full or not only.is_empty():
+		log_line("flags: saved %s, only %s, full %s" % [saved_mode, ",".join(only), full])
 	_next()
 
 
@@ -641,8 +642,9 @@ func _capture(step: Dictionary) -> bool:
 
 func _grab(name: String) -> void:
 	var step: Dictionary = steps[_i]
-	# `--half` (or the step's own `scale`) shrinks both images before saving, for inner loops.
-	var scale := float(step.get("scale", 0.5 if half else 1.0))
+	# Both images are halved before saving unless `--full` is given; the step's own `scale`
+	# wins over either (pixel-exact diffs pin 1.0, perf jobs pin 0.5).
+	var scale := float(step.get("scale", 1.0 if full else 0.5))
 	# Without a map (a title-screen dialog) there is no world viewport: the window alone.
 	var map := gm()
 	var images: Array[Image] = [get_viewport().get_texture().get_image()]

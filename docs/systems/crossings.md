@@ -379,7 +379,7 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
   biome `phase4d_judgment_set.json` (verdict `VERDICT.md` beside its captures) and the pinned
   pass `p4d_perf_build.json` / `p4d_perf_play.json`. Captures and verdicts are indexed in
   [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Verification status"; the jobs are described in
-  [../../tools/render_jobs/README.md](../../tools/render_jobs/README.md).
+  [../../tools/render_jobs/JOBS.md](../../tools/render_jobs/JOBS.md).
 - **Performance** ([../PERFORMANCE.md](../PERFORMANCE.md)): "Phase 4b (crossings): pinned
   performance pass (2026-09-27)", with "Play: crossings shown and hidden in one run", and
   "Phase 4d (arch and ford): pinned performance pass (2026-10-04)" (crossings shown are

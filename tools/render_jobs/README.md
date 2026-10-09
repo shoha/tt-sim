@@ -5,680 +5,115 @@ a list of steps from a JSON job file: open new maps or existing levels in author
 strokes, place props, move the camera, and capture both the composited window and the raw
 3D SubViewport as PNGs, with an `INDEX.md` listing every capture. It exists so judgment
 passes on authoring visuals (what a biome looks like out of the box, what a hand-painted
-composition looks like at game zoom, how it compares with the Blender reference maps) can
-be re-run identically after a change instead of being rebuilt by hand each time.
+composition looks like at game zoom, how it compares with the Blender reference maps) can be
+re-run identically after a change instead of being rebuilt by hand each time. It needs no
+validation bridge, no Python and no shell script: one `godot` command runs the job and quits.
 
-It needs no validation bridge, no Python, and no shell script: one `godot` command runs
-the job and quits.
+This page is the quick reference. [REFERENCE.md](REFERENCE.md) holds the job file format,
+every op and probe script, the capture readers and the caveats; [JOBS.md](JOBS.md) is the
+catalogue of the jobs in `jobs/`.
 
 ## Running a job
 
+One fixed command form, so it is approved once; only the job and the flags change:
+
 ```
-godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- authoring_judgment_set
+godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- <job> [flags]
 ```
+
+Do not pass `--headless`: captures need real pixels. `run.gd` loads the main scene, waits
+about 3 seconds for it to settle, forces the window onto the primary screen at 1920x1080
+(REFERENCE.md "Why 1920x1080 is forced") and adds `driver.gd`, which runs the steps. The
+run takes as long as its steps (`dressing_smoke` about 15 s, a judgment set several
+minutes) and quits by itself when the last step is done or `timeout_s` passes.
+
+Progress lines start with `RJ|`. A PreToolUse hook (`.claude/hooks/godot_output.sh`) shows
+an agent only the job line (with the output folder's absolute path), each capture with its
+image sizes, flags, saved-level loads, measurements (`gpu`, `record`) and probe results,
+errors with their `at:` lines, and the end (`done in`, or `TIMEOUT` / `HANG` after the last
+step line). The whole output is kept in `.godot/last_godot_output.txt`; every step is also
+in the job's own `log.txt`.
+
+## Flags
 
 Arguments after `--`:
 
-- `<job>`: a path to a JSON job file, or the name of one under
-  `res://tools/render_jobs/jobs/` (the `.json` is optional).
-- `--out <dir>` (or `--out=<dir>`), optional: overrides the job's `out_dir`.
-- `--warm-graphics`, optional: force the first-launch graphics warm-up
-  (`GraphicsWarmup.FORCE_ARG`). The editor binary skips it otherwise, so a job run from
-  it never sees the warm-up unless it passes this. Start such a job with `wait_title`.
-- `--saved`, optional: skip every step tagged `"phase": "build"` and, where the first of
-  them was, load the job's saved level instead (the `saved` key or op, below). The level
-  must have been built by a run without the flag; a missing one stops the job.
-- `--only <names>` (or `--only=<names>`), optional: comma-separated capture names, `*` and
-  `?` wildcards allowed (quote them in a shell: `--only "*_2_tier_z8"`). Only the matching
-  `capture` steps run; a step tagged `"phase": "look"` with a `for` runs only when a
-  capture it serves runs. Untagged steps always run.
-- `--half`, optional: every capture, window and `_sub`, saved at half size (960x540).
+- `<job>`: a path to a JSON job file, or the name of one under `res://tools/render_jobs/jobs/`
+  (the `.json` is optional).
+- `--full`: captures at the window's size (1920x1080), for a final verdict. Without it every
+  capture, window and `_sub`, is saved at half size (960x540), about a quarter of the tokens
+  to read. A capture step's own `scale` wins over both (perf jobs pin 0.5;
+  `avatar_probe.json`'s pixel-diff twins pin 1.0).
+- `--saved`: skip every step tagged `"phase": "build"` and, where the first of them was, load
+  the job's saved level instead (the `saved` key or op). The level must have been built by a
+  run without the flag; a missing one stops the job.
+- `--only <names>` (or `--only=<names>`): comma-separated capture names, `*` and `?`
+  wildcards allowed (quote them in a shell: `--only "*_2_tier_z8"`). Only the matching
+  `capture` steps run; a step tagged `"phase": "look"` with a `for` runs only when a capture
+  it serves runs. Untagged steps always run.
+- `--out <dir>` (or `--out=<dir>`): overrides the job's `out_dir`.
+- `--warm-graphics`: force the first-launch graphics warm-up (`GraphicsWarmup.FORCE_ARG`).
+  The editor binary skips it otherwise, so a job run from it never sees the warm-up unless
+  it passes this. Start such a job with `wait_title`.
+- `--half`: accepted and ignored. It was the half-size flag before half size became the
+  default (2026-10-09), so older commands still run.
 
-See "Build once, look many" for the loop these three serve.
-
-Do not pass `--headless`: captures need real pixels. The run takes as long as the job's
-steps (the judgment set is about 6 minutes) and quits by itself when the last step is done
-or `timeout_s` passes. Progress lines are printed with the prefix `RJ|`.
-
-A hung run kills itself (see `hang_s` below). This matters because `timeout_s` is checked
-on the main thread, which a hang blocks, and on Windows stopping the shell task that
-launched Godot (Claude Code's TaskStop, or the Bash tool's own timeout) does not stop the
-Godot process: a hung Mobile-renderer run in September 2026 kept its window and GPU context
-alive for 26 minutes after its task was "stopped", contending with every later run. If a
-`Godot_v4.7.1-stable_win64` process is still listed after a job, stop it by id.
-
-`run.gd` loads the main scene, waits about 3 seconds for it to settle, then forces the
-window onto the primary screen at 1920x1080 and adds `driver.gd`, which runs the steps.
-
-## Where outputs go
+## Where captures land
 
 - The job's `out_dir`, or `--out` when given. A path that is already absolute (`user://...`,
   `res://...`, `D:/...`) is used as is; a relative one resolves under `user://`
-  (`--out render_jobs/verify` writes to `user://render_jobs/verify`).
-- With neither, `user://render_jobs/<job file name>/`, for example
-  `user://render_jobs/authoring_judgment_set/`.
-
-`user://` is `%APPDATA%/Godot/app_userdata/TTSim/`. Each capture writes `<name>.png` (the
-composited window, including the lo-fi pass) and `<name>_sub.png` (the raw 3D SubViewport).
-`log.txt` gets one line per step and per result; it is appended to, not replaced, so delete
-it between runs into the same folder if you want a clean log.
-
-The harness itself never saves a level. The `title` op switches state directly, bypassing
-the leave prompt, and `no_autosave` stops the authoring autosave timer, so
-`user://levels/_autosave` and existing level folders are only ever read. Use `no_autosave`
-after every `new_map` or `dress` in a job that paints. The only writes under
-`user://levels/` are the explicit `water.gd save` (and `crossing.gd save`) steps a job
-carries, into `_p4..._` test folders, and the only deletes are their `cleanup` actions.
+  (`--out render_jobs/verify` writes to `user://render_jobs/verify`). With neither,
+  `user://render_jobs/<job file name>/`, for example `user://render_jobs/dressing_smoke/`.
+- `user://` is `%APPDATA%/Godot/app_userdata/TTSim/`; the job line prints the absolute folder.
+- Each capture writes `<name>.png` (the composited window, including the lo-fi pass) and
+  `<name>_sub.png` (the raw 3D SubViewport); with no map open, `<name>.png` alone. Its
+  `captured` line logs both image sizes and the camera size, so a wrong size shows.
+- `log.txt` gets one line per step and per result; it is appended to, not replaced, so delete
+  it between runs into the same folder if you want a clean log. The `index` op writes
+  `INDEX.md`.
+- The pixel readers (`sample_pixels.gd`, `probes/avatar_diff.gd`) take coordinates in the
+  PNG's own pixels: halve coordinates read off a full-size capture (REFERENCE.md "Capture
+  readers").
 
 ## Build once, look many
 
-A job that builds a map (new map, strokes, carves, bakes) before its captures pays that
-build on every run: 60-95 s for one map, 13-17 minutes for the eight-biome judgment sets.
-Shader and mesh-constant iteration does not need the rebuild, so a job can split its steps
-into two phases and run in look mode:
+A job that builds a map (new map, strokes, carves, bakes) before its captures pays that build
+on every run: 60-95 s for one map, 13-17 minutes for the eight-biome judgment sets. Shader
+and mesh-constant iteration does not need the rebuild, so a job can split its steps into two
+phases (REFERENCE.md "Tagging a job for build and look") and run in look mode:
 
-1. **Build run** (no flags): the job runs as written. Its build steps end with a
-   `water.gd save` into a `_<task>_` test level (`_p4c_falls_look`, `_p4c_{biome}`), with
-   `"replace": true` so a rebuild overwrites the last one. The saved levels are kept on
-   purpose.
-2. **Look runs**: `--saved --only <captures> --half`. The build steps are skipped, the
-   saved level is loaded in their place (`dress` by default, so the look steps find the
-   authoring controller they expect), only the named captures and the look steps serving
-   them run, and the PNGs come out at 960x540. `falls_look` drops from 93 s to 15 s for
-   two captures; the judgment set from about 100 s per biome to about 9 s.
-3. A carve, plan or terrain change (anything the saved document bakes in) needs a new
-   build run; a shader, material or mesh-constant change does not. Full-size captures
-   (no `--half`) are for the final verdict.
-4. `jobs/cleanup_levels.json` (`water.gd cleanup`) deletes every `_p43_` to `_p4d_`, `_p5_`
-   and `_p5j_` test level when the task is done.
+1. **Build run** (no flags): the job runs as written. Its build steps end with a `water.gd
+   save` into a `_<task>_` test level (`_p4c_falls_look`, `_p4c_{biome}`), with `"replace":
+   true` so a rebuild overwrites the last one. The saved levels are kept on purpose.
+2. **Look runs**: `--saved --only <captures>`. The build steps are skipped, the saved level
+   is loaded in their place (`dress` by default, so the look steps find the authoring
+   controller they expect), and only the named captures and the look steps serving them run.
+   `falls_look` drops from 93 s to 15 s for two captures; the judgment set from about 100 s
+   per biome to about 9 s.
+3. A carve, plan or terrain change (anything the saved document bakes in) needs a new build
+   run; a shader, material or mesh-constant change does not. Full-size captures (`--full`)
+   are for the final verdict.
+4. `jobs/cleanup_levels.json` (`water.gd cleanup`) deletes every `_p43_` to `_p4d_`, `_p5_`,
+   `_p5j_` and `_p6_` test level when the task is done; JOBS.md names each job's own cleanup.
 
-Tagging a job: `"phase": "build"` on every step that shapes the document (and the
-`look_at` / `zoom` / `wait` that set up the strokes' view), `"phase": "look", "for":
-"<capture>"` on a camera move, probe toggle or wait that serves one capture (a comma
-list or a wildcard when it serves several: `"for": "{biome}_*_play_*"` on a play section),
-nothing on steps that must run either way (`no_autosave`, `env.gd`, `falls.gd falls` for
-its `found:` names, `hide_ui`, a toggle that restores state, `title`). A `saved` op (or
-the top-level `saved` key) names the level to load; inside an `expand_biomes` template it
-is one level per biome.
+## Levels, hangs and the process check
 
-## Why 1920x1080 is forced
+The harness itself never saves a level. The `title` op switches state directly, bypassing the
+leave prompt, and `no_autosave` stops the authoring autosave timer, so `user://levels/_autosave`
+and existing level folders are only ever read. Use `no_autosave` after every `new_map` or
+`dress` in a job that paints. The only writes under `user://levels/` are the explicit `save`
+steps a job carries (`water.gd`, `crossing.gd` and the avatar probes), into `_<task>_` test
+folders, and the only deletes are their `cleanup` actions.
 
-On the user's portrait monitor the `--resolution` flag alone produced odd window sizes (the
-window was clamped or rescaled to fit the screen), so captures from different runs did not
-match. `run.gd` sets the window to 1920x1080 on the primary screen after the scene loads,
-and every capture log line records the actual image sizes so a wrong size is visible.
-
-## Job file format
-
-```json
-{
-  "out_dir": "render_jobs/my_run",
-  "timeout_s": 900,
-  "remove_override": false,
-  "steps": [ {"op": "wait", "s": 1.0}, ... ]
-}
-```
-
-Top-level keys:
-
-| Key | Default | Meaning |
-|---|---|---|
-| `steps` | required | Array of step objects, run in order, each over one or more frames. |
-| `out_dir` | `user://render_jobs/<job name>` | Output folder (see above). `--out` overrides it. |
-| `timeout_s` | 300 | Hard stop in seconds from launch; the run quits even if steps remain. |
-| `hang_s` | 60 | Watchdog: when no frame completes for this many seconds, log a `HANG:` line (stderr and `log.txt`) and kill the process. The same watchdog kills a run still alive 30 s past `timeout_s`. The last `step` line before the `HANG` line is the step that hung. |
-| `remove_override` | false | Delete `res://override.cfg` right after startup (the engine has already read it). Use it when you drop in a temporary `override.cfg` for one run (for example to pin a setting), so the file never outlives the run. The harness never creates one itself. |
-| `saved` | none | `{"folder": "<level folder>", "load": "dress" or "play" (default `dress`), "settle": 2.0}`: the saved level `--saved` loads in place of the job's build steps ("Build once, look many"). The `saved` op declares the same from inside the steps (per expansion). |
-
-Every step has an `op`. Steps that finish immediately advance on the same frame; `wait`,
-`wait_ready`, `stroke`, `capture` and `gpu` take several frames. An unknown op logs
-`unknown op` and is skipped. Any step may also carry:
-
-| Field | Meaning |
-|---|---|
-| `phase` | `"build"`: skipped by `--saved` (the saved level is loaded where the first skipped build step was). `"look"`: skipped by `--only` when its `for` serves no capture that runs. Absent: the step always runs. |
-| `for` | On a `"phase": "look"` step: the capture names it serves, comma-separated, `*` and `?` wildcards allowed. The step runs when any capture in the job matching an entry is taken by `--only`, or when an `--only` pattern matches an entry directly (a name that is no capture, say `falls_gpu` on a GPU A/B). |
-| `scale` | On a `capture`: the image scale (0.5 for half size); `--half` is `scale` 0.5 on every capture. |
-
-A skipped step logs `skip <op> (<reason>)`.
-
-### State and maps
-
-| Op | Fields | What it does |
-|---|---|---|
-| `title` | none | Switch to the title state (`change_state(0)`), without the leave prompt and without saving. |
-| `wait_title` | none | Wait until the title state is current: the first-launch graphics warm-up (`Root.State.WARMING_UP`) has handed over. Put it first in any job that may boot into the warm-up. |
-| `new_map` | `biome` (palette biome id, `""` for bare ground), `size` (ft, default 200), `seed` (default 1234), `landform` (a `StartingLandform.KINDS` id, default `flat`) | Open a new map in authoring, as the New map dialog does. The default `flat` keeps older jobs on the ground they were written for. |
-| `dress` | `folder` (level folder under `user://levels/`) | Open an existing level in authoring; a GLB-only level opens as a dressing layer. Nothing is written unless something saves. |
-| `play` | `folder` | Load that level folder and play it (`_on_play_level_requested`). |
-| `wait_ready` | `settle` (s, default 2.0) | Wait until the map has loaded, authoring is open, and the scatter is neither regenerating nor growing, then `settle` more seconds; the timer restarts whenever any of those is busy again. |
-| `wait` | `s` (default 1.0) | Wait that many seconds. |
-| `no_autosave` | none | Stop and disconnect the authoring autosave timer. |
-| `hide_ui` | `hide` (default true) | Hide (or with `false`, show) the authoring panel. |
-| `expand_ab` | `configs` (array of ground shader versions), `label`, `s` (default 3.0) | An in-run ground shader A/B: per config, swap the terrain's shader (`probes/ground_perf.gd` `shader`; `"std"` draws the chunks with `perf.gd`'s StandardMaterial3D instead), wait 0.5 s and sample GPU time for `s` seconds (`perf.gd` `start` / `stop`). Run `vsync_off` first. |
-| `expand` | `template` (array of steps), `values` (array) | Insert `template` once per entry of `values`, in order, with `{value}` replaced by it anywhere in the template's strings (level folders, for example, where `expand_biomes` only takes palette biomes). |
-| `expand_biomes` | `template` (array of steps), `biomes` (optional array of biome ids) | Insert `template` once per biome in the installed palette (`PaletteLibrary.biomes()`, palette order; only the ids in `biomes` when given), with `{biome}` replaced by the biome id, `{name}` by its display name and `{path}` by its first path surface (`dirt` when it lists none), anywhere in the template's strings. |
-| `saved` | `folder`, `load` (`dress` default, `play`), `settle` (default 2.0) | Declare the saved level that `--saved` loads (with `wait_ready` after it) in place of the build steps that follow, until the next `saved`. Does nothing without `--saved`. Put it first in an `expand_biomes` template (`"folder": "_p4c_{biome}"`) so each biome loads its own level. |
-
-### Camera
-
-| Op | Fields | What it does |
-|---|---|---|
-| `home` | none | Reset the camera to its home view. |
-| `zoom` | `size` (optional) | With `size`, set the target orthographic size (it eases there, so follow with a `wait`). Without it, zoom out 60 steps, which reaches full zoom-out. |
-| `look_at` | `at` ([x, z] world metres) | Pan so the screen centre looks at that ground point. |
-
-### Authoring edits
-
-| Op | Fields | What it does |
-|---|---|---|
-| `stroke` | `points` ([[x, z], ...] world metres), `curve` (default false: a Catmull-Rom curve through the points, as a hand draws, instead of straight runs), `mode` (`paint` default, `thin`, `clear`, `sculpt`, `surface`, `water`: `shape` `river` or `pond`, `depth` `ankle` / `waist` / `deep`, `flow_speed`, `ctrl` erases), `biome` (for `paint`), `tile` (for `sculpt`: `raise` default, `smooth`, `flatten`, `tier`), `surface` (for `surface`: a palette surface, picked as its Paint tile is), `ctrl` / `shift` (for `sculpt`, and `ctrl` for `surface`, which erases paint: held at the press), `radius` (default 4.0), `flow` (default 1.0), `speed` (m/s along the path, default 6.0), `hold` (s to hold at the end, default 0), `keep_active` (default false), `release` (default true) | Paint a brush stroke through the real brush tool, moving the pointer along the polyline at `speed`. `paint` uses the biome tool with `biome`; `thin` uses the thin tool; `clear` is the thin tool with Ctrl held; `sculpt` picks the Sculpt tile as the panel does. On sculptable ground the pointer aims at the ground's current height. `keep_active` releases the press and finishes the gesture without deactivating the brush; `release: false` leaves the stroke held at the end point (it keeps dabbing there) for a capture mid-stroke, until a `release` step. |
-| `release` | none | Ends a stroke left held by `release: false`, keeping the brush active. |
-| `cancel` | none | Cancels a stroke left held by `release: false`, as a right click does (a river being drawn is dropped). |
-| `hover` | `at` ([x, z]), `tile` (default `tier`), `radius`, `ctrl` | The Sculpt tool with `tile` over `at`, not pressed, Ctrl as given: the cursor and its Tier / Flatten readout as an author sees them before pressing. |
-| `place` | `biome`, `species`, `at` ([x, z]) | Place one prop of that biome's species at the point and commit it. If the biome or species is not in the palette, logs `no species <s> in <b>; not placed` and carries on. |
-| `bridge_kind` | `kind` (`plank` default, `stones`, `arch`, `ford`: any `Crossing.KIND_NAMES` entry) | Pick that Bridge tile (P4b-2, P4d-3): the Bridge tool becomes the active tool with that kind. An unknown name logs and picks `plank`. |
-| `gesture` | `points` ([[x, z], ...]), `speed` (m/s, default 4.0), `ctrl` (held throughout), `press` (default true), `release` (default true), `hold` (s at the end) | A left-button drag through real input events (`Input.parse_input_event`: motion, press, motion along the points, release), so the whole path from GameMap's `_input` through `BrushTool.decide()` runs. Each point is aimed at the top walkable surface there (a downward layer-1 ray: ground, deck or stone), where a real pointer over what is drawn would be. `release: false` stops still pressed for a capture; a later `gesture` with `press: false` carries the drag on, or an `input` release ends it. |
-| `input` | `events` (one per frame): `{"type": "move", "at"}`, `{"type": "press" / "release", "at", "button" ("left", "right")}`, `{"type": "key", "key" ("ctrl", "escape"), "pressed"}`; mouse events take `ctrl` | Single real input events, as `gesture` sends them: hovers with Ctrl, clicks, key presses. |
-
-### Capture and output
-
-| Op | Fields | What it does |
-|---|---|---|
-| `capture` | `name`, `desc` (caption for the index), `scale` (default 1.0; `--half` makes it 0.5) | After the next frame is drawn, save `<name>_sub.png` (raw SubViewport) and `<name>.png` (window), resized by `scale` (Lanczos) when it is not 1, and log both sizes and the camera size. With no map open (a dialog over the title) only `<name>.png` is written. `--only` skips captures whose `name` matches none of its patterns. |
-| `index` | `title`, `intro` | Write `INDEX.md` in the output folder: title, intro, then a table row per capture so far (window image, raw image, camera size, caption). |
-
-### Measurement
-
-| Op | Fields | What it does |
-|---|---|---|
-| `vsync_off` | none | Disable vsync and turn on render-time measurement for the world viewport. Needed before `gpu`. |
-| `gpu` | `name`, `s` (default 2.0) | After a 0.3 s settle, sample the world viewport's GPU render time every frame for `s` seconds and log median, p10, p90 and sample count. |
-| `record` | `on` (default true), `name` (default `rec`) | Start recording CPU frame times; `on: false` stops, logs frame count, median and worst, and writes `<name>_frames.txt` with one line per frame (frame time, pipeline compilation counters, process time). |
-
-### Escape hatches
-
-| Op | Fields | What it does |
-|---|---|---|
-| `eval` | `expr` | Run a Godot `Expression` with the main scene (`Root`) as base instance and log the result, for example `_game_map.get_brush_tool().deactivate()`. Expressions cannot assign. |
-| `call` | `script` (a `res://` path), plus any fields the script reads | Load the script and call its static `run(root: Node, step: Dictionary) -> String`, logging the returned string. If the script fails to load, the rest of the job is skipped. |
-
-## Probe scripts for `call`
-
-In `probes/`. Each is a static `run(base, step)`; every field is optional.
-
-| Script | Fields | Effect |
-|---|---|---|
-| `env.gd` | `color` ([r, g, b]), `mouse` ([x, y]), `recentre` (bool), `skirt` (bool) | Flat background colour; the cursor position zoom-toward-cursor uses (the judgment set pins it to the screen centre so zoom-out is repeatable); camera clamp to fitted map bounds on or off; terrain skirt visibility. |
-| `ground_params.gd` | `params` ({uniform: value}), `broad_factor` (int) | Set ground shader uniforms for an in-run A/B; rebuild the broad weight texture at a different box-filter factor. |
-| `tree_fade.gd` | `params` ({uniform: value}), `factor` (float) | Set occlusion-fade uniforms on every registered tree material; set the brush's canopy fade radius factor (0 turns it off). |
-| `close_zoom.gd` | `action` (`camera` default, `back`, `fade`), `d`, `on` | Trees at close zoom (Polish): `camera` logs the camera's size, position, near and far, the ray origins' heights (on the near plane, so where it cuts) and the centre ray's distance from them to y = 0; `back` moves the camera `d` metres along its view axis (same orthographic frame; negative moves it nearer); `near` sets the camera's near (`near`, default 0.001: the plane before the canopy hold, for an A/B; a zoom restores the hold); `shadow` logs the sun's shadow distance and splits, and sets the distance (`max`); `fade` turns the close-zoom canopy fade off (`canopy_part` 0 on every foliage material that takes part) and back on for exactly those. |
-| `reflection_probe.gd` | `visible` (default true) | Show or hide the level reflection probe; logs its box and the environment's SSIL/SDFGI/glow/fog/tonemap switches. |
-| `grid.gd` | `visible` | Log, and optionally set, the grid overlay's visibility directly (bypasses the grid policy; fine for a render session only). |
-| `scatter_warm.gd` | `warm` (bool), `use_biome`, `tool`, `select` | Toggle `AuthoredScatter.warm_pipelines`; choose the brush biome and/or the biome tool without painting. Logs pipeline compilation counts. |
-| `prepare_biomes.gd` | `all` (bool) | `all: true` starts preparing every palette biome on the authoring scatter; a later call without it reports whether preparation finished and how long it took. |
-| `additive_clumps.gd` | `additive` (default true) | Set the static `ScatterPlan.additive_clumps` switch for an A/B; call it before painting. |
-| `ground_check.gd` | `action` (`survey` or `rows`, default `rows`), `near` ([x, z, r]) | Layer-1 downcasts against the opened map. `survey`: one ray per document sample (timed), misses, ground and document height ranges, the 10 m cell with most relief, layer-1 bodies. `rows`: each scatter row's Y against the ground under it (mean and worst \|dY\|, rows off by > 0.1 m) and the mean angle between row up and ground normal for normal-aligned and upright assets. Used for the dressed-map ground fix (P3-0). |
-| `grid_ground.gd` | `action` plus its fields (see the script header) | The grid on a Blender map's ground (P3-3c). `survey` samples the loaded map's layer-1 collision at each of `spacings` and logs ray time, misses and the interpolation error against the collision at `n` random points, plus the share of the ground near Y = 0; `fit` logs the last grid ground fit (play and authoring); `grid` logs the overlay's ground state; `key_g` presses G; `measure` and `drag` turn the measure tool and a token drag's grid auto-show on or off; `token_at` lists tokens; `play_res` plays a built-in `res://` level. |
-| `sculpt.gd` | `action` plus its fields (see the script header) | The sculpt pipeline (P3-3a), driven through `AuthoringEditor` since there is no Sculpt tool yet. `stroke` runs a height stroke over real frames (`sculpt`: raise / lower / smooth / flatten / tier; the step's own `op` is `call`) and logs frame times, the worst frame and its breakdown (ray, dab, terrain, collision, snap, rows moved, chunks), `end_stroke`'s cost by part (terrain, collision, snap, rule fields), then the regeneration tail with its parts summed and its worst frame's parts (terrain settling, collision, snap, rock keeping, cells applied) and the plants grown and shrunk against the instances really added and removed (the tail's first frame also carries the probe's own key snapshot, 17-20 ms on 8.5K rows); `compare` times whole-chunk rebuilds against in-place updates; `collision` times the collision rebuild and the CPU ray march; `snap_dense` times snapping the densest cell; `check` tests rays, rows, in-place chunks, AABBs and the near plane; `view_shift` measures how far the view moves when the terrain top rises; `look_bottom` puts a point at the bottom edge. A capture during a stroke lands in its worst frame (about 1 s for the PNG), so measure strokes without one. |
-| `perf.gd` | `action` plus its fields (see the script header) | Performance passes: `start` / `stop` sample every frame's CPU frame time and world-viewport GPU time and log n / median / p95 / worst (run `vsync_off` first); `info` logs visible and shadow draw calls and primitives plus scatter instance counts; `mem` logs engine memory monitors (`ws: true` adds the process working set via one powershell call); `play` / `author` / `dress` time a load, the loading screen and the palette resolve; `scatter`, `ground_std`, `broad`, `layers`, `skirt` toggle ground and scatter configurations for in-run A/Bs; `gpu_state` logs one `nvidia-smi` query (utilisation, temperature, P-state, clock) as the pinned procedure's idle check (P4b-3). Used for `PERFORMANCE.md` "In-game authoring: pinned performance pass". |
-
-| `terrain_shapes.gd` | `action` plus its fields (see the script header) | The automatic dressing (P3-4) without Sculpt or Paint tools: `plateau` (stacked 1.524 m tiers with one-sample faces and an optional rounded lip), `hill`, `hollow` write the document heights and refresh terrain, collision, plants and ground like an undo; `path` / `area` paint a surface into the document; `stats` counts samples by rule weight (TerrainRules). |
-| `water.gd` | `action` plus its fields (see the script header) | Authored water at runtime (P4-2) without the carve or Water tool: `build` writes a sloped map with a three-reach river, a deep pond and a waist basin into the open document and refreshes terrain, plants and water; `save` writes it as a `_p42_*` test level; in play `tokens` spawns tokens, `drag` drags one through DragAndDrop3D, `report` logs each token's base, bed, surface and float state, `points` / `measure` log beds, surfaces, landings, the grid field, the drag resolver and the measure tool's rays; `water` hides or shows every water mesh (GPU A/B); `scan` finds a Blender map's water and names points for later steps (`"found:deep"`); `look` pans to a point; `state` logs the water nodes and the grid field. P4-3, through the `AuthoringEditor` water API: `tilt` slopes the open map; `carve` carves a river (`points`, `half_width`, `depth`, `speed`; logs its reaches and timings and names each step between reaches `"found:c<n>_joint<k>"`); `pond` paints a pond (`points`, `radius`, `depth`); `erase` erases water (`points`, `radius`); `check` logs the bodies, the dressing's coverage, plants standing in the water and the ground layers; `profile` logs ground and depth along every river; `joints` names every reach step drawn so far (any tool) `"found:joint<k>"` (P4-5); `save` also takes `_p43_*`, `_p44_*` and `_p45_*` folders and `cleanup` deletes every such folder. `tokens` takes `assets` ([[pack, id]]) or else spawns the first cached asset that is not a light (P4-5: the first one used to be `misc/lightglobe`, an emissive globe with its own light, whose glow read as blown-out bright blobs on the water in every capture with tokens). |
-| `water_params.gd` | `params` ({uniform: value}), `shader` (`"current"` or a zip path), `glow` (bool), `sun_pitch` (degrees) | Water shader A/Bs (P4-5) on the shared water material: set uniforms (logs the old values); swap in `shaders/water.gdshader` from a zip made with `git archive --format=zip --output=<path> <commit> shaders/water.gdshader` (an older shader) or put the current one back; turn the environment's glow off or on; set the sun's elevation. Call it after a level load (a load re-applies the level's water settings). |
-| `p4b.gd` | `action` plus its fields (see the script header) | Phase 4b follow-ups (P4b-0): `line` logs ground, water level, depth, the wet dressing (bed, shore, wet line) and a surface's painted weight at points along a line on the open authoring map (the path-meets-water fix); in play `cues` logs every token's height, base, the surface over it and whether its submerged cue shows, `hold` picks a token up through DragAndDrop3D and holds it over a point (edge pan off, since it reads the real cursor) for a mid-drag capture, `drop` releases it; `load_profile` (from the title) times each main-thread part of loading a level's `map.ttmap` (terrain wet and dry and its parts, the wet dressing, the water mesh and nodes, the workers' share and what is left on the main thread with their output). |
-| `crossing.gd` | `action` plus its fields (see the script header) | Crossings (P4b-1) through the `AuthoringEditor.crossings` API: `place` (`kind` `plank` or `stones`, `from`, `to`, `width`) snaps a line across the water to the banks and logs the id or refusal, anchors, span, levels, style and times, naming `"found:c<id>_mid"`, `_a`, `_b` and `_stone<k>`; `report` lists the crossing nodes; `undo`; `save` writes a `_p4b1_` test level and `cleanup` deletes every `_p4b1_*` folder; `look`, and in play `tokens` and `points` (water.gd's, with `found:` names resolved). P4b-2: `list` logs every crossing (id, kind, anchors, levels, width) and names its `found:` points; `timing` the Bridge tool's last plan and the last edit's refresh, build and swap; `bench` (`kind`, `from`, `to`, `runs`) times `plan()` and one place and undo; `first_use` (`kind`, `from`, `to`, `style`) times a crossing node's first-use parts for a style (material, shader, mesh, body, entering the tree). P4b-3: `list` names stones too; `visible` shows or hides every crossing's meshes (a GPU A/B; `"off ..."` labels from `expand` hide); `save` and `cleanup` also take `_p4b3_` folders. |
-| `falls.gd` | `action` (`falls`, `look`, `falls_visible`, `quality`, `clock`, `palette`) plus its fields | Waterfalls (P4c-2): `falls` logs every fall the open document derives (`WaterFalls.falls`: reaches, lip, direction, drop, half-width, the carved face foot and plunge pool, the steepest slope, the ground along the lower course from the lip every quarter metre) and names `"found:fall<k>_lip"`, `_foot` and `_plunge` for `look` and any point field; `look` pans to a point (found: resolved). P4c-4: `falls_visible` (`visible`) shows or hides the falls meshes alone (a GPU A/B with the water kept); `quality` (`low`) sets the Water Quality globals; `clock` (`scale`) sets `Engine.time_scale` (0 freezes the shader clock for a capture; the driver's `wait` runs on scaled time, so set 1 before one); `palette` (`name`) applies a `WaterPresets` palette to the water and the falls. P4c-6: `tokens` (`points`, `assets`) is water.gd's `tokens` with this probe's `found:` names resolved (a token in a fall's plunge pool or on its lip); `ramp` (`at`, `rise`, `face_slope`, `back_slope`, `half_length`) raises a block of ground with a 39 degree east face (under the cliff rule); `old_river` (`points`, `half_width`, `depth`) makes a river as v0.1.29 did (the frozen `plan_river` from `test_water_falls.gd`, every step carved as a riffle through `WaterCarve.river_goals` with zero flags) and logs which of its steps the current rule reads as falls. |
-| `p4d.gd` | `action` (`bar`, `remove`, `landing`) plus its fields (see the script header) | The ford bar probe (P4d-0): `bar` (`from`, `to`, `width`, `depth`, `name`) lays a gravel strip across a river under the map root, its crest `depth` under the water level where the ground is below that and sunk under the ground elsewhere, with the palette's gravel surface, a shadow and terrain-layer collision, in authoring or in play; `remove` frees it; `landing` (`at`) logs the terrain and walkable hits, the water, `WaterSurface.landing_below`, the grid field, the drag resolver and whether a 0.3 m token there counts as submerged. |
-| `p6_perf.gd` | `action` (`shader`, `backdrop`, `backdrop_bench`, `exits_build`, `apply_bench`, `water_timing`) plus its fields (see the script header) | The phase 6 pinned pass (P6-2): `shader` swaps the skirt material between the game's opaque shader, the pre-phase-6 transparent one (from a `git archive` zip) and the band variant (patch opaque, ring transparent through a surface override); `backdrop` turns `SkirtBackdrop`'s per-frame sync on or off and `backdrop_bench` times `sync()`; `exits_build` times `RiverExitMesh.skirt_parts` on the open map and logs the vertex counts; `apply_bench` times `AuthoredTerrain.apply_river_exits`; `water_timing` logs the last water refresh's worker build, bake and main-thread swap and the editor's parts. |
-| `skirt.gd` | `action` (`dip`, `undip`, `ribbon`, `ribbon_visible`, `skirt_depth`, `fog`, `info`, `state`) plus its fields (see the script header) | Water over the ground skirt (P6-0): `dip` rebuilds `TerrainSkirt` with more rings and carries the river's edge cross-section out along a line; `ribbon` lays a water strip there (`real`: the water shader with ALPHA times the skirt's fade; `simple`: no depth or screen reads), one render priority above the skirt by default; `skirt_depth` hot-swaps the skirt shader (`never` the game's, `always`, `prepass`, opaque `dither` / `dissolve` / `tint`), writing each variant to `user://render_jobs/p6_probe/`; `fog` turns depth fog on or off; `state` sets a named combination (`STATES`) for one capture. |
-| `landform.gd` | `action` (`new`, `report`, `look`) plus its fields (see the script header) | Starting landforms (P5-1, P5-4): `new` (`biome`, `size`, `seed`, `landform`) opens a new map through the controller with the landform in the spec and logs the recipe's report; `report` recomputes the report for the open map (a saved level answers too); `look` (`at`) pans so the screen centre looks at a point or a named part: `stage`, `water`, `floor`, `summit`, `steepest`, `fall` or `crossing`, correcting the parallax of ground below y = 0. See `docs/systems/landforms.md`. |
-| `paint_check.gd` | `points` ([[x, z], ...]), `r` (default 0.75) | The Paint tool (P3-6): at each point the document's painted weights, what the ground lets grow there (`ScatterGround`: open, rock and scree shares), the scatter rows within `r` by asset and the nearest row's distance, to tell a plant left on a path by the rules from one on its shoulder. |
-| `rocks.gd` | `action` (`check` default, `survey`), `near` ([x, z, r]), `within`, `top` | Rocks survive terrain changes (P3-7, `RockKeep`): `check` logs the rock props (kept or placed), any standing above its bed (`GroundSnap.bed_under`), their tilt, generated rocks inside a rock prop (twins), rock rows and props within `near`, and the last stroke's keeping (count, main-thread and worker time); `survey` lists the 10 m cells near the centre with most rock rows, to aim strokes at a boulder field. |
-| `height_profile.gd` | `from`, `to` ([x, z]), `n` (default 21) | The authoring map's ground height at `n` points along a line (`AuthoringEditor.ground_height_at`) and the steepest slope between them, for checking a sculpt stroke numerically (tier tops on whole tiers, a face's width, a ramp's slope, a pit's floor). |
-| `ground_perf.gd` | `action` plus its fields (see the script header) | Ground shader A/Bs: `shader` swaps the terrain material to the current include or one read from `user://p34_<version>_ground.zip` (made with `git archive`); `variant` builds a text-replaced copy of the current include; `paint` writes eight painted surfaces as strips or a half-weight checker; `terraces` fills the view with tiers; `fraction` reports the share of steep ground pixels. |
-| `avatar_kit.gd` | `action` plus its fields (see the script header) | Avatar figures from figurine's kit through AvatarKit: `place` stands figurine's three judging recipes in a row along the screen's right axis, `canopy` adds one at the first of `points` whose shade ray meets a canopy, `spawn` places `count` for frame times, `look` pans to a figure at a height, `shade` re-takes the shade rays and says what blocks each, `hidden` dithers one, `params` sets figure shader uniforms, `variant` sets a named look set (`before` / `after` the world-lighting pass), `near` adds one at the first of `points` in sun, `add` one at a point, `env` logs the environment's ambient and the sun, `sun` hides or shows the sun, `mipmaps` toggles AvatarKit's detail mipmaps; `save` / `cleanup` (all, or one `folder`) for `_avatarkit_` levels. |
-| `avatar_token.gd` | `action` plus its fields (see the script header) | Avatar tokens in play: `pair` spawns a preset under a canopy and a selected one in sun (a ring search when the listed sunny points are shaded), `spawn_at` drops one onto whatever is under a point (water too), `look` (a token by name, index or the pair's midpoint), `hide` (hidden from players, by name or index), `report` (capsule, shade, submerged cue, occlusion fade entries), `timing` (spawn and shade-ray medians, walked and cached), `profile` (build and `set_recipe` medians per change type, off the board); `save` / `cleanup` for `_avatartoken_` levels. |
-| `avatar_library.gd` | `action` plus its fields (see the script header) | The avatar library: `use` points the running game's library at a `user://_avatarlib_<dir>/` test directory (and seeds it from presets), `roster` opens the title screen's roster, `edit` opens the builder from it, `close`, `browser` opens the Add Token browser, `place` presses a saved avatar's card in the Avatar tab, `report`, `cleanup` deletes every `_avatarlib_` directory and points the library back at `user://avatars/`. |
-| `avatar_builder.gd` | `action` plus its fields (see the script header) | The avatar builder in play: `window` resizes the game window, `open` opens the builder on a preset, `pane` selects a rail pane, `report` (panel, preview and pane sizes, measured bounds and view, stance tile sizes), `timing` (preview `set_recipe` and face-tile repaint medians), `close`, `spawn` (the preset as a token turned to the camera). |
-
-`sample_pixels.gd` (this folder) is a standalone reader for captures, not a probe:
+A hung run kills itself (`hang_s`, REFERENCE.md "Job file format"): `timeout_s` is checked on
+the main thread, which a hang blocks, and on Windows stopping the shell task that launched
+Godot (TaskStop, or the Bash tool's own timeout) does not stop Godot. A hung Mobile-renderer
+run in September 2026 kept its window and GPU context for 26 minutes after its task was
+"stopped", contending with every later run. After every job, check from PowerShell:
 
 ```
-godot --headless --path D:/dev/tt-sim --script res://tools/render_jobs/sample_pixels.gd -- <x> <y0> <y1> <step> <png>...
+Get-Process godot* -ErrorAction SilentlyContinue
 ```
 
-prints the mean colour of 9x9 boxes down one column of each PNG, for comparing captures
-numerically (for example where a fade or a tint band starts).
-
-## Jobs
-
-- `jobs/authoring_judgment_set.json`: the authoring judgment set: two captures per palette
-  biome plus seven, each as a window and a raw PNG (23 captures, 46 PNGs, with the 8-biome
-  palette installed in September 2026; about 4 to 6 minutes). Every palette biome as a new 200 ft map (seed 1234) at home
-  and full zoom-out; a hand-painted composition on bare ground (grassland meadow and
-  temperate forest strokes, a thinned path, a cleared glade, placed props) at home, zoom 26
-  and full zoom-out; the Blender reference levels `river` and `deciduous_clusters` opened in
-  authoring at home and full zoom-out; then `INDEX.md`.
-- `jobs/sculpt_pipeline.json`: the sculpt pipeline check (P3-3a, about 100 s): a new temperate
-  forest map with three placed props; a 6-7 m hill (8 m brush), a hollow, smooth, flatten, a
-  tier stub and an edge raise, each followed by its regeneration; the rebuild / in-place
-  comparison; continuous 4 m and 12 m strokes for frame times; `check` after the edits; the
-  hill at the bottom edge of the screen at zoom 13.85 and 8 (near plane); 10 captures and
-  `INDEX.md`. Numbers for `docs/PERFORMANCE.md` "Sculpting".
-
-- `jobs/sculpt_look.json`: the Sculpt tool look pass (P3-5, about 2.5 minutes): human-speed
-  strokes through the real tool on a new 150 ft temperate forest map (a raised hill, a tier
-  from the ground, a second tier from its top, the first tier extended from its edge, a
-  sunken tier with Ctrl, a Shift-smoothed ramp, a flatten), with hover captures of the Tier
-  readout, a capture mid-stroke, height profiles, a cancelled stroke and undo / redo checked
-  by profile; then the same strokes on a rocky badlands map with the grid on (G). Frame
-  times per stroke (`record`). 19 captures and `INDEX.md`.
-- `jobs/paint_look.json`: the Paint tool look pass (P3-6, about 3 minutes): a new 150 ft
-  grassland meadow with a two-tier plateau and a Shift-smoothed ramp (Sculpt tool), then
-  human-speed Paint strokes: a winding dirt track from the low ground up the ramp (captured
-  still pressed and after release), a flagstone courtyard on tier 2, a cobblestone path
-  across tier 1's south edge (it stops at the face and resumes on top), tier 1's east face
-  restyled with basalt, part of the track erased with Ctrl; close-ups at zoom 10, the grid,
-  the home view (with an A/B of the trampled fringe, `paint_broad_strength` 0 vs 0.35), undo /
-  redo of the last stroke. Frame times per stroke (`record`). `jobs/paint_shoulder.json` (about
-  30 s) paints the same track alone and runs `paint_check.gd` along it with a zoom-8 capture.
-- `jobs/phase3_judgment_set.json`: the phase 3 judgment set (P3-7, about 7 minutes): for
-  temperate forest, alpine meadow, rocky badlands and grassland meadow, a new 150 ft map
-  (seed 1234) built with the real Sculpt and Paint tools at human speed (a raised hill, a
-  two-tier plateau with a Shift-smoothed ramp, a sunken hollow, a track up the ramp in the
-  biome's first path surface, a path across a tier edge and a courtyard on the top tier in
-  its first stone path surface (`PaletteLibrary.path_surfaces`; badlands: `dirt_road_caliche`
-  and `flagstone_sandstone`), three placed props), captured at home zoom, home zoom on the plateau, zoom 26 and full zoom-out, each
-  with the grid off and on; then `deciduous_clusters` and `river` in play (read-only) at home
-  (grid off and on) and full zoom-out. 38 captures and `INDEX.md`.
-- `jobs/rocks_survive.json`: rocks survive terrain changes (P3-7, about 80 s): on new 150 ft
-  alpine meadow and rocky badlands maps, a Tier stroke through the densest boulder field near
-  the centre (before, still pressed, after, close up), on alpine a Flatten back over the new
-  face, and a gentle Raise hill under another group of rocks, with `rocks.gd` checks (kept
-  rocks, floating, tilt, twins) after each. 16 captures and `INDEX.md`.
-  `jobs/rocks_survey.json` (about 12 s) runs `rocks.gd survey` on both maps to pick the spots.
-- `jobs/dressing_look.json`: the automatic dressing judgment set (P3-4, about 75 s): new 200 ft
-  maps in temperate forest, alpine meadow and rocky badlands (the three cliff surfaces) with a
-  two-tier plateau, a 6 m hill and a sunken hollow, at home and zoom 7 on each, then a painted
-  cobblestone path and flagstone courtyard across the plateau; 18 captures and `INDEX.md`.
-- `jobs/perf_ground_layers.json`: the pinned ground shader cost (P3-4): StandardMaterial3D,
-  the pre-P3-4 shader and the current one, interleaved, on a bare map, 4 biome layers, 8
-  painted strips, the 8-surface half-weight checker and screen-filling terraces. Needs
-  `user://p34_old_ground.zip` (see `ground_perf.gd`) and a temporary pinned `override.cfg`
-  (`remove_override` deletes it). `jobs/perf_ground_ab.json` is the shorter A/B used to
-  pick the loop form.
-- `jobs/dressing_smoke.json`: the fastest dressing check (about 15 s, two captures of one
-  temperate forest map with the three shapes), for iterating on the shader.
-- `jobs/mobile_check.json`: a bare 100 ft map shaped and painted under
-  `--rendering-method mobile`, to check the ground shader in the Mobile renderer.
-- `jobs/mobile_maps.json`: the Mobile renderer with scatter (about 40 s): a new 200 ft
-  temperate forest map, the Blender levels `deciduous_clusters` and `river` in play, and
-  `river` opened for dressing, one capture each. Run it with `--rendering-method mobile`
-  after any change to foliage, scatter or pipeline warm-up; its first map open is where
-  the one hang seen under Mobile stopped (docs/PERFORMANCE.md "Mobile renderer hang").
-- `jobs/water_look.json`: carving and dressing water (P4-3, about 2.5 minutes): for
-  temperate forest, grassland meadow and rocky badlands, a new 200 ft map tilted 2.5 %
-  with a painted track, a winding waist-deep river in three reaches, a deep river and a
-  pond (`probes/water.gd`), captured before and after at home, zoom 9 on the crossing, a
-  reach step, the pond and the deep river, and zoom 34; on badlands the grid, an erase at
-  the crossing and its undo, then the level saved as `_p43_badlands` and played with tokens
-  wading and floating; the test level is deleted at the end. 26 captures and `INDEX.md`.
-- `jobs/water_tool.json`: the Water tool look pass (P4-4, about 4.5 minutes): for grassland
-  meadow, rocky badlands and temperate forest, a new 150 ft map tilted 2 %, then human-speed
-  Water strokes through the real tool: a winding waist-deep river (captured still pressed:
-  the ribbon), a cancelled stroke, an ankle stream joining it, a deep pool, a pond in two
-  strokes; home view, zoom 9 on the confluence, the river's head, the pool and the pond, the
-  grid, an erase with Ctrl (held, done, undone), then the level saved as `_p44_<biome>` and
-  played with tokens wading and floating; frame times around each release (`record`). The
-  test levels are deleted at the end. 42 captures and `INDEX.md`.
-- `jobs/phase4_judgment_set.json`: the phase 4 (water) judgment set (P4-5, about 12
-  minutes): for temperate forest, grassland meadow, rocky badlands and riverside wetland, a new
-  150 ft map (seed 1234) tilted 2 % and built with the real tools at human speed: a tier north
-  of the middle, a winding waist-deep river passing below its face, an ankle stream joining
-  it, a deep pool, a pond painted in two strokes, a path in the biome's first path surface
-  crossing the river, three placed props; captured at home zoom, zoom 26 and full zoom-out
-  with the grid off and on and at zoom 9 on the crossing, then saved as a `_p45_` test level
-  and played with tokens wading, floating and standing in the stream; then the Blender
-  `river` level in play (read-only). The test levels are deleted at the end. 42 captures and
-  `INDEX.md`.
-- `jobs/p4b_badlands.json`: the badlands follow-ups (P4b-0, about 1 minute): a new 150 ft
-  rocky badlands map built like the phase 4 judgment set (river, stream, deep pool, caliche
-  path; no tier, pond or props), captured at home, on the crossing at zoom 9 and 7 and on the
-  deep pool at zoom 7. Run it with `--out` before and after a change.
-  `jobs/p4b_badlands_probe.json` is the diagnosis run: the path's paint and wet dressing
-  along its line (`p4b.gd line`), the crossing with the water hidden, and the pool with the
-  rock foam off and the water hidden.
-- `jobs/p4b_cue.json`: the submerged token cue (P4b-0, about 80 s): the badlands map above
-  saved as `_p4b_badlands` and played with tokens wading, floating and in the stream (home,
-  max play zoom, zoom 10), a token held over the river mid-drag, dropped in and carried out
-  onto the bank; then the Blender `river` level with tokens in its water (read-only). The
-  test level is deleted at the end (`water.gd cleanup` covers `_p4b_*`).
-- `jobs/p4b_load.json`: authored map loading with and without water (P4b-0, about 100 s):
-  the badlands map saved before (`_p4b_dry`) and after its water (`_p4b_wet`), `p4b.gd
-  load_profile` on the wet one, then warm play loads (`perf.gd play`) wet first, then wet /
-  dry interleaved three times. Both levels are deleted at the end. Numbers in
-  `docs/PERFORMANCE.md` "P4b-0: authored map load on workers".
-- `jobs/crossing_look.json`: crossings (P4b-1, about 100 s): for temperate forest and rocky
-  badlands, a new 150 ft map with a waist-deep river, a plank bridge and stepping stones
-  placed with `probes/crossing.gd` (a short line on the water each), captured at home and
-  zoom 8 with the grid off and on, then saved as a `_p4b1_` test level and played with
-  tokens on the deck, at its end, on the stones and wading beside the bridge, grid on. The
-  test levels are deleted at the end. 13 captures and `INDEX.md`. `jobs/crossing_iter.json`
-  (about 35 s) is the quick check used while iterating: the badlands map's bridge and stones
-  at zoom 8 with the grid, and the stones at zoom 4.
-- `jobs/bridge_tool.json`: the Bridge tool (P4b-2, about 70 s) through real input events
-  (`gesture`, `input`) on a new 150 ft temperate forest map with a waist-deep river: the pane,
-  a plank line previewed near the water and on the far bank then released, a refused line on
-  dry ground (hint and toast), stepping stones previewed and placed (and close up), home, Ctrl
-  hover and Ctrl+click erase and its undo, a Raise stroke that re-anchors the bridge, a Tier
-  stroke that removes the stones with their water (toast) and its undo; `crossing.gd` `bench`,
-  `timing` and `list` logged along the way. 17 captures and `INDEX.md`. Saves nothing.
-  `jobs/bridge_first_use.json` (about 25 s) times the first-use parts of a crossing node
-  (`first_use`) and placements after the tool's warm-up (`bench`).
-- `jobs/phase4b_judgment_set.json`: the phase 4b (crossings) judgment set (P4b-3, about 13
-  minutes): for every palette biome (`expand_biomes`, `{path}` is the biome's first path
-  surface), a new 150 ft map with a waist-deep river, a deep pond and a path across the river,
-  then through the real Bridge tool (`gesture`) a plank bridge where the path meets the river,
-  stepping stones downstream and a long plank bridge over the pond (over 5.5 m: pile bents);
-  authoring captures at home, zoom 8 on the bridge (grid off and on), zoom 5 on the stones and
-  zoom 10 on the long bridge; then saved as a `_p4b3_` test level and played with tokens on
-  both decks and the stones and one wading beside the bridge (its submerged ring), grid on.
-  Last, the phase 4 wetland rebuilt (tier, river, stream, pool, plank path) and re-rendered to
-  check the reeds after P4b-0's rock-foam change. Test levels deleted at the end. 76 captures
-  (eight biomes) and `INDEX.md`; the verdict is written beside them as `VERDICT.md`.
-- `jobs/p4b3_stones_iter.json` (about 55 s): stepping stones over a waist river in alpine,
-  grassland and forest at zoom 5 and home, for iterating on the stones' rock and moss.
-- `jobs/p4b3_reanchor.json` (about 60 s): a plank bridge, then Smooth passes and a light Raise
-  at its banks through the real Sculpt tool, with the crossing list and the ground profile along
-  the bridge (`height_profile.gd`) logged after each: how far a re-anchor moves on a gentle
-  underwater bank. Saves nothing.
-- `jobs/p4b3_perf_build.json` and `jobs/p4b3_perf_play.json`: the phase 4b pinned performance
-  pass (`PERFORMANCE.md` "Phase 4b (crossings): pinned performance pass"). The build job makes a
-  150 ft forest map with a river, a pond and a path (saved as `_p4b3_perf_water`), then places
-  four crossings with the real tool recording frame times around each drag and release, benches
-  `plan()` and a place / undo, times a Raise by a bridge, and saves `_p4b3_perf_cross`. The play
-  job (run with a temporary pinned `override.cfg`, which it deletes) times warm loads of both
-  levels interleaved, samples GPU time with the crossings shown and hidden in one run at home,
-  zoom 20 and zoom 8 on a bridge, then each level at home and zoom 20 with tokens, and deletes
-  both levels. `perf.gd gpu_state` logs `nvidia-smi` at the start and end of each.
-- `jobs/p4c_perf_build.json` and `jobs/p4c_perf_play.json`: the phase 4c pinned performance
-  pass (`PERFORMANCE.md` "Phase 4c (waterfalls): pinned performance pass"). The build job makes
-  the judgment set's forest map (two-tier step, 13 m hill) with six falls (a waist river over
-  the step, an ankle tributary, two ankle streams down the hill flank with `record` windows
-  around the strokes and an erase, a deep river off the far edge through `water.gd carve`) and
-  saves `_p4c_perf_falls`, then the same sculpt with the five waters on the flat ground, saved
-  as `_p4c_perf_riffles`. The play job (run with the pinned `override.cfg`, which it deletes)
-  opens the falls level once in authoring for `falls.gd`'s `found:` names, times warm loads of
-  both levels interleaved, samples GPU time with the falls mesh shown and hidden
-  (`falls_visible`) at home, zoom 8 on the hill and on the tier fall and zoom 20, Water
-  Quality Low against High (`quality`; both take `expand` labels, "off ..." and "low ..."),
-  then each level at home and zoom 20. The levels are kept (`cleanup_levels.json` deletes
-  them).
-- `jobs/p4d_perf_build.json` and `jobs/p4d_perf_play.json`: the phase 4d pinned performance
-  pass (`PERFORMANCE.md` "Phase 4d (arch and ford): pinned performance pass"). The build job
-  makes the P4b-3 map (a curved waist river, a deep pond, a path; saved as `_p4d_perf_water`),
-  draws an arch and a ford through the real tool with `record` windows around each drag and
-  release, places a plank bridge, stepping stones, a 14.8 m pier arch along the pond and a
-  second ford through `crossing.gd place` with `timing` after each (the rebuild cost by
-  crossing count), benches plank and arch plans, times a Raise by the arch and saves
-  `_p4d_perf_cross` (six crossings). The play job (run with the pinned `override.cfg`, which
-  it deletes) times warm loads of both levels interleaved, samples GPU time with the crossings
-  shown and hidden at home, zoom 8 on the arch and on the ford and zoom 20, then each level at
-  home and zoom 20 with tokens and `mem`. The levels are kept (`cleanup_levels.json` deletes
-  them).
-- `jobs/p5_perf_open.json`, `jobs/p5_perf_strokes.json` and `jobs/p5_perf_play.json`: the
-  phase 5 (starting landforms) pinned performance pass (`PERFORMANCE.md` "Phase 5 (starting
-  landforms): pinned performance pass"). Open: `perf.gd author` with each landform in the
-  forest at 150 ft (seed 7, three interleaved rounds, flat first) and flat, valley and gorge
-  at 100 and 200 ft, `mem` after each, `perf.gd recipe` (the recipe's own ms) at the title;
-  strokes: the forest Terraces and flat maps (seed 3) with `record` windows around idle, a
-  Raise on the stage, a Smooth across a step, a waist river and its erase, saved as
-  `_p5_perf_terraces` / `_p5_perf_flat`; play (deletes the pinned `override.cfg`): warm loads
-  of both interleaved, then GPU windows at home and zoom 20, `mem`.
-- `jobs/falls_look.json`: the waterfall carve and curtains (P4c-2, P4c-3, about 100 s): a new
-  150 ft temperate forest map with a two-tier Tier step and a 14 m Raise hill (real Sculpt
-  strokes; the hill's flank runs steep for about 9 m, so the stream down it gets two falls), a
-  straight waist river drawn from the step's top toward the camera, an ankle stream from the
-  hill's top down its flank toward the camera, and a second waist river carved through the
-  editor API (`water.gd carve`) off the step's far edge, away from the camera; `falls.gd
-  falls` logs each fall's lip, foot and the carved profile, then the ground is captured with
-  the water hidden at home and at zoom 8 on each facing fall's foot, and the water shown at
-  home and at zoom 8 on every fall (the tier fall, both hill falls, the away-facing fall's
-  lip); then (P4c-4, the falls shader) the tier fall at zoom 6 and 10, two zoom-10 frames
-  about 0.25 s of shader time apart (`clock`), Water Quality Low (`quality`), the Swamp
-  palette (`palette`), and an indicative GPU A/B of the falls shown and hidden at zoom 8
-  (`vsync_off`, `gpu`, `falls_visible`; about 15 s). 15 captures and `INDEX.md`. The
-  worked example of the build / look split: the build ends by saving `_p4c_falls_look`
-  (kept on purpose; `cleanup_levels` removes it), every camera move is tagged `for` its
-  capture and the GPU A/B is `for: "falls_gpu"`. A look run,
-  `falls_look --saved --only tier_fall_z8_water,hill_fall1_z8_water --half`, loads the
-  level and takes those two captures at 960x540 in about 15 s (93 s for the full build run);
-  `--only falls_gpu` runs the A/B alone.
-- `jobs/falls_tools.json`: waterfalls, the tools and play (P4c-5, about 80 s): a new 150 ft
-  temperate forest map with a Tier plateau and a waist river drawn over its south edge toward
-  the camera (one fall, `falls.gd falls` names its lip, foot and plunge); through real input
-  events the Bridge tool refuses a line across the plunge pool just below the fall (red line,
-  the fall's message beside the cursor, then as a toast) and places a plank bridge across the
-  upper pool 2.5 m upstream of the lip; the Water tool holds a river stroke drawn uphill onto
-  the plateau mid-stroke (the ribbon's chevrons point downhill) and cancels it; then the
-  level is saved as `_p4c_tools` and played with a token wading in the plunge pool (its
-  submerged ring) and one in the upper pool. 8 captures and `INDEX.md`; the test level is
-  deleted at the end (`water.gd cleanup` covers `_p4c_*`).
-- `jobs/phase4c_judgment_set.json`: the phase 4c (waterfalls) judgment set (P4c-6, about 15
-  minutes): for every palette biome (`expand_biomes`), a new 150 ft map (seed 1234) built with
-  the real tools at human speed: a two-tier Tier step about 10 m deep and 28 m wide (zigzag
-  Tier paths, so the brush covers the whole top; the west shelf one tier high; every river's
-  area, half-width plus the 1 m bank, stays clear of the inner tier's side faces, or its flat
-  surface hangs down them), a 13 m Raise hill east of it
-  (flank 44 degrees, a steep run of about 9 m; placed where it stands clear of every later
-  stroke's pointer ray), a waist river over the step's south edge toward the camera (one
-  two-tier fall), an ankle tributary from the west shelf over the edge into the main plunge
-  pool, an ankle stream down the hill's flank (two hillside falls), and a deep river carved
-  through the editor API off the step's north edge, away from the camera (its free head 5 m
-  from both brinks: a deep river's area, half-width 2.96 m plus the bank, hangs its surface
-  over any brink nearer than 4 m); captured in authoring at home and at zoom 8 on the tier fall (grid off and on), the
-  tributary, the hill steps and the away-facing lip, then saved as a `_p4c_` test level and
-  played with tokens in the tier fall's plunge pool, on its lip, in the tributary's pool and in
-  the away-facing pool, grid on (home and zoom 8). Last, a v0.1.29-style document (`falls.gd
-  ramp` and `old_river`: a river over a Tier cliff and one down a 39 degree ramp) captured as
-  built and after a save and load in play. 78 captures and `INDEX.md`; the verdict is
-  written beside them as `VERDICT.md`. Split into build and look: each biome's template
-  starts with `saved` `_p4c_{biome}` (the old document's section with `_p4c_old`), the
-  build steps save that level (`replace: true`) and the play section is `for:
-  "{biome}_*_play_*"`. The levels are kept after the run for look mode, for example
-  `phase4c_judgment_set --saved --only "*_2_tier_z8" --half` (every biome's tier fall at
-  zoom 8, half size, no play; about 9 s per saved level against 100 s to build one: the
-  one-biome trial took 170 s to build and 21 s to look), and
-  `cleanup_levels` removes them when the task is done. Limit a trial to one biome with the
-  template's `biomes` field in a scratch copy of the job.
-- `jobs/p4d_probe.json`: the ford bar probe (P4d-0, about 55 s to build, 20 s to look): a
-  new 150 ft temperate forest map with a straight waist river and a straight ankle stream,
-  saved as `_p4d_probe` and played (`saved` loads it in play, since tokens spawn only
-  there); `probes/p4d.gd bar` lays a gravel bar across each (crest 0.2 m and 0.15 m under
-  the surface), tokens are dropped on both bars and in the river off the bar, `landing`
-  logs the rays at each; captured at home with the grid, zoom 8 on the waist bar (plain,
-  grid, water hidden), zoom 8 on the ankle bar, and the waist bar rebuilt 0.35 m deep. 6
-  captures and `INDEX.md`; the verdict is written beside them as `VERDICT.md`.
-- `jobs/arch_look.json`: the stone arch (P4d-1): a new 150 ft temperate forest map with a
-  waist river and a deep pond, saved as `_p4d_arch`; through `crossing.gd place` an arch over
-  the river at z = 2 with a plank bridge below it for scale and a long arch with a mid-stream
-  pier along the pond; captured at home with the grid, zoom 8 on the river arch (plain, grid,
-  water hidden), zoom 6 on it (facets, paving scale, coping stones) and zoom 8 on the pier
-  arch. 6 captures and `INDEX.md`; the level is kept for look runs.
-- `jobs/pol_trees.json`: trees at close zoom (Polish, 2026-10-05; about 95 s to build, 90 s
-  to look): new 150 ft temperate forest (a waist river at x = -9) and boreal taiga maps saved
-  as `_pol_forest` and `_pol_taiga`, captured from zoom 20 down to 2 and at full authoring
-  zoom-out (`f_out*`, with the grid), with the camera moved back (`_back`), the fade off
-  (`_nofade`), the scatter hidden, and the near plane where it was before the canopy hold
-  (`_old`: home, zoom 20, zoom-out, the river and its grid at zoom 6); an in-run GPU A/B of
-  the fade at zoom 6 in a grove and at home, and of the hold at home (`--only f_gpu`); the
-  Thin brush's ring; the forest played with tokens in a grove and in the river and a token
-  dragged at home (`p_drag_z13`); Deciduous clusters played read-only (`b_*`); the taiga's
-  play-zoom window at home with the fade off, its GPU A/B (`t_gpu`), the Thin ring at home,
-  zoom 20 and full zoom-out; a new grassland map at home and zoom 20 (`g_*`, not saved). 43
-  captures and `INDEX.md`; the levels are kept. `probes/close_zoom.gd play` tunes the
-  play-zoom window in-run.
-- `jobs/ford_look.json`: the ford (P4d-2): a new 150 ft temperate forest map with a waist
-  river, an ankle stream and a deep river, saved as `_p4d_ford` and played (`saved` loads it
-  in play: tokens spawn only there); a ford across the river and one across the stream through
-  `crossing.gd place` (the deep river takes none: refused), tokens standing on each and one
-  wading downstream; captured at home with the grid, zoom 8 on the waist ford (plain, grid,
-  water hidden), zoom 8 on the ankle ford and zoom 6 on the waist ford. 6 captures and
-  `INDEX.md`; the level is kept for look runs.
-- `jobs/phase4d_judgment_set.json`: the phase 4d (arch and ford) judgment set (P4d-4): for
-  every palette biome (`expand_biomes`), a new 150 ft map (seed 1234) with a straight waist
-  river at x = -7, a straight ankle stream at x = 8 and a deep pond west of the river (its
-  stroke 4 m from the river's waterline, since a pond's water reaches about 3 m past its
-  stroke), then through the crossing API an arch, a ford and a plank bridge across the river,
-  a ford across the stream and a pier arch along the pond, drawn from x = -10 so no line
-  starts in another body's water; captured in authoring at home and at zoom 8 on the arch,
-  the ford, the ankle ford and the pier arch, saved as `_p4d_{biome}` and played with tokens
-  on the arch's deck, in both fords and on the plank deck, grid on (home, zoom 8 on the arch
-  and the ford). 64 captures (eight biomes) and `INDEX.md`; the verdict is written beside them
-  as `VERDICT.md`. Split into build and look like the 4c set (`saved` `_p4d_{biome}`, the play
-  section `for: "{biome}_*_play_*"`); the levels are kept (`cleanup_levels` removes them).
-- `jobs/phase5_{valley,hilltop,terraces,lakeshore,gorge}.json` and
-  `jobs/phase5_judgment_set.json`: the starting-landform judgment set (P5-4). One job per
-  recipe (about a minute per level to build): new 150 ft maps through `new_map` with the
-  `landform` key, three or four temperate forest seeds (a wet draw with a crossing, a wet
-  draw without, a dry draw; the hill adds the flank spring) and one seed in another biome
-  (alpine meadow, boreal taiga, riverside wetland, rocky badlands, grassland meadow), saved
-  as `_p5j_<kind>_<biome>_<seed>`; per level home with the grid, home with the water hidden,
-  zoom 8 on the stage (`landform.gd look stage`) and on the crossing, the water or the floor
-  (`look crossing`; the hill adds `look summit`); then one wet level played with a token on
-  the stage and one on or in the water feature (`for: "<level>_play_*"`). The judgment set
-  is the union of the five (the driver has no include op, so the blocks are repeated) for
-  the final full-size pass; a recipe change rebuilds that recipe's job alone. The verdict is
-  written beside the captures as `VERDICT.md`. `landform_look.json` is the P5-2 look (the
-  `_p5_` levels), `landform_dialog.json` the new-map dialog's Landform row (P5-3).
-- `jobs/arch_ford_tools.json`: the Arch and Ford tiles through the real Bridge tool (P4d-3,
-  about 60 s to build, 30 s to look): a new 150 ft temperate forest map (seed 1234) with a
-  straight waist river at x = -7 and a deep river carved at x = 8 (`water.gd carve`), saved
-  as `_p4d_tools`; then in authoring (`bridge_kind` `arch` / `ford`, `gesture`, `input`) the
-  Bridge pane with its four tiles, an arch held across the waist river (the live ghost and
-  readout) and released, a ford held across the deep river (the red line and "Too deep to
-  ford. Fords cross wadeable water." beside the cursor) and released (the toast), a ford
-  placed across the waist river, and Ctrl held over the arch ("Remove stone arch"). 8
-  captures and `INDEX.md`. The level is kept for look runs (`cleanup_levels` removes it).
-- `jobs/p6_probe.json`: water over the ground skirt (P6-0, about 70 s to build, 3.5 minutes
-  for the full look run): a new 150 ft temperate forest map with a straight waist river
-  carved through the near edge, saved as `_p6_probe` (kept); then `probes/skirt.gd` states
-  (the game today, the dipped skirt, a real or simple water ribbon over it, the skirt shader
-  transparent, depth-writing or opaque) each at home zoom panned to the edge, with fog, at
-  zoom 20 and at zoom 8 on the mouth, and a GPU A/B (`--only edge_gpu`). 53 captures and
-  `INDEX.md`; the verdict is written beside them as `VERDICT.md`.
-- `jobs/p6_look.json`: rivers past the map edge (P6-1, build and look). `_p6_look_forest`: a
-  new 150 ft temperate forest map with a waist river drawn on past the near edge with a bend
-  and an ankle stream drawn to stop at the right edge (a derived continuation);
-  `_p6_look_valley`: a Valley landform map (seed 2) whose recipe river ends at both edges.
-  Each map zoomed out (`*_overview`, with and without fog), then per exit home zoom panned
-  to it, zoom 20 and zoom 8 on the mouth, each with fog off and on; diagnostics with the
-  ribbon, the channel patch or the rest of the skirt hidden (`forest_e0_z8_no*`); the valley
-  under two sky presets (`valley_outdoor_*`). `_p6_look_ponds` (P6-4): a new 150 ft forest
-  map (seed 4321) with a wide deep pond painted against the near edge and a narrow waist pond
-  touching the right edge (`look` exits 0, the narrow one, and 1), the same views as the
-  rivers' plus `ponds_e*_z8_noribbon` and `ponds_sunset_*` (outdoor_sunset). `probes/p6.gd`
-  (`info`, `look` at an exit, `preset`, `show`) does the exits' parts.
-- `jobs/p6_perf_build.json`, `jobs/p6_perf_play.json` and `jobs/p6_perf_band.json`: the phase
-  6 pinned performance pass (`PERFORMANCE.md` "Phase 6 (rivers past the map edge): pinned
-  performance pass"), with `probes/p6_perf.gd`. Build (about 85 s): a 150 ft forest map with a
-  waist river drawn past the near edge and an ankle stream past the right edge, saved as
-  `_p6_perf_exits` (two exits), `exits_build` and `apply_bench` timed, then `record` windows
-  and `water_timing` around a river stopping short of the left edge and its erase and one drawn
-  past it and its erase; the same rivers stopping short of the edges saved as `_p6_perf_short`.
-  Play (about 5 minutes; run with the pinned `override.cfg`, which it deletes): warm loads of
-  both levels interleaved with `mem`, `exits_build` on each, `backdrop_bench`, then GPU windows
-  with the skirt opaque and transparent (`shader`, from `user://p6_old_skirt.zip`: `git archive
-  --format=zip --output=<that path> 7bde99a shaders/authored_ground.gdshaderinc
-  shaders/authored_ground_skirt.gdshader`) and hidden at home, zoom 20 on an exit and zoom 20 on
-  the plain left edge, the patch and ribbon shown and hidden, `SkirtBackdrop` on and off, and
-  the skirt A/B at full authoring zoom-out. Band (about 2 minutes, pinned too): the probe's band
-  variant (the patch opaque, the rest of the ring transparent) against the opaque skirt at the
-  same views. The levels are kept (`cleanup_levels.json` deletes them). P6-4: the build job
-  (now about 125 s) also saves `_p6_perf_ponds` (`_p6_perf_exits`'s rivers and a wide pond
-  painted to the near edge, its stroke in a `record` window); `jobs/p6_perf_ponds_play.json`
-  (about 2.5 minutes, the pinned `override.cfg`, which it deletes) times warm loads of it
-  against `_p6_perf_exits` and GPU windows at zoom 20 on the pond's edge on both maps, then the
-  pond's water shown and hidden and the skirt hidden.
-- `jobs/cleanup_levels.json`: `water.gd cleanup` alone (a few seconds): deletes every
-  `_p43_`, `_p44_`, `_p45_`, `_p4b_`, `_p4c_`, `_p4d_`, `_p5_`, `_p5j_` and `_p6_` level under
-  `user://levels/`, the
-  saved levels of the build / look jobs included. Run it when a task's look iterations are
-  done.
-- `jobs/grid_ground.json`: the grid on Blender maps' ground (P3-3c, about 50 s):
-  `deciduous_clusters`, `river` and the built-in Oak's lab in play with G, the measure
-  tool and a token drag's auto-show, the load's grid ground fit and a sampling survey
-  logged for each; then `river` opened for dressing with G. 11 captures and `INDEX.md`.
-- `jobs/avatar_kit_look.json`: avatar figures from figurine's kit (AvatarKit, about 60 s to
-  build, 50 s to look plus 70 s of perf): a new 150 ft temperate forest map with a placed
-  oak, saved as `_avatarkit_forest` and played; `probes/avatar_kit.gd` stands figurine's
-  three judging recipes in a clearing (the second in the kit's long-sleeved top, the third
-  in its witch hat, since figurine card B2a) and one figure under the oak (its shade ray
-  meets the crown). Captures at home, close (3.5 m) and closest (2 m), under the oak, hidden from
-  players (dither), the outdoor_sunset, outdoor_night and dungeon_dark presets (dungeon also
-  with the sun hidden), and an A/B of the detail textures without AvatarKit's mipmaps; then
-  GPU and CPU frame times with 0, 8 and 30 figures at home and zoom 20 (`for: "perf"`).
-  `avatar_kit.gd cleanup` deletes the `_avatarkit_` level.
-- `jobs/avatar_lighting_look.json`: avatar figure lighting (the world-lighting card, about
-  60 s to build, 70 s to look): a new 150 ft temperate forest map with a placed oak, saved
-  as `_avatarkit_light` and played; three figures in the sunny clearing, one under the oak,
-  one in sun beside it and five across the oak's shade. For each look set (`variant`
-  `before` and `after`): home, close on the clearing, zoom 5 under the oak, zoom 6 across
-  the shade (`*_dapple`), sunset home and close, night home and dungeon (sun hidden) close.
-  `jobs/avatar_cleanup.json` deletes the level.
-- `jobs/avatar_token_look.json`: avatar tokens (the avatar token card, about 40 s to build,
-  20 s to look): a new 150 ft temperate forest map with a placed oak, a waist-deep and a
-  deep pond, saved as `_avatartoken_forest` and played; `probes/avatar_token.gd` spawns
-  preset avatars as real board tokens (`LevelPlayController.spawn_avatar`): one under the
-  oak's crown, one selected in sun and turned 30 degrees, one dropped into each pond. The
-  scatter around the oak differs between builds, so when none of the listed sunny points is
-  in sun `pair` searches rings around the shaded token (toward the screen's sides) for one,
-  and the camera steps find their tokens by name (`look` `name` / `names`, with the pond's
-  centre as `at` should a token be missing) rather than by spawn order.
-  Captures at home, close (4.5 m) on the pair, the pair with the sunny one hidden from
-  players, and zoom 5 on each pond; `report` logs capsules, shade, the submerged cue and
-  the occlusion fade's entries; `timing` (`for: "timing"`) logs spawn and shade-ray medians
-  with and without `AvatarShadeCache`. `avatar_token.gd cleanup` deletes the level.
-  `jobs/avatar_token_profile.json` (about 7 s, from the title screen) runs `profile` twice:
-  build, capsule and token creation medians and `set_recipe` per change type (repeated and
-  never-seen values).
-- `jobs/avatar_builder_look.json`: the avatar builder (the builder polish card, about 35 s
-  to build, 30 s to look): a new 100 ft bare-ground map saved as `_avatartoken_builder` and
-  played; `probes/avatar_builder.gd` resizes the window to 1438x1221, opens the builder on
-  a preset and captures the Pose, Face (the zoomed portrait), Colours, Parts and Shape (the
-  proportion sliders, the five body attributes among them) panes, `report`
-  logs the panel, preview and pane sizes, the preview's measured bounds and view and the
-  stance tiles, `timing` (`for: "builder_timing"`) logs preview and face-tile repaint
-  medians; then the builder at 1280x720, and the same recipe as a board token at close
-  zoom, turned to the camera, for the lighting comparison. `jobs/avatar_cleanup.json`
-  deletes the level (and `_avatarkit_light`).
-- `jobs/avatar_library_look.json`: the avatar library (about 37 s): at 1438x1221, the
-  title screen with Avatars, the roster on an empty test library and on five seeded
-  presets, the builder opened from the roster (Pose and Face panes), then a bare 100 ft
-  map saved as `_avatartoken_library` and played with the Add Token browser's Avatar tab
-  and a saved avatar placed by its card. It deletes its test library and level at the end;
-  the player's `user://avatars/` is never read or written.
-
-## Caveats
-
-- **Frame and GPU timings from a job are not measurements.** The window shares the GPU with
-  everything else on the machine (the user may be gaming), and clocks throttle under
-  sustained load, so numbers from `record` and `gpu` drift between runs. For any
-  performance claim follow `docs/PERFORMANCE.md` "How to measure without fooling
-  yourself" (pinned viewport, vsync off, in-run A/B, drift checks).
-- **The judgment set assumes palette content.** Its composition strokes use the palette ids
-  `temperate_forest_summer_s1` and `grassland_meadow_summer_s1`, and it places the species
-  `oak`, `log` and `boulder` from `temperate_forest_summer_s1` and `boulder` from
-  `alpine_meadow_summer_s1`. A missing species or biome in a `place` step is skipped with a
-  `no species ... not placed` log line. A paint stroke is not guarded the same way: it hands
-  the unknown id to the brush, so after a palette change check the log and the composition
-  images, and update the ids in the job. The per-biome captures follow whatever palette is installed, so
-  the capture count changes with the palette.
-- **The Blender reference levels must exist** as `user://levels/river` and
-  `user://levels/deciduous_clusters`; the `dress` steps only read them.
-- Positions in `stroke`, `place` and `look_at` are world metres on the map plane (x, z),
-  centred on the map; a 200 ft map spans about -30 to 30.
-- The driver pokes private members of the game (`_begin_authoring`, `_autosave_timer`,
-  `_pressed`, `_reset_camera_to_home` and so on). A rename in the game breaks the matching
-  op with a script error in the log; fix the driver alongside the rename.
+and stop anything listed with `Stop-Process -Id <id>`. Frame and GPU timings from a job are
+indicative only (REFERENCE.md "Caveats").
