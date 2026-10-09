@@ -42,8 +42,7 @@ extends RefCounted
 ##                               asset, rock props under the water, the ground layers.
 ##   profile {every}             ground and depth along every river's course.
 ##   joints                      the reach steps of every river, named "joint<k>" (P4-5).
-##   cleanup                     deletes the _p43_ to _p4d_, _p5_ and _p5j_ level folders
-##                               (test levels).
+##   cleanup                     deletes TEST_PREFIXES folders but _p42_, and NET_PREFIX ones.
 
 ## The `build` map: the river's control line, its reaches' half-widths, the bank width of
 ## the carve, and the two ponds.
@@ -62,10 +61,11 @@ const RIVER := [
 const HALF_WIDTHS := [1.8, 2.2, 2.8]
 const BANK_M := 1.6
 const POND := {"id": 20, "at": [13, -17], "r": 6.0, "depth": "deep"}
-## Level folders `save` may write (test levels; `cleanup` deletes all but the _p42_ ones).
+## Folders `save` may write: test levels (`cleanup` skips _p42_) and NET_PREFIX's net levels.
 const TEST_PREFIXES: Array[String] = [
 	"_p42_", "_p43_", "_p44_", "_p45_", "_p4b_", "_p4c_", "_p4d_", "_p5_", "_p5j_", "_p6_", "_pol_"
 ]
+const NET_PREFIX := "_nettest_"
 const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}
 
 ## Points `scan` found (and the reach steps `carve` made), by name.
@@ -708,7 +708,7 @@ static func _joints(base: Node) -> String:
 
 
 ## Deletes the test levels this probe saved (user://levels/_p43_*, _p44_*, _p45_*, _p4b_*,
-## _p4c_*, _p4d_*, _p5_*, _p5j_*, _p6_* only).
+## _p4c_*, _p4d_*, _p5_*, _p5j_*, _p6_*, _pol_*, _nettest_* only).
 static func _cleanup() -> String:
 	var dir := DirAccess.open(LevelManager.levels_dir)
 	if dir == null:
@@ -716,7 +716,7 @@ static func _cleanup() -> String:
 	var removed := PackedStringArray()
 	for folder in dir.get_directories():
 		var is_test := func(prefix: String) -> bool: return folder.begins_with(prefix)
-		if not TEST_PREFIXES.slice(1).any(is_test):
+		if not (TEST_PREFIXES.slice(1) + [NET_PREFIX]).any(is_test):
 			continue
 		var path := LevelManager.folder_path(folder)
 		_remove_tree(path)
@@ -741,9 +741,9 @@ static func _remove_tree(path: String) -> void:
 static func _save(base: Node, step: Dictionary) -> String:
 	var ctrl: AuthoringController = base.get("_authoring_controller")
 	var folder := String(step.get("folder", "_p42_water"))
-	var test_level := TEST_PREFIXES.any(func(p: String) -> bool: return folder.begins_with(p))
-	if ctrl == null or not test_level:
-		return "no authoring controller, or not a %s folder" % " / ".join(TEST_PREFIXES)
+	var prefixes := TEST_PREFIXES + [NET_PREFIX]
+	if ctrl == null or not prefixes.any(func(p: String) -> bool: return folder.begins_with(p)):
+		return "no authoring controller, or not a %s folder" % " / ".join(prefixes)
 	var path := LevelManager.folder_path(folder)
 	if DirAccess.dir_exists_absolute(path) and not bool(step.get("replace", false)):
 		return "folder %s exists; not touching it (replace: true overwrites)" % folder

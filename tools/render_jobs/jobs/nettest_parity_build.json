@@ -1,0 +1,30 @@
+{
+ "out_dir": "render_jobs/nettest_parity",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 150, "seed": 3, "landform": "terraces"},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "report", "landform": "terraces"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "place", "kind": "arch", "from": [-10, -1], "to": [-2, -1]},
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "place", "kind": "ford", "from": [-10, 14], "to": [-2, 14]},
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "pond", "points": [[6, 13], [9, 15]], "radius": 3.0, "depth": "deep"},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/falls.gd", "action": "falls"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/crossing.gd", "action": "list"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "check"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/p6.gd", "action": "info"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_nettest_parity", "replace": true},
+  {"op": "hide_ui"},
+  {"op": "home"},
+  {"op": "wait", "s": 1.5},
+  {"op": "capture", "name": "parity_home", "scale": 0.5, "desc": "_nettest_parity in authoring at home: terraces seed 3 (river over two falls, plank bridge), an arch and a ford placed, a deep pond"},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}
