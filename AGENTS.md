@@ -347,10 +347,10 @@ Use `app_state` to verify scene transitions worked. Use `tokens` to verify token
 ### Architecture
 
 ```
-Agent → MCP Server (TypeScript, tools/mcp/) → TCP localhost:7777 → Validation Bridge (GDScript autoload, addons/validation_bridge/)
+Agent → MCP Server (TypeScript, tools/mcp/) → TCP localhost:7777 → Validation Bridge (GDScript, addons/validation_bridge/)
 ```
 
-The bridge only activates when Godot is launched with `-- --validation-bridge`. Normal gameplay, editor play, and release builds are unaffected.
+The bridge only activates when Godot is launched with `-- --validation-bridge`. Normal gameplay and editor play are unaffected, and release builds do not contain it: the `ValidationBridge` autoload is `autoloads/validation_bridge_loader.gd`, which adds the bridge as its child (`/root/ValidationBridge/Bridge`) only on that flag and only when the script exists, and every export preset excludes `addons/validation_bridge/`. Registering the bridge script itself as the autoload would make an export log `Failed to instantiate an autoload` at startup (measured 2026-10-09).
 
 ### Troubleshooting
 
@@ -386,6 +386,7 @@ The bridge only activates when Godot is launched with `-- --validation-bridge`. 
 - **Versioning rule** – `project.godot config/version` is the single source of truth. It always holds the version being worked *toward*, not the one last shipped. CI reads it for every build; for tagged builds it validates the tag matches and fails the build if not.
 - **Cutting a release** – Ensure `project.godot config/version` is set to the intended release version (e.g. `0.1.2`). Tag: `git tag v0.1.2 && git push origin v0.1.2`. CI validates tag == project.godot version. **Immediately after**: bump `project.godot` to the next version (e.g. `0.1.3`) and push — this ensures subsequent builds are correctly versioned as pre-releases of `0.1.3`.
 - **Every push to `main` publishes too** – not only tags. A `main` push runs the full pipeline and creates a GitHub **prerelease** `v<version>-build.<sha>` with all three platform zips, and deploys the build to the Steam app's **`testing`** branch (`releaseBranch: testing` in `.github/workflows/build.yml`). The default Steam branch only changes on a release you set live. Treat a `main` push as shipping to testers.
+- **What a release contains** – All three presets in `export_presets.cfg` share one `exclude_filter`: `tests/`, `tools/`, `docs/`, `addons/gut/`, `addons/validation_bridge/`, the editor-only addons (`icon_explorer`, `theme_gen`, `theme_gen_save_sync`) and `themes/dark_theme.gd` (the theme generator; the game loads `themes/generated/dark_theme.tres`). Measured on a pack-only export of the Windows preset on 2026-10-09: 3014 files and 106.2 MB before, 1731 files and 83.9 MB after. Without it, `all_resources` also shipped `tools/mcp/node_modules/*.json` and any gitignored PNGs under `docs/plans/`. A new dev-only folder belongs in that filter on all three presets, and runtime code must never load from an excluded path. `godot --headless --path . --export-pack "Windows Desktop" <dir>/x.zip` needs no export templates and lists what ships.
 - **Hotfixes** – Branch from the release tag, apply the fix, tag a patch release (e.g. `v0.1.2.1`), then merge the fix back to main if applicable.
 
 ## File Layout
@@ -402,7 +403,7 @@ themes/                     # dark_theme.gd → generated/dark_theme.tres
 tests/                      # GUT unit tests + runnable test scenes (F6 in editor)
 tools/                      # Python scripts (audio normalization, hooks, manifest generation)
 tools/mcp/                  # TypeScript MCP server for agent validation bridge
-addons/validation_bridge/   # GDScript autoload for in-game validation (TCP server)
+addons/validation_bridge/   # In-game validation TCP server, started by autoloads/validation_bridge_loader.gd
 data/                       # Static data files (pokemon.json)
 docs/                       # Authoritative documentation
 assets/                     # Audio, icons, models, maps

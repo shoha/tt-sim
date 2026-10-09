@@ -4,6 +4,8 @@ extends Node
 ## Listens on TCP localhost and accepts commands for screenshot capture,
 ## game state queries, and input injection.
 ## Only activates when launched with: godot --path . -- --validation-bridge
+## Not an autoload itself: autoloads/validation_bridge_loader.gd adds it on that flag, so
+## release exports, which exclude this folder, start without it.
 
 const PORT: int = 7777
 const HOST: String = "127.0.0.1"
