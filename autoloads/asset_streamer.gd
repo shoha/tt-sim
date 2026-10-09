@@ -17,10 +17,14 @@ extends Node
 ##   - Chunked transfers with progress tracking
 ##   - Transfer resume support for interrupted downloads
 ##   - Ack-based flow control: the host keeps at most SEND_WINDOW_BYTES of chunks
-##     unacknowledged per peer and sends more as the client acks them. Over Steam,
+##     unacknowledged and sends more as the client acks them. Over Steam,
 ##     SteamMultiplayerPeer silently drops reliable messages once about 512 KB is queued
 ##     (Steam's default send buffer), so a map sent all at once never completed
 ##     (tests/net/steam_map_download.gd reproduces it over real Steam).
+##   - One peer at a time: the host serves bulk transfers to the head of a FIFO of peers
+##     (StreamPeerQueue), so its upload stays near one connection's send rate whatever
+##     the player count. A head with no ack progress for STALL_TIMEOUT_MS goes to the
+##     back of the queue and later resumes from its last ack.
 
 ## Signals
 ## Every listener must declare all five parameters, file_type included. Godot 4.7
@@ -40,10 +44,11 @@ signal transfer_progress(
 
 const CHUNK_SIZE := 32768  # 32KB chunks
 const MAX_CONCURRENT_TRANSFERS := 2
-const TRANSFER_TIMEOUT := 60.0  # seconds
-## Unacknowledged chunk bytes the host allows per peer, across all of its transfers: half
-## of Steam's default 512 KB send buffer, leaving room for game traffic.
+## Unacknowledged chunk bytes the host allows the served peer, across all of its
+## transfers: half of Steam's default 512 KB send buffer, leaving room for game traffic.
 const SEND_WINDOW_BYTES := 256 * 1024
+## How long the served peer may go without acking new chunks before it loses its turn.
+const STALL_TIMEOUT_MS := 10000
 
 ## Injected reference to the disk cache (set by AssetManager.setup).
 var _cache_manager: Node
@@ -54,6 +59,13 @@ var _asset_manager: Node
 ## Active transfers on host: peer_id -> {key -> {"parts", "data", "total_chunks",
 ## "next_chunk", "acked_chunks"}}, in the order they started
 var _host_transfers: Dictionary = {}
+
+## Peers waiting for bulk transfers on host, head first (see StreamPeerQueue)
+var _host_queue: Array = []
+
+## The peer whose chunks are being sent (0 for none) and when it last made ack progress
+var _active_peer: int = 0
+var _active_progress_ms: int = 0
 
 ## Pending downloads on client (key -> download state)
 var _client_downloads: Dictionary = {}
@@ -74,6 +86,11 @@ func _ready() -> void:
 
 	# Connect to multiplayer signals
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+
+
+func _process(_delta: float) -> void:
+	if _active_peer != 0:
+		_check_stall(_now_ms())
 
 
 ## Inject dependencies (called by AssetManager after adding to tree).
@@ -396,12 +413,31 @@ func _begin_host_transfer(
 		"acked_chunks": first,
 	}
 	_host_transfers[peer_id] = transfers
-	_pump_peer(peer_id)
+	_host_queue = StreamPeerQueue.with_peer(_host_queue, peer_id)
+	_pump()
 
 
-## Sends every chunk the peer's window has room for, across that peer's transfers in the
-## order they started, and drops transfers the peer has fully acknowledged.
-func _pump_peer(peer_id: int) -> void:
+## Serves the head of the queue: drops its finished transfers, moves on to the next peer
+## once it has none, and sends what the window allows to the peer it settles on.
+func _pump() -> void:
+	while true:
+		var peer_id := StreamPeerQueue.head(_host_queue)
+		if peer_id == 0:
+			_active_peer = 0
+			return
+		if peer_id != _active_peer:
+			_active_peer = peer_id
+			_active_progress_ms = _now_ms()
+		_drop_finished_transfers(peer_id)
+		if _host_transfers.has(peer_id):
+			_send_window(peer_id)
+			return
+		_host_queue = StreamPeerQueue.without_peer(_host_queue, peer_id)
+
+
+## Drops the transfers a peer has fully acknowledged, and the peer's entry once none are
+## left.
+func _drop_finished_transfers(peer_id: int) -> void:
 	var transfers: Dictionary = _host_transfers.get(peer_id, {})
 	for key in transfers.keys():
 		var state: Dictionary = transfers[key]
@@ -415,7 +451,38 @@ func _pump_peer(peer_id: int) -> void:
 			transfers.erase(key)
 	if transfers.is_empty():
 		_host_transfers.erase(peer_id)
+
+
+## The served peer has acked nothing new for STALL_TIMEOUT_MS: it goes to the back of the
+## queue, and its transfers rewind to the last ack so its next turn resends what was lost.
+func _check_stall(now_ms: int) -> void:
+	if _active_peer == 0:
 		return
+	if not StreamPeerQueue.is_stalled(_active_progress_ms, now_ms, STALL_TIMEOUT_MS):
+		return
+	var peer_id := _active_peer
+	push_warning(
+		(
+			"AssetStreamer: Peer %d made no progress for %d ms; moving it to the back of the queue"
+			% [peer_id, STALL_TIMEOUT_MS]
+		)
+	)
+	for state in _host_transfers.get(peer_id, {}).values():
+		state.next_chunk = state.acked_chunks
+	_host_queue = StreamPeerQueue.rotated(_host_queue)
+	_active_peer = 0
+	_pump()
+
+
+## Milliseconds clock for stall detection. Separate so tests can drive time.
+func _now_ms() -> int:
+	return Time.get_ticks_msec()
+
+
+## Sends every chunk the window has room for, across the peer's transfers in the order
+## they started.
+func _send_window(peer_id: int) -> void:
+	var transfers: Dictionary = _host_transfers.get(peer_id, {})
 	var in_flight := 0
 	for state in transfers.values():
 		in_flight += StreamSendWindow.bytes_in_flight(
@@ -443,13 +510,18 @@ func _send_chunk_rpc(peer_id: int, parts: Array, index: int, chunk: PackedByteAr
 
 ## Host side of an ack: the peer holds every chunk before `received_chunks` of one of its
 ## transfers. The value comes from the peer, so it only ever moves the ack forward and
-## never past what was sent.
+## never past what was sent. Progress by the served peer restarts its stall clock; an ack
+## from a waiting peer only records its position.
 func _on_chunk_ack(peer_id: int, key: String, received_chunks: int) -> void:
 	var state: Dictionary = _host_transfers.get(peer_id, {}).get(key, {})
 	if state.is_empty():
 		return
-	state.acked_chunks = clampi(received_chunks, state.acked_chunks, state.next_chunk)
-	_pump_peer(peer_id)
+	var acked := clampi(received_chunks, state.acked_chunks, state.next_chunk)
+	if acked > state.acked_chunks and peer_id == _active_peer:
+		_active_progress_ms = _now_ms()
+	state.acked_chunks = acked
+	if peer_id == _active_peer:
+		_pump()
 
 
 ## RPC: Client acknowledges the chunks of a transfer it holds (client -> host)
@@ -652,8 +724,13 @@ func _finalize_download(key: String) -> void:
 
 ## Clean up when a peer disconnects
 func _on_peer_disconnected(peer_id: int) -> void:
-	# Host: Clean up any transfers to this peer
+	# Host: Clean up any transfers to this peer, and serve the next peer if it was served
 	_host_transfers.erase(peer_id)
+	if _host_queue.has(peer_id):
+		_host_queue = StreamPeerQueue.without_peer(_host_queue, peer_id)
+		if peer_id == _active_peer:
+			_active_peer = 0
+			_pump()
 
 	# Client: If we disconnected from host, save partial transfers for resume
 	if peer_id == 1:  # Host peer_id

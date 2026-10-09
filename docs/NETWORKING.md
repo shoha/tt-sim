@@ -341,25 +341,36 @@ level folder as asset id, and a variant id naming the file.
   coordinator's four-parameter handlers were never called, so client map downloads never
   completed.
 
-- **Flow control.** `AssetStreamer` keeps at most `SEND_WINDOW_BYTES` (256 KB) of chunks
-  unacknowledged per peer, shared across that peer's transfers (`StreamSendWindow`,
-  `utils/stream_send_window.gd`); the client acks the unbroken run of chunks it holds,
-  and the host only moves an ack forward. This exists because `SteamMultiplayerPeer`
-  silently drops reliable messages once about 512 KB is queued (see
+- **Flow control.** The host serves bulk transfers to one peer at a time: peers wait in a
+  host-wide FIFO in the order they first asked (`StreamPeerQueue`,
+  `utils/stream_peer_queue.gd`), only the head peer's chunks are sent, and the next peer
+  is served once the head's transfers finish or it disconnects. A file several peers ask
+  for is sent to each in turn. For the served peer, `AssetStreamer` keeps at most
+  `SEND_WINDOW_BYTES` (256 KB) of chunks unacknowledged, shared across its transfers
+  (`StreamSendWindow`, `utils/stream_send_window.gd`); the client acks the unbroken run
+  of chunks it holds, and the host only moves an ack forward. A served peer that acks
+  nothing new for `STALL_TIMEOUT_MS` (10 s) is logged and moved to the back of the queue,
+  its transfers rewound to the last ack so its next turn resumes from there; acks from a
+  waiting peer send nothing. The window exists because `SteamMultiplayerPeer` silently
+  drops reliable messages once about 512 KB is queued (see
   [Transport Resilience](#transport-resilience)): before it, a 12.9 MB compressed map
   stalled at 21 of 394 chunks with the host reporting "Finished sending". Resume keeps
   the chunks already received when the file is unchanged.
 - **Send rate.** `SteamNetConfig.apply_defaults()` (`utils/steam_net_config.gd`) runs right
   after Steam initialises and sets the global SendRateMin to 1 MB/s and SendRateMax to
   4 MB/s, per connection. SendRateMin is the setting that counts: raising only the max
-  changed nothing. The same map took 51 s at Steam's default, 13 s at 1 MB/s, 3.4 s at
-  4 MB/s.
+  changed nothing, and Steam sends at the min whatever the real uplink carries. Because
+  the rate is per connection and Steam has no one-to-many send, the one-peer-at-a-time
+  queue above is what keeps the host's total upload near 1 MB/s whatever the player
+  count. The same map took 51 s at Steam's default, 13 s at 1 MB/s, 3.4 s at 4 MB/s.
 
 Exercised over a real Steam connection by `tests/net/steam_map_download.tscn` (not in the
 GUT suite; see [Automated runs](#automated-runs-agents)). The unit tests
 (`test_map_download_coordinator.gd`, `test_level_map_streaming.gd`,
-`test_asset_streamer_flow_control.gd`, `test_stream_send_window.gd`) cover the
-coordinator, whitelist, cache, hash and window logic with a streamer double.
+`test_asset_streamer_flow_control.gd`, `test_stream_send_window.gd`,
+`test_stream_peer_queue.gd`) cover the coordinator, whitelist, cache, hash, window and
+queue logic with a streamer double; with one alt account, more than one client is tested
+only there.
 
 ---
 
