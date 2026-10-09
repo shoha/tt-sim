@@ -1,0 +1,29 @@
+{
+  "out_dir": "render_jobs/_msize_",
+  "timeout_s": 600,
+  "steps": [
+    {"op": "wait_title"},
+    {"op": "new_map", "biome": "grassland_meadow_summer_s1", "size": 200, "seed": 3, "landform": "valley"},
+    {"op": "no_autosave"},
+    {"op": "wait_ready", "settle": 3.0},
+    {"op": "call", "script": "res://tools/map_size/dump.gd", "name": "grass_valley_200"},
+    {"op": "capture", "name": "grass_valley_200", "scale": 0.5},
+    {"op": "title"},
+    {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 200, "seed": 3, "landform": "valley"},
+    {"op": "no_autosave"},
+    {"op": "wait_ready", "settle": 3.0},
+    {"op": "call", "script": "res://tools/map_size/dump.gd", "name": "forest_valley_200"},
+    {"op": "capture", "name": "forest_valley_200", "scale": 0.5},
+    {"op": "title"},
+    {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 100, "seed": 1234, "landform": "flat"},
+    {"op": "no_autosave"},
+    {"op": "wait_ready", "settle": 3.0},
+    {"op": "call", "script": "res://tools/map_size/dump.gd", "name": "forest_flat_100"},
+    {"op": "title"},
+    {"op": "new_map", "biome": "", "size": 200, "seed": 1234, "landform": "flat"},
+    {"op": "no_autosave"},
+    {"op": "wait_ready", "settle": 2.0},
+    {"op": "call", "script": "res://tools/map_size/dump.gd", "name": "bare_flat_200"},
+    {"op": "title"}
+  ]
+}
