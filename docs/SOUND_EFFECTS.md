@@ -42,8 +42,7 @@ playback fields are:
 **One sound per gesture.** `play()` queues the request, and `AudioManager` flushes the queue once
 a frame, after every other node's `_process`. On each bus (UI, SFX) only the highest-priority
 request of the frame plays; ties keep the first. So a click that confirms a dialog and closes it
-is heard as the confirm alone, a finished pack download and its success toast as one chime, and
-a dialog no longer needs to suppress its own close sound. The buses coalesce separately, so a
+is heard as the confirm alone, and a dialog no longer needs to suppress its own close sound. The buses coalesce separately, so a
 splash on the board is never silenced by a click in a menu. The tiers (`PRIORITY_*` in
 `sfx_spec.py`):
 
@@ -56,16 +55,36 @@ splash on the board is never silenced by a click in a menu. The tiers (`PRIORITY
 | Faint | 10 | `tick`, `hover`, `token_hover`, `token_slide`, `token_whoosh` |
 
 A sound inside its cooldown is dropped when requested, before coalescing, so it never outranks a
-lower sound that would otherwise play. `tick` carries the only cooldown today (80 ms, formerly the
+lower sound that would otherwise play. Two sounds carry one today: `tick` (80 ms, formerly the
 Settings sliders' own throttle), so a fast slider drag or a held key ticks about twelve times a
-second at most.
+second at most, and `token_hover` (150 ms), so sweeping the mouse across a row of tokens chirps
+once rather than once per token.
+
+**Only the user's actions sound.** A sound marks something the player did or something that
+happened to them, never code putting a control in step:
+
+- Toggles tick on `pressed`, which only a click emits, not `toggled`, which also fires when code
+  sets `button_pressed`. Code that shows a saved value (Settings opening, Reset) sets controls
+  with `set_pressed_no_signal` / `set_value_no_signal`, or holds its slider ticks while a tween
+  moves them (Settings' Reset).
+- Background work is quiet until it means something to the player: a pack download plays nothing
+  per asset variant (five finishing 120 ms apart used to stack +4.3 LU and fill the UI voice
+  pool, cutting clicks off); the pack's own toast plays `success` or `error` once.
+- `token_hover` plays only for a token the local player can drag now
+  (`DraggableToken.dragging_allowed`), so the chirp says "you can move this".
 
 **Pause.** `AudioManager` runs with `PROCESS_MODE_ALWAYS`: the pause menu's own sounds play
 while the tree is paused, and a drop or splash already playing when the game pauses finishes
 instead of freezing and resurfacing on unpause.
 
 **Bus volumes.** The Settings sliders call `AudioManager.set_bus_volume(AudioManager.BUS_*, 0..1)`;
-`AudioManager` also applies the saved values at startup. There is no other bus-volume code.
+`AudioManager` also applies the saved values at startup. There is no other bus-volume code. The
+slider position maps to gain through a squared taper, `AudioManager.slider_to_db(p)` =
+`linear_to_db(p * p)`: half way is -12 dB, a quarter -24 dB, a tenth -40 dB, zero silent.
+Loudness grows with roughly the 0.6 power of sound pressure, so gain ~ position^1.7 makes the
+slider track how loud it sounds, and squared is the nearest simple curve; the old linear taper put
+half way at only -6 dB. Saved settings are slider percentages, so a saved 50% now sounds quieter
+than it did.
 
 ---
 
@@ -77,7 +96,8 @@ Sound effects are wired up **automatically** wherever possible so that new UI el
 
 `AudioManager` listens to `SceneTree.node_added`. Every `BaseButton` that enters the scene tree automatically gets:
 
-- **`pressed`** → `play(&"click")`
+- **`pressed`** → `play(&"click")`; a `CheckButton` or `CheckBox` plays `tick` instead, 2 dB
+  louder when it turns on. Both listen to `pressed`, so a toggle set from code is silent.
 - **`mouse_entered`** → `play(&"hover")` -- currently **off**: the connection
   is skipped unless `AudioManager.BUTTON_HOVER_SOUND_ENABLED` is flipped to `true`. Toggles
   (`CheckButton`/`CheckBox`) are excluded from it regardless, since they already tick.
@@ -131,6 +151,8 @@ Some buttons play specialized sounds instead of the generic click:
 |------------------------------------|----------------------|------------------------------------------|
 | Confirmation dialog "Confirm"      | `confirm` (or the dialog's `confirm_sound`, e.g. `leave_game` for Return to Title) | Button has `ui_silent` meta; calls `play()`; outranks the dialog's close |
 | Confirmation dialog "Cancel"       | `cancel`             | Button has `ui_silent` meta; calls `play()`; outranks the dialog's close |
+| Avatar builder "Save" / "Add to board" | `confirm`        | `AvatarBuilder.confirm()` calls `play()`; outranks the button's click and the panel's close |
+| Avatar builder "Cancel" (and Escape) | `cancel`           | `AvatarBuilder.cancel()` calls `play()`; outranks the click and the close |
 
 ---
 
@@ -146,11 +168,11 @@ and priority columns mirror `tools/sfx_spec.py`, which is the source of truth. A
 | `hover`        | -6 dB  | 0.5    | -        | 10       | Button hover / focus              | Disabled             |
 | `open`         | 0 dB   | 0.5    | -        | 30       | Menu or panel opening             | **Auto** (panels)    |
 | `close`        | 0 dB   | 0.5    | -        | 30       | Menu or panel closing             | **Auto** (panels)    |
-| `success`      | 0 dB   | 0.5    | -        | 40       | Success feedback (e.g. level win) | Manual               |
-| `error`        | 0 dB   | 0.5    | -        | 50       | Error feedback                    | Manual               |
-| `confirm`      | 0 dB   | 0.5    | -        | 40       | Confirmation dialog accept        | **Wired**            |
+| `success`      | 0 dB   | 0.5    | -        | 40       | Success feedback                  | Success toasts (one per finished pack download); a player joining, in the lobby and mid-game (`PlayerListDrawer`); connecting to a lobby; a game update downloaded |
+| `error`        | 0 dB   | 0.5    | -        | 50       | Error feedback                    | Error toasts (one per failed pack download); a failed connect; a game update download that failed |
+| `confirm`      | 0 dB   | 0.5    | -        | 40       | Dialog accept (confirmation dialog, avatar builder, pickers) | **Wired**            |
 | `cancel`       | 0 dB   | 0.5    | -        | 40       | Cancel / back action              | **Wired**            |
-| `tick`         | -8 dB  | 0.5    | 80 ms    | 10       | Slider / toggle / checkbox tick   | **Auto** (toggles)   |
+| `tick`         | -8 dB  | 0.5    | 80 ms    | 10       | Slider / toggle / checkbox tick   | **Auto** (toggles, on a click only); Settings sliders when the user moves them; a player leaving (lobby and mid-game); tabs, rails, foldouts, menus |
 | `transition`   | -3 dB  | 0      | -        | 30       | Scene / state transition whoosh   | Called by `TransitionOverlay`; nothing calls `UIManager.fade_out`/`fade_in`/`transition` yet, so it never plays |
 | `leave_game`   | 0 dB   | 0      | -        | 40       | Returning to title from a game    | **Wired**            |
 
@@ -165,7 +187,7 @@ Played with `AudioManager.play(&"<name>")`; columns as for the UI table.
 | `token_pickup`  | 0 dB   | 0.5    | -        | 20       | Picking up / starting to drag a token| **Wired**     |
 | `token_drop`    | 0 dB   | 0.7    | -        | 20       | Dropping / placing a token           | **Wired**     |
 | `token_slide`   | -3 dB  | 0.5    | -        | 10       | Token sliding / movement on board    | Not wired     |
-| `token_hover`   | -6 dB  | 0.5    | -        | 10       | Mouse hovering over a board token    | **Wired**     |
+| `token_hover`   | -6 dB  | 0.5    | 150 ms   | 10       | Mouse hovering over a token the player can drag | **Wired**     |
 | `token_whoosh`  | -3 dB  | 1.3    | -        | 10       | Rapid drag swoosh (velocity-based)   | Disabled      |
 | `splash_enter`  | 0 dB   | 0.5    | -        | 30       | Token entering a water zone          | **Wired**     |
 | `splash_exit`   | -3 dB  | 0.5    | -        | 30       | Token leaving a water zone           | **Wired**     |
@@ -176,7 +198,7 @@ Played with `AudioManager.play(&"<name>")`; columns as for the UI table.
 |--------------------|---------------------------|----------------------------------|
 | `token_pickup` | `draggable_token.gd`    | Drag start                      |
 | `token_drop`   | `draggable_token.gd`    | Settle start (immediate on drop); gain -3 to +2 dB and pitch 1.1 to 0.85 by drop height |
-| `token_hover`  | `board_token_controller.gd` | Mouse enters token rigid body |
+| `token_hover`  | `board_token_controller.gd` | Mouse enters the rigid body of a token the local player can drag (`wants_hover_sound()`: `DraggableToken.dragging_allowed`, false without CONTROL permission or while another peer holds the drag lock) |
 | `token_whoosh` | `draggable_token.gd`    | Horizontal drag speed >= 10 units/sec (0.15s cooldown, velocity-scaled pitch) -- trigger still wired, but the call is skipped while `AudioManager.TOKEN_WHOOSH_SOUND_ENABLED` is false |
 | `splash_enter` | `scenes/effects/water_zone.gd` (`_on_body_entered`) | Token's collision shape enters a water zone |
 | `splash_exit`  | `scenes/effects/water_zone.gd` (`_on_body_exited`) | Token's collision shape fully exits a water zone |
@@ -210,8 +232,9 @@ Master
     └── Effect: LowPassFilter  (cutoff 7kHz — warm, muffled-speaker feel)
 ```
 
-Each bus has an independent volume (0–100%) on the Settings menu. `AudioManager.set_bus_mute`
-exists, but Settings has no mute toggle, and the Music slider has nothing to control yet.
+Master, SFX and UI each have a volume slider (0–100%, squared taper; see "Bus volumes" above)
+on the Settings menu. The Music row is hidden (`SettingsMenu.SHOW_MUSIC_VOLUME`) until the game
+has music; its bus and saved value are kept.
 
 ### Lo-fi Bus Effects
 
@@ -529,8 +552,12 @@ palette's own peak target and normalization is a no-op.
   off via `AudioManager.TOKEN_WHOOSH_SOUND_ENABLED`; the trigger stays wired
 - [x] One entry point, `AudioManager.play(&"name")`, driven by the manifest; one sound per
   gesture through per-frame coalescing; pause no longer freezes a playing sound
+- [x] Only user actions sound: toggles tick on `pressed`, Settings loads and resets without
+  ticks, downloads chime once per pack (the toast), `token_hover` only on draggable tokens with
+  a 150 ms cooldown; avatar builder plays confirm/cancel; a mid-game join plays `success` as the
+  lobby does; volume sliders use a squared taper and the Music row is hidden
 - [ ] Wire `token_slide` to token movement
-- [ ] Wire `success` / `error` to relevant feedback points
+- [ ] Sounds for authoring actions (prop place/remove, undo/redo), with the palette work
 
 ### Phase 3: Expanded SFX (optional)
 - [ ] Add token snap, rotate, scale, cancel sounds to the palette

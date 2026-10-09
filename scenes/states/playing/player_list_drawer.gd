@@ -5,15 +5,22 @@ extends DrawerContainer
 ##
 ## Automatically updates when players join or leave. Only visible during
 ## networked games — starts completely hidden and slides the tab into view
-## when a networked game begins.
+## when a networked game begins. A player arriving or leaving mid-game sounds as
+## it does in the lobby: success for a join, a tick for a leave.
+
+## Joins this soon after the drawer appears are the initial player list sync, not
+## arrivals, and stay silent (the lobby client holds its join sound the same way).
+const JOIN_SOUND_GRACE_MS := 1000
 
 # -- Internals --------------------------------------------------------------
 
 var _header_label: Label
 var _player_list_vbox: VBoxContainer
+var _ready_ms := 0
 
 
 func _on_ready() -> void:
+	_ready_ms = Time.get_ticks_msec()
 	drawer_width = 200.0
 	tab_icon = preload("res://assets/icons/ui/users.svg")
 
@@ -156,11 +163,14 @@ func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
 	_update_player_list()
 	# Brief highlight flash on the tab to draw attention
 	_flash_tab()
+	if Time.get_ticks_msec() - _ready_ms >= JOIN_SOUND_GRACE_MS:
+		AudioManager.play(&"success")
 
 
 func _on_player_left(_peer_id: int, _player_info: Dictionary) -> void:
 	_update_player_list()
 	_flash_tab()
+	AudioManager.play(&"tick")
 
 
 func _on_connection_state_changed(

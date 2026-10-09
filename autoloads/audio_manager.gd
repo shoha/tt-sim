@@ -18,6 +18,9 @@ extends Node
 
 ## Emitted when a requested sound actually starts, after coalescing and cooldowns.
 signal sound_played(sound: StringName)
+## Emitted for every play() call, before cooldowns and coalescing decide whether it is heard:
+## what the game asked for, which is what call-site tests check.
+signal sound_requested(sound: StringName)
 
 # Audio bus names
 const BUS_MASTER := "Master"
@@ -78,6 +81,7 @@ func _process(_delta: float) -> void:
 ## each bus only the highest-priority one plays. A sound inside its cooldown is skipped,
 ## and an unknown name warns once and plays nothing.
 func play(sound: StringName, volume_offset_db: float = 0.0, pitch_scale: float = 1.0) -> void:
+	sound_requested.emit(sound)
 	_queue.request(sound, _now_s(), volume_offset_db, pitch_scale)
 
 
@@ -123,10 +127,13 @@ func _auto_connect_button(button: BaseButton) -> void:
 	if button.has_meta("ui_silent"):
 		return
 
-	# CheckButtons / CheckBoxes use toggle sounds instead of click
+	# CheckButtons / CheckBoxes tick instead of clicking. The tick listens to `pressed`,
+	# which only the user's click emits, not `toggled`, which also fires when code sets
+	# button_pressed (Settings loading saved values, Reset): those changes stay silent.
 	if button is CheckButton or button is CheckBox:
-		if not button.toggled.is_connected(_on_toggle_sound):
-			button.toggled.connect(_on_toggle_sound)
+		var tick := _on_toggle_sound.bind(button)
+		if not button.pressed.is_connected(tick):
+			button.pressed.connect(tick)
 	else:
 		if not button.pressed.is_connected(_on_button_pressed):
 			button.pressed.connect(_on_button_pressed)
@@ -148,9 +155,10 @@ func _on_button_hover() -> void:
 	play(&"hover")
 
 
-## Plays the tick for a toggle, 2 dB louder when it turns on than when it turns off.
-func _on_toggle_sound(toggled_on: bool) -> void:
-	play(&"tick", 2.0 if toggled_on else 0.0)
+## Plays the tick for a toggle the user clicked, 2 dB louder when it turned on than when
+## it turned off (`pressed` is emitted after the state flips).
+func _on_toggle_sound(button: BaseButton) -> void:
+	play(&"tick", 2.0 if button.button_pressed else 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -216,19 +224,34 @@ func _load_audio_settings() -> void:
 		set_bus_volume(bus_name, buses[bus_name] / 100.0)
 
 
-## Set volume for a bus (0.0 to 1.0)
+## The bus gain in dB for a volume slider position (0.0 to 1.0). The taper is squared:
+## gain = position^2, so half way is -12 dB, a quarter is -24 dB, a tenth -40 dB and zero
+## is silent. Loudness grows with roughly the 0.6 power of sound pressure (Stevens), so
+## pressure ~ position^1.7 makes the slider track how loud it sounds; squared is the
+## nearest simple curve. A linear taper put half way at only -6 dB, so the top half of
+## the slider barely changed anything and the bottom tenth did everything.
+static func slider_to_db(position: float) -> float:
+	var p := clampf(position, 0.0, 1.0)
+	return linear_to_db(p * p)
+
+
+## The slider position (0.0 to 1.0) that slider_to_db maps to `db`.
+static func db_to_slider(db: float) -> float:
+	return clampf(sqrt(db_to_linear(db)), 0.0, 1.0)
+
+
+## Sets a bus's volume from a slider position (0.0 to 1.0), through slider_to_db.
 func set_bus_volume(bus_name: String, volume: float) -> void:
 	var bus_idx = AudioServer.get_bus_index(bus_name)
 	if bus_idx >= 0:
-		var db = linear_to_db(clampf(volume, 0.0, 1.0))
-		AudioServer.set_bus_volume_db(bus_idx, db)
+		AudioServer.set_bus_volume_db(bus_idx, slider_to_db(volume))
 
 
-## Get volume for a bus (0.0 to 1.0)
+## A bus's volume as a slider position (0.0 to 1.0), the inverse of set_bus_volume.
 func get_bus_volume(bus_name: String) -> float:
 	var bus_idx = AudioServer.get_bus_index(bus_name)
 	if bus_idx >= 0:
-		return db_to_linear(AudioServer.get_bus_volume_db(bus_idx))
+		return db_to_slider(AudioServer.get_bus_volume_db(bus_idx))
 	return 1.0
 
 

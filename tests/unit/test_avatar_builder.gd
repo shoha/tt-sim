@@ -2,7 +2,8 @@ extends GutTest
 
 ## The avatar builder (AvatarBuilder, AvatarSurprise): a surprise recipe is always valid
 ## and drawn from the curated sets, a committed edit is one undo entry that syncs and
-## undoes, a cancelled edit puts the token back exactly, only an avatar's owner or the GM
+## undoes, a cancelled edit puts the token back exactly, confirm and cancel sound as every
+## dialog's do, only an avatar's owner or the GM
 ## may open "Edit Avatar", proportion drags reach the figure once a frame, a recipe the
 ## builder made round-trips through a level file, every stance is framed whole, the Face
 ## pane zooms to the head, the panel fits the window, and the face tiles take the skin.
@@ -23,6 +24,8 @@ const PEER := 4242
 
 var _old_scene: Node = null
 var _scene: Node = null
+## Sounds AudioManager was asked for while a test listened (_on_sound_requested).
+var _heard: Array[StringName] = []
 
 
 ## DragAndDrop3D's DraggingObject3D waits on the current scene when it enters the tree, and
@@ -35,6 +38,7 @@ func before_each() -> void:
 	get_tree().current_scene = _scene
 	NetworkManager._connection_state = NetworkManager.ConnectionState.OFFLINE
 	AvatarLibrary.directory = LIBRARY_DIR
+	_heard.clear()
 
 
 func after_each() -> void:
@@ -59,6 +63,10 @@ func _token(recipe: Dictionary = RECIPE) -> BoardToken:
 	token.network_id = TOKEN_ID
 	_scene.add_child(token)
 	return token
+
+
+func _on_sound_requested(sound: StringName) -> void:
+	_heard.append(sound)
 
 
 func _rng(seed_value: int) -> RandomNumberGenerator:
@@ -136,7 +144,10 @@ func test_cancel_puts_the_token_back_exactly() -> void:
 	assert_eq(token.avatar_recipe.stance, "stance_sneaky", "picks preview on the token")
 	assert_eq((figure.get_meta("avatar_recipe") as Dictionary).colours.hair, 3)
 	watch_signals(builder)
+	AudioManager.sound_requested.connect(_on_sound_requested)
 	builder.cancel()
+	AudioManager.sound_requested.disconnect(_on_sound_requested)
+	assert_true(_heard.has(&"cancel"), "sounds as every dialog's cancel")
 	assert_signal_emitted(builder, "cancelled")
 	assert_signal_not_emitted(builder, "edit_confirmed")
 	assert_eq(token.avatar_recipe, AvatarRecipe.normalized(RECIPE))
@@ -153,8 +164,11 @@ func test_confirm_emits_the_edit_once_and_it_records_one_undo_entry_that_syncs()
 	builder.pick_colour("primary", 5)
 	builder.name_input.text = "Rook"
 	watch_signals(builder)
+	AudioManager.sound_requested.connect(_on_sound_requested)
 	builder.confirm()
 	builder.confirm()
+	AudioManager.sound_requested.disconnect(_on_sound_requested)
+	assert_eq(_heard.count(&"confirm"), 1, "sounds once, as every dialog's confirm")
 	assert_signal_emit_count(builder, "edit_confirmed", 1)
 	var args: Array = get_signal_parameters(builder, "edit_confirmed")
 	assert_same(args[0], token)

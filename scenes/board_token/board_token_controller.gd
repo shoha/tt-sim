@@ -106,8 +106,17 @@ func _on_mouse_entered() -> void:
 	# Cursor: show pointing hand when hovering (not during drag)
 	if not draggable_token or not draggable_token.is_being_dragged():
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
-	# Sound
-	AudioManager.play(&"token_hover")
+	# Sound: the manifest's cooldown keeps a sweep across several tokens to one chirp
+	if wants_hover_sound():
+		AudioManager.play(&"token_hover")
+
+
+## True when hovering this token should chirp: only a token the local player can pick up
+## right now (DraggableToken.dragging_allowed is false for tokens without CONTROL
+## permission and while another peer holds the drag lock), so the chirp says "you can
+## move this" rather than "the mouse crossed something".
+func wants_hover_sound() -> bool:
+	return draggable_token != null and draggable_token.dragging_allowed
 
 
 func _on_mouse_exited() -> void:

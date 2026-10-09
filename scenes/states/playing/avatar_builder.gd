@@ -496,6 +496,8 @@ func confirm() -> void:
 		edit_confirmed.emit(token, _original, recipe.duplicate(true), _original_name, final_name)
 	elif token == null:
 		create_confirmed.emit(recipe.duplicate(true), final_name)
+	# As every dialog's confirm: it outranks the button's click and the panel's close
+	AudioManager.play(&"confirm")
 	animate_out()
 
 
@@ -528,6 +530,7 @@ func cancel() -> void:
 	if token != null and is_instance_valid(token) and recipe != _original:
 		AvatarTokenFactory.set_recipe(token, _original)
 	cancelled.emit()
+	AudioManager.play(&"cancel")
 	animate_out()
 
 

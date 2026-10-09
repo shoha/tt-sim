@@ -107,7 +107,7 @@
     },
     "token_hover": {
       "bus": "SFX",
-      "cooldown_s": 0.0,
+      "cooldown_s": 0.15,
       "path": "res://assets/audio/sfx/token_hover.wav",
       "pitch_jitter": 0.5,
       "priority": 10,

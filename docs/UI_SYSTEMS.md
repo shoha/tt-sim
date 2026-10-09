@@ -524,9 +524,12 @@ await settings.closed  # Wait for user to close
 **Audio Tab:**
 
 - Master Volume
-- Music Volume
 - Sound Effects Volume
 - UI Sounds Volume
+- (Music Volume is hidden until the game has music: `SettingsMenu.SHOW_MUSIC_VOLUME`)
+
+The sliders use a squared taper (`AudioManager.slider_to_db`). Opening Settings and Reset set
+controls without signals, so neither plays a burst of ticks; see `docs/SOUND_EFFECTS.md`.
 
 **Graphics Tab:**
 
@@ -623,11 +626,11 @@ dialog is heard once. Names, tiers and how to add a sound: `docs/SOUND_EFFECTS.m
 ### Volume Control
 
 ```gdscript
-# Set volume (0.0 to 1.0)
+# Set volume from a slider position (0.0 to 1.0); squared taper, so 0.5 is -12 dB
 AudioManager.set_bus_volume("Master", 0.8)
-AudioManager.set_bus_volume("Music", 0.5)
+AudioManager.set_bus_volume("SFX", 0.5)
 
-# Get current volume
+# Get current volume, as a slider position
 var vol = AudioManager.get_bus_volume("SFX")
 
 # Mute/unmute
