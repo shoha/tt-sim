@@ -5,7 +5,11 @@ extends BoxContainer
 ## [member vertical] for a side rail. With [member auto_select] the rail
 ## selects on click; a host that must decide first (a drawer that has to open)
 ## turns it off and calls [method select] itself. The indicator is drawn by the
-## rail and tweened between items, so it is not a laid-out child.
+## rail and tweened between items, so it is not a laid-out child. Its place is
+## read from the selected item's laid-out rect, so it is recomputed after every
+## sort of the rail's children ([signal Container.sort_children]), not on
+## [signal Control.resized]: a rail resizes before it sorts, and a selection made
+## before the first sort reads every item at x = 0.
 
 signal item_pressed(id: StringName)
 signal selection_changed(id: StringName)
@@ -26,6 +30,8 @@ var selected: StringName = &""
 var _buttons: Dictionary = {}
 var _items: Dictionary = {}
 var _indicator_tween: Tween
+## Where the running slide ends, so a re-sort mid-slide can tell a moved item.
+var _indicator_goal: float = -1.0
 var _indicator_pos: float = -1.0:
 	set(value):
 		_indicator_pos = value
@@ -35,7 +41,7 @@ var _indicator_pos: float = -1.0:
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_theme_constant_override("separation", ITEM_GAP)
-	resized.connect(_on_resized)
+	sort_children.connect(_on_children_sorted)
 
 
 func add_item(id: StringName, icon_name: String, tooltip: String = "") -> IconButton:
@@ -126,9 +132,17 @@ func _on_item_pressed(id: StringName) -> void:
 	item_pressed.emit(id)
 
 
-func _on_resized() -> void:
-	if _buttons.has(selected):
-		_indicator_pos = _indicator_target()
+## The items have their final rects now. Snap the indicator onto the selected
+## item, or retarget a slide that is still running so it lands there.
+func _on_children_sorted() -> void:
+	if not _buttons.has(selected):
+		return
+	var target := _indicator_target()
+	if _indicator_tween and _indicator_tween.is_valid() and _indicator_tween.is_running():
+		if not is_equal_approx(target, _indicator_goal):
+			_slide_indicator_to(target)
+		return
+	_indicator_pos = target
 
 
 func _indicator_target() -> float:
@@ -148,6 +162,13 @@ func _animate_indicator() -> void:
 	if _indicator_pos < 0.0:
 		_indicator_pos = target
 		return
+	_slide_indicator_to(target)
+
+
+func _slide_indicator_to(target: float) -> void:
+	if _indicator_tween and _indicator_tween.is_valid():
+		_indicator_tween.kill()
+	_indicator_goal = target
 	_indicator_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_indicator_tween.tween_property(self, "_indicator_pos", target, Constants.ANIM_PANE_SWAP)
 

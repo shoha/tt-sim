@@ -1,0 +1,41 @@
+{
+ "out_dir": "render_jobs/ui_primitives_look",
+ "timeout_s": 240,
+ "hang_s": 60,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "wait", "s": 1.0},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "settings"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "report"},
+  {"op": "capture", "name": "settings_first_open", "desc": "Settings as first opened over the title: the rail underline under the first section"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "settings", "section": "Graphics"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "report"},
+  {"op": "capture", "name": "settings_graphics", "desc": "Settings > Graphics: the underline under Graphics, the Advanced foldout closed with its 16 px chevron left of the title"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "foldout", "expanded": true},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "report"},
+  {"op": "capture", "name": "settings_graphics_advanced", "desc": "The Advanced foldout open: the chevron turned down, the advanced rows below"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "close_settings"},
+  {"op": "wait", "s": 1.0},
+
+  {"op": "new_map", "biome": "", "size": 100, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "save", "folder": "_u1_ui_hud", "replace": true},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_u1_ui_hud"},
+  {"op": "wait", "s": 3.0},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "report"},
+  {"op": "capture", "name": "play_hud", "desc": "The play HUD on a bare 100 ft map: the input hint bar at the bottom centre"},
+
+  {"op": "index", "title": "UI primitives (U1)", "intro": "Produced by tools/render_jobs/jobs/ui_primitives_look.json: Settings over the title (first open, then Graphics with its Advanced foldout closed and open) and the play HUD on a bare 100 ft map saved as _u1_ui_hud, which the job deletes at the end. Rects and the underline position are in log.txt."},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "cleanup"}
+ ]
+}

@@ -413,6 +413,12 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   map saved as `_avatartoken_library` and played with the Add Token browser's Avatar tab
   and a saved avatar placed by its card. It deletes its test library and level at the end;
   the player's `user://avatars/` is never read or written.
+- `jobs/ui_primitives_look.json`: the UI primitive fixes (card U1, about 20 s): Settings over
+  the title as first opened (the rail underline), on Graphics with its Advanced `Foldout`
+  closed and open (the chevron), then a bare 100 ft map saved as `_u1_ui_hud` and played
+  (the input hint bar). `probes/ui_primitives.gd report` logs the underline against the
+  selected item's centre, the chevron's rect against its title and the hint bar's rect
+  against the window. The job deletes `_u1_ui_hud` at the end (`cleanup`).
 
 ## Caveats
 

@@ -76,6 +76,53 @@ func test_badge_enabled_visible_reach_the_item() -> void:
 	assert_false(rail.has_item(&"nope"))
 
 
+func _horizontal_rail() -> IconRail:
+	var rail := IconRail.new()
+	rail.show_labels = true
+	add_child_autofree(rail)
+	rail.add_item(&"audio", "volume", "Audio")
+	rail.add_item(&"graphics", "photo", "Graphics")
+	rail.add_item(&"grid", "grid-dots", "Grid")
+	return rail
+
+
+func _item_centre_x(rail: IconRail, id: StringName) -> float:
+	var item: Control = rail._items[id]
+	return item.position.x + item.size.x / 2.0
+
+
+## A rail resizes before it sorts its children, so a selection made before the
+## first layout (the Settings menu selects in _ready) read every item at x = 0
+## and left the underline at x = 18 under no item. It must land after the sort.
+func test_indicator_lands_on_the_selected_item_after_the_first_sort() -> void:
+	var rail := _horizontal_rail()
+	rail.select(&"grid")
+	await wait_process_frames(2)
+	assert_gt(rail._items[&"grid"].position.x, 0.0, "items are laid out")
+	assert_almost_eq(rail._indicator_pos, _item_centre_x(rail, &"grid"), 0.5)
+
+
+func test_indicator_follows_its_item_when_the_rail_resorts() -> void:
+	var rail := _horizontal_rail()
+	rail.select(&"grid")
+	await wait_process_frames(2)
+	var before := rail._indicator_pos
+	rail.set_item_visible(&"audio", false)
+	await wait_process_frames(2)
+	assert_lt(rail._indicator_pos, before, "the item moved left, and the indicator with it")
+	assert_almost_eq(rail._indicator_pos, _item_centre_x(rail, &"grid"), 0.5)
+
+
+func test_selection_change_slides_to_the_new_item() -> void:
+	var rail := _horizontal_rail()
+	rail.select(&"audio")
+	await wait_process_frames(2)
+	rail.select(&"graphics")
+	assert_true(rail._indicator_tween != null and rail._indicator_tween.is_running())
+	await wait_seconds(Constants.ANIM_PANE_SWAP + 0.1)
+	assert_almost_eq(rail._indicator_pos, _item_centre_x(rail, &"graphics"), 0.5)
+
+
 func test_labels_mode_wraps_items_in_a_column() -> void:
 	var rail := IconRail.new()
 	rail.show_labels = true

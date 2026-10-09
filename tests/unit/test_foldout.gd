@@ -49,6 +49,20 @@ func test_expanded_chevron_survives_a_hide_and_show() -> void:
 	assert_almost_eq(foldout._chevron.rotation, PI / 2.0, 0.001)
 
 
+## The chevron used to be sized before its expand mode was set, so the icon
+## texture's own 72 px won and the chevron hung over the title below the
+## header. It must be CHEVRON_SIZE square, inside the header, left of the title.
+func test_chevron_is_small_and_sits_left_of_the_title() -> void:
+	var foldout := _foldout()
+	var square := Vector2(Foldout.CHEVRON_SIZE, Foldout.CHEVRON_SIZE)
+	assert_eq(foldout._chevron.size, square)
+	await wait_process_frames(2)
+	var chevron_rect := foldout._chevron.get_global_rect()
+	assert_eq(chevron_rect.size, square)
+	assert_true(foldout._header.get_global_rect().encloses(chevron_rect), "inside the header")
+	assert_lte(chevron_rect.end.x, foldout._title_label.get_global_rect().position.x)
+
+
 func test_toggle_emits_and_starts_tween() -> void:
 	var foldout := _foldout()
 	watch_signals(foldout)

@@ -85,12 +85,16 @@ func _build_header() -> void:
 	chevron_holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_header.add_child(chevron_holder)
 
+	# expand_mode goes before size: under the default EXPAND_KEEP_SIZE the
+	# texture's own size (the icon SVGs import at 72 px) is the minimum, so a
+	# size set first is clamped up to 72 and stays there, hanging the chevron
+	# over the title below the header.
 	_chevron = TextureRect.new()
 	_chevron.name = "Chevron"
-	_chevron.texture = IconButton.load_icon("chevron-right")
-	_chevron.size = Vector2(CHEVRON_SIZE, CHEVRON_SIZE)
 	_chevron.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_chevron.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_chevron.texture = IconButton.load_icon("chevron-right")
+	_chevron.size = Vector2(CHEVRON_SIZE, CHEVRON_SIZE)
 	_chevron.pivot_offset = Vector2(CHEVRON_SIZE, CHEVRON_SIZE) / 2.0
 	_chevron.self_modulate = ThemeColors.TEXT_MUTED
 	_chevron.mouse_filter = Control.MOUSE_FILTER_IGNORE
