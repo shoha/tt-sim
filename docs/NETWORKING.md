@@ -341,9 +341,25 @@ level folder as asset id, and a variant id naming the file.
   coordinator's four-parameter handlers were never called, so client map downloads never
   completed.
 
-Not yet exercised over a real Steam connection: the unit tests
-(`test_map_download_coordinator.gd`, `test_level_map_streaming.gd`) cover the
-coordinator, whitelist, cache and hash logic with a streamer double.
+- **Flow control.** `AssetStreamer` keeps at most `SEND_WINDOW_BYTES` (256 KB) of chunks
+  unacknowledged per peer, shared across that peer's transfers (`StreamSendWindow`,
+  `utils/stream_send_window.gd`); the client acks the unbroken run of chunks it holds,
+  and the host only moves an ack forward. This exists because `SteamMultiplayerPeer`
+  silently drops reliable messages once about 512 KB is queued (see
+  [Transport Resilience](#transport-resilience)): before it, a 12.9 MB compressed map
+  stalled at 21 of 394 chunks with the host reporting "Finished sending". Resume keeps
+  the chunks already received when the file is unchanged.
+- **Send rate.** `SteamNetConfig.apply_defaults()` (`utils/steam_net_config.gd`) runs right
+  after Steam initialises and sets the global SendRateMin to 1 MB/s and SendRateMax to
+  4 MB/s, per connection. SendRateMin is the setting that counts: raising only the max
+  changed nothing. The same map took 51 s at Steam's default, 13 s at 1 MB/s, 3.4 s at
+  4 MB/s.
+
+Exercised over a real Steam connection by `tests/net/steam_map_download.tscn` (not in the
+GUT suite; see [Automated runs](#automated-runs-agents)). The unit tests
+(`test_map_download_coordinator.gd`, `test_level_map_streaming.gd`,
+`test_asset_streamer_flow_control.gd`, `test_stream_send_window.gd`) cover the
+coordinator, whitelist, cache, hash and window logic with a streamer double.
 
 ---
 
@@ -495,7 +511,15 @@ the client in the box.
 - Steam's global fake lag/loss settings (`setGlobalConfigValueInt32` /
   `setGlobalConfigValueFloat` with `NETWORKING_CONFIG_FAKE_PACKET_*`) return success but
   had no measurable effect on a `SteamMultiplayerPeer` connection between two peers on
-  this machine. Simulate bad networks in a test-side transport wrapper instead.
+  this machine. Simulate bad networks in a test-side transport wrapper instead. (Global
+  config does reach these connections: SendRateMin changes throughput.)
+- Regression scenario: `tests/net/steam_map_download.tscn`. Run the host unsandboxed
+  with `--role=host` and the client in the box with `--role=client`, both with the same
+  `--rendezvous` file and each with its own `--out` log in the box's OpenFilePath folder;
+  allow `--timeout-s` of about 240. `--level` must start with `_nettest_`; the host
+  copies the map into that level and deletes it afterwards, and the client clears its
+  own cached copy, so no manual cache cleanup is needed. Each side writes one
+  `NET_RESULT {json}` line.
 
 #### Limitations
 
