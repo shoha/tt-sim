@@ -287,7 +287,7 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   kind, the default follows the biome, a pick sets the spec and caption, the icons load,
   `opening_status` names the landform). Phase 5 took the suite from 1890 to 1929 tests.
 - **Render jobs** (`tools/render_jobs/jobs/`, described in
-  [../../tools/render_jobs/README.md](../../tools/render_jobs/README.md)): `landform_look.json`
+  [../../tools/render_jobs/JOBS.md](../../tools/render_jobs/JOBS.md)): `landform_look.json`
   (P5-1 and P5-2: each landform in two biomes at home and zoom 8, water hidden and shown, the
   `_p5_` levels), `landform_dialog.json` (P5-3: the dialog with each tile and its caption),
   `phase5_valley/hilltop/terraces/lakeshore/gorge.json` and their union

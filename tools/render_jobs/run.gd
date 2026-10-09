@@ -1,8 +1,9 @@
 extends SceneTree
 
-## Render-job runner (see README.md in this folder). A plain godot command, no bridge:
+## Render-job runner (see README.md in this folder; REFERENCE.md documents the job format).
+## A plain godot command, no bridge:
 ##   godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --position 320,120
-##     --script res://tools/render_jobs/run.gd -- <job> [--out <dir>]
+##     --script res://tools/render_jobs/run.gd -- <job> [--out <dir>] [--full]
 ## <job> is a JSON file path, or a name under res://tools/render_jobs/jobs/ (".json" optional).
 ## Loads the project's main scene, forces a 1920x1080 window on the primary screen, runs the
 ## job's steps through driver.gd (same folder), then quits. Job keys besides "steps":
@@ -13,9 +14,12 @@ extends SceneTree
 ##   "remove_override"  delete res://override.cfg once the engine has read it
 ##   "saved"            {folder, load}: the saved level --saved loads in place of the job's
 ##                      build steps (README "Build once, look many")
-## Look-mode flags (README "Running a job"): --saved skips the steps tagged "phase": "build"
-## and loads the saved level instead; --only <a,b*> takes only the captures whose names match
-## (and skips the look steps tagged "for" them); --half writes every capture at half size.
+## Captures are written at half the window's size (960x540) unless --full is given, which
+## keeps the window's size for a final verdict; a capture step's own "scale" wins over both.
+## --half is still accepted and does nothing (it was the flag before half became the default).
+## Look-mode flags (README "Flags"): --saved skips the steps tagged "phase": "build" and loads
+## the saved level instead; --only <a,b*> takes only the captures whose names match (and
+## skips the look steps tagged "for" them).
 ##
 ## The timeout above runs on the main thread, so a main thread that blocks (a hung load, a
 ## GPU wait) would never reach it, and stopping the shell task that launched Godot does not
@@ -55,7 +59,8 @@ func _initialize() -> void:
 	if bool(_job.get("remove_override", false)) and FileAccess.file_exists(override_abs):
 		DirAccess.remove_absolute(override_abs)
 		print("RJ| override.cfg removed after startup")
-	print("RJ| job %s -> %s" % [path, _out_dir])
+	# The absolute folder too, so a reader can open the PNGs without resolving user://.
+	print("RJ| job %s -> %s (%s)" % [path, _out_dir, ProjectSettings.globalize_path(_out_dir)])
 	_watchdog = Thread.new()
 	_watchdog.start(
 		_watch.bind(
@@ -143,7 +148,7 @@ func _start() -> void:
 	driver.set("saved", _job.get("saved", {}))
 	driver.set("saved_mode", args.has("--saved"))
 	driver.set("only", only.split(",", false) if only != "" else PackedStringArray())
-	driver.set("half", args.has("--half"))
+	driver.set("full", args.has("--full"))
 	DirAccess.make_dir_recursive_absolute(_out_dir)
 	root.add_child(driver)
 	print("RJ| started %d steps" % _job.steps.size())

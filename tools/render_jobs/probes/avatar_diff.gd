@@ -8,7 +8,10 @@ extends SceneTree
 ##     --script res://tools/render_jobs/probes/avatar_diff.gd -- <a> <b> <x0> <y0> <x1> <y1>
 ##
 ## Prints the mean absolute channel difference (0-255) and how many pixels differ by more
-## than 8 and by more than 32 in any channel.
+## than 8 and by more than 32 in any channel. The rectangle is in the images' own pixels.
+## A pixel-exact diff needs full-size captures (a halved one averages a one-pixel difference
+## away), so avatar_probe.json pins its twin captures at "scale" 1.0; the result line names
+## the image size and says when the rectangle had to be clamped to it.
 
 
 func _init() -> void:
@@ -37,6 +40,9 @@ func _init() -> void:
 	var y0 := clampi(int(args[3]), 0, a.get_height() - 1)
 	var x1 := clampi(int(args[4]), 0, a.get_width() - 1)
 	var y1 := clampi(int(args[5]), 0, a.get_height() - 1)
+	var clamped := (
+		Vector4i(x0, y0, x1, y1) != Vector4i(int(args[2]), int(args[3]), int(args[4]), int(args[5]))
+	)
 	var total := 0.0
 	var n := 0
 	var over8 := 0
@@ -58,8 +64,20 @@ func _init() -> void:
 		mask.save_png(args[6])
 	print(
 		(
-			"diff rect %d,%d-%d,%d: %d px, mean %.3f, over 8: %d, over 32: %d"
-			% [x0, y0, x1, y1, n, total / maxi(n, 1), over8, over32]
+			"diff rect %d,%d-%d,%d of %dx%d%s: %d px, mean %.3f, over 8: %d, over 32: %d"
+			% [
+				x0,
+				y0,
+				x1,
+				y1,
+				a.get_width(),
+				a.get_height(),
+				" (clamped)" if clamped else "",
+				n,
+				total / maxi(n, 1),
+				over8,
+				over32
+			]
 		)
 	)
 	quit(0)
