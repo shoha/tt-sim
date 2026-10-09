@@ -34,3 +34,17 @@ Documents here:
 - [landforms.md](landforms.md): the starting landforms a new map opens with (Valley, Hilltop,
   Terraces, Lakeshore, Gorge): the seeded frame, the shared steps, each recipe, the stage and
   the open path.
+- [palette.md](palette.md): the built-in palette (`PaletteLibrary`): validation, read access,
+  `resolve()`, the import sidecars.
+- [map_document.md](map_document.md): `map.ttmap` (`MapDocument`, `MapDocumentIO`), levels
+  with `map.glb`, `map.ttmap` or both, the play-time load and map downloads.
+- [scatter.md](scatter.md): the scatter generator (region independence, thinning, density
+  response, clumps) and authored scatter (per-cell builds, worker regeneration, warm-up).
+- [authored_terrain.md](authored_terrain.md): the ground of a map without `map.glb`: chunks,
+  collision, ground layers, the self-dressing rules, height and ground refresh calls.
+- [authoring.md](authoring.md): authoring mode (entry, controller, new maps, save, autosave,
+  undo) and the brushes (mask, Paint and Sculpt strokes, flush, history).
+
+The last five were moved out of `AGENTS.md` Key Conventions on 2026-10-09 and are first cuts:
+they hold the map and the rules, use only the headings they have content for, and leave the
+long form in their `ARCHITECTURE.md` sections until that is migrated here.
