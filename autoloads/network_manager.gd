@@ -226,6 +226,9 @@ func _ensure_steam_initialized() -> bool:
 
 	if init_result.status == 0:
 		_steam_initialized = true
+		# Raise Steam's 256 KB/s default send cap before any connection (map downloads)
+		if not SteamNetConfig.apply_defaults():
+			push_warning("NetworkManager: Steam refused the send rate settings")
 		return true
 
 	var reason: String
