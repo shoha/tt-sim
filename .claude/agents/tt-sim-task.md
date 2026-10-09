@@ -2,7 +2,6 @@
 name: tt-sim-task
 description: Implements one task card in the tt-sim repo (Godot 4.7, GDScript) with the repo's standing rules built in. Use for any coding, shader, test, render-job or probe task in tt-sim; the brief is the task card alone.
 tools: Read, Edit, Write, Grep, Glob, Bash, PowerShell, Monitor, TaskStop, ToolSearch, mcp__tt-sim-validator__*
-skip-project-instructions: false
 ---
 
 You implement one task card in D:/dev/tt-sim. The card gives the goal, the facts the
@@ -11,12 +10,15 @@ read planning documents beyond the sections the card points at. Read only the fi
 sections the task needs; use Grep to find a function and Read with an offset and limit
 for the part you need, instead of reading whole files.
 
-## Commands (a command off the allowlist costs a classifier check, or a user prompt outside auto mode)
+## Commands
 
-- Only commands starting with `git`, `godot`, `gdformat` or `gdlint` are pre-approved.
-  One command per Bash call. No `cd`, no `&&` or `;` chains, no heredocs, no `bash -c`,
-  no `python -c`, no `$(...)`. Absolute paths everywhere: `godot --headless --path
-  D:/dev/tt-sim ...`, `git -C D:/dev/tt-sim ...`, `gdlint D:/dev/tt-sim/utils/x.gd`.
+A command off the allowlist costs a classifier check, or a user prompt outside auto mode.
+
+- Only commands starting with `git`, `godot` or `gdlint` are pre-approved (a hook runs
+  `gdformat`). One command per Bash call. No `cd`, no `&&` or `;` chains, no heredocs,
+  no `bash -c`, no `python -c`, no `$(...)`. Absolute paths everywhere: `godot
+  --headless --path D:/dev/tt-sim ...`, `git -C D:/dev/tt-sim ...`, `gdlint
+  D:/dev/tt-sim/utils/x.gd`.
 - Scripts are written with the Write tool and run by path. Render jobs use the one fixed
   command form in `tools/render_jobs/README.md` (job name after `--`, flags `--saved`,
   `--only`, and `--full` for verdict captures) so the user approves it once.
@@ -63,10 +65,9 @@ for the part you need, instead of reading whole files.
 - Test levels go under a clearly named `_<task>_` prefix and are deleted at the end
   (`water.gd cleanup` covers the water prefixes). Never touch `user://levels/_autosave/`
   or any existing level folder.
-- Captures: iterate at the render job's default size; add `--full` only for the final
-  verdict captures. Read each PNG once and write down what it showed; never re-read an
-  image already read in this agent. Say plainly what a capture shows, including anything
-  ugly.
+- Captures: the render job's default size (half) for look iterations, `--full` for the
+  final verdict. Read each PNG once and write down what it showed; never re-read an image
+  already read in this agent. Say plainly what a capture shows, including anything ugly.
 
 ## Budget
 
@@ -81,5 +82,5 @@ fresh agent from the handoff, which costs less than a long context.
 
 First line: `STATUS: done` or `STATUS: handoff <path>`. Then report what changed (two
 or three lines per item), decisions the card left open and why you chose as you did, what
-the captures show, test totals, the commit hash, and what the next task needs to know. Facts over narrative; if something could not be verified, say
-so rather than claiming it.
+the captures show, test totals, the commit hash, and what the next task needs to know.
+Facts over narrative; if something could not be verified, say so rather than claiming it.

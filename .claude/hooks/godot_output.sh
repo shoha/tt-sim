@@ -33,8 +33,46 @@ cont > 0 && /^[[:blank:]]/ { print substr($0, 1, 400); cont--; next }
     reason="render job output filtered; raw log in .godot/last_godot_output.txt, every step in the job's log.txt"
     ;;
   *gut_cmdln.gd*|*--quit-after*)
-    pattern='\[Failed\]|\[Error\]|\[Risky\]|\[Pending\]|SCRIPT ERROR|ERROR|Error|error|Totals|Scripts|Tests|Asserts|Time|All tests passed|Warnings|Deprecated|Orphans|Leaked|HANG|godot exit:'
-    filtered="{ $cmd 2>&1; echo \"godot exit: \$?\"; } | tee $log | grep -E -B 1 -A 4 '$pattern' | tail -n 200"
+    # The test run and the compile check: GUT's run summary (each failing test with its
+    # assert messages, then the totals), every error block no [ExpectedError] line claims
+    # (compile errors, unexpected SCRIPT ERRORs, with up to six indented "at:" lines; three
+    # repeats at most), and the exit code. Warnings, passing tests and known noise (the
+    # gut_loader.gd:35 startup error, the leak reports at exit) are dropped. A test run that
+    # never reaches its summary (a crash, nothing selected) prints its inline failures and
+    # its last 40 lines instead. Colour codes are stripped. Same no-backslash rule as above:
+    # a literal [ is written [[] and a literal ] is written []].
+    gut=0
+    case "$cmd" in *gut_cmdln.gd*) gut=1 ;; esac
+    prog='function noise(s) { return s ~ /gut_loader[.]gd:35|resources still in use at exit|ObjectDB instances were leaked/ }
+function flush(   i, show) { for (i = 1; i <= np; i++) { if (head[i]) show = seen[pl[i]]++ < 3; if (show) print pl[i] }; np = 0 }
+BEGIN { esc = sprintf("%c", 27) }
+{ gsub(esc "[[][0-9;]*m", ""); line = substr($0, 1, 400) }
+/^godot exit:/ {
+  flush()
+  if (gut && !sum) {
+    for (i = 1; i <= nf; i++) print fails[i]
+    print "(no GUT run summary; the last 40 lines of output follow)"
+    for (i = NR - 40; i < NR; i++) if (i > 0) print ring[i % 40]
+  }
+  print line; next
+}
+{ ring[NR % 40] = line }
+!sum && index(line, "[Failed]") { if (nf < 50) fails[++nf] = script " " test ": " line; inblk = 0; next }
+inblk && /^[[:blank:]]/ { if (keep && noise(line)) { np = bs; keep = 0 }; if (keep && cont-- > 0) { pl[++np] = line; head[np] = 0 }; next }
+{ inblk = 0 }
+/^(SCRIPT ERROR|SHADER ERROR|USER SCRIPT ERROR|USER ERROR|ERROR|USER WARNING|WARNING):|^[[]ERROR[]]/ {
+  inblk = 1; bs = np; cont = 6
+  keep = line !~ /^(USER )?WARNING/ && !noise(line)
+  if (keep) { pl[++np] = line; head[np] = 1 }
+  next
+}
+index(line, "[ExpectedError]") { np = 0; next }
+index(line, "= Run Summary") { flush(); sum = 1; print line; next }
+sum && !post { if (line ~ "^---- .* ----$") post = 1; if (line !~ "^=*$") print line; next }
+!sum && line ~ "^res://" { flush(); script = line; next }
+!sum && line ~ "^[*] " { flush(); test = substr(line, 3); next }
+!sum && line ~ "^[0-9]+/[0-9]+ passed" { flush() }'
+    filtered="{ $cmd 2>&1; echo \"godot exit: \$?\"; } | tee $log | awk -v gut=$gut '$prog' | tail -n 300"
     ;;
   *) printf '{}'; exit 0 ;;
 esac

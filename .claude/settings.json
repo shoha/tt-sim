@@ -10,6 +10,11 @@
       "Bash(godot *)",
       "Bash(gdformat *)",
       "Bash(gdlint *)",
+      "PowerShell(Get-Process blender*, godot* -ErrorAction SilentlyContinue)",
+      "mcp__tt-sim-validator__game_stop",
+      "mcp__tt-sim-validator__game_state",
+      "mcp__tt-sim-validator__game_screenshot",
+      "mcp__tt-sim-validator__game_controls",
       "Task",
       "WebFetch",
       "WebSearch"
