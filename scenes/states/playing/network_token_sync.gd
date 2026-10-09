@@ -44,9 +44,12 @@ func _init(token_spawner: TokenSpawner) -> void:
 	_token_spawner = token_spawner
 
 
-## Get the local multiplayer API without requiring Node inheritance.
+## Get the local multiplayer API without requiring Node inheritance. Through the method:
+## SceneTree has no `multiplayer` property, and reading one raised "Invalid access to
+## property or key 'multiplayer'" on every client's permission and connection change (seen
+## over real Steam, tests/net/steam_authored_parity.gd; TokenSpawner hit the same).
 func _get_multiplayer_api() -> MultiplayerAPI:
-	return (Engine.get_main_loop() as SceneTree).multiplayer
+	return (Engine.get_main_loop() as SceneTree).get_multiplayer()
 
 
 ## Wire up network signal connections and create/parent the reconciliation
