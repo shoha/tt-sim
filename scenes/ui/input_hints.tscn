@@ -17,7 +17,8 @@ content_margin_bottom = 6.0
 layer = 1
 script = ExtResource("1_hints")
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="HintBar" type="MarginContainer" parent="."]
+unique_name_in_owner = true
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
@@ -27,13 +28,13 @@ grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
 
-[node name="BackdropPanel" type="PanelContainer" parent="MarginContainer"]
+[node name="BackdropPanel" type="PanelContainer" parent="HintBar"]
 layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_backdrop")
 
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/BackdropPanel"]
+[node name="HintRow" type="HBoxContainer" parent="HintBar/BackdropPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4

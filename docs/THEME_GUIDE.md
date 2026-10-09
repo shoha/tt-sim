@@ -399,10 +399,10 @@ Reusable controls under `scenes/ui/primitives/`, built in code (no `.tscn`). Eve
 | Primitive | Use it for | Key API |
 |---|---|---|
 | `IconButton` | Icon-only actions, rail items, pane headers | `icon_name`, `active`, `badge`, `static load_icon(name)` |
-| `IconRail` | One-of-N section choice (drawer rail, Settings sections) | `add_item(id, icon, tooltip)`, `select(id)`, `item_pressed`, `selection_changed`, `set_badge(id, on)`, `show_labels`, `auto_select` |
+| `IconRail` | One-of-N section choice (drawer rail, Settings sections) | `add_item(id, icon, tooltip)`, `select(id)`, `item_pressed`, `selection_changed`, `set_badge(id, on)`, `show_labels`, `auto_select`; the accent indicator is placed after each `sort_children` (never on `resized`, which fires before the items are laid out) and slides on selection change |
 | `TileRow` | Enums with up to ten options (use `columns` beyond five); multi-select toggles | `add_tile(id, label, icon)`, `select(id)` (silent), `selection_changed`, `multi_select`, `tile_toggled`, `columns`, `tile_hovered`, `tile_unhovered`, `photo_icons` (picture icons such as palette thumbnails: own size, untinted) |
 | `TileField` | A captioned, full-width tile row (use instead of set_control(TileRow)) | caption, tiles, overridden, reset_requested |
-| `Foldout` | Advanced or secondary rows | `title`, `expanded`, `body`; children authored in a `.tscn` move into `body`; re-measures wrapping bodies mid-animation |
+| `Foldout` | Advanced or secondary rows | `title`, `expanded`, `body`; children authored in a `.tscn` move into `body`; re-measures wrapping bodies mid-animation; the chevron is `CHEVRON_SIZE` (16 px) square (its `expand_mode` must be set before its size, or the 72 px icon texture wins) |
 | `PropertyRow` | Label + optional check and colour + slider + inline value | `value`, `min_value`, `max_value`, `step`, `show_check`, `show_color`, `show_slider`, `overridden`, `ticks`, `hint_low`, `hint_high`, `values_visible`, `formatter`, `set_control(control)`, `value_changed`, `reset_requested` |
 | `PaneStack` | One-visible-pane content area with crossfade | `add_pane(id, pane)`, `show_pane(id)`, `pane_changed` |
 | `LevelCard` | A saved level as a selectable, actionable card (title hub, level picker) | `setup(info)`, static `caption_for(info, now_unix)`, `locked`, `begin_rename()`, `selected`, `activated`, `action_requested`, `rename_committed` |

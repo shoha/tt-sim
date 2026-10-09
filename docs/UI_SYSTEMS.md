@@ -295,7 +295,20 @@ loading_overlay.show_indeterminate("Please wait...")
 
 ## Input Hints
 
-Contextual keybinding hints at the bottom of the screen.
+Contextual keybinding hints in a bar at the bottom centre of the screen (`InputHints`,
+`scenes/ui/input_hints.tscn` / `.gd`, owned by `UIManager`). Each hint is a chip: the key in a
+`KeyChip` key cap (the help overlay's shortcut style) beside a `Caption` action label.
+
+- **Placement**: the bar (`%HintBar`) is anchored to the bottom edge and stays there. Its
+  entrance and exit tween its alpha and `offset_transform_position` (12 px below its place to
+  0), a draw offset that never touches anchors or offsets; tweening `position` instead rewrote
+  the offsets against the top anchor and parked the bar at the top of the screen until
+  2026-10-09. The bar slides only when it appears (first hint) or empties (last hint gone).
+- **Diffing**: hint changes are diffed by key, never rebuilt. A kept key's chip stays the same
+  node (a new action relabels it in place), a new key's chip fades in, a removed key's chip
+  fades out where it stands and is freed, and a key re-added while its chip is still fading out
+  takes that chip back. So a hint toggled mid-drag (Shift: Free Move) moves nothing else.
+  `remove_hint` on a key that is not shown does nothing.
 
 ### Usage
 
@@ -485,8 +498,13 @@ screen to the tree so headless runs never reach the network layer.
 Tabbed settings interface (`scenes/ui/settings_menu.gd`) with six sections: Audio, Graphics, Grid,
 Controls, Network, and Updates. Sections are chosen from a labelled `IconRail` (`SECTIONS` in
 `settings_menu.gd`) rather than the `TabContainer`'s own tab bar, which is hidden
-(`tabs_visible = false`); the rail drives `tab_container.current_tab` instead. Graphics keeps
-foliage budget and renderer options under an Advanced `Foldout`. The header is a closable
+(`tabs_visible = false`); the rail drives `tab_container.current_tab` instead. The menu selects
+its first section in `_ready`, before the rail has laid out its items; the rail's accent
+underline is placed from the items' laid-out rects after every sort of the rail
+(`sort_children`), so it sits under the selected section from the first frame (it read every
+item at x = 0 and sat at x = 18 under no section until 2026-10-09). Graphics keeps
+foliage budget and renderer options under an Advanced `Foldout`, whose 16 px chevron sits
+inline left of its title. The header is a closable
 `MenuHeader`; `close_button` is `header.close_button`. Keyboard section switching (the native tab
 bar's Ctrl+Tab) is not available while the tab bar is hidden and the rail items are not focusable; a
 keyboard-navigation pass is a known follow-up.

@@ -26,6 +26,16 @@ func test_rail_selection_switches_tab() -> void:
 	assert_eq(_menu.tab_container.current_tab, grid_index)
 
 
+## The rail selects its first section in _ready, before it has laid out its
+## items; the underline must still end up under that section.
+func test_rail_underline_sits_under_the_selected_section() -> void:
+	await wait_process_frames(3)
+	var rail := _menu.section_rail
+	assert_false(rail.selected.is_empty())
+	assert_gt(rail._indicator_pos, 0.0)
+	assert_almost_eq(rail._indicator_pos, rail._indicator_target(), 0.5)
+
+
 func test_advanced_graphics_rows_keep_unique_names() -> void:
 	assert_not_null(_menu.foliage_density_slider)
 	assert_not_null(_menu.renderer_method_option)
