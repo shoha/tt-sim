@@ -11,7 +11,7 @@ read planning documents beyond the sections the card points at. Read only the fi
 sections the task needs; use Grep to find a function and Read with an offset and limit
 for the part you need, instead of reading whole files.
 
-## Commands (every non-allowlisted command is a permission prompt for the user)
+## Commands (a command off the allowlist costs a classifier check, or a user prompt outside auto mode)
 
 - Only commands starting with `git`, `godot`, `gdformat` or `gdlint` are pre-approved.
   One command per Bash call. No `cd`, no `&&` or `;` chains, no heredocs, no `bash -c`,
@@ -54,8 +54,10 @@ for the part you need, instead of reading whole files.
 
 ## Godot processes and test data
 
-- Every command must exit on its own. After any render job or bridge use, confirm no
-  `godot*` process is left (the card says how). A hung Godot keeps the GPU for everyone.
+- Every command must exit on its own. After any render job or bridge use, and before
+  reporting, run exactly `Get-Process blender*, godot* -ErrorAction SilentlyContinue`
+  with the PowerShell tool (allowlisted) and stop your own leftovers with `Stop-Process
+  -Id <id>`. A hung Godot keeps the GPU for everyone.
 - Validation bridge (tt-sim-validator MCP): `game_stop` as soon as each look or
   measurement is taken; never leave an instance idle; the user may be gaming.
 - Test levels go under a clearly named `_<task>_` prefix and are deleted at the end
