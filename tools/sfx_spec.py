@@ -204,7 +204,9 @@ SPECS = {
         attack_ms=2.0, note_ms=38.0, decay_tau_ms=12.2, release_ms=2.3,
         harmonics=ROUND_HARMONICS, noise_mix=0.020, noise_cutoff_hz=12000.0,
         sweep_semitones=0.0, lp_cutoff_hz=2000.0, max_high_band_db=-34.1,
-        volume_db=-6.0, priority=PRIORITY_FAINT,
+        # Sweeping the mouse across a row of tokens chirps once, not once per token
+        # (six in a sweep stacked +7 LU before the cooldown).
+        volume_db=-6.0, cooldown_s=0.15, priority=PRIORITY_FAINT,
     ),
     "token_pickup": SoundSpec(
         bus="sfx", notes=("E3",),

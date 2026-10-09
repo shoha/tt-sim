@@ -215,13 +215,13 @@ func _remove_item(pack_id: String, asset_id: String, variant_id: String, success
 	var item = _download_items[key]
 	var container = item.container
 
+	# Silent on purpose: variants finish in bursts (five 120 ms apart stacked +4.3 LU and
+	# filled the UI voice pool), and the pack's toast speaks once when the pack is done.
 	if success:
 		item.progress_bar.value = 100.0
 		item.progress_bar.modulate = Color(0.5, 0.8, 0.5)
-		AudioManager.play(&"success")
 	else:
 		item.progress_bar.modulate = Color(0.8, 0.4, 0.4)
-		AudioManager.play(&"error")
 
 	var tween = create_tween()
 	tween.tween_interval(0.5)
@@ -478,16 +478,15 @@ func _remove_pack_item(pack_id: String, success: bool) -> void:
 	var item = _pack_items[pack_id]
 	var container = item.container
 
+	# The toast plays the success or error sound itself.
 	if success:
 		item.progress_bar.value = 100.0
 		item.progress_bar.modulate = Color(0.5, 0.8, 0.5)
-		AudioManager.play(&"success")
 		var pack = AssetManager.get_pack(pack_id)
 		var display = pack.display_name if pack else pack_id
 		UIManager.show_success("%s downloaded and ready." % display)
 	else:
 		item.progress_bar.modulate = Color(0.8, 0.4, 0.4)
-		AudioManager.play(&"error")
 		var pack = AssetManager.get_pack(pack_id)
 		var display = pack.display_name if pack else pack_id
 		UIManager.show_error("Failed to download %s." % display)

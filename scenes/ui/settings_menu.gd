@@ -37,6 +37,9 @@ const _RENDERING_METHOD_VALUES: PackedStringArray = [
 ## must be read via OS.get_cmdline_user_args() instead.
 const _RELAUNCH_SENTINEL_ARG := "--renderer-relaunched"
 
+## Shows the Music volume row. Off until the game plays music.
+const SHOW_MUSIC_VOLUME := false
+
 ## [tab node name, Tabler icon]. Node names double as rail ids and labels.
 const SECTIONS := [
 	["Audio", "volume"],
@@ -49,6 +52,9 @@ const SECTIONS := [
 
 var header: MenuHeader
 var close_button: Button
+
+## True while Reset tweens the sliders to their defaults; the sliders do not tick then.
+var _resetting := false
 
 # Audio controls
 @onready var master_slider: HSlider = %MasterVolumeSlider
@@ -284,19 +290,12 @@ func _on_panel_ready() -> void:
 		[ui_slider, ui_label, AudioManager.BUS_UI],
 	]:
 		binding[0].value_changed.connect(_on_volume_changed.bind(binding[1], binding[2]))
+	# The game has no music yet, so a Music slider would control nothing. The row comes
+	# back when music does; its saved value and bus are kept meanwhile.
+	music_slider.get_parent().visible = SHOW_MUSIC_VOLUME
 
-	# Graphics
-	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
-	vsync_check.toggled.connect(_on_vsync_toggled)
-	lofi_check.toggled.connect(_on_lofi_toggled)
-	occlusion_fade_check.toggled.connect(_on_occlusion_fade_toggled)
-	ssao_check.toggled.connect(_on_ssao_toggled)
-	ssr_check.toggled.connect(_on_ssr_toggled)
-	sdfgi_check.toggled.connect(_on_sdfgi_toggled)
-	antialiasing_option.item_selected.connect(_on_antialiasing_selected)
-	shadow_quality_option.item_selected.connect(_on_shadow_quality_selected)
-	water_quality_option.item_selected.connect(_on_water_quality_selected)
-	renderer_method_option.item_selected.connect(_on_renderer_method_selected)
+	# Graphics. The toggles and option buttons here and the P2P toggle have no live handler:
+	# Apply reads and applies them (_apply_settings).
 	foliage_density_slider.value_changed.connect(_on_foliage_density_changed)
 
 	# Grid visuals
@@ -309,7 +308,6 @@ func _on_panel_ready() -> void:
 	InputProfile.profile_changed.connect(_on_input_profile_changed)
 
 	# Network
-	p2p_enabled_check.toggled.connect(_on_p2p_toggled)
 	clear_cache_button.pressed.connect(_on_clear_cache_pressed)
 
 	# Updates
@@ -394,40 +392,7 @@ func _load_settings() -> void:
 	var err = config.load(Paths.SETTINGS_PATH)
 
 	if err == OK:
-		master_slider.value = config.get_value("audio", "master", 100.0)
-		music_slider.value = config.get_value("audio", "music", 100.0)
-		sfx_slider.value = config.get_value("audio", "sfx", 100.0)
-		ui_slider.value = config.get_value("audio", "ui", 100.0)
-		fullscreen_check.button_pressed = config.get_value("graphics", "fullscreen", false)
-		vsync_check.button_pressed = config.get_value("graphics", "vsync", true)
-		lofi_check.button_pressed = config.get_value("graphics", "lofi_enabled", true)
-		occlusion_fade_check.button_pressed = config.get_value(
-			"graphics", "occlusion_fade_enabled", true
-		)
-		ssao_check.button_pressed = config.get_value(
-			"graphics", "ssao_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"]
-		)
-		ssr_check.button_pressed = config.get_value(
-			"graphics", "ssr_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["ssr_enabled"]
-		)
-		sdfgi_check.button_pressed = config.get_value(
-			"graphics", "sdfgi_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"]
-		)
-		foliage_density_slider.value = (
-			config.get_value(
-				FoliageDensityController.SETTINGS_SECTION,
-				FoliageDensityController.SETTINGS_KEY,
-				FoliageBudget.PRIMITIVE_BUDGET
-			)
-			/ 1000000.0
-		)
-		p2p_enabled_check.button_pressed = config.get_value("network", "p2p_enabled", true)
-		prereleases_check.button_pressed = config.get_value("updates", "check_prereleases", false)
-		cell_tint_opacity_slider.value = (
-			config.get_value("grid_visuals", "cell_tint_opacity", 0.65) * 100.0
-		)
-		line_thickness_slider.value = config.get_value("grid_visuals", "line_thickness", 2.0)
-		fade_distance_slider.value = config.get_value("grid_visuals", "fade_radius", 30.0)
+		_show_saved_values(config)
 
 	# Antialiasing selection must be set unconditionally (not just when a config
 	# file exists) so a fresh install without user://settings.cfg still lands on
@@ -470,6 +435,57 @@ func _load_settings() -> void:
 	_update_volume_label(sfx_label, sfx_slider.value)
 	_update_volume_label(ui_label, ui_slider.value)
 	_update_grid_labels()
+
+
+## Puts the saved slider and toggle values in `config` on the controls. Showing a saved
+## value changes nothing, so it sets them without signals: no slider or toggle ticks and
+## no handler runs. The caller refreshes the labels, and AudioManager applied the bus
+## volumes at startup from the same file.
+func _show_saved_values(config: ConfigFile) -> void:
+	master_slider.set_value_no_signal(config.get_value("audio", "master", 100.0))
+	music_slider.set_value_no_signal(config.get_value("audio", "music", 100.0))
+	sfx_slider.set_value_no_signal(config.get_value("audio", "sfx", 100.0))
+	ui_slider.set_value_no_signal(config.get_value("audio", "ui", 100.0))
+	fullscreen_check.set_pressed_no_signal(config.get_value("graphics", "fullscreen", false))
+	vsync_check.set_pressed_no_signal(config.get_value("graphics", "vsync", true))
+	lofi_check.set_pressed_no_signal(config.get_value("graphics", "lofi_enabled", true))
+	occlusion_fade_check.set_pressed_no_signal(
+		config.get_value("graphics", "occlusion_fade_enabled", true)
+	)
+	ssao_check.set_pressed_no_signal(
+		config.get_value(
+			"graphics", "ssao_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"]
+		)
+	)
+	ssr_check.set_pressed_no_signal(
+		config.get_value(
+			"graphics", "ssr_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["ssr_enabled"]
+		)
+	)
+	sdfgi_check.set_pressed_no_signal(
+		config.get_value(
+			"graphics", "sdfgi_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"]
+		)
+	)
+	foliage_density_slider.set_value_no_signal(
+		(
+			config.get_value(
+				FoliageDensityController.SETTINGS_SECTION,
+				FoliageDensityController.SETTINGS_KEY,
+				FoliageBudget.PRIMITIVE_BUDGET
+			)
+			/ 1000000.0
+		)
+	)
+	p2p_enabled_check.set_pressed_no_signal(config.get_value("network", "p2p_enabled", true))
+	prereleases_check.set_pressed_no_signal(config.get_value("updates", "check_prereleases", false))
+	cell_tint_opacity_slider.set_value_no_signal(
+		config.get_value("grid_visuals", "cell_tint_opacity", 0.65) * 100.0
+	)
+	line_thickness_slider.set_value_no_signal(
+		config.get_value("grid_visuals", "line_thickness", 2.0)
+	)
+	fade_distance_slider.set_value_no_signal(config.get_value("grid_visuals", "fade_radius", 30.0))
 
 
 func _save_settings() -> void:
@@ -570,7 +586,14 @@ func _update_volume_label(label: Label, value: float) -> void:
 func _on_volume_changed(value: float, label: Label, bus_name: String) -> void:
 	_update_volume_label(label, value)
 	AudioManager.set_bus_volume(bus_name, value / 100.0)
-	AudioManager.play(&"tick")
+	_slider_tick()
+
+
+## Ticks for a slider the user moved. Silent while Reset tweens the sliders home: the
+## Reset button's own click is the whole sound of that gesture.
+func _slider_tick() -> void:
+	if not _resetting:
+		AudioManager.play(&"tick")
 
 
 ## Cross-fade animation when switching settings tabs
@@ -593,52 +616,8 @@ func _on_section_selected(id: StringName) -> void:
 		tab_container.current_tab = tab.get_index()
 
 
-func _on_fullscreen_toggled(_pressed: bool) -> void:
-	pass
-
-
 func _apply_fullscreen_mode(enable: bool) -> void:
 	_set_window_fullscreen(enable)
-
-
-func _on_vsync_toggled(_pressed: bool) -> void:
-	pass
-
-
-func _on_lofi_toggled(_pressed: bool) -> void:
-	pass
-
-
-func _on_occlusion_fade_toggled(_pressed: bool) -> void:
-	pass
-
-
-func _on_ssao_toggled(_pressed: bool) -> void:
-	pass
-
-
-func _on_ssr_toggled(_pressed: bool) -> void:
-	pass
-
-
-func _on_sdfgi_toggled(_pressed: bool) -> void:
-	pass
-
-
-func _on_antialiasing_selected(_index: int) -> void:
-	pass
-
-
-func _on_shadow_quality_selected(_index: int) -> void:
-	pass
-
-
-func _on_water_quality_selected(_index: int) -> void:
-	pass
-
-
-func _on_renderer_method_selected(_index: int) -> void:
-	pass
 
 
 func _apply_lofi_setting() -> void:
@@ -715,7 +694,7 @@ func _apply_grid_visual_settings() -> void:
 
 func _on_foliage_density_changed(value: float) -> void:
 	foliage_density_label.text = "%.1fM" % value
-	AudioManager.play(&"tick")
+	_slider_tick()
 
 
 func _apply_foliage_density() -> void:
@@ -726,17 +705,17 @@ func _apply_foliage_density() -> void:
 
 func _on_cell_tint_opacity_changed(value: float) -> void:
 	cell_tint_opacity_label.text = "%d%%" % int(value)
-	AudioManager.play(&"tick")
+	_slider_tick()
 
 
 func _on_line_thickness_changed(value: float) -> void:
 	line_thickness_label.text = "%.1f" % value
-	AudioManager.play(&"tick")
+	_slider_tick()
 
 
 func _on_fade_distance_changed(value: float) -> void:
 	fade_distance_label.text = "%d" % int(value)
-	AudioManager.play(&"tick")
+	_slider_tick()
 
 
 func _update_grid_labels() -> void:
@@ -768,9 +747,23 @@ func _on_close_pressed() -> void:
 	animate_out()
 
 
+## Reset to Defaults: shows the defaults (applied on Apply), and resets the two
+## preferences that save the moment they change, the prerelease channel and the input
+## profile, at once as before.
 func _on_reset_pressed() -> void:
-	# Tween sliders smoothly to defaults
+	_show_defaults()
+	prereleases_check.button_pressed = false
+	input_device_option.selected = InputProfile.Profile.AUTO
+	InputProfile.set_profile(InputProfile.Profile.AUTO)
+
+
+## Puts every Settings control except those two on its default without a sound: the
+## sliders tween home and hold their ticks (_slider_tick) until they land, and the
+## toggles and options snap without signals (Apply applies them).
+func _show_defaults() -> void:
+	_resetting = true
 	var tw = create_tween()
+	tw.finished.connect(func() -> void: _resetting = false)
 	tw.set_parallel(true)
 	tw.set_ease(Tween.EASE_OUT)
 	tw.set_trans(Tween.TRANS_CUBIC)
@@ -785,23 +778,20 @@ func _on_reset_pressed() -> void:
 	tw.tween_property(foliage_density_slider, "value", 8.0, 0.3)
 
 	# Snap toggles immediately (no meaningful tween for booleans)
-	fullscreen_check.button_pressed = false
-	vsync_check.button_pressed = true
-	lofi_check.button_pressed = true
-	occlusion_fade_check.button_pressed = true
+	fullscreen_check.set_pressed_no_signal(false)
+	vsync_check.set_pressed_no_signal(true)
+	lofi_check.set_pressed_no_signal(true)
+	occlusion_fade_check.set_pressed_no_signal(true)
 	antialiasing_option.select(antialiasing_option.get_item_index(Viewport.MSAA_DISABLED))
 	shadow_quality_option.select(
 		shadow_quality_option.get_item_index(RenderingServer.SHADOW_QUALITY_SOFT_ULTRA)
 	)
 	water_quality_option.select(water_quality_option.get_item_index(WaterQuality.MEDIUM))
-	ssao_check.button_pressed = Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"]
-	ssr_check.button_pressed = Constants.RENDERING_TOGGLES_DEFAULTS["ssr_enabled"]
-	sdfgi_check.button_pressed = Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"]
+	ssao_check.set_pressed_no_signal(Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"])
+	ssr_check.set_pressed_no_signal(Constants.RENDERING_TOGGLES_DEFAULTS["ssr_enabled"])
+	sdfgi_check.set_pressed_no_signal(Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"])
 	renderer_method_option.select(0)
-	p2p_enabled_check.button_pressed = true
-	prereleases_check.button_pressed = false
-	input_device_option.selected = InputProfile.Profile.AUTO
-	InputProfile.set_profile(InputProfile.Profile.AUTO)
+	p2p_enabled_check.set_pressed_no_signal(true)
 
 
 func _on_input_device_selected(index: int) -> void:
@@ -810,10 +800,6 @@ func _on_input_device_selected(index: int) -> void:
 
 func _on_input_profile_changed(_new_profile: InputProfile.Profile) -> void:
 	_populate_controls_list()
-
-
-func _on_p2p_toggled(_pressed: bool) -> void:
-	pass
 
 
 func _on_clear_cache_pressed() -> void:

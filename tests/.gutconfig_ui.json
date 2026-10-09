@@ -40,6 +40,7 @@
 		"res://tests/unit/test_settings_menu_footer.gd",
 		"res://tests/unit/test_settings_menu_rail.gd",
 		"res://tests/unit/test_sky_pane.gd",
+		"res://tests/unit/test_sound_call_sites.gd",
 		"res://tests/unit/test_sun_pane.gd",
 		"res://tests/unit/test_swatch_textures.gd",
 		"res://tests/unit/test_tile_field.gd",
