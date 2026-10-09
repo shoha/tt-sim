@@ -428,12 +428,15 @@ follow-ups and ponds and lakes past the edge as v0.1.33 (2026-10-05); the polish
 at close zoom and the home-zoom canopy window, the ford's gravel showing through clear
 shallows, the crossing swap and water swap costs, the edge patch during a sculpt) as v0.1.34
 (2026-10-05). Releases stay patch bumps until the whole map maker is finished, then the minor
-version goes up (user, 2026-09-27). The two-account Steam test (above) is still open and is
-best run on the current release (v0.1.34 or later): it verifies that a peer builds the same
-waterfalls, crossings (an arch, a ford with a token wading it), starting landforms and water
-past the edge from the host's document, and that a document with `splines.json`,
-`ponds.png`, a baked `water_flow.png` and `crossings.json` reaches a peer, with tokens on a
-deck and the submerged ring on a client.
+version goes up (user, 2026-09-27). The two-account Steam test passed on 2026-10-09 and is
+now automated: `tests/net/steam_authored_parity.tscn` (two accounts on one machine, see
+`NETWORKING.md` "Automated runs") builds `_nettest_parity` (Terraces, seed 3: two falls, a
+plank bridge, an arch, a ford, a deep pond, the river past both edges; job
+`nettest_parity_build`), downloads its `map.ttmap` to the client over real Steam, and
+compares `MapFingerprint` (`utils/map_fingerprint.gd`) on both peers: every key matched in
+three runs, a deck token and a wading token matched to the millimetre, and the wading token
+showed the submerged ring on the client. (A ford is 0.17 m deep, so a token on it is
+correctly not submerged.) Host and client captures matched.
 
 Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
@@ -581,11 +584,6 @@ Follow-ups:
 
 **Next** (agreed at the end of the 2026-10-04 to 05 session; one line each, no plan yet):
 
-- The Steam two-account test on the current release: the user runs it; it verifies a peer
-  builds the same falls, crossings, landforms and edge water as the host (Open work, first
-  paragraph).
-- Confirm the "map maker finished" list with the user for the 0.2 bump (the last bullet
-  below).
 - Future ideas: player avatar tokens in the house style (Future ideas, below).
 - Crossings over a dressed Blender map's own water, in the terrain-paint integration sprint
   (Open work, "Crossing follow-ups").
@@ -750,10 +748,9 @@ Follow-ups:
   ford's gravel through clear shallows, the arch and ford swap and the water swap made cheap,
   the exits' patch following a sculpt on the edge (Verification status, "Trees at close
   zoom"; Open work).
-- **Before the minor version bump ("map maker finished"):** the planned phases (3 to 6 and
-  the polish pass) are done. The open candidate is the Steam two-account test passing on the
-  current release (an authored map with water, falls, crossings, a landform and edge water).
-  Confirm the finish list with the user before planning anything more toward 0.2.
+- **Map maker finished (v0.2.0, 2026-10-09):** the planned phases (3 to 6 and the polish
+  pass) are done and the two-account Steam parity test passes (Open work, first paragraph).
+  The user confirmed this was the whole finish list.
 
 ## Future ideas (user notes, 2026-09-27)
 
