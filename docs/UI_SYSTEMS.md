@@ -396,6 +396,13 @@ one, so a level only edited there (never played) falls back to the placeholder a
 Players make their avatars ahead of time and place them in any game (user decision,
 2026-10-06). The library is local to the machine (no Steam Cloud yet).
 
+Avatars are a dev feature for now (user, 2026-10-08: not ready for testers).
+`DevFeatures.avatars` (`utils/dev_features.gd`) is on only in runs of the editor binary
+(the editor, CLI tests, render jobs) and off in exported builds, where the title screen's
+Avatars button, the browser's Avatar tab and Edit Avatar are absent. Saved levels and
+synced games with avatar tokens still load and draw them. To release avatars, delete the
+flag and its three checks.
+
 - **`AvatarLibrary`** (`utils/avatar_library.gd`): one JSON file per avatar in
   `user://avatars/<id>.json`: `{"format": 1, "id": "av_<ms>_<hex>", "name", "recipe",
   "created", "updated"}` (unix seconds; `recipe` per `ASSET_PIPELINE.md` section 10,

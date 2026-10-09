@@ -101,8 +101,11 @@ func _add_or_refresh_tab(pack_id: String) -> void:
 		tab_container.tab_changed.connect(_on_tab_changed)
 
 
-## The "Avatar" tab, first and kept across pack tab rebuilds.
+## The "Avatar" tab, first and kept across pack tab rebuilds; absent while avatars are a
+## dev feature (DevFeatures.avatars), so get_avatar_tab returns null in releases.
 func _add_avatar_tab() -> void:
+	if not DevFeatures.avatars:
+		return
 	_avatar_tab = AvatarTabScene.instantiate() as AvatarTab
 	_avatar_tab.name = AvatarTab.TAB_TITLE
 	tab_container.add_child(_avatar_tab)

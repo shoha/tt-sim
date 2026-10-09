@@ -92,6 +92,7 @@ func _build_left_column() -> void:
 	avatars_button = UiActions.secondary("Avatars", "mood-smile", _left)
 	avatars_button.tooltip_text = "Make your characters ahead of time; place them in any game"
 	avatars_button.pressed.connect(_on_avatars_pressed)
+	avatars_button.visible = DevFeatures.avatars
 	settings_button = UiActions.secondary("Settings", "settings", _left)
 	settings_button.pressed.connect(_on_settings_pressed)
 	quit_button = UiActions.secondary("Quit", "x", _left)
