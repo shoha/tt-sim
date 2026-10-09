@@ -179,6 +179,13 @@ Leaves the Steam lobby, closes the multiplayer peer, and clears all state.
 
 Steam SDR (Steam Datagram Relay) handles transport-level resilience including packet retransmission and route optimization. There is no application-level reconnection logic — if the connection drops entirely, the client is disconnected and must rejoin.
 
+**Send limits (measured 2026-10-09, two peers on one machine).** `SteamMultiplayerPeer`
+silently drops reliable messages once more than about 512 KB is queued for a peer
+(Steam's default send buffer): a single 1 MB RPC never arrived, and of four 256 KB RPCs
+sent back to back only the first two did, with no error and no disconnect. Throughput was
+about 256 KB/s (Steam's default send rate). Anything that sends more than a few hundred KB
+must wait for the receiver's acks before sending more.
+
 ---
 
 ## State Synchronization
@@ -425,49 +432,76 @@ For production testing, replace `480` with `4591070`.
 
 ### Local Multiplayer Testing
 
-Testing multiplayer requires **two game instances with different Steam accounts**. The recommended setup runs the Godot editor as one peer and an exported debug build as the second.
+Testing multiplayer requires **two game instances with different Steam accounts**. Steam
+identifies peers by Steam ID, so two instances on one account cannot connect. On one
+machine the second account's Steam client runs inside a
+[Sandboxie-Plus](https://sandboxie-plus.com) box, and the second game instance runs in the
+same box so it talks to that client. Both instances run the project from source; nothing
+is exported.
+
+`-master_ipc_name_override` (an older version of this setup) does not work: a second
+Steam client from the same install hangs before startup while the main one runs (checked
+2026-10-09).
 
 #### One-time setup
 
-1. **Create a free second Steam account** at [store.steampowered.com](https://store.steampowered.com). No purchase needed — App ID 480 (SpaceWar) works with any account.
-
-2. **Launch the secondary Steam client** and log in:
+1. **Install Sandboxie-Plus:** `winget install --id Sandboxie.Plus --exact` (needs admin
+   once, for its driver).
+2. **Create a free second Steam account** at
+   [store.steampowered.com](https://store.steampowered.com). App ID 480 (SpaceWar) works
+   with any account; a free (limited) account can join a private lobby by room code
+   (hosting from one is untested).
+3. **Start Steam in the box** and pick or log in the second account:
 
 ```powershell
 .\scripts\launch-test-peer.ps1 -SetupSteam
 ```
 
-This runs `steam.exe -master_ipc_name_override tt-sim-testing -userchooser`, which opens a separate Steam client with its own IPC channel. Log in with the second account. The secondary client stays running in the background — you only need to do this once per session.
+This creates the `SteamAlt` box if needed and starts Steam in it. The box's Steam window
+may keep showing its loading spinner; the account is logged on anyway (the box's copy of
+`logs/connection_log.txt`, under `C:\Sandbox\<user>\SteamAlt\drive\C\Program Files (x86)\Steam\`,
+shows `Logged On`). It stays running; do this once per login session.
 
 #### Testing workflow
 
-1. Open tt-sim in the **Godot editor** and hit Play. Host a game — you'll get a room code.
-
-2. In a **PowerShell terminal**, launch the second peer:
+1. Open tt-sim in the **Godot editor** and hit Play. Host a game to get a room code.
+2. Launch the second peer, which runs the current source in the box:
 
 ```powershell
 .\scripts\launch-test-peer.ps1
 ```
 
-This exports a debug build to `build/windows-debug/` and launches it connected to the secondary Steam account. Join with the room code from step 1.
+Join with the room code from step 1. `-GodotArgs` passes extra Godot arguments (a scene
+path, `--headless`); `-Box` picks another box, one per extra account for 3+ peers.
 
-#### Script options
+#### Automated runs (agents)
 
-| Flag | Effect |
-|------|--------|
-| `-SetupSteam` | Launch the secondary Steam client for login |
-| `-SkipExport` | Reuse the last debug build (faster when only host-side code changed) |
-| `-ExportOnly` | Export the debug build without launching |
-| (no flags) | Export + launch |
+Two headless peers work without a human (probe, 2026-10-09): the host runs unsandboxed,
+the client in the box.
 
-#### How it works
-
-Steam identifies peers by Steam ID. Two instances on the same account share the same ID and cannot form a connection. The script solves this by running a second Steam client with a separate IPC name (`-master_ipc_name_override`) and pointing the debug build at it via the `steam_master_ipc_name_override` environment variable. Each instance then has a distinct Steam ID.
+- Command form for the boxed peer, from Bash:
+  `"/c/Program Files/Sandboxie-Plus/Start.exe" /box:SteamAlt //wait "<godot exe>" --headless --path D:/dev/tt-sim <scene> -- <args>`.
+  Git Bash rewrites `/wait` and `/terminate` as file paths, so they must be written
+  `//wait` and `//terminate` (a single slash shows "Could not invoke program... cannot
+  find the file specified"). `//wait` blocks until Godot exits and returns its exit code.
+  Pass the explicit Godot exe; the `godot` wrapper does not resolve inside the box.
+- The boxed process's stdout does not come back. It writes results to a file in a folder
+  the box has as an `OpenFilePath` (`SbieIni.exe append SteamAlt OpenFilePath <folder>`);
+  writes anywhere else, including `user://`, go to the box's private copy under
+  `C:\Sandbox\<user>\SteamAlt\`. Its Godot log is at
+  `C:\Sandbox\<user>\SteamAlt\user\current\AppData\Roaming\Godot\app_userdata\TTSim\logs\godot.log`.
+- Steam init: `Steam.steamInitEx(480, false)` sets the app id without `steam_appid.txt`
+  (which Steam reads from the process working directory).
+- Steam's global fake lag/loss settings (`setGlobalConfigValueInt32` /
+  `setGlobalConfigValueFloat` with `NETWORKING_CONFIG_FAKE_PACKET_*`) return success but
+  had no measurable effect on a `SteamMultiplayerPeer` connection between two peers on
+  this machine. Simulate bad networks in a test-side transport wrapper instead.
 
 #### Limitations
 
-- The debug build must be re-exported to pick up code changes. Use `-SkipExport` when you only changed host-side logic and just need a connected peer.
 - Both instances share the same machine's resources (CPU, GPU, network). Performance profiling should use separate machines.
+- Two peers on one machine measure near-zero network latency (pings of 14-21 ms are
+  Godot frame granularity), so latency bugs need simulated conditions.
 
 ### Configuration
 
