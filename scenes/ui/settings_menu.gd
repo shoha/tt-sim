@@ -55,6 +55,9 @@ var close_button: Button
 
 ## True while Reset tweens the sliders to their defaults; the sliders do not tick then.
 var _resetting := false
+## The live Reset tween. A second Reset kills it and starts its own, and only the live
+## tween's end clears _resetting, so the first tween ending cannot let the second tick.
+var _reset_tween: Tween
 
 # Audio controls
 @onready var master_slider: HSlider = %MasterVolumeSlider
@@ -488,9 +491,12 @@ func _show_saved_values(config: ConfigFile) -> void:
 	fade_distance_slider.set_value_no_signal(config.get_value("grid_visuals", "fade_radius", 30.0))
 
 
-func _save_settings() -> void:
+## Writes every control's value to the settings file at `path` (tests pass their own),
+## keeping the sections other code saves there. The volumes go with the taper marker, so a
+## fresh install's first save is never mistaken for a linear-taper file and converted.
+func _save_settings(path: String = Paths.SETTINGS_PATH) -> void:
 	var config = ConfigFile.new()
-	var err = config.load(Paths.SETTINGS_PATH)
+	var err = config.load(path)
 	if err != OK and err != ERR_FILE_NOT_FOUND:
 		push_warning("SettingsMenu: failed to load settings for save: %d" % err)
 
@@ -498,6 +504,7 @@ func _save_settings() -> void:
 	config.set_value("audio", "music", music_slider.value)
 	config.set_value("audio", "sfx", sfx_slider.value)
 	config.set_value("audio", "ui", ui_slider.value)
+	config.set_value("audio", AudioManager.VOLUME_TAPER_KEY, AudioManager.VOLUME_TAPER)
 	config.set_value("graphics", "fullscreen", fullscreen_check.button_pressed)
 	config.set_value("graphics", "vsync", vsync_check.button_pressed)
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
@@ -527,7 +534,7 @@ func _save_settings() -> void:
 	config.set_value("grid_visuals", "line_thickness", line_thickness_slider.value)
 	config.set_value("grid_visuals", "fade_radius", fade_distance_slider.value)
 
-	config.save(Paths.SETTINGS_PATH)
+	config.save(path)
 
 
 func _apply_settings() -> void:
@@ -761,9 +768,12 @@ func _on_reset_pressed() -> void:
 ## sliders tween home and hold their ticks (_slider_tick) until they land, and the
 ## toggles and options snap without signals (Apply applies them).
 func _show_defaults() -> void:
+	if _reset_tween and _reset_tween.is_valid():
+		_reset_tween.kill()
 	_resetting = true
-	var tw = create_tween()
-	tw.finished.connect(func() -> void: _resetting = false)
+	var tw := create_tween()
+	_reset_tween = tw
+	tw.finished.connect(_on_reset_tween_finished.bind(tw))
 	tw.set_parallel(true)
 	tw.set_ease(Tween.EASE_OUT)
 	tw.set_trans(Tween.TRANS_CUBIC)
@@ -792,6 +802,13 @@ func _show_defaults() -> void:
 	sdfgi_check.set_pressed_no_signal(Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"])
 	renderer_method_option.select(0)
 	p2p_enabled_check.set_pressed_no_signal(true)
+
+
+## Lets the sliders tick again once the live Reset tween lands; a killed one's end is ignored.
+func _on_reset_tween_finished(tween: Tween) -> void:
+	if tween == _reset_tween:
+		_resetting = false
+		_reset_tween = null
 
 
 func _on_input_device_selected(index: int) -> void:
