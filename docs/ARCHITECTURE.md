@@ -1076,6 +1076,16 @@ rather than in `ASSET_PIPELINE.md`.
   `authoring/biomes.json` (`{"biomes": [palette biome id, ...]}`), and optional painted
   surfaces (below), and optional water (below). Unknown entries are ignored, so later
   phases add entries without a format bump.
+- **Size (measured 2026-10-09, 200 ft maps):** a fresh starting-cover map is 0.2-0.26 MB
+  (about 3.7K scatter rows); a full-density grassland map is 1.37-1.48 MB (43K rows),
+  93-99% of it `scatter.json` at about 93 B per row. `height.bin` is 100 KB zipped on a
+  sculpted map, 250 B on a flat one. The file is sent zstd-compressed, which gains nothing
+  over the ZIP's deflate. For comparison a Blender `map.glb` (oakslabpainted) sends 12.9 MB.
+  An offline prototype (packed binary scatter: uint16 positions, y as an int16 mm offset
+  from the ground, smallest-three quaternion, uint16 log scale, column-wise per asset)
+  cut scatter 3.6-4x at under 1 mm and 0.16 deg error; uint16 row-delta heights cut
+  `height.bin` from 100 KB to 18 KB. Both are candidates for the next format bump, not
+  worth one on their own.
 - **Water (phase 4):** `splines.json` (`{"version": 1, "bodies": [...], "flow": {...}}`):
   each body has a stable `id` (1..255, unique), `kind` `river` or `pond`, `depth`
   (`ankle`, `waist`, `deep`) and `level_m`; a river adds `speed` (0..2) and its control
