@@ -1085,7 +1085,8 @@ rather than in `ASSET_PIPELINE.md`.
   from the ground, smallest-three quaternion, uint16 log scale, column-wise per asset)
   cut scatter 3.6-4x at under 1 mm and 0.16 deg error; uint16 row-delta heights cut
   `height.bin` from 100 KB to 18 KB. Both are candidates for the next format bump, not
-  worth one on their own.
+  worth one on their own. The measurement jobs and the encoder prototype are kept in
+  `tools/map_size/` (README there).
 - **Water (phase 4):** `splines.json` (`{"version": 1, "bodies": [...], "flow": {...}}`):
   each body has a stable `id` (1..255, unique), `kind` `river` or `pond`, `depth`
   (`ankle`, `waist`, `deep`) and `level_m`; a river adds `speed` (0..2) and its control
