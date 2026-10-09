@@ -227,6 +227,11 @@ func test_only_the_owner_or_the_gm_can_edit_an_avatar() -> void:
 	add_child_autofree(pack)
 	assert_false(TokenContextMenu.can_edit_avatar(pack, true, false, PEER), "not an avatar")
 	assert_false(TokenContextMenu.can_edit_avatar(null, true, false, PEER))
+	# Releases hold avatars back (DevFeatures.avatars): not even the GM edits one there.
+	DevFeatures.avatars = false
+	var gm_in_release := TokenContextMenu.can_edit_avatar(token, true, true, PEER)
+	DevFeatures.avatars = true
+	assert_false(gm_in_release, "avatars off in a release")
 
 
 # --- proportion throttle -----------------------------------------------------------------------

@@ -165,10 +165,13 @@ func _update_menu_content() -> void:
 
 
 ## Whether `token` is an avatar this peer may edit in the builder: the GM (or anyone in a
-## single-player game) edits any avatar, a player only one they hold CONTROL on.
+## single-player game) edits any avatar, a player only one they hold CONTROL on. Never
+## while avatars are a dev feature (DevFeatures.avatars).
 static func can_edit_avatar(
 	token: BoardToken, is_gm: bool, is_networked: bool, my_peer_id: int
 ) -> bool:
+	if not DevFeatures.avatars:
+		return false
 	if token == null or not is_instance_valid(token) or not token.is_avatar():
 		return false
 	if is_gm or not is_networked:
