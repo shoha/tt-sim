@@ -16,6 +16,11 @@ extends Node
 ##   - ZSTD compression for efficient transfer
 ##   - Chunked transfers with progress tracking
 ##   - Transfer resume support for interrupted downloads
+##   - Ack-based flow control: the host keeps at most SEND_WINDOW_BYTES of chunks
+##     unacknowledged per peer and sends more as the client acks them. Over Steam,
+##     SteamMultiplayerPeer silently drops reliable messages once about 512 KB is queued
+##     (Steam's default send buffer), so a map sent all at once never completed
+##     (tests/net/steam_map_download.gd reproduces it over real Steam).
 
 ## Signals
 ## Every listener must declare all five parameters, file_type included. Godot 4.7
@@ -36,6 +41,9 @@ signal transfer_progress(
 const CHUNK_SIZE := 32768  # 32KB chunks
 const MAX_CONCURRENT_TRANSFERS := 2
 const TRANSFER_TIMEOUT := 60.0  # seconds
+## Unacknowledged chunk bytes the host allows per peer, across all of its transfers: half
+## of Steam's default 512 KB send buffer, leaving room for game traffic.
+const SEND_WINDOW_BYTES := 256 * 1024
 
 ## Injected reference to the disk cache (set by AssetManager.setup).
 var _cache_manager: Node
@@ -43,7 +51,8 @@ var _cache_manager: Node
 ## Injected reference to the AssetManager facade (set by AssetManager.setup).
 var _asset_manager: Node
 
-## Active transfers on host (peer_id -> Array of active transfer keys)
+## Active transfers on host: peer_id -> {key -> {"parts", "data", "total_chunks",
+## "next_chunk", "acked_chunks"}}, in the order they started
 var _host_transfers: Dictionary = {}
 
 ## Pending downloads on client (key -> download state)
@@ -168,7 +177,7 @@ func _start_request(request: Dictionary) -> void:
 	var resume_from: int = 0
 	if _partial_transfers.has(key):
 		var partial = _partial_transfers[key]
-		resume_from = partial.received_count
+		resume_from = first_missing_chunk(partial.get("chunks", []))
 		_client_downloads[key] = partial.duplicate(true)
 		_partial_transfers.erase(key)
 		print("AssetStreamer: Resuming %s from chunk %d" % [key, resume_from])
@@ -196,6 +205,15 @@ func _start_request(request: Dictionary) -> void:
 		resume_from
 	)
 	print("AssetStreamer: Requesting %s from host (resume_from=%d)" % [key, resume_from])
+
+
+## The index of the first chunk not yet received (null), or the chunk count when every
+## chunk is here: where a resumed transfer asks the host to start.
+static func first_missing_chunk(chunks: Array) -> int:
+	for i in chunks.size():
+		if chunks[i] == null:
+			return i
+	return chunks.size()
 
 
 ## Whether a client-requested level map name is authorized to be served: it must sanitize
@@ -329,7 +347,7 @@ func _send_asset_to_peer(
 
 	# Compress the data
 	var compressed = data.compress(FileAccess.COMPRESSION_ZSTD)
-	var total_chunks = ceili(float(compressed.size()) / CHUNK_SIZE)
+	var total_chunks := StreamSendWindow.chunk_count(compressed.size(), CHUNK_SIZE)
 
 	print(
 		(
@@ -356,49 +374,105 @@ func _send_asset_to_peer(
 		data.size()
 	)
 
-	# Send chunks starting from resume point (spread across frames to avoid blocking)
-	_send_chunks_async(
-		peer_id,
-		pack_id,
-		asset_id,
-		variant_id,
-		file_type,
-		compressed,
-		total_chunks,
-		resume_from_chunk
+	# Send chunks from the resume point, a window at a time as the client acks them
+	_begin_host_transfer(
+		peer_id, [pack_id, asset_id, variant_id, file_type], compressed, resume_from_chunk
 	)
 
 
-## Async chunk sending to avoid blocking (with resume support)
-func _send_chunks_async(
-	peer_id: int,
-	pack_id: String,
-	asset_id: String,
-	variant_id: String,
-	file_type: String,
-	compressed: PackedByteArray,
-	total_chunks: int,
-	start_chunk: int = 0
+## Starts (or restarts) the windowed send of `compressed` to a peer from `start_chunk`.
+## `parts` is [pack_id, asset_id, variant_id, file_type].
+func _begin_host_transfer(
+	peer_id: int, parts: Array, compressed: PackedByteArray, start_chunk: int
 ) -> void:
-	for i in range(start_chunk, total_chunks):
-		var start = i * CHUNK_SIZE
-		var end = mini(start + CHUNK_SIZE, compressed.size())
-		var chunk = compressed.slice(start, end)
+	var total_chunks := StreamSendWindow.chunk_count(compressed.size(), CHUNK_SIZE)
+	var first := clampi(start_chunk, 0, total_chunks)
+	var transfers: Dictionary = _host_transfers.get(peer_id, {})
+	transfers["/".join(parts)] = {
+		"parts": parts,
+		"data": compressed,
+		"total_chunks": total_chunks,
+		"next_chunk": first,
+		"acked_chunks": first,
+	}
+	_host_transfers[peer_id] = transfers
+	_pump_peer(peer_id)
 
-		rpc_id(peer_id, "_rpc_asset_chunk", pack_id, asset_id, variant_id, file_type, i, chunk)
 
-		# Yield every few chunks to avoid blocking
-		if (i - start_chunk) % 4 == 3:
-			await get_tree().process_frame
-			if not is_instance_valid(self):
-				return
-
-	var chunks_sent = total_chunks - start_chunk
-	print(
-		(
-			"AssetStreamer: Finished sending %s/%s/%s/%s to peer %d (%d chunks)"
-			% [pack_id, asset_id, variant_id, file_type, peer_id, chunks_sent]
+## Sends every chunk the peer's window has room for, across that peer's transfers in the
+## order they started, and drops transfers the peer has fully acknowledged.
+func _pump_peer(peer_id: int) -> void:
+	var transfers: Dictionary = _host_transfers.get(peer_id, {})
+	for key in transfers.keys():
+		var state: Dictionary = transfers[key]
+		if state.acked_chunks >= state.total_chunks:
+			print(
+				(
+					"AssetStreamer: Finished sending %s to peer %d (%d chunks)"
+					% [key, peer_id, state.total_chunks]
+				)
+			)
+			transfers.erase(key)
+	if transfers.is_empty():
+		_host_transfers.erase(peer_id)
+		return
+	var in_flight := 0
+	for state in transfers.values():
+		in_flight += StreamSendWindow.bytes_in_flight(
+			state.next_chunk, state.acked_chunks, state.data.size(), CHUNK_SIZE
 		)
+	for state in transfers.values():
+		var count := StreamSendWindow.chunks_to_send(
+			in_flight, SEND_WINDOW_BYTES, CHUNK_SIZE, state.total_chunks - state.next_chunk
+		)
+		for _i in count:
+			var index: int = state.next_chunk
+			var start := index * CHUNK_SIZE
+			var chunk: PackedByteArray = state.data.slice(
+				start, mini(start + CHUNK_SIZE, state.data.size())
+			)
+			_send_chunk_rpc(peer_id, state.parts, index, chunk)
+			state.next_chunk = index + 1
+			in_flight += chunk.size()
+
+
+## Sends one chunk to a peer. Separate so tests can capture the sends.
+func _send_chunk_rpc(peer_id: int, parts: Array, index: int, chunk: PackedByteArray) -> void:
+	rpc_id(peer_id, "_rpc_asset_chunk", parts[0], parts[1], parts[2], parts[3], index, chunk)
+
+
+## Host side of an ack: the peer holds every chunk before `received_chunks` of one of its
+## transfers. The value comes from the peer, so it only ever moves the ack forward and
+## never past what was sent.
+func _on_chunk_ack(peer_id: int, key: String, received_chunks: int) -> void:
+	var state: Dictionary = _host_transfers.get(peer_id, {}).get(key, {})
+	if state.is_empty():
+		return
+	state.acked_chunks = clampi(received_chunks, state.acked_chunks, state.next_chunk)
+	_pump_peer(peer_id)
+
+
+## RPC: Client acknowledges the chunks of a transfer it holds (client -> host)
+@rpc("any_peer", "reliable")
+func _rpc_asset_chunk_ack(
+	pack_id: String, asset_id: String, variant_id: String, file_type: String, received: int
+) -> void:
+	if not NetworkManager.is_host():
+		return
+	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
+	_on_chunk_ack(multiplayer.get_remote_sender_id(), key, received)
+
+
+## Client side of an ack, sent for every chunk stored. Separate so tests can capture it.
+func _send_chunk_ack(download: Dictionary, received_chunks: int) -> void:
+	rpc_id(
+		1,
+		"_rpc_asset_chunk_ack",
+		download.pack_id,
+		download.asset_id,
+		download.variant_id,
+		download.get("file_type", "model"),
+		received_chunks
 	)
 
 
@@ -457,10 +531,21 @@ func _rpc_asset_header(
 	if not _client_downloads.has(key):
 		return
 
-	_client_downloads[key].total_chunks = total_chunks
-	_client_downloads[key].original_size = original_size
-	_client_downloads[key].chunks = []
-	_client_downloads[key].chunks.resize(total_chunks)
+	var download: Dictionary = _client_downloads[key]
+	# A resumed download keeps the chunks it already has when the file is unchanged;
+	# anything else starts over.
+	var resumable: bool = (
+		download.get("chunks", []).size() == total_chunks
+		and int(download.get("original_size", 0)) == original_size
+	)
+	download.total_chunks = total_chunks
+	download.original_size = original_size
+	if not resumable:
+		download.chunks = []
+		download.chunks.resize(total_chunks)
+		download.received_count = 0
+		download.received_bytes = 0
+		download.acked_prefix = 0
 
 	print("AssetStreamer: Receiving %s (%d chunks, %d bytes)" % [key, total_chunks, original_size])
 
@@ -482,17 +567,22 @@ func _rpc_asset_chunk(
 
 	var download = _client_downloads[key]
 
-	# Store chunk
+	if chunk_index < 0 or chunk_index >= download.chunks.size():
+		return
+
+	# Store chunk, counting it once (a resend of a stored chunk adds nothing)
+	if download.chunks[chunk_index] == null:
+		download.received_count = int(download.get("received_count", 0)) + 1
+		download.received_bytes = int(download.get("received_bytes", 0)) + chunk_data.size()
 	download.chunks[chunk_index] = chunk_data
+	var received: int = download.received_count
 
-	# Count received chunks
-	var received = 0
-	for chunk in download.chunks:
-		if chunk != null:
-			received += 1
-
-	# Track received count for resume
-	download.received_count = received
+	# Ack the unbroken run of chunks from the start, which frees the host's send window
+	var prefix := int(download.get("acked_prefix", 0))
+	while prefix < download.chunks.size() and download.chunks[prefix] != null:
+		prefix += 1
+	download.acked_prefix = prefix
+	_send_chunk_ack(download, prefix)
 	download.last_chunk_time = Time.get_ticks_msec()
 
 	# Emit progress
@@ -599,6 +689,19 @@ func set_enabled(enabled: bool) -> void:
 ## Check if P2P streaming is enabled
 func is_enabled() -> bool:
 	return _enabled
+
+
+## Progress of one client download by key ("pack/asset/variant/file_type"):
+## {"received_chunks", "total_chunks", "received_bytes"}, or {} when none is active.
+func get_download_status(key: String) -> Dictionary:
+	if not _client_downloads.has(key):
+		return {}
+	var download: Dictionary = _client_downloads[key]
+	return {
+		"received_chunks": int(download.get("received_count", 0)),
+		"total_chunks": int(download.get("total_chunks", 0)),
+		"received_bytes": int(download.get("received_bytes", 0)),
+	}
 
 
 ## Get the number of active downloads (client side)
