@@ -109,11 +109,12 @@ A hung run kills itself (`hang_s`, REFERENCE.md "Job file format"): `timeout_s` 
 the main thread, which a hang blocks, and on Windows stopping the shell task that launched
 Godot (TaskStop, or the Bash tool's own timeout) does not stop Godot. A hung Mobile-renderer
 run in September 2026 kept its window and GPU context for 26 minutes after its task was
-"stopped", contending with every later run. After every job, check from PowerShell:
+"stopped", contending with every later run. After every job, check with the PowerShell tool,
+in exactly this form (it is allowlisted):
 
 ```
-Get-Process godot* -ErrorAction SilentlyContinue
+Get-Process blender*, godot* -ErrorAction SilentlyContinue
 ```
 
-and stop anything listed with `Stop-Process -Id <id>`. Frame and GPU timings from a job are
+and stop your own leftovers with `Stop-Process -Id <id>`. Frame and GPU timings from a job are
 indicative only (REFERENCE.md "Caveats").

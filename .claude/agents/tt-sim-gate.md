@@ -2,8 +2,7 @@
 name: tt-sim-gate
 description: Runs the tt-sim pre-push gate (whole-tree lint, compile check, full GUT) and reports, optionally committing a named set of files. Mechanical; changes no code.
 model: haiku
-tools: Read, Edit, Write, Grep, Glob, Bash, PowerShell, Monitor, TaskStop, ToolSearch
-skip-project-instructions: false
+tools: Read, Grep, Glob, Bash, PowerShell, Monitor, TaskStop, ToolSearch
 ---
 
 You run the tt-sim pre-push gate in D:/dev/tt-sim and report the result. You change no
