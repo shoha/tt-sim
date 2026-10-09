@@ -167,6 +167,27 @@ godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- 
 It is for iterating only: the full run above is still required before a commit. Add a new
 avatar or token test script to the list when you create it.
 
+**Three more named subsets** work the same way, each a list of script paths chosen by what
+the script exercises (a script can sit in several). Times are GUT's own, measured 2026-10-09:
+```
+godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_authoring.json
+godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_net.json
+godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_ui.json
+```
+- `authoring` (73 scripts, about 220 s): in-game authoring and the map pipeline it feeds: the
+  map document and its IO, the editor and its tools, terrain, ground, scatter, water,
+  crossings, landforms, new maps, the palette, and loading or streaming a map into a level.
+  Nearly the whole full run's time: the five landform recipe scripts alone take about 115 s,
+  so narrow it with GUT's `-gselect=<part of a script name>` while iterating.
+- `net` (27 scripts, under 1 s): NetworkManager, AssetStreamer and its flow control, map
+  download and hashing, lobby, state sync, token network tracking, version gate.
+- `ui` (49 scripts, about 10 s): menu and panel controls, the Visuals drawer panes, level
+  cards and pickers, title screen, lobby screens, dialogs.
+
+Add a new test script to every subset it belongs to when you create it.
+`tests/unit/test_gut_subsets.gd` fails the full run if any subset lists a script that no
+longer exists, so a rename has to update the lists.
+
 **After a fresh clone or when new `class_name` scripts are added**, run the import step first (required once):
 ```
 godot --headless --import --path .
