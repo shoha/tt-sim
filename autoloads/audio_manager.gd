@@ -40,6 +40,14 @@ const PLAYER_POOL_SIZE := 4
 ## Runs the flush after every other node's _process, so one frame's requests coalesce.
 const FLUSH_PROCESS_PRIORITY := 1000
 
+## settings.cfg's [audio] key naming the taper its volume percentages were saved for. A file
+## without it predates the squared taper: its percentages were linear gains.
+const VOLUME_TAPER_KEY := "taper"
+## The squared taper of slider_to_db (taper 1, the linear one, is the absent marker).
+const VOLUME_TAPER := 2
+## The [audio] keys holding the volume sliders' percentages, 0 to 100.
+const VOLUME_KEYS: PackedStringArray = ["master", "music", "sfx", "ui"]
+
 var _queue: SoundRequestQueue
 ## name -> AudioStream, for every manifest entry whose file exists.
 var _streams: Dictionary = {}
@@ -206,11 +214,12 @@ func _now_s() -> float:
 
 
 ## Load saved audio bus volumes from settings.cfg and apply them.
-## Called once at startup so the game respects the user's previous volume choices.
+## Called once at startup so the game respects the user's previous volume choices. Every
+## launch passes here before anything else reads the volumes, so this is where a file saved
+## before the squared taper is migrated (load_migrated_settings).
 func _load_audio_settings() -> void:
-	var config = ConfigFile.new()
-	var err = config.load(Paths.SETTINGS_PATH)
-	if err != OK:
+	var config := load_migrated_settings(Paths.SETTINGS_PATH)
+	if config == null:
 		return  # No saved settings — buses stay at default (100%)
 
 	var buses := {
@@ -238,6 +247,41 @@ static func slider_to_db(position: float) -> float:
 ## The slider position (0.0 to 1.0) that slider_to_db maps to `db`.
 static func db_to_slider(db: float) -> float:
 	return clampf(sqrt(db_to_linear(db)), 0.0, 1.0)
+
+
+## Loads the settings file at `path`, first migrating volumes saved for the linear taper
+## (migrate_volume_taper) and writing the migration back, so it happens once. Returns null
+## when there is no readable file: a fresh install has nothing to convert and gets no file
+## here; SettingsMenu stamps the taper marker whenever it saves the volumes.
+static func load_migrated_settings(path: String) -> ConfigFile:
+	var config := ConfigFile.new()
+	if config.load(path) != OK:
+		return null
+	if migrate_volume_taper(config):
+		var err := config.save(path)
+		if err != OK:
+			push_warning("AudioManager: could not save the volume taper migration: %d" % err)
+	return config
+
+
+## Converts the volume percentages in `config` from the linear taper they were saved for to
+## the squared one at the same loudness, and stamps audio/taper so it never runs twice. A
+## linear percentage p played at gain p/100 and the squared taper plays q at (q/100)^2, so
+## q = 100 sqrt(p/100): a saved 50% (-6 dB) becomes 70.7%. The value stays unrounded, so the
+## gain is exact; the slider shows it to its 1% step. Only the volume keys present change.
+## Returns true when it changed `config`, false for a config already stamped.
+static func migrate_volume_taper(config: ConfigFile) -> bool:
+	if int(config.get_value("audio", VOLUME_TAPER_KEY, 1)) >= VOLUME_TAPER:
+		return false
+	for key in VOLUME_KEYS:
+		if not config.has_section_key("audio", key):
+			continue
+		var saved: Variant = config.get_value("audio", key)
+		if saved is float or saved is int:
+			var gain := clampf(float(saved) / 100.0, 0.0, 1.0)
+			config.set_value("audio", key, sqrt(gain) * 100.0)
+	config.set_value("audio", VOLUME_TAPER_KEY, VOLUME_TAPER)
+	return true
 
 
 ## Sets a bus's volume from a slider position (0.0 to 1.0), through slider_to_db.

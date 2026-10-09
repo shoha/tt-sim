@@ -128,6 +128,26 @@ func test_reset_is_silent_until_the_sliders_land_then_a_drag_ticks() -> void:
 	assert_eq(_count(&"tick"), 1, "a slider the user moves ticks again")
 
 
+func test_a_second_reset_mid_tween_requests_no_tick() -> void:
+	var menu := _open_settings()
+	await wait_process_frames(2)
+	for slider in _sliders(menu):
+		slider.set_value_no_signal(slider.min_value)
+	_requested.clear()
+
+	# The second Reset lands half way, so its tween outlives the first by half a tween.
+	menu._show_defaults()
+	await wait_seconds(RESET_TWEEN_S / 2.0)
+	menu._show_defaults()
+	await wait_seconds(RESET_TWEEN_S + 0.1)
+
+	assert_eq(_count(&"tick"), 0, "the first tween ending does not end the second's silence")
+	assert_eq(menu.master_slider.value, 100.0, "the sliders tweened home")
+	assert_false(menu._resetting)
+	menu.cell_tint_opacity_slider.value = 50.0
+	assert_eq(_count(&"tick"), 1, "a slider the user moves ticks again")
+
+
 func test_the_music_row_is_hidden_until_there_is_music() -> void:
 	var menu := _open_settings()
 	assert_false(SettingsMenu.SHOW_MUSIC_VOLUME)

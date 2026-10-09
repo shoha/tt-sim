@@ -528,8 +528,10 @@ await settings.closed  # Wait for user to close
 - UI Sounds Volume
 - (Music Volume is hidden until the game has music: `SettingsMenu.SHOW_MUSIC_VOLUME`)
 
-The sliders use a squared taper (`AudioManager.slider_to_db`). Opening Settings and Reset set
-controls without signals, so neither plays a burst of ticks; see `docs/SOUND_EFFECTS.md`.
+The sliders use a squared taper (`AudioManager.slider_to_db`); volumes saved on the old linear
+one are converted once at startup. Opening Settings and Reset set controls without signals, so
+neither plays a burst of ticks, and a second Reset mid-tween kills the first tween so only the
+live one ends the silence; see `docs/SOUND_EFFECTS.md`.
 
 **Graphics Tab:**
 

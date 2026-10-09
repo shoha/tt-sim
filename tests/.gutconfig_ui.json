@@ -50,6 +50,7 @@
 		"res://tests/unit/test_ui_motion_stagger.gd",
 		"res://tests/unit/test_ui_preferences.gd",
 		"res://tests/unit/test_update_dialog_focus.gd",
+		"res://tests/unit/test_volume_taper_migration.gd",
 		"res://tests/unit/test_water_pane.gd",
 		"res://tests/unit/test_weather_pane.gd",
 		"res://tests/unit/test_world_pane.gd"

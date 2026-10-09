@@ -83,8 +83,12 @@ slider position maps to gain through a squared taper, `AudioManager.slider_to_db
 `linear_to_db(p * p)`: half way is -12 dB, a quarter -24 dB, a tenth -40 dB, zero silent.
 Loudness grows with roughly the 0.6 power of sound pressure, so gain ~ position^1.7 makes the
 slider track how loud it sounds, and squared is the nearest simple curve; the old linear taper put
-half way at only -6 dB. Saved settings are slider percentages, so a saved 50% now sounds quieter
-than it did.
+half way at only -6 dB. Saved settings are slider percentages, and `[audio] taper = 2` in
+`settings.cfg` marks a file written for the squared taper. A file without it was saved on the
+linear one: `AudioManager` converts it once at startup (`load_migrated_settings`), each
+percentage p to 100 sqrt(p/100), so a saved 50% becomes 70.7% and keeps its -6 dB, then stamps
+the marker. `SettingsMenu._save_settings` writes the marker with the volumes, so a fresh
+install's first save is never converted.
 
 ---
 
