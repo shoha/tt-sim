@@ -613,14 +613,17 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   controller refits them and resizes the reflection probe when the range changed. A map
   loaded with relief needs nothing extra: its chunks are built before the probe and camera
   bounds are measured.
-- **Canopy fade:** while Thin / Clear, Sculpt, Paint or Water is the tool, `BrushTool` makes its ring the
-  `OcclusionFadeManager` focus (`set_focus(centre, 1.35 x radius)`, first entry in the token
-  texture, cleared for other tools and on deactivate), so tree canopies between the camera and
-  the ring dither away as they do over a token. Tree foliage materials are registered with
-  `floor_threshold` 2.0 (`FOLIAGE_FLOOR_THRESHOLD`): the floor exemption meant for map floors
-  also exempted every upward-facing leaf card, which left canopies mostly opaque, over tokens
-  in play as well. Follows the player's occlusion fade setting (not forced on in authoring:
-  enabling the manager converts a dressed GLB's materials).
+- **Canopy fade:** while Thin / Clear, Sculpt, Paint or Water is the tool, `BrushTool` makes its
+  ring the canopy fade's brush window (`CanopyFade.set_brush(centre, 1.35 x radius)`, the
+  `canopy_brush` shader global, cleared for other tools and on deactivate), so the crowns
+  between the camera and the ring drop out card by card and limb by limb with the trunks kept,
+  as in the view-centre canopy fade; the window grows from the ring's centre in 0.15 s and
+  closes back in from its edge in 0.4 s. In play only while a press is held
+  (`fade_held_only`). It was the occlusion fade's first token entry until 2026-10-10, whose
+  per-pixel screen door dithered whole trees, trunks included. Tree foliage materials are
+  registered with the occlusion fade at `floor_threshold` 2.0 (`FOLIAGE_FLOOR_THRESHOLD`): the
+  floor exemption meant for map floors also exempted every upward-facing leaf card, which left
+  canopies over tokens mostly opaque.
 
 **Save.** `save_async()` waits for scatter regeneration to land, then
 `AuthoringController.write_level()`: a new level gets `LevelManager.new_folder_name()`,

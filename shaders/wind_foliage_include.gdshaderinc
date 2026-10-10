@@ -126,8 +126,18 @@ global uniform vec4 canopy_fade_view;
 // one (untouched past it), z the depth band over which the fade grows in front of the
 // view-centre ground. CanopyFade.shape() sets them by zoom.
 global uniform vec4 canopy_fade_shape;
+// The brush window (CanopyFade.set_brush): xyz the ground point under a map brush's ring
+// (world), w the window's radius in metres (0: off). It grows from nothing as the brush asks
+// for it and shrinks back when it lets go, so the canopy closes in from the window's edge.
+global uniform vec4 canopy_brush;
 // Metres in front of the view-centre ground (along the view axis) where the fade starts.
 const float CANOPY_FADE_START = 0.5;
+// The brush window's fade: full inside CANOPY_BRUSH_INNER of its radius, none past it; it
+// grows over CANOPY_BRUSH_BAND metres from CANOPY_BRUSH_START in front of the ring's ground,
+// so the crowns standing over and before the ring go and the ones behind it stay.
+const float CANOPY_BRUSH_INNER = 0.55;
+const float CANOPY_BRUSH_START = 0.3;
+const float CANOPY_BRUSH_BAND = 1.2;
 // Bark flutter weight above which a fragment belongs to a limb rather than the trunk.
 const float CANOPY_LIMB_FLUTTER = 0.04;
 
@@ -205,7 +215,7 @@ vec3 two_sided_foliage_normal(vec3 normal, bool front_facing) {
 }
 
 
-// The canopy fade (see canopy_part above): discards this fragment when its
+// The canopy fades (see canopy_part above): discards this fragment when its
 // dissolve key falls under the fade there. The fade is the strength times two soft
 // ramps: depth, growing across a band in front of the view-centre ground (measured along
 // the camera's view axis in world space), and the clearing, falling off with the
@@ -218,10 +228,12 @@ vec3 two_sided_foliage_normal(vec3 normal, bool front_facing) {
 // limb), so whole cards and whole limbs drop out one by one, bold shapes rather than a
 // stipple; an asset without authored weights falls back to the occlusion fade's Bayer
 // dither on its cards and keeps its bark. `wind` is the fragment's COLOR.gb.
+// The brush window (canopy_brush) opens the canopy over a map brush's ring by the same law
+// and key, the larger of the two fades winning.
 void apply_canopy_fade(
 	vec3 vertex_view, mat4 inv_view_matrix, vec2 wind, vec2 frag_coord
 ) {
-	if (canopy_part == 0 || canopy_fade_centre.w <= 0.0) {
+	if (canopy_part == 0 || (canopy_fade_centre.w <= 0.0 && canopy_brush.w <= 0.0)) {
 		return;
 	}
 	// The trunk (authored flutter 0) always stays, on either surface: a Blender map's baked
@@ -233,12 +245,24 @@ void apply_canopy_fade(
 	if (dot(inv_view_matrix[2].xyz, back) < 0.999) {
 		return;
 	}
-	vec3 offset = (inv_view_matrix * vec4(vertex_view, 1.0)).xyz - canopy_fade_centre.xyz;
-	float ahead = dot(offset, back);
-	float across = length(offset - back * ahead);
-	float fade = canopy_fade_centre.w
-		* smoothstep(CANOPY_FADE_START, CANOPY_FADE_START + canopy_fade_shape.z, ahead)
-		* (1.0 - smoothstep(canopy_fade_shape.x, canopy_fade_shape.y, across));
+	vec3 world = (inv_view_matrix * vec4(vertex_view, 1.0)).xyz;
+	float fade = 0.0;
+	if (canopy_fade_centre.w > 0.0) {
+		vec3 offset = world - canopy_fade_centre.xyz;
+		float ahead = dot(offset, back);
+		float across = length(offset - back * ahead);
+		fade = canopy_fade_centre.w
+			* smoothstep(CANOPY_FADE_START, CANOPY_FADE_START + canopy_fade_shape.z, ahead)
+			* (1.0 - smoothstep(canopy_fade_shape.x, canopy_fade_shape.y, across));
+	}
+	if (canopy_brush.w > 0.0) {
+		vec3 offset = world - canopy_brush.xyz;
+		float ahead = dot(offset, back);
+		float across = length(offset - back * ahead);
+		float brush = smoothstep(CANOPY_BRUSH_START, CANOPY_BRUSH_START + CANOPY_BRUSH_BAND, ahead)
+			* (1.0 - smoothstep(canopy_brush.w * CANOPY_BRUSH_INNER, canopy_brush.w, across));
+		fade = max(fade, brush);
+	}
 	if (fade <= 0.0) {
 		return;
 	}

@@ -13,11 +13,23 @@ extends RefCounted
 ##
 ## The camera's near plane stands clear of every canopy (CameraController
 ## _hold_near_plane_over_canopies), so without this fade a dense forest fills the frame.
+##
+## The brush window: a map brush whose mode `fades` (BrushTool, BrushMode.fade_focus) opens
+## the canopy over its ring by the same law, card by card with the trunks kept, in a soft
+## round window of the ring's reach (set_brush; the shader's canopy_brush). It grows from
+## the ring's centre over BRUSH_OPEN_S and, once let go (clear_brush), closes back in from
+## its edge over BRUSH_CLOSE_S, so the crowns grow back rather than pop. It used to be a
+## token entry of the occlusion fade, whose per-pixel screen door dithered whole trees,
+## trunks included, so a cleared ring's neighbours read as half erased.
 
 ## Global shader parameters (project.godot [shader_globals]).
 const GLOBAL_CENTRE := &"canopy_fade_centre"
 const GLOBAL_VIEW := &"canopy_fade_view"
 const GLOBAL_SHAPE := &"canopy_fade_shape"
+const GLOBAL_BRUSH := &"canopy_brush"
+## How long the brush window takes to open and to close, in seconds.
+const BRUSH_OPEN_S := 0.15
+const BRUSH_CLOSE_S := 0.4
 ## The ramp to the full close-zoom fade runs from the home zoom down to FULL_FRACTION of it.
 const FULL_FRACTION := 0.55
 ## The full close-zoom window, per unit of orthographic size: inner and outer radius on screen
@@ -43,6 +55,43 @@ static var play_outer := 0.55
 static var _last_centre := Vector4(INF, INF, INF, INF)
 static var _last_view := Vector4(INF, INF, INF, INF)
 static var _last_shape := Vector4(INF, INF, INF, INF)
+static var _last_brush := Vector4(INF, INF, INF, INF)
+## The brush window asked for: (ground centre, radius in metres), w 0 when let go; the last
+## centre and radius stay while it closes.
+static var _brush_asked := Vector4.ZERO
+static var _brush_window := Vector4.ZERO
+## How far the window is open, 0 to 1.
+static var _brush_open := 0.0
+
+
+## Opens the brush window over the ground point `centre` with radius `radius` (metres in the
+## view plane), or moves it there while it is open.
+static func set_brush(centre: Vector3, radius: float) -> void:
+	_brush_asked = Vector4(centre.x, centre.y, centre.z, maxf(radius, 0.0))
+	if _brush_asked.w > 0.0:
+		_brush_window = _brush_asked
+
+
+## Lets the brush window close (it shrinks back over BRUSH_CLOSE_S).
+static func clear_brush() -> void:
+	_brush_asked = Vector4.ZERO
+
+
+## Whether the brush window is asked for (it may still be opening). For tests.
+static func brush_asked() -> Vector4:
+	return _brush_asked
+
+
+## The brush window after `seconds` more of opening or closing: (centre, radius scaled by how
+## far it is open), zero once shut. Advances the window's state.
+static func step_brush(seconds: float) -> Vector4:
+	var opening := _brush_asked.w > 0.0
+	var rate := 1.0 / (BRUSH_OPEN_S if opening else BRUSH_CLOSE_S)
+	_brush_open = clampf(_brush_open + (rate if opening else -rate) * maxf(seconds, 0.0), 0.0, 1.0)
+	if _brush_open <= 0.0:
+		return Vector4.ZERO
+	var w := _brush_window
+	return Vector4(w.x, w.y, w.z, w.w * smoothstep(0.0, 1.0, _brush_open))
 
 
 ## How far the camera has closed in past the home zoom: 0 at home and above, 1 at
@@ -78,8 +127,15 @@ static func shape(size: float, home: float) -> Vector4:
 
 ## Writes the fade's globals for `camera` at home size `home`: the ground under the view
 ## centre (a layer-1 ray, or the y = 0 plane when it misses), the strength, the camera's back
-## axis and the window. Only pushes values that changed; while off, no ray is cast.
-static func publish(camera: Camera3D, home: float, viewport_size: Vector2) -> void:
+## axis and the window, and the brush window `seconds` on. Only pushes values that changed;
+## while off, no ray is cast.
+static func publish(
+	camera: Camera3D, home: float, viewport_size: Vector2, seconds: float = 0.0
+) -> void:
+	var brush := step_brush(seconds)
+	if brush != _last_brush:
+		_last_brush = brush
+		RenderingServer.global_shader_parameter_set(GLOBAL_BRUSH, brush)
 	var s := strength(camera.size, home)
 	var back := camera.global_basis.z.normalized()
 	var centre := Vector4.ZERO

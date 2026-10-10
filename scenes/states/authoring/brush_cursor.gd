@@ -8,14 +8,19 @@ extends RefCounted
 ## The ring lies on the ground at the hit point with the brush radius, conforming to the
 ## ground (one downward ray per ring point, cached until the brush moves; with `live`, the
 ## document's own heights every frame, since the ground under a still ring moves while
-## sculpting). It is drawn on the measure overlay layer so it stays crisp above the lo-fi
+## sculpting). It is drawn on its own layer (OVERLAY_LAYER) so it stays crisp above the lo-fi
 ## pass: a dark under-stroke and a light over-stroke read on any ground in either lo-fi theme.
+## That layer is under every panel and drawer: the ring belongs to the board, so the glass over
+## the board covers it as it covers the ground (it was on the measure overlay, over the glass).
 ## The tint is the mode's (BrushMode.cursor_tint). A faint fill shows the reach, a fan from the
 ## centre and never a triangulated outline: a ring conformed over steep ground projects to a
 ## self-intersecting outline, which the canvas cannot triangulate ("Invalid polygon data,
 ## triangulation failed"). An inner ring brightens as dwell builds strength, and a mode's
 ## readout (BrushMode.cursor_text) sits in a small pill under the ring.
 
+## Above the world viewport (LAYER_WORLD_VIEWPORT), under the drawers and panels
+## (LAYER_GAMEPLAY_MENU, LAYER_AUTHORING), with the hint bar.
+const OVERLAY_LAYER := Constants.LAYER_INPUT_HINTS
 const RING_SEGMENTS := 48
 ## Ring points re-conform to the ground when the centre moves this fraction of the radius.
 const RING_REFRESH := 0.04
@@ -60,7 +65,7 @@ func setup(
 	camera = cam
 	_world_viewport = viewport
 	var overlay: Dictionary = MapOverlayUtils.create_overlay(
-		overlay_parent, Constants.LAYER_MEASURE_OVERLAY, on_draw
+		overlay_parent, OVERLAY_LAYER, on_draw
 	)
 	_canvas_layer = overlay.canvas_layer
 	canvas = overlay.draw_control

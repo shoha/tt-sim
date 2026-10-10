@@ -507,9 +507,8 @@ func _on_sun_gizmo_toggled(active: bool) -> void:
 ## Create the map brush (see BrushTool): authoring's, or in play the GM's Events pane's
 ## (PlayEvents, over the table's live editor). Mirrors setup_sun_gizmo(): owned here,
 ## dispatched from _input(), exclusive with the measure tool and the sun gizmo, and wired
-## into CameraController so RMB does not pan while it is active. Thin / Clear fades canopies
-## over its ring through the occlusion fade (so it follows the player's occlusion fade
-## setting, which is on by default).
+## into CameraController so RMB does not pan while it is active. The brushes that `fade` open
+## the canopy over their ring through the canopy fade's brush window (CanopyFade.set_brush).
 func setup_brush_tool() -> BrushTool:
 	if _brush_tool:
 		return _brush_tool
@@ -517,7 +516,6 @@ func setup_brush_tool() -> BrushTool:
 	_brush_tool.name = "BrushTool"
 	add_child(_brush_tool)
 	_brush_tool.setup(camera_node, world_viewport, self, _is_mouse_over_gui)
-	_brush_tool.occlusion_fade = occlusion_fade as OcclusionFadeManager
 	_brush_tool.toggled.connect(_on_brush_tool_toggled)
 	_camera_controller.set_brush_tool(_brush_tool)
 	return _brush_tool

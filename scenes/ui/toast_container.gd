@@ -28,6 +28,9 @@ const KINDS := {
 	ToastType.WARNING: ["alert-triangle", ThemeColors.WARNING],
 	ToastType.ERROR: ["alert-circle", ThemeColors.DANGER],
 }
+## A toast with an action is as wide as its one line needs, up to this, so its words do not
+## wrap beside the button ("Cleared for everyone at the table" with Undo, at 720p).
+const ACTION_MAX_WIDTH := 520.0
 
 var _active_toasts: Array[Control] = []
 
@@ -45,11 +48,14 @@ func show_toast(
 	action_icon: String = "",
 ) -> void:
 	var toast = _create_toast(message, type)
-	if action.is_valid() and not action_label.is_empty():
+	var has_action := action.is_valid() and not action_label.is_empty()
+	if has_action:
 		var button := _action_button(action_label, action_icon)
 		button.pressed.connect(_on_action_pressed.bind(toast, action))
 		toast.get_child(0).add_child(button)
 	toast_vbox.add_child(toast)
+	if has_action:
+		_fit_one_line(toast)
 	_active_toasts.append(toast)
 
 	# Limit visible toasts
@@ -61,9 +67,17 @@ func show_toast(
 	# Animate in
 	_animate_toast_in(toast, type)
 
-	# Schedule dismissal
+	# Schedule dismissal. Held weakly: a toast dismissed at once (the oldest past
+	# MAX_VISIBLE_TOASTS) is freed before its timer runs, and a lambda that captured it
+	# errors on the freed capture.
 	if duration > 0:
-		get_tree().create_timer(duration).timeout.connect(func(): _dismiss_toast(toast, false))
+		var held: WeakRef = weakref(toast)
+		get_tree().create_timer(duration).timeout.connect(
+			func() -> void:
+				var shown: Control = held.get_ref()
+				if shown != null:
+					_dismiss_toast(shown, false)
+		)
 
 
 func _create_toast(message: String, type: ToastType) -> Control:
@@ -101,6 +115,20 @@ static func kind_icon(type: ToastType, themed: Control) -> TextureRect:
 	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	icon.self_modulate = ThemeColors.of(themed, kind[1])
 	return icon
+
+
+## Widens `toast` (in the tree, so its fonts resolve) to its words' one-line width beside
+## the icon and the action, between WIDTH and ACTION_MAX_WIDTH; past that they wrap.
+func _fit_one_line(toast: Control) -> void:
+	var label := toast.get_child(0).get_child(1) as Label
+	toast.custom_minimum_size.x = 0.0
+	# The chip with its words wrapped to nothing, plus the words' one-line width (2 px spare,
+	# so the line does not break on rounding).
+	var rest := toast.get_combined_minimum_size().x
+	var font := label.get_theme_font(&"font")
+	var font_size := label.get_theme_font_size(&"font_size")
+	var words := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	toast.custom_minimum_size.x = clampf(ceilf(rest + words) + 2.0, WIDTH, ACTION_MAX_WIDTH)
 
 
 ## The action at a toast's end: a quiet Secondary button with its icon and a verb.

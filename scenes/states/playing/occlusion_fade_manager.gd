@@ -101,10 +101,6 @@ var _shader_material_by_source: Dictionary[int, ShaderMaterial] = {}
 var _aabb_cache: Dictionary[RID, AABB] = {}
 # Entries published on the previous tick; identical ticks skip the GPU update.
 var _last_entries: Array[Vector4] = []
-# A fade entry that is not a token, (world centre, radius), or zero for none: authoring's
-# Thin / Clear brush sets it at its ring (set_focus). It goes first in the entry list so a
-# full token list never drops it.
-var _focus: Vector4 = Vector4.ZERO
 
 
 func _ready() -> void:
@@ -143,24 +139,10 @@ func clear() -> void:
 	_shader_material_by_source.clear()
 	_aabb_cache.clear()
 	_last_entries = []
-	_focus = Vector4.ZERO
 	RenderingServer.global_shader_parameter_set(GLOBAL_TOKEN_COUNT, 0)
 	_last_token_count = 0
 	_is_setup = false
 	set_physics_process(false)
-
-
-## Fades what stands between the camera and `centre` within `radius` (metres in the view
-## plane), exactly as for a token there. Authoring's Thin / Clear brush calls it every frame
-## at its ring so canopies over the ground being thinned turn see-through. Only visible while
-## the manager is set up, i.e. while the player's occlusion fade setting is on.
-func set_focus(centre: Vector3, radius: float) -> void:
-	_focus = Vector4(centre.x, centre.y, centre.z, maxf(radius, 0.0))
-
-
-## Removes the set_focus() entry (published on the next tick).
-func clear_focus() -> void:
-	_focus = Vector4.ZERO
 
 
 func _physics_process(_delta: float) -> void:
@@ -423,12 +405,10 @@ func _update_token_uniforms() -> bool:
 ## Per-token (world centre, fade radius) as Vector4(x, y, z, radius). Uses the
 ## collision shape AABB centre as the token position and derives the fade radius
 ## from the AABB extent so small tokens get a tight zone and large tokens get a
-## proportionally larger one. The set_focus() entry, if any, comes first. Capped at
-## MAX_TOKENS.
+## proportionally larger one. Capped at MAX_TOKENS. (A map brush's ring opens the canopy
+## through CanopyFade's brush window, not here.)
 func _collect_token_entries() -> Array[Vector4]:
 	var entries: Array[Vector4] = []
-	if _focus.w > 0.0:
-		entries.append(_focus)
 	for child in _tokens_container.get_children():
 		if child is not BoardToken:
 			continue

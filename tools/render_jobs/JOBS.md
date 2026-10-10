@@ -506,16 +506,21 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   `ToolRegistry`, a `ToolDescriptor` or `AuthoringPanel` and compare the drawer's pixels: the
   scene behind the glass moves (wind, water), so judge the pane and rail rects, where an
   unchanged drawer differs by under 32 in every pixel. No level to clean up.
-- `jobs/events_pane.json`: the GM's Events pane in play (card gm-events, about 37 s, 7
-  captures): a new 100 ft temperate forest map (seed 1234) saved as `_gm_events_table` and
-  played; the Visuals drawer open on Events at 1280x720 and 1920x1080 (`*_events_open`); at
-  1280x720 a live Sculpt raise held on the board (`events_sculpt`), released
-  (`events_raised`), undone through `PlayEvents.undo` (`events_undone`), a 9 m Clear swept
-  through the forest with its undo toast (`events_cleared`), and a staged player's view
-  (`events_player`: the Visuals drawer concealed and the GM's HUD buttons hidden; the GM's own
-  toast from the clear may still show, which a player's client never gets). Its own probe
-  (`probes/events_pane.gd`: save, window, open, arm, press, move, release, undo, redo, player,
-  cleanup) deletes `_gm_events_table` at the end.
+- `jobs/events_pane.json`: the GM's Events pane in play (cards gm-events and gm-events-2a,
+  about 50 s, 15 captures): a new 100 ft temperate forest map (seed 1234) saved as
+  `_gm_events_table` and played; the Visuals drawer open on Events at 1280x720 and 1920x1080
+  (`*_events_open`); at 1280x720 the Biome (first biome picked, the ring hovering under the
+  drawer's edge), Paint, Water and Bridge panes (`events_biome`, `events_paint`,
+  `events_water`, `events_bridge`); a live Sculpt raise held on the board, the drawer stepped
+  aside at the press (`events_sculpt`), released (`events_raised`), the brush put away
+  (`events_put_away`), undone through `PlayEvents.undo` (`events_undone`); a 9 m Clear held
+  mid-sweep with the canopy open over it (`events_clearing`) and released with its undo toast
+  (`events_cleared`); at 1920x1080 Thin held where the drawer stood (`events_brush_out`); the
+  pane over outdoor_night with the sun off, the darkest board (`events_night`); and a staged
+  player's view (`events_player`: the Visuals drawer concealed, the GM's HUD buttons hidden
+  and the GM's toasts dismissed). Its own probe (`probes/events_pane.gd`: save, window, open,
+  arm, hover, press, move, release, put_away, undo, redo, player, dismiss, cleanup; the night
+  step uses `p6.gd preset` and `avatar_kit.gd sun`) deletes `_gm_events_table` at the end.
 
 ## Caveats
 

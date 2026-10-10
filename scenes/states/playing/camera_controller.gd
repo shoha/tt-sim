@@ -173,7 +173,7 @@ func _process(delta: float) -> void:
 	handle_zoom(delta)
 	_handle_edge_pan(delta)
 	CanopyFade.publish(
-		_game_map.camera_node, _base_camera_size, Vector2(_game_map.world_viewport.size)
+		_game_map.camera_node, _base_camera_size, Vector2(_game_map.world_viewport.size), delta
 	)
 	PerformanceMonitor.stop_timer(&"perf/camera_update_ms")
 

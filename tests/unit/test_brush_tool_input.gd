@@ -123,31 +123,41 @@ func test_the_brush_runs_each_tool_s_own_mode_and_keeps_it() -> void:
 	assert_eq(brush.tool, ToolRegistry.find(SculptTool.ID), "a tool with no mode is ignored")
 
 
-func test_thin_ring_is_the_occlusion_fade_focus() -> void:
+func test_thin_ring_is_the_canopy_brush_window() -> void:
 	var brush := BrushTool.new()
 	add_child_autofree(brush)
-	var fade := OcclusionFadeManager.new()
-	add_child_autofree(fade)
-	brush.occlusion_fade = fade
 	var thin := ToolRegistry.find(ThinTool.ID)
 	brush.use_tool(thin)
 	brush.activate()
 	brush.hit = Vector3(3.0, 0.5, -2.0)
 	brush._update_fade()
 	var radius := BrushTool.session_radius * BrushTool.FADE_RADIUS_FACTOR
-	assert_eq(fade._focus, Vector4(3.0, 0.5, -2.0, radius), "ring centre, widened radius")
+	assert_eq(
+		CanopyFade.brush_asked(), Vector4(3.0, 0.5, -2.0, radius), "ring centre, widened radius"
+	)
 	brush.use_tool(ToolRegistry.find(BiomeTool.ID))
 	brush._update_fade()
-	assert_eq(fade._focus, Vector4.ZERO, "the Biome brush does not fade the canopy")
+	assert_eq(CanopyFade.brush_asked(), Vector4.ZERO, "the Biome brush does not fade the canopy")
 	brush.use_tool(thin)
 	brush._update_fade()
 	brush.hit = Vector3.INF
 	brush._update_fade()
-	assert_eq(fade._focus, Vector4.ZERO, "no ground under the pointer")
+	assert_eq(CanopyFade.brush_asked(), Vector4.ZERO, "no ground under the pointer")
 	brush.hit = Vector3.ZERO
+	brush.fade_held_only = true
+	brush._update_fade()
+	assert_eq(CanopyFade.brush_asked(), Vector4.ZERO, "the play brush: not before a press")
+	brush.pressed = true
+	brush._update_fade()
+	assert_gt(CanopyFade.brush_asked().w, 0.0, "the play brush: while the press is held")
+	brush.pressed = false
+	brush._update_fade()
+	assert_eq(CanopyFade.brush_asked(), Vector4.ZERO, "and closing once it is let go")
+	brush.fade_held_only = false
 	brush._update_fade()
 	brush.deactivate()
-	assert_eq(fade._focus, Vector4.ZERO, "putting the brush down clears it")
+	assert_eq(CanopyFade.brush_asked(), Vector4.ZERO, "putting the brush down clears it")
+	CanopyFade.step_brush(1.0)
 
 
 func test_radius_steps_are_multiplicative_and_clamped() -> void:

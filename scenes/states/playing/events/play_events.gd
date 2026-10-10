@@ -15,13 +15,22 @@ extends Node
 ## Picking a brush's tile arms it on the board; its tile again, Esc or a right click puts it
 ## away (the pane keeps showing its controls). A brush with nothing to work with yet (Biome
 ## before a biome is picked) is picked but not armed. While it is out its keys lead the hint
-## bar (InputHints tool layer), Ctrl+Z and Ctrl+Y undo and redo the GM's live edits (GameMap
-## leaves Ctrl+Z to it), and an edit that changes a lot at once (is_large) offers Undo in a
-## toast (UI_TASTE I4). The drawer may close with the brush still out, as authoring's does;
-## the Events rail item stays tinted meanwhile (armed_changed).
+## bar (InputHints tool layer), the last of them naming it (Esc, Put away Sculpt), Ctrl+Z and
+## Ctrl+Y undo and redo the GM's live edits (GameMap leaves Ctrl+Z to it), and an edit that
+## changes a lot at once (is_large) offers Undo in a toast (UI_TASTE I4).
+##
+## The board is the GM's while they work (UI_TASTE G11): the drawer stays open while a brush
+## and its settings are picked, and the first press on the board sends it aside
+## (stroke_started; GameplayMenuController closes it, keeping any look changes), so no ring
+## works on ground under the glass. The brush stays out, named in the hint bar, and the
+## Events rail item stays tinted (armed_changed); the item opens the pane again to change it.
+## The canopy over the ring opens only while a press is held (BrushTool.fade_held_only), so
+## the GM sees the result whole once they let go.
 
 ## The brush was armed with tool `tool_id`, or put away (&"").
 signal armed_changed(tool_id: StringName)
+## A press on the board started a stroke of the armed brush.
+signal stroke_started
 
 ## The F1 help row for the pane (HelpOverlay's Tools section).
 const HELP_KEYS := "Events (GM)"
@@ -38,8 +47,15 @@ const WHOLE_FEATURE_METHODS: Array[StringName] = [&"apply_edit", &"apply_list"]
 const NOT_GM := "Only the GM can change the map during play."
 const NOT_HOST := "Only the host can change the map during play."
 const NOT_READY := "The map is still being set out; its brushes are ready in a moment."
-const UNDO_TOAST := "%s: everyone at the table sees it."
+## A large edit's toast: its label in the past tense (done_phrase), "Cleared for everyone at
+## the table".
+const UNDO_TOAST := "%s for everyone at the table"
 const NEWER_EDITS := "Newer changes stand on that one: undo them first with Ctrl+Z."
+## The size key every brush shows in the same slot, before Undo (BrushTool: [ and ] step the
+## size; Shift+scroll does too, but Shift is Sculpt's Smooth).
+const SIZE_KEY := "[ ]"
+## Past tenses an edit label's first word does not take by adding "d" or "ed".
+const IRREGULAR_PAST := {"Thin": "Thinned", "Cut": "Cut", "Lay": "Laid"}
 
 ## The pane this controls (set by setup()).
 var pane: EventsPane = null
@@ -75,37 +91,57 @@ static func is_large(entry: Dictionary) -> bool:
 	return int(entry.get("bytes", 0)) >= LARGE_EDIT_BYTES
 
 
-## The hint bar's keys while `tool_id` is out (at most five, so the row keeps one line at 720p
-## with Help beside it); `sculpt_tile` names the Sculpt drag, `water_shape` the Water drag.
+## The hint bar's keys while `tool_id` is out: its gestures, then in the same three slots for
+## every brush its size key (SIZE_KEY), Undo, and Esc naming the brush it puts away (at most
+## five, so with Help beside them the row keeps one line at 720p with the drawer open);
+## `sculpt_tile` names the Sculpt drag, `water_shape` the Water drag.
 static func hints_for(
 	tool_id: StringName, sculpt_tile: int = HeightBrush.RAISE, water_shape: int = 0
 ) -> Array[Dictionary]:
 	var rows: Array = []
+	var size := "Size"
 	match tool_id:
 		BiomeTool.ID:
-			rows = [["Left-drag", "Paint biome"], ["Shift+scroll", "Size"]]
+			rows = [["Left-drag", "Paint biome"]]
 		ThinTool.ID:
-			rows = [["Left-drag", "Thin"], ["Ctrl+left-drag", "Clear"], ["Shift+scroll", "Size"]]
+			rows = [["Left-drag", "Thin"], ["Ctrl+left-drag", "Clear"]]
 		SculptTool.ID:
 			var tile_label := "Shape"
 			for tile in AuthoringPanel.SCULPT_TILES:
 				if int(tile.op) == sculpt_tile:
 					tile_label = String(tile.label)
-			rows = [["Left-drag", tile_label], ["Ctrl+left-drag", "Lower"], ["Shift+left-drag", "Smooth"]]
+			# Shift smooths too, but a sixth key wraps the row beside the drawer at 720p: the
+			# pane's gesture line and its Smooth tile carry it.
+			rows = [["Left-drag", tile_label], ["Ctrl+left-drag", "Lower"]]
 		PaintTool.ID:
-			rows = [
-				["Left-drag", "Lay surface"], ["Ctrl+left-drag", "Erase paint"], ["Shift+scroll", "Size"]
-			]
+			rows = [["Left-drag", "Lay surface"], ["Ctrl+left-drag", "Erase paint"]]
 		WaterTool.ID:
 			var drag := "Paint pond" if water_shape == WaterBrush.Shape.POND else "Draw river"
-			rows = [["Left-drag", drag], ["Ctrl+left-drag", "Erase water"], ["Shift+scroll", "Width"]]
+			rows = [["Left-drag", drag], ["Ctrl+left-drag", "Erase water"]]
+			size = "Width"
 		BridgeTool.ID:
-			rows = [["Left-drag", "Lay a crossing"], ["Ctrl+click", "Remove one"], ["Shift+scroll", "Width"]]
-	rows.append_array([["Ctrl+Z", "Undo"], ["Esc", "Put away"]])
+			rows = [["Left-drag", "Lay a crossing"], ["Ctrl+click", "Remove one"]]
+			size = "Width"
+	var tool := ToolRegistry.find(tool_id)
+	var put_away := "Put away " + tool.label if tool != null else "Put away"
+	rows.append_array([[SIZE_KEY, size], ["Ctrl+Z", "Undo"], ["Esc", put_away]])
 	var hints: Array[Dictionary] = []
 	for row: Array in rows:
 		hints.append({"key": row[0], "action": row[1]})
 	return hints
+
+
+## History label `label` in the past tense, for the large-edit toast: its first word's past
+## ("Clear" -> "Cleared", "Carve river" -> "Carved river", "Thin" -> "Thinned"). Pure.
+static func done_phrase(label: String) -> String:
+	if label == "":
+		return "Changed"
+	var words := label.split(" ", false, 1)
+	var verb := words[0]
+	var past: String = IRREGULAR_PAST.get(verb, "")
+	if past == "":
+		past = verb + ("d" if verb.ends_with("e") else "ed")
+	return past if words.size() == 1 else past + " " + words[1]
 
 
 ## Wires the controller to the table's LevelPlayController and to `events_pane`.
@@ -183,12 +219,17 @@ func pick(tool_id: StringName) -> void:
 	var brush := _wired_brush()
 	brush.use_tool(tool)
 	picked = tool_id
+	if tool_id == PaintTool.ID and PaintTool.of(brush).surface == "":
+		# The pane's Paint tiles open on a picked surface (as authoring's do): that one.
+		pane.ensure_paint_tiles()
+		PaintTool.of(brush).surface = pane.paint_surface()
 	if not _has_work(tool_id):
 		brush.deactivate()
 		_set_armed(&"")
 		refresh()
 		return
 	_prepare(tool_id)
+	brush.fade_held_only = true
 	brush.activate()
 	_set_armed(tool_id)
 	refresh()
@@ -196,30 +237,35 @@ func pick(tool_id: StringName) -> void:
 
 ## Puts the brush away (the pane keeps the picked brush's controls).
 func put_away() -> void:
-	if _brush != null and _brush.is_active():
-		_brush.deactivate()
+	if _brush != null:
+		if _brush.is_active():
+			_brush.deactivate()
+		# GameMap's brush is authoring's too: its canopy follows the cursor there.
+		_brush.fade_held_only = false
 	_set_armed(&"")
 	refresh()
 
 
 ## Undoes the GM's newest live edit (a gesture in progress is finished first, a water edit
-## still computing lands first), with a toast naming it. Returns its label, or "".
+## still computing lands first), with a toast naming it ("Raise undone"). Returns its label,
+## or "".
 func undo() -> String:
 	if not _finish_for_history():
 		return ""
 	var label := _edits.history.undo()
 	if label != "":
-		UIManager.show_info("Undone: %s" % label)
+		UIManager.show_info("%s undone" % label)
 	return label
 
 
-## Redoes the GM's newest undone live edit, with a toast naming it. Returns its label, or "".
+## Redoes the GM's newest undone live edit, with a toast naming it ("Raise redone"). Returns
+## its label, or "".
 func redo() -> String:
 	if not _finish_for_history():
 		return ""
 	var label := _edits.history.redo()
 	if label != "":
-		UIManager.show_info("Redone: %s" % label)
+		UIManager.show_info("%s redone" % label)
 	return label
 
 
@@ -257,6 +303,11 @@ func _wired_brush() -> BrushTool:
 		)
 		_brush.radius_changed.connect(
 			func(radius: float) -> void: pane.set_brush_values(radius, _brush.get_flow())
+		)
+		_brush.gesture_started.connect(
+			func() -> void:
+				if armed != &"":
+					stroke_started.emit()
 		)
 	var edits := _lpc.live_edits
 	if edits != _edits:
@@ -376,6 +427,7 @@ func _pick_again(tool_id: StringName) -> void:
 
 func _on_brush_toggled(active: bool) -> void:
 	if not active and armed != &"":
+		_brush.fade_held_only = false
 		_set_armed(&"")
 		refresh()
 
@@ -384,7 +436,9 @@ func _on_brush_toggled(active: bool) -> void:
 func _on_recorded(entry: Dictionary) -> void:
 	if not is_large(entry):
 		return
-	UIManager.show_undo_toast(UNDO_TOAST % String(entry.get("label", "")), _undo_entry.bind(entry))
+	UIManager.show_undo_toast(
+		UNDO_TOAST % done_phrase(String(entry.get("label", ""))), _undo_entry.bind(entry)
+	)
 
 
 func _undo_entry(entry: Dictionary) -> void:

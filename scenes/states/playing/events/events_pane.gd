@@ -8,9 +8,11 @@ extends VBoxContainer
 ## Bridge). PlayEvents arms and puts away the brush and tells the pane what to show; the pane
 ## owns no map state.
 ##
-## Layout, top down: the header and one caption saying what the pane does, a notice line for
-## a map that takes no live edits (a Blender map without a document, LiveEdits.refusal), the
-## Brushes tiles, then the picked brush's own controls, built from the authoring panes'
+## Layout, top down: the header (its subtitle says what the pane does; how to work and undo
+## is the picked brush's gesture line and the hint bar's, so no intro repeats them), a
+## notice line for a map that takes no live edits (a Blender map without a document,
+## LiveEdits.refusal), the Brushes tiles, then the picked brush's own controls, built from
+## the authoring panes'
 ## parts: the Sculpt tiles (AuthoringPanel.SCULPT_TILES), the palette biome and surface tiles
 ## (thumbnails and labels as AuthoringPanel draws them), WaterToolPane and BridgeToolPane as
 ## they are (their own headers hidden: the tile above names the brush), and one Advanced
@@ -34,20 +36,24 @@ signal brush_strength_changed(flow: float)
 
 const TITLE := "Events"
 const SUMMARY := "Change the map for everyone at the table."
-const HINT := (
-	"Pick a brush and work on the board. Everyone sees each change as it lands; Ctrl+Z"
-	+ " takes it back."
-)
 const TOOL_TILE_SIZE := Vector2(64, 56)
 const TOOL_COLUMNS := 3
 const BIOME_COLUMNS := 3
-## Each brush's gesture line (Water and Bridge carry their panes' own).
+## Each brush's gesture line. Water and Bridge show theirs in place of their authoring panes'
+## paragraph, which repeats the hint bar's keys at length.
 const TOOL_HINTS := {
 	BiomeTool.ID: "Pick a biome, then drag on the board; linger to thicken it.",
 	ThinTool.ID: "Drag to thin trees and plants out; hold Ctrl as you press to clear the ground.",
 	SculptTool.ID:
 	"Drag to shape the ground; linger to build. Hold Ctrl as you press to lower, Shift to smooth.",
 	PaintTool.ID: "Pick a surface, then drag on the board. Hold Ctrl as you press to erase paint.",
+	WaterTool.ID:
+	(
+		"Draw a river from where the water comes to where it goes, or paint a pond."
+		+ " Hold Ctrl as you press to erase water."
+	),
+	BridgeTool.ID:
+	"Drag a line across a river or pond, bank to bank. Hold Ctrl and click a crossing to remove it.",
 }
 
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
@@ -79,7 +85,6 @@ func _ready() -> void:
 	header.name = "EventsHeader"
 	header.setup(TITLE, SUMMARY)
 	add_child(header)
-	add_child(_caption("EventsHint", HINT))
 	notice = _caption("EventsNotice", "")
 	notice.visible = false
 	add_child(notice)
@@ -207,6 +212,7 @@ func _build_tool_options(tool_id: StringName) -> Control:
 		WaterTool.ID:
 			water_pane = WaterToolPane.new()
 			water_pane.get_node("WaterHeader").visible = false
+			(water_pane.get_node("WaterHint") as Label).text = String(TOOL_HINTS[tool_id])
 			water_pane.shape_selected.connect(water_shape_selected.emit)
 			water_pane.depth_selected.connect(water_depth_selected.emit)
 			water_pane.speed_changed.connect(water_speed_changed.emit)
@@ -217,6 +223,7 @@ func _build_tool_options(tool_id: StringName) -> Control:
 		BridgeTool.ID:
 			bridge_pane = BridgeToolPane.new()
 			bridge_pane.get_node("BridgeHeader").visible = false
+			(bridge_pane.get_node("BridgeHint") as Label).text = String(TOOL_HINTS[tool_id])
 			bridge_pane.kind_selected.connect(bridge_kind_selected.emit)
 			return bridge_pane
 	var box := VBoxContainer.new()
