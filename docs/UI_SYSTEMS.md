@@ -415,25 +415,32 @@ See [THEME_GUIDE.md's UI Primitives](THEME_GUIDE.md#ui-primitives) and
 ## Title Hub
 
 `TitleScreen` (`scenes/states/title_screen/title_screen.gd`) is the app's entry screen. It has two
-zones: a left column of actions and a right zone showing the player's saved levels as cards, with
-the d20 sub-viewport as a dimmed backdrop behind both.
+zones: a left column of actions and a right zone showing the player's saved levels as cards, over
+the sky backdrop. The d20 sub-viewport turns there only while the library is empty: behind the
+card grid its flat orange showed through the gutters, so it is hidden and not rendered while
+the grid holds a card.
 
 ### Left Column
 
 Built by `_build_left_column()`. **Host game** and **Join game** are tall primary actions
 (`UiActions.primary()`: icon, bold label, caption underneath); below a separator, **Play solo**,
-**Set up tokens**, **New map**, **Avatars**, and **Settings** and **Quit** side by side on the
-last row are compact secondary actions (`UiActions.secondary()`). The two map actions name what
+**Set up tokens**, **New map**, **Avatars**, and **Settings** and **Quit game** side by side on
+the last row are compact secondary actions (`UiActions.secondary()`); Quit game has the pause
+menu's words and icon (`TitleScreen.QUIT`, `QUIT_ICON`). The two map actions name what
 differs: Set up tokens is the Level Editor by what it does (starting tokens, the map's details
-and its Blender file) and opens it on the selected map, captioned "on <name>" (with none
+and its Blender file), with its own icon (a chess pawn, `SET_UP_TOKENS_ICON`; the wand is the
+Events rail item's and Surprise me's), and opens it on the selected map, captioned with its
+name (with none
 selected it opens on a new map, the way to bring in a Blender map); New map carries the caption
 "Pick a landform, then paint it" and emits `build_map_requested`, which Root turns into the
 new-map dialog and then [authoring mode](#authoring-mode). A card's overflow menu and the pause
 menu use the same name, Set up tokens (`TitleScreen.SET_UP_TOKENS`), and so does the editor's
 own header. Avatars opens the [avatar roster](#avatar-library).
-Host game and Play solo are disabled until a card is selected; once one is, their captions name it
-("with <name>" for Host, the map's name for Play solo). "Your maps" carries its count as a bare
-number beside the heading.
+Host game ("Open a room and invite players") and Play solo are disabled until a card is
+selected; once one is, the three map actions name it one way, the bare name leading the line
+under the button: "<name> goes on the shelf" under Host (Host opens a room; the map is what
+goes on its shelf), the name alone under Play solo and Set up tokens. "Your maps" carries its
+count as a bare number beside the heading.
 
 ### Right Zone
 
@@ -920,10 +927,16 @@ view itself, with one piece of chrome: the `AuthoringPanel` rail on the left edg
 
 `NewMapDialog` (`new_map_dialog.gd` / `.tscn`, an `AnimatedCanvasLayerPanel` on
 `LAYER_DIALOG`) is the only question before a new map: a `MenuHeader` ("New map", closable),
-a Size `TileField` (100 / 150 / 200 ft, 20 / 30 / 40 squares in the tooltips), a Start from
-`TileField` of the palette biomes' thumbnails plus Bare ground (the bare surface's albedo),
-three columns, `photo_icons` so pictures draw untinted at their size, and a caption naming
-the ground the choice implies ("Ground: forest floor"). Under it a Landform `TileField`
+a Size `TileField` (100 / 150 / 200 ft as words alone on 40 px tiles, 20 / 30 / 40 squares
+in the tooltips), a Start from `TileField` of the palette biomes' pictures plus Bare ground
+(the bare surface's albedo), three columns, `photo_icons` so pictures draw untinted at their
+size, with the ground the choice implies ("Ground: forest floor") at the end of its caption
+line (`TileField.show_note`). A biome's picture is `BiomeThumbnail.of()`: the palette's grey
+studio render with the grey keyed out over a small painted landscape (the backdrop's morning
+sky, a hazy far ridge the biome's id draws, the biome's own ground surface lifted luminous,
+the contact shadows kept as shade); the authoring drawer's Biome tiles and Place foldouts use
+it too. On the 1280x720 canvas (150% on 1080p) all three fields show without scrolling
+(`test_interface_size_fit`). Under it a Landform `TileField`
 (P5-3): one glyph tile per `StartingLandform.KINDS` entry, in that order and all on one row
 (`columns` = the kind count), tile ids `landform_<kind>`, labels from `StartingLandform.NAMES`,
 icons `assets/icons/ui/landform-<kind>.svg`, and a caption under the row that is the chosen

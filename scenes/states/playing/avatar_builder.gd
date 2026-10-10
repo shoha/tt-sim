@@ -42,6 +42,11 @@ signal cancelled
 signal library_saved(entry: Dictionary)
 
 const SCENE_PATH := "res://scenes/states/playing/avatar_builder.tscn"
+## What the builder does, in one wording: its header's subtitle, the Add token browser's
+## caption under Make an avatar and the roster's Make an avatar card.
+const SUBTITLE := "Pick a pose, a face, colours and a shape; the figure follows every pick."
+## The confirm when the avatar goes straight onto the board (W5: the table, not the board).
+const PLACE_LABEL := "Place on the table"
 ## The token meta naming the library avatar a placed avatar came from (local only).
 const LIBRARY_META := &"avatar_library_id"
 ## Rail items: id, icon, label. "parts" shows only when a slot has a choice.
@@ -262,11 +267,7 @@ func _on_panel_ready() -> void:
 	var header := MenuHeader.new()
 	header.name = "Header"
 	header_slot.add_child(header)
-	header.setup(
-		"Edit avatar" if editing else "Make an avatar",
-		"Click a pose, a face and colours; the figure follows every pick",
-		true
-	)
+	header.setup("Edit avatar" if editing else "Make an avatar", SUBTITLE, true)
 	header.close_requested.connect(cancel)
 	name_input.text = token_name
 	name_input.text_changed.connect(_on_name_changed)
@@ -274,7 +275,7 @@ func _on_panel_ready() -> void:
 	surprise_button.icon = IconButton.load_icon("wand")
 	surprise_button.pressed.connect(surprise)
 	cancel_button.pressed.connect(cancel)
-	confirm_button.text = "Save" if token != null or library_mode else "Add to board"
+	confirm_button.text = "Save" if token != null or library_mode else PLACE_LABEL
 	confirm_button.pressed.connect(confirm)
 	confirm_button.disabled = _kit == null
 	if not library_mode:

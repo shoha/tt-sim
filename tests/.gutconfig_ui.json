@@ -9,6 +9,7 @@
 		"res://tests/unit/test_asset_pack_tab_icons.gd",
 		"res://tests/unit/test_audio_manager.gd",
 		"res://tests/unit/test_avatar_drag_place.gd",
+		"res://tests/unit/test_biome_thumbnail.gd",
 		"res://tests/unit/test_color_pane.gd",
 		"res://tests/unit/test_confirmation_dialog_variants.gd",
 		"res://tests/unit/test_drawer_container.gd",

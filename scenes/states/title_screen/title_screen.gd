@@ -4,12 +4,15 @@ extends CanvasLayer
 ## Title hub. Host and Join lead; the saved levels sit beside them as cards and
 ## the selected card is the level a host starts with (or Play Solo opens). Avatars opens
 ## the player's saved avatars (AvatarRoster).
-## The d20 sub-viewport stays over a sky-coloured backdrop.
+## The d20 sub-viewport turns over the sky-coloured backdrop only while there are no maps:
+## behind the card grid its flat orange showed through the gutters as a warm smear, so it
+## is hidden (and not rendered) while the grid holds a card, until painted backdrops land.
 ##
-## The lower stack names what each action works on: Play solo and Set up tokens act on the
-## selected map (their captions name it, as Host's does), New map starts one from nothing.
-## Set up tokens is the Level Editor by what it does (starting tokens, the map's details and
-## its Blender file; W5 keeps "level" internal); with no map selected it opens on a new one.
+## Host opens a room, and the selected map is what goes on its shelf; Play solo and Set up
+## tokens act on that map, and all three name it the same way, the bare name leading the line
+## under the button. New map starts one from nothing. Set up tokens is the Level Editor by
+## what it does (starting tokens, the map's details and its Blender file; W5 keeps "level"
+## internal); with no map selected it opens on a new one.
 
 signal host_game_requested(level_info: Dictionary)
 signal join_game_requested
@@ -24,6 +27,15 @@ const ENTRANCE_STAGGER := Constants.ANIM_ENTRANCE_STAGGER
 const ENTRANCE_DURATION := Constants.ANIM_ENTRANCE
 ## The Level Editor's player-facing name, here, on a card's menu and in the pause menu.
 const SET_UP_TOKENS := "Set up tokens"
+## A token on its square, its own icon: the wand stays with the Events rail item and Surprise
+## me, where it means a little magic, not an editor.
+const SET_UP_TOKENS_ICON := "chess"
+## Quitting the game, in the same words and icon here and in the pause menu.
+const QUIT := "Quit game"
+const QUIT_ICON := "logout"
+const HOST_CAPTION := "Open a room and invite players"
+## The line under Host once a map is selected: what Host does with it.
+const HOST_MAP_LINE := "%s goes on the shelf"
 const NEW_MAP_CAPTION := "Pick a landform, then paint it"
 const EMPTY_CAPTION := (
 	"No maps yet. Start a new map, or open Set up tokens to bring one in from Blender"
@@ -71,6 +83,7 @@ var _row_gaps: Array[Control] = []
 @onready var _left: VBoxContainer = %LeftColumn
 @onready var _right: VBoxContainer = %RightZone
 @onready var _version_label: Label = %VersionLabel
+@onready var _die_view: SubViewportContainer = %SubViewportContainer
 
 
 func _ready() -> void:
@@ -157,9 +170,7 @@ func _build_left_column() -> void:
 	wordmark.theme_type_variation = &"Wordmark"
 	_left.add_child(wordmark)
 	_section_gaps.append(UiActions.spacer(0, _left))
-	host_button = UiActions.primary(
-		"Host game", "network", "Start a table and invite players", _left
-	)
+	host_button = UiActions.primary("Host game", "network", HOST_CAPTION, _left)
 	host_subtitle = UiActions.subtitle_of(host_button)
 	host_button.pressed.connect(_on_host_pressed)
 	# One persimmon fill per screen (C5): Host is the primary, Join stands beside it quietly.
@@ -175,7 +186,7 @@ func _build_left_column() -> void:
 	play_subtitle = UiActions.subtitle_of(play_button)
 	play_button.pressed.connect(_on_play_pressed)
 	# The Level Editor, by what it does to the selected map (W5: "level" stays internal).
-	editor_button = _stacked(SET_UP_TOKENS, "wand")
+	editor_button = _stacked(SET_UP_TOKENS, SET_UP_TOKENS_ICON)
 	editor_button.tooltip_text = "Starting tokens, details and the map file of the selected map"
 	editor_subtitle = UiActions.subtitle_of(editor_button)
 	editor_button.pressed.connect(_on_editor_pressed)
@@ -196,7 +207,7 @@ func _build_left_column() -> void:
 	_left.add_child(last_row)
 	settings_button = UiActions.secondary("Settings", "settings", last_row)
 	settings_button.pressed.connect(_on_settings_pressed)
-	quit_button = UiActions.secondary("Quit", "x", last_row)
+	quit_button = UiActions.secondary(QUIT, QUIT_ICON, last_row)
 	quit_button.pressed.connect(_on_quit_pressed)
 	for button in [settings_button, quit_button]:
 		(button as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -269,11 +280,21 @@ func _refresh_actions() -> void:
 	play_subtitle.visible = has_level
 	editor_subtitle.visible = has_level
 	var name := String(info.get("name", ""))
-	host_subtitle.text = "with %s" % name if has_level else ""
+	host_subtitle.text = HOST_MAP_LINE % name if has_level else ""
 	play_subtitle.text = name
-	editor_subtitle.text = "on %s" % name if has_level else ""
+	editor_subtitle.text = name
+	_show_die(count == 0)
 	# A caption shown or hidden changes the column's height and the gap after it.
 	_fit_to_canvas()
+
+
+## The d20 turns only over an empty library; behind the cards it stops rendering too.
+func _show_die(shown: bool) -> void:
+	_die_view.visible = shown
+	var view := _die_view.get_child(0) as SubViewport
+	view.render_target_update_mode = (
+		SubViewport.UPDATE_ALWAYS if shown else SubViewport.UPDATE_DISABLED
+	)
 
 
 ## The rows lift in one after another; the spacers between them are skipped (M4).

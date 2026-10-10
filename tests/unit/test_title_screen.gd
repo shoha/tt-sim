@@ -45,11 +45,33 @@ func test_most_recent_level_is_preselected_and_named_in_subtitles() -> void:
 	_levels = [_info("old", "Old Camp", 100), _info("new", "New Camp", 200)]
 	var title := _title()
 	assert_eq(title.selected_level()["name"], "New Camp")
-	assert_eq(title.host_subtitle.text, "with New Camp")
+	# Host opens a room with the map on its shelf; all three name it the same way.
+	assert_eq(title.host_subtitle.text, "New Camp goes on the shelf")
 	assert_eq(title.play_subtitle.text, "New Camp")
-	assert_eq(title.editor_subtitle.text, "on New Camp")
+	assert_eq(title.editor_subtitle.text, "New Camp")
 	assert_eq(title.heading_count.text, "2")
 	assert_false(title.host_button.disabled)
+
+
+## Quit reads as the pause menu's, and Set up tokens has an icon of its own.
+func test_quit_and_set_up_tokens_match_the_pause_menu() -> void:
+	_levels = [_info("new", "New Camp", 200)]
+	var title := _title()
+	assert_eq(title.quit_button.text, TitleScreen.QUIT)
+	assert_eq(title.quit_button.icon, IconButton.load_icon(TitleScreen.QUIT_ICON))
+	assert_eq(title.editor_button.icon, IconButton.load_icon(TitleScreen.SET_UP_TOKENS_ICON))
+	assert_ne(title.editor_button.icon, IconButton.load_icon("wand"))
+
+
+## The d20 turns only over an empty library: behind the cards it showed through the gutters.
+func test_the_die_hides_behind_the_cards() -> void:
+	_levels = [_info("new", "New Camp", 200)]
+	var title := _title()
+	var die := title.get_node("SubViewportContainer") as Control
+	assert_false(die.visible, "hidden while the grid holds a card")
+	title.grid.provider = func() -> Array: return []
+	title.grid.refresh()
+	assert_true(die.visible, "shown over an empty library")
 
 
 ## The two map actions name what differs: Set up tokens acts on the selected map, New map
@@ -75,7 +97,7 @@ func test_selection_changes_subtitles_and_signals_carry_it() -> void:
 	var title := _title()
 	watch_signals(title)
 	title.grid._cards[0]._on_pressed()
-	assert_eq(title.host_subtitle.text, "with Old Camp")
+	assert_eq(title.host_subtitle.text, "Old Camp goes on the shelf")
 	title._on_host_pressed()
 	assert_signal_emitted_with_parameters(title, "host_game_requested", [_levels[0]])
 	title._on_play_pressed()

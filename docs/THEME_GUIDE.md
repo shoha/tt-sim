@@ -30,15 +30,15 @@ and each theme maps them to its own token (`PAPER_ROLES`, `GLASS_ROLES`):
 
 | Role | Paper | Glass | Use |
 |---|---|---|---|
-| `SURFACE`, `SURFACE_RAISED`, `SURFACE_INSET` | paper, raised, inset | glass, glass raised | sheets, secondary buttons, fields and tracks |
+| `SURFACE`, `SURFACE_RAISED`, `SURFACE_INSET` | paper, raised, inset | glass (plum `#251B35` at 0.90: at 0.86 and lower chroma a green board pulled it to neutral charcoal), glass raised | sheets, secondary buttons, fields and tracks |
 | `SURFACE_HOVER`, `SURFACE_PRESS` | deeper paper steps | deeper glass steps | hover and press washes (only ever deeper) |
 | `TEXT`, `TEXT_SOFT` | ink, ink_soft | chalk, chalk_soft | text and captions (solid, never dimmed) |
-| `ACCENT` (+ `_HOVER`, `_PRESS`), `ON_ACCENT` | persimmon, paper text | ember, ink text | the one primary fill per screen, the unsaved dot |
+| `ACCENT` (+ `_HOVER`, `_PRESS`), `ON_ACCENT` | persimmon, paper text | ember_fill (one OKLCH step under ember: ember outshone a dusk board), ink text | the one primary fill per screen, the unsaved dot |
 | `STATE` (+ steps), `ON_STATE` | lake, paper text | lake_light, ink text | on-states, checks and switches, rail indicator, a changed value; on glass the text and lines of state |
 | `SELECTED` (+ `_HOVER`), `ON_SELECTED` | lake, paper text | lake, chalk text | a selected tile or list row (glass adds a lake_light ring: a lake_light fill outshone the board) |
 | `FOCUS` | lake (about 6:1 on paper) | lake_light | the keyboard focus ring: a state, never a control's fill hue |
 | `SUCCESS`, `WARNING`, `DANGER`, `DANGER_FILL` | moss, ochre, madder | light variants; madder fill | text and icons; madder fills only a danger confirm |
-| `TRACK` | pencil pressed hard `#978160` | `#958DA0` | an unfilled slider or switch track, 3:1 on every surface |
+| `TRACK` | lavender graphite `#887A8E` (tan pressed this dark read as muddy khaki) | `#958DA0` | an unfilled slider or switch track, 3:1 on every surface |
 | `EDGE`, `SHADOW`, `BACKDROP` | pencil edge, ink 16%, sky | top rim, plum-black 25%, glass | decoration, shadows (ink-tinted, never brown or black), a solid backdrop |
 
 Prefer a theme variation (`Caption`, `BodyState`, `Primary` ...) over reading a role. Read a

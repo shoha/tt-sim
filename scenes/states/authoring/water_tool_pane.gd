@@ -58,7 +58,7 @@ const DEPTH_TILES: Array[Dictionary] = [
 ]
 const HINT := (
 	"River: draw its line from where the water comes to where it goes; over a steep drop it"
-	+ " falls by itself. Pond: paint an area; start inside a pond to grow it. Shift+wheel or"
+	+ " falls by itself. Pond: paint an area; start inside a pond to grow it. Shift + scroll or"
 	+ " [ and ] set the width. Hold Ctrl as you press to erase water; the ground stays carved"
 	+ " (Sculpt's Smooth fills a dry channel). Sculpting never makes or moves a waterfall:"
 	+ " erase the river and draw it again."

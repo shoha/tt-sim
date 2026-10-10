@@ -192,6 +192,7 @@ grow_vertical = 2
 color = Color(0.12156863, 0.12156863, 0.14901961, 1)
 
 [node name="SubViewportContainer" type="SubViewportContainer" parent="." unique_id=2114530362]
+unique_name_in_owner = true
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0

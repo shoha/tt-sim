@@ -3,9 +3,11 @@ extends AnimatedCanvasLayerPanel
 
 ## The one question before a new map opens in authoring mode: how big, what place to start
 ## from, and what shape. Three tile fields (size, starting biome from the palette thumbnails
-## plus Bare ground, landform from StartingLandform.KINDS) and nothing to type; the ground
-## surface follows from the biome and the landform's caption is named under its tiles, so
-## each choice explains itself. Create is the one primary action.
+## plus Bare ground, each on a painted backdrop by BiomeThumbnail, landform from
+## StartingLandform.KINDS) and nothing to type; the ground surface follows from the biome and
+## is named at the end of Start from's caption line, and the landform's caption is named under
+## its tiles, so each choice explains itself. Create is the one primary action. On the
+## smallest canvas (1280x720, 150% on 1080p) all three fields show without scrolling.
 ##
 ## Emits map_chosen({"size_ft", "biome_id", "landform", "seed"}) and closes; Cancel, the
 ## header's close button and Escape close without choosing. Root builds the map from the
@@ -33,7 +35,9 @@ const BARE_TILE := &"bare_ground"
 ## Preselected starting biome: a temperate forest reads as a place at once and suits most
 ## tabletop scenes. Falls back to the first palette biome, then to bare ground.
 const DEFAULT_BIOME := "temperate_forest_summer_s1"
-const SIZE_TILE_SIZE := Vector2(96, 56)
+## Size tiles are words alone at control height: one shared grid icon on all three said
+## nothing, and the 16 px it took kept the Landform row under the scroll fade at 150%.
+const SIZE_TILE_SIZE := Vector2(96, 40)
 const BIOME_TILE_SIZE := Vector2(96, 96)
 const BIOME_THUMB_PX := 64
 const BIOME_COLUMNS := 3
@@ -92,7 +96,7 @@ func _on_panel_ready() -> void:
 	size_field.tiles.columns = BIOME_COLUMNS
 	for feet in NewMap.SIZES_FT:
 		size_field.tiles.add_tile(
-			StringName("size_%d" % feet), "%d ft" % feet, "grid-dots", SIZE_HINTS.get(feet, "")
+			StringName("size_%d" % feet), "%d ft" % feet, "", SIZE_HINTS.get(feet, "")
 		)
 	size_field.tiles.select(StringName("size_%d" % _size_ft))
 	size_field.tiles.selection_changed.connect(_on_size_selected)
@@ -111,7 +115,7 @@ func _on_panel_ready() -> void:
 			AuthoringPanel.short_name(String(biome["name"])),
 			"",
 			String(biome["name"]),
-			SwatchTextures.palette_thumbnail(biome["thumbnail"], BIOME_THUMB_PX, palette_root)
+			BiomeThumbnail.of(biome, BIOME_THUMB_PX, palette_root)
 		)
 	var bare: Dictionary = PaletteLibrary.surfaces(palette_root).get(NewMap.BARE_SURFACE, {})
 	biome_field.tiles.add_tile(
@@ -125,11 +129,8 @@ func _on_panel_ready() -> void:
 	biome_field.tiles.select(_tile_for_biome(_biome_id))
 	biome_field.tiles.selection_changed.connect(_on_biome_selected)
 	_fields.add_child(biome_field)
-
-	ground_caption = Label.new()
-	ground_caption.name = "GroundCaption"
-	ground_caption.theme_type_variation = &"Caption"
-	_fields.add_child(ground_caption)
+	# The ground the biome starts on, at the end of Start from's own line.
+	ground_caption = biome_field.show_note("")
 	_refresh_ground_caption()
 
 	landform_field = TileField.new()

@@ -30,7 +30,8 @@ const CONFIRM_SCENE := preload("res://scenes/ui/confirmation_dialog.tscn")
 const TOASTS_SCENE := preload("res://scenes/ui/toast_container.tscn")
 const HELP_SCENE := preload("res://scenes/ui/help_overlay.tscn")
 const HINTS_SCENE := preload("res://scenes/ui/input_hints.tscn")
-## A saved level, so the title shows every caption it can (Host's "with ...", Play Solo's).
+## A saved level, so the title shows every caption it can (Host's "... goes on the shelf",
+## Play Solo's).
 const LEVEL := {
 	"path": "user://x/_fit_mossy/",
 	"folder": "_fit_mossy",
@@ -106,13 +107,13 @@ func test_title_column_fits_by_measurement() -> void:
 		var caption := _next_shown(title.host_button)
 		assert_almost_eq(_gap(title.host_button, caption), 4.0, SLACK_PX, "%s: caption" % what)
 		var subtitle := _next_shown(caption)
-		assert_eq(subtitle, title.host_subtitle, "%s: with Mossy Hollow under it" % what)
+		assert_eq(subtitle, title.host_subtitle, "%s: Mossy Hollow goes on the shelf" % what)
 		assert_almost_eq(_gap(subtitle, title.join_button), 12.0, SLACK_PX, "%s: Join" % what)
 		var play_caption := _next_shown(title.play_button)
 		assert_eq(play_caption, title.play_subtitle)
 		assert_almost_eq(_gap(play_caption, title.editor_button), 12.0, SLACK_PX, what)
 		var editor_caption := _next_shown(title.editor_button)
-		assert_eq(editor_caption, title.editor_subtitle, "%s: on Mossy Hollow" % what)
+		assert_eq(editor_caption, title.editor_subtitle, "%s: Mossy Hollow" % what)
 		assert_almost_eq(_gap(editor_caption, title.build_map_button), 12.0, SLACK_PX, what)
 		var new_map_caption := _next_shown(title.build_map_button)
 		assert_almost_eq(_gap(title.build_map_button, new_map_caption), 4.0, SLACK_PX, what)
@@ -161,16 +162,22 @@ func test_new_map_dialog_keeps_its_sheet_at_1080p() -> void:
 	assert_eq(dialog.biome_field.tiles.columns, NewMapDialog.BIOME_COLUMNS)
 
 
-## At 720p Auto (a 1371x771 canvas) the wide sheet shows every field without scrolling.
-func test_new_map_dialog_needs_no_scroll_at_720p_auto() -> void:
-	_host.size = Vector2i(1371, 771)
-	var dialog := NEW_MAP_SCENE.instantiate() as NewMapDialog
-	_host.add_child(dialog)
-	await _assert_fits("new map dialog at 720p Auto", dialog.create_button, Vector2(1371, 771))
-	var scroll := dialog.landform_field.get_parent().get_parent() as ScrollContainer
-	var fields := scroll.get_child(0) as Control
-	assert_almost_eq(_sheet(dialog).size.x, NewMapDialog.WIDE_SHEET_WIDTH, 0.5)
-	assert_almost_eq(scroll.size.y, fields.get_combined_minimum_size().y, SLACK_PX)
+## At 720p Auto (a 1371x771 canvas) and at 150% on 1080p (the smallest canvas, 1280x720) the
+## wide sheet shows every field without scrolling, the Landform row included.
+func test_new_map_dialog_needs_no_scroll_on_short_canvases() -> void:
+	for canvas in [CANVAS_720P_AUTO, Vector2i(CANVAS)]:
+		_host.size = canvas
+		var dialog := NEW_MAP_SCENE.instantiate() as NewMapDialog
+		_host.add_child(dialog)
+		var what := "new map dialog on %s" % str(canvas)
+		await _assert_fits(what, dialog.create_button, Vector2(canvas))
+		var scroll := dialog.landform_field.get_parent().get_parent() as ScrollContainer
+		var fields := scroll.get_child(0) as Control
+		assert_almost_eq(_sheet(dialog).size.x, NewMapDialog.WIDE_SHEET_WIDTH, 0.5)
+		var wanted := fields.get_combined_minimum_size().y
+		var shown := "%s: %.0f of %.0f" % [what, scroll.size.y, wanted]
+		assert_true(scroll.size.y >= wanted - SLACK_PX, shown)
+		dialog.free()
 
 
 ## On either sheet the three fields share one track: a size tile is a biome tile's width and

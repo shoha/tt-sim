@@ -305,7 +305,7 @@ func _build_biome_pane(tool: ToolDescriptor) -> Control:
 		_hint(
 			"BiomeHint",
 			(
-				"Pick a biome, then drag on the map. Linger to thicken it; Shift+wheel or"
+				"Pick a biome, then drag on the map. Linger to thicken it; Shift + scroll or"
 				+ " [ and ] size the brush; right-click puts it down."
 			)
 		)
@@ -323,7 +323,7 @@ func _build_biome_pane(tool: ToolDescriptor) -> Control:
 			short_name(String(biome["name"])),
 			"",
 			String(biome["name"]),
-			SwatchTextures.palette_thumbnail(biome["thumbnail"], BIOME_THUMB_PX, palette_root)
+			BiomeThumbnail.of(biome, BIOME_THUMB_PX, palette_root)
 		)
 	biome_field.tiles.selection_changed.connect(
 		func(id: StringName) -> void: biome_selected.emit(String(id))
@@ -371,7 +371,7 @@ func _build_place_pane(tool: ToolDescriptor) -> Control:
 			"PlaceHint",
 			(
 				"Pick one, then click the map. Drag while pressed to turn it. Over a placed one,"
-				+ " Shift+wheel resizes it and right-click or Delete removes it."
+				+ " Shift + scroll resizes it and right-click or Delete removes it."
 			)
 		)
 	)
@@ -383,7 +383,7 @@ func _build_place_pane(tool: ToolDescriptor) -> Control:
 		var foldout := Foldout.new()
 		foldout.name = "Place_" + biome_id.validate_node_name()
 		foldout.title = String(biome["name"])
-		foldout.icon = SwatchTextures.palette_thumbnail(biome["thumbnail"], 28, palette_root)
+		foldout.icon = BiomeThumbnail.of(biome, 28, palette_root)
 		var row := TileRow.new()
 		row.name = "PlaceTiles"
 		row.tile_min_size = PLACE_TILE_SIZE

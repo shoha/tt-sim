@@ -12,7 +12,9 @@ signal sun_changed(settings: SunSettings)
 signal aim_toggled(active: bool)
 
 ## [mode value, label, icon]
-const MODES := [["auto", "Auto", "wand"], ["on", "On", "sun"], ["off", "Off", "sun-off"]]
+const MODES := [
+	["auto", "Auto", "brightness-auto"], ["on", "On", "sun"], ["off", "Off", "sun-off"]
+]
 ## [tile id, label, icon]
 const SHADOW_TILES := [
 	["off", "Off", "circle-off"], ["hard", "Hard", "contrast"], ["soft", "Soft", "cloud"]
