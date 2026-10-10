@@ -54,6 +54,8 @@ var _menu_button: IconButton
 var _menu: PopupMenu
 var _rename: LineEdit
 var _tween: Tween
+## "Updated in Blender" on the picture, made the first time a map needs it.
+var _updated_chip: PanelContainer = null
 
 
 func _init() -> void:
@@ -187,6 +189,47 @@ func setup(info: Dictionary) -> void:
 		_placeholder.paint(
 			folder if folder != "" else _name.text, String(info.get("environment_preset", ""))
 		)
+	_show_updated(bool(info.get(LibraryFacts.UPDATED_KEY, false)))
+
+
+## "Updated in Blender" on the picture's corner while the map's source is newer than its copy.
+func _show_updated(on: bool) -> void:
+	if on and _updated_chip == null:
+		_updated_chip = state_chip(LibraryFacts.UPDATED, LibraryFacts.UPDATED_ICON)
+		_updated_chip.position = Vector2(6, 6)
+		_thumb.get_parent().add_child(_updated_chip)
+	if _updated_chip != null:
+		_updated_chip.visible = on
+
+
+## A state in words on a lake pill with its icon before them (StateChip): the library's
+## "Updated in Blender", on a card and in the detail strip's facts.
+static func state_chip(words: String, icon_name: String) -> PanelContainer:
+	var chip := PanelContainer.new()
+	chip.name = "StateChip"
+	chip.theme_type_variation = &"StateChip"
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var row := HBoxContainer.new()
+	row.theme_type_variation = &"BoxContainerTight"
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.add_child(row)
+	var mark := TextureRect.new()
+	mark.texture = IconButton.load_icon(icon_name)
+	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	mark.custom_minimum_size = Vector2(16, 16)
+	mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(mark)
+	var label := Label.new()
+	label.text = words
+	label.theme_type_variation = &"CaptionOnSelected"
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(label)
+	chip.theme_changed.connect(
+		func() -> void: mark.self_modulate = ThemeColors.of(chip, ThemeColors.ON_SELECTED)
+	)
+	return chip
 
 
 ## A name's initial (a portrait's letter): its first letter or digit, so "_camp" shows C,
@@ -206,8 +249,12 @@ func set_selected(on: bool) -> void:
 
 
 ## "1 token, edited 3 h ago"; "No tokens" alone when the level is empty and has
-## never been saved with a time.
+## never been saved with a time. A library entry (it carries "played_at") says the date the
+## library's order uses instead, as its detail strip does: "Played yesterday", "Edited 3 days
+## ago" (LibraryFacts.touched_text).
 static func caption_for(info: Dictionary, now_unix: int) -> String:
+	if info.has("played_at"):
+		return LibraryFacts.touched_text(info, now_unix)
 	var count := int(info.get("token_count", 0))
 	var tokens := "No tokens" if count == 0 else ("1 token" if count == 1 else "%d tokens" % count)
 	var modified := int(info.get("modified_at", 0))

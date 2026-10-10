@@ -6,16 +6,20 @@ extends CanvasLayer
 ## card (PlayTogetherCard: Host and Join as two sides of one question, the screen's one
 ## persimmon fill, C5) with Resume under it when saved sessions exist (ResumeEntry). Under the
 ## bar, the maps as a grid of cards (LevelGrid), the most recently played or edited first and
-## the Bundled maps last (LibraryFacts.ordered, LibraryPlays). The first card is New map
-## (NewMapCard: Generate and Import..., Advanced for size and seed); an empty library shows
-## only that card, larger and centred, captioned to make a first map or drop one in.
+## the Bundled maps last (LibraryFacts.ordered, LibraryPlays); each card's caption is the date
+## that order uses, and a Blender map whose source is newer says "Updated in Blender". The
+## first card is New map (NewMapCard: Generate and Import..., Advanced for size and seed in a
+## popover); with no map of the player's own that card stands alone, larger and centred, and
+## the Bundled maps are offered under it ("Or play one that comes with TTSim"), none selected.
 ##
-## Selecting a card opens its detail strip (MapDetailStrip) directly under its row: the map's
+## Selecting a card opens its detail strip (MapDetailStrip) directly under its row and under
+## the card, and scrolls the grid so the row and the whole strip are in view: the map's
 ## picture, its name, description and author edited in place, its source, size, tokens and
-## when it was last played, and Play (solo), Host with this map (a room with this map on its
-## shelf: the Host control beside what it acts on), Edit map and "..." (Set up tokens,
-## Duplicate, Delete, Reload from Blender). Accept on a card selects it first and plays it on
-## a second Accept; a double click plays.
+## when it was last played (and Reload from Blender when its source is newer), then Play
+## (solo), Host with this map (a room with this map on its shelf: the Host control beside
+## what it acts on), Edit map and "..." (Set up tokens, Duplicate, Replace map file...,
+## Delete). Accept on a card selects it first and plays it on a second Accept; a double click
+## plays.
 ##
 ## A Blender map comes in through Import..., or a .glb dropped anywhere on the library (a new
 ## map) or on a map's card (Replace for that map); LibraryImports shows the import check
@@ -65,6 +69,8 @@ var level_provider: Callable = LevelManager.get_saved_levels
 var plays_provider: Callable = LibraryPlays.all
 ## Returns the saved sessions (SessionFile.list()); tests and the UI tour inject a fake.
 var session_provider: Callable = SessionFile.list
+## Whether Blender wrote a level folder's source since its copy: func(folder) -> bool.
+var updated_provider: Callable = MapImport.is_updated_in_blender
 
 ## Host and Join, the top bar's right end and the screen's one fill.
 var play_together: PlayTogetherCard
@@ -227,23 +233,30 @@ func _build_library() -> void:
 	_stack.add_child(grid)
 
 
-## The library's maps in its order (LibraryFacts.ordered), each with when it was last played.
+## The library's maps in its order (LibraryFacts.ordered), each with when it was last played
+## and whether Blender has written its source since (LibraryFacts.UPDATED_KEY).
 func library() -> Array[Dictionary]:
-	return LibraryFacts.ordered(level_provider.call(), plays_provider.call())
+	var levels := LibraryFacts.ordered(level_provider.call(), plays_provider.call())
+	for info in levels:
+		var folder := String(info.get("folder", ""))
+		var source := LibraryFacts.source_of(info)
+		var blender := source == LibraryFacts.SOURCE_BLENDER or source == LibraryFacts.SOURCE_DRESSED
+		info[LibraryFacts.UPDATED_KEY] = folder != "" and blender and updated_provider.call(folder)
+	return levels
 
 
-## Selects the map at the head of the library (the most recently played or edited).
+## Selects the map at the head of the library (the most recently played or edited) when it is
+## the player's own; over Bundled maps alone nothing is selected (New map leads).
 func _preselect_most_recent() -> void:
 	var levels := LibraryFacts.ordered(grid.provider.call(), {})
-	if not levels.is_empty():
+	if not levels.is_empty() and not LibraryFacts.is_bundled(levels[0]):
 		grid.select(String(levels[0].get("path", "")))
 
 
-## The library's state: an empty one is New map alone, larger; the strip shows the selected
-## map; the backdrop takes its mood and land (morning with none).
+## The library's state: one with no map of the player's own is New map alone, larger; the
+## strip shows the selected map; the backdrop takes its mood and land (morning with none).
 func _refresh_actions() -> void:
-	var count := grid.card_count()
-	new_map_card.set_empty(count == 0)
+	new_map_card.set_empty(grid.own_card_count() == 0)
 	var info := grid.selected_info()
 	if not info.is_empty():
 		strip.show_map(info)
@@ -331,6 +344,8 @@ func _on_strip_action(info: Dictionary, action: StringName) -> void:
 			_open_editor(info)
 		MapDetailStrip.ACTION_RELOAD:
 			imports.reload(info)
+		MapDetailStrip.ACTION_REPLACE:
+			imports.pick_replace(info)
 		_:
 			grid.act(info, action)
 

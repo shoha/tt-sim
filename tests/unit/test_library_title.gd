@@ -96,13 +96,24 @@ func test_the_library_order_is_last_played_or_edited_with_bundled_last() -> void
 
 
 func test_facts_read_as_words() -> void:
-	assert_eq(LibraryFacts.size_text(Vector2(150.0, 98.4)), "150 x 100 ft")
+	assert_eq(LibraryFacts.size_text(Vector2(150.0, 98.4)), "150 × 100 ft")
 	assert_eq(LibraryFacts.size_text(Vector2.ZERO), "")
 	assert_eq(LibraryFacts.tokens_text(0), "No tokens")
 	assert_eq(LibraryFacts.tokens_text(1), "1 token")
 	assert_eq(LibraryFacts.played_text(0, 1000), LibraryFacts.NEVER_PLAYED)
 	var now := 1_760_000_000
 	assert_eq(LibraryFacts.played_text(now - 3 * 86400, now), "Played 3 days ago")
+
+
+## A library card says the date its order uses: the later of played and edited.
+func test_a_card_caption_is_the_date_the_order_uses() -> void:
+	var now := 1_760_000_000
+	var played := {"played_at": now - 30 * 3600, "modified_at": now - 5 * 86400}
+	assert_eq(LibraryFacts.touched_text(played, now), "Played yesterday")
+	var edited := {"played_at": now - 9 * 86400, "modified_at": now - 3 * 86400}
+	assert_eq(LibraryFacts.touched_text(edited, now), "Edited 3 days ago")
+	assert_eq(LevelCard.caption_for(edited, now), "Edited 3 days ago", "a library entry")
+	assert_eq(LevelCard.caption_for({"token_count": 1}, now), "1 token", "a picker's card")
 
 
 func test_a_made_maps_size_is_read_from_its_manifest() -> void:
@@ -113,11 +124,11 @@ func test_a_made_maps_size_is_read_from_its_manifest() -> void:
 	DirAccess.make_dir_recursive_absolute(_root + "levels/made/")
 	assert_eq(MapDocumentIO.write(doc, path), OK)
 	var feet := LibraryFacts.footprint_ft(_info("made", "", "map.ttmap"))
-	assert_eq(LibraryFacts.size_text(feet), "150 x 100 ft")
+	assert_eq(LibraryFacts.size_text(feet), "150 × 100 ft")
 	var glb := _source(Vector2(30.48, 15.24))
 	var imported := MapImport.write_import(glb)
 	var blender := LibraryFacts.footprint_ft(_info(imported.folder, "map.glb", ""))
-	assert_eq(LibraryFacts.size_text(blender), "100 x 50 ft")
+	assert_eq(LibraryFacts.size_text(blender), "100 × 50 ft")
 
 
 func test_plays_are_recorded_and_forgotten() -> void:
@@ -141,6 +152,15 @@ func test_the_strip_goes_after_the_last_item_of_the_selected_row() -> void:
 	assert_eq(LevelGrid.line_end(with_heading, 3, 4), 3)
 
 
+## A selection scrolls as little as it can to show the row and its strip, the row first when
+## both cannot fit.
+func test_a_selection_scrolls_its_row_and_strip_into_view() -> void:
+	assert_eq(LevelGrid.reveal_scroll(0.0, 300.0, 700.0, 500.0), 200.0, "down to the strip")
+	assert_eq(LevelGrid.reveal_scroll(400.0, 100.0, 300.0, 500.0), 100.0, "up to the row")
+	assert_eq(LevelGrid.reveal_scroll(150.0, 200.0, 600.0, 500.0), 150.0, "already shown")
+	assert_eq(LevelGrid.reveal_scroll(0.0, 300.0, 900.0, 500.0), 300.0, "too tall: the row")
+
+
 # --- the strip ---------------------------------------------------------------------------------
 
 
@@ -157,21 +177,35 @@ func test_the_strips_actions_follow_the_source() -> void:
 	var blender := _strip(_info("harbour", "map.glb", ""))
 	assert_true(blender.edit_button.visible)
 	assert_eq(blender.source_label.text, "From Blender")
-	assert_eq(blender.size_label.text, "150 x 150 ft")
+	assert_eq(blender.size_label.text, "150 × 150 ft")
 	assert_eq(blender.tokens_label.text, "2 tokens")
-	assert_eq(
-		blender.menu_items(),
-		[MapDetailStrip.MENU_SET_UP, MapDetailStrip.MENU_DUPLICATE, MapDetailStrip.MENU_DELETE]
-	)
+	var items := [
+		MapDetailStrip.MENU_SET_UP,
+		MapDetailStrip.MENU_DUPLICATE,
+		MapDetailStrip.MENU_REPLACE,
+		MapDetailStrip.MENU_DELETE,
+	]
+	assert_eq(blender.menu_items(), items)
+	assert_false(blender.reload_button.visible, "its source is not newer")
 	var updated := _strip(_info("harbour", "map.glb", "map.ttmap"), true)
-	assert_true(updated.menu_items().has(MapDetailStrip.MENU_RELOAD), "Reload from Blender")
+	assert_eq(updated.source_label.text, "Blender, edited here")
+	assert_true(updated.updated_chip.visible, "Updated in Blender, in words")
+	assert_true(updated.reload_button.visible, "Reload from Blender without the menu")
+	watch_signals(updated)
+	updated.reload_button.pressed.emit()
+	assert_signal_emitted_with_parameters(
+		updated, "action_requested", [updated.info, MapDetailStrip.ACTION_RELOAD]
+	)
 	var made := _strip(_info("made", "", "map.ttmap"), true)
-	assert_false(made.menu_items().has(MapDetailStrip.MENU_RELOAD), "nothing to reload")
+	assert_false(made.reload_button.visible, "nothing to reload")
 	var bundled := _strip(_info("ship", "res://maps/x.glb", ""))
 	assert_false(bundled.edit_button.visible, "a bundled map is not edited here")
+	assert_false(bundled.menu_items().has(MapDetailStrip.MENU_REPLACE))
 	assert_eq(bundled.source_label.text, "Bundled")
 	assert_true(bundled.host_button.visible)
 	assert_eq(bundled.host_button.text, "Host with this map")
+	for button: Button in [blender.play_button, blender.host_button, blender.more_button]:
+		assert_eq(button.custom_minimum_size.y, MapDetailStrip.ACTION_HEIGHT, "one height")
 
 
 func test_a_field_saves_on_enter_through_update_meta_and_escape_reverts() -> void:
@@ -201,37 +235,68 @@ func test_a_field_saves_on_enter_through_update_meta_and_escape_reverts() -> voi
 # --- New map -----------------------------------------------------------------------------------
 
 
+func test_the_strips_menu_and_author() -> void:
+	var info := _info("harbour", "map.glb", "")
+	info.author = "Hannah"
+	var strip := _strip(info)
+	assert_true(strip.by_label.visible, "by Hannah")
+	watch_signals(strip)
+	strip._on_menu_id(MapDetailStrip.MENU_REPLACE)
+	assert_signal_emitted_with_parameters(
+		strip, "action_requested", [strip.info, MapDetailStrip.ACTION_REPLACE]
+	)
+	assert_eq(MapDetailStrip.MENU_LABELS[MapDetailStrip.MENU_REPLACE], "Replace map file...")
+	assert_true(strip.description_edit.flat, "reads as text at rest")
+	strip.description_edit.mouse_entered.emit()
+	assert_false(strip.description_edit.flat, "the field's well under the pointer")
+	strip.description_edit.mouse_exited.emit()
+	assert_true(strip.description_edit.flat)
+	assert_false(_strip(_info("x", "map.glb", "")).by_label.visible, "no author, no by")
+
+
 func test_new_map_advanced_sizes_and_seeds() -> void:
 	var card := NewMapCard.new()
 	add_child_autofree(card)
-	assert_false(card.advanced_body.visible, "Advanced starts closed")
+	assert_false(card.advanced_popover.visible, "Advanced starts closed")
+	var height := card.get_combined_minimum_size().y
 	card.set_advanced(true)
-	assert_true(card.advanced_body.visible)
+	assert_true(card.advanced_popover.visible)
 	card.seed_edit.text = "42"
 	var drawn := card.spec()
 	assert_eq(drawn.seed, 42)
-	assert_eq(drawn.size_ft, NewMapCard.draw_size(42), "the seed draws the size")
+	assert_eq(drawn.size_ft, NewMapCard.draw_size(42), "the seed picks the size")
 	assert_true(NewMap.SIZES_FT.has(drawn.size_ft))
 	card.size_field.tiles.selection_changed.emit(NewMapCard.SIZE_CUSTOM)
 	assert_true(card.custom_row.visible)
 	card.width_box.value = 300
 	card.depth_box.value = 120
 	assert_eq(card.spec(), {"seed": 42, "size_ft": 300, "depth_ft": 120})
-	assert_true(card.size_line.visible, "a big map is warned")
+	assert_true(card.size_note_row.visible, "a big map is warned")
 	assert_false(card.generate_button.disabled, "warnings never block")
 	card.width_box.value = 400
-	assert_eq(card.refusal(), NewMap.size_error(400, 120))
+	assert_eq(card.refusal(), NewMapCard.side_refusal("Width", 400))
 	assert_true(card.generate_button.disabled, "past the format's limit")
+	assert_eq(card.generate_button.tooltip_text, card.refusal(), "Generate says why it waits")
+	assert_eq(card.width_box.edit.theme_type_variation, &"FieldError", "the refused field")
+	assert_eq(card.depth_box.edit.theme_type_variation, &"", "not the good one")
+	card.width_box.get_child(2).pressed.emit()
+	assert_eq(card.width_box.value, 405.0, "plus steps a 5 ft square")
 	card.seed_edit.text = "forty"
 	card.width_box.value = 150
 	assert_eq(card.refusal(), NewMapCard.SEED_ERROR)
+	card.set_advanced(false)
+	assert_eq(card.get_combined_minimum_size().y, height, "Advanced never changes the card")
 
 
 func test_new_map_size_notes() -> void:
 	assert_eq(NewMapCard.size_note(200, 200), "")
 	assert_eq(NewMapCard.size_note(220, 100), NewMapCard.SLOW_LINE % NewMapCard.WARN_ABOVE_FT)
 	assert_eq(NewMapCard.size_note(260, 100), NewMapCard.BIG_LINE % NewMap.RECOMMENDED_MAX_FT)
-	assert_eq(NewMapCard.size_note(NewMap.MAX_FT + 5, 100), NewMap.size_error(NewMap.MAX_FT + 5))
+	var too_big := NewMapCard.side_refusal("Width", NewMap.MAX_FT + 5)
+	assert_string_contains(too_big, "Width %d ft" % (NewMap.MAX_FT + 5))
+	assert_string_contains(too_big, "Set %d or less" % NewMap.MAX_FT)
+	assert_ne(NewMapCard.side_refusal("Depth", 0), "")
+	assert_eq(NewMapCard.side_refusal("Depth", 100), "")
 	assert_eq(NewMapCard.parse_seed(""), -1)
 	assert_eq(NewMapCard.parse_seed(" 7 "), 7)
 	assert_eq(NewMapCard.parse_seed("-3"), -2)
@@ -269,12 +334,56 @@ func test_the_check_panel_shows_the_report_and_its_warnings() -> void:
 	for child in panel.facts.get_children():
 		labels.append((child as Label).text)
 	var shown := " | ".join(labels)
-	assert_string_contains(shown, "(150 x 100 ft)")
+	assert_string_contains(shown, "150 × 100 ft (45.7 × 30.5 m)")
 	assert_string_contains(shown, "map.glb")
+	assert_string_contains(shown, ImportCheckPanel.UNDER_TENTH_MB, "never 0.0 MB")
+	assert_string_contains(shown, "Lowest point 1.5 m above Y = 0")
 	assert_eq(panel.warnings_box.get_child_count(), 1, "the floor off Y = 0, one warning")
 	assert_eq(panel.confirm_button.text, ImportCheckPanel.ADD, "warnings never block")
 	assert_eq(panel.name_edit.text, "Harbour")
 	assert_true(panel.confirm_button.disabled == false)
+
+
+## The check's words: sizes in one unit style, the ground's place the same way above and below,
+## the contents plain, and the floor warned past its threshold on either side, never inside.
+func test_the_checks_words_and_the_floor_thresholds() -> void:
+	assert_eq(ImportCheckPanel.mb_text(0.02), "under 0.1 MB")
+	assert_eq(ImportCheckPanel.mb_text(2.44), "2.4 MB")
+	assert_eq(ImportCheckPanel.floor_text(0.01), "Lowest point at Y = 0")
+	assert_eq(ImportCheckPanel.floor_text(1.5), "Lowest point 1.5 m above Y = 0")
+	assert_eq(ImportCheckPanel.floor_text(-1.5), "Lowest point 1.5 m below Y = 0")
+	var holds := {"meshes": 3, "water_planes": 1, "extras": {"scatter_instances": 40}}
+	holds.extras.scatter_species = 2
+	holds.extras.ambient_light = true
+	assert_eq(
+		ImportCheckPanel.holds_text(holds),
+		"The ground in 3 pieces, water, 40 plants and rocks of 2 kinds and its own light and sky"
+	)
+	assert_eq(ImportCheckPanel.holds_text({"meshes": 1}), "The ground")
+	assert_eq(ImportCheckPanel.removed_words(1, 0), "1 prop sits")
+	assert_eq(ImportCheckPanel.removed_words(1, 2), "1 prop and 2 plants sit")
+	assert_eq(
+		LibraryImports.replaced_text(0, 3), "Map replaced; 3 plants sat outside it and were removed"
+	)
+	var above := GlbCheck.FLOOR_ABOVE_M
+	var below := GlbCheck.FLOOR_BELOW_M
+	for case: Array in [
+		[above - 0.1, 1.0, false], [above + 0.1, 1.0, true],
+		[-below + 0.5, 1.0, false], [-below - 0.5, 1.0, true],
+	]:
+		var report := {
+			"has_bounds": true,
+			"footprint_m": Vector2(30, 30),
+			"floor_m": case[0],
+			"top_m": case[1],
+			"mb": 1.0,
+		}
+		var floors := GlbCheck.warnings(report).filter(
+			func(warning: Dictionary) -> bool: return warning.code == GlbCheck.WARN_FLOOR
+		)
+		assert_eq(floors.size() == 1, case[2], "floor at %.1f m" % case[0])
+		if case[2]:
+			assert_string_contains(String(floors[0].text), "In Blender, move the map", "a way on")
 
 
 func test_a_gltf_is_refused_in_one_sentence() -> void:
@@ -313,9 +422,16 @@ func test_a_dressed_maps_replace_offers_keep_dressing_with_its_count() -> void:
 	assert_ne(LevelManager.save_level_folder(level, first.folder), "")
 	var smaller := _source(Vector2(20.0, 20.0), "harbour/smaller.glb")
 	var panel := _imports().check_replace(first.folder, smaller)
-	assert_eq(panel.confirm_button.text, ImportCheckPanel.KEEP)
-	assert_eq(panel.fresh_button.text, ImportCheckPanel.FRESH)
+	assert_eq(panel.confirm_button.text, "Replace, keep edits")
+	assert_eq(panel.fresh_button.text, "Replace, start fresh")
 	assert_true(panel.choice_line.text.begins_with(ImportCheckPanel.keep_line(1)))
+	assert_string_contains(panel.choice_line.text, "1 prop sits outside the new map")
+	assert_false(panel.choice_line.text.contains(".bak"), "no file names")
+	var labels := PackedStringArray()
+	for child in panel.facts.get_children():
+		labels.append((child as Label).text)
+	assert_true(labels.has("Map size now"), "the current size beside the new one")
+	assert_true(labels.has("New map size"))
 
 
 func test_a_glb_dropped_between_cards_is_a_new_map() -> void:

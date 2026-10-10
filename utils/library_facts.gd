@@ -16,13 +16,21 @@ const SOURCE_BLENDER := &"blender"
 const SOURCE_DRESSED := &"dressed"
 const SOURCE_MADE := &"made"
 const SOURCE_BUNDLED := &"bundled"
+## "Edited" is the one word for what tt-sim's own tools add over a Blender map (painting, props
+## and plants): the chip here, Edit map on the strip, and Replace's choices and captions.
 const SOURCE_LABELS := {
 	SOURCE_BLENDER: "From Blender",
-	SOURCE_DRESSED: "Blender, dressed here",
+	SOURCE_DRESSED: "Blender, edited here",
 	SOURCE_MADE: "Made here",
 	SOURCE_BUNDLED: "Bundled",
 }
 const NEVER_PLAYED := "Not played yet"
+## A Blender map whose source file is newer than its copy (MapImport.is_updated_in_blender):
+## on its card and in the strip's facts, with UPDATED_ICON.
+const UPDATED := "Updated in Blender"
+const UPDATED_ICON := "rotate-clockwise"
+## The library entry's key for UPDATED (TitleScreen.library sets it).
+const UPDATED_KEY := "updated_in_blender"
 const METRES_PER_FOOT := 0.3048
 
 
@@ -74,6 +82,18 @@ static func played_text(played_at: int, now_unix: int) -> String:
 	return "Played " + LevelCard.relative_time(now_unix - played_at, played_at)
 
 
+## The date the library's order uses (last_touched), as a card's caption says it: "Played
+## yesterday" when the last play is the later, else "Edited 3 days ago"; "" with neither. Pure.
+static func touched_text(info: Dictionary, now_unix: int) -> String:
+	var played := int(info.get("played_at", 0))
+	var edited := int(info.get("modified_at", 0))
+	if played > 0 and played >= edited:
+		return played_text(played, now_unix)
+	if edited <= 0:
+		return ""
+	return "Edited " + LevelCard.relative_time(now_unix - edited, edited)
+
+
 ## "No tokens", "1 token", "4 tokens". Pure.
 static func tokens_text(count: int) -> String:
 	if count <= 0:
@@ -81,12 +101,12 @@ static func tokens_text(count: int) -> String:
 	return "1 token" if count == 1 else "%d tokens" % count
 
 
-## "150 x 100 ft" for a footprint in feet, each side to the nearest 5 ft square; "" for none.
+## "150 × 100 ft" for a footprint in feet, each side to the nearest 5 ft square; "" for none.
 ## Pure.
 static func size_text(feet: Vector2) -> String:
 	if feet.x <= 0.0 or feet.y <= 0.0:
 		return ""
-	return "%d x %d ft" % [_squares(feet.x), _squares(feet.y)]
+	return "%d × %d ft" % [_squares(feet.x), _squares(feet.y)]
 
 
 static func _squares(feet: float) -> int:

@@ -122,6 +122,46 @@ func test_the_library_fits_by_measurement() -> void:
 		title.free()
 
 
+## At 720p (Auto) and 1280x720 a click on a map in the second row scrolls the grid so that row
+## and its whole strip are in view, Play among them; the strip is at most 960 wide and stands
+## under its card inside the grid. Opening Advanced and typing in it moves no card.
+func test_a_second_row_selection_shows_its_strip() -> void:
+	for canvas in [CANVAS_720P_AUTO, Vector2i(CANVAS)]:
+		_host.size = canvas
+		var title := TITLE_SCENE.instantiate() as TitleScreen
+		var levels: Array[Dictionary] = []
+		for i in 8:
+			var level := LEVEL.duplicate()
+			level.folder = "_fit_%d" % i
+			level.path = "user://x/_fit_%d/" % i
+			level.name = "Map %d" % i
+			level.modified_at = 1000 - i
+			levels.append(level)
+		title.level_provider = func() -> Array[Dictionary]: return levels
+		title.session_provider = func() -> Array[Dictionary]: return SESSIONS.duplicate(true)
+		_host.add_child(title)
+		var what := "a second-row map on a %s canvas" % str(canvas)
+		await _assert_fits(what, title.quit_button, Vector2(canvas))
+		var card := title.grid._cards[4]
+		card._on_pressed()
+		await wait_process_frames(6)
+		_assert_library_shows(what, title)
+		var strip := _drawn_rect(title.strip)
+		var grid := _drawn_rect(title.grid).grow(SLACK_PX)
+		assert_true(strip.size.x <= LevelGrid.DETAIL_MAX_WIDTH + SLACK_PX, "%s: 960" % what)
+		assert_true(grid.encloses(strip), "%s: the strip inside the grid" % what)
+		var centre := _drawn_rect(card).get_center().x
+		assert_true(strip.position.x <= centre and centre <= strip.end.x, "%s: under it" % what)
+		var rests := title.grid._cards.map(func(c: LevelCard) -> Rect2: return c.get_global_rect())
+		title.new_map_card.set_advanced(true)
+		title.new_map_card.size_field.tiles.selection_changed.emit(NewMapCard.SIZE_CUSTOM)
+		title.new_map_card.width_box.value = 400
+		await wait_process_frames(3)
+		var now := title.grid._cards.map(func(c: LevelCard) -> Rect2: return c.get_global_rect())
+		assert_eq(now, rests, "%s: Advanced and a refusal move no card" % what)
+		title.free()
+
+
 func test_every_settings_section_fits() -> void:
 	var menu := SETTINGS_SCENE.instantiate() as SettingsMenu
 	_host.add_child(menu)

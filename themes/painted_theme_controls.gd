@@ -74,6 +74,13 @@ func define_fields() -> void:
 			focus = ring(),
 		}
 	)
+	# A field whose value is refused (New map's custom size past the format's range): the well
+	# outlined in the danger role, always beside the alert icon and the sentence (C7).
+	define_variant_style(
+		"FieldError",
+		"LineEdit",
+		{normal = inherit(well, edge(2, c(ThemeColors.DANGER))), focus = ring()}
+	)
 	var hover: Dictionary = inherit(well, {bg_color = c(ThemeColors.SURFACE_HOVER)})
 	var option := {
 		normal = well,
