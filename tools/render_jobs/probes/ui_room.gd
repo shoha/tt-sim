@@ -11,6 +11,10 @@ extends RefCounted
 ## - `opening` (`open`, default true): the "Opening a room..." wait Root.host_session shows
 ##   over the title while hosting starts, on Root's own loading overlay; `open` false hides it
 ##   as Root does when the room opens.
+## - `map_load` (`folder`, `open`, default true): Root's loading overlay as a map load shows
+##   it mid-load, titled as Root titles it for that test level and held at a sample step;
+##   nothing is loaded. Over the title or over a table, wherever the job is. `open` false
+##   hides it as Root does when the load completes (the sky's reveal).
 ## - `host_room` (`folder`, optional): the host's room (LobbyHost) over the hidden title with
 ##   a sample code and three sample players. With `folder` that test level is the map to set
 ##   out, as after Host on the title; without, no map is picked yet, as after Return everyone
@@ -31,6 +35,9 @@ const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn
 const STAGED := "UiTourRoom"
 ## The copy Root.host_session shows while hosting starts.
 const OPENING_TEXT := "Opening a room..."
+## The step a staged map load is held at: a share of the bar and the loader's own caption.
+const MAP_LOAD_PROGRESS := 0.35
+const MAP_LOAD_STATUS := "Loading token models..."
 ## A Steam lobby id of the usual magnitude, for a room code in the real format.
 const SAMPLE_LOBBY_ID := 109775244321098765
 const SAMPLE_PLAYERS: Array[String] = ["Marigold", "Ranger", "Starling"]
@@ -40,6 +47,8 @@ static func run(base: Node, step: Dictionary) -> String:
 	match String(step.get("action", "")):
 		"opening":
 			return _opening(base, bool(step.get("open", true)))
+		"map_load":
+			return _map_load(base, String(step.get("folder", "")), bool(step.get("open", true)))
 		"host_room":
 			return _host_room(base, String(step.get("folder", "")))
 		"client_room":
@@ -63,8 +72,23 @@ static func _opening(base: Node, open: bool) -> String:
 		overlay.show_indeterminate(OPENING_TEXT)
 		return "showing %s" % OPENING_TEXT
 	overlay.hide_loading()
-	overlay.show_progress_bar()
 	return "room wait hidden"
+
+
+static func _map_load(base: Node, folder: String, open: bool) -> String:
+	var overlay := base.get("_loading_overlay") as LoadingOverlay
+	if overlay == null:
+		return "no loading overlay"
+	if not open:
+		overlay.hide_loading()
+		return "map load hidden"
+	var level: LevelData = null
+	if not folder.is_empty():
+		level = LevelManager.load_level_folder(folder, false)
+	var title := LoadingOverlay.setting_out_text(level)
+	overlay.show_loading(title)
+	overlay.set_progress(MAP_LOAD_PROGRESS, MAP_LOAD_STATUS)
+	return "showing %s at %.2f" % [title, MAP_LOAD_PROGRESS]
 
 
 static func _show_title(base: Node, shown: bool) -> void:

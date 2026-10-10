@@ -445,18 +445,21 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   the title, keyboard focus on a quiet paper button and on the selected level card, Settings
   on each of its six sections, the new-map dialog, then the session screens, staged by
   `probes/ui_room.gd` with no network (nothing is hosted or joined): the "Opening a
-  room..." wait over the title (`opening_room`), the host's room as it opens after Host with
-  Mossy Hollow to set out (`room_host`) and after Return everyone to the room with no map yet
-  (`room_host_returned`), each with a sample room code and three sample players, the join
+  room..." wait over the title (`opening_room`), a map load staged mid-load over the title
+  (`map_load_title`, Root's loading overlay on the backdrop sky; nothing is loaded), the
+  host's room as it opens after Host with Mossy Hollow to set out (`room_host`) and after
+  Return everyone to the room with no map yet (`room_host_returned`), each with a sample room code and three sample players, the join
   screen as the title's Join Game opens it (`join`, Root's real entry point), and a client's
   room, the waiting view with sample players (`room_client`); then authoring with the tool
   drawer on Biome and focus on its picked tile (the probe lets a drawer tile take focus),
-  then in play the Visuals drawer on Sun, focus on a quiet glass button, the pause menu, the
+  then the real map load of the test map caught about 0.4 s after Play (`map_load_real`), and
+  in play the same staged map load over the live table (`map_load_table`), the Visuals drawer
+  on Sun, focus on a quiet glass button, the pause menu, the
   pause menu as the host sees it (`pause_host`: the host-only Return everyone to the room row,
   shown on a solo pause) and the confirmation that row asks (`return_room_confirm`), the
   Remove token danger confirmation, one toast of each kind, the Add Token browser and the
   avatar builder, and at dusk (19:00 through the Sun pane) the Visuals drawer, the browser and
-  the pause menu again. Last, one probe capture of the title at 1720x720 (ultrawide). 59
+  the pause menu again. Last, one probe capture of the title at 1720x720 (ultrawide). 65
   captures and `INDEX.md`; the level is deleted at the end. Half size makes the 720p captures
   640x360, smaller than any player sees: judge 720p legibility on a `--full` run.
 - `jobs/import_thumb.json`: the map library's import (the level core card, about 35 s, no

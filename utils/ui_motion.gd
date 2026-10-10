@@ -9,6 +9,13 @@ extends RefCounted
 const ENTRANCE_OFFSET_PX := 12.0
 
 
+## Whether motion should be fewer and gentler (docs/UI_TASTE.md M5): the operating
+## system's reduce-animation setting, where the platform reports one (-1, unknown, reads as
+## no). A Reduce motion setting in Settings would join it here.
+static func reduced() -> bool:
+	return DisplayServer.accessibility_should_reduce_animation() == 1
+
+
 ## Tween [param control]'s offset_transform_scale to [param target]. Kills
 ## [param previous] first. Returns the new tween for the caller to store.
 static func scale_to(

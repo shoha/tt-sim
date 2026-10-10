@@ -6,8 +6,12 @@ extends CanvasLayer
 ## Provides fade in/out transitions between scenes or states.
 ## Can optionally show a loading indicator during the transition.
 ##
+## Every style covers the screen with the backdrop sky (the BACKDROP role, the sky the title,
+## the room and a map load stand on), so a transition reads as the world stepping back into
+## that sky rather than a dip to black (docs/UI_TASTE.md C4, G10).
+##
 ## Supports multiple transition styles:
-##   FADE    - standard fade to/from black (default)
+##   FADE    - standard fade to/from the sky (default)
 ##   IRIS    - circular iris wipe (closing circle out, opening circle in)
 ##   CURTAIN - vertical slide down (out) / up (in)
 
@@ -19,7 +23,8 @@ enum TransitionType { FADE, IRIS, CURTAIN }
 
 # Configuration
 var fade_duration := 0.3
-var fade_color := Color(0.102, 0.071, 0.102, 1.0)  # Dark theme background
+## The colour a transition covers the screen with, read from the BACKDROP role in _ready.
+var fade_color: Color
 
 var _tween: Tween
 var _is_transitioning := false
@@ -32,6 +37,7 @@ var _iris_material: ShaderMaterial = null
 
 
 func _ready() -> void:
+	fade_color = ThemeColors.of(color_rect, ThemeColors.BACKDROP)
 	color_rect.color = fade_color
 	color_rect.modulate.a = 0.0
 	color_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -43,7 +49,7 @@ func set_transition_type(type: int) -> void:
 	_current_type = type
 
 
-## Fade to black (or configured color) using the current transition type.
+## Cover the screen with fade_color using the current transition type.
 func fade_out(duration: float = -1.0) -> void:
 	if duration < 0:
 		duration = fade_duration
@@ -69,7 +75,7 @@ func fade_out(duration: float = -1.0) -> void:
 	fade_out_complete.emit()
 
 
-## Fade from black back to normal using the current transition type.
+## Uncover the screen from fade_color using the current transition type.
 func fade_in(duration: float = -1.0) -> void:
 	if duration < 0:
 		duration = fade_duration
@@ -160,7 +166,7 @@ func _get_iris_material() -> ShaderMaterial:
 shader_type canvas_item;
 
 uniform float progress : hint_range(0.0, 1.0) = 0.0;
-uniform vec4 color : source_color = vec4(0.102, 0.071, 0.102, 1.0);
+uniform vec4 color : source_color;
 
 void fragment() {
 	vec2 center = vec2(0.5, 0.5);

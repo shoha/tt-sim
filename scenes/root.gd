@@ -461,11 +461,10 @@ func host_session(level: LevelData) -> void:
 
 
 ## Hide the "Opening a room..." wait (and any level loading a client had under way when the
-## room opened), giving the overlay its progress bar back for the next level load.
+## room opened). The next map load lays its own sky and bar (LoadingOverlay.show_loading).
 func _end_room_wait() -> void:
 	if _loading_overlay and _loading_overlay.visible:
 		_loading_overlay.hide_loading()
-		_loading_overlay.show_progress_bar()
 
 
 ## PLAYING > ROOM (host): put the table away for everyone. The connection, the players and
@@ -870,9 +869,11 @@ func _on_level_cleared() -> void:
 # ============================================================================
 
 
+## A map load names its map (UI_TASTE.md W4): the pending level is the one being set out on
+## every path into play (host, client and solo), or null after a queued load's handover.
 func _on_level_loading_started() -> void:
 	if _loading_overlay:
-		_loading_overlay.show_loading("Loading Level...")
+		_loading_overlay.show_loading(LoadingOverlay.setting_out_text(_pending_level_data))
 
 
 func _on_level_loading_progress(progress: float, status: String) -> void:

@@ -32,6 +32,7 @@
 		"res://tests/unit/test_level_picker_dialog.gd",
 		"res://tests/unit/test_level_thumbnail.gd",
 		"res://tests/unit/test_level_visual_state.gd",
+		"res://tests/unit/test_loading_overlay.gd",
 		"res://tests/unit/test_lobby_client_states.gd",
 		"res://tests/unit/test_lobby_host_level_strip.gd",
 		"res://tests/unit/test_map_overlay_utils.gd",
