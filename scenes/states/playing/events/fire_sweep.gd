@@ -9,18 +9,21 @@ extends ForestFall
 ##
 ## The fire reads through the trees themselves. A stand-in draws a copy of its tree's mesh
 ## whose surfaces use shaders/wind_foliage_burn.gdshader, and each tree's burn (burn_progress,
-## the instance's custom data) runs its crown through the burn in bold patches: ember orange,
-## then charcoal, the leaf cards burning away from a glowing edge until the charred trunk and
-## limbs stand bare. A painted flame (EventPuffs' flame, FlameAtlas) stands on each crown as it
-## catches, a second beside it on some, a spark drifts up from a few, and dark plum billows of
-## smoke, lit rust underneath, rise slowly from half the trees and in a short column over the
-## middle. No ground glow and no mist: a few bold shapes, the forest visibly changing under
-## them. Over the event's last SNAG_GO_S the charred snags shrink away (snag_transform) as the
-## change lands.
+## the instance's custom data) runs its crown through the burn in bold patches: hot yellow
+## along the leading edge, ember red-orange, then charcoal, the leaf cards burning away from a
+## glowing edge until the charred trunk and limbs stand bare (the bark only chars). A painted
+## flame (EventPuffs' flame, FlameAtlas) stands on each crown as it catches, sized by the
+## crown's width so a narrow pine's is a tongue on its crown rather than a beam down it, a
+## second beside it on some, a spark drifts up from a few, and billows of smoke rise slowly
+## from half the trees and in a short column over the middle: painted cumulus, grey-violet
+## with cream-gold tops and darker undersides. No ground glow and no mist: a few bold shapes,
+## the forest visibly changing under them. Over the event's last SNAG_GO_S the charred snags
+## shrink away (snag_transform) as the change lands.
 ##
-## Colours are linear, as every puff's and shader constant's is: each is the colour it should
-## show raised to 2.2 (mid values show pale; the first look's amber and lilac read as cream
-## and pink mist).
+## Colours are linear, as every puff's and shader constant's is: each is picked as the colour
+## it should show through the scene's filmic tonemap, which shows low values lighter still
+## than raising them to 1/2.2 does (mid values show pale; the first look's amber and lilac read
+## as cream and pink mist).
 ##
 ## The map change follows (TerrainEvents): the burnt biome painted over the area, its snags
 ## and litter growing in under the smoke, then ash laid over the ground (plan_for; a palette
@@ -57,12 +60,16 @@ const BURN_RATE := 1.7
 ## The charred snags shrink away over the event's last this many seconds.
 const SNAG_GO_S := 0.6
 ## A crown's flame: when it rises (a share of the tree's burn) and how long it lives, where its
-## foot stands and its width and height (shares of the tree's height); a second beside it on
-## SIDE_CHANCE of the trees, SIDE_SIZE of its size.
+## foot stands (a share of the tree's height), its width (TONGUE_WIDE of the crown's, held
+## within TONGUE_BOUNDS of the tree's height) and its height over its width; a second beside it
+## on SIDE_CHANCE of the trees, SIDE_SIZE of its size. Sized by the tree's height alone, a
+## narrow pine's flame stood as a tall thin beam down its trunk.
 const TONGUE_AT := 0.12
 const TONGUE_LIFE := 0.55
-const TONGUE_FOOT := 0.45
-const TONGUE_SIZE := Vector2(0.4, 0.52)
+const TONGUE_FOOT := 0.5
+const TONGUE_WIDE := 0.85
+const TONGUE_BOUNDS := Vector2(0.22, 0.38)
+const TONGUE_TALL := 1.15
 const SIDE_CHANCE := 0.5
 const SIDE_SIZE := 0.65
 ## The share of trees that throw up a spark as they catch.
@@ -84,13 +91,15 @@ const SMOKE_PRIORITY := EventPuffs.RENDER_PRIORITY + 1
 const FLAME_PRIORITY := EventPuffs.RENDER_PRIORITY + 2
 ## Colours (linear, see the header): a flame's rim (shows a deep red-orange; its body burns
 ## amber and its core pale gold, the puff shader's), the second tongue's redder; a spark;
-## the trees' smoke (shows a warm dark plum, rust underneath; bluer and lighter read as purple
-## and salmon smears in the verdict look) and the column's, a little cooler.
+## the body of the trees' smoke (shows a warm grey-violet, about 0.45, 0.4, 0.48; the shader
+## lights its lobes' tops cream-gold and shades its underside; a plum body lit rust underneath
+## read as salmon-pink mist, and a body showing 0.54 as a pile of pale balls) and the
+## column's, a little darker. Nearly opaque: a billow is a body, not a haze.
 const FLAME := Color(0.75, 0.047, 0.006, 1.0)
 const FLAME_LATE := Color(0.61, 0.018, 0.004, 1.0)
 const EMBER := Color(1.0, 0.35, 0.036, 1.0)
-const SMOKE := Color(0.096, 0.061, 0.083, 0.9)
-const SMOKE_COLUMN := Color(0.1, 0.07, 0.1, 0.88)
+const SMOKE := Color(0.102, 0.081, 0.119, 0.95)
+const SMOKE_COLUMN := Color(0.085, 0.069, 0.102, 0.95)
 const BURN_SHADER := preload("res://shaders/wind_foliage_burn.gdshader")
 
 var _flames: EventPuffs = null
@@ -290,7 +299,8 @@ func _kindle(tree: Dictionary, t: float) -> void:
 		var rise := Vector3(0.0, height * 0.04, 0.0) + _drift * 0.3
 		var side := _across * (1.0 if draws[0] < 0.5 else -1.0)
 		var at := origin + Vector3(0.0, height * TONGUE_FOOT, 0.0) + side * width * 0.1
-		var size := TONGUE_SIZE * height
+		var wide := clampf(width * TONGUE_WIDE, height * TONGUE_BOUNDS.x, height * TONGUE_BOUNDS.y)
+		var size := Vector2(wide, wide * TONGUE_TALL)
 		_flames.emit_flame(at, rise, size.x, size.y, burn * TONGUE_LIFE, FLAME)
 		if draws[1] < SIDE_CHANCE:
 			_flames.emit_flame(
@@ -321,8 +331,8 @@ func _kindle(tree: Dictionary, t: float) -> void:
 			)
 
 
-## The column's billow `index`: a large plum billow climbing slowly over the stand's middle,
-## higher each time.
+## The column's billow `index`: a large billow climbing slowly over the stand's middle, higher
+## each time.
 func _column(index: int) -> void:
 	_smoke.emit_smoke(
 		_middle + Vector3(0.0, _tall * (1.0 + 0.35 * index), 0.0),

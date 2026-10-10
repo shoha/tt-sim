@@ -335,6 +335,17 @@ func test_a_fire_fits_its_pools() -> void:
 	assert_almost_eq(FireSweep.snag_transform(base, 4.0, 4.0).basis.y.length(), 0.0, 0.001, "gone")
 
 
+func test_smoke_holds_its_body() -> void:
+	# A billow swells in, holds its full body most of its life (the shader breaks its lobes
+	# apart late), and thins only at the very end.
+	assert_lt(EventPuffs.smoke_fade(0.05), 1.0, "swelling in")
+	assert_almost_eq(EventPuffs.smoke_fade(0.6), 1.0, 0.001, "holding its body")
+	assert_almost_eq(EventPuffs.smoke_fade(EventPuffs.SMOKE_FADE_FROM), 1.0, 0.001)
+	assert_lt(EventPuffs.smoke_fade(0.95), 0.5, "thinning only at the very end")
+	assert_almost_eq(EventPuffs.smoke_fade(1.0), 0.0, 0.001)
+	assert_gt(EventPuffs.SMOKE_FADE_FROM, EventPuffs.FIRE_FADE_FROM, "smoke outlasts a flame's hold")
+
+
 func test_the_painted_flame() -> void:
 	var image := FlameAtlas.paint()
 	assert_eq(image.get_size(), Vector2i(FlameAtlas.SIZE.x * FlameAtlas.FRAMES, FlameAtlas.SIZE.y))

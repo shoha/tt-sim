@@ -6,29 +6,39 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx, alpha_to_covera
 // (INSTANCE_CUSTOM.x, 0 untouched, rising past 1 as the tree burns). A tree catches in a few
 // bold patches, not all at once: each fragment's own moment (`catch_at`) comes from its height
 // up the tree and a slow noise about a metre across, so the heat climbs the crown in blotches.
-// Past its moment a patch glows ember orange (emission, so it burns in shade too), then goes to
-// charcoal; a leaf card then burns away from a glowing edge, leaving the charred trunk and limbs
-// standing. At 0 it draws exactly as wind_foliage.gdshader, so a stand-in waiting for the front
-// matches the tree it replaced.
+// Past its moment a patch flares hot yellow along the burn's leading edge, burns on in ember
+// red-orange (emission, so it burns in shade too), dims to deep red and goes to charcoal; a
+// leaf card then burns away from a glowing edge, leaving the charred trunk and limbs standing.
+// Bark never glows, it only chars: a glowing trunk read as a thin orange beam down the tree.
+// At 0 it draws exactly as wind_foliage.gdshader, so a stand-in waiting for the front matches
+// the tree it replaced.
 
 #include "res://shaders/wind_foliage_include.gdshaderinc"
 
-// Ember orange the glow burns in (shows about 1, 0.45, 0.1: linear colour, picked as the
-// colour it should show raised to 2.2; at 0.4 green it burnt white-gold in the first look),
-// and the warm charcoal a patch goes to.
-const vec3 EMBER = vec3(1.0, 0.17, 0.006);
+// The burn's colours, linear. The scene's filmic tonemap shows a low linear value lighter than
+// raising it to 1/2.2 does (0.07 shows about 0.37), so each is picked through that curve. The
+// hot core (shows about 1, 0.78, 0.3), the ember the patch burns on in (shows about 0.95, 0.36,
+// 0.1: at 0.22 green, emission and leaf green together, the crowns burnt yellow-orange like
+// autumn leaves), its deep red (shows about 0.8, 0.2, 0.06) in the patches a second, finer
+// noise picks (one ember all over read as a flat orange cut-out), and the warm charcoal a
+// patch goes to.
+const vec3 HOT = vec3(1.6, 0.42, 0.045);
+const vec3 EMBER = vec3(1.1, 0.066, 0.004);
+const vec3 EMBER_DEEP = vec3(0.43, 0.02, 0.003);
 const vec3 CHARCOAL = vec3(0.045, 0.032, 0.03);
-// After its moment (in burn units): the glow swells in over GLOW_IN, holds to CHAR_FROM, and
-// the patch chars over CHAR_FROM..CHAR_TO; a card burns away from GONE_FROM, its edge glowing
-// over GONE_EDGE.
-const float GLOW_IN = 0.12;
+// A glowing patch's own colour under its glow, a scorched red-brown: the lit leaf green left
+// under the ember tinted it toward yellow.
+const vec3 SCORCH = vec3(0.05, 0.012, 0.004);
+// After its moment (in burn units): the glow flares in over GLOW_IN, hot to there and cooling
+// to ember by LEAD (so the yellow stays a thin band along the leading edge), holds to
+// CHAR_FROM, and the patch chars over CHAR_FROM..CHAR_TO, its glow dimming to deep red; a card
+// burns away from GONE_FROM, its edge glowing ember over GONE_EDGE.
+const float GLOW_IN = 0.04;
+const float LEAD = 0.15;
 const float CHAR_FROM = 0.3;
 const float CHAR_TO = 0.6;
 const float GONE_FROM = 0.45;
 const float GONE_EDGE = 0.1;
-// The emission's strength at full glow, and the share of it bark takes.
-const float GLOW_ENERGY = 1.3;
-const float BARK_GLOW = 0.3;
 
 varying float burn_s;
 varying vec3 burn_local;
@@ -79,19 +89,22 @@ void fragment() {
 		float up = clamp(local_vertex_y / max(mesh_height, 0.01), 0.0, 1.0);
 		float catch_at = 0.55 * up + 0.45 * noise(burn_local * 0.9 + vec3(3.1, 0.0, 1.7));
 		float since = burn_s - catch_at;
-		float glow = smoothstep(0.0, GLOW_IN, since) * (1.0 - smoothstep(CHAR_FROM, CHAR_TO + 0.2, since));
-		// Bark smoulders rather than blazes: a fully lit trunk read as a thin orange beam.
-		glow *= canopy_part == 2 ? 1.0 : BARK_GLOW;
 		float charred = smoothstep(CHAR_FROM, CHAR_TO, since);
-		albedo = mix(albedo, albedo * 0.35, glow);
+		if (canopy_part != 1) {
+			float glow = smoothstep(0.0, GLOW_IN, since) * (1.0 - smoothstep(CHAR_FROM, CHAR_TO + 0.2, since));
+			float lead = 1.0 - smoothstep(GLOW_IN, LEAD, since);
+			float flare = smoothstep(0.3, 0.7, noise(burn_local * 1.7 + vec3(7.3, 2.1, 0.0)));
+			albedo = mix(albedo, SCORCH, glow);
+			emission = mix(mix(EMBER_DEEP, EMBER, flare), HOT, lead) * glow;
+		}
 		albedo = mix(albedo, CHARCOAL, charred);
-		emission = EMBER * glow * GLOW_ENERGY;
 		if (canopy_part == 2) {
 			float gone = since - GONE_FROM;
 			if (gone > GONE_EDGE) {
 				pbr_alpha = 0.0;
 			} else if (gone > 0.0) {
-				emission += EMBER * GLOW_ENERGY * (1.0 - gone / GONE_EDGE);
+				// Over what is left of its own glow, so a deep red-orange, not amber.
+				emission += EMBER * 0.6 * (1.0 - gone / GONE_EDGE);
 			}
 		}
 		pbr_roughness = mix(pbr_roughness, 1.0, charred);
