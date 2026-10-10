@@ -109,6 +109,11 @@ func _lpc() -> LevelPlayController:
 	return _main.get("_level_play_controller") as LevelPlayController
 
 
+## Root's SessionFlow: Host, Join, the room and Set out.
+func _flow() -> SessionFlow:
+	return _main.get("_session_flow") as SessionFlow
+
+
 func _table_ready() -> bool:
 	var lpc := _lpc()
 	return (
@@ -175,12 +180,11 @@ func _start_host() -> void:
 		func(p: int): _log("late_joiner_connected %d (state sent)" % p)
 	)
 	_main.set(
-		"_pending_level_data",
-		LevelData.from_dict({"level_name": LEVEL_NAME, "map_path": MAP_SOURCE})
+		"pending_level", LevelData.from_dict({"level_name": LEVEL_NAME, "map_path": MAP_SOURCE})
 	)
-	# What Root does once hosting starts (host_session), then Set out from the room.
+	# What Root does once hosting starts (SessionFlow.host_session), then Set out from the room.
 	_main.call("change_state", STATE_ROOM)
-	_main.call("_on_lobby_start_game")
+	_flow().set_out_pending()
 	_set_phase("table_load")
 
 

@@ -180,8 +180,8 @@ func _process_host() -> void:
 		"room_start":
 			if _has("client", "room0"):
 				var level := LevelManager.load_level_folder(LEVEL_FOLDER, false)
-				_main.set("_pending_level_data", level)
-				_main.call("_on_lobby_start_game")
+				_main.set("pending_level", level)
+				_flow().set_out_pending()
 				_set_phase("table_load")
 		"table_load":
 			if _table_ready() and _map_still() and _has("client", "table"):
@@ -464,7 +464,7 @@ func _process_client() -> void:
 
 ## Joins through the join screen over the title, as enet_session_room does.
 func _join_live() -> void:
-	_main.call("_on_join_game_requested")
+	_flow().open_join_screen()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client("127.0.0.1", int(_args.get("port", DEFAULT_PORT)))
 	if err != OK:

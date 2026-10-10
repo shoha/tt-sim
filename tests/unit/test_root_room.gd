@@ -1,9 +1,9 @@
 extends GutTest
 
 ## Root's room transitions that run without the main scene: Set out refuses with no map
-## (it used to enter an empty PLAYING that clients waited in), and only a host at a table
-## can return everyone to the room. tests/net/enet_session_room.gd drives the whole flow
-## between real peers.
+## (it used to enter an empty PLAYING that clients waited in; SessionFlow), and only a host at
+## a table can return everyone to the room. tests/net/enet_session_room.gd drives the whole
+## flow between real peers.
 
 const RootScript := preload("res://scenes/root.gd")
 
@@ -21,8 +21,10 @@ func after_each() -> void:
 
 func test_set_out_refuses_without_a_map() -> void:
 	var root: Node = autofree(RootScript.new())
+	var flow: SessionFlow = autofree(SessionFlow.new())
+	flow.setup(root, null, null)
 	NetworkManager.session.open()
-	root.call("_on_lobby_start_game")
+	flow.set_out_pending()
 	assert_true(NetworkManager.session.is_open(), "the room stays open")
 	assert_false(NetworkManager.is_game_in_progress(), "no client is told a game starts")
 	assert_eq(root.call("get_current_state"), RootScript.State.TITLE_SCREEN, "no state change")

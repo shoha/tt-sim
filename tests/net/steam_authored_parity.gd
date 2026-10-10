@@ -174,6 +174,11 @@ func _game_map() -> GameMap:
 	return _main.get("_game_map") as GameMap
 
 
+## Root's SessionFlow: Host, Join, the room and Set out.
+func _flow() -> SessionFlow:
+	return _main.get("_session_flow") as SessionFlow
+
+
 func _host_file() -> String:
 	return _rendezvous_path + ".host.json"
 
@@ -181,8 +186,8 @@ func _host_file() -> String:
 # --- Host --------------------------------------------------------------------
 
 
-## Root._on_host_game_requested for a level folder: the level becomes the pending level and
-## hosting starts (Root.host_session); Root opens the room once hosting.
+## SessionFlow.host_from_title for a level folder: the level becomes the pending level and
+## hosting starts (SessionFlow.host_session); the room opens once hosting.
 func _start_host() -> void:
 	var level := LevelManager.load_level_folder(_level, false)
 	if level == null or level.map_document == "":
@@ -195,7 +200,7 @@ func _start_host() -> void:
 	NetworkManager.player_joined.connect(_on_host_player_joined)
 	NetworkManager.player_left.connect(_on_host_player_left)
 	NetworkManager.connection_failed.connect(func(reason: String): _finish(false, reason))
-	_main.call("host_session", level)
+	_flow().host_session(level)
 	_set_phase("lobby")
 
 
@@ -212,7 +217,7 @@ func _on_host_player_joined(peer_id: int, _info: Dictionary) -> void:
 		return
 	_log("peer %d joined; starting" % peer_id)
 	await get_tree().create_timer(START_DELAY_S).timeout
-	_main.call("_on_lobby_start_game")
+	_flow().set_out_pending()
 	_set_phase("host_load")
 
 
@@ -405,8 +410,8 @@ func _poll_rendezvous() -> void:
 	if code == "":
 		return
 	_log("joining room " + code)
-	_main.call("_on_join_game_requested")
-	var lobby: Node = _main.get("_join_screen")
+	_flow().open_join_screen()
+	var lobby: Node = _flow().get("_join_screen")
 	(lobby.get("room_code_input") as LineEdit).text = code
 	lobby.call("_on_connect_pressed")
 	_set_phase("client_load")
