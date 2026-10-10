@@ -2,7 +2,8 @@ extends RefCounted
 
 ## Render-job probe (`call` op) for UI captures: the primitive fixes of card U1
 ## (jobs/ui_primitives_look.json) and the UI tour (jobs/ui_tour.json), which takes every top
-## screen at each window size for the tt-sim-ui-critic agent. `action`:
+## screen at each window size for the tt-sim-ui-critic agent. The tour's session screens (the
+## room, the join screen, the host's pause row) are staged by ui_room.gd. `action`:
 ## - `settings` (`section`, optional): open Settings (UIManager.open_settings) when
 ##   it is not open, then select that rail section.
 ## - `foldout` (`expanded`, default true): expand or collapse the first Foldout on
@@ -14,10 +15,6 @@ extends RefCounted
 ## - `window` (`size` [w, h] or "WxH", `content_scale` default 1.0): resize the game window
 ##   (run.gd forces 1920x1080 at start) and set its content_scale_factor, the knob an
 ##   Interface size setting would turn. Logs the size the window actually took.
-## - `host_lobby` (`folder`): the host lobby as a host sees it after hosting, without
-##   hosting (LobbyHost.connect_network false, so no Steam lobby is made): the title hidden, the
-##   test level as its level, a sample room code through the real code path and a sample
-##   player list. `close_host_lobby` frees it and shows the title again.
 ## - `drawer` (`which` "authoring" or "visuals", `pane`, `open` default true): open a rail
 ##   drawer on a pane as a rail click does (the authoring tool drawer, or the play Visuals
 ##   drawer), or close it.
@@ -39,10 +36,6 @@ extends RefCounted
 ## - `cleanup`: delete every `_u1_ui_*` and `_ui_tour_*` level folder.
 
 const PREFIXES: Array[String] = ["_u1_ui_", "_ui_tour_"]
-const LOBBY_HOST_SCENE := preload("res://scenes/states/lobby/lobby_host.tscn")
-## A Steam lobby id of the usual magnitude, for a room code in the real format.
-const SAMPLE_LOBBY_ID := 109775244321098765
-const SAMPLE_PLAYERS: Array[String] = ["Marigold", "Ranger", "Starling"]
 
 
 static func run(base: Node, step: Dictionary) -> String:
@@ -57,10 +50,6 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _report(base)
 		"window":
 			return _window(base, step)
-		"host_lobby":
-			return _host_lobby(base, step)
-		"close_host_lobby":
-			return _close_host_lobby(base)
 		"drawer":
 			return _drawer(base, step)
 		"toasts":
@@ -201,38 +190,6 @@ static func _window(base: Node, step: Dictionary) -> String:
 			str(base.get_viewport().get_visible_rect().size)
 		]
 	)
-
-
-static func _host_lobby(base: Node, step: Dictionary) -> String:
-	var level := LevelManager.load_level_folder(String(step.get("folder", "")), false)
-	if level == null:
-		return "no level %s" % step.get("folder", "")
-	var title: CanvasLayer = base.get("_title_screen")
-	if title:
-		title.visible = false
-	var lobby := LOBBY_HOST_SCENE.instantiate() as LobbyHost
-	lobby.name = "UiTourHostLobby"
-	lobby.connect_network = false
-	base.add_child(lobby)
-	lobby.set_level(level)
-	lobby._on_room_code_received(LobbyCode.encode(SAMPLE_LOBBY_ID))
-	lobby.player_list.clear()
-	lobby.player_list.add_item("%s (Host)" % NetworkManager.get_player_name())
-	for player in SAMPLE_PLAYERS:
-		lobby.player_list.add_item(player)
-	lobby.status_label.text = LobbyHost.players_connected_text(SAMPLE_PLAYERS.size() + 1)
-	return "host lobby on %s, code %s" % [level.level_name, lobby.room_code_value.text]
-
-
-static func _close_host_lobby(base: Node) -> String:
-	var lobby := base.get_node_or_null("UiTourHostLobby")
-	if lobby:
-		base.remove_child(lobby)
-		lobby.queue_free()
-	var title: CanvasLayer = base.get("_title_screen")
-	if title:
-		title.visible = true
-	return "host lobby closed" if lobby else "no host lobby"
 
 
 ## The authoring tool drawer, or the play Visuals drawer, when that mode is up.

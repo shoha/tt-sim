@@ -72,7 +72,7 @@ func _on_panel_ready() -> void:
 	if connect_network and NetworkManager.is_host():
 		_on_room_code_received(NetworkManager.room_code)
 		if NetworkManager.get_player_count() > 1:
-			status_label.text = "%d player(s) connected" % NetworkManager.get_player_count()
+			status_label.text = players_connected_text(NetworkManager.get_player_count())
 
 
 func _stagger_targets() -> Array[Control]:
