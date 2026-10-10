@@ -10,6 +10,11 @@ signal drag_place_started(pack_id: String, asset_id: String, variant_id: String,
 ## under the cursor and calls `place(ground_position)` on the drop.
 signal avatar_drag_place_started(icon: Texture2D, place: Callable)
 
+## Player-facing errors (UI_TASTE W3, W5: what failed, why, how to recover; "map", not
+## "level").
+const NO_MAP_ERROR := "Could not add a token: no map is on the table. Set out a map first."
+const SAVE_ERROR := "Could not save the map: its file was not written. Try again in a moment."
+
 var _level_play_controller: LevelPlayController = null
 
 ## Snapshot of every editable visual field, taken when the drawer opens and
@@ -130,9 +135,9 @@ func _save_level() -> void:
 		return
 	var path := _level_play_controller.save_level_with_thumbnail()
 	if path != "":
-		UIManager.show_success("Level saved")
+		UIManager.show_success("Map saved")
 	else:
-		UIManager.show_error("Failed to save level")
+		UIManager.show_error(SAVE_ERROR)
 
 
 func _update_save_level_button_visibility() -> void:
@@ -193,13 +198,15 @@ func _on_asset_selected(pack_id: String, asset_id: String, variant_id: String) -
 		return
 
 	if not _level_play_controller:
-		UIManager.show_error("Cannot add token — no level is loaded")
+		UIManager.show_error(NO_MAP_ERROR)
 		return
 
 	var spawn_pos := _get_spawn_position()
 	var token = _level_play_controller.spawn_asset(pack_id, asset_id, variant_id, spawn_pos, true)
 	if not token:
-		UIManager.show_error("Failed to add token — asset may still be downloading")
+		UIManager.show_error(
+			"Could not add that token: its model may still be downloading. Try again in a moment."
+		)
 
 
 ## "Make an avatar" in the browser's Avatar tab: opens the builder over the board; the
@@ -209,7 +216,7 @@ func _on_avatar_build_requested() -> void:
 		UIManager.show_error("Only the GM can add tokens")
 		return
 	if not _level_play_controller:
-		UIManager.show_error("Cannot add token — no level is loaded")
+		UIManager.show_error(NO_MAP_ERROR)
 		return
 	var builder := AvatarBuilder.open_for_new(get_tree().root)
 	builder.create_confirmed.connect(_on_avatar_created.bind(builder))
@@ -244,7 +251,7 @@ func _can_add_avatar() -> bool:
 		UIManager.show_error("Only the GM can add tokens")
 		return false
 	if not _level_play_controller:
-		UIManager.show_error("Cannot add token — no level is loaded")
+		UIManager.show_error(NO_MAP_ERROR)
 		return false
 	return true
 
@@ -623,7 +630,7 @@ func _on_edit_save_requested(state: LevelVisualState) -> void:
 	if save_path != "":
 		if thumbnail:
 			LevelManager.save_thumbnail(level_data, thumbnail)
-		UIManager.show_success("Level settings saved")
+		UIManager.show_success("Map's look saved")
 
 		# The drawer no longer closes on Save, so the revert snapshot has to
 		# advance with it -- otherwise a later Cancel would undo work already
@@ -635,7 +642,9 @@ func _on_edit_save_requested(state: LevelVisualState) -> void:
 		# though, so the aiming gizmo goes away exactly as it would on a close.
 		level_edit_panel.mark_clean()
 	else:
-		UIManager.show_error("Failed to save level settings")
+		UIManager.show_error(
+			"Could not save the map's look: its file was not written. Your changes are kept here."
+		)
 		# The disk write failed: the panel stays dirty and the revert snapshot
 		# is left untouched so Cancel still reverts to the last known-good state.
 
@@ -692,7 +701,7 @@ func _set_default_hints() -> void:
 				{"key": InputProfile.label(&"pause"), "action": "Pause"},
 				{"key": InputProfile.label(&"wasd"), "action": "Pan"},
 				{"key": InputProfile.label(&"zoom"), "action": "Zoom"},
-				{"key": InputProfile.label(&"reset_camera"), "action": "Reset Camera"},
+				{"key": InputProfile.label(&"reset_camera"), "action": "Reset camera"},
 				{"key": InputProfile.label(&"measure"), "action": "Measure"},
 				{"key": InputProfile.label(&"grid"), "action": "Grid"},
 				{"key": "F1", "action": "Help"},

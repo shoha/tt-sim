@@ -768,41 +768,36 @@ func _push_measure_hints() -> void:
 	_update_hints()
 
 
+## The tool's own keys lead the hint bar while it is active (InputHints.set_tool_hints): the
+## camera keys step out and Help stays, so the row fits one line at 720p.
 func _update_hints() -> void:
-	# Clear all measure-tool-owned hint keys using current profile labels
-	UIManager.remove_hint(InputProfile.label(&"done"))
-	UIManager.remove_hint(InputProfile.label(&"grid"))
-	UIManager.remove_hint(InputProfile.label(&"place_point"))
-	UIManager.remove_hint(InputProfile.label(&"snap_token"))
-	UIManager.remove_hint(InputProfile.label(&"undo_cancel"))
-	UIManager.remove_hint(InputProfile.label(&"cycle_mode"))
+	UIManager.set_tool_hints(hints_for(_mode, _state))
 
-	if _mode == Mode.LINE:
-		UIManager.add_hint(InputProfile.label(&"place_point"), "Place Point")
-		UIManager.add_hint(InputProfile.label(&"snap_token"), "Snap Token")
-		UIManager.add_hint(InputProfile.label(&"undo_cancel"), "Undo / Cancel")
-		UIManager.add_hint(InputProfile.label(&"cycle_mode"), "Sphere")
-		UIManager.add_hint(InputProfile.label(&"done"), "Done")
+
+## The measure tool's hints for `mode` and `state`, in order: place, snap (line only),
+## undo or cancel, the next mode, and Done.
+static func hints_for(mode: Mode, state: State) -> Array[Dictionary]:
+	var hints: Array[Dictionary] = []
+	if mode == Mode.LINE:
+		hints.append(_hint(&"place_point", "Place point"))
+		hints.append(_hint(&"snap_token", "Snap to token"))
+		hints.append(_hint(&"undo_cancel", "Undo / Cancel"))
+		hints.append(_hint(&"cycle_mode", "Sphere"))
 	else:
-		var next_label := "Cylinder" if _mode == Mode.SPHERE else "Line"
-		var action_label := (
-			"Place Center" if _state == State.PLACING_VOLUME_CENTER else "Lock Radius"
-		)
-		var cancel_label := "Clear/Cancel" if _state == State.PLACING_VOLUME_CENTER else "Cancel"
-		UIManager.add_hint(InputProfile.label(&"place_point"), action_label)
-		UIManager.add_hint(InputProfile.label(&"undo_cancel"), cancel_label)
-		UIManager.add_hint(InputProfile.label(&"cycle_mode"), next_label)
-		UIManager.add_hint(InputProfile.label(&"done"), "Done")
+		var centring := state == State.PLACING_VOLUME_CENTER
+		hints.append(_hint(&"place_point", "Place centre" if centring else "Lock radius"))
+		hints.append(_hint(&"undo_cancel", "Clear / Cancel" if centring else "Cancel"))
+		hints.append(_hint(&"cycle_mode", "Cylinder" if mode == Mode.SPHERE else "Line"))
+	hints.append(_hint(&"done", "Done"))
+	return hints
+
+
+static func _hint(action_id: StringName, action: String) -> Dictionary:
+	return {"key": InputProfile.label(action_id), "action": action}
 
 
 func _pop_measure_hints() -> void:
-	UIManager.remove_hint(InputProfile.label(&"place_point"))
-	UIManager.remove_hint(InputProfile.label(&"snap_token"))
-	UIManager.remove_hint(InputProfile.label(&"undo_cancel"))
-	UIManager.remove_hint(InputProfile.label(&"cycle_mode"))
-	UIManager.remove_hint(InputProfile.label(&"done"))
-	UIManager.add_hint(InputProfile.label(&"measure"), "Measure")
-	UIManager.add_hint(InputProfile.label(&"grid"), "Grid")
+	UIManager.clear_tool_hints()
 
 
 func _cycle_mode() -> void:

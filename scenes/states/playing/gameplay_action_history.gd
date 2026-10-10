@@ -103,19 +103,20 @@ func record_compound_property_change(changes: Array[Dictionary]) -> void:
 
 
 ## Record a token removal. Call BEFORE freeing the token.
-## Captures the full TokenState plus asset IDs for re-creation.
-func record_token_removal(token: BoardToken, token_state: TokenState) -> void:
-	_push(
-		{
-			"type": ActionType.TOKEN_REMOVAL,
-			"network_id": token_state.network_id,
-			"token_state_dict": token_state.to_dict(),
-			"pack_id": token.pack_id,
-			"asset_id": token.asset_id,
-			"variant_id": token.variant_id,
-			"description": 'removed "%s"' % token_state.token_name,
-		}
-	)
+## Captures the full TokenState plus asset IDs for re-creation. Returns the entry, which
+## undo_action() takes back out of turn (the removal toast's Undo).
+func record_token_removal(token: BoardToken, token_state: TokenState) -> Dictionary:
+	var action := {
+		"type": ActionType.TOKEN_REMOVAL,
+		"network_id": token_state.network_id,
+		"token_state_dict": token_state.to_dict(),
+		"pack_id": token.pack_id,
+		"asset_id": token.asset_id,
+		"variant_id": token.variant_id,
+		"description": 'removed "%s"' % token_state.token_name,
+	}
+	_push(action)
+	return action
 
 
 ## Record a token spawn (currently only duplicate). Call AFTER the spawn, since
@@ -135,7 +136,21 @@ func record_token_spawn(network_id: String, token_name: String) -> void:
 func undo() -> String:
 	if _stack.is_empty():
 		return ""
-	var action: Dictionary = _stack.pop_back()
+	return _undo(_stack.pop_back())
+
+
+## Undo one recorded entry wherever it sits in the stack (a toast's Undo, when other
+## actions may have followed it). Returns its description, or "" when it is no longer in
+## the stack: already undone by Ctrl+Z, or dropped past MAX_HISTORY.
+func undo_action(action: Dictionary) -> String:
+	for i in range(_stack.size() - 1, -1, -1):
+		if is_same(_stack[i], action):
+			_stack.remove_at(i)
+			return _undo(action)
+	return ""
+
+
+func _undo(action: Dictionary) -> String:
 	match action.type:
 		ActionType.PROPERTY_CHANGE:
 			_undo_property_change(action)

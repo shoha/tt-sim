@@ -23,7 +23,9 @@ extends RefCounted
 ##   drawer on a pane as a rail click does (the authoring tool drawer, or the play Visuals
 ##   drawer), or close it.
 ## - `toasts`: one toast of each kind, with copy the game uses.
-## - `danger`: the Remove token danger confirmation, with the game's copy.
+## - `undo_toast`: the toast a removed token shows, with its Undo.
+## - `danger`: press the open pause menu's Return to title: its danger confirmation, with
+##   Cancel focused as the game opens it.
 ## - `dismiss`: cancel every open confirmation dialog.
 ## - `browser` (`open`, default true): open or close the Add Token browser.
 ## - `dusk` (`hour`, default 19.0): set the play map's time of day as a player dragging the
@@ -59,7 +61,10 @@ static func run(base: Node, step: Dictionary) -> String:
 		"toasts":
 			return _toasts()
 		"danger":
-			return _danger()
+			return _danger(base)
+		"undo_toast":
+			UIManager.show_undo_toast('Removed "Marigold"', func() -> void: pass)
+			return "undo toast"
 		"dismiss":
 			return _dismiss(base)
 		"browser":
@@ -282,20 +287,20 @@ static func _first_pressed(root: Node, variation: StringName) -> Button:
 
 
 static func _toasts() -> String:
-	UIManager.show_success("Level saved")
+	UIManager.show_success("Map saved")
 	UIManager.show_info("Undone: Move token")
 	UIManager.show_warning("Maps are built offline. Leave the game to build or edit a map.")
-	UIManager.show_error("Could not load that level")
+	UIManager.show_error(MapLoadError.text("user://levels/_ui_tour_gone/", "Old Mill"))
 	return "four toasts"
 
 
-static func _danger() -> String:
-	UIManager.show_danger_confirmation(
-		"Remove token",
-		'Remove "Marigold" from the board? Ctrl+Z undoes it.',
-		Callable(),
-		"Remove"
-	)
+## The pause menu's Return to title, pressed: the danger confirmation as the game asks it,
+## opening with Cancel focused. Needs the pause menu open.
+static func _danger(base: Node) -> String:
+	var pause: Variant = base.get("_pause_overlay")
+	if not is_instance_valid(pause):
+		return "the pause menu is not open"
+	(pause as PauseOverlay).main_menu_button.pressed.emit()
 	return "danger confirmation"
 
 

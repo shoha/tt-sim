@@ -52,7 +52,7 @@ role only to draw or tint by hand, through the control being drawn:
 |---|---|
 | `Label` (default: Inter body 16, text) | `Wordmark` (Fraunces 56), `Title` / `H1` (Fraunces 26), `Heading` / `H2` / `SectionHeader` / `PanelHeader` (Fraunces 19), `Eyebrow` (Fraunces italic 19), `H3` (Inter 16 semibold), `Body`, `Caption` / `RailLabel` (14, soft), `BodyState`, `CaptionState`, `Code` (Inter 19 semibold, tabular figures, slashed zero, tailed l: a code read aloud), `CountBadgeLabel` (caption, strong, on the accent), `BodyOnSelected` / `CaptionOnSelected` (body and caption in ON_SELECTED: text on a selected fill) |
 | `Button` (default: the quiet secondary) | `Primary` (one per screen), `Danger` (danger confirm only), `Ghost` (no fill, soft text), `Secondary` (alias of the default), `IconButton`, `IconButtonActive`, `Tile`, `ListRow` (a selectable list row, the room's shelf maps: clear at rest with no edge, the hover wash, the selected fill when picked), `Card`, `FoldoutHeader` |
-| `PanelContainer` (default: a `Sheet`) | `Sheet`, `Inset` / `PanelInset`, `PanelElevated`, `PanelBordered`, `KeyChip`, `CodeChip` (the room code: a key chip with 12 / 6 padding), `CardStrip` / `CardStripSelected` (a card's caption strip: clear, or the selected fill when the card is selected), `Chip` (a label over the board: glass with its rim on glass, never a black box), `CountBadge` (the accent pill behind a count), `ToastInfo` / `ToastSuccess` / `ToastWarning` / `ToastError` (a toast: its kind in a left stripe of state, success, warning or danger); `Panel`: `Badge` (the unsaved dot), `CardThumb` (a card's thumbnail well: the inset wash, the shape the card clips its picture to; a map with no thumbnail paints its `MapPlaceholder` in it); `ProgressBar`: `ProgressSuccess`, `ProgressDanger` (a finished or failed bar) |
+| `PanelContainer` (default: a `Sheet`) | `Sheet`, `Inset` / `PanelInset`, `PanelElevated`, `PanelBordered`, `KeyChip`, `CodeChip` (the room code: a key chip with 12 / 6 padding), `CardStrip` / `CardStripSelected` (a card's caption strip: clear, or the selected fill when the card is selected), `Chip` (a label over the board: glass with its rim on glass, never a black box), `CountBadge` (the accent pill behind a count), `Toast` (every toast and the disconnect banner: one glass surface, no side stripe; the kind is the icon tinted state, success, warning or danger, and the words); `Panel`: `Badge` (the unsaved dot, in the cool state role: it says what is, and its item's tooltip says it in words), `CardThumb` (a card's thumbnail well: the inset wash, the shape the card clips its picture to; a map with no thumbnail paints its `MapPlaceholder` in it); `ProgressBar`: `ProgressSuccess`, `ProgressDanger` (a finished or failed bar) |
 | `HBoxContainer` / `ScrollContainer` | `PropertyRow` (a sheet's label-and-control row: 16 px gap; `PropertyRow.fit_sheet_row(row)` also sets the 184 px label column), `CardGrid` (a scrolling card grid: a clear panel whose 6 px margins keep a focused card's ring inside the clip) |
 
 Focus and selection never share a mark (I1). The ring is focus only: a selected `Tile` is the
@@ -215,10 +215,10 @@ window's `content_scale_factor` instead, so the virtual canvas shrinks and the U
   size and pixel-sized 3D details (grid line widths) are unchanged. Overlays drawn on the canvas
   over the board (measure labels, gizmo handles, brush outlines) are UI and follow the factor.
 - **Where it lives:** Settings > Graphics, the Interface Size row (saves and applies the moment
-  it is picked; Reset puts Auto back). Its choices read "Auto (recommended)" and each fixed
-  size against Auto on this window ("100% (smaller than Auto)" at 720p, "140% (same as
-  Auto)"), because a bare "100%" reads as the normal size and draws 9 px captions at 720p; the
-  labels refill when the window resizes. Saved per user in the settings file's `[ui]` section as
+  it is picked; Reset puts Auto back). Its choices read "Auto (recommended)" and bare percents,
+  with only the one Auto picks on this window marked ("140% (Auto's size here)" at 720p), so a
+  bare "100%" does not read as the normal size (it draws 9 px captions at 720p) without five
+  rows of "(smaller than Auto)"; the labels refill when the window resizes. Saved per user in the settings file's `[ui]` section as
   `interface_size` (0 for Auto, else the percent; `UiPreferences`), never networked.
   `UIManager` applies it at startup and on every root `size_changed`; a headless run keeps 1.0.
   The render-job probe `ui_primitives.gd` `window` step applies Auto (or its `content_scale`,
@@ -906,9 +906,11 @@ UIManager.show_danger_confirmation("Delete Level?", "All data will be lost.", my
 
 ```gdscript
 UIManager.show_info("Auto-saved")
-UIManager.show_success("Level saved!")
+UIManager.show_success("Map saved")
 UIManager.show_warning("Unsaved changes")
-UIManager.show_error("Failed to load")
+UIManager.show_error(MapLoadError.for_info(info))  # what failed, why, how to recover (W3)
+# A change recovered by undo rather than confirmed first (I4): the toast offers Undo.
+UIManager.show_undo_toast('Removed "Marigold"', undo_callable)
 ```
 
 ### Other Components
@@ -917,7 +919,7 @@ UIManager.show_error("Failed to load")
 | -------------- | -------------------------------- | ----------------------- |
 | Settings Menu  | `UIManager.open_settings()`      | Audio/Graphics/Grid/Controls/Network/Updates |
 | Loading Screen | `LoadingOverlay.show_loading()` (owned by `Root`) | Progress indicator      |
-| Input Hints    | `UIManager.set_hints([...])`     | Contextual keybindings  |
+| Input Hints    | `UIManager.set_hints([...])`; a tool's own keys `UIManager.set_tool_hints([...])` / `clear_tool_hints()` | Contextual keybindings  |
 | Transitions    | `UIManager.transition(callback)` | Fade between scenes     |
 
 See [UI Systems Guide](UI_SYSTEMS.md) for complete documentation.

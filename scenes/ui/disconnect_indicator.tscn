@@ -22,7 +22,13 @@ layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
 
-[node name="Label" type="Label" parent="MarginContainer/PanelContainer"]
+[node name="Row" type="HBoxContainer" parent="MarginContainer/PanelContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="Label" type="Label" parent="MarginContainer/PanelContainer/Row"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Body"

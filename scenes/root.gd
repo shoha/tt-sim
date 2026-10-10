@@ -483,7 +483,7 @@ func _load_shelf_map(key: String) -> LevelData:
 func _on_host_game_requested(level_info: Dictionary) -> void:
 	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
 	if level == null:
-		UIManager.show_error("Could not load that level")
+		UIManager.show_error(MapLoadError.for_info(level_info))
 		return
 	host_session(level)
 
@@ -543,7 +543,7 @@ func _on_session_room_opened() -> void:
 func _on_play_solo_requested(level_info: Dictionary) -> void:
 	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
 	if level == null:
-		UIManager.show_error("Could not load that level")
+		UIManager.show_error(MapLoadError.for_info(level_info))
 		return
 	_on_play_level_requested(level)
 
@@ -597,7 +597,7 @@ func _begin_authoring(request: Dictionary) -> void:
 func _on_edit_map_requested(level_info: Dictionary) -> void:
 	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
 	if level == null:
-		UIManager.show_error("Could not load that level")
+		UIManager.show_error(MapLoadError.for_info(level_info))
 		return
 	request_authoring(level, RETURN_TO_TITLE)
 
@@ -864,7 +864,7 @@ func _on_pause_change_level_requested(level_info: Dictionary) -> void:
 func request_level_change(level_info: Dictionary) -> void:
 	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
 	if level == null:
-		UIManager.show_error("Could not load that level")
+		UIManager.show_error(MapLoadError.for_info(level_info))
 		return
 	_on_play_level_requested(level)
 

@@ -327,9 +327,9 @@ func test_danger_confirmation_fits() -> void:
 	var dialog := CONFIRM_SCENE.instantiate()
 	_host.add_child(dialog)
 	dialog.setup(
-		"Remove token",
-		'Remove "Marigold" from the board? Ctrl+Z undoes it.',
-		"Remove",
+		"Return to the title?",
+		PauseOverlay.leave_consequence(true, true),
+		"Return to title",
 		"Cancel",
 		Callable(),
 		Callable(),
@@ -341,14 +341,14 @@ func test_danger_confirmation_fits() -> void:
 func test_toasts_fit() -> void:
 	var toasts := TOASTS_SCENE.instantiate()
 	_host.add_child(toasts)
-	toasts.show_toast("Level saved", ToastContainer.ToastType.SUCCESS, 30.0)
-	toasts.show_toast("Undone: Move token", ToastContainer.ToastType.INFO, 30.0)
+	toasts.show_toast("Map saved", ToastContainer.ToastType.SUCCESS, 30.0)
+	toasts.show_toast('Removed "Marigold"', ToastContainer.ToastType.INFO, 30.0, "Undo", func(): pass)
 	toasts.show_toast(
 		"Maps are built offline. Leave the game to build or edit a map.",
 		ToastContainer.ToastType.WARNING,
 		30.0
 	)
-	toasts.show_toast("Could not load that level", ToastContainer.ToastType.ERROR, 30.0)
+	toasts.show_toast(MapLoadError.text("", "Mossy Hollow"), ToastContainer.ToastType.ERROR, 30.0)
 	await _assert_fits("four toasts", toasts.toast_vbox)
 	assert_eq(toasts.toast_vbox.get_child_count(), 4)
 
@@ -375,36 +375,37 @@ func test_help_overlay_fits() -> void:
 	await _assert_fits("help overlay", _sheet(help))
 
 
-## The measure tool's row (ten chips) is wider than the canvas at 150%: it wraps onto a second
-## line inside the canvas, whole and clear of the Add Token button, rather than running past
-## both edges; beside an open drawer it wraps inside the free board.
+## The measure tool's own keys lead and the camera keys step out (MeasureTool.hints_for), so
+## its row is one line at 150%, whole and clear of the Add token button. The play row beside
+## an open drawer is longer than the free board: it wraps onto a second line inside it rather
+## than running past either edge.
 func test_a_long_hint_row_wraps_inside_the_canvas() -> void:
 	var play := PLAY_SCENE.instantiate()
 	_host.add_child(play)
 	var drawer := play.get_node("GameplayMenu").get("level_edit_panel") as LevelEditPanel
 	drawer.initialize(LevelData.new())
 	var hints := _play_hints()
-	# As MeasureTool._update_hints: its own keys replace Measure and Grid.
-	hints.remove_hint(InputProfile.label(&"measure"))
-	hints.remove_hint(InputProfile.label(&"grid"))
-	for spec in [
-		[&"place_point", "Place Point"],
-		[&"snap_token", "Snap Token"],
-		[&"undo_cancel", "Undo / Cancel"],
-		[&"cycle_mode", "Sphere"],
-		[&"done", "Done"],
-	]:
-		hints.add_hint(InputProfile.label(spec[0]), spec[1])
+	hints.set_tool_hints(MeasureTool.hints_for(MeasureTool.Mode.LINE, MeasureTool.State.PLACING_START))
 	await _assert_fits("the measure hint row", _backdrop(hints))
 	var bar := _drawn_rect(_backdrop(hints))
 	assert_true(Rect2(Vector2.ZERO, CANVAS).encloses(bar), "the row on the canvas: %s" % bar)
 	assert_almost_eq(_drawn_alpha(_backdrop(hints)), 1.0, 0.01, "and shown")
+	assert_eq(_chip_lines(hints), 1, "the measure row on one line")
 	_assert_uncovered("the measure hint row beside Add Token", hints)
+	hints.clear_tool_hints()
 	drawer._on_rail_item_pressed(&"sun")
-	await _assert_fits("the measure hint row beside the drawer", drawer)
-	_assert_uncovered("the measure hint row beside the drawer", hints)
+	await _assert_fits("the play hint row beside the drawer", drawer)
+	_assert_uncovered("the play hint row beside the drawer", hints)
 	var room := drawer.covered_span().x - 2.0 * InputHints.DRAWER_CLEARANCE
 	assert_lte(_backdrop(hints).size.x, room + SLACK_PX, "held to the free board")
+
+
+## How many lines the hint row's chips lie on.
+func _chip_lines(hints: InputHints) -> int:
+	var tops := {}
+	for chip in hints.hints_container.get_children():
+		tops[roundi((chip as Control).position.y)] = true
+	return tops.size()
 
 
 ## An AnimatedCanvasLayerPanel's sheet.
@@ -459,7 +460,7 @@ func _play_hints() -> InputHints:
 			{"key": InputProfile.label(&"pause"), "action": "Pause"},
 			{"key": InputProfile.label(&"wasd"), "action": "Pan"},
 			{"key": InputProfile.label(&"zoom"), "action": "Zoom"},
-			{"key": InputProfile.label(&"reset_camera"), "action": "Reset Camera"},
+			{"key": InputProfile.label(&"reset_camera"), "action": "Reset camera"},
 			{"key": InputProfile.label(&"measure"), "action": "Measure"},
 			{"key": InputProfile.label(&"grid"), "action": "Grid"},
 			{"key": "F1", "action": "Help"},

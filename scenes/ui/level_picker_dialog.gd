@@ -11,7 +11,7 @@ signal closed
 var grid: LevelGrid
 var provider: Callable = LevelManager.get_saved_levels
 
-var _title: String = "Choose a level"
+var _title: String = "Choose a map"
 var _locked_path: String = ""
 var _closing: bool = false
 

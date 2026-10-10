@@ -137,6 +137,25 @@ func test_removal_record_and_undo_emits_signal() -> void:
 	assert_eq(received[0].network_id, TEST_TOKEN_ID)
 
 
+## The removal toast's Undo takes its own entry back even after later actions, which stay;
+## an entry already undone (Ctrl+Z got there first) is nothing to undo.
+func test_undo_action_takes_one_entry_out_of_turn() -> void:
+	var received := []
+	_history.removal_undo_requested.connect(func(a: Dictionary) -> void: received.append(a))
+	var removal_action := {
+		"type": GameplayActionHistory.ActionType.TOKEN_REMOVAL,
+		"network_id": TEST_TOKEN_ID,
+		"description": 'removed "Goblin"',
+	}
+	_history._push(removal_action)
+	_history.record_property_change(TEST_TOKEN_ID, "is_visible_to_players", true, false)
+	assert_eq(_history.undo_action(removal_action), 'removed "Goblin"')
+	assert_eq(received.size(), 1)
+	assert_eq(_history.get_count(), 1, "the later action stays")
+	assert_eq(_history.undo_action(removal_action), "", "already undone")
+	assert_eq(received.size(), 1)
+
+
 func test_visibility_description() -> void:
 	_history.record_property_change(TEST_TOKEN_ID, "is_visible_to_players", true, false)
 	var desc := _history.undo()

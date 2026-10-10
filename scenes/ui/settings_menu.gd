@@ -376,18 +376,18 @@ func _populate_controls_list() -> void:
 
 	# Add control hints (profile-aware labels)
 	var controls: Array[Array] = [
-		["Left Click + Drag", "Move token"],
-		["Right Click", "Open context menu"],
-		[InputProfile.label(&"zoom"), "Zoom camera"],
-		[InputProfile.label(&"pan"), "Pan camera"],
-		[InputProfile.label(&"rotate"), "Rotate token"],
-		[InputProfile.label(&"scale"), "Scale token"],
-		[InputProfile.label(&"reset_transform"), "Reset token transform"],
-		[InputProfile.label(&"reset_camera"), "Reset camera"],
-		[InputProfile.label(&"wasd"), "Move camera"],
-		[InputProfile.label(&"measure"), "Measure tool"],
-		[InputProfile.label(&"grid"), "Toggle grid"],
-		[InputProfile.label(&"pause"), "Pause / Close menu"],
+		["Left-drag", "Move a token"],
+		["Right-click", "Open a token's menu"],
+		[InputProfile.label(&"zoom"), "Zoom the camera"],
+		[InputProfile.label(&"pan"), "Pan the camera"],
+		[InputProfile.label(&"rotate"), "Rotate a token"],
+		[InputProfile.label(&"scale"), "Scale a token"],
+		[InputProfile.label(&"reset_transform"), "Reset a token's rotation and scale"],
+		[InputProfile.label(&"reset_camera"), "Reset the camera"],
+		[InputProfile.label(&"wasd"), "Move the camera"],
+		[InputProfile.label(&"measure"), "Measure distances"],
+		[InputProfile.label(&"grid"), "Show or hide the grid"],
+		[InputProfile.label(&"pause"), "Pause, or close a menu"],
 	]
 
 	for control in controls:

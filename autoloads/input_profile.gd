@@ -12,18 +12,20 @@ signal profile_changed(new_profile: Profile)
 
 enum Profile { AUTO, MOUSE, TRACKPAD }
 
-## Label table: action_id -> [mouse_label, trackpad_label]
+## Label table: action_id -> [mouse_label, trackpad_label]. The gestures read in words, one
+## form throughout ("Middle-drag", "Shift + middle-drag", "Middle double-click"); the hint
+## bar's short key caps (LMB, Ctrl+LMB, RMB) stay as caps.
 const LABELS := {
-	&"pan": ["MMB drag", "RMB drag"],
+	&"pan": ["Middle-drag", "Right-drag"],
 	&"zoom": ["Scroll", "Scroll"],
 	&"reset_camera": ["Home", "C"],
 	# The same gesture as pan, told apart by where it starts.
-	&"rotate": ["MMB drag on a token", "R+drag on a token"],
-	&"scale": ["Shift+MMB", "Shift+R+Drag"],
-	&"reset_transform": ["MMB DblClick", "R+DblClick"],
+	&"rotate": ["Middle-drag on a token", "R + drag on a token"],
+	&"scale": ["Shift + middle-drag", "Shift + R + drag"],
+	&"reset_transform": ["Middle double-click", "R + double-click"],
 	&"measure": ["M", "M"],
 	&"grid": ["G", "G"],
-	&"pause": ["ESC", "ESC"],
+	&"pause": ["Esc", "Esc"],
 	&"wasd": ["WASD", "WASD"],
 	&"place_point": ["LMB", "LMB"],
 	&"snap_token": ["Ctrl+LMB", "Ctrl+LMB"],

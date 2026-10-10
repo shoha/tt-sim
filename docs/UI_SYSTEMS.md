@@ -205,28 +205,37 @@ Non-blocking notifications that appear bottom-center of the screen.
 
 ### Types
 
-| Type    | Method           | Color  | Use Case              |
-| ------- | ---------------- | ------ | --------------------- |
-| INFO    | `show_info()`    | Orange | General information   |
-| SUCCESS | `show_success()` | Green  | Successful operations |
-| WARNING | `show_warning()` | Yellow | Caution notices       |
-| ERROR   | `show_error()`   | Red    | Error messages        |
+Every kind is the same glass chip (the `Toast` variation, no side stripe); the kind shows in an
+icon tinted with its role and in the words (UI_TASTE C7).
+
+| Type    | Method           | Icon tint      | Use Case              |
+| ------- | ---------------- | -------------- | --------------------- |
+| INFO    | `show_info()`    | Lake (state)   | General information   |
+| SUCCESS | `show_success()` | Moss           | Successful operations |
+| WARNING | `show_warning()` | Ochre          | Caution notices       |
+| ERROR   | `show_error()`   | Madder         | Error messages        |
 
 ### Usage
 
 ```gdscript
 # Quick helpers
 UIManager.show_info("Auto-saved")
-UIManager.show_success("Level saved!")
+UIManager.show_success("Map saved")
 UIManager.show_warning("Unsaved changes")
-UIManager.show_error("Failed to load file")
+# An error says what failed, why and how to recover (W3); a map that will not open:
+UIManager.show_error(MapLoadError.for_info(level_info))
 
 # With custom duration
 UIManager.show_toast("Custom message", UIManager.TOAST_SUCCESS, 5.0)
+
+# A change undone safely instead of confirmed first (I4): the toast offers Undo
+UIManager.show_undo_toast('Removed "Marigold"', undo_callable)
 ```
 
 ### Behavior
 
+- A toast with an action (Undo) stays 6 s (`ToastContainer.ACTION_DURATION`); pressing it runs
+  the action once and dismisses the toast
 - Auto-dismiss after 3 seconds (configurable)
 - Maximum 5 visible at once (oldest dismissed)
 - Animated slide-in/out
@@ -1462,15 +1471,16 @@ Rename, Duplicate, and Remove Token (plus their separator) are visible only when
 `NetworkManager.has_gm_access()` is true — `TokenContextMenu._update_menu_content()` sets
 `rename_container.visible`, `duplicate_button.visible`, and `remove_button.visible` accordingly.
 
-### Remove: Confirmation and Undo
+### Remove: Undo, not a confirmation
 
-Requesting Remove closes the context menu first (`_context_menu.close_menu()`) before showing
-`UIManager.show_danger_confirmation("Remove token", ..., "Remove")` — the menu closes before the
-dialog opens so its own click-outside handler doesn't swallow the dialog's first click. On confirm,
-`TokenContextMenuController._remove_token_confirmed()` records
-`GameplayActionHistory.record_token_removal(token, TokenState.from_board_token(token))` (when the
-local peer has GM access) before calling `LevelPlayController.remove_token(token)`, so Ctrl+Z
-restores both the token and its level placement.
+Remove asks nothing first (UI_TASTE I4: recovery is safe). Requesting it closes the context menu
+and `TokenContextMenuController._remove_token()` removes the token at once through
+`LevelPlayController.remove_token(token)`; once that succeeds (and the local peer has GM access)
+it records `GameplayActionHistory.record_token_removal(token, TokenState.from_board_token(token))`
+(the state is captured before the removal) and shows `UIManager.show_undo_toast('Removed "Name"',
+...)`. The toast's Undo calls `GameplayActionHistory.undo_action(entry)`, which takes that one
+entry back even after later actions; Ctrl+Z still undoes the latest. Both restore the token and
+its level placement. Without GM access the toast is a plain info toast.
 
 ### Rename and Duplicate
 

@@ -259,23 +259,18 @@ func _grant_token_control(token: BoardToken, peer_id: int) -> void:
 		UIManager.show_success('%s can now control "%s"' % [player_name, token_name])
 
 
+## Remove at once, no confirm (UI_TASTE I4: recovery is safe): the toast that reports the
+## removal offers Undo, which brings this token back even after other actions (Ctrl+Z still
+## undoes the latest).
 func _on_context_menu_remove_requested(token: BoardToken) -> void:
 	if not is_instance_valid(token):
 		return
-	# Close synchronously before the confirmation dialog opens -- the menu's
-	# own _input() click-outside handler stays live while it is fully visible
-	# and would otherwise swallow the first click on the dialog's buttons.
 	if _context_menu:
 		_context_menu.close_menu()
-	UIManager.show_danger_confirmation(
-		"Remove token",
-		'Remove "%s" from the board? Ctrl+Z undoes it.' % token.token_name,
-		func() -> void: _remove_token_confirmed(token),
-		"Remove",
-	)
+	_remove_token(token)
 
 
-func _remove_token_confirmed(token: BoardToken) -> void:
+func _remove_token(token: BoardToken) -> void:
 	if not is_instance_valid(token):
 		return
 	var removed_name: String = token.token_name
@@ -289,9 +284,21 @@ func _remove_token_confirmed(token: BoardToken) -> void:
 	var lpc := _game_map.get_level_play_controller()
 	if not lpc or not lpc.remove_token(token):
 		return
-	if token_state:
-		_game_map._action_history.record_token_removal(token, token_state)
-	UIManager.show_info('Removed "%s"' % removed_name)
+	var message := 'Removed "%s"' % removed_name
+	if token_state == null:
+		UIManager.show_info(message)
+		return
+	var history: GameplayActionHistory = _game_map._action_history
+	var entry := history.record_token_removal(token, token_state)
+	UIManager.show_undo_toast(message, _undo_removal.bind(history, entry))
+
+
+## The removal toast's Undo. A history freed with its table, or an entry already undone or
+## cleared by a map change, leaves nothing to bring back.
+## `history` is untyped so a freed one arrives as a value is_instance_valid can test.
+static func _undo_removal(history: Variant, entry: Dictionary) -> void:
+	if is_instance_valid(history):
+		(history as GameplayActionHistory).undo_action(entry)
 
 
 func _on_context_menu_duplicate_requested(token: BoardToken) -> void:

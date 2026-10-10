@@ -35,7 +35,7 @@ func test_no_levels_disables_host_and_play_and_explains() -> void:
 	assert_true(title.play_button.disabled)
 	assert_false(title.join_button.disabled)
 	assert_true(title.empty_caption.visible)
-	assert_eq(title.heading_count.text, "0 levels")
+	assert_eq(title.heading_count.text, "0 maps")
 
 
 func test_most_recent_level_is_preselected_and_named_in_subtitles() -> void:
@@ -44,7 +44,7 @@ func test_most_recent_level_is_preselected_and_named_in_subtitles() -> void:
 	assert_eq(title.selected_level()["name"], "New Camp")
 	assert_eq(title.host_subtitle.text, "with New Camp")
 	assert_eq(title.play_subtitle.text, "New Camp")
-	assert_eq(title.heading_count.text, "2 levels")
+	assert_eq(title.heading_count.text, "2 maps")
 	assert_false(title.host_button.disabled)
 
 
@@ -76,7 +76,7 @@ func test_grid_refresh_notifies_actions_when_the_list_changes() -> void:
 	assert_false(title.host_button.disabled)
 	title.grid.provider = func() -> Array: return []
 	title.grid.refresh()
-	assert_eq(title.heading_count.text, "0 levels")
+	assert_eq(title.heading_count.text, "0 maps")
 	assert_true(title.empty_caption.visible)
 	assert_true(title.host_button.disabled)
 	assert_true(title.play_button.disabled)

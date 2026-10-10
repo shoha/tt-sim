@@ -63,31 +63,49 @@ func test_host_steps_down_from_its_fill_while_a_sheet_is_up() -> void:
 	assert_eq(title.host_button.theme_type_variation, &"Primary", "the fill comes back")
 
 
-func test_each_toast_kind_has_its_stripe_and_icon() -> void:
+## Every toast is the same stripe-less surface (a stripe at rest is decoration); its kind
+## shows in a real icon tinted with the kind's role, and in its words.
+func test_each_toast_kind_has_its_icon_and_no_stripe() -> void:
 	var toasts: ToastContainer = TOAST_SCENE.instantiate()
 	add_child_autofree(toasts)
 	var glass := ThemeColors.glass_theme()
+	var surface := glass.get_stylebox("panel", "Toast") as StyleBoxFlat
+	assert_eq(surface.border_width_left, surface.border_width_right, "no side stripe")
 	for type: int in ToastContainer.KINDS:
 		var kind: Array = ToastContainer.KINDS[type]
-		var toast := toasts._create_toast("Level saved", type) as PanelContainer
+		var toast := toasts._create_toast("Map saved", type) as PanelContainer
 		autofree(toast)
-		assert_eq(toast.theme_type_variation, kind[0])
+		assert_eq(toast.theme_type_variation, &"Toast")
 		var icon := toast.find_child("Icon", true, false) as TextureRect
-		assert_not_null(icon.texture, "%s has a real icon, not a glyph" % kind[1])
-		var stripe := glass.get_stylebox("panel", kind[0]) as StyleBoxFlat
-		assert_eq(stripe.border_color, ThemeColors.GLASS_ROLES[kind[2]])
-		assert_gt(stripe.border_width_left, 0)
+		assert_not_null(icon.texture, "%s has a real icon, not a glyph" % kind[0])
+		assert_eq(icon.self_modulate, ThemeColors.GLASS_ROLES[kind[1]])
+	for variation in ["ToastInfo", "ToastSuccess", "ToastWarning", "ToastError"]:
+		assert_false(glass.has_stylebox("panel", variation), "%s is gone" % variation)
 	var info: Array = ToastContainer.KINDS[ToastContainer.ToastType.INFO]
-	assert_eq(info[2], ThemeColors.STATE, "information is cool: warm means do")
+	assert_eq(info[1], ThemeColors.STATE, "information is cool: warm means do")
 
 
-## The toast stripes and icons sit on glass over any board: each holds 3:1 over white and
-## over black.
+## A toast's action (the removal's Undo) runs once and dismisses the toast.
+func test_a_toast_action_runs_once_and_dismisses() -> void:
+	var toasts: ToastContainer = TOAST_SCENE.instantiate()
+	add_child_autofree(toasts)
+	var calls := [0]
+	toasts.show_toast('Removed "Marigold"', 0, 30.0, "Undo", func(): calls[0] += 1, "arrow-back-up")
+	var button := toasts.toast_vbox.find_child("Action", true, false) as Button
+	assert_eq(button.text, "Undo")
+	assert_not_null(button.icon, "a real icon")
+	button.pressed.emit()
+	button.pressed.emit()
+	assert_eq(calls[0], 1)
+	assert_eq(toasts._active_toasts.size(), 0, "dismissed")
+
+
+## The toast icons sit on glass over any board: each holds 3:1 over white and over black.
 func test_toast_kinds_hold_glyph_contrast_on_glass() -> void:
 	for kind: Array in ToastContainer.KINDS.values():
 		for ground: Color in [WHITE, BLACK]:
 			var back := _over(ThemeColors.GLASS_ROLES[ThemeColors.SURFACE], ground)
-			var ratio := _contrast(ThemeColors.GLASS_ROLES[kind[2]], back)
+			var ratio := _contrast(ThemeColors.GLASS_ROLES[kind[1]], back)
 			assert_gt(ratio, GLYPH, "%s on glass: %.2f" % [kind[0], ratio])
 
 

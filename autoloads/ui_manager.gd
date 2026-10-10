@@ -228,6 +228,15 @@ func show_toast(message: String, type: int = TOAST_INFO, duration: float = 3.0) 
 		_toast_container.show_toast(message, type, duration)
 
 
+## Show an info toast that offers Undo, for a change undone safely instead of confirmed
+## first (UI_TASTE I4: a removed token). Pressing Undo calls `undo` and dismisses the toast.
+func show_undo_toast(message: String, undo: Callable) -> void:
+	if _toast_container and _toast_container.has_method("show_toast"):
+		_toast_container.show_toast(
+			message, TOAST_INFO, ToastContainer.ACTION_DURATION, "Undo", undo, "arrow-back-up"
+		)
+
+
 ## Show an info toast
 func show_info(message: String) -> void:
 	show_toast(message, TOAST_INFO)
@@ -301,6 +310,19 @@ func add_hint(key: String, action: String) -> void:
 func remove_hint(key: String) -> void:
 	if _input_hints:
 		_input_hints.remove_hint(key)
+
+
+## Lay an active tool's own hints over the base ones (InputHints.set_tool_hints): they lead,
+## the camera keys step out and Help stays.
+func set_tool_hints(hints: Array) -> void:
+	if _input_hints:
+		_input_hints.set_tool_hints(hints)
+
+
+## Drop the tool's hints: the base hints return in their own order.
+func clear_tool_hints() -> void:
+	if _input_hints:
+		_input_hints.clear_tool_hints()
 
 
 # --- Interface Size ---

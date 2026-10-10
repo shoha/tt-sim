@@ -128,7 +128,7 @@ func _load_editor_level(level_path: String) -> bool:
 	# stay silent or the editor opens with the level starting up underneath it.
 	var level_data := LevelManager.load_level(level_path, false)
 	if level_data == null:
-		UIManager.show_error("Could not open that level for editing")
+		UIManager.show_error(MapLoadError.text(level_path))
 		return false
 	_level_editor_instance.set_level(level_data)
 	return true

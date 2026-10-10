@@ -367,7 +367,7 @@ func _on_request_control_pressed() -> void:
 		if request_control_button:
 			request_control_button.disabled = true
 			request_control_button.text = "Waiting..."
-		UIManager.show_info("Request sent, waiting for DM...")
+		UIManager.show_info("Request sent. Waiting for the GM...")
 		AudioManager.play(&"tick")
 		close_menu()
 

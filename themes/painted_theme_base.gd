@@ -199,6 +199,20 @@ func _define_flat_buttons() -> void:
 	tile_style.icon_max_width = 24
 	tile_style.h_separation = SPACE_1
 	define_variant_style("Tile", "Button", tile_style)
+	# A list row (the room's shelf maps): a row like a player row, not a tile, so no edge at
+	# rest; the hover wash, and the selected fill edge to edge when picked.
+	var list_row := box(Color(c(ThemeColors.SURFACE), 0.0), RADIUS_CONTROL, SPACE_1, SPACE_1)
+	var row_picked: Dictionary = inherit(list_row, {bg_color = c(ThemeColors.SELECTED)})
+	var row_style := _button(
+		list_row,
+		inherit(list_row, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
+		row_picked,
+		ThemeColors.TEXT
+	)
+	for key: String in ["font_pressed_color", "font_hover_pressed_color"]:
+		row_style[key] = c(ThemeColors.ON_SELECTED)
+	row_style.hover_pressed = inherit(row_picked, {bg_color = c(ThemeColors.SELECTED_HOVER)})
+	define_variant_style("ListRow", "Button", row_style)
 	# Cards: equivalent items (levels, avatars) that lift on hover. A selected card says so in
 	# its caption strip (CardStripSelected below), never with a ring: the ring is focus, so
 	# a selected card with focus shows both.
@@ -241,16 +255,11 @@ func _define_flat_buttons() -> void:
 	)
 	# A card's thumbnail well: the paper-inset wash, its top corners concentric with the
 	# card's (the card radius less its 4 px inset). The card clips its picture to this shape;
-	# with no picture the wash shows with the name's initial in Fraunces.
+	# with no picture it holds the map's painted placeholder (MapPlaceholder).
 	var well := box(c(ThemeColors.SURFACE_INSET), RADIUS_CARD - SPACE_1)
 	well.corner_radius_bottom_left = RADIUS_CHIP
 	well.corner_radius_bottom_right = RADIUS_CHIP
 	define_variant_style("CardThumb", "Panel", {panel = well})
-	define_variant_style(
-		"CardInitial",
-		"Label",
-		{font = font_wordmark, font_size = SIZE_WORDMARK, font_color = c(ThemeColors.TEXT_SOFT)}
-	)
 	define_variant_style(
 		"FoldoutHeader",
 		"Button",
@@ -313,8 +322,9 @@ func _define_panels() -> void:
 	var pencil := edge(1, c(ThemeColors.EDGE))
 	var code_chip := box(c(ThemeColors.SURFACE_RAISED), RADIUS_CHIP, SPACE_3, 6, pencil)
 	define_variant_style("CodeChip", "PanelContainer", {panel = code_chip})
-	# The unsaved-changes dot: warm, because it asks for an action (save).
-	define_variant_style("Badge", "Panel", {panel = box(c(ThemeColors.ACCENT), RADIUS_PILL)})
+	# The unsaved-changes dot: cool, because it says what is (C5: warm means do); the action
+	# it points at (Save) keeps the warm fill. Its item's tooltip names the state in words.
+	define_variant_style("Badge", "Panel", {panel = box(c(ThemeColors.STATE), RADIUS_PILL)})
 
 
 func _define_containers() -> void:
@@ -351,9 +361,10 @@ func _define_containers() -> void:
 
 ## Small status surfaces: chips that label the board (a ruler's distance, the input hints),
 ## the count badge, toasts and progress outcomes. On glass a chip is the glass surface with
-## its top rim, never a black box (C4). A toast carries its kind in a left stripe and an icon
-## (C7): cool for information (lake, "is"), moss, ochre and madder for the outcomes; never
-## the warm accent, which means "do" (C5).
+## its top rim, never a black box (C4). Every toast is one surface with no side stripe (a
+## stripe at rest is decoration); it carries its kind in a tinted icon and its words (C7):
+## cool for information (lake, "is"), moss, ochre and madder for the outcomes; never the warm
+## accent, which means "do" (C5).
 func _define_status() -> void:
 	var chip := box(c(ThemeColors.SURFACE), RADIUS_CHIP, SPACE_3, SPACE_1, rim())
 	if not on_glass:
@@ -368,16 +379,8 @@ func _define_status() -> void:
 		"Label",
 		{font = font_strong, font_size = SIZE_CAPTION, font_color = c(ThemeColors.ON_ACCENT)}
 	)
-	var kinds := {
-		ToastInfo = ThemeColors.STATE,
-		ToastSuccess = ThemeColors.SUCCESS,
-		ToastWarning = ThemeColors.WARNING,
-		ToastError = ThemeColors.DANGER,
-	}
-	for kind: String in kinds:
-		var stripe: Dictionary = inherit({border_color = c(kinds[kind]), border_width_left = 3}, lift())
-		var toast := box(c(ThemeColors.SURFACE), RADIUS_CONTROL, SPACE_3, SPACE_2, stripe)
-		define_variant_style(kind, "PanelContainer", {panel = toast})
+	var toast := box(c(ThemeColors.SURFACE), RADIUS_CONTROL, SPACE_3, SPACE_2, lift())
+	define_variant_style("Toast", "PanelContainer", {panel = toast})
 	for outcome: String in ["Success", "Danger"]:
 		var role := ThemeColors.SUCCESS if outcome == "Success" else ThemeColors.DANGER
 		define_variant_style(

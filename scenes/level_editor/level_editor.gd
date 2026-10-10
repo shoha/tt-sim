@@ -548,11 +548,11 @@ func _on_level_metadata_changed(_new_text = null) -> void:
 
 
 ## Keep the header caption in sync with the level name, falling back to
-## "Untitled level" when it's empty. Called from _update_ui_from_level()
+## "Untitled map" when it's empty. Called from _update_ui_from_level()
 ## (load/create/import) and _on_level_metadata_changed() (live typing).
 func _update_level_title_caption() -> void:
 	level_title_caption.text = (
-		current_level.level_name if current_level.level_name != "" else "Untitled level"
+		current_level.level_name if current_level.level_name != "" else "Untitled map"
 	)
 
 

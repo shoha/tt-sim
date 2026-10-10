@@ -4,25 +4,29 @@ extends CanvasLayer
 ## Container for displaying toast notifications.
 ##
 ## Toasts appear at the bottom-center of the screen and auto-dismiss.
-## Supports different types: info, success, warning, error. Each is a glass chip whose
-## kind shows twice (UI_TASTE.md C7): a left stripe (the Toast* theme variations) and an
-## icon tinted with the same role. Information is cool (lake: it says what is); the
-## outcomes are moss, ochre and madder.
+## Supports different types: info, success, warning, error. Each is the same glass chip (the
+## Toast variation, no side stripe: a stripe at rest is decoration, UI_TASTE anti-patterns);
+## its kind shows twice (C7), in an icon tinted with the kind's role and in the words.
+## Information is cool (lake: it says what is); the outcomes are moss, ochre and madder.
+## A toast may offer one action at its end (the removal toast's Undo, I4): pressing it runs
+## the action and dismisses the toast.
 
 enum ToastType { INFO, SUCCESS, WARNING, ERROR }
 
 const MAX_VISIBLE_TOASTS := 5
 const DEFAULT_DURATION := 3.0
+## A toast with an action stays long enough to read it and reach for the button.
+const ACTION_DURATION := 6.0
 const ICON_SIZE := 20
 ## Every toast's width: a stack of equal chips, and room for a two-line warning ("Maps are
 ## built offline. Leave the game to build or edit a map.") rather than three.
 const WIDTH := 360.0
-## Per kind: the panel's theme variation, the icon and the role that tints it.
+## Per kind: the icon and the role that tints it.
 const KINDS := {
-	ToastType.INFO: [&"ToastInfo", "info-circle", ThemeColors.STATE],
-	ToastType.SUCCESS: [&"ToastSuccess", "circle-check", ThemeColors.SUCCESS],
-	ToastType.WARNING: [&"ToastWarning", "alert-triangle", ThemeColors.WARNING],
-	ToastType.ERROR: [&"ToastError", "alert-circle", ThemeColors.DANGER],
+	ToastType.INFO: ["info-circle", ThemeColors.STATE],
+	ToastType.SUCCESS: ["circle-check", ThemeColors.SUCCESS],
+	ToastType.WARNING: ["alert-triangle", ThemeColors.WARNING],
+	ToastType.ERROR: ["alert-circle", ThemeColors.DANGER],
 }
 
 var _active_toasts: Array[Control] = []
@@ -30,10 +34,21 @@ var _active_toasts: Array[Control] = []
 @onready var toast_vbox: VBoxContainer = %VBoxContainer
 
 
+## Show a toast. With `action_label` and a valid `action`, a button at its end runs the
+## action and dismisses the toast (`action_icon` is its Tabler icon).
 func show_toast(
-	message: String, type: ToastType = ToastType.INFO, duration: float = DEFAULT_DURATION
+	message: String,
+	type: ToastType = ToastType.INFO,
+	duration: float = DEFAULT_DURATION,
+	action_label: String = "",
+	action: Callable = Callable(),
+	action_icon: String = "",
 ) -> void:
 	var toast = _create_toast(message, type)
+	if action.is_valid() and not action_label.is_empty():
+		var button := _action_button(action_label, action_icon)
+		button.pressed.connect(_on_action_pressed.bind(toast, action))
+		toast.get_child(0).add_child(button)
 	toast_vbox.add_child(toast)
 	_active_toasts.append(toast)
 
@@ -52,26 +67,16 @@ func show_toast(
 
 
 func _create_toast(message: String, type: ToastType) -> Control:
-	var kind: Array = KINDS.get(type, KINDS[ToastType.INFO])
 	var panel = PanelContainer.new()
-	panel.theme_type_variation = kind[0]
+	panel.theme_type_variation = &"Toast"
 	panel.custom_minimum_size = Vector2(WIDTH, 0)
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
 	var hbox = HBoxContainer.new()
 	hbox.theme_type_variation = &"BoxContainerSpaced"
 	panel.add_child(hbox)
-
-	var icon := TextureRect.new()
-	icon.name = "Icon"
-	icon.texture = IconButton.load_icon(kind[1])
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
-	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	# The roles resolve against the glass theme the container carries.
-	icon.self_modulate = ThemeColors.of(toast_vbox, kind[2])
-	hbox.add_child(icon)
+	hbox.add_child(kind_icon(type, toast_vbox))
 
 	var label = Label.new()
 	label.text = message
@@ -81,6 +86,40 @@ func _create_toast(message: String, type: ToastType) -> Control:
 	hbox.add_child(label)
 
 	return panel
+
+
+## The icon that names a toast kind, tinted with its role as resolved against `themed` (a
+## node under the glass theme). The disconnect banner wears the warning one.
+static func kind_icon(type: ToastType, themed: Control) -> TextureRect:
+	var kind: Array = KINDS.get(type, KINDS[ToastType.INFO])
+	var icon := TextureRect.new()
+	icon.name = "Icon"
+	icon.texture = IconButton.load_icon(kind[0])
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.self_modulate = ThemeColors.of(themed, kind[1])
+	return icon
+
+
+## The action at a toast's end: a quiet Secondary button with its icon and a verb.
+func _action_button(label: String, icon: String) -> Button:
+	var button := AnimatedButton.new()
+	button.name = "Action"
+	button.text = label
+	button.icon = IconButton.load_icon(icon)
+	button.theme_type_variation = &"Secondary"
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return button
+
+
+## Runs once: a second press while the toast fades finds it already dismissed.
+func _on_action_pressed(toast: Control, action: Callable) -> void:
+	if not _active_toasts.has(toast):
+		return
+	_dismiss_toast(toast, false)
+	action.call()
 
 
 func _animate_toast_in(toast: Control, type: ToastType = ToastType.INFO) -> void:

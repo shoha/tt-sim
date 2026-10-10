@@ -17,16 +17,21 @@ extends CanvasLayer
 ## then freed. A key re-added while its chip is still fading out takes that chip
 ## back.
 ##
+## A tool (the measure tool) lays its own keys over the base hints with set_tool_hints: they
+## lead the row, and of the base hints only KEPT_WITH_A_TOOL stays, so the camera keys step
+## out while a tool is active and its row fits one line at 720p. The base hints are kept
+## underneath, untouched, and come back in their own order when the tool clears its layer.
+##
 ## The bar never lies under an open drawer, under a bottom-corner button or past the canvas
 ## edge. It centres in the span of the board the open drawers leave free
 ## (DrawerContainer.free_span), sliding there by its backdrop's offset_transform_position.x as
-## a drawer slides. Shown controls in OBSTACLES (the play HUD's Add Token and Save Level) end
+## a drawer slides. Shown controls in OBSTACLES (the play HUD's Add token and Save map) end
 ## that span where they stand, and the bar moves aside only as far as they need. Its row (a
 ## centred flow) is held to the span less DRAWER_CLEARANCE each side, so a row longer than the
-## span wraps onto a second line, growing up from the bottom edge: the measure tool's ten chips
-## at 720p, or the play row beside the room drawer at 150%. Drawers tell it when they open or
-## close (DrawerContainer.WATCHERS), an obstacle when it shows or hides; a window resize and a
-## change of chips refit it too.
+## span wraps onto a second line, growing up from the bottom edge: the play row beside the
+## Visuals drawer and Add token, or beside the room drawer at 150%. Drawers tell it when they
+## open or close (DrawerContainer.WATCHERS), an obstacle when it shows or hides; a window
+## resize and a change of chips refit it too.
 
 ## How far below its resting place the bar starts its entrance, in pixels.
 const SLIDE_DISTANCE := 12.0
@@ -37,8 +42,13 @@ const DRAWER_CLEARANCE := 12.0
 const SHIFT_DURATION := 0.25
 ## Controls along the bottom edge the bar keeps clear of.
 const OBSTACLES := &"hint_bar_obstacles"
+## Base hint keys that stay beside a tool's own: Help.
+const KEPT_WITH_A_TOOL: Array[String] = ["F1"]
 
+## The base hints (set_hints, add_hint, remove_hint).
 var _current_hints: Array[Dictionary] = []
+## The active tool's own hints; while any, they lead and replace the base hints but the kept.
+var _tool_hints: Array[Dictionary] = []
 ## Key -> chip, for every chip in the row, leaving ones included.
 var _chips: Dictionary = {}
 ## Key -> the chip's running fade.
@@ -170,6 +180,38 @@ func remove_hint(key: String) -> void:
 		_sync()
 
 
+## Lay a tool's own hints over the base ones while it is active (see the header). Each hint
+## is a dictionary with "key" and "action", as for set_hints; an empty array clears the layer.
+func set_tool_hints(hints: Array) -> void:
+	var next: Array[Dictionary] = []
+	for hint in hints:
+		next.append({"key": String(hint["key"]), "action": String(hint["action"])})
+	if next == _tool_hints:
+		return
+	_tool_hints = next
+	_sync()
+
+
+## Drop the tool's layer: the base hints return in their own order.
+func clear_tool_hints() -> void:
+	set_tool_hints([])
+
+
+## What the row shows, in order: the base hints, or the tool's hints followed by the base
+## hints in KEPT_WITH_A_TOOL.
+func shown_hints() -> Array[Dictionary]:
+	if _tool_hints.is_empty():
+		return _current_hints
+	var shown: Array[Dictionary] = _tool_hints.duplicate()
+	var taken := {}
+	for hint in shown:
+		taken[hint["key"]] = true
+	for hint in _current_hints:
+		if KEPT_WITH_A_TOOL.has(hint["key"]) and not taken.has(hint["key"]):
+			shown.append(hint)
+	return shown
+
+
 ## The chip shown for [param key], or null. A chip that is fading out still
 ## counts until it is freed.
 func chip_for(key: String) -> Control:
@@ -188,17 +230,17 @@ func _are_hints_equal(new_hints: Array) -> bool:
 	return true
 
 
-## Bring the chips in line with [member _current_hints], animating only what
-## changed. While the bar is hidden (or on its way out) nobody sees single
-## chips, so stale ones go at once and new ones arrive opaque; the bar's own
-## entrance carries them.
+## Bring the chips in line with shown_hints(), animating only what changed. While
+## the bar is hidden (or on its way out) nobody sees single chips, so stale ones
+## go at once and new ones arrive opaque; the bar's own entrance carries them.
 func _sync() -> void:
-	if _current_hints.is_empty():
+	var shown := shown_hints()
+	if shown.is_empty():
 		_show_bar(false)
 		return
 	var animate := _bar_shown
 	var wanted := {}
-	for hint in _current_hints:
+	for hint in shown:
 		wanted[hint["key"]] = true
 	for key in _chips.keys():
 		if wanted.has(key):
@@ -209,7 +251,7 @@ func _sync() -> void:
 			_leaving[key] = true
 			_fade_chip(key, 0.0)
 	var previous: Control = null
-	for hint in _current_hints:
+	for hint in shown:
 		previous = _sync_chip(hint, previous, animate)
 	on_drawers_moved()
 	_show_bar(true)

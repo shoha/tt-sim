@@ -129,6 +129,28 @@ func test_clear_slides_the_bar_out_and_frees_the_chips() -> void:
 	assert_eq(_hints.hints_container.get_child_count(), 0)
 
 
+## A tool's keys lead while it is active and the camera keys step out (Help stays); when the
+## tool ends the base hints come back in their own order, not with Measure and Grid last.
+func test_a_tool_layer_leads_and_the_base_row_returns_in_order() -> void:
+	var base := [
+		{"key": "Esc", "action": "Pause"},
+		{"key": "WASD", "action": "Pan"},
+		{"key": "M", "action": "Measure"},
+		{"key": "G", "action": "Grid"},
+		{"key": "F1", "action": "Help"},
+	]
+	_hints.set_hints(base)
+	await wait_seconds(SETTLE_S)
+	_hints.set_tool_hints([{"key": "LMB", "action": "Place point"}, {"key": "M", "action": "Done"}])
+	await wait_seconds(SETTLE_S)
+	assert_eq(_row_keys(), ["LMB", "M", "F1"])
+	assert_eq(_hints._action_label(_hints.chip_for("M")).text, "Done")
+	_hints.clear_tool_hints()
+	await wait_seconds(SETTLE_S)
+	assert_eq(_row_keys(), ["Esc", "WASD", "M", "G", "F1"])
+	assert_eq(_hints._action_label(_hints.chip_for("M")).text, "Measure")
+
+
 func test_hints_set_while_hidden_arrive_with_the_bar() -> void:
 	_hints.set_hints([{"key": "G", "action": "Grid"}])
 	assert_eq(_hints.chip_for("G").modulate.a, 1.0, "the bar's entrance carries the chip")

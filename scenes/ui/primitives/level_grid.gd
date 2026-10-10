@@ -133,23 +133,35 @@ func _on_card_action(info: Dictionary, action: StringName) -> void:
 		&"duplicate":
 			var new_path := LevelManager.duplicate_level(info)
 			if new_path.is_empty():
-				UIManager.show_error("Could not duplicate the level")
+				UIManager.show_error(
+					'Could not duplicate "%s": the copy was not written. Try again.' % _name(info)
+				)
 				return
 			refresh()
 			select(new_path)
 		&"delete":
 			confirm_delete.call(
-				"Delete %s?" % info.get("name", "this level"),
-				"The level and its map are removed from this computer. This cannot be undone.",
+				"Delete %s?" % info.get("name", "this map"),
+				"The map and its tokens are removed from this computer. This cannot be undone.",
 				_delete.bind(info)
 			)
+
+
+## The card's map name for an error line, or "this map".
+static func _name(info: Dictionary) -> String:
+	return String(info.get("name", "this map"))
 
 
 func _delete(info: Dictionary) -> void:
 	var path: String = info.get("path", "")
 	var index := _index_of(path)
 	if not LevelManager.delete_level(path):
-		UIManager.show_error("Could not delete the level")
+		UIManager.show_error(
+			(
+				'Could not delete "%s": its files could not be removed. Try again in a moment.'
+				% _name(info)
+			)
+		)
 		return
 	refresh()
 	if _cards.is_empty():
@@ -161,7 +173,7 @@ func _delete(info: Dictionary) -> void:
 func _on_card_rename(info: Dictionary, new_name: String) -> void:
 	var new_path := LevelManager.rename_level(info, new_name)
 	if new_path.is_empty():
-		UIManager.show_error("Could not rename the level")
+		UIManager.show_error('Could not rename "%s". Try another name.' % _name(info))
 		return
 	refresh()
 	select(new_path)
