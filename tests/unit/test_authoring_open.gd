@@ -2,12 +2,13 @@ extends GutTest
 
 ## Opening maps for authoring: MapSourceLoader with props kept apart (always two scatter
 ## nodes, even empty, and a GLB-only level loading as a dressing base), the camera zoom-out
-## fit and the view-following shadow distance, Root's entry refusal, and the entry points on
-## the level card, level grid and title.
+## fit and the view-following shadow distance, play's F3 overlay in authoring, Root's entry
+## refusal, and the entry points on the level card, level grid and title.
 
 const DIR := "user://test_authoring_open/"
 const ROCK := "temperate_forest_summer_s1/Rock_Boulder_summer_04"
 const TITLE_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
+const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const ROOT_SCRIPT := preload("res://scenes/root.gd")
 
 
@@ -99,6 +100,24 @@ func test_zoom_fit_for_a_200_ft_map_is_width_bound_at_16_9() -> void:
 	assert_almost_eq(fit, diagonal / (16.0 / 9.0), 0.01, "the diagonal fills the width")
 	assert_gt(fit, 20.0, "beyond the play camera's zoom-out")
 	camera.free()
+
+
+func test_authoring_has_plays_f3_overlay_and_render_toggles() -> void:
+	var game_map: GameMap = GAME_MAP_SCENE.instantiate()
+	# DragAndDrop3D awaits the current scene's ready signal, and GUT's runner has no current
+	# scene: a stand-in whose ready has already fired lets that wait sit harmlessly.
+	var stand_in := Node.new()
+	get_tree().root.add_child(stand_in)
+	get_tree().current_scene = stand_in
+	add_child_autofree(game_map)
+	get_tree().current_scene = null
+	stand_in.free()
+	var ctrl := AuthoringController.new()
+	add_child_autofree(ctrl)
+	ctrl.setup(game_map)
+	assert_not_null(game_map.get_performance_overlay(), "F3 opens the overlay play has")
+	assert_not_null(game_map.get_debug_render_toggles())
+	ctrl.teardown()
 
 
 func test_shadow_distance_follows_the_view_only_past_the_play_range() -> void:

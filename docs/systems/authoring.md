@@ -43,7 +43,8 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   fade, drag landing, the float rule and grid snap come from `GameMap` as in play. A move,
   turn or resize is one `AuthoringHistory` entry and marks the session unsaved; a save
   copies every token back into its placement (`write_placements`). Authoring adds and
-  removes no tokens.
+  removes no tokens. F3 opens play's `PerformanceOverlay` and `DebugRenderToggles`
+  (`AuthoringController.setup`; log rows are tagged map "unknown").
 - Tokens follow their ground (`TokenGrounding`): a token that no longer stands where a drop
   at its spot would land (ground sculpted, carved or filled under it, a dressed GLB
   re-exported) is set straight down there, from its own top, or from above the map when
