@@ -131,16 +131,20 @@ func _define_buttons() -> void:
 	# where the default's edge is a faint rim: a button on a chip of its own colour (the table
 	# move's Stay here).
 	var frame := edge(1, c(ThemeColors.TRACK))
-	define_variant_style(
-		"Framed",
-		"Button",
-		_button(
-			inherit(raised, frame),
-			inherit(raised, frame, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
-			inherit(raised, frame, {bg_color = c(ThemeColors.SURFACE_PRESS), shadow_size = 0}),
-			ThemeColors.TEXT
-		)
+	var framed := _button(
+		inherit(raised, frame),
+		inherit(raised, frame, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
+		inherit(raised, frame, {bg_color = c(ThemeColors.SURFACE_PRESS), shadow_size = 0}),
+		ThemeColors.TEXT
 	)
+	# A waiting lead (New map's Generate while a size is refused) keeps its frame, unlifted on
+	# clear paper: the inset fill every other disabled button takes read as a field or a chip.
+	framed.disabled = inherit(
+		raised,
+		edge(1, Color(c(ThemeColors.TRACK), 0.6)),
+		{bg_color = Color(c(ThemeColors.SURFACE_RAISED), 0.0), shadow_size = 0}
+	)
+	define_variant_style("Framed", "Button", framed)
 	var primary := _filled(
 		ThemeColors.ACCENT, ThemeColors.ACCENT_HOVER, ThemeColors.ACCENT_PRESS, ThemeColors.ON_ACCENT
 	)
@@ -370,12 +374,22 @@ func _define_panels() -> void:
 	# The unsaved-changes dot: cool, because it says what is (C5: warm means do); the action
 	# it points at (Save) keeps the warm fill. Its item's tooltip names the state in words.
 	define_variant_style("Badge", "Panel", {panel = box(c(ThemeColors.STATE), RADIUS_PILL)})
+	# A state in words on a lake pill (the library's "Updated in Blender"), its icon and words in
+	# the on-selected colour: lake says what is, and the words carry it too (C5, C7).
+	define_variant_style(
+		"StateChip", "PanelContainer", {panel = box(c(ThemeColors.STATE), RADIUS_PILL, SPACE_2, 2)}
+	)
 
 
 func _define_containers() -> void:
 	define_style("BoxContainer", {separation = SPACE_1})
 	define_variant_style("BoxContainerTight", "BoxContainer", {separation = SPACE_1})
 	define_variant_style("BoxContainerSpaced", "BoxContainer", {separation = SPACE_3})
+	# Label and value pairs (the import check's facts): the labels' column a clear step from
+	# the values, the rows a little apart.
+	define_variant_style(
+		"FactsGrid", "GridContainer", {h_separation = SPACE_4, v_separation = SPACE_2}
+	)
 	define_style(
 		"MarginContainer",
 		{margin_left = SPACE_2, margin_top = SPACE_2, margin_right = SPACE_2, margin_bottom = SPACE_2}

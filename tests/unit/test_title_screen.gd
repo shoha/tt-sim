@@ -71,12 +71,33 @@ func test_an_empty_library_is_the_new_map_card_alone() -> void:
 	assert_true(title.new_map_card.is_empty_library())
 	assert_eq(title.new_map_card.caption.text, NewMapCard.EMPTY_CAPTION)
 	assert_eq(title.new_map_card.custom_minimum_size.x, NewMapCard.EMPTY_WIDTH, "larger")
-	assert_false(title.strip.visible, "no map, no strip")
+	assert_false(title.strip.is_visible_in_tree(), "no map, no strip")
 	var flow := title.new_map_card.get_parent() as HFlowContainer
 	assert_eq(flow.alignment, FlowContainer.ALIGNMENT_CENTER)
-	assert_true(title.new_map_card.picture.get_node("Placeholder").visible, "a painted map")
+	var sketch := title.new_map_card.picture
+	assert_null(sketch.get_node_or_null("Placeholder"), "a sketch on blank paper, not a map")
+	assert_eq(title.new_map_card.heading.theme_type_variation, &"H2", "the heading's face")
 	title.new_map_card.generate()
 	assert_signal_emitted(title, "build_map_requested")
+
+
+## A first run with only the maps that come with the game: New map alone, larger and centred,
+## the Bundled maps offered under it in a heading of their own, and none selected.
+func test_a_library_of_bundled_maps_offers_them_under_new_map() -> void:
+	var bundled := _info("ship", "Ship", 100)
+	bundled.map_path = "res://maps/ship.glb"
+	_levels = [bundled]
+	var title := _title()
+	assert_true(title.new_map_card.is_empty_library(), "no map of the player's own")
+	assert_eq(title.grid.card_count(), 1)
+	assert_eq(title.grid.own_card_count(), 0)
+	var heading := title.grid._bundled_heading
+	assert_true(heading.visible)
+	assert_eq(title.grid._heading_words.text, LevelGrid.EMPTY_HEADING)
+	assert_eq(title.grid._heading_words.theme_type_variation, &"H2", "a heading, not a pill")
+	assert_gt(heading.get_index(), title.new_map_card.get_index())
+	assert_eq(title.selected_level(), {}, "New map leads; nothing selected")
+	assert_false(title.strip.is_visible_in_tree())
 
 
 ## The New map card leads the grid; the maps follow the most recently played or edited first,
@@ -89,11 +110,13 @@ func test_the_library_orders_by_play_and_opens_the_head() -> void:
 	assert_eq(title.new_map_card.get_index(), 0, "New map first")
 	assert_eq(title.grid._cards[0].level_info.name, "Old Camp", "played last, so first")
 	assert_eq(title.selected_level()["name"], "Old Camp")
-	assert_true(title.strip.visible)
+	assert_true(title.strip.is_visible_in_tree())
 	assert_eq(title.strip.name_edit.text, "Old Camp")
 	assert_eq(title.strip.played_label.text.begins_with("Played"), true)
-	assert_eq(title.strip.get_parent(), flow, "in the grid, not a modal")
-	assert_gt(title.strip.get_index(), title.grid._cards[0].get_index())
+	var line := title.strip.get_parent()
+	assert_eq(line.get_parent(), flow, "on a line of the grid, not a modal")
+	assert_gt(line.get_index(), title.grid._cards[0].get_index())
+	assert_eq(title.grid._cards[0]._caption.text.begins_with("Played"), true, "the sort's date")
 
 
 ## The strip's actions reach Root as the column's did: Play solo with the map, Host with this

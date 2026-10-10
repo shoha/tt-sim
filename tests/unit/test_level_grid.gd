@@ -98,7 +98,8 @@ func test_a_card_selected_by_code_scrolls_into_view() -> void:
 	var at := last.get_global_rect()
 	at.position -= grid.global_position
 	assert_true(shown.encloses(at.grow(-1.0)), "the whole card in view: %s in %s" % [at, shown])
-	assert_eq(grid.get_v_scroll_bar().theme_type_variation, &"CardGridBar")
+	# The bar is its handle alone, on no paper strip (user verdict 2026-10-10).
+	assert_eq(grid.get_v_scroll_bar().theme_type_variation, &"")
 
 
 func test_activation_relays_the_card() -> void:

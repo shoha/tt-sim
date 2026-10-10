@@ -3,8 +3,9 @@ extends Node
 
 ## The library's ways in for a Blender map, each through the import check (ImportCheckPanel)
 ## before anything is written: Import... (the system's file picker, on .glb), a file dropped
-## anywhere on the library (a new level) or on a map's card (Replace for that map), and Reload
-## from Blender (Replace with the source ImportSources remembers). A confirmed check runs
+## anywhere on the library (a new level) or on a map's card (Replace for that map), Replace map
+## file... on the detail strip (the picker, then Replace for that map), and Reload from Blender
+## (Replace with the source ImportSources remembers). A confirmed check runs
 ## MapImport (import_glb or replace_map, which render the card's thumbnail offscreen) and
 ## reports the level it wrote, so the title selects it. A file of another kind opens the panel
 ## on its one-sentence refusal; of several files dropped at once, the first .glb is checked.
@@ -17,7 +18,8 @@ signal replaced(folder: String, result: Dictionary)
 
 const PICKER_FILTER := "*.glb ; Map export (glTF Binary)"
 const REPLACED := "Map replaced"
-const REPLACED_DROPPED := "Map replaced; %d props and plants off the new map were dropped"
+## "Map replaced; 1 prop sat outside it and was removed".
+const REPLACED_DROPPED := "Map replaced; %s outside it and %s removed"
 
 ## The open check panel, or null.
 var panel: ImportCheckPanel = null
@@ -29,9 +31,23 @@ var render_thumbnails: bool = true
 
 ## Opens the system's file picker on .glb files; a chosen file goes to the check.
 func pick() -> void:
+	_picker("Import a map", check_import)
+
+
+## Replace map file...: the picker, then the check and Replace for the map `info` describes,
+## as a file dropped on its card.
+func pick_replace(info: Dictionary) -> void:
+	var folder := String(info.get("folder", ""))
+	if folder == "":
+		return
+	var title := "Replace the map file of %s" % String(info.get("name", folder))
+	_picker(title, func(path: String) -> void: drop(PackedStringArray([path]), folder))
+
+
+func _picker(title: String, chosen: Callable) -> void:
 	var dialog := FileDialog.new()
 	dialog.name = "ImportPicker"
-	dialog.title = "Import a map"
+	dialog.title = title
 	dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	dialog.access = FileDialog.ACCESS_FILESYSTEM
 	dialog.use_native_dialog = true
@@ -39,7 +55,7 @@ func pick() -> void:
 	dialog.file_selected.connect(
 		func(path: String) -> void:
 			dialog.queue_free()
-			check_import(path)
+			chosen.call(path)
 	)
 	dialog.canceled.connect(dialog.queue_free)
 	add_child(dialog)
@@ -111,6 +127,17 @@ func _on_replace_confirmed(folder: String, path: String, mode: String) -> void:
 	if not result.ok:
 		UIManager.show_error(String(result.error))
 		return
-	var dropped := int(result.props_dropped) + int(result.scatter_dropped)
-	UIManager.show_success(REPLACED_DROPPED % dropped if dropped > 0 else REPLACED)
+	var props := int(result.props_dropped)
+	var plants := int(result.scatter_dropped)
+	UIManager.show_success(replaced_text(props, plants))
 	replaced.emit(folder, result)
+
+
+## The toast after a Replace that kept the edits: what was removed from outside the new map.
+## Pure.
+static func replaced_text(props: int, plants: int) -> String:
+	if props + plants <= 0:
+		return REPLACED
+	var words := ImportCheckPanel.removed_words(props, plants)
+	var sat := words.replace(" sits", " sat").replace(" sit", " sat")
+	return REPLACED_DROPPED % [sat, "was" if props + plants == 1 else "were"]

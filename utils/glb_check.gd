@@ -151,10 +151,13 @@ static func warnings(report: Dictionary) -> Array[Dictionary]:
 		var floor_m: float = report.floor_m
 		if floor_m > FLOOR_ABOVE_M:
 			var above := "The lowest ground is %.1f m above Y = 0, " % floor_m
-			out.append(_warning(WARN_FLOOR, above + "so the table grid sits under the map."))
+			var down := "so the table grid sits under the map. "
+			var fix := "In Blender, move the map down to Y = 0 and export it again."
+			out.append(_warning(WARN_FLOOR, above + down + fix))
 		elif report.top_m < 0.0 or floor_m < -FLOOR_BELOW_M:
-			var below := "The map reaches %.1f m below Y = 0, " % -floor_m
-			out.append(_warning(WARN_FLOOR, below + "where the table grid is."))
+			var below := "The map reaches %.1f m below Y = 0, where the table grid is. " % -floor_m
+			var fix := "In Blender, move the map up until its ground sits at Y = 0, and export it again."
+			out.append(_warning(WARN_FLOOR, below + fix))
 	if report.mb > STREAMING_BUDGET_MB:
 		var over := (
 			"At %.1f MB it is over the %d MB streaming budget: "

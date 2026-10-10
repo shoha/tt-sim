@@ -9,8 +9,16 @@ extends ScrollContainer
 ## The title's library adds two controls of its own (both null in a picker): `lead`, the New
 ## map card, first in the flow at a card's width, and `detail`, the selected card's detail
 ## strip, on a line of its own directly under the selected card's row (line_end() finds the
-## row's last item at the current column count), hidden with nothing selected. Bundled maps
-## (LibraryFacts.is_bundled) follow a heading on a line of their own, after every other.
+## row's last item at the current column count), hidden with nothing selected. The strip is at
+## most DETAIL_MAX_WIDTH wide (the 960 sheet token) and stands under its card, centred on it
+## and clamped to the grid, so its Play and Host sit by the map they act on. Selecting a card,
+## by a click or select(), scrolls the grid so the card's row and the whole strip are in view.
+## Bundled maps (LibraryFacts.is_bundled) follow a heading on a line of their own, after every
+## other; with no map of the player's own the lead stands alone, larger and centred, and the
+## heading under it offers the Bundled maps instead (EMPTY_HEADING).
+##
+## Where the grid's edge cuts a card, the card fades by how much of it lies out of view
+## (CUT_ALPHA at the least), so the grid ends in a fade rather than a straight cut.
 
 signal selection_changed(level_info: Dictionary)
 signal level_activated(level_info: Dictionary)
@@ -26,6 +34,17 @@ signal content_resized
 const GAP := 12
 ## The widest a card grows; past it the grid adds a column.
 const MAX_CARD_WIDTH := 400
+## The detail strip's widest (S5's 960 sheet).
+const DETAIL_MAX_WIDTH := 960.0
+## The least an item the grid's edge cuts fades to (_fade_cut_items).
+const CUT_ALPHA := 0.35
+## How long the scroll bar stays after a scroll with the pointer elsewhere.
+const BAR_LINGER_S := 0.8
+## Frames a reveal is repeated over, while the flow lays the strip out under its new row.
+const REVEAL_FRAMES := 3
+const BUNDLED_HEADING := "Bundled with TTSim"
+## The heading over the Bundled maps when the player has no map of their own yet.
+const EMPTY_HEADING := "Or play one that comes with TTSim"
 
 ## The fewest columns; a wide grid adds more.
 @export var columns: int = 3:
@@ -55,15 +74,36 @@ var _selected_path: String = ""
 ## Cards per line at the current width (_fit_columns).
 var _per_line: int = 1
 ## The Bundled maps' heading, on a line of its own before them (library only).
-var _bundled_heading: HBoxContainer = null
+var _bundled_heading: VBoxContainer = null
+var _heading_words: Label = null
+## The detail strip's line: the grid's full width, the strip placed in it by _lay_detail().
+var _detail_line: Control = null
+## Frames left in the current reveal.
+var _reveal_frames := 0
+## The scroll bar's fade (_show_bar), whether the pointer is over the cards, and the time the
+## bar stays after a scroll.
+var _bar_tween: Tween = null
+var _pointer_over := false
+var _linger: Timer
 
 
 func _init() -> void:
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# The CardGrid panel's margins keep a focused card's ring inside the scroll clip.
 	theme_type_variation = &"CardGrid"
-	# Over the painted backdrop the bar stands on a paper strip of its own (3:1 in every mood).
-	get_v_scroll_bar().theme_type_variation = &"CardGridBar"
+	# The bar is its handle alone (the theme's lane is clear), shown only while it is wanted
+	# (user verdict 2026-10-10): _show_bar().
+	var bar := get_v_scroll_bar()
+	bar.modulate.a = 0.0
+	bar.value_changed.connect(_on_scrolled)
+	mouse_entered.connect(_on_pointer.bind(true))
+	mouse_exited.connect(_on_pointer.bind(false))
+	_linger = Timer.new()
+	_linger.name = "BarLinger"
+	_linger.one_shot = true
+	_linger.wait_time = BAR_LINGER_S
+	_linger.timeout.connect(_show_bar.bind(false))
+	add_child(_linger)
 	_flow = HFlowContainer.new()
 	_flow.name = "Flow"
 	_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -71,11 +111,58 @@ func _init() -> void:
 	_flow.add_theme_constant_override("h_separation", GAP)
 	_flow.add_theme_constant_override("v_separation", GAP)
 	_flow.resized.connect(content_resized.emit)
+	_flow.sort_children.connect(_lay_detail)
+	_flow.sort_children.connect(_fade_cut_items)
 	add_child(_flow)
+
+
+func _on_scrolled(_value: float) -> void:
+	_fade_cut_items()
+	_show_bar(true)
+	if not _pointer_over:
+		_linger.start()
+
+
+func _on_pointer(inside: bool) -> void:
+	_pointer_over = inside
+	if inside:
+		_show_bar(true)
+	else:
+		_linger.start()
+
+
+## The scroll bar fades in while the pointer is over the cards and for BAR_LINGER_S after a
+## wheel, pad or drag scrolls them, then out (M1). Hidden, it still takes a click or a drag
+## where it stands, so a pointer always finds it; the pad scrolls by focus.
+func _show_bar(on: bool) -> void:
+	if not on and _pointer_over:
+		return
+	if not is_inside_tree():
+		return
+	if _bar_tween != null and _bar_tween.is_valid():
+		_bar_tween.kill()
+	var duration := Constants.ANIM_HOVER_SOFT_IN if on else Constants.ANIM_HOVER_SOFT_OUT
+	_bar_tween = create_tween()
+	_bar_tween.tween_property(get_v_scroll_bar(), "modulate:a", 1.0 if on else 0.0, duration)
+
+
+## An item the grid's edge cuts fades by how much of it is out of view, down to CUT_ALPHA, so
+## the grid ends in a fade rather than a straight cut through whole cards. (A mask over the
+## cards, clip_children, blanked their clipped picture wells.)
+func _fade_cut_items() -> void:
+	var view := _view_height()
+	for child in _flow.get_children():
+		var item := child as Control
+		if item == null or item.size.y <= 0.0:
+			continue
+		var top := item.position.y - float(scroll_vertical)
+		var shown := clampf(minf(top + item.size.y, view) - maxf(top, 0.0), 0.0, item.size.y)
+		item.modulate.a = lerpf(CUT_ALPHA, 1.0, shown / item.size.y)
 
 
 func _ready() -> void:
 	resized.connect(_fit_columns)
+	resized.connect(_fade_cut_items)
 
 
 func refresh() -> void:
@@ -84,9 +171,15 @@ func refresh() -> void:
 		_flow.remove_child(card)
 		card.queue_free()
 	_cards.clear()
-	for extra in [lead, detail]:
-		if extra != null and (extra as Control).get_parent() == null:
-			_flow.add_child(extra)
+	if lead != null and lead.get_parent() == null:
+		_flow.add_child(lead)
+	if detail != null and _detail_line == null:
+		_detail_line = Control.new()
+		_detail_line.name = "DetailLine"
+		_detail_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_detail_line.add_child(detail)
+		_flow.add_child(_detail_line)
+		detail.minimum_size_changed.connect(_lay_detail)
 	if lead != null:
 		_flow.move_child(lead, 0)
 	var levels: Array = provider.call()
@@ -99,9 +192,9 @@ func refresh() -> void:
 		card.locked = not locked_path.is_empty() and info.get("path", "") == locked_path
 		card.manageable = manageable
 		card.accept_selects_first = select_before_activate
-		# A taller card in the row (the New map card with Advanced open) leaves these at their
-		# own height.
-		card.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		# Every item fills its line's height, so a row's bottoms line up (the New map card is
+		# taller than a map's).
+		card.size_flags_vertical = Control.SIZE_FILL
 		card.selected.connect(_on_card_selected)
 		card.activated.connect(_on_card_activated)
 		card.action_requested.connect(_on_card_action)
@@ -135,28 +228,50 @@ func card_for(path: String) -> LevelCard:
 	return null
 
 
-## The heading before the first Bundled card, or hidden with none, or when every map is
-## Bundled (nothing to set them apart from).
+## The number of cards that are the player's own maps (not Bundled).
+func own_card_count() -> int:
+	var own := _cards.filter(
+		func(card: LevelCard) -> bool: return not LibraryFacts.is_bundled(card.level_info)
+	)
+	return own.size()
+
+
+## The heading before the first Bundled card, or hidden with none, or in a picker when every
+## map is Bundled (nothing to set them apart from). Over an empty library it offers the Bundled
+## maps instead (EMPTY_HEADING), centred under the lone New map card.
 func _place_bundled_heading(first_bundled: LevelCard) -> void:
-	if first_bundled == null or first_bundled == _cards[0]:
+	if first_bundled == null or (lead == null and first_bundled == _cards[0]):
 		if _bundled_heading != null:
 			_bundled_heading.visible = false
 		return
 	if _bundled_heading == null:
-		# A line of its own (the row's full width, no paper) with the words on a plaque that
-		# ends at them.
-		_bundled_heading = HBoxContainer.new()
+		# A line of its own (the row's full width, no paper) with the heading's words on a plaque
+		# that ends at them, a gap's more room above it than below (S4).
+		_bundled_heading = VBoxContainer.new()
 		_bundled_heading.name = "BundledHeading"
 		_bundled_heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var above := Control.new()
+		above.custom_minimum_size.y = GAP
+		above.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_bundled_heading.add_child(above)
+		var row := HBoxContainer.new()
+		row.name = "Row"
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_bundled_heading.add_child(row)
 		var plaque := PanelContainer.new()
 		plaque.theme_type_variation = &"Plaque"
 		plaque.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_bundled_heading.add_child(plaque)
-		var words := Label.new()
-		words.text = "Bundled with TTSim"
-		words.theme_type_variation = &"Caption"
-		plaque.add_child(words)
+		row.add_child(plaque)
+		_heading_words = Label.new()
+		_heading_words.name = "Words"
+		_heading_words.theme_type_variation = &"H2"
+		plaque.add_child(_heading_words)
 		_flow.add_child(_bundled_heading)
+	var own := own_card_count() > 0
+	_heading_words.text = BUNDLED_HEADING if own else EMPTY_HEADING
+	(_bundled_heading.get_node("Row") as HBoxContainer).alignment = (
+		BoxContainer.ALIGNMENT_BEGIN if own else BoxContainer.ALIGNMENT_CENTER
+	)
 	_bundled_heading.visible = true
 	# From the end, so taking it out shifts nothing before the card it goes in front of.
 	_flow.move_child(_bundled_heading, -1)
@@ -189,23 +304,42 @@ static func line_end(wides: Array, target: int, per_line: int) -> int:
 
 ## The detail strip directly under the selected card's row, or hidden with none selected.
 func _place_detail() -> void:
-	if detail == null or detail.get_parent() != _flow:
+	if _detail_line == null:
 		return
 	var card := card_for(_selected_path)
-	detail.visible = card != null
+	_detail_line.visible = card != null
 	if card == null:
 		return
-	_flow.move_child(detail, -1)
+	_flow.move_child(_detail_line, -1)
 	var items: Array[Control] = []
 	var wides: Array = []
 	for child in _flow.get_children():
 		var item := child as Control
-		if item == detail or not item.visible:
+		if item == _detail_line or not item.visible:
 			continue
 		items.append(item)
 		wides.append(item == _bundled_heading)
 	var end := line_end(wides, items.find(card), _per_line)
-	_flow.move_child(detail, items[end].get_index() + 1)
+	_flow.move_child(_detail_line, items[end].get_index() + 1)
+	_lay_detail()
+
+
+## The strip in its line: at most DETAIL_MAX_WIDTH wide, centred under the selected card and
+## clamped to the grid, the line as tall as the strip. Runs whenever the flow lays out.
+func _lay_detail() -> void:
+	if _detail_line == null or not _detail_line.visible:
+		return
+	var full := _detail_line.custom_minimum_size.x
+	var width := minf(DETAIL_MAX_WIDTH, full)
+	var height := detail.get_combined_minimum_size().y
+	if not is_equal_approx(_detail_line.custom_minimum_size.y, height):
+		_detail_line.custom_minimum_size.y = height
+	var card := card_for(_selected_path)
+	var x := 0.0
+	if card != null:
+		x = card.position.x + card.size.x * 0.5 - width * 0.5
+	detail.position = Vector2(clampf(x, 0.0, maxf(full - width, 0.0)), 0.0)
+	detail.size = Vector2(width, height)
 
 
 func card_count() -> int:
@@ -223,18 +357,44 @@ func content_height() -> float:
 func select(path: String) -> void:
 	_selected_path = path
 	_apply_selection()
-	if is_inside_tree() and not get_tree().process_frame.is_connected(_reveal_selected):
-		get_tree().process_frame.connect(_reveal_selected, CONNECT_ONE_SHOT)
+	reveal_selected()
 
 
-func _reveal_selected() -> void:
-	for card in _cards:
-		if card.level_info.get("path", "") == _selected_path and card.is_inside_tree():
-			ensure_control_visible(card)
-			# The strip under the row is part of what the selection shows.
-			if detail != null and detail.is_visible_in_tree():
-				ensure_control_visible(detail)
-				ensure_control_visible(card)
+## Scrolls the grid so the selected card's row and the strip under it are in view (the card's
+## row first when both cannot fit), over the next REVEAL_FRAMES frames while the flow lays the
+## strip out under its new row.
+func reveal_selected() -> void:
+	_reveal_frames = REVEAL_FRAMES
+	if is_inside_tree() and not get_tree().process_frame.is_connected(_on_reveal_frame):
+		get_tree().process_frame.connect(_on_reveal_frame)
+
+
+func _on_reveal_frame() -> void:
+	_reveal_frames -= 1
+	if _reveal_frames <= 0:
+		get_tree().process_frame.disconnect(_on_reveal_frame)
+	var card := card_for(_selected_path)
+	if card == null or not card.is_inside_tree():
+		return
+	var bottom := card.position.y + card.size.y
+	if _detail_line != null and _detail_line.visible:
+		bottom = maxf(bottom, _detail_line.position.y + _detail_line.size.y)
+	scroll_vertical = roundi(
+		reveal_scroll(float(scroll_vertical), card.position.y, bottom, _view_height())
+	)
+
+
+## The scroll that shows content from `top` to `bottom` (flow coordinates) in a view
+## `view` tall, moving as little as it can from `current`; `top` when it cannot all fit. Pure.
+static func reveal_scroll(current: float, top: float, bottom: float, view: float) -> float:
+	if bottom - top > view:
+		return top
+	return clampf(current, bottom - view, top)
+
+
+## The height the cards are seen through (the grid inside its panel's margins).
+func _view_height() -> float:
+	return size.y - get_theme_stylebox(&"panel").get_minimum_size().y
 
 
 func selected_info() -> Dictionary:
@@ -266,16 +426,13 @@ func _fit_columns() -> void:
 	for card in _cards:
 		card.custom_minimum_size.x = width
 	_per_line = count
-	# The library's lead takes a card's width beside cards; alone (an empty library) it keeps
-	# the size its owner gave it, centred.
-	if lead != null and not _cards.is_empty():
+	# The library's lead takes a card's width beside the player's maps; with none of their own
+	# it keeps the size its owner gave it, centred, the Bundled maps centred under it.
+	var alone := lead != null and own_card_count() == 0
+	if lead != null and not alone:
 		lead.custom_minimum_size.x = width
-	_flow.alignment = (
-		FlowContainer.ALIGNMENT_CENTER
-		if lead != null and _cards.is_empty()
-		else FlowContainer.ALIGNMENT_BEGIN
-	)
-	for wide: Control in [detail, _bundled_heading]:
+	_flow.alignment = FlowContainer.ALIGNMENT_CENTER if alone else FlowContainer.ALIGNMENT_BEGIN
+	for wide: Control in [_detail_line, _bundled_heading]:
 		if wide != null:
 			wide.custom_minimum_size.x = size.x - reserved
 	_place_detail()
@@ -285,6 +442,7 @@ func _on_card_selected(info: Dictionary) -> void:
 	_selected_path = info.get("path", "")
 	_apply_selection()
 	selection_changed.emit(info)
+	reveal_selected()
 
 
 func _on_card_activated(info: Dictionary) -> void:
