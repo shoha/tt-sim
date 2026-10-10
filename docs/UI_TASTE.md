@@ -216,3 +216,10 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
   Follow-up the same day: each colour runs solid right up to the seam line; any lighter
   watercolour tone sits in the open middle of each half, away from the seam, so nothing soft
   frames the middle.
+- **2026-10-10** The painterly aspects of the UI are landing sloppy. Until revisited, the UI
+  uses solid colours and subtle gradients: the Play together card (solid halves, a subtle
+  gradient, a crisp line), the title and room backdrop (a soft sky gradient in the map's mood;
+  no painted clouds, hills or trees), and map placeholders (a simple two-tone gradient with the
+  initial). The board itself (the 3D world) is not affected.
+- **2026-10-10** Scroll bars over content lists (the library grid first): only the handle,
+  visible only while the pointer is over the list, fading in and out; no bare track.
