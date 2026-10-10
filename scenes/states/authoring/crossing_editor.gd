@@ -241,7 +241,7 @@ func follow(area: Rect2) -> Dictionary:
 		return {}
 	var before := _current()
 	if int(result.moved) == 0 and int(result.removed) == 0:
-		_apply(before, Rect2())
+		apply_list(before, Rect2())
 		return {"before": before, "after": before, "area": Rect2()}
 	var after: Array[Crossing] = result.crossings
 	var changed: Array[Crossing] = []
@@ -252,7 +252,7 @@ func follow(area: Rect2) -> Dictionary:
 		if not before.has(new):
 			changed.append(new)
 	var bounds := _area_of(changed)
-	_apply(after, bounds)
+	apply_list(after, bounds)
 	followed.emit(int(result.moved), int(result.removed))
 	return {"before": before, "after": after, "area": bounds}
 
@@ -264,7 +264,7 @@ func follow(area: Rect2) -> Dictionary:
 func restore(record: Dictionary, redo: bool) -> void:
 	if record.is_empty():
 		return
-	_apply(record.after if redo else record.before, record.area)
+	apply_list(record.after if redo else record.before, record.area)
 
 
 ## The document's crossings as a new list of the same objects.
@@ -283,15 +283,15 @@ func _change(label: String, after: Array[Crossing], touched: Array[Crossing]) ->
 	e.finish_height_work()
 	var before := _current()
 	var area := _area_of(touched)
-	_apply(after, area)
+	apply_list(after, area)
 	(
 		e
 		. history
 		. record(
 			{
 				"label": label,
-				"undo": _apply.bind(before, area),
-				"redo": _apply.bind(after, area),
+				"undo": apply_list.bind(before, area),
+				"redo": apply_list.bind(after, area),
 				"bytes": 256 * (before.size() + after.size()),
 			}
 		)
@@ -300,8 +300,8 @@ func _change(label: String, after: Array[Crossing], touched: Array[Crossing]) ->
 
 
 ## Puts `crossings` into the document and refreshes the nodes and the scatter over `area`
-## (map XZ).
-func _apply(crossings: Array[Crossing], area: Rect2) -> void:
+## (map XZ): the undo and redo of a crossing edit, and a live crossings edit.
+func apply_list(crossings: Array[Crossing], area: Rect2) -> void:
 	var e := _editor()
 	var list: Array[Crossing] = []
 	list.assign(crossings)

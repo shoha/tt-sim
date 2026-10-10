@@ -574,7 +574,10 @@ tokens past the edge. The probe that chose the rendering is P6-0
   (`RiverExitMesh.skirt_parts`) and on AuthoredWater's refresh worker after any water edit,
   which hands the skirt to `AuthoredTerrain.apply_river_exits()` (a rebuild of the skirt mesh
   keeping its material; nothing when no exit was or is there; `RiverExitMesh.has_exits` counts
-  a pond on the edge). The skirt's vertex mirror for
+  a pond on the edge). The worker builds the skirt whenever exits are there now or were before
+  the edit: the plain skirt that replaces the last exits (a river erased whole) used to be
+  built in the swap, 60-90 ms of main thread on a 200 ft map (live edits probe, 2026-10-09);
+  now the swap's "exits" part is 1.5 ms there. The skirt's vertex mirror for
   in-place edge updates comes with the parts (`TerrainMeshBuilder.skirt_mirror_of`, read off
   the built arrays on the worker): made from the document on the first edge edit after every
   rebuild, it cost a stroke carved to the edge 34 ms of its ground step (P6-3). **The cache**

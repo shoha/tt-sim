@@ -26,6 +26,11 @@ other committed home.
   (`docs/plans/2026-10-09-v0.2-evaluation/probes/size_probe.md`, gitignored).
 - **Who and when:** host/GM only, offline only, in a separate authoring state. No editing
   during play, so no live edit sync. A session receives a finished, saved map.
+  Extended 2026-10-09 (v0.2 evaluation): the GM's terrain events during play (a bridge
+  collapsing, a forest falling, fire, biome and terrain changes with the existing brushes)
+  will replicate as the after states of authoring history entries. The codec, its checks and
+  the peer's apply exist (`systems/authoring.md` "Live edits"); networking and the GM's UI do
+  not yet.
 - **Same version to join:** peers must run exactly the host's game version
   (`VersionGate`, checked from Steam lobby data before connecting and again by the host).
   This is what keeps the built-in palette identical across peers.
@@ -80,7 +85,8 @@ other committed home.
 | Terrain and ground (chunks, collision, mosaic anti-tiling, biome ground, broad edge, skirt) | `scenes/terrain/authored_terrain.gd`, `utils/terrain_mesh_builder.gd`, `utils/biome_ground_layers.gd`, `shaders/authored_ground*.gdshader*` | `systems/authored_terrain.md`, `ARCHITECTURE.md` "Authored terrain" |
 | Loading and networking (glb / ttmap / both, erase filter, map hashes) | `scenes/states/playing/level_loader.gd`, `MapSourceLoader`, `utils/map_file_hash.gd` | `systems/map_document.md`, `ARCHITECTURE.md` Map Loading Flow, `NETWORKING.md` |
 | Authoring state (controller, session, save, autosave, new map) | `scenes/states/authoring/`, `utils/new_map.gd` | `systems/authoring.md`, `ARCHITECTURE.md` "Authoring Flow", `UI_SYSTEMS.md` authoring drawer |
-| Brushes, gestures, undo | `scenes/states/authoring/brush_tool.gd`, `authoring_editor.gd`, `authoring_history.gd`, `utils/mask_brush.gd`, `utils/mask_stroke.gd`, `utils/base_scatter_eraser.gd` | `systems/authoring.md`, `UI_SYSTEMS.md` "Brushes and gestures", `ARCHITECTURE.md` "Authoring Flow" (Brushes) |
+| Brushes, gestures, undo | `scenes/states/authoring/brush_tool.gd`, `authoring_editor.gd`, `height_editor.gd`, `authoring_history.gd`, `utils/mask_brush.gd`, `utils/mask_stroke.gd`, `utils/base_scatter_eraser.gd` | `systems/authoring.md`, `UI_SYSTEMS.md` "Brushes and gestures", `ARCHITECTURE.md` "Authoring Flow" (Brushes) |
+| Live edits during play (op format, decode checks, ordered spread apply, the peer's queue) | `utils/live_edit_codec.gd`, `utils/live_edit_reader.gd`, the editors' public apply methods | `systems/authoring.md` "Live edits" |
 | Water model and flow bake (bodies, levels, wet samples, pond mask, the flow map) | `resources/water_body.gd`, `utils/water_geometry.gd`, `utils/water_flow_baker.gd`, `utils/map_water_io.gd` | `systems/water.md` (Model), `ARCHITECTURE.md` "Map document (map.ttmap)" |
 | Water at runtime (merged surface, zones, water as ground, float rule, grid on the water, the water shader) | `utils/water_mesh_builder.gd`, `scenes/terrain/authored_water.gd`, `utils/water_surface.gd`, `scenes/effects/water_zone.gd`, `utils/water_glb_utils.gd`, `shaders/water.gdshader` | `systems/water.md` (Runtime) |
 | Carving and wet dressing (channel and basin profiles, reach steps and riffles, confluences, erase, bed and shore surfaces, plants, rocks, the worker) | `utils/water_carve.gd`, `utils/water_edit.gd`, `utils/water_dressing.gd`, `scenes/states/authoring/water_editor.gd` | `systems/water.md` (Authoring) |

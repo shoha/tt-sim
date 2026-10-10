@@ -63,15 +63,12 @@ static func _heights(
 				changed = MaskBrush.merge_rect(changed, Rect2i(x, z, 1, 1))
 	if not changed.has_area():
 		return "%s: nothing changed" % step.get("action", "")
-	editor.set("_snap_before", before)
-	editor.set("_aligned", DressingGround.aligned_assets(doc.biome_ids, editor.palette_root))
-	(editor.get("_snap_start") as Dictionary).clear()
-	(editor.get("_prop_start") as Dictionary).clear()
-	editor.call("_queue_heights", changed)
+	editor.heights.begin_snap(before, true)
+	editor.heights.queue_heights(changed)
 	editor.finish_height_work()
 	editor.terrain.settle_heights()
 	editor.finish_height_work()
-	editor.call("_regenerate", changed)
+	editor.heights.regenerate(changed)
 	return (
 		"%s: %d x %d samples changed, %.1f ms"
 		% [

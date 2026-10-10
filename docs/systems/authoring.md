@@ -24,6 +24,8 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 | `utils/token_grounding.gd` | `TokenGrounding` | Sets saved tokens down on ground that moved (authoring and play load) |
 | `scenes/states/authoring/brush_tool.gd` | `BrushTool` | Gestures and the ring cursor; `decide()`, `Mode`, `sculpt_op()` |
 | `scenes/states/authoring/authoring_editor.gd` | `AuthoringEditor` | One per opened map; owns the edits |
+| `scenes/states/authoring/height_editor.gd` | `HeightEditor` | `AuthoringEditor.heights`: sculpt strokes and the height work they, water edits and live edits share |
+| `utils/live_edit_codec.gd`, `utils/live_edit_reader.gd` | `LiveEditCodec`, `LiveEditReader` | Live edits: a history entry's after side as bytes, the decode checks, the peer's queue |
 | `utils/mask_stroke.gd`, `utils/mask_brush.gd` | `MaskStroke`, `MaskBrush` | Mask strokes and their pure rules |
 | `utils/surface_stroke.gd` | `SurfaceStroke` | The Paint tool's stroke |
 | `utils/height_brush.gd` | `HeightBrush` | Sculpt rules: `tier_target_level`, `tier_goal()` |
@@ -107,14 +109,72 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   `BrushTool.sculpt_op(tile, ctrl, shift)`; Tier's target is `AuthoringEditor.tier_target()`
   (a whole tier, `HeightBrush.tier_target_level`) and its cliff profile `HeightBrush.tier_goal()`
   (tops exactly on `k * tier_height_m`). Height edits and their refresh calls are in
-  [authored_terrain.md](authored_terrain.md).
+  [authored_terrain.md](authored_terrain.md). `HeightEditor` (`AuthoringEditor.heights`, split
+  out on 2026-10-09 like `WaterEditor` and `CrossingEditor`) runs the strokes and owns the
+  height work: chunks within `TERRAIN_BUDGET_USEC` (4 ms) and plant and prop snapping within
+  `SNAP_BUDGET_USEC` (2.5 ms) a frame, the collision, rock keeping, the regeneration;
+  `AuthoringEditor`'s height entry points (`begin_height_stroke`, `has_height_work`,
+  `step_height_work`, `finish_height_work`) forward to it. A sculpt diff carries the samples
+  it changed (`HeightStroke.finish`, "changed"), and undo and redo redo only those, not the
+  diff's whole 40-sample blocks (a block reaching the grid's edge also refreshed the skirt).
+
+## Live edits
+
+The GM's terrain events during play (a bridge collapsing, a forest falling, fire, biome and
+terrain changes with the authoring brushes; user decision, 2026-10-09) replicate as the after
+states of authoring history entries. The codec and the apply side exist (2026-10-09); the
+networking and the GM's UI do not yet. Probe and numbers:
+`docs/plans/2026-10-09-v0.2-evaluation/probes/live_edits_probe.md` (gitignored).
+
+- **Op format** (`LiveEditCodec`): `{"v": 1, "kind", "args"}`, one op per history entry, at
+  most `MAX_BYTES` (256 KB). The six kinds and the public methods they go through, which are
+  the redo methods history binds: `mask` `AuthoringEditor.apply_mask_diff`, `surface`
+  `apply_surface_diff`, `props` `set_prop_cell`, `height` `HeightEditor.apply_diff`, `water`
+  `WaterEditor.apply_edit`, `crossings` `CrossingEditor.apply_list`. Only the after side
+  travels (surface diffs keep `ids_before`, which `SurfaceStroke.changes_plants` reads); an
+  undo is the before side sent as one more op. Water bodies and crossings travel as the
+  document's JSON (`MapWaterIO.body_json`, `MapCrossingIO.crossing_json`). `op_of(entry,
+  editor)` reads the entry's redo Callable; it finishes the host's height work first, since a
+  sculpt's record is complete only once its kept rocks land. Payloads on a 200 ft map: 0.1 to
+  10 KB.
+- **Checks** (`LiveEditReader`, run by `decode(bytes, doc, palette_root)`): the byte cap
+  before `bytes_to_var` (which refuses objects); version and kind; rectangles inside the grid;
+  mask names whitelisted (`MaskStroke.apply_diff` sets the property a diff names); every block
+  decompressed to exactly its rectangle's size; slot bytes within the op's biome list; finite
+  heights within `MAX_ABS_HEIGHT_M`; a pond mask of 0 or the grid's samples whose bytes all
+  name ponds; a wet dressing of 0 or 4 bytes a sample; bodies and crossings through
+  `MapWaterIO.parse_bodies` and `MapCrossingIO.parse_list`; rows `MapDocumentIO.row_ok`
+  accepts, in their own cell, that cell on the map, at most 200k an op; palette biome, surface
+  and asset ids (tables cached per palette, `palette_ids`). A fresh op is built from the
+  checked values. Malformed bytes and over-inflating ZSTD are refused but print an engine
+  error first: rate-limit the sender.
+- **Order and frame cost:** `apply(op, editor)` finishes whatever height work an earlier op
+  left first (a props op must see the rocks a sculpt kept; a later op's regeneration must not
+  be snapped twice), so order holds whoever calls it. A `height` or `water` op passes `spread`:
+  its heights go into the document and the queue and the call returns (about 1 ms); the
+  editor's `step_height_work()` drains the chunks and the snap within the budgets above, the
+  collision on a frame of its own, then the rest on the next (`HeightEditor.after_work`:
+  props, kept rocks, the settle, the wet dressing, the regeneration). `LiveEditCodec.Queue` is
+  the peer's driver: `push(bytes)` as payloads arrive, `step()` once a frame, which steps the
+  height work and applies the next op only on a frame that began with none, at most one a
+  frame. Worst frames measured headless on the probe's 200 ft map (indicative, a shared
+  machine): sculpt raise 49 to 16-23 ms (the apply 0.9 ms; what remains is the water
+  surface's swap after the wet dressing refresh, 13-15 ms, that every sculpt on a map with
+  water pays in authoring too), sculpt lower 27 to 13, crater 19 to 7, river erase 66 to 8
+  (the skirt build moved to the water's worker, [water.md](water.md) "Past the map edge");
+  paint, clear, bridge and pond ops 7-12 ms as before.
+- **Identity** (`test_live_map_edits.gd`): nine ops on a saved 200 ft level reach a peer, and
+  a reload of the host's saved document, with every `MapFingerprint` key equal (rows exactly:
+  generated rows snap to the saved precision) and the documents equal. Hostile payloads:
+  `test_live_edit_codec.gd`.
 
 ## Verification
 
 Unit tests in `tests/unit/`: `test_authoring_open.gd`, `test_authoring_session.gd`,
 `test_authoring_save.gd`, `test_authoring_history_cap.gd`, `test_authoring_editor.gd`,
 `test_authoring_sculpt.gd`, `test_brush_tool_input.gd`, `test_mask_brush.gd`,
-`test_mask_stroke.gd`, `test_prop_rows.gd`, `test_new_map.gd`, `test_new_map_build.gd`.
+`test_mask_stroke.gd`, `test_prop_rows.gd`, `test_new_map.gd`, `test_new_map_build.gd`,
+`test_live_edit_codec.gd`, `test_live_map_edits.gd`.
 
 ## Open work
 
@@ -123,3 +183,5 @@ See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
 ## History
 
 - 2026-10-09: map and rules moved here from `AGENTS.md` Key Conventions.
+- 2026-10-09: `HeightEditor` split out of `AuthoringEditor`; live edits (`LiveEditCodec`,
+  public apply entry points, spread height work, the peer's queue).

@@ -3,17 +3,17 @@ extends RefCounted
 
 ## AuthoringEditor's water edits (phase 4, P4-3; the Water tool, P4-4, calls them through
 ## `AuthoringEditor.water`): carving a river, painting a pond, erasing water. It owns the
-## pond and erase strokes in progress and shares the editor's ground machinery with sculpt
-## strokes (the height queue, the per-frame snap of plants and props, rock keeping, the
-## scatter regeneration, history), reaching into the editor for it: it is part of the editor,
-## split out only to keep one class a readable size. Frames: world in, document inside, as
-## the editor. Summary and the rules: docs/systems/water.md (Carving).
+## pond and erase strokes in progress and shares the ground machinery of sculpt strokes
+## (HeightEditor: the height queue, the per-frame snap of plants and props, rock keeping, the
+## scatter regeneration) and the editor's history, reaching into the editor for them: it is
+## part of the editor, split out only to keep one class a readable size. Frames: world in,
+## document inside, as the editor. Summary and the rules: docs/systems/water.md (Carving).
 ##
 ## Each operation is one history entry: the heights diff (HeightStroke.lower_to, a one-shot
 ## carve recorded like a dab), the water model before and after (WaterEdit.model_of), the wet
 ## dressing before and after, the props cells it changed, the rocks it kept and the crossings
 ## that followed it (CrossingEditor.follow, P4b-2); undo and redo put either side back
-## exactly (_apply()).
+## exactly (apply_edit(), which a live edit calls too).
 ##
 ## The heavy, pure half of an edit (P4-4) runs in compute() on a snapshot of the document:
 ## the carve's goal heights (WaterCarve), the wet dressing of the result (WaterDressing) and
@@ -593,14 +593,9 @@ func _land() -> void:
 	t0 = Time.get_ticks_usec()
 	var diff := {}
 	if stroke != null:
-		e._snap_before = stroke.start_heights
-		e._snap_windows.clear()
-		e._snap_start.clear()
-		e._prop_start.clear()
-		e._aligned = DressingGround.aligned_assets(doc.biome_ids, e.palette_root)
-		e._rocks = RockKeep.rock_assets(doc.biome_ids, e.palette_root)
-		e._queue_heights(stroke.take_pending())
-		e._work(true)
+		e.heights.begin_snap(stroke.start_heights, true)
+		e.heights.queue_heights(stroke.take_pending())
+		e.heights.work(true)
 		diff = stroke.finish()
 		region = region.merge(stroke.changed) if stroke.changed.has_area() else region
 	timings["ground"] = Time.get_ticks_usec() - t0
@@ -661,8 +656,9 @@ func _finish(
 		# Crossings follow their water and banks, in this edit's entry (P4b-2).
 		"crossings": e.crossings.follow(MaskBrush.sample_rect_to_world(doc, region)),
 	}
-	for cell in e._prop_start:
-		record.props_before[cell] = (e._prop_start[cell] as Dictionary).duplicate(true)
+	var started_props := e.heights.props_started()
+	for cell in started_props:
+		record.props_before[cell] = (started_props[cell] as Dictionary).duplicate(true)
 	var keep := _wet_rock_rule(job.result.owners)
 	_drop_wet_rocks(region, keep, record)
 	var props_bytes := 0
@@ -673,12 +669,13 @@ func _finish(
 	t0 = Time.get_ticks_usec()
 	var started := false
 	if stroke != null and not diff.is_empty():
-		var area: Rect2 = e._regenerated_area(region)
+		var area: Rect2 = e.heights.regenerated_area(region)
+		var rocks := e.heights.rocks()
 		started = e.rock_keeper.start(
-			stroke.start_heights, region, area, record, e._rocks, dressing_before, keep
+			stroke.start_heights, region, area, record, rocks, dressing_before, keep
 		)
 	if not started:
-		e._regenerate(region)
+		e.heights.regenerate(region)
 	timings["regenerate"] = Time.get_ticks_usec() - t0
 	var bytes := int(diff.get("bytes", 0)) + props_bytes
 	bytes += WaterEdit.model_bytes(before) + WaterEdit.model_bytes(after)
@@ -690,8 +687,8 @@ func _finish(
 		. record(
 			{
 				"label": label,
-				"undo": _apply.bind(diff, false, record),
-				"redo": _apply.bind(diff, true, record),
+				"undo": apply_edit.bind(diff, false, record),
+				"redo": apply_edit.bind(diff, true, record),
 				"bytes": bytes,
 			}
 		)
@@ -715,29 +712,38 @@ static func _unpack(packed: Dictionary) -> PackedByteArray:
 
 ## Undo (`redo` false) or redo of a water edit (_finish()'s record): the heights, the water
 ## model and its dressing, props as recorded, kept rocks swapped, then the surface and plants.
-func _apply(diff: Dictionary, redo: bool, record: Dictionary) -> void:
+## All at once, or with `spread` (a live edit) the heights' work is queued for
+## HeightEditor.step() and the rest lands once it has drained (HeightEditor.after_work).
+func apply_edit(diff: Dictionary, redo: bool, record: Dictionary, spread: bool = false) -> void:
 	var e := _editor()
 	var doc := e.document
 	e.finish_height_work()
 	WaterEdit.apply_model(doc, record.water_after if redo else record.water_before)
-	var prop_rows: Dictionary = record.props_after if redo else record.props_before
-	if not diff.is_empty():
-		var before := doc.heights.duplicate()
-		var rect := HeightStroke.apply_diff(doc, diff, redo)
-		e._snap_before = before
-		e._snap_start.clear()
-		e._prop_start.clear()
-		e._aligned = DressingGround.aligned_assets(doc.biome_ids, e.palette_root)
-		e._rocks = RockKeep.rock_assets(doc.biome_ids, e.palette_root)
-		e._queue_heights(rect)
-		# Props take their recorded rows, not a snap.
-		e._snap_props = false
-		e._work(true)
-		e._snap_props = true
-		e._snap_start.clear()
+	var land := _land_edit.bind(record, redo)
+	if diff.is_empty():
+		land.call()
+		return
+	var before := doc.heights.duplicate()
+	var rect := HeightStroke.apply_diff(doc, diff, redo)
+	if not rect.has_area():
+		land.call()
+		return
+	# Props take their recorded rows, not a snap.
+	e.heights.begin_snap(before, false)
+	e.heights.queue_heights(rect)
+	e.heights.after_work(land)
+	if not spread:
+		e.heights.work(true)
+
+
+## apply_edit()'s rest once the ground has caught up.
+func _land_edit(record: Dictionary, redo: bool) -> void:
+	var e := _editor()
+	var doc := e.document
 	e.crossings.restore(record.get("crossings", {}), redo)
+	var prop_rows: Dictionary = record.props_after if redo else record.props_before
 	for cell in prop_rows:
-		e._set_prop_cell(cell, prop_rows[cell], false)
+		e.set_prop_cell(cell, prop_rows[cell], false)
 	e.rock_keeper.swap(record.kept, redo)
 	if is_instance_valid(e.terrain):
 		e.terrain.settle_heights()
@@ -746,7 +752,7 @@ func _apply(diff: Dictionary, redo: bool, record: Dictionary) -> void:
 		e.terrain.refresh_water_dressing()
 	if is_instance_valid(e.map_root):
 		AuthoredWater.refresh_map(e.map_root, doc)
-	e._regenerate(record.region)
+	e.heights.regenerate(record.region)
 
 
 ## WaterCarve.keeps_rock() for the document's water as it is now, as Callable(asset id,

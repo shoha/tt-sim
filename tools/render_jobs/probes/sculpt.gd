@@ -170,10 +170,10 @@ class Stroker:
 					"ray": ray_ms,
 					"dab": editor.last_dab_usec / 1000.0,
 					"flush": editor.last_flush_usec / 1000.0,
-					"terrain": editor.last_terrain_usec / 1000.0,
-					"collision": editor.last_collision_usec / 1000.0,
-					"snap": editor.last_snap_usec / 1000.0,
-					"rows": float(editor.last_snap_rows),
+					"terrain": editor.heights.last_terrain_usec / 1000.0,
+					"collision": editor.heights.last_collision_usec / 1000.0,
+					"snap": editor.heights.last_snap_usec / 1000.0,
+					"rows": float(editor.heights.last_snap_rows),
 					"chunks": float(editor.terrain.last_heights_chunks),
 				}
 				for key in parts:
@@ -189,9 +189,9 @@ class Stroker:
 					editor.end_stroke()
 					end_ms = (Time.get_ticks_usec() - started) / 1000.0
 					end_parts = {
-						"terrain": editor.last_terrain_usec / 1000.0,
-						"collision": editor.last_collision_usec / 1000.0,
-						"snap": editor.last_snap_usec / 1000.0,
+						"terrain": editor.heights.last_terrain_usec / 1000.0,
+						"collision": editor.heights.last_collision_usec / 1000.0,
+						"snap": editor.heights.last_snap_usec / 1000.0,
 						"fields": editor.terrain.last_fields_usec / 1000.0,
 					}
 					_reset_tail_parts()
@@ -204,9 +204,9 @@ class Stroker:
 				# What the previous frame (the one `ms` timed) spent on the stroke's leftovers.
 				var sample := {
 					"frame": ms,
-					"terrain": editor.last_terrain_usec / 1000.0,
-					"collision": editor.last_collision_usec / 1000.0,
-					"snap": editor.last_snap_usec / 1000.0,
+					"terrain": editor.heights.last_terrain_usec / 1000.0,
+					"collision": editor.heights.last_collision_usec / 1000.0,
+					"snap": editor.heights.last_snap_usec / 1000.0,
 					"keep": editor.rock_keeper.last_usec / 1000.0,
 					"apply": ctrl.scatter.last_apply_usec / 1000.0,
 				}
@@ -240,9 +240,9 @@ class Stroker:
 
 	func _reset_tail_parts() -> void:
 		var editor := ctrl.editor
-		editor.last_terrain_usec = 0
-		editor.last_collision_usec = 0
-		editor.last_snap_usec = 0
+		editor.heights.last_terrain_usec = 0
+		editor.heights.last_collision_usec = 0
+		editor.heights.last_snap_usec = 0
 		editor.rock_keeper.last_usec = 0
 		ctrl.scatter.last_apply_usec = 0
 
@@ -536,7 +536,7 @@ static func _snap_dense(ctrl: AuthoringController) -> String:
 		editor.height_dab(Vector3(centre.x, 0, centre.y), Vector3(centre.x, 0, centre.y), 9.0, 0.3)
 		# Snap only this cell, timed; the terrain and collision are not part of it.
 		var started := Time.get_ticks_usec()
-		var moved: int = editor.call("_snap_cell", best, window.grow(0.5))
+		var moved: int = editor.heights.call("_snap_cell", best, window.grow(0.5))
 		var snap_ms := (Time.get_ticks_usec() - started) / 1000.0
 		editor.cancel_stroke()
 		results.append("%.2f ms (%d rows moved)" % [snap_ms, moved])

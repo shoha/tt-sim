@@ -55,7 +55,7 @@ static func serialize(doc: MapDocument, entries: Dictionary) -> void:
 		return
 	var bodies: Array = []
 	for body in doc.water_bodies:
-		bodies.append(_body_json(body))
+		bodies.append(body_json(body))
 	var data := {"version": VERSION, "bodies": bodies}
 	if not doc.water_flow.is_empty():
 		var size := doc.water_flow_size
@@ -178,7 +178,7 @@ static func parse(blobs: Dictionary, doc: MapDocument, log: MapDocumentIO._Warni
 	if not bodies is Array:
 		log.add("%s needs a bodies list; water ignored" % SPLINES_ENTRY)
 		return
-	doc.water_bodies = _parse_bodies(bodies, doc.extent_m(), log)
+	doc.water_bodies = parse_bodies(bodies, doc.extent_m(), log)
 	if blobs.has(PONDS_ENTRY):
 		_parse_ponds(blobs[PONDS_ENTRY], doc, log)
 	if blobs.has(FLOW_ENTRY):
@@ -188,7 +188,8 @@ static func parse(blobs: Dictionary, doc: MapDocument, log: MapDocumentIO._Warni
 # --- writing ------------------------------------------------------------------------
 
 
-static func _body_json(body: WaterBody) -> Dictionary:
+## One body's JSON form, as the document stores it (and a live water edit carries it).
+static func body_json(body: WaterBody) -> Dictionary:
 	var out := {
 		"id": body.id,
 		"kind": WaterBody.KIND_NAMES[body.kind],
@@ -212,7 +213,9 @@ static func _body_json(body: WaterBody) -> Dictionary:
 # --- reading ------------------------------------------------------------------------
 
 
-static func _parse_bodies(
+## The bodies of a JSON list (body_json() forms, untrusted) on a map of `extent`: each one the
+## rules accept, a warning in `log` for each one dropped.
+static func parse_bodies(
 	list: Array, extent: Vector2, log: MapDocumentIO._WarningLog
 ) -> Array[WaterBody]:
 	var out: Array[WaterBody] = []

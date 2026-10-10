@@ -1,21 +1,24 @@
 extends GutTest
 
-## Live map edits (probe P-live; findings in
+## Live map edits (LiveEditCodec; probe P-live, findings in
 ## docs/plans/2026-10-09-v0.2-evaluation/probes/live_edits_probe.md, local): the GM's edits
 ## during play reach every peer as their recorded after states and come out identical. A saved
 ## authored level (forest, a river leaving both edges with a plank bridge over it, a pond, two
 ## boulders placed by hand) is loaded twice through MapSourceLoader with props kept apart, as a
 ## play-side editor needs: the host's copy and a peer's. Each op runs on the host through the
 ## editor's own code paths; the redo side of every history entry it records crosses as bytes
-## (live_edit_codec.gd) and the peer applies it through the same redo method. The host's
-## document is then saved and loaded a third time. After every op the three MapFingerprints
-## and the documents (masks, heights, water, crossings, flow) match. The decoder's refusals of
-## hostile payloads are checked apart on a small document.
+## (LiveEditCodec.op_of, encode) into the peer's LiveEditCodec.Queue, which applies one op a
+## frame once the last one's height work has drained. The host's document is then saved and
+## loaded a third time. After every op the three MapFingerprints match exactly (generated rows
+## snap to the saved precision, so a reloaded cell and a regenerated one are bit-equal) and so
+## do the documents (masks, heights, water, crossings, flow). A sculpt's apply returns with its
+## chunks queued and the peer's per-frame step drains them over several frames.
 ##
-## Each op's payload size, decode-and-apply time, worst frame and settle time are printed on
-## "P-LIVE" lines (headless: no GPU upload in any frame; indicative only).
+## Each op's payload size, decode and apply time, worst frame, the most one frame spent on
+## chunks, snapping and the collision, and the settle time are printed on "P-LIVE" lines
+## (headless: no GPU upload in any frame; indicative only). Hostile payloads are refused in
+## test_live_edit_codec.gd.
 
-const Codec := preload("res://tests/unit/live_edit_codec.gd")
 const DIR := "user://_p_live_probe/"
 const LEVEL := DIR + "map.ttmap"
 const FOREST := "temperate_forest_summer_s1"
@@ -30,10 +33,6 @@ const RIVER: Array[Vector2] = [Vector2(12, -34), Vector2(13, 0), Vector2(14, 34)
 const POND := Vector2(-13, 16)
 const CRATER := Vector3(-6, 0, 22)
 const SETTLE_FRAMES := 900
-## Scatter rows of two copies may differ by this much (metres, or quaternion and scale units).
-## The saved rows carry 6 decimals, so a row loaded from the file and the same row generated
-## again differ by up to about 1e-6; a moved or different instance differs by far more.
-const ROW_TOLERANCE := 1e-5
 
 
 ## One built copy of the level.
@@ -144,33 +143,85 @@ func _busy(copy: Copy) -> bool:
 
 ## Frames until `copy` has no work left (height work, a water edit's landing, regeneration,
 ## grow-in, the water surface's refresh), driving the editor's per-frame step as a play-side
-## driver would. `started` (usec): when the op began on this frame. {"frames", "worst_usec"
-## (the longest frame, the op's own included), "worst_parts" (what that frame spent on the
-## editor's step, scatter cells applied and the water surface's swap), "wall_usec"}.
-func _settle(copy: Copy, started: int = -1) -> Dictionary:
+## driver would, or `queue` (a peer's LiveEditCodec.Queue), which also applies its ops.
+## `started` (usec): when the op began on this frame. {"frames", "worst_usec" (the longest
+## frame, the op's own included), "worst_parts" (what that frame spent on the step, scatter
+## cells applied and the water surface's swap), "wall_usec", "apply_usec" (the longest step
+## that applied an op), "queued" (an applied op left terrain chunks queued), "height_frames"
+## (frames that updated chunks), "chunks" and "chunks_max" (chunks updated in all, and in one
+## frame), "terrain_usec", "snap_usec", "collision_usec" (the most one frame spent on each),
+## "trace" (a line per frame of height work)}.
+func _settle(copy: Copy, started: int = -1, queue: LiveEditCodec.Queue = null) -> Dictionary:
 	var begin := Time.get_ticks_usec() if started < 0 else started
 	var last := begin
-	var worst := 0
-	var worst_parts := ""
-	var frames := 0
-	var scatter := copy.editor.scatter
+	var out := {
+		"frames": 0,
+		"worst_usec": 0,
+		"worst_parts": "",
+		"apply_usec": 0,
+		"queued": false,
+		"height_frames": 0,
+		"terrain_usec": 0,
+		"snap_usec": 0,
+		"collision_usec": 0,
+		"chunks": 0,
+		"chunks_max": 0,
+		"trace": [],
+	}
+	var e := copy.editor
+	var heights := e.heights
 	var applied := [0]
-	var on_applied := func(_cells: Array) -> void: applied[0] += scatter.last_apply_usec
-	scatter.cells_applied.connect(on_applied)
-	while frames < SETTLE_FRAMES and _busy(copy):
+	var on_applied := func(_cells: Array) -> void: applied[0] += e.scatter.last_apply_usec
+	e.scatter.cells_applied.connect(on_applied)
+	while out.frames < SETTLE_FRAMES and (_busy(copy) or (queue != null and queue.size() > 0)):
 		var water := copy.root.get_node_or_null(AuthoredWater.NODE_NAME) as AuthoredWater
 		var version := water.version if water != null else 0
+		heights.last_terrain_usec = 0
+		heights.last_snap_usec = 0
+		heights.last_collision_usec = 0
+		heights.last_snap_rows = 0
+		e.terrain.last_heights_chunks = 0
 		var step_started := Time.get_ticks_usec()
-		copy.editor.step_height_work()
+		var did_apply := false
+		if queue != null:
+			did_apply = queue.step()
+		else:
+			e.step_height_work()
 		var step := Time.get_ticks_usec() - step_started
+		if did_apply:
+			out.apply_usec = maxi(out.apply_usec, step)
+			out.queued = out.queued or e.terrain.has_height_work()
+		else:
+			var chunks := e.terrain.last_heights_chunks
+			out.terrain_usec = maxi(out.terrain_usec, heights.last_terrain_usec)
+			out.snap_usec = maxi(out.snap_usec, heights.last_snap_usec)
+			out.collision_usec = maxi(out.collision_usec, heights.last_collision_usec)
+			out.height_frames += 1 if chunks > 0 else 0
+			out.chunks += chunks
+			out.chunks_max = maxi(out.chunks_max, chunks)
+			if chunks > 0 or heights.last_snap_rows > 0 or heights.last_collision_usec > 100:
+				(out.trace as Array).append(
+					(
+						"%d: %d chunks %.1f, %d rows %.1f, collision %.1f"
+						% [
+							out.frames,
+							chunks,
+							heights.last_terrain_usec / 1000.0,
+							heights.last_snap_rows,
+							heights.last_snap_usec / 1000.0,
+							heights.last_collision_usec / 1000.0,
+						]
+					)
+				)
 		await get_tree().process_frame
 		var now := Time.get_ticks_usec()
-		if now - last > worst:
-			worst = now - last
+		if now - last > out.worst_usec:
+			out.worst_usec = now - last
 			var swapped := water != null and water.version != version
-			worst_parts = (
-				"step %.1f, cells %.1f, water swap %.1f %s"
+			out.worst_parts = (
+				"%s %.1f, cells %.1f, water swap %.1f %s"
 				% [
+					"apply" if did_apply else "step",
 					step / 1000.0,
 					applied[0] / 1000.0,
 					water.last_swap_usec / 1000.0 if swapped else 0.0,
@@ -179,14 +230,13 @@ func _settle(copy: Copy, started: int = -1) -> Dictionary:
 			)
 		applied[0] = 0
 		last = now
-		frames += 1
-	scatter.cells_applied.disconnect(on_applied)
+		out.frames += 1
+	e.scatter.cells_applied.disconnect(on_applied)
 	assert_false(_busy(copy), "settled within %d frames" % SETTLE_FRAMES)
 	# Freed nodes (a removed crossing's, shrunk-out instances) leave at the end of a frame.
 	await get_tree().process_frame
-	return {
-		"frames": frames, "worst_usec": worst, "worst_parts": worst_parts, "wall_usec": last - begin
-	}
+	out["wall_usec"] = last - begin
+	return out
 
 
 ## The host's document saved with its scatter and props rows (as authoring saves) and loaded a
@@ -196,49 +246,9 @@ func _reloaded(host: Copy) -> Dictionary:
 	host.doc.props = host.editor.props.rows_by_asset()
 	assert_eq(MapDocumentIO.write(host.doc, LEVEL), OK)
 	var third := await _load()
-	var out := {
-		"fp": MapFingerprint.of(third.root, third.doc),
-		"doc": _digest(third.doc),
-		"rows": _rows_diff(host.root, third.root),
-	}
+	var out := {"fp": MapFingerprint.of(third.root, third.doc), "doc": _digest(third.doc)}
 	third.root.free()
 	return out
-
-
-## How the scatter and props rows of two map roots differ, compared in order per node and
-## asset: {"max": the largest component difference, "problems": a line per asset whose row
-## count differs or whose rows differ by more than ROW_TOLERANCE}.
-func _rows_diff(a: Node, b: Node) -> Dictionary:
-	var problems := PackedStringArray()
-	var largest := 0.0
-	for node_name in [MapSourceLoader.SCATTER_NODE, MapSourceLoader.PROPS_NODE]:
-		var ra: Dictionary = (a.get_node(node_name) as AuthoredScatter).rows_by_asset()
-		var rb: Dictionary = (b.get_node(node_name) as AuthoredScatter).rows_by_asset()
-		var ids := ra.keys()
-		for id in rb.keys():
-			if not ids.has(id):
-				ids.append(id)
-		for id in ids:
-			var fa: PackedFloat32Array = ra.get(id, PackedFloat32Array())
-			var fb: PackedFloat32Array = rb.get(id, PackedFloat32Array())
-			if fa.size() != fb.size():
-				problems.append("%s %s: %d vs %d floats" % [node_name, id, fa.size(), fb.size()])
-				continue
-			var worst := 0.0
-			var at := -1
-			for i in fa.size():
-				if absf(fa[i] - fb[i]) > worst:
-					worst = absf(fa[i] - fb[i])
-					at = i
-			largest = maxf(largest, worst)
-			if worst > ROW_TOLERANCE:
-				problems.append(
-					(
-						"%s %s: row %d differs by %.6f (%.6f vs %.6f)"
-						% [node_name, id, floori(at / 10.0), worst, fa[at], fb[at]]
-					)
-				)
-	return {"max": largest, "problems": problems}
 
 
 ## The document's fields, hashed: masks, heights and flow exactly; water and crossings in
@@ -264,10 +274,10 @@ func _digest(doc: MapDocument) -> Dictionary:
 		out[field] = ctx.finish().hex_encode().left(16)
 	var water: Array = []
 	for body in doc.water_bodies:
-		water.append(MapWaterIO._body_json(body))
+		water.append(MapWaterIO.body_json(body))
 	var crossings: Array = []
 	for crossing in doc.crossings:
-		crossings.append(MapCrossingIO._crossing_json(crossing))
+		crossings.append(MapCrossingIO.crossing_json(crossing))
 	out["water"] = JSON.stringify(_rounded(water))
 	out["crossings"] = JSON.stringify(_rounded(crossings))
 	return out
@@ -383,12 +393,16 @@ func test_live_ops_reach_a_peer_identical_to_the_host_and_a_reload() -> void:
 	var peer := _editable(await _load())
 	await _settle(host)
 	await _settle(peer)
-	assert_eq(_rows_diff(host.root, peer.root).problems, PackedStringArray(), "two loads agree")
+	var host_loaded := MapFingerprint.of(host.root, host.doc)
+	var loads := MapFingerprint.diff(host_loaded, MapFingerprint.of(peer.root, peer.doc))
+	assert_true(loads.is_empty(), "two loads agree: %s" % str(loads))
+	var queue := LiveEditCodec.Queue.new(peer.editor)
 	var report := PackedStringArray(
 		[
 			(
-				"op | entries | payload B | record B (both sides) | decode ms | apply ms (terrain"
-				+ " / collision / snap) | worst frame ms (its parts) | frames | settle ms | rows um"
+				"op | entries | payload B | record B (both sides) | decode ms | apply ms | worst"
+				+ " frame ms (its parts) | most per frame ms (terrain / snap / collision) | chunk"
+				+ " frames | frames | settle ms"
 			)
 		]
 	)
@@ -403,139 +417,61 @@ func test_live_ops_reach_a_peer_identical_to_the_host_and_a_reload() -> void:
 		var sizes := 0
 		var record_bytes := 0
 		for entry: Dictionary in entries:
-			var op := Codec.op_of(entry)
+			var op := LiveEditCodec.op_of(entry, host.editor)
 			assert_false(op.is_empty(), "%s: a redo the codec knows (%s)" % [label, entry.label])
-			payloads.append(Codec.encode(op))
+			payloads.append(LiveEditCodec.encode(op))
 			sizes += payloads[-1].size()
 			record_bytes += int(entry.get("bytes", 0))
-			assert_lt(payloads[-1].size(), Codec.MAX_BYTES, label + ": under 256 KB")
-		var e := peer.editor
-		e.last_terrain_usec = 0
-		e.last_collision_usec = 0
-		e.last_snap_usec = 0
+			assert_lt(payloads[-1].size(), LiveEditCodec.MAX_BYTES, label + ": under 256 KB")
 		var started := Time.get_ticks_usec()
 		var decoded_usec := 0
 		for bytes in payloads:
 			var decode_started := Time.get_ticks_usec()
-			var decoded := Codec.decode(bytes, peer.doc)
+			var problem := queue.push(bytes)
 			decoded_usec += Time.get_ticks_usec() - decode_started
-			assert_eq(decoded.problem, "", label + ": the payload reads back")
-			if decoded.problem == "":
-				Codec.apply(decoded.op, e)
-		var applied := Time.get_ticks_usec() - started
-		var parts := [e.last_terrain_usec, e.last_collision_usec, e.last_snap_usec]
-		var settled := await _settle(peer, started)
+			assert_eq(problem, "", label + ": the payload reads back")
+		var settled := await _settle(peer, started, queue)
+		if label.begins_with("sculpt"):
+			assert_true(settled.queued, label + ": the apply returned with its chunks queued")
+			var spread := "chunks, the collision and the settling on frames of their own"
+			assert_gt(settled.trace.size(), 2, "%s: %s" % [label, spread])
+			assert_lt(settled.chunks_max, settled.chunks, label + ": no frame took every chunk")
+			# Indicative (headless, a shared machine): a budget lets one chunk or cell finish
+			# past it; all at once, this raise spent 17 ms on chunks and 15 on snapping.
+			var budgets := "%s: per-frame parts near the budgets" % label
+			assert_lt(settled.terrain_usec, HeightEditor.TERRAIN_BUDGET_USEC * 3, budgets)
+			assert_lt(settled.snap_usec, HeightEditor.SNAP_BUDGET_USEC * 3, budgets)
+			for line in settled.trace:
+				print("P-LIVE-FRAMES %s %s" % [label, line])
 		var reload := await _reloaded(host)
 		var host_fp := MapFingerprint.of(host.root, host.doc)
-		assert_eq(_fp_diff(host_fp, MapFingerprint.of(peer.root, peer.doc)), [], label)
-		assert_eq(_fp_diff(host_fp, reload.fp), [], label + ": against the reload")
-		var rows := _rows_diff(host.root, peer.root)
-		assert_eq(rows.problems, PackedStringArray(), label + ": the peer's rows")
-		assert_eq(reload.rows.problems, PackedStringArray(), label + ": the reloaded rows")
+		var to_peer := MapFingerprint.diff(host_fp, MapFingerprint.of(peer.root, peer.doc))
+		assert_true(to_peer.is_empty(), "%s: the peer differs in %s" % [label, str(to_peer)])
+		var to_reload := MapFingerprint.diff(host_fp, reload.fp)
+		assert_true(to_reload.is_empty(), "%s: the reload differs in %s" % [label, str(to_reload)])
 		var host_doc := _digest(host.doc)
 		assert_eq(_digest(peer.doc), host_doc, label + ": the peer's document")
 		assert_eq(reload.doc, host_doc, label + ": the reloaded document")
 		report.append(
 			(
-				"%s | %d | %d | %d | %.1f | %.1f (%.1f / %.1f / %.1f) | %.1f (%s) | %d | %.0f | %.1f"
+				"%s | %d | %d | %d | %.1f | %.1f | %.1f (%s) | %.1f / %.1f / %.1f | %d | %d | %.0f"
 				% [
 					label,
 					entries.size(),
 					sizes,
 					record_bytes,
 					decoded_usec / 1000.0,
-					(applied - decoded_usec) / 1000.0,
-					parts[0] / 1000.0,
-					parts[1] / 1000.0,
-					parts[2] / 1000.0,
-					maxi(applied, settled.worst_usec) / 1000.0,
+					settled.apply_usec / 1000.0,
+					settled.worst_usec / 1000.0,
 					settled.worst_parts,
+					settled.terrain_usec / 1000.0,
+					settled.snap_usec / 1000.0,
+					settled.collision_usec / 1000.0,
+					settled.height_frames,
 					settled.frames,
 					settled.wall_usec / 1000.0,
-					rows.max * 1e6,
 				]
 			)
 		)
 	for line in report:
 		print("P-LIVE " + line)
-
-
-## MapFingerprint.diff without scatter_hash: its 1 mm rounding flips where a row loaded from
-## the file (6 decimals) and the same row generated again straddle a rounding boundary, so the
-## rows are compared within ROW_TOLERANCE instead (_rows_diff).
-func _fp_diff(a: Dictionary, b: Dictionary) -> Array:
-	var out: Array = []
-	for key in MapFingerprint.diff(a, b):
-		if key != "scatter_hash":
-			out.append(key)
-	return out
-
-
-## A valid mask op on a small document, the op it reads back as, and that document.
-func _small_mask_op() -> Array:
-	var doc := MapDocument.create_flat(Vector2i(4, 4), "grass", "v", 1)
-	var stroke := MaskStroke.begin(doc, MaskBrush.PAINT, FOREST)
-	stroke.dab(Vector2(-1, 0), Vector2(1, 0), 1.0, 0.5)
-	var op := Codec._op("mask", [Codec._diff_after(stroke.finish())])
-	return [op, MapDocument.create_flat(Vector2i(4, 4), "grass", "v", 1)]
-
-
-func _tamper(op: Dictionary, why: String) -> void:
-	var diff: Dictionary = op.args[0]
-	var block: Dictionary = diff.blocks[0]
-	match why:
-		"an unknown kind":
-			op.kind = "terraform"
-		"a rectangle off the grid":
-			block.rect = Rect2i(10, 10, 40, 40)
-		"a property that is not a mask":
-			block.after = {&"heights": block.after[&"biome_slots"]}
-		"a block short of its rectangle":
-			block.after[&"biome_density"] = PackedByteArray([1, 2, 3]).compress(Codec.COMPRESSION)
-		"a slot past the biome list":
-			diff.ids_after = PackedStringArray()
-		"an unknown biome":
-			diff.ids_after = PackedStringArray(["no_such_biome"])
-
-
-func test_the_decoder_refuses_hostile_payloads() -> void:
-	var made := _small_mask_op()
-	var good: Dictionary = made[0]
-	var doc: MapDocument = made[1]
-	assert_eq(Codec.decode(Codec.encode(good), doc).problem, "", "a real stroke reads back")
-	for why in [
-		"an unknown kind",
-		"a rectangle off the grid",
-		"a property that is not a mask",
-		"a block short of its rectangle",
-		"a slot past the biome list",
-		"an unknown biome",
-	]:
-		var op := good.duplicate(true)
-		_tamper(op, why)
-		assert_ne(Codec.decode(Codec.encode(op), doc).problem, "", why)
-	var oversized := PackedByteArray()
-	oversized.resize(Codec.MAX_BYTES + 1)
-	assert_ne(Codec.decode(oversized, doc).problem, "", "over the byte cap, never decoded")
-	var plank := {
-		"id": 1,
-		"kind": "plank",
-		"start": [-1.5, 0.0],
-		"end": [1.5, 0.0],
-		"levels": [0.1, 0.15, 0.1],
-		"width_m": 1.5,
-		"style": "",
-	}
-	var crossing := Codec._op("crossings", [[plank], Rect2()])
-	assert_eq(Codec.decode(Codec.encode(crossing), doc).problem, "", "a plank bridge")
-	plank.id = 0
-	crossing = Codec._op("crossings", [[plank], Rect2()])
-	assert_ne(Codec.decode(Codec.encode(crossing), doc).problem, "", "a crossing with id 0")
-	var asset: String = PaletteLibrary.species(FOREST)[0].assets[0]
-	var row := PackedFloat32Array([1, 0, 1, 0, 0, 0, 1, 1, 1, 1])
-	var props := Codec._op("props", [Vector2i.ZERO, {asset: row}])
-	assert_eq(Codec.decode(Codec.encode(props), doc).problem, "", "a prop in its cell")
-	props = Codec._op("props", [Vector2i(1, 0), {asset: row}])
-	assert_ne(Codec.decode(Codec.encode(props), doc).problem, "", "a prop filed in another cell")
-	props = Codec._op("props", [Vector2i.ZERO, {"x/no_such_asset": row}])
-	assert_ne(Codec.decode(Codec.encode(props), doc).problem, "", "an asset the palette lacks")

@@ -353,7 +353,8 @@ func start_height(i: int) -> float:
 
 ## Ends the stroke: the diff history keeps, or {} when no height changed. A diff is
 ## {"blocks": Array of {"rect", "before": PackedByteArray, "after": PackedByteArray} (ZSTD
-## float bytes), "rect": Rect2i (every block), "bytes": int}.
+## float bytes), "rect": Rect2i (every block), "changed": Rect2i (the samples the stroke
+## changed, inside "rect"), "bytes": int}.
 @warning_ignore("integer_division")
 func finish() -> Dictionary:
 	if not changed.has_area():
@@ -378,7 +379,7 @@ func finish() -> Dictionary:
 		whole = MaskBrush.merge_rect(whole, rect)
 	if blocks.is_empty():
 		return {}
-	return {"blocks": blocks, "rect": whole, "bytes": total}
+	return {"blocks": blocks, "rect": whole, "changed": changed, "bytes": total}
 
 
 ## Puts every height the stroke wrote back (a cancelled stroke). Returns the sample
@@ -398,7 +399,10 @@ func revert() -> Rect2i:
 
 
 ## Writes one side of a finish() diff into `document` (`redo` true: the stroke's result;
-## false: the heights before it). Returns the sample rectangle it touched.
+## false: the heights before it). Returns the sample rectangle whose heights changed: the
+## stroke's own ("changed"), not its whole blocks, so the terrain, the snap and the
+## regeneration redo only what the stroke did (a block reaching the grid's edge would refresh
+## the skirt too).
 static func apply_diff(document: MapDocument, diff: Dictionary, redo: bool) -> Rect2i:
 	if document.heights.size() != document.sample_count():
 		return Rect2i()
@@ -408,7 +412,7 @@ static func apply_diff(document: MapDocument, diff: Dictionary, redo: bool) -> R
 		var packed: PackedByteArray = block[side]
 		var raw := packed.decompress(rect.size.x * rect.size.y * 4, COMPRESSION)
 		write_block(document.heights, document.samples_x(), rect, raw.to_float32_array())
-	return diff.get("rect", Rect2i())
+	return diff.get("changed", diff.get("rect", Rect2i()))
 
 
 ## The floats of `rect` of a row-major grid `width` samples wide, row by row.
