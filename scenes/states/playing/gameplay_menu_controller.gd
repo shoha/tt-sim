@@ -15,6 +15,9 @@ signal avatar_drag_place_started(icon: Texture2D, place: Callable)
 const NO_MAP_ERROR := "Could not add a token: no map is on the table. Set out a map first."
 const SAVE_ERROR := "Could not save the map: its file was not written. Try again in a moment."
 
+## The GM's live brushes: the Visuals drawer's Events pane (made in setup()).
+var play_events: PlayEvents = null
+
 var _level_play_controller: LevelPlayController = null
 
 ## Snapshot of every editable visual field, taken when the drawer opens and
@@ -98,6 +101,17 @@ func setup(level_play_controller: LevelPlayController) -> void:
 	# Show default gameplay input hints
 	_set_default_hints()
 	InputProfile.profile_changed.connect(_on_input_profile_changed)
+
+	# The Events pane's brushes; its rail item stays tinted while one is out.
+	if level_edit_panel and play_events == null:
+		play_events = PlayEvents.new()
+		play_events.name = "PlayEvents"
+		add_child(play_events)
+		play_events.setup(level_play_controller, level_edit_panel.events_pane)
+		play_events.armed_changed.connect(
+			func(tool_id: StringName) -> void:
+				level_edit_panel.set_rail_item_active(LevelEditPanel.EVENTS_ID, tool_id != &"")
+		)
 
 	# Update UI state
 	_update_asset_browser_button_state()
@@ -383,6 +397,9 @@ func _update_edit_mode_drawer() -> void:
 		level_edit_panel.reveal()
 	else:
 		level_edit_panel.conceal()
+		# No brush outlives the GM's drawer (GM access lost, or the map gone).
+		if play_events:
+			play_events.put_away()
 
 
 ## Called when the drawer tab is clicked and the drawer opens.

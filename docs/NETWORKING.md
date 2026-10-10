@@ -778,13 +778,17 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
 - `enet_live_edits` (`--peers=3 --timeout-s=300`): live map edits (see "Live map edits"
   below). The host builds a 120 ft authored level (forest west of a river, a plank bridge) in
   its own test root before it opens the room, so both clients download its `map.ttmap`. With
-  client at the table, the host runs five ops on the table's play-side editor: a sculpt raise,
-  a forest clear, the bridge removed, a sculpt lower, and an undo of the lower (a height op's
-  before side). client's `MapFingerprint` equals the host's after each. The host drops Hero
-  onto the raised ground; client2 then joins at the table, downloads the original map, takes
-  the log and matches the host's final fingerprint, with Hero resting on its own ground at the
-  host's height (0.65 m above the original flat ground). Passed on 2026-10-09 in about 7.4 s on
-  the host.
+  client at the table, the host stands Scout where the raise will go and runs five ops as the
+  GM's Events pane does: the sculpt raise, a forest clear (Thin with Ctrl) and a sculpt lower
+  are strokes of GameMap's play brush armed by `PlayEvents.pick` and driven over the board,
+  the bridge removal is a direct editor call, and the undo of the lower (a height op's before
+  side) is `PlayEvents.undo`, Ctrl+Z's path. client's `MapFingerprint` equals the host's after
+  each, and its Scout stands where the host's does (the host's `LiveEditGround` set it down on
+  the raised ground and sent it). The host drops Hero onto the raised ground; client2 then
+  joins at the table, downloads the original map, takes the log and matches the host's final
+  fingerprint, with Hero and Scout resting on its own ground at the host's heights. Passed on
+  2026-10-10 in about 13.8 s on the host (Scout 0.047 m before the raise, 0.303 m after on
+  every peer; Hero 0.622 m).
 
 All three earlier ones passed through the launcher on 2026-10-09, each in about 1.4 s on the
 host, with no shipped store file changed (31,435 files watched) and every test root removed;
@@ -1091,13 +1095,22 @@ joiner included, ends with the same map. The ops and their checks are
   warning), so a misbehaving host cannot make a client print an engine error for every op.
   A request for the log is answered at most once in two seconds a player, since the answer
   can be megabytes.
+- **Tokens follow the ground.** Once the edits so far have settled on a peer (sent or applied,
+  the terrain's chunks rebuilt, two physics frames on), its `LiveEditGround` (a child of the
+  service) refits the view to the ground. On the host it also sets every token down on the
+  ground as it is now (`TokenGrounding`) and sends each one that moved with
+  `NetworkStateSync.broadcast_token_properties` (reliable, GameState kept in step), so a token
+  on raised ground stands on it on every peer and one on a bridge that went sits in the water.
+  Clients take the host's positions and never re-ground on their own.
 - **Saving.** Live edits change the session's copy of the map (the loaded document and
   nodes), never `map.ttmap`.
 
-ENet scenario: `tests/net/enet_live_edits` (three peers: the host builds an authored level in
-its test root, a client follows five ops with an equal `MapFingerprint` after each, a late
-joiner downloads the original map, catches up and matches, its token resting on the raised
-ground at the host's height).
+The GM's UI is the Events pane (`PlayEvents`, [systems/authoring.md](systems/authoring.md)
+"Live edits"). ENet scenario: `tests/net/enet_live_edits` (three peers: the host builds an
+authored level in its test root and changes it through the play brush, a client follows five
+ops with an equal `MapFingerprint` and a re-grounded token after each, a late joiner downloads
+the original map, catches up and matches, its tokens resting on the raised ground at the
+host's heights).
 
 ### NetworkStateSync
 

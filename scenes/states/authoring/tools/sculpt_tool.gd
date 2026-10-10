@@ -4,7 +4,7 @@ extends ToolDescriptor
 ## The Sculpt tool: raises, smooths, flattens and tiers the document's own ground
 ## (SculptBrush; HeightEditor runs the strokes). Its pane is AuthoringPanel's four tiles. A
 ## dressed Blender map's ground is the GLB's, so there the tool is disabled with a tooltip
-## saying why.
+## saying why. It exists in play too, in the GM's Events pane (PlayEvents).
 
 const ID := &"sculpt"
 const LABEL := "Sculpt"
@@ -17,6 +17,7 @@ func _init() -> void:
 	summary = "Shape the ground."
 	icon = "mountain"
 	brush_mode = SculptBrush
+	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [["Shift + Left Drag", "Smooth the ground (Sculpt, any tile)"]]
 
@@ -28,4 +29,8 @@ static func of(brush: BrushTool) -> SculptBrush:
 
 ## Only where the ground is the document's.
 func can_select(controller: AuthoringController) -> bool:
-	return controller.editor != null and controller.editor.can_sculpt()
+	return controller.editor != null and works_on(controller.editor)
+
+
+func works_on(editor: AuthoringEditor) -> bool:
+	return editor.can_sculpt()

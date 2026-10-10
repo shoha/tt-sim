@@ -14,3 +14,4 @@ func _init() -> void:
 	summary = "Open up what grows."
 	icon = "eraser"
 	brush_mode = ThinBrush
+	contexts = AUTHORING | PLAY

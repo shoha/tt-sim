@@ -71,6 +71,12 @@ func can_redo() -> bool:
 	return not _redo.is_empty()
 
 
+## True when `entry` is the one undo() would take back next (an undo toast's entry is undone
+## only while nothing newer stands on it).
+func is_newest(entry: Dictionary) -> bool:
+	return not _undo.is_empty() and is_same(_undo.back(), entry)
+
+
 ## Undoes the newest entry; returns its label, or "" when there was nothing to undo.
 func undo() -> String:
 	if _undo.is_empty():

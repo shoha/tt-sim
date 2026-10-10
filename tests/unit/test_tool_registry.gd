@@ -97,10 +97,14 @@ func test_every_tool_is_in_help_with_its_shortcut() -> void:
 			var index := _row_index(building, row)
 			assert_gt(index, last, "%s's row %s is in help, after the tool before" % [tool.id, row])
 			last = index
+	# A play tool that is a map-building tool too has its rows there; the Tools section names
+	# the GM's Events pane once, and lists a play-only tool's own rows.
+	var tools := _help_section("Tools")
+	assert_gt(_row_index(tools, [PlayEvents.HELP_KEYS, PlayEvents.HELP_TEXT]), -1, "Events row")
 	for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
-		var tools := _help_section("Tools")
+		var section := building if tool.exists_in(ToolDescriptor.AUTHORING) else tools
 		for row in tool.help_rows():
-			assert_gt(_row_index(tools, row), -1, "%s's row %s is in help" % [tool.id, row])
+			assert_gt(_row_index(section, row), -1, "%s's row %s is in help" % [tool.id, row])
 
 
 func test_shortcuts_are_unique() -> void:

@@ -18,6 +18,7 @@ func _init() -> void:
 	summary = "Lay paths, yards and rock."
 	icon = "brush"
 	brush_mode = PaintBrush
+	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 
 
@@ -28,7 +29,11 @@ static func of(brush: BrushTool) -> PaintBrush:
 
 ## Only where the ground is the document's.
 func can_select(controller: AuthoringController) -> bool:
-	return controller.editor != null and controller.editor.can_paint()
+	return controller.editor != null and works_on(controller.editor)
+
+
+func works_on(editor: AuthoringEditor) -> bool:
+	return editor.can_paint()
 
 
 ## Armed once a surface is picked (the pane preselects one).

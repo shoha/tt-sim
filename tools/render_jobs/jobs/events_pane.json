@@ -1,0 +1,59 @@
+{
+ "out_dir": "render_jobs/events_pane",
+ "timeout_s": 240,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "wait", "s": 1.0},
+
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 100, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "save", "folder": "_gm_events_table"},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_gm_events_table"},
+  {"op": "wait", "s": 3.0},
+  {"op": "wait_ready", "settle": 1.5},
+
+  {"op": "expand", "values": ["1280x720", "1920x1080"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "window", "size": "{value}"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "open"},
+   {"op": "wait", "s": 1.0},
+   {"op": "capture", "name": "{value}_events_open", "desc": "{value}: the GM's Events pane open in the Visuals drawer, no brush out: the brushes the table can take and the footer's Cancel and Save look stepped out"}
+  ]},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "window", "size": "1280x720"},
+  {"op": "wait", "s": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "arm", "tool": "sculpt"},
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "press", "at": [-6, 2]},
+  {"op": "wait", "s": 1.2},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "move", "at": [-4, 3]},
+  {"op": "wait", "s": 1.2},
+  {"op": "capture", "name": "1280x720_events_sculpt", "desc": "1280x720: a live Sculpt raise held on the board as the GM, the ring on the rising ground, the hint bar led by the brush's keys, the Sculpt tile pressed in the Events pane"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "release"},
+  {"op": "wait", "s": 2.0},
+  {"op": "capture", "name": "1280x720_events_raised", "desc": "1280x720: the raise released: sent to every player, the undo toast if it was a large edit"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "undo"},
+  {"op": "wait", "s": 2.0},
+  {"op": "capture", "name": "1280x720_events_undone", "desc": "1280x720: after Ctrl+Z (PlayEvents.undo): the ground back as it was, the Undone toast"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "arm", "tool": "thin_clear", "radius": 9.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "press", "screen": [0.1, 0.55], "ctrl": true},
+  {"op": "wait", "s": 0.8},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "move", "screen": [0.26, 0.62]},
+  {"op": "wait", "s": 0.8},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "move", "screen": [0.44, 0.55]},
+  {"op": "wait", "s": 0.8},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "release"},
+  {"op": "wait", "s": 1.5},
+  {"op": "capture", "name": "1280x720_events_cleared", "desc": "1280x720: a wide Clear (Thin / Clear with Ctrl) swept through the forest, a large edit: the toast offering Undo"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "player"},
+  {"op": "wait", "s": 1.0},
+  {"op": "capture", "name": "1280x720_events_player", "desc": "1280x720: a player's view of the same table (staged: the GM's Visuals drawer concealed and the GM's HUD buttons hidden, as for a player): the cleared swath, no Events pane, no brush"},
+
+  {"op": "index", "title": "Events pane", "intro": "The GM's live brushes in play (card gm-events)."},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "cleanup"}
+ ]
+}

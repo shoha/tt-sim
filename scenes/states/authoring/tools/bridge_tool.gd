@@ -21,6 +21,7 @@ func _init() -> void:
 	summary = "Cross water on planks, stones, an arch or a ford."
 	icon = "building-bridge"
 	brush_mode = BridgeBrush
+	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [
 		[
@@ -44,6 +45,10 @@ static func of(brush: BrushTool) -> BridgeBrush:
 ## Where water can be made or the document has some.
 func can_select(controller: AuthoringController) -> bool:
 	return WaterTool.has_water_work(controller)
+
+
+func works_on(editor: AuthoringEditor) -> bool:
+	return WaterTool.has_water_work_on(editor)
 
 
 ## Starts the open map's crossing textures and materials once (AuthoringController

@@ -9,8 +9,9 @@ extends RefCounted
 ## docs/systems/authoring.md "Tools").
 ##
 ## Contexts: a descriptor says whether it exists in authoring, in play, or in both
-## (ToolDescriptor.AUTHORING, PLAY), and every list query takes the context it is for. The
-## seven tools of 2026-10 are all authoring tools; play lists none yet.
+## (ToolDescriptor.AUTHORING, PLAY), and every list query takes the context it is for. Play
+## lists Biome, Thin / Clear, Sculpt, Paint, Water and Bridge, the GM's live brushes in the
+## Events pane (PlayEvents); Place is authoring's alone.
 ##
 ## The descriptors are stateless, so one set is made on first use and shared.
 
