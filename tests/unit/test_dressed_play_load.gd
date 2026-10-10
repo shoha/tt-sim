@@ -9,8 +9,8 @@ extends GutTest
 ## The play path runs through the real LevelPlayController and GameMap (wired as
 ## Root._enter_playing_state wires them). The GLB is one 8 x 8 m box with a collision twin
 ## whose top is at Y = GROUND_Y; the document is 4 x 4 cells, flat at 0, inside it. The level
-## folder is under the real user://levels/ with a name no real level can have; it is removed
-## after each test.
+## folder is under Paths.LEVELS_DIR (the GUT run's own test data root) and is removed after
+## each test.
 
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const FOLDER := "_authparity_dressed_gut"

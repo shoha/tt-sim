@@ -833,10 +833,9 @@ func _update_cache_info() -> void:
 
 
 func _get_cache_size() -> int:
-	var cache_dir = "user://asset_cache/"
-	if not DirAccess.dir_exists_absolute(cache_dir):
+	if not DirAccess.dir_exists_absolute(Paths.ASSET_CACHE_DIR):
 		return 0
-	return _get_dir_size(cache_dir)
+	return _get_dir_size(Paths.ASSET_CACHE_DIR)
 
 
 func _get_dir_size(path: String) -> int:

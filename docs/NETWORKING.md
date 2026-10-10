@@ -599,7 +599,8 @@ index, user asset packs, avatars, updates, perf logs, the warm-up marker) under
 clients wrote one shared asset cache index at once and each evicted a real cached model to fit
 its download. The launcher also records the modification time of every file in the shipped
 stores before the peers start and fails the run if any was added, removed or changed, and it
-deletes every test root of the run at the end, pass or fail.
+deletes every test root of the run at the end, pass or fail. A GUT run gets such a root
+without an argument (`Paths.gut_data_root`, see `AGENTS.md` "Running tests from the CLI").
 
 A scenario is a scene whose script reads `--role`, `--rendezvous` (an absolute path prefix
 for the files the roles coordinate through), `--out`, `--timeout-s` and `--port`, writes its

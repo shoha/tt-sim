@@ -5,12 +5,13 @@ extends GutTest
 ## These tests exercise the state-file helpers directly on AssetManager
 ## without needing HTTP downloads.
 
-const USER_ASSETS_USER_DIR := "user://user_assets/"
 const TEST_PACK_ID := "test_resume_pack"
 
 
+## The pack folder AssetManager scans: under Paths.USER_ASSETS_DIR, which in a GUT run is the
+## run's test data root, never the real user's installed packs.
 func _get_pack_dir() -> String:
-	return USER_ASSETS_USER_DIR + TEST_PACK_ID + "/"
+	return Paths.USER_ASSETS_DIR + TEST_PACK_ID + "/"
 
 
 func _get_state_path() -> String:

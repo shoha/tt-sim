@@ -12,12 +12,25 @@ class_name Paths
 ## scenarios pass the engine's --log-file instead), and two files only an interactive
 ## session writes, the Level Editor's autosave (LevelEditorHistory) and the update
 ## installer's restart scripts.
+##
+## A GUT command-line run (godot --script res://addons/gut/gut_cmdln.gd) gets its own test
+## root, user://_test_roots/gut_<process id>/, without passing anything: the command is fixed,
+## and the stores must already point there when the autoloads load (AssetCacheManager reads
+## and rewrites its index, UpdateManager consumes the update-success file, several classes
+## copy a path as a static default), which is before GUT runs any hook. tests/gut_post_run.gd,
+## named by every tests/.gutconfig*.json, deletes the root when the run ends. An explicit
+## --data-root wins over it.
 
 ## The user argument that selects a test data root.
 const DATA_ROOT_ARG: String = "--data-root="
 const SHIPPED_DATA_ROOT: String = "user://"
 ## Parent of every test data root; a scenario deletes its own roots when it ends.
 const TEST_ROOTS_DIR: String = "user://_test_roots/"
+## The file name of GUT's command-line runner, the engine's `--script` of a GUT run.
+const GUT_RUNNER_SCRIPT: String = "gut_cmdln.gd"
+## Prefix of a GUT run's test root name; the process id follows, so runs that overlap (a
+## subset beside the full run) never share or delete each other's files.
+const GUT_ROOT_PREFIX: String = "gut_"
 
 # Special pack ID for map streaming (used by AssetStreamer)
 const LEVEL_MAPS_PACK_ID: String = "_level_maps"
@@ -47,7 +60,7 @@ const BOARD_TOKEN_DIR: String = "res://scenes/board_token/"
 # The per-user stores, each under the data root (user:// in the shipped game). Static
 # rather than const only so --data-root can move them when this class loads, and named like
 # the constants they were; nothing assigns them afterwards (tests that call use_data_root()
-# put the shipped root back).
+# put the run's root back).
 # gdlint: disable=class-variable-name
 ## The data root itself, ending in "/".
 static var DATA_ROOT: String = ""
@@ -69,14 +82,21 @@ static var UPDATES_DIR: String = ""
 
 
 static func _static_init() -> void:
-	use_data_root(data_root_from_args(OS.get_cmdline_user_args()))
+	var root := data_root_from_args(OS.get_cmdline_user_args())
+	if root == SHIPPED_DATA_ROOT:
+		var gut_root := gut_data_root(OS.get_cmdline_args(), OS.get_process_id())
+		if gut_root != "":
+			# A leftover of an earlier process with this id; no live process shares it.
+			remove_test_data_root(gut_root)
+			root = gut_root
+	use_data_root(root)
 
 
 ## Point every per-user store at `root` (ending in "/"). Runs once when this class loads,
 ## with the root the command line picks; a test may call it to check the redirect and must
-## call it again with SHIPPED_DATA_ROOT. Classes that copied a path when they loaded
-## (LevelManager.levels_dir, UIPreferences.settings_path, AuthoringAutosave.directory,
-## AvatarLibrary.directory) keep the root they loaded with.
+## call it again with the root it found (DATA_ROOT before the call). Classes that copied a
+## path when they loaded (LevelManager.levels_dir, UIPreferences.settings_path,
+## AuthoringAutosave.directory, AvatarLibrary.directory) keep the root they loaded with.
 static func use_data_root(root: String) -> void:
 	var stores := store_paths(root)
 	DATA_ROOT = root
@@ -115,6 +135,16 @@ static func data_root_from_args(args: PackedStringArray) -> String:
 		if arg.begins_with(DATA_ROOT_ARG):
 			return test_data_root(arg.substr(DATA_ROOT_ARG.length()))
 	return SHIPPED_DATA_ROOT
+
+
+## The test data root of a GUT command-line run: `engine_args` (OS.get_cmdline_args()) name
+## GUT's runner as the script the engine runs, `process_id` is the run's. "" for any other
+## process, the shipped game included.
+static func gut_data_root(engine_args: PackedStringArray, process_id: int) -> String:
+	for arg in engine_args:
+		if arg.get_file() == GUT_RUNNER_SCRIPT:
+			return test_data_root("%s%d" % [GUT_ROOT_PREFIX, process_id])
+	return ""
 
 
 ## The test data root named `root_name`: TEST_ROOTS_DIR + the name + "/", keeping only

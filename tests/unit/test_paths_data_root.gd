@@ -7,8 +7,10 @@ extends GutTest
 ## index first among them: three local clients once wrote the real index at once and each
 ## evicted a real cached model to fit its download.
 ##
-## This run has no --data-root, so the stores load at the shipped root. The redirect tests
-## call Paths.use_data_root() and put the shipped root back in after_each().
+## A GUT command-line run has no --data-root, but Paths gives it a test root of its own
+## (gut_data_root), so these tests, like every other, never see the real user's stores; the
+## stores load at that root. The redirect tests call Paths.use_data_root() and put the run's
+## root back in after_each().
 
 const ROOT_NAME := "_paths_test_root"
 const AssetCacheScript := preload("res://autoloads/asset_cache_manager.gd")
@@ -27,8 +29,16 @@ const SHIPPED := {
 }
 
 
+## The data root this run started with, put back after each redirect test
+var _run_root := ""
+
+
+func before_all() -> void:
+	_run_root = Paths.DATA_ROOT
+
+
 func after_each() -> void:
-	Paths.use_data_root(Paths.SHIPPED_DATA_ROOT)
+	Paths.use_data_root(_run_root)
 	Paths.remove_test_data_root(Paths.test_data_root(ROOT_NAME))
 
 
@@ -46,20 +56,49 @@ func _stores() -> Dictionary:
 	}
 
 
-func test_without_the_argument_every_store_keeps_its_shipped_path() -> void:
-	assert_eq(Paths.DATA_ROOT, "user://")
-	assert_eq(_stores(), SHIPPED)
+func test_the_shipped_root_keeps_every_store_at_its_shipped_path() -> void:
+	assert_eq(Paths.SHIPPED_DATA_ROOT, "user://")
 	assert_eq(Paths.store_paths(Paths.SHIPPED_DATA_ROOT), SHIPPED)
 
 
-func test_stores_that_copy_a_path_copied_the_shipped_one() -> void:
-	assert_eq(LevelManager.levels_dir, "user://levels/")
-	assert_eq(UiPreferences.settings_path, "user://settings.cfg")
-	assert_eq(AuthoringAutosave.directory, "user://levels/_autosave/")
-	assert_eq(AvatarLibrary.directory, "user://avatars/")
-	assert_eq(UpdateManager._pending_update_file, "user://updates/pending_update.json")
+func test_every_store_is_under_the_root_the_run_started_with() -> void:
+	assert_eq(Paths.DATA_ROOT, _run_root)
+	assert_eq(_stores(), Paths.store_paths(_run_root))
+
+
+func test_a_gut_command_line_run_has_a_test_root_of_its_own() -> void:
+	var expected := Paths.gut_data_root(OS.get_cmdline_args(), OS.get_process_id())
+	if expected == "":
+		pending("not a GUT command-line run (the editor panel has no runner script)")
+		return
+	assert_eq(_run_root, expected)
+	assert_true(_run_root.begins_with("user://_test_roots/gut_"), _run_root)
+	assert_ne(_run_root, Paths.SHIPPED_DATA_ROOT)
+
+
+func test_gut_data_root_names_only_the_gut_runner() -> void:
+	var gut_args := PackedStringArray(
+		["--headless", "--script", "res://addons/gut/gut_cmdln.gd"]
+	)
+	assert_eq(Paths.gut_data_root(gut_args, 4242), "user://_test_roots/gut_4242/")
+	assert_eq(Paths.gut_data_root(PackedStringArray(), 4242), "")
+	assert_eq(Paths.gut_data_root(PackedStringArray(["--headless", "--path", "x"]), 4242), "")
 	assert_eq(
-		AssetManager.cache.get_expected_cache_path("p", "a", "v"), "user://asset_cache/p/a/v.glb"
+		Paths.gut_data_root(PackedStringArray(["--script", "res://tools/render_map.gd"]), 4242), ""
+	)
+
+
+func test_stores_that_copy_a_path_copied_the_runs_root() -> void:
+	var stores := Paths.store_paths(_run_root)
+	assert_eq(LevelManager.levels_dir, stores.LEVELS_DIR)
+	assert_eq(UiPreferences.settings_path, stores.SETTINGS_PATH)
+	assert_eq(AuthoringAutosave.directory, stores.LEVELS_DIR + "_autosave/")
+	assert_eq(AvatarLibrary.directory, stores.AVATARS_DIR)
+	assert_eq(UpdateManager._pending_update_file, stores.UPDATES_DIR + "pending_update.json")
+	assert_eq(UpdateManager._update_success_file, stores.UPDATES_DIR + "update_success.txt")
+	assert_eq(
+		AssetManager.cache.get_expected_cache_path("p", "a", "v"),
+		stores.ASSET_CACHE_DIR + "p/a/v.glb"
 	)
 
 

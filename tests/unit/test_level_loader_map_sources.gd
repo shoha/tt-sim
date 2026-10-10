@@ -6,8 +6,8 @@ extends GutTest
 ## root for a GLB, and one AuthoredScatter under the root for the document's rows.
 ##
 ## Fixtures are small (a 4 x 4 cell document, a one-box GLB) and live in a level folder
-## under the real user://levels/ (LevelData resolves paths through Paths) with a name no
-## real level can have; it is removed after each test.
+## under Paths.LEVELS_DIR (the GUT run's own test data root, where LevelData resolves paths);
+## it is removed after each test.
 
 const FOLDER := "_gut_t4_loader"
 const ROCK := "temperate_forest_summer_s1/Rock_Boulder_summer_04"

@@ -13,8 +13,8 @@ extends GutTest
 ## NetworkStateSync._on_game_state_received, the client's receive path.
 ##
 ## NetworkManager is set to HOSTING so the hold runs and the receive path skips its ACK RPC.
-## The level is a 4 x 4 cell map document in a level folder under the real user://levels/
-## with a name no real level can have; it is removed after each test.
+## The level is a 4 x 4 cell map document in a level folder under Paths.LEVELS_DIR (the GUT
+## run's own test data root); it is removed after each test.
 
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const FOLDER := "_late_joiner_state_gut"
