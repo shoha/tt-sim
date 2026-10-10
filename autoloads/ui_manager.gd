@@ -64,8 +64,21 @@ func _ready() -> void:
 	_interface_size = UiPreferences.load_interface_size()
 	get_tree().root.size_changed.connect(apply_interface_size)
 	apply_interface_size()
+	add_pad_accept_and_back()
 
 	call_deferred("_setup_ui_components")
+
+
+## Pad A accepts and pad B goes back, as Enter and Esc do: Godot's default ui_accept and
+## ui_cancel carry no pad button (theme probe, the Play together card). Added once at start,
+## for every device, so every control's Accept and Back take them. Safe to call again.
+static func add_pad_accept_and_back() -> void:
+	for pair: Array in [[&"ui_accept", JOY_BUTTON_A], [&"ui_cancel", JOY_BUTTON_B]]:
+		var event := InputEventJoypadButton.new()
+		event.device = -1
+		event.button_index = pair[1]
+		if not InputMap.action_has_event(pair[0], event):
+			InputMap.action_add_event(pair[0], event)
 
 
 func _on_state_changed(_old_state: int, new_state: int) -> void:

@@ -402,7 +402,9 @@ func _remove_folder(folder: String) -> void:
 	_log("remove %s -> %s" % [folder, error_string(DirAccess.remove_absolute(folder))])
 
 
-## Joins through the join screen over the title, as a player typing the code does.
+## Joins in place on the title's Play together card, as a player typing the code does: Join
+## opens the field, the code goes in, and Join submits it (Root's SessionFlow joins over
+## Steam).
 func _poll_rendezvous() -> void:
 	if _rendezvous_path == "" or not FileAccess.file_exists(_rendezvous_path):
 		return
@@ -410,10 +412,13 @@ func _poll_rendezvous() -> void:
 	if code == "":
 		return
 	_log("joining room " + code)
-	_flow().open_join_screen()
-	var lobby: Node = _flow().get("_join_screen")
-	(lobby.get("room_code_input") as LineEdit).text = code
-	lobby.call("_on_connect_pressed")
+	var title := _main.get("_title_screen") as TitleScreen
+	if title == null:
+		_finish(false, "no title card to join from")
+		return
+	title.play_together.open_join()
+	title.play_together.code_edit.text = code
+	title.play_together.submit()
 	_set_phase("client_load")
 
 

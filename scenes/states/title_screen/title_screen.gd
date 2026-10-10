@@ -1,9 +1,10 @@
 class_name TitleScreen
 extends CanvasLayer
 
-## Title hub. Host and Join lead; the saved levels sit beside them as cards and
-## the selected card is the level a host starts with (or Play Solo opens). Avatars opens
-## the player's saved avatars (AvatarRoster).
+## Title hub. The Play together card leads the column (PlayTogetherCard: Host and Join as two
+## sides of one question), with a quiet Resume under it when saved sessions exist
+## (ResumeEntry); the saved levels sit beside them as cards and the selected card is the level
+## Play Solo opens. Avatars opens the player's saved avatars (AvatarRoster).
 ## The hub stands on the painted backdrop (PaintedBackdrop) in the selected map's mood and
 ## land, changing as the selection changes, and making way for the column's sheet, the plaque
 ## and the cards (fit_around); with no map selected, and over an empty library, it is
@@ -13,19 +14,28 @@ extends CanvasLayer
 ## the room's side sheet, ending at its content, and "Your maps" with its count (and the empty
 ## library's caption) on a paper plaque, so every caption keeps its contrast in every mood.
 ##
-## Host opens a room, and the selected map is what goes on its shelf; Play solo and Set up
-## tokens act on that map, and all three name it the same way, the bare name leading the line
-## under the button. A room needs no map (room first, user verdict 2026-10-09), so over an
-## empty library Host stays the screen's fill and says maps are added in the room, and the
-## plaque where the cards would be says so once (no count of 0) beside a small painted picture
-## of a map to come, and offers one action, New map's (Start a new map; I5). New map starts one
+## Host opens a room with nothing on its shelf: a room needs no map (room first, user verdict
+## 2026-10-09), so it acts on nothing selected and maps are added in the room. Join happens in
+## place on the card (no join screen): the code goes to Root's SessionFlow, whose progress and
+## errors come back to the card (show_join_status()). Resume reopens a saved session. Play solo
+## and Set up tokens act on the selected map, and both name it the same way, the bare name
+## leading the line under the button. Over an empty library the plaque where the cards would
+## be says so once (no count of 0) beside a small painted picture of a map to come, and offers
+## one action, New map's (Start a new map; I5). New map starts one
 ## from nothing. Set up tokens is the Level Editor by what it does (starting tokens, the map's
 ## details and its Blender file; W5 keeps "level" internal); with no map selected it opens on a
 ## new one, where a map exported from Blender is chosen, and its caption says so: it stays
 ## enabled, since that is how a Blender map comes into an empty library.
 
+## Host: open a room. `level_info` is always empty from the card (a room needs no map); a
+## caller may still pass a map to go on the shelf.
 signal host_game_requested(level_info: Dictionary)
-signal join_game_requested
+## Join in place: join the room with `code`.
+signal join_requested(code: String)
+## Join mode closed while a join was under way: drop it.
+signal join_cancel_requested
+## Resume the saved session `id` (ResumeEntry).
+signal resume_requested(id: String)
 signal play_solo_requested(level_info: Dictionary)
 ## New map: a new map in authoring mode (Root shows the new-map dialog).
 signal build_map_requested
@@ -43,11 +53,6 @@ const SET_UP_TOKENS_ICON := "chess"
 ## Quitting the game, in the same words and icon here and in the pause menu.
 const QUIT := "Quit game"
 const QUIT_ICON := "logout"
-const HOST_CAPTION := "Open a room and invite players"
-## The line under Host once a map is selected: what Host does with it.
-const HOST_MAP_LINE := "%s goes on the shelf"
-## The line under Host with no map: a room needs none (room first, user verdict 2026-10-09).
-const HOST_EMPTY_LINE := "Open a room; add maps there"
 const NEW_MAP_CAPTION := "Pick a landform, then paint it"
 ## The empty library's plaque: one line and one action, New map's.
 const EMPTY_CAPTION := "No maps yet. Paint your first one"
@@ -77,18 +82,19 @@ const SECTION_GAP_MIN := 8.0
 
 ## Returns the level info list; tests inject a fake before the node enters the tree.
 var level_provider: Callable = LevelManager.get_saved_levels
+## Returns the saved sessions (SessionFile.list()); tests and the UI tour inject a fake.
+var session_provider: Callable = SessionFile.list
 
-var host_button: Button
-var join_button: Button
+## Host and Join, the column's lead and the screen's one fill.
+var play_together: PlayTogetherCard
+## Resume a saved session, under the card; hidden with none.
+var resume_entry: ResumeEntry
 var play_button: Button
 var editor_button: Button
 var build_map_button: Button
 var avatars_button: Button
 var settings_button: Button
 var quit_button: Button
-## Host's caption: what Host does, or with no map that maps are added in the room.
-var host_caption: Label
-var host_subtitle: Label
 var play_subtitle: Label
 var editor_subtitle: Label
 var heading_count: Label
@@ -105,7 +111,7 @@ var _heading_row: HBoxContainer
 ## The empty library's picture, line and action, under the heading on its plaque.
 var _empty_row: HBoxContainer
 ## The left column's spacers: the three section gaps in order, and the gap before each
-## button after Host's.
+## row after the card.
 var _section_gaps: Array[Control] = []
 var _row_gaps: Array[Control] = []
 
@@ -215,16 +221,25 @@ func _build_left_column() -> void:
 	version_label.size_flags_vertical = Control.SIZE_SHRINK_END
 	wordmark_row.add_child(version_label)
 	_section_gaps.append(UiActions.spacer(0, _left))
-	host_button = UiActions.primary("Host game", "network", HOST_CAPTION, _left)
-	host_caption = _left.get_child(host_button.get_index() + 1) as Label
-	host_subtitle = UiActions.subtitle_of(host_button)
-	host_button.pressed.connect(_on_host_pressed)
-	# One persimmon fill per screen (C5): Host is the primary, Join stands beside it quietly.
-	_row_gaps.append(UiActions.spacer(0, _left))
-	join_button = UiActions.primary(
-		"Join game", "users", "Enter a room code", _left, &"Secondary"
-	)
-	join_button.pressed.connect(_on_join_pressed)
+	# Host and Join as two sides of one question; its persimmon is the screen's one fill (C5).
+	play_together = PlayTogetherCard.new()
+	play_together.name = "PlayTogether"
+	_left.add_child(play_together)
+	play_together.host_pressed.connect(_on_host_pressed)
+	play_together.join_submitted.connect(join_requested.emit)
+	play_together.join_cancelled.connect(join_cancel_requested.emit)
+	# Resume belongs to the card: directly under it, at the column's own separation.
+	resume_entry = ResumeEntry.new()
+	resume_entry.name = "ResumeEntry"
+	resume_entry.provider = session_provider
+	_left.add_child(resume_entry)
+	resume_entry.resume_requested.connect(resume_requested.emit)
+	play_together.join_mode_changed.connect(resume_entry.hold)
+	# A join's line under the card, or Resume shown or hidden, changes the column's height
+	# (deferred: the column is still being built when the first of these can come).
+	var refit := func() -> void: _fit_to_canvas.call_deferred()
+	play_together.minimum_size_changed.connect(refit)
+	resume_entry.visibility_changed.connect(refit)
 	_section_gaps.append(UiActions.spacer(0, _left))
 	_left.add_child(HSeparator.new())
 	_section_gaps.append(UiActions.spacer(0, _left))
@@ -344,9 +359,9 @@ func _preselect_most_recent() -> void:
 	grid.select(String(newest.get("path", "")))
 
 
-## Host, Play Solo and Set up tokens name the selected level. Host needs none (a room needs no
-## map: its caption says maps are added there); Play Solo is disabled without one, and Set up
-## tokens opens on a new map, where a Blender map is brought in, as its line then says.
+## Play Solo and Set up tokens name the selected level (Host on the card needs none: a room
+## needs no map). Play Solo is disabled without one, and Set up tokens opens on a new map,
+## where a Blender map is brought in, as its line then says.
 func _refresh_actions() -> void:
 	var count := grid.card_count()
 	heading_count.text = str(count)
@@ -358,11 +373,8 @@ func _refresh_actions() -> void:
 	var info := grid.selected_info()
 	var has_level := not info.is_empty()
 	play_button.disabled = not has_level
-	host_caption.text = HOST_CAPTION if has_level else HOST_EMPTY_LINE
-	host_subtitle.visible = has_level
 	play_subtitle.visible = has_level
 	var name := String(info.get("name", ""))
-	host_subtitle.text = HOST_MAP_LINE % name if has_level else ""
 	play_subtitle.text = name
 	editor_subtitle.text = name if has_level else SET_UP_TOKENS_EMPTY_LINE
 	editor_subtitle.visible = true
@@ -399,18 +411,30 @@ func _on_selection_changed(_info: Dictionary) -> void:
 
 
 ## One persimmon fill per screen (C5): while a sheet's scrim covers the title, the sheet's
-## own primary (Apply, Create) is the fill, so Host steps down to the quiet secondary and
-## takes its fill back when the last sheet closes. Deferred: a node is still in its groups
-## while node_removed is emitted.
+## own primary (Apply, Create) is the fill, so Host's wash steps back to paper and takes its
+## fill back when the last sheet closes. Deferred: a node is still in its groups while
+## node_removed is emitted.
 func _on_node_added_or_removed(node: Node) -> void:
 	if node is Scrim:
 		_refresh_host_fill.call_deferred()
 
 
 func _refresh_host_fill() -> void:
-	if not is_inside_tree() or host_button == null:
+	if not is_inside_tree() or play_together == null:
 		return
-	host_button.theme_type_variation = &"Secondary" if Scrim.any_shown(get_tree()) else &"Primary"
+	play_together.step_back(Scrim.any_shown(get_tree()))
+
+
+## A join under way, as Root's SessionFlow reports it (SessionFlow.JOIN_*): connecting,
+## connected and waiting for the room, or failed with `message`.
+func show_join_status(state: StringName, message := "") -> void:
+	match state:
+		SessionFlow.JOIN_CONNECTING:
+			play_together.show_connecting()
+		SessionFlow.JOIN_JOINED:
+			play_together.show_joining()
+		SessionFlow.JOIN_FAILED:
+			play_together.show_error(message)
 
 
 ## A level saved from the Level Editor overlay (not through the title) must
@@ -424,13 +448,10 @@ func _on_level_activated(info: Dictionary) -> void:
 	play_solo_requested.emit(info)
 
 
-## Host opens a room with the selected map on its shelf, or with none (an empty info).
+## Host opens a room with nothing on its shelf (it acts on nothing selected; maps are added
+## in the room).
 func _on_host_pressed() -> void:
-	host_game_requested.emit(grid.selected_info())
-
-
-func _on_join_pressed() -> void:
-	join_game_requested.emit()
+	host_game_requested.emit({})
 
 
 func _on_play_pressed() -> void:

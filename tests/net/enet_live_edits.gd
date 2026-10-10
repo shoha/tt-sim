@@ -462,9 +462,10 @@ func _process_client() -> void:
 			_joiner_check()
 
 
-## Joins through the join screen over the title, as enet_session_room does.
+## Joins in place on the title's card, as enet_session_room does.
 func _join_live() -> void:
-	_flow().open_join_screen()
+	if not _join_in_place():
+		return
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client("127.0.0.1", int(_args.get("port", DEFAULT_PORT)))
 	if err != OK:

@@ -37,6 +37,7 @@ func define_theme() -> void:
 	define_lists()
 	_define_containers()
 	_define_status()
+	_define_wash_card()
 
 
 ## The role table as colour items of type ThemeColors.TYPE, for ThemeColors.of(), and the
@@ -430,6 +431,94 @@ func _define_status() -> void:
 		define_variant_style(
 			"Progress" + outcome, "ProgressBar", {fill = box(c(role), RADIUS_PILL)}
 		)
+
+
+## The Play together card (PlayTogetherCard). Its words, faces and Join-in-place controls sit on
+## the persimmon and lake washes, so they take the on-accent role (paper), and a control inside
+## the card rings in that paper, not in lake, which the lake wash would swallow: in Join mode
+## that inner ring is the only one (the card's own ring wraps it at rest). The faces are bare
+## (the wash is the fill). The card's shadow is a filled pill in the shadow colour: with no
+## centre, StyleBoxFlat leaves a gap as tall as the offset under the pill.
+func _define_wash_card() -> void:
+	var on := c(ThemeColors.ON_ACCENT)
+	define_variant_style(
+		"WashTitle", "Label", {font = font_title, font_size = SIZE_TITLE, font_color = on}
+	)
+	define_variant_style(
+		"WashCaption", "Label", {font = font_label, font_size = SIZE_LABEL, font_color = on}
+	)
+	# Host stepped back from its fill (a sheet is up): soft ink on the paper-inset wash.
+	var quiet := c(ThemeColors.TEXT_SOFT)
+	define_variant_style(
+		"WashTitleQuiet", "Label", {font = font_title, font_size = SIZE_TITLE, font_color = quiet}
+	)
+	define_variant_style(
+		"WashCaptionQuiet",
+		"Label",
+		{font = font_label, font_size = SIZE_LABEL, font_color = quiet}
+	)
+	var empty := {type = "stylebox_empty"}
+	var bare := {
+		normal = empty,
+		hover = empty,
+		pressed = empty,
+		hover_pressed = empty,
+		disabled = empty,
+		focus = empty,
+	}
+	define_variant_style("WashFace", "Button", bare)
+	var paper_ring := box(
+		Color(on, 0.0),
+		RADIUS_PILL,
+		0,
+		0,
+		inherit(
+			edge(2, on),
+			{
+				draw_center = false,
+				expand_margin_left = 3,
+				expand_margin_top = 3,
+				expand_margin_right = 3,
+				expand_margin_bottom = 3,
+			}
+		)
+	)
+	var disc: Dictionary = inherit(bare, {focus = paper_ring, icon_max_width = 20})
+	for state: String in ["normal_", "hover_", "pressed_", "hover_pressed_", "focus_"]:
+		disc["icon_%scolor" % state] = on
+	define_variant_style("WashDisc", "Button", disc)
+	# A room code is 12 or 13 characters: label size and 12 px sides fit one in the field.
+	var field := box(c(ThemeColors.SURFACE_RAISED), RADIUS_PILL, SPACE_3, CONTROL_PAD_V)
+	define_variant_style(
+		"WashField",
+		"LineEdit",
+		{
+			normal = field,
+			focus = paper_ring,
+			read_only = inherit(field, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
+			font = font_code,
+			font_size = SIZE_LABEL,
+		}
+	)
+	var join := box(c(ThemeColors.SURFACE_RAISED), RADIUS_PILL, CONTROL_PAD_H, CONTROL_PAD_V)
+	var join_style := _button(
+		join,
+		inherit(join, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
+		inherit(join, {bg_color = c(ThemeColors.SURFACE_PRESS)}),
+		ThemeColors.STATE_PRESS
+	)
+	join_style.focus = paper_ring
+	join_style.font = font_strong
+	define_variant_style("WashJoin", "Button", join_style)
+	define_variant_style(
+		"WashShadow", "Panel", {panel = box(ThemeColors.SHADOW_REST, RADIUS_PILL, 0, 0, lift())}
+	)
+	define_variant_style(
+		"WashShadowLifted",
+		"Panel",
+		{panel = box(ThemeColors.SHADOW_LIFTED, RADIUS_PILL, 0, 0, lift(true))}
+	)
+	define_variant_style("WashRing", "Panel", {panel = ring(RADIUS_PILL)})
 
 
 ## A button item set from its normal, hover and pressed boxes and a text role (`hover_text`

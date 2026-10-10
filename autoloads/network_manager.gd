@@ -228,6 +228,7 @@ func _ensure_steam_initialized() -> bool:
 
 	if init_result.status == 0:
 		_steam_initialized = true
+		_name_from_steam()
 		# Raise Steam's 256 KB/s default send cap before any connection (map downloads)
 		if not SteamNetConfig.apply_defaults():
 			push_warning("NetworkManager: Steam refused the send rate settings")
@@ -242,6 +243,17 @@ func _ensure_steam_initialized() -> bool:
 	push_warning("NetworkManager: ", reason)
 	connection_failed.emit(reason)
 	return false
+
+
+## A player who never saved a name takes their Steam name: the join screen's name field went
+## with Join in place, and a room of "Player"s says nothing. Not saved, so a name chosen later
+## still wins.
+func _name_from_steam() -> void:
+	if get_player_name() != DEFAULT_PLAYER_NAME:
+		return
+	var persona := str(Steam.getPersonaName()).strip_edges()
+	if persona != "":
+		set_player_name(persona)
 
 
 func _try_steam_init() -> Dictionary:
@@ -428,7 +440,7 @@ func _on_peer_connected(peer_id: int) -> void:
 		# Send current player list to new peer
 		_rpc_sync_player_list.rpc_id(peer_id, _players)
 		# A joiner's room or table sync waits for its player info, so a client on the
-		# wrong version is rejected on the join screen instead of being pushed into the
+		# wrong version is rejected on the title's card instead of being pushed into the
 		# room or PLAYING first -- see _rpc_send_player_info().
 
 	# Request player info from the new peer

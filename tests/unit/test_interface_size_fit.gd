@@ -23,15 +23,13 @@ const SETTLE_S := 3.0
 const TITLE_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
 const SETTINGS_SCENE := preload("res://scenes/ui/settings_menu.tscn")
 const NEW_MAP_SCENE := preload("res://scenes/states/authoring/new_map_dialog.tscn")
-const CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn")
 const PLAY_SCENE := preload("res://scenes/states/playing/gameplay_menu.tscn")
 const PAUSE_SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
 const CONFIRM_SCENE := preload("res://scenes/ui/confirmation_dialog.tscn")
 const TOASTS_SCENE := preload("res://scenes/ui/toast_container.tscn")
 const HELP_SCENE := preload("res://scenes/ui/help_overlay.tscn")
 const HINTS_SCENE := preload("res://scenes/ui/input_hints.tscn")
-## A saved level, so the title shows every caption it can (Host's "... goes on the shelf",
-## Play Solo's).
+## A saved level, so the title shows every caption it can (Play Solo's, Set up tokens').
 const LEVEL := {
 	"path": "user://x/_fit_mossy/",
 	"folder": "_fit_mossy",
@@ -42,6 +40,11 @@ const LEVEL := {
 	"environment_preset": "",
 	"thumbnail": "",
 }
+## Two saved sessions, as SessionFile.list() gives them, the newest with a long name.
+const SESSIONS: Array[Dictionary] = [
+	{"id": "s2", "name": "The Drowned Lanterns of Upper Fenwick", "last_played": 2000, "maps": 3},
+	{"id": "s1", "name": "Old Mill", "last_played": 1000, "maps": 1},
+]
 const RECIPE := {
 	"format": 1,
 	"parts": {"body": "body_a", "head": "head_round", "hair": "hair_bun"},
@@ -95,8 +98,9 @@ func test_title_screen_fits_after_a_resize_mid_entrance() -> void:
 
 
 ## The column is measured against its canvas, not switched at a threshold: on 1366x768 at Auto
-## (exactly 800 px tall), 720p at Auto and 1080p it fits on its sheet, and every
-## caption sits 4 px under its own button and 12 px above the next control.
+## (exactly 800 px tall), 720p at Auto and 1080p it fits on its sheet, with the Play together
+## card at its full size and the Resume entry under it, and every caption sits 4 px under its
+## own button and 12 px above the next control.
 func test_title_column_fits_by_measurement() -> void:
 	for canvas in [CANVAS_768P_AUTO, CANVAS_720P_AUTO, Vector2i(1920, 1080)]:
 		_host.size = canvas
@@ -104,11 +108,9 @@ func test_title_column_fits_by_measurement() -> void:
 		var what := "title screen on a %s canvas" % str(canvas)
 		await _assert_fits(what, title.quit_button, Vector2(canvas))
 		_assert_column_on_its_sheet(what, title, Vector2(canvas))
-		var caption := _next_shown(title.host_button)
-		assert_almost_eq(_gap(title.host_button, caption), 4.0, SLACK_PX, "%s: caption" % what)
-		var subtitle := _next_shown(caption)
-		assert_eq(subtitle, title.host_subtitle, "%s: Mossy Hollow goes on the shelf" % what)
-		assert_almost_eq(_gap(subtitle, title.join_button), 12.0, SLACK_PX, "%s: Join" % what)
+		_assert_card_whole(what, title)
+		var resume := title.resume_entry
+		assert_almost_eq(_gap(title.play_together, resume), 4.0, SLACK_PX, "%s: Resume" % what)
 		var play_caption := _next_shown(title.play_button)
 		assert_eq(play_caption, title.play_subtitle)
 		assert_almost_eq(_gap(play_caption, title.editor_button), 12.0, SLACK_PX, what)
@@ -207,11 +209,35 @@ func test_new_map_fields_share_one_track() -> void:
 		dialog.free()
 
 
-func test_join_screen_fits() -> void:
-	var lobby := CLIENT_SCENE.instantiate()
-	lobby.connect_network = false
-	_host.add_child(lobby)
-	await _assert_fits("join screen", lobby.connect_button)
+## Join in place with a code typed and a failure under the card (the longest message, the
+## version gate's), at 1280x720 and on 720p at Auto: the card keeps its size, the message
+## wraps under it, and the column still ends on its sheet.
+func test_join_in_place_fits() -> void:
+	for canvas in [Vector2i(CANVAS), CANVAS_720P_AUTO]:
+		_host.size = canvas
+		var title := _title()
+		var what := "Join in place on a %s canvas" % str(canvas)
+		await _assert_fits(what, title.quit_button, Vector2(canvas))
+		title.play_together.open_join()
+		title.play_together.code_edit.text = "2kq9xw1vb7ma3"
+		title.show_join_status(
+			SessionFlow.JOIN_FAILED, VersionGate.mismatch_message("0.2.9", "0.2.10")
+		)
+		await _assert_fits(what, title.play_together.status_label, Vector2(canvas))
+		_assert_column_on_its_sheet(what, title, Vector2(canvas))
+		_assert_card_whole(what, title)
+		var field := _drawn_rect(title.play_together.code_edit)
+		assert_true(_drawn_rect(title.play_together.pill).encloses(field), "%s: field" % what)
+		title.free()
+
+
+## The Play together card at its own size, inside the column's sheet.
+func _assert_card_whole(what: String, title: TitleScreen) -> void:
+	var pill := _drawn_rect(title.play_together.pill)
+	assert_almost_eq(pill.size.x, PlayTogetherCard.CARD_SIZE.x, SLACK_PX, "%s: card width" % what)
+	assert_almost_eq(pill.size.y, PlayTogetherCard.CARD_SIZE.y, SLACK_PX, "%s: card height" % what)
+	var sheet := _drawn_rect(title.get_node("%ColumnSheet") as Control)
+	assert_true(sheet.encloses(pill), "%s: the card on the sheet" % what)
 
 
 ## The room as the GM sees it: four players, three maps (one long name), one selected.
@@ -493,10 +519,12 @@ func _sheet(layer: Node) -> Control:
 	return layer.get_node("CenterContainer/PanelContainer") as Control
 
 
-## The title with one saved level selected, so Host and Play Solo show their captions.
+## The title with one saved level selected, so Play Solo shows its caption, and two saved
+## sessions, so the Resume entry shows with its older-sessions menu.
 func _title() -> TitleScreen:
 	var title := TITLE_SCENE.instantiate() as TitleScreen
 	title.level_provider = func() -> Array[Dictionary]: return [LEVEL.duplicate()]
+	title.session_provider = func() -> Array[Dictionary]: return SESSIONS.duplicate(true)
 	_host.add_child(title)
 	return title
 

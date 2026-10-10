@@ -10,7 +10,7 @@ extends Node3D
 ## Root is the state machine and the wiring between the states' views and its helpers, each a
 ## child it sets up once:
 ## - SessionFlow (scenes/session_flow.gd): the way into a hosted session and out of it. Host,
-##   Join (the join screen over the title), the room full screen in ROOM (RoomScreen), Set out,
+##   Join (in place on the title's card), the room full screen in ROOM (RoomScreen), Set out,
 ##   leaving, and the network events that move Root between TITLE_SCREEN, ROOM and PLAYING.
 ## - TableMover (scenes/table_mover.gd): moving the table between the session's maps (the
 ##   drawer's Move the table here, return_to_room()) and what each map keeps of the session;
@@ -157,10 +157,11 @@ func _setup_session_flow() -> void:
 	_session_flow.name = "SessionFlow"
 	_session_flow.setup(self, _table_mover, _level_flow.loading_overlay)
 	add_child(_session_flow)
-	_session_flow.join_screen_shown.connect(
-		func(shown: bool) -> void:
-			if _title_screen:
-				_title_screen.visible = not shown
+	# A join from the title's card: its progress and failure show on the card.
+	_session_flow.join_status.connect(
+		func(state: StringName, message: String) -> void:
+			if _title_screen and _title_screen.has_method("show_join_status"):
+				_title_screen.show_join_status(state, message)
 	)
 
 
@@ -182,6 +183,12 @@ func _on_open_editor_requested(level_path: String = "") -> void:
 	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
 	if app_ctrl:
 		app_ctrl.open_level_editor(level_path)
+
+
+## The title's Resume: the keeper reads the session and asks the flow to host it
+## (SessionKeeper.host_requested), and the room opens with its shelf.
+func _on_resume_requested(id: String) -> void:
+	_table_mover.keeper.resume(id)
 
 
 func _on_play_level_requested(level_data: LevelData) -> void:
@@ -288,8 +295,11 @@ func _enter_state(state: State) -> void:
 			# Connect title screen signals
 			if _title_screen.has_signal("host_game_requested"):
 				_title_screen.host_game_requested.connect(_session_flow.host_from_title)
-			if _title_screen.has_signal("join_game_requested"):
-				_title_screen.join_game_requested.connect(_session_flow.open_join_screen)
+			if _title_screen.has_signal("join_requested"):
+				_title_screen.join_requested.connect(_session_flow.join_session)
+				_title_screen.join_cancel_requested.connect(_session_flow.cancel_join)
+			if _title_screen.has_signal("resume_requested"):
+				_title_screen.resume_requested.connect(_on_resume_requested)
 			if _title_screen.has_signal("play_solo_requested"):
 				_title_screen.play_solo_requested.connect(_on_play_solo_requested)
 			if _title_screen.has_signal("build_map_requested"):
@@ -367,7 +377,7 @@ func _exit_state(state: State) -> void:
 			if _title_screen:
 				_title_screen.queue_free()
 				_title_screen = null
-			_session_flow.close_join_screen()
+			_session_flow.end_join()
 		State.ROOM:
 			_session_flow.exit_room()
 		State.PLAYING:

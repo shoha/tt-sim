@@ -74,7 +74,7 @@ The application uses a **state stack** managed by the `Root` node.
 
 | State          | Description                              |
 | -------------- | ---------------------------------------- |
-| `TITLE_SCREEN` | Main menu, level selection; the join screen opens over it |
+| `TITLE_SCREEN` | Main menu, level selection; Join happens in place on its Play together card |
 | `ROOM`         | A hosted session between maps: everyone connected, no table out (host or client view); see [NETWORKING.md](NETWORKING.md#sessions-the-room-and-the-table) |
 | `PLAYING`      | Active gameplay with GameMap loaded      |
 | `PAUSED`       | Game paused, pause menu visible          |
@@ -84,12 +84,12 @@ The application uses a **state stack** managed by the `Root` node.
 The values are fixed (`TITLE_SCREEN` 0, `ROOM` 1, `PLAYING` 3, `PAUSED` 4, `AUTHORING` 5,
 `WARMING_UP` 6; 2 is retired) because `UIManager`, the validation bridge and the net scenarios
 use the numbers. `ROOM` replaced `LOBBY_HOST` and `LOBBY_CLIENT` on 2026-10-09. Entering it
-never connects: Host starts hosting from the title and Root enters `ROOM` once hosting; Join
-opens the join screen over the title and Root enters `ROOM` (or `PLAYING`, when a table is out)
-when the host places the client.
+never connects: Host (or Resume) starts hosting from the title and Root enters `ROOM` once
+hosting; Join in place on the title's card connects, and Root enters `ROOM` (or `PLAYING`, when
+a table is out) when the host places the client.
 
 Root is the state machine and the wiring; the session's steps are its `SessionFlow`
-(`scenes/session_flow.gd`: Host, Join and the join screen, the room full screen in `ROOM`, Set
+(`scenes/session_flow.gd`: Host, Join in place, the room full screen in `ROOM`, Set
 out, leaving, and the network events that change state), the table's loads its `LevelFlow`
 (`scenes/level_flow.gd`: the loading overlay, a client's level and state stream) and the table
 moves its `TableMover` ([ARCHITECTURE.md](ARCHITECTURE.md#root-state-machine)).
@@ -527,9 +527,9 @@ Built by `_build_left_column()` on a paper sheet (`%ColumnSheet`, the `Sheet` va
 ends at its content, like the room's side sheet; the version is a caption on the wordmark's
 baseline. The hub's margins (24) are the sheet's distance from the canvas edge, and
 `_fit_to_canvas` measures the column against the canvas less those margins and the sheet's
-padding (`test_interface_size_fit`: 1280x720, 1366x768 at Auto and 150%). **Host game** and
-**Join game** are tall primary actions
-(`UiActions.primary()`: icon, bold label, caption underneath); below a separator, **Play solo**,
+padding (`test_interface_size_fit`: 1280x720, 1366x768 at Auto and 150%). The **Play together
+card** leads it (below), with a quiet **Resume** directly under it when saved sessions exist;
+below a separator, **Play solo**,
 **Set up tokens**, **New map**, **Avatars**, and **Settings** and **Quit game** side by side on
 the last row are compact secondary actions (`UiActions.secondary()`); Quit game has the pause
 menu's words and icon (`TitleScreen.QUIT`, `QUIT_ICON`). The two map actions name what
@@ -543,14 +543,67 @@ Play solo is disabled, since that is how a Blender map comes in); New map carrie
 new-map dialog and then [authoring mode](#authoring-mode). A card's overflow menu and the pause
 menu use the same name, Set up tokens (`TitleScreen.SET_UP_TOKENS`), and so does the editor's
 own header. Avatars opens the [avatar roster](#avatar-library).
-Play solo is disabled until a card is selected. Host game is never disabled: a room needs no
-map (room first, user verdict 2026-10-09), so over an empty library Host stays the screen's
-fill with the caption "Open a room; add maps there" and opens a room with an empty shelf
-(`SessionFlow.host_from_title` with no path: `host_session(null)`). Once a card is selected,
-the three map actions name it one way, the bare name leading the line under the button:
-"<name> goes on the shelf" under Host's "Open a room and invite players" (Host opens a room;
-the map is what goes on its shelf), the name alone under Play solo and Set up tokens. "Your
-maps" carries its count as a bare number beside the heading.
+Play solo is disabled until a card is selected. Once a card is selected, the two map actions
+name it one way, the name alone under Play solo and Set up tokens. "Your maps" carries its
+count as a bare number beside the heading.
+
+### Play together card
+
+`PlayTogetherCard` (`scenes/ui/play_together_card.gd`) answers one question, the italic
+Fraunces eyebrow **Play together?** (`Eyebrow`, the card's own question, never a category over
+a heading), on a 336x112 pill where two watercolour washes meet in a wet seam
+(`shaders/ui_wash_split.gdshader` on a `ColorRect`: the seam wanders +-5 px, a paper hairline
+breathes 0-2.8 px and opens with a smoothstep fade, each wash pools 14% darker along its edges,
+5% mottle in 70 px blots, a slow drift held under Reduce motion). **Host** is the persimmon
+face on the left, "Open a room": a room needs no map (room first, user verdict 2026-10-09), so
+it acts on nothing selected (`host_game_requested({})`, `SessionFlow.host_from_title` with no
+path: `host_session(null)`) and maps are added in the room. **Join** is the lake face on the
+right, "Enter a code". Two transparent face Buttons (`WashFace`) over the wash take the mouse
+and carry the tooltips; the words sit in fixed 118 px blocks 20 px from the outer edges
+(`WashTitle`, Fraunces 26, and `WashCaption`, Inter 15, both on-accent paper), so the seam's
+travel never reflows them and a long caption ellipsizes. The card's shadow is a filled pill
+(`WashShadow`, `WashShadowLifted`: with no centre StyleBoxFlat leaves a gap as tall as the
+offset) and its ring `WashRing`.
+
+- **Pick and press.** Hover, or Left and Right on the focused pill (keys, D-pad, stick), picks
+  a face: the seam swings 6% away from it over `MOTION_WASH` (0.28 s, sine out), the face
+  deepens to its hover colour, its icon lifts 2 px and the shadow lifts. On an end face Left or
+  Right is not consumed, so focus moves on. Accept (Enter, Space, pad A) presses: the pill
+  squashes to 0.97 on `offset_transform_scale`; Host floods the card persimmon, then asks for
+  the room, and the wash settles back under the "Opening a room..." wait. The pill is the one
+  focus stop; the ring wraps it.
+- **Join in place** (user verdict 2026-10-09: there is no join screen). The lake widens to the
+  whole card and becomes a room-code field (`WashField`, Inter with the code features) and a
+  Join button (`WashJoin`); Host shrinks to a persimmon blot at the left (the hairline closes
+  round it, so it reads wet into wet, not a cut-out) with a back arrow (`WashDisc`). The disc,
+  or Esc or pad B anywhere in the card, goes back with Join still picked. Focus goes to the
+  field and editing starts (`edit()` after `grab_focus()`: in 4.7 focus alone does not). In
+  Join mode the control with focus rings itself in paper and the card's lake ring is gone: one
+  ring. Join (or Enter) hands the trimmed code to Root's `SessionFlow.join_session()`; its
+  progress and failure come back through `TitleScreen.show_join_status()` on a line under the
+  pill: "Connecting to the room...", "Connected. Joining the room...", or the failure in W3
+  words with the alert icon and the code selected to correct (`SessionFlow.join_error_text()`).
+  Going back while a join is under way drops it (`join_cancelled`, `SessionFlow.cancel_join()`).
+  Resume is held out of the way while Join is open, so a long failure never pushes the column
+  off a 720 px canvas.
+- **One fill.** While a sheet's scrim covers the title, Host's wash steps back to paper inset
+  with soft ink (`step_back()`, `WashTitleQuiet`, `WashCaptionQuiet`) and takes its fill back
+  when the last sheet closes.
+- **Discipline** (theme probe): an instant state set kills every easing under way; pad A and B
+  are added to `ui_accept` and `ui_cancel` at start (`UIManager.add_pad_accept_and_back()`);
+  pad input is ignored while the window is not focused (a controller used in another game
+  moved focus here). `test_painted_backdrop` reads a face's words against the wash under them
+  (`wash_under()`).
+
+**Resume** (`ResumeEntry`, `scenes/states/title_screen/resume_entry.gd`) shows only when saved
+sessions exist (`SessionFile.list()`, through `TitleScreen.session_provider`): the newest named
+in a quiet Ghost button by the local day it was last played ("Resume yesterday's session",
+"Resume Friday's session" within the week, "Resume the session from 2 October" before it) over
+a caption naming its maps ("Old Mill and 2 more"), and the older ones, named the same way, in
+an overflow menu beside it. A choice emits `resume_requested(id)`, which Root answers with
+`TableMover.keeper.resume(id)`: a new room with the session's shelf, kept tables and party. In
+the room the GM's shelf rows then say what Resume found (`RoomPanel.notes_source`,
+`SessionKeeper.notes()`): "Changed since last time" or "Missing from your library".
 
 ### Right Zone
 
@@ -568,8 +621,11 @@ bar's grabber is opaque in the track role).
 
 ### Signals
 
-- `host_game_requested(level_info: Dictionary)` -- Host Game pressed with a level selected
-- `join_game_requested` -- Join Game pressed
+- `host_game_requested(level_info: Dictionary)` -- the card's Host (always `{}`: a room needs
+  no map)
+- `join_requested(code: String)` -- Join in place submitted a code
+- `join_cancel_requested` -- the card went back while a join was under way
+- `resume_requested(id: String)` -- Resume chose a saved session
 - `play_solo_requested(level_info: Dictionary)` -- Play Solo pressed, or a card double-clicked or
   Enter-activated
 
@@ -707,14 +763,15 @@ lobby, the client's waiting view, the lobby's Change and the in-play `PlayerList
   nothing else taking Tab: no `UIManager` overlay, no `AnimatedCanvasLayerPanel` up
   (`any_open()`), no focused text field, and not the measure tool, which cycles its mode on Tab.
 
-The join form (`LobbyClient`, `scenes/states/lobby/lobby_client.gd`) stays over the title until
-the library title's Join in place replaces it: its `MenuHeader` ("Join a game"), Your Name and
-Room Code fields, a full-width Connect, and a footer button that reads "Back" while the form is
-up and "Leave" once a connection is under way. Connected, the form stays locked with one status
-line, "Connected. Joining the room...", until Root moves the client into the room or to the
-table. It extends `AnimatedCanvasLayerPanel` with `play_sounds = false` and a no-op
-`_on_after_animate_out()` (Root's SessionFlow opens and frees it), and `connect_network = false`
-keeps tests off the network.
+There is no join form: a player joins in place on the title's Play together card (above). The
+join screen's name field went with it; a player who never saved a name takes their Steam name
+when Steam starts (`NetworkManager._name_from_steam()`).
+
+- **Resume notes.** After Resume the GM's shelf rows say what Resume found of each map
+  (`notes_source`, `SessionKeeper.notes()`, wired by `TableMover.attach_panel`;
+  `show_notes()` for tests and the tour): "Changed since last time" (its map files changed, so
+  its live edits were dropped) after "On the table", or "Missing from your library" alone (its
+  folder is gone; it stays on the shelf as kept). A player's rows never say either.
 
 The pause menu offers the host one quiet extra row, **Return everyone to the room** (`users`
 icon, Secondary, `ui_silent`, visible only while hosting); its confirmation emits

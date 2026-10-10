@@ -3,7 +3,8 @@ extends RefCounted
 ## Render-job probe (`call` op) for UI captures: the primitive fixes of card U1
 ## (jobs/ui_primitives_look.json) and the UI tour (jobs/ui_tour.json), which takes every top
 ## screen at each window size for the tt-sim-ui-critic agent. The tour's session screens (the
-## room, the join screen, the host's pause row) are staged by ui_room.gd. `action`:
+## room, the host's pause row) are staged by ui_room.gd, and the title's Play together card and
+## Resume by ui_play_together.gd. `action`:
 ## - `settings` (`section`, optional): open Settings (UIManager.open_settings) when
 ##   it is not open, then select that rail section.
 ## - `foldout` (`expanded`, default true): expand or collapse the first Foldout on
@@ -38,8 +39,8 @@ extends RefCounted
 ## - `hover_rail` (`which`, `pane`): hover a drawer's rail item with a synthetic pointer
 ##   event, so its tooltip shows after the tooltip delay (the OS cursor is not moved);
 ##   `unhover` moves the synthetic pointer to the window's top-left corner.
-## - `focus` (`target` "title_join", "add_token", "title_card" or "glass_tile"): give
-##   keyboard focus to a quiet button, the title's Join Game (paper) or the play HUD's Add
+## - `focus` (`target` "title_play", "add_token", "title_card" or "glass_tile"): give
+##   keyboard focus to a quiet button, the title's Play solo (paper) or the play HUD's Add
 ##   Token (glass), or to a selected item, the title's selected level card (paper) or the
 ##   authoring drawer's picked tile (glass), as Tab would. Drawer tiles take no keyboard focus,
 ##   so for `glass_tile` the probe sets the tile's focus_mode first. `blur` takes focus away
@@ -296,9 +297,9 @@ static func _pointer_to(window_pos: Vector2) -> void:
 static func _focus(base: Node, target: String) -> String:
 	var button: Button = null
 	match target:
-		"title_join":
+		"title_play":
 			var title: CanvasLayer = base.get("_title_screen")
-			button = title.get("join_button") if title else null
+			button = title.get("play_button") if title else null
 		"add_token":
 			button = base.find_child("ToggleAssetBrowserButton", true, false) as Button
 		"title_card":

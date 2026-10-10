@@ -202,7 +202,7 @@ func animate_out() -> void:
 
 
 ## Collect all focusable controls inside the panel for Tab-wrapping. Re-callable:
-## a subclass that hides/shows containers after _ready() (see LobbyClient's join form) must
+## a subclass that hides/shows containers after _ready() (a form that swaps its rows) must
 ## call this again after each swap, or the trap keeps naming controls that are
 ## no longer visible.
 func rebuild_focus_trap() -> void:

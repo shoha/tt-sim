@@ -122,9 +122,12 @@ func table_closing() -> void:
 
 ## A room panel (the room's or the drawer's, Root's) shows the changed maps: it reads them
 ## from changed_maps() on each refresh and again whenever they change, and its rows' Save into
-## map and Discard changes come here.
+## map and Discard changes come here. It reads what Resume found of the shelf from the keeper
+## (SessionKeeper.notes()) the same way.
 func attach_panel(panel: RoomPanel) -> void:
 	panel.changes_source = changed_maps
+	if keeper:
+		panel.notes_source = keeper.notes
 	panel.save_changes_requested.connect(ask_save)
 	panel.discard_changes_requested.connect(ask_discard)
 	if panel.connect_network:

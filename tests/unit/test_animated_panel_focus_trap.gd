@@ -1,7 +1,7 @@
 extends GutTest
 
 ## AnimatedCanvasLayerPanel builds its focus trap once in _ready(). A subclass
-## that shows/hides content afterwards (see LobbyClient) must call
+## that shows/hides content afterwards (a form that swaps its rows) must call
 ## rebuild_focus_trap() to keep the trap naming only what is actually visible.
 
 

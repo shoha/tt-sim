@@ -27,8 +27,12 @@ extends Control
 ## changes_source, TableMover.changed_maps()) and, selected in the room, under its picture; its
 ## row, once selected, has Save into map (for a map with a level folder here) and Discard
 ## changes on a line under it, or with no folder a caption saying why Discard is all there is;
-## TableMover asks before either. Selecting a row never moves the table (the action does), and
-## moving the table never asks: the table is kept as it is. A full shelf scrolls, in the room's
+## TableMover asks before either. After Resume a GM's row also says what Resume found of its
+## map (read from notes_source, SessionKeeper.notes()): "Changed since last time" (its map
+## files changed, so its live edits were dropped) or "Missing from your library" (its folder is
+## gone; it stays on the shelf as it was kept). Selecting a row never moves the table (the
+## action does), and moving the table never asks: the table is kept as it is. A full shelf
+## scrolls, in the room's
 ## side sheet as in the drawer's column, the selected row and its line scrolled into view.
 ##
 ## Everything shown comes from a session summary (show_session()); RoomModel holds the rules
@@ -93,6 +97,9 @@ var action_button: Button
 ## Where refresh() reads which shelf maps changed this session: a Callable returning
 ## TableMover.changed_maps()' shape (key -> Save into map offered). Unset: none did.
 var changes_source: Callable
+## Where refresh() reads what Resume found of the shelf: a Callable returning
+## SessionKeeper.notes()' shape (key -> SessionFile.CHANGED or MISSING). Unset: nothing.
+var notes_source: Callable
 
 var _local_id := ""
 var _is_gm := false
@@ -105,6 +112,8 @@ var _pictures: Dictionary = {}
 var _ready_ms := 0
 ## The GM's changed maps, as show_changes() was last given them.
 var _changed: Dictionary = {}
+## What Resume found of the shelf, as show_notes() was last given it.
+var _notes: Dictionary = {}
 
 
 func _ready() -> void:
@@ -159,6 +168,8 @@ func refresh() -> void:
 	var peer := NetPeers.local_id(multiplayer)
 	if changes_source.is_valid():
 		_changed = changes_source.call()
+	if notes_source.is_valid():
+		_notes = notes_source.call()
 	show_session(session.summary(), session.session_id_of(peer), NetworkManager.is_host())
 
 
@@ -167,6 +178,15 @@ func refresh() -> void:
 ## Save into map and Discard changes under it.
 func show_changes(changed: Dictionary) -> void:
 	_changed = changed.duplicate()
+	_fill_shelf()
+	_show_selection()
+
+
+## Show what Resume found of the shelf (`notes`: SessionKeeper.notes()' shape), for the GM:
+## a map whose files changed since the session was kept says "Changed since last time" on its
+## row, and one gone from this library "Missing from your library".
+func show_notes(notes: Dictionary) -> void:
+	_notes = notes.duplicate()
 	_fill_shelf()
 	_show_selection()
 
@@ -299,7 +319,8 @@ func _fill_shelf() -> void:
 		var caption := RoomModel.shelf_caption(
 			entry.on_table,
 			_is_gm and _changed.has(entry.key),
-			RoomModel.readiness_text(_players, entry.key)
+			RoomModel.readiness_text(_players, entry.key),
+			_notes.get(entry.key, &"") if _is_gm else &""
 		)
 		var picture := _picture_for(entry)
 		var row := RoomRows.shelf_row(entry, picture.texture, picture.mood, caption, true)

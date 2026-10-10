@@ -13,7 +13,7 @@
 		"res://tests/unit/test_level_map_streaming.gd",
 		"res://tests/unit/test_level_play_controller_transform_validation.gd",
 		"res://tests/unit/test_level_visual_state.gd",
-		"res://tests/unit/test_lobby_client_states.gd",
+		"res://tests/unit/test_join_in_place.gd",
 		"res://tests/unit/test_lobby_code.gd",
 		"res://tests/unit/test_map_download_coordinator.gd",
 		"res://tests/unit/test_map_file_hash.gd",

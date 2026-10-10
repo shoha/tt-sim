@@ -1,11 +1,14 @@
 extends GutTest
 
-## Title hub: Host and Play Solo follow the selected card, and the signals carry the
-## selection. Play Solo is disabled with no levels; Host and Join never need one.
+## Title hub: Play Solo follows the selected card and its signal carries the selection; Host on
+## the Play together card opens a room with nothing on its shelf, and Join in place and Resume
+## reach Root through the title's signals. Play Solo is disabled with no levels; Host and Join
+## never need one.
 
 const SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
 
 var _levels: Array[Dictionary] = []
+var _sessions: Array[Dictionary] = []
 
 
 func _info(folder: String, name: String, modified: int) -> Dictionary:
@@ -24,24 +27,24 @@ func _info(folder: String, name: String, modified: int) -> Dictionary:
 func _title() -> TitleScreen:
 	var title: TitleScreen = SCENE.instantiate()
 	title.level_provider = func() -> Array[Dictionary]: return _levels
+	title.session_provider = func() -> Array[Dictionary]: return _sessions
 	add_child_autofree(title)
 	return title
 
 
-## Room first: a room needs no map, so Host stays the screen's fill over an empty library and
-## says maps are added there; the plaque offers New map, in fewer words than a line.
+## Room first: a room needs no map, so the card's Host opens one over an empty library; the
+## plaque offers New map, in fewer words than a line.
 func test_no_levels_keeps_host_and_offers_a_new_map() -> void:
 	_levels = []
 	var title := _title()
 	watch_signals(title)
-	assert_false(title.host_button.disabled, "a room needs no map")
-	assert_eq(title.host_button.theme_type_variation, &"Primary")
-	assert_eq(title.host_caption.text, TitleScreen.HOST_EMPTY_LINE)
-	assert_false(title.host_subtitle.visible, "one line under Host")
-	title._on_host_pressed()
+	var card := title.play_together
+	assert_true(title.get_node("%LeftColumn").is_ancestor_of(card), "the card leads the column")
+	assert_eq(card.get_index(), 2, "under the wordmark and its gap")
+	card.press(PlayTogetherCard.Face.HOST)
+	card._host_flooded()
 	assert_signal_emitted_with_parameters(title, "host_game_requested", [{}])
 	assert_true(title.play_button.disabled)
-	assert_false(title.join_button.disabled)
 	assert_true(title.empty_caption.visible)
 	assert_lt(title.empty_caption.text.length(), 60, "a short line")
 	assert_false(title.empty_caption.text.contains(TitleScreen.SET_UP_TOKENS))
@@ -67,12 +70,10 @@ func test_most_recent_level_is_preselected_and_named_in_subtitles() -> void:
 	_levels = [_info("old", "Old Camp", 100), _info("new", "New Camp", 200)]
 	var title := _title()
 	assert_eq(title.selected_level()["name"], "New Camp")
-	# Host opens a room with the map on its shelf; all three name it the same way.
-	assert_eq(title.host_subtitle.text, "New Camp goes on the shelf")
+	# Play solo and Set up tokens name the map the same way.
 	assert_eq(title.play_subtitle.text, "New Camp")
 	assert_eq(title.editor_subtitle.text, "New Camp")
 	assert_eq(title.heading_count.text, "2")
-	assert_false(title.host_button.disabled)
 
 
 ## Quit reads as the pause menu's, and Set up tokens has an icon of its own.
@@ -152,13 +153,48 @@ func test_selection_changes_subtitles_and_signals_carry_it() -> void:
 	var title := _title()
 	watch_signals(title)
 	title.grid._cards[0]._on_pressed()
-	assert_eq(title.host_subtitle.text, "Old Camp goes on the shelf")
+	# Host acts on nothing selected.
 	title._on_host_pressed()
-	assert_signal_emitted_with_parameters(title, "host_game_requested", [_levels[0]])
+	assert_signal_emitted_with_parameters(title, "host_game_requested", [{}])
 	title._on_play_pressed()
 	assert_signal_emitted_with_parameters(title, "play_solo_requested", [_levels[0]])
-	title._on_join_pressed()
-	assert_signal_emitted(title, "join_game_requested")
+	var card := title.play_together
+	card.open_join()
+	card.code_edit.text = "  2kq9xw  "
+	card.join_button.pressed.emit()
+	assert_signal_emitted_with_parameters(title, "join_requested", ["2kq9xw"])
+	title.show_join_status(SessionFlow.JOIN_CONNECTING)
+	assert_true(card.busy)
+	card.close_join()
+	assert_signal_emitted(title, "join_cancel_requested", "going back drops the join")
+	title.show_join_status(SessionFlow.JOIN_FAILED, SessionFlow.NO_ROOM)
+	assert_true(card.joining, "a failure reopens Join with the code to correct")
+	assert_eq(card.status_label.text, SessionFlow.NO_ROOM)
+
+
+## Resume shows only with saved sessions, names the newest by its day and its maps, and asks
+## Root to resume the one chosen, the newest or an older one from its menu.
+func test_resume_lists_saved_sessions_and_asks_for_one() -> void:
+	_levels = [_info("new", "New Camp", 200)]
+	_sessions = []
+	var bare := _title()
+	assert_false(bare.resume_entry.visible, "no saved session, no Resume")
+	_sessions = [
+		{"id": "s2", "name": "Old Mill", "last_played": 1000, "maps": 3},
+		{"id": "s1", "name": "Oak's Lab", "last_played": 500, "maps": 1},
+	]
+	var title := _title()
+	watch_signals(title)
+	var entry := title.resume_entry
+	assert_true(entry.visible)
+	assert_eq(entry.caption.text, "Old Mill and 2 more")
+	assert_true(entry.older_button.visible, "an older session to choose")
+	assert_eq(entry.older_button.get_popup().item_count, 1)
+	entry.resume_button.pressed.emit()
+	assert_signal_emitted_with_parameters(title, "resume_requested", ["s2"])
+	entry.older_button.get_popup().id_pressed.emit(1)
+	assert_signal_emitted_with_parameters(title, "resume_requested", ["s1"])
+	_sessions = []
 
 
 func test_activating_a_card_plays_solo() -> void:
@@ -172,14 +208,12 @@ func test_activating_a_card_plays_solo() -> void:
 func test_grid_refresh_notifies_actions_when_the_list_changes() -> void:
 	_levels = [_info("old", "Old Camp", 100), _info("new", "New Camp", 200)]
 	var title := _title()
-	assert_false(title.host_button.disabled)
 	title.grid.provider = func() -> Array: return []
 	title.grid.refresh()
 	assert_false(title.heading_count.visible, "no count of 0")
 	assert_true(title.empty_caption.visible)
 	assert_true(title.empty_action.visible)
-	assert_false(title.host_button.disabled, "a room needs no map")
-	assert_eq(title.host_caption.text, TitleScreen.HOST_EMPTY_LINE)
+	assert_true(title.play_together.visible, "a room needs no map")
 	assert_true(title.play_button.disabled)
 
 
