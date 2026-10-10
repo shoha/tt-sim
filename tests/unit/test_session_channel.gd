@@ -263,6 +263,26 @@ func test_holdings_keep_shelf_keys_and_the_host_holds_every_map() -> void:
 	assert_eq(_session.summary().holdings, holdings, "the summary carries them")
 
 
+## A map Resume found gone from the host's library (restore()'s `gone`) stays on the shelf but
+## out of the host's own holdings, so every peer's room reads that the GM no longer has it;
+## taking it off the shelf, or a new session, forgets it.
+func test_the_host_does_not_hold_a_map_gone_from_its_library() -> void:
+	_session._add_player("enet-1", "Gm", 1)
+	var camp := SessionChannel.map_ref(_level_dict("camp"))
+	var fen := {"folder": "fen", "map_path": "", "hashes": {}, "name": "Fen"}
+	_session.restore([camp, fen], {}, "fen", ["fen", "not-on-the-shelf"])
+	assert_eq(_session.get_shelf().size(), 2, "it keeps its place on the shelf")
+	assert_eq(_session.get_holdings()["enet-1"], ["camp"])
+	assert_eq(_session.summary().holdings["enet-1"], ["camp"], "the summary carries it")
+	var players := RoomModel.players(_session.summary(), "enet-1")
+	var shelf := RoomModel.shelf(_session.summary())
+	assert_eq(shelf.map(func(entry: Dictionary) -> bool: return entry.gone), [false, true])
+	assert_eq(RoomModel.download_state(players[0], "fen", true).state, RoomModel.GONE)
+	_session.unshelve("fen")
+	_session.shelve(_level_dict("fen"))
+	assert_eq(_session.get_holdings()["enet-1"], ["camp", "fen"], "back on the shelf, held")
+
+
 func test_a_summary_keeps_clean_holdings() -> void:
 	var clean := SessionChannel.sanitize_summary(
 		{"holdings": {"enet-2": ["camp", 3, {}], 9: ["camp"], "enet-3": "camp"}}

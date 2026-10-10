@@ -10,7 +10,10 @@ shader_type canvas_item;
 // lightens a wash under its words (`text_warm`, `text_cool`): there it stays at or below its
 // own colour, the rest token, so paper words keep 4.5:1. At the seam the washes bleed into each
 // other over a few px with soft fingers, and where they part a soft light line of paper shows
-// (it breathes along the seam, closing where they touch). `disc` pulls the warm wash into a
+// (it breathes along the seam, closing where they touch). The words' no-lightening mask fades
+// over `text_feather` (24 px or more) and its seam side follows the seam's own wobble, so as a
+// face narrows its bloom thins to a soft glow along the seam rather than a straight-edged bar;
+// the mottle is round blots, never the lattice streaks of value noise. `disc` pulls the warm wash into a
 // blot at the left end that then dries away (Join in place: the lake takes the card and the
 // back disc stands where the blot was). `focus` draws a soft paper ring just inside the picked
 // face (`focus_side`: -1 Host, 1 Join). Every length is in the card's own pixels (`rect_size`).
@@ -30,7 +33,7 @@ uniform vec4 text_warm = vec4(20.0, 22.0, 120.0, 84.0);
 uniform vec4 text_cool = vec4(216.0, 22.0, 316.0, 84.0);
 // How far past the words the no-lightening mask holds, then fades over `text_feather`.
 uniform float text_pad = 4.0;
-uniform float text_feather = 10.0;
+uniform float text_feather = 26.0;
 // The seam wanders this far either side of `split`, with one soft wiggle per `seam_scale` px.
 uniform float seam_amp = 5.0;
 uniform float seam_scale = 40.0;
@@ -89,6 +92,24 @@ float fbm(vec2 p, int octaves) {
 		amp *= 0.5;
 	}
 	return sum * 1.6;
+}
+
+// Soft round blots: one gaussian per lattice cell at a random spot, of random sign and
+// strength, summed over the cell's neighbours (about -0.6 to 0.6). Round by construction,
+// where octaves of value noise read as streaks along the lattice at this size.
+float round_blots(vec2 p) {
+	vec2 cell = floor(p);
+	vec2 f = fract(p);
+	float sum = 0.0;
+	for (int y = -1; y <= 1; y++) {
+		for (int x = -1; x <= 1; x++) {
+			vec2 g = vec2(float(x), float(y));
+			vec2 spot = g + vec2(hash(cell + g), hash(cell + g + vec2(7.3, 1.9))) - f;
+			float w = hash(cell + g + vec2(3.1, 5.7)) * 2.0 - 1.0;
+			sum += w * exp(-dot(spot, spot) * 3.0);
+		}
+	}
+	return sum * 0.5;
 }
 
 vec3 to_linear(vec3 c) {
@@ -158,7 +179,7 @@ float face_step(vec2 px, float in_seam, float in_rim, float words, float open, f
 	float swell = clamp(0.62 + fbm(blot, 2) * 1.1, 0.0, 1.0);
 	float light = bloom_l * band * swell * smoothstep(0.0, 18.0, in_rim) * open;
 	vec2 blots = px / mottle_px + vec2(seed * 7.0 + k * 5.0, 1.3);
-	float m = fbm(blots, 2) * 2.0 * mottle_l * (1.0 + press);
+	float m = round_blots(blots) * 1.6 * mottle_l * (1.0 + press);
 	float grain = smoothstep(0.6, 0.95, vnoise(px / grain_px + vec2(k * 31.0, seed))) * grain_l;
 	float lift = (light + max(m, 0.0)) * (1.0 - words);
 	return lift + min(m, 0.0) - pool * deep - grain;
@@ -202,8 +223,12 @@ void fragment() {
 	float line = exp(-(s * s) / (line_w * line_w)) * mix(line_min, line_max, parted) * (1.0 - disc);
 
 	float open = 1.0 - disc;
-	float dl_warm = face_step(px, -s, in_rim, text_mask(px, text_warm), open, 0.0, parted);
-	float dl_cool = face_step(px, s, in_rim, text_mask(px, text_cool), open, 1.0, parted);
+	// Each mask's seam side reaches out with the seam's wobble (never in toward the words), so
+	// the bloom's edge there runs along the seam.
+	vec4 warm_words = text_warm + vec4(0.0, 0.0, wander + seam_amp, 0.0);
+	vec4 cool_words = text_cool + vec4(wander - seam_amp, 0.0, 0.0, 0.0);
+	float dl_warm = face_step(px, -s, in_rim, text_mask(px, warm_words), open, 0.0, parted);
+	float dl_cool = face_step(px, s, in_rim, text_mask(px, cool_words), open, 1.0, parted);
 	vec3 lab = mix(
 		stepped(oklab_of(cool.rgb), dl_cool),
 		stepped(oklab_of(warm.rgb), dl_warm),

@@ -288,6 +288,7 @@ func test_join_mode_has_one_fill_and_a_quiet_disc() -> void:
 	card.open_join()
 	assert_eq(card.join_button.theme_type_variation, &"WashJoin")
 	assert_eq(card.disc_button.theme_type_variation, &"WashDisc")
+	_settle()
 	var join_fill := card.join_button.get_theme_stylebox(&"normal") as StyleBoxFlat
 	assert_eq(join_fill.bg_color, ThemeColors.PERSIMMON, "Join is the fill")
 	var disc := card.disc_button.get_theme_stylebox(&"normal") as StyleBoxFlat
@@ -310,12 +311,15 @@ func test_a_failure_the_code_did_not_cause_leaves_it_unselected() -> void:
 	assert_eq(card.code_edit.caret_column, 6)
 
 
-## The slot under the pill holds a three-line failure, so a failure never grows the card; the
-## alert icon is the body line's height.
+## In Join mode the slot under the pill holds a three-line failure, so a failure never grows
+## the card; the alert icon is the body line's height.
 func test_the_slot_holds_the_longest_failure() -> void:
 	var card := _card()
 	var version := VersionGate.mismatch_message("0.2.9", "0.2.10")
+	card.open_join()
+	_settle()
 	var reserved := card.slot.custom_minimum_size.y
+	assert_almost_eq(reserved, card.slot.reserved(), 0.5, "Join mode holds the reserve")
 	var before := card.get_combined_minimum_size().y
 	card.show_error(version)
 	await wait_process_frames(2)
@@ -324,6 +328,44 @@ func test_the_slot_holds_the_longest_failure() -> void:
 	var font := card.status_label.get_theme_font(&"font")
 	var line := font.get_height(card.status_label.get_theme_font_size(&"font_size"))
 	assert_almost_eq(card.status_icon.custom_minimum_size.y, line, 1.0, "the icon is a line tall")
+
+
+## A first run (nothing under the pill, no saved session): no empty hole under the card at
+## rest; Join eases the slot open to its reserve and Back closes it again. With Resume showing
+## the slot holds the reserve at rest too, so Join moves nothing.
+func test_the_slot_takes_no_height_at_rest_with_nothing_under_it() -> void:
+	var card := _card()
+	assert_eq(card.slot.custom_minimum_size.y, 0.0, "no hole at rest")
+	card.open_join()
+	_settle()
+	assert_almost_eq(card.slot.custom_minimum_size.y, card.slot.reserved(), 0.5, "Join reserves")
+	card.close_join()
+	_settle()
+	assert_eq(card.slot.custom_minimum_size.y, 0.0, "closed again at rest")
+	var resume := Button.new()
+	resume.text = "Resume yesterday's session"
+	card.set_under(resume)
+	assert_almost_eq(card.slot.custom_minimum_size.y, card.slot.reserved(), 0.5, "Resume at rest")
+	card.open_join()
+	resume.visible = false
+	_settle()
+	assert_almost_eq(card.slot.custom_minimum_size.y, card.slot.reserved(), 0.5, "unmoved")
+
+
+## The flood holds the press depth only through the press, then eases back toward the bloom's
+## lighter step; Join's words fade as it covers them and come back with the wash after it.
+func test_the_flood_covers_joins_words_and_eases_its_pigment() -> void:
+	var card := _card()
+	var join_title := card.pill.get_node("JoinTitle") as Control
+	card.press(PlayTogetherCard.Face.HOST)
+	for tween in card.easings():
+		tween.custom_step(PlayTogetherCard.MOTION_WASH * 1.4 * 0.8)
+	assert_almost_eq(join_title.modulate.a, 0.0, 0.01, "the flood covered Join's words")
+	var warm: Color = card.wash().warm
+	assert_gt(_lch(warm).x, _lch(ThemeColors.PERSIMMON_PRESS).x, "eased back from the press")
+	_settle()
+	_settle()
+	assert_almost_eq(join_title.modulate.a, 1.0, 0.01, "back with the wash")
 
 
 func _lch(color: Color) -> Vector3:

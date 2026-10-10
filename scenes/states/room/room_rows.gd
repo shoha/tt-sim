@@ -36,6 +36,11 @@ const HAS_IT := "Has it"
 const GETS_IT := "Gets it at the table"
 const GETTING_IT := "Getting it · %d%%"
 const WAITING := "Waiting to get it"
+## A map gone from the GM's library: the GM's row, and everyone else's.
+const NO_LONGER := "No longer has it"
+const CANNOT_GET := "Cannot get it"
+## The other way on from a missing map, beside Remove from shelf (missing_line()).
+const BRING_BACK := "Or add it again from Blender, then resume this session"
 ## A changed map's row action beside Save into map (changes_line()).
 const DISCARD := "Discard"
 ## Why a changed map with no level folder here has Discard alone (changes_line()).
@@ -104,11 +109,13 @@ static func thumb_material() -> ShaderMaterial:
 
 
 ## One player: `player` is a RoomModel.players() entry, `selected` the selected map's key (""
-## for none: no download state). Your own row carries Choose avatar, which calls
-## `choose_avatar`. The row's content sits ROW_INSET in from both sides of the column, as a
-## shelf row's does inside its button: the content is laid in a plain holder with those
-## offsets, and the holder takes the content's height.
-static func player_row(player: Dictionary, selected: String, choose_avatar: Callable) -> Control:
+## for none: no download state; `gone`: the GM no longer has it). Your own row carries Choose
+## avatar, which calls `choose_avatar`. The row's content sits ROW_INSET in from both sides of
+## the column, as a shelf row's does inside its button: the content is laid in a plain holder
+## with those offsets, and the holder takes the content's height.
+static func player_row(
+	player: Dictionary, selected: String, choose_avatar: Callable, gone := false
+) -> Control:
 	var holder := Control.new()
 	holder.name = "Player_%s" % str(player.id).validate_node_name()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -157,7 +164,7 @@ static func player_row(player: Dictionary, selected: String, choose_avatar: Call
 		you.name = "You"
 		line.add_child(you)
 	if selected != "":
-		line.add_child(download_state(RoomModel.download_state(player, selected)))
+		line.add_child(download_state(RoomModel.download_state(player, selected, gone)))
 	line.visible = line.get_child_count() > 0
 
 	if player.you:
@@ -169,7 +176,9 @@ static func player_row(player: Dictionary, selected: String, choose_avatar: Call
 ## The selected map's download state for one player (`state`, RoomModel.download_state()),
 ## an icon and a word (C7: never colour alone): the lake check and "Has it"; the lake download
 ## arrow and "Getting it · 40%" while it comes; the soft arrow and "Waiting to get it" while it
-## waits its turn, or "Gets it at the table" when this player is not fetching it. Progress is
+## waits its turn, or "Gets it at the table" when this player is not fetching it; the circle
+## off and "No longer has it" (the GM) or "Cannot get it" for a map gone from the GM's
+## library. Progress is
 ## lake and a word, never a bar. The word never trims: the caption line wraps it whole onto a
 ## line of its own. show_download_state() updates it in place as the percent moves.
 static func download_state(state: Dictionary) -> Control:
@@ -198,7 +207,12 @@ static func download_state(state: Dictionary) -> Control:
 static func show_download_state(box: Control, state: Dictionary) -> void:
 	var kind: StringName = state.get("state", RoomModel.TABLE)
 	var icon := box.get_node("Icon") as TextureRect
-	icon.texture = IconButton.load_icon("circle-check" if kind == RoomModel.HAS else "download")
+	var icon_name := "download"
+	if kind == RoomModel.HAS:
+		icon_name = "circle-check"
+	elif kind == RoomModel.GONE:
+		icon_name = "circle-off"
+	icon.texture = IconButton.load_icon(icon_name)
 	# Lake (state) for has it and getting it, the soft text role for not yet.
 	var lake := kind == RoomModel.HAS or kind == RoomModel.GETTING
 	icon.set_meta(&"role", ThemeColors.STATE if lake else ThemeColors.TEXT_SOFT)
@@ -216,6 +230,8 @@ static func download_word(state: Dictionary) -> String:
 			return GETTING_IT % int(state.get("percent", 0))
 		RoomModel.WAITING:
 			return WAITING
+		RoomModel.GONE:
+			return NO_LONGER if bool(state.get("gm", false)) else CANNOT_GET
 	return GETS_IT
 
 
@@ -341,16 +357,18 @@ static func changes_line(
 	return holder
 
 
-## The GM's way on from a map missing from this library (`key`), on a line under its selected
+## The GM's ways on from a map missing from this library (`key`), on a line under its selected
 ## row as the changes line is: Remove from shelf (REMOVE), a quiet button calling `on_remove`
-## with the key. A missing map cannot be set out, so taking it off is the one step there is
-## (bringing its folder back is the other, outside the game).
+## with the key, and under it the other way, in a caption (BRING_BACK): a map brought in from
+## Blender again under its name takes its old folder, and Resume finds it there (the session
+## keeps the missing map's place and its kept state). A missing map cannot be set out.
 static func missing_line(key: String, on_remove: Callable) -> Control:
 	var holder := Control.new()
 	holder.name = "Missing_%s" % key.validate_node_name()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var line := HFlowContainer.new()
+	var line := VBoxContainer.new()
 	line.name = "Line"
+	line.theme_type_variation = &"BoxContainerTight"
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	line.offset_left = ROW_INSET
@@ -358,7 +376,13 @@ static func missing_line(key: String, on_remove: Callable) -> Control:
 	line.offset_top = ROW_INSET * 0.5
 	line.offset_bottom = -ROW_INSET
 	holder.add_child(line)
-	line.add_child(_row_action("RemoveFromShelf", REMOVE, "x", on_remove, key))
+	var remove := _row_action("RemoveFromShelf", REMOVE, "x", on_remove, key)
+	remove.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	line.add_child(remove)
+	var other := _caption(BRING_BACK, &"Caption", false)
+	other.name = "BringBack"
+	other.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	line.add_child(other)
 	var fit := func() -> void:
 		holder.custom_minimum_size.y = line.get_combined_minimum_size().y + ROW_INSET * 1.5
 	line.minimum_size_changed.connect(fit)

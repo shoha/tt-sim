@@ -38,7 +38,9 @@ extends Node
 ## Holdings are readiness as download state (there is no manual Ready): each client reports
 ## which shelf maps it already holds at the host's content (holds_map(): its own level folder
 ## or the download cache), after every summary, on returning to the room and when a fetch
-## finishes, and the host counts itself as holding every shelf map. Clients fetch the shelf
+## finishes, and the host counts itself as holding every shelf map whose files it has: a map
+## Resume found gone from its library (restore()'s `gone`) is not, so every peer's room reads
+## from the host's own holdings that the GM can no longer hand it out. Clients fetch the shelf
 ## maps they lack in the background (`prefetch`, SessionPrefetch: the table's map, the GM's
 ## selected map (select_map()), then shelf order) and report their progress, so the room shows
 ## "Getting it · 40%" and "3 of 4 have it"; Set out never waits for them. The host serves map
@@ -93,6 +95,8 @@ var _players: Dictionary = {}
 ## session id -> Array of the ref_key()s that client holds (host: as reported; clients: the
 ## host's copy, the host's own entry included)
 var _holdings: Dictionary = {}
+## Host: the shelf keys of maps whose files the host no longer has (key -> true)
+var _gone: Dictionary = {}
 ## Client: the keys this peer last reported, so an unchanged report is not sent again
 var _reported: Array = []
 
@@ -144,13 +148,13 @@ func get_players() -> Dictionary:
 
 
 ## session id -> the ref_key()s of the shelf maps that player holds (a copy). On the host its
-## own entry holds every shelf map.
+## own entry holds every shelf map but those gone from its library.
 func get_holdings() -> Dictionary:
 	var out := _holdings.duplicate(true)
 	if NetworkManager.is_host():
 		var host_id := session_id_of(1)
 		if host_id != "":
-			out[host_id] = _shelf_keys()
+			out[host_id] = _shelf_keys().filter(func(key: String) -> bool: return not _gone.has(key))
 	return out
 
 
@@ -269,6 +273,7 @@ func unshelve(key: String) -> bool:
 	_shelf.remove_at(index)
 	for id: String in _holdings:
 		(_holdings[id] as Array).erase(key)
+	_gone.erase(key)
 	if _selected == key:
 		_selected = ""
 	prefetch.forget_map(key)
@@ -281,13 +286,17 @@ func unshelve(key: String) -> bool:
 ## Host: lay a resumed session over the one hosting has just begun (SessionKeeper, Resume):
 ## the shelf `shelf` (MapRefs, in order), every player of `players` (session id -> {"name"})
 ## but those here now as away (peer 0) until they rejoin, and `selected` when it is on the
-## shelf. Publishes once.
-func restore(shelf: Array, players: Dictionary, selected: String) -> void:
+## shelf. The shelf keys in `gone` name maps whose folder this host's library no longer has:
+## they stay on the shelf, but the host does not hold them (get_holdings()). Publishes once.
+func restore(shelf: Array, players: Dictionary, selected: String, gone: Array = []) -> void:
 	if not NetworkManager.is_host():
 		return
 	for ref: Variant in shelf:
 		if ref is Dictionary and ref_key(ref) != "" and not _shelf_keys().has(ref_key(ref)):
 			_shelf.append((ref as Dictionary).duplicate(true))
+	for key: Variant in gone:
+		if key is String and _shelf_keys().has(key):
+			_gone[key] = true
 	for id: Variant in players:
 		var entry: Variant = players[id]
 		if id is String and id != "" and not _players.has(id) and entry is Dictionary:
@@ -456,6 +465,7 @@ func reset() -> void:
 	_selected = ""
 	_players.clear()
 	_holdings.clear()
+	_gone.clear()
 	_reported = []
 	if party:
 		party.reset()

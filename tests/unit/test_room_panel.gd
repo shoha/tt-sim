@@ -112,7 +112,9 @@ func test_a_player_reads_their_own_download_state_first() -> void:
 	panel.select(MAP_A)
 	assert_eq(panel.readiness_label.text, "Everyone has it")
 	var summary := _sample()
-	summary.holdings = {GM: [MAP_A], WREN: [MAP_A, MAP_B, MAP_C], "enet-ranger": [MAP_A, MAP_C]}
+	# No holdings of the GM's: the counts are the players' alone (a GM's holdings that lack a
+	# map would say the GM no longer has it).
+	summary.holdings = {WREN: [MAP_A, MAP_B, MAP_C], "enet-ranger": [MAP_A, MAP_C]}
 	panel.show_session(summary, WREN, false)
 	panel.select(MAP_B)
 	assert_eq(panel.readiness_label.text, "Only you have it")
@@ -383,6 +385,7 @@ func test_the_drawer_action_follows_the_shelf_and_pins_only_on_overflow() -> voi
 				summary.shelf.append(
 					{"folder": folder, "map_path": "", "hashes": {}, "name": "Extra %d" % i}
 				)
+				(summary.holdings[GM] as Array).append(folder)
 		panel.show_session(summary, GM, true)
 		var last := "_room_panel_extra_5" if height == 720 else MAP_C
 		panel.select(last)
@@ -564,6 +567,59 @@ func test_a_missing_map_offers_remove_from_shelf() -> void:
 	await wait_process_frames(1)
 	assert_null(panel.shelf_rows.get_node_or_null("Missing_%s" % MAP_C.validate_node_name()))
 	assert_false(panel.action_button.disabled)
+
+
+## A map gone from the GM's library as every peer's summary carries it after Resume: the host
+## does not hold it (SessionChannel.get_holdings()), so nobody does and nobody waits for it.
+func _gone_sample() -> Dictionary:
+	var summary := _sample()
+	for id: String in summary.holdings:
+		(summary.holdings[id] as Array).erase(MAP_C)
+	summary["progress"] = {WREN: {MAP_B: 40}}
+	return summary
+
+
+func _word_of(panel: RoomPanel, index: int) -> String:
+	var box := panel.player_rows.get_child(index).find_child("Download", true, false)
+	return (box.get_node("Word") as Label).text
+
+
+## What each peer's rows say for a map the GM no longer has: the GM's row never says Has it,
+## no player waits for it, the GM's own room says Missing from your library without the
+## notes (the holdings say it), a player's says the GM no longer has it; neither can set it
+## out, and only the GM has the line with its ways on.
+func test_a_map_the_gm_no_longer_has_reads_so_on_every_peer() -> void:
+	var gm_view := _panel()
+	gm_view.show_session(_gone_sample(), GM, true)
+	gm_view.select(MAP_C)
+	assert_eq(_word_of(gm_view, 0), RoomRows.NO_LONGER, "the GM's own row, not Has it")
+	for index in range(1, gm_view.player_rows.get_child_count()):
+		assert_eq(_word_of(gm_view, index), RoomRows.CANNOT_GET, "nobody waits for it")
+	assert_eq(_line_of(gm_view, MAP_C, "Note"), RoomModel.MISSING)
+	assert_eq(_caption_of(gm_view, MAP_C), "")
+	assert_eq(gm_view.readiness_label.text, RoomModel.MISSING)
+	assert_true(gm_view.action_button.disabled, "Set out stays disabled")
+	assert_not_null(gm_view.shelf_rows.get_node_or_null("Missing_%s" % MAP_C.validate_node_name()))
+	var player := _panel()
+	player.show_session(_gone_sample(), WREN, false)
+	player.select(MAP_C)
+	var words := {}
+	for index in player.player_rows.get_child_count():
+		var name_label := player.player_rows.get_child(index).find_child("Name", true, false)
+		words[(name_label as Label).text] = _word_of(player, index)
+	assert_eq(words["Marigold"], RoomRows.NO_LONGER)
+	assert_eq(words["Wren"], RoomRows.CANNOT_GET, "your own row: not waiting")
+	assert_false(words.values().has(RoomRows.WAITING) or words.values().has(RoomRows.HAS_IT))
+	assert_eq(_caption_of(player, MAP_C), RoomModel.GM_LACKS)
+	assert_eq(player.readiness_label.text, RoomModel.GM_LACKS)
+	assert_eq(_line_of(player, MAP_C, "Note"), "", "the note is the GM's")
+	assert_null(player.shelf_rows.get_node_or_null("Missing_%s" % MAP_C.validate_node_name()))
+	var faded := _row(player, MAP_C).get_node("Inner/Well/Placeholder") as Control
+	assert_almost_eq(faded.modulate.a, RoomRows.MUTED_PICTURE, 0.001, "faded for a player too")
+	player.select(MAP_B)
+	assert_eq(_word_of(player, 0), RoomRows.HAS_IT, "a map the GM has reads as before")
+	player.show_progress(_gone_sample())
+	assert_eq(_caption_of(player, MAP_B), "2 of 4 have it")
 
 
 func test_the_shelf_caption_leaves_the_resume_note_to_its_line() -> void:
