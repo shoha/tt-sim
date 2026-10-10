@@ -1,8 +1,8 @@
 extends RefCounted
 
 ## Render-job probe for the GM's presets with spectacle (TerrainEvents: a bridge collapsing,
-## a stand of trees toppling), on a table played from a _gm_events_ level. Fires an event on
-## the GM's side with its clock held, so a filmstrip steps it to exact times, and arms the
+## a stand of trees toppling, a fire), on a table played from a _gm_events_ level. Fires an
+## event on the GM's side with its clock held, so a filmstrip steps it to exact times, and arms the
 ## presets in the Events pane for the pane captures. Used by jobs/terrain_events.json.
 ##
 ## Actions (step "action"):
@@ -11,9 +11,9 @@ extends RefCounted
 ##            elsewhere; "forest": the densest stand found near the bridge, see find), the
 ##            zoom set at once (an eased zoom drifts toward the cursor), the camera turned
 ##            `yaw` about the vertical from the play angle (0, the default, turns it back)
-##   fire     {"kind": "collapse" | "fall", "radius": m, "seed": n}: starts the event on the
-##            table's TerrainEvents (the bridge, or the forest spot `look` found), its clock
-##            held so `advance` steps it
+##   fire     {"kind": "collapse" | "fall" | "fire", "radius": m, "seed": n}: starts the event
+##            on the table's TerrainEvents (the bridge, or the forest spot `look` found), its
+##            clock held so `advance` steps it
 ##   advance  {"s": seconds}: the events' clock that much further
 ##   free     the clock back to the frame loop (the change lands, the effects let go)
 ##   arm      {"preset": "collapse" | "topple"}: PlayEvents.pick, as the preset's tile does
@@ -57,9 +57,12 @@ static func run(base: Node, step: Dictionary) -> String:
 				event = TerrainEvent.bridge_collapse(bridge.id, middle, int(step.get("seed", 7)))
 			else:
 				var at := _point(edits, "forest")
-				event = TerrainEvent.forest_fall(
-					at, float(step.get("radius", FIND_RADIUS)), int(step.get("seed", 7))
-				)
+				var radius := float(step.get("radius", FIND_RADIUS))
+				var event_seed := int(step.get("seed", 7))
+				if String(step.get("kind")) == "fire":
+					event = TerrainEvent.fire(at, radius, event_seed)
+				else:
+					event = TerrainEvent.forest_fall(at, radius, event_seed)
 			edits.events.set_process(false)
 			# PlayEvents hears the table's history once a brush or preset was wired (its
 			# first pick): the event's toast comes from there.

@@ -28,7 +28,8 @@ extends Node
 ## the GM sees the result whole once they let go. A click that stays on its spot gets at least
 ## PLAY_CLICK_SECONDS of exposure (BrushTool.min_stroke_seconds), so it shows.
 ##
-## Presets (EventPresets: Drop bridge, Topple trees) arm on the same brush as the brushes do.
+## Presets (EventPresets: Drop bridge, Topple trees, Start a fire) arm on the same brush as the
+## brushes do.
 ## Their modes fire a TerrainEvent, which the table's TerrainEvents plays on every board and
 ## ends in an ordinary live edit; that entry, labelled as the preset's tile ("Drop bridge"),
 ## always offers Undo in a toast in the event's own icon ("The bridge fell for everyone at the
@@ -72,6 +73,7 @@ const IRREGULAR_PAST := {"Thin": "Thinned", "Cut": "Cut", "Lay": "Laid"}
 const PRESET_DONE := {
 	TerrainEvent.Kind.BRIDGE_COLLAPSE: "The bridge fell for everyone at the table",
 	TerrainEvent.Kind.FOREST_FALL: "The trees fell for everyone at the table",
+	TerrainEvent.Kind.FIRE: "The forest burned for everyone at the table",
 }
 const NO_BRIDGE := EventPresets.NO_BRIDGE_TOOLTIP
 ## In play a click (a stroke that never left its spot) gets at least this much exposure
@@ -152,6 +154,8 @@ static func hints_for(
 			size = ""
 		EventPresets.TOPPLE:
 			rows = [["Click", EventPresets.TOPPLE_LABEL], ["Drag", "Wider stand"]]
+		EventPresets.IGNITE:
+			rows = [["Click", EventPresets.IGNITE_LABEL], ["Drag", "Wider fire"]]
 	var tool := ToolRegistry.find(tool_id)
 	var put_away := "Put away " + tool.label if tool != null else "Put away"
 	if size != "":
@@ -226,6 +230,7 @@ func available() -> Dictionary:
 	for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
 		out[tool.id] = ok and tool.works_on(_lpc.live_edits.editor)
 	out[EventPresets.TOPPLE] = ok
+	out[EventPresets.IGNITE] = ok
 	out[EventPresets.COLLAPSE] = ok and has_bridge(_lpc.live_edits.editor.document)
 	return out
 

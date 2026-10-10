@@ -1,14 +1,15 @@
 class_name TerrainEvent
 extends RefCounted
 
-## One terrain event of the GM's Events pane (a bridge collapsing, a forest falling) as the
-## few parameters every peer needs to play the same motion on its own board: what happens
+## One terrain event of the GM's Events pane (a bridge collapsing, a forest falling, a fire) as
+## the few parameters every peer needs to play the same motion on its own board: what happens
 ## (`kind`), where (`centre`, map XZ, and `radius_m` or `crossing_id`), how long it lasts, how
 ## long the host waits before it plays it, and a seed for the variation. An effect is not
 ## document state: the host broadcasts the event (NetworkGameSync.broadcast_terrain_event),
 ## every peer simulates it (TerrainEvents), and the host then makes the map change it ends in
-## as an ordinary live edit (a crossing removal, a Clear over the area), which reaches every
-## peer, late joiners included, as an op. A late joiner never sees the motion, only the op.
+## as an ordinary live edit (a crossing removal, a Clear over the area, ash and the burnt
+## biome), which reaches every peer, late joiners included, as ops. A late joiner never sees
+## the motion, only the ops.
 ##
 ## Wire form: EVENT_BYTES little-endian bytes (encode, decode). decode() is the only way an
 ## event enters from the network and refuses anything out of bounds (problem_of says why): a
@@ -16,7 +17,7 @@ extends RefCounted
 ## lead outside their ranges, a centre past MAX_COORD_M, or a crossing id past Crossing.MAX_ID.
 ## Whether the crossing or the trees are there is the receiving map's question (TerrainEvents).
 
-enum Kind { BRIDGE_COLLAPSE = 1, FOREST_FALL = 2 }
+enum Kind { BRIDGE_COLLAPSE = 1, FOREST_FALL = 2, FIRE = 3 }
 
 const VERSION := 1
 ## version u8, kind u8, crossing id u16, table key u32, centre x f32, centre z f32, radius
@@ -33,8 +34,10 @@ const MAX_LEAD_S := 0.5
 ## Map frame coordinates beyond this are no map's.
 const MAX_COORD_M := 4096.0
 ## How long each kind plays: a bridge's fall reads in about two seconds, a stand of trees
-## toppling in a ripple in under three (the card: 1.5-2.5 s and 2-3 s).
-const DURATIONS := {Kind.BRIDGE_COLLAPSE: 2.2, Kind.FOREST_FALL: 2.8}
+## toppling in a ripple in under three (the card: 1.5-2.5 s and 2-3 s), a fire spreading out
+## from the click and burning down in four (the card: 3-5 s; its smoke hangs on after).
+const DURATIONS := {Kind.BRIDGE_COLLAPSE: 2.2, Kind.FOREST_FALL: 2.8, Kind.FIRE: 4.0}
+const KINDS: Array[int] = [Kind.BRIDGE_COLLAPSE, Kind.FOREST_FALL, Kind.FIRE]
 
 var kind: int = Kind.BRIDGE_COLLAPSE
 ## The table the event belongs to (LiveEdits.table_key): a client plays only its own table's.
@@ -42,7 +45,7 @@ var table_key: int = 0
 ## Map frame XZ: a bridge's middle, or the point the trees fall away from.
 var centre: Vector2 = Vector2.ZERO
 var radius_m: float = MIN_RADIUS_M
-## The crossing a collapse takes down (Crossing.id), 0 for a forest fall.
+## The crossing a collapse takes down (Crossing.id), 0 for a forest fall or a fire.
 var crossing_id: int = 0
 var duration_s: float = MIN_DURATION_S
 var lead_s: float = LEAD_S
@@ -70,6 +73,14 @@ static func forest_fall(at: Vector2, radius: float, event_seed: int) -> TerrainE
 	event.radius_m = clampf(radius, MIN_RADIUS_M, MAX_RADIUS_M)
 	event.duration_s = DURATIONS[Kind.FOREST_FALL]
 	event.seed_value = event_seed
+	return event
+
+
+## A fire over the circle of `radius` metres around map point `at`, spreading out from it.
+static func fire(at: Vector2, radius: float, event_seed: int) -> TerrainEvent:
+	var event := forest_fall(at, radius, event_seed)
+	event.kind = Kind.FIRE
+	event.duration_s = DURATIONS[Kind.FIRE]
 	return event
 
 
@@ -113,7 +124,7 @@ static func problem_of(bytes: PackedByteArray) -> String:
 	if bytes.decode_u8(0) != VERSION:
 		return "event version %d" % bytes.decode_u8(0)
 	var event_kind := bytes.decode_u8(1)
-	if not event_kind in [Kind.BRIDGE_COLLAPSE, Kind.FOREST_FALL]:
+	if not event_kind in KINDS:
 		return "unknown event kind %d" % event_kind
 	var values := []
 	for offset in [8, 12, 16, 20, 24]:

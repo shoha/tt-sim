@@ -38,6 +38,15 @@ func test_an_event_round_trips_through_its_bytes() -> void:
 	var collapse_back := TerrainEvent.decode(collapse.encode())
 	assert_eq(collapse_back.kind, TerrainEvent.Kind.BRIDGE_COLLAPSE)
 	assert_eq(collapse_back.crossing_id, 7)
+	var fire := TerrainEvent.fire(Vector2(3.5, -2.0), 40.0, 99)
+	assert_eq(fire.radius_m, TerrainEvent.MAX_RADIUS_M, "a fire's radius is clamped as a fall's")
+	var fire_back := TerrainEvent.decode(fire.encode())
+	assert_not_null(fire_back, "a fire is an event")
+	assert_eq(fire_back.kind, TerrainEvent.Kind.FIRE)
+	assert_eq(fire_back.crossing_id, 0)
+	assert_eq(fire_back.centre, Vector2(3.5, -2.0))
+	assert_almost_eq(fire_back.duration_s, TerrainEvent.DURATIONS[TerrainEvent.Kind.FIRE], 0.0001)
+	assert_lte(fire.duration_s, TerrainEvent.MAX_DURATION_S, "within the duration bound")
 
 
 ## The bytes of _sample() with `value` written at `offset`, as a float, or as a byte with
@@ -74,6 +83,12 @@ func test_decode_refuses_what_is_out_of_bounds() -> void:
 	var no_bridge := TerrainEvent.bridge_collapse(0, Vector2.ZERO, 1).encode()
 	assert_null(TerrainEvent.decode(no_bridge), "a collapse names a crossing")
 	assert_eq(TerrainEvent.problem_of(_sample().encode()), "")
+	# The kind after the last one is unknown; a fire is held to a fall's bounds.
+	assert_ne(TerrainEvent.problem_of(_with(1, TerrainEvent.Kind.FIRE + 1, true)), "")
+	var fire := TerrainEvent.fire(Vector2.ZERO, 5.0, 1).encode()
+	assert_eq(TerrainEvent.problem_of(fire), "")
+	fire.encode_float(16, TerrainEvent.MAX_RADIUS_M * 2.0)
+	assert_null(TerrainEvent.decode(fire), "a fire past the radius bound")
 
 
 func test_a_client_hears_an_event_and_the_host_ignores_one() -> void:

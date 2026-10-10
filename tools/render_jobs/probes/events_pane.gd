@@ -31,7 +31,7 @@ extends RefCounted
 ##   hover_crossing {"kind"}: the brush's pointer over the first crossing of that kind
 ##               ("stones", "plank", ...), at its own level
 ##   tile        {"id"}: a preset or brush tile's state, disabled and tooltip, for the log
-##   toasts      the presets' Undo toasts, both kinds, as PlayEvents shows them once an
+##   toasts      the presets' Undo toasts, every kind, as PlayEvents shows them once an
 ##               event's change lands (its _on_recorded, with stand-in history entries)
 ##   cleanup     deletes every _gm_events_ level
 
@@ -111,6 +111,8 @@ static func run(base: Node, step: Dictionary) -> String:
 				% [entry.get("label", ""), int(entry.get("bytes", 0)), PlayEvents.is_large(entry)]
 			)
 		"undo":
+			if events.brush() == null or events.brush().editor == null:
+				return "nothing to undo: no brush wired yet"
 			var stack: Array = events.brush().editor.history.get("_undo")
 			var held := int((stack.back() as Dictionary).get("bytes", 0)) if not stack.is_empty() else 0
 			var large := PlayEvents.is_large(stack.back()) if not stack.is_empty() else false
@@ -151,7 +153,7 @@ static func run(base: Node, step: Dictionary) -> String:
 				id, tile.disabled, field.tiles.is_on(StringName(id)), tile.tooltip_text
 			]
 		"toasts":
-			for kind in [TerrainEvent.Kind.BRIDGE_COLLAPSE, TerrainEvent.Kind.FOREST_FALL]:
+			for kind in TerrainEvent.KINDS:
 				events.call("_on_recorded", {"preset": kind, "label": "", "bytes": 0})
 			return "shown: %s" % str(PlayEvents.PRESET_DONE.values())
 	return "unknown action"

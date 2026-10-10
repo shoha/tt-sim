@@ -19,15 +19,37 @@ extends MultiMeshInstance3D
 ## - A ring (emit_ring) lies flat on the surface and spreads, thinning as it goes: the foam a
 ##   splash leaves on the water.
 ##
+## And three for fire (FireSweep), each luminous, its colour hottest at its core:
+##
+## - A flame (emit_flame) stands on its base, a teardrop whose tip licks from side to side
+##   (the shader's clock), swelling in fast and narrowing as it rises and dies.
+## - An ember (emit_ember) is a small glowing spark drifting up and weaving as it goes.
+## - A glow (emit_glow) is a squat soft oval of firelight facing the camera, standing on the
+##   ground (lying flat as a ring does, the proximity fade melted it into the ground it lay on).
+##
+## Fire's kinds hold their full alpha longer than the others (fire_fade), so a flame burns
+## rather than flickers out.
+##
 ## The puffs draw after the water's transparent pass (RENDER_PRIORITY), which writes no depth,
-## so a splash or its foam is never painted over by the river it lands in.
+## so a splash or its foam is never painted over by the river it lands in. A pool made with a
+## higher priority draws after one with a lower (a fire's flames over its smoke over its
+## glow), and with a larger capacity holds one event's every puff at once.
 
-enum Kind { BLOB, PLUME, RING }
+enum Kind { BLOB, PLUME, RING, FLAME, EMBER, GLOW }
 
 const CAPACITY := 96
 const SHADER := preload("res://shaders/event_puff.gdshader")
 ## Drawn after the water (as SubmergedMarker's ring is).
 const RENDER_PRIORITY := 2
+## How much of its width a flame has lost by the end of its life, and how far an ember weaves
+## (metres) and how fast (radians a second).
+const FLAME_NARROW := 0.55
+const EMBER_WEAVE := 0.35
+const EMBER_WEAVE_RATE := 3.2
+## A glow's height over its width.
+const GLOW_ASPECT := 0.45
+## Where a fire puff's fade out starts (fire_fade).
+const FIRE_FADE_FROM := 0.65
 ## Fraction of its life a puff takes to swell in, and where its fade out starts.
 const SWELL := 0.12
 const FADE_FROM := 0.4
@@ -44,8 +66,11 @@ const PLUME_MOUND := 0.15
 ## A ring's hole (its share of the ring's radius) as it starts and as it ends.
 const RING_HOLE := Vector2(0.4, 0.78)
 
-static var _material: ShaderMaterial = null
+## One material per render priority, shared by every pool of that priority.
+static var _materials: Dictionary = {}
 
+## The pool's size, fixed when it is made.
+var capacity: int = CAPACITY
 var _clock := 0.0
 var _born := PackedFloat32Array()
 var _life := PackedFloat32Array()
@@ -62,36 +87,39 @@ var _next := 0
 var _live := 0
 
 
-func _init() -> void:
+## A pool of `pool_size` puffs drawn at render priority `priority` (see the header).
+func _init(pool_size: int = CAPACITY, priority: int = RENDER_PRIORITY) -> void:
 	name = "EventPuffs"
+	capacity = maxi(pool_size, 1)
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if _material == null:
-		_material = ShaderMaterial.new()
-		_material.shader = SHADER
-		_material.render_priority = RENDER_PRIORITY
+	if not _materials.has(priority):
+		var material := ShaderMaterial.new()
+		material.shader = SHADER
+		material.render_priority = priority
+		_materials[priority] = material
 	var quad := QuadMesh.new()
 	quad.size = Vector2.ONE
-	quad.material = _material
+	quad.material = _materials[priority]
 	multimesh = MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.use_colors = true
 	multimesh.use_custom_data = true
 	multimesh.mesh = quad
-	multimesh.instance_count = CAPACITY
+	multimesh.instance_count = capacity
 	# Packed arrays are values: each is resized by name, not through a list of them.
-	_born.resize(CAPACITY)
-	_life.resize(CAPACITY)
-	_size.resize(CAPACITY)
-	_aspect.resize(CAPACITY)
-	_gravity.resize(CAPACITY)
-	_seed.resize(CAPACITY)
-	_kind.resize(CAPACITY)
-	_from.resize(CAPACITY)
-	_velocity.resize(CAPACITY)
-	_axis.resize(CAPACITY)
-	_colors.resize(CAPACITY)
+	_born.resize(capacity)
+	_life.resize(capacity)
+	_size.resize(capacity)
+	_aspect.resize(capacity)
+	_gravity.resize(capacity)
+	_seed.resize(capacity)
+	_kind.resize(capacity)
+	_from.resize(capacity)
+	_velocity.resize(capacity)
+	_axis.resize(capacity)
+	_colors.resize(capacity)
 	_born.fill(-1.0)
-	for slot in CAPACITY:
+	for slot in capacity:
 		multimesh.set_instance_transform(slot, _hidden())
 	# The puffs move a few metres from where they start; the cull box follows them.
 	extra_cull_margin = 4.0
@@ -131,12 +159,33 @@ func emit_ring(at: Vector3, size: float, life: float, color: Color) -> void:
 	_take(Kind.RING, at, Vector3.ZERO, Vector3.UP, size, RING_HOLE.x, life, color, 0.0)
 
 
+## A flame standing on `at`, `size` metres wide and `height` tall at its fullest, rising at
+## `velocity` and narrowing as it dies over `life` seconds; `color` is its outer colour (its
+## core burns pale gold whatever it is), alpha its peak.
+func emit_flame(
+	at: Vector3, velocity: Vector3, size: float, height: float, life: float, color: Color
+) -> void:
+	_take(Kind.FLAME, at, velocity, Vector3.UP, size, height / maxf(size, 0.01), life, color, 0.0)
+
+
+## A spark at `at` drifting at `velocity` (it weaves from side to side as it goes), `size`
+## metres across, living `life` seconds, its halo `color`.
+func emit_ember(at: Vector3, velocity: Vector3, size: float, life: float, color: Color) -> void:
+	_take(Kind.EMBER, at, velocity, Vector3.ZERO, size, ROUND, life, color, 0.0)
+
+
+## An oval of firelight standing on the ground at `at`, `size` metres across and GLOW_ASPECT
+## of that tall, over `life` seconds, in `color`.
+func emit_glow(at: Vector3, size: float, life: float, color: Color) -> void:
+	_take(Kind.GLOW, at, Vector3.ZERO, Vector3.UP, size, GLOW_ASPECT, life, color, 0.0)
+
+
 ## Advances every live puff `delta` seconds.
 func step(delta: float) -> void:
 	_clock += delta
 	if _live == 0:
 		return
-	for slot in CAPACITY:
+	for slot in capacity:
 		if _born[slot] < 0.0:
 			continue
 		var age := _clock - _born[slot]
@@ -147,15 +196,23 @@ func step(delta: float) -> void:
 			multimesh.set_instance_transform(slot, _hidden())
 			continue
 		var keep := 1.0
-		match _kind[slot]:
+		var kind := _kind[slot]
+		var alpha := fire_fade(k) if kind >= Kind.FLAME else fade(k)
+		match kind:
 			Kind.PLUME:
 				_place_plume(slot, k)
 			Kind.RING:
 				_place_ring(slot, k)
+			Kind.FLAME:
+				_place_flame(slot, age, k)
+			Kind.EMBER:
+				_place_ember(slot, age)
+			Kind.GLOW:
+				_place_glow(slot, k)
 			_:
 				keep = _place_blob(slot, age, k)
 		var color := _colors[slot]
-		color.a *= fade(k) * keep
+		color.a *= alpha * keep
 		multimesh.set_instance_color(slot, color)
 
 
@@ -170,6 +227,14 @@ static func fade(k: float) -> float:
 	if k < SWELL:
 		return k / SWELL
 	return 1.0 - smoothstep(FADE_FROM, 1.0, k)
+
+
+## A fire puff's alpha `k` of the way through its life: a quick swell in, a long hold, a fade
+## from FIRE_FADE_FROM. Pure.
+static func fire_fade(k: float) -> float:
+	if k < SWELL:
+		return k / SWELL
+	return 1.0 - smoothstep(FIRE_FADE_FROM, 1.0, k)
 
 
 ## A plume's height, as a share of its full height, `k` of the way through its life: it
@@ -195,7 +260,7 @@ func _take(
 	gravity: float
 ) -> void:
 	var slot := _next
-	_next = (_next + 1) % CAPACITY
+	_next = (_next + 1) % capacity
 	if _born[slot] < 0.0:
 		_live += 1
 	_born[slot] = _clock
@@ -260,6 +325,34 @@ func _place_plume(slot: int, k: float) -> void:
 		slot, Transform3D(basis_along(_axis[slot], width), _from[slot])
 	)
 	_shape(slot, height / width)
+
+
+## Flame `slot` `age` seconds (`k` of its life) in: risen along its velocity, swollen to its
+## width at once and narrowing to FLAME_NARROW less by its end, its height kept.
+func _place_flame(slot: int, age: float, k: float) -> void:
+	var at := _from[slot] + _velocity[slot] * age
+	var swell := smoothstep(0.0, SWELL * 2.0, k)
+	var width := _size[slot] * (1.0 - FLAME_NARROW * k) * (0.55 + 0.45 * swell)
+	var height := _size[slot] * _aspect[slot] * (0.7 + 0.3 * swell)
+	multimesh.set_instance_transform(slot, Transform3D(basis_along(Vector3.UP, width), at))
+	_shape(slot, height / maxf(width, 0.01))
+
+
+## Ember `slot` `age` seconds in: drifting along its velocity and weaving across it.
+func _place_ember(slot: int, age: float) -> void:
+	var velocity := _velocity[slot]
+	var across := Vector3(-velocity.z, 0.0, velocity.x)
+	across = across.normalized() if across.length_squared() > 1e-6 else Vector3.RIGHT
+	var weave := sin(age * EMBER_WEAVE_RATE + _seed[slot] * TAU) * EMBER_WEAVE
+	var at := _from[slot] + velocity * age + across * weave
+	multimesh.set_instance_transform(slot, Transform3D(basis_along(Vector3.UP, _size[slot]), at))
+
+
+## Glow `slot` `k` of its life in: spread out at once to its size, standing on its spot.
+func _place_glow(slot: int, k: float) -> void:
+	var size := _size[slot] * (0.6 + 0.4 * smoothstep(0.0, SWELL * 2.0, k))
+	var at := _from[slot] + Vector3(0.0, size * GLOW_ASPECT * 0.35, 0.0)
+	multimesh.set_instance_transform(slot, Transform3D(basis_along(Vector3.UP, size), at))
 
 
 ## A ring `k` of its life in: spreading fast then slowing, its band thinning as it goes.

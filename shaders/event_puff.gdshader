@@ -18,6 +18,13 @@ shader_type spatial;
 // inside it. A ring lies flat on the surface: a band of foam broken into soft arcs round a
 // faint wash. Each melts into whatever it touches (a proximity fade on the depth buffer)
 // instead of cutting a hard line across it.
+//
+// Fire's kinds are luminous, not lit: no shade underneath, their colour running from the
+// instance colour at the rim through amber to a pale gold core. A flame stands on its base as
+// a plume does: a teardrop, round at the foot and pointed at the tip, which licks from side to
+// side on the shader's clock (seeded, so neighbours never lick together). An ember is a small
+// spark with a soft halo that flickers. A glow is a squat soft oval of firelight facing the
+// camera at a burning tree's foot (lying flat, the ground's own depth faded it to nothing).
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
 
 uniform sampler2D depth_texture : hint_depth_texture, filter_linear;
@@ -33,9 +40,19 @@ const vec3 SHADE_WATER = vec3(0.6, 0.75, 0.97);
 // Water's soft rim: bluer and clearer than its body, so a plume glows from inside instead of
 // sitting flat as a white cut-out.
 const vec3 RIM_WATER = vec3(0.72, 0.86, 1.0);
+// A fire's colours inward from the instance colour at its rim: amber, then a pale gold core.
+const vec3 FIRE_AMBER = vec3(1.0, 0.7, 0.2);
+const vec3 FIRE_CORE = vec3(1.0, 0.95, 0.7);
 // EventPuffs.Kind.
 const float PLUME = 1.0;
 const float RING = 2.0;
+const float FLAME = 3.0;
+const float EMBER = 4.0;
+const float GLOW = 5.0;
+
+bool is_kind(float kind, float which) {
+	return abs(kind - which) < 0.5;
+}
 
 varying float puff_seed;
 varying float puff_shape;
@@ -50,7 +67,7 @@ void vertex() {
 	puff_kind = INSTANCE_CUSTOM.z;
 	puff_bold = INSTANCE_CUSTOM.w;
 	float scale = length(MODEL_MATRIX[0].xyz);
-	if (puff_kind > RING - 0.5) {
+	if (is_kind(puff_kind, RING)) {
 		// Lying flat on the surface it spreads over.
 		MODELVIEW_MATRIX = VIEW_MATRIX * mat4(
 			vec4(scale, 0.0, 0.0, 0.0),
@@ -65,8 +82,8 @@ void vertex() {
 		up = length(up) > 1e-4 ? normalize(up) : vec2(0.0, 1.0);
 		vec2 right = vec2(up.y, -up.x);
 		vec3 centre = (VIEW_MATRIX * vec4(MODEL_MATRIX[3].xyz, 1.0)).xyz;
-		// A plume stands on its point.
-		float lift = puff_kind > PLUME - 0.5 ? 0.5 : 0.0;
+		// A plume stands on its point, a flame on its base.
+		float lift = is_kind(puff_kind, PLUME) || is_kind(puff_kind, FLAME) ? 0.5 : 0.0;
 		centre.xy += up * length_m * lift;
 		centre.z += toward_camera * 0.5 * max(scale, length_m);
 		MODELVIEW_MATRIX = mat4(
@@ -89,13 +106,38 @@ void fragment() {
 	float edge = 1.0 + 0.09 * sin(3.0 * a + puff_seed * 6.283) + 0.05 * sin(5.0 * a + puff_seed * 17.0);
 	float inner = mix(0.44, 0.58, puff_bold) * edge;
 	float shape;
-	if (puff_kind > RING - 0.5) {
+	// Fire's kinds: how hot this fragment is (0 its rim colour, 1 FIRE_CORE).
+	float heat = -1.0;
+	if (is_kind(puff_kind, FLAME)) {
+		// 0 at the foot, 1 at the tip; the tip licks across, the foot stays put.
+		float rise = 0.5 - 0.5 * p.y;
+		float lick = (0.16 * sin(TIME * 7.3 + puff_seed * 40.0 + rise * 4.0)
+			+ 0.07 * sin(TIME * 12.1 + puff_seed * 17.0)) * rise * rise;
+		float x = p.x - lick;
+		// A teardrop: round at the foot (the square root), drawn to a point at the tip; a firm
+		// body with a short soft rim, so it reads as one bold shape.
+		float half_w = 2.0 * sqrt(max(rise, 0.0)) * pow(max(1.0 - rise, 0.0), 0.8) * edge;
+		shape = 1.0 - smoothstep(half_w * 0.72, half_w, abs(x));
+		vec2 core = vec2(x / max(half_w, 0.05), (rise - 0.25) * 2.2);
+		heat = 1.0 - smoothstep(0.0, 0.9, length(core));
+	} else if (is_kind(puff_kind, EMBER)) {
+		float r = length(p) / edge;
+		shape = (1.0 - smoothstep(0.15, 1.0, r)) * (0.75 + 0.25 * sin(TIME * 14.0 + puff_seed * 30.0));
+		heat = 1.0 - smoothstep(0.0, 0.6, r);
+	} else if (is_kind(puff_kind, GLOW)) {
+		// A soft oval of firelight standing at a burning tree's foot.
+		float r = length(p) / edge;
+		shape = 1.0 - smoothstep(0.3, 1.0, r);
+		// Never white: many glows overlap across a burning stand (a hot core in each read as
+		// one white glare in the second look).
+		heat = 0.45 * (1.0 - smoothstep(0.0, 0.75, r));
+	} else if (is_kind(puff_kind, RING)) {
 		float r = length(p) / edge;
 		float hole = puff_shape;
 		float band = smoothstep(hole - 0.22, hole, r) * (1.0 - smoothstep(0.8, 0.98, r));
 		float arcs = 0.65 + 0.35 * sin(4.0 * a + puff_seed * 11.0);
 		shape = band * arcs + 0.2 * (1.0 - smoothstep(0.0, hole, r));
-	} else if (puff_kind > PLUME - 0.5) {
+	} else if (is_kind(puff_kind, PLUME)) {
 		// A column: a round head (a circle in metres, whatever the column's height), sides
 		// narrowing to the foot like a sheet of water flung up, and a foot that melts into the
 		// water. Straight sides read as fingers in the round 4 look.
@@ -113,7 +155,9 @@ void fragment() {
 	float lit = clamp(0.5 + lit_y * 0.7, 0.0, 1.0);
 	vec3 body = COLOR.rgb * mix(mix(SHADE_DUST, SHADE_WATER, puff_bold), vec3(1.12), lit);
 	float rim = (1.0 - clamp(shape, 0.0, 1.0)) * puff_bold;
-	ALBEDO = mix(body, body * RIM_WATER, rim);
+	vec3 fire = mix(COLOR.rgb, FIRE_AMBER, smoothstep(0.0, 0.6, heat));
+	fire = mix(fire, FIRE_CORE, smoothstep(0.6, 1.0, heat));
+	ALBEDO = heat >= 0.0 ? fire : mix(body, body * RIM_WATER, rim);
 	float depth_tex = textureLod(depth_texture, SCREEN_UV, 0.0).r;
 	vec4 behind = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth_tex, 1.0);
 	behind.xyz /= behind.w;

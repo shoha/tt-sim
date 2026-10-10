@@ -55,13 +55,18 @@ func _init() -> void:
 
 ## The ground marks of the trees a fall at world point `at` with world radius `radius` fells
 ## on `editor`'s map, one per tree: its base (world, xyz) and its spot's world radius (w,
-## BASE_SHARE of the tree's height).
-static func base_marks(editor: AuthoringEditor, at: Vector3, radius: float) -> PackedVector4Array:
+## BASE_SHARE of the tree's height). Assets whose id starts with `skip` are passed over
+## (ForestFall.trees_near).
+static func base_marks(
+	editor: AuthoringEditor, at: Vector3, radius: float, skip: String = ""
+) -> PackedVector4Array:
 	var out := PackedVector4Array()
 	if editor == null or editor.scatter == null or at == Vector3.INF:
 		return out
 	var scale := maxf(editor.map_scale(), 0.001)
-	for tree in ForestFall.trees_near(editor.scatter, editor.to_map_xz(at), radius / scale):
+	var centre := editor.to_map_xz(at)
+	var limit := ForestFall.MAX_TREES
+	for tree in ForestFall.trees_near(editor.scatter, centre, radius / scale, limit, skip):
 		var node := tree.node as MultiMeshInstance3D
 		if not is_instance_valid(node) or node.multimesh == null or node.multimesh.mesh == null:
 			continue
@@ -191,7 +196,12 @@ func _refresh_marks(brush: BrushTool) -> void:
 	_marked_at = at
 	_marked_radius = radius
 	_marked_msec = now
-	_marks = base_marks(brush.editor, at, radius)
+	_marks = _find_marks(brush.editor, at, radius)
+
+
+## The trees a click at world point `at` with world radius `radius` takes (base_marks).
+func _find_marks(editor: AuthoringEditor, at: Vector3, radius: float) -> PackedVector4Array:
+	return base_marks(editor, at, radius)
 
 
 static func _scale(brush: BrushTool) -> float:
