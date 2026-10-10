@@ -30,6 +30,20 @@ func test_header_reads_as_a_sentence() -> void:
 	assert_true(overlay.header.caption_label.visible)
 
 
+## Player-facing copy says "map", never "level" (W5), in sentence case, and leaving names
+## its consequence for the role (W2).
+func test_rows_say_map_in_sentence_case_and_leaving_names_its_cost() -> void:
+	var overlay = SCENE.instantiate()
+	add_child_autofree(overlay)
+	assert_eq(overlay.edit_level_button.text, "Open the Map editor")
+	assert_eq(overlay.change_level_button.text, "Change map")
+	assert_eq(overlay.main_menu_button.text, "Return to title")
+	assert_eq(overlay.quit_game_button.text, "Quit game")
+	assert_string_contains(PauseOverlay.leave_consequence(true, true), "ends for every player")
+	assert_string_contains(PauseOverlay.leave_consequence(true, false), "the others play on")
+	assert_string_contains(PauseOverlay.leave_consequence(false, false), "not saved to the map")
+
+
 func test_resume_is_the_only_accent_action_and_nothing_shouts() -> void:
 	var overlay = SCENE.instantiate()
 	add_child_autofree(overlay)

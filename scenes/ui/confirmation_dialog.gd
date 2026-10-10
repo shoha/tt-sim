@@ -96,8 +96,11 @@ func _on_alternate_pressed(callback: Callable) -> void:
 	animate_out()
 
 
+## A danger dialog opens with Cancel focused, so Enter or Space keeps what is there; any
+## other dialog focuses its confirm. A dialog whose Cancel is hidden focuses its confirm.
 func _on_after_animate_in() -> void:
-	confirm_button.grab_focus()
+	var safe := _is_danger and cancel_button.visible
+	(cancel_button if safe else confirm_button).grab_focus()
 
 	# Danger dialogs get a subtle horizontal shake to draw attention
 	if _is_danger:

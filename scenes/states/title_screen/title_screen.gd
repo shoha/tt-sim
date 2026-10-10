@@ -17,7 +17,7 @@ signal edit_map_requested(level_info: Dictionary)
 const SettingsMenuScene := preload("res://scenes/ui/settings_menu.tscn")
 const ENTRANCE_STAGGER := Constants.ANIM_ENTRANCE_STAGGER
 const ENTRANCE_DURATION := Constants.ANIM_ENTRANCE
-const EMPTY_CAPTION := "Build a map, or make a level in the Level Editor"
+const EMPTY_CAPTION := "No maps yet. Build one, or set one up in the Map editor"
 ## The left column's rhythm. Its own separation (BoxContainerTight, 4) puts a caption under
 ## its button; every other gap is a spacer before a row, sized by _fit_to_canvas. A caption
 ## stands AFTER_CAPTION_GAP above the next control, so it reads with its own button; stacked
@@ -145,25 +145,26 @@ func _build_left_column() -> void:
 	_left.add_child(wordmark)
 	_section_gaps.append(UiActions.spacer(0, _left))
 	host_button = UiActions.primary(
-		"Host Game", "network", "Start a table and invite players", _left
+		"Host game", "network", "Start a table and invite players", _left
 	)
 	host_subtitle = UiActions.subtitle_of(host_button)
 	host_button.pressed.connect(_on_host_pressed)
 	# One persimmon fill per screen (C5): Host is the primary, Join stands beside it quietly.
 	_row_gaps.append(UiActions.spacer(0, _left))
 	join_button = UiActions.primary(
-		"Join Game", "users", "Enter a room code", _left, &"Secondary"
+		"Join game", "users", "Enter a room code", _left, &"Secondary"
 	)
 	join_button.pressed.connect(_on_join_pressed)
 	_section_gaps.append(UiActions.spacer(0, _left))
 	_left.add_child(HSeparator.new())
 	_section_gaps.append(UiActions.spacer(0, _left))
-	play_button = UiActions.secondary("Play Solo", "map", _left)
+	play_button = UiActions.secondary("Play solo", "map", _left)
 	play_subtitle = UiActions.subtitle_of(play_button)
 	play_button.pressed.connect(_on_play_pressed)
-	editor_button = _stacked("Level Editor", "wand")
+	# The Level Editor, by its player-facing name (W5: "level" stays internal).
+	editor_button = _stacked("Map editor", "wand")
 	editor_button.pressed.connect(_on_editor_pressed)
-	build_map_button = _stacked("Build Map", "brush")
+	build_map_button = _stacked("Build map", "brush")
 	build_map_button.pressed.connect(_on_build_map_pressed)
 	avatars_button = _stacked("Avatars", "mood-smile")
 	avatars_button.tooltip_text = "Make your characters ahead of time; place them in any game"
@@ -185,14 +186,17 @@ func _build_right_zone() -> void:
 	var heading_row := HBoxContainer.new()
 	heading_row.name = "Heading"
 	heading_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The count reads with its heading ("Your maps  3 maps"), sitting on the heading's
+	# baseline rather than pinned to the window's far edge.
+	heading_row.theme_type_variation = &"BoxContainerSpaced"
 	var heading := Label.new()
-	heading.text = "Your levels"
+	heading.text = "Your maps"
 	heading.theme_type_variation = &"H2"
-	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading_row.add_child(heading)
 	heading_count = Label.new()
 	heading_count.name = "Count"
 	heading_count.theme_type_variation = &"Caption"
+	heading_count.size_flags_vertical = Control.SIZE_SHRINK_END
 	heading_row.add_child(heading_count)
 	_right.add_child(heading_row)
 	empty_caption = Label.new()
@@ -228,7 +232,7 @@ func _preselect_most_recent() -> void:
 ## Host and Play Solo name the selected level and are disabled without one.
 func _refresh_actions() -> void:
 	var count := grid.card_count()
-	heading_count.text = "%d level%s" % [count, "" if count == 1 else "s"]
+	heading_count.text = "%d map%s" % [count, "" if count == 1 else "s"]
 	empty_caption.visible = count == 0
 	var info := grid.selected_info()
 	var has_level := not info.is_empty()

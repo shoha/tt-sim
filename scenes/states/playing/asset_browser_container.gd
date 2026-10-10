@@ -28,6 +28,8 @@ func _on_ready() -> void:
 	asset_browser.library_avatar_chosen.connect(func(_entry: Dictionary) -> void: animate_out())
 	asset_browser.asset_drag_started.connect(_on_asset_drag_started)
 	if add_pack_button:
+		# A real icon beside "Add a pack", never a "+" glyph in the label (UI_TASTE).
+		add_pack_button.icon = IconButton.load_icon("plus")
 		add_pack_button.pressed.connect(_on_add_pack_pressed)
 	AssetManager.pack_download_completed.connect(_on_pack_download_completed)
 

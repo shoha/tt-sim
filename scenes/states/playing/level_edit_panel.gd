@@ -209,15 +209,28 @@ func mark_clean() -> void:
 	_dismiss_close_prompt()
 	_dirty = false
 	set_tab_badge(false)
+	for item in RAIL_ITEMS:
+		set_rail_item_tooltip(item["id"], item["tooltip"])
 
 
 func _mark_dirty() -> void:
 	_dirty = true
 
 
+## A changed pane's rail item takes the lake dot (it says what is, C5) and a tooltip that
+## names the state in words, since a dot alone is colour as the only cue.
 func _on_pane_changed(id: StringName) -> void:
 	_mark_dirty()
 	set_rail_badge(id, true)
+	set_rail_item_tooltip(id, pending_tooltip(id))
+
+
+## The tooltip of pane `id`'s rail item while it holds unsaved edits.
+static func pending_tooltip(id: StringName) -> String:
+	for item in RAIL_ITEMS:
+		if item["id"] == id:
+			return "%s: unsaved changes to this map's look" % item["tooltip"]
+	return "Unsaved changes to this map's look"
 
 
 ## The shared environment model is edited by two panes; its change is the
@@ -243,8 +256,8 @@ func request_close() -> void:
 		return
 	UIManager.register_overlay(self)
 	_close_prompt = UIManager.show_danger_confirmation(
-		"Unsaved visual changes",
-		"Discard the changes made in this drawer? Save is still available in the drawer.",
+		"Unsaved changes to this map's look",
+		"Discard the changes made in this drawer? Save look keeps them instead.",
 		_on_discard_confirmed,
 		"Discard changes",
 		"Keep editing"

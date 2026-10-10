@@ -44,7 +44,7 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_type_variation = &"Secondary"
-text = "Save Level"
+text = "Save map"
 
 [node name="ToggleAssetBrowserButton" type="Button" parent="GameplayMenu/BottomButtons" unique_id=688700750 groups=["hint_bar_obstacles"]]
 script = ExtResource("animated_btn")
@@ -52,7 +52,7 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
 toggle_mode = true
-text = "Add Token"
+text = "Add token"
 
 [node name="AssetBrowserContainer" type="CenterContainer" parent="GameplayMenu" unique_id=454441786]
 visible = false
@@ -81,15 +81,15 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"PanelHeader"
-text = "Add Token"
+text = "Add token"
 
 [node name="AddPackButton" type="Button" parent="GameplayMenu/AssetBrowserContainer/PanelContainer/VBox/Header" unique_id=556190123]
 script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Secondary"
-text = "+ Add Pack"
-tooltip_text = "Download an asset pack from a URL"
+text = "Add a pack"
+tooltip_text = "Download a token pack from a URL"
 
 [node name="AssetBrowser" parent="GameplayMenu/AssetBrowserContainer/PanelContainer/VBox" instance=ExtResource("5_browser")]
 layout_mode = 2
@@ -97,7 +97,7 @@ layout_mode = 2
 [node name="Hint" type="Label" parent="GameplayMenu/AssetBrowserContainer/PanelContainer/VBox" unique_id=735621106]
 layout_mode = 2
 theme_type_variation = &"Caption"
-text = "Click an asset to add it to the map"
+text = "Click a token to place it on the table"
 horizontal_alignment = 1
 
 [node name="LevelEditPanel" parent="GameplayMenu" instance=ExtResource("6_edit_panel")]

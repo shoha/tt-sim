@@ -55,7 +55,7 @@ func _on_drag_started_grid(obj: DraggingObject3D) -> void:
 	_update_grid_visibility()
 	# Show "Shift: Free move" hint when grid snap is active
 	if _game_map.drag_and_drop_node and _game_map.drag_and_drop_node.grid_snap_enabled:
-		UIManager.add_hint(InputProfile.label(&"free_move"), "Free Move")
+		UIManager.add_hint(InputProfile.label(&"free_move"), "Free move")
 	# Start cell highlighting
 	if obj and obj.objectBody:
 		_drag_highlight_active = true

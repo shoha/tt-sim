@@ -30,9 +30,10 @@ func _on_panel_ready() -> void:
 
 	resume_button = UiActions.primary("Resume", "player-play", "", box)
 	resume_button.pressed.connect(_on_resume_pressed)
-	edit_level_button = UiActions.secondary("Edit Level", "wand", box)
+	# The Level Editor and the level picker, by their player-facing names (W5).
+	edit_level_button = UiActions.secondary("Open the Map editor", "wand", box)
 	edit_level_button.pressed.connect(_on_edit_level_pressed)
-	change_level_button = UiActions.secondary("Change Level", "map", box)
+	change_level_button = UiActions.secondary("Change map", "map", box)
 	change_level_button.pressed.connect(_on_change_level_pressed)
 	settings_button = UiActions.secondary("Settings", "settings", box)
 	settings_button.pressed.connect(_on_settings_pressed)
@@ -42,14 +43,14 @@ func _on_panel_ready() -> void:
 	room_button.set_meta("ui_silent", true)
 	room_button.pressed.connect(_on_room_pressed)
 	room_button.visible = NetworkManager.is_host()
-	main_menu_button = UiActions.secondary("Return to Title", "home", box)
+	main_menu_button = UiActions.secondary("Return to title", "home", box)
 	main_menu_button.set_meta("ui_silent", true)
 	main_menu_button.pressed.connect(_on_main_menu_pressed)
-	quit_game_button = UiActions.secondary("Quit Game", "logout", box)
+	quit_game_button = UiActions.secondary("Quit game", "logout", box)
 	quit_game_button.set_meta("ui_silent", true)
 	quit_game_button.pressed.connect(_on_quit_game_pressed)
 
-	# Only show "Edit Level" and "Change Level" for the GM / local player
+	# Only show the Map editor and Change map for the GM / local player
 	edit_level_button.visible = NetworkManager.has_gm_access()
 	change_level_button.visible = NetworkManager.has_gm_access()
 
@@ -76,7 +77,7 @@ func _on_edit_level_pressed() -> void:
 
 func _on_change_level_pressed() -> void:
 	var picker: LevelPickerDialog = LEVEL_PICKER_SCENE.instantiate()
-	picker.setup("Change level", LevelManager.current_level_path)
+	picker.setup("Change map", LevelManager.current_level_path)
 	picker.level_chosen.connect(_on_level_picked)
 	get_tree().root.add_child(picker)
 	# Returning to the title (or otherwise leaving the tree) while the picker
@@ -103,12 +104,13 @@ func _on_room_pressed() -> void:
 	)
 
 
+## Confirm first (W2: the action and its consequence, on the button too); a danger dialog
+## opens with Cancel focused, so Enter keeps the table.
 func _on_main_menu_pressed() -> void:
-	# Show confirmation before returning to title
 	UIManager.show_confirmation(
-		"Return to Title?",
-		"Any unsaved progress will be lost.",
-		"Return",
+		"Return to the title?",
+		leave_consequence(NetworkManager.is_networked(), NetworkManager.is_host()),
+		"Return to title",
 		"Cancel",
 		func(): main_menu_requested.emit(),
 		Callable(),
@@ -119,11 +121,21 @@ func _on_main_menu_pressed() -> void:
 
 func _on_quit_game_pressed() -> void:
 	UIManager.show_confirmation(
-		"Quit Game?",
-		"Any unsaved progress will be lost.",
-		"Quit",
+		"Quit the game?",
+		leave_consequence(NetworkManager.is_networked(), NetworkManager.is_host()),
+		"Quit game",
 		"Cancel",
 		func(): get_tree().quit(),
 		Callable(),
 		"Danger",
 	)
+
+
+## What leaving the table costs: the host's leaving ends the session for everyone, a
+## player's leaves it to the others, and token moves not saved to the map are lost.
+static func leave_consequence(networked: bool, host: bool) -> String:
+	if networked and host:
+		return "The session ends for every player. Token moves not saved to the map are lost."
+	if networked:
+		return "You leave the session; the others play on."
+	return "Token moves not saved to the map are lost."

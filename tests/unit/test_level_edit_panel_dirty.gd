@@ -98,6 +98,19 @@ func test_mark_clean_clears_dirty_badges_and_allows_rail_close() -> void:
 	assert_true(_panel._can_close_from_tab())
 
 
+## The dot is not the only cue: a changed pane's item says so in its tooltip, and the
+## tooltip goes back to the pane's name once the look is saved or reverted. Save names its
+## object.
+func test_a_badged_item_names_the_unsaved_look_in_its_tooltip() -> void:
+	_panel.sun_pane._on_energy_changed(0.7)
+	var sun: Button = _panel._rail._buttons[&"sun"]
+	assert_eq(sun.tooltip_text, "Sun: unsaved changes to this map's look")
+	assert_eq(_panel._rail._buttons[&"sky"].tooltip_text, "Sky")
+	_panel.mark_clean()
+	assert_eq(sun.tooltip_text, "Sun")
+	assert_eq(_panel.save_button.text, "Save look")
+
+
 func test_dirty_panel_refuses_rail_close() -> void:
 	_panel.weather_pane._on_intensity_changed(0.3, "rain")
 	assert_false(_panel._can_close_from_tab(), "A dirty drawer must prompt instead of closing")

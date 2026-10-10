@@ -36,7 +36,7 @@ theme_type_variation = &"BoxContainerSpaced"
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"H1"
-text = "Choose a level"
+text = "Choose a map"
 
 [node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
 layout_mode = 2
@@ -67,5 +67,5 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 disabled = true
-text = "Choose"
+text = "Choose this map"
 script = ExtResource("2_animated_btn")

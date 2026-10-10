@@ -3,7 +3,7 @@ extends GutTest
 ## Level editor chrome: exactly one default-variant Button in the header
 ## (Play), every other header Button is Secondary or IconButton, no Button
 ## anywhere in the scene uses Success/Danger/Warning, the placement footer
-## is end-aligned, and the title reads "Level editor".
+## is end-aligned, and the title reads "Map editor" (W5: a level is a map to the player).
 
 const SCENE := preload("res://scenes/level_editor/level_editor.tscn")
 
@@ -65,10 +65,10 @@ func test_placement_footer_is_end_aligned() -> void:
 	assert_eq(buttons_row.alignment, BoxContainer.ALIGNMENT_END)
 
 
-func test_title_reads_level_editor() -> void:
+func test_title_reads_map_editor() -> void:
 	var editor := _editor()
 	var title: Label = editor.get_node("MainContainer/VBox/Header/TitleBlock/Title")
-	assert_eq(title.text, "Level editor")
+	assert_eq(title.text, "Map editor")
 
 
 func test_header_caption_follows_the_level_name_while_typing() -> void:
@@ -79,4 +79,4 @@ func test_header_caption_follows_the_level_name_while_typing() -> void:
 
 	editor.level_name_edit.text = ""
 	editor.level_name_edit.text_changed.emit("")
-	assert_eq(editor.level_title_caption.text, "Untitled level")
+	assert_eq(editor.level_title_caption.text, "Untitled map")

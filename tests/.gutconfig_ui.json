@@ -34,6 +34,7 @@
 		"res://tests/unit/test_level_visual_state.gd",
 		"res://tests/unit/test_loading_overlay.gd",
 		"res://tests/unit/test_lobby_client_states.gd",
+		"res://tests/unit/test_map_load_error.gd",
 		"res://tests/unit/test_map_overlay_utils.gd",
 		"res://tests/unit/test_menu_header.gd",
 		"res://tests/unit/test_menu_theme_assets.gd",

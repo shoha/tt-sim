@@ -13,8 +13,8 @@ static func apply(menu: SettingsMenu) -> void:
 	menu.fullscreen_check.tooltip_text = "Toggle fullscreen mode (F11)"
 	menu.interface_size_option.tooltip_text = (
 		"How large menus and text draw. Auto picks the size that keeps text readable on this "
-		+ "screen. A percent is a fixed size, the same on every screen: one smaller than Auto "
-		+ "makes text small here. The board is not scaled. Applies at once."
+		+ "screen. A percent is a fixed size, the same on every screen; one below the size "
+		+ "marked as Auto's makes text small here. The board is not scaled. Applies at once."
 	)
 	menu.vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
 	menu.lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
@@ -58,4 +58,4 @@ static func apply(menu: SettingsMenu) -> void:
 	menu.check_updates_button.tooltip_text = "Check for a newer version of TTSim"
 	menu.reset_button.tooltip_text = "Reset all settings to defaults"
 	menu.apply_button.tooltip_text = "Apply and save current settings"
-	menu.close_button.tooltip_text = "Close settings (ESC)"
+	menu.close_button.tooltip_text = "Close settings (Esc)"

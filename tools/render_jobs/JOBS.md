@@ -441,8 +441,9 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (the input hint bar). `probes/ui_primitives.gd report` logs the underline against the
   selected item's centre, the chevron's rect against its title and the hint bar's rect
   against the window. The job deletes `_u1_ui_hud` at the end (`cleanup`).
-- `jobs/ui_tour.json`: the UI tour (about 145 s at half size, 160 s with `--full`), the
-  capture set the `tt-sim-ui-critic` agent judges (`docs/UI_TASTE.md`). It saves a new
+- `jobs/ui_tour.json`: the UI tour (94 captures; about 210 s at half size and 215 s with
+  `--full`, timed on `--only` runs, which still run every step but the skipped captures),
+  the capture set the `tt-sim-ui-critic` agent judges (`docs/UI_TASTE.md`). It saves a new
   100 ft temperate forest map as `_ui_tour_room` (shown as Mossy Hollow) with a real
   thumbnail of it (`ui_room.gd thumbnail`), then at 1280x720
   and 1920x1080 window sizes (`ui_primitives.gd window`; capture names start with the size):
@@ -468,14 +469,18 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   on Sun, focus on a quiet glass button, the pause menu, the
   pause menu as the host sees it (`pause_host`: the host-only Return everyone to the room row,
   shown on a solo pause) and the confirmation that row asks (`return_room_confirm`), the
-  Remove token danger confirmation, one toast of each kind, the Add Token browser and the
-  avatar builder, and at dusk (19:00 through the Sun pane) the Visuals drawer, the browser and
-  the pause menu again. Then the Interface size passes (`probes/ui_size.gd`): at 1366x768
-  (Auto 1.35, an 800 px canvas) and on a 1920x1080 window at a fixed 150% (names start
-  `1920x1080@150`, a 1280x720 canvas) the title, Settings on Graphics, the new-map dialog as
-  it opens and scrolled to its end, and in play the Visuals drawer on Sun; at 1280x720 (Auto
-  1.40) the Interface Size dropdown open and a staged two-segment measure line over the board
-  (`1280x720_measure`). Last, one probe capture of the title at 1720x720 (ultrawide). The
+  pause menu's Return to title danger confirmation with Cancel focused (`danger`), one toast
+  of each kind, the toast a removed token shows with its Undo (`undo_toast`), the Add token
+  browser and the avatar builder, and at dusk (19:00 through the Sun pane) the Visuals
+  drawer, the browser and the pause menu again. Then the Interface size passes
+  (`probes/ui_size.gd`): at 1366x768 (Auto 1.35, an 800 px canvas) and on a 1920x1080 window
+  at a fixed 150% (names start `1920x1080@150`, a 1280x720 canvas) the title, Settings on
+  Graphics, the new-map dialog as it opens and scrolled to its end, and in play the Visuals
+  drawer on Sun and the play hint row between the room drawer and Add token
+  (`hints_room_drawer`, wrapping at 150%); at 1280x720 (Auto 1.40) the Interface size
+  dropdown open, a staged two-segment measure line over the board with the measure tool's
+  own keys leading the hint bar (`1280x720_measure`) and the bar just after the tool ends
+  (`1280x720_measure_done`). Last, one probe capture of the title at 1720x720 (ultrawide). The
   captures and `INDEX.md`; the level is deleted at the end. Half size makes the 720p captures
   640x360, smaller than any player sees: judge 720p legibility on a `--full` run.
 - `jobs/import_thumb.json`: the map library's import (the level core card, about 35 s, no
