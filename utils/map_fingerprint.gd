@@ -23,7 +23,8 @@ extends RefCounted
 ##   edge           the skirt's river-exit parts: "<name> <verts>" for Channel and Ribbon,
 ##                  or [] when no water leaves the map.
 ##   scatter        per asset in every AuthoredScatter: "<asset> <rows>", sorted.
-##   scatter_hash   every scatter row value, rounded, hashed.
+##   scatter_hash   every scatter row value, rounded, hashed (each asset's rows sorted, so
+##                  the node or cell holding a row does not count).
 ##   mesh_vertices  the vertex count of every MeshInstance3D under the root.
 
 ## Floats are rounded to this before printing or hashing.
@@ -279,9 +280,22 @@ static func _scatter(root: Node) -> Array:
 	var ids := rows.keys()
 	ids.sort()
 	var counts: Array = []
-	var all := PackedFloat32Array()
+	var lines := PackedStringArray()
 	for asset_id in ids:
 		var flat: PackedFloat32Array = rows[asset_id]
-		counts.append("%s %d" % [asset_id, flat.size() / MapDocument.ROW_STRIDE])
-		all.append_array(flat)
-	return [counts, hash_floats(all)]
+		var count: int = flat.size() / MapDocument.ROW_STRIDE
+		counts.append("%s %d" % [asset_id, count])
+		# Each asset's rows in a canonical order: which node or cell holds a row (play merges
+		# the props into the scatter node, authoring keeps them apart) is not part of the map.
+		var asset_rows := PackedStringArray()
+		for r in count:
+			var values := PackedStringArray()
+			for k in MapDocument.ROW_STRIDE:
+				values.append(str(roundi(flat[r * MapDocument.ROW_STRIDE + k] / ROUND_M)))
+			asset_rows.append(",".join(values))
+		asset_rows.sort()
+		lines.append_array(asset_rows)
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	ctx.update("\n".join(lines).to_utf8_buffer())
+	return [counts, ctx.finish().hex_encode().substr(0, HASH_CHARS)]

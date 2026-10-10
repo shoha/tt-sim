@@ -468,12 +468,12 @@ static func _split_rows(
 ) -> void:
 	if rows.is_empty():
 		return
+	MapDocumentIO.snap_rows(rows)  # The saved precision: a reload is bit-equal.
 	if asset_ids.size() == 1:
 		result[String(asset_ids[0])] = rows
 		return
 	var per_asset: Array[PackedFloat32Array] = []
-	for _i in asset_ids.size():
-		per_asset.append(PackedFloat32Array())
+	per_asset.resize(asset_ids.size())
 	for r in assets.size():
 		per_asset[assets[r]].append_array(rows.slice(r * ROW_STRIDE, (r + 1) * ROW_STRIDE))
 	for a in asset_ids.size():

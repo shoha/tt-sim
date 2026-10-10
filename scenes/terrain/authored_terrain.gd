@@ -483,6 +483,16 @@ func _exit_tree() -> void:
 	_warm_held.clear()
 
 
+## Replans the ground layers from scratch, as every load does, when the session's plan ran out
+## of slots (past GroundLayerTable.MAX_LAYERS kept slots can drop other accents or fall back
+## differently from a fresh plan). Called on save. Returns true when it rebuilt.
+func replan_ground_layers() -> bool:
+	if _plan.get("dropped_accents", []).is_empty() and _plan.get("fallbacks", {}).is_empty():
+		return false
+	_build_ground_layers()
+	return true
+
+
 func _build_ground_layers() -> void:
 	_plan = {}
 	_planned_biomes = -1

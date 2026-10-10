@@ -51,6 +51,14 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   on) and before each save; a play-time load re-grounds every placement as it spawns
   (`LevelPlayLoader`, before tracking, so GameState and peers get the grounded position).
   Props have no collision, so a token inside a placed prop stays there; authoring shows it.
+- Save equals reload. `ScatterGenerator` snaps the rows it generates to the saved precision
+  (`MapDocumentIO.snap_rows`, `ROW_DECIMALS` 6), so a regenerated cell and the same cell
+  read back are bit-equal. A save replans the ground layers from scratch when the session's
+  plan ran out of slots (`AuthoredTerrain.replan_ground_layers`), as every load plans.
+  `test_authoring_save_reload.gd` edits through `AuthoringEditor` (sculpt, Paint, a biome
+  stroke, a prop), saves, reloads through `MapSourceLoader` and compares every
+  `MapFingerprint` key; the fingerprint sorts each asset's rows, since play merges props
+  into the scatter node.
 - `AuthoringController` (`scenes/states/authoring/`) owns its own `LevelEnvironmentManager`,
   loads through `MapSourceLoader` (shared with `LevelPlayLoader`; `separate_props` keeps props
   in `AuthoredProps`) and `MapSourceLoader.install()`, and treats the `MapDocument` as the
