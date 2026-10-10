@@ -302,6 +302,13 @@ func test_the_presets_stand_above_the_brushes_and_lead_their_hints() -> void:
 	assert_eq(topple[-3]["key"], PlayEvents.SIZE_KEY, "Topple's ring has a size")
 	for kind in [TerrainEvent.Kind.BRIDGE_COLLAPSE, TerrainEvent.Kind.FOREST_FALL]:
 		assert_true(PlayEvents.PRESET_DONE.has(kind), "every preset has its toast")
+		assert_true(TerrainEvents.NOTICES.has(kind), "and its players' notice")
+		# The history entry, its undo toast and every chip say and show what the tile does.
+		var preset := EventPresets.for_kind(kind)
+		assert_eq(TerrainEvents.label_for(kind), preset.label)
+		assert_eq(TerrainEvents.icon_for(kind), preset.icon)
+	assert_eq(EventPresets.for_kind(TerrainEvent.Kind.FOREST_FALL).id, EventPresets.TOPPLE)
+	assert_eq(TerrainEvents.icon_for(-1), "", "an unknown kind keeps the toast's own icon")
 
 
 func test_a_picked_tools_controls_stand_under_its_own_field() -> void:
@@ -311,7 +318,8 @@ func test_a_picked_tools_controls_stand_under_its_own_field() -> void:
 	var advanced := pane.get_node("EventsAdvanced") as Control
 	pane.show_tool(EventPresets.TOPPLE)
 	assert_true(pane.preset_field.tiles.is_on(EventPresets.TOPPLE))
-	assert_eq(holder.get_index(), pane.preset_field.get_index() + 1, "the line under the presets")
+	assert_eq(pane.preset_note.get_index(), pane.preset_field.get_index() + 1, "the tiles' caption")
+	assert_eq(holder.get_index(), pane.preset_note.get_index() + 1, "the line under the presets")
 	assert_eq(advanced.get_index(), holder.get_index() + 1, "Advanced under the line")
 	assert_lt(advanced.get_index(), pane.tool_field.get_index(), "both above Brushes")
 	assert_true(advanced.visible, "Topple's size")
@@ -375,7 +383,16 @@ func test_a_preset_stays_armed_after_it_fires_until_no_bridge_is_left() -> void:
 		)
 		await _settle()
 		assert_eq(editor.document.crossings.size(), left, "the bridge fell")
+		# The entry is named as the tile is (W5); its toast offers Undo in the event's icon.
+		var newest_entry: Dictionary = (_controller.live_edits.history.get("_undo") as Array).back()
+		assert_eq(newest_entry.label, EventPresets.DROP_LABEL)
+		var toasts: ToastContainer = UIManager.get("_toast_container")
+		var newest: Control = toasts.get("_active_toasts").back()
+		var icon := newest.find_child("Icon", true, false) as TextureRect
+		assert_eq(icon.texture, IconButton.load_icon("bridge-broken"), "the event's own icon")
+		assert_not_null(newest.find_child("Action", true, false), "with Undo")
 		if left > 0:
+			assert_false(_pane.preset_note.visible, "a bridge still stands")
 			assert_eq(_events.armed, EventPresets.COLLAPSE, "still armed for the next bridge")
 			assert_true(brush.is_active(), "still out on the board")
 			assert_true(_pane.preset_field.tiles.is_on(EventPresets.COLLAPSE))
@@ -387,6 +404,10 @@ func test_a_preset_stays_armed_after_it_fires_until_no_bridge_is_left() -> void:
 	assert_eq(tile.tooltip_text, EventPresets.NO_BRIDGE_TOOLTIP, "and its tooltip says why")
 	_pane.preset_field.tiles.call("_fit_columns")
 	assert_eq(tile.tooltip_text, EventPresets.NO_BRIDGE_TOOLTIP, "kept through a refit (a resize)")
+	# A disabled tile alone reads as one at rest: a caption under the tiles says why.
+	assert_true(_pane.preset_note.visible, "the caption shows")
+	assert_eq(_pane.preset_note.text, EventsPane.NO_BRIDGE)
+	assert_eq(_pane.preset_note.get_index(), _pane.preset_field.get_index() + 1, "under the tiles")
 
 
 func test_a_preset_arms_the_board_and_a_map_without_a_bridge_refuses_collapse() -> void:
@@ -403,6 +424,7 @@ func test_a_preset_arms_the_board_and_a_map_without_a_bridge_refuses_collapse() 
 	brush.hit = RAISE_AT
 	brush.mode.press(brush)
 	brush.mode.end(brush)
+	assert_true(_pane.preset_note.visible, "no bridge on a flat map, says the caption")
 	assert_eq(fired.size(), 1, "a click fires a forest fall")
 	assert_eq((fired[0] as TerrainEvent).kind, TerrainEvent.Kind.FOREST_FALL)
 	assert_almost_eq((fired[0] as TerrainEvent).radius_m, brush.get_radius(), 0.01)

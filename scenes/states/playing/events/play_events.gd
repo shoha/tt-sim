@@ -30,8 +30,10 @@ extends Node
 ##
 ## Presets (EventPresets: Drop bridge, Topple trees) arm on the same brush as the brushes do.
 ## Their modes fire a TerrainEvent, which the table's TerrainEvents plays on every board and
-## ends in an ordinary live edit; that entry, labelled for the event, always offers Undo in a
-## toast ("The bridge fell for everyone at the table"), and its undo restores the map at once.
+## ends in an ordinary live edit; that entry, labelled as the preset's tile ("Drop bridge"),
+## always offers Undo in a toast in the event's own icon ("The bridge fell for everyone at the
+## table"), and its undo restores the map at once. The players get a chip without Undo
+## (TerrainEvents.show_notice): the Undo is the GM's alone.
 ## A preset stays armed after it fires: the drawer steps aside for the spectacle and the hint
 ## bar keeps its keys, so a GM fells stand after stand without reopening the pane; Drop bridge
 ## puts itself away once no bridge is left to drop. A preset put away is forgotten as well
@@ -516,8 +518,9 @@ func _on_fired(event: TerrainEvent) -> void:
 ## still the newest.
 func _on_recorded(entry: Dictionary) -> void:
 	if entry.has("preset"):
-		var done: String = PRESET_DONE.get(int(entry.preset), "Changed for everyone at the table")
-		UIManager.show_undo_toast(done, _undo_entry.bind(entry))
+		var kind := int(entry.preset)
+		var done: String = PRESET_DONE.get(kind, "Changed for everyone at the table")
+		UIManager.show_undo_toast(done, _undo_entry.bind(entry), TerrainEvents.icon_for(kind))
 		return
 	if not is_large(entry):
 		return

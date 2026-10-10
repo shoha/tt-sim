@@ -22,7 +22,10 @@ extends RefCounted
 ##   undo        PlayEvents.undo (Ctrl+Z's path), reporting the entry's size and is_large
 ##   redo        PlayEvents.redo (Ctrl+Y's path)
 ##   player      staged player's view: the brush put away, the GM's Visuals drawer concealed,
-##               the GM's own HUD buttons hidden and the GM's toasts dismissed
+##               the GM's own HUD buttons hidden and the GM's toasts dismissed, then the
+##               notices a player's board shows for "kinds" (TerrainEvent.Kind names, none by
+##               default, in that order: TerrainEvents.show_notice, as a client's receive does)
+##   gm          the GM's view back after `player`: the drawer and the HUD buttons
 ##   dismiss     every toast on screen dismissed at once
 ##   close       the Visuals drawer closed (as a press on the board sends it aside)
 ##   hover_crossing {"kind"}: the brush's pointer over the first crossing of that kind
@@ -120,13 +123,19 @@ static func run(base: Node, step: Dictionary) -> String:
 			if panel != null:
 				panel.close()
 				panel.conceal()
-			# The GM's own HUD buttons a player never has.
-			for button_name in ["SaveLevelButton", "ToggleAssetBrowserButton"]:
-				var button := base.find_child(button_name, true, false) as Control
-				if button != null:
-					button.visible = false
+			_gm_buttons(base, false)
 			# The GM's own toasts (the large edit's Undo, Undone) are not a player's.
-			return "staged a player's view (%d toasts dismissed)" % _dismiss_toasts()
+			var dismissed := _dismiss_toasts()
+			var kinds: Array = step.get("kinds", [])
+			for kind_name: String in kinds:
+				TerrainEvents.show_notice(TerrainEvent.Kind.get(kind_name, -1))
+			return "staged a player's view (%d toasts dismissed), notices %s" % [dismissed, kinds]
+		"gm":
+			var panel := base.find_child("LevelEditPanel", true, false) as LevelEditPanel
+			if panel != null:
+				panel.reveal()
+			_gm_buttons(base, true)
+			return "the GM's view back (%d toasts dismissed)" % _dismiss_toasts()
 		"dismiss":
 			return "%d toasts dismissed" % _dismiss_toasts()
 		"hover_crossing":
@@ -146,6 +155,14 @@ static func run(base: Node, step: Dictionary) -> String:
 				events.call("_on_recorded", {"preset": kind, "label": "", "bytes": 0})
 			return "shown: %s" % str(PlayEvents.PRESET_DONE.values())
 	return "unknown action"
+
+
+## Shows or hides the GM's own HUD buttons, which a player never has.
+static func _gm_buttons(base: Node, shown: bool) -> void:
+	for button_name in ["SaveLevelButton", "ToggleAssetBrowserButton"]:
+		var button := base.find_child(button_name, true, false) as Control
+		if button != null:
+			button.visible = shown
 
 
 ## Dismisses every toast on screen at once; returns how many.

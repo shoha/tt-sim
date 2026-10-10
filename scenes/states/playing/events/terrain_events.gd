@@ -9,8 +9,9 @@ extends Node
 ## (refusal_for), stamps it with the table's key and the host's lead, broadcasts it
 ## (NetworkGameSync.broadcast_terrain_event, behind any op still queued) and plays it after
 ## the lead. Once it has played, the map change is made on the live editor as one ordinary
-## history entry, labelled for the event ("Bridge collapse", "Forest fall"; the entry carries
-## "preset": its kind, for PlayEvents' toast): the crossing removed, or a Clear over the area
+## history entry, labelled as the preset's tile is ("Drop bridge", "Topple trees", label_for;
+## the entry carries "preset": its kind, for PlayEvents' toast with Undo, which is the GM's
+## alone): the crossing removed, or a Clear over the area
 ## reaching CLEAR_REACH times the radius (the Clear's falloff is soft at its rim, so the trees
 ## that fell are well inside it). LiveEdits turns that entry into an op like any edit, so every
 ## client gets it after the motion, a late joiner gets only the op, and an undo restores the
@@ -18,7 +19,9 @@ extends Node
 ##
 ## A client's side: an event from the host (NetworkGameSync.terrain_event_received) is decoded
 ## (TerrainEvent.decode refuses anything out of bounds), taken only for this table and only
-## while the table takes ops, and played at once; the op follows on its own.
+## while the table takes ops, and played at once; the op follows on its own. A player whose
+## camera is elsewhere still learns of it: the event shows a glass chip in its own icon
+## ("The bridge fell", show_notice), without Undo (UI_TASTE G13, G14).
 ##
 ## The effects (BridgeCollapse, ForestFall) live under the map root, stepped here by one clock
 ## (advance(), which a test can call to jump ahead). Each stays, drawing nothing, until its
@@ -29,12 +32,18 @@ extends Node
 signal started(bytes: PackedByteArray)
 ## An event's change was made on the GM's side (its history entry recorded).
 signal applied(event: TerrainEvent)
+## A client's side took the host's event and showed its notice (show_notice).
+signal announced(event: TerrainEvent)
 
 const MAX_ACTIVE := 4
-const LABELS := {
-	TerrainEvent.Kind.BRIDGE_COLLAPSE: "Bridge collapse",
-	TerrainEvent.Kind.FOREST_FALL: "Forest fall",
+## A player's notice of each kind: what happened, in a few words. Where it happened is the
+## board's to show (no place names exist to say it with).
+const NOTICES := {
+	TerrainEvent.Kind.BRIDGE_COLLAPSE: "The bridge fell",
+	TerrainEvent.Kind.FOREST_FALL: "Trees fell in the forest",
 }
+## How long a player's notice stays: past the motion, so a player who looks up still finds it.
+const NOTICE_S := 5.0
 const CLEAR_REACH := 1.3
 ## Exposure of the Clear's one dab: at the fall's radius (0.77 of the dab's) it clears
 ## 1 - exp(-18 * 0.17 * 2) = 99.8 % of the density (MaskBrush CLEAR rate and falloff).
@@ -138,6 +147,29 @@ func receive(bytes: PackedByteArray) -> void:
 	if event == null or event.table_key != edits.table_key or refusal_for(event) != "":
 		return
 	_active.append({"event": event, "begin": _clock, "node": null, "owns_op": false})
+	show_notice(event.kind)
+	announced.emit(event)
+
+
+## The history label of an event of `kind`: its preset tile's ("Drop bridge"). Pure.
+static func label_for(kind: int) -> String:
+	var preset := EventPresets.for_kind(kind)
+	return preset.label if preset != null else "Event"
+
+
+## The Tabler icon an event of `kind` wears in its toasts: its preset tile's
+## ("bridge-broken"), or "" for the toast kind's own. Pure.
+static func icon_for(kind: int) -> String:
+	var preset := EventPresets.for_kind(kind)
+	return preset.icon if preset != null else ""
+
+
+## Shows a player the notice of an event of `kind` (NOTICES): a glass info chip in the event's
+## icon, with no action, since only the GM undoes it.
+static func show_notice(kind: int) -> void:
+	var text: String = NOTICES.get(kind, "")
+	if text != "":
+		UIManager.show_toast(text, UIManager.TOAST_INFO, NOTICE_S, icon_for(kind))
 
 
 ## How many events are playing or waiting on their change.
@@ -229,5 +261,5 @@ func _apply(event: TerrainEvent) -> void:
 func _on_recorded(entry: Dictionary) -> void:
 	if _applying == null:
 		return
-	entry["label"] = LABELS[_applying.kind]
+	entry["label"] = label_for(_applying.kind)
 	entry["preset"] = _applying.kind

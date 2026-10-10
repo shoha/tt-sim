@@ -225,15 +225,22 @@ Probe and numbers:
   labels say what the cursor pills say, and the icons show the break (`bridge-broken`,
   `tree-falling`) so no preset repeats a brush's picture. Both events undo, so both cursors
   wear one warm ochre (`ToppleMode.TINT`, `ThemeColors.OCHRE_LIGHT`; madder is the danger
-  confirm's alone). Drop bridge outlines the deck under the pointer with "Drop bridge" and
-  fires on a click; it is a disabled tile on a map with no deck crossing
-  (`PlayEvents.has_bridge`; tooltip `EventPresets.NO_BRIDGE_TOOLTIP`), and stepping stones or a
-  ford say "Only a bridge falls" on hover and refuse a click. Topple trees fires on a click
-  within its ring ("Topple trees"; a drag widens the ring, Advanced shows its size alone) and
-  marks the trees that will fall with a short ochre blaze across each trunk
-  (`ToppleMode.trunk_marks`: exactly `ForestFall.trees_near`, searched again when the ring
-  moves 0.3 m or every 0.5 s); a spot with no tree is refused by toast
-  (`TerrainEvents.NO_TREES`). The cursor pills and the brush readouts are glass chips
+  confirm's alone). Drop bridge outlines the deck under the pointer, with a thin chalk edge
+  0.1 m inside the ochre (`CollapseMode.EDGE`: the ochre alone vanished over a sunlit plank
+  deck) and "Drop bridge" in a chip under the outline's lowest point
+  (`BrushCursor.draw_readout`, as Topple's), and fires on a click; it is a disabled tile on a
+  map with no deck crossing (`PlayEvents.has_bridge`; tooltip
+  `EventPresets.NO_BRIDGE_TOOLTIP`, and the caption "No bridge on this map" under the preset
+  tiles, `EventsPane.preset_note`, since a disabled tile alone read as one at rest), and
+  stepping stones or a ford draw the small ring in chalk_soft (`CollapseMode.REFUSED_TINT`:
+  nothing happens there, so not the "do" ochre), say "Only a bridge falls" and refuse a click.
+  Topple trees fires on a click within its ring ("Topple trees"; a drag widens the ring,
+  Advanced shows its size alone) and marks each tree that will fall with a small ochre spot
+  on the ground at its foot, inside the ring (`ToppleMode.base_marks`: exactly
+  `ForestFall.trees_near`, each spot 3 % of its tree's height in radius and 9 to 36 px
+  across, searched again when the ring moves 0.3 m or every 0.5 s; a blaze across the trunk
+  before it floated over undergrowth where no trunk showed); a spot with no tree is refused by
+  toast (`TerrainEvents.NO_TREES`). The cursor pills and the brush readouts are glass chips
   (`MapOverlayUtils.draw_chip`: the hint bar's Chip, chalk caption 14). Hint rows: Drop bridge
   Click, Ctrl+Z, Esc "Put away"; Topple trees Click, Drag "Wider stand", `[ ]`, Ctrl+Z, Esc
   "Put away" (the first key names the preset). A fired event goes to `TerrainEvents.start`;
@@ -248,13 +255,18 @@ Probe and numbers:
   lead (0.1 s hosting, 0 solo), broadcasts it (NETWORKING.md "Live map edits") and plays it
   after the lead; a client plays it on receipt. One clock, `advance(delta)` (`_process`, tests
   and the render probe call it). Once the motion has played, the GM's side makes the change on
-  the live editor as one history entry labelled "Bridge collapse" or "Forest fall" with
-  `entry.preset` its kind (`_on_recorded` is connected before PlayEvents hears the history, so
-  the label is set first): the crossing removed (`crossings.remove`), or one CLEAR dab of 2 s
-  at 1.3x the radius (99.8 % of the density at the fall's radius). LiveEdits sends it as an
-  ordinary op, so a late joiner gets only the op and an undo restores the map without replaying
-  anything. The entry's toast always offers Undo (`PlayEvents.PRESET_DONE`: "The bridge fell
-  for everyone at the table", "The trees fell ..."). An effect stays, drawing nothing, until
+  the live editor as one history entry labelled as its tile, "Drop bridge" or "Topple trees"
+  (`TerrainEvents.label_for`, `EventPresets.for_kind`; so Ctrl+Z says "Topple trees undone"),
+  with `entry.preset` its kind (`_on_recorded` is connected before PlayEvents hears the
+  history, so the label is set first): the crossing removed (`crossings.remove`), or one CLEAR
+  dab of 2 s at 1.3x the radius (99.8 % of the density at the fall's radius). LiveEdits sends
+  it as an ordinary op, so a late joiner gets only the op and an undo restores the map without
+  replaying anything. The GM's toast for the entry always offers Undo
+  (`PlayEvents.PRESET_DONE`: "The bridge fell for everyone at the table", "The trees fell
+  ..."); a client's side shows its players a chip without Undo as the event starts playing
+  (`TerrainEvents.show_notice`, `NOTICES`: "The bridge fell", "Trees fell in the forest", 5 s;
+  UI_TASTE G13, G14). Both wear the event's own icon (`icon_for`: `bridge-broken`,
+  `tree-falling`) in the info tint. An effect stays, drawing nothing, until
   its change lands (the crossing node freed, every held cell's scatter rebuilt) or
   `RELEASE_AFTER_S` (8 s), then lets go of what it hid (`release()`).
 - **The effects** (`scenes/states/playing/events/`), bounded so a frame only sets transforms:

@@ -57,6 +57,18 @@ static func find(id: StringName) -> ToolDescriptor:
 	return null
 
 
+## The preset that sets off events of TerrainEvent kind `kind`, or null: its label names the
+## event's history entry and its icon the event's toasts, so the tile, the undo and the chips
+## say and show one thing (UI_TASTE W5).
+static func for_kind(kind: int) -> ToolDescriptor:
+	match kind:
+		TerrainEvent.Kind.BRIDGE_COLLAPSE:
+			return find(COLLAPSE)
+		TerrainEvent.Kind.FOREST_FALL:
+			return find(TOPPLE)
+	return null
+
+
 static func _make(
 	id: StringName, label: String, icon: String, summary: String, mode: GDScript
 ) -> ToolDescriptor:

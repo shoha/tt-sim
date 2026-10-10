@@ -538,18 +538,22 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   bridge at zoom 16 (`fall_0_before`, then 0.45, 0.95, 1.45, 1.95 and 2.45 s: `fall_1_tip` to
   `fall_5_clear`, and `fall_6_after`); at 1.45 s also `fall_3_nofade`, the canopy fade off (`close_zoom.gd
   fade`), an A/B in which the fallen crowns must match `fall_3_down`. The pane captures
-  (card presets-pane-fix; 29 captures in all, about 72 s with `--saved --full`): with no
-  bridge left, `pane_nobridge` (Drop bridge disabled; `events_pane.gd tile` logs its tooltip);
-  both events then undone through `events_pane.gd undo` (Ctrl+Z's path: the trees and the
-  bridge back, no effect played), the camera's near plane logged (`eval`, -61.8 m at zoom 11
-  at either yaw: pulled back over the canopies, so it cuts no tree); at 1280x720 and 1920x1080
-  the pane fresh, with Topple trees armed at 6 m over the stand (its blazes, chip and keys)
-  and put away again (`{size}_pane_fresh`, `_topple`, `_putaway`); Drop bridge over the bridge
-  and over the build's stepping stones at map x 14 (`pane_drop_bridge`, `pane_drop_stones`,
-  `events_pane.gd hover_crossing`); the presets' toasts at 720p (`pane_toasts_720`,
-  `events_pane.gd toasts`); both cursors at dusk (`pane_dusk_topple`, `pane_dusk_drop`,
-  `ui_primitives.gd dusk`); and a player's view after an event, with no toast
-  (`pane_player_720`). The level is
+  (cards presets-pane-fix, events-followup; 29 captures in all, about 72 s with `--saved
+  --full`): with no bridge left, `pane_nobridge` (Drop bridge disabled with its caption;
+  `events_pane.gd tile` logs its tooltip); still before any undo, at 1280x720 over the felled
+  stand, the GM's two Undo toasts in their events' icons, stacked with aligned edges
+  (`pane_toasts_720`, `events_pane.gd toasts`), and a player's view with the two notice chips
+  and no Undo (`pane_player_720`, `events_pane.gd player` with `kinds`, then `gm` to restore
+  the drawer and buttons); both events then undone through `events_pane.gd undo` (Ctrl+Z's
+  path: the trees and the bridge back, no effect played), the camera's near plane logged
+  (`eval`, -61.8 m at zoom 11 at either yaw: pulled back over the canopies, so it cuts no
+  tree); at 1280x720 and 1920x1080 the pane fresh, with Topple trees armed at 6 m over the
+  stand (the ground marks at the falling trees' feet, chip and keys) and put away again
+  (`{size}_pane_fresh`, `_topple`, `_putaway`); Drop bridge over the bridge in daylight (the
+  chalk inner edge, the chip under the outline) and over the build's stepping stones at map
+  x 14 (the chalk_soft ring; `pane_drop_bridge`, `pane_drop_stones`, `events_pane.gd
+  hover_crossing`); and both cursors at dusk (`pane_dusk_topple`, `pane_dusk_drop`,
+  `ui_primitives.gd dusk`). The level is
   kept for look runs; `jobs/gm_events_cleanup.json` (`events_pane.gd cleanup` alone, a few
   seconds) deletes every `_gm_events_` level when the task is done.
 
