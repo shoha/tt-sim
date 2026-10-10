@@ -36,6 +36,32 @@ func test_the_ground_is_the_biomes_own_and_luminous() -> void:
 	assert_gt(savanna.r, savanna.b, "savanna paints golden")
 
 
+## The new-map dialog's strip: the landscape across a wide picture, rounded at its corners.
+func test_a_strip_is_a_wide_landscape_with_rounded_corners() -> void:
+	var size := Vector2i(168, 56)
+	var image := BiomeThumbnail.strip(_biome("temperate_forest_summer_s1"), size).get_image()
+	assert_eq(image.get_size(), size)
+	assert_eq(image.get_pixel(0, 0).a, 0.0, "the corner is cut round")
+	var sky := image.get_pixel(4, 4)
+	assert_eq(sky.a, 1.0)
+	assert_gt(sky.b, sky.r, "sky at the top of the strip's far end")
+	assert_gt(_chroma(image.get_pixel(160, 52)), 0.1, "painted ground at its foot")
+
+
+## Bare ground is the same landscape with nothing on it, its ground the bare surface's own:
+## no raw noise swatch.
+func test_bare_ground_is_a_painted_strip_with_nothing_on_it() -> void:
+	var surfaces := PaletteLibrary.surfaces()
+	var bare: Dictionary = surfaces.get(NewMap.BARE_SURFACE, {})
+	var image := BiomeThumbnail.bare_strip(bare, Vector2i(168, 56)).get_image()
+	var sky := image.get_pixel(84, 3)
+	assert_gt(sky.b, sky.r, "sky above")
+	var foot := image.get_pixel(84, 52)
+	var row_beside := image.get_pixel(40, 52)
+	assert_gt(_chroma(foot), 0.1, "luminous ground")
+	assert_almost_eq(foot.g, row_beside.g, 0.05, "plain ground, not noise")
+
+
 func test_pictures_are_cached_per_size() -> void:
 	var biome := _biome("alpine_meadow_summer_s1")
 	assert_eq(BiomeThumbnail.of(biome, 28), BiomeThumbnail.of(biome, 28))

@@ -84,7 +84,8 @@ const MADDER_LIGHT := Color("#FF928C")
 const OCHRE_LIGHT := Color("#F5C766")
 
 # -- Shared --
-## The morning sky (backdrop wash) until painted backdrops land.
+## The morning sky: the BACKDROP role's flat colour (the transition overlay's fade) and the
+## biome pictures' sky. The screens outside play stand on PaintedBackdrop.
 const SKY_TOP := Color("#A8D2E8")
 const SKY_LOW := Color("#F4DDB4")
 ## The stop-play scrim (C4), used with blur.

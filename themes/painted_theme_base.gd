@@ -176,6 +176,21 @@ func _define_flat_buttons() -> void:
 			}
 		)
 	)
+	# On a picture (a level card's overflow menu): the same button on a small raised disc with a
+	# pencil edge, so its glyph reads over a dark thumbnail as over a light one.
+	var disc := box(
+		c(ThemeColors.SURFACE_RAISED), RADIUS_PILL, 4, 4, edge(1, c(ThemeColors.EDGE))
+	)
+	define_variant_style(
+		"IconButtonDisc",
+		"Button",
+		_button(
+			disc,
+			inherit(disc, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
+			inherit(disc, {bg_color = c(ThemeColors.SURFACE_PRESS)}),
+			ThemeColors.TEXT
+		)
+	)
 	# Tiles: a centred label, so 4 px sides leave a long name (Grassland Meadow) its room in
 	# a two-column drawer. Picked is the selected fill edge to edge, with no ring of its own:
 	# the ring is focus (I1), so a picked tile that also has focus shows both, the fill and the

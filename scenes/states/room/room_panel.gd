@@ -31,6 +31,9 @@ signal move_table_requested(key: String)
 ## The GM picked a map to add to the shelf (with connect_network, it is shelved and selected).
 signal map_picked(level_info: Dictionary)
 signal leave_requested
+## The selection changed: the selected map's environment preset ("" with none), for the
+## room's backdrop mood.
+signal selection_shown(preset: String)
 
 const LEVEL_PICKER_SCENE := preload("res://scenes/ui/level_picker_dialog.tscn")
 ## The side column and the drawer share the drawer width token (UI_TASTE S5).
@@ -254,6 +257,7 @@ func _show_selection() -> void:
 			entry = candidate
 	if not in_drawer:
 		_show_stage(entry)
+		selection_shown.emit(_picture_for(entry).mood if not entry.is_empty() else "")
 	var action := RoomModel.action(
 		in_drawer, _is_gm, _selected, _table, _shelf.size(), str(entry.get("name", ""))
 	)

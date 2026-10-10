@@ -63,15 +63,37 @@ func test_quit_and_set_up_tokens_match_the_pause_menu() -> void:
 	assert_ne(title.editor_button.icon, IconButton.load_icon("wand"))
 
 
-## The d20 turns only over an empty library: behind the cards it showed through the gutters.
-func test_the_die_hides_behind_the_cards() -> void:
-	_levels = [_info("new", "New Camp", 200)]
+## The hub stands on the painted backdrop in the selected map's mood, morning with none and
+## over an empty library; the d20 is gone.
+func test_the_backdrop_takes_the_selected_maps_mood() -> void:
+	var night := _info("night", "Night Camp", 200)
+	night["environment_preset"] = "outdoor_night"
+	_levels = [_info("old", "Old Camp", 100), night]
 	var title := _title()
-	var die := title.get_node("SubViewportContainer") as Control
-	assert_false(die.visible, "hidden while the grid holds a card")
+	assert_eq(title.backdrop.mood(), PaintedBackdrop.Mood.NIGHT, "the preselected newest map")
+	title.grid._cards[0]._on_pressed()
+	assert_eq(title.backdrop.mood(), PaintedBackdrop.Mood.MORNING, "a map with no preset")
 	title.grid.provider = func() -> Array: return []
 	title.grid.refresh()
-	assert_true(die.visible, "shown over an empty library")
+	assert_eq(title.backdrop.mood(), PaintedBackdrop.Mood.MORNING, "an empty library")
+	assert_null(title.get_node_or_null("SubViewportContainer"), "no die")
+	assert_eq(title.backdrop.get_index(), 0, "behind the hub")
+
+
+## The column and the version label are one band of words on the backdrop, the heading
+## another: the backdrop keeps both legible.
+func test_the_words_on_the_backdrop_are_kept_legible() -> void:
+	_levels = [_info("new", "New Camp", 200)]
+	var title := _title()
+	await wait_frames(3)
+	var zones := title.backdrop.zone_rects()
+	assert_eq(zones.size(), 2)
+	var version := title.get_node("%VersionLabel") as Label
+	assert_true(zones[0].encloses(Rect2(version.global_position, Vector2(8, version.size.y))))
+	var wordmark := title.get_node("%LeftColumn").get_child(0) as Control
+	assert_true(zones[0].has_point(wordmark.global_position + Vector2(4, 4)))
+	var heading := title.get_node("Hub/Columns/RightZone/Heading") as Control
+	assert_true(zones[1].has_point(heading.global_position + Vector2(4, 4)))
 
 
 ## The two map actions name what differs: Set up tokens acts on the selected map, New map

@@ -39,6 +39,7 @@
 		"res://tests/unit/test_map_overlay_utils.gd",
 		"res://tests/unit/test_menu_header.gd",
 		"res://tests/unit/test_menu_theme_assets.gd",
+		"res://tests/unit/test_painted_backdrop.gd",
 		"res://tests/unit/test_painted_theme.gd",
 		"res://tests/unit/test_pane_stack.gd",
 		"res://tests/unit/test_panel_one_scrim.gd",

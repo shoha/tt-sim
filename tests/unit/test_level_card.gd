@@ -231,6 +231,15 @@ func test_edit_is_the_first_overflow_action() -> void:
 	assert_eq(card._menu.get_item_text(0), "Set up tokens")
 
 
+## The overflow menu sits on a paper disc on every card: the bare glyph vanished over a dark
+## thumbnail.
+func test_the_overflow_menu_sits_on_a_paper_disc() -> void:
+	var card := _card(_info())
+	assert_eq(card._menu_button.theme_type_variation, &"IconButtonDisc")
+	var disc := card._menu_button.get_theme_stylebox(&"normal") as StyleBoxFlat
+	assert_eq(disc.bg_color, ThemeColors.PAPER_RAISED)
+
+
 func test_edit_requests_the_edit_action() -> void:
 	var card := _card(_info())
 	watch_signals(card)

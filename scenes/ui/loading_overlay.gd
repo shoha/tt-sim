@@ -7,10 +7,11 @@ extends CanvasLayer
 ##
 ## - show_loading(): a map load ("Setting out Mossy Hollow"; Root, the authoring build and
 ##   the graphics warm-up). The table behind is torn down and rebuilt under the overlay, so
-##   there is nothing worth seeing through it; the sheet sits on the backdrop sky, the same
-##   sky the title and the room stand on, so a title or room handing over to a load does not
-##   change the picture. The bar is determinate (set_progress), and the sky fades off the
-##   finished table when the load ends, as its reveal.
+##   there is nothing worth seeing through it; the sheet sits on the painted backdrop
+##   (PaintedBackdrop), the same world the title and the room stand on and in the mood they
+##   last showed (PaintedBackdrop.last_mood), so a title or room handing over to a load does
+##   not change the picture. The bar is determinate (set_progress), and the backdrop fades off
+##   the finished table when the load ends, as its reveal.
 ## - show_indeterminate(): a wait over a live screen that stays ("Opening a room..." over
 ##   the title). The shared Scrim (C4) blurs and tints the screen behind, and with no known
 ##   progress a lake segment, the bar's own fill style, glides back and forth along the bar
@@ -72,7 +73,7 @@ var _track_edge := StyleBoxFlat.new()
 @onready var progress_bar: ProgressBar = %ProgressBar
 @onready var status_label: Label = %StatusLabel
 @onready var cancel_button: Button = %CancelButton
-@onready var _sky: ColorRect = %Sky
+@onready var _sky: PaintedBackdrop = %Sky
 @onready var _scrim: ColorRect = %Scrim
 @onready var _center: CenterContainer = %CenterContainer
 @onready var _glide: Control = %Glide
@@ -86,7 +87,6 @@ static func setting_out_text(level: LevelData) -> String:
 
 
 func _ready() -> void:
-	_sky.color = ThemeColors.of(_sky, ThemeColors.BACKDROP)
 	_track_edge.draw_center = false
 	_track_edge.set_border_width_all(1)
 	_track_edge.set_corner_radius_all(int(progress_bar.custom_minimum_size.y))
@@ -98,9 +98,11 @@ func _ready() -> void:
 	hide()
 
 
-## Show a map load: the sheet on the backdrop sky with a determinate bar. The sky covers the
-## screen at once (the title and the room stand on the same sky); the sheet fades in.
+## Show a map load: the sheet on the painted backdrop with a determinate bar. The backdrop
+## covers the screen at once in the mood last shown (the title and the room stand on the
+## same world); the sheet fades in.
 func show_loading(title: String = SETTING_OUT_ANY) -> void:
+	_sky.show_mood(PaintedBackdrop.last_mood, true)
 	_open(title, false, false)
 
 

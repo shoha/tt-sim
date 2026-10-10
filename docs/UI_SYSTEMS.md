@@ -277,8 +277,9 @@ if UIManager.is_transitioning():
 ### Configuration
 
 Default fade duration: 0.3 seconds
-Fade color: the backdrop sky (the `BACKDROP` role, read in `_ready`), the sky the title, the
-room and a map load stand on, never a dark fill (`docs/UI_TASTE.md` C4, G10)
+Fade color: the backdrop sky (the `BACKDROP` role, read in `_ready`), the morning sky of the
+painted backdrop the title, the room and a map load stand on, never a dark fill
+(`docs/UI_TASTE.md` C4, G10)
 
 ---
 
@@ -312,9 +313,10 @@ loading_overlay.show_indeterminate(RoomScreen.OPENING, true, RoomScreen.OPENING_
 
 - A paper sheet (stops play, so paper: C8) holding the operation in the Title role, the bar
   and a Caption for the step; an empty caption is hidden.
-- Two grounds. `show_loading()` lays the backdrop sky (the `BACKDROP` role, the title's and
-  the room's sky) at once, since the table behind a map load is torn down and rebuilt; the
-  sky fades off the finished table on hide (0.4 s). `show_indeterminate()` lays the shared
+- Two grounds. `show_loading()` lays the painted backdrop (`%Sky` is a `PaintedBackdrop`, see
+  "Painted backdrop") at once in the mood the title or the room last showed
+  (`PaintedBackdrop.last_mood`), since the table behind a map load is torn down and rebuilt;
+  it fades off the finished table on hide (0.4 s). `show_indeterminate()` lays the shared
   `Scrim` (C4) over the screen behind it.
 - Determinate bar: tweened to each new value (0.25 s). Indeterminate: a lake segment glides
   back and forth along the bar; under Reduce motion (`UiMotion.reduced()`, the OS setting)
@@ -416,9 +418,39 @@ See [THEME_GUIDE.md's UI Primitives](THEME_GUIDE.md#ui-primitives) and
 
 `TitleScreen` (`scenes/states/title_screen/title_screen.gd`) is the app's entry screen. It has two
 zones: a left column of actions and a right zone showing the player's saved levels as cards, over
-the sky backdrop. The d20 sub-viewport turns there only while the library is empty: behind the
-card grid its flat orange showed through the gutters, so it is hidden and not rendered while
-the grid holds a card.
+the painted backdrop in the selected map's mood (morning with none, and over an empty library,
+where the painting is the whole picture: the d20 that turned there went with the flat sky).
+
+### Painted backdrop
+
+`PaintedBackdrop` (`scenes/ui/primitives/painted_backdrop.gd`, `shaders/ui_backdrop.gdshader`)
+is the world every screen outside play stands on: the title, the room (`RoomScreen`) and a map
+load (`LoadingOverlay`'s `%Sky`). One full-screen shader pass in the map placeholder's language
+(`MapPlaceholder`): a sky in two washes with a sun (a moon at night), four flat-based cumulus
+clouds, a hazy far ridge with mist at its foot, a round near hill with three trees on its
+shoulder, and a meadow rising to the right. No textures and no noise.
+
+- **Moods.** Six curated palettes (`PaintedBackdrop.Mood`: morning, midday, golden hour, dusk,
+  overcast, night), chosen by the selected map's environment preset (`mood_of`,
+  `MOOD_OF_PRESET`; an unknown preset or none is morning). The mood sets only the backdrop
+  (UI_TASTE verdict 2026-10-09): controls and semantic colours never change with it.
+- **Cross-fade.** `show_mood` mixes every colour from the old mood to the new over
+  `FADE_S` (1.2 s, sine in-out) and fades the two suns into each other; the first mood a
+  backdrop shows comes at once. `last_mood` carries the mood to the next backdrop, so the room
+  opens in the title's light and a map load in whatever was last shown.
+- **Drift.** The clouds sway about their places over 64-88 s each (`DRIFT_S`, the shader's
+  `TIME`; no `_process`). Reduce motion (`UiMotion.reduced()`) holds them (`drift` 0); the
+  cross-fade stays (M5). A hidden backdrop draws nothing (M6).
+- **Legible words.** Text that sits straight on the backdrop registers its controls
+  (`keep_legible`, up to four zones, each the union of its controls' words: a label's text as
+  aligned, a box container's shown children). Inside a zone, feathered over 48 px, the shader
+  lifts any colour darker than relative luminance 0.6 toward the mood's haze in linear light,
+  just far enough that ink-soft captions hold 4.5:1. Over a day sky it changes nothing; at
+  night it is a pale mist under the words. The title registers its column with the version
+  label, and its heading with the empty caption; the room its heading, the room code row and
+  the selected map's name and readiness.
+- **Cost.** One full-screen fragment pass (about 30 smoothsteps, 12 sines, 2 exps; four zone
+  distances). Measured indicatively in `docs/PERFORMANCE.md`.
 
 ### Left Column
 
@@ -532,8 +564,9 @@ Saved levels are three primitives under `scenes/ui/primitives/`:
 ### The room
 
 One `RoomPanel` (`scenes/states/room/room_panel.gd`), learned once, shown two ways: full screen
-on paper between maps (`RoomScreen`, Root's `ROOM` state, over the default sky backdrop until
-painted backdrops land) and as a glass drawer over the table (`RoomDrawer`, left edge, the
+on paper between maps (`RoomScreen`, Root's `ROOM` state, over the painted backdrop in the
+selected shelf map's mood, `RoomPanel.selection_shown`) and as a glass drawer over the table
+(`RoomDrawer`, left edge, the
 drawer width token 396, `RoomPanel.SIDE_WIDTH`, opened by its tab or Tab). It replaced the host
 lobby, the client's waiting view, the lobby's Change and the in-play `PlayerListDrawer`.
 

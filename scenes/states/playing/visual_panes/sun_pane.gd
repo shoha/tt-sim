@@ -11,10 +11,13 @@ extends LevelEditPane
 signal sun_changed(settings: SunSettings)
 signal aim_toggled(active: bool)
 
-## [mode value, label, icon]
+## [mode value, label, icon]. Auto is an A in a ring: brightness-auto's rayed octagon read as
+## the Settings cog at 720p.
 const MODES := [
-	["auto", "Auto", "brightness-auto"], ["on", "On", "sun"], ["off", "Off", "sun-off"]
+	["auto", "Auto", "circle-letter-a"], ["on", "On", "sun"], ["off", "Off", "sun-off"]
 ]
+## The mode field's caption: the pane's heading already says Sun.
+const MODE_CAPTION := "Daylight"
 ## [tile id, label, icon]
 const SHADOW_TILES := [
 	["off", "Off", "circle-off"], ["hard", "Hard", "contrast"], ["soft", "Soft", "cloud"]
@@ -65,7 +68,7 @@ func _build() -> void:
 	]
 	_time_row.value_changed.connect(_on_time_changed)
 
-	_mode_field = _add_tile_field("Sun", MODES)
+	_mode_field = _add_tile_field(MODE_CAPTION, MODES)
 	_mode_field.tiles.columns = 3
 	_mode_tiles = _mode_field.tiles
 	_mode_tiles.selection_changed.connect(_on_mode_selected)

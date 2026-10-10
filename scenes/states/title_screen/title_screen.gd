@@ -4,9 +4,11 @@ extends CanvasLayer
 ## Title hub. Host and Join lead; the saved levels sit beside them as cards and
 ## the selected card is the level a host starts with (or Play Solo opens). Avatars opens
 ## the player's saved avatars (AvatarRoster).
-## The d20 sub-viewport turns over the sky-coloured backdrop only while there are no maps:
-## behind the card grid its flat orange showed through the gutters as a warm smear, so it
-## is hidden (and not rendered) while the grid holds a card, until painted backdrops land.
+## The hub stands on the painted backdrop (PaintedBackdrop) in the selected map's mood,
+## cross-fading as the selection changes; with no map selected, and over an empty library, it
+## is morning. The backdrop is the empty library's picture too: the d20 that turned there was
+## a glossy 3D object over a painting, so it went with the flat sky. The column, the heading
+## and the version label are the words on the backdrop, kept legible in every mood.
 ##
 ## Host opens a room, and the selected map is what goes on its shelf; Play solo and Set up
 ## tokens act on that map, and all three name it the same way, the bare name leading the line
@@ -74,6 +76,8 @@ var editor_subtitle: Label
 var heading_count: Label
 var empty_caption: Label
 var grid: LevelGrid
+var backdrop: PaintedBackdrop
+var _heading_row: HBoxContainer
 ## The left column's spacers: the three section gaps in order, and the gap before each
 ## button after Host's.
 var _section_gaps: Array[Control] = []
@@ -83,17 +87,16 @@ var _row_gaps: Array[Control] = []
 @onready var _left: VBoxContainer = %LeftColumn
 @onready var _right: VBoxContainer = %RightZone
 @onready var _version_label: Label = %VersionLabel
-@onready var _die_view: SubViewportContainer = %SubViewportContainer
 
 
 func _ready() -> void:
-	# The hub's text sits straight on the backdrop, so the backdrop takes the paper theme's
-	# sky role (ink reads 9:1 on it) until the painted backdrop lands; the dark dim goes.
-	var backdrop := $ColorRect as ColorRect
-	backdrop.color = ThemeColors.of(backdrop, ThemeColors.BACKDROP)
-	($Dim as CanvasItem).visible = false
+	backdrop = PaintedBackdrop.new()
+	add_child(backdrop)
+	move_child(backdrop, 0)
 	_build_left_column()
 	_build_right_zone()
+	# The column and the version label make one band of words down the left edge.
+	backdrop.keep_legible([[_left, _version_label], [_heading_row, empty_caption]])
 	_version_label.text = "v" + UpdateVersion.get_current()
 	_version_label.modulate.a = 0.0
 	grid.refresh()
@@ -220,22 +223,22 @@ func _stacked(label: String, icon: String) -> Button:
 
 
 func _build_right_zone() -> void:
-	var heading_row := HBoxContainer.new()
-	heading_row.name = "Heading"
-	heading_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_heading_row = HBoxContainer.new()
+	_heading_row.name = "Heading"
+	_heading_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# The count reads with its heading as a bare number ("Your maps  3"), sitting on the
 	# heading's baseline rather than pinned to the window's far edge.
-	heading_row.theme_type_variation = &"BoxContainerSpaced"
+	_heading_row.theme_type_variation = &"BoxContainerSpaced"
 	var heading := Label.new()
 	heading.text = "Your maps"
 	heading.theme_type_variation = &"H2"
-	heading_row.add_child(heading)
+	_heading_row.add_child(heading)
 	heading_count = Label.new()
 	heading_count.name = "Count"
 	heading_count.theme_type_variation = &"Caption"
 	heading_count.size_flags_vertical = Control.SIZE_SHRINK_END
-	heading_row.add_child(heading_count)
-	_right.add_child(heading_row)
+	_heading_row.add_child(heading_count)
+	_right.add_child(_heading_row)
 	empty_caption = Label.new()
 	empty_caption.name = "Empty"
 	empty_caption.text = EMPTY_CAPTION
@@ -283,18 +286,10 @@ func _refresh_actions() -> void:
 	host_subtitle.text = HOST_MAP_LINE % name if has_level else ""
 	play_subtitle.text = name
 	editor_subtitle.text = name
-	_show_die(count == 0)
+	# The selected map's mood (morning with none); the first one shows at once.
+	backdrop.show_mood_of(String(info.get("environment_preset", "")))
 	# A caption shown or hidden changes the column's height and the gap after it.
 	_fit_to_canvas()
-
-
-## The d20 turns only over an empty library; behind the cards it stops rendering too.
-func _show_die(shown: bool) -> void:
-	_die_view.visible = shown
-	var view := _die_view.get_child(0) as SubViewport
-	view.render_target_update_mode = (
-		SubViewport.UPDATE_ALWAYS if shown else SubViewport.UPDATE_DISABLED
-	)
 
 
 ## The rows lift in one after another; the spacers between them are skipped (M4).

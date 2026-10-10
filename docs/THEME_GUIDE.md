@@ -39,7 +39,7 @@ and each theme maps them to its own token (`PAPER_ROLES`, `GLASS_ROLES`):
 | `FOCUS` | lake (about 6:1 on paper) | lake_light | the keyboard focus ring: a state, never a control's fill hue |
 | `SUCCESS`, `WARNING`, `DANGER`, `DANGER_FILL` | moss, ochre, madder | light variants; madder fill | text and icons; madder fills only a danger confirm |
 | `TRACK` | lavender graphite `#887A8E` (tan pressed this dark read as muddy khaki) | `#958DA0` | an unfilled slider or switch track, 3:1 on every surface |
-| `EDGE`, `SHADOW`, `BACKDROP` | pencil edge, ink 16%, sky | top rim, plum-black 25%, glass | decoration, shadows (ink-tinted, never brown or black), a solid backdrop |
+| `EDGE`, `SHADOW`, `BACKDROP` | pencil edge, ink 16%, sky | top rim, plum-black 25%, glass | decoration, shadows (ink-tinted, never brown or black), a solid backdrop's colour (the transition overlay's fade; the screens outside play stand on the painted backdrop, `PaintedBackdrop`, UI_SYSTEMS.md) |
 
 Prefer a theme variation (`Caption`, `BodyState`, `Primary` ...) over reading a role. Read a
 role only to draw or tint by hand, through the control being drawn:
@@ -51,7 +51,7 @@ role only to draw or tint by hand, through the control being drawn:
 | Type | Variations |
 |---|---|
 | `Label` (default: Inter body 16, text) | `Wordmark` (Fraunces 56), `Title` / `H1` (Fraunces 26), `Heading` / `H2` / `SectionHeader` / `PanelHeader` (Fraunces 19), `Eyebrow` (Fraunces italic 19), `H3` (Inter 16 semibold), `Body`, `Caption` / `RailLabel` (14, soft), `BodyState`, `CaptionState`, `Code` (Inter 19 semibold, tabular figures, slashed zero, tailed l: a code read aloud), `CountBadgeLabel` (caption, strong, on the accent), `BodyOnSelected` / `CaptionOnSelected` (body and caption in ON_SELECTED: text on a selected fill) |
-| `Button` (default: the quiet secondary) | `Primary` (one per screen), `Danger` (danger confirm only), `Ghost` (no fill, soft text), `Secondary` (alias of the default), `IconButton`, `IconButtonActive`, `Tile`, `ListRow` (a selectable list row, the room's shelf maps: clear at rest with no edge, the hover wash, the selected fill when picked), `Card`, `FoldoutHeader` |
+| `Button` (default: the quiet secondary) | `Primary` (one per screen), `Danger` (danger confirm only), `Ghost` (no fill, soft text), `Secondary` (alias of the default), `IconButton`, `IconButtonActive`, `IconButtonDisc` (the icon button on a small raised paper disc with a pencil edge, for a button over a picture: a level card's overflow menu), `Tile`, `ListRow` (a selectable list row, the room's shelf maps: clear at rest with no edge, the hover wash, the selected fill when picked), `Card`, `FoldoutHeader` |
 | `PanelContainer` (default: a `Sheet`) | `Sheet`, `Inset` / `PanelInset`, `PanelElevated`, `PanelBordered`, `KeyChip`, `CodeChip` (the room code: a key chip with 12 / 6 padding), `CardStrip` / `CardStripSelected` (a card's caption strip: clear, or the selected fill when the card is selected), `Chip` (a label over the board: glass with its rim on glass, never a black box), `CountBadge` (the accent pill behind a count), `Toast` (every toast and the disconnect banner: one glass surface, no side stripe; the kind is the icon tinted state, success, warning or danger, and the words); `Panel`: `Badge` (the unsaved dot, in the cool state role: it says what is, and its item's tooltip says it in words), `CardThumb` (a card's thumbnail well: the inset wash, the shape the card clips its picture to; a map with no thumbnail paints its `MapPlaceholder` in it); `ProgressBar`: `ProgressSuccess`, `ProgressDanger` (a finished or failed bar) |
 | `HBoxContainer` / `ScrollContainer` | `PropertyRow` (a sheet's label-and-control row: 16 px gap; `PropertyRow.fit_sheet_row(row)` also sets the 184 px label column), `CardGrid` (a scrolling card grid: a clear panel whose 6 px margins keep a focused card's ring inside the clip) |
 
@@ -507,7 +507,7 @@ Rules: most programmatic setters are silent — `TileRow.select()` and `set_tile
 
 Sky tiles and the Sky preview strip come from `SwatchTextures` (shipped PNGs for HDRI skies, painted gradients otherwise).
 
-`IconButton` sets its own theme type variation in code (`IconButton` normally, `IconButtonActive` when `active` is true), so a different `theme_type_variation` assigned on the node in a scene is overwritten at runtime.
+`IconButton` sets its own theme type variation in code (`IconButton` normally, `IconButtonActive` when `active` is true, `IconButtonDisc` when `disc` is true), so a different `theme_type_variation` assigned on the node in a scene is overwritten at runtime.
 
 ### Regenerating the theme
 
