@@ -50,9 +50,13 @@ role only to draw or tint by hand, through the control being drawn:
 
 | Type | Variations |
 |---|---|
-| `Label` (default: Inter body 16, text) | `Wordmark` (Fraunces 56), `Title` / `H1` (Fraunces 26), `Heading` / `H2` / `SectionHeader` / `PanelHeader` (Fraunces 19), `Eyebrow` (Fraunces italic 19), `H3` (Inter 16 semibold), `Body`, `Caption` / `RailLabel` (14, soft), `BodyState`, `CaptionState`, `Code` (Inter 19 semibold, tabular figures, slashed zero, tailed l: a code read aloud) |
+| `Label` (default: Inter body 16, text) | `Wordmark` (Fraunces 56), `Title` / `H1` (Fraunces 26), `Heading` / `H2` / `SectionHeader` / `PanelHeader` (Fraunces 19), `Eyebrow` (Fraunces italic 19), `H3` (Inter 16 semibold), `Body`, `Caption` / `RailLabel` (14, soft), `BodyState`, `CaptionState`, `Code` (Inter 19 semibold, tabular figures, slashed zero, tailed l: a code read aloud), `CardInitial` (Fraunces 56, soft: a level card's placeholder initial), `CountBadgeLabel` (caption, strong, on the accent) |
 | `Button` (default: the quiet secondary) | `Primary` (one per screen), `Danger` (danger confirm only), `Ghost` (no fill, soft text), `Secondary` (alias of the default), `IconButton`, `IconButtonActive`, `Tile`, `Card`, `FoldoutHeader` |
-| `PanelContainer` (default: a `Sheet`) | `Sheet`, `Inset` / `PanelInset`, `PanelElevated`, `PanelBordered`, `KeyChip`; `Panel`: `Badge` (the unsaved dot) |
+| `PanelContainer` (default: a `Sheet`) | `Sheet`, `Inset` / `PanelInset`, `PanelElevated`, `PanelBordered`, `KeyChip`, `Chip` (a label over the board: glass with its rim on glass, never a black box), `CountBadge` (the accent pill behind a count), `ToastInfo` / `ToastSuccess` / `ToastWarning` / `ToastError` (a toast: its kind in a left stripe of state, success, warning or danger); `Panel`: `Badge` (the unsaved dot), `CardThumb` (a card's thumbnail well: the inset wash, the shape the card clips its picture to); `ProgressBar`: `ProgressSuccess`, `ProgressDanger` (a finished or failed bar) |
+
+The stop-play scrim is not a theme item: every full-screen sheet's backdrop `ColorRect` takes
+`scenes/ui/primitives/scrim.gd` (`Scrim`), which blurs what is behind it and lays
+`ThemeColors.SCRIM` over the blur (`shaders/ui_scrim.gdshader`). Never a black `ColorRect`.
 
 Fraunces is only for the wordmark, titles, headings and eyebrows; rows and buttons use Inter.
 Sizes: 56 / 26 / 19 Fraunces, 16 / 15 / 14 Inter (14 is the floor). Spacing 4, 8, 12, 16, 24,

@@ -27,14 +27,11 @@ signal rail_footer_pressed(id: StringName)
 
 enum DrawerEdge { LEFT, RIGHT }
 
-# -- Colours -----------------------------------------------------------------
-# Surface colours from the dark theme, used for programmatic styling.
-
-const _PANEL_COLOR := Color("#2c1f2b")  # color_surface1 — panel background
-const _TAB_COLOR_NORMAL := Color("#2c1f2b")  # color_surface1 — same as panel
-const _TAB_COLOR_HOVER := Color("#3e2b3c")  # color_surface2 — hover highlight
-const _TAB_COLOR_PRESSED := Color("#1a121a")  # color_background — pressed depression
-const _TAB_BORDER_COLOR := Color("#50374d")  # color_surface3 — subtle border
+# -- Glass -------------------------------------------------------------------
+# The panel and its handle are glass (UI_TASTE.md C8: play continues under a drawer). Their
+# colours are read from the roles of the glass theme the drawer's host root carries:
+# SURFACE for the panel and the handle at rest, SURFACE_HOVER and SURFACE_PRESS for the
+# handle, and EDGE for the handle's top rim.
 
 # -- Icon tab padding -------------------------------------------------------
 # Standard insets for icon-mode tabs so all icon tabs look consistent.
@@ -139,6 +136,7 @@ func _ready() -> void:
 
 	# The handle depends on rail_items, so it is built after _on_ready().
 	_build_tab()
+	_apply_panel_style()
 
 	# Re-apply panel size, tab style, sled layout, and positions AFTER
 	# _on_ready(), because the subclass may have changed drawer_width,
@@ -328,7 +326,6 @@ func _build_ui() -> void:
 	_panel = PanelContainer.new()
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_panel.size = Vector2(drawer_width, size.y)
-	_apply_panel_style()
 	_sled.add_child(_panel)
 
 	var margin := MarginContainer.new()
@@ -455,19 +452,22 @@ func _build_rail() -> void:
 
 func _apply_panel_style() -> void:
 	# Square-cornered panel — no rounded corners so the 3D scene behind
-	# the drawer never peeks through at the edges.
+	# the drawer never peeks through at the edges. No shadow: a closed panel
+	# rests just off-screen, where a shadow would smudge the screen edge.
 	var style := StyleBoxFlat.new()
-	style.bg_color = _PANEL_COLOR
+	style.bg_color = ThemeColors.of(self, ThemeColors.SURFACE)
 	_panel.add_theme_stylebox_override("panel", style)
 
 
 func _apply_tab_style() -> void:
-	# The tab matches the panel colour and has rounded corners on the side
-	# facing away from the panel. No border — keeps it clean and cohesive.
+	# The tab is the panel's glass, with rounded corners on the side facing
+	# away from the panel and the glass top rim. Hover and press only deepen.
 	var corner_r := 6
 
 	var style_normal := StyleBoxFlat.new()
-	style_normal.bg_color = _TAB_COLOR_NORMAL
+	style_normal.bg_color = ThemeColors.of(self, ThemeColors.SURFACE)
+	style_normal.border_color = ThemeColors.of(self, ThemeColors.EDGE)
+	style_normal.border_width_top = 1
 	if edge == DrawerEdge.LEFT:
 		style_normal.corner_radius_top_right = corner_r
 		style_normal.corner_radius_bottom_right = corner_r
@@ -480,10 +480,10 @@ func _apply_tab_style() -> void:
 	style_normal.content_margin_bottom = 12
 
 	var style_hover := style_normal.duplicate()
-	style_hover.bg_color = _TAB_COLOR_HOVER
+	style_hover.bg_color = ThemeColors.of(self, ThemeColors.SURFACE_HOVER)
 
 	var style_pressed := style_normal.duplicate()
-	style_pressed.bg_color = _TAB_COLOR_PRESSED
+	style_pressed.bg_color = ThemeColors.of(self, ThemeColors.SURFACE_PRESS)
 
 	# Badge position depends on tab_width, which a subclass may change in
 	# _on_ready(). This runs again afterwards, so it lands on the final width.

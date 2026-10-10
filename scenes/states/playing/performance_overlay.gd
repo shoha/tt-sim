@@ -355,7 +355,7 @@ func _write_log_row() -> void:
 
 
 func _create_overlay(overlay_parent: GameMap) -> void:
-	var result: Dictionary = MapOverlayUtils.create_label_panel(13, Color(0.8, 1.0, 0.8))
+	var result: Dictionary = MapOverlayUtils.create_label_panel()
 	_panel = result.panel
 	_label = result.label
 	overlay_parent.get_perf_overlay_container().add_child(_panel)

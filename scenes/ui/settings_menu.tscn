@@ -4,6 +4,7 @@
 [ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
 [ext_resource type="Script" path="res://scenes/ui/primitives/icon_rail.gd" id="icon_rail"]
 [ext_resource type="Script" path="res://scenes/ui/primitives/foldout.gd" id="foldout"]
+[ext_resource type="Script" path="res://scenes/ui/primitives/scrim.gd" id="scrim"]
 
 [node name="SettingsMenu" type="CanvasLayer"]
 layer = 95
@@ -16,7 +17,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.6)
+script = ExtResource("scrim")
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 anchors_preset = 15

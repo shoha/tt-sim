@@ -56,6 +56,8 @@ func _ready() -> void:
 	_refresh_actions()
 	_play_entrance_animation()
 	LevelManager.level_saved.connect(_on_level_saved)
+	get_tree().node_added.connect(_on_node_added_or_removed)
+	get_tree().node_removed.connect(_on_node_added_or_removed)
 
 
 func _exit_tree() -> void:
@@ -180,6 +182,21 @@ func _play_entrance_animation() -> void:
 
 func _on_selection_changed(_info: Dictionary) -> void:
 	_refresh_actions()
+
+
+## One persimmon fill per screen (C5): while a sheet's scrim covers the title, the sheet's
+## own primary (Apply, Create) is the fill, so Host steps down to the quiet secondary and
+## takes its fill back when the last sheet closes. Deferred: a node is still in its groups
+## while node_removed is emitted.
+func _on_node_added_or_removed(node: Node) -> void:
+	if node is Scrim:
+		_refresh_host_fill.call_deferred()
+
+
+func _refresh_host_fill() -> void:
+	if not is_inside_tree() or host_button == null:
+		return
+	host_button.theme_type_variation = &"Secondary" if Scrim.any_shown(get_tree()) else &"Primary"
 
 
 ## A level saved from the Level Editor overlay (not through the title) must

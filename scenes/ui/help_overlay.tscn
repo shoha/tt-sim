@@ -1,6 +1,7 @@
 [gd_scene load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://scenes/ui/help_overlay.gd" id="1"]
+[ext_resource type="Script" path="res://scenes/ui/primitives/scrim.gd" id="scrim"]
 
 [node name="HelpOverlay" type="CanvasLayer"]
 layer = 95
@@ -12,7 +13,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.6)
+script = ExtResource("scrim")
 mouse_filter = 0
 
 [node name="CenterContainer" type="CenterContainer" parent="."]

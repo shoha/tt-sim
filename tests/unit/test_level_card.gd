@@ -55,8 +55,10 @@ func test_setup_fills_name_caption_and_placeholder() -> void:
 	var card := _card(_info())
 	assert_eq(card._name.text, "Sandy Clearing")
 	assert_true(card._caption.text.begins_with("2 tokens"))
-	assert_not_null(card._thumb.texture, "placeholder painted when no thumbnail")
-	assert_same(card._thumb.texture, SwatchTextures.sky_preview("clear_day"))
+	assert_null(card._thumb.texture, "no picture: the well's paper-inset wash shows")
+	var well := card._thumb.get_parent() as Panel
+	assert_eq(well.theme_type_variation, &"CardThumb")
+	assert_eq(card._letter.theme_type_variation, &"CardInitial", "the initial is in Fraunces")
 
 
 func test_placeholder_shows_the_first_letter_and_a_real_thumbnail_hides_it() -> void:
@@ -142,7 +144,11 @@ func test_hover_zooms_the_thumbnail_inside_its_slot_and_never_scales_the_card() 
 	assert_almost_eq(card._thumb.scale.x, 1.04, 0.001)
 	assert_eq(card.scale, Vector2.ONE)
 	assert_false(card.offset_transform_enabled)
-	assert_true(card._thumb.get_parent().clip_contents)
+	assert_eq(
+		card._thumb.get_parent().clip_children,
+		CanvasItem.CLIP_CHILDREN_AND_DRAW,
+		"the zoom stays inside the well's rounded shape"
+	)
 	assert_almost_eq(card._thumb.pivot_offset.x, card._thumb.size.x * 0.5, 0.5)
 	card._on_hover(false)
 	await wait_seconds(Constants.ANIM_HOVER_SOFT_OUT + 0.05)
