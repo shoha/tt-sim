@@ -438,21 +438,27 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (the input hint bar). `probes/ui_primitives.gd report` logs the underline against the
   selected item's centre, the chevron's rect against its title and the hint bar's rect
   against the window. The job deletes `_u1_ui_hud` at the end (`cleanup`).
-- `jobs/ui_tour.json`: the UI tour (about 130 s at half size, 140 s with `--full`), the
+- `jobs/ui_tour.json`: the UI tour (about 145 s at half size, 160 s with `--full`), the
   capture set the `tt-sim-ui-critic` agent judges (`docs/UI_TASTE.md`). It saves a new
   100 ft temperate forest map as `_ui_tour_room` (shown as Mossy Hollow), then at 1280x720
   and 1920x1080 window sizes (`ui_primitives.gd window`; capture names start with the size):
   the title, keyboard focus on a quiet paper button and on the selected level card, Settings
-  on each of its six sections, the new-map dialog, the host lobby (shown without hosting,
-  with a sample room code and three sample players), the join screen, authoring with the
-  tool drawer on Biome and focus on its picked tile (the probe lets a drawer tile take
-  focus), then in play the Visuals drawer on Sun, focus on a quiet glass button, the pause
-  menu, the Remove token danger confirmation, one toast of each kind, the Add Token browser
-  and the avatar builder, and at dusk (19:00 through the Sun pane) the Visuals drawer, the
-  browser and the pause menu again. Last, one probe capture of the title at 1720x720
-  (ultrawide). 49 captures and `INDEX.md`; the level is deleted at the end. Half size makes
-  the 720p captures 640x360, smaller than any player sees: judge 720p legibility on a
-  `--full` run.
+  on each of its six sections, the new-map dialog, then the session screens, staged by
+  `probes/ui_room.gd` with no network (nothing is hosted or joined): the "Opening a
+  room..." wait over the title (`opening_room`), the host's room as it opens after Host with
+  Mossy Hollow to set out (`room_host`) and after Return everyone to the room with no map yet
+  (`room_host_returned`), each with a sample room code and three sample players, the join
+  screen as the title's Join Game opens it (`join`, Root's real entry point), and a client's
+  room, the waiting view with sample players (`room_client`); then authoring with the tool
+  drawer on Biome and focus on its picked tile (the probe lets a drawer tile take focus),
+  then in play the Visuals drawer on Sun, focus on a quiet glass button, the pause menu, the
+  pause menu as the host sees it (`pause_host`: the host-only Return everyone to the room row,
+  shown on a solo pause) and the confirmation that row asks (`return_room_confirm`), the
+  Remove token danger confirmation, one toast of each kind, the Add Token browser and the
+  avatar builder, and at dusk (19:00 through the Sun pane) the Visuals drawer, the browser and
+  the pause menu again. Last, one probe capture of the title at 1720x720 (ultrawide). 59
+  captures and `INDEX.md`; the level is deleted at the end. Half size makes the 720p captures
+  640x360, smaller than any player sees: judge 720p legibility on a `--full` run.
 - `jobs/import_thumb.json`: the map library's import (the level core card, about 35 s, no
   map open): `probes/import_thumb.gd check` logs `GlbCheck` on terrain-paint's
   `deciduous_clusters`, `sandyclearing` and `terrain` exports and the built-in Oak's Lab
