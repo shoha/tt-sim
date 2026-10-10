@@ -21,6 +21,8 @@
 		"res://tests/unit/test_icon_button.gd",
 		"res://tests/unit/test_icon_rail.gd",
 		"res://tests/unit/test_input_hints.gd",
+		"res://tests/unit/test_interface_size.gd",
+		"res://tests/unit/test_interface_size_fit.gd",
 		"res://tests/unit/test_level_card.gd",
 		"res://tests/unit/test_level_edit_panel_dirty.gd",
 		"res://tests/unit/test_level_edit_panel_overrides.gd",

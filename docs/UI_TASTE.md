@@ -50,7 +50,8 @@ sizes per file against `tests/ui_bypass_baseline.json`, and a count may only fal
   15 / 14 (body, label, caption). Adjacent roles differ by 2 px or a weight step; body 16 and
   label 15 are 1 px apart, so label differs by weight.
 - **T2** Caption 14 is the floor. A `font_size` under 14 is a finding; Interface size Auto
-  (`content_scale_factor`) keeps the floor at 13 physical px or more at 720p.
+  (`content_scale_factor`, THEME_GUIDE "Interface Size") keeps it at 13 physical px or more on
+  every window 669 px tall and up (1.40 at 720p).
 - **T3** Fraunces only where only it can serve: the wordmark, titles, headings and the Play
   together question. Never in rows or buttons.
 - **T4** The default `Label` is body 16.
@@ -73,7 +74,8 @@ sizes per file against `tests/ui_bypass_baseline.json`, and a count may only fal
 - **S5** Width tokens (sheets 420 / 600 / 960, drawer 396) and a max content width; nothing
   stretched to the window, no full-width form fields. One declared wide token, 1280, for the
   avatar builder's three columns (rail, panes, preview). Pause and confirms are 420, Settings
-  and the new-map dialog 600; a card grid adds columns rather than stretch a card past 400.
+  and the new-map dialog 600 (the new-map dialog takes 960 on a canvas under 880 px, so its
+  fields stay in view at 720p); a card grid adds columns rather than stretch a card past 400.
 - **S6** Targets about 44: rows 44, controls and footer buttons 40.
 
 ## Motion

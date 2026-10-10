@@ -12,9 +12,11 @@ extends RefCounted
 ## - `report`: the open Settings menu's rail underline against its selected item's
 ##   centre and the visible Foldout's chevron rect against its title; the input
 ##   hint bar's rect against the window and its chip keys.
-## - `window` (`size` [w, h] or "WxH", `content_scale` default 1.0): resize the game window
-##   (run.gd forces 1920x1080 at start) and set its content_scale_factor, the knob an
-##   Interface size setting would turn. Logs the size the window actually took.
+## - `window` (`size` [w, h] or "WxH", `content_scale` optional): resize the game window
+##   (run.gd forces 1920x1080 at start) and set the Interface size for the run, unsaved:
+##   Auto (1.40 at 720p, 1.0 at 1080p) whatever the player saved, or with `content_scale`
+##   the fixed size it names (1.5 is 150%; a value off InterfaceSize.CHOICES falls back to
+##   Auto). Logs the size the window took, the content scale and the virtual canvas.
 ## - `drawer` (`which` "authoring" or "visuals", `pane`, `open` default true): open a rail
 ##   drawer on a pane as a rail click does (the authoring tool drawer, or the play Visuals
 ##   drawer), or close it.
@@ -180,7 +182,12 @@ static func _window(base: Node, step: Dictionary) -> String:
 		return "bad size %s" % str(step.get("size"))
 	var window := base.get_window()
 	window.size = size
-	window.content_scale_factor = float(step.get("content_scale", 1.0))
+	# This run's Interface size, never saved: Auto, or the fixed percent `content_scale` names.
+	var choice := InterfaceSize.AUTO
+	if step.has("content_scale"):
+		choice = roundi(float(step.get("content_scale")) * 100.0)
+	UIManager.set("_interface_size", InterfaceSize.sanitize(choice))
+	UIManager.apply_interface_size()
 	return (
 		"window asked %s, took %s, content scale %.2f, canvas %s"
 		% [

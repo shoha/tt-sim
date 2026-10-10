@@ -134,6 +134,17 @@ func _ready() -> void:
 	_camera_controller.name = "CameraController"
 	add_child(_camera_controller)
 	_camera_controller.setup(self)
+	# The Interface size changes the window's content scale, which also fires size_changed.
+	get_window().size_changed.connect(_match_world_render)
+	_match_world_render()
+
+
+## Keep the board's 3D render at its Interface size 100% resolution. The world viewport fills a
+## canvas that shrinks by content_scale_factor, so its 3D render scales back up by the same
+## factor (bilinear supersampling, as the 100% canvas already does on windows under 1080p):
+## the render size, and pixel-sized details such as grid line widths, stay as they were.
+func _match_world_render() -> void:
+	world_viewport.scaling_3d_scale = InterfaceSize.world_render_scale(get_window())
 
 
 ## Setup with a reference to the level play controller

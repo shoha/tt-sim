@@ -10,6 +10,8 @@ extends Node
 ## - Toast notifications
 ## - Scene transitions
 ## - Input hints
+## - Interface size (InterfaceSize): the root window's content_scale_factor, applied at
+##   startup and on every window resize
 
 ## Local mirrors of Root.State (scenes/root.gd), kept as plain ints rather than
 ## a preloaded reference to Root's script. Root's script eagerly preloads all
@@ -48,6 +50,9 @@ var _download_queue: Node = null
 var _help_overlay: Node = null
 var _help_closing: bool = false
 
+## The player's Interface size: InterfaceSize.AUTO or a fixed percent (UiPreferences).
+var _interface_size: int = InterfaceSize.AUTO
+
 
 func _ready() -> void:
 	# Process input even when game is paused (for ESC to unpause)
@@ -55,6 +60,10 @@ func _ready() -> void:
 
 	# Listen for state changes via the EventBus (no Root import needed)
 	EventBus.state_changed.connect(_on_state_changed)
+
+	_interface_size = UiPreferences.load_interface_size()
+	get_tree().root.size_changed.connect(apply_interface_size)
+	apply_interface_size()
 
 	call_deferred("_setup_ui_components")
 
@@ -292,6 +301,30 @@ func add_hint(key: String, action: String) -> void:
 func remove_hint(key: String) -> void:
 	if _input_hints:
 		_input_hints.remove_hint(key)
+
+
+# --- Interface Size ---
+
+
+## The player's Interface size choice: InterfaceSize.AUTO or a percent from 90 to 150.
+func get_interface_size() -> int:
+	return _interface_size
+
+
+## Save an Interface size choice and apply it at once (Settings > Graphics).
+func set_interface_size(choice: int) -> void:
+	_interface_size = InterfaceSize.sanitize(choice)
+	UiPreferences.save_interface_size(_interface_size)
+	apply_interface_size()
+
+
+## Scale the Control layer for the choice on the window's current size. Runs at startup and
+## on every resize, since Auto follows the window. A headless run (GUT, the compile check)
+## keeps 1.0: it has no real window, and tests lay out on the 1920x1080 canvas.
+func apply_interface_size() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	InterfaceSize.apply(get_tree().root, _interface_size)
 
 
 # --- Settings Menu ---

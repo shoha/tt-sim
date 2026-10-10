@@ -18,6 +18,11 @@ const SettingsMenuScene := preload("res://scenes/ui/settings_menu.tscn")
 const ENTRANCE_STAGGER := Constants.ANIM_ENTRANCE_STAGGER
 const ENTRANCE_DURATION := Constants.ANIM_ENTRANCE
 const EMPTY_CAPTION := "Build a map, or make a level in the Level Editor"
+## A canvas shorter than this (720p at Interface size Auto, or 140% and up at 1080p) closes
+## the left column's gaps from BoxContainerSpaced (12) to BoxContainerTight (4): its six
+## 40 px buttons then stand on a 44 px pitch, and the column needs 546 px instead of 666, so
+## the hub fits the 720 px canvas of 150% (docs/THEME_GUIDE.md, Interface size).
+const COMPACT_BELOW_PX := 800.0
 
 ## Returns the level info list; tests inject a fake before the node enters the tree.
 var level_provider: Callable = LevelManager.get_saved_levels
@@ -55,6 +60,8 @@ func _ready() -> void:
 	_preselect_most_recent()
 	_refresh_actions()
 	_play_entrance_animation()
+	get_viewport().size_changed.connect(_fit_to_canvas)
+	_fit_to_canvas()
 	LevelManager.level_saved.connect(_on_level_saved)
 	get_tree().node_added.connect(_on_node_added_or_removed)
 	get_tree().node_removed.connect(_on_node_added_or_removed)
@@ -67,6 +74,12 @@ func _exit_tree() -> void:
 
 func selected_level() -> Dictionary:
 	return grid.selected_info()
+
+
+## The left column's gaps for the canvas height: spaced, or tight under COMPACT_BELOW_PX.
+func _fit_to_canvas() -> void:
+	var short := get_viewport().get_visible_rect().size.y < COMPACT_BELOW_PX
+	_left.theme_type_variation = &"BoxContainerTight" if short else &"BoxContainerSpaced"
 
 
 func _build_left_column() -> void:

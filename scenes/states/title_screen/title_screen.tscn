@@ -256,7 +256,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 12
+theme_type_variation = &"BoxContainerSpaced"
 
 [node name="RightZone" type="VBoxContainer" parent="Hub/Columns"]
 unique_name_in_owner = true

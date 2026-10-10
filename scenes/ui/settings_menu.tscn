@@ -181,6 +181,20 @@ text = "Fullscreen"
 unique_name_in_owner = true
 layout_mode = 2
 
+[node name="InterfaceSize" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/InterfaceSize"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Interface Size"
+
+[node name="InterfaceSizeOption" type="OptionButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/InterfaceSize"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
 [node name="VSync" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2
 

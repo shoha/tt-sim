@@ -11,6 +11,10 @@ static func apply(menu: SettingsMenu) -> void:
 	menu.sfx_slider.tooltip_text = "Sound effects for token interactions"
 	menu.ui_slider.tooltip_text = "UI sounds (clicks, hover, panel open/close)"
 	menu.fullscreen_check.tooltip_text = "Toggle fullscreen mode (F11)"
+	menu.interface_size_option.tooltip_text = (
+		"How large menus and text draw. Auto enlarges them on small windows so text stays "
+		+ "readable; the board is not scaled. Applies at once."
+	)
 	menu.vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
 	menu.lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
 	menu.occlusion_fade_check.tooltip_text = "Fade map geometry that hides tokens from view"
