@@ -278,6 +278,24 @@ func unshelve(key: String) -> bool:
 	return true
 
 
+## Host: lay a resumed session over the one hosting has just begun (SessionKeeper, Resume):
+## the shelf `shelf` (MapRefs, in order), every player of `players` (session id -> {"name"})
+## but those here now as away (peer 0) until they rejoin, and `selected` when it is on the
+## shelf. Publishes once.
+func restore(shelf: Array, players: Dictionary, selected: String) -> void:
+	if not NetworkManager.is_host():
+		return
+	for ref: Variant in shelf:
+		if ref is Dictionary and ref_key(ref) != "" and not _shelf_keys().has(ref_key(ref)):
+			_shelf.append((ref as Dictionary).duplicate(true))
+	for id: Variant in players:
+		var entry: Variant = players[id]
+		if id is String and id != "" and not _players.has(id) and entry is Dictionary:
+			_add_player(id, _clip(entry.get("name", "")), 0)
+	_selected = selected if _shelf_keys().has(selected) else ""
+	_publish()
+
+
 ## Host: the level folders whose map files the host serves (the whitelist AssetStreamer
 ## checks every level map request against): the map on the table and every shelf map.
 func servable_folders() -> Array:

@@ -4,9 +4,9 @@ class_name Paths
 ## Accessible everywhere via the class_name (no autoload needed).
 ##
 ## Every per-user store (levels, settings, the asset cache and its index, user asset packs,
-## avatars, ...) lives under one data root: "user://" in the shipped game. A process started
-## with the user argument `--data-root=<name>` (after `--`) puts all of them under the
-## disposable test root user://_test_roots/<name>/ instead, so the local multi-process
+## avatars, saved sessions, ...) lives under one data root: "user://" in the shipped game. A
+## process started with the user argument `--data-root=<name>` (after `--`) puts all of them
+## under the disposable test root user://_test_roots/<name>/ instead, so the local multi-process
 ## scenarios in tests/net/ give each peer its own data and never read, evict or overwrite
 ## the real user's. Nothing in the shipped game passes it. Not moved: Godot's own log (the
 ## scenarios pass the engine's --log-file instead), and two files only an interactive
@@ -81,6 +81,8 @@ static var USER_ASSETS_DIR: String = ""
 static var AVATARS_DIR: String = ""
 ## Downloaded game updates (UpdateManager).
 static var UPDATES_DIR: String = ""
+## Saved hosted sessions, one folder each (SessionFile, SessionKeeper: Resume).
+static var SESSIONS_DIR: String = ""
 # gdlint: enable=class-variable-name
 
 
@@ -113,6 +115,7 @@ static func use_data_root(root: String) -> void:
 	USER_ASSETS_DIR = stores.USER_ASSETS_DIR
 	AVATARS_DIR = stores.AVATARS_DIR
 	UPDATES_DIR = stores.UPDATES_DIR
+	SESSIONS_DIR = stores.SESSIONS_DIR
 
 
 ## Every per-user store's path under the data root `root`, keyed by the name of its static
@@ -129,6 +132,7 @@ static func store_paths(root: String) -> Dictionary:
 		"USER_ASSETS_DIR": root + "user_assets/",
 		"AVATARS_DIR": root + "avatars/",
 		"UPDATES_DIR": root + "updates/",
+		"SESSIONS_DIR": root + "sessions/",
 	}
 
 

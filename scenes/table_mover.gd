@@ -6,7 +6,9 @@ extends Node
 ## "The model" and "The flow" 4). A map is a template: nothing a session does changes its level
 ## folder unless the GM picks Save into map. What the session did to a map (its tokens, its
 ## look, live terrain edits) stays with the session in `states` (TableStates) and comes back
-## when the map is set out again, from the room (set_out()) or by moving the table.
+## when the map is set out again, from the room (set_out()) or by moving the table. The
+## session file (SessionKeeper) keeps `states` and the table as it stands (table_entry()), so a
+## resumed session has them again.
 ##
 ## A move asks nothing (request_move(), host at a table): the table is kept as it is, and every
 ## peer sees the notice (TableMoveNotice, sent through SessionChannel.announce_move()) count
@@ -74,6 +76,8 @@ const RECOVER_MISSING := "Your changes are still kept for this session."
 
 ## What the session keeps of each map it set out (host).
 var states := TableStates.new()
+## The session file of the hosted session, and Resume (a child, set up after this mover).
+var keeper: SessionKeeper = null
 
 var _controller: LevelPlayController = null
 ## The level _arrive() prepared, until it has loaded, with what its template had.
@@ -100,6 +104,20 @@ func setup(controller: LevelPlayController) -> void:
 	NetworkManager.session.table_moving.connect(_on_table_moving)
 	NetworkManager.session.table_move_cancelled.connect(_drop_notice)
 	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
+	# After this mover's handler, which forgets every kept state when hosting starts; the
+	# keeper's then restores a resumed session's.
+	keeper = SessionKeeper.new()
+	keeper.name = "SessionKeeper"
+	add_child(keeper)
+	keeper.setup(self)
+
+
+## Root leaves the table (PLAYING): the session file keeps it as it stands first (the host
+## ending the session here; a move has kept it already), and a move counting down goes with it.
+func table_closing() -> void:
+	if keeper:
+		keeper.save_now(true)
+	cancel()
 
 
 ## A room panel (the room's or the drawer's, Root's) shows the changed maps: it reads them
@@ -160,6 +178,34 @@ func changed_maps() -> Dictionary:
 func can_save(key: String) -> bool:
 	var folder := _shelf_folder(key)
 	return folder != "" and FileAccess.file_exists(LevelManager.json_path(folder))
+
+
+## The table's state as it stands, for the session file (SessionKeeper): null when there is no
+## table to read (none out, or one loading), {} when it is as its map, else capture()'s entry
+## with the ops since its map was last saved and, when the terrain changed on a map with a
+## level folder, the edited document if the editor has settled (none this time otherwise).
+## With `settle` (the session ends at this table) the recorded entries become ops first.
+func table_entry(settle := false) -> Variant:
+	var key := NetworkManager.session.get_table()
+	var level: LevelData = _controller.active_level_data if _controller else null
+	if key == "" or level == null or _controller.is_loading():
+		return null
+	var edits := _controller.live_edits
+	var gm_edits := is_instance_valid(edits) and edits.sends
+	if gm_edits and settle:
+		edits.send_now()
+	var changed := changes(false)
+	if not changed.values().has(true):
+		return {}
+	var ops: Array[PackedByteArray] = []
+	if gm_edits:
+		ops.assign(edits.op_log.slice(_terrain_base))
+	var entry := TableStates.capture(level, _controller.spawned_tokens, ops)
+	if changed.terrain and gm_edits and can_save(key) and edits.is_settled():
+		var scatter := edits.editor.scatter
+		if not (is_instance_valid(scatter) and scatter.is_regenerating()):
+			entry["document"] = document_of(edits.editor)
+	return entry
 
 
 ## True while a move counts down.
