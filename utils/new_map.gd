@@ -56,6 +56,19 @@ const COVER_FEATURE_GROWTH := 0.5
 const CLEARING_INNER := 0.55
 const CLEARING_OPEN_SHARE := 0.5
 const CLEARING_WARP := 0.25
+## The cover's feather at the map edge (2026-10-09; play shows the whole map, and a
+## grassland's tall grass stopped dead along it in a straight line): the cover thins to none
+## over EDGE_FEATHER_SHARE of the shorter half extent inside the edge (within
+## EDGE_FEATHER_MIN_M..EDGE_FEATHER_MAX_M), the band's depth pushed in and out by
+## EDGE_FEATHER_WOBBLE by the cover noise read at twice its feature size (EDGE_WOBBLE_OFFSET
+## away), so the scatter ends in a ragged fringe that runs out onto the skirt's bare ground.
+## Trees answer the density late (ScatterPlan.DENSITY_RESPONSE), so the groves keep their
+## edge and the ground cover thins first.
+const EDGE_FEATHER_SHARE := 0.1
+const EDGE_FEATHER_MIN_M := 2.0
+const EDGE_FEATHER_MAX_M := 6.0
+const EDGE_FEATHER_WOBBLE := 0.6
+const EDGE_WOBBLE_OFFSET := Vector2(911.0, -517.0)
 
 
 static func cells_for_feet(feet: int) -> int:
@@ -89,9 +102,10 @@ static func is_big(width_ft: int, depth_ft: int = 0) -> bool:
 ## the starting cover is painted into its masks; with BARE_BIOME (or a biome the palette
 ## lacks) it is BARE_SURFACE and unpainted. With a `landform` other than
 ## StartingLandform.FLAT the recipe shapes the document first (heights, carved water, a
-## crossing, from the seed) and the glade is centred on its stage. The scatter rows are left
-## empty: they are generated from the masks once the map is shown. A size size_error()
-## refuses gives null, with the error pushed.
+## crossing, from the seed) and the glade is centred on its stage. A big or long map's thin
+## cover is then greened (LandformPlacement.paint_sparse). The scatter rows are left empty:
+## they are generated from the masks once the map is shown. A size size_error() refuses gives
+## null, with the error pushed.
 static func create(
 	size_ft: int,
 	biome_id: String,
@@ -121,6 +135,7 @@ static func create(
 		clearings = shaped.get("clearings", [])
 	if not biome.is_empty():
 		paint_starting_cover(doc, biome_id, stage, glade, clearings)
+		LandformPlacement.paint_sparse(doc, biome_id, root)
 	return doc
 
 
@@ -159,7 +174,7 @@ static func opening_status(spec: Dictionary) -> String:
 ## or long map's meadows and tarn shores, LandformGrowth) open more ground
 ## (clearing_density). On a map with room (LandformGrowth.room) the copses and clearings of
 ## the cover noise grow by up to COVER_FEATURE_GROWTH, so a big map's forest keeps a few bold
-## shapes instead of finer noise.
+## shapes instead of finer noise. Every map's cover feathers out at its edge (edge_feather).
 static func paint_starting_cover(
 	doc: MapDocument,
 	biome_id: String,
@@ -176,6 +191,8 @@ static func paint_starting_cover(
 		doc.map_seed, COVER_FEATURE_M * (1.0 + COVER_FEATURE_GROWTH * LandformGrowth.room(doc))
 	)
 	var half := doc.extent_m() * 0.5
+	var feather := edge_feather_m(half)
+	var feather_reach := feather * (1.0 + EDGE_FEATHER_WOBBLE)
 	var line: PackedVector2Array = glade.get("line", PackedVector2Array())
 	for z in doc.samples_z():
 		for x in doc.samples_x():
@@ -188,6 +205,10 @@ static func paint_starting_cover(
 			)
 			if not clearings.is_empty():
 				value = clearing_density(world, clearings, value, noise_value)
+			if minf(half.x - absf(world.x), half.y - absf(world.y)) < feather_reach:
+				var at := world * 0.5 + EDGE_WOBBLE_OFFSET
+				value *= edge_feather(world, half, feather, noise.get_noise_2d(at.x, at.y))
+				value = value if value >= COVER_MIN_DENSITY else 0.0
 			var byte := roundi(value * 255.0)
 			var index := doc.sample_index(x, z)
 			density[index] = byte
@@ -268,6 +289,21 @@ static func clearing_density(
 		)
 		value = minf(value, open)
 	return value if value >= COVER_MIN_DENSITY else 0.0
+
+
+## The share of the cover kept at map point `world` on a map of half extent `half` (see
+## EDGE_FEATHER_SHARE): all of it from `width` inside the edge, that depth stretched by
+## EDGE_FEATHER_WOBBLE times `wobble` (-1..1), easing to none at the edge. Pure.
+static func edge_feather(world: Vector2, half: Vector2, width: float, wobble: float) -> float:
+	var inside := minf(half.x - absf(world.x), half.y - absf(world.y))
+	return smoothstep(0.0, width * (1.0 + EDGE_FEATHER_WOBBLE * wobble), inside)
+
+
+## The depth (metres) of the cover's edge feather on a map of half extent `half`.
+static func edge_feather_m(half: Vector2) -> float:
+	return clampf(
+		minf(half.x, half.y) * EDGE_FEATHER_SHARE, EDGE_FEATHER_MIN_M, EDGE_FEATHER_MAX_M
+	)
 
 
 ## The cover density for `edge` (0 the glade, 1 the groves) and the noise there.
