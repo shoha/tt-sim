@@ -209,3 +209,7 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
 - **2026-10-09** Terrain events wanted during play: bridge collapse, forest falls, fire, and
   biome and terrain changes through the existing brush tools. (The UI rules for them are G13,
   M7 and I4.)
+- **2026-10-10** The Play together card's blurred seam is disliked ("blurry down the middle").
+  Keep one pill with the two colours, but the seam between Host and Join is a crisp
+  hand-painted edge with a thin paper line: no soft bleed, no blur. The washes may keep a
+  gentle tone inside each half. Soft blur on a control edge reads as out of focus, not painted.
