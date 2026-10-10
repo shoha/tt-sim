@@ -173,8 +173,9 @@ func _on_connection_state_changed(
 ## Hidden tokens are semi-transparent for GM, invisible for players.
 func _update_all_token_state() -> void:
 	var is_gm = NetworkManager.has_gm_access()
-	var mp := _get_multiplayer_api()
-	var my_peer_id = mp.get_unique_id() if mp.multiplayer_peer else 0
+	# The state change to OFFLINE comes with the transport already closed when the host
+	# ended the session; NetPeers does not touch a closed peer.
+	var my_peer_id := NetPeers.local_id(_get_multiplayer_api())
 
 	var tokens := _token_spawner.get_spawned_tokens()
 	for placement_id in tokens:
@@ -243,8 +244,7 @@ func _on_permissions_changed(network_id: String, _peer_id: int) -> void:
 
 	# Update interactivity for the specific token
 	var is_gm = NetworkManager.has_gm_access()
-	var mp := _get_multiplayer_api()
-	var my_peer_id = mp.get_unique_id() if mp.multiplayer_peer else 0
+	var my_peer_id := NetPeers.local_id(_get_multiplayer_api())
 
 	var token = _token_spawner._find_token_by_network_id(network_id)
 	if token:
@@ -394,7 +394,7 @@ func _on_drag_lock_released(network_id: String) -> void:
 ## Called when permissions change on the client side.
 func _update_client_transform_wiring() -> void:
 	var mp := _get_multiplayer_api()
-	if not mp.multiplayer_peer:
+	if not NetPeers.is_live(mp):
 		return
 	var my_peer_id = mp.get_unique_id()
 

@@ -389,7 +389,7 @@ func set_drag_lock(locker_peer_id: int) -> void:
 	_drag_locked_by = locker_peer_id
 	if not _dragging_object:
 		return
-	var my_peer = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 1
+	var my_peer := NetPeers.local_id(multiplayer, 1)
 	if locker_peer_id != my_peer:
 		_dragging_object.dragging_allowed = false
 

@@ -28,7 +28,12 @@ extends Node
 ## scenario timeout are killed, and all of them at once when a peer has not opened its scenario
 ## log STARTUP_S after the start. Every test root of the run, the launcher's own included, is
 ## deleted at the end, pass or fail.
+##
+## Every engine log of the run is read for the errors a peer's teardown used to log (a send to
+## a closed peer from script, a closed peer asked for its id; net_log_check.gd), and one fails
+## the run although every peer passed; `teardown_errors` lists the logs that have any.
 
+const LogCheck := preload("res://tests/net/net_log_check.gd")
 const SCENARIO_DIR := "res://tests/net/"
 const RUNS_DIR := "res://.godot/net_runs/"
 const DEFAULT_PEERS := 2
@@ -124,7 +129,8 @@ func _run() -> bool:
 	# A peer that failed to start fails the run; the others are stopped at once.
 	await _wait_for(peers, timeout_s + GRACE_S if started else 0.0)
 	var ok := _collect(peers) and started
-	var changes := compare_snapshots(before, _snapshot_stores(), never_written_paths())
+	ok = _check_logs(logs) and ok
+	var changes :=compare_snapshots(before, _snapshot_stores(), never_written_paths())
 	var failed := failed_changes(changes)
 	_report["shipped_files_changed"] = failed
 	var added: Array = changes.added
@@ -214,6 +220,25 @@ func _collect(peers: Array[Dictionary]) -> bool:
 		ok = ok and exit_code == 0 and bool(result.get("pass", false))
 		ok = ok and not peer.get("killed", false)
 	_report["peers"] = results
+	return ok
+
+
+## The teardown errors (LogCheck) in every engine log in `logs`, the run's folder, into the
+## report for the logs that have any; false when one of them fails the run.
+func _check_logs(logs: String) -> bool:
+	var ok := true
+	var found := {}
+	for file_name in DirAccess.get_files_at(logs):
+		if not file_name.ends_with(".godot.log"):
+			continue
+		var counts := LogCheck.teardown_errors(FileAccess.get_file_as_string(logs + file_name))
+		if counts.values().any(func(n: int) -> bool: return n > 0):
+			found[file_name] = counts
+			print("net_launcher: %s teardown errors %s" % [file_name, str(counts)])
+		ok = ok and not LogCheck.fails(counts)
+	_report["teardown_errors"] = found
+	if not ok and not _report.has("reason"):
+		_report["reason"] = "teardown errors in the engine logs (see teardown_errors)"
 	return ok
 
 

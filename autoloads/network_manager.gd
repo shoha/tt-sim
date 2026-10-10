@@ -14,6 +14,10 @@ extends Node
 ## locks, live visual settings -- on `game_sync` (NetworkGameSync), and the session -- the
 ## room, the shelf of maps, the table pointer, players by Steam id, and where a joiner
 ## lands -- on `session` (SessionChannel).
+##
+## The host announces a leave (player_left, then the player list) once the multiplayer poll
+## that reported it has drained, every leave of that poll together (_announce_leaves()), so
+## nothing a listener sends reaches a peer that has closed but is not reported gone yet.
 
 ## Signals
 signal connection_state_changed(old_state: ConnectionState, new_state: ConnectionState)
@@ -89,6 +93,10 @@ var _room_code: String = ""
 
 ## Connected players: peer_id -> player_info dictionary
 var _players: Dictionary = {}
+
+## Host: the leaves of the current poll not announced yet, in order, each {"peer_id",
+## "info"} (see _on_peer_disconnected())
+var _leaves: Array[Dictionary] = []
 
 ## Local player info. "version" is what the host checks against its own version
 ## (VersionGate.is_player_info_accepted) when this client's info arrives.
@@ -386,7 +394,9 @@ func disconnect_game() -> void:
 	if _connection_state == ConnectionState.OFFLINE:
 		return
 
-	# Set state to OFFLINE before closing connections to prevent signal cascades
+	# Set state to OFFLINE before closing connections to prevent signal cascades. When the
+	# host ended the session the transport is already closed here, so listeners of this
+	# change ask NetPeers (is_live(), local_id()) rather than the peer itself.
 	_set_connection_state(ConnectionState.OFFLINE)
 
 	# Leave Steam lobby
@@ -425,16 +435,39 @@ func _on_peer_connected(peer_id: int) -> void:
 	_rpc_send_player_info.rpc_id(peer_id, _local_player_info)
 
 
+## A peer left: it is out of get_players() at once. A client announces it here; the host
+## after the poll that reported it (_announce_leaves()). Over ENet a closing peer's channels
+## are freed as soon as its disconnect arrives, before Godot reports the leave, and clients
+## that quit together arrive in one poll, so a send made while that poll is still reporting
+## leaves reaches peers that are already closed ("Unable to send packet on channel 0, max
+## channels: 0"). Sending to multiplayer.get_peers() alone would not help: a peer whose leave
+## is not reported yet is still in it.
 func _on_peer_disconnected(peer_id: int) -> void:
-	if _players.has(peer_id):
-		var player_info: Dictionary = _players[peer_id].duplicate()
-		_players.erase(peer_id)
+	if not _players.has(peer_id):
+		return
+	var player_info: Dictionary = _players[peer_id].duplicate()
+	_players.erase(peer_id)
+	if not is_host():
 		# Emit after erasing so get_players() returns consistent state
 		player_left.emit(peer_id, player_info)
+		return
+	_leaves.append({"peer_id": peer_id, "info": player_info})
+	if _leaves.size() == 1:
+		_announce_leaves.call_deferred()
 
-		# Notify all clients of updated player list
-		if is_host():
-			_rpc_sync_player_list.rpc(_players)
+
+## Host: announce the leaves of the poll that has just drained: player_left for each, in the
+## order they came (whatever its listeners send goes to the peers still connected), then the
+## player list once. Leaves the host went offline before announcing are dropped.
+func _announce_leaves() -> void:
+	var leaves := _leaves
+	_leaves = []
+	if not is_host():
+		return
+	for leave in leaves:
+		player_left.emit(int(leave.peer_id), leave.info)
+	if NetPeers.is_live(multiplayer):
+		_rpc_sync_player_list.rpc(_players)
 
 
 func _on_connected_to_server() -> void:
@@ -719,7 +752,7 @@ func save_player_name(player_name: String) -> void:
 	_local_player_info["name"] = player_name
 
 	# Update local player entry if we're in a game
-	var my_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
+	var my_id := NetPeers.local_id(multiplayer)
 	if my_id > 0 and _players.has(my_id):
 		_players[my_id]["name"] = player_name
 
