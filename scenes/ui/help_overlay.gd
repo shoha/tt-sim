@@ -82,7 +82,12 @@ func _get_shortcut_data() -> Array:
 		["Ctrl (measure)", "Snap to token"],
 		["Right Click / Esc", "Finish measurement"],
 	]
-	tools.append_array(ToolRegistry.help_rows(ToolDescriptor.PLAY))
+	# The GM's live brushes are map-building tools, whose rows are under Map building; a tool
+	# that exists only in play lists its own rows here.
+	tools.append([PlayEvents.HELP_KEYS, PlayEvents.HELP_TEXT])
+	for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
+		if not tool.exists_in(ToolDescriptor.AUTHORING):
+			tools.append_array(tool.help_rows())
 	var building: Array = [
 		[
 			"New map",

@@ -10,19 +10,25 @@ extends "res://tests/net/enet_late_joiner.gd"
 ## LEVEL_FOLDER), so both clients download its map.ttmap through the ordinary map download.
 ##
 ## host: builds and saves the level, opens the session in the room; once client is in the
-##   room, sets the level out. Once client's table has its live edits, runs the GM's ops on
-##   the table's play-side editor one at a time: a sculpt raise, a forest clear, the bridge
-##   removed, a sculpt lower, and an undo (of the lower: the before side of a height op). After
-##   each it waits for its map to settle and writes its MapFingerprint and log length; client
-##   compares. Then it drops Hero onto the raised ground, writes the final fingerprint and the
-##   hero's resting position, and lets client2 join. It finishes when both clients reported.
+##   room, sets the level out. Once client's table has its live edits, it stands Scout on the
+##   flat ground where the raise will go, then runs the GM's ops one at a time, as the GM's
+##   Events pane does: the sculpt raise, the forest clear (Thin with Ctrl) and the sculpt lower
+##   are strokes of GameMap's play brush armed by PlayEvents.pick and driven over the board
+##   (its pointer and press, as the render driver drives authoring's), the bridge removal a
+##   direct editor call, and the undo (of the lower: the before side of a height op) is
+##   PlayEvents.undo, Ctrl+Z's path. After each it waits for its map to settle and its ground
+##   follower (LiveEditGround) to set the tokens down, and writes its MapFingerprint, log
+##   length and Scout's height; client compares. Then it drops Hero onto the raised ground,
+##   writes the final fingerprint and the hero's resting position, and lets client2 join. It
+##   finishes when both clients reported.
 ## client: joins at the start and lands in the room, then at the table; after each op, once
 ##   its live edits hold that many ops and its map has settled, its MapFingerprint must equal
-##   the host's.
+##   the host's, and Scout must stand where the host's does (on the raised ground after the
+##   raise: the host's re-grounding reached it).
 ## client2: joins at the table after every op (a late joiner: the map file is the original,
 ##   the log brings the edits); once its live edits have caught up and its map has settled,
-##   its MapFingerprint must equal the host's final one and Hero must rest on its ground where
-##   the host's does.
+##   its MapFingerprint must equal the host's final one and Hero and Scout must rest on its
+##   ground where the host's do.
 ##
 ## Run: godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn --
 ##   --data-root=net_launcher --scenario=enet_live_edits --peers=3 --timeout-s=300
@@ -44,18 +50,36 @@ const OPS: Array[String] = [
 const STILL_FRAMES := 10
 ## How far Hero may rest off the host's height, and off its own ground (m).
 const GROUND_TOLERANCE_M := 0.05
+## How long the play brush holds each point of a stroke (real time: headless frames are short).
+const HOLD_MS := 900
+## Frames a client waits for Scout to reach the host's height before it reports.
+const SCOUT_FRAMES := 600
+## The ops the play brush strokes: [tool id, Ctrl at the press, points].
+const STROKES := {
+	"sculpt raise":
+	[SculptTool.ID, false, [RAISE_AT, RAISE_AT + Vector3(3, 0, 2), RAISE_AT + Vector3(6, 0, 4)]],
+	"forest clear":
+	[ThinTool.ID, true, [Vector3(-18, 0, -2), Vector3(-10, 0, -3), Vector3(-4, 0, -4)]],
+	"sculpt lower": [SculptTool.ID, true, [LOWER_AT, LOWER_AT + Vector3(3, 0, 1)]],
+}
 
 var _op := 0
 var _still := 0
 var _hero_id := ""
+var _scout_id := ""
+var _scout_frames := 0
 var _building := false
+## The stroke in progress: the points left, Ctrl at the press, and when the current one ends.
+var _stroke: Array = []
+var _stroke_ctrl := false
+var _stroke_until := 0
 
 
 func _set_phase(phase: String) -> void:
 	_phase = phase
 	_log("phase " + phase)
 	if _role == "host":
-		_write_json(_rv + ".host.json", {"phase": phase, "hero": _hero_id})
+		_write_json(_rv + ".host.json", {"phase": phase, "hero": _hero_id, "scout": _scout_id})
 
 
 func _has(role: String, step: String) -> bool:
@@ -92,8 +116,10 @@ func _map_still() -> bool:
 	var edits := _edits()
 	var root := _lpc().loaded_map_instance
 	var water := root.get_node_or_null(AuthoredWater.NODE_NAME) as AuthoredWater
+	var ground := edits.get_node_or_null("LiveEditGround") as LiveEditGround
 	var busy := (
 		not edits.is_settled()
+		or (ground != null and not ground.is_idle())
 		or edits.editor.scatter.is_regenerating()
 		or edits.editor.scatter.is_growing()
 		or edits.editor.props.is_growing()
@@ -105,6 +131,21 @@ func _map_still() -> bool:
 
 func _fingerprint() -> Dictionary:
 	return MapFingerprint.of(_lpc().loaded_map_instance, _lpc().loaded_map_document)
+
+
+## The table's Events pane controller (the GM's live brushes).
+func _events() -> PlayEvents:
+	var menu := _lpc().get_game_map().gameplay_menu.get_node("GameplayMenu")
+	return menu.get("play_events") as PlayEvents
+
+
+## Scout's base height on this peer, or NAN while it is not on the board.
+func _scout_y() -> float:
+	var scout_id := _scout_id
+	if _role != "host":
+		scout_id = str(_read_json(_rv + ".host.json").get("scout", ""))
+	var scout := _lpc().find_token_by_network_id(scout_id) if scout_id != "" else null
+	return scout.rigid_body.global_position.y if scout != null else NAN
 
 
 # =============================================================================
@@ -126,12 +167,21 @@ func _process_host() -> void:
 				_set_phase("table_load")
 		"table_load":
 			if _table_ready() and _map_still() and _has("client", "table"):
-				_run_op()
+				_place_scout()
+		"scout":
+			_host_check_scout()
+		"brushing":
+			_step_stroke()
 		"op":
 			if _map_still():
 				var edits := _edits()
-				_mark("op%d" % _op, {"fingerprint": _fingerprint(), "ops": edits.op_log.size()})
+				_mark(
+					"op%d" % _op,
+					{"fingerprint": _fingerprint(), "ops": edits.op_log.size(), "scout": _scout_y()}
+				)
 				_log("op %d (%s) logged as %d ops" % [_op, OPS[_op], edits.op_log.size()])
+				if OPS[_op] == "sculpt raise":
+					_result["scout_raised_m"] = snappedf(_scout_y(), 0.001)
 				_set_phase("op_wait")
 		"op_wait":
 			if _has("client", "op%d" % _op):
@@ -220,35 +270,85 @@ func _build_level() -> String:
 	return ""
 
 
-## Runs op _op on the table's play-side editor (the GM's brushes, no UI).
+## Stands Scout on the flat ground where the raise goes (a drop from above), before the ops.
+func _place_scout() -> void:
+	var token := _lpc().spawn_avatar({"format": 1}, "Scout", RAISE_AT + Vector3(1, 30, 1), true)
+	if token == null:
+		_finish(false, "the scout did not spawn")
+		return
+	_scout_id = token.network_id
+	_set_phase("scout")
+
+
+## Once Scout rests on the ground, the ops begin.
+func _host_check_scout() -> void:
+	var scout := _lpc().find_token_by_network_id(_scout_id)
+	if scout == null or not scout.visible:
+		return
+	var rest := TokenGrounding.resting_position(scout, TokenGrounding.cast_top(_lpc().get_game_map()))
+	if rest == Vector3.INF or absf(rest.y - scout.rigid_body.global_position.y) > GROUND_TOLERANCE_M:
+		return
+	_result["scout_before_m"] = snappedf(scout.rigid_body.global_position.y, 0.001)
+	_run_op()
+
+
+## Runs op _op as the GM's Events pane does: a stroke of the play brush, the bridge removal on
+## the play-side editor, the undo through PlayEvents (Ctrl+Z's path).
 func _run_op() -> void:
-	var e := _edits().editor
 	_log("op %d: %s" % [_op, OPS[_op]])
+	if STROKES.has(OPS[_op]):
+		_begin_stroke(STROKES[OPS[_op]])
+		return
 	match OPS[_op]:
-		"sculpt raise":
-			e.begin_height_stroke(HeightBrush.RAISE)
-			_dabs(e, [RAISE_AT, RAISE_AT + Vector3(3, 0, 2), RAISE_AT + Vector3(6, 0, 4)], 4.0, 0.8)
-		"forest clear":
-			e.begin_stroke(MaskBrush.CLEAR)
-			_dabs(e, [Vector3(-18, 0, -2), Vector3(-10, 0, -3), Vector3(-4, 0, -4)], 4.0, 0.6)
 		"bridge removal":
+			var e := _edits().editor
 			e.crossings.remove(e.document.crossings[0].id)
-		"sculpt lower":
-			e.begin_height_stroke(HeightBrush.LOWER)
-			_dabs(e, [LOWER_AT, LOWER_AT + Vector3(3, 0, 1)], 3.0, 0.5)
 		"undo":
-			_result["undid"] = _edits().history.undo()
+			_result["undid"] = _events().undo()
 	_still = 0
 	_set_phase("op")
 
 
-func _dabs(e: AuthoringEditor, points: Array, radius: float, seconds: float) -> void:
-	var last: Vector3 = points[0]
-	for p: Vector3 in points:
-		e.stroke_dab(last, p, radius, seconds)
-		e.flush()
-		last = p
-	e.end_stroke()
+## Arms the stroke's brush through the Events pane's controller and starts driving it.
+func _begin_stroke(stroke: Array) -> void:
+	var events := _events()
+	events.pick(stroke[0])
+	var brush := events.brush()
+	if brush == null or not brush.is_active() or brush.editor != _edits().editor:
+		_finish(false, "the %s brush did not arm over the live editor" % stroke[0])
+		return
+	if stroke[0] == SculptTool.ID:
+		SculptTool.of(brush).tile = HeightBrush.RAISE
+	_stroke = (stroke[2] as Array).duplicate()
+	_stroke_ctrl = stroke[1]
+	_set_phase("brushing")
+
+
+## One frame of the stroke: the pointer on the current point (pressed with the stroke's Ctrl
+## on the first frame), held HOLD_MS a point, released and put away after the last.
+func _step_stroke() -> void:
+	var events := _events()
+	var brush := events.brush()
+	if _stroke.is_empty():
+		brush.pressed = false
+		brush.finish_gesture()
+		events.put_away()
+		_still = 0
+		_set_phase("op")
+		return
+	var point: Vector3 = _stroke[0]
+	point.y = _edits().editor.ground_height_at(point)
+	brush.pointer = _lpc().get_game_map().camera_node.unproject_position(point)
+	brush.has_pointer = true
+	if not brush.pressed:
+		brush.pressed = true
+		brush.press_pending = true
+		brush.press_ctrl = _stroke_ctrl
+		brush.press_shift = false
+		_stroke_until = Time.get_ticks_msec() + HOLD_MS
+	elif Time.get_ticks_msec() >= _stroke_until:
+		_stroke.pop_front()
+		_stroke_until = Time.get_ticks_msec() + HOLD_MS
 
 
 func _place_hero() -> void:
@@ -280,6 +380,7 @@ func _host_check_landing() -> void:
 			"fingerprint": _fingerprint(),
 			"ops": _edits().op_log.size(),
 			"hero": {"x": at.x, "y": at.y, "z": at.z},
+			"scout": _scout_y(),
 		}
 	)
 	_log("hero %s rests at %s; the late joiner may join" % [_hero_id, str(at)])
@@ -297,6 +398,8 @@ func _host_collect() -> void:
 		and bool(joiner.get("pass", false))
 		and _edits().op_log.size() == OPS.size()
 		and str(_result.get("undid", "")) != ""
+		# The host's ground follower set Scout down on the ground the brush raised.
+		and float(_result.get("scout_raised_m", 0.0)) > float(_result.get("scout_before_m", 0.0)) + 0.1
 	)
 	_finish(ok, "both clients reported")
 
@@ -359,16 +462,27 @@ func _client_follow_op() -> void:
 	var host := _read_step("host", step)
 	if _edits().op_log.size() < int(host.get("ops", 0)) or not _map_still():
 		return
+	# Scout follows the host's re-grounding (a reliable state send; it eases there).
+	var scout_off := absf(_scout_y() - float(host.get("scout", NAN)))
+	if not scout_off <= GROUND_TOLERANCE_M and _scout_frames < SCOUT_FRAMES:
+		_scout_frames += 1
+		return
+	_scout_frames = 0
 	var mismatch := MapFingerprint.diff(host.get("fingerprint", {}), _fingerprint())
-	_result[OPS[_op]] = {"ops": _edits().op_log.size(), "mismatch": mismatch}
-	_log("%s: %d ops, mismatch %s" % [OPS[_op], _edits().op_log.size(), str(mismatch)])
+	_result[OPS[_op]] = {
+		"ops": _edits().op_log.size(),
+		"mismatch": mismatch,
+		"scout_y": snappedf(_scout_y(), 0.001),
+		"scout_ok": scout_off <= GROUND_TOLERANCE_M,
+	}
+	_log("%s: %s" % [OPS[_op], str(_result[OPS[_op]])])
 	_mark(step)
 	_op += 1
 	if _op < OPS.size():
 		return
 	var ok := _edits().problem == ""
 	for label in OPS:
-		ok = ok and (_result[label].mismatch as Array).is_empty()
+		ok = ok and (_result[label].mismatch as Array).is_empty() and bool(_result[label].scout_ok)
 	_result["pass"] = ok
 	_mark("done", _result)
 	_set_phase("wait_done")
@@ -394,9 +508,11 @@ func _joiner_check() -> void:
 	_result["hero_y"] = snappedf(at.y, 0.001)
 	_result["hero_rest_y"] = snappedf(rest.y, 0.001)
 	_result["host_hero_y"] = snappedf(host_y, 0.001)
+	_result["scout_y"] = snappedf(_scout_y(), 0.001)
 	_result["pass"] = (
 		mismatch.is_empty()
 		and edits.problem == ""
+		and absf(_scout_y() - float(host.get("scout", NAN))) <= GROUND_TOLERANCE_M
 		and absf(at.y - host_y) <= GROUND_TOLERANCE_M
 		and absf(rest.y - at.y) <= GROUND_TOLERANCE_M
 	)

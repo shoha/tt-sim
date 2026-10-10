@@ -291,10 +291,12 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 
-			# Undo (Ctrl+Z) — GM only
+			# Undo (Ctrl+Z) — GM only. While a brush is out (the Events pane's in play, an
+			# authoring tool) Ctrl+Z is its owner's: the live or authoring history.
 			if event.keycode == KEY_Z and event.ctrl_pressed and not event.shift_pressed:
 				if (
 					_action_history
+					and not (_brush_tool and _brush_tool.is_active())
 					and NetworkManager.has_gm_access()
 					and _action_history.can_undo()
 				):
@@ -502,7 +504,8 @@ func _on_sun_gizmo_toggled(active: bool) -> void:
 		_brush_tool.deactivate()
 
 
-## Create authoring's brush tool (see BrushTool). Mirrors setup_sun_gizmo(): owned here,
+## Create the map brush (see BrushTool): authoring's, or in play the GM's Events pane's
+## (PlayEvents, over the table's live editor). Mirrors setup_sun_gizmo(): owned here,
 ## dispatched from _input(), exclusive with the measure tool and the sun gizmo, and wired
 ## into CameraController so RMB does not pan while it is active. Thin / Clear fades canopies
 ## over its ring through the occlusion fade (so it follows the player's occlusion fade
@@ -520,7 +523,7 @@ func setup_brush_tool() -> BrushTool:
 	return _brush_tool
 
 
-## Return the BrushTool instance (null outside authoring).
+## Return the BrushTool instance (null until authoring or the Events pane made it).
 func get_brush_tool() -> BrushTool:
 	return _brush_tool
 

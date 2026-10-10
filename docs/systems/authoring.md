@@ -137,7 +137,10 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   and help row), rail icon, an optional shortcut (a bare `Key`; none of the seven has one,
   so a key is still free to give), its `brush_mode` (the `BrushMode` class its gestures run
   in), its own help rows, an unavailable tooltip, and its contexts
-  (`ToolDescriptor.AUTHORING`, `PLAY`; every query takes one, and play lists no tool yet).
+  (`ToolDescriptor.AUTHORING`, `PLAY`; every query takes one). Play lists Biome, Thin /
+  Clear, Sculpt, Paint, Water and Bridge, the GM's Events pane (see "Live edits"); Place is
+  authoring's alone. `works_on(editor)` is the map half of `can_select`, asked of an editor
+  alone, so play asks it of the live editor.
   A tool whose pane sets what its mode paints has a static `of(brush)` returning that mode,
   typed (`SculptTool.of(brush).tile`, `WaterTool.of(brush).depth`).
 - Hooks, which read the controller's public state only: `can_select` refuses a pick the open
@@ -179,9 +182,37 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 The GM's terrain events during play (a bridge collapsing, a forest falling, fire, biome and
 terrain changes with the authoring brushes; user decision, 2026-10-09) replicate as one side
 of authoring history entries. The codec, the apply side and the transport exist
-(2026-10-09); the GM's UI (an Events pane) does not yet. Probe and numbers:
+(2026-10-09), and the GM's UI, the Events pane (2026-10-10). Probe and numbers:
 `docs/plans/2026-10-09-v0.2-evaluation/probes/live_edits_probe.md` (gitignored). Transport:
 [../NETWORKING.md](../NETWORKING.md) "Live map edits".
+
+- **The Events pane** (`EventsPane`, `PlayEvents`, `scenes/states/playing/events/`): the
+  Visuals drawer's last rail item (wand), so the GM's alone. It lists the play brushes
+  (`ToolRegistry.tools(PLAY)`) as toggling tiles, then the picked brush's controls built from
+  the authoring panes' parts (Sculpt's shape tiles, the palette biome and surface tiles,
+  `WaterToolPane` and `BridgeToolPane` with their headers hidden, one Advanced foldout with
+  size and strength); the presets with spectacle of later cards (bridge collapse, forest falls,
+  fire) take a field above the brushes. The look's Cancel and Save step out under it. A map
+  that takes no live edits says why in the pane (`PlayEvents.refusal_for`: a player, a Blender
+  map without a document, the table still setting out, a client's side); a brush the map
+  cannot take is a disabled tile with its descriptor's unavailable tooltip.
+- **Arming** (`PlayEvents`): a pick arms GameMap's own `BrushTool` (`setup_brush_tool`, made
+  on first use) with `editor` the live editor and the level's units, the mode set from the
+  pane as `AuthoringController` sets it. The brush's tile again, Esc or a right click puts it
+  away; Biome waits for a biome. While it is out its keys lead the hint bar
+  (`PlayEvents.hints_for`, at most five, one line at 720p), token drag and the right-button
+  pan are off (GameMap's modal-tool rules), Ctrl+Z and Ctrl+Y undo and redo through
+  `live_edits.history` (GameMap leaves Ctrl+Z to the brush's owner while one is out), and an
+  edit that changed a lot (`PlayEvents.is_large`: a river, pond or crossing edit, or a stroke
+  whose entry holds 12 KB or more; one 4 m mound is about 4 KB, a 9 m Clear sweep 15 KB)
+  offers Undo in a toast while it is still the newest entry (`AuthoringHistory.is_newest`).
+  The drawer may close with the brush out; the Events rail item stays tinted.
+- **The ground follows** (`LiveEditGround`, a child of the service on every peer): once the
+  edits have settled it refits the camera, pan and shadow bounds and the reflection probe
+  (`LevelPlayController.refit_view_to_ground`), samples a Blender map's grid ground again when
+  its water or crossings changed (an authored map's grid follows the terrain by itself), and on
+  the GM's side sets every token down on the new ground and sends the moved ones to every peer
+  (NETWORKING.md "Live map edits").
 
 - **The table's service** (`LiveEdits`, `scenes/states/playing/live_edits.gd`): every peer
   of a table set out from a map document has one, a play-side `AuthoringEditor` (no UI,

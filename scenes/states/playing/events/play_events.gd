@@ -1,0 +1,410 @@
+class_name PlayEvents
+extends Node
+
+## The GM's live brushes during play: the controller of the Events pane (EventsPane, in the
+## Visuals drawer). GameplayMenuController makes one on every peer; only the GM's side with a
+## table that takes live edits can arm it (refusal()).
+##
+## The brush is GameMap's own BrushTool (GameMap.setup_brush_tool: exclusive with the measure
+## tool and the sun gizmo, no token drag and no right-button pan while it is out), its
+## `editor` the table's play-side editor (LevelPlayController.live_edits), so every stroke
+## records into the live history and goes to every peer as an op (LiveEdits). The modes are
+## the authoring ones (BrushMode never reaches AuthoringController), set from the pane as
+## AuthoringController sets them from its panes.
+##
+## Picking a brush's tile arms it on the board; its tile again, Esc or a right click puts it
+## away (the pane keeps showing its controls). A brush with nothing to work with yet (Biome
+## before a biome is picked) is picked but not armed. While it is out its keys lead the hint
+## bar (InputHints tool layer), Ctrl+Z and Ctrl+Y undo and redo the GM's live edits (GameMap
+## leaves Ctrl+Z to it), and an edit that changes a lot at once (is_large) offers Undo in a
+## toast (UI_TASTE I4). The drawer may close with the brush still out, as authoring's does;
+## the Events rail item stays tinted meanwhile (armed_changed).
+
+## The brush was armed with tool `tool_id`, or put away (&"").
+signal armed_changed(tool_id: StringName)
+
+## The F1 help row for the pane (HelpOverlay's Tools section).
+const HELP_KEYS := "Events (GM)"
+const HELP_TEXT := (
+	"Visuals drawer: change the map for everyone with the map-building brushes; Ctrl+Z undoes"
+)
+## A brush stroke whose history entry holds at least this much (its compressed diff, which
+## grows with the ground it changed) offers Undo in a toast; a river, pond or crossing edit
+## always does (a whole feature at once). Measured: one mound of a 4 m Sculpt raise held
+## 0.9 s holds 3.8 KB, so a single mound gets none and a wide sweep does.
+const LARGE_EDIT_BYTES := 12 * 1024
+## History methods of whole-feature edits (WaterEditor.apply_edit, CrossingEditor.apply_list).
+const WHOLE_FEATURE_METHODS: Array[StringName] = [&"apply_edit", &"apply_list"]
+const NOT_GM := "Only the GM can change the map during play."
+const NOT_HOST := "Only the host can change the map during play."
+const NOT_READY := "The map is still being set out; its brushes are ready in a moment."
+const UNDO_TOAST := "%s: everyone at the table sees it."
+const NEWER_EDITS := "Newer changes stand on that one: undo them first with Ctrl+Z."
+
+## The pane this controls (set by setup()).
+var pane: EventsPane = null
+## The tool whose controls the pane shows (&"" for none), and the one armed on the board.
+var picked: StringName = &""
+var armed: StringName = &""
+
+var _lpc: LevelPlayController = null
+var _brush: BrushTool = null
+## The live edits the brush is wired to (their history's recorded signal is connected).
+var _edits: LiveEdits = null
+var _biome_id: String = ""
+
+
+## The reason this peer cannot change the map now, or "" when it can: GM access, a map with a
+## document (LiveEdits.refusal), its live edits started, and the GM's side of them. Pure.
+static func refusal_for(gm_access: bool, doc: MapDocument, edits: LiveEdits) -> String:
+	if not gm_access:
+		return NOT_GM
+	var why := LiveEdits.refusal(doc)
+	if why != "":
+		return why
+	if edits == null:
+		return NOT_READY
+	return "" if edits.sends else NOT_HOST
+
+
+## Whether history `entry` changed a lot at once (see LARGE_EDIT_BYTES). Pure.
+static func is_large(entry: Dictionary) -> bool:
+	var redo: Callable = entry.get("redo", Callable())
+	if redo.is_valid() and redo.get_method() in WHOLE_FEATURE_METHODS:
+		return true
+	return int(entry.get("bytes", 0)) >= LARGE_EDIT_BYTES
+
+
+## The hint bar's keys while `tool_id` is out (at most five, so the row keeps one line at 720p
+## with Help beside it); `sculpt_tile` names the Sculpt drag, `water_shape` the Water drag.
+static func hints_for(
+	tool_id: StringName, sculpt_tile: int = HeightBrush.RAISE, water_shape: int = 0
+) -> Array[Dictionary]:
+	var rows: Array = []
+	match tool_id:
+		BiomeTool.ID:
+			rows = [["Left-drag", "Paint biome"], ["Shift+scroll", "Size"]]
+		ThinTool.ID:
+			rows = [["Left-drag", "Thin"], ["Ctrl+left-drag", "Clear"], ["Shift+scroll", "Size"]]
+		SculptTool.ID:
+			var tile_label := "Shape"
+			for tile in AuthoringPanel.SCULPT_TILES:
+				if int(tile.op) == sculpt_tile:
+					tile_label = String(tile.label)
+			rows = [["Left-drag", tile_label], ["Ctrl+left-drag", "Lower"], ["Shift+left-drag", "Smooth"]]
+		PaintTool.ID:
+			rows = [
+				["Left-drag", "Lay surface"], ["Ctrl+left-drag", "Erase paint"], ["Shift+scroll", "Size"]
+			]
+		WaterTool.ID:
+			var drag := "Paint pond" if water_shape == WaterBrush.Shape.POND else "Draw river"
+			rows = [["Left-drag", drag], ["Ctrl+left-drag", "Erase water"], ["Shift+scroll", "Width"]]
+		BridgeTool.ID:
+			rows = [["Left-drag", "Lay a crossing"], ["Ctrl+click", "Remove one"], ["Shift+scroll", "Width"]]
+	rows.append_array([["Ctrl+Z", "Undo"], ["Esc", "Put away"]])
+	var hints: Array[Dictionary] = []
+	for row: Array in rows:
+		hints.append({"key": row[0], "action": row[1]})
+	return hints
+
+
+## Wires the controller to the table's LevelPlayController and to `events_pane`.
+func setup(lpc: LevelPlayController, events_pane: EventsPane) -> void:
+	_lpc = lpc
+	pane = events_pane
+	pane.tool_toggled.connect(_on_tool_toggled)
+	pane.sculpt_selected.connect(_on_sculpt_selected)
+	pane.biome_selected.connect(_on_biome_selected)
+	pane.paint_selected.connect(_on_paint_selected)
+	pane.water_shape_selected.connect(
+		func(shape: int) -> void: _set_mode(WaterTool.ID, "shape", shape)
+	)
+	pane.water_depth_selected.connect(
+		func(depth: int) -> void: _set_mode(WaterTool.ID, "depth", depth)
+	)
+	pane.water_speed_changed.connect(
+		func(speed: float) -> void: _set_mode(WaterTool.ID, "speed", speed, false)
+	)
+	pane.bridge_kind_selected.connect(
+		func(kind: int) -> void: _set_mode(BridgeTool.ID, "kind", kind)
+	)
+	pane.brush_size_changed.connect(func(radius: float) -> void: _wired_brush().set_radius(radius))
+	pane.brush_strength_changed.connect(func(flow: float) -> void: _wired_brush().set_flow(flow))
+	pane.visibility_changed.connect(refresh)
+	lpc.level_cleared.connect(_on_level_cleared)
+	lpc.level_loaded.connect(func(_level: LevelData) -> void: refresh())
+	refresh()
+
+
+## Why this peer cannot change the map now, or "".
+func refusal() -> String:
+	if _lpc == null or not _lpc.has_active_level():
+		return NOT_READY
+	return refusal_for(NetworkManager.has_gm_access(), _lpc.loaded_map_document, _lpc.live_edits)
+
+
+## The play brushes the table's map can take now (tool id -> true): none while refusal()
+## says why, else each tool's works_on() on the live editor.
+func available() -> Dictionary:
+	var out := {}
+	var ok := refusal() == ""
+	for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
+		out[tool.id] = ok and tool.works_on(_lpc.live_edits.editor)
+	return out
+
+
+## Shows on the pane why the map takes no live edits, which brushes it can take, and the
+## picked and armed brush.
+func refresh() -> void:
+	if pane == null:
+		return
+	var why := refusal()
+	# A table still being set out is no reason to explain; a map that never takes edits is.
+	pane.set_notice("" if why == NOT_READY else why)
+	pane.set_available(available())
+	# A picked brush waiting on a pick in its controls (a biome) keeps its tile pressed.
+	var waiting := picked != &"" and _brush != null and not _has_work(picked)
+	pane.show_tool(picked, picked != &"" and (armed == picked or waiting))
+
+
+## Picks `tool_id` and arms it on the board when it has what it needs; a refused pick says
+## why in a toast.
+func pick(tool_id: StringName) -> void:
+	var tool := ToolRegistry.find(tool_id)
+	if tool == null or not tool.exists_in(ToolDescriptor.PLAY):
+		return
+	var why := refusal()
+	if why == "" and not tool.works_on(_lpc.live_edits.editor):
+		why = tool.unavailable_tooltip
+	if why != "":
+		UIManager.show_toast(why, UIManager.TOAST_WARNING, 5.0)
+		refresh()
+		return
+	var brush := _wired_brush()
+	brush.use_tool(tool)
+	picked = tool_id
+	if not _has_work(tool_id):
+		brush.deactivate()
+		_set_armed(&"")
+		refresh()
+		return
+	_prepare(tool_id)
+	brush.activate()
+	_set_armed(tool_id)
+	refresh()
+
+
+## Puts the brush away (the pane keeps the picked brush's controls).
+func put_away() -> void:
+	if _brush != null and _brush.is_active():
+		_brush.deactivate()
+	_set_armed(&"")
+	refresh()
+
+
+## Undoes the GM's newest live edit (a gesture in progress is finished first, a water edit
+## still computing lands first), with a toast naming it. Returns its label, or "".
+func undo() -> String:
+	if not _finish_for_history():
+		return ""
+	var label := _edits.history.undo()
+	if label != "":
+		UIManager.show_info("Undone: %s" % label)
+	return label
+
+
+## Redoes the GM's newest undone live edit, with a toast naming it. Returns its label, or "".
+func redo() -> String:
+	if not _finish_for_history():
+		return ""
+	var label := _edits.history.redo()
+	if label != "":
+		UIManager.show_info("Redone: %s" % label)
+	return label
+
+
+func _finish_for_history() -> bool:
+	if _edits == null or not is_instance_valid(_edits):
+		return false
+	if _brush != null:
+		_brush.finish_gesture()
+	_edits.editor.water.finish_work()
+	return true
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if armed == &"" or _brush == null:
+		return
+	if event.is_action_pressed("ui_cancel") and not _brush.is_dragging():
+		put_away()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_undo"):
+		undo()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_redo"):
+		redo()
+		get_viewport().set_input_as_handled()
+
+
+## GameMap's brush, made on first use, its editor the table's live editor and its units the
+## level's.
+func _wired_brush() -> BrushTool:
+	if _brush == null:
+		_brush = _lpc.get_game_map().setup_brush_tool()
+		_brush.toggled.connect(_on_brush_toggled)
+		_brush.refused.connect(
+			func(reason: String) -> void: UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
+		)
+		_brush.radius_changed.connect(
+			func(radius: float) -> void: pane.set_brush_values(radius, _brush.get_flow())
+		)
+	var edits := _lpc.live_edits
+	if edits != _edits:
+		if is_instance_valid(_edits) and _edits.history.recorded.is_connected(_on_recorded):
+			_edits.history.recorded.disconnect(_on_recorded)
+			_edits.history.changed.disconnect(refresh)
+		_edits = edits
+		if edits != null:
+			edits.history.recorded.connect(_on_recorded)
+			edits.history.changed.connect(refresh)
+	_brush.editor = edits.editor if edits != null else null
+	var level := _lpc.active_level_data
+	if level != null:
+		_brush.unit_cell_m = level.grid_cell_size
+		_brush.unit_per_cell = level.display_unit_per_cell
+		_brush.unit_label = level.display_unit
+	return _brush
+
+
+## Whether `tool_id` has what its first stroke needs: a biome for Biome, a surface for Paint.
+func _has_work(tool_id: StringName) -> bool:
+	match tool_id:
+		BiomeTool.ID:
+			return _biome_id != ""
+		PaintTool.ID:
+			return PaintTool.of(_brush).surface != ""
+	return true
+
+
+## What the first stroke would otherwise wait on, and the mode's paint from the pane.
+func _prepare(tool_id: StringName) -> void:
+	match tool_id:
+		PaintTool.ID:
+			var surface := PaintTool.of(_brush).surface
+			PaintTool.of(_brush).tint = AuthoringController.surface_tint(surface)
+			var terrain := _brush.editor.terrain
+			if is_instance_valid(terrain):
+				terrain.warm_surface(surface)
+		WaterTool.ID:
+			AuthoredWater.warm_fall_material()
+			AuthoredWater.warm_flow_carrier()
+
+
+func _set_armed(tool_id: StringName) -> void:
+	if armed == tool_id:
+		_show_hints()
+		return
+	armed = tool_id
+	_show_hints()
+	armed_changed.emit(armed)
+
+
+## The armed brush's keys lead the hint bar; put away, the play row returns, unless the
+## measure tool or the sun gizmo took over (their own keys are on the bar then).
+func _show_hints() -> void:
+	if armed != &"":
+		var sculpt := SculptTool.of(_brush).tile
+		var shape := WaterTool.of(_brush).shape
+		UIManager.set_tool_hints(hints_for(armed, sculpt, shape))
+		return
+	var map := _lpc.get_game_map() if _lpc != null else null
+	var measuring := map != null and map.get_measure_tool() != null
+	if measuring and map.get_measure_tool().is_active():
+		return
+	UIManager.clear_tool_hints()
+
+
+func _on_tool_toggled(tool_id: StringName, on: bool) -> void:
+	if on:
+		pick(tool_id)
+	elif tool_id == armed:
+		put_away()
+	else:
+		refresh()
+
+
+func _on_sculpt_selected(op: int) -> void:
+	SculptTool.of(_wired_brush()).tile = op
+	_pick_again(SculptTool.ID)
+
+
+func _on_biome_selected(biome_id: String) -> void:
+	_biome_id = biome_id
+	var brush := _wired_brush()
+	BiomeTool.of(brush).biome_id = biome_id
+	BiomeTool.of(brush).tint = AuthoringController.biome_tint(biome_id)
+	if brush.editor != null:
+		brush.editor.prepare_biome(biome_id)
+	_pick_again(BiomeTool.ID)
+
+
+func _on_paint_selected(surface: String) -> void:
+	var brush := _wired_brush()
+	PaintTool.of(brush).surface = surface
+	if brush.editor != null:
+		var reason := brush.editor.surface_refusal(surface)
+		if reason != "":
+			UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
+	_pick_again(PaintTool.ID)
+
+
+## A mode setting `field` = `value` picked in the pane; `arm` arms its tool as a tile does.
+func _set_mode(tool_id: StringName, field: String, value: Variant, arm: bool = true) -> void:
+	var brush := _wired_brush()
+	brush.mode_for(ToolRegistry.find(tool_id)).set(field, value)
+	if arm:
+		_pick_again(tool_id)
+	elif armed == tool_id:
+		_show_hints()
+
+
+## A tile of the tool's own picked: arms it (again), as a pick in authoring re-activates a
+## brush put down with a right click.
+func _pick_again(tool_id: StringName) -> void:
+	pick(tool_id)
+
+
+func _on_brush_toggled(active: bool) -> void:
+	if not active and armed != &"":
+		_set_armed(&"")
+		refresh()
+
+
+## A live edit recorded: a large one offers Undo in a toast, while it is still the newest.
+func _on_recorded(entry: Dictionary) -> void:
+	if not is_large(entry):
+		return
+	UIManager.show_undo_toast(UNDO_TOAST % String(entry.get("label", "")), _undo_entry.bind(entry))
+
+
+func _undo_entry(entry: Dictionary) -> void:
+	if _edits == null or not is_instance_valid(_edits):
+		return
+	if not _edits.history.is_newest(entry):
+		UIManager.show_info(NEWER_EDITS)
+		return
+	undo()
+
+
+## The brush the Events pane arms (GameMap's), or null before the first pick.
+func brush() -> BrushTool:
+	return _brush
+
+
+func _on_level_cleared() -> void:
+	put_away()
+	picked = &""
+	_edits = null
+	if _brush != null:
+		_brush.editor = null
+	refresh()

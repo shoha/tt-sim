@@ -499,6 +499,16 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   `ToolRegistry`, a `ToolDescriptor` or `AuthoringPanel` and compare the drawer's pixels: the
   scene behind the glass moves (wind, water), so judge the pane and rail rects, where an
   unchanged drawer differs by under 32 in every pixel. No level to clean up.
+- `jobs/events_pane.json`: the GM's Events pane in play (card gm-events, about 37 s, 7
+  captures): a new 100 ft temperate forest map (seed 1234) saved as `_gm_events_table` and
+  played; the Visuals drawer open on Events at 1280x720 and 1920x1080 (`*_events_open`); at
+  1280x720 a live Sculpt raise held on the board (`events_sculpt`), released
+  (`events_raised`), undone through `PlayEvents.undo` (`events_undone`), a 9 m Clear swept
+  through the forest with its undo toast (`events_cleared`), and a staged player's view
+  (`events_player`: the Visuals drawer concealed and the GM's HUD buttons hidden; the GM's own
+  toast from the clear may still show, which a player's client never gets). Its own probe
+  (`probes/events_pane.gd`: save, window, open, arm, press, move, release, undo, redo, player,
+  cleanup) deletes `_gm_events_table` at the end.
 
 ## Caveats
 

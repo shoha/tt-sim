@@ -8,6 +8,10 @@ extends DrawerContainer
 ## EnvironmentEditModel. The panel relays pane signals under the names
 ## GameplayMenuController has always listened to, tracks dirty state per pane
 ## (rail badges) and as a whole, and owns the discard-changes prompt.
+##
+## The rail's last item is the GM's Events pane (EventsPane, controlled by PlayEvents): live map
+## changes for the whole table, undone rather than saved, so Cancel and Save look step out of
+## the footer while it shows and it takes no part in the dirty state.
 
 signal save_requested(state: LevelVisualState)
 signal cancel_requested
@@ -38,6 +42,8 @@ signal drawer_closed
 const PANE_IDS: Array[StringName] = [
 	&"sun", &"sky", &"color", &"weather", &"water", &"film", &"world"
 ]
+## The Events pane's rail item.
+const EVENTS_ID := &"events"
 const RAIL_ITEMS: Array[Dictionary] = [
 	{"id": &"sun", "icon": "sun", "tooltip": "Sun"},
 	{"id": &"sky", "icon": "haze", "tooltip": "Sky"},
@@ -46,6 +52,7 @@ const RAIL_ITEMS: Array[Dictionary] = [
 	{"id": &"water", "icon": "droplet", "tooltip": "Water"},
 	{"id": &"film", "icon": "grain", "tooltip": "Film"},
 	{"id": &"world", "icon": "ruler-measure", "tooltip": "World"},
+	{"id": EVENTS_ID, "icon": "wand", "tooltip": "Events: change the map for everyone"},
 ]
 const RAIL_FOOTER_ITEMS: Array[Dictionary] = [
 	{"id": &"values", "icon": "hash", "tooltip": "Show values"},
@@ -58,6 +65,7 @@ var weather_pane: WeatherPane
 var water_pane: WaterPane
 var film_pane: FilmPane
 var world_pane: WorldPane
+var events_pane: EventsPane
 
 var _env_model := EnvironmentEditModel.new()
 var _stack: PaneStack
@@ -138,6 +146,8 @@ func _build_panes() -> void:
 		pane.name = String(id).capitalize() + "Pane"
 		_stack.add_pane(id, pane)
 		pane.changed.connect(_on_pane_changed.bind(id))
+	events_pane = EventsPane.new()
+	_stack.add_pane(EVENTS_ID, events_pane)
 
 	sun_pane.sun_changed.connect(sun_changed.emit)
 	sun_pane.aim_toggled.connect(aim_sun_toggled.emit)
@@ -176,6 +186,8 @@ func _on_closed() -> void:
 
 func _on_pane_requested(id: StringName) -> void:
 	_stack.show_pane(id)
+	# Events are undone, not saved: the look's Cancel and Save step out under that pane.
+	save_button.get_parent().visible = id != EVENTS_ID
 
 
 func _on_rail_footer_pressed(id: StringName) -> void:

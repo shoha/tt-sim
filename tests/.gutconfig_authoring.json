@@ -60,6 +60,7 @@
 		"res://tests/unit/test_new_map.gd",
 		"res://tests/unit/test_new_map_build.gd",
 		"res://tests/unit/test_paint_tool.gd",
+		"res://tests/unit/test_play_events.gd",
 		"res://tests/unit/test_palette_builtin.gd",
 		"res://tests/unit/test_palette_library.gd",
 		"res://tests/unit/test_pond_exits.gd",

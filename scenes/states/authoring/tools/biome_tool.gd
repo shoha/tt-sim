@@ -15,6 +15,7 @@ func _init() -> void:
 	summary = "Paint a place onto the map."
 	icon = "trees"
 	brush_mode = BiomeBrush
+	contexts = AUTHORING | PLAY
 
 
 ## The tool's mode on `brush`.

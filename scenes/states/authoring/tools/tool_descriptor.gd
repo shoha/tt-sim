@@ -25,7 +25,8 @@ extends RefCounted
 ## cannot take, armed() leaves the brush put down while it has nothing to work with, and
 ## prepare() warms what the first stroke would otherwise wait on. refresh() shows on the rail
 ## whether the open map can take the tool, after the map opens and after every edit, undo and
-## redo.
+## redo. works_on() is the map half of can_select(), asked of an editor alone, so the GM's
+## Events pane in play (PlayEvents, over the table's LiveEdits editor) asks it too.
 ##
 ## Panes. The seven tools that predate the registry have panes AuthoringPanel builds itself:
 ## five inline, plus WaterToolPane and BridgeToolPane, whose signals it relays to the
@@ -100,6 +101,13 @@ func matches_shortcut(event: InputEvent) -> bool:
 
 ## Whether a pick may switch the brush to this tool on the open map. Default: always.
 func can_select(_controller: AuthoringController) -> bool:
+	return true
+
+
+## Whether the tool can work on the map `editor` edits (its ground the document's, water to
+## work on): can_select()'s question asked of an editor alone, in authoring and in play.
+## Default: always.
+func works_on(_editor: AuthoringEditor) -> bool:
 	return true
 
 

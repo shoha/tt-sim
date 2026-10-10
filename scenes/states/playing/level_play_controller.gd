@@ -579,7 +579,8 @@ func clear_level_map() -> void:
 
 
 ## Starts the table's live map edits over the installed map: LevelPlayLoader calls it once
-## the map is in, on every peer. A map with no document gets none (LiveEdits.refusal()).
+## the map is in, on every peer. A map with no document gets none (LiveEdits.refusal()). The
+## table follows the ground the edits leave (LiveEditGround, a child of the service).
 func start_live_edits() -> void:
 	stop_live_edits()
 	if loaded_map_document == null or not is_instance_valid(loaded_map_instance):
@@ -587,7 +588,18 @@ func start_live_edits() -> void:
 	live_edits = LiveEdits.create(
 		loaded_map_instance, loaded_map_document, not NetworkManager.is_client()
 	)
+	live_edits.add_child(LiveEditGround.create(live_edits, self))
 	add_child(live_edits)
+
+
+## After a live edit has settled: the camera, pan and shadow bounds and the reflection probe
+## follow the ground when its range moved (LiveEditGround; authoring does the same after its
+## edits).
+func refit_view_to_ground() -> void:
+	if not _view_fit.ground_moved():
+		return
+	_view_fit.refit()
+	_environment_manager.apply_reflection_probe(_game_map.world_viewport)
 
 
 ## Ends the table's live edits (the map is going): they stop taking ops at once.

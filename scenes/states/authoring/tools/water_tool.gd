@@ -18,6 +18,7 @@ func _init() -> void:
 	summary = "Rivers, streams and ponds."
 	icon = "droplet"
 	brush_mode = WaterBrush
+	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [
 		["Left Drag (Water)", "River: draw it the way it flows. Pond: paint its area"],
@@ -42,6 +43,10 @@ func can_select(controller: AuthoringController) -> bool:
 	return has_water_work(controller)
 
 
+func works_on(editor: AuthoringEditor) -> bool:
+	return has_water_work_on(editor)
+
+
 ## The falls material and the flow carrier's build now, so the first waterfall drawn and the
 ## first river's swap pay no shader build (P4c-4; the Bridge tool warms its crossing
 ## materials the same way).
@@ -61,6 +66,9 @@ func refresh(controller: AuthoringController) -> void:
 ## True when the open map can be given water (its ground is the document's) or already has
 ## some in its document. The Bridge tool works on the same maps.
 static func has_water_work(controller: AuthoringController) -> bool:
-	if controller.editor == null:
-		return false
-	return controller.editor.water.can_carve() or not controller.document.water_bodies.is_empty()
+	return controller.editor != null and has_water_work_on(controller.editor)
+
+
+## has_water_work() of the map `editor` edits.
+static func has_water_work_on(editor: AuthoringEditor) -> bool:
+	return editor.water.can_carve() or not editor.document.water_bodies.is_empty()
