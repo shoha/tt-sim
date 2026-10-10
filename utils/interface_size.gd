@@ -81,7 +81,7 @@ static func label_for(choice: int, window_size: Vector2, base: Vector2 = BASE_SI
 	if picked == AUTO:
 		return "Auto (recommended)"
 	if picked == roundi(auto_factor(window_size, base) * 100.0):
-		return "%d%% (Auto's size here)" % picked
+		return "%d%% (Auto on this screen)" % picked
 	return "%d%%" % picked
 
 

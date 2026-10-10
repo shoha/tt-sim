@@ -213,7 +213,7 @@ static func _apply_icon(tab_id: int, image: Image, cache_key: String, index: int
 func _show_empty_state(filter_text: String = "") -> void:
 	if not is_instance_valid(self):
 		return
-	var msg = 'No results for "%s"' % filter_text if filter_text != "" else "No assets in this pack"
+	var msg = "No results for “%s”" % filter_text if filter_text != "" else "No assets in this pack"
 	item_list.add_item(msg)
 	item_list.set_item_disabled(0, true)
 	item_list.set_item_selectable(0, false)

@@ -129,7 +129,12 @@
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "drawer", "which": "visuals", "pane": "sun"},
    {"op": "wait", "s": 1.0},
    {"op": "capture", "name": "{value}_play_drawer", "desc": "{value}: the play HUD on the test map with the Visuals drawer open on Sun"},
-   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "drawer", "which": "visuals", "open": false},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "unsaved"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "hover_rail", "which": "visuals", "pane": "sun"},
+   {"op": "wait", "s": 1.5},
+   {"op": "capture", "name": "{value}_play_drawer_unsaved", "desc": "{value}: the Visuals drawer with an unsaved change on Sun (the time of day moved 45 minutes): the lake dot on the Sun rail item, its tooltip Sun: unsaved changes to this map's look, and Save look in the drawer"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "unhover"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "revert"},
    {"op": "wait", "s": 0.8},
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_room.gd", "action": "drawer", "folder": "_ui_tour_room"},
    {"op": "wait", "s": 1.0},
@@ -149,12 +154,12 @@
    {"op": "capture", "name": "{value}_pause_host", "desc": "{value}: the pause menu as the host sees it, with Return everyone to the room (staged on a solo pause)"},
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_room.gd", "action": "return_room"},
    {"op": "wait", "s": 1.2},
-   {"op": "capture", "name": "{value}_return_room_confirm", "desc": "{value}: the confirmation Return everyone to the room asks"},
+   {"op": "capture", "name": "{value}_return_room_confirm", "desc": "{value}: the confirmation Return everyone to the room asks, standing on the pause menu's scrim in place of its sheet (one scrim); the table's tokens are as saved, so nothing is lost and it is not a danger"},
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "dismiss"},
    {"op": "wait", "s": 0.6},
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "danger"},
    {"op": "wait", "s": 1.2},
-   {"op": "capture", "name": "{value}_danger", "desc": "{value}: a danger confirmation over the pause menu: Return to title, its consequence for a solo table on the message, the action on the button, Cancel focused"},
+   {"op": "capture", "name": "{value}_danger", "desc": "{value}: a danger confirmation over the pause menu, on its scrim in place of its sheet (one scrim): Return to title? with a token moved and not saved, so the message says the moves will be lost, Save first beside Return to title, Cancel focused"},
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "dismiss"},
    {"op": "wait", "s": 0.6},
    {"op": "eval", "expr": "pop_state()"},
@@ -166,7 +171,7 @@
    {"op": "wait", "s": 4.0},
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "undo_toast"},
    {"op": "wait", "s": 0.8},
-   {"op": "capture", "name": "{value}_undo_toast", "desc": "{value}: the toast a removed token shows (Removed \"Marigold\") with its Undo; the token is removed at once, with no confirmation"},
+   {"op": "capture", "name": "{value}_undo_toast", "desc": "{value}: the toast a removed token shows (Removed “Marigold”) with its Undo; the token is removed at once, with no confirmation"},
    {"op": "wait", "s": 6.5},
 
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "browser"},
@@ -264,7 +269,7 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": "1920x1080"},
   {"op": "wait", "s": 1.0},
 
-  {"op": "index", "title": "UI tour", "intro": "Produced by tools/render_jobs/jobs/ui_tour.json with probes/ui_primitives.gd: every top screen at 1280x720 and 1920x1080 window sizes (names start with the size), for the tt-sim-ui-critic agent (docs/UI_TASTE.md). A 100 ft temperate forest map is saved as the test level _ui_tour_room (shown as Mossy Hollow) for authoring, play and the host's room, and deleted at the end. The session screens are staged by probes/ui_room.gd without a network (nothing is hosted or joined): the Opening a room... wait (Root's loading overlay over the title, scrimmed, its bar gliding), the room (RoomPanel) from a staged session summary as the GM sees it with a shelf of three maps and four players, with no map at all, and as a player sees it, the join screen as the title's Join Game opens it, the room drawer over the table as the GM sees it, and in play the pause menu as the host sees it (the host-only Return everyone to the room row, shown on a solo pause) and the confirmation that row asks. The map_load_ captures show Root's loading overlay for a map load: map_load_title and map_load_table staged mid-load over the title and over a live table (the probe's map_load action; nothing is loaded), map_load_real a real load of the test map caught about 0.4 s after Play. focus_paper and focus_glass show keyboard focus on a quiet button of each theme leaf, and focus_selected_card and focus_selected_tile focus on a selected item, where the focus ring and the selection must both read (drawer tiles take no focus in the game; the probe lets the picked one); the dusk_ captures repeat the in-play screens with the time of day set to 19:00 through the Sun pane. Then the Interface size passes (probes/ui_size.gd): 1366x768 at Auto (1.35, an 800 px canvas) and a 1920x1080 window at a fixed 150% (named 1920x1080@150, a 1280x720 canvas), each with the title, Settings Graphics, the new-map dialog as it opens and scrolled to its end, and the play Visuals drawer; at 1280x720 (Auto 1.40) the Interface Size dropdown open and a staged measure line over the board (the hint bar with the measure tool's own keys first) and measure_done just after it ends (the play row back in its order); hints_room_drawer in the 1366x768 and 150% passes is the play hint row between the room drawer and Add token. undo_toast is the toast a removed token shows with its Undo (removing a token asks nothing first), and danger is the pause menu's Return to title confirmation, Cancel focused. Last, one ultrawide probe capture."},
+  {"op": "index", "title": "UI tour", "intro": "Produced by tools/render_jobs/jobs/ui_tour.json with probes/ui_primitives.gd: every top screen at 1280x720 and 1920x1080 window sizes (names start with the size), for the tt-sim-ui-critic agent (docs/UI_TASTE.md). A 100 ft temperate forest map is saved as the test level _ui_tour_room (shown as Mossy Hollow) for authoring, play and the host's room, and deleted at the end. The session screens are staged by probes/ui_room.gd without a network (nothing is hosted or joined): the Opening a room... wait (Root's loading overlay over the title, scrimmed, its bar gliding), the room (RoomPanel) from a staged session summary as the GM sees it with a shelf of three maps and four players, with no map at all, and as a player sees it, the join screen as the title's Join Game opens it, the room drawer over the table as the GM sees it, and in play the pause menu as the host sees it (the host-only Return everyone to the room row, shown on a solo pause) and the confirmation that row asks. The map_load_ captures show Root's loading overlay for a map load: map_load_title and map_load_table staged mid-load over the title and over a live table (the probe's map_load action; nothing is loaded), map_load_real a real load of the test map caught about 0.4 s after Play. focus_paper and focus_glass show keyboard focus on a quiet button of each theme leaf, and focus_selected_card and focus_selected_tile focus on a selected item, where the focus ring and the selection must both read (drawer tiles take no focus in the game; the probe lets the picked one); the dusk_ captures repeat the in-play screens with the time of day set to 19:00 through the Sun pane. Then the Interface size passes (probes/ui_size.gd): 1366x768 at Auto (1.35, an 800 px canvas) and a 1920x1080 window at a fixed 150% (named 1920x1080@150, a 1280x720 canvas), each with the title, Settings Graphics, the new-map dialog as it opens and scrolled to its end, and the play Visuals drawer; at 1280x720 (Auto 1.40) the Interface Size dropdown open and a staged measure line over the board (the hint bar with the measure tool's own keys first) and measure_done just after it ends (the play row back in its order); hints_room_drawer in the 1366x768 and 150% passes is the play hint row between the room drawer and Add token. undo_toast is the toast a removed token shows with its Undo (removing a token asks nothing first), and danger is the pause menu's Return to title confirmation with an unsaved token move staged (Save first, Cancel focused); it and return_room_confirm stand on the pause menu's scrim in place of its sheet. play_drawer_unsaved is the Visuals drawer with an unsaved Sun change, the rail item's tooltip shown. Last, one ultrawide probe capture."},
   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "cleanup"}
  ]
 }

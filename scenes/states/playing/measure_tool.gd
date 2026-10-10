@@ -774,21 +774,23 @@ func _update_hints() -> void:
 	UIManager.set_tool_hints(hints_for(_mode, _state))
 
 
-## The measure tool's hints for `mode` and `state`, in order: place, snap (line only),
-## undo or cancel, the next mode, and Done.
+## The measure tool's hints for `mode` and `state`, in order: place, snap (line only), what
+## Right-click takes back, the next mode, and how measuring stops (M; Right-click with nothing
+## left to take back stops it too). Keys read as Settings > Controls names them.
 static func hints_for(mode: Mode, state: State) -> Array[Dictionary]:
 	var hints: Array[Dictionary] = []
 	if mode == Mode.LINE:
 		hints.append(_hint(&"place_point", "Place point"))
 		hints.append(_hint(&"snap_token", "Snap to token"))
-		hints.append(_hint(&"undo_cancel", "Undo / Cancel"))
-		hints.append(_hint(&"cycle_mode", "Sphere"))
+		hints.append(_hint(&"undo_cancel", "Undo last point"))
+		hints.append(_hint(&"cycle_mode", "Measure a sphere"))
 	else:
 		var centring := state == State.PLACING_VOLUME_CENTER
 		hints.append(_hint(&"place_point", "Place centre" if centring else "Lock radius"))
-		hints.append(_hint(&"undo_cancel", "Clear / Cancel" if centring else "Cancel"))
-		hints.append(_hint(&"cycle_mode", "Cylinder" if mode == Mode.SPHERE else "Line"))
-	hints.append(_hint(&"done", "Done"))
+		hints.append(_hint(&"undo_cancel", "Clear shape" if centring else "Move centre"))
+		var next := "Measure a cylinder" if mode == Mode.SPHERE else "Measure a line"
+		hints.append(_hint(&"cycle_mode", next))
+	hints.append(_hint(&"done", "Stop measuring"))
 	return hints
 
 

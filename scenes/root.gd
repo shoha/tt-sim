@@ -580,7 +580,7 @@ func request_authoring(level: LevelData, return_to: StringName) -> void:
 ## map has no level folder to write a document into. Pure.
 static func authoring_refusal(level: LevelData, networked: bool) -> String:
 	if networked:
-		return "Maps are built offline. Leave the game to build or edit a map."
+		return "Maps are built offline. Leave the session to build or edit a map."
 	if level != null and level.map_path.begins_with("res://"):
 		return "Built-in maps cannot be edited in the game."
 	return ""
@@ -843,6 +843,8 @@ func _enter_paused_state() -> void:
 		_pause_overlay.change_level_requested.connect(_on_pause_change_level_requested)
 	if _pause_overlay.has_signal("room_requested"):
 		_pause_overlay.room_requested.connect(return_to_room)
+	if _pause_overlay is PauseOverlay and _level_play_controller:
+		(_pause_overlay as PauseOverlay).watch_table(_level_play_controller)
 
 
 func _on_pause_resume_requested() -> void:

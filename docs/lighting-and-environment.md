@@ -768,7 +768,7 @@ weather, foliage, sun, and the grid scale fields). When the panel is closed with
 level-clear; every edit handler calls `_mark_dirty()`, which shows an accent-colored badge on the
 drawer's tab and switches its tooltip to "Visuals (unsaved changes)". A dirty drawer will not close
 from its tab or from Escape — both route through `request_close()`, which shows a "Discard changes"
-/ "Keep editing" confirmation before reverting; confirming discards by emitting `cancel_requested`
+/ "Cancel" confirmation before reverting; confirming discards by emitting `cancel_requested`
 (the same path described above). `_enter_edit_mode()` only re-snapshots `_original_state` when the
 drawer is clean, so Cancel still returns to the state from before the first unsaved edit even across
 a conceal/reopen while dirty.

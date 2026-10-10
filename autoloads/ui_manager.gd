@@ -188,7 +188,7 @@ func show_confirmation(
 
 
 ## A three-way choice: Cancel (also Escape), a Secondary alternate action, and the confirm
-## action, in that order along the footer. For "Keep editing / Discard / Save and leave".
+## action, in that order along the footer. For "Cancel / Discard / Save and leave".
 func show_choice(
 	title: String,
 	message: String,

@@ -79,8 +79,8 @@ func _get_shortcut_data() -> Array:
 		[InputProfile.label(&"measure"), "Toggle measure tool"],
 		[InputProfile.label(&"grid"), "Toggle grid overlay"],
 		[InputProfile.label(&"cycle_mode"), "Cycle measure mode"],
-		["Ctrl (measure)", "Snap to token"],
-		["Right Click / Esc", "Finish measurement"],
+		[InputProfile.label(&"snap_token"), "Snap a measure point to a token"],
+		["Right-click / Esc", "Undo the last point; with none left, stop measuring"],
 	]
 	# The GM's live brushes are map-building tools, whose rows are under Map building; a tool
 	# that exists only in play lists its own rows here.
@@ -93,9 +93,9 @@ func _get_shortcut_data() -> Array:
 			"New map",
 			"Pick a size, a biome and a landform; the seed draws the water and the way across",
 		],
-		["Left Drag", "Paint, thin, place, sculpt or lay a surface (hold still to build)"],
+		["Left-drag", "Paint, thin, place, sculpt or lay a surface (hold still to build)"],
 		[
-			"Ctrl + Left Drag",
+			"Ctrl + left-drag",
 			"Clear, lower (Raise), cut a tier down (Tier), erase paint or water",
 		],
 	]
@@ -103,11 +103,11 @@ func _get_shortcut_data() -> Array:
 	building.append_array(
 		[
 			[
-				"Shift + Wheel / [ ]",
+				"Shift + scroll / [ ]",
 				"Brush size (Place: resize the prop under the cursor; Bridge: its width)",
 			],
-			["Right Click / Esc", "Cancel the stroke in progress"],
-			["Right Click", "Remove a prop, or put the brush down"],
+			["Right-click / Esc", "Cancel the stroke in progress"],
+			["Right-click", "Remove a prop, or put the brush down"],
 			["Delete", "Remove the prop under the cursor"],
 			["Ctrl+Z / Ctrl+Y", "Undo / redo a stroke"],
 		]
@@ -126,13 +126,13 @@ func _get_shortcut_data() -> Array:
 			"header": "Tokens",
 			"entries":
 			[
-				["Left Drag", "Move token"],
-				["Double Left Click", "Center camera on token"],
-				["Right Click", "Actions (rename, duplicate, remove)"],
+				["Left-drag", "Move token"],
+				["Double-click", "Centre the camera on a token"],
+				["Right-click", "Actions (rename, duplicate, remove)"],
 				[InputProfile.label(&"rotate"), "Rotate token"],
 				[InputProfile.label(&"scale"), "Scale token"],
 				[InputProfile.label(&"reset_transform"), "Reset rotation & scale"],
-				["Shift (drag)", "Free move (bypass grid snap)"],
+				["Shift while dragging", "Free move (bypass grid snap)"],
 			],
 		},
 		{"header": "Tools", "entries": tools},

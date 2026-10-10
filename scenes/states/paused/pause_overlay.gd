@@ -2,6 +2,13 @@ class_name PauseOverlay
 extends AnimatedCanvasLayerPanel
 
 ## Pause menu overlay with resume, settings, and return to title options.
+##
+## Leaving the table (Return everyone to the room, Return to title, Quit game) asks first, and
+## the question names the action as its button does (W2). What leaving costs depends on the
+## role and on the tokens: the host's leaving ends the session for everyone, and token moves
+## not yet saved to the map are lost, which is said only when there are some
+## (tokens_unsaved). A confirm that loses something is a danger confirm with Cancel focused
+## and, when this player can save (save_map), offers Save first beside it.
 
 signal resume_requested
 signal main_menu_requested
@@ -10,6 +17,17 @@ signal change_level_requested(level_info: Dictionary)
 signal room_requested
 
 const LEVEL_PICKER_SCENE := preload("res://scenes/ui/level_picker_dialog.tscn")
+## The cost of leaving with unsaved token moves, shown only when there are some.
+const TOKENS_LOST := "Token moves you have not saved to the map will be lost."
+## The leave confirm's save offer: save the tokens to the map, then leave.
+const SAVE_FIRST := "Save first"
+
+## Returns whether the table's tokens differ from the map as saved; Root sets it
+## (LevelPlayController.has_unsaved_tokens). Unset, there are none.
+var tokens_unsaved: Callable = Callable()
+## Saves the table's tokens to the map and returns whether that worked (it toasts either
+## way); Root sets it for a player who can save. Unset, leaving offers no save.
+var save_map: Callable = Callable()
 
 var header: MenuHeader
 var resume_button: Button
@@ -30,8 +48,9 @@ func _on_panel_ready() -> void:
 
 	resume_button = UiActions.primary("Resume", "player-play", "", box)
 	resume_button.pressed.connect(_on_resume_pressed)
-	# The Level Editor and the level picker, by their player-facing names (W5).
-	edit_level_button = UiActions.secondary("Open the Map editor", "wand", box)
+	# The Level Editor and the level picker, by their player-facing names (W5); the editor
+	# by the title's own words for it, here acting on the map on the table.
+	edit_level_button = UiActions.secondary(TitleScreen.SET_UP_TOKENS, "wand", box)
 	edit_level_button.pressed.connect(_on_edit_level_pressed)
 	change_level_button = UiActions.secondary("Change map", "map", box)
 	change_level_button.pressed.connect(_on_change_level_pressed)
@@ -50,9 +69,30 @@ func _on_panel_ready() -> void:
 	quit_game_button.set_meta("ui_silent", true)
 	quit_game_button.pressed.connect(_on_quit_game_pressed)
 
-	# Only show the Map editor and Change map for the GM / local player
+	# Only show Set up tokens and Change map for the GM / local player
 	edit_level_button.visible = NetworkManager.has_gm_access()
 	change_level_button.visible = NetworkManager.has_gm_access()
+
+
+## Leaving reads the tokens on `table` (Root passes it as the menu opens): it names lost
+## token moves only when there are some, and offers to save them to a player who can.
+func watch_table(table: LevelPlayController) -> void:
+	tokens_unsaved = table.has_unsaved_tokens
+	if not NetworkManager.is_restricted_client():
+		save_map = _save_table.bind(table)
+
+
+## Save the table's tokens to its map as the play HUD's Save map does, and say so. Returns
+## whether it saved, so a failed save keeps the table.
+func _save_table(table: LevelPlayController) -> bool:
+	var saved := not table.save_level_with_thumbnail().is_empty()
+	if saved:
+		UIManager.show_success("Map saved")
+	else:
+		UIManager.show_error(
+			preload("res://scenes/states/playing/gameplay_menu_controller.gd").SAVE_ERROR
+		)
+	return saved
 
 
 func _stagger_targets() -> Array[Control]:
@@ -93,49 +133,104 @@ func _on_settings_pressed() -> void:
 	UIManager.open_settings()
 
 
-## Confirm first: the table goes away for every player, and what moved on it is not kept.
+## Confirm first: the table goes away for every player, and unsaved token moves with it.
 func _on_room_pressed() -> void:
-	UIManager.show_confirmation(
-		"Return everyone to the room?",
-		"The table is put away for every player. Tokens moved on it are not kept.",
+	var unsaved := _unsaved()
+	var message := "The table is put away for every player."
+	if unsaved:
+		message += " " + TOKENS_LOST
+	_confirm_leaving(
+		"Return to the room?",
+		message,
 		"Return to the room",
-		"Cancel",
-		func(): room_requested.emit(),
+		unsaved,
+		func() -> void: room_requested.emit(),
+		&"confirm",
 	)
 
 
-## Confirm first (W2: the action and its consequence, on the button too); a danger dialog
-## opens with Cancel focused, so Enter keeps the table.
+## Confirm first (W2: the action and its consequence, on the button too).
 func _on_main_menu_pressed() -> void:
-	UIManager.show_confirmation(
-		"Return to the title?",
-		leave_consequence(NetworkManager.is_networked(), NetworkManager.is_host()),
+	_confirm_leaving(
+		"Return to title?",
+		_leave_message(),
 		"Return to title",
-		"Cancel",
-		func(): main_menu_requested.emit(),
-		Callable(),
-		"Danger",
+		_leaving_loses_work(),
+		func() -> void: main_menu_requested.emit(),
 		&"leave_game",
 	)
 
 
 func _on_quit_game_pressed() -> void:
-	UIManager.show_confirmation(
-		"Quit the game?",
-		leave_consequence(NetworkManager.is_networked(), NetworkManager.is_host()),
+	_confirm_leaving(
+		"Quit game?",
+		_leave_message(),
 		"Quit game",
-		"Cancel",
-		func(): get_tree().quit(),
-		Callable(),
-		"Danger",
+		_leaving_loses_work(),
+		func() -> void: get_tree().quit(),
+		&"confirm",
 	)
 
 
+## Ask before leaving by `action`. A leave that loses something is a danger confirm (Cancel
+## focused, so Enter keeps the table); with unsaved token moves and a way to save, the
+## dialog also offers Save first, which saves and then leaves, and stays when the save
+## fails (short, so three buttons fit the 420 sheet).
+func _confirm_leaving(
+	title: String,
+	message: String,
+	action: String,
+	loses_work: bool,
+	leave: Callable,
+	sound: StringName,
+) -> Node:
+	var dialog: Node = UIManager.show_confirmation(
+		title,
+		message,
+		action,
+		"Cancel",
+		leave,
+		Callable(),
+		"Danger" if loses_work else "Primary",
+		sound,
+	)
+	if _unsaved() and save_map.is_valid():
+		dialog.add_alternate_action(SAVE_FIRST, _save_then.bind(leave))
+	return dialog
+
+
+func _save_then(leave: Callable) -> void:
+	if bool(save_map.call()):
+		leave.call()
+
+
+func _unsaved() -> bool:
+	return tokens_unsaved.is_valid() and bool(tokens_unsaved.call())
+
+
+## Whether leaving the table loses something: the session for everyone (the host), or
+## token moves this player could have saved.
+func _leaving_loses_work() -> bool:
+	var networked := NetworkManager.is_networked()
+	if networked and NetworkManager.is_host():
+		return true
+	return not networked and _unsaved()
+
+
+func _leave_message() -> String:
+	var networked := NetworkManager.is_networked()
+	var host := NetworkManager.is_host()
+	return leave_consequence(networked, host, (host or not networked) and _unsaved())
+
+
 ## What leaving the table costs: the host's leaving ends the session for everyone, a
-## player's leaves it to the others, and token moves not saved to the map are lost.
-static func leave_consequence(networked: bool, host: bool) -> String:
-	if networked and host:
-		return "The session ends for every player. Token moves not saved to the map are lost."
-	if networked:
+## player's leaves it to the others, and token moves not saved to the map are lost, said
+## only when `unsaved`.
+static func leave_consequence(networked: bool, host: bool, unsaved: bool) -> String:
+	if networked and not host:
 		return "You leave the session; the others play on."
-	return "Token moves not saved to the map are lost."
+	var lines: Array[String] = []
+	if networked:
+		lines.append("The session ends for every player.")
+	lines.append(TOKENS_LOST if unsaved else "Your tokens are saved to the map.")
+	return " ".join(lines)

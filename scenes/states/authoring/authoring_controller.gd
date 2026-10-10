@@ -194,7 +194,7 @@ func _offer_recovery(request: Dictionary) -> void:
 	_recovery_prompt = UIManager.show_confirmation(
 		"Recover an unsaved map?",
 		(
-			'Map building closed before "%s" was saved. Recover it, or discard it and go on?'
+			"Map building closed before “%s” was saved. Recover it, or discard it and go on?"
 			% saved.level_name
 		),
 		"Recover",
@@ -734,7 +734,7 @@ func save_async() -> bool:
 		return false
 	session.mark_saved()
 	AuthoringAutosave.discard()
-	UIManager.show_success('Saved "%s"' % level.level_name)
+	UIManager.show_success("Saved “%s”" % level.level_name)
 	return true
 
 
@@ -804,10 +804,10 @@ func request_leave() -> void:
 	panel.set_leave_pending(true)
 	_leave_prompt = UIManager.show_choice(
 		"Leave with unsaved changes?",
-		'The changes to "%s" are not saved yet.' % panel.get_map_name(),
+		"The changes to “%s” are not saved yet." % panel.get_map_name(),
 		"Save and leave",
 		"Discard",
-		"Keep editing",
+		"Cancel",
 		_save_and_leave,
 		_discard_and_leave
 	)

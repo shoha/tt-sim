@@ -17,6 +17,12 @@ extends CanvasLayer
 ## Rows that should fade and lift in one after another are returned from
 ## _stagger_targets(); the base hides them before the first frame and runs the
 ## stagger alongside animate_in().
+##
+## One scrim (docs/UI_TASTE.md G1): a panel opened over a live panel whose ColorRect is a
+## Scrim (a confirmation over the pause menu, the picker over it) lays no scrim of its own,
+## since a second one darkened the sheet below to grey-mauve. It stands on the scrim already
+## there and takes the place of the sheet below, which fades out (cover) and comes back, with
+## its focus, as the panel over it closes.
 
 ## Stack of live panels, topmost last. Only the topmost panel traps Tab, so a
 ## dialog opened over another panel (e.g. LevelPickerDialog over the pause
@@ -29,6 +35,12 @@ static var _trap_stack: Array[AnimatedCanvasLayerPanel] = []
 
 var _panel_tween: Tween
 var _focusable_controls: Array[Control] = []
+## The scrimmed panel this one stands over and hides (see the header), or null.
+var _covered: AnimatedCanvasLayerPanel = null
+var _cover_tween: Tween
+## The control that had focus in this panel when a panel covered it, for its return.
+var _focus_before_cover: Control = null
+var _leaving: bool = false
 
 
 func _ready() -> void:
@@ -42,6 +54,12 @@ func _ready() -> void:
 	# Build focus ring for trapping
 	if trap_focus:
 		rebuild_focus_trap()
+
+	# Over a scrimmed panel, share its scrim and take the place of its sheet (one scrim).
+	_covered = _scrimmed_panel_below()
+	if _covered != null:
+		($ColorRect as CanvasItem).self_modulate.a = 0.0
+		_covered.cover(true)
 
 	# Register as the topmost panel, even when trap_focus is false — a
 	# non-trapping panel is still the topmost surface, so a lower trapping
@@ -60,6 +78,55 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	_trap_stack.erase(self)
+	_uncover()
+
+
+## The topmost live panel below this one that stands on a scrim (its ColorRect is a Scrim),
+## or null.
+func _scrimmed_panel_below() -> AnimatedCanvasLayerPanel:
+	for i in range(_trap_stack.size() - 1, -1, -1):
+		var panel := _trap_stack[i]
+		if not is_instance_valid(panel) or panel == self or panel._leaving:
+			continue
+		if not panel.is_inside_tree() or panel.is_queued_for_deletion():
+			continue
+		var backdrop := panel.get_node_or_null("ColorRect") as CanvasItem
+		if backdrop is Scrim and backdrop.is_visible_in_tree():
+			return panel
+		return null
+	return null
+
+
+## Fade this panel's sheet out while a panel stacked over it holds the screen (`on`), or
+## back in, giving focus back to the control that had it.
+func cover(on: bool) -> void:
+	var sheet := $CenterContainer/PanelContainer as Control
+	if _cover_tween and _cover_tween.is_valid():
+		_cover_tween.kill()
+	_cover_tween = create_tween().set_trans(Tween.TRANS_CUBIC)
+	if on:
+		var focused := get_viewport().gui_get_focus_owner()
+		_focus_before_cover = focused if focused != null and sheet.is_ancestor_of(focused) else null
+		_cover_tween.set_ease(Tween.EASE_IN)
+		_cover_tween.tween_property(sheet, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
+		_cover_tween.tween_callback(sheet.hide)
+		return
+	sheet.show()
+	_cover_tween.set_ease(Tween.EASE_OUT)
+	_cover_tween.tween_property(sheet, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
+	if is_instance_valid(_focus_before_cover) and _focus_before_cover.is_visible_in_tree():
+		_focus_before_cover.grab_focus()
+	_focus_before_cover = null
+
+
+## Give the covered panel its sheet back, once.
+func _uncover() -> void:
+	var below := _covered
+	_covered = null
+	if not is_instance_valid(below) or below._leaving:
+		return
+	if below.is_inside_tree() and not below.is_queued_for_deletion():
+		below.cover(false)
 
 
 ## Override this in subclasses instead of _ready().
@@ -97,7 +164,10 @@ func animate_in() -> void:
 
 ## Smoothly hide the panel with scale + fade animation, then queue_free().
 func animate_out() -> void:
+	_leaving = true
 	_on_before_animate_out()
+	# The sheet below comes back as this one goes.
+	_uncover()
 
 	if _panel_tween:
 		_panel_tween.kill()

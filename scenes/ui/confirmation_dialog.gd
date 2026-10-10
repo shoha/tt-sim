@@ -67,7 +67,7 @@ func setup(
 
 
 ## Adds a third choice as a Secondary button between Cancel and the confirm button (for
-## example "Discard" between "Keep editing" and "Save and leave"). Pressing it calls
+## example "Discard" between "Cancel" and "Save and leave"). Pressing it calls
 ## `callback` and closes the dialog; `closed` reports false, as for Cancel. Escape still
 ## means Cancel.
 func add_alternate_action(text: String, callback: Callable) -> Button:
@@ -78,6 +78,8 @@ func add_alternate_action(text: String, callback: Callable) -> Button:
 	button.custom_minimum_size = Vector2(120, 0)
 	button.set_meta("ui_silent", true)
 	var row := confirm_button.get_parent()
+	# Three buttons share the 420 sheet's footer: Cancel takes its own width, not 120.
+	cancel_button.custom_minimum_size.x = 0.0
 	row.add_child(button)
 	row.move_child(button, confirm_button.get_index())
 	button.pressed.connect(_on_alternate_pressed.bind(callback))

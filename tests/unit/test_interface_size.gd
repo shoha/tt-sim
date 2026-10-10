@@ -106,9 +106,9 @@ func test_labels() -> void:
 	# Fixed sizes are bare percents; only the one Auto picks on this window is marked, so
 	# 100% at 720p does not read as the normal size.
 	assert_eq(InterfaceSize.label_for(100, _window(720)), "100%")
-	assert_eq(InterfaceSize.label_for(140, _window(720)), "140% (Auto's size here)")
+	assert_eq(InterfaceSize.label_for(140, _window(720)), "140% (Auto on this screen)")
 	assert_eq(InterfaceSize.label_for(150, _window(720)), "150%")
-	assert_eq(InterfaceSize.label_for(100, _window(1080)), "100% (Auto's size here)")
+	assert_eq(InterfaceSize.label_for(100, _window(1080)), "100% (Auto on this screen)")
 	assert_eq(InterfaceSize.label_for(90, _window(1080)), "90%")
 
 

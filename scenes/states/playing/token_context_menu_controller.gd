@@ -222,7 +222,7 @@ func _on_context_menu_control_assign_requested(token: BoardToken) -> void:
 	if token_state:
 		token_name = token_state.token_name
 
-	dialog.setup('Assign Control: "%s"' % token_name, players, exclude)
+	dialog.setup("Assign control: “%s”" % token_name, players, exclude)
 	dialog.player_selected.connect(
 		func(peer_id: int): _grant_token_control(token, peer_id),
 		CONNECT_ONE_SHOT,
@@ -256,7 +256,7 @@ func _grant_token_control(token: BoardToken, peer_id: int) -> void:
 		var player_name: String = (
 			players[peer_id].get("name", "Player") if players.has(peer_id) else "Player"
 		)
-		UIManager.show_success('%s can now control "%s"' % [player_name, token_name])
+		UIManager.show_success("%s can now control “%s”" % [player_name, token_name])
 
 
 ## Remove at once, no confirm (UI_TASTE I4: recovery is safe): the toast that reports the
@@ -284,7 +284,7 @@ func _remove_token(token: BoardToken) -> void:
 	var lpc := _game_map.get_level_play_controller()
 	if not lpc or not lpc.remove_token(token):
 		return
-	var message := 'Removed "%s"' % removed_name
+	var message := "Removed “%s”" % removed_name
 	if token_state == null:
 		UIManager.show_info(message)
 		return

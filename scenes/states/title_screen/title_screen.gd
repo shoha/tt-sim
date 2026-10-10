@@ -5,11 +5,16 @@ extends CanvasLayer
 ## the selected card is the level a host starts with (or Play Solo opens). Avatars opens
 ## the player's saved avatars (AvatarRoster).
 ## The d20 sub-viewport stays over a sky-coloured backdrop.
+##
+## The lower stack names what each action works on: Play solo and Set up tokens act on the
+## selected map (their captions name it, as Host's does), New map starts one from nothing.
+## Set up tokens is the Level Editor by what it does (starting tokens, the map's details and
+## its Blender file; W5 keeps "level" internal); with no map selected it opens on a new one.
 
 signal host_game_requested(level_info: Dictionary)
 signal join_game_requested
 signal play_solo_requested(level_info: Dictionary)
-## Build Map: a new map in authoring mode (Root shows the new-map dialog).
+## New map: a new map in authoring mode (Root shows the new-map dialog).
 signal build_map_requested
 ## A card's "Edit map": open that level's map in authoring mode.
 signal edit_map_requested(level_info: Dictionary)
@@ -17,13 +22,19 @@ signal edit_map_requested(level_info: Dictionary)
 const SettingsMenuScene := preload("res://scenes/ui/settings_menu.tscn")
 const ENTRANCE_STAGGER := Constants.ANIM_ENTRANCE_STAGGER
 const ENTRANCE_DURATION := Constants.ANIM_ENTRANCE
-const EMPTY_CAPTION := "No maps yet. Build one, or set one up in the Map editor"
+## The Level Editor's player-facing name, here, on a card's menu and in the pause menu.
+const SET_UP_TOKENS := "Set up tokens"
+const NEW_MAP_CAPTION := "Pick a landform, then paint it"
+const EMPTY_CAPTION := (
+	"No maps yet. Start a new map, or open Set up tokens to bring one in from Blender"
+)
 ## The left column's rhythm. Its own separation (BoxContainerTight, 4) puts a caption under
 ## its button; every other gap is a spacer before a row, sized by _fit_to_canvas. A caption
 ## stands AFTER_CAPTION_GAP above the next control, so it reads with its own button; stacked
 ## buttons stand STACK_GAP_ROOMY apart, or STACK_GAP when the canvas is short; the three
 ## section gaps (under the wordmark, above and below the divider) take what is left, from
-## their SECTION_GAPS size down to SECTION_GAP_MIN. The column is measured against the room
+## their SECTION_GAPS size down to SECTION_GAP_MIN (8: on a 1280x720 canvas the two map
+## actions' captions need the room). The column is measured against the room
 ## the hub's margins leave it (they keep the bottom-left version label clear), and tightens
 ## only by what that room needs: the stacked gaps first, then the sections, evenly
 ## (docs/THEME_GUIDE.md, Interface size).
@@ -32,7 +43,7 @@ const STACK_GAP := 8.0
 const STACK_GAP_ROOMY := 12.0
 ## Under the wordmark, above the divider, below it.
 const SECTION_GAPS: Array[float] = [36.0, 32.0, 32.0]
-const SECTION_GAP_MIN := 12.0
+const SECTION_GAP_MIN := 8.0
 
 ## Returns the level info list; tests inject a fake before the node enters the tree.
 var level_provider: Callable = LevelManager.get_saved_levels
@@ -47,6 +58,7 @@ var settings_button: Button
 var quit_button: Button
 var host_subtitle: Label
 var play_subtitle: Label
+var editor_subtitle: Label
 var heading_count: Label
 var empty_caption: Label
 var grid: LevelGrid
@@ -115,12 +127,13 @@ func _fit_to_canvas() -> void:
 
 ## Size every spacer: a row's gap is AFTER_CAPTION_GAP after a caption, else `stack`; each
 ## section gap gives up the share `squeeze` of its way down to SECTION_GAP_MIN. A spacer's
-## height is its gap less the column's separation above and below it.
+## height is its gap less the column's separation above and below it, in whole pixels, rounded
+## down: the box rounds each child's height up, which put a fully squeezed column 2 px over.
 func _set_gaps(stack: float, squeeze: float) -> void:
 	var separation := float(_left.get_theme_constant(&"separation"))
 	for i in _section_gaps.size():
 		var gap := lerpf(SECTION_GAPS[i], SECTION_GAP_MIN, squeeze)
-		_section_gaps[i].custom_minimum_size.y = maxf(gap - 2.0 * separation, 0.0)
+		_section_gaps[i].custom_minimum_size.y = floorf(maxf(gap - 2.0 * separation, 0.0))
 	for spacer in _row_gaps:
 		var row := _left.get_child(spacer.get_index() + 1) as Control
 		spacer.visible = row.visible
@@ -161,19 +174,32 @@ func _build_left_column() -> void:
 	play_button = UiActions.secondary("Play solo", "map", _left)
 	play_subtitle = UiActions.subtitle_of(play_button)
 	play_button.pressed.connect(_on_play_pressed)
-	# The Level Editor, by its player-facing name (W5: "level" stays internal).
-	editor_button = _stacked("Map editor", "wand")
+	# The Level Editor, by what it does to the selected map (W5: "level" stays internal).
+	editor_button = _stacked(SET_UP_TOKENS, "wand")
+	editor_button.tooltip_text = "Starting tokens, details and the map file of the selected map"
+	editor_subtitle = UiActions.subtitle_of(editor_button)
 	editor_button.pressed.connect(_on_editor_pressed)
-	build_map_button = _stacked("Build map", "brush")
+	build_map_button = _stacked("New map", "brush")
+	var new_map_caption := UiActions.subtitle_of(build_map_button)
+	new_map_caption.text = NEW_MAP_CAPTION
+	new_map_caption.visible = true
 	build_map_button.pressed.connect(_on_build_map_pressed)
 	avatars_button = _stacked("Avatars", "mood-smile")
 	avatars_button.tooltip_text = "Make your characters ahead of time; place them in any game"
 	avatars_button.pressed.connect(_on_avatars_pressed)
 	avatars_button.visible = DevFeatures.avatars
-	settings_button = _stacked("Settings", "settings")
+	# Settings and Quit share the last row: the two map actions' captions need its height.
+	_row_gaps.append(UiActions.spacer(0, _left))
+	var last_row := HBoxContainer.new()
+	last_row.name = "SettingsAndQuit"
+	last_row.theme_type_variation = &"BoxContainerSpaced"
+	_left.add_child(last_row)
+	settings_button = UiActions.secondary("Settings", "settings", last_row)
 	settings_button.pressed.connect(_on_settings_pressed)
-	quit_button = _stacked("Quit", "x")
+	quit_button = UiActions.secondary("Quit", "x", last_row)
 	quit_button.pressed.connect(_on_quit_pressed)
+	for button in [settings_button, quit_button]:
+		(button as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 
 ## A Secondary button in the lower stack, after its row gap.
@@ -186,8 +212,8 @@ func _build_right_zone() -> void:
 	var heading_row := HBoxContainer.new()
 	heading_row.name = "Heading"
 	heading_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# The count reads with its heading ("Your maps  3 maps"), sitting on the heading's
-	# baseline rather than pinned to the window's far edge.
+	# The count reads with its heading as a bare number ("Your maps  3"), sitting on the
+	# heading's baseline rather than pinned to the window's far edge.
 	heading_row.theme_type_variation = &"BoxContainerSpaced"
 	var heading := Label.new()
 	heading.text = "Your maps"
@@ -229,10 +255,11 @@ func _preselect_most_recent() -> void:
 	grid.select(String(newest.get("path", "")))
 
 
-## Host and Play Solo name the selected level and are disabled without one.
+## Host and Play Solo name the selected level and are disabled without one; Set up tokens
+## names it too, and opens on a new map without one.
 func _refresh_actions() -> void:
 	var count := grid.card_count()
-	heading_count.text = "%d map%s" % [count, "" if count == 1 else "s"]
+	heading_count.text = str(count)
 	empty_caption.visible = count == 0
 	var info := grid.selected_info()
 	var has_level := not info.is_empty()
@@ -240,9 +267,11 @@ func _refresh_actions() -> void:
 	play_button.disabled = not has_level
 	host_subtitle.visible = has_level
 	play_subtitle.visible = has_level
+	editor_subtitle.visible = has_level
 	var name := String(info.get("name", ""))
 	host_subtitle.text = "with %s" % name if has_level else ""
 	play_subtitle.text = name
+	editor_subtitle.text = "on %s" % name if has_level else ""
 	# A caption shown or hidden changes the column's height and the gap after it.
 	_fit_to_canvas()
 
@@ -313,10 +342,10 @@ func _on_play_pressed() -> void:
 	play_solo_requested.emit(info)
 
 
+## Set up tokens opens the editor on the selected map, as its caption says; with none
+## selected, on a new map (where a Blender map file can be chosen).
 func _on_editor_pressed() -> void:
-	# The Level Editor button opens the editor with no particular level chosen; the
-	# per-card Edit action is what names one.
-	EventBus.open_editor_requested.emit("")
+	EventBus.open_editor_requested.emit(String(grid.selected_info().get("path", "")))
 
 
 func _on_build_map_pressed() -> void:

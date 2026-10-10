@@ -123,20 +123,63 @@ func _clear_span(viewport: Viewport, span: Vector2, centre: float) -> Vector2:
 	return clear
 
 
-## Hold the backdrop to the row's one-line width, or to `room` when that is narrower (the
-## flow then wraps), and return that width. A width, not an animation: it changes with the
-## chips or the span.
+## Hold the backdrop to the row's one-line width, or, when `room` is narrower and the flow
+## wraps, to the narrowest width that wraps onto no more lines than `room` does, so the lines
+## come out even and the last chip (Help) never stands alone on its own. Returns that width.
+## A width, not an animation: it changes with the chips or the span.
 func _fit_row(room: float) -> float:
-	var chips := 0
-	var line := 0.0
+	var widths: Array[float] = []
 	for chip in hints_container.get_children():
-		line += (chip as Control).get_combined_minimum_size().x
-		chips += 1
-	if chips > 1:
-		line += float(hints_container.get_theme_constant(&"h_separation")) * float(chips - 1)
-	line += _backdrop.get_theme_stylebox(&"panel").get_minimum_size().x
-	_backdrop.custom_minimum_size.x = minf(line, maxf(room, 0.0))
+		widths.append((chip as Control).get_combined_minimum_size().x)
+	var separation := float(hints_container.get_theme_constant(&"h_separation"))
+	var padding := _backdrop.get_theme_stylebox(&"panel").get_minimum_size().x
+	var content := balanced_width(widths, separation, maxf(room - padding, 0.0))
+	_backdrop.custom_minimum_size.x = minf(content + padding, maxf(room, 0.0))
 	return _backdrop.custom_minimum_size.x
+
+
+## The width a flow of chips `widths` apart by `separation` takes within `room`: its one-line
+## width when that fits, else the least width (to the pixel) that wraps it onto as few lines
+## as `room` does, which evens the lines out. Pure.
+static func balanced_width(widths: Array[float], separation: float, room: float) -> float:
+	if widths.is_empty():
+		return 0.0
+	var line := 0.0
+	var widest := 0.0
+	for width in widths:
+		line += width
+		widest = maxf(widest, width)
+	line += separation * float(widths.size() - 1)
+	if line <= room:
+		return line
+	if widest >= room:
+		return room
+	var lines := wrapped_lines(widths, separation, room)
+	var low := widest
+	var high := room
+	while high - low > 1.0:
+		var mid := (low + high) / 2.0
+		if wrapped_lines(widths, separation, mid) <= lines:
+			high = mid
+		else:
+			low = mid
+	return ceilf(high)
+
+
+## How many lines a flow of chips `widths` apart by `separation` wraps onto at `width`,
+## filling each line before starting the next, as the flow does. Pure.
+static func wrapped_lines(widths: Array[float], separation: float, width: float) -> int:
+	var lines := 1
+	var used := -1.0
+	for chip in widths:
+		if used < 0.0:
+			used = chip
+		elif used + separation + chip <= width:
+			used += separation + chip
+		else:
+			lines += 1
+			used = chip
+	return lines
 
 
 ## Set hints to display. Each hint is a dictionary with "key" and "action".

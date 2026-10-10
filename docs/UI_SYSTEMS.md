@@ -171,10 +171,17 @@ func show_danger_confirmation(
 ) -> Node
 ```
 
-`LevelEditPanel`'s unsaved-changes prompt calls it with `confirm_text = "Discard changes"` and
-`cancel_text = "Keep editing"` — relabelling both buttons, since a bare "Cancel" next to the
-drawer's own Cancel button would be ambiguous about which one it cancelled. See
-[Unsaved Changes](#unsaved-changes) below.
+`LevelEditPanel`'s unsaved-changes prompt calls it as "Discard changes?" with
+`confirm_text = "Discard changes"`. Every confirmation's safe button reads **Cancel** (End
+session, the leave confirms, the three-way leave prompts), so a player learns one word for "keep
+what is there". See [Unsaved Changes](#unsaved-changes) below.
+
+A confirmation (any `AnimatedCanvasLayerPanel`) opened over a live panel that stands on a
+`Scrim`, such as the pause menu, lays no scrim of its own: a second scrim turned the sheet below
+grey-mauve (UI_TASTE G1). It stands on the scrim already there and takes the place of the sheet
+below, which fades out (`cover(true)`) and comes back with its focus as the panel over it closes.
+With a third button (`add_alternate_action`) Cancel drops its 120 px minimum so the footer fits
+the 420 sheet.
 
 ### Parameters
 
@@ -332,8 +339,15 @@ Contextual keybinding hints in a bar at the bottom centre of the screen (`InputH
   `InputHints.OBSTACLES` (the play HUD's Add Token and Save Level, by scene group) end the span
   where they stand, and the bar moves aside only as far as they need. The row (`%HintRow`, a
   centred `HFlowContainer`) is held to the clear span less 12 px each side, so a longer row
-  wraps onto a second line growing up from the bottom edge (the measure tool's keys at 720p
-  Auto) instead of running past the canvas.
+  wraps onto a second line growing up from the bottom edge (the play row beside the room
+  drawer at 1366x768) instead of running past the canvas. A row that wraps is held to the
+  narrowest width that keeps its line count (`InputHints.balanced_width`), so its lines come
+  out even and Help is never left alone on the last line.
+- **Words**: keys read as Settings > Controls and Help name them (`InputProfile.LABELS`):
+  Click, Ctrl + click, Right-click, Middle-drag, Scroll, never LMB or RMB. The measure tool's
+  row is Click Place point, Ctrl + click Snap to token, Right-click Undo last point, Tab Measure
+  a sphere and M Stop measuring (`MeasureTool.hints_for`; Right-click with no point left stops
+  it too).
 - **Diffing**: hint changes are diffed by key, never rebuilt. A kept key's chip stays the same
   node (a new action relabels it in place), a new key's chip fades in, a removed key's chip
   fades out where it stands and is freed, and a key re-added while its chip is still fading out
@@ -403,14 +417,20 @@ the d20 sub-viewport as a dimmed backdrop behind both.
 
 ### Left Column
 
-Built by `_build_left_column()`. **Host Game** and **Join Game** are tall primary actions
-(`UiActions.primary()`: icon, bold label, caption underneath); below a separator, **Play Solo**,
-**Level Editor**, **Build Map**, **Avatars**, **Settings**, and **Quit** are compact secondary actions
-(`UiActions.secondary()`). Build Map emits `build_map_requested`, which Root turns into the
-new-map dialog and then [authoring mode](#authoring-mode). Avatars opens the
-[avatar roster](#avatar-library).
-Host Game and Play Solo are disabled until a card is selected; once one is, their captions name it
-("with <name>" for Host, the level name for Play Solo).
+Built by `_build_left_column()`. **Host game** and **Join game** are tall primary actions
+(`UiActions.primary()`: icon, bold label, caption underneath); below a separator, **Play solo**,
+**Set up tokens**, **New map**, **Avatars**, and **Settings** and **Quit** side by side on the
+last row are compact secondary actions (`UiActions.secondary()`). The two map actions name what
+differs: Set up tokens is the Level Editor by what it does (starting tokens, the map's details
+and its Blender file) and opens it on the selected map, captioned "on <name>" (with none
+selected it opens on a new map, the way to bring in a Blender map); New map carries the caption
+"Pick a landform, then paint it" and emits `build_map_requested`, which Root turns into the
+new-map dialog and then [authoring mode](#authoring-mode). A card's overflow menu and the pause
+menu use the same name, Set up tokens (`TitleScreen.SET_UP_TOKENS`), and so does the editor's
+own header. Avatars opens the [avatar roster](#avatar-library).
+Host game and Play solo are disabled until a card is selected; once one is, their captions name it
+("with <name>" for Host, the map's name for Play solo). "Your maps" carries its count as a bare
+number beside the heading.
 
 ### Right Zone
 
@@ -636,10 +656,29 @@ during gameplay).
 
 The scene holds only the shell: `_on_panel_ready()` builds a `MenuHeader` ("Paused" / "Esc to
 resume") and the rows through `UiActions`. **Resume** is the only accent action, continuing play.
-**Edit Level** and **Change Level** are still GM-gated (`NetworkManager.has_gm_access()`) --
-Edit Level resumes and opens the level editor, Change Level opens `LevelPickerDialog` and swaps the
+**Set up tokens** and **Change map** are still GM-gated (`NetworkManager.has_gm_access()`) --
+Set up tokens resumes and opens the level editor on the map on the table (the title's name for
+it, `TitleScreen.SET_UP_TOKENS`), Change map opens `LevelPickerDialog` and swaps the
 level without leaving the current game (see Change Level below). **Settings** opens the settings
-menu. **Return to Title** and **Quit Game** are `Secondary` and still confirm before acting.
+menu. **Return to title** and **Quit game** are `Secondary` and still confirm before acting.
+
+### Leaving the table
+
+Return everyone to the room, Return to title and Quit game confirm through
+`_confirm_leaving()`, the question naming the action as its button does ("Return to title?" /
+Return to title, W2). The message is the cost by role (`leave_consequence(networked, host,
+unsaved)`): the host's leaving ends the session for every player, a player's leaves it to the
+others, and "Token moves you have not saved to the map will be lost." appears only when the
+table's tokens differ from the map as saved. Root hands the menu the table as it opens
+(`watch_table(LevelPlayController)`): `tokens_unsaved` asks
+`LevelPlayController.has_unsaved_tokens()` (`TokenSaveState`: placements snapshotted when the
+level loads and after each save, against the live tokens, with a 10 cm move and 30 cm settle
+tolerance), and `save_map` saves as the play HUD's Save map does, for a player who can save. A
+leave that loses something (unsaved moves, or the session for everyone) is a `Danger` confirm
+with Cancel focused; with unsaved moves it also offers **Save first** (the alternate action:
+save, then leave; a failed save stays). A leave that loses nothing is a plain confirm. Over the
+pause menu each confirm stands on the pause menu's scrim in place of its sheet (one scrim, see
+[Confirmation Dialogs](#confirmation-dialogs)).
 
 ### Behavior
 
@@ -654,8 +693,8 @@ menu. **Return to Title** and **Quit Game** are `Secondary` and still confirm be
 Picking a level in the `LevelPickerDialog` (locked to the level currently in play) emits
 `change_level_requested(level_info)`; `Root._on_pause_change_level_requested()` resumes first, then
 routes through `GameplayMenuController.request_level_change(on_ready)`. If the Visuals drawer
-(`LevelEditPanel`) has unsaved edits, that shows a "Discard the changes... and change the level?"
-danger confirmation before continuing; a clean drawer proceeds immediately. Once ready,
+(`LevelEditPanel`) has unsaved edits, that shows a "Discard the look and change map?" danger
+confirmation before continuing; a clean drawer proceeds immediately. Once ready,
 `Root.request_level_change(level_info)` loads the new level and reloads it in place in the current
 session (`Root._on_play_level_requested()`), broadcasting the level data to clients if the local
 peer is the host.
@@ -1155,7 +1194,7 @@ The panel registers itself with `UIManager.register_overlay()` for the whole ses
 (`begin_session()`), so Escape never reaches the pause handling. `request_close()` closes the
 drawer when it is open; with the drawer closed it asks to leave. Leaving with everything
 saved is immediate. With unsaved changes `UIManager.show_choice()` asks "Leave with unsaved
-changes?" with Keep editing (Cancel and Escape), Discard (a Secondary alternate action,
+changes?" with Cancel (also Escape), Discard (a Secondary alternate action,
 `ConfirmationDialogUI.add_alternate_action`), and Save and leave (the confirm button).
 Leaving goes back to the title, or to the Level Editor on the same level when authoring was
 opened from there.

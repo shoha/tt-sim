@@ -174,10 +174,10 @@ func ask_to_leave() -> void:
 		leave_requested.emit()
 		return
 	UIManager.show_confirmation(
-		"End the session?",
+		"End session?",
 		"Everyone goes back to their title screen.",
 		"End session",
-		"Stay",
+		"Cancel",
 		leave_requested.emit,
 		Callable(),
 		"Danger",

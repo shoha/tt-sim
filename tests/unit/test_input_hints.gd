@@ -151,6 +151,19 @@ func test_a_tool_layer_leads_and_the_base_row_returns_in_order() -> void:
 	assert_eq(_hints._action_label(_hints.chip_for("M")).text, "Measure")
 
 
+## A row that must wrap is held to the narrowest width that keeps its line count, so its
+## lines come out even and the last chip (Help) is never left alone on a line.
+func test_a_wrapped_row_balances_its_lines() -> void:
+	var widths: Array[float] = [100.0, 100.0, 100.0, 100.0, 100.0, 60.0]
+	# One line is 560 + 5 * 10 = 610; in 600 the greedy wrap leaves the 60 alone.
+	assert_eq(InputHints.wrapped_lines(widths, 10.0, 600.0), 2)
+	var width := InputHints.balanced_width(widths, 10.0, 600.0)
+	assert_eq(InputHints.wrapped_lines(widths, 10.0, width), 2)
+	assert_true(width <= 331.0, "three chips a line, not five and one: %.0f" % width)
+	assert_eq(InputHints.balanced_width(widths, 10.0, 700.0), 610.0, "one line fits")
+	assert_eq(InputHints.balanced_width([] as Array[float], 10.0, 600.0), 0.0)
+
+
 func test_hints_set_while_hidden_arrive_with_the_bar() -> void:
 	_hints.set_hints([{"key": "G", "action": "Grid"}])
 	assert_eq(_hints.chip_for("G").modulate.a, 1.0, "the bar's entrance carries the chip")

@@ -24,13 +24,20 @@ extends RefCounted
 ##   drawer), or close it.
 ## - `toasts`: one toast of each kind, with copy the game uses.
 ## - `undo_toast`: the toast a removed token shows, with its Undo.
-## - `danger`: press the open pause menu's Return to title: its danger confirmation, with
-##   Cancel focused as the game opens it.
+## - `danger`: press the open pause menu's Return to title with an unsaved token move staged:
+##   its danger confirmation, with Save first and Cancel focused as the game opens it.
 ## - `dismiss`: cancel every open confirmation dialog.
 ## - `browser` (`open`, default true): open or close the Add Token browser.
 ## - `dusk` (`hour`, default 19.0): set the play map's time of day as a player dragging the
 ##   Sun pane's Time of day row does (the visuals drawer must be open on Sun; the edit is
 ##   live and left unsaved), so the in-play captures can be taken against a dark board.
+## - `unsaved` (`shift`, default 0.75 h): the same edit by a small step from the map's own
+##   time, so the Visuals drawer shows its unsaved state (the lake dot, Save look) on a board
+##   that still looks like itself. `revert` presses the drawer's Cancel: the edit is undone
+##   and the drawer closes.
+## - `hover_rail` (`which`, `pane`): hover a drawer's rail item with a synthetic pointer
+##   event, so its tooltip shows after the tooltip delay (the OS cursor is not moved);
+##   `unhover` moves the synthetic pointer to the window's top-left corner.
 ## - `focus` (`target` "title_join", "add_token", "title_card" or "glass_tile"): give
 ##   keyboard focus to a quiet button, the title's Join Game (paper) or the play HUD's Add
 ##   Token (glass), or to a selected item, the title's selected level card (paper) or the
@@ -63,7 +70,7 @@ static func run(base: Node, step: Dictionary) -> String:
 		"danger":
 			return _danger(base)
 		"undo_toast":
-			UIManager.show_undo_toast('Removed "Marigold"', func() -> void: pass)
+			UIManager.show_undo_toast("Removed “Marigold”", func() -> void: pass)
 			return "undo toast"
 		"dismiss":
 			return _dismiss(base)
@@ -71,6 +78,19 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _browser(base, bool(step.get("open", true)))
 		"dusk":
 			return _dusk(base, float(step.get("hour", 19.0)))
+		"unsaved":
+			return _unsaved(base, float(step.get("shift", 0.75)))
+		"revert":
+			var panel := _find_drawer(base, "visuals") as LevelEditPanel
+			if panel == null:
+				return "no visuals drawer"
+			panel.cancel_requested.emit()
+			return "visuals edits reverted"
+		"hover_rail":
+			return _hover_rail(base, step)
+		"unhover":
+			_pointer_to(Vector2.ONE)
+			return "pointer at the corner"
 		"focus":
 			return _focus(base, String(step.get("target", "")))
 		"blur":
@@ -247,6 +267,32 @@ static func _dusk(base: Node, hour: float) -> String:
 	return "time of day %s" % SunPane.format_time(hour)
 
 
+static func _unsaved(base: Node, shift: float) -> String:
+	var panel := _find_drawer(base, "visuals") as LevelEditPanel
+	if panel == null or not panel.is_open:
+		return "the visuals drawer is not open"
+	return _dusk(base, panel.sun_pane._sun.time_of_day + shift)
+
+
+static func _hover_rail(base: Node, step: Dictionary) -> String:
+	var drawer := _find_drawer(base, String(step.get("which", "visuals")))
+	var pane := StringName(String(step.get("pane", "")))
+	var button: Control = drawer._rail._buttons.get(pane) if drawer else null
+	if button == null:
+		return "no rail item %s" % pane
+	var centre := button.get_global_rect().get_center()
+	_pointer_to(base.get_viewport().get_final_transform() * centre)
+	return "hovering %s: %s" % [pane, button.tooltip_text]
+
+
+## A synthetic pointer move to `window_pos` (window pixels); the OS cursor stays put.
+static func _pointer_to(window_pos: Vector2) -> void:
+	var motion := InputEventMouseMotion.new()
+	motion.position = window_pos
+	motion.global_position = window_pos
+	Input.parse_input_event(motion)
+
+
 static func _focus(base: Node, target: String) -> String:
 	var button: Button = null
 	match target:
@@ -289,7 +335,7 @@ static func _first_pressed(root: Node, variation: StringName) -> Button:
 static func _toasts() -> String:
 	UIManager.show_success("Map saved")
 	UIManager.show_info("Undone: Move token")
-	UIManager.show_warning("Maps are built offline. Leave the game to build or edit a map.")
+	UIManager.show_warning(preload("res://scenes/root.gd").authoring_refusal(null, true))
 	UIManager.show_error(MapLoadError.text("user://levels/_ui_tour_gone/", "Old Mill"))
 	return "four toasts"
 
@@ -300,6 +346,9 @@ static func _danger(base: Node) -> String:
 	var pause: Variant = base.get("_pause_overlay")
 	if not is_instance_valid(pause):
 		return "the pause menu is not open"
+	# Staged: the tour's map has no tokens, so the probe says one moved and was not saved,
+	# and the confirmation names the loss and offers Save first.
+	(pause as PauseOverlay).tokens_unsaved = func() -> bool: return true
 	(pause as PauseOverlay).main_menu_button.pressed.emit()
 	return "danger confirmation"
 

@@ -4,7 +4,8 @@ extends Button
 ## A saved level as a card: thumbnail, name, and a caption with the token count
 ## and when it was last edited. Press selects (the caption strip takes the selected fill;
 ## the ring stays focus's), double-click activates, and the
-## overflow menu in the thumbnail corner offers Edit, Edit map (authoring mode), Rename
+## overflow menu in the thumbnail corner offers Set up tokens (the Level Editor, by the name
+## the title gives it), Edit map (authoring mode), Rename
 ## (inline), Duplicate and Delete. Delete is disabled while the card is locked (the level
 ## being played).
 
@@ -102,7 +103,7 @@ func _init() -> void:
 	thumb_slot.add_child(_menu_button)
 	_menu = PopupMenu.new()
 	_menu.name = "Actions"
-	_menu.add_item("Edit", ACTION_EDIT)
+	_menu.add_item(TitleScreen.SET_UP_TOKENS, ACTION_EDIT)
 	_menu.add_item("Edit map", ACTION_EDIT_MAP)
 	_menu.add_item("Rename", ACTION_RENAME)
 	_menu.add_item("Duplicate", ACTION_DUPLICATE)

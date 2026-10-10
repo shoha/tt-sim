@@ -13,8 +13,8 @@ signal profile_changed(new_profile: Profile)
 enum Profile { AUTO, MOUSE, TRACKPAD }
 
 ## Label table: action_id -> [mouse_label, trackpad_label]. The gestures read in words, one
-## form throughout ("Middle-drag", "Shift + middle-drag", "Middle double-click"); the hint
-## bar's short key caps (LMB, Ctrl+LMB, RMB) stay as caps.
+## vocabulary for the hint bar, Settings > Controls and Help ("Click", "Ctrl + click",
+## "Right-click", "Middle-drag", "Shift + middle-drag", "Middle double-click").
 const LABELS := {
 	&"pan": ["Middle-drag", "Right-drag"],
 	&"zoom": ["Scroll", "Scroll"],
@@ -27,10 +27,10 @@ const LABELS := {
 	&"grid": ["G", "G"],
 	&"pause": ["Esc", "Esc"],
 	&"wasd": ["WASD", "WASD"],
-	&"place_point": ["LMB", "LMB"],
-	&"snap_token": ["Ctrl+LMB", "Ctrl+LMB"],
-	&"undo_cancel": ["RMB", "RMB"],
-	&"cancel_drag": ["RMB", "RMB"],
+	&"place_point": ["Click", "Click"],
+	&"snap_token": ["Ctrl + click", "Ctrl + click"],
+	&"undo_cancel": ["Right-click", "Right-click"],
+	&"cancel_drag": ["Right-click", "Right-click"],
 	&"drag_height": ["Scroll", "Scroll"],
 	&"free_move": ["Shift", "Shift"],
 	&"cycle_mode": ["Tab", "Tab"],
