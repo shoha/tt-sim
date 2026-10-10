@@ -55,7 +55,9 @@ other committed home.
   step, so what play would show must show while authoring. The level's tokens stand on the
   map in authoring, draggable while no brush is out, and save back as its placements; a
   token whose ground was sculpted, carved or filled under it is set back down on it, in
-  authoring and at every play load (`systems/authoring.md`). Survey and reasons:
+  authoring and at every play load (`systems/authoring.md`). Play and authoring share one
+  camera model (`MapViewFit`): the same whole-map zoom-out and the same per-frame shadow
+  reach. Survey and reasons:
   `docs/plans/2026-10-09-v0.2-evaluation/design/parity.md` (gitignored).
 
 ## Where each system is documented

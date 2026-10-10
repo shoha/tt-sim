@@ -51,8 +51,8 @@ static func run(base: Node, step: Dictionary) -> String:
 
 
 ## Raises the camera's zoom-out limit to the loaded map's whole-map fit (the camera's own
-## fit size with authoring's margin), so a following `zoom` op with no size shows the whole
-## map in play as authoring does.
+## fit size with MapViewFit's margin), so a following `zoom` op with no size shows the whole
+## map. Play fits itself since MapViewFit (2026-10-09); kept for the jobs that name it.
 static func _fit_zoom(base: Node) -> String:
 	var gm: GameMap = base.get("_game_map")
 	var cc: Node = gm.get("_camera_controller") if gm else null
@@ -61,8 +61,8 @@ static func _fit_zoom(base: Node) -> String:
 	var fit := float(cc.get("_fit_size"))
 	if is_inf(fit) or fit <= 0.0:
 		return "fit_zoom: no fit size"
-	var high := maxf(AuthoringController.PLAY_MAX_ZOOM, fit * AuthoringController.ZOOM_FIT_MARGIN)
-	gm.set_zoom_limits(AuthoringController.MIN_ZOOM, high)
+	var high := maxf(MapViewFit.PLAY_MAX_ZOOM, fit * MapViewFit.ZOOM_FIT_MARGIN)
+	gm.set_zoom_limits(MapViewFit.MIN_ZOOM, high)
 	return "fit_zoom: max zoom %.2f (fit %.2f)" % [high, fit]
 
 

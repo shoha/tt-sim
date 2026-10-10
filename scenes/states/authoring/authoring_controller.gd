@@ -6,11 +6,12 @@ extends Node
 ## Offline only; Root refuses entry while hosting or joined.
 ##
 ## Owns what LevelPlayController owns in play, minus peers and the token tools: its own
-## LevelEnvironmentManager, the GameMap setup it needs (authoring mode, measure tool, grid
-## overlay; weather comes with MapSourceLoader.install), the level's tokens as play spawns
-## them (AuthoringTokens: draggable, saved back as its placements), and the map, loaded
-## through the same MapSourceLoader the play-time load uses (with props kept in their own
-## node, since the tools edit scatter and props apart). The MapDocument is the source of truth for
+## LevelEnvironmentManager and MapViewFit (the camera model play uses), the GameMap setup it
+## needs (authoring mode, measure tool, grid overlay; weather comes with
+## MapSourceLoader.install), the level's tokens as play spawns them (AuthoringTokens:
+## draggable, saved back as its placements), and the map, loaded through the same
+## MapSourceLoader the play-time load uses (with props kept in their own node, since the
+## tools edit scatter and props apart). The MapDocument is the source of truth for
 ## everything authored: masks and heights are edited in it in place, and the scatter and
 ## props rows are copied back from their AuthoredScatter nodes whenever the document is
 ## written (_sync_document).
@@ -41,13 +42,6 @@ signal loading_completed
 signal exit_requested(level: LevelData)
 
 const AUTOSAVE_INTERVAL := 30.0
-const MIN_ZOOM := 2.0
-## The play camera's zoom-out limit (CameraController.max_zoom); authoring never goes below.
-const PLAY_MAX_ZOOM := 20.0
-## Room around a whole map at the widest zoom.
-const ZOOM_FIT_MARGIN := 1.08
-## Height the zoom-out fit leaves room for above the ground: the tallest palette trees.
-const CONTENT_HEIGHT_M := 12.0
 ## Longest the loading screen waits for the first palette species (see _await_palette_warm).
 const PALETTE_WARM_TIMEOUT_MS := 2000
 ## Frames drawn after the first species resolves before the loading screen goes, so its
@@ -75,10 +69,9 @@ var ground_fit: Dictionary = {}
 var _game_map: GameMap = null
 var _environment := LevelEnvironmentManager.new()
 var _ui_layer: CanvasLayer = null
-## The document's extent in world space (plus canopy height), for the shadow distance.
-var _map_bounds: AABB = AABB()
-## The ground range _fit_camera() last used, and whether an edit may have changed it.
-var _fitted_ground: Vector2 = Vector2.ZERO
+## The camera model play uses too: whole-map zoom, pan bounds, near plane, shadow reach.
+var _view_fit := MapViewFit.new()
+## Whether an edit may have moved the ground the camera and the tokens were fit to.
 var _bounds_stale: bool = false
 var _autosave_timer: Timer = null
 ## Bumped by every open and by teardown, so a load still awaiting drops its result.
@@ -99,6 +92,7 @@ func _ready() -> void:
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
 	_environment.setup(game_map)
+	_view_fit.setup(game_map, _environment)
 	game_map.setup_authoring()
 	game_map.setup_measure_tool()
 	game_map.setup_grid_overlay()
@@ -329,8 +323,8 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	props = root.get_node_or_null(NodePath(MapSourceLoader.PROPS_NODE)) as AuthoredScatter
 	scatter.attach_document(document)
 	FoliageDensityController.apply(root, FoliageDensityController.budget_from_settings())
-	_fit_camera()
-	editor = AuthoringEditor.create(document, root, history)
+	_view_fit.fit(root, document)
+	editor =AuthoringEditor.create(document, root, history)
 	editor.edited.connect(mark_edited)
 	editor.edited.connect(func() -> void: _bounds_stale = true)
 	editor.edited.connect(_refresh_paint_limits)
@@ -362,33 +356,6 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 		editor.terrain.refresh_skirt()
 
 
-## Zoom-out reaches a view of the whole map (never less than the play camera's), and panning
-## is bounded by the map's extent even where nothing has been painted yet. Heights follow the
-## terrain's real range (sculpted ground can rise above or sink below Y = 0; a dressed GLB
-## map keeps 0): the zoom fit, the pan bounds and the shadow bounds all span the lowest
-## ground to the highest plus CONTENT_HEIGHT_M of canopy.
-func _fit_camera() -> void:
-	var extent := document.extent_m()
-	var scaled := extent * Vector2(map_root.scale.x, map_root.scale.z)
-	var ground := _ground_range()
-	_fitted_ground = ground
-	var fit := (
-		_game_map.fit_zoom_for_extent(scaled, ground.y + CONTENT_HEIGHT_M, ground.x)
-		* ZOOM_FIT_MARGIN
-	)
-	_game_map.set_zoom_limits(MIN_ZOOM, maxf(PLAY_MAX_ZOOM, fit))
-	var local := AABB(Vector3(-extent.x, 0.0, -extent.y) * 0.5, Vector3(extent.x, 0.0, extent.y))
-	_map_bounds = map_root.global_transform * local
-	_map_bounds.position.y = ground.x
-	_map_bounds.size.y = ground.y - ground.x
-	if not document.has_base_map:
-		_game_map.set_map_bounds(_map_bounds)
-	# Shadows reach the map's far side, with room for the canopy.
-	_map_bounds = _map_bounds.expand(
-		Vector3(_map_bounds.position.x, ground.y + CONTENT_HEIGHT_M, _map_bounds.position.z)
-	)
-
-
 ## The authored terrain of the open map, or null (a dressed GLB map has none).
 func _terrain() -> AuthoredTerrain:
 	if not is_instance_valid(map_root):
@@ -396,24 +363,19 @@ func _terrain() -> AuthoredTerrain:
 	return map_root.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain
 
 
-## The ground's world height range (lowest, highest): the terrain's, or 0..0 without one.
-func _ground_range() -> Vector2:
-	var terrain := _terrain()
-	return terrain.world_height_range() if terrain else Vector2.ZERO
-
-
 ## After a sculpt stroke, undo or redo has settled (its chunks rebuilt, so their AABBs are
 ## exact again): sets the tokens down on the ground it left, and refits the camera and
-## shadow bounds and resizes the reflection probe to the new ground, when its range changed.
+## shadow bounds (MapViewFit) and resizes the reflection probe to the new ground, when its
+## range changed.
 func _refresh_bounds_after_edit() -> void:
 	var terrain := _terrain()
 	if terrain != null and ((editor and editor.has_height_work()) or terrain.has_unsettled_chunks()):
 		return
 	_bounds_stale = false
 	tokens.reground_after_physics()
-	if terrain == null or terrain.world_height_range().is_equal_approx(_fitted_ground):
+	if not _view_fit.ground_moved():
 		return
-	_fit_camera()
+	_view_fit.refit()
 	_environment.apply_reflection_probe(_game_map.world_viewport)
 
 
@@ -430,12 +392,7 @@ func _process(_delta: float) -> void:
 	if editor:
 		# Sculpt work a stroke's frames left over drains even with the brush put away.
 		editor.step_height_work()
-	var ground := _ground_range()
-	# The near plane follows raised ground at once (the range only widens mid-stroke).
-	_game_map.set_ground_top(ground.y)
-	_environment.fit_shadow_distance_to_view(
-		_game_map.camera_node, Vector2(_game_map.world_viewport.size), _map_bounds, ground.x
-	)
+	_view_fit.follow()
 	if _bounds_stale:
 		_refresh_bounds_after_edit()
 
@@ -945,4 +902,5 @@ func teardown() -> void:
 			prompt.queue_free()
 	_leave_prompt = null
 	_recovery_prompt = null
+	_view_fit.clear()
 	_environment.clear()
