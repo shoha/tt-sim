@@ -48,9 +48,15 @@ const SETTLE_S := 0.45
 const SWAY_DEG := 16.0
 ## The share of its fall over which a tree's wind weights go to 0 (calm_weight).
 const CALM := 0.4
-## Warm sunlit dust: golden ochre, well see-through, so overlapping puffs stay dust rather than
-## the cream mass that read as cotton in the third look.
-const DUST := Color(0.9, 0.76, 0.52, 0.4)
+## Warm sunlit dust: golden ochre, see-through enough that overlapping puffs stay dust rather
+## than the cream mass that read as cotton in the third look, firm enough to read over a crown
+## (at 0.4, three small puffs under each crown all but vanished in the round 3 verdict).
+const DUST := Color(0.98, 0.82, 0.55, 0.5)
+## A tree's dust, against its height: the billow where its crown lands (across) and the roll
+## along its trunk (across, and its length over that).
+const BILLOW := 0.36
+const ROLL := 0.15
+const ROLL_LENGTH := 2.6
 const TREE_CATEGORY := "tree"
 
 var duration: float = 2.8
@@ -317,26 +323,31 @@ func _tree_transform(tree: Dictionary, elapsed: float) -> Transform3D:
 	return Transform3D(turned * keep, middle + (base.origin - middle) * keep + sink)
 
 
-## Soft dust along a fallen tree, three puffs (EventPuffs.CAPACITY holds 32 trees landing at
-## once; an older puff gives its slot to a newer one past that).
+## Dust kicked up where a fallen tree lands, two puffs (EventPuffs.CAPACITY holds MAX_TREES
+## trees landing at once): a squat billow where the crown hits, rolling on the way the tree
+## fell, and a long roll along the trunk sliding out to one side. Both are drawn in front of
+## the crown (the puff shader), so it is veiled rather than hiding them.
 func _dust(tree: Dictionary) -> void:
 	var base: Transform3D = tree.base
 	var dir: Vector3 = tree.dir
 	var height := float(tree.height)
-	# Kicked out low along the trunk where it lands, the biggest under the crown: wider than
-	# tall and rolling out to either side over the ground, as dust from an impact does,
-	# rather than rising as a cloud.
-	var side := Vector3.UP.cross(dir)
-	for k in 3:
-		var along := 0.35 + 0.22 * k
-		var out := 1.0 if k % 2 == 0 else -1.0
-		var at := base.origin + dir * height * along + side * out * _rng.randf_range(0.1, 0.5)
-		_puffs.emit(
-			at + Vector3(0.0, height * 0.03, 0.0),
-			side * out * _rng.randf_range(0.9, 1.4) + Vector3(0.0, _rng.randf_range(0.15, 0.35), 0.0),
-			height * (0.13 + 0.05 * k) * _rng.randf_range(0.9, 1.15),
-			_rng.randf_range(1.0, 1.3),
-			DUST,
-			0.0,
-			EventPuffs.SQUAT
-		)
+	var side := Vector3.UP.cross(dir) * (1.0 if _rng.randf() < 0.5 else -1.0)
+	_puffs.emit(
+		base.origin + dir * height * 0.62 + Vector3(0.0, height * 0.06, 0.0),
+		dir * _rng.randf_range(0.6, 1.0) + Vector3(0.0, _rng.randf_range(0.2, 0.4), 0.0),
+		height * BILLOW * _rng.randf_range(0.9, 1.1),
+		_rng.randf_range(1.2, 1.4),
+		DUST,
+		0.0,
+		EventPuffs.SQUAT
+	)
+	_puffs.emit(
+		base.origin + dir * height * 0.36 + Vector3(0.0, height * 0.04, 0.0),
+		side * _rng.randf_range(0.7, 1.1) + Vector3(0.0, _rng.randf_range(0.1, 0.25), 0.0),
+		height * ROLL * _rng.randf_range(0.9, 1.1),
+		_rng.randf_range(1.1, 1.3),
+		DUST,
+		0.0,
+		ROLL_LENGTH,
+		dir
+	)

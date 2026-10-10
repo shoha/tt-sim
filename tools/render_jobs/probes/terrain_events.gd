@@ -6,8 +6,11 @@ extends RefCounted
 ## presets in the Events pane for the pane captures. Used by jobs/terrain_events.json.
 ##
 ## Actions (step "action"):
-##   look     {"at": "bridge" | "forest" | [x, z] (map frame), "zoom": camera size}: the view
-##            centred there ("forest": the densest stand found near the bridge, see find)
+##   look     {"at": "bridge" | "forest" | [x, z] (map frame), "zoom": camera size, "yaw":
+##            degrees}: the view centred exactly there (the bridge's deck, the ground
+##            elsewhere; "forest": the densest stand found near the bridge, see find), the
+##            zoom set at once (an eased zoom drifts toward the cursor), the camera turned
+##            `yaw` about the vertical from the play angle (0, the default, turns it back)
 ##   fire     {"kind": "collapse" | "fall", "radius": m, "seed": n}: starts the event on the
 ##            table's TerrainEvents (the bridge, or the forest spot `look` found), its clock
 ##            held so `advance` steps it
@@ -35,16 +38,15 @@ static func run(base: Node, step: Dictionary) -> String:
 			var at := _point(edits, step.get("at", "bridge"))
 			if at == Vector2.INF:
 				return "nothing to look at"
-			var world := edits.editor.to_world(Vector3(at.x, 0.0, at.y))
+			var world := _world(edits, step.get("at", "bridge"), at)
 			var cc := map.get_camera_controller()
 			if step.has("zoom"):
 				cc.set("_target_zoom", float(step.zoom))
-			var off: Vector2 = cc.call("_get_view_center_ground_offset")
-			var holder := map.cameraholder_node
-			holder.global_position = Vector3(
-				world.x - off.x, holder.global_position.y, world.z - off.y
-			)
-			return "looking at map %s (world %s)" % [str(at), str(world)]
+				map.camera_node.size = cc.call("_corrected_size", float(step.zoom))
+				cc.call("_update_camera_offset")
+			map.cameraholder_node.rotation.y = deg_to_rad(float(step.get("yaw", 0.0)))
+			var miss := _centre_on(map, world)
+			return "looking at map %s (world %s), %.1f px off centre" % [str(at), str(world), miss]
 		"fire":
 			var event: TerrainEvent = null
 			if String(step.get("kind", "collapse")) == "collapse":
@@ -84,11 +86,7 @@ static func run(base: Node, step: Dictionary) -> String:
 			if brush == null:
 				return "no brush"
 			var at := _point(edits, step.get("at", "bridge"))
-			var world := edits.editor.to_world(Vector3(at.x, 0.0, at.y))
-			world.y = edits.editor.ground_height_at(world)
-			if String(step.get("at")) == "bridge":
-				var bridge := _bridge(edits)
-				world.y = edits.editor.to_world(Vector3(0.0, bridge.levels.y, 0.0)).y
+			var world := _world(edits, step.get("at", "bridge"), at)
 			brush.pointer = map.camera_node.unproject_position(world)
 			brush.has_pointer = true
 			return "pointer at %s" % str(brush.pointer)
@@ -105,6 +103,35 @@ static func run(base: Node, step: Dictionary) -> String:
 static func _play_events(map: GameMap) -> PlayEvents:
 	var menu := map.gameplay_menu.get_node_or_null("GameplayMenu")
 	return menu.get("play_events") as PlayEvents if menu != null else null
+
+
+## The world point over map point `at` named by `key`: the bridge's deck, or the ground.
+static func _world(edits: LiveEdits, key: Variant, at: Vector2) -> Vector3:
+	var world := edits.editor.to_world(Vector3(at.x, 0.0, at.y))
+	world.y = edits.editor.ground_height_at(world)
+	var bridge := _bridge(edits)
+	if key is String and String(key) == "bridge" and bridge != null:
+		world.y = edits.editor.to_world(Vector3(0.0, bridge.levels.y, 0.0)).y
+	return world
+
+
+## Pans the camera holder over the ground (its height kept) until world point `world` falls at
+## the screen centre; an orthographic camera's pan moves the picture without changing it.
+## Returns how far off centre it still is, in pixels.
+static func _centre_on(map: GameMap, world: Vector3) -> float:
+	var camera := map.camera_node
+	var size := Vector2(map.world_viewport.size)
+	var high := camera.keep_aspect == Camera3D.KEEP_HEIGHT
+	var per_px := camera.size / (size.y if high else size.x)
+	for i in 3:
+		var off := camera.unproject_position(world) - size * 0.5
+		var right := camera.global_basis.x
+		var up := camera.global_basis.y
+		var up_flat := Vector3(up.x, 0.0, up.z)
+		var move := right * off.x * per_px
+		move -= up_flat.normalized() * off.y * per_px / maxf(up_flat.length(), 0.01)
+		map.cameraholder_node.global_position += move
+	return (camera.unproject_position(world) - size * 0.5).length()
 
 
 static func _bridge(edits: LiveEdits) -> Crossing:
