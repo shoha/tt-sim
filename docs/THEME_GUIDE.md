@@ -5,6 +5,7 @@ This guide explains how to use the theme variants defined in `dark_theme.gd` to 
 > **Related Documentation:**
 >
 > - [UI Systems Guide](UI_SYSTEMS.md) - Toasts, dialogs, transitions, etc.
+> - [UI taste](UI_TASTE.md) - The rules UI work is judged by (C, T, S, M, I, W, G ids), the anti-patterns and the user's verdicts
 > - [Architecture Guide](ARCHITECTURE.md) - Overall project structure
 
 ## Color Palette
