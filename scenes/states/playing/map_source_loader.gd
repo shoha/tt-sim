@@ -48,7 +48,9 @@ var foliage_overrides: Dictionary = {}
 ## Authoring keeps the document's props in their own AuthoredScatter (PROPS_NODE) and always
 ## creates both nodes, even empty, because its tools edit scatter and props apart and write
 ## each back to the document. Play merges them into one node (fewer MultiMeshes) and creates
-## it only when there are rows.
+## it only when there are rows, except for a dressed GLB (has_base_map, props_apart()):
+## fit_dressing_ground_async() settles the scatter node's rows onto the sampled ground, and
+## props, bedded on the GLB's collision when placed, must not move with them.
 var separate_props: bool = false
 ## func() -> bool: true when a newer load or a reset replaced this one while it waited;
 ## everything built is freed and the load returns null.
@@ -107,7 +109,7 @@ func build_async(glb_path: String, doc: MapDocument) -> Node3D:
 	document = doc
 	var cells := {}
 	if doc != null:
-		cells = cells_of_document(doc, separate_props)
+		cells = cells_of_document(doc, props_apart(doc, separate_props))
 	return await _build_async(glb_path, cells)
 
 
@@ -143,7 +145,7 @@ func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
 		add_authored_crossings(root, document, separate_props)
 
 	var groups: Array = [[SCATTER_NODE, cells.get(SCATTER_NODE, {})]]
-	if separate_props:
+	if separate_props or cells.has(PROPS_NODE):
 		groups.append([PROPS_NODE, cells.get(PROPS_NODE, {})])
 	for group in groups:
 		var rows_by_cell: Dictionary = group[1]
@@ -287,7 +289,13 @@ static func read_document_work(path: String, separate: bool, out: Dictionary) ->
 	out["document"] = doc
 	if doc == null:
 		return
-	out["cells"] = cells_of_document(doc, separate)
+	out["cells"] = cells_of_document(doc, props_apart(doc, separate))
+
+
+## Whether a load keeps `doc`'s props in their own node: always in authoring (`separate`),
+## and in play for a dressed GLB (see separate_props). Pure.
+static func props_apart(doc: MapDocument, separate: bool) -> bool:
+	return separate or doc.has_base_map
 
 
 ## The document's rows split into 10 m cells, per scatter node: {SCATTER_NODE:

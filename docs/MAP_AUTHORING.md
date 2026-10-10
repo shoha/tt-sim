@@ -57,8 +57,9 @@ other committed home.
   token whose ground was sculpted, carved or filled under it is set back down on it, in
   authoring and at every play load (`systems/authoring.md`). Play and authoring share one
   camera model (`MapViewFit`): the same whole-map zoom-out and the same per-frame shadow
-  reach. F3 opens play's performance overlay and debug render toggles in authoring too.
-  Survey and reasons:
+  reach. F3 opens play's performance overlay and debug render toggles in authoring too. A
+  dressed GLB's plants are set down on its ground at every play load, as authoring does when
+  it opens (`ARCHITECTURE.md` "Dressing ground"). Survey and reasons:
   `docs/plans/2026-10-09-v0.2-evaluation/design/parity.md` (gitignored).
 
 ## Where each system is documented

@@ -41,8 +41,9 @@ const TOKENS_PER_FRAME: int = 3  # How many tokens to spawn per frame during pro
 ## The authored-map lighting; see MapSourceLoader.AUTHORED_MAP_LIGHTING.
 const AUTHORED_MAP_LIGHTING := MapSourceLoader.AUTHORED_MAP_LIGHTING
 
-## The last Blender map grid ground fit (MapSourceLoader.fit_grid_ground_async), for
-## measurement; {} for an authored map or a superseded load.
+## The last Blender map grid ground fit (MapSourceLoader.fit_grid_ground_async), or a dressed
+## map's ground fit (fit_dressing_ground_async), for measurement; {} for an authored map or a
+## superseded load.
 var grid_ground_fit: Dictionary = {}
 
 var _level_play_controller: LevelPlayController = null
@@ -372,9 +373,11 @@ func _report_document_problem(message: String) -> void:
 ## Finalize map loading after the map instance is ready: the shared install
 ## (MapSourceLoader.install: environment, water, weather, camera bounds, measure tool and
 ## grid, late-species wiring) and the camera fit authoring shares (MapViewFit), then this
-## controller's bookkeeping and the density toast,
-## then a Blender map's grid ground sampled from its collision
-## (MapSourceLoader.fit_grid_ground_async, a few frames). The direct load awaits it under the
+## controller's bookkeeping and the density toast, then a Blender map's ground sampled from
+## its collision, a few frames: a dressed GLB's (has_base_map) as authoring opens it
+## (MapSourceLoader.fit_dressing_ground_async: the document's heights, the generated rows
+## that no longer stand on the GLB set down onto it, the grid on the document's grid), any
+## other GLB's for the grid alone (fit_grid_ground_async). The direct load awaits it under the
 ## loading screen; the client download path calls it without awaiting, so there the grid
 ## keeps the fixed band for those frames.
 func _finalize_map_loading(map: Node3D) -> void:
@@ -396,7 +399,13 @@ func _finalize_map_loading(map: Node3D) -> void:
 	var generation := _load_generation
 	var loader := MapSourceLoader.new(_level_play_controller.get_tree())
 	loader.is_superseded = func() -> bool: return _superseded(generation)
-	grid_ground_fit = await loader.fit_grid_ground_async(map, _level_play_controller._game_map)
+	var document := _level_play_controller.loaded_map_document
+	if document != null and document.has_base_map:
+		grid_ground_fit = await loader.fit_dressing_ground_async(
+			map, _level_play_controller._game_map, document
+		)
+	else:
+		grid_ground_fit = await loader.fit_grid_ground_async(map, _level_play_controller._game_map)
 
 
 ## Applies the player's foliage density setting to a freshly loaded map, and tells them
