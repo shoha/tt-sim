@@ -20,10 +20,14 @@ extends Node
 ## NET_RESULT and ends with one `NET_LAUNCH {json}` line.
 ##
 ## Before the peers start it records the modification time of every file in the shipped
-## stores (Paths.store_paths("user://")); any file added, removed or changed there by the end
-## fails the run. Peers still running GRACE_S after the scenario timeout are killed, and all of
-## them at once when a peer has not opened its scenario log STARTUP_S after the start. Every
-## test root of the run, the launcher's own included, is deleted at the end, pass or fail.
+## stores (watched_stores(): Paths.store_paths("user://") and the import source index). The run
+## fails when a file that existed then was modified or deleted by the end, or when a new file
+## or folder appeared under a store in NEVER_WRITTEN. Other new files and folders (a render
+## job from another session creating and deleting its test level in the real user://levels/,
+## say) are only reported, as `shipped_files_added`. Peers still running GRACE_S after the
+## scenario timeout are killed, and all of them at once when a peer has not opened its scenario
+## log STARTUP_S after the start. Every test root of the run, the launcher's own included, is
+## deleted at the end, pass or fail.
 
 const SCENARIO_DIR := "res://tests/net/"
 const RUNS_DIR := "res://.godot/net_runs/"
@@ -42,6 +46,19 @@ const POLL_S := 0.25
 const CLIENT_START_DELAY_S := 0.5
 ## How deep the store snapshot looks into a store folder (user://levels/<level>/<file> is 2)
 const SNAPSHOT_DEPTH := 4
+## The stores (keys of watched_stores()) a new file or folder fails the run in. Every peer has
+## a root of its own for them, and nothing but a peer with a store left pointing at user://
+## (or the user's own game, which should not run during a launch) writes them while a run
+## goes. The others are written by other sessions' render jobs and probes at any time: levels
+## (test levels), avatars, perf logs, settings and the import source index. A change to a file
+## that existed before the run fails in every store.
+const NEVER_WRITTEN := [
+	"ASSET_CACHE_DIR", "ASSET_CACHE_INDEX_PATH", "USER_ASSETS_DIR", "UPDATES_DIR"
+]
+## Files one worker-thread task stats
+const STAT_CHUNK := 512
+## How many new paths the report lists (the count is always given)
+const ADDED_SAMPLE := 10
 
 var _args: Dictionary = {}
 var _report: Dictionary = {}
@@ -88,8 +105,10 @@ func _run() -> bool:
 		)
 	for peer in peers:
 		Paths.remove_test_data_root(peer.root)
+	var snapshot_start_ms := Time.get_ticks_msec()
 	var before := _snapshot_stores()
 	_report["shipped_files_watched"] = before.size()
+	_report["shipped_snapshot_ms"] = Time.get_ticks_msec() - snapshot_start_ms
 	var common := [
 		"--rendezvous=" + logs + "rv",
 		"--timeout-s=%d" % timeout_s,
@@ -105,9 +124,15 @@ func _run() -> bool:
 	# A peer that failed to start fails the run; the others are stopped at once.
 	await _wait_for(peers, timeout_s + GRACE_S if started else 0.0)
 	var ok := _collect(peers) and started
-	var changed := _changed_files(before, _snapshot_stores())
-	_report["shipped_files_changed"] = changed
-	ok = ok and changed.is_empty()
+	var changes := compare_snapshots(before, _snapshot_stores(), never_written_paths())
+	var failed := failed_changes(changes)
+	_report["shipped_files_changed"] = failed
+	var added: Array = changes.added
+	_report["shipped_files_added"] = added.size()
+	if not added.is_empty():
+		_report["shipped_files_added_sample"] = added.slice(0, ADDED_SAMPLE)
+		print("net_launcher: %d new paths in the shipped stores (not a failure)" % added.size())
+	ok = ok and failed.is_empty()
 	_report["logs"] = logs
 	_report["test_roots_removed"] = _remove_roots(peers)
 	return ok
@@ -205,41 +230,123 @@ static func _net_result(log_path: String) -> Dictionary:
 	return result
 
 
-## Every file and folder in the shipped stores -> its modification time (0 for a folder).
-static func _snapshot_stores() -> Dictionary:
-	var snapshot := {}
+## Every store the run watches, by key: Paths.store_paths() of the shipped root plus the
+## import source index, which lives beside them and which Paths does not list as a store.
+## Always the shipped root (the launcher's own data root is a test root).
+static func watched_stores() -> Dictionary:
 	var stores := Paths.store_paths(Paths.SHIPPED_DATA_ROOT)
+	stores["IMPORT_SOURCES_PATH"] = Paths.SHIPPED_DATA_ROOT + Paths.IMPORT_SOURCES_NAME
+	return stores
+
+
+## The paths of the stores in NEVER_WRITTEN (folders end in "/").
+static func never_written_paths() -> Array:
+	var stores := watched_stores()
+	var paths := []
+	for key in NEVER_WRITTEN:
+		paths.append(stores[key])
+	return paths
+
+
+## Every file and folder in the shipped stores -> its modification time (0 for a folder). The
+## listing is a tenth of the cost (31,000 files take 0.13 s) and the stat of each file the rest
+## (2.1 s one after the other), so the stats run on the worker threads (0.33 s).
+static func _snapshot_stores() -> Dictionary:
+	var folders := []
+	var files := []
+	var stores := watched_stores()
 	for key in stores:
 		var path: String = stores[key]
 		if path.ends_with("/"):
-			_snapshot_folder(path, snapshot, SNAPSHOT_DEPTH)
+			_list_folder(path, folders, files, SNAPSHOT_DEPTH)
 		elif FileAccess.file_exists(path):
-			snapshot[path] = FileAccess.get_modified_time(path)
+			files.append(path)
+	var times := modified_times(files)
+	var snapshot := {}
+	for folder in folders:
+		snapshot[folder] = 0
+	for i in files.size():
+		# A file that vanished since the listing has no time, and is left out.
+		if times[i] != 0:
+			snapshot[files[i]] = times[i]
 	return snapshot
 
 
-static func _snapshot_folder(folder: String, snapshot: Dictionary, depth: int) -> void:
+## Append `folder` to `folders` and its files to `files`, then do the same for each folder in
+## it down `depth` more levels.
+static func _list_folder(folder: String, folders: Array, files: Array, depth: int) -> void:
 	var dir := DirAccess.open(folder)
 	if dir == null:
 		return
-	snapshot[folder] = 0
+	folders.append(folder)
 	for file_name in dir.get_files():
-		snapshot[folder + file_name] = FileAccess.get_modified_time(folder + file_name)
+		files.append(folder + file_name)
 	if depth > 0:
 		for sub in dir.get_directories():
-			_snapshot_folder(folder + sub + "/", snapshot, depth - 1)
+			_list_folder(folder + sub + "/", folders, files, depth - 1)
 
 
-## Paths added, removed or modified between two snapshots.
-static func _changed_files(before: Dictionary, after: Dictionary) -> Array:
-	var changed := []
+## The modification time of each of `paths`, in order (0 for a file that is gone), taken in
+## chunks on the worker threads. Each chunk writes only its own slots of `times`.
+static func modified_times(paths: Array) -> Array:
+	var times := []
+	times.resize(paths.size())
+	var chunks := ceili(paths.size() / float(STAT_CHUNK))
+	if chunks > 0:
+		var task := WorkerThreadPool.add_group_task(_stat_chunk.bind(paths, times), chunks)
+		WorkerThreadPool.wait_for_group_task_completion(task)
+	return times
+
+
+static func _stat_chunk(chunk: int, paths: Array, times: Array) -> void:
+	var from := chunk * STAT_CHUNK
+	for i in range(from, mini(from + STAT_CHUNK, paths.size())):
+		times[i] = FileAccess.get_modified_time(paths[i])
+
+
+## What happened to the watched paths between two snapshots, in four lists of paths:
+## `modified` and `deleted` are files that existed in `before` (a folder that went away is not
+## listed; the files in it are), `added` is every new file or folder, and `added_never_written`
+## is the part of that under or equal to a path of `never_written` (a folder ends in "/").
+static func compare_snapshots(
+	before: Dictionary, after: Dictionary, never_written: Array = []
+) -> Dictionary:
+	var changes := {"modified": [], "deleted": [], "added": [], "added_never_written": []}
 	for path in before:
-		if not after.has(path) or after[path] != before[path]:
-			changed.append(path)
+		if int(before[path]) == 0:
+			continue
+		if not after.has(path):
+			changes.deleted.append(path)
+		elif after[path] != before[path]:
+			changes.modified.append(path)
 	for path in after:
-		if not before.has(path):
-			changed.append(path)
-	return changed
+		if before.has(path):
+			continue
+		if _under_any(path, never_written):
+			changes.added_never_written.append(path)
+		else:
+			changes.added.append(path)
+	return changes
+
+
+## What fails the run in `changes` (compare_snapshots()): each modified or deleted file and
+## each new path in a never-written store, as "<kind> <path>".
+static func failed_changes(changes: Dictionary) -> Array:
+	var failed := []
+	for kind in ["modified", "deleted"]:
+		for path in changes[kind]:
+			failed.append("%s %s" % [kind, path])
+	for path in changes.added_never_written:
+		failed.append("added %s" % path)
+	return failed
+
+
+## True when `path` is one of `stores` or, for a folder store (ending in "/"), inside it.
+static func _under_any(path: String, stores: Array) -> bool:
+	for store: String in stores:
+		if path == store or (store.ends_with("/") and path.begins_with(store)):
+			return true
+	return false
 
 
 ## Delete every test root of the run, the launcher's own last. True when all are gone.

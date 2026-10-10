@@ -717,9 +717,29 @@ index, user asset packs, avatars, updates, perf logs, the warm-up marker) under
 `user://_test_roots/<root>/` instead of where the shipped game keeps it. Before this, local
 clients wrote one shared asset cache index at once and each evicted a real cached model to fit
 its download. The launcher also records the modification time of every file in the shipped
-stores before the peers start and fails the run if any was added, removed or changed, and it
-deletes every test root of the run at the end, pass or fail. A GUT run gets such a root
-without an argument (`Paths.gut_data_root`, see `AGENTS.md` "Running tests from the CLI").
+stores (`Paths.store_paths("user://")` and the import source index, `user://import_sources.cfg`)
+before the peers start, and it deletes every test root of the run at the end, pass or fail. A
+GUT run gets such a root without an argument (`Paths.gut_data_root`, see `AGENTS.md` "Running
+tests from the CLI").
+
+The run fails on what a test peer must never do, and on nothing else: a file that existed
+before the run was modified or deleted (`shipped_files_changed` lists each as `modified <path>`
+or `deleted <path>`), or a new file or folder appeared under a store only a misdirected peer
+writes, the asset cache and its index, `user_assets/` and `updates/` (listed as `added
+<path>`). Every other new file or folder is information: `shipped_files_added` counts them and
+`shipped_files_added_sample` lists the first ten, and the launcher prints a line when there are
+any. That is deliberate. Other sessions' render jobs create and delete their own `_<task>_`
+level folders in the real `user://levels/` while a launch runs (`_biglf_*`, `_ui_tour_room`,
+`_p4*`), and used to fail every run that overlapped one although every peer passed; `levels/`,
+`avatars/`, `perf_logs/`, `settings.cfg` and the import index are written by such jobs too, so a
+new file there says nothing about the peers. What still fails a run without a peer being at
+fault is another session modifying or deleting a file that already existed, such as a job
+re-saving a level that was there before the launch or rewriting `import_sources.cfg`: the
+`shipped_files_changed` paths say whose it is, and a re-run settles it. The snapshot stats the
+files on the worker threads (about 31,600 files in 0.6 s with the listing, against 3.0 s one at
+a time, taken before and again after the peers; `shipped_snapshot_ms` in the report). The
+comparison is `compare_snapshots()` in `tests/net/net_launcher.gd`, covered by
+`tests/unit/test_net_launcher_store_check.gd`.
 
 A scenario is a scene whose script reads `--role`, `--rendezvous` (an absolute path prefix
 for the files the roles coordinate through), `--out`, `--timeout-s` and `--port`, writes its
@@ -770,8 +790,11 @@ All three earlier ones passed through the launcher on 2026-10-09, each in about 
 host, with no shipped store file changed (31,435 files watched) and every test root removed;
 `enet_session_room` passed the same way in about 4.9 s on the host. With the party and the
 rejoin it passed on every peer later on 2026-10-09 in about 5.5 s on the host (three runs); the
-launcher's store check flagged only level folders other sessions were writing into the real
-store at the time (`_biglf_*`, `_p4b3_*`), never the scenario's own.
+launcher's store check then flagged only level folders other sessions were writing into the real
+store at the time (`_biglf_*`, `_p4b3_*`), never the scenario's own, which is why new files are
+now only reported. `enet_late_joiner` through the launcher with that change: `pass:true`,
+`shipped_files_changed:[]`, and the other session's new level folder
+(`user://levels/_biglf_lakeshore_4_320x160/`) in `shipped_files_added`.
 
 The launcher fails a run at once (killing every peer) when a peer has not opened its scenario
 log 60 s after the start (`STARTUP_S`): a scenario script that fails to parse leaves a bare scene
