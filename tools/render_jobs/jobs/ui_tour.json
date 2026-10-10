@@ -57,6 +57,11 @@
    {"op": "wait", "s": 1.0},
    {"op": "capture", "name": "{value}_opening_room", "desc": "{value}: the Opening a room... wait over the title after Host (Root's loading overlay with its copy; nothing is hosted)"},
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_room.gd", "action": "opening", "open": false},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_room.gd", "action": "map_load", "folder": "_ui_tour_room"},
+   {"op": "wait", "s": 1.0},
+   {"op": "capture", "name": "{value}_map_load_title", "desc": "{value}: a map load as it starts from the title, staged mid-load (Setting out Mossy Hollow, held at 35% on Loading token models...; nothing is loaded): the sheet on the backdrop sky"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_room.gd", "action": "map_load", "open": false},
+   {"op": "wait", "s": 0.8},
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_room.gd", "action": "host_room", "folder": "_ui_tour_room"},
    {"op": "wait", "s": 2.0},
    {"op": "capture", "name": "{value}_room_host", "desc": "{value}: the host's room as it opens after Host, Mossy Hollow to set out (staged: a sample code and three sample players)"},
@@ -92,8 +97,15 @@
    {"op": "wait", "s": 1.0},
 
    {"op": "play", "folder": "_ui_tour_room"},
-   {"op": "wait", "s": 3.0},
+   {"op": "wait", "s": 0.4},
+   {"op": "capture", "name": "{value}_map_load_real", "desc": "{value}: a real map load of the test map from the title (Play), caught about 0.4 s in, at whatever step the load has reached"},
+   {"op": "wait", "s": 2.6},
    {"op": "wait_ready", "settle": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_room.gd", "action": "map_load", "folder": "_ui_tour_room"},
+   {"op": "wait", "s": 1.0},
+   {"op": "capture", "name": "{value}_map_load_table", "desc": "{value}: a map load as it starts over a live table, staged mid-load as in map_load_title: the sky covers the table being torn down"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_room.gd", "action": "map_load", "open": false},
+   {"op": "wait", "s": 1.0},
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "drawer", "which": "visuals", "pane": "sun"},
    {"op": "wait", "s": 1.0},
    {"op": "capture", "name": "{value}_play_drawer", "desc": "{value}: the play HUD on the test map with the Visuals drawer open on Sun"},
@@ -168,7 +180,7 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": "1920x1080"},
   {"op": "wait", "s": 1.0},
 
-  {"op": "index", "title": "UI tour", "intro": "Produced by tools/render_jobs/jobs/ui_tour.json with probes/ui_primitives.gd: every top screen at 1280x720 and 1920x1080 window sizes (names start with the size), for the tt-sim-ui-critic agent (docs/UI_TASTE.md). A 100 ft temperate forest map is saved as the test level _ui_tour_room (shown as Mossy Hollow) for authoring, play and the host's room, and deleted at the end. The session screens are staged by probes/ui_room.gd without a network (nothing is hosted or joined): the Opening a room... wait, the host's room as it opens after Host and after Return everyone to the room (no map yet), each with a sample code and players, the join screen as the title's Join Game opens it, a client's room (the waiting view) with sample players, and in play the pause menu as the host sees it (the host-only Return everyone to the room row, shown on a solo pause) and the confirmation that row asks. focus_paper and focus_glass show keyboard focus on a quiet button of each theme leaf, and focus_selected_card and focus_selected_tile focus on a selected item, where the focus ring and the selection must both read (drawer tiles take no focus in the game; the probe lets the picked one); the dusk_ captures repeat the in-play screens with the time of day set to 19:00 through the Sun pane. Last, one ultrawide probe capture."},
+  {"op": "index", "title": "UI tour", "intro": "Produced by tools/render_jobs/jobs/ui_tour.json with probes/ui_primitives.gd: every top screen at 1280x720 and 1920x1080 window sizes (names start with the size), for the tt-sim-ui-critic agent (docs/UI_TASTE.md). A 100 ft temperate forest map is saved as the test level _ui_tour_room (shown as Mossy Hollow) for authoring, play and the host's room, and deleted at the end. The session screens are staged by probes/ui_room.gd without a network (nothing is hosted or joined): the Opening a room... wait (Root's loading overlay over the title, scrimmed, its bar gliding), the host's room as it opens after Host and after Return everyone to the room (no map yet), each with a sample code and players, the join screen as the title's Join Game opens it, a client's room (the waiting view) with sample players, and in play the pause menu as the host sees it (the host-only Return everyone to the room row, shown on a solo pause) and the confirmation that row asks. The map_load_ captures show Root's loading overlay for a map load: map_load_title and map_load_table staged mid-load over the title and over a live table (the probe's map_load action; nothing is loaded), map_load_real a real load of the test map caught about 0.4 s after Play. focus_paper and focus_glass show keyboard focus on a quiet button of each theme leaf, and focus_selected_card and focus_selected_tile focus on a selected item, where the focus ring and the selection must both read (drawer tiles take no focus in the game; the probe lets the picked one); the dusk_ captures repeat the in-play screens with the time of day set to 19:00 through the Sun pane. Last, one ultrawide probe capture."},
   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "cleanup"}
  ]
 }

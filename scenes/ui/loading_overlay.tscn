@@ -1,50 +1,75 @@
-[gd_scene load_steps=2 format=3 uid="uid://cloading_overlay"]
+[gd_scene load_steps=3 format=3 uid="uid://cloading_overlay"]
 
 [ext_resource type="Script" path="res://scenes/ui/loading_overlay.gd" id="1_loading"]
+[ext_resource type="Script" path="res://scenes/ui/primitives/scrim.gd" id="2_scrim"]
 
 [node name="LoadingOverlay" type="CanvasLayer"]
 layer = 105
 process_mode = 3
 script = ExtResource("1_loading")
 
-[node name="ColorRect" type="ColorRect" parent="."]
+[node name="Sky" type="ColorRect" parent="."]
+unique_name_in_owner = true
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.101961, 0.0705882, 0.101961, 0.9)
+
+[node name="Scrim" type="ColorRect" parent="."]
+unique_name_in_owner = true
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_scrim")
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
+unique_name_in_owner = true
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer"]
+[node name="Sheet" type="PanelContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/Sheet"]
 layout_mode = 2
 theme_type_variation = &"BoxContainerSpaced"
 alignment = 1
 
-[node name="LoadingLabel" type="Label" parent="CenterContainer/VBoxContainer"]
+[node name="LoadingLabel" type="Label" parent="CenterContainer/Sheet/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"H1"
+theme_type_variation = &"Title"
 text = "Loading..."
 horizontal_alignment = 1
+autowrap_mode = 3
 
-[node name="ProgressBar" type="ProgressBar" parent="CenterContainer/VBoxContainer"]
+[node name="ProgressBar" type="ProgressBar" parent="CenterContainer/Sheet/VBoxContainer"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(300, 20)
+custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 max_value = 1.0
-value = 0.5
 show_percentage = false
 
-[node name="StatusLabel" type="Label" parent="CenterContainer/VBoxContainer"]
+[node name="Glide" type="Control" parent="CenterContainer/Sheet/VBoxContainer/ProgressBar"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="StatusLabel" type="Label" parent="CenterContainer/Sheet/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Caption"
-text = "Preparing..."
 horizontal_alignment = 1
+autowrap_mode = 3

@@ -48,8 +48,8 @@ await UIManager.fade_in()
 await UIManager.transition(func(): change_scene())
 
 # Loading screen -- owned by Root, not UIManager (see Loading Screen section below)
-loading_overlay.show_loading("Loading level...")
-loading_overlay.set_progress(0.5, "Loading tokens...")
+loading_overlay.show_loading("Setting out Mossy Hollow")
+loading_overlay.set_progress(0.5, "Spawning tokens...")
 await loading_overlay.hide_loading()
 
 # Input hints
@@ -261,7 +261,8 @@ if UIManager.is_transitioning():
 ### Configuration
 
 Default fade duration: 0.3 seconds
-Fade color: Dark theme background (#1a121a)
+Fade color: the backdrop sky (the `BACKDROP` role, read in `_ready`), the sky the title, the
+room and a map load stand on, never a dark fill (`docs/UI_TASTE.md` C4, G10)
 
 ---
 
@@ -274,29 +275,32 @@ calls it during level loading. There is no `UIManager.show_loading()`/`hide_load
 ### Usage
 
 ```gdscript
-# Show loading
-loading_overlay.show_loading("Loading Level...")
+# A map load: name the real operation (UI_TASTE.md W4); Root names the map it sets out
+loading_overlay.show_loading(LoadingOverlay.setting_out_text(level))
 
-# Update progress (0.0 to 1.0)
+# Update progress (0.0 to 1.0) and name the step in the caption
 loading_overlay.set_progress(0.25, "Loading map...")
-loading_overlay.set_progress(0.50, "Spawning tokens...")
-loading_overlay.set_progress(0.75, "Configuring camera...")
-loading_overlay.set_progress(1.0, "Done!")
+loading_overlay.set_progress(0.60, "Spawning tokens...")
 
 # Hide when complete (async -- awaits the fade-out tween, emits loading_complete)
 await loading_overlay.hide_loading()
 
-# For indeterminate loading (no progress bar)
-loading_overlay.show_indeterminate("Please wait...")
-# Progress bar is hidden, just shows spinner/message; show_progress_bar() restores it
+# A wait over a live screen with no known progress ("Opening a room..." over the title)
+loading_overlay.show_indeterminate("Opening a room...")
 ```
 
 ### Features
 
-- Smooth progress bar animation (lerped toward the target value, with a looping shimmer)
-- Status text updates
-- Blocks mouse input while visible (full-screen near-opaque `ColorRect`, default `mouse_filter`)
-- Animated show/hide
+- A paper sheet (stops play, so paper: C8) holding the operation in the Title role, the bar
+  and a Caption for the step; an empty caption is hidden.
+- Two grounds. `show_loading()` lays the backdrop sky (the `BACKDROP` role, the title's and
+  the room's sky) at once, since the table behind a map load is torn down and rebuilt; the
+  sky fades off the finished table on hide (0.4 s). `show_indeterminate()` lays the shared
+  `Scrim` (C4) over the screen behind it.
+- Determinate bar: tweened to each new value (0.25 s). Indeterminate: a lake segment glides
+  back and forth along the bar; under Reduce motion (`UiMotion.reduced()`, the OS setting)
+  it rests in the middle and breathes in opacity. The glide stops when the overlay hides.
+- Blocks mouse input while visible (the sky and the scrim are full-rect `ColorRect`s).
 
 ---
 

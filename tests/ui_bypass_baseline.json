@@ -150,12 +150,6 @@
 		"res://scenes/ui/level_picker_dialog.tscn": {
 			"override": 1
 		},
-		"res://scenes/ui/loading_overlay.gd": {
-			"colour": 1
-		},
-		"res://scenes/ui/loading_overlay.tscn": {
-			"colour": 1
-		},
 		"res://scenes/ui/primitives/avatar_card.gd": {
 			"override": 1
 		},
@@ -191,12 +185,6 @@
 		},
 		"res://scenes/ui/toast_container.tscn": {
 			"override": 1
-		},
-		"res://scenes/ui/transition_overlay.gd": {
-			"colour": 1
-		},
-		"res://scenes/ui/transition_overlay.tscn": {
-			"colour": 1
 		},
 		"res://scenes/ui/update_dialog.tscn": {
 			"override": 1
