@@ -21,13 +21,14 @@ offset_bottom = 32.0
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="CancelButton" type="Button" parent="ButtonsRow"]
+[node name="RevertButton" type="Button" parent="ButtonsRow"]
 script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+tooltip_text = "Put the look back as it was saved and close the drawer"
 theme_type_variation = &"Secondary"
-text = "Cancel"
+text = "Revert look"
 
 [node name="SaveButton" type="Button" parent="ButtonsRow"]
 script = ExtResource("animated_btn")

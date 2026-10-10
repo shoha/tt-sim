@@ -3,15 +3,21 @@ extends DrawerContainer
 
 ## Slide-out drawer for real-time visual tuning during gameplay. A rail of seven
 ## icons (sun, sky, color, weather, water, film, world) shows one pane at a time in a
-## PaneStack, with Cancel/Save pinned below it. Each pane owns the fields it
-## edits (see LevelEditPane); the Sky and Color panes share an
+## PaneStack, with the foot (Revert look, Save look) pinned below it. Each pane owns the
+## fields it edits (see LevelEditPane); the Sky and Color panes share an
 ## EnvironmentEditModel. The panel relays pane signals under the names
 ## GameplayMenuController has always listened to, tracks dirty state per pane
 ## (rail badges) and as a whole, and owns the discard-changes prompt.
 ##
+## The foot shows only while the look has a change standing (docs/UI_TASTE.md C5: the one
+## fill is for an action that can happen): with nothing to save there is nothing to revert
+## either, so a clean drawer is panes alone and the first change brings Save look in as the
+## drawer's one Primary with Revert look quiet beside it. Saving or reverting takes the foot
+## away again (mark_clean).
+##
 ## The rail's last item is the GM's Events pane (EventsPane, controlled by PlayEvents): live map
-## changes for the whole table, undone rather than saved, so Cancel and Save look step out of
-## the footer while it shows and it takes no part in the dirty state.
+## changes for the whole table, undone rather than saved, so the foot steps out while it shows
+## and it takes no part in the dirty state.
 
 signal save_requested(state: LevelVisualState)
 signal cancel_requested
@@ -57,6 +63,8 @@ const RAIL_ITEMS: Array[Dictionary] = [
 const RAIL_FOOTER_ITEMS: Array[Dictionary] = [
 	{"id": &"values", "icon": "hash", "tooltip": "Show values"},
 ]
+## How long the foot takes to fade in when the first change stands.
+const FOOT_FADE_S := 0.18
 
 var sun_pane: SunPane
 var sky_pane: SkyPane
@@ -77,9 +85,14 @@ var _dirty: bool = false
 ## The live "discard changes" prompt, while one is on screen. Kept so a second
 ## close request reuses it instead of stacking a second dialog.
 var _close_prompt: Node = null
+## The pane on show, so the foot steps out under Events.
+var _shown_pane: StringName = &"sun"
+## The foot's fade in, replaced by the next one.
+var _foot_tween: Tween
 
 @onready var save_button: Button = %SaveButton
-@onready var cancel_button: Button = %CancelButton
+@onready var revert_button: Button = %RevertButton
+@onready var _foot: HBoxContainer = %ButtonsRow
 
 
 func _on_ready() -> void:
@@ -108,15 +121,15 @@ func _on_ready() -> void:
 	# Pinned footer: the scene-defined ButtonsRow moves under the stack.
 	# remove_child() clears `owner` on the moved subtree, which breaks the
 	# %unique_name lookups; re-establish ownership afterwards.
-	var buttons_row: HBoxContainer = %ButtonsRow
-	buttons_row.get_parent().remove_child(buttons_row)
-	content_container.add_child(buttons_row)
+	_foot.get_parent().remove_child(_foot)
+	content_container.add_child(_foot)
 	NodeUtils.set_own_children(self)
 
 	save_button.pressed.connect(_on_save_pressed)
-	cancel_button.pressed.connect(_on_cancel_pressed)
+	revert_button.pressed.connect(_on_revert_pressed)
 	pane_requested.connect(_on_pane_requested)
-	_stack.show_pane(&"sun", false)
+	_stack.show_pane(_shown_pane, false)
+	_update_foot()
 	rail_footer_pressed.connect(_on_rail_footer_pressed)
 	_values_visible = UiPreferences.load_show_values()
 	_apply_values_visible()
@@ -186,8 +199,26 @@ func _on_closed() -> void:
 
 func _on_pane_requested(id: StringName) -> void:
 	_stack.show_pane(id)
-	# Events are undone, not saved: the look's Cancel and Save step out under that pane.
-	save_button.get_parent().visible = id != EVENTS_ID
+	_shown_pane = id
+	_update_foot()
+
+
+## The foot shows while the look has a change standing and the pane on show is a look pane
+## (Events are undone, not saved). It fades in over the state band (M1) so Save look arrives
+## rather than pops; it leaves at once, as exits are faster.
+func _update_foot() -> void:
+	var shown := _dirty and _shown_pane != EVENTS_ID
+	if shown == _foot.visible:
+		return
+	if _foot_tween and _foot_tween.is_valid():
+		_foot_tween.kill()
+	_foot.visible = shown
+	_foot.modulate.a = 1.0
+	if shown and is_inside_tree():
+		_foot.modulate.a = 0.0
+		_foot_tween = create_tween()
+		_foot_tween.set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+		_foot_tween.tween_property(_foot, "modulate:a", 1.0, FOOT_FADE_S)
 
 
 func _on_rail_footer_pressed(id: StringName) -> void:
@@ -223,10 +254,12 @@ func mark_clean() -> void:
 	set_tab_badge(false)
 	for item in RAIL_ITEMS:
 		set_rail_item_tooltip(item["id"], item["tooltip"])
+	_update_foot()
 
 
 func _mark_dirty() -> void:
 	_dirty = true
+	_update_foot()
 
 
 ## A changed pane's rail item takes the lake dot (it says what is, C5) and a tooltip that
@@ -359,7 +392,9 @@ func _on_save_pressed() -> void:
 	save_requested.emit(_build_state())
 
 
-func _on_cancel_pressed() -> void:
+## Revert look: the controller puts the look back as it was when the drawer opened (or as last
+## saved) and closes the drawer, as the discard prompt's confirm does.
+func _on_revert_pressed() -> void:
 	cancel_requested.emit()
 
 
