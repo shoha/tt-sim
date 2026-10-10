@@ -5,7 +5,8 @@ extends SceneTree
 ## directory), the whole file on disk and zstd-compressed (what AssetStreamer sends), and
 ## prototypes a packed binary scatter entry, a fewer-decimals JSON, and a quantized
 ## height.bin, with round-trip errors. Writes alternative archives beside the originals to
-## measure what each would cost to send. Prints lines prefixed MS|.
+## measure what each would cost to send. Prints lines prefixed MS|. With the user arg
+## `levels` it measures the size sweep's saved levels instead (_measure_levels).
 
 const DIR := "user://_msize_"
 const MAPS := [
@@ -25,6 +26,9 @@ const PROTO_MAPS := [
 	"grass_flat_200_full",
 ]
 const RATE := 1048576.0
+## The size sweep's levels (dump.gd save) and the players a host sends a map to in turn.
+const LEVEL_PREFIX := "_psize_"
+const PEERS := 4
 ## Lean (degrees) reported as "small"; the encoding range is _lean_max (user arg 1) and the
 ## lean components are int8 or int16 (user arg 2).
 const LEAN_SMALL_DEG := 30.0
@@ -42,6 +46,10 @@ func _init() -> void:
 		_lean_max = float(args[0])
 		_lean_bits = int(args[1])
 		_only_proto = args.size() >= 3
+	if args.size() >= 1 and args[0] == "levels":
+		_measure_levels()
+		quit()
+		return
 	print("MS| lean range %.0f deg, %d-bit lean components" % [_lean_max, _lean_bits])
 	if _only_proto:
 		for map_name in PROTO_MAPS:
@@ -109,6 +117,53 @@ func _measure_map(map_name: String) -> void:
 	_height_proto(doc, packed.entries)
 	if map_name in PROTO_MAPS:
 		_scatter_proto(map_name, doc, packed.entries)
+
+
+## The size sweep (msize_sizes_build.json): per saved user://levels/_psize_* level, the
+## document's size on disk and zstd-compressed (what AssetStreamer sends), its largest
+## entries, and the time to send it to PEERS players one after another at RATE.
+func _measure_levels() -> void:
+	var dir := DirAccess.open("user://levels")
+	if dir == null:
+		print("MS| no levels folder")
+		return
+	for folder in dir.get_directories():
+		if not folder.begins_with(LEVEL_PREFIX):
+			continue
+		var path := "user://levels/%s/map.ttmap" % folder
+		var file := FileAccess.get_file_as_bytes(path)
+		if file.is_empty():
+			print("MS| %s has no map.ttmap" % folder)
+			continue
+		var doc: MapDocument = MapDocumentIO.read(path).document
+		var sent := file.compress(FileAccess.COMPRESSION_ZSTD).size()
+		var largest := ""
+		var largest_rows := 0
+		for asset_id in doc.scatter if doc else {}:
+			var rows: int = doc.scatter[asset_id].size() / MapDocument.ROW_STRIDE
+			if rows > largest_rows:
+				largest = asset_id
+				largest_rows = rows
+		var entries := PackedStringArray(["largest asset %s %d rows" % [largest, largest_rows]])
+		for entry in _central_directory(file):
+			if int(entry.comp) >= 50 * 1024:
+				entries.append("%s %.2f MB" % [entry.name, entry.comp / RATE])
+		print(
+			(
+				"MS| %s: %d x %d samples, scatter rows %d, on disk %.2f MB, sent %.2f MB, %d peers %.0f s | %s"
+				% [
+					folder,
+					doc.samples_x() if doc else 0,
+					doc.samples_z() if doc else 0,
+					MapDocument.row_count(doc.scatter) if doc else 0,
+					file.size() / RATE,
+					sent / RATE,
+					PEERS,
+					PEERS * sent / RATE,
+					", ".join(entries),
+				]
+			)
+		)
 
 
 ## Entries of a ZIP from its central directory: [{name, raw, comp}].

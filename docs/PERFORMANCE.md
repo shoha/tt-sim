@@ -2674,3 +2674,59 @@ upload (`ground` 9-15, `dressing_upload` 18-20 ms), not the swap.
 in-place skirt (`SkirtExits.update_channel_in_place`, `systems/water.md` "Past the map edge"):
 1.8 ms headless for the 18 columns of a 4.5 m strip in one call (normals re-encoded only where
 they change: an inner column's ring 0), so a dab's own few columns cost well under that.
+
+## Map size sweep (2026-10-09)
+
+What a bigger authored map costs, to set the custom-size range: the worst-case look (forest
+Terraces seed 3: a river with two falls and a plank crossing at every size; every sample
+painted with two of eight ground surfaces; the forest filled to density 255) at 200, 250,
+300, 350, 400 and 400 x 200 ft. Tooling and commands: `tools/map_size/README.md`. Sizes over
+320 ft and the non-square map needed two patches that were reverted afterwards
+(`MapDocument.MAX_SIZE_CELLS` 64 -> 80, a `depth_ft` key in `NewMap.from_spec`). Debug
+build, RTX 3080, window 1920x1080 (the play job with the pinned `override.cfg`), vsync off for
+frame windows. **The GPU was not idle**: `perf.gd gpu_state` read 89-91 % at P3 780 MHz on the
+title at the start of both jobs (earlier passes read 29-38 % at P8), so absolute times are
+indicative; compare rows within the table.
+
+| Size (ft) | Samples | Document build ms | Open ms | Fill regen ms | ttmap MB (sent) | 4 peers s | Static / video / WS MB, authoring |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 200 | 245 x 245 | 794 | 3,658 (cold) | 5,698 | 1.10 | 4.4 | 370 / 1,674 / 1,480 |
+| 250 | 306 x 306 | 1,129 | 2,437 | 7,036 | 1.73 | 6.9 | 382 / 1,678 / 1,564 |
+| 300 | 367 x 367 | 1,524 | 3,124 | 8,863 | 2.48 | 9.9 | 395 / 1,681 / 1,589 |
+| 350 | 428 x 428 | 2,001 | 3,493 | 10,772 | 3.38 | 13.5 | 411 / 1,687 / 1,635 |
+| 400 | 489 x 489 | 2,567 | 4,067 | 14,331 | 4.44 | 17.7 | 430 / 1,702 / 1,640 |
+| 400 x 200 | 489 x 245 | 1,261 | 2,707 | 8,678 | 2.22 | 8.9 | 389 / 1,680 / 1,544 |
+
+Document build: `gen.gd time`, `NewMap.from_spec` headless on one thread, median of three (it
+runs on a worker under the loading screen in the game; Flat alone is 197-754 ms). Open: the
+loading screen from Create to drop (`perf.gd author`). Fill regen: `paint` and `fill` to
+`wait_ready` (the whole scatter regenerated at full density). ttmap: the saved level's
+`map.ttmap`; zstd gains nothing on it, so it is also what `AssetStreamer` sends, and "4 peers"
+is four sends in turn at 1 MiB/s. Everything grows close to linearly with the area. Rows at
+400 ft: 120,360, the largest asset 21,926, far from the 1M / 200K caps.
+
+Play and authoring, GPU median ms (CPU median), one run, levels interleaved, 200 ft again at
+the end; whole-map zoom in play via `dump.gd fit_zoom`:
+
+| Size (ft) | Warm load ms | Home | Zoom 20 | Play whole map | Authoring whole map | Whole-map prims / draws | Foliage shown |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 200 | 2,638 / 2,799 | 11.0 (12.7) | 14.2 (15.1) | 11.2 (12.4) | 17.1 (18.0) | 3.0M / 1,555 | 100 % |
+| 250 | 2,754 / 2,941 | 11.7 (12.7) | 13.8 (14.6) | 12.8 (13.6) | 34.4 (38.2) | 4.8M / 2,052 | 100 % |
+| 300 | 3,324 / 3,547 | 12.7 (13.4) | 15.1 (15.9) | 14.3 (15.0) | 45.9 (65.9) | 6.9M / 3,137 | 100 % |
+| 350 | 3,741 / 3,888 | 6.1 (11.9) | 12.7 (13.3) | 13.9 (14.7) | 44.3 (65.5) | 8.4M / 4,403 | 89 % |
+| 400 | 4,329 / 4,292 | 5.4 (11.4) | 12.4 (13.3) | 13.1 (16.6) | 51.1 (69.0) | 8.6M / 5,736 | 67 % |
+| 400 x 200 | 3,306 / 3,567 | 11.6 (12.4) | 13.8 (14.6) | 14.5 (15.2) | 38.3 (65.1) | 6.2M / 3,004 | 100 % |
+| 200 again | | 6.0 (6.8) | 13.5 (14.3) | 7.9 (12.0) | 17.9 (18.7) | | |
+
+**Verdict: in play at the table camera a bigger map costs nothing measurable; the builder's
+whole-map view and the foliage budget are what grow.** Home and zoom 20 draw 1.3-1.8M and
+2.1-3.0M primitives at every size (chunked foliage, the play view capped at 20), and their
+times show no trend; the 200 ft drift check held at zoom 20 (14.2 -> 13.5) but not at Home
+(11.0 -> 6.0), so Home differences here are contention noise. Loads stay under 4.5 s and
+memory grows by about 56 MB static from 200 to 400 ft. The whole-map view grows with the
+area until the default 8M foliage budget caps it (from about 330 ft a full forest is thinned
+map-wide: 89 % shown at 350, 67 % at 400). Authoring at that view costs 2-3x play at the same
+primitives and is CPU-bound from 300 ft (65-69 ms), unprofiled. Above 320 ft the document
+format refuses the map (64 cells), and an older peer would too. The recommendation drawn
+from this (custom sizes up to 250 ft recommended, 320 ft hard) is in the v0.2 evaluation's
+size probe.
