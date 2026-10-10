@@ -17,10 +17,12 @@ extends CanvasLayer
 ## tokens act on that map, and all three name it the same way, the bare name leading the line
 ## under the button. A room needs no map (room first, user verdict 2026-10-09), so over an
 ## empty library Host stays the screen's fill and says maps are added in the room, and the
-## plaque where the cards would be offers one action, New map's (Start a new map). New map
-## starts one from nothing. Set up tokens is the Level Editor by
-## what it does (starting tokens, the map's details and its Blender file; W5 keeps "level"
-## internal); with no map selected it opens on a new one.
+## plaque where the cards would be says so once (no count of 0) beside a small painted picture
+## of a map to come, and offers one action, New map's (Start a new map; I5). New map starts one
+## from nothing. Set up tokens is the Level Editor by what it does (starting tokens, the map's
+## details and its Blender file; W5 keeps "level" internal); with no map selected it opens on a
+## new one, where a map exported from Blender is chosen, and its caption says so: it stays
+## enabled, since that is how a Blender map comes into an empty library.
 
 signal host_game_requested(level_info: Dictionary)
 signal join_game_requested
@@ -50,6 +52,11 @@ const NEW_MAP_CAPTION := "Pick a landform, then paint it"
 ## The empty library's plaque: one line and one action, New map's.
 const EMPTY_CAPTION := "No maps yet. Paint your first one"
 const EMPTY_ACTION := "Start a new map"
+## The empty library's picture: a map to come, painted in the morning the backdrop shows.
+const EMPTY_PICTURE := Vector2(128, 72)
+const EMPTY_PICTURE_KEY := "Your first map"
+## The line under Set up tokens with no map selected: what it opens there.
+const SET_UP_TOKENS_EMPTY_LINE := "Bring in a map from Blender"
 ## The left column's rhythm. Its own separation (BoxContainerTight, 4) puts a caption under
 ## its button; every other gap is a spacer before a row, sized by _fit_to_canvas. A caption
 ## stands AFTER_CAPTION_GAP above the next control, so it reads with its own button; stacked
@@ -95,6 +102,8 @@ var version_label: Label
 ## "Your maps" and its count, with the empty library's caption under them, on their plaque.
 var heading_plaque: PanelContainer
 var _heading_row: HBoxContainer
+## The empty library's picture, line and action, under the heading on its plaque.
+var _empty_row: HBoxContainer
 ## The left column's spacers: the three section gaps in order, and the gap before each
 ## button after Host's.
 var _section_gaps: Array[Control] = []
@@ -285,17 +294,31 @@ func _build_right_zone() -> void:
 	heading_count.size_flags_vertical = Control.SIZE_SHRINK_END
 	_heading_row.add_child(heading_count)
 	words.add_child(_heading_row)
+	# The empty library: a small painted picture of a map to come beside one line and one
+	# action, quiet beside Host's fill (C5): New map's.
+	_empty_row = HBoxContainer.new()
+	_empty_row.name = "EmptyLibrary"
+	_empty_row.theme_type_variation = &"BoxContainerSpaced"
+	_empty_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_empty_row.visible = false
+	words.add_child(_empty_row)
+	var picture := RoomRows.map_well(EMPTY_PICTURE, null, EMPTY_PICTURE_KEY, "")
+	picture.name = "Picture"
+	picture.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_empty_row.add_child(picture)
+	var empty_words := VBoxContainer.new()
+	empty_words.theme_type_variation = &"BoxContainerSpaced"
+	empty_words.alignment = BoxContainer.ALIGNMENT_CENTER
+	empty_words.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_empty_row.add_child(empty_words)
 	empty_caption = Label.new()
 	empty_caption.name = "Empty"
 	empty_caption.text = EMPTY_CAPTION
 	empty_caption.theme_type_variation = &"Caption"
-	empty_caption.visible = false
-	words.add_child(empty_caption)
-	# One action where the cards would be, quiet beside Host's fill (C5): New map's.
-	empty_action = UiActions.secondary(EMPTY_ACTION, "brush", words)
+	empty_words.add_child(empty_caption)
+	empty_action = UiActions.secondary(EMPTY_ACTION, "brush", empty_words)
 	empty_action.name = "StartNewMap"
 	empty_action.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	empty_action.visible = false
 	empty_action.pressed.connect(_on_build_map_pressed)
 	grid = LevelGrid.new()
 	grid.name = "Grid"
@@ -323,10 +346,13 @@ func _preselect_most_recent() -> void:
 
 ## Host, Play Solo and Set up tokens name the selected level. Host needs none (a room needs no
 ## map: its caption says maps are added there); Play Solo is disabled without one, and Set up
-## tokens opens on a new map.
+## tokens opens on a new map, where a Blender map is brought in, as its line then says.
 func _refresh_actions() -> void:
 	var count := grid.card_count()
 	heading_count.text = str(count)
+	# An empty library says so once, in its own line: no count of 0 above it.
+	heading_count.visible = count > 0
+	_empty_row.visible = count == 0
 	empty_caption.visible = count == 0
 	empty_action.visible = count == 0
 	var info := grid.selected_info()
@@ -335,11 +361,11 @@ func _refresh_actions() -> void:
 	host_caption.text = HOST_CAPTION if has_level else HOST_EMPTY_LINE
 	host_subtitle.visible = has_level
 	play_subtitle.visible = has_level
-	editor_subtitle.visible = has_level
 	var name := String(info.get("name", ""))
 	host_subtitle.text = HOST_MAP_LINE % name if has_level else ""
 	play_subtitle.text = name
-	editor_subtitle.text = name
+	editor_subtitle.text = name if has_level else SET_UP_TOKENS_EMPTY_LINE
+	editor_subtitle.visible = true
 	# The selected map's mood and land (morning with none); the first one shows at once.
 	var folder := String(info.get("folder", ""))
 	backdrop.show_map(

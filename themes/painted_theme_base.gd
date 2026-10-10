@@ -93,6 +93,8 @@ func _define_labels() -> void:
 	define_variant_style("H1", "Label", title)
 	define_variant_style("H2", "Label", heading)
 	define_variant_style("H3", "Label", {font = font_strong, font_size = SIZE_BODY})
+	# H3 with tabular figures, for a count that ticks in place: the line around it never moves.
+	define_variant_style("Count", "Label", {font = font_count, font_size = SIZE_BODY})
 	define_variant_style("SectionHeader", "Label", heading)
 	define_variant_style("PanelHeader", "Label", heading)
 	define_variant_style("RailLabel", "Label", caption)
@@ -124,6 +126,20 @@ func _define_buttons() -> void:
 	)
 	define_style("Button", inherit(secondary, {icon_max_width = 20, h_separation = SPACE_2}))
 	define_variant_style("Secondary", "Button", {})
+	# The quiet button framed at 3:1 against what it sits on (the track role) in every state,
+	# where the default's edge is a faint rim: a button on a chip of its own colour (the table
+	# move's Stay here).
+	var frame := edge(1, c(ThemeColors.TRACK))
+	define_variant_style(
+		"Framed",
+		"Button",
+		_button(
+			inherit(raised, frame),
+			inherit(raised, frame, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
+			inherit(raised, frame, {bg_color = c(ThemeColors.SURFACE_PRESS), shadow_size = 0}),
+			ThemeColors.TEXT
+		)
+	)
 	var primary := _filled(
 		ThemeColors.ACCENT, ThemeColors.ACCENT_HOVER, ThemeColors.ACCENT_PRESS, ThemeColors.ON_ACCENT
 	)
@@ -257,6 +273,10 @@ func _define_flat_buttons() -> void:
 	strip.corner_radius_bottom_left = RADIUS_CARD - SPACE_1
 	strip.corner_radius_bottom_right = RADIUS_CARD - SPACE_1
 	var clear_strip: Dictionary = inherit(strip, {bg_color = Color(c(ThemeColors.SELECTED), 0.0)})
+	# A picture on its own card (the room's selected map, the title's empty library): a card's
+	# paper and trim at rest, so a picture over the painted backdrop reads as a picture on
+	# paper, not a hole in the sky.
+	define_variant_style("PictureCard", "PanelContainer", {panel = card})
 	define_variant_style("CardStrip", "PanelContainer", {panel = clear_strip})
 	define_variant_style("CardStripSelected", "PanelContainer", {panel = strip})
 	var on_selected := {font_color = c(ThemeColors.ON_SELECTED)}

@@ -50,10 +50,17 @@ func test_no_levels_keeps_host_and_offers_a_new_map() -> void:
 	assert_true(title.heading_plaque.is_ancestor_of(title.empty_action))
 	title.empty_action.pressed.emit()
 	assert_signal_emitted(title, "build_map_requested")
-	assert_eq(title.heading_count.text, "0")
-	# Set up tokens stays open with nothing selected (a new map, a Blender file), unnamed.
+	# Said once: "No maps yet" with no count of 0 above it, beside a painted picture (I5).
+	assert_false(title.heading_count.visible)
+	var picture := title.heading_plaque.find_child("Picture", true, false) as Control
+	assert_not_null(picture)
+	assert_true(picture.is_visible_in_tree())
+	assert_true(picture.get_node("Placeholder").visible, "a painted map to come")
+	# Set up tokens stays open with nothing selected: it is how a Blender map comes in, and
+	# its line says so.
 	assert_false(title.editor_button.disabled)
-	assert_false(title.editor_subtitle.visible)
+	assert_true(title.editor_subtitle.visible)
+	assert_eq(title.editor_subtitle.text, TitleScreen.SET_UP_TOKENS_EMPTY_LINE)
 
 
 func test_most_recent_level_is_preselected_and_named_in_subtitles() -> void:
@@ -168,7 +175,7 @@ func test_grid_refresh_notifies_actions_when_the_list_changes() -> void:
 	assert_false(title.host_button.disabled)
 	title.grid.provider = func() -> Array: return []
 	title.grid.refresh()
-	assert_eq(title.heading_count.text, "0")
+	assert_false(title.heading_count.visible, "no count of 0")
 	assert_true(title.empty_caption.visible)
 	assert_true(title.empty_action.visible)
 	assert_false(title.host_button.disabled, "a room needs no map")

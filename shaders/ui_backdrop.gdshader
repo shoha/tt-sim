@@ -93,17 +93,26 @@ float hash12(vec2 c) {
 	return fract(sin(dot(c, vec2(127.1, 311.7))) * 43758.5453);
 }
 
-// A painted cumulus at `at`, `s` heights across: four puffs melted together, their sizes and
-// places nudged by `shape`, on a soft base that rounds up toward its ends (a ruled base read as
-// the edge of a card). Returns its coverage; `shade` is 0 on its sunlit crown and 1 along its
-// base.
+// A painted cumulus at `at`, `s` heights across: a shoulder at each end and two big bumps
+// between them melted together, on a soft base that rounds up toward its ends (a ruled base
+// read as the edge of a card). `shape` draws three numbers that each cloud takes its own
+// silhouette from, so no two read as one stamp: which big bump is the crown (left or right)
+// and by how much, the size of each shoulder, and whether a small round turret stands on top,
+// and where. Every puff stays inside -0.85..0.97 across and under 0.65 up, the extent
+// BackdropPaint._open_sky keeps clear of the paper. Returns its coverage; `shade` is 0 on its
+// sunlit crown and 1 along its base.
 float cloud(vec2 p, vec2 at, float s, float shape, float soft, out float shade) {
 	vec2 q = (p - at) / s;
 	float v = shape;
-	float d = length(q - vec2(-0.55, 0.02 + 0.05 * v)) - (0.25 + 0.09 * v);
-	d = smin(d, length(q - vec2(-0.16 - 0.08 * v, 0.20)) - (0.36 + 0.10 * (1.0 - v)), 0.12);
-	d = smin(d, length(q - vec2(0.30 + 0.08 * v, 0.10 + 0.06 * v)) - (0.31 + 0.06 * v), 0.12);
-	d = smin(d, length(q - vec2(0.70 + 0.06 * v, 0.0)) - (0.19 + 0.09 * (1.0 - v)), 0.12);
+	float u = fract(v * 7.13 + 0.31);
+	float w = fract(v * 13.7 + 0.77);
+	float d = length(q - vec2(-0.55 + 0.05 * v, 0.05 * u)) - (0.20 + 0.08 * v);
+	d = smin(d, length(q - vec2(-0.22 + 0.06 * u, 0.14 + 0.08 * w)) - (0.28 + 0.10 * (1.0 - v)), 0.12);
+	d = smin(d, length(q - vec2(0.22 + 0.06 * v, 0.10 + 0.08 * (1.0 - w))) - (0.26 + 0.08 * u), 0.12);
+	d = smin(d, length(q - vec2(0.62 + 0.06 * u, 0.04 * v)) - (0.16 + 0.08 * (1.0 - u)), 0.12);
+	// A small round turret on top, on some clouds only, melted on lightly so it stays a bump.
+	float turret = length(q - vec2(mix(-0.30, 0.25, v), 0.42 + 0.04 * u)) - (0.12 + 0.04 * w);
+	d = mix(d, smin(d, turret, 0.06), step(0.5, w));
 	d = smax(d, -(q.y + 0.10 - 0.14 * q.x * q.x), 0.08);
 	shade = 1.0 - smoothstep(-0.10, 0.42, q.y);
 	return 1.0 - smoothstep(-soft, soft, d * s);

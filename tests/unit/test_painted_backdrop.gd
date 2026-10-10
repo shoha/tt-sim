@@ -101,13 +101,67 @@ func test_a_change_of_light_keeps_its_saturation_and_moves_one_disc() -> void:
 					assert_gte(_chroma(mixed[key]), want * 0.75, what)
 	var golden := BackdropPaint.look_of(PaintedBackdrop.Mood.GOLDEN_HOUR)
 	var night := BackdropPaint.look_of(PaintedBackdrop.Mood.NIGHT)
-	var hill: Vector3 = BackdropPaint.mix_looks(golden, night, 0.37).near_col
-	var hue := rad_to_deg(fposmod(BackdropPaint.to_oklch(hill).z, TAU))
-	assert_false(hue > 95.0 and hue < 150.0, "the hill passes through rose, not olive: %d" % hue)
 	var composition := BackdropPaint.compose(0.3, Vector2(1920, 1080), null)
 	var sun := BackdropPaint.sun_of(BackdropPaint.mix_looks(golden, night, 0.5), composition)
 	assert_between(sun.z, night.sun_r, golden.sun_r, "the disc shrinks toward the moon's")
 	assert_between(sun.y, golden.sun_y, night.sun_y, "and rises")
+
+
+## One route round the hue circle for the land, and one for the sky: half way through any
+## change of light, two of the land's colours (or two of the sky's) that start in neighbouring
+## hues and end in neighbouring hues have turned the same way round (an orange hill on a teal
+## meadow had turned two ways from olive to blue).
+func test_a_change_of_light_turns_the_land_one_way() -> void:
+	var land := BackdropPaint.LAND_COLOURS
+	var sky: Array[String] = ["sky_top", "sky_low", "sun_glow", "cloud_lit", "cloud_shade"]
+	var near := deg_to_rad(50.0)
+	for a in PaintedBackdrop.Mood.size():
+		for b in PaintedBackdrop.Mood.size():
+			var from := BackdropPaint.look_of(a)
+			var to := BackdropPaint.look_of(b)
+			var mixed := BackdropPaint.mix_looks(from, to, 0.5)
+			for group: Array[String] in [land, sky]:
+				for one: String in group:
+					for two: String in group:
+						var turns := [_turn(from[one], mixed[one]), _turn(from[two], mixed[two])]
+						var colourful := [one, two].all(
+							func(key: String) -> bool: return _colourful(from[key], to[key])
+						)
+						var moved := absf(turns[0]) > deg_to_rad(15.0) and absf(turns[1]) > deg_to_rad(15.0)
+						var neighbours := (
+							absf(_turn(from[one], from[two])) < near and absf(_turn(to[one], to[two])) < near
+						)
+						if colourful and moved and neighbours:
+							var what := "%s and %s, %d -> %d: %s" % [one, two, a, b, turns]
+							assert_eq(signf(turns[0]), signf(turns[1]), what)
+
+
+## A low sun keeps low: with the largest open sky in a strip along the top and a smaller band
+## low over the hills, golden hour and dusk stand their sun in the low band, smaller, while
+## morning's stands in the strip.
+func test_a_low_sun_keeps_low_and_shrinks() -> void:
+	var size := Vector2(1280, 720)
+	var paper: Array[Rect2] = [Rect2(24, 24, 380, 672), Rect2(428, 200, 828, 200)]
+	var layout := BackdropLayout.new(size, paper)
+	var composition := BackdropPaint.compose(0.4, size, layout)
+	var morning := BackdropPaint.sun_of(BackdropPaint.look_of(0), composition)
+	assert_gt(morning.y, 0.6, "morning's sun in the strip along the top")
+	for mood: int in [PaintedBackdrop.Mood.GOLDEN_HOUR, PaintedBackdrop.Mood.DUSK]:
+		var look := BackdropPaint.look_of(mood)
+		var sun := BackdropPaint.sun_of(look, composition)
+		assert_lt(sun.y, 0.45, "mood %d: low over the hills" % mood)
+		assert_lt(sun.z, look.sun_r, "mood %d: smaller to fit" % mood)
+		var disc := Rect2(sun.x - sun.z, sun.y - sun.z, sun.z * 2.0, sun.z * 2.0)
+		assert_true(layout.is_open(_pixels(disc, size)), "mood %d: in open sky" % mood)
+	# With cards over all the low sky, a low sun sets behind them at its own place, its glow
+	# round their edges, rather than climbing to the strip along the top.
+	var full: Array[Rect2] = [Rect2(24, 24, 380, 672), Rect2(428, 60, 828, 640)]
+	var crowded := BackdropPaint.compose(0.4, size, BackdropLayout.new(size, full))
+	var golden := BackdropPaint.look_of(PaintedBackdrop.Mood.GOLDEN_HOUR)
+	var setting := BackdropPaint.sun_of(golden, crowded)
+	assert_almost_eq(setting.y, float(golden.sun_y), 0.001, "low, behind the cards")
+	var high := BackdropPaint.sun_of(BackdropPaint.look_of(0), crowded)
+	assert_gt(high.y, 0.9, "morning's still in the strip along the top")
 
 
 ## The sun or moon stands in the sky the paper leaves open, and every cloud and poplar clear of
@@ -122,12 +176,12 @@ func test_the_painting_makes_way_for_the_paper() -> void:
 			var sun := BackdropPaint.sun_of(BackdropPaint.look_of(mood), composition)
 			var disc := Rect2(sun.x - sun.z, sun.y - sun.z, sun.z * 2.0, sun.z * 2.0)
 			assert_true(layout.is_open(_pixels(disc, size)), "seed %.2f mood %d sun" % [seed, mood])
-		# A cloud's base never in the band of cards (its crown may tuck behind one).
+		# A whole cloud in open sky, crown and all (a crown behind the cards left a lozenge).
 		for cloud: Vector4 in composition.clouds:
 			if cloud.z > 0.0:
 				var z := cloud.z
-				var base := Rect2(cloud.x - 0.85 * z, cloud.y - 0.1 * z, 1.7 * z, 0.3 * z)
-				assert_true(layout.is_open(_pixels(base, size)), "seed %.2f cloud %s" % [seed, cloud])
+				var whole := Rect2(cloud.x - 0.85 * z, cloud.y - 0.14 * z, 1.8 * z, 0.76 * z)
+				assert_true(layout.is_open(_pixels(whole, size)), "seed %.2f cloud %s" % [seed, cloud])
 		for tree: Vector4 in composition.poplars:
 			if tree.y > 0.0:
 				var foot := BackdropPaint.near_line(tree.x, size.x / size.y, composition.ridges.z)
@@ -161,6 +215,17 @@ func test_drift_follows_reduce_motion() -> void:
 
 func _chroma(color: Vector3) -> float:
 	return BackdropPaint.to_oklch(color).y
+
+
+## Whether both ends have a hue worth turning (a near-grey end has none).
+func _colourful(one: Vector3, two: Vector3) -> bool:
+	return minf(_chroma(one), _chroma(two)) > 0.04
+
+
+## How far the hue turned from `from` to `to`, signed, the short way (radians).
+func _turn(from: Vector3, to: Vector3) -> float:
+	var up := fposmod(BackdropPaint.to_oklch(to).z - BackdropPaint.to_oklch(from).z, TAU)
+	return up if up <= PI else up - TAU
 
 
 ## A rect in heights (y up from the foot) as pixels.

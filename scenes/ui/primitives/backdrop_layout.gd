@@ -70,23 +70,24 @@ func is_open(rect: Rect2) -> bool:
 	return count + _sum[r0 * stride + c0] == 0
 
 
-## The largest open square above `floor_y` (pixels from the top), in pixels; among squares
-## nearly as large (within a cell or 15%), the one whose centre is nearest `toward`. Empty when
-## the paper covers it all.
-func largest_square(floor_y: float, toward: Vector2) -> Rect2:
+## The largest open square above `floor_y` and below `ceiling_y` (pixels from the top), in
+## pixels; among squares nearly as large (within a cell or 15%), the one whose centre is
+## nearest `toward`. Empty when the paper covers it all.
+func largest_square(floor_y: float, toward: Vector2, ceiling_y := 0.0) -> Rect2:
 	var rows := clampi(floori(floor_y / _cell), 0, _rows)
+	var top := clampi(ceili(ceiling_y / _cell), 0, rows)
 	var stride := _cols + 1
 	var side := PackedInt32Array()
 	side.resize(_cols * rows)
 	var best := 0
-	for r in rows:
+	for r in range(top, rows):
 		for c in _cols:
 			var open := _sum[(r + 1) * stride + c + 1] - _sum[r * stride + c + 1]
 			open -= _sum[(r + 1) * stride + c] - _sum[r * stride + c]
 			var s := 0
 			if open == 0:
 				s = 1
-				if r > 0 and c > 0:
+				if r > top and c > 0:
 					var up := side[(r - 1) * _cols + c]
 					var left := side[r * _cols + c - 1]
 					s += mini(mini(up, left), side[(r - 1) * _cols + c - 1])
@@ -98,7 +99,7 @@ func largest_square(floor_y: float, toward: Vector2) -> Rect2:
 	enough = maxi(enough, 1)
 	var chosen := Rect2()
 	var nearest := INF
-	for r in rows:
+	for r in range(top, rows):
 		for c in _cols:
 			var s := side[r * _cols + c]
 			if s < enough:

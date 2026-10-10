@@ -186,17 +186,37 @@ func define_ranges() -> void:
 			font_size = SIZE_CAPTION,
 		}
 	)
-	var thumb := box(Color(c(ThemeColors.TEXT_SOFT), 0.45), RADIUS_PILL, 3, 3)
+	# The grabber is opaque, in the track role at rest (3:1 on every surface of its leaf: ink
+	# on paper, chalk on glass), deepening to the soft text role on hover and the text role
+	# while dragged. A translucent grey read 1.7:1 over a midday sky.
+	var thumb := box(c(ThemeColors.TRACK), RADIUS_PILL, 3, 3)
 	var lane := box(Color(c(ThemeColors.SURFACE_INSET), 0.0), RADIUS_PILL, 3, 3)
 	var bar := {
 		scroll = lane,
 		scroll_focus = lane,
 		grabber = thumb,
-		grabber_highlight = inherit(thumb, {bg_color = Color(c(ThemeColors.TEXT_SOFT), 0.7)}),
-		grabber_pressed = inherit(thumb, {bg_color = c(ThemeColors.TEXT_SOFT)}),
+		grabber_highlight = inherit(thumb, {bg_color = c(ThemeColors.TEXT_SOFT)}),
+		grabber_pressed = inherit(thumb, {bg_color = c(ThemeColors.TEXT)}),
 	}
 	define_style("VScrollBar", bar)
 	define_style("HScrollBar", bar)
+	# A bar over the painted backdrop (the title's card list) sits on a strip of paper of its
+	# own, so its grabber holds 3:1 against the paper in every mood rather than against a sky
+	# that runs from midday white to night blue. Godot draws the grabber the bar's full width,
+	# so its paper border is what keeps it in from the strip's sides.
+	var strip := box(c(ThemeColors.SURFACE), RADIUS_PILL, 5, 5, edge(1, c(ThemeColors.EDGE)))
+	var inked := edge(3, c(ThemeColors.SURFACE))
+	define_variant_style(
+		"CardGridBar",
+		"VScrollBar",
+		{
+			scroll = strip,
+			scroll_focus = strip,
+			grabber = inherit(thumb, inked),
+			grabber_highlight = inherit(thumb, inked, {bg_color = c(ThemeColors.TEXT_SOFT)}),
+			grabber_pressed = inherit(thumb, inked, {bg_color = c(ThemeColors.TEXT)}),
+		}
+	)
 
 
 ## Tabs: label type, the soft text role at rest, and the selected tab underlined in the

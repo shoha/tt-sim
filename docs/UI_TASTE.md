@@ -83,7 +83,9 @@ sizes per file against `tests/ui_bypass_baseline.json`, and a count may only fal
 - **M1** Duration bands: 100-150 ms for feedback, 150-300 ms for state, 300-500 ms for an
   overlay, 500-800 ms for one authored entrance; exits are faster than entrances. Our modal
   sits under the overlay band on purpose (0.22 s in, 0.15 s out); the long moments are
-  authored ones only (Host's wash into the room, the table move).
+  authored ones only (Host's wash into the room, the table move). Named exception: the
+  painted backdrop's change of light (0.6 s, `PaintedBackdrop.FADE_S`) is the world changing,
+  not chrome, so it runs past the overlay band; no control waits on it.
 - **M2** No bounce, elastic or overshoot on panels (`TRANS_BACK`, `TRANS_ELASTIC`,
   `TRANS_BOUNCE`); a 6% back-out only on a small tile or icon hover. Arrivals use
   `TRANS_QUART` or `TRANS_EXPO` with `EASE_OUT`.

@@ -59,6 +59,9 @@ var on_glass := false
 var font_body: FontVariation
 var font_label: FontVariation
 var font_strong: FontVariation
+## A count that ticks in place (the table move's 3, 2, 1): the strong face with tabular
+## figures, so every digit takes one width.
+var font_count: FontVariation
 var font_wordmark: FontVariation
 var font_title: FontVariation
 var font_heading: FontVariation
@@ -85,6 +88,7 @@ func build_fonts() -> void:
 	font_body = inter(400.0 + lift)
 	font_label = inter(500.0 + lift)
 	font_strong = inter(600.0 + lift)
+	font_count = inter(600.0 + lift, ["tnum"])
 	font_wordmark = fraunces(650.0, 144.0)
 	font_title = fraunces(600.0, SIZE_TITLE)
 	font_heading = fraunces(600.0, SIZE_HEADING)
