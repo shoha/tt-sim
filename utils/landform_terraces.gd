@@ -14,8 +14,8 @@ extends RefCounted
 ## a plank bridge on the top terrace (BRIDGE_CHANCE). The stage is on the middle terrace,
 ## or the lower when there are two, away from the river. On a big or long map
 ## (LandformGrowth) the terraces step down along a long map's length, spread over it
-## (span_of), and may gain a step (EXTRA_STEP_CHANCE); a river over three steps jogs aside at
-## every other one (river_line).
+## (span_of), and may gain a step (EXTRA_STEP_CHANCE); a river over three steps (two on a
+## wide or long map) jogs aside at every other one (river_line).
 
 const THREE_CHANCE := 0.5
 const RIVER_CHANCE := 0.6
@@ -44,9 +44,12 @@ const RIVER_HALF_WIDTH_M := 1.5
 const RIVER_SPACING_M := 5.0
 const RIVER_WOBBLE_M := 1.2
 const RIVER_OFFSET_SHARE := 0.3
-## Over three steps the river jogs this share of the half extent across the heading at every
-## other step, crossing each step square on within JOG_SQUARE_M of its edge (river_line).
+## Over three steps (two on a wide or long map) the river jogs this share of the half extent
+## across the heading at every other step, at least JOG_MIN_M (three river widths: the
+## 3.9 m jog of a 320 x 160 ft map read as a straight river, and 6.1 m at 250 ft as a kink),
+## crossing each step square on within JOG_SQUARE_M of its edge (river_line).
 const JOG_SHARE := 0.16
+const JOG_MIN_M := 9.0
 const JOG_SQUARE_M := 3.0
 ## The bridge stands on the top terrace at least this far back from its edge and this far
 ## inside the map.
@@ -108,8 +111,12 @@ static func terraces(doc: MapDocument, seed_value: int, biome_id: String) -> Dic
 		]
 	)
 	if wants_river:
+		var jog_from := 2 if LandformGrowth.is_wide(doc) or LandformGrowth.is_long(doc) else 3
 		var line := StartingLandform.map_line(
-			doc, river_line(plateaus, frame, river_v, span, half), EDGE_MARGIN_M, RIVER_SPACING_M
+			doc,
+			river_line(plateaus, frame, river_v, span, half, jog_from),
+			EDGE_MARGIN_M,
+			RIVER_SPACING_M
 		)
 		var course := StartingLandform.wobbled(
 			doc,
@@ -137,20 +144,27 @@ static func terraces(doc: MapDocument, seed_value: int, biome_id: String) -> Dic
 
 
 ## The river's line down the terraces, `river_v` across the heading of `frame`, reaching far
-## past the map both ways along `span`: straight over one or two steps; over three (a big
-## map's extra step) it jogs JOG_SHARE of `half` across the heading at every other step,
-## always away from the axis where the stage stands, and crosses each step square on within
-## JOG_SQUARE_M of its edge, so its falls step aside down the map instead of standing in one
-## line (round 3, 2026-10-09: seed 5 at 320 ft ran straight up the map over three falls).
+## past the map both ways along `span`: straight over fewer than `jog_from` steps; over that
+## many (three, a big map's extra step; two on a wide or long map, whose whole-map view shows
+## every fall) it jogs JOG_SHARE of `half` (at least JOG_MIN_M) across the heading at every
+## other step, always away from the axis where the stage stands, and crosses each step square
+## on within JOG_SQUARE_M of its edge, so its falls step aside down the map instead of
+## standing in one line (round 3, 2026-10-09: seed 5 at 320 ft ran straight up the map over
+## three falls; 2026-10-10: over two at 200 and 250 ft, the bridge in the same line).
 static func river_line(
-	plateaus: Array[Dictionary], frame: Dictionary, river_v: float, span: float, half: float
+	plateaus: Array[Dictionary],
+	frame: Dictionary,
+	river_v: float,
+	span: float,
+	half: float,
+	jog_from: int = 3
 ) -> PackedVector2Array:
 	var dir: Vector2 = frame.dir
 	var normal: Vector2 = frame.normal
 	var far := dir * 4.0 * span
-	if plateaus.size() < 3:
+	if plateaus.size() < jog_from:
 		return PackedVector2Array([normal * river_v - far, normal * river_v + far])
-	var jog := half * JOG_SHARE * (signf(river_v) if river_v != 0.0 else 1.0)
+	var jog := maxf(half * JOG_SHARE, JOG_MIN_M) * (signf(river_v) if river_v != 0.0 else 1.0)
 	var points := PackedVector2Array([normal * river_v - far])
 	var across := river_v
 	# Highest first, so the edges run downhill in order.

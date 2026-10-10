@@ -75,8 +75,9 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   again (`SECOND_BEND_GROWTH` 0.6) and spreads it over the long half, the Terraces may gain a
   step (`EXTRA_STEP_CHANCE` 0.7; three steps spread over half the span either side) and
   spread their steps along a long map (`span_of`), the Hilltop sits toward one end of a long
-  map with its second hill toward the other (`toward_end`), and the Lakeshore's far-corner
-  lake sits in a long map's own corner. Then `apply()` runs `grow()`: one extra with chance
+  map with its second hill toward the other (`toward_end`), and the Lakeshore's lake takes
+  any corner or side of a long map's own extent (`wide_frame`, as on a wide map, since
+  2026-10-10). Then `apply()` runs `grow()`: one extra with chance
   `room`, a second with 0.85 `room`, drawn by weight from the landform's palette (`PALETTES`:
   mostly a tarn or a meadow, a knoll least) from `STREAM_EXTRAS` salted by the landform, each
   placed by `LandformPlacement.find_spot` (48 seeded candidates; clear of the stage, the
@@ -208,8 +209,14 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   the half extent of the centre. The setting (round 3, `STREAM_SETTING`; every seed had read
   as a dense forest diamond round a green hill): on a wide map (`LandformGrowth.is_wide`, the
   shorter side 60 m or more: 200 ft and up, not long) the hill stands
-  `HILL_WIDE_OFFSET_SHARE` 0.3-0.5 of the half extent toward its heading, the second hill as
-  far the other way; the open crown on a map with room covers `HILL_OPEN_RANGE` 0.45-0.95 of
+  `HILL_WIDE_OFFSET_SHARE` 0.3-0.5 of the half extent toward a heading of its own: the seed
+  times `WIDE_TURN` (the golden ratio's fraction) turns, any azimuth, so a random seed's
+  heading is as even as a draw and seeds close in number stand far apart (any five in a row
+  at least 52 degrees, six 32; `setting_of`). Until 2026-10-10 it was the frame's eight
+  headings: at 250 ft seeds 1 and 4 drew the same 315 and near-equal setting draws, so their
+  hills stood within half a metre and the maps read alike; a uniform draw from the setting
+  stream, tried first, put seeds 1, 5 and 6 within 17 degrees. The second hill stands as far
+  the other way; the open crown on a map with room covers `HILL_OPEN_RANGE` 0.45-0.95 of
   the radius; and at every size the wood (`LandformPlacement.wood`, `NewMap.wood_density`)
   keeps 0.4-1.0 of the groves' density over the glade's and with `WOOD_LEAN_CHANCE` 0.6
   gathers them toward a seeded side, the far side opening by 0.55-0.9.
@@ -224,10 +231,14 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   river, a plank bridge on the top terrace (`BRIDGE_CHANCE` 0.5) `BRIDGE_BACK_M` 5 m uphill of
   its edge. Stage: on the middle terrace, or `STAGE_DOWN_SHARE` 0.3 of the half extent down
   the lower one when there are two, `STAGE_RIVER_M` 6 m from the river toward the axis. Over
-  three steps (a big map's extra step) the river jogs `JOG_SHARE` 0.16 of the half extent
-  across the heading at every other step, away from the axis and the stage, crossing each
-  step square on within `JOG_SQUARE_M` 3 m of its edge (`river_line`; round 3, where seed 5
-  at 320 ft ran straight up the map over three falls in a line).
+  three steps (a big map's extra step), or two on a wide or long map, the river jogs
+  `JOG_SHARE` 0.16 of the half extent (at least `JOG_MIN_M` 9 m, three river widths) across
+  the heading at every other step, away from the axis and the stage, crossing each step
+  square on within `JOG_SQUARE_M` 3 m of its edge (`river_line`; round 3, where seed 5 at
+  320 ft ran straight up the map over three falls in a line; 2026-10-10, where seed 5 at
+  200 and 250 ft still did over two, the bridge in the same line, a 320 x 160 ft map's
+  3.9 m jog read as none and a 6.1 m one at 250 ft as a kink). A 150 ft map keeps its
+  straight river over two steps.
 - **Lakeshore** (`LandformLakeshore.lakeshore`; "A deep lake over one corner, its shore the
   stage"): a deep pond over a disc of `LAKE_RADIUS_SHARE` 0.45 of the half extent centred
   `LAKE_CENTRE_SHARE` 0.5 of it toward a corner (0.55 before P5-4), its shore warped
@@ -252,7 +263,9 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   (`STONES_CHANCE` 0.4) at least `STONES_SHORE_M` 5 m back from the shore. Stage: on the shore
   nearest the map's centre, `STAGE_SHORE_M` 4 m back from the waterline. The setting (round
   3, `STREAM_SETTING`; every seed had read as a lake at the back with forest elsewhere): on a
-  wide map (200 ft and up) the corner draw above gives way to `wide_frame`: the lake takes any
+  wide map (200 ft and up) or a long one (since 2026-10-10: a 320 x 160 ft map's 48.8 m
+  shorter side is under the wide threshold, and its far-corner frame kept the lake at the back
+  on 4 of 6 seeds) the corner draw above gives way to `wide_frame`: the lake takes any
   of `WIDE_PLACES` alike, the four corners and the four sides' middles (the home frame no
   longer bounds it: the whole map is what reads), with `LARGE_LAKE_CHANCE` 0.35 a lake of
   `LARGE_LAKE_SHARE` 0.6 of the half extent, its centre its radius plus `LAKE_EDGE_SHARE` 0.05
