@@ -24,9 +24,12 @@ extends Control
 ## percent moves in place (show_progress()), not by rebuilding the rows.
 ##
 ## A map the session changed says so on the GM's shelf row ("Changed this session", read from
-## changes_source, TableMover.changed_maps()), and its row, once selected, has Save into map
-## (for a map with a level folder here) and Discard changes on a line under it; TableMover asks
-## before either. Moving the table never asks: the table is kept as it is.
+## changes_source, TableMover.changed_maps()) and, selected in the room, under its picture; its
+## row, once selected, has Save into map (for a map with a level folder here) and Discard
+## changes on a line under it, or with no folder a caption saying why Discard is all there is;
+## TableMover asks before either. Selecting a row never moves the table (the action does), and
+## moving the table never asks: the table is kept as it is. A full shelf scrolls, in the room's
+## side sheet as in the drawer's column, the selected row and its line scrolled into view.
 ##
 ## Everything shown comes from a session summary (show_session()); RoomModel holds the rules
 ## and RoomLayout builds the controls. With connect_network (the default) the panel reads
@@ -122,6 +125,7 @@ func _ready() -> void:
 	else:
 		stage.resized.connect(_fit_preview)
 		body.resized.connect(_fit_side)
+		resized.connect(_fit_side)
 	if connect_network:
 		NetworkManager.session.session_changed.connect(refresh)
 		NetworkManager.session.prefetch.progress_changed.connect(refresh_progress)
@@ -331,9 +335,9 @@ func _show_selection() -> void:
 		hint_label.text = RoomModel.drawer_hint(_is_gm, _selected, _table, _shelf.size())
 		hint_label.visible = hint_label.text != ""
 		_fit_drawer.call_deferred()
-		# After the frame's layout, when the column knows whether it scrolls and how far.
-		if is_inside_tree() and not get_tree().process_frame.is_connected(_reveal_selected):
-			get_tree().process_frame.connect(_reveal_selected, CONNECT_ONE_SHOT)
+	# After the frame's layout, when the column knows whether it scrolls and how far.
+	if is_inside_tree() and not get_tree().process_frame.is_connected(_reveal_selected):
+		get_tree().process_frame.connect(_reveal_selected, CONNECT_ONE_SHOT)
 
 
 ## The GM's Save into map and Discard changes, on a line right under the selected shelf row
@@ -384,12 +388,14 @@ func _show_stage(entry: Dictionary) -> void:
 	readiness_label.visible = readiness_label.text != ""
 
 
-## The line under the selected map: on the table, or its readiness, a player's own first.
+## The line under the selected map: on the table, or its readiness, a player's own first; for
+## the GM, a map that changed this session says so first, as its shelf row does.
 func _readiness(entry: Dictionary) -> String:
+	var changed := _is_gm and _changed.has(entry.key)
 	if entry.on_table:
-		return "On the table now"
+		return RoomModel.shelf_caption(true, true, "") if changed else "On the table now"
 	if _is_gm:
-		return RoomModel.readiness_text(_players, entry.key)
+		return RoomModel.shelf_caption(false, changed, RoomModel.readiness_text(_players, entry.key))
 	return RoomModel.own_readiness_text(_players, entry.key)
 
 
@@ -428,13 +434,17 @@ func _fit_preview() -> void:
 
 ## The room's side sheet ends at its content (no empty paper under a short shelf); when the
 ## shelf is too long for the screen, the sheet takes the full height and the shelf scrolls.
+## Measured against the panel, never the body, which a sheet too tall for the screen stretches
+## past the canvas (a full shelf with a changed map's actions under its selected row).
 func _fit_side() -> void:
 	if in_drawer or body == null or not is_inside_tree():
 		return
 	var rows_height := shelf_rows.get_combined_minimum_size().y
 	var scrolling := shelf_scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED
 	var needed := side.get_combined_minimum_size().y + (rows_height if scrolling else 0.0)
-	var fits := needed <= body.size.y
+	var layout := body.get_parent() as Control
+	var others := layout.get_combined_minimum_size().y - body.get_combined_minimum_size().y
+	var fits := needed <= size.y - EDGE * 2.0 - others
 	var mode := ScrollContainer.SCROLL_MODE_DISABLED if fits else ScrollContainer.SCROLL_MODE_AUTO
 	if shelf_scroll.vertical_scroll_mode != mode:
 		shelf_scroll.vertical_scroll_mode = mode
@@ -466,18 +476,29 @@ func _fit_drawer() -> void:
 		column_scroll.size_flags_vertical = flags
 	if drawer_rest.visible != fits:
 		drawer_rest.visible = fits
+	# The column's minimum can move and settle back within one frame of deferred updates (a
+	# changes line rebuilt under another row while its flow takes its width), and the layout,
+	# sorted in between, is then never told again: a fitting column a row short of its content
+	# (488 of 540 px) is sorted once more.
+	if fits and column_scroll.size.y + 0.5 < column.get_combined_minimum_size().y:
+		(layout as Container).queue_sort()
 
 
-## Scroll the drawer's column to the selected shelf row when the column scrolls, so the map the
-## action names is in view.
+## Scroll the drawer's column, or the room's shelf, to the selected shelf row and the changes
+## line under it when it scrolls, so the map the action names, and its own actions, are in view.
 func _reveal_selected() -> void:
-	if column_scroll == null or not is_inside_tree() or _selected == "":
+	var scroll := column_scroll if in_drawer else shelf_scroll
+	if scroll == null or not is_inside_tree() or _selected == "":
 		return
-	if column_scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED:
+	if scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED:
 		return
-	var row := shelf_rows.get_node_or_null(NodePath("Map_%s" % _selected.validate_node_name()))
+	var key := _selected.validate_node_name()
+	var line := shelf_rows.get_node_or_null(NodePath("Changes_%s" % key))
+	if line is Control:
+		scroll.ensure_control_visible(line)
+	var row := shelf_rows.get_node_or_null(NodePath("Map_%s" % key))
 	if row is Control:
-		column_scroll.ensure_control_visible(row)
+		scroll.ensure_control_visible(row)
 
 
 # -- Actions -------------------------------------------------------------------

@@ -23,6 +23,13 @@ const ICON_SIZE := 20
 ## and a short one ("Raise undone") is no wider than its words (the 2a critic: a 360 px chip
 ## around two words read as an empty box).
 const WIDTH := 360.0
+## An error says what failed, why and how to recover (W3), so it wraps at the narrow sheet's
+## width token (UI_TASTE S5) instead: three lines rather than five.
+const ERROR_WIDTH := 420.0
+## A toast stays at least as long as its words take to read: a moment to look, then this many
+## words a second (a long error's recovery is read, not glimpsed).
+const LOOK_S := 1.5
+const WORDS_PER_S := 3.0
 ## Per kind: the icon and the role that tints it.
 const KINDS := {
 	ToastType.INFO: ["info-circle", ThemeColors.STATE],
@@ -39,8 +46,10 @@ var _active_toasts: Array[Control] = []
 @onready var toast_vbox: VBoxContainer = %VBoxContainer
 
 
-## Show a toast. With `action_label` and a valid `action`, a button at its end runs the
-## action and dismisses the toast (`action_icon` is its Tabler icon).
+## Show a toast for `duration` seconds, or as long as its words take to read when that is
+## longer (reading_seconds(); 0 keeps it up). With `action_label` and a valid `action`, a
+## button at its end runs the action and dismisses the toast (`action_icon` is its Tabler
+## icon).
 func show_toast(
 	message: String,
 	type: ToastType = ToastType.INFO,
@@ -56,7 +65,7 @@ func show_toast(
 		button.pressed.connect(_on_action_pressed.bind(toast, action))
 		toast.get_child(0).add_child(button)
 	toast_vbox.add_child(toast)
-	_fit_one_line(toast, ACTION_MAX_WIDTH if has_action else WIDTH)
+	_fit_one_line(toast, max_width(type, has_action))
 	_active_toasts.append(toast)
 
 	# Limit visible toasts
@@ -73,12 +82,25 @@ func show_toast(
 	# errors on the freed capture.
 	if duration > 0:
 		var held: WeakRef = weakref(toast)
-		get_tree().create_timer(duration).timeout.connect(
+		get_tree().create_timer(maxf(duration, reading_seconds(message))).timeout.connect(
 			func() -> void:
 				var shown: Control = held.get_ref()
 				if shown != null:
 					_dismiss_toast(shown, false)
 		)
+
+
+## How long `message` takes to read: LOOK_S, then WORDS_PER_S words a second. Pure.
+static func reading_seconds(message: String) -> float:
+	return LOOK_S + message.split(" ", false).size() / WORDS_PER_S
+
+
+## The widest a toast of `type` grows before its words wrap: ERROR_WIDTH for an error,
+## ACTION_MAX_WIDTH beside an action, WIDTH otherwise. Pure.
+static func max_width(type: ToastType, has_action: bool) -> float:
+	if has_action:
+		return ACTION_MAX_WIDTH
+	return ERROR_WIDTH if type == ToastType.ERROR else WIDTH
 
 
 func _create_toast(message: String, type: ToastType) -> Control:

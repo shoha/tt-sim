@@ -247,11 +247,14 @@ UIManager.show_undo_toast('Removed "Marigold"', undo_callable)
 - A toast with an action (Undo) stays 6 s (`ToastContainer.ACTION_DURATION`); pressing it runs
   the action once and dismisses the toast
 - A toast hugs its one line: as wide as its icon, words and any action need, up to 360 px
-  (`ToastContainer.WIDTH`; 520 with an action, `ACTION_MAX_WIDTH`), wrapping past that
+  (`ToastContainer.WIDTH`; 520 with an action, `ACTION_MAX_WIDTH`; 420 for an error,
+  `ERROR_WIDTH`, which says what failed, why and how to recover), wrapping past that
   (`_fit_one_line`). There is no floor: "Raise undone" is no wider than its words (a 360 px
   chip around two words read as an empty box), and "Cleared for everyone at the table" with
   Undo keeps one line at 720p
-- Auto-dismiss after 3 seconds (configurable)
+- Auto-dismiss after 3 seconds (configurable), or as long as its words take to read when that
+  is longer (`ToastContainer.reading_seconds()`: 1.5 s, then three words a second; a 31-word
+  save error stays about 12 s)
 - Maximum 5 visible at once (oldest dismissed)
 - Animated slide-in/out
 - Does not block input
@@ -787,31 +790,41 @@ with placeholders: the GM reads "Moving the table to <map> in 3", "Returning eve
 room in 3" or "Putting <map> back as it was saved in 3"; a player reads who moves it and where,
 "Marigold is moving the table to Fen Crossing in 3". The count is its own label in the H3
 face with tabular figures (`TableMoveNotice.tabular()`), so the chip never changes width as it
-counts; a long name is shortened to keep the words within `MAX_SENTENCE_WIDTH` (520): the
-GM's name to its first word, then the map's with an ellipsis, the whole in the chip's tooltip.
-The GM's chip ends in **Stay here** (the quiet glass button, as Add token, framed at 3:1 in the
-track role), which calls the move off for everyone (the move's undo, I4). The chip only fades
-in and out (M7).
+counts; a long name is shortened to keep the words within `MAX_SENTENCE_WIDTH` (520): the GM's
+name to its first words and an ellipsis ("Marigold…", never fewer than six characters, so "The
+Keeper" is never cut to "The"), then the map's with an ellipsis, the whole names in the chip's
+tooltip. The GM's chip ends in **Stay here** (the quiet glass button, as Add token, framed at
+3:1 in the track role), which calls the move off for everyone (the move's undo, I4). The chip
+only fades in and out (M7).
 
 Save into map and Discard changes are the shelf's, not the move's. A map with changes this
 session (`TableMover.changed_maps()`: a kept state, or the table that is out when it differs
 from its map) reads "Changed this session" on the GM's shelf row ("On the table · changed this
 session" for the table; `RoomModel.shelf_caption()`), in the room and in the room drawer (which
-reads the table again each time it opens). Its row, once selected, has a line under it
+reads the table again each time it opens), and in the room under the selected map's picture
+too. Selecting a row never moves the table, in the drawer either: a row click only selects
+(so the GM reaches any changed map's actions), and the move is the action under the shelf,
+Move the table to <map>. Its row, once selected, has a line under it
 (`RoomRows.changes_line()`): **Save into map**, only for a map with a level folder in this
 library, and **Discard** (Discard changes in its tooltip; the two keep one line in the 396
-column). Each opens a confirm on the 420 width token whose title wraps rather than widen the
-sheet (`ConfirmationDialogUI.hold_width()`) and that names its consequence (W2): Save into
-“Old Mill”? / “Old Mill” itself changes for every later session (a Primary confirm; when the
-table's terrain is written, "The table is set out again from it for everyone."), and Discard
-the changes to “Old Mill”? / “Old Mill” goes back to how it was saved (a Danger confirm with
-Discard changes set apart at the left, Cancel alone at the right and focused,
-`ConfirmationDialogUI.set_confirm_apart()`). A save that fails says what failed, why and how to
-recover (W3: "Could not save into “Old Mill”: its terrain file could not be written. Your
-changes are still kept. Check that your maps folder is not full or read-only, then try
-again."). Captures: `tools/render_jobs/jobs/table_moves.json` (the shelf rows in the room and
-the drawer, the chip's filmstrip, a player's chip, the chip at dusk, long names in the chip and
-the confirms at 1280x720, the save error).
+column); without a folder a caption over Discard says why ("Kept for this session; not in your
+library"). A full shelf scrolls (the room's side sheet takes the full height, the drawer's
+column pins its action and foot), with the selected row and its line scrolled into view. Each
+opens a confirm on the 420 width token whose title wraps rather than widen the sheet
+(`ConfirmationDialogUI.hold_width()`) and that names its consequence (W2), the map's name in the
+title only: Save into “Old Mill”? / Every later session sets it out as it is now. (a Primary
+confirm; when the table's terrain is written, "The table is set out again from it for
+everyone."), and Discard the changes to “Old Mill”? / It goes back to how it was saved. (a
+Danger confirm with Discard changes set apart at the left, Cancel alone at the right and
+focused, `ConfirmationDialogUI.set_confirm_apart()`). A save that fails says what failed, why
+and how to recover (W3: "Could not save into “Old Mill”: its terrain file could not be written.
+Your changes are still kept. Check that your maps folder is not full or read-only, then try
+again."), on an error toast that wraps at 420 and stays up as long as its words take to read
+(`ToastContainer.reading_seconds()`: 1.5 s and three words a second, never under the 3 s
+default; every toast follows it). Captures: `tools/render_jobs/jobs/table_moves.json` (the
+shelf rows in the room and the drawer, a full shelf in both at 1280x720, the chip's filmstrip,
+a player's chip, the chip at dusk, long names in the chip and the confirms at 1280x720, the
+save error).
 
 ---
 

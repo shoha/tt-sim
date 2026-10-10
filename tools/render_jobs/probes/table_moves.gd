@@ -19,17 +19,25 @@ extends RefCounted
 ##   confirm     {"which": "save" or "discard", "to": the map's name, "folder": a saved test
 ##               level}: the confirm TableMover opens from that map's shelf row
 ##   save_failed {"to"}: Save into map's error when the terrain file could not be written
-##   room        {"folder", "select": "mill" or "fen"}: the GM's room (ui_room.gd host_room)
-##               with Old Mill changed (Save into map offered) and Fen Crossing changed (no level
-##               folder here: Discard changes only), that map selected
-##   drawer      {"folder"}: the room drawer over the table (ui_room.gd drawer), the table and
-##               Old Mill changed, the table's row selected with its actions under it
+##   room        {"folder", "select": "mill" or "fen", "full": false}: the GM's room
+##               (ui_room.gd host_room) with Old Mill changed (Save into map offered) and Fen
+##               Crossing changed (no level folder here: Discard changes and why), that map
+##               selected; `full` puts FULL_SHELF's two more maps on the shelf (five)
+##   drawer      {"folder", "select": "table" or "mill", "full": false}: the room drawer over
+##               the table (ui_room.gd drawer), the table and Old Mill changed, that row selected
+##               (a row click, which never moves the table) with its actions under it; `full`
+##               as for the room
 ##   close       the notice, the confirms, the staged room and drawer taken away; the session
 ##               staging undone
 ##   cleanup     deletes every _table_moves_ level
 
 const PREFIX := "_table_moves_"
 const UI_ROOM := preload("res://tools/render_jobs/probes/ui_room.gd")
+## The two maps a full shelf adds after ui_room.gd's three, with no thumbnail anywhere.
+const FULL_SHELF := {
+	"_ui_tour_sample_tarn": "Heron Tarn",
+	"_ui_tour_sample_keep": "The Broken Keep",
+}
 const KINDS := {
 	"map": TableMoveNotice.Kind.MAP,
 	"room": TableMoveNotice.Kind.ROOM,
@@ -51,9 +59,9 @@ static func run(base: Node, step: Dictionary) -> String:
 			UIManager.show_error(text)
 			return "error: %s" % text
 		"room":
-			return _room(base, String(step.get("folder", "")), String(step.get("select", "mill")))
+			return _room(base, String(step.get("folder", "")), step)
 		"drawer":
-			return _drawer(base, String(step.get("folder", "")))
+			return _drawer(base, String(step.get("folder", "")), step)
 	var mover := base.get("_table_mover") as TableMover
 	if mover == null:
 		return "no TableMover"
@@ -71,7 +79,12 @@ static func run(base: Node, step: Dictionary) -> String:
 			if shown == null:
 				return "no notice"
 			shown.dismiss()
-			return "notice fading out (%.2f s left)" % shown.seconds_left()
+			# Its fade is 0.15 s, shorter than a capture's frame wait: hold the chip halfway
+			# (its fade tween, bound to the notice, stops with it) so the frame shows it going.
+			shown.process_mode = Node.PROCESS_MODE_DISABLED
+			var chip := shown.find_child("Chip", true, false) as Control
+			chip.modulate.a = float(step.get("alpha", 0.5))
+			return "notice fading out, held at %.2f" % chip.modulate.a
 		"confirm":
 			return _confirm(mover, step)
 		"close":
@@ -96,6 +109,10 @@ static func _confirm(mover: TableMover, step: Dictionary) -> String:
 
 static func _close(base: Node, mover: TableMover) -> String:
 	mover.cancel()
+	# A notice held mid-fade (dismiss) never finishes its fade by itself.
+	var held := mover.get_node_or_null("TableMoveNotice")
+	if held:
+		held.queue_free()
 	for child in base.get_tree().root.get_children():
 		if child is ConfirmationDialogUI:
 			child.queue_free()
@@ -111,30 +128,75 @@ static func _close(base: Node, mover: TableMover) -> String:
 
 ## The GM's room with changed maps: Old Mill with Save into map offered, Fen Crossing with no
 ## level folder here (Discard changes only); `select` picks which one's actions show.
-static func _room(base: Node, folder: String, select: String) -> String:
+static func _room(base: Node, folder: String, step: Dictionary) -> String:
 	var staged := UI_ROOM.run(base, {"action": "host_room", "folder": folder, "select": false})
 	var room := base.get_node_or_null(UI_ROOM.STAGED) as RoomScreen
 	if room == null:
 		return "no room: %s" % staged
+	if bool(step.get("full", false)):
+		_fill_shelf(room.panel, "")
 	var keys: Array = UI_ROOM.SAMPLE_MAPS.keys()
 	room.panel.show_changes({keys[0]: true, keys[1]: false})
-	room.panel.select(keys[0] if select == "mill" else keys[1])
-	return "room, changed %s; %s selected" % [str(keys), room.panel.selected_key()]
+	room.panel.select(keys[0] if String(step.get("select", "mill")) == "mill" else keys[1])
+	return "room, %d maps, changed %s; %s selected" % [
+		room.panel.shelf_rows.get_child_count(), str(keys), room.panel.selected_key()
+	]
 
 
-## The room drawer over the table with the table and Old Mill changed, the table's row
-## selected (its actions under it).
-static func _drawer(base: Node, folder: String) -> String:
+## The room drawer over the table with the table and Old Mill changed, the table's row or Old
+## Mill's selected by a row click (its actions under it), as the GM does it.
+static func _drawer(base: Node, folder: String, step: Dictionary) -> String:
 	var staged := UI_ROOM.run(base, {"action": "drawer", "folder": folder})
 	var map: GameMap = base.get("_game_map")
 	var menu: Node = map.gameplay_menu.get_node_or_null("GameplayMenu") if map else null
 	var drawer: RoomDrawer = menu.get("room_drawer") if menu else null
 	if drawer == null:
 		return "no drawer: %s" % staged
+	if bool(step.get("full", false)):
+		_fill_shelf(drawer.panel, folder)
 	var mill: String = UI_ROOM.SAMPLE_MAPS.keys()[0]
 	drawer.panel.show_changes({folder: true, mill: true})
-	drawer.panel.select(folder)
-	return "drawer, %s and %s changed, %s selected" % [folder, mill, drawer.panel.selected_key()]
+	var key := mill if String(step.get("select", "table")) == "mill" else folder
+	var row := drawer.panel.shelf_rows.get_node_or_null("Map_%s" % key.validate_node_name())
+	var moved := [false]
+	var on_move := func(_key: String) -> void: moved[0] = true
+	drawer.panel.move_table_requested.connect(on_move)
+	if row is Button:
+		(row as Button).pressed.emit()
+	drawer.panel.move_table_requested.disconnect(on_move)
+	return "drawer, %s and %s changed, %s selected by its row; the table moved: %s" % [
+		folder, mill, drawer.panel.selected_key(), str(moved[0])
+	]
+
+
+## Show `panel` the GM's session with FULL_SHELF after ui_room.gd's three maps: the test level
+## (`table` on the table, "" in the room), Old Mill, Fen Crossing, Heron Tarn, The Broken Keep.
+static func _fill_shelf(panel: RoomPanel, table: String) -> void:
+	var shelf: Array = []
+	var holdings := {}
+	for row: Node in panel.shelf_rows.get_children():
+		if row is Button:
+			var key := String(row.name).trim_prefix("Map_")
+			var label := row.find_child("Name", true, false) as Label
+			shelf.append({"folder": key, "map_path": "", "hashes": {}, "name": label.text})
+	for key: String in FULL_SHELF:
+		shelf.append({"folder": key, "map_path": "", "hashes": {}, "name": FULL_SHELF[key]})
+	var keys: Array = shelf.map(func(ref: Dictionary) -> String: return ref.folder)
+	var players := {UI_ROOM.SAMPLE_GM: {"name": "Marigold", "peer_id": 1}}
+	holdings[UI_ROOM.SAMPLE_GM] = keys
+	var peer := 2
+	for id: String in UI_ROOM.SAMPLE_PLAYERS:
+		players[id] = {"name": UI_ROOM.SAMPLE_PLAYERS[id], "peer_id": peer}
+		holdings[id] = keys.slice(0, 2)
+		peer += 1
+	var summary := {
+		"open": table == "",
+		"table": table,
+		"shelf": shelf,
+		"players": players,
+		"holdings": holdings,
+	}
+	panel.show_session(summary, UI_ROOM.SAMPLE_GM, true)
 
 
 ## The window at `size` ("WxH") with the Interface size at Auto for the run, as

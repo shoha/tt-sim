@@ -52,12 +52,13 @@ const ROOM := ""
 const NOTICE_S := 3.0
 const SAVE_TEXT := "Save into map"
 const DISCARD_TEXT := "Discard changes"
-## The confirms (W2: the action, then its consequence), the map's name in typographic quotes.
+## The confirms (W2: the action, then its consequence), the map's name in typographic quotes
+## in the title only, so a long name is not read twice.
 const SAVE_TITLE := "Save into “{map}”?"
-const SAVE_MESSAGE := "“{map}” itself changes for every later session."
+const SAVE_MESSAGE := "Every later session sets it out as it is now."
 const SAVE_RELOAD := " The table is set out again from it for everyone."
 const DISCARD_TITLE := "Discard the changes to “{map}”?"
-const DISCARD_MESSAGE := "“{map}” goes back to how it was saved."
+const DISCARD_MESSAGE := "It goes back to how it was saved."
 ## Both confirms hold the narrow sheet's width token (UI_TASTE S5).
 const CONFIRM_WIDTH := 420.0
 ## Save into map failed (W3): what failed, why, then how to recover.
@@ -166,10 +167,10 @@ func is_moving() -> bool:
 	return not _pending.is_empty()
 
 
-## The confirm's message for saving the map named `map_name`, and that the table is set out
-## again when `reloads`. Pure.
-static func save_message(map_name: String, reloads: bool) -> String:
-	return SAVE_MESSAGE.format({"map": map_name}) + (SAVE_RELOAD if reloads else "")
+## The confirm's message for Save into map (the title names the map), and that the table is
+## set out again when `reloads`. Pure.
+static func save_message(reloads: bool) -> String:
+	return SAVE_MESSAGE + (SAVE_RELOAD if reloads else "")
 
 
 ## What Save into map says when it failed: the map, why (a WHY_ constant) and how to recover.
@@ -313,7 +314,7 @@ func ask_save(key: String) -> ConfirmationDialogUI:
 	var dialog := (
 		UIManager.show_confirmation(
 			SAVE_TITLE.format({"map": map_name}),
-			save_message(map_name, reloads),
+			save_message(reloads),
 			SAVE_TEXT,
 			"Cancel",
 			save_changes.bind(key),
@@ -333,7 +334,7 @@ func ask_discard(key: String) -> ConfirmationDialogUI:
 	var dialog := (
 		UIManager.show_confirmation(
 			DISCARD_TITLE.format({"map": map_name}),
-			DISCARD_MESSAGE.format({"map": map_name}),
+			DISCARD_MESSAGE,
 			DISCARD_TEXT,
 			"Cancel",
 			discard_changes.bind(key),

@@ -32,6 +32,8 @@ const GETTING_IT := "Getting it · %d%%"
 const WAITING := "Waiting to get it"
 ## A changed map's row action beside Save into map (changes_line()).
 const DISCARD := "Discard"
+## Why a changed map with no level folder here has Discard alone (changes_line()).
+const NOT_IN_LIBRARY := "Kept for this session; not in your library"
 
 static var _thumb_material: ShaderMaterial
 
@@ -266,8 +268,9 @@ static func show_shelf_selected(row: Button, on: bool) -> void:
 ## the row and ROW_INSET in from the column as the row's picture is: Save into map (only when
 ## `can_save`: a level folder here to write) calling `on_save`, and Discard (DISCARD, Discard
 ## changes in its tooltip) calling `on_discard`, each with its key. Quiet buttons: the confirm
-## each opens carries the weight (and Discard's red). The line wraps rather than clip at a
-## large interface size.
+## each opens carries the weight (and Discard's red). Without Save into map a caption over the
+## buttons says why (NOT_IN_LIBRARY), so its absence is never a puzzle. The line wraps rather
+## than clip at a large interface size.
 static func changes_line(
 	key: String, can_save: bool, on_save: Callable, on_discard: Callable
 ) -> Control:
@@ -276,18 +279,28 @@ static func changes_line(
 	var holder := Control.new()
 	holder.name = "Changes_%s" % key.validate_node_name()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var box := VBoxContainer.new()
+	box.name = "Box"
+	box.theme_type_variation = &"BoxContainerTight"
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = ROW_INSET
+	box.offset_right = -ROW_INSET
+	box.offset_top = ROW_INSET * 0.5
+	box.offset_bottom = -ROW_INSET
+	holder.add_child(box)
+	if not can_save:
+		var why := _caption(NOT_IN_LIBRARY, &"Caption", false)
+		why.name = "Why"
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(why)
 	var line := HFlowContainer.new()
 	line.name = "Line"
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	line.offset_left = ROW_INSET
-	line.offset_right = -ROW_INSET
-	line.offset_top = ROW_INSET * 0.5
-	line.offset_bottom = -ROW_INSET
-	holder.add_child(line)
+	box.add_child(line)
 	var fit := func() -> void:
-		holder.custom_minimum_size.y = line.get_combined_minimum_size().y + ROW_INSET * 1.5
-	line.minimum_size_changed.connect(fit)
+		holder.custom_minimum_size.y = box.get_combined_minimum_size().y + ROW_INSET * 1.5
+	box.minimum_size_changed.connect(fit)
 	if can_save:
 		var save := _row_action("SaveIntoMap", TableMover.SAVE_TEXT, "device-floppy", on_save, key)
 		line.add_child(save)

@@ -264,6 +264,17 @@ func test_save_on_leaving_writes_the_level_or_stops() -> void:
 	)
 
 
+## The error toast wraps at the narrow sheet's 420 and stays up as long as its words take to
+## read; a short toast keeps the default time.
+func test_the_save_error_toast_is_read_not_glimpsed() -> void:
+	var text := TableMover.save_error("Old Mill", TableMover.WHY_DOCUMENT)
+	assert_gte(ToastContainer.reading_seconds(text), 10.0)
+	assert_lt(ToastContainer.reading_seconds("Map saved"), ToastContainer.DEFAULT_DURATION)
+	var error := ToastContainer.max_width(ToastContainer.ToastType.ERROR, false)
+	assert_eq(error, 420.0)
+	assert_eq(ToastContainer.max_width(ToastContainer.ToastType.SUCCESS, false), 360.0)
+
+
 # =============================================================================
 # THE SHELF ROWS: SAVE INTO MAP AND DISCARD CHANGES
 # =============================================================================
@@ -299,7 +310,7 @@ func test_save_from_the_shelf_confirms_then_writes_the_kept_state() -> void:
 	var dialog := _mover.ask_save(SAVED)
 	assert_not_null(dialog)
 	assert_eq(dialog.title_label.text, "Save into “Old Mill”?")
-	assert_eq(dialog.message_label.text, "“Old Mill” itself changes for every later session.")
+	assert_eq(dialog.message_label.text, "Every later session sets it out as it is now.")
 	assert_eq(dialog.confirm_button.text, TableMover.SAVE_TEXT)
 	assert_eq(dialog.confirm_button.theme_type_variation, &"Primary")
 	assert_eq(dialog.cancel_button.text, "Cancel")
@@ -331,7 +342,7 @@ func test_discard_from_the_shelf_confirms_then_forgets() -> void:
 	var dialog := _mover.ask_discard(KEY_B)
 	await wait_physics_frames(1)
 	assert_eq(dialog.title_label.text, "Discard the changes to “Table Moves B”?")
-	assert_eq(dialog.message_label.text, "“Table Moves B” goes back to how it was saved.")
+	assert_eq(dialog.message_label.text, "It goes back to how it was saved.")
 	assert_eq(dialog.confirm_button.theme_type_variation, &"Danger")
 	var row := dialog.confirm_button.get_parent()
 	assert_eq(dialog.confirm_button.get_index(), 0, "the action at the left")
@@ -424,10 +435,13 @@ func test_the_shelf_rows_show_changes_and_their_actions() -> void:
 	var discarded: Array[String] = []
 	panel.save_changes_requested.connect(func(key: String) -> void: saved.append(key))
 	panel.discard_changes_requested.connect(func(key: String) -> void: discarded.append(key))
+	assert_null(line.find_child("Why", true, false), "Save into map offered: nothing to explain")
 	(line.find_child("SaveIntoMap", true, false) as Button).pressed.emit()
 	panel.select(KEY_B)
 	line = panel.shelf_rows.get_node_or_null("Changes_%s" % KEY_B)
 	assert_null(line.find_child("SaveIntoMap", true, false), "no level folder: no Save into map")
+	var why := line.find_child("Why", true, false) as Label
+	assert_eq(why.text, RoomRows.NOT_IN_LIBRARY, "and a caption says why")
 	(line.find_child("DiscardChanges", true, false) as Button).pressed.emit()
 	assert_eq(saved, [KEY_A] as Array[String])
 	assert_eq(discarded, [KEY_B] as Array[String])
@@ -456,6 +470,50 @@ func test_the_actions_keep_the_drawer_column_fitting() -> void:
 	var discard := line.find_child("DiscardChanges", true, false) as Control
 	assert_eq(save.global_position.y, discard.global_position.y, "one row")
 	assert_true(panel.drawer_rest.visible, "the column fits: the caption follows the shelf")
+	# Selecting another changed map moves its line under that row and shows the action: the
+	# column grows to hold it all, nothing clipped under the action.
+	panel.show_changes({KEY_A: true, KEY_B: false})
+	(panel.shelf_rows.get_node("Map_%s" % KEY_B) as Button).pressed.emit()
+	await wait_physics_frames(4)
+	var column := panel.column_scroll.get_child(0) as Control
+	var shown := panel.column_scroll.get_global_rect()
+	assert_almost_eq(shown.size.y, column.get_combined_minimum_size().y, 0.5, "nothing clipped")
+	var last := panel.shelf_rows.get_node("Changes_%s" % KEY_B) as Control
+	assert_lte(last.get_global_rect().end.y, shown.end.y + 0.5, "its line in view")
+	assert_true(panel.action_button.visible)
+	assert_gte(panel.action_button.global_position.y, shown.end.y, "the action under the shelf")
+
+
+## In the drawer a row click only selects: the GM reaches a changed map's Save into map and
+## Discard without moving the table; the action, named for the map, is the move.
+func test_a_row_click_selects_without_moving_the_table() -> void:
+	var panel := RoomPanel.new()
+	panel.connect_network = false
+	panel.in_drawer = true
+	add_child_autofree(panel)
+	panel.show_session(_shelf_summary(), "enet-1", true)
+	panel.show_changes({KEY_B: false})
+	watch_signals(panel)
+	(panel.shelf_rows.get_node("Map_%s" % KEY_B) as Button).pressed.emit()
+	assert_eq(panel.selected_key(), KEY_B)
+	assert_signal_not_emitted(panel, "move_table_requested")
+	assert_not_null(panel.shelf_rows.get_node_or_null("Changes_%s" % KEY_B), "its actions show")
+	assert_eq(panel.action_button.text, "Move the table to Old Mill")
+
+
+## In the room the selected map's line under its picture says it changed, as its row does.
+func test_the_rooms_stage_says_a_map_changed() -> void:
+	var panel := RoomPanel.new()
+	panel.connect_network = false
+	add_child_autofree(panel)
+	var summary := _shelf_summary()
+	summary.table = ""
+	panel.show_session(summary, "enet-1", true)
+	panel.show_changes({KEY_B: true})
+	panel.select(KEY_B)
+	assert_eq(panel.readiness_label.text, RoomModel.CHANGED)
+	panel.select(KEY_A)
+	assert_eq(panel.readiness_label.text, "", "an unchanged map, nobody else here")
 
 
 func test_shelf_caption_orders_its_parts() -> void:
@@ -527,10 +585,16 @@ func test_the_chip_keeps_its_width() -> void:
 	var box := notice.stay_button.get_theme_stylebox(&"normal") as StyleBoxFlat
 	assert_eq(box.border_color, ThemeColors.of(notice.stay_button, ThemeColors.TRACK))
 	assert_gt(box.border_width_left, 0)
-	# A player's chip gives the GM's name way first: their first name, the map's kept longer.
+	# A player's chip gives the GM's name way first, to its first words and an ellipsis, the
+	# map's kept longer; a first word that is no name alone ("The Keeper") is never cut to.
 	var player := TableMoveNotice.create(
 		TableMoveNotice.Kind.MAP, LONG_NAME, 3.0, "Marigold Thistlewood-Ash"
 	)
 	add_child_autofree(player)
+	var keeper := TableMoveNotice.create(TableMoveNotice.Kind.MAP, LONG_NAME, 3.0, "The Keeper")
+	add_child_autofree(keeper)
 	await wait_physics_frames(1)
-	assert_string_starts_with(player.before_label.text, "Marigold is moving the table to The")
+	assert_string_starts_with(player.before_label.text, "Marigold… is moving the table to The")
+	assert_string_starts_with(keeper.before_label.text, "The Keeper is moving the table to The")
+	var tip := (player.find_child("Chip", true, false) as Control).tooltip_text
+	assert_string_contains(tip, "Marigold Thistlewood-Ash", "the whole name in the tooltip")
