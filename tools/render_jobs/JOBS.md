@@ -451,6 +451,14 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   thumbnail a headless run cannot draw), `report` copies the saved 320x180 thumbnail to
   `import_thumb.png` in the output folder, and `cleanup` deletes the level and its source
   index entry (and the index file when that leaves it empty).
+- `jobs/tool_panes.json`: the tool rail and panes (the tool registry card, about 20 s): a
+  new 100 ft temperate forest map (seed 1234, never saved) in authoring, the drawer opened
+  from the rail on each registered tool's pane in rail order (`pane_<id>`), the rail with
+  the drawer closed (`rail_closed`), then F1 help scrolled to the tools' Map building rows
+  (`help_tools`) and to its end (`help_building`). Run it before and after a change to
+  `ToolRegistry`, a `ToolDescriptor` or `AuthoringPanel` and compare the drawer's pixels: the
+  scene behind the glass moves (wind, water), so judge the pane and rail rects, where an
+  unchanged drawer differs by under 32 in every pixel. No level to clean up.
 
 ## Caveats
 

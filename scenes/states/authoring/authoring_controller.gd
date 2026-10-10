@@ -32,7 +32,10 @@ extends Node
 ## AuthoringEditor made per opened map does the edits (masks, ground, scatter, props,
 ## history). The controller connects the two to the panel: a rail item picks the tool, a
 ## biome or Place tile picks what it paints or places (and warms it), the Advanced rows set
-## size and strength, and the brush reports its state back (active tool tint, size).
+## size and strength, and the brush reports its state back (active tool tint, size). The
+## tools are ToolRegistry's: each ToolDescriptor says which brush mode it runs, whether the
+## open map can take it and what it warms when picked (_select_tool), and how its rail item
+## shows that (_refresh_tools, after the map opens and after every edit, undo and redo).
 
 signal loading_started
 signal loading_progress(progress: float, status: String)
@@ -80,7 +83,7 @@ var _is_open: bool = false
 var _saving: bool = false
 var _leave_prompt: Node = null
 var _recovery_prompt: Node = null
-## True once the open map's crossing textures were warmed (_warm_crossings).
+## True once the open map's crossing textures were warmed (warm_crossings).
 var _crossings_warmed: bool = false
 
 
@@ -149,6 +152,9 @@ func _build_ui() -> void:
 	panel.bridge_kind_selected.connect(_on_bridge_kind_selected)
 	panel.brush_size_changed.connect(func(radius: float) -> void: brush.set_radius(radius))
 	panel.brush_strength_changed.connect(func(flow: float) -> void: brush.set_flow(flow))
+	# A tool that brings its own pane wires it here; the panel's own panes signal above.
+	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+		tool.connect_pane(self, panel.tool_pane(tool.id))
 
 
 ## Opens what `request` names ({"level": LevelData or null, "new_map": NewMapDialog spec or
@@ -331,19 +337,14 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	editor =AuthoringEditor.create(document, root, history)
 	editor.edited.connect(mark_edited)
 	editor.edited.connect(func() -> void: _bounds_stale = true)
-	editor.edited.connect(_refresh_paint_limits)
+	editor.edited.connect(_refresh_tools)
 	brush.deactivate()
 	brush.editor = editor
 	brush.unit_cell_m = level.grid_cell_size
 	brush.unit_per_cell = level.display_unit_per_cell
 	brush.unit_label = level.display_unit
-	# Sculpting and painting edit the document's own ground; a dressed Blender map's is the
-	# GLB's.
-	panel.set_sculpt_available(editor.can_sculpt())
-	panel.set_paint_available(editor.can_paint())
 	# The Water tool's carve computes on a worker (WaterEditor), so a stroke never freezes.
 	editor.water.use_worker = true
-	editor.edited.connect(_refresh_water_available)
 	# A crossing removed with its water is said (it vanished away from the pointer).
 	editor.crossings.followed.connect(
 		func(_moved: int, removed: int) -> void:
@@ -351,8 +352,9 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 				UIManager.show_toast(BridgeBrush.followed_text(removed), UIManager.TOAST_INFO, 5.0)
 	)
 	_crossings_warmed = false
-	_refresh_water_available()
-	_refresh_paint_limits()
+	# Sculpt, Paint and Water carve the document's own ground, which a dressed Blender map's
+	# is not: their rail items say so (ToolDescriptor.refresh).
+	_refresh_tools()
 	if editor.can_sculpt() and is_instance_valid(editor.terrain):
 		# Builds the skirt's CPU vertex copy (45 ms on a 200 ft map) here, under the loading
 		# screen, instead of in the first stroke frame that reaches the map edge
@@ -410,6 +412,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_redo"):
 		redo()
 		get_viewport().set_input_as_handled()
+	elif event is InputEventKey:
+		# A tool's shortcut picks it as its rail item would (no tool of 2026-10 has one).
+		var tool := ToolRegistry.for_shortcut(event, ToolDescriptor.AUTHORING)
+		if tool != null:
+			panel.show_tool_pane(tool.id)
+			_select_tool(tool.id)
+			get_viewport().set_input_as_handled()
 
 
 # ============================================================================
@@ -427,8 +436,7 @@ func undo() -> void:
 	if history.undo() != "":
 		mark_edited()
 		_bounds_stale = true
-		_refresh_paint_limits()
-		_refresh_water_available()
+		_refresh_tools()
 
 
 func redo() -> void:
@@ -436,8 +444,7 @@ func redo() -> void:
 	if history.redo() != "":
 		mark_edited()
 		_bounds_stale = true
-		_refresh_paint_limits()
-		_refresh_water_available()
+		_refresh_tools()
 
 
 ## A stroke or prop gesture in progress becomes its own history entry before undo or redo
@@ -512,7 +519,7 @@ func _on_sculpt_selected(tile: int) -> void:
 ## first dab binds them from the cache) and switches to that brush. A surface that cannot
 ## take a slot says why at once rather than on the first press.
 func _on_paint_selected(surface: String) -> void:
-	_use_surface(surface)
+	use_surface(surface)
 	if editor != null:
 		var reason := editor.surface_refusal(surface)
 		if reason != "":
@@ -520,7 +527,9 @@ func _on_paint_selected(surface: String) -> void:
 	_select_tool(AuthoringPanel.TOOL_PAINT)
 
 
-func _use_surface(surface: String) -> void:
+## Makes `surface` the Paint brush's surface and ring tint, starts loading its textures (so
+## the first dab binds them from the cache) and shows its tile as picked, without a signal.
+func use_surface(surface: String) -> void:
 	if brush == null:
 		return
 	brush.paint_surface = surface
@@ -553,21 +562,13 @@ func _show_brush_values() -> void:
 	panel.set_water_values(2.0 * brush.water_radius(), brush.water.speed)
 
 
-## The Water tool on the rail: carving where the ground is the document's, erasing only on
-## a dressed Blender map that has water painted over it (AuthoringPanel.set_water_available).
-## The Bridge tool with it: wherever water can be made or the document has some.
-func _refresh_water_available() -> void:
+## Shows on the rail which tools the open map can take, tool by tool
+## (ToolDescriptor.refresh): after the map opens and after every edit, undo and redo.
+func _refresh_tools() -> void:
 	if editor == null or panel == null:
 		return
-	var has_water := not document.water_bodies.is_empty()
-	panel.set_water_available(editor.water.can_carve(), has_water)
-	panel.set_bridge_available(bridge_available(), has_water)
-
-
-## True when the Bridge tool can work: crossings snap to the document's water, which the
-## map can be given (its ground is the document's) or already has.
-func bridge_available() -> bool:
-	return editor != null and (editor.water.can_carve() or not document.water_bodies.is_empty())
+	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+		tool.refresh(self)
 
 
 ## A picked Bridge tile becomes the kind the Bridge tool lays and switches to it. The pane's
@@ -585,7 +586,7 @@ func _on_bridge_kind_selected(kind: int) -> void:
 ## map would bind (the palette planks and each map biome's cliff rock) on background threads,
 ## then 0.4 s later makes the crossing materials of the map's biomes (their shaders build), so
 ## the first placement pays for neither (17 ms of first use on the main thread, P4b-2).
-func _warm_crossings() -> void:
+func warm_crossings() -> void:
 	if _crossings_warmed or not is_instance_valid(map_root):
 		return
 	_crossings_warmed = true
@@ -610,8 +611,8 @@ func _on_paint_refused(surface: String) -> void:
 
 ## Disables the Paint tiles that cannot take a slot (all eight hold paint) with the reason
 ## in their tooltips; enables them all otherwise. The slot walk only runs when all eight
-## are taken (AuthoringEditor.surface_refusal).
-func _refresh_paint_limits() -> void:
+## are taken (AuthoringEditor.surface_refusal). Then orders the Built tiles for the map.
+func refresh_paint_limits() -> void:
 	if editor == null or panel == null:
 		return
 	var reason := ""
@@ -632,73 +633,32 @@ func _refresh_paint_order() -> void:
 				biomes.append(String(biome.id))
 			break
 	if panel.order_paint_tiles(biomes):
-		_use_surface(panel.get_paint_surface())
+		use_surface(panel.get_paint_surface())
 
 
-## Switches the brush to `tool_id` and activates it. The Biome brush waits for a biome to be
-## picked (there is nothing to paint with before); Sculpt and Paint need a map whose ground
-## is the document's.
+## Switches the brush to tool `tool_id` (a ToolRegistry id) and activates it, as its
+## descriptor allows: a tool the open map cannot take is refused (Sculpt and Paint need a
+## map whose ground is the document's), and a tool with nothing to work with yet is switched
+## to but left put down (the Biome brush before a biome is picked).
 func _select_tool(tool_id: StringName) -> void:
-	if brush == null or not _is_open:
+	var tool := ToolRegistry.find(tool_id)
+	if brush == null or not _is_open or tool == null or tool.brush_mode < 0:
 		return
-	match tool_id:
-		AuthoringPanel.TOOL_BIOME:
-			brush.set_mode(BrushTool.Mode.BIOME)
-			if selected_biome == "":
-				brush.deactivate()
-				return
-		AuthoringPanel.TOOL_THIN:
-			brush.set_mode(BrushTool.Mode.THIN)
-		AuthoringPanel.TOOL_PLACE:
-			brush.set_mode(BrushTool.Mode.PLACE)
-		AuthoringPanel.TOOL_SCULPT:
-			if editor == null or not editor.can_sculpt():
-				return
-			brush.set_mode(BrushTool.Mode.SCULPT)
-		AuthoringPanel.TOOL_PAINT:
-			if editor == null or not editor.can_paint():
-				return
-			brush.set_mode(BrushTool.Mode.PAINT)
-			if brush.paint_surface == "":
-				brush.deactivate()
-				return
-			_use_surface(brush.paint_surface)
-		AuthoringPanel.TOOL_WATER:
-			if editor == null:
-				return
-			if not editor.water.can_carve() and document.water_bodies.is_empty():
-				return
-			# The falls material now, so the first waterfall drawn pays no shader build
-			# (P4c-4; the Bridge tool warms its crossing materials the same way).
-			AuthoredWater.warm_fall_material()
-			# And the flow carrier's, so the first river's swap pays none either.
-			AuthoredWater.warm_flow_carrier()
-			brush.set_mode(BrushTool.Mode.WATER)
-		AuthoringPanel.TOOL_BRIDGE:
-			if not bridge_available():
-				return
-			_warm_crossings()
-			brush.set_mode(BrushTool.Mode.BRIDGE)
-		_:
-			return
+	if not tool.can_select(self):
+		return
+	brush.set_mode(tool.brush_mode as BrushTool.Mode)
+	if not tool.armed(self):
+		brush.deactivate()
+		return
+	tool.prepare(self)
 	brush.activate()
 	panel.set_active_tool(tool_id)
 
 
+## Tints the rail item of the tool whose brush is active (ToolRegistry.for_mode).
 func _on_brush_toggled(active: bool) -> void:
-	if not active:
-		panel.set_active_tool(&"")
-		return
-	var ids := {
-		BrushTool.Mode.BIOME: AuthoringPanel.TOOL_BIOME,
-		BrushTool.Mode.THIN: AuthoringPanel.TOOL_THIN,
-		BrushTool.Mode.PLACE: AuthoringPanel.TOOL_PLACE,
-		BrushTool.Mode.SCULPT: AuthoringPanel.TOOL_SCULPT,
-		BrushTool.Mode.PAINT: AuthoringPanel.TOOL_PAINT,
-		BrushTool.Mode.WATER: AuthoringPanel.TOOL_WATER,
-		BrushTool.Mode.BRIDGE: AuthoringPanel.TOOL_BRIDGE,
-	}
-	panel.set_active_tool(ids[brush.mode])
+	var tool := ToolRegistry.for_mode(brush.mode) if active else null
+	panel.set_active_tool(tool.id if tool != null else &"")
 
 
 ## The cursor tint of a biome: its thumbnail's mean colour, lifted toward white so the ring

@@ -1,0 +1,29 @@
+{
+ "out_dir": "render_jobs/tool_panes",
+ "timeout_s": 240,
+ "hang_s": 60,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 100, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "expand", "values": ["biome", "thin_clear", "place", "sculpt", "paint", "water", "bridge"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "drawer", "which": "authoring", "pane": "{value}"},
+   {"op": "wait", "s": 1.0},
+   {"op": "capture", "name": "pane_{value}", "desc": "The authoring tool drawer open on the {value} pane, picked from the rail as a click does"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "drawer", "which": "authoring", "open": false},
+  {"op": "wait", "s": 1.0},
+  {"op": "capture", "name": "rail_closed", "desc": "The rail alone with the drawer closed, the last tool picked (Bridge) still tinted"},
+  {"op": "eval", "expr": "get_node(\"/root/UIManager\").open_help()"},
+  {"op": "wait", "s": 1.0},
+  {"op": "eval", "expr": "get_node(\"/root/UIManager\")._help_overlay.find_children(\"*\", \"ScrollContainer\", true, false)[0].set_v_scroll(560)"},
+  {"op": "wait", "s": 0.5},
+  {"op": "capture", "name": "help_tools", "desc": "F1 help over authoring, scrolled to the Map building rows of the registered tools (name and summary, then each tool's own gestures)"},
+  {"op": "eval", "expr": "get_node(\"/root/UIManager\")._help_overlay.find_children(\"*\", \"ScrollContainer\", true, false)[0].set_v_scroll(100000)"},
+  {"op": "wait", "s": 0.5},
+  {"op": "capture", "name": "help_building", "desc": "F1 help scrolled to the end: Map building, with each registered tool's rows between the shared ones, then General"},
+  {"op": "index", "title": "Tool rail and panes", "intro": "Produced by tools/render_jobs/jobs/tool_panes.json: a new 100 ft temperate forest map (seed 1234, not saved) in authoring, the tool drawer opened on each registered tool's pane in rail order, the rail with the drawer closed, then the F1 help scrolled to the tools' Map building rows and to its end. For checking that a change to ToolRegistry, a ToolDescriptor or AuthoringPanel moved nothing on the rail or in a pane, and how the tools read in help."}
+ ]
+}

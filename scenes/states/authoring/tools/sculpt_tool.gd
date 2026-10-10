@@ -1,0 +1,26 @@
+class_name SculptTool
+extends ToolDescriptor
+
+## The Sculpt tool: raises, smooths, flattens and tiers the document's own ground
+## (BrushTool.Mode.SCULPT; HeightEditor runs the strokes). Its pane is AuthoringPanel's four
+## tiles. A dressed Blender map's ground is the GLB's, so there the tool is disabled with a
+## tooltip saying why.
+
+const ID := &"sculpt"
+const LABEL := "Sculpt"
+const UNAVAILABLE_TOOLTIP := "Sculpt: not on a Blender map, whose ground is the map file's"
+
+
+func _init() -> void:
+	id = ID
+	label = LABEL
+	summary = "Shape the ground."
+	icon = "mountain"
+	brush_mode = BrushTool.Mode.SCULPT
+	unavailable_tooltip = UNAVAILABLE_TOOLTIP
+	help = [["Shift + Left Drag", "Smooth the ground (Sculpt, any tile)"]]
+
+
+## Only where the ground is the document's.
+func can_select(controller: AuthoringController) -> bool:
+	return controller.editor != null and controller.editor.can_sculpt()

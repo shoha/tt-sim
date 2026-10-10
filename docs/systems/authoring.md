@@ -22,6 +22,9 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 | `scenes/states/authoring/authoring_history.gd` | `AuthoringHistory` | The undo seam |
 | `scenes/states/authoring/authoring_tokens.gd` | `AuthoringTokens` | The level's tokens, spawned as play does, saved back as placements |
 | `utils/token_grounding.gd` | `TokenGrounding` | Sets saved tokens down on ground that moved (authoring and play load) |
+| `scenes/states/authoring/tool_registry.gd` | `ToolRegistry` | Every map tool in rail order; the panel, the controller and F1 help read it |
+| `scenes/states/authoring/tools/tool_descriptor.gd` | `ToolDescriptor` | One tool's declaration and its hooks; `BiomeTool` ... `BridgeTool` beside it |
+| `scenes/states/authoring/authoring_panel.gd` | `AuthoringPanel` | The tool drawer: rail, panes, the session footer, Escape |
 | `scenes/states/authoring/brush_tool.gd` | `BrushTool` | Gestures and the ring cursor; `decide()`, `Mode`, `sculpt_op()` |
 | `scenes/states/authoring/authoring_editor.gd` | `AuthoringEditor` | One per opened map; owns the edits |
 | `scenes/states/authoring/height_editor.gd` | `HeightEditor` | `AuthoringEditor.heights`: sculpt strokes and the height work they, water edits and live edits share |
@@ -118,6 +121,33 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   it changed (`HeightStroke.finish`, "changed"), and undo and redo redo only those, not the
   diff's whole 40-sample blocks (a block reaching the grid's edge also refreshed the skirt).
 
+## Tools
+
+- One registry (2026-10-09): `ToolRegistry` lists one `ToolDescriptor` per tool, in rail
+  order (Biome, Thin / Clear, Place, Sculpt, Paint, Water, Bridge), and nothing else lists
+  tools. `AuthoringPanel` builds its rail items (`ToolRegistry.rail_items`) and one pane per
+  tool from it; `AuthoringController._select_tool` and `_on_brush_toggled` go through it;
+  the F1 help overlay puts each tool's rows between the shared Map building rows.
+- A descriptor declares the id, label (rail tooltip and pane title), summary (pane caption
+  and help row), rail icon, an optional shortcut (a bare `Key`; none of the seven has one,
+  so a key is still free to give), its `BrushTool.Mode`, its own help rows, an unavailable
+  tooltip, and its contexts (`ToolDescriptor.AUTHORING`, `PLAY`; every query takes one, and
+  play lists no tool yet).
+- Hooks, which read the controller's public state only: `can_select` refuses a pick the open
+  map cannot take (Sculpt, Paint: the document's own ground; Water, Bridge:
+  `WaterTool.has_water_work`), `armed` leaves the brush put down while it has nothing to
+  work with (Biome before a biome is picked, Paint without a surface), `prepare` warms what
+  the first stroke would wait on (Paint's textures, Water's falls and flow materials,
+  Bridge's crossings), and `refresh` sets the rail item's state after the map opens and after
+  every edit, undo and redo (`_refresh_tools`).
+- Panes: the seven tools' panes are `AuthoringPanel`'s own (`_build_pane`: five inline, plus
+  `WaterToolPane` and `BridgeToolPane`, whose signals the panel relays to the controller). A
+  new tool returns its pane class from `build_pane` and wires it in `connect_pane`, so it
+  edits neither hub.
+- A new tool with gestures of its own still adds a `BrushTool.Mode` and its dispatch in
+  `brush_tool.gd` (with a mode object like `WaterBrush` or `BridgeBrush`), and that file is at
+  980 lines: its cursor drawing (`_on_draw` onward) is the `BrushCursor` seam to take first.
+
 ## Live edits
 
 The GM's terrain events during play (a bridge collapsing, a forest falling, fire, biome and
@@ -174,7 +204,9 @@ Unit tests in `tests/unit/`: `test_authoring_open.gd`, `test_authoring_session.g
 `test_authoring_save.gd`, `test_authoring_history_cap.gd`, `test_authoring_editor.gd`,
 `test_authoring_sculpt.gd`, `test_brush_tool_input.gd`, `test_mask_brush.gd`,
 `test_mask_stroke.gd`, `test_prop_rows.gd`, `test_new_map.gd`, `test_new_map_build.gd`,
-`test_live_edit_codec.gd`, `test_live_map_edits.gd`.
+`test_live_edit_codec.gd`, `test_live_map_edits.gd`, `test_tool_registry.gd` (every
+registered tool on the rail, with a pane and in help; unique ids, shortcuts and brush modes).
+The render job `tool_panes` captures the rail, each tool's pane and the help rows.
 
 ## Open work
 
@@ -185,3 +217,5 @@ See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
 - 2026-10-09: map and rules moved here from `AGENTS.md` Key Conventions.
 - 2026-10-09: `HeightEditor` split out of `AuthoringEditor`; live edits (`LiveEditCodec`,
   public apply entry points, spread height work, the peer's queue).
+- 2026-10-09: the tool registry (`ToolRegistry`, one `ToolDescriptor` per tool); the panel's
+  `RAIL_ITEMS` and the controller's per-tool select and mode tables are gone.

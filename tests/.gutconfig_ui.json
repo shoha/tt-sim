@@ -50,6 +50,7 @@
 		"res://tests/unit/test_tile_field.gd",
 		"res://tests/unit/test_tile_row.gd",
 		"res://tests/unit/test_title_screen.gd",
+		"res://tests/unit/test_tool_registry.gd",
 		"res://tests/unit/test_ui_actions.gd",
 		"res://tests/unit/test_ui_motion_stagger.gd",
 		"res://tests/unit/test_ui_preferences.gd",
