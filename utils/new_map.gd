@@ -19,6 +19,14 @@ extends RefCounted
 const SIZES_FT: Array[int] = [100, 150, 200]
 const DEFAULT_SIZE_FT := 100
 const FEET_PER_CELL := 5.0
+## A custom map is width x depth in whole 5 ft squares. Up to RECOMMENDED_MAX_FT a side the
+## builder's whole-map view stays near the 200 ft one's cost; past it the New map screen
+## says the map is big (it plays the same at the table, but opens, saves and shows whole
+## more slowly while built); MAX_FT is the document format's limit (MapDocument
+## MAX_SIZE_CELLS squares), where the field stops. Size probe, 2026-10-09.
+const RECOMMENDED_MAX_FT := 250
+const MAX_FT := MapDocument.MAX_SIZE_CELLS * 5
+const MIN_FT := MapDocument.MIN_SIZE_CELLS * 5
 ## Base surface of a map started from bare ground (no starting biome).
 const BARE_SURFACE := "grass"
 ## The id NewMapDialog uses for its "Bare ground" tile.
@@ -47,26 +55,54 @@ static func cells_for_feet(feet: int) -> int:
 	return roundi(float(feet) / FEET_PER_CELL)
 
 
-## A new map `size_ft` feet square. With a starting biome (a palette biome id), the base
-## surface is that biome's ground surface and the starting cover is painted into its masks;
-## with BARE_BIOME (or a biome the palette lacks) it is BARE_SURFACE and unpainted. With a
-## `landform` other than StartingLandform.FLAT the recipe shapes the document first (heights,
-## carved water, a crossing, from the seed) and the glade is centred on its stage. The
-## scatter rows are left empty: they are generated from the masks once the map is shown.
+## The size in cells of a map `width_ft` by `depth_ft` (whole squares, rounded); a depth of 0
+## or less means a square map.
+static func size_cells(width_ft: int, depth_ft: int = 0) -> Vector2i:
+	var depth := depth_ft if depth_ft > 0 else width_ft
+	return Vector2i(cells_for_feet(width_ft), cells_for_feet(depth))
+
+
+## Why a map `width_ft` by `depth_ft` (0: square) cannot be made, in one sentence, or "" when
+## it can: each side, in whole 5 ft squares, must be MIN_FT to MAX_FT.
+static func size_error(width_ft: int, depth_ft: int = 0) -> String:
+	if MapDocument.size_in_range(size_cells(width_ft, depth_ft)):
+		return ""
+	return "A map side must be %d to %d ft." % [MIN_FT, MAX_FT]
+
+
+## True when a map `width_ft` by `depth_ft` (0: square) is over RECOMMENDED_MAX_FT on either
+## side, so the New map screen shows its quiet "big map" line.
+static func is_big(width_ft: int, depth_ft: int = 0) -> bool:
+	var depth := depth_ft if depth_ft > 0 else width_ft
+	return maxi(width_ft, depth) > RECOMMENDED_MAX_FT
+
+
+## A new map `size_ft` feet wide (X) and `depth_ft` deep (Z; 0 or less: square). With a
+## starting biome (a palette biome id), the base surface is that biome's ground surface and
+## the starting cover is painted into its masks; with BARE_BIOME (or a biome the palette
+## lacks) it is BARE_SURFACE and unpainted. With a `landform` other than
+## StartingLandform.FLAT the recipe shapes the document first (heights, carved water, a
+## crossing, from the seed) and the glade is centred on its stage. The scatter rows are left
+## empty: they are generated from the masks once the map is shown. A size size_error()
+## refuses gives null, with the error pushed.
 static func create(
 	size_ft: int,
 	biome_id: String,
 	seed_value: int,
 	root: String = PaletteLibrary.DEFAULT_ROOT,
-	landform: String = StartingLandform.FLAT
+	landform: String = StartingLandform.FLAT,
+	depth_ft: int = 0
 ) -> MapDocument:
-	var cells := cells_for_feet(size_ft)
+	var refusal := size_error(size_ft, depth_ft)
+	if refusal != "":
+		push_error("NewMap: " + refusal)
+		return null
 	var biome := PaletteLibrary.biome(biome_id, root) if biome_id != BARE_BIOME else {}
 	var surface: String = biome.get("ground_surface", "")
 	if surface == "":
 		surface = BARE_SURFACE
 	var doc := MapDocument.create_flat(
-		Vector2i(cells, cells), surface, PaletteLibrary.palette_version(root), seed_value
+		size_cells(size_ft, depth_ft), surface, PaletteLibrary.palette_version(root), seed_value
 	)
 	var stage := Vector2.ZERO
 	var glade := {}
@@ -80,15 +116,16 @@ static func create(
 
 
 ## create() from the new-map spec NewMapDialog emits and AuthoringController opens:
-## {"size_ft", "biome_id", "seed", "landform"}, each optional (DEFAULT_SIZE_FT, BARE_BIOME,
-## a fresh random_seed(), StartingLandform.FLAT).
+## {"size_ft" (the width), "depth_ft", "biome_id", "seed", "landform"}, each optional
+## (DEFAULT_SIZE_FT, the width, BARE_BIOME, a fresh random_seed(), StartingLandform.FLAT).
 static func from_spec(spec: Dictionary, root: String = PaletteLibrary.DEFAULT_ROOT) -> MapDocument:
 	return create(
 		int(spec.get("size_ft", DEFAULT_SIZE_FT)),
 		String(spec.get("biome_id", BARE_BIOME)),
 		int(spec.get("seed", random_seed())),
 		root,
-		String(spec.get("landform", StartingLandform.FLAT))
+		String(spec.get("landform", StartingLandform.FLAT)),
+		int(spec.get("depth_ft", 0))
 	)
 
 
@@ -223,14 +260,23 @@ static func create_dressing(
 	cell_size_m: float = LevelData.DEFAULT_GRID_CELL_SIZE,
 	root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> MapDocument:
+	var cells := dressing_cells(local_bounds, cell_size_m)
+	var doc := MapDocument.create_flat(cells, "", PaletteLibrary.palette_version(root), seed_value)
+	doc.has_base_map = true
+	return doc
+
+
+## The size in cells of the dressing document over geometry spanning `local_bounds`: centred
+## on the origin, reaching the farthest geometry on each axis, in whole even cells, within
+## MapDocument's size limits. Pure.
+static func dressing_cells(
+	local_bounds: AABB, cell_size_m: float = LevelData.DEFAULT_GRID_CELL_SIZE
+) -> Vector2i:
 	var reach := Vector2(
 		maxf(absf(local_bounds.position.x), absf(local_bounds.end.x)),
 		maxf(absf(local_bounds.position.z), absf(local_bounds.end.z))
 	)
-	var cells := Vector2i(_even_cells(reach.x, cell_size_m), _even_cells(reach.y, cell_size_m))
-	var doc := MapDocument.create_flat(cells, "", PaletteLibrary.palette_version(root), seed_value)
-	doc.has_base_map = true
-	return doc
+	return Vector2i(_even_cells(reach.x, cell_size_m), _even_cells(reach.y, cell_size_m))
 
 
 static func _even_cells(half_extent_m: float, cell_size_m: float) -> int:

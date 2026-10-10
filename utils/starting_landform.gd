@@ -120,9 +120,10 @@ static func half_extent(doc: MapDocument) -> float:
 
 
 ## How the recipes' depths and falls scale with the map: 0.8 at 100 ft, 1.0 at 150, 1.2 at
-## 200, so a landform keeps its proportions without a small map becoming a pit.
+## 200, so a landform keeps its proportions without a small map becoming a pit. A map that
+## is not square scales by its smaller side, the one half_extent() composes on.
 static func size_scale(doc: MapDocument) -> float:
-	return clampf(0.4 + 0.6 * doc.extent_m().x / REFERENCE_EXTENT_M, 0.5, 1.5)
+	return clampf(0.4 + 0.6 * 2.0 * half_extent(doc) / REFERENCE_EXTENT_M, 0.5, 1.5)
 
 
 ## One of eight headings (45 degree steps) as a unit direction.

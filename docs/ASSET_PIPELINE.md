@@ -44,7 +44,8 @@ Versions this contract was last verified against: Blender 5.2 (terrain-paint req
 
 ## 2. Units and axes
 
-- 1 unit = 1 metre, everywhere. tt-sim applies no map scale at runtime.
+- 1 unit = 1 metre, everywhere. tt-sim applies no map scale at runtime (a level's
+  legacy `map_scale` and `map_offset` are still read for old levels; section 11).
 - glTF and Godot are Y-up. terrain-paint converts Blender Z-up transform data it writes
   by hand (the scatter extras) with translation `(x, y, z) -> (x, z, -y)`, the same rule
   on a quaternion's vector part with `w` unchanged, and scale `(x, y, z) -> (x, z, y)`.
@@ -1174,3 +1175,87 @@ A kit is done when `build_kit.py`'s output, installed under `assets/avatar_kit/`
 through `AvatarKit` from an exported pack (section 9's `--main-pack` check), every part
 binds to the kit skeleton, and a figure assembled from a recipe renders at home and close
 zoom.
+
+## 11. Importing a map GLB (the library's Import, Replace map and Reload from Blender)
+
+How a terrain-paint export (or any glTF Binary map) enters a player's library, decided for
+the v0.2 map flow on 2026-10-09. Consumer: `utils/glb_check.gd` (`GlbCheck`, the check),
+`utils/map_import.gd` (`MapImport`, import and replace), `utils/import_sources.gd`
+(`ImportSources`, the source index), `utils/dressing_reconcile.gd` (`DressingReconcile`,
+Keep dressing). Tests: `tests/unit/test_glb_check.gd`, `tests/unit/test_map_import.gd`.
+
+**What is accepted.** One self-contained `.glb` (glTF Binary, version 2). Everything is
+refused with one sentence, before anything is written:
+
+| File | Refusal |
+|------|---------|
+| `.gltf` | its buffers and textures are separate files, and a level bundles one file |
+| `.tscn` / `.scn` | a Godot scene, not a map export |
+| a `.glb` whose buffers or images name a file by URI (not `data:`) | those files would not travel with the level |
+| anything else, or a file without the GLB header | not a glTF Binary export |
+
+terrain-paint's Export glTF already writes this form (textures packed). Nothing else about
+the file is required: the extras (section 4), names (section 3) and attributes (section 5)
+are read as they are for any map.
+
+**The check, shown before anything is written** (`GlbCheck.check`, pure, reads only the
+GLB's JSON chunk, so a 50 MB map is checked in milliseconds):
+
+- file and size in MB;
+- the footprint in metres and feet (X by Z) and the floor height, from each mesh's
+  POSITION accessor `min`/`max` carried through the node transforms. The instance-source
+  nodes named in `tt_scatter_instances` are left out: tt-sim frees them on load, and
+  Blender may have left them anywhere;
+- what the extras hold: ambient light, background colour, scatter species and instance
+  counts, and any keys tt-sim does not read;
+- mesh, collision (section 3 suffixes), `-water`, light and image counts.
+
+**Warnings never block.** The author reads them and imports anyway if they choose.
+
+| Warning | When | Why |
+|---------|------|-----|
+| units | the longer side is under 3 m or over 1,000 m | section 2: 1 unit = 1 m; a centimetre export is 100x off |
+| floor | the lowest point is more than 0.5 m above Y = 0, or the whole map is below it, or the lowest point is deeper than 10 m | section 2: floors sit at Y = 0, where the table grid is; a carved pond or river bed below 0 is normal and does not warn |
+| streaming budget | the file is over 32 MB | every joining player downloads it once, one peer at a time at about 1 MB/s compressed (`docs/NETWORKING.md`; a 20.5 MB map took about 13 s per peer) |
+| no ground | no mesh has bounds | nothing to stand tokens on |
+
+**Import** makes a new level folder (named after the file, or after its folder when the
+file is `map.glb`), copies the file to `map.glb` before writing `level.json`, so
+`level.json` never names a file that is not there, records the source path in the local
+index, and renders the card's thumbnail offscreen from the table camera's angle
+(`LevelThumbnail`; none under the headless renderer, and any later Save replaces it).
+
+**`map_scale` and `map_offset` are legacy.** An import never moves or scales the map: it
+plays at 1 unit = 1 m with the floor at Y = 0 (section 2). Both fields are still read
+and applied for old levels that set them, but `level.json` carries them only when they
+are not identity, so no new import or new map writes them.
+
+**Source index.** `import_sources.cfg` under the data root (`Paths.import_sources_path()`),
+beside `levels/`, never inside a level folder: it is local to this machine and is never
+listed, duplicated or streamed. One section per level folder: the source path and the
+import time. Deleting a level forgets its entry. **Updated in Blender** is a comparison of
+two files, not a stored time: the source file is newer than the level's `map.glb` copy.
+
+**Replace map** (a picked file) and **Reload from Blender** (the remembered source) run the
+same check, then the author chooses:
+
+- **Keep dressing**: the level's `map.ttmap`, if it dresses the GLB (`has_base_map`), stays.
+  Its heights are the GLB's ground and are refit from the new collision on the next open and
+  at every play load (`MapSourceLoader.fit_dressing_ground_async`), which also sets the
+  generated rows down on it. Props and generated rows outside the new footprint are dropped
+  and counted, and the painted biome cover outside it is cleared; a map that reaches past
+  the document grows it (every per-sample layer carried by position; the baked flow map is
+  cleared). Props keep their saved height. A level whose ground was built in tt-sim (a
+  document without `has_base_map`) can only Start fresh.
+- **Start fresh**: the old document is kept as `map.ttmap.bak` (never streamed: the level
+  map whitelist is `map.glb` and `map.ttmap` only) and the level is a plain Blender map.
+
+Either way `map.glb` is written first, then the document, then `level.json`; tokens and
+the level's look are untouched, and the index records the new source.
+
+**Round trip.** `test_map_import.gd` imports a GLB written by `GLTFDocument` (with
+`tt_scatter_instances` patched into the scene extras as terrain-paint does), replaces it
+with a smaller one under a dressing document, and loads the result through
+`GlbUtils.load_map`: the footprint the check reported matches the loaded ground's bounds.
+A real terrain-paint export has not yet been through it; the first one through the
+library's Import is the producer-side check.

@@ -359,8 +359,6 @@ func to_dict() -> Dictionary:
 		"level_folder": level_folder,
 		"map_path": map_path,
 		"map_document": map_document,
-		"map_scale": SerializationUtils.vec3_to_dict(map_scale),
-		"map_offset": SerializationUtils.vec3_to_dict(map_offset),
 		"light_intensity_scale": light_intensity_scale,
 		"environment_preset": environment_preset,
 		"environment_overrides": EnvironmentPresets.overrides_to_json(environment_overrides),
@@ -384,6 +382,12 @@ func to_dict() -> Dictionary:
 	}
 	if not map_hashes.is_empty():
 		data[MapFileHash.HASHES_KEY] = map_hashes.duplicate()
+	# Legacy (docs/ASSET_PIPELINE.md section 11): read, written only for a level that already
+	# moves its map, never for an import or a new map, which sit at 1 unit = 1 m, floor Y = 0.
+	if map_scale != Vector3.ONE:
+		data["map_scale"] = SerializationUtils.vec3_to_dict(map_scale)
+	if map_offset != Vector3.ZERO:
+		data["map_offset"] = SerializationUtils.vec3_to_dict(map_offset)
 	return data
 
 

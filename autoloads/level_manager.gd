@@ -20,6 +20,8 @@ const LEVEL_THUMBNAIL_NAME = "thumbnail.png"
 const THUMBNAIL_SIZE := Vector2i(320, 180)
 ## The autosave slot under levels_dir (LevelEditorHistory, AuthoringAutosave); never listed.
 const AUTOSAVE_FOLDER := "_autosave"
+## The fields update_meta() edits: change key -> LevelData property.
+const META_FIELDS := {"name": "level_name", "description": "level_description", "author": "author"}
 
 ## Root of the saved-level folders. Tests point this at a temp directory so no
 ## real save is touched (the same pattern as UiPreferences.settings_path).
@@ -579,8 +581,43 @@ func delete_level_folder(folder_path: String) -> bool:
 	if current_level_path == folder_path:
 		current_level = null
 		current_level_path = ""
+	ImportSources.forget(folder_path.trim_suffix("/").get_file())
 
 	return true
+
+
+## Edits the name, description and author of folder level `folder` in place, saved on Enter
+## by the library's detail strip. `changes` holds any of "name", "description" and "author"
+## (META_FIELDS), each a String; any other key or value refuses the whole edit, as does a
+## name that is empty once trimmed (edges are trimmed), so a card never goes blank. The
+## folder never changes. When the level is the loaded current_level it takes the same
+## changes, so a later save of it keeps them; current_level and current_level_path never
+## move. Returns true when level.json was written.
+func update_meta(folder: String, changes: Dictionary) -> bool:
+	var trimmed := {}
+	for key: Variant in changes:
+		if not META_FIELDS.has(key) or not changes[key] is String:
+			return false
+		trimmed[key] = (changes[key] as String).strip_edges()
+	if trimmed.get("name", "-") == "" or folder.is_empty():
+		return false
+	var previous_level := current_level
+	var previous_path := current_level_path
+	var level := load_level_folder(folder, false)
+	var saved := false
+	if level != null:
+		_apply_meta(level, trimmed)
+		saved = save_level_folder(level, folder) != ""
+	current_level = previous_level
+	current_level_path = previous_path
+	if saved and current_level != null and current_level.level_folder == folder:
+		_apply_meta(current_level, trimmed)
+	return saved
+
+
+func _apply_meta(level: LevelData, changes: Dictionary) -> void:
+	for key: String in changes:
+		level.set(META_FIELDS[key], changes[key])
 
 
 ## Write a 320x180 thumbnail beside level.json. Only folder-based levels have a

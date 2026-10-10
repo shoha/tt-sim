@@ -18,7 +18,12 @@ other committed home.
 
 - **Map size:** tabletop battle maps, 100 x 100 ft typical, 200 x 200 ft maximum (about
   30 m and 61 m). New maps are 20, 30 or 40 cells of 5 ft, centred on the origin so the
-  grid aligns by construction.
+  grid aligns by construction. **Custom width x depth (2026-10-09, v0.2):** under the New
+  map screen's Advanced, any width by depth in whole 5 ft squares, recommended up to 250 ft
+  a side (`NewMap.RECOMMENDED_MAX_FT`, quietly flagged above it) and capped at 320 ft, the
+  document format's limit (`NewMap.MAX_FT`; `MapDocument.create_flat` refuses past it).
+  Non-square maps work end to end; landform recipes compose on the shorter side
+  (`docs/plans/2026-10-09-v0.2-evaluation/probes/size_probe.md`, gitignored).
 - **Who and when:** host/GM only, offline only, in a separate authoring state. No editing
   during play, so no live edit sync. A session receives a finished, saved map.
 - **Same version to join:** peers must run exactly the host's game version
@@ -67,6 +72,7 @@ other committed home.
 | System | Code | Documented in |
 |--------|------|---------------|
 | Built-in palette (treecube -> tt-sim contract, import path) | `utils/palette_library.gd`, `assets/palette/` | `systems/palette.md`, `ASSET_PIPELINE.md` section 9 |
+| Map library core (level name, description and author edits; the GLB import check and its warnings; Import; Replace map and Reload from Blender with Keep dressing or Start fresh; the local source index and "Updated in Blender"; the card thumbnail, captured or rendered offscreen) | `autoloads/level_manager.gd` (`update_meta`), `utils/glb_check.gd`, `utils/map_import.gd`, `utils/import_sources.gd`, `utils/dressing_reconcile.gd`, `utils/level_thumbnail.gd` | `ASSET_PIPELINE.md` section 11 |
 | Palette build (producer side) | `treecube/scripts/build_palette.py`, `treecube/treecube/palette.py` | treecube `README.md` "Palette for tt-sim" |
 | Map document `map.ttmap` (format, caps, atomic write) | `resources/map_document.gd`, `utils/map_document_io.gd` | `systems/map_document.md`, `ARCHITECTURE.md` "Map document (map.ttmap)" |
 | Scatter generator (Matern III spacing, clumps, relations, density response) | `utils/scatter_generator.gd`, `utils/scatter_plan.gd` | `systems/scatter.md`, `ARCHITECTURE.md` "Scatter generator" |

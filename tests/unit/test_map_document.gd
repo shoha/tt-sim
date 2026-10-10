@@ -47,9 +47,14 @@ func test_create_flat_is_all_zero() -> void:
 	assert_true(doc.biome_slots.is_empty())
 
 
-func test_create_flat_clamps_size() -> void:
-	var doc := MapDocument.create_flat(Vector2i(0, 500), "", "", 0)
-	assert_eq(doc.size_cells, Vector2i(MapDocument.MIN_SIZE_CELLS, MapDocument.MAX_SIZE_CELLS))
+func test_create_flat_refuses_a_size_outside_the_format() -> void:
+	assert_null(MapDocument.create_flat(Vector2i(20, 65), "", "", 0), "past 320 ft")
+	assert_null(MapDocument.create_flat(Vector2i(0, 20), "", "", 0), "no squares")
+	assert_push_error(2)
+	var largest := Vector2i(MapDocument.MAX_SIZE_CELLS, MapDocument.MAX_SIZE_CELLS)
+	assert_eq(MapDocument.create_flat(largest, "", "", 0).size_cells, largest)
+	assert_true(MapDocument.size_in_range(Vector2i(80, 40) / 2))
+	assert_false(MapDocument.size_in_range(Vector2i(65, 1)))
 
 
 func test_rectangular_map_has_separate_axes() -> void:

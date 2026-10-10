@@ -65,7 +65,8 @@ const ROW_STRIDE := 10
 const DEFAULT_SAMPLE_SPACING_M := 0.25
 
 ## Domain limits, enforced by MapDocumentIO.parse() on untrusted documents. 64 cells at
-## the default 5 ft cell is about 97.5 m, over the 200 ft (61 m) authoring maximum.
+## the default 5 ft cell is 320 ft (about 97.5 m) per axis, the largest map a new build may
+## make: a larger document fails to parse on any peer that has not raised this limit.
 const MIN_SIZE_CELLS := 1
 const MAX_SIZE_CELLS := 64
 const MIN_CELL_SIZE_M := 0.1
@@ -143,17 +144,23 @@ var crossings: Array[Crossing] = []
 var water_dressing: PackedByteArray = PackedByteArray()
 
 
-## A flat, empty document with the default cell size (5 ft), sample spacing and tier
-## height. Sizes are clamped to MIN_SIZE_CELLS..MAX_SIZE_CELLS; the authoring UI only
-## asks for even counts (20, 30, 40) so grid lines stay on the origin.
+## A flat, empty document `cells` in size with the default cell size (5 ft), sample spacing
+## and tier height. A size outside MIN_SIZE_CELLS..MAX_SIZE_CELLS on either axis is refused:
+## null, with an error, never a silently smaller map (callers check size_in_range() first).
+## An even count keeps grid lines on the origin; an odd one leaves half a square at each edge.
 static func create_flat(
 	cells: Vector2i, surface: String, version: String, seed_value: int
 ) -> MapDocument:
+	if not size_in_range(cells):
+		push_error(
+			(
+				"MapDocument: a %d x %d cell map is outside %d..%d cells per axis"
+				% [cells.x, cells.y, MIN_SIZE_CELLS, MAX_SIZE_CELLS]
+			)
+		)
+		return null
 	var doc := MapDocument.new()
-	doc.size_cells = Vector2i(
-		clampi(cells.x, MIN_SIZE_CELLS, MAX_SIZE_CELLS),
-		clampi(cells.y, MIN_SIZE_CELLS, MAX_SIZE_CELLS)
-	)
+	doc.size_cells = cells
 	doc.base_surface = surface
 	doc.palette_version = version
 	doc.map_seed = seed_value
@@ -161,6 +168,17 @@ static func create_flat(
 	flat.resize(doc.samples_x() * doc.samples_z())
 	doc.heights = flat
 	return doc
+
+
+## True when a map `cells` in size fits the format on both axes (MIN_SIZE_CELLS to
+## MAX_SIZE_CELLS). Pure.
+static func size_in_range(cells: Vector2i) -> bool:
+	return (
+		cells.x >= MIN_SIZE_CELLS
+		and cells.y >= MIN_SIZE_CELLS
+		and cells.x <= MAX_SIZE_CELLS
+		and cells.y <= MAX_SIZE_CELLS
+	)
 
 
 ## Samples along one axis of `extent_m` metres at a nominal `spacing_m`: never fewer than
