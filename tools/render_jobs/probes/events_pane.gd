@@ -24,6 +24,12 @@ extends RefCounted
 ##   player      staged player's view: the brush put away, the GM's Visuals drawer concealed,
 ##               the GM's own HUD buttons hidden and the GM's toasts dismissed
 ##   dismiss     every toast on screen dismissed at once
+##   close       the Visuals drawer closed (as a press on the board sends it aside)
+##   hover_crossing {"kind"}: the brush's pointer over the first crossing of that kind
+##               ("stones", "plank", ...), at its own level
+##   tile        {"id"}: a preset or brush tile's state, disabled and tooltip, for the log
+##   toasts      the presets' Undo toasts, both kinds, as PlayEvents shows them once an
+##               event's change lands (its _on_recorded, with stand-in history entries)
 ##   cleanup     deletes every _gm_events_ level
 
 const PREFIX := "_gm_events_"
@@ -44,6 +50,12 @@ static func run(base: Node, step: Dictionary) -> String:
 			if not panel.is_open or panel._rail.selected != LevelEditPanel.EVENTS_ID:
 				panel._on_rail_item_pressed(LevelEditPanel.EVENTS_ID)
 			return "Visuals drawer open on %s" % panel._rail.selected
+		"close":
+			var panel := base.find_child("LevelEditPanel", true, false) as LevelEditPanel
+			if panel == null:
+				return "no Visuals drawer"
+			panel.close()
+			return "Visuals drawer closed"
 	var events := _events(base)
 	if events == null:
 		return "no PlayEvents on the table"
@@ -117,6 +129,22 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "staged a player's view (%d toasts dismissed)" % _dismiss_toasts()
 		"dismiss":
 			return "%d toasts dismissed" % _dismiss_toasts()
+		"hover_crossing":
+			return _hover_crossing(base, events.brush(), String(step.get("kind", "stones")))
+		"tile":
+			var id := String(step.get("id", "collapse"))
+			var preset := EventPresets.find(StringName(id)) != null
+			var field := events.pane.preset_field if preset else events.pane.tool_field
+			var tile := field.tiles.get_node_or_null(NodePath(id)) as Button
+			if tile == null:
+				return "no tile %s" % id
+			return "tile %s: disabled %s, on %s, tooltip '%s'" % [
+				id, tile.disabled, field.tiles.is_on(StringName(id)), tile.tooltip_text
+			]
+		"toasts":
+			for kind in [TerrainEvent.Kind.BRIDGE_COLLAPSE, TerrainEvent.Kind.FOREST_FALL]:
+				events.call("_on_recorded", {"preset": kind, "label": "", "bytes": 0})
+			return "shown: %s" % str(PlayEvents.PRESET_DONE.values())
 	return "unknown action"
 
 
@@ -150,6 +178,24 @@ static func _events(base: Node) -> PlayEvents:
 		return null
 	var menu := map.gameplay_menu.get_node_or_null("GameplayMenu")
 	return menu.get("play_events") as PlayEvents if menu != null else null
+
+
+## The brush's pointer over the middle of the first crossing of kind `kind_name`
+## (Crossing.KIND_NAMES) at its own level, where it is drawn: over a river's bed the pointer's
+## ray met the near bank first.
+static func _hover_crossing(base: Node, brush: BrushTool, kind_name: String) -> String:
+	if brush == null or not brush.is_active() or brush.editor == null:
+		return "no brush out"
+	var kind := Crossing.KIND_NAMES.find(kind_name)
+	for crossing in brush.editor.document.crossings:
+		if crossing.kind == kind:
+			var middle := (crossing.start + crossing.end) * 0.5
+			var world := brush.editor.to_world(Vector3(middle.x, crossing.levels.y, middle.y))
+			var map: GameMap = base.get("_game_map")
+			brush.pointer = map.camera_node.unproject_position(world)
+			brush.has_pointer = true
+			return "pointer over %s %d at %s" % [kind_name, crossing.id, str(brush.pointer)]
+	return "no %s crossing" % kind_name
 
 
 ## The brush's pointer on the ground at map point `at` ([x, z]).

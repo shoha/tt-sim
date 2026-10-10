@@ -28,10 +28,14 @@ extends Node
 ## the GM sees the result whole once they let go. A click that stays on its spot gets at least
 ## PLAY_CLICK_SECONDS of exposure (BrushTool.min_stroke_seconds), so it shows.
 ##
-## Presets (EventPresets: Collapse, Topple) arm on the same brush as the brushes do. Their
-## modes fire a TerrainEvent, which the table's TerrainEvents plays on every board and ends in
-## an ordinary live edit; that entry, labelled for the event, always offers Undo in a toast
-## ("The bridge fell for everyone at the table"), and its undo restores the map at once.
+## Presets (EventPresets: Drop bridge, Topple trees) arm on the same brush as the brushes do.
+## Their modes fire a TerrainEvent, which the table's TerrainEvents plays on every board and
+## ends in an ordinary live edit; that entry, labelled for the event, always offers Undo in a
+## toast ("The bridge fell for everyone at the table"), and its undo restores the map at once.
+## A preset stays armed after it fires: the drawer steps aside for the spectacle and the hint
+## bar keeps its keys, so a GM fells stand after stand without reopening the pane; Drop bridge
+## puts itself away once no bridge is left to drop. A preset put away is forgotten as well
+## (picked goes back to &""), so its gesture line and Advanced leave the pane with it.
 
 ## The brush was armed with tool `tool_id`, or put away (&"").
 signal armed_changed(tool_id: StringName)
@@ -67,7 +71,7 @@ const PRESET_DONE := {
 	TerrainEvent.Kind.BRIDGE_COLLAPSE: "The bridge fell for everyone at the table",
 	TerrainEvent.Kind.FOREST_FALL: "The trees fell for everyone at the table",
 }
-const NO_BRIDGE := "No bridge stands on this map to collapse."
+const NO_BRIDGE := EventPresets.NO_BRIDGE_TOOLTIP
 ## In play a click (a stroke that never left its spot) gets at least this much exposure
 ## (BrushTool.min_stroke_seconds), so a GM's quick click shows on the board: a Sculpt raise of
 ## about 0.2 m at the default 4 m size where authoring's CLICK_SECONDS left a few millimetres
@@ -109,9 +113,10 @@ static func is_large(entry: Dictionary) -> bool:
 
 
 ## The hint bar's keys while `tool_id` (a brush or a preset) is out: its gestures, then in the
-## same three slots for every brush its size key (SIZE_KEY; Collapse has no size), Undo, and
-## Esc naming what it puts away (at most five, so with Help beside them the row keeps one line
-## at 720p with the drawer open);
+## same three slots for every brush its size key (SIZE_KEY; Drop bridge has no size), Undo,
+## and Esc naming what it puts away (at most five, so with Help beside them the row keeps one
+## line at 720p with the drawer open). A preset's first key already names it ("Click Topple
+## trees"), so its Esc says only "Put away" and its keys stay short;
 ## `sculpt_tile` names the Sculpt drag, `water_shape` the Water drag.
 static func hints_for(
 	tool_id: StringName, sculpt_tile: int = HeightBrush.RAISE, water_shape: int = 0
@@ -141,11 +146,11 @@ static func hints_for(
 			rows = [["Left-drag", "Lay a crossing"], ["Ctrl+click", "Remove one"]]
 			size = "Width"
 		EventPresets.COLLAPSE:
-			rows = [["Click", "Collapse a bridge"]]
+			rows = [["Click", EventPresets.DROP_LABEL]]
 			size = ""
 		EventPresets.TOPPLE:
-			rows = [["Click", "Topple trees"], ["Left-drag", "Topple a wider stand"]]
-	var tool := find_tool(tool_id)
+			rows = [["Click", EventPresets.TOPPLE_LABEL], ["Drag", "Wider stand"]]
+	var tool := ToolRegistry.find(tool_id)
 	var put_away := "Put away " + tool.label if tool != null else "Put away"
 	if size != "":
 		rows.append([SIZE_KEY, size])
@@ -237,9 +242,14 @@ func refresh() -> void:
 	if pane == null:
 		return
 	var why := refusal()
+	var open := available()
+	# An armed preset the map no longer takes (the last bridge fell) puts itself away.
+	if EventPresets.find(armed) != null and not bool(open.get(armed, false)):
+		put_away()
+		return
 	# A table still being set out is no reason to explain; a map that never takes edits is.
 	pane.set_notice("" if why == NOT_READY else why)
-	pane.set_available(available())
+	pane.set_available(open)
 	# A picked brush waiting on a pick in its controls (a biome) keeps its tile pressed.
 	var waiting := picked != &"" and _brush != null and not _has_work(picked)
 	pane.show_tool(picked, picked != &"" and (armed == picked or waiting))
@@ -283,7 +293,8 @@ func pick(tool_id: StringName) -> void:
 	refresh()
 
 
-## Puts the brush away (the pane keeps the picked brush's controls).
+## Puts the brush away. The pane keeps a picked brush's controls (its picks arm it again); a
+## preset has none, so it is forgotten and the pane is as fresh.
 func put_away() -> void:
 	if _brush != null:
 		if _brush.is_active():
@@ -292,6 +303,8 @@ func put_away() -> void:
 		# keeps authoring's own exposure.
 		_brush.fade_held_only = false
 		_brush.min_stroke_seconds = 0.0
+	if EventPresets.find(picked) != null:
+		picked = &""
 	_set_armed(&"")
 	refresh()
 
@@ -479,12 +492,15 @@ func _on_brush_toggled(active: bool) -> void:
 	if not active and armed != &"":
 		_brush.fade_held_only = false
 		_brush.min_stroke_seconds = 0.0
+		if EventPresets.find(picked) != null:
+			picked = &""
 		_set_armed(&"")
 		refresh()
 
 
 ## A preset fired an event: the table's TerrainEvents starts it on every board (a refusal is
-## toasted), and the drawer steps aside, since the spectacle is the board's (UI_TASTE M7).
+## toasted), and the drawer steps aside, since the spectacle is the board's (UI_TASTE M7). The
+## preset stays armed, its keys on the hint bar, for the next one.
 func _on_fired(event: TerrainEvent) -> void:
 	var edits := _lpc.live_edits if _lpc != null else null
 	if edits == null or edits.events == null:

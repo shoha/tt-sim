@@ -42,7 +42,7 @@ const LINE_DASH_PX := 10.0
 const LINE_KEY_PX := 1.5
 ## Hover reach of the Ctrl erase around a crossing's footprint (world metres).
 const PICK_MARGIN_M := 0.35
-const READOUT_FONT_SIZE := 13
+## A readout pill's text on its glass chip (draw_pill), and a refused line's.
 const READOUT_COLOR := Color(1.0, 0.95, 0.6)
 const REFUSED_COLOR := Color(1.0, 0.72, 0.62)
 ## Plain-words reasons a line makes no crossing (refusal_text()).
@@ -57,8 +57,6 @@ const INVALID := "A crossing cannot stand there."
 const NOTHING := "There is no crossing here to remove."
 ## The canopy fade's reach around the cursor (metres, before the brush's fade factor).
 const FADE_M := 2.5
-
-static var _pill_box: StyleBoxFlat = null
 
 ## The tile picked (Crossing.Kind).
 var kind: int = Crossing.Kind.PLANK
@@ -503,14 +501,15 @@ static func _draw_marker(canvas: Control, camera: Camera3D, at: Vector3, tint: C
 	canvas.draw_polyline(points, tint, 2.0, true)
 
 
-## `text` in a small dark pill beside screen point `at` (below and right of the cursor).
-static func draw_pill(canvas: Control, at: Vector2, text: String, color: Color) -> void:
-	var font := canvas.get_theme_default_font()
-	if font == null or text == "":
+## `text` in a glass chip beside screen point `at` (below and right of the cursor): the hint
+## bar's plum glass with caption text in `color` (MapOverlayUtils.draw_chip; chalk when
+## transparent).
+static func draw_pill(
+	canvas: Control, at: Vector2, text: String, color: Color = Color.TRANSPARENT
+) -> void:
+	if text == "":
 		return
-	var size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, READOUT_FONT_SIZE)
-	var pad := Vector2(7.0, 3.0)
-	var box := Rect2(at + Vector2(16.0, 14.0), size + pad * 2.0)
+	var box := Rect2(at + Vector2(16.0, 14.0), MapOverlayUtils.chip_size(canvas, text))
 	# Kept on the board an open drawer leaves free (the 2a critic: the pill ran under the
 	# drawer's glass): flipped to the cursor's left near the free span's right edge, and held
 	# inside its left edge.
@@ -521,12 +520,4 @@ static func draw_pill(canvas: Control, at: Vector2, text: String, color: Color) 
 	box.position.x = maxf(box.position.x, span.x + 4.0)
 	if box.end.y > view.y - 4.0:
 		box.position.y = at.y - 14.0 - box.size.y
-	if _pill_box == null:
-		_pill_box = StyleBoxFlat.new()
-		_pill_box.bg_color = Color(0.0, 0.0, 0.0, 0.6)
-		_pill_box.set_corner_radius_all(4)
-	canvas.draw_style_box(_pill_box, box)
-	var baseline := box.position + pad + Vector2(0.0, font.get_ascent(READOUT_FONT_SIZE))
-	canvas.draw_string(
-		font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, READOUT_FONT_SIZE, color
-	)
+	MapOverlayUtils.draw_chip(canvas, box.position, text, color)

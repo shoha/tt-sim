@@ -192,11 +192,15 @@ Probe and numbers:
   (`ToolRegistry.tools(PLAY)`) as toggling tiles, then the picked brush's controls built from
   the authoring panes' parts (Sculpt's shape tiles, the palette biome and surface tiles,
   `WaterToolPane` and `BridgeToolPane` with their headers hidden, one Advanced foldout with
-  size and strength); the presets with spectacle (Collapse, Topple; fire is a later card) take
-  a Presets field above the brushes. The look's Cancel and Save step out under it. A map
+  size and strength); the presets with spectacle (Drop bridge, Topple trees; fire is a later
+  card) take a field headed "Happenings" (`EventPresets.HEADING`) above the brushes. The
+  picked tool's controls stand directly under its own field (`show_tool` moves them), and a
+  preset put away takes its line and Advanced with it (`PlayEvents` forgets the pick), so the
+  pane is as fresh. The look's Cancel and Save step out under it. A map
   that takes no live edits says why in the pane (`PlayEvents.refusal_for`: a player, a Blender
   map without a document, the table still setting out, a client's side); a brush the map
-  cannot take is a disabled tile with its descriptor's unavailable tooltip.
+  cannot take is a disabled tile with its descriptor's unavailable tooltip (set through
+  `TileRow.set_tile_tooltip`, so a refit on the drawer opening keeps it).
 - **Arming** (`PlayEvents`): a pick arms GameMap's own `BrushTool` (`setup_brush_tool`, made
   on first use) with `editor` the live editor and the level's units, the mode set from the
   pane as `AuthoringController` sets it. The brush's tile again, Esc or a right click puts it
@@ -217,15 +221,24 @@ Probe and numbers:
   Sculpt click raises a visible mound (over 0.12 m at radius 4; `CLICK_SECONDS` alone gives
   about 0.05 m).
 - **Presets with spectacle** (`EventPresets`, play-only `ToolDescriptor`s outside
-  `ToolRegistry`; `CollapseMode`, `ToppleMode`, BrushModes with a `fired(event)` signal): the
-  Presets field's Collapse (bridge-plank icon) outlines the deck under the pointer in madder
-  with "Collapse plank bridge" and fires on a click; it is a disabled tile on a map with no
-  deck crossing (`PlayEvents.has_bridge`), and a click on stepping stones or a ford is refused
-  ("Only a bridge collapses"). Topple (tree icon) fires on a click within its ochre ring ("Topple
-  trees"; a drag widens the ring, Advanced shows its size); a spot with no tree is refused by
-  toast (`TerrainEvents.NO_TREES`), with no per-frame tree search on hover. Hint rows: Collapse
-  Click, Ctrl+Z, Esc; Topple Click, Left-drag, `[ ]`, Ctrl+Z, Esc. A fired event goes to
-  `TerrainEvents.start`; the drawer steps aside as it starts (`stroke_started`).
+  `ToolRegistry`; `CollapseMode`, `ToppleMode`, BrushModes with a `fired(event)` signal). Tile
+  labels say what the cursor pills say, and the icons show the break (`bridge-broken`,
+  `tree-falling`) so no preset repeats a brush's picture. Both events undo, so both cursors
+  wear one warm ochre (`ToppleMode.TINT`, `ThemeColors.OCHRE_LIGHT`; madder is the danger
+  confirm's alone). Drop bridge outlines the deck under the pointer with "Drop bridge" and
+  fires on a click; it is a disabled tile on a map with no deck crossing
+  (`PlayEvents.has_bridge`; tooltip `EventPresets.NO_BRIDGE_TOOLTIP`), and stepping stones or a
+  ford say "Only a bridge falls" on hover and refuse a click. Topple trees fires on a click
+  within its ring ("Topple trees"; a drag widens the ring, Advanced shows its size alone) and
+  marks the trees that will fall with a short ochre blaze across each trunk
+  (`ToppleMode.trunk_marks`: exactly `ForestFall.trees_near`, searched again when the ring
+  moves 0.3 m or every 0.5 s); a spot with no tree is refused by toast
+  (`TerrainEvents.NO_TREES`). The cursor pills and the brush readouts are glass chips
+  (`MapOverlayUtils.draw_chip`: the hint bar's Chip, chalk caption 14). Hint rows: Drop bridge
+  Click, Ctrl+Z, Esc "Put away"; Topple trees Click, Drag "Wider stand", `[ ]`, Ctrl+Z, Esc
+  "Put away" (the first key names the preset). A fired event goes to `TerrainEvents.start`;
+  the drawer steps aside as it starts (`stroke_started`) and the preset stays armed for the
+  next one, until Drop bridge has no bridge left and puts itself away.
 - **Terrain events** (`TerrainEvent`, `utils/terrain_event.gd`; `TerrainEvents`,
   `scenes/states/playing/events/terrain_events.gd`, a child of `LiveEdits` made in
   `LiveEdits.create`, `LiveEdits.events`): an event is a few parameters (kind, table key,

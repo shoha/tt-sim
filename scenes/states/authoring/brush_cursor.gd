@@ -15,7 +15,7 @@ extends RefCounted
 ## The tint is the mode's (BrushMode.cursor_tint). The ring is an outline only: a fill, drawn on
 ## this 2D layer, veiled the tree crowns standing in front of the ground it covered (the 2a
 ## critic). An inner ring brightens as dwell builds strength, and a mode's readout
-## (BrushMode.cursor_text) sits in a small pill under the ring. fan_indices() stays for the
+## (BrushMode.cursor_text) sits in a glass chip under the ring. fan_indices() stays for the
 ## Bridge tool's stone ghosts, filled as fans because a conformed outline can cross itself.
 
 ## Above the world viewport (LAYER_WORLD_VIEWPORT), under the drawers and panels
@@ -30,10 +30,8 @@ const SHADOW_COLOR := Color(0.05, 0.04, 0.05, 0.55)
 const CLEAR_TINT := Color(1.0, 0.52, 0.42)
 ## The glass accent: the brush is drawn over the live table, where ember is the action colour.
 const PLACE_TINT := ThemeColors.EMBER
-## The readout under the ring (MapOverlayUtils.create_label_panel's look, smaller: it
-## accompanies the cursor rather than reporting a measurement).
-const READOUT_FONT_SIZE := 13
-const READOUT_COLOR := Color(1.0, 0.95, 0.6)
+## The readout under the ring: a glass chip as the rulers' (MapOverlayUtils.draw_chip), this
+## far below the ring's lowest point.
 const READOUT_GAP_PX := 14.0
 
 ## The control the cursor is drawn on, and the camera that projects it.
@@ -42,7 +40,6 @@ var camera: Camera3D = null
 
 var _world_viewport: SubViewport = null
 var _canvas_layer: CanvasLayer = null
-var _readout_box: StyleBoxFlat = null
 var _ring_world := PackedVector3Array()
 var _ring_centre: Vector3 = Vector3.INF
 var _ring_radius: float = -1.0
@@ -100,30 +97,21 @@ func draw_ring(brush: BrushTool, tint: Color, text: String, live: bool) -> void:
 		draw_readout(text, outline)
 
 
-## Draws `text` in a small dark pill just below the lowest point of `outline` on screen.
+## Draws `text` in a glass chip (MapOverlayUtils.draw_chip: the hint bar's plum glass, chalk
+## caption 14) just below the lowest point of `outline` on screen. The dark film it replaced
+## took the board's colour (olive over leaves) and its 13 px text was under the caption floor.
 func draw_readout(text: String, outline: PackedVector2Array) -> void:
-	var font := canvas.get_theme_default_font()
-	if font == null:
+	if text == "" or outline.is_empty():
 		return
 	var bottom := -INF
 	var centre_x := 0.0
 	for point in outline:
 		bottom = maxf(bottom, point.y)
 		centre_x += point.x
-	centre_x /= maxf(1.0, float(outline.size()))
-	var size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, READOUT_FONT_SIZE)
-	var pad := Vector2(7.0, 3.0)
-	var box := Rect2(
-		Vector2(centre_x - size.x * 0.5, bottom + READOUT_GAP_PX) - pad, size + pad * 2.0
-	)
-	if _readout_box == null:
-		_readout_box = StyleBoxFlat.new()
-		_readout_box.bg_color = Color(0.0, 0.0, 0.0, 0.6)
-		_readout_box.set_corner_radius_all(4)
-	canvas.draw_style_box(_readout_box, box)
-	var baseline := box.position + pad + Vector2(0.0, font.get_ascent(READOUT_FONT_SIZE))
-	canvas.draw_string(
-		font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, READOUT_FONT_SIZE, READOUT_COLOR
+	centre_x /= float(outline.size())
+	var size := MapOverlayUtils.chip_size(canvas, text)
+	MapOverlayUtils.draw_chip(
+		canvas, Vector2(centre_x - size.x * 0.5, bottom + READOUT_GAP_PX - 4.0), text
 	)
 
 

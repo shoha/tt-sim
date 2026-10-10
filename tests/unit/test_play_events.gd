@@ -62,9 +62,9 @@ func _with_scene(add: Callable) -> void:
 	stand_in.free()
 
 
-## A flat authored level played on the table, with its live edits started.
-func _play() -> void:
-	var doc := MapDocument.create_flat(Vector2i(MAP_CELLS, MAP_CELLS), "grass", "gm", 5)
+## A flat authored level of `cells` a side played on the table, with its live edits started.
+func _play(cells: int = MAP_CELLS) -> void:
+	var doc := MapDocument.create_flat(Vector2i(cells, cells), "grass", "gm", 5)
 	assert_eq(MapDocumentIO.write(doc, Paths.get_level_map_document_path(FOLDER)), OK)
 	var level := LevelData.new()
 	level.level_name = FOLDER
@@ -113,6 +113,19 @@ func _drag(brush: BrushTool, points: Array[Vector3]) -> void:
 
 func _height_at(xz: Vector3) -> float:
 	return _controller.live_edits.editor.ground_height_at(xz)
+
+
+## The pane's shown parts in order (name, visible), and which tiles are on.
+func _shown(pane: EventsPane) -> Array:
+	var out := []
+	for child in pane.get_children():
+		out.append([child.name, (child as Control).visible])
+	for id in pane.preset_ids():
+		out.append([id, pane.preset_field.tiles.is_on(id)])
+	var options := pane.get_node("EventsOptions")
+	for child in options.get_children():
+		out.append([child.name, (child as Control).visible])
+	return out
 
 
 func test_the_pane_lists_the_play_brushes_only() -> void:
@@ -269,18 +282,111 @@ func test_the_presets_stand_above_the_brushes_and_lead_their_hints() -> void:
 		assert_true(pane.preset_field.tiles.has_tile(id), "%s has a tile" % id)
 		assert_false(pane.tool_field.tiles.has_tile(id), "%s is no brush" % id)
 	assert_lt(pane.preset_field.get_index(), pane.tool_field.get_index(), "above Brushes")
+	assert_eq(pane.preset_field.caption, EventPresets.HEADING, "the one-shot events' own heading")
 	assert_null(ToolRegistry.find(EventPresets.COLLAPSE), "no map tool: authoring never lists it")
+	# The tiles say what the pills say, so make (the Bridge brush) and break read apart.
+	assert_eq(EventPresets.find(EventPresets.COLLAPSE).label, CollapseMode.DROP)
+	assert_eq(EventPresets.find(EventPresets.TOPPLE).label, ToppleMode.TEXT)
+	for preset in EventPresets.all():
+		assert_not_null(IconButton.load_icon(preset.icon), "%s has its own icon" % preset.id)
+		for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
+			assert_ne(preset.icon, tool.icon, "%s does not repeat %s's picture" % [preset.id, tool.id])
 	var collapse := PlayEvents.hints_for(EventPresets.COLLAPSE)
-	assert_eq(collapse[0], {"key": "Click", "action": "Collapse a bridge"})
-	assert_eq(collapse[-1]["action"], "Put away Collapse")
+	assert_eq(collapse[0], {"key": "Click", "action": "Drop bridge"})
+	assert_eq(collapse[-1], {"key": "Esc", "action": "Put away"}, "the first key names it")
 	assert_false(collapse.any(func(h: Dictionary) -> bool: return h.key == PlayEvents.SIZE_KEY))
 	var topple := PlayEvents.hints_for(EventPresets.TOPPLE)
 	assert_lte(topple.size(), 5, "one line beside Help")
+	assert_eq(topple[0], {"key": "Click", "action": "Topple trees"})
+	assert_eq(topple[1], {"key": "Drag", "action": "Wider stand"})
 	assert_eq(topple[-3]["key"], PlayEvents.SIZE_KEY, "Topple's ring has a size")
-	pane.show_tool(EventPresets.TOPPLE)
-	assert_true(pane.preset_field.tiles.is_on(EventPresets.TOPPLE))
 	for kind in [TerrainEvent.Kind.BRIDGE_COLLAPSE, TerrainEvent.Kind.FOREST_FALL]:
 		assert_true(PlayEvents.PRESET_DONE.has(kind), "every preset has its toast")
+
+
+func test_a_picked_tools_controls_stand_under_its_own_field() -> void:
+	var pane := EventsPane.new()
+	add_child_autofree(pane)
+	var holder := pane.get_node("EventsOptions") as Control
+	var advanced := pane.get_node("EventsAdvanced") as Control
+	pane.show_tool(EventPresets.TOPPLE)
+	assert_true(pane.preset_field.tiles.is_on(EventPresets.TOPPLE))
+	assert_eq(holder.get_index(), pane.preset_field.get_index() + 1, "the line under the presets")
+	assert_eq(advanced.get_index(), holder.get_index() + 1, "Advanced under the line")
+	assert_lt(advanced.get_index(), pane.tool_field.get_index(), "both above Brushes")
+	assert_true(advanced.visible, "Topple's size")
+	var strength := advanced.find_child("EventsBrushStrength", true, false) as Control
+	assert_false(strength.visible, "an event has no strength")
+	pane.show_tool(SculptTool.ID)
+	assert_eq(holder.get_index(), pane.tool_field.get_index() + 1, "a brush's under Brushes")
+	assert_true(strength.visible)
+
+
+func test_a_preset_put_away_leaves_the_pane_as_fresh() -> void:
+	await _play()
+	var fresh := _shown(_pane)
+	_events.pick(EventPresets.TOPPLE)
+	assert_ne(_shown(_pane), fresh, "a picked preset shows its line and size")
+	_events.put_away()
+	assert_eq(_events.picked, &"", "a put-away preset is forgotten")
+	assert_eq(_shown(_pane), fresh, "the put-away pane equals the fresh one")
+	_events.pick(EventPresets.TOPPLE)
+	var esc := InputEventAction.new()
+	esc.action = &"ui_cancel"
+	esc.pressed = true
+	_events._unhandled_input(esc)
+	assert_eq(_shown(_pane), fresh, "Esc too")
+	# A brush keeps its controls: their picks arm it again.
+	_events.pick(SculptTool.ID)
+	_events.put_away()
+	assert_eq(_events.picked, SculptTool.ID)
+
+
+func test_a_preset_stays_armed_after_it_fires_until_no_bridge_is_left() -> void:
+	# test_terrain_events's river and plank bridge, on a flat map of its size, and a second
+	# bridge downstream.
+	await _play(24)
+	var editor := _controller.live_edits.editor
+	var river := PackedVector2Array([Vector2(8, -20), Vector2(9, 0), Vector2(10, 20)])
+	assert_gt(editor.water.carve_river(river, PackedFloat32Array([1.4]), WaterBody.Depth.WAIST), 0)
+	# The live editor computes water off the main thread: land it before laying the bridges.
+	editor.water.finish_work()
+	for z: float in [0.0, 8.0]:
+		var at := 9.0 + z / 20.0
+		var id := editor.crossings.place(
+			Crossing.Kind.PLANK, Vector3(at - 4.0, 0, z), Vector3(at + 4.0, 0, z)
+		)
+		assert_gt(id, 0, "a plank bridge at z %.0f" % z)
+	editor.finish_height_work()
+	_events.refresh()
+	_events.pick(EventPresets.COLLAPSE)
+	var brush := _game_map.get_brush_tool()
+	assert_true(brush.is_active(), "Drop bridge is out")
+	for left in [1, 0]:
+		var bridge := editor.document.crossings[0]
+		var middle := (bridge.start + bridge.end) * 0.5
+		brush.hit = editor.to_world(Vector3(middle.x, 0.0, middle.y))
+		brush.mode.press(brush)
+		assert_eq(_controller.live_edits.events.active_count(), 1, "the click started the drop")
+		# Stepped as test_terrain_events steps it: into the fall, then to its end.
+		_controller.live_edits.events.advance(0.6)
+		_controller.live_edits.events.advance(
+			TerrainEvent.bridge_collapse(bridge.id, middle, 1).duration_s
+		)
+		await _settle()
+		assert_eq(editor.document.crossings.size(), left, "the bridge fell")
+		if left > 0:
+			assert_eq(_events.armed, EventPresets.COLLAPSE, "still armed for the next bridge")
+			assert_true(brush.is_active(), "still out on the board")
+			assert_true(_pane.preset_field.tiles.is_on(EventPresets.COLLAPSE))
+	assert_eq(_events.armed, &"", "with no bridge left it puts itself away")
+	assert_eq(_events.picked, &"")
+	assert_false(brush.is_active())
+	var tile := _pane.preset_field.tiles.get_node(String(EventPresets.COLLAPSE)) as Button
+	assert_true(tile.disabled, "Drop bridge is off on a map without a bridge")
+	assert_eq(tile.tooltip_text, EventPresets.NO_BRIDGE_TOOLTIP, "and its tooltip says why")
+	_pane.preset_field.tiles.call("_fit_columns")
+	assert_eq(tile.tooltip_text, EventPresets.NO_BRIDGE_TOOLTIP, "kept through a refit (a resize)")
 
 
 func test_a_preset_arms_the_board_and_a_map_without_a_bridge_refuses_collapse() -> void:

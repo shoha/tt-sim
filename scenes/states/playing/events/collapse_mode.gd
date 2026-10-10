@@ -1,19 +1,23 @@
 class_name CollapseMode
 extends BrushMode
 
-## The Collapse preset's gestures on the play brush (EventPresets): hovering outlines the
-## bridge under the pointer in madder with "Collapse plank bridge" beside it; a click on one
-## fires a bridge collapse (TerrainEvent) for PlayEvents to start. Stepping stones and fords do
-## not collapse; a click off any bridge says so through the brush's `refused`. Its rays see
-## crossings, so a deck is picked where it is drawn, as the Bridge tool picks one.
+## The Drop bridge preset's gestures on the play brush (EventPresets): hovering outlines the
+## bridge under the pointer in the presets' ochre (TINT, ToppleMode's ring colour: both events
+## undo, so neither wears the danger confirm's madder, UI_TASTE C5) with "Drop bridge" beside
+## it in a glass chip; a click on one fires a bridge collapse (TerrainEvent) for PlayEvents to
+## start. Stepping stones and fords do not fall; hovering one says so, and a click off any
+## bridge says so through the brush's `refused`. Its rays see crossings, so a deck is picked
+## where it is drawn, as the Bridge tool picks one.
 
 ## A click asked for this event (PlayEvents starts it on the table's TerrainEvents).
 signal fired(event: TerrainEvent)
 
-const TINT := BrushCursor.CLEAR_TINT
+const TINT := ToppleMode.TINT
 const PICK_MARGIN_M := 0.35
 const HINT := "Click a bridge"
-const NOT_A_BRIDGE := "Only a bridge collapses"
+## The pill's words over a bridge, and the preset tile's label (EventPresets).
+const DROP := "Drop bridge"
+const NOT_A_BRIDGE := "Only a bridge falls"
 
 ## The crossing under the pointer (its id), or -1.
 var hover_id: int = -1
@@ -31,6 +35,13 @@ static func bridge_at(editor: AuthoringEditor, hit: Vector3) -> Crossing:
 	var id := editor.crossings.crossing_at(hit, PICK_MARGIN_M)
 	var crossing := editor.document.crossing(id) if id >= 0 else null
 	return crossing if crossing != null and crossing.is_deck() else null
+
+
+## The cursor pill's words over `crossing` (null: off any crossing). Pure.
+static func pill_text(crossing: Crossing) -> String:
+	if crossing == null:
+		return HINT
+	return DROP if crossing.is_deck() else NOT_A_BRIDGE
 
 
 func frame(brush: BrushTool) -> void:
@@ -61,9 +72,6 @@ func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
 	var crossing := editor.document.crossing(hover_id) if hover_id >= 0 else null
 	if crossing != null and crossing.is_deck():
 		BridgeBrush.draw_crossing(cursor.canvas, cursor.camera, editor, crossing, TINT, 1.0)
-		var label := "Collapse " + BridgeBrush.kind_label(crossing.kind).to_lower()
-		BridgeBrush.draw_pill(cursor.canvas, at, label, BridgeBrush.REFUSED_COLOR)
-		return
-	cursor.draw_flat_ring(brush.hit, 0.4, TINT, 2.0)
-	var text := NOT_A_BRIDGE if crossing != null else HINT
-	BridgeBrush.draw_pill(cursor.canvas, at, text, BridgeBrush.READOUT_COLOR)
+	else:
+		cursor.draw_flat_ring(brush.hit, 0.4, TINT, 2.0)
+	BridgeBrush.draw_pill(cursor.canvas, at, pill_text(crossing))

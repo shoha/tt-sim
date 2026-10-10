@@ -134,6 +134,17 @@ func set_tile_visible(id: StringName, tile_visible: bool) -> void:
 		_tiles[id].visible = tile_visible
 
 
+## Replaces tile `id`'s tooltip (a disabled tile's says why). Kept as the tile's own, so a
+## refit (a resize) keeps it rather than restoring the one add_tile gave.
+func set_tile_tooltip(id: StringName, tooltip: String) -> void:
+	if not _tiles.has(id):
+		return
+	var tile: Button = _tiles[id]
+	tile.set_meta(TOOLTIP_META, tooltip)
+	tile.tooltip_text = tooltip
+	_fit_columns()
+
+
 func _on_tile_toggled(pressed: bool, id: StringName) -> void:
 	if multi_select:
 		AudioManager.play(&"tick")
