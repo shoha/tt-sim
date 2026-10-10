@@ -32,7 +32,7 @@ func test_header_reads_as_a_sentence() -> void:
 func test_resume_is_the_only_accent_action_and_nothing_shouts() -> void:
 	var overlay = SCENE.instantiate()
 	add_child_autofree(overlay)
-	assert_eq(overlay.resume_button.theme_type_variation, &"")
+	assert_eq(overlay.resume_button.theme_type_variation, &"Primary")
 	for button in [
 		overlay.edit_level_button,
 		overlay.change_level_button,

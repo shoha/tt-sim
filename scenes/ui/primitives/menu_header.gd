@@ -26,13 +26,12 @@ func _init() -> void:
 	add_child(_row)
 	title_label = Label.new()
 	title_label.name = "Title"
-	title_label.theme_type_variation = &"H2"
+	title_label.theme_type_variation = &"Title"
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_row.add_child(title_label)
 	caption_label = Label.new()
 	caption_label.name = "Caption"
 	caption_label.theme_type_variation = &"Caption"
-	caption_label.add_theme_color_override("font_color", ThemeColors.TEXT_MUTED)
 	caption_label.visible = false
 	add_child(caption_label)
 	add_child(HSeparator.new())

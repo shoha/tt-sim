@@ -3,22 +3,27 @@ extends RefCounted
 
 ## The two menu action shapes, as static builders. Every menu screen builds its
 ## actions through these so metrics, icon loading, text alignment and the hidden
-## subtitle label stay identical everywhere: one tall accent primary per screen
-## (the default Button variant) and quiet Secondary rows for everything else.
-## Extracted from TitleScreen, which was the first screen to use them.
+## subtitle label stay identical everywhere: one tall primary per screen (the
+## `Primary` variation, the screen's one persimmon fill, UI_TASTE.md C5) and quiet
+## Secondary rows for everything else. Extracted from TitleScreen, which was the
+## first screen to use them.
 
 const PRIMARY_HEIGHT := 56
-const SECONDARY_HEIGHT := 36
+const SECONDARY_HEIGHT := 40
 
 
-## A tall accent button with an icon and a left-aligned label, appended to
-## [param parent]. When [param caption] is not empty a muted Caption label
+## A tall button with an icon and a left-aligned label, appended to [param parent]:
+## the Primary fill unless [param variation] names a quieter one (a second tall
+## action beside the primary). When [param caption] is not empty a Caption label
 ## follows it; a hidden subtitle label always follows that (see subtitle_of).
-static func primary(label: String, icon: String, caption: String, parent: Control) -> Button:
+static func primary(
+	label: String, icon: String, caption: String, parent: Control, variation := &"Primary"
+) -> Button:
 	var button := AnimatedButton.new()
 	button.name = label.replace(" ", "")
 	button.text = label
 	button.icon = IconButton.load_icon(icon)
+	button.theme_type_variation = variation
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.custom_minimum_size = Vector2(0, PRIMARY_HEIGHT)
 	button.expand_icon = false
@@ -28,7 +33,6 @@ static func primary(label: String, icon: String, caption: String, parent: Contro
 		caption_label.name = "Caption"
 		caption_label.text = caption
 		caption_label.theme_type_variation = &"Caption"
-		caption_label.add_theme_color_override("font_color", ThemeColors.TEXT_MUTED)
 		parent.add_child(caption_label)
 	_add_subtitle(button, parent)
 	return button
@@ -69,7 +73,6 @@ static func _add_subtitle(button: Button, parent: Control) -> void:
 	var subtitle := Label.new()
 	subtitle.name = "Subtitle"
 	subtitle.theme_type_variation = &"Caption"
-	subtitle.add_theme_color_override("font_color", ThemeColors.TEXT_MUTED)
 	subtitle.visible = false
 	parent.add_child(subtitle)
 	button.set_meta("subtitle", subtitle)

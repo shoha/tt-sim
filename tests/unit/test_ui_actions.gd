@@ -15,7 +15,7 @@ func before_each() -> void:
 func test_primary_is_an_accent_animated_button_with_caption_and_subtitle() -> void:
 	var button := UiActions.primary("Host Game", "network", "Start a table", _box)
 	assert_true(button is AnimatedButton, "primary actions animate their press")
-	assert_eq(button.theme_type_variation, &"", "the primary keeps the default accent variant")
+	assert_eq(button.theme_type_variation, &"Primary", "the screen's one persimmon fill")
 	assert_eq(button.custom_minimum_size.y, float(UiActions.PRIMARY_HEIGHT))
 	assert_eq(button.alignment, HORIZONTAL_ALIGNMENT_LEFT)
 	assert_not_null(button.icon)

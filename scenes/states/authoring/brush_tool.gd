@@ -111,7 +111,8 @@ const TERRAIN_LAYER := 1
 const SHADOW_COLOR := Color(0.05, 0.04, 0.05, 0.55)
 const THIN_TINT := Color(0.98, 0.93, 0.82)
 const CLEAR_TINT := Color(1.0, 0.52, 0.42)
-const PLACE_TINT := ThemeColors.ACCENT
+## The glass accent: the brush is drawn over the live table, where ember is the action colour.
+const PLACE_TINT := ThemeColors.EMBER
 const RAISE_TINT := Color(1.0, 0.86, 0.62)
 const LOWER_TINT := Color(0.66, 0.78, 1.0)
 const SMOOTH_TINT := Color(0.86, 0.96, 0.9)

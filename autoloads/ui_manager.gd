@@ -160,7 +160,7 @@ func show_confirmation(
 	cancel_text: String = "Cancel",
 	confirm_callback: Callable = Callable(),
 	cancel_callback: Callable = Callable(),
-	confirm_style: String = "Success",
+	confirm_style: String = "Primary",
 	confirm_sound: StringName = &"confirm"
 ) -> Node:
 	var dialog = CONFIRMATION_DIALOG_SCENE.instantiate()

@@ -36,7 +36,8 @@ func _on_panel_ready() -> void:
 	box.add_child(header)
 	box.move_child(header, 0)
 	header.setup("Join a game", "Enter the room code from the host")
-	($ColorRect as ColorRect).color = ThemeColors.BACKGROUND
+	var backdrop := $ColorRect as ColorRect
+	backdrop.color = ThemeColors.of(backdrop, ThemeColors.BACKDROP)
 
 	# Connect UI signals
 	connect_button.pressed.connect(_on_connect_pressed)

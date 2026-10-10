@@ -35,7 +35,6 @@ const _TAB_COLOR_NORMAL := Color("#2c1f2b")  # color_surface1 — same as panel
 const _TAB_COLOR_HOVER := Color("#3e2b3c")  # color_surface2 — hover highlight
 const _TAB_COLOR_PRESSED := Color("#1a121a")  # color_background — pressed depression
 const _TAB_BORDER_COLOR := Color("#50374d")  # color_surface3 — subtle border
-const _TAB_ICON_COLOR := ThemeColors.ACCENT  # icon tint
 
 # -- Icon tab padding -------------------------------------------------------
 # Standard insets for icon-mode tabs so all icon tabs look consistent.
@@ -393,8 +392,8 @@ func _build_tab_button() -> void:
 	_tab_icon_rect.offset_right = -_TAB_ICON_PAD_H
 	_tab_icon_rect.offset_top = _TAB_ICON_PAD_V
 	_tab_icon_rect.offset_bottom = -_TAB_ICON_PAD_V
-	# Tint the icon with the theme's accent colour.
-	_tab_icon_rect.self_modulate = _TAB_ICON_COLOR
+	# Tint the icon with the theme's accent colour (ember under the glass theme).
+	_tab_icon_rect.self_modulate = ThemeColors.of(self, ThemeColors.ACCENT)
 	_tab_icon_rect.visible = tab_icon != null
 	_tab_icon_rect.texture = tab_icon
 	_tab_button.add_child(_tab_icon_rect)
@@ -405,10 +404,7 @@ func _build_tab_button() -> void:
 	_tab_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tab_badge.custom_minimum_size = Vector2(_TAB_BADGE_SIZE, _TAB_BADGE_SIZE)
 	_tab_badge.size = Vector2(_TAB_BADGE_SIZE, _TAB_BADGE_SIZE)
-	var badge_style := StyleBoxFlat.new()
-	badge_style.bg_color = _TAB_ICON_COLOR
-	badge_style.set_corner_radius_all(int(_TAB_BADGE_SIZE / 2.0))
-	_tab_badge.add_theme_stylebox_override("panel", badge_style)
+	_tab_badge.theme_type_variation = &"Badge"
 	_tab_badge.visible = false
 	_tab_button.add_child(_tab_badge)
 

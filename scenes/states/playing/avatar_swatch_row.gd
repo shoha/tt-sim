@@ -4,7 +4,8 @@ extends HFlowContainer
 ## A row of colour swatches for one palette slot of the avatar builder: one toggle button
 ## per entry of the kit's curated set, filled with the colour's base and edged with its
 ## shadow, so the swatch reads as the painted cloth would. The picked swatch carries the
-## theme accent as its edge. Signals fire for clicks only; select() is silent.
+## theme's state colour as its edge (a pick is a state). Signals fire for clicks only;
+## select() is silent.
 
 signal picked(index: int)
 
@@ -31,6 +32,7 @@ func build(triples: Array) -> void:
 	for button in _buttons:
 		button.queue_free()
 	_buttons.clear()
+	var picked_edge := ThemeColors.of(self, ThemeColors.STATE)
 	for i in triples.size():
 		var triple: Array = triples[i]
 		var base := Color.html(String(triple[0]))
@@ -47,10 +49,8 @@ func build(triples: Array) -> void:
 		button.set_meta("ui_silent", true)
 		button.add_theme_stylebox_override("normal", _style(base, shadow, EDGE))
 		button.add_theme_stylebox_override("hover", _style(base, highlight, EDGE))
-		button.add_theme_stylebox_override("pressed", _style(base, ThemeColors.ACCENT, PICKED_EDGE))
-		button.add_theme_stylebox_override(
-			"hover_pressed", _style(base, ThemeColors.ACCENT, PICKED_EDGE)
-		)
+		button.add_theme_stylebox_override("pressed", _style(base, picked_edge, PICKED_EDGE))
+		button.add_theme_stylebox_override("hover_pressed", _style(base, picked_edge, PICKED_EDGE))
 		button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		button.toggled.connect(_on_toggled.bind(i))
 		add_child(button)

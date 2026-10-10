@@ -5,8 +5,8 @@ spacing, M motion, I interaction, W writing, G game) that makers, the critic and
 cite the same way, then the user's verdicts, which outrank every rule. The reference is the
 suite's: painterly and luminous (Studio Ghibli backgrounds), never grey or muddy, with Tiny
 Glade's calm. Token names (paper, glass, ink, chalk, persimmon, lake, madder, moss) are the
-Painted Table tokens of the 2026-10-09 theme recommendation; until the tokens card lands they
-map onto today's `ThemeColors` and `dark_theme.gd` roles. Sizes are 1080p virtual px.
+Painted Table tokens of the 2026-10-09 theme recommendation, defined in `ThemeColors` and built
+into the paper and glass themes by `themes/painted_theme_base.gd`. Sizes are 1080p virtual px.
 
 Some rules and review methods here are adapted from Impeccable by Paul Bakaus
 (https://github.com/pbakaus/impeccable), Apache License 2.0.

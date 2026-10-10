@@ -79,8 +79,9 @@ func test_overridden_tints_label_and_right_click_resets() -> void:
 	var row := _row()
 	watch_signals(row)
 	row.overridden = true
-	assert_true(row._label.has_theme_color_override("font_color"))
-	assert_eq(row._label.get_theme_color("font_color"), ThemeColors.ACCENT)
+	assert_eq(row._label.theme_type_variation, &"BodyState")
+	var state := ThemeColors.of(row._label, ThemeColors.STATE)
+	assert_eq(row._label.get_theme_color("font_color"), state, "a changed value reads as state")
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_RIGHT
 	click.pressed = true

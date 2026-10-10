@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scenes/ui/download_queue.gd" id="1_script"]
 [ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
+[ext_resource type="Theme" path="res://themes/generated/glass_theme.tres" id="2_glass"]
 
 [node name="DownloadQueue" type="CanvasLayer"]
 layer = 100
@@ -19,6 +20,7 @@ offset_right = 160.0
 offset_bottom = -16.0
 grow_vertical = 0
 mouse_filter = 2
+theme = ExtResource("2_glass")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Anchor"]
 layout_mode = 1

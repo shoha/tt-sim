@@ -25,16 +25,15 @@ func test_collects_a_visible_control() -> void:
 func test_describes_centre_in_viewport_coordinates() -> void:
 	var root := Control.new()
 	add_child_autofree(root)
-	var button := _make_button("Play", "Start Game", Rect2(10, 20, 100, 40))
+	var button := _make_button("Play", "Start Game", Rect2(10, 20, 160, 48))
 	root.add_child(button)
 
 	var entry := BridgeInspector.describe_control(button)
 
-	# Button's minimum width for "Start Game" at the project's default theme font size (16) is
-	# 101px, which exceeds the requested 100px width, so Godot clamps size.x up to 101. Height
-	# (40) stays as requested since it is above the 28px minimum.
-	assert_eq(entry["center"], [60.5, 40.0])
-	assert_eq(entry["rect"], [10.0, 20.0, 101.0, 40.0])
+	# The rect is larger than the button's themed minimum ("Start Game" at the label size plus
+	# the control padding), so Godot keeps the requested size and the centre is exact.
+	assert_eq(entry["center"], [90.0, 44.0])
+	assert_eq(entry["rect"], [10.0, 20.0, 160.0, 48.0])
 
 
 func test_describes_button_text_and_state() -> void:

@@ -59,7 +59,7 @@ enabled=PackedStringArray("res://addons/DragAndDrop3D/plugin.cfg", "res://addons
 
 [gui]
 
-theme/custom="uid://gsomug13qq54"
+theme/custom="res://themes/generated/paper_theme.tres"
 
 [input]
 

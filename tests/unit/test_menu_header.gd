@@ -14,7 +14,7 @@ func test_title_shows_and_caption_hides_by_default() -> void:
 	var header := _header()
 	header.setup("Paused")
 	assert_eq(header.title_label.text, "Paused")
-	assert_eq(header.title_label.theme_type_variation, &"H2")
+	assert_eq(header.title_label.theme_type_variation, &"Title")
 	assert_false(header.caption_label.visible)
 	assert_null(header.close_button, "no close button unless the caller asks for one")
 

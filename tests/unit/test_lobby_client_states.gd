@@ -38,7 +38,7 @@ func test_connecting_state_offers_leave_and_locks_the_form() -> void:
 
 func test_connect_is_the_only_accent_action() -> void:
 	var lobby := _lobby()
-	assert_eq(lobby.connect_button.theme_type_variation, &"")
+	assert_eq(lobby.connect_button.theme_type_variation, &"Primary")
 	assert_eq(lobby.leave_button.theme_type_variation, &"Secondary")
 	assert_eq(lobby.paste_button.theme_type_variation, &"IconButton")
 	assert_eq(lobby.paste_button.tooltip_text, "Paste")

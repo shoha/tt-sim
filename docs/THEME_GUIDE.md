@@ -1,6 +1,9 @@
-# Dark Theme Usage Guide
+# Painted Table Theme Guide
 
-This guide explains how to use the theme variants defined in `dark_theme.gd` to create consistent, well-organized UIs.
+How to use the Painted Table theme (2026-10-09) so screens stay consistent. The rules it serves
+are in [UI taste](UI_TASTE.md); this guide says where things live and which names to use.
+Sections further down that predate the Painted Table (sizes, Secondary/Success examples) are
+being migrated card by card; where they disagree with this top section, this section wins.
 
 > **Related Documentation:**
 >
@@ -8,38 +11,50 @@ This guide explains how to use the theme variants defined in `dark_theme.gd` to 
 > - [UI taste](UI_TASTE.md) - The rules UI work is judged by (C, T, S, M, I, W, G ids), the anti-patterns and the user's verdicts
 > - [Architecture Guide](ARCHITECTURE.md) - Overall project structure
 
-## Color Palette
+## Paper and glass
 
-The theme uses a semantic color system where colors are named by their purpose, not their appearance.
+One rule decides the material: **if it stops play it is paper; if play continues under it, it
+is glass.** Paper (`themes/generated/paper_theme.tres`) is the project default (`theme/custom`),
+so menus, dialogs, pause and confirms need nothing. Every UI root shown while play continues
+(the GameplayMenu HUD and its drawers and token menu, the hint bar, toasts, the download queue,
+the disconnect chip, the authoring panel, measure and ruler labels) sets
+`theme = ThemeColors.glass_theme()` (or the `glass_theme.tres` ext_resource in its `.tscn`).
+`tests/unit/test_glass_roots.gd` fails when a new CanvasLayer scene or script is not sorted
+into one of the two.
 
-### Background & Surface Colors
+## Colour roles
 
-| Color              | Hex       | Usage                                               |
-| ------------------ | --------- | --------------------------------------------------- |
-| `color_background` | `#1a121a` | Deepest background (inputs, tracks, recessed areas) |
-| `color_surface1`   | `#2c1f2b` | Panel backgrounds, cards                            |
-| `color_surface2`   | `#3e2b3c` | Elevated surfaces, hover states                     |
-| `color_surface3`   | `#50374d` | Higher elevation, borders                           |
-| `color_surface4`   | `#62435f` | Highest elevation                                   |
+`utils/theme_colors.gd` (`ThemeColors`) is the one role table. Tokens (`PAPER`, `INK`,
+`PERSIMMON`, `GLASS`, `CHALK`, `EMBER` ...) are the raw palette; roles are what UI code uses,
+and each theme maps them to its own token (`PAPER_ROLES`, `GLASS_ROLES`):
 
-### Interactive Colors
+| Role | Paper | Glass | Use |
+|---|---|---|---|
+| `SURFACE`, `SURFACE_RAISED`, `SURFACE_INSET` | paper, raised, inset | glass, glass raised | sheets, secondary buttons, fields and tracks |
+| `SURFACE_HOVER`, `SURFACE_PRESS` | deeper paper steps | deeper glass steps | hover and press washes (only ever deeper) |
+| `TEXT`, `TEXT_SOFT` | ink, ink_soft | chalk, chalk_soft | text and captions (solid, never dimmed) |
+| `ACCENT` (+ `_HOVER`, `_PRESS`), `ON_ACCENT` | persimmon, paper text | ember, ink text | the one primary fill per screen, focus ring |
+| `STATE` (+ steps), `ON_STATE` | lake, paper text | lake_light, ink text | selection, on-states, rail indicator, a changed value |
+| `SUCCESS`, `WARNING`, `DANGER`, `DANGER_FILL` | moss, ochre, madder | light variants; madder fill | text and icons; madder fills only a danger confirm |
+| `EDGE`, `SHADOW`, `BACKDROP` | pencil edge, ink 16%, sky | top rim, plum-black 25%, glass | decoration, shadows, a solid backdrop |
 
-| Color                  | Usage                                              |
-| ---------------------- | -------------------------------------------------- |
-| `color_accent`         | Primary interactive elements (buttons, selections) |
-| `color_accent_lighter` | Hover states                                       |
-| `color_accent_darker`  | Pressed states                                     |
-| `color_secondary`      | Secondary actions, less prominent elements         |
-| `color_success`        | Positive actions (Apply, Confirm, Play)            |
-| `color_warning`        | Caution states                                     |
-| `color_danger`         | Destructive actions (Delete, Quit, Leave)          |
+Prefer a theme variation (`Caption`, `BodyState`, `Primary` ...) over reading a role. Read a
+role only to draw or tint by hand, through the control being drawn:
+`ThemeColors.of(control, ThemeColors.TEXT_SOFT)`, at draw time or on
+`NOTIFICATION_THEME_CHANGED` (a control outside the tree resolves to paper).
 
-### Text Colors
+## Variations
 
-| Color                  | Usage                                        |
-| ---------------------- | -------------------------------------------- |
-| `color_text_on_dark`   | Text on dark backgrounds (inputs, panels)    |
-| `color_text_on_accent` | Text on accent-colored backgrounds (buttons) |
+| Type | Variations |
+|---|---|
+| `Label` (default: Inter body 16, text) | `Wordmark` (Fraunces 56), `Title` / `H1` (Fraunces 26), `Heading` / `H2` / `SectionHeader` / `PanelHeader` (Fraunces 19), `Eyebrow` (Fraunces italic 19), `H3` (Inter 16 semibold), `Body`, `Caption` / `RailLabel` (14, soft), `BodyState`, `CaptionState` |
+| `Button` (default: the quiet secondary) | `Primary` (one per screen), `Danger` (danger confirm only), `Ghost` (no fill, soft text), `Secondary` (alias of the default), `IconButton`, `IconButtonActive`, `Tile`, `Card`, `FoldoutHeader` |
+| `PanelContainer` (default: a `Sheet`) | `Sheet`, `Inset` / `PanelInset`, `PanelElevated`, `PanelBordered`, `KeyChip`; `Panel`: `Badge` (the unsaved dot) |
+
+Fraunces is only for the wordmark, titles, headings and eyebrows; rows and buttons use Inter.
+Sizes: 56 / 26 / 19 Fraunces, 16 / 15 / 14 Inter (14 is the floor). Spacing 4, 8, 12, 16, 24,
+32 (theme type `Space`), sheet padding 24, controls 40 tall; radii chip 6, control 10, card
+16, sheet 20.
 
 ---
 
@@ -70,10 +85,10 @@ Godot's SVG loader renders `currentColor` as black, and `modulate` multiplies th
 
 | Context | Theme item / colour |
 |---|---|
-| Icon-only buttons | `IconButton` variation: text colour, accent on hover and press |
-| Active rail item or tile | `IconButtonActive` / pressed `Tile`: accent |
-| Muted marks (chevrons, slider ticks) | `ThemeColors.TEXT_MUTED` |
-| Drawer tab (single-tab mode) | `ThemeColors.ACCENT` |
+| Icon-only buttons | `IconButton` variation: text colour, state on press |
+| Active rail item or tile | `IconButtonActive` / pressed `Tile`: state |
+| Muted marks (chevrons, slider ticks) | `ThemeColors.of(control, ThemeColors.TEXT_SOFT)` |
+| Drawer tab (single-tab mode) | `ThemeColors.of(control, ThemeColors.ACCENT)` |
 
 Licence text lives in `THIRD_PARTY_LICENSES.md` at the repo root.
 
@@ -421,13 +436,13 @@ Sky tiles and the Sky preview strip come from `SwatchTextures` (shipped PNGs for
 
 ### Regenerating the theme
 
-`tools/regen_theme.gd` (a `SceneTree` subclass) rebuilds `themes/generated/dark_theme.tres` from `dark_theme.gd` for CI or an agent with no editor session open. It loads `dark_theme.gd` (which extends `ProgrammaticTheme`, itself an `EditorScript`) and calls its `_run()` method directly, rather than being an `EditorScript` subclass itself. Because `EditorScript` can only be instantiated inside the editor, a plain `--headless` run hangs; pass `--editor` too:
+`tools/regen_theme.gd` (a `SceneTree` subclass) rebuilds both `themes/generated/paper_theme.tres` and `glass_theme.tres` from their leaves (`themes/paper_theme.gd`, `themes/glass_theme.gd`, which extend `painted_theme_base.gd` <- `painted_theme_controls.gd` <- `painted_theme_kit.gd` <- `ProgrammaticTheme`). Saving a leaf in the editor regenerates that leaf; after editing the base, controls or kit, run the tool. It loads each leaf and calls its `_run()` method directly, rather than being an `EditorScript` subclass itself. Because `EditorScript` can only be instantiated inside the editor, a plain `--headless` run hangs; pass `--editor` too:
 
 ```
 godot --headless --editor --path . --script res://tools/regen_theme.gd --quit-after 3
 ```
 
-It preserves the theme resource's UID (captured before saving, restored with `ResourceSaver.set_uid()` after), so `project.godot`'s `gui/theme/custom="uid://..."` reference keeps working across a regeneration.
+It preserves each theme resource's UID when it has one (captured before saving, restored with `ResourceSaver.set_uid()` after). `project.godot` and the in-play scenes reference the themes by path, so a UID change never breaks them. The switch, check and slider-knob icons are drawn from role colours as SVG in `painted_theme_controls.gd` and stored inside the `.tres`.
 
 ## Motion
 
@@ -836,23 +851,23 @@ See [UI Systems Guide](UI_SYSTEMS.md) for complete documentation.
 
 ## File Reference
 
-- **Theme definition**: `themes/dark_theme.gd`
-- **Generated theme**: `themes/generated/dark_theme.tres`
+- **Role table**: `utils/theme_colors.gd`
+- **Theme definition**: `themes/painted_theme_base.gd` (with `painted_theme_controls.gd`, `painted_theme_kit.gd`); leaves `themes/paper_theme.gd`, `themes/glass_theme.gd`
+- **Generated themes**: `themes/generated/paper_theme.tres` (project default), `themes/generated/glass_theme.tres`
+- **Fonts**: `assets/fonts/Inter-VariableFont_opsz,wght.ttf`, `assets/fonts/fraunces/` (SIL OFL, `OFL.txt`)
 - **Base class**: `addons/theme_gen/programmatic_theme.gd`
 - **UI Components**: `scenes/ui/` directory
 
 ### Theme Regeneration
 
-The theme is generated programmatically from `themes/dark_theme.gd` (extends `ProgrammaticTheme` from the ThemeGen addon) into `themes/generated/dark_theme.tres`.
-
 **How to regenerate:**
 
-1. **Automatic (recommended):** With `const UPDATE_ON_SAVE = true` in `dark_theme.gd`, the `theme_gen_save_sync` plugin regenerates the `.tres` file every time you save the script.
-2. **Manual:** Open `dark_theme.gd` in the Godot script editor, then use **File → Run** (or Ctrl+Shift+X).
+1. **Automatic:** With `const UPDATE_ON_SAVE = true` in a leaf, the `theme_gen_save_sync` plugin regenerates that leaf's `.tres` every time you save the leaf.
+2. **Both at once (after editing the base, controls or kit):** `tools/regen_theme.gd`, above.
 
 **When to regenerate:**
 
-- After modifying colors, fonts, spacing, or any theme properties in `dark_theme.gd`
+- After modifying roles in `ThemeColors`, or fonts, spacing or any theme property in the theme scripts
 - After adding new theme type variations (button variants, label variants, etc.)
 - The generated `.tres` file should always be committed alongside the `.gd` changes
 

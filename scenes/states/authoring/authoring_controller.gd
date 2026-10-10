@@ -131,6 +131,8 @@ func _build_ui() -> void:
 	_ui_layer.layer = Constants.LAYER_AUTHORING
 	add_child(_ui_layer)
 	panel = AuthoringPanel.new()
+	# Authoring happens over the live table, so its UI is glass (UI_TASTE.md C8).
+	panel.theme = ThemeColors.glass_theme()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_ui_layer.add_child(panel)
 	panel.save_pressed.connect(save_async)

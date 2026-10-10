@@ -60,7 +60,7 @@ func test_start_is_the_only_accent_action() -> void:
 	var lobby = SCENE.instantiate()
 	lobby.start_hosting = false
 	add_child_autofree(lobby)
-	assert_eq(lobby.start_button.theme_type_variation, &"")
+	assert_eq(lobby.start_button.theme_type_variation, &"Primary")
 	assert_eq(lobby.cancel_button.theme_type_variation, &"Secondary")
 	assert_eq(lobby.change_level_button.theme_type_variation, &"Secondary")
 	assert_eq(lobby.copy_button.theme_type_variation, &"IconButton")

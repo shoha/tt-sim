@@ -98,7 +98,6 @@ func _init() -> void:
 	_caption.theme_type_variation = &"Caption"
 	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_caption.add_theme_color_override("font_color", ThemeColors.TEXT_MUTED)
 	_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_caption.visible = false
 	_column.add_child(_caption)

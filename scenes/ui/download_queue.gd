@@ -10,8 +10,7 @@ const MAX_VISIBLE_ITEMS := 3
 const HIDE_DELAY := 2.0  # Seconds to wait before hiding after all downloads complete
 const PULSE_SPEED := 3.0  # Pulse animation speed
 
-# Theme colors (matching dark_theme.gd)
-const COLOR_ACCENT := ThemeColors.ACCENT
+# Colours not yet read from the theme (a later card moves them to ThemeColors roles)
 const COLOR_SURFACE2 := Color("#3e2b3c")
 const COLOR_SURFACE3 := Color("#50374d")
 const COLOR_TEXT_ON_ACCENT := Color("#2c1f2b")
@@ -70,9 +69,9 @@ func _create_badge() -> void:
 	_badge_container.offset_bottom = 10
 	_badge_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# Style with theme accent color
+	# Style with the theme's accent colour (ember under the glass theme)
 	var style = StyleBoxFlat.new()
-	style.bg_color = COLOR_ACCENT
+	style.bg_color = ThemeColors.of(icon_button, ThemeColors.ACCENT)
 	style.set_corner_radius_all(4)
 	style.content_margin_left = 4
 	style.content_margin_right = 4
