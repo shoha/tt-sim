@@ -53,14 +53,16 @@ func test_host_steps_down_from_its_fill_while_a_sheet_is_up() -> void:
 	var title: TitleScreen = TITLE_SCENE.instantiate()
 	title.level_provider = func() -> Array[Dictionary]: return []
 	add_child_autofree(title)
-	assert_eq(title.host_button.theme_type_variation, &"Primary")
+	var card := title.play_together
+	assert_eq(card.wash().warm, ThemeColors.PERSIMMON)
 	var scrim := Scrim.new()
 	add_child(scrim)
 	await wait_frames(2)
-	assert_eq(title.host_button.theme_type_variation, &"Secondary", "one fill per screen")
+	assert_eq(card.wash().warm, ThemeColors.PAPER_INSET, "one fill per screen")
+	assert_true(card.stepped_back)
 	scrim.free()
 	await wait_frames(2)
-	assert_eq(title.host_button.theme_type_variation, &"Primary", "the fill comes back")
+	assert_eq(card.wash().warm, ThemeColors.PERSIMMON, "the fill comes back")
 
 
 ## Every toast is the same stripe-less surface (a stripe at rest is decoration); its kind

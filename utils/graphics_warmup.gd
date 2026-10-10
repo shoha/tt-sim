@@ -34,6 +34,7 @@ const COVERED_SHADERS := [
 	"res://shaders/ui_backdrop.gdshader",
 	"res://shaders/ui_card_thumb.gdshader",
 	"res://shaders/ui_scrim.gdshader",
+	"res://shaders/ui_wash_split.gdshader",
 	"res://shaders/water.gdshader",
 	"res://shaders/waterfall.gdshader",
 	"res://shaders/wind_foliage.gdshader",

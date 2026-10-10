@@ -511,6 +511,42 @@ func test_the_side_sheet_ends_at_its_content() -> void:
 	assert_eq(panel.shelf_scroll.vertical_scroll_mode, ScrollContainer.SCROLL_MODE_DISABLED)
 
 
+## After Resume the GM's shelf rows say what Resume found (SessionKeeper.notes()): a map whose
+## files changed since, and one gone from the library; a player's rows say nothing of it.
+func test_resumed_shelf_rows_say_changed_or_missing() -> void:
+	var notes := {MAP_B: SessionFile.CHANGED, MAP_C: SessionFile.MISSING}
+	var panel := _panel()
+	panel.show_session(_sample(), GM, true)
+	panel.show_notes(notes)
+	assert_eq(_caption_of(panel, MAP_A), "Everyone has it")
+	assert_eq(_caption_of(panel, MAP_B), "Changed since last time · 2 of 4 have it")
+	assert_eq(_caption_of(panel, MAP_C), RoomModel.MISSING, "missing says all there is")
+	panel.show_changes({MAP_B: true})
+	assert_eq(
+		_caption_of(panel, MAP_B),
+		"Changed since last time · changed this session · 2 of 4 have it"
+	)
+	var player := _panel()
+	player.show_session(_sample(), WREN, false)
+	player.show_notes(notes)
+	assert_false(_caption_of(player, MAP_C).contains(RoomModel.MISSING), "the GM's library alone")
+
+
+func test_the_shelf_caption_puts_the_resume_note_after_the_table() -> void:
+	var changed := SessionFile.CHANGED
+	assert_eq(
+		RoomModel.shelf_caption(true, false, "", changed), "On the table · changed since last time"
+	)
+	assert_eq(RoomModel.shelf_caption(false, false, "", SessionFile.MISSING), RoomModel.MISSING)
+	assert_eq(RoomModel.shelf_caption(false, false, "3 of 4 have it"), "3 of 4 have it")
+
+
+func _caption_of(panel: RoomPanel, key: String) -> String:
+	var row := panel.shelf_rows.get_node("Map_%s" % key.validate_node_name())
+	var caption := row.get_node("Inner/Text/Caption") as Label
+	return caption.text if caption.visible else ""
+
+
 ## Inside a scroll region (what it holds may run past it; the player scrolls to it).
 func _in_scroll(control: Control, stop: Node) -> bool:
 	var node := control.get_parent()

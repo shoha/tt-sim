@@ -31,10 +31,10 @@ extends "res://tests/net/enet_late_joiner.gd"
 ##   Bystander A where it was moved, the raised ground and its one op, and Hero A set out
 ##   on it; then client4 may join. It finishes when every client has reported, checking one
 ##   peer object and room code throughout, the shelf and the table pointer.
-## client, client2: join at the start (through the join screen) and land in the room, then
+## client, client2: join at the start (in place on the title's card) and land in the room, then
 ##   follow the session: table A, the room (GameState empty), table B, where Hero A is on the
 ##   board and only client controls it. client then leaves from the table the way the pause
-##   menu does (no "connection lost" dialog), rejoins through the join screen once the host
+##   menu does (no "connection lost" dialog), rejoins in place on the card once the host
 ##   saw it go, and must control Hero A again under its new peer id.
 ## client3: joins while the room is open between tables; must land in the room, then table B.
 ## client, client2, client3: see the move's notice, then table A as the session left it:
@@ -670,7 +670,7 @@ func _process_client() -> void:
 				_join_session()
 		"wait_room0":
 			if _state() == STATE_ROOM:
-				_mark("room0", {"join_screen_freed": _flow().get("_join_screen") == null})
+				_mark("room0", {"join_landed": not _flow().is_joining()})
 				_set_phase("table_a")
 		"table_a":
 			_client_at_table_a()
@@ -719,11 +719,12 @@ func _may_join(host_phase: String) -> bool:
 	return false
 
 
-## Joins (or, for the leaver, rejoins) through the join screen over the title, connecting
-## over ENet as its Connect would over Steam, with the role as the session key. Root moves on
-## when the host places this client.
+## Joins (or, for the leaver, rejoins) in place on the title's card (_join_in_place()),
+## connecting over ENet as its Join would over Steam, with the role as the session key. Root
+## moves on when the host places this client.
 func _join_session() -> void:
-	_flow().open_join_screen()
+	if not _join_in_place():
+		return
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client("127.0.0.1", int(_args.get("port", DEFAULT_PORT)))
 	if err != OK:
@@ -790,7 +791,7 @@ func _client_in_room() -> void:
 		"joined": NetworkManager.is_client(),
 		"session_open": NetworkManager.session.is_open(),
 		"table": NetworkManager.session.get_table(),
-		"join_screen_freed": _flow().get("_join_screen") == null,
+		"join_landed": not _flow().is_joining(),
 	}
 	_log("in the room: %s" % str(_result.room))
 	_mark("room")
@@ -816,7 +817,7 @@ func _client_report_b() -> void:
 		and bool(room.get("joined"))
 		and bool(room.get("session_open"))
 		and room.get("table") == ""
-		and bool(room.get("join_screen_freed"))
+		and bool(room.get("join_landed"))
 	)
 	var expected_states := {
 		"client": [STATE_ROOM, STATE_PLAYING, STATE_ROOM, STATE_PLAYING],
@@ -836,7 +837,7 @@ func _client_report_b() -> void:
 		"session_table": _result.session_table == TABLE_B.folder,
 		"shelf": _result.shelf == [TABLE_A.folder, TABLE_B.folder],
 		"room": room_ok,
-		"join_screen_freed": _flow().get("_join_screen") == null,
+		"join_landed": not _flow().is_joining(),
 	}
 	_result["checks"] = checks
 	var ok := true

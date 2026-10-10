@@ -11,23 +11,34 @@ extends Node
 ## that can exist with no map, where the GM sets maps out and everyone returns between them, on
 ## one connection throughout. Entering ROOM never connects; the action that leads there does:
 ## - TITLE > ROOM: Host (host_session(): ROOM once hosting, with "Opening a room..." and its
-##   Cancel meanwhile), or Join (the join screen over the title: ROOM on room_opened, or
-##   PLAYING on game_starting when a table is out).
+##   Cancel meanwhile), Resume (SessionKeeper.resume(), which hosts the same way), or Join in
+##   place on the title's Play together card (join_session(): ROOM on room_opened, or PLAYING
+##   on game_starting when a table is out; the card shows the join's progress and failure
+##   through join_status, in W3 words, join_error_text()).
 ## - ROOM > PLAYING: the room's Set out this map (TableMover.set_out(), then Root hands the
 ##   level here: set_out_pending(), refused with no map).
 ## - PLAYING > ROOM: TableMover's move to the room ends in _open_room() (host); every client
 ##   follows on room_opened.
 ## - ROOM > TITLE: Leave (a client leaves the session, the host ends it). A connection lost at
 ##   a table or in the room shows "Disconnected", whose only way on is the title.
-## The room's screen and the join screen are Root's children, as every state's view is.
+## The room's screen is Root's child, as every state's view is.
 
-## The join screen opened over the title (true) or was left (false): Root hides or shows the
-## title under it.
-signal join_screen_shown(shown: bool)
+## A join from the title moved on: JOIN_CONNECTING, JOIN_JOINED (connected, waiting for the
+## host to place this player), or JOIN_FAILED with the reason in W3 words. Root passes it to
+## the title's card.
+signal join_status(state: StringName, message: String)
 
 const RootScript := preload("res://scenes/root.gd")
-const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn")
 const DISCONNECT_INDICATOR_SCENE := preload("res://scenes/ui/disconnect_indicator.tscn")
+const JOIN_CONNECTING := &"connecting"
+const JOIN_JOINED := &"joined"
+const JOIN_FAILED := &"failed"
+## Join failures in W3 words (what failed, then how to recover; no codes). A bad code and a
+## lobby Steam cannot join (gone, or never there) read the same to the player.
+const NO_ROOM := "No room has that code. Check it with your host."
+const NO_ANSWER := "The room did not answer. Check your connection, then try again."
+const LOST := "The connection to the room was lost. Try joining again."
+const NO_STEAM := "Steam is not running. Start Steam, then try again."
 
 var _root: RootScript = null
 var _table_mover: TableMover = null
@@ -35,8 +46,9 @@ var _loading_overlay: LoadingOverlay = null
 var _disconnect_indicator: DisconnectIndicator = null
 ## The room's view in ROOM (the RoomPanel full screen)
 var _room_screen: RoomScreen = null
-## The join screen over the title, until the host places this client in the room or a table
-var _join_screen: LobbyClient = null
+## True from a join on the title (begin_join()) until the host places this client in the room
+## or at a table, or the join fails or is dropped
+var _joining := false
 ## True from host_session() until hosting starts (ROOM) or fails (back to the title)
 var _hosting_requested := false
 ## True after the player cancelled the "Opening a room..." wait, until a late HOSTING is closed
@@ -155,33 +167,59 @@ func _on_session_room_opened() -> void:
 		NetworkManager.is_client()
 		and _root.get_current_state() != RootScript.State.ROOM
 	):
+		_joining = false
 		_root.change_state(RootScript.State.ROOM)
 
 
-## Title > Join: the join screen opens over the hidden title, and its Connect joins. Root
+## Title > Join in place: the card's Join connects to the room with `code` (over Steam). Root
 ## moves on when the host places this client: ROOM on room_opened, or PLAYING on
-## game_starting when a table is out. A client the host rejects stays here with the reason.
-func open_join_screen() -> void:
-	if is_instance_valid(_join_screen):
+## game_starting when a table is out. A failure, or a host that rejects this client, comes
+## back to the card with the reason (join_status).
+func join_session(code: String) -> void:
+	if NetworkManager.connection_state != NetworkManager.ConnectionState.OFFLINE:
 		return
-	_join_screen = LOBBY_CLIENT_SCENE.instantiate() as LobbyClient
-	_join_screen.leave_requested.connect(_on_join_screen_left)
-	_root.add_child(_join_screen)
-	join_screen_shown.emit(true)
+	begin_join()
+	NetworkManager.join_game(code)
 
 
-## The join screen's Back or Leave: drop any connection under way and show the title again.
-func _on_join_screen_left() -> void:
-	close_join_screen()
-	join_screen_shown.emit(false)
+## A join from the title is under way: from here its progress and failure go to the card
+## (join_status). join_session() starts one; the ENet scenarios start theirs here and connect
+## over ENet themselves, as join_game() does over Steam.
+func begin_join() -> void:
+	_joining = true
+	join_status.emit(JOIN_CONNECTING, "")
+
+
+## The card went back while a join was under way: drop it and stay on the title.
+func cancel_join() -> void:
+	if not _joining:
+		return
+	_joining = false
 	NetworkManager.disconnect_game()
 
 
-## The join screen goes (leaving the title takes it along).
-func close_join_screen() -> void:
-	if is_instance_valid(_join_screen):
-		_join_screen.queue_free()
-	_join_screen = null
+## Whether a join from the title is under way.
+func is_joining() -> bool:
+	return _joining
+
+
+## The title is left (to the room, a table or anything else): a join under way has landed.
+func end_join() -> void:
+	_joining = false
+
+
+## A join failure's reason as the player reads it (W3). NetworkManager's own reasons name the
+## failure in engine terms ("Invalid room code", "Failed to join Steam lobby (result=...)",
+## "Connection timed out"); the version gate's and any other already speak to the player and
+## pass through. Pure.
+static func join_error_text(reason: String) -> String:
+	if reason.begins_with("Invalid room code") or reason.begins_with("Failed to join Steam lobby"):
+		return NO_ROOM
+	if reason.begins_with("Connection timed out"):
+		return NO_ANSWER
+	if reason.begins_with("Steam is not running"):
+		return NO_STEAM
+	return reason if reason.strip_edges() != "" else LOST
 
 
 ## ROOM > PLAYING (host): set the pending map out. Refused with no map, which used to enter
@@ -206,12 +244,21 @@ func _on_lobby_cancel() -> void:
 ## Client: the host set a map out from the room, or this client joined while one is out.
 func _on_network_game_starting() -> void:
 	if NetworkManager.is_client() and not _root.is_in_state(RootScript.State.PLAYING):
+		_joining = false
 		_root.change_state(RootScript.State.PLAYING)
 
 
 func _on_network_state_changed(
 	old_state: NetworkManager.ConnectionState, new_state: NetworkManager.ConnectionState
 ) -> void:
+	# A join from the title connected, or went offline with no reason given (a reason comes
+	# first, through connection_failed, and ends the join there).
+	if _joining and new_state == NetworkManager.ConnectionState.JOINED:
+		AudioManager.play(&"success")
+		join_status.emit(JOIN_JOINED, "")
+	elif _joining and new_state == NetworkManager.ConnectionState.OFFLINE:
+		_joining = false
+		join_status.emit(JOIN_FAILED, LOST)
 	# Hosting started from the title: the session opens in the room.
 	if new_state == NetworkManager.ConnectionState.HOSTING and _hosting_requested:
 		_hosting_requested = false
@@ -243,8 +290,13 @@ func _on_network_state_changed(
 
 
 ## Hosting from the title failed (Steam not running, no lobby): the title stays, with the
-## reason.
+## reason. A join from the title failed: the card shows why, in W3 words.
 func _on_network_connection_failed(reason: String) -> void:
+	if _joining:
+		_joining = false
+		AudioManager.play(&"error")
+		join_status.emit(JOIN_FAILED, join_error_text(reason))
+		return
 	if not _hosting_requested:
 		return
 	_hosting_requested = false

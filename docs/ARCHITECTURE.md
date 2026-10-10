@@ -43,8 +43,8 @@ Root (Node3D)
 ├── SessionFlow (Node) - Host, Join, the room, leaving; the network events that change state
 │   └── DisconnectIndicator (CanvasLayer)
 │
-├── [Dynamic] TitleScreen (CanvasLayer) - shown in TITLE_SCREEN state
-├── [Dynamic] LobbyClient (CanvasLayer) - the join screen over the title (SessionFlow)
+├── [Dynamic] TitleScreen (CanvasLayer) - shown in TITLE_SCREEN state; Join happens in place
+│                                           on its Play together card
 ├── [Dynamic] RoomScreen (CanvasLayer) - the room full screen in ROOM state (SessionFlow)
 │
 ├── [Dynamic] GameMap (Node3D) - shown in PLAYING state
@@ -82,7 +82,6 @@ Root (Node3D)
 | AppMenu      | Always present     | Root.\_setup_app_menu()      |
 | LoadingOverlay | Always present   | LevelFlow.setup()            |
 | TitleScreen  | TITLE_SCREEN state | Root.\_enter_state()         |
-| LobbyClient (join screen) | Over TITLE_SCREEN, Join | SessionFlow.open_join_screen() |
 | RoomScreen   | ROOM state         | SessionFlow.enter_room()     |
 | GameMap      | PLAYING state      | Root.\_enter_playing_state() |
 | PauseOverlay | PAUSED state       | Root.\_enter_paused_state()  |
@@ -266,7 +265,7 @@ The `Root` node implements a state stack for flexible state management.
 
 ```gdscript
 enum State {
-    TITLE_SCREEN = 0,  # Main menu (the join screen opens over it)
+    TITLE_SCREEN = 0,  # Main menu (Join happens in place on its card)
     ROOM = 1,          # A hosted session between maps: everyone connected, no table out
     # 2 was LOBBY_CLIENT; ROOM replaced both lobby states on 2026-10-09
     PLAYING = 3,       # Active gameplay
@@ -295,7 +294,7 @@ Root is the state machine and the wiring; three helpers, each a child Root sets 
 
 | Helper | File | What it owns |
 |--------|------|--------------|
-| `SessionFlow` | `scenes/session_flow.gd` | The way into a hosted session and out of it: Host (`host_from_title()`, `host_session()`, the "Opening a room..." wait and its Cancel), Join (`open_join_screen()`, the join screen over the title), the room full screen (`enter_room()`, `exit_room()`), Set out (`set_out_pending()`, refused with no map), Leave, and the network events that change Root's state (hosting started or failed, `room_opened`, `game_starting`, a lost connection's "Disconnected" dialog). It also opens the room when TableMover moves the table there, and hosts for SessionKeeper's Resume. |
+| `SessionFlow` | `scenes/session_flow.gd` | The way into a hosted session and out of it: Host (`host_from_title()`, `host_session()`, the "Opening a room..." wait and its Cancel), Join in place on the title's card (`join_session()`, its progress and failure back to the card through `join_status`, `cancel_join()`), the room full screen (`enter_room()`, `exit_room()`), Set out (`set_out_pending()`, refused with no map), Leave, and the network events that change Root's state (hosting started or failed, `room_opened`, `game_starting`, a lost connection's "Disconnected" dialog). It also opens the room when TableMover moves the table there, and hosts for SessionKeeper's Resume. |
 | `TableMover` | `scenes/table_mover.gd` | Table moves (`set_out()`, `request_move()`, `move_now()`), each map's session state, the shelf rows' Save into map and Discard changes, and the session file (`keeper`, SessionKeeper). |
 | `LevelFlow` | `scenes/level_flow.gd` | A table's load: the loading overlay (`loading_overlay`) over every map load and AUTHORING's builds (`track_authoring()`), the level a client receives and its state stream (`start_client_table()`, `stop_client_table()`, through `RootNetworkHandler`), the client's `report_table_loaded()`, and the party set out on each loaded table. |
 
@@ -304,7 +303,7 @@ The helpers change state through Root (`change_state()`, `get_current_state()`,
 one slot with it, `Root.pending_level`: the level every path into play (host, client, solo, a
 table move) hands over, set until LevelFlow sees its load complete or fail. While it is set, the
 table clearing is part of the load; a table cleared without one sends Root to the title. The
-helpers add their screens (the join screen, the room) to Root, as every state's view is, so the
+helpers add their screens (the room) to Root, as every state's view is, so the
 draw order is the order the states open them.
 
 ### State Transitions

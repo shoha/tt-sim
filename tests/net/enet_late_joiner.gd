@@ -211,9 +211,30 @@ func _process_client() -> void:
 			_client_check()
 
 
-## Joins from the title, as the join screen's Connect would; Root moves on when the host
-## places this client (PLAYING here, since a table is out).
+## Join in place, as a player does on the title's Play together card: Join opens the code
+## field, the code is typed, and Join hands it to Root's SessionFlow. Over Steam that ends in
+## join_game(); here the flow begins tracking the join (begin_join(), as join_session() does,
+## so the card shows the join's progress) and the caller connects over ENet as join_game()
+## would. False, with the run failed, when the title or its card is not there.
+func _join_in_place() -> bool:
+	var title := _main.get("_title_screen") as TitleScreen
+	if title == null or title.play_together == null:
+		_finish(false, "no title card to join from")
+		return false
+	title.play_together.open_join()
+	title.play_together.code_edit.text = _role
+	_flow().begin_join()
+	if not title.play_together.busy:
+		_finish(false, "the card did not show the join under way")
+		return false
+	return true
+
+
+## Joins in place from the title; Root moves on when the host places this client (PLAYING
+## here, since a table is out).
 func _join() -> void:
+	if not _join_in_place():
+		return
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client("127.0.0.1", int(_args.get("port", DEFAULT_PORT)))
 	if err != OK:

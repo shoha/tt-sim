@@ -295,11 +295,12 @@ func _may_join(host_phase: String) -> bool:
 	return host_phase == "room_start"
 
 
-## Joins through the join screen over the title, connecting over ENet as its Connect would
-## over Steam, with the role as the session key. Root moves on when the host places this
+## Joins in place on the title's card (_join_in_place()), connecting over ENet as its Join
+## would over Steam, with the role as the session key. Root moves on when the host places this
 ## client (the room, or the table for client3).
 func _join_session() -> void:
-	_flow().open_join_screen()
+	if not _join_in_place():
+		return
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client("127.0.0.1", int(_args.get("port", DEFAULT_PORT)))
 	if err != OK:

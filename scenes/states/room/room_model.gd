@@ -27,6 +27,10 @@ const ADD_MAP := "Add a map"
 ## A shelf row's caption parts (shelf_caption()).
 const ON_TABLE := "On the table"
 const CHANGED := "Changed this session"
+## What Resume found of a shelf map (SessionKeeper.notes()): its map files changed since the
+## session was kept (its live edits were dropped), or its folder is gone from this library.
+const SINCE_CHANGED := "Changed since last time"
+const MISSING := "Missing from your library"
 ## A player's download state for one map (download_state()).
 const HAS := &"has"
 const GETTING := &"getting"
@@ -123,13 +127,21 @@ static func action(
 
 
 ## A shelf row's caption (the GM's view): the map on the table first ("On the table"), then
-## whether it changed this session (`changed`, TableMover.changed_maps()), then `readiness`
+## what Resume found of it (`note`: SessionFile.CHANGED, "Changed since last time", or
+## SessionFile.MISSING, "Missing from your library", which says all there is), then whether it
+## changed this session (`changed`, TableMover.changed_maps()), then `readiness`
 ## (readiness_text()), joined by middots, the first clause capitalized: "Changed this session
 ## · 3 of 4 have it", "On the table · changed this session". Pure.
-static func shelf_caption(on_table: bool, changed: bool, readiness: String) -> String:
+static func shelf_caption(
+	on_table: bool, changed: bool, readiness: String, note: StringName = &""
+) -> String:
+	if note == SessionFile.MISSING:
+		return MISSING
 	var parts: Array[String] = []
 	if on_table:
 		parts.append(ON_TABLE)
+	if note == SessionFile.CHANGED:
+		parts.append(SINCE_CHANGED if parts.is_empty() else SINCE_CHANGED.to_lower())
 	if changed:
 		parts.append(CHANGED if parts.is_empty() else CHANGED.to_lower())
 	if not on_table and readiness != "":

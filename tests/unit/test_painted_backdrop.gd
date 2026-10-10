@@ -293,11 +293,16 @@ func _ink(control: Control) -> Color:
 	return control.get_theme_color(&"font_color")
 
 
-## The opaque fill under `control`'s words: its own (a button's state, a panel's), else the
-## nearest ancestor's. Transparent (alpha 0) when nothing but the painting is under them.
+## The opaque fill under `control`'s words: its own (a button's state, a panel's), the Play
+## together card's wash under a face's words, else the nearest ancestor's. Transparent (alpha 0)
+## when nothing but the painting is under them.
 func _ground(control: Control) -> Color:
 	var node: Node = control
 	while node is Control:
+		if node is PlayTogetherCard:
+			var wash := (node as PlayTogetherCard).wash_under(control)
+			if wash.a >= 1.0:
+				return wash
 		var fill := _fill(node as Control)
 		if fill.a >= 1.0:
 			return fill

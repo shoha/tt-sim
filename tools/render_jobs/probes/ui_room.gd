@@ -3,9 +3,9 @@ extends RefCounted
 ## Render-job probe (`call` op) for the session screens of the UI tour (jobs/ui_tour.json):
 ## what a host and a client see from the title's Host or Join to the room, and the way back
 ## from the table. Nothing here hosts or joins: NetworkManager.host_game() and join_game()
-## are never called. Root's real entry points are used where they need no peer (the title's
-## Join opens Root's join screen and its Back closes it; the pause menu's room row asks its
-## own confirmation). What needs a peer is staged with sample data: the room (RoomScreen, its
+## are never called. Root's real entry points are used where they need no peer (the pause
+## menu's room row asks its own confirmation; the title's card is ui_play_together.gd's). What
+## needs a peer is staged with sample data: the room (RoomScreen, its
 ## RoomPanel with connect_network false) fed a sample session summary (a room code in the real
 ## format, four players, a shelf of three maps: the tour's test level with the thumbnail
 ## `thumbnail` saved for it and two sample maps with none, showing their painted placeholders),
@@ -29,6 +29,9 @@ extends RefCounted
 ##   for Set out, as after Host with this map (`select` false: nothing selected yet); `shelf`
 ##   false is a room with no map at all, as after Host a session. `long` names the GM with
 ##   LONG_GM_NAME (24 characters) and the second sample map LONG_MAP_NAME, and selects it.
+##   `notes` stages what Resume found: Old Mill's files changed since the session was kept and
+##   Fen Crossing missing from the library (RoomPanel.show_notes()), Old Mill selected; with
+##   `notes` the folder may be "", a shelf of the two sample maps alone.
 ## - `client_room` (`folder`; `shelf`, default true; `select`, default 0): a player's room
 ##   with the same players and shelf, the local player one of them, the SAMPLE_MAPS entry at
 ##   index `select` selected to look at (their own download state first: 0 is Old Mill, which
@@ -44,8 +47,6 @@ extends RefCounted
 ##   `player` shows it as the local player sees it, opened on the map on the table; `long`
 ##   gives the GM and the second sample map their long names and selects that map.
 ## - `close_room`: free the staged room and show the title again.
-## - `join` (`open`, default true): press the title's Join Game, which opens Root's join
-##   screen over the hidden title; `open` false presses the join screen's Back.
 ## - `pause_host`: on the open pause menu, show the host-only Return everyone to the room
 ##   row (a solo pause hides it).
 ## - `return_room`: press that row, which asks its confirmation. Dismiss it with
@@ -89,8 +90,6 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _drawer(base, String(step.get("folder", "")), step)
 		"close_room":
 			return _close_room(base)
-		"join":
-			return _join(base, bool(step.get("open", true)))
 		"pause_host":
 			return _pause_host(base)
 		"return_room":
@@ -216,14 +215,22 @@ static func _room(base: Node, summary: Dictionary, local_id: String) -> RoomScre
 static func _host_room(base: Node, folder: String, step: Dictionary) -> String:
 	var with_shelf := bool(step.get("shelf", true))
 	var long := bool(step.get("long", false))
-	if with_shelf and LevelManager.load_level_folder(folder, false) == null:
+	var notes := bool(step.get("notes", false))
+	# With `notes` the test level may be left out (folder ""): the two sample maps carry them.
+	var needs_level := with_shelf and not (notes and folder == "")
+	if needs_level and LevelManager.load_level_folder(folder, false) == null:
 		return "no level %s" % folder
 	var room := _room(base, _summary(folder, with_shelf, "", long), SAMPLE_GM)
+	var keys: Array = SAMPLE_MAPS.keys()
 	if long:
-		room.panel.select(SAMPLE_MAPS.keys()[1])
+		room.panel.select(keys[1])
+	elif notes:
+		room.panel.select(keys[0])
 	elif with_shelf and bool(step.get("select", true)):
 		room.panel.select(folder)
 	var panel := room.panel
+	if notes:
+		panel.show_notes({keys[0]: SessionFile.CHANGED, keys[1]: SessionFile.MISSING})
 	return "GM's room: %s; %d maps, %s selected; action %s" % [
 		panel.title_label.text,
 		panel.shelf_rows.get_child_count(),
@@ -303,28 +310,6 @@ static func _close_room(base: Node) -> String:
 		room.queue_free()
 	_show_title(base, true)
 	return "room closed" if room else "no staged room"
-
-
-static func _join(base: Node, open: bool) -> String:
-	if open:
-		var title: CanvasLayer = base.get("_title_screen")
-		var button: Button = title.get("join_button") if title else null
-		if button == null:
-			return "no title Join Game button"
-		button.pressed.emit()
-	else:
-		var screen: Variant = _join_screen(base)
-		if not is_instance_valid(screen):
-			return "no join screen"
-		(screen as LobbyClient).leave_button.pressed.emit()
-	var shown: Variant = _join_screen(base)
-	return "join screen %s" % ("open" if is_instance_valid(shown) else "closed")
-
-
-## The join screen over the title (SessionFlow's), or null.
-static func _join_screen(base: Node) -> Variant:
-	var flow := base.get("_session_flow") as SessionFlow
-	return flow.get("_join_screen") if flow else null
 
 
 static func _pause_overlay(base: Node) -> PauseOverlay:

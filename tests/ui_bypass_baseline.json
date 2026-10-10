@@ -51,9 +51,6 @@
 		"res://scenes/states/authoring/water_tool_pane.gd": {
 			"override": 1
 		},
-		"res://scenes/states/lobby/lobby_client.tscn": {
-			"override": 8
-		},
 		"res://scenes/states/playing/avatar_builder.gd": {
 			"override": 4
 		},

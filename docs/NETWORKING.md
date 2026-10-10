@@ -182,8 +182,9 @@ with the version message, before the host's delayed disconnect lands, so the pla
 version reason and not "Host disconnected". The host admits a joiner to the session
 (`SessionChannel.admit_peer()`: the room, or `LateJoinerSync.sync_peer()` at a table) only once
 its player info passes the gate, so a rejected client is never moved into the room or `PLAYING`
-and the message appears on the join screen, where `LobbyClient` keeps the `connection_failed`
-reason on screen through the following `OFFLINE` state change.
+and the message appears in place on the title's Play together card: `SessionFlow` reports the
+`connection_failed` reason once (`join_status`, failed) and ends the join, so the `OFFLINE`
+state change that follows says nothing more.
 
 ### Disconnecting
 
@@ -448,8 +449,8 @@ sent anything.
 
 | From > to | Action | What happens |
 |-----------|--------|--------------|
-| TITLE > ROOM (host) | Host with a map: `host_session(level)` | `host_game()` with an "Opening a room..." wait; ROOM on `HOSTING`; on `connection_failed` the title stays, with the reason |
-| TITLE > ROOM or PLAYING (client) | Join: the join form (`LobbyClient`) over the hidden title | Connect joins; the form stays locked ("Connected. Joining the room...") until ROOM on `room_opened`, or PLAYING on `game_starting` when a table is out; a rejected client stays on the form |
+| TITLE > ROOM (host) | The title card's Host: `host_from_title({})`, `host_session(null)`; or Resume: `SessionKeeper.resume(id)`, whose `host_requested` calls `host_session(null)` | `host_game()` with an "Opening a room..." wait; ROOM on `HOSTING` (a resumed session restored over it first); on `connection_failed` the title stays, with the reason |
+| TITLE > ROOM or PLAYING (client) | Join in place on the title's Play together card: `SessionFlow.join_session(code)` | `begin_join()`, then `join_game(code)`; `join_status` tells the card: connecting, then joined ("Connected. Joining the room...") until ROOM on `room_opened`, or PLAYING on `game_starting` when a table is out; a failure (`connection_failed`, or `OFFLINE` with no reason) comes back to the card in W3 words (`join_error_text()`), the code kept to correct; the card's back (disc, Esc, pad B) while connecting is `cancel_join()`, `disconnect_game()` |
 | ROOM (host) | Entering with a map from Host | The map is shelved and selected in the room |
 | ROOM > PLAYING | The room's Set out this map: `TableMover.set_out(key)`, then `SessionFlow.set_out_pending()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
 | PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()`, a table move to the room | After TableMover's notice (nothing asked): the table's state is kept, the party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
@@ -926,7 +927,12 @@ each in `enet_live_edits`' and `enet_prefetch`'s (two clients leaving together),
 A scenario is a scene whose script reads `--role`, `--rendezvous` (an absolute path prefix
 for the files the roles coordinate through), `--out`, `--timeout-s` and `--port`, writes its
 log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
-`enet_late_joiner.gd` gives the boot, ENet setup and rendezvous.
+`enet_late_joiner.gd` gives the boot, ENet setup and rendezvous. Every client joins in place
+on the title's Play together card as a player does (`_join_in_place()`: Join opens the field,
+the code goes in, `SessionFlow.begin_join()` as `join_session()` does, so the card shows the
+join under way), then connects over ENet where `join_game()` would use Steam. All seven passed
+on every peer on 2026-10-10 with the card's path; the launcher flagged only another session's
+`_biglf_gorge_*` test levels re-saved in the real store during the runs.
 
 - `enet_late_joiner`: the client joins after the host placed an avatar and must see it once
   its table has loaded (`LateJoinerSync`'s hold).
@@ -959,7 +965,7 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
   The shelf ends as both folders and the pointer on table B. Every client keeps its peer id with
   no offline event; the host keeps one peer object and room code. client then leaves the way the
   pause menu does, with no "connection lost" dialog (the host keeps its entry with no peer and
-  its grant by session id), rejoins through the join screen with a new peer id, lands at table
+  its grant by session id), rejoins in place on the title's card with a new peer id, lands at table
   B and controls Hero A again. Table B, saved and with the party not counted, is unchanged, so
   the drawer's Move the table here (`TableMover.request_move`) asks nothing and counts down; client,
   client2 and client3 show a player's notice naming the GM and the map ("host is moving the
@@ -1470,8 +1476,12 @@ When the host disconnects, clients receive a `connection_failed("Host disconnect
 
 ### Where `connection_failed` reaches the player
 
-`LobbyClient._on_connection_failed()` shows `"Connection failed: <reason>"` in the join
-form's status label. While hosting is starting from the title, `Root` shows the reason as an
+While a join from the title is under way, `SessionFlow` turns the reason into the player's
+words (`join_error_text()`: "Invalid room code" and a Steam lobby that cannot be joined read
+"No room has that code. Check it with your host.", a timeout "The room did not answer. Check
+your connection, then try again.", Steam not running "Steam is not running. Start Steam, then
+try again."; the version gate's messages pass through) and the title's card shows it under the
+code field. While hosting is starting from the title, `Root` shows the reason as an
 error toast (`UIManager.show_error`) and stays on the title. Once in `ROOM` or `PLAYING`, a
 client's drop shows `Root`'s generic "Disconnected" dialog instead, which does not include the
 reason.
