@@ -44,6 +44,9 @@ var _save_level_impl: Callable = func() -> String: return _level_loader.save_lev
 var _save_thumbnail: Callable = LevelManager.save_thumbnail
 
 var _environment_manager := LevelEnvironmentManager.new()  # Manages lighting/atmosphere
+## The camera model authoring uses too (whole-map zoom, pan bounds, near plane, shadow reach):
+## fit by LevelPlayLoader as a map is installed, followed every frame here.
+var _view_fit := MapViewFit.new()
 var _map_download_coordinator := MapDownloadCoordinator.new()  # Manages map downloads
 var _token_spawner := TokenSpawner.new()  # Manages token spawning/tracking/clearing
 ## Manages network sync (reconciliation, client transforms, drag locks, permission-driven
@@ -64,6 +67,7 @@ var _permission_handler: TokenPermissionHandler = null
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
 	_environment_manager.setup(game_map)
+	_view_fit.setup(game_map, _environment_manager)
 	_game_map.setup_measure_tool()
 	_game_map.setup_sun_gizmo()
 	_game_map.setup_grid_overlay()
@@ -141,6 +145,10 @@ func setup(game_map: GameMap) -> void:
 		history.set_rename_callable(_token_spawner.rename_token)
 		history.set_remove_callable(_token_spawner.remove_token)
 		history.set_recipe_callable(set_avatar_recipe)
+
+
+func _process(_delta: float) -> void:
+	_view_fit.follow()
 
 
 func _exit_tree() -> void:

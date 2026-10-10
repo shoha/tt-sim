@@ -69,8 +69,15 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   thumbnail. Dirty is `AuthoringSession`. Autosave is `AuthoringAutosave`
   (`_autosave/map.ttmap` + `map_level.json`). The undo seam is `AuthoringHistory`
   (`record({label, undo, redo, bytes})`, capped at 100 entries and 64 MB).
-- Zoom-out is raised per map (`GameMap.set_zoom_limits`, `fit_zoom_for_extent`), and the sun's
-  shadow distance follows the view (`LevelEnvironmentManager.fit_shadow_distance_to_view`).
+- One camera model (`MapViewFit`, 2026-10-09), owned by `AuthoringController` and
+  `LevelPlayController` alike: zoom-out reaches the whole map, never less than 20
+  (`GameMap.set_zoom_limits`, `fit_zoom_for_extent`, margin 1.08, 12 m of canopy above the
+  highest ground); an authored map without a GLB pans within its own extent; every frame the
+  near plane follows the highest ground and the sun's shadow distance follows the view
+  (`LevelEnvironmentManager.fit_shadow_distance_to_view`). The extent is the document's, or a
+  Blender map's mesh bounds when it has none. Authoring refits when a sculpt moved the ground's
+  range, play when the GM changes the map scale. Play at whole-map zoom measured 11.2 to 14.5
+  ms GPU median from 200 to 400 ft maps (size_probe, 2026-10-09).
 - Packed arrays are shared by reference in GDScript: duplicate before handing one to a worker
   or keeping it for undo ([../CONVENTIONS.md](../CONVENTIONS.md) Threading Gotchas).
 

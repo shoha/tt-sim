@@ -170,7 +170,7 @@ func setup_authoring() -> void:
 
 
 ## The camera zoom range: camera.size at the 16:9 reference height, see CameraController.
-## Authoring raises the upper limit so a whole map fits the screen.
+## MapViewFit raises the upper limit, in play and authoring, so a whole map fits the screen.
 func set_zoom_limits(min_size: float, max_size: float) -> void:
 	_camera_controller.set_zoom_limits(min_size, max_size)
 

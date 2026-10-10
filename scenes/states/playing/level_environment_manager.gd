@@ -20,10 +20,9 @@ class_name LevelEnvironmentManager
 ## already inside 30 units, so a shorter cascade distance excludes nothing.
 ##
 ## Kept as an explicit named constant rather than reverted to an implicit engine default
-## so the next person does not re-investigate this. It would only become a lever for a
-## map substantially larger than the camera's visible extent, and note the extent scales
-## with camera.size (max zoom 20), so any future value must cover the zoomed-out view,
-## not just the map bounds.
+## so the next person does not re-investigate this. It is the floor: past the view the old
+## max zoom of 20 showed, the distance follows the view every frame
+## (fit_shadow_distance_to_view, called by MapViewFit in play and authoring alike).
 const SUN_SHADOW_MAX_DISTANCE: float = 100.0
 ## DirectionalLight3D.directional_shadow_fade_start (Godot's default, left unchanged):
 ## shadows fade out over the last fifth of the max distance.
@@ -517,11 +516,11 @@ func get_sun_light() -> DirectionalLight3D:
 ##
 ## Why the view: the orthographic camera sits back along its view axis in proportion to
 ## camera.size (CameraController._update_camera_offset keeps the near plane above the
-## ground), so the top edge of the screen is about 2.5 x camera.size from the camera. The
-## play camera tops out at 20 (about 57 m to the top of a 16:9 screen, inside the fixed
-## 100 m), but authoring's whole-map zoom (52.4 for a 200 ft map) puts the map's far corner
-## 106 m away (measured 2026-09-26), past the fade band that starts at 80 m: with the fixed
-## distance the whole far half of the map lost its shadows.
+## ground), so the top edge of the screen is about 2.5 x camera.size from the camera. A zoom
+## of 20 is about 57 m to the top of a 16:9 screen, inside the fixed 100 m, but the
+## whole-map zoom (MapViewFit; 52.4 for a 200 ft map) puts the map's far corner 106 m away
+## (measured 2026-09-26), past the fade band that starts at 80 m: with the fixed distance the
+## whole far half of the map lost its shadows.
 static func shadow_distance_for_depth(far_depth: float) -> float:
 	var needed := far_depth / SUN_SHADOW_FADE_START + SUN_SHADOW_VIEW_MARGIN
 	return maxf(SUN_SHADOW_MAX_DISTANCE, ceilf(needed))
@@ -559,8 +558,9 @@ static func far_bounds_depth(camera: Camera3D, bounds: AABB) -> float:
 ## shadow_distance_for_depth): the nearer of the screen's top edge and the farthest corner
 ## of `map_bounds` (world space; an empty AABB means the screen alone). The screen edge
 ## meets the ground at `ground_y`, the lowest ground (authoring passes the sculpted
-## terrain's). Never below SUN_SHADOW_MAX_DISTANCE, so a view the play camera can reach is
-## unchanged. Returns the distance in effect. Authoring calls it as the camera zooms.
+## terrain's). Never below SUN_SHADOW_MAX_DISTANCE, so a view within the old zoom of 20 is
+## unchanged. Returns the distance in effect. MapViewFit.follow() calls it every frame, in
+## play and authoring.
 func fit_shadow_distance_to_view(
 	camera: Camera3D, viewport_size: Vector2, map_bounds: AABB = AABB(), ground_y: float = 0.0
 ) -> float:

@@ -451,8 +451,9 @@ func adjust_zoom(delta: float) -> void:
 	_target_zoom = clampf(_target_zoom + delta, min_zoom, max_zoom)
 
 
-## Replace the zoom range and pull the current target into it. The play camera keeps the
-## exported 2..20; authoring raises the upper limit so a whole map fits.
+## Replace the zoom range and pull the current target into it. The exported 2..20 holds until
+## a map is fit; MapViewFit (play and authoring alike) raises the upper limit so a whole map
+## fits.
 func set_zoom_limits(low: float, high: float) -> void:
 	min_zoom = low
 	max_zoom = maxf(high, low)

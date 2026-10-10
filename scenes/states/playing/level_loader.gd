@@ -371,7 +371,8 @@ func _report_document_problem(message: String) -> void:
 
 ## Finalize map loading after the map instance is ready: the shared install
 ## (MapSourceLoader.install: environment, water, weather, camera bounds, measure tool and
-## grid, late-species wiring), then this controller's bookkeeping and the density toast,
+## grid, late-species wiring) and the camera fit authoring shares (MapViewFit), then this
+## controller's bookkeeping and the density toast,
 ## then a Blender map's grid ground sampled from its collision
 ## (MapSourceLoader.fit_grid_ground_async, a few frames). The direct load awaits it under the
 ## loading screen; the client download path calls it without awaiting, so there the grid
@@ -390,6 +391,7 @@ func _finalize_map_loading(map: Node3D) -> void:
 		_level_play_controller._environment_manager,
 		_level_play_controller.active_level_data
 	)
+	_level_play_controller._view_fit.fit(map, _level_play_controller.loaded_map_document)
 	_apply_foliage_density_and_notify(map)
 	var generation := _load_generation
 	var loader := MapSourceLoader.new(_level_play_controller.get_tree())
@@ -581,6 +583,7 @@ func clear_level_map() -> void:
 		_level_play_controller.loaded_map_instance.queue_free()
 		_level_play_controller.loaded_map_instance = null
 	_level_play_controller.loaded_map_document = null
+	_level_play_controller._view_fit.clear()
 
 	# Clear weather effects before environment state
 	var game_map = _level_play_controller.get_game_map()
@@ -638,6 +641,8 @@ func set_map_scale(uniform_scale: float) -> void:
 		_level_play_controller.loaded_map_instance.scale = Vector3.ONE * uniform_scale
 	if _level_play_controller.active_level_data:
 		_level_play_controller.active_level_data.map_scale = Vector3.ONE * uniform_scale
+	# The whole-map zoom and the shadow reach follow the map's new size.
+	_level_play_controller._view_fit.refit()
 
 
 ## Check if a level is currently loaded
