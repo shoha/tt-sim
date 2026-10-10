@@ -13,7 +13,7 @@ extends CanvasLayer
 ## translation may order them as its language does. The count is drawn on its own, in semibold
 ## tabular figures, so the chip's width never moves as it counts; the sentence is cut at {n}
 ## into the words before and after it. A long name is shortened with an ellipsis until the
-## sentence fits MAX_SENTENCE_WIDTH, the whole sentence in the chip's tooltip.
+## sentence fits MAX_SENTENCE_WIDTH, the whole name in the chip's tooltip.
 
 ## The seconds ran out (the move goes ahead).
 signal elapsed
@@ -221,8 +221,10 @@ func _show_count() -> void:
 
 
 ## The words around the count, fitted to MAX_SENTENCE_WIDTH: the destination is what the chip
-## is for, so the mover's name gives way first (their first name alone), then the map's
-## (shortened with an ellipsis), then the first name; the label ellipsizes past that.
+## is for, so the mover's name gives way first, to its first words and an ellipsis
+## ("Marigold…"), never fewer than MIN_NAME characters (so "The Keeper" never reads as "The");
+## then the map's, shortened with an ellipsis, then the mover's further; the label ellipsizes
+## past that.
 func _fit_words(font: Font, font_size: int) -> void:
 	var names := [_map, _mover]
 	var parts := _parts(names)
@@ -230,16 +232,20 @@ func _fit_words(font: Font, font_size: int) -> void:
 		return font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 	var too_wide := func(pieces: PackedStringArray) -> bool:
 		return width.call(pieces[0]) + width.call(pieces[1]) > MAX_SENTENCE_WIDTH
-	var first_name := _mover.get_slice(" ", 0)
-	if bool(too_wide.call(parts)) and first_name != "" and first_name != _mover:
-		names[1] = first_name
+	var keeps := [_map.length(), _mover.length()]
+	var words := _mover.split(" ", false)
+	for count in range(words.size() - 1, 0, -1):
+		var prefix := " ".join(words.slice(0, count))
+		if not bool(too_wide.call(parts)) or prefix.length() < MIN_NAME:
+			break
+		names[1] = prefix + "…"
+		keeps[1] = prefix.length()
 		parts = _parts(names)
 	for index in [0, 1]:
-		var whole: String = names[index]
-		var keep := whole.length()
-		while bool(too_wide.call(parts)) and keep > MIN_NAME:
-			keep -= 1
-			names[index] = whole.left(keep).strip_edges() + "…"
+		var whole: String = [_map, _mover][index]
+		while bool(too_wide.call(parts)) and keeps[index] > MIN_NAME:
+			keeps[index] -= 1
+			names[index] = whole.left(keeps[index]).strip_edges() + "…"
 			parts = _parts(names)
 	before_label.text = parts[0]
 	after_label.text = parts[1]

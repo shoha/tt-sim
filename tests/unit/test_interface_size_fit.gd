@@ -243,13 +243,77 @@ func test_room_drawer_fits() -> void:
 	_assert_uncovered("hint bar beside the room drawer", hints)
 
 
-func _room_summary(table: String) -> Dictionary:
+## A full shelf with a changed map selected: its Save into map and Discard line adds a row's
+## height under it, and End session still lies on the canvas (the room's shelf scrolls, the
+## drawer's column scrolls and pins its action and foot).
+func test_room_fits_with_a_changed_map_selected() -> void:
+	var room := RoomScreen.new()
+	room.connect_network = false
+	_host.add_child(room)
+	room.panel.show_session(_room_summary("", true), "enet-1", true)
+	room.panel.show_changes({"mill": true, "fen": false})
+	room.panel.select("mill")
+	await _assert_fits("room with a changed map selected", room.panel.leave_button)
+	assert_not_null(room.panel.shelf_rows.get_node_or_null("Changes_mill"), "its actions show")
+	room.free()
+	var layer := CanvasLayer.new()
+	_host.add_child(layer)
+	var drawer := RoomDrawer.new()
+	drawer.connect_network = false
+	drawer.theme = ThemeColors.glass_theme()
+	drawer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(drawer)
+	drawer.panel.show_session(_room_summary("hollow", true), "enet-1", true)
+	drawer.panel.show_changes({"hollow": true, "mill": true})
+	drawer.panel.select("mill")
+	drawer.open()
+	await _assert_fits("room drawer with a changed map selected", drawer.panel.leave_button)
+	assert_true(drawer.panel.action_button.is_visible_in_tree(), "the move shows too")
+
+
+## On a tall canvas the drawer's column holds the whole shelf with a changed map's line, the
+## action right under it: no row clipped under the action. Opened a second time on another
+## changed map, the layout once kept the column a row short (488 of 540 px, Fen Crossing
+## under the action) until RoomPanel._fit_drawer() sorted it again.
+func test_room_drawer_column_holds_its_changes_line() -> void:
+	_host.size = Vector2i(1920, 1080)
+	var layer := CanvasLayer.new()
+	_host.add_child(layer)
+	var drawer := RoomDrawer.new()
+	drawer.connect_network = false
+	drawer.theme = ThemeColors.glass_theme()
+	drawer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(drawer)
+	# As the GM uses it: opened with the table's row selected, closed, opened again on Old Mill.
+	for key in ["hollow", "mill"]:
+		drawer.panel.show_session(_room_summary("hollow"), "enet-1", true)
+		drawer.panel.select("mill")
+		drawer.open()
+		drawer.panel.show_changes({"hollow": true, "mill": true})
+		(drawer.panel.shelf_rows.get_node("Map_%s" % key) as Button).pressed.emit()
+		await wait_seconds(0.6)
+		if key == "hollow":
+			drawer.close()
+			await wait_seconds(0.6)
+	await _assert_fits("room drawer, tall", drawer.panel.leave_button, Vector2(1920, 1080))
+	var shown := drawer.panel.column_scroll.get_global_rect()
+	var fen := drawer.panel.shelf_rows.get_node("Map_fen") as Control
+	assert_lte(fen.get_global_rect().end.y, shown.end.y + SLACK_PX, "the last row in view")
+	var action := drawer.panel.action_button.get_global_rect()
+	assert_gte(action.position.y, fen.get_global_rect().end.y, "the action under the shelf")
+
+
+## The sample session: four players and three maps (one long name), or with `full` five.
+func _room_summary(table: String, full := false) -> Dictionary:
 	var shelf := []
-	for spec in [
+	var specs := [
 		["hollow", "Mossy Hollow, the long way round past the mill"],
 		["mill", "Old Mill"],
 		["fen", "Fen Crossing"],
-	]:
+	]
+	if full:
+		specs.append_array([["tarn", "Heron Tarn"], ["keep", "The Broken Keep"]])
+	for spec in specs:
 		shelf.append({"folder": spec[0], "map_path": "", "hashes": {}, "name": spec[1]})
 	var players := {}
 	var names := ["Marigold", "Ranger", "Starling", "Wren"]
