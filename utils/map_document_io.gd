@@ -424,7 +424,7 @@ static func _rows_problem(rows_by_asset: Dictionary[String, PackedFloat32Array])
 		if flat.size() / MapDocument.ROW_STRIDE > MAX_ROWS_PER_ASSET:
 			return "asset '%s' has more than %d rows" % [asset_id, MAX_ROWS_PER_ASSET]
 		for start in range(0, flat.size(), MapDocument.ROW_STRIDE):
-			if not _row_ok(flat, start):
+			if not row_ok(flat, start):
 				return "asset '%s' has a non-finite or degenerate row" % asset_id
 	return ""
 
@@ -704,15 +704,16 @@ static func _collect_rows(rows: Array, take: int) -> PackedFloat32Array:
 				numeric = false
 				break
 			flat[kept * stride + k] = value
-		if numeric and _row_ok(flat, kept * stride):
+		if numeric and row_ok(flat, kept * stride):
 			kept += 1
 	flat.resize(kept * stride)
 	return flat
 
 
 ## True when the row at `start` is finite, within MAX_ROW_COMPONENT, and has a rotation
-## that normalizes (a zero quaternion would turn into a NaN basis).
-static func _row_ok(flat: PackedFloat32Array, start: int) -> bool:
+## that normalizes (a zero quaternion would turn into a NaN basis). The writer, the reader and
+## a live edit's decoder (LiveEditReader) check every row with it.
+static func row_ok(flat: PackedFloat32Array, start: int) -> bool:
 	for k in MapDocument.ROW_STRIDE:
 		var value := flat[start + k]
 		if is_nan(value) or is_inf(value) or absf(value) > MAX_ROW_COMPONENT:

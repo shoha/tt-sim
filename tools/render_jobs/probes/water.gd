@@ -316,15 +316,12 @@ static func _build(base: Node, step: Dictionary) -> String:
 	doc.heights = heights
 	var painted := _paint_beds(doc, owners, courses)
 	changed = MaskBrush.merge_rect(changed, Rect2i(0, 0, doc.samples_x(), doc.samples_z()))
-	editor.set("_snap_before", before)
-	editor.set("_aligned", DressingGround.aligned_assets(doc.biome_ids, editor.palette_root))
-	(editor.get("_snap_start") as Dictionary).clear()
-	(editor.get("_prop_start") as Dictionary).clear()
-	editor.call("_queue_heights", changed)
+	editor.heights.begin_snap(before, true)
+	editor.heights.queue_heights(changed)
 	editor.finish_height_work()
 	editor.terrain.settle_heights()
 	editor.finish_height_work()
-	editor.call("_regenerate", changed)
+	editor.heights.regenerate(changed)
 	if painted != "":
 		editor.call("_refresh", changed)
 	var water := AuthoredWater.refresh_map(editor.map_root, doc)
@@ -415,15 +412,12 @@ static func _tilt(base: Node, slope: float, axis: Vector2) -> String:
 			heights[doc.sample_index(x, z)] -= slope * p.dot(axis.normalized())
 	doc.heights = heights
 	var changed := Rect2i(0, 0, doc.samples_x(), doc.samples_z())
-	editor.set("_snap_before", before)
-	editor.set("_aligned", DressingGround.aligned_assets(doc.biome_ids, editor.palette_root))
-	(editor.get("_snap_start") as Dictionary).clear()
-	(editor.get("_prop_start") as Dictionary).clear()
-	editor.call("_queue_heights", changed)
+	editor.heights.begin_snap(before, true)
+	editor.heights.queue_heights(changed)
 	editor.finish_height_work()
 	editor.terrain.settle_heights()
 	editor.finish_height_work()
-	editor.call("_regenerate", changed)
+	editor.heights.regenerate(changed)
 	return "tilted %.3f m/m along %s" % [slope, str(axis)]
 
 

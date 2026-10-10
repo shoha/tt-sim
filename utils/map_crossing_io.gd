@@ -31,7 +31,7 @@ static func serialize(doc: MapDocument, entries: Dictionary) -> void:
 		return
 	var list: Array = []
 	for crossing in doc.crossings:
-		list.append(_crossing_json(crossing))
+		list.append(crossing_json(crossing))
 	var data := {"version": VERSION, "crossings": list}
 	entries[ENTRY] = JSON.stringify(data, "", false, true).to_utf8_buffer()
 
@@ -98,13 +98,14 @@ static func parse(blobs: Dictionary, doc: MapDocument, log: MapDocumentIO._Warni
 	if not list is Array:
 		log.add("%s needs a crossings list; crossings ignored" % ENTRY)
 		return
-	doc.crossings = _parse_list(list, doc.extent_m(), log)
+	doc.crossings = parse_list(list, doc.extent_m(), log)
 
 
 # --- writing ------------------------------------------------------------------------
 
 
-static func _crossing_json(crossing: Crossing) -> Dictionary:
+## One crossing's JSON form, as the document stores it (and a live crossings edit carries it).
+static func crossing_json(crossing: Crossing) -> Dictionary:
 	return {
 		"id": crossing.id,
 		"kind": Crossing.KIND_NAMES[crossing.kind],
@@ -119,7 +120,9 @@ static func _crossing_json(crossing: Crossing) -> Dictionary:
 # --- reading ------------------------------------------------------------------------
 
 
-static func _parse_list(
+## The crossings of a JSON list (crossing_json() forms, untrusted) on a map of `extent`: each
+## one crossing_problem() accepts, a warning in `log` for each one dropped.
+static func parse_list(
 	list: Array, extent: Vector2, log: MapDocumentIO._WarningLog
 ) -> Array[Crossing]:
 	var out: Array[Crossing] = []
