@@ -24,12 +24,14 @@ shader_type spatial;
 // from the instance colour at the rim through amber to a pale gold core. A flame stands on its
 // base as a plume does: the painted flame (FlameAtlas), three tongues in flat bands, its frames
 // cross-faded on the shader's clock (seeded, so neighbours never lick together). An ember is a
-// small spark with a soft halo that flickers. A billow of smoke is a painted cumulus: a heap
-// of round lobes (seeded) melted into one soft outline, the instance colour's grey-violet
-// body over a darker violet underside, each lobe's upper rim catching the sun in cream gold
-// (fully at the top of the heap), the lobe in front laid over the ones behind it, so the
-// billow reads as a few bold, nearly opaque shapes. Late in its life its lobes shrink apart,
-// the smaller first, so it thins by breaking up rather than going see-through.
+// small spark with a soft halo that flickers. A billow of smoke is a painted cumulus: a few
+// large round lobes (seeded, the heap mirrored for half the seeds) melted into one soft
+// outline, the instance colour's grey-violet body over a darker violet underside, each lobe's
+// top wrapped in a soft crescent of sun in cream gold (fully at the top of the heap), the lobe
+// in front laid over the ones behind it and their shading blended where they meet, so the
+// billow reads as a few bold, nearly opaque shapes. A small billow is one soft lobe; its lobes
+// part as it swells. Late in its life the side lobes shrink and sink into the body, so it
+// thins by breaking up rather than going see-through.
 //
 // Colours here and in the instance colours are linear, so they show far lighter than their
 // numbers: a mid value (0.4) shows pale, which is why the first fire's amber and lilac read as
@@ -66,29 +68,47 @@ const float SMOKE = 5.0;
 // colour. A rust underside lit by the fire, and lighter bodies, read as salmon and pink mist.
 const vec3 SMOKE_LIT = vec3(0.85, 0.58, 0.265);
 const vec3 SMOKE_SHADE = vec3(0.045, 0.034, 0.058);
-// The light on a lobe, from above and a little from the left (x right, y down the quad, z
-// toward the camera): it catches only each lobe's upper rim. Facing the camera more, it lit
-// most of every lobe, and with a dark crescent under each the billow read as a pile of pale
-// balls.
-const vec3 SMOKE_SUN = vec3(-0.3, -0.9, 0.3);
-// A billow's lobes in the quad's -1..1 (y down), heaped into a cumulus (a broad body, two low
-// lobes in front, shoulders and a domed top): centre, radius, and how far in front of the
-// others it stands (the low lobes in front, so their lit rims lie over the body behind them).
-const vec4 SMOKE_LOBES[7] = {
-	vec4(0.0, 0.22, 0.55, 0.1),
-	vec4(-0.42, 0.3, 0.4, 0.14),
-	vec4(0.44, 0.32, 0.38, 0.12),
-	vec4(-0.22, -0.25, 0.42, 0.04),
-	vec4(0.2, -0.35, 0.4, 0.0),
-	vec4(0.55, -0.05, 0.3, 0.02),
-	vec4(-0.6, -0.02, 0.28, 0.03)
+// The sun on a lobe, from above and a little from the left: lit inside the lobe but outside a
+// copy of it shifted down and right by SMOKE_CAP_SHIFT (radii, y down), so the lit cap is a
+// crescent wrapping the lobe's top whose inner edge is an arc, softened over SMOKE_CAP_SOFT
+// (quad units). A sun direction cut each lobe's cap off in a straight chord, and the billows
+// read as stacked mushroom caps.
+const vec2 SMOKE_CAP_SHIFT = vec2(0.1, 0.3);
+const float SMOKE_CAP_SOFT = 0.06;
+// A billow's lobes in the quad's -1..1 (y down), heaped into a cumulus (a broad domed body a
+// little off centre, a lower dome on one shoulder, a low shoulder on the other, two low lobes
+// in front on a flattish base): centre, radius, and how far in front of the others it stands
+// (the low lobes in front, so their lit rims lie over the body behind them). Seven smaller
+// lobes read as a pile of pebbles.
+const vec4 SMOKE_LOBES[5] = {
+	vec4(-0.1, -0.1, 0.58, 0.0),
+	vec4(0.42, 0.02, 0.42, 0.06),
+	vec4(-0.52, 0.24, 0.38, 0.1),
+	vec4(0.18, 0.44, 0.38, 0.18),
+	vec4(-0.2, 0.5, 0.3, 0.2)
 };
+// A small billow's single lobe (centre, radius), and the sizes in metres up to which a billow
+// is that one lobe and from which it has parted into all of SMOKE_LOBES.
+const vec3 SMOKE_ONE = vec3(0.0, 0.12, 0.68);
+const float SMOKE_ONE_M = 2.5;
+const float SMOKE_ALL_M = 6.0;
+// A billow's flattish base (quad y) and how softly the lobes round into it. Round lobe feet
+// along the bottom read as a bunch of grapes, and a lone lobe as a ball.
+const float SMOKE_BASE = 0.55;
+const float SMOKE_BASE_ROUND = 0.15;
 // A billow's soft edge (quad units), how far the lobes melt into one outline, how far a lobe's
-// seed moves it, and the share of its radius it has lost by the end of the billow's life.
+// seed moves it, and the share of a side lobe's radius it has lost by the end of the billow's
+// life (the body loses less).
 const float SMOKE_EDGE = 0.1;
-const float SMOKE_MERGE = 0.12;
+const float SMOKE_MERGE = 0.2;
 const float SMOKE_JITTER = 0.05;
 const float SMOKE_BREAK = 0.6;
+// Where lobes meet, their shading is blended by how far in front each stands (a soft maximum
+// over SMOKE_BLEND, quad units; outside a lobe its depth falls SMOKE_FALL times as fast as the
+// distance from its rim), so the underside and the caps run on across a join instead of
+// stepping.
+const float SMOKE_BLEND = 0.05;
+const float SMOKE_FALL = 3.0;
 // The painted flame flipbook (FlameAtlas, set by EventPuffs.paint_flames): FLAME_FRAMES frames
 // side by side, red the heat, green the coverage, row 0 the tips. Cross-faded at FLAME_FPS.
 uniform sampler2D flame_atlas : filter_linear, repeat_disable;
@@ -110,6 +130,8 @@ varying float puff_seed;
 varying float puff_shape;
 varying float puff_kind;
 varying float puff_bold;
+// The puff's width in metres.
+varying float puff_metres;
 // The fragment's height in the puff on screen, -1 at its bottom to 1 at its top.
 varying float lit_y;
 
@@ -119,6 +141,7 @@ void vertex() {
 	puff_kind = INSTANCE_CUSTOM.z;
 	puff_bold = INSTANCE_CUSTOM.w;
 	float scale = length(MODEL_MATRIX[0].xyz);
+	puff_metres = scale;
 	if (is_kind(puff_kind, RING)) {
 		// Lying flat on the surface it spreads over.
 		MODELVIEW_MATRIX = VIEW_MATRIX * mat4(
@@ -158,8 +181,10 @@ void fragment() {
 	float edge = 1.0 + 0.09 * sin(3.0 * a + puff_seed * 6.283) + 0.05 * sin(5.0 * a + puff_seed * 17.0);
 	float inner = mix(0.44, 0.58, puff_bold) * edge;
 	float shape;
-	// Smoke's lobe in front here, as a ball: its offset from the lobe's centre (radii) and depth.
-	vec3 smoke_ball = vec3(0.0, 0.0, 1.0);
+	// Smoke's shading here, blended over the lobes in front: how far down its lobe the point
+	// lies (radii, -1 its top to 1 its foot) and how much of the sunlit crescent it is in.
+	float smoke_under = 0.0;
+	float smoke_cap = 0.0;
 	// Fire's kinds: how hot this fragment is (0 its rim colour, 1 FIRE_CORE).
 	float heat = -1.0;
 	if (is_kind(puff_kind, FLAME)) {
@@ -195,31 +220,41 @@ void fragment() {
 		shape = (1.0 - smoothstep(inner, 0.98 * edge, r)) * foot;
 	} else if (is_kind(puff_kind, SMOKE)) {
 		// The billow's lobes melted into one outline with a short soft rim (a wide one read as
-		// a translucent smear), each point shaded by the lobe in front there (or, between
-		// lobes, the nearest one's edge).
-		float front = -1.0;
+		// a translucent smear), each point shaded by the lobes in front there, blended by their
+		// depth (a lobe's depth runs on past its rim, so in the crease the merge fills the
+		// nearest lobes shade it). A small billow's lobes all lie exactly on SMOKE_ONE (a seeded
+		// offset between them drew a second crescent inside the first).
+		float lobed = smoothstep(SMOKE_ONE_M, SMOKE_ALL_M, puff_metres);
+		float mirror = fract(puff_seed * 5.3) < 0.5 ? -1.0 : 1.0;
+		vec2 body_centre = mix(SMOKE_ONE.xy, SMOKE_LOBES[0].xy * vec2(mirror, 1.0), lobed);
 		float outline = 10.0;
-		float nearest = 1e3;
-		for (int i = 0; i < 7; i++) {
+		float weights = 0.0;
+		for (int i = 0; i < 5; i++) {
 			vec4 lobe = SMOKE_LOBES[i];
 			float draw = fract(puff_seed * (3.7 + 1.9 * float(i)) + 0.37 * float(i));
-			vec2 centre = lobe.xy + SMOKE_JITTER * vec2(sin(puff_seed * 6.283 + 2.4 * float(i)), cos(puff_seed * 9.1 + 1.3 * float(i)));
-			float broken = smoothstep(0.45 + 0.25 * draw, 1.0, puff_bold);
-			float radius = max(lobe.z * (0.92 + 0.16 * draw) * (1.0 - SMOKE_BREAK * broken), 0.01);
+			vec2 jitter = SMOKE_JITTER * vec2(sin(puff_seed * 6.283 + 2.4 * float(i)), cos(puff_seed * 9.1 + 1.3 * float(i)));
+			vec2 centre = mix(SMOKE_ONE.xy, lobe.xy * vec2(mirror, 1.0) + jitter, lobed);
+			float radius = mix(SMOKE_ONE.z, lobe.z * (0.92 + 0.16 * draw), lobed);
+			lobe.w *= lobed;
+			// Late in its life a lobe shrinks and sinks toward the body, a side lobe most.
+			float lose = SMOKE_BREAK * (i == 0 ? 0.6 : 1.5) * smoothstep(0.45 + 0.25 * draw, 1.0, puff_bold);
+			centre = mix(centre, body_centre, 0.5 * lose);
+			radius = max(radius * (1.0 - lose), 0.01);
 			vec2 d = (p - centre) / radius;
 			float r = length(d);
 			outline = smooth_union(outline, (r - 1.0) * radius, SMOKE_MERGE);
-			if (r < 1.0) {
-				float z = sqrt(1.0 - r * r);
-				if (z * radius + lobe.w > front) {
-					front = z * radius + lobe.w;
-					smoke_ball = vec3(d, z);
-				}
-			} else if (front < 0.0 && r < nearest) {
-				nearest = r;
-				smoke_ball = vec3(d / r, 0.0);
-			}
+			float depth = lobe.w + radius * (r < 1.0 ? sqrt(1.0 - r * r) : (1.0 - r) * SMOKE_FALL);
+			float weight = exp(depth / SMOKE_BLEND);
+			weights += weight;
+			smoke_under += weight * d.y / max(r, 1.0);
+			float crescent = (length(d - SMOKE_CAP_SHIFT) - 1.0) * radius;
+			smoke_cap += weight * smoothstep(0.0, SMOKE_CAP_SOFT, crescent);
 		}
+		weights = max(weights, 1e-20);
+		smoke_under /= weights;
+		smoke_cap /= weights;
+		// Cut by a flattish base, rounded into it (a smooth maximum).
+		outline = -smooth_union(-outline, SMOKE_BASE - p.y, SMOKE_BASE_ROUND);
 		shape = 1.0 - smoothstep(-SMOKE_EDGE, 0.0, outline);
 	} else {
 		shape = 1.0 - smoothstep(inner, 0.98 * edge, length(p));
@@ -231,13 +266,13 @@ void fragment() {
 	float rim = (1.0 - clamp(shape, 0.0, 1.0)) * puff_bold;
 	if (is_kind(puff_kind, SMOKE)) {
 		// A dark violet underside over the billow's lower part (each low lobe's foot a little
-		// darker, for its roundness), the grey-violet body, and the sun catching each lobe's
-		// upper rim in cream gold, fully on the billow's top and fading out down it: fairly
-		// crisp painted steps.
-		float low = lit_y - 0.35 * smoke_ball.y;
-		body = mix(SMOKE_SHADE, COLOR.rgb, smoothstep(-0.75, -0.2, low));
-		float sunlit = smoothstep(0.55, 0.72, dot(smoke_ball, SMOKE_SUN));
-		body = mix(body, SMOKE_LIT, sunlit * smoothstep(-0.4, 0.45, lit_y));
+		// darker, for its roundness; darker still drew each front lobe's whole outline), the
+		// grey-violet body, and the sun's crescent on each lobe's top in cream gold, fully on
+		// the billow's top and dimmer down it, so the low lobes in front still show a lit rim
+		// over the body behind them.
+		float low = lit_y - 0.2 * smoke_under;
+		body = mix(SMOKE_SHADE, COLOR.rgb, smoothstep(-0.8, -0.15, low));
+		body = mix(body, SMOKE_LIT, smoke_cap * smoothstep(-0.6, 0.4, lit_y));
 		rim = 0.0;
 	}
 	vec3 fire = mix(COLOR.rgb, FIRE_AMBER, smoothstep(0.0, 0.6, heat));
