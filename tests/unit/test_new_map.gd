@@ -84,6 +84,26 @@ func test_cover_is_open_in_the_middle_and_denser_at_the_edges() -> void:
 	assert_eq(NewMap.starting_density(Vector2.ZERO, half, -1.0), 0.0, "noise opens clearings")
 
 
+func test_the_cover_feathers_out_at_the_map_edge() -> void:
+	var half := Vector2(30.0, 20.0)
+	var width := NewMap.edge_feather_m(half)
+	assert_almost_eq(width, 2.0, 0.001, "a tenth of the shorter half, at least the minimum")
+	var big := NewMap.edge_feather_m(Vector2(48.8, 48.8))
+	assert_almost_eq(big, NewMap.EDGE_FEATHER_SHARE * 48.8, 0.001, "320 ft")
+	assert_eq(NewMap.edge_feather(Vector2(30.0, 0.0), half, width, 0.0), 0.0, "none at the edge")
+	assert_eq(NewMap.edge_feather(Vector2(0.0, 0.0), half, width, 1.0), 1.0, "all inside")
+	var deep := NewMap.edge_feather(Vector2(0.0, 19.0), half, width, 1.0)
+	assert_lt(deep, NewMap.edge_feather(Vector2(0.0, 19.0), half, width, -1.0), "ragged depth")
+	if PaletteLibrary.biome(BIOME).is_empty():
+		pass_test("palette without %s" % BIOME)
+		return
+	var doc := NewMap.create(100, BIOME, 7)
+	var last := doc.samples_x() - 1
+	for k in doc.samples_z():
+		for x in [0, last]:
+			assert_eq(doc.biome_density[doc.sample_index(x, k)], 0, "the edge sample is bare")
+
+
 func test_same_seed_same_cover_different_seed_different_cover() -> void:
 	if PaletteLibrary.biome(BIOME).is_empty():
 		pass_test("palette without %s" % BIOME)

@@ -135,12 +135,14 @@ func test_a_spot_keeps_clear_and_inside() -> void:
 	var rng := StartingLandform.stream(7, LandformGrowth.STREAM_EXTRAS)
 	var want := {"radius": 4.0, "inset": 1.2, "water_gap": 2.0, "lean": 0.0, "tie": 0.0}
 	var avoid: Array = [{"at": Vector2(10.0, 0.0), "radius": 6.0}]
-	var at := LandformGrowth.find_spot(doc, rng, want, avoid, [], Vector2.ZERO)
+	var at := LandformPlacement.find_spot(doc, rng, want, avoid, [], Vector2.ZERO)
 	assert_ne(at, Vector2.INF)
 	assert_gte(at.distance_to(Vector2(10.0, 0.0)), 10.0)
 	assert_true(StartingLandform.inside(doc, at, 4.0 * 1.2 - 0.01))
 	var everywhere: Array = [{"at": Vector2.ZERO, "radius": 100.0}]
-	assert_eq(LandformGrowth.find_spot(doc, rng, want, everywhere, [], Vector2.ZERO), Vector2.INF)
+	assert_eq(
+		LandformPlacement.find_spot(doc, rng, want, everywhere, [], Vector2.ZERO), Vector2.INF
+	)
 
 
 func test_long_valleys_grow_extras_that_stand_on_their_own() -> void:
@@ -176,23 +178,69 @@ func test_a_tarn_is_wet_and_a_knoll_stands_up() -> void:
 
 
 func test_open_ground_is_painted_with_the_biomes_meadow_surface() -> void:
-	assert_eq(LandformGrowth.meadow_surface(""), "")
-	var surface := LandformGrowth.meadow_surface(BIOME)
+	assert_eq(LandformPlacement.meadow_surface(""), "")
+	var surface := LandformPlacement.meadow_surface(BIOME)
 	if surface == "":
 		pass_test("palette without a grass accent in %s" % BIOME)
 		return
 	assert_true(surface.begins_with("grass") or surface.begins_with("moss"), surface)
 	var doc := _doc(LONG)
 	var rng := StartingLandform.stream(5, LandformGrowth.STREAM_EXTRAS)
-	LandformGrowth.paint_open(doc, surface, {"at": Vector2(8.0, 0.0), "radius": 6.0}, rng)
+	LandformPlacement.paint_open(doc, surface, {"at": Vector2(8.0, 0.0), "radius": 6.0}, rng)
 	var slot := doc.surface_ids.find(surface)
 	assert_gte(slot, 0)
-	var weight := func(p: Vector2) -> int:
-		var s := doc.world_to_sample(p).round()
-		var i := doc.sample_index(int(s.x), int(s.y))
-		return doc.surface_weights[MapDocument.surface_offset(i, slot, doc.sample_count())]
-	assert_eq(weight.call(Vector2(8.0, 0.0)), 255, "full at the centre")
-	assert_eq(weight.call(Vector2(8.0, 9.0)), 0, "nothing past the warped outline")
+	assert_eq(_weight(doc, slot, Vector2(8.0, 0.0)), 255, "full at the centre")
+	assert_eq(_weight(doc, slot, Vector2(8.0, 9.0)), 0, "nothing past the warped outline")
+
+
+func test_thin_cover_is_greened_only_on_a_map_with_room() -> void:
+	var surface := LandformPlacement.meadow_surface(BIOME)
+	if surface == "":
+		pass_test("palette without a grass accent in %s" % BIOME)
+		return
+	# Thin cover west of x = 0, groves east of it.
+	var long := _covered(_doc(LONG))
+	LandformPlacement.paint_sparse(long, BIOME)
+	var slot := long.surface_ids.find(surface)
+	assert_gte(slot, 0)
+	var greened := 0
+	var thin := 0
+	for z in range(-5, 6):
+		for x in range(-20, -10):
+			thin += 1
+			greened += 1 if _weight(long, slot, Vector2(x, z)) > 128 else 0
+	assert_between(float(greened) / thin, 0.25, 1.0, "thin cover is greened in patches")
+	for z in range(-5, 6):
+		for x in range(10, 20):
+			assert_eq(_weight(long, slot, Vector2(x, z)), 0, "the groves keep their floor")
+	var half := long.extent_m() * 0.5
+	for z in range(-5, 6):
+		assert_eq(_weight(long, slot, Vector2(-half.x, z)), 0, "nothing on the edge feather")
+	var square := _covered(_doc(Vector2i(50, 50)))
+	LandformPlacement.paint_sparse(square, BIOME)
+	assert_true(square.surface_ids.is_empty(), "250 ft square: no room, nothing painted")
+
+
+## `doc` with BIOME painted: thin (0.1) west of x = 0, groves (0.8) east of it.
+func _covered(doc: MapDocument) -> MapDocument:
+	var slots := PackedByteArray()
+	var density := PackedByteArray()
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var thin := doc.sample_to_world(Vector2(x, z)).x < 0.0
+			slots.append(1)
+			density.append(26 if thin else 204)
+	doc.biome_ids = PackedStringArray([BIOME])
+	doc.biome_slots = slots
+	doc.biome_density = density
+	return doc
+
+
+## The weight of surface `slot` at the sample nearest `p`.
+func _weight(doc: MapDocument, slot: int, p: Vector2) -> int:
+	var s := doc.world_to_sample(p).round()
+	var i := doc.sample_index(int(s.x), int(s.y))
+	return doc.surface_weights[MapDocument.surface_offset(i, slot, doc.sample_count())]
 
 
 func test_a_clearing_opens_the_cover_and_leaves_the_rest() -> void:

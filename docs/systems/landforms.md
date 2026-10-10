@@ -29,8 +29,9 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
 | `utils/landform_terraces.gd` | `LandformTerraces` | The Terraces (`terraces`, `terraces_frame`, `plateaus_of`, `terraces_stage`) |
 | `utils/landform_lakeshore.gd` | `LandformLakeshore` | The Lakeshore (`lakeshore`, `lakeshore_frame`, `allowed_corners`) |
 | `utils/landform_gorge.gd` | `LandformGorge` | The Gorge (`gorge`, `gorge_frame`, `gorge_stage`) |
-| `utils/landform_growth.gd` | `LandformGrowth` | Big and long maps: `room`, `is_long`, `long_dir`, `turned`, `grow` (the extras: tarn, knoll, meadow), `find_spot` |
-| `utils/new_map.gd` | `NewMap` | `create(..., landform, depth_ft)` runs the recipe before the cover; `from_spec(spec)`; `opening_status(spec)`; `paint_starting_cover(doc, biome, centre, glade, clearings)` centres the glade on the stage and opens the clearings |
+| `utils/landform_growth.gd` | `LandformGrowth` | Big and long maps: `room`, `is_long`, `long_dir`, `turned`, `grow` (the extras: tarn, meadow, knoll), `knoll`, `tarn` |
+| `utils/landform_placement.gd` | `LandformPlacement` | Where the extras stand and the open ground's paint: `find_spot`, `meadow_surface`, `paint_open`, `paint_sparse` (a big map's thin cover greened) |
+| `utils/new_map.gd` | `NewMap` | `create(..., landform, depth_ft)` runs the recipe before the cover; `from_spec(spec)`; `opening_status(spec)`; `paint_starting_cover(doc, biome, centre, glade, clearings)` centres the glade on the stage, opens the clearings and feathers the cover at the map edge (`edge_feather`) |
 | `scenes/states/authoring/new_map_dialog.gd` | `NewMapDialog` | The Landform tile row and its caption; the spec's `landform` |
 | `scenes/states/authoring/authoring_controller.gd` | `AuthoringController` | Opens a new map from `NewMap.from_spec(spec)` under the loading line `NewMap.opening_status(spec)` |
 | `scenes/ui/help_overlay.gd` | | The F1 "New map" row |
@@ -75,21 +76,35 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   spread their steps along a long map (`span_of`), the Hilltop sits toward one end of a long
   map with its second hill toward the other (`toward_end`), and the Lakeshore's far-corner
   lake sits in a long map's own corner. Then `apply()` runs `grow()`: one extra with chance
-  `room`, a second with 0.55 `room`, drawn by weight from the landform's palette (`PALETTES`:
-  a tarn, a knoll, a meadow) from `STREAM_EXTRAS` salted by the landform, each placed by
-  `find_spot` (48 seeded candidates; clear of the stage, the crossings, the water, the
-  recipe's `keepout` and the other extras, on ground flat within 0.6 m; scored about midway
-  from the stage to the edge, well inside the edge, near the recipe's features and rivers by
-  its tie, high or low by its lean, toward a long map's ends). Open ground (a meadow, a
-  knoll's crown, a tarn's shore, and the recipe's own `open` features: the Hilltop's upper
-  slopes, the Lakeshore's shore, the Valley's floor unless a dry wash dresses it) is painted
-  with the biome's meadow surface (`meadow_surface`: its grass or moss accent; none on a
-  grass or sand ground) and, as discs, comes back as `clearings`, which
-  `NewMap.paint_starting_cover` opens (`clearing_density`). On a map with room the cover
-  noise's copses grow by up to `COVER_FEATURE_GROWTH` 0.5, so a big forest keeps a few bold
-  shapes. Why open ground: the first look (`biglf_look`, half size) found that from the
-  whole-map view a forest's trees hide a big map's relief (a 5 m knoll, the hill, the
-  terraces' steps), so what reads is water and bright open ground.
+  `room`, a second with 0.85 `room`, drawn by weight from the landform's palette (`PALETTES`:
+  mostly a tarn or a meadow, a knoll least) from `STREAM_EXTRAS` salted by the landform, each
+  placed by `LandformPlacement.find_spot` (48 seeded candidates; clear of the stage, the
+  crossings, the water, the recipe's `keepout` and the other extras, on ground flat within
+  0.6 m; scored about midway from the stage to the edge, well inside the edge, near the
+  recipe's features and rivers by its tie, high or low by its lean, toward a long map's
+  ends). Open ground (a meadow, a knoll's crown over 0.95 of its radius, a tarn's shore, and
+  the recipe's own `open` features: the Hilltop's upper slopes, the Lakeshore's shore, the
+  Valley's floor unless a dry wash dresses it) is painted with the biome's meadow surface
+  (`meadow_surface`: its grass or moss accent; none on a grass or sand ground) and, as discs,
+  comes back as `clearings`, which `NewMap.paint_starting_cover` opens (`clearing_density`).
+  On a map with room the cover noise's copses grow by up to `COVER_FEATURE_GROWTH` 0.5, so a
+  big forest keeps a few bold shapes, and after the cover is painted
+  `LandformPlacement.paint_sparse` greens its thin parts (cover density 0.45 down to 0.18) in
+  bold noise-shaped patches, in proportion to the room. Why open ground: the first look
+  (`biglf_look`, half size) found that from the whole-map view a forest's trees hide a big
+  map's relief (a 5 m knoll, the hill, the terraces' steps), so what reads is water and
+  bright open ground; the second found the forest floor between thin cover (a valley's
+  camera-side slope, the uplands between groves) reading as brown dirt, the hilltop seeds
+  alike, and knolls lost under trees (hence the greening, more tarns and meadows, fewer
+  knolls with wider crowns).
+- **The map edge** (2026-10-09; play shows the whole map). Every new map's cover feathers out
+  at its edge (`NewMap.edge_feather`: to none over a tenth of the shorter half extent, 2-6 m,
+  its depth ragged by the cover noise), so the scatter ends in a ragged fringe rather than a
+  straight line (a grassland's tall grass stopped dead at it). Trees answer the density late,
+  so a forest's groves keep their edge. Past the edge the ground skirt continues the base
+  surface, and its accent patches shrink away a few metres out (the skirt shader's
+  `skirt_accent_keep`): on a grass map nothing hides them there, and a grassland's savanna
+  patches floated in the haze as orange blotches.
 - **Facing the camera** (P5-4, commit 0bcda1d): the fixed camera (`game_map.tscn`'s Camera3D)
   stands at +x, +z and looks along (-1, -1) in map XZ at a 45 degree yaw, pitched 21.6
   degrees down. `VIEW` (-0.707, -0.707) is that look direction and `NEAR` (0.707, 0.707) the

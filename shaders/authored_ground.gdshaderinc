@@ -46,6 +46,11 @@
  * shore), routed to the base's bed and shore surfaces like the map's; within
  * SKIRT_EDGE_DRESSING_M of the edge the map's own dressing (water_weights, clamped at its
  * edge texel) takes over, so the two meet without a seam.
+ *   The base's accent patches continue a few metres past the edge, so they do not stop in a
+ * straight line, and shrink away as the fade begins (skirt_accent_keep(): their threshold
+ * rises until no patch is left by SKIRT_ACCENT_LOW of the fade, about 7 m out at 24 m). Past
+ * that the skirt is the plain base surface: on a grass map nothing hides the patches there,
+ * and they read as loose blotches floating in the haze (2026-10-09).
  *
  * ANTI-TILING (the live port of terrain-paint's Mosaic tiling breakup):
  * terrain-paint breaks a repeating texture by cutting UV space into a grid of cells, giving
@@ -305,6 +310,11 @@ uniform sampler2D accent_noise : hint_default_black, filter_linear, repeat_enabl
 uniform int skirt_channel = 0;
 // Within this of the map edge the map's own wet dressing takes over the channel's.
 const float SKIRT_EDGE_DRESSING_M = 2.0;
+// The skirt's accent patches (see SKIRT): whole at the edge, none left where the fade has
+// reached SKIRT_ACCENT_LOW; their threshold rises by up to SKIRT_ACCENT_SHRINK as they go,
+// past the noise's whole range, so they shrink rather than turn translucent.
+const float SKIRT_ACCENT_LOW = 0.8;
+const float SKIRT_ACCENT_SHRINK = 1.2;
 #endif
 
 // Map-frame normal, position and the per-vertex rule fields (UV2: curvature, steepness).
@@ -911,6 +921,12 @@ float blend_score(float weight, float height) {
 float skirt_alpha(vec2 world_xz) {
 	return skirt_alpha_seeded(world_xz, breakup_seed);
 }
+
+// How much of the base's accent patches the skirt keeps where its fade is `a` (see SKIRT):
+// 1 at the edge, 0 from SKIRT_ACCENT_LOW out, so the patches follow the fade's own wobble.
+float skirt_accent_keep(float a) {
+	return smoothstep(SKIRT_ACCENT_LOW, 1.0, a);
+}
 #endif
 
 void vertex() {
@@ -933,6 +949,7 @@ void fragment() {
 	if (skirt_a <= 0.0) {
 		discard;
 	}
+	float accent_keep = skirt_accent_keep(skirt_a);
 	if (skirt_backdrop_mode == 2) {
 		// No colour to fade to: the fade as an interleaved-gradient dither (see SKIRT).
 		if (skirt_a < fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))))) {
@@ -1025,12 +1042,19 @@ void fragment() {
 	for (int j = 0; j < 9; j++) {
 		w[j] += g[j] * keep;
 	}
-	if (accent_components != 0 && keep > WEIGHT_EPSILON) {
+	int components = accent_components;
+	float accent_rise = 0.0;
+#ifdef GROUND_SKIRT
+	// The skirt's patches shrink away past the edge (see SKIRT).
+	components = accent_keep > 0.0 ? components : 0;
+	accent_rise = (1.0 - accent_keep) * SKIRT_ACCENT_SHRINK;
+#endif
+	if (components != 0 && keep > WEIGHT_EPSILON) {
 		// Accent patches take their share of each component's kept ground, in order (see
 		// GROUND ACCENTS). Constant indices into w[] only, as below.
 		for (int j = 0; j < 9; j++) {
 			float kept = g[j] * keep;
-			if (((accent_components >> j) & 1) == 0 || kept <= WEIGHT_EPSILON) {
+			if (((components >> j) & 1) == 0 || kept <= WEIGHT_EPSILON) {
 				continue;
 			}
 			float remaining = 1.0;
@@ -1040,7 +1064,8 @@ void fragment() {
 				if (to < 0) {
 					break;
 				}
-				float share = remaining * accent_mask(world_xz, accent_params[index]);
+				vec4 params = accent_params[index] + vec4(accent_rise, 0.0, 0.0, 0.0);
+				float share = remaining * accent_mask(world_xz, params);
 				remaining -= share;
 				for (int k = 0; k < 9; k++) {
 					w[k] += kept * share * (float(to == k) - float(j == k));

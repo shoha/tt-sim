@@ -10,8 +10,11 @@
     "terraces_1_250", "terraces_2_250", "terraces_3_250", "terraces_4_250", "terraces_5_250", "terraces_6_250",
     "lakeshore_1_250", "lakeshore_2_250", "lakeshore_3_250", "lakeshore_4_250", "lakeshore_5_250", "lakeshore_6_250",
     "gorge_1_250", "gorge_2_250", "gorge_3_250", "gorge_4_250", "gorge_5_250", "gorge_6_250",
-    "valley_1_200", "valley_2_200", "hilltop_1_200", "hilltop_2_200", "terraces_1_200", "terraces_2_200",
-    "lakeshore_1_200", "lakeshore_2_200", "gorge_1_200", "gorge_2_200"
+    "valley_1_200", "valley_2_200", "valley_3_200", "valley_4_200", "valley_5_200", "valley_6_200",
+    "hilltop_1_200", "hilltop_2_200", "hilltop_3_200", "hilltop_4_200", "hilltop_5_200", "hilltop_6_200",
+    "terraces_1_200", "terraces_2_200", "terraces_3_200", "terraces_4_200", "terraces_5_200", "terraces_6_200",
+    "lakeshore_1_200", "lakeshore_2_200", "lakeshore_3_200", "lakeshore_4_200", "lakeshore_5_200", "lakeshore_6_200",
+    "gorge_1_200", "gorge_2_200", "gorge_3_200", "gorge_4_200", "gorge_5_200", "gorge_6_200"
    ], "template": [
    {"op": "saved", "folder": "_biglf_{value}"},
    {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "temperate_forest_summer_s1", "spec": "{value}", "phase": "build"},
@@ -22,7 +25,21 @@
    {"op": "home"},
    {"op": "zoom"},
    {"op": "wait", "s": 2.5},
-   {"op": "capture", "name": "{value}", "desc": "Temperate forest, {value} (landform, seed, size in ft), authoring at full zoom-out: the whole map at a size the big-map growth leaves as it was (LandformGrowth.room is 0 at 250 ft and below)."},
+   {"op": "capture", "name": "{value}", "desc": "Temperate forest, {value} (landform, seed, size in ft), authoring at full zoom-out: the whole map at a size the big-map growth leaves as it was (LandformGrowth.room is 0 at 250 ft and below); only the edge feather (NewMap.edge_feather) and the skirt's accents changed."},
+   {"op": "title"},
+   {"op": "wait", "s": 1.0}
+  ]},
+  {"op": "expand", "values": ["flat_1234_300", "hilltop_3_200"], "template": [
+   {"op": "saved", "folder": "_biglf_grass_{value}"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "grassland_meadow_summer_s1", "spec": "{value}", "phase": "build"},
+   {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+   {"op": "no_autosave"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "save", "folder": "_biglf_grass_{value}", "replace": true, "phase": "build"},
+   {"op": "hide_ui"},
+   {"op": "home"},
+   {"op": "zoom"},
+   {"op": "wait", "s": 2.5},
+   {"op": "capture", "name": "grass_{value}", "desc": "Grassland meadow, {value}, authoring at full zoom-out: the map edge. The tall grass should thin out in a ragged fringe (NewMap.edge_feather) instead of stopping in a straight line, and the skirt past it should be plain grass fading into the haze, with no savanna-grass patches floating in it (the skirt's accents shrink away, authored_ground.gdshaderinc SKIRT)."},
    {"op": "title"},
    {"op": "wait", "s": 1.0}
   ]},
@@ -31,8 +48,13 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_terraces_250", "names": ["terraces_1_250", "terraces_2_250", "terraces_3_250", "terraces_4_250", "terraces_5_250", "terraces_6_250"]},
   {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_lakeshore_250", "names": ["lakeshore_1_250", "lakeshore_2_250", "lakeshore_3_250", "lakeshore_4_250", "lakeshore_5_250", "lakeshore_6_250"]},
   {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_gorge_250", "names": ["gorge_1_250", "gorge_2_250", "gorge_3_250", "gorge_4_250", "gorge_5_250", "gorge_6_250"]},
-  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_200", "columns": 5, "names": ["valley_1_200", "hilltop_1_200", "terraces_1_200", "lakeshore_1_200", "gorge_1_200", "valley_2_200", "hilltop_2_200", "terraces_2_200", "lakeshore_2_200", "gorge_2_200"]},
-  {"op": "index", "title": "Big and long landforms: the baseline sizes (biglf)", "intro": "Produced by tools/render_jobs/jobs/biglf_base.json. New temperate forest maps through NewMap (probes/landform.gd new with a spec): every landform at seeds 1-6 at 250 ft and at seeds 1-2 at 200 ft, sizes the big-map growth leaves as they were, each saved as _biglf_<landform>_<seed>_<size> and captured in authoring at full zoom-out. sheet_<landform>_250.png tiles the six seeds, sheet_200.png the ten 200 ft maps (columns: valley, hilltop, terraces, lakeshore, gorge; rows: seeds 1 and 2). The big sizes are in biglf_look.json. Delete the levels with biglf_cleanup.json."},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_valley_200", "names": ["valley_1_200", "valley_2_200", "valley_3_200", "valley_4_200", "valley_5_200", "valley_6_200"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_hilltop_200", "names": ["hilltop_1_200", "hilltop_2_200", "hilltop_3_200", "hilltop_4_200", "hilltop_5_200", "hilltop_6_200"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_terraces_200", "names": ["terraces_1_200", "terraces_2_200", "terraces_3_200", "terraces_4_200", "terraces_5_200", "terraces_6_200"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_lakeshore_200", "names": ["lakeshore_1_200", "lakeshore_2_200", "lakeshore_3_200", "lakeshore_4_200", "lakeshore_5_200", "lakeshore_6_200"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_gorge_200", "names": ["gorge_1_200", "gorge_2_200", "gorge_3_200", "gorge_4_200", "gorge_5_200", "gorge_6_200"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_grass_edge", "columns": 2, "names": ["grass_flat_1234_300", "grass_hilltop_3_200"]},
+  {"op": "index", "title": "Big and long landforms: the baseline sizes and the map edge (biglf)", "intro": "Produced by tools/render_jobs/jobs/biglf_base.json. New temperate forest maps through NewMap (probes/landform.gd new with a spec): every landform at seeds 1-6 at 250 ft and 200 ft, sizes the big-map growth leaves as they were, each saved as _biglf_<landform>_<seed>_<size> and captured in authoring at full zoom-out. sheet_<landform>_<size>.png tiles the six seeds. Two grassland meadow maps (a flat 300 ft one like authparity's, and a 200 ft hilltop; _biglf_grass_<spec>) check the map edge: the cover's feather and the skirt without accent patches (sheet_grass_edge.png). The big sizes are in biglf_look.json. Delete the levels with biglf_cleanup.json."},
   {"op": "title"},
   {"op": "wait", "s": 1.0}
  ]

@@ -247,11 +247,12 @@ static func bind(material: ShaderMaterial, plan: Dictionary, map_seed: int) -> v
 
 
 ## Brings the ground skirt's material up to the ground's: the skirt continues the base
-## surface, and with it the base's accent patches, so they do not stop in a straight line at
-## the map edge. It gets the slot textures (`layer_count` of them) and the accent uniforms,
-## but only the base's accents, and never any weights (its painted and ground masks stay 0;
-## the skirt shader reads no weight maps and runs no rules). Without base accents it samples
-## no slot at all (layer_count 0).
+## surface, and with it the base's accent patches for a few metres, so they do not stop in a
+## straight line at the map edge (the skirt shader shrinks them away as its fade begins; see
+## SKIRT in authored_ground.gdshaderinc). It gets the slot textures (`layer_count` of them)
+## and the accent uniforms, but only the base's accents, and never any weights (its painted
+## and ground masks stay 0; the skirt shader reads no weight maps and runs no rules). Without
+## base accents it samples no slot at all (layer_count 0).
 static func sync_skirt(skirt: ShaderMaterial, ground: ShaderMaterial, layer_count: int) -> void:
 	for uniform in ["layer_albedo", "layer_normal", "layer_orm", "layer_height", "layer_tile_m"]:
 		skirt.set_shader_parameter(uniform, ground.get_shader_parameter(uniform))
