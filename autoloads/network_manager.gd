@@ -489,9 +489,10 @@ func _rpc_send_player_info(info: Dictionary) -> void:
 
 		# A new peer joins the session only once it has passed the version gate above: it
 		# lands in the room, or at the table with the level and, after its table-loaded
-		# report, the state (SessionChannel.admit_peer, LateJoinerSync).
+		# report, the state (SessionChannel.admit_peer, LateJoinerSync). The info it reported
+		# carries its session key on a transport without Steam ids.
 		if is_new_peer:
-			session.admit_peer(sender_id)
+			session.admit_peer(sender_id, info)
 
 
 ## Host side of a version rejection: tell the client why, then drop it after

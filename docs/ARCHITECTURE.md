@@ -158,6 +158,12 @@ var dict = TokenPermissions.to_dict(perms)
 var restored = TokenPermissions.from_dict(dict)
 ```
 
+These are keyed by the peer ids at the table. In a hosted session the party
+(`NetworkManager.session.party`, `SessionParty`) also keeps every grant by session id (Steam id),
+from `GameState.token_permission_granted` and `token_permission_revoked`, so a player who rejoins
+with a new peer id gets its grants back and its avatar travels between maps with it
+(`docs/NETWORKING.md` "Sessions: the room and the table").
+
 ### Other Autoloads
 
 | Autoload              | File                                | Purpose                                       |

@@ -168,7 +168,9 @@ func _on_permissions_received(permissions_dict: Dictionary) -> void:
 	GameState.apply_token_permissions(permissions_dict)
 
 
-## Host-side: clean up permissions when a player disconnects.
+## Host-side: clean up permissions when a player disconnects. Only this table's peer-id
+## grants go: the session keeps them by session id and grants them again when the player
+## rejoins (SessionParty.restore_grants).
 func _on_player_left_permissions(peer_id: int, _player_info: Dictionary) -> void:
 	if not NetworkManager.is_host():
 		return

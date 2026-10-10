@@ -26,6 +26,7 @@
 		"res://tests/unit/test_network_state_sync_queue.gd",
 		"res://tests/unit/test_root_room.gd",
 		"res://tests/unit/test_session_channel.gd",
+		"res://tests/unit/test_session_party.gd",
 		"res://tests/unit/test_steam_launch_detection.gd",
 		"res://tests/unit/test_stream_peer_queue.gd",
 		"res://tests/unit/test_stream_send_window.gd",

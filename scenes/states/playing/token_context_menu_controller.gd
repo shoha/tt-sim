@@ -191,6 +191,8 @@ func _on_context_menu_control_revoked(token: BoardToken) -> void:
 			GameState.revoke_token_permission(
 				token.network_id, peer_id, TokenPermissions.Permission.CONTROL
 			)
+		# Players who are away lose it too: the session keeps grants by session id.
+		NetworkManager.session.party.revoke_all(token.network_id)
 		# Broadcast updated permissions
 		if NetworkManager.is_host():
 			NetworkManager.permissions.broadcast_token_permissions(
