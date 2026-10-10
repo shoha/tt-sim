@@ -182,7 +182,7 @@ func _on_player_left_permissions(peer_id: int, _player_info: Dictionary) -> void
 	if not locked_tokens.is_empty():
 		GameState.clear_drag_locks_for_peer(peer_id)
 		for network_id in locked_tokens:
-			NetworkManager._rpc_drag_lock_released.rpc(network_id)
+			NetworkManager.game_sync.broadcast_drag_lock_released(network_id)
 
 	# Check if the disconnected player had any permissions
 	var controlled = GameState.get_controlled_tokens(peer_id, TokenPermissions.Permission.CONTROL)

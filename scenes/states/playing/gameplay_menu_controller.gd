@@ -39,7 +39,7 @@ func _ready() -> void:
 		asset_browser_container.asset_drag_started.connect(_on_asset_drag_started)
 
 	_visual_broadcast.name = "VisualBroadcastThrottle"
-	_visual_broadcast.send = NetworkManager.broadcast_visual_settings
+	_visual_broadcast.send = NetworkManager.game_sync.broadcast_visual_settings
 	add_child(_visual_broadcast)
 
 	# Connect level edit panel (drawer) signals
@@ -437,7 +437,7 @@ func _revert_edit_mode_values() -> void:
 	# A pending partial batch must not land after this full snapshot.
 	_visual_broadcast.drop()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings(_original_state.to_broadcast_dict())
+		NetworkManager.game_sync.broadcast_visual_settings(_original_state.to_broadcast_dict())
 
 
 # --- Edit Panel Signal Handlers ---
@@ -615,7 +615,7 @@ func _on_edit_save_requested(state: LevelVisualState) -> void:
 	# A pending partial batch must not land after this full snapshot.
 	_visual_broadcast.drop()
 	if NetworkManager.is_networked() and NetworkManager.is_host():
-		NetworkManager.broadcast_visual_settings(state.to_broadcast_dict())
+		NetworkManager.game_sync.broadcast_visual_settings(state.to_broadcast_dict())
 
 	# Save to disk — use folder format when the level came from a folder
 	var thumbnail := _level_play_controller.capture_thumbnail() if _level_play_controller else null

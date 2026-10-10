@@ -7,15 +7,25 @@ extends GutTest
 ## for the established precedent on this constraint), so these tests drive it directly
 ## and restore its state in after_each(). is_host()-gated code paths are exercised by
 ## setting _connection_state directly rather than through a real Steam/multiplayer
-## connection -- is_host() is a pure state-enum check (see network_manager.gd:132-133),
-## not dependent on an actual peer.
+## connection -- is_host() is a pure state-enum check (see NetworkManager.is_host()),
+## not dependent on an actual peer. The client transform RPC and its rate limit live on
+## the GameSync child (NetworkGameSync), reached as NetworkManager.game_sync.
 
 
 func after_each() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.OFFLINE
 	NetworkManager._players.clear()
 	NetworkManager._current_level_dict.clear()
-	NetworkManager._client_transform_throttle.clear()
+	NetworkManager.game_sync.reset()
+
+
+## Patch the late-joiner snapshot with a visual-settings broadcast, the way
+## NetworkGameSync.broadcast_visual_settings() does.
+func _patch_snapshot(net_settings: Dictionary) -> void:
+	NetworkManager.update_level_snapshot(
+		func(level_dict: Dictionary) -> Dictionary:
+			return LevelVisualState.patch_level_dict(level_dict, net_settings)
+	)
 
 
 ## Player info as a same-version client sends it; the host rejects info without a
@@ -92,14 +102,15 @@ func test_local_player_info_reports_the_game_version() -> void:
 ## the lambda is visible to the test function afterward.
 func test_rate_limit_drops_rapid_repeat_transform_updates() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
+	var game_sync := NetworkManager.game_sync
 	var counts := [0]
 	var counter := func(_sender_id, _network_id, _pos, _rot, _scl): counts[0] += 1
-	NetworkManager.client_token_transform_received.connect(counter)
+	game_sync.client_token_transform_received.connect(counter)
 
-	NetworkManager._rpc_client_token_transform("rate_test_token", [1, 0, 0], [0, 0, 0], [1, 1, 1])
-	NetworkManager._rpc_client_token_transform("rate_test_token", [2, 0, 0], [0, 0, 0], [1, 1, 1])
+	game_sync._rpc_client_token_transform("rate_test_token", [1, 0, 0], [0, 0, 0], [1, 1, 1])
+	game_sync._rpc_client_token_transform("rate_test_token", [2, 0, 0], [0, 0, 0], [1, 1, 1])
 
-	NetworkManager.client_token_transform_received.disconnect(counter)
+	game_sync.client_token_transform_received.disconnect(counter)
 	assert_eq(
 		counts[0],
 		1,
@@ -109,42 +120,45 @@ func test_rate_limit_drops_rapid_repeat_transform_updates() -> void:
 
 func test_rate_limit_allows_update_after_interval_elapses() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
+	var game_sync := NetworkManager.game_sync
 	var counts := [0]
 	var counter := func(_sender_id, _network_id, _pos, _rot, _scl): counts[0] += 1
-	NetworkManager.client_token_transform_received.connect(counter)
+	game_sync.client_token_transform_received.connect(counter)
 
-	NetworkManager._rpc_client_token_transform("rate_test_token_2", [1, 0, 0], [0, 0, 0], [1, 1, 1])
+	game_sync._rpc_client_token_transform("rate_test_token_2", [1, 0, 0], [0, 0, 0], [1, 1, 1])
 	# Simulate time passing past CLIENT_TRANSFORM_RATE_LIMIT by directly backdating the
 	# throttle entry, rather than an actual sleep (keeps the test fast and deterministic).
-	NetworkManager._client_transform_throttle["rate_test_token_2"] = 0.0
-	NetworkManager._rpc_client_token_transform("rate_test_token_2", [2, 0, 0], [0, 0, 0], [1, 1, 1])
+	game_sync._client_transform_throttle["rate_test_token_2"] = 0.0
+	game_sync._rpc_client_token_transform("rate_test_token_2", [2, 0, 0], [0, 0, 0], [1, 1, 1])
 
-	NetworkManager.client_token_transform_received.disconnect(counter)
+	game_sync.client_token_transform_received.disconnect(counter)
 	assert_eq(counts[0], 2, "Update after the rate-limit interval elapses must be relayed")
 
 
 func test_rate_limit_tracks_tokens_independently() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
+	var game_sync := NetworkManager.game_sync
 	var counts := [0]
 	var counter := func(_sender_id, _network_id, _pos, _rot, _scl): counts[0] += 1
-	NetworkManager.client_token_transform_received.connect(counter)
+	game_sync.client_token_transform_received.connect(counter)
 
-	NetworkManager._rpc_client_token_transform("token_a", [1, 0, 0], [0, 0, 0], [1, 1, 1])
-	NetworkManager._rpc_client_token_transform("token_b", [1, 0, 0], [0, 0, 0], [1, 1, 1])
+	game_sync._rpc_client_token_transform("token_a", [1, 0, 0], [0, 0, 0], [1, 1, 1])
+	game_sync._rpc_client_token_transform("token_b", [1, 0, 0], [0, 0, 0], [1, 1, 1])
 
-	NetworkManager.client_token_transform_received.disconnect(counter)
+	game_sync.client_token_transform_received.disconnect(counter)
 	assert_eq(counts[0], 2, "Rate limit must be per-token, not global")
 
 
 func test_transform_rpc_is_ignored_when_not_hosting() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.OFFLINE
+	var game_sync := NetworkManager.game_sync
 	var counts := [0]
 	var counter := func(_sender_id, _network_id, _pos, _rot, _scl): counts[0] += 1
-	NetworkManager.client_token_transform_received.connect(counter)
+	game_sync.client_token_transform_received.connect(counter)
 
-	NetworkManager._rpc_client_token_transform("token_c", [1, 0, 0], [0, 0, 0], [1, 1, 1])
+	game_sync._rpc_client_token_transform("token_c", [1, 0, 0], [0, 0, 0], [1, 1, 1])
 
-	NetworkManager.client_token_transform_received.disconnect(counter)
+	game_sync.client_token_transform_received.disconnect(counter)
 	assert_eq(counts[0], 0, "Only the host should ever process a client transform RPC")
 
 
@@ -154,9 +168,7 @@ func test_late_joiner_snapshot_reflects_live_visual_settings_edit() -> void:
 		"level_folder": "sectest_level", "light_intensity_scale": 1.0, "environment_preset": ""
 	}
 
-	NetworkManager._patch_current_level_dict(
-		{"light_intensity_scale": 0.4, "environment_preset": "night"}
-	)
+	_patch_snapshot({"light_intensity_scale": 0.4, "environment_preset": "night"})
 
 	assert_eq(
 		NetworkManager._current_level_dict["environment_preset"],
@@ -167,7 +179,7 @@ func test_late_joiner_snapshot_reflects_live_visual_settings_edit() -> void:
 
 func test_patch_current_level_dict_is_noop_with_no_active_level() -> void:
 	NetworkManager._current_level_dict.clear()
-	NetworkManager._patch_current_level_dict({"environment_preset": "night"})
+	_patch_snapshot({"environment_preset": "night"})
 	assert_true(
 		NetworkManager._current_level_dict.is_empty(),
 		"Patching with no active level must not fabricate a level snapshot"

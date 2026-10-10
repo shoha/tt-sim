@@ -13,10 +13,11 @@ extends Node
 ## Usage:
 ##   NetworkStateSync.broadcast_token_transform(token)  # Host sends position
 ##   NetworkStateSync.broadcast_token_properties(token)  # Host sends health/visibility
-##   NetworkManager.token_transform_received.connect(_on_transform)  # Client listens
+##   NetworkManager.game_sync.token_transform_received.connect(_on_transform)  # Client
 ##
-## Note: Client-side receive signals live on NetworkManager, not here.
-## NetworkStateSync only handles host-side broadcasting and full_state_received.
+## Note: Client-side receive signals live on NetworkManager.game_sync (NetworkGameSync),
+## which also carries the RPCs; this autoload only decides what to send and when
+## (throttling, batching, keeping GameState in step) and emits full_state_received.
 
 ## Emitted when full game state is received (clients only, for initial sync)
 signal full_state_received(state_dict: Dictionary)
@@ -109,11 +110,8 @@ func _send_transform_update(token: BoardToken) -> void:
 	GameState.sync_from_board_token(token)
 
 	# Send via unreliable RPC
-	NetworkManager._rpc_receive_token_transform.rpc(
-		token.network_id,
-		_vector3_to_array(state.position),
-		_vector3_to_array(state.rotation),
-		_vector3_to_array(state.scale)
+	NetworkManager.game_sync.broadcast_token_transform(
+		token.network_id, state.position, state.rotation, state.scale
 	)
 
 
@@ -126,7 +124,7 @@ func _flush_pending_transforms() -> void:
 		return
 
 	# Send batch update
-	NetworkManager._rpc_receive_transform_batch.rpc(_pending_transforms.duplicate())
+	NetworkManager.game_sync.broadcast_transform_batch(_pending_transforms.duplicate())
 	_pending_transforms.clear()
 
 
@@ -144,7 +142,7 @@ func broadcast_token_properties(token: BoardToken) -> void:
 		return
 
 	# Send via reliable RPC
-	NetworkManager._rpc_receive_token_state.rpc(token.network_id, state.to_dict())
+	NetworkManager.game_sync.broadcast_token_state(token.network_id, state.to_dict())
 
 
 ## Broadcast a client-sent token transform to all OTHER clients (excluding the sender).
@@ -170,17 +168,7 @@ func broadcast_client_token_transform(
 		# Skip the host itself (peer 1) and the original sender
 		if peer_id == 1 or peer_id == exclude_peer:
 			continue
-		(
-			NetworkManager
-			. _rpc_receive_token_transform
-			. rpc_id(
-				peer_id,
-				network_id,
-				_vector3_to_array(pos),
-				_vector3_to_array(rot),
-				_vector3_to_array(scl),
-			)
-		)
+		NetworkManager.game_sync.send_token_transform_to_peer(peer_id, network_id, pos, rot, scl)
 
 
 ## Broadcast that a token was removed
@@ -192,7 +180,7 @@ func broadcast_token_removed(network_id: String) -> void:
 	_pending_transforms.erase(network_id)
 	_transform_throttle.erase(network_id)
 
-	NetworkManager._rpc_receive_token_removed.rpc(network_id)
+	NetworkManager.game_sync.broadcast_token_removed(network_id)
 
 
 ## Broadcast the full game state to all clients (for initial sync or reconciliation)
@@ -226,10 +214,6 @@ func _on_game_state_received(state_dict: Dictionary) -> void:
 
 	# Emit signal for visual layer
 	full_state_received.emit(state_dict)
-
-	# Send ACK back to host (for late joiner sync tracking)
-	if not NetworkManager.is_host() and multiplayer.multiplayer_peer:
-		NetworkManager._rpc_state_sync_ack.rpc_id(1)
 
 
 # =============================================================================

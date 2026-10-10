@@ -29,8 +29,8 @@ const TABLE_LOADED_TIMEOUT := 300.0
 
 ## Host: sync a late joiner whose player info has passed the version gate.
 static func sync_peer(peer_id: int) -> void:
-	NetworkManager._rpc_game_starting.rpc_id(peer_id)
-	NetworkManager._rpc_receive_level_data.rpc_id(peer_id, NetworkManager._current_level_dict)
+	NetworkManager.send_game_starting_to_peer(peer_id)
+	NetworkManager.send_level_snapshot_to_peer(peer_id)
 	await send_state_once_table_loaded(peer_id, NetworkStateSync.send_full_state_to_peer)
 
 

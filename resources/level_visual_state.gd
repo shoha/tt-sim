@@ -10,7 +10,8 @@ extends RefCounted
 ##
 ## Adding a live-synced visual property means: a field here, one line in
 ## from_level_data(), apply_to_level_data(), copy(), to_broadcast_dict() and
-## patch_from_broadcast_dict(), one apply line in
+## patch_from_broadcast_dict() (and its key in LEVEL_DICT_MIRROR_KEYS, or a branch in
+## patch_level_dict(), so a late joiner sees it too), one apply line in
 ## LevelPlayController.apply_visual_state(), and the panel control. A new field
 ## on VisualSettings also needs a line in apply_to_level_data() -- it assigns
 ## level_data.visual_settings.sun (the one field it currently carries), not the
@@ -25,6 +26,19 @@ extends RefCounted
 ## -- and are not applied by LevelPlayController.apply_visual_state(). A caller
 ## that changes them must call LevelPlayController.update_measure_tool_scale()
 ## itself after writing them to level data.
+
+## Broadcast keys stored under the same name in a LevelData.to_dict() dictionary, which
+## patch_level_dict() copies across as they are. "light_intensity" and "sun_settings"
+## differ in name or place and have their own branches there.
+const LEVEL_DICT_MIRROR_KEYS: Array[String] = [
+	"environment_preset",
+	"environment_overrides",
+	"lofi_overrides",
+	"weather_overrides",
+	"foliage_overrides",
+	"water_style",
+	"water_overrides",
+]
 
 var light_intensity_scale: float = 1.0
 var environment_preset: String = ""
@@ -94,7 +108,7 @@ func copy() -> LevelVisualState:
 	return state
 
 
-## The full live-settings payload NetworkManager.broadcast_visual_settings()
+## The full live-settings payload NetworkGameSync.broadcast_visual_settings()
 ## understands (it serialises environment_overrides itself). Grid scale is not
 ## networked today, so it is not included.
 func to_broadcast_dict() -> Dictionary:
@@ -139,3 +153,26 @@ func patch_from_broadcast_dict(settings: Dictionary) -> void:
 		# An older host sends only the style name.
 		water_style = str(settings["water_style"])
 		water = WaterSettings.from_style(water_style)
+
+
+## A copy of `level_dict` (LevelData.to_dict() shape: the level snapshot the host serves
+## to late joiners) with a broadcast written into the LevelData fields it stands for.
+## `settings` is any subset of to_broadcast_dict()'s keys as sent on the wire, so
+## environment_overrides is already EnvironmentPresets.overrides_to_json() output, the
+## format LevelData.to_dict() uses too. "light_intensity" lands in light_intensity_scale;
+## "sun_settings" nests under visual_settings.sun and stamps format_version, because
+## LevelData.from_dict() only reads the sun there; LEVEL_DICT_MIRROR_KEYS copy across 1:1.
+## The copy is shallow and `level_dict` is left untouched.
+static func patch_level_dict(level_dict: Dictionary, settings: Dictionary) -> Dictionary:
+	var patched := level_dict.duplicate()
+	if settings.has("light_intensity"):
+		patched["light_intensity_scale"] = settings["light_intensity"]
+	for key in LEVEL_DICT_MIRROR_KEYS:
+		if settings.has(key):
+			patched[key] = settings[key]
+	if settings.has("sun_settings"):
+		var visual: Dictionary = (patched.get("visual_settings", {}) as Dictionary).duplicate()
+		visual["sun"] = settings["sun_settings"]
+		patched["visual_settings"] = visual
+		patched["format_version"] = LevelData.FORMAT_VERSION
+	return patched

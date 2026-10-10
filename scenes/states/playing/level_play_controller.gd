@@ -114,8 +114,10 @@ func setup(game_map: GameMap) -> void:
 		_level_loader.level_loading_completed.connect(_on_level_loader_loading_completed)
 
 	# Listen for visual settings changes from the host (map scale, lighting, environment, lo-fi)
-	if not NetworkManager.visual_settings_received.is_connected(_on_visual_settings_received):
-		NetworkManager.visual_settings_received.connect(_on_visual_settings_received)
+	if not NetworkManager.game_sync.visual_settings_received.is_connected(
+		_on_visual_settings_received
+	):
+		NetworkManager.game_sync.visual_settings_received.connect(_on_visual_settings_received)
 
 	# Token permission handling (delegated to TokenPermissionHandler)
 	if is_instance_valid(_permission_handler):
@@ -143,8 +145,10 @@ func setup(game_map: GameMap) -> void:
 
 func _exit_tree() -> void:
 	# Disconnect network signals
-	if NetworkManager.visual_settings_received.is_connected(_on_visual_settings_received):
-		NetworkManager.visual_settings_received.disconnect(_on_visual_settings_received)
+	if NetworkManager.game_sync.visual_settings_received.is_connected(
+		_on_visual_settings_received
+	):
+		NetworkManager.game_sync.visual_settings_received.disconnect(_on_visual_settings_received)
 
 	# Disconnect network sync signals (reconciliation, client transforms, drag locks, permissions)
 	_network_token_sync.teardown()

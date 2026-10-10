@@ -73,11 +73,11 @@ func setup(level_play_controller: Node) -> void:
 	if not GameState.permissions_changed.is_connected(_on_permissions_changed):
 		GameState.permissions_changed.connect(_on_permissions_changed)
 
+	var game_sync := NetworkManager.game_sync
+
 	# Host-side: listen for client transforms
-	if not NetworkManager.client_token_transform_received.is_connected(
-		_on_client_transform_received
-	):
-		NetworkManager.client_token_transform_received.connect(_on_client_transform_received)
+	if not game_sync.client_token_transform_received.is_connected(_on_client_transform_received):
+		game_sync.client_token_transform_received.connect(_on_client_transform_received)
 
 	# Host-side: a player's avatar edit from the builder
 	if not NetworkManager.permissions.avatar_recipe_requested.is_connected(
@@ -89,45 +89,47 @@ func setup(level_play_controller: Node) -> void:
 	_level_play_controller = level_play_controller
 
 	# Host-side: handle client drag lock requests
-	if not NetworkManager.client_drag_lock_claimed.is_connected(_on_client_drag_lock_claimed):
-		NetworkManager.client_drag_lock_claimed.connect(_on_client_drag_lock_claimed)
-	if not NetworkManager.client_drag_lock_released.is_connected(_on_client_drag_lock_released):
-		NetworkManager.client_drag_lock_released.connect(_on_client_drag_lock_released)
+	if not game_sync.client_drag_lock_claimed.is_connected(_on_client_drag_lock_claimed):
+		game_sync.client_drag_lock_claimed.connect(_on_client_drag_lock_claimed)
+	if not game_sync.client_drag_lock_released.is_connected(_on_client_drag_lock_released):
+		game_sync.client_drag_lock_released.connect(_on_client_drag_lock_released)
 
-	# Client-side: receive drag lock broadcasts from host
-	if not NetworkManager.drag_lock_granted.is_connected(_on_drag_lock_granted):
-		NetworkManager.drag_lock_granted.connect(_on_drag_lock_granted)
-	if not NetworkManager.drag_lock_denied.is_connected(_on_drag_lock_denied):
-		NetworkManager.drag_lock_denied.connect(_on_drag_lock_denied)
-	if not NetworkManager.drag_lock_released.is_connected(_on_drag_lock_released):
-		NetworkManager.drag_lock_released.connect(_on_drag_lock_released)
+	# Every peer: drag lock grants (the host's own grant_drag_lock() emits here too), and
+	# the host's denial and release broadcasts on clients
+	if not game_sync.drag_lock_granted.is_connected(_on_drag_lock_granted):
+		game_sync.drag_lock_granted.connect(_on_drag_lock_granted)
+	if not game_sync.drag_lock_denied.is_connected(_on_drag_lock_denied):
+		game_sync.drag_lock_denied.connect(_on_drag_lock_denied)
+	if not game_sync.drag_lock_released.is_connected(_on_drag_lock_released):
+		game_sync.drag_lock_released.connect(_on_drag_lock_released)
 
 
 ## Disconnect all network signals connected in setup(). Call from
 ## LevelPlayController._exit_tree().
 func teardown() -> void:
+	var game_sync := NetworkManager.game_sync
 	if NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
 		NetworkManager.connection_state_changed.disconnect(_on_connection_state_changed)
 	if GameState.permissions_changed.is_connected(_on_permissions_changed):
 		GameState.permissions_changed.disconnect(_on_permissions_changed)
-	if NetworkManager.client_token_transform_received.is_connected(_on_client_transform_received):
-		NetworkManager.client_token_transform_received.disconnect(_on_client_transform_received)
+	if game_sync.client_token_transform_received.is_connected(_on_client_transform_received):
+		game_sync.client_token_transform_received.disconnect(_on_client_transform_received)
 	if NetworkManager.permissions.avatar_recipe_requested.is_connected(
 		_on_client_avatar_recipe_received
 	):
 		NetworkManager.permissions.avatar_recipe_requested.disconnect(
 			_on_client_avatar_recipe_received
 		)
-	if NetworkManager.client_drag_lock_claimed.is_connected(_on_client_drag_lock_claimed):
-		NetworkManager.client_drag_lock_claimed.disconnect(_on_client_drag_lock_claimed)
-	if NetworkManager.client_drag_lock_released.is_connected(_on_client_drag_lock_released):
-		NetworkManager.client_drag_lock_released.disconnect(_on_client_drag_lock_released)
-	if NetworkManager.drag_lock_granted.is_connected(_on_drag_lock_granted):
-		NetworkManager.drag_lock_granted.disconnect(_on_drag_lock_granted)
-	if NetworkManager.drag_lock_denied.is_connected(_on_drag_lock_denied):
-		NetworkManager.drag_lock_denied.disconnect(_on_drag_lock_denied)
-	if NetworkManager.drag_lock_released.is_connected(_on_drag_lock_released):
-		NetworkManager.drag_lock_released.disconnect(_on_drag_lock_released)
+	if game_sync.client_drag_lock_claimed.is_connected(_on_client_drag_lock_claimed):
+		game_sync.client_drag_lock_claimed.disconnect(_on_client_drag_lock_claimed)
+	if game_sync.client_drag_lock_released.is_connected(_on_client_drag_lock_released):
+		game_sync.client_drag_lock_released.disconnect(_on_client_drag_lock_released)
+	if game_sync.drag_lock_granted.is_connected(_on_drag_lock_granted):
+		game_sync.drag_lock_granted.disconnect(_on_drag_lock_granted)
+	if game_sync.drag_lock_denied.is_connected(_on_drag_lock_denied):
+		game_sync.drag_lock_denied.disconnect(_on_drag_lock_denied)
+	if game_sync.drag_lock_released.is_connected(_on_drag_lock_released):
+		game_sync.drag_lock_released.disconnect(_on_drag_lock_released)
 
 
 ## Start the reconciliation timer (host-only). Call after a level finishes loading.
@@ -327,18 +329,13 @@ func _on_client_drag_lock_claimed(sender_id: int, network_id: String) -> void:
 	if not GameState.has_token_permission(
 		network_id, sender_id, TokenPermissions.Permission.CONTROL
 	):
-		NetworkManager._rpc_drag_lock_denied.rpc_id(sender_id, network_id)
+		NetworkManager.game_sync.send_drag_lock_denied(sender_id, network_id)
 		return
 
-	if GameState.claim_drag_lock(network_id, sender_id):
-		# Granted — apply to host's local token and broadcast to all clients
-		var token = _token_spawner._find_token_by_network_id(network_id)
-		if token:
-			token.set_drag_lock(sender_id)
-		NetworkManager._rpc_drag_lock_granted.rpc(network_id, sender_id)
-	else:
-		# Denied — someone else holds the lock
-		NetworkManager._rpc_drag_lock_denied.rpc_id(sender_id, network_id)
+	# Granted: the host's local token locks through _on_drag_lock_granted, and every
+	# client hears the broadcast. Denied: someone else holds the lock.
+	if not NetworkManager.game_sync.grant_drag_lock(network_id, sender_id):
+		NetworkManager.game_sync.send_drag_lock_denied(sender_id, network_id)
 
 
 ## Host-side: handle a client drag lock release.
@@ -369,11 +366,11 @@ func _on_client_drag_lock_released(sender_id: int, network_id: String) -> void:
 		NetworkStateSync.broadcast_token_transform(token)
 
 	# Broadcast release to all clients
-	NetworkManager._rpc_drag_lock_released.rpc(network_id)
+	NetworkManager.game_sync.broadcast_drag_lock_released(network_id)
 
 
-## Client-side: another peer (or the host) has locked this token.
-## Disables dragging on the local copy.
+## Every peer: a drag lock was granted (on the host, by its own grant_drag_lock()).
+## Disables dragging on the local copy unless this peer is the one dragging.
 func _on_drag_lock_granted(network_id: String, locker_peer_id: int) -> void:
 	var token = _token_spawner._find_token_by_network_id(network_id)
 	if token:
@@ -478,6 +475,6 @@ func _on_client_token_transform_changed(token: BoardToken) -> void:
 
 	# Get current transform from the rigid body
 	var state = TokenState.from_board_token(token)
-	NetworkManager.send_client_token_transform(
+	NetworkManager.game_sync.send_client_token_transform(
 		network_id, state.position, state.rotation, state.scale
 	)
