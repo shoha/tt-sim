@@ -1,7 +1,10 @@
 class_name LobbyClient
 extends AnimatedCanvasLayerPanel
 
-## Lobby screen for clients: enter a room code, then wait for the host.
+## Lobby screen for clients: enter a room code, then wait for the host. Root shows it twice
+## until the RoomPanel replaces it: as the join screen over the title (its form), and as the
+## client's view of the room (Root.State.ROOM), which opens on the waiting view because the
+## connection already exists.
 ## Root frees this node directly on state exit, so _on_after_animate_out() is a
 ## no-op here: a stray animate_out() must never free the lobby a second time.
 
@@ -54,8 +57,12 @@ func _on_panel_ready() -> void:
 	# Load saved player name
 	player_name_input.text = NetworkManager.get_player_name()
 
-	# Initialize UI
-	_show_input_state()
+	# Initialize UI; in the room the connection already exists (and was announced on the
+	# join screen)
+	if connect_network and NetworkManager.is_client():
+		_show_connected_state(false)
+	else:
+		_show_input_state()
 
 
 func _stagger_targets() -> Array[Control]:
@@ -102,7 +109,9 @@ func _show_connecting_state() -> void:
 	rebuild_focus_trap()
 
 
-func _show_connected_state() -> void:
+## The waiting view; `announce` plays the connected sound (not when the room view opens on
+## a connection the join screen already announced).
+func _show_connected_state(announce := true) -> void:
 	input_container.visible = false
 	waiting_container.visible = true
 	status_label.text = "Connected! Waiting for host to start..."
@@ -111,7 +120,8 @@ func _show_connected_state() -> void:
 	_suppressing_join_sounds = true
 	_update_player_list()
 	_cross_fade(waiting_container)
-	AudioManager.play(&"success")
+	if announce:
+		AudioManager.play(&"success")
 	# Allow the initial player list sync from the host to complete before
 	# treating subsequent player_joined signals as new-player events.
 	get_tree().create_timer(1.0).timeout.connect(

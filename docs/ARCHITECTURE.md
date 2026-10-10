@@ -249,18 +249,26 @@ The `Root` node implements a state stack for flexible state management.
 
 ```gdscript
 enum State {
-    TITLE_SCREEN,   # Main menu
-    LOBBY_HOST,     # Hosting a game, waiting for players
-    LOBBY_CLIENT,   # Joined a game, waiting for host to start
-    PLAYING,        # Active gameplay
-    PAUSED,         # Game paused (overlay state)
-    AUTHORING,      # Building or dressing a map in the game view (offline only)
+    TITLE_SCREEN = 0,  # Main menu (the join screen opens over it)
+    ROOM = 1,          # A hosted session between maps: everyone connected, no table out
+    # 2 was LOBBY_CLIENT; ROOM replaced both lobby states on 2026-10-09
+    PLAYING = 3,       # Active gameplay
+    PAUSED = 4,        # Game paused (overlay state)
+    AUTHORING = 5,     # Building or dressing a map in the game view (offline only)
+    WARMING_UP = 6,    # First-launch graphics warm-up before the title screen
 }
 ```
 
-`UIManager` mirrors only `PLAYING` and `PAUSED` as ints; AUTHORING is appended so
-nothing else shifts. Escape in AUTHORING goes through the overlay stack (the
-AuthoringPanel), never the pause menu.
+The values are fixed: `UIManager` mirrors `PLAYING` and `PAUSED` as ints, and the validation
+bridge and the net scenarios use the numbers. Escape in AUTHORING goes through the overlay
+stack (the AuthoringPanel), never the pause menu.
+
+A hosted session is a room first (`NetworkManager.session`, `SessionChannel`): TITLE > ROOM
+(Host, once hosting; Join, when the host places the client), ROOM > PLAYING (Set out, refused
+with no map), PLAYING > ROOM (`return_to_room()`, host), PLAYING > PLAYING (a map change), ROOM
+or PLAYING > TITLE (leave). Entering ROOM never connects; GameMap is torn down on every move.
+The table of transitions is in
+[NETWORKING.md](NETWORKING.md#sessions-the-room-and-the-table).
 
 ### State Transitions
 

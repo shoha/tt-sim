@@ -101,6 +101,7 @@ other committed home.
 | Authored map load on workers (dressing, water geometry, rule fields, chunk and skirt arrays, crossings) | `utils/authored_load_prep.gd`, `MapSourceLoader` | `ARCHITECTURE.md` Map Loading Flow, `PERFORMANCE.md` "P4b-0: authored map load on workers" |
 | First-use pipeline warm-up | `utils/pipeline_warmer.gd` | `PERFORMANCE.md` |
 | Same-version join gate | `utils/version_gate.gd` | `NETWORKING.md` "Same-version gate" |
+| Sessions (a room first: the room between maps, the shelf of maps set out, the table pointer, players by Steam id, where a joiner lands, Root's ROOM state) | `autoloads/session_channel.gd`, `autoloads/late_joiner_sync.gd`, `scenes/root.gd` | `NETWORKING.md` "Sessions: the room and the table" |
 | Render-job harness (judgment renders, half size by default, `--full` for verdicts) | `tools/render_jobs/` | `tools/render_jobs/README.md` |
 
 ## Verification status

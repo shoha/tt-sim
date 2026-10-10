@@ -9,9 +9,11 @@ extends Node
 ##   NetworkManager.join_game("ROOMCODE")
 ##   NetworkManager.disconnect_game()
 ##
-## Two child nodes carry the rest of the RPCs: token permissions on `permissions`
-## (NetworkPermissions) and table play -- token transforms, state and removal, drag
-## locks, live visual settings -- on `game_sync` (NetworkGameSync).
+## Three child nodes carry the rest of the RPCs: token permissions on `permissions`
+## (NetworkPermissions), table play -- token transforms, state and removal, drag
+## locks, live visual settings -- on `game_sync` (NetworkGameSync), and the session -- the
+## room, the shelf of maps, the table pointer, players by Steam id, and where a joiner
+## lands -- on `session` (SessionChannel).
 
 ## Signals
 signal connection_state_changed(old_state: ConnectionState, new_state: ConnectionState)
@@ -61,6 +63,9 @@ var permissions: NetworkPermissions
 
 ## Table-play sub-component: token, drag-lock and live visual RPCs
 var game_sync: NetworkGameSync
+
+## Session sub-component: the room, the shelf, the table pointer and late joiners' phase
+var session: SessionChannel
 
 # =============================================================================
 # PUBLIC PROPERTIES
@@ -183,6 +188,11 @@ func _ready() -> void:
 	game_sync = NetworkGameSync.new()
 	game_sync.name = "GameSync"
 	add_child(game_sync)
+
+	# Setup session sub-component
+	session = SessionChannel.new()
+	session.name = "Session"
+	add_child(session)
 
 	# Load player name from settings
 	_load_player_name()
@@ -404,9 +414,9 @@ func _on_peer_connected(peer_id: int) -> void:
 	if is_host():
 		# Send current player list to new peer
 		_rpc_sync_player_list.rpc_id(peer_id, _players)
-		# A late joiner's level and state sync waits for its player info, so a client on
-		# the wrong version is rejected in the lobby screen instead of being pushed into
-		# PLAYING first -- see _rpc_send_player_info().
+		# A joiner's room or table sync waits for its player info, so a client on the
+		# wrong version is rejected on the join screen instead of being pushed into the
+		# room or PLAYING first -- see _rpc_send_player_info().
 
 	# Request player info from the new peer
 	_rpc_send_player_info.rpc_id(peer_id, _local_player_info)
@@ -477,11 +487,11 @@ func _rpc_send_player_info(info: Dictionary) -> void:
 	if is_host():
 		_rpc_sync_player_list.rpc(_players)
 
-		# Handle late joiner - send current level and game state, only once the peer
-		# has passed the version gate above. The state waits for the peer's table-loaded
-		# report (see LateJoinerSync).
-		if is_new_peer and _game_in_progress and not _current_level_dict.is_empty():
-			LateJoinerSync.sync_peer(sender_id)
+		# A new peer joins the session only once it has passed the version gate above: it
+		# lands in the room, or at the table with the level and, after its table-loaded
+		# report, the state (SessionChannel.admit_peer, LateJoinerSync).
+		if is_new_peer:
+			session.admit_peer(sender_id)
 
 
 ## Host side of a version rejection: tell the client why, then drop it after
@@ -629,6 +639,7 @@ func broadcast_level_data(level_dict: Dictionary) -> void:
 	# Store for late joiners
 	_current_level_dict = payload.duplicate(true)
 	_game_in_progress = true
+	session.note_table_out(payload)
 
 	_rpc_receive_level_data.rpc(payload)
 
@@ -745,7 +756,8 @@ func is_game_in_progress() -> bool:
 	return _game_in_progress
 
 
-## Clear level data (call when returning to lobby/title)
+## Clear the late-joiner level snapshot: no table is out (SessionChannel.open() calls this
+## when the host returns everyone to the room).
 func clear_level_data() -> void:
 	_current_level_dict.clear()
 	_game_in_progress = false

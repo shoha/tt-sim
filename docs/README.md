@@ -87,8 +87,7 @@ add_child(token)
 ```
 Root (manages state)
 ├── TITLE_SCREEN state → TitleScreen scene
-├── LOBBY_HOST state → Lobby scene (hosting)
-├── LOBBY_CLIENT state → Lobby scene (joining)
+├── ROOM state → Lobby scenes (a hosted session between maps)
 ├── PLAYING state → GameMap scene
 └── PAUSED state → PauseOverlay scene
 

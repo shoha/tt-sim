@@ -1,8 +1,9 @@
 class_name LobbyHost
 extends AnimatedCanvasLayerPanel
 
-## Lobby screen for the host.
-## Shows the room code, the level about to be played, and who has joined.
+## The host's view of the room (Root.State.ROOM) until the RoomPanel replaces it.
+## Shows the room code, the map to set out next, and who has joined. It opens on a
+## session that is already hosted (Root.host_session) and never connects itself.
 ## Root frees this node directly on state exit, so _on_after_animate_out() is a
 ## no-op here: a stray animate_out() must never free the lobby a second time.
 
@@ -13,8 +14,8 @@ signal level_change_requested(level_info: Dictionary)
 const LEVEL_PICKER_SCENE := preload("res://scenes/ui/level_picker_dialog.tscn")
 
 ## Tests set this false before adding the lobby to the tree so headless runs
-## never reach NetworkManager.host_game() or its signal connections.
-@export var start_hosting: bool = true
+## never reach NetworkManager's signals or its session.
+@export var connect_network: bool = true
 
 var header: MenuHeader
 var _level: LevelData = null
@@ -51,9 +52,8 @@ func _on_panel_ready() -> void:
 	player_name_input.text_changed.connect(_on_player_name_changed)
 	change_level_button.pressed.connect(_on_change_pressed)
 
-	if start_hosting:
+	if connect_network:
 		# Connect network signals
-		NetworkManager.room_code_received.connect(_on_room_code_received)
 		NetworkManager.player_joined.connect(_on_player_joined)
 		NetworkManager.player_left.connect(_on_player_left)
 		NetworkManager.connection_failed.connect(_on_connection_failed)
@@ -68,9 +68,11 @@ func _on_panel_ready() -> void:
 	start_button.disabled = true
 	_update_player_list()
 
-	# Start hosting
-	if start_hosting:
-		NetworkManager.host_game()
+	# The session is already hosted: show its code
+	if connect_network and NetworkManager.is_host():
+		_on_room_code_received(NetworkManager.room_code)
+		if NetworkManager.get_player_count() > 1:
+			status_label.text = "%d player(s) connected" % NetworkManager.get_player_count()
 
 
 func _stagger_targets() -> Array[Control]:

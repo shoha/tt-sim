@@ -15,7 +15,7 @@ extends RefCounted
 ##   (run.gd forces 1920x1080 at start) and set its content_scale_factor, the knob an
 ##   Interface size setting would turn. Logs the size the window actually took.
 ## - `host_lobby` (`folder`): the host lobby as a host sees it after hosting, without
-##   hosting (LobbyHost.start_hosting false, so no Steam lobby is made): the title hidden, the
+##   hosting (LobbyHost.connect_network false, so no Steam lobby is made): the title hidden, the
 ##   test level as its level, a sample room code through the real code path and a sample
 ##   player list. `close_host_lobby` frees it and shows the title again.
 ## - `drawer` (`which` "authoring" or "visuals", `pane`, `open` default true): open a rail
@@ -209,7 +209,7 @@ static func _host_lobby(base: Node, step: Dictionary) -> String:
 		title.visible = false
 	var lobby := LOBBY_HOST_SCENE.instantiate() as LobbyHost
 	lobby.name = "UiTourHostLobby"
-	lobby.start_hosting = false
+	lobby.connect_network = false
 	base.add_child(lobby)
 	lobby.set_level(level)
 	lobby._on_room_code_received(LobbyCode.encode(SAMPLE_LOBBY_ID))

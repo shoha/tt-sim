@@ -6,6 +6,8 @@ extends AnimatedCanvasLayerPanel
 signal resume_requested
 signal main_menu_requested
 signal change_level_requested(level_info: Dictionary)
+## The host chose to return everyone to the room (Root.return_to_room)
+signal room_requested
 
 const LEVEL_PICKER_SCENE := preload("res://scenes/ui/level_picker_dialog.tscn")
 
@@ -14,6 +16,7 @@ var resume_button: Button
 var edit_level_button: Button
 var change_level_button: Button
 var settings_button: Button
+var room_button: Button
 var main_menu_button: Button
 var quit_game_button: Button
 
@@ -35,6 +38,10 @@ func _on_panel_ready() -> void:
 	settings_button.pressed.connect(_on_settings_pressed)
 	box.add_child(HSeparator.new())
 	# Leaving is quiet here; the confirmation that follows carries the red.
+	room_button = UiActions.secondary("Return everyone to the room", "users", box)
+	room_button.set_meta("ui_silent", true)
+	room_button.pressed.connect(_on_room_pressed)
+	room_button.visible = NetworkManager.is_host()
 	main_menu_button = UiActions.secondary("Return to Title", "home", box)
 	main_menu_button.set_meta("ui_silent", true)
 	main_menu_button.pressed.connect(_on_main_menu_pressed)
@@ -83,6 +90,17 @@ func _on_level_picked(info: Dictionary) -> void:
 
 func _on_settings_pressed() -> void:
 	UIManager.open_settings()
+
+
+## Confirm first: the table goes away for every player, and what moved on it is not kept.
+func _on_room_pressed() -> void:
+	UIManager.show_confirmation(
+		"Return everyone to the room?",
+		"The table is put away for every player. Tokens moved on it are not kept.",
+		"Return to the room",
+		"Cancel",
+		func(): room_requested.emit(),
+	)
 
 
 func _on_main_menu_pressed() -> void:

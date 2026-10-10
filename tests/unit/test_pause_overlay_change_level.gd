@@ -1,7 +1,8 @@
 extends GutTest
 
-## The pause menu offers Change Level to the GM and relays the picked level,
-## and its buttons are built on the shared menu design language.
+## The pause menu offers Change Level to the GM and relays the picked level, offers the
+## host Return everyone to the room, and its buttons are built on the shared menu design
+## language.
 
 const SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
 
@@ -37,6 +38,7 @@ func test_resume_is_the_only_accent_action_and_nothing_shouts() -> void:
 		overlay.edit_level_button,
 		overlay.change_level_button,
 		overlay.settings_button,
+		overlay.room_button,
 		overlay.main_menu_button,
 		overlay.quit_game_button,
 	]:
@@ -51,7 +53,20 @@ func test_every_row_carries_an_icon() -> void:
 		overlay.edit_level_button,
 		overlay.change_level_button,
 		overlay.settings_button,
+		overlay.room_button,
 		overlay.main_menu_button,
 		overlay.quit_game_button,
 	]:
 		assert_not_null(button.icon, button.text)
+
+
+func test_only_the_host_can_return_everyone_to_the_room() -> void:
+	var offline = SCENE.instantiate()
+	add_child_autofree(offline)
+	assert_false(offline.room_button.visible, "solo play has no room")
+	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
+	var hosting = SCENE.instantiate()
+	add_child_autofree(hosting)
+	NetworkManager._connection_state = NetworkManager.ConnectionState.OFFLINE
+	assert_true(hosting.room_button.visible)
+	assert_true(hosting.room_button.get_meta("ui_silent", false), "a quiet item")

@@ -37,8 +37,6 @@ const DEFAULT_LEVEL := "_nettest_parity"
 const QUIT_DELAY_S := 1.0
 ## Root.State values the scenario drives (scenes/root.gd).
 const STATE_TITLE := 0
-const STATE_LOBBY_HOST := 1
-const STATE_LOBBY_CLIENT := 2
 ## The host starts the game this long after the client joins.
 const START_DELAY_S := 1.0
 ## The host records its tokens this long after placing them (the drop and its tween).
@@ -184,7 +182,7 @@ func _host_file() -> String:
 
 
 ## Root._on_host_game_requested for a level folder: the level becomes the pending level and
-## the host lobby opens, which starts hosting.
+## hosting starts (Root.host_session); Root opens the room once hosting.
 func _start_host() -> void:
 	var level := LevelManager.load_level_folder(_level, false)
 	if level == null or level.map_document == "":
@@ -197,8 +195,7 @@ func _start_host() -> void:
 	NetworkManager.player_joined.connect(_on_host_player_joined)
 	NetworkManager.player_left.connect(_on_host_player_left)
 	NetworkManager.connection_failed.connect(func(reason: String): _finish(false, reason))
-	_main.set("_pending_level_data", level)
-	_main.call("change_state", STATE_LOBBY_HOST)
+	_main.call("host_session", level)
 	_set_phase("lobby")
 
 
@@ -400,7 +397,7 @@ func _remove_folder(folder: String) -> void:
 	_log("remove %s -> %s" % [folder, error_string(DirAccess.remove_absolute(folder))])
 
 
-## Joins through the client lobby, as a player typing the code does.
+## Joins through the join screen over the title, as a player typing the code does.
 func _poll_rendezvous() -> void:
 	if _rendezvous_path == "" or not FileAccess.file_exists(_rendezvous_path):
 		return
@@ -408,8 +405,8 @@ func _poll_rendezvous() -> void:
 	if code == "":
 		return
 	_log("joining room " + code)
-	_main.call("change_state", STATE_LOBBY_CLIENT)
-	var lobby: Node = _main.get("_lobby_client")
+	_main.call("_on_join_game_requested")
+	var lobby: Node = _main.get("_join_screen")
 	(lobby.get("room_code_input") as LineEdit).text = code
 	lobby.call("_on_connect_pressed")
 	_set_phase("client_load")

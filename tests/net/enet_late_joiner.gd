@@ -21,9 +21,9 @@ const MAP_SOURCE := "res://assets/models/maps/oakslabpainted.glb"
 const LEVEL_NAME := "Late joiner table"
 const DEFAULT_PORT := 28471
 const QUIT_DELAY_S := 1.0
+## Root.State values the scenarios read (scenes/root.gd)
 const STATE_TITLE := 0
-const STATE_LOBBY_HOST := 1
-const STATE_LOBBY_CLIENT := 2
+const STATE_ROOM := 1
 const STATE_PLAYING := 3
 
 var _args: Dictionary = {}
@@ -178,7 +178,8 @@ func _start_host() -> void:
 		"_pending_level_data",
 		LevelData.from_dict({"level_name": LEVEL_NAME, "map_path": MAP_SOURCE})
 	)
-	_main.call("change_state", STATE_LOBBY_HOST)
+	# What Root does once hosting starts (host_session), then Set out from the room.
+	_main.call("change_state", STATE_ROOM)
 	_main.call("_on_lobby_start_game")
 	_set_phase("table_load")
 
@@ -206,8 +207,9 @@ func _process_client() -> void:
 			_client_check()
 
 
+## Joins from the title, as the join screen's Connect would; Root moves on when the host
+## places this client (PLAYING here, since a table is out).
 func _join() -> void:
-	_main.call("change_state", STATE_LOBBY_CLIENT)
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client("127.0.0.1", int(_args.get("port", DEFAULT_PORT)))
 	if err != OK:
