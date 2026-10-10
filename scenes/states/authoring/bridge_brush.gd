@@ -1,11 +1,12 @@
 class_name BridgeBrush
-extends RefCounted
+extends BrushMode
 
-## The Bridge tool's half of BrushTool (phase 4b, P4b-2): the drawn line, its live preview,
-## the refusal hint, the Ctrl erase hover and the width a Shift+wheel sets. BrushTool owns one
-## (`BrushTool.bridge`), routes the Bridge mode's press, frames, release and cancel to it and
-## emits `bridge_refused` with the reasons it gives. Where a crossing goes is
-## CrossingPlacement's rule and what an edit does is CrossingEditor's
+## The Bridge tool's mode (phase 4b, P4b-2; BridgeTool): the drawn line, its live preview,
+## the refusal hint, the Ctrl erase hover and the width a Shift+wheel sets. BrushTool routes
+## the tool's press, frames, release and cancel to it (the BrushMode hooks below), and a
+## release or Ctrl press that makes nothing emits the brush's `refused` with the reason. Its
+## rays see crossings (`sees_crossings`), so a deck or a stone is picked where it is drawn.
+## Where a crossing goes is CrossingPlacement's rule and what an edit does is CrossingEditor's
 ## (`AuthoringEditor.crossings`); this only wires the gesture to them.
 ##
 ## Gesture. A press on the map starts a line; every frame the pointer moves at least
@@ -54,6 +55,8 @@ const LONG := "Too wide to cross (at most %s). Try a narrower spot."
 const FULL := "The map holds as many crossings as it can. Remove one to make room."
 const INVALID := "A crossing cannot stand there."
 const NOTHING := "There is no crossing here to remove."
+## The canopy fade's reach around the cursor (metres, before the brush's fade factor).
+const FADE_M := 2.5
 
 static var _pill_box: StyleBoxFlat = null
 
@@ -82,6 +85,11 @@ var last_plan_usec: int = 0
 
 var _planned_to: Vector3 = Vector3.INF
 var _message: String = ""
+
+
+func _init() -> void:
+	sees_crossings = true
+	fades = true
 
 
 ## The reason a line makes no crossing, in plain words for the hint beside the cursor and the
@@ -251,6 +259,58 @@ func reset() -> void:
 
 
 # ============================================================================
+# BrushMode hooks
+# ============================================================================
+
+
+## Starts a line, or with Ctrl erases the crossing under the press (a miss says why).
+func press(brush: BrushTool) -> bool:
+	if not brush.press_ctrl:
+		begin(brush.hit)
+	elif not erase_at(brush.editor, brush.hit):
+		brush.refused.emit(message())
+	return false
+
+
+## Ctrl held while hovering (not pressed) looks up the crossing to outline.
+func frame(brush: BrushTool) -> void:
+	track(brush.editor, brush.hit, brush.ctrl and not brush.pressed)
+
+
+## Places the line being drawn (a line that makes nothing says why).
+func end(brush: BrushTool) -> void:
+	if drawing and brush.editor != null:
+		var placed := finish(brush.editor, brush.unit_cell_m, brush.unit_per_cell, brush.unit_label)
+		if placed < 0:
+			brush.refused.emit(message())
+	reset()
+
+
+func cancel(_brush: BrushTool) -> void:
+	reset()
+
+
+## Shift+wheel or a bracket key: the picked kind's width.
+func step(brush: BrushTool, steps: int) -> void:
+	step_width(steps)
+	brush.redraw()
+
+
+## The line being drawn stays in view under a canopy: the focus is its middle.
+func fade_focus(brush: BrushTool) -> Vector4:
+	var centre := (from + brush.hit) * 0.5 if drawing else brush.hit
+	var reach := maxf(FADE_M, centre.distance_to(brush.hit) + 1.0)
+	return Vector4(centre.x, centre.y, centre.z, reach)
+
+
+func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
+	if brush.editor != null:
+		var units := [brush.unit_cell_m, brush.unit_per_cell, brush.unit_label]
+		var erasing := brush.ctrl and not brush.pressed
+		draw(cursor.canvas, cursor.camera, brush.editor, brush.hit, erasing, units)
+
+
+# ============================================================================
 # Drawing
 # ============================================================================
 
@@ -387,7 +447,7 @@ static func _draw_stone(
 	colors.resize(fan.size())
 	colors.fill(Color(tint, 0.25 * strength))
 	RenderingServer.canvas_item_add_triangle_array(
-		canvas.get_canvas_item(), BrushTool.fan_indices(points.size()), fan, colors
+		canvas.get_canvas_item(), BrushCursor.fan_indices(points.size()), fan, colors
 	)
 	canvas.draw_polyline(points, Color(SHADOW, 0.6 * strength), 3.5, true)
 	canvas.draw_polyline(points, Color(tint, 0.9 * strength), 1.75, true)

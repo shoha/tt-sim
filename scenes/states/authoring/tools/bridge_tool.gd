@@ -2,8 +2,8 @@ class_name BridgeTool
 extends ToolDescriptor
 
 ## The Bridge tool: a line dragged across water, bank to bank, lays planks, stepping stones,
-## an arch or a ford, and Ctrl+click removes one (BrushTool.Mode.BRIDGE; BridgeBrush does the
-## gesture, CrossingEditor the plan). Its pane is BridgeToolPane, which AuthoringPanel builds
+## an arch or a ford, and Ctrl+click removes one (BridgeBrush does the gesture,
+## CrossingEditor the plan). Its pane is BridgeToolPane, which AuthoringPanel builds
 ## and relays. Crossings snap to the document's water, so the tool works wherever the Water
 ## tool does (WaterTool.has_water_work) and is disabled with a tooltip elsewhere.
 
@@ -20,7 +20,7 @@ func _init() -> void:
 	label = LABEL
 	summary = "Cross water on planks, stones, an arch or a ford."
 	icon = "building-bridge"
-	brush_mode = BrushTool.Mode.BRIDGE
+	brush_mode = BridgeBrush
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [
 		[
@@ -34,6 +34,11 @@ func _init() -> void:
 		],
 		["Ctrl + Click (Bridge)", "Remove the crossing under the cursor"],
 	]
+
+
+## The tool's mode on `brush`.
+static func of(brush: BrushTool) -> BridgeBrush:
+	return brush.mode_for(ToolRegistry.find(ID)) as BridgeBrush
 
 
 ## Where water can be made or the document has some.

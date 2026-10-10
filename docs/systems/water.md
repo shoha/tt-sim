@@ -431,7 +431,7 @@ editor API the Water tool (P4-4) calls.
   as after a sculpt stroke (`RockKeeper.start(..., dressing_before, keep)`, the rule deciding
   which), and placed rock props in the area are re-bedded by the snap and then dropped by the
   same rule (`WaterEditor._drop_wet_rocks`); undo brings them all back.
-- **The Water tool** (`WaterBrush`, `BrushTool` mode for River and Pond tiles, the depth
+- **The Water tool** (`WaterBrush`, its `BrushMode`: River and Pond tiles, the depth
   tiles, the ribbon preview and Ctrl erase) is documented in `UI_SYSTEMS.md` (authoring
   drawer, Water; "Brushes and gestures").
 

@@ -18,17 +18,32 @@
 		"res://scenes/states/authoring/authoring_panel.gd": {
 			"override": 6
 		},
+		"res://scenes/states/authoring/biome_brush.gd": {
+			"colour": 1
+		},
 		"res://scenes/states/authoring/bridge_brush.gd": {
 			"colour": 21
 		},
 		"res://scenes/states/authoring/bridge_tool_pane.gd": {
 			"override": 1
 		},
-		"res://scenes/states/authoring/brush_tool.gd": {
-			"colour": 13
+		"res://scenes/states/authoring/brush_cursor.gd": {
+			"colour": 6
 		},
 		"res://scenes/states/authoring/new_map_dialog.gd": {
 			"override": 1
+		},
+		"res://scenes/states/authoring/paint_brush.gd": {
+			"colour": 1
+		},
+		"res://scenes/states/authoring/place_brush.gd": {
+			"colour": 1
+		},
+		"res://scenes/states/authoring/sculpt_brush.gd": {
+			"colour": 3
+		},
+		"res://scenes/states/authoring/thin_brush.gd": {
+			"colour": 1
 		},
 		"res://scenes/states/authoring/water_brush.gd": {
 			"colour": 10

@@ -140,25 +140,26 @@ func test_pane_has_a_tile_per_kind_and_emits_the_picked_one() -> void:
 
 
 func test_bridge_mode_input() -> void:
-	var mode := BrushTool.Mode.BRIDGE
+	var picks := BridgeBrush.new().picks
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
-	assert_eq(BrushTool.decide(press, mode, false, false), A.BEGIN)
+	assert_eq(BrushTool.decide(press, picks, false, false), A.BEGIN)
 	var right := InputEventMouseButton.new()
 	right.button_index = MOUSE_BUTTON_RIGHT
 	right.pressed = true
-	assert_eq(BrushTool.decide(right, mode, true, false), A.CANCEL, "RMB drops a line")
-	assert_eq(BrushTool.decide(right, mode, false, false), A.DESELECT)
+	assert_eq(BrushTool.decide(right, picks, true, false), A.CANCEL, "RMB drops a line")
+	assert_eq(BrushTool.decide(right, picks, false, false), A.DESELECT)
 	var wheel := InputEventMouseButton.new()
 	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
 	wheel.pressed = true
 	wheel.shift_pressed = true
-	assert_eq(BrushTool.decide(wheel, mode, false, false), A.GROW, "Shift+wheel: width")
+	assert_eq(BrushTool.decide(wheel, picks, false, false), A.GROW, "Shift+wheel: width")
 	var escape := InputEventKey.new()
 	escape.keycode = KEY_ESCAPE
 	escape.pressed = true
-	assert_eq(BrushTool.decide(escape, mode, true, false), A.CANCEL)
+	assert_eq(BrushTool.decide(escape, picks, true, false), A.CANCEL)
+	assert_true(BridgeBrush.new().sees_crossings, "its rays pick a crossing where it is drawn")
 
 
 # --- the gesture -----------------------------------------------------------------------
@@ -272,21 +273,22 @@ func test_brush_tool_places_on_release_and_reports_a_refusal() -> void:
 	var tool := BrushTool.new()
 	add_child_autofree(tool)
 	tool.editor = editor
-	tool.set_mode(BrushTool.Mode.BRIDGE)
+	tool.use_tool(ToolRegistry.find(BridgeTool.ID))
+	var bridge := BridgeTool.of(tool)
 	watch_signals(tool)
-	tool.bridge.begin(Vector3(0, 0, -3))
-	tool.bridge.track(editor, Vector3(0, 0, 3), false)
+	bridge.begin(Vector3(0, 0, -3))
+	bridge.track(editor, Vector3(0, 0, 3), false)
 	tool.finish_gesture()
 	assert_eq(_doc.crossings.size(), 1)
-	assert_signal_not_emitted(tool, "bridge_refused")
-	tool.bridge.begin(Vector3(0, 0, 6))
-	tool.bridge.track(editor, Vector3(1, 0, 7), false)
+	assert_signal_not_emitted(tool, "refused")
+	bridge.begin(Vector3(0, 0, 6))
+	bridge.track(editor, Vector3(1, 0, 7), false)
 	tool.finish_gesture()
-	assert_signal_emitted_with_parameters(tool, "bridge_refused", [BridgeBrush.NO_WATER])
-	tool.bridge.begin(Vector3(3, 0, -3))
-	tool.bridge.track(editor, Vector3(3, 0, 3), false)
-	tool.call("_cancel_gesture")
-	assert_false(tool.bridge.drawing)
+	assert_signal_emitted_with_parameters(tool, "refused", [BridgeBrush.NO_WATER])
+	bridge.begin(Vector3(3, 0, -3))
+	bridge.track(editor, Vector3(3, 0, 3), false)
+	tool.cancel_gesture()
+	assert_false(bridge.drawing)
 	assert_eq(_doc.crossings.size(), 1, "a cancelled line places nothing")
 
 

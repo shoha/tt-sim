@@ -10,9 +10,15 @@ extends RefCounted
 ##
 ## Declared: the id (the rail item and the pane share it), the label (rail tooltip and pane
 ## title), a one-line summary (pane caption and the tool's help row), the rail icon, an
-## optional shortcut (a bare key; none of the seven tools of 2026-10 has one), the
-## BrushTool.Mode its gestures run in, its own help rows, and the contexts it exists in
-## (authoring, play, or both).
+## optional shortcut (a bare key; none of the seven tools of 2026-10 has one), the BrushMode
+## class its gestures run in, its own help rows, and the contexts it exists in (authoring,
+## play, or both).
+##
+## Gestures. `brush_mode` names a BrushMode subclass (WaterBrush, SculptBrush, ...): its
+## press, frames, release, cancel, size step and cursor. BrushTool makes one per tool
+## (BrushTool.mode_for) and dispatches to it, so a tool with gestures of its own adds its
+## mode class and edits no brush code. A subclass's static of(brush) returns its mode, typed,
+## for the controller and the panes that set what it paints.
 ##
 ## The hooks are the tool's half of the controller's tool wiring. They read the controller's
 ## public state and call its public methods only. can_select() refuses a pick the open map
@@ -42,8 +48,8 @@ var icon: String = ""
 var shortcut: Key = KEY_NONE
 ## Where the tool exists: AUTHORING, PLAY, or both.
 var contexts: int = AUTHORING
-## The BrushTool.Mode its gestures run in, or -1 for a tool without brush gestures.
-var brush_mode: int = -1
+## The BrushMode subclass its gestures run in, or null for a tool without brush gestures.
+var brush_mode: GDScript = null
 ## Its own F1 help rows after its name row, each [keys, what they do]. The gestures every
 ## brush shares (size, cancel, undo) are the help overlay's own rows.
 var help: Array = []

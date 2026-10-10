@@ -1,11 +1,12 @@
 class_name WaterBrush
-extends RefCounted
+extends BrushMode
 
-## The Water tool's half of BrushTool (phase 4, P4-4): what a Water press does (a river's
-## line, a pond stroke, an erase), the line's capture and smoothing, the width rule, and the
-## previews drawn under the ring. BrushTool owns one (`BrushTool.water`), routes the Water
-## mode's press, frames, release and cancel to it and emits `water_refused` with the reasons
-## it gives. What the water does to the map is WaterEditor's.
+## The Water tool's mode (phase 4, P4-4; WaterTool): what a Water press does (a river's line,
+## a pond stroke, an erase), the line's capture and smoothing, the width rule, and the
+## previews drawn under the ring. BrushTool routes the tool's press, frames, release and
+## cancel to it (the BrushMode hooks at the end of this file), and a refused press or release
+## emits the brush's `refused` with the reason. What the water does to the map is
+## WaterEditor's.
 ##
 ## River: the press starts the line; every frame the pointer's ground point is recorded once
 ## it lies RIVER_DECIMATE_M from the last (decimate()), and the line ends where the pointer
@@ -41,7 +42,7 @@ const POND_DWELL_GROW := 0.35
 const RIBBON_ARROW_M := 2.5
 const RIBBON_ALPHA_UP := 0.12
 const RIBBON_ALPHA_DOWN := 0.34
-## Refusal reasons (BrushTool.water_refused).
+## Refusal reasons (BrushTool.refused).
 const NO_CARVE := (
 	"Rivers and ponds carve the map's own ground: not on a Blender map."
 	+ " Ctrl+drag erases water."
@@ -71,6 +72,10 @@ var _line_y: float = 0.0
 ## The pointer's last ground point while a river is drawn (world XZ; Vector2.INF: none): the
 ## release point, which the line ends at whether or not decimation recorded it.
 var _tip: Vector2 = Vector2.INF
+
+
+func _init() -> void:
+	fades = true
 
 
 ## The river half-width or pond brush radius for brush size `radius` and depth class
@@ -430,3 +435,84 @@ static func _fill_disc(
 	RenderingServer.canvas_item_add_triangle_array(
 		canvas.get_canvas_item(), indices, points, colors
 	)
+
+
+# ============================================================================
+# BrushMode hooks
+# ============================================================================
+
+
+## A brook may be narrower than the other brushes allow.
+func min_radius() -> float:
+	return WaterBody.MIN_HALF_WIDTH_M
+
+
+## The water radius (a Ctrl erase keeps the plain brush size), a pond's growing with dwell.
+func stroke_radius(brush: BrushTool) -> float:
+	if _erasing(brush):
+		return brush.get_radius()
+	var width := radius(brush.get_radius())
+	if brush.stroking and shape == Shape.POND:
+		width *= 1.0 + POND_DWELL_GROW * clampf(brush.dwell / BrushTool.DWELL_MAX, 0.0, 1.0)
+	return width
+
+
+## A pond or erase stroke for the brush to dab, or a river's line; a refusal says why.
+func press(brush: BrushTool) -> bool:
+	if begin(brush.editor, brush.press_ctrl, brush.hit):
+		return true
+	if refusal() != "":
+		brush.refused.emit(refusal())
+	return false
+
+
+func frame(brush: BrushTool) -> void:
+	track(brush.editor, brush.hit, radius(brush.get_radius()))
+
+
+## Keeps a pond stroke's dab for its preview.
+func dabbed(brush: BrushTool) -> void:
+	if not brush.press_ctrl and shape == Shape.POND:
+		record_dab(brush.hit, stroke_radius(brush))
+
+
+## Carves a river being drawn (a refusal says why).
+func end(brush: BrushTool) -> void:
+	if drawing and brush.editor != null and not carve(brush.editor, radius(brush.get_radius())):
+		brush.refused.emit(refusal())
+	reset()
+
+
+func cancel(_brush: BrushTool) -> void:
+	reset()
+
+
+## From the size the ring shows, so a notch always changes it visibly; with Ctrl held (the
+## erase ring), the plain brush size.
+func step(brush: BrushTool, steps: int) -> void:
+	if brush.ctrl:
+		super.step(brush, steps)
+		return
+	brush.set_radius(radius(radius(brush.get_radius()) * pow(BrushTool.RADIUS_STEP, steps)))
+
+
+func cursor_tint(brush: BrushTool) -> Color:
+	return ERASE_TINT if _erasing(brush) else TINT
+
+
+func cursor_text(brush: BrushTool) -> String:
+	return readout_text(_erasing(brush), brush.unit_cell_m, brush.unit_per_cell, brush.unit_label)
+
+
+## The previews (draw()) under the ring.
+func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
+	if brush.editor != null:
+		var width := radius(brush.get_radius())
+		var erasing := _erasing(brush)
+		draw(cursor.canvas, cursor.camera, brush.editor, brush.hit, width, brush.stroking, erasing)
+	super.draw_cursor(brush, cursor)
+
+
+## True while Ctrl erases: held at the press during a gesture, else held now.
+func _erasing(brush: BrushTool) -> bool:
+	return brush.press_ctrl if (brush.stroking or brush.pressed) else brush.ctrl

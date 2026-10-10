@@ -3,10 +3,10 @@ extends RefCounted
 
 ## Every map tool, in rail order, as one ToolDescriptor each (scenes/states/authoring/tools/).
 ## The hubs read it instead of listing tools by hand: AuthoringPanel builds its rail items and
-## panes from it, AuthoringController picks a tool, refreshes the rail and maps the brush's
-## mode back to a tool through it, and the F1 help overlay lists each tool's rows from it.
-## Adding a tool is one descriptor added to _make() below, its gesture handler, its pane and
-## a test (AGENTS.md "Adding Features", docs/systems/authoring.md "Tools").
+## panes from it, AuthoringController picks a tool and refreshes the rail through it, and the
+## F1 help overlay lists each tool's rows from it. Adding a tool is one descriptor added to
+## _make() below, its BrushMode class, its pane and a test (AGENTS.md "Adding Features",
+## docs/systems/authoring.md "Tools").
 ##
 ## Contexts: a descriptor says whether it exists in authoring, in play, or in both
 ## (ToolDescriptor.AUTHORING, PLAY), and every list query takes the context it is for. The
@@ -37,14 +37,6 @@ static func tools(context: int) -> Array[ToolDescriptor]:
 static func find(id: StringName) -> ToolDescriptor:
 	for tool in all():
 		if tool.id == id:
-			return tool
-	return null
-
-
-## The authoring tool whose gestures run in BrushTool mode `mode`, or null.
-static func for_mode(mode: int) -> ToolDescriptor:
-	for tool in tools(ToolDescriptor.AUTHORING):
-		if tool.brush_mode == mode:
 			return tool
 	return null
 

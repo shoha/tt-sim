@@ -344,50 +344,50 @@ func test_an_editor_tier_stroke_is_one_undoable_step_on_a_whole_tier() -> void:
 
 func test_sculpt_op_follows_the_tile_and_the_press_modifiers() -> void:
 	var raise := HeightBrush.RAISE
-	assert_eq(BrushTool.sculpt_op(raise, false, false), HeightBrush.RAISE)
-	assert_eq(BrushTool.sculpt_op(raise, true, false), HeightBrush.LOWER, "Ctrl lowers")
-	assert_eq(BrushTool.sculpt_op(HeightBrush.TIER, false, false), HeightBrush.TIER)
-	assert_eq(BrushTool.sculpt_op(HeightBrush.TIER, true, false), HeightBrush.TIER_CUT)
-	assert_eq(BrushTool.sculpt_op(HeightBrush.FLATTEN, true, false), HeightBrush.FLATTEN)
-	assert_eq(BrushTool.sculpt_op(HeightBrush.SMOOTH, true, false), HeightBrush.SMOOTH)
+	assert_eq(SculptBrush.sculpt_op(raise, false, false), HeightBrush.RAISE)
+	assert_eq(SculptBrush.sculpt_op(raise, true, false), HeightBrush.LOWER, "Ctrl lowers")
+	assert_eq(SculptBrush.sculpt_op(HeightBrush.TIER, false, false), HeightBrush.TIER)
+	assert_eq(SculptBrush.sculpt_op(HeightBrush.TIER, true, false), HeightBrush.TIER_CUT)
+	assert_eq(SculptBrush.sculpt_op(HeightBrush.FLATTEN, true, false), HeightBrush.FLATTEN)
+	assert_eq(SculptBrush.sculpt_op(HeightBrush.SMOOTH, true, false), HeightBrush.SMOOTH)
 	for tile in [raise, HeightBrush.FLATTEN, HeightBrush.TIER]:
 		for ctrl in [false, true]:
-			assert_eq(BrushTool.sculpt_op(tile, ctrl, true), HeightBrush.SMOOTH, "Shift smooths")
+			assert_eq(SculptBrush.sculpt_op(tile, ctrl, true), HeightBrush.SMOOTH, "Shift smooths")
 
 
 func test_sculpt_presses_are_brush_strokes() -> void:
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
-	var mode := BrushTool.Mode.SCULPT
-	assert_eq(BrushTool.decide(press, mode, false, false), BrushTool.Action.BEGIN)
+	var picks := SculptBrush.new().picks
+	assert_eq(BrushTool.decide(press, picks, false, false), BrushTool.Action.BEGIN)
 	var rmb := InputEventMouseButton.new()
 	rmb.button_index = MOUSE_BUTTON_RIGHT
 	rmb.pressed = true
-	assert_eq(BrushTool.decide(rmb, mode, true, false), BrushTool.Action.CANCEL, "RMB cancels")
+	assert_eq(BrushTool.decide(rmb, picks, true, false), BrushTool.Action.CANCEL, "RMB cancels")
 	var wheel := InputEventMouseButton.new()
 	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
 	wheel.pressed = true
 	wheel.shift_pressed = true
-	assert_eq(BrushTool.decide(wheel, mode, false, false), BrushTool.Action.GROW, "size")
+	assert_eq(BrushTool.decide(wheel, picks, false, false), BrushTool.Action.GROW, "size")
 	var escape := InputEventKey.new()
 	escape.keycode = KEY_ESCAPE
 	escape.pressed = true
-	assert_eq(BrushTool.decide(escape, mode, true, false), BrushTool.Action.CANCEL, "held")
+	assert_eq(BrushTool.decide(escape, picks, true, false), BrushTool.Action.CANCEL, "held")
 	assert_eq(
-		BrushTool.decide(escape, mode, false, false), BrushTool.Action.NONE, "idle: the drawer's"
+		BrushTool.decide(escape, picks, false, false), BrushTool.Action.NONE, "idle: the drawer's"
 	)
 
 
 func test_the_readout_names_the_tier_and_its_elevation() -> void:
 	var cell := LevelData.DEFAULT_GRID_CELL_SIZE
 	var per := LevelData.DEFAULT_DISPLAY_UNIT_PER_CELL
-	assert_eq(BrushTool.tier_readout(1, 1.524, cell, per, "ft"), "Tier 1  +5 ft")
-	assert_eq(BrushTool.tier_readout(2, 3.048, cell, per, "ft"), "Tier 2  +10 ft")
-	assert_eq(BrushTool.tier_readout(-1, -1.524, cell, per, "ft"), "Tier -1  -5 ft")
-	assert_eq(BrushTool.tier_readout(0, 0.0, cell, per, "ft"), "Ground  0 ft")
-	assert_eq(BrushTool.format_elevation(2.3, cell, per, "ft"), "+8 ft")
-	assert_eq(BrushTool.format_elevation(1.524, 1.0, 1.0, "m"), "+2 m")
+	assert_eq(SculptBrush.tier_readout(1, 1.524, cell, per, "ft"), "Tier 1  +5 ft")
+	assert_eq(SculptBrush.tier_readout(2, 3.048, cell, per, "ft"), "Tier 2  +10 ft")
+	assert_eq(SculptBrush.tier_readout(-1, -1.524, cell, per, "ft"), "Tier -1  -5 ft")
+	assert_eq(SculptBrush.tier_readout(0, 0.0, cell, per, "ft"), "Ground  0 ft")
+	assert_eq(SculptBrush.format_elevation(2.3, cell, per, "ft"), "+8 ft")
+	assert_eq(SculptBrush.format_elevation(1.524, 1.0, 1.0, "m"), "+2 m")
 
 
 func test_sculpt_tiles_round_trip_their_operations() -> void:
@@ -422,12 +422,12 @@ func test_the_ring_fill_needs_no_triangulation() -> void:
 	# raised ground projects to an outline that crosses itself, which the canvas's
 	# triangulator (draw_colored_polygon) rejects. The fan is drawn with explicit indices.
 	var ring := PackedVector2Array()
-	for i in BrushTool.RING_SEGMENTS + 1:
-		var angle := TAU * float(i % BrushTool.RING_SEGMENTS) / float(BrushTool.RING_SEGMENTS)
+	for i in BrushCursor.RING_SEGMENTS + 1:
+		var angle := TAU * float(i % BrushCursor.RING_SEGMENTS) / float(BrushCursor.RING_SEGMENTS)
 		var r := 100.0 if absf(sin(angle * 3.0)) <= 0.8 else -40.0
 		ring.append(Vector2(cos(angle), sin(angle) * 0.6) * r)
 	assert_true(Geometry2D.triangulate_polygon(ring).is_empty(), "the old fill failed here")
-	var indices := BrushTool.fan_indices(ring.size())
+	var indices := BrushCursor.fan_indices(ring.size())
 	assert_eq(indices.size(), 3 * (ring.size() - 1))
 	var centre_uses := 0
 	for index in indices:
