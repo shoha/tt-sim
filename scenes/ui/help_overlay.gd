@@ -2,7 +2,10 @@ extends AnimatedCanvasLayerPanel
 
 ## Full-screen overlay showing all keyboard shortcuts.
 ## Triggered by F1. Uses InputProfile.label() for device-aware key labels.
-## Built programmatically from a data array for easy maintenance.
+## Built programmatically from a data array for easy maintenance. Each map tool's rows (its
+## name with its shortcut, what it is for, its own gestures) come from its ToolDescriptor
+## through ToolRegistry: authoring tools between the shared Map building rows, play tools
+## after the Tools rows.
 
 ## Key caps line up in a column wide enough for the longest shortcut label.
 const CHIP_MIN_WIDTH := 140
@@ -72,6 +75,38 @@ func _on_after_animate_out() -> void:
 
 
 func _get_shortcut_data() -> Array:
+	var tools: Array = [
+		[InputProfile.label(&"measure"), "Toggle measure tool"],
+		[InputProfile.label(&"grid"), "Toggle grid overlay"],
+		[InputProfile.label(&"cycle_mode"), "Cycle measure mode"],
+		["Ctrl (measure)", "Snap to token"],
+		["Right Click / Esc", "Finish measurement"],
+	]
+	tools.append_array(ToolRegistry.help_rows(ToolDescriptor.PLAY))
+	var building: Array = [
+		[
+			"New map",
+			"Pick a size, a biome and a landform; the seed draws the water and the way across",
+		],
+		["Left Drag", "Paint, thin, place, sculpt or lay a surface (hold still to build)"],
+		[
+			"Ctrl + Left Drag",
+			"Clear, lower (Raise), cut a tier down (Tier), erase paint or water",
+		],
+	]
+	building.append_array(ToolRegistry.help_rows(ToolDescriptor.AUTHORING))
+	building.append_array(
+		[
+			[
+				"Shift + Wheel / [ ]",
+				"Brush size (Place: resize the prop under the cursor; Bridge: its width)",
+			],
+			["Right Click / Esc", "Cancel the stroke in progress"],
+			["Right Click", "Remove a prop, or put the brush down"],
+			["Delete", "Remove the prop under the cursor"],
+			["Ctrl+Z / Ctrl+Y", "Undo / redo a stroke"],
+		]
+	)
 	return [
 		{
 			"header": "Navigation",
@@ -95,66 +130,8 @@ func _get_shortcut_data() -> Array:
 				["Shift (drag)", "Free move (bypass grid snap)"],
 			],
 		},
-		{
-			"header": "Tools",
-			"entries":
-			[
-				[InputProfile.label(&"measure"), "Toggle measure tool"],
-				[InputProfile.label(&"grid"), "Toggle grid overlay"],
-				[InputProfile.label(&"cycle_mode"), "Cycle measure mode"],
-				["Ctrl (measure)", "Snap to token"],
-				["Right Click / Esc", "Finish measurement"],
-			],
-		},
-		{
-			"header": "Map building",
-			"entries":
-			[
-				[
-					"New map",
-					(
-						"Pick a size, a biome and a landform; the seed draws the water and the way"
-						+ " across"
-					),
-				],
-				["Left Drag", "Paint, thin, place, sculpt or lay a surface (hold still to build)"],
-				["Left Drag (Water)", "River: draw it the way it flows. Pond: paint its area"],
-				[
-					"Waterfall",
-					(
-						"A river over a steep drop falls there by itself. Sculpting never makes or"
-						+ " moves a fall: erase the river and draw it again"
-					),
-				],
-				[
-					"Left Drag (Bridge)",
-					"Drag across calm water, bank to bank: planks, stones, an arch or a ford",
-				],
-				[
-					"Arch (Bridge)",
-					"A stone arch crosses like planks: the biome's rock, a paved deck"
-				],
-				[
-					"Ford (Bridge)",
-					"A gravel bar for wading: needs wadeable water; its width runs along the river",
-				],
-				[
-					"Ctrl + Left Drag",
-					"Clear, lower (Raise), cut a tier down (Tier), erase paint or water",
-				],
-				["Ctrl + Click (Bridge)", "Remove the crossing under the cursor"],
-				["Dry channel", "Erased water leaves its channel: Sculpt's Smooth fills it"],
-				["Shift + Left Drag", "Smooth the ground (Sculpt, any tile)"],
-				[
-					"Shift + Wheel / [ ]",
-					"Brush size (Place: resize the prop under the cursor; Bridge: its width)",
-				],
-				["Right Click / Esc", "Cancel the stroke in progress"],
-				["Right Click", "Remove a prop, or put the brush down"],
-				["Delete", "Remove the prop under the cursor"],
-				["Ctrl+Z / Ctrl+Y", "Undo / redo a stroke"],
-			],
-		},
+		{"header": "Tools", "entries": tools},
+		{"header": "Map building", "entries": building},
 		{
 			"header": "General",
 			"entries":

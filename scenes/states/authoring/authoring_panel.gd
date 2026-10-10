@@ -1,11 +1,13 @@
 class_name AuthoringPanel
 extends DrawerContainer
 
-## Authoring mode's tool drawer on the left edge, in rail mode: one rail item per tool
-## (Biome, Thin / Clear, Place, Sculpt) above a footer of session actions (Undo, Redo, Save,
-## Leave). The drawer content is the map's name, the one text field in authoring, over one
-## pane per tool. Built in code; every interactive Control is named so the validation
-## bridge can click it.
+## Authoring mode's tool drawer on the left edge, in rail mode: one rail item per tool above
+## a footer of session actions (Undo, Redo, Save, Leave). The drawer content is the map's
+## name, the one text field in authoring, over one pane per tool. The tools, their order,
+## rail items and pane titles come from ToolRegistry (one ToolDescriptor each); the panes of
+## the seven tools that predate it are built here (_build_pane), and a tool added since
+## brings its own (ToolDescriptor.build_pane). Built in code; every interactive Control is
+## named so the validation bridge can click it.
 ##
 ## The panel owns no map state. It relays what the author does as signals to
 ## AuthoringController and shows what the controller tells it (dirty, undo/redo
@@ -79,39 +81,29 @@ const PLACE_SIZE_CLASSES := ["large", "medium", "small"]
 const PLACE_ICONS := {"tree": "tree", "palm": "tree", "cactus": "tree", "grass": "leaf"}
 const PLACE_DEFAULT_ICON := "grain"
 
-const TOOL_BIOME := &"biome"
-const TOOL_THIN := &"thin_clear"
-const TOOL_PLACE := &"place"
-const TOOL_SCULPT := &"sculpt"
-const TOOL_PAINT := &"paint"
-const TOOL_WATER := &"water"
-const TOOL_BRIDGE := &"bridge"
+## The ids of the seven tools that predate ToolRegistry (their descriptors own them).
+const TOOL_BIOME := BiomeTool.ID
+const TOOL_THIN := ThinTool.ID
+const TOOL_PLACE := PlaceTool.ID
+const TOOL_SCULPT := SculptTool.ID
+const TOOL_PAINT := PaintTool.ID
+const TOOL_WATER := WaterTool.ID
+const TOOL_BRIDGE := BridgeTool.ID
 const ACTION_UNDO := &"undo"
 const ACTION_REDO := &"redo"
 const ACTION_SAVE := &"save_map"
 const ACTION_LEAVE := &"leave_authoring"
 
-const SCULPT_TOOLTIP := "Sculpt"
-const SCULPT_UNAVAILABLE_TOOLTIP := "Sculpt: not on a Blender map, whose ground is the map file's"
-const PAINT_TOOLTIP := "Paint"
-const PAINT_UNAVAILABLE_TOOLTIP := "Paint: not on a Blender map, whose ground is the map file's"
-const WATER_TOOLTIP := "Water"
-const WATER_UNAVAILABLE_TOOLTIP := "Water: not on a Blender map, whose ground is the map file's"
+## Rail tooltips of the tools a map can refuse, from their descriptors.
+const SCULPT_TOOLTIP := SculptTool.LABEL
+const SCULPT_UNAVAILABLE_TOOLTIP := SculptTool.UNAVAILABLE_TOOLTIP
+const PAINT_TOOLTIP := PaintTool.LABEL
+const PAINT_UNAVAILABLE_TOOLTIP := PaintTool.UNAVAILABLE_TOOLTIP
+const WATER_TOOLTIP := WaterTool.LABEL
+const WATER_UNAVAILABLE_TOOLTIP := WaterTool.UNAVAILABLE_TOOLTIP
 const WATER_ERASE_ONLY_TOOLTIP := WaterToolPane.ERASE_ONLY_HINT
-const BRIDGE_TOOLTIP := "Bridge"
-const BRIDGE_UNAVAILABLE_TOOLTIP := (
-	"Bridge: crosses water made with the Water tool; a Blender map's own water is part of the"
-	+ " map file"
-)
-const RAIL_ITEMS: Array[Dictionary] = [
-	{"id": TOOL_BIOME, "icon": "trees", "tooltip": "Biome"},
-	{"id": TOOL_THIN, "icon": "eraser", "tooltip": "Thin / Clear"},
-	{"id": TOOL_PLACE, "icon": "tree", "tooltip": "Place"},
-	{"id": TOOL_SCULPT, "icon": "mountain", "tooltip": SCULPT_TOOLTIP},
-	{"id": TOOL_PAINT, "icon": "brush", "tooltip": PAINT_TOOLTIP},
-	{"id": TOOL_WATER, "icon": "droplet", "tooltip": WATER_TOOLTIP},
-	{"id": TOOL_BRIDGE, "icon": "building-bridge", "tooltip": BRIDGE_TOOLTIP},
-]
+const BRIDGE_TOOLTIP := BridgeTool.LABEL
+const BRIDGE_UNAVAILABLE_TOOLTIP := BridgeTool.UNAVAILABLE_TOOLTIP
 ## Paint groups in pane order: palette surface role and caption.
 const PAINT_GROUPS: Array[Dictionary] = [
 	{"role": "built", "caption": "Built"},
@@ -229,7 +221,7 @@ func _on_ready() -> void:
 	tab_width = 44.0
 	play_sounds = true
 	start_revealed = false
-	rail_items = RAIL_ITEMS.duplicate()
+	rail_items = ToolRegistry.rail_items(ToolDescriptor.AUTHORING)
 	rail_footer_items = RAIL_FOOTER_ITEMS.duplicate()
 
 	var margin_node := _panel.get_child(0) as MarginContainer
@@ -243,15 +235,14 @@ func _on_ready() -> void:
 	_stack.slide_from_right = false
 	_stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content_container.add_child(_stack)
-	_stack.add_pane(TOOL_BIOME, _build_biome_pane())
-	_stack.add_pane(TOOL_THIN, _build_thin_pane())
-	_stack.add_pane(TOOL_PLACE, _build_place_pane())
-	_stack.add_pane(TOOL_SCULPT, _build_sculpt_pane())
-	_stack.add_pane(TOOL_PAINT, _build_paint_pane())
-	_stack.add_pane(TOOL_WATER, _build_water_pane())
-	bridge_pane = BridgeToolPane.new()
-	bridge_pane.kind_selected.connect(func(kind: int) -> void: bridge_kind_selected.emit(kind))
-	_stack.add_pane(TOOL_BRIDGE, bridge_pane)
+	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+		var pane := tool.build_pane(self)
+		if pane == null:
+			pane = _build_pane(tool)
+		if pane == null:
+			push_error("AuthoringPanel: tool %s has no pane" % tool.id)
+			continue
+		_stack.add_pane(tool.id, pane)
 	_stack.show_pane(TOOL_BIOME, false)
 
 	pane_requested.connect(_on_pane_requested)
@@ -280,14 +271,35 @@ func _build_name_field() -> void:
 	content_container.add_child(HSeparator.new())
 
 
-func _build_biome_pane() -> Control:
+## The pane of one of the seven tools that predate ToolRegistry, titled from its
+## descriptor, or null for any other tool.
+func _build_pane(tool: ToolDescriptor) -> Control:
+	match tool.id:
+		TOOL_BIOME:
+			return _build_biome_pane(tool)
+		TOOL_THIN:
+			return _build_thin_pane(tool)
+		TOOL_PLACE:
+			return _build_place_pane(tool)
+		TOOL_SCULPT:
+			return _build_sculpt_pane(tool)
+		TOOL_PAINT:
+			return _build_paint_pane(tool)
+		TOOL_WATER:
+			return _build_water_pane()
+		TOOL_BRIDGE:
+			return _build_bridge_pane()
+	return null
+
+
+func _build_biome_pane(tool: ToolDescriptor) -> Control:
 	var pane := VBoxContainer.new()
 	pane.name = "BiomePane"
 	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pane.add_theme_constant_override("separation", 8)
 	var header := MenuHeader.new()
 	header.name = "BiomeHeader"
-	header.setup("Biome", "Paint a place onto the map.")
+	header.setup(tool.label, tool.summary)
 	pane.add_child(header)
 	pane.add_child(
 		_hint(
@@ -321,14 +333,14 @@ func _build_biome_pane() -> Control:
 	return pane
 
 
-func _build_thin_pane() -> Control:
+func _build_thin_pane(tool: ToolDescriptor) -> Control:
 	var pane := VBoxContainer.new()
 	pane.name = "ThinPane"
 	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pane.add_theme_constant_override("separation", 8)
 	var header := MenuHeader.new()
 	header.name = "ThinHeader"
-	header.setup("Thin / Clear", "Open up what grows.")
+	header.setup(tool.label, tool.summary)
 	pane.add_child(header)
 	pane.add_child(
 		_hint(
@@ -345,14 +357,14 @@ func _build_thin_pane() -> Control:
 
 ## Place: one foldout per palette biome (headed by its thumbnail), holding a tile per
 ## species big enough to place by hand. The selected biome's group starts open.
-func _build_place_pane() -> Control:
+func _build_place_pane(tool: ToolDescriptor) -> Control:
 	var pane := VBoxContainer.new()
 	pane.name = "PlacePane"
 	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pane.add_theme_constant_override("separation", 8)
 	var header := MenuHeader.new()
 	header.name = "PlaceHeader"
-	header.setup("Place", "Set a hero tree, rock or log.")
+	header.setup(tool.label, tool.summary)
 	pane.add_child(header)
 	pane.add_child(
 		_hint(
@@ -395,14 +407,14 @@ func _build_place_pane() -> Control:
 
 ## Sculpt: four tiles (Raise, Smooth, Flatten, Tier), Raise preselected; the gestures and
 ## modifiers in the hint line.
-func _build_sculpt_pane() -> Control:
+func _build_sculpt_pane(tool: ToolDescriptor) -> Control:
 	var pane := VBoxContainer.new()
 	pane.name = "SculptPane"
 	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pane.add_theme_constant_override("separation", 8)
 	var header := MenuHeader.new()
 	header.name = "SculptHeader"
-	header.setup("Sculpt", "Shape the ground.")
+	header.setup(tool.label, tool.summary)
 	pane.add_child(header)
 	pane.add_child(
 		_hint(
@@ -440,14 +452,14 @@ func _build_sculpt_pane() -> Control:
 
 ## Paint: the header, the gestures, and the surface groups (filled by ensure_paint_tiles()),
 ## ending in the Advanced foldout.
-func _build_paint_pane() -> Control:
+func _build_paint_pane(tool: ToolDescriptor) -> Control:
 	var pane := VBoxContainer.new()
 	pane.name = "PaintPane"
 	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pane.add_theme_constant_override("separation", 8)
 	var header := MenuHeader.new()
 	header.name = "PaintHeader"
-	header.setup("Paint", "Lay paths, yards and rock.")
+	header.setup(tool.label, tool.summary)
 	pane.add_child(header)
 	pane.add_child(
 		_hint(
@@ -485,6 +497,28 @@ func _build_water_pane() -> Control:
 	return water_pane
 
 
+## Bridge (P4b-2): BridgeToolPane, its kind tiles relayed.
+func _build_bridge_pane() -> Control:
+	bridge_pane = BridgeToolPane.new()
+	bridge_pane.kind_selected.connect(func(kind: int) -> void: bridge_kind_selected.emit(kind))
+	return bridge_pane
+
+
+## A tool's pane (ToolRegistry id), or null.
+func tool_pane(id: StringName) -> Control:
+	return _stack.get_pane(id)
+
+
+## Enables a tool's rail item with its tooltip, or disables it with the descriptor's
+## unavailable_tooltip saying why.
+func set_tool_available(id: StringName, available: bool) -> void:
+	var tool := ToolRegistry.find(id)
+	if tool == null:
+		return
+	set_rail_item_enabled(id, available)
+	set_rail_item_tooltip(id, tool.rail_tooltip() if available else tool.unavailable_tooltip)
+
+
 ## Shows the Water tool's exact width (metres, the full channel) and flow, without signals.
 func set_water_values(width: float, speed: float) -> void:
 	water_pane.set_values(width, speed)
@@ -494,11 +528,9 @@ func set_water_values(width: float, speed: float) -> void:
 ## Blender map) only when the map already has water to erase, with the River and Pond tiles
 ## disabled and the tooltips and hint saying why; otherwise disabled with a tooltip.
 func set_water_available(carves: bool, has_water: bool) -> void:
-	set_rail_item_enabled(TOOL_WATER, carves or has_water)
-	var tooltip := WATER_TOOLTIP
-	if not carves:
-		tooltip = WATER_UNAVAILABLE_TOOLTIP if not has_water else WATER_ERASE_ONLY_TOOLTIP
-	set_rail_item_tooltip(TOOL_WATER, tooltip)
+	set_tool_available(TOOL_WATER, carves or has_water)
+	if not carves and has_water:
+		set_rail_item_tooltip(TOOL_WATER, WATER_ERASE_ONLY_TOOLTIP)
 	water_pane.set_carves(carves)
 
 
@@ -506,8 +538,7 @@ func set_water_available(carves: bool, has_water: bool) -> void:
 ## with no water painted over it: crossings snap to the document's water). `has_water`: the
 ## pane's line saying to make water first shows while it is false.
 func set_bridge_available(available: bool, has_water: bool) -> void:
-	set_rail_item_enabled(TOOL_BRIDGE, available)
-	set_rail_item_tooltip(TOOL_BRIDGE, BRIDGE_TOOLTIP if available else BRIDGE_UNAVAILABLE_TOOLTIP)
+	set_tool_available(TOOL_BRIDGE, available)
 	bridge_pane.set_has_water(has_water)
 
 
@@ -657,8 +688,7 @@ func set_paint_limits(full_reason: String, in_use: PackedStringArray) -> void:
 
 ## Enables Paint, or disables it with a tooltip saying why (a dressed Blender map).
 func set_paint_available(available: bool) -> void:
-	set_rail_item_enabled(TOOL_PAINT, available)
-	set_rail_item_tooltip(TOOL_PAINT, PAINT_TOOLTIP if available else PAINT_UNAVAILABLE_TOOLTIP)
+	set_tool_available(TOOL_PAINT, available)
 
 
 ## The tile id of a Sculpt tile's operation ("sculpt_raise", ...; also its node name), or
@@ -681,8 +711,7 @@ static func sculpt_tile_op(id: StringName) -> int:
 ## Enables Sculpt, or disables it with a tooltip saying why (a dressed Blender map, whose
 ## ground is the GLB's own).
 func set_sculpt_available(available: bool) -> void:
-	set_rail_item_enabled(TOOL_SCULPT, available)
-	set_rail_item_tooltip(TOOL_SCULPT, SCULPT_TOOLTIP if available else SCULPT_UNAVAILABLE_TOOLTIP)
+	set_tool_available(TOOL_SCULPT, available)
 
 
 ## The species of a biome the Place picker offers (PLACE_SIZE_CLASSES), in palette order.
